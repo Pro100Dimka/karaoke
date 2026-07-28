@@ -1,0 +1,13 @@
+# Установка: pip install -r requirements.txt
+# Плюс системно должен быть установлен ffmpeg (ffmpeg.org)
+
+numpy
+scipy
+soundfile
+pydub
+mutagen
+librosa
+demucs          # разделение дорожек (шаг 3)
+openai-whisper  # распознавание и синхронизация текста (шаги 8-9)
+crepe           # опционально, более точный pitch tracker (шаг 5)
+pretty_midi

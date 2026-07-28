@@ -1,0 +1,90 @@
+"""
+Шаг 8. Анализ текста.
+song.mp3 / vocals.wav -> lyrics.txt
+
+Источники (по приоритету):
+1. Встроенные ID3-теги (USLT / lyrics) через mutagen.
+2. Файл .lrc рядом с треком.
+3. Распознавание речи через Whisper (если ничего не найдено).
+4. Текст, введённый вручную.
+"""
+import argparse
+import re
+from pathlib import Path
+
+from mutagen.id3 import ID3, USLT
+from mutagen import File as MutagenFile
+
+
+def from_id3_tags(audio_path: str) -> str | None:
+    try:
+        audio = MutagenFile(audio_path)
+        if audio is None:
+            return None
+        # MP3 / ID3
+        if hasattr(audio, "tags") and audio.tags:
+            for tag in audio.tags.values():
+                if isinstance(tag, USLT):
+                    return tag.text
+        # Другие форматы (FLAC/OGG и т.п.) хранят lyrics как обычный ключ
+        if hasattr(audio, "get"):
+            for key in ("LYRICS", "lyrics", "\xa9lyr"):
+                val = audio.get(key)
+                if val:
+                    return "\n".join(val) if isinstance(val, list) else str(val)
+    except Exception:
+        return None
+    return None
+
+
+def from_lrc_file(audio_path: str) -> str | None:
+    lrc_path = Path(audio_path).with_suffix(".lrc")
+    if lrc_path.exists():
+        raw = lrc_path.read_text(encoding="utf-8")
+        # убираем временные метки [mm:ss.xx]
+        lines = [re.sub(r"\[\d{2}:\d{2}(\.\d{2,3})?\]", "", line).strip()
+                 for line in raw.splitlines()]
+        return "\n".join(l for l in lines if l)
+    return None
+
+
+def from_whisper(audio_path: str, model_size: str = "medium", language: str | None = None) -> str:
+    import whisper  # openai-whisper
+    model = whisper.load_model(model_size)
+    result = model.transcribe(audio_path, language=language)
+    return result["text"].strip()
+
+
+def get_lyrics(audio_path: str, whisper_model: str = "medium",
+                language: str | None = None) -> tuple[str, str]:
+    """Возвращает (текст, источник)."""
+    text = from_id3_tags(audio_path)
+    if text:
+        return text, "id3_tags"
+
+    text = from_lrc_file(audio_path)
+    if text:
+        return text, "lrc_file"
+
+    text = from_whisper(audio_path, whisper_model, language)
+    return text, "whisper"
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Получение текста песни")
+    parser.add_argument("input", help="song.mp3 или vocals.wav (для whisper лучше vocals.wav)")
+    parser.add_argument("output", nargs="?", default="lyrics.txt")
+    parser.add_argument("--whisper-model", default="medium",
+                         choices=["tiny", "base", "small", "medium", "large"])
+    parser.add_argument("--language", default=None, help="код языка, напр. ru, en")
+    args = parser.parse_args()
+
+    text, source = get_lyrics(args.input, args.whisper_model, args.language)
+
+    Path(args.output).write_text(text, encoding="utf-8")
+    print(f"Источник текста: {source}")
+    print(f"Сохранено: {args.output}")
+
+
+if __name__ == "__main__":
+    main()

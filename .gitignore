@@ -8,7 +8,10 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
+# Игнорировать только корневой build
+/build/
+
+# Не игнорировать AI/build
 !AI/build/
 develop-eggs/
 dist/
@@ -32,6 +35,8 @@ MANIFEST
 #   before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
+AI/full_songs/*.mp3
+AI/Song
 
 # Installer logs
 pip-log.txt
