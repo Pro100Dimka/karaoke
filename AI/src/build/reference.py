@@ -10,7 +10,7 @@ import json
 
 
 def build_reference(pitch_frames: list, min_note_duration: float = 0.06,
-                     confidence_threshold: float = 0.4) -> list:
+                     confidence_threshold: float = 0.1) -> list:
     """
     Группирует последовательные кадры с одинаковой (или близкой) нотой
     в одну ноту. Короткие/неуверенные фрагменты отбрасываются или
@@ -76,7 +76,7 @@ def main():
     parser.add_argument("output", nargs="?", default="reference.json")
     parser.add_argument("--min-duration", type=float, default=0.06,
                          help="минимальная длительность ноты, сек")
-    parser.add_argument("--confidence", type=float, default=0.4,
+    parser.add_argument("--confidence", type=float, default=0.1,
                          help="порог уверенности pitch-детектора")
     args = parser.parse_args()
 

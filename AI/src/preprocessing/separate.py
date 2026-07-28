@@ -1,71 +1,120 @@
 """
 Шаг 3. Разделение дорожек.
 song.wav -> vocals.wav, instrumental.wav (+ drums.wav, bass.wav, other.wav)
-
-Использует Demucs (Facebook Research) — современную нейросеть для
-разделения аудио на стемы. Требует: pip install demucs (и PyTorch).
 """
+
 import argparse
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 
-def separate(input_path: str, out_dir: str, model: str = "htdemucs",
-             two_stems: bool = True):
-    """
-    two_stems=True -> получаем vocals.wav + no_vocals.wav (инструментал)
-    two_stems=False -> получаем 4 дорожки: vocals, drums, bass, other
-    """
+def separate(
+    input_path: str,
+    out_dir: str,
+    model: str = "htdemucs_ft",
+    two_stems: bool = True,
+):
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    cmd = ["demucs", "-n", model, "-o", str(out_dir)]
+    # Максимальная длина сегмента для разных моделей
+    if model == "htdemucs_ft" or model.startswith("htdemucs"):
+        segment = "7"
+    else:
+        segment = "10"
+
+    cmd = [
+        "demucs",
+        "-n", model,
+        "-o", str(out_dir),
+        "--segment", segment,
+        "--shifts", "2",
+    ]
+
+    # GPU если есть
+    # Проверяем реальную поддержку CUDA в PyTorch
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            cmd += ["-d", "cuda"]
+            print("Используется GPU CUDA")
+        else:
+            cmd += ["-d", "cpu"]
+            print("CUDA недоступна, используется CPU")
+
+    except Exception:
+        cmd += ["-d", "cpu"]
+        print("PyTorch CUDA не найден, используется CPU")
+
     if two_stems:
         cmd += ["--two-stems", "vocals"]
+
     cmd.append(input_path)
 
-    subprocess.run(cmd, check=True)
+    print("Запуск Demucs:")
+    print(" ".join(cmd))
 
-    # demucs кладёт результат в out_dir/<model>/<имя_файла_без_расширения>/
+    result = subprocess.run(
+        cmd,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        print(result.stdout)
+        print(result.stderr)
+        raise RuntimeError("Demucs завершился с ошибкой.")
+
     stem_name = Path(input_path).stem
     result_dir = out_dir / model / stem_name
 
     vocals_src = result_dir / "vocals.wav"
-    instrumental_src = result_dir / ("no_vocals.wav" if two_stems else "other.wav")
+    instrumental_src = result_dir / (
+        "no_vocals.wav" if two_stems else "other.wav"
+    )
 
     vocals_dst = out_dir / "vocals.wav"
     instrumental_dst = out_dir / "instrumental.wav"
 
     if vocals_src.exists():
-        shutil.copy(vocals_src, vocals_dst)
+        shutil.copy2(vocals_src, vocals_dst)
+
     if instrumental_src.exists():
-        shutil.copy(instrumental_src, instrumental_dst)
+        shutil.copy2(instrumental_src, instrumental_dst)
 
     if not two_stems:
-        for stem in ["drums", "bass"]:
+        for stem in ("drums", "bass", "other"):
             src = result_dir / f"{stem}.wav"
             if src.exists():
-                shutil.copy(src, out_dir / f"{stem}.wav")
+                shutil.copy2(src, out_dir / f"{stem}.wav")
 
     return {
-        "vocals": str(vocals_dst) if vocals_src.exists() else None,
-        "instrumental": str(instrumental_dst) if instrumental_src.exists() else None,
+        "vocals": str(vocals_dst) if vocals_dst.exists() else None,
+        "instrumental": str(instrumental_dst) if instrumental_dst.exists() else None,
     }
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Разделение вокала и минуса (Demucs)")
-    parser.add_argument("input", help="song.wav")
-    parser.add_argument("--out", default="separated", help="Папка для результата")
-    parser.add_argument("--model", default="htdemucs")
-    parser.add_argument("--full", action="store_true",
-                         help="Разделить на 4 дорожки (vocals/drums/bass/other) вместо 2")
+    parser = argparse.ArgumentParser(
+        description="Разделение вокала и инструментала"
+    )
+
+    parser.add_argument("input")
+    parser.add_argument("--out", default="separated")
+    parser.add_argument("--model", default="htdemucs_ft")
+    parser.add_argument("--full", action="store_true")
+
     args = parser.parse_args()
 
-    result = separate(args.input, args.out, args.model, two_stems=not args.full)
-    print("Готово:", result)
+    result = separate(
+        args.input,
+        args.out,
+        args.model,
+        two_stems=not args.full,
+    )
+
+    print(result)
 
 
 if __name__ == "__main__":
