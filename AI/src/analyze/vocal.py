@@ -7,8 +7,9 @@ vocals.wav -> pitch.json
 """
 import argparse
 import json
-import numpy as np
+
 import librosa
+import numpy as np
 
 
 def freq_to_note(freq: float) -> str:

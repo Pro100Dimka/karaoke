@@ -28,9 +28,10 @@ def build_midi(
     instrument_name: str = "Voice Oohs",
     min_velocity: int = 40,
     max_velocity: int = 110,
+    tempo: float = 120.0,
 ) -> pretty_midi.PrettyMIDI:
 
-    midi = pretty_midi.PrettyMIDI()
+    midi = pretty_midi.PrettyMIDI(initial_tempo=tempo)
 
     program = pretty_midi.instrument_name_to_program(instrument_name)
     instrument = pretty_midi.Instrument(program=program, name="Vocal Melody")
@@ -137,7 +138,7 @@ def build_midi(
 
 
 def add_tempo_and_key(midi: pretty_midi.PrettyMIDI, music_json_path: str | None):
-    """Опционально: проставить темп и тональность из music.json (шаг 4)."""
+    """Добавляет тональность как текстовую метку."""
 
     if not music_json_path:
         return
@@ -160,7 +161,11 @@ def main():
     parser = argparse.ArgumentParser(description="Экспорт эталонной мелодии в MIDI")
     parser.add_argument("input", help="reference.json")
     parser.add_argument("output", nargs="?", default="melody.mid")
-    parser.add_argument("--music", default=None, help="music.json (для тональности как маркера)")
+    parser.add_argument(
+        "--music",
+        default=None,
+        help="music.json (для темпа и тональности)"
+    )
     parser.add_argument(
         "--instrument",
         default="Voice Oohs",
@@ -172,13 +177,41 @@ def main():
     with open(args.input, "r", encoding="utf-8") as f:
         notes = json.load(f)
 
-    midi = build_midi(notes, instrument_name=args.instrument)
+    # --------------------------
+    # Получаем темп ДО создания MIDI
+    # --------------------------
 
+    tempo = 120.0
+
+    if args.music:
+        with open(args.music, "r", encoding="utf-8") as f:
+            music = json.load(f)
+
+        tempo = float(
+            music.get("tempo")
+            or music.get("bpm")
+            or music.get("Tempo")
+            or 120.0
+        )
+
+    print(f"Tempo: {tempo:.2f} BPM")
+
+    # --------------------------
+    # Создаем MIDI уже с нужным темпом
+    # --------------------------
+
+    midi = build_midi(
+        notes,
+        instrument_name=args.instrument,
+        tempo=tempo,
+    )
+
+    # Добавляем только тональность
     add_tempo_and_key(midi, args.music)
 
     midi.write(args.output)
-    print(f"Сохранено {len(notes)} нот -> {args.output}")
 
+    print(f"Сохранено {len(notes)} нот -> {args.output}")
 
 if __name__ == "__main__":
     main()

@@ -6,7 +6,6 @@ song.mp3 -> song.wav
 """
 import argparse
 import subprocess
-import sys
 
 
 def convert(input_path: str, output_path: str, sample_rate: int = 44100,
@@ -20,7 +19,10 @@ def convert(input_path: str, output_path: str, sample_rate: int = 44100,
         "-c:a", codec,
         output_path,
     ]
-    subprocess.run(cmd, check=True)
+    # subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True,
+                   stdout=subprocess.DEVNULL,
+                   stderr=subprocess.DEVNULL)
 
 
 def main():

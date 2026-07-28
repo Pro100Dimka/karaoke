@@ -168,8 +168,21 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
         print("12/13 MIDI — уже есть, пропускаю")
     else:
         print("12/13 Экспорт мелодии в MIDI...")
-        midi = build_midi(reference_notes)
+        tempo = (
+            music.get("tempo")
+            or music.get("bpm")
+            or music.get("Tempo")
+            or 120.0
+        )
+
+        midi = build_midi(
+            reference_notes,
+            instrument_name="Voice Oohs",
+            tempo=tempo,
+        )
+
         add_tempo_and_key(midi, str(music_path))
+
         midi.write(str(midi_path))
 
     # --- 13/13 Сборка проекта (манифест) ---
