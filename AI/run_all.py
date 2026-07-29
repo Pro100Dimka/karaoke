@@ -32,7 +32,7 @@ from src.build.midi import add_tempo_and_key, build_midi, quantize_notes
 from src.build.project import build_project
 from src.build.reference import build_reference
 from src.build.report import build_report
-from src.build.split_notes import split_notes_by_syllables
+from src.build.split_notes import fill_gaps_during_active_singing, split_notes_by_syllables
 from src.build.unified_song_map import build_song_map
 from src.evaluation.difficulty_map import build_difficulty_map
 from src.lyrics.get_text import get_lyrics
@@ -163,21 +163,29 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
             vocals_path, str(lyrics_path), whisper_model, language)
         save_json(lyrics_sync, lyrics_sync_path)
 
-    # --- 9.5/13 Разбиение долгих нот по слогам текста ---
-    # ИСПРАВЛЕНО: если певец держит одну ноту на протяжении целой фразы/
-    # слова из нескольких слогов, build_reference (шаг 6) строит из этого
-    # одну длинную ноту — сам pitch не знает про текст. Здесь используем
-    # word-level тайминги lyricsSync.json, чтобы разбить такие ноты на
-    # несколько того же тона, по одной на слог (см. src/build/split_notes.py
-    # и src/lyrics/syllabify.py). Выполняется каждый раз (не кэшируется по
-    # наличию файла), чтобы проекты, собранные до появления этого шага,
-    # тоже получили разбиение при повторном запуске; сам шаг идемпотентен.
-    print("9.5/13 Разбиение долгих нот по слогам...")
+    # --- 9.5/13 Дозаполнение пробелов + разбиение долгих нот по слогам ---
+    # ИСПРАВЛЕНО (v2): раньше здесь только резали ноты по каждой границе
+    # слога вслепую (по тексту) — это давало "кашу"/лаг там, где певец
+    # реально тянул легато без повторной атаки, а тайминги Whisper на
+    # границах слов сами по себе неточны. Теперь:
+    #  1) fill_gaps_during_active_singing закрывает провалы МЕЖДУ нотами,
+    #     если весь провал приходится на активное пение по тексту, а
+    #     сырые (до отсечки confidence) кадры pitch.json показывают, что
+    #     высота там всё-таки была — это дыра детектора, а не тишина;
+    #  2) split_notes_by_syllables режет долгую ноту по слогу, ТОЛЬКО
+    #     если рядом есть настоящий провал громкости (акустическое
+    #     подтверждение повторной атаки), и снапает точку разреза к нему,
+    #     а не к тексту — легато при этом не трогается.
+    # Выполняется каждый раз (не кэшируется по наличию файла), чтобы
+    # проекты, собранные до этого шага, тоже получили исправление при
+    # повторном запуске; сам шаг идемпотентен.
+    print("9.5/13 Дозаполнение пробелов и разбиение долгих нот по слогам...")
     notes_before = len(reference_notes)
-    reference_notes = split_notes_by_syllables(reference_notes, lyrics_sync)
+    reference_notes = fill_gaps_during_active_singing(reference_notes, lyrics_sync, pitch_frames)
+    reference_notes = split_notes_by_syllables(reference_notes, lyrics_sync, pitch_frames)
     if len(reference_notes) != notes_before:
         print(f"   ноты: {notes_before} -> {len(reference_notes)}")
-        save_json(reference_notes, reference_path)
+    save_json(reference_notes, reference_path)
 
     # --- 10/13 Карта песни ---
     song_map_path = out / "songMap.json"

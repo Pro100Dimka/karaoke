@@ -11,19 +11,30 @@ import subprocess
 
 
 def convert(input_path: str, output_path: str, sample_rate: int = 44100,
-            channels: int = 2, bit_depth: int = 16):
-    codec = "pcm_s16le" if bit_depth == 16 else "pcm_s24le"
+            channels: int = 2, bit_depth: int = 24):
+
+    codec = "pcm_s24le" if bit_depth == 24 else "pcm_s16le"
+
     cmd = [
-        "ffmpeg", "-y",
-        "-i", input_path,
-        "-ar", str(sample_rate),
-        "-ac", str(channels),
-        "-c:a", codec,
+        "ffmpeg",
+        "-y",
+        "-i",
+        input_path,
+        "-ar",
+        str(sample_rate),
+        "-ac",
+        str(channels),
+        "-c:a",
+        codec,
         output_path,
     ]
-    subprocess.run(cmd, check=True,
-                   stdout=subprocess.DEVNULL,
-                   stderr=subprocess.DEVNULL)
+
+    subprocess.run(
+        cmd,
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
 
 
 def normalize_loudness(input_path: str, output_path: str,

@@ -3,7 +3,27 @@
 только json+stdlib, как и test_reference.py.
 """
 from src.lyrics.syllabify import syllabify_word, split_word_span_into_syllables, build_syllable_spans
-from src.build.split_notes import split_notes_by_syllables
+from src.build.split_notes import split_notes_by_syllables, fill_gaps_during_active_singing
+
+
+def _flat_loudness_frames(t0, t1, step=0.01, loudness=-6.0):
+    frames = []
+    t = t0
+    while t < t1:
+        frames.append({"time": round(t, 3), "loudness_db": loudness})
+        t += step
+    return frames
+
+
+def _frames_with_dip(t0, t1, dip_center, dip_half_width=0.06, step=0.01,
+                      base_loudness=-6.0, dip_loudness=-15.0):
+    """Синтетические кадры pitch.json: ровная громкость с одним настоящим
+    провалом вокруг dip_center (имитация согласной/повторной атаки)."""
+    frames = _flat_loudness_frames(t0, t1, step, base_loudness)
+    for f in frames:
+        if abs(f["time"] - dip_center) <= dip_half_width:
+            f["loudness_db"] = dip_loudness
+    return frames
 
 
 def test_syllabify_word_known_cases():
@@ -111,6 +131,116 @@ def test_build_midi_does_not_remerge_retriggered_syllable_notes():
         return
     midi = build_midi(notes)
     assert len(midi.instruments[0].notes) == 3, "retrigger-ноты не должны склеиваться в одну"
+
+
+def test_split_notes_acoustic_gate_splits_when_real_dip_present():
+    """Есть настоящий провал громкости на границе слогов (0.06с уже, но
+    заметно тише соседних пиков) -> ноту разбиваем, точка разреза
+    снапается к самому провалу, а не к сырому таймингу Whisper (1.53,
+    сдвинут на 30мс от реального провала на 1.5, как бывает у Whisper)."""
+    notes = [{"note": "G3", "start": 0.0, "end": 3.0, "duration": 3.0, "confidence": 0.8}]
+    lyrics_lines = [{
+        "text": "молоко дома", "start": 0.0, "end": 3.0,
+        "words": [
+            {"word": "молоко", "start": 0.0, "end": 1.53},  # Whisper "неточен" тут
+            {"word": "дома", "start": 1.53, "end": 3.0},
+        ],
+    }]
+    pitch_frames = _frames_with_dip(0.0, 3.0, dip_center=1.5)
+
+    split = split_notes_by_syllables(notes, lyrics_lines, pitch_frames,
+                                      min_segment_duration=0.3, retrigger_gap=0.02)
+
+    assert len(split) == 2, f"ожидалось 2 ноты (один настоящий провал), получили: {split}"
+    assert split[1].get("retrigger") is True
+    # точка разреза должна быть у самого провала (~1.5), а не у тайминга Whisper (1.53)
+    assert abs(split[0]["end"] - 1.5) < 0.05, f"разрез не снапнулся к провалу: {split[0]['end']}"
+
+
+def test_split_notes_acoustic_gate_keeps_legato_note_whole():
+    """Громкость ровная (легато, повторной атаки нет) -> нота НЕ должна
+    разбиваться, даже если по тексту там граница слога/слова — иначе
+    получилась бы придуманная пауза, которой нет в записи ('каша')."""
+    notes = [{"note": "G3", "start": 0.0, "end": 3.0, "duration": 3.0, "confidence": 0.8}]
+    lyrics_lines = [{
+        "text": "молоко дома", "start": 0.0, "end": 3.0,
+        "words": [
+            {"word": "молоко", "start": 0.0, "end": 1.5},
+            {"word": "дома", "start": 1.5, "end": 3.0},
+        ],
+    }]
+    pitch_frames = _flat_loudness_frames(0.0, 3.0)  # ни одного провала
+
+    split = split_notes_by_syllables(notes, lyrics_lines, pitch_frames,
+                                      min_segment_duration=0.3, retrigger_gap=0.02)
+
+    assert len(split) == 1, f"легато не должно резаться без акустических доказательств: {split}"
+    assert split == notes
+
+
+def test_fill_gaps_during_active_singing_fills_detector_dropout():
+    """Провал МЕЖДУ нотами полностью приходится на активное пение по
+    тексту, а сырые кадры pitch.json там всё-таки показывают высоту
+    (просто с низким confidence, отсеянным build_reference) -> дыру
+    нужно закрыть новой нотой с этой высотой и пониженным confidence."""
+    notes = [
+        {"note": "G3", "start": 0.0, "end": 1.0, "duration": 1.0, "confidence": 0.8},
+        {"note": "A3", "start": 1.2, "end": 2.0, "duration": 0.8, "confidence": 0.8},
+    ]
+    lyrics_lines = [{
+        "text": "город дома", "start": 0.0, "end": 2.0,
+        "words": [{"word": "город дома", "start": 0.0, "end": 2.0}],  # поётся весь провал
+    }]
+    pitch_frames = [
+        {"time": round(t, 2), "note": "G#3"}  # ниже порога confidence, но высота была
+        for t in [1.0, 1.05, 1.1, 1.15]
+    ]
+
+    filled = fill_gaps_during_active_singing(notes, lyrics_lines, pitch_frames)
+
+    assert len(filled) == 3, f"ожидалась вставленная нота-заплатка: {filled}"
+    patch = filled[1]
+    assert patch["note"] == "G#3"
+    assert patch.get("gap_filled") is True
+    assert patch["confidence"] < 0.5
+
+
+def test_fill_gaps_during_active_singing_leaves_real_unvoiced_gap():
+    """Провал без распознанной высоты в сырых кадрах (безголосая согласная
+    внутри слова, например) — это не баг детектора, оставляем как есть."""
+    notes = [
+        {"note": "G3", "start": 0.0, "end": 1.0, "duration": 1.0, "confidence": 0.8},
+        {"note": "A3", "start": 1.2, "end": 2.0, "duration": 0.8, "confidence": 0.8},
+    ]
+    lyrics_lines = [{
+        "text": "город дома", "start": 0.0, "end": 2.0,
+        "words": [{"word": "город дома", "start": 0.0, "end": 2.0}],
+    }]
+    pitch_frames = [{"time": round(t, 2), "note": None} for t in [1.0, 1.05, 1.1, 1.15]]
+
+    filled = fill_gaps_during_active_singing(notes, lyrics_lines, pitch_frames)
+    assert filled == notes
+
+
+def test_fill_gaps_during_active_singing_ignores_gap_during_real_pause():
+    """Провал совпадает с реальной паузой по тексту (между строками, вне
+    слов) — заполнять не нужно, даже если в сырых кадрах случайно
+    мелькнула высота (шум/дыхание)."""
+    notes = [
+        {"note": "G3", "start": 0.0, "end": 1.0, "duration": 1.0, "confidence": 0.8},
+        {"note": "A3", "start": 1.2, "end": 2.0, "duration": 0.8, "confidence": 0.8},
+    ]
+    lyrics_lines = [
+        {"text": "строка раз", "start": 0.0, "end": 1.0,
+         "words": [{"word": "строка раз", "start": 0.0, "end": 1.0}]},
+        # следующая строка начинается только в 1.2 — пауза 1.0-1.2 реальна
+        {"text": "строка два", "start": 1.2, "end": 2.0,
+         "words": [{"word": "строка два", "start": 1.2, "end": 2.0}]},
+    ]
+    pitch_frames = [{"time": round(t, 2), "note": "G#3"} for t in [1.0, 1.05, 1.1, 1.15]]
+
+    filled = fill_gaps_during_active_singing(notes, lyrics_lines, pitch_frames)
+    assert filled == notes
 
 
 def _run_all():
