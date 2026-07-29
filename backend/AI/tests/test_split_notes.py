@@ -2,11 +2,11 @@
 Тесты для syllabify.py и split_notes.py. Не требует librosa/torch —
 только json+stdlib, как и test_reference.py.
 """
-from backend.AI.src.build.split_notes import (
+from src.build.split_notes import (
     fill_gaps_during_active_singing,
     split_notes_by_syllables,
 )
-from backend.AI.src.lyrics.syllabify import (
+from src.lyrics.syllabify import (
     build_syllable_spans,
     split_word_span_into_syllables,
     syllabify_word,
@@ -132,7 +132,7 @@ def test_build_midi_does_not_remerge_retriggered_syllable_notes():
         {"note": "G3", "start": 2.0, "end": 2.98, "duration": 0.98, "confidence": 0.8, "retrigger": True},
     ]
     try:
-        from backend.AI.src.build.midi import build_midi
+        from src.build.midi import build_midi
     except ImportError:
         print("SKIP test_build_midi_does_not_remerge_retriggered_syllable_notes: pretty_midi не установлен")
         return

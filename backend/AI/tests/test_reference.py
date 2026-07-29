@@ -4,7 +4,7 @@
 """
 import random
 
-from backend.AI.src.build.reference import (
+from src.build.reference import (
     _fix_octave_errors,
     _merge_adjacent_same_notes,
     build_reference,
