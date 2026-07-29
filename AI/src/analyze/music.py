@@ -48,8 +48,45 @@ def compute_boundary_chroma(chroma: np.ndarray, rms: np.ndarray,
     return chroma[:, idx].mean(axis=1)
 
 
+def compute_bass_chroma(y: np.ndarray, sr: int, cutoff_hz: float = 350.0,
+                         fmin_note: str = "C1", n_octaves: int = 3) -> np.ndarray | None:
+    """
+    Хрома, посчитанная на НИЗКОЧАСТОТНОЙ (басовой) версии сигнала.
+
+    ПОЧЕМУ: полноспектральная хрома (chroma_cqt на всём миксе) отражает
+    ВСЁ, что звучит одновременно — мелодию, гармонию, вокал, — и если
+    какая-то не-тоническая нота держится долго/громко (например,
+    доминанта в мелодии, что очень частый приём), она может перевесить
+    в KS-корреляции и увести оценку тональности на "соседнюю" (доминанта
+    вместо тоники и т.п. — не только относительный мажор/минор). Бас
+    почти всегда играет корень аккорда, особенно на сильных долях и на
+    первом/последнем аккорде трека, поэтому хрома, посчитанная только на
+    низких частотах, — гораздо более надёжный (хоть и более разреженный)
+    сигнал именно для тоники, а не для того, что просто громче всего
+    звучит.
+
+    Возвращает None, если scipy недоступен или сигнал слишком короткий
+    для устойчивой low-pass фильтрации.
+    """
+    try:
+        from scipy.signal import butter, sosfiltfilt
+    except ImportError:
+        return None
+    if len(y) < sr:
+        return None
+    sos = butter(4, cutoff_hz, btype="low", fs=sr, output="sos")
+    y_bass = sosfiltfilt(sos, y)
+    chroma_bass = librosa.feature.chroma_cqt(
+        y=y_bass, sr=sr,
+        fmin=librosa.note_to_hz(fmin_note),
+        n_octaves=n_octaves,
+    )
+    return chroma_bass.mean(axis=1)
+
+
 def estimate_key(chroma_mean: np.ndarray, boundary_chroma_mean: np.ndarray = None,
-                  boundary_weight: float = 1.5):
+                  boundary_weight: float = 1.5, bass_chroma_mean: np.ndarray = None,
+                  bass_weight: float = 2.0):
     """
     Корреляция с профилями Krумhansl-Schmuckler -> лучшая тональность.
 
@@ -58,10 +95,20 @@ def estimate_key(chroma_mean: np.ndarray, boundary_chroma_mean: np.ndarray = Non
     тонике или доминанте, так что усиление этих участков помогает
     отличить релятивные мажор/минор (например, C major vs A minor —
     ноты одинаковые, но начало/конец чаще выдают настоящую тонику).
+
+    bass_chroma_mean — усреднённая хрома НИЗКИХ частот (см.
+    compute_bass_chroma). ИСПРАВЛЕНО: одной boundary-хромы недостаточно,
+    если сама доминанта активно используется и на границах трека тоже —
+    тогда усиление границ только усугубляет путаницу тоника/доминанта.
+    Басовая хрома добавляет сигнал именно о том, ГДЕ корень аккорда, а
+    не о том, что просто громко звучит, поэтому у неё увеличенный вес
+    (bass_weight) относительно полноспектральной хромы.
     """
     combined = chroma_mean.copy()
     if boundary_chroma_mean is not None:
-        combined = chroma_mean + boundary_weight * boundary_chroma_mean
+        combined = combined + boundary_weight * boundary_chroma_mean
+    if bass_chroma_mean is not None:
+        combined = combined + bass_weight * bass_chroma_mean
 
     best_score, best_key = -1, None
     for i in range(12):
@@ -196,7 +243,9 @@ def analyze_music(input_path: str, key_change_window_sec: float = 20.0):
             chroma_rms,
         )
     boundary_chroma = compute_boundary_chroma(chroma, chroma_rms)
-    key, confidence = estimate_key(chroma.mean(axis=1), boundary_chroma)
+    bass_chroma = compute_bass_chroma(y, sr)
+    key, confidence = estimate_key(chroma.mean(axis=1), boundary_chroma,
+                                    bass_chroma_mean=bass_chroma)
 
     # Смена тональности по окнам, со сглаживанием (гистерезисом): считаем
     # смену тональности подтверждённой, только если новое окно повторилось

@@ -114,6 +114,166 @@ def _fix_octave_errors(notes: list, max_octave_note_duration: float = 0.15) -> l
     return result
 
 
+def _fix_pitch_spikes(notes: list, max_spike_duration: float = 0.15,
+                       min_jump_semitones: int = 3,
+                       max_neighbor_diff_semitones: int = 2) -> list:
+    """
+    Обобщение _fix_octave_errors: раньше ловились только СТРОГО октавные
+    (ровно 12 полутонов) выбросы между ДВУМЯ ОДИНАКОВЫМИ соседями. На
+    реальных данных встречаются короткие "блики" другого рода — соседняя
+    (не октавная) нота, к которой трекер прыгнул на долю секунды из-за
+    шума/переходного процесса, а окружающие ноты при этом близки друг к
+    другу, но не обязательно идентичны (например G3 G3 -> F#3(0.11с) ->
+    G3 G3 — блик на полтона вниз, не октава).
+
+    Условие: короткая нота (< max_spike_duration), чья высота отличается
+    от ОБОИХ соседей минимум на min_jump_semitones полутонов, при этом
+    сами соседи отличаются друг от друга не больше чем на
+    max_neighbor_diff_semitones — то есть контекст мелодии вокруг
+    стабилен, а эта одна нота — явный выброс. Удаляем, расширяя более
+    длинного/ближайшего по высоте соседа.
+    """
+    if len(notes) < 3:
+        return notes
+    result = list(notes)
+    changed = True
+    while changed:
+        changed = False
+        for i in range(1, len(result) - 1):
+            prev_n, cur_n, next_n = result[i - 1], result[i], result[i + 1]
+            if cur_n["duration"] > max_spike_duration:
+                continue
+            prev_midi = note_to_midi(prev_n["note"])
+            cur_midi = note_to_midi(cur_n["note"])
+            next_midi = note_to_midi(next_n["note"])
+            jump_prev = abs(cur_midi - prev_midi)
+            jump_next = abs(cur_midi - next_midi)
+            neighbor_diff = abs(prev_midi - next_midi)
+            if (jump_prev >= min_jump_semitones and jump_next >= min_jump_semitones
+                    and neighbor_diff <= max_neighbor_diff_semitones):
+                # отдаём освободившееся время тому соседу, что ближе по
+                # высоте (или длиннее, если высота одинаково близка)
+                if jump_prev <= jump_next or (jump_prev == jump_next
+                                               and prev_n["duration"] >= next_n["duration"]):
+                    prev_n["end"] = cur_n["end"]
+                    prev_n["duration"] = round(prev_n["end"] - prev_n["start"], 3)
+                else:
+                    next_n["start"] = cur_n["start"]
+                    next_n["duration"] = round(next_n["end"] - next_n["start"], 3)
+                del result[i]
+                changed = True
+                break
+    return result
+
+
+def _drop_quiet_artifacts(notes: list, pitch_frames: list, step: float,
+                           max_artifact_duration: float = 0.3,
+                           quiet_margin_db: float = 6.0) -> list:
+    """
+    Убирает короткие ноты, которые заметно ТИШЕ обоих своих соседей —
+    типичный след хвоста реверба/дилея (эффект остаётся на записи вокала
+    после того, как певец уже замолчал, и pYIN иногда продолжает ловить
+    в нём чёткую, но тихую высоту) либо шумного дыхания. Настоящая новая
+    атака голоса на новом слоге обычно НЕ тише соседних спетых нот —
+    поэтому громкость (loudness_db из pitch.json, посчитанная отдельно
+    от confidence и до этого нигде в построении нот не использовавшаяся)
+    — хороший независимый сигнал для отделения "ещё звучащего эффекта"
+    от настоящей ноты.
+
+    Сравниваем со СРЕДНИМ соседних нот (а не с глобальным порогом),
+    потому что громкость пения естественно меняется по ходу песни
+    (куплет тише припева и т.п.) — важна тишина ОТНОСИТЕЛЬНО контекста.
+    """
+    if len(notes) < 2 or not pitch_frames:
+        return notes
+
+    def avg_loudness(start: float, end: float) -> float | None:
+        vals = [f.get("loudness_db") for f in pitch_frames
+                if start <= f["time"] < end and f.get("loudness_db") is not None]
+        return sum(vals) / len(vals) if vals else None
+
+    loud = [avg_loudness(n["start"], n["end"]) for n in notes]
+
+    result = []
+    for i, n in enumerate(notes):
+        if n["duration"] > max_artifact_duration or loud[i] is None:
+            result.append(n)
+            continue
+        neighbor_vals = [loud[j] for j in (i - 1, i + 1)
+                          if 0 <= j < len(notes) and loud[j] is not None]
+        if not neighbor_vals:
+            result.append(n)
+            continue
+        neighbor_avg = sum(neighbor_vals) / len(neighbor_vals)
+        if loud[i] <= neighbor_avg - quiet_margin_db:
+            continue  # выброс: заметно тише окружения — не добавляем в результат
+        result.append(n)
+    return result
+
+
+def _snap_note_onsets(notes: list, pitch_frames: list, step: float,
+                       max_lookback_sec: float = 0.12,
+                       rise_margin_db: float = 6.0) -> list:
+    """
+    Сдвигает начало ноты назад к реальному моменту вступления голоса,
+    если нота идёт после паузы/тишины.
+
+    ПОЧЕМУ ноты стартуют позже голоса: сглаживание (smoothing_window) и
+    гистерезис (stable_frames) в build_reference специально не дают
+    случайному дребезгу первого кадра сразу создать новую ноту — но за
+    это приходится платить систематической задержкой: нота официально
+    "начинается" только когда высота удержалась stable_frames кадров
+    подряд, то есть на ~stable_frames*step позже, чем singer реально
+    начал звук. На коротких форшлагах/затактах в начале фразы эта
+    задержка того же порядка, что и сама нота, — из-за чего она может
+    вообще не пройти min_note_duration и исчезнуть.
+
+    Здесь событие уже случилось (нота построена), поэтому можно просто
+    поискать назад по СЫРЫМ кадрам pitch.json момент, где громкость уже
+    вплотную приблизилась к громкости самой ноты (rise_margin_db) — это
+    и есть настоящий момент атаки. Не уходим раньше конца предыдущей
+    ноты и не дальше max_lookback_sec, чтобы не залезть в чужую паузу
+    или в хвост предыдущей ноты.
+    """
+    if not notes or not pitch_frames:
+        return notes
+
+    frames_by_time = pitch_frames  # уже отсортированы по time на входе
+    n = len(frames_by_time)
+
+    def frame_index(t: float) -> int:
+        # ближайший индекс кадра к времени t (кадры равномерные по step)
+        idx = int(round(t / step))
+        return max(0, min(n - 1, idx))
+
+    result = []
+    prev_end = None
+    for note in notes:
+        new_note = dict(note)
+        gap_before = note["start"] - prev_end if prev_end is not None else note["start"]
+        if gap_before > 0.05:  # нота идёт после реальной паузы/тишины
+            note_loud = [f.get("loudness_db") for f in frames_by_time
+                         if note["start"] <= f["time"] < note["end"]
+                         and f.get("loudness_db") is not None]
+            target_loud = (sum(note_loud) / len(note_loud)) if note_loud else None
+            if target_loud is not None:
+                start_idx = frame_index(note["start"])
+                earliest_idx = frame_index(max(prev_end or 0.0, note["start"] - max_lookback_sec))
+                new_start_idx = start_idx
+                for idx in range(start_idx, earliest_idx - 1, -1):
+                    ld = frames_by_time[idx].get("loudness_db")
+                    if ld is None or ld < target_loud - rise_margin_db:
+                        break
+                    new_start_idx = idx
+                new_start = frames_by_time[new_start_idx]["time"]
+                if new_start < new_note["start"]:
+                    new_note["start"] = round(new_start, 3)
+                    new_note["duration"] = round(new_note["end"] - new_note["start"], 3)
+        result.append(new_note)
+        prev_end = new_note["end"]
+    return result
+
+
 def _resolve_confidence_threshold(pitch_frames: list, confidence_threshold,
                                    confidence_percentile: float,
                                    min_confidence_floor: float,
@@ -276,6 +436,17 @@ def build_reference(pitch_frames: list, min_note_duration: float = 0.08,
 
     notes = _fix_octave_errors(notes)
     notes = _merge_adjacent_same_notes(notes)
+
+    # ИСПРАВЛЕНО: три новых шага очистки после того, как ноты уже
+    # построены и склеены (см. docstring каждой функции):
+    #  1. обобщённые "блики" высоты (не только октавные) между близкими
+    #     по высоте соседями;
+    #  2. короткие тихие ноты-артефакты (хвост реверба/дилея, дыхание);
+    #  3. подтяжка старта ноты назад к реальному вступлению голоса.
+    notes = _fix_pitch_spikes(notes)
+    notes = _merge_adjacent_same_notes(notes)
+    notes = _drop_quiet_artifacts(notes, pitch_frames, step)
+    notes = _snap_note_onsets(notes, pitch_frames, step)
 
     print(f"Reference notes: {len(notes)} (raw frames: {len(pitch_frames)})")
     return notes
