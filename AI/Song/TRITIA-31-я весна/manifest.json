@@ -1,0 +1,17 @@
+{
+  "project": "TRITIA-31-я весна",
+  "files": {
+    "song_info": "Song\\TRITIA-31-я весна\\songInfo.json",
+    "instrumental": "Song\\TRITIA-31-я весна\\instrumental.wav",
+    "vocals": "Song\\TRITIA-31-я весна\\vocals.wav",
+    "pitch": "Song\\TRITIA-31-я весна\\pitch.json",
+    "reference": "Song\\TRITIA-31-я весна\\reference.json",
+    "lyrics_sync": "Song\\TRITIA-31-я весна\\lyrics.json",
+    "music": "Song\\TRITIA-31-я весна\\music.json",
+    "breaths": "Song\\TRITIA-31-я весна\\breaths.json",
+    "difficulty": "Song\\TRITIA-31-я весна\\difficulty.json",
+    "song_map": "Song\\TRITIA-31-я весна\\songMap.json",
+    "midi": "Song\\TRITIA-31-я весна\\melody.mid"
+  },
+  "complete": true
+}
