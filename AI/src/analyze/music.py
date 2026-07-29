@@ -15,6 +15,39 @@ MINOR_PROFILE = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 
 NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
 
+def compute_boundary_chroma(chroma: np.ndarray, rms: np.ndarray,
+                             boundary_fraction: float = 0.05,
+                             energy_gate_ratio: float = 0.15) -> np.ndarray | None:
+    """
+    ИСПРАВЛЕНО: раньше "граница" трека (первые+последние boundary_fraction
+    кадров) усреднялась без учёта громкости. Если интро/аутро — это
+    тишина, шум или реверб-хвост (в этой песне так и есть: структура
+    выделяет отдельные крошечные блоки 0-1с и ~139-145с), эти почти-
+    случайные хрома-вектора всё равно попадали в boundary_chroma_mean
+    и с весом boundary_weight=1.5 могли утянуть оценку тоники в сторону
+    от неё (не проверено на реальном аудио в этой среде — нужен librosa
+    локально, но иначе безопасно: сначала выбрасываем кадры граничной
+    зоны, чья громкость намного ниже средней по треку (< energy_gate_ratio
+    от максимума RMS), и усредняем только оставшиеся. Если после фильтра
+    ничего не осталось (интро/аутро — сплошная тишина), возвращаем None —
+    тогда estimate_key просто не будет использовать усиление границ.
+    """
+    n_frames = chroma.shape[1]
+    span = max(1, int(n_frames * boundary_fraction))
+    idx = np.concatenate([np.arange(0, span), np.arange(n_frames - span, n_frames)])
+    idx = np.unique(idx[(idx >= 0) & (idx < n_frames)])
+
+    rms_at_idx = rms[idx] if len(rms) == n_frames else None
+    if rms_at_idx is not None and rms.max() > 0:
+        gate = energy_gate_ratio * rms.max()
+        kept = idx[rms_at_idx >= gate]
+        if len(kept) == 0:
+            return None
+        idx = kept
+
+    return chroma[:, idx].mean(axis=1)
+
+
 def estimate_key(chroma_mean: np.ndarray, boundary_chroma_mean: np.ndarray = None,
                   boundary_weight: float = 1.5):
     """
@@ -70,6 +103,18 @@ def estimate_time_signature(onset_env: np.ndarray, sr: int, bpm: float,
     Идея: если реальный размер N/4, то автокорреляция onset-огибающей
     должна иметь выраженный пик на лаге "N долей" и его кратных (2N, 3N...),
     сильнее, чем у конкурирующих гипотез.
+
+    ИСПРАВЛЕНО (v2): раньше кандидаты сравнивались по сырому значению
+    ac[lag]/ac0. Но автокорреляция типичного onset-сигнала в среднем
+    затухает с ростом лага — поэтому лаг "3 доли" почти всегда получает
+    более высокое сырое значение, чем лаг "4 доли", ПРОСТО потому что он
+    короче, независимо от того, какой размер реально в песне. Это
+    систематически смещало результат в пользу 3/4 (и вообще в пользу
+    меньшего кандидата). Теперь каждый кандидат оценивается не по
+    абсолютному значению автокорреляции, а по тому, насколько пик на
+    его лаге выступает НАД локальным фоном (средним значением ac в
+    небольшой окрестности этого же лага) — это не зависит от общего
+    затухания автокорреляции с лагом.
     """
     beat_period_sec = 60.0 / bpm if bpm > 0 else 0.5
     beat_period_frames = max(1, int(round(beat_period_sec * sr / hop_length)))
@@ -81,15 +126,32 @@ def estimate_time_signature(onset_env: np.ndarray, sr: int, bpm: float,
     ac = librosa.autocorrelate(onset_env, max_size=max_lag)
     ac0 = ac[0] + 1e-9
 
+    def local_prominence(lag: int, half_window: int) -> float:
+        """ac[lag] минус средний фон в окне вокруг lag (без самого пика)."""
+        lo, hi = max(0, lag - half_window), min(len(ac), lag + half_window + 1)
+        window = np.concatenate([ac[lo:lag], ac[lag + 1:hi]])
+        baseline = float(np.mean(window)) if len(window) else 0.0
+        return float(ac[lag]) - baseline
+
+    half_window = max(1, beat_period_frames // 2)
     candidates = {"3/4": 3, "4/4": 4, "6/8": 6}
     scores = {}
     for label, group in candidates.items():
-        lag = beat_period_frames * group
-        vals = [ac[lag * k] for k in (1, 2) if lag * k < len(ac)]
-        scores[label] = (np.mean(vals) / ac0) if vals else 0.0
+        proms = []
+        for k in (1, 2):
+            lag = beat_period_frames * group * k
+            if lag < len(ac):
+                proms.append(local_prominence(lag, half_window))
+        scores[label] = (np.mean(proms) / ac0) if proms else 0.0
 
     best_label = max(scores, key=scores.get)
-    confidence = float(scores[best_label])
+    # уверенность считаем от лучшего сырого ac (как раньше) — prominence
+    # используется только для ВЫБОРА кандидата, чтобы не переписывать
+    # смысл confidence в остальном пайплайне/отчёте
+    best_group = candidates[best_label]
+    raw_vals = [ac[beat_period_frames * best_group * k] for k in (1, 2)
+                if beat_period_frames * best_group * k < len(ac)]
+    confidence = float(np.mean(raw_vals) / ac0) if raw_vals else 0.0
     return best_label, confidence
 
 
@@ -120,13 +182,20 @@ def analyze_music(input_path: str, key_change_window_sec: float = 20.0):
     # Размер такта — автокорреляция onset-огибающей (см. estimate_time_signature)
     time_signature, ts_confidence = estimate_time_signature(onset_env, sr, tempo)
 
-    # Тональность в целом, с усилением начала/конца трека (см. estimate_key)
+    # Тональность в целом, с усилением начала/конца трека (см. estimate_key).
+    # boundary-хрома теперь фильтруется по громкости (compute_boundary_chroma),
+    # чтобы тишина/шум на границах трека не перетягивала оценку тоники.
     chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
-    n_frames = chroma.shape[1]
-    boundary_span = max(1, int(n_frames * 0.05))
-    boundary_chroma = np.concatenate(
-        [chroma[:, :boundary_span], chroma[:, -boundary_span:]], axis=1
-    ).mean(axis=1)
+    chroma_rms = librosa.feature.rms(
+        y=y, hop_length=512, frame_length=2048
+    )[0]
+    if len(chroma_rms) != chroma.shape[1]:
+        chroma_rms = np.interp(
+            np.linspace(0, 1, chroma.shape[1]),
+            np.linspace(0, 1, len(chroma_rms)),
+            chroma_rms,
+        )
+    boundary_chroma = compute_boundary_chroma(chroma, chroma_rms)
     key, confidence = estimate_key(chroma.mean(axis=1), boundary_chroma)
 
     # Смена тональности по окнам, со сглаживанием (гистерезисом): считаем

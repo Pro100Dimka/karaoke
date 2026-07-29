@@ -25,6 +25,8 @@ import argparse
 import json
 from collections import Counter
 
+import numpy as np
+
 NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
 
@@ -112,12 +114,61 @@ def _fix_octave_errors(notes: list, max_octave_note_duration: float = 0.15) -> l
     return result
 
 
+def _resolve_confidence_threshold(pitch_frames: list, confidence_threshold,
+                                   confidence_percentile: float,
+                                   min_confidence_floor: float,
+                                   max_confidence_ceiling: float) -> float:
+    """
+    ИСПРАВЛЕНО (v3): раньше был фиксированный порог confidence_threshold=0.4,
+    сравниваемый напрямую с полем "confidence" (= voiced_probs из pYIN).
+
+    Проблема: voiced_flag в pYIN — это не "confidence > порог", а решение
+    Viterbi/HMM-декодирования по всей последовательности (учитывает соседние
+    кадры). Поэтому бывают целые участки, где voiced=True почти везде, но
+    сам voiced_probs стабильно низкий (0.05-0.2) — например, тихие/
+    приглушённые места после сепарации вокала, дыхание, концы фраз.
+    Фиксированный порог 0.4 вырезал такие участки целиком, из-за чего
+    в reference.json пропадали целые куски мелодии.
+
+    Теперь, если confidence_threshold не передан явно (None), порог
+    считается АДАПТИВНО под конкретную песню/движок: берём
+    confidence_percentile-й перцентиль среди confidence кадров,
+    помеченных voiced=True, зажимая его в разумный коридор
+    [min_confidence_floor, max_confidence_ceiling]. Так порог сам
+    подстраивается под то, насколько "уверенно" в среднем модель
+    размечает голос в этой конкретной записи, вместо одной жёсткой
+    цифры на все случаи.
+    """
+    if confidence_threshold is not None:
+        return float(confidence_threshold)
+
+    voiced_confidences = [
+        f.get("confidence", 0.0) for f in pitch_frames if f.get("voiced")
+    ]
+    if not voiced_confidences:
+        return min_confidence_floor
+
+    adaptive = float(np.percentile(voiced_confidences, confidence_percentile))
+    return max(min_confidence_floor, min(adaptive, max_confidence_ceiling))
+
+
 def build_reference(pitch_frames: list, min_note_duration: float = 0.08,
-                     confidence_threshold: float = 0.4,
+                     confidence_threshold: float | None = None,
+                     confidence_percentile: float = 15.0,
+                     min_confidence_floor: float = 0.03,
+                     max_confidence_ceiling: float = 0.4,
                      smoothing_window: int = 5,
                      stable_frames: int = 3,
                      max_gap_sec: float = 0.08) -> list:
     """
+    confidence_threshold — порог по voiced_probs для отбраковки кадра.
+                         По умолчанию None: порог вычисляется адаптивно
+                         под конкретную песню (см. _resolve_confidence_threshold).
+                         Передайте число, чтобы вернуть старое жёсткое
+                         поведение (например, 0.4).
+    confidence_percentile, min_confidence_floor, max_confidence_ceiling —
+                         параметры адаптивного порога (используются только
+                         если confidence_threshold=None).
     smoothing_window  — окно медианного сглаживания (в кадрах)
     stable_frames     — сколько кадров подряд должна держаться новая
                          нота, прежде чем считать, что произошла смена ноты
@@ -131,6 +182,11 @@ def build_reference(pitch_frames: list, min_note_duration: float = 0.08,
     step = (pitch_frames[1]["time"] - pitch_frames[0]["time"]) if len(pitch_frames) > 1 else 0.01
     max_gap_frames = max(1, int(round(max_gap_sec / step)))
 
+    resolved_threshold = _resolve_confidence_threshold(
+        pitch_frames, confidence_threshold, confidence_percentile,
+        min_confidence_floor, max_confidence_ceiling,
+    )
+
     # 1) сырые midi-номера по кадрам (None = не voiced / низкая уверенность)
     raw_midi = []
     confidences = []
@@ -138,7 +194,7 @@ def build_reference(pitch_frames: list, min_note_duration: float = 0.08,
         note = frame.get("note")
         conf = frame.get("confidence", 0.0)
         voiced = frame.get("voiced", False)
-        if voiced and note is not None and conf >= confidence_threshold:
+        if voiced and note is not None and conf >= resolved_threshold:
             raw_midi.append(note_to_midi(note))
         else:
             raw_midi.append(None)
@@ -231,8 +287,17 @@ def main():
     parser.add_argument("output", nargs="?", default="reference.json")
     parser.add_argument("--min-duration", type=float, default=0.08,
                          help="минимальная длительность ноты, сек")
-    parser.add_argument("--confidence", type=float, default=0.4,
-                         help="порог уверенности pitch-детектора")
+    parser.add_argument("--confidence", type=float, default=None,
+                         help="порог уверенности pitch-детектора (по умолчанию "
+                              "считается адаптивно под песню, см. --confidence-percentile). "
+                              "Передайте число (например 0.4) для старого фиксированного порога")
+    parser.add_argument("--confidence-percentile", type=float, default=15.0,
+                         help="перцентиль confidence среди voiced-кадров, используемый "
+                              "как адаптивный порог (игнорируется, если задан --confidence)")
+    parser.add_argument("--confidence-floor", type=float, default=0.03,
+                         help="минимальное значение адаптивного порога")
+    parser.add_argument("--confidence-ceiling", type=float, default=0.4,
+                         help="максимальное значение адаптивного порога")
     parser.add_argument("--smoothing-window", type=int, default=5,
                          help="окно медианного сглаживания, в кадрах")
     parser.add_argument("--stable-frames", type=int, default=3,
@@ -244,10 +309,20 @@ def main():
     with open(args.input, "r", encoding="utf-8") as f:
         pitch_frames = json.load(f)
 
+    resolved = _resolve_confidence_threshold(
+        pitch_frames, args.confidence, args.confidence_percentile,
+        args.confidence_floor, args.confidence_ceiling,
+    )
+    print(f"Порог confidence: {resolved:.3f}"
+          + (" (адаптивный)" if args.confidence is None else " (задан вручную)"))
+
     notes = build_reference(
         pitch_frames,
         min_note_duration=args.min_duration,
         confidence_threshold=args.confidence,
+        confidence_percentile=args.confidence_percentile,
+        min_confidence_floor=args.confidence_floor,
+        max_confidence_ceiling=args.confidence_ceiling,
         smoothing_window=args.smoothing_window,
         stable_frames=args.stable_frames,
         max_gap_sec=args.max_gap,
