@@ -32,6 +32,7 @@ from src.build.midi import add_tempo_and_key, build_midi, quantize_notes
 from src.build.project import build_project
 from src.build.reference import build_reference
 from src.build.report import build_report
+from src.build.split_notes import split_notes_by_syllables
 from src.build.unified_song_map import build_song_map
 from src.evaluation.difficulty_map import build_difficulty_map
 from src.lyrics.get_text import get_lyrics
@@ -161,6 +162,22 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
         lyrics_sync = sync_existing_lyrics_with_whisper(
             vocals_path, str(lyrics_path), whisper_model, language)
         save_json(lyrics_sync, lyrics_sync_path)
+
+    # --- 9.5/13 Разбиение долгих нот по слогам текста ---
+    # ИСПРАВЛЕНО: если певец держит одну ноту на протяжении целой фразы/
+    # слова из нескольких слогов, build_reference (шаг 6) строит из этого
+    # одну длинную ноту — сам pitch не знает про текст. Здесь используем
+    # word-level тайминги lyricsSync.json, чтобы разбить такие ноты на
+    # несколько того же тона, по одной на слог (см. src/build/split_notes.py
+    # и src/lyrics/syllabify.py). Выполняется каждый раз (не кэшируется по
+    # наличию файла), чтобы проекты, собранные до появления этого шага,
+    # тоже получили разбиение при повторном запуске; сам шаг идемпотентен.
+    print("9.5/13 Разбиение долгих нот по слогам...")
+    notes_before = len(reference_notes)
+    reference_notes = split_notes_by_syllables(reference_notes, lyrics_sync)
+    if len(reference_notes) != notes_before:
+        print(f"   ноты: {notes_before} -> {len(reference_notes)}")
+        save_json(reference_notes, reference_path)
 
     # --- 10/13 Карта песни ---
     song_map_path = out / "songMap.json"

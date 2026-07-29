@@ -48,6 +48,11 @@ def build_report(project_dir: str) -> str:
                       f"(сырое значение до коррекции: {music.get('bpm_raw', '?')})")
         lines.append(f"- Тональность: **{music.get('key', '?')}** "
                       f"(уверенность {music.get('key_confidence', '?')})")
+        key_candidates = music.get("key_candidates", [])
+        if len(key_candidates) > 1:
+            alt = ", ".join(f"{c['key']} ({c['score']})" for c in key_candidates[1:])
+            lines.append(f"  - другие варианты: {alt} — если счёт близок к победителю, "
+                          f"тональность стоит проверить на слух")
         lines.append(f"- Размер такта: {music.get('time_signature', '?')} "
                       f"(уверенность {music.get('time_signature_confidence', '?')}, "
                       f"{music.get('time_signature_note', '')})")

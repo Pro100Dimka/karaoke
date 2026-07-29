@@ -111,6 +111,7 @@ def build_midi(
         if (
             last["note"] == note["note"]
             and note["start"] - last["end"] <= MERGE_GAP
+            and not note.get("retrigger")
         ):
 
             last["end"] = max(last["end"], note["end"])

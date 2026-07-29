@@ -103,6 +103,17 @@ def estimate_key(chroma_mean: np.ndarray, boundary_chroma_mean: np.ndarray = Non
     Басовая хрома добавляет сигнал именно о том, ГДЕ корень аккорда, а
     не о том, что просто громко звучит, поэтому у неё увеличенный вес
     (bass_weight) относительно полноспектральной хромы.
+
+    ДОБАВЛЕНО: раньше функция возвращала только (лучший_ключ, score) —
+    если движок ошибался, не было видно, НАСКОЛЬКО близко второе место
+    (релятивный мажор/минор или доминанта часто оказываются очень рядом
+    по корреляции с "правильным" ключом). Теперь возвращаем ещё top-3
+    (score, key) — если счёт победителя выше второго места лишь на
+    0.01-0.02, результату не стоит доверять слепо, его нужно проверить
+    на слух.
+
+    Возвращает (best_key, best_score, top3), top3 — список (score, key)
+    по убыванию score, длиной до 3.
     """
     combined = chroma_mean.copy()
     if boundary_chroma_mean is not None:
@@ -110,17 +121,18 @@ def estimate_key(chroma_mean: np.ndarray, boundary_chroma_mean: np.ndarray = Non
     if bass_chroma_mean is not None:
         combined = combined + bass_weight * bass_chroma_mean
 
-    best_score, best_key = -1, None
+    scored = []
     for i in range(12):
         maj = np.roll(MAJOR_PROFILE, i)
         minr = np.roll(MINOR_PROFILE, i)
         maj_corr = np.corrcoef(combined, maj)[0, 1]
         min_corr = np.corrcoef(combined, minr)[0, 1]
-        if maj_corr > best_score:
-            best_score, best_key = maj_corr, f"{NOTE_NAMES[i]} major"
-        if min_corr > best_score:
-            best_score, best_key = min_corr, f"{NOTE_NAMES[i]} minor"
-    return best_key, float(best_score)
+        scored.append((float(maj_corr), f"{NOTE_NAMES[i]} major"))
+        scored.append((float(min_corr), f"{NOTE_NAMES[i]} minor"))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    best_score, best_key = scored[0]
+    return best_key, best_score, scored[:3]
 
 
 def fold_tempo(bpm: float, low: float = 70.0, high: float = 180.0) -> float:
@@ -244,8 +256,8 @@ def analyze_music(input_path: str, key_change_window_sec: float = 20.0):
         )
     boundary_chroma = compute_boundary_chroma(chroma, chroma_rms)
     bass_chroma = compute_bass_chroma(y, sr)
-    key, confidence = estimate_key(chroma.mean(axis=1), boundary_chroma,
-                                    bass_chroma_mean=bass_chroma)
+    key, confidence, key_top3 = estimate_key(chroma.mean(axis=1), boundary_chroma,
+                                              bass_chroma_mean=bass_chroma)
 
     # Смена тональности по окнам, со сглаживанием (гистерезисом): считаем
     # смену тональности подтверждённой, только если новое окно повторилось
@@ -260,7 +272,7 @@ def analyze_music(input_path: str, key_change_window_sec: float = 20.0):
         if len(segment) < sr:  # слишком коротко
             continue
         seg_chroma = librosa.feature.chroma_cqt(y=segment, sr=sr)
-        seg_key, seg_conf = estimate_key(seg_chroma.mean(axis=1))
+        seg_key, seg_conf, _ = estimate_key(seg_chroma.mean(axis=1))
         raw_windows.append({"time": round(start / sr, 2), "key": seg_key, "confidence": round(seg_conf, 3)})
 
     key_changes = []
@@ -290,6 +302,9 @@ def analyze_music(input_path: str, key_change_window_sec: float = 20.0):
         "time_signature_confidence": round(ts_confidence, 3),
         "key": key,
         "key_confidence": round(confidence, 3),
+        "key_candidates": [
+            {"key": k, "score": round(s, 3)} for s, k in key_top3
+        ],
         "key_changes": key_changes,
     }
     return result
