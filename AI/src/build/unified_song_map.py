@@ -28,6 +28,25 @@ def build_song_map(music: dict, reference_notes: list, lyrics_lines: list,
     note_starts = [n["start"] for n in reference_notes]
     line_starts = [l["start"] for l in lyrics_lines]
 
+    # tempo_curve отсортирован по времени — используем bisect вместо
+    # линейного min(...) на каждый кадр (было O(N*M), стало O(log M))
+    tempo_curve = music.get("tempo_curve", [])
+    tempo_times = [p["time"] for p in tempo_curve]
+
+    def bpm_at(t):
+        if not tempo_curve:
+            return music.get("bpm")
+        idx = bisect.bisect_left(tempo_times, t)
+        if idx == 0:
+            return tempo_curve[0]["bpm"]
+        if idx >= len(tempo_curve):
+            return tempo_curve[-1]["bpm"]
+        # ближайшая из двух соседних точек
+        before, after = tempo_curve[idx - 1], tempo_curve[idx]
+        if abs(before["time"] - t) <= abs(after["time"] - t):
+            return before["bpm"]
+        return after["bpm"]
+
     for frame in pitch_frames:
         t = frame["time"]
 
@@ -46,12 +65,7 @@ def build_song_map(music: dict, reference_notes: list, lyrics_lines: list,
         # пауза?
         in_pause = any(p["start"] <= t <= p["end"] for p in breaths.get("pauses", []))
 
-        # темп в этот момент (ближайшая точка tempo_curve)
-        bpm = music.get("bpm")
-        tempo_curve = music.get("tempo_curve", [])
-        if tempo_curve:
-            closest = min(tempo_curve, key=lambda p: abs(p["time"] - t))
-            bpm = closest["bpm"]
+        bpm = bpm_at(t)
 
         timeline.append({
             "time": round(t, 3),

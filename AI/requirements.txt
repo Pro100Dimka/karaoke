@@ -1,4 +1,4 @@
-# Установка: pip install -r requirements.txt
+# Установка (базовый набор): pip install -r requirements.txt
 # Плюс системно должен быть установлен ffmpeg (ffmpeg.org)
 
 numpy
@@ -9,5 +9,13 @@ mutagen
 librosa
 demucs          # разделение дорожек (шаг 3)
 openai-whisper  # распознавание и синхронизация текста (шаги 8-9)
-crepe           # опционально, более точный pitch tracker (шаг 5)
-pretty_midi
+pretty_midi     # экспорт мелодии в MIDI (шаг 12)
+
+# --- Опционально, для более точных результатов (всё бесплатно, open-source) ---
+# crepe + tensorflow: точнее pYIN на тихом/приглушённом вокале.
+#   pip install crepe tensorflow
+#   Использование: python -m src.analyze.vocal ... --engine crepe
+#
+# whisperx: forced-alignment поверх Whisper, точнее word-level таймингов.
+#   pip install whisperx
+#   Использование: python -m src.lyrics.sync ... --engine whisperx

@@ -23,6 +23,52 @@ def note_to_midi(note: str) -> int:
         return NOTE_NAMES.index(name) + (int(octave) + 1) * 12
 
 
+def quantize_notes(notes: list, bpm: float, first_beat: float = 0.0,
+                    division: int = 16, strength: float = 0.5) -> list:
+    """
+    Привязывает старт/конец нот к ритмической сетке (по умолчанию к
+    шестнадцатым долям), рассчитанной из BPM и времени первой доли.
+
+    Без квантизации ноты стоят в "сыром" времени пения — на слух в
+    MIDI-плеере/DAW это может звучать неряшливо, "не в такт", даже
+    если реально певец пел почти точно. Полная (жёсткая) квантизация
+    наоборот убивает живое ощущение и человеческий тайминг, поэтому
+    strength — это доля сдвига к сетке (0.0 = не трогать, 1.0 = жёстко
+    приклеить к сетке, 0.5 по умолчанию — сдвиг наполовину пути к сетке).
+    """
+    if not notes or bpm <= 0:
+        return notes
+
+    grid_step = (60.0 / bpm) / (division / 4)  # длительность одной доли сетки, сек
+
+    def snap(t: float) -> float:
+        rel = t - first_beat
+        nearest = round(rel / grid_step) * grid_step
+        snapped = first_beat + nearest
+        return t + strength * (snapped - t)
+
+    quantized = []
+    for n in notes:
+        new_start = snap(n["start"])
+        new_end = snap(n["end"])
+        if new_end <= new_start:
+            new_end = new_start + max(0.05, n.get("duration", 0.05))
+        q = dict(n)
+        q["start"] = round(new_start, 3)
+        q["end"] = round(new_end, 3)
+        q["duration"] = round(new_end - new_start, 3)
+        quantized.append(q)
+
+    # после квантизации соседние ноты могут наложиться — разводим по времени
+    quantized.sort(key=lambda n: n["start"])
+    for i in range(len(quantized) - 1):
+        if quantized[i]["end"] > quantized[i + 1]["start"]:
+            quantized[i]["end"] = max(quantized[i]["start"] + 0.05, quantized[i + 1]["start"] - 0.001)
+            quantized[i]["duration"] = round(quantized[i]["end"] - quantized[i]["start"], 3)
+
+    return quantized
+
+
 def build_midi(
     notes: list,
     instrument_name: str = "Voice Oohs",
@@ -171,6 +217,12 @@ def main():
         default="Voice Oohs",
         help="название GM-инструмента (см. pretty_midi.INSTRUMENT_MAP)",
     )
+    parser.add_argument("--quantize", action="store_true",
+                         help="привязать ноты к ритмической сетке по BPM")
+    parser.add_argument("--quantize-division", type=int, default=16,
+                         help="доли сетки квантизации (16 = шестнадцатые)")
+    parser.add_argument("--quantize-strength", type=float, default=0.5,
+                         help="сила квантизации 0..1 (0=выкл, 1=жёстко к сетке)")
 
     args = parser.parse_args()
 
@@ -182,6 +234,7 @@ def main():
     # --------------------------
 
     tempo = 120.0
+    first_beat = 0.0
 
     if args.music:
         with open(args.music, "r", encoding="utf-8") as f:
@@ -193,8 +246,16 @@ def main():
             or music.get("Tempo")
             or 120.0
         )
+        first_beat = float(music.get("first_beat_sec", 0.0))
 
     print(f"Tempo: {tempo:.2f} BPM")
+
+    if args.quantize:
+        notes = quantize_notes(notes, tempo, first_beat,
+                                division=args.quantize_division,
+                                strength=args.quantize_strength)
+        print(f"Квантизация применена: division=1/{args.quantize_division}, "
+              f"strength={args.quantize_strength}")
 
     # --------------------------
     # Создаем MIDI уже с нужным темпом

@@ -56,8 +56,18 @@ def from_whisper(audio_path: str, model_size: str = "medium", language: str | No
 
 
 def get_lyrics(audio_path: str, whisper_model: str = "medium",
-                language: str | None = None) -> tuple[str, str]:
-    """Возвращает (текст, источник)."""
+                language: str | None = None,
+                whisper_audio_path: str | None = None) -> tuple[str, str]:
+    """
+    Возвращает (текст, источник).
+
+    audio_path          — оригинальный файл (mp3), где ищем ID3-теги/.lrc
+    whisper_audio_path   — файл для распознавания речи, если теги/lrc не
+                           найдены. ВАЖНО: должен быть ИЗОЛИРОВАННЫЙ вокал
+                           (vocals.wav после Demucs), а не полный микс —
+                           иначе Whisper путает слова с инструменталом.
+                           Если не передан, используется audio_path.
+    """
     text = from_id3_tags(audio_path)
     if text:
         return text, "id3_tags"
@@ -66,20 +76,24 @@ def get_lyrics(audio_path: str, whisper_model: str = "medium",
     if text:
         return text, "lrc_file"
 
-    text = from_whisper(audio_path, whisper_model, language)
+    text = from_whisper(whisper_audio_path or audio_path, whisper_model, language)
     return text, "whisper"
 
 
 def main():
     parser = argparse.ArgumentParser(description="Получение текста песни")
-    parser.add_argument("input", help="song.mp3 или vocals.wav (для whisper лучше vocals.wav)")
+    parser.add_argument("input", help="song.mp3 (для проверки ID3-тегов/.lrc)")
     parser.add_argument("output", nargs="?", default="lyrics.txt")
+    parser.add_argument("--whisper-audio", default=None,
+                         help="vocals.wav — использовать для Whisper-фолбэка вместо "
+                              "полного микса, если теги/lrc не найдены (рекомендуется)")
     parser.add_argument("--whisper-model", default="medium",
                          choices=["tiny", "base", "small", "medium", "large"])
     parser.add_argument("--language", default=None, help="код языка, напр. ru, en")
     args = parser.parse_args()
 
-    text, source = get_lyrics(args.input, args.whisper_model, args.language)
+    text, source = get_lyrics(args.input, args.whisper_model, args.language,
+                               whisper_audio_path=args.whisper_audio)
 
     Path(args.output).write_text(text, encoding="utf-8")
     print(f"Источник текста: {source}")

@@ -25,11 +25,13 @@ from pathlib import Path
 
 from src.analyze.breath import analyze_breath
 from src.analyze.music import analyze_music
+from src.analyze.structure import segment_structure
 from src.analyze.vocal import analyze_vocal
-from src.build.convert import convert
-from src.build.midi import add_tempo_and_key, build_midi
+from src.build.convert import convert, normalize_loudness
+from src.build.midi import add_tempo_and_key, build_midi, quantize_notes
 from src.build.project import build_project
 from src.build.reference import build_reference
+from src.build.report import build_report
 from src.build.unified_song_map import build_song_map
 from src.evaluation.difficulty_map import build_difficulty_map
 from src.lyrics.get_text import get_lyrics
@@ -82,6 +84,22 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
         instrumental_path = Path(stems["instrumental"])
     vocals_path, instrumental_path = str(vocals_path), str(instrumental_path)
 
+    # --- 3.5/13 Нормализация громкости ---
+    # Пороги в analyze_breath (top_db) и confidence в pitch-детекторах
+    # калибровались на "типичной" громкости. Нормализация приводит все
+    # песни к одному уровню (-16 LUFS) перед анализом, чтобы пороги
+    # срабатывали одинаково независимо от того, как трек был сведён.
+    normalized_flag = out / "separated" / ".normalized"
+    if normalized_flag.exists():
+        print("3.5/13 Нормализация громкости — уже есть, пропускаю")
+    else:
+        print("3.5/13 Нормализация громкости...")
+        for p in (vocals_path, instrumental_path):
+            tmp_path = p + ".tmp.wav"
+            normalize_loudness(p, tmp_path)
+            Path(tmp_path).replace(p)
+        normalized_flag.touch()
+
     # --- 4/13 Анализ минусовки ---
     music_path = out / "music.json"
     if music_path.exists():
@@ -119,7 +137,7 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
         breaths = load_json(breaths_path)
     else:
         print("7/13 Анализ дыхания...")
-        breaths = analyze_breath(vocals_path)
+        breaths = analyze_breath(vocals_path, pitch_frames=pitch_frames)
         save_json(breaths, breaths_path)
 
     # --- 8/13 Текст ---
@@ -128,7 +146,8 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
         print("8/13 Получение текста — уже есть, пропускаю")
     else:
         print("8/13 Получение текста...")
-        lyrics_text, source = get_lyrics(input_mp3, whisper_model, language)
+        lyrics_text, source = get_lyrics(input_mp3, whisper_model, language,
+                                          whisper_audio_path=vocals_path)
         lyrics_path.write_text(lyrics_text, encoding="utf-8")
         print(f"   источник текста: {source}")
 
@@ -153,7 +172,7 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
             music, reference_notes, lyrics_sync, breaths, pitch_frames)
         save_json(song_map, song_map_path)
 
-    # --- 11/13 Карта сложности ---
+    # --- 11/13 Карта сложности (по строкам текста) ---
     difficulty_path = out / "difficulty.json"
     if difficulty_path.exists():
         print("11/13 Карта сложности — уже есть, пропускаю")
@@ -161,6 +180,18 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
         print("11/13 Карта сложности...")
         difficulty = build_difficulty_map(reference_notes, lyrics_sync)
         save_json(difficulty, difficulty_path)
+
+    # --- 11.5/13 Структурная сегментация + карта сложности по блокам ---
+    structure_path = out / "structure.json"
+    difficulty_by_structure_path = out / "difficultyByStructure.json"
+    if structure_path.exists() and difficulty_by_structure_path.exists():
+        print("11.5/13 Структура песни — уже есть, пропускаю")
+    else:
+        print("11.5/13 Структурная сегментация (куплет/припев)...")
+        structure_sections = segment_structure(instrumental_path)
+        save_json(structure_sections, structure_path)
+        difficulty_by_structure = build_difficulty_map(reference_notes, structure_sections)
+        save_json(difficulty_by_structure, difficulty_by_structure_path)
 
     # --- 12/13 MIDI ---
     midi_path = out / "melody.mid"
@@ -174,9 +205,13 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
             or music.get("Tempo")
             or 120.0
         )
+        first_beat = float(music.get("first_beat_sec", 0.0))
+
+        midi_notes = quantize_notes(reference_notes, tempo, first_beat,
+                                     division=16, strength=0.5)
 
         midi = build_midi(
-            reference_notes,
+            midi_notes,
             instrument_name="Voice Oohs",
             tempo=tempo,
         )
@@ -203,6 +238,10 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
         midi=str(midi_path),
     )
 
+    print("13.5/13 Формирование отчёта...")
+    report_text = build_report(str(out))
+    (out / "report.md").write_text(report_text, encoding="utf-8")
+
     print("Готово! Проект собран в:", out)
     return manifest
 
@@ -213,7 +252,7 @@ def main():
     parser.add_argument(
         "--input-dir",
         default="full_songs",
-        help="Папка с mp3 файлами"
+        help="Папка с песнями (mp3/wav/flac/m4a)"
     )
     parser.add_argument(
         "--out",
@@ -231,25 +270,29 @@ def main():
         print(f"Папка не найдена: {input_dir}")
         return
 
-    mp3_files = sorted(input_dir.glob("*.mp3"))
+    audio_extensions = ("*.mp3", "*.wav", "*.flac", "*.m4a", "*.ogg")
+    song_files = sorted(
+        f for ext in audio_extensions for f in input_dir.glob(ext)
+    )
 
-    if not mp3_files:
-        print("В папке нет mp3 файлов.")
+    if not song_files:
+        print(f"В папке '{input_dir}' не найдено аудиофайлов "
+              f"({', '.join(audio_extensions)}).")
         return
 
-    print(f"Найдено песен: {len(mp3_files)}")
+    print(f"Найдено песен: {len(song_files)}")
 
-    for index, mp3 in enumerate(mp3_files, start=1):
-        song_name = mp3.stem
+    for index, song_file in enumerate(song_files, start=1):
+        song_name = song_file.stem
         out_dir = Path(args.out) / song_name
 
         print("\n" + "=" * 80)
-        print(f"[{index}/{len(mp3_files)}] {song_name}")
+        print(f"[{index}/{len(song_files)}] {song_name}")
         print("=" * 80)
 
         try:
             run(
-                str(mp3),
+                str(song_file),
                 str(out_dir),
                 args.whisper_model,
                 args.language
