@@ -38,7 +38,7 @@ import bisect
 import json
 from collections import Counter
 
-from src.lyrics.syllabify import build_syllable_spans
+from backend.AI.src.lyrics.syllabify import build_syllable_spans
 
 
 def _times_index(pitch_frames: list) -> list:

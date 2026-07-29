@@ -2,7 +2,7 @@
 Тесты для build/midi.py — квантизация нот под ритм-сетку.
 Требует pretty_midi (для импорта модуля, хотя тестируем чистую функцию).
 """
-from src.build.midi import quantize_notes
+from backend.AI.src.build.midi import quantize_notes
 
 
 def test_quantize_notes_snaps_toward_grid():

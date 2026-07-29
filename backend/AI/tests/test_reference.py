@@ -4,8 +4,13 @@
 """
 import random
 
-from src.build.reference import (build_reference, note_to_midi, midi_to_note,
-                                   _fix_octave_errors, _merge_adjacent_same_notes)
+from backend.AI.src.build.reference import (
+    _fix_octave_errors,
+    _merge_adjacent_same_notes,
+    build_reference,
+    midi_to_note,
+    note_to_midi,
+)
 
 
 def test_note_midi_roundtrip():

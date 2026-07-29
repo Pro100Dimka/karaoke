@@ -23,22 +23,25 @@ import argparse
 import json
 from pathlib import Path
 
-from src.analyze.breath import analyze_breath
-from src.analyze.music import analyze_music
-from src.analyze.structure import segment_structure
-from src.analyze.vocal import analyze_vocal
-from src.build.convert import convert, normalize_loudness
-from src.build.midi import add_tempo_and_key, build_midi, quantize_notes
-from src.build.project import build_project
-from src.build.reference import build_reference
-from src.build.report import build_report
-from src.build.split_notes import fill_gaps_during_active_singing, split_notes_by_syllables
-from src.build.unified_song_map import build_song_map
-from src.evaluation.difficulty_map import build_difficulty_map
-from src.lyrics.get_text import get_lyrics
-from src.lyrics.sync import sync_existing_lyrics_with_whisper
-from src.preprocessing.probe import probe_file
-from src.preprocessing.separate import separate
+from backend.AI.src.analyze.breath import analyze_breath
+from backend.AI.src.analyze.music import analyze_music
+from backend.AI.src.analyze.structure import segment_structure
+from backend.AI.src.analyze.vocal import analyze_vocal
+from backend.AI.src.build.convert import convert, normalize_loudness
+from backend.AI.src.build.midi import add_tempo_and_key, build_midi, quantize_notes
+from backend.AI.src.build.project import build_project
+from backend.AI.src.build.reference import build_reference
+from backend.AI.src.build.report import build_report
+from backend.AI.src.build.split_notes import (
+    fill_gaps_during_active_singing,
+    split_notes_by_syllables,
+)
+from backend.AI.src.build.unified_song_map import build_song_map
+from backend.AI.src.evaluation.difficulty_map import build_difficulty_map
+from backend.AI.src.lyrics.get_text import get_lyrics
+from backend.AI.src.lyrics.sync import sync_existing_lyrics_with_whisper
+from backend.AI.src.preprocessing.probe import probe_file
+from backend.AI.src.preprocessing.separate import separate
 
 
 def save_json(obj, path):
