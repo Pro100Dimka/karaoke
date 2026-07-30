@@ -1,50 +1,47 @@
-from app import config
-from app.database.database import SessionLocal, init_db
-from app.database.models import Song
+"""
+Точка входа FastAPI-приложения.
+
+Это чистый backend/API — без UI. Локальный React/Electron/Qt-фронтенд
+(добавится позже) будет стучаться сюда по http://127.0.0.1:8000.
+"""
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from database import init_db
+from app.routers import songs, player, recording, analysis, cache, diagnostics, audio
+
+app = FastAPI(
+    title="Karaoke AI Backend",
+    description="Локальный backend поверх AI-пайплайна: управление песнями, плеер, запись, анализ голоса.",
+    version="0.1.0",
+)
+
+# Локальная десктоп-программа: UI будет открываться как отдельное окно/
+# процесс (Electron/Tauri/браузер) и стучаться на localhost — разрешаем
+# запросы с любого локального origin. При появлении конкретного UI-порта
+# стоит сузить allow_origins до него.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(songs.router)
+app.include_router(player.router)
+app.include_router(recording.router)
+app.include_router(analysis.router)
+app.include_router(cache.router)
+app.include_router(diagnostics.router)
+app.include_router(audio.router)
 
 
-def test_config():
-    print("=== CONFIG ===")
-    print("BASE_DIR:", config.BASE_DIR)
-    print("AI_DIR:", config.AI_DIR)
-    print("FULL_SONGS_DIR:", config.FULL_SONGS_DIR)
-    print("SONG_OUTPUT_DIR:", config.SONG_OUTPUT_DIR)
-    print("DB_PATH:", config.DB_PATH)
-    print()
-
-
-def test_database():
-    print("=== DATABASE ===")
+@app.on_event("startup")
+def on_startup() -> None:
     init_db()
-    print("SQLite успешно инициализирован.")
-    print()
 
 
-def test_models():
-    print("=== MODELS ===")
-
-    db = SessionLocal()
-
-    song = Song(
-        title="Test Song",
-        original_filename="test.mp3",
-        source_path="full_songs/test.mp3",
-        slug="test-song",
-    )
-
-    db.add(song)
-    db.commit()
-    db.refresh(song)
-
-    print("Song ID:", song.id)
-    print("Title:", song.title)
-    print("Status:", song.status)
-
-    db.close()
-    print()
-
-
-if __name__ == "__main__":
-    test_config()
-    test_database()
-    test_models()
+@app.get("/")
+def root():
+    return {"name": "Karaoke AI Backend", "docs": "/docs"}

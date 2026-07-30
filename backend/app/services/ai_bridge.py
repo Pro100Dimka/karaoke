@@ -17,7 +17,7 @@ AI/ — самостоятельный пакет со своими импорт
 """
 import sys
 
-from backend.app import config
+import config
 
 _AI_PATH_ADDED = False
 

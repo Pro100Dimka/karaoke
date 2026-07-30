@@ -1,22 +1,18 @@
-# Установка (базовый набор): pip install -r requirements.txt
-# Плюс системно должен быть установлен ffmpeg (ffmpeg.org)
+# Зависимости backend-слоя (API/БД). Зависимости самого AI-пайплайна
+# (librosa/demucs/whisper/pretty_midi/...) описаны отдельно в
+# AI/requirements.txt — устанавливаются так же через pip install -r,
+# оставлены раздельно, чтобы backend можно было поднять и без тяжёлых
+# ML-зависимостей (для разработки API/БД без прогона пайплайна).
 
-numpy
-scipy
+fastapi
+uvicorn[standard]
+python-multipart      # нужен FastAPI для приёма файлов (UploadFile)
 sqlalchemy
-soundfile
-pydub
-mutagen
-librosa
-demucs          # разделение дорожек (шаг 3)
-openai-whisper  # распознавание и синхронизация текста (шаги 8-9)
-pretty_midi     # экспорт мелодии в MIDI (шаг 12)
+pydantic
 
-# --- Опционально, для более точных результатов (всё бесплатно, open-source) ---
-# crepe + tensorflow: точнее pYIN на тихом/приглушённом вокале.
-#   pip install crepe tensorflow
-#   Использование: python -m src.analyze.vocal ... --engine crepe
-#
-# whisperx: forced-alignment поверх Whisper, точнее word-level таймингов.
-#   pip install whisperx
-#   Использование: python -m src.lyrics.sync ... --engine whisperx
+# Запись голоса и работа с аудио-устройствами
+sounddevice
+soundfile
+numpy
+
+-r AI/requirements.txt

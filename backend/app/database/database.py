@@ -5,9 +5,10 @@ SQLite выбрана потому, что это десктоп-програм�
 не нужен отдельный процесс сервера БД, работает "из коробки" без установки
 чего-либо дополнительного пользователем.
 """
-from app import config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
+
+import config
 
 # check_same_thread=False — нужно, т.к. FastAPI обрабатывает запросы в разных
 # потоках (и фоновая обработка песни в pipeline_service тоже работает в
@@ -26,8 +27,7 @@ Base = declarative_base()
 
 def init_db() -> None:
     """Создаёт таблицы, если их ещё нет. Вызывается один раз при старте приложения."""
-    import app.database.models  # noqa: F401
-
+    import models  # noqa: F401  (регистрирует модели в Base.metadata перед create_all)
     Base.metadata.create_all(bind=engine)
 
 
