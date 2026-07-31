@@ -141,12 +141,15 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
             pitch_frames,
             # Keep quiet syllables in the guide while still filtering
             # single-frame pYIN artefacts in the post-processing stages.
-            min_note_duration=0.10,
+            min_note_duration=0.12,
             confidence_percentile=18.0,
             min_confidence_floor=0.03,
             max_confidence_ceiling=0.42,
-            smoothing_window=5,
-            stable_frames=3,
+            # A vocal pitch tracker reports vibrato as repeated semitone
+            # crossings. Require a short held contour before emitting a new
+            # karaoke note, so the guide follows melody rather than tremolo.
+            smoothing_window=9,
+            stable_frames=7,
             max_gap_sec=0.12,
         )
         save_json(reference_notes, reference_path)

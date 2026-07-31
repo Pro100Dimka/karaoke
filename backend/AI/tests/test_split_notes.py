@@ -66,7 +66,7 @@ def test_build_syllable_spans_skips_lines_without_words():
     assert [s["text"] for s in spans] == ["го", "род"]
 
 
-def test_split_notes_by_syllables_splits_long_note_on_multi_syllable_phrase():
+def test_split_notes_by_syllables_prefers_real_word_boundaries():
     """
     Синтетика из жалобы пользователя: одна долгая нота G3 (0-3с), а на
     ней поётся "широкий город" (2 слова, 5 слогов) — должно получиться
@@ -82,7 +82,7 @@ def test_split_notes_by_syllables_splits_long_note_on_multi_syllable_phrase():
     }]
     split = split_notes_by_syllables(notes, lyrics_lines, min_segment_duration=0.1, retrigger_gap=0.02)
 
-    assert len(split) == 5, f"ожидалось 5 нот-слогов, получили {len(split)}: {split}"
+    assert len(split) == 2, f"expected two word-aligned notes, got {len(split)}: {split}"
     assert all(n["note"] == "G3" for n in split)
     assert split[0].get("retrigger") is not True
     assert all(n.get("retrigger") is True for n in split[1:])
@@ -208,7 +208,7 @@ def test_fill_gaps_during_active_singing_fills_detector_dropout():
     assert len(filled) == 3, f"ожидалась вставленная нота-заплатка: {filled}"
     patch = filled[1]
     assert patch["note"] == "G#3"
-    assert patch.get("gap_filled") is True
+    assert patch.get("source") == "sustained_gap_recovery"
     assert patch["confidence"] < 0.5
 
 

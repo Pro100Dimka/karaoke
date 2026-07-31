@@ -153,6 +153,14 @@ export default function Library() {
   return (
     <div className="library-page">
       <section className="library-hero">
+        <div className="library-hero-3d-scene" aria-hidden="true">
+          <i className="library-hero-disc" />
+          <i className="library-hero-prism" />
+          <i className="library-hero-orbit library-hero-orbit--one" />
+          <i className="library-hero-orbit library-hero-orbit--two" />
+          <i className="library-hero-spark library-hero-spark--one" />
+          <i className="library-hero-spark library-hero-spark--two" />
+        </div>
         <div className="library-hero-brand-mark" aria-hidden="true">
           <Music2 size={30} />
           <i />
@@ -177,7 +185,7 @@ export default function Library() {
         </div>
       </section>
       <Panel
-        title="Библиотека песен"
+        title=" "
         actions={
           <div style={{ display: "flex", gap: 8 }}>
             <button className="btn btn-primary" onClick={handleAddClick}>
@@ -220,7 +228,67 @@ export default function Library() {
           </p>
         )}
 
-        <table className="data-table">
+        <div className="library-card-deck">
+          {filtered.map((song, cardIndex) => {
+            const isWorking = song.status === "processing" || song.status === "cancelling";
+            const isReady = song.status === "done";
+            return (
+              <article className={`library-song-card library-song-card--${song.status}`} key={`card-${song.id}`}>
+                <div className="library-song-card-art" aria-hidden="true">
+                  <i className="library-card-vinyl" />
+                  <i className="library-card-prism" />
+                  <i className="library-card-spark library-card-spark--one" />
+                  <i className="library-card-spark library-card-spark--two" />
+                  <Music2 size={26} />
+                  <div className="library-song-card-wave">
+                    {[32, 58, 39, 74, 46, 66, 34, 52, 78, 41, 62, 29].map((height, index) => (
+                      <i key={index} style={{ height: `${height}%`, animationDelay: `${(cardIndex + index) * -85}ms` }} />
+                    ))}
+                  </div>
+                </div>
+                <div className="library-song-card-main">
+                  <div className="library-song-card-heading">
+                    <div className="song-title-content">
+                      <span className="song-title-name">{song.title}</span>
+                    </div>
+                    <StatusBadge status={song.status} />
+                  </div>
+                  <p className="library-song-card-meta">
+                    {song.key_override || "Тональность определяется"}
+                    {song.tempo_override ? ` · ${song.tempo_override} BPM` : ""}
+                    {song.difficulty_override ? ` · ${song.difficulty_override}` : ""}
+                  </p>
+                  {isWorking ? (
+                    <button className="library-song-card-progress" onClick={() => setProcessingSong(song)}>
+                      <ProgressBar percent={song.progress_percent} />
+                      <span>{song.progress_percent}% · Открыть обработку</span>
+                    </button>
+                  ) : (
+                    <div className="library-song-card-ready"><span />{isReady ? "Готова к исполнению" : `${song.progress_percent || 0}% подготовлено`}</div>
+                  )}
+                  <div className="library-song-card-footer">
+                    <span className="text-secondary">{formatDate(song.created_at)}</span>
+                    <div className="library-song-card-actions">
+                      {isReady ? (
+                        <>
+                          <button className="btn btn-primary" onClick={() => navigate("/karaoke", { state: { songId: song.id } })}><Play size={15} fill="currentColor" /> Караоке</button>
+                          <button className="btn btn-ghost" title="Прослушать записи" onClick={() => setRecordingsSong(song)}><Headphones size={16} /></button>
+                        </>
+                      ) : (
+                        <button className="btn btn-primary" disabled={isWorking} onClick={() => handleProcess(song)}><Play size={15} fill="currentColor" /> Обработать</button>
+                      )}
+                      <button className="btn btn-ghost" title="Информация" onClick={() => setInfoSong(song)}><Info size={16} /></button>
+                      <button className="btn btn-danger" title="Удалить" onClick={() => handleDelete(song)}><Trash2 size={15} /></button>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+          {filtered.length === 0 && !error && <div className="library-card-empty text-muted">Пока нет ни одной песни — добавьте первую</div>}
+        </div>
+
+        <table className="data-table library-table-fallback">
           <thead>
             <tr>
               <th>Название</th>

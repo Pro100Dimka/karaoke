@@ -1000,7 +1000,7 @@ export default function Karaoke({ onOpenAppSettings }) {
         )
       )}
 
-      <div className={`karaoke-immersive-atmosphere ${isPlaying ? "is-playing" : ""}`} aria-hidden="true">
+      <div className={`karaoke-immersive-atmosphere ${isPlaying ? "is-playing" : ""} ${isPitchDetected ? "is-singing" : ""}`} aria-hidden="true">
         <i className="karaoke-atmosphere-orb" />
         <i className="karaoke-atmosphere-orb karaoke-atmosphere-orb-secondary" />
         <i className="karaoke-atmosphere-grid" />

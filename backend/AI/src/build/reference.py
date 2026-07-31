@@ -102,9 +102,9 @@ def _fix_octave_errors(notes: list, max_octave_note_duration: float = 0.15) -> l
     return result
 
 
-def _fix_pitch_spikes(notes: list, max_spike_duration: float = 0.15,
-                       min_jump_semitones: int = 3,
-                       max_neighbor_diff_semitones: int = 2) -> list:
+def _fix_pitch_spikes(notes: list, max_spike_duration: float = 0.18,
+                       min_jump_semitones: int = 1,
+                       max_neighbor_diff_semitones: int = 1) -> list:
     """
     Обобщение _fix_octave_errors: раньше ловились только СТРОГО октавные
     (ровно 12 полутонов) выбросы между ДВУМЯ ОДИНАКОВЫМИ соседями. На
