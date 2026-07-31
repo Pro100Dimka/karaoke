@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { Panel } from "../components/ui";
 
@@ -77,6 +78,16 @@ export default function Settings() {
         <Row label="Автообновление">
           <input type="checkbox" checked={form.autoupdate} onChange={(e) => set("autoupdate")(e.target.checked)} />
         </Row>
+      </div>
+      <div style={{ marginTop: 28, paddingTop: 18, borderTop: "1px solid var(--card-border)" }}>
+        <div className="text-secondary" style={{ fontSize: 12, marginBottom: 10 }}>Обслуживание и информация</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Link className="btn btn-ghost" to="/models">Модели AI</Link>
+          <Link className="btn btn-ghost" to="/memory">Хранилище</Link>
+          <Link className="btn btn-ghost" to="/history">История</Link>
+          <Link className="btn btn-ghost" to="/diagnostics">Диагностика</Link>
+          <Link className="btn btn-ghost" to="/about">О программе</Link>
+        </div>
       </div>
     </Panel>
   );

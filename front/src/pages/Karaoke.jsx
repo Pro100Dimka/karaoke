@@ -22,11 +22,24 @@ function normalizeLyrics(raw) {
 
 function normalizeNotes(raw) {
   if (!raw) return [];
-  return raw.map((n) => ({
-    start: n.start,
-    end: n.end,
-    midi: n.midi ?? n.pitch ?? 60,
-  }));
+  return raw
+    .map((note) => ({
+      start: Number(note.start),
+      end: Number(note.end),
+      midi: note.midi ?? note.pitch ?? noteNameToMidi(note.note),
+    }))
+    .filter((note) => Number.isFinite(note.start) && Number.isFinite(note.end) && Number.isFinite(note.midi));
+}
+
+function noteNameToMidi(noteName) {
+  if (typeof noteName !== "string") return null;
+  const match = /^([A-Ga-g])([#b]?)(-?\d+)$/.exec(noteName.trim());
+  if (!match) return null;
+  const semitones = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  const [, letter, accidental, octaveText] = match;
+  const base = semitones[letter.toUpperCase()];
+  const offset = accidental === "#" ? 1 : accidental === "b" ? -1 : 0;
+  return (Number(octaveText) + 1) * 12 + base + offset;
 }
 
 function formatTime(sec) {
@@ -61,11 +74,17 @@ export default function Karaoke() {
   const [keyShift, setKeyShift] = useState(0);
   const [showLyrics, setShowLyrics] = useState(true);
   const [showNotes, setShowNotes] = useState(true);
+  const currentTimeRef = useRef(currentTime);
+  const durationRef = useRef(duration);
+  currentTimeRef.current = currentTime;
+  durationRef.current = duration;
 
   useEffect(() => {
     if (!song || song.status !== "done") return;
     api.getResult(song.id).then(setResult).catch(() => setResult(null));
     setKeyShift(0);
+    setShowLyrics(song.show_lyrics ?? true);
+    setShowNotes(song.show_notes ?? true);
   }, [song?.id, song?.status]);
 
   const lyrics = useMemo(() => normalizeLyrics(result?.lyrics_sync), [result]);
@@ -74,24 +93,34 @@ export default function Karaoke() {
   const currentLineIndex = lyrics.findIndex((l) => currentTime >= l.start && currentTime < l.end);
   const currentLine = lyrics[currentLineIndex];
   const nextLine = lyrics[currentLineIndex + 1];
+  const previousLine = lyrics[currentLineIndex - 1];
 
   // Держим instrumental/vocals синхронизированными между собой.
   useEffect(() => {
     const instr = instrumentalRef.current;
     const voc = vocalsRef.current;
     if (!instr || !voc) return;
-    const onTimeUpdate = () => setCurrentTime(instr.currentTime);
     const onLoadedMeta = () => setDuration(instr.duration || 0);
     const onEnded = () => setIsPlaying(false);
-    instr.addEventListener("timeupdate", onTimeUpdate);
     instr.addEventListener("loadedmetadata", onLoadedMeta);
     instr.addEventListener("ended", onEnded);
     return () => {
-      instr.removeEventListener("timeupdate", onTimeUpdate);
       instr.removeEventListener("loadedmetadata", onLoadedMeta);
       instr.removeEventListener("ended", onEnded);
     };
   }, [song?.id]);
+
+  useEffect(() => {
+    if (!isPlaying) return undefined;
+    let animationFrameId;
+    const updatePosition = () => {
+      const position = instrumentalRef.current?.currentTime;
+      if (Number.isFinite(position)) setCurrentTime(position);
+      animationFrameId = requestAnimationFrame(updatePosition);
+    };
+    updatePosition();
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [isPlaying]);
 
   useEffect(() => {
     if (instrumentalRef.current) instrumentalRef.current.volume = musicVolume;
@@ -144,6 +173,26 @@ export default function Karaoke() {
   };
 
   const skip = (delta) => seekTo(Math.max(0, Math.min(duration, currentTime + delta)));
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.target.closest("input, select, textarea, button")) return;
+      if (event.code === "Space") {
+        event.preventDefault();
+        togglePlay();
+      } else if (event.code === "ArrowLeft") {
+        event.preventDefault();
+        seekTo(Math.max(0, currentTimeRef.current - 5));
+      } else if (event.code === "ArrowRight") {
+        event.preventDefault();
+        seekTo(Math.min(durationRef.current, currentTimeRef.current + 5));
+      } else if (event.code === "Escape") {
+        stop();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isPlaying]);
 
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
@@ -200,31 +249,21 @@ export default function Karaoke() {
         </div>
       </div>
 
-      {/* Текст с подсветкой текущей строки */}
+      {/* Large, high-contrast lyric cue: previous / current / next line. */}
       {showLyrics && (
-        <div style={{ textAlign: "center", padding: "48px 40px 24px", minHeight: 180 }}>
+        <div className="karaoke-lyrics">
           {lyrics.length === 0 && <p className="text-muted">Синхронизированный текст недоступен</p>}
-          {currentLine && (
-            <div
-              style={{
-                fontSize: 30,
-                fontWeight: 800,
-                background: "var(--accent-gradient)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                marginBottom: 14,
-              }}
-            >
-              {currentLine.text}
-            </div>
-          )}
-          {nextLine && <div style={{ fontSize: 20, color: "var(--text-secondary)" }}>{nextLine.text}</div>}
+          {previousLine && <div className="karaoke-lyric karaoke-lyric-muted">{previousLine.text}</div>}
+          {currentLine ? (
+            <div className="karaoke-lyric karaoke-lyric-current">{currentLine.text}</div>
+          ) : lyrics.length > 0 && <div className="karaoke-lyric karaoke-lyric-current">Слушайте вступление…</div>}
+          {nextLine && <div className="karaoke-lyric karaoke-lyric-next">{nextLine.text}</div>}
         </div>
       )}
 
-      {/* Линия мелодии */}
+      {/* Piano-roll notes: visible pitch lanes make melody and intervals readable. */}
       {showNotes && notes.length > 0 && (
-        <MelodyLine notes={notes} currentTime={currentTime} duration={duration} keyShift={keyShift} />
+        <MelodyRoll notes={notes} currentTime={currentTime} keyShift={keyShift} />
       )}
 
       {/* Таймлайн + транспорт */}
@@ -255,22 +294,26 @@ export default function Karaoke() {
           <button className="btn btn-ghost" onClick={() => skip(5)}><SkipForward size={16} /></button>
         </div>
 
+        <p className="text-muted" style={{ margin: "0 0 12px", textAlign: "center", fontSize: 11 }}>
+          Space — пуск/пауза · ← / → — перемотка на 5 секунд · Esc — стоп
+        </p>
+
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, fontSize: 12 }}>
           <SliderField label="Громкость музыки" value={musicVolume} min={0} max={1} step={0.05}
-            onChange={setMusicVolume} display={`${Math.round(musicVolume * 100)}%`} />
+            onChange={setMusicVolume} display={`${Math.round(musicVolume * 100)}%`} disabled={isPlaying} />
           <SliderField label="Громкость вокала" value={vocalVolume} min={0} max={1} step={0.05}
-            onChange={setVocalVolume} display={`${Math.round(vocalVolume * 100)}%`} />
+            onChange={setVocalVolume} display={`${Math.round(vocalVolume * 100)}%`} disabled={isPlaying} />
           <SliderField label="Скорость" value={speed} min={0.5} max={1.5} step={0.05}
-            onChange={setSpeed} display={`${speed.toFixed(2)}x`} />
+            onChange={setSpeed} display={`${speed.toFixed(2)}x`} disabled={isPlaying} />
           <SliderField label="Тональность" value={keyShift} min={-6} max={6} step={1}
-            onChange={setKeyShift} display={`${keyShift > 0 ? "+" : ""}${keyShift}`} />
+            onChange={setKeyShift} display={`${keyShift > 0 ? "+" : ""}${keyShift}`} disabled={isPlaying} />
         </div>
       </div>
     </div>
   );
 }
 
-function SliderField({ label, value, min, max, step, onChange, display }) {
+function SliderField({ label, value, min, max, step, onChange, display, disabled }) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-secondary)", marginBottom: 4 }}>
@@ -283,6 +326,7 @@ function SliderField({ label, value, min, max, step, onChange, display }) {
         max={max}
         step={step}
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
         style={{ width: "100%", accentColor: "#a855f7" }}
       />
@@ -290,33 +334,48 @@ function SliderField({ label, value, min, max, step, onChange, display }) {
   );
 }
 
-function MelodyLine({ notes, currentTime, duration, keyShift }) {
-  const width = 900;
-  const height = 90;
-  const midiValues = notes.map((n) => n.midi + keyShift);
-  const minMidi = Math.min(...midiValues) - 2;
-  const maxMidi = Math.max(...midiValues) + 2;
-  const span = Math.max(1, maxMidi - minMidi);
-  const total = duration || Math.max(...notes.map((n) => n.end), 1);
+function MelodyRoll({ notes, currentTime, keyShift }) {
+  const width = 1000;
+  const height = 310;
+  const windowSeconds = 12;
+  const viewStart = Math.max(0, currentTime - 2.5);
+  const viewEnd = viewStart + windowSeconds;
+  const visibleNotes = notes.filter((note) => note.end >= viewStart && note.start <= viewEnd);
+  const scaleNotes = visibleNotes.length > 0 ? visibleNotes : notes;
+  const midiValues = scaleNotes.map((n) => n.midi + keyShift);
+  const minMidi = Math.floor(Math.min(...midiValues)) - 2;
+  const maxMidi = Math.ceil(Math.max(...midiValues)) + 2;
+  const pitchRange = Math.max(1, maxMidi - minMidi + 1);
+  const rowHeight = height / pitchRange;
 
-  const x = (t) => (t / total) * width;
-  const y = (midi) => height - ((midi - minMidi) / span) * height;
+  const x = (time) => ((time - viewStart) / windowSeconds) * width;
+  const y = (midi) => height - (midi - minMidi + 1) * rowHeight;
 
   return (
-    <div style={{ padding: "0 24px 8px", overflow: "hidden" }}>
-      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} preserveAspectRatio="none">
-        {notes.map((n, i) => (
+    <div className="melody-roll">
+      <div className="melody-roll-caption">Мелодия · текущий фрагмент</div>
+      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} preserveAspectRatio="none" aria-label="Ноты мелодии">
+        {Array.from({ length: pitchRange }, (_, index) => {
+          const midi = minMidi + index;
+          const isOctave = midi % 12 === 0;
+          return <g key={midi}>
+            <line x1={0} x2={width} y1={y(midi) + rowHeight} y2={y(midi) + rowHeight}
+              stroke={isOctave ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.08)"} />
+            {isOctave && <text x={8} y={y(midi) + rowHeight - 4} fill="rgba(255,255,255,0.45)" fontSize="20">C{Math.floor(midi / 12) - 1}</text>}
+          </g>;
+        })}
+        {visibleNotes.map((n, i) => (
           <rect
             key={i}
-            x={x(n.start)}
-            y={y(n.midi + keyShift) - 3}
-            width={Math.max(2, x(n.end) - x(n.start) - 1)}
-            height={6}
-            rx={3}
-            fill={currentTime >= n.start && currentTime < n.end ? "#ec4899" : "rgba(139,92,246,0.55)"}
+            x={Math.max(0, x(n.start))}
+            y={y(n.midi + keyShift) + 3}
+            width={Math.max(4, Math.min(width, x(n.end)) - Math.max(0, x(n.start)) - 2)}
+            height={Math.max(8, rowHeight - 6)}
+            rx={5}
+            fill={currentTime >= n.start && currentTime < n.end ? "#f472b6" : "rgba(139,92,246,0.76)"}
           />
         ))}
-        <line x1={x(currentTime)} x2={x(currentTime)} y1={0} y2={height} stroke="#fff" strokeOpacity={0.4} strokeWidth={1.5} />
+        <line x1={x(currentTime)} x2={x(currentTime)} y1={0} y2={height} stroke="#fff" strokeOpacity={0.9} strokeWidth={2} />
       </svg>
     </div>
   );

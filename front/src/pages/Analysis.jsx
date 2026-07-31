@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
@@ -17,10 +17,11 @@ export default function Analysis() {
     [song?.id]
   );
 
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedId, setSelectedId] = useState(location.state?.recordingId || null);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const autoRunStarted = useRef(false);
 
   const runAnalysis = async (recordingId) => {
     setSelectedId(recordingId);
@@ -36,6 +37,15 @@ export default function Analysis() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (location.state?.autoRun && location.state?.recordingId && !autoRunStarted.current) {
+      autoRunStarted.current = true;
+      runAnalysis(location.state.recordingId);
+    }
+  // The route state represents a one-time action after recording is stopped.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 18 }}>

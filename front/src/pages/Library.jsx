@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Play, Trash2, FolderOpen, Search, Info } from "lucide-react";
+import { Plus, Play, Trash2, FolderOpen, Search, Info, Settings2, Mic } from "lucide-react";
 import { api } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
 import { Panel, StatusBadge, ProgressBar } from "../components/ui";
@@ -132,13 +132,16 @@ export default function Library() {
                 <td>
                   <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                     {song.status === "done" ? (
-                      <button
-                        className="btn btn-ghost"
-                        title="Открыть в караоке"
-                        onClick={() => navigate("/karaoke", { state: { songId: song.id } })}
-                      >
-                        <Play size={14} />
-                      </button>
+                      <>
+                        <button className="btn btn-ghost" title="Открыть в караоке"
+                          onClick={() => navigate("/karaoke", { state: { songId: song.id } })}>
+                          <Play size={14} />
+                        </button>
+                        <button className="btn btn-ghost" title="Записать исполнение"
+                          onClick={() => navigate("/recording", { state: { songId: song.id } })}>
+                          <Mic size={14} />
+                        </button>
+                      </>
                     ) : (
                       <button
                         className="btn btn-ghost"
@@ -151,6 +154,10 @@ export default function Library() {
                     )}
                     <button className="btn btn-ghost" title="Информация" onClick={() => setInfoSong(song)}>
                       <Info size={14} />
+                    </button>
+                    <button className="btn btn-ghost" title="Настройки песни"
+                      onClick={() => navigate("/song-settings", { state: { songId: song.id } })}>
+                      <Settings2 size={14} />
                     </button>
                     <button
                       className="btn btn-ghost"

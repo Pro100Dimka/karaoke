@@ -1,22 +1,13 @@
 import { NavLink } from "react-router-dom";
 import {
-  Library, Cpu, Mic2, CircleDot, BarChart3, Music2, Settings as SettingsIcon,
-  Stethoscope, Boxes, History as HistoryIcon, Info,
+  Library, CircleDot, Music2, Settings as SettingsIcon,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { to: "/", label: "Библиотека", icon: Library, end: true },
-  { to: "/processing", label: "Обработка", icon: Cpu },
   { to: "/karaoke", label: "Караоке", icon: Music2 },
   { to: "/recording", label: "Запись", icon: CircleDot },
-  { to: "/analysis", label: "Анализ", icon: BarChart3 },
-  { to: "/song-settings", label: "Песня", icon: Mic2 },
   { to: "/settings", label: "Настройки", icon: SettingsIcon },
-  { to: "/memory", label: "Память", icon: Boxes },
-  { to: "/diagnostics", label: "Диагностика", icon: Stethoscope },
-  { to: "/models", label: "Модели AI", icon: Boxes },
-  { to: "/history", label: "История", icon: HistoryIcon },
-  { to: "/about", label: "О программе", icon: Info },
 ];
 
 export default function Sidebar() {
@@ -31,7 +22,7 @@ export default function Sidebar() {
         flexDirection: "column",
         alignItems: "center",
         padding: "16px 0",
-        gap: 4,
+        gap: 6,
         overflowY: "auto",
       }}
     >

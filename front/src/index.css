@@ -242,3 +242,25 @@ table.data-table tbody tr:hover {
 .text-muted { color: var(--text-muted); }
 .text-secondary { color: var(--text-secondary); }
 .mono { font-variant-numeric: tabular-nums; }
+
+.karaoke-lyrics {
+  min-height: 230px;
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  padding: 32px 48px 20px;
+  text-align: center;
+}
+.karaoke-lyric { line-height: 1.18; transition: opacity 0.2s ease; }
+.karaoke-lyric-muted { color: var(--text-muted); font-size: clamp(16px, 1.6vw, 22px); }
+.karaoke-lyric-current {
+  font-size: clamp(28px, 3.2vw, 52px);
+  font-weight: 800;
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-wrap: balance;
+}
+.karaoke-lyric-next { color: var(--text-secondary); font-size: clamp(19px, 2vw, 30px); }
+.melody-roll { margin: 0 24px 16px; padding: 12px; border-radius: 12px; background: rgba(5, 3, 12, 0.34); border: 1px solid rgba(168, 85, 247, 0.18); }
+.melody-roll-caption { margin: 0 0 8px 4px; color: var(--text-muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }

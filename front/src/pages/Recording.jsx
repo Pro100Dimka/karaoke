@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Mic, Square, Trash2, Play } from "lucide-react";
 import { api } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
@@ -7,6 +7,7 @@ import { Panel } from "../components/ui";
 
 export default function Recording() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { data: songs } = usePolling(api.listSongs, 5000, []);
   const [songId] = useState(location.state?.songId || null);
   const song = songId ? (songs || []).find((s) => s.id === songId) : (songs || []).find((s) => s.status === "done");
@@ -17,6 +18,9 @@ export default function Recording() {
   const [sessionId, setSessionId] = useState(null);
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState(null);
+  const timerRef = useRef(null);
+
+  useEffect(() => () => clearInterval(timerRef.current), []);
 
   const { data: recordings } = usePolling(
     () => (song ? api.listRecordingsForSong(song.id) : Promise.resolve([])),
@@ -41,8 +45,7 @@ export default function Recording() {
       const res = await api.startRecording(song.id);
       setSessionId(res.recording_session_id);
       setElapsed(0);
-      const timer = setInterval(() => setElapsed((s) => s + 1), 1000);
-      window.__recTimer = timer;
+      timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
     } catch (err) {
       setError(err.message);
     }
@@ -50,9 +53,12 @@ export default function Recording() {
 
   const stopRecording = async () => {
     if (!sessionId) return;
-    clearInterval(window.__recTimer);
+    clearInterval(timerRef.current);
     try {
-      await api.stopRecording(sessionId);
+      const recording = await api.stopRecording(sessionId);
+      navigate("/analysis", {
+        state: { songId: song.id, recordingId: recording.id, autoRun: true },
+      });
     } catch (err) {
       setError(err.message);
     } finally {
