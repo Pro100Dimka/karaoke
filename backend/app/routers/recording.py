@@ -24,11 +24,14 @@ def start_recording(body: schemas.RecordingStartRequest, db: Session = Depends(g
 
     settings = audio_service.get_settings(db)
     try:
+        audio_service.stop_monitoring()
         session_id = recording_service.start_recording(
             song_id=song.id,
-            device_id=settings.input_device_id,
+            device_id=audio_service.preferred_input_device(settings.input_device_id),
+            output_device_id=audio_service.preferred_output_device(),
             gain=settings.volume,
             monitoring_enabled=settings.monitoring_enabled,
+            playback_offset_sec=body.position_sec,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -55,13 +58,14 @@ def resume_recording(session_id: str):
 
 
 @router.post("/stop", response_model=schemas.RecordingOut)
-def stop_recording(session_id: str):
+def stop_recording(session_id: str, db: Session = Depends(get_db)):
     try:
         recording = recording_service.stop_recording(session_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    audio_service.configure_monitoring(audio_service.get_settings(db))
     return recording
 
 
@@ -77,6 +81,17 @@ def list_recordings_for_song(song_id: str, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/library", response_model=list[schemas.RecordedSongOut])
+def list_recording_library(db: Session = Depends(get_db)):
+    rows = (
+        db.query(models.Recording, models.Song.title)
+        .join(models.Song, models.Recording.song_id == models.Song.id)
+        .order_by(models.Recording.created_at.desc())
+        .all()
+    )
+    return [{**schemas.RecordingOut.model_validate(recording).model_dump(), "song_title": title} for recording, title in rows]
+
+
 @router.get("/{recording_id}", response_model=schemas.RecordingOut)
 def get_recording(recording_id: str, db: Session = Depends(get_db)):
     recording = db.query(models.Recording).filter(models.Recording.id == recording_id).first()
@@ -90,6 +105,17 @@ def get_recording_file(recording_id: str, db: Session = Depends(get_db)):
     recording = db.query(models.Recording).filter(models.Recording.id == recording_id).first()
     if recording is None:
         raise HTTPException(status_code=404, detail="Запись не найдена")
+    return FileResponse(recording.path, media_type="audio/wav", filename=recording.filename)
+
+
+@router.get("/{recording_id}/performance")
+def get_performance_file(recording_id: str, db: Session = Depends(get_db)):
+    recording = db.query(models.Recording).filter(models.Recording.id == recording_id).first()
+    if recording is None:
+        raise HTTPException(status_code=404, detail="Recording not found")
+    mixed_path = recording_service.performance_mix_path(recording)
+    if mixed_path.is_file():
+        return FileResponse(mixed_path, media_type="audio/mpeg", filename=mixed_path.name)
     return FileResponse(recording.path, media_type="audio/wav", filename=recording.filename)
 
 

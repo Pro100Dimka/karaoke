@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
 import { Panel } from "../components/ui";
+import { Dropdown } from "../components/Dropdown";
 
 const DIFFICULTIES = ["Лёгкий", "Средний", "Сложный", "Эксперт"];
 
@@ -14,10 +15,22 @@ export default function SongSettings() {
 
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [lyricsText, setLyricsText] = useState("");
+  const [lyricsError, setLyricsError] = useState(null);
 
   useEffect(() => {
     if (song) setForm({ ...song });
   }, [song?.id]);
+
+  useEffect(() => {
+    if (!song || song.status !== "done") {
+      setLyricsText("");
+      return;
+    }
+    api.getResult(song.id)
+      .then((result) => setLyricsText(JSON.stringify(result.lyrics_sync || [], null, 2)))
+      .catch(() => setLyricsText(""));
+  }, [song?.id, song?.status]);
 
   if (!song || !form) {
     return (
@@ -48,6 +61,19 @@ export default function SongSettings() {
     }
   };
 
+  const saveLyrics = async () => {
+    try {
+      const lyrics = JSON.parse(lyricsText);
+      if (!Array.isArray(lyrics) && (typeof lyrics !== "object" || lyrics === null)) {
+        throw new Error("Текст должен быть массивом строк или объектом JSON");
+      }
+      await api.updateLyrics(song.id, lyrics);
+      setLyricsError(null);
+    } catch (error) {
+      setLyricsError(error.message || "Не удалось сохранить текст");
+    }
+  };
+
   return (
     <div style={{ maxWidth: 720 }}>
       <Panel title={`Настройки песни — ${song.title}`}>
@@ -68,11 +94,8 @@ export default function SongSettings() {
           </div>
         </FieldRow>
         <FieldRow label="Уровень сложности">
-          <select className="input" value={form.difficulty_override || ""}
-                  onChange={(e) => set("difficulty_override")(e.target.value)}>
-            <option value="">Авто (по AI)</option>
-            {DIFFICULTIES.map((d) => <option key={d} value={d}>{d}</option>)}
-          </select>
+          <Dropdown value={form.difficulty_override || ""} onChange={set("difficulty_override")}
+            options={[{ value: "", label: "Авто (по AI)" }, ...DIFFICULTIES.map((value) => ({ value, label: value }))]} />
         </FieldRow>
         <FieldRow label="Показывать текст">
           <input type="checkbox" checked={form.show_lyrics} onChange={(e) => set("show_lyrics")(e.target.checked)} />
@@ -84,6 +107,17 @@ export default function SongSettings() {
           {saving ? "Сохранение..." : "Сохранить"}
         </button>
       </Panel>
+      {song.status === "done" && (
+        <Panel title="Редактор текста" style={{ marginTop: 18 }}>
+          <p className="text-muted" style={{ marginTop: 0, fontSize: 12 }}>
+            Отредактируйте слова или тайминги. Формат: <code>[&#123; "start": 0, "end": 2, "text": "Строка" &#125;]</code>.
+          </p>
+          <textarea className="input song-lyrics-editor" value={lyricsText}
+            onChange={(event) => setLyricsText(event.target.value)} spellCheck={false} />
+          {lyricsError && <p className="song-lyrics-error">{lyricsError}</p>}
+          <button className="btn btn-primary" onClick={saveLyrics}>Сохранить текст</button>
+        </Panel>
+      )}
     </div>
   );
 }

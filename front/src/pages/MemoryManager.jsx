@@ -1,6 +1,7 @@
 import { api } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
 import { Panel } from "../components/ui";
+import { Dropdown } from "../components/Dropdown";
 import { Trash2, Sparkles, FolderX } from "lucide-react";
 import { useState } from "react";
 
@@ -61,12 +62,8 @@ export default function MemoryManager() {
           </div>
 
           <div style={{ marginTop: 20, display: "flex", gap: 10, alignItems: "center" }}>
-            <select className="input" value={optimizeTarget} onChange={(e) => setOptimizeTarget(e.target.value)}>
-              <option value="">Оптимизировать файлы песни...</option>
-              {(songs || []).filter((s) => s.status === "done" && !s.optimized).map((s) => (
-                <option key={s.id} value={s.id}>{s.title}</option>
-              ))}
-            </select>
+            <Dropdown value={optimizeTarget} onChange={setOptimizeTarget}
+              options={[{ value: "", label: "Оптимизировать файлы песни..." }, ...(songs || []).filter((song) => song.status === "done" && !song.optimized).map((song) => ({ value: song.id, label: song.title }))]} />
             <button
               className="btn btn-ghost"
               disabled={!optimizeTarget}

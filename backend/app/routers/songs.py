@@ -165,3 +165,22 @@ def get_result(song_id: str, db: Session = Depends(get_db)):
         breaths=_read_json(out_dir / "breaths.json"),
         manifest=None,
     )
+
+
+@router.put("/{song_id}/lyrics")
+def update_lyrics(song_id: str, body: schemas.LyricsUpdate, db: Session = Depends(get_db)):
+    song = song_service.get_song(db, song_id)
+    if song is None:
+        raise HTTPException(status_code=404, detail="Song not found")
+    if song.status != models.SongStatus.DONE or not song.output_dir:
+        raise HTTPException(status_code=409, detail="Song has not been processed yet")
+
+    lyrics_path = Path(song.output_dir) / "lyrics.json"
+    temporary_path = lyrics_path.with_suffix(".tmp")
+    try:
+        temporary_path.write_text(json.dumps(body.lyrics, ensure_ascii=False, indent=2), encoding="utf-8")
+        temporary_path.replace(lyrics_path)
+    except (OSError, TypeError, ValueError) as exc:
+        temporary_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail=f"Could not save lyrics: {exc}") from exc
+    return {"status": "saved"}

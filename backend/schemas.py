@@ -55,6 +55,10 @@ class SongUpdate(BaseModel):
     show_notes: Optional[bool] = None
 
 
+class LyricsUpdate(BaseModel):
+    lyrics: Any
+
+
 class ProcessingStatusOut(BaseModel):
     song_id: str
     status: SongStatus
@@ -107,8 +111,13 @@ class RecordingOut(BaseModel):
     created_at: datetime
 
 
+class RecordedSongOut(RecordingOut):
+    song_title: str
+
+
 class RecordingStartRequest(BaseModel):
     song_id: str
+    position_sec: float = Field(default=0, ge=0)
 
 
 class RecordingStartOut(BaseModel):

@@ -9,6 +9,8 @@ wav. Обе библиотеки — системные, требуют реал
 пользователю ещё до попытки записи).
 """
 import queue
+import shutil
+import subprocess
 import threading
 import time
 import uuid
@@ -30,12 +32,14 @@ except Exception as exc:  # noqa: BLE001 — библиотека может б�
 
 class RecordingSession:
     def __init__(self, session_id: str, song_id: str, device_id: int | None,
-                 sample_rate: int, channels: int, gain: float, monitoring_enabled: bool):
+                 output_device_id: int | None, sample_rate: int, channels: int, gain: float,
+                 monitoring_enabled: bool, playback_offset_sec: float = 0):
         self.session_id = session_id
         self.song_id = song_id
         self.sample_rate = sample_rate
         self.channels = channels
         self.gain = max(0.0, min(4.0, gain))
+        self.playback_offset_sec = max(0.0, playback_offset_sec)
         self._queue: "queue.Queue" = queue.Queue()
         if monitoring_enabled:
             output_info = sd.query_devices(kind="output")
@@ -45,7 +49,9 @@ class RecordingSession:
             self._stream = sd.Stream(
                 samplerate=sample_rate,
                 channels=(channels, output_channels),
-                device=(device_id, None),
+                device=(device_id, output_device_id),
+                blocksize=64,
+                latency="low",
                 callback=self._monitoring_callback,
             )
         else:
@@ -53,6 +59,8 @@ class RecordingSession:
                 samplerate=sample_rate,
                 channels=channels,
                 device=device_id,
+                blocksize=64,
+                latency="low",
                 callback=self._callback,
             )
         self._stopped = threading.Event()
@@ -65,7 +73,9 @@ class RecordingSession:
     def _monitoring_callback(self, indata, outdata, frames, time_info, status):  # noqa: ARG002
         processed = (indata * self.gain).clip(-1.0, 1.0)
         self._queue.put(processed.copy())
-        outdata[:] = processed
+        outdata.fill(0)
+        for channel in range(outdata.shape[1]):
+            outdata[:, channel] = processed[:, 0]
 
     def start(self) -> None:
         self._stream.start()
@@ -103,15 +113,17 @@ def backend_available() -> tuple[bool, str | None]:
 
 
 def start_recording(song_id: str, device_id: int | None = None,
+                     output_device_id: int | None = None,
                      sample_rate: int = config.RECORDING_SAMPLE_RATE,
                      channels: int = config.RECORDING_CHANNELS, gain: float = 1.0,
-                     monitoring_enabled: bool = False) -> str:
+                     monitoring_enabled: bool = False, playback_offset_sec: float = 0) -> str:
     if not _AUDIO_BACKEND_AVAILABLE:
         raise RuntimeError(f"Аудио-бэкенд недоступен: {_AUDIO_BACKEND_ERROR}")
 
     session_id = uuid.uuid4().hex
     session = RecordingSession(
-        session_id, song_id, device_id, sample_rate, channels, gain, monitoring_enabled
+        session_id, song_id, device_id, output_device_id, sample_rate, channels, gain,
+        monitoring_enabled, playback_offset_sec
     )
     session.start()
     with _sessions_lock:
@@ -165,6 +177,7 @@ def stop_recording(session_id: str) -> models.Recording:
         db.add(recording)
         db.commit()
         db.refresh(recording)
+        _create_performance_mix(recording, song, session.playback_offset_sec)
         return recording
     finally:
         db.close()
@@ -174,5 +187,33 @@ def delete_recording(db, recording: models.Recording) -> None:
     path = Path(recording.path)
     if path.exists():
         path.unlink()
+    performance_mix_path(recording).unlink(missing_ok=True)
     db.delete(recording)
     db.commit()
+
+
+def performance_mix_path(recording: models.Recording) -> Path:
+    voice_path = Path(recording.path)
+    return voice_path.with_name(f"{voice_path.stem}-performance.mp3")
+
+
+def _create_performance_mix(recording: models.Recording, song: models.Song, offset_sec: float) -> None:
+    """Mix the voice take with the instrumental track without altering the raw take."""
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None or not song.output_dir:
+        return
+    song_dir = Path(song.output_dir)
+    instrumental = next((song_dir / f"instrumental{extension}" for extension in (".mp3", ".wav") if (song_dir / f"instrumental{extension}").is_file()), None)
+    if instrumental is None:
+        return
+    destination = performance_mix_path(recording)
+    command = [
+        ffmpeg, "-y", "-ss", f"{offset_sec:.3f}", "-i", str(instrumental), "-i", recording.path,
+        "-t", f"{recording.duration_sec or 0:.3f}",
+        "-filter_complex", "[0:a][1:a]amix=inputs=2:duration=first:normalize=0",
+        "-c:a", "libmp3lame", "-q:a", "2", str(destination),
+    ]
+    try:
+        subprocess.run(command, capture_output=True, check=True, timeout=90)
+    except (OSError, subprocess.SubprocessError):
+        destination.unlink(missing_ok=True)

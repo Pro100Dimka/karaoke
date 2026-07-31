@@ -44,6 +44,7 @@ export const api = {
   getStatus: (id) => request(`/songs/${id}/status`),
   getLog: (id) => request(`/songs/${id}/log`),
   getResult: (id) => request(`/songs/${id}/result`),
+  updateLyrics: (id, lyrics) => request(`/songs/${id}/lyrics`, { method: "PUT", body: JSON.stringify({ lyrics }) }),
   getAudioTrackUrl: (id, track) => `${BASE_URL}/songs/${id}/audio/${track}`,
 
   // Плеер
@@ -58,14 +59,16 @@ export const api = {
 
   // Запись
   getRecordingSettings: () => request("/recording/settings"),
-  startRecording: (songId) =>
-    request("/recording/start", { method: "POST", body: JSON.stringify({ song_id: songId }) }),
+  startRecording: (songId, positionSec = 0) =>
+    request("/recording/start", { method: "POST", body: JSON.stringify({ song_id: songId, position_sec: positionSec }) }),
   pauseRecording: (sessionId) => request(`/recording/pause?session_id=${sessionId}`, { method: "POST" }),
   resumeRecording: (sessionId) => request(`/recording/resume?session_id=${sessionId}`, { method: "POST" }),
   stopRecording: (sessionId) => request(`/recording/stop?session_id=${sessionId}`, { method: "POST" }),
   listRecordingsForSong: (songId) => request(`/recording/by-song/${songId}`),
+  listRecordingLibrary: () => request("/recording/library"),
   deleteRecording: (id) => request(`/recording/${id}`, { method: "DELETE" }),
   getRecordingFileUrl: (id) => `${BASE_URL}/recording/${id}/file`,
+  getPerformanceFileUrl: (id) => `${BASE_URL}/recording/${id}/performance`,
 
   // Анализ
   runAnalysis: (recordingId) => request(`/analysis/${recordingId}/run`, { method: "POST" }),
@@ -89,6 +92,8 @@ export const api = {
   getAudioSettings: () => request("/audio/settings"),
   updateAudioSettings: (patch) =>
     request("/audio/settings", { method: "POST", body: JSON.stringify(patch) }),
+  startDirectMonitoring: () => request("/audio/direct-monitor/start", { method: "POST" }),
+  stopDirectMonitoring: () => request("/audio/direct-monitor/stop", { method: "POST" }),
   getSignalQuality: () => request("/audio/signal-quality"),
 
   // Настройки программы

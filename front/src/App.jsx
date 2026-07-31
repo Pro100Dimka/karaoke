@@ -1,4 +1,6 @@
 import { HashRouter, Routes, Route } from "react-router-dom";
+import { useEffect } from "react";
+import { api } from "./api/client";
 import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
 import Library from "./pages/Library";
@@ -15,6 +17,13 @@ import History from "./pages/History";
 import About from "./pages/About";
 
 export default function App() {
+  useEffect(() => {
+    api.getAppSettings().then((settings) => {
+      const theme = settings.theme || "dark";
+      document.documentElement.dataset.theme = theme;
+    }).catch(() => {});
+  }, []);
+
   return (
     <HashRouter>
       <div className="app-shell">

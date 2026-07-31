@@ -6,7 +6,7 @@ import {
 const NAV_ITEMS = [
   { to: "/", label: "Библиотека", icon: Library, end: true },
   { to: "/karaoke", label: "Караоке", icon: Music2 },
-  { to: "/recording", label: "Запись", icon: CircleDot },
+  { to: "/recording", label: "Записанные песни", icon: CircleDot },
   { to: "/settings", label: "Настройки", icon: SettingsIcon },
 ];
 
@@ -14,7 +14,7 @@ export default function Sidebar() {
   return (
     <nav
       style={{
-        width: 92,
+        width: 118,
         flexShrink: 0,
         borderRight: "1px solid var(--card-border)",
         background: "rgba(10, 7, 21, 0.4)",
@@ -36,7 +36,7 @@ export default function Sidebar() {
             flexDirection: "column",
             alignItems: "center",
             gap: 4,
-            width: 76,
+            width: 104,
             padding: "10px 4px",
             borderRadius: 12,
             textDecoration: "none",

@@ -185,6 +185,18 @@ a {
 .input:focus {
   border-color: var(--accent-1);
 }
+.app-dropdown { position: relative; min-width: 140px; }
+.app-dropdown-trigger { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 35px; padding: 8px 10px; border: 1px solid var(--card-border); border-radius: var(--radius-sm); background: rgba(255,255,255,.04); color: var(--text-primary); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.app-dropdown-trigger > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-dropdown-trigger svg { flex: none; color: var(--text-muted); transition: transform .18s ease; }
+.app-dropdown-trigger[aria-expanded="true"] svg { transform: rotate(180deg); }
+.app-dropdown-trigger:focus-visible { outline: 2px solid var(--accent-1); outline-offset: 2px; }
+.app-dropdown-menu { position: absolute; z-index: 40; top: calc(100% + 5px); right: 0; left: 0; min-width: max-content; max-width: min(420px, calc(100vw - 32px)); max-height: 260px; overflow: auto; padding: 5px; border: 1px solid var(--card-border-strong); border-radius: 10px; background: #1a1030; box-shadow: 0 14px 34px rgba(0,0,0,.38); }
+.app-dropdown-option { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 9px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.app-dropdown-option:hover { background: rgba(255,255,255,.07); color: var(--text-primary); }
+.app-dropdown-option.is-selected { border-color: rgba(168,85,247,.42); background: rgba(168,85,247,.13); color: var(--text-primary); }
+.app-dropdown-option svg { color: #c084fc; }
+:root[data-theme="light"] .app-dropdown-menu { background: #fff; }
 
 /* ---------- статус-бейджи ---------- */
 .badge {
@@ -255,18 +267,24 @@ table.data-table tbody tr:hover {
 .text-secondary { color: var(--text-secondary); }
 .mono { font-variant-numeric: tabular-nums; }
 
+.karaoke-performance-stage { position: relative; min-height: 310px; margin: 16px 24px; overflow: hidden; border-radius: 12px; }
 .karaoke-lyrics {
-  min-height: 230px;
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  min-height: 0;
   display: grid;
-  align-content: center;
+  align-content: end;
   gap: 12px;
-  padding: 32px 48px 20px;
+  padding: 92px 48px 24px;
   text-align: center;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent 28%, rgba(8, 5, 18, .14) 42%, rgba(8, 5, 18, .86) 100%);
 }
 .karaoke-lyric { line-height: 1.18; transition: opacity 0.2s ease; }
 .karaoke-lyric-muted { color: var(--text-muted); font-size: clamp(16px, 1.6vw, 22px); }
 .karaoke-lyric-current {
-  font-size: clamp(28px, 3.2vw, 52px);
+  font-size: clamp(30px, 3.6vw, 56px);
   font-weight: 800;
   background: var(--accent-gradient);
   -webkit-background-clip: text;
@@ -274,20 +292,73 @@ table.data-table tbody tr:hover {
   text-wrap: balance;
 }
 .karaoke-lyric-next { color: var(--text-secondary); font-size: clamp(19px, 2vw, 30px); }
-.melody-roll { margin: 0 24px 16px; padding: 12px; border-radius: 12px; background: rgba(5, 3, 12, 0.34); border: 1px solid rgba(168, 85, 247, 0.18); }
+.melody-roll { height: 100%; margin: 0; padding: 12px; border-radius: 12px; background: rgba(5, 3, 12, 0.34); border: 1px solid rgba(168, 85, 247, 0.18); }
 .melody-roll-caption { margin: 0 0 8px 4px; color: var(--text-muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .microphone-panel { display: grid; grid-template-columns: 1.3fr 1fr .8fr; gap: 14px; align-items: end; margin: 16px 24px 0; padding: 14px; border: 1px solid var(--card-border); border-radius: 12px; background: rgba(5, 3, 12, .38); }
+.karaoke-settings-backdrop { position: absolute; z-index: 25; inset: 0; display: grid; align-items: start; justify-items: center; padding: 72px 24px 24px; background: rgba(4, 2, 10, .58); backdrop-filter: blur(5px); overflow: auto; }
+.karaoke-settings-modal { position: relative; width: min(920px, 100%); margin: 0; background: #120b23; box-shadow: 0 24px 65px rgba(0,0,0,.55); }
+.karaoke-settings-close { position: absolute; top: 11px; right: 11px; display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 7px; background: transparent; color: var(--text-secondary); cursor: pointer; }
+.karaoke-settings-close:hover { background: rgba(255,255,255,.08); color: var(--text-primary); }
+.performance-analysis-backdrop { position: absolute; z-index: 35; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(4,2,10,.7); backdrop-filter: blur(7px); }
+.performance-analysis-modal { position: relative; width: min(410px, 100%); padding: 28px; border: 1px solid var(--card-border-strong); border-radius: 16px; background: #120b23; box-shadow: 0 26px 70px rgba(0,0,0,.58); text-align: center; }
+.performance-analysis-heading { margin-bottom: 18px; font-size: 18px; font-weight: 800; }
+.performance-analysis-score { font-size: 68px; font-weight: 900; line-height: 1; background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.performance-analysis-score small { font-size: 28px; }
+.performance-analysis-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 22px 0; }
+.performance-analysis-metrics > div { display: grid; gap: 5px; padding: 11px; border-radius: 9px; background: rgba(255,255,255,.05); }
+.performance-analysis-metrics span { color: var(--text-muted); font-size: 11px; }.performance-analysis-metrics strong { font-size: 15px; }
+.performance-analysis-audio { width: 100%; height: 32px; margin: 0 0 18px; }
+.karaoke-settings-section { grid-column: 1 / -1; display: grid; gap: 11px; padding: 12px; border: 1px solid rgba(168,85,247,.18); border-radius: 9px; background: rgba(255,255,255,.025); }
+.karaoke-settings-section-title { color: var(--text-muted); font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.karaoke-settings-toggles { display: flex; gap: 8px; }
+.karaoke-settings-sliders { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; font-size: 12px; }
 .microphone-panel-title { grid-column: 1 / -1; display: flex; align-items: center; gap: 7px; color: var(--text-secondary); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
 .microphone-panel label { display: grid; gap: 7px; color: var(--text-secondary); font-size: 12px; }
 .microphone-panel .microphone-monitoring { display: flex; align-items: center; gap: 8px; min-height: 34px; }
 .microphone-panel select { width: 100%; }
+.monitoring-mode-picker { position: relative; display: grid; gap: 7px; color: var(--text-secondary); font-size: 12px; }
+.monitoring-mode-trigger { width: 100%; display: flex; align-items: center; gap: 8px; min-height: 35px; padding: 8px 10px; border: 1px solid var(--card-border); border-radius: var(--radius-sm); background: rgba(255,255,255,.04); color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
+.monitoring-mode-trigger span { flex: 1; }
+.monitoring-mode-trigger svg:last-child { color: var(--text-muted); transition: transform .18s ease; }
+.monitoring-mode-trigger[aria-expanded="true"] svg:last-child { transform: rotate(180deg); }
+.monitoring-mode-trigger:focus-visible { outline: 2px solid var(--accent-1); outline-offset: 2px; }
+.monitoring-mode-menu { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; right: 0; padding: 7px; border: 1px solid var(--card-border-strong); border-radius: 10px; background: #1a1030; box-shadow: 0 14px 34px rgba(0,0,0,.38); }
+.monitoring-mode-menu-title { padding: 5px 7px 7px; color: var(--text-muted); font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.monitoring-mode-option { width: 100%; display: flex; align-items: center; gap: 9px; padding: 9px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text-secondary); font: inherit; text-align: left; cursor: pointer; }
+.monitoring-mode-option:hover { background: rgba(255,255,255,.07); color: var(--text-primary); }
+.monitoring-mode-option.is-selected { border-color: rgba(168,85,247,.5); background: rgba(168,85,247,.14); color: var(--text-primary); }
+.monitoring-mode-option-copy { display: grid; flex: 1; gap: 2px; }
+.monitoring-mode-option-copy strong { font-size: 12px; }
+.monitoring-mode-option-copy small { color: var(--text-muted); font-size: 10px; line-height: 1.3; }
+.monitoring-mode-check { color: #a855f7; }
+:root[data-theme="light"] .monitoring-mode-menu { background: #fff; }
+.song-lyrics-editor { display: block; width: 100%; min-height: 240px; margin: 12px 0; resize: vertical; font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.song-lyrics-error { margin: -3px 0 10px; color: #fca5a5; font-size: 12px; }
+.recording-library-intro { margin: 0 0 18px; max-width: 670px; font-size: 13px; }
+.recording-library { display: grid; gap: 9px; }
+.recording-library-item { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--card-border); border-radius: 11px; background: rgba(255,255,255,.025); }
+.recording-library-icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; color: #c084fc; background: rgba(168,85,247,.14); }
+.recording-library-main { display: grid; flex: 1; min-width: 0; gap: 4px; }
+.recording-library-main strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recording-library-main span { color: var(--text-muted); font-size: 12px; }
+.recording-library-main audio { width: min(100%, 390px); height: 28px; margin-top: 2px; }
+.recording-library-actions { display: flex; align-items: center; gap: 6px; }
+.recording-library-empty { padding: 42px 18px; border: 1px dashed var(--card-border); border-radius: 11px; color: var(--text-muted); text-align: center; font-size: 13px; }
+@media (max-width: 700px) { .recording-library-item { align-items: flex-start; flex-wrap: wrap; } .recording-library-main { min-width: calc(100% - 52px); } .recording-library-actions { width: 100%; justify-content: flex-end; } }
+@media (max-width: 760px) { .karaoke-settings-sliders { grid-template-columns: repeat(2, 1fr); } }
 .microphone-level { display: grid; gap: 7px; padding: 9px 12px; border-radius: 8px; color: var(--text-secondary); font-size: 12px; background: rgba(255, 255, 255, .05); }
 .microphone-level-track { height: 8px; overflow: hidden; border-radius: 99px; background: rgba(255, 255, 255, .1); }
 .microphone-level-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, #22c55e 0%, #eab308 72%, #ef4444 100%); transition: width .15s linear; }
 .microphone-effects { grid-column: 1 / -1; color: var(--text-muted); font-size: 11px; }
 .karaoke-recording-error { margin: 12px 24px 0; color: #fca5a5; font-size: 12px; }
 .karaoke-stage .btn, .karaoke-stage .microphone-panel, .karaoke-stage .karaoke-recording-error { transition: opacity .22s ease, transform .22s ease; }
-.karaoke-stage.karaoke-ui-hidden .btn, .karaoke-stage.karaoke-ui-hidden .microphone-panel, .karaoke-stage.karaoke-ui-hidden .karaoke-recording-error { opacity: 0; pointer-events: none; }
+.karaoke-stage.karaoke-ui-hidden .btn, .karaoke-stage.karaoke-ui-hidden .karaoke-settings-backdrop, .karaoke-stage.karaoke-ui-hidden .microphone-panel, .karaoke-stage.karaoke-ui-hidden .karaoke-recording-error { opacity: 0; pointer-events: none; }
+.karaoke-transport-area { position: relative; }
+.karaoke-playback-controls { position: relative; }
+.karaoke-corner-actions { position: absolute; right: 0; top: 50%; display: flex; gap: 6px; transform: translateY(-50%); }
+.karaoke-corner-actions .btn { width: 40px; min-height: 40px; padding: 0; justify-content: center; }
+:root[data-theme="light"] .karaoke-settings-modal { background: #fff; }
+:root[data-theme="light"] .performance-analysis-modal { background: #fff; }
 .song-actions-menu { position: absolute; z-index: 10; top: calc(100% + 6px); right: 34px; width: 190px; padding: 6px; border: 1px solid var(--card-border-strong); border-radius: 10px; background: #1a1030; box-shadow: 0 12px 30px rgba(0, 0, 0, .32); }
 .song-actions-menu button { width: 100%; display: flex; align-items: center; gap: 8px; padding: 9px; border: 0; border-radius: 7px; background: transparent; color: var(--text-secondary); text-align: left; font: inherit; font-size: 12px; }
 .song-actions-menu button:hover { background: rgba(255, 255, 255, .08); color: var(--text-primary); }

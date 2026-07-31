@@ -25,8 +25,27 @@ def _read_json(path: Path):
 def _note_at_time(reference_notes: list[dict], t: float) -> int | None:
     for note in reference_notes:
         if note["start"] <= t < note["end"]:
-            return note.get("midi") or note.get("pitch")
+            return _to_midi(note.get("midi") or note.get("pitch") or note.get("note"))
     return None
+
+
+def _to_midi(value) -> int | None:
+    if isinstance(value, (int, float)):
+        return int(round(value))
+    if not isinstance(value, str):
+        return None
+    names = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+    value = value.strip()
+    if len(value) < 2 or value[0].upper() not in names:
+        return None
+    letter = value[0].upper()
+    accidental = value[1] if len(value) > 1 and value[1] in {"#", "b"} else ""
+    octave_part = value[2:] if accidental else value[1:]
+    try:
+        octave = int(octave_part)
+    except ValueError:
+        return None
+    return (octave + 1) * 12 + names[letter] + (1 if accidental == "#" else -1 if accidental == "b" else 0)
 
 
 def analyze_recording(recording: models.Recording, song: models.Song) -> dict:
@@ -49,7 +68,7 @@ def analyze_recording(recording: models.Recording, song: models.Song) -> dict:
 
     for frame in pitch_frames:
         t = frame.get("time")
-        user_midi = frame.get("midi")
+        user_midi = _to_midi(frame.get("midi") or frame.get("note"))
         if t is None or user_midi is None:
             continue
         ref_midi = _note_at_time(reference_notes, t)

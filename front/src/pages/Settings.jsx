@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { Panel } from "../components/ui";
+import { Dropdown } from "../components/Dropdown";
 
 export default function Settings() {
   const [form, setForm] = useState(null);
@@ -17,7 +18,12 @@ export default function Settings() {
 
   if (!form) return <Panel title="Настройки программы"><p className="text-muted">Загрузка...</p></Panel>;
 
-  const set = (field) => (value) => setForm((f) => ({ ...f, [field]: value }));
+  const set = (field) => (value) => {
+    if (field === "theme") {
+      document.documentElement.dataset.theme = value;
+    }
+    setForm((formState) => ({ ...formState, [field]: value }));
+  };
 
   const save = async () => {
     setSaving(true);
@@ -38,16 +44,10 @@ export default function Settings() {
     }>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 32px", maxWidth: 800 }}>
         <Row label="Язык">
-          <select className="input" value={form.language} onChange={(e) => set("language")(e.target.value)}>
-            <option value="ru">Русский</option>
-            <option value="en">English</option>
-          </select>
+          <Dropdown value={form.language} onChange={set("language")} options={[{ value: "ru", label: "Русский" }, { value: "en", label: "English" }]} />
         </Row>
         <Row label="Тема">
-          <select className="input" value={form.theme} onChange={(e) => set("theme")(e.target.value)}>
-            <option value="dark">Тёмная</option>
-            <option value="light">Светлая</option>
-          </select>
+          <Dropdown value={form.theme} onChange={set("theme")} options={[{ value: "dark", label: "Тёмная" }, { value: "light", label: "Светлая" }]} />
         </Row>
         <Row label="Папка с песнями">
           <input className="input" value={form.songs_folder || ""} readOnly />
@@ -62,9 +62,7 @@ export default function Settings() {
           <input className="input" value={form.cache_folder || ""} readOnly />
         </Row>
         <Row label="Модель Whisper">
-          <select className="input" value={form.whisper_model} onChange={(e) => set("whisper_model")(e.target.value)}>
-            {["tiny", "base", "small", "medium", "large"].map((m) => <option key={m} value={m}>{m}</option>)}
-          </select>
+          <Dropdown value={form.whisper_model} onChange={set("whisper_model")} options={["tiny", "base", "small", "medium", "large"].map((value) => ({ value, label: value }))} />
         </Row>
         <Row label="Количество потоков">
           <input type="number" className="input" min={1} max={64} value={form.thread_count}
