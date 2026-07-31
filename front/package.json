@@ -30,6 +30,9 @@
     "appId": "com.karaokestudio.app",
     "productName": "Karaoke Studio",
     "files": ["dist/**/*", "electron/**/*"],
+    "extraResources": [
+      { "from": "../backend/dist/KaraokeBackend", "to": "backend" }
+    ],
     "directories": { "output": "release" },
     "win": { "target": "nsis" },
     "mac": { "target": "dmg" },

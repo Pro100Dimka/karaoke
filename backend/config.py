@@ -8,6 +8,7 @@
 пользователя — ничего не захардкожено абсолютным путём.
 """
 import os
+import sys
 from pathlib import Path
 
 
@@ -21,10 +22,11 @@ def _env_path(name: str, default: Path) -> Path:
 # --------------------------------------------------------------------
 
 BASE_DIR = Path(__file__).resolve().parent
+IS_FROZEN = bool(getattr(sys, "frozen", False))
+# PyInstaller places bundled read-only files in _MEIPASS.
+RUNTIME_DIR = Path(getattr(sys, "_MEIPASS", BASE_DIR))
 
-AI_DIR = BASE_DIR / "AI"                     # существующий AI-пайплайн (run_all.py, src/...)
-FULL_SONGS_DIR = BASE_DIR / "full_songs"     # сюда складываются загруженные оригиналы (mp3/wav/...)
-SONG_OUTPUT_DIR = BASE_DIR / "Song"          # сюда AI-пайплайн пишет результаты по каждой песне
+AI_DIR = _env_path("SONGAPP_AI_DIR", RUNTIME_DIR / "AI")
 RECORDINGS_DIRNAME = "recordings"            # подпапка внутри Song/<slug>/ для записей пользователя
 LOGS_DIRNAME = "logs"                        # подпапка внутри Song/<slug>/ для логов обработки
 
@@ -33,6 +35,12 @@ LOGS_DIRNAME = "logs"                        # подпапка внутри Son
 # macOS при упаковке в инсталлятор.
 DATA_DIR = _env_path("SONGAPP_DATA_DIR", BASE_DIR / "data")
 DB_PATH = DATA_DIR / "app.db"
+
+# Keep the development layout. The packaged application gets SONGAPP_DATA_DIR
+# from Electron, so updates never overwrite songs, recordings or the database.
+_CONTENT_DIR = DATA_DIR if IS_FROZEN else BASE_DIR
+FULL_SONGS_DIR = _env_path("SONGAPP_FULL_SONGS_DIR", _CONTENT_DIR / "full_songs")
+SONG_OUTPUT_DIR = _env_path("SONGAPP_SONG_OUTPUT_DIR", _CONTENT_DIR / "Song")
 
 # --------------------------------------------------------------------
 # База данных

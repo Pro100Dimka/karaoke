@@ -32,13 +32,23 @@ function resolveBackendDir() {
 function startBackend() {
   if (process.env.KARAOKE_BACKEND_EXTERNAL === "1") return;
   const backendDir = resolveBackendDir();
-  const pythonBin = process.platform === "win32" ? "python" : "python3";
+  const backendCommand = isDev
+    ? (process.platform === "win32" ? "python" : "python3")
+    : path.join(backendDir, process.platform === "win32" ? "KaraokeBackend.exe" : "KaraokeBackend");
+  const backendArgs = isDev ? ["run.py"] : [];
+  const backendDataDir = isDev ? null : path.join(app.getPath("userData"), "backend-data");
 
   try {
-    backendProcess = spawn(pythonBin, ["run.py"], {
+    backendProcess = spawn(backendCommand, backendArgs, {
       cwd: backendDir,
       stdio: "ignore",
       windowsHide: true,
+      env: {
+        ...process.env,
+        ...(backendDataDir ? { SONGAPP_DATA_DIR: backendDataDir } : {}),
+        // Packaged ffmpeg.exe is placed next to KaraokeBackend.exe.
+        PATH: `${backendDir}${path.delimiter}${process.env.PATH || ""}`,
+      },
     });
     backendProcess.on("error", (err) => {
       console.error("Не удалось запустить backend:", err);
