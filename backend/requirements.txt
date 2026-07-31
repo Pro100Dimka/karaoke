@@ -1,8 +1,8 @@
-# Зависимости backend-слоя (API/БД). Зависимости самого AI-пайплайна
-# (librosa/demucs/whisper/pretty_midi/...) описаны отдельно в
-# AI/requirements.txt — устанавливаются так же через pip install -r,
-# оставлены раздельно, чтобы backend можно было поднять и без тяжёлых
-# ML-зависимостей (для разработки API/БД без прогона пайплайна).
+# Зависимости backend-слоя (API/БД). Тяжёлые ML-зависимости самого
+# AI-пайплайна (librosa/demucs/whisper/pretty_midi/...) — отдельно в
+# AI/requirements.txt (подключены строкой -r ниже), чтобы backend можно
+# было поднять и без них — для разработки API/БД без прогона пайплайна
+# используй requirements-dev.txt.
 
 fastapi
 uvicorn[standard]

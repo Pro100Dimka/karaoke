@@ -14,6 +14,7 @@ AI/
     ├── analyze/
     │   ├── breath.py            # шаг 7 — анализ дыхания/пауз
     │   ├── music.py             # шаг 4 — BPM, тональность, размер
+    │   ├── structure.py         # шаг 11.5 — сегментация куплет/припев
     │   └── vocal.py             # шаг 5 — pitch (F0) по кадрам
     │
     ├── build/
@@ -21,13 +22,19 @@ AI/
     │   ├── midi.py              # шаг 12 — экспорт мелодии в MIDI
     │   ├── project.py           # шаг 13 — сборка финального проекта
     │   ├── reference.py         # шаг 6 — эталонная мелодия
+    │   ├── report.py            # шаг 13.5 — читаемый отчёт (report.md)
+    │   ├── split_notes.py       # шаг 9.5 — дозаполнение пауз/разбиение нот по слогам
     │   └── unified_song_map.py  # шаг 10 — общая карта песни
+    │
+    ├── common/
+    │   └── notes.py             # общие NOTE_NAMES/note_to_midi/midi_to_note
     │
     ├── evaluation/
     │   └── difficulty_map.py    # шаг 11 — карта сложности
     │
     ├── lyrics/
     │   ├── get_text.py          # шаг 8 — получение текста
+    │   ├── syllabify.py         # разбиение слов на слоги (для split_notes.py)
     │   └── sync.py              # шаг 9 — синхронизация текста
     │
     └── preprocessing/
@@ -37,7 +44,7 @@ AI/
 ├── README.md
 ├── requirements.txt
 ├── run_all.py
-└── song.mp3
+└── tests/                       # pytest — офлайн-тесты чистой логики (без librosa/torch)
 ```
 
 При запуске `run_all.py` результат (`songInfo.json`, `song.wav`,

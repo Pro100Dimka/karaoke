@@ -14,10 +14,15 @@
     ├── requirements.txt
     └── song.mp3
 
-Запуск:
-    python run_all.py song.mp3 --out Song
+Запуск (обрабатывает все аудиофайлы в папке):
+    python run_all.py --input-dir full_songs --out Song
 
 Требует: ffmpeg в PATH и pip install -r requirements.txt
+
+Функция run(input_mp3, out_dir, ...) из этого модуля также вызывается
+напрямую из backend/app/services/pipeline_service.py (через ai_bridge.py)
+для обработки одной песни — CLI (main()) нужен только для пакетной
+обработки всей папки из командной строки.
 """
 import argparse
 import json
@@ -227,12 +232,7 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
         print("12/13 MIDI — уже есть, пропускаю")
     else:
         print("12/13 Экспорт мелодии в MIDI...")
-        tempo = (
-            music.get("tempo")
-            or music.get("bpm")
-            or music.get("Tempo")
-            or 120.0
-        )
+        tempo = float(music.get("bpm", 120.0))
         first_beat = float(music.get("first_beat_sec", 0.0))
 
         midi_notes = quantize_notes(reference_notes, tempo, first_beat,

@@ -1,0 +1,36 @@
+[project]
+name = "karaoke-ai-backend"
+version = "0.1.0"
+description = "Локальный FastAPI backend поверх AI-пайплайна (Karaoke AI)."
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["AI/tests", "app/data", "Song", "full_songs"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle
+    "F",   # pyflakes
+    "I",   # isort (сортировка импортов)
+    "UP",  # pyupgrade (актуальный синтаксис под target-version)
+    "B",   # flake8-bugbear (частые логические ошибки)
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501", # длину строк уже ограничивает line-length; докстринги/комментарии на русском иногда длиннее
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = true
+exclude = ["AI/", "Song/", "full_songs/"]
+
+[tool.pytest.ini_options]
+testpaths = ["AI/tests"]
+pythonpath = ["."]

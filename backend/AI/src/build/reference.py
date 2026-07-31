@@ -27,19 +27,7 @@ from collections import Counter
 
 import numpy as np
 
-NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-
-
-def note_to_midi(note: str) -> int:
-    if "#" in note:
-        name, octave = note[:2], note[2:]
-    else:
-        name, octave = note[:1], note[1:]
-    return NOTE_NAMES.index(name) + (int(octave) + 1) * 12
-
-
-def midi_to_note(m: int) -> str:
-    return f"{NOTE_NAMES[m % 12]}{m // 12 - 1}"
+from src.common.notes import midi_to_note, note_to_midi  # noqa: F401  (реэкспорт)
 
 
 def _smooth_midi_sequence(midi_seq: list, window: int = 5) -> list:

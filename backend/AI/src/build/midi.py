@@ -8,19 +8,16 @@ import json
 
 import pretty_midi
 
-NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+from src.common.notes import note_to_midi as _note_to_midi_fallback
 
 
 def note_to_midi(note: str) -> int:
-    """Совместимость со старым кодом."""
+    """Совместимость со старым кодом: сначала pretty_midi (понимает и
+    бемоли, напр. 'Db4'), при неудаче — общий разбор из src.common.notes."""
     try:
         return pretty_midi.note_name_to_number(note)
     except Exception:
-        if "#" in note:
-            name, octave = note[:2], note[2:]
-        else:
-            name, octave = note[:1], note[1:]
-        return NOTE_NAMES.index(name) + (int(octave) + 1) * 12
+        return _note_to_midi_fallback(note)
 
 
 def quantize_notes(notes: list, bpm: float, first_beat: float = 0.0,

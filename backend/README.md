@@ -1,49 +1,36 @@
 # Karaoke AI — Backend
 
-Локальный backend (FastAPI + SQLite) поверх существующего AI-пайплайна
-(`AI/run_all.py`). Без UI — чистое API на `http://127.0.0.1:8000`,
-документация автоматически на `/docs`.
+Локальный backend (FastAPI + SQLite) поверх AI-пайплайна (`AI/run_all.py`).
+Без UI — чистое API на `http://127.0.0.1:8000`, документация автоматически
+на `/docs`.
 
-## ⚠️ Перед тем как распаковывать поверх своего проекта
-
-В этом архиве **нет** `AI/`, `full_songs/`, `Song/`, `venv/` — они у тебя уже
-есть, я их не трогал и не дублирую. Также я **не видел** содержимого твоих
-текущих `config.py` / `database.py` / `app/routers` / `app/services` (файлы
-не были прикреплены) — здесь они написаны с нуля. Если в них уже что-то
-было — пришли их, я домержу, а не просто перезатру.
-
-Структура архива:
-
-```
-config.py
-database.py
-models.py
-schemas.py
-requirements.txt
-run.py
-.gitignore
-app/
-├── main.py
-├── routers/     (songs, player, recording, analysis, cache, diagnostics, audio)
-└── services/    (бизнес-логика каждой группы + ai_bridge.py — мост к AI/)
-```
-
-Распаковать так, чтобы получилось твоё дерево:
+## Структура проекта
 
 ```
 backend/
-├── AI/              ← твоё, без изменений
-├── app/             ← заменить на файлы из архива
-├── full_songs/      ← твоё
-├── Song/            ← твоё
-├── venv/            ← твоё
-├── config.py        ← новый
-├── database.py      ← новый
-├── models.py         ← новый
-├── schemas.py        ← новый
-├── requirements.txt  ← новый (сверху -r AI/requirements.txt — твои ML-зависимости не задваиваются)
-└── run.py             ← новый
+├── config.py            # вся конфигурация: пути, БД, дефолты пайплайна
+├── database.py           # SQLAlchemy engine/Session/Base + get_db()
+├── models.py              # ORM-модели (Song, ProcessingJob, Recording, ...)
+├── schemas.py              # Pydantic-схемы запросов/ответов API
+├── run.py                   # точка запуска: python run.py
+├── requirements.txt          # зависимости backend-слоя (API/БД)
+├── requirements-dev.txt       # линт/типы/тесты — для разработки
+├── pyproject.toml              # конфигурация ruff/mypy/pytest
+├── app/
+│   ├── main.py                  # сборка FastAPI-приложения, роутеры, CORS
+│   ├── routers/                  # HTTP-слой: songs, player, recording,
+│   │                              # analysis, cache, diagnostics, audio
+│   └── services/                  # бизнес-логика + ai_bridge.py (мост к AI/)
+├── AI/                              # независимый ML-пайплайн (свои requirements.txt)
+├── Song/                             # результаты обработки песен (генерируется, не в git)
+├── full_songs/                        # исходные загруженные аудиофайлы (генерируется, не в git)
+└── data/                                # app.db и служебный кэш (генерируется, не в git)
 ```
+
+Слой `app/` — тонкий HTTP-фасад. `config.py` / `database.py` / `models.py` /
+`schemas.py` лежат в корне `backend/` намеренно (а не внутри `app/`) —
+это упрощает пути (`AI_DIR`, `SONG_OUTPUT_DIR` и т.д. вычисляются от корня
+проекта) и позволяет поднимать API и AI-пайплайн независимо друг от друга.
 
 ## Запуск
 
@@ -53,6 +40,25 @@ python run.py
 ```
 
 Откроется `http://127.0.0.1:8000/docs` — там же можно потыкать все ручки руками.
+
+Хост/порт и папку с данными можно переопределить переменными окружения:
+`SONGAPP_HOST`, `SONGAPP_PORT`, `SONGAPP_DATA_DIR`.
+
+Для запуска самого AI-пайплайна (обработка песен) нужны также его
+зависимости: `pip install -r AI/requirements.txt` (тяжёлые: torch, whisper,
+demucs — устанавливаются отдельно, backend без них тоже стартует, просто
+`POST /songs/{id}/process` вернёт понятную ошибку через `diagnostics`).
+
+## Разработка
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+
+ruff check .        # линт
+ruff format .        # форматирование
+mypy .                 # проверка типов
+pytest                   # тесты (AI/tests)
+```
 
 ## Как это связано с AI/
 
@@ -127,8 +133,84 @@ instrumental.wav → mp3` (через `ffmpeg libmp3lame` — конвертер
   Это осознанное решение: backend локальный и должен оставаться тонким,
   а сам звук логичнее гонять через клиентский аудио-движок (UI).
 - SQLite: одна БД-файл в `data/app.db`, создаётся автоматически при
-  первом запуске (`config.ensure_directories()` + `init_db()` при
-  старте FastAPI).
+  первом запуске (`config.py` создаёт директории, `init_db()` создаёт
+  таблицы в `lifespan`-хуке при старте FastAPI).
+- CORS явно ограничен локальными портами типичных dev-серверов фронтенда
+  (`3000`, `5173`) — подставь свой порт в `app/main.py`, когда появится UI.
+  Wildcard-origin (`*`) вместе с `allow_credentials=True` намеренно не
+  используется: это запрещено спецификацией CORS и такой ответ браузеры
+  всё равно отклоняют.
+
+## Что было исправлено при аудите/рефакторинге
+
+Проект содержал технический долг от предыдущего мержа архивов:
+
+- **Битые импорты.** Весь код (`routers/`, `services/`) импортирует
+  `config`, `models`, `schemas`, `database` как модули корня `backend/`.
+  Реальные (актуальные) версии этих файлов лежали внутри `app/config.py`
+  и `app/database/*.py`, а в корне оставались старые, несовместимые
+  черновики (`database.py` на чистом `sqlite3` без `SessionLocal`/`get_db`/
+  `Base`, которые нужны остальному коду; `config.py` без `DATABASE_URL`,
+  `AI_DIR` и других полей, на которые опирался `ai_bridge.py`). Из-за этого
+  импорт `app.main` падал бы уже на старте. Файлы перемещены на
+  правильное место в корень, дубликаты и папка `app/database/` удалены.
+- **Мёртвый код.** Восемь файлов в `app/services/` (`file.py`,
+  `diagnostics.py`, `audio.py`, `recording.py`, `player.py`, `cache.py`,
+  `analysis.py` — пустые заглушки, и `songs.py` — устаревшая версия) не
+  импортировались нигде в проекте; их вытеснили одноимённые
+  `*_service.py`. Удалены.
+- **Отсутствующий `AI/requirements.txt`.** `requirements.txt` ссылался на
+  него (`-r AI/requirements.txt`), но файла не было — `pip install`
+  падал бы с ошибкой. Восстановлен по фактическим импортам в `AI/src/`.
+- **Отсутствующий `run.py`.** Упоминался в README, но отсутствовал в
+  архиве — добавлен.
+- **CORS-баг.** `allow_origins=["*"]` вместе с `allow_credentials=True` —
+  недопустимая по спецификации комбинация; заменено на явный список
+  локальных origin'ов.
+- **Устаревший API FastAPI.** `@app.on_event("startup")` заменён на
+  современный `lifespan`-контекст-менеджер.
+- **CRLF-окончания строк** в части файлов приведены к единому LF.
+- Добавлены `.gitignore` (рантайм-данные, кэши, venv), `pyproject.toml`
+  (единая конфигурация `ruff`/`mypy`/`pytest`) — база для CI/pre-commit.
+- Из поставки исключены `Song/`, `full_songs/`, `app/data/app.db` —
+  это сгенерированные пользовательские данные, а не код; при первом
+  запуске они создаются автоматически.
+
+### Аудит `AI/` (сам ML-пайплайн)
+
+- **Дублирование кода.** `NOTE_NAMES` и функции `note_to_midi`/
+  `midi_to_note` были независимо продублированы в трёх файлах
+  (`src/build/midi.py`, `src/build/reference.py`,
+  `src/evaluation/difficulty_map.py`), причём с разной реализацией
+  `note_to_midi` в каждом. Вынесены в `src/common/notes.py` — единственный
+  источник истины; `midi.py` (единственный, кому реально нужен
+  `pretty_midi`) сверху добавляет свой fallback через `pretty_midi.
+  note_name_to_number` для бемолей. Регрессия проверена прогоном
+  `tests/test_reference.py::test_note_midi_roundtrip`.
+- **Мёртвые ветки.** В `run_all.py` при экспорте MIDI тайминг брался как
+  `music.get("tempo") or music.get("bpm") or music.get("Tempo") or 120.0` —
+  `analyze_music()` возвращает только ключ `"bpm"`, два других варианта
+  никогда не срабатывали. Упрощено до `music.get("bpm", 120.0)`.
+- **Расхождение докстроки и реального CLI.** Докстрока `run_all.py`
+  описывала запуск `python run_all.py song.mp3 --out Song`, а реальный
+  `argparse` принимает `--input-dir` (пакетная обработка папки), а не
+  позиционный файл. Докстрока исправлена.
+- Обновлена `AI/README.md` — диаграмма структуры не отражала часть файлов
+  (`structure.py`, `split_notes.py`, `report.py`, `syllabify.py`,
+  новый `common/`).
+- Прогнаны все офлайн-тесты (`AI/tests/test_reference.py`,
+  `test_split_notes.py` — 19 тестов, не требующих `librosa`/`torch`/
+  `pretty_midi`) — все проходят после рефакторинга.
+- **Оставлено как есть, но стоит знать:** `run_all.py` печатает прогресс
+  строками вида `"N/13"`, и `app/services/pipeline_service.py` перехватывает
+  stdout и парсит их регуляркой для прогресс-бара в БД. Число шагов (13)
+  захардкожено в обоих слоях независимо — это намеренно не тронуто (замена
+  `print` на `logging` сломала бы эту интеграцию), но при добавлении/
+  удалении шагов пайплайна нужно синхронно поправить оба места.
+- Остальной код `AI/` (алгоритмы анализа аудио/pitch/дыхания) не переписан
+  по существу — это доменная логика с калиброванными на слух порогами;
+  трогать её без прослушивания результатов и тестового прогона было бы
+  риском регрессии, а не "чисткой".
 
 ## Дальше
 

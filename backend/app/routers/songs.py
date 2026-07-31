@@ -2,13 +2,13 @@
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 import models
 import schemas
+from app.services import pipeline_service, song_service
 from database import get_db
-from app.services import song_service, pipeline_service
 
 router = APIRouter(prefix="/songs", tags=["songs"])
 
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/songs", tags=["songs"])
 def _read_json(path: Path):
     if not path.exists():
         return None
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -28,7 +28,8 @@ async def add_song(
 ):
     file_bytes = await file.read()
     try:
-        song = song_service.create_song(db, title or "", file.filename, file_bytes)
+        song = song_service.create_song(
+            db, title or "", file.filename, file_bytes)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return song
@@ -61,7 +62,8 @@ def remove_song(song_id: str, db: Session = Depends(get_db)):
     if song is None:
         raise HTTPException(status_code=404, detail="Песня не найдена")
     if pipeline_service.is_processing(song_id):
-        raise HTTPException(status_code=409, detail="Песня сейчас обрабатывается, дождитесь завершения")
+        raise HTTPException(
+            status_code=409, detail="Песня сейчас обрабатывается, дождитесь завершения")
     song_service.delete_song(db, song)
 
 

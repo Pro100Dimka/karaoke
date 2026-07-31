@@ -1,0 +1,23 @@
+# Зависимости AI-пайплайна (backend/AI). Тяжёлые ML-библиотеки — держим
+# отдельно от backend/requirements.txt, чтобы API/БД можно было поднять
+# и разрабатывать без установки torch/whisper/demucs.
+#
+# Требуется также системный ffmpeg в PATH (используется через subprocess
+# в src/preprocessing/probe.py и src/build/convert.py).
+
+numpy
+librosa
+pretty_midi
+mutagen
+
+# Разделение вокала/инструментала (src/preprocessing/separate.py вызывает
+# демукс как CLI-команду).
+demucs
+torch
+
+# Распознавание и синхронизация текста (src/lyrics/get_text.py, sync.py).
+openai-whisper
+
+# Опционально — точнее (forced alignment), но не обязателен: sync.py сам
+# откатывается на whisper, если whisperx не установлен.
+# whisperx

@@ -8,19 +8,10 @@ reference.json (+ lyricsSync.json для разбивки по строкам) -
 """
 import argparse
 import json
+
 import numpy as np
 
-NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-
-
-def note_to_midi(note: str) -> int:
-    name = note[:-1] if note[-2] != "-" else note[:-2]
-    octave = int(note[len(name):])
-    return NOTE_NAMES.index(name) + (octave + 1) * 12
-
-
-def midi_to_note(m: int) -> str:
-    return f"{NOTE_NAMES[m % 12]}{m // 12 - 1}"
+from src.common.notes import midi_to_note, note_to_midi  # noqa: F401  (реэкспорт)
 
 
 def notes_in_range(notes: list, start: float, end: float) -> list:
