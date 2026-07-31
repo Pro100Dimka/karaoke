@@ -68,6 +68,38 @@ function noteNameToMidi(noteName) {
   return (Number(octaveText) + 1) * 12 + base + offset;
 }
 
+function detectMidiFromAnalyser(analyser, buffer, sampleRate) {
+  analyser.getFloatTimeDomainData(buffer);
+  let energy = 0;
+  for (let index = 0; index < buffer.length; index += 1) energy += buffer[index] ** 2;
+  if (Math.sqrt(energy / buffer.length) < 0.012) return null;
+
+  const minLag = Math.floor(sampleRate / 1000);
+  const maxLag = Math.min(buffer.length - 2, Math.floor(sampleRate / 75));
+  let bestLag = -1;
+  let bestScore = 0;
+  for (let lag = minLag; lag <= maxLag; lag += 1) {
+    let correlation = 0;
+    let leftEnergy = 0;
+    let rightEnergy = 0;
+    for (let index = 0; index < buffer.length - lag; index += 1) {
+      const left = buffer[index];
+      const right = buffer[index + lag];
+      correlation += left * right;
+      leftEnergy += left * left;
+      rightEnergy += right * right;
+    }
+    const score = correlation / Math.sqrt(leftEnergy * rightEnergy || 1);
+    if (score > bestScore) {
+      bestScore = score;
+      bestLag = lag;
+    }
+  }
+  if (bestLag < 0 || bestScore < 0.62) return null;
+  const frequency = sampleRate / bestLag;
+  return Number.isFinite(frequency) ? 69 + 12 * Math.log2(frequency / 440) : null;
+}
+
 function midiToWesternNote(midi) {
   const names = [
     "C",
@@ -91,6 +123,11 @@ function formatTime(sec) {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function playbackGain(value) {
+  const normalized = Math.max(0, Math.min(1, Number(value) || 0));
+  return normalized ** 2;
 }
 
 function getYouTubeVideoId(url) {
@@ -159,6 +196,9 @@ export default function Karaoke() {
   const containerRef = useRef(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
+  const [sungMidi, setSungMidi] = useState(null);
+  const [isPitchDetected, setIsPitchDetected] = useState(false);
+  const [pitchRestProgress, setPitchRestProgress] = useState(1);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [preferences] = useState(loadKaraokePreferences);
@@ -374,6 +414,139 @@ export default function Karaoke() {
   }, [isPlaying]);
 
   useEffect(() => {
+    if (!isPlaying || !navigator.mediaDevices?.getUserMedia) {
+      setSungMidi(null);
+      setIsPitchDetected(false);
+      setPitchRestProgress(1);
+      return undefined;
+    }
+
+    let cancelled = false;
+    let animationFrameId = 0;
+    let ownsStream = false;
+    let ownsContext = false;
+    let stream;
+    let context;
+    let lastMeasurementAt = 0;
+    let lastAnimationAt = 0;
+    let lastRenderAt = 0;
+    let lastVoicedAt = 0;
+    let targetMidi = null;
+    let displayedMidi = null;
+    let restStartedAt = 0;
+    const recentMidi = [];
+
+    const start = async () => {
+      try {
+        const monitor = browserMonitorRef.current;
+        stream = monitor?.stream;
+        context = monitor?.context;
+        if (!stream) {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+              ...(monitorInputDeviceId !== "default" ? { deviceId: { exact: monitorInputDeviceId } } : {}),
+            },
+          });
+          ownsStream = true;
+        }
+        if (!context) {
+          context = new AudioContext({ latencyHint: "interactive" });
+          ownsContext = true;
+        }
+        if (cancelled) return;
+        const analyser = context.createAnalyser();
+        analyser.fftSize = 2048;
+        analyser.smoothingTimeConstant = 0.2;
+        context.createMediaStreamSource(stream).connect(analyser);
+        const buffer = new Float32Array(analyser.fftSize);
+        const updatePitch = (timestamp) => {
+          if (cancelled) return;
+          if (timestamp - lastMeasurementAt >= 35) {
+            lastMeasurementAt = timestamp;
+            const detectedMidi = detectMidiFromAnalyser(analyser, buffer, context.sampleRate);
+            if (Number.isFinite(detectedMidi)) {
+              // Individual autocorrelation readings can jump by a semitone or octave.
+              // Use a short median window; the visible marker itself moves separately
+              // at a capped, constant speed below.
+              recentMidi.push(detectedMidi);
+              if (recentMidi.length > 3) recentMidi.shift();
+              const sortedMidi = [...recentMidi].sort((left, right) => left - right);
+              const medianMidi = sortedMidi[Math.floor(sortedMidi.length / 2)];
+              targetMidi = Number.isFinite(targetMidi)
+                ? targetMidi + (medianMidi - targetMidi) * 0.42
+                : medianMidi;
+              const wasResting = restStartedAt > 0 || !Number.isFinite(displayedMidi);
+              lastVoicedAt = timestamp;
+              restStartedAt = 0;
+              if (wasResting) {
+                // A new phrase must react immediately; only the return to rest is eased.
+                displayedMidi = targetMidi;
+                setSungMidi(targetMidi);
+              }
+              setIsPitchDetected(true);
+              setPitchRestProgress(0);
+            }
+          }
+          if (timestamp - lastVoicedAt > 110) {
+            targetMidi = null;
+            if (!restStartedAt && Number.isFinite(displayedMidi)) {
+              restStartedAt = timestamp;
+              setIsPitchDetected(false);
+            }
+          }
+          if (Number.isFinite(targetMidi)) {
+            const elapsedSeconds = Math.min(0.05, Math.max(0.001, (timestamp - lastAnimationAt) / 1000));
+            const maxStep = 22 * elapsedSeconds;
+            const difference = targetMidi - displayedMidi;
+            displayedMidi = Number.isFinite(displayedMidi)
+              ? displayedMidi + Math.max(-maxStep, Math.min(maxStep, difference))
+              : targetMidi;
+            if (timestamp - lastRenderAt >= 15) {
+              setSungMidi(displayedMidi);
+              lastRenderAt = timestamp;
+            }
+          } else if (restStartedAt) {
+            const restProgress = Math.min(1, (timestamp - restStartedAt) / 380);
+            if (timestamp - lastRenderAt >= 32) {
+              setPitchRestProgress(restProgress);
+              lastRenderAt = timestamp;
+            }
+            if (restProgress >= 1) {
+              displayedMidi = null;
+              recentMidi.length = 0;
+              setSungMidi(null);
+              restStartedAt = 0;
+            }
+          }
+          lastAnimationAt = timestamp;
+          animationFrameId = requestAnimationFrame(updatePitch);
+        };
+        animationFrameId = requestAnimationFrame(updatePitch);
+      } catch {
+        if (!cancelled) {
+          setSungMidi(null);
+          setIsPitchDetected(false);
+          setPitchRestProgress(1);
+        }
+      }
+    };
+
+    start();
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(animationFrameId);
+      if (ownsStream) stream?.getTracks().forEach((track) => track.stop());
+      if (ownsContext) context?.close();
+      setSungMidi(null);
+      setIsPitchDetected(false);
+      setPitchRestProgress(1);
+    };
+  }, [isPlaying, monitorInputDeviceId, monitoringEnabled]);
+
+  useEffect(() => {
     lastControlsActivityRef.current = Date.now();
     const watcher = window.setInterval(() => {
       setControlsVisible(Date.now() - lastControlsActivityRef.current < 2200);
@@ -382,10 +555,15 @@ export default function Karaoke() {
   }, []);
 
   useEffect(() => {
-    if (instrumentalRef.current) instrumentalRef.current.volume = musicVolume;
+    if (instrumentalRef.current) instrumentalRef.current.volume = playbackGain(musicVolume);
   }, [musicVolume]);
   useEffect(() => {
-    if (vocalsRef.current) vocalsRef.current.volume = vocalVolume;
+    if (browserMonitorRef.current) {
+      browserMonitorRef.current.gainNode.gain.value = microphoneVolume;
+    }
+  }, [microphoneVolume]);
+  useEffect(() => {
+    if (vocalsRef.current) vocalsRef.current.volume = playbackGain(vocalVolume);
   }, [vocalVolume]);
   useEffect(() => {
     [instrumentalRef.current, vocalsRef.current, videoRef.current].forEach(
@@ -419,6 +597,8 @@ export default function Karaoke() {
         return;
       }
       syncSecondaryMedia(instr.currentTime, true);
+      instr.volume = playbackGain(musicVolume);
+      voc.volume = playbackGain(vocalVolume);
       sendYouTubeCommand("playVideo");
       try {
         await instr.play();
@@ -525,6 +705,7 @@ export default function Karaoke() {
         activeMonitor?.stream.getTracks().forEach((track) => track.stop());
         activeMonitor?.context.close();
         browserMonitorRef.current = null;
+        await updateMicrophone({ volume: microphoneVolume });
         await api.startDirectMonitoring();
       } else {
         await api.stopDirectMonitoring();
@@ -544,8 +725,7 @@ export default function Karaoke() {
 
   const seekTo = (time) => {
     const instr = instrumentalRef.current;
-    const voc = vocalsRef.current;
-    if (!instr || !voc) return;
+    if (!instr) return;
     instr.currentTime = time;
     syncSecondaryMedia(time, true);
     setCurrentTime(time);
@@ -593,6 +773,36 @@ export default function Karaoke() {
     };
   }, []);
 
+  useEffect(() => {
+    const shell = document.querySelector(".karaoke-app-shell");
+    const main = containerRef.current?.parentElement;
+    const stage = containerRef.current;
+    if (!shell || !main || !stage) return undefined;
+
+    const syncStageAspect = () => {
+      const currentExtra = Number.parseFloat(getComputedStyle(shell).getPropertyValue("--karaoke-nav-extra")) || 0;
+      const fullAvailableHeight = main.clientHeight + currentExtra;
+      const targetStageHeight = main.clientWidth * 9 / 16;
+      shell.style.setProperty("--karaoke-nav-extra", `${Math.max(0, fullAvailableHeight - targetStageHeight)}px`);
+
+      const videoWidth = Math.max(stage.clientWidth, stage.clientHeight * 16 / 9);
+      const videoHeight = Math.max(stage.clientHeight, stage.clientWidth * 9 / 16);
+      stage.style.setProperty("--karaoke-video-width", `${Math.ceil(videoWidth) + 2}px`);
+      stage.style.setProperty("--karaoke-video-height", `${Math.ceil(videoHeight) + 2}px`);
+    };
+
+    const observer = new ResizeObserver(syncStageAspect);
+    observer.observe(main);
+    observer.observe(stage);
+    syncStageAspect();
+    return () => {
+      observer.disconnect();
+      shell.style.removeProperty("--karaoke-nav-extra");
+      stage.style.removeProperty("--karaoke-video-width");
+      stage.style.removeProperty("--karaoke-video-height");
+    };
+  }, []);
+
   const revealControls = () => {
     lastControlsActivityRef.current = Date.now();
     setControlsVisible(true);
@@ -634,11 +844,13 @@ export default function Karaoke() {
         ref={instrumentalRef}
         src={api.getAudioTrackUrl(song.id, "instrumental")}
         preload="auto"
+        onLoadedMetadata={(event) => { event.currentTarget.volume = playbackGain(musicVolume); }}
       />
       <audio
         ref={vocalsRef}
         src={api.getAudioTrackUrl(song.id, "vocals")}
         preload="auto"
+        onLoadedMetadata={(event) => { event.currentTarget.volume = playbackGain(vocalVolume); }}
       />
       {youTubeVideoId ? (
         <iframe
@@ -947,6 +1159,9 @@ export default function Karaoke() {
           <MelodyRoll
             notes={notes}
             currentTime={currentTime}
+            sungMidi={sungMidi}
+            isPitchDetected={isPitchDetected}
+            pitchRestProgress={pitchRestProgress}
             keyShift={keyShift}
             songTitle={song.title}
             noteRangeMin={song.note_range_min}
@@ -1087,9 +1302,20 @@ function WaveformTimeline({ value, duration, onChange }) {
   const bars = 220;
   const progress =
     duration > 0 ? Math.max(0, Math.min(1, value / duration)) : 0;
+  const seekFromPointer = (event) => {
+    if (!duration) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    onChange(ratio * duration);
+  };
 
   return (
-    <div className="waveform-timeline">
+    <div className="waveform-timeline" onPointerDown={(event) => {
+      event.preventDefault();
+      seekFromPointer(event);
+    }} onPointerMove={(event) => {
+      if (event.buttons === 1) seekFromPointer(event);
+    }} onClick={seekFromPointer}>
       <svg
         viewBox={`0 0 ${bars * 3} 44`}
         preserveAspectRatio="none"
@@ -1128,6 +1354,7 @@ function WaveformTimeline({ value, duration, onChange }) {
         step="0.01"
         value={Math.min(value, duration || 0)}
         onChange={(event) => onChange(Number(event.target.value))}
+        tabIndex={-1}
       />
     </div>
   );
@@ -1394,6 +1621,9 @@ function PerformancePlayer({ recordingId }) {
 function MelodyRoll({
   notes,
   currentTime,
+  sungMidi,
+  isPitchDetected,
+  pitchRestProgress,
   keyShift,
   songTitle,
   noteRangeMin,
@@ -1442,11 +1672,26 @@ function MelodyRoll({
         note.start >= currentTime - 0.08 && note.start <= currentTime + 1.4,
     ) ||
     visibleNotes.find((note) => note.end >= currentTime);
+  const targetMidi = cueNote?.midi + keyShift;
+  const isInTune = isPitchDetected && Number.isFinite(sungMidi) && Number.isFinite(targetMidi) && Math.abs(sungMidi - targetMidi) <= 0.7;
+  const indicatorMidi = Number.isFinite(sungMidi) ? sungMidi : targetMidi;
+  const hasLivePitch = isPitchDetected && Number.isFinite(sungMidi);
+  const visibleMidiLanes = [
+    ...new Set(visibleNotes.map((note) => note.midi + keyShift)),
+  ].sort((a, b) => a - b);
+  const displayMidiLanes = visibleMidiLanes.length
+    ? Array.from(
+      { length: visibleMidiLanes.at(-1) - visibleMidiLanes[0] + 5 },
+      (_, index) => visibleMidiLanes[0] - 2 + index,
+    )
+    : [];
 
   const x = (time) =>
     noteLaneStart +
     ((time - viewStart) / windowSeconds) * (width - noteLaneStart);
   const y = (midi) => height - (midi - minMidi + 1) * rowHeight;
+  const pitchY = Number.isFinite(indicatorMidi) ? y(indicatorMidi) + rowHeight / 2 : height - 16;
+  const indicatorY = pitchY + (height - 16 - pitchY) * Math.min(1, Math.max(0, pitchRestProgress));
 
   return (
     <div className="melody-roll">
@@ -1486,7 +1731,12 @@ function MelodyRoll({
             <stop offset="1" stopColor="#db2777" stopOpacity=".62" />
           </linearGradient>
           <linearGradient id="melody-note-active" x1="0" x2="1" y1="0" y2="1">
-            <stop offset="0" stopColor="#d9f99d" />
+            <stop offset="0" stopColor="#dbeafe" />
+            <stop offset=".45" stopColor="#a5b4fc" />
+            <stop offset="1" stopColor="#4f46e5" />
+          </linearGradient>
+          <linearGradient id="melody-note-hit" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0" stopColor="#dcfce7" />
             <stop offset=".45" stopColor="#4ade80" />
             <stop offset="1" stopColor="#16a34a" />
           </linearGradient>
@@ -1530,18 +1780,7 @@ function MelodyRoll({
           fill="url(#melody-scale-rail)"
           stroke="rgba(129,140,248,.2)"
         />
-        {Array.from({ length: 5 }, (_, index) => (
-          <line
-            key={`beat-${index}`}
-            x1={noteLaneStart + (index / 4) * (width - noteLaneStart)}
-            x2={noteLaneStart + (index / 4) * (width - noteLaneStart)}
-            y1={0}
-            y2={height}
-            stroke="rgba(196,181,253,.09)"
-          />
-        ))}
-        {Array.from({ length: pitchRange }, (_, index) => {
-          const midi = minMidi + index;
+        {displayMidiLanes.map((midi) => {
           const isOctave = midi % 12 === 0;
           const isCurrentPitch = activeMidi === midi;
           return (
@@ -1569,7 +1808,7 @@ function MelodyRoll({
                 {isCurrentPitch && (
                   <path
                     d={`M36 ${y(midi) + rowHeight / 2 - 6} L46 ${y(midi) + rowHeight / 2} L36 ${y(midi) + rowHeight / 2 + 6}Z`}
-                    fill="#d9f99d"
+                    fill="#c4b5fd"
                   />
                 )}
                 <text
@@ -1595,6 +1834,7 @@ function MelodyRoll({
         {visibleNotes.map((n, i) => {
           const isCurrent = currentTime >= n.start && currentTime < n.end;
           const isCue = n === cueNote;
+          const isHit = isInTune && isCue;
           const isPast = n.end < currentTime;
           const pastOpacity = isPast
             ? Math.max(0.08, 1 - (currentTime - n.end) / 2.4)
@@ -1611,8 +1851,10 @@ function MelodyRoll({
                 height={noteHeight}
                 rx={Math.min(9, Math.max(3.5, noteHeight / 3))}
                 fill={
-                  isCurrent || isCue
-                    ? "url(#melody-note-active)"
+                  isHit
+                    ? "url(#melody-note-hit)"
+                    : isCurrent || isCue
+                      ? "url(#melody-note-active)"
                     : isPast
                       ? "url(#melody-note-past)"
                       : "url(#melody-note-upcoming)"
@@ -1621,8 +1863,10 @@ function MelodyRoll({
                   isCurrent || isCue ? "url(#melody-active-glow)" : undefined
                 }
                 stroke={
-                  isCurrent || isCue
-                    ? "#bef264"
+                  isHit
+                    ? "#86efac"
+                    : isCurrent || isCue
+                      ? "#c4b5fd"
                     : isPast
                       ? "rgba(165,180,252,.52)"
                       : "rgba(251,207,232,.8)"
@@ -1635,27 +1879,19 @@ function MelodyRoll({
                   cy={noteY + noteHeight / 2}
                   r={Math.min(8, noteHeight / 2 + 2)}
                   fill="rgba(255,255,255,.08)"
-                  stroke="#f0fdf4"
+                  stroke="#e0e7ff"
                   strokeWidth="2.5"
                 />
               )}
             </g>
           );
         })}
-        <g
-          transform={`translate(${x(currentTime)} 0)`}
-          filter="url(#melody-playhead-glow)"
-        >
-          <line
-            x1="0"
-            x2="0"
-            y1="29"
-            y2={height}
-            stroke="#60a5fa"
-            strokeOpacity={0.98}
-            strokeWidth={2.5}
-          />
-        </g>
+        {Number.isFinite(indicatorMidi) && indicatorMidi >= minMidi - 1 && indicatorMidi <= maxMidi + 1 && (
+          <g transform={`translate(${x(currentTime)} 0)`} opacity={hasLivePitch ? 1 : .38}>
+            <circle cy={indicatorY} r="14" fill={hasLivePitch ? (isInTune ? "rgba(34,197,94,.22)" : "rgba(244,114,182,.2)") : "rgba(219,234,254,.08)"} style={{ transition: "cy .11s linear" }} />
+            <circle cy={indicatorY} r="7" fill={hasLivePitch ? (isInTune ? "#86efac" : "#f9a8d4") : "rgba(219,234,254,.14)"} stroke={hasLivePitch ? "#fff" : "rgba(255,255,255,.45)"} strokeWidth="2" style={{ transition: "cy .11s linear" }} />
+          </g>
+        )}
       </svg>
     </div>
   );

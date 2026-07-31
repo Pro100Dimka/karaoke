@@ -210,7 +210,11 @@ def _create_performance_mix(recording: models.Recording, song: models.Song, offs
     command = [
         ffmpeg, "-y", "-ss", f"{offset_sec:.3f}", "-i", str(instrumental), "-i", recording.path,
         "-t", f"{recording.duration_sec or 0:.3f}",
-        "-filter_complex", "[0:a][1:a]amix=inputs=2:duration=first:normalize=0",
+        # The recorded voice needs headroom over the backing track.  Mixing
+        # both sources at unity makes the instrumental mask an ordinary mic.
+        "-filter_complex",
+        "[0:a]volume=0.48[music];[1:a]volume=1.8[vocal];[music][vocal]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[mix]",
+        "-map", "[mix]",
         "-c:a", "libmp3lame", "-q:a", "2", str(destination),
     ]
     try:
