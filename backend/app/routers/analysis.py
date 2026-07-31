@@ -62,7 +62,6 @@ def run_analysis(recording_id: str, db: Session = Depends(get_db)):
         )
         db.add(result)
 
-    recording.analyzed = True
     db.commit()
     db.refresh(result)
     return _to_out(result)

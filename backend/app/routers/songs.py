@@ -3,8 +3,10 @@ import json
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+import config
 import models
 import schemas
 from app.services import pipeline_service, song_service
@@ -98,6 +100,49 @@ def get_status(song_id: str, db: Session = Depends(get_db)):
         progress_step=song.progress_step, progress_percent=song.progress_percent,
         error_message=song.error_message,
     )
+
+
+@router.post("/{song_id}/cancel", response_model=schemas.ProcessingStatusOut)
+def cancel_processing(song_id: str, db: Session = Depends(get_db)):
+    song = song_service.get_song(db, song_id)
+    if song is None:
+        raise HTTPException(status_code=404, detail="Song not found")
+    if not pipeline_service.cancel_processing(song_id):
+        raise HTTPException(status_code=409, detail="Song is not being processed")
+    db.refresh(song)
+    return schemas.ProcessingStatusOut(
+        song_id=song.id,
+        status=song.status,
+        progress_step=song.progress_step,
+        progress_percent=song.progress_percent,
+        error_message=song.error_message,
+    )
+
+
+@router.get("/{song_id}/log")
+def get_processing_log(song_id: str, db: Session = Depends(get_db)):
+    song = song_service.get_song(db, song_id)
+    if song is None:
+        raise HTTPException(status_code=404, detail="Song not found")
+    log_path = config.SONG_OUTPUT_DIR / song.slug / config.LOGS_DIRNAME / "pipeline.log"
+    if not log_path.exists():
+        return {"lines": []}
+    return {"lines": log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-500:]}
+
+
+@router.get("/{song_id}/audio/{track}")
+def get_audio_track(song_id: str, track: str, db: Session = Depends(get_db)):
+    song = song_service.get_song(db, song_id)
+    if song is None:
+        raise HTTPException(status_code=404, detail="Song not found")
+    if track not in {"instrumental", "vocals", "song"}:
+        raise HTTPException(status_code=404, detail="Unknown audio track")
+    output_dir = Path(song.output_dir) if song.output_dir else config.SONG_OUTPUT_DIR / song.slug
+    for extension, media_type in ((".mp3", "audio/mpeg"), (".wav", "audio/wav")):
+        candidate = output_dir / f"{track}{extension}"
+        if candidate.is_file():
+            return FileResponse(candidate, media_type=media_type, filename=candidate.name)
+    raise HTTPException(status_code=404, detail="Audio track is not available")
 
 
 @router.get("/{song_id}/result", response_model=schemas.SongResultOut)

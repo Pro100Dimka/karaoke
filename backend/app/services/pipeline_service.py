@@ -23,7 +23,8 @@ _STEP_RE = re.compile(r"(?P<step>\d+(?:\.\d+)?)\s*/\s*13")
 # песни, которые прямо сейчас обрабатываются (song_id -> Thread) — чтобы не
 # запускать одну и ту же песню повторно, пока предыдущий запуск не завершился
 _active_jobs: dict[str, threading.Thread] = {}
-_active_jobs_lock = threading.Lock()
+_active_jobs_lock = threading.RLock()
+_cancelled_jobs: set[str] = set()
 
 
 class _ProgressCapture(io.TextIOBase):
@@ -88,12 +89,28 @@ def start_processing(song_id: str) -> bool:
     уже обрабатывается (чтобы не плодить параллельные запуски одной и той же
     песни)."""
     with _active_jobs_lock:
+        _cancelled_jobs.discard(song_id)
         if is_processing(song_id):
             return False
         thread = threading.Thread(target=_run_job, args=(song_id,), daemon=True)
         _active_jobs[song_id] = thread
         thread.start()
     return True
+
+
+def cancel_processing(song_id: str) -> bool:
+    """Request cancellation without terminating a worker thread unsafely."""
+    with _active_jobs_lock:
+        if not is_processing(song_id):
+            return False
+        _cancelled_jobs.add(song_id)
+    _update_progress(song_id, status=models.SongStatus.CANCELLED)
+    return True
+
+
+def _is_cancelled(song_id: str) -> bool:
+    with _active_jobs_lock:
+        return song_id in _cancelled_jobs
 
 
 def _run_job(song_id: str) -> None:
@@ -106,6 +123,9 @@ def _run_job(song_id: str) -> None:
         slug = song.slug
     finally:
         db.close()
+
+    if _is_cancelled(song_id):
+        return
 
     _update_progress(song_id, status=models.SongStatus.PROCESSING, percent=0.0, step_label="0/13")
 
@@ -138,7 +158,8 @@ def _run_job(song_id: str) -> None:
     finally:
         capture.close()
 
-    _finalize_success(song_id, out_dir)
+    if not _is_cancelled(song_id):
+        _finalize_success(song_id, out_dir)
 
 
 def _finalize_success(song_id: str, out_dir: Path) -> None:

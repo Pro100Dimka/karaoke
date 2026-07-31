@@ -103,7 +103,7 @@ export default function Karaoke() {
     [instrumentalRef.current, vocalsRef.current].forEach((el) => el && (el.playbackRate = speed));
   }, [speed]);
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     const instr = instrumentalRef.current;
     const voc = vocalsRef.current;
     if (!instr || !voc) return;
@@ -112,8 +112,12 @@ export default function Karaoke() {
       voc.pause();
     } else {
       voc.currentTime = instr.currentTime;
-      instr.play();
-      voc.play();
+      try {
+        await Promise.all([instr.play(), voc.play()]);
+      } catch {
+        setIsPlaying(false);
+        return;
+      }
     }
     setIsPlaying(!isPlaying);
   };

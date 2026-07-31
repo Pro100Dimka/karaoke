@@ -2,12 +2,16 @@
 // Никакой отдельной библиотеки (axios и т.п.) не тянем — обычного fetch
 // достаточно для локального REST API.
 
-const BASE_URL = "http://127.0.0.1:8000";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
 async function request(path, options = {}) {
+  const { headers, body, ...requestOptions } = options;
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: options.body instanceof FormData ? undefined : { "Content-Type": "application/json" },
-    ...options,
+    ...requestOptions,
+    body,
+    headers: body instanceof FormData
+      ? headers
+      : { "Content-Type": "application/json", ...headers },
   });
   if (!res.ok) {
     let detail = res.statusText;

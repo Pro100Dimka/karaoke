@@ -7,7 +7,7 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    api.getAppSettings().then(setForm);
+    api.getAppSettings().then(setForm).catch((err) => alert(`Не удалось загрузить настройки: ${err.message}`));
   }, []);
 
   if (!form) return <Panel title="Настройки программы"><p className="text-muted">Загрузка...</p></Panel>;
@@ -45,20 +45,16 @@ export default function Settings() {
           </select>
         </Row>
         <Row label="Папка с песнями">
-          <input className="input" value={form.songs_folder || ""} placeholder="по умолчанию"
-                 onChange={(e) => set("songs_folder")(e.target.value)} />
+          <input className="input" value={form.songs_folder || ""} readOnly />
         </Row>
         <Row label="Папка AI">
-          <input className="input" value={form.ai_folder || ""} placeholder="по умолчанию"
-                 onChange={(e) => set("ai_folder")(e.target.value)} />
+          <input className="input" value={form.ai_folder || ""} readOnly />
         </Row>
         <Row label="Папка записей">
-          <input className="input" value={form.recordings_folder || ""} placeholder="по умолчанию"
-                 onChange={(e) => set("recordings_folder")(e.target.value)} />
+          <input className="input" value={form.recordings_folder || ""} readOnly />
         </Row>
         <Row label="Папка кэша">
-          <input className="input" value={form.cache_folder || ""} placeholder="по умолчанию"
-                 onChange={(e) => set("cache_folder")(e.target.value)} />
+          <input className="input" value={form.cache_folder || ""} readOnly />
         </Row>
         <Row label="Модель Whisper">
           <select className="input" value={form.whisper_model} onChange={(e) => set("whisper_model")(e.target.value)}>

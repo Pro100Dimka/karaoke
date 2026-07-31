@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import init_db
-from app.routers import songs, player, recording, analysis, cache, diagnostics, audio
+from app.routers import analysis, application, audio, cache, diagnostics, player, recording, songs
 
 
 @asynccontextmanager
@@ -53,6 +53,7 @@ app.include_router(analysis.router)
 app.include_router(cache.router)
 app.include_router(diagnostics.router)
 app.include_router(audio.router)
+app.include_router(application.router)
 
 
 @app.get("/")

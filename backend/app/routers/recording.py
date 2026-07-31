@@ -44,6 +44,18 @@ def stop_recording(session_id: str):
     return recording
 
 
+@router.get("/by-song/{song_id}", response_model=list[schemas.RecordingOut])
+def list_recordings_for_song(song_id: str, db: Session = Depends(get_db)):
+    if song_service.get_song(db, song_id) is None:
+        raise HTTPException(status_code=404, detail="Song not found")
+    return (
+        db.query(models.Recording)
+        .filter(models.Recording.song_id == song_id)
+        .order_by(models.Recording.created_at.desc())
+        .all()
+    )
+
+
 @router.get("/{recording_id}", response_model=schemas.RecordingOut)
 def get_recording(recording_id: str, db: Session = Depends(get_db)):
     recording = db.query(models.Recording).filter(models.Recording.id == recording_id).first()

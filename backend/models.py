@@ -28,6 +28,7 @@ class SongStatus(str, enum.Enum):
     QUEUED = "queued"          # обработка запрошена, ждёт своей очереди
     PROCESSING = "processing"  # AI-пайплайн работает
     DONE = "done"               # готово
+    CANCELLED = "cancelled"     # отменено пользователем
     ERROR = "error"             # упало с ошибкой
 
 
