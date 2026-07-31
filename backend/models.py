@@ -53,6 +53,8 @@ class Song(Base):
     note_range_min = Column(Integer, nullable=True)     # MIDI-номер
     note_range_max = Column(Integer, nullable=True)
     difficulty_override = Column(String, nullable=True)
+    # Optional direct URL of a music video shown silently in the karaoke player.
+    video_url = Column(String, nullable=True)
     show_lyrics = Column(Boolean, nullable=False, default=True)
     show_notes = Column(Boolean, nullable=False, default=True)
 

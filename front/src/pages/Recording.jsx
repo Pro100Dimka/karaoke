@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
 import { Panel } from "../components/ui";
+import { AudioPlayer } from "../components/AudioPlayer";
 
 function formatDate(value) {
   return value ? new Date(value).toLocaleString("ru-RU") : "—";
@@ -34,7 +35,7 @@ export default function Recording() {
             <div className="recording-library-main">
               <strong>{recording.song_title}</strong>
               <span>{formatDate(recording.created_at)} · {recording.duration_sec?.toFixed(1) || "0.0"} с</span>
-              <audio controls preload="metadata" src={api.getPerformanceFileUrl(recording.id)} />
+              <AudioPlayer src={api.getPerformanceFileUrl(recording.id)} className="recording-library-player" />
             </div>
             <div className="recording-library-actions">
               <button className="btn btn-ghost" title="Анализ исполнения"

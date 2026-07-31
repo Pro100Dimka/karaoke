@@ -35,6 +35,7 @@ class SongOut(BaseModel):
     note_range_min: Optional[int] = None
     note_range_max: Optional[int] = None
     difficulty_override: Optional[str] = None
+    video_url: Optional[str] = None
     show_lyrics: bool
     show_notes: bool
     optimized: bool
@@ -51,6 +52,7 @@ class SongUpdate(BaseModel):
     note_range_min: Optional[int] = Field(default=None, ge=0, le=127)
     note_range_max: Optional[int] = Field(default=None, ge=0, le=127)
     difficulty_override: Optional[str] = None
+    video_url: Optional[str] = Field(default=None, max_length=2048)
     show_lyrics: Optional[bool] = None
     show_notes: Optional[bool] = None
 

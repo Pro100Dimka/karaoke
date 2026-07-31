@@ -51,6 +51,7 @@ export default function SongSettings() {
         note_range_min: form.note_range_min,
         note_range_max: form.note_range_max,
         difficulty_override: form.difficulty_override,
+        video_url: form.video_url?.trim() || null,
         show_lyrics: form.show_lyrics,
         show_notes: form.show_notes,
       });
@@ -97,6 +98,14 @@ export default function SongSettings() {
           <Dropdown value={form.difficulty_override || ""} onChange={set("difficulty_override")}
             options={[{ value: "", label: "Авто (по AI)" }, ...DIFFICULTIES.map((value) => ({ value, label: value }))]} />
         </FieldRow>
+        <FieldRow label="Ссылка на клип">
+          <input className="input" type="url" value={form.video_url || ""}
+                 placeholder="https://example.com/video.mp4"
+                 onChange={(e) => set("video_url")(e.target.value)} />
+        </FieldRow>
+        <p className="text-muted" style={{ margin: "-5px 0 14px", fontSize: 12 }}>
+          Поддерживаются YouTube-ссылки и прямые ссылки на MP4/WebM. Клип будет идти без звука и синхронно с песней.
+        </p>
         <FieldRow label="Показывать текст">
           <input type="checkbox" checked={form.show_lyrics} onChange={(e) => set("show_lyrics")(e.target.checked)} />
         </FieldRow>

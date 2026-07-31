@@ -2,6 +2,7 @@
 import json
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import models
@@ -38,32 +39,40 @@ def run_analysis(recording_id: str, db: Session = Depends(get_db)):
     if song is None:
         raise HTTPException(status_code=404, detail="Песня для этой записи не найдена")
 
+    existing = db.query(models.AnalysisResult).filter(
+        models.AnalysisResult.recording_id == recording_id
+    ).first()
+    if existing is not None:
+        return _to_out(existing)
+
     try:
         analysis = analysis_service.analyze_recording(recording, song)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    existing = db.query(models.AnalysisResult).filter(
-        models.AnalysisResult.recording_id == recording_id
-    ).first()
     sections_json = json.dumps(analysis["sections"], ensure_ascii=False) if analysis["sections"] else None
 
-    if existing:
-        existing.pitch_accuracy_percent = analysis["pitch_accuracy_percent"]
-        existing.mean_deviation_semitones = analysis["mean_deviation_semitones"]
-        existing.sections_json = sections_json
-        result = existing
-    else:
-        result = models.AnalysisResult(
-            recording_id=recording_id,
-            pitch_accuracy_percent=analysis["pitch_accuracy_percent"],
-            mean_deviation_semitones=analysis["mean_deviation_semitones"],
-            sections_json=sections_json,
-        )
-        db.add(result)
+    result = models.AnalysisResult(
+        recording_id=recording_id,
+        pitch_accuracy_percent=analysis["pitch_accuracy_percent"],
+        mean_deviation_semitones=analysis["mean_deviation_semitones"],
+        sections_json=sections_json,
+    )
+    db.add(result)
 
-    db.commit()
-    db.refresh(result)
+    try:
+        db.commit()
+        db.refresh(result)
+    except IntegrityError:
+        # Two clients can request the same analysis simultaneously (for
+        # example React StrictMode during development). The other request may
+        # already have committed the unique recording result; return it.
+        db.rollback()
+        result = db.query(models.AnalysisResult).filter(
+            models.AnalysisResult.recording_id == recording_id
+        ).first()
+        if result is None:
+            raise
     return _to_out(result)
 
 

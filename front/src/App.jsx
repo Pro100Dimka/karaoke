@@ -1,4 +1,4 @@
-import { HashRouter, Routes, Route } from "react-router-dom";
+import { HashRouter, Routes, Route, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { api } from "./api/client";
 import TitleBar from "./components/TitleBar";
@@ -26,7 +26,17 @@ export default function App() {
 
   return (
     <HashRouter>
-      <div className="app-shell">
+      <AppLayout />
+    </HashRouter>
+  );
+}
+
+function AppLayout() {
+  const location = useLocation();
+  const isKaraoke = location.pathname === "/karaoke";
+
+  return (
+      <div className={`app-shell ${isKaraoke ? "karaoke-app-shell" : ""}`}>
         <TitleBar />
         <div className="app-body">
           <Sidebar />
@@ -48,6 +58,5 @@ export default function App() {
           </main>
         </div>
       </div>
-    </HashRouter>
   );
 }

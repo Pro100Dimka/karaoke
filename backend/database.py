@@ -5,7 +5,7 @@ SQLite выбрана потому, что это десктоп-програм�
 не нужен отдельный процесс сервера БД, работает "из коробки" без установки
 чего-либо дополнительного пользователем.
 """
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 import config
@@ -29,6 +29,12 @@ def init_db() -> None:
     """Создаёт таблицы, если их ещё нет. Вызывается один раз при старте приложения."""
     import models  # noqa: F401  (регистрирует модели в Base.metadata перед create_all)
     Base.metadata.create_all(bind=engine)
+    # create_all deliberately does not alter existing SQLite tables. Keep
+    # additive migrations so installed libraries upgrade without data loss.
+    song_columns = {column["name"] for column in inspect(engine).get_columns("songs")}
+    if "video_url" not in song_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE songs ADD COLUMN video_url VARCHAR"))
 
 
 def get_db():
