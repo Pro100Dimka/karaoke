@@ -127,14 +127,19 @@ def fill_gaps_during_active_singing(notes: list, lyrics_lines: list, pitch_frame
             note_votes = [f["note"] for f in frames if f.get("note")]
             if frames and (len(note_votes) / len(frames)) >= min_voiced_ratio:
                 fill_note_name, _ = Counter(note_votes).most_common(1)[0]
-                result.append({
-                    "note": fill_note_name,
-                    "start": round(gap_start, 3),
-                    "end": round(gap_end, 3),
-                    "duration": round(gap_dur, 3),
-                    "confidence": fill_confidence,
-                    "gap_filled": True,
-                })
+                # A raw frame in a gap is not strong enough evidence for a new
+                # note: it is often consonant noise, reverb, or a pYIN octave
+                # error. Bridge only a sustained note confirmed on both sides.
+                if (
+                    prev["note"] == nxt["note"] == fill_note_name
+                ):
+                    prev["end"] = nxt["end"]
+                    prev["duration"] = round(prev["end"] - prev["start"], 3)
+                    prev["confidence"] = max(
+                        prev.get("confidence", fill_confidence),
+                        nxt.get("confidence", fill_confidence),
+                    )
+                    continue
         result.append(dict(nxt))
     return result
 

@@ -40,6 +40,7 @@ export const api = {
   updateSong: (id, patch) => request(`/songs/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
   deleteSong: (id) => request(`/songs/${id}`, { method: "DELETE" }),
   processSong: (id) => request(`/songs/${id}/process`, { method: "POST" }),
+  reprocessMelody: (id) => request(`/songs/${id}/reprocess`, { method: "POST" }),
   cancelProcessing: (id) => request(`/songs/${id}/cancel`, { method: "POST" }),
   getStatus: (id) => request(`/songs/${id}/status`),
   getLog: (id) => request(`/songs/${id}/log`),

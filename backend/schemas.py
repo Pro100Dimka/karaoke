@@ -66,6 +66,8 @@ class ProcessingStatusOut(BaseModel):
     status: SongStatus
     progress_step: Optional[str] = None
     progress_percent: float
+    progress_detail: Optional[str] = None
+    eta_seconds: Optional[int] = None
     error_message: Optional[str] = None
 
 

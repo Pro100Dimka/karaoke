@@ -90,14 +90,44 @@ def process_song(song_id: str, db: Session = Depends(get_db)):
     )
 
 
+@router.post("/{song_id}/reprocess", response_model=schemas.ProcessingStatusOut, status_code=202)
+def reprocess_melody(song_id: str, db: Session = Depends(get_db)):
+    """Clear prior generated files and rebuild the song with the current MIDI algorithm."""
+    song = song_service.get_song(db, song_id)
+    if song is None:
+        raise HTTPException(status_code=404, detail="Песня не найдена")
+    if not song.output_dir or song.status != models.SongStatus.DONE:
+        raise HTTPException(status_code=409, detail="Сначала завершите полную обработку песни")
+    if pipeline_service.is_processing(song_id):
+        raise HTTPException(status_code=409, detail="Обработка уже запущена")
+
+    song.status = models.SongStatus.QUEUED
+    song.error_message = None
+    song.progress_percent = 0.0
+    song.progress_step = "0/13"
+    db.commit()
+    pipeline_service.start_reprocessing(song_id)
+    db.refresh(song)
+    return schemas.ProcessingStatusOut(
+        song_id=song.id,
+        status=song.status,
+        progress_step=song.progress_step,
+        progress_percent=song.progress_percent,
+        error_message=song.error_message,
+    )
+
+
 @router.get("/{song_id}/status", response_model=schemas.ProcessingStatusOut)
 def get_status(song_id: str, db: Session = Depends(get_db)):
     song = song_service.get_song(db, song_id)
     if song is None:
         raise HTTPException(status_code=404, detail="Песня не найдена")
+    telemetry = pipeline_service.get_processing_telemetry(song_id)
     return schemas.ProcessingStatusOut(
         song_id=song.id, status=song.status,
         progress_step=song.progress_step, progress_percent=song.progress_percent,
+        progress_detail=telemetry.get("progress_detail"),
+        eta_seconds=telemetry.get("eta_seconds"),
         error_message=song.error_message,
     )
 

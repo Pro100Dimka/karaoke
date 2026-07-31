@@ -302,9 +302,9 @@ def _resolve_confidence_threshold(pitch_frames: list, confidence_threshold,
 
 def build_reference(pitch_frames: list, min_note_duration: float = 0.08,
                      confidence_threshold: float | None = None,
-                     confidence_percentile: float = 15.0,
+                     confidence_percentile: float = 18.0,
                      min_confidence_floor: float = 0.03,
-                     max_confidence_ceiling: float = 0.4,
+                     max_confidence_ceiling: float = 0.42,
                      smoothing_window: int = 5,
                      stable_frames: int = 3,
                      max_gap_sec: float = 0.08) -> list:
@@ -450,12 +450,12 @@ def main():
                          help="порог уверенности pitch-детектора (по умолчанию "
                               "считается адаптивно под песню, см. --confidence-percentile). "
                               "Передайте число (например 0.4) для старого фиксированного порога")
-    parser.add_argument("--confidence-percentile", type=float, default=15.0,
+    parser.add_argument("--confidence-percentile", type=float, default=18.0,
                          help="перцентиль confidence среди voiced-кадров, используемый "
                               "как адаптивный порог (игнорируется, если задан --confidence)")
     parser.add_argument("--confidence-floor", type=float, default=0.03,
                          help="минимальное значение адаптивного порога")
-    parser.add_argument("--confidence-ceiling", type=float, default=0.4,
+    parser.add_argument("--confidence-ceiling", type=float, default=0.42,
                          help="максимальное значение адаптивного порога")
     parser.add_argument("--smoothing-window", type=int, default=5,
                          help="окно медианного сглаживания, в кадрах")
