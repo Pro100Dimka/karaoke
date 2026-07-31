@@ -39,6 +39,7 @@ import json
 from collections import Counter
 
 from src.lyrics.syllabify import build_syllable_spans
+from src.common.notes import note_to_midi
 
 
 def _times_index(pitch_frames: list) -> list:
@@ -94,8 +95,10 @@ def _fully_covered_by_singing(active_spans: list, t0: float, t1: float) -> bool:
 
 
 def fill_gaps_during_active_singing(notes: list, lyrics_lines: list, pitch_frames: list,
-                                     max_gap_duration: float = 0.35,
-                                     min_voiced_ratio: float = 0.5,
+                                     max_gap_duration: float = 0.75,
+                                     min_voiced_ratio: float = 0.50,
+                                     min_restored_duration: float = 0.14,
+                                     min_dominant_ratio: float = 0.50,
                                      fill_confidence: float = 0.3) -> list:
     """
     max_gap_duration — провалы длиннее этого не трогаем (это уже, скорее
@@ -126,7 +129,7 @@ def fill_gaps_during_active_singing(notes: list, lyrics_lines: list, pitch_frame
             frames = _frames_in_range(pitch_frames, times_index, gap_start, gap_end)
             note_votes = [f["note"] for f in frames if f.get("note")]
             if frames and (len(note_votes) / len(frames)) >= min_voiced_ratio:
-                fill_note_name, _ = Counter(note_votes).most_common(1)[0]
+                fill_note_name, dominant_votes = Counter(note_votes).most_common(1)[0]
                 # A raw frame in a gap is not strong enough evidence for a new
                 # note: it is often consonant noise, reverb, or a pYIN octave
                 # error. Bridge only a sustained note confirmed on both sides.
@@ -140,6 +143,39 @@ def fill_gaps_during_active_singing(notes: list, lyrics_lines: list, pitch_frame
                         nxt.get("confidence", fill_confidence),
                     )
                     continue
+                # Restore a missing voiced syllable only when raw pYIN keeps
+                # one pitch for a meaningful part of the gap.  This is much
+                # stricter than the old "one raw frame = a note" heuristic:
+                # it brings back quiet vocal phrases but not consonants,
+                # reverb tails or tiny octave glitches.
+                if (
+                    gap_dur >= min_restored_duration
+                    and dominant_votes / len(note_votes) >= min_dominant_ratio
+                ):
+                    candidate_midi = note_to_midi(fill_note_name)
+                    neighbor_distance = min(
+                        abs(candidate_midi - note_to_midi(prev["note"])),
+                        abs(candidate_midi - note_to_midi(nxt["note"])),
+                    )
+                    stable_ratio = dominant_votes / len(note_votes)
+                    # A recovered pitch that continues a neighbouring note
+                    # (or moves just a semitone) is safe at the normal gate.
+                    # A completely new pitch needs substantially stronger
+                    # evidence; otherwise pYIN octave/noise artefacts become
+                    # visible as extra notes in the karaoke guide.
+                    context_confirmed = neighbor_distance <= 1
+                    independently_confirmed = (
+                        gap_dur >= 0.22 and stable_ratio >= 0.68
+                    )
+                    if context_confirmed or independently_confirmed:
+                        result.append({
+                            "note": fill_note_name,
+                            "start": round(gap_start, 3),
+                            "end": round(gap_end, 3),
+                            "duration": round(gap_dur, 3),
+                            "confidence": round(fill_confidence, 3),
+                            "source": "sustained_gap_recovery",
+                        })
         result.append(dict(nxt))
     return result
 
@@ -201,11 +237,20 @@ def split_notes_by_syllables(notes: list, lyrics_lines: list, pitch_frames: list
     if not notes:
         return notes
 
+    # Word starts come from forced alignment and describe the user's visible
+    # lyric rhythm.  Prefer them over estimated intra-word syllable timings;
+    # the latter are only a fallback when word timings are unavailable.
+    word_boundaries = sorted({
+        float(word["start"])
+        for line in lyrics_lines or []
+        for word in line.get("words", []) or []
+        if word.get("start") is not None
+    })
     syllables = build_syllable_spans(lyrics_lines)
-    if not syllables:
+    if not word_boundaries and not syllables:
         return notes
 
-    boundary_times = sorted({s["start"] for s in syllables})
+    boundary_times = word_boundaries or sorted({s["start"] for s in syllables})
     times_index = _times_index(pitch_frames) if pitch_frames else None
 
     result = []
@@ -251,6 +296,57 @@ def split_notes_by_syllables(notes: list, lyrics_lines: list, pitch_frames: list
             result.append(seg)
 
     result.sort(key=lambda n: n["start"])
+    return result
+
+
+def align_note_boundaries_to_words(notes: list, lyrics_lines: list, pitch_frames: list,
+                                   word_window: float = 0.18,
+                                   max_snap_distance: float = 0.14,
+                                   min_note_duration: float = 0.10) -> list:
+    """Snap existing note transitions to real word attacks when audio agrees.
+
+    Word timings provide the intended rhythm, while the loudness dip in the
+    separated vocal is the evidence that a new attack actually occurred.  We
+    therefore never create, remove or retune notes here; only an already
+    detected boundary may move by a small amount.
+    """
+    if len(notes) < 2 or not pitch_frames:
+        return notes
+
+    word_starts = sorted({
+        float(word["start"])
+        for line in lyrics_lines or []
+        for word in line.get("words", []) or []
+        if word.get("start") is not None
+    })
+    if not word_starts:
+        return notes
+
+    result = [dict(note) for note in notes]
+    times_index = _times_index(pitch_frames)
+    for index in range(len(result) - 1):
+        left, right = result[index], result[index + 1]
+        boundary = (left["end"] + right["start"]) / 2
+        nearby = min(word_starts, key=lambda start: abs(start - boundary))
+        if abs(nearby - boundary) > word_window:
+            continue
+
+        lo = left["start"] + min_note_duration
+        hi = right["end"] - min_note_duration
+        snapped = _find_acoustic_split_point(
+            pitch_frames, times_index, nearby, lo, hi,
+            search_window=word_window, dip_margin_db=2.0,
+        )
+        if snapped is None or abs(snapped - boundary) > max_snap_distance:
+            continue
+        if snapped - left["start"] < min_note_duration or right["end"] - snapped < min_note_duration:
+            continue
+
+        left["end"] = round(snapped, 3)
+        left["duration"] = round(left["end"] - left["start"], 3)
+        right["start"] = round(snapped, 3)
+        right["duration"] = round(right["end"] - right["start"], 3)
+
     return result
 
 

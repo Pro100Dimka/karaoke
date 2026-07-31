@@ -153,7 +153,12 @@ export default function Library() {
   return (
     <div className="library-page">
       <section className="library-hero">
-        <div>
+        <div className="library-hero-brand-mark" aria-hidden="true">
+          <Music2 size={30} />
+          <i />
+          <i />
+        </div>
+        <div className="library-hero-copy">
           <span>ВАША МУЗЫКАЛЬНАЯ КОЛЛЕКЦИЯ</span>
           <h1>Библиотека песен</h1>
           <p>
@@ -188,15 +193,8 @@ export default function Library() {
           </div>
         }
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            marginBottom: 14,
-          }}
-        >
-          <div style={{ position: "relative", flex: 1, maxWidth: 320 }}>
+        <div className="library-toolbar">
+          <div className="library-search">
             <Search
               size={14}
               style={{
@@ -235,10 +233,8 @@ export default function Library() {
           <tbody>
             {filtered.map((song) => (
               <tr key={song.id}>
-                <td style={{ fontWeight: 600 }}>
-                  <div
-                    style={{ display: "flex", alignItems: "center", gap: 8 }}
-                  >
+                <td className="song-title-cell">
+                  <div className="song-title-content">
                     {song.status === "done" && (
                       <button
                         className="btn btn-ghost"
@@ -259,7 +255,7 @@ export default function Library() {
                         <Headphones size={15} />
                       </button>
                     )}
-                    <span>{song.title}</span>
+                    <span className="song-title-name">{song.title}</span>
                   </div>
                 </td>
                 <td>

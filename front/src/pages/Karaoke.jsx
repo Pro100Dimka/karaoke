@@ -41,6 +41,13 @@ function normalizeLyrics(raw) {
       start: l.start ?? l.begin ?? 0,
       end: l.end ?? l.start + 2,
       text: l.text || l.line || "",
+      words: Array.isArray(l.words)
+        ? l.words.map((word) => ({
+            text: word.word || word.text || "",
+            start: word.start ?? l.start ?? 0,
+            end: word.end ?? l.end ?? l.start + 2,
+          })).filter((word) => word.text)
+        : [],
     }))
     .filter((l) => l.text);
 }
@@ -370,17 +377,25 @@ export default function Karaoke({ onOpenAppSettings }) {
   melodyKeyShiftRef.current = keyShift;
   const youTubeVideoId = getYouTubeVideoId(song?.video_url);
 
+  // Whisper commonly places the first syllable a fraction before the actual
+  // vocal attack.  Anchor the lyric clock to the first nearby melody note so
+  // text, guide and voice begin together for every processed song.
+  const lyricAnchorNote = lyrics.length
+    ? notes.find((note) => note.end >= lyrics[0].start - 0.35)
+    : null;
+  const lyricDelay = lyricAnchorNote && lyrics.length
+    ? Math.max(0, Math.min(0.5, lyricAnchorNote.start - lyrics[0].start))
+    : 0;
+  const lyricTime = Math.max(0, currentTime - lyricDelay);
+
   const currentLineIndex = lyrics.findIndex(
-    (l) => currentTime >= l.start && currentTime < l.end,
+    (l) => lyricTime >= l.start && lyricTime < l.end,
   );
   const currentLine = lyrics[currentLineIndex];
-  const upcomingLine = lyrics.find((line) => line.start > currentTime);
+  const upcomingLine = lyrics.find((line) => line.start > lyricTime);
   const nextLine = currentLine ? lyrics[currentLineIndex + 1] : upcomingLine;
-  const previousLine = currentLine
-    ? lyrics[currentLineIndex - 1]
-    : [...lyrics].reverse().find((line) => line.end <= currentTime);
   const secondsUntilLyrics = upcomingLine
-    ? Math.max(0, upcomingLine.start - currentTime)
+    ? Math.max(0, upcomingLine.start - lyricTime)
     : 0;
 
   const sendYouTubeCommand = (func, args = []) => {
@@ -985,6 +1000,13 @@ export default function Karaoke({ onOpenAppSettings }) {
         )
       )}
 
+      <div className={`karaoke-immersive-atmosphere ${isPlaying ? "is-playing" : ""}`} aria-hidden="true">
+        <i className="karaoke-atmosphere-orb" />
+        <i className="karaoke-atmosphere-orb karaoke-atmosphere-orb-secondary" />
+        <i className="karaoke-atmosphere-grid" />
+        <i className="karaoke-atmosphere-beam" />
+      </div>
+
       {microphoneOpen && (
         <div
           className="karaoke-settings-backdrop"
@@ -1299,11 +1321,8 @@ export default function Karaoke({ onOpenAppSettings }) {
             {lyrics.length === 0 && (
               <p className="text-muted">Синхронизированный текст недоступен</p>
             )}
-            {previousLine && (
-              <KaraokeLyricLine line={previousLine} currentTime={currentTime} className="karaoke-lyric karaoke-lyric-muted" />
-            )}
             {currentLine ? (
-              <KaraokeLyricLine key={`${currentLine.start}-${currentLine.text}`} line={currentLine} currentTime={currentTime} className="karaoke-lyric karaoke-lyric-current" />
+              <KaraokeLyricLine key={`${currentLine.start}-${currentLine.text}`} line={currentLine} currentTime={lyricTime} className="karaoke-lyric karaoke-lyric-current" />
             ) : upcomingLine ? (
               secondsUntilLyrics > 8 ? (
                 <div className="karaoke-lyric karaoke-lyric-current">
@@ -1313,7 +1332,7 @@ export default function Karaoke({ onOpenAppSettings }) {
                   {formatTime(secondsUntilLyrics)}
                 </div>
               ) : (
-                <KaraokeLyricLine key={`${upcomingLine.start}-${upcomingLine.text}`} line={upcomingLine} currentTime={currentTime} className="karaoke-lyric karaoke-lyric-current karaoke-lyric-upcoming" />
+                <KaraokeLyricLine key={`${upcomingLine.start}-${upcomingLine.text}`} line={upcomingLine} currentTime={lyricTime} className="karaoke-lyric karaoke-lyric-current karaoke-lyric-upcoming" />
               )
             ) : (
               lyrics.length > 0 && (
@@ -1325,7 +1344,7 @@ export default function Karaoke({ onOpenAppSettings }) {
               )
             )}
             {nextLine && (
-              <KaraokeLyricLine line={nextLine} currentTime={currentTime} className="karaoke-lyric karaoke-lyric-next" />
+              <KaraokeLyricLine line={nextLine} currentTime={lyricTime} className="karaoke-lyric karaoke-lyric-next" />
             )}
           </div>
         )}
@@ -1433,17 +1452,21 @@ export default function Karaoke({ onOpenAppSettings }) {
 }
 
 function KaraokeLyricLine({ line, currentTime, className }) {
-  const words = line.text.trim().split(/\s+/).filter(Boolean);
-  const totalWeight = words.reduce((sum, word) => sum + Math.max(word.length, 1), 0) || 1;
+  const words = line.words?.length
+    ? line.words
+    : line.text.trim().split(/\s+/).filter(Boolean).map((text) => ({ text }));
+  const totalWeight = words.reduce((sum, word) => sum + Math.max(word.text.length, 1), 0) || 1;
   const progress = Math.max(0, Math.min(1, (currentTime - line.start) / Math.max(.01, line.end - line.start)));
   let passedWeight = 0;
 
   return <div className={className}>
     {words.map((word, index) => {
-      const weight = Math.max(word.length, 1) / totalWeight;
-      const fill = Math.max(0, Math.min(1, (progress - passedWeight / totalWeight) / weight));
-      passedWeight += word.length;
-      return <span className="karaoke-lyric-word" style={{ "--lyric-fill": `${Math.round(fill * 100)}%` }} key={`${word}-${index}`}>{word}{index < words.length - 1 ? " " : ""}</span>;
+      const weight = Math.max(word.text.length, 1) / totalWeight;
+      const wordStart = Number.isFinite(word.start) ? word.start : line.start + (passedWeight / totalWeight) * (line.end - line.start);
+      const wordEnd = Number.isFinite(word.end) ? word.end : wordStart + weight * (line.end - line.start);
+      const fill = Math.max(0, Math.min(1, (currentTime - wordStart) / Math.max(.01, wordEnd - wordStart)));
+      passedWeight += word.text.length;
+      return <span className="karaoke-lyric-word" style={{ "--lyric-fill": `${Math.round(fill * 100)}%` }} key={`${word.text}-${index}`}>{word.text}{index < words.length - 1 ? " " : ""}</span>;
     })}
   </div>;
 }

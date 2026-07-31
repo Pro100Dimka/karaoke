@@ -38,6 +38,7 @@ from src.build.project import build_project
 from src.build.reference import build_reference
 from src.build.report import build_report
 from src.build.split_notes import (
+    align_note_boundaries_to_words,
     fill_gaps_during_active_singing,
     split_notes_by_syllables,
 )
@@ -201,7 +202,12 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
     print("9.5/13 Дозаполнение пробелов и разбиение долгих нот по слогам...")
     notes_before = len(reference_notes)
     reference_notes = fill_gaps_during_active_singing(reference_notes, lyrics_sync, pitch_frames)
-    reference_notes = split_notes_by_syllables(reference_notes, lyrics_sync, pitch_frames)
+    reference_notes = split_notes_by_syllables(
+        reference_notes, lyrics_sync, pitch_frames,
+        acoustic_search_window=0.12,
+        acoustic_dip_margin_db=3.5,
+    )
+    reference_notes = align_note_boundaries_to_words(reference_notes, lyrics_sync, pitch_frames)
     if len(reference_notes) != notes_before:
         print(f"   ноты: {notes_before} -> {len(reference_notes)}")
     save_json(reference_notes, reference_path)
