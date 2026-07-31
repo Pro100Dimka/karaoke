@@ -11,6 +11,10 @@ export default function Settings() {
     api.getAppSettings().then(setForm).catch((err) => alert(`Не удалось загрузить настройки: ${err.message}`));
   }, []);
 
+  useEffect(() => {
+    if (form?.theme) document.documentElement.dataset.theme = form.theme;
+  }, [form?.theme]);
+
   if (!form) return <Panel title="Настройки программы"><p className="text-muted">Загрузка...</p></Panel>;
 
   const set = (field) => (value) => setForm((f) => ({ ...f, [field]: value }));

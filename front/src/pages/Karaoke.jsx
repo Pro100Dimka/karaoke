@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
-  Play, Pause, Square, SkipBack, SkipForward, Maximize, Type, AudioLines,
+  Play, Pause, Square, SkipBack, SkipForward, Maximize, Type, AudioLines, Mic, Settings2,
 } from "lucide-react";
 import { api } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
@@ -51,6 +51,7 @@ function formatTime(sec) {
 
 export default function Karaoke() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { data: songs } = usePolling(api.listSongs, 5000, []);
   const [songId] = useState(location.state?.songId || null);
   const song = songId ? (songs || []).find((s) => s.id === songId) : (songs || []).find((s) => s.status === "done");
@@ -74,10 +75,32 @@ export default function Karaoke() {
   const [keyShift, setKeyShift] = useState(0);
   const [showLyrics, setShowLyrics] = useState(true);
   const [showNotes, setShowNotes] = useState(true);
+  const [recordingSessionId, setRecordingSessionId] = useState(null);
+  const [microphoneOpen, setMicrophoneOpen] = useState(false);
+  const [recordingError, setRecordingError] = useState(null);
+  const [microphoneVolume, setMicrophoneVolume] = useState(1);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [controlsVisible, setControlsVisible] = useState(true);
   const currentTimeRef = useRef(currentTime);
   const durationRef = useRef(duration);
+  const controlsTimerRef = useRef(null);
+  const microphoneVolumeInitializedRef = useRef(false);
   currentTimeRef.current = currentTime;
   durationRef.current = duration;
+  const { data: devices } = usePolling(api.listAudioDevices, 15000, []);
+  const { data: audioSettings } = usePolling(api.getAudioSettings, 5000, []);
+  const { data: signal } = usePolling(
+    () => (microphoneOpen ? api.getSignalQuality() : Promise.resolve(null)),
+    1200,
+    [microphoneOpen]
+  );
+
+  useEffect(() => {
+    if (audioSettings?.volume != null && !microphoneVolumeInitializedRef.current) {
+      microphoneVolumeInitializedRef.current = true;
+      setMicrophoneVolume(audioSettings.volume);
+    }
+  }, [audioSettings?.volume]);
 
   useEffect(() => {
     if (!song || song.status !== "done") return;
@@ -139,7 +162,20 @@ export default function Karaoke() {
     if (isPlaying) {
       instr.pause();
       voc.pause();
+      if (recordingSessionId) await api.pauseRecording(recordingSessionId).catch(() => {});
     } else {
+      try {
+        if (recordingSessionId) {
+          await api.resumeRecording(recordingSessionId);
+        } else {
+          const session = await api.startRecording(song.id);
+          setRecordingSessionId(session.recording_session_id);
+        }
+        setRecordingError(null);
+      } catch (error) {
+        setRecordingError(`Не удалось начать запись: ${error.message}`);
+        return;
+      }
       voc.currentTime = instr.currentTime;
       try {
         await Promise.all([instr.play(), voc.play()]);
@@ -151,7 +187,7 @@ export default function Karaoke() {
     setIsPlaying(!isPlaying);
   };
 
-  const stop = () => {
+  const stop = async () => {
     const instr = instrumentalRef.current;
     const voc = vocalsRef.current;
     if (!instr || !voc) return;
@@ -161,7 +197,29 @@ export default function Karaoke() {
     voc.currentTime = 0;
     setIsPlaying(false);
     setCurrentTime(0);
+    if (recordingSessionId) {
+      try {
+        const recording = await api.stopRecording(recordingSessionId);
+        setRecordingSessionId(null);
+        navigate("/analysis", { state: { songId: song.id, recordingId: recording.id, autoRun: true } });
+      } catch (error) {
+        setRecordingError(`Не удалось сохранить запись: ${error.message}`);
+      }
+    }
   };
+
+  const updateMicrophone = async (patch) => {
+    try {
+      const updated = await api.updateAudioSettings(patch);
+      if (updated.volume != null) setMicrophoneVolume(updated.volume);
+    } catch (error) {
+      setRecordingError(`Не удалось сохранить настройки микрофона: ${error.message}`);
+    }
+  };
+
+  const microphoneLevel = signal
+    ? Math.max(0, Math.min(100, ((signal.rms_db + 60) / 60) * 100))
+    : 0;
 
   const seekTo = (time) => {
     const instr = instrumentalRef.current;
@@ -200,6 +258,26 @@ export default function Karaoke() {
     else containerRef.current.requestFullscreen();
   };
 
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      const active = document.fullscreenElement === containerRef.current;
+      setIsFullscreen(active);
+      setControlsVisible(true);
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+      clearTimeout(controlsTimerRef.current);
+    };
+  }, []);
+
+  const revealControls = () => {
+    if (!isFullscreen) return;
+    setControlsVisible(true);
+    clearTimeout(controlsTimerRef.current);
+    controlsTimerRef.current = setTimeout(() => setControlsVisible(false), 2200);
+  };
+
   if (!song) {
     return (
       <div className="panel">
@@ -218,7 +296,8 @@ export default function Karaoke() {
   return (
     <div
       ref={containerRef}
-      className="panel"
+      className={`panel karaoke-stage ${isFullscreen && !controlsVisible ? "karaoke-ui-hidden" : ""}`}
+      onMouseMove={revealControls}
       style={{
         padding: 0,
         overflow: "hidden",
@@ -243,11 +322,46 @@ export default function Karaoke() {
           <button className={`btn ${showNotes ? "btn-primary" : "btn-ghost"}`} onClick={() => setShowNotes((v) => !v)}>
             <AudioLines size={14} /> Ноты
           </button>
+          <button className={`btn ${microphoneOpen ? "btn-primary" : "btn-ghost"}`} onClick={() => setMicrophoneOpen((value) => !value)}>
+            <Settings2 size={14} /> Микрофон
+          </button>
           <button className="btn btn-ghost" onClick={toggleFullscreen}>
             <Maximize size={14} />
           </button>
         </div>
       </div>
+
+      {microphoneOpen && (
+        <div className="microphone-panel">
+          <div className="microphone-panel-title"><Mic size={15} /> Настройка микрофона</div>
+          <label>Устройство ввода
+            <select className="input" value={audioSettings?.input_device_id ?? ""}
+              onChange={(event) => updateMicrophone({ input_device_id: Number(event.target.value) })}>
+              <option value="">По умолчанию</option>
+              {(devices || []).map((device) => <option key={device.index} value={device.index}>{device.name}</option>)}
+            </select>
+          </label>
+          <label>Громкость микрофона: {Math.round(microphoneVolume * 100)}%
+            <input type="range" min="0" max="4" step="0.05" value={microphoneVolume}
+              onChange={(event) => setMicrophoneVolume(Number(event.target.value))}
+              onPointerUp={(event) => updateMicrophone({ volume: Number(event.currentTarget.value) })}
+              onBlur={(event) => updateMicrophone({ volume: Number(event.currentTarget.value) })} />
+          </label>
+          <label className="microphone-monitoring">
+            <input type="checkbox" checked={audioSettings?.monitoring_enabled ?? false}
+              onChange={(event) => updateMicrophone({ monitoring_enabled: event.target.checked })} />
+            Прослушивать с этого устройства
+          </label>
+          <div className="microphone-level">
+            <div>Уровень: {signal ? `${signal.rms_db} дБFS${signal.clipping ? " · перегрузка" : signal.silent ? " · тихо" : ""}` : "проверяем…"}</div>
+            <div className="microphone-level-track"><div className="microphone-level-fill" style={{ width: `${microphoneLevel}%` }} /></div>
+            <span>{Math.round(microphoneLevel)}%</span>
+          </div>
+          <div className="microphone-effects">Для прослушивания используйте наушники: через колонки возможна обратная связь.</div>
+        </div>
+      )}
+
+      {recordingError && <p className="karaoke-recording-error">{recordingError}</p>}
 
       {/* Large, high-contrast lyric cue: previous / current / next line. */}
       {showLyrics && (
@@ -300,13 +414,13 @@ export default function Karaoke() {
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, fontSize: 12 }}>
           <SliderField label="Громкость музыки" value={musicVolume} min={0} max={1} step={0.05}
-            onChange={setMusicVolume} display={`${Math.round(musicVolume * 100)}%`} disabled={isPlaying} />
+            onChange={setMusicVolume} display={`${Math.round(musicVolume * 100)}%`} />
           <SliderField label="Громкость вокала" value={vocalVolume} min={0} max={1} step={0.05}
-            onChange={setVocalVolume} display={`${Math.round(vocalVolume * 100)}%`} disabled={isPlaying} />
+            onChange={setVocalVolume} display={`${Math.round(vocalVolume * 100)}%`} />
           <SliderField label="Скорость" value={speed} min={0.5} max={1.5} step={0.05}
-            onChange={setSpeed} display={`${speed.toFixed(2)}x`} disabled={isPlaying} />
+            onChange={setSpeed} display={`${speed.toFixed(2)}x`} />
           <SliderField label="Тональность" value={keyShift} min={-6} max={6} step={1}
-            onChange={setKeyShift} display={`${keyShift > 0 ? "+" : ""}${keyShift}`} disabled={isPlaying} />
+            onChange={setKeyShift} display={`${keyShift > 0 ? "+" : ""}${keyShift}`} />
         </div>
       </div>
     </div>

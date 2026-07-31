@@ -25,12 +25,33 @@ def start_recording(body: schemas.RecordingStartRequest, db: Session = Depends(g
     settings = audio_service.get_settings(db)
     try:
         session_id = recording_service.start_recording(
-            song_id=song.id, device_id=settings.input_device_id,
+            song_id=song.id,
+            device_id=settings.input_device_id,
+            gain=settings.volume,
+            monitoring_enabled=settings.monitoring_enabled,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     return schemas.RecordingStartOut(recording_session_id=session_id, message="Запись начата")
+
+
+@router.post("/pause")
+def pause_recording(session_id: str):
+    try:
+        recording_service.pause_recording(session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"status": "paused"}
+
+
+@router.post("/resume")
+def resume_recording(session_id: str):
+    try:
+        recording_service.resume_recording(session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"status": "recording"}
 
 
 @router.post("/stop", response_model=schemas.RecordingOut)

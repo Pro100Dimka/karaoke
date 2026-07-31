@@ -33,6 +33,6 @@ def select_device(device_id: int, db: Session = Depends(get_db)):
 def signal_quality(db: Session = Depends(get_db)):
     settings = audio_service.get_settings(db)
     try:
-        return audio_service.check_signal_quality(settings.input_device_id)
+        return audio_service.check_signal_quality(settings.input_device_id, gain=settings.volume)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

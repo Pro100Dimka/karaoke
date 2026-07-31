@@ -24,6 +24,7 @@ class SongOut(BaseModel):
     title: str
     original_filename: str
     slug: str
+    output_dir: Optional[str] = None
     status: SongStatus
     progress_step: Optional[str] = None
     progress_percent: float
@@ -206,7 +207,7 @@ class AudioSettingsOut(BaseModel):
 
 class AudioSettingsUpdate(BaseModel):
     input_device_id: Optional[int] = None
-    volume: Optional[float] = Field(default=None, ge=0, le=1)
+    volume: Optional[float] = Field(default=None, ge=0, le=4)
     sensitivity: Optional[float] = Field(default=None, ge=0, le=1)
     latency_ms: Optional[int] = Field(default=None, ge=0)
     monitoring_enabled: Optional[bool] = None

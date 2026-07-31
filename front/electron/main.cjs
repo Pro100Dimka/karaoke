@@ -30,6 +30,7 @@ function resolveBackendDir() {
 }
 
 function startBackend() {
+  if (process.env.KARAOKE_BACKEND_EXTERNAL === "1") return;
   const backendDir = resolveBackendDir();
   const pythonBin = process.platform === "win32" ? "python" : "python3";
 

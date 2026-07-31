@@ -56,7 +56,7 @@ def update_settings(db: Session, patch: dict) -> models.AudioSettings:
     return settings
 
 
-def check_signal_quality(device_id: int | None, duration_sec: float = 0.5) -> dict:
+def check_signal_quality(device_id: int | None, gain: float = 1.0, duration_sec: float = 0.5) -> dict:
     """Короткая проверка: пишет duration_sec секунд с выбранного устройства
     и считает RMS-уровень — чтобы UI мог показать "тихо / нормально /
     клиппинг" ещё до полноценной записи."""
@@ -69,7 +69,7 @@ def check_signal_quality(device_id: int | None, duration_sec: float = 0.5) -> di
         device=device_id, dtype="float32",
     )
     sd.wait()
-    samples = recording.flatten()
+    samples = np.clip(recording.flatten() * max(0.0, min(4.0, gain)), -1.0, 1.0)
 
     rms = float(np.sqrt(np.mean(np.square(samples)))) if len(samples) else 0.0
     rms_db = 20 * np.log10(rms) if rms > 0 else -120.0

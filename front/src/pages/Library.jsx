@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Play, Trash2, FolderOpen, Search, Info, Settings2, Mic } from "lucide-react";
+import { Plus, Play, Trash2, FolderOpen, Search, Info, Settings2, Mic, MoreHorizontal } from "lucide-react";
 import { api } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
 import { Panel, StatusBadge, ProgressBar } from "../components/ui";
@@ -13,6 +13,7 @@ function formatDate(iso) {
 export default function Library() {
   const [query, setQuery] = useState("");
   const [infoSong, setInfoSong] = useState(null);
+  const [menuSongId, setMenuSongId] = useState(null);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
 
@@ -130,7 +131,7 @@ export default function Library() {
                 </td>
                 <td className="text-secondary">{formatDate(song.created_at)}</td>
                 <td>
-                  <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                  <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", position: "relative" }}>
                     {song.status === "done" ? (
                       <>
                         <button className="btn btn-ghost" title="Открыть в караоке"
@@ -152,20 +153,17 @@ export default function Library() {
                         <Play size={14} />
                       </button>
                     )}
-                    <button className="btn btn-ghost" title="Информация" onClick={() => setInfoSong(song)}>
-                      <Info size={14} />
+                    <button className="btn btn-ghost" title="Дополнительные действия"
+                      onClick={() => setMenuSongId((id) => id === song.id ? null : song.id)}>
+                      <MoreHorizontal size={16} />
                     </button>
-                    <button className="btn btn-ghost" title="Настройки песни"
-                      onClick={() => navigate("/song-settings", { state: { songId: song.id } })}>
-                      <Settings2 size={14} />
-                    </button>
-                    <button
-                      className="btn btn-ghost"
-                      title="Открыть папку песни"
-                      onClick={() => handleOpenFolder(song)}
-                    >
-                      <FolderOpen size={14} />
-                    </button>
+                    {menuSongId === song.id && (
+                      <div className="song-actions-menu">
+                        <button onClick={() => { setInfoSong(song); setMenuSongId(null); }}><Info size={14} /> Информация</button>
+                        <button onClick={() => { navigate("/song-settings", { state: { songId: song.id } }); setMenuSongId(null); }}><Settings2 size={14} /> Настройки песни</button>
+                        <button onClick={() => { handleOpenFolder(song); setMenuSongId(null); }}><FolderOpen size={14} /> Открыть папку</button>
+                      </div>
+                    )}
                     <button className="btn btn-danger" title="Удалить" onClick={() => handleDelete(song)}>
                       <Trash2 size={14} />
                     </button>

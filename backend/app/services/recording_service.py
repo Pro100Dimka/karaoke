@@ -30,26 +30,50 @@ except Exception as exc:  # noqa: BLE001 — библиотека может б�
 
 class RecordingSession:
     def __init__(self, session_id: str, song_id: str, device_id: int | None,
-                 sample_rate: int, channels: int):
+                 sample_rate: int, channels: int, gain: float, monitoring_enabled: bool):
         self.session_id = session_id
         self.song_id = song_id
         self.sample_rate = sample_rate
         self.channels = channels
+        self.gain = max(0.0, min(4.0, gain))
         self._queue: "queue.Queue" = queue.Queue()
-        self._stream = sd.InputStream(
-            samplerate=sample_rate,
-            channels=channels,
-            device=device_id,
-            callback=self._callback,
-        )
+        if monitoring_enabled:
+            output_info = sd.query_devices(kind="output")
+            output_channels = min(2, int(output_info["max_output_channels"]))
+            if output_channels < 1:
+                raise RuntimeError("No output device is available for microphone monitoring")
+            self._stream = sd.Stream(
+                samplerate=sample_rate,
+                channels=(channels, output_channels),
+                device=(device_id, None),
+                callback=self._monitoring_callback,
+            )
+        else:
+            self._stream = sd.InputStream(
+                samplerate=sample_rate,
+                channels=channels,
+                device=device_id,
+                callback=self._callback,
+            )
         self._stopped = threading.Event()
         self._frames_written = 0
         self.started_at = time.time()
 
     def _callback(self, indata, frames, time_info, status):  # noqa: ARG002
-        self._queue.put(indata.copy())
+        self._queue.put((indata * self.gain).clip(-1.0, 1.0).copy())
+
+    def _monitoring_callback(self, indata, outdata, frames, time_info, status):  # noqa: ARG002
+        processed = (indata * self.gain).clip(-1.0, 1.0)
+        self._queue.put(processed.copy())
+        outdata[:] = processed
 
     def start(self) -> None:
+        self._stream.start()
+
+    def pause(self) -> None:
+        self._stream.stop()
+
+    def resume(self) -> None:
         self._stream.start()
 
     def stop_and_save(self, out_path: Path) -> tuple[float, int]:
@@ -80,16 +104,35 @@ def backend_available() -> tuple[bool, str | None]:
 
 def start_recording(song_id: str, device_id: int | None = None,
                      sample_rate: int = config.RECORDING_SAMPLE_RATE,
-                     channels: int = config.RECORDING_CHANNELS) -> str:
+                     channels: int = config.RECORDING_CHANNELS, gain: float = 1.0,
+                     monitoring_enabled: bool = False) -> str:
     if not _AUDIO_BACKEND_AVAILABLE:
         raise RuntimeError(f"Аудио-бэкенд недоступен: {_AUDIO_BACKEND_ERROR}")
 
     session_id = uuid.uuid4().hex
-    session = RecordingSession(session_id, song_id, device_id, sample_rate, channels)
+    session = RecordingSession(
+        session_id, song_id, device_id, sample_rate, channels, gain, monitoring_enabled
+    )
     session.start()
     with _sessions_lock:
         _sessions[session_id] = session
     return session_id
+
+
+def pause_recording(session_id: str) -> None:
+    with _sessions_lock:
+        session = _sessions.get(session_id)
+    if session is None:
+        raise KeyError(f"Recording session {session_id} was not found")
+    session.pause()
+
+
+def resume_recording(session_id: str) -> None:
+    with _sessions_lock:
+        session = _sessions.get(session_id)
+    if session is None:
+        raise KeyError(f"Recording session {session_id} was not found")
+    session.resume()
 
 
 def stop_recording(session_id: str) -> models.Recording:

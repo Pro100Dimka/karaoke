@@ -17,7 +17,7 @@ async function request(path, options = {}) {
     let detail = res.statusText;
     try {
       const data = await res.json();
-      detail = data.detail || JSON.stringify(data);
+      detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail ?? data);
     } catch {
       // ответ без тела — оставляем statusText
     }
@@ -60,6 +60,8 @@ export const api = {
   getRecordingSettings: () => request("/recording/settings"),
   startRecording: (songId) =>
     request("/recording/start", { method: "POST", body: JSON.stringify({ song_id: songId }) }),
+  pauseRecording: (sessionId) => request(`/recording/pause?session_id=${sessionId}`, { method: "POST" }),
+  resumeRecording: (sessionId) => request(`/recording/resume?session_id=${sessionId}`, { method: "POST" }),
   stopRecording: (sessionId) => request(`/recording/stop?session_id=${sessionId}`, { method: "POST" }),
   listRecordingsForSong: (songId) => request(`/recording/by-song/${songId}`),
   deleteRecording: (id) => request(`/recording/${id}`, { method: "DELETE" }),
