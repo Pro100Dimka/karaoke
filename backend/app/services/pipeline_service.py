@@ -32,6 +32,41 @@ _cancelled_jobs: set[str] = set()
 _progress_runtime: dict[str, dict] = {}
 _progress_runtime_lock = threading.RLock()
 
+
+def _first_audio_tag(tags: object, *names: str) -> str | None:
+    """Return the first non-empty easy-tag value without making tags mandatory."""
+    get = getattr(tags, "get", None)
+    if not callable(get):
+        return None
+    for name in names:
+        value = get(name)
+        if isinstance(value, list | tuple):
+            value = next((item for item in value if isinstance(item, str) and item.strip()), None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _apply_source_metadata(song: models.Song) -> None:
+    """Fill library fields from embedded audio tags, preserving user edits."""
+    try:
+        from mutagen import File as MutagenFile
+
+        tags = MutagenFile(song.source_path, easy=True)
+    except Exception:  # Metadata is a convenience, never a pipeline failure.
+        return
+    if tags is None:
+        return
+
+    tagged_title = _first_audio_tag(tags, "title")
+    default_title = Path(song.original_filename).stem
+    if tagged_title and song.title == default_title:
+        song.title = tagged_title
+    if not song.artist:
+        song.artist = _first_audio_tag(tags, "artist", "albumartist")
+    if not song.genre:
+        song.genre = _first_audio_tag(tags, "genre")
+
 # The expensive AI stages receive a larger share of the indicator.  This makes
 # progress meaningful instead of pretending that thirteen very different jobs
 # each take the same amount of time.
@@ -344,6 +379,7 @@ def _finalize_success(song_id: str, out_dir: Path) -> None:
         if song is None:
             return
         song.output_dir = str(out_dir)
+        _apply_source_metadata(song)
         # Persist the facts discovered by the pipeline so the library and the
         # song editor do not need to infer them from generated files again.
         with contextlib.suppress(OSError, ValueError, TypeError):

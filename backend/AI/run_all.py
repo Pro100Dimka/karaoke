@@ -170,8 +170,16 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
         print("8/13 Получение текста — уже есть, пропускаю")
     else:
         print("8/13 Получение текста...")
-        lyrics_text, source = get_lyrics(input_mp3, whisper_model, language,
-                                          whisper_audio_path=vocals_path)
+        # Step 9 transcribes with word timestamps and already returns the text.
+        # Do not run Whisper here as well: that used to make every untagged
+        # track pay for a full second transcription with no extra data.
+        lyrics_text, source = get_lyrics(
+            input_mp3,
+            whisper_model,
+            language,
+            whisper_audio_path=vocals_path,
+            transcribe_if_missing=False,
+        )
         lyrics_path.write_text(lyrics_text, encoding="utf-8")
         print(f"   источник текста: {source}")
 

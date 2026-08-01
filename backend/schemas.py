@@ -6,12 +6,11 @@ Pydantic-схемы: тела запросов/ответов API.
 наружу отдаём только то, что реально нужно фронтенду).
 """
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from models import SongStatus
-
 
 # --------------------------------------------------------------------
 # Песни
@@ -22,20 +21,22 @@ class SongOut(BaseModel):
 
     id: str
     title: str
+    artist: str | None = None
+    genre: str | None = None
     original_filename: str
     slug: str
-    output_dir: Optional[str] = None
+    output_dir: str | None = None
     status: SongStatus
-    progress_step: Optional[str] = None
+    progress_step: str | None = None
     progress_percent: float
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
-    key_override: Optional[str] = None
-    tempo_override: Optional[float] = None
-    note_range_min: Optional[int] = None
-    note_range_max: Optional[int] = None
-    difficulty_override: Optional[str] = None
-    video_url: Optional[str] = None
+    key_override: str | None = None
+    tempo_override: float | None = None
+    note_range_min: int | None = None
+    note_range_max: int | None = None
+    difficulty_override: str | None = None
+    video_url: str | None = None
     show_lyrics: bool
     show_notes: bool
     optimized: bool
@@ -46,15 +47,17 @@ class SongOut(BaseModel):
 
 class SongUpdate(BaseModel):
     """Все поля опциональны — PATCH-семантика, меняем только переданное."""
-    title: Optional[str] = None
-    key_override: Optional[str] = None
-    tempo_override: Optional[float] = Field(default=None, gt=0)
-    note_range_min: Optional[int] = Field(default=None, ge=0, le=127)
-    note_range_max: Optional[int] = Field(default=None, ge=0, le=127)
-    difficulty_override: Optional[str] = None
-    video_url: Optional[str] = Field(default=None, max_length=2048)
-    show_lyrics: Optional[bool] = None
-    show_notes: Optional[bool] = None
+    title: str | None = None
+    artist: str | None = Field(default=None, max_length=255)
+    genre: str | None = Field(default=None, max_length=255)
+    key_override: str | None = None
+    tempo_override: float | None = Field(default=None, gt=0)
+    note_range_min: int | None = Field(default=None, ge=0, le=127)
+    note_range_max: int | None = Field(default=None, ge=0, le=127)
+    difficulty_override: str | None = None
+    video_url: str | None = Field(default=None, max_length=2048)
+    show_lyrics: bool | None = None
+    show_notes: bool | None = None
 
 
 class LyricsUpdate(BaseModel):
@@ -64,24 +67,24 @@ class LyricsUpdate(BaseModel):
 class ProcessingStatusOut(BaseModel):
     song_id: str
     status: SongStatus
-    progress_step: Optional[str] = None
+    progress_step: str | None = None
     progress_percent: float
-    progress_detail: Optional[str] = None
-    eta_seconds: Optional[int] = None
-    error_message: Optional[str] = None
+    progress_detail: str | None = None
+    eta_seconds: int | None = None
+    error_message: str | None = None
 
 
 class SongResultOut(BaseModel):
     """Агрегированные результаты AI-пайплайна по одной песне (содержимое Song/<slug>/*.json)."""
     song: SongOut
-    music: Optional[dict[str, Any]] = None
-    reference_notes: Optional[list[dict[str, Any]]] = None
-    lyrics_sync: Optional[Any] = None
-    song_map: Optional[dict[str, Any]] = None
-    difficulty: Optional[Any] = None
-    structure: Optional[Any] = None
-    breaths: Optional[Any] = None
-    manifest: Optional[dict[str, Any]] = None
+    music: dict[str, Any] | None = None
+    reference_notes: list[dict[str, Any]] | None = None
+    lyrics_sync: Any | None = None
+    song_map: dict[str, Any] | None = None
+    difficulty: Any | None = None
+    structure: Any | None = None
+    breaths: Any | None = None
+    manifest: dict[str, Any] | None = None
 
 
 # --------------------------------------------------------------------
@@ -110,8 +113,8 @@ class RecordingOut(BaseModel):
     id: str
     song_id: str
     filename: str
-    duration_sec: Optional[float] = None
-    sample_rate: Optional[int] = None
+    duration_sec: float | None = None
+    sample_rate: int | None = None
     created_at: datetime
 
 
@@ -138,9 +141,9 @@ class AnalysisOut(BaseModel):
 
     id: str
     recording_id: str
-    pitch_accuracy_percent: Optional[float] = None
-    mean_deviation_semitones: Optional[float] = None
-    sections: Optional[list[dict[str, Any]]] = None
+    pitch_accuracy_percent: float | None = None
+    mean_deviation_semitones: float | None = None
+    sections: list[dict[str, Any]] | None = None
     created_at: datetime
 
 
@@ -189,7 +192,7 @@ class PipelineHealthOut(BaseModel):
 class VersionsOut(BaseModel):
     backend_version: str
     python_version: str
-    components: dict[str, Optional[str]]
+    components: dict[str, str | None]
 
 
 class SystemErrorsOut(BaseModel):
@@ -204,14 +207,14 @@ class AudioDeviceOut(BaseModel):
     index: int
     name: str
     max_input_channels: int
-    default_samplerate: Optional[float] = None
+    default_samplerate: float | None = None
 
 
 class AudioSettingsOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    input_device_id: Optional[int] = None
-    input_device_name: Optional[str] = None
+    input_device_id: int | None = None
+    input_device_name: str | None = None
     volume: float
     sensitivity: float
     latency_ms: int
@@ -219,11 +222,11 @@ class AudioSettingsOut(BaseModel):
 
 
 class AudioSettingsUpdate(BaseModel):
-    input_device_id: Optional[int] = None
-    volume: Optional[float] = Field(default=None, ge=0, le=4)
-    sensitivity: Optional[float] = Field(default=None, ge=0, le=1)
-    latency_ms: Optional[int] = Field(default=None, ge=0)
-    monitoring_enabled: Optional[bool] = None
+    input_device_id: int | None = None
+    volume: float | None = Field(default=None, ge=0, le=4)
+    sensitivity: float | None = Field(default=None, ge=0, le=1)
+    latency_ms: int | None = Field(default=None, ge=0)
+    monitoring_enabled: bool | None = None
 
 
 class SignalQualityOut(BaseModel):

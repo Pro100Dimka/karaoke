@@ -5353,6 +5353,13 @@ input[type="range"]::-webkit-slider-thumb {
 .song-settings-workspace .panel-title { font-size: 15px; }
 .song-settings-workspace .input { min-height: 40px; }
 .library-song-card-heading .song-title-name { font-size: 18px; }
+.library-song-card-heading .song-artist-name,
+.library-song-card-heading .song-genre-name {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.25;
+}
+.library-song-card-heading .song-genre-name::before { content: " · "; }
 .library-song-card-meta { font-size: 13px; }
 .library-song-card-ready,
 .library-song-card-progress { font-size: 12px; }

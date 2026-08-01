@@ -33,9 +33,12 @@ def init_db() -> None:
     # create_all deliberately does not alter existing SQLite tables. Keep
     # additive migrations so installed libraries upgrade without data loss.
     song_columns = {column["name"] for column in inspect(engine).get_columns("songs")}
-    if "video_url" not in song_columns:
-        with engine.begin() as connection:
+    with engine.begin() as connection:
+        if "video_url" not in song_columns:
             connection.execute(text("ALTER TABLE songs ADD COLUMN video_url VARCHAR"))
+        for column in ("artist", "genre"):
+            if column not in song_columns:
+                connection.execute(text(f"ALTER TABLE songs ADD COLUMN {column} VARCHAR"))
 
 
 def get_db():

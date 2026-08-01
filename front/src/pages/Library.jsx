@@ -45,6 +45,7 @@ export default function Library() {
   const [menuSongId, setMenuSongId] = useState(null);
   const [recordingsSong, setRecordingsSong] = useState(null);
   const [processingSong, setProcessingSong] = useState(null);
+  const [hiddenSongIds, setHiddenSongIds] = useState(() => new Set());
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const { confirm: confirmDialog } = useAppDialog();
@@ -97,11 +98,21 @@ export default function Library() {
   const handleDelete = useCallback(async (song) => {
     if (!(await confirmDialog(`Удалить «${song.title}»? Это удалит все файлы песни.`, "Удалить песню?"))) return;
     try {
+      setHiddenSongIds((ids) => new Set(ids).add(song.id));
+      setMenuSongId(null);
+      if (infoSong?.id === song.id) setInfoSong(null);
+      if (recordingsSong?.id === song.id) setRecordingsSong(null);
+      if (processingSong?.id === song.id) setProcessingSong(null);
       await api.deleteSong(song.id);
     } catch (err) {
+      setHiddenSongIds((ids) => {
+        const next = new Set(ids);
+        next.delete(song.id);
+        return next;
+      });
       alert(`Не удалось удалить: ${err.message}`);
     }
-  }, []);
+  }, [confirmDialog, infoSong?.id, processingSong?.id, recordingsSong?.id]);
 
   const handleProcess = useCallback(
     async (song) => {
@@ -153,10 +164,11 @@ export default function Library() {
     }
   }, [processingSong]);
 
-  const filtered = (songs || []).filter((s) =>
-    s.title.toLowerCase().includes(query.toLowerCase()),
+  const visibleSongs = (songs || []).filter((song) => !hiddenSongIds.has(song.id));
+  const filtered = visibleSongs.filter((s) =>
+    [s.title, s.artist, s.genre].filter(Boolean).join(" ").toLowerCase().includes(query.toLowerCase()),
   );
-  const readyCount = (songs || []).filter(
+  const readyCount = visibleSongs.filter(
     (song) => song.status === "done",
   ).length;
 
@@ -214,7 +226,7 @@ export default function Library() {
         </div>
         <div className="library-hero-stats">
           <div>
-            <b>{(songs || []).length}</b>
+            <b>{visibleSongs.length}</b>
             <span>всего песен</span>
           </div>
           <div>
@@ -328,6 +340,8 @@ export default function Library() {
                   <div className="library-song-card-heading">
                     <div className="song-title-content">
                       <span className="song-title-name">{song.title}</span>
+                      {song.artist && <span className="song-artist-name">{song.artist}</span>}
+                      {song.genre && <span className="song-genre-name">{song.genre}</span>}
                     </div>
                     {!isReady && <StatusBadge status={song.status} />}
                   </div>

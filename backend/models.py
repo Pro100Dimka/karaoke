@@ -30,6 +30,8 @@ class Song(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_id)
     title: Mapped[str] = mapped_column(String, nullable=False)
+    artist: Mapped[str | None] = mapped_column(String)
+    genre: Mapped[str | None] = mapped_column(String)
     original_filename: Mapped[str] = mapped_column(String, nullable=False)
     source_path: Mapped[str] = mapped_column(String, nullable=False)
     slug: Mapped[str] = mapped_column(String, unique=True, nullable=False)

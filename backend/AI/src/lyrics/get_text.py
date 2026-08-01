@@ -57,7 +57,8 @@ def from_whisper(audio_path: str, model_size: str = "medium", language: str | No
 
 def get_lyrics(audio_path: str, whisper_model: str = "medium",
                 language: str | None = None,
-                whisper_audio_path: str | None = None) -> tuple[str, str]:
+                whisper_audio_path: str | None = None,
+                transcribe_if_missing: bool = True) -> tuple[str, str]:
     """
     Возвращает (текст, источник).
 
@@ -75,6 +76,9 @@ def get_lyrics(audio_path: str, whisper_model: str = "medium",
     text = from_lrc_file(audio_path)
     if text:
         return text, "lrc_file"
+
+    if not transcribe_if_missing:
+        return "", "deferred_to_timed_transcription"
 
     text = from_whisper(whisper_audio_path or audio_path, whisper_model, language)
     return text, "whisper"

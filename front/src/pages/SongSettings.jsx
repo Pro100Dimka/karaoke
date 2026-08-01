@@ -51,6 +51,9 @@ export default function SongSettings() {
     setSaving(true);
     try {
       await api.updateSong(song.id, {
+        title: form.title?.trim() || song.title,
+        artist: form.artist?.trim() || null,
+        genre: form.genre?.trim() || null,
         key_override: form.key_override,
         tempo_override: form.tempo_override,
         note_range_min: form.note_range_min,
@@ -86,6 +89,18 @@ export default function SongSettings() {
         <FieldRow label="Тональность">
           <input className="input" value={form.key_override || ""} placeholder="напр. C#m"
                  onChange={(e) => set("key_override")(e.target.value)} />
+        </FieldRow>
+        <FieldRow label={"\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u043f\u0435\u0441\u043d\u0438"}>
+          <input className="input" value={form.title || ""}
+                 onChange={(e) => set("title")(e.target.value)} />
+        </FieldRow>
+        <FieldRow label={"\u0413\u0440\u0443\u043f\u043f\u0430 / \u0438\u0441\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c"}>
+          <input className="input" value={form.artist || ""} placeholder="Muse"
+                 onChange={(e) => set("artist")(e.target.value)} />
+        </FieldRow>
+        <FieldRow label={"\u0416\u0430\u043d\u0440"}>
+          <input className="input" value={form.genre || ""} placeholder="Alternative rock"
+                 onChange={(e) => set("genre")(e.target.value)} />
         </FieldRow>
         <FieldRow label="Темп (BPM)">
           <input type="number" className="input" value={form.tempo_override || ""}
