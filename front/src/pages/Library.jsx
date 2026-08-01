@@ -49,7 +49,7 @@ export default function Library() {
   const [hiddenSongIds, setHiddenSongIds] = useState(() => new Set());
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
-  const { confirm: confirmDialog } = useAppDialog();
+  const { alert: notify, confirm: confirmDialog } = useAppDialog();
 
   useEffect(() => {
     if (!menuSongId) return undefined;
@@ -88,12 +88,12 @@ export default function Library() {
         await api.processSong(song.id);
         setProcessingSong(song);
       } catch (err) {
-        alert(
+        await notify(
           `Не удалось добавить и запустить обработку песни: ${err.message}`,
         );
       }
     },
-    [navigate],
+    [notify],
   );
 
   const handleDelete = useCallback(async (song) => {
@@ -111,9 +111,9 @@ export default function Library() {
         next.delete(song.id);
         return next;
       });
-      alert(`Не удалось удалить: ${err.message}`);
+      await notify(`Не удалось удалить: ${err.message}`);
     }
-  }, [confirmDialog, infoSong?.id, processingSong?.id, recordingsSong?.id]);
+  }, [confirmDialog, infoSong?.id, notify, processingSong?.id, recordingsSong?.id]);
 
   const handleProcess = useCallback(
     async (song) => {
@@ -121,10 +121,10 @@ export default function Library() {
         await api.processSong(song.id);
         setProcessingSong(song);
       } catch (err) {
-        alert(`Не удалось запустить обработку: ${err.message}`);
+        await notify(`Не удалось запустить обработку: ${err.message}`);
       }
     },
-    [navigate],
+    [notify],
   );
 
   const handleReprocess = useCallback(
@@ -133,37 +133,37 @@ export default function Library() {
         await api.reprocessMelody(song.id);
         setProcessingSong(song);
       } catch (err) {
-        alert(`Не удалось переобработать MIDI: ${err.message}`);
+        await notify(`Не удалось переобработать MIDI: ${err.message}`);
       }
     },
-    [navigate],
+    [notify],
   );
 
-  const handleOpenFolder = useCallback((song) => {
+  const handleOpenFolder = useCallback(async (song) => {
     if (!song.output_dir && !window.electronAPI) {
-      alert("Папка ещё не создана — песня не обработана");
+      await notify("Папка ещё не создана — песня не обработана");
       return;
     }
     window.electronAPI?.openPath(song.output_dir || "");
-  }, []);
+  }, [notify]);
 
   const handleDeleteRecording = useCallback(async (recording) => {
-    if (!confirm("Удалить это записанное исполнение?")) return;
+    if (!(await confirmDialog("Удалить это записанное исполнение?"))) return;
     try {
       await api.deleteRecording(recording.id);
     } catch (err) {
-      alert(`Не удалось удалить запись: ${err.message}`);
+      await notify(`Не удалось удалить запись: ${err.message}`);
     }
-  }, []);
+  }, [confirmDialog, notify]);
 
   const cancelProcessing = useCallback(async () => {
-    if (!processingSong || !confirm("Отменить обработку этой песни?")) return;
+    if (!processingSong || !(await confirmDialog("Отменить обработку этой песни?"))) return;
     try {
       await api.cancelProcessing(processingSong.id);
     } catch (err) {
-      alert(`Не удалось отменить обработку: ${err.message}`);
+      await notify(`Не удалось отменить обработку: ${err.message}`);
     }
-  }, [processingSong]);
+  }, [confirmDialog, notify, processingSong]);
 
   const visibleSongs = (songs || []).filter((song) => !hiddenSongIds.has(song.id));
   const filtered = visibleSongs.filter((s) =>

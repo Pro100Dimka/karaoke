@@ -3,6 +3,7 @@ import { ArrowLeft, Check, Cpu, FolderCog, Palette, Save, Settings2, Wrench } fr
 import { api } from "../api/client";
 import { Panel } from "../components/ui";
 import { Dropdown } from "../components/Dropdown";
+import { useAppDialog } from "../components/AppDialog";
 import ModelManager from "./ModelManager";
 import MemoryManager from "./MemoryManager";
 import Diagnostics from "./Diagnostics";
@@ -17,6 +18,7 @@ const TABS = [
 ];
 
 export default function Settings() {
+  const { alert: notify } = useAppDialog();
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -24,8 +26,8 @@ export default function Settings() {
   const [serviceView, setServiceView] = useState(null);
 
   useEffect(() => {
-    api.getAppSettings().then(setForm).catch((err) => alert(`Не удалось загрузить настройки: ${err.message}`));
-  }, []);
+    api.getAppSettings().then(setForm).catch((err) => notify(`Не удалось загрузить настройки: ${err.message}`));
+  }, [notify]);
   useEffect(() => {
     if (form?.theme) document.documentElement.dataset.theme = form.theme;
   }, [form?.theme]);
@@ -43,7 +45,7 @@ export default function Settings() {
       await api.updateAppSettings(form);
       setSaved(true);
     } catch (err) {
-      alert(`Не удалось сохранить: ${err.message}`);
+      await notify(`Не удалось сохранить: ${err.message}`);
     } finally {
       setSaving(false);
     }

@@ -4,6 +4,7 @@ import { Panel } from "../components/ui";
 import { Dropdown } from "../components/Dropdown";
 import { Trash2, Sparkles, FolderX } from "lucide-react";
 import { useState } from "react";
+import { useAppDialog } from "../components/AppDialog";
 
 const LABELS = {
   full_songs: "Песни (оригиналы)",
@@ -12,6 +13,7 @@ const LABELS = {
 };
 
 export default function MemoryManager() {
+  const { alert: notify } = useAppDialog();
   const { data: size, error } = usePolling(api.getCacheSize, 5000, []);
   const { data: free } = usePolling(api.getFreeSpace, 10000, []);
   const { data: songs } = usePolling(api.listSongs, 8000, []);
@@ -20,18 +22,18 @@ export default function MemoryManager() {
   const clear = async () => {
     try {
       const res = await api.clearCache();
-      alert(`Освобождено: ${(res.freed_bytes / 1024 / 1024).toFixed(1)} МБ`);
+      await notify(`Освобождено: ${(res.freed_bytes / 1024 / 1024).toFixed(1)} МБ`);
     } catch (err) {
-      alert(err.message);
+      await notify(err.message);
     }
   };
 
   const deleteTemp = async () => {
     try {
       const res = await api.deleteTemp();
-      alert(`Удалено временных файлов: ${(res.freed_bytes / 1024 / 1024).toFixed(1)} МБ`);
+      await notify(`Удалено временных файлов: ${(res.freed_bytes / 1024 / 1024).toFixed(1)} МБ`);
     } catch (err) {
-      alert(err.message);
+      await notify(err.message);
     }
   };
 
@@ -70,10 +72,10 @@ export default function MemoryManager() {
               onClick={async () => {
                 try {
                   const res = await api.optimizeSong(optimizeTarget);
-                  alert(`Освобождено: ${res.freed_human}`);
+                  await notify(`Освобождено: ${res.freed_human}`);
                   setOptimizeTarget("");
                 } catch (err) {
-                  alert(err.message);
+                  await notify(err.message);
                 }
               }}
             >

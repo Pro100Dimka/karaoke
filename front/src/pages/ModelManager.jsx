@@ -1,25 +1,27 @@
 import { api } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
 import { Panel } from "../components/ui";
+import { useAppDialog } from "../components/AppDialog";
 import { Download, Trash2, CheckCircle2 } from "lucide-react";
 
 export default function ModelManager() {
   const { data: models, error } = usePolling(api.listWhisperModels, 4000, []);
+  const { alert: notify, confirm: confirmDialog } = useAppDialog();
 
   const download = async (name) => {
     try {
       await api.downloadModel(name);
     } catch (err) {
-      alert(err.message);
+      await notify(err.message);
     }
   };
 
   const remove = async (name) => {
-    if (!confirm(`Удалить модель ${name}?`)) return;
+    if (!(await confirmDialog(`Удалить модель ${name}?`))) return;
     try {
       await api.deleteModel(name);
     } catch (err) {
-      alert(err.message);
+      await notify(err.message);
     }
   };
 
@@ -27,7 +29,7 @@ export default function ModelManager() {
     try {
       await api.selectModel(name);
     } catch (err) {
-      alert(err.message);
+      await notify(err.message);
     }
   };
 

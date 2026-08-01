@@ -4,10 +4,12 @@ import { api } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
 import { Panel } from "../components/ui";
 import { Dropdown } from "../components/Dropdown";
+import { useAppDialog } from "../components/AppDialog";
 
 const DIFFICULTIES = ["Лёгкий", "Средний", "Сложный", "Эксперт"];
 
 export default function SongSettings() {
+  const { alert: notify } = useAppDialog();
   const location = useLocation();
   const { data: songs } = usePolling(api.listSongs, 5000, []);
   const [songId] = useState(location.state?.songId || null);
@@ -64,7 +66,7 @@ export default function SongSettings() {
         show_notes: form.show_notes,
       });
     } catch (err) {
-      alert(`Не удалось сохранить: ${err.message}`);
+      await notify(`Не удалось сохранить: ${err.message}`);
     } finally {
       setSaving(false);
     }

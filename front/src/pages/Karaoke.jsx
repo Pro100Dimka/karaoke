@@ -27,6 +27,7 @@ import {
 import { api } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
 import { Dropdown } from "../components/Dropdown";
+import { useAppDialog } from "../components/AppDialog";
 import { KARAOKE_THEMES, shuffleThemes } from "../assets/karaoke/themes";
 
 // ПРИМЕЧАНИЕ ПО СХЕМЕ ДАННЫХ: здесь предполагается, что lyrics.json — это
@@ -2069,6 +2070,7 @@ function PerformanceAnalysisModal({ recordingId, onClose, onDone, onDeleted }) {
   const [error, setError] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const analysisRequestRef = useRef(null);
+  const { confirm: confirmDialog } = useAppDialog();
 
   useEffect(() => {
     let active = true;
@@ -2084,7 +2086,7 @@ function PerformanceAnalysisModal({ recordingId, onClose, onDone, onDeleted }) {
   }, [recordingId]);
 
   const deleteRecording = async () => {
-    if (!window.confirm("Удалить это записанное исполнение?")) return;
+    if (!(await confirmDialog("Удалить это записанное исполнение?"))) return;
     setDeleting(true);
     try {
       await api.deleteRecording(recordingId);
