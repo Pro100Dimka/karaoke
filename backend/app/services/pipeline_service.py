@@ -8,6 +8,7 @@ run_all.py уже печатает прогресс по шагам в духе 
 """
 import contextlib
 import io
+import json
 import re
 import shutil
 import threading
@@ -343,6 +344,18 @@ def _finalize_success(song_id: str, out_dir: Path) -> None:
         if song is None:
             return
         song.output_dir = str(out_dir)
+        # Persist the facts discovered by the pipeline so the library and the
+        # song editor do not need to infer them from generated files again.
+        with contextlib.suppress(OSError, ValueError, TypeError):
+            music = json.loads((out_dir / "music.json").read_text(encoding="utf-8"))
+            song.key_override = song.key_override or music.get("key")
+            song.tempo_override = song.tempo_override or music.get("bpm")
+        with contextlib.suppress(OSError, ValueError, TypeError):
+            reference = json.loads((out_dir / "reference.json").read_text(encoding="utf-8"))
+            midi = [int(note["midi"]) for note in reference if note.get("midi") is not None]
+            if midi:
+                song.note_range_min = song.note_range_min if song.note_range_min is not None else min(midi)
+                song.note_range_max = song.note_range_max if song.note_range_max is not None else max(midi)
         song.status = models.SongStatus.DONE
         song.progress_percent = 100.0
         song.progress_step = "13/13"

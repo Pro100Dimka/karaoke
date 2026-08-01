@@ -35,9 +35,9 @@ export function ProgressBar({ percent = 0 }) {
   );
 }
 
-export function Panel({ title, actions, children, style }) {
+export function Panel({ title, actions, children, style, className = "" }) {
   return (
-    <div className="panel" style={style}>
+    <div className={`panel ${className}`.trim()} style={style}>
       {title && (
         <div className="panel-header">
           <div className="panel-title">{title}</div>

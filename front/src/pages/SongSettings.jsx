@@ -16,6 +16,7 @@ export default function SongSettings() {
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
   const [lyricsText, setLyricsText] = useState("");
+  const [lyricsData, setLyricsData] = useState([]);
   const [lyricsError, setLyricsError] = useState(null);
 
   useEffect(() => {
@@ -28,8 +29,12 @@ export default function SongSettings() {
       return;
     }
     api.getResult(song.id)
-      .then((result) => setLyricsText(JSON.stringify(result.lyrics_sync || [], null, 2)))
-      .catch(() => setLyricsText(""));
+.then((result) => {
+        const lines = Array.isArray(result.lyrics_sync) ? result.lyrics_sync : [];
+        setLyricsData(lines);
+        setLyricsText(lines.map((line) => line.text || "").join("\n"));
+      })
+      .catch(() => { setLyricsData([]); setLyricsText(""); });
   }, [song?.id, song?.status]);
 
   if (!song || !form) {
@@ -64,19 +69,19 @@ export default function SongSettings() {
 
   const saveLyrics = async () => {
     try {
-      const lyrics = JSON.parse(lyricsText);
-      if (!Array.isArray(lyrics) && (typeof lyrics !== "object" || lyrics === null)) {
-        throw new Error("Текст должен быть массивом строк или объектом JSON");
-      }
+      const textLines = lyricsText.split("\n").map((line) => line.trim()).filter(Boolean);
+      const lyrics = lyricsData.map((line, index) => ({ ...line, text: textLines[index] || line.text }));
       await api.updateLyrics(song.id, lyrics);
+      setLyricsData(lyrics);
+      setLyricsText(lyrics.map((line) => line.text || "").join("\n"));
       setLyricsError(null);
     } catch (error) {
-      setLyricsError(error.message || "Не удалось сохранить текст");
+      setLyricsError(error.message || "?? ??????? ????????? ?????");
     }
   };
 
   return (
-    <div style={{ maxWidth: 720 }}>
+    <div className="song-settings-workspace">
       <Panel title={`Настройки песни — ${song.title}`}>
         <FieldRow label="Тональность">
           <input className="input" value={form.key_override || ""} placeholder="напр. C#m"
@@ -117,10 +122,8 @@ export default function SongSettings() {
         </button>
       </Panel>
       {song.status === "done" && (
-        <Panel title="Редактор текста" style={{ marginTop: 18 }}>
-          <p className="text-muted" style={{ marginTop: 0, fontSize: 12 }}>
-            Отредактируйте слова или тайминги. Формат: <code>[&#123; "start": 0, "end": 2, "text": "Строка" &#125;]</code>.
-          </p>
+        <Panel className="song-lyrics-panel" title="\u0420\u0435\u0434\u0430\u043a\u0442\u043e\u0440 \u0442\u0435\u043a\u0441\u0442\u0430">
+          <p className="text-muted" style={{ marginTop: 0, fontSize: 12 }}>\u041a\u0430\u0436\u0434\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430 ? \u043e\u0442\u0434\u0435\u043b\u044c\u043d\u0430\u044f \u0441\u0442\u0440\u043e\u043a\u0430 \u043f\u0435\u0441\u043d\u0438. \u0422\u0430\u0439\u043c\u0438\u043d\u0433\u0438 \u0441\u043e\u0445\u0440\u0430\u043d\u044f\u044e\u0442\u0441\u044f \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438.</p>
           <textarea className="input song-lyrics-editor" value={lyricsText}
             onChange={(event) => setLyricsText(event.target.value)} spellCheck={false} />
           {lyricsError && <p className="song-lyrics-error">{lyricsError}</p>}

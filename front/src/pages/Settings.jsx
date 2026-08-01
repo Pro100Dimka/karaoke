@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { Check, Cpu, FolderCog, Palette, Save, Settings2, Wrench } from "lucide-react";
+import { ArrowLeft, Check, Cpu, FolderCog, Palette, Save, Settings2, Wrench } from "lucide-react";
 import { api } from "../api/client";
 import { Panel } from "../components/ui";
 import { Dropdown } from "../components/Dropdown";
+import ModelManager from "./ModelManager";
+import MemoryManager from "./MemoryManager";
+import Diagnostics from "./Diagnostics";
+import History from "./History";
+import About from "./About";
 
 const TABS = [
   { id: "appearance", label: "Интерфейс", icon: Palette },
@@ -17,6 +21,7 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [tab, setTab] = useState("appearance");
+  const [serviceView, setServiceView] = useState(null);
 
   useEffect(() => {
     api.getAppSettings().then(setForm).catch((err) => alert(`Не удалось загрузить настройки: ${err.message}`));
@@ -68,7 +73,8 @@ export default function Settings() {
           ))}
         </nav>
 
-        <Panel title={TABS.find((item) => item.id === tab)?.label}>
+        <Panel className="settings-content-panel" title={serviceView ? "????????????" : TABS.find((item) => item.id === tab)?.label}>
+          {serviceView ? <ServiceScreen view={serviceView} onBack={() => setServiceView(null)} /> : <>
           {tab === "appearance" && (
             <div className="settings-field-grid">
               <SettingField label="Язык интерфейса" hint="Язык элементов приложения">
@@ -103,13 +109,14 @@ export default function Settings() {
           )}
           {tab === "service" && (
             <div className="settings-service-grid">
-              <ServiceLink to="/models" title="Модели AI" text="Загрузка и выбор моделей распознавания" />
-              <ServiceLink to="/memory" title="Хранилище" text="Кэш, свободное место и очистка" />
-              <ServiceLink to="/history" title="История" text="События и действия в приложении" />
-              <ServiceLink to="/diagnostics" title="Диагностика" text="Проверка компонентов и окружения" />
-              <ServiceLink to="/about" title="О программе" text="Версия и сведения о приложении" />
+              <ServiceLink view="models" onOpen={setServiceView} title="Модели AI" text="Загрузка и выбор моделей распознавания" />
+              <ServiceLink view="memory" onOpen={setServiceView} title="Хранилище" text="Кэш, свободное место и очистка" />
+              <ServiceLink view="history" onOpen={setServiceView} title="История" text="События и действия в приложении" />
+              <ServiceLink view="diagnostics" onOpen={setServiceView} title="Диагностика" text="Проверка компонентов и окружения" />
+              <ServiceLink view="about" onOpen={setServiceView} title="О программе" text="Версия и сведения о приложении" />
             </div>
           )}
+          </>}
         </Panel>
       </div>
     </div>
@@ -122,6 +129,12 @@ function SettingField({ label, hint, children }) {
 function ToggleField({ label, hint, checked, onChange }) {
   return <label className="settings-toggle"><span><strong>{label}</strong><small>{hint}</small></span><input type="checkbox" checked={Boolean(checked)} onChange={(event) => onChange(event.target.checked)} /></label>;
 }
-function ServiceLink({ to, title, text }) {
-  return <Link className="settings-service-link" to={to}><strong>{title}</strong><span>{text}</span><b>Открыть →</b></Link>;
+function ServiceLink({ view, onOpen, title, text }) {
+  return <button type="button" className="settings-service-link" onClick={() => onOpen(view)}><strong>{title}</strong><span>{text}</span><b>??????? ?</b></button>;
+}
+
+function ServiceScreen({ view, onBack }) {
+  const screens = { models: ModelManager, memory: MemoryManager, diagnostics: Diagnostics, history: History, about: About };
+  const Screen = screens[view];
+  return <div className="settings-service-screen"><button type="button" className="btn btn-ghost settings-service-back" onClick={onBack}><ArrowLeft size={15} /> ????? ? ??????????</button><Screen /></div>;
 }

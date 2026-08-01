@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
@@ -46,6 +46,15 @@ export default function Library() {
   const [processingSong, setProcessingSong] = useState(null);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!menuSongId) return undefined;
+    const closeMenu = (event) => {
+      if (!event.target.closest(".library-card-more")) setMenuSongId(null);
+    };
+    document.addEventListener("pointerdown", closeMenu);
+    return () => document.removeEventListener("pointerdown", closeMenu);
+  }, [menuSongId]);
 
   const { data: songs, error } = usePolling(api.listSongs, 3000, []);
   const { data: songRecordings, error: recordingsError } = usePolling(
@@ -155,8 +164,14 @@ export default function Library() {
       <div className="library-concert-backdrop" aria-hidden="true">
         <i className="library-bg-vinyl library-bg-vinyl--one" />
         <i className="library-bg-vinyl library-bg-vinyl--two" />
-        <i className="library-bg-cassette library-bg-cassette--one"><b /><b /></i>
-        <i className="library-bg-cassette library-bg-cassette--two"><b /><b /></i>
+        <i className="library-bg-cassette library-bg-cassette--one">
+          <b />
+          <b />
+        </i>
+        <i className="library-bg-cassette library-bg-cassette--two">
+          <b />
+          <b />
+        </i>
         <i className="library-bg-cube library-bg-cube--one" />
         <i className="library-bg-cube library-bg-cube--two" />
         <i className="library-bg-sphere library-bg-sphere--one" />
@@ -164,8 +179,16 @@ export default function Library() {
         <i className="library-bg-ring library-bg-ring--one" />
         <i className="library-bg-ring library-bg-ring--two" />
         <div className="library-bg-notes">♪ ♫ ♪ ♬</div>
-        <div className="library-bg-pixel-rain">{Array.from({ length: 34 }, (_, index) => <i key={index} style={{ "--n": index }} />)}</div>
-        <div className="library-bg-eq">{Array.from({ length: 28 }, (_, index) => <i key={index} style={{ animationDelay: `${index * -110}ms` }} />)}</div>
+        <div className="library-bg-pixel-rain">
+          {Array.from({ length: 34 }, (_, index) => (
+            <i key={index} style={{ "--n": index }} />
+          ))}
+        </div>
+        <div className="library-bg-eq">
+          {Array.from({ length: 28 }, (_, index) => (
+            <i key={index} style={{ animationDelay: `${index * -110}ms` }} />
+          ))}
+        </div>
       </div>
       <section className="library-hero">
         <div className="library-hero-3d-scene" aria-hidden="true">
@@ -200,6 +223,7 @@ export default function Library() {
         </div>
       </section>
       <Panel
+        className="library-collection-panel"
         title=" "
         actions={
           <div style={{ display: "flex", gap: 8 }}>
@@ -235,6 +259,11 @@ export default function Library() {
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
+          <div className="library-toolbar-actions">
+            <button className="btn btn-primary" onClick={handleAddClick}>
+              <Plus size={15} /> Добавить песню
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -245,7 +274,8 @@ export default function Library() {
 
         <div className="library-card-deck">
           {filtered.map((song, cardIndex) => {
-            const isWorking = song.status === "processing" || song.status === "cancelling";
+            const isWorking =
+              song.status === "processing" || song.status === "cancelling";
             const isReady = song.status === "done";
             return (
               <article
@@ -255,10 +285,22 @@ export default function Library() {
                   const rect = event.currentTarget.getBoundingClientRect();
                   const x = (event.clientX - rect.left) / rect.width - 0.5;
                   const y = (event.clientY - rect.top) / rect.height - 0.5;
-                  event.currentTarget.style.setProperty("--tilt-x", `${-y * 7}deg`);
-                  event.currentTarget.style.setProperty("--tilt-y", `${x * 7}deg`);
-                  event.currentTarget.style.setProperty("--glow-x", `${(x + 0.5) * 100}%`);
-                  event.currentTarget.style.setProperty("--glow-y", `${(y + 0.5) * 100}%`);
+                  event.currentTarget.style.setProperty(
+                    "--tilt-x",
+                    `${-y * 7}deg`,
+                  );
+                  event.currentTarget.style.setProperty(
+                    "--tilt-y",
+                    `${x * 7}deg`,
+                  );
+                  event.currentTarget.style.setProperty(
+                    "--glow-x",
+                    `${(x + 0.5) * 100}%`,
+                  );
+                  event.currentTarget.style.setProperty(
+                    "--glow-y",
+                    `${(y + 0.5) * 100}%`,
+                  );
                 }}
                 onPointerLeave={(event) => {
                   event.currentTarget.style.removeProperty("--tilt-x");
@@ -266,15 +308,19 @@ export default function Library() {
                 }}
               >
                 <div className="library-song-card-art" aria-hidden="true">
-                  <i className="library-card-vinyl" />
-                  <i className="library-card-prism" />
-                  <i className="library-card-spark library-card-spark--one" />
-                  <i className="library-card-spark library-card-spark--two" />
                   <Music2 size={26} />
                   <div className="library-song-card-wave">
-                    {[32, 58, 39, 74, 46, 66, 34, 52, 78, 41, 62, 29].map((height, index) => (
-                      <i key={index} style={{ height: `${height}%`, animationDelay: `${(cardIndex + index) * -85}ms` }} />
-                    ))}
+                    {[32, 58, 39, 74, 46, 66, 34, 52, 78, 41, 62, 29].map(
+                      (height, index) => (
+                        <i
+                          key={index}
+                          style={{
+                            height: `${height}%`,
+                            animationDelay: `${(cardIndex + index) * -85}ms`,
+                          }}
+                        />
+                      ),
+                    )}
                   </div>
                 </div>
                 <div className="library-song-card-main">
@@ -282,225 +328,131 @@ export default function Library() {
                     <div className="song-title-content">
                       <span className="song-title-name">{song.title}</span>
                     </div>
-                    <StatusBadge status={song.status} />
+                    {!isReady && <StatusBadge status={song.status} />}
                   </div>
                   <p className="library-song-card-meta">
                     {song.key_override || "Тональность определяется"}
                     {song.tempo_override ? ` · ${song.tempo_override} BPM` : ""}
-                    {song.difficulty_override ? ` · ${song.difficulty_override}` : ""}
+                    {song.difficulty_override
+                      ? ` · ${song.difficulty_override}`
+                      : ""}
                   </p>
                   {isWorking ? (
-                    <button className="library-song-card-progress" onClick={() => setProcessingSong(song)}>
+                    <button
+                      className="library-song-card-progress"
+                      onClick={() => setProcessingSong(song)}
+                    >
                       <ProgressBar percent={song.progress_percent} />
                       <span>{song.progress_percent}% · Открыть обработку</span>
                     </button>
                   ) : (
-                    <div className="library-song-card-ready"><span />{isReady ? "Готова к исполнению" : `${song.progress_percent || 0}% подготовлено`}</div>
+                    <div className="library-song-card-ready">
+                      <span />
+                      {isReady
+                        ? "Готова к исполнению"
+                        : `${song.progress_percent || 0}% подготовлено`}
+                    </div>
                   )}
                   <div className="library-song-card-footer">
-                    <span className="text-secondary">{formatDate(song.created_at)}</span>
+                    <span className="text-secondary">
+                      {formatDate(song.created_at)}
+                    </span>
                     <div className="library-song-card-actions">
                       {isReady ? (
                         <>
-                          <button className="btn btn-primary" onClick={() => navigate("/karaoke", { state: { songId: song.id } })}><Play size={15} fill="currentColor" /> Караоке</button>
-                          <button className="btn btn-ghost" title="Прослушать записи" onClick={() => setRecordingsSong(song)}><Headphones size={16} /></button>
+                          <button
+                            className="btn btn-primary"
+                            onClick={() =>
+                              navigate("/karaoke", {
+                                state: { songId: song.id },
+                              })
+                            }
+                          >
+                            <Play size={15} fill="currentColor" /> Караоке
+                          </button>
+                          <button
+                            className="btn btn-ghost"
+                            title="Прослушать записи"
+                            onClick={() => setRecordingsSong(song)}
+                          >
+                            <Headphones size={16} />
+                          </button>
                         </>
                       ) : (
-                        <button className="btn btn-primary" disabled={isWorking} onClick={() => handleProcess(song)}><Play size={15} fill="currentColor" /> Обработать</button>
+                        <button
+                          className="btn btn-primary"
+                          disabled={isWorking}
+                          onClick={() => handleProcess(song)}
+                        >
+                          <Play size={15} fill="currentColor" /> Обработать
+                        </button>
                       )}
-                      <button className="btn btn-ghost" title="Информация" onClick={() => setInfoSong(song)}><Info size={16} /></button>
+                      <button
+                        className="btn btn-ghost"
+                        title="Настройки песни"
+                        onClick={() => {
+                          navigate("/song-settings", {
+                            state: { songId: song.id },
+                          });
+                          setMenuSongId(null);
+                        }}
+                      >
+                        <Settings2 size={14} />
+                      </button>
+                      <button
+                        className="btn btn-ghost"
+                        title="Открыть папку"
+                        onClick={() => {
+                          handleOpenFolder(song);
+                          setMenuSongId(null);
+                        }}
+                      >
+                        <FolderOpen size={14} />
+                      </button>
+                      {isReady && (
+                        <button
+                          className="btn btn-ghost"
+                          title="Переобработать MIDI"
+                          onClick={() => {
+                            handleReprocess(song);
+                            setMenuSongId(null);
+                          }}
+                        >
+                          <RotateCcw size={14} />
+                        </button>
+                      )}
                       <div className="library-card-more">
                         <button
                           className="btn btn-ghost"
                           title="Дополнительные действия"
-                          onClick={() => setMenuSongId((id) => (id === song.id ? null : song.id))}
+                          onClick={() =>
+                            setMenuSongId((id) =>
+                              id === song.id ? null : song.id,
+                            )
+                          }
                         >
                           <MoreHorizontal size={16} />
                         </button>
-                        {menuSongId === song.id && (
-                          <div className="song-actions-menu">
-                            <button onClick={() => { navigate("/song-settings", { state: { songId: song.id } }); setMenuSongId(null); }}>
-                              <Settings2 size={14} /> Настройки песни
-                            </button>
-                            <button onClick={() => { handleOpenFolder(song); setMenuSongId(null); }}>
-                              <FolderOpen size={14} /> Открыть папку
-                            </button>
-                            {isReady && (
-                              <button onClick={() => { handleReprocess(song); setMenuSongId(null); }}>
-                                <RotateCcw size={14} /> Переобработать MIDI
-                              </button>
-                            )}
-                          </div>
-                        )}
                       </div>
-                      <button className="btn btn-danger" title="Удалить" onClick={() => handleDelete(song)}><Trash2 size={15} /></button>
+                      <button
+                        className="btn btn-danger"
+                        title="Удалить"
+                        onClick={() => handleDelete(song)}
+                      >
+                        <Trash2 size={15} />
+                      </button>
                     </div>
                   </div>
                 </div>
               </article>
             );
           })}
-          {filtered.length === 0 && !error && <div className="library-card-empty text-muted">Пока нет ни одной песни — добавьте первую</div>}
+          {filtered.length === 0 && !error && (
+            <div className="library-card-empty text-muted">
+              Пока нет ни одной песни — добавьте первую
+            </div>
+          )}
         </div>
-
-        <table className="data-table library-table-fallback">
-          <thead>
-            <tr>
-              <th>Название</th>
-              <th>Статус</th>
-              <th style={{ width: 160 }}>Прогресс</th>
-              <th>Добавлена</th>
-              <th style={{ width: 200 }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((song) => (
-              <tr key={song.id}>
-                <td className="song-title-cell">
-                  <div className="song-title-content">
-                    {song.status === "done" && (
-                      <button
-                        className="btn btn-ghost"
-                        title="Открыть в караоке"
-                        onClick={() =>
-                          navigate("/karaoke", { state: { songId: song.id } })
-                        }
-                      >
-                        <Play size={14} />
-                      </button>
-                    )}
-                    {song.status === "done" && (
-                      <button
-                        className="btn btn-ghost"
-                        title="Прослушать записи по этой песне"
-                        onClick={() => setRecordingsSong(song)}
-                      >
-                        <Headphones size={15} />
-                      </button>
-                    )}
-                    <span className="song-title-name">{song.title}</span>
-                  </div>
-                </td>
-                <td>
-                  <StatusBadge status={song.status} />
-                </td>
-                <td>
-                  {song.status === "processing" ||
-                  song.status === "cancelling" ? (
-                    <div className="library-processing-indicator">
-                      <ProgressBar percent={song.progress_percent} />
-                      <button
-                        className="btn btn-ghost"
-                        title="Открыть ход обработки"
-                        onClick={() => setProcessingSong(song)}
-                      >
-                        <CircleDot size={16} />
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="text-muted mono">
-                      {song.progress_percent}%
-                    </span>
-                  )}
-                </td>
-                <td className="text-secondary">
-                  {formatDate(song.created_at)}
-                </td>
-                <td>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 6,
-                      justifyContent: "flex-end",
-                      position: "relative",
-                    }}
-                  >
-                    {song.status !== "done" && (
-                      <button
-                        className="btn btn-ghost"
-                        title="Обработать"
-                        disabled={
-                          song.status === "processing" ||
-                          song.status === "cancelling"
-                        }
-                        onClick={() => handleProcess(song)}
-                      >
-                        <Play size={14} />
-                      </button>
-                    )}
-                    <button
-                      className="btn btn-ghost"
-                      title="Дополнительные действия"
-                      onClick={() =>
-                        setMenuSongId((id) => (id === song.id ? null : song.id))
-                      }
-                    >
-                      <MoreHorizontal size={16} />
-                    </button>
-                    {menuSongId === song.id && (
-                      <div className="song-actions-menu">
-                        <button
-                          onClick={() => {
-                            setInfoSong(song);
-                            setMenuSongId(null);
-                          }}
-                        >
-                          <Info size={14} /> Информация
-                        </button>
-                        <button
-                          onClick={() => {
-                            navigate("/song-settings", {
-                              state: { songId: song.id },
-                            });
-                            setMenuSongId(null);
-                          }}
-                        >
-                          <Settings2 size={14} /> Настройки песни
-                        </button>
-                        <button
-                          onClick={() => {
-                            handleOpenFolder(song);
-                            setMenuSongId(null);
-                          }}
-                        >
-                          <FolderOpen size={14} /> Открыть папку
-                        </button>
-                        {song.status === "done" && (
-                          <button
-                            onClick={() => {
-                              handleReprocess(song);
-                              setMenuSongId(null);
-                            }}
-                          >
-                            <RotateCcw size={14} /> Переобработать MIDI
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    <button
-                      className="btn btn-danger"
-                      title="Удалить"
-                      onClick={() => handleDelete(song)}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 && !error && (
-              <tr>
-                <td
-                  colSpan={5}
-                  className="text-muted"
-                  style={{ textAlign: "center", padding: 24 }}
-                >
-                  Пока нет ни одной песни — добавьте первую
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
       </Panel>
 
       {infoSong && (
