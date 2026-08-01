@@ -8,6 +8,7 @@
 //     запускает "Karaoke Studio", ему не нужно отдельно поднимать backend;
 //  3) IPC-мостик для управления окном и открытия папки песни в проводнике.
 const { app, BrowserWindow, ipcMain, session, shell } = require("electron");
+const fs = require("fs");
 const http = require("http");
 const path = require("path");
 const { spawn } = require("child_process");
@@ -161,8 +162,16 @@ ipcMain.handle("shell:openSongFolder", (_event, targetPath) => {
     return "A song folder was not provided.";
   }
 
-  const songsDir = path.resolve(resolveSongOutputDir());
-  const folderPath = path.resolve(targetPath);
+  let songsDir;
+  let folderPath;
+  try {
+    // Resolve links before the containment check: a link inside Song/ must
+    // not become an indirect way to open arbitrary folders from the renderer.
+    songsDir = fs.realpathSync.native(resolveSongOutputDir());
+    folderPath = fs.realpathSync.native(targetPath);
+  } catch {
+    return "The song folder is no longer available.";
+  }
   if (!isPathInside(songsDir, folderPath)) {
     return "Opening folders outside the song library is not allowed.";
   }
@@ -171,8 +180,13 @@ ipcMain.handle("shell:openSongFolder", (_event, targetPath) => {
 ipcMain.handle("backend:url", () => BACKEND_URL);
 
 app.whenReady().then(() => {
-  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
-    callback(permission === "media");
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    const requestUrl = details?.requestingUrl || "";
+    const trustedRenderer = webContents === mainWindow?.webContents
+      && (requestUrl.startsWith("file://") || requestUrl.startsWith("http://127.0.0.1:5173"));
+    // The app uses only the microphone. Never grant media permissions to a
+    // navigation, popup, or arbitrary origin that happens to share a session.
+    callback(permission === "media" && trustedRenderer);
   });
   startBackend();
   createWindow();

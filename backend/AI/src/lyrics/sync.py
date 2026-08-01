@@ -27,6 +27,9 @@ from src.common.model_paths import whisper_dir
 
 def _faster_whisper_runtime() -> tuple[str, str]:
     """Choose GPU acceleration when it is genuinely usable, else safe CPU."""
+    requested_device = os.getenv("SONGAPP_DEVICE", "auto").lower()
+    if requested_device == "cpu":
+        return "cpu", "int8"
     try:
         import ctranslate2
 

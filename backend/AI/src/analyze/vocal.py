@@ -14,6 +14,7 @@ vocals.wav -> pitch.json
 
 import argparse
 import json
+import os
 
 import librosa
 import numpy as np
@@ -129,7 +130,8 @@ def _analyze_torchcrepe(y: np.ndarray, sr: int, frame_step_sec: float, fmin: str
         y = librosa.resample(y, orig_sr=sr, target_sr=target_sr)
         sr = target_sr
     hop_length = max(1, int(round(frame_step_sec * sr)))
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    requested_device = os.getenv("SONGAPP_DEVICE", "auto").lower()
+    device = "cuda" if requested_device != "cpu" and torch.cuda.is_available() else "cpu"
     audio = torch.from_numpy(np.ascontiguousarray(y, dtype=np.float32)).to(device).unsqueeze(0)
     f0, periodicity = torchcrepe.predict(
         audio,

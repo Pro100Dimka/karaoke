@@ -10,6 +10,7 @@ run_all.py уже печатает прогресс по шагам в духе 
 import contextlib
 import io
 import json
+import os
 import re
 import shutil
 import threading
@@ -32,6 +33,25 @@ _active_jobs_lock = threading.RLock()
 _cancelled_jobs: set[str] = set()
 _progress_runtime: dict[str, dict] = {}
 _progress_runtime_lock = threading.RLock()
+
+
+def _configure_ai_runtime() -> str:
+    """Apply persisted compute preferences before lazy AI imports load a runtime."""
+    settings = app_settings_service.read_settings()
+    use_gpu = bool(settings["use_gpu"])
+    use_cpu = bool(settings["use_cpu"])
+    device = "auto" if use_gpu and use_cpu else "cuda" if use_gpu else "cpu"
+    thread_count = int(settings["thread_count"])
+    os.environ["SONGAPP_DEVICE"] = device
+    # NumPy/BLAS honor these on their next initialization; PyTorch is also
+    # configured explicitly when it is already available in this process.
+    for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+        os.environ[name] = str(thread_count)
+    with contextlib.suppress(ImportError, RuntimeError):
+        import torch
+
+        torch.set_num_threads(thread_count)
+    return device
 
 
 def _first_audio_tag(tags: object, *names: str) -> str | None:
@@ -360,6 +380,8 @@ def _run_job(song_id: str) -> None:
     capture = _ProgressCapture(song_id, log_path)
     pipeline_succeeded = False
     try:
+        device = _configure_ai_runtime()
+        capture.write(f"[backend] AI runtime: device={device}\n")
         run_pipeline = ai_bridge.get_run_all_pipeline()
         with (
             contextlib.redirect_stdout(cast(TextIO, capture)),

@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
 import models
@@ -27,6 +27,12 @@ class AppSettingsPatch(BaseModel):
     use_cpu: bool | None = None
     autosave: bool | None = None
     autoupdate: bool | None = None
+
+    @model_validator(mode="after")
+    def validate_compute_target(self) -> AppSettingsPatch:
+        if self.use_gpu is False and self.use_cpu is False:
+            raise ValueError("At least one AI compute target must remain enabled")
+        return self
 
 
 @router.get("/settings")
