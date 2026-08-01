@@ -25,14 +25,18 @@ def start_recording(body: schemas.RecordingStartRequest, db: Session = Depends(g
     settings = audio_service.get_settings(db)
     try:
         audio_service.stop_monitoring()
+        input_device_id = audio_service.preferred_input_device(
+            settings.input_device_id, settings.audio_driver, settings.asio_driver_name,
+        )
         session_id = recording_service.start_recording(
             song_id=song.id,
-            device_id=audio_service.preferred_input_device(settings.input_device_id),
+            device_id=input_device_id,
             output_device_id=audio_service.preferred_output_device(
-                settings.input_device_id, settings.audio_driver, settings.output_device_id,
+                input_device_id, settings.audio_driver, settings.output_device_id,
+                settings.asio_driver_name,
             ),
             sample_rate=audio_service.preferred_sample_rate(
-                settings.input_device_id, settings.audio_driver,
+                input_device_id, settings.audio_driver,
             ),
             gain=settings.volume,
             monitoring_enabled=settings.monitoring_enabled,

@@ -48,7 +48,13 @@ export function Dropdown({ value, onChange, options, placeholder = "Выбери
           const isSelected = String(option.value) === String(value);
           return <button type="button" key={String(option.value)} role="option" aria-selected={isSelected}
             className={`app-dropdown-option ${isSelected ? "is-selected" : ""}`}
-            onClick={() => { onChange(option.value); setOpen(false); }}>
+            onClick={(event) => {
+              event.stopPropagation();
+              // Close before an async settings update triggers a re-render.
+              // This prevents the menu from appearing to reopen on selection.
+              setOpen(false);
+              onChange(option.value);
+            }}>
             <span>{option.label}</span>{isSelected && <Check size={15} />}
           </button>;
         })}

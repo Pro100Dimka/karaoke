@@ -37,6 +37,7 @@ struct Options {
   long output_channels = 2;
   long buffer_size = 0;
   double sample_rate = 0.0;
+  double gain = 1.0;
   bool list = false;
 };
 
@@ -50,6 +51,7 @@ struct Engine {
   long buffer_size = 0;
   long input_latency = 0;
   long output_latency = 0;
+  float gain = 1.0F;
   bool output_ready = false;
   bool buffers_created = false;
 } g_engine;
@@ -76,6 +78,7 @@ std::optional<Options> parse_options(int argc, char** argv) {
     else if (key == "--output-channels" && index + 1 < argc) options.output_channels = std::stol(argv[++index]);
     else if (key == "--buffer-size" && index + 1 < argc) options.buffer_size = std::stol(argv[++index]);
     else if (key == "--sample-rate" && index + 1 < argc) options.sample_rate = std::stod(argv[++index]);
+    else if (key == "--gain" && index + 1 < argc) options.gain = std::stod(argv[++index]);
     else return std::nullopt;
   }
   return options;
@@ -131,6 +134,41 @@ float sample_peak(const void* source, ASIOSampleType type, long frames) {
   return peak;
 }
 
+// ASIO buffers are passed directly from the driver callback.  Apply the gain
+// here, before copying input to the output buffers, so the microphone volume
+// setting affects native ASIO monitoring as well as the browser fallback.
+void copy_with_gain(void* target, const void* source, ASIOSampleType type, long frames, float gain) {
+  if (gain == 1.0F) {
+    std::memcpy(target, source, static_cast<size_t>(frames * bytes_per_sample(type)));
+    return;
+  }
+  if (type == ASIOSTFloat32LSB) {
+    const auto* input = static_cast<const float*>(source);
+    auto* output = static_cast<float*>(target);
+    for (long index = 0; index < frames; ++index) output[index] = std::clamp(input[index] * gain, -1.0F, 1.0F);
+    return;
+  }
+  if (type == ASIOSTInt32LSB || type == ASIOSTInt32LSB24) {
+    const auto* input = static_cast<const int32_t*>(source);
+    auto* output = static_cast<int32_t*>(target);
+    for (long index = 0; index < frames; ++index) {
+      const double scaled = std::clamp(static_cast<double>(input[index]) * gain, -2147483648.0, 2147483647.0);
+      output[index] = static_cast<int32_t>(scaled);
+    }
+    return;
+  }
+  if (type == ASIOSTInt16LSB) {
+    const auto* input = static_cast<const int16_t*>(source);
+    auto* output = static_cast<int16_t*>(target);
+    for (long index = 0; index < frames; ++index) {
+      output[index] = static_cast<int16_t>(std::clamp(static_cast<float>(input[index]) * gain, -32768.0F, 32767.0F));
+    }
+    return;
+  }
+  // Unsupported packed/endian formats are preserved rather than corrupted.
+  std::memcpy(target, source, static_cast<size_t>(frames * bytes_per_sample(type)));
+}
+
 void process_buffer(long buffer_index) {
   if (g_engine.input_count < 1 || g_engine.output_count < 1) return;
   const void* input = g_engine.buffers[0].buffers[buffer_index];
@@ -150,7 +188,7 @@ void process_buffer(long buffer_index) {
     const ASIOSampleType output_type = g_engine.channels[output_index].type;
     if (target == nullptr) continue;
     if (output_type == input_type) {
-      std::memcpy(target, input, static_cast<size_t>(g_engine.buffer_size * input_bytes));
+      copy_with_gain(target, input, input_type, g_engine.buffer_size, g_engine.gain);
     } else {
       std::memset(target, 0, static_cast<size_t>(g_engine.buffer_size * bytes_per_sample(output_type)));
     }
@@ -188,6 +226,7 @@ bool create_buffers(const Options& options) {
   g_engine.output_count = std::min({options.output_channels, g_engine.output_count, kMaxChannels});
   if (ASIOGetBufferSize(&minimum, &maximum, &preferred, &granularity) != ASE_OK) return false;
   g_engine.buffer_size = resolve_buffer_size(options, minimum, maximum, preferred, granularity);
+  g_engine.gain = static_cast<float>(std::clamp(options.gain, 0.0, 4.0));
   for (long index = 0; index < g_engine.input_count; ++index) {
     g_engine.buffers[index].isInput = ASIOTrue;
     g_engine.buffers[index].channelNum = options.input_channel + index;

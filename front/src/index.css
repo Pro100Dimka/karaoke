@@ -630,6 +630,57 @@ table.data-table tbody tr:hover {
   border-radius: 12px;
   background: rgba(5, 3, 12, 0.38);
 }
+.microphone-panel.karaoke-settings-modal {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 12px;
+  padding: 16px;
+  border-color: color-mix(in srgb, var(--accent-2) 28%, transparent);
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--surface-solid) 92%, transparent), color-mix(in srgb, var(--surface-deep) 84%, transparent));
+}
+.microphone-panel.karaoke-settings-modal > label,
+.microphone-panel.karaoke-settings-modal > .microphone-level {
+  min-height: 74px;
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--text-primary) 9%, transparent);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--surface-deep) 55%, transparent);
+}
+.microphone-panel.karaoke-settings-modal .advanced-audio-setting {
+  display: none;
+}
+.microphone-panel.karaoke-settings-modal .microphone-monitoring {
+  align-self: stretch;
+  grid-column: span 2;
+  min-height: 74px;
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent-2) 27%, transparent);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--surface-deep) 66%, transparent);
+}
+.microphone-panel.karaoke-settings-modal .audio-driver-setting,
+.microphone-panel.karaoke-settings-modal .asio-driver-setting,
+.microphone-panel.karaoke-settings-modal .microphone-gain-setting {
+  grid-column: span 2;
+}
+.microphone-panel.karaoke-settings-modal .microphone-level {
+  grid-column: span 4;
+  min-height: 74px;
+  align-content: center;
+}
+.microphone-panel.karaoke-settings-modal .microphone-effects {
+  margin: 2px 2px 0;
+}
+@media (max-width: 760px) {
+  .microphone-panel.karaoke-settings-modal { grid-template-columns: 1fr; }
+  .microphone-panel.karaoke-settings-modal .audio-driver-setting,
+  .microphone-panel.karaoke-settings-modal .asio-driver-setting,
+  .microphone-panel.karaoke-settings-modal .microphone-gain-setting,
+  .microphone-panel.karaoke-settings-modal .microphone-monitoring,
+  .microphone-panel.karaoke-settings-modal .microphone-level { grid-column: auto; }
+}
 .karaoke-settings-backdrop {
   position: absolute;
   z-index: 25;

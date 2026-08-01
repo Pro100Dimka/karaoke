@@ -306,9 +306,9 @@ export default function Karaoke({ onOpenAppSettings }) {
     [microphoneOpen],
   );
   const { data: audioSettings } = usePolling(
-    () => (microphoneOpen ? api.getAudioSettings() : Promise.resolve(null)),
+    () => api.getAudioSettings(),
     30000,
-    [microphoneOpen],
+    [],
   );
   const { data: signal } = usePolling(
     () => (microphoneOpen ? api.getSignalQuality() : Promise.resolve(null)),
@@ -330,11 +330,53 @@ export default function Karaoke({ onOpenAppSettings }) {
     if (audioSettings?.audio_driver) setAudioDriver(audioSettings.audio_driver);
     if (audioSettings?.asio_driver_name) setAsioDriverName(audioSettings.asio_driver_name);
     if (audioSettings?.buffer_size) setAudioBufferSize(audioSettings.buffer_size);
-  }, [audioSettings?.audio_driver, audioSettings?.asio_driver_name, audioSettings?.buffer_size]);
+    if (audioSettings?.monitoring_enabled != null)
+      setMonitoringEnabled(audioSettings.monitoring_enabled);
+  }, [
+    audioSettings?.audio_driver,
+    audioSettings?.asio_driver_name,
+    audioSettings?.buffer_size,
+    audioSettings?.monitoring_enabled,
+  ]);
 
   useEffect(() => {
     setDirectOutputDeviceId(audioSettings?.output_device_id ?? "");
   }, [audioSettings?.output_device_id]);
+
+  // Keep browser playback on the same physical interface as the ASIO monitor.
+  // The ASIO bridge handles the microphone; HTML media uses the matching
+  // Windows endpoint so both are heard through the Audient headphones output.
+  useEffect(() => {
+    if (
+      !microphoneOpen ||
+      audioDriver !== "asio" ||
+      audioSettings?.output_device_id != null
+    ) return;
+    const preferred = (directOutputDevices || []).find((device) =>
+      device.name.toLowerCase().includes("audient"),
+    );
+    if (preferred && String(directOutputDeviceId) !== String(preferred.index)) {
+      setDirectOutputDeviceId(preferred.index);
+      updateMicrophone({ output_device_id: preferred.index });
+    }
+  }, [
+    audioDriver,
+    audioSettings?.output_device_id,
+    directOutputDevices,
+    directOutputDeviceId,
+    microphoneOpen,
+  ]);
+
+  useEffect(() => {
+    if (!microphoneOpen || !directOutputDeviceId || !navigator.mediaDevices?.enumerateDevices) return;
+    const selected = (directOutputDevices || []).find((device) => String(device.index) === String(directOutputDeviceId));
+    if (!selected) return;
+    navigator.mediaDevices.enumerateDevices().then((entries) => {
+      const output = entries.find((entry) => entry.kind === "audiooutput" && selected.name.toLowerCase().includes(entry.label.toLowerCase()));
+      if (!output?.deviceId) return;
+      [instrumentalRef.current, vocalsRef.current, videoRef.current].forEach((media) => media?.setSinkId?.(output.deviceId).catch(() => {}));
+    }).catch(() => {});
+  }, [directOutputDevices, directOutputDeviceId, microphoneOpen]);
 
   useEffect(
     () => () => {
@@ -1172,7 +1214,7 @@ export default function Karaoke({ onOpenAppSettings }) {
                 </div>
               </div>
             </div>
-            <label>
+            <label className={audioDriver === "asio" ? "advanced-audio-setting" : ""}>
               Устройство ввода
               <Dropdown
                 value={audioSettings?.input_device_id ?? ""}
@@ -1190,7 +1232,7 @@ export default function Karaoke({ onOpenAppSettings }) {
                 ]}
               />
             </label>
-            <label>
+            <label className="audio-driver-setting">
               Аудиодрайвер
               <Dropdown
                 value={audioDriver}
@@ -1211,8 +1253,8 @@ export default function Karaoke({ onOpenAppSettings }) {
               )}
             </label>
             {audioDriver === "asio" && (
-              <label>
-                ASIO driver
+              <label className="asio-driver-setting">
+                ASIO-драйвер
                 <Dropdown
                   value={asioDriverName}
                   disabled={monitoringEnabled}
@@ -1225,10 +1267,10 @@ export default function Karaoke({ onOpenAppSettings }) {
                     label: driver.name,
                   }))}
                 />
-                <small>For Audient choose Audient USB Audio ASIO Driver.</small>
+                <small>Для Audient выбран нативный драйвер аудиоинтерфейса.</small>
               </label>
             )}
-            <label>
+            <label className="advanced-audio-setting">
               Буфер аудио
               <Dropdown
                 value={audioBufferSize}
@@ -1244,7 +1286,7 @@ export default function Karaoke({ onOpenAppSettings }) {
                 }))}
               />
             </label>
-            <label>
+            <label className="advanced-audio-setting">
               Выход прямого мониторинга
               <Dropdown
                 value={directOutputDeviceId}
@@ -1372,7 +1414,7 @@ export default function Karaoke({ onOpenAppSettings }) {
                 </div>
               )}
             </div>
-            <label>
+            <label className="microphone-gain-setting">
               Громкость микрофона: {Math.round((microphoneVolume / 4) * 100)}%
               <input
                 type="range"

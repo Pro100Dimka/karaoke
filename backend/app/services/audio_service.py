@@ -58,8 +58,51 @@ def _preferred_device_index(device_id: int | None, kind: str) -> int | None:
     return device_id
 
 
-def preferred_input_device(device_id: int | None) -> int | None:
-    return _preferred_device_index(device_id, "input")
+def _asio_device_hint(driver_name: str | None) -> str:
+    """Return a stable, human-readable part of a native ASIO driver name."""
+    if not driver_name:
+        return ""
+    hint = driver_name.lower()
+    for suffix in (" asio driver", " asio", " driver"):
+        hint = hint.replace(suffix, "")
+    return " ".join(hint.split())
+
+
+def _matching_asio_device_index(driver_name: str | None, kind: str) -> int | None:
+    """Resolve native ASIO to its matching PortAudio device for recording.
+
+    The native bridge owns direct monitoring; recording currently uses
+    PortAudio. Prefer the same interface by name so an Audient selection does
+    not silently fall back to Windows' default microphone.
+    """
+    if not _AUDIO_BACKEND_AVAILABLE:
+        return None
+    hint = _asio_device_hint(driver_name)
+    if not hint:
+        return None
+    capability = "max_input_channels" if kind == "input" else "max_output_channels"
+    best: tuple[int, int] | None = None
+    for index, device in enumerate(sd.query_devices()):
+        if int(device.get(capability, 0)) < 1:
+            continue
+        name = str(device.get("name", "")).lower()
+        overlap = sum(token in name for token in hint.split() if len(token) > 2)
+        if overlap == 0:
+            continue
+        score = overlap * 10 + (5 if _is_asio_device(device) else 0)
+        if best is None or score > best[0]:
+            best = (score, index)
+    return best[1] if best else None
+
+
+def preferred_input_device(
+    device_id: int | None, driver: str = "auto", asio_driver_name: str | None = None,
+) -> int | None:
+    if device_id is not None:
+        return _preferred_device_index(device_id, "input")
+    if driver == "asio":
+        return _matching_asio_device_index(asio_driver_name, "input")
+    return None
 
 
 def _host_api_name(device: dict) -> str:
@@ -83,6 +126,7 @@ def _is_wasapi_device(device: dict) -> bool:
 
 def preferred_output_device(
     input_device_id: int | None = None, driver: str = "auto", output_device_id: int | None = None,
+    asio_driver_name: str | None = None,
 ) -> int | None:
     if output_device_id is not None:
         return output_device_id
@@ -91,7 +135,7 @@ def preferred_output_device(
     device = sd.query_devices(input_device_id)
     if _is_asio_device(device) and int(device.get("max_output_channels", 0)) > 0:
         return input_device_id
-    return None
+    return _matching_asio_device_index(asio_driver_name, "output")
 
 
 def preferred_sample_rate(input_device_id: int | None = None, driver: str = "auto") -> int:
@@ -272,6 +316,7 @@ def _start_asio_monitor(settings: models.AudioSettings) -> None:
         str(bridge), "--driver", settings.asio_driver_name,
         "--buffer-size", str(settings.buffer_size),
         "--sample-rate", str(config.RECORDING_SAMPLE_RATE),
+        "--gain", str(max(0.0, min(4.0, settings.volume))),
     ]
     _launch_monitor_process(command, cwd=bridge.parent)
 
