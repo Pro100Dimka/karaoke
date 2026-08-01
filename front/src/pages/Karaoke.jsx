@@ -402,24 +402,29 @@ export default function Karaoke({ onOpenAppSettings }) {
     let frameId;
     const startedAt = performance.now() - panoramaClockRef.current;
     const path = panoramaPathRef.current;
-    const cycleMs = 84_000;
+    // Background panoramas are decorative. Keep camera drift slow enough that
+    // the visual scene feels alive without competing with lyrics or causing
+    // motion discomfort during a full song.
+    const cycleMs = 240_000;
     const offsetSine = (phase) => Math.sin(phase);
 
     const move = (now) => {
       const elapsed = now - startedAt;
       const theta = ((elapsed % cycleMs) / cycleMs) * Math.PI * 2;
-      // Integer harmonics make the 84-second path closed: frame 0 and the
+      // Integer harmonics make the 240-second path closed: frame 0 and the
       // final frame have identical position and velocity, so no loop is seen.
       const x =
-        96 * (Math.sin(theta + path.xPhaseA) - offsetSine(path.xPhaseA)) +
-        58 *
+        22 * (Math.sin(theta + path.xPhaseA) - offsetSine(path.xPhaseA)) +
+        13 *
           (Math.sin(theta * 3 + path.xPhaseB) - offsetSine(path.xPhaseB)) +
-        31 *
+        7 *
           (Math.sin(theta * 5 + path.xPhaseC) - offsetSine(path.xPhaseC));
       const y =
         48 +
-        10 * (Math.sin(theta * 2 + path.yPhaseA) - offsetSine(path.yPhaseA)) +
-        5 * (Math.sin(theta * 5 + path.yPhaseB) - offsetSine(path.yPhaseB));
+        2.4 *
+          (Math.sin(theta * 2 + path.yPhaseA) - offsetSine(path.yPhaseA)) +
+        1.2 *
+          (Math.sin(theta * 5 + path.yPhaseB) - offsetSine(path.yPhaseB));
       panorama.style.setProperty("--panorama-x", `-${x.toFixed(3)}cqh`);
       panorama.style.setProperty("--panorama-y", `${y.toFixed(3)}%`);
       panoramaClockRef.current = elapsed;

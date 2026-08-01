@@ -7,7 +7,14 @@ requires-python = ">=3.11"
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-extend-exclude = ["AI/tests", "app/data", "Song", "full_songs"]
+extend-exclude = [
+    "AI/tests",
+    "app/data",
+    "dist",
+    "engines",
+    "full_songs",
+    "Song",
+]
 
 [tool.ruff.lint]
 select = [
