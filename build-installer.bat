@@ -18,7 +18,7 @@ if not defined FFMPEG_PATH (
   exit /b 1
 )
 
-call "%PROJECT_ROOT%setup-offline-models.bat"
+call "%PROJECT_ROOT%scripts\ensure-offline-models.bat"
 if errorlevel 1 exit /b 1
 
 echo [1/3] Installing the backend packager when needed...
