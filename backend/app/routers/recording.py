@@ -24,7 +24,20 @@ def start_recording(body: schemas.RecordingStartRequest, db: Session = Depends(g
 
     settings = audio_service.get_settings(db)
     try:
-        audio_service.stop_monitoring()
+        # Karaoke playback always monitors the microphone. The checkbox only
+        # controls whether it is also monitored *before* Play. For ASIO, start
+        # a temporary native monitor without persisting that automatic choice;
+        # it is stopped again after the take if the checkbox was not selected.
+        keep_native_monitor = settings.audio_driver == "asio"
+        if keep_native_monitor:
+            saved_monitoring_preference = settings.monitoring_enabled
+            settings.monitoring_enabled = True
+            try:
+                audio_service.configure_monitoring(settings)
+            finally:
+                settings.monitoring_enabled = saved_monitoring_preference
+        else:
+            audio_service.stop_monitoring()
         input_device_id = audio_service.preferred_input_device(
             settings.input_device_id, settings.audio_driver, settings.asio_driver_name,
         )
@@ -39,9 +52,11 @@ def start_recording(body: schemas.RecordingStartRequest, db: Session = Depends(g
                 input_device_id, settings.audio_driver,
             ),
             gain=settings.volume,
-            monitoring_enabled=settings.monitoring_enabled,
+            monitoring_enabled=not keep_native_monitor,
             playback_offset_sec=body.position_sec,
             blocksize=settings.buffer_size,
+            music_gain=body.music_volume,
+            vocal_gain=body.vocal_volume,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
