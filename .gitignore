@@ -38,6 +38,8 @@ MANIFEST
 #   before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
+backend/build/
+backend/dist/
 backend/AI/full_songs/*.mp3
 backend/AI/Song
 
