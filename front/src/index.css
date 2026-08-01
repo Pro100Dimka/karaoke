@@ -6115,9 +6115,9 @@ input[type="range"]::-webkit-slider-thumb {
 .aurora-ring--two { width: min(94vw, 1510px); height: min(31vw, 490px); bottom: -17%; border-color: rgba(255, 206, 92, .68); animation-duration: 9s; animation-direction: alternate-reverse; }
 .aurora-ring--three { width: min(74vw, 1180px); height: min(24vw, 380px); bottom: -9%; border-color: rgba(242, 72, 219, .72); animation-duration: 14s; }
 .aurora-ribbon { left: 50%; width: 122vw; height: 49vw; border: 3px solid transparent; border-bottom-color: rgba(255, 216, 123, .94); border-radius: 50%; transform-origin: 50% 50%; filter: drop-shadow(0 0 5px #ff691e) drop-shadow(0 0 20px rgba(255, 65, 87, .9)); opacity: .94; }
-.aurora-ribbon--one { top: 2%; transform: translateX(-53%) rotate(-6deg) rotateX(2deg); animation: aurora-ribbon-one 13s ease-in-out infinite alternate; }
-.aurora-ribbon--two { top: 10%; border-bottom-color: rgba(255, 48, 154, .93); transform: translateX(-48%) rotate(2deg) rotateX(2deg); animation: aurora-ribbon-two 17s ease-in-out infinite alternate; }
-.aurora-ribbon--three { top: 18%; width: 132vw; height: 55vw; border-bottom-color: rgba(255, 137, 55, .88); transform: translateX(-50%) rotate(-2deg) rotateX(2deg); animation: aurora-ribbon-three 15s ease-in-out infinite alternate; }
+.aurora-ribbon--one { top: 2%; transform: translateX(-53%) rotate(-6deg) rotateX(2deg); }
+.aurora-ribbon--two { top: 10%; border-bottom-color: rgba(255, 48, 154, .93); transform: translateX(-48%) rotate(2deg) rotateX(2deg); }
+.aurora-ribbon--three { top: 18%; width: 132vw; height: 55vw; border-bottom-color: rgba(255, 137, 55, .88); transform: translateX(-50%) rotate(-2deg) rotateX(2deg); }
 .aurora-stars { z-index: 1; inset: 0; }
 .aurora-stars i { left: var(--aurora-x); top: var(--aurora-y); width: calc(var(--aurora-depth) * 1px); height: calc(var(--aurora-depth) * 1px); border-radius: 50%; background: #fff8db; box-shadow: 0 0 calc(var(--aurora-depth) * 6px) calc(var(--aurora-depth) * 1px) rgba(255, 80, 128, .92); animation: aurora-twinkle calc(2.8s + var(--aurora-depth) * .8s) ease-in-out var(--aurora-delay) infinite; }
 .karaoke-aurora-stage .melody-roll { position: relative; z-index: 2; }
@@ -6131,9 +6131,6 @@ input[type="range"]::-webkit-slider-thumb {
 @keyframes aurora-star-drift { to { transform: translate3d(-3%, 2%, 0) scale(1.05); } }
 @keyframes aurora-grid-slide { to { background-position: 0 42px, 72px 0, 0 0; } }
 @keyframes aurora-ring-orbit { to { transform: translateX(-50%) rotateX(69deg) rotateZ(2deg) scale(1.035); opacity: .9; } }
-@keyframes aurora-ribbon-one { to { transform: translateX(-53%) translateY(3%) rotate(-3deg) rotateX(63deg); } }
-@keyframes aurora-ribbon-two { to { transform: translateX(-47%) translateY(-4%) rotate(10deg) rotateX(62deg); } }
-@keyframes aurora-ribbon-three { to { transform: translateX(-51%) translateY(-7%) rotate(3deg) rotateX(67deg); } }
 @keyframes aurora-twinkle { 50% { transform: scale(2.4); opacity: .3; } }
 @media (prefers-reduced-motion: reduce) { .karaoke-aurora-world *, .karaoke-aurora-stage::before { animation: none !important; } }
 
@@ -6176,9 +6173,6 @@ input[type="range"]::-webkit-slider-thumb {
 @keyframes aurora-ring-outer-score { to { transform: translateX(-50%) rotateX(71deg) rotateZ(90deg); } }
 @keyframes aurora-ring-middle-score { to { transform: translateX(-50%) rotateX(71deg) rotateZ(-120deg); } }
 @keyframes aurora-ring-inner-score { to { transform: translateX(-50%) rotateX(71deg) rotateZ(180deg); } }
-@keyframes aurora-ribbon-one-score { 0%,100% { transform: translateX(-55%) rotate(-8deg) rotateX(61deg); } 32% { transform: translateX(-40%) rotate(-3deg) rotateX(61deg); } 100% { transform: translateX(10%) rotate(5deg) rotateX(61deg); } }
-@keyframes aurora-ribbon-two-score { 0%,35% { opacity: 0; transform: translateX(24%) rotate(5deg) rotateX(64deg); } 59% { opacity: .92; } 100% { opacity: 0; transform: translateX(-96%) rotate(-5deg) rotateX(64deg); } }
-@keyframes aurora-ribbon-three-score { 0%,66% { opacity: 0; transform: translateX(-63%) rotate(-2deg) rotateX(69deg); } 92% { opacity: .9; } 100% { opacity: 0; transform: translateX(6%) rotate(4deg) rotateX(69deg); } }
 @keyframes aurora-arc-pulse-one { 0%,5% { left:-18%; opacity:0; } 6%,31% { opacity:1; } 32%,100% { left:105%; opacity:0; } }
 @keyframes aurora-arc-pulse-two { 0%,34% { left:105%; opacity:0; } 35%,58% { opacity:1; } 59%,100% { left:-18%; opacity:0; } }
 @keyframes aurora-arc-pulse-three { 0%,66% { left:-18%; opacity:0; } 67%,96% { opacity:1; } 97%,100% { left:105%; opacity:0; } }

@@ -1,4 +1,5 @@
 """Микрофон и звук: список устройств, настройки записи, проверка сигнала."""
+
 import json
 import logging
 import subprocess
@@ -14,6 +15,7 @@ import models
 try:
     import numpy as np
     import sounddevice as sd
+
     _AUDIO_BACKEND_AVAILABLE = True
 except Exception:
     _AUDIO_BACKEND_AVAILABLE = False
@@ -39,8 +41,12 @@ def list_asio_drivers() -> list[str]:
         return []
     try:
         result = subprocess.run(
-            [str(bridge), "--list"], capture_output=True, text=True,
-            encoding="utf-8", timeout=4, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            [str(bridge), "--list"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=4,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         payload = json.loads(result.stdout.strip().splitlines()[-1])
         drivers = payload.get("drivers", [])
@@ -96,7 +102,9 @@ def _matching_asio_device_index(driver_name: str | None, kind: str) -> int | Non
 
 
 def preferred_input_device(
-    device_id: int | None, driver: str = "auto", asio_driver_name: str | None = None,
+    device_id: int | None,
+    driver: str = "auto",
+    asio_driver_name: str | None = None,
 ) -> int | None:
     if device_id is not None:
         return _preferred_device_index(device_id, "input")
@@ -125,7 +133,9 @@ def _is_wasapi_device(device: dict) -> bool:
 
 
 def preferred_output_device(
-    input_device_id: int | None = None, driver: str = "auto", output_device_id: int | None = None,
+    input_device_id: int | None = None,
+    driver: str = "auto",
+    output_device_id: int | None = None,
     asio_driver_name: str | None = None,
 ) -> int | None:
     if output_device_id is not None:
@@ -153,14 +163,16 @@ def list_input_devices() -> list[dict]:
     for idx, dev in enumerate(devices):
         if dev.get("max_input_channels", 0) > 0:
             host_api = _host_api_name(dev)
-            result.append({
-                "index": idx,
-                "name": f"{dev.get('name', f'device-{idx}')} [{host_api}]",
-                "max_input_channels": dev.get("max_input_channels", 0),
-                "default_samplerate": dev.get("default_samplerate"),
-                "host_api": host_api,
-                "is_asio": "asio" in host_api.lower(),
-            })
+            result.append(
+                {
+                    "index": idx,
+                    "name": f"{dev.get('name', f'device-{idx}')} [{host_api}]",
+                    "max_input_channels": dev.get("max_input_channels", 0),
+                    "default_samplerate": dev.get("default_samplerate"),
+                    "host_api": host_api,
+                    "is_asio": "asio" in host_api.lower(),
+                }
+            )
     return result
 
 
@@ -171,14 +183,16 @@ def list_output_devices() -> list[dict]:
     for idx, dev in enumerate(sd.query_devices()):
         if dev.get("max_output_channels", 0) > 0:
             host_api = _host_api_name(dev)
-            result.append({
-                "index": idx,
-                "name": f"{dev.get('name', f'device-{idx}')} [{host_api}]",
-                "max_output_channels": dev.get("max_output_channels", 0),
-                "default_samplerate": dev.get("default_samplerate"),
-                "host_api": host_api,
-                "is_asio": "asio" in host_api.lower(),
-            })
+            result.append(
+                {
+                    "index": idx,
+                    "name": f"{dev.get('name', f'device-{idx}')} [{host_api}]",
+                    "max_output_channels": dev.get("max_output_channels", 0),
+                    "default_samplerate": dev.get("default_samplerate"),
+                    "host_api": host_api,
+                    "is_asio": "asio" in host_api.lower(),
+                }
+            )
     return result
 
 
@@ -200,7 +214,8 @@ def get_settings(db: Session) -> models.AudioSettings:
         drivers = list_asio_drivers()
         if drivers:
             settings.asio_driver_name = next(
-                (name for name in drivers if "audient" in name.lower()), drivers[0],
+                (name for name in drivers if "audient" in name.lower()),
+                drivers[0],
             )
             settings.audio_driver = "asio"
             db.commit()
@@ -210,14 +225,22 @@ def get_settings(db: Session) -> models.AudioSettings:
 
 def update_settings(db: Session, patch: dict) -> models.AudioSettings:
     settings = _get_or_create_settings(db)
-    restart_monitor = settings.monitoring_enabled and bool(
-        {"input_device_id", "output_device_id", "volume", "audio_driver", "asio_driver_name", "buffer_size"}
-        & patch.keys()
-    )
+    restart_fields = {
+        "input_device_id",
+        "output_device_id",
+        "volume",
+        "audio_driver",
+        "asio_driver_name",
+        "buffer_size",
+    }
+    changed_fields: set[str] = set()
     for field, value in patch.items():
-        if field == "input_device_id" and value is None:
-            settings.input_device_id = None
-            settings.input_device_name = None
+        if field in {"input_device_id", "output_device_id"} and value is None:
+            if getattr(settings, field) is not None:
+                setattr(settings, field, None)
+                changed_fields.add(field)
+            if field == "input_device_id":
+                settings.input_device_name = None
             continue
         if value is None:
             continue
@@ -225,7 +248,9 @@ def update_settings(db: Session, patch: dict) -> models.AudioSettings:
             devices = sd.query_devices()
             if 0 <= value < len(devices):
                 settings.input_device_name = devices[value].get("name")
-        setattr(settings, field, value)
+        if getattr(settings, field) != value:
+            setattr(settings, field, value)
+            changed_fields.add(field)
     if settings.audio_driver not in {"auto", "asio"}:
         raise RuntimeError("Unsupported audio driver")
     if settings.audio_driver == "asio":
@@ -238,6 +263,7 @@ def update_settings(db: Session, patch: dict) -> models.AudioSettings:
     db.refresh(settings)
     # Saving an unrelated value must not close and reopen the native audio
     # stream. Besides being slow, some ASIO drivers reject quick reopen calls.
+    restart_monitor = settings.monitoring_enabled and bool(restart_fields & changed_fields)
     if restart_monitor:
         configure_monitoring(settings)
     return settings
@@ -279,7 +305,9 @@ def configure_monitoring(settings: models.AudioSettings) -> None:
 
     input_device_id = _preferred_device_index(settings.input_device_id, "input")
     output_device_id = preferred_output_device(
-        input_device_id, settings.audio_driver, settings.output_device_id,
+        input_device_id,
+        settings.audio_driver,
+        settings.output_device_id,
     )
     if settings.audio_driver == "asio" and output_device_id is None:
         raise RuntimeError("The selected ASIO device has no output channels")
@@ -313,10 +341,15 @@ def _start_asio_monitor(settings: models.AudioSettings) -> None:
     if settings.asio_driver_name not in drivers:
         raise RuntimeError("Selected ASIO driver is unavailable")
     command = [
-        str(bridge), "--driver", settings.asio_driver_name,
-        "--buffer-size", str(settings.buffer_size),
-        "--sample-rate", str(config.RECORDING_SAMPLE_RATE),
-        "--gain", str(max(0.0, min(4.0, settings.volume))),
+        str(bridge),
+        "--driver",
+        settings.asio_driver_name,
+        "--buffer-size",
+        str(settings.buffer_size),
+        "--sample-rate",
+        str(config.RECORDING_SAMPLE_RATE),
+        "--gain",
+        str(max(0.0, min(4.0, settings.volume))),
     ]
     _launch_monitor_process(command, cwd=bridge.parent)
 
@@ -329,7 +362,13 @@ def _start_monitor_worker(worker_options: dict) -> None:
             raise RuntimeError("The packaged audio-monitor worker is missing")
         command = [str(worker), "--config", json.dumps(worker_options)]
     else:
-        command = [sys.executable, "-m", "app.services.monitor_worker", "--config", json.dumps(worker_options)]
+        command = [
+            sys.executable,
+            "-m",
+            "app.services.monitor_worker",
+            "--config",
+            json.dumps(worker_options),
+        ]
     _launch_monitor_process(command, cwd=Path(config.BASE_DIR))
 
 
@@ -364,7 +403,9 @@ def _launch_monitor_process(command: list[str], *, cwd: Path) -> None:
             elif event == "level":
                 with _monitor_lock:
                     if _monitor_process is process:
-                        _monitor_signal.update({key: message[key] for key in _monitor_signal if key in message})
+                        _monitor_signal.update(
+                            {key: message[key] for key in _monitor_signal if key in message}
+                        )
             elif event == "error":
                 state["error"] = str(message.get("message") or "unknown audio worker error")
                 ready.set()
@@ -413,8 +454,11 @@ def check_signal_quality(
 
     sample_rate = 44100
     recording = sd.rec(
-        int(duration_sec * sample_rate), samplerate=sample_rate, channels=1,
-        device=device_id, dtype="float32",
+        int(duration_sec * sample_rate),
+        samplerate=sample_rate,
+        channels=1,
+        device=device_id,
+        dtype="float32",
     )
     sd.wait()
     samples = np.clip(recording.flatten() * max(0.0, min(4.0, gain)), -1.0, 1.0)

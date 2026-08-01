@@ -1,4 +1,5 @@
 """Управление песнями: добавление, чтение, изменение, удаление."""
+
 import re
 import shutil
 import unicodedata
@@ -9,6 +10,26 @@ from sqlalchemy.orm import Session
 import config
 import models
 import schemas
+
+
+def _ensure_path_within(path: Path, root: Path) -> Path:
+    """Resolve a persisted path and reject anything outside its owned folder."""
+    resolved_path = path.resolve()
+    resolved_root = root.resolve()
+    if resolved_path == resolved_root or resolved_root in resolved_path.parents:
+        return resolved_path
+    raise ValueError("Song file path is outside the application library")
+
+
+def resolve_source_path(song: models.Song) -> Path:
+    """Return the validated path to a song's original audio file."""
+    return _ensure_path_within(Path(song.source_path), config.FULL_SONGS_DIR)
+
+
+def resolve_output_dir(song: models.Song) -> Path:
+    """Return the validated directory that belongs to a song's generated data."""
+    path = Path(song.output_dir) if song.output_dir else config.SONG_OUTPUT_DIR / song.slug
+    return _ensure_path_within(path, config.SONG_OUTPUT_DIR)
 
 
 def slugify(title: str, fallback: str) -> str:
@@ -53,8 +74,15 @@ def create_song(db: Session, title: str, original_filename: str, file_bytes: byt
         status=models.SongStatus.PENDING,
     )
     db.add(song)
-    db.commit()
-    db.refresh(song)
+    try:
+        db.commit()
+        db.refresh(song)
+    except Exception:
+        # Do not leave an unreferenced original file when the database write
+        # fails (for example, after an interrupted disk/database operation).
+        db.rollback()
+        dest_path.unlink(missing_ok=True)
+        raise
     return song
 
 
@@ -78,13 +106,14 @@ def update_song(db: Session, song: models.Song, patch: schemas.SongUpdate) -> mo
 def delete_song(db: Session, song: models.Song) -> None:
     """Удаляет запись из БД и все файлы на диске (оригинал в full_songs/,
     папку результатов Song/<slug>/)."""
-    source = Path(song.source_path)
+    source = resolve_source_path(song)
+    output_dir = resolve_output_dir(song)
+    # Delete generated data first. If a file is locked, retain the database
+    # record and original source instead of reporting a misleading success.
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
     if source.exists():
         source.unlink()
-
-    output_dir = Path(song.output_dir) if song.output_dir else (config.SONG_OUTPUT_DIR / song.slug)
-    if output_dir.exists():
-        shutil.rmtree(output_dir, ignore_errors=True)
 
     db.delete(song)
     db.commit()

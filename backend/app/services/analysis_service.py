@@ -7,12 +7,13 @@
 остаётся той же самой, что использовалась при построении самой мелодии, и
 результаты гарантированно сопоставимы.
 """
+
 import json
 import statistics
 from pathlib import Path
 
 import models
-from app.services import ai_bridge
+from app.services import ai_bridge, song_service
 
 
 def _read_json(path: Path):
@@ -45,14 +46,18 @@ def _to_midi(value) -> int | None:
         octave = int(octave_part)
     except ValueError:
         return None
-    return (octave + 1) * 12 + names[letter] + (1 if accidental == "#" else -1 if accidental == "b" else 0)
+    return (
+        (octave + 1) * 12
+        + names[letter]
+        + (1 if accidental == "#" else -1 if accidental == "b" else 0)
+    )
 
 
 def analyze_recording(recording: models.Recording, song: models.Song) -> dict:
     if not song.output_dir:
         raise ValueError("Песня ещё не обработана — нет эталонной мелодии для сравнения")
 
-    out_dir = Path(song.output_dir)
+    out_dir = song_service.resolve_output_dir(song)
     reference_notes = _read_json(out_dir / "reference.json")
     structure = _read_json(out_dir / "structure.json")
     if reference_notes is None:
@@ -105,16 +110,21 @@ def _sections_breakdown(structure: list[dict], per_frame: list[dict]) -> list[di
         if in_section:
             avg_dev = round(statistics.mean(f["deviation_semitones"] for f in in_section), 3)
             hit_ratio = round(
-                sum(1 for f in in_section if f["deviation_semitones"] <= 0.5) / len(in_section) * 100, 1
+                sum(1 for f in in_section if f["deviation_semitones"] <= 0.5)
+                / len(in_section)
+                * 100,
+                1,
             )
         else:
             avg_dev = None
             hit_ratio = None
-        breakdown.append({
-            "label": section.get("label", section.get("name")),
-            "start": start,
-            "end": end,
-            "accuracy_percent": hit_ratio,
-            "mean_deviation_semitones": avg_dev,
-        })
+        breakdown.append(
+            {
+                "label": section.get("label", section.get("name")),
+                "start": start,
+                "end": end,
+                "accuracy_percent": hit_ratio,
+                "mean_deviation_semitones": avg_dev,
+            }
+        )
     return breakdown

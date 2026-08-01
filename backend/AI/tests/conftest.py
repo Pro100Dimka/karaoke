@@ -2,6 +2,7 @@
 Настройка путей для тестов: чтобы `import src...` работал при запуске
 pytest из корня AI/ или из папки tests/.
 """
+
 import sys
 from pathlib import Path
 

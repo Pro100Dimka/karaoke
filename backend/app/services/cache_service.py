@@ -3,12 +3,14 @@
 пост-обработка результатов AI (перевод тяжёлых wav в mp3, удаление
 промежуточных файлов после успешной сборки песни).
 """
+
 import shutil
 import subprocess
 from pathlib import Path
 
 import config
 import models
+from app.services import song_service
 from database import SessionLocal
 
 # Промежуточные артефакты AI-пайплайна, которые не нужны после того как
@@ -24,8 +26,14 @@ def _encode_mp3(wav_path: Path, mp3_path: Path) -> None:
     ffmpeg с libmp3lame."""
     subprocess.run(
         [
-            "ffmpeg", "-y", "-i", str(wav_path),
-            "-codec:a", "libmp3lame", "-qscale:a", "2",
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(wav_path),
+            "-codec:a",
+            "libmp3lame",
+            "-qscale:a",
+            "2",
             str(mp3_path),
         ],
         check=True,
@@ -100,7 +108,7 @@ def optimize_song_files(song_id: str) -> dict:
         if song is None or not song.output_dir:
             return {"song_id": song_id, "freed_bytes": 0, "freed_human": "0.0 B", "actions": []}
 
-        out_dir = Path(song.output_dir)
+        out_dir = song_service.resolve_output_dir(song)
         actions: list[str] = []
         freed = 0
 
@@ -129,6 +137,11 @@ def optimize_song_files(song_id: str) -> dict:
         song.optimized = True
         db.commit()
 
-        return {"song_id": song_id, "freed_bytes": freed, "freed_human": _human(freed), "actions": actions}
+        return {
+            "song_id": song_id,
+            "freed_bytes": freed,
+            "freed_human": _human(freed),
+            "actions": actions,
+        }
     finally:
         db.close()

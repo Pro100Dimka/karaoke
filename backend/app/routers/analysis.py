@@ -1,4 +1,5 @@
 """Анализ голоса: сравнение записи пользователя с эталонной мелодией."""
+
 import json
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -39,9 +40,11 @@ def run_analysis(recording_id: str, db: Session = Depends(get_db)):
     if song is None:
         raise HTTPException(status_code=404, detail="Песня для этой записи не найдена")
 
-    existing = db.query(models.AnalysisResult).filter(
-        models.AnalysisResult.recording_id == recording_id
-    ).first()
+    existing = (
+        db.query(models.AnalysisResult)
+        .filter(models.AnalysisResult.recording_id == recording_id)
+        .first()
+    )
     if existing is not None:
         return _to_out(existing)
 
@@ -50,7 +53,9 @@ def run_analysis(recording_id: str, db: Session = Depends(get_db)):
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    sections_json = json.dumps(analysis["sections"], ensure_ascii=False) if analysis["sections"] else None
+    sections_json = (
+        json.dumps(analysis["sections"], ensure_ascii=False) if analysis["sections"] else None
+    )
 
     result = models.AnalysisResult(
         recording_id=recording_id,
@@ -68,9 +73,11 @@ def run_analysis(recording_id: str, db: Session = Depends(get_db)):
         # example React StrictMode during development). The other request may
         # already have committed the unique recording result; return it.
         db.rollback()
-        existing_result = db.query(models.AnalysisResult).filter(
-            models.AnalysisResult.recording_id == recording_id
-        ).first()
+        existing_result = (
+            db.query(models.AnalysisResult)
+            .filter(models.AnalysisResult.recording_id == recording_id)
+            .first()
+        )
         if existing_result is None:
             raise
         result = existing_result
@@ -79,9 +86,11 @@ def run_analysis(recording_id: str, db: Session = Depends(get_db)):
 
 @router.get("/{recording_id}", response_model=schemas.AnalysisOut)
 def get_analysis(recording_id: str, db: Session = Depends(get_db)):
-    result = db.query(models.AnalysisResult).filter(
-        models.AnalysisResult.recording_id == recording_id
-    ).first()
+    result = (
+        db.query(models.AnalysisResult)
+        .filter(models.AnalysisResult.recording_id == recording_id)
+        .first()
+    )
     if result is None:
         raise HTTPException(status_code=404, detail="Анализ ещё не выполнялся для этой записи")
     return _to_out(result)
@@ -89,9 +98,11 @@ def get_analysis(recording_id: str, db: Session = Depends(get_db)):
 
 @router.get("/{recording_id}/accuracy")
 def get_accuracy(recording_id: str, db: Session = Depends(get_db)):
-    result = db.query(models.AnalysisResult).filter(
-        models.AnalysisResult.recording_id == recording_id
-    ).first()
+    result = (
+        db.query(models.AnalysisResult)
+        .filter(models.AnalysisResult.recording_id == recording_id)
+        .first()
+    )
     if result is None:
         raise HTTPException(status_code=404, detail="Анализ ещё не выполнялся для этой записи")
     return {"pitch_accuracy_percent": result.pitch_accuracy_percent}
@@ -99,9 +110,11 @@ def get_accuracy(recording_id: str, db: Session = Depends(get_db)):
 
 @router.get("/{recording_id}/deviation")
 def get_deviation(recording_id: str, db: Session = Depends(get_db)):
-    result = db.query(models.AnalysisResult).filter(
-        models.AnalysisResult.recording_id == recording_id
-    ).first()
+    result = (
+        db.query(models.AnalysisResult)
+        .filter(models.AnalysisResult.recording_id == recording_id)
+        .first()
+    )
     if result is None:
         raise HTTPException(status_code=404, detail="Анализ ещё не выполнялся для этой записи")
     return {"mean_deviation_semitones": result.mean_deviation_semitones}
@@ -109,9 +122,11 @@ def get_deviation(recording_id: str, db: Session = Depends(get_db)):
 
 @router.get("/{recording_id}/sections")
 def get_sections(recording_id: str, db: Session = Depends(get_db)):
-    result = db.query(models.AnalysisResult).filter(
-        models.AnalysisResult.recording_id == recording_id
-    ).first()
+    result = (
+        db.query(models.AnalysisResult)
+        .filter(models.AnalysisResult.recording_id == recording_id)
+        .first()
+    )
     if result is None:
         raise HTTPException(status_code=404, detail="Анализ ещё не выполнялся для этой записи")
     return {"sections": json.loads(result.sections_json) if result.sections_json else None}

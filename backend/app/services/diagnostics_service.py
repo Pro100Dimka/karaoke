@@ -1,4 +1,5 @@
 """Диагностика окружения: доступность ffmpeg/AI-моделей, версии, ошибки."""
+
 import platform
 import shutil
 import subprocess
@@ -15,6 +16,7 @@ def _ffmpeg_available() -> bool:
 def _demucs_available() -> bool:
     try:
         import demucs  # noqa: F401
+
         return True
     except Exception:
         return False
@@ -23,10 +25,12 @@ def _demucs_available() -> bool:
 def _whisper_available() -> bool:
     try:
         import whisper  # noqa: F401
+
         return True
     except Exception:
         try:
             import faster_whisper  # noqa: F401
+
             return True
         except Exception:
             return False
@@ -35,6 +39,7 @@ def _whisper_available() -> bool:
 def _torch_info() -> tuple[bool, bool, str | None]:
     try:
         import torch
+
         return True, torch.cuda.is_available(), torch.__version__
     except Exception:
         return False, False, None

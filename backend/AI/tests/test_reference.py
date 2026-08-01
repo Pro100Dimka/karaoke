@@ -2,6 +2,7 @@
 Тесты для build/reference.py — сегментации нот из pitch.json.
 Не требует librosa/torch — только json+collections, быстрые тесты.
 """
+
 import random
 
 from src.build.reference import (
@@ -33,12 +34,19 @@ def test_build_reference_ignores_single_frame_noise():
     for true_note in notes_true:
         note = true_note
         if random.random() < 0.15:
-            note = (random.choice(["F#3", "G#3", "A3", "F3"]) if true_note == "G3"
-                    else random.choice(["G#3", "A#3", "B3", "G3"]))
-        frames.append({
-            "time": round(t, 3), "note": note, "voiced": True,
-            "confidence": round(random.uniform(0.45, 0.9), 2),
-        })
+            note = (
+                random.choice(["F#3", "G#3", "A3", "F3"])
+                if true_note == "G3"
+                else random.choice(["G#3", "A#3", "B3", "G3"])
+            )
+        frames.append(
+            {
+                "time": round(t, 3),
+                "note": note,
+                "voiced": True,
+                "confidence": round(random.uniform(0.45, 0.9), 2),
+            }
+        )
         t += step
 
     notes = build_reference(frames)
@@ -54,8 +62,10 @@ def test_build_reference_empty_input():
 
 
 def test_build_reference_all_silence():
-    frames = [{"time": round(i * 0.01, 3), "note": None, "voiced": False, "confidence": 0.0}
-              for i in range(50)]
+    frames = [
+        {"time": round(i * 0.01, 3), "note": None, "voiced": False, "confidence": 0.0}
+        for i in range(50)
+    ]
     assert build_reference(frames) == []
 
 
@@ -65,7 +75,13 @@ def test_fix_octave_errors_removes_short_octave_blip():
     (полный пайплайн, как в build_reference: fix -> merge)."""
     notes = [
         {"note": "G3", "start": 0.0, "end": 1.0, "duration": 1.0, "confidence": 0.8},
-        {"note": "G4", "start": 1.0, "end": 1.05, "duration": 0.05, "confidence": 0.5},  # октавный сбой
+        {
+            "note": "G4",
+            "start": 1.0,
+            "end": 1.05,
+            "duration": 0.05,
+            "confidence": 0.5,
+        },  # октавный сбой
         {"note": "G3", "start": 1.05, "end": 2.0, "duration": 0.95, "confidence": 0.8},
     ]
     fixed = _merge_adjacent_same_notes(_fix_octave_errors(notes))
@@ -79,7 +95,13 @@ def test_fix_octave_errors_keeps_real_octave_jump():
     """Длинная нота на октаву выше (не блип) — не должна удаляться."""
     notes = [
         {"note": "G3", "start": 0.0, "end": 1.0, "duration": 1.0, "confidence": 0.8},
-        {"note": "G4", "start": 1.0, "end": 2.0, "duration": 1.0, "confidence": 0.8},  # реальный скачок
+        {
+            "note": "G4",
+            "start": 1.0,
+            "end": 2.0,
+            "duration": 1.0,
+            "confidence": 0.8,
+        },  # реальный скачок
         {"note": "G3", "start": 2.0, "end": 3.0, "duration": 1.0, "confidence": 0.8},
     ]
     fixed = _fix_octave_errors(notes)

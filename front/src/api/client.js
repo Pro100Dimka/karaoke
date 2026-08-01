@@ -9,7 +9,10 @@ async function request(path, options = {}) {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...requestOptions,
     body,
-    headers: body instanceof FormData
+    // Content-Type is only needed for a JSON payload. Sending it with every
+    // GET/empty POST is redundant and may cause an unnecessary CORS preflight
+    // when the backend is configured on another local address.
+    headers: body instanceof FormData || body == null
       ? headers
       : { "Content-Type": "application/json", ...headers },
   });
@@ -24,7 +27,11 @@ async function request(path, options = {}) {
     throw new Error(detail);
   }
   if (res.status === 204) return null;
-  return res.json();
+
+  // A few control endpoints may legitimately acknowledge a request without a
+  // body. Treat an empty success response as `null` instead of a JSON error.
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
 }
 
 export const api = {
@@ -106,10 +113,7 @@ export const api = {
   startDirectMonitoring: () => request("/audio/direct-monitor/start", { method: "POST" }),
   stopDirectMonitoring: () => request("/audio/direct-monitor/stop", { method: "POST" }),
   releaseDirectMonitoring: () =>
-    fetch(`${BASE_URL}/audio/direct-monitor/stop`, {
-      method: "POST",
-      keepalive: true,
-    }).catch(() => {}),
+    request("/audio/direct-monitor/stop", { method: "POST", keepalive: true }).catch(() => null),
   getSignalQuality: () => request("/audio/signal-quality"),
 
   // Настройки программы

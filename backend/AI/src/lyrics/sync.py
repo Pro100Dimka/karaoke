@@ -15,6 +15,7 @@ vocals.wav + lyrics.txt -> lyricsSync.json
   "дрейфовать". Установка: pip install whisperx (бесплатно, open-source,
   требует ffmpeg и, как и обычный Whisper, PyTorch).
 """
+
 import argparse
 import ctypes
 import json
@@ -48,7 +49,10 @@ def _faster_whisper_runtime() -> tuple[str, str]:
 
 
 def _transcribe_faster(
-    audio_path: str, language: str | None, device: str, compute_type: str,
+    audio_path: str,
+    language: str | None,
+    device: str,
+    compute_type: str,
 ) -> list:
     """Fast GPU transcription with native word timestamps and VAD."""
     from faster_whisper import WhisperModel
@@ -81,12 +85,14 @@ def _transcribe_faster(
         ]
         text = segment.text.strip()
         if text:
-            lines.append({
-                "text": text,
-                "start": round(float(segment.start), 3),
-                "end": round(float(segment.end), 3),
-                "words": words,
-            })
+            lines.append(
+                {
+                    "text": text,
+                    "start": round(float(segment.start), 3),
+                    "end": round(float(segment.end), 3),
+                    "words": words,
+                }
+            )
     return lines
 
 
@@ -103,8 +109,9 @@ def sync_with_faster_whisper(audio_path: str, language: str | None = None) -> li
         return _transcribe_faster(audio_path, language, "cpu", "int8")
 
 
-def sync_with_whisper(audio_path: str, model_size: str = "medium",
-                       language: str | None = None) -> list:
+def sync_with_whisper(
+    audio_path: str, model_size: str = "medium", language: str | None = None
+) -> list:
     import whisper
 
     model = whisper.load_model(model_size, download_root=str(whisper_dir()))
@@ -120,30 +127,34 @@ def sync_with_whisper(audio_path: str, model_size: str = "medium",
             }
             for w in segment.get("words", [])
         ]
-        lines.append({
-            "text": segment["text"].strip(),
-            "start": round(segment["start"], 3),
-            "end": round(segment["end"], 3),
-            "words": words,
-        })
+        lines.append(
+            {
+                "text": segment["text"].strip(),
+                "start": round(segment["start"], 3),
+                "end": round(segment["end"], 3),
+                "words": words,
+            }
+        )
     return lines
 
 
-def sync_with_whisperx(audio_path: str, model_size: str = "medium",
-                        language: str | None = None, device: str = "cpu") -> list:
+def sync_with_whisperx(
+    audio_path: str, model_size: str = "medium", language: str | None = None, device: str = "cpu"
+) -> list:
     """WhisperX: распознавание + отдельный forced-alignment проход."""
     import whisperx
 
     compute_type = "float16" if device == "cuda" else "float32"
-    model = whisperx.load_model(model_size, device, compute_type=compute_type,
-                                 language=language)
+    model = whisperx.load_model(model_size, device, compute_type=compute_type, language=language)
     audio = whisperx.load_audio(audio_path)
     result = model.transcribe(audio, language=language)
 
     align_model, metadata = whisperx.load_align_model(
-        language_code=result["language"], device=device)
-    result = whisperx.align(result["segments"], align_model, metadata,
-                             audio, device, return_char_alignments=False)
+        language_code=result["language"], device=device
+    )
+    result = whisperx.align(
+        result["segments"], align_model, metadata, audio, device, return_char_alignments=False
+    )
 
     lines = []
     for segment in result["segments"]:
@@ -155,17 +166,18 @@ def sync_with_whisperx(audio_path: str, model_size: str = "medium",
             }
             for w in segment.get("words", [])
         ]
-        lines.append({
-            "text": segment.get("text", "").strip(),
-            "start": round(segment.get("start", 0.0), 3),
-            "end": round(segment.get("end", 0.0), 3),
-            "words": words,
-        })
+        lines.append(
+            {
+                "text": segment.get("text", "").strip(),
+                "start": round(segment.get("start", 0.0), 3),
+                "end": round(segment.get("end", 0.0), 3),
+                "words": words,
+            }
+        )
     return lines
 
 
-def _sync_raw(audio_path: str, model_size: str, language: str | None,
-              engine: str) -> list:
+def _sync_raw(audio_path: str, model_size: str, language: str | None, engine: str) -> list:
     if engine in {"auto", "faster-whisper"}:
         device, _ = _faster_whisper_runtime()
         if device == "cuda":
@@ -182,17 +194,22 @@ def _sync_raw(audio_path: str, model_size: str, language: str | None,
         try:
             return sync_with_whisperx(audio_path, model_size, language)
         except ImportError:
-            print("whisperx не установлен — откатываюсь на whisper. "
-                  "Установить: pip install whisperx")
+            print(
+                "whisperx не установлен — откатываюсь на whisper. "
+                "Установить: pip install whisperx"
+            )
         except Exception as e:
             print(f"whisperx завершился с ошибкой ({e}) — откатываюсь на whisper.")
     return sync_with_whisper(audio_path, model_size, language)
 
 
-def sync_existing_lyrics_with_whisper(audio_path: str, lyrics_path: str,
-                                       model_size: str = "medium",
-                                       language: str | None = None,
-                                       engine: str = "auto") -> list:
+def sync_existing_lyrics_with_whisper(
+    audio_path: str,
+    lyrics_path: str,
+    model_size: str = "medium",
+    language: str | None = None,
+    engine: str = "auto",
+) -> list:
     """
     Если текст уже есть (из тегов/LRC) и нужно только выровнять его
     по времени — прогоняем распознавание+алаймент по аудио (даёт точные
@@ -216,18 +233,24 @@ def sync_existing_lyrics_with_whisper(audio_path: str, lyrics_path: str,
 def main():
     parser = argparse.ArgumentParser(description="Синхронизация текста песни с аудио")
     parser.add_argument("audio", help="vocals.wav")
-    parser.add_argument("--lyrics", default=None,
-                         help="lyrics.txt (если есть готовый текст для сверки)")
+    parser.add_argument(
+        "--lyrics", default=None, help="lyrics.txt (если есть готовый текст для сверки)"
+    )
     parser.add_argument("output", nargs="?", default="lyricsSync.json")
     parser.add_argument("--whisper-model", default="medium")
     parser.add_argument("--language", default=None)
-    parser.add_argument("--engine", default="whisper", choices=["whisper", "whisperx"],
-                         help="whisper (быстро) или whisperx (точнее, forced alignment)")
+    parser.add_argument(
+        "--engine",
+        default="whisper",
+        choices=["whisper", "whisperx"],
+        help="whisper (быстро) или whisperx (точнее, forced alignment)",
+    )
     args = parser.parse_args()
 
     if args.lyrics:
         lines = sync_existing_lyrics_with_whisper(
-            args.audio, args.lyrics, args.whisper_model, args.language, args.engine)
+            args.audio, args.lyrics, args.whisper_model, args.language, args.engine
+        )
     else:
         lines = _sync_raw(args.audio, args.whisper_model, args.language, args.engine)
 

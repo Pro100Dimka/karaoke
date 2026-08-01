@@ -1,5 +1,5 @@
 import { HashRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Cog, X } from "lucide-react";
 import { api } from "./api/client";
@@ -17,10 +17,25 @@ import About from "./pages/About";
 import { AppDialogProvider } from "./components/AppDialog";
 
 export default function App() {
+  useLayoutEffect(() => {
+    const savedTheme = window.localStorage.getItem("karaoke-theme");
+    document.documentElement.dataset.theme = savedTheme || "dark";
+  }, []);
+
   useEffect(() => {
-    api.getAppSettings().then((settings) => {
-      document.documentElement.dataset.theme = settings.theme || "dark";
-    }).catch(() => {});
+    let active = true;
+    api
+      .getAppSettings()
+      .then((settings) => {
+        if (!active) return;
+        const theme = settings.theme || "dark";
+        document.documentElement.dataset.theme = theme;
+        window.localStorage.setItem("karaoke-theme", theme);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
   }, []);
 
   return (

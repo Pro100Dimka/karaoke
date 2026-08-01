@@ -5,6 +5,7 @@ instrumental.wav -> music.json
 Рассчитывает: BPM, первую долю, темп, изменение темпа,
 размер (4/4, 3/4 ...), тональность, смену тональности.
 """
+
 import argparse
 import json
 
@@ -16,9 +17,12 @@ MINOR_PROFILE = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 
 NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
 
-def compute_boundary_chroma(chroma: np.ndarray, rms: np.ndarray,
-                             boundary_fraction: float = 0.05,
-                             energy_gate_ratio: float = 0.15) -> np.ndarray | None:
+def compute_boundary_chroma(
+    chroma: np.ndarray,
+    rms: np.ndarray,
+    boundary_fraction: float = 0.05,
+    energy_gate_ratio: float = 0.15,
+) -> np.ndarray | None:
     """
     ИСПРАВЛЕНО: раньше "граница" трека (первые+последние boundary_fraction
     кадров) усреднялась без учёта громкости. Если интро/аутро — это
@@ -49,8 +53,9 @@ def compute_boundary_chroma(chroma: np.ndarray, rms: np.ndarray,
     return chroma[:, idx].mean(axis=1)
 
 
-def compute_bass_chroma(y: np.ndarray, sr: int, cutoff_hz: float = 350.0,
-                         fmin_note: str = "C1", n_octaves: int = 3) -> np.ndarray | None:
+def compute_bass_chroma(
+    y: np.ndarray, sr: int, cutoff_hz: float = 350.0, fmin_note: str = "C1", n_octaves: int = 3
+) -> np.ndarray | None:
     """
     Хрома, посчитанная на НИЗКОЧАСТОТНОЙ (басовой) версии сигнала.
 
@@ -78,16 +83,21 @@ def compute_bass_chroma(y: np.ndarray, sr: int, cutoff_hz: float = 350.0,
     sos = butter(4, cutoff_hz, btype="low", fs=sr, output="sos")
     y_bass = sosfiltfilt(sos, y)
     chroma_bass = librosa.feature.chroma_cqt(
-        y=y_bass, sr=sr,
+        y=y_bass,
+        sr=sr,
         fmin=librosa.note_to_hz(fmin_note),
         n_octaves=n_octaves,
     )
     return chroma_bass.mean(axis=1)
 
 
-def estimate_key(chroma_mean: np.ndarray, boundary_chroma_mean: np.ndarray = None,
-                  boundary_weight: float = 1.5, bass_chroma_mean: np.ndarray = None,
-                  bass_weight: float = 2.0):
+def estimate_key(
+    chroma_mean: np.ndarray,
+    boundary_chroma_mean: np.ndarray = None,
+    boundary_weight: float = 1.5,
+    bass_chroma_mean: np.ndarray = None,
+    bass_weight: float = 2.0,
+):
     """
     Корреляция с профилями Krумhansl-Schmuckler -> лучшая тональность.
 
@@ -159,8 +169,7 @@ def fold_tempo(bpm: float, low: float = 70.0, high: float = 180.0) -> float:
     return folded
 
 
-def estimate_time_signature(onset_env: np.ndarray, sr: int, bpm: float,
-                             hop_length: int = 512):
+def estimate_time_signature(onset_env: np.ndarray, sr: int, bpm: float, hop_length: int = 512):
     """
     Более надёжная оценка размера такта через автокорреляцию onset-огибающей
     на лагах, кратных длительности такта для гипотез 3/4 и 4/4 (и бонусом
@@ -196,7 +205,7 @@ def estimate_time_signature(onset_env: np.ndarray, sr: int, bpm: float,
     def local_prominence(lag: int, half_window: int) -> float:
         """ac[lag] минус средний фон в окне вокруг lag (без самого пика)."""
         lo, hi = max(0, lag - half_window), min(len(ac), lag + half_window + 1)
-        window = np.concatenate([ac[lo:lag], ac[lag + 1:hi]])
+        window = np.concatenate([ac[lo:lag], ac[lag + 1 : hi]])
         baseline = float(np.mean(window)) if len(window) else 0.0
         return float(ac[lag]) - baseline
 
@@ -216,8 +225,11 @@ def estimate_time_signature(onset_env: np.ndarray, sr: int, bpm: float,
     # используется только для ВЫБОРА кандидата, чтобы не переписывать
     # смысл confidence в остальном пайплайне/отчёте
     best_group = candidates[best_label]
-    raw_vals = [ac[beat_period_frames * best_group * k] for k in (1, 2)
-                if beat_period_frames * best_group * k < len(ac)]
+    raw_vals = [
+        ac[beat_period_frames * best_group * k]
+        for k in (1, 2)
+        if beat_period_frames * best_group * k < len(ac)
+    ]
     confidence = float(np.mean(raw_vals) / ac0) if raw_vals else 0.0
     return best_label, confidence
 
@@ -253,9 +265,7 @@ def analyze_music(input_path: str, key_change_window_sec: float = 20.0):
     # boundary-хрома теперь фильтруется по громкости (compute_boundary_chroma),
     # чтобы тишина/шум на границах трека не перетягивала оценку тоники.
     chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
-    chroma_rms = librosa.feature.rms(
-        y=y, hop_length=512, frame_length=2048
-    )[0]
+    chroma_rms = librosa.feature.rms(y=y, hop_length=512, frame_length=2048)[0]
     if len(chroma_rms) != chroma.shape[1]:
         chroma_rms = np.interp(
             np.linspace(0, 1, chroma.shape[1]),
@@ -264,8 +274,9 @@ def analyze_music(input_path: str, key_change_window_sec: float = 20.0):
         )
     boundary_chroma = compute_boundary_chroma(chroma, chroma_rms)
     bass_chroma = compute_bass_chroma(y, sr)
-    key, confidence, key_top3 = estimate_key(chroma.mean(axis=1), boundary_chroma,
-                                              bass_chroma_mean=bass_chroma)
+    key, confidence, key_top3 = estimate_key(
+        chroma.mean(axis=1), boundary_chroma, bass_chroma_mean=bass_chroma
+    )
 
     # Смена тональности по окнам, со сглаживанием (гистерезисом): считаем
     # смену тональности подтверждённой, только если новое окно повторилось
@@ -276,12 +287,14 @@ def analyze_music(input_path: str, key_change_window_sec: float = 20.0):
     raw_windows = []
     hop = int(key_change_window_sec * sr)
     for start in range(0, len(y), hop):
-        segment = y[start:start + hop]
+        segment = y[start : start + hop]
         if len(segment) < sr:  # слишком коротко
             continue
         seg_chroma = librosa.feature.chroma_cqt(y=segment, sr=sr)
         seg_key, seg_conf, _ = estimate_key(seg_chroma.mean(axis=1))
-        raw_windows.append({"time": round(start / sr, 2), "key": seg_key, "confidence": round(seg_conf, 3)})
+        raw_windows.append(
+            {"time": round(start / sr, 2), "key": seg_key, "confidence": round(seg_conf, 3)}
+        )
 
     key_changes = []
     confirmed_key = None
@@ -293,11 +306,13 @@ def analyze_music(input_path: str, key_change_window_sec: float = 20.0):
             j += 1
         run_length = j - i
         if candidate != confirmed_key and run_length >= min_repeat:
-            key_changes.append({
-                "time": raw_windows[i]["time"],
-                "key": candidate,
-                "confidence": raw_windows[i]["confidence"],
-            })
+            key_changes.append(
+                {
+                    "time": raw_windows[i]["time"],
+                    "key": candidate,
+                    "confidence": raw_windows[i]["confidence"],
+                }
+            )
             confirmed_key = candidate
         i = j
 
@@ -310,9 +325,7 @@ def analyze_music(input_path: str, key_change_window_sec: float = 20.0):
         "time_signature_confidence": round(ts_confidence, 3),
         "key": key,
         "key_confidence": round(confidence, 3),
-        "key_candidates": [
-            {"key": k, "score": round(s, 3)} for s, k in key_top3
-        ],
+        "key_candidates": [{"key": k, "score": round(s, 3)} for s, k in key_top3],
         "key_changes": key_changes,
     }
     return result
@@ -328,8 +341,11 @@ def main():
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
     print(f"Сохранено: {args.output}")
-    print(json.dumps({k: v for k, v in result.items() if k != "tempo_curve"},
-                      ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            {k: v for k, v in result.items() if k != "tempo_curve"}, ensure_ascii=False, indent=2
+        )
+    )
 
 
 if __name__ == "__main__":

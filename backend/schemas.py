@@ -8,7 +8,7 @@ Pydantic-схемы: тела запросов/ответов API.
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from models import SongStatus
 
@@ -60,8 +60,33 @@ class SongUpdate(BaseModel):
     show_notes: bool | None = None
 
 
+class LyricWord(BaseModel):
+    word: str = Field(max_length=512)
+    start: float = Field(ge=0)
+    end: float = Field(ge=0)
+
+    @model_validator(mode="after")
+    def validate_time_range(self) -> "LyricWord":
+        if self.end < self.start:
+            raise ValueError("Word end time must not be earlier than its start time")
+        return self
+
+
+class LyricLine(BaseModel):
+    text: str = Field(max_length=4_000)
+    start: float = Field(ge=0)
+    end: float = Field(ge=0)
+    words: list[LyricWord] = Field(default_factory=list, max_length=1_000)
+
+    @model_validator(mode="after")
+    def validate_time_range(self) -> "LyricLine":
+        if self.end < self.start:
+            raise ValueError("Line end time must not be earlier than its start time")
+        return self
+
+
 class LyricsUpdate(BaseModel):
-    lyrics: Any
+    lyrics: list[LyricLine] = Field(max_length=10_000)
 
 
 class ProcessingStatusOut(BaseModel):

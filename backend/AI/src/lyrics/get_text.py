@@ -8,6 +8,7 @@ song.mp3 / vocals.wav -> lyrics.txt
 3. Распознавание речи через Whisper (если ничего не найдено).
 4. Текст, введённый вручную.
 """
+
 import argparse
 import re
 from pathlib import Path
@@ -43,23 +44,28 @@ def from_lrc_file(audio_path: str) -> str | None:
     if lrc_path.exists():
         raw = lrc_path.read_text(encoding="utf-8")
         # убираем временные метки [mm:ss.xx]
-        lines = [re.sub(r"\[\d{2}:\d{2}(\.\d{2,3})?\]", "", line).strip()
-                 for line in raw.splitlines()]
+        lines = [
+            re.sub(r"\[\d{2}:\d{2}(\.\d{2,3})?\]", "", line).strip() for line in raw.splitlines()
+        ]
         return "\n".join(line for line in lines if line)
     return None
 
 
 def from_whisper(audio_path: str, model_size: str = "medium", language: str | None = None) -> str:
     import whisper  # openai-whisper
+
     model = whisper.load_model(model_size, download_root=str(whisper_dir()))
     result = model.transcribe(audio_path, language=language)
     return result["text"].strip()
 
 
-def get_lyrics(audio_path: str, whisper_model: str = "medium",
-                language: str | None = None,
-                whisper_audio_path: str | None = None,
-                transcribe_if_missing: bool = True) -> tuple[str, str]:
+def get_lyrics(
+    audio_path: str,
+    whisper_model: str = "medium",
+    language: str | None = None,
+    whisper_audio_path: str | None = None,
+    transcribe_if_missing: bool = True,
+) -> tuple[str, str]:
     """
     Возвращает (текст, источник).
 
@@ -89,16 +95,21 @@ def main():
     parser = argparse.ArgumentParser(description="Получение текста песни")
     parser.add_argument("input", help="song.mp3 (для проверки ID3-тегов/.lrc)")
     parser.add_argument("output", nargs="?", default="lyrics.txt")
-    parser.add_argument("--whisper-audio", default=None,
-                         help="vocals.wav — использовать для Whisper-фолбэка вместо "
-                              "полного микса, если теги/lrc не найдены (рекомендуется)")
-    parser.add_argument("--whisper-model", default="medium",
-                         choices=["tiny", "base", "small", "medium", "large"])
+    parser.add_argument(
+        "--whisper-audio",
+        default=None,
+        help="vocals.wav — использовать для Whisper-фолбэка вместо "
+        "полного микса, если теги/lrc не найдены (рекомендуется)",
+    )
+    parser.add_argument(
+        "--whisper-model", default="medium", choices=["tiny", "base", "small", "medium", "large"]
+    )
     parser.add_argument("--language", default=None, help="код языка, напр. ru, en")
     args = parser.parse_args()
 
-    text, source = get_lyrics(args.input, args.whisper_model, args.language,
-                               whisper_audio_path=args.whisper_audio)
+    text, source = get_lyrics(
+        args.input, args.whisper_model, args.language, whisper_audio_path=args.whisper_audio
+    )
 
     Path(args.output).write_text(text, encoding="utf-8")
     print(f"Источник текста: {source}")

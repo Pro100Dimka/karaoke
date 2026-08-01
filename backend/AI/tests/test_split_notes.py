@@ -2,6 +2,7 @@
 Тесты для syllabify.py и split_notes.py. Не требует librosa/torch —
 только json+stdlib, как и test_reference.py.
 """
+
 from src.build.split_notes import (
     fill_gaps_during_active_singing,
     split_notes_by_syllables,
@@ -22,8 +23,9 @@ def _flat_loudness_frames(t0, t1, step=0.01, loudness=-6.0):
     return frames
 
 
-def _frames_with_dip(t0, t1, dip_center, dip_half_width=0.06, step=0.01,
-                      base_loudness=-6.0, dip_loudness=-15.0):
+def _frames_with_dip(
+    t0, t1, dip_center, dip_half_width=0.06, step=0.01, base_loudness=-6.0, dip_loudness=-15.0
+):
     """Синтетические кадры pitch.json: ровная громкость с одним настоящим
     провалом вокруг dip_center (имитация согласной/повторной атаки)."""
     frames = _flat_loudness_frames(t0, t1, step, base_loudness)
@@ -59,8 +61,12 @@ def test_split_word_span_proportional():
 def test_build_syllable_spans_skips_lines_without_words():
     lines = [
         {"text": "без слов", "start": 0.0, "end": 1.0},  # нет "words" -> пропускается
-        {"text": "город", "start": 1.0, "end": 2.0,
-         "words": [{"word": "город", "start": 1.0, "end": 2.0}]},
+        {
+            "text": "город",
+            "start": 1.0,
+            "end": 2.0,
+            "words": [{"word": "город", "start": 1.0, "end": 2.0}],
+        },
     ]
     spans = build_syllable_spans(lines)
     assert [s["text"] for s in spans] == ["го", "род"]
@@ -73,14 +79,20 @@ def test_split_notes_by_syllables_prefers_real_word_boundaries():
     5 нот той же высоты, все кроме первой помечены retrigger.
     """
     notes = [{"note": "G3", "start": 0.0, "end": 3.0, "duration": 3.0, "confidence": 0.8}]
-    lyrics_lines = [{
-        "text": "широкий город", "start": 0.0, "end": 3.0,
-        "words": [
-            {"word": "широкий", "start": 0.0, "end": 1.5},
-            {"word": "город", "start": 1.5, "end": 3.0},
-        ],
-    }]
-    split = split_notes_by_syllables(notes, lyrics_lines, min_segment_duration=0.1, retrigger_gap=0.02)
+    lyrics_lines = [
+        {
+            "text": "широкий город",
+            "start": 0.0,
+            "end": 3.0,
+            "words": [
+                {"word": "широкий", "start": 0.0, "end": 1.5},
+                {"word": "город", "start": 1.5, "end": 3.0},
+            ],
+        }
+    ]
+    split = split_notes_by_syllables(
+        notes, lyrics_lines, min_segment_duration=0.1, retrigger_gap=0.02
+    )
 
     assert len(split) == 2, f"expected two word-aligned notes, got {len(split)}: {split}"
     assert all(n["note"] == "G3" for n in split)
@@ -97,23 +109,33 @@ def test_split_notes_by_syllables_prefers_real_word_boundaries():
 def test_split_notes_leaves_short_note_untouched():
     """Нота короче порога сегмента не должна дробиться даже при наличии слогов внутри."""
     notes = [{"note": "A4", "start": 0.0, "end": 0.15, "duration": 0.15, "confidence": 0.9}]
-    lyrics_lines = [{
-        "text": "да", "start": 0.0, "end": 0.15,
-        "words": [{"word": "да", "start": 0.0, "end": 0.15}],
-    }]
-    split = split_notes_by_syllables(notes, lyrics_lines, min_segment_duration=0.12, retrigger_gap=0.02)
+    lyrics_lines = [
+        {
+            "text": "да",
+            "start": 0.0,
+            "end": 0.15,
+            "words": [{"word": "да", "start": 0.0, "end": 0.15}],
+        }
+    ]
+    split = split_notes_by_syllables(
+        notes, lyrics_lines, min_segment_duration=0.12, retrigger_gap=0.02
+    )
     assert split == notes
 
 
 def test_split_notes_is_idempotent():
     notes = [{"note": "G3", "start": 0.0, "end": 3.0, "duration": 3.0, "confidence": 0.8}]
-    lyrics_lines = [{
-        "text": "широкий город", "start": 0.0, "end": 3.0,
-        "words": [
-            {"word": "широкий", "start": 0.0, "end": 1.5},
-            {"word": "город", "start": 1.5, "end": 3.0},
-        ],
-    }]
+    lyrics_lines = [
+        {
+            "text": "широкий город",
+            "start": 0.0,
+            "end": 3.0,
+            "words": [
+                {"word": "широкий", "start": 0.0, "end": 1.5},
+                {"word": "город", "start": 1.5, "end": 3.0},
+            ],
+        }
+    ]
     once = split_notes_by_syllables(notes, lyrics_lines)
     twice = split_notes_by_syllables(once, lyrics_lines)
     assert once == twice
@@ -128,13 +150,29 @@ def test_build_midi_does_not_remerge_retriggered_syllable_notes():
     """
     notes = [
         {"note": "G3", "start": 0.0, "end": 0.98, "duration": 0.98, "confidence": 0.8},
-        {"note": "G3", "start": 1.0, "end": 1.98, "duration": 0.98, "confidence": 0.8, "retrigger": True},
-        {"note": "G3", "start": 2.0, "end": 2.98, "duration": 0.98, "confidence": 0.8, "retrigger": True},
+        {
+            "note": "G3",
+            "start": 1.0,
+            "end": 1.98,
+            "duration": 0.98,
+            "confidence": 0.8,
+            "retrigger": True,
+        },
+        {
+            "note": "G3",
+            "start": 2.0,
+            "end": 2.98,
+            "duration": 0.98,
+            "confidence": 0.8,
+            "retrigger": True,
+        },
     ]
     try:
         from src.build.midi import build_midi
     except ImportError:
-        print("SKIP test_build_midi_does_not_remerge_retriggered_syllable_notes: pretty_midi не установлен")
+        print(
+            "SKIP test_build_midi_does_not_remerge_retriggered_syllable_notes: pretty_midi не установлен"
+        )
         return
     midi = build_midi(notes)
     assert len(midi.instruments[0].notes) == 3, "retrigger-ноты не должны склеиваться в одну"
@@ -146,17 +184,22 @@ def test_split_notes_acoustic_gate_splits_when_real_dip_present():
     снапается к самому провалу, а не к сырому таймингу Whisper (1.53,
     сдвинут на 30мс от реального провала на 1.5, как бывает у Whisper)."""
     notes = [{"note": "G3", "start": 0.0, "end": 3.0, "duration": 3.0, "confidence": 0.8}]
-    lyrics_lines = [{
-        "text": "молоко дома", "start": 0.0, "end": 3.0,
-        "words": [
-            {"word": "молоко", "start": 0.0, "end": 1.53},  # Whisper "неточен" тут
-            {"word": "дома", "start": 1.53, "end": 3.0},
-        ],
-    }]
+    lyrics_lines = [
+        {
+            "text": "молоко дома",
+            "start": 0.0,
+            "end": 3.0,
+            "words": [
+                {"word": "молоко", "start": 0.0, "end": 1.53},  # Whisper "неточен" тут
+                {"word": "дома", "start": 1.53, "end": 3.0},
+            ],
+        }
+    ]
     pitch_frames = _frames_with_dip(0.0, 3.0, dip_center=1.5)
 
-    split = split_notes_by_syllables(notes, lyrics_lines, pitch_frames,
-                                      min_segment_duration=0.3, retrigger_gap=0.02)
+    split = split_notes_by_syllables(
+        notes, lyrics_lines, pitch_frames, min_segment_duration=0.3, retrigger_gap=0.02
+    )
 
     assert len(split) == 2, f"ожидалось 2 ноты (один настоящий провал), получили: {split}"
     assert split[1].get("retrigger") is True
@@ -169,17 +212,22 @@ def test_split_notes_acoustic_gate_keeps_legato_note_whole():
     разбиваться, даже если по тексту там граница слога/слова — иначе
     получилась бы придуманная пауза, которой нет в записи ('каша')."""
     notes = [{"note": "G3", "start": 0.0, "end": 3.0, "duration": 3.0, "confidence": 0.8}]
-    lyrics_lines = [{
-        "text": "молоко дома", "start": 0.0, "end": 3.0,
-        "words": [
-            {"word": "молоко", "start": 0.0, "end": 1.5},
-            {"word": "дома", "start": 1.5, "end": 3.0},
-        ],
-    }]
+    lyrics_lines = [
+        {
+            "text": "молоко дома",
+            "start": 0.0,
+            "end": 3.0,
+            "words": [
+                {"word": "молоко", "start": 0.0, "end": 1.5},
+                {"word": "дома", "start": 1.5, "end": 3.0},
+            ],
+        }
+    ]
     pitch_frames = _flat_loudness_frames(0.0, 3.0)  # ни одного провала
 
-    split = split_notes_by_syllables(notes, lyrics_lines, pitch_frames,
-                                      min_segment_duration=0.3, retrigger_gap=0.02)
+    split = split_notes_by_syllables(
+        notes, lyrics_lines, pitch_frames, min_segment_duration=0.3, retrigger_gap=0.02
+    )
 
     assert len(split) == 1, f"легато не должно резаться без акустических доказательств: {split}"
     assert split == notes
@@ -194,10 +242,14 @@ def test_fill_gaps_during_active_singing_fills_detector_dropout():
         {"note": "G3", "start": 0.0, "end": 1.0, "duration": 1.0, "confidence": 0.8},
         {"note": "A3", "start": 1.2, "end": 2.0, "duration": 0.8, "confidence": 0.8},
     ]
-    lyrics_lines = [{
-        "text": "город дома", "start": 0.0, "end": 2.0,
-        "words": [{"word": "город дома", "start": 0.0, "end": 2.0}],  # поётся весь провал
-    }]
+    lyrics_lines = [
+        {
+            "text": "город дома",
+            "start": 0.0,
+            "end": 2.0,
+            "words": [{"word": "город дома", "start": 0.0, "end": 2.0}],  # поётся весь провал
+        }
+    ]
     pitch_frames = [
         {"time": round(t, 2), "note": "G#3"}  # ниже порога confidence, но высота была
         for t in [1.0, 1.05, 1.1, 1.15]
@@ -219,10 +271,14 @@ def test_fill_gaps_during_active_singing_leaves_real_unvoiced_gap():
         {"note": "G3", "start": 0.0, "end": 1.0, "duration": 1.0, "confidence": 0.8},
         {"note": "A3", "start": 1.2, "end": 2.0, "duration": 0.8, "confidence": 0.8},
     ]
-    lyrics_lines = [{
-        "text": "город дома", "start": 0.0, "end": 2.0,
-        "words": [{"word": "город дома", "start": 0.0, "end": 2.0}],
-    }]
+    lyrics_lines = [
+        {
+            "text": "город дома",
+            "start": 0.0,
+            "end": 2.0,
+            "words": [{"word": "город дома", "start": 0.0, "end": 2.0}],
+        }
+    ]
     pitch_frames = [{"time": round(t, 2), "note": None} for t in [1.0, 1.05, 1.1, 1.15]]
 
     filled = fill_gaps_during_active_singing(notes, lyrics_lines, pitch_frames)
@@ -238,11 +294,19 @@ def test_fill_gaps_during_active_singing_ignores_gap_during_real_pause():
         {"note": "A3", "start": 1.2, "end": 2.0, "duration": 0.8, "confidence": 0.8},
     ]
     lyrics_lines = [
-        {"text": "строка раз", "start": 0.0, "end": 1.0,
-         "words": [{"word": "строка раз", "start": 0.0, "end": 1.0}]},
+        {
+            "text": "строка раз",
+            "start": 0.0,
+            "end": 1.0,
+            "words": [{"word": "строка раз", "start": 0.0, "end": 1.0}],
+        },
         # следующая строка начинается только в 1.2 — пауза 1.0-1.2 реальна
-        {"text": "строка два", "start": 1.2, "end": 2.0,
-         "words": [{"word": "строка два", "start": 1.2, "end": 2.0}]},
+        {
+            "text": "строка два",
+            "start": 1.2,
+            "end": 2.0,
+            "words": [{"word": "строка два", "start": 1.2, "end": 2.0}],
+        },
     ]
     pitch_frames = [{"time": round(t, 2), "note": "G#3"} for t in [1.0, 1.05, 1.1, 1.15]]
 
@@ -269,4 +333,5 @@ def _run_all():
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(1 if _run_all() else 0)

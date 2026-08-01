@@ -1,4 +1,5 @@
 """Диагностика backend'а и AI-пайплайна."""
+
 from fastapi import APIRouter
 
 import schemas

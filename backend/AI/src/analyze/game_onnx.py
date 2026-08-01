@@ -49,21 +49,30 @@ def _extract_chunk(
     known = np.zeros(mask_t.shape, dtype=np.bool_)
     boundaries = known
     for step in range(8):
-        (boundaries,) = sessions["segmenter"].run(None, {
-            "x_seg": x_seg,
-            "language": np.asarray([language_id], dtype=np.int64),
-            "known_boundaries": known,
-            "prev_boundaries": boundaries,
-            "t": np.asarray([step / 8], dtype=np.float32),
-            "maskT": mask_t,
-            "threshold": np.asarray(0.2, dtype=np.float32),
-            "radius": np.asarray(2, dtype=np.int64),
-        })
+        (boundaries,) = sessions["segmenter"].run(
+            None,
+            {
+                "x_seg": x_seg,
+                "language": np.asarray([language_id], dtype=np.int64),
+                "known_boundaries": known,
+                "prev_boundaries": boundaries,
+                "t": np.asarray([step / 8], dtype=np.float32),
+                "maskT": mask_t,
+                "threshold": np.asarray(0.2, dtype=np.float32),
+                "radius": np.asarray(2, dtype=np.int64),
+            },
+        )
     durations, mask_n = sessions["bd2dur"].run(None, {"boundaries": boundaries, "maskT": mask_t})
-    presence, scores = sessions["estimator"].run(None, {
-        "x_est": x_est, "boundaries": boundaries, "maskT": mask_t, "maskN": mask_n,
-        "threshold": np.asarray(0.2, dtype=np.float32),
-    })
+    presence, scores = sessions["estimator"].run(
+        None,
+        {
+            "x_est": x_est,
+            "boundaries": boundaries,
+            "maskT": mask_t,
+            "maskN": mask_n,
+            "threshold": np.asarray(0.2, dtype=np.float32),
+        },
+    )
     notes, cursor = [], 0.0
     for note_duration, voiced, pitch, valid in zip(
         durations[0], presence[0], scores[0], mask_n[0], strict=False
@@ -83,13 +92,28 @@ def extract(audio_path: str | Path, model_dir: str | Path, language: str | None)
     rate = int(config["samplerate"])
     languages = config.get("languages") or {}
     language_id = int(languages.get(language, 0))
-    sessions = {name: _session(model_dir / f"{name}.onnx") for name in ("encoder", "segmenter", "bd2dur", "estimator")}
+    sessions = {
+        name: _session(model_dir / f"{name}.onnx")
+        for name in ("encoder", "segmenter", "bd2dur", "estimator")
+    }
     waveform, _ = librosa.load(audio_path, sr=rate, mono=True)
     notes: list[dict[str, float | int]] = []
     for start, end, core_start, core_end in _chunks(len(waveform), rate):
-        for onset, offset, pitch in _extract_chunk(waveform[start:end], rate, sessions, language_id):
+        for onset, offset, pitch in _extract_chunk(
+            waveform[start:end], rate, sessions, language_id
+        ):
             note_start, note_end = onset + start / rate, offset + start / rate
             midpoint = (note_start + note_end) / 2
             if core_start / rate <= midpoint < core_end / rate:
-                notes.append({"note": int(round(pitch)), "start": round(note_start, 3), "end": round(note_end, 3)})
-    return {"engine": "game-onnx", "provider": sessions["encoder"].get_providers()[0], "notes": notes}
+                notes.append(
+                    {
+                        "note": int(round(pitch)),
+                        "start": round(note_start, 3),
+                        "end": round(note_end, 3),
+                    }
+                )
+    return {
+        "engine": "game-onnx",
+        "provider": sessions["encoder"].get_providers()[0],
+        "notes": notes,
+    }

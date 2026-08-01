@@ -1,4 +1,4 @@
-import cosmicNebula from "./multi-nebulae-1.png";
+import cosmicNebula from "./multi-nebulae-1.webp";
 import arboretum from "./themes/arboretum.webp";
 import artistWorkshop from "./themes/artist_workshop.webp";
 import belfastFarmhouse from "./themes/belfast_farmhouse.webp";

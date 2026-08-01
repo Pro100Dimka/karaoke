@@ -50,7 +50,7 @@ def _remove_transient_outliers(notes: list[dict]) -> list[dict]:
     while changed:
         changed = False
         for index in range(1, len(result) - 1):
-            left, current, right = result[index - 1:index + 2]
+            left, current, right = result[index - 1 : index + 2]
             if current["duration"] > 0.24:
                 continue
             left_pitch = note_to_midi(left["note"])
@@ -67,10 +67,7 @@ def _remove_transient_outliers(notes: list[dict]) -> list[dict]:
                 # The removed event was only a pitch glitch between two
                 # touching instances of the same sustained note.  Joining
                 # them prevents a fake re-attack in the karaoke guide.
-                if (
-                    left["note"] == right["note"]
-                    and right["start"] - left["end"] <= 0.01
-                ):
+                if left["note"] == right["note"] and right["start"] - left["end"] <= 0.01:
                     left["end"] = right["end"]
                     left["duration"] = round(left["end"] - left["start"], 3)
                     del result[index]

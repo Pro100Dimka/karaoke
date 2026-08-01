@@ -35,7 +35,10 @@ export default function Settings() {
   if (!form) return <Panel title="Настройки программы"><p className="text-muted">Загружаем центр управления…</p></Panel>;
 
   const set = (field) => (value) => {
-    if (field === "theme") document.documentElement.dataset.theme = value;
+    if (field === "theme") {
+      document.documentElement.dataset.theme = value;
+      window.localStorage.setItem("karaoke-theme", value);
+    }
     setSaved(false);
     setForm((state) => ({ ...state, [field]: value }));
   };
@@ -92,7 +95,7 @@ export default function Settings() {
           {tab === "ai" && (
             <div className="settings-field-grid">
               <SettingField label="Модель Whisper" hint="Качество распознавания текста">
-                <Dropdown value={form.whisper_model} onChange={set("whisper_model")} options={["tiny", "base", "small", "medium", "large"].map((value) => ({ value, label: value }))} />
+                <Dropdown value={form.whisper_model} onChange={set("whisper_model")} options={["tiny", "base", "small", "medium", "large", "turbo", "large-v3-turbo"].map((value) => ({ value, label: value }))} />
               </SettingField>
               <SettingField label="Потоки CPU" hint="Больше потоков — быстрее обработка">
                 <input type="number" className="input" min={1} max={64} value={form.thread_count} onChange={(event) => set("thread_count")(Number(event.target.value))} />

@@ -5,6 +5,7 @@ song.mp3 -> songInfo.json
 Рассчитывает: длительность, формат, частоту дискретизации,
 количество каналов, битрейт.
 """
+
 import json
 import subprocess
 import sys
@@ -14,10 +15,13 @@ from pathlib import Path
 def probe_file(input_path: str) -> dict:
     """Использует ffprobe (часть ffmpeg) для получения метаданных аудио."""
     cmd = [
-        "ffprobe", "-v", "error",
+        "ffprobe",
+        "-v",
+        "error",
         "-show_entries",
         "format=duration,format_name,bit_rate:stream=sample_rate,channels,codec_name,bit_rate",
-        "-of", "json",
+        "-of",
+        "json",
         input_path,
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -49,9 +53,7 @@ def main():
 
     info = probe_file(input_path)
 
-    Path(output_path).write_text(
-        json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    Path(output_path).write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Сохранено: {output_path}")
     print(json.dumps(info, ensure_ascii=False, indent=2))
 

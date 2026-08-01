@@ -4,6 +4,7 @@
 Это чистый backend/API — без UI. Локальный React/Electron/Qt-фронтенд
 (добавится позже) будет стучаться сюда по http://127.0.0.1:8000.
 """
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI

@@ -28,15 +28,26 @@ export default function SongSettings() {
   useEffect(() => {
     if (!song || song.status !== "done") {
       setLyricsText("");
+      setLyricsData([]);
       return;
     }
-    api.getResult(song.id)
-.then((result) => {
+    let active = true;
+    api
+      .getResult(song.id)
+      .then((result) => {
+        if (!active) return;
         const lines = Array.isArray(result.lyrics_sync) ? result.lyrics_sync : [];
         setLyricsData(lines);
         setLyricsText(lines.map((line) => line.text || "").join("\n"));
       })
-      .catch(() => { setLyricsData([]); setLyricsText(""); });
+      .catch(() => {
+        if (!active) return;
+        setLyricsData([]);
+        setLyricsText("");
+      });
+    return () => {
+      active = false;
+    };
   }, [song?.id, song?.status]);
 
   if (!song || !form) {
@@ -74,7 +85,16 @@ export default function SongSettings() {
 
   const saveLyrics = async () => {
     try {
-      const textLines = lyricsText.split("\n").map((line) => line.trim()).filter(Boolean);
+      const textLines = lyricsText
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+      if (textLines.length > lyricsData.length) {
+        setLyricsError(
+          "Нельзя добавить новые строки без таймингов. Сначала добавьте их при обработке песни.",
+        );
+        return;
+      }
       const lyrics = lyricsData.map((line, index) => ({ ...line, text: textLines[index] || line.text }));
       await api.updateLyrics(song.id, lyrics);
       setLyricsData(lyrics);

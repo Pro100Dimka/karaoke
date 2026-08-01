@@ -574,11 +574,22 @@ export default function Karaoke({ onOpenAppSettings }) {
   }, [microphoneOpen]);
 
   useEffect(() => {
-    if (!song || song.status !== "done") return;
+    if (!song || song.status !== "done") {
+      setResult(null);
+      return undefined;
+    }
+    let active = true;
     api
       .getResult(song.id)
-      .then(setResult)
-      .catch(() => setResult(null));
+      .then((nextResult) => {
+        if (active) setResult(nextResult);
+      })
+      .catch(() => {
+        if (active) setResult(null);
+      });
+    return () => {
+      active = false;
+    };
   }, [song?.id, song?.status]);
 
   useEffect(() => {
@@ -781,7 +792,11 @@ export default function Karaoke({ onOpenAppSettings }) {
           context = new AudioContext({ latencyHint: "interactive" });
           ownsContext = true;
         }
-        if (cancelled) return;
+        if (cancelled) {
+          if (ownsStream) stream.getTracks().forEach((track) => track.stop());
+          if (ownsContext) context.close();
+          return;
+        }
         const analyser = context.createAnalyser();
         analyser.fftSize = 2048;
         analyser.smoothingTimeConstant = 0.2;
@@ -1631,11 +1646,13 @@ export default function Karaoke({ onOpenAppSettings }) {
                     volume: Number(event.currentTarget.value),
                   })
                 }
-                onBlur={(event) =>
-                  updateMicrophone({
-                    volume: Number(event.currentTarget.value),
-                  })
-                }
+                onKeyUp={(event) => {
+                  if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+                    updateMicrophone({
+                      volume: Number(event.currentTarget.value),
+                    });
+                  }
+                }}
               />
             </label>
             <label className="microphone-monitoring">

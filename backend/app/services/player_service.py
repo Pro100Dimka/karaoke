@@ -4,12 +4,14 @@
 разные части UI (текст, ноты, таймлайн) сверялись с одним источником
 правды, и отдаёт данные синхронизации, собранные AI-пайплайном.
 """
+
 import json
 from pathlib import Path
 
 from sqlalchemy.orm import Session
 
 import models
+from app.services import song_service
 
 
 def _read_json(path: Path):
@@ -24,7 +26,7 @@ def get_sync_data(song: models.Song) -> dict:
     во время воспроизведения: карту песни, текст с таймингами, ноты."""
     if not song.output_dir:
         return {}
-    out_dir = Path(song.output_dir)
+    out_dir = song_service.resolve_output_dir(song)
     return {
         "lyrics": _read_json(out_dir / "lyrics.json"),
         "structure": _read_json(out_dir / "structure.json"),
@@ -36,7 +38,7 @@ def get_sync_data(song: models.Song) -> dict:
 def get_timeline(song: models.Song) -> dict:
     if not song.output_dir:
         return {}
-    out_dir = Path(song.output_dir)
+    out_dir = song_service.resolve_output_dir(song)
     return {
         "structure": _read_json(out_dir / "structure.json"),
         "song_info": _read_json(out_dir / "songInfo.json"),

@@ -8,6 +8,8 @@ wav. Обе библиотеки — системные, требуют реал
 сервера при импорте (см. diagnostics_service, который сообщит об этом
 пользователю ещё до попытки записи).
 """
+
+import contextlib
 import queue
 import shutil
 import subprocess
@@ -18,11 +20,13 @@ from pathlib import Path
 
 import config
 import models
+from app.services import song_service
 from database import SessionLocal
 
 try:
     import sounddevice as sd
     import soundfile as sf
+
     _AUDIO_BACKEND_AVAILABLE = True
     _AUDIO_BACKEND_ERROR = None
 except Exception as exc:  # noqa: BLE001 — библиотека может быть не установлена или без PortAudio
@@ -31,10 +35,21 @@ except Exception as exc:  # noqa: BLE001 — библиотека может б�
 
 
 class RecordingSession:
-    def __init__(self, session_id: str, song_id: str, device_id: int | None,
-                 output_device_id: int | None, sample_rate: int, channels: int, gain: float,
-                 monitoring_enabled: bool, playback_offset_sec: float = 0, blocksize: int = 64,
-                 music_gain: float = 1.0, vocal_gain: float = 1.0):
+    def __init__(
+        self,
+        session_id: str,
+        song_id: str,
+        device_id: int | None,
+        output_device_id: int | None,
+        sample_rate: int,
+        channels: int,
+        gain: float,
+        monitoring_enabled: bool,
+        playback_offset_sec: float = 0,
+        blocksize: int = 64,
+        music_gain: float = 1.0,
+        vocal_gain: float = 1.0,
+    ):
         self.session_id = session_id
         self.song_id = song_id
         self.sample_rate = sample_rate
@@ -48,8 +63,11 @@ class RecordingSession:
             # Use the selected output, not Windows' default device.  With an
             # audio interface those can be different endpoints, which made a
             # live microphone disappear as soon as karaoke recording started.
-            output_info = sd.query_devices(output_device_id, kind="output") \
-                if output_device_id is not None else sd.query_devices(kind="output")
+            output_info = (
+                sd.query_devices(output_device_id, kind="output")
+                if output_device_id is not None
+                else sd.query_devices(kind="output")
+            )
             output_channels = min(2, int(output_info["max_output_channels"]))
             if output_channels < 1:
                 raise RuntimeError("No output device is available for microphone monitoring")
@@ -93,14 +111,21 @@ class RecordingSession:
     def resume(self) -> None:
         self._stream.start()
 
+    def close(self) -> None:
+        """Release the device after a failed start without writing a take."""
+        self._stream.close()
+
     def stop_and_save(self, out_path: Path) -> tuple[float, int]:
         self._stream.stop()
         self._stream.close()
         self._stopped.set()
 
         with sf.SoundFile(
-            str(out_path), mode="w", samplerate=self.sample_rate,
-            channels=self.channels, subtype="PCM_24",
+            str(out_path),
+            mode="w",
+            samplerate=self.sample_rate,
+            channels=self.channels,
+            subtype="PCM_24",
         ) as f:
             while not self._queue.empty():
                 chunk = self._queue.get_nowait()
@@ -119,22 +144,45 @@ def backend_available() -> tuple[bool, str | None]:
     return _AUDIO_BACKEND_AVAILABLE, _AUDIO_BACKEND_ERROR
 
 
-def start_recording(song_id: str, device_id: int | None = None,
-                     output_device_id: int | None = None,
-                     sample_rate: int = config.RECORDING_SAMPLE_RATE,
-                     channels: int = config.RECORDING_CHANNELS, gain: float = 1.0,
-                     monitoring_enabled: bool = False, playback_offset_sec: float = 0,
-                     blocksize: int = 64, music_gain: float = 1.0,
-                     vocal_gain: float = 1.0) -> str:
+def start_recording(
+    song_id: str,
+    device_id: int | None = None,
+    output_device_id: int | None = None,
+    sample_rate: int = config.RECORDING_SAMPLE_RATE,
+    channels: int = config.RECORDING_CHANNELS,
+    gain: float = 1.0,
+    monitoring_enabled: bool = False,
+    playback_offset_sec: float = 0,
+    blocksize: int = 64,
+    music_gain: float = 1.0,
+    vocal_gain: float = 1.0,
+) -> str:
     if not _AUDIO_BACKEND_AVAILABLE:
         raise RuntimeError(f"Аудио-бэкенд недоступен: {_AUDIO_BACKEND_ERROR}")
 
     session_id = uuid.uuid4().hex
-    session = RecordingSession(
-        session_id, song_id, device_id, output_device_id, sample_rate, channels, gain,
-        monitoring_enabled, playback_offset_sec, blocksize, music_gain, vocal_gain,
-    )
-    session.start()
+    session: RecordingSession | None = None
+    try:
+        session = RecordingSession(
+            session_id,
+            song_id,
+            device_id,
+            output_device_id,
+            sample_rate,
+            channels,
+            gain,
+            monitoring_enabled,
+            playback_offset_sec,
+            blocksize,
+            music_gain,
+            vocal_gain,
+        )
+        session.start()
+    except Exception as exc:  # Audio drivers raise implementation-specific errors.
+        if session is not None:
+            with contextlib.suppress(Exception):
+                session.close()
+        raise RuntimeError(f"Could not start recording stream: {exc}") from exc
     with _sessions_lock:
         _sessions[session_id] = session
     return session_id
@@ -168,27 +216,35 @@ def stop_recording(session_id: str) -> models.Recording:
         if song is None:
             raise ValueError(f"Песня {session.song_id} не найдена")
 
-        out_dir = Path(song.output_dir) / config.RECORDINGS_DIRNAME if song.output_dir \
-            else config.SONG_OUTPUT_DIR / song.slug / config.RECORDINGS_DIRNAME
+        out_dir = song_service.resolve_output_dir(song) / config.RECORDINGS_DIRNAME
         out_dir.mkdir(parents=True, exist_ok=True)
 
         filename = f"take-{uuid.uuid4().hex[:8]}.wav"
         out_path = out_dir / filename
-        duration_sec, sample_rate = session.stop_and_save(out_path)
-
-        recording = models.Recording(
-            song_id=song.id,
-            filename=filename,
-            path=str(out_path),
-            duration_sec=duration_sec,
-            sample_rate=sample_rate,
-        )
-        db.add(recording)
-        db.commit()
-        db.refresh(recording)
+        try:
+            duration_sec, sample_rate = session.stop_and_save(out_path)
+            recording = models.Recording(
+                song_id=song.id,
+                filename=filename,
+                path=str(out_path),
+                duration_sec=duration_sec,
+                sample_rate=sample_rate,
+            )
+            db.add(recording)
+            db.commit()
+            db.refresh(recording)
+        except Exception:
+            # Saving audio and its database record is one operation from the
+            # user's perspective. Remove a partial/orphaned take on failure.
+            db.rollback()
+            out_path.unlink(missing_ok=True)
+            raise
         _create_performance_mix(
-            recording, song, session.playback_offset_sec,
-            session.music_gain, session.vocal_gain,
+            recording,
+            song,
+            session.playback_offset_sec,
+            session.music_gain,
+            session.vocal_gain,
         )
         return recording
     finally:
@@ -210,20 +266,33 @@ def performance_mix_path(recording: models.Recording) -> Path:
 
 
 def _create_performance_mix(
-    recording: models.Recording, song: models.Song, offset_sec: float,
-    music_gain: float, vocal_gain: float,
+    recording: models.Recording,
+    song: models.Song,
+    offset_sec: float,
+    music_gain: float,
+    vocal_gain: float,
 ) -> None:
     """Create the take using the exact karaoke volumes active at Play."""
     ffmpeg = shutil.which("ffmpeg")
     if ffmpeg is None or not song.output_dir:
         return
-    song_dir = Path(song.output_dir)
-    instrumental = next((song_dir / f"instrumental{extension}" for extension in (".mp3", ".wav") if (song_dir / f"instrumental{extension}").is_file()), None)
+    song_dir = song_service.resolve_output_dir(song)
+    instrumental = next(
+        (
+            song_dir / f"instrumental{extension}"
+            for extension in (".mp3", ".wav")
+            if (song_dir / f"instrumental{extension}").is_file()
+        ),
+        None,
+    )
     if instrumental is None:
         return
     original_vocals = next(
-        (song_dir / f"vocals{extension}" for extension in (".mp3", ".wav")
-        if (song_dir / f"vocals{extension}").is_file()),
+        (
+            song_dir / f"vocals{extension}"
+            for extension in (".mp3", ".wav")
+            if (song_dir / f"vocals{extension}").is_file()
+        ),
         None,
     )
     destination = performance_mix_path(recording)
@@ -244,11 +313,20 @@ def _create_performance_mix(
         "alimiter=limit=0.95[mix]",
     )
     command = [
-        ffmpeg, "-y", *inputs,
-        "-t", f"{recording.duration_sec or 0:.3f}",
-        "-filter_complex", ";".join(filters),
-        "-map", "[mix]",
-        "-c:a", "libmp3lame", "-q:a", "2", str(destination),
+        ffmpeg,
+        "-y",
+        *inputs,
+        "-t",
+        f"{recording.duration_sec or 0:.3f}",
+        "-filter_complex",
+        ";".join(filters),
+        "-map",
+        "[mix]",
+        "-c:a",
+        "libmp3lame",
+        "-q:a",
+        "2",
+        str(destination),
     ]
     try:
         subprocess.run(command, capture_output=True, check=True, timeout=90)

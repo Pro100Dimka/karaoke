@@ -2,14 +2,14 @@
 Тесты для build/midi.py — квантизация нот под ритм-сетку.
 Требует pretty_midi (для импорта модуля, хотя тестируем чистую функцию).
 """
+
 from src.build.midi import quantize_notes
 
 
 def test_quantize_notes_snaps_toward_grid():
     # BPM=120 -> одна доля = 0.5 сек, 16-я доля = 0.125 сек
     notes = [{"note": "G3", "start": 0.51, "end": 1.02, "duration": 0.51, "confidence": 0.8}]
-    quantized = quantize_notes(notes, bpm=120.0, first_beat=0.0,
-                                division=16, strength=1.0)
+    quantized = quantize_notes(notes, bpm=120.0, first_beat=0.0, division=16, strength=1.0)
     # 0.51 должно притянуться к ближайшей 1/16 (0.5), 1.02 -> 1.0
     assert abs(quantized[0]["start"] - 0.5) < 1e-6
     assert abs(quantized[0]["end"] - 1.0) < 1e-6

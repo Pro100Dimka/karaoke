@@ -5,6 +5,7 @@ to take down the FastAPI process, so the microphone monitor deliberately runs
 in its own short-lived process.  It writes newline-delimited JSON telemetry to
 stdout; the API process owns lifecycle and exposes the last known level.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -43,11 +44,13 @@ def main() -> int:
             outdata[:, channel] = processed
         rms = float(np.sqrt(np.mean(np.square(processed)))) if len(processed) else 0.0
         peak = float(np.max(np.abs(processed))) if len(processed) else 0.0
-        _level.update({
-            "rms_db": round(20 * np.log10(rms) if rms > 0 else -120.0, 1),
-            "clipping": peak >= 0.99,
-            "silent": rms < 10 ** (-50 / 20),
-        })
+        _level.update(
+            {
+                "rms_db": round(20 * np.log10(rms) if rms > 0 else -120.0, 1),
+                "clipping": peak >= 0.99,
+                "silent": rms < 10 ** (-50 / 20),
+            }
+        )
 
     stream_options = {
         "samplerate": float(options["sample_rate"]),

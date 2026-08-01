@@ -1,38 +1,74 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
- * Периодически вызывает fetchFn и складывает результат в state.
- * Останавливается сама при размонтировании компонента.
+ * Fetches immediately, then repeats only after the preceding request settles.
+ * This avoids overlapping network calls when a local AI operation or an audio
+ * driver endpoint responds slower than its polling interval.
  */
 export function usePolling(fetchFn, intervalMs, deps = []) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
-  const timerRef = useRef(null);
+  const fetchRef = useRef(fetchFn);
+  const refreshRef = useRef(null);
 
   useEffect(() => {
-    let cancelled = false;
+    fetchRef.current = fetchFn;
+  }, [fetchFn]);
 
-    async function tick() {
+  useEffect(() => {
+    let active = true;
+    let timerId = null;
+    let inFlight = false;
+    const isHidden = () => document.visibilityState === "hidden";
+
+    const scheduleNext = () => {
+      if (
+        !active ||
+        isHidden() ||
+        !Number.isFinite(intervalMs) ||
+        intervalMs <= 0
+      )
+        return;
+      timerId = window.setTimeout(run, intervalMs);
+    };
+
+    const run = async () => {
+      if (!active || inFlight || isHidden()) return;
+      inFlight = true;
       try {
-        const result = await fetchFn();
-        if (!cancelled) {
+        const result = await fetchRef.current();
+        if (active) {
           setData(result);
           setError(null);
         }
-      } catch (err) {
-        if (!cancelled) setError(err);
+      } catch (requestError) {
+        if (active) setError(requestError);
+      } finally {
+        inFlight = false;
+        scheduleNext();
       }
-    }
+    };
 
-    tick();
-    timerRef.current = setInterval(tick, intervalMs);
+    refreshRef.current = run;
+    run();
+    const refreshWhenVisible = () => {
+      if (isHidden()) return;
+      if (timerId) window.clearTimeout(timerId);
+      timerId = null;
+      run();
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
 
     return () => {
-      cancelled = true;
-      clearInterval(timerRef.current);
+      active = false;
+      if (timerId) window.clearTimeout(timerId);
+      refreshRef.current = null;
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
+    // Callers provide a stable dependency list for the resource being polled.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [intervalMs, ...deps]);
 
-  return { data, error };
+  const refresh = useCallback(() => refreshRef.current?.(), []);
+  return { data, error, refresh };
 }

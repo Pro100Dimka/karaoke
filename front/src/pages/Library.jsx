@@ -144,7 +144,7 @@ export default function Library() {
       await notify("Папка ещё не создана — песня не обработана");
       return;
     }
-    window.electronAPI?.openPath(song.output_dir || "");
+    window.electronAPI?.openSongFolder(song.output_dir || "");
   }, [notify]);
 
   const handleDeleteRecording = useCallback(async (recording) => {

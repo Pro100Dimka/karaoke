@@ -48,6 +48,25 @@ def init_db() -> None:
             connection.execute(text("ALTER TABLE audio_settings ADD COLUMN buffer_size INTEGER DEFAULT 64"))
         if "output_device_id" not in audio_columns:
             connection.execute(text("ALTER TABLE audio_settings ADD COLUMN output_device_id INTEGER"))
+        # Background AI workers are in-process threads. They cannot survive a
+        # backend restart, so retaining PROCESSING/QUEUED would leave a song
+        # permanently locked in the UI. Make only those orphaned states
+        # actionable again; completed and pending library entries are intact.
+        connection.execute(
+            text(
+                "UPDATE songs "
+                "SET status = :cancelled, progress_step = :step, progress_percent = 0, "
+                "error_message = :message "
+                "WHERE status IN (:queued, :processing)"
+            ),
+            {
+                "cancelled": "CANCELLED",
+                "queued": "QUEUED",
+                "processing": "PROCESSING",
+                "step": "Interrupted",
+                "message": "Processing was interrupted by an application restart",
+            },
+        )
 
 
 def get_db():

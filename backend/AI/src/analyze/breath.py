@@ -13,6 +13,7 @@ top_db-порог на самой громкости путает тихое п�
 громкости, так что пересечение (voiced ИЛИ громко) даёт более честные
 границы фраз.
 """
+
 import argparse
 import json
 
@@ -20,8 +21,13 @@ import librosa
 import numpy as np
 
 
-def _estimate_adaptive_top_db(y: np.ndarray, sr: int, margin_db: float = 6.0,
-                               min_top_db: float = 20.0, max_top_db: float = 50.0) -> float:
+def _estimate_adaptive_top_db(
+    y: np.ndarray,
+    sr: int,
+    margin_db: float = 6.0,
+    min_top_db: float = 20.0,
+    max_top_db: float = 50.0,
+) -> float:
     """
     librosa.effects.split(top_db=X) считает силу X дБ ниже пикового
     уровня трека тишиной. Фиксированное число (например, 30 дБ) хорошо
@@ -92,10 +98,13 @@ def _union_intervals(a: list, b: list):
     return merged
 
 
-def analyze_breath(input_path: str, top_db: float = None,
-                    phrase_gap_sec: float = 0.6,
-                    breath_gap_sec: float = 0.15,
-                    pitch_frames: list = None):
+def analyze_breath(
+    input_path: str,
+    top_db: float = None,
+    phrase_gap_sec: float = 0.6,
+    breath_gap_sec: float = 0.15,
+    pitch_frames: list = None,
+):
     y, sr = librosa.load(input_path, sr=None, mono=True)
 
     if top_db is None:
@@ -118,18 +127,20 @@ def analyze_breath(input_path: str, top_db: float = None,
             continue
 
         if gap_duration >= phrase_gap_sec:
-            kind = "phrase_end"   # конец музыкальной фразы
+            kind = "phrase_end"  # конец музыкальной фразы
         elif gap_duration >= breath_gap_sec:
-            kind = "breath"       # вероятный вдох
+            kind = "breath"  # вероятный вдох
         else:
             kind = "micro_pause"  # микропауза внутри фразы
 
-        pauses.append({
-            "start": round(gap_start, 3),
-            "end": round(gap_end, 3),
-            "duration": round(gap_duration, 3),
-            "type": kind,
-        })
+        pauses.append(
+            {
+                "start": round(gap_start, 3),
+                "end": round(gap_end, 3),
+                "duration": round(gap_duration, 3),
+                "type": kind,
+            }
+        )
 
     phrases = [
         {"start": round(s, 3), "end": round(e, 3), "duration": round(e - s, 3)}
@@ -143,15 +154,21 @@ def main():
     parser = argparse.ArgumentParser(description="Анализ пауз/дыхания в вокальной дорожке")
     parser.add_argument("input", help="vocals.wav")
     parser.add_argument("output", nargs="?", default="breaths.json")
-    parser.add_argument("--top-db", type=float, default=None,
-                         help="порог тишины в дБ; по умолчанию считается "
-                              "автоматически из шумового пола трека")
-    parser.add_argument("--phrase-gap", type=float, default=0.6,
-                         help="пауза длиннее -> конец фразы, сек")
-    parser.add_argument("--breath-gap", type=float, default=0.15,
-                         help="пауза длиннее -> вероятный вдох, сек")
-    parser.add_argument("--pitch", default=None,
-                         help="pitch.json (шаг 5) — включает voiced-флаг в VAD")
+    parser.add_argument(
+        "--top-db",
+        type=float,
+        default=None,
+        help="порог тишины в дБ; по умолчанию считается " "автоматически из шумового пола трека",
+    )
+    parser.add_argument(
+        "--phrase-gap", type=float, default=0.6, help="пауза длиннее -> конец фразы, сек"
+    )
+    parser.add_argument(
+        "--breath-gap", type=float, default=0.15, help="пауза длиннее -> вероятный вдох, сек"
+    )
+    parser.add_argument(
+        "--pitch", default=None, help="pitch.json (шаг 5) — включает voiced-флаг в VAD"
+    )
     args = parser.parse_args()
 
     pitch_frames = None
@@ -159,8 +176,7 @@ def main():
         with open(args.pitch, encoding="utf-8") as f:
             pitch_frames = json.load(f)
 
-    result = analyze_breath(args.input, args.top_db, args.phrase_gap,
-                             args.breath_gap, pitch_frames)
+    result = analyze_breath(args.input, args.top_db, args.phrase_gap, args.breath_gap, pitch_frames)
 
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)

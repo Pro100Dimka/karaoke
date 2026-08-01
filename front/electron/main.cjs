@@ -19,6 +19,7 @@ let mainWindow = null;
 let backendProcess = null;
 let isQuitting = false;
 let backendRestartTimer = null;
+let backendStopRequested = false;
 
 function resolveBackendDir() {
   // В dev-режиме backend лежит рядом с проектом (../backend при обычной
@@ -32,8 +33,19 @@ function resolveBackendDir() {
   return path.join(process.resourcesPath, "backend");
 }
 
+function resolveSongOutputDir() {
+  if (isDev) return path.join(resolveBackendDir(), "Song");
+  return path.join(app.getPath("userData"), "backend-data", "Song");
+}
+
+function isPathInside(parentPath, candidatePath) {
+  const relativePath = path.relative(parentPath, candidatePath);
+  return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
+}
+
 function startBackend() {
   if (process.env.KARAOKE_BACKEND_EXTERNAL === "1") return;
+  backendStopRequested = false;
   const backendDir = resolveBackendDir();
   const backendCommand = isDev
     ? (process.env.KARAOKE_PYTHON || (process.platform === "win32" ? "python" : "python3"))
@@ -45,7 +57,10 @@ function startBackend() {
   try {
     backendProcess = spawn(backendCommand, backendArgs, {
       cwd: backendDir,
-      stdio: "ignore",
+      // Keep the packaged app quiet, but expose backend startup errors in the
+      // terminal launched by start-dev.bat. Otherwise a missing dependency or
+      // a port conflict looks like a frontend failure with no useful clue.
+      stdio: isDev ? "inherit" : "ignore",
       windowsHide: true,
       env: {
         ...process.env,
@@ -71,18 +86,41 @@ function startBackend() {
 }
 
 function stopBackend() {
+  if (backendStopRequested) return;
+  backendStopRequested = true;
   clearTimeout(backendRestartTimer);
-  // Release a monitor even when development uses an external backend.
+
+  const terminateBackend = () => {
+    if (backendProcess && !backendProcess.killed) {
+      backendProcess.kill();
+      backendProcess = null;
+    }
+  };
+
+  // Release the native audio worker before terminating Python. On Windows a
+  // direct child-process kill can otherwise leave an isolated monitor holding
+  // the microphone for a short time after the application has closed.
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    terminateBackend();
+  };
   const request = http.request(`${BACKEND_URL}/audio/direct-monitor/stop`, {
     method: "POST",
-    timeout: 500,
+    timeout: 450,
   });
-  request.on("error", () => {});
+  request.on("response", (response) => {
+    response.resume();
+    response.once("end", finish);
+  });
+  request.on("error", finish);
+  request.on("timeout", () => {
+    request.destroy();
+    finish();
+  });
   request.end();
-  if (backendProcess && !backendProcess.killed) {
-    backendProcess.kill();
-    backendProcess = null;
-  }
+  setTimeout(finish, 550);
 }
 
 function createWindow() {
@@ -118,7 +156,18 @@ ipcMain.handle("window:maximize", () => {
   else mainWindow.maximize();
 });
 ipcMain.handle("window:close", () => mainWindow?.close());
-ipcMain.handle("shell:openPath", (_event, targetPath) => shell.openPath(targetPath));
+ipcMain.handle("shell:openSongFolder", (_event, targetPath) => {
+  if (typeof targetPath !== "string" || !targetPath) {
+    return "A song folder was not provided.";
+  }
+
+  const songsDir = path.resolve(resolveSongOutputDir());
+  const folderPath = path.resolve(targetPath);
+  if (!isPathInside(songsDir, folderPath)) {
+    return "Opening folders outside the song library is not allowed.";
+  }
+  return shell.openPath(folderPath);
+});
 ipcMain.handle("backend:url", () => BACKEND_URL);
 
 app.whenReady().then(() => {

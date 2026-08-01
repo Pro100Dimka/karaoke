@@ -1,4 +1,5 @@
 """Запись голоса пользователя."""
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -39,17 +40,22 @@ def start_recording(body: schemas.RecordingStartRequest, db: Session = Depends(g
         else:
             audio_service.stop_monitoring()
         input_device_id = audio_service.preferred_input_device(
-            settings.input_device_id, settings.audio_driver, settings.asio_driver_name,
+            settings.input_device_id,
+            settings.audio_driver,
+            settings.asio_driver_name,
         )
         session_id = recording_service.start_recording(
             song_id=song.id,
             device_id=input_device_id,
             output_device_id=audio_service.preferred_output_device(
-                input_device_id, settings.audio_driver, settings.output_device_id,
+                input_device_id,
+                settings.audio_driver,
+                settings.output_device_id,
                 settings.asio_driver_name,
             ),
             sample_rate=audio_service.preferred_sample_rate(
-                input_device_id, settings.audio_driver,
+                input_device_id,
+                settings.audio_driver,
             ),
             gain=settings.volume,
             monitoring_enabled=not keep_native_monitor,
@@ -59,6 +65,13 @@ def start_recording(body: schemas.RecordingStartRequest, db: Session = Depends(g
             vocal_gain=body.vocal_volume,
         )
     except RuntimeError as exc:
+        # A temporary ASIO monitor is started for karaoke playback. If opening
+        # the recording stream fails, restore the persisted preference so the
+        # microphone does not remain audible without an active recording.
+        try:
+            audio_service.configure_monitoring(audio_service.get_settings(db))
+        except RuntimeError:
+            audio_service.stop_monitoring()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     return schemas.RecordingStartOut(recording_session_id=session_id, message="Запись начата")
@@ -90,6 +103,8 @@ def stop_recording(session_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not save recording: {exc}") from exc
     audio_service.configure_monitoring(audio_service.get_settings(db))
     return recording
 
@@ -114,7 +129,10 @@ def list_recording_library(db: Session = Depends(get_db)):
         .order_by(models.Recording.created_at.desc())
         .all()
     )
-    return [{**schemas.RecordingOut.model_validate(recording).model_dump(), "song_title": title} for recording, title in rows]
+    return [
+        {**schemas.RecordingOut.model_validate(recording).model_dump(), "song_title": title}
+        for recording, title in rows
+    ]
 
 
 @router.get("/{recording_id}", response_model=schemas.RecordingOut)

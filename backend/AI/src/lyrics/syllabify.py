@@ -43,7 +43,7 @@ def syllabify_word(word: str) -> list[str]:
         return [word] if word else []
 
     boundaries = [0] + [i + 1 for i in vowel_idx[:-1]] + [len(word)]
-    return [word[boundaries[i]:boundaries[i + 1]] for i in range(len(boundaries) - 1)]
+    return [word[boundaries[i] : boundaries[i + 1]] for i in range(len(boundaries) - 1)]
 
 
 def split_word_span_into_syllables(word: str, start: float, end: float) -> list[dict]:

@@ -1,4 +1,5 @@
 """Кэш и производительность."""
+
 from fastapi import APIRouter, HTTPException
 
 import schemas
@@ -33,5 +34,7 @@ def delete_temp():
 def optimize_song(song_id: str):
     result = cache_service.optimize_song_files(song_id)
     if not result["actions"] and result["freed_bytes"] == 0:
-        raise HTTPException(status_code=404, detail="Песня не найдена, не обработана или уже оптимизирована")
+        raise HTTPException(
+            status_code=404, detail="Песня не найдена, не обработана или уже оптимизирована"
+        )
     return result

@@ -93,9 +93,7 @@ def separate(
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Разделение вокала и инструментала"
-    )
+    parser = argparse.ArgumentParser(description="Разделение вокала и инструментала")
 
     parser.add_argument("input")
     parser.add_argument("--out", default="separated")

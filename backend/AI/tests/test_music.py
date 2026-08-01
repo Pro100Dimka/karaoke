@@ -2,6 +2,7 @@
 Тесты для analyze/music.py — коррекция октавной ошибки BPM.
 Требует librosa (для импорта модуля).
 """
+
 from src.analyze.music import fold_tempo
 
 

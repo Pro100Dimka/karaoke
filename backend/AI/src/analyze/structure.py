@@ -17,6 +17,7 @@ instrumental.wav (или song.wav) -> structure.json
 что именно куплет, а что припев, только группирует похожие по звучанию
 участки в один кластер.
 """
+
 import argparse
 import json
 
@@ -52,11 +53,13 @@ def segment_structure(input_path: str, n_segments: int = 6) -> list:
 
     sections = []
     for i in range(len(boundary_times) - 1):
-        sections.append({
-            "start": round(float(boundary_times[i]), 2),
-            "end": round(float(boundary_times[i + 1]), 2),
-            "label": labels[i],
-        })
+        sections.append(
+            {
+                "start": round(float(boundary_times[i]), 2),
+                "end": round(float(boundary_times[i + 1]), 2),
+                "label": labels[i],
+            }
+        )
     return sections
 
 
@@ -87,8 +90,9 @@ def main():
     parser = argparse.ArgumentParser(description="Автоматическая структурная сегментация песни")
     parser.add_argument("input", help="instrumental.wav или song.wav")
     parser.add_argument("output", nargs="?", default="structure.json")
-    parser.add_argument("--segments", type=int, default=6,
-                         help="ориентировочное число структурных блоков")
+    parser.add_argument(
+        "--segments", type=int, default=6, help="ориентировочное число структурных блоков"
+    )
     args = parser.parse_args()
 
     sections = segment_structure(args.input, args.segments)

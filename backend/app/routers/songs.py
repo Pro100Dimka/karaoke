@@ -1,4 +1,5 @@
 """Управление песнями + запуск AI-обработки."""
+
 import json
 from pathlib import Path
 
@@ -22,6 +23,16 @@ def _read_json(path: Path):
         return json.load(f)
 
 
+def _read_log_tail(path: Path, max_lines: int = 500, max_bytes: int = 1_000_000) -> list[str]:
+    """Read a bounded tail without loading an unbounded pipeline log into memory."""
+    with path.open("rb") as log_file:
+        log_file.seek(0, 2)
+        start = max(0, log_file.tell() - max_bytes)
+        log_file.seek(start)
+        content = log_file.read()
+    return content.decode("utf-8", errors="replace").splitlines()[-max_lines:]
+
+
 @router.post("", response_model=schemas.SongOut, status_code=201)
 async def add_song(
     file: UploadFile = File(...),
@@ -30,8 +41,7 @@ async def add_song(
 ):
     file_bytes = await file.read()
     try:
-        song = song_service.create_song(
-            db, title or "", file.filename or "song", file_bytes)
+        song = song_service.create_song(db, title or "", file.filename or "song", file_bytes)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return song
@@ -65,8 +75,12 @@ def remove_song(song_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Песня не найдена")
     if pipeline_service.is_processing(song_id):
         raise HTTPException(
-            status_code=409, detail="Песня сейчас обрабатывается, дождитесь завершения")
-    song_service.delete_song(db, song)
+            status_code=409, detail="Песня сейчас обрабатывается, дождитесь завершения"
+        )
+    try:
+        song_service.delete_song(db, song)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=f"Could not delete song files: {exc}") from exc
 
 
 @router.post("/{song_id}/process", response_model=schemas.ProcessingStatusOut, status_code=202)
@@ -84,8 +98,10 @@ def process_song(song_id: str, db: Session = Depends(get_db)):
     pipeline_service.start_processing(song_id)
     db.refresh(song)
     return schemas.ProcessingStatusOut(
-        song_id=song.id, status=song.status,
-        progress_step=song.progress_step, progress_percent=song.progress_percent,
+        song_id=song.id,
+        status=song.status,
+        progress_step=song.progress_step,
+        progress_percent=song.progress_percent,
         error_message=song.error_message,
     )
 
@@ -124,8 +140,10 @@ def get_status(song_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Песня не найдена")
     telemetry = pipeline_service.get_processing_telemetry(song_id)
     return schemas.ProcessingStatusOut(
-        song_id=song.id, status=song.status,
-        progress_step=song.progress_step, progress_percent=song.progress_percent,
+        song_id=song.id,
+        status=song.status,
+        progress_step=song.progress_step,
+        progress_percent=song.progress_percent,
         progress_detail=telemetry.get("progress_detail"),
         eta_seconds=telemetry.get("eta_seconds"),
         error_message=song.error_message,
@@ -154,10 +172,10 @@ def get_processing_log(song_id: str, db: Session = Depends(get_db)):
     song = song_service.get_song(db, song_id)
     if song is None:
         raise HTTPException(status_code=404, detail="Song not found")
-    log_path = config.SONG_OUTPUT_DIR / song.slug / config.LOGS_DIRNAME / "pipeline.log"
+    log_path = song_service.resolve_output_dir(song) / config.LOGS_DIRNAME / "pipeline.log"
     if not log_path.exists():
         return {"lines": []}
-    return {"lines": log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-500:]}
+    return {"lines": _read_log_tail(log_path)}
 
 
 @router.get("/{song_id}/audio/{track}")
@@ -167,7 +185,7 @@ def get_audio_track(song_id: str, track: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Song not found")
     if track not in {"instrumental", "vocals", "song"}:
         raise HTTPException(status_code=404, detail="Unknown audio track")
-    output_dir = Path(song.output_dir) if song.output_dir else config.SONG_OUTPUT_DIR / song.slug
+    output_dir = song_service.resolve_output_dir(song)
     for extension, media_type in ((".mp3", "audio/mpeg"), (".wav", "audio/wav")):
         candidate = output_dir / f"{track}{extension}"
         if candidate.is_file():
@@ -183,7 +201,7 @@ def get_result(song_id: str, db: Session = Depends(get_db)):
     if song.status != models.SongStatus.DONE or not song.output_dir:
         raise HTTPException(status_code=409, detail="Песня ещё не обработана")
 
-    out_dir = Path(song.output_dir)
+    out_dir = song_service.resolve_output_dir(song)
     return schemas.SongResultOut(
         song=schemas.SongOut.model_validate(song),
         music=_read_json(out_dir / "music.json"),
@@ -205,10 +223,13 @@ def update_lyrics(song_id: str, body: schemas.LyricsUpdate, db: Session = Depend
     if song.status != models.SongStatus.DONE or not song.output_dir:
         raise HTTPException(status_code=409, detail="Song has not been processed yet")
 
-    lyrics_path = Path(song.output_dir) / "lyrics.json"
+    lyrics_path = song_service.resolve_output_dir(song) / "lyrics.json"
     temporary_path = lyrics_path.with_suffix(".tmp")
     try:
-        temporary_path.write_text(json.dumps(body.lyrics, ensure_ascii=False, indent=2), encoding="utf-8")
+        temporary_path.write_text(
+            json.dumps([line.model_dump() for line in body.lyrics], ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
         temporary_path.replace(lyrics_path)
     except (OSError, TypeError, ValueError) as exc:
         temporary_path.unlink(missing_ok=True)
