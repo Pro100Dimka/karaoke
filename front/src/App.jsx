@@ -22,7 +22,11 @@ export default function App() {
     }).catch(() => {});
   }, []);
 
-  return <HashRouter><AppLayout /></HashRouter>;
+  return (
+    <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <AppLayout />
+    </HashRouter>
+  );
 }
 
 function AppLayout() {

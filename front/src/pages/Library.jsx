@@ -152,6 +152,21 @@ export default function Library() {
 
   return (
     <div className="library-page">
+      <div className="library-concert-backdrop" aria-hidden="true">
+        <i className="library-bg-vinyl library-bg-vinyl--one" />
+        <i className="library-bg-vinyl library-bg-vinyl--two" />
+        <i className="library-bg-cassette library-bg-cassette--one"><b /><b /></i>
+        <i className="library-bg-cassette library-bg-cassette--two"><b /><b /></i>
+        <i className="library-bg-cube library-bg-cube--one" />
+        <i className="library-bg-cube library-bg-cube--two" />
+        <i className="library-bg-sphere library-bg-sphere--one" />
+        <i className="library-bg-sphere library-bg-sphere--two" />
+        <i className="library-bg-ring library-bg-ring--one" />
+        <i className="library-bg-ring library-bg-ring--two" />
+        <div className="library-bg-notes">♪ ♫ ♪ ♬</div>
+        <div className="library-bg-pixel-rain">{Array.from({ length: 34 }, (_, index) => <i key={index} style={{ "--n": index }} />)}</div>
+        <div className="library-bg-eq">{Array.from({ length: 28 }, (_, index) => <i key={index} style={{ animationDelay: `${index * -110}ms` }} />)}</div>
+      </div>
       <section className="library-hero">
         <div className="library-hero-3d-scene" aria-hidden="true">
           <i className="library-hero-disc" />
@@ -233,7 +248,23 @@ export default function Library() {
             const isWorking = song.status === "processing" || song.status === "cancelling";
             const isReady = song.status === "done";
             return (
-              <article className={`library-song-card library-song-card--${song.status}`} key={`card-${song.id}`}>
+              <article
+                className={`library-song-card library-song-card--${song.status}`}
+                key={`card-${song.id}`}
+                onPointerMove={(event) => {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  const x = (event.clientX - rect.left) / rect.width - 0.5;
+                  const y = (event.clientY - rect.top) / rect.height - 0.5;
+                  event.currentTarget.style.setProperty("--tilt-x", `${-y * 7}deg`);
+                  event.currentTarget.style.setProperty("--tilt-y", `${x * 7}deg`);
+                  event.currentTarget.style.setProperty("--glow-x", `${(x + 0.5) * 100}%`);
+                  event.currentTarget.style.setProperty("--glow-y", `${(y + 0.5) * 100}%`);
+                }}
+                onPointerLeave={(event) => {
+                  event.currentTarget.style.removeProperty("--tilt-x");
+                  event.currentTarget.style.removeProperty("--tilt-y");
+                }}
+              >
                 <div className="library-song-card-art" aria-hidden="true">
                   <i className="library-card-vinyl" />
                   <i className="library-card-prism" />

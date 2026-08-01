@@ -22,6 +22,7 @@ import {
   Volume2,
   VolumeX,
   Trash2,
+  Trophy,
 } from "lucide-react";
 import { api } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
@@ -393,7 +394,9 @@ export default function Karaoke({ onOpenAppSettings }) {
   );
   const currentLine = lyrics[currentLineIndex];
   const upcomingLine = lyrics.find((line) => line.start > lyricTime);
-  const nextLine = currentLine ? lyrics[currentLineIndex + 1] : upcomingLine;
+  // Before a phrase starts, upcomingLine is already the large primary cue.
+  // Do not render it a second time as the "next" line underneath.
+  const nextLine = currentLine ? lyrics[currentLineIndex + 1] : null;
   const secondsUntilLyrics = upcomingLine
     ? Math.max(0, upcomingLine.start - lyricTime)
     : 0;
@@ -1005,6 +1008,24 @@ export default function Karaoke({ onOpenAppSettings }) {
         <i className="karaoke-atmosphere-orb karaoke-atmosphere-orb-secondary" />
         <i className="karaoke-atmosphere-grid" />
         <i className="karaoke-atmosphere-beam" />
+        <i className="karaoke-atmosphere-spotlight karaoke-atmosphere-spotlight--one" />
+        <i className="karaoke-atmosphere-spotlight karaoke-atmosphere-spotlight--two" />
+        <i className="karaoke-atmosphere-laser karaoke-atmosphere-laser--one" />
+        <i className="karaoke-atmosphere-laser karaoke-atmosphere-laser--two" />
+        <i className="karaoke-atmosphere-fog" />
+        <div className="karaoke-atmosphere-crowd">{Array.from({ length: 22 }, (_, index) => <i key={index} />)}</div>
+        <div className="karaoke-atmosphere-particles">
+          {Array.from({ length: 44 }, (_, index) => (
+            <i
+              key={index}
+              style={{
+                "--particle-x": `${(index * 17) % 96}%`,
+                "--particle-bottom": `${2 + ((index * 11) % 36)}%`,
+                "--particle-delay": `${index * -130}ms`,
+              }}
+            />
+          ))}
+        </div>
       </div>
 
       {microphoneOpen && (
@@ -1299,6 +1320,35 @@ export default function Karaoke({ onOpenAppSettings }) {
       )}
 
       <div className="karaoke-performance-stage">
+        <div
+          className={`karaoke-3d-flight ${isPlaying ? "is-playing" : ""} ${isPitchDetected ? "is-singing" : ""}`}
+          style={{
+            "--karaoke-beat": Number(song.tempo_override) > 0
+              ? `${60 / Number(song.tempo_override)}s`
+              : ".5s",
+          }}
+          aria-hidden="true"
+        >
+          <i className="karaoke-flight-road" />
+          <i className="karaoke-flight-horizon" />
+          <i className="karaoke-flight-ring karaoke-flight-ring--one" />
+          <i className="karaoke-flight-ring karaoke-flight-ring--two" />
+          <i className="karaoke-flight-crystal karaoke-flight-crystal--one" />
+          <i className="karaoke-flight-crystal karaoke-flight-crystal--two" />
+          <div className="karaoke-flight-cover">{song.title.slice(0, 1).toUpperCase()}</div>
+          <div className="karaoke-flight-stars">
+            {Array.from({ length: 36 }, (_, index) => (
+              <i
+                key={index}
+                style={{
+                  "--star-x": `${(index * 23) % 96}%`,
+                  "--star-y": `${(index * 13) % 92}%`,
+                  "--star-delay": `${index * -150}ms`,
+                }}
+              />
+            ))}
+          </div>
+        </div>
         {/* Piano-roll notes: visible pitch lanes make melody and intervals readable. */}
         {showNotes && notes.length > 0 && (
           <MelodyRoll
@@ -1609,6 +1659,11 @@ function PerformanceAnalysisModal({ recordingId, onClose, onDone, onDeleted }) {
       aria-label="Анализ выступления"
     >
       <section className="performance-analysis-modal">
+        <div className="analysis-victory-scene" aria-hidden="true">
+          <div className="analysis-trophy"><Trophy size={38} fill="currentColor" /></div>
+          <div className="analysis-crystal" />
+          <div className="analysis-confetti">{Array.from({ length: 26 }, (_, index) => <i key={index} style={{ "--j": index }} />)}</div>
+        </div>
         <button
           className="karaoke-settings-close"
           title="Закрыть"
@@ -2034,7 +2089,17 @@ function MelodyRoll({
           const noteWidth = Math.max(3, Math.min(width, x(n.end)) - noteX - 4);
           const noteY = y(n.midi + keyShift) + (rowHeight - noteHeight) / 2;
           return (
-            <g key={i} opacity={pastOpacity}>
+            <g key={i} opacity={pastOpacity} className={`melody-note-platform ${isCurrent ? "is-current" : ""} ${isHit ? "is-hit" : ""}`}>
+              <rect
+                x={noteX + 5}
+                y={noteY + Math.min(7, noteHeight / 2)}
+                width={Math.max(2, noteWidth - 2)}
+                height={noteHeight}
+                rx={Math.min(9, Math.max(3.5, noteHeight / 3))}
+                fill={isHit ? "rgba(22,163,74,.30)" : "rgba(8,11,24,.44)"}
+                stroke="rgba(255,255,255,.11)"
+                strokeWidth="1"
+              />
               <rect
                 x={noteX}
                 y={noteY}
@@ -2079,6 +2144,14 @@ function MelodyRoll({
         })}
         {Number.isFinite(indicatorMidi) && indicatorMidi >= minMidi - 1 && indicatorMidi <= maxMidi + 1 && (
           <g transform={`translate(${x(currentTime)} 0)`} opacity={hasLivePitch ? 1 : .38}>
+            <path
+              d={`M-88 ${indicatorY} C-58 ${indicatorY - 10}, -26 ${indicatorY + 10}, 0 ${indicatorY}`}
+              fill="none"
+              stroke={hasLivePitch ? (isInTune ? "rgba(134,239,172,.78)" : "rgba(249,168,212,.64)") : "rgba(219,234,254,.18)"}
+              strokeWidth="4"
+              strokeLinecap="round"
+              opacity=".7"
+            />
             <circle cy={indicatorY} r="14" fill={hasLivePitch ? (isInTune ? "rgba(34,197,94,.22)" : "rgba(244,114,182,.2)") : "rgba(219,234,254,.08)"} style={{ transition: isPitchAttacking ? "none" : "cy .11s linear" }} />
             <circle cy={indicatorY} r="7" fill={hasLivePitch ? (isInTune ? "#86efac" : "#f9a8d4") : "rgba(219,234,254,.14)"} stroke={hasLivePitch ? "#fff" : "rgba(255,255,255,.45)"} strokeWidth="2" style={{ transition: isPitchAttacking ? "none" : "cy .11s linear" }} />
           </g>
