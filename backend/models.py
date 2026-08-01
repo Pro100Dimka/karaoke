@@ -114,6 +114,8 @@ class AudioSettings(Base):
     volume: Mapped[float] = mapped_column(Float, default=1.0)
     sensitivity: Mapped[float] = mapped_column(Float, default=0.5)
     latency_ms: Mapped[int] = mapped_column(Integer, default=50)
+    audio_driver: Mapped[str] = mapped_column(String, default="auto")
+    buffer_size: Mapped[int] = mapped_column(Integer, default=64)
     monitoring_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow

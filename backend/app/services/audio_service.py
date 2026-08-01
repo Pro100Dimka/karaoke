@@ -3,6 +3,7 @@ import threading
 
 from sqlalchemy.orm import Session
 
+import config
 import models
 
 try:
@@ -30,8 +31,28 @@ def preferred_input_device(device_id: int | None) -> int | None:
     return _preferred_device_index(device_id, "input")
 
 
-def preferred_output_device(input_device_id: int | None = None) -> int | None:
+def _host_api_name(device: dict) -> str:
+    return str(sd.query_hostapis(device["hostapi"])["name"])
+
+
+def _is_asio_device(device: dict) -> bool:
+    return "asio" in _host_api_name(device).lower()
+
+
+def preferred_output_device(input_device_id: int | None = None, driver: str = "auto") -> int | None:
+    if not _AUDIO_BACKEND_AVAILABLE or driver != "asio" or input_device_id is None:
+        return None
+    device = sd.query_devices(input_device_id)
+    if _is_asio_device(device) and int(device.get("max_output_channels", 0)) > 0:
+        return input_device_id
     return None
+
+
+def preferred_sample_rate(input_device_id: int | None = None, driver: str = "auto") -> int:
+    if _AUDIO_BACKEND_AVAILABLE and driver == "asio" and input_device_id is not None:
+        device = sd.query_devices(input_device_id)
+        return int(round(float(device["default_samplerate"])))
+    return config.RECORDING_SAMPLE_RATE
 
 
 def list_input_devices() -> list[dict]:
@@ -41,12 +62,14 @@ def list_input_devices() -> list[dict]:
     result = []
     for idx, dev in enumerate(devices):
         if dev.get("max_input_channels", 0) > 0:
-            host_api = sd.query_hostapis(dev["hostapi"])["name"]
+            host_api = _host_api_name(dev)
             result.append({
                 "index": idx,
                 "name": f"{dev.get('name', f'device-{idx}')} [{host_api}]",
                 "max_input_channels": dev.get("max_input_channels", 0),
                 "default_samplerate": dev.get("default_samplerate"),
+                "host_api": host_api,
+                "is_asio": "asio" in host_api.lower(),
             })
     return result
 
@@ -79,6 +102,14 @@ def update_settings(db: Session, patch: dict) -> models.AudioSettings:
             if 0 <= value < len(devices):
                 settings.input_device_name = devices[value].get("name")
         setattr(settings, field, value)
+    if settings.audio_driver not in {"auto", "asio"}:
+        raise RuntimeError("Unsupported audio driver")
+    if settings.audio_driver == "asio":
+        if settings.input_device_id is None:
+            raise RuntimeError("Select an ASIO input device first")
+        device = sd.query_devices(settings.input_device_id) if _AUDIO_BACKEND_AVAILABLE else None
+        if device is None or not _is_asio_device(device):
+            raise RuntimeError("The selected device is not available through ASIO")
     db.commit()
     db.refresh(settings)
     configure_monitoring(settings)
@@ -111,11 +142,10 @@ def configure_monitoring(settings: models.AudioSettings) -> None:
         raise RuntimeError("Audio backend is unavailable")
 
     input_device_id = _preferred_device_index(settings.input_device_id, "input")
-    # The Windows default output is intentionally used here. Some interfaces
-    # expose input and output under the same name but cannot be opened as a
-    # PortAudio duplex pair, which caused monitor dropouts.
-    output_device_id = None
-    output_info = sd.query_devices(kind="output")
+    output_device_id = preferred_output_device(input_device_id, settings.audio_driver)
+    if settings.audio_driver == "asio" and output_device_id is None:
+        raise RuntimeError("The selected ASIO device has no output channels")
+    output_info = sd.query_devices(output_device_id) if output_device_id is not None else sd.query_devices(kind="output")
     output_channels = min(2, int(output_info["max_output_channels"]))
     if output_channels < 1:
         raise RuntimeError("No output device is available for microphone monitoring")
@@ -141,7 +171,7 @@ def configure_monitoring(settings: models.AudioSettings) -> None:
             samplerate=float(output_info["default_samplerate"]),
             channels=(1, output_channels),
             device=(input_device_id, output_device_id),
-            blocksize=64,
+            blocksize=settings.buffer_size,
             latency="low",
             callback=callback,
         )

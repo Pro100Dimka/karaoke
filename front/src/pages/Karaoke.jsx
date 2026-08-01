@@ -247,6 +247,8 @@ export default function Karaoke({ onOpenAppSettings }) {
   const [microphoneOpen, setMicrophoneOpen] = useState(false);
   const [recordingError, setRecordingError] = useState(null);
   const [microphoneVolume, setMicrophoneVolume] = useState(1);
+  const [audioDriver, setAudioDriver] = useState("auto");
+  const [audioBufferSize, setAudioBufferSize] = useState(64);
   const [monitoringEnabled, setMonitoringEnabled] = useState(false);
   const [browserAudioDevices, setBrowserAudioDevices] = useState({
     inputs: [],
@@ -294,6 +296,11 @@ export default function Karaoke({ onOpenAppSettings }) {
       setMicrophoneVolume(audioSettings.volume);
     }
   }, [audioSettings?.volume]);
+
+  useEffect(() => {
+    if (audioSettings?.audio_driver) setAudioDriver(audioSettings.audio_driver);
+    if (audioSettings?.buffer_size) setAudioBufferSize(audioSettings.buffer_size);
+  }, [audioSettings?.audio_driver, audioSettings?.buffer_size]);
 
   useEffect(
     () => () => {
@@ -1130,6 +1137,42 @@ export default function Karaoke({ onOpenAppSettings }) {
                     label: device.name,
                   })),
                 ]}
+              />
+            </label>
+            <label>
+              Аудиодрайвер
+              <Dropdown
+                value={audioDriver}
+                disabled={monitoringEnabled}
+                onChange={async (value) => {
+                  setAudioDriver(value);
+                  await updateMicrophone({ audio_driver: value });
+                }}
+                options={[
+                  { value: "auto", label: "Авто · Windows / PortAudio" },
+                  ...(devices || []).some((device) => device.is_asio)
+                    ? [{ value: "asio", label: "ASIO · минимальная задержка" }]
+                    : [],
+                ]}
+              />
+              {!(devices || []).some((device) => device.is_asio) && (
+                <small>ASIO появится после установки драйвера аудиоинтерфейса.</small>
+              )}
+            </label>
+            <label>
+              Буфер аудио
+              <Dropdown
+                value={audioBufferSize}
+                disabled={monitoringEnabled}
+                onChange={async (value) => {
+                  const bufferSize = Number(value);
+                  setAudioBufferSize(bufferSize);
+                  await updateMicrophone({ buffer_size: bufferSize });
+                }}
+                options={[32, 64, 128, 256, 512].map((value) => ({
+                  value,
+                  label: `${value} samples`,
+                }))}
               />
             </label>
             <label>

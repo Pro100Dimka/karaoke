@@ -48,4 +48,4 @@ popd
 
 if not "%BUILD_RESULT%"=="0" exit /b %BUILD_RESULT%
 echo.
-echo Done. Installer: %PROJECT_ROOT%front\release\Karaoke Studio Setup.exe
+echo Done. Installer: %PROJECT_ROOT%release\Karaoke Studio Setup 1.0.0.exe

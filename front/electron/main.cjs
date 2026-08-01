@@ -37,6 +37,7 @@ function startBackend() {
     : path.join(backendDir, process.platform === "win32" ? "KaraokeBackend.exe" : "KaraokeBackend");
   const backendArgs = isDev ? ["run.py"] : [];
   const backendDataDir = isDev ? null : path.join(app.getPath("userData"), "backend-data");
+  const backendLogDir = isDev ? path.resolve(__dirname, "..", "..", "logs") : path.join(app.getPath("userData"), "logs");
 
   try {
     backendProcess = spawn(backendCommand, backendArgs, {
@@ -46,6 +47,7 @@ function startBackend() {
       env: {
         ...process.env,
         ...(backendDataDir ? { SONGAPP_DATA_DIR: backendDataDir } : {}),
+        SONGAPP_LOG_DIR: backendLogDir,
         // Packaged ffmpeg.exe is placed next to KaraokeBackend.exe.
         PATH: `${backendDir}${path.delimiter}${process.env.PATH || ""}`,
       },

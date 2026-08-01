@@ -208,6 +208,8 @@ class AudioDeviceOut(BaseModel):
     name: str
     max_input_channels: int
     default_samplerate: float | None = None
+    host_api: str
+    is_asio: bool
 
 
 class AudioSettingsOut(BaseModel):
@@ -218,6 +220,8 @@ class AudioSettingsOut(BaseModel):
     volume: float
     sensitivity: float
     latency_ms: int
+    audio_driver: str
+    buffer_size: int
     monitoring_enabled: bool
 
 
@@ -226,6 +230,8 @@ class AudioSettingsUpdate(BaseModel):
     volume: float | None = Field(default=None, ge=0, le=4)
     sensitivity: float | None = Field(default=None, ge=0, le=1)
     latency_ms: int | None = Field(default=None, ge=0)
+    audio_driver: str | None = None
+    buffer_size: int | None = Field(default=None, ge=16, le=2048)
     monitoring_enabled: bool | None = None
 
 

@@ -35,6 +35,8 @@ LOGS_DIRNAME = "logs"                        # подпапка внутри Son
 # macOS при упаковке в инсталлятор.
 DATA_DIR = _env_path("SONGAPP_DATA_DIR", BASE_DIR / "data")
 DB_PATH = DATA_DIR / "app.db"
+_DEFAULT_LOG_DIR = DATA_DIR / "logs" if IS_FROZEN else BASE_DIR.parent / "logs"
+APP_LOG_DIR = _env_path("SONGAPP_LOG_DIR", _DEFAULT_LOG_DIR)
 
 # Keep the development layout. The packaged application gets SONGAPP_DATA_DIR
 # from Electron, so updates never overwrite songs, recordings or the database.
@@ -79,7 +81,7 @@ PORT = int(os.environ.get("SONGAPP_PORT", "8000"))
 
 def ensure_directories() -> None:
     """Создаёт все рабочие директории при первом запуске, если их ещё нет."""
-    for path in (AI_DIR, FULL_SONGS_DIR, SONG_OUTPUT_DIR, DATA_DIR):
+    for path in (AI_DIR, FULL_SONGS_DIR, SONG_OUTPUT_DIR, DATA_DIR, APP_LOG_DIR):
         path.mkdir(parents=True, exist_ok=True)
 
 

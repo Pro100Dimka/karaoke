@@ -28,10 +28,16 @@ def start_recording(body: schemas.RecordingStartRequest, db: Session = Depends(g
         session_id = recording_service.start_recording(
             song_id=song.id,
             device_id=audio_service.preferred_input_device(settings.input_device_id),
-            output_device_id=audio_service.preferred_output_device(),
+            output_device_id=audio_service.preferred_output_device(
+                settings.input_device_id, settings.audio_driver,
+            ),
+            sample_rate=audio_service.preferred_sample_rate(
+                settings.input_device_id, settings.audio_driver,
+            ),
             gain=settings.volume,
             monitoring_enabled=settings.monitoring_enabled,
             playback_offset_sec=body.position_sec,
+            blocksize=settings.buffer_size,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

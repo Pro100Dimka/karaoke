@@ -33,7 +33,7 @@ except Exception as exc:  # noqa: BLE001 — библиотека может б�
 class RecordingSession:
     def __init__(self, session_id: str, song_id: str, device_id: int | None,
                  output_device_id: int | None, sample_rate: int, channels: int, gain: float,
-                 monitoring_enabled: bool, playback_offset_sec: float = 0):
+                 monitoring_enabled: bool, playback_offset_sec: float = 0, blocksize: int = 64):
         self.session_id = session_id
         self.song_id = song_id
         self.sample_rate = sample_rate
@@ -50,7 +50,7 @@ class RecordingSession:
                 samplerate=sample_rate,
                 channels=(channels, output_channels),
                 device=(device_id, output_device_id),
-                blocksize=64,
+                blocksize=blocksize,
                 latency="low",
                 callback=self._monitoring_callback,
             )
@@ -59,7 +59,7 @@ class RecordingSession:
                 samplerate=sample_rate,
                 channels=channels,
                 device=device_id,
-                blocksize=64,
+                blocksize=blocksize,
                 latency="low",
                 callback=self._callback,
             )
@@ -116,14 +116,15 @@ def start_recording(song_id: str, device_id: int | None = None,
                      output_device_id: int | None = None,
                      sample_rate: int = config.RECORDING_SAMPLE_RATE,
                      channels: int = config.RECORDING_CHANNELS, gain: float = 1.0,
-                     monitoring_enabled: bool = False, playback_offset_sec: float = 0) -> str:
+                     monitoring_enabled: bool = False, playback_offset_sec: float = 0,
+                     blocksize: int = 64) -> str:
     if not _AUDIO_BACKEND_AVAILABLE:
         raise RuntimeError(f"Аудио-бэкенд недоступен: {_AUDIO_BACKEND_ERROR}")
 
     session_id = uuid.uuid4().hex
     session = RecordingSession(
         session_id, song_id, device_id, output_device_id, sample_rate, channels, gain,
-        monitoring_enabled, playback_offset_sec
+        monitoring_enabled, playback_offset_sec, blocksize
     )
     session.start()
     with _sessions_lock:

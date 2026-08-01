@@ -29,6 +29,8 @@ node_modules/
 front/node_modules/
 front/dist/
 front/release/
+/release/
+/logs/
 front/.vite/
 *.tsbuildinfo
 

@@ -33,7 +33,7 @@
     "extraResources": [
       { "from": "../backend/dist/KaraokeBackend", "to": "backend" }
     ],
-    "directories": { "output": "release" },
+    "directories": { "output": "../release" },
     "win": { "target": "nsis" },
     "nsis": {
       "oneClick": false,
