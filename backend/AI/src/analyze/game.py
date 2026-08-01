@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 from src.analyze.game_onnx import extract
+from src.common.model_paths import game_model_dir
 from src.common.notes import midi_to_note, note_to_midi
 
 
@@ -15,7 +16,7 @@ def _backend_dir() -> Path:
 
 
 def _model_dir() -> Path:
-    return _backend_dir() / "engines" / "game" / "models" / "GAME-1.0.3-large-onnx"
+    return game_model_dir()
 
 
 def _merge_sustained_notes(notes: list[dict]) -> list[dict]:

@@ -14,6 +14,7 @@ from pathlib import Path
 
 from mutagen import File as MutagenFile
 from mutagen.id3 import USLT
+from src.common.model_paths import whisper_dir
 
 
 def from_id3_tags(audio_path: str) -> str | None:
@@ -50,7 +51,7 @@ def from_lrc_file(audio_path: str) -> str | None:
 
 def from_whisper(audio_path: str, model_size: str = "medium", language: str | None = None) -> str:
     import whisper  # openai-whisper
-    model = whisper.load_model(model_size)
+    model = whisper.load_model(model_size, download_root=str(whisper_dir()))
     result = model.transcribe(audio_path, language=language)
     return result["text"].strip()
 

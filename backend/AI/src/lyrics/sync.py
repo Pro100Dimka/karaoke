@@ -19,12 +19,14 @@ import argparse
 import json
 from pathlib import Path
 
+from src.common.model_paths import whisper_dir
+
 
 def sync_with_whisper(audio_path: str, model_size: str = "medium",
                        language: str | None = None) -> list:
     import whisper
 
-    model = whisper.load_model(model_size)
+    model = whisper.load_model(model_size, download_root=str(whisper_dir()))
     result = model.transcribe(audio_path, language=language, word_timestamps=True)
 
     lines = []

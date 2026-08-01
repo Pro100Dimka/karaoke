@@ -5,10 +5,9 @@ song.wav -> vocals.wav, instrumental.wav (+ drums.wav, bass.wav, other.wav)
 
 import argparse
 import os
-import shutil
-import subprocess
-import sys
 from pathlib import Path
+
+from src.common.model_paths import demucs_cache_dir
 
 
 def separate(
@@ -31,73 +30,57 @@ def separate(
     # separation can set SONGAPP_DEMUCS_SHIFTS=2 (or higher).
     demucs_shifts = shifts if shifts is not None else int(os.getenv("SONGAPP_DEMUCS_SHIFTS", "1"))
     demucs_shifts = max(1, demucs_shifts)
-    cmd = [
-        # Do not resolve an unrelated demucs.exe from PATH.  The package must
-        # run in this application's Python environment so its Torch build and
-        # CUDA availability always match the backend diagnostics.
-        sys.executable, "-m", "demucs",
-        "-n", model,
-        "-o", str(out_dir),
-        "--segment", segment,
-        "--shifts", str(demucs_shifts),
-    ]
-
-    # GPU если есть
-    # Проверяем реальную поддержку CUDA в PyTorch
+    # Run Demucs in-process. Calling ``python -m demucs`` breaks after
+    # PyInstaller packaging because ``sys.executable`` then points at the
+    # frozen backend executable, not a Python interpreter.
+    # Проверяем реальную поддержку CUDA в PyTorch.
+    device = "cpu"
     try:
         import torch
 
         if requested_device != "cpu" and torch.cuda.is_available():
-            cmd += ["-d", "cuda"]
+            device = "cuda"
             print("Используется GPU CUDA")
         else:
-            cmd += ["-d", "cpu"]
             print("CUDA недоступна, используется CPU")
 
     except Exception:
-        cmd += ["-d", "cpu"]
         print("PyTorch CUDA не найден, используется CPU")
 
-    if two_stems:
-        cmd += ["--two-stems", "vocals"]
+    os.environ.setdefault("HF_HOME", str(demucs_cache_dir()))
+    from demucs.api import Separator, save_audio
 
-    cmd.append(input_path)
-
-    print("Запуск Demucs:")
-    print(" ".join(cmd))
-
-    result = subprocess.run(
-        cmd,
-        text=True,
+    print(f"Запуск Demucs: {model} ({device}, shifts={demucs_shifts})")
+    separator = Separator(
+        model=model,
+        device=device,
+        shifts=demucs_shifts,
+        overlap=0.25,
+        split=True,
+        segment=int(segment),
+        progress=False,
     )
-
-    if result.returncode != 0:
-        print(result.stdout)
-        print(result.stderr)
-        raise RuntimeError("Demucs завершился с ошибкой.")
-
-    stem_name = Path(input_path).stem
-    result_dir = out_dir / model / stem_name
-
-    vocals_src = result_dir / "vocals.wav"
-    instrumental_src = result_dir / (
-        "no_vocals.wav" if two_stems else "other.wav"
-    )
-
+    _, stems = separator.separate_audio_file(Path(input_path))
     vocals_dst = out_dir / "vocals.wav"
     instrumental_dst = out_dir / "instrumental.wav"
+    save_options = {
+        "samplerate": separator.samplerate,
+        "clip": "rescale",
+        "as_float": False,
+        "bits_per_sample": 16,
+    }
+    save_audio(stems["vocals"], vocals_dst, **save_options)
 
-    if vocals_src.exists():
-        shutil.copy2(vocals_src, vocals_dst)
-
-    if instrumental_src.exists():
-        shutil.copy2(instrumental_src, instrumental_dst)
+    other_stems = [audio for name, audio in stems.items() if name != "vocals"]
+    instrumental = other_stems[0]
+    for audio in other_stems[1:]:
+        instrumental = instrumental + audio
+    save_audio(instrumental, instrumental_dst, **save_options)
 
     if not two_stems:
         for stem in ("drums", "bass", "other"):
-            src = result_dir / f"{stem}.wav"
-            if src.exists():
-                shutil.copy2(src, out_dir / f"{stem}.wav")
+            if stem in stems:
+                save_audio(stems[stem], out_dir / f"{stem}.wav", **save_options)
 
     return {
         "vocals": str(vocals_dst) if vocals_dst.exists() else None,

@@ -48,6 +48,7 @@ backend/engines/game/source/
 backend/engines/game/venv/
 backend/runtimes/
 backend/tools/*.exe
+backend/models/
 
 # Packaging output and diagnostic files
 backend/build/
