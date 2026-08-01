@@ -16,10 +16,91 @@ vocals.wav + lyrics.txt -> lyricsSync.json
   требует ffmpeg и, как и обычный Whisper, PyTorch).
 """
 import argparse
+import ctypes
 import json
+import os
 from pathlib import Path
 
 from src.common.model_paths import whisper_dir
+
+
+def _faster_whisper_runtime() -> tuple[str, str]:
+    """Choose GPU acceleration when it is genuinely usable, else safe CPU."""
+    try:
+        import ctranslate2
+
+        # CTranslate2 on Windows currently links against CUDA 12. A newer
+        # PyTorch runtime (CUDA 13, for example) is not binary-compatible.
+        # Do not choose CUDA merely because the GPU is visible: that otherwise
+        # fails halfway through transcription and falls back to slow Whisper.
+        cuda_runtime_ready = os.name != "nt"
+        if os.name == "nt":
+            try:
+                ctypes.WinDLL("cublas64_12.dll")
+                cuda_runtime_ready = True
+            except OSError:
+                cuda_runtime_ready = False
+        if ctranslate2.get_cuda_device_count() > 0 and cuda_runtime_ready:
+            return "cuda", "float16"
+    except Exception:
+        pass
+    return "cpu", "int8"
+
+
+def _transcribe_faster(
+    audio_path: str, language: str | None, device: str, compute_type: str,
+) -> list:
+    """Fast GPU transcription with native word timestamps and VAD."""
+    from faster_whisper import WhisperModel
+
+    model_name = os.getenv("SONGAPP_FASTER_WHISPER_MODEL", "large-v3-turbo")
+    model = WhisperModel(
+        model_name,
+        device=device,
+        compute_type=compute_type,
+        download_root=str(whisper_dir() / "faster-whisper"),
+    )
+    segments, _ = model.transcribe(
+        audio_path,
+        language=language,
+        beam_size=5,
+        word_timestamps=True,
+        vad_filter=True,
+        condition_on_previous_text=False,
+    )
+    lines = []
+    for segment in segments:
+        words = [
+            {
+                "word": word.word.strip(),
+                "start": round(float(word.start), 3),
+                "end": round(float(word.end), 3),
+            }
+            for word in (segment.words or [])
+            if word.word and word.start is not None and word.end is not None
+        ]
+        text = segment.text.strip()
+        if text:
+            lines.append({
+                "text": text,
+                "start": round(float(segment.start), 3),
+                "end": round(float(segment.end), 3),
+                "words": words,
+            })
+    return lines
+
+
+def sync_with_faster_whisper(audio_path: str, language: str | None = None) -> list:
+    """Transcribe with GPU when available, otherwise optimized CPU inference."""
+    device, compute_type = _faster_whisper_runtime()
+    try:
+        return _transcribe_faster(audio_path, language, device, compute_type)
+    except RuntimeError:
+        if device != "cuda":
+            raise
+        # A driver can report CUDA but fail to initialize a model. One CPU
+        # retry is deterministic and still much faster than OpenAI Whisper.
+        return _transcribe_faster(audio_path, language, "cpu", "int8")
 
 
 def sync_with_whisper(audio_path: str, model_size: str = "medium",
@@ -85,6 +166,18 @@ def sync_with_whisperx(audio_path: str, model_size: str = "medium",
 
 def _sync_raw(audio_path: str, model_size: str, language: str | None,
               engine: str) -> list:
+    if engine in {"auto", "faster-whisper"}:
+        device, _ = _faster_whisper_runtime()
+        if device == "cuda":
+            try:
+                lines = sync_with_faster_whisper(audio_path, language)
+                if lines:
+                    return lines
+                raise RuntimeError("faster-whisper returned no speech segments")
+            except Exception as exc:
+                print(f"faster-whisper failed; falling back to Whisper. {exc}")
+        elif engine == "faster-whisper":
+            print("faster-whisper GPU runtime is unavailable; using Whisper turbo.")
     if engine == "whisperx":
         try:
             return sync_with_whisperx(audio_path, model_size, language)
@@ -99,7 +192,7 @@ def _sync_raw(audio_path: str, model_size: str, language: str | None,
 def sync_existing_lyrics_with_whisper(audio_path: str, lyrics_path: str,
                                        model_size: str = "medium",
                                        language: str | None = None,
-                                       engine: str = "whisper") -> list:
+                                       engine: str = "auto") -> list:
     """
     Если текст уже есть (из тегов/LRC) и нужно только выровнять его
     по времени — прогоняем распознавание+алаймент по аудио (даёт точные

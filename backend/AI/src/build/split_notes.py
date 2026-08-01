@@ -237,9 +237,12 @@ def split_notes_by_syllables(notes: list, lyrics_lines: list, pitch_frames: list
     if not notes:
         return notes
 
-    # Word starts come from forced alignment and describe the user's visible
-    # lyric rhythm.  Prefer them over estimated intra-word syllable timings;
-    # the latter are only a fallback when word timings are unavailable.
+    # Word starts come from forced alignment and describe the visible lyric
+    # rhythm.  Syllable starts are estimated, so they are never trusted by
+    # themselves: both kinds of boundary still need an acoustic attack before
+    # they can split a note.  Keeping syllables here is important for a long
+    # sustained pitch inside a multi-syllable word ("ме-ло-ди-я"), where there
+    # may be no new word start at all.
     word_boundaries = sorted({
         float(word["start"])
         for line in lyrics_lines or []
@@ -250,24 +253,46 @@ def split_notes_by_syllables(notes: list, lyrics_lines: list, pitch_frames: list
     if not word_boundaries and not syllables:
         return notes
 
-    boundary_times = word_boundaries or sorted({s["start"] for s in syllables})
+    # A word boundary wins over an estimated syllable boundary at virtually
+    # the same timestamp.  Round only for de-duplication; preserve the source
+    # timestamp for the acoustic search itself.
+    # The no-audio compatibility mode cannot validate inferred syllables, so
+    # keep its historical word-only behavior.  In the real pipeline
+    # ``pitch_frames`` is always available and makes syllable candidates safe.
+    boundary_candidates = (
+        {
+            round(float(s["start"]), 4): (float(s["start"]), "syllable")
+            for s in syllables
+            if s.get("start") is not None
+        }
+        if pitch_frames
+        else {}
+    )
+    for word_start in word_boundaries:
+        boundary_candidates[round(word_start, 4)] = (word_start, "word")
+    boundary_candidates = sorted(boundary_candidates.values(), key=lambda item: item[0])
     times_index = _times_index(pitch_frames) if pitch_frames else None
 
     result = []
     for note in notes:
         start, end = note["start"], note["end"]
         candidates = [
-            t for t in boundary_times
-            if start + min_segment_duration <= t <= end - min_segment_duration
+            (time, source) for time, source in boundary_candidates
+            if start + min_segment_duration <= time <= end - min_segment_duration
         ]
 
         cut_points_inner = []
-        for t in candidates:
+        for t, source in candidates:
             actual_t = t
             if pitch_frames:
+                # A word attack is a slightly stronger rhythmic cue than an
+                # inferred syllable.  The latter therefore needs more local
+                # evidence, while both remain protected from blind splitting.
+                window = acoustic_search_window if source == "word" else min(acoustic_search_window, 0.16)
+                margin = acoustic_dip_margin_db if source == "word" else max(acoustic_dip_margin_db, 2.0)
                 found = _find_acoustic_split_point(
                     pitch_frames, times_index, t, start, end,
-                    acoustic_search_window, acoustic_dip_margin_db)
+                    window, margin)
                 if found is None:
                     continue  # нет провала громкости — вероятно легато, не режем
                 actual_t = found

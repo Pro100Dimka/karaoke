@@ -232,7 +232,7 @@ def _create_performance_mix(
     mix_labels = ["[music]"]
     next_input = 1
     if original_vocals is not None:
-        inputs.extend(["-i", str(original_vocals)])
+        inputs.extend(["-ss", f"{offset_sec:.3f}", "-i", str(original_vocals)])
         filters.append(f"[{next_input}:a]volume={vocal_gain:.6f}[original_vocals]")
         mix_labels.append("[original_vocals]")
         next_input += 1

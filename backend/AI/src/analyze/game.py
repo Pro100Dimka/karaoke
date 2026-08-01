@@ -19,14 +19,23 @@ def _model_dir() -> Path:
     return game_model_dir()
 
 
-def _merge_sustained_notes(notes: list[dict]) -> list[dict]:
-    """Collapse model-internal frames while preserving real pitch changes."""
+def _merge_machine_fragments(notes: list[dict], max_fragment_duration: float = 0.08) -> list[dict]:
+    """Merge only implausibly tiny duplicate events from the model.
+
+    GAME emits note *events*, not PCM frames.  Consecutive equal-pitch events
+    are often separate attacks or syllables and are essential for karaoke
+    rhythm, so merging every touching pair turns them into one long bar.
+    """
     if not notes:
         return notes
     merged = [dict(notes[0])]
     for note in notes[1:]:
         previous = merged[-1]
-        if note["note"] == previous["note"] and note["start"] - previous["end"] <= 0.04:
+        if (
+            note["note"] == previous["note"]
+            and note["start"] - previous["end"] <= 0.01
+            and min(note["duration"], previous["duration"]) <= max_fragment_duration
+        ):
             previous["end"] = note["end"]
             previous["duration"] = round(previous["end"] - previous["start"], 3)
         else:
@@ -57,7 +66,7 @@ def _remove_transient_outliers(notes: list[dict]) -> list[dict]:
                 del result[index]
                 changed = True
                 break
-    return _merge_sustained_notes(result)
+    return result
 
 
 def extract_game_reference(
@@ -104,7 +113,10 @@ def extract_game_reference(
             for item in raw_notes
             if float(item["end"]) > float(item["start"])
         ]
-        notes = _remove_transient_outliers(_merge_sustained_notes(notes))
+        # Preserve equal-pitch retriggers from GAME: they are musical events,
+        # not duplicate frames.  Only machine-sized fragments and isolated
+        # pitch glitches may be collapsed.
+        notes = _remove_transient_outliers(_merge_machine_fragments(notes))
         if not notes:
             raise ValueError("the engine returned no voiced notes")
         print(f"GAME melody accepted: {len(notes)} notes ({payload.get('provider', 'unknown')}).")

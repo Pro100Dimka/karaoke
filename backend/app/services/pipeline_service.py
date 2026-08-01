@@ -130,8 +130,29 @@ def _set_runtime_step(song_id: str, step: float, log_line: str) -> None:
     detail = log_line.strip().splitlines()[0]
     detail = re.sub(r"^\d+(?:\.\d+)?\s*/\s*13\s*", "", detail).strip(" .—-")
     with _progress_runtime_lock:
-        runtime = _progress_runtime.setdefault(song_id, {"started_at": time.monotonic()})
-        runtime.update({"step": step, "step_started_at": time.monotonic(), "detail": detail[:120]})
+        now = time.monotonic()
+        runtime = _progress_runtime.setdefault(
+            song_id,
+            {
+                "started_at": now,
+                "step": 0.0,
+                "step_started_at": now,
+                "completed_step_seconds": {},
+            },
+        )
+        previous_step = float(runtime.get("step", 0.0))
+
+        # A long-running tool may repeat its current "N/13" message.  That
+        # is a progress update, not a new stage: resetting its clock here was
+        # the source of the jumping and incorrect remaining-time estimate.
+        if step <= previous_step:
+            runtime["detail"] = detail[:120]
+            return
+
+        if previous_step in _STEP_PLAN:
+            completed = runtime.setdefault("completed_step_seconds", {})
+            completed[previous_step] = max(0.0, now - runtime.get("step_started_at", now))
+        runtime.update({"step": step, "step_started_at": now, "detail": detail[:120]})
 
 
 def _set_runtime_detail(song_id: str, log_text: str) -> None:
@@ -150,6 +171,7 @@ def _begin_runtime_progress(song_id: str) -> None:
             "started_at": time.monotonic(),
             "step": 0.0,
             "step_started_at": time.monotonic(),
+            "completed_step_seconds": {},
             "detail": "Подготовка AI-пайплайна",
         }
 
@@ -174,10 +196,27 @@ def get_processing_telemetry(song_id: str) -> dict:
     # real pipeline signal arrives.
     fraction = min(0.94, elapsed_step / max(1, expected))
     percent = round(base + (end - base) * fraction, 1)
-    remaining = max(0.0, expected - elapsed_step)
+    # Adapt the remaining-time prediction to this computer and this song.
+    # The plan supplies a safe initial estimate, then every completed stage
+    # calibrates it using measured wall-clock time.  Bounds avoid an early
+    # ultra-fast metadata step from producing a wildly optimistic ETA.
+    completed = runtime.get("completed_step_seconds", {})
+    expected_completed = 0.0
+    actual_completed = 0.0
+    for completed_step, seconds in completed.items():
+        plan = _STEP_PLAN.get(float(completed_step))
+        if plan is not None:
+            expected_completed += plan[2]
+            actual_completed += float(seconds)
+    speed_factor = 1.0
+    if expected_completed >= 10.0 and actual_completed > 0:
+        speed_factor = min(3.0, max(0.25, actual_completed / expected_completed))
+
+    estimated_current = expected * speed_factor
+    remaining = max(0.0, estimated_current - elapsed_step)
     for plan_step, (_, _, seconds) in _STEP_PLAN.items():
         if plan_step > step:
-            remaining += seconds
+            remaining += seconds * speed_factor
     return {
         "step": step,
         "progress_percent": percent,

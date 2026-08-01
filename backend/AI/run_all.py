@@ -26,6 +26,7 @@
 """
 import argparse
 import json
+import os
 from pathlib import Path
 
 from src.analyze.breath import analyze_breath
@@ -49,6 +50,15 @@ from src.lyrics.get_text import get_lyrics
 from src.lyrics.sync import sync_existing_lyrics_with_whisper
 from src.preprocessing.probe import probe_file
 from src.preprocessing.separate import separate
+
+
+def _use_game_melody_engine() -> bool:
+    """Whether GAME supplies pitch, making the slower pYIN pass redundant."""
+    if os.getenv("SONGAPP_MIDI_ENGINE", "auto").strip().lower() == "pyin":
+        return False
+    from src.common.model_paths import game_model_dir
+
+    return (game_model_dir() / "config.json").exists()
 
 
 def save_json(obj, path):
@@ -128,7 +138,10 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
         pitch_frames = load_json(pitch_path)
     else:
         print("5/13 Анализ вокала (pitch)...")
-        pitch_frames = analyze_vocal(vocals_path)
+        pitch_engine = "energy" if _use_game_melody_engine() else "pyin"
+        if pitch_engine == "energy":
+            print("   GAME supplies pitch; building fast vocal activity map.")
+        pitch_frames = analyze_vocal(vocals_path, engine=pitch_engine)
         save_json(pitch_frames, pitch_path)
 
     # --- 6/13 Эталонная мелодия ---
@@ -215,18 +228,41 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
     # повторном запуске; сам шаг идемпотентен.
     print("9.5/13 Дозаполнение пробелов и разбиение долгих нот по слогам...")
     notes_before = len(reference_notes)
+    reference_before_postprocessing = reference_notes
     using_game = (out / "game_notes.json").exists()
     if not using_game:
         reference_notes = fill_gaps_during_active_singing(reference_notes, lyrics_sync, pitch_frames)
-        reference_notes = split_notes_by_syllables(
-            reference_notes, lyrics_sync, pitch_frames,
-            acoustic_search_window=0.12,
-            acoustic_dip_margin_db=3.5,
-        )
+    # GAME is better at pitch than pYIN, but it can merge a long repeated
+    # pitch across several sung words. Split only at a word attack confirmed
+    # by a real vocal-energy dip; this restores lyric rhythm without inventing
+    # notes from Whisper timestamps alone.
+    reference_notes = split_notes_by_syllables(
+        reference_notes, lyrics_sync, pitch_frames,
+        # Real vocal attacks are frequently only 1.5–3 dB quieter than the
+        # vowel around them after source separation.  The former 3.5 dB gate
+        # left repeated notes merged into one long block.
+        acoustic_search_window=0.20,
+        acoustic_dip_margin_db=1.5,
+    )
     reference_notes = align_note_boundaries_to_words(reference_notes, lyrics_sync, pitch_frames)
     if len(reference_notes) != notes_before:
         print(f"   ноты: {notes_before} -> {len(reference_notes)}")
     save_json(reference_notes, reference_path)
+
+    # The outputs below embed ``reference.json``. They used to remain stale
+    # when a cached run refined the guide, making the player and MIDI export
+    # disagree. Only small derived artefacts are rebuilt; audio and lyrics
+    # remain cached.
+    if reference_notes != reference_before_postprocessing:
+        for derived_path in (
+            out / "songMap.json",
+            out / "difficulty.json",
+            out / "difficultyByStructure.json",
+            out / "melody.mid",
+            out / "manifest.json",
+            out / "report.md",
+        ):
+            derived_path.unlink(missing_ok=True)
 
     # --- 10/13 Карта песни ---
     song_map_path = out / "songMap.json"

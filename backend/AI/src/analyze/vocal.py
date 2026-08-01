@@ -86,12 +86,29 @@ def _analyze_crepe(y: np.ndarray, sr: int, frame_step_sec: float, fmin: str, fma
     return times, frequency, voiced_flag, confidence, rms_db_aligned
 
 
+def _analyze_energy(y: np.ndarray, sr: int, frame_step_sec: float):
+    """Fast vocal-activity envelope used when GAME already supplies pitch."""
+    hop_length = max(1, int(round(frame_step_sec * sr)))
+    rms = librosa.feature.rms(y=y, frame_length=hop_length * 4, hop_length=hop_length)[0]
+    rms_db = librosa.amplitude_to_db(rms, ref=np.max)
+    threshold = max(float(np.percentile(rms_db, 20)) + 7.0, -38.0)
+    voiced_flag = rms_db >= threshold
+    times = librosa.frames_to_time(np.arange(len(rms_db)), sr=sr, hop_length=hop_length)
+    f0 = np.full(len(rms_db), np.nan)
+    confidence = voiced_flag.astype(float)
+    return times, f0, voiced_flag, confidence, rms_db
+
+
 def analyze_vocal(input_path: str, frame_step_sec: float = 0.01,
                    fmin: str = "C2", fmax: str = "C6",
                    engine: str = "pyin", crepe_model: str = "full"):
     y, sr = librosa.load(input_path, sr=None, mono=True)
 
-    if engine == "crepe":
+    if engine == "energy":
+        times, f0, voiced_flag, voiced_probs, rms_db = _analyze_energy(
+            y, sr, frame_step_sec,
+        )
+    elif engine == "crepe":
         try:
             times, f0, voiced_flag, voiced_probs, rms_db = _analyze_crepe(
                 y, sr, frame_step_sec, fmin, fmax, model_capacity=crepe_model)
@@ -125,7 +142,7 @@ def main():
     parser.add_argument("input", help="vocals.wav")
     parser.add_argument("output", nargs="?", default="pitch.json")
     parser.add_argument("--step", type=float, default=0.01, help="шаг анализа в секундах")
-    parser.add_argument("--engine", default="pyin", choices=["pyin", "crepe"],
+    parser.add_argument("--engine", default="pyin", choices=["pyin", "crepe", "energy"],
                          help="pyin (быстро, встроено) или crepe (точнее, требует TF)")
     parser.add_argument("--crepe-model", default="full",
                          choices=["tiny", "small", "medium", "large", "full"],

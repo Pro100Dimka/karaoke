@@ -54,7 +54,7 @@ DATABASE_URL = f"sqlite:///{DB_PATH}"
 # AI-пайплайн
 # --------------------------------------------------------------------
 
-DEFAULT_WHISPER_MODEL = "medium"
+DEFAULT_WHISPER_MODEL = "turbo"
 DEFAULT_LANGUAGE = None  # автоопределение
 
 ALLOWED_AUDIO_EXTENSIONS = {".mp3", ".wav", ".flac", ".m4a", ".ogg"}

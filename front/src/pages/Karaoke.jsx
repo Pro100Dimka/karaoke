@@ -2468,7 +2468,10 @@ function MelodyRoll({
             ? Math.max(0.08, 1 - (currentTime - n.end) / 2.4)
             : 1;
           const noteX = Math.max(noteLaneStart, x(n.start));
-          const noteWidth = Math.max(3, Math.min(width, x(n.end)) - noteX - 4);
+          // Keep event boundaries visible even when two consecutive syllables
+          // have the same pitch.  Without a deliberate screen-space gap they
+          // look like one long note despite being separate MIDI events.
+          const noteWidth = Math.max(3, Math.min(width, x(n.end)) - noteX - 7);
           const noteY = y(n.midi + keyShift) + (rowHeight - noteHeight) / 2;
           return (
             <g

@@ -19,7 +19,11 @@ def separate(
 ):
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    model = model or os.getenv("SONGAPP_DEMUCS_MODEL", "htdemucs_ft")
+    # ``htdemucs_ft`` is a four-model bag: excellent for archival separation
+    # but disproportionate for interactive karaoke.  The single htdemucs
+    # model keeps clean enough vocals for GAME and runs several times faster.
+    # Power users can still opt into the four-pass model via the environment.
+    model = model or os.getenv("SONGAPP_DEMUCS_MODEL", "htdemucs")
     requested_device = os.getenv("SONGAPP_DEVICE", "auto").lower()
 
     # Максимальная длина сегмента для разных моделей
