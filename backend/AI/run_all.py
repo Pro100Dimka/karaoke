@@ -37,7 +37,11 @@ from src.analyze.vocal import analyze_vocal
 from src.build.convert import convert, normalize_loudness
 from src.build.midi import add_tempo_and_key, build_midi, quantize_notes
 from src.build.project import build_project
-from src.build.reference import build_reference
+from src.build.reference import (
+    build_reference,
+    correct_confirmed_neural_octaves,
+    refine_neural_reference,
+)
 from src.build.report import build_report
 from src.build.split_notes import (
     align_note_boundaries_to_words,
@@ -138,9 +142,9 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
         pitch_frames = load_json(pitch_path)
     else:
         print("5/13 Анализ вокала (pitch)...")
-        pitch_engine = "energy" if _use_game_melody_engine() else "pyin"
-        if pitch_engine == "energy":
-            print("   GAME supplies pitch; building fast vocal activity map.")
+        pitch_engine = "torchcrepe" if _use_game_melody_engine() else "pyin"
+        if pitch_engine == "torchcrepe":
+            print("   GAME supplies note events; TorchCrepe verifies vocal pitch.")
         pitch_frames = analyze_vocal(vocals_path, engine=pitch_engine)
         save_json(pitch_frames, pitch_path)
 
@@ -230,6 +234,11 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
     notes_before = len(reference_notes)
     reference_before_postprocessing = reference_notes
     using_game = (out / "game_notes.json").exists()
+    if using_game:
+        # GAME is the pitch authority.  Remove only isolated, acoustically
+        # unsupported glitches before preserving its real repeated attacks.
+        reference_notes = refine_neural_reference(reference_notes, pitch_frames)
+        reference_notes = correct_confirmed_neural_octaves(reference_notes, pitch_frames)
     if not using_game:
         reference_notes = fill_gaps_during_active_singing(reference_notes, lyrics_sync, pitch_frames)
     # GAME is better at pitch than pYIN, but it can merge a long repeated

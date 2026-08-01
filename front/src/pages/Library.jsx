@@ -24,6 +24,7 @@ import { usePolling } from "../hooks/usePolling";
 import { Panel, StatusBadge, ProgressBar } from "../components/ui";
 import { AudioPlayer } from "../components/AudioPlayer";
 import { useAppDialog } from "../components/AppDialog";
+import libraryNeonSpace from "../assets/karaoke/library-neon-space.webp";
 
 function formatDate(iso) {
   if (!iso) return "—";
@@ -175,6 +176,7 @@ export default function Library() {
   return (
     <div className="library-page">
       <div className="library-concert-backdrop" aria-hidden="true">
+        <img className="library-neon-space" src={libraryNeonSpace} alt="" />
         <i className="library-bg-vinyl library-bg-vinyl--one" />
         <i className="library-bg-vinyl library-bg-vinyl--two" />
         <i className="library-bg-cassette library-bg-cassette--one">

@@ -99,6 +99,47 @@ def _analyze_energy(y: np.ndarray, sr: int, frame_step_sec: float):
     return times, f0, voiced_flag, confidence, rms_db
 
 
+def _analyze_torchcrepe(y: np.ndarray, sr: int, frame_step_sec: float,
+                        fmin: str, fmax: str):
+    """GPU neural F0 tracking used to verify GAME's note events.
+
+    GAME is excellent at segmentation; TorchCrepe gives an independent,
+    continuous estimate of vocal pitch.  Combining them lets us correct a
+    sustained octave error without trusting a single detector blindly.
+    """
+    import torch
+    import torchcrepe
+
+    target_sr = 16_000
+    if sr != target_sr:
+        y = librosa.resample(y, orig_sr=sr, target_sr=target_sr)
+        sr = target_sr
+    hop_length = max(1, int(round(frame_step_sec * sr)))
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    audio = torch.from_numpy(np.ascontiguousarray(y, dtype=np.float32)).to(device).unsqueeze(0)
+    f0, periodicity = torchcrepe.predict(
+        audio,
+        sr,
+        hop_length=hop_length,
+        fmin=float(librosa.note_to_hz(fmin)),
+        fmax=float(librosa.note_to_hz(fmax)),
+        model="full",
+        return_periodicity=True,
+        batch_size=1024 if device == "cuda" else 256,
+        device=device,
+    )
+    f0 = f0.squeeze(0).detach().cpu().numpy()
+    periodicity = periodicity.squeeze(0).detach().cpu().numpy()
+    voiced_flag = periodicity >= 0.45
+
+    rms = librosa.feature.rms(y=y, frame_length=max(1024, hop_length * 4), hop_length=hop_length)[0]
+    rms_db = librosa.amplitude_to_db(rms, ref=np.max)
+    rms_times = librosa.frames_to_time(np.arange(len(rms)), sr=sr, hop_length=hop_length)
+    times = np.arange(len(f0), dtype=float) * frame_step_sec
+    rms_db_aligned = np.interp(times, rms_times, rms_db)
+    return times, f0, voiced_flag, periodicity, rms_db_aligned
+
+
 def analyze_vocal(input_path: str, frame_step_sec: float = 0.01,
                    fmin: str = "C2", fmax: str = "C6",
                    engine: str = "pyin", crepe_model: str = "full"):
@@ -108,6 +149,16 @@ def analyze_vocal(input_path: str, frame_step_sec: float = 0.01,
         times, f0, voiced_flag, voiced_probs, rms_db = _analyze_energy(
             y, sr, frame_step_sec,
         )
+    elif engine == "torchcrepe":
+        try:
+            times, f0, voiced_flag, voiced_probs, rms_db = _analyze_torchcrepe(
+                y, sr, frame_step_sec, fmin, fmax,
+            )
+        except (ImportError, RuntimeError) as exc:
+            print(f"TorchCrepe unavailable ({exc}); using fast vocal activity map.")
+            times, f0, voiced_flag, voiced_probs, rms_db = _analyze_energy(
+                y, sr, frame_step_sec,
+            )
     elif engine == "crepe":
         try:
             times, f0, voiced_flag, voiced_probs, rms_db = _analyze_crepe(
@@ -142,7 +193,7 @@ def main():
     parser.add_argument("input", help="vocals.wav")
     parser.add_argument("output", nargs="?", default="pitch.json")
     parser.add_argument("--step", type=float, default=0.01, help="шаг анализа в секундах")
-    parser.add_argument("--engine", default="pyin", choices=["pyin", "crepe", "energy"],
+    parser.add_argument("--engine", default="pyin", choices=["pyin", "crepe", "torchcrepe", "energy"],
                          help="pyin (быстро, встроено) или crepe (точнее, требует TF)")
     parser.add_argument("--crepe-model", default="full",
                          choices=["tiny", "small", "medium", "large", "full"],

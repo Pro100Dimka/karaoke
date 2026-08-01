@@ -105,6 +105,11 @@ export const api = {
     request("/audio/settings", { method: "POST", body: JSON.stringify(patch) }),
   startDirectMonitoring: () => request("/audio/direct-monitor/start", { method: "POST" }),
   stopDirectMonitoring: () => request("/audio/direct-monitor/stop", { method: "POST" }),
+  releaseDirectMonitoring: () =>
+    fetch(`${BASE_URL}/audio/direct-monitor/stop`, {
+      method: "POST",
+      keepalive: true,
+    }).catch(() => {}),
   getSignalQuality: () => request("/audio/signal-quality"),
 
   // Настройки программы

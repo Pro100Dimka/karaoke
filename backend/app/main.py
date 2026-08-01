@@ -10,13 +10,19 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import analysis, application, audio, cache, diagnostics, player, recording, songs
+from app.services import audio_service
 from database import init_db
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
-    yield
+    try:
+        yield
+    finally:
+        # The direct monitor owns a native audio device in a child process.
+        # Always release it when Uvicorn/Electron shuts down.
+        audio_service.stop_monitoring()
 
 
 app = FastAPI(

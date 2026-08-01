@@ -198,6 +198,84 @@ def _drop_quiet_artifacts(notes: list, pitch_frames: list, step: float,
     return result
 
 
+def refine_neural_reference(notes: list, pitch_frames: list,
+                            frame_step_sec: float = 0.01) -> list:
+    """Remove only acoustically unsupported pitch glitches from neural notes.
+
+    GAME supplies substantially better note events than a classical tracker,
+    but an isolated 80–250 ms jump can still be caused by vocal bleed or
+    reverb.  This pass deliberately does *not* merge equal-pitch neighbours:
+    they may be valid repeated syllables/attacks.  It removes a note only when
+    its melodic neighbours agree and the separated vocal is also quiet there.
+    """
+    refined = _fix_octave_errors(notes)
+    refined = _fix_pitch_spikes(refined)
+    return _drop_quiet_artifacts(refined, pitch_frames, frame_step_sec)
+
+
+def correct_confirmed_neural_octaves(notes: list, pitch_frames: list,
+                                     min_group_notes: int = 3,
+                                     min_group_duration: float = 0.45) -> list:
+    """Correct a sustained GAME octave error only when TorchCrepe confirms it.
+
+    An isolated disagreement is deliberately ignored: either tracker can be
+    wrong for a consonant or a harmonic.  A correction needs a contiguous
+    group of confident frames whose pitch disagrees by at least a fourth with
+    GAME and stays mutually consistent across several note events.
+    """
+    if not notes or not pitch_frames:
+        return notes
+
+    observations = []
+    for index, note in enumerate(notes):
+        # Ignore the very first/last frame: onset and release are naturally
+        # less stable than the sustained part of a note.
+        lead_in = min(0.03, note["duration"] * 0.2)
+        lead_out = min(0.03, note["duration"] * 0.2)
+        values = [
+            float(frame["f0_hz"])
+            for frame in pitch_frames
+            if note["start"] + lead_in <= frame.get("time", -1) < note["end"] - lead_out
+            and frame.get("f0_hz") is not None
+            and float(frame.get("confidence", 0)) >= 0.70
+        ]
+        if len(values) < 4:
+            continue
+        observed_midi = int(round(69 + 12 * np.log2(float(np.median(values)) / 440.0)))
+        expected_midi = note_to_midi(note["note"])
+        difference = observed_midi - expected_midi
+        if abs(difference) >= 5:
+            observations.append((index, observed_midi, difference))
+
+    groups = []
+    for item in observations:
+        if not groups:
+            groups.append([item])
+            continue
+        previous = groups[-1][-1]
+        previous_note, current_note = notes[previous[0]], notes[item[0]]
+        is_contiguous = item[0] == previous[0] + 1
+        close_in_time = current_note["start"] - previous_note["end"] <= 0.08
+        similar_shift = abs(item[2] - previous[2]) <= 2
+        if is_contiguous and close_in_time and similar_shift:
+            groups[-1].append(item)
+        else:
+            groups.append([item])
+
+    corrected = [dict(note) for note in notes]
+    for group in groups:
+        duration = sum(corrected[index]["duration"] for index, _, _ in group)
+        if len(group) < min_group_notes or duration < min_group_duration:
+            continue
+        for index, observed_midi, _ in group:
+            corrected[index]["note"] = midi_to_note(observed_midi)
+            corrected[index]["confidence"] = min(
+                float(corrected[index].get("confidence", 1.0)), 0.92,
+            )
+            corrected[index]["source"] = "game_torchcrepe_consensus"
+    return corrected
+
+
 def _snap_note_onsets(notes: list, pitch_frames: list, step: float,
                        max_lookback_sec: float = 0.12,
                        rise_margin_db: float = 6.0) -> list:

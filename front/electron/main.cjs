@@ -8,6 +8,7 @@
 //     запускает "Karaoke Studio", ему не нужно отдельно поднимать backend;
 //  3) IPC-мостик для управления окном и открытия папки песни в проводнике.
 const { app, BrowserWindow, ipcMain, session, shell } = require("electron");
+const http = require("http");
 const path = require("path");
 const { spawn } = require("child_process");
 
@@ -71,6 +72,13 @@ function startBackend() {
 
 function stopBackend() {
   clearTimeout(backendRestartTimer);
+  // Release a monitor even when development uses an external backend.
+  const request = http.request(`${BACKEND_URL}/audio/direct-monitor/stop`, {
+    method: "POST",
+    timeout: 500,
+  });
+  request.on("error", () => {});
+  request.end();
   if (backendProcess && !backendProcess.killed) {
     backendProcess.kill();
     backendProcess = null;

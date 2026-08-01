@@ -27,6 +27,7 @@ import {
 import { api } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
 import { Dropdown } from "../components/Dropdown";
+import { KARAOKE_THEMES, shuffleThemes } from "../assets/karaoke/themes";
 
 // ПРИМЕЧАНИЕ ПО СХЕМЕ ДАННЫХ: здесь предполагается, что lyrics.json — это
 // массив строк вида {start, end, text}, а reference.json — массив нот вида
@@ -38,20 +39,36 @@ function normalizeLyrics(raw) {
   if (!raw) return [];
   const list = Array.isArray(raw) ? raw : raw.lines || raw.segments || [];
   return list
-    .map((l) => ({
-      start: l.start ?? l.begin ?? 0,
-      end: l.end ?? l.start + 2,
-      text: l.text || l.line || "",
-      words: Array.isArray(l.words)
-        ? l.words
+    .map((line) => {
+      const fallbackStart = Number(line.start ?? line.begin ?? 0);
+      const fallbackEnd = Number(line.end ?? fallbackStart + 2);
+      const words = Array.isArray(line.words)
+        ? line.words
             .map((word) => ({
               text: word.word || word.text || "",
-              start: word.start ?? l.start ?? 0,
-              end: word.end ?? l.end ?? l.start + 2,
+              start: Number(word.start ?? fallbackStart),
+              end: Number(word.end ?? fallbackEnd),
             }))
-            .filter((word) => word.text)
-        : [],
-    }))
+            .filter(
+              (word) =>
+                word.text &&
+                Number.isFinite(word.start) &&
+                Number.isFinite(word.end) &&
+                word.end >= word.start,
+            )
+        : [];
+      // Segment boundaries can be several tenths of a second away from the
+      // sung phrase.  Word marks are produced from the vocal track, so use
+      // them as the canonical line bounds whenever they exist.
+      const start = words.length ? words[0].start : fallbackStart;
+      const end = words.length ? words.at(-1).end : fallbackEnd;
+      return {
+        start,
+        end: Math.max(start, end),
+        text: line.text || line.line || "",
+        words,
+      };
+    })
     .filter((l) => l.text);
 }
 
@@ -115,7 +132,6 @@ const SHARP_KEYS = [
   "A#",
   "B",
 ];
-
 function transposeKey(key, semitones) {
   if (!key) return "Тональность не определена";
   const match = /^([A-G](?:#|b)?)(.*)$/i.exec(key.trim());
@@ -190,6 +206,16 @@ function formatTime(sec) {
 function playbackGain(value) {
   const normalized = Math.max(0, Math.min(1, Number(value) || 0));
   return normalized ** 2;
+}
+
+function createPanoramaPath() {
+  return {
+    xPhaseA: Math.random() * Math.PI * 2,
+    xPhaseB: Math.random() * Math.PI * 2,
+    xPhaseC: Math.random() * Math.PI * 2,
+    yPhaseA: Math.random() * Math.PI * 2,
+    yPhaseB: Math.random() * Math.PI * 2,
+  };
 }
 
 function getYouTubeVideoId(url) {
@@ -313,6 +339,15 @@ export default function Karaoke({ onOpenAppSettings }) {
   const [monitorModeOpen, setMonitorModeOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
+  const [auroraSeed] = useState(() => Math.floor(Math.random() * 997));
+  const themeQueueRef = useRef(shuffleThemes());
+  const appliedThemeSongRef = useRef(song?.id);
+  const [activeTheme, setActiveTheme] = useState(
+    () => themeQueueRef.current.pop() || KARAOKE_THEMES[0],
+  );
+  const panoramaSkyRef = useRef(null);
+  const panoramaClockRef = useRef(0);
+  const panoramaPathRef = useRef(createPanoramaPath());
   const currentTimeRef = useRef(currentTime);
   const durationRef = useRef(duration);
   const controlsTimerRef = useRef(null);
@@ -348,6 +383,52 @@ export default function Karaoke({ onOpenAppSettings }) {
     1200,
     [microphoneOpen],
   );
+
+  useEffect(() => {
+    if (!song?.id || appliedThemeSongRef.current === song.id) return;
+    appliedThemeSongRef.current = song.id;
+
+    if (!themeQueueRef.current.length) {
+      themeQueueRef.current = shuffleThemes();
+    }
+    setActiveTheme(themeQueueRef.current.pop() || KARAOKE_THEMES[0]);
+    panoramaClockRef.current = 0;
+    panoramaPathRef.current = createPanoramaPath();
+  }, [song?.id]);
+
+  useEffect(() => {
+    const panorama = panoramaSkyRef.current;
+    if (!panorama || !isPlaying) return undefined;
+    let frameId;
+    const startedAt = performance.now() - panoramaClockRef.current;
+    const path = panoramaPathRef.current;
+    const cycleMs = 84_000;
+    const offsetSine = (phase) => Math.sin(phase);
+
+    const move = (now) => {
+      const elapsed = now - startedAt;
+      const theta = ((elapsed % cycleMs) / cycleMs) * Math.PI * 2;
+      // Integer harmonics make the 84-second path closed: frame 0 and the
+      // final frame have identical position and velocity, so no loop is seen.
+      const x =
+        96 * (Math.sin(theta + path.xPhaseA) - offsetSine(path.xPhaseA)) +
+        58 *
+          (Math.sin(theta * 3 + path.xPhaseB) - offsetSine(path.xPhaseB)) +
+        31 *
+          (Math.sin(theta * 5 + path.xPhaseC) - offsetSine(path.xPhaseC));
+      const y =
+        48 +
+        10 * (Math.sin(theta * 2 + path.yPhaseA) - offsetSine(path.yPhaseA)) +
+        5 * (Math.sin(theta * 5 + path.yPhaseB) - offsetSine(path.yPhaseB));
+      panorama.style.setProperty("--panorama-x", `-${x.toFixed(3)}cqh`);
+      panorama.style.setProperty("--panorama-y", `${y.toFixed(3)}%`);
+      panoramaClockRef.current = elapsed;
+      frameId = requestAnimationFrame(move);
+    };
+
+    frameId = requestAnimationFrame(move);
+    return () => cancelAnimationFrame(frameId);
+  }, [isPlaying]);
 
   useEffect(() => {
     if (
@@ -435,6 +516,7 @@ export default function Karaoke({ onOpenAppSettings }) {
       const monitor = browserMonitorRef.current;
       monitor?.stream.getTracks().forEach((track) => track.stop());
       monitor?.context.close();
+      browserMonitorRef.current = null;
       const guide = melodyGuideRef.current;
       guide?.oscillator.stop();
       guide?.context.close();
@@ -442,6 +524,17 @@ export default function Karaoke({ onOpenAppSettings }) {
     },
     [],
   );
+
+  useEffect(() => {
+    // Do not put this request in the component cleanup: React development
+    // mode deliberately runs cleanups once while mounting.  That could race
+    // with Play.  ``pagehide`` runs only for a real window/page shutdown.
+    const releaseMonitorOnClose = () => {
+      api.releaseDirectMonitoring();
+    };
+    window.addEventListener("pagehide", releaseMonitorOnClose);
+    return () => window.removeEventListener("pagehide", releaseMonitorOnClose);
+  }, []);
 
   useEffect(() => {
     const closeOnOutsideClick = (event) => {
@@ -521,17 +614,10 @@ export default function Karaoke({ onOpenAppSettings }) {
   melodyKeyShiftRef.current = keyShift;
   const youTubeVideoId = getYouTubeVideoId(song?.video_url);
 
-  // Whisper commonly places the first syllable a fraction before the actual
-  // vocal attack.  Anchor the lyric clock to the first nearby melody note so
-  // text, guide and voice begin together for every processed song.
-  const lyricAnchorNote = lyrics.length
-    ? notes.find((note) => note.end >= lyrics[0].start - 0.35)
-    : null;
-  const lyricDelay =
-    lyricAnchorNote && lyrics.length
-      ? Math.max(0, Math.min(0.5, lyricAnchorNote.start - lyrics[0].start))
-      : 0;
-  const lyricTime = Math.max(0, currentTime - lyricDelay);
+  // Lyrics and melody use the same instrumental clock.  A former global
+  // "anchor" delay shifted every word by up to half a second even when the
+  // word-level alignment was already correct for the current song.
+  const lyricTime = currentTime;
 
   const currentLineIndex = lyrics.findIndex(
     (l) => lyricTime >= l.start && lyricTime < l.end,
@@ -541,9 +627,6 @@ export default function Karaoke({ onOpenAppSettings }) {
   // Before a phrase starts, upcomingLine is already the large primary cue.
   // Do not render it a second time as the "next" line underneath.
   const nextLine = currentLine ? lyrics[currentLineIndex + 1] : null;
-  const secondsUntilLyrics = upcomingLine
-    ? Math.max(0, upcomingLine.start - lyricTime)
-    : 0;
 
   const sendYouTubeCommand = (func, args = []) => {
     youTubeClipRef.current?.contentWindow?.postMessage(
@@ -911,6 +994,14 @@ export default function Karaoke({ onOpenAppSettings }) {
         setRecordingError(`Не удалось сохранить запись: ${error.message}`);
       }
     }
+    // Stop marks the end of a take. Do not leave a temporary monitor open;
+    // the next Play starts it again automatically.
+    const monitor = browserMonitorRef.current;
+    monitor?.stream.getTracks().forEach((track) => track.stop());
+    monitor?.context.close();
+    browserMonitorRef.current = null;
+    setMonitoringEnabled(false);
+    await api.stopDirectMonitoring().catch(() => {});
   };
 
   const returnToLibrary = async () => {
@@ -1183,38 +1274,6 @@ export default function Karaoke({ onOpenAppSettings }) {
           />
         )
       )}
-
-      <div
-        className={`karaoke-immersive-atmosphere ${isPlaying ? "is-playing" : ""} ${isPitchDetected ? "is-singing" : ""}`}
-        aria-hidden="true"
-      >
-        <i className="karaoke-atmosphere-orb" />
-        <i className="karaoke-atmosphere-orb karaoke-atmosphere-orb-secondary" />
-        <i className="karaoke-atmosphere-grid" />
-        <i className="karaoke-atmosphere-beam" />
-        <i className="karaoke-atmosphere-spotlight karaoke-atmosphere-spotlight--one" />
-        <i className="karaoke-atmosphere-spotlight karaoke-atmosphere-spotlight--two" />
-        <i className="karaoke-atmosphere-laser karaoke-atmosphere-laser--one" />
-        <i className="karaoke-atmosphere-laser karaoke-atmosphere-laser--two" />
-        <i className="karaoke-atmosphere-fog" />
-        <div className="karaoke-atmosphere-crowd">
-          {Array.from({ length: 22 }, (_, index) => (
-            <i key={index} />
-          ))}
-        </div>
-        <div className="karaoke-atmosphere-particles">
-          {Array.from({ length: 44 }, (_, index) => (
-            <i
-              key={index}
-              style={{
-                "--particle-x": `${(index * 17) % 96}%`,
-                "--particle-bottom": `${2 + ((index * 11) % 36)}%`,
-                "--particle-delay": `${index * -130}ms`,
-              }}
-            />
-          ))}
-        </div>
-      </div>
 
       {microphoneOpen && (
         <div
@@ -1622,34 +1681,67 @@ export default function Karaoke({ onOpenAppSettings }) {
         />
       )}
 
-      <div className="karaoke-performance-stage">
+      <div
+        className={`karaoke-performance-stage karaoke-aurora-stage ${isPlaying ? "is-playing" : ""}`}
+      >
         <div
-          className={`karaoke-3d-flight ${isPlaying ? "is-playing" : ""} ${isPitchDetected ? "is-singing" : ""}`}
-          style={{
-            "--karaoke-beat":
-              Number(song.tempo_override) > 0
-                ? `${60 / Number(song.tempo_override)}s`
-                : ".5s",
-          }}
+          ref={panoramaSkyRef}
+          className="karaoke-panoramic-sky"
+          style={{ "--panorama-image": `url(${activeTheme.image})` }}
           aria-hidden="true"
-        >
-          <i className="karaoke-flight-road" />
-          <i className="karaoke-flight-horizon" />
-          <i className="karaoke-flight-ring karaoke-flight-ring--one" />
-          <i className="karaoke-flight-ring karaoke-flight-ring--two" />
-          <i className="karaoke-flight-crystal karaoke-flight-crystal--one" />
-          <i className="karaoke-flight-crystal karaoke-flight-crystal--two" />
-          <div className="karaoke-flight-cover">
-            {song.title.slice(0, 1).toUpperCase()}
-          </div>
-          <div className="karaoke-flight-stars">
-            {Array.from({ length: 36 }, (_, index) => (
+        />
+        <div className="karaoke-aurora-world" aria-hidden="true">
+          <i className="aurora-nebula aurora-nebula--left" />
+          <i className="aurora-nebula aurora-nebula--center" />
+          <i className="aurora-nebula aurora-nebula--right" />
+          <i className="aurora-cloud-texture aurora-cloud-texture--left" />
+          <i className="aurora-cloud-texture aurora-cloud-texture--right" />
+          <i className="aurora-solar-flare" />
+          <i className="aurora-horizon-city" />
+          <i className="aurora-grid-floor" />
+          <i className="aurora-floor-pulse aurora-floor-pulse--one" />
+          <i className="aurora-floor-pulse aurora-floor-pulse--two" />
+          <i className="aurora-floor-pulse aurora-floor-pulse--three" />
+          <i className="aurora-ring aurora-ring--one" />
+          <i className="aurora-ring aurora-ring--two" />
+          <i className="aurora-ring aurora-ring--three" />
+          <i className="aurora-ribbon aurora-ribbon--one" />
+          <i className="aurora-ribbon aurora-ribbon--two" />
+          <i className="aurora-ribbon aurora-ribbon--three" />
+          <i className="aurora-arc-pulse aurora-arc-pulse--one" />
+          <i className="aurora-arc-pulse aurora-arc-pulse--two" />
+          <i className="aurora-arc-pulse aurora-arc-pulse--three" />
+          <i className="aurora-comet aurora-comet--one" />
+          <i className="aurora-comet aurora-comet--two" />
+          <i className="aurora-comet aurora-comet--three" />
+          <div className="aurora-stars">
+            {Array.from({ length: 96 }, (_, index) => (
               <i
                 key={index}
                 style={{
-                  "--star-x": `${(index * 23) % 96}%`,
-                  "--star-y": `${(index * 13) % 92}%`,
-                  "--star-delay": `${index * -150}ms`,
+                  "--aurora-x": `${(index * 47 + auroraSeed) % 100}%`,
+                  "--aurora-y": `${(index * 29 + auroraSeed * 3) % 92}%`,
+                  "--aurora-delay": `${(index * -137) % 5800}ms`,
+                  "--aurora-depth": `${1 + (index % 4)}`,
+                }}
+              />
+            ))}
+          </div>
+          <div className="aurora-particles">
+            {Array.from({ length: 112 }, (_, index) => (
+              <i
+                key={index}
+                style={{
+                  "--particle-angle": `${(index * 137.5 + auroraSeed) % 360}deg`,
+                  "--particle-distance": `${32 + ((index * 29) % 74)}vmax`,
+                  "--particle-delay": `${(index * -211) % 6000}ms`,
+                  "--particle-size": `${1 + (index % 6)}px`,
+                  "--particle-color": [
+                    "#ff5c99",
+                    "#ff9d42",
+                    "#c786ff",
+                    "#fff3d5",
+                  ][index % 4],
                 }}
               />
             ))}
@@ -1685,21 +1777,12 @@ export default function Karaoke({ onOpenAppSettings }) {
                 className="karaoke-lyric karaoke-lyric-current"
               />
             ) : upcomingLine ? (
-              secondsUntilLyrics > 8 ? (
-                <div className="karaoke-lyric karaoke-lyric-current">
-                  {
-                    "\u0412\u0441\u0442\u0443\u043f\u043b\u0435\u043d\u0438\u0435 \u00b7 \u0441\u043b\u043e\u0432\u0430 \u0447\u0435\u0440\u0435\u0437 "
-                  }
-                  {formatTime(secondsUntilLyrics)}
-                </div>
-              ) : (
-                <KaraokeLyricLine
-                  key={`${upcomingLine.start}-${upcomingLine.text}`}
-                  line={upcomingLine}
-                  currentTime={lyricTime}
-                  className="karaoke-lyric karaoke-lyric-current karaoke-lyric-upcoming"
-                />
-              )
+              <KaraokeLyricLine
+                key={`${upcomingLine.start}-${upcomingLine.text}`}
+                line={upcomingLine}
+                currentTime={lyricTime}
+                className="karaoke-lyric karaoke-lyric-current karaoke-lyric-upcoming"
+              />
             ) : (
               lyrics.length > 0 && (
                 <div className="karaoke-lyric karaoke-lyric-current">
@@ -1721,19 +1804,9 @@ export default function Karaoke({ onOpenAppSettings }) {
       </div>
 
       {/* Таймлайн + транспорт */}
-      <div
-        className="karaoke-transport-area"
-        style={{ padding: "12px 24px 22px" }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            marginBottom: 10,
-          }}
-        >
-          <span className="mono text-muted" style={{ fontSize: 12, width: 40 }}>
+      <div className="karaoke-transport-area">
+        <div className="karaoke-timeline-row">
+          <span className="mono karaoke-timecode">
             {formatTime(currentTime)}
           </span>
           <WaveformTimeline
@@ -1741,21 +1814,12 @@ export default function Karaoke({ onOpenAppSettings }) {
             duration={duration}
             onChange={seekTo}
           />
-          <span className="mono text-muted" style={{ fontSize: 12, width: 40 }}>
+          <span className="mono karaoke-timecode karaoke-timecode-end">
             {formatTime(duration)}
           </span>
         </div>
 
-        <div
-          className="karaoke-playback-controls"
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            gap: 14,
-            marginBottom: 18,
-          }}
-        >
+        <div className="karaoke-playback-controls">
           <div className="karaoke-player-meta">
             <span>Мелодическая карта</span>
             <strong>{song.title}</strong>
@@ -1764,13 +1828,7 @@ export default function Karaoke({ onOpenAppSettings }) {
             <SkipBack size={16} />
           </button>
           <button
-            className="btn btn-primary"
-            style={{
-              width: 46,
-              height: 46,
-              borderRadius: "50%",
-              justifyContent: "center",
-            }}
+            className="btn btn-primary karaoke-play-button"
             onClick={togglePlay}
           >
             {isPlaying ? <Pause size={18} /> : <Play size={18} />}
@@ -1823,7 +1881,11 @@ export default function Karaoke({ onOpenAppSettings }) {
   );
 }
 
-function KaraokeLyricLine({ line, currentTime, className }) {
+function KaraokeLyricLine({
+  line,
+  currentTime,
+  className,
+}) {
   const words = line.words?.length
     ? line.words
     : line.text
@@ -1833,25 +1895,25 @@ function KaraokeLyricLine({ line, currentTime, className }) {
         .map((text) => ({ text }));
   const totalWeight =
     words.reduce((sum, word) => sum + Math.max(word.text.length, 1), 0) || 1;
-  const progress = Math.max(
-    0,
-    Math.min(
-      1,
-      (currentTime - line.start) / Math.max(0.01, line.end - line.start),
-    ),
-  );
   let passedWeight = 0;
+  const wordTimings = words.map((word) => {
+    const weight = Math.max(word.text.length, 1) / totalWeight;
+    const declaredStart = Number(word.start);
+    const declaredEnd = Number(word.end);
+    const start = Number.isFinite(declaredStart)
+      ? declaredStart
+      : line.start + (passedWeight / totalWeight) * (line.end - line.start);
+    const end = Number.isFinite(declaredEnd) && declaredEnd > start
+      ? declaredEnd
+      : start + weight * (line.end - line.start);
+    passedWeight += Math.max(word.text.length, 1);
+    return { start, end };
+  });
 
   return (
     <div className={className}>
       {words.map((word, index) => {
-        const weight = Math.max(word.text.length, 1) / totalWeight;
-        const wordStart = Number.isFinite(word.start)
-          ? word.start
-          : line.start + (passedWeight / totalWeight) * (line.end - line.start);
-        const wordEnd = Number.isFinite(word.end)
-          ? word.end
-          : wordStart + weight * (line.end - line.start);
+        const { start: wordStart, end: wordEnd } = wordTimings[index];
         const fill = Math.max(
           0,
           Math.min(
@@ -1859,15 +1921,30 @@ function KaraokeLyricLine({ line, currentTime, className }) {
             (currentTime - wordStart) / Math.max(0.01, wordEnd - wordStart),
           ),
         );
-        passedWeight += word.text.length;
+        const characters = Array.from(word.text);
+        const characterProgress = fill * characters.length;
         return (
           <span
             className="karaoke-lyric-word"
             style={{ "--lyric-fill": `${Math.round(fill * 100)}%` }}
             key={`${word.text}-${index}`}
           >
-            {word.text}
-            {index < words.length - 1 ? " " : ""}
+            {characters.map((character, characterIndex) => (
+              <span
+                className="karaoke-lyric-character"
+                style={{
+                  "--character-fill": `${Math.round(
+                    Math.max(
+                      0,
+                      Math.min(1, characterProgress - characterIndex),
+                    ) * 100,
+                  )}%`,
+                }}
+                key={`${character}-${characterIndex}`}
+              >
+                {character}
+              </span>
+            ))}
           </span>
         );
       })}
@@ -2250,8 +2327,8 @@ function MelodyRoll({
 }) {
   const width = 1000;
   const height = 310;
-  const scaleWidth = 46;
-  const noteLaneStart = 66;
+  const scaleWidth = 38;
+  const noteLaneStart = 54;
   // Keep a moderately shorter window: notes are more legible without making
   // the timeline feel detached from the music.
   const windowSeconds = 10;
@@ -2369,10 +2446,6 @@ function MelodyRoll({
             <stop offset=".45" stopColor="#4ade80" />
             <stop offset="1" stopColor="#16a34a" />
           </linearGradient>
-          <linearGradient id="melody-scale-rail" x1="0" x2="1" y1="0" y2="0">
-            <stop offset="0" stopColor="rgba(16,13,30,.52)" />
-            <stop offset="1" stopColor="rgba(25,17,43,.16)" />
-          </linearGradient>
           <filter
             id="melody-active-glow"
             x="-40%"
@@ -2400,15 +2473,6 @@ function MelodyRoll({
             </feMerge>
           </filter>
         </defs>
-        <rect
-          x="0"
-          y="0"
-          width={scaleWidth}
-          height={height}
-          rx="12"
-          fill="url(#melody-scale-rail)"
-          stroke="rgba(129,140,248,.2)"
-        />
         {displayMidiLanes.map((midi) => {
           const isOctave = midi % 12 === 0;
           const isCurrentPitch = activeMidi === midi;
@@ -2416,12 +2480,12 @@ function MelodyRoll({
             <g key={midi}>
               {isCurrentPitch && (
                 <rect
-                  x="1"
+                  x="2"
                   y={y(midi) + 1}
-                  width={scaleWidth - 2}
+                  width={scaleWidth - 4}
                   height={Math.max(9, rowHeight - 2)}
                   rx="7"
-                  fill="rgba(99,102,241,.3)"
+                  fill="rgba(129,140,248,.22)"
                 />
               )}
               <line
@@ -2436,12 +2500,12 @@ function MelodyRoll({
               <>
                 {isCurrentPitch && (
                   <path
-                    d={`M36 ${y(midi) + rowHeight / 2 - 6} L46 ${y(midi) + rowHeight / 2} L36 ${y(midi) + rowHeight / 2 + 6}Z`}
+                    d={`M27 ${y(midi) + rowHeight / 2 - 5} L39 ${y(midi) + rowHeight / 2} L27 ${y(midi) + rowHeight / 2 + 5}Z`}
                     fill="#c4b5fd"
                   />
                 )}
                 <text
-                  x="23"
+                  x="18"
                   y={y(midi) + rowHeight / 2 + 4}
                   textAnchor="middle"
                   fill={
@@ -2479,16 +2543,6 @@ function MelodyRoll({
               opacity={pastOpacity}
               className={`melody-note-platform ${isCurrent ? "is-current" : ""} ${isHit ? "is-hit" : ""}`}
             >
-              <rect
-                x={noteX + 5}
-                y={noteY + Math.min(7, noteHeight / 2)}
-                width={Math.max(2, noteWidth - 2)}
-                height={noteHeight}
-                rx={Math.min(9, Math.max(3.5, noteHeight / 3))}
-                fill={isHit ? "rgba(22,163,74,.30)" : "rgba(8,11,24,.44)"}
-                stroke="rgba(255,255,255,.11)"
-                strokeWidth="1"
-              />
               <rect
                 x={noteX}
                 y={noteY}
