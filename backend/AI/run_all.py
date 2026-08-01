@@ -29,6 +29,7 @@ import json
 from pathlib import Path
 
 from src.analyze.breath import analyze_breath
+from src.analyze.game import extract_game_reference
 from src.analyze.music import analyze_music
 from src.analyze.structure import segment_structure
 from src.analyze.vocal import analyze_vocal
@@ -137,21 +138,23 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
         reference_notes = load_json(reference_path)
     else:
         print("6/13 Построение эталонной мелодии...")
-        reference_notes = build_reference(
-            pitch_frames,
-            # Keep quiet syllables in the guide while still filtering
-            # single-frame pYIN artefacts in the post-processing stages.
-            min_note_duration=0.12,
-            confidence_percentile=18.0,
-            min_confidence_floor=0.03,
-            max_confidence_ceiling=0.42,
-            # A vocal pitch tracker reports vibrato as repeated semitone
-            # crossings. Require a short held contour before emitting a new
-            # karaoke note, so the guide follows melody rather than tremolo.
-            smoothing_window=9,
-            stable_frames=7,
-            max_gap_sec=0.12,
-        )
+        reference_notes = extract_game_reference(vocals_path, out, language)
+        if reference_notes is None:
+            reference_notes = build_reference(
+                pitch_frames,
+                # Keep quiet syllables in the guide while still filtering
+                # single-frame pYIN artefacts in the post-processing stages.
+                min_note_duration=0.12,
+                confidence_percentile=18.0,
+                min_confidence_floor=0.03,
+                max_confidence_ceiling=0.42,
+                # A vocal pitch tracker reports vibrato as repeated semitone
+                # crossings. Require a short held contour before emitting a new
+                # karaoke note, so the guide follows melody rather than tremolo.
+                smoothing_window=9,
+                stable_frames=7,
+                max_gap_sec=0.12,
+            )
         save_json(reference_notes, reference_path)
 
     # --- 7/13 Анализ дыхания ---
@@ -212,12 +215,14 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
     # повторном запуске; сам шаг идемпотентен.
     print("9.5/13 Дозаполнение пробелов и разбиение долгих нот по слогам...")
     notes_before = len(reference_notes)
-    reference_notes = fill_gaps_during_active_singing(reference_notes, lyrics_sync, pitch_frames)
-    reference_notes = split_notes_by_syllables(
-        reference_notes, lyrics_sync, pitch_frames,
-        acoustic_search_window=0.12,
-        acoustic_dip_margin_db=3.5,
-    )
+    using_game = (out / "game_notes.json").exists()
+    if not using_game:
+        reference_notes = fill_gaps_during_active_singing(reference_notes, lyrics_sync, pitch_frames)
+        reference_notes = split_notes_by_syllables(
+            reference_notes, lyrics_sync, pitch_frames,
+            acoustic_search_window=0.12,
+            acoustic_dip_margin_db=3.5,
+        )
     reference_notes = align_note_boundaries_to_words(reference_notes, lyrics_sync, pitch_frames)
     if len(reference_notes) != notes_before:
         print(f"   ноты: {notes_before} -> {len(reference_notes)}")

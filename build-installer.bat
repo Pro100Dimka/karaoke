@@ -18,13 +18,18 @@ if not defined FFMPEG_PATH (
   exit /b 1
 )
 
+if not exist "%BACKEND_DIR%\engines\game\models\GAME-1.0.3-large-onnx\config.json" (
+  call "%PROJECT_ROOT%setup-game-engine.bat"
+  if errorlevel 1 exit /b 1
+)
+
 echo [1/3] Installing the backend packager when needed...
 "%PYTHON%" -m pip install pyinstaller
 if errorlevel 1 exit /b 1
 
 echo [2/3] Building KaraokeBackend.exe...
 pushd "%BACKEND_DIR%"
-"%PYTHON%" -m PyInstaller --noconfirm --clean --onedir --name KaraokeBackend --paths "%BACKEND_DIR%\AI" --add-data "%BACKEND_DIR%\AI;AI" --add-binary "%FFMPEG_PATH%;." --hidden-import run_all --collect-submodules app --collect-submodules src --collect-all demucs --collect-all whisper --collect-all torch run.py
+"%PYTHON%" -m PyInstaller --noconfirm --clean --onedir --name KaraokeBackend --paths "%BACKEND_DIR%\AI" --add-data "%BACKEND_DIR%\AI;AI" --add-data "%BACKEND_DIR%\engines\game\models\GAME-1.0.3-large-onnx;engines\game\models\GAME-1.0.3-large-onnx" --add-binary "%FFMPEG_PATH%;." --hidden-import run_all --collect-submodules app --collect-submodules src --collect-all demucs --collect-all whisper --collect-all torch --collect-all onnxruntime run.py
 if errorlevel 1 (
   popd
   exit /b 1

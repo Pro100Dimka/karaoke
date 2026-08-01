@@ -7,18 +7,21 @@ import argparse
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 
 def separate(
     input_path: str,
     out_dir: str,
-    model: str = "htdemucs_ft",
+    model: str | None = None,
     two_stems: bool = True,
     shifts: int | None = None,
 ):
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    model = model or os.getenv("SONGAPP_DEMUCS_MODEL", "htdemucs_ft")
+    requested_device = os.getenv("SONGAPP_DEVICE", "auto").lower()
 
     # Максимальная длина сегмента для разных моделей
     segment = "7" if model == "htdemucs_ft" or model.startswith("htdemucs") else "10"
@@ -29,7 +32,10 @@ def separate(
     demucs_shifts = shifts if shifts is not None else int(os.getenv("SONGAPP_DEMUCS_SHIFTS", "1"))
     demucs_shifts = max(1, demucs_shifts)
     cmd = [
-        "demucs",
+        # Do not resolve an unrelated demucs.exe from PATH.  The package must
+        # run in this application's Python environment so its Torch build and
+        # CUDA availability always match the backend diagnostics.
+        sys.executable, "-m", "demucs",
         "-n", model,
         "-o", str(out_dir),
         "--segment", segment,
@@ -41,7 +47,7 @@ def separate(
     try:
         import torch
 
-        if torch.cuda.is_available():
+        if requested_device != "cpu" and torch.cuda.is_available():
             cmd += ["-d", "cuda"]
             print("Используется GPU CUDA")
         else:
