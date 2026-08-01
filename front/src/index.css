@@ -843,6 +843,9 @@ table.data-table tbody tr:hover {
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
+.legacy-browser-monitoring {
+  display: none !important;
+}
 .karaoke-settings-toggles {
   display: flex;
   gap: 8px;
@@ -852,6 +855,54 @@ table.data-table tbody tr:hover {
   grid-template-columns: repeat(4, 1fr);
   gap: 14px;
   font-size: 12px;
+}
+.karaoke-setting-choice {
+  display: grid;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+.karaoke-setting-choice > small {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.karaoke-speed-switch,
+.karaoke-key-stepper {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent-2) 25%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-deep) 58%, transparent);
+}
+.karaoke-speed-switch button,
+.karaoke-key-stepper button {
+  min-width: 0;
+  height: 32px;
+  border: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+.karaoke-speed-switch { gap: 2px; padding: 2px; }
+.karaoke-speed-switch button { flex: 1; border-radius: 7px; font-size: 11px; }
+.karaoke-speed-switch button.is-active {
+  color: #fff;
+  background: var(--accent-gradient);
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--accent-1) 28%, transparent);
+}
+.karaoke-key-stepper button { width: 34px; font-size: 20px; line-height: 1; }
+.karaoke-key-stepper button:hover:not(:disabled) { color: #fff; background: color-mix(in srgb, var(--accent-1) 30%, transparent); }
+.karaoke-key-stepper button:disabled { opacity: .32; cursor: default; }
+.karaoke-key-stepper strong {
+  flex: 1;
+  overflow: hidden;
+  padding: 0 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .microphone-panel-title {
   grid-column: 1 / -1;

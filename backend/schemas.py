@@ -212,25 +212,42 @@ class AudioDeviceOut(BaseModel):
     is_asio: bool
 
 
+class AudioOutputDeviceOut(BaseModel):
+    index: int
+    name: str
+    max_output_channels: int
+    default_samplerate: float | None = None
+    host_api: str
+    is_asio: bool
+
+
+class AsioDriverOut(BaseModel):
+    name: str
+
+
 class AudioSettingsOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     input_device_id: int | None = None
     input_device_name: str | None = None
+    output_device_id: int | None = None
     volume: float
     sensitivity: float
     latency_ms: int
     audio_driver: str
+    asio_driver_name: str | None = None
     buffer_size: int
     monitoring_enabled: bool
 
 
 class AudioSettingsUpdate(BaseModel):
     input_device_id: int | None = None
+    output_device_id: int | None = None
     volume: float | None = Field(default=None, ge=0, le=4)
     sensitivity: float | None = Field(default=None, ge=0, le=1)
     latency_ms: int | None = Field(default=None, ge=0)
     audio_driver: str | None = None
+    asio_driver_name: str | None = Field(default=None, max_length=255)
     buffer_size: int | None = Field(default=None, ge=16, le=2048)
     monitoring_enabled: bool | None = None
 

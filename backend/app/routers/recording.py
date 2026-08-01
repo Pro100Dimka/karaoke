@@ -29,7 +29,7 @@ def start_recording(body: schemas.RecordingStartRequest, db: Session = Depends(g
             song_id=song.id,
             device_id=audio_service.preferred_input_device(settings.input_device_id),
             output_device_id=audio_service.preferred_output_device(
-                settings.input_device_id, settings.audio_driver,
+                settings.input_device_id, settings.audio_driver, settings.output_device_id,
             ),
             sample_rate=audio_service.preferred_sample_rate(
                 settings.input_device_id, settings.audio_driver,

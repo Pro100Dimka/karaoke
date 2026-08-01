@@ -111,10 +111,12 @@ class AudioSettings(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     input_device_id: Mapped[int | None] = mapped_column(Integer)
     input_device_name: Mapped[str | None] = mapped_column(String)
+    output_device_id: Mapped[int | None] = mapped_column(Integer)
     volume: Mapped[float] = mapped_column(Float, default=1.0)
     sensitivity: Mapped[float] = mapped_column(Float, default=0.5)
     latency_ms: Mapped[int] = mapped_column(Integer, default=50)
     audio_driver: Mapped[str] = mapped_column(String, default="auto")
+    asio_driver_name: Mapped[str | None] = mapped_column(String)
     buffer_size: Mapped[int] = mapped_column(Integer, default=64)
     monitoring_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     updated_at: Mapped[datetime] = mapped_column(

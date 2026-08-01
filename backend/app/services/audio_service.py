@@ -1,5 +1,10 @@
 """Микрофон и звук: список устройств, настройки записи, проверка сигнала."""
+import json
+import logging
+import subprocess
+import sys
 import threading
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 
@@ -14,9 +19,35 @@ except Exception:
     _AUDIO_BACKEND_AVAILABLE = False
 
 
-_monitor_stream = None
+_monitor_process: subprocess.Popen[str] | None = None
+_monitor_reader: threading.Thread | None = None
 _monitor_lock = threading.Lock()
 _monitor_signal = {"rms_db": -120.0, "clipping": False, "silent": True}
+logger = logging.getLogger(__name__)
+
+
+def _asio_bridge_path() -> Path:
+    if config.IS_FROZEN:
+        return Path(sys.executable).with_name("KaraokeAsioBridge.exe")
+    return Path(config.BASE_DIR) / "engines" / "asio" / "build" / "KaraokeAsioBridge.exe"
+
+
+def list_asio_drivers() -> list[str]:
+    """Enumerate native ASIO drivers through the isolated C++ bridge."""
+    bridge = _asio_bridge_path()
+    if not bridge.is_file():
+        return []
+    try:
+        result = subprocess.run(
+            [str(bridge), "--list"], capture_output=True, text=True,
+            encoding="utf-8", timeout=4, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        payload = json.loads(result.stdout.strip().splitlines()[-1])
+        drivers = payload.get("drivers", [])
+        return [str(name) for name in drivers if isinstance(name, str)]
+    except (OSError, ValueError, subprocess.SubprocessError, IndexError) as exc:
+        logger.warning("Could not enumerate ASIO drivers: %s", exc)
+        return []
 
 
 def _preferred_device_index(device_id: int | None, kind: str) -> int | None:
@@ -39,7 +70,22 @@ def _is_asio_device(device: dict) -> bool:
     return "asio" in _host_api_name(device).lower()
 
 
-def preferred_output_device(input_device_id: int | None = None, driver: str = "auto") -> int | None:
+def _resolved_device_index(device_id: int | None, kind: str) -> int:
+    if device_id is not None:
+        return device_id
+    default_input, default_output = sd.default.device
+    return int(default_input if kind == "input" else default_output)
+
+
+def _is_wasapi_device(device: dict) -> bool:
+    return "wasapi" in _host_api_name(device).lower()
+
+
+def preferred_output_device(
+    input_device_id: int | None = None, driver: str = "auto", output_device_id: int | None = None,
+) -> int | None:
+    if output_device_id is not None:
+        return output_device_id
     if not _AUDIO_BACKEND_AVAILABLE or driver != "asio" or input_device_id is None:
         return None
     device = sd.query_devices(input_device_id)
@@ -74,6 +120,24 @@ def list_input_devices() -> list[dict]:
     return result
 
 
+def list_output_devices() -> list[dict]:
+    if not _AUDIO_BACKEND_AVAILABLE:
+        return []
+    result = []
+    for idx, dev in enumerate(sd.query_devices()):
+        if dev.get("max_output_channels", 0) > 0:
+            host_api = _host_api_name(dev)
+            result.append({
+                "index": idx,
+                "name": f"{dev.get('name', f'device-{idx}')} [{host_api}]",
+                "max_output_channels": dev.get("max_output_channels", 0),
+                "default_samplerate": dev.get("default_samplerate"),
+                "host_api": host_api,
+                "is_asio": "asio" in host_api.lower(),
+            })
+    return result
+
+
 def _get_or_create_settings(db: Session) -> models.AudioSettings:
     settings = db.query(models.AudioSettings).filter(models.AudioSettings.id == 1).first()
     if settings is None:
@@ -85,11 +149,27 @@ def _get_or_create_settings(db: Session) -> models.AudioSettings:
 
 
 def get_settings(db: Session) -> models.AudioSettings:
-    return _get_or_create_settings(db)
+    settings = _get_or_create_settings(db)
+    # A professional interface with a native ASIO driver is the best default.
+    # Do this once, only while the user has not chosen a driver explicitly.
+    if settings.audio_driver == "auto" and not settings.asio_driver_name:
+        drivers = list_asio_drivers()
+        if drivers:
+            settings.asio_driver_name = next(
+                (name for name in drivers if "audient" in name.lower()), drivers[0],
+            )
+            settings.audio_driver = "asio"
+            db.commit()
+            db.refresh(settings)
+    return settings
 
 
 def update_settings(db: Session, patch: dict) -> models.AudioSettings:
     settings = _get_or_create_settings(db)
+    restart_monitor = settings.monitoring_enabled and bool(
+        {"input_device_id", "output_device_id", "volume", "audio_driver", "asio_driver_name", "buffer_size"}
+        & patch.keys()
+    )
     for field, value in patch.items():
         if field == "input_device_id" and value is None:
             settings.input_device_id = None
@@ -105,92 +185,185 @@ def update_settings(db: Session, patch: dict) -> models.AudioSettings:
     if settings.audio_driver not in {"auto", "asio"}:
         raise RuntimeError("Unsupported audio driver")
     if settings.audio_driver == "asio":
-        if settings.input_device_id is None:
-            raise RuntimeError("Select an ASIO input device first")
-        device = sd.query_devices(settings.input_device_id) if _AUDIO_BACKEND_AVAILABLE else None
-        if device is None or not _is_asio_device(device):
-            raise RuntimeError("The selected device is not available through ASIO")
+        drivers = list_asio_drivers()
+        if not drivers:
+            raise RuntimeError("Native ASIO bridge is not installed or no ASIO drivers were found")
+        if settings.asio_driver_name not in drivers:
+            settings.asio_driver_name = drivers[0]
     db.commit()
     db.refresh(settings)
-    configure_monitoring(settings)
+    # Saving an unrelated value must not close and reopen the native audio
+    # stream. Besides being slow, some ASIO drivers reject quick reopen calls.
+    if restart_monitor:
+        configure_monitoring(settings)
     return settings
 
 
 def stop_monitoring() -> None:
-    global _monitor_stream
+    global _monitor_process, _monitor_reader
     with _monitor_lock:
-        streams = _monitor_stream
-        _monitor_stream = None
-    if streams is not None:
-        for stream in streams:
-            try:
-                stream.stop()
-                stream.close()
-            except Exception:
-                pass
+        process = _monitor_process
+        _monitor_process = None
+        _monitor_reader = None
+        _monitor_signal.update({"rms_db": -120.0, "clipping": False, "silent": True})
+    if process is None or process.poll() is not None:
+        return
+    try:
+        # Terminating a separate worker is safe even if a native driver callback
+        # is stuck.  This is intentionally not done in the API process.
+        process.terminate()
+        process.wait(timeout=1.5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+    except OSError as exc:
+        logger.warning("Could not stop direct monitoring worker: %s", exc)
 
 
 def configure_monitoring(settings: models.AudioSettings) -> None:
-    """Start or stop one direct PortAudio monitor stream.
+    """Start or stop an isolated direct microphone monitor.
 
     Audio bypasses Chromium/WebAudio here, which avoids its extra buffering.
     """
     stop_monitoring()
     if not settings.monitoring_enabled:
         return
+    if settings.audio_driver == "asio":
+        _start_asio_monitor(settings)
+        return
     if not _AUDIO_BACKEND_AVAILABLE:
         raise RuntimeError("Audio backend is unavailable")
 
     input_device_id = _preferred_device_index(settings.input_device_id, "input")
-    output_device_id = preferred_output_device(input_device_id, settings.audio_driver)
+    output_device_id = preferred_output_device(
+        input_device_id, settings.audio_driver, settings.output_device_id,
+    )
     if settings.audio_driver == "asio" and output_device_id is None:
         raise RuntimeError("The selected ASIO device has no output channels")
-    output_info = sd.query_devices(output_device_id) if output_device_id is not None else sd.query_devices(kind="output")
+    resolved_input_id = _resolved_device_index(input_device_id, "input")
+    resolved_output_id = _resolved_device_index(output_device_id, "output")
+    input_info = sd.query_devices(resolved_input_id)
+    output_info = sd.query_devices(resolved_output_id)
     output_channels = min(2, int(output_info["max_output_channels"]))
     if output_channels < 1:
         raise RuntimeError("No output device is available for microphone monitoring")
     gain = max(0.0, min(4.0, settings.volume))
 
-    def callback(indata, outdata, frames, time_info, status):  # noqa: ARG001
-        processed = np.clip(indata[:, 0] * gain, -1.0, 1.0)
-        outdata.fill(0)
-        for channel in range(outdata.shape[1]):
-            outdata[:, channel] = processed
-        rms = float(np.sqrt(np.mean(np.square(processed)))) if len(processed) else 0.0
-        rms_db = 20 * np.log10(rms) if rms > 0 else -120.0
-        peak = float(np.max(np.abs(processed))) if len(processed) else 0.0
+    use_wasapi_exclusive = _is_wasapi_device(input_info) and _is_wasapi_device(output_info)
+    worker_options = {
+        "input_device_id": resolved_input_id,
+        "output_device_id": resolved_output_id,
+        "sample_rate": float(output_info["default_samplerate"]),
+        "output_channels": output_channels,
+        "blocksize": settings.buffer_size,
+        "gain": gain,
+        "wasapi_exclusive": use_wasapi_exclusive,
+    }
+    _start_monitor_worker(worker_options)
+
+
+def _start_asio_monitor(settings: models.AudioSettings) -> None:
+    bridge = _asio_bridge_path()
+    if not bridge.is_file():
+        raise RuntimeError("Native ASIO bridge is not built")
+    drivers = list_asio_drivers()
+    if settings.asio_driver_name not in drivers:
+        raise RuntimeError("Selected ASIO driver is unavailable")
+    command = [
+        str(bridge), "--driver", settings.asio_driver_name,
+        "--buffer-size", str(settings.buffer_size),
+        "--sample-rate", str(config.RECORDING_SAMPLE_RATE),
+    ]
+    _launch_monitor_process(command, cwd=bridge.parent)
+
+
+def _start_monitor_worker(worker_options: dict) -> None:
+    """Launch direct monitoring out-of-process and wait for its ready event."""
+    if config.IS_FROZEN:
+        worker = Path(sys.executable).with_name("KaraokeAudioMonitor.exe")
+        if not worker.is_file():
+            raise RuntimeError("The packaged audio-monitor worker is missing")
+        command = [str(worker), "--config", json.dumps(worker_options)]
+    else:
+        command = [sys.executable, "-m", "app.services.monitor_worker", "--config", json.dumps(worker_options)]
+    _launch_monitor_process(command, cwd=Path(config.BASE_DIR))
+
+
+def _launch_monitor_process(command: list[str], *, cwd: Path) -> None:
+    """Launch a JSON-line monitor process and wait for its ready event."""
+    global _monitor_process, _monitor_reader
+    ready = threading.Event()
+    state: dict[str, str | None] = {"error": None}
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    process = subprocess.Popen(
+        command,
+        cwd=cwd,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        creationflags=creationflags,
+    )
+
+    def consume_output() -> None:
+        assert process.stdout is not None
+        for line in process.stdout:
+            try:
+                message = json.loads(line)
+            except json.JSONDecodeError:
+                logger.warning("Audio monitor worker: %s", line.rstrip())
+                continue
+            event = message.get("event")
+            if event == "started":
+                ready.set()
+            elif event == "level":
+                with _monitor_lock:
+                    if _monitor_process is process:
+                        _monitor_signal.update({key: message[key] for key in _monitor_signal if key in message})
+            elif event == "error":
+                state["error"] = str(message.get("message") or "unknown audio worker error")
+                ready.set()
+        if not ready.is_set():
+            state["error"] = state["error"] or "audio monitoring worker terminated during startup"
+            ready.set()
         with _monitor_lock:
-            _monitor_signal.update({
-                "rms_db": round(rms_db, 1),
-                "clipping": peak >= 0.99,
-                "silent": rms_db < -50.0,
-            })
+            if _monitor_process is process and process.poll() is not None:
+                _monitor_signal.update({"rms_db": -120.0, "clipping": False, "silent": True})
 
-    try:
-        stream = sd.Stream(
-            samplerate=float(output_info["default_samplerate"]),
-            channels=(1, output_channels),
-            device=(input_device_id, output_device_id),
-            blocksize=settings.buffer_size,
-            latency="low",
-            callback=callback,
-        )
-        stream.start()
-    except Exception as exc:
-        raise RuntimeError(f"Could not start direct microphone monitoring: {exc}") from exc
+    reader = threading.Thread(target=consume_output, name="audio-monitor-reader", daemon=True)
     with _monitor_lock:
-        _monitor_stream = (stream,)
+        _monitor_process = process
+        _monitor_reader = reader
+    reader.start()
+    if not ready.wait(timeout=4):
+        stop_monitoring()
+        raise RuntimeError("Timed out starting direct microphone monitoring")
+    if state["error"]:
+        stop_monitoring()
+        raise RuntimeError(f"Could not start direct microphone monitoring: {state['error']}")
 
 
-def check_signal_quality(device_id: int | None, gain: float = 1.0, duration_sec: float = 0.5) -> dict:
+def check_signal_quality(
+    device_id: int | None,
+    gain: float = 1.0,
+    duration_sec: float = 0.5,
+    monitoring_expected: bool = False,
+) -> dict:
     """Короткая проверка: пишет duration_sec секунд с выбранного устройства
     и считает RMS-уровень — чтобы UI мог показать "тихо / нормально /
     клиппинг" ещё до полноценной записи."""
+    global _monitor_process
     if not _AUDIO_BACKEND_AVAILABLE:
         raise RuntimeError("Аудио-бэкенд (sounddevice) недоступен")
 
     with _monitor_lock:
-        if _monitor_stream is not None:
+        process = _monitor_process
+        if process is not None and process.poll() is None:
+            return dict(_monitor_signal)
+        if process is not None:
+            _monitor_process = None
+            _monitor_signal.update({"rms_db": -120.0, "clipping": False, "silent": True})
+        if monitoring_expected:
             return dict(_monitor_signal)
 
     sample_rate = 44100

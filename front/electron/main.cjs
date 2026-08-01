@@ -16,6 +16,8 @@ const BACKEND_URL = "http://127.0.0.1:8000";
 
 let mainWindow = null;
 let backendProcess = null;
+let isQuitting = false;
+let backendRestartTimer = null;
 
 function resolveBackendDir() {
   // В dev-режиме backend лежит рядом с проектом (../backend при обычной
@@ -33,7 +35,7 @@ function startBackend() {
   if (process.env.KARAOKE_BACKEND_EXTERNAL === "1") return;
   const backendDir = resolveBackendDir();
   const backendCommand = isDev
-    ? (process.platform === "win32" ? "python" : "python3")
+    ? (process.env.KARAOKE_PYTHON || (process.platform === "win32" ? "python" : "python3"))
     : path.join(backendDir, process.platform === "win32" ? "KaraokeBackend.exe" : "KaraokeBackend");
   const backendArgs = isDev ? ["run.py"] : [];
   const backendDataDir = isDev ? null : path.join(app.getPath("userData"), "backend-data");
@@ -55,12 +57,20 @@ function startBackend() {
     backendProcess.on("error", (err) => {
       console.error("Не удалось запустить backend:", err);
     });
+    backendProcess.on("exit", (code, signal) => {
+      backendProcess = null;
+      if (isQuitting || process.env.KARAOKE_BACKEND_EXTERNAL === "1") return;
+      console.error(`Backend stopped (${code ?? "unknown"}, ${signal ?? "no signal"}); restarting…`);
+      clearTimeout(backendRestartTimer);
+      backendRestartTimer = setTimeout(startBackend, 1200);
+    });
   } catch (err) {
     console.error("Не удалось запустить backend:", err);
   }
 }
 
 function stopBackend() {
+  clearTimeout(backendRestartTimer);
   if (backendProcess && !backendProcess.killed) {
     backendProcess.kill();
     backendProcess = null;
@@ -84,7 +94,6 @@ function createWindow() {
 
   if (isDev) {
     mainWindow.loadURL("http://127.0.0.1:5173");
-    mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
     mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
   }
@@ -117,8 +126,12 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
+  isQuitting = true;
   stopBackend();
   if (process.platform !== "darwin") app.quit();
 });
 
-app.on("before-quit", stopBackend);
+app.on("before-quit", () => {
+  isQuitting = true;
+  stopBackend();
+});

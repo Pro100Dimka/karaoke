@@ -11,8 +11,17 @@ export function Dropdown({ value, onChange, options, placeholder = "Выбери
     const close = (event) => {
       if (!ref.current?.contains(event.target)) setOpen(false);
     };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    // Settings modals stop bubbling mouse events. Capture sees the click
+    // before that handler, so a dropdown always closes outside itself.
+    document.addEventListener("pointerdown", close, true);
+    document.addEventListener("keydown", closeOnEscape, true);
+    return () => {
+      document.removeEventListener("pointerdown", close, true);
+      document.removeEventListener("keydown", closeOnEscape, true);
+    };
   }, []);
 
   useEffect(() => {

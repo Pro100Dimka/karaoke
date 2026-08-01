@@ -42,8 +42,12 @@ def init_db() -> None:
                 connection.execute(text(f"ALTER TABLE songs ADD COLUMN {column} VARCHAR"))
         if "audio_driver" not in audio_columns:
             connection.execute(text("ALTER TABLE audio_settings ADD COLUMN audio_driver VARCHAR DEFAULT 'auto'"))
+        if "asio_driver_name" not in audio_columns:
+            connection.execute(text("ALTER TABLE audio_settings ADD COLUMN asio_driver_name VARCHAR"))
         if "buffer_size" not in audio_columns:
             connection.execute(text("ALTER TABLE audio_settings ADD COLUMN buffer_size INTEGER DEFAULT 64"))
+        if "output_device_id" not in audio_columns:
+            connection.execute(text("ALTER TABLE audio_settings ADD COLUMN output_device_id INTEGER"))
 
 
 def get_db():

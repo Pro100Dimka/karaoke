@@ -90,6 +90,8 @@ export const api = {
 
   // Аудио
   listAudioDevices: () => request("/audio/devices"),
+  listAudioOutputDevices: () => request("/audio/output-devices"),
+  listAsioDrivers: () => request("/audio/asio-drivers"),
   getAudioSettings: () => request("/audio/settings"),
   updateAudioSettings: (patch) =>
     request("/audio/settings", { method: "POST", body: JSON.stringify(patch) }),

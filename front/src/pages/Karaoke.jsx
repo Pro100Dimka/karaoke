@@ -80,6 +80,23 @@ function noteNameToMidi(noteName) {
   return (Number(octaveText) + 1) * 12 + base + offset;
 }
 
+const KEY_PITCHES = {
+  C: 0, "C#": 1, Db: 1, D: 2, "D#": 3, Eb: 3, E: 4, F: 5,
+  "F#": 6, Gb: 6, G: 7, "G#": 8, Ab: 8, A: 9, "A#": 10, Bb: 10, B: 11,
+};
+const SHARP_KEYS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+function transposeKey(key, semitones) {
+  if (!key) return "Тональность не определена";
+  const match = /^([A-G](?:#|b)?)(.*)$/i.exec(key.trim());
+  if (!match) return key;
+  const [, rootText, suffix] = match;
+  const root = rootText[0].toUpperCase() + rootText.slice(1);
+  const pitch = KEY_PITCHES[root];
+  if (pitch == null) return key;
+  return `${SHARP_KEYS[(pitch + semitones + 120) % 12]}${suffix}`;
+}
+
 function detectMidiFromAnalyser(analyser, buffer, sampleRate) {
   analyser.getFloatTimeDomainData(buffer);
   let energy = 0;
@@ -248,7 +265,9 @@ export default function Karaoke({ onOpenAppSettings }) {
   const [recordingError, setRecordingError] = useState(null);
   const [microphoneVolume, setMicrophoneVolume] = useState(1);
   const [audioDriver, setAudioDriver] = useState("auto");
+  const [asioDriverName, setAsioDriverName] = useState("");
   const [audioBufferSize, setAudioBufferSize] = useState(64);
+  const [directOutputDeviceId, setDirectOutputDeviceId] = useState("");
   const [monitoringEnabled, setMonitoringEnabled] = useState(false);
   const [browserAudioDevices, setBrowserAudioDevices] = useState({
     inputs: [],
@@ -276,6 +295,16 @@ export default function Karaoke({ onOpenAppSettings }) {
     30000,
     [microphoneOpen],
   );
+  const { data: directOutputDevices } = usePolling(
+    () => (microphoneOpen ? api.listAudioOutputDevices() : Promise.resolve([])),
+    30000,
+    [microphoneOpen],
+  );
+  const { data: asioDrivers } = usePolling(
+    () => (microphoneOpen ? api.listAsioDrivers() : Promise.resolve([])),
+    30000,
+    [microphoneOpen],
+  );
   const { data: audioSettings } = usePolling(
     () => (microphoneOpen ? api.getAudioSettings() : Promise.resolve(null)),
     30000,
@@ -299,8 +328,13 @@ export default function Karaoke({ onOpenAppSettings }) {
 
   useEffect(() => {
     if (audioSettings?.audio_driver) setAudioDriver(audioSettings.audio_driver);
+    if (audioSettings?.asio_driver_name) setAsioDriverName(audioSettings.asio_driver_name);
     if (audioSettings?.buffer_size) setAudioBufferSize(audioSettings.buffer_size);
-  }, [audioSettings?.audio_driver, audioSettings?.buffer_size]);
+  }, [audioSettings?.audio_driver, audioSettings?.asio_driver_name, audioSettings?.buffer_size]);
+
+  useEffect(() => {
+    setDirectOutputDeviceId(audioSettings?.output_device_id ?? "");
+  }, [audioSettings?.output_device_id]);
 
   useEffect(
     () => () => {
@@ -830,12 +864,12 @@ export default function Karaoke({ onOpenAppSettings }) {
   };
 
   const setDirectMonitoring = async (enabled) => {
+    const activeMonitor = browserMonitorRef.current;
+    activeMonitor?.stream.getTracks().forEach((track) => track.stop());
+    activeMonitor?.context.close();
+    browserMonitorRef.current = null;
     try {
       if (enabled) {
-        const activeMonitor = browserMonitorRef.current;
-        activeMonitor?.stream.getTracks().forEach((track) => track.stop());
-        activeMonitor?.context.close();
-        browserMonitorRef.current = null;
         await updateMicrophone({ volume: microphoneVolume });
         await api.startDirectMonitoring();
       } else {
@@ -844,6 +878,7 @@ export default function Karaoke({ onOpenAppSettings }) {
       setMonitoringEnabled(enabled);
     } catch (error) {
       setMonitoringEnabled(false);
+      if (!enabled) await api.stopDirectMonitoring().catch(() => {});
       setRecordingError(
         `Не удалось включить прямое прослушивание: ${error.message}`,
       );
@@ -1101,24 +1136,40 @@ export default function Karaoke({ onOpenAppSettings }) {
                   onChange={setMelodyVolume}
                   display={`${Math.round(melodyVolume * 100)}%`}
                 />
-                <SliderField
-                  label="Скорость"
-                  value={speed}
-                  min={0.5}
-                  max={1.5}
-                  step={0.05}
-                  onChange={setSpeed}
-                  display={`${speed.toFixed(2)}x`}
-                />
-                <SliderField
-                  label="Тональность"
-                  value={keyShift}
-                  min={-6}
-                  max={6}
-                  step={1}
-                  onChange={setKeyShift}
-                  display={`${keyShift > 0 ? "+" : ""}${keyShift}`}
-                />
+                <div className="karaoke-setting-choice">
+                  <span>Скорость</span>
+                  <div className="karaoke-speed-switch" role="group" aria-label="Скорость">
+                    {[0.5, 0.75, 1, 1.25, 1.5].map((value) => (
+                      <button
+                        type="button"
+                        key={value}
+                        className={speed === value ? "is-active" : ""}
+                        onClick={() => setSpeed(value)}
+                      >
+                        {value === 1 ? "1×" : `${value}×`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="karaoke-setting-choice">
+                  <span>Тональность</span>
+                  <div className="karaoke-key-stepper">
+                    <button
+                      type="button"
+                      aria-label="Понизить тональность"
+                      disabled={keyShift <= -6}
+                      onClick={() => setKeyShift((value) => Math.max(-6, value - 1))}
+                    >−</button>
+                    <strong>{transposeKey(song?.key_override, keyShift)}</strong>
+                    <button
+                      type="button"
+                      aria-label="Повысить тональность"
+                      disabled={keyShift >= 6}
+                      onClick={() => setKeyShift((value) => Math.min(6, value + 1))}
+                    >+</button>
+                  </div>
+                  <small>{keyShift === 0 ? "Оригинальная" : `${keyShift > 0 ? "+" : ""}${keyShift} полутонов`}</small>
+                </div>
               </div>
             </div>
             <label>
@@ -1150,15 +1201,33 @@ export default function Karaoke({ onOpenAppSettings }) {
                 }}
                 options={[
                   { value: "auto", label: "Авто · Windows / PortAudio" },
-                  ...(devices || []).some((device) => device.is_asio)
+                  ...(asioDrivers || []).length
                     ? [{ value: "asio", label: "ASIO · минимальная задержка" }]
                     : [],
                 ]}
               />
-              {!(devices || []).some((device) => device.is_asio) && (
+              {!(asioDrivers || []).length && (
                 <small>ASIO появится после установки драйвера аудиоинтерфейса.</small>
               )}
             </label>
+            {audioDriver === "asio" && (
+              <label>
+                ASIO driver
+                <Dropdown
+                  value={asioDriverName}
+                  disabled={monitoringEnabled}
+                  onChange={async (value) => {
+                    setAsioDriverName(value);
+                    await updateMicrophone({ asio_driver_name: value });
+                  }}
+                  options={(asioDrivers || []).map((driver) => ({
+                    value: driver.name,
+                    label: driver.name,
+                  }))}
+                />
+                <small>For Audient choose Audient USB Audio ASIO Driver.</small>
+              </label>
+            )}
             <label>
               Буфер аудио
               <Dropdown
@@ -1176,6 +1245,26 @@ export default function Karaoke({ onOpenAppSettings }) {
               />
             </label>
             <label>
+              Выход прямого мониторинга
+              <Dropdown
+                value={directOutputDeviceId}
+                disabled={monitoringEnabled}
+                onChange={async (value) => {
+                  const deviceId = value === "" ? null : Number(value);
+                  setDirectOutputDeviceId(value);
+                  await updateMicrophone({ output_device_id: deviceId });
+                }}
+                options={[
+                  { value: "", label: "Системное устройство по умолчанию" },
+                  ...(directOutputDevices || []).map((device) => ({
+                    value: device.index,
+                    label: device.name,
+                  })),
+                ]}
+              />
+              <small>Для минимальной задержки выберите выход того же аудиоинтерфейса.</small>
+            </label>
+            <label className="legacy-browser-monitoring">
               Вход для прослушивания
               <Dropdown
                 value={monitorInputDeviceId}
@@ -1190,7 +1279,7 @@ export default function Karaoke({ onOpenAppSettings }) {
                 ]}
               />
             </label>
-            <label>
+            <label className="legacy-browser-monitoring">
               Выход для прослушивания
               <Dropdown
                 value={monitorOutputDeviceId}
@@ -1205,7 +1294,7 @@ export default function Karaoke({ onOpenAppSettings }) {
                 ]}
               />
             </label>
-            <label>
+            <label className="legacy-browser-monitoring">
               Режим задержки
               <Dropdown
                 value={monitorLatencyHint}
@@ -1218,7 +1307,7 @@ export default function Karaoke({ onOpenAppSettings }) {
                 ]}
               />
             </label>
-            <div className="monitoring-mode-picker" ref={monitorModeMenuRef}>
+            <div className="monitoring-mode-picker legacy-browser-monitoring" ref={monitorModeMenuRef}>
               <span>
                 {
                   "\u0420\u0435\u0436\u0438\u043c \u043f\u0440\u043e\u0441\u043b\u0443\u0448\u0438\u0432\u0430\u043d\u0438\u044f"
@@ -1313,11 +1402,7 @@ export default function Karaoke({ onOpenAppSettings }) {
               <input
                 type="checkbox"
                 checked={monitoringEnabled}
-                onChange={(event) =>
-                  (monitorMode === "direct"
-                    ? setDirectMonitoring
-                    : setBrowserMonitoring)(event.target.checked)
-                }
+                onChange={(event) => setDirectMonitoring(event.target.checked)}
               />
               Прослушивать с этого устройства
             </label>
