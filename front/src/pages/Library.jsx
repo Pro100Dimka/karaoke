@@ -23,6 +23,7 @@ import { api } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
 import { Panel, StatusBadge, ProgressBar } from "../components/ui";
 import { AudioPlayer } from "../components/AudioPlayer";
+import { useAppDialog } from "../components/AppDialog";
 
 function formatDate(iso) {
   if (!iso) return "—";
@@ -46,6 +47,7 @@ export default function Library() {
   const [processingSong, setProcessingSong] = useState(null);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
+  const { confirm: confirmDialog } = useAppDialog();
 
   useEffect(() => {
     if (!menuSongId) return undefined;
@@ -93,8 +95,7 @@ export default function Library() {
   );
 
   const handleDelete = useCallback(async (song) => {
-    if (!confirm(`Удалить "${song.title}"? Это удалит все файлы песни.`))
-      return;
+    if (!(await confirmDialog(`Удалить «${song.title}»? Это удалит все файлы песни.`, "Удалить песню?"))) return;
     try {
       await api.deleteSong(song.id);
     } catch (err) {

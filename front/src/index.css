@@ -5324,6 +5324,7 @@ table.data-table tbody tr td {
 input[type="range"] {
   accent-color: var(--accent-1);
 }
+.app-dialog-backdrop{position:fixed;z-index:200;inset:0;display:grid;place-items:center;padding:20px;background:rgba(3,8,7,.66);backdrop-filter:blur(14px)}.app-dialog{position:relative;width:min(430px,100%);padding:24px;border:1px solid color-mix(in srgb,var(--accent-2) 34%,transparent);border-radius:22px;background:color-mix(in srgb,var(--surface-deep) 94%,transparent);box-shadow:0 30px 86px rgba(0,0,0,.48)}.app-dialog-icon{display:grid;place-items:center;width:44px;height:44px;margin-bottom:15px;border-radius:14px;color:var(--danger);background:color-mix(in srgb,var(--danger) 16%,transparent)}.app-dialog>span{color:var(--accent-label);font-size:10px;font-weight:800;letter-spacing:.1em}.app-dialog h2{margin:5px 0 8px;font-size:20px}.app-dialog p{margin:0;color:var(--text-secondary);line-height:1.55}.app-dialog-close{position:absolute;top:14px;right:14px;border:0;color:var(--text-muted);background:transparent}.app-dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:24px}
 input[type="range"]::-webkit-slider-thumb {
   background: var(--accent-2);
   box-shadow: 0 0 10px color-mix(in srgb, var(--accent-2) 45%, transparent);

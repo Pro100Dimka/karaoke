@@ -4,6 +4,7 @@ song.wav -> vocals.wav, instrumental.wav (+ drums.wav, bass.wav, other.wav)
 """
 
 import argparse
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -14,6 +15,7 @@ def separate(
     out_dir: str,
     model: str = "htdemucs_ft",
     two_stems: bool = True,
+    shifts: int | None = None,
 ):
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -21,12 +23,17 @@ def separate(
     # Максимальная длина сегмента для разных моделей
     segment = "7" if model == "htdemucs_ft" or model.startswith("htdemucs") else "10"
 
+    # ``--shifts 2`` runs the costly separator twice. One pass is the best
+    # default for interactive karaoke; users who need an archival-quality
+    # separation can set SONGAPP_DEMUCS_SHIFTS=2 (or higher).
+    demucs_shifts = shifts if shifts is not None else int(os.getenv("SONGAPP_DEMUCS_SHIFTS", "1"))
+    demucs_shifts = max(1, demucs_shifts)
     cmd = [
         "demucs",
         "-n", model,
         "-o", str(out_dir),
         "--segment", segment,
-        "--shifts", "2",
+        "--shifts", str(demucs_shifts),
     ]
 
     # GPU если есть

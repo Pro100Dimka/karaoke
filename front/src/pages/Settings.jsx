@@ -73,7 +73,7 @@ export default function Settings() {
           ))}
         </nav>
 
-        <Panel className="settings-content-panel" title={serviceView ? "????????????" : TABS.find((item) => item.id === tab)?.label}>
+        <Panel className="settings-content-panel" title={serviceView ? "Обслуживание" : TABS.find((item) => item.id === tab)?.label}>
           {serviceView ? <ServiceScreen view={serviceView} onBack={() => setServiceView(null)} /> : <>
           {tab === "appearance" && (
             <div className="settings-field-grid">
@@ -130,11 +130,11 @@ function ToggleField({ label, hint, checked, onChange }) {
   return <label className="settings-toggle"><span><strong>{label}</strong><small>{hint}</small></span><input type="checkbox" checked={Boolean(checked)} onChange={(event) => onChange(event.target.checked)} /></label>;
 }
 function ServiceLink({ view, onOpen, title, text }) {
-  return <button type="button" className="settings-service-link" onClick={() => onOpen(view)}><strong>{title}</strong><span>{text}</span><b>??????? ?</b></button>;
+  return <button type="button" className="settings-service-link" onClick={() => onOpen(view)}><strong>{title}</strong><span>{text}</span><b>Открыть →</b></button>;
 }
 
 function ServiceScreen({ view, onBack }) {
   const screens = { models: ModelManager, memory: MemoryManager, diagnostics: Diagnostics, history: History, about: About };
   const Screen = screens[view];
-  return <div className="settings-service-screen"><button type="button" className="btn btn-ghost settings-service-back" onClick={onBack}><ArrowLeft size={15} /> ????? ? ??????????</button><Screen /></div>;
+  return <div className="settings-service-screen"><button type="button" className="btn btn-ghost settings-service-back" onClick={onBack}><ArrowLeft size={15} /> Назад к настройкам</button><Screen /></div>;
 }

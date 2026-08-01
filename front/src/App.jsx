@@ -14,6 +14,7 @@ import Diagnostics from "./pages/Diagnostics";
 import ModelManager from "./pages/ModelManager";
 import History from "./pages/History";
 import About from "./pages/About";
+import { AppDialogProvider } from "./components/AppDialog";
 
 export default function App() {
   useEffect(() => {
@@ -23,9 +24,9 @@ export default function App() {
   }, []);
 
   return (
-    <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <AppDialogProvider><HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AppLayout />
-    </HashRouter>
+    </HashRouter></AppDialogProvider>
   );
 }
 

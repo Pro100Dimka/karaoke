@@ -76,7 +76,7 @@ export default function SongSettings() {
       setLyricsText(lyrics.map((line) => line.text || "").join("\n"));
       setLyricsError(null);
     } catch (error) {
-      setLyricsError(error.message || "?? ??????? ????????? ?????");
+      setLyricsError(error.message || "Не удалось сохранить текст");
     }
   };
 
