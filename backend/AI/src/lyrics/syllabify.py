@@ -63,10 +63,7 @@ def split_word_span_into_syllables(word: str, start: float, end: float) -> list[
     spans = []
     cursor = start
     for i, syl in enumerate(syllables):
-        if i == len(syllables) - 1:
-            syl_end = end  # последний слог забирает остаток, чтобы не терять время на округлении
-        else:
-            syl_end = cursor + duration * (len(syl) / total_chars)
+        syl_end = end if i == len(syllables) - 1 else cursor + duration * (len(syl) / total_chars)
         spans.append({"text": syl, "start": round(cursor, 3), "end": round(syl_end, 3)})
         cursor = syl_end
     return spans

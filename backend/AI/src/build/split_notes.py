@@ -38,8 +38,8 @@ import bisect
 import json
 from collections import Counter
 
-from src.lyrics.syllabify import build_syllable_spans
 from src.common.notes import note_to_midi
+from src.lyrics.syllabify import build_syllable_spans
 
 
 def _times_index(pitch_frames: list) -> list:
@@ -369,13 +369,13 @@ def main():
                          help="максимальная длина пробела, который можно заполнить, сек")
     args = parser.parse_args()
 
-    with open(args.reference, "r", encoding="utf-8") as f:
+    with open(args.reference, encoding="utf-8") as f:
         notes = json.load(f)
-    with open(args.lyrics_sync, "r", encoding="utf-8") as f:
+    with open(args.lyrics_sync, encoding="utf-8") as f:
         lyrics_lines = json.load(f)
     pitch_frames = None
     if args.pitch:
-        with open(args.pitch, "r", encoding="utf-8") as f:
+        with open(args.pitch, encoding="utf-8") as f:
             pitch_frames = json.load(f)
 
     before = len(notes)

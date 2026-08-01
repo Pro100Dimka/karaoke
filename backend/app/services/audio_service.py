@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 import models
 
 try:
-    import sounddevice as sd
     import numpy as np
+    import sounddevice as sd
     _AUDIO_BACKEND_AVAILABLE = True
 except Exception:
     _AUDIO_BACKEND_AVAILABLE = False

@@ -26,7 +26,6 @@ import json
 from collections import Counter
 
 import numpy as np
-
 from src.common.notes import midi_to_note, note_to_midi  # noqa: F401  (реэкспорт)
 
 
@@ -465,7 +464,7 @@ def main():
                          help="провалы voiced короче этого не обрывают ноту, сек")
     args = parser.parse_args()
 
-    with open(args.input, "r", encoding="utf-8") as f:
+    with open(args.input, encoding="utf-8") as f:
         pitch_frames = json.load(f)
 
     resolved = _resolve_confidence_threshold(

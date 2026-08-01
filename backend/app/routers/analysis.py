@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 
 import models
 import schemas
-from database import get_db
 from app.services import analysis_service
+from database import get_db
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 
@@ -68,11 +68,12 @@ def run_analysis(recording_id: str, db: Session = Depends(get_db)):
         # example React StrictMode during development). The other request may
         # already have committed the unique recording result; return it.
         db.rollback()
-        result = db.query(models.AnalysisResult).filter(
+        existing_result = db.query(models.AnalysisResult).filter(
             models.AnalysisResult.recording_id == recording_id
         ).first()
-        if result is None:
+        if existing_result is None:
             raise
+        result = existing_result
     return _to_out(result)
 
 

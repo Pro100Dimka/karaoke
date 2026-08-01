@@ -19,6 +19,7 @@ select = [
     "SIM", # flake8-simplify
 ]
 ignore = [
+    "B008", # FastAPI declares Depends/File through parameter defaults.
     "E501", # длину строк уже ограничивает line-length; докстринги/комментарии на русском иногда длиннее
 ]
 

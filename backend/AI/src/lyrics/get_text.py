@@ -12,8 +12,8 @@ import argparse
 import re
 from pathlib import Path
 
-from mutagen.id3 import ID3, USLT
 from mutagen import File as MutagenFile
+from mutagen.id3 import USLT
 
 
 def from_id3_tags(audio_path: str) -> str | None:
@@ -44,7 +44,7 @@ def from_lrc_file(audio_path: str) -> str | None:
         # убираем временные метки [mm:ss.xx]
         lines = [re.sub(r"\[\d{2}:\d{2}(\.\d{2,3})?\]", "", line).strip()
                  for line in raw.splitlines()]
-        return "\n".join(l for l in lines if l)
+        return "\n".join(line for line in lines if line)
     return None
 
 

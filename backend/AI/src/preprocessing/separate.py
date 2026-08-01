@@ -19,10 +19,7 @@ def separate(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # Максимальная длина сегмента для разных моделей
-    if model == "htdemucs_ft" or model.startswith("htdemucs"):
-        segment = "7"
-    else:
-        segment = "10"
+    segment = "7" if model == "htdemucs_ft" or model.startswith("htdemucs") else "10"
 
     cmd = [
         "demucs",

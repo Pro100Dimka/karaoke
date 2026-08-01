@@ -309,6 +309,30 @@ export default function Library() {
                         <button className="btn btn-primary" disabled={isWorking} onClick={() => handleProcess(song)}><Play size={15} fill="currentColor" /> Обработать</button>
                       )}
                       <button className="btn btn-ghost" title="Информация" onClick={() => setInfoSong(song)}><Info size={16} /></button>
+                      <div className="library-card-more">
+                        <button
+                          className="btn btn-ghost"
+                          title="Дополнительные действия"
+                          onClick={() => setMenuSongId((id) => (id === song.id ? null : song.id))}
+                        >
+                          <MoreHorizontal size={16} />
+                        </button>
+                        {menuSongId === song.id && (
+                          <div className="song-actions-menu">
+                            <button onClick={() => { navigate("/song-settings", { state: { songId: song.id } }); setMenuSongId(null); }}>
+                              <Settings2 size={14} /> Настройки песни
+                            </button>
+                            <button onClick={() => { handleOpenFolder(song); setMenuSongId(null); }}>
+                              <FolderOpen size={14} /> Открыть папку
+                            </button>
+                            {isReady && (
+                              <button onClick={() => { handleReprocess(song); setMenuSongId(null); }}>
+                                <RotateCcw size={14} /> Переобработать MIDI
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
                       <button className="btn btn-danger" title="Удалить" onClick={() => handleDelete(song)}><Trash2 size={15} /></button>
                     </div>
                   </div>

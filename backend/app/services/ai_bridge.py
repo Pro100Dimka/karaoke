@@ -35,23 +35,23 @@ def _ensure_ai_on_path() -> None:
 def get_run_all_pipeline():
     """Возвращает функцию run_all.run(input_mp3, out_dir, whisper_model, language)."""
     _ensure_ai_on_path()
-    from run_all import run  # type: ignore
+    from run_all import run
     return run
 
 
 def get_analyze_vocal():
     _ensure_ai_on_path()
-    from src.analyze.vocal import analyze_vocal  # type: ignore
+    from src.analyze.vocal import analyze_vocal
     return analyze_vocal
 
 
 def get_build_reference():
     _ensure_ai_on_path()
-    from src.build.reference import build_reference  # type: ignore
+    from src.build.reference import build_reference
     return build_reference
 
 
 def get_convert():
     _ensure_ai_on_path()
-    from src.build.convert import convert  # type: ignore
+    from src.build.convert import convert
     return convert

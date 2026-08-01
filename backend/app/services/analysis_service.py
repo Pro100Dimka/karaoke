@@ -18,7 +18,7 @@ from app.services import ai_bridge
 def _read_json(path: Path):
     if not path.exists():
         return None
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -30,7 +30,7 @@ def _note_at_time(reference_notes: list[dict], t: float) -> int | None:
 
 
 def _to_midi(value) -> int | None:
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return int(round(value))
     if not isinstance(value, str):
         return None

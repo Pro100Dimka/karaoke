@@ -14,11 +14,12 @@ import threading
 import time
 import traceback
 from pathlib import Path
+from typing import TextIO, cast
 
 import config
 import models
-from database import SessionLocal
 from app.services import ai_bridge, cache_service
+from database import SessionLocal
 
 _STEP_RE = re.compile(r"(?P<step>\d+(?:\.\d+)?)\s*/\s*13")
 
@@ -53,7 +54,8 @@ class _ProgressCapture(io.TextIOBase):
 
     def __init__(self, song_id: str, log_path: Path):
         self._song_id = song_id
-        self._log_file = open(log_path, "a", encoding="utf-8")
+        # The stream deliberately stays open for the lifetime of the capture.
+        self._log_file = open(log_path, "a", encoding="utf-8")  # noqa: SIM115
 
     def write(self, text: str) -> int:
         if _is_cancelled(self._song_id):
@@ -264,7 +266,10 @@ def _run_job(song_id: str) -> None:
     capture = _ProgressCapture(song_id, log_path)
     try:
         run_pipeline = ai_bridge.get_run_all_pipeline()
-        with contextlib.redirect_stdout(capture), contextlib.redirect_stderr(capture):
+        with (
+            contextlib.redirect_stdout(cast(TextIO, capture)),
+            contextlib.redirect_stderr(cast(TextIO, capture)),
+        ):
             # run_all.run(input_mp3, out_dir, ...) — out_dir тут должен быть
             # УЖЕ конечной папкой песни (Song/<slug>), а не родительским Song/:
             # именно так его вызывает и сам run_all.py в своём main().
@@ -348,7 +353,5 @@ def _finalize_success(song_id: str, out_dir: Path) -> None:
 
     # Пост-обработка: перевод тяжёлых wav в mp3 + чистка временных файлов.
     # Не должна валить успешно завершённый пайплайн, если что-то пойдёт не так.
-    try:
+    with contextlib.suppress(Exception):
         cache_service.optimize_song_files(song_id)
-    except Exception:  # noqa: BLE001
-        pass

@@ -105,7 +105,7 @@ def analyze_vocal(input_path: str, frame_step_sec: float = 0.01,
             y, sr, frame_step_sec, fmin, fmax)
 
     frames = []
-    for t, freq, voiced, prob, loud in zip(times, f0, voiced_flag, voiced_probs, rms_db):
+    for t, freq, voiced, prob, loud in zip(times, f0, voiced_flag, voiced_probs, rms_db, strict=False):
         voiced = bool(voiced)
         freq_valid = voiced and freq is not None and not np.isnan(freq) and freq > 0
         frames.append({

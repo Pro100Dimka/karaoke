@@ -56,7 +56,7 @@ def save_json(obj, path):
 
 
 def load_json(path):
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -269,7 +269,6 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
         midi.write(str(midi_path))
 
     # --- 13/13 Сборка проекта (манифест) ---
-    manifest_path = out / "manifest.json"
     print("13/13 Сборка проекта...")
     manifest = build_project(
         str(out),

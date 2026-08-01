@@ -19,7 +19,6 @@ import json
 import shutil
 from pathlib import Path
 
-
 FILES_MAP = {
     "song_info": "songInfo.json",
     "instrumental": "instrumental.wav",

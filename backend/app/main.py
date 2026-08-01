@@ -9,8 +9,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from database import init_db
 from app.routers import analysis, application, audio, cache, diagnostics, player, recording, songs
+from database import init_db
 
 
 @asynccontextmanager

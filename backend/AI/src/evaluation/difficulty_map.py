@@ -10,7 +10,6 @@ import argparse
 import json
 
 import numpy as np
-
 from src.common.notes import midi_to_note, note_to_midi  # noqa: F401  (реэкспорт)
 
 
@@ -80,9 +79,9 @@ def main():
     parser.add_argument("output", nargs="?", default="difficulty.json")
     args = parser.parse_args()
 
-    with open(args.reference, "r", encoding="utf-8") as f:
+    with open(args.reference, encoding="utf-8") as f:
         reference_notes = json.load(f)
-    with open(args.sections, "r", encoding="utf-8") as f:
+    with open(args.sections, encoding="utf-8") as f:
         sections = json.load(f)
 
     difficulty_map = build_difficulty_map(reference_notes, sections)

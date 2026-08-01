@@ -3,8 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 import schemas
-from database import get_db
 from app.services import audio_service
+from database import get_db
 
 router = APIRouter(prefix="/audio", tags=["audio"])
 

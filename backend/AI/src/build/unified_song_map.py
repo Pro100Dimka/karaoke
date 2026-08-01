@@ -12,7 +12,7 @@ import json
 
 
 def load(path):
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -26,7 +26,7 @@ def build_song_map(music: dict, reference_notes: list, lyrics_lines: list,
     # Список временных меток — берём из pitch.json (самая частая сетка)
     timeline = []
     note_starts = [n["start"] for n in reference_notes]
-    line_starts = [l["start"] for l in lyrics_lines]
+    line_starts = [line["start"] for line in lyrics_lines]
 
     # tempo_curve отсортирован по времени — используем bisect вместо
     # линейного min(...) на каждый кадр (было O(N*M), стало O(log M))

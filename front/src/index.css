@@ -4041,6 +4041,13 @@ table.data-table tbody tr td {
   justify-content: flex-end;
   gap: 6px;
 }
+.library-card-more {
+  position: relative;
+}
+.library-card-more .song-actions-menu {
+  top: calc(100% + 6px);
+  right: 0;
+}
 .library-song-card-actions .btn {
   min-height: 34px;
   padding: 0 10px;

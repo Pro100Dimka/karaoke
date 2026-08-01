@@ -7,7 +7,6 @@ import argparse
 import json
 
 import pretty_midi
-
 from src.common.notes import note_to_midi as _note_to_midi_fallback
 
 
@@ -187,7 +186,7 @@ def add_tempo_and_key(midi: pretty_midi.PrettyMIDI, music_json_path: str | None)
     if not music_json_path:
         return
 
-    with open(music_json_path, "r", encoding="utf-8") as f:
+    with open(music_json_path, encoding="utf-8") as f:
         music = json.load(f)
 
     key = music.get("key")
@@ -224,7 +223,7 @@ def main():
 
     args = parser.parse_args()
 
-    with open(args.input, "r", encoding="utf-8") as f:
+    with open(args.input, encoding="utf-8") as f:
         notes = json.load(f)
 
     # --------------------------
@@ -235,7 +234,7 @@ def main():
     first_beat = 0.0
 
     if args.music:
-        with open(args.music, "r", encoding="utf-8") as f:
+        with open(args.music, encoding="utf-8") as f:
             music = json.load(f)
 
         tempo = float(

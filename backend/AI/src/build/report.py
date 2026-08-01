@@ -12,7 +12,7 @@ from pathlib import Path
 
 def _load_if_exists(path: Path):
     if path and Path(path).exists():
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
     return None
 
@@ -65,7 +65,6 @@ def build_report(project_dir: str) -> str:
 
     lines.append("## Вокал")
     if reference_notes:
-        notes_names = [n["note"] for n in reference_notes]
         durations = [n["duration"] for n in reference_notes]
         lines.append(f"- Всего нот: {len(reference_notes)}")
         lines.append(f"- Средняя длительность ноты: {sum(durations) / len(durations):.2f} сек")

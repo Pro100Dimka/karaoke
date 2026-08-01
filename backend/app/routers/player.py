@@ -3,8 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 import schemas
+from app.services import player_service, song_service
 from database import get_db
-from app.services import song_service, player_service
 
 router = APIRouter(prefix="/player", tags=["player"])
 

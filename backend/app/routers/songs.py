@@ -31,7 +31,7 @@ async def add_song(
     file_bytes = await file.read()
     try:
         song = song_service.create_song(
-            db, title or "", file.filename, file_bytes)
+            db, title or "", file.filename or "song", file_bytes)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return song
@@ -185,7 +185,7 @@ def get_result(song_id: str, db: Session = Depends(get_db)):
 
     out_dir = Path(song.output_dir)
     return schemas.SongResultOut(
-        song=song,
+        song=schemas.SongOut.model_validate(song),
         music=_read_json(out_dir / "music.json"),
         reference_notes=_read_json(out_dir / "reference.json"),
         lyrics_sync=_read_json(out_dir / "lyrics.json"),

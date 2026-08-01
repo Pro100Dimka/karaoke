@@ -40,7 +40,7 @@ class RecordingSession:
         self.channels = channels
         self.gain = max(0.0, min(4.0, gain))
         self.playback_offset_sec = max(0.0, playback_offset_sec)
-        self._queue: "queue.Queue" = queue.Queue()
+        self._queue: queue.Queue = queue.Queue()
         if monitoring_enabled:
             output_info = sd.query_devices(kind="output")
             output_channels = min(2, int(output_info["max_output_channels"]))

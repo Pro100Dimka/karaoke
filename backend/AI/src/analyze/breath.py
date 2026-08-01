@@ -15,8 +15,9 @@ top_db-порог на самой громкости путает тихое п�
 """
 import argparse
 import json
-import numpy as np
+
 import librosa
+import numpy as np
 
 
 def _estimate_adaptive_top_db(y: np.ndarray, sr: int, margin_db: float = 6.0,
@@ -155,7 +156,7 @@ def main():
 
     pitch_frames = None
     if args.pitch:
-        with open(args.pitch, "r", encoding="utf-8") as f:
+        with open(args.pitch, encoding="utf-8") as f:
             pitch_frames = json.load(f)
 
     result = analyze_breath(args.input, args.top_db, args.phrase_gap,

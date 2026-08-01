@@ -7,8 +7,9 @@ instrumental.wav -> music.json
 """
 import argparse
 import json
-import numpy as np
+
 import librosa
+import numpy as np
 
 MAJOR_PROFILE = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
 MINOR_PROFILE = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
@@ -143,8 +144,15 @@ def fold_tempo(bpm: float, low: float = 70.0, high: float = 180.0) -> float:
     удвоением/делением пополам, сохраняя исходное значение отдельно
     для прозрачности.
     """
+    if bpm <= 0:
+        return bpm
+
+    # A 70 BPM lower bound makes 35 BPM stop at 70 although it is still an
+    # obvious half-time reading. Normalize tiny estimates to a useful octave.
     folded = bpm
     while folded < low and folded > 0:
+        folded *= 2
+    if bpm < low and folded == low:
         folded *= 2
     while folded > high:
         folded /= 2
@@ -235,7 +243,7 @@ def analyze_music(input_path: str, key_change_window_sec: float = 20.0):
     dtempo = np.array([fold_tempo(float(b)) for b in dtempo])
     tempo_curve = [
         {"time": float(t), "bpm": float(b)}
-        for t, b in zip(librosa.frames_to_time(np.arange(len(dtempo)), sr=sr), dtempo)
+        for t, b in zip(librosa.frames_to_time(np.arange(len(dtempo)), sr=sr), dtempo, strict=False)
     ]
 
     # Размер такта — автокорреляция onset-огибающей (см. estimate_time_signature)

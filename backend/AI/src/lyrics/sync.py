@@ -107,12 +107,12 @@ def sync_existing_lyrics_with_whisper(audio_path: str, lyrics_path: str,
     lines = _sync_raw(audio_path, model_size, language, engine)
 
     given_text = Path(lyrics_path).read_text(encoding="utf-8")
-    given_lines = [l.strip() for l in given_text.splitlines() if l.strip()]
+    given_lines = [line.strip() for line in given_text.splitlines() if line.strip()]
 
     # Если количество строк совпадает — подставляем "эталонный" текст,
     # оставляя тайминги
     if len(given_lines) == len(lines):
-        for wl, gl in zip(lines, given_lines):
+        for wl, gl in zip(lines, given_lines, strict=False):
             wl["text"] = gl
 
     return lines
