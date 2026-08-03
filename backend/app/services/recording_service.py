@@ -258,14 +258,14 @@ def delete_recording(db, recording: models.Recording) -> None:
 
 def performance_mix_path(recording: models.Recording) -> Path:
     voice_path = Path(recording.path)
-    return voice_path.with_name(f"{voice_path.stem}-performance.wav")
+    return voice_path.with_name(f"{voice_path.stem}-performance.mp3")
 
 
 def performance_mix_paths(recording: models.Recording) -> tuple[Path, Path]:
-    """Return the lossless mix path followed by the legacy MP3 path."""
+    """Return the current MP3 mix followed by the prior lossless file."""
     voice_path = Path(recording.path)
     return performance_mix_path(recording), voice_path.with_name(
-        f"{voice_path.stem}-performance.mp3"
+        f"{voice_path.stem}-performance.wav"
     )
 
 
@@ -275,7 +275,7 @@ def _create_performance_mix(
     offset_sec: float,
     music_gain: float,
 ) -> None:
-    """Create a lossless take from the backing track and recorded microphone."""
+    """Create a high-quality MP3 take from backing track and microphone only."""
     ffmpeg = shutil.which("ffmpeg")
     if ffmpeg is None or not song.output_dir:
         return
@@ -312,7 +312,9 @@ def _create_performance_mix(
         "-map",
         "[mix]",
         "-c:a",
-        "pcm_s24le",
+        "libmp3lame",
+        "-b:a",
+        "320k",
         str(destination),
     ]
     try:

@@ -186,17 +186,16 @@ def sync_with_whisperx(
 
 def _sync_raw(audio_path: str, model_size: str, language: str | None, engine: str) -> list:
     if engine in {"auto", "faster-whisper"}:
-        device, _ = _faster_whisper_runtime()
-        if device == "cuda":
-            try:
-                lines = sync_with_faster_whisper(audio_path, language)
-                if lines:
-                    return lines
-                raise RuntimeError("faster-whisper returned no speech segments")
-            except Exception as exc:
-                print(f"faster-whisper failed; falling back to Whisper. {exc}")
-        elif engine == "faster-whisper":
-            print("faster-whisper GPU runtime is unavailable; using Whisper turbo.")
+        try:
+            # CTranslate2 is substantially faster than OpenAI Whisper on CPU
+            # as well. The bundled large-v3-turbo model also gives better
+            # lyric wording and word boundaries than the old turbo fallback.
+            lines = sync_with_faster_whisper(audio_path, language)
+            if lines:
+                return lines
+            raise RuntimeError("faster-whisper returned no speech segments")
+        except Exception as exc:
+            print(f"faster-whisper failed; falling back to Whisper. {exc}")
     if engine == "whisperx":
         try:
             return sync_with_whisperx(audio_path, model_size, language)

@@ -151,6 +151,7 @@ class RecordingStartRequest(BaseModel):
     song_id: str
     position_sec: float = Field(default=0, ge=0)
     music_volume: float = Field(default=1, ge=0, le=1)
+    microphone_volume: float = Field(default=1, ge=0, le=4)
 
 
 class RecordingStartOut(BaseModel):

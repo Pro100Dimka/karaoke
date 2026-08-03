@@ -57,7 +57,10 @@ def start_recording(body: schemas.RecordingStartRequest, db: Session = Depends(g
                 input_device_id,
                 settings.audio_driver,
             ),
-            gain=settings.volume,
+            # Use the value currently visible in the karaoke UI.  Persisting
+            # a slider change is asynchronous, so reading only settings.volume
+            # here could start a take with the previous microphone level.
+            gain=body.microphone_volume,
             monitoring_enabled=not keep_native_monitor,
             playback_offset_sec=body.position_sec,
             blocksize=settings.buffer_size,
@@ -157,7 +160,7 @@ def get_performance_file(recording_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Recording not found")
     for mixed_path in recording_service.performance_mix_paths(recording):
         if mixed_path.is_file():
-            media_type = "audio/wav" if mixed_path.suffix == ".wav" else "audio/mpeg"
+            media_type = "audio/mpeg" if mixed_path.suffix == ".mp3" else "audio/wav"
             return FileResponse(mixed_path, media_type=media_type, filename=mixed_path.name)
     return FileResponse(recording.path, media_type="audio/wav", filename=recording.filename)
 

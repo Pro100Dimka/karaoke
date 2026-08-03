@@ -95,6 +95,52 @@ def _fully_covered_by_singing(active_spans: list, t0: float, t1: float) -> bool:
     return cur >= t1
 
 
+def filter_unanchored_long_notes(
+    notes: list,
+    lyrics_lines: list,
+    min_duration: float = 0.9,
+    lyric_padding: float = 0.08,
+    min_lyric_ratio: float = 0.18,
+) -> list:
+    """Drop likely reverb/backing-vocal tails that have no lyric support.
+
+    Pitch trackers can hold one stable F0 after the singer has finished a
+    phrase.  We deliberately keep short notes and notes that materially
+    overlap a recognised word, so sustained vowels and vocalises are not
+    removed.  Only a long event with almost no lyric coverage is filtered.
+    """
+    if not notes:
+        return notes
+
+    active_spans = _active_singing_spans(lyrics_lines)
+    if not active_spans:
+        return notes
+
+    padded_spans = [
+        (max(0.0, start - lyric_padding), end + lyric_padding)
+        for start, end in active_spans
+    ]
+    result = []
+    for note in notes:
+        start = float(note.get("start", 0.0))
+        end = float(note.get("end", start))
+        duration = max(0.0, end - start)
+        if duration < min_duration:
+            result.append(note)
+            continue
+
+        lyric_overlap = sum(
+            max(0.0, min(end, span_end) - max(start, span_start))
+            for span_start, span_end in padded_spans
+        )
+        # Do not count overlapping padded spans twice.
+        lyric_overlap = min(duration, lyric_overlap)
+        required_overlap = max(0.12, duration * min_lyric_ratio)
+        if lyric_overlap >= required_overlap:
+            result.append(note)
+    return result
+
+
 def fill_gaps_during_active_singing(notes: list, lyrics_lines: list, pitch_frames: list,
                                      max_gap_duration: float = 0.75,
                                      min_voiced_ratio: float = 0.50,

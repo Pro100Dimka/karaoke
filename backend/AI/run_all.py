@@ -45,6 +45,7 @@ from src.build.reference import (
 from src.build.report import build_report
 from src.build.split_notes import (
     align_note_boundaries_to_words,
+    filter_unanchored_long_notes,
     fill_gaps_during_active_singing,
     split_notes_by_syllables,
 )
@@ -266,6 +267,7 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
         include_syllables=not using_game,
     )
     reference_notes = align_note_boundaries_to_words(reference_notes, lyrics_sync, pitch_frames)
+    reference_notes = filter_unanchored_long_notes(reference_notes, lyrics_sync)
     if len(reference_notes) != notes_before:
         print(f"   ноты: {notes_before} -> {len(reference_notes)}")
     save_json(reference_notes, reference_path)

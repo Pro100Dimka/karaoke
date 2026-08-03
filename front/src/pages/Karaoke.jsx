@@ -976,6 +976,7 @@ export default function Karaoke({ onOpenAppSettings }) {
             song.id,
             instr.currentTime,
             playbackGain(musicVolume),
+            microphoneVolume,
           );
           setRecordingSessionId(session.recording_session_id);
         }

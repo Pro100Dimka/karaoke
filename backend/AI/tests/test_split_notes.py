@@ -5,6 +5,7 @@
 
 from src.build.split_notes import (
     align_note_boundaries_to_words,
+    filter_unanchored_long_notes,
     fill_gaps_during_active_singing,
     split_notes_by_syllables,
 )
@@ -345,6 +346,27 @@ def test_fill_gaps_during_active_singing_ignores_gap_during_real_pause():
 
     filled = fill_gaps_during_active_singing(notes, lyrics_lines, pitch_frames)
     assert filled == notes
+
+
+def test_filter_unanchored_long_notes_removes_tail_outside_words():
+    notes = [
+        {"note": "G3", "start": 0.0, "end": 0.45, "duration": 0.45},
+        {"note": "A3", "start": 2.0, "end": 3.6, "duration": 1.6},
+        {"note": "B3", "start": 4.0, "end": 5.3, "duration": 1.3},
+    ]
+    lyrics = [
+        {
+            "text": "one two",
+            "words": [
+                {"word": "one", "start": 0.0, "end": 0.45},
+                {"word": "two", "start": 4.0, "end": 5.25},
+            ],
+        }
+    ]
+
+    filtered = filter_unanchored_long_notes(notes, lyrics)
+
+    assert [note["note"] for note in filtered] == ["G3", "B3"]
 
 
 def _run_all():

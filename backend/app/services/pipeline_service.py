@@ -16,6 +16,7 @@ import shutil
 import threading
 import time
 import traceback
+import uuid
 from pathlib import Path
 from typing import TextIO, cast
 
@@ -436,7 +437,7 @@ def _run_job(song_id: str) -> None:
 
 
 def _run_reprocessing(song_id: str) -> None:
-    """Safely clear generated files, then run the regular full pipeline."""
+    """Rebuild generated artefacts without deleting user performance takes."""
     db = SessionLocal()
     try:
         song = db.query(models.Song).filter(models.Song.id == song_id).first()
@@ -446,14 +447,22 @@ def _run_reprocessing(song_id: str) -> None:
     finally:
         db.close()
 
+    recordings_backup: Path | None = None
     try:
         output_root = config.SONG_OUTPUT_DIR.resolve()
         target_dir = out_dir.resolve()
         if target_dir.parent != output_root:
             raise ValueError("Недопустимый путь к результатам песни")
+        recordings_dir = target_dir / config.RECORDINGS_DIRNAME
+        if recordings_dir.is_dir():
+            recordings_backup = output_root / (f".{target_dir.name}.recordings-{uuid.uuid4().hex}")
+            recordings_dir.replace(recordings_backup)
         if target_dir.exists():
             shutil.rmtree(target_dir)
     except Exception as exc:  # noqa: BLE001
+        if recordings_backup and recordings_backup.exists():
+            target_dir.mkdir(parents=True, exist_ok=True)
+            recordings_backup.replace(target_dir / config.RECORDINGS_DIRNAME)
         if _is_cancelled(song_id):
             _update_progress(song_id, status=models.SongStatus.CANCELLED, step_label="Отменено")
             return
@@ -464,7 +473,15 @@ def _run_reprocessing(song_id: str) -> None:
         )
         return
 
-    _run_job(song_id)
+    try:
+        _run_job(song_id)
+    finally:
+        if recordings_backup and recordings_backup.exists():
+            target_dir.mkdir(parents=True, exist_ok=True)
+            destination = target_dir / config.RECORDINGS_DIRNAME
+            if destination.exists():
+                shutil.rmtree(destination)
+            recordings_backup.replace(destination)
 
 
 def _finalize_success(song_id: str, out_dir: Path) -> None:
