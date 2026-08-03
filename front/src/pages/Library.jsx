@@ -60,11 +60,13 @@ export default function Library() {
   useEffect(() => { api.getAppSettings().then(setAppSettings).catch(() => {}); }, []);
   useEffect(() => {
     if (typeof sharedRoom?.roomUi?.query !== "string") return;
-    if (sharedRoom.roomUi.query !== query) {
-      applyingRemoteRoomUiRef.current = true;
-      setQuery(sharedRoom.roomUi.query);
+    if (sharedRoom.roomUi.query === query) {
+      applyingRemoteRoomUiRef.current = false;
+      return;
     }
-  }, [query, sharedRoom?.roomUi?.query]);
+    applyingRemoteRoomUiRef.current = true;
+    setQuery(sharedRoom.roomUi.query);
+  }, [sharedRoom?.roomUi?.__eventId]);
   useEffect(() => {
     if (!sharedRoom?.room) return;
     if (applyingRemoteRoomUiRef.current) {

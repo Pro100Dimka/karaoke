@@ -339,6 +339,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   const melodyNotesRef = useRef([]);
   const melodyVolumeRef = useRef(0);
   const melodyKeyShiftRef = useRef(0);
+  const transportOperationRef = useRef(0);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [sungMidi, setSungMidi] = useState(null);
@@ -1024,6 +1025,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     const instr = instrumentalRef.current;
     const voc = vocalsRef.current;
     if (!instr || !voc) return;
+    const operationId = ++transportOperationRef.current;
     const shouldPlay = forcePlaying == null ? !isPlaying : forcePlaying;
     if (!shouldPlay) {
       instr.pause();
@@ -1046,6 +1048,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     } else {
       // Create/resume Web Audio while this click is still a user gesture.
       const melodyStart = startMelodyGuide().catch(() => {});
+      let activeRecordingId = recordingSessionId;
       try {
         if (recordingSessionId) {
           await api.resumeRecording(recordingSessionId);
@@ -1059,12 +1062,20 @@ export default function Karaoke({ onOpenAppSettings }) {
             microphoneEffects.echo,
             microphoneEffects.delay,
           );
-          setRecordingSessionId(session.recording_session_id);
+          activeRecordingId = session.recording_session_id;
+          setRecordingSessionId(activeRecordingId);
         }
         setRecordingError(null);
       } catch (error) {
         silenceMelodyGuide();
         setRecordingError(`Не удалось начать запись: ${error.message}`);
+        return;
+      }
+      if (operationId !== transportOperationRef.current) {
+        if (activeRecordingId) {
+          await api.pauseRecording(activeRecordingId).catch(() => {});
+        }
+        silenceMelodyGuide();
         return;
       }
       syncSecondaryMedia(instr.currentTime, true);
@@ -1082,6 +1093,7 @@ export default function Karaoke({ onOpenAppSettings }) {
         return;
       }
     }
+    if (operationId !== transportOperationRef.current) return;
     setIsPlaying(true);
     if (broadcast && onlineRoom?.room) {
       onlineRoom.syncCommand({
@@ -1097,6 +1109,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     const instr = instrumentalRef.current;
     const voc = vocalsRef.current;
     if (!instr || !voc) return;
+    transportOperationRef.current += 1;
     instr.pause();
     voc.pause();
     videoRef.current?.pause();
@@ -2049,19 +2062,21 @@ export default function Karaoke({ onOpenAppSettings }) {
             <span>Мелодическая карта</span>
             <strong>{song.title}</strong>
           </div>
-          <button className="btn btn-ghost" onClick={() => skip(-5)}>
+          <button className="btn btn-ghost" aria-label="Назад на 5 секунд" title="Назад на 5 секунд" onClick={() => skip(-5)}>
             <SkipBack size={16} />
           </button>
           <button
             className="btn btn-primary karaoke-play-button"
-            onClick={togglePlay}
+            aria-label={isPlaying ? "Пауза" : "Воспроизвести"}
+            title={isPlaying ? "Пауза" : "Воспроизвести"}
+            onClick={() => togglePlay()}
           >
             {isPlaying ? <Pause size={18} /> : <Play size={18} />}
           </button>
-          <button className="btn btn-ghost" onClick={stop}>
+          <button className="btn btn-ghost" aria-label="Остановить" title="Остановить" onClick={() => stop()}>
             <Square size={16} />
           </button>
-          <button className="btn btn-ghost" onClick={() => skip(5)}>
+          <button className="btn btn-ghost" aria-label="Вперёд на 5 секунд" title="Вперёд на 5 секунд" onClick={() => skip(5)}>
             <SkipForward size={16} />
           </button>
           <div className="karaoke-corner-actions">

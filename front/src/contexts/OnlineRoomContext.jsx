@@ -204,7 +204,10 @@ export function OnlineRoomProvider({ children }) {
           return;
         }
         if (message.type === "ui") {
-          setRoomUi(message.state || {});
+          setRoomUi({
+            ...(message.state || {}),
+            __eventId: `${Date.now()}-${Math.random()}`,
+          });
           return;
         }
         if (message.type === "sync") {
