@@ -55,6 +55,13 @@ def get_build_reference():
     return build_reference
 
 
+def get_reconcile_lyric_words():
+    _ensure_ai_on_path()
+    from src.lyrics.alignment import reconcile_lyric_words
+
+    return reconcile_lyric_words
+
+
 def get_convert():
     _ensure_ai_on_path()
     from src.build.convert import convert

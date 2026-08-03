@@ -4,6 +4,7 @@
 """
 
 from src.build.split_notes import (
+    align_note_boundaries_to_words,
     fill_gaps_during_active_singing,
     split_notes_by_syllables,
 )
@@ -231,6 +232,38 @@ def test_split_notes_acoustic_gate_keeps_legato_note_whole():
 
     assert len(split) == 1, f"легато не должно резаться без акустических доказательств: {split}"
     assert split == notes
+
+
+def test_align_note_boundary_uses_real_pitch_change_when_legato():
+    notes = [
+        {"note": "G3", "start": 0.0, "end": 1.12, "duration": 1.12},
+        {"note": "A3", "start": 1.12, "end": 2.0, "duration": 0.88},
+    ]
+    lyrics = [
+        {
+            "text": "one two",
+            "words": [
+                {"word": "one", "start": 0.0, "end": 1.0},
+                {"word": "two", "start": 1.0, "end": 2.0},
+            ],
+        }
+    ]
+    frames = []
+    for index in range(201):
+        time = round(index * 0.01, 2)
+        frames.append(
+            {
+                "time": time,
+                "loudness_db": -6.0,
+                "f0_hz": 196.0 if time < 1.03 else 220.0,
+                "confidence": 0.9,
+            }
+        )
+
+    aligned = align_note_boundaries_to_words(notes, lyrics, frames)
+
+    assert abs(aligned[0]["end"] - 1.03) < 0.03
+    assert aligned[0]["end"] == aligned[1]["start"]
 
 
 def test_fill_gaps_during_active_singing_fills_detector_dropout():

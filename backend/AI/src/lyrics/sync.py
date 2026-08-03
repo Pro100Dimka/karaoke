@@ -23,6 +23,7 @@ import os
 from pathlib import Path
 
 from src.common.model_paths import whisper_dir
+from src.lyrics.alignment import reconcile_lyric_words
 
 
 def _faster_whisper_runtime() -> tuple[str, str]:
@@ -96,7 +97,7 @@ def _transcribe_faster(
                     "words": words,
                 }
             )
-    return lines
+    return reconcile_lyric_words(lines)
 
 
 def sync_with_faster_whisper(audio_path: str, language: str | None = None) -> list:

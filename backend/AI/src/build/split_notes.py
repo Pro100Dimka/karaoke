@@ -36,6 +36,7 @@ reference.json + lyricsSync.json + pitch.json -> reference.json (обновлё�
 import argparse
 import bisect
 import json
+import math
 from collections import Counter
 
 from src.common.notes import note_to_midi
@@ -216,6 +217,49 @@ def _find_acoustic_split_point(pitch_frames: list, times_index: list, candidate_
     return None
 
 
+def _find_pitch_transition_point(
+    pitch_frames: list,
+    times_index: list,
+    candidate_time: float,
+    lo_bound: float,
+    hi_bound: float,
+    search_window: float = 0.14,
+    min_jump_semitones: float = 0.75,
+) -> float | None:
+    """Locate a real legato pitch change near a word-aligned note boundary.
+
+    A repeated syllable often has an energy dip, but a melodic transition can
+    be perfectly legato.  In that case loudness cannot correct Whisper's word
+    timestamp; a stable F0 jump can.  This function never creates a boundary
+    and is used only for two already-detected notes of different pitch.
+    """
+    lo = max(lo_bound, candidate_time - search_window)
+    hi = min(hi_bound, candidate_time + search_window)
+    frames = _frames_in_range(pitch_frames, times_index, lo, hi)
+    candidates: list[tuple[float, float]] = []
+    previous = None
+    for frame in frames:
+        frequency = frame.get("f0_hz")
+        confidence = float(frame.get("confidence", 0.0))
+        if frequency is None or confidence < 0.45:
+            previous = None
+            continue
+        try:
+            midi = 69 + 12 * math.log2(float(frequency) / 440.0)
+        except (TypeError, ValueError):
+            previous = None
+            continue
+        if previous is not None:
+            jump = abs(midi - previous[1])
+            if jump >= min_jump_semitones:
+                # Prefer the strongest nearby transition; distance prevents a
+                # vibrato change at the edge of the search window from winning.
+                score = jump - abs(float(frame["time"]) - candidate_time) * 1.5
+                candidates.append((score, float(frame["time"])))
+        previous = (float(frame["time"]), midi)
+    return max(candidates, default=(None, None))[1]
+
+
 def split_notes_by_syllables(notes: list, lyrics_lines: list, pitch_frames: list = None,
                               min_segment_duration: float = 0.12,
                               retrigger_gap: float = 0.02,
@@ -362,6 +406,15 @@ def align_note_boundaries_to_words(notes: list, lyrics_lines: list, pitch_frames
             pitch_frames, times_index, nearby, lo, hi,
             search_window=word_window, dip_margin_db=2.0,
         )
+        if snapped is None and note_to_midi(left["note"]) != note_to_midi(right["note"]):
+            snapped = _find_pitch_transition_point(
+                pitch_frames,
+                times_index,
+                nearby,
+                lo,
+                hi,
+                search_window=word_window,
+            )
         if snapped is None or abs(snapped - boundary) > max_snap_distance:
             continue
         if snapped - left["start"] < min_note_duration or right["end"] - snapped < min_note_duration:

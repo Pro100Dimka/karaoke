@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 import config
 import models
 import schemas
-from app.services import pipeline_service, song_service
+from app.services import ai_bridge, pipeline_service, song_service
 from database import get_db
 
 router = APIRouter(prefix="/songs", tags=["songs"])
@@ -226,8 +226,10 @@ def update_lyrics(song_id: str, body: schemas.LyricsUpdate, db: Session = Depend
     lyrics_path = song_service.resolve_output_dir(song) / "lyrics.json"
     temporary_path = lyrics_path.with_suffix(".tmp")
     try:
+        reconcile_lyric_words = ai_bridge.get_reconcile_lyric_words()
+        lyrics = reconcile_lyric_words([line.model_dump() for line in body.lyrics])
         temporary_path.write_text(
-            json.dumps([line.model_dump() for line in body.lyrics], ensure_ascii=False, indent=2),
+            json.dumps(lyrics, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
         temporary_path.replace(lyrics_path)
