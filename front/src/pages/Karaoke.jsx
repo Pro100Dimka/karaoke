@@ -1020,11 +1020,12 @@ export default function Karaoke({ onOpenAppSettings }) {
     sendYouTubeCommand("setPlaybackRate", [speed]);
   }, [speed]);
 
-  const togglePlay = async () => {
+  const togglePlay = async ({ broadcast = true, forcePlaying = null } = {}) => {
     const instr = instrumentalRef.current;
     const voc = vocalsRef.current;
     if (!instr || !voc) return;
-    if (isPlaying) {
+    const shouldPlay = forcePlaying == null ? !isPlaying : forcePlaying;
+    if (!shouldPlay) {
       instr.pause();
       voc.pause();
       videoRef.current?.pause();
@@ -1033,6 +1034,14 @@ export default function Karaoke({ onOpenAppSettings }) {
       setIsPlaying(false);
       if (recordingSessionId)
         await api.pauseRecording(recordingSessionId).catch(() => {});
+      if (broadcast && onlineRoom?.room) {
+        onlineRoom.syncCommand({
+          type: "karaoke-player",
+          action: "pause",
+          songId: song.id,
+          position: instr.currentTime,
+        });
+      }
       return;
     } else {
       // Create/resume Web Audio while this click is still a user gesture.
@@ -1074,9 +1083,17 @@ export default function Karaoke({ onOpenAppSettings }) {
       }
     }
     setIsPlaying(true);
+    if (broadcast && onlineRoom?.room) {
+      onlineRoom.syncCommand({
+        type: "karaoke-player",
+        action: "play",
+        songId: song.id,
+        position: instr.currentTime,
+      });
+    }
   };
 
-  const stop = async () => {
+  const stop = async ({ broadcast = true } = {}) => {
     const instr = instrumentalRef.current;
     const voc = vocalsRef.current;
     if (!instr || !voc) return;
@@ -1089,6 +1106,14 @@ export default function Karaoke({ onOpenAppSettings }) {
     syncSecondaryMedia(0, true);
     setIsPlaying(false);
     setCurrentTime(0);
+    if (broadcast && onlineRoom?.room) {
+      onlineRoom.syncCommand({
+        type: "karaoke-player",
+        action: "stop",
+        songId: song.id,
+        position: 0,
+      });
+    }
     if (recordingSessionId) {
       try {
         const recording = await api.stopRecording(recordingSessionId);
@@ -1110,8 +1135,8 @@ export default function Karaoke({ onOpenAppSettings }) {
   };
 
   const returnToLibrary = async () => {
-    await stop();
-    if (onlineRoom?.room?.host) onlineRoom.syncCommand({ type: "open-library" });
+    await stop({ broadcast: false });
+    if (onlineRoom?.room) onlineRoom.syncCommand({ type: "open-library" });
     navigate("/");
   };
 
@@ -1214,16 +1239,44 @@ export default function Karaoke({ onOpenAppSettings }) {
     ? Math.max(0, Math.min(100, ((signal.rms_db + 60) / 60) * 100))
     : 0;
 
-  const seekTo = (time) => {
+  const seekTo = (time, { broadcast = true } = {}) => {
     const instr = instrumentalRef.current;
     if (!instr) return;
-    instr.currentTime = time;
-    syncSecondaryMedia(time, true);
-    setCurrentTime(time);
+    const position = Math.max(0, Math.min(durationRef.current || time, time));
+    instr.currentTime = position;
+    syncSecondaryMedia(position, true);
+    setCurrentTime(position);
+    if (broadcast && onlineRoom?.room) {
+      onlineRoom.syncCommand({
+        type: "karaoke-player",
+        action: "seek",
+        songId: song.id,
+        position,
+      });
+    }
   };
 
   const skip = (delta) =>
     seekTo(Math.max(0, Math.min(duration, currentTime + delta)));
+
+  useEffect(() => {
+    const command = onlineRoom?.roomCommand;
+    if (
+      command?.type !== "karaoke-player" ||
+      command.songId !== song.id ||
+      !instrumentalRef.current
+    ) return;
+
+    const position = Number(command.position);
+    if (Number.isFinite(position)) seekTo(position, { broadcast: false });
+    if (command.action === "play") {
+      togglePlay({ broadcast: false, forcePlaying: true });
+    } else if (command.action === "pause") {
+      togglePlay({ broadcast: false, forcePlaying: false });
+    } else if (command.action === "stop") {
+      stop({ broadcast: false });
+    }
+  }, [onlineRoom?.roomCommand]);
 
   useEffect(() => {
     const onKeyDown = (event) => {

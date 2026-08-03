@@ -7,9 +7,7 @@ import {
   Trash2,
   FolderOpen,
   Search,
-  Info,
   Settings2,
-  MoreHorizontal,
   RotateCcw,
   Headphones,
   BarChart3,
@@ -46,13 +44,10 @@ function formatEta(seconds) {
 export default function Library() {
   const [query, setQuery] = useState("");
   const [infoSong, setInfoSong] = useState(null);
-  const [menuSongId, setMenuSongId] = useState(null);
   const [recordingsSong, setRecordingsSong] = useState(null);
   const [processingSong, setProcessingSong] = useState(null);
   const [hiddenSongIds, setHiddenSongIds] = useState(() => new Set());
   const [onlineRoomOpen, setOnlineRoomOpen] = useState(false);
-  const [onlineActive, setOnlineActive] = useState(false);
-  const [roomClient, setRoomClient] = useState(null);
   const [appSettings, setAppSettings] = useState(null);
   const applyingRemoteRoomUiRef = useRef(false);
   const fileInputRef = useRef(null);
@@ -60,15 +55,6 @@ export default function Library() {
   const { alert: notify, confirm: confirmDialog } = useAppDialog();
   const sharedRoom = useOnlineRoom();
   const canManageLibrary = !sharedRoom?.room || sharedRoom.room.host;
-
-  useEffect(() => {
-    if (!menuSongId) return undefined;
-    const closeMenu = (event) => {
-      if (!event.target.closest(".library-card-more")) setMenuSongId(null);
-    };
-    document.addEventListener("pointerdown", closeMenu);
-    return () => document.removeEventListener("pointerdown", closeMenu);
-  }, [menuSongId]);
 
   const { data: songs, error } = usePolling(api.listSongs, 3000, []);
   useEffect(() => { api.getAppSettings().then(setAppSettings).catch(() => {}); }, []);
@@ -80,14 +66,13 @@ export default function Library() {
     }
   }, [query, sharedRoom?.roomUi?.query]);
   useEffect(() => {
-    if (!onlineActive || !roomClient) return;
+    if (!sharedRoom?.room) return;
     if (applyingRemoteRoomUiRef.current) {
       applyingRemoteRoomUiRef.current = false;
       return;
     }
-    roomClient.send("ui", { state: { query } });
-    sharedRoom?.syncUi({ query });
-  }, [onlineActive, query, roomClient]);
+    sharedRoom.syncUi({ query });
+  }, [query, sharedRoom?.room]);
 
   const openOnlineRoom = async () => {
     let settings = appSettings;
@@ -150,7 +135,6 @@ export default function Library() {
         return;
       try {
         setHiddenSongIds((ids) => new Set(ids).add(song.id));
-        setMenuSongId(null);
         if (infoSong?.id === song.id) setInfoSong(null);
         if (recordingsSong?.id === song.id) setRecordingsSong(null);
         if (processingSong?.id === song.id) setProcessingSong(null);
@@ -316,7 +300,7 @@ export default function Library() {
         title=" "
         actions={
           <div style={{ display: "flex", gap: 8 }}>
-            {!onlineActive && !sharedRoom?.room && <button className="btn btn-ghost" onClick={openOnlineRoom}>
+            {!sharedRoom?.room && <button className="btn btn-ghost" onClick={openOnlineRoom}>
               <UsersRound size={15} /> Петь вместе
             </button>}
             {canManageLibrary && <button className="btn btn-primary" onClick={handleAddClick}>
@@ -352,7 +336,7 @@ export default function Library() {
             />
           </div>
           <div className="library-toolbar-actions">
-            {!onlineActive && !sharedRoom?.room && <button className="btn btn-ghost" onClick={openOnlineRoom}>
+            {!sharedRoom?.room && <button className="btn btn-ghost" onClick={openOnlineRoom}>
               <UsersRound size={15} /> Петь вместе
             </button>}
             {canManageLibrary && <button className="btn btn-primary" onClick={handleAddClick}>
@@ -464,7 +448,7 @@ export default function Library() {
                           <button
                             className="btn btn-primary"
                             onClick={() => {
-                              if (sharedRoom?.room?.host) sharedRoom.syncCommand({ type: "open-karaoke", songId: song.id });
+                              if (sharedRoom?.room) sharedRoom.syncCommand({ type: "open-karaoke", songId: song.id });
                               navigate("/karaoke", { state: { songId: song.id } });
                             }}
                           >
@@ -478,7 +462,7 @@ export default function Library() {
                             <Headphones size={16} />
                           </button>
                         </>
-                      ) : (
+                      ) : canManageLibrary ? (
                         <button
                           className="btn btn-primary"
                           disabled={isWorking}
@@ -486,48 +470,45 @@ export default function Library() {
                         >
                           <Play size={15} fill="currentColor" /> Обработать
                         </button>
-                      )}
-                      <button
+                      ) : null}
+                      {canManageLibrary && <button
                         className="btn btn-ghost"
                         title="Настройки песни"
                         onClick={() => {
                           navigate("/song-settings", {
                             state: { songId: song.id },
                           });
-                          setMenuSongId(null);
                         }}
                       >
                         <Settings2 size={14} />
-                      </button>
-                      <button
+                      </button>}
+                      {canManageLibrary && <button
                         className="btn btn-ghost"
                         title="Открыть папку"
                         onClick={() => {
                           handleOpenFolder(song);
-                          setMenuSongId(null);
                         }}
                       >
                         <FolderOpen size={14} />
-                      </button>
-                      {isReady && (
+                      </button>}
+                      {canManageLibrary && isReady && (
                         <button
                           className="btn btn-ghost"
                           title="Переобработать MIDI"
                           onClick={() => {
                             handleReprocess(song);
-                            setMenuSongId(null);
                           }}
                         >
                           <RotateCcw size={14} />
                         </button>
                       )}
-                      <button
+                      {canManageLibrary && <button
                         className="btn btn-danger"
                         title="Удалить"
                         onClick={() => handleDelete(song)}
                       >
                         <Trash2 size={15} />
-                      </button>
+                      </button>}
                     </div>
                   </div>
                 </div>
@@ -542,20 +523,8 @@ export default function Library() {
         </div>
       </Panel>
       {onlineRoomOpen && <OnlineRoomModal
-        onlineName={appSettings.online_name.trim()}
+        onlineName={appSettings?.online_name?.trim() || ""}
         onClose={() => setOnlineRoomOpen(false)}
-        keepAlive
-        onConnectedChange={setOnlineActive}
-        onRoomClient={(client, roomData) => {
-          setRoomClient(client);
-          if (client) { sharedRoom.attachRoom(client, roomData); setOnlineRoomOpen(false); }
-        }}
-        getRoomState={() => ({ query })}
-        onRoomUi={(state) => {
-          if (typeof state?.query !== "string") return;
-          applyingRemoteRoomUiRef.current = true;
-          setQuery(state.query);
-        }}
       />}
 
       {infoSong && (

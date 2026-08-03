@@ -35,7 +35,12 @@ export class KaraokeRoom {
       .getWebSockets()
       .map(participantFromSocket)
       .filter(Boolean)
-      .map(({ id, name, role }) => ({ id, name, role }));
+      .map(({ id, name, role, micMuted = false }) => ({
+        id,
+        name,
+        role,
+        micMuted,
+      }));
   }
 
   send(socket, type, payload) {
@@ -56,11 +61,16 @@ export class KaraokeRoom {
     }
     const url = new URL(request.url);
     const requestedRole = url.searchParams.get("role") === "host" ? "host" : "guest";
-    const hasHost = this.participants().some((participant) => participant.role === "host");
+    const currentParticipants = this.participants();
+    const hasHost = currentParticipants.some((participant) => participant.role === "host");
     const participant = {
       id: crypto.randomUUID(),
       name: normalizeName(url.searchParams.get("name")),
-      role: requestedRole === "host" && !hasHost ? "host" : "guest",
+      role:
+        currentParticipants.length === 0 || (requestedRole === "host" && !hasHost)
+          ? "host"
+          : "guest",
+      micMuted: false,
     };
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
@@ -106,6 +116,20 @@ export class KaraokeRoom {
       return;
     }
 
+    if (message.type === "presence" && typeof message.micMuted === "boolean") {
+      sender.micMuted = message.micMuted;
+      socket.serializeAttachment(sender);
+      this.broadcast("participant-updated", {
+        participant: {
+          id: sender.id,
+          name: sender.name,
+          role: sender.role,
+          micMuted: sender.micMuted,
+        },
+      });
+      return;
+    }
+
     if (message.type === "claim-host" && !this.participants().some((participant) => participant.role === "host")) {
       sender.role = "host";
       socket.serializeAttachment(sender);
@@ -119,6 +143,19 @@ export class KaraokeRoom {
     // The edge already closes this endpoint before invoking the callback.
     // Calling close() again can prevent the remaining sockets from receiving
     // the participant-left event.
+    if (participant?.role === "host") {
+      const successorSocket = this.ctx.getWebSockets().find((candidate) => {
+        const candidateParticipant = participantFromSocket(candidate);
+        return candidateParticipant && candidateParticipant.id !== participant.id;
+      });
+      if (successorSocket) {
+        const successor = participantFromSocket(successorSocket);
+        successor.role = "host";
+        successorSocket.serializeAttachment(successor);
+        this.send(successorSocket, "self-updated", { self: successor });
+        this.broadcast("participant-updated", { participant: successor });
+      }
+    }
   }
 }
 
