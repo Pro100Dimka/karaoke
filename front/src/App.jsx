@@ -16,6 +16,8 @@ import History from "./pages/History";
 import About from "./pages/About";
 import { AppDialogProvider } from "./components/AppDialog";
 import { useAppDialog } from "./components/AppDialog";
+import { OnlineRoomProvider } from "./contexts/OnlineRoomContext";
+import { OnlineRoomDock } from "./components/OnlineRoomDock";
 
 export default function App() {
   useLayoutEffect(() => {
@@ -40,9 +42,10 @@ export default function App() {
   }, []);
 
   return (
-    <AppDialogProvider><HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <AppDialogProvider><OnlineRoomProvider><HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AppLayout />
-    </HashRouter></AppDialogProvider>
+      <OnlineRoomDock />
+    </HashRouter></OnlineRoomProvider></AppDialogProvider>
   );
 }
 

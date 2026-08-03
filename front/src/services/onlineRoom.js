@@ -68,3 +68,63 @@ export class OnlineRoomClient {
 }
 
 export const onlineRoomUrl = DEFAULT_SIGNALING_URL;
+
+// Peer-to-peer voice transport. Signalling stays in the room Worker; audio
+// itself never passes through the Worker or permanent cloud storage.
+export class OnlineVoiceMesh {
+  constructor(roomClient) {
+    this.roomClient = roomClient;
+    this.peers = new Map();
+    this.stream = null;
+    this.onRemoteStream = null;
+  }
+
+  async start() {
+    this.stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+    return this.stream;
+  }
+
+  createPeer(participantId) {
+    if (this.peers.has(participantId)) return this.peers.get(participantId);
+    const peer = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }] });
+    this.stream?.getTracks().forEach((track) => peer.addTrack(track, this.stream));
+    peer.onicecandidate = ({ candidate }) => {
+      if (candidate) this.roomClient.send("signal", { targetId: participantId, signal: { candidate } });
+    };
+    peer.ontrack = ({ streams }) => this.onRemoteStream?.(participantId, streams[0]);
+    peer.onconnectionstatechange = () => {
+      if (["failed", "closed", "disconnected"].includes(peer.connectionState)) this.peers.delete(participantId);
+    };
+    this.peers.set(participantId, peer);
+    return peer;
+  }
+
+  async invite(participantId) {
+    const peer = this.createPeer(participantId);
+    const offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    this.roomClient.send("signal", { targetId: participantId, signal: { description: peer.localDescription } });
+  }
+
+  async accept(fromId, signal) {
+    const peer = this.createPeer(fromId);
+    if (signal.candidate) return peer.addIceCandidate(signal.candidate);
+    if (!signal.description) return undefined;
+    await peer.setRemoteDescription(signal.description);
+    if (signal.description.type === "offer") {
+      const answer = await peer.createAnswer();
+      await peer.setLocalDescription(answer);
+      this.roomClient.send("signal", { targetId: fromId, signal: { description: peer.localDescription } });
+    }
+    return undefined;
+  }
+
+  stop() {
+    this.peers.forEach((peer) => peer.close());
+    this.peers.clear();
+    this.stream?.getTracks().forEach((track) => track.stop());
+    this.stream = null;
+  }
+}

@@ -27,6 +27,7 @@ import { AudioPlayer } from "../components/AudioPlayer";
 import { useAppDialog } from "../components/AppDialog";
 import libraryNeonSpace from "../assets/karaoke/library-neon-space.webp";
 import { OnlineRoomModal } from "../components/OnlineRoomModal";
+import { useOnlineRoom } from "../contexts/OnlineRoomContext";
 
 function formatDate(iso) {
   if (!iso) return "—";
@@ -57,6 +58,7 @@ export default function Library() {
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const { alert: notify, confirm: confirmDialog } = useAppDialog();
+  const sharedRoom = useOnlineRoom();
 
   useEffect(() => {
     if (!menuSongId) return undefined;
@@ -70,12 +72,20 @@ export default function Library() {
   const { data: songs, error } = usePolling(api.listSongs, 3000, []);
   useEffect(() => { api.getAppSettings().then(setAppSettings).catch(() => {}); }, []);
   useEffect(() => {
+    if (typeof sharedRoom?.roomUi?.query !== "string") return;
+    if (sharedRoom.roomUi.query !== query) {
+      applyingRemoteRoomUiRef.current = true;
+      setQuery(sharedRoom.roomUi.query);
+    }
+  }, [query, sharedRoom?.roomUi?.query]);
+  useEffect(() => {
     if (!onlineActive || !roomClient) return;
     if (applyingRemoteRoomUiRef.current) {
       applyingRemoteRoomUiRef.current = false;
       return;
     }
     roomClient.send("ui", { state: { query } });
+    sharedRoom?.syncUi({ query });
   }, [onlineActive, query, roomClient]);
 
   const openOnlineRoom = async () => {
@@ -305,7 +315,7 @@ export default function Library() {
         title=" "
         actions={
           <div style={{ display: "flex", gap: 8 }}>
-            {!onlineActive && <button className="btn btn-ghost" onClick={openOnlineRoom}>
+            {!onlineActive && !sharedRoom?.room && <button className="btn btn-ghost" onClick={openOnlineRoom}>
               <UsersRound size={15} /> Петь вместе
             </button>}
             <button className="btn btn-primary" onClick={handleAddClick}>
@@ -341,7 +351,7 @@ export default function Library() {
             />
           </div>
           <div className="library-toolbar-actions">
-            {!onlineActive && <button className="btn btn-ghost" onClick={openOnlineRoom}>
+            {!onlineActive && !sharedRoom?.room && <button className="btn btn-ghost" onClick={openOnlineRoom}>
               <UsersRound size={15} /> Петь вместе
             </button>}
             <button className="btn btn-primary" onClick={handleAddClick}>
