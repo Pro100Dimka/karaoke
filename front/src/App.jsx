@@ -18,6 +18,7 @@ import { AppDialogProvider } from "./components/AppDialog";
 import { useAppDialog } from "./components/AppDialog";
 import { OnlineRoomProvider } from "./contexts/OnlineRoomContext";
 import { OnlineRoomDock } from "./components/OnlineRoomDock";
+import { useOnlineRoom } from "./contexts/OnlineRoomContext";
 
 export default function App() {
   useLayoutEffect(() => {
@@ -56,6 +57,14 @@ function AppLayout() {
   const isSongSettings = location.pathname === "/song-settings";
   const [isSettingsOpen, setSettingsOpen] = useState(false);
   const { alert } = useAppDialog();
+  const onlineRoom = useOnlineRoom();
+
+  useEffect(() => {
+    const command = onlineRoom?.roomCommand;
+    if (command?.type === "open-karaoke" && command.songId) {
+      navigate("/karaoke", { state: { songId: command.songId } });
+    }
+  }, [navigate, onlineRoom?.roomCommand]);
 
   useEffect(() => {
     let active = true;

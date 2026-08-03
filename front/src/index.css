@@ -763,7 +763,9 @@ table.data-table tbody tr:hover {
   background: rgba(5, 18, 25, 0.94);
   border: 1px solid rgba(102, 236, 255, 0.45);
   border-radius: 20px;
-  box-shadow: 0 0 36px rgba(54, 210, 255, 0.22), 0 28px 80px rgba(0, 0, 0, 0.5);
+  box-shadow:
+    0 0 36px rgba(54, 210, 255, 0.22),
+    0 28px 80px rgba(0, 0, 0, 0.5);
 }
 .online-room-backdrop {
   position: fixed;
@@ -772,7 +774,7 @@ table.data-table tbody tr:hover {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(1, 5, 12, .62);
+  background: rgba(1, 5, 12, 0.62);
   backdrop-filter: blur(10px);
 }
 .online-room-backdrop.is-docked {
@@ -789,31 +791,130 @@ table.data-table tbody tr:hover {
   width: min(320px, calc(100vw - 40px));
   padding: 16px;
   pointer-events: auto;
-  border-color: rgba(102, 236, 255, .58);
-  box-shadow: 0 16px 44px rgba(0, 0, 0, .48), 0 0 28px rgba(72, 234, 255, .18);
+  border-color: rgba(102, 236, 255, 0.58);
+  box-shadow:
+    0 16px 44px rgba(0, 0, 0, 0.48),
+    0 0 28px rgba(72, 234, 255, 0.18);
 }
-.online-room-backdrop.is-docked .online-room-form { margin-top: 12px; gap: 10px; }
-.online-room-backdrop.is-docked .online-room-code { font-size: 23px; }
+.online-room-backdrop.is-docked .online-room-form {
+  margin-top: 12px;
+  gap: 10px;
+}
+.online-room-backdrop.is-docked .online-room-code {
+  font-size: 23px;
+}
 .online-room-dock {
-  position: fixed; z-index: 9000; left: 18px; bottom: 18px; display: flex;
-  align-items: center; gap: 8px; max-width: min(520px, calc(100vw - 36px));
-  padding: 10px 12px; color: var(--text); background: rgba(4, 16, 25, .9);
-  border: 1px solid rgba(102, 236, 255, .4); border-radius: 14px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, .42), 0 0 22px rgba(72, 234, 255, .14);
+  position: fixed;
+  z-index: 9000;
+  left: 20px;
+  bottom: 20px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px 14px;
+  width: min(310px, calc(100vw - 40px));
+  padding: 16px;
+  color: var(--text);
+  background: linear-gradient(
+    145deg,
+    rgba(5, 23, 35, 0.94),
+    rgba(4, 11, 23, 0.9)
+  );
+  border: 1px solid rgba(102, 236, 255, 0.52);
+  border-radius: 18px;
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.5),
+    0 0 28px rgba(72, 234, 255, 0.2),
+    inset 0 1px rgba(255, 255, 255, 0.12);
 }
-.online-room-dock small { color: #5ff4cd; font-size: 9px; letter-spacing: .08em; }
-.online-room-dock strong { letter-spacing: .09em; color: #d9fbff; }
-.online-room-dock > div { display: flex; gap: 5px; overflow: hidden; }
-.online-room-dock > div span { max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 7px; border-radius: 7px; background: rgba(128, 226, 255, .1); font-size: 11px; }
-.online-room-form { display: grid; gap: 14px; margin-top: 18px; }
-.online-room-form > p { margin: 0; color: var(--text-muted); line-height: 1.45; }
-.online-room-form label { display: grid; gap: 7px; color: var(--text-muted); font-size: 13px; }
-.online-room-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-.online-room-status { color: #59f7c8; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
-.online-room-code { font-size: clamp(24px, 6vw, 36px); letter-spacing: .13em; color: #d9fbff; text-shadow: 0 0 18px rgba(73, 226, 255, .75); }
-.online-room-code-row { display: flex; align-items: center; gap: 10px; }
-.online-room-participants { display: grid; gap: 7px; }
-.online-room-participants span { padding: 9px 11px; border-radius: 10px; background: rgba(134, 230, 255, .08); border: 1px solid rgba(134, 230, 255, .14); }
+.online-room-dock small {
+  color: #5ff4cd;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+}
+.online-room-dock strong {
+  font-size: 20px;
+  letter-spacing: 0.12em;
+  color: #d9fbff;
+  text-shadow: 0 0 14px rgba(92, 229, 255, 0.7);
+}
+.online-room-dock-code { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; }
+.online-room-dock-bottom { grid-column: 1 / -1; display: grid; gap: 10px; }
+.online-room-dock-people { display: grid; gap: 6px; max-height: 104px; overflow: auto; }
+.online-room-dock-people span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(128, 226, 255, 0.1);
+  border: 1px solid rgba(128, 226, 255, 0.14);
+  font-size: 12px;
+}
+.online-room-dock-actions { display: grid; grid-template-columns: 38px 38px 1fr; gap: 8px; }
+.online-room-dock-actions button { min-height: 36px; border-radius: 10px; }
+.online-room-dock-actions button:last-child {
+  color: #ffb5c4;
+  border-color: rgba(255, 99, 145, 0.25);
+}
+.online-room-dock { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.online-room-dock header, .online-room-dock footer, .online-room-person, .online-room-dock-code { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.online-room-dock header .btn-danger { min-width: 34px; min-height: 34px; padding: 0; border-radius: 10px; }
+.online-room-dock-people { display: grid; gap: 6px; max-height: 150px; overflow: auto; }
+.online-room-person { padding: 7px 8px 7px 10px; border: 1px solid rgba(128,226,255,.14); border-radius: 10px; background: rgba(128,226,255,.09); }
+.online-room-person > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.online-room-person > div { display: flex; gap: 5px; }
+.online-room-person button { width: 30px; min-height: 30px; padding: 0; }
+.online-room-dock footer { justify-content: stretch; }
+.online-room-dock footer button { flex: 1; min-height: 34px; font-size: 11px; }
+.online-room-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+.online-room-form > p {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+.online-room-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.online-room-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.online-room-status {
+  color: #59f7c8;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.online-room-code {
+  font-size: clamp(24px, 6vw, 36px);
+  letter-spacing: 0.13em;
+  color: #d9fbff;
+  text-shadow: 0 0 18px rgba(73, 226, 255, 0.75);
+}
+.online-room-code-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.online-room-participants {
+  display: grid;
+  gap: 7px;
+}
+.online-room-participants span {
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: rgba(134, 230, 255, 0.08);
+  border: 1px solid rgba(134, 230, 255, 0.14);
+}
 .karaoke-settings-backdrop {
   position: absolute;
   z-index: 25;

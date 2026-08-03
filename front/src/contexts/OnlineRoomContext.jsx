@@ -12,9 +12,10 @@ export function OnlineRoomProvider({ children }) {
   const [microphoneMuted, setMicrophoneMuted] = useState(false);
   const [roomSoundMuted, setRoomSoundMuted] = useState(false);
   const [roomUi, setRoomUi] = useState({});
+  const [roomCommand, setRoomCommand] = useState(null);
 
   const value = useMemo(() => ({
-    room, participants, mutedPeople, microphoneMuted, roomSoundMuted, roomUi,
+    room, participants, mutedPeople, microphoneMuted, roomSoundMuted, roomUi, roomCommand,
     async createRoom(name) {
       const client = new OnlineRoomClient();
       const id = crypto.randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase();
@@ -26,8 +27,19 @@ export function OnlineRoomProvider({ children }) {
         if (message.type === "participant-joined") setParticipants((items) => [...items, message.participant]);
         if (message.type === "participant-left") setParticipants((items) => items.filter((item) => item.id !== message.participantId));
         if (message.type === "ui") setRoomUi(message.state || {});
+        if (message.type === "sync") setRoomCommand(message.state || null);
       });
       return id;
+    },
+    attachRoom(client, roomData) {
+      clientRef.current = client;
+      setRoom(roomData);
+      client.onMessage((message) => {
+        if (message.type === "room-state") setParticipants(message.participants || []);
+        if (message.type === "participant-joined") setParticipants((items) => [...items, message.participant]);
+        if (message.type === "participant-left") setParticipants((items) => items.filter((item) => item.id !== message.participantId));
+        if (message.type === "ui") setRoomUi(message.state || {});
+      });
     },
     async leaveRoom() {
       voiceRef.current?.stop();
@@ -43,6 +55,7 @@ export function OnlineRoomProvider({ children }) {
     togglePersonMuted(id) { setMutedPeople((items) => { const next = new Set(items); next.has(id) ? next.delete(id) : next.add(id); return next; }); },
     getClient: () => clientRef.current,
     syncUi(state) { clientRef.current?.send("ui", { state }); },
+    syncCommand(state) { clientRef.current?.send("sync", { state }); },
     getVoice: () => voiceRef.current || (voiceRef.current = new OnlineVoiceMesh(clientRef.current)),
   }), [microphoneMuted, mutedPeople, participants, room, roomSoundMuted, roomUi]);
   return <OnlineRoomContext.Provider value={value}>{children}</OnlineRoomContext.Provider>;

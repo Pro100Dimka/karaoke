@@ -462,11 +462,10 @@ export default function Library() {
                         <>
                           <button
                             className="btn btn-primary"
-                            onClick={() =>
-                              navigate("/karaoke", {
-                                state: { songId: song.id },
-                              })
-                            }
+                            onClick={() => {
+                              if (sharedRoom?.room?.host) sharedRoom.syncCommand({ type: "open-karaoke", songId: song.id });
+                              navigate("/karaoke", { state: { songId: song.id } });
+                            }}
                           >
                             <Play size={15} fill="currentColor" /> Караоке
                           </button>
@@ -544,8 +543,12 @@ export default function Library() {
       {onlineRoomOpen && <OnlineRoomModal
         onlineName={appSettings.online_name.trim()}
         onClose={() => setOnlineRoomOpen(false)}
+        keepAlive
         onConnectedChange={setOnlineActive}
-        onRoomClient={setRoomClient}
+        onRoomClient={(client, roomData) => {
+          setRoomClient(client);
+          if (client) { sharedRoom.attachRoom(client, roomData); setOnlineRoomOpen(false); }
+        }}
         getRoomState={() => ({ query })}
         onRoomUi={(state) => {
           if (typeof state?.query !== "string") return;

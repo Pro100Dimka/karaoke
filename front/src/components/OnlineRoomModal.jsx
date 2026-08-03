@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Check, Copy, UsersRound, X } from "lucide-react";
 import { OnlineRoomClient } from "../services/onlineRoom";
 
-export function OnlineRoomModal({ onlineName, onClose, onConnectedChange, onRoomClient, onRoomUi, getRoomState }) {
+export function OnlineRoomModal({ onlineName, onClose, onConnectedChange, onRoomClient, onRoomUi, getRoomState, compact = false, keepAlive = false }) {
   const clientRef = useRef(null);
   const [roomId, setRoomId] = useState("");
   const [participants, setParticipants] = useState([]);
@@ -12,7 +12,7 @@ export function OnlineRoomModal({ onlineName, onClose, onConnectedChange, onRoom
   const [copied, setCopied] = useState(false);
   const [joinMode, setJoinMode] = useState(false);
 
-  useEffect(() => () => clientRef.current?.disconnect(), []);
+  useEffect(() => () => { if (!keepAlive) clientRef.current?.disconnect(); }, [keepAlive]);
   const connect = async (host) => {
     const id = host ? crypto.randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase() : roomId;
     setError("");
@@ -30,7 +30,7 @@ export function OnlineRoomModal({ onlineName, onClose, onConnectedChange, onRoom
       await client.connect({ id, name: onlineName, host });
       setRoomId(id);
       setConnected(true);
-      onRoomClient?.(client);
+      onRoomClient?.(client, { id, host });
       if (host) client.send("ui", { state: getRoomState?.() || {} });
     }
     catch (connectError) { setError(connectError.message); client.disconnect(); }
@@ -57,7 +57,7 @@ export function OnlineRoomModal({ onlineName, onClose, onConnectedChange, onRoom
 
   useEffect(() => { onConnectedChange?.(connected); }, [connected, onConnectedChange]);
 
-  return createPortal(<div className={`online-room-backdrop ${connected ? "is-docked" : ""}`} onMouseDown={connected ? undefined : onClose}>
+  return createPortal(<div className={`online-room-backdrop ${connected && compact ? "is-docked" : ""}`} onMouseDown={connected && compact ? undefined : onClose}>
     <section className="online-room-modal" onMouseDown={(event) => event.stopPropagation()}>
         {!connected && <button type="button" className="karaoke-settings-close" onClick={onClose} aria-label="Закрыть"><X size={16} /></button>}
       <div className="microphone-panel-title"><UsersRound size={16} /> Совместное исполнение</div>
