@@ -29,6 +29,7 @@ import { usePolling } from "../hooks/usePolling";
 import { Dropdown } from "../components/Dropdown";
 import { useAppDialog } from "../components/AppDialog";
 import { KARAOKE_THEMES, shuffleThemes } from "../assets/karaoke/themes";
+import { useOnlineRoom } from "../contexts/OnlineRoomContext";
 
 // ПРИМЕЧАНИЕ ПО СХЕМЕ ДАННЫХ: здесь предполагается, что lyrics.json — это
 // массив строк вида {start, end, text}, а reference.json — массив нот вида
@@ -319,6 +320,7 @@ const MONITORING_MODES = [
 ];
 
 export default function Karaoke({ onOpenAppSettings }) {
+  const onlineRoom = useOnlineRoom();
   const location = useLocation();
   const navigate = useNavigate();
   const { data: songs } = usePolling(api.listSongs, 15000, []);
@@ -1109,6 +1111,7 @@ export default function Karaoke({ onOpenAppSettings }) {
 
   const returnToLibrary = async () => {
     await stop();
+    if (onlineRoom?.room?.host) onlineRoom.syncCommand({ type: "open-library" });
     navigate("/");
   };
 

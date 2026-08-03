@@ -59,6 +59,7 @@ export default function Library() {
   const navigate = useNavigate();
   const { alert: notify, confirm: confirmDialog } = useAppDialog();
   const sharedRoom = useOnlineRoom();
+  const canManageLibrary = !sharedRoom?.room || sharedRoom.room.host;
 
   useEffect(() => {
     if (!menuSongId) return undefined;
@@ -318,9 +319,9 @@ export default function Library() {
             {!onlineActive && !sharedRoom?.room && <button className="btn btn-ghost" onClick={openOnlineRoom}>
               <UsersRound size={15} /> Петь вместе
             </button>}
-            <button className="btn btn-primary" onClick={handleAddClick}>
+            {canManageLibrary && <button className="btn btn-primary" onClick={handleAddClick}>
               <Plus size={15} /> Добавить песню
-            </button>
+            </button>}
             <input
               ref={fileInputRef}
               type="file"
@@ -354,9 +355,9 @@ export default function Library() {
             {!onlineActive && !sharedRoom?.room && <button className="btn btn-ghost" onClick={openOnlineRoom}>
               <UsersRound size={15} /> Петь вместе
             </button>}
-            <button className="btn btn-primary" onClick={handleAddClick}>
+            {canManageLibrary && <button className="btn btn-primary" onClick={handleAddClick}>
               <Plus size={15} /> Добавить песню
-            </button>
+            </button>}
           </div>
         </div>
 

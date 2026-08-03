@@ -64,6 +64,7 @@ function AppLayout() {
     if (command?.type === "open-karaoke" && command.songId) {
       navigate("/karaoke", { state: { songId: command.songId } });
     }
+    if (command?.type === "open-library") navigate("/");
   }, [navigate, onlineRoom?.roomCommand]);
 
   useEffect(() => {

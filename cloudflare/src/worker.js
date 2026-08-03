@@ -101,7 +101,7 @@ export class KaraokeRoom {
       return;
     }
 
-    if (message.type === "sync" && sender.role === "host") {
+    if (message.type === "sync") {
       this.broadcast("sync", { state: message.state, sentAt: Date.now() }, sender.id);
       return;
     }
