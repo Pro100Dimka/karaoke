@@ -465,8 +465,11 @@ export default function Library() {
                         <>
                           <button
                             className="btn btn-primary"
-                            onClick={() => {
-                              if (sharedRoom?.room) sharedRoom.syncCommand({ type: "open-karaoke", songId: song.id });
+                            onClick={async () => {
+                              if (sharedRoom?.room) {
+                                const readyLocally = await sharedRoom.openKaraoke(song.id);
+                                if (!readyLocally) return;
+                              }
                               navigate("/karaoke", { state: { songId: song.id } });
                             }}
                           >

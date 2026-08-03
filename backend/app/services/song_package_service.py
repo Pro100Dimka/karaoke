@@ -70,7 +70,9 @@ def build_package(song: models.Song) -> Path:
                     continue
                 if path.name.startswith("take-") or path.name == "pipeline.log":
                     continue
-                archive.write(path, (PurePosixPath("output") / PurePosixPath(relative.as_posix())).as_posix())
+                archive.write(
+                    path, (PurePosixPath("output") / PurePosixPath(relative.as_posix())).as_posix()
+                )
         return package_path
     except Exception:
         package_path.unlink(missing_ok=True)
@@ -107,7 +109,11 @@ def import_package(db: Session, package_path: Path) -> models.Song:
         if existing is not None:
             return existing
 
-        source_members = [m for m in members if PurePosixPath(m.filename).parts[:1] == ("source",) and not m.is_dir()]
+        source_members = [
+            m
+            for m in members
+            if PurePosixPath(m.filename).parts[:1] == ("source",) and not m.is_dir()
+        ]
         if len(source_members) != 1:
             raise ValueError("Song package must contain one source file")
         source_member = source_members[0]

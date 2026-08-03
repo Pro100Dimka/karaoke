@@ -170,6 +170,14 @@ export function OnlineRoomProvider({ children }) {
           pendingSongCommandRef.current = null;
           setVoiceError("");
           if (pendingCommand?.songId === metadata.songId) {
+            if (pendingCommand.__originatedHere) {
+              clientRef.current?.send("sync", {
+                state: {
+                  type: "open-karaoke",
+                  songId: pendingCommand.songId,
+                },
+              });
+            }
             setRoomCommand({
               ...pendingCommand,
               __eventId: `import-${Date.now()}-${Math.random()}`,
@@ -375,6 +383,29 @@ export function OnlineRoomProvider({ children }) {
       },
       syncCommand(state) {
         clientRef.current?.send("sync", { state });
+      },
+      async openKaraoke(songId) {
+        const command = { type: "open-karaoke", songId };
+        if (!room || room.host) {
+          clientRef.current?.send("sync", { state: command });
+          return true;
+        }
+        try {
+          await api.getSong(songId);
+          clientRef.current?.send("sync", { state: command });
+          return true;
+        } catch {
+          pendingSongCommandRef.current = { ...command, __originatedHere: true };
+          setVoiceError("Получаем песню от ведущего…");
+          clientRef.current?.send("sync", {
+            state: {
+              type: "song-request",
+              songId,
+              requesterId: room.selfId,
+            },
+          });
+          return false;
+        }
       },
     }),
     [

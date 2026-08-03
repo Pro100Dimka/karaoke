@@ -108,7 +108,9 @@ async def import_song_package(
         temporary.close()
         return song_package_service.import_package(db, temporary_path)
     except (OSError, ValueError, zipfile.BadZipFile) as exc:
-        raise HTTPException(status_code=400, detail=f"Could not import song package: {exc}") from exc
+        raise HTTPException(
+            status_code=400, detail=f"Could not import song package: {exc}"
+        ) from exc
     finally:
         temporary.close()
         temporary_path.unlink(missing_ok=True)
