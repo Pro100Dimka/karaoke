@@ -326,6 +326,12 @@ export default function Karaoke({ onOpenAppSettings }) {
   const [microphoneOpen, setMicrophoneOpen] = useState(false);
   const [recordingError, setRecordingError] = useState(null);
   const [microphoneVolume, setMicrophoneVolume] = useState(1);
+  const [microphoneEffects, setMicrophoneEffects] = useState({
+    reverb: 0,
+    echo: 0,
+    delay: 0,
+  });
+  const [microphoneControlsOpen, setMicrophoneControlsOpen] = useState(false);
   const [audioDriver, setAudioDriver] = useState("auto");
   const [asioDriverName, setAsioDriverName] = useState("");
   const [audioBufferSize, setAudioBufferSize] = useState(64);
@@ -356,6 +362,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   const controlsTimerRef = useRef(null);
   const lastControlsActivityRef = useRef(Date.now());
   const microphoneVolumeInitializedRef = useRef(false);
+  const microphoneEffectsInitializedRef = useRef(false);
   const browserMonitorRef = useRef(null);
   const manualMonitoringRef = useRef(false);
   const monitorModeMenuRef = useRef(null);
@@ -448,6 +455,16 @@ export default function Karaoke({ onOpenAppSettings }) {
       setMicrophoneVolume(audioSettings.volume);
     }
   }, [audioSettings?.volume]);
+
+  useEffect(() => {
+    if (!audioSettings || microphoneEffectsInitializedRef.current) return;
+    microphoneEffectsInitializedRef.current = true;
+    setMicrophoneEffects({
+      reverb: Number(audioSettings.reverb) || 0,
+      echo: Number(audioSettings.echo) || 0,
+      delay: Number(audioSettings.delay) || 0,
+    });
+  }, [audioSettings]);
 
   useEffect(() => {
     if (audioSettings?.audio_driver) setAudioDriver(audioSettings.audio_driver);
@@ -977,6 +994,9 @@ export default function Karaoke({ onOpenAppSettings }) {
             instr.currentTime,
             playbackGain(musicVolume),
             microphoneVolume,
+            microphoneEffects.reverb,
+            microphoneEffects.echo,
+            microphoneEffects.delay,
           );
           setRecordingSessionId(session.recording_session_id);
         }
@@ -1433,6 +1453,18 @@ export default function Karaoke({ onOpenAppSettings }) {
                 </div>
               </div>
             </div>
+            <div className="microphone-controls-launcher">
+              <button
+                type="button"
+                className={`btn ${microphoneControlsOpen ? "btn-primary" : "btn-ghost"}`}
+                onClick={() => setMicrophoneControlsOpen((open) => !open)}
+              >
+                <Settings2 size={15} />
+                {microphoneControlsOpen ? "Скрыть микрофон" : "Микрофон и эффекты"}
+              </button>
+            </div>
+            {microphoneControlsOpen && (
+              <div className="microphone-controls-content">
             <label
               className={audioDriver === "asio" ? "advanced-audio-setting" : ""}
             >
@@ -1696,9 +1728,50 @@ export default function Karaoke({ onOpenAppSettings }) {
               <span>{Math.round(microphoneLevel)}%</span>
             </div>
             <div className="microphone-effects">
-              Для прослушивания используйте наушники: через колонки возможна
-              обратная связь.
+              <div className="microphone-effects-title">Эффекты записи</div>
+              <SliderField
+                label="Reverb"
+                value={microphoneEffects.reverb}
+                min={0}
+                max={1}
+                step={0.05}
+                display={`${Math.round(microphoneEffects.reverb * 100)}%`}
+                onChange={(value) => {
+                  setMicrophoneEffects((effects) => ({ ...effects, reverb: value }));
+                }}
+                onCommit={(value) => updateMicrophone({ reverb: value })}
+              />
+              <SliderField
+                label="Echo"
+                value={microphoneEffects.echo}
+                min={0}
+                max={1}
+                step={0.05}
+                display={`${Math.round(microphoneEffects.echo * 100)}%`}
+                onChange={(value) => {
+                  setMicrophoneEffects((effects) => ({ ...effects, echo: value }));
+                }}
+                onCommit={(value) => updateMicrophone({ echo: value })}
+              />
+              <SliderField
+                label="Delay"
+                value={microphoneEffects.delay}
+                min={0}
+                max={1}
+                step={0.05}
+                display={`${Math.round(microphoneEffects.delay * 100)}%`}
+                onChange={(value) => {
+                  setMicrophoneEffects((effects) => ({ ...effects, delay: value }));
+                }}
+                onCommit={(value) => updateMicrophone({ delay: value })}
+              />
+              <small>
+                Эффекты применяются к сохранённому исполнению. Прямой ASIO-мониторинг
+                остаётся без DSP, чтобы не добавлять задержку.
+              </small>
             </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2071,6 +2144,7 @@ function SliderField({
   onChange,
   display,
   disabled,
+  onCommit,
 }) {
   return (
     <div>
@@ -2093,6 +2167,11 @@ function SliderField({
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
+        onPointerUp={(event) => onCommit?.(Number(event.currentTarget.value))}
+        onKeyUp={(event) => {
+          if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
+            onCommit?.(Number(event.currentTarget.value));
+        }}
         style={{ width: "100%", accentColor: "#a855f7" }}
       />
     </div>

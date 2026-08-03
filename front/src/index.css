@@ -673,6 +673,59 @@ table.data-table tbody tr:hover {
 .microphone-panel.karaoke-settings-modal .microphone-effects {
   margin: 2px 2px 0;
 }
+.microphone-controls-launcher {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-start;
+}
+.microphone-controls-content {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+.microphone-controls-content > label,
+.microphone-controls-content > .microphone-level,
+.microphone-controls-content > .monitoring-mode-picker,
+.microphone-controls-content > .microphone-effects {
+  min-height: 74px;
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--text-primary) 9%, transparent);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--surface-deep) 55%, transparent);
+}
+.microphone-controls-content > .audio-driver-setting,
+.microphone-controls-content > .asio-driver-setting,
+.microphone-controls-content > .microphone-gain-setting,
+.microphone-controls-content > .microphone-monitoring {
+  grid-column: span 2;
+}
+.microphone-controls-content > .microphone-level,
+.microphone-controls-content > .microphone-effects {
+  grid-column: span 4;
+}
+.microphone-controls-content > .microphone-effects {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+.microphone-effects-title,
+.microphone-controls-content > .microphone-effects small {
+  grid-column: 1 / -1;
+}
+.microphone-effects-title {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.microphone-controls-content > .microphone-effects small {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
 @media (max-width: 760px) {
   .microphone-panel.karaoke-settings-modal { grid-template-columns: 1fr; }
   .microphone-panel.karaoke-settings-modal .audio-driver-setting,
@@ -680,6 +733,14 @@ table.data-table tbody tr:hover {
   .microphone-panel.karaoke-settings-modal .microphone-gain-setting,
   .microphone-panel.karaoke-settings-modal .microphone-monitoring,
   .microphone-panel.karaoke-settings-modal .microphone-level { grid-column: auto; }
+  .microphone-controls-content { grid-template-columns: 1fr; }
+  .microphone-controls-content > .audio-driver-setting,
+  .microphone-controls-content > .asio-driver-setting,
+  .microphone-controls-content > .microphone-gain-setting,
+  .microphone-controls-content > .microphone-monitoring,
+  .microphone-controls-content > .microphone-level,
+  .microphone-controls-content > .microphone-effects { grid-column: auto; }
+  .microphone-controls-content > .microphone-effects { grid-template-columns: 1fr; }
 }
 .karaoke-settings-backdrop {
   position: absolute;

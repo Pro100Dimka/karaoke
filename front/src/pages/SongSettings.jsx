@@ -60,9 +60,34 @@ export default function SongSettings() {
 
   const set = (field) => (value) => setForm((f) => ({ ...f, [field]: value }));
 
+  const saveLyrics = async () => {
+    try {
+      const textLines = lyricsText
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+      if (textLines.length > lyricsData.length) {
+        setLyricsError(
+          "Нельзя добавить новые строки без таймингов. Сначала добавьте их при обработке песни.",
+        );
+        return false;
+      }
+      const lyrics = lyricsData.map((line, index) => ({ ...line, text: textLines[index] || line.text }));
+      await api.updateLyrics(song.id, lyrics);
+      setLyricsData(lyrics);
+      setLyricsText(lyrics.map((line) => line.text || "").join("\n"));
+      setLyricsError(null);
+      return true;
+    } catch (error) {
+      setLyricsError(error.message || "Не удалось сохранить текст");
+      return false;
+    }
+  };
+
   const save = async () => {
     setSaving(true);
     try {
+      if (song.status === "done" && !(await saveLyrics())) return;
       await api.updateSong(song.id, {
         title: form.title?.trim() || song.title,
         artist: form.artist?.trim() || null,
@@ -80,28 +105,6 @@ export default function SongSettings() {
       await notify(`Не удалось сохранить: ${err.message}`);
     } finally {
       setSaving(false);
-    }
-  };
-
-  const saveLyrics = async () => {
-    try {
-      const textLines = lyricsText
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean);
-      if (textLines.length > lyricsData.length) {
-        setLyricsError(
-          "Нельзя добавить новые строки без таймингов. Сначала добавьте их при обработке песни.",
-        );
-        return;
-      }
-      const lyrics = lyricsData.map((line, index) => ({ ...line, text: textLines[index] || line.text }));
-      await api.updateLyrics(song.id, lyrics);
-      setLyricsData(lyrics);
-      setLyricsText(lyrics.map((line) => line.text || "").join("\n"));
-      setLyricsError(null);
-    } catch (error) {
-      setLyricsError(error.message || "Не удалось сохранить текст");
     }
   };
 
@@ -164,7 +167,6 @@ export default function SongSettings() {
           <textarea className="input song-lyrics-editor" value={lyricsText}
             onChange={(event) => setLyricsText(event.target.value)} spellCheck={false} />
           {lyricsError && <p className="song-lyrics-error">{lyricsError}</p>}
-          <button className="btn btn-primary" onClick={saveLyrics}>Сохранить текст</button>
         </Panel>
       )}
     </div>

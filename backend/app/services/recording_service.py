@@ -48,6 +48,7 @@ class RecordingSession:
         playback_offset_sec: float = 0,
         blocksize: int = 64,
         music_gain: float = 1.0,
+        effects: dict[str, float] | None = None,
     ):
         self.session_id = session_id
         self.song_id = song_id
@@ -55,6 +56,10 @@ class RecordingSession:
         self.channels = channels
         self.gain = max(0.0, min(4.0, gain))
         self.music_gain = max(0.0, min(1.0, music_gain))
+        self.effects = {
+            name: max(0.0, min(1.0, float((effects or {}).get(name, 0.0))))
+            for name in ("reverb", "echo", "delay")
+        }
         self.playback_offset_sec = max(0.0, playback_offset_sec)
         self._queue: queue.Queue = queue.Queue()
         if monitoring_enabled:
@@ -153,6 +158,7 @@ def start_recording(
     playback_offset_sec: float = 0,
     blocksize: int = 64,
     music_gain: float = 1.0,
+    effects: dict[str, float] | None = None,
 ) -> str:
     if not _AUDIO_BACKEND_AVAILABLE:
         raise RuntimeError(f"Аудио-бэкенд недоступен: {_AUDIO_BACKEND_ERROR}")
@@ -172,6 +178,7 @@ def start_recording(
             playback_offset_sec,
             blocksize,
             music_gain,
+            effects,
         )
         session.start()
     except Exception as exc:  # Audio drivers raise implementation-specific errors.
@@ -240,6 +247,7 @@ def stop_recording(session_id: str) -> models.Recording:
             song,
             session.playback_offset_sec,
             session.music_gain,
+            session.effects,
         )
         return recording
     finally:
@@ -274,6 +282,7 @@ def _create_performance_mix(
     song: models.Song,
     offset_sec: float,
     music_gain: float,
+    effects: dict[str, float] | None = None,
 ) -> None:
     """Create a high-quality MP3 take from backing track and microphone only."""
     ffmpeg = shutil.which("ffmpeg")
@@ -295,8 +304,32 @@ def _create_performance_mix(
     filters = [f"[0:a]volume={music_gain:.6f}[music]"]
     mix_labels = ["[music]"]
     inputs.extend(["-i", recording.path])
-    filters.append("[1:a]volume=1.000000[performer]")
-    mix_labels.append("[performer]")
+    performer_label = "performer0"
+    filters.append("[1:a]volume=1.000000[performer0]")
+    for index, (name, amount) in enumerate((effects or {}).items(), start=1):
+        amount = max(0.0, min(1.0, float(amount)))
+        if amount < 0.01:
+            continue
+        next_label = f"performer{index}"
+        if name == "reverb":
+            filters.append(
+                f"[{performer_label}]aecho=1.0:1.0:"
+                f"55|110|170:{0.20 + amount * 0.24:.3f}|{0.14 + amount * 0.18:.3f}|{0.08 + amount * 0.14:.3f}[{next_label}]"
+            )
+        elif name == "echo":
+            filters.append(
+                f"[{performer_label}]aecho=1.0:1.0:"
+                f"180|360:{0.18 + amount * 0.38:.3f}|{0.10 + amount * 0.22:.3f}[{next_label}]"
+            )
+        elif name == "delay":
+            filters.append(
+                f"[{performer_label}]aecho=1.0:1.0:"
+                f"{int(110 + amount * 390)}:{0.16 + amount * 0.34:.3f}[{next_label}]"
+            )
+        else:
+            continue
+        performer_label = next_label
+    mix_labels.append(f"[{performer_label}]")
     filters.append(
         f"{''.join(mix_labels)}amix=inputs={len(mix_labels)}:duration=first:normalize=0,"
         "alimiter=limit=0.95[mix]",

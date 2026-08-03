@@ -67,7 +67,15 @@ export const api = {
 
   // Запись
   getRecordingSettings: () => request("/recording/settings"),
-  startRecording: (songId, positionSec = 0, musicVolume = 1, microphoneVolume = 1) =>
+  startRecording: (
+    songId,
+    positionSec = 0,
+    musicVolume = 1,
+    microphoneVolume = 1,
+    reverb = 0,
+    echo = 0,
+    delay = 0,
+  ) =>
     request("/recording/start", {
       method: "POST",
       body: JSON.stringify({
@@ -75,6 +83,9 @@ export const api = {
         position_sec: positionSec,
         music_volume: musicVolume,
         microphone_volume: microphoneVolume,
+        reverb,
+        echo,
+        delay,
       }),
     }),
   pauseRecording: (sessionId) => request(`/recording/pause?session_id=${sessionId}`, { method: "POST" }),

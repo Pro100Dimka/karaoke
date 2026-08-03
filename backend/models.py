@@ -119,6 +119,9 @@ class AudioSettings(Base):
     asio_driver_name: Mapped[str | None] = mapped_column(String)
     buffer_size: Mapped[int] = mapped_column(Integer, default=64)
     monitoring_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    reverb: Mapped[float] = mapped_column(Float, default=0.0)
+    echo: Mapped[float] = mapped_column(Float, default=0.0)
+    delay: Mapped[float] = mapped_column(Float, default=0.0)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )

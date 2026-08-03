@@ -24,6 +24,7 @@
 для обработки одной песни — CLI (main()) нужен только для пакетной
 обработки всей папки из командной строки.
 """
+
 import argparse
 import json
 import os
@@ -48,6 +49,7 @@ from src.build.split_notes import (
     filter_unanchored_long_notes,
     fill_gaps_during_active_singing,
     split_notes_by_syllables,
+    trim_quiet_unanchored_note_tails,
 )
 from src.build.unified_song_map import build_song_map
 from src.evaluation.difficulty_map import build_difficulty_map
@@ -76,8 +78,7 @@ def load_json(path):
         return json.load(f)
 
 
-def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
-        language: str | None = None):
+def run(input_mp3: str, out_dir: str, whisper_model: str = "medium", language: str | None = None):
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -221,7 +222,8 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
     else:
         print("9/13 Синхронизация текста...")
         lyrics_sync = sync_existing_lyrics_with_whisper(
-            vocals_path, str(lyrics_path), whisper_model, language)
+            vocals_path, str(lyrics_path), whisper_model, language
+        )
         save_json(lyrics_sync, lyrics_sync_path)
 
     # --- 9.5/13 Дозаполнение пробелов + разбиение долгих нот по слогам ---
@@ -250,13 +252,17 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
         reference_notes = refine_neural_reference(reference_notes, pitch_frames)
         reference_notes = correct_confirmed_neural_octaves(reference_notes, pitch_frames)
     if not using_game:
-        reference_notes = fill_gaps_during_active_singing(reference_notes, lyrics_sync, pitch_frames)
+        reference_notes = fill_gaps_during_active_singing(
+            reference_notes, lyrics_sync, pitch_frames
+        )
     # GAME is better at pitch than pYIN, but it can merge a long repeated
     # pitch across several sung words. Split only at a word attack confirmed
     # by a real vocal-energy dip; this restores lyric rhythm without inventing
     # notes from Whisper timestamps alone.
     reference_notes = split_notes_by_syllables(
-        reference_notes, lyrics_sync, pitch_frames,
+        reference_notes,
+        lyrics_sync,
+        pitch_frames,
         # Real vocal attacks are frequently only 1.5–3 dB quieter than the
         # vowel around them after source separation.  The former 3.5 dB gate
         # left repeated notes merged into one long block.
@@ -267,6 +273,7 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
         include_syllables=not using_game,
     )
     reference_notes = align_note_boundaries_to_words(reference_notes, lyrics_sync, pitch_frames)
+    reference_notes = trim_quiet_unanchored_note_tails(reference_notes, lyrics_sync, pitch_frames)
     reference_notes = filter_unanchored_long_notes(reference_notes, lyrics_sync)
     if len(reference_notes) != notes_before:
         print(f"   ноты: {notes_before} -> {len(reference_notes)}")
@@ -293,8 +300,7 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
         print("10/13 Карта песни — уже есть, пропускаю")
     else:
         print("10/13 Построение карты песни...")
-        song_map = build_song_map(
-            music, reference_notes, lyrics_sync, breaths, pitch_frames)
+        song_map = build_song_map(music, reference_notes, lyrics_sync, breaths, pitch_frames)
         save_json(song_map, song_map_path)
 
     # --- 11/13 Карта сложности (по строкам текста) ---
@@ -327,8 +333,7 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
         tempo = float(music.get("bpm", 120.0))
         first_beat = float(music.get("first_beat_sec", 0.0))
 
-        midi_notes = quantize_notes(reference_notes, tempo, first_beat,
-                                     division=16, strength=0.5)
+        midi_notes = quantize_notes(reference_notes, tempo, first_beat, division=16, strength=0.5)
 
         midi = build_midi(
             midi_notes,
@@ -366,18 +371,11 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Полный пайплайн подготовки караоке")
+    parser = argparse.ArgumentParser(description="Полный пайплайн подготовки караоке")
     parser.add_argument(
-        "--input-dir",
-        default="full_songs",
-        help="Папка с песнями (mp3/wav/flac/m4a)"
+        "--input-dir", default="full_songs", help="Папка с песнями (mp3/wav/flac/m4a)"
     )
-    parser.add_argument(
-        "--out",
-        default="Song",
-        help="Папка, куда будут складываться проекты"
-    )
+    parser.add_argument("--out", default="Song", help="Папка, куда будут складываться проекты")
     parser.add_argument("--whisper-model", default="medium")
     parser.add_argument("--language", default=None)
 
@@ -390,13 +388,10 @@ def main():
         return
 
     audio_extensions = ("*.mp3", "*.wav", "*.flac", "*.m4a", "*.ogg")
-    song_files = sorted(
-        f for ext in audio_extensions for f in input_dir.glob(ext)
-    )
+    song_files = sorted(f for ext in audio_extensions for f in input_dir.glob(ext))
 
     if not song_files:
-        print(f"В папке '{input_dir}' не найдено аудиофайлов "
-              f"({', '.join(audio_extensions)}).")
+        print(f"В папке '{input_dir}' не найдено аудиофайлов " f"({', '.join(audio_extensions)}).")
         return
 
     print(f"Найдено песен: {len(song_files)}")
@@ -410,12 +405,7 @@ def main():
         print("=" * 80)
 
         try:
-            run(
-                str(song_file),
-                str(out_dir),
-                args.whisper_model,
-                args.language
-            )
+            run(str(song_file), str(out_dir), args.whisper_model, args.language)
         except Exception as e:
             print(f"\nОшибка при обработке '{song_name}':")
             print(e)

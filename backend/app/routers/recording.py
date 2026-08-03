@@ -31,12 +31,23 @@ def start_recording(body: schemas.RecordingStartRequest, db: Session = Depends(g
         # it is stopped again after the take if the checkbox was not selected.
         keep_native_monitor = settings.audio_driver == "asio"
         if keep_native_monitor:
-            saved_monitoring_preference = settings.monitoring_enabled
+            transient_values = {
+                "monitoring_enabled": settings.monitoring_enabled,
+                "volume": settings.volume,
+                "reverb": settings.reverb,
+                "echo": settings.echo,
+                "delay": settings.delay,
+            }
             settings.monitoring_enabled = True
+            settings.volume = body.microphone_volume
+            settings.reverb = body.reverb
+            settings.echo = body.echo
+            settings.delay = body.delay
             try:
                 audio_service.configure_monitoring(settings)
             finally:
-                settings.monitoring_enabled = saved_monitoring_preference
+                for name, value in transient_values.items():
+                    setattr(settings, name, value)
         else:
             audio_service.stop_monitoring()
         input_device_id = audio_service.preferred_input_device(
@@ -65,6 +76,7 @@ def start_recording(body: schemas.RecordingStartRequest, db: Session = Depends(g
             playback_offset_sec=body.position_sec,
             blocksize=settings.buffer_size,
             music_gain=body.music_volume,
+            effects={"reverb": body.reverb, "echo": body.echo, "delay": body.delay},
         )
     except RuntimeError as exc:
         # A temporary ASIO monitor is started for karaoke playback. If opening

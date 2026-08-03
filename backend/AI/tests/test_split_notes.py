@@ -8,6 +8,7 @@ from src.build.split_notes import (
     filter_unanchored_long_notes,
     fill_gaps_during_active_singing,
     split_notes_by_syllables,
+    trim_quiet_unanchored_note_tails,
 )
 from src.lyrics.syllabify import (
     build_syllable_spans,
@@ -367,6 +368,21 @@ def test_filter_unanchored_long_notes_removes_tail_outside_words():
     filtered = filter_unanchored_long_notes(notes, lyrics)
 
     assert [note["note"] for note in filtered] == ["G3", "B3"]
+
+
+def test_trim_quiet_unanchored_note_tail_keeps_a_sustained_vowel_safe():
+    notes = [{"note": "A3", "start": 0.0, "end": 1.4, "duration": 1.4}]
+    lyrics = [{"text": "ah", "words": [{"word": "ah", "start": 0.0, "end": 0.8}]}]
+    frames = [
+        {"time": 0.1, "loudness_db": -12},
+        {"time": 0.5, "loudness_db": -11},
+        {"time": 0.9, "loudness_db": -20},
+        {"time": 1.2, "loudness_db": -22},
+    ]
+
+    trimmed = trim_quiet_unanchored_note_tails(notes, lyrics, frames)
+
+    assert trimmed[0]["end"] == 0.88
 
 
 def _run_all():

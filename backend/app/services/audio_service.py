@@ -232,6 +232,9 @@ def update_settings(db: Session, patch: dict) -> models.AudioSettings:
         "audio_driver",
         "asio_driver_name",
         "buffer_size",
+        "reverb",
+        "echo",
+        "delay",
     }
     changed_fields: set[str] = set()
     for field, value in patch.items():
@@ -350,6 +353,12 @@ def _start_asio_monitor(settings: models.AudioSettings) -> None:
         str(config.RECORDING_SAMPLE_RATE),
         "--gain",
         str(max(0.0, min(4.0, settings.volume))),
+        "--reverb",
+        str(max(0.0, min(1.0, settings.reverb))),
+        "--echo",
+        str(max(0.0, min(1.0, settings.echo))),
+        "--delay",
+        str(max(0.0, min(1.0, settings.delay))),
     ]
     _launch_monitor_process(command, cwd=bridge.parent)
 

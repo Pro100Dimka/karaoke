@@ -33,6 +33,7 @@ reference.json + lyricsSync.json + pitch.json -> reference.json (обновлё�
 аудио) — покрыто модульными тестами на синтетических данных
 (tests/test_split_notes.py).
 """
+
 import argparse
 import bisect
 import json
@@ -117,8 +118,7 @@ def filter_unanchored_long_notes(
         return notes
 
     padded_spans = [
-        (max(0.0, start - lyric_padding), end + lyric_padding)
-        for start, end in active_spans
+        (max(0.0, start - lyric_padding), end + lyric_padding) for start, end in active_spans
     ]
     result = []
     for note in notes:
@@ -141,12 +141,81 @@ def filter_unanchored_long_notes(
     return result
 
 
-def fill_gaps_during_active_singing(notes: list, lyrics_lines: list, pitch_frames: list,
-                                     max_gap_duration: float = 0.75,
-                                     min_voiced_ratio: float = 0.50,
-                                     min_restored_duration: float = 0.14,
-                                     min_dominant_ratio: float = 0.50,
-                                     fill_confidence: float = 0.3) -> list:
+def trim_quiet_unanchored_note_tails(
+    notes: list,
+    lyrics_lines: list,
+    pitch_frames: list,
+    min_tail_duration: float = 0.28,
+    quiet_tail_margin_db: float = 4.0,
+) -> list:
+    """Trim a long pitch tail only when vocal energy confirms it has decayed.
+
+    Word end times alone are not reliable enough to cut a sustained vowel.
+    A tail is shortened only after the final nearby word *and* when the
+    separated-vocal energy is meaningfully quieter than the body of the note.
+    This targets reverb/bleed without making legato phrases visually early.
+    """
+    if not notes or not pitch_frames:
+        return notes
+
+    spans = _active_singing_spans(lyrics_lines)
+    if not spans:
+        return notes
+    times_index = _times_index(pitch_frames)
+    result = []
+    for raw_note in notes:
+        note = dict(raw_note)
+        start = float(note.get("start", 0.0))
+        end = float(note.get("end", start))
+        nearby_ends = [
+            span_end for span_start, span_end in spans if span_end >= start and span_start <= end
+        ]
+        if not nearby_ends:
+            result.append(note)
+            continue
+        supported_end = max(nearby_ends) + 0.08
+        if end - supported_end < min_tail_duration:
+            result.append(note)
+            continue
+
+        body_frames = _frames_in_range(pitch_frames, times_index, start, supported_end)
+        tail_frames = _frames_in_range(pitch_frames, times_index, supported_end, end)
+        body_levels = [
+            float(frame["loudness_db"])
+            for frame in body_frames
+            if frame.get("loudness_db") is not None
+        ]
+        tail_levels = [
+            float(frame["loudness_db"])
+            for frame in tail_frames
+            if frame.get("loudness_db") is not None
+        ]
+        if not body_levels or not tail_levels:
+            result.append(note)
+            continue
+        body_level = sum(body_levels) / len(body_levels)
+        tail_level = sum(tail_levels) / len(tail_levels)
+        if tail_level > body_level - quiet_tail_margin_db:
+            result.append(note)
+            continue
+
+        new_end = max(start + 0.1, supported_end)
+        note["end"] = round(new_end, 3)
+        note["duration"] = round(new_end - start, 3)
+        result.append(note)
+    return result
+
+
+def fill_gaps_during_active_singing(
+    notes: list,
+    lyrics_lines: list,
+    pitch_frames: list,
+    max_gap_duration: float = 0.75,
+    min_voiced_ratio: float = 0.50,
+    min_restored_duration: float = 0.14,
+    min_dominant_ratio: float = 0.50,
+    fill_confidence: float = 0.3,
+) -> list:
     """
     max_gap_duration — провалы длиннее этого не трогаем (это уже, скорее
                         всего, настоящая пауза/вдох, не дыра детектора)
@@ -172,7 +241,9 @@ def fill_gaps_during_active_singing(notes: list, lyrics_lines: list, pitch_frame
         prev = result[-1]
         gap_start, gap_end = prev["end"], nxt["start"]
         gap_dur = gap_end - gap_start
-        if 0 < gap_dur <= max_gap_duration and _fully_covered_by_singing(active_spans, gap_start, gap_end):
+        if 0 < gap_dur <= max_gap_duration and _fully_covered_by_singing(
+            active_spans, gap_start, gap_end
+        ):
             frames = _frames_in_range(pitch_frames, times_index, gap_start, gap_end)
             note_votes = [f["note"] for f in frames if f.get("note")]
             if frames and (len(note_votes) / len(frames)) >= min_voiced_ratio:
@@ -180,9 +251,7 @@ def fill_gaps_during_active_singing(notes: list, lyrics_lines: list, pitch_frame
                 # A raw frame in a gap is not strong enough evidence for a new
                 # note: it is often consonant noise, reverb, or a pYIN octave
                 # error. Bridge only a sustained note confirmed on both sides.
-                if (
-                    prev["note"] == nxt["note"] == fill_note_name
-                ):
+                if prev["note"] == nxt["note"] == fill_note_name:
                     prev["end"] = nxt["end"]
                     prev["duration"] = round(prev["end"] - prev["start"], 3)
                     prev["confidence"] = max(
@@ -211,26 +280,31 @@ def fill_gaps_during_active_singing(notes: list, lyrics_lines: list, pitch_frame
                     # evidence; otherwise pYIN octave/noise artefacts become
                     # visible as extra notes in the karaoke guide.
                     context_confirmed = neighbor_distance <= 1
-                    independently_confirmed = (
-                        gap_dur >= 0.22 and stable_ratio >= 0.68
-                    )
+                    independently_confirmed = gap_dur >= 0.22 and stable_ratio >= 0.68
                     if context_confirmed or independently_confirmed:
-                        result.append({
-                            "note": fill_note_name,
-                            "start": round(gap_start, 3),
-                            "end": round(gap_end, 3),
-                            "duration": round(gap_dur, 3),
-                            "confidence": round(fill_confidence, 3),
-                            "source": "sustained_gap_recovery",
-                        })
+                        result.append(
+                            {
+                                "note": fill_note_name,
+                                "start": round(gap_start, 3),
+                                "end": round(gap_end, 3),
+                                "duration": round(gap_dur, 3),
+                                "confidence": round(fill_confidence, 3),
+                                "source": "sustained_gap_recovery",
+                            }
+                        )
         result.append(dict(nxt))
     return result
 
 
-def _find_acoustic_split_point(pitch_frames: list, times_index: list, candidate_time: float,
-                                lo_bound: float, hi_bound: float,
-                                search_window: float = 0.15,
-                                dip_margin_db: float = 2.5):
+def _find_acoustic_split_point(
+    pitch_frames: list,
+    times_index: list,
+    candidate_time: float,
+    lo_bound: float,
+    hi_bound: float,
+    search_window: float = 0.15,
+    dip_margin_db: float = 2.5,
+):
     """
     Ищет настоящий провал громкости рядом с candidate_time (тайминг слога
     из Whisper) в пределах [lo_bound, hi_bound] — то есть акустическое
@@ -306,12 +380,16 @@ def _find_pitch_transition_point(
     return max(candidates, default=(None, None))[1]
 
 
-def split_notes_by_syllables(notes: list, lyrics_lines: list, pitch_frames: list = None,
-                              min_segment_duration: float = 0.12,
-                              retrigger_gap: float = 0.02,
-                              acoustic_search_window: float = 0.15,
-                              acoustic_dip_margin_db: float = 2.5,
-                              include_syllables: bool = True) -> list:
+def split_notes_by_syllables(
+    notes: list,
+    lyrics_lines: list,
+    pitch_frames: list = None,
+    min_segment_duration: float = 0.12,
+    retrigger_gap: float = 0.02,
+    acoustic_search_window: float = 0.15,
+    acoustic_dip_margin_db: float = 2.5,
+    include_syllables: bool = True,
+) -> list:
     """
     pitch_frames — если передан, граница слога разбивает ноту, ТОЛЬКО
                    если рядом (± acoustic_search_window) есть настоящий
@@ -334,12 +412,14 @@ def split_notes_by_syllables(notes: list, lyrics_lines: list, pitch_frames: list
     # they can split a note.  Keeping syllables here is important for a long
     # sustained pitch inside a multi-syllable word ("ме-ло-ди-я"), where there
     # may be no new word start at all.
-    word_boundaries = sorted({
-        float(word["start"])
-        for line in lyrics_lines or []
-        for word in line.get("words", []) or []
-        if word.get("start") is not None
-    })
+    word_boundaries = sorted(
+        {
+            float(word["start"])
+            for line in lyrics_lines or []
+            for word in line.get("words", []) or []
+            if word.get("start") is not None
+        }
+    )
     syllables = build_syllable_spans(lyrics_lines)
     if not word_boundaries and not syllables:
         return notes
@@ -368,7 +448,8 @@ def split_notes_by_syllables(notes: list, lyrics_lines: list, pitch_frames: list
     for note in notes:
         start, end = note["start"], note["end"]
         candidates = [
-            (time, source) for time, source in boundary_candidates
+            (time, source)
+            for time, source in boundary_candidates
             if start + min_segment_duration <= time <= end - min_segment_duration
         ]
 
@@ -379,11 +460,17 @@ def split_notes_by_syllables(notes: list, lyrics_lines: list, pitch_frames: list
                 # A word attack is a slightly stronger rhythmic cue than an
                 # inferred syllable.  The latter therefore needs more local
                 # evidence, while both remain protected from blind splitting.
-                window = acoustic_search_window if source == "word" else min(acoustic_search_window, 0.16)
-                margin = acoustic_dip_margin_db if source == "word" else max(acoustic_dip_margin_db, 2.0)
+                window = (
+                    acoustic_search_window
+                    if source == "word"
+                    else min(acoustic_search_window, 0.16)
+                )
+                margin = (
+                    acoustic_dip_margin_db if source == "word" else max(acoustic_dip_margin_db, 2.0)
+                )
                 found = _find_acoustic_split_point(
-                    pitch_frames, times_index, t, start, end,
-                    window, margin)
+                    pitch_frames, times_index, t, start, end, window, margin
+                )
                 if found is None:
                     continue  # нет провала громкости — вероятно легато, не режем
                 actual_t = found
@@ -415,10 +502,14 @@ def split_notes_by_syllables(notes: list, lyrics_lines: list, pitch_frames: list
     return result
 
 
-def align_note_boundaries_to_words(notes: list, lyrics_lines: list, pitch_frames: list,
-                                   word_window: float = 0.18,
-                                   max_snap_distance: float = 0.14,
-                                   min_note_duration: float = 0.10) -> list:
+def align_note_boundaries_to_words(
+    notes: list,
+    lyrics_lines: list,
+    pitch_frames: list,
+    word_window: float = 0.18,
+    max_snap_distance: float = 0.14,
+    min_note_duration: float = 0.10,
+) -> list:
     """Snap existing note transitions to real word attacks when audio agrees.
 
     Word timings provide the intended rhythm, while the loudness dip in the
@@ -429,12 +520,14 @@ def align_note_boundaries_to_words(notes: list, lyrics_lines: list, pitch_frames
     if len(notes) < 2 or not pitch_frames:
         return notes
 
-    word_starts = sorted({
-        float(word["start"])
-        for line in lyrics_lines or []
-        for word in line.get("words", []) or []
-        if word.get("start") is not None
-    })
+    word_starts = sorted(
+        {
+            float(word["start"])
+            for line in lyrics_lines or []
+            for word in line.get("words", []) or []
+            if word.get("start") is not None
+        }
+    )
     if not word_starts:
         return notes
 
@@ -450,8 +543,13 @@ def align_note_boundaries_to_words(notes: list, lyrics_lines: list, pitch_frames
         lo = left["start"] + min_note_duration
         hi = right["end"] - min_note_duration
         snapped = _find_acoustic_split_point(
-            pitch_frames, times_index, nearby, lo, hi,
-            search_window=word_window, dip_margin_db=2.0,
+            pitch_frames,
+            times_index,
+            nearby,
+            lo,
+            hi,
+            search_window=word_window,
+            dip_margin_db=2.0,
         )
         if snapped is None and note_to_midi(left["note"]) != note_to_midi(right["note"]):
             snapped = _find_pitch_transition_point(
@@ -464,7 +562,10 @@ def align_note_boundaries_to_words(notes: list, lyrics_lines: list, pitch_frames
             )
         if snapped is None or abs(snapped - boundary) > max_snap_distance:
             continue
-        if snapped - left["start"] < min_note_duration or right["end"] - snapped < min_note_duration:
+        if (
+            snapped - left["start"] < min_note_duration
+            or right["end"] - snapped < min_note_duration
+        ):
             continue
 
         left["end"] = round(snapped, 3)
@@ -477,21 +578,35 @@ def align_note_boundaries_to_words(notes: list, lyrics_lines: list, pitch_frames
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Дозаполняет пробелы и разбивает долгие ноты reference.json по слогам")
+        description="Дозаполняет пробелы и разбивает долгие ноты reference.json по слогам"
+    )
     parser.add_argument("reference", help="reference.json")
     parser.add_argument("lyrics_sync", help="lyricsSync.json")
-    parser.add_argument("--pitch", default=None,
-                         help="pitch.json (нужен для заполнения пробелов и "
-                              "акустической проверки границ слогов; без него — "
-                              "старое поведение 'режем по каждой границе слога вслепую')")
-    parser.add_argument("output", nargs="?", default=None,
-                         help="куда сохранить (по умолчанию перезаписать reference.json)")
-    parser.add_argument("--min-segment", type=float, default=0.12,
-                         help="минимальная длительность осколка ноты, сек")
-    parser.add_argument("--retrigger-gap", type=float, default=0.02,
-                         help="зазор между осколками одной ноты, сек")
-    parser.add_argument("--max-gap-fill", type=float, default=0.35,
-                         help="максимальная длина пробела, который можно заполнить, сек")
+    parser.add_argument(
+        "--pitch",
+        default=None,
+        help="pitch.json (нужен для заполнения пробелов и "
+        "акустической проверки границ слогов; без него — "
+        "старое поведение 'режем по каждой границе слога вслепую')",
+    )
+    parser.add_argument(
+        "output",
+        nargs="?",
+        default=None,
+        help="куда сохранить (по умолчанию перезаписать reference.json)",
+    )
+    parser.add_argument(
+        "--min-segment", type=float, default=0.12, help="минимальная длительность осколка ноты, сек"
+    )
+    parser.add_argument(
+        "--retrigger-gap", type=float, default=0.02, help="зазор между осколками одной ноты, сек"
+    )
+    parser.add_argument(
+        "--max-gap-fill",
+        type=float,
+        default=0.35,
+        help="максимальная длина пробела, который можно заполнить, сек",
+    )
     args = parser.parse_args()
 
     with open(args.reference, encoding="utf-8") as f:
@@ -505,11 +620,16 @@ def main():
 
     before = len(notes)
     if pitch_frames:
-        notes = fill_gaps_during_active_singing(notes, lyrics_lines, pitch_frames,
-                                                  max_gap_duration=args.max_gap_fill)
-    notes = split_notes_by_syllables(notes, lyrics_lines, pitch_frames,
-                                      min_segment_duration=args.min_segment,
-                                      retrigger_gap=args.retrigger_gap)
+        notes = fill_gaps_during_active_singing(
+            notes, lyrics_lines, pitch_frames, max_gap_duration=args.max_gap_fill
+        )
+    notes = split_notes_by_syllables(
+        notes,
+        lyrics_lines,
+        pitch_frames,
+        min_segment_duration=args.min_segment,
+        retrigger_gap=args.retrigger_gap,
+    )
 
     output = args.output or args.reference
     with open(output, "w", encoding="utf-8") as f:

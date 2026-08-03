@@ -5,6 +5,7 @@ Pydantic-схемы: тела запросов/ответов API.
 ровно то, что лежит в базе (например source_path — внутренний путь на диске,
 наружу отдаём только то, что реально нужно фронтенду).
 """
+
 from datetime import datetime
 from typing import Any
 
@@ -15,6 +16,7 @@ from models import SongStatus
 # --------------------------------------------------------------------
 # Песни
 # --------------------------------------------------------------------
+
 
 class SongOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -47,6 +49,7 @@ class SongOut(BaseModel):
 
 class SongUpdate(BaseModel):
     """Все поля опциональны — PATCH-семантика, меняем только переданное."""
+
     title: str | None = None
     artist: str | None = Field(default=None, max_length=255)
     genre: str | None = Field(default=None, max_length=255)
@@ -101,6 +104,7 @@ class ProcessingStatusOut(BaseModel):
 
 class SongResultOut(BaseModel):
     """Агрегированные результаты AI-пайплайна по одной песне (содержимое Song/<slug>/*.json)."""
+
     song: SongOut
     music: dict[str, Any] | None = None
     reference_notes: list[dict[str, Any]] | None = None
@@ -115,6 +119,7 @@ class SongResultOut(BaseModel):
 # --------------------------------------------------------------------
 # Плеер
 # --------------------------------------------------------------------
+
 
 class PlaybackStateOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -131,6 +136,7 @@ class SeekRequest(BaseModel):
 # --------------------------------------------------------------------
 # Записи голоса
 # --------------------------------------------------------------------
+
 
 class RecordingOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -152,6 +158,9 @@ class RecordingStartRequest(BaseModel):
     position_sec: float = Field(default=0, ge=0)
     music_volume: float = Field(default=1, ge=0, le=1)
     microphone_volume: float = Field(default=1, ge=0, le=4)
+    reverb: float = Field(default=0, ge=0, le=1)
+    echo: float = Field(default=0, ge=0, le=1)
+    delay: float = Field(default=0, ge=0, le=1)
 
 
 class RecordingStartOut(BaseModel):
@@ -162,6 +171,7 @@ class RecordingStartOut(BaseModel):
 # --------------------------------------------------------------------
 # Анализ голоса
 # --------------------------------------------------------------------
+
 
 class AnalysisOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -177,6 +187,7 @@ class AnalysisOut(BaseModel):
 # --------------------------------------------------------------------
 # Кэш/производительность
 # --------------------------------------------------------------------
+
 
 class CacheSizeOut(BaseModel):
     total_bytes: int
@@ -201,6 +212,7 @@ class OptimizeResultOut(BaseModel):
 # --------------------------------------------------------------------
 # Диагностика
 # --------------------------------------------------------------------
+
 
 class HealthOut(BaseModel):
     status: str
@@ -229,6 +241,7 @@ class SystemErrorsOut(BaseModel):
 # --------------------------------------------------------------------
 # Аудио-устройства
 # --------------------------------------------------------------------
+
 
 class AudioDeviceOut(BaseModel):
     index: int
@@ -265,6 +278,9 @@ class AudioSettingsOut(BaseModel):
     asio_driver_name: str | None = None
     buffer_size: int
     monitoring_enabled: bool
+    reverb: float
+    echo: float
+    delay: float
 
 
 class AudioSettingsUpdate(BaseModel):
@@ -277,6 +293,9 @@ class AudioSettingsUpdate(BaseModel):
     asio_driver_name: str | None = Field(default=None, max_length=255)
     buffer_size: int | None = Field(default=None, ge=16, le=2048)
     monitoring_enabled: bool | None = None
+    reverb: float | None = Field(default=None, ge=0, le=1)
+    echo: float | None = Field(default=None, ge=0, le=1)
+    delay: float | None = Field(default=None, ge=0, le=1)
 
 
 class SignalQualityOut(BaseModel):

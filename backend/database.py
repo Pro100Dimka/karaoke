@@ -5,6 +5,7 @@ SQLite выбрана потому, что это десктоп-програм�
 не нужен отдельный процесс сервера БД, работает "из коробки" без установки
 чего-либо дополнительного пользователем.
 """
+
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
@@ -22,6 +23,7 @@ engine = create_engine(
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+
 class Base(DeclarativeBase):
     """Shared declarative base for all persisted application models."""
 
@@ -29,6 +31,7 @@ class Base(DeclarativeBase):
 def init_db() -> None:
     """Создаёт таблицы, если их ещё нет. Вызывается один раз при старте приложения."""
     import models  # noqa: F401  (регистрирует модели в Base.metadata перед create_all)
+
     Base.metadata.create_all(bind=engine)
     # create_all deliberately does not alter existing SQLite tables. Keep
     # additive migrations so installed libraries upgrade without data loss.
@@ -41,13 +44,26 @@ def init_db() -> None:
             if column not in song_columns:
                 connection.execute(text(f"ALTER TABLE songs ADD COLUMN {column} VARCHAR"))
         if "audio_driver" not in audio_columns:
-            connection.execute(text("ALTER TABLE audio_settings ADD COLUMN audio_driver VARCHAR DEFAULT 'auto'"))
+            connection.execute(
+                text("ALTER TABLE audio_settings ADD COLUMN audio_driver VARCHAR DEFAULT 'auto'")
+            )
         if "asio_driver_name" not in audio_columns:
-            connection.execute(text("ALTER TABLE audio_settings ADD COLUMN asio_driver_name VARCHAR"))
+            connection.execute(
+                text("ALTER TABLE audio_settings ADD COLUMN asio_driver_name VARCHAR")
+            )
         if "buffer_size" not in audio_columns:
-            connection.execute(text("ALTER TABLE audio_settings ADD COLUMN buffer_size INTEGER DEFAULT 64"))
+            connection.execute(
+                text("ALTER TABLE audio_settings ADD COLUMN buffer_size INTEGER DEFAULT 64")
+            )
         if "output_device_id" not in audio_columns:
-            connection.execute(text("ALTER TABLE audio_settings ADD COLUMN output_device_id INTEGER"))
+            connection.execute(
+                text("ALTER TABLE audio_settings ADD COLUMN output_device_id INTEGER")
+            )
+        for column in ("reverb", "echo", "delay"):
+            if column not in audio_columns:
+                connection.execute(
+                    text(f"ALTER TABLE audio_settings ADD COLUMN {column} FLOAT DEFAULT 0")
+                )
         # Background AI workers are in-process threads. They cannot survive a
         # backend restart, so retaining PROCESSING/QUEUED would leave a song
         # permanently locked in the UI. Make only those orphaned states
