@@ -23,14 +23,12 @@ import {
   VolumeX,
   Trash2,
   Trophy,
-  UsersRound,
 } from "lucide-react";
 import { api } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
 import { Dropdown } from "../components/Dropdown";
 import { useAppDialog } from "../components/AppDialog";
 import { KARAOKE_THEMES, shuffleThemes } from "../assets/karaoke/themes";
-import { OnlineRoomClient } from "../services/onlineRoom";
 
 // ПРИМЕЧАНИЕ ПО СХЕМЕ ДАННЫХ: здесь предполагается, что lyrics.json — это
 // массив строк вида {start, end, text}, а reference.json — массив нот вида
@@ -381,7 +379,6 @@ export default function Karaoke({ onOpenAppSettings }) {
     delay: 0,
   });
   const [microphoneControlsOpen, setMicrophoneControlsOpen] = useState(false);
-  const [onlineRoomOpen, setOnlineRoomOpen] = useState(false);
   const [audioDriver, setAudioDriver] = useState("auto");
   const [asioDriverName, setAsioDriverName] = useState("");
   const [audioBufferSize, setAudioBufferSize] = useState(64);
@@ -1835,9 +1832,6 @@ export default function Karaoke({ onOpenAppSettings }) {
         </div>
       )}
 
-      {onlineRoomOpen && (
-        <OnlineRoomModal song={song} onClose={() => setOnlineRoomOpen(false)} />
-      )}
       {recordingError && (
         <p className="karaoke-recording-error">{recordingError}</p>
       )}
@@ -2036,14 +2030,6 @@ export default function Karaoke({ onOpenAppSettings }) {
               </button>
             )}
             <button
-              className={`btn ${onlineRoomOpen ? "btn-primary" : "btn-ghost"}`}
-              title="Петь вместе"
-              aria-label="Петь вместе"
-              onClick={() => setOnlineRoomOpen(true)}
-            >
-              <UsersRound size={18} />
-            </button>
-            <button
               className={`btn ${microphoneOpen ? "btn-primary" : "btn-ghost"}`}
               title="Настройки караоке"
               onClick={() => setMicrophoneOpen(true)}
@@ -2201,79 +2187,6 @@ function WaveformTimeline({ value, duration, onChange }) {
         onChange={(event) => onChange(Number(event.target.value))}
         tabIndex={-1}
       />
-    </div>
-  );
-}
-
-function OnlineRoomModal({ song, onClose }) {
-  const clientRef = useRef(null);
-  const [name, setName] = useState(() => window.localStorage.getItem("karaoke-online-name") || "");
-  const [roomId, setRoomId] = useState("");
-  const [participants, setParticipants] = useState([]);
-  const [connected, setConnected] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => () => clientRef.current?.disconnect(), []);
-
-  const connect = async (host) => {
-    const id = host
-      ? crypto.randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase()
-      : roomId;
-    setError("");
-    const client = new OnlineRoomClient();
-    clientRef.current?.disconnect();
-    clientRef.current = client;
-    client.onMessage((message) => {
-      if (message.type === "room-state") setParticipants(message.participants || []);
-      if (message.type === "participant-joined") {
-        setParticipants((current) => [...current, message.participant]);
-      }
-      if (message.type === "participant-left") {
-        setParticipants((current) => current.filter((person) => person.id !== message.participantId));
-      }
-      if (message.type === "connection-closed") setConnected(false);
-    });
-    try {
-      await client.connect({ id, name, host });
-      window.localStorage.setItem("karaoke-online-name", name.trim() || "Гость");
-      setRoomId(id);
-      setConnected(true);
-    } catch (connectError) {
-      setError(connectError.message);
-      client.disconnect();
-    }
-  };
-
-  return (
-    <div className="karaoke-settings-backdrop" onMouseDown={onClose}>
-      <section className="online-room-modal" onMouseDown={(event) => event.stopPropagation()}>
-        <button type="button" className="karaoke-settings-close" onClick={onClose} aria-label="Закрыть">
-          <X size={16} />
-        </button>
-        <div className="microphone-panel-title"><UsersRound size={16} /> Петь вместе</div>
-        {!connected ? (
-          <div className="online-room-form">
-            <p>Создайте комнату или подключитесь по коду. Голос и синхронизация песни будут подключены после входа.</p>
-            <label>Ваше имя<input className="input" value={name} maxLength={40} onChange={(event) => setName(event.target.value)} /></label>
-            <label>Код комнаты<input className="input" value={roomId} placeholder="Например, STUDIO24" maxLength={32} onChange={(event) => setRoomId(event.target.value.toUpperCase())} /></label>
-            {error && <p className="karaoke-recording-error">{error}</p>}
-            <div className="online-room-actions">
-              <button type="button" className="btn btn-primary" onClick={() => connect(true)}>Создать комнату</button>
-              <button type="button" className="btn btn-ghost" onClick={() => connect(false)}>Войти</button>
-            </div>
-          </div>
-        ) : (
-          <div className="online-room-form">
-            <span className="online-room-status">Комната активна</span>
-            <strong className="online-room-code">{roomId}</strong>
-            <p>Текущая песня: {song?.title || "не выбрана"}</p>
-            <div className="online-room-participants">
-              {participants.map((person) => <span key={person.id}>{person.name}{person.role === "host" ? " · ведущий" : ""}</span>)}
-            </div>
-            <button type="button" className="btn btn-ghost" onClick={() => { clientRef.current?.disconnect(); setConnected(false); setParticipants([]); }}>Выйти из комнаты</button>
-          </div>
-        )}
-      </section>
     </div>
   );
 }

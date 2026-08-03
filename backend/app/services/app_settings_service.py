@@ -18,6 +18,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "use_cpu": True,
     "autosave": True,
     "autoupdate": False,
+    "online_name": "",
 }
 
 

@@ -96,6 +96,11 @@ export class KaraokeRoom {
       return;
     }
 
+    if (message.type === "ui" && message.state && typeof message.state === "object") {
+      this.broadcast("ui", { fromId: sender.id, state: message.state }, sender.id);
+      return;
+    }
+
     if (message.type === "sync" && sender.role === "host") {
       this.broadcast("sync", { state: message.state, sentAt: Date.now() }, sender.id);
       return;

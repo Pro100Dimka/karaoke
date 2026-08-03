@@ -15,6 +15,7 @@ import ModelManager from "./pages/ModelManager";
 import History from "./pages/History";
 import About from "./pages/About";
 import { AppDialogProvider } from "./components/AppDialog";
+import { useAppDialog } from "./components/AppDialog";
 
 export default function App() {
   useLayoutEffect(() => {
@@ -51,6 +52,17 @@ function AppLayout() {
   const isKaraoke = location.pathname === "/karaoke";
   const isSongSettings = location.pathname === "/song-settings";
   const [isSettingsOpen, setSettingsOpen] = useState(false);
+  const { alert } = useAppDialog();
+
+  useEffect(() => {
+    let active = true;
+    api.getAppSettings().then((settings) => {
+      if (!active || settings.online_name?.trim()) return;
+      setSettingsOpen(true);
+      alert("Укажите своё имя в настройках приложения. Оно нужно для совместного исполнения и будет видно участникам комнаты.");
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [alert]);
 
   return <div className={`app-shell ${isKaraoke ? "karaoke-app-shell" : ""}`}>
     <TitleBar />

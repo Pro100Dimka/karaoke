@@ -18,6 +18,7 @@ import {
   CircleDot,
   OctagonX,
   Library as LibraryIcon,
+  UsersRound,
 } from "lucide-react";
 import { api } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
@@ -25,6 +26,7 @@ import { Panel, StatusBadge, ProgressBar } from "../components/ui";
 import { AudioPlayer } from "../components/AudioPlayer";
 import { useAppDialog } from "../components/AppDialog";
 import libraryNeonSpace from "../assets/karaoke/library-neon-space.webp";
+import { OnlineRoomModal } from "../components/OnlineRoomModal";
 
 function formatDate(iso) {
   if (!iso) return "—";
@@ -47,6 +49,11 @@ export default function Library() {
   const [recordingsSong, setRecordingsSong] = useState(null);
   const [processingSong, setProcessingSong] = useState(null);
   const [hiddenSongIds, setHiddenSongIds] = useState(() => new Set());
+  const [onlineRoomOpen, setOnlineRoomOpen] = useState(false);
+  const [onlineActive, setOnlineActive] = useState(false);
+  const [roomClient, setRoomClient] = useState(null);
+  const [appSettings, setAppSettings] = useState(null);
+  const applyingRemoteRoomUiRef = useRef(false);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const { alert: notify, confirm: confirmDialog } = useAppDialog();
@@ -61,6 +68,31 @@ export default function Library() {
   }, [menuSongId]);
 
   const { data: songs, error } = usePolling(api.listSongs, 3000, []);
+  useEffect(() => { api.getAppSettings().then(setAppSettings).catch(() => {}); }, []);
+  useEffect(() => {
+    if (!onlineActive || !roomClient) return;
+    if (applyingRemoteRoomUiRef.current) {
+      applyingRemoteRoomUiRef.current = false;
+      return;
+    }
+    roomClient.send("ui", { state: { query } });
+  }, [onlineActive, query, roomClient]);
+
+  const openOnlineRoom = async () => {
+    let settings = appSettings;
+    try {
+      settings = await api.getAppSettings();
+      setAppSettings(settings);
+    } catch (error) {
+      await notify(`Не удалось проверить настройки онлайн-режима: ${error.message}`);
+      return;
+    }
+    if (!settings?.online_name?.trim()) {
+      await notify("Сначала укажите имя в настройках приложения — оно нужно другим участникам комнаты.");
+      return;
+    }
+    setOnlineRoomOpen(true);
+  };
   const { data: songRecordings, error: recordingsError } = usePolling(
     () =>
       recordingsSong
@@ -273,6 +305,9 @@ export default function Library() {
         title=" "
         actions={
           <div style={{ display: "flex", gap: 8 }}>
+            {!onlineActive && <button className="btn btn-ghost" onClick={openOnlineRoom}>
+              <UsersRound size={15} /> Петь вместе
+            </button>}
             <button className="btn btn-primary" onClick={handleAddClick}>
               <Plus size={15} /> Добавить песню
             </button>
@@ -306,6 +341,9 @@ export default function Library() {
             />
           </div>
           <div className="library-toolbar-actions">
+            {!onlineActive && <button className="btn btn-ghost" onClick={openOnlineRoom}>
+              <UsersRound size={15} /> Петь вместе
+            </button>}
             <button className="btn btn-primary" onClick={handleAddClick}>
               <Plus size={15} /> Добавить песню
             </button>
@@ -493,6 +531,18 @@ export default function Library() {
           )}
         </div>
       </Panel>
+      {onlineRoomOpen && <OnlineRoomModal
+        onlineName={appSettings.online_name.trim()}
+        onClose={() => setOnlineRoomOpen(false)}
+        onConnectedChange={setOnlineActive}
+        onRoomClient={setRoomClient}
+        getRoomState={() => ({ query })}
+        onRoomUi={(state) => {
+          if (typeof state?.query !== "string") return;
+          applyingRemoteRoomUiRef.current = true;
+          setQuery(state.query);
+        }}
+      />}
 
       {infoSong && (
         <Panel

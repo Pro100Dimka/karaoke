@@ -53,6 +53,16 @@ export default function Settings() {
       setSaving(false);
     }
   };
+  const saveOnlineName = async (value) => {
+    const onlineName = value.trim();
+    try {
+      const updated = await api.updateAppSettings({ online_name: onlineName });
+      setForm((state) => ({ ...state, online_name: updated.online_name }));
+      setSaved(true);
+    } catch (err) {
+      await notify(`Не удалось сохранить имя: ${err.message}`);
+    }
+  };
 
   return (
     <div className="settings-page">
@@ -87,6 +97,9 @@ export default function Settings() {
               </SettingField>
               <SettingField label="Тема" hint="Применяется сразу, без перезапуска">
                 <Dropdown value={form.theme} onChange={set("theme")} options={[{ value: "dark", label: "Тёмная" }, { value: "light", label: "Светлая" }]} />
+              </SettingField>
+              <SettingField label="Имя для онлайн-комнат" hint="Его увидят другие участники совместного исполнения">
+                <input className="input" value={form.online_name || ""} maxLength={40} placeholder="Например, Дима" onChange={(event) => set("online_name")(event.target.value)} onBlur={(event) => saveOnlineName(event.target.value)} />
               </SettingField>
               <ToggleField label="Автосохранение" hint="Сохранять изменения автоматически" checked={form.autosave} onChange={set("autosave")} />
               <ToggleField label="Автообновление" hint="Проверять новые версии приложения" checked={form.autoupdate} onChange={set("autoupdate")} />

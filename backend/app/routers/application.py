@@ -27,6 +27,7 @@ class AppSettingsPatch(BaseModel):
     use_cpu: bool | None = None
     autosave: bool | None = None
     autoupdate: bool | None = None
+    online_name: str | None = Field(default=None, max_length=40)
 
     @model_validator(mode="after")
     def validate_compute_target(self) -> AppSettingsPatch:

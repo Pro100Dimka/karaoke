@@ -6,5 +6,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   close: () => ipcRenderer.invoke("window:close"),
   openSongFolder: (targetPath) => ipcRenderer.invoke("shell:openSongFolder", targetPath),
   getBackendUrl: () => ipcRenderer.invoke("backend:url"),
+  copyText: (value) => ipcRenderer.invoke("clipboard:writeText", value),
   isElectron: true,
 });

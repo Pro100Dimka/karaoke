@@ -7,7 +7,7 @@
 //     программы и его остановку при закрытии — пользователь просто
 //     запускает "Karaoke Studio", ему не нужно отдельно поднимать backend;
 //  3) IPC-мостик для управления окном и открытия папки песни в проводнике.
-const { app, BrowserWindow, ipcMain, session, shell } = require("electron");
+const { app, BrowserWindow, clipboard, ipcMain, session, shell } = require("electron");
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
@@ -189,6 +189,11 @@ ipcMain.handle("shell:openSongFolder", (_event, targetPath) => {
   return shell.openPath(folderPath);
 });
 ipcMain.handle("backend:url", () => BACKEND_URL);
+ipcMain.handle("clipboard:writeText", (_event, value) => {
+  if (typeof value !== "string" || value.length > 256) return false;
+  clipboard.writeText(value);
+  return true;
+});
 
 app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
