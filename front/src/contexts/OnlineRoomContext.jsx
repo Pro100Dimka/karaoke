@@ -12,6 +12,7 @@ import {
   OnlineRoomClient,
   OnlineVoiceMesh,
 } from "../services/onlineRoom";
+import { api } from "../api/client";
 
 const OnlineRoomContext = createContext(null);
 
@@ -35,6 +36,7 @@ export function OnlineRoomProvider({ children }) {
   const mutedPeopleRef = useRef(new Set());
   const roomSoundMutedRef = useRef(false);
   const intentionalDisconnectRef = useRef(false);
+  const pendingSongCommandRef = useRef(null);
 
   const [room, setRoomState] = useState(null);
   const [participants, setParticipants] = useState([]);
@@ -159,6 +161,24 @@ export function OnlineRoomProvider({ children }) {
         });
       };
       voice.onPeerClosed = removeRemoteAudio;
+      voice.onFile = async (_participantId, blob, metadata) => {
+        if (metadata.kind !== "song-package" || !metadata.songId) return;
+        try {
+          setVoiceError("Импортируем песню в локальную библиотеку…");
+          await api.importSongPackage(blob, metadata.filename);
+          const pendingCommand = pendingSongCommandRef.current;
+          pendingSongCommandRef.current = null;
+          setVoiceError("");
+          if (pendingCommand?.songId === metadata.songId) {
+            setRoomCommand({
+              ...pendingCommand,
+              __eventId: `import-${Date.now()}-${Math.random()}`,
+            });
+          }
+        } catch (error) {
+          setVoiceError(`Не удалось импортировать песню: ${error.message}`);
+        }
+      };
 
       unsubscribeRef.current = client.onMessage((message) => {
         if (message.type === "room-state") {
@@ -204,15 +224,54 @@ export function OnlineRoomProvider({ children }) {
           return;
         }
         if (message.type === "ui") {
-          setRoomUi({
+          setRoomUi((current) => ({
+            ...current,
             ...(message.state || {}),
             __eventId: `${Date.now()}-${Math.random()}`,
-          });
+          }));
           return;
         }
         if (message.type === "sync") {
+          const command = message.state || {};
+          if (
+            command.type === "song-request" &&
+            roomRef.current?.host &&
+            command.requesterId &&
+            command.songId
+          ) {
+            api.exportSongPackage(command.songId).then((blob) => {
+              setVoiceError(`Передаём песню участнику…`);
+              return voice.sendFile(command.requesterId, blob, {
+                kind: "song-package",
+                songId: command.songId,
+                filename: `${command.songId}.karaoke.zip`,
+              });
+            }).then(() => setVoiceError("")).catch((error) => {
+              setVoiceError(`Не удалось передать песню: ${error.message}`);
+            });
+            return;
+          }
+          if (command.type === "open-karaoke" && !roomRef.current?.host) {
+            api.getSong(command.songId).then(() => {
+              setRoomCommand({
+                ...command,
+                __eventId: `${message.sentAt || Date.now()}-${Math.random()}`,
+              });
+            }).catch(() => {
+              pendingSongCommandRef.current = command;
+              setVoiceError("Получаем песню от ведущего…");
+              client.send("sync", {
+                state: {
+                  type: "song-request",
+                  songId: command.songId,
+                  requesterId: roomRef.current?.selfId,
+                },
+              });
+            });
+            return;
+          }
           setRoomCommand({
-            ...(message.state || {}),
+            ...command,
             __eventId: `${message.sentAt || Date.now()}-${Math.random()}`,
           });
           return;

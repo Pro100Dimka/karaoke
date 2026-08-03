@@ -91,9 +91,12 @@ export class OnlineVoiceMesh {
     this.peers = new Map();
     this.pendingCandidates = new Map();
     this.pendingInvites = new Set();
+    this.channels = new Map();
+    this.incomingFiles = new Map();
     this.stream = null;
     this.onRemoteStream = null;
     this.onPeerClosed = null;
+    this.onFile = null;
   }
 
   async start() {
@@ -144,6 +147,7 @@ export class OnlineVoiceMesh {
     peer.ontrack = ({ streams }) => {
       if (streams[0]) this.onRemoteStream?.(participantId, streams[0]);
     };
+    peer.ondatachannel = ({ channel }) => this.setupDataChannel(participantId, channel);
     peer.onconnectionstatechange = () => {
       if (!["failed", "closed"].includes(peer.connectionState)) return;
       this.removePeer(participantId);
@@ -154,11 +158,13 @@ export class OnlineVoiceMesh {
 
   async invite(participantId) {
     if (!participantId) return;
-    if (!this.stream) {
-      this.pendingInvites.add(participantId);
-      return;
-    }
     const peer = this.createPeer(participantId);
+    if (!this.channels.has(participantId)) {
+      this.setupDataChannel(
+        participantId,
+        peer.createDataChannel("karaoke-library", { ordered: true }),
+      );
+    }
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
     this.roomClient.send("signal", {
@@ -201,11 +207,81 @@ export class OnlineVoiceMesh {
     });
   }
 
+  setupDataChannel(participantId, channel) {
+    channel.binaryType = "arraybuffer";
+    channel.bufferedAmountLowThreshold = 256 * 1024;
+    channel.onmessage = ({ data }) => {
+      if (typeof data === "string") {
+        let message;
+        try {
+          message = JSON.parse(data);
+        } catch {
+          return;
+        }
+        if (message.type === "file-start") {
+          this.incomingFiles.set(participantId, { metadata: message, chunks: [], received: 0 });
+        } else if (message.type === "file-end") {
+          const transfer = this.incomingFiles.get(participantId);
+          this.incomingFiles.delete(participantId);
+          if (!transfer || transfer.metadata.transferId !== message.transferId) return;
+          const blob = new Blob(transfer.chunks, { type: transfer.metadata.mimeType });
+          this.onFile?.(participantId, blob, transfer.metadata);
+        }
+        return;
+      }
+      const transfer = this.incomingFiles.get(participantId);
+      if (!transfer) return;
+      const chunk = data instanceof ArrayBuffer ? data : data.buffer;
+      transfer.chunks.push(chunk);
+      transfer.received += chunk.byteLength;
+      if (transfer.received > transfer.metadata.size) {
+        this.incomingFiles.delete(participantId);
+      }
+    };
+    channel.onclose = () => {
+      if (this.channels.get(participantId) === channel) this.channels.delete(participantId);
+    };
+    this.channels.set(participantId, channel);
+  }
+
+  async waitForDataChannel(participantId, timeoutMs = 15_000) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+      const channel = this.channels.get(participantId);
+      if (channel?.readyState === "open") return channel;
+      await new Promise((resolve) => window.setTimeout(resolve, 50));
+    }
+    throw new Error("Канал передачи песни не готов");
+  }
+
+  async sendFile(participantId, blob, metadata = {}) {
+    const channel = await this.waitForDataChannel(participantId);
+    const transferId = crypto.randomUUID();
+    channel.send(JSON.stringify({
+      type: "file-start",
+      transferId,
+      size: blob.size,
+      mimeType: blob.type || "application/octet-stream",
+      ...metadata,
+    }));
+    const chunkSize = 32 * 1024;
+    for (let offset = 0; offset < blob.size; offset += chunkSize) {
+      while (channel.bufferedAmount > 512 * 1024) {
+        await new Promise((resolve) => window.setTimeout(resolve, 20));
+      }
+      channel.send(await blob.slice(offset, offset + chunkSize).arrayBuffer());
+    }
+    channel.send(JSON.stringify({ type: "file-end", transferId }));
+  }
+
   removePeer(participantId) {
     this.peers.get(participantId)?.close();
     this.peers.delete(participantId);
     this.pendingCandidates.delete(participantId);
     this.pendingInvites.delete(participantId);
+    this.channels.get(participantId)?.close();
+    this.channels.delete(participantId);
+    this.incomingFiles.delete(participantId);
     this.onPeerClosed?.(participantId);
   }
 

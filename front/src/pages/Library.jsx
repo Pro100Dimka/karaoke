@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
@@ -219,9 +219,25 @@ export default function Library() {
     }
   }, [confirmDialog, notify, processingSong]);
 
-  const visibleSongs = (songs || []).filter(
+  const localVisibleSongs = (songs || []).filter(
     (song) => !hiddenSongIds.has(song.id),
   );
+  const visibleSongs =
+    sharedRoom?.room && !sharedRoom.room.host && Array.isArray(sharedRoom.roomUi.songs)
+      ? sharedRoom.roomUi.songs
+      : localVisibleSongs;
+  const librarySyncSignature = useMemo(
+    () => JSON.stringify(localVisibleSongs),
+    [songs, hiddenSongIds],
+  );
+  useEffect(() => {
+    if (!sharedRoom?.room?.host) return;
+    sharedRoom.syncUi({ songs: localVisibleSongs });
+  }, [
+    librarySyncSignature,
+    sharedRoom?.participants?.length,
+    sharedRoom?.room?.host,
+  ]);
   const filtered = visibleSongs.filter((s) =>
     [s.title, s.artist, s.genre]
       .filter(Boolean)
