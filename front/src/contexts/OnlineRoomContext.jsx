@@ -254,6 +254,33 @@ export function OnlineRoomProvider({ children }) {
 
   useEffect(() => () => cleanupConnection(), [cleanupConnection]);
 
+  useEffect(() => {
+    if (!roomSoundMuted) return undefined;
+    const muteApplicationAudio = (root) => {
+      const audioElements = [
+        ...(root instanceof HTMLAudioElement ? [root] : []),
+        ...(root.querySelectorAll?.("audio") || []),
+      ];
+      audioElements.forEach((audio) => {
+        if (audio.dataset.onlineRoomParticipant) return;
+        if (!appAudioStateRef.current.has(audio)) {
+          appAudioStateRef.current.set(audio, audio.muted);
+        }
+        audio.muted = true;
+      });
+    };
+    muteApplicationAudio(document);
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+          if (node instanceof Element) muteApplicationAudio(node);
+        });
+      });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [roomSoundMuted]);
+
   const value = useMemo(
     () => ({
       room,

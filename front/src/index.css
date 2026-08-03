@@ -893,6 +893,11 @@ table.data-table tbody tr:hover {
   background: rgba(102, 236, 255, 0.14);
   transform: translateY(-1px);
 }
+.online-room-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+  transform: none;
+}
 .online-room-icon-button.is-off {
   color: #ff9bae;
   border-color: rgba(255, 86, 124, 0.32);

@@ -1,16 +1,18 @@
 """Управление песнями + запуск AI-обработки."""
 
 import json
+import tempfile
+import zipfile
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 import config
 import models
 import schemas
-from app.services import ai_bridge, pipeline_service, song_service
+from app.services import ai_bridge, pipeline_service, song_package_service, song_service
 from database import get_db
 
 router = APIRouter(prefix="/songs", tags=["songs"])
@@ -58,6 +60,58 @@ def get_song(song_id: str, db: Session = Depends(get_db)):
     if song is None:
         raise HTTPException(status_code=404, detail="Песня не найдена")
     return song
+
+
+@router.get("/{song_id}/package")
+def export_song_package(
+    song_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    song = song_service.get_song(db, song_id)
+    if song is None:
+        raise HTTPException(status_code=404, detail="Song not found")
+    if song.status != models.SongStatus.DONE:
+        raise HTTPException(status_code=409, detail="Song processing is not complete")
+    try:
+        package_path = song_package_service.build_package(song)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=f"Could not package song: {exc}") from exc
+    background_tasks.add_task(package_path.unlink, missing_ok=True)
+    return FileResponse(
+        package_path,
+        media_type="application/zip",
+        filename=f"{song.slug}.karaoke.zip",
+        background=background_tasks,
+    )
+
+
+@router.post("/package/import", response_model=schemas.SongOut, status_code=201)
+async def import_song_package(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    temporary = tempfile.NamedTemporaryFile(
+        prefix="karaoke-import-",
+        suffix=".zip",
+        dir=config.DATA_DIR,
+        delete=False,
+    )
+    temporary_path = Path(temporary.name)
+    received = 0
+    try:
+        while chunk := await file.read(1024 * 1024):
+            received += len(chunk)
+            if received > song_package_service.MAX_PACKAGE_BYTES:
+                raise ValueError("Song package is too large")
+            temporary.write(chunk)
+        temporary.close()
+        return song_package_service.import_package(db, temporary_path)
+    except (OSError, ValueError, zipfile.BadZipFile) as exc:
+        raise HTTPException(status_code=400, detail=f"Could not import song package: {exc}") from exc
+    finally:
+        temporary.close()
+        temporary_path.unlink(missing_ok=True)
 
 
 @router.patch("/{song_id}", response_model=schemas.SongOut)

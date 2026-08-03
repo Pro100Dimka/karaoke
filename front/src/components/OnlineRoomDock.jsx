@@ -69,6 +69,7 @@ export function OnlineRoomDock() {
                     <button
                       type="button"
                       className={`online-room-icon-button ${onlineRoom.microphoneMuted ? "is-off" : ""}`}
+                      disabled={onlineRoom.roomSoundMuted}
                       onClick={() =>
                         onlineRoom.setMicrophoneMuted(!onlineRoom.microphoneMuted)
                       }

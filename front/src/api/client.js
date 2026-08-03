@@ -54,6 +54,16 @@ export const api = {
   getResult: (id) => request(`/songs/${id}/result`),
   updateLyrics: (id, lyrics) => request(`/songs/${id}/lyrics`, { method: "PUT", body: JSON.stringify({ lyrics }) }),
   getAudioTrackUrl: (id, track) => `${BASE_URL}/songs/${id}/audio/${track}`,
+  exportSongPackage: async (id) => {
+    const response = await fetch(`${BASE_URL}/songs/${id}/package`);
+    if (!response.ok) throw new Error(`Не удалось подготовить песню: ${response.status}`);
+    return response.blob();
+  },
+  importSongPackage: (blob, filename = "song.karaoke.zip") => {
+    const form = new FormData();
+    form.append("file", blob, filename);
+    return request("/songs/package/import", { method: "POST", body: form });
+  },
 
   // Плеер
   getSync: (songId) => request(`/player/${songId}/sync`),
