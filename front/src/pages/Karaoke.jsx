@@ -1276,6 +1276,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     const command = onlineRoom?.roomCommand;
     if (
       command?.type !== "karaoke-player" ||
+      !song?.id ||
       command.songId !== song.id ||
       !instrumentalRef.current
     ) return;

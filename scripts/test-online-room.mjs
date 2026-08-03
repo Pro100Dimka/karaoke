@@ -56,13 +56,19 @@ async function run() {
   host.socket.send(JSON.stringify({ type: "sync", state: { songId: "song-test", position: 12.5, playing: true } }));
   await waitFor(guest, (message) => message.type === "sync" && message.state?.position === 12.5, "playback sync");
 
+  guest.socket.send(JSON.stringify({ type: "ui", state: { query: "shared-search" } }));
+  await waitFor(host, (message) => message.type === "ui" && message.state?.query === "shared-search", "library UI sync");
+
+  guest.socket.send(JSON.stringify({ type: "presence", micMuted: true }));
+  await waitFor(host, (message) => message.type === "participant-updated" && message.participant?.id === guestId && message.participant?.micMuted === true, "participant presence");
+
   host.socket.send(JSON.stringify({ type: "signal", targetId: guestId, signal: { type: "offer", sdp: "test" } }));
   await waitFor(guest, (message) => message.type === "signal" && message.fromId === hostId, "WebRTC signalling");
 
   host.socket.close();
   await waitFor(guest, (message) => message.type === "participant-left" && message.participantId === hostId, "host leaves");
   guest.socket.close();
-  console.log("PASS: room, participants, chat, sync and WebRTC signalling work.");
+  console.log("PASS: room, participants, presence, shared UI, playback and WebRTC signalling work.");
 }
 
 run().catch((error) => {
