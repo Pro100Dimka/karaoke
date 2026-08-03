@@ -48,7 +48,6 @@ class RecordingSession:
         playback_offset_sec: float = 0,
         blocksize: int = 64,
         music_gain: float = 1.0,
-        vocal_gain: float = 1.0,
     ):
         self.session_id = session_id
         self.song_id = song_id
@@ -56,7 +55,6 @@ class RecordingSession:
         self.channels = channels
         self.gain = max(0.0, min(4.0, gain))
         self.music_gain = max(0.0, min(1.0, music_gain))
-        self.vocal_gain = max(0.0, min(1.0, vocal_gain))
         self.playback_offset_sec = max(0.0, playback_offset_sec)
         self._queue: queue.Queue = queue.Queue()
         if monitoring_enabled:
@@ -155,7 +153,6 @@ def start_recording(
     playback_offset_sec: float = 0,
     blocksize: int = 64,
     music_gain: float = 1.0,
-    vocal_gain: float = 1.0,
 ) -> str:
     if not _AUDIO_BACKEND_AVAILABLE:
         raise RuntimeError(f"Аудио-бэкенд недоступен: {_AUDIO_BACKEND_ERROR}")
@@ -175,7 +172,6 @@ def start_recording(
             playback_offset_sec,
             blocksize,
             music_gain,
-            vocal_gain,
         )
         session.start()
     except Exception as exc:  # Audio drivers raise implementation-specific errors.
@@ -244,7 +240,6 @@ def stop_recording(session_id: str) -> models.Recording:
             song,
             session.playback_offset_sec,
             session.music_gain,
-            session.vocal_gain,
         )
         return recording
     finally:
@@ -255,14 +250,23 @@ def delete_recording(db, recording: models.Recording) -> None:
     path = Path(recording.path)
     if path.exists():
         path.unlink()
-    performance_mix_path(recording).unlink(missing_ok=True)
+    for mixed_path in performance_mix_paths(recording):
+        mixed_path.unlink(missing_ok=True)
     db.delete(recording)
     db.commit()
 
 
 def performance_mix_path(recording: models.Recording) -> Path:
     voice_path = Path(recording.path)
-    return voice_path.with_name(f"{voice_path.stem}-performance.mp3")
+    return voice_path.with_name(f"{voice_path.stem}-performance.wav")
+
+
+def performance_mix_paths(recording: models.Recording) -> tuple[Path, Path]:
+    """Return the lossless mix path followed by the legacy MP3 path."""
+    voice_path = Path(recording.path)
+    return performance_mix_path(recording), voice_path.with_name(
+        f"{voice_path.stem}-performance.mp3"
+    )
 
 
 def _create_performance_mix(
@@ -270,9 +274,8 @@ def _create_performance_mix(
     song: models.Song,
     offset_sec: float,
     music_gain: float,
-    vocal_gain: float,
 ) -> None:
-    """Create the take using the exact karaoke volumes active at Play."""
+    """Create a lossless take from the backing track and recorded microphone."""
     ffmpeg = shutil.which("ffmpeg")
     if ffmpeg is None or not song.output_dir:
         return
@@ -287,26 +290,12 @@ def _create_performance_mix(
     )
     if instrumental is None:
         return
-    original_vocals = next(
-        (
-            song_dir / f"vocals{extension}"
-            for extension in (".mp3", ".wav")
-            if (song_dir / f"vocals{extension}").is_file()
-        ),
-        None,
-    )
     destination = performance_mix_path(recording)
     inputs = ["-ss", f"{offset_sec:.3f}", "-i", str(instrumental)]
     filters = [f"[0:a]volume={music_gain:.6f}[music]"]
     mix_labels = ["[music]"]
-    next_input = 1
-    if original_vocals is not None:
-        inputs.extend(["-ss", f"{offset_sec:.3f}", "-i", str(original_vocals)])
-        filters.append(f"[{next_input}:a]volume={vocal_gain:.6f}[original_vocals]")
-        mix_labels.append("[original_vocals]")
-        next_input += 1
     inputs.extend(["-i", recording.path])
-    filters.append(f"[{next_input}:a]volume=1.000000[performer]")
+    filters.append("[1:a]volume=1.000000[performer]")
     mix_labels.append("[performer]")
     filters.append(
         f"{''.join(mix_labels)}amix=inputs={len(mix_labels)}:duration=first:normalize=0,"
@@ -323,9 +312,7 @@ def _create_performance_mix(
         "-map",
         "[mix]",
         "-c:a",
-        "libmp3lame",
-        "-q:a",
-        "2",
+        "pcm_s24le",
         str(destination),
     ]
     try:

@@ -62,7 +62,6 @@ def start_recording(body: schemas.RecordingStartRequest, db: Session = Depends(g
             playback_offset_sec=body.position_sec,
             blocksize=settings.buffer_size,
             music_gain=body.music_volume,
-            vocal_gain=body.vocal_volume,
         )
     except RuntimeError as exc:
         # A temporary ASIO monitor is started for karaoke playback. If opening
@@ -156,9 +155,10 @@ def get_performance_file(recording_id: str, db: Session = Depends(get_db)):
     recording = db.query(models.Recording).filter(models.Recording.id == recording_id).first()
     if recording is None:
         raise HTTPException(status_code=404, detail="Recording not found")
-    mixed_path = recording_service.performance_mix_path(recording)
-    if mixed_path.is_file():
-        return FileResponse(mixed_path, media_type="audio/mpeg", filename=mixed_path.name)
+    for mixed_path in recording_service.performance_mix_paths(recording):
+        if mixed_path.is_file():
+            media_type = "audio/wav" if mixed_path.suffix == ".wav" else "audio/mpeg"
+            return FileResponse(mixed_path, media_type=media_type, filename=mixed_path.name)
     return FileResponse(recording.path, media_type="audio/wav", filename=recording.filename)
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import json
 import os
 from pathlib import Path
@@ -23,12 +24,31 @@ def _prepare_cuda_dlls() -> None:
         pass
 
 
-def _session(path: Path) -> Any:
+def _select_providers() -> list[str]:
+    """Select CUDA only when its native dependencies are actually loadable."""
     import onnxruntime as ort
 
-    return ort.InferenceSession(
-        str(path), providers=["CUDAExecutionProvider", "CPUExecutionProvider"]
-    )
+    if os.getenv("SONGAPP_DEVICE", "auto").lower() == "cpu":
+        return ["CPUExecutionProvider"]
+    if "CUDAExecutionProvider" not in ort.get_available_providers():
+        return ["CPUExecutionProvider"]
+    if os.name == "nt":
+        # onnxruntime-gpu currently requires the CUDA 13/cuDNN 9 ABI. Asking
+        # ORT to probe without these DLLs emits several alarming errors for
+        # each model, then falls back to CPU anyway.
+        try:
+            for library in ("cublas64_13.dll", "cublasLt64_13.dll", "cudnn64_9.dll"):
+                ctypes.WinDLL(library)
+        except OSError:
+            print("GAME ONNX: CUDA 13/cuDNN 9 unavailable; using CPU inference.")
+            return ["CPUExecutionProvider"]
+    return ["CUDAExecutionProvider", "CPUExecutionProvider"]
+
+
+def _session(path: Path, providers: list[str]) -> Any:
+    import onnxruntime as ort
+
+    return ort.InferenceSession(str(path), providers=providers)
 
 
 def _chunks(length: int, rate: int) -> list[tuple[int, int, int, int]]:
@@ -92,8 +112,9 @@ def extract(audio_path: str | Path, model_dir: str | Path, language: str | None)
     rate = int(config["samplerate"])
     languages = config.get("languages") or {}
     language_id = int(languages.get(language, 0))
+    providers = _select_providers()
     sessions = {
-        name: _session(model_dir / f"{name}.onnx")
+        name: _session(model_dir / f"{name}.onnx", providers)
         for name in ("encoder", "segmenter", "bd2dur", "estimator")
     }
     waveform, _ = librosa.load(audio_path, sr=rate, mono=True)

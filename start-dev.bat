@@ -24,8 +24,8 @@ rem ----------------------------------------------------------------------------
 call "%ROOT%scripts\ensure-offline-models.bat"
 if errorlevel 1 exit /b 1
 
-echo Stopping the previous backend on port 8000...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess | Sort-Object -Unique | ForEach-Object { Stop-Process -Id $_ -Force }"
+echo Stopping previous development processes on ports 8000 and 5173...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ports = 8000,5173; Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -in $ports } | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }"
 set "KARAOKE_PYTHON=%PYTHON%"
 cd /d "%ROOT%front"
 call npm run dev:electron

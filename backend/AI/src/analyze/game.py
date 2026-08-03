@@ -19,12 +19,12 @@ def _model_dir() -> Path:
     return game_model_dir()
 
 
-def _merge_machine_fragments(notes: list[dict], max_fragment_duration: float = 0.08) -> list[dict]:
-    """Merge only implausibly tiny duplicate events from the model.
+def _merge_machine_fragments(notes: list[dict], max_gap_sec: float = 0.035) -> list[dict]:
+    """Collapse GAME's frame-sized fragments before restoring real attacks.
 
-    GAME emits note *events*, not PCM frames.  Consecutive equal-pitch events
-    are often separate attacks or syllables and are essential for karaoke
-    rhythm, so merging every touching pair turns them into one long bar.
+    The model output contains adjacent 100–250 ms copies of one sustained
+    pitch. They are analysis frames, not necessarily separate sung notes.
+    Lyric attacks are restored later only where vocal audio confirms them.
     """
     if not notes:
         return notes
@@ -34,7 +34,7 @@ def _merge_machine_fragments(notes: list[dict], max_fragment_duration: float = 0
         if (
             note["note"] == previous["note"]
             and note["start"] - previous["end"] <= 0.01
-            and min(note["duration"], previous["duration"]) <= max_fragment_duration
+            and note["start"] - previous["end"] <= max_gap_sec
         ):
             previous["end"] = note["end"]
             previous["duration"] = round(previous["end"] - previous["start"], 3)

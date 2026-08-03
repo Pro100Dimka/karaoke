@@ -36,6 +36,8 @@ import { KARAOKE_THEMES, shuffleThemes } from "../assets/karaoke/themes";
 // именам полей, поправить нужно только в двух местах ниже —
 // normalizeLyrics()/normalizeNotes() — остальной компонент от конкретной
 // формы данных не зависит.
+// Keep compatibility with the pipeline's compact lyric/note files at the UI
+// boundary so playback components operate on one predictable shape.
 function normalizeLyrics(raw) {
   if (!raw) return [];
   const list = Array.isArray(raw) ? raw : raw.lines || raw.segments || [];
@@ -355,6 +357,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   const lastControlsActivityRef = useRef(Date.now());
   const microphoneVolumeInitializedRef = useRef(false);
   const browserMonitorRef = useRef(null);
+  const manualMonitoringRef = useRef(false);
   const monitorModeMenuRef = useRef(null);
   const lastSecondarySyncRef = useRef(0);
   currentTimeRef.current = currentTime;
@@ -717,7 +720,15 @@ export default function Karaoke({ onOpenAppSettings }) {
     const voc = vocalsRef.current;
     if (!instr || !voc) return;
     const onLoadedMeta = () => setDuration(instr.duration || 0);
-    const onEnded = () => setIsPlaying(false);
+    const onEnded = () => {
+      // The instrumental track owns the transport clock. Do not let vocals,
+      // video, or the synthetic melody continue after that clock has ended.
+      voc.pause();
+      videoRef.current?.pause();
+      sendYouTubeCommand("pauseVideo");
+      silenceMelodyGuide();
+      setIsPlaying(false);
+    };
     instr.addEventListener("loadedmetadata", onLoadedMeta);
     instr.addEventListener("ended", onEnded);
     return () => {
@@ -965,7 +976,6 @@ export default function Karaoke({ onOpenAppSettings }) {
             song.id,
             instr.currentTime,
             playbackGain(musicVolume),
-            playbackGain(vocalVolume),
           );
           setRecordingSessionId(session.recording_session_id);
         }
@@ -1015,8 +1025,9 @@ export default function Karaoke({ onOpenAppSettings }) {
         setRecordingError(`Не удалось сохранить запись: ${error.message}`);
       }
     }
-    // Stop marks the end of a take. Do not leave a temporary monitor open;
-    // the next Play starts it again automatically.
+    // A monitor enabled by the user remains active after a take; only the
+    // temporary recording monitor is released by Stop.
+    if (manualMonitoringRef.current) return;
     const monitor = browserMonitorRef.current;
     monitor?.stream.getTracks().forEach((track) => track.stop());
     monitor?.context.close();
@@ -1047,6 +1058,7 @@ export default function Karaoke({ onOpenAppSettings }) {
       activeMonitor?.stream.getTracks().forEach((track) => track.stop());
       activeMonitor?.context.close();
       browserMonitorRef.current = null;
+      manualMonitoringRef.current = false;
       setMonitoringEnabled(false);
       await api.stopDirectMonitoring().catch(() => {});
       return;
@@ -1081,9 +1093,11 @@ export default function Karaoke({ onOpenAppSettings }) {
       stereo.connect(gainNode).connect(context.destination);
       await context.resume();
       browserMonitorRef.current = { stream, context, gainNode };
+      manualMonitoringRef.current = true;
       setMonitoringEnabled(true);
       await updateMicrophone({ monitoring_enabled: false });
     } catch (error) {
+      manualMonitoringRef.current = false;
       setMonitoringEnabled(false);
       setRecordingError(
         `Не удалось включить прослушивание микрофона: ${error.message}`,
@@ -1104,8 +1118,10 @@ export default function Karaoke({ onOpenAppSettings }) {
       } else {
         await api.stopDirectMonitoring();
       }
+      manualMonitoringRef.current = enabled;
       setMonitoringEnabled(enabled);
     } catch (error) {
+      manualMonitoringRef.current = false;
       setMonitoringEnabled(false);
       if (!enabled) await api.stopDirectMonitoring().catch(() => {});
       setRecordingError(

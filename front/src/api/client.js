@@ -67,14 +67,13 @@ export const api = {
 
   // Запись
   getRecordingSettings: () => request("/recording/settings"),
-  startRecording: (songId, positionSec = 0, musicVolume = 1, vocalVolume = 1) =>
+  startRecording: (songId, positionSec = 0, musicVolume = 1) =>
     request("/recording/start", {
       method: "POST",
       body: JSON.stringify({
         song_id: songId,
         position_sec: positionSec,
         music_volume: musicVolume,
-        vocal_volume: vocalVolume,
       }),
     }),
   pauseRecording: (sessionId) => request(`/recording/pause?session_id=${sessionId}`, { method: "POST" }),

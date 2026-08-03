@@ -264,7 +264,8 @@ def split_notes_by_syllables(notes: list, lyrics_lines: list, pitch_frames: list
                               min_segment_duration: float = 0.12,
                               retrigger_gap: float = 0.02,
                               acoustic_search_window: float = 0.15,
-                              acoustic_dip_margin_db: float = 2.5) -> list:
+                              acoustic_dip_margin_db: float = 2.5,
+                              include_syllables: bool = True) -> list:
     """
     pitch_frames — если передан, граница слога разбивает ноту, ТОЛЬКО
                    если рядом (± acoustic_search_window) есть настоящий
@@ -309,7 +310,7 @@ def split_notes_by_syllables(notes: list, lyrics_lines: list, pitch_frames: list
             for s in syllables
             if s.get("start") is not None
         }
-        if pitch_frames
+        if pitch_frames and include_syllables
         else {}
     )
     for word_start in word_boundaries:

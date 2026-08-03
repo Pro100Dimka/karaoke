@@ -189,7 +189,12 @@ def get_audio_track(song_id: str, track: str, db: Session = Depends(get_db)):
     for extension, media_type in ((".mp3", "audio/mpeg"), (".wav", "audio/wav")):
         candidate = output_dir / f"{track}{extension}"
         if candidate.is_file():
-            return FileResponse(candidate, media_type=media_type, filename=candidate.name)
+            return FileResponse(
+                candidate,
+                media_type=media_type,
+                filename=candidate.name,
+                content_disposition_type="inline",
+            )
     raise HTTPException(status_code=404, detail="Audio track is not available")
 
 

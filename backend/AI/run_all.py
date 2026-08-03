@@ -150,7 +150,16 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
 
     # --- 6/13 Эталонная мелодия ---
     reference_path = out / "reference.json"
-    if reference_path.exists():
+    # GAME's raw output is cached, but its normalization is cheap and evolves
+    # with the app. Rebuild the clean baseline from it on every pipeline run.
+    game_cache_available = (out / "game_notes.json").exists()
+    if game_cache_available:
+        print("6/13 Нормализация эталонной мелодии GAME...")
+        reference_notes = extract_game_reference(vocals_path, out, language)
+        if reference_notes is None:
+            raise RuntimeError("Cached GAME melody could not be normalized")
+        save_json(reference_notes, reference_path)
+    elif reference_path.exists():
         print("6/13 Эталонная мелодия — уже есть, пропускаю")
         reference_notes = load_json(reference_path)
     else:
@@ -252,6 +261,9 @@ def run(input_mp3: str, out_dir: str, whisper_model: str = "medium",
         # left repeated notes merged into one long block.
         acoustic_search_window=0.20,
         acoustic_dip_margin_db=1.5,
+        # GAME already identifies musical attacks. For it, lyric words may
+        # refine timing but estimated syllables must not invent extra events.
+        include_syllables=not using_game,
     )
     reference_notes = align_note_boundaries_to_words(reference_notes, lyrics_sync, pitch_frames)
     if len(reference_notes) != notes_before:

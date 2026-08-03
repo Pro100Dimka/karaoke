@@ -16,6 +16,13 @@ const { spawn } = require("child_process");
 const isDev = !app.isPackaged;
 const BACKEND_URL = "http://127.0.0.1:8000";
 
+// Keep the development profile self-contained. It avoids Windows profile
+// permission/cache corruption from making `start-dev.bat` look like a broken
+// app launch. Packaged builds continue to use the normal per-user profile.
+if (isDev) {
+  app.setPath("userData", path.resolve(__dirname, "..", ".runtime", "electron-profile"));
+}
+
 let mainWindow = null;
 let backendProcess = null;
 let isQuitting = false;

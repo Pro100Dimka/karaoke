@@ -139,7 +139,10 @@ def sync_with_whisper(
                 "words": words,
             }
         )
-    return lines
+    # The visible text can come from tags/LRC and therefore differ from the
+    # transcription. Rebuild nested words from that visible text while
+    # retaining timings measured on the vocal track.
+    return reconcile_lyric_words(lines)
 
 
 def sync_with_whisperx(

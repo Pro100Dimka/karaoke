@@ -32,6 +32,7 @@ front/release/
 /release/
 /logs/
 front/.vite/
+front/.runtime/
 *.tsbuildinfo
 
 # Application runtime data and user media

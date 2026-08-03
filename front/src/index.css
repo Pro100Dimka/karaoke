@@ -5208,9 +5208,10 @@ table.data-table tbody tr td {
 .karaoke-performance-stage .melody-roll {
   position: absolute;
   right: 0;
-  bottom: clamp(112px, 15vh, 142px);
   left: 0;
-  height: min(50%, 470px);
+  top: clamp(250px, 43vh, 420px);
+  bottom: auto;
+  height: clamp(205px, 34vh, 370px);
   margin: 0;
   padding: 8px clamp(16px, 2vw, 30px);
   transform: none;
