@@ -110,8 +110,10 @@ export class KaraokeRoom {
 
   async webSocketClose(socket, code, reason) {
     const participant = participantFromSocket(socket);
-    socket.close(code, reason);
     if (participant) this.broadcast("participant-left", { participantId: participant.id });
+    // The edge already closes this endpoint before invoking the callback.
+    // Calling close() again can prevent the remaining sockets from receiving
+    // the participant-left event.
   }
 }
 

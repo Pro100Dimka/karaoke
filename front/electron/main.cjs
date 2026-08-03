@@ -20,7 +20,11 @@ const BACKEND_URL = "http://127.0.0.1:8000";
 // permission/cache corruption from making `start-dev.bat` look like a broken
 // app launch. Packaged builds continue to use the normal per-user profile.
 if (isDev) {
-  app.setPath("userData", path.resolve(__dirname, "..", ".runtime", "electron-profile"));
+  app.setPath(
+    "userData",
+    process.env.KARAOKE_ELECTRON_PROFILE ||
+      path.resolve(__dirname, "..", ".runtime", "electron-profile"),
+  );
 }
 
 let mainWindow = null;
