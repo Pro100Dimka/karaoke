@@ -91,6 +91,53 @@ function normalizeNotes(raw) {
     );
 }
 
+const clampEffectAmount = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+
+// The browser fallback uses the same dry/wet principle as the ASIO bridge.
+// Keeping every wet gain at zero means that an effect is truly bypassed,
+// while changing a slider can still be heard immediately without reopening
+// the microphone stream.
+function createLiveMicrophoneEffects(context, source, destination, initialEffects) {
+  const dry = context.createGain();
+  source.connect(dry).connect(destination);
+
+  const createFeedbackEffect = (delaySeconds, feedbackAmount) => {
+    const delay = context.createDelay(0.75);
+    const feedback = context.createGain();
+    const wet = context.createGain();
+    delay.delayTime.value = delaySeconds;
+    feedback.gain.value = feedbackAmount;
+    wet.gain.value = 0;
+    source.connect(delay);
+    delay.connect(feedback).connect(delay);
+    delay.connect(wet).connect(destination);
+    return { delay, wet };
+  };
+
+  const reverbEarly = createFeedbackEffect(0.037, 0.26);
+  const reverbLate = context.createDelay(0.75);
+  const reverbWet = context.createGain();
+  reverbLate.delayTime.value = 0.091;
+  reverbWet.gain.value = 0;
+  reverbEarly.delay.connect(reverbLate).connect(reverbWet).connect(destination);
+  const echo = createFeedbackEffect(0.235, 0.34);
+  const delay = createFeedbackEffect(0.12, 0.22);
+
+  const apply = (effects) => {
+    const now = context.currentTime;
+    const reverb = clampEffectAmount(effects.reverb);
+    const echoAmount = clampEffectAmount(effects.echo);
+    const delayAmount = clampEffectAmount(effects.delay);
+    reverbEarly.wet.gain.setTargetAtTime(reverb * 0.3, now, 0.025);
+    reverbWet.gain.setTargetAtTime(reverb * 0.24, now, 0.025);
+    echo.wet.gain.setTargetAtTime(echoAmount * 0.44, now, 0.025);
+    delay.delay.delayTime.setTargetAtTime(0.12 + delayAmount * 0.38, now, 0.025);
+    delay.wet.gain.setTargetAtTime(delayAmount * 0.4, now, 0.025);
+  };
+  apply(initialEffects);
+  return { apply };
+}
+
 function noteNameToMidi(noteName) {
   if (typeof noteName !== "string") return null;
   const match = /^([A-Ga-g])([#b]?)(-?\d+)$/.exec(noteName.trim());
@@ -952,6 +999,9 @@ export default function Karaoke({ onOpenAppSettings }) {
     }
   }, [microphoneVolume]);
   useEffect(() => {
+    browserMonitorRef.current?.effects?.apply(microphoneEffects);
+  }, [microphoneEffects]);
+  useEffect(() => {
     if (vocalsRef.current) vocalsRef.current.volume = playbackGain(vocalVolume);
   }, [vocalVolume]);
   useEffect(() => {
@@ -1111,9 +1161,15 @@ export default function Karaoke({ onOpenAppSettings }) {
       gainNode.gain.value = microphoneVolume;
       source.connect(stereo, 0, 0);
       source.connect(stereo, 0, 1);
-      stereo.connect(gainNode).connect(context.destination);
+      const effects = createLiveMicrophoneEffects(
+        context,
+        stereo,
+        gainNode,
+        microphoneEffects,
+      );
+      gainNode.connect(context.destination);
       await context.resume();
-      browserMonitorRef.current = { stream, context, gainNode };
+      browserMonitorRef.current = { stream, context, gainNode, effects };
       manualMonitoringRef.current = true;
       setMonitoringEnabled(true);
       await updateMicrophone({ monitoring_enabled: false });
@@ -1728,7 +1784,7 @@ export default function Karaoke({ onOpenAppSettings }) {
               <span>{Math.round(microphoneLevel)}%</span>
             </div>
             <div className="microphone-effects">
-              <div className="microphone-effects-title">Эффекты записи</div>
+              <div className="microphone-effects-title">Эффекты микрофона</div>
               <SliderField
                 label="Reverb"
                 value={microphoneEffects.reverb}
@@ -1766,8 +1822,8 @@ export default function Karaoke({ onOpenAppSettings }) {
                 onCommit={(value) => updateMicrophone({ delay: value })}
               />
               <small>
-                Эффекты применяются к сохранённому исполнению. Прямой ASIO-мониторинг
-                остаётся без DSP, чтобы не добавлять задержку.
+                0% — эффект полностью выключен. Изменения слышны в мониторинге;
+                для ASIO они применяются после отпускания ползунка.
               </small>
             </div>
               </div>

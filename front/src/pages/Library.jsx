@@ -96,24 +96,39 @@ export default function Library() {
     [notify],
   );
 
-  const handleDelete = useCallback(async (song) => {
-    if (!(await confirmDialog(`Удалить «${song.title}»? Это удалит все файлы песни.`, "Удалить песню?"))) return;
-    try {
-      setHiddenSongIds((ids) => new Set(ids).add(song.id));
-      setMenuSongId(null);
-      if (infoSong?.id === song.id) setInfoSong(null);
-      if (recordingsSong?.id === song.id) setRecordingsSong(null);
-      if (processingSong?.id === song.id) setProcessingSong(null);
-      await api.deleteSong(song.id);
-    } catch (err) {
-      setHiddenSongIds((ids) => {
-        const next = new Set(ids);
-        next.delete(song.id);
-        return next;
-      });
-      await notify(`Не удалось удалить: ${err.message}`);
-    }
-  }, [confirmDialog, infoSong?.id, notify, processingSong?.id, recordingsSong?.id]);
+  const handleDelete = useCallback(
+    async (song) => {
+      if (
+        !(await confirmDialog(
+          `Удалить «${song.title}»? Это удалит все файлы песни.`,
+          "Удалить песню?",
+        ))
+      )
+        return;
+      try {
+        setHiddenSongIds((ids) => new Set(ids).add(song.id));
+        setMenuSongId(null);
+        if (infoSong?.id === song.id) setInfoSong(null);
+        if (recordingsSong?.id === song.id) setRecordingsSong(null);
+        if (processingSong?.id === song.id) setProcessingSong(null);
+        await api.deleteSong(song.id);
+      } catch (err) {
+        setHiddenSongIds((ids) => {
+          const next = new Set(ids);
+          next.delete(song.id);
+          return next;
+        });
+        await notify(`Не удалось удалить: ${err.message}`);
+      }
+    },
+    [
+      confirmDialog,
+      infoSong?.id,
+      notify,
+      processingSong?.id,
+      recordingsSong?.id,
+    ],
+  );
 
   const handleProcess = useCallback(
     async (song) => {
@@ -139,25 +154,35 @@ export default function Library() {
     [notify],
   );
 
-  const handleOpenFolder = useCallback(async (song) => {
-    if (!song.output_dir && !window.electronAPI) {
-      await notify("Папка ещё не создана — песня не обработана");
-      return;
-    }
-    window.electronAPI?.openSongFolder(song.output_dir || "");
-  }, [notify]);
+  const handleOpenFolder = useCallback(
+    async (song) => {
+      if (!song.output_dir && !window.electronAPI) {
+        await notify("Папка ещё не создана — песня не обработана");
+        return;
+      }
+      window.electronAPI?.openSongFolder(song.output_dir || "");
+    },
+    [notify],
+  );
 
-  const handleDeleteRecording = useCallback(async (recording) => {
-    if (!(await confirmDialog("Удалить это записанное исполнение?"))) return;
-    try {
-      await api.deleteRecording(recording.id);
-    } catch (err) {
-      await notify(`Не удалось удалить запись: ${err.message}`);
-    }
-  }, [confirmDialog, notify]);
+  const handleDeleteRecording = useCallback(
+    async (recording) => {
+      if (!(await confirmDialog("Удалить это записанное исполнение?"))) return;
+      try {
+        await api.deleteRecording(recording.id);
+      } catch (err) {
+        await notify(`Не удалось удалить запись: ${err.message}`);
+      }
+    },
+    [confirmDialog, notify],
+  );
 
   const cancelProcessing = useCallback(async () => {
-    if (!processingSong || !(await confirmDialog("Отменить обработку этой песни?"))) return;
+    if (
+      !processingSong ||
+      !(await confirmDialog("Отменить обработку этой песни?"))
+    )
+      return;
     try {
       await api.cancelProcessing(processingSong.id);
     } catch (err) {
@@ -165,9 +190,15 @@ export default function Library() {
     }
   }, [confirmDialog, notify, processingSong]);
 
-  const visibleSongs = (songs || []).filter((song) => !hiddenSongIds.has(song.id));
+  const visibleSongs = (songs || []).filter(
+    (song) => !hiddenSongIds.has(song.id),
+  );
   const filtered = visibleSongs.filter((s) =>
-    [s.title, s.artist, s.genre].filter(Boolean).join(" ").toLowerCase().includes(query.toLowerCase()),
+    [s.title, s.artist, s.genre]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .includes(query.toLowerCase()),
   );
   const readyCount = visibleSongs.filter(
     (song) => song.status === "done",
@@ -342,8 +373,12 @@ export default function Library() {
                   <div className="library-song-card-heading">
                     <div className="song-title-content">
                       <span className="song-title-name">{song.title}</span>
-                      {song.artist && <span className="song-artist-name">{song.artist}</span>}
-                      {song.genre && <span className="song-genre-name">{song.genre}</span>}
+                      {song.artist && (
+                        <span className="song-artist-name">{song.artist}</span>
+                      )}
+                      {song.genre && (
+                        <span className="song-genre-name">{song.genre}</span>
+                      )}
                     </div>
                     {!isReady && <StatusBadge status={song.status} />}
                   </div>
@@ -438,19 +473,6 @@ export default function Library() {
                           <RotateCcw size={14} />
                         </button>
                       )}
-                      <div className="library-card-more">
-                        <button
-                          className="btn btn-ghost"
-                          title="Дополнительные действия"
-                          onClick={() =>
-                            setMenuSongId((id) =>
-                              id === song.id ? null : song.id,
-                            )
-                          }
-                        >
-                          <MoreHorizontal size={16} />
-                        </button>
-                      </div>
                       <button
                         className="btn btn-danger"
                         title="Удалить"
