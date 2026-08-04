@@ -3,7 +3,7 @@ import { useCallback, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useOnlineRoomNavigation } from "../hooks/useOnlineRoomNavigation";
 import { useRequireOnlineName } from "../hooks/useRequireOnlineName";
-import SongSettings from "../pages/Library/SongSettings";
+import SongSettings from "../pages/Library/song-settings";
 import Settings from "../pages/Settings";
 import Modal from "./Modal";
 import TitleBar from "./TitleBar";
