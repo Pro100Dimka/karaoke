@@ -1,6 +1,6 @@
 import { useLocation } from "react-router-dom";
-import { Panel } from "../components/ui";
-import { useAnalysis } from "../hooks/useAnalysis";
+import { Panel } from "../../components/ui";
+import { useAnalysis } from "../../hooks/useAnalysis";
 
 function AnalysisTable({ sections }) {
   return (

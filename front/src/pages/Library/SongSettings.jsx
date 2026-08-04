@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { api } from "../api/client";
-import { usePolling } from "../hooks/usePolling";
-import { Panel } from "../components/ui";
-import { Dropdown } from "../components/Dropdown";
-import { useAppDialog } from "../components/AppDialog";
-import { FieldRow } from "../components/fields";
+import { api } from "../../api/client";
+import { usePolling } from "../../hooks/usePolling";
+import { Panel } from "../../components/ui";
+import { Dropdown } from "../../components/Dropdown";
+import { useAppDialog } from "../../components/AppDialog";
 
 const DIFFICULTIES = ["Лёгкий", "Средний", "Сложный", "Эксперт"];
 
@@ -282,6 +281,23 @@ export default function SongSettings() {
           {lyricsError && <p className="song-lyrics-error">{lyricsError}</p>}
         </Panel>
       )}
+    </div>
+  );
+}
+function FieldRow({ label, children }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginBottom: 14,
+      }}
+    >
+      <span className="text-secondary" style={{ fontSize: 13 }}>
+        {label}
+      </span>
+      {children}
     </div>
   );
 }

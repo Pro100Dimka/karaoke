@@ -1,6 +1,6 @@
-import { api } from "../api/client";
-import { usePolling } from "../hooks/usePolling";
-import { Panel } from "../components/ui";
+import { api } from "../../api/client";
+import { usePolling } from "../../hooks/usePolling";
+import { Panel } from "../../components/ui";
 import { CheckCircle2, XCircle } from "lucide-react";
 
 function Check({ label, ok }) {

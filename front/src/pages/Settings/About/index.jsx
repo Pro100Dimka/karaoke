@@ -1,7 +1,7 @@
 import { Mic } from "lucide-react";
-import { api } from "../api/client";
-import { usePolling } from "../hooks/usePolling";
-import { Panel } from "../components/ui";
+import { api } from "../../../api/client";
+import { usePolling } from "../../../hooks/usePolling";
+import { Panel } from "../../../components/ui";
 
 const REACT_VERSION = "18.3.1";
 

@@ -24,12 +24,12 @@ import {
   Trash2,
   Trophy,
 } from "lucide-react";
-import { api } from "../api/client";
-import { usePolling } from "../hooks/usePolling";
-import { Dropdown } from "../components/Dropdown";
-import { useAppDialog } from "../components/AppDialog";
-import { KARAOKE_THEMES, shuffleThemes } from "../assets/karaoke/themes";
-import { useOnlineRoom } from "../contexts/OnlineRoomContext";
+import { api } from "../../api/client";
+import { usePolling } from "../../hooks/usePolling";
+import { Dropdown } from "../../components/Dropdown";
+import { useAppDialog } from "../../components/AppDialog";
+import { KARAOKE_THEMES, shuffleThemes } from "../../assets/karaoke/themes";
+import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 
 // ПРИМЕЧАНИЕ ПО СХЕМЕ ДАННЫХ: здесь предполагается, что lyrics.json — это
 // массив строк вида {start, end, text}, а reference.json — массив нот вида
@@ -92,13 +92,19 @@ function normalizeNotes(raw) {
     );
 }
 
-const clampEffectAmount = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+const clampEffectAmount = (value) =>
+  Math.max(0, Math.min(1, Number(value) || 0));
 
 // The browser fallback uses the same dry/wet principle as the ASIO bridge.
 // Keeping every wet gain at zero means that an effect is truly bypassed,
 // while changing a slider can still be heard immediately without reopening
 // the microphone stream.
-function createLiveMicrophoneEffects(context, source, destination, initialEffects) {
+function createLiveMicrophoneEffects(
+  context,
+  source,
+  destination,
+  initialEffects,
+) {
   const dry = context.createGain();
   source.connect(dry).connect(destination);
 
@@ -132,7 +138,11 @@ function createLiveMicrophoneEffects(context, source, destination, initialEffect
     reverbEarly.wet.gain.setTargetAtTime(reverb * 0.3, now, 0.025);
     reverbWet.gain.setTargetAtTime(reverb * 0.24, now, 0.025);
     echo.wet.gain.setTargetAtTime(echoAmount * 0.44, now, 0.025);
-    delay.delay.delayTime.setTargetAtTime(0.12 + delayAmount * 0.38, now, 0.025);
+    delay.delay.delayTime.setTargetAtTime(
+      0.12 + delayAmount * 0.38,
+      now,
+      0.025,
+    );
     delay.wet.gain.setTargetAtTime(delayAmount * 0.4, now, 0.025);
   };
   apply(initialEffects);
@@ -476,16 +486,12 @@ export default function Karaoke({ onOpenAppSettings }) {
       // final frame have identical position and velocity, so no loop is seen.
       const x =
         22 * (Math.sin(theta + path.xPhaseA) - offsetSine(path.xPhaseA)) +
-        13 *
-          (Math.sin(theta * 3 + path.xPhaseB) - offsetSine(path.xPhaseB)) +
-        7 *
-          (Math.sin(theta * 5 + path.xPhaseC) - offsetSine(path.xPhaseC));
+        13 * (Math.sin(theta * 3 + path.xPhaseB) - offsetSine(path.xPhaseB)) +
+        7 * (Math.sin(theta * 5 + path.xPhaseC) - offsetSine(path.xPhaseC));
       const y =
         48 +
-        2.4 *
-          (Math.sin(theta * 2 + path.yPhaseA) - offsetSine(path.yPhaseA)) +
-        1.2 *
-          (Math.sin(theta * 5 + path.yPhaseB) - offsetSine(path.yPhaseB));
+        2.4 * (Math.sin(theta * 2 + path.yPhaseA) - offsetSine(path.yPhaseA)) +
+        1.2 * (Math.sin(theta * 5 + path.yPhaseB) - offsetSine(path.yPhaseB));
       panorama.style.setProperty("--panorama-x", `-${x.toFixed(3)}cqh`);
       panorama.style.setProperty("--panorama-y", `${y.toFixed(3)}%`);
       panoramaClockRef.current = elapsed;
@@ -1279,7 +1285,8 @@ export default function Karaoke({ onOpenAppSettings }) {
       !song?.id ||
       command.songId !== song.id ||
       !instrumentalRef.current
-    ) return;
+    )
+      return;
 
     const position = Number(command.position);
     if (Number.isFinite(position)) seekTo(position, { broadcast: false });
@@ -1586,316 +1593,353 @@ export default function Karaoke({ onOpenAppSettings }) {
                 onClick={() => setMicrophoneControlsOpen((open) => !open)}
               >
                 <Settings2 size={15} />
-                {microphoneControlsOpen ? "Скрыть микрофон" : "Микрофон и эффекты"}
+                {microphoneControlsOpen
+                  ? "Скрыть микрофон"
+                  : "Микрофон и эффекты"}
               </button>
             </div>
             {microphoneControlsOpen && (
               <div className="microphone-controls-content">
-            <label
-              className={audioDriver === "asio" ? "advanced-audio-setting" : ""}
-            >
-              Устройство ввода
-              <Dropdown
-                value={audioSettings?.input_device_id ?? ""}
-                onChange={(value) =>
-                  updateMicrophone({
-                    input_device_id: value === "" ? null : Number(value),
-                  })
-                }
-                options={[
-                  { value: "", label: "По умолчанию" },
-                  ...(devices || []).map((device) => ({
-                    value: device.index,
-                    label: device.name,
-                  })),
-                ]}
-              />
-            </label>
-            <label className="audio-driver-setting">
-              Аудиодрайвер
-              <Dropdown
-                value={audioDriver}
-                disabled={monitoringEnabled}
-                onChange={async (value) => {
-                  setAudioDriver(value);
-                  await updateMicrophone({ audio_driver: value });
-                }}
-                options={[
-                  { value: "auto", label: "Авто · Windows / PortAudio" },
-                  ...((asioDrivers || []).length
-                    ? [{ value: "asio", label: "ASIO · минимальная задержка" }]
-                    : []),
-                ]}
-              />
-              {!(asioDrivers || []).length && (
-                <small>
-                  ASIO появится после установки драйвера аудиоинтерфейса.
-                </small>
-              )}
-            </label>
-            {audioDriver === "asio" && (
-              <label className="asio-driver-setting">
-                ASIO-драйвер
-                <Dropdown
-                  value={asioDriverName}
-                  disabled={monitoringEnabled}
-                  onChange={async (value) => {
-                    setAsioDriverName(value);
-                    await updateMicrophone({ asio_driver_name: value });
-                  }}
-                  options={(asioDrivers || []).map((driver) => ({
-                    value: driver.name,
-                    label: driver.name,
-                  }))}
-                />
-                <small>
-                  Для Audient выбран нативный драйвер аудиоинтерфейса.
-                </small>
-              </label>
-            )}
-            <label className="advanced-audio-setting">
-              Буфер аудио
-              <Dropdown
-                value={audioBufferSize}
-                disabled={monitoringEnabled}
-                onChange={async (value) => {
-                  const bufferSize = Number(value);
-                  setAudioBufferSize(bufferSize);
-                  await updateMicrophone({ buffer_size: bufferSize });
-                }}
-                options={[32, 64, 128, 256, 512].map((value) => ({
-                  value,
-                  label: `${value} samples`,
-                }))}
-              />
-            </label>
-            <label className="advanced-audio-setting">
-              Выход прямого мониторинга
-              <Dropdown
-                value={directOutputDeviceId}
-                disabled={monitoringEnabled}
-                onChange={async (value) => {
-                  const deviceId = value === "" ? null : Number(value);
-                  setDirectOutputDeviceId(value);
-                  await updateMicrophone({ output_device_id: deviceId });
-                }}
-                options={[
-                  { value: "", label: "Системное устройство по умолчанию" },
-                  ...(directOutputDevices || []).map((device) => ({
-                    value: device.index,
-                    label: device.name,
-                  })),
-                ]}
-              />
-              <small>
-                Для минимальной задержки выберите выход того же аудиоинтерфейса.
-              </small>
-            </label>
-            <label className="legacy-browser-monitoring">
-              Вход для прослушивания
-              <Dropdown
-                value={monitorInputDeviceId}
-                disabled={monitoringEnabled}
-                onChange={setMonitorInputDeviceId}
-                options={[
-                  { value: "default", label: "Системное по умолчанию" },
-                  ...browserAudioDevices.inputs.map((device) => ({
-                    value: device.deviceId,
-                    label: device.label || "Микрофон",
-                  })),
-                ]}
-              />
-            </label>
-            <label className="legacy-browser-monitoring">
-              Выход для прослушивания
-              <Dropdown
-                value={monitorOutputDeviceId}
-                disabled={monitoringEnabled}
-                onChange={setMonitorOutputDeviceId}
-                options={[
-                  { value: "default", label: "Системное по умолчанию" },
-                  ...browserAudioDevices.outputs.map((device) => ({
-                    value: device.deviceId,
-                    label: device.label || "Аудиоустройство",
-                  })),
-                ]}
-              />
-            </label>
-            <label className="legacy-browser-monitoring">
-              Режим задержки
-              <Dropdown
-                value={monitorLatencyHint}
-                disabled={monitoringEnabled}
-                onChange={setMonitorLatencyHint}
-                options={[
-                  { value: "interactive", label: "Низкая задержка" },
-                  { value: "balanced", label: "Автоматический" },
-                  { value: "playback", label: "Стабильное воспроизведение" },
-                ]}
-              />
-            </label>
-            <div
-              className="monitoring-mode-picker legacy-browser-monitoring"
-              ref={monitorModeMenuRef}
-            >
-              <span>
-                {
-                  "\u0420\u0435\u0436\u0438\u043c \u043f\u0440\u043e\u0441\u043b\u0443\u0448\u0438\u0432\u0430\u043d\u0438\u044f"
-                }
-              </span>
-              <button
-                type="button"
-                className="monitoring-mode-trigger"
-                disabled={monitoringEnabled}
-                aria-haspopup="listbox"
-                aria-expanded={monitorModeOpen}
-                onClick={() => setMonitorModeOpen((open) => !open)}
-              >
-                {(() => {
-                  const selected = MONITORING_MODES.find(
-                    (mode) => mode.id === monitorMode,
-                  );
-                  const Icon = selected.Icon;
-                  return (
-                    <>
-                      <Icon size={15} />
-                      <span>{selected.title}</span>
-                      <ChevronDown size={15} />
-                    </>
-                  );
-                })()}
-              </button>
-              {monitorModeOpen && (
-                <div
-                  className="monitoring-mode-menu"
-                  role="listbox"
-                  aria-label="Режим прослушивания"
-                >
-                  <div className="monitoring-mode-menu-title">
-                    Выберите способ прослушивания
-                  </div>
-                  {MONITORING_MODES.map(({ id, title, description, Icon }) => {
-                    const selected = id === monitorMode;
-                    return (
-                      <button
-                        type="button"
-                        role="option"
-                        aria-selected={selected}
-                        key={id}
-                        className={`monitoring-mode-option ${selected ? "is-selected" : ""}`}
-                        onClick={() => {
-                          setMonitorMode(id);
-                          setMonitorModeOpen(false);
-                        }}
-                      >
-                        <Icon size={17} />
-                        <span className="monitoring-mode-option-copy">
-                          <strong>{title}</strong>
-                          <small>{description}</small>
-                        </span>
-                        {selected && (
-                          <Check className="monitoring-mode-check" size={17} />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-            <label className="microphone-gain-setting">
-              Громкость микрофона: {Math.round((microphoneVolume / 4) * 100)}%
-              <input
-                type="range"
-                min="0"
-                max="4"
-                step="0.05"
-                value={microphoneVolume}
-                onChange={(event) => {
-                  const value = Number(event.target.value);
-                  setMicrophoneVolume(value);
-                  if (browserMonitorRef.current)
-                    browserMonitorRef.current.gainNode.gain.value = value;
-                }}
-                onPointerUp={(event) =>
-                  updateMicrophone({
-                    volume: Number(event.currentTarget.value),
-                  })
-                }
-                onKeyUp={(event) => {
-                  if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
-                    updateMicrophone({
-                      volume: Number(event.currentTarget.value),
-                    });
+                <label
+                  className={
+                    audioDriver === "asio" ? "advanced-audio-setting" : ""
                   }
-                }}
-              />
-            </label>
-            <label className="microphone-monitoring">
-              <input
-                type="checkbox"
-                checked={monitoringEnabled}
-                onChange={(event) => setDirectMonitoring(event.target.checked)}
-              />
-              Прослушивать с этого устройства
-            </label>
-            <div className="microphone-level">
-              <div>
-                Уровень:{" "}
-                {signal
-                  ? `${signal.rms_db} дБFS${signal.clipping ? " · перегрузка" : signal.silent ? " · тихо" : ""}`
-                  : "проверяем…"}
-              </div>
-              <div className="microphone-level-track">
+                >
+                  Устройство ввода
+                  <Dropdown
+                    value={audioSettings?.input_device_id ?? ""}
+                    onChange={(value) =>
+                      updateMicrophone({
+                        input_device_id: value === "" ? null : Number(value),
+                      })
+                    }
+                    options={[
+                      { value: "", label: "По умолчанию" },
+                      ...(devices || []).map((device) => ({
+                        value: device.index,
+                        label: device.name,
+                      })),
+                    ]}
+                  />
+                </label>
+                <label className="audio-driver-setting">
+                  Аудиодрайвер
+                  <Dropdown
+                    value={audioDriver}
+                    disabled={monitoringEnabled}
+                    onChange={async (value) => {
+                      setAudioDriver(value);
+                      await updateMicrophone({ audio_driver: value });
+                    }}
+                    options={[
+                      { value: "auto", label: "Авто · Windows / PortAudio" },
+                      ...((asioDrivers || []).length
+                        ? [
+                            {
+                              value: "asio",
+                              label: "ASIO · минимальная задержка",
+                            },
+                          ]
+                        : []),
+                    ]}
+                  />
+                  {!(asioDrivers || []).length && (
+                    <small>
+                      ASIO появится после установки драйвера аудиоинтерфейса.
+                    </small>
+                  )}
+                </label>
+                {audioDriver === "asio" && (
+                  <label className="asio-driver-setting">
+                    ASIO-драйвер
+                    <Dropdown
+                      value={asioDriverName}
+                      disabled={monitoringEnabled}
+                      onChange={async (value) => {
+                        setAsioDriverName(value);
+                        await updateMicrophone({ asio_driver_name: value });
+                      }}
+                      options={(asioDrivers || []).map((driver) => ({
+                        value: driver.name,
+                        label: driver.name,
+                      }))}
+                    />
+                    <small>
+                      Для Audient выбран нативный драйвер аудиоинтерфейса.
+                    </small>
+                  </label>
+                )}
+                <label className="advanced-audio-setting">
+                  Буфер аудио
+                  <Dropdown
+                    value={audioBufferSize}
+                    disabled={monitoringEnabled}
+                    onChange={async (value) => {
+                      const bufferSize = Number(value);
+                      setAudioBufferSize(bufferSize);
+                      await updateMicrophone({ buffer_size: bufferSize });
+                    }}
+                    options={[32, 64, 128, 256, 512].map((value) => ({
+                      value,
+                      label: `${value} samples`,
+                    }))}
+                  />
+                </label>
+                <label className="advanced-audio-setting">
+                  Выход прямого мониторинга
+                  <Dropdown
+                    value={directOutputDeviceId}
+                    disabled={monitoringEnabled}
+                    onChange={async (value) => {
+                      const deviceId = value === "" ? null : Number(value);
+                      setDirectOutputDeviceId(value);
+                      await updateMicrophone({ output_device_id: deviceId });
+                    }}
+                    options={[
+                      { value: "", label: "Системное устройство по умолчанию" },
+                      ...(directOutputDevices || []).map((device) => ({
+                        value: device.index,
+                        label: device.name,
+                      })),
+                    ]}
+                  />
+                  <small>
+                    Для минимальной задержки выберите выход того же
+                    аудиоинтерфейса.
+                  </small>
+                </label>
+                <label className="legacy-browser-monitoring">
+                  Вход для прослушивания
+                  <Dropdown
+                    value={monitorInputDeviceId}
+                    disabled={monitoringEnabled}
+                    onChange={setMonitorInputDeviceId}
+                    options={[
+                      { value: "default", label: "Системное по умолчанию" },
+                      ...browserAudioDevices.inputs.map((device) => ({
+                        value: device.deviceId,
+                        label: device.label || "Микрофон",
+                      })),
+                    ]}
+                  />
+                </label>
+                <label className="legacy-browser-monitoring">
+                  Выход для прослушивания
+                  <Dropdown
+                    value={monitorOutputDeviceId}
+                    disabled={monitoringEnabled}
+                    onChange={setMonitorOutputDeviceId}
+                    options={[
+                      { value: "default", label: "Системное по умолчанию" },
+                      ...browserAudioDevices.outputs.map((device) => ({
+                        value: device.deviceId,
+                        label: device.label || "Аудиоустройство",
+                      })),
+                    ]}
+                  />
+                </label>
+                <label className="legacy-browser-monitoring">
+                  Режим задержки
+                  <Dropdown
+                    value={monitorLatencyHint}
+                    disabled={monitoringEnabled}
+                    onChange={setMonitorLatencyHint}
+                    options={[
+                      { value: "interactive", label: "Низкая задержка" },
+                      { value: "balanced", label: "Автоматический" },
+                      {
+                        value: "playback",
+                        label: "Стабильное воспроизведение",
+                      },
+                    ]}
+                  />
+                </label>
                 <div
-                  className="microphone-level-fill"
-                  style={{ width: `${microphoneLevel}%` }}
-                />
-              </div>
-              <span>{Math.round(microphoneLevel)}%</span>
-            </div>
-            <div className="microphone-effects">
-              <div className="microphone-effects-title">Эффекты микрофона</div>
-              <SliderField
-                label="Reverb"
-                value={microphoneEffects.reverb}
-                min={0}
-                max={1}
-                step={0.05}
-                display={`${Math.round(microphoneEffects.reverb * 100)}%`}
-                onChange={(value) => {
-                  setMicrophoneEffects((effects) => ({ ...effects, reverb: value }));
-                }}
-                onCommit={(value) => updateMicrophone({ reverb: value })}
-              />
-              <SliderField
-                label="Echo"
-                value={microphoneEffects.echo}
-                min={0}
-                max={1}
-                step={0.05}
-                display={`${Math.round(microphoneEffects.echo * 100)}%`}
-                onChange={(value) => {
-                  setMicrophoneEffects((effects) => ({ ...effects, echo: value }));
-                }}
-                onCommit={(value) => updateMicrophone({ echo: value })}
-              />
-              <SliderField
-                label="Delay"
-                value={microphoneEffects.delay}
-                min={0}
-                max={1}
-                step={0.05}
-                display={`${Math.round(microphoneEffects.delay * 100)}%`}
-                onChange={(value) => {
-                  setMicrophoneEffects((effects) => ({ ...effects, delay: value }));
-                }}
-                onCommit={(value) => updateMicrophone({ delay: value })}
-              />
-              <small>
-                0% — эффект полностью выключен. Изменения слышны в мониторинге;
-                для ASIO они применяются после отпускания ползунка.
-              </small>
-            </div>
+                  className="monitoring-mode-picker legacy-browser-monitoring"
+                  ref={monitorModeMenuRef}
+                >
+                  <span>
+                    {
+                      "\u0420\u0435\u0436\u0438\u043c \u043f\u0440\u043e\u0441\u043b\u0443\u0448\u0438\u0432\u0430\u043d\u0438\u044f"
+                    }
+                  </span>
+                  <button
+                    type="button"
+                    className="monitoring-mode-trigger"
+                    disabled={monitoringEnabled}
+                    aria-haspopup="listbox"
+                    aria-expanded={monitorModeOpen}
+                    onClick={() => setMonitorModeOpen((open) => !open)}
+                  >
+                    {(() => {
+                      const selected = MONITORING_MODES.find(
+                        (mode) => mode.id === monitorMode,
+                      );
+                      const Icon = selected.Icon;
+                      return (
+                        <>
+                          <Icon size={15} />
+                          <span>{selected.title}</span>
+                          <ChevronDown size={15} />
+                        </>
+                      );
+                    })()}
+                  </button>
+                  {monitorModeOpen && (
+                    <div
+                      className="monitoring-mode-menu"
+                      role="listbox"
+                      aria-label="Режим прослушивания"
+                    >
+                      <div className="monitoring-mode-menu-title">
+                        Выберите способ прослушивания
+                      </div>
+                      {MONITORING_MODES.map(
+                        ({ id, title, description, Icon }) => {
+                          const selected = id === monitorMode;
+                          return (
+                            <button
+                              type="button"
+                              role="option"
+                              aria-selected={selected}
+                              key={id}
+                              className={`monitoring-mode-option ${selected ? "is-selected" : ""}`}
+                              onClick={() => {
+                                setMonitorMode(id);
+                                setMonitorModeOpen(false);
+                              }}
+                            >
+                              <Icon size={17} />
+                              <span className="monitoring-mode-option-copy">
+                                <strong>{title}</strong>
+                                <small>{description}</small>
+                              </span>
+                              {selected && (
+                                <Check
+                                  className="monitoring-mode-check"
+                                  size={17}
+                                />
+                              )}
+                            </button>
+                          );
+                        },
+                      )}
+                    </div>
+                  )}
+                </div>
+                <label className="microphone-gain-setting">
+                  Громкость микрофона:{" "}
+                  {Math.round((microphoneVolume / 4) * 100)}%
+                  <input
+                    type="range"
+                    min="0"
+                    max="4"
+                    step="0.05"
+                    value={microphoneVolume}
+                    onChange={(event) => {
+                      const value = Number(event.target.value);
+                      setMicrophoneVolume(value);
+                      if (browserMonitorRef.current)
+                        browserMonitorRef.current.gainNode.gain.value = value;
+                    }}
+                    onPointerUp={(event) =>
+                      updateMicrophone({
+                        volume: Number(event.currentTarget.value),
+                      })
+                    }
+                    onKeyUp={(event) => {
+                      if (
+                        ["ArrowLeft", "ArrowRight", "Home", "End"].includes(
+                          event.key,
+                        )
+                      ) {
+                        updateMicrophone({
+                          volume: Number(event.currentTarget.value),
+                        });
+                      }
+                    }}
+                  />
+                </label>
+                <label className="microphone-monitoring">
+                  <input
+                    type="checkbox"
+                    checked={monitoringEnabled}
+                    onChange={(event) =>
+                      setDirectMonitoring(event.target.checked)
+                    }
+                  />
+                  Прослушивать с этого устройства
+                </label>
+                <div className="microphone-level">
+                  <div>
+                    Уровень:{" "}
+                    {signal
+                      ? `${signal.rms_db} дБFS${signal.clipping ? " · перегрузка" : signal.silent ? " · тихо" : ""}`
+                      : "проверяем…"}
+                  </div>
+                  <div className="microphone-level-track">
+                    <div
+                      className="microphone-level-fill"
+                      style={{ width: `${microphoneLevel}%` }}
+                    />
+                  </div>
+                  <span>{Math.round(microphoneLevel)}%</span>
+                </div>
+                <div className="microphone-effects">
+                  <div className="microphone-effects-title">
+                    Эффекты микрофона
+                  </div>
+                  <SliderField
+                    label="Reverb"
+                    value={microphoneEffects.reverb}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    display={`${Math.round(microphoneEffects.reverb * 100)}%`}
+                    onChange={(value) => {
+                      setMicrophoneEffects((effects) => ({
+                        ...effects,
+                        reverb: value,
+                      }));
+                    }}
+                    onCommit={(value) => updateMicrophone({ reverb: value })}
+                  />
+                  <SliderField
+                    label="Echo"
+                    value={microphoneEffects.echo}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    display={`${Math.round(microphoneEffects.echo * 100)}%`}
+                    onChange={(value) => {
+                      setMicrophoneEffects((effects) => ({
+                        ...effects,
+                        echo: value,
+                      }));
+                    }}
+                    onCommit={(value) => updateMicrophone({ echo: value })}
+                  />
+                  <SliderField
+                    label="Delay"
+                    value={microphoneEffects.delay}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    display={`${Math.round(microphoneEffects.delay * 100)}%`}
+                    onChange={(value) => {
+                      setMicrophoneEffects((effects) => ({
+                        ...effects,
+                        delay: value,
+                      }));
+                    }}
+                    onCommit={(value) => updateMicrophone({ delay: value })}
+                  />
+                  <small>
+                    0% — эффект полностью выключен. Изменения слышны в
+                    мониторинге; для ASIO они применяются после отпускания
+                    ползунка.
+                  </small>
+                </div>
               </div>
             )}
           </div>
@@ -2063,7 +2107,12 @@ export default function Karaoke({ onOpenAppSettings }) {
             <span>Мелодическая карта</span>
             <strong>{song.title}</strong>
           </div>
-          <button className="btn btn-ghost" aria-label="Назад на 5 секунд" title="Назад на 5 секунд" onClick={() => skip(-5)}>
+          <button
+            className="btn btn-ghost"
+            aria-label="Назад на 5 секунд"
+            title="Назад на 5 секунд"
+            onClick={() => skip(-5)}
+          >
             <SkipBack size={16} />
           </button>
           <button
@@ -2074,10 +2123,20 @@ export default function Karaoke({ onOpenAppSettings }) {
           >
             {isPlaying ? <Pause size={18} /> : <Play size={18} />}
           </button>
-          <button className="btn btn-ghost" aria-label="Остановить" title="Остановить" onClick={() => stop()}>
+          <button
+            className="btn btn-ghost"
+            aria-label="Остановить"
+            title="Остановить"
+            onClick={() => stop()}
+          >
             <Square size={16} />
           </button>
-          <button className="btn btn-ghost" aria-label="Вперёд на 5 секунд" title="Вперёд на 5 секунд" onClick={() => skip(5)}>
+          <button
+            className="btn btn-ghost"
+            aria-label="Вперёд на 5 секунд"
+            title="Вперёд на 5 секунд"
+            onClick={() => skip(5)}
+          >
             <SkipForward size={16} />
           </button>
           <div className="karaoke-corner-actions">
@@ -2122,11 +2181,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   );
 }
 
-function KaraokeLyricLine({
-  line,
-  currentTime,
-  className,
-}) {
+function KaraokeLyricLine({ line, currentTime, className }) {
   const words = line.words?.length
     ? line.words
     : line.text
@@ -2144,9 +2199,10 @@ function KaraokeLyricLine({
     const start = Number.isFinite(declaredStart)
       ? declaredStart
       : line.start + (passedWeight / totalWeight) * (line.end - line.start);
-    const end = Number.isFinite(declaredEnd) && declaredEnd > start
-      ? declaredEnd
-      : start + weight * (line.end - line.start);
+    const end =
+      Number.isFinite(declaredEnd) && declaredEnd > start
+        ? declaredEnd
+        : start + weight * (line.end - line.start);
     passedWeight += Math.max(word.text.length, 1);
     return { start, end };
   });
