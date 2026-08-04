@@ -12,6 +12,7 @@ __pycache__/
 venv/
 env/
 ENV/
+backend/build-audio-monitor/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
