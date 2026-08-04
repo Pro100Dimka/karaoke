@@ -1,16 +1,16 @@
 import { SETTINGS_TABS } from "../config";
-import About from "./About";
-import Diagnostics from "./Diagnostics";
 import History from "./History";
 import MemoryManager from "./MemoryManager";
-import ModelManager from "./ModelManager";
+import About from "./about";
+import Diagnostics from "./diagnostics";
+import Models from "./models";
 
 export default [
   {
     id: "models",
     title: "Модели AI",
     text: "Загрузка и выбор моделей распознавания",
-    component: ModelManager
+    component: Models
   },
   {
     id: "memory",
