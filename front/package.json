@@ -19,22 +19,45 @@
     "react-router-dom": "^6.24.0"
   },
   "devDependencies": {
+    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+    "@babel/preset-env": "^7.29.7",
+    "@babel/preset-react": "^7.29.7",
     "@vitejs/plugin-react": "^4.3.1",
     "concurrently": "^8.2.2",
     "electron": "^30.0.0",
     "electron-builder": "^24.13.3",
+    "eslint": "^8.54.0",
+    "eslint-config-airbnb": "^19.0.4",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-config-react-app": "^7.0.1",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-prettier": "^5.5.6",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "prettier": "^3.9.6",
     "vite": "^5.3.1",
     "wait-on": "^7.2.0"
   },
   "build": {
     "appId": "com.karaokestudio.app",
     "productName": "Karaoke Studio",
-    "files": ["dist/**/*", "electron/**/*"],
-    "extraResources": [
-      { "from": "../backend/dist/KaraokeBackend", "to": "backend" }
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
     ],
-    "directories": { "output": "../release" },
-    "win": { "target": "nsis" },
+    "extraResources": [
+      {
+        "from": "../backend/dist/KaraokeBackend",
+        "to": "backend"
+      }
+    ],
+    "directories": {
+      "output": "../release"
+    },
+    "win": {
+      "target": "nsis"
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
@@ -42,7 +65,11 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Karaoke Studio"
     },
-    "mac": { "target": "dmg" },
-    "linux": { "target": "AppImage" }
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   }
 }

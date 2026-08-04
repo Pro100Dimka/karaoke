@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   Check,
@@ -7,23 +6,24 @@ import {
   Palette,
   Save,
   Settings2,
-  Wrench,
+  Wrench
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { api } from "../../api/client";
-import { Panel } from "../../components/ui";
 import { Dropdown } from "../../components/Dropdown";
-import { useAppDialog } from "../../components/AppDialog";
-import ModelManager from "../ModelManager";
-import MemoryManager from "../MemoryManager";
-import Diagnostics from "../Diagnostics";
-import History from "../History";
-import About from "../About";
+import { Panel } from "../../components/ui";
+import { useAppDialog } from "../../contexts/AppDialog";
+import History from "../Library/History";
+import About from "./About";
+import Diagnostics from "./Diagnostics";
+import MemoryManager from "./MemoryManager";
+import ModelManager from "./ModelManager";
 
 const TABS = [
   { id: "appearance", label: "Интерфейс", icon: Palette },
   { id: "ai", label: "AI и обработка", icon: Cpu },
   { id: "storage", label: "Файлы", icon: FolderCog },
-  { id: "service", label: "Обслуживание", icon: Wrench },
+  { id: "service", label: "Обслуживание", icon: Wrench }
 ];
 
 export default function Settings() {
@@ -95,6 +95,7 @@ export default function Settings() {
         <button
           className="btn btn-primary settings-save"
           onClick={save}
+          type="button"
           disabled={saving}
         >
           {saved ? <Check size={16} /> : <Save size={16} />}
@@ -143,7 +144,7 @@ export default function Settings() {
                       onChange={set("language")}
                       options={[
                         { value: "ru", label: "Русский" },
-                        { value: "en", label: "English" },
+                        { value: "en", label: "English" }
                       ]}
                     />
                   </SettingField>
@@ -156,7 +157,7 @@ export default function Settings() {
                       onChange={set("theme")}
                       options={[
                         { value: "dark", label: "Тёмная" },
-                        { value: "light", label: "Светлая" },
+                        { value: "light", label: "Светлая" }
                       ]}
                     />
                   </SettingField>
@@ -205,7 +206,7 @@ export default function Settings() {
                         "medium",
                         "large",
                         "turbo",
-                        "large-v3-turbo",
+                        "large-v3-turbo"
                       ].map((value) => ({ value, label: value }))}
                     />
                   </SettingField>
@@ -314,7 +315,7 @@ export default function Settings() {
 
 function SettingField({ label, hint, children }) {
   return (
-    <label className="settings-field">
+    <label className="settings-field" htmlFor={label}>
       <span>
         <strong>{label}</strong>
         {hint && <small>{hint}</small>}
@@ -325,7 +326,7 @@ function SettingField({ label, hint, children }) {
 }
 function ToggleField({ label, hint, checked, onChange }) {
   return (
-    <label className="settings-toggle">
+    <label className="settings-toggle" htmlFor={label}>
       <span>
         <strong>{label}</strong>
         <small>{hint}</small>
@@ -358,7 +359,7 @@ function ServiceScreen({ view, onBack }) {
     memory: MemoryManager,
     diagnostics: Diagnostics,
     history: History,
-    about: About,
+    about: About
   };
   const Screen = screens[view];
   return (

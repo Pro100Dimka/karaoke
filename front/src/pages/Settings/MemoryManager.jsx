@@ -4,7 +4,7 @@ import { Panel } from "../../components/ui";
 import { Dropdown } from "../../components/Dropdown";
 import { Trash2, Sparkles, FolderX } from "lucide-react";
 import { useState } from "react";
-import { useAppDialog } from "../../components/AppDialog";
+import { useAppDialog } from "../../contexts/AppDialog";
 
 const LABELS = {
   full_songs: "Песни (оригиналы)",

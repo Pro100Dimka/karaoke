@@ -1,6 +1,3 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
 import {
   Plus,
   Play,
@@ -16,16 +13,19 @@ import {
   CircleDot,
   OctagonX,
   Library as LibraryIcon,
-  UsersRound,
+  UsersRound
 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
-import { usePolling } from "../../hooks/usePolling";
-import { Panel, StatusBadge, ProgressBar } from "../../components/ui";
+import libraryNeonSpace from "../../assets/karaoke/library-neon-space.webp";
 import { AudioPlayer } from "../../components/AudioPlayer";
-import { useAppDialog } from "../../components/AppDialog";
-import libraryNeonSpace from "../assets/karaoke/library-neon-space.webp";
 import { OnlineRoomModal } from "../../components/OnlineRoomModal";
+import { Panel, StatusBadge, ProgressBar } from "../../components/ui";
+import { useAppDialog } from "../../contexts/AppDialog";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
+import { usePolling } from "../../hooks/usePolling";
 
 function formatDate(iso) {
   if (!iso) return "—";
@@ -88,13 +88,13 @@ export default function Library() {
       setAppSettings(settings);
     } catch (error) {
       await notify(
-        `Не удалось проверить настройки онлайн-режима: ${error.message}`,
+        `Не удалось проверить настройки онлайн-режима: ${error.message}`
       );
       return;
     }
     if (!settings?.online_name?.trim()) {
       await notify(
-        "Сначала укажите имя в настройках приложения — оно нужно другим участникам комнаты.",
+        "Сначала укажите имя в настройках приложения — оно нужно другим участникам комнаты."
       );
       return;
     }
@@ -106,13 +106,13 @@ export default function Library() {
         ? api.listRecordingsForSong(recordingsSong.id)
         : Promise.resolve([]),
     2500,
-    [recordingsSong?.id],
+    [recordingsSong?.id]
   );
   const { data: processingStatus } = usePolling(
     () =>
       processingSong ? api.getStatus(processingSong.id) : Promise.resolve(null),
     1000,
-    [processingSong?.id],
+    [processingSong?.id]
   );
 
   const handleAddClick = useCallback(() => fileInputRef.current?.click(), []);
@@ -128,11 +128,11 @@ export default function Library() {
         setProcessingSong(song);
       } catch (err) {
         await notify(
-          `Не удалось добавить и запустить обработку песни: ${err.message}`,
+          `Не удалось добавить и запустить обработку песни: ${err.message}`
         );
       }
     },
-    [notify],
+    [notify]
   );
 
   const handleDelete = useCallback(
@@ -140,7 +140,7 @@ export default function Library() {
       if (
         !(await confirmDialog(
           `Удалить «${song.title}»? Это удалит все файлы песни.`,
-          "Удалить песню?",
+          "Удалить песню?"
         ))
       )
         return;
@@ -164,8 +164,8 @@ export default function Library() {
       infoSong?.id,
       notify,
       processingSong?.id,
-      recordingsSong?.id,
-    ],
+      recordingsSong?.id
+    ]
   );
 
   const handleProcess = useCallback(
@@ -177,7 +177,7 @@ export default function Library() {
         await notify(`Не удалось запустить обработку: ${err.message}`);
       }
     },
-    [notify],
+    [notify]
   );
 
   const handleReprocess = useCallback(
@@ -189,7 +189,7 @@ export default function Library() {
         await notify(`Не удалось переобработать MIDI: ${err.message}`);
       }
     },
-    [notify],
+    [notify]
   );
 
   const handleOpenFolder = useCallback(
@@ -200,7 +200,7 @@ export default function Library() {
       }
       window.electronAPI?.openSongFolder(song.output_dir || "");
     },
-    [notify],
+    [notify]
   );
 
   const handleDeleteRecording = useCallback(
@@ -212,7 +212,7 @@ export default function Library() {
         await notify(`Не удалось удалить запись: ${err.message}`);
       }
     },
-    [confirmDialog, notify],
+    [confirmDialog, notify]
   );
 
   const cancelProcessing = useCallback(async () => {
@@ -229,7 +229,7 @@ export default function Library() {
   }, [confirmDialog, notify, processingSong]);
 
   const localVisibleSongs = (songs || []).filter(
-    (song) => !hiddenSongIds.has(song.id),
+    (song) => !hiddenSongIds.has(song.id)
   );
   const visibleSongs =
     sharedRoom?.room &&
@@ -239,7 +239,7 @@ export default function Library() {
       : localVisibleSongs;
   const librarySyncSignature = useMemo(
     () => JSON.stringify(localVisibleSongs),
-    [songs, hiddenSongIds],
+    [songs, hiddenSongIds]
   );
   useEffect(() => {
     if (!sharedRoom?.room?.host) return;
@@ -247,17 +247,17 @@ export default function Library() {
   }, [
     librarySyncSignature,
     sharedRoom?.participants?.length,
-    sharedRoom?.room?.host,
+    sharedRoom?.room?.host
   ]);
   const filtered = visibleSongs.filter((s) =>
     [s.title, s.artist, s.genre]
       .filter(Boolean)
       .join(" ")
       .toLowerCase()
-      .includes(query.toLowerCase()),
+      .includes(query.toLowerCase())
   );
   const readyCount = visibleSongs.filter(
-    (song) => song.status === "done",
+    (song) => song.status === "done"
   ).length;
 
   return (
@@ -330,12 +330,20 @@ export default function Library() {
         actions={
           <div style={{ display: "flex", gap: 8 }}>
             {!sharedRoom?.room && (
-              <button className="btn btn-ghost" onClick={openOnlineRoom}>
+              <button
+                className="btn btn-ghost"
+                onClick={openOnlineRoom}
+                type="button"
+              >
                 <UsersRound size={15} /> Петь вместе
               </button>
             )}
             {canManageLibrary && (
-              <button className="btn btn-primary" onClick={handleAddClick}>
+              <button
+                className="btn btn-primary"
+                onClick={handleAddClick}
+                type="button"
+              >
                 <Plus size={15} /> Добавить песню
               </button>
             )}
@@ -357,7 +365,7 @@ export default function Library() {
                 position: "absolute",
                 left: 10,
                 top: 10,
-                color: "var(--text-muted)",
+                color: "var(--text-muted)"
               }}
             />
             <input
@@ -370,12 +378,20 @@ export default function Library() {
           </div>
           <div className="library-toolbar-actions">
             {!sharedRoom?.room && (
-              <button className="btn btn-ghost" onClick={openOnlineRoom}>
+              <button
+                className="btn btn-ghost"
+                onClick={openOnlineRoom}
+                type="button"
+              >
                 <UsersRound size={15} /> Петь вместе
               </button>
             )}
             {canManageLibrary && (
-              <button className="btn btn-primary" onClick={handleAddClick}>
+              <button
+                className="btn btn-primary"
+                onClick={handleAddClick}
+                type="button"
+              >
                 <Plus size={15} /> Добавить песню
               </button>
             )}
@@ -403,19 +419,19 @@ export default function Library() {
                   const y = (event.clientY - rect.top) / rect.height - 0.5;
                   event.currentTarget.style.setProperty(
                     "--tilt-x",
-                    `${-y * 7}deg`,
+                    `${-y * 7}deg`
                   );
                   event.currentTarget.style.setProperty(
                     "--tilt-y",
-                    `${x * 7}deg`,
+                    `${x * 7}deg`
                   );
                   event.currentTarget.style.setProperty(
                     "--glow-x",
-                    `${(x + 0.5) * 100}%`,
+                    `${(x + 0.5) * 100}%`
                   );
                   event.currentTarget.style.setProperty(
                     "--glow-y",
-                    `${(y + 0.5) * 100}%`,
+                    `${(y + 0.5) * 100}%`
                   );
                 }}
                 onPointerLeave={(event) => {
@@ -432,10 +448,10 @@ export default function Library() {
                           key={index}
                           style={{
                             height: `${height}%`,
-                            animationDelay: `${(cardIndex + index) * -85}ms`,
+                            animationDelay: `${(cardIndex + index) * -85}ms`
                           }}
                         />
-                      ),
+                      )
                     )}
                   </div>
                 </div>
@@ -463,6 +479,7 @@ export default function Library() {
                     <button
                       className="library-song-card-progress"
                       onClick={() => setProcessingSong(song)}
+                      type="button"
                     >
                       <ProgressBar percent={song.progress_percent} />
                       <span>{song.progress_percent}% · Открыть обработку</span>
@@ -484,6 +501,7 @@ export default function Library() {
                         <>
                           <button
                             className="btn btn-primary"
+                            type="button"
                             onClick={async () => {
                               if (sharedRoom?.room) {
                                 const readyLocally =
@@ -491,7 +509,7 @@ export default function Library() {
                                 if (!readyLocally) return;
                               }
                               navigate("/karaoke", {
-                                state: { songId: song.id },
+                                state: { songId: song.id }
                               });
                             }}
                           >
@@ -501,6 +519,7 @@ export default function Library() {
                             className="btn btn-ghost"
                             title="Прослушать записи"
                             onClick={() => setRecordingsSong(song)}
+                            type="button"
                           >
                             <Headphones size={16} />
                           </button>
@@ -509,6 +528,7 @@ export default function Library() {
                         <button
                           className="btn btn-primary"
                           disabled={isWorking}
+                          type="button"
                           onClick={() => handleProcess(song)}
                         >
                           <Play size={15} fill="currentColor" /> Обработать
@@ -518,9 +538,10 @@ export default function Library() {
                         <button
                           className="btn btn-ghost"
                           title="Настройки песни"
+                          type="button"
                           onClick={() => {
                             navigate("/song-settings", {
-                              state: { songId: song.id },
+                              state: { songId: song.id }
                             });
                           }}
                         >
@@ -530,6 +551,7 @@ export default function Library() {
                       {canManageLibrary && (
                         <button
                           className="btn btn-ghost"
+                          type="button"
                           title="Открыть папку"
                           onClick={() => {
                             handleOpenFolder(song);
@@ -541,6 +563,7 @@ export default function Library() {
                       {canManageLibrary && isReady && (
                         <button
                           className="btn btn-ghost"
+                          type="button"
                           title="Переобработать MIDI"
                           onClick={() => {
                             handleReprocess(song);
@@ -552,6 +575,7 @@ export default function Library() {
                       {canManageLibrary && (
                         <button
                           className="btn btn-danger"
+                          type="button"
                           title="Удалить"
                           onClick={() => handleDelete(song)}
                         >
@@ -588,7 +612,7 @@ export default function Library() {
               display: "grid",
               gridTemplateColumns: "repeat(3, 1fr)",
               gap: 12,
-              fontSize: 13,
+              fontSize: 13
             }}
           >
             <div>
@@ -619,6 +643,7 @@ export default function Library() {
           <button
             className="btn btn-ghost"
             style={{ marginTop: 12 }}
+            type="button"
             onClick={() => setInfoSong(null)}
           >
             Закрыть
@@ -673,13 +698,14 @@ export default function Library() {
                     <div className="song-recording-item-actions">
                       <button
                         className="btn btn-ghost"
+                        type="button"
                         onClick={() => {
                           setRecordingsSong(null);
                           navigate("/analysis", {
                             state: {
                               songId: recordingsSong.id,
-                              recordingId: recording.id,
-                            },
+                              recordingId: recording.id
+                            }
                           });
                         }}
                       >
@@ -689,6 +715,7 @@ export default function Library() {
                         className="btn btn-danger"
                         title="Удалить запись"
                         onClick={() => handleDeleteRecording(recording)}
+                        type="button"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -703,7 +730,7 @@ export default function Library() {
               )}
             </section>
           </div>,
-          document.body,
+          document.body
         )}
       {processingSong &&
         createPortal(
@@ -741,7 +768,7 @@ export default function Library() {
                   {Math.round(
                     processingStatus?.progress_percent ??
                       processingSong.progress_percent ??
-                      0,
+                      0
                   )}
                   %
                 </b>
@@ -773,7 +800,11 @@ export default function Library() {
               <div className="processing-modal-actions">
                 {(processingStatus?.status === "processing" ||
                   processingStatus?.status === "queued") && (
-                  <button className="btn btn-danger" onClick={cancelProcessing}>
+                  <button
+                    className="btn btn-danger"
+                    onClick={cancelProcessing}
+                    type="button"
+                  >
                     <OctagonX size={15} /> Отменить
                   </button>
                 )}
@@ -782,14 +813,16 @@ export default function Library() {
                     <button
                       className="btn btn-ghost"
                       onClick={() => setProcessingSong(null)}
+                      type="button"
                     >
                       <LibraryIcon size={15} /> В библиотеку
                     </button>
                     <button
                       className="btn btn-primary"
+                      type="button"
                       onClick={() =>
                         navigate("/karaoke", {
-                          state: { songId: processingSong.id },
+                          state: { songId: processingSong.id }
                         })
                       }
                     >
@@ -800,7 +833,7 @@ export default function Library() {
               </div>
             </section>
           </div>,
-          document.body,
+          document.body
         )}
     </div>
   );

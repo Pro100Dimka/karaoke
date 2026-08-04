@@ -4,7 +4,7 @@ import { api } from "../../api/client";
 import { usePolling } from "../../hooks/usePolling";
 import { Panel } from "../../components/ui";
 import { Dropdown } from "../../components/Dropdown";
-import { useAppDialog } from "../../components/AppDialog";
+import { useAppDialog } from "../../contexts/AppDialog";
 
 const DIFFICULTIES = ["Лёгкий", "Средний", "Сложный", "Эксперт"];
 

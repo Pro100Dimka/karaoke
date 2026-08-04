@@ -27,7 +27,7 @@ import {
 import { api } from "../../api/client";
 import { usePolling } from "../../hooks/usePolling";
 import { Dropdown } from "../../components/Dropdown";
-import { useAppDialog } from "../../components/AppDialog";
+import { useAppDialog } from "../../contexts/AppDialog";
 import { KARAOKE_THEMES, shuffleThemes } from "../../assets/karaoke/themes";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 

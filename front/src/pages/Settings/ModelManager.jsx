@@ -1,7 +1,7 @@
 import { api } from "../../api/client";
 import { usePolling } from "../../hooks/usePolling";
 import { Panel } from "../../components/ui";
-import { useAppDialog } from "../../components/AppDialog";
+import { useAppDialog } from "../../contexts/AppDialog";
 import { Download, Trash2, CheckCircle2 } from "lucide-react";
 
 export default function ModelManager() {
