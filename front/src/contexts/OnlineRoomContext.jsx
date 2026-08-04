@@ -5,14 +5,14 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
+  useState
 } from "react";
+import { api } from "../api/client";
 import {
   normalizeRoomId,
   OnlineRoomClient,
-  OnlineVoiceMesh,
+  OnlineVoiceMesh
 } from "../services/onlineRoom";
-import { api } from "../api/client";
 
 const OnlineRoomContext = createContext(null);
 
@@ -113,7 +113,12 @@ export function OnlineRoomProvider({ children }) {
       }
       applyRemoteAudioMute();
     },
-    [applyRemoteAudioMute, microphoneMuted, restoreApplicationAudio, setMicrophoneMuted],
+    [
+      applyRemoteAudioMute,
+      microphoneMuted,
+      restoreApplicationAudio,
+      setMicrophoneMuted
+    ]
   );
 
   const leaveRoom = useCallback(async () => {
@@ -157,7 +162,9 @@ export function OnlineRoomProvider({ children }) {
         remoteAudioRef.current.set(participantId, audio);
         applyRemoteAudioMute();
         audio.play().catch(() => {
-          setVoiceError("Нажмите в любом месте приложения, чтобы разрешить звук комнаты.");
+          setVoiceError(
+            "Нажмите в любом месте приложения, чтобы разрешить звук комнаты."
+          );
         });
       };
       voice.onPeerClosed = removeRemoteAudio;
@@ -174,13 +181,13 @@ export function OnlineRoomProvider({ children }) {
               clientRef.current?.send("sync", {
                 state: {
                   type: "open-karaoke",
-                  songId: pendingCommand.songId,
-                },
+                  songId: pendingCommand.songId
+                }
               });
             }
             setRoomCommand({
               ...pendingCommand,
-              __eventId: `import-${Date.now()}-${Math.random()}`,
+              __eventId: `import-${Date.now()}-${Math.random()}`
             });
           }
         } catch (error) {
@@ -190,25 +197,29 @@ export function OnlineRoomProvider({ children }) {
 
       unsubscribeRef.current = client.onMessage((message) => {
         if (message.type === "room-state") {
-          const self = message.self;
+          const { self } = message;
           if (self) {
             setRoom({
               id: normalizeRoomId(id),
               selfId: self.id,
               host: self.role === "host",
-              role: self.role,
+              role: self.role
             });
           }
           setParticipants(message.participants || []);
           return;
         }
         if (message.type === "participant-joined") {
-          setParticipants((items) => upsertParticipant(items, message.participant));
+          setParticipants((items) =>
+            upsertParticipant(items, message.participant)
+          );
           voice.invite(message.participant?.id).catch(() => {});
           return;
         }
         if (message.type === "participant-updated") {
-          setParticipants((items) => upsertParticipant(items, message.participant));
+          setParticipants((items) =>
+            upsertParticipant(items, message.participant)
+          );
           return;
         }
         if (message.type === "self-updated" && message.self) {
@@ -216,13 +227,13 @@ export function OnlineRoomProvider({ children }) {
             ...(roomRef.current || {}),
             selfId: message.self.id,
             host: message.self.role === "host",
-            role: message.self.role,
+            role: message.self.role
           });
           return;
         }
         if (message.type === "participant-left") {
           setParticipants((items) =>
-            items.filter((item) => item.id !== message.participantId),
+            items.filter((item) => item.id !== message.participantId)
           );
           voice.removePeer(message.participantId);
           return;
@@ -235,7 +246,7 @@ export function OnlineRoomProvider({ children }) {
           setRoomUi((current) => ({
             ...current,
             ...(message.state || {}),
-            __eventId: `${Date.now()}-${Math.random()}`,
+            __eventId: `${Date.now()}-${Math.random()}`
           }));
           return;
         }
@@ -247,44 +258,54 @@ export function OnlineRoomProvider({ children }) {
             command.requesterId &&
             command.songId
           ) {
-            api.exportSongPackage(command.songId).then((blob) => {
-              setVoiceError(`Передаём песню участнику…`);
-              return voice.sendFile(command.requesterId, blob, {
-                kind: "song-package",
-                songId: command.songId,
-                filename: `${command.songId}.karaoke.zip`,
+            api
+              .exportSongPackage(command.songId)
+              .then((blob) => {
+                setVoiceError(`Передаём песню участнику…`);
+                return voice.sendFile(command.requesterId, blob, {
+                  kind: "song-package",
+                  songId: command.songId,
+                  filename: `${command.songId}.karaoke.zip`
+                });
+              })
+              .then(() => setVoiceError(""))
+              .catch((error) => {
+                setVoiceError(`Не удалось передать песню: ${error.message}`);
               });
-            }).then(() => setVoiceError("")).catch((error) => {
-              setVoiceError(`Не удалось передать песню: ${error.message}`);
-            });
             return;
           }
           if (command.type === "open-karaoke" && !roomRef.current?.host) {
-            api.getSong(command.songId).then(() => {
-              setRoomCommand({
-                ...command,
-                __eventId: `${message.sentAt || Date.now()}-${Math.random()}`,
+            api
+              .getSong(command.songId)
+              .then(() => {
+                setRoomCommand({
+                  ...command,
+                  __eventId: `${message.sentAt || Date.now()}-${Math.random()}`
+                });
+              })
+              .catch(() => {
+                pendingSongCommandRef.current = command;
+                setVoiceError("Получаем песню от ведущего…");
+                client.send("sync", {
+                  state: {
+                    type: "song-request",
+                    songId: command.songId,
+                    requesterId: roomRef.current?.selfId
+                  }
+                });
               });
-            }).catch(() => {
-              pendingSongCommandRef.current = command;
-              setVoiceError("Получаем песню от ведущего…");
-              client.send("sync", {
-                state: {
-                  type: "song-request",
-                  songId: command.songId,
-                  requesterId: roomRef.current?.selfId,
-                },
-              });
-            });
             return;
           }
           setRoomCommand({
             ...command,
-            __eventId: `${message.sentAt || Date.now()}-${Math.random()}`,
+            __eventId: `${message.sentAt || Date.now()}-${Math.random()}`
           });
           return;
         }
-        if (message.type === "connection-closed" && !intentionalDisconnectRef.current) {
+        if (
+          message.type === "connection-closed" &&
+          !intentionalDisconnectRef.current
+        ) {
           setVoiceError("Соединение с комнатой потеряно.");
           cleanupConnection();
           setRoom(null);
@@ -294,16 +315,21 @@ export function OnlineRoomProvider({ children }) {
 
       try {
         const normalizedId = await client.connect({ id, name, host });
-        voice.start().then(() => {
-          voice.setMicrophoneMuted(microphoneMuted || roomSoundMutedRef.current);
-          client.send("presence", {
-            micMuted: microphoneMuted || roomSoundMutedRef.current,
+        voice
+          .start()
+          .then(() => {
+            voice.setMicrophoneMuted(
+              microphoneMuted || roomSoundMutedRef.current
+            );
+            client.send("presence", {
+              micMuted: microphoneMuted || roomSoundMutedRef.current
+            });
+          })
+          .catch((error) => {
+            setVoiceError(
+              `Комната подключена без голоса: ${error?.message || "нет доступа к микрофону"}`
+            );
           });
-        }).catch((error) => {
-          setVoiceError(
-            `Комната подключена без голоса: ${error?.message || "нет доступа к микрофону"}`,
-          );
-        });
         return normalizedId;
       } catch (error) {
         cleanupConnection();
@@ -315,8 +341,8 @@ export function OnlineRoomProvider({ children }) {
       cleanupConnection,
       microphoneMuted,
       removeRemoteAudio,
-      setRoom,
-    ],
+      setRoom
+    ]
   );
 
   useEffect(() => () => cleanupConnection(), [cleanupConnection]);
@@ -326,7 +352,7 @@ export function OnlineRoomProvider({ children }) {
     const muteApplicationAudio = (root) => {
       const audioElements = [
         ...(root instanceof HTMLAudioElement ? [root] : []),
-        ...(root.querySelectorAll?.("audio") || []),
+        ...(root.querySelectorAll?.("audio") || [])
       ];
       audioElements.forEach((audio) => {
         if (audio.dataset.onlineRoomParticipant) return;
@@ -359,7 +385,11 @@ export function OnlineRoomProvider({ children }) {
       roomCommand,
       voiceError,
       createRoom(name) {
-        const id = crypto.randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase();
+        const id = crypto
+          .randomUUID()
+          .replaceAll("-", "")
+          .slice(0, 8)
+          .toUpperCase();
         return connect({ id, name, host: true });
       },
       joinRoom(id, name) {
@@ -395,18 +425,21 @@ export function OnlineRoomProvider({ children }) {
           clientRef.current?.send("sync", { state: command });
           return true;
         } catch {
-          pendingSongCommandRef.current = { ...command, __originatedHere: true };
+          pendingSongCommandRef.current = {
+            ...command,
+            __originatedHere: true
+          };
           setVoiceError("Получаем песню от ведущего…");
           clientRef.current?.send("sync", {
             state: {
               type: "song-request",
               songId,
-              requesterId: room.selfId,
-            },
+              requesterId: room.selfId
+            }
           });
           return false;
         }
-      },
+      }
     }),
     [
       applyRemoteAudioMute,
@@ -421,8 +454,8 @@ export function OnlineRoomProvider({ children }) {
       roomUi,
       setMicrophoneMuted,
       setRoomSoundMuted,
-      voiceError,
-    ],
+      voiceError
+    ]
   );
 
   return (
