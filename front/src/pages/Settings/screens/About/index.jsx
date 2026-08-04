@@ -1,7 +1,7 @@
 import { Mic } from "lucide-react";
-import { api } from "../../../api/client";
-import { usePolling } from "../../../hooks/usePolling";
-import { Panel } from "../../../components/ui";
+import { api } from "../../../../api/client";
+import { Panel } from "../../../../components/ui";
+import { usePolling } from "../../../../hooks/usePolling";
 
 const REACT_VERSION = "18.3.1";
 
@@ -11,7 +11,7 @@ export default function About() {
     { label: "Версия Backend", value: about?.backend_version },
     { label: "Версия React", value: REACT_VERSION },
     { label: "Версия AI", value: about?.ai_version },
-    { label: "Путь к данным", value: about?.data_dir },
+    { label: "Путь к данным", value: about?.data_dir }
   ];
 
   return (

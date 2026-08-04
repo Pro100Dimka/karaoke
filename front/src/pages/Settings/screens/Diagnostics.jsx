@@ -1,7 +1,7 @@
-import { api } from "../../api/client";
-import { usePolling } from "../../hooks/usePolling";
-import { Panel } from "../../components/ui";
 import { CheckCircle2, XCircle } from "lucide-react";
+import { api } from "../../../api/client";
+import { Panel } from "../../../components/ui";
+import { usePolling } from "../../../hooks/usePolling";
 
 function Check({ label, ok }) {
   return (
@@ -11,7 +11,7 @@ function Check({ label, ok }) {
         alignItems: "center",
         justifyContent: "space-between",
         padding: "8px 0",
-        borderBottom: "1px solid rgba(168,85,247,0.08)",
+        borderBottom: "1px solid rgba(168,85,247,0.08)"
       }}
     >
       <span style={{ fontSize: 13 }}>{label}</span>
@@ -62,7 +62,7 @@ export default function Diagnostics() {
     { label: "Whisper найден", key: "whisper_available" },
     { label: "Demucs найден", key: "demucs_available" },
     { label: "CUDA доступна", key: "cuda_available" },
-    { label: "Torch установлен", key: "torch_available" },
+    { label: "Torch установлен", key: "torch_available" }
   ];
 
   return (

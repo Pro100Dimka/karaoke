@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { api } from "../../api/client";
-import { usePolling } from "../../hooks/usePolling";
+import { Dropdown } from "../../components/fields/Dropdown";
 import { Panel } from "../../components/ui";
-import { Dropdown } from "../../components/Dropdown";
 import { useAppDialog } from "../../contexts/AppDialog";
+import { usePolling } from "../../hooks/usePolling";
 
 const DIFFICULTIES = ["Лёгкий", "Средний", "Сложный", "Эксперт"];
 
@@ -33,7 +33,8 @@ export default function SongSettings() {
       setLyricsData([]);
       return;
     }
-    let active = true;
+    const active = true;
+    // let active = true;
     api
       .getResult(song.id)
       .then((result) => {
@@ -49,9 +50,7 @@ export default function SongSettings() {
         setLyricsData([]);
         setLyricsText("");
       });
-    return () => {
-      active = false;
-    };
+    // return () => (active = false);
   }, [song?.id, song?.status]);
 
   if (!song || !form) {
@@ -73,13 +72,13 @@ export default function SongSettings() {
         .filter(Boolean);
       if (textLines.length > lyricsData.length) {
         setLyricsError(
-          "Нельзя добавить новые строки без таймингов. Сначала добавьте их при обработке песни.",
+          "Нельзя добавить новые строки без таймингов. Сначала добавьте их при обработке песни."
         );
         return false;
       }
       const lyrics = lyricsData.map((line, index) => ({
         ...line,
-        text: textLines[index] || line.text,
+        text: textLines[index] || line.text
       }));
       await api.updateLyrics(song.id, lyrics);
       setLyricsData(lyrics);
@@ -107,7 +106,7 @@ export default function SongSettings() {
         difficulty_override: form.difficulty_override,
         video_url: form.video_url?.trim() || null,
         show_lyrics: form.show_lyrics,
-        show_notes: form.show_notes,
+        show_notes: form.show_notes
       });
     } catch (err) {
       await notify(`Не удалось сохранить: ${err.message}`);
@@ -126,7 +125,7 @@ export default function SongSettings() {
           placeholder="напр. C#m"
           onChange={setEvent("key_override")}
         />
-      ),
+      )
     },
     {
       label: "Название песни",
@@ -136,7 +135,7 @@ export default function SongSettings() {
           value={form.title || ""}
           onChange={setEvent("title")}
         />
-      ),
+      )
     },
     {
       label: "Группа / исполнитель",
@@ -147,7 +146,7 @@ export default function SongSettings() {
           placeholder="Muse"
           onChange={setEvent("artist")}
         />
-      ),
+      )
     },
     {
       label: "Жанр",
@@ -158,7 +157,7 @@ export default function SongSettings() {
           placeholder="Alternative rock"
           onChange={setEvent("genre")}
         />
-      ),
+      )
     },
     {
       label: "Темп (BPM)",
@@ -171,7 +170,7 @@ export default function SongSettings() {
             set("tempo_override")(Number(e.target.value) || null)
           }
         />
-      ),
+      )
     },
     {
       label: "Диапазон нот (MIDI)",
@@ -192,7 +191,7 @@ export default function SongSettings() {
             placeholder="max"
           />
         </div>
-      ),
+      )
     },
     {
       label: "Уровень сложности",
@@ -202,10 +201,10 @@ export default function SongSettings() {
           onChange={set("difficulty_override")}
           options={[
             { value: "", label: "Авто (по AI)" },
-            ...DIFFICULTIES.map((value) => ({ value, label: value })),
+            ...DIFFICULTIES.map((value) => ({ value, label: value }))
           ]}
         />
-      ),
+      )
     },
     {
       label: "Ссылка на клип",
@@ -217,10 +216,10 @@ export default function SongSettings() {
           placeholder="https://example.com/video.mp4"
           onChange={setEvent("video_url")}
         />
-      ),
+      )
     },
     {
-      hint: "Поддерживаются YouTube-ссылки и прямые ссылки на MP4/WebM. Клип будет идти без звука и синхронно с песней.",
+      hint: "Поддерживаются YouTube-ссылки и прямые ссылки на MP4/WebM. Клип будет идти без звука и синхронно с песней."
     },
     {
       label: "Показывать текст",
@@ -230,7 +229,7 @@ export default function SongSettings() {
           checked={form.show_lyrics}
           onChange={(e) => set("show_lyrics")(e.target.checked)}
         />
-      ),
+      )
     },
     {
       label: "Показывать ноты",
@@ -240,8 +239,8 @@ export default function SongSettings() {
           checked={form.show_notes}
           onChange={(e) => set("show_notes")(e.target.checked)}
         />
-      ),
-    },
+      )
+    }
   ];
 
   return (
@@ -256,11 +255,12 @@ export default function SongSettings() {
             <FieldRow key={field.label} label={field.label}>
               {field.render()}
             </FieldRow>
-          ),
+          )
         )}
         <button
           className="btn btn-primary mt-4"
           onClick={save}
+          type="button"
           disabled={saving}
         >
           {saving ? "Сохранение..." : "Сохранить"}
@@ -291,7 +291,7 @@ function FieldRow({ label, children }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        marginBottom: 14,
+        marginBottom: 14
       }}
     >
       <span className="text-secondary" style={{ fontSize: 13 }}>

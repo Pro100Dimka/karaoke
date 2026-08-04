@@ -1,35 +1,34 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
 import {
-  Play,
-  Pause,
-  Square,
-  SkipBack,
-  SkipForward,
   ArrowLeft,
-  Maximize,
-  Type,
   AudioLines,
-  Mic,
-  Settings2,
-  Cog,
-  SlidersHorizontal,
   Check,
   ChevronDown,
-  Zap,
+  Cog,
+  Maximize,
+  Pause,
+  Play,
+  Settings2,
   ShieldCheck,
-  X,
-  Volume2,
-  VolumeX,
+  SkipBack,
+  SkipForward,
+  SlidersHorizontal,
+  Square,
   Trash2,
   Trophy,
+  Type,
+  Volume2,
+  VolumeX,
+  X,
+  Zap
 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
-import { usePolling } from "../../hooks/usePolling";
-import { Dropdown } from "../../components/Dropdown";
-import { useAppDialog } from "../../contexts/AppDialog";
 import { KARAOKE_THEMES, shuffleThemes } from "../../assets/karaoke/themes";
+import { Dropdown } from "../../components/fields/Dropdown";
+import { useAppDialog } from "../../contexts/AppDialog";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
+import { usePolling } from "../../hooks/usePolling";
 
 // ПРИМЕЧАНИЕ ПО СХЕМЕ ДАННЫХ: здесь предполагается, что lyrics.json — это
 // массив строк вида {start, end, text}, а reference.json — массив нот вида
@@ -51,14 +50,14 @@ function normalizeLyrics(raw) {
             .map((word) => ({
               text: word.word || word.text || "",
               start: Number(word.start ?? fallbackStart),
-              end: Number(word.end ?? fallbackEnd),
+              end: Number(word.end ?? fallbackEnd)
             }))
             .filter(
               (word) =>
                 word.text &&
                 Number.isFinite(word.start) &&
                 Number.isFinite(word.end) &&
-                word.end >= word.start,
+                word.end >= word.start
             )
         : [];
       // Segment boundaries can be several tenths of a second away from the
@@ -70,7 +69,7 @@ function normalizeLyrics(raw) {
         start,
         end: Math.max(start, end),
         text: line.text || line.line || "",
-        words,
+        words
       };
     })
     .filter((l) => l.text);
@@ -82,13 +81,13 @@ function normalizeNotes(raw) {
     .map((note) => ({
       start: Number(note.start),
       end: Number(note.end),
-      midi: note.midi ?? note.pitch ?? noteNameToMidi(note.note),
+      midi: note.midi ?? note.pitch ?? noteNameToMidi(note.note)
     }))
     .filter(
       (note) =>
         Number.isFinite(note.start) &&
         Number.isFinite(note.end) &&
-        Number.isFinite(note.midi),
+        Number.isFinite(note.midi)
     );
 }
 
@@ -103,7 +102,7 @@ function createLiveMicrophoneEffects(
   context,
   source,
   destination,
-  initialEffects,
+  initialEffects
 ) {
   const dry = context.createGain();
   source.connect(dry).connect(destination);
@@ -141,7 +140,7 @@ function createLiveMicrophoneEffects(
     delay.delay.delayTime.setTargetAtTime(
       0.12 + delayAmount * 0.38,
       now,
-      0.025,
+      0.025
     );
     delay.wet.gain.setTargetAtTime(delayAmount * 0.4, now, 0.025);
   };
@@ -177,7 +176,7 @@ const KEY_PITCHES = {
   A: 9,
   "A#": 10,
   Bb: 10,
-  B: 11,
+  B: 11
 };
 const SHARP_KEYS = [
   "C",
@@ -191,7 +190,7 @@ const SHARP_KEYS = [
   "G#",
   "A",
   "A#",
-  "B",
+  "B"
 ];
 function transposeKey(key, semitones) {
   if (!key) return "Тональность не определена";
@@ -252,7 +251,7 @@ function midiToWesternNote(midi) {
     "G♯",
     "A",
     "A♯",
-    "B",
+    "B"
   ];
   return `${names[((midi % 12) + 12) % 12]}${Math.floor(midi / 12) - 1}`;
 }
@@ -275,7 +274,7 @@ function createPanoramaPath() {
     xPhaseB: Math.random() * Math.PI * 2,
     xPhaseC: Math.random() * Math.PI * 2,
     yPhaseA: Math.random() * Math.PI * 2,
-    yPhaseB: Math.random() * Math.PI * 2,
+    yPhaseB: Math.random() * Math.PI * 2
   };
 }
 
@@ -285,7 +284,10 @@ function getYouTubeVideoId(url) {
     const parsed = new URL(url);
     const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
     let id = null;
-    if (host === "youtu.be") id = parsed.pathname.split("/")[1];
+    if (host === "youtu.be") {
+      const [, pathnameId] = parsed.pathname.split("/");
+      id = pathnameId;
+    }
     if (host.endsWith("youtube.com")) {
       id =
         parsed.searchParams.get("v") ||
@@ -318,15 +320,15 @@ const MONITORING_MODES = [
       "\u041f\u0440\u044f\u043c\u043e\u0439 \u0434\u0440\u0430\u0439\u0432\u0435\u0440",
     description:
       "\u041c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u0430\u044f \u0437\u0430\u0434\u0435\u0440\u0436\u043a\u0430. \u041d\u0435\u043e\u0431\u0445\u043e\u0434\u0438\u043c\u044b \u0430\u0443\u0434\u0438\u043e\u0434\u0440\u0430\u0439\u0432\u0435\u0440 \u0438 \u043d\u0430\u0443\u0448\u043d\u0438\u043a\u0438.",
-    Icon: Zap,
+    Icon: Zap
   },
   {
     id: "browser",
     title: "\u0421\u043e\u0432\u043c\u0435\u0441\u0442\u0438\u043c\u044b\u0439",
     description:
       "\u0420\u0430\u0431\u043e\u0442\u0430\u0435\u0442 \u0441 \u043e\u0431\u044b\u0447\u043d\u044b\u043c\u0438 USB-\u043c\u0438\u043a\u0440\u043e\u0444\u043e\u043d\u0430\u043c\u0438. \u0412\u043e\u0437\u043c\u043e\u0436\u043d\u0430 \u0437\u0430\u0434\u0435\u0440\u0436\u043a\u0430.",
-    Icon: ShieldCheck,
-  },
+    Icon: ShieldCheck
+  }
 ];
 
 export default function Karaoke({ onOpenAppSettings }) {
@@ -360,13 +362,13 @@ export default function Karaoke({ onOpenAppSettings }) {
   const [duration, setDuration] = useState(0);
   const [preferences] = useState(loadKaraokePreferences);
   const [musicVolume, setMusicVolume] = useState(
-    () => preferences.musicVolume ?? 1,
+    () => preferences.musicVolume ?? 1
   );
   const [vocalVolume, setVocalVolume] = useState(
-    () => preferences.vocalVolume ?? 1,
+    () => preferences.vocalVolume ?? 1
   );
   const [melodyVolume, setMelodyVolume] = useState(
-    () => preferences.melodyVolume ?? 0,
+    () => preferences.melodyVolume ?? 0
   );
   const [speed, setSpeed] = useState(() => preferences.speed ?? 1);
   // ВАЖНО: keyShift сейчас смещает только отображаемую линию мелодии
@@ -376,10 +378,10 @@ export default function Karaoke({ onOpenAppSettings }) {
   // сдвиг тональности звука — это отдельная задача.
   const [keyShift, setKeyShift] = useState(() => preferences.keyShift ?? 0);
   const [showLyrics, setShowLyrics] = useState(
-    () => preferences.showLyrics ?? true,
+    () => preferences.showLyrics ?? true
   );
   const [showNotes, setShowNotes] = useState(
-    () => preferences.showNotes ?? true,
+    () => preferences.showNotes ?? true
   );
   const [recordingSessionId, setRecordingSessionId] = useState(null);
   const [analysisRecordingId, setAnalysisRecordingId] = useState(null);
@@ -389,7 +391,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   const [microphoneEffects, setMicrophoneEffects] = useState({
     reverb: 0,
     echo: 0,
-    delay: 0,
+    delay: 0
   });
   const [microphoneControlsOpen, setMicrophoneControlsOpen] = useState(false);
   const [audioDriver, setAudioDriver] = useState("auto");
@@ -399,7 +401,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   const [monitoringEnabled, setMonitoringEnabled] = useState(false);
   const [browserAudioDevices, setBrowserAudioDevices] = useState({
     inputs: [],
-    outputs: [],
+    outputs: []
   });
   const [monitorInputDeviceId, setMonitorInputDeviceId] = useState("default");
   const [monitorOutputDeviceId, setMonitorOutputDeviceId] = useState("default");
@@ -412,7 +414,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   const themeQueueRef = useRef(shuffleThemes());
   const appliedThemeSongRef = useRef(song?.id);
   const [activeTheme, setActiveTheme] = useState(
-    () => themeQueueRef.current.pop() || KARAOKE_THEMES[0],
+    () => themeQueueRef.current.pop() || KARAOKE_THEMES[0]
   );
   const panoramaSkyRef = useRef(null);
   const panoramaClockRef = useRef(0);
@@ -432,27 +434,27 @@ export default function Karaoke({ onOpenAppSettings }) {
   const { data: devices } = usePolling(
     () => (microphoneOpen ? api.listAudioDevices() : Promise.resolve([])),
     30000,
-    [microphoneOpen],
+    [microphoneOpen]
   );
   const { data: directOutputDevices } = usePolling(
     () => (microphoneOpen ? api.listAudioOutputDevices() : Promise.resolve([])),
     30000,
-    [microphoneOpen],
+    [microphoneOpen]
   );
   const { data: asioDrivers } = usePolling(
     () => (microphoneOpen ? api.listAsioDrivers() : Promise.resolve([])),
     30000,
-    [microphoneOpen],
+    [microphoneOpen]
   );
   const { data: audioSettings } = usePolling(
     () => api.getAudioSettings(),
     30000,
-    [],
+    []
   );
   const { data: signal } = usePolling(
     () => (microphoneOpen ? api.getSignalQuality() : Promise.resolve(null)),
     1200,
-    [microphoneOpen],
+    [microphoneOpen]
   );
 
   useEffect(() => {
@@ -518,7 +520,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     setMicrophoneEffects({
       reverb: Number(audioSettings.reverb) || 0,
       echo: Number(audioSettings.echo) || 0,
-      delay: Number(audioSettings.delay) || 0,
+      delay: Number(audioSettings.delay) || 0
     });
   }, [audioSettings]);
 
@@ -534,7 +536,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     audioSettings?.audio_driver,
     audioSettings?.asio_driver_name,
     audioSettings?.buffer_size,
-    audioSettings?.monitoring_enabled,
+    audioSettings?.monitoring_enabled
   ]);
 
   useEffect(() => {
@@ -552,7 +554,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     )
       return;
     const preferred = (directOutputDevices || []).find((device) =>
-      device.name.toLowerCase().includes("audient"),
+      device.name.toLowerCase().includes("audient")
     );
     if (preferred && String(directOutputDeviceId) !== String(preferred.index)) {
       setDirectOutputDeviceId(preferred.index);
@@ -563,7 +565,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     audioSettings?.output_device_id,
     directOutputDevices,
     directOutputDeviceId,
-    microphoneOpen,
+    microphoneOpen
   ]);
 
   useEffect(() => {
@@ -574,7 +576,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     )
       return;
     const selected = (directOutputDevices || []).find(
-      (device) => String(device.index) === String(directOutputDeviceId),
+      (device) => String(device.index) === String(directOutputDeviceId)
     );
     if (!selected) return;
     navigator.mediaDevices
@@ -583,11 +585,11 @@ export default function Karaoke({ onOpenAppSettings }) {
         const output = entries.find(
           (entry) =>
             entry.kind === "audiooutput" &&
-            selected.name.toLowerCase().includes(entry.label.toLowerCase()),
+            selected.name.toLowerCase().includes(entry.label.toLowerCase())
         );
         if (!output?.deviceId) return;
         [instrumentalRef.current, vocalsRef.current, videoRef.current].forEach(
-          (media) => media?.setSinkId?.(output.deviceId).catch(() => {}),
+          (media) => media?.setSinkId?.(output.deviceId).catch(() => {})
         );
       })
       .catch(() => {});
@@ -604,7 +606,7 @@ export default function Karaoke({ onOpenAppSettings }) {
       guide?.context.close();
       melodyGuideRef.current = null;
     },
-    [],
+    []
   );
 
   useEffect(() => {
@@ -642,8 +644,8 @@ export default function Karaoke({ onOpenAppSettings }) {
         setBrowserAudioDevices({
           inputs: mediaDevices.filter((device) => device.kind === "audioinput"),
           outputs: mediaDevices.filter(
-            (device) => device.kind === "audiooutput",
-          ),
+            (device) => device.kind === "audiooutput"
+          )
         });
       })
       .catch(() => {});
@@ -684,8 +686,8 @@ export default function Karaoke({ onOpenAppSettings }) {
         speed,
         keyShift,
         showLyrics,
-        showNotes,
-      }),
+        showNotes
+      })
     );
   }, [
     musicVolume,
@@ -694,13 +696,13 @@ export default function Karaoke({ onOpenAppSettings }) {
     speed,
     keyShift,
     showLyrics,
-    showNotes,
+    showNotes
   ]);
 
   const lyrics = useMemo(() => normalizeLyrics(result?.lyrics_sync), [result]);
   const notes = useMemo(
     () => normalizeNotes(result?.reference_notes),
-    [result],
+    [result]
   );
   melodyNotesRef.current = notes;
   melodyVolumeRef.current = melodyVolume;
@@ -713,7 +715,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   const lyricTime = currentTime;
 
   const currentLineIndex = lyrics.findIndex(
-    (l) => lyricTime >= l.start && lyricTime < l.end,
+    (l) => lyricTime >= l.start && lyricTime < l.end
   );
   const currentLine = lyrics[currentLineIndex];
   const upcomingLine = lyrics.find((line) => line.start > lyricTime);
@@ -724,7 +726,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   const sendYouTubeCommand = (func, args = []) => {
     youTubeClipRef.current?.contentWindow?.postMessage(
       JSON.stringify({ event: "command", func, args }),
-      "*",
+      "*"
     );
   };
 
@@ -745,7 +747,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     const now = guide.context.currentTime;
     const volume = melodyVolumeRef.current;
     const note = melodyNotesRef.current.find(
-      (item) => position >= item.start && position < item.end,
+      (item) => position >= item.start && position < item.end
     );
     if (!note || volume <= 0) {
       guide.gain.gain.setTargetAtTime(0.0001, now, 0.018);
@@ -826,7 +828,9 @@ export default function Karaoke({ onOpenAppSettings }) {
       animationFrameId = requestAnimationFrame(updatePosition);
     };
     updatePosition();
-    return () => cancelAnimationFrame(animationFrameId);
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+    };
   }, [isPlaying]);
 
   useEffect(() => {
@@ -867,8 +871,8 @@ export default function Karaoke({ onOpenAppSettings }) {
               autoGainControl: false,
               ...(monitorInputDeviceId !== "default"
                 ? { deviceId: { exact: monitorInputDeviceId } }
-                : {}),
-            },
+                : {})
+            }
           });
           ownsStream = true;
         }
@@ -893,7 +897,7 @@ export default function Karaoke({ onOpenAppSettings }) {
             const detectedMidi = detectMidiFromAnalyser(
               analyser,
               buffer,
-              context.sampleRate,
+              context.sampleRate
             );
             if (Number.isFinite(detectedMidi)) {
               // Individual autocorrelation readings can jump by a semitone or octave.
@@ -902,7 +906,7 @@ export default function Karaoke({ onOpenAppSettings }) {
               recentMidi.push(detectedMidi);
               if (recentMidi.length > 3) recentMidi.shift();
               const sortedMidi = [...recentMidi].sort(
-                (left, right) => left - right,
+                (left, right) => left - right
               );
               const medianMidi = sortedMidi[Math.floor(sortedMidi.length / 2)];
               targetMidi = Number.isFinite(targetMidi)
@@ -938,7 +942,7 @@ export default function Karaoke({ onOpenAppSettings }) {
           if (Number.isFinite(targetMidi)) {
             const elapsedSeconds = Math.min(
               0.05,
-              Math.max(0.001, (timestamp - lastAnimationAt) / 1000),
+              Math.max(0.001, (timestamp - lastAnimationAt) / 1000)
             );
             const maxStep = 22 * elapsedSeconds;
             const difference = targetMidi - displayedMidi;
@@ -1022,7 +1026,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   }, [isPlaying, melodyVolume, keyShift]);
   useEffect(() => {
     [instrumentalRef.current, vocalsRef.current, videoRef.current].forEach(
-      (el) => el && (el.playbackRate = speed),
+      (el) => el && (el.playbackRate = speed)
     );
     sendYouTubeCommand("setPlaybackRate", [speed]);
   }, [speed]);
@@ -1047,7 +1051,7 @@ export default function Karaoke({ onOpenAppSettings }) {
           type: "karaoke-player",
           action: "pause",
           songId: song.id,
-          position: instr.currentTime,
+          position: instr.currentTime
         });
       }
       return;
@@ -1066,7 +1070,7 @@ export default function Karaoke({ onOpenAppSettings }) {
             microphoneVolume,
             microphoneEffects.reverb,
             microphoneEffects.echo,
-            microphoneEffects.delay,
+            microphoneEffects.delay
           );
           activeRecordingId = session.recording_session_id;
           setRecordingSessionId(activeRecordingId);
@@ -1092,7 +1096,7 @@ export default function Karaoke({ onOpenAppSettings }) {
         await melodyStart;
         await instr.play();
         await Promise.allSettled(
-          [voc.play(), videoRef.current?.play()].filter(Boolean),
+          [voc.play(), videoRef.current?.play()].filter(Boolean)
         );
       } catch {
         setIsPlaying(false);
@@ -1106,7 +1110,7 @@ export default function Karaoke({ onOpenAppSettings }) {
         type: "karaoke-player",
         action: "play",
         songId: song.id,
-        position: instr.currentTime,
+        position: instr.currentTime
       });
     }
   };
@@ -1130,7 +1134,7 @@ export default function Karaoke({ onOpenAppSettings }) {
         type: "karaoke-player",
         action: "stop",
         songId: song.id,
-        position: 0,
+        position: 0
       });
     }
     if (recordingSessionId) {
@@ -1165,7 +1169,7 @@ export default function Karaoke({ onOpenAppSettings }) {
       if (updated.volume != null) setMicrophoneVolume(updated.volume);
     } catch (error) {
       setRecordingError(
-        `Не удалось сохранить настройки микрофона: ${error.message}`,
+        `Не удалось сохранить настройки микрофона: ${error.message}`
       );
     }
   };
@@ -1192,8 +1196,8 @@ export default function Karaoke({ onOpenAppSettings }) {
           channelCount: 1,
           ...(monitorInputDeviceId !== "default"
             ? { deviceId: { exact: monitorInputDeviceId } }
-            : {}),
-        },
+            : {})
+        }
       });
       const context = new AudioContext({ latencyHint: monitorLatencyHint });
       if (
@@ -1212,7 +1216,7 @@ export default function Karaoke({ onOpenAppSettings }) {
         context,
         stereo,
         gainNode,
-        microphoneEffects,
+        microphoneEffects
       );
       gainNode.connect(context.destination);
       await context.resume();
@@ -1224,7 +1228,7 @@ export default function Karaoke({ onOpenAppSettings }) {
       manualMonitoringRef.current = false;
       setMonitoringEnabled(false);
       setRecordingError(
-        `Не удалось включить прослушивание микрофона: ${error.message}`,
+        `Не удалось включить прослушивание микрофона: ${error.message}`
       );
       await updateMicrophone({ monitoring_enabled: false });
     }
@@ -1249,7 +1253,7 @@ export default function Karaoke({ onOpenAppSettings }) {
       setMonitoringEnabled(false);
       if (!enabled) await api.stopDirectMonitoring().catch(() => {});
       setRecordingError(
-        `Не удалось включить прямое прослушивание: ${error.message}`,
+        `Не удалось включить прямое прослушивание: ${error.message}`
       );
     }
   };
@@ -1270,7 +1274,7 @@ export default function Karaoke({ onOpenAppSettings }) {
         type: "karaoke-player",
         action: "seek",
         songId: song.id,
-        position,
+        position
       });
     }
   };
@@ -1347,30 +1351,30 @@ export default function Karaoke({ onOpenAppSettings }) {
     const syncStageAspect = () => {
       const currentExtra =
         Number.parseFloat(
-          getComputedStyle(shell).getPropertyValue("--karaoke-nav-extra"),
+          getComputedStyle(shell).getPropertyValue("--karaoke-nav-extra")
         ) || 0;
       const fullAvailableHeight = main.clientHeight + currentExtra;
       const targetStageHeight = (main.clientWidth * 9) / 16;
       shell.style.setProperty(
         "--karaoke-nav-extra",
-        `${Math.max(0, fullAvailableHeight - targetStageHeight)}px`,
+        `${Math.max(0, fullAvailableHeight - targetStageHeight)}px`
       );
 
       const videoWidth = Math.max(
         stage.clientWidth,
-        (stage.clientHeight * 16) / 9,
+        (stage.clientHeight * 16) / 9
       );
       const videoHeight = Math.max(
         stage.clientHeight,
-        (stage.clientWidth * 9) / 16,
+        (stage.clientWidth * 9) / 16
       );
       stage.style.setProperty(
         "--karaoke-video-width",
-        `${Math.ceil(videoWidth) + 2}px`,
+        `${Math.ceil(videoWidth) + 2}px`
       );
       stage.style.setProperty(
         "--karaoke-video-height",
-        `${Math.ceil(videoHeight) + 2}px`,
+        `${Math.ceil(videoHeight) + 2}px`
       );
     };
 
@@ -1420,7 +1424,7 @@ export default function Karaoke({ onOpenAppSettings }) {
         padding: 0,
         overflow: "visible",
         position: "relative",
-        minHeight: "calc(100vh - 72px)",
+        minHeight: "calc(100vh - 72px)"
       }}
     >
       <audio
@@ -1610,15 +1614,15 @@ export default function Karaoke({ onOpenAppSettings }) {
                     value={audioSettings?.input_device_id ?? ""}
                     onChange={(value) =>
                       updateMicrophone({
-                        input_device_id: value === "" ? null : Number(value),
+                        input_device_id: value === "" ? null : Number(value)
                       })
                     }
                     options={[
                       { value: "", label: "По умолчанию" },
                       ...(devices || []).map((device) => ({
                         value: device.index,
-                        label: device.name,
-                      })),
+                        label: device.name
+                      }))
                     ]}
                   />
                 </label>
@@ -1637,10 +1641,10 @@ export default function Karaoke({ onOpenAppSettings }) {
                         ? [
                             {
                               value: "asio",
-                              label: "ASIO · минимальная задержка",
-                            },
+                              label: "ASIO · минимальная задержка"
+                            }
                           ]
-                        : []),
+                        : [])
                     ]}
                   />
                   {!(asioDrivers || []).length && (
@@ -1661,7 +1665,7 @@ export default function Karaoke({ onOpenAppSettings }) {
                       }}
                       options={(asioDrivers || []).map((driver) => ({
                         value: driver.name,
-                        label: driver.name,
+                        label: driver.name
                       }))}
                     />
                     <small>
@@ -1681,7 +1685,7 @@ export default function Karaoke({ onOpenAppSettings }) {
                     }}
                     options={[32, 64, 128, 256, 512].map((value) => ({
                       value,
-                      label: `${value} samples`,
+                      label: `${value} samples`
                     }))}
                   />
                 </label>
@@ -1699,8 +1703,8 @@ export default function Karaoke({ onOpenAppSettings }) {
                       { value: "", label: "Системное устройство по умолчанию" },
                       ...(directOutputDevices || []).map((device) => ({
                         value: device.index,
-                        label: device.name,
-                      })),
+                        label: device.name
+                      }))
                     ]}
                   />
                   <small>
@@ -1718,8 +1722,8 @@ export default function Karaoke({ onOpenAppSettings }) {
                       { value: "default", label: "Системное по умолчанию" },
                       ...browserAudioDevices.inputs.map((device) => ({
                         value: device.deviceId,
-                        label: device.label || "Микрофон",
-                      })),
+                        label: device.label || "Микрофон"
+                      }))
                     ]}
                   />
                 </label>
@@ -1733,8 +1737,8 @@ export default function Karaoke({ onOpenAppSettings }) {
                       { value: "default", label: "Системное по умолчанию" },
                       ...browserAudioDevices.outputs.map((device) => ({
                         value: device.deviceId,
-                        label: device.label || "Аудиоустройство",
-                      })),
+                        label: device.label || "Аудиоустройство"
+                      }))
                     ]}
                   />
                 </label>
@@ -1749,8 +1753,8 @@ export default function Karaoke({ onOpenAppSettings }) {
                       { value: "balanced", label: "Автоматический" },
                       {
                         value: "playback",
-                        label: "Стабильное воспроизведение",
-                      },
+                        label: "Стабильное воспроизведение"
+                      }
                     ]}
                   />
                 </label>
@@ -1773,7 +1777,7 @@ export default function Karaoke({ onOpenAppSettings }) {
                   >
                     {(() => {
                       const selected = MONITORING_MODES.find(
-                        (mode) => mode.id === monitorMode,
+                        (mode) => mode.id === monitorMode
                       );
                       const Icon = selected.Icon;
                       return (
@@ -1822,7 +1826,7 @@ export default function Karaoke({ onOpenAppSettings }) {
                               )}
                             </button>
                           );
-                        },
+                        }
                       )}
                     </div>
                   )}
@@ -1844,17 +1848,17 @@ export default function Karaoke({ onOpenAppSettings }) {
                     }}
                     onPointerUp={(event) =>
                       updateMicrophone({
-                        volume: Number(event.currentTarget.value),
+                        volume: Number(event.currentTarget.value)
                       })
                     }
                     onKeyUp={(event) => {
                       if (
                         ["ArrowLeft", "ArrowRight", "Home", "End"].includes(
-                          event.key,
+                          event.key
                         )
                       ) {
                         updateMicrophone({
-                          volume: Number(event.currentTarget.value),
+                          volume: Number(event.currentTarget.value)
                         });
                       }
                     }}
@@ -1899,7 +1903,7 @@ export default function Karaoke({ onOpenAppSettings }) {
                     onChange={(value) => {
                       setMicrophoneEffects((effects) => ({
                         ...effects,
-                        reverb: value,
+                        reverb: value
                       }));
                     }}
                     onCommit={(value) => updateMicrophone({ reverb: value })}
@@ -1914,7 +1918,7 @@ export default function Karaoke({ onOpenAppSettings }) {
                     onChange={(value) => {
                       setMicrophoneEffects((effects) => ({
                         ...effects,
-                        echo: value,
+                        echo: value
                       }));
                     }}
                     onCommit={(value) => updateMicrophone({ echo: value })}
@@ -1929,7 +1933,7 @@ export default function Karaoke({ onOpenAppSettings }) {
                     onChange={(value) => {
                       setMicrophoneEffects((effects) => ({
                         ...effects,
-                        delay: value,
+                        delay: value
                       }));
                     }}
                     onCommit={(value) => updateMicrophone({ delay: value })}
@@ -2005,7 +2009,7 @@ export default function Karaoke({ onOpenAppSettings }) {
                   "--aurora-x": `${(index * 47 + auroraSeed) % 100}%`,
                   "--aurora-y": `${(index * 29 + auroraSeed * 3) % 92}%`,
                   "--aurora-delay": `${(index * -137) % 5800}ms`,
-                  "--aurora-depth": `${1 + (index % 4)}`,
+                  "--aurora-depth": `${1 + (index % 4)}`
                 }}
               />
             ))}
@@ -2023,8 +2027,8 @@ export default function Karaoke({ onOpenAppSettings }) {
                     "#ff5c99",
                     "#ff9d42",
                     "#c786ff",
-                    "#fff3d5",
-                  ][index % 4],
+                    "#fff3d5"
+                  ][index % 4]
                 }}
               />
             ))}
@@ -2215,8 +2219,8 @@ function KaraokeLyricLine({ line, currentTime, className }) {
           0,
           Math.min(
             1,
-            (currentTime - wordStart) / Math.max(0.01, wordEnd - wordStart),
-          ),
+            (currentTime - wordStart) / Math.max(0.01, wordEnd - wordStart)
+          )
         );
         const characters = Array.from(word.text);
         const characterProgress = fill * characters.length;
@@ -2233,9 +2237,9 @@ function KaraokeLyricLine({ line, currentTime, className }) {
                   "--character-fill": `${Math.round(
                     Math.max(
                       0,
-                      Math.min(1, characterProgress - characterIndex),
-                    ) * 100,
-                  )}%`,
+                      Math.min(1, characterProgress - characterIndex)
+                    ) * 100
+                  )}%`
                 }}
                 key={`${character}-${characterIndex}`}
               >
@@ -2258,7 +2262,7 @@ function WaveformTimeline({ value, duration, onChange }) {
     const rect = event.currentTarget.getBoundingClientRect();
     const ratio = Math.max(
       0,
-      Math.min(1, (event.clientX - rect.left) / rect.width),
+      Math.min(1, (event.clientX - rect.left) / rect.width)
     );
     onChange(ratio * duration);
   };
@@ -2328,7 +2332,7 @@ function SliderField({
   onChange,
   display,
   disabled,
-  onCommit,
+  onCommit
 }) {
   return (
     <div>
@@ -2337,7 +2341,7 @@ function SliderField({
           display: "flex",
           justifyContent: "space-between",
           color: "var(--text-secondary)",
-          marginBottom: 4,
+          marginBottom: 4
         }}
       >
         <span>{label}</span>
@@ -2460,21 +2464,21 @@ function PerformanceAnalysisModal({ recordingId, onClose, onDone, onDeleted }) {
 function AnalysisSummary({ result }) {
   const accuracy = result.pitch_accuracy_percent;
   const scoredSections = (result.sections || []).filter(
-    (section) => section.accuracy_percent != null,
+    (section) => section.accuracy_percent != null
   );
   const bestSection = scoredSections.reduce(
     (best, section) =>
       !best || section.accuracy_percent > best.accuracy_percent
         ? section
         : best,
-    null,
+    null
   );
   const needsPractice = scoredSections.reduce(
     (worst, section) =>
       !worst || section.accuracy_percent < worst.accuracy_percent
         ? section
         : worst,
-    null,
+    null
   );
   const grade =
     accuracy == null
@@ -2627,7 +2631,7 @@ function MelodyRoll({
   keyShift,
   songTitle,
   noteRangeMin,
-  noteRangeMax,
+  noteRangeMax
 }) {
   const width = 1000;
   const height = 310;
@@ -2639,7 +2643,7 @@ function MelodyRoll({
   const viewStart = Math.max(0, currentTime - 2.5);
   const viewEnd = viewStart + windowSeconds;
   const visibleNotes = notes.filter(
-    (note) => note.end >= viewStart && note.start <= viewEnd,
+    (note) => note.end >= viewStart && note.start <= viewEnd
   );
   const songMidiValues = notes.map((note) => note.midi + keyShift);
   const savedMin = Number(noteRangeMin);
@@ -2654,24 +2658,24 @@ function MelodyRoll({
   // timeline moves. Explicit song settings have priority over inferred notes.
   const minMidi =
     Math.floor(
-      hasSavedRange ? savedMin + keyShift : Math.min(...songMidiValues),
+      hasSavedRange ? savedMin + keyShift : Math.min(...songMidiValues)
     ) - 2;
   const maxMidi =
     Math.ceil(
-      hasSavedRange ? savedMax + keyShift : Math.max(...songMidiValues),
+      hasSavedRange ? savedMax + keyShift : Math.max(...songMidiValues)
     ) + 2;
   const pitchRange = Math.max(1, maxMidi - minMidi + 1);
   const rowHeight = height / pitchRange;
   const noteHeight = Math.min(22, Math.max(7, rowHeight - 6));
   const activeNote = visibleNotes.find(
-    (note) => currentTime >= note.start && currentTime < note.end,
+    (note) => currentTime >= note.start && currentTime < note.end
   );
   const activeMidi = activeNote?.midi + keyShift;
   const cueNote =
     activeNote ||
     visibleNotes.find(
       (note) =>
-        note.start >= currentTime - 0.08 && note.start <= currentTime + 1.4,
+        note.start >= currentTime - 0.08 && note.start <= currentTime + 1.4
     ) ||
     visibleNotes.find((note) => note.end >= currentTime);
   const targetMidi = cueNote?.midi + keyShift;
@@ -2683,12 +2687,12 @@ function MelodyRoll({
   const indicatorMidi = Number.isFinite(sungMidi) ? sungMidi : targetMidi;
   const hasLivePitch = isPitchDetected && Number.isFinite(sungMidi);
   const visibleMidiLanes = [
-    ...new Set(visibleNotes.map((note) => note.midi + keyShift)),
+    ...new Set(visibleNotes.map((note) => note.midi + keyShift))
   ].sort((a, b) => a - b);
   const displayMidiLanes = visibleMidiLanes.length
     ? Array.from(
         { length: visibleMidiLanes.at(-1) - visibleMidiLanes[0] + 5 },
-        (_, index) => visibleMidiLanes[0] - 2 + index,
+        (_, index) => visibleMidiLanes[0] - 2 + index
       )
     : [];
 
@@ -2919,7 +2923,7 @@ function MelodyRoll({
                     : "rgba(219,234,254,.08)"
                 }
                 style={{
-                  transition: isPitchAttacking ? "none" : "cy .11s linear",
+                  transition: isPitchAttacking ? "none" : "cy .11s linear"
                 }}
               />
               <circle
@@ -2935,7 +2939,7 @@ function MelodyRoll({
                 stroke={hasLivePitch ? "#fff" : "rgba(255,255,255,.45)"}
                 strokeWidth="2"
                 style={{
-                  transition: isPitchAttacking ? "none" : "cy .11s linear",
+                  transition: isPitchAttacking ? "none" : "cy .11s linear"
                 }}
               />
             </g>

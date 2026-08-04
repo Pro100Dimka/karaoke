@@ -1,8 +1,8 @@
-import { api } from "../../api/client";
-import { usePolling } from "../../hooks/usePolling";
-import { Panel } from "../../components/ui";
-import { useAppDialog } from "../../contexts/AppDialog";
-import { Download, Trash2, CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Download, Trash2 } from "lucide-react";
+import { api } from "../../../api/client";
+import { Panel } from "../../../components/ui";
+import { useAppDialog } from "../../../contexts/AppDialog";
+import { usePolling } from "../../../hooks/usePolling";
 
 export default function ModelManager() {
   const { data: models, error } = usePolling(api.listWhisperModels, 4000, []);
@@ -42,7 +42,7 @@ export default function ModelManager() {
             <th>Модель</th>
             <th>Размер</th>
             <th>Статус</th>
-            <th style={{ width: 240 }}></th>
+            <th style={{ width: 240 }} />
           </tr>
         </thead>
         <tbody>
@@ -80,13 +80,14 @@ export default function ModelManager() {
                   style={{
                     display: "flex",
                     gap: 6,
-                    justifyContent: "flex-end",
+                    justifyContent: "flex-end"
                   }}
                 >
                   {!m.downloaded ? (
                     <button
                       className="btn btn-primary"
                       onClick={() => download(m.name)}
+                      type="button"
                     >
                       <Download size={13} /> Скачать
                     </button>
@@ -96,6 +97,7 @@ export default function ModelManager() {
                         <button
                           className="btn btn-ghost"
                           onClick={() => select(m.name)}
+                          type="button"
                         >
                           <CheckCircle2 size={13} /> Выбрать
                         </button>
@@ -103,6 +105,7 @@ export default function ModelManager() {
                       <button
                         className="btn btn-danger"
                         onClick={() => remove(m.name)}
+                        type="button"
                       >
                         <Trash2 size={13} />
                       </button>

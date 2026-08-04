@@ -7,10 +7,8 @@ export function resolveTheme(theme) {
 
 export function applyTheme(theme) {
   const resolvedTheme = resolveTheme(theme);
-
   document.documentElement.dataset.theme = resolvedTheme;
   window.localStorage.setItem(THEME_STORAGE_KEY, resolvedTheme);
-
   return resolvedTheme;
 }
 

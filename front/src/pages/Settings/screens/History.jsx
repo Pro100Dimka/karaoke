@@ -1,6 +1,6 @@
-import { api } from "../../api/client";
-import { usePolling } from "../../hooks/usePolling";
-import { Panel, StatusBadge } from "../../components/ui";
+import { api } from "../../../api/client";
+import { Panel, StatusBadge } from "../../../components/ui";
+import { usePolling } from "../../../hooks/usePolling";
 
 export default function History() {
   const { data: history, error } = usePolling(api.getHistory, 5000, []);

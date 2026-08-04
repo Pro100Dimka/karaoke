@@ -1,15 +1,15 @@
-import { api } from "../../api/client";
-import { usePolling } from "../../hooks/usePolling";
-import { Panel } from "../../components/ui";
-import { Dropdown } from "../../components/Dropdown";
-import { Trash2, Sparkles, FolderX } from "lucide-react";
+import { FolderX, Sparkles, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { useAppDialog } from "../../contexts/AppDialog";
+import { api } from "../../../api/client";
+import { Dropdown } from "../../../components/fields/Dropdown";
+import { Panel } from "../../../components/ui";
+import { useAppDialog } from "../../../contexts/AppDialog";
+import { usePolling } from "../../../hooks/usePolling";
 
 const LABELS = {
   full_songs: "Песни (оригиналы)",
   song_results: "Результаты AI",
-  database: "База данных",
+  database: "База данных"
 };
 
 export default function MemoryManager() {
@@ -23,7 +23,7 @@ export default function MemoryManager() {
     try {
       const res = await api.clearCache();
       await notify(
-        `Освобождено: ${(res.freed_bytes / 1024 / 1024).toFixed(1)} МБ`,
+        `Освобождено: ${(res.freed_bytes / 1024 / 1024).toFixed(1)} МБ`
       );
     } catch (err) {
       await notify(err.message);
@@ -34,7 +34,7 @@ export default function MemoryManager() {
     try {
       const res = await api.deleteTemp();
       await notify(
-        `Удалено временных файлов: ${(res.freed_bytes / 1024 / 1024).toFixed(1)} МБ`,
+        `Удалено временных файлов: ${(res.freed_bytes / 1024 / 1024).toFixed(1)} МБ`
       );
     } catch (err) {
       await notify(err.message);
@@ -51,7 +51,7 @@ export default function MemoryManager() {
               display: "grid",
               gridTemplateColumns: "repeat(3, 1fr)",
               gap: 14,
-              marginBottom: 20,
+              marginBottom: 20
             }}
           >
             {Object.entries(size.breakdown).map(([key, bytes]) => (
@@ -60,7 +60,7 @@ export default function MemoryManager() {
                 style={{
                   background: "rgba(255,255,255,0.04)",
                   borderRadius: 12,
-                  padding: 14,
+                  padding: 14
                 }}
               >
                 <div className="text-muted" style={{ fontSize: 12 }}>
@@ -84,10 +84,14 @@ export default function MemoryManager() {
             </div>
           )}
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button className="btn btn-primary" onClick={clear}>
+            <button className="btn btn-primary" onClick={clear} type="button">
               <Sparkles size={14} /> Очистить кэш
             </button>
-            <button className="btn btn-ghost" onClick={deleteTemp}>
+            <button
+              className="btn btn-ghost"
+              onClick={deleteTemp}
+              type="button"
+            >
               <FolderX size={14} /> Удалить временные файлы
             </button>
           </div>
@@ -97,7 +101,7 @@ export default function MemoryManager() {
               marginTop: 20,
               display: "flex",
               gap: 10,
-              alignItems: "center",
+              alignItems: "center"
             }}
           >
             <Dropdown
@@ -107,11 +111,12 @@ export default function MemoryManager() {
                 { value: "", label: "Оптимизировать файлы песни..." },
                 ...(songs || [])
                   .filter((song) => song.status === "done" && !song.optimized)
-                  .map((song) => ({ value: song.id, label: song.title })),
+                  .map((song) => ({ value: song.id, label: song.title }))
               ]}
             />
             <button
               className="btn btn-ghost"
+              type="button"
               disabled={!optimizeTarget}
               onClick={async () => {
                 try {
