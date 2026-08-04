@@ -1,11 +1,12 @@
 import { STATUS_ICONS } from "./config";
 
 export function DiagnosticCheck({ label, ok }) {
+  const status = ok ? "success" : "error";
   const Icon = STATUS_ICONS[status];
   return (
     <div className="diagnostics-check">
       <span>{label}</span>
-      <Icon className={`diagnostics-icon ${ok ? "success" : "error"}`} />
+      <Icon className={`diagnostics-icon ${status}`} />
     </div>
   );
 }
@@ -24,12 +25,12 @@ export function VersionList({ components }) {
     </div>
   );
 }
-export function ErrorList({ errors = [] }) {
-  if (!errors.length) return <p className="text-muted">Ошибок не найдено</p>;
-  return errors.map((error) => (
-    <ErrorItem key={getErrorKey(error)} error={error} />
-  ));
-}
+export const ErrorList = ({ errors = [] }) =>
+  errors.length ? (
+    errors.map((error) => <ErrorItem key={getErrorKey(error)} error={error} />)
+  ) : (
+    <p className="text-muted">Ошибок не найдено</p>
+  );
 function ErrorItem({ error }) {
   const { title, updated_at: updatedAt, error_message: message } = error;
   return (

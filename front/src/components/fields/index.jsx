@@ -1,4 +1,4 @@
-import { Dropdown } from "./Dropdown";
+import Dropdown from "./Dropdown";
 
 export default function FieldInput({ id, field, value, onChange, onBlur }) {
   const inputProps = { id, className: "input", value: value ?? "" };

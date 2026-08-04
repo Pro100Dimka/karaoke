@@ -3,11 +3,11 @@ import { api } from "../../../../api/client";
 
 export const BYTES_IN_MB = 1024 ** 2;
 
-export const COLUMNS = [
-  { id: "name", title: "Модель" },
-  { id: "size", title: "Размер" },
-  { id: "status", title: "Статус" },
-  { id: "actions", title: "", className: "models-actions-column" }
+export const MODEL_COLUMNS = [
+  ["name", "Модель"],
+  ["size", "Размер"],
+  ["status", "Статус"],
+  ["actions", "", "models-actions-column"]
 ];
 
 export const STATUSES = [

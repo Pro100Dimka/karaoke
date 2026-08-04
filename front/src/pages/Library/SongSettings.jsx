@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { api } from "../../api/client";
-import { Dropdown } from "../../components/fields/Dropdown";
+import Dropdown from "../../components/fields/Dropdown";
 import { Panel } from "../../components/ui";
 import { useAppDialog } from "../../contexts/AppDialog";
 import { usePolling } from "../../hooks/usePolling";

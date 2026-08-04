@@ -1,8 +1,8 @@
 import { SETTINGS_TABS } from "../config";
-import History from "./History";
-import MemoryManager from "./MemoryManager";
 import About from "./about";
 import Diagnostics from "./diagnostics";
+import History from "./history";
+import MemoryManager from "./memory";
 import Models from "./models";
 
 export default [

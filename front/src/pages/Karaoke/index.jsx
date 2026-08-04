@@ -25,7 +25,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { KARAOKE_THEMES, shuffleThemes } from "../../assets/karaoke/themes";
-import { Dropdown } from "../../components/fields/Dropdown";
+import Dropdown from "../../components/fields/Dropdown";
 import { useAppDialog } from "../../contexts/AppDialog";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import { usePolling } from "../../hooks/usePolling";

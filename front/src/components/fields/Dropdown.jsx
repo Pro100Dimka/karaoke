@@ -1,7 +1,7 @@
 import { Check, ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-export function Dropdown({
+export default function Dropdown({
   value,
   onChange,
   options,
