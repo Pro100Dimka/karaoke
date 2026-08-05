@@ -1,8 +1,16 @@
-/* Settings uses the same bounded neon Card modal as song settings. */
+/* Settings modal: same Card shell as song-settings, stable centered layout. */
+.settings-modal-backdrop {
+  place-items: center;
+  overflow: hidden;
+}
+
 .settings-modal {
-  inline-size: min(76rem, calc(100vw - 2 * var(--space-4)));
+  inline-size: min(76rem, calc(100vw - 2 * var(--space-5)));
   block-size: min(88dvh, 52rem);
+  max-inline-size: calc(100vw - 2 * var(--space-4));
+  max-block-size: calc(100dvh - 2 * var(--space-4));
   min-block-size: 0;
+  margin: auto;
   overflow: visible;
 }
 
@@ -13,9 +21,7 @@
   min-block-size: 0;
 }
 
-.settings-modal > .ui-card__panel {
-  overflow: hidden;
-}
+.settings-modal > .ui-card__panel { overflow: hidden; }
 
 .settings-modal-close {
   position: absolute;
@@ -39,15 +45,15 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-4);
-  min-block-size: 5.5rem;
+  min-block-size: 6.25rem;
   padding: var(--space-4) calc(var(--space-8) + var(--space-3)) var(--space-4) var(--space-5);
   border-block-end: var(--hairline) solid var(--color-border);
-  background: color-mix(in srgb, var(--color-surface-glass) 28%, transparent);
+  background: color-mix(in srgb, var(--color-surface-glass) 32%, transparent);
 }
 
 .settings-hero-icon {
   display: grid;
-  inline-size: 3.25rem;
+  inline-size: 3.5rem;
   aspect-ratio: 1;
   place-items: center;
   border: var(--hairline) solid var(--color-border-strong);
@@ -57,37 +63,29 @@
   box-shadow: var(--shadow-neon-soft);
 }
 
-.settings-hero-content {
-  min-inline-size: 0;
-}
-
+.settings-hero-content { min-inline-size: 0; }
 .settings-hero-content span {
   color: var(--color-primary-soft);
   font: 800 var(--font-size-xs) / 1 var(--font-display);
   letter-spacing: 0.16em;
 }
-
 .settings-hero-content h1 {
   margin: var(--space-1) 0;
   font: 850 clamp(1.35rem, 2.2vw, 2rem) / 1.05 var(--font-display);
 }
-
 .settings-hero-content p {
   margin: 0;
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
 }
-
-.settings-save {
-  white-space: nowrap;
-}
+.settings-save { white-space: nowrap; }
 
 .settings-layout {
   display: grid;
   min-inline-size: 0;
   min-block-size: 0;
   flex: 1;
-  grid-template-columns: minmax(11rem, 14rem) minmax(0, 1fr);
+  grid-template-columns: minmax(12rem, 15rem) minmax(0, 1fr);
   overflow: hidden;
 }
 
@@ -99,15 +97,14 @@
   padding: var(--space-4);
   overflow: auto;
   border-inline-end: var(--hairline) solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface-glass) 18%, transparent);
   scrollbar-width: none;
 }
-
 .settings-tabs::-webkit-scrollbar { display: none; }
-
 .settings-tabs button {
   display: flex;
   inline-size: 100%;
-  min-block-size: 3rem;
+  min-block-size: 3.25rem;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3);
@@ -116,14 +113,8 @@
   color: var(--color-text-soft);
   background: transparent;
   text-align: start;
-  transition:
-    color var(--duration-fast) var(--ease-standard),
-    border-color var(--duration-fast) var(--ease-standard),
-    background var(--duration-fast) var(--ease-standard),
-    box-shadow var(--duration-fast) var(--ease-standard),
-    transform var(--duration-fast) var(--ease-standard);
+  transition: color var(--duration-fast), border-color var(--duration-fast), background var(--duration-fast), box-shadow var(--duration-fast), transform var(--duration-fast);
 }
-
 .settings-tabs button:hover,
 .settings-tabs button.is-active {
   color: var(--color-text);
@@ -131,7 +122,6 @@
   background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface-glass));
   box-shadow: var(--shadow-neon-soft);
 }
-
 .settings-tabs button:hover { transform: translateX(var(--space-1)); }
 
 .settings-content-panel {
@@ -145,7 +135,6 @@
   background: transparent;
   box-shadow: none;
 }
-
 .settings-content-panel .panel-header {
   flex: none;
   min-block-size: 4rem;
@@ -153,14 +142,12 @@
   border-block-end: var(--hairline) solid var(--color-border);
   background: color-mix(in srgb, var(--color-surface-glass) 22%, transparent);
 }
-
 .settings-content-panel > :not(.panel-header) {
   min-block-size: 0;
   overflow: auto;
   padding: var(--space-5);
   scrollbar-width: none;
 }
-
 .settings-content-panel > :not(.panel-header)::-webkit-scrollbar { display: none; }
 
 .settings-field-grid {
@@ -169,17 +156,12 @@
   gap: var(--space-4);
   align-content: start;
 }
-
-.settings-path-grid {
-  grid-template-columns: 1fr;
-}
-
+.settings-path-grid { grid-template-columns: 1fr; }
 .settings-service-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-4);
 }
-
 .settings-service-link {
   min-block-size: 7rem;
   flex-direction: column;
@@ -187,44 +169,19 @@
   justify-content: center;
   text-align: start;
 }
-
-.settings-service-link span {
-  color: var(--color-text-muted);
-  font-weight: 500;
-}
-
-.settings-service-link b {
-  color: var(--color-primary-soft);
-}
-
-.settings-service-screen {
-  min-inline-size: 0;
-}
-
-.settings-service-back {
-  margin-block-end: var(--space-4);
-}
+.settings-service-link span { color: var(--color-text-muted); font-weight: 500; }
+.settings-service-link b { color: var(--color-primary-soft); }
+.settings-service-screen { min-inline-size: 0; }
+.settings-service-back { margin-block-end: var(--space-4); }
 
 @media (max-width: 58rem) {
   .settings-modal {
     inline-size: calc(100vw - 2 * var(--space-3));
     block-size: min(92dvh, 52rem);
   }
-
-  .settings-header {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .settings-save {
-    grid-column: 1 / -1;
-    inline-size: 100%;
-  }
-
-  .settings-layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-
+  .settings-header { grid-template-columns: auto minmax(0, 1fr); }
+  .settings-save { grid-column: 1 / -1; inline-size: 100%; }
+  .settings-layout { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
   .settings-tabs {
     flex-direction: row;
     padding: var(--space-3);
@@ -232,24 +189,13 @@
     border-inline-end: 0;
     border-block-end: var(--hairline) solid var(--color-border);
   }
-
-  .settings-tabs button {
-    inline-size: auto;
-    flex: none;
-  }
-
+  .settings-tabs button { inline-size: auto; flex: none; }
   .settings-tabs button:hover { transform: translateY(calc(-1 * var(--hairline))); }
 }
 
 @media (max-width: 40rem) {
   .settings-field-grid,
-  .settings-service-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .settings-header {
-    padding-inline-start: var(--space-4);
-  }
-
+  .settings-service-grid { grid-template-columns: 1fr; }
+  .settings-header { padding-inline-start: var(--space-4); }
   .settings-hero-icon { display: none; }
 }

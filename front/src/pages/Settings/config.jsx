@@ -11,6 +11,7 @@ export const SETTINGS = {
     fields: [
       {
         type: "select",
+        variant: "stacked",
         name: "language",
         label: "Язык интерфейса",
         hint: "Язык элементов приложения",
@@ -18,6 +19,7 @@ export const SETTINGS = {
       },
       {
         type: "select",
+        variant: "stacked",
         name: "theme",
         label: "Тема",
         hint: "Применяется сразу, без перезапуска",
@@ -25,6 +27,7 @@ export const SETTINGS = {
       },
       {
         type: "text",
+        variant: "stacked",
         name: "online_name",
         label: "Имя для онлайн-комнат",
         hint: "Его увидят другие участники совместного исполнения",
@@ -34,12 +37,14 @@ export const SETTINGS = {
       },
       {
         type: "toggle",
+        variant: "switch-card",
         name: "autosave",
         label: "Автосохранение",
         hint: "Сохранять изменения автоматически"
       },
       {
         type: "toggle",
+        variant: "switch-card",
         name: "autoupdate",
         label: "Автообновление",
         hint: "Проверять новые версии приложения"
@@ -53,6 +58,7 @@ export const SETTINGS = {
     fields: [
       {
         type: "select",
+        variant: "stacked",
         name: "whisper_model",
         label: "Модель Whisper",
         hint: "Качество распознавания текста",
@@ -62,6 +68,7 @@ export const SETTINGS = {
       },
       {
         type: "number",
+        variant: "stacked",
         name: "thread_count",
         label: "Потоки CPU",
         hint: "Больше потоков — быстрее обработка",
@@ -70,12 +77,14 @@ export const SETTINGS = {
       },
       {
         type: "toggle",
+        variant: "switch-card",
         name: "use_gpu",
         label: "Использовать GPU",
         hint: "Ускоряет AI, если видеокарта поддерживается"
       },
       {
         type: "toggle",
+        variant: "switch-card",
         name: "use_cpu",
         label: "Использовать CPU",
         hint: "Резервный режим обработки"
@@ -87,10 +96,10 @@ export const SETTINGS = {
     icon: FolderCog,
     className: "settings-field-grid settings-path-grid",
     fields: [
-      { type: "readonly", name: "songs_folder", label: "Папка с песнями" },
-      { type: "readonly", name: "ai_folder", label: "Папка AI" },
-      { type: "readonly", name: "recordings_folder", label: "Папка записей" },
-      { type: "readonly", name: "cache_folder", label: "Папка кэша" }
+      { type: "readonly", variant: "stacked", name: "songs_folder", label: "Папка с песнями" },
+      { type: "readonly", variant: "stacked", name: "ai_folder", label: "Папка AI" },
+      { type: "readonly", variant: "stacked", name: "recordings_folder", label: "Папка записей" },
+      { type: "readonly", variant: "stacked", name: "cache_folder", label: "Папка кэша" }
     ]
   },
   service: {

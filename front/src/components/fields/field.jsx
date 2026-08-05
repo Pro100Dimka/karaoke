@@ -4,10 +4,15 @@ export default function Field({
   hint,
   error,
   inline = false,
+  variant = "default",
   className = "",
   children
 }) {
-  const classes = [inline ? "settings-toggle" : "settings-field", className]
+  const classes = [
+    inline ? "settings-toggle" : "settings-field",
+    `field-variant-${variant}`,
+    className
+  ]
     .filter(Boolean)
     .join(" ");
 

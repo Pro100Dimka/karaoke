@@ -163,3 +163,31 @@ svg {
   box-shadow: var(--shadow-neon-soft);
   backdrop-filter: blur(var(--space-3));
 }
+
+/* Prominent application settings launcher. */
+.app-settings-fab {
+  inline-size: clamp(6rem, 8vw, 10.5rem);
+  block-size: clamp(6rem, 8vw, 10.5rem);
+  border-width: max(var(--hairline), 0.1rem);
+  color: white;
+  background:
+    radial-gradient(circle at 32% 24%, color-mix(in srgb, white 38%, transparent), transparent 28%),
+    var(--gradient-primary);
+  box-shadow: var(--shadow-lg), var(--shadow-neon-primary);
+  transition: transform var(--duration-fast) var(--ease-emphasized), box-shadow var(--duration-fast) var(--ease-standard);
+}
+.app-settings-fab svg {
+  inline-size: 42%;
+  block-size: 42%;
+  filter: drop-shadow(0 0 0.7rem color-mix(in srgb, var(--color-primary) 70%, transparent));
+}
+.app-settings-fab:hover {
+  transform: translateY(-0.25rem) scale(1.04) rotate(8deg);
+  box-shadow: var(--shadow-lg), var(--shadow-neon-mixed);
+}
+@media (max-width: 45rem) {
+  .app-settings-fab {
+    inline-size: 5rem;
+    block-size: 5rem;
+  }
+}

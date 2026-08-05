@@ -4,7 +4,7 @@ import { SAVE_BUTTONS } from "./config";
 export default function SettingsHeader({ status, onSave }) {
   const { text, Icon } = SAVE_BUTTONS[status] ?? SAVE_BUTTONS.idle;
   return (
-    <section className="settings-hero">
+    <section className="settings-header">
       <div className="settings-hero-icon">
         <Settings2 size={28} />
       </div>
