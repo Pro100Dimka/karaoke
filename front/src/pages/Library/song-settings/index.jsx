@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
 import { api } from "../../../api/client";
-import FieldInput from "../../../components/fields";
+import FieldInput, { FieldList, FieldRow } from "../../../components/fields";
 import Button from "../../../components/fields/button";
 import { Panel } from "../../../components/ui";
 import { useAppDialog } from "../../../contexts/AppDialog";
@@ -15,12 +14,24 @@ import {
   parseLyricsText
 } from "./utils";
 
-export default function SongSettings() {
+const LYRICS_FIELD = {
+  name: "lyrics",
+  label: "Текст песни",
+  type: "textarea",
+  rows: 16,
+  spellCheck: false,
+  className: "song-lyrics-editor",
+  hint: "Каждая строка — отдельная строка песни. Тайминги сохраняются автоматически."
+};
+
+const SONG_FIELDS_BEFORE_RANGE = SONG_FIELDS.slice(0, 5);
+const SONG_FIELDS_AFTER_RANGE = SONG_FIELDS.slice(5);
+
+export default function SongSettings({ songId }) {
   const { alert: notify } = useAppDialog();
-  const { state } = useLocation();
   const { data: songs } = usePolling(api.listSongs, 5000, []);
 
-  const song = getSelectedSong(songs, state?.songId);
+  const song = getSelectedSong(songs, songId);
 
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -154,7 +165,7 @@ export default function SongSettings() {
         <SongFields form={form} onChange={updateField} />
 
         <Button
-          className="mt-4"
+          className="song-settings-save"
           variant="primary"
           disabled={saving}
           onClick={save}
@@ -171,31 +182,20 @@ export default function SongSettings() {
 }
 
 function SongFields({ form, onChange }) {
-  const beforeRange = SONG_FIELDS.slice(0, 5);
-  const afterRange = SONG_FIELDS.slice(5);
-
   return (
-    <>
-      {beforeRange.map((field) => (
-        <FieldInput
-          key={field.name}
-          field={field}
-          value={form[field.name]}
-          onChange={(value) => onChange(field.name, value)}
-        />
-      ))}
-
+    <div className="song-settings-fields">
+      <FieldList
+        fields={SONG_FIELDS_BEFORE_RANGE}
+        values={form}
+        onChange={onChange}
+      />
       <NoteRangeFields form={form} onChange={onChange} />
-
-      {afterRange.map((field) => (
-        <FieldInput
-          key={field.name}
-          field={field}
-          value={form[field.name]}
-          onChange={(value) => onChange(field.name, value)}
-        />
-      ))}
-    </>
+      <FieldList
+        fields={SONG_FIELDS_AFTER_RANGE}
+        values={form}
+        onChange={onChange}
+      />
+    </div>
   );
 }
 
@@ -205,8 +205,7 @@ function NoteRangeFields({ form, onChange }) {
       <span>
         <strong>Диапазон нот (MIDI)</strong>
       </span>
-
-      <div className="flex gap-3">
+      <FieldRow>
         {NOTE_RANGE_FIELDS.map((field) => (
           <FieldInput
             bare
@@ -216,26 +215,19 @@ function NoteRangeFields({ form, onChange }) {
             onChange={(value) => onChange(field.name, value)}
           />
         ))}
-      </div>
+      </FieldRow>
     </div>
   );
 }
 
 function LyricsEditor({ lyrics, onChange }) {
-  const field = {
-    name: "lyrics",
-    label: "Текст песни",
-    type: "textarea",
-    rows: 16,
-    spellCheck: false,
-    className: "song-lyrics-editor",
-    hint: "Каждая строка — отдельная строка песни. Тайминги сохраняются автоматически."
-  };
-
   return (
     <Panel className="song-lyrics-panel" title="Редактор текста">
-      <FieldInput field={field} value={lyrics.text} onChange={onChange} />
-
+      <FieldInput
+        field={LYRICS_FIELD}
+        value={lyrics.text}
+        onChange={onChange}
+      />
       {lyrics.error && <p className="song-lyrics-error">{lyrics.error}</p>}
     </Panel>
   );

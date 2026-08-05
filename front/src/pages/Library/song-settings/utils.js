@@ -1,5 +1,7 @@
-export const getSelectedSong = (songs, songId) =>
-  songId ? (songs ?? []).find(({ id }) => id === songId) : songs?.[0];
+export const getSelectedSong = (songs, songId) => {
+  const list = Array.isArray(songs) ? songs.filter(Boolean) : [];
+  return songId ? list.find((song) => song?.id === songId) : list[0];
+};
 
 export function createSongPayload(form, song) {
   return {
@@ -17,17 +19,26 @@ export function createSongPayload(form, song) {
   };
 }
 
-export const normalizeText = (value) => value?.trim() ?? null;
+export const normalizeText = (value) =>
+  typeof value === "string" && value.trim() ? value.trim() : null;
 export const parseLyricsText = (text = "") =>
-  text
+  String(text ?? "")
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
 export const lyricsToText = (lines = []) =>
-  lines.map(({ text }) => text ?? "").join("\n");
+  (Array.isArray(lines) ? lines : [])
+    .filter((line) => line && typeof line === "object")
+    .map(({ text }) => text ?? "")
+    .join("\n");
 
-export const buildLyricsData = (lines, textLines) =>
-  lines.map((line, index) => ({
-    ...line,
-    text: textLines[index] ?? line.text
-  }));
+export const buildLyricsData = (lines, textLines) => {
+  const sourceLines = Array.isArray(lines) ? lines : [];
+  const replacementLines = Array.isArray(textLines) ? textLines : [];
+  return sourceLines
+    .filter((line) => line && typeof line === "object")
+    .map((line, index) => ({
+      ...line,
+      text: replacementLines[index] ?? line.text
+    }));
+};

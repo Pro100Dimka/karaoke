@@ -6,50 +6,17 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
+  useState
 } from "react";
 import { createPortal } from "react-dom";
+import { FOCUSABLE_SELECTOR } from "../components/modal-focus";
+import {
+  createDialogConfig,
+  getDialogCloseResult,
+  normalizeDialogOptions
+} from "./dialog-utils";
 
 const DialogContext = createContext(null);
-
-const FOCUSABLE_SELECTOR = [
-  "button:not([disabled])",
-  "[href]",
-  "input:not([disabled])",
-  "select:not([disabled])",
-  "textarea:not([disabled])",
-  '[tabindex]:not([tabindex="-1"])',
-].join(", ");
-
-const DIALOG_DEFAULTS = {
-  confirm: {
-    title: "Подтвердите действие",
-    label: "Требуется подтверждение",
-    confirmText: "Подтвердить",
-    cancelText: "Отмена",
-    confirmClassName: "btn btn-primary",
-  },
-  alert: {
-    title: "Уведомление",
-    label: "Караоке Studio",
-    confirmText: "Понятно",
-    confirmClassName: "btn btn-primary",
-  },
-};
-
-function getCloseResult(kind) {
-  return kind !== "confirm";
-}
-
-function normalizeDialogOptions(titleOrOptions) {
-  if (typeof titleOrOptions === "string") {
-    return {
-      title: titleOrOptions,
-    };
-  }
-
-  return titleOrOptions ?? {};
-}
 
 function DialogIcon({ kind }) {
   if (kind === "confirm") {
@@ -65,7 +32,7 @@ function DialogModal({ dialog, onClose }) {
   const primaryButtonRef = useRef(null);
 
   const isConfirmation = dialog.kind === "confirm";
-  const closeResult = getCloseResult(dialog.kind);
+  const closeResult = getDialogCloseResult(dialog.kind);
 
   useEffect(() => {
     const previouslyFocused = document.activeElement;
@@ -90,7 +57,7 @@ function DialogModal({ dialog, onClose }) {
       }
 
       const focusableElements = Array.from(
-        dialogRef.current?.querySelectorAll(FOCUSABLE_SELECTOR) ?? [],
+        dialogRef.current?.querySelectorAll(FOCUSABLE_SELECTOR) ?? []
       );
 
       if (focusableElements.length === 0) {
@@ -115,11 +82,14 @@ function DialogModal({ dialog, onClose }) {
       }
     };
 
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
       cancelAnimationFrame(animationFrameId);
       document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
 
       if (
         previouslyFocused instanceof HTMLElement &&
@@ -136,32 +106,11 @@ function DialogModal({ dialog, onClose }) {
     }
   };
 
-  const handleBackdropClick = (event) => {
-    // only trigger when clicking/tapping the backdrop itself
-    if (event.target === event.currentTarget) {
-      onClose(closeResult);
-    }
-  };
-
-  const handleBackdropKeyDown = (event) => {
-    // support Enter and Space to activate the backdrop
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      if (event.target === event.currentTarget) {
-        onClose(closeResult);
-      }
-    }
-  };
-
   return createPortal(
     <div
       className="app-dialog-backdrop"
-      role="button"
-      tabIndex={0}
+      role="presentation"
       onMouseDown={handleBackdropMouseDown}
-      onClick={handleBackdropClick}
-      onKeyDown={handleBackdropKeyDown}
-      onTouchStart={handleBackdropClick}
     >
       <section
         ref={dialogRef}
@@ -214,7 +163,7 @@ function DialogModal({ dialog, onClose }) {
         </div>
       </section>
     </div>,
-    document.body,
+    document.body
   );
 }
 
@@ -239,15 +188,12 @@ export function AppDialogProvider({ children }) {
       const previousDialog = activeDialogRef.current;
 
       if (previousDialog) {
-        previousDialog.resolve(getCloseResult(previousDialog.kind));
+        previousDialog.resolve(getDialogCloseResult(previousDialog.kind));
       }
 
       const nextDialog = {
-        ...DIALOG_DEFAULTS[kind],
-        ...options,
-        kind,
-        message,
-        resolve,
+        ...createDialogConfig(kind, message, options),
+        resolve
       };
 
       activeDialogRef.current = nextDialog;
@@ -261,7 +207,7 @@ export function AppDialogProvider({ children }) {
 
       return openDialog("confirm", message, options);
     },
-    [openDialog],
+    [openDialog]
   );
 
   const alert = useCallback(
@@ -270,7 +216,7 @@ export function AppDialogProvider({ children }) {
 
       return openDialog("alert", message, options);
     },
-    [openDialog],
+    [openDialog]
   );
 
   useEffect(() => {
@@ -282,16 +228,16 @@ export function AppDialogProvider({ children }) {
       }
 
       activeDialogRef.current = null;
-      activeDialog.resolve(getCloseResult(activeDialog.kind));
+      activeDialog.resolve(getDialogCloseResult(activeDialog.kind));
     };
   }, []);
 
   const contextValue = useMemo(
     () => ({
       alert,
-      confirm,
+      confirm
     }),
-    [alert, confirm],
+    [alert, confirm]
   );
 
   return (
@@ -308,7 +254,7 @@ export function useAppDialog() {
 
   if (!context) {
     throw new Error(
-      "useAppDialog должен использоваться внутри AppDialogProvider",
+      "useAppDialog должен использоваться внутри AppDialogProvider"
     );
   }
 

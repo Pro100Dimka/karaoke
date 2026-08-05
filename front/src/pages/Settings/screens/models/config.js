@@ -34,16 +34,16 @@ export const ACTIONS = [
   {
     id: "download",
     label: "Скачать",
-    Icon: Download,
-    className: "btn btn-primary",
+    icon: Download,
+    variant: "primary",
     visible: ({ downloaded }) => !downloaded,
     request: api.downloadModel
   },
   {
     id: "select",
     label: "Выбрать",
-    Icon: CheckCircle2,
-    className: "btn btn-ghost",
+    icon: CheckCircle2,
+    variant: "ghost",
     visible: ({ downloaded, selected }) => downloaded && !selected,
     request: api.selectModel
   },
@@ -51,8 +51,8 @@ export const ACTIONS = [
     id: "remove",
     label: null,
     ariaLabel: "Удалить модель",
-    Icon: Trash2,
-    className: "btn btn-danger",
+    icon: Trash2,
+    variant: "danger",
     visible: ({ downloaded }) => downloaded,
     confirm: ({ name }) => `Удалить модель ${name}?`,
     request: api.deleteModel

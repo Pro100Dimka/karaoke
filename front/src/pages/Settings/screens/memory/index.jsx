@@ -3,6 +3,7 @@ import { api } from "../../../../api/client";
 import { Panel } from "../../../../components/ui";
 import { useAppDialog } from "../../../../contexts/AppDialog";
 import { usePolling } from "../../../../hooks/usePolling";
+import { getErrorMessage } from "../../../../utils/errors";
 import { buildOptimizeOptions, MEMORY_ACTIONS } from "./config";
 import MemoryBreakdown from "./memory-breakdown";
 import {
@@ -46,7 +47,7 @@ export default function MemoryManager() {
   ];
   return (
     <Panel title="Управление памятью">
-      {error && <p style={{ color: "var(--danger)" }}>{error.message}</p>}
+      {error && <p className="field-error">{getErrorMessage(error)}</p>}
       {size &&
         sections.map(([id, Component, props]) => (
           <Component key={id} {...props} />

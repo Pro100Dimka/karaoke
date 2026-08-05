@@ -34,6 +34,8 @@ export function usePolling(fetchFn, intervalMs, deps = []) {
 
     const run = async () => {
       if (!active || inFlight || isHidden()) return;
+      if (timerId) window.clearTimeout(timerId);
+      timerId = null;
       inFlight = true;
       try {
         const result = await fetchRef.current();

@@ -1,3 +1,4 @@
+import { getErrorMessage } from "../../../../utils/errors";
 import { BYTES_IN_MB } from "./config";
 
 export const formatModelSize = ({
@@ -18,6 +19,6 @@ export async function runDialogAction(action, model, dialogs) {
   try {
     await action.request(model.name);
   } catch (error) {
-    await notify(error.message || "Не удалось выполнить действие");
+    await notify(getErrorMessage(error, "Не удалось выполнить действие"));
   }
 }

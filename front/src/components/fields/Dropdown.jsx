@@ -1,17 +1,20 @@
 import { Check, ChevronDown } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 export default function Dropdown({
+  id,
   value,
   onChange,
-  options,
+  options = [],
   placeholder = "Выберите…",
   disabled = false,
   className = ""
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
-  const idRef = useRef(`dropdown-${Math.random().toString(36).slice(2)}`);
+  const generatedId = useId();
+  const dropdownId = id ?? `dropdown-${generatedId.replace(/:/g, "")}`;
+  const eventIdRef = useRef(dropdownId);
   const selected = options.find(
     (option) => String(option.value) === String(value)
   );
@@ -35,7 +38,7 @@ export default function Dropdown({
 
   useEffect(() => {
     const closeWhenAnotherOpens = (event) => {
-      if (event.detail !== idRef.current) setOpen(false);
+      if (event.detail !== eventIdRef.current) setOpen(false);
     };
     window.addEventListener("karaoke-dropdown-open", closeWhenAnotherOpens);
     return () =>
@@ -48,7 +51,7 @@ export default function Dropdown({
   const toggle = () => {
     if (!open)
       window.dispatchEvent(
-        new CustomEvent("karaoke-dropdown-open", { detail: idRef.current })
+        new CustomEvent("karaoke-dropdown-open", { detail: eventIdRef.current })
       );
     setOpen((current) => !current);
   };
@@ -56,18 +59,24 @@ export default function Dropdown({
   return (
     <div className={`app-dropdown ${className}`} ref={ref}>
       <button
+        id={dropdownId}
         type="button"
         className="app-dropdown-trigger"
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-controls={`${dropdownId}-menu`}
         onClick={toggle}
       >
         <span>{selected?.label || placeholder}</span>
         <ChevronDown size={15} />
       </button>
       {open && (
-        <div className="app-dropdown-menu" role="listbox">
+        <div
+          id={`${dropdownId}-menu`}
+          className="app-dropdown-menu"
+          role="listbox"
+        >
           {options.map((option) => {
             const isSelected = String(option.value) === String(value);
             return (

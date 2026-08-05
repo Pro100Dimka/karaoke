@@ -16,7 +16,7 @@ export default function Diagnostics() {
       : [])
   ];
   return (
-    <div className="grid grid-cols-2 gap-5">
+    <div className="diagnostics-grid">
       <Panel title="Диагностика">
         {checks.map(([key, label, ok]) => (
           <DiagnosticCheck key={key} label={label} ok={ok} />

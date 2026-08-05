@@ -1,335 +1,72 @@
 import {
   ArrowLeft,
   AudioLines,
-  Check,
-  ChevronDown,
   Cog,
   Maximize,
   Pause,
   Play,
   Settings2,
-  ShieldCheck,
   SkipBack,
   SkipForward,
   SlidersHorizontal,
   Square,
-  Trash2,
-  Trophy,
   Type,
-  Volume2,
-  VolumeX,
-  X,
-  Zap
+  X
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { KARAOKE_THEMES, shuffleThemes } from "../../assets/karaoke/themes";
-import Dropdown from "../../components/fields/Dropdown";
-import { useAppDialog } from "../../contexts/AppDialog";
+import Dropdown from "../../components/fields/dropdown";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import { usePolling } from "../../hooks/usePolling";
+import { getErrorMessage } from "../../utils/errors";
+import KaraokeLyricLine from "./components/KaraokeLyricLine";
+import MelodyRoll from "./components/MelodyRoll";
+import MonitoringModePicker from "./components/MonitoringModePicker";
+import PerformanceAnalysisModal from "./components/PerformanceAnalysisModal";
+import SliderField from "./components/SliderField";
+import WaveformTimeline from "./components/WaveformTimeline";
+import { MONITORING_MODES } from "./config";
+import useKaraokePreferences from "./hooks/useKaraokePreferences";
+import useKaraokeResult from "./hooks/useKaraokeResult";
+import {
+  findMatchingBrowserOutput,
+  findPreferredOutputDevice,
+  groupBrowserAudioDevices,
+  normalizeAudioEffects
+} from "./utils/audio-settings";
+import {
+  createPanoramaPath,
+  getYouTubeVideoId,
+  normalizeLyrics,
+  normalizeNotes,
+  playbackGain,
+  transposeKey,
+  youTubeEmbedUrl
+} from "./utils/data";
+import {
+  createBrowserDeviceOptions,
+  createBufferSizeOptions,
+  createIndexedDeviceOptions
+} from "./utils/devices";
+import { formatTime } from "./utils/format";
+import { getKaraokeStageLayout } from "./utils/layout";
+import { getLyricDisplayState } from "./utils/lyrics";
+import { getMelodyGuideState } from "./utils/melody-guide";
+import { getPanoramaPosition } from "./utils/panorama";
+import { detectMidiFromAnalyser } from "./utils/pitch";
+import {
+  clampPlaybackPosition,
+  createPlayerSyncCommand,
+  getMicrophoneLevel,
+  getSecondaryMediaPosition,
+  shouldSyncMedia
+} from "./utils/transport";
 
-// ПРИМЕЧАНИЕ ПО СХЕМЕ ДАННЫХ: здесь предполагается, что lyrics.json — это
-// массив строк вида {start, end, text}, а reference.json — массив нот вида
-// {start, end, midi}. Если реальная структура AI-пайплайна отличается по
-// именам полей, поправить нужно только в двух местах ниже —
-// normalizeLyrics()/normalizeNotes() — остальной компонент от конкретной
-// формы данных не зависит.
-// Keep compatibility with the pipeline's compact lyric/note files at the UI
-// boundary so playback components operate on one predictable shape.
-function normalizeLyrics(raw) {
-  if (!raw) return [];
-  const list = Array.isArray(raw) ? raw : raw.lines || raw.segments || [];
-  return list
-    .map((line) => {
-      const fallbackStart = Number(line.start ?? line.begin ?? 0);
-      const fallbackEnd = Number(line.end ?? fallbackStart + 2);
-      const words = Array.isArray(line.words)
-        ? line.words
-            .map((word) => ({
-              text: word.word || word.text || "",
-              start: Number(word.start ?? fallbackStart),
-              end: Number(word.end ?? fallbackEnd)
-            }))
-            .filter(
-              (word) =>
-                word.text &&
-                Number.isFinite(word.start) &&
-                Number.isFinite(word.end) &&
-                word.end >= word.start
-            )
-        : [];
-      // Segment boundaries can be several tenths of a second away from the
-      // sung phrase.  Word marks are produced from the vocal track, so use
-      // them as the canonical line bounds whenever they exist.
-      const start = words.length ? words[0].start : fallbackStart;
-      const end = words.length ? words.at(-1).end : fallbackEnd;
-      return {
-        start,
-        end: Math.max(start, end),
-        text: line.text || line.line || "",
-        words
-      };
-    })
-    .filter((l) => l.text);
-}
-
-function normalizeNotes(raw) {
-  if (!raw) return [];
-  return raw
-    .map((note) => ({
-      start: Number(note.start),
-      end: Number(note.end),
-      midi: note.midi ?? note.pitch ?? noteNameToMidi(note.note)
-    }))
-    .filter(
-      (note) =>
-        Number.isFinite(note.start) &&
-        Number.isFinite(note.end) &&
-        Number.isFinite(note.midi)
-    );
-}
-
-const clampEffectAmount = (value) =>
-  Math.max(0, Math.min(1, Number(value) || 0));
-
-// The browser fallback uses the same dry/wet principle as the ASIO bridge.
-// Keeping every wet gain at zero means that an effect is truly bypassed,
-// while changing a slider can still be heard immediately without reopening
-// the microphone stream.
-function createLiveMicrophoneEffects(
-  context,
-  source,
-  destination,
-  initialEffects
-) {
-  const dry = context.createGain();
-  source.connect(dry).connect(destination);
-
-  const createFeedbackEffect = (delaySeconds, feedbackAmount) => {
-    const delay = context.createDelay(0.75);
-    const feedback = context.createGain();
-    const wet = context.createGain();
-    delay.delayTime.value = delaySeconds;
-    feedback.gain.value = feedbackAmount;
-    wet.gain.value = 0;
-    source.connect(delay);
-    delay.connect(feedback).connect(delay);
-    delay.connect(wet).connect(destination);
-    return { delay, wet };
-  };
-
-  const reverbEarly = createFeedbackEffect(0.037, 0.26);
-  const reverbLate = context.createDelay(0.75);
-  const reverbWet = context.createGain();
-  reverbLate.delayTime.value = 0.091;
-  reverbWet.gain.value = 0;
-  reverbEarly.delay.connect(reverbLate).connect(reverbWet).connect(destination);
-  const echo = createFeedbackEffect(0.235, 0.34);
-  const delay = createFeedbackEffect(0.12, 0.22);
-
-  const apply = (effects) => {
-    const now = context.currentTime;
-    const reverb = clampEffectAmount(effects.reverb);
-    const echoAmount = clampEffectAmount(effects.echo);
-    const delayAmount = clampEffectAmount(effects.delay);
-    reverbEarly.wet.gain.setTargetAtTime(reverb * 0.3, now, 0.025);
-    reverbWet.gain.setTargetAtTime(reverb * 0.24, now, 0.025);
-    echo.wet.gain.setTargetAtTime(echoAmount * 0.44, now, 0.025);
-    delay.delay.delayTime.setTargetAtTime(
-      0.12 + delayAmount * 0.38,
-      now,
-      0.025
-    );
-    delay.wet.gain.setTargetAtTime(delayAmount * 0.4, now, 0.025);
-  };
-  apply(initialEffects);
-  return { apply };
-}
-
-function noteNameToMidi(noteName) {
-  if (typeof noteName !== "string") return null;
-  const match = /^([A-Ga-g])([#b]?)(-?\d+)$/.exec(noteName.trim());
-  if (!match) return null;
-  const semitones = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
-  const [, letter, accidental, octaveText] = match;
-  const base = semitones[letter.toUpperCase()];
-  const offset = accidental === "#" ? 1 : accidental === "b" ? -1 : 0;
-  return (Number(octaveText) + 1) * 12 + base + offset;
-}
-
-const KEY_PITCHES = {
-  C: 0,
-  "C#": 1,
-  Db: 1,
-  D: 2,
-  "D#": 3,
-  Eb: 3,
-  E: 4,
-  F: 5,
-  "F#": 6,
-  Gb: 6,
-  G: 7,
-  "G#": 8,
-  Ab: 8,
-  A: 9,
-  "A#": 10,
-  Bb: 10,
-  B: 11
-};
-const SHARP_KEYS = [
-  "C",
-  "C#",
-  "D",
-  "D#",
-  "E",
-  "F",
-  "F#",
-  "G",
-  "G#",
-  "A",
-  "A#",
-  "B"
-];
-function transposeKey(key, semitones) {
-  if (!key) return "Тональность не определена";
-  const match = /^([A-G](?:#|b)?)(.*)$/i.exec(key.trim());
-  if (!match) return key;
-  const [, rootText, suffix] = match;
-  const root = rootText[0].toUpperCase() + rootText.slice(1);
-  const pitch = KEY_PITCHES[root];
-  if (pitch == null) return key;
-  return `${SHARP_KEYS[(pitch + semitones + 120) % 12]}${suffix}`;
-}
-
-function detectMidiFromAnalyser(analyser, buffer, sampleRate) {
-  analyser.getFloatTimeDomainData(buffer);
-  let energy = 0;
-  for (let index = 0; index < buffer.length; index += 1)
-    energy += buffer[index] ** 2;
-  if (Math.sqrt(energy / buffer.length) < 0.012) return null;
-
-  const minLag = Math.floor(sampleRate / 1000);
-  const maxLag = Math.min(buffer.length - 2, Math.floor(sampleRate / 75));
-  let bestLag = -1;
-  let bestScore = 0;
-  for (let lag = minLag; lag <= maxLag; lag += 1) {
-    let correlation = 0;
-    let leftEnergy = 0;
-    let rightEnergy = 0;
-    for (let index = 0; index < buffer.length - lag; index += 1) {
-      const left = buffer[index];
-      const right = buffer[index + lag];
-      correlation += left * right;
-      leftEnergy += left * left;
-      rightEnergy += right * right;
-    }
-    const score = correlation / Math.sqrt(leftEnergy * rightEnergy || 1);
-    if (score > bestScore) {
-      bestScore = score;
-      bestLag = lag;
-    }
-  }
-  if (bestLag < 0 || bestScore < 0.62) return null;
-  const frequency = sampleRate / bestLag;
-  return Number.isFinite(frequency)
-    ? 69 + 12 * Math.log2(frequency / 440)
-    : null;
-}
-
-function midiToWesternNote(midi) {
-  const names = [
-    "C",
-    "C♯",
-    "D",
-    "D♯",
-    "E",
-    "F",
-    "F♯",
-    "G",
-    "G♯",
-    "A",
-    "A♯",
-    "B"
-  ];
-  return `${names[((midi % 12) + 12) % 12]}${Math.floor(midi / 12) - 1}`;
-}
-
-function formatTime(sec) {
-  if (!Number.isFinite(sec)) return "00:00";
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
-
-function playbackGain(value) {
-  const normalized = Math.max(0, Math.min(1, Number(value) || 0));
-  return normalized ** 2;
-}
-
-function createPanoramaPath() {
-  return {
-    xPhaseA: Math.random() * Math.PI * 2,
-    xPhaseB: Math.random() * Math.PI * 2,
-    xPhaseC: Math.random() * Math.PI * 2,
-    yPhaseA: Math.random() * Math.PI * 2,
-    yPhaseB: Math.random() * Math.PI * 2
-  };
-}
-
-function getYouTubeVideoId(url) {
-  if (!url) return null;
-  try {
-    const parsed = new URL(url);
-    const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
-    let id = null;
-    if (host === "youtu.be") {
-      const [, pathnameId] = parsed.pathname.split("/");
-      id = pathnameId;
-    }
-    if (host.endsWith("youtube.com")) {
-      id =
-        parsed.searchParams.get("v") ||
-        parsed.pathname.match(/^\/(?:embed|shorts|live)\/([^/?]+)/)?.[1];
-    }
-    return /^[\w-]{11}$/.test(id || "") ? id : null;
-  } catch {
-    return null;
-  }
-}
-
-function youTubeEmbedUrl(videoId) {
-  return `https://www.youtube.com/embed/${videoId}?enablejsapi=1&playsinline=1&controls=0&disablekb=1&fs=0&iv_load_policy=3&cc_load_policy=0&rel=0&modestbranding=1&mute=1`;
-}
-
-const KARAOKE_PREFERENCES_KEY = "karaoke-player-preferences";
-
-function loadKaraokePreferences() {
-  try {
-    return JSON.parse(localStorage.getItem(KARAOKE_PREFERENCES_KEY) || "{}");
-  } catch {
-    return {};
-  }
-}
-
-const MONITORING_MODES = [
-  {
-    id: "direct",
-    title:
-      "\u041f\u0440\u044f\u043c\u043e\u0439 \u0434\u0440\u0430\u0439\u0432\u0435\u0440",
-    description:
-      "\u041c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u0430\u044f \u0437\u0430\u0434\u0435\u0440\u0436\u043a\u0430. \u041d\u0435\u043e\u0431\u0445\u043e\u0434\u0438\u043c\u044b \u0430\u0443\u0434\u0438\u043e\u0434\u0440\u0430\u0439\u0432\u0435\u0440 \u0438 \u043d\u0430\u0443\u0448\u043d\u0438\u043a\u0438.",
-    Icon: Zap
-  },
-  {
-    id: "browser",
-    title: "\u0421\u043e\u0432\u043c\u0435\u0441\u0442\u0438\u043c\u044b\u0439",
-    description:
-      "\u0420\u0430\u0431\u043e\u0442\u0430\u0435\u0442 \u0441 \u043e\u0431\u044b\u0447\u043d\u044b\u043c\u0438 USB-\u043c\u0438\u043a\u0440\u043e\u0444\u043e\u043d\u0430\u043c\u0438. \u0412\u043e\u0437\u043c\u043e\u0436\u043d\u0430 \u0437\u0430\u0434\u0435\u0440\u0436\u043a\u0430.",
-    Icon: ShieldCheck
-  }
-];
+// Karaoke data is normalized at the UI boundary so playback and visual
+// components operate on one predictable shape. Pure transformations live in
+// utils/data.js and are covered by regression tests.
 
 export default function Karaoke({ onOpenAppSettings }) {
   const onlineRoom = useOnlineRoom();
@@ -341,7 +78,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     ? (songs || []).find((s) => s.id === songId)
     : (songs || []).find((s) => s.status === "done");
 
-  const [result, setResult] = useState(null);
+  const result = useKaraokeResult(song);
   const instrumentalRef = useRef(null);
   const vocalsRef = useRef(null);
   const videoRef = useRef(null);
@@ -360,29 +97,27 @@ export default function Karaoke({ onOpenAppSettings }) {
   const [pitchRestProgress, setPitchRestProgress] = useState(1);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [preferences] = useState(loadKaraokePreferences);
-  const [musicVolume, setMusicVolume] = useState(
-    () => preferences.musicVolume ?? 1
-  );
-  const [vocalVolume, setVocalVolume] = useState(
-    () => preferences.vocalVolume ?? 1
-  );
-  const [melodyVolume, setMelodyVolume] = useState(
-    () => preferences.melodyVolume ?? 0
-  );
-  const [speed, setSpeed] = useState(() => preferences.speed ?? 1);
+  const {
+    musicVolume,
+    setMusicVolume,
+    vocalVolume,
+    setVocalVolume,
+    melodyVolume,
+    setMelodyVolume,
+    speed,
+    setSpeed,
+    keyShift,
+    setKeyShift,
+    showLyrics,
+    setShowLyrics,
+    showNotes,
+    setShowNotes
+  } = useKaraokePreferences();
   // ВАЖНО: keyShift сейчас смещает только отображаемую линию мелодии
   // (транспонирует ноты на экране), а НЕ реальный питч аудио — честный
   // питч-шифтинг воспроизведения в браузере требует DSP-библиотеки вроде
   // SoundTouch-js/Rubberband и здесь не реализован. Если нужен настоящий
   // сдвиг тональности звука — это отдельная задача.
-  const [keyShift, setKeyShift] = useState(() => preferences.keyShift ?? 0);
-  const [showLyrics, setShowLyrics] = useState(
-    () => preferences.showLyrics ?? true
-  );
-  const [showNotes, setShowNotes] = useState(
-    () => preferences.showNotes ?? true
-  );
   const [recordingSessionId, setRecordingSessionId] = useState(null);
   const [analysisRecordingId, setAnalysisRecordingId] = useState(null);
   const [microphoneOpen, setMicrophoneOpen] = useState(false);
@@ -408,7 +143,6 @@ export default function Karaoke({ onOpenAppSettings }) {
   const [monitorLatencyHint, setMonitorLatencyHint] = useState("interactive");
   const [monitorMode, setMonitorMode] = useState("direct");
   const [monitorModeOpen, setMonitorModeOpen] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [auroraSeed] = useState(() => Math.floor(Math.random() * 997));
   const themeQueueRef = useRef(shuffleThemes());
@@ -479,21 +213,12 @@ export default function Karaoke({ onOpenAppSettings }) {
     // the visual scene feels alive without competing with lyrics or causing
     // motion discomfort during a full song.
     const cycleMs = 240_000;
-    const offsetSine = (phase) => Math.sin(phase);
 
     const move = (now) => {
       const elapsed = now - startedAt;
-      const theta = ((elapsed % cycleMs) / cycleMs) * Math.PI * 2;
       // Integer harmonics make the 240-second path closed: frame 0 and the
       // final frame have identical position and velocity, so no loop is seen.
-      const x =
-        22 * (Math.sin(theta + path.xPhaseA) - offsetSine(path.xPhaseA)) +
-        13 * (Math.sin(theta * 3 + path.xPhaseB) - offsetSine(path.xPhaseB)) +
-        7 * (Math.sin(theta * 5 + path.xPhaseC) - offsetSine(path.xPhaseC));
-      const y =
-        48 +
-        2.4 * (Math.sin(theta * 2 + path.yPhaseA) - offsetSine(path.yPhaseA)) +
-        1.2 * (Math.sin(theta * 5 + path.yPhaseB) - offsetSine(path.yPhaseB));
+      const { x, y } = getPanoramaPosition(elapsed, cycleMs, path);
       panorama.style.setProperty("--panorama-x", `-${x.toFixed(3)}cqh`);
       panorama.style.setProperty("--panorama-y", `${y.toFixed(3)}%`);
       panoramaClockRef.current = elapsed;
@@ -517,11 +242,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   useEffect(() => {
     if (!audioSettings || microphoneEffectsInitializedRef.current) return;
     microphoneEffectsInitializedRef.current = true;
-    setMicrophoneEffects({
-      reverb: Number(audioSettings.reverb) || 0,
-      echo: Number(audioSettings.echo) || 0,
-      delay: Number(audioSettings.delay) || 0
-    });
+    setMicrophoneEffects(normalizeAudioEffects(audioSettings));
   }, [audioSettings]);
 
   useEffect(() => {
@@ -553,9 +274,7 @@ export default function Karaoke({ onOpenAppSettings }) {
       audioSettings?.output_device_id != null
     )
       return;
-    const preferred = (directOutputDevices || []).find((device) =>
-      device.name.toLowerCase().includes("audient")
-    );
+    const preferred = findPreferredOutputDevice(directOutputDevices);
     if (preferred && String(directOutputDeviceId) !== String(preferred.index)) {
       setDirectOutputDeviceId(preferred.index);
       updateMicrophone({ output_device_id: preferred.index });
@@ -582,11 +301,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     navigator.mediaDevices
       .enumerateDevices()
       .then((entries) => {
-        const output = entries.find(
-          (entry) =>
-            entry.kind === "audiooutput" &&
-            selected.name.toLowerCase().includes(entry.label.toLowerCase())
-        );
+        const output = findMatchingBrowserOutput(entries, selected);
         if (!output?.deviceId) return;
         [instrumentalRef.current, vocalsRef.current, videoRef.current].forEach(
           (media) => media?.setSinkId?.(output.deviceId).catch(() => {})
@@ -641,63 +356,16 @@ export default function Karaoke({ onOpenAppSettings }) {
     navigator.mediaDevices
       .enumerateDevices()
       .then((mediaDevices) => {
-        setBrowserAudioDevices({
-          inputs: mediaDevices.filter((device) => device.kind === "audioinput"),
-          outputs: mediaDevices.filter(
-            (device) => device.kind === "audiooutput"
-          )
-        });
+        setBrowserAudioDevices(groupBrowserAudioDevices(mediaDevices));
       })
       .catch(() => {});
   }, [microphoneOpen]);
-
-  useEffect(() => {
-    if (!song || song.status !== "done") {
-      setResult(null);
-      return undefined;
-    }
-    let active = true;
-    api
-      .getResult(song.id)
-      .then((nextResult) => {
-        if (active) setResult(nextResult);
-      })
-      .catch(() => {
-        if (active) setResult(null);
-      });
-    return () => {
-      active = false;
-    };
-  }, [song?.id, song?.status]);
 
   useEffect(() => {
     setIsPlaying(false);
     setCurrentTime(0);
     setDuration(0);
   }, [song?.id]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      KARAOKE_PREFERENCES_KEY,
-      JSON.stringify({
-        musicVolume,
-        vocalVolume,
-        melodyVolume,
-        speed,
-        keyShift,
-        showLyrics,
-        showNotes
-      })
-    );
-  }, [
-    musicVolume,
-    vocalVolume,
-    melodyVolume,
-    speed,
-    keyShift,
-    showLyrics,
-    showNotes
-  ]);
 
   const lyrics = useMemo(() => normalizeLyrics(result?.lyrics_sync), [result]);
   const notes = useMemo(
@@ -714,14 +382,10 @@ export default function Karaoke({ onOpenAppSettings }) {
   // word-level alignment was already correct for the current song.
   const lyricTime = currentTime;
 
-  const currentLineIndex = lyrics.findIndex(
-    (l) => lyricTime >= l.start && lyricTime < l.end
+  const { currentLine, upcomingLine, nextLine } = getLyricDisplayState(
+    lyrics,
+    lyricTime
   );
-  const currentLine = lyrics[currentLineIndex];
-  const upcomingLine = lyrics.find((line) => line.start > lyricTime);
-  // Before a phrase starts, upcomingLine is already the large primary cue.
-  // Do not render it a second time as the "next" line underneath.
-  const nextLine = currentLine ? lyrics[currentLineIndex + 1] : null;
 
   const sendYouTubeCommand = (func, args = []) => {
     youTubeClipRef.current?.contentWindow?.postMessage(
@@ -733,8 +397,8 @@ export default function Karaoke({ onOpenAppSettings }) {
   const syncSecondaryMedia = (position, force = false) => {
     [vocalsRef.current, videoRef.current].forEach((media) => {
       if (!media || !Number.isFinite(media.duration)) return;
-      if (force || Math.abs(media.currentTime - position) > 0.08) {
-        media.currentTime = Math.min(position, media.duration || position);
+      if (force || shouldSyncMedia(media.currentTime, position)) {
+        media.currentTime = getSecondaryMediaPosition(position, media.duration);
       }
     });
     if (force) sendYouTubeCommand("seekTo", [position, true]);
@@ -745,19 +409,19 @@ export default function Karaoke({ onOpenAppSettings }) {
     if (!guide || guide.context.state === "closed") return;
 
     const now = guide.context.currentTime;
-    const volume = melodyVolumeRef.current;
-    const note = melodyNotesRef.current.find(
-      (item) => position >= item.start && position < item.end
-    );
-    if (!note || volume <= 0) {
-      guide.gain.gain.setTargetAtTime(0.0001, now, 0.018);
+    const state = getMelodyGuideState({
+      notes: melodyNotesRef.current,
+      position,
+      keyShift: melodyKeyShiftRef.current,
+      volume: melodyVolumeRef.current
+    });
+    if (!state.active) {
+      guide.gain.gain.setTargetAtTime(state.gain, now, 0.018);
       return;
     }
 
-    const midi = note.midi + melodyKeyShiftRef.current;
-    const frequency = 440 * 2 ** ((midi - 69) / 12);
-    guide.oscillator.frequency.setTargetAtTime(frequency, now, 0.012);
-    guide.gain.gain.setTargetAtTime(0.12 * volume ** 2, now, 0.015);
+    guide.oscillator.frequency.setTargetAtTime(state.frequency, now, 0.012);
+    guide.gain.gain.setTargetAtTime(state.gain, now, 0.015);
   }
 
   async function startMelodyGuide() {
@@ -793,7 +457,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   useEffect(() => {
     const instr = instrumentalRef.current;
     const voc = vocalsRef.current;
-    if (!instr || !voc) return;
+    if (!instr || !voc) return undefined;
     const onLoadedMeta = () => setDuration(instr.duration || 0);
     const onEnded = () => {
       // The instrumental track owns the transport clock. Do not let vocals,
@@ -1034,7 +698,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   const togglePlay = async ({ broadcast = true, forcePlaying = null } = {}) => {
     const instr = instrumentalRef.current;
     const voc = vocalsRef.current;
-    if (!instr || !voc) return;
+    if (!instr || !voc) return undefined;
     const operationId = ++transportOperationRef.current;
     const shouldPlay = forcePlaying == null ? !isPlaying : forcePlaying;
     if (!shouldPlay) {
@@ -1047,14 +711,11 @@ export default function Karaoke({ onOpenAppSettings }) {
       if (recordingSessionId)
         await api.pauseRecording(recordingSessionId).catch(() => {});
       if (broadcast && onlineRoom?.room) {
-        onlineRoom.syncCommand({
-          type: "karaoke-player",
-          action: "pause",
-          songId: song.id,
-          position: instr.currentTime
-        });
+        onlineRoom.syncCommand(
+          createPlayerSyncCommand("pause", song.id, instr.currentTime)
+        );
       }
-      return;
+      return true;
     } else {
       // Create/resume Web Audio while this click is still a user gesture.
       const melodyStart = startMelodyGuide().catch(() => {});
@@ -1078,15 +739,17 @@ export default function Karaoke({ onOpenAppSettings }) {
         setRecordingError(null);
       } catch (error) {
         silenceMelodyGuide();
-        setRecordingError(`Не удалось начать запись: ${error.message}`);
-        return;
+        setRecordingError(
+          `Не удалось начать запись: ${getErrorMessage(error, "неизвестная ошибка")}`
+        );
+        return false;
       }
       if (operationId !== transportOperationRef.current) {
         if (activeRecordingId) {
           await api.pauseRecording(activeRecordingId).catch(() => {});
         }
         silenceMelodyGuide();
-        return;
+        return false;
       }
       syncSecondaryMedia(instr.currentTime, true);
       instr.volume = playbackGain(musicVolume);
@@ -1100,25 +763,23 @@ export default function Karaoke({ onOpenAppSettings }) {
         );
       } catch {
         setIsPlaying(false);
-        return;
+        return false;
       }
     }
-    if (operationId !== transportOperationRef.current) return;
+    if (operationId !== transportOperationRef.current) return false;
     setIsPlaying(true);
     if (broadcast && onlineRoom?.room) {
-      onlineRoom.syncCommand({
-        type: "karaoke-player",
-        action: "play",
-        songId: song.id,
-        position: instr.currentTime
-      });
+      onlineRoom.syncCommand(
+        createPlayerSyncCommand("play", song.id, instr.currentTime)
+      );
     }
+    return true;
   };
 
   const stop = async ({ broadcast = true } = {}) => {
     const instr = instrumentalRef.current;
     const voc = vocalsRef.current;
-    if (!instr || !voc) return;
+    if (!instr || !voc) return undefined;
     transportOperationRef.current += 1;
     instr.pause();
     voc.pause();
@@ -1130,12 +791,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     setIsPlaying(false);
     setCurrentTime(0);
     if (broadcast && onlineRoom?.room) {
-      onlineRoom.syncCommand({
-        type: "karaoke-player",
-        action: "stop",
-        songId: song.id,
-        position: 0
-      });
+      onlineRoom.syncCommand(createPlayerSyncCommand("stop", song.id, 0));
     }
     if (recordingSessionId) {
       try {
@@ -1143,18 +799,21 @@ export default function Karaoke({ onOpenAppSettings }) {
         setRecordingSessionId(null);
         setAnalysisRecordingId(recording.id);
       } catch (error) {
-        setRecordingError(`Не удалось сохранить запись: ${error.message}`);
+        setRecordingError(
+          `Не удалось сохранить запись: ${getErrorMessage(error, "неизвестная ошибка")}`
+        );
       }
     }
     // A monitor enabled by the user remains active after a take; only the
     // temporary recording monitor is released by Stop.
-    if (manualMonitoringRef.current) return;
+    if (manualMonitoringRef.current) return true;
     const monitor = browserMonitorRef.current;
     monitor?.stream.getTracks().forEach((track) => track.stop());
     monitor?.context.close();
     browserMonitorRef.current = null;
     setMonitoringEnabled(false);
     await api.stopDirectMonitoring().catch(() => {});
+    return true;
   };
 
   const returnToLibrary = async () => {
@@ -1169,68 +828,8 @@ export default function Karaoke({ onOpenAppSettings }) {
       if (updated.volume != null) setMicrophoneVolume(updated.volume);
     } catch (error) {
       setRecordingError(
-        `Не удалось сохранить настройки микрофона: ${error.message}`
+        `Не удалось сохранить настройки микрофона: ${getErrorMessage(error, "неизвестная ошибка")}`
       );
-    }
-  };
-
-  const setBrowserMonitoring = async (enabled) => {
-    const activeMonitor = browserMonitorRef.current;
-    if (!enabled) {
-      activeMonitor?.stream.getTracks().forEach((track) => track.stop());
-      activeMonitor?.context.close();
-      browserMonitorRef.current = null;
-      manualMonitoringRef.current = false;
-      setMonitoringEnabled(false);
-      await api.stopDirectMonitoring().catch(() => {});
-      return;
-    }
-
-    try {
-      await api.stopDirectMonitoring().catch(() => {});
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-          channelCount: 1,
-          ...(monitorInputDeviceId !== "default"
-            ? { deviceId: { exact: monitorInputDeviceId } }
-            : {})
-        }
-      });
-      const context = new AudioContext({ latencyHint: monitorLatencyHint });
-      if (
-        monitorOutputDeviceId !== "default" &&
-        typeof context.setSinkId === "function"
-      ) {
-        await context.setSinkId(monitorOutputDeviceId);
-      }
-      const source = context.createMediaStreamSource(stream);
-      const stereo = context.createChannelMerger(2);
-      const gainNode = context.createGain();
-      gainNode.gain.value = microphoneVolume;
-      source.connect(stereo, 0, 0);
-      source.connect(stereo, 0, 1);
-      const effects = createLiveMicrophoneEffects(
-        context,
-        stereo,
-        gainNode,
-        microphoneEffects
-      );
-      gainNode.connect(context.destination);
-      await context.resume();
-      browserMonitorRef.current = { stream, context, gainNode, effects };
-      manualMonitoringRef.current = true;
-      setMonitoringEnabled(true);
-      await updateMicrophone({ monitoring_enabled: false });
-    } catch (error) {
-      manualMonitoringRef.current = false;
-      setMonitoringEnabled(false);
-      setRecordingError(
-        `Не удалось включить прослушивание микрофона: ${error.message}`
-      );
-      await updateMicrophone({ monitoring_enabled: false });
     }
   };
 
@@ -1253,34 +852,29 @@ export default function Karaoke({ onOpenAppSettings }) {
       setMonitoringEnabled(false);
       if (!enabled) await api.stopDirectMonitoring().catch(() => {});
       setRecordingError(
-        `Не удалось включить прямое прослушивание: ${error.message}`
+        `Не удалось включить прямое прослушивание: ${getErrorMessage(error, "неизвестная ошибка")}`
       );
     }
   };
 
-  const microphoneLevel = signal
-    ? Math.max(0, Math.min(100, ((signal.rms_db + 60) / 60) * 100))
-    : 0;
+  const microphoneLevel = getMicrophoneLevel(signal);
 
   const seekTo = (time, { broadcast = true } = {}) => {
     const instr = instrumentalRef.current;
     if (!instr) return;
-    const position = Math.max(0, Math.min(durationRef.current || time, time));
+    const position = clampPlaybackPosition(time, durationRef.current);
     instr.currentTime = position;
     syncSecondaryMedia(position, true);
     setCurrentTime(position);
     if (broadcast && onlineRoom?.room) {
-      onlineRoom.syncCommand({
-        type: "karaoke-player",
-        action: "seek",
-        songId: song.id,
-        position
-      });
+      onlineRoom.syncCommand(
+        createPlayerSyncCommand("seek", song.id, position)
+      );
     }
   };
 
   const skip = (delta) =>
-    seekTo(Math.max(0, Math.min(duration, currentTime + delta)));
+    seekTo(clampPlaybackPosition(currentTime + delta, duration));
 
   useEffect(() => {
     const command = onlineRoom?.roomCommand;
@@ -1331,8 +925,6 @@ export default function Karaoke({ onOpenAppSettings }) {
 
   useEffect(() => {
     const onFullscreenChange = () => {
-      const active = document.fullscreenElement === containerRef.current;
-      setIsFullscreen(active);
       setControlsVisible(true);
     };
     document.addEventListener("fullscreenchange", onFullscreenChange);
@@ -1349,32 +941,24 @@ export default function Karaoke({ onOpenAppSettings }) {
     if (!shell || !main || !stage) return undefined;
 
     const syncStageAspect = () => {
-      const currentExtra =
-        Number.parseFloat(
-          getComputedStyle(shell).getPropertyValue("--karaoke-nav-extra")
-        ) || 0;
-      const fullAvailableHeight = main.clientHeight + currentExtra;
-      const targetStageHeight = (main.clientWidth * 9) / 16;
-      shell.style.setProperty(
-        "--karaoke-nav-extra",
-        `${Math.max(0, fullAvailableHeight - targetStageHeight)}px`
+      const currentExtra = Number.parseFloat(
+        getComputedStyle(shell).getPropertyValue("--karaoke-nav-extra")
       );
-
-      const videoWidth = Math.max(
-        stage.clientWidth,
-        (stage.clientHeight * 16) / 9
-      );
-      const videoHeight = Math.max(
-        stage.clientHeight,
-        (stage.clientWidth * 9) / 16
-      );
+      const layout = getKaraokeStageLayout({
+        mainWidth: main.clientWidth,
+        mainHeight: main.clientHeight,
+        stageWidth: stage.clientWidth,
+        stageHeight: stage.clientHeight,
+        currentNavExtra: currentExtra
+      });
+      shell.style.setProperty("--karaoke-nav-extra", `${layout.navExtra}px`);
       stage.style.setProperty(
         "--karaoke-video-width",
-        `${Math.ceil(videoWidth) + 2}px`
+        `${layout.videoWidth}px`
       );
       stage.style.setProperty(
         "--karaoke-video-height",
-        `${Math.ceil(videoHeight) + 2}px`
+        `${layout.videoHeight}px`
       );
     };
 
@@ -1496,12 +1080,14 @@ export default function Karaoke({ onOpenAppSettings }) {
               </div>
               <div className="karaoke-settings-toggles">
                 <button
+                  type="button"
                   className={`btn ${showLyrics ? "btn-primary" : "btn-ghost"}`}
                   onClick={() => setShowLyrics((value) => !value)}
                 >
                   <Type size={14} /> Текст
                 </button>
                 <button
+                  type="button"
                   className={`btn ${showNotes ? "btn-primary" : "btn-ghost"}`}
                   onClick={() => setShowNotes((value) => !value)}
                 >
@@ -1604,31 +1190,27 @@ export default function Karaoke({ onOpenAppSettings }) {
             </div>
             {microphoneControlsOpen && (
               <div className="microphone-controls-content">
-                <label
+                <div
                   className={
                     audioDriver === "asio" ? "advanced-audio-setting" : ""
                   }
                 >
-                  Устройство ввода
+                  <span>Устройство ввода</span>
                   <Dropdown
+                    id="karaoke-input-device"
                     value={audioSettings?.input_device_id ?? ""}
                     onChange={(value) =>
                       updateMicrophone({
                         input_device_id: value === "" ? null : Number(value)
                       })
                     }
-                    options={[
-                      { value: "", label: "По умолчанию" },
-                      ...(devices || []).map((device) => ({
-                        value: device.index,
-                        label: device.name
-                      }))
-                    ]}
+                    options={createIndexedDeviceOptions(devices)}
                   />
-                </label>
-                <label className="audio-driver-setting">
-                  Аудиодрайвер
+                </div>
+                <div className="audio-driver-setting">
+                  <span>Аудиодрайвер</span>
                   <Dropdown
+                    id="karaoke-audio-driver"
                     value={audioDriver}
                     disabled={monitoringEnabled}
                     onChange={async (value) => {
@@ -1652,11 +1234,12 @@ export default function Karaoke({ onOpenAppSettings }) {
                       ASIO появится после установки драйвера аудиоинтерфейса.
                     </small>
                   )}
-                </label>
+                </div>
                 {audioDriver === "asio" && (
-                  <label className="asio-driver-setting">
-                    ASIO-драйвер
+                  <div className="asio-driver-setting">
+                    <span>ASIO-драйвер</span>
                     <Dropdown
+                      id="karaoke-asio-driver"
                       value={asioDriverName}
                       disabled={monitoringEnabled}
                       onChange={async (value) => {
@@ -1671,11 +1254,12 @@ export default function Karaoke({ onOpenAppSettings }) {
                     <small>
                       Для Audient выбран нативный драйвер аудиоинтерфейса.
                     </small>
-                  </label>
+                  </div>
                 )}
-                <label className="advanced-audio-setting">
-                  Буфер аудио
+                <div className="advanced-audio-setting">
+                  <span>Буфер аудио</span>
                   <Dropdown
+                    id="karaoke-audio-buffer"
                     value={audioBufferSize}
                     disabled={monitoringEnabled}
                     onChange={async (value) => {
@@ -1683,15 +1267,13 @@ export default function Karaoke({ onOpenAppSettings }) {
                       setAudioBufferSize(bufferSize);
                       await updateMicrophone({ buffer_size: bufferSize });
                     }}
-                    options={[32, 64, 128, 256, 512].map((value) => ({
-                      value,
-                      label: `${value} samples`
-                    }))}
+                    options={createBufferSizeOptions()}
                   />
-                </label>
-                <label className="advanced-audio-setting">
-                  Выход прямого мониторинга
+                </div>
+                <div className="advanced-audio-setting">
+                  <span>Выход прямого мониторинга</span>
                   <Dropdown
+                    id="karaoke-direct-output"
                     value={directOutputDeviceId}
                     disabled={monitoringEnabled}
                     onChange={async (value) => {
@@ -1699,52 +1281,46 @@ export default function Karaoke({ onOpenAppSettings }) {
                       setDirectOutputDeviceId(value);
                       await updateMicrophone({ output_device_id: deviceId });
                     }}
-                    options={[
-                      { value: "", label: "Системное устройство по умолчанию" },
-                      ...(directOutputDevices || []).map((device) => ({
-                        value: device.index,
-                        label: device.name
-                      }))
-                    ]}
+                    options={createIndexedDeviceOptions(
+                      directOutputDevices,
+                      "Системное устройство по умолчанию"
+                    )}
                   />
                   <small>
                     Для минимальной задержки выберите выход того же
                     аудиоинтерфейса.
                   </small>
-                </label>
-                <label className="legacy-browser-monitoring">
-                  Вход для прослушивания
+                </div>
+                <div className="legacy-browser-monitoring">
+                  <span>Вход для прослушивания</span>
                   <Dropdown
+                    id="karaoke-monitor-input"
                     value={monitorInputDeviceId}
                     disabled={monitoringEnabled}
                     onChange={setMonitorInputDeviceId}
-                    options={[
-                      { value: "default", label: "Системное по умолчанию" },
-                      ...browserAudioDevices.inputs.map((device) => ({
-                        value: device.deviceId,
-                        label: device.label || "Микрофон"
-                      }))
-                    ]}
+                    options={createBrowserDeviceOptions(
+                      browserAudioDevices.inputs,
+                      "Микрофон"
+                    )}
                   />
-                </label>
-                <label className="legacy-browser-monitoring">
-                  Выход для прослушивания
+                </div>
+                <div className="legacy-browser-monitoring">
+                  <span>Выход для прослушивания</span>
                   <Dropdown
+                    id="karaoke-monitor-output"
                     value={monitorOutputDeviceId}
                     disabled={monitoringEnabled}
                     onChange={setMonitorOutputDeviceId}
-                    options={[
-                      { value: "default", label: "Системное по умолчанию" },
-                      ...browserAudioDevices.outputs.map((device) => ({
-                        value: device.deviceId,
-                        label: device.label || "Аудиоустройство"
-                      }))
-                    ]}
+                    options={createBrowserDeviceOptions(
+                      browserAudioDevices.outputs,
+                      "Аудиоустройство"
+                    )}
                   />
-                </label>
-                <label className="legacy-browser-monitoring">
-                  Режим задержки
+                </div>
+                <div className="legacy-browser-monitoring">
+                  <span>Режим задержки</span>
                   <Dropdown
+                    id="karaoke-latency-mode"
                     value={monitorLatencyHint}
                     disabled={monitoringEnabled}
                     onChange={setMonitorLatencyHint}
@@ -1757,84 +1333,27 @@ export default function Karaoke({ onOpenAppSettings }) {
                       }
                     ]}
                   />
-                </label>
-                <div
-                  className="monitoring-mode-picker legacy-browser-monitoring"
-                  ref={monitorModeMenuRef}
-                >
-                  <span>
-                    {
-                      "\u0420\u0435\u0436\u0438\u043c \u043f\u0440\u043e\u0441\u043b\u0443\u0448\u0438\u0432\u0430\u043d\u0438\u044f"
-                    }
-                  </span>
-                  <button
-                    type="button"
-                    className="monitoring-mode-trigger"
-                    disabled={monitoringEnabled}
-                    aria-haspopup="listbox"
-                    aria-expanded={monitorModeOpen}
-                    onClick={() => setMonitorModeOpen((open) => !open)}
-                  >
-                    {(() => {
-                      const selected = MONITORING_MODES.find(
-                        (mode) => mode.id === monitorMode
-                      );
-                      const Icon = selected.Icon;
-                      return (
-                        <>
-                          <Icon size={15} />
-                          <span>{selected.title}</span>
-                          <ChevronDown size={15} />
-                        </>
-                      );
-                    })()}
-                  </button>
-                  {monitorModeOpen && (
-                    <div
-                      className="monitoring-mode-menu"
-                      role="listbox"
-                      aria-label="Режим прослушивания"
-                    >
-                      <div className="monitoring-mode-menu-title">
-                        Выберите способ прослушивания
-                      </div>
-                      {MONITORING_MODES.map(
-                        ({ id, title, description, Icon }) => {
-                          const selected = id === monitorMode;
-                          return (
-                            <button
-                              type="button"
-                              role="option"
-                              aria-selected={selected}
-                              key={id}
-                              className={`monitoring-mode-option ${selected ? "is-selected" : ""}`}
-                              onClick={() => {
-                                setMonitorMode(id);
-                                setMonitorModeOpen(false);
-                              }}
-                            >
-                              <Icon size={17} />
-                              <span className="monitoring-mode-option-copy">
-                                <strong>{title}</strong>
-                                <small>{description}</small>
-                              </span>
-                              {selected && (
-                                <Check
-                                  className="monitoring-mode-check"
-                                  size={17}
-                                />
-                              )}
-                            </button>
-                          );
-                        }
-                      )}
-                    </div>
-                  )}
                 </div>
-                <label className="microphone-gain-setting">
+                <MonitoringModePicker
+                  modes={MONITORING_MODES}
+                  value={monitorMode}
+                  isOpen={monitorModeOpen}
+                  disabled={monitoringEnabled}
+                  menuRef={monitorModeMenuRef}
+                  onToggle={() => setMonitorModeOpen((open) => !open)}
+                  onChange={(value) => {
+                    setMonitorMode(value);
+                    setMonitorModeOpen(false);
+                  }}
+                />
+                <label
+                  className="microphone-gain-setting"
+                  htmlFor="microphone-volume"
+                >
                   Громкость микрофона:{" "}
                   {Math.round((microphoneVolume / 4) * 100)}%
                   <input
+                    id="microphone-volume"
                     type="range"
                     min="0"
                     max="4"
@@ -1864,8 +1383,12 @@ export default function Karaoke({ onOpenAppSettings }) {
                     }}
                   />
                 </label>
-                <label className="microphone-monitoring">
+                <label
+                  className="microphone-monitoring"
+                  htmlFor="microphone-monitoring-enabled"
+                >
                   <input
+                    id="microphone-monitoring-enabled"
                     type="checkbox"
                     checked={monitoringEnabled}
                     onChange={(event) =>
@@ -2112,6 +1635,7 @@ export default function Karaoke({ onOpenAppSettings }) {
             <strong>{song.title}</strong>
           </div>
           <button
+            type="button"
             className="btn btn-ghost"
             aria-label="Назад на 5 секунд"
             title="Назад на 5 секунд"
@@ -2120,6 +1644,7 @@ export default function Karaoke({ onOpenAppSettings }) {
             <SkipBack size={16} />
           </button>
           <button
+            type="button"
             className="btn btn-primary karaoke-play-button"
             aria-label={isPlaying ? "Пауза" : "Воспроизвести"}
             title={isPlaying ? "Пауза" : "Воспроизвести"}
@@ -2128,6 +1653,7 @@ export default function Karaoke({ onOpenAppSettings }) {
             {isPlaying ? <Pause size={18} /> : <Play size={18} />}
           </button>
           <button
+            type="button"
             className="btn btn-ghost"
             aria-label="Остановить"
             title="Остановить"
@@ -2136,6 +1662,7 @@ export default function Karaoke({ onOpenAppSettings }) {
             <Square size={16} />
           </button>
           <button
+            type="button"
             className="btn btn-ghost"
             aria-label="Вперёд на 5 секунд"
             title="Вперёд на 5 секунд"
@@ -2145,17 +1672,19 @@ export default function Karaoke({ onOpenAppSettings }) {
           </button>
           <div className="karaoke-corner-actions">
             <button
+              type="button"
               className="btn btn-ghost"
               title="Вернуться в библиотеку"
               aria-label="Вернуться в библиотеку"
               onClick={() => {
-                void returnToLibrary();
+                returnToLibrary();
               }}
             >
               <ArrowLeft size={18} />
             </button>
             {onOpenAppSettings && (
               <button
+                type="button"
                 className="btn karaoke-app-settings"
                 title="Настройки приложения"
                 aria-label="Настройки приложения"
@@ -2165,6 +1694,7 @@ export default function Karaoke({ onOpenAppSettings }) {
               </button>
             )}
             <button
+              type="button"
               className={`btn ${microphoneOpen ? "btn-primary" : "btn-ghost"}`}
               title="Настройки караоке"
               onClick={() => setMicrophoneOpen(true)}
@@ -2172,6 +1702,7 @@ export default function Karaoke({ onOpenAppSettings }) {
               <SlidersHorizontal size={18} />
             </button>
             <button
+              type="button"
               className="btn btn-ghost"
               title="На весь экран"
               onClick={toggleFullscreen}
@@ -2181,770 +1712,6 @@ export default function Karaoke({ onOpenAppSettings }) {
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function KaraokeLyricLine({ line, currentTime, className }) {
-  const words = line.words?.length
-    ? line.words
-    : line.text
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean)
-        .map((text) => ({ text }));
-  const totalWeight =
-    words.reduce((sum, word) => sum + Math.max(word.text.length, 1), 0) || 1;
-  let passedWeight = 0;
-  const wordTimings = words.map((word) => {
-    const weight = Math.max(word.text.length, 1) / totalWeight;
-    const declaredStart = Number(word.start);
-    const declaredEnd = Number(word.end);
-    const start = Number.isFinite(declaredStart)
-      ? declaredStart
-      : line.start + (passedWeight / totalWeight) * (line.end - line.start);
-    const end =
-      Number.isFinite(declaredEnd) && declaredEnd > start
-        ? declaredEnd
-        : start + weight * (line.end - line.start);
-    passedWeight += Math.max(word.text.length, 1);
-    return { start, end };
-  });
-
-  return (
-    <div className={className}>
-      {words.map((word, index) => {
-        const { start: wordStart, end: wordEnd } = wordTimings[index];
-        const fill = Math.max(
-          0,
-          Math.min(
-            1,
-            (currentTime - wordStart) / Math.max(0.01, wordEnd - wordStart)
-          )
-        );
-        const characters = Array.from(word.text);
-        const characterProgress = fill * characters.length;
-        return (
-          <span
-            className="karaoke-lyric-word"
-            style={{ "--lyric-fill": `${Math.round(fill * 100)}%` }}
-            key={`${word.text}-${index}`}
-          >
-            {characters.map((character, characterIndex) => (
-              <span
-                className="karaoke-lyric-character"
-                style={{
-                  "--character-fill": `${Math.round(
-                    Math.max(
-                      0,
-                      Math.min(1, characterProgress - characterIndex)
-                    ) * 100
-                  )}%`
-                }}
-                key={`${character}-${characterIndex}`}
-              >
-                {character}
-              </span>
-            ))}
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
-function WaveformTimeline({ value, duration, onChange }) {
-  const bars = 220;
-  const progress =
-    duration > 0 ? Math.max(0, Math.min(1, value / duration)) : 0;
-  const seekFromPointer = (event) => {
-    if (!duration) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const ratio = Math.max(
-      0,
-      Math.min(1, (event.clientX - rect.left) / rect.width)
-    );
-    onChange(ratio * duration);
-  };
-
-  return (
-    <div
-      className="waveform-timeline"
-      onPointerDown={(event) => {
-        event.preventDefault();
-        seekFromPointer(event);
-      }}
-      onPointerMove={(event) => {
-        if (event.buttons === 1) seekFromPointer(event);
-      }}
-      onClick={seekFromPointer}
-    >
-      <svg
-        viewBox={`0 0 ${bars * 3} 44`}
-        preserveAspectRatio="none"
-        aria-hidden="true"
-      >
-        {Array.from({ length: bars }, (_, index) => {
-          const amplitude =
-            8 + Math.abs(Math.sin(index * 1.71) + Math.sin(index * 0.37)) * 11;
-          const played = index / bars <= progress;
-          return (
-            <rect
-              key={index}
-              x={index * 3 + 0.75}
-              y={22 - amplitude / 2}
-              width="1.5"
-              height={amplitude}
-              rx=".75"
-              fill={played ? "rgba(196,181,253,.98)" : "rgba(255,255,255,.18)"}
-            />
-          );
-        })}
-        <line
-          x1={progress * bars * 3}
-          x2={progress * bars * 3}
-          y1="0"
-          y2="44"
-          stroke="#f5f3ff"
-          strokeWidth="1.5"
-        />
-      </svg>
-      <input
-        aria-label="Позиция песни"
-        type="range"
-        min="0"
-        max={duration || 0}
-        step="0.01"
-        value={Math.min(value, duration || 0)}
-        onChange={(event) => onChange(Number(event.target.value))}
-        tabIndex={-1}
-      />
-    </div>
-  );
-}
-
-function SliderField({
-  label,
-  value,
-  min,
-  max,
-  step,
-  onChange,
-  display,
-  disabled,
-  onCommit
-}) {
-  return (
-    <div>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          color: "var(--text-secondary)",
-          marginBottom: 4
-        }}
-      >
-        <span>{label}</span>
-        <span className="mono">{display}</span>
-      </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(Number(e.target.value))}
-        onPointerUp={(event) => onCommit?.(Number(event.currentTarget.value))}
-        onKeyUp={(event) => {
-          if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
-            onCommit?.(Number(event.currentTarget.value));
-        }}
-        style={{ width: "100%", accentColor: "#a855f7" }}
-      />
-    </div>
-  );
-}
-
-function PerformanceAnalysisModal({ recordingId, onClose, onDone, onDeleted }) {
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
-  const [deleting, setDeleting] = useState(false);
-  const analysisRequestRef = useRef(null);
-  const { confirm: confirmDialog } = useAppDialog();
-
-  useEffect(() => {
-    let active = true;
-    if (!analysisRequestRef.current) {
-      analysisRequestRef.current = api.runAnalysis(recordingId);
-    }
-    analysisRequestRef.current
-      .then((analysis) => active && setResult(analysis))
-      .catch((analysisError) => active && setError(analysisError.message));
-    return () => {
-      active = false;
-    };
-  }, [recordingId]);
-
-  const deleteRecording = async () => {
-    if (!(await confirmDialog("Удалить это записанное исполнение?"))) return;
-    setDeleting(true);
-    try {
-      await api.deleteRecording(recordingId);
-      onDeleted();
-    } catch (deleteError) {
-      setError(`Не удалось удалить запись: ${deleteError.message}`);
-      setDeleting(false);
-    }
-  };
-
-  return (
-    <div
-      className="performance-analysis-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Анализ выступления"
-    >
-      <section className="performance-analysis-modal">
-        <div className="analysis-victory-scene" aria-hidden="true">
-          <div className="analysis-trophy">
-            <Trophy size={38} fill="currentColor" />
-          </div>
-          <div className="analysis-crystal" />
-          <div className="analysis-confetti">
-            {Array.from({ length: 26 }, (_, index) => (
-              <i key={index} style={{ "--j": index }} />
-            ))}
-          </div>
-        </div>
-        <button
-          className="karaoke-settings-close"
-          title="Закрыть"
-          onClick={onClose}
-        >
-          <X size={17} />
-        </button>
-        <div className="performance-analysis-heading">Анализ выступления</div>
-        {!result && !error && (
-          <p className="text-muted">Анализируем ноты и ритм исполнения…</p>
-        )}
-        {error && (
-          <>
-            <p className="song-lyrics-error">
-              Не удалось выполнить анализ: {error}
-            </p>
-            <button className="btn btn-primary" onClick={onClose}>
-              Закрыть
-            </button>
-          </>
-        )}
-        {result && (
-          <>
-            <AnalysisSummary result={result} />
-            <PerformancePlayer recordingId={recordingId} />
-            <div className="performance-analysis-actions">
-              <button
-                className="btn btn-danger"
-                onClick={deleteRecording}
-                disabled={deleting}
-              >
-                <Trash2 size={14} /> {deleting ? "Удаляем…" : "Удалить запись"}
-              </button>
-              <button className="btn btn-primary" onClick={onDone}>
-                Готово
-              </button>
-            </div>
-          </>
-        )}
-      </section>
-    </div>
-  );
-}
-
-function AnalysisSummary({ result }) {
-  const accuracy = result.pitch_accuracy_percent;
-  const scoredSections = (result.sections || []).filter(
-    (section) => section.accuracy_percent != null
-  );
-  const bestSection = scoredSections.reduce(
-    (best, section) =>
-      !best || section.accuracy_percent > best.accuracy_percent
-        ? section
-        : best,
-    null
-  );
-  const needsPractice = scoredSections.reduce(
-    (worst, section) =>
-      !worst || section.accuracy_percent < worst.accuracy_percent
-        ? section
-        : worst,
-    null
-  );
-  const grade =
-    accuracy == null
-      ? "Нет данных"
-      : accuracy >= 85
-        ? "Отличное исполнение"
-        : accuracy >= 70
-          ? "Хороший результат"
-          : accuracy >= 50
-            ? "Есть потенциал"
-            : "Нужно потренироваться";
-  const advice =
-    accuracy == null
-      ? "Не удалось определить достаточно пропетых нот. Попробуйте петь ближе к микрофону."
-      : result.mean_deviation_semitones > 1
-        ? "Сфокусируйтесь на точном начале каждой фразы и удержании высоты ноты."
-        : accuracy >= 70
-          ? "Хорошая точность. Попробуйте сделать фразы ровнее по громкости и дыханию."
-          : "Повторите сложные фразы медленнее, ориентируясь на ноты на экране.";
-
-  return (
-    <>
-      <div className="performance-analysis-grade">{grade}</div>
-      <div className="performance-analysis-score">
-        {accuracy ?? "—"}
-        <small>%</small>
-      </div>
-      <div className="text-muted">Попадание в ноты</div>
-      <div className="performance-analysis-metrics performance-analysis-metrics-expanded">
-        <div>
-          <span>Среднее отклонение</span>
-          <strong>
-            {result.mean_deviation_semitones != null
-              ? `±${result.mean_deviation_semitones} п/т`
-              : "—"}
-          </strong>
-        </div>
-        <div>
-          <span>Проверено фрагментов</span>
-          <strong>{scoredSections.length || 0}</strong>
-        </div>
-        <div>
-          <span>Лучший фрагмент</span>
-          <strong>
-            {bestSection ? `${bestSection.accuracy_percent}%` : "—"}
-          </strong>
-        </div>
-        <div>
-          <span>Нуждается в работе</span>
-          <strong>
-            {needsPractice ? `${needsPractice.accuracy_percent}%` : "—"}
-          </strong>
-        </div>
-      </div>
-      <div className="performance-analysis-advice">
-        <strong>Рекомендация</strong>
-        <span>{advice}</span>
-      </div>
-    </>
-  );
-}
-
-function PerformancePlayer({ recordingId }) {
-  const audioRef = useRef(null);
-  const [playing, setPlaying] = useState(false);
-  const [position, setPosition] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(1);
-
-  const toggle = async () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (audio.paused) await audio.play();
-    else audio.pause();
-  };
-  const seek = (value) => {
-    const audio = audioRef.current;
-    if (audio) audio.currentTime = Number(value);
-    setPosition(Number(value));
-  };
-  const changeVolume = (value) => {
-    const level = Number(value);
-    if (audioRef.current) audioRef.current.volume = level;
-    setVolume(level);
-  };
-
-  return (
-    <div className="performance-player">
-      <audio
-        ref={audioRef}
-        preload="metadata"
-        src={api.getPerformanceFileUrl(recordingId)}
-        onLoadedMetadata={(event) =>
-          setDuration(event.currentTarget.duration || 0)
-        }
-        onTimeUpdate={(event) => setPosition(event.currentTarget.currentTime)}
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-        onEnded={() => {
-          setPlaying(false);
-          setPosition(0);
-        }}
-      />
-      <button
-        className="performance-player-play"
-        type="button"
-        onClick={toggle}
-      >
-        {playing ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
-      </button>
-      <div className="performance-player-track">
-        <input
-          aria-label="Позиция записи"
-          type="range"
-          min="0"
-          max={duration || 0}
-          step="0.01"
-          value={Math.min(position, duration || 0)}
-          onChange={(event) => seek(event.target.value)}
-        />
-        <span>
-          {formatTime(position)} / {formatTime(duration)}
-        </span>
-      </div>
-      <div className="performance-player-volume">
-        <button type="button" onClick={() => changeVolume(volume ? 0 : 1)}>
-          {volume ? <Volume2 size={16} /> : <VolumeX size={16} />}
-        </button>
-        <input
-          aria-label="Громкость записи"
-          type="range"
-          min="0"
-          max="1"
-          step="0.05"
-          value={volume}
-          onChange={(event) => changeVolume(event.target.value)}
-        />
-      </div>
-    </div>
-  );
-}
-
-function MelodyRoll({
-  notes,
-  currentTime,
-  sungMidi,
-  isPitchDetected,
-  isPitchAttacking,
-  pitchRestProgress,
-  keyShift,
-  songTitle,
-  noteRangeMin,
-  noteRangeMax
-}) {
-  const width = 1000;
-  const height = 310;
-  const scaleWidth = 38;
-  const noteLaneStart = 54;
-  // Keep a moderately shorter window: notes are more legible without making
-  // the timeline feel detached from the music.
-  const windowSeconds = 10;
-  const viewStart = Math.max(0, currentTime - 2.5);
-  const viewEnd = viewStart + windowSeconds;
-  const visibleNotes = notes.filter(
-    (note) => note.end >= viewStart && note.start <= viewEnd
-  );
-  const songMidiValues = notes.map((note) => note.midi + keyShift);
-  const savedMin = Number(noteRangeMin);
-  const savedMax = Number(noteRangeMax);
-  const hasSavedRange =
-    noteRangeMin != null &&
-    noteRangeMax != null &&
-    Number.isFinite(savedMin) &&
-    Number.isFinite(savedMax) &&
-    savedMax >= savedMin;
-  // A fixed song-wide range keeps pitch lanes in the same place while the
-  // timeline moves. Explicit song settings have priority over inferred notes.
-  const minMidi =
-    Math.floor(
-      hasSavedRange ? savedMin + keyShift : Math.min(...songMidiValues)
-    ) - 2;
-  const maxMidi =
-    Math.ceil(
-      hasSavedRange ? savedMax + keyShift : Math.max(...songMidiValues)
-    ) + 2;
-  const pitchRange = Math.max(1, maxMidi - minMidi + 1);
-  const rowHeight = height / pitchRange;
-  const noteHeight = Math.min(22, Math.max(7, rowHeight - 6));
-  const activeNote = visibleNotes.find(
-    (note) => currentTime >= note.start && currentTime < note.end
-  );
-  const activeMidi = activeNote?.midi + keyShift;
-  const cueNote =
-    activeNote ||
-    visibleNotes.find(
-      (note) =>
-        note.start >= currentTime - 0.08 && note.start <= currentTime + 1.4
-    ) ||
-    visibleNotes.find((note) => note.end >= currentTime);
-  const targetMidi = cueNote?.midi + keyShift;
-  const isInTune =
-    isPitchDetected &&
-    Number.isFinite(sungMidi) &&
-    Number.isFinite(targetMidi) &&
-    Math.abs(sungMidi - targetMidi) <= 0.7;
-  const indicatorMidi = Number.isFinite(sungMidi) ? sungMidi : targetMidi;
-  const hasLivePitch = isPitchDetected && Number.isFinite(sungMidi);
-  const visibleMidiLanes = [
-    ...new Set(visibleNotes.map((note) => note.midi + keyShift))
-  ].sort((a, b) => a - b);
-  const displayMidiLanes = visibleMidiLanes.length
-    ? Array.from(
-        { length: visibleMidiLanes.at(-1) - visibleMidiLanes[0] + 5 },
-        (_, index) => visibleMidiLanes[0] - 2 + index
-      )
-    : [];
-
-  const x = (time) =>
-    noteLaneStart +
-    ((time - viewStart) / windowSeconds) * (width - noteLaneStart);
-  const y = (midi) => height - (midi - minMidi + 1) * rowHeight;
-  const pitchY = Number.isFinite(indicatorMidi)
-    ? y(indicatorMidi) + rowHeight / 2
-    : height - 16;
-  const indicatorY =
-    pitchY +
-    (height - 16 - pitchY) * Math.min(1, Math.max(0, pitchRestProgress));
-
-  return (
-    <div className="melody-roll">
-      <div className="melody-roll-header">
-        <div>
-          <div className="melody-roll-caption">Мелодическая карта</div>
-          <strong>{songTitle}</strong>
-        </div>
-        <div
-          className="melody-roll-legend"
-          aria-label="Обозначения мелодической карты"
-        >
-          <span>
-            <i className="melody-legend-dot melody-legend-reference" />
-            Эталон
-          </span>
-          <span>
-            <i className="melody-legend-dot melody-legend-active" />
-            Сейчас
-          </span>
-        </div>
-      </div>
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        width="100%"
-        height={height}
-        preserveAspectRatio="none"
-        aria-label="Ноты мелодии"
-      >
-        <defs>
-          <linearGradient id="melody-note-past" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stopColor="#a5b4fc" stopOpacity=".46" />
-            <stop offset="1" stopColor="#6366f1" stopOpacity=".2" />
-          </linearGradient>
-          <linearGradient id="melody-note-upcoming" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stopColor="#f0abfc" stopOpacity=".92" />
-            <stop offset="1" stopColor="#db2777" stopOpacity=".62" />
-          </linearGradient>
-          <linearGradient id="melody-note-active" x1="0" x2="1" y1="0" y2="1">
-            <stop offset="0" stopColor="#dbeafe" />
-            <stop offset=".45" stopColor="#a5b4fc" />
-            <stop offset="1" stopColor="#4f46e5" />
-          </linearGradient>
-          <linearGradient id="melody-note-hit" x1="0" x2="1" y1="0" y2="1">
-            <stop offset="0" stopColor="#dcfce7" />
-            <stop offset=".45" stopColor="#4ade80" />
-            <stop offset="1" stopColor="#16a34a" />
-          </linearGradient>
-          <filter
-            id="melody-active-glow"
-            x="-40%"
-            y="-100%"
-            width="180%"
-            height="300%"
-          >
-            <feGaussianBlur stdDeviation="7" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-          <filter
-            id="melody-playhead-glow"
-            x="-150%"
-            y="-20%"
-            width="400%"
-            height="140%"
-          >
-            <feGaussianBlur stdDeviation="6" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-        {displayMidiLanes.map((midi) => {
-          const isOctave = midi % 12 === 0;
-          const isCurrentPitch = activeMidi === midi;
-          return (
-            <g key={midi}>
-              {isCurrentPitch && (
-                <rect
-                  x="2"
-                  y={y(midi) + 1}
-                  width={scaleWidth - 4}
-                  height={Math.max(9, rowHeight - 2)}
-                  rx="7"
-                  fill="rgba(129,140,248,.22)"
-                />
-              )}
-              <line
-                x1={noteLaneStart}
-                x2={width}
-                y1={y(midi) + rowHeight}
-                y2={y(midi) + rowHeight}
-                stroke={
-                  isOctave ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.055)"
-                }
-              />
-              <>
-                {isCurrentPitch && (
-                  <path
-                    d={`M27 ${y(midi) + rowHeight / 2 - 5} L39 ${y(midi) + rowHeight / 2} L27 ${y(midi) + rowHeight / 2 + 5}Z`}
-                    fill="#c4b5fd"
-                  />
-                )}
-                <text
-                  x="18"
-                  y={y(midi) + rowHeight / 2 + 4}
-                  textAnchor="middle"
-                  fill={
-                    isCurrentPitch
-                      ? "#f5f3ff"
-                      : isOctave
-                        ? "rgba(245,243,255,.9)"
-                        : "rgba(221,214,254,.63)"
-                  }
-                  fontSize={rowHeight < 16 ? "9" : "12"}
-                  fontWeight={isCurrentPitch || isOctave ? "800" : "650"}
-                >
-                  {midiToWesternNote(midi)}
-                </text>
-              </>
-            </g>
-          );
-        })}
-        {visibleNotes.map((n, i) => {
-          const isCurrent = currentTime >= n.start && currentTime < n.end;
-          const isHit = isInTune && isCurrent;
-          const isPast = n.end < currentTime;
-          const pastOpacity = isPast
-            ? Math.max(0.08, 1 - (currentTime - n.end) / 2.4)
-            : 1;
-          const noteX = Math.max(noteLaneStart, x(n.start));
-          // Keep event boundaries visible even when two consecutive syllables
-          // have the same pitch.  Without a deliberate screen-space gap they
-          // look like one long note despite being separate MIDI events.
-          const noteWidth = Math.max(3, Math.min(width, x(n.end)) - noteX - 7);
-          const noteY = y(n.midi + keyShift) + (rowHeight - noteHeight) / 2;
-          return (
-            <g
-              key={i}
-              opacity={pastOpacity}
-              className={`melody-note-platform ${isCurrent ? "is-current" : ""} ${isHit ? "is-hit" : ""}`}
-            >
-              <rect
-                x={noteX}
-                y={noteY}
-                width={noteWidth}
-                height={noteHeight}
-                rx={Math.min(9, Math.max(3.5, noteHeight / 3))}
-                fill={
-                  isHit
-                    ? "url(#melody-note-hit)"
-                    : isCurrent
-                      ? "url(#melody-note-active)"
-                      : isPast
-                        ? "url(#melody-note-past)"
-                        : "url(#melody-note-upcoming)"
-                }
-                filter={isCurrent ? "url(#melody-active-glow)" : undefined}
-                stroke={
-                  isHit
-                    ? "#86efac"
-                    : isCurrent
-                      ? "#c4b5fd"
-                      : isPast
-                        ? "rgba(165,180,252,.52)"
-                        : "rgba(251,207,232,.8)"
-                }
-                strokeWidth="1.25"
-              />
-              {isCurrent && (
-                <circle
-                  cx={Math.min(width - 10, noteX + noteWidth - 7)}
-                  cy={noteY + noteHeight / 2}
-                  r={Math.min(8, noteHeight / 2 + 2)}
-                  fill="rgba(255,255,255,.08)"
-                  stroke="#e0e7ff"
-                  strokeWidth="2.5"
-                />
-              )}
-            </g>
-          );
-        })}
-        {Number.isFinite(indicatorMidi) &&
-          indicatorMidi >= minMidi - 1 &&
-          indicatorMidi <= maxMidi + 1 && (
-            <g
-              transform={`translate(${x(currentTime)} 0)`}
-              opacity={hasLivePitch ? 1 : 0.38}
-            >
-              <path
-                d={`M-88 ${indicatorY} C-58 ${indicatorY - 10}, -26 ${indicatorY + 10}, 0 ${indicatorY}`}
-                fill="none"
-                stroke={
-                  hasLivePitch
-                    ? isInTune
-                      ? "rgba(134,239,172,.78)"
-                      : "rgba(249,168,212,.64)"
-                    : "rgba(219,234,254,.18)"
-                }
-                strokeWidth="4"
-                strokeLinecap="round"
-                opacity=".7"
-              />
-              <circle
-                cy={indicatorY}
-                r="14"
-                fill={
-                  hasLivePitch
-                    ? isInTune
-                      ? "rgba(34,197,94,.22)"
-                      : "rgba(244,114,182,.2)"
-                    : "rgba(219,234,254,.08)"
-                }
-                style={{
-                  transition: isPitchAttacking ? "none" : "cy .11s linear"
-                }}
-              />
-              <circle
-                cy={indicatorY}
-                r="7"
-                fill={
-                  hasLivePitch
-                    ? isInTune
-                      ? "#86efac"
-                      : "#f9a8d4"
-                    : "rgba(219,234,254,.14)"
-                }
-                stroke={hasLivePitch ? "#fff" : "rgba(255,255,255,.45)"}
-                strokeWidth="2"
-                style={{
-                  transition: isPitchAttacking ? "none" : "cy .11s linear"
-                }}
-              />
-            </g>
-          )}
-      </svg>
     </div>
   );
 }

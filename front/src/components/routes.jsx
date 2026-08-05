@@ -7,14 +7,19 @@ const routes = [
   { path: "/karaoke", Comp: Karaoke }
 ];
 
-export default function AppRoutes({ onOpenAppSettings }) {
+export default function AppRoutes({ onOpenAppSettings, onOpenSongSettings }) {
   return (
     <Routes>
-      {routes.map(({ path, Comp }, index) => (
+      {routes.map(({ path, Comp }) => (
         <Route
-          key={index}
+          key={path}
           path={path}
-          element={<Comp onOpenAppSettings={onOpenAppSettings} />}
+          element={
+            <Comp
+              onOpenAppSettings={onOpenAppSettings}
+              onOpenSongSettings={onOpenSongSettings}
+            />
+          }
         />
       ))}
     </Routes>

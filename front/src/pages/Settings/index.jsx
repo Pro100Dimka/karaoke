@@ -4,8 +4,8 @@ import useSettingsForm from "../../hooks/useSettingsForm";
 import useSettingsNavigation from "../../hooks/useSettingsNavigation";
 import { SETTINGS } from "./config";
 import SettingsHeader from "./header";
-import { SettingsTabs } from "./screens";
 import SettingsContent from "./settings-content";
+import SettingsTabs from "./settings-tabs";
 
 export default function Settings() {
   const { alert } = useAppDialog();

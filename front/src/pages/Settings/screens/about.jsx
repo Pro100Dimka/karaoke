@@ -15,21 +15,21 @@ export default function About() {
   const about = data ?? {};
   return (
     <Panel>
-      <div className="text-center py-8">
+      <div className="about-screen">
         <div className="about-logo">
           <Mic size={36} />
         </div>
-        <h1 className="mb-1">{APP_INFO.title}</h1>
+        <h1 className="about-title">{APP_INFO.title}</h1>
         <p className="text-secondary">{APP_INFO.description}</p>
-        <div className="inline-block text-left mt-6 text-sm">
+        <div className="about-info">
           {INFO_FIELDS.map(([key, label]) => (
-            <div key={key} className="flex justify-between gap-10 py-1">
+            <div key={key} className="about-info-row">
               <span className="text-muted">{label}</span>
               <span className="mono">{about[key] ?? "—"}</span>
             </div>
           ))}
         </div>
-        <p className="text-muted text-xs mt-6">{APP_INFO.copyright}</p>
+        <p className="about-copyright text-muted">{APP_INFO.copyright}</p>
       </div>
     </Panel>
   );

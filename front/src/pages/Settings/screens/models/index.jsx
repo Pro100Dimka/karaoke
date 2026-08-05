@@ -4,6 +4,7 @@ import Table from "../../../../components/table";
 import { Panel } from "../../../../components/ui";
 import { useAppDialog } from "../../../../contexts/AppDialog";
 import { usePolling } from "../../../../hooks/usePolling";
+import { getErrorMessage } from "../../../../utils/errors";
 import { ACTIONS, MODEL_COLUMNS, STATUSES } from "./config";
 import { formatModelSize, runDialogAction } from "./utils";
 
@@ -12,7 +13,7 @@ export default function Models() {
   const dialogs = useAppDialog();
   return (
     <Panel title="Модели AI — Whisper">
-      {error && <p className="text-danger">{error.message}</p>}
+      {error && <p className="text-danger">{getErrorMessage(error)}</p>}
       <Table
         columns={MODEL_COLUMNS}
         data={models}

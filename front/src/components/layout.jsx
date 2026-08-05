@@ -1,6 +1,6 @@
 import { Cog } from "lucide-react";
 import { useCallback, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { useOnlineRoomNavigation } from "../hooks/useOnlineRoomNavigation";
 import { useRequireOnlineName } from "../hooks/useRequireOnlineName";
 import SongSettings from "../pages/Library/song-settings";
@@ -9,10 +9,7 @@ import Modal from "./Modal";
 import TitleBar from "./TitleBar";
 import AppRoutes from "./routes";
 
-const ROUTES = {
-  karaoke: "/karaoke",
-  songSettings: "/song-settings"
-};
+const ROUTES = { karaoke: "/karaoke" };
 
 function AppSettingsButton({ onClick }) {
   return (
@@ -30,14 +27,13 @@ function AppSettingsButton({ onClick }) {
 
 export default function AppLayout() {
   const location = useLocation();
-  const navigate = useNavigate();
-
   const [isSettingsOpen, setSettingsOpen] = useState(false);
+  const [songSettingsId, setSongSettingsId] = useState(null);
 
   const isKaraoke = location.pathname === ROUTES.karaoke;
-  const isSongSettings = location.pathname === ROUTES.songSettings;
 
   const openSettings = useCallback(() => {
+    setSongSettingsId(null);
     setSettingsOpen(true);
   }, []);
 
@@ -45,9 +41,14 @@ export default function AppLayout() {
     setSettingsOpen(false);
   }, []);
 
+  const openSongSettings = useCallback((songId) => {
+    setSettingsOpen(false);
+    setSongSettingsId(songId || null);
+  }, []);
+
   const closeSongSettings = useCallback(() => {
-    navigate(-1);
-  }, [navigate]);
+    setSongSettingsId(null);
+  }, []);
 
   useOnlineRoomNavigation();
 
@@ -65,7 +66,10 @@ export default function AppLayout() {
 
       <div className="app-body">
         <main className="app-main">
-          <AppRoutes onOpenAppSettings={openSettings} />
+          <AppRoutes
+            onOpenAppSettings={openSettings}
+            onOpenSongSettings={openSongSettings}
+          />
         </main>
 
         {!isKaraoke && <AppSettingsButton onClick={openSettings} />}
@@ -84,7 +88,7 @@ export default function AppLayout() {
         </Modal>
 
         <Modal
-          isOpen={isSongSettings}
+          isOpen={Boolean(songSettingsId)}
           onClose={closeSongSettings}
           ariaLabel="Настройки песни"
           backdropClassName="song-recordings-backdrop"
@@ -94,7 +98,7 @@ export default function AppLayout() {
           closeIconSize={18}
           portal
         >
-          <SongSettings />
+          <SongSettings songId={songSettingsId} />
         </Modal>
       </div>
     </div>

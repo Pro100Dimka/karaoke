@@ -1,32 +1,18 @@
 import { MEMORY_SECTIONS } from "./config";
-import { formatBytes } from "./utils";
+import { formatBytes } from "./format";
 
 export default function MemoryBreakdown({ breakdown = {} }) {
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(3, 1fr)",
-        gap: 14,
-        marginBottom: 20
-      }}
-    >
+    <div className="memory-breakdown">
       {Object.entries(breakdown).map(([key, bytes]) => (
-        <div
-          key={key}
-          style={{
-            background: "rgba(255,255,255,0.04)",
-            borderRadius: 12,
-            padding: 14
-          }}
-        >
-          <div className="text-muted" style={{ fontSize: 12 }}>
+        <article key={key} className="memory-breakdown-card">
+          <span className="memory-breakdown-label">
             {MEMORY_SECTIONS[key] ?? key}
-          </div>
-          <div style={{ fontWeight: 700, fontSize: 18 }}>
+          </span>
+          <strong className="memory-breakdown-value">
             {formatBytes(bytes)}
-          </div>
-        </div>
+          </strong>
+        </article>
       ))}
     </div>
   );

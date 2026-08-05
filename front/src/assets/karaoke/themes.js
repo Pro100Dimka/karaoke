@@ -52,7 +52,7 @@ export const KARAOKE_THEMES = [
   { id: "old-hall", image: oldHall },
   { id: "snow-field", image: snowField },
   { id: "sunset-forest", image: sunsetForest },
-  { id: "treetop-balcony", image: treetopBalcony },
+  { id: "treetop-balcony", image: treetopBalcony }
 ];
 
 export function shuffleThemes(themes = KARAOKE_THEMES) {
@@ -61,7 +61,7 @@ export function shuffleThemes(themes = KARAOKE_THEMES) {
     const swapIndex = Math.floor(Math.random() * (index + 1));
     [shuffled[index], shuffled[swapIndex]] = [
       shuffled[swapIndex],
-      shuffled[index],
+      shuffled[index]
     ];
   }
   return shuffled;

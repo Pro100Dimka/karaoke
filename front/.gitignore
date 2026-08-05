@@ -1,0 +1,14 @@
+node_modules/
+dist/
+release/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+coverage/
+
+test-results/

@@ -1,5 +1,13 @@
-import { useState } from "react";
-import { Check, Copy, LogOut, Mic, MicOff, Volume2, VolumeX } from "lucide-react";
+import {
+  Check,
+  Copy,
+  LogOut,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useOnlineRoom } from "../contexts/OnlineRoomContext";
 
 async function copyText(value) {
@@ -22,20 +30,35 @@ async function copyText(value) {
 export function OnlineRoomDock() {
   const onlineRoom = useOnlineRoom();
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef(null);
+
+  useEffect(
+    () => () => {
+      if (copiedTimerRef.current) {
+        window.clearTimeout(copiedTimerRef.current);
+      }
+    },
+    []
+  );
+
   if (!onlineRoom?.room) return null;
 
   const handleCopy = async () => {
     if (!(await copyText(onlineRoom.room.id))) return;
     setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
+    if (copiedTimerRef.current) {
+      window.clearTimeout(copiedTimerRef.current);
+    }
+    copiedTimerRef.current = window.setTimeout(() => {
+      copiedTimerRef.current = null;
+      setCopied(false);
+    }, 1600);
   };
 
   return (
     <aside className="online-room-dock" aria-label="Участники комнаты">
       <div className="online-room-dock-heading">
-        <span>
-          Комната · {onlineRoom.room.host ? "ведущий" : "участник"}
-        </span>
+        <span>Комната · {onlineRoom.room.host ? "ведущий" : "участник"}</span>
         <div className="online-room-dock-code">
           <strong>{onlineRoom.room.id}</strong>
           <button
@@ -71,12 +94,26 @@ export function OnlineRoomDock() {
                       className={`online-room-icon-button ${onlineRoom.microphoneMuted ? "is-off" : ""}`}
                       disabled={onlineRoom.roomSoundMuted}
                       onClick={() =>
-                        onlineRoom.setMicrophoneMuted(!onlineRoom.microphoneMuted)
+                        onlineRoom.setMicrophoneMuted(
+                          !onlineRoom.microphoneMuted
+                        )
                       }
-                      title={onlineRoom.microphoneMuted ? "Включить микрофон" : "Выключить микрофон"}
-                      aria-label={onlineRoom.microphoneMuted ? "Включить микрофон" : "Выключить микрофон"}
+                      title={
+                        onlineRoom.microphoneMuted
+                          ? "Включить микрофон"
+                          : "Выключить микрофон"
+                      }
+                      aria-label={
+                        onlineRoom.microphoneMuted
+                          ? "Включить микрофон"
+                          : "Выключить микрофон"
+                      }
                     >
-                      {onlineRoom.microphoneMuted ? <MicOff size={16} /> : <Mic size={16} />}
+                      {onlineRoom.microphoneMuted ? (
+                        <MicOff size={16} />
+                      ) : (
+                        <Mic size={16} />
+                      )}
                     </button>
                     <button
                       type="button"
@@ -84,10 +121,22 @@ export function OnlineRoomDock() {
                       onClick={() =>
                         onlineRoom.setRoomSoundMuted(!onlineRoom.roomSoundMuted)
                       }
-                      title={onlineRoom.roomSoundMuted ? "Включить звук приложения" : "Выключить звук приложения"}
-                      aria-label={onlineRoom.roomSoundMuted ? "Включить звук приложения" : "Выключить звук приложения"}
+                      title={
+                        onlineRoom.roomSoundMuted
+                          ? "Включить звук приложения"
+                          : "Выключить звук приложения"
+                      }
+                      aria-label={
+                        onlineRoom.roomSoundMuted
+                          ? "Включить звук приложения"
+                          : "Выключить звук приложения"
+                      }
                     >
-                      {onlineRoom.roomSoundMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                      {onlineRoom.roomSoundMuted ? (
+                        <VolumeX size={16} />
+                      ) : (
+                        <Volume2 size={16} />
+                      )}
                     </button>
                     <button
                       type="button"
@@ -104,10 +153,22 @@ export function OnlineRoomDock() {
                     type="button"
                     className={`online-room-icon-button ${isLocallyMuted ? "is-off" : ""}`}
                     onClick={() => onlineRoom.togglePersonMuted(person.id)}
-                    title={isLocallyMuted ? `Включить ${person.name}` : `Не слышать ${person.name}`}
-                    aria-label={isLocallyMuted ? `Включить ${person.name}` : `Не слышать ${person.name}`}
+                    title={
+                      isLocallyMuted
+                        ? `Включить ${person.name}`
+                        : `Не слышать ${person.name}`
+                    }
+                    aria-label={
+                      isLocallyMuted
+                        ? `Включить ${person.name}`
+                        : `Не слышать ${person.name}`
+                    }
                   >
-                    {isLocallyMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                    {isLocallyMuted ? (
+                      <VolumeX size={16} />
+                    ) : (
+                      <Volume2 size={16} />
+                    )}
                   </button>
                 )}
               </div>

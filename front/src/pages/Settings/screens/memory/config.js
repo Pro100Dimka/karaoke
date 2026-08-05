@@ -1,6 +1,6 @@
 import { FolderX, Sparkles } from "lucide-react";
 import { api } from "../../../../api/client";
-import { formatBytes } from "./utils";
+import { formatBytes } from "./format";
 
 export const DEFAULT_OPTIMIZE_OPTION = {
   value: "",

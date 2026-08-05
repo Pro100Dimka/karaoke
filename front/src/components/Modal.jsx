@@ -1,16 +1,17 @@
 import { X } from "lucide-react";
 import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
+import { FOCUSABLE_SELECTOR } from "./modal-focus";
 
 export default function Modal({
   children,
   isOpen,
   onClose,
-  ariaLabel,
+  ariaLabel = "Диалог",
   portal = false,
-  backdropClassName = "",
-  modalClassName = "",
-  closeClassName = "",
+  backdropClassName = "modal-backdrop",
+  modalClassName = "modal",
+  closeClassName = "modal-close",
   closeIconSize = 20,
   closeAriaLabel = "Закрыть"
 }) {
@@ -18,49 +19,67 @@ export default function Modal({
   const titleId = useId();
 
   useEffect(() => {
-    if (!isOpen) {
-      return undefined;
-    }
+    if (!isOpen) return undefined;
+
+    const previouslyFocused = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const frameId = requestAnimationFrame(() => {
+      const firstFocusable =
+        dialogRef.current?.querySelector(FOCUSABLE_SELECTOR);
+      (firstFocusable || dialogRef.current)?.focus();
+    });
 
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
+        event.preventDefault();
         onClose();
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+
+      const focusable = Array.from(
+        dialogRef.current?.querySelectorAll(FOCUSABLE_SELECTOR) ?? []
+      );
+      if (!focusable.length) {
+        event.preventDefault();
+        dialogRef.current?.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     };
 
     document.addEventListener("keydown", handleKeyDown);
-    dialogRef.current?.focus();
 
     return () => {
+      cancelAnimationFrame(frameId);
       document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
     };
   }, [isOpen, onClose]);
 
-  if (!isOpen) {
-    return null;
-  }
+  if (!isOpen) return null;
 
   const content = (
-    <div className={backdropClassName}>
-      <button
-        type="button"
-        aria-label={closeAriaLabel}
-        tabIndex={-1}
-        onClick={onClose}
-        style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-          padding: 0,
-          margin: 0,
-          border: 0,
-          background: "transparent",
-          cursor: "default",
-          zIndex: 0
-        }}
-      />
-
+    <div
+      className={backdropClassName}
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
       <section
         ref={dialogRef}
         className={modalClassName}
@@ -68,25 +87,10 @@ export default function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        style={{ position: "relative", zIndex: 1 }}
       >
-        <span
-          id={titleId}
-          style={{
-            position: "absolute",
-            width: 1,
-            height: 1,
-            padding: 0,
-            margin: -1,
-            overflow: "hidden",
-            clip: "rect(0, 0, 0, 0)",
-            whiteSpace: "nowrap",
-            border: 0
-          }}
-        >
+        <span id={titleId} className="sr-only">
           {ariaLabel}
         </span>
-
         <button
           type="button"
           className={closeClassName}
@@ -95,7 +99,6 @@ export default function Modal({
         >
           <X size={closeIconSize} aria-hidden="true" />
         </button>
-
         {children}
       </section>
     </div>

@@ -1,10 +1,12 @@
 import { Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { useRef, useState } from "react";
-
-const formatTime = (seconds) => {
-  if (!Number.isFinite(seconds)) return "00:00";
-  return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
-};
+import {
+  formatAudioTime,
+  normalizeAudioDuration,
+  normalizeAudioPosition,
+  normalizeAudioVolume,
+  toggleAudioPlayback
+} from "./audio-player-utils";
 
 export function AudioPlayer({ src, className = "" }) {
   const audioRef = useRef(null);
@@ -14,18 +16,15 @@ export function AudioPlayer({ src, className = "" }) {
   const [volume, setVolume] = useState(1);
 
   const toggle = async () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (audio.paused) await audio.play();
-    else audio.pause();
+    await toggleAudioPlayback(audioRef.current);
   };
   const seek = (value) => {
-    const positionValue = Number(value);
+    const positionValue = normalizeAudioPosition(value, duration);
     if (audioRef.current) audioRef.current.currentTime = positionValue;
     setPosition(positionValue);
   };
   const changeVolume = (value) => {
-    const volumeValue = Number(value);
+    const volumeValue = normalizeAudioVolume(value);
     if (audioRef.current) audioRef.current.volume = volumeValue;
     setVolume(volumeValue);
   };
@@ -37,9 +36,13 @@ export function AudioPlayer({ src, className = "" }) {
         preload="metadata"
         src={src}
         onLoadedMetadata={(event) =>
-          setDuration(event.currentTarget.duration || 0)
+          setDuration(normalizeAudioDuration(event.currentTarget.duration))
         }
-        onTimeUpdate={(event) => setPosition(event.currentTarget.currentTime)}
+        onTimeUpdate={(event) =>
+          setPosition(
+            normalizeAudioPosition(event.currentTarget.currentTime, duration)
+          )
+        }
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
         onEnded={() => {
@@ -50,6 +53,7 @@ export function AudioPlayer({ src, className = "" }) {
       <button
         className="performance-player-play"
         type="button"
+        aria-label={playing ? "Пауза" : "Воспроизвести запись"}
         onClick={toggle}
       >
         {playing ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
@@ -65,11 +69,15 @@ export function AudioPlayer({ src, className = "" }) {
           onChange={(event) => seek(event.target.value)}
         />
         <span>
-          {formatTime(position)} / {formatTime(duration)}
+          {formatAudioTime(position)} / {formatAudioTime(duration)}
         </span>
       </div>
       <div className="performance-player-volume">
-        <button type="button" onClick={() => changeVolume(volume ? 0 : 1)}>
+        <button
+          type="button"
+          aria-label={volume ? "Выключить звук" : "Включить звук"}
+          onClick={() => changeVolume(volume ? 0 : 1)}
+        >
           {volume ? <Volume2 size={16} /> : <VolumeX size={16} />}
         </button>
         <input

@@ -1,6 +1,7 @@
 import { HashRouter } from "react-router-dom";
 import { OnlineRoomDock } from "./components/OnlineRoomDock";
 import AppLayout from "./components/layout";
+import { ErrorBoundary } from "./components/ui";
 import ContextProviders from "./contexts";
 
 const routerFutureConfig = {
@@ -10,11 +11,13 @@ const routerFutureConfig = {
 
 export default function App() {
   return (
-    <ContextProviders>
-      <HashRouter future={routerFutureConfig}>
-        <AppLayout />
-        <OnlineRoomDock />
-      </HashRouter>
-    </ContextProviders>
+    <ErrorBoundary>
+      <ContextProviders>
+        <HashRouter future={routerFutureConfig}>
+          <AppLayout />
+          <OnlineRoomDock />
+        </HashRouter>
+      </ContextProviders>
+    </ErrorBoundary>
   );
 }

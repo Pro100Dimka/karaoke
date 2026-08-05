@@ -13,6 +13,7 @@ import {
   OnlineRoomClient,
   OnlineVoiceMesh
 } from "../services/onlineRoom";
+import { getErrorMessage } from "../utils/errors";
 
 const OnlineRoomContext = createContext(null);
 
@@ -191,7 +192,9 @@ export function OnlineRoomProvider({ children }) {
             });
           }
         } catch (error) {
-          setVoiceError(`Не удалось импортировать песню: ${error.message}`);
+          setVoiceError(
+            `Не удалось импортировать песню: ${getErrorMessage(error)}`
+          );
         }
       };
 
@@ -270,7 +273,9 @@ export function OnlineRoomProvider({ children }) {
               })
               .then(() => setVoiceError(""))
               .catch((error) => {
-                setVoiceError(`Не удалось передать песню: ${error.message}`);
+                setVoiceError(
+                  `Не удалось передать песню: ${getErrorMessage(error)}`
+                );
               });
             return;
           }
@@ -404,7 +409,7 @@ export function OnlineRoomProvider({ children }) {
           if (next.has(id)) next.delete(id);
           else next.add(id);
           mutedPeopleRef.current = next;
-          window.setTimeout(applyRemoteAudioMute, 0);
+          queueMicrotask(applyRemoteAudioMute);
           return next;
         });
       },

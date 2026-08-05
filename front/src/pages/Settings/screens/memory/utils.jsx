@@ -1,12 +1,7 @@
 import { Trash2 } from "lucide-react";
 import Button from "../../../../components/fields/button";
 import Dropdown from "../../../../components/fields/dropdown";
-
-const ROW_STYLE = {
-  display: "flex",
-  gap: 10,
-  alignItems: "center"
-};
+import { getErrorMessage } from "../../../../utils/errors";
 
 export async function runMemoryAction({ request, getMessage, notify }) {
   try {
@@ -14,42 +9,36 @@ export async function runMemoryAction({ request, getMessage, notify }) {
     await notify(getMessage(result));
     return true;
   } catch (error) {
-    await notify(error?.message ?? "Не удалось выполнить действие");
+    await notify(getErrorMessage(error, "Не удалось выполнить действие"));
     return false;
   }
 }
+
 export function MemoryStats({ size, free }) {
   return (
-    <>
-      <div style={{ fontSize: 14, marginBottom: 4 }}>
-        Всего занято: <b>{size.total_human}</b>
-      </div>
-
+    <div className="memory-stats">
+      <p className="memory-stats-total">
+        Всего занято: <strong>{size.total_human}</strong>
+      </p>
       {free && (
-        <div className="text-muted" style={{ fontSize: 13, marginBottom: 20 }}>
+        <p className="memory-stats-free text-muted">
           Свободно на диске: {free.free_human} из {free.total_human}
-        </div>
+        </p>
       )}
-    </>
+    </div>
   );
 }
 
 export function MemoryActions({ actions, notify }) {
   return (
-    <div style={ROW_STYLE}>
+    <div className="memory-actions">
       {actions.map(([id, label, icon, variant, request, getMessage]) => (
         <Button
           key={id}
           icon={icon}
           iconSize={14}
           variant={variant}
-          onClick={() =>
-            runMemoryAction({
-              request,
-              getMessage,
-              notify
-            })
-          }
+          onClick={() => runMemoryAction({ request, getMessage, notify })}
         >
           {label}
         </Button>
@@ -60,7 +49,7 @@ export function MemoryActions({ actions, notify }) {
 
 export function OptimizeSong({ value, options, onChange, onOptimize }) {
   return (
-    <div style={{ ...ROW_STYLE, marginTop: 20 }}>
+    <div className="memory-actions memory-optimize">
       <Dropdown value={value} options={options} onChange={onChange} />
       <Button
         icon={Trash2}
@@ -73,8 +62,4 @@ export function OptimizeSong({ value, options, onChange, onOptimize }) {
       </Button>
     </div>
   );
-}
-
-export function formatBytes(bytes = 0) {
-  return `${(Number(bytes) / 1024 ** 2).toFixed(1)} МБ`;
 }

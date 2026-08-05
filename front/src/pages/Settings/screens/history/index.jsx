@@ -2,13 +2,14 @@ import { api } from "../../../../api/client";
 import Table from "../../../../components/table";
 import { Panel, StatusBadge } from "../../../../components/ui";
 import { usePolling } from "../../../../hooks/usePolling";
+import { getErrorMessage } from "../../../../utils/errors";
 import { HISTORY_ACTIONS, HISTORY_COLUMNS, RECORDING_STATUSES } from "./config";
 
 export default function History() {
   const { data: history, error } = usePolling(api.getHistory, 5000, []);
   return (
     <Panel title="История">
-      {error && <p className="text-danger">{error.message}</p>}
+      {error && <p className="text-danger">{getErrorMessage(error)}</p>}
       <Table
         columns={HISTORY_COLUMNS}
         data={history}

@@ -107,9 +107,6 @@ export const SETTINGS_TABS = Object.entries(SETTINGS).map(
     icon
   })
 );
-export const SETTINGS_TAB_BY_ID = Object.fromEntries(
-  SETTINGS_TABS.map((tab) => [tab.id, tab])
-);
 export const SCREEN_BY_ID = Object.fromEntries(
   screens.map((screen) => [screen.id, screen])
 );

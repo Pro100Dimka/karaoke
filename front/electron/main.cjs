@@ -7,11 +7,18 @@
 //     программы и его остановку при закрытии — пользователь просто
 //     запускает "Karaoke Studio", ему не нужно отдельно поднимать backend;
 //  3) IPC-мостик для управления окном и открытия папки песни в проводнике.
-const { app, BrowserWindow, clipboard, ipcMain, session, shell } = require("electron");
+const { spawn } = require("child_process");
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
-const { spawn } = require("child_process");
+const {
+  app,
+  BrowserWindow,
+  clipboard,
+  ipcMain,
+  session,
+  shell
+} = require("electron");
 
 const isDev = !app.isPackaged;
 const BACKEND_URL = "http://127.0.0.1:8000";
@@ -23,7 +30,7 @@ if (isDev) {
   app.setPath(
     "userData",
     process.env.KARAOKE_ELECTRON_PROFILE ||
-      path.resolve(__dirname, "..", ".runtime", "electron-profile"),
+      path.resolve(__dirname, "..", ".runtime", "electron-profile")
   );
 }
 
@@ -52,7 +59,10 @@ function resolveSongOutputDir() {
 
 function isPathInside(parentPath, candidatePath) {
   const relativePath = path.relative(parentPath, candidatePath);
-  return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
+  return (
+    relativePath === "" ||
+    (!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
+  );
 }
 
 function startBackend() {
@@ -60,11 +70,19 @@ function startBackend() {
   backendStopRequested = false;
   const backendDir = resolveBackendDir();
   const backendCommand = isDev
-    ? (process.env.KARAOKE_PYTHON || (process.platform === "win32" ? "python" : "python3"))
-    : path.join(backendDir, process.platform === "win32" ? "KaraokeBackend.exe" : "KaraokeBackend");
+    ? process.env.KARAOKE_PYTHON ||
+      (process.platform === "win32" ? "python" : "python3")
+    : path.join(
+        backendDir,
+        process.platform === "win32" ? "KaraokeBackend.exe" : "KaraokeBackend"
+      );
   const backendArgs = isDev ? ["run.py"] : [];
-  const backendDataDir = isDev ? null : path.join(app.getPath("userData"), "backend-data");
-  const backendLogDir = isDev ? path.resolve(__dirname, "..", "..", "logs") : path.join(app.getPath("userData"), "logs");
+  const backendDataDir = isDev
+    ? null
+    : path.join(app.getPath("userData"), "backend-data");
+  const backendLogDir = isDev
+    ? path.resolve(__dirname, "..", "..", "logs")
+    : path.join(app.getPath("userData"), "logs");
 
   try {
     backendProcess = spawn(backendCommand, backendArgs, {
@@ -79,8 +97,8 @@ function startBackend() {
         ...(backendDataDir ? { SONGAPP_DATA_DIR: backendDataDir } : {}),
         SONGAPP_LOG_DIR: backendLogDir,
         // Packaged ffmpeg.exe is placed next to KaraokeBackend.exe.
-        PATH: `${backendDir}${path.delimiter}${process.env.PATH || ""}`,
-      },
+        PATH: `${backendDir}${path.delimiter}${process.env.PATH || ""}`
+      }
     });
     backendProcess.on("error", (err) => {
       console.error("Не удалось запустить backend:", err);
@@ -88,7 +106,9 @@ function startBackend() {
     backendProcess.on("exit", (code, signal) => {
       backendProcess = null;
       if (isQuitting || process.env.KARAOKE_BACKEND_EXTERNAL === "1") return;
-      console.error(`Backend stopped (${code ?? "unknown"}, ${signal ?? "no signal"}); restarting…`);
+      console.error(
+        `Backend stopped (${code ?? "unknown"}, ${signal ?? "no signal"}); restarting…`
+      );
       clearTimeout(backendRestartTimer);
       backendRestartTimer = setTimeout(startBackend, 1200);
     });
@@ -120,7 +140,7 @@ function stopBackend() {
   };
   const request = http.request(`${BACKEND_URL}/audio/direct-monitor/stop`, {
     method: "POST",
-    timeout: 450,
+    timeout: 450
   });
   request.on("response", (response) => {
     response.resume();
@@ -146,8 +166,16 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
-      nodeIntegration: false,
-    },
+      nodeIntegration: false
+    }
+  });
+
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  mainWindow.webContents.on("will-navigate", (event, navigationUrl) => {
+    const allowed = isDev
+      ? navigationUrl.startsWith("http://127.0.0.1:5173")
+      : navigationUrl.startsWith("file://");
+    if (!allowed) event.preventDefault();
   });
 
   if (isDev) {
@@ -196,14 +224,18 @@ ipcMain.handle("clipboard:writeText", (_event, value) => {
 });
 
 app.whenReady().then(() => {
-  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
-    const requestUrl = details?.requestingUrl || "";
-    const trustedRenderer = webContents === mainWindow?.webContents
-      && (requestUrl.startsWith("file://") || requestUrl.startsWith("http://127.0.0.1:5173"));
-    // The app uses only the microphone. Never grant media permissions to a
-    // navigation, popup, or arbitrary origin that happens to share a session.
-    callback(permission === "media" && trustedRenderer);
-  });
+  session.defaultSession.setPermissionRequestHandler(
+    (webContents, permission, callback, details) => {
+      const requestUrl = details?.requestingUrl || "";
+      const trustedRenderer =
+        webContents === mainWindow?.webContents &&
+        (requestUrl.startsWith("file://") ||
+          requestUrl.startsWith("http://127.0.0.1:5173"));
+      // The app uses only the microphone. Never grant media permissions to a
+      // navigation, popup, or arbitrary origin that happens to share a session.
+      callback(permission === "media" && trustedRenderer);
+    }
+  );
   startBackend();
   createWindow();
 

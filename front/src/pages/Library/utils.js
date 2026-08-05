@@ -1,0 +1,81 @@
+export function formatLibraryDate(value, locale = "ru-RU") {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString(locale);
+}
+
+export function formatEta(seconds) {
+  const value = Number(seconds);
+  if (!Number.isFinite(value) || value <= 0) return "рассчитываем…";
+  const rounded = Math.max(0, Math.round(value));
+  if (!rounded) return "рассчитываем…";
+  const minutes = Math.floor(rounded / 60);
+  const remainingSeconds = rounded % 60;
+  return minutes
+    ? `~${minutes} мин ${remainingSeconds} сек`
+    : `~${remainingSeconds} сек`;
+}
+
+export function formatRecordingDuration(seconds) {
+  const value = Number(seconds);
+  return `${Number.isFinite(value) && value > 0 ? value.toFixed(1) : "0.0"} сек`;
+}
+
+export function getProcessingProgress(status, song) {
+  const raw = status?.progress_percent ?? song?.progress_percent ?? 0;
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(100, Math.max(0, value));
+}
+
+export function isProcessingActive(status) {
+  return status === "processing" || status === "queued";
+}
+
+export function getLocalVisibleSongs(songs, hiddenSongIds) {
+  const hidden = hiddenSongIds instanceof Set ? hiddenSongIds : new Set();
+  return Array.isArray(songs)
+    ? songs.filter(
+        (song) => song && typeof song === "object" && !hidden.has(song.id)
+      )
+    : [];
+}
+
+export function resolveVisibleSongs({ localSongs, room, roomSongs }) {
+  if (room && !room.host && Array.isArray(roomSongs)) {
+    return roomSongs.filter((song) => song && typeof song === "object");
+  }
+
+  return Array.isArray(localSongs) ? localSongs : [];
+}
+
+export function filterSongs(songs, query) {
+  const normalizedQuery =
+    typeof query === "string" ? query.trim().toLowerCase() : "";
+  const source = Array.isArray(songs) ? songs : [];
+
+  if (!normalizedQuery) return source;
+
+  return source.filter((song) =>
+    [song?.title, song?.artist, song?.genre]
+      .filter((value) => typeof value === "string" && value.trim())
+      .join(" ")
+      .toLowerCase()
+      .includes(normalizedQuery)
+  );
+}
+
+export function countReadySongs(songs) {
+  return Array.isArray(songs)
+    ? songs.filter((song) => song?.status === "done").length
+    : 0;
+}
+
+export function getSongCardState(song) {
+  const status = typeof song?.status === "string" ? song.status : "pending";
+  return {
+    status,
+    isWorking: status === "processing" || status === "cancelling",
+    isReady: status === "done"
+  };
+}

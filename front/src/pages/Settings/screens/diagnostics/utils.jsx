@@ -14,10 +14,10 @@ export function VersionList({ components }) {
   const entries = Object.entries(components ?? {});
   if (!entries.length) return null;
   return (
-    <div className="mt-4">
-      <div className="panel-title mb-2">Версии</div>
+    <div className="diagnostics-versions">
+      <div className="panel-title diagnostics-versions-title">Версии</div>
       {entries.map(([name, version]) => (
-        <div key={name} className="flex justify-between text-xs py-1">
+        <div key={name} className="diagnostics-version-row">
           <span className="text-muted">{name}</span>
           <span className="mono">{version ?? "—"}</span>
         </div>
@@ -34,10 +34,10 @@ export const ErrorList = ({ errors = [] }) =>
 function ErrorItem({ error }) {
   const { title, updated_at: updatedAt, error_message: message } = error;
   return (
-    <div className="py-2 border-b border-red-500/20">
-      <div className="font-semibold text-sm">{title}</div>
-      <div className="text-muted text-xs">{updatedAt}</div>
-      <div className="text-red-400 text-xs mt-1">{message}</div>
+    <div className="diagnostics-error-item">
+      <div className="diagnostics-error-title">{title}</div>
+      <div className="diagnostics-error-meta text-muted">{updatedAt}</div>
+      <div className="diagnostics-error-message">{message}</div>
     </div>
   );
 }

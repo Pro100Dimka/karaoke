@@ -1,0 +1,9 @@
+[
+  { "id": "library-desktop", "path": "/", "viewport": [1440, 900], "state": "content" },
+  { "id": "library-compact", "path": "/", "viewport": [900, 650], "state": "content" },
+  { "id": "settings-modal", "path": "/", "viewport": [1440, 900], "state": "settings-open" },
+  { "id": "song-settings-modal", "path": "/", "viewport": [1440, 900], "state": "song-settings-open" },
+  { "id": "processing-modal", "path": "/", "viewport": [1024, 720], "state": "processing-open" },
+  { "id": "karaoke-desktop", "path": "/karaoke", "viewport": [1440, 900], "state": "paused" },
+  { "id": "karaoke-compact", "path": "/karaoke", "viewport": [900, 650], "state": "paused" }
+]
