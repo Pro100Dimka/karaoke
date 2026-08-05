@@ -47,7 +47,8 @@ test("karaoke CSS layer imports stay in cascade order", () => {
     "./styles/cascade/02-layer.css",
     "./styles/cascade/03-layer.css",
     "./styles/cascade/04-layer.css",
-    "./styles/cascade/05-layer.css"
+    "./styles/cascade/05-layer.css",
+    "./styles/refinements.css"
   ];
   const actual = [...indexCss.matchAll(/@import\s+["']([^"']+)["']/g)].map(
     (match) => match[1]

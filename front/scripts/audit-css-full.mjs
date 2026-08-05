@@ -331,6 +331,23 @@ function getSelectorDepth(selector) {
     .filter(Boolean).length;
 }
 
+function getAtRuleContext(node) {
+  const context = [];
+  let current = node.parent;
+
+  while (current) {
+    if (current.type === "atrule") {
+      context.unshift(
+        `@${current.name}${current.params ? ` ${current.params}` : ""}`
+      );
+    }
+
+    current = current.parent;
+  }
+
+  return context.join(" > ");
+}
+
 function isIgnoredClass(className, config) {
   if (config.ignoreClasses.includes(className)) {
     return true;
@@ -547,13 +564,19 @@ async function main() {
           continue;
         }
 
+        const context = getAtRuleContext(rule);
         const location = {
           file,
           line: rule.source?.start?.line,
-          column: rule.source?.start?.column
+          column: rule.source?.start?.column,
+          context,
+          selector: normalizedSelector
         };
+        const selectorKey = context
+          ? `${context} :: ${normalizedSelector}`
+          : normalizedSelector;
 
-        addUsage(selectorDefinitions, normalizedSelector, location);
+        addUsage(selectorDefinitions, selectorKey, location);
 
         for (const className of getSelectorClasses(normalizedSelector)) {
           addUsage(classDefinitions, className, {
@@ -857,8 +880,9 @@ async function main() {
 
   const duplicateSelectors = [...selectorDefinitions.entries()]
     .filter(([, locations]) => locations.length > 1)
-    .map(([selector, locations]) => ({
-      selector,
+    .map(([selectorKey, locations]) => ({
+      selector: locations[0]?.selector ?? selectorKey,
+      context: locations[0]?.context ?? "",
       count: locations.length,
       locations
     }))

@@ -72,6 +72,24 @@
   --control-height-lg: 44px;
   --transition-fast: 120ms ease;
   --transition-normal: 200ms ease;
+
+  /* Layering scale: keep overlays predictable and avoid arbitrary 9999 values. */
+  --z-base: 0;
+  --z-raised: 10;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-backdrop: 500;
+  --z-modal: 600;
+  --z-toast: 700;
+  --z-tooltip: 800;
+  --z-fullscreen: 1000;
+
+  /* Shared interactive surfaces. */
+  --surface-subtle: color-mix(in srgb, var(--card-bg) 84%, transparent);
+  --surface-hover: color-mix(in srgb, var(--card-bg) 78%, white 5%);
+  --border-subtle: color-mix(in srgb, var(--card-border) 72%, transparent);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent-1) 28%, transparent);
+  --transition-slow: 320ms ease;
 }
 
 :root[data-theme="light"] {
