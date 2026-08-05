@@ -1,50 +1,106 @@
-/* Reusable premium glass-neon frame for cards, panels and dialogs. */
-.fx-neon-frame,
-.ui-card--neon {
-  position: relative;
-  isolation: isolate;
-  border-color: rgb(255 110 150 / 42%);
-  box-shadow:
-    0 1.25rem 3.5rem rgb(0 0 0 / 38%),
-    inset 0 0.0625rem 0 rgb(255 255 255 / 10%),
-    inset 0 0 2rem rgb(255 22 88 / 5%),
-    0 0 1.1rem rgb(255 30 92 / 10%);
-  animation: neon-surface-breathe 4.8s ease-in-out infinite;
+:root {
+  --card-fx-hot: #ff3c5f;
+  --card-fx-warm: #ff8c56;
+  --card-fx-bright: #ffe8df;
+  --card-fx-deep: #85001f;
+  --card-fx-sheen: rgb(255 225 214 / 18%);
+  --card-fx-sheen-soft: rgb(255 140 105 / 5%);
+  --card-fx-outer-opacity: 0.58;
+  --card-fx-mid-opacity: 0.72;
 }
 
-/* Thin animated platinum / pink / electric-blue contour. */
-.fx-neon-frame::before,
-.ui-card--neon::before {
+:root[data-theme="light"] {
+  --card-fx-hot: #e92f63;
+  --card-fx-warm: #f4a07f;
+  --card-fx-bright: #ffffff;
+  --card-fx-deep: #bd315d;
+  --card-fx-sheen: rgb(255 255 255 / 62%);
+  --card-fx-sheen-soft: rgb(239 98 133 / 13%);
+  --card-fx-outer-opacity: 0.4;
+  --card-fx-mid-opacity: 0.56;
+}
+
+/* Reusable layered glass-neon effect for Card variant="neon". */
+.fx-neon-frame,
+.ui-card--neon {
+  --card-mx: 50%;
+  --card-my: 20%;
+  position: relative;
+  isolation: isolate;
+  border-color: transparent;
+  transform-style: preserve-3d;
+  box-shadow:
+    var(--shadow-lg),
+    inset 0 var(--hairline) 0 rgb(255 255 255 / 8%);
+}
+
+.ui-card--neon > :not(.ui-card__fx) {
+  position: relative;
+  z-index: 3;
+}
+
+.ui-card__fx {
+  position: absolute;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* Transform-driven layers: reliable in Electron/Chromium without animated CSS custom properties. */
+.ui-card__glow,
+.ui-card__glow-mid,
+.ui-card__edge,
+.ui-card__glint {
+  overflow: hidden;
+}
+
+.ui-card__glow::before,
+.ui-card__glow-mid::before,
+.ui-card__edge::before,
+.ui-card__glint::before {
   content: "";
   position: absolute;
-  z-index: 20;
-  inset: 0;
-  padding: max(var(--hairline), 0.105rem);
-  border-radius: inherit;
-  pointer-events: none;
-  background:
-    linear-gradient(
-      105deg,
-      rgb(255 45 98 / 36%) 0%,
-      rgb(255 45 98 / 95%) 12%,
-      rgb(255 241 247 / 100%) 18%,
-      rgb(255 65 130 / 100%) 25%,
-      rgb(255 35 94 / 45%) 38%,
-      rgb(255 35 94 / 18%) 48%,
-      rgb(136 83 255 / 75%) 60%,
-      rgb(105 168 255 / 100%) 67%,
-      rgb(244 246 255 / 100%) 72%,
-      rgb(212 50 255 / 78%) 78%,
-      rgb(255 42 104 / 92%) 90%,
-      rgb(255 45 98 / 36%) 100%
-    );
-  background-size: 280% 100%;
-  filter:
-    drop-shadow(0 0 0.18rem rgb(255 245 248 / 70%))
-    drop-shadow(0 0 0.6rem rgb(255 34 91 / 65%))
-    drop-shadow(0 0 1.15rem rgb(255 25 86 / 28%));
-  opacity: 0.96;
-  animation: neon-border-travel 5.8s linear infinite;
+  left: 50%;
+  top: 50%;
+  width: max(180%, 90rem);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background: conic-gradient(
+    var(--card-fx-bright),
+    var(--card-fx-hot),
+    var(--card-fx-warm),
+    var(--card-fx-deep),
+    var(--card-fx-bright),
+    var(--card-fx-hot),
+    var(--card-fx-bright)
+  );
+  will-change: transform;
+}
+
+.ui-card__glow {
+  z-index: 0;
+  inset: -1rem;
+  filter: blur(1.25rem);
+  opacity: var(--card-fx-outer-opacity);
+  animation: card-fx-breathe 4s ease-in-out infinite;
+}
+
+.ui-card__glow::before { animation: card-fx-rotate 7s linear infinite; }
+
+.ui-card__glow-mid {
+  z-index: 0;
+  inset: -0.42rem;
+  filter: blur(0.58rem);
+  opacity: var(--card-fx-mid-opacity);
+}
+
+.ui-card__glow-mid::before { animation: card-fx-rotate-reverse 9s linear infinite; }
+
+/* Mask the animated layers to a crisp ring. */
+.ui-card__edge,
+.ui-card__glint {
+  z-index: 5;
+  inset: calc(-1 * max(var(--hairline), 0.09rem));
+  padding: max(var(--hairline), 0.09rem);
   -webkit-mask:
     linear-gradient(#fff 0 0) content-box,
     linear-gradient(#fff 0 0);
@@ -52,127 +108,72 @@
   mask-composite: exclude;
 }
 
-/* Local flashes and soft internal bloom, like the reference image. */
-.fx-neon-frame::after,
-.ui-card--neon::after {
-  content: "";
-  position: absolute;
-  z-index: 19;
-  inset: -0.1rem;
-  border-radius: inherit;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 15% 0%, rgb(255 255 255 / 92%) 0 0.08rem, rgb(255 80 136 / 58%) 0.18rem, transparent 0.72rem),
-    radial-gradient(circle at 100% 26%, rgb(255 255 255 / 88%) 0 0.07rem, rgb(255 42 100 / 52%) 0.17rem, transparent 0.68rem),
-    radial-gradient(circle at 84% 100%, rgb(247 248 255 / 96%) 0 0.08rem, rgb(93 139 255 / 68%) 0.19rem, transparent 0.8rem),
-    radial-gradient(circle at 0% 70%, rgb(255 255 255 / 90%) 0 0.07rem, rgb(255 52 111 / 54%) 0.18rem, transparent 0.72rem),
-    radial-gradient(circle at 50% 48%, rgb(255 52 118 / 9%), transparent 58%);
-  box-shadow:
-    inset 0 0 1.9rem rgb(255 40 104 / 9%),
-    inset 0 0 4.5rem rgb(95 25 255 / 3%),
-    0 0 1rem rgb(255 37 95 / 16%);
-  mix-blend-mode: screen;
-  opacity: 0.82;
-  animation: neon-glints-drift 6.4s ease-in-out infinite alternate;
-}
-
-.fx-neon-pulse {
-  animation: neon-surface-breathe 3.8s ease-in-out infinite;
-}
-
-@keyframes neon-border-travel {
-  from { background-position: 0% 50%; }
-  to { background-position: 280% 50%; }
-}
-
-@keyframes neon-surface-breathe {
-  0%, 100% {
-    box-shadow:
-      0 1.25rem 3.5rem rgb(0 0 0 / 38%),
-      inset 0 0.0625rem 0 rgb(255 255 255 / 10%),
-      inset 0 0 2rem rgb(255 22 88 / 5%),
-      0 0 1rem rgb(255 30 92 / 10%);
-  }
-  50% {
-    box-shadow:
-      0 1.4rem 4rem rgb(0 0 0 / 42%),
-      inset 0 0.0625rem 0 rgb(255 255 255 / 14%),
-      inset 0 0 2.7rem rgb(255 22 88 / 9%),
-      0 0 1.9rem rgb(255 28 91 / 24%),
-      0 0 3.8rem rgb(98 66 255 / 7%);
-  }
-}
-
-@keyframes neon-glints-drift {
-  0% {
-    opacity: 0.6;
-    filter: brightness(0.9) saturate(1.05);
-  }
-  48% {
-    opacity: 1;
-    filter: brightness(1.25) saturate(1.18);
-  }
-  100% {
-    opacity: 0.72;
-    filter: brightness(1.05) saturate(1.12);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fx-neon-frame,
-  .ui-card--neon,
-  .fx-neon-frame::before,
-  .ui-card--neon::before,
-  .fx-neon-frame::after,
-  .ui-card--neon::after,
-  .fx-neon-pulse {
-    animation: none;
-  }
-}
-
-/* Pearl contour for light surfaces; the component API stays identical. */
-:root[data-theme="light"] .fx-neon-frame,
-:root[data-theme="light"] .ui-card--neon {
-  border-color: rgba(222, 94, 124, 0.28);
-  box-shadow:
-    0 1.25rem 3.5rem rgba(112, 61, 73, 0.14),
-    inset 0 0.0625rem 0 rgba(255, 255, 255, 0.92),
-    inset 0 0 2rem rgba(255, 151, 171, 0.08),
-    0 0 1.25rem rgba(239, 63, 101, 0.11);
-}
-
-:root[data-theme="light"] .fx-neon-frame::before,
-:root[data-theme="light"] .ui-card--neon::before {
-  background: linear-gradient(
-    105deg,
-    rgba(239, 63, 101, 0.28) 0%,
-    rgba(239, 63, 101, 0.78) 12%,
-    #ffffff 18%,
-    #f7a7b7 27%,
-    rgba(246, 160, 128, 0.64) 42%,
-    rgba(255, 255, 255, 0.6) 53%,
-    rgba(232, 201, 189, 0.8) 63%,
-    #ffffff 72%,
-    rgba(214, 47, 98, 0.72) 84%,
-    rgba(239, 63, 101, 0.28) 100%
-  );
-  background-size: 280% 100%;
+.ui-card__edge {
   filter:
-    drop-shadow(0 0 0.18rem rgba(255, 255, 255, 0.95))
-    drop-shadow(0 0 0.62rem rgba(239, 96, 126, 0.3))
-    drop-shadow(0 0 1.1rem rgba(246, 160, 128, 0.16));
+    drop-shadow(0 0 0.18rem color-mix(in srgb, var(--card-fx-bright) 78%, transparent))
+    drop-shadow(0 0 0.65rem color-mix(in srgb, var(--card-fx-hot) 62%, transparent));
 }
 
-:root[data-theme="light"] .fx-neon-frame::after,
-:root[data-theme="light"] .ui-card--neon::after {
-  background:
-    radial-gradient(circle at 15% 0%, #fff 0 0.08rem, rgba(239, 127, 156, 0.48) 0.18rem, transparent 0.72rem),
-    radial-gradient(circle at 100% 26%, #fff 0 0.07rem, rgba(246, 160, 128, 0.42) 0.17rem, transparent 0.68rem),
-    radial-gradient(circle at 84% 100%, #fff 0 0.08rem, rgba(232, 201, 189, 0.56) 0.19rem, transparent 0.8rem),
-    radial-gradient(circle at 0% 70%, #fff 0 0.07rem, rgba(214, 47, 98, 0.4) 0.18rem, transparent 0.72rem),
-    radial-gradient(circle at 50% 48%, rgba(239, 127, 156, 0.08), transparent 58%);
+.ui-card__edge::before { animation: card-fx-rotate 7s linear infinite; }
+
+.ui-card__glint::before {
+  background: conic-gradient(
+    transparent 0deg,
+    transparent 260deg,
+    color-mix(in srgb, var(--card-fx-bright) 100%, transparent) 282deg,
+    color-mix(in srgb, var(--card-fx-warm) 80%, transparent) 294deg,
+    transparent 313deg,
+    transparent 360deg
+  );
+  animation: card-fx-rotate-reverse 3.2s linear infinite;
+}
+
+.ui-card__glint {
+  z-index: 6;
+  filter:
+    drop-shadow(0 0 0.24rem var(--card-fx-bright))
+    drop-shadow(0 0 0.8rem color-mix(in srgb, var(--card-fx-hot) 70%, transparent));
+  mix-blend-mode: screen;
+}
+
+.ui-card__sheen {
+  z-index: 2;
+  inset: 0;
+  background: radial-gradient(
+    circle 20rem at var(--card-mx) var(--card-my),
+    var(--card-fx-sheen),
+    var(--card-fx-sheen-soft) 40%,
+    transparent 72%
+  );
+  mix-blend-mode: screen;
+  opacity: 0.84;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.ui-card--neon:hover .ui-card__sheen { opacity: 1; }
+.fx-neon-pulse { animation: card-fx-breathe 4s ease-in-out infinite; }
+
+@keyframes card-fx-rotate { to { transform: rotate(1turn); } }
+@keyframes card-fx-rotate-reverse { to { transform: rotate(-1turn); } }
+@keyframes card-fx-breathe {
+  0%, 100% { opacity: calc(var(--card-fx-outer-opacity) * 0.82); }
+  50% { opacity: min(0.86, calc(var(--card-fx-outer-opacity) * 1.38)); }
+}
+
+:root[data-theme="light"] .ui-card--neon {
   box-shadow:
-    inset 0 0 1.9rem rgba(255, 130, 158, 0.08),
-    inset 0 0 4.5rem rgba(246, 160, 128, 0.04),
-    0 0 1rem rgba(239, 63, 101, 0.12);
+    0 1.5rem 4rem rgb(118 68 78 / 14%),
+    inset 0 var(--hairline) 0 rgb(255 255 255 / 88%);
+}
+
+:root[data-theme="light"] .ui-card__edge {
+  filter:
+    drop-shadow(0 0 0.2rem rgb(255 255 255 / 96%))
+    drop-shadow(0 0 0.72rem rgb(227 71 108 / 38%));
+}
+
+:root[data-theme="light"] .ui-card__glint {
+  filter:
+    drop-shadow(0 0 0.24rem rgb(255 255 255 / 100%))
+    drop-shadow(0 0 0.78rem rgb(235 83 118 / 44%));
 }
