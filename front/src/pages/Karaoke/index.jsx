@@ -155,6 +155,9 @@ export default function Karaoke({ onOpenAppSettings }) {
   const panoramaPathRef = useRef(createPanoramaPath());
   const currentTimeRef = useRef(currentTime);
   const durationRef = useRef(duration);
+  const togglePlayRef = useRef(null);
+  const seekToRef = useRef(null);
+  const stopRef = useRef(null);
   const controlsTimerRef = useRef(null);
   const lastControlsActivityRef = useRef(Date.now());
   const microphoneVolumeInitializedRef = useRef(false);
@@ -876,6 +879,10 @@ export default function Karaoke({ onOpenAppSettings }) {
   const skip = (delta) =>
     seekTo(clampPlaybackPosition(currentTime + delta, duration));
 
+  togglePlayRef.current = togglePlay;
+  seekToRef.current = seekTo;
+  stopRef.current = stop;
+
   useEffect(() => {
     const command = onlineRoom?.roomCommand;
     if (
@@ -902,20 +909,22 @@ export default function Karaoke({ onOpenAppSettings }) {
       if (event.target.closest("input, select, textarea, button")) return;
       if (event.code === "Space") {
         event.preventDefault();
-        togglePlay();
+        togglePlayRef.current?.();
       } else if (event.code === "ArrowLeft") {
         event.preventDefault();
-        seekTo(Math.max(0, currentTimeRef.current - 5));
+        seekToRef.current?.(Math.max(0, currentTimeRef.current - 5));
       } else if (event.code === "ArrowRight") {
         event.preventDefault();
-        seekTo(Math.min(durationRef.current, currentTimeRef.current + 5));
+        seekToRef.current?.(
+          Math.min(durationRef.current, currentTimeRef.current + 5)
+        );
       } else if (event.code === "Escape") {
-        stop();
+        stopRef.current?.();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isPlaying]);
+  }, []);
 
   const toggleFullscreen = () => {
     if (!containerRef.current) return;

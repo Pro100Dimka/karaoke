@@ -13,20 +13,64 @@ function walk(directory, extensions) {
   });
 }
 
+function stripComments(css) {
+  return css.replace(/\/\*[\s\S]*?\*\//g, "");
+}
+
+function selectorPreludes(css) {
+  const source = stripComments(css);
+  const preludes = [];
+  let start = 0;
+  let quote = null;
+  let parentheses = 0;
+
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+
+    if (quote) {
+      if (char === quote && source[index - 1] !== "\\") quote = null;
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+
+    if (char === "(") parentheses += 1;
+    else if (char === ")") parentheses = Math.max(0, parentheses - 1);
+    else if (char === "{" && parentheses === 0) {
+      const prelude = source.slice(start, index).trim();
+      if (
+        prelude &&
+        !prelude.startsWith("@") &&
+        !/^(?:from|to|\d+(?:\.\d+)?%)$/i.test(prelude)
+      ) {
+        preludes.push(prelude);
+      }
+      start = index + 1;
+    } else if (char === "}" && parentheses === 0) {
+      start = index + 1;
+    }
+  }
+
+  return preludes;
+}
+
 const cssFiles = walk(path.join(root, "src"), cssExtensions);
 const sourceFiles = walk(path.join(root, "src"), sourceExtensions);
-const source = sourceFiles
-  .map((file) => fs.readFileSync(file, "utf8"))
-  .join("\n");
+const source = sourceFiles.map((file) => fs.readFileSync(file, "utf8")).join("\n");
 const candidates = new Map();
 const selectorPattern = /\.([_a-zA-Z]+[_a-zA-Z0-9-]*)/g;
 
 for (const file of cssFiles) {
   const css = fs.readFileSync(file, "utf8");
-  for (const match of css.matchAll(selectorPattern)) {
-    const className = match[1];
-    if (!candidates.has(className)) candidates.set(className, new Set());
-    candidates.get(className).add(path.relative(root, file));
+  for (const prelude of selectorPreludes(css)) {
+    for (const match of prelude.matchAll(selectorPattern)) {
+      const className = match[1];
+      if (!candidates.has(className)) candidates.set(className, new Set());
+      candidates.get(className).add(path.relative(root, file));
+    }
   }
 }
 
@@ -36,8 +80,13 @@ const dynamicPrefixes = [
   "theme-",
   "status-",
   "badge-",
-  "karaoke-theme-"
+  "cosmic-",
+  "karaoke-theme-",
+  "karaoke-atmosphere-",
+  "karaoke-flight-",
+  "library-song-card--"
 ];
+
 const unused = [...candidates]
   .filter(([className]) => !source.includes(className))
   .filter(

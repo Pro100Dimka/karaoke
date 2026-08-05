@@ -41,7 +41,11 @@
     "test:e2e": "playwright test -c e2e/playwright.config.mjs",
     "test:e2e:ui": "playwright test -c e2e/playwright.config.mjs --ui",
     "audit:css:full": "node scripts/audit-css-full.mjs",
-    "audit:css:strict": "node scripts/audit-css-full.mjs --strict"
+    "audit:css:strict": "node scripts/audit-css-full.mjs --strict",
+    "clean": "node scripts/clean.mjs",
+    "verify": "npm run check:imports && npm run test:unit && npm run lint && npm run format:check && npm run audit && npm run build",
+    "verify:ui": "npm run build:mock && npm run test:e2e",
+    "test:e2e:update": "playwright test -c e2e/playwright.config.mjs --update-snapshots"
   },
   "dependencies": {
     "lucide-react": "^0.383.0",

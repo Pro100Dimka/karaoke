@@ -130,8 +130,7 @@ textarea {
 .song-lyrics-panel,
 .song-lyrics-field,
 .song-lyrics-field > *,
-.song-lyrics-field .field,
-.song-lyrics-field .field-control {
+.song-lyrics-field .field {
   width: 100%;
   min-width: 0;
 }
