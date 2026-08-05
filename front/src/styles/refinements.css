@@ -151,31 +151,6 @@ textarea {
   overflow-wrap: break-word;
 }
 
-/* Library */
-.library-page,
-.library-toolbar,
-.library-collection-panel,
-.library-card-deck {
-  min-width: 0;
-}
-
-.library-toolbar {
-  gap: var(--space-3);
-}
-
-.library-search {
-  min-width: min(260px, 100%);
-  max-width: 520px;
-}
-
-.library-search-input {
-  min-width: 0;
-}
-
-.library-card-deck {
-  overflow-x: clip;
-}
-
 /* Compact desktop window */
 @media (max-width: 1000px) {
   .song-settings-workspace {
@@ -198,16 +173,6 @@ textarea {
     max-width: calc(100vw - 12px);
     max-height: calc(100vh - 12px);
     border-radius: var(--radius-lg);
-  }
-
-  .library-toolbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .library-search {
-    width: 100%;
-    max-width: none;
   }
 }
 
