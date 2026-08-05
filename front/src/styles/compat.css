@@ -1,7 +1,4 @@
 /* Shared compatibility styles for screens that are not part of the library redesign yet. */
-body {
-  background-image: url("../assets/karaoke/library-neon-space.webp");
-}
 .about-screen,
 .page-state {
   padding: var(--space-6);
@@ -529,4 +526,61 @@ body {
   border-radius: var(--radius-xl);
   background: var(--color-surface-strong);
   box-shadow: var(--shadow-lg), var(--shadow-neon-mixed);
+}
+
+/* Global crimson-nebula stage: one fixed image shared by every application screen. */
+html {
+  background: #060002;
+}
+
+body {
+  position: relative;
+  background-color: #060002;
+  background-image: url("../assets/karaoke/library-neon-space.png");
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-attachment: fixed;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      circle at 13% 18%,
+      rgba(255, 43, 68, 0.13),
+      transparent 30%
+    ),
+    radial-gradient(circle at 78% 67%, rgba(194, 7, 44, 0.12), transparent 34%),
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.16),
+      transparent 35%,
+      transparent 68%,
+      rgba(0, 0, 0, 0.22)
+    );
+}
+
+#root,
+.app-shell,
+.app-body,
+.app-main {
+  background: transparent;
+}
+
+.title-bar {
+  background: linear-gradient(
+    180deg,
+    rgba(24, 1, 7, 0.92),
+    rgba(16, 0, 5, 0.72)
+  );
+  border-bottom-color: rgba(255, 78, 101, 0.28);
+  box-shadow:
+    0 8px 32px rgba(4, 0, 1, 0.42),
+    0 0 28px rgba(207, 10, 47, 0.1);
+  backdrop-filter: blur(18px) saturate(135%);
 }

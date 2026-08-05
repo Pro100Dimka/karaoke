@@ -1,37 +1,62 @@
 :root {
   color-scheme: dark;
 
-  --color-bg: #03051f;
-  --color-bg-deep: #010212;
-  --color-surface: rgba(7, 12, 55, 0.72);
-  --color-surface-strong: rgba(10, 19, 76, 0.9);
-  --color-surface-soft: rgba(20, 31, 96, 0.46);
-  --color-surface-hover: rgba(29, 48, 133, 0.58);
+  --color-bg: #090104;
+  --color-bg-deep: #030001;
+  --color-surface: rgba(27, 3, 9, 0.76);
+  --color-surface-strong: rgba(42, 5, 13, 0.92);
+  --color-surface-soft: rgba(69, 9, 20, 0.5);
+  --color-surface-hover: rgba(99, 15, 29, 0.62);
 
-  --color-text: #f7f8ff;
-  --color-text-soft: #c8d0ff;
-  --color-text-muted: #7f8bc7;
-  --color-text-inverse: #05061b;
+  --color-text: #fff7f8;
+  --color-text-soft: #f0cbd0;
+  --color-text-muted: #b77f89;
+  --color-text-inverse: #170205;
 
-  --color-primary: #2ee8ff;
-  --color-primary-strong: #079cff;
-  --color-secondary: #7b5cff;
-  --color-accent: #ff38c7;
-  --color-accent-strong: #ff197f;
-  --color-success: #14f1d3;
-  --color-warning: #ffc857;
-  --color-danger: #ff4d9a;
+  --color-primary: #ff334f;
+  --color-primary-strong: #d9082c;
+  --color-secondary: #b51d3f;
+  --color-accent: #ff6a78;
+  --color-accent-strong: #ff1744;
+  --color-success: #51e3a4;
+  --color-warning: #ffc66d;
+  --color-danger: #ff3658;
 
-  --color-border: rgba(107, 167, 255, 0.32);
-  --color-border-strong: rgba(73, 220, 255, 0.82);
-  --color-border-accent: rgba(255, 63, 214, 0.84);
-  --color-focus: #86f6ff;
+  --color-border: rgba(255, 91, 112, 0.3);
+  --color-border-strong: rgba(255, 95, 113, 0.82);
+  --color-border-accent: rgba(255, 31, 73, 0.88);
+  --color-focus: #ff9ba7;
 
-  --gradient-primary: linear-gradient(135deg, #ff35ca 0%, #7b5cff 45%, #08cfff 100%);
-  --gradient-primary-hover: linear-gradient(135deg, #ff55d5 0%, #987cff 42%, #3de8ff 100%);
-  --gradient-panel: linear-gradient(145deg, rgba(18, 32, 116, 0.72), rgba(4, 9, 47, 0.82));
-  --gradient-border: linear-gradient(110deg, #2ef2ff, #6c5cff 28%, #ff38c7 58%, #2ef2ff 100%);
-  --gradient-text: linear-gradient(90deg, #ffffff 0%, #b9d6ff 50%, #f4c8ff 100%);
+  --gradient-primary: linear-gradient(
+    135deg,
+    #ff7180 0%,
+    #f11d43 42%,
+    #8f0a28 100%
+  );
+  --gradient-primary-hover: linear-gradient(
+    135deg,
+    #ff909b 0%,
+    #ff3457 44%,
+    #b30d32 100%
+  );
+  --gradient-panel: linear-gradient(
+    145deg,
+    rgba(74, 9, 23, 0.76),
+    rgba(18, 1, 6, 0.88)
+  );
+  --gradient-border: linear-gradient(
+    110deg,
+    #ffb0b8,
+    #ff3959 30%,
+    #a4072b 62%,
+    #ff677c 100%
+  );
+  --gradient-text: linear-gradient(
+    90deg,
+    #ffffff 0%,
+    #ffd5da 48%,
+    #ff9ba9 100%
+  );
 }
 
 :root[data-theme="light"] {

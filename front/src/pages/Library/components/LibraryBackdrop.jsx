@@ -1,3 +1,5 @@
+import LibraryWaveTerrain from "./LibraryWaveTerrain";
+
 const PIXEL_COUNT = 34;
 const EQUALIZER_BAR_COUNT = 28;
 
@@ -9,7 +11,7 @@ const BACKGROUND_GROUPS = [
   ["library-bg-ring--one", "library-bg-ring--two"]
 ];
 
-export default function LibraryBackdrop({ image }) {
+export default function LibraryBackdrop() {
   return (
     <div className="library-concert-backdrop" aria-hidden="true">
       {/* <img className="library-neon-space" src={image} alt="" /> */}
@@ -18,6 +20,7 @@ export default function LibraryBackdrop({ image }) {
           <i key={`${gIndex}-${i}`} className={`library-bg ${cls}`} />
         ))
       )}
+      <LibraryWaveTerrain />
       <div className="library-bg-notes">♪ ♫ ♪ ♬</div>
       <div className="library-bg-pixel-rain">
         {Array.from({ length: PIXEL_COUNT }, (_, index) => (

@@ -2,7 +2,6 @@ import { Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
-import libraryNeonSpace from "../../assets/karaoke/library-neon-space.webp";
 import { OnlineRoomModal } from "../../components/OnlineRoomModal";
 import { Panel } from "../../components/ui";
 import { useAppDialog } from "../../contexts/AppDialog";
@@ -226,7 +225,7 @@ export default function Library({ onOpenSongSettings }) {
 
   return (
     <div className="library-page">
-      <LibraryBackdrop image={libraryNeonSpace} />
+      <LibraryBackdrop />
       <LibraryHero songCount={visibleSongs.length} readyCount={readyCount} />
       <Panel className="library-collection-panel">
         <div className="library-toolbar">

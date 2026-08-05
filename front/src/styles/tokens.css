@@ -20,27 +20,27 @@
   --space-6: 24px;
   --space-8: 32px;
 
-  --bg-0: #090d0c;
-  --bg-1: #101816;
-  --bg-2: #17221e;
-  --card-bg: rgba(20, 31, 28, 0.78);
-  --card-border: rgba(244, 63, 94, 0.24);
-  --card-border-strong: rgba(244, 63, 94, 0.5);
-  --accent-1: #e11d48;
-  --accent-2: #fb7185;
+  --bg-0: #090104;
+  --bg-1: #160307;
+  --bg-2: #27060d;
+  --card-bg: rgba(35, 4, 11, 0.8);
+  --card-border: rgba(255, 74, 99, 0.28);
+  --card-border-strong: rgba(255, 89, 110, 0.58);
+  --accent-1: #f21d42;
+  --accent-2: #ff7785;
   --accent-gradient: linear-gradient(135deg, var(--accent-1), var(--accent-2));
-  --text-primary: #f2f8f4;
-  --text-secondary: #b5c7bd;
-  --text-muted: #789087;
+  --text-primary: #fff7f8;
+  --text-secondary: #edc6cc;
+  --text-muted: #ae7781;
   --success: #34d399;
   --warning: #fbbf24;
   --danger: #fb4e69;
-  --info: #2dd4bf;
-  --bg-glow-a: rgba(225, 29, 72, 0.18);
-  --bg-glow-b: rgba(52, 211, 153, 0.12);
-  --surface-solid: #14201c;
-  --surface-deep: #0d1512;
-  --accent-label: #fda4af;
+  --info: #ff7185;
+  --bg-glow-a: rgba(242, 29, 66, 0.22);
+  --bg-glow-b: rgba(132, 4, 35, 0.18);
+  --surface-solid: #2a0710;
+  --surface-deep: #120206;
+  --accent-label: #ffadb7;
 
   /* Semantic aliases used by shared components. They intentionally point to
      the legacy palette so both systems always change together. */
@@ -65,7 +65,7 @@
   --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.18);
   --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.24);
   --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.32);
-  --shadow-glow: 0 8px 40px rgba(139, 92, 246, 0.12);
+  --shadow-glow: 0 8px 40px rgba(242, 29, 66, 0.18);
 
   --control-height-sm: 32px;
   --control-height-md: 36px;
