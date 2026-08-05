@@ -1,4 +1,5 @@
-import image from "../../../assets/karaoke/library-neon-space.png";
+import darkImage from "../../../assets/karaoke/library-neon-space.png";
+import lightImage from "../../../assets/karaoke/library-light-space.webp";
 import LibraryWaveTerrain from "./LibraryWaveTerrain";
 
 const MUSIC_DECOR = [
@@ -11,7 +12,8 @@ const MUSIC_DECOR = [
 export default function LibraryBackdrop() {
   return (
     <div className="library-concert-backdrop" aria-hidden="true">
-      <img className="library-neon-space" src={image} alt="" />
+      <img className="library-theme-space library-theme-space--dark" src={darkImage} alt="" />
+      <img className="library-theme-space library-theme-space--light" src={lightImage} alt="" />
       <div className="library-stage-lights">
         <i />
         <i />

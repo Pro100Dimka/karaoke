@@ -1,39 +1,50 @@
-@property --neon-angle {
-  syntax: "<angle>";
-  initial-value: 0deg;
-  inherits: false;
-}
-
-/* Reusable premium neon frame for cards, panels and dialogs. */
+/* Reusable premium glass-neon frame for cards, panels and dialogs. */
 .fx-neon-frame,
 .ui-card--neon {
   position: relative;
   isolation: isolate;
+  border-color: rgb(255 110 150 / 42%);
+  box-shadow:
+    0 1.25rem 3.5rem rgb(0 0 0 / 38%),
+    inset 0 0.0625rem 0 rgb(255 255 255 / 10%),
+    inset 0 0 2rem rgb(255 22 88 / 5%),
+    0 0 1.1rem rgb(255 30 92 / 10%);
   animation: neon-surface-breathe 4.8s ease-in-out infinite;
 }
 
+/* Thin animated platinum / pink / electric-blue contour. */
 .fx-neon-frame::before,
 .ui-card--neon::before {
   content: "";
   position: absolute;
-  z-index: 6;
+  z-index: 20;
   inset: 0;
-  padding: max(var(--hairline), 0.075rem);
+  padding: max(var(--hairline), 0.105rem);
   border-radius: inherit;
   pointer-events: none;
-  background: conic-gradient(
-    from var(--neon-angle),
-    rgb(255 255 255 / 0%) 0 48%,
-    rgb(255 226 231 / 92%) 53%,
-    rgb(255 84 112 / 100%) 57%,
-    rgb(190 7 49 / 92%) 64%,
-    rgb(255 255 255 / 0%) 72% 100%
-  );
+  background:
+    linear-gradient(
+      105deg,
+      rgb(255 45 98 / 36%) 0%,
+      rgb(255 45 98 / 95%) 12%,
+      rgb(255 241 247 / 100%) 18%,
+      rgb(255 65 130 / 100%) 25%,
+      rgb(255 35 94 / 45%) 38%,
+      rgb(255 35 94 / 18%) 48%,
+      rgb(136 83 255 / 75%) 60%,
+      rgb(105 168 255 / 100%) 67%,
+      rgb(244 246 255 / 100%) 72%,
+      rgb(212 50 255 / 78%) 78%,
+      rgb(255 42 104 / 92%) 90%,
+      rgb(255 45 98 / 36%) 100%
+    );
+  background-size: 280% 100%;
   filter:
-    drop-shadow(0 0 0.2rem rgb(255 215 223 / 48%))
-    drop-shadow(0 0 0.7rem rgb(255 34 76 / 44%));
-  opacity: 0.92;
-  animation: neon-frame-orbit 5.4s linear infinite;
+    drop-shadow(0 0 0.18rem rgb(255 245 248 / 70%))
+    drop-shadow(0 0 0.6rem rgb(255 34 91 / 65%))
+    drop-shadow(0 0 1.15rem rgb(255 25 86 / 28%));
+  opacity: 0.96;
+  animation: neon-border-travel 5.8s linear infinite;
   -webkit-mask:
     linear-gradient(#fff 0 0) content-box,
     linear-gradient(#fff 0 0);
@@ -41,40 +52,70 @@
   mask-composite: exclude;
 }
 
+/* Local flashes and soft internal bloom, like the reference image. */
 .fx-neon-frame::after,
 .ui-card--neon::after {
   content: "";
   position: absolute;
-  z-index: 5;
-  inset: 0;
+  z-index: 19;
+  inset: -0.1rem;
   border-radius: inherit;
   pointer-events: none;
+  background:
+    radial-gradient(circle at 15% 0%, rgb(255 255 255 / 92%) 0 0.08rem, rgb(255 80 136 / 58%) 0.18rem, transparent 0.72rem),
+    radial-gradient(circle at 100% 26%, rgb(255 255 255 / 88%) 0 0.07rem, rgb(255 42 100 / 52%) 0.17rem, transparent 0.68rem),
+    radial-gradient(circle at 84% 100%, rgb(247 248 255 / 96%) 0 0.08rem, rgb(93 139 255 / 68%) 0.19rem, transparent 0.8rem),
+    radial-gradient(circle at 0% 70%, rgb(255 255 255 / 90%) 0 0.07rem, rgb(255 52 111 / 54%) 0.18rem, transparent 0.72rem),
+    radial-gradient(circle at 50% 48%, rgb(255 52 118 / 9%), transparent 58%);
   box-shadow:
-    inset 0 0 1rem rgb(255 63 96 / 8%),
-    0 0 0.85rem rgb(255 30 69 / 12%);
-  animation: neon-inner-breathe 3.6s ease-in-out infinite;
+    inset 0 0 1.9rem rgb(255 40 104 / 9%),
+    inset 0 0 4.5rem rgb(95 25 255 / 3%),
+    0 0 1rem rgb(255 37 95 / 16%);
+  mix-blend-mode: screen;
+  opacity: 0.82;
+  animation: neon-glints-drift 6.4s ease-in-out infinite alternate;
 }
 
 .fx-neon-pulse {
-  animation: neon-surface-breathe 3.6s ease-in-out infinite;
+  animation: neon-surface-breathe 3.8s ease-in-out infinite;
 }
 
-@keyframes neon-frame-orbit {
-  to { --neon-angle: 360deg; }
+@keyframes neon-border-travel {
+  from { background-position: 0% 50%; }
+  to { background-position: 280% 50%; }
 }
 
 @keyframes neon-surface-breathe {
   0%, 100% {
-    box-shadow: var(--shadow-glass), 0 0 0.8rem rgb(255 35 73 / 8%);
+    box-shadow:
+      0 1.25rem 3.5rem rgb(0 0 0 / 38%),
+      inset 0 0.0625rem 0 rgb(255 255 255 / 10%),
+      inset 0 0 2rem rgb(255 22 88 / 5%),
+      0 0 1rem rgb(255 30 92 / 10%);
   }
   50% {
-    box-shadow: var(--shadow-glass), 0 0 1.65rem rgb(255 35 73 / 22%);
+    box-shadow:
+      0 1.4rem 4rem rgb(0 0 0 / 42%),
+      inset 0 0.0625rem 0 rgb(255 255 255 / 14%),
+      inset 0 0 2.7rem rgb(255 22 88 / 9%),
+      0 0 1.9rem rgb(255 28 91 / 24%),
+      0 0 3.8rem rgb(98 66 255 / 7%);
   }
 }
 
-@keyframes neon-inner-breathe {
-  0%, 100% { opacity: 0.42; }
-  50% { opacity: 0.9; }
+@keyframes neon-glints-drift {
+  0% {
+    opacity: 0.6;
+    filter: brightness(0.9) saturate(1.05);
+  }
+  48% {
+    opacity: 1;
+    filter: brightness(1.25) saturate(1.18);
+  }
+  100% {
+    opacity: 0.72;
+    filter: brightness(1.05) saturate(1.12);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -87,4 +128,51 @@
   .fx-neon-pulse {
     animation: none;
   }
+}
+
+/* Pearl contour for light surfaces; the component API stays identical. */
+:root[data-theme="light"] .fx-neon-frame,
+:root[data-theme="light"] .ui-card--neon {
+  border-color: rgba(222, 94, 124, 0.28);
+  box-shadow:
+    0 1.25rem 3.5rem rgba(112, 61, 73, 0.14),
+    inset 0 0.0625rem 0 rgba(255, 255, 255, 0.92),
+    inset 0 0 2rem rgba(255, 151, 171, 0.08),
+    0 0 1.25rem rgba(239, 63, 101, 0.11);
+}
+
+:root[data-theme="light"] .fx-neon-frame::before,
+:root[data-theme="light"] .ui-card--neon::before {
+  background: linear-gradient(
+    105deg,
+    rgba(239, 63, 101, 0.28) 0%,
+    rgba(239, 63, 101, 0.78) 12%,
+    #ffffff 18%,
+    #f7a7b7 27%,
+    rgba(246, 160, 128, 0.64) 42%,
+    rgba(255, 255, 255, 0.6) 53%,
+    rgba(232, 201, 189, 0.8) 63%,
+    #ffffff 72%,
+    rgba(214, 47, 98, 0.72) 84%,
+    rgba(239, 63, 101, 0.28) 100%
+  );
+  background-size: 280% 100%;
+  filter:
+    drop-shadow(0 0 0.18rem rgba(255, 255, 255, 0.95))
+    drop-shadow(0 0 0.62rem rgba(239, 96, 126, 0.3))
+    drop-shadow(0 0 1.1rem rgba(246, 160, 128, 0.16));
+}
+
+:root[data-theme="light"] .fx-neon-frame::after,
+:root[data-theme="light"] .ui-card--neon::after {
+  background:
+    radial-gradient(circle at 15% 0%, #fff 0 0.08rem, rgba(239, 127, 156, 0.48) 0.18rem, transparent 0.72rem),
+    radial-gradient(circle at 100% 26%, #fff 0 0.07rem, rgba(246, 160, 128, 0.42) 0.17rem, transparent 0.68rem),
+    radial-gradient(circle at 84% 100%, #fff 0 0.08rem, rgba(232, 201, 189, 0.56) 0.19rem, transparent 0.8rem),
+    radial-gradient(circle at 0% 70%, #fff 0 0.07rem, rgba(214, 47, 98, 0.4) 0.18rem, transparent 0.72rem),
+    radial-gradient(circle at 50% 48%, rgba(239, 127, 156, 0.08), transparent 58%);
+  box-shadow:
+    inset 0 0 1.9rem rgba(255, 130, 158, 0.08),
+    inset 0 0 4.5rem rgba(246, 160, 128, 0.04),
+    0 0 1rem rgba(239, 63, 101, 0.12);
 }

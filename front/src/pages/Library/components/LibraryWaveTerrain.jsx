@@ -65,15 +65,21 @@ export default function LibraryWaveTerrain() {
         points.push(rowPoints);
       }
 
+      const isLight = document.documentElement.dataset.theme === "light";
+
       for (let row = 0; row <= ROWS; row += 1) {
         const rowPoints = points[row];
         const scale = rowPoints[Math.floor(rowPoints.length / 2)].scale;
-        const alpha = 0.08 + scale * 0.62;
-        const hue = 352 + scale * 16;
+        const alpha = (isLight ? 0.08 : 0.08) + scale * (isLight ? 0.42 : 0.62);
+        const hue = (isLight ? 344 : 352) + scale * (isLight ? 10 : 16);
+        const saturation = isLight ? 86 : 100;
+        const lightness = (isLight ? 58 : 48) + scale * (isLight ? 16 : 24);
 
-        context.strokeStyle = `hsla(${hue}, 100%, ${48 + scale * 24}%, ${alpha})`;
+        context.strokeStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
         context.lineWidth = 0.55 + scale * 1.65;
-        context.shadowColor = `hsla(${hue}, 100%, 58%, ${0.48 * scale})`;
+        context.shadowColor = `hsla(${hue}, ${saturation}%, ${isLight ? 66 : 58}%, ${
+          (isLight ? 0.34 : 0.48) * scale
+        })`;
         context.shadowBlur = 2 + scale * 10;
         context.beginPath();
         context.moveTo(rowPoints[0].x, rowPoints[0].y);
@@ -92,7 +98,9 @@ export default function LibraryWaveTerrain() {
           if (row === 0) context.moveTo(point.x, point.y);
           else context.lineTo(point.x, point.y);
         });
-        context.strokeStyle = "rgba(255, 72, 92, 0.24)";
+        context.strokeStyle = isLight
+          ? "rgba(196, 46, 83, 0.24)"
+          : "rgba(255, 72, 92, 0.24)";
         context.lineWidth = 0.55;
         context.stroke();
       }
@@ -107,12 +115,19 @@ export default function LibraryWaveTerrain() {
       draw(0);
     };
 
+    const themeObserver = new MutationObserver(restart);
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"]
+    });
+
     resize();
     draw(0);
     window.addEventListener("resize", resize);
     reducedMotion.addEventListener("change", restart);
 
     return () => {
+      themeObserver.disconnect();
       window.cancelAnimationFrame(animationFrame);
       window.removeEventListener("resize", resize);
       reducedMotion.removeEventListener("change", restart);

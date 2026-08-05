@@ -160,23 +160,30 @@ export default function SongSettings({ songId }) {
   };
 
   return (
-    <div className="song-settings-workspace">
-      <Panel title={`Настройки песни — ${song.title}`}>
-        <SongFields form={form} onChange={updateField} />
+    <div className="song-settings-shell">
+      <div className="song-settings-scroll modal-scroll">
+        <div className="song-settings-workspace">
+          <Panel
+            className="ui-card song-settings-panel"
+            title={`Настройки песни — ${song.title}`}
+          >
+            <SongFields form={form} onChange={updateField} />
 
-        <Button
-          className="song-settings-save"
-          variant="primary"
-          disabled={saving}
-          onClick={save}
-        >
-          {saving ? "Сохранение..." : "Сохранить"}
-        </Button>
-      </Panel>
+            <Button
+              className="song-settings-save"
+              variant="primary"
+              disabled={saving}
+              onClick={save}
+            >
+              {saving ? "Сохранение..." : "Сохранить"}
+            </Button>
+          </Panel>
 
-      {song.status === "done" && (
-        <LyricsEditor lyrics={lyrics} onChange={updateLyricsText} />
-      )}
+          {song.status === "done" && (
+            <LyricsEditor lyrics={lyrics} onChange={updateLyricsText} />
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -222,7 +229,7 @@ function NoteRangeFields({ form, onChange }) {
 
 function LyricsEditor({ lyrics, onChange }) {
   return (
-    <Panel className="song-lyrics-panel" title="Редактор текста">
+    <Panel className="ui-card song-settings-panel song-lyrics-panel" title="Редактор текста">
       <div className="song-lyrics-field">
         <FieldInput
           field={LYRICS_FIELD}

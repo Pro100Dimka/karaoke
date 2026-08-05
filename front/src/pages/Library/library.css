@@ -1,169 +1,3 @@
-/* Library screen + the small set of primitives it renders. All values come from src/theme. */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-html,
-body,
-#root {
-  min-block-size: 100%;
-  margin: 0;
-}
-
-html {
-  background: var(--color-bg-deep);
-}
-
-body {
-  min-block-size: 100dvh;
-  overflow-x: hidden;
-  color: var(--color-text);
-  background: var(--color-bg-deep);
-  font: var(--font-size-md) / var(--line-height-base) var(--font-sans);
-}
-
-button,
-input,
-textarea,
-select {
-  font: inherit;
-}
-
-button {
-  cursor: pointer;
-}
-
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-svg {
-  flex: none;
-}
-
-.sr-only,
-.visually-hidden {
-  position: absolute !important;
-  inline-size: 1px !important;
-  block-size: 1px !important;
-  margin: -1px !important;
-  padding: 0 !important;
-  overflow: hidden !important;
-  border: 0 !important;
-  clip: rect(0, 0, 0, 0) !important;
-  white-space: nowrap !important;
-}
-
-/* Fixed, transparent Windows-style application chrome. */
-.app-shell {
-  position: relative;
-  min-block-size: 100dvh;
-  padding-block-start: var(--titlebar-height);
-  background: transparent;
-  isolation: isolate;
-}
-
-.app-body,
-.app-main {
-  min-block-size: calc(100dvh - var(--titlebar-height));
-  background: transparent;
-}
-
-.app-main {
-  position: relative;
-}
-
-.title-bar {
-  position: fixed;
-  z-index: 1000;
-  inset: 0 0 auto;
-  display: flex;
-  align-items: stretch;
-  block-size: var(--titlebar-height);
-  border-block-end: var(--hairline) solid rgb(255 255 255 / 8%);
-  background: rgb(8 0 3 / 8%);
-  box-shadow: 0 var(--hairline) 0 rgb(255 58 91 / 10%);
-  backdrop-filter: blur(var(--space-2)) saturate(115%);
-  -webkit-app-region: drag;
-}
-
-.title-bar__brand,
-.title-bar__actions {
-  display: flex;
-  align-items: center;
-}
-
-.title-bar__brand {
-  flex: 1;
-  min-inline-size: 0;
-  gap: var(--space-2);
-  padding-inline: var(--space-4);
-  font: 700 var(--font-size-xs) / 1 var(--font-display);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  text-shadow: 0 0 var(--space-4) rgb(255 64 93 / 45%);
-}
-
-.title-bar__indicator {
-  inline-size: var(--space-2);
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: var(--color-primary);
-  box-shadow: var(--shadow-neon-primary);
-}
-
-.title-bar__actions {
-  margin-inline-start: auto;
-  -webkit-app-region: no-drag;
-}
-
-.title-bar__button {
-  display: grid;
-  inline-size: clamp(2.75rem, 4vw, 3.5rem);
-  block-size: 100%;
-  padding: 0;
-  place-items: center;
-  border: 0;
-  border-inline-start: var(--hairline) solid rgb(255 255 255 / 6%);
-  color: var(--color-text-soft);
-  background: transparent;
-  transition:
-    color var(--duration-fast) var(--ease-standard),
-    background var(--duration-fast) var(--ease-standard),
-    box-shadow var(--duration-fast) var(--ease-standard);
-}
-
-.title-bar__button:hover {
-  color: var(--color-text);
-  background: var(--color-surface-hover);
-  box-shadow: inset 0 calc(-1 * var(--space-1)) var(--color-primary);
-}
-
-.title-bar__button.is-danger:hover {
-  background: var(--gradient-primary);
-  box-shadow: var(--shadow-neon-primary);
-}
-
-.app-settings-fab {
-  position: fixed;
-  z-index: 30;
-  inset-inline-end: var(--space-5);
-  inset-block-end: var(--space-5);
-  display: grid;
-  inline-size: clamp(3rem, 5vw, 3.75rem);
-  aspect-ratio: 1;
-  place-items: center;
-  border: var(--hairline) solid var(--color-border-strong);
-  border-radius: 50%;
-  color: var(--color-text);
-  background: var(--gradient-panel);
-  box-shadow: var(--shadow-neon-soft);
-  backdrop-filter: blur(var(--space-3));
-}
-
 /* Background scene. */
 .library-concert-backdrop {
   position: fixed;
@@ -174,12 +8,28 @@ svg {
   background: var(--color-bg-deep);
 }
 
-.library-neon-space {
+.library-theme-space {
+  position: absolute;
+  inset: 0;
   inline-size: 100%;
   block-size: 100%;
   object-fit: cover;
   object-position: center;
+  opacity: 0;
   filter: saturate(1.05) contrast(1.04) brightness(0.72);
+  transition: opacity var(--duration-slow) var(--ease-standard);
+}
+
+.library-theme-space--dark {
+  opacity: 1;
+}
+
+:root[data-theme="light"] .library-theme-space--dark {
+  opacity: 0;
+}
+
+:root[data-theme="light"] .library-theme-space--light {
+  opacity: 1;
 }
 
 .library-concert-backdrop::before {
@@ -358,7 +208,7 @@ svg {
 
 /* Main Library composition. */
 .library-page {
-  --library-gutter: clamp(0.9rem, 2.5vw, 1.35rem);
+  --library-gutter: 10vw;
   --library-content: 100%;
   position: relative;
   min-block-size: calc(100dvh - var(--titlebar-height));
@@ -440,14 +290,6 @@ svg {
   gap: var(--space-3);
 }
 
-.ui-card {
-  border: var(--hairline) solid var(--color-border);
-  border-radius: var(--radius-xl);
-  background: var(--gradient-glass);
-  box-shadow: var(--shadow-glass);
-  backdrop-filter: blur(var(--space-4)) saturate(135%);
-}
-
 .library-stat-card {
   display: grid;
   min-inline-size: 8rem;
@@ -496,21 +338,10 @@ svg {
   transform: translateY(-50%);
 }
 
-.input,
-.library-search-input,
 .settings-field input,
 .settings-field textarea,
 .settings-field select {
   inline-size: 100%;
-  border: var(--hairline) solid var(--color-border);
-  border-radius: var(--radius-md);
-  color: var(--color-text);
-  outline: none;
-  background: var(--color-surface-glass);
-  transition:
-    border-color var(--duration-fast) var(--ease-standard),
-    box-shadow var(--duration-fast) var(--ease-standard),
-    background var(--duration-fast) var(--ease-standard);
 }
 
 .library-search-input {
@@ -535,54 +366,6 @@ svg {
   gap: var(--space-2);
 }
 
-.btn {
-  display: inline-flex;
-  min-block-size: 2.75rem;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  border: var(--hairline) solid var(--color-border);
-  border-radius: var(--radius-md);
-  color: var(--color-text);
-  background: var(--color-surface-glass);
-  font: 800 var(--font-size-xs) / 1 var(--font-display);
-  letter-spacing: 0.03em;
-  transition:
-    transform var(--duration-fast) var(--ease-standard),
-    border-color var(--duration-fast) var(--ease-standard),
-    background var(--duration-fast) var(--ease-standard),
-    box-shadow var(--duration-fast) var(--ease-standard);
-}
-
-.btn:hover:not(:disabled) {
-  border-color: var(--color-border-strong);
-  background: var(--color-surface-hover);
-  box-shadow: var(--shadow-neon-soft);
-  transform: translateY(calc(-1 * var(--hairline)));
-}
-
-.btn-primary {
-  border-color: var(--color-border-strong);
-  background: var(--gradient-primary);
-  box-shadow: inset 0 var(--hairline) rgb(255 255 255 / 22%);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--gradient-primary-hover);
-  box-shadow: var(--shadow-neon-primary);
-}
-
-.btn-danger {
-  color: var(--color-danger);
-  background: rgb(110 7 31 / 45%);
-}
-
-.btn-danger:hover:not(:disabled) {
-  color: var(--color-text);
-  background: var(--color-primary-strong);
-}
-
 .library-card-deck {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 27rem), 34rem));
@@ -602,10 +385,13 @@ svg {
   grid-template-columns: clamp(4.6rem, 8vw, 5.5rem) minmax(0, 1fr);
   min-block-size: 12.5rem;
   overflow: hidden;
-  border-color: rgb(255 104 124 / 24%);
+  border-color: rgb(255 104 145 / 30%);
   background:
-    radial-gradient(circle at var(--glow-x) var(--glow-y), rgb(255 67 99 / 13%), transparent 34%),
-    var(--gradient-panel);
+    radial-gradient(circle at var(--glow-x) var(--glow-y), rgb(255 68 126 / 15%), transparent 34%),
+    radial-gradient(circle at 58% 70%, rgb(99 59 255 / 5%), transparent 42%),
+    linear-gradient(145deg, rgb(58 2 20 / 88%), rgb(18 0 9 / 91%));
+  backdrop-filter: blur(1rem) saturate(142%);
+  -webkit-backdrop-filter: blur(1rem) saturate(142%);
   transform: rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
   transform-style: preserve-3d;
   container-type: inline-size;
@@ -616,8 +402,11 @@ svg {
 }
 
 .library-song-card:hover {
-  border-color: var(--color-border-strong);
-  box-shadow: var(--shadow-md), 0 0 var(--space-8) rgb(255 44 79 / 15%);
+  border-color: rgb(255 174 197 / 56%);
+  box-shadow:
+    var(--shadow-md),
+    0 0 1.8rem rgb(255 40 102 / 23%),
+    0 0 3.2rem rgb(106 83 255 / 7%);
 }
 
 .library-song-card-art {
@@ -756,72 +545,6 @@ svg {
 }
 
 /* Progress, badges and Library-owned dialogs. */
-.panel {
-  border-radius: var(--radius-xl);
-  overflow: hidden;
-}
-
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-5);
-  border-block-end: var(--hairline) solid var(--color-border);
-}
-
-.panel-title {
-  font: 800 var(--font-size-md) / 1.2 var(--font-display);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.progress-track {
-  inline-size: 100%;
-  block-size: var(--space-2);
-  overflow: hidden;
-  border-radius: var(--radius-pill);
-  background: rgb(255 255 255 / 9%);
-}
-
-.progress-fill {
-  block-size: 100%;
-  border-radius: inherit;
-  background: var(--gradient-primary);
-  box-shadow: var(--shadow-neon-primary);
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-2);
-  border: var(--hairline) solid var(--color-border);
-  border-radius: var(--radius-pill);
-  color: var(--color-text-soft);
-  background: var(--color-surface-glass);
-  font-size: var(--font-size-xs);
-}
-
-.badge-dot {
-  inline-size: var(--space-1);
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.badge-done {
-  color: var(--color-success);
-}
-
-.badge-processing {
-  color: var(--color-warning);
-}
-
-.badge-error,
-.badge-cancelled {
-  color: var(--color-danger);
-}
-
 .song-recordings-backdrop,
 .modal-backdrop {
   position: fixed;
@@ -837,7 +560,6 @@ svg {
 
 .song-recordings-modal,
 .processing-modal,
-.song-settings-modal,
 .modal {
   position: relative;
   inline-size: min(58rem, 100%);
@@ -966,7 +688,55 @@ svg {
   background: var(--color-surface-soft);
 }
 
-/* Song settings can be opened from Library, so its local layout remains here. */
+/* Song settings modal reuses the global Card, panel and modal-scroll primitives. */
+.song-settings-modal {
+  display: flex;
+  inline-size: min(76rem, calc(100vw - 2 * var(--space-5)));
+  block-size: min(88dvh, 54rem);
+  max-block-size: calc(100dvh - 2 * var(--space-4));
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  border-color: var(--color-border-strong);
+  background: var(--gradient-panel);
+}
+
+.song-settings-modal > .song-recordings-close {
+  position: absolute;
+  z-index: 30;
+  inset-block-start: var(--space-3);
+  inset-inline-end: var(--space-3);
+}
+
+.song-settings-shell {
+  display: flex;
+  min-block-size: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.song-settings-scroll {
+  padding: clamp(var(--space-4), 2.4vw, var(--space-7));
+}
+
+.song-settings-workspace {
+  display: grid;
+  grid-template-columns: minmax(18rem, 0.92fr) minmax(24rem, 1.08fr);
+  gap: clamp(var(--space-4), 2vw, var(--space-6));
+  min-block-size: 100%;
+}
+
+.song-settings-panel {
+  min-inline-size: 0;
+  align-self: start;
+  overflow: hidden;
+  background: var(--gradient-glass);
+}
+
+.song-settings-panel .panel-header {
+  padding-inline-end: calc(var(--space-8) + var(--space-3));
+}
+
 .settings-field {
   display: grid;
   gap: var(--space-2);
@@ -974,39 +744,28 @@ svg {
   border: var(--hairline) solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface-soft);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
 }
 
-.settings-field > span {
-  display: grid;
+.settings-field:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-hover);
+  box-shadow: var(--shadow-neon-soft);
 }
 
-.settings-field small {
-  color: var(--color-text-muted);
-}
-
-.field-row {
-  gap: var(--space-3);
-}
-
-.app-dropdown-trigger {
-  inline-size: 100%;
-}
+.settings-field > span { display: grid; }
+.settings-field small { color: var(--color-text-muted); }
+.field-row { gap: var(--space-3); }
+.app-dropdown-trigger { inline-size: 100%; }
 
 .app-dropdown-menu {
   z-index: 10;
   border: var(--hairline) solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface-strong);
-}
-
-.song-settings-workspace {
-  display: grid;
-  grid-template-columns: minmax(18rem, 0.92fr) minmax(24rem, 1.08fr);
-  gap: clamp(var(--space-4), 2vw, var(--space-6));
-}
-
-.song-settings-workspace > .panel {
-  overflow: visible;
 }
 
 .song-settings-fields {
@@ -1022,32 +781,40 @@ svg {
 
 .song-lyrics-panel {
   display: flex;
-  min-inline-size: 0;
+  min-block-size: 34rem;
   flex-direction: column;
 }
 
 .song-lyrics-field {
   display: flex;
+  min-block-size: 0;
   flex: 1;
   padding: var(--space-4);
 }
 
 .song-lyrics-field > .settings-field {
+  display: flex;
   inline-size: 100%;
+  min-block-size: 0;
+  flex-direction: column;
   padding: 0;
   border: 0;
   background: transparent;
+  box-shadow: none;
 }
 
 .song-lyrics-editor {
-  min-block-size: 30rem;
-  resize: vertical;
+  min-block-size: 26rem;
+  flex: 1;
+  resize: none;
+  overflow: auto;
   font-family: var(--font-mono);
   line-height: var(--line-height-relaxed);
 }
 
 .song-lyrics-error {
   margin: var(--space-3) var(--space-4);
+  color: var(--color-danger);
 }
 
 @keyframes library-light-sweep {
@@ -1120,8 +887,17 @@ svg {
     opacity: 0.2;
   }
 
+  .song-settings-modal {
+    inline-size: calc(100vw - 2 * var(--space-3));
+    block-size: min(92dvh, 54rem);
+  }
+
   .song-settings-workspace {
     grid-template-columns: 1fr;
+  }
+
+  .song-lyrics-panel {
+    min-block-size: 28rem;
   }
 }
 
@@ -1155,12 +931,6 @@ svg {
   .library-music-object--microphone,
   .library-music-object--notes {
     display: none;
-  }
-}
-
-@media (min-width: 80rem) {
-  .library-page {
-    --library-gutter: clamp(0.35rem, 0.65vw, 0.75rem);
   }
 }
 
@@ -1203,4 +973,148 @@ svg {
   .song-lyrics-editor {
     min-block-size: 20rem;
   }
+}
+
+
+/* Light library composition: moonlight glass, peach haze and raspberry accents. */
+:root[data-theme="light"] .title-bar {
+  border-block-end-color: rgba(191, 86, 103, 0.16);
+  background: rgba(255, 250, 247, 0.18);
+  box-shadow: 0 var(--hairline) 0 rgba(255, 255, 255, 0.7);
+}
+
+:root[data-theme="light"] .title-bar__brand {
+  text-shadow: 0 0 var(--space-4) rgba(214, 47, 98, 0.22);
+}
+
+:root[data-theme="light"] .title-bar__button {
+  border-inline-start-color: rgba(176, 84, 101, 0.1);
+}
+
+:root[data-theme="light"] .library-concert-backdrop {
+  background: #f8eee9;
+}
+
+:root[data-theme="light"] .library-theme-space {
+  filter: saturate(0.95) contrast(0.98) brightness(1.02);
+}
+
+:root[data-theme="light"] .library-concert-backdrop::before {
+  background:
+    radial-gradient(circle at 24% 18%, rgba(255, 255, 255, 0.08), transparent 38%),
+    radial-gradient(circle at 76% 38%, rgba(239, 127, 156, 0.06), transparent 34%),
+    linear-gradient(180deg, rgba(255, 250, 247, 0.04), rgba(255, 247, 241, 0.1) 58%, rgba(245, 219, 211, 0.25));
+}
+
+:root[data-theme="light"] .library-stage-lights i {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(239, 63, 101, 0.2) 46%, rgba(246, 160, 128, 0.08) 68%, transparent 90%);
+  filter: blur(var(--space-1)) saturate(1.28);
+  mix-blend-mode: multiply;
+  opacity: 0.62;
+}
+
+:root[data-theme="light"] .library-wave-terrain {
+  opacity: 0.48;
+  filter: saturate(1.35) contrast(1.08);
+}
+
+:root[data-theme="light"] .library-music-object {
+  opacity: 0.48;
+  filter:
+    drop-shadow(0 0 var(--space-4) rgba(214, 47, 98, 0.28))
+    drop-shadow(0 0 var(--space-8) rgba(246, 160, 128, 0.18));
+}
+
+:root[data-theme="light"] .library-music-object--equalizer {
+  opacity: 0.56;
+}
+
+:root[data-theme="light"] .library-music-object--equalizer span {
+  background: linear-gradient(var(--color-raspberry), var(--color-primary), var(--color-peach));
+  box-shadow: 0 0 var(--space-3) rgba(214, 47, 98, 0.42);
+}
+
+:root[data-theme="light"] .library-music-object--notes span {
+  opacity: 0.48;
+}
+
+:root[data-theme="light"] .library-music-object--notes span::before {
+  color: var(--color-raspberry);
+  text-shadow: 0 0 var(--space-3) rgba(214, 47, 98, 0.3);
+}
+
+:root[data-theme="light"] .library-music-object--record {
+  border: var(--hairline) solid rgba(151, 74, 91, 0.26);
+  box-shadow:
+    inset 0 0 var(--space-8) rgba(255, 255, 255, 0.72),
+    0 0 var(--space-5) rgba(214, 47, 98, 0.22),
+    0 0 var(--space-8) rgba(246, 160, 128, 0.16);
+}
+
+:root[data-theme="light"] .library-music-object--record::before {
+  color: var(--color-text-inverse);
+  box-shadow: 0 0 var(--space-4) rgba(214, 47, 98, 0.28);
+}
+
+:root[data-theme="light"] .library-music-object--microphone {
+  filter:
+    drop-shadow(0 0 var(--space-3) rgba(214, 47, 98, 0.32))
+    drop-shadow(0 var(--space-2) var(--space-5) rgba(99, 52, 63, 0.18));
+}
+
+:root[data-theme="light"] .library-hero h1 {
+  filter: drop-shadow(0 0 var(--space-5) rgba(214, 47, 98, 0.12));
+}
+
+:root[data-theme="light"] .ui-card {
+  backdrop-filter: blur(var(--space-4)) saturate(150%);
+}
+
+:root[data-theme="light"] .library-search-input {
+  border-color: rgba(174, 75, 94, 0.18);
+  box-shadow: inset 0 var(--hairline) rgba(255, 255, 255, 0.86);
+}
+
+:root[data-theme="light"] .library-search-input:focus {
+  box-shadow: 0 0 0 var(--space-1) rgba(239, 63, 101, 0.1);
+}
+
+:root[data-theme="light"] .btn-primary {
+  box-shadow: inset 0 var(--hairline) rgba(255, 255, 255, 0.55);
+}
+
+:root[data-theme="light"] .btn-danger {
+  color: var(--color-danger);
+  background: rgba(215, 53, 72, 0.08);
+}
+
+:root[data-theme="light"] .library-song-card {
+  border-color: rgba(214, 47, 98, 0.22);
+  background:
+    radial-gradient(circle at var(--glow-x) var(--glow-y), rgba(239, 127, 156, 0.13), transparent 34%),
+    radial-gradient(circle at 58% 70%, rgba(246, 160, 128, 0.08), transparent 42%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.72), rgba(255, 239, 233, 0.76));
+  backdrop-filter: blur(1rem) saturate(155%);
+}
+
+:root[data-theme="light"] .library-song-card:hover {
+  border-color: rgba(214, 47, 98, 0.42);
+  box-shadow:
+    var(--shadow-md),
+    0 0 1.8rem rgba(239, 63, 101, 0.14),
+    0 0 3.2rem rgba(246, 160, 128, 0.08);
+}
+
+:root[data-theme="light"] .library-song-card-art {
+  color: #fff;
+  background: linear-gradient(160deg, var(--color-raspberry), var(--color-peach));
+}
+
+:root[data-theme="light"] .progress-track {
+  background: rgba(116, 74, 83, 0.1);
+}
+
+:root[data-theme="light"] .song-recordings-backdrop,
+:root[data-theme="light"] .modal-backdrop {
+  background: rgba(87, 54, 62, 0.28);
 }

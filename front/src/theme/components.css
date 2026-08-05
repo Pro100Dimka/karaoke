@@ -1,0 +1,164 @@
+/* Reusable UI primitives shared by Library and future screens. */
+.ui-card {
+  border: var(--hairline) solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--gradient-glass);
+  box-shadow: var(--shadow-glass);
+  backdrop-filter: blur(var(--space-4)) saturate(135%);
+}
+
+
+.input {
+  inline-size: 100%;
+  border: var(--hairline) solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  outline: none;
+  background: var(--color-surface-glass);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard);
+}
+
+.btn {
+  display: inline-flex;
+  min-block-size: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: var(--hairline) solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  background: var(--color-surface-glass);
+  font: 800 var(--font-size-xs) / 1 var(--font-display);
+  letter-spacing: 0.03em;
+  transition:
+    transform var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-hover);
+  box-shadow: var(--shadow-neon-soft);
+  transform: translateY(calc(-1 * var(--hairline)));
+}
+
+.btn-primary {
+  border-color: var(--color-border-strong);
+  background: var(--gradient-primary);
+  box-shadow: inset 0 var(--hairline) rgb(255 255 255 / 22%);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--gradient-primary-hover);
+  box-shadow: var(--shadow-neon-primary);
+}
+
+.btn-danger {
+  color: var(--color-danger);
+  background: rgb(110 7 31 / 45%);
+}
+
+.btn-danger:hover:not(:disabled) {
+  color: var(--color-text);
+  background: var(--color-primary-strong);
+}
+
+.panel {
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-5);
+  border-block-end: var(--hairline) solid var(--color-border);
+}
+
+.panel-title {
+  font: 800 var(--font-size-md) / 1.2 var(--font-display);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.progress-track {
+  inline-size: 100%;
+  block-size: var(--space-2);
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 9%);
+}
+
+.progress-fill {
+  block-size: 100%;
+  border-radius: inherit;
+  background: var(--gradient-primary);
+  box-shadow: var(--shadow-neon-primary);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: var(--hairline) solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-soft);
+  background: var(--color-surface-glass);
+  font-size: var(--font-size-xs);
+}
+
+.badge-dot {
+  inline-size: var(--space-1);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.badge-done {
+  color: var(--color-success);
+}
+
+.badge-processing {
+  color: var(--color-warning);
+}
+
+.badge-error,
+.badge-cancelled {
+  color: var(--color-danger);
+}
+
+
+/* Reusable bounded modal layout: the dialog never scrolls, its content does. */
+.modal-card {
+  display: flex;
+  min-block-size: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-scroll {
+  min-block-size: 0;
+  flex: 1;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.modal-scroll::-webkit-scrollbar {
+  inline-size: 0.55rem;
+}
+
+.modal-scroll::-webkit-scrollbar-thumb {
+  border: 0.12rem solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--gradient-primary);
+  background-clip: padding-box;
+}

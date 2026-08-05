@@ -11,3 +11,13 @@
   --shadow-neon-cyan: var(--shadow-neon-soft);
   --shadow-neon-pink: var(--shadow-neon-primary);
 }
+
+:root[data-theme="light"] {
+  --shadow-sm: 0 0.5rem 1.5rem rgba(114, 61, 73, 0.1);
+  --shadow-md: 0 1.15rem 3rem rgba(120, 59, 74, 0.14);
+  --shadow-lg: 0 1.8rem 5rem rgba(105, 53, 65, 0.18);
+  --shadow-glass: inset 0 0.0625rem 0 rgba(255, 255, 255, 0.92), 0 1.15rem 3rem rgba(139, 72, 85, 0.12);
+  --shadow-neon-soft: 0 0 0.8rem rgba(239, 93, 126, 0.22), 0 0 2.1rem rgba(246, 160, 128, 0.16);
+  --shadow-neon-primary: 0 0 0.7rem rgba(239, 63, 101, 0.3), 0 0 2rem rgba(214, 47, 98, 0.16);
+  --shadow-neon-mixed: 0 0 0.75rem rgba(255, 255, 255, 0.9), 0 0 2rem rgba(239, 127, 156, 0.2), 0 0 3.5rem rgba(246, 160, 128, 0.12);
+}

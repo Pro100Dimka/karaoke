@@ -92,7 +92,7 @@ export default function AppLayout() {
           onClose={closeSongSettings}
           ariaLabel="Настройки песни"
           backdropClassName="song-recordings-backdrop"
-          modalClassName="song-settings-modal"
+          modalClassName="song-settings-modal modal-card ui-card ui-card--neon"
           closeClassName="song-recordings-close"
           closeAriaLabel="Закрыть настройки"
           closeIconSize={18}
