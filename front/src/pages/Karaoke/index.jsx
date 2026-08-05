@@ -3,6 +3,7 @@ import {
   AudioLines,
   Cog,
   Maximize,
+  Mic,
   Pause,
   Play,
   Settings2,
@@ -17,25 +18,22 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { KARAOKE_THEMES, shuffleThemes } from "../../assets/karaoke/themes";
-import Dropdown from "../../components/fields/dropdown";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import useLatestRef from "../../hooks/useLatestRef";
 import { usePolling } from "../../hooks/usePolling";
 import { getErrorMessage } from "../../utils/errors";
+import { getAudioPreferences } from "../../utils/audio-preferences";
 import KaraokeLyricLine from "./components/KaraokeLyricLine";
 import MelodyRoll from "./components/MelodyRoll";
-import MonitoringModePicker from "./components/MonitoringModePicker";
 import PerformanceAnalysisModal from "./components/PerformanceAnalysisModal";
 import SliderField from "./components/SliderField";
 import WaveformTimeline from "./components/WaveformTimeline";
-import { MONITORING_MODES } from "./config";
 import useKaraokeHotkeys from "./hooks/useKaraokeHotkeys";
 import useKaraokePreferences from "./hooks/useKaraokePreferences";
 import useKaraokeResult from "./hooks/useKaraokeResult";
 import {
   findMatchingBrowserOutput,
   findPreferredOutputDevice,
-  groupBrowserAudioDevices,
   normalizeAudioEffects
 } from "./utils/audio-settings";
 import {
@@ -47,11 +45,6 @@ import {
   transposeKey,
   youTubeEmbedUrl
 } from "./utils/data";
-import {
-  createBrowserDeviceOptions,
-  createBufferSizeOptions,
-  createIndexedDeviceOptions
-} from "./utils/devices";
 import { formatTime } from "./utils/format";
 import { getKaraokeStageLayout } from "./utils/layout";
 import { getLyricDisplayState } from "./utils/lyrics";
@@ -130,21 +123,12 @@ export default function Karaoke({ onOpenAppSettings }) {
     echo: 0,
     delay: 0
   });
-  const [microphoneControlsOpen, setMicrophoneControlsOpen] = useState(false);
   const [audioDriver, setAudioDriver] = useState("auto");
-  const [asioDriverName, setAsioDriverName] = useState("");
-  const [audioBufferSize, setAudioBufferSize] = useState(64);
   const [directOutputDeviceId, setDirectOutputDeviceId] = useState("");
   const [monitoringEnabled, setMonitoringEnabled] = useState(false);
-  const [browserAudioDevices, setBrowserAudioDevices] = useState({
-    inputs: [],
-    outputs: []
-  });
-  const [monitorInputDeviceId, setMonitorInputDeviceId] = useState("default");
-  const [monitorOutputDeviceId, setMonitorOutputDeviceId] = useState("default");
-  const [monitorLatencyHint, setMonitorLatencyHint] = useState("interactive");
-  const [monitorMode, setMonitorMode] = useState("direct");
-  const [monitorModeOpen, setMonitorModeOpen] = useState(false);
+  const [monitorInputDeviceId, setMonitorInputDeviceId] = useState(
+    () => getAudioPreferences().monitorInputDeviceId
+  );
   const [controlsVisible, setControlsVisible] = useState(true);
   const [auroraSeed] = useState(() => Math.floor(Math.random() * 997));
   const themeQueueRef = useRef(shuffleThemes());
@@ -163,22 +147,11 @@ export default function Karaoke({ onOpenAppSettings }) {
   const microphoneEffectsInitializedRef = useRef(false);
   const browserMonitorRef = useRef(null);
   const manualMonitoringRef = useRef(false);
-  const monitorModeMenuRef = useRef(null);
   const lastSecondarySyncRef = useRef(0);
   currentTimeRef.current = currentTime;
   durationRef.current = duration;
-  const { data: devices } = usePolling(
-    () => (microphoneOpen ? api.listAudioDevices() : Promise.resolve([])),
-    30000,
-    [microphoneOpen]
-  );
   const { data: directOutputDevices } = usePolling(
     () => (microphoneOpen ? api.listAudioOutputDevices() : Promise.resolve([])),
-    30000,
-    [microphoneOpen]
-  );
-  const { data: asioDrivers } = usePolling(
-    () => (microphoneOpen ? api.listAsioDrivers() : Promise.resolve([])),
     30000,
     [microphoneOpen]
   );
@@ -192,6 +165,16 @@ export default function Karaoke({ onOpenAppSettings }) {
     1200,
     [microphoneOpen]
   );
+
+  useEffect(() => {
+    const syncAudioPreferences = (event) => {
+      const next = event.detail || getAudioPreferences();
+      setMonitorInputDeviceId(next.monitorInputDeviceId || "default");
+    };
+    window.addEventListener("audio-preferences-changed", syncAudioPreferences);
+    return () =>
+      window.removeEventListener("audio-preferences-changed", syncAudioPreferences);
+  }, []);
 
   useEffect(() => {
     if (!song?.id || appliedThemeSongRef.current === song.id) return;
@@ -249,16 +232,10 @@ export default function Karaoke({ onOpenAppSettings }) {
 
   useEffect(() => {
     if (audioSettings?.audio_driver) setAudioDriver(audioSettings.audio_driver);
-    if (audioSettings?.asio_driver_name)
-      setAsioDriverName(audioSettings.asio_driver_name);
-    if (audioSettings?.buffer_size)
-      setAudioBufferSize(audioSettings.buffer_size);
     if (audioSettings?.monitoring_enabled != null)
       setMonitoringEnabled(audioSettings.monitoring_enabled);
   }, [
     audioSettings?.audio_driver,
-    audioSettings?.asio_driver_name,
-    audioSettings?.buffer_size,
     audioSettings?.monitoring_enabled
   ]);
 
@@ -337,31 +314,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     return () => window.removeEventListener("pagehide", releaseMonitorOnClose);
   }, []);
 
-  useEffect(() => {
-    const closeOnOutsideClick = (event) => {
-      if (!monitorModeMenuRef.current?.contains(event.target))
-        setMonitorModeOpen(false);
-    };
-    const closeOnEscape = (event) => {
-      if (event.key === "Escape") setMonitorModeOpen(false);
-    };
-    document.addEventListener("mousedown", closeOnOutsideClick);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("mousedown", closeOnOutsideClick);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, []);
 
-  useEffect(() => {
-    if (!microphoneOpen || !navigator.mediaDevices?.enumerateDevices) return;
-    navigator.mediaDevices
-      .enumerateDevices()
-      .then((mediaDevices) => {
-        setBrowserAudioDevices(groupBrowserAudioDevices(mediaDevices));
-      })
-      .catch(() => {});
-  }, [microphoneOpen]);
 
   useEffect(() => {
     setIsPlaying(false);
@@ -999,7 +952,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   return (
     <div
       ref={containerRef}
-      className={`panel karaoke-stage ${!controlsVisible ? "karaoke-ui-hidden" : ""}`}
+      className={`panel karaoke-stage ${isPlaying ? "karaoke-is-playing" : ""} ${!controlsVisible ? "karaoke-ui-hidden" : ""}`}
       onMouseMove={revealControls}
     >
       <audio
@@ -1168,298 +1121,61 @@ export default function Karaoke({ onOpenAppSettings }) {
               </div>
             </div>
             <div className="microphone-controls-launcher">
-              <button
-                type="button"
-                className={`btn ${microphoneControlsOpen ? "btn-primary" : "btn-ghost"}`}
-                onClick={() => setMicrophoneControlsOpen((open) => !open)}
-              >
-                <Settings2 size={15} />
-                {microphoneControlsOpen
-                  ? "Скрыть микрофон"
-                  : "Микрофон и эффекты"}
-              </button>
-            </div>
-            {microphoneControlsOpen && (
-              <div className="microphone-controls-content">
-                <div
-                  className={
-                    audioDriver === "asio" ? "advanced-audio-setting" : ""
-                  }
-                >
-                  <span>Устройство ввода</span>
-                  <Dropdown
-                    id="karaoke-input-device"
-                    value={audioSettings?.input_device_id ?? ""}
-                    onChange={(value) =>
-                      updateMicrophone({
-                        input_device_id: value === "" ? null : Number(value)
-                      })
-                    }
-                    options={createIndexedDeviceOptions(devices)}
-                  />
-                </div>
-                <div className="audio-driver-setting">
-                  <span>Аудиодрайвер</span>
-                  <Dropdown
-                    id="karaoke-audio-driver"
-                    value={audioDriver}
-                    disabled={monitoringEnabled}
-                    onChange={async (value) => {
-                      setAudioDriver(value);
-                      await updateMicrophone({ audio_driver: value });
-                    }}
-                    options={[
-                      { value: "auto", label: "Авто · Windows / PortAudio" },
-                      ...((asioDrivers || []).length
-                        ? [
-                            {
-                              value: "asio",
-                              label: "ASIO · минимальная задержка"
-                            }
-                          ]
-                        : [])
-                    ]}
-                  />
-                  {!(asioDrivers || []).length && (
-                    <small>
-                      ASIO появится после установки драйвера аудиоинтерфейса.
-                    </small>
-                  )}
-                </div>
-                {audioDriver === "asio" && (
-                  <div className="asio-driver-setting">
-                    <span>ASIO-драйвер</span>
-                    <Dropdown
-                      id="karaoke-asio-driver"
-                      value={asioDriverName}
-                      disabled={monitoringEnabled}
-                      onChange={async (value) => {
-                        setAsioDriverName(value);
-                        await updateMicrophone({ asio_driver_name: value });
-                      }}
-                      options={(asioDrivers || []).map((driver) => ({
-                        value: driver.name,
-                        label: driver.name
-                      }))}
-                    />
-                    <small>
-                      Для Audient выбран нативный драйвер аудиоинтерфейса.
-                    </small>
-                  </div>
-                )}
-                <div className="advanced-audio-setting">
-                  <span>Буфер аудио</span>
-                  <Dropdown
-                    id="karaoke-audio-buffer"
-                    value={audioBufferSize}
-                    disabled={monitoringEnabled}
-                    onChange={async (value) => {
-                      const bufferSize = Number(value);
-                      setAudioBufferSize(bufferSize);
-                      await updateMicrophone({ buffer_size: bufferSize });
-                    }}
-                    options={createBufferSizeOptions()}
-                  />
-                </div>
-                <div className="advanced-audio-setting">
-                  <span>Выход прямого мониторинга</span>
-                  <Dropdown
-                    id="karaoke-direct-output"
-                    value={directOutputDeviceId}
-                    disabled={monitoringEnabled}
-                    onChange={async (value) => {
-                      const deviceId = value === "" ? null : Number(value);
-                      setDirectOutputDeviceId(value);
-                      await updateMicrophone({ output_device_id: deviceId });
-                    }}
-                    options={createIndexedDeviceOptions(
-                      directOutputDevices,
-                      "Системное устройство по умолчанию"
-                    )}
-                  />
-                  <small>
-                    Для минимальной задержки выберите выход того же
-                    аудиоинтерфейса.
-                  </small>
-                </div>
-                <div className="legacy-browser-monitoring">
-                  <span>Вход для прослушивания</span>
-                  <Dropdown
-                    id="karaoke-monitor-input"
-                    value={monitorInputDeviceId}
-                    disabled={monitoringEnabled}
-                    onChange={setMonitorInputDeviceId}
-                    options={createBrowserDeviceOptions(
-                      browserAudioDevices.inputs,
-                      "Микрофон"
-                    )}
-                  />
-                </div>
-                <div className="legacy-browser-monitoring">
-                  <span>Выход для прослушивания</span>
-                  <Dropdown
-                    id="karaoke-monitor-output"
-                    value={monitorOutputDeviceId}
-                    disabled={monitoringEnabled}
-                    onChange={setMonitorOutputDeviceId}
-                    options={createBrowserDeviceOptions(
-                      browserAudioDevices.outputs,
-                      "Аудиоустройство"
-                    )}
-                  />
-                </div>
-                <div className="legacy-browser-monitoring">
-                  <span>Режим задержки</span>
-                  <Dropdown
-                    id="karaoke-latency-mode"
-                    value={monitorLatencyHint}
-                    disabled={monitoringEnabled}
-                    onChange={setMonitorLatencyHint}
-                    options={[
-                      { value: "interactive", label: "Низкая задержка" },
-                      { value: "balanced", label: "Автоматический" },
-                      {
-                        value: "playback",
-                        label: "Стабильное воспроизведение"
-                      }
-                    ]}
-                  />
-                </div>
-                <MonitoringModePicker
-                  modes={MONITORING_MODES}
-                  value={monitorMode}
-                  isOpen={monitorModeOpen}
-                  disabled={monitoringEnabled}
-                  menuRef={monitorModeMenuRef}
-                  onToggle={() => setMonitorModeOpen((open) => !open)}
-                  onChange={(value) => {
-                    setMonitorMode(value);
-                    setMonitorModeOpen(false);
+              {onOpenAppSettings && (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => {
+                    setMicrophoneOpen(false);
+                    onOpenAppSettings("audio");
                   }}
-                />
-                <label
-                  className="microphone-gain-setting"
-                  htmlFor="microphone-volume"
                 >
-                  Громкость микрофона:{" "}
-                  {Math.round((microphoneVolume / 4) * 100)}%
-                  <input
-                    id="microphone-volume"
-                    type="range"
-                    min="0"
-                    max="4"
-                    step="0.05"
-                    value={microphoneVolume}
-                    onChange={(event) => {
-                      const value = Number(event.target.value);
-                      setMicrophoneVolume(value);
-                      if (browserMonitorRef.current)
-                        browserMonitorRef.current.gainNode.gain.value = value;
-                    }}
-                    onPointerUp={(event) =>
-                      updateMicrophone({
-                        volume: Number(event.currentTarget.value)
-                      })
-                    }
-                    onKeyUp={(event) => {
-                      if (
-                        ["ArrowLeft", "ArrowRight", "Home", "End"].includes(
-                          event.key
-                        )
-                      ) {
-                        updateMicrophone({
-                          volume: Number(event.currentTarget.value)
-                        });
-                      }
-                    }}
-                  />
-                </label>
-                <label
-                  className="microphone-monitoring"
-                  htmlFor="microphone-monitoring-enabled"
-                >
-                  <input
-                    id="microphone-monitoring-enabled"
-                    type="checkbox"
-                    checked={monitoringEnabled}
-                    onChange={(event) =>
-                      setDirectMonitoring(event.target.checked)
-                    }
-                  />
-                  Прослушивать с этого устройства
-                </label>
-                <div className="microphone-level">
-                  <div>
-                    Уровень:{" "}
-                    {signal
-                      ? `${signal.rms_db} дБFS${signal.clipping ? " · перегрузка" : signal.silent ? " · тихо" : ""}`
-                      : "проверяем…"}
-                  </div>
-                  <div className="microphone-level-track">
-                    <div
-                      className="microphone-level-fill"
-                      style={{ width: `${microphoneLevel}%` }}
-                    />
-                  </div>
-                  <span>{Math.round(microphoneLevel)}%</span>
-                </div>
-                <div className="microphone-effects">
-                  <div className="microphone-effects-title">
-                    Эффекты микрофона
-                  </div>
-                  <SliderField
-                    label="Reverb"
-                    value={microphoneEffects.reverb}
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    display={`${Math.round(microphoneEffects.reverb * 100)}%`}
-                    onChange={(value) => {
-                      setMicrophoneEffects((effects) => ({
-                        ...effects,
-                        reverb: value
-                      }));
-                    }}
-                    onCommit={(value) => updateMicrophone({ reverb: value })}
-                  />
-                  <SliderField
-                    label="Echo"
-                    value={microphoneEffects.echo}
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    display={`${Math.round(microphoneEffects.echo * 100)}%`}
-                    onChange={(value) => {
-                      setMicrophoneEffects((effects) => ({
-                        ...effects,
-                        echo: value
-                      }));
-                    }}
-                    onCommit={(value) => updateMicrophone({ echo: value })}
-                  />
-                  <SliderField
-                    label="Delay"
-                    value={microphoneEffects.delay}
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    display={`${Math.round(microphoneEffects.delay * 100)}%`}
-                    onChange={(value) => {
-                      setMicrophoneEffects((effects) => ({
-                        ...effects,
-                        delay: value
-                      }));
-                    }}
-                    onCommit={(value) => updateMicrophone({ delay: value })}
-                  />
-                  <small>
-                    0% — эффект полностью выключен. Изменения слышны в
-                    мониторинге; для ASIO они применяются после отпускания
-                    ползунка.
-                  </small>
-                </div>
+                  <Settings2 size={15} />
+                  Аудио и запись
+                </button>
+              )}
+            </div>
+            <div className="microphone-effects">
+              <div className="microphone-effects-title">
+                Эффекты микрофона
               </div>
-            )}
+              <SliderField
+                label="Reverb"
+                value={microphoneEffects.reverb}
+                min={0}
+                max={1}
+                step={0.05}
+                display={`${Math.round(microphoneEffects.reverb * 100)}%`}
+                onChange={(value) =>
+                  setMicrophoneEffects((effects) => ({ ...effects, reverb: value }))
+                }
+                onCommit={(value) => updateMicrophone({ reverb: value })}
+              />
+              <SliderField
+                label="Echo"
+                value={microphoneEffects.echo}
+                min={0}
+                max={1}
+                step={0.05}
+                display={`${Math.round(microphoneEffects.echo * 100)}%`}
+                onChange={(value) =>
+                  setMicrophoneEffects((effects) => ({ ...effects, echo: value }))
+                }
+                onCommit={(value) => updateMicrophone({ echo: value })}
+              />
+              <SliderField
+                label="Delay"
+                value={microphoneEffects.delay}
+                min={0}
+                max={1}
+                step={0.05}
+                display={`${Math.round(microphoneEffects.delay * 100)}%`}
+                onChange={(value) =>
+                  setMicrophoneEffects((effects) => ({ ...effects, delay: value }))
+                }
+                onCommit={(value) => updateMicrophone({ delay: value })}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -1604,9 +1320,13 @@ export default function Karaoke({ onOpenAppSettings }) {
         )}
       </div>
 
-      {/* Таймлайн + транспорт */}
+      {/* Нижний студийный транспорт: метаданные, waveform и действия. */}
       <div className="karaoke-transport-area">
         <div className="karaoke-timeline-row">
+          <div className="karaoke-player-meta">
+            <strong>{song.title}</strong>
+            <span>{song.artist || song.performer || "Караоке"}</span>
+          </div>
           <span className="mono karaoke-timecode">
             {formatTime(currentTime)}
           </span>
@@ -1621,84 +1341,114 @@ export default function Karaoke({ onOpenAppSettings }) {
         </div>
 
         <div className="karaoke-playback-controls">
-          <div className="karaoke-player-meta">
-            <span>Мелодическая карта</span>
-            <strong>{song.title}</strong>
+          <button
+            type="button"
+            className="karaoke-microphone-dock"
+            style={{ "--microphone-level": Math.max(0, Math.min(1, microphoneLevel)) }}
+            onClick={() => setMicrophoneOpen(true)}
+            aria-label="Настройки микрофона"
+          >
+            <Mic size={22} />
+            <span>Микрофон</span>
+            <span className="karaoke-microphone-meter" aria-hidden="true">
+              {Array.from({ length: 9 }, (_, index) => (
+                <i
+                  key={index}
+                  style={{
+                    "--meter-level": `${Math.max(18, Math.min(100, microphoneLevel * 100 - index * 5 + 34))}%`
+                  }}
+                />
+              ))}
+            </span>
+            <Settings2 size={20} />
+          </button>
+
+          <div className="karaoke-transport-buttons">
+            <button
+              type="button"
+              className="btn btn-ghost karaoke-transport-button"
+              aria-label="Назад на 5 секунд"
+              title="Назад на 5 секунд"
+              onClick={() => skip(-5)}
+            >
+              <SkipBack size={19} />
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary karaoke-play-button"
+              aria-label={isPlaying ? "Пауза" : "Воспроизвести"}
+              title={isPlaying ? "Пауза" : "Воспроизвести"}
+              onClick={() => togglePlay()}
+            >
+              {isPlaying ? <Pause size={25} /> : <Play size={25} />}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost karaoke-transport-button"
+              aria-label="Остановить"
+              title="Остановить"
+              onClick={() => stop()}
+            >
+              <Square size={18} />
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost karaoke-transport-button"
+              aria-label="Вперёд на 5 секунд"
+              title="Вперёд на 5 секунд"
+              onClick={() => skip(5)}
+            >
+              <SkipForward size={19} />
+            </button>
           </div>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            aria-label="Назад на 5 секунд"
-            title="Назад на 5 секунд"
-            onClick={() => skip(-5)}
-          >
-            <SkipBack size={16} />
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary karaoke-play-button"
-            aria-label={isPlaying ? "Пауза" : "Воспроизвести"}
-            title={isPlaying ? "Пауза" : "Воспроизвести"}
-            onClick={() => togglePlay()}
-          >
-            {isPlaying ? <Pause size={18} /> : <Play size={18} />}
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            aria-label="Остановить"
-            title="Остановить"
-            onClick={() => stop()}
-          >
-            <Square size={16} />
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            aria-label="Вперёд на 5 секунд"
-            title="Вперёд на 5 секунд"
-            onClick={() => skip(5)}
-          >
-            <SkipForward size={16} />
-          </button>
+
           <div className="karaoke-corner-actions">
             <button
               type="button"
-              className="btn btn-ghost"
+              className="karaoke-labeled-action"
               title="Вернуться в библиотеку"
-              aria-label="Вернуться в библиотеку"
-              onClick={() => {
-                returnToLibrary();
-              }}
+              onClick={returnToLibrary}
             >
-              <ArrowLeft size={18} />
+              <ArrowLeft size={19} />
+              <span>Назад</span>
             </button>
             {onOpenAppSettings && (
               <button
                 type="button"
-                className="btn karaoke-app-settings"
+                className="karaoke-labeled-action"
                 title="Настройки приложения"
-                aria-label="Настройки приложения"
                 onClick={onOpenAppSettings}
               >
-                <Cog size={18} />
+                <Cog size={20} />
+                <span>Настройки</span>
               </button>
             )}
             <button
               type="button"
-              className={`btn ${microphoneOpen ? "btn-primary" : "btn-ghost"}`}
-              title="Настройки караоке"
+              className={`karaoke-labeled-action ${microphoneOpen ? "is-active" : ""}`}
+              title="Эффекты и параметры караоке"
               onClick={() => setMicrophoneOpen(true)}
             >
-              <SlidersHorizontal size={18} />
+              <AudioLines size={20} />
+              <span>Эффекты</span>
             </button>
             <button
               type="button"
-              className="btn btn-ghost"
+              className={`karaoke-labeled-action ${showLyrics ? "is-active" : ""}`}
+              title="Показать или скрыть текст"
+              onClick={() => setShowLyrics((value) => !value)}
+            >
+              <Type size={20} />
+              <span>Текст</span>
+            </button>
+            <button
+              type="button"
+              className="karaoke-labeled-action"
               title="На весь экран"
               onClick={toggleFullscreen}
             >
-              <Maximize size={18} />
+              <Maximize size={20} />
+              <span>Экран</span>
             </button>
           </div>
         </div>

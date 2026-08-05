@@ -292,3 +292,85 @@
   block-size: auto;
   max-block-size: 90dvh;
 }
+
+/* Audio & recording reuses the shared field/card system. */
+.audio-settings-grid {
+  display: grid;
+  gap: var(--space-5);
+  align-content: start;
+}
+
+.audio-settings-group {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.audio-settings-group + .audio-settings-group {
+  padding-block-start: var(--space-5);
+  border-block-start: var(--hairline) solid var(--color-border);
+}
+
+.audio-settings-group__header,
+.audio-monitor-card__copy {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.audio-settings-group__header > svg,
+.audio-monitor-card__copy > svg {
+  color: var(--color-primary);
+  filter: drop-shadow(0 0 .5rem color-mix(in srgb, var(--color-primary) 55%, transparent));
+}
+
+.audio-settings-group__header div,
+.audio-monitor-card__copy div {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.audio-settings-group__header small,
+.audio-monitor-card__copy small {
+  color: var(--color-text-muted);
+}
+
+.audio-level-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.audio-monitor-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(8rem, 14rem) auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: var(--hairline) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-surface-glass) 70%, transparent);
+}
+
+.audio-monitor-meter {
+  block-size: .55rem;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-text) 12%, transparent);
+}
+
+.audio-monitor-meter span {
+  display: block;
+  block-size: 100%;
+  min-inline-size: .2rem;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-soft));
+  box-shadow: 0 0 .8rem color-mix(in srgb, var(--color-primary) 55%, transparent);
+  transition: inline-size 120ms linear;
+}
+
+@media (max-width: 40rem) {
+  .audio-monitor-card {
+    grid-template-columns: 1fr;
+  }
+}

@@ -7,10 +7,10 @@ import SettingsHeader from "./header";
 import SettingsContent from "./settings-content";
 import SettingsTabs from "./settings-tabs";
 
-export default function Settings() {
+export default function Settings({ initialTab = "appearance" }) {
   const { alert } = useAppDialog();
   const settings = useSettingsForm(alert);
-  const navigation = useSettingsNavigation();
+  const navigation = useSettingsNavigation(initialTab);
 
   return (
     <div className="settings-page">

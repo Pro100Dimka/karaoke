@@ -28,12 +28,14 @@ function AppSettingsButton({ onClick }) {
 export default function AppLayout() {
   const location = useLocation();
   const [isSettingsOpen, setSettingsOpen] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState("appearance");
   const [songSettingsId, setSongSettingsId] = useState(null);
 
   const isKaraoke = location.pathname === ROUTES.karaoke;
 
-  const openSettings = useCallback(() => {
+  const openSettings = useCallback((tab = "appearance") => {
     setSongSettingsId(null);
+    setSettingsInitialTab(tab);
     setSettingsOpen(true);
   }, []);
 
@@ -85,7 +87,7 @@ export default function AppLayout() {
           closeAriaLabel="Закрыть настройки"
           closeIconSize={20}
         >
-          <Settings />
+          <Settings key={settingsInitialTab} initialTab={settingsInitialTab} />
         </Modal>
 
         <Modal

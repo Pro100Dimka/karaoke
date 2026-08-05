@@ -48,6 +48,8 @@ export default function SettingsContent(props) {
   }
   const section = SETTINGS[tab];
   if (!section) return null;
+  const SectionComponent = section.component;
+  if (SectionComponent) return <SectionComponent />;
   return (
     <div className={section.className}>
       {section.fields.map((field) => (

@@ -1,4 +1,5 @@
-import { Check, Cpu, FolderCog, Palette, Save, Wrench } from "lucide-react";
+import { Check, Cpu, FolderCog, Palette, Save, SlidersHorizontal, Wrench } from "lucide-react";
+import AudioSettings from "./audio-settings";
 import screens from "./screens";
 
 const option = (value, label = value) => ({ value, label });
@@ -50,6 +51,12 @@ export const SETTINGS = {
         hint: "Проверять новые версии приложения"
       }
     ]
+  },
+
+  audio: {
+    label: "Аудио и запись",
+    icon: SlidersHorizontal,
+    component: AudioSettings
   },
   ai: {
     label: "AI и обработка",
