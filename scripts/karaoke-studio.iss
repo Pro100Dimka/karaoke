@@ -23,7 +23,7 @@
 #endif
 
 [Setup]
-AppId={{#MyAppId}
+AppId={#MyAppId}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
@@ -47,9 +47,8 @@ WizardStyle=modern
 Compression=lzma2
 SolidCompression=no
 
-DiskSpanning=yes
-DiskSliceSize=2000000000
-SlicesPerDisk=1
+DiskSpanning=no
+
 
 SetupLogging=yes
 CloseApplications=yes

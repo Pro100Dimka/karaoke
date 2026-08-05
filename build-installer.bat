@@ -446,7 +446,7 @@ echo Building KaraokeBackend.exe...
 echo.
 
 "%PYTHON%" -m PyInstaller ^
-    --log-level WARN ^
+    --log-level ERROR ^
     --noconfirm ^
     %PYINSTALLER_CLEAN% ^
     --onedir ^
@@ -475,7 +475,7 @@ echo Building KaraokeAudioMonitor.exe...
 echo.
 
 "%PYTHON%" -m PyInstaller ^
-    --log-level WARN ^
+    --log-level ERROR ^
     --noconfirm ^
     %PYINSTALLER_CLEAN% ^
     --onefile ^
