@@ -1001,12 +1001,6 @@ export default function Karaoke({ onOpenAppSettings }) {
       ref={containerRef}
       className={`panel karaoke-stage ${!controlsVisible ? "karaoke-ui-hidden" : ""}`}
       onMouseMove={revealControls}
-      style={{
-        padding: 0,
-        overflow: "visible",
-        position: "relative",
-        minHeight: "calc(100vh - 72px)"
-      }}
     >
       <audio
         ref={instrumentalRef}

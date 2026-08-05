@@ -14,9 +14,9 @@ export default function MelodyRoll({
   noteRangeMax
 }) {
   const width = 1000;
-  const height = 310;
-  const scaleWidth = 38;
-  const noteLaneStart = 54;
+  const height = 264;
+  const scaleWidth = 52;
+  const noteLaneStart = 44;
   // Keep a moderately shorter window: notes are more legible without making
   // the timeline feel detached from the music.
   const windowSeconds = 10;
@@ -25,15 +25,13 @@ export default function MelodyRoll({
   const visibleNotes = getVisibleNotes(notes, viewStart, viewEnd);
   // A fixed song-wide range keeps pitch lanes in the same place while the
   // timeline moves. Explicit song settings have priority over inferred notes.
-  const { minMidi, maxMidi, pitchRange } = getMelodyRange({
+  const { minMidi: songMinMidi, maxMidi: songMaxMidi } = getMelodyRange({
     notes,
     keyShift,
     noteRangeMin,
     noteRangeMax,
     fallbackMidi: sungMidi
   });
-  const rowHeight = height / pitchRange;
-  const noteHeight = Math.min(22, Math.max(7, rowHeight - 6));
   const { activeMidi, targetMidi } = getMelodyCue({
     notes: visibleNotes,
     currentTime,
@@ -46,15 +44,40 @@ export default function MelodyRoll({
     Math.abs(sungMidi - targetMidi) <= 0.7;
   const indicatorMidi = Number.isFinite(sungMidi) ? sungMidi : targetMidi;
   const hasLivePitch = isPitchDetected && Number.isFinite(sungMidi);
-  const visibleMidiLanes = [
-    ...new Set(visibleNotes.map((note) => note.midi + keyShift))
-  ].sort((a, b) => a - b);
-  const displayMidiLanes = visibleMidiLanes.length
-    ? Array.from(
-        { length: visibleMidiLanes.at(-1) - visibleMidiLanes[0] + 5 },
-        (_, index) => visibleMidiLanes[0] - 2 + index
-      )
-    : [];
+  const visibleMidiValues = visibleNotes.map((note) => note.midi + keyShift);
+  if (Number.isFinite(indicatorMidi)) visibleMidiValues.push(indicatorMidi);
+
+  // Keep the complete song range stable, but zoom the visible viewport around
+  // the notes currently being sung. This avoids a huge empty piano roll when
+  // the song-wide range is much wider than the current phrase.
+  const phraseMin = visibleMidiValues.length
+    ? Math.min(...visibleMidiValues)
+    : songMinMidi;
+  const phraseMax = visibleMidiValues.length
+    ? Math.max(...visibleMidiValues)
+    : songMaxMidi;
+  const viewportSpan = Math.min(
+    songMaxMidi - songMinMidi + 1,
+    Math.max(9, phraseMax - phraseMin + 5)
+  );
+  const phraseCenter = (phraseMin + phraseMax) / 2;
+  let minMidi = Math.floor(phraseCenter - viewportSpan / 2);
+  minMidi = Math.max(
+    songMinMidi,
+    Math.min(minMidi, songMaxMidi - viewportSpan + 1)
+  );
+  const maxMidi = minMidi + viewportSpan - 1;
+  const pitchRange = maxMidi - minMidi + 1;
+  const rowHeight = height / pitchRange;
+  const noteHeight = Math.min(20, Math.max(9, rowHeight * 0.58));
+  const displayMidiLanes = Array.from(
+    { length: pitchRange },
+    (_, index) => minMidi + index
+  );
+  const timeMarkers = Array.from(
+    { length: windowSeconds + 1 },
+    (_, index) => viewStart + index
+  );
 
   const x = (time) =>
     noteLaneStart +
@@ -69,25 +92,6 @@ export default function MelodyRoll({
 
   return (
     <div className="melody-roll">
-      <div className="melody-roll-header">
-        <div>
-          <div className="melody-roll-caption">Мелодическая карта</div>
-          <strong>{songTitle}</strong>
-        </div>
-        <div
-          className="melody-roll-legend"
-          aria-label="Обозначения мелодической карты"
-        >
-          <span>
-            <i className="melody-legend-dot melody-legend-reference" />
-            Эталон
-          </span>
-          <span>
-            <i className="melody-legend-dot melody-legend-active" />
-            Сейчас
-          </span>
-        </div>
-      </div>
       <svg
         viewBox={`0 0 ${width} ${height}`}
         width="100%"
@@ -96,23 +100,78 @@ export default function MelodyRoll({
         aria-label="Ноты мелодии"
       >
         <defs>
+          <linearGradient id="melody-stage-bg" x1="0" x2="1" y1="0" y2="1">
+            <stop
+              offset="0"
+              stopColor="var(--color-bg-deep)"
+              stopOpacity=".78"
+            />
+            <stop
+              offset=".55"
+              stopColor="var(--color-surface)"
+              stopOpacity=".42"
+            />
+            <stop
+              offset="1"
+              stopColor="var(--color-bg-deep)"
+              stopOpacity=".88"
+            />
+          </linearGradient>
+          <linearGradient id="melody-now-zone" x1="0" x2="1">
+            <stop offset="0" stopColor="var(--color-primary)" stopOpacity="0" />
+            <stop
+              offset=".48"
+              stopColor="var(--color-primary)"
+              stopOpacity=".12"
+            />
+            <stop
+              offset=".5"
+              stopColor="var(--color-highlight)"
+              stopOpacity=".2"
+            />
+            <stop
+              offset=".52"
+              stopColor="var(--color-primary)"
+              stopOpacity=".12"
+            />
+            <stop offset="1" stopColor="var(--color-primary)" stopOpacity="0" />
+          </linearGradient>
           <linearGradient id="melody-note-past" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stopColor="#a5b4fc" stopOpacity=".46" />
-            <stop offset="1" stopColor="#6366f1" stopOpacity=".2" />
+            <stop
+              offset="0"
+              stopColor="var(--color-text-soft)"
+              stopOpacity=".42"
+            />
+            <stop
+              offset="1"
+              stopColor="var(--color-text-muted)"
+              stopOpacity=".16"
+            />
           </linearGradient>
           <linearGradient id="melody-note-upcoming" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stopColor="#f0abfc" stopOpacity=".92" />
-            <stop offset="1" stopColor="#db2777" stopOpacity=".62" />
+            <stop
+              offset="0"
+              stopColor="var(--color-highlight)"
+              stopOpacity=".94"
+            />
+            <stop
+              offset="1"
+              stopColor="var(--color-primary)"
+              stopOpacity=".68"
+            />
           </linearGradient>
           <linearGradient id="melody-note-active" x1="0" x2="1" y1="0" y2="1">
-            <stop offset="0" stopColor="#dbeafe" />
-            <stop offset=".45" stopColor="#a5b4fc" />
-            <stop offset="1" stopColor="#4f46e5" />
+            <stop offset="0" stopColor="var(--color-highlight)" />
+            <stop offset=".42" stopColor="var(--color-primary-soft)" />
+            <stop offset="1" stopColor="var(--color-primary)" />
           </linearGradient>
           <linearGradient id="melody-note-hit" x1="0" x2="1" y1="0" y2="1">
-            <stop offset="0" stopColor="#dcfce7" />
-            <stop offset=".45" stopColor="#4ade80" />
-            <stop offset="1" stopColor="#16a34a" />
+            <stop offset="0" stopColor="var(--color-highlight)" />
+            <stop offset=".45" stopColor="var(--color-success)" />
+            <stop
+              offset="1"
+              stopColor="var(--color-success-strong, var(--color-success))"
+            />
           </linearGradient>
           <filter
             id="melody-active-glow"
@@ -141,6 +200,42 @@ export default function MelodyRoll({
             </feMerge>
           </filter>
         </defs>
+        <rect width={width} height={height} fill="url(#melody-stage-bg)" />
+        <rect
+          x={Math.max(noteLaneStart, x(currentTime) - 58)}
+          width="116"
+          height={height}
+          fill="url(#melody-now-zone)"
+        />
+        {timeMarkers.map((time, index) => (
+          <line
+            key={`time-${index}`}
+            x1={x(time)}
+            x2={x(time)}
+            y1="0"
+            y2={height}
+            stroke={
+              index % 2 === 0
+                ? "rgba(255,255,255,.08)"
+                : "rgba(255,255,255,.035)"
+            }
+            strokeDasharray={index % 2 === 0 ? "0" : "3 7"}
+          />
+        ))}
+        <rect
+          x="0"
+          y="0"
+          width={noteLaneStart}
+          height={height}
+          fill="rgba(4,3,12,.46)"
+        />
+        <line
+          x1={noteLaneStart}
+          x2={noteLaneStart}
+          y1="0"
+          y2={height}
+          stroke="rgba(255,255,255,.16)"
+        />
         {displayMidiLanes.map((midi) => {
           const isOctave = midi % 12 === 0;
           const isCurrentPitch = activeMidi === midi;
@@ -153,7 +248,8 @@ export default function MelodyRoll({
                   width={scaleWidth - 4}
                   height={Math.max(9, rowHeight - 2)}
                   rx="7"
-                  fill="rgba(129,140,248,.22)"
+                  fill="var(--color-primary)"
+                  fillOpacity=".2"
                 />
               )}
               <line
@@ -168,7 +264,7 @@ export default function MelodyRoll({
               {isCurrentPitch && (
                 <path
                   d={`M27 ${y(midi) + rowHeight / 2 - 5} L39 ${y(midi) + rowHeight / 2} L27 ${y(midi) + rowHeight / 2 + 5}Z`}
-                  fill="#c4b5fd"
+                  fill="var(--color-highlight)"
                 />
               )}
               <text
@@ -179,8 +275,8 @@ export default function MelodyRoll({
                   isCurrentPitch
                     ? "#f5f3ff"
                     : isOctave
-                      ? "rgba(245,243,255,.9)"
-                      : "rgba(221,214,254,.63)"
+                      ? "rgba(255,255,255,.9)"
+                      : "rgba(255,255,255,.56)"
                 }
                 fontSize={rowHeight < 16 ? "9" : "12"}
                 fontWeight={isCurrentPitch || isOctave ? "800" : "650"}
@@ -229,7 +325,7 @@ export default function MelodyRoll({
                   isHit
                     ? "#86efac"
                     : isCurrent
-                      ? "#c4b5fd"
+                      ? "var(--color-highlight)"
                       : isPast
                         ? "rgba(165,180,252,.52)"
                         : "rgba(251,207,232,.8)"
@@ -249,6 +345,25 @@ export default function MelodyRoll({
             </g>
           );
         })}
+        <g className="melody-playhead" pointerEvents="none">
+          <line
+            x1={x(currentTime)}
+            x2={x(currentTime)}
+            y1="0"
+            y2={height}
+            stroke="var(--color-highlight)"
+            strokeWidth="1.5"
+            opacity=".82"
+            filter="url(#melody-playhead-glow)"
+          />
+          <circle
+            cx={x(currentTime)}
+            cy="10"
+            r="4.5"
+            fill="var(--color-highlight)"
+            filter="url(#melody-playhead-glow)"
+          />
+        </g>
         {Number.isFinite(indicatorMidi) &&
           indicatorMidi >= minMidi - 1 &&
           indicatorMidi <= maxMidi + 1 && (
