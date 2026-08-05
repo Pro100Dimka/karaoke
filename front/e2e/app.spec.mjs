@@ -66,7 +66,10 @@ test("focus stays inside the settings modal", async ({ page }) => {
   await page.getByRole("button", { name: "Настройки приложения" }).click();
   const dialog = page.getByRole("dialog", { name: "Настройки приложения" });
   await expect(dialog).toBeVisible();
-  for (let index = 0; index < 20; index += 1) await page.keyboard.press("Tab");
+  await [...Array(20)].reduce(
+    (promise) => promise.then(() => page.keyboard.press("Tab")),
+    Promise.resolve()
+  );
   const focusIsInside = await dialog.evaluate((node) =>
     node.contains(document.activeElement)
   );

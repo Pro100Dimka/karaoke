@@ -20,29 +20,60 @@ input[type="range"]::-webkit-slider-thumb {
 /* Song setup is a two-column workspace; lyrics are edited as plain lines. */
 .song-settings-workspace {
   display: grid;
-  grid-template-columns: minmax(320px, 0.8fr) minmax(420px, 1.2fr);
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
   gap: 18px;
   width: min(1180px, 100%);
   max-width: none !important;
+  min-width: 0;
 }
+
 .song-settings-workspace > .panel {
+  min-width: 0;
   margin: 0 !important;
 }
+
 .song-settings-workspace .panel {
   min-width: 0;
 }
+
 .song-lyrics-panel {
   display: flex;
   flex-direction: column;
+  width: 100%;
+  min-width: 0;
 }
-.song-lyrics-panel .song-lyrics-editor {
-  min-height: 420px;
+
+.song-lyrics-field {
+  display: block;
+  width: 100%;
+  min-width: 0;
   flex: 1;
+}
+
+.song-lyrics-field > * {
+  width: 100%;
+  min-width: 0;
+}
+
+.song-lyrics-panel .song-lyrics-editor {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 420px;
+  box-sizing: border-box;
+  flex: 1;
+
   resize: vertical;
+  writing-mode: horizontal-tb;
+  text-orientation: mixed;
+  white-space: pre-wrap;
+  overflow-x: hidden;
+  overflow-y: auto;
+
   font-family: inherit;
   font-size: 15px;
   line-height: 1.7;
-  white-space: pre-wrap;
 }
 .song-settings-workspace .panel-title {
   font-size: 15px;

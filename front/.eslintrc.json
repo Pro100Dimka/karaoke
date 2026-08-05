@@ -43,6 +43,8 @@
         "argsIgnorePattern": "^_$"
       }
     ],
+    "no-continue": 0,
+    "no-await-in-loop": 0,
     "linebreak-style": 0,
     "arrow-body-style": 0,
     "quotes": [0, "double"],

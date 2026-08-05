@@ -223,11 +223,14 @@ function NoteRangeFields({ form, onChange }) {
 function LyricsEditor({ lyrics, onChange }) {
   return (
     <Panel className="song-lyrics-panel" title="Редактор текста">
-      <FieldInput
-        field={LYRICS_FIELD}
-        value={lyrics.text}
-        onChange={onChange}
-      />
+      <div className="song-lyrics-field">
+        <FieldInput
+          field={LYRICS_FIELD}
+          value={lyrics.text}
+          onChange={onChange}
+        />
+      </div>
+
       {lyrics.error && <p className="song-lyrics-error">{lyrics.error}</p>}
     </Panel>
   );
