@@ -2790,3 +2790,137 @@
     drop-shadow(0 0 .16rem color-mix(in srgb, var(--color-primary) 34%, transparent))
     drop-shadow(0 0 .34rem color-mix(in srgb, var(--color-accent) 18%, transparent));
 }
+
+/* Interaction and alignment polish for the studio console. */
+.karaoke-effect-dial {
+  touch-action: none;
+  user-select: none;
+}
+
+.karaoke-effect-dial__knob {
+  transform: rotate(var(--dial-angle));
+  transition: transform 90ms linear;
+}
+
+.karaoke-effect-dial:active .karaoke-effect-dial__knob {
+  transition: none;
+}
+
+.karaoke-console-center {
+  justify-items: center;
+}
+
+.karaoke-console-center > * {
+  margin-inline: auto;
+}
+
+.karaoke-transport-buttons--hero,
+.karaoke-performance-controls {
+  inline-size: min(100%, 31rem);
+}
+
+.karaoke-transport-buttons--hero {
+  justify-content: center;
+}
+
+.karaoke-performance-controls {
+  align-items: stretch;
+}
+
+.karaoke-performance-controls > .karaoke-performance-control {
+  align-content: center;
+  justify-items: center;
+}
+
+.karaoke-performance-control--range {
+  grid-template-columns: 1fr;
+}
+
+.karaoke-tools-panel {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.karaoke-effect-presets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .42rem;
+  align-content: center;
+}
+
+.karaoke-effect-presets button {
+  --preset-color: var(--color-primary);
+  display: grid;
+  place-items: center;
+  gap: .28rem;
+  min-block-size: 3.45rem;
+  padding: .42rem .25rem;
+  border: var(--hairline) solid color-mix(in srgb, var(--preset-color) 24%, var(--color-border));
+  border-radius: .62rem;
+  color: var(--color-text-soft);
+  background:
+    radial-gradient(circle at 50% 24%, color-mix(in srgb, var(--preset-color) 10%, transparent), transparent 48%),
+    color-mix(in srgb, var(--color-bg-deep) 58%, transparent);
+  cursor: pointer;
+  transition:
+    color var(--duration-fast),
+    border-color var(--duration-fast),
+    background var(--duration-fast),
+    box-shadow var(--duration-fast),
+    transform var(--duration-fast);
+}
+
+.karaoke-effect-presets button:nth-child(2),
+.karaoke-effect-presets button:nth-child(6) { --preset-color: var(--color-success); }
+.karaoke-effect-presets button:nth-child(3),
+.karaoke-effect-presets button:nth-child(7) { --preset-color: var(--color-accent); }
+.karaoke-effect-presets button:nth-child(4),
+.karaoke-effect-presets button:nth-child(8) { --preset-color: var(--color-secondary); }
+
+.karaoke-effect-presets button > span {
+  display: grid;
+  place-items: center;
+  inline-size: 1.85rem;
+  block-size: 1.85rem;
+  border: var(--hairline) solid color-mix(in srgb, var(--preset-color) 38%, var(--color-border));
+  border-radius: .52rem;
+  color: var(--preset-color);
+  font: 800 1rem/1 var(--font-display);
+  box-shadow: inset 0 0 .65rem color-mix(in srgb, var(--preset-color) 8%, transparent);
+}
+
+.karaoke-effect-presets button small {
+  color: inherit;
+  font: 700 .59rem/1 var(--font-sans);
+}
+
+.karaoke-effect-presets button:hover,
+.karaoke-effect-presets button.is-active {
+  color: color-mix(in srgb, var(--preset-color) 45%, var(--color-highlight));
+  border-color: var(--preset-color);
+  background:
+    radial-gradient(circle at 50% 20%, color-mix(in srgb, var(--preset-color) 20%, transparent), transparent 55%),
+    color-mix(in srgb, var(--color-bg-deep) 52%, transparent);
+  box-shadow:
+    inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 18%, transparent),
+    0 0 .85rem color-mix(in srgb, var(--preset-color) 24%, transparent);
+  transform: translateY(-.04rem);
+}
+
+.karaoke-effect-presets button.is-active > span {
+  background: color-mix(in srgb, var(--preset-color) 14%, transparent);
+  box-shadow:
+    inset 0 0 .65rem color-mix(in srgb, var(--preset-color) 14%, transparent),
+    0 0 .7rem color-mix(in srgb, var(--preset-color) 30%, transparent);
+}
+
+@media (max-width: 78rem) {
+  .karaoke-effect-presets {
+    grid-template-columns: repeat(8, minmax(4rem, 1fr));
+  }
+}
+
+@media (max-width: 56rem) {
+  .karaoke-effect-presets {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
