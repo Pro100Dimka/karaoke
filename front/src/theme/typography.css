@@ -1,17 +1,16 @@
 :root {
-  --font-sans: Inter, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-
-  --font-size-xs: 0.75rem;
-  --font-size-sm: 0.875rem;
+  --font-sans: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+  --font-display: Bahnschrift, "Arial Narrow", "Trebuchet MS", sans-serif;
+  --font-mono: Consolas, "SFMono-Regular", monospace;
+  --font-size-xs: .75rem;
+  --font-size-sm: .875rem;
   --font-size-md: 1rem;
   --font-size-lg: 1.125rem;
-  --font-size-xl: clamp(1.35rem, 2vw, 1.75rem);
-  --font-size-2xl: clamp(2rem, 4.2vw, 4rem);
-
-  --line-height-tight: 1.15;
+  --font-size-xl: clamp(1.35rem, 2vw, 1.8rem);
+  --font-size-2xl: clamp(2.2rem, 5vw, 4.8rem);
+  --line-height-tight: 1.08;
   --line-height-base: 1.5;
   --line-height-relaxed: 1.7;
-  --letter-spacing-ui: 0.02em;
-  --letter-spacing-title: 0.045em;
+  --letter-spacing-ui: .015em;
+  --letter-spacing-title: .035em;
 }

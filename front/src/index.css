@@ -1,8 +1,2 @@
 @import "./theme/index.css";
-@import "./styles/reset.css";
-@import "./styles/components.css";
-@import "./styles/layout.css";
-@import "./styles/compat.css";
 @import "./pages/Library/library.css";
-@import "./pages/Settings/settings.css";
-@import "./pages/Karaoke/karaoke.css";

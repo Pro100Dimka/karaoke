@@ -33,13 +33,13 @@ export default function ProcessingModal({
             title={song.title}
           />
           <StatusBadge status={currentStatus} />
-          <div className="processing-modal-progress-head library-row-between">
+          <div className="processing-modal-progress-head u-row-between">
             <span>{status?.progress_step || "Подготовка"}</span>
             <b>{Math.round(progress)}%</b>
           </div>
           <ProgressBar percent={progress} />
           {isProcessingActive(currentStatus) && (
-            <div className="processing-modal-detail library-row-between">
+            <div className="processing-modal-detail u-row-between">
               <span>
                 Сейчас: {status?.progress_detail || "подготовка задачи"}
               </span>
@@ -51,7 +51,7 @@ export default function ProcessingModal({
               Ошибка обработки: {status.error_message}
             </p>
           )}
-          <div className="processing-modal-actions library-row library-wrap">
+          <div className="processing-modal-actions u-row u-cluster">
             {isProcessingActive(currentStatus) && (
               <button
                 className="btn btn-danger"

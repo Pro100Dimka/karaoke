@@ -19,3 +19,8 @@
   --content-max: 90rem;
   --titlebar-height: 2.125rem;
 }
+
+:root {
+  --hairline: max(.0625rem, .06vw);
+  --library-gutter: clamp(1rem, 3vw, 3rem);
+}

@@ -228,7 +228,7 @@ export default function Library({ onOpenSongSettings }) {
       <LibraryBackdrop />
       <LibraryHero songCount={visibleSongs.length} readyCount={readyCount} />
       <Panel className="library-collection-panel">
-        <div className="library-toolbar library-row-between">
+        <div className="library-toolbar u-row-between">
           <div className="library-search">
             <Search className="library-search-icon" size={14} />
             <input

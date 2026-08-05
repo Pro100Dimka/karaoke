@@ -1,0 +1,30 @@
+/* Small, reusable layout utilities shared by every screen. */
+.u-row,
+.u-row-between,
+.u-cluster {
+  display: flex;
+  align-items: center;
+}
+
+.u-row-between {
+  justify-content: space-between;
+}
+
+.u-cluster {
+  flex-wrap: wrap;
+}
+
+.u-stack {
+  display: grid;
+}
+
+.u-glass {
+  border: var(--hairline) solid var(--color-border);
+  background: var(--gradient-glass);
+  box-shadow: var(--shadow-glass);
+  backdrop-filter: blur(var(--space-4)) saturate(135%);
+}
+
+.u-muted {
+  color: var(--color-text-muted);
+}

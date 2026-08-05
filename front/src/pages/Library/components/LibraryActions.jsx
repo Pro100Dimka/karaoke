@@ -10,7 +10,7 @@ export default function LibraryActions({
   roomActive
 }) {
   return (
-    <div className="library-actions library-row library-wrap">
+    <div className="library-actions u-row u-cluster">
       {!roomActive && (
         <button className="btn btn-ghost" onClick={onOpenRoom} type="button">
           <UsersRound size={15} /> Петь вместе

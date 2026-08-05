@@ -54,14 +54,14 @@ export default function LibrarySongCard({
   return (
     <Card
       as="article"
-      variant="interactive"
+      variant="neon"
       className={`library-song-card library-song-card--${status}`}
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
     >
       <SongCardArtwork cardIndex={cardIndex} />
       <div className="library-song-card-main">
-        <div className="library-song-card-heading library-row-between">
+        <div className="library-song-card-heading u-row-between">
           <div className="song-title-content">
             <span className="song-title-name">{song.title}</span>
             {song.artist && (
@@ -90,7 +90,7 @@ export default function LibrarySongCard({
             <span>{song.progress_percent}% · Открыть обработку</span>
           </button>
         ) : (
-          <div className="library-song-card-ready library-row">
+          <div className="library-song-card-ready u-row">
             <span />
             {isReady
               ? "Готова к исполнению"
@@ -98,22 +98,22 @@ export default function LibrarySongCard({
           </div>
         )}
 
-        <div className="library-song-card-footer library-row-between">
+        <div className="library-song-card-footer">
           <span className="text-secondary">
             {formatLibraryDate(song.created_at)}
           </span>
-          <div className="library-song-card-actions library-row library-wrap">
+          <div className="library-song-card-actions">
             {isReady ? (
               <>
                 <button
-                  className="btn btn-primary"
+                  className="btn btn-primary library-song-card-primary"
                   type="button"
                   onClick={() => onOpenKaraoke(song)}
                 >
                   <Play size={15} fill="currentColor" /> Караоке
                 </button>
                 <button
-                  className="btn btn-ghost"
+                  className="btn btn-ghost library-song-card-icon"
                   type="button"
                   title="Прослушать записи"
                   aria-label="Прослушать записи"
@@ -124,7 +124,7 @@ export default function LibrarySongCard({
               </>
             ) : canManageLibrary ? (
               <button
-                className="btn btn-primary"
+                className="btn btn-primary library-song-card-primary"
                 disabled={isWorking}
                 type="button"
                 onClick={() => onProcess(song)}
@@ -135,7 +135,7 @@ export default function LibrarySongCard({
 
             {canManageLibrary && (
               <button
-                className="btn btn-ghost"
+                className="btn btn-ghost library-song-card-icon"
                 title="Настройки песни"
                 aria-label="Настройки песни"
                 type="button"
@@ -146,7 +146,7 @@ export default function LibrarySongCard({
             )}
             {canManageLibrary && (
               <button
-                className="btn btn-ghost"
+                className="btn btn-ghost library-song-card-icon"
                 type="button"
                 title="Открыть папку"
                 aria-label="Открыть папку"
@@ -157,7 +157,7 @@ export default function LibrarySongCard({
             )}
             {canManageLibrary && isReady && (
               <button
-                className="btn btn-ghost"
+                className="btn btn-ghost library-song-card-icon"
                 type="button"
                 title="Переобработать MIDI"
                 aria-label="Переобработать MIDI"
@@ -168,7 +168,7 @@ export default function LibrarySongCard({
             )}
             {canManageLibrary && (
               <button
-                className="btn btn-danger"
+                className="btn btn-danger library-song-card-icon"
                 type="button"
                 title="Удалить"
                 aria-label="Удалить песню"
