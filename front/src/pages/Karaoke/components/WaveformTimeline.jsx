@@ -1,9 +1,11 @@
+import { useId } from "react";
 import { getSeekTime, getTimelineProgress } from "../utils/timeline";
 
 const BAR_COUNT = 220;
 
 export default function WaveformTimeline({ value, duration, onChange }) {
   const progress = getTimelineProgress(value, duration);
+  const gradientId = `waveform-gradient-${useId().replace(/:/g, "")}`;
 
   const seekFromPointer = (event) => {
     if (!duration) return;
@@ -34,6 +36,22 @@ export default function WaveformTimeline({ value, duration, onChange }) {
         preserveAspectRatio="none"
         aria-hidden="true"
       >
+        <defs>
+          <linearGradient
+            id={gradientId}
+            x1="0"
+            y1="0"
+            x2={BAR_COUNT * 3}
+            y2="0"
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop offset="0%" stopColor="var(--color-primary)" />
+            <stop offset="24%" stopColor="var(--color-accent)" />
+            <stop offset="50%" stopColor="var(--color-success)" />
+            <stop offset="74%" stopColor="var(--color-secondary)" />
+            <stop offset="100%" stopColor="var(--color-primary-hover)" />
+          </linearGradient>
+        </defs>
         {Array.from({ length: BAR_COUNT }, (_, index) => {
           const amplitude =
             8 + Math.abs(Math.sin(index * 1.71) + Math.sin(index * 0.37)) * 11;
@@ -47,7 +65,7 @@ export default function WaveformTimeline({ value, duration, onChange }) {
               width="1.5"
               height={amplitude}
               rx=".75"
-              fill={played ? "currentColor" : "var(--waveform-future, rgba(255,255,255,.18))"}
+              fill={played ? `url(#${gradientId})` : "var(--waveform-future, rgba(255,255,255,.18))"}
             />
           );
         })}

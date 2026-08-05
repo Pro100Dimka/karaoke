@@ -1,6 +1,8 @@
 import {
   ArrowLeft,
   AudioLines,
+  ChevronLeft,
+  ChevronRight,
   Cog,
   Maximize,
   Mic,
@@ -23,6 +25,7 @@ import useLatestRef from "../../hooks/useLatestRef";
 import { usePolling } from "../../hooks/usePolling";
 import { getErrorMessage } from "../../utils/errors";
 import { getAudioPreferences } from "../../utils/audio-preferences";
+import EffectDial from "./components/EffectDial";
 import KaraokeLyricLine from "./components/KaraokeLyricLine";
 import MelodyRoll from "./components/MelodyRoll";
 import PerformanceAnalysisModal from "./components/PerformanceAnalysisModal";
@@ -58,6 +61,15 @@ import {
   getSecondaryMediaPosition,
   shouldSyncMedia
 } from "./utils/transport";
+
+
+function formatCompactKey(key) {
+  return String(key || "—")
+    .replace(/\s*(major|maj)\b/gi, "maj")
+    .replace(/\s*(minor|min)\b/gi, "m")
+    .replace(/\s+/g, "")
+    .replace(/mmaj$/i, "maj");
+}
 
 // Karaoke data is normalized at the UI boundary so playback and visual
 // components operate on one predictable shape. Pure transformations live in
@@ -950,6 +962,16 @@ export default function Karaoke({ onOpenAppSettings }) {
     );
   }
 
+  const baseTempo = Number(result?.music?.tempo || song.tempo_override || 120);
+  const currentTempo = Math.max(1, Math.round(baseTempo * speed));
+  const compactKey = formatCompactKey(
+    transposeKey(song.key_override || result?.music?.key || "C", keyShift)
+  );
+  const changeTempo = (delta) => {
+    const nextTempo = Math.max(1, currentTempo + delta);
+    setSpeed(Math.max(0.5, Math.min(1.5, nextTempo / baseTempo)));
+  };
+
   return (
     <div
       ref={containerRef}
@@ -1285,198 +1307,101 @@ export default function Karaoke({ onOpenAppSettings }) {
         )}
       </div>
 
-      {/* Нижний студийный транспорт: метаданные, waveform и действия. */}
-      <div className="karaoke-transport-area">
-        <div className="karaoke-timeline-row">
+      {/* Нижняя студийная консоль: дорожка, микшер, транспорт и быстрые действия. */}
+      <div className="karaoke-transport-area karaoke-studio-console">
+        <div className="karaoke-song-strip">
+          <div className="karaoke-song-cover" aria-hidden="true">
+            <Mic size={30} />
+          </div>
           <div className="karaoke-player-meta">
             <strong>{song.title}</strong>
             <span>{song.artist || song.performer || "Караоке"}</span>
           </div>
-          <span className="mono karaoke-timecode">
-            {formatTime(currentTime)}
-          </span>
-          <WaveformTimeline
-            value={currentTime}
-            duration={duration}
-            onChange={seekTo}
-          />
-          <span className="mono karaoke-timecode karaoke-timecode-end">
-            {formatTime(duration)}
-          </span>
+          <span className="mono karaoke-timecode">{formatTime(currentTime)}</span>
+          <WaveformTimeline value={currentTime} duration={duration} onChange={seekTo} />
+          <span className="mono karaoke-timecode karaoke-timecode-end">{formatTime(duration)}</span>
         </div>
 
-        <div className="karaoke-playback-controls">
-          <div
-            className="karaoke-microphone-dock karaoke-mixer-dock"
+        <div className="karaoke-console-grid">
+          <section
+            className="karaoke-console-panel karaoke-mixer-panel"
             style={{ "--microphone-level": Math.max(0, Math.min(1, microphoneLevel)) }}
           >
-            <div className="karaoke-mixer-heading">
-              <Mic size={21} />
-              <span>Микшер</span>
+            <div className="karaoke-console-title">
+              <Mic size={18} />
+              <strong>Микшер</strong>
               <span className="karaoke-microphone-meter" aria-hidden="true">
                 {Array.from({ length: 7 }, (_, index) => (
-                  <i
-                    key={index}
-                    style={{
-                      "--meter-level": `${Math.max(18, Math.min(100, microphoneLevel * 100 - index * 6 + 34))}%`
-                    }}
-                  />
+                  <i key={index} style={{ "--meter-level": `${Math.max(18, Math.min(100, microphoneLevel * 100 - index * 6 + 34))}%` }} />
                 ))}
               </span>
-              <button
-                type="button"
-                className="karaoke-mixer-settings"
-                title="Настройки караоке"
-                aria-label="Настройки караоке"
-                onClick={() => {
-                  setMicrophoneSettingsView("music");
-                  setMicrophoneOpen(true);
-                }}
-              >
-                <Settings2 size={18} />
-              </button>
             </div>
-            <div className="karaoke-quick-mixer">
-              <SliderField
-                label="Мик"
-                value={microphoneVolume}
-                min={0}
-                max={1}
-                step={0.05}
-                display={`${Math.round(microphoneVolume * 100)}%`}
-                onChange={setMicrophoneVolume}
-                onCommit={(value) => updateMicrophone({ volume: value })}
-              />
-              <SliderField
-                label="Музыка"
-                value={musicVolume}
-                min={0}
-                max={1}
-                step={0.05}
-                display={`${Math.round(musicVolume * 100)}%`}
-                onChange={setMusicVolume}
-              />
-              <SliderField
-                label="Вокал"
-                value={vocalVolume}
-                min={0}
-                max={1}
-                step={0.05}
-                display={`${Math.round(vocalVolume * 100)}%`}
-                onChange={setVocalVolume}
-              />
-              <SliderField
-                label="Мелодия"
-                value={melodyVolume}
-                min={0}
-                max={1}
-                step={0.05}
-                display={`${Math.round(melodyVolume * 100)}%`}
-                onChange={setMelodyVolume}
-              />
+            <div className="karaoke-mixer-body">
+              <div className="karaoke-quick-mixer karaoke-quick-mixer--vertical">
+                <SliderField label="Мик" value={microphoneVolume} min={0} max={1} step={0.05} display={`${Math.round(microphoneVolume * 100)}%`} onChange={setMicrophoneVolume} onCommit={(value) => updateMicrophone({ volume: value })} />
+                <SliderField label="Музыка" value={musicVolume} min={0} max={1} step={0.05} display={`${Math.round(musicVolume * 100)}%`} onChange={setMusicVolume} />
+                <SliderField label="Вокал" value={vocalVolume} min={0} max={1} step={0.05} display={`${Math.round(vocalVolume * 100)}%`} onChange={setVocalVolume} />
+                <SliderField label="Мелодия" value={melodyVolume} min={0} max={1} step={0.05} display={`${Math.round(melodyVolume * 100)}%`} onChange={setMelodyVolume} />
+              </div>
+              <div className="karaoke-mixer-effects" aria-label="Быстрые эффекты микрофона">
+                <EffectDial
+                  label="Эхо"
+                  value={microphoneEffects.echo}
+                  onChange={(value) => setMicrophoneEffects((effects) => ({ ...effects, echo: value }))}
+                />
+                <EffectDial
+                  label="Реверб"
+                  value={microphoneEffects.reverb}
+                  accent="secondary"
+                  onChange={(value) => setMicrophoneEffects((effects) => ({ ...effects, reverb: value }))}
+                />
+              </div>
             </div>
-          </div>
+          </section>
 
-          <div className="karaoke-transport-buttons">
-            <button
-              type="button"
-              className="btn btn-ghost karaoke-transport-button"
-              aria-label="Назад на 5 секунд"
-              title="Назад на 5 секунд"
-              onClick={() => skip(-5)}
-            >
-              <SkipBack size={19} />
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary karaoke-play-button"
-              aria-label={isPlaying ? "Пауза" : "Воспроизвести"}
-              title={isPlaying ? "Пауза" : "Воспроизвести"}
-              onClick={() => togglePlay()}
-            >
-              {isPlaying ? <Pause size={25} /> : <Play size={25} />}
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost karaoke-transport-button"
-              aria-label="Остановить"
-              title="Остановить"
-              onClick={() => stop()}
-            >
-              <Square size={18} />
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost karaoke-transport-button"
-              aria-label="Вперёд на 5 секунд"
-              title="Вперёд на 5 секунд"
-              onClick={() => skip(5)}
-            >
-              <SkipForward size={19} />
-            </button>
-          </div>
+          <section className="karaoke-console-center">
+            <div className="karaoke-transport-buttons karaoke-transport-buttons--hero">
+              <button type="button" className="btn btn-ghost karaoke-transport-button" aria-label="Назад на 5 секунд" title="Назад на 5 секунд" onClick={() => skip(-5)}><SkipBack size={22} /></button>
+              <button type="button" className="btn btn-primary karaoke-play-button" aria-label={isPlaying ? "Пауза" : "Воспроизвести"} title={isPlaying ? "Пауза" : "Воспроизвести"} onClick={() => togglePlay()}>{isPlaying ? <Pause size={30} /> : <Play size={30} />}</button>
+              <button type="button" className="btn btn-ghost karaoke-transport-button" aria-label="Остановить" title="Остановить" onClick={() => stop()}><Square size={20} /></button>
+              <button type="button" className="btn btn-ghost karaoke-transport-button" aria-label="Вперёд на 5 секунд" title="Вперёд на 5 секунд" onClick={() => skip(5)}><SkipForward size={22} /></button>
+            </div>
+            <div className="karaoke-performance-controls">
+              <div className="karaoke-performance-control">
+                <span>Темп</span>
+                <button type="button" aria-label="Уменьшить темп на 1 BPM" onClick={() => changeTempo(-1)}>−</button>
+                <strong>{currentTempo} BPM</strong>
+                <button type="button" aria-label="Увеличить темп на 1 BPM" onClick={() => changeTempo(1)}>+</button>
+              </div>
+              <div className="karaoke-performance-control karaoke-performance-control--key">
+                <span>Тональность</span>
+                <button type="button" aria-label="Понизить тональность" onClick={() => setKeyShift(Math.max(-12, keyShift - 1))}>
+                  <ChevronLeft size={17} />
+                </button>
+                <strong>{compactKey}</strong>
+                <button type="button" aria-label="Повысить тональность" onClick={() => setKeyShift(Math.min(12, keyShift + 1))}>
+                  <ChevronRight size={17} />
+                </button>
+              </div>
+              <div className="karaoke-performance-control karaoke-performance-control--range">
+                <span>Диапазон</span>
+                <strong>{song.note_range_min || "C2"} – {song.note_range_max || "C5"}</strong>
+              </div>
+            </div>
+          </section>
 
-          <div className="karaoke-corner-actions">
-            <button
-              type="button"
-              className="karaoke-labeled-action"
-              title="Вернуться в библиотеку"
-              onClick={returnToLibrary}
-            >
-              <ArrowLeft size={19} />
-              <span>Назад</span>
-            </button>
-            {onOpenAppSettings && (
-              <button
-                type="button"
-                className="karaoke-labeled-action"
-                title="Настройки приложения"
-                onClick={onOpenAppSettings}
-              >
-                <Cog size={20} />
-                <span>Настройки</span>
-              </button>
-            )}
-            <button
-              type="button"
-              className={`karaoke-labeled-action ${microphoneOpen && microphoneSettingsView === "effects" ? "is-active" : ""}`}
-              title="Эффекты микрофона"
-              onClick={() => {
-                setMicrophoneSettingsView("effects");
-                setMicrophoneOpen(true);
-              }}
-            >
-              <AudioLines size={20} />
-              <span>Эффекты</span>
-            </button>
-            <button
-              type="button"
-              className={`karaoke-labeled-action ${showNotes ? "is-active" : ""}`}
-              title="Показать или скрыть ноты"
-              onClick={() => setShowNotes((value) => !value)}
-            >
-              <AudioLines size={20} />
-              <span>Ноты</span>
-            </button>
-            <button
-              type="button"
-              className={`karaoke-labeled-action ${showLyrics ? "is-active" : ""}`}
-              title="Показать или скрыть текст"
-              onClick={() => setShowLyrics((value) => !value)}
-            >
-              <Type size={20} />
-              <span>Текст</span>
-            </button>
-            <button
-              type="button"
-              className="karaoke-labeled-action"
-              title="На весь экран"
-              onClick={toggleFullscreen}
-            >
-              <Maximize size={20} />
-              <span>Экран</span>
-            </button>
-          </div>
+          <section className="karaoke-console-panel karaoke-tools-panel">
+            <div className="karaoke-tool-tabs">
+              <button type="button" className={microphoneOpen && microphoneSettingsView === "effects" ? "is-active" : ""} onClick={() => { setMicrophoneSettingsView("effects"); setMicrophoneOpen(true); }}><AudioLines size={17} /><span>Эффекты</span></button>
+              <button type="button" className={showNotes ? "is-active" : ""} onClick={() => setShowNotes((value) => !value)}><AudioLines size={17} /><span>Ноты</span></button>
+              <button type="button" className={showLyrics ? "is-active" : ""} onClick={() => setShowLyrics((value) => !value)}><Type size={17} /><span>Текст</span></button>
+              <button type="button" onClick={toggleFullscreen}><Maximize size={17} /><span>Экран</span></button>
+            </div>
+            <div className="karaoke-console-actions">
+              <button type="button" onClick={returnToLibrary}><ArrowLeft size={17} />Назад</button>
+              {onOpenAppSettings && <button type="button" onClick={onOpenAppSettings}><Cog size={17} />Настройки</button>}
+            </div>
+          </section>
         </div>
       </div>
     </div>
