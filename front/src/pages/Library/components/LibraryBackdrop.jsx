@@ -1,26 +1,23 @@
 const PIXEL_COUNT = 34;
 const EQUALIZER_BAR_COUNT = 28;
 
+const BACKGROUND_GROUPS = [
+  ["library-bg-vinyl--one", "library-bg-vinyl--two"],
+  ["library-bg-cassette--one", "library-bg-cassette--two"],
+  ["library-bg-cube--one", "library-bg-cube--two"],
+  ["library-bg-sphere--one", "library-bg-sphere--two"],
+  ["library-bg-ring--one", "library-bg-ring--two"]
+];
+
 export default function LibraryBackdrop({ image }) {
   return (
     <div className="library-concert-backdrop" aria-hidden="true">
-      <img className="library-neon-space" src={image} alt="" />
-      <i className="library-bg-vinyl library-bg-vinyl--one" />
-      <i className="library-bg-vinyl library-bg-vinyl--two" />
-      <i className="library-bg-cassette library-bg-cassette--one">
-        <b />
-        <b />
-      </i>
-      <i className="library-bg-cassette library-bg-cassette--two">
-        <b />
-        <b />
-      </i>
-      <i className="library-bg-cube library-bg-cube--one" />
-      <i className="library-bg-cube library-bg-cube--two" />
-      <i className="library-bg-sphere library-bg-sphere--one" />
-      <i className="library-bg-sphere library-bg-sphere--two" />
-      <i className="library-bg-ring library-bg-ring--one" />
-      <i className="library-bg-ring library-bg-ring--two" />
+      {/* <img className="library-neon-space" src={image} alt="" /> */}
+      {BACKGROUND_GROUPS.map((group, gIndex) =>
+        group.map((cls, i) => (
+          <i key={`${gIndex}-${i}`} className={`library-bg ${cls}`} />
+        ))
+      )}
       <div className="library-bg-notes">♪ ♫ ♪ ♬</div>
       <div className="library-bg-pixel-rain">
         {Array.from({ length: PIXEL_COUNT }, (_, index) => (

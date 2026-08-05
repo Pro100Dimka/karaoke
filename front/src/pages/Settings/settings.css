@@ -1,0 +1,10 @@
+.settings-page { min-width: 0; padding: var(--space-6); }
+.settings-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-6); }
+.settings-layout { display: grid; grid-template-columns: minmax(190px, 250px) minmax(0, 1fr); gap: var(--space-5); }
+.settings-tabs { display: flex; flex-direction: column; gap: var(--space-2); }
+.settings-tab { justify-content: flex-start; width: 100%; }
+.settings-content-panel { padding-bottom: var(--space-6); }
+.settings-content-panel > :not(.panel-header) { margin-inline: var(--space-6); }
+.settings-service-screen { min-width: 0; }
+.settings-service-back { margin-bottom: var(--space-4); }
+@media (max-width: 780px) { .settings-layout { grid-template-columns: 1fr; } .settings-tabs { flex-direction: row; overflow-x: auto; } }

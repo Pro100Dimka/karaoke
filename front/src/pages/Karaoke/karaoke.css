@@ -1,0 +1,7 @@
+.karaoke-page,
+.karaoke-stage { min-height: calc(100vh - var(--titlebar-height)); background: #020316; color: var(--color-text); }
+.karaoke-app-shell .app-settings-fab { display: none; }
+.karaoke-toolbar,
+.karaoke-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.karaoke-lyrics { position: absolute; z-index: 10; left: 50%; bottom: 12%; width: min(900px, 90vw); transform: translateX(-50%); text-align: center; text-shadow: 0 2px 12px #000, var(--shadow-neon-cyan); }
+.karaoke-lyric-line { font-size: clamp(1.5rem, 3vw, 3.6rem); font-weight: 900; }

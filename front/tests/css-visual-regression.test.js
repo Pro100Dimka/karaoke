@@ -5,13 +5,19 @@ import test from "node:test";
 const read = (path) =>
   readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const css = [
-  "src/styles/tokens.css",
-  "src/styles/foundations.css",
-  "src/styles/cascade/01-layer.css",
-  "src/styles/cascade/02-layer.css",
-  "src/styles/cascade/03-layer.css",
-  "src/styles/cascade/04-layer.css",
-  "src/styles/cascade/05-layer.css"
+  "src/theme/palette.css",
+  "src/theme/typography.css",
+  "src/theme/spacing.css",
+  "src/theme/shadows.css",
+  "src/theme/motion.css",
+  "src/styles/reset.css",
+  "src/styles/components.css",
+  "src/styles/layout.css",
+  "src/styles/compat.css",
+  "src/pages/Library/library.css",
+  "src/pages/Library/song-settings/song-settings.css",
+  "src/pages/Settings/settings.css",
+  "src/pages/Karaoke/karaoke.css"
 ]
   .map(read)
   .join("\n");
@@ -50,15 +56,16 @@ for (const selector of criticalSelectors) {
 }
 
 const criticalTokens = [
+  "--color-bg",
   "--color-text",
+  "--color-text-muted",
   "--color-surface",
   "--color-border",
   "--color-primary",
-  "--text-primary",
-  "--text-muted",
-  "--accent-gradient",
-  "--danger",
-  "--success",
+  "--color-accent",
+  "--color-danger",
+  "--color-success",
+  "--gradient-primary",
   "--space-1",
   "--space-2",
   "--space-3",
@@ -75,8 +82,7 @@ const criticalTokens = [
   "--shadow-lg",
   "--font-size-xs",
   "--font-size-sm",
-  "--font-size-md",
-  "--font-weight-semibold"
+  "--font-size-md"
 ];
 for (const token of criticalTokens) {
   test(`critical design token exists: ${token}`, () => {
@@ -108,11 +114,10 @@ for (const selector of modalSelectors) {
 }
 
 const responsiveSelectors = [
-  ".diagnostics-grid",
   ".library-card-deck",
   ".song-settings-workspace",
-  ".settings-modal",
-  ".performance-analysis-modal"
+  ".settings-layout",
+  ".settings-field"
 ];
 for (const selector of responsiveSelectors) {
   test(`${selector} participates in responsive CSS`, () => {

@@ -1,0 +1,49 @@
+:root {
+  color-scheme: dark;
+
+  --color-bg: #03051f;
+  --color-bg-deep: #010212;
+  --color-surface: rgba(7, 12, 55, 0.72);
+  --color-surface-strong: rgba(10, 19, 76, 0.9);
+  --color-surface-soft: rgba(20, 31, 96, 0.46);
+  --color-surface-hover: rgba(29, 48, 133, 0.58);
+
+  --color-text: #f7f8ff;
+  --color-text-soft: #c8d0ff;
+  --color-text-muted: #7f8bc7;
+  --color-text-inverse: #05061b;
+
+  --color-primary: #2ee8ff;
+  --color-primary-strong: #079cff;
+  --color-secondary: #7b5cff;
+  --color-accent: #ff38c7;
+  --color-accent-strong: #ff197f;
+  --color-success: #14f1d3;
+  --color-warning: #ffc857;
+  --color-danger: #ff4d9a;
+
+  --color-border: rgba(107, 167, 255, 0.32);
+  --color-border-strong: rgba(73, 220, 255, 0.82);
+  --color-border-accent: rgba(255, 63, 214, 0.84);
+  --color-focus: #86f6ff;
+
+  --gradient-primary: linear-gradient(135deg, #ff35ca 0%, #7b5cff 45%, #08cfff 100%);
+  --gradient-primary-hover: linear-gradient(135deg, #ff55d5 0%, #987cff 42%, #3de8ff 100%);
+  --gradient-panel: linear-gradient(145deg, rgba(18, 32, 116, 0.72), rgba(4, 9, 47, 0.82));
+  --gradient-border: linear-gradient(110deg, #2ef2ff, #6c5cff 28%, #ff38c7 58%, #2ef2ff 100%);
+  --gradient-text: linear-gradient(90deg, #ffffff 0%, #b9d6ff 50%, #f4c8ff 100%);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-bg: #edf2ff;
+  --color-bg-deep: #dfe7ff;
+  --color-surface: rgba(255, 255, 255, 0.82);
+  --color-surface-strong: rgba(255, 255, 255, 0.96);
+  --color-surface-soft: rgba(235, 241, 255, 0.8);
+  --color-surface-hover: rgba(218, 229, 255, 0.9);
+  --color-text: #10152d;
+  --color-text-soft: #36446f;
+  --color-text-muted: #6b7596;
+  --color-border: rgba(72, 102, 177, 0.28);
+}

@@ -1,10 +1,9 @@
-@import "./styles/tokens.css";
-@import "./styles/foundations.css";
-
-@import "./styles/cascade/01-layer.css";
-@import "./styles/cascade/02-layer.css";
-@import "./styles/cascade/03-layer.css";
-@import "./styles/cascade/04-layer.css";
-@import "./styles/cascade/05-layer.css";
-
-@import "./styles/refinements.css";
+@import "./theme/index.css";
+@import "./styles/reset.css";
+@import "./styles/components.css";
+@import "./styles/layout.css";
+@import "./styles/compat.css";
+@import "./pages/Library/library.css";
+@import "./pages/Library/song-settings/song-settings.css";
+@import "./pages/Settings/settings.css";
+@import "./pages/Karaoke/karaoke.css";

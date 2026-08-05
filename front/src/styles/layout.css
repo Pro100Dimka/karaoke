@@ -1,0 +1,79 @@
+.app-shell { min-height: 100vh; background: var(--color-bg); }
+.app-body,
+.app-main { min-width: 0; min-height: calc(100vh - var(--titlebar-height)); }
+.title-bar { position: relative; z-index: 500; height: var(--titlebar-height); background: rgba(2, 4, 25, 0.92); border-bottom: 1px solid rgba(90, 145, 255, 0.2); }
+
+.app-settings-fab {
+  position: fixed;
+  z-index: 80;
+  right: 26px;
+  bottom: 24px;
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  border: 1px solid rgba(75, 226, 255, 0.7);
+  border-radius: 50%;
+  color: #dffcff;
+  background: radial-gradient(circle at 35% 25%, rgba(62, 231, 255, 0.48), rgba(9, 35, 116, 0.92) 55%, rgba(20, 5, 75, 0.98));
+  box-shadow: var(--shadow-neon-cyan), var(--shadow-lg);
+  cursor: pointer;
+}
+
+.settings-modal-backdrop,
+.song-recordings-backdrop,
+.app-dialog-backdrop,
+.modal-backdrop {
+  position: fixed;
+  z-index: 600;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: clamp(12px, 3vw, 36px);
+  overflow: auto;
+  background: rgba(1, 2, 18, 0.76);
+  backdrop-filter: blur(18px) saturate(130%);
+}
+
+.settings-modal,
+.song-settings-modal,
+.song-recordings-modal,
+.app-dialog,
+.modal {
+  position: relative;
+  width: min(1120px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border: 1px solid rgba(64, 211, 255, 0.66);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(145deg, rgba(9, 18, 80, 0.96), rgba(3, 7, 40, 0.96));
+  box-shadow: var(--shadow-lg), var(--shadow-neon-mixed);
+}
+
+.settings-modal-close,
+.song-recordings-close,
+.modal-close {
+  position: sticky;
+  z-index: 4;
+  top: var(--space-4);
+  float: right;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  margin: var(--space-4) var(--space-4) 0 0;
+  place-items: center;
+  border: 1px solid rgba(91, 194, 255, 0.38);
+  border-radius: 50%;
+  color: var(--color-text-soft);
+  background: rgba(4, 11, 51, 0.82);
+  cursor: pointer;
+}
+
+.application-error { display: grid; min-height: 100vh; place-items: center; padding: var(--space-6); background: var(--color-bg-deep); }
+.application-error__card { width: min(560px, 100%); padding: var(--space-8); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); background: var(--color-surface-strong); box-shadow: var(--shadow-lg); }
+
+@media (max-width: 720px) {
+  .settings-field { grid-template-columns: 1fr; }
+  .field-row { flex-wrap: wrap; }
+  .app-settings-fab { right: 14px; bottom: 14px; width: 52px; height: 52px; }
+}

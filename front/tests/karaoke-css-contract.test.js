@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const karaokeRoot = path.join(root, "src/pages/Karaoke");
-const stylesRoot = path.join(root, "src/styles");
+const stylesRoot = path.join(root, "src");
 
 function walk(directory, extension) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -38,17 +38,18 @@ function sourceClassNames() {
   return [...names].sort();
 }
 
-test("karaoke CSS layer imports stay in cascade order", () => {
+test("application CSS imports use the new theme and page architecture", () => {
   const indexCss = fs.readFileSync(path.join(root, "src/index.css"), "utf8");
   const expected = [
-    "./styles/tokens.css",
-    "./styles/foundations.css",
-    "./styles/cascade/01-layer.css",
-    "./styles/cascade/02-layer.css",
-    "./styles/cascade/03-layer.css",
-    "./styles/cascade/04-layer.css",
-    "./styles/cascade/05-layer.css",
-    "./styles/refinements.css"
+    "./theme/index.css",
+    "./styles/reset.css",
+    "./styles/components.css",
+    "./styles/layout.css",
+    "./styles/compat.css",
+    "./pages/Library/library.css",
+    "./pages/Library/song-settings/song-settings.css",
+    "./pages/Settings/settings.css",
+    "./pages/Karaoke/karaoke.css"
   ];
   const actual = [...indexCss.matchAll(/@import\s+["']([^"']+)["']/g)].map(
     (match) => match[1]

@@ -228,21 +228,7 @@ export default function Library({ onOpenSongSettings }) {
     <div className="library-page">
       <LibraryBackdrop image={libraryNeonSpace} />
       <LibraryHero songCount={visibleSongs.length} readyCount={readyCount} />
-      <Panel
-        className="library-collection-panel"
-        title=" "
-        actions={
-          <LibraryActions
-            canManageLibrary={canManageLibrary}
-            fileInputRef={fileInputRef}
-            includeFileInput
-            onAdd={handleAddClick}
-            onFileChosen={handleFileChosen}
-            onOpenRoom={openOnlineRoom}
-            roomActive={Boolean(sharedRoom?.room)}
-          />
-        }
-      >
+      <Panel className="library-collection-panel">
         <div className="library-toolbar">
           <div className="library-search">
             <Search className="library-search-icon" size={14} />
@@ -255,7 +241,10 @@ export default function Library({ onOpenSongSettings }) {
           </div>
           <LibraryActions
             canManageLibrary={canManageLibrary}
+            fileInputRef={fileInputRef}
+            includeFileInput
             onAdd={handleAddClick}
+            onFileChosen={handleFileChosen}
             onOpenRoom={openOnlineRoom}
             roomActive={Boolean(sharedRoom?.room)}
           />

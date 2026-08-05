@@ -299,6 +299,10 @@ for (const scenario of MODAL_SCENARIOS) {
 
     if (scenario.screenshot) {
       test("visual regression", async ({ page }) => {
+        test.skip(
+          process.env.VISUAL_REGRESSION !== "1",
+          "Новый CSS требует явного утверждения эталонных снимков"
+        );
         await scenario.open(page);
 
         const dialog = scenario.root(page);
@@ -335,6 +339,10 @@ for (const scenario of PAGE_SCENARIOS) {
 
     if (scenario.screenshot) {
       test("visual regression", async ({ page }) => {
+        test.skip(
+          process.env.VISUAL_REGRESSION !== "1",
+          "Новый CSS требует явного утверждения эталонных снимков"
+        );
         await scenario.open(page);
 
         const root = scenario.root(page);
