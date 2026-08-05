@@ -4,7 +4,7 @@ import { AudioPlayer } from "../../../components/AudioPlayer";
 import Modal from "../../../components/Modal";
 import { Card } from "../../../components/ui";
 import { getErrorMessage } from "../../../utils/errors";
-import { formatLibraryDate, formatRecordingDuration } from "../utils";
+import { formatLibraryDate } from "../utils";
 import LibraryModalHeader from "./LibraryModalHeader";
 
 export default function RecordingsModal({
@@ -43,37 +43,38 @@ export default function RecordingsModal({
             )}
             <div className="song-recordings-list">
               {recordings.map((recording) => (
-                <Card key={recording.id} className="song-recording-item" variant="glass">
+                <Card
+                  key={recording.id}
+                  className="song-recording-item"
+                  variant="glass"
+                >
                   <div className="song-recording-header">
                     <div className="song-recording-meta">
                       <strong>{formatLibraryDate(recording.created_at)}</strong>
-                      <span>
-                        {formatRecordingDuration(recording.duration_sec)} · голос и минус
-                      </span>
-                    </div>
-                    <div className="song-recording-item-actions">
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        type="button"
-                        onClick={() => onAnalyze(recording)}
-                      >
-                        <BarChart3 size={15} /> Анализ
-                      </button>
-                      <button
-                        className="btn btn-danger btn-sm song-recording-delete"
-                        title="Удалить запись"
-                        aria-label="Удалить запись"
-                        onClick={() => onDelete(recording)}
-                        type="button"
-                      >
-                        <Trash2 size={14} />
-                      </button>
                     </div>
                   </div>
                   <AudioPlayer
                     className="song-recording-player"
                     src={api.getPerformanceFileUrl(recording.id)}
                   />
+                  <div className="song-recording-item-actions">
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      type="button"
+                      onClick={() => onAnalyze(recording)}
+                    >
+                      <BarChart3 size={15} />
+                    </button>
+                    <button
+                      className="btn btn-danger btn-sm song-recording-delete"
+                      title="Удалить запись"
+                      aria-label="Удалить запись"
+                      onClick={() => onDelete(recording)}
+                      type="button"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </Card>
               ))}
             </div>
