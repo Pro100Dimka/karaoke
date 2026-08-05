@@ -4,7 +4,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Cog,
-  Maximize,
   Mic,
   Pause,
   Play,
@@ -892,11 +891,6 @@ export default function Karaoke({ onOpenAppSettings }) {
     onStop: stop
   });
 
-  const toggleFullscreen = () => {
-    if (!containerRef.current) return;
-    if (document.fullscreenElement) document.exitFullscreen();
-    else containerRef.current.requestFullscreen();
-  };
 
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -1419,10 +1413,28 @@ export default function Karaoke({ onOpenAppSettings }) {
 
           <section className="karaoke-console-panel karaoke-tools-panel">
             <div className="karaoke-tool-tabs">
-              <button type="button" className={microphoneOpen && microphoneSettingsView === "effects" ? "is-active" : ""} onClick={() => { setMicrophoneSettingsView("effects"); setMicrophoneOpen(true); }}><AudioLines size={17} /><span>Эффекты</span></button>
-              <button type="button" className={showNotes ? "is-active" : ""} onClick={() => setShowNotes((value) => !value)}><AudioLines size={17} /><span>Ноты</span></button>
-              <button type="button" className={showLyrics ? "is-active" : ""} onClick={() => setShowLyrics((value) => !value)}><Type size={17} /><span>Текст</span></button>
-              <button type="button" onClick={toggleFullscreen}><Maximize size={17} /><span>Экран</span></button>
+              <button
+                type="button"
+                className={microphoneOpen && microphoneSettingsView === "effects" ? "is-active" : ""}
+                aria-pressed={microphoneOpen && microphoneSettingsView === "effects"}
+                onClick={() => { setMicrophoneSettingsView("effects"); setMicrophoneOpen(true); }}
+              ><AudioLines size={17} /><span>Эффекты</span></button>
+              <button
+                type="button"
+                className={showNotes ? "is-active" : ""}
+                aria-pressed={showNotes}
+                onClick={() => setShowNotes((value) => !value)}
+              ><AudioLines size={17} /><span>Ноты</span></button>
+              <button
+                type="button"
+                className={showLyrics ? "is-active" : ""}
+                aria-pressed={showLyrics}
+                onClick={() => setShowLyrics((value) => !value)}
+              ><Type size={17} /><span>Текст</span></button>
+              <button type="button" onClick={returnToLibrary}><ArrowLeft size={17} /><span>Назад</span></button>
+              {onOpenAppSettings && (
+                <button type="button" onClick={onOpenAppSettings}><Cog size={17} /><span>Настройки</span></button>
+              )}
             </div>
             <div className="karaoke-effect-presets" aria-label="Режимы эффектов микрофона">
               {EFFECT_PRESETS.map((preset) => (
@@ -1439,10 +1451,7 @@ export default function Karaoke({ onOpenAppSettings }) {
                 </button>
               ))}
             </div>
-            <div className="karaoke-console-actions">
-              <button type="button" onClick={returnToLibrary}><ArrowLeft size={17} />Назад</button>
-              {onOpenAppSettings && <button type="button" onClick={onOpenAppSettings}><Cog size={17} />Настройки</button>}
-            </div>
+
           </section>
         </div>
       </div>

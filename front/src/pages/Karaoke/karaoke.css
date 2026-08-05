@@ -2924,3 +2924,49 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
+
+/* Shared analysis modal: same geometry and Card system as the application modals. */
+.performance-analysis-modal {
+  inline-size: min(43.75rem, 90vw);
+  max-block-size: 90dvh;
+}
+
+.performance-analysis-modal > .ui-card__panel,
+.performance-analysis-modal > .ui-card__panel > .ui-card__content {
+  min-block-size: 0;
+  max-block-size: inherit;
+}
+
+.performance-analysis-modal > .ui-card__panel > .ui-card__content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.performance-analysis-body {
+  display: grid;
+  gap: var(--space-4);
+  min-block-size: 0;
+  padding: var(--space-4);
+  overflow: auto;
+}
+
+/* Top toolbar owns all scene-level actions; inactive toggles deliberately dim. */
+.karaoke-tool-tabs {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.karaoke-tool-tabs button[aria-pressed="false"] {
+  color: var(--color-text-muted);
+  border-color: var(--color-border);
+  box-shadow: none;
+  opacity: .68;
+}
+
+.karaoke-tool-tabs button[aria-pressed="true"] {
+  opacity: 1;
+}
+
+.karaoke-tools-panel {
+  grid-template-rows: auto 1fr;
+}

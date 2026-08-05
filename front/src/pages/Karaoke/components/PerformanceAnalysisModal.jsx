@@ -71,11 +71,12 @@ export default function PerformanceAnalysisModal({
       isOpen
       onClose={onClose}
       ariaLabel="Анализ выступления"
-      backdropClassName="performance-analysis-backdrop"
-      modalClassName="performance-analysis-modal"
-      closeClassName="karaoke-settings-close"
+      backdropClassName="app-modal-backdrop performance-analysis-backdrop"
+      modalClassName="app-modal modal-card performance-analysis-modal"
+      closeClassName="app-modal-close performance-analysis-close"
       closeAriaLabel="Закрыть анализ"
-      closeIconSize={17}
+      closeIconSize={18}
+      cardVariant="neon"
       portal
     >
       <div className="analysis-victory-scene" aria-hidden="true">
@@ -95,38 +96,40 @@ export default function PerformanceAnalysisModal({
         title="Анализ выступления"
         description="Точность нот, ритм и рекомендации по исполнению."
       />
-      {!result && !error && (
-        <p className="text-muted">Анализируем ноты и ритм исполнения…</p>
-      )}
-      {error && (
-        <>
-          <p className="song-lyrics-error">
-            Не удалось выполнить анализ: {error}
-          </p>
-          <button type="button" className="btn btn-primary" onClick={onClose}>
-            Закрыть
-          </button>
-        </>
-      )}
-      {result && (
-        <>
-          <AnalysisSummary result={result} />
-          <AudioPlayer src={api.getPerformanceFileUrl(recordingId)} />
-          <div className="performance-analysis-actions">
-            <button
-              type="button"
-              className="btn btn-danger"
-              onClick={deleteRecording}
-              disabled={deleting}
-            >
-              <Trash2 size={14} /> {deleting ? "Удаляем…" : "Удалить запись"}
+      <div className="performance-analysis-body modal-scroll">
+        {!result && !error && (
+          <p className="text-muted">Анализируем ноты и ритм исполнения…</p>
+        )}
+        {error && (
+          <>
+            <p className="song-lyrics-error">
+              Не удалось выполнить анализ: {error}
+            </p>
+            <button type="button" className="btn btn-primary" onClick={onClose}>
+              Закрыть
             </button>
-            <button type="button" className="btn btn-primary" onClick={onDone}>
-              Готово
-            </button>
-          </div>
-        </>
-      )}
+          </>
+        )}
+        {result && (
+          <>
+            <AnalysisSummary result={result} />
+            <AudioPlayer src={api.getPerformanceFileUrl(recordingId)} />
+            <div className="performance-analysis-actions">
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={deleteRecording}
+                disabled={deleting}
+              >
+                <Trash2 size={14} /> {deleting ? "Удаляем…" : "Удалить запись"}
+              </button>
+              <button type="button" className="btn btn-primary" onClick={onDone}>
+                Готово
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </Modal>
   );
 }

@@ -38,6 +38,8 @@ export function OnlineRoomProvider({ children }) {
   const roomSoundMutedRef = useRef(false);
   const intentionalDisconnectRef = useRef(false);
   const pendingSongCommandRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const levelMetersRef = useRef(new Map());
 
   const [room, setRoomState] = useState(null);
   const [participants, setParticipants] = useState([]);
@@ -47,6 +49,74 @@ export function OnlineRoomProvider({ children }) {
   const [roomUi, setRoomUi] = useState({});
   const [roomCommand, setRoomCommand] = useState(null);
   const [voiceError, setVoiceError] = useState("");
+  const [localSpeakingLevel, setLocalSpeakingLevel] = useState(0);
+  const [speakingLevels, setSpeakingLevels] = useState({});
+
+
+  const stopSpeakingMeter = useCallback((key) => {
+    const meter = levelMetersRef.current.get(key);
+    if (!meter) return;
+    window.clearInterval(meter.intervalId);
+    meter.source.disconnect();
+    meter.analyser.disconnect();
+    levelMetersRef.current.delete(key);
+    if (key === "local") setLocalSpeakingLevel(0);
+    else {
+      setSpeakingLevels((levels) => {
+        if (!(key in levels)) return levels;
+        const next = { ...levels };
+        delete next[key];
+        return next;
+      });
+    }
+  }, []);
+
+  const startSpeakingMeter = useCallback(
+    (key, stream) => {
+      stopSpeakingMeter(key);
+      if (!stream?.getAudioTracks?.().length) return;
+
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+      const audioContext =
+        audioContextRef.current || new AudioContextClass({ latencyHint: "interactive" });
+      audioContextRef.current = audioContext;
+      if (audioContext.state === "suspended") audioContext.resume().catch(() => {});
+
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.72;
+      source.connect(analyser);
+
+      const samples = new Uint8Array(analyser.fftSize);
+      let smoothed = 0;
+      let lastPublished = -1;
+      const intervalId = window.setInterval(() => {
+        analyser.getByteTimeDomainData(samples);
+        let sum = 0;
+        for (const sample of samples) {
+          const normalized = (sample - 128) / 128;
+          sum += normalized * normalized;
+        }
+        const rms = Math.sqrt(sum / samples.length);
+        const normalizedLevel = Math.min(1, Math.max(0, (rms - 0.012) / 0.16));
+        smoothed = smoothed * 0.68 + normalizedLevel * 0.32;
+        const published = smoothed < 0.035 ? 0 : Number(smoothed.toFixed(2));
+        if (Math.abs(published - lastPublished) < 0.035) return;
+        lastPublished = published;
+        if (key === "local") setLocalSpeakingLevel(published);
+        else {
+          setSpeakingLevels((levels) =>
+            levels[key] === published ? levels : { ...levels, [key]: published }
+          );
+        }
+      }, 70);
+
+      levelMetersRef.current.set(key, { analyser, intervalId, source });
+    },
+    [stopSpeakingMeter]
+  );
 
   const setRoom = useCallback((next) => {
     roomRef.current = next;
@@ -54,13 +124,14 @@ export function OnlineRoomProvider({ children }) {
   }, []);
 
   const removeRemoteAudio = useCallback((participantId) => {
+    stopSpeakingMeter(participantId);
     const audio = remoteAudioRef.current.get(participantId);
     if (!audio) return;
     audio.pause();
     audio.srcObject = null;
     audio.remove();
     remoteAudioRef.current.delete(participantId);
-  }, []);
+  }, [stopSpeakingMeter]);
 
   const applyRemoteAudioMute = useCallback(() => {
     for (const [participantId, audio] of remoteAudioRef.current) {
@@ -73,11 +144,14 @@ export function OnlineRoomProvider({ children }) {
     unsubscribeRef.current?.();
     unsubscribeRef.current = null;
     voiceRef.current?.stop();
+    for (const key of [...levelMetersRef.current.keys()]) stopSpeakingMeter(key);
+    audioContextRef.current?.close().catch(() => {});
+    audioContextRef.current = null;
     voiceRef.current = null;
     for (const id of [...remoteAudioRef.current.keys()]) removeRemoteAudio(id);
     clientRef.current?.disconnect();
     clientRef.current = null;
-  }, [removeRemoteAudio]);
+  }, [removeRemoteAudio, stopSpeakingMeter]);
 
   const setMicrophoneMuted = useCallback((muted, broadcast = true) => {
     const next = Boolean(muted);
@@ -85,6 +159,30 @@ export function OnlineRoomProvider({ children }) {
     setMicrophoneMutedState(next);
     if (broadcast) clientRef.current?.send("presence", { micMuted: next });
   }, []);
+
+  const requestMicrophoneAccess = useCallback(async () => {
+    const voice = voiceRef.current;
+    if (!voice) {
+      setVoiceError("Сначала подключитесь к комнате.");
+      return false;
+    }
+
+    setVoiceError("");
+    try {
+      const stream = await voice.start();
+      startSpeakingMeter("local", stream);
+      const muted = microphoneMuted || roomSoundMutedRef.current;
+      voice.setMicrophoneMuted(muted);
+      clientRef.current?.send("presence", { micMuted: muted });
+      return true;
+    } catch (error) {
+      const message = error?.message || "нет доступа к микрофону";
+      setVoiceError(
+        `Не удалось получить доступ к микрофону: ${message}. Проверьте разрешение Windows и повторите попытку.`
+      );
+      return false;
+    }
+  }, [microphoneMuted, startSpeakingMeter]);
 
   const restoreApplicationAudio = useCallback(() => {
     for (const [audio, wasMuted] of appAudioStateRef.current) {
@@ -161,6 +259,7 @@ export function OnlineRoomProvider({ children }) {
         audio.style.display = "none";
         document.body.append(audio);
         remoteAudioRef.current.set(participantId, audio);
+        startSpeakingMeter(participantId, stream);
         applyRemoteAudioMute();
         audio.play().catch(() => {
           setVoiceError(
@@ -320,9 +419,29 @@ export function OnlineRoomProvider({ children }) {
 
       try {
         const normalizedId = await client.connect({ id, name, host });
+
+        // Show the room UI as soon as the WebSocket is connected. The server
+        // room-state packet will replace the temporary self id a moment later.
+        const pendingSelfId = `pending-${normalizedId}`;
+        setRoom({
+          id: normalizedId,
+          selfId: pendingSelfId,
+          host: Boolean(host),
+          role: host ? "host" : "guest"
+        });
+        setParticipants([
+          {
+            id: pendingSelfId,
+            name: name?.trim() || "Гость",
+            role: host ? "host" : "guest",
+            pending: true
+          }
+        ]);
+
         voice
           .start()
-          .then(() => {
+          .then((stream) => {
+            startSpeakingMeter("local", stream);
             voice.setMicrophoneMuted(
               microphoneMuted || roomSoundMutedRef.current
             );
@@ -346,7 +465,8 @@ export function OnlineRoomProvider({ children }) {
       cleanupConnection,
       microphoneMuted,
       removeRemoteAudio,
-      setRoom
+      setRoom,
+      startSpeakingMeter
     ]
   );
 
@@ -389,6 +509,8 @@ export function OnlineRoomProvider({ children }) {
       roomUi,
       roomCommand,
       voiceError,
+      localSpeakingLevel,
+      speakingLevels,
       createRoom(name) {
         const id = crypto
           .randomUUID()
@@ -401,6 +523,7 @@ export function OnlineRoomProvider({ children }) {
         return connect({ id, name, host: false });
       },
       leaveRoom,
+      requestMicrophoneAccess,
       setMicrophoneMuted,
       setRoomSoundMuted,
       togglePersonMuted(id) {
@@ -457,9 +580,12 @@ export function OnlineRoomProvider({ children }) {
       roomCommand,
       roomSoundMuted,
       roomUi,
+      requestMicrophoneAccess,
       setMicrophoneMuted,
       setRoomSoundMuted,
-      voiceError
+      voiceError,
+      localSpeakingLevel,
+      speakingLevels
     ]
   );
 
