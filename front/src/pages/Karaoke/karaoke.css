@@ -1307,3 +1307,116 @@
   .karaoke-player-meta { grid-column: 1 / -1; }
   .karaoke-playback-controls { grid-template-columns: 1fr; }
 }
+
+/* Compact four-channel mixer in the performance HUD. */
+.karaoke-mixer-dock {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: .85rem;
+  min-inline-size: 0;
+  cursor: default;
+}
+
+.karaoke-mixer-dock:hover {
+  transform: none;
+}
+
+.karaoke-mixer-heading {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-content: center;
+  align-items: center;
+  gap: .3rem .55rem;
+  min-inline-size: 5.6rem;
+}
+
+.karaoke-mixer-heading > span:first-of-type {
+  font-weight: 800;
+}
+
+.karaoke-mixer-heading .karaoke-microphone-meter {
+  grid-column: 1 / -1;
+  justify-content: flex-start;
+  block-size: .9rem;
+}
+
+.karaoke-mixer-settings {
+  display: grid;
+  place-items: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  padding: 0;
+  border: var(--hairline) solid color-mix(in srgb, var(--color-primary) 34%, var(--color-border));
+  border-radius: .65rem;
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-surface) 55%, transparent);
+  cursor: pointer;
+}
+
+.karaoke-mixer-settings:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 78%, white 8%);
+  background: color-mix(in srgb, var(--color-primary) 18%, var(--color-surface));
+  box-shadow: 0 0 .8rem color-mix(in srgb, var(--color-primary) 28%, transparent);
+}
+
+.karaoke-quick-mixer {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(4.2rem, 1fr));
+  gap: .55rem;
+  min-inline-size: 0;
+}
+
+.karaoke-quick-mixer .slider-field {
+  min-inline-size: 0;
+  gap: .25rem;
+}
+
+.karaoke-quick-mixer .slider-field__header {
+  gap: .25rem;
+  font-size: .62rem;
+  white-space: nowrap;
+}
+
+.karaoke-quick-mixer .slider-field__header .mono {
+  color: var(--color-text-muted);
+  font-size: .58rem;
+}
+
+.karaoke-quick-mixer input[type="range"] {
+  min-inline-size: 0;
+}
+
+.karaoke-settings-sliders--single {
+  grid-template-columns: 1fr;
+}
+
+.karaoke-effects-panel {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
+@media (max-width: 88rem) {
+  .karaoke-playback-controls {
+    grid-template-columns: minmax(22rem, 1.25fr) minmax(16rem, .8fr) minmax(16rem, auto);
+  }
+
+  .karaoke-quick-mixer {
+    grid-template-columns: repeat(2, minmax(5rem, 1fr));
+  }
+}
+
+@media (max-width: 68rem) {
+  .karaoke-playback-controls {
+    grid-template-columns: 1fr auto;
+  }
+
+  .karaoke-mixer-dock {
+    grid-column: 1 / -1;
+  }
+
+  .karaoke-corner-actions {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+}

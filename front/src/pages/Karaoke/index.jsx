@@ -116,6 +116,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   const [recordingSessionId, setRecordingSessionId] = useState(null);
   const [analysisRecordingId, setAnalysisRecordingId] = useState(null);
   const [microphoneOpen, setMicrophoneOpen] = useState(false);
+  const [microphoneSettingsView, setMicrophoneSettingsView] = useState("music");
   const [recordingError, setRecordingError] = useState(null);
   const [microphoneVolume, setMicrophoneVolume] = useState(1);
   const [microphoneEffects, setMicrophoneEffects] = useState({
@@ -1008,7 +1009,11 @@ export default function Karaoke({ onOpenAppSettings }) {
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="microphone-panel-title">
-              <Settings2 size={15} /> Настройки караоке
+              {microphoneSettingsView === "effects" ? (
+                <><AudioLines size={15} /> Эффекты микрофона</>
+              ) : (
+                <><Settings2 size={15} /> Настройки караоке</>
+              )}
             </div>
             <button
               type="button"
@@ -1018,164 +1023,138 @@ export default function Karaoke({ onOpenAppSettings }) {
             >
               <X size={16} />
             </button>
-            <div className="karaoke-settings-section">
-              <div className="karaoke-settings-section-title">
-                Отображение и воспроизведение
+
+            {microphoneSettingsView === "effects" ? (
+              <div className="microphone-effects karaoke-effects-panel">
+                <SliderField
+                  label="Reverb"
+                  value={microphoneEffects.reverb}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  display={`${Math.round(microphoneEffects.reverb * 100)}%`}
+                  onChange={(value) =>
+                    setMicrophoneEffects((effects) => ({ ...effects, reverb: value }))
+                  }
+                  onCommit={(value) => updateMicrophone({ reverb: value })}
+                />
+                <SliderField
+                  label="Echo"
+                  value={microphoneEffects.echo}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  display={`${Math.round(microphoneEffects.echo * 100)}%`}
+                  onChange={(value) =>
+                    setMicrophoneEffects((effects) => ({ ...effects, echo: value }))
+                  }
+                  onCommit={(value) => updateMicrophone({ echo: value })}
+                />
+                <SliderField
+                  label="Delay"
+                  value={microphoneEffects.delay}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  display={`${Math.round(microphoneEffects.delay * 100)}%`}
+                  onChange={(value) =>
+                    setMicrophoneEffects((effects) => ({ ...effects, delay: value }))
+                  }
+                  onCommit={(value) => updateMicrophone({ delay: value })}
+                />
               </div>
-              <div className="karaoke-settings-toggles">
-                <button
-                  type="button"
-                  className={`btn ${showLyrics ? "btn-primary" : "btn-ghost"}`}
-                  onClick={() => setShowLyrics((value) => !value)}
-                >
-                  <Type size={14} /> Текст
-                </button>
-                <button
-                  type="button"
-                  className={`btn ${showNotes ? "btn-primary" : "btn-ghost"}`}
-                  onClick={() => setShowNotes((value) => !value)}
-                >
-                  <AudioLines size={14} /> Ноты
-                </button>
-                <div className="karaoke-setting-choice">
-                  <span>Тональность</span>
-                  <div className="karaoke-key-stepper">
-                    <button
-                      type="button"
-                      aria-label="Понизить тональность"
-                      disabled={keyShift <= -6}
-                      onClick={() =>
-                        setKeyShift((value) => Math.max(-6, value - 1))
-                      }
-                    >
-                      −
-                    </button>
-                    <strong>
-                      {transposeKey(song?.key_override, keyShift)}
-                    </strong>
-                    <button
-                      type="button"
-                      aria-label="Повысить тональность"
-                      disabled={keyShift >= 6}
-                      onClick={() =>
-                        setKeyShift((value) => Math.min(6, value + 1))
-                      }
-                    >
-                      +
-                    </button>
+            ) : (
+              <>
+                <div className="karaoke-settings-section">
+                  <div className="karaoke-settings-section-title">
+                    Отображение и воспроизведение
                   </div>
-                  <small>
-                    {keyShift === 0
-                      ? "Оригинальная"
-                      : `${keyShift > 0 ? "+" : ""}${keyShift} полутонов`}
-                  </small>
-                </div>
-              </div>
-              <div className="karaoke-settings-sliders">
-                <SliderField
-                  label="Громкость музыки"
-                  value={musicVolume}
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  onChange={setMusicVolume}
-                  display={`${Math.round(musicVolume * 100)}%`}
-                />
-                <SliderField
-                  label="Громкость вокала"
-                  value={vocalVolume}
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  onChange={setVocalVolume}
-                  display={`${Math.round(vocalVolume * 100)}%`}
-                />
-                <SliderField
-                  label="Мелодия-ориентир"
-                  value={melodyVolume}
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  onChange={setMelodyVolume}
-                  display={`${Math.round(melodyVolume * 100)}%`}
-                />
-                <div className="karaoke-setting-choice">
-                  <span>Скорость</span>
-                  <div
-                    className="karaoke-speed-switch"
-                    role="group"
-                    aria-label="Скорость"
-                  >
-                    {[0.5, 0.75, 1, 1.25, 1.5].map((value) => (
-                      <button
-                        type="button"
-                        key={value}
-                        className={speed === value ? "is-active" : ""}
-                        onClick={() => setSpeed(value)}
+                  <div className="karaoke-settings-toggles">
+                    <button
+                      type="button"
+                      className={`btn ${showLyrics ? "btn-primary" : "btn-ghost"}`}
+                      onClick={() => setShowLyrics((value) => !value)}
+                    >
+                      <Type size={14} /> Текст
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn ${showNotes ? "btn-primary" : "btn-ghost"}`}
+                      onClick={() => setShowNotes((value) => !value)}
+                    >
+                      <AudioLines size={14} /> Ноты
+                    </button>
+                    <div className="karaoke-setting-choice">
+                      <span>Тональность</span>
+                      <div className="karaoke-key-stepper">
+                        <button
+                          type="button"
+                          aria-label="Понизить тональность"
+                          disabled={keyShift <= -6}
+                          onClick={() =>
+                            setKeyShift((value) => Math.max(-6, value - 1))
+                          }
+                        >
+                          −
+                        </button>
+                        <strong>{transposeKey(song?.key_override, keyShift)}</strong>
+                        <button
+                          type="button"
+                          aria-label="Повысить тональность"
+                          disabled={keyShift >= 6}
+                          onClick={() =>
+                            setKeyShift((value) => Math.min(6, value + 1))
+                          }
+                        >
+                          +
+                        </button>
+                      </div>
+                      <small>
+                        {keyShift === 0
+                          ? "Оригинальная"
+                          : `${keyShift > 0 ? "+" : ""}${keyShift} полутонов`}
+                      </small>
+                    </div>
+                  </div>
+                  <div className="karaoke-settings-sliders karaoke-settings-sliders--single">
+                    <div className="karaoke-setting-choice">
+                      <span>Скорость</span>
+                      <div
+                        className="karaoke-speed-switch"
+                        role="group"
+                        aria-label="Скорость"
                       >
-                        {value === 1 ? "1×" : `${value}×`}
-                      </button>
-                    ))}
+                        {[0.5, 0.75, 1, 1.25, 1.5].map((value) => (
+                          <button
+                            type="button"
+                            key={value}
+                            className={speed === value ? "is-active" : ""}
+                            onClick={() => setSpeed(value)}
+                          >
+                            {value === 1 ? "1×" : `${value}×`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
-            <div className="microphone-controls-launcher">
-              {onOpenAppSettings && (
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => {
-                    setMicrophoneOpen(false);
-                    onOpenAppSettings("audio");
-                  }}
-                >
-                  <Settings2 size={15} />
-                  Аудио и запись
-                </button>
-              )}
-            </div>
-            <div className="microphone-effects">
-              <div className="microphone-effects-title">
-                Эффекты микрофона
-              </div>
-              <SliderField
-                label="Reverb"
-                value={microphoneEffects.reverb}
-                min={0}
-                max={1}
-                step={0.05}
-                display={`${Math.round(microphoneEffects.reverb * 100)}%`}
-                onChange={(value) =>
-                  setMicrophoneEffects((effects) => ({ ...effects, reverb: value }))
-                }
-                onCommit={(value) => updateMicrophone({ reverb: value })}
-              />
-              <SliderField
-                label="Echo"
-                value={microphoneEffects.echo}
-                min={0}
-                max={1}
-                step={0.05}
-                display={`${Math.round(microphoneEffects.echo * 100)}%`}
-                onChange={(value) =>
-                  setMicrophoneEffects((effects) => ({ ...effects, echo: value }))
-                }
-                onCommit={(value) => updateMicrophone({ echo: value })}
-              />
-              <SliderField
-                label="Delay"
-                value={microphoneEffects.delay}
-                min={0}
-                max={1}
-                step={0.05}
-                display={`${Math.round(microphoneEffects.delay * 100)}%`}
-                onChange={(value) =>
-                  setMicrophoneEffects((effects) => ({ ...effects, delay: value }))
-                }
-                onCommit={(value) => updateMicrophone({ delay: value })}
-              />
-            </div>
+                <div className="microphone-controls-launcher">
+                  {onOpenAppSettings && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() => {
+                        setMicrophoneOpen(false);
+                        onOpenAppSettings("audio");
+                      }}
+                    >
+                      <Settings2 size={15} />
+                      Аудио и запись
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -1341,27 +1320,76 @@ export default function Karaoke({ onOpenAppSettings }) {
         </div>
 
         <div className="karaoke-playback-controls">
-          <button
-            type="button"
-            className="karaoke-microphone-dock"
+          <div
+            className="karaoke-microphone-dock karaoke-mixer-dock"
             style={{ "--microphone-level": Math.max(0, Math.min(1, microphoneLevel)) }}
-            onClick={() => setMicrophoneOpen(true)}
-            aria-label="Настройки микрофона"
           >
-            <Mic size={22} />
-            <span>Микрофон</span>
-            <span className="karaoke-microphone-meter" aria-hidden="true">
-              {Array.from({ length: 9 }, (_, index) => (
-                <i
-                  key={index}
-                  style={{
-                    "--meter-level": `${Math.max(18, Math.min(100, microphoneLevel * 100 - index * 5 + 34))}%`
-                  }}
-                />
-              ))}
-            </span>
-            <Settings2 size={20} />
-          </button>
+            <div className="karaoke-mixer-heading">
+              <Mic size={21} />
+              <span>Микшер</span>
+              <span className="karaoke-microphone-meter" aria-hidden="true">
+                {Array.from({ length: 7 }, (_, index) => (
+                  <i
+                    key={index}
+                    style={{
+                      "--meter-level": `${Math.max(18, Math.min(100, microphoneLevel * 100 - index * 6 + 34))}%`
+                    }}
+                  />
+                ))}
+              </span>
+              <button
+                type="button"
+                className="karaoke-mixer-settings"
+                title="Настройки караоке"
+                aria-label="Настройки караоке"
+                onClick={() => {
+                  setMicrophoneSettingsView("music");
+                  setMicrophoneOpen(true);
+                }}
+              >
+                <Settings2 size={18} />
+              </button>
+            </div>
+            <div className="karaoke-quick-mixer">
+              <SliderField
+                label="Мик"
+                value={microphoneVolume}
+                min={0}
+                max={1}
+                step={0.05}
+                display={`${Math.round(microphoneVolume * 100)}%`}
+                onChange={setMicrophoneVolume}
+                onCommit={(value) => updateMicrophone({ volume: value })}
+              />
+              <SliderField
+                label="Музыка"
+                value={musicVolume}
+                min={0}
+                max={1}
+                step={0.05}
+                display={`${Math.round(musicVolume * 100)}%`}
+                onChange={setMusicVolume}
+              />
+              <SliderField
+                label="Вокал"
+                value={vocalVolume}
+                min={0}
+                max={1}
+                step={0.05}
+                display={`${Math.round(vocalVolume * 100)}%`}
+                onChange={setVocalVolume}
+              />
+              <SliderField
+                label="Мелодия"
+                value={melodyVolume}
+                min={0}
+                max={1}
+                step={0.05}
+                display={`${Math.round(melodyVolume * 100)}%`}
+                onChange={setMelodyVolume}
+              />
+            </div>
+          </div>
 
           <div className="karaoke-transport-buttons">
             <button
@@ -1425,9 +1453,12 @@ export default function Karaoke({ onOpenAppSettings }) {
             )}
             <button
               type="button"
-              className={`karaoke-labeled-action ${microphoneOpen ? "is-active" : ""}`}
-              title="Эффекты и параметры караоке"
-              onClick={() => setMicrophoneOpen(true)}
+              className={`karaoke-labeled-action ${microphoneOpen && microphoneSettingsView === "effects" ? "is-active" : ""}`}
+              title="Эффекты микрофона"
+              onClick={() => {
+                setMicrophoneSettingsView("effects");
+                setMicrophoneOpen(true);
+              }}
             >
               <AudioLines size={20} />
               <span>Эффекты</span>
