@@ -20,7 +20,7 @@ function AppSettingsButton({ onClick }) {
       title="Настройки приложения"
       aria-label="Настройки приложения"
     >
-      <Cog size={29} />
+      <Cog size={56} strokeWidth={1.8} />
     </button>
   );
 }

@@ -437,3 +437,90 @@
   justify-content: flex-end;
   gap: var(--space-3);
 }
+
+/* Every shared modal uses the same circular close control. */
+.app-modal-close,
+.song-recordings-close,
+.settings-modal-close,
+.modal-close {
+  border-radius: 50%;
+}
+
+/* Compact shared modal used by online-room and other short workflows. */
+.online-room-modal {
+  inline-size: min(38rem, calc(100vw - 2 * var(--space-4)));
+  max-block-size: min(82dvh, 42rem);
+}
+
+.online-room-modal__content {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
+.online-room-modal .online-room-form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.online-room-modal .online-room-form > p {
+  margin: 0;
+  color: var(--color-text-soft);
+  line-height: 1.6;
+}
+
+.online-room-modal .online-room-form > label {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--color-text-soft);
+  font: 800 var(--font-size-sm) / 1.2 var(--font-display);
+}
+
+.online-room-modal .input {
+  min-block-size: 3rem;
+  padding-inline: var(--space-4);
+}
+
+.online-room-modal .online-room-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+/* Final shared modal sizing: responsive 700px shell, never taller than 90% viewport. */
+.app-modal {
+  inline-size: min(90vw, 43.75rem);
+  max-inline-size: min(90vw, 43.75rem);
+  block-size: auto;
+  max-block-size: 90dvh;
+}
+
+.app-modal > .ui-card__panel {
+  display: flex;
+  block-size: auto;
+  max-block-size: 90dvh;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app-modal > .ui-card__panel > .ui-card__content {
+  display: flex;
+  min-block-size: 0;
+  block-size: auto;
+  max-block-size: 90dvh;
+  flex-direction: column;
+}
+
+.app-modal .modal-scroll {
+  min-block-size: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+.app-dropdown-menu--portal {
+  position: fixed;
+  inset: auto;
+  overflow: auto;
+  margin: 0;
+}

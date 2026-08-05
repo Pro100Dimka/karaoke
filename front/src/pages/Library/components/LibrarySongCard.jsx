@@ -1,7 +1,7 @@
 import {
+  AudioWaveform,
   FolderOpen,
   Headphones,
-  Play,
   RotateCcw,
   Settings2,
   Trash2
@@ -11,6 +11,16 @@ import { getSongCardTilt } from "../card-tilt";
 import { getSongCardState } from "../utils";
 import SongCardArtwork from "./SongCardArtwork";
 import ProcessingSignal from "./ProcessingSignal";
+
+
+function formatSongKey(value) {
+  if (!value) return "Тональность определяется";
+
+  return String(value)
+    .trim()
+    .replace(/\s+minor$/i, "m")
+    .replace(/\s+major$/i, "maj");
+}
 
 function applyCardTilt(element, tilt) {
   if (!tilt) return;
@@ -52,6 +62,18 @@ export default function LibrarySongCard({
     event.currentTarget.style.removeProperty("--glow-y");
   };
 
+  const openReadySong = (event) => {
+    if (!isReady || event.target.closest("button, a, input, select, textarea")) return;
+    onOpenKaraoke(song);
+  };
+
+  const handleCardKeyDown = (event) => {
+    if (!isReady || (event.key !== "Enter" && event.key !== " ")) return;
+    if (event.target !== event.currentTarget) return;
+    event.preventDefault();
+    onOpenKaraoke(song);
+  };
+
   return (
     <Card
       as="article"
@@ -59,6 +81,11 @@ export default function LibrarySongCard({
       className={`library-song-card library-song-card--${status}`}
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
+      onClick={openReadySong}
+      onKeyDown={handleCardKeyDown}
+      role={isReady ? "button" : undefined}
+      tabIndex={isReady ? 0 : undefined}
+      aria-label={isReady ? `Открыть ${song.title} в караоке` : undefined}
     >
       <SongCardArtwork cardIndex={cardIndex} />
       <div className="library-song-card-main">
@@ -75,11 +102,6 @@ export default function LibrarySongCard({
           <StatusBadge status={song.status} />
         </div>
 
-        <p className="library-song-card-meta">
-          {song.key_override || "Тональность определяется"}
-          {song.tempo_override ? ` · ${song.tempo_override} BPM` : ""}
-          {song.difficulty_override ? ` · ${song.difficulty_override}` : ""}
-        </p>
 
         {isWorking && (
           <button
@@ -93,34 +115,34 @@ export default function LibrarySongCard({
         )}
 
         <div className="library-song-card-footer">
+          <p className="library-song-card-meta">
+            <span>{formatSongKey(song.key_override)}</span>
+            {song.tempo_override ? <span>{song.tempo_override} BPM</span> : null}
+            {song.difficulty_override ? (
+              <span>{song.difficulty_override}</span>
+            ) : null}
+          </p>
           <div className="library-song-card-actions">
             {isReady ? (
-              <>
-                <button
-                  className="btn btn-primary btn-sm library-song-card-primary"
-                  type="button"
-                  onClick={() => onOpenKaraoke(song)}
-                >
-                  <Play size={16} fill="currentColor" />
-                </button>
-                <button
-                  className="btn btn-ghost btn-sm library-song-card-icon"
-                  type="button"
-                  title="Прослушать записи"
-                  aria-label="Прослушать записи"
-                  onClick={() => onOpenRecordings(song)}
-                >
-                  <Headphones size={16} />
-                </button>
-              </>
+              <button
+                className="btn btn-ghost btn-sm library-song-card-icon"
+                type="button"
+                title="Прослушать записи"
+                aria-label="Прослушать записи"
+                onClick={() => onOpenRecordings(song)}
+              >
+                <Headphones size={15} />
+              </button>
             ) : canManageLibrary ? (
               <button
-                className="btn btn-primary btn-sm library-song-card-primary"
+                className="btn btn-primary btn-sm library-song-card-icon library-song-card-process"
                 disabled={isWorking}
                 type="button"
+                title="Обработать песню"
+                aria-label="Обработать песню"
                 onClick={() => onProcess(song)}
               >
-                <Play size={15} fill="currentColor" /> Обработать
+                <AudioWaveform size={16} />
               </button>
             ) : null}
 

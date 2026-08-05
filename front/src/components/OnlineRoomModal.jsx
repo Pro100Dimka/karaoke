@@ -32,10 +32,12 @@ export function OnlineRoomModal({ onlineName, onClose }) {
       onClose={onClose}
       ariaLabel="Совместное исполнение"
       portal
-      backdropClassName="online-room-backdrop"
-      modalClassName="online-room-modal"
-      closeClassName="karaoke-settings-close"
+      backdropClassName="app-modal-backdrop"
+      modalClassName="app-modal modal-card online-room-modal"
+      closeClassName="app-modal-close"
       closeIconSize={18}
+      cardVariant="neon"
+      tilt
     >
       <ModalTitle
         icon={UsersRound}
@@ -44,6 +46,7 @@ export function OnlineRoomModal({ onlineName, onClose }) {
         description="Создайте комнату или подключитесь по коду ведущего."
       />
 
+      <div className="modal-scroll online-room-modal__content">
       {!joinMode ? (
         <div className="online-room-form">
           <p>
@@ -112,6 +115,7 @@ export function OnlineRoomModal({ onlineName, onClose }) {
           </div>
         </div>
       )}
+      </div>
     </Modal>
   );
 }

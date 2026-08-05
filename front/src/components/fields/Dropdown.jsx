@@ -1,5 +1,6 @@
 import { Check, ChevronDown } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 export default function Dropdown({
   id,
@@ -12,6 +13,8 @@ export default function Dropdown({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
+  const menuRef = useRef(null);
+  const [menuStyle, setMenuStyle] = useState(null);
   const generatedId = useId();
   const dropdownId = id ?? `dropdown-${generatedId.replace(/:/g, "")}`;
   const eventIdRef = useRef(dropdownId);
@@ -21,7 +24,10 @@ export default function Dropdown({
 
   useEffect(() => {
     const close = (event) => {
-      if (!ref.current?.contains(event.target)) setOpen(false);
+      if (
+        !ref.current?.contains(event.target) &&
+        !menuRef.current?.contains(event.target)
+      ) setOpen(false);
     };
     const closeOnEscape = (event) => {
       if (event.key === "Escape") setOpen(false);
@@ -48,6 +54,37 @@ export default function Dropdown({
       );
   }, []);
 
+
+  useLayoutEffect(() => {
+    if (!open || !ref.current) return undefined;
+
+    const updatePosition = () => {
+      const rect = ref.current.getBoundingClientRect();
+      const viewportGap = 12;
+      const estimatedHeight = Math.min(320, options.length * 48 + 16);
+      const spaceBelow = window.innerHeight - rect.bottom - viewportGap;
+      const openUp = spaceBelow < estimatedHeight && rect.top > spaceBelow;
+
+      setMenuStyle({
+        position: "fixed",
+        zIndex: 2000,
+        left: `${rect.left}px`,
+        top: openUp ? "auto" : `${rect.bottom + 6}px`,
+        bottom: openUp ? `${window.innerHeight - rect.top + 6}px` : "auto",
+        width: `${rect.width}px`,
+        maxHeight: `${Math.max(120, Math.min(320, openUp ? rect.top - viewportGap : spaceBelow))}px`
+      });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open, options.length]);
+
   const toggle = () => {
     if (!open)
       window.dispatchEvent(
@@ -71,11 +108,13 @@ export default function Dropdown({
         <span>{selected?.label || placeholder}</span>
         <ChevronDown size={15} />
       </button>
-      {open && (
+      {open && menuStyle && createPortal(
         <div
+          ref={menuRef}
           id={`${dropdownId}-menu`}
-          className="app-dropdown-menu"
+          className="app-dropdown-menu app-dropdown-menu--portal"
           role="listbox"
+          style={menuStyle}
         >
           {options.map((option) => {
             const isSelected = String(option.value) === String(value);
@@ -88,8 +127,6 @@ export default function Dropdown({
                 className={`app-dropdown-option ${isSelected ? "is-selected" : ""}`}
                 onClick={(event) => {
                   event.stopPropagation();
-                  // Close before an async settings update triggers a re-render.
-                  // This prevents the menu from appearing to reopen on selection.
                   setOpen(false);
                   onChange(option.value);
                 }}
@@ -99,7 +136,8 @@ export default function Dropdown({
               </button>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

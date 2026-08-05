@@ -163,3 +163,16 @@ svg {
   box-shadow: var(--shadow-neon-soft);
   backdrop-filter: blur(var(--space-3));
 }
+
+/* Main application settings launcher. */
+.app-settings-fab {
+  inline-size: clamp(6.5rem, 8vw, 8rem);
+  block-size: clamp(6.5rem, 8vw, 8rem);
+  border-width: max(0.1rem, 0.08vw);
+  box-shadow: var(--shadow-lg), var(--shadow-neon-primary);
+}
+
+.app-settings-fab:hover {
+  transform: translateY(-0.25rem) scale(1.04);
+  box-shadow: var(--shadow-lg), 0 0 3rem color-mix(in srgb, var(--color-primary) 50%, transparent);
+}

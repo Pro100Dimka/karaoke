@@ -278,3 +278,17 @@
     inline-size: 100%;
   }
 }
+
+/* Keep Settings on the same responsive shared modal geometry. */
+.settings-modal {
+  inline-size: min(90vw, 43.75rem);
+  max-inline-size: min(90vw, 43.75rem);
+  block-size: auto;
+  max-block-size: 90dvh;
+}
+
+.settings-modal > .ui-card__panel,
+.settings-modal > .ui-card__panel > .ui-card__content {
+  block-size: auto;
+  max-block-size: 90dvh;
+}
