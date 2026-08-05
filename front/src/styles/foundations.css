@@ -178,3 +178,38 @@ a {
 .title-bar__button.is-danger:hover {
   background: rgb(239 68 68 / 20%);
 }
+
+/* Global crimson-nebula stage. Kept with foundations instead of compat. */
+html {
+  background: var(--color-bg-deep);
+}
+
+body {
+  position: relative;
+  background-color: var(--color-bg-deep);
+  background-image: url("../assets/karaoke/library-neon-space.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-attachment: fixed;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 13% 18%, rgba(255, 56, 82, 0.12), transparent 30%),
+    radial-gradient(circle at 78% 67%, rgba(194, 7, 44, 0.11), transparent 34%),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.16), transparent 35%, transparent 68%, rgba(0, 0, 0, 0.22));
+}
+
+#root,
+.app-shell,
+.app-body,
+.app-main {
+  background: transparent;
+}
+

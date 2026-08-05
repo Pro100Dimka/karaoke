@@ -59,7 +59,7 @@ export default function LibrarySongCard({
     >
       <SongCardArtwork cardIndex={cardIndex} />
       <div className="library-song-card-main">
-        <div className="library-song-card-heading">
+        <div className="library-song-card-heading library-row-between">
           <div className="song-title-content">
             <span className="song-title-name">{song.title}</span>
             {song.artist && (
@@ -88,7 +88,7 @@ export default function LibrarySongCard({
             <span>{song.progress_percent}% · Открыть обработку</span>
           </button>
         ) : (
-          <div className="library-song-card-ready">
+          <div className="library-song-card-ready library-row">
             <span />
             {isReady
               ? "Готова к исполнению"
@@ -96,11 +96,11 @@ export default function LibrarySongCard({
           </div>
         )}
 
-        <div className="library-song-card-footer">
+        <div className="library-song-card-footer library-row-between">
           <span className="text-secondary">
             {formatLibraryDate(song.created_at)}
           </span>
-          <div className="library-song-card-actions">
+          <div className="library-song-card-actions library-row library-wrap">
             {isReady ? (
               <>
                 <button

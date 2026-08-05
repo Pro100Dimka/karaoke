@@ -37,9 +37,9 @@ export default function RecordingsModal({
               Не удалось загрузить записи: {getErrorMessage(error)}
             </p>
           )}
-          <div className="song-recordings-list">
+          <div className="song-recordings-list library-stack">
             {recordings.map((recording) => (
-              <article key={recording.id} className="song-recording-item">
+              <article key={recording.id} className="song-recording-item library-row-between library-glass">
                 <div>
                   <strong>{formatLibraryDate(recording.created_at)}</strong>
                   <span>
@@ -48,7 +48,7 @@ export default function RecordingsModal({
                   </span>
                 </div>
                 <AudioPlayer src={api.getPerformanceFileUrl(recording.id)} />
-                <div className="song-recording-item-actions">
+                <div className="song-recording-item-actions library-row">
                   <button
                     className="btn btn-ghost"
                     type="button"

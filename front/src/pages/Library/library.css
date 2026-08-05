@@ -4,7 +4,44 @@
   min-height: calc(100vh - var(--titlebar-height));
   padding: clamp(26px, 4vw, 64px) clamp(20px, 4vw, 66px) 90px;
   overflow: hidden;
-  background: #03041f;
+  background: transparent;
+}
+
+/* Library-only composition helpers. They keep component markup declarative and
+   prevent repeated flex/grid declarations across library elements. */
+.library-row {
+  display: flex;
+  align-items: center;
+}
+
+.library-row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.library-wrap {
+  flex-wrap: wrap;
+}
+
+.library-stack {
+  display: grid;
+}
+
+.library-glass {
+  border: 1px solid var(--color-border);
+  background: var(--gradient-glass);
+  box-shadow: var(--shadow-glass);
+  backdrop-filter: blur(18px) saturate(135%);
+}
+
+.library-hero-3d-scene,
+.library-hero-disc,
+.library-hero-prism,
+.library-hero-orbit,
+.library-hero-spark {
+  position: absolute;
+  pointer-events: none;
 }
 
 .library-concert-backdrop {
@@ -13,7 +50,7 @@
   inset: var(--titlebar-height) 0 0;
   overflow: hidden;
   pointer-events: none;
-  background: #03041f;
+  background: transparent;
 }
 
 .library-neon-space {
@@ -50,8 +87,8 @@
   inset: 62% -10% -30%;
   opacity: 0.42;
   background-image:
-    linear-gradient(rgba(55, 198, 255, 0.32) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(55, 198, 255, 0.3) 1px, transparent 1px);
+    linear-gradient(rgba(255, 69, 92, 0.22) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(152, 8, 39, 0.18) 1px, transparent 1px);
   background-size: 54px 42px;
   transform: perspective(520px) rotateX(62deg);
   transform-origin: top;
@@ -94,7 +131,7 @@
   width: 74px;
   height: 74px;
   place-items: center;
-  border: 1px solid rgba(65, 228, 255, 0.75);
+  border: 1px solid rgba(255, 157, 166, 0.86);
   border-radius: 22px;
   color: #fff;
   background: radial-gradient(
@@ -149,7 +186,7 @@
   position: relative;
   min-width: 150px;
   padding: var(--space-5);
-  border: 1px solid rgba(46, 232, 255, 0.75);
+  border: 1px solid rgba(255, 87, 106, 0.62);
   border-radius: var(--radius-lg);
   background: linear-gradient(
     145deg,
@@ -215,12 +252,12 @@
   left: 15px;
   top: 50%;
   transform: translateY(-50%);
-  color: #8297eb;
+  color: var(--color-accent);
 }
 .library-search-input {
   height: 46px;
   padding-left: 42px;
-  border-color: rgba(67, 141, 255, 0.68);
+  border-color: var(--color-border-strong);
   border-radius: var(--radius-md);
   box-shadow:
     inset 0 0 24px rgba(42, 86, 255, 0.11),
@@ -253,7 +290,7 @@
   padding: 2px;
   border: 1px solid rgba(170, 222, 255, 0.2);
   border-radius: 30px;
-  background: rgba(12, 29, 99, 0.16);
+  background: rgba(45, 3, 13, 0.2);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.07),
     inset 0 1px 0 rgba(255, 255, 255, 0.24),
@@ -640,7 +677,7 @@
 }
 
 .library-hero-copy p {
-  color: #f2d9dd;
+  color: var(--color-text-soft);
   text-shadow: 0 2px 14px rgba(8, 0, 2, 0.95);
 }
 
@@ -655,9 +692,9 @@
 }
 
 .library-search-input {
-  color: #fff8f9;
+  color: var(--color-text);
   border-color: rgba(255, 84, 105, 0.56);
-  background: linear-gradient(135deg, rgba(54, 5, 17, 0.78), rgba(20, 1, 7, 0.76));
+  background: var(--gradient-glass);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.1), inset 0 0 26px rgba(160, 4, 35, 0.13), 0 0 18px rgba(240, 24, 60, 0.14);
   backdrop-filter: blur(14px) saturate(125%);
 }
@@ -668,7 +705,7 @@
 }
 
 .library-search-icon {
-  color: #ff8997;
+  color: var(--color-accent);
   filter: drop-shadow(0 0 7px rgba(255, 55, 81, 0.72));
 }
 
@@ -710,11 +747,11 @@
 }
 
 .song-title-name {
-  color: #fff7f8;
+  color: var(--color-text);
   text-shadow: 0 0 12px rgba(255, 72, 94, 0.36), 0 2px 18px rgba(6,0,2,.95);
 }
-.song-artist-name { color: #edcbd0; }
-.library-song-card-ready { color: #ffe9ec; }
+.song-artist-name { color: var(--color-text-soft); }
+.library-song-card-ready { color: var(--color-highlight); }
 
 .library-song-card-wave i {
   background: linear-gradient(#ffb1ba, #ff405f, #aa082f);
