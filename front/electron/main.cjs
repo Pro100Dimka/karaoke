@@ -170,6 +170,7 @@ function createWindow() {
     minHeight: 700,
     frame: false, // свой titlebar — см. src/components/TitleBar.jsx
     backgroundColor: "#0d0a1a",
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -188,6 +189,11 @@ function createWindow() {
       packagedIndexUrl
     });
     if (!allowed) event.preventDefault();
+  });
+
+  mainWindow.once("ready-to-show", () => {
+    mainWindow?.maximize();
+    mainWindow?.show();
   });
 
   if (isDev) {
@@ -217,23 +223,61 @@ handleTrustedIpc("window:maximize", () => {
   else mainWindow.maximize();
 });
 handleTrustedIpc("window:close", () => mainWindow?.close());
-handleTrustedIpc("shell:openSongFolder", (targetPath) => {
-  if (typeof targetPath !== "string" || !targetPath) {
-    return "A song folder was not provided.";
+handleTrustedIpc("shell:openSongFolder", async (target) => {
+  const request = typeof target === "string" ? { path: target } : target || {};
+  const songsDir = resolveSongOutputDir();
+  const candidates = [
+    request.path,
+    request.slug && path.join(songsDir, request.slug),
+    request.title && path.join(songsDir, request.title),
+    request.id && path.join(songsDir, request.id)
+  ].filter((value) => typeof value === "string" && value.trim());
+
+  let realSongsDir;
+  try {
+    realSongsDir = fs.realpathSync.native(songsDir);
+  } catch {
+    return "Папка библиотеки песен пока не создана.";
   }
 
-  let songsDir;
-  let folderPath;
+  for (const candidate of candidates) {
+    try {
+      const folderPath = fs.realpathSync.native(candidate);
+      if (!isPathInside(realSongsDir, folderPath)) continue;
+      const error = await shell.openPath(folderPath);
+      return error || "";
+    } catch {
+      // Try the next safe candidate.
+    }
+  }
+
+  const normalizeName = (value) =>
+    String(value || "")
+      .toLocaleLowerCase("ru")
+      .replace(/[^a-zа-яё0-9]+/giu, "")
+      .trim();
+  const requestedNames = [request.slug, request.title, request.id]
+    .map(normalizeName)
+    .filter(Boolean);
+
   try {
-    songsDir = fs.realpathSync.native(resolveSongOutputDir());
-    folderPath = fs.realpathSync.native(targetPath);
+    const matchingEntry = fs.readdirSync(realSongsDir, { withFileTypes: true }).find((entry) => {
+      if (!entry.isDirectory()) return false;
+      const entryName = normalizeName(entry.name);
+      return requestedNames.some(
+        (requested) => entryName === requested || entryName.includes(requested) || requested.includes(entryName)
+      );
+    });
+
+    if (matchingEntry) {
+      const error = await shell.openPath(path.join(realSongsDir, matchingEntry.name));
+      return error || "";
+    }
   } catch {
-    return "The song folder is no longer available.";
+    // Fall through to the user-facing error.
   }
-  if (!isPathInside(songsDir, folderPath)) {
-    return "Opening folders outside the song library is not allowed.";
-  }
-  return shell.openPath(folderPath);
+
+  return "Папка песни не найдена.";
 });
 handleTrustedIpc("backend:url", () => BACKEND_URL);
 handleTrustedIpc("clipboard:writeText", (value) => {

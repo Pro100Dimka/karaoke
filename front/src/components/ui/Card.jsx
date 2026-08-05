@@ -8,6 +8,7 @@ const Card = forwardRef(function Card(
     children,
     onPointerMove,
     onPointerLeave,
+    tilt = true,
     ...props
   },
   ref
@@ -20,13 +21,15 @@ const Card = forwardRef(function Card(
       const x = ((event.clientX - rect.left) / rect.width) * 100;
       const y = ((event.clientY - rect.top) / rect.height) * 100;
 
-      const tiltX = (0.5 - y / 100) * 8;
-      const tiltY = (x / 100 - 0.5) * 10;
-
       event.currentTarget.style.setProperty("--card-mx", `${x}%`);
       event.currentTarget.style.setProperty("--card-my", `${y}%`);
-      event.currentTarget.style.setProperty("--tilt-x", `${tiltX}deg`);
-      event.currentTarget.style.setProperty("--tilt-y", `${tiltY}deg`);
+
+      if (tilt) {
+        const tiltX = (0.5 - y / 100) * 8;
+        const tiltY = (x / 100 - 0.5) * 10;
+        event.currentTarget.style.setProperty("--tilt-x", `${tiltX}deg`);
+        event.currentTarget.style.setProperty("--tilt-y", `${tiltY}deg`);
+      }
     }
 
     onPointerMove?.(event);
@@ -36,8 +39,10 @@ const Card = forwardRef(function Card(
     if (isNeon) {
       event.currentTarget.style.removeProperty("--card-mx");
       event.currentTarget.style.removeProperty("--card-my");
-      event.currentTarget.style.removeProperty("--tilt-x");
-      event.currentTarget.style.removeProperty("--tilt-y");
+      if (tilt) {
+        event.currentTarget.style.removeProperty("--tilt-x");
+        event.currentTarget.style.removeProperty("--tilt-y");
+      }
     }
 
     onPointerLeave?.(event);
@@ -46,7 +51,7 @@ const Card = forwardRef(function Card(
   return (
     <Component
       ref={ref}
-      className={`ui-card ui-card--${variant} ${className}`.trim()}
+      className={`ui-card ui-card--${variant} ${!tilt ? "ui-card--no-tilt" : ""} ${className}`.trim()}
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
       {...props}

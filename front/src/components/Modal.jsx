@@ -15,7 +15,8 @@ export default function Modal({
   closeClassName = "modal-close",
   closeIconSize = 20,
   closeAriaLabel = "Закрыть",
-  cardVariant = null
+  cardVariant = null,
+  tilt = true
 }) {
   const dialogRef = useRef(null);
   const titleId = useId();
@@ -86,6 +87,7 @@ export default function Modal({
         ref={dialogRef}
         as="section"
         variant={cardVariant ?? "glass"}
+        tilt={tilt}
         className={modalClassName}
         role="dialog"
         aria-modal="true"

@@ -1,6 +1,6 @@
 :root {
-  --font-sans: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
-  --font-display: Bahnschrift, "Arial Narrow", "Trebuchet MS", sans-serif;
+  --font-sans: "Bahnschrift", "Aptos", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Bahnschrift", "Aptos Display", "Segoe UI Variable Display", sans-serif;
   --font-mono: Consolas, "SFMono-Regular", monospace;
   --font-size-xs: .75rem;
   --font-size-sm: .875rem;

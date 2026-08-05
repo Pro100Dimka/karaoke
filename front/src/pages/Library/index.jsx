@@ -168,11 +168,21 @@ export default function Library({ onOpenSongSettings }) {
 
   const handleOpenFolder = useCallback(
     async (song) => {
-      if (!song.output_dir && !window.electronAPI) {
-        await notify("Папка ещё не создана — песня не обработана");
+      if (!window.electronAPI?.openSongFolder) {
+        await notify("Открытие папки доступно только в установленном приложении.");
         return;
       }
-      window.electronAPI?.openSongFolder(song.output_dir || "");
+
+      const errorMessage = await window.electronAPI.openSongFolder({
+        path: song.output_dir || "",
+        slug: song.slug || "",
+        title: song.title || "",
+        id: song.id || ""
+      });
+
+      if (errorMessage) {
+        await notify(errorMessage, "Не удалось открыть папку");
+      }
     },
     [notify]
   );

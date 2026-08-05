@@ -1270,3 +1270,307 @@
 .library-modal-title {
   margin: calc(-1 * var(--space-5)) calc(-1 * var(--space-5)) var(--space-5);
 }
+
+
+/* Recordings uses the same shared bounded neon modal shell as Settings/SongSettings. */
+.song-recordings-modal {
+  inline-size: min(72rem, calc(100vw - 2 * var(--space-4)));
+  block-size: min(84dvh, 46rem);
+  max-block-size: calc(100dvh - 2 * var(--space-4));
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.song-recordings-modal > .ui-card__panel,
+.song-recordings-modal > .ui-card__panel > .ui-card__content {
+  inline-size: 100%;
+  block-size: 100%;
+  min-block-size: 0;
+}
+
+.song-recordings-modal > .ui-card__panel { overflow: hidden; }
+
+.song-recordings-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
+.song-recordings-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.song-recording-item {
+  border: var(--hairline) solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface-glass) 54%, transparent);
+}
+
+@media (max-width: 48rem) {
+  .song-recordings-modal {
+    inline-size: calc(100vw - 2 * var(--space-3));
+    block-size: min(90dvh, 46rem);
+  }
+
+  .song-recording-item {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Final compact song-card composition. */
+.library-song-card-heading {
+  align-items: flex-start;
+}
+
+.library-song-card-heading .badge {
+  flex: none;
+  max-inline-size: 46%;
+}
+
+.library-song-card-footer {
+  margin-block-start: auto;
+  padding-block-start: var(--space-3);
+}
+
+.library-song-card-actions {
+  justify-content: flex-end;
+}
+
+.library-song-card-primary {
+  flex: 0 0 2.45rem;
+  inline-size: 2.45rem;
+  min-inline-size: 2.45rem;
+  block-size: 2.45rem;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.library-song-card-icon {
+  flex-basis: 2.25rem;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+}
+
+.library-song-card-progress {
+  margin-block-start: var(--space-2);
+}
+
+/* Cubase-inspired animated processing meter. */
+.processing-signal {
+  --processing-progress: 0%;
+  position: relative;
+  display: grid;
+  min-block-size: 7rem;
+  align-items: center;
+  padding: var(--space-4);
+  overflow: hidden;
+  border: var(--hairline) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 4%), transparent),
+    color-mix(in srgb, var(--color-bg-deep) 72%, transparent);
+  box-shadow: inset 0 0 2rem rgb(0 0 0 / 24%);
+}
+
+.processing-signal__bars {
+  display: flex;
+  block-size: 4.2rem;
+  align-items: center;
+  gap: 0.16rem;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, #000 0 var(--processing-progress), rgb(0 0 0 / 24%) var(--processing-progress) 100%);
+  mask-image: linear-gradient(90deg, #000 0 var(--processing-progress), rgb(0 0 0 / 24%) var(--processing-progress) 100%);
+}
+
+.processing-signal__bars i {
+  flex: 1;
+  min-inline-size: 0.12rem;
+  block-size: var(--bar-height);
+  max-block-size: 100%;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, var(--color-highlight), var(--color-primary), var(--color-accent));
+  box-shadow: 0 0 0.6rem color-mix(in srgb, var(--color-primary) 58%, transparent);
+  transform-origin: center;
+  animation: processing-signal-wave 0.8s ease-in-out infinite alternate;
+  animation-delay: calc(var(--bar-index) * -0.055s);
+}
+
+.processing-signal__cursor {
+  position: absolute;
+  inset-block: var(--space-3);
+  inset-inline-start: var(--processing-progress);
+  inline-size: 0.12rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-highlight);
+  box-shadow: 0 0 0.9rem var(--color-primary);
+  transform: translateX(-50%);
+}
+
+.processing-signal__value {
+  position: absolute;
+  inset-block-start: var(--space-2);
+  inset-inline-end: var(--space-3);
+  color: var(--color-text);
+  font: 850 var(--font-size-xs) / 1 var(--font-display);
+}
+
+.processing-signal--compact {
+  min-block-size: 3rem;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+}
+
+.processing-signal--compact .processing-signal__bars {
+  block-size: 1.75rem;
+}
+
+.processing-signal--compact .processing-signal__cursor {
+  inset-block: var(--space-1);
+}
+
+.processing-signal--compact .processing-signal__value {
+  inset-block-start: 0.3rem;
+  inset-inline-end: 0.45rem;
+  font-size: 0.62rem;
+}
+
+@keyframes processing-signal-wave {
+  from { transform: scaleY(0.48); opacity: 0.62; }
+  to { transform: scaleY(1); opacity: 1; }
+}
+
+/* Processing modal: same shared shell, calmer composition. */
+.processing-modal {
+  inline-size: min(46rem, calc(100vw - 2 * var(--space-4)));
+  max-block-size: min(84dvh, 42rem);
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+}
+
+.processing-modal > .ui-card__panel {
+  overflow: hidden;
+}
+
+.processing-modal > .ui-card__panel > .ui-card__content {
+  display: flex;
+  min-block-size: 0;
+  flex-direction: column;
+}
+
+.processing-modal-body {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
+.processing-modal-summary,
+.processing-modal-stage {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.processing-modal-stage {
+  padding: var(--space-3) var(--space-4);
+  border: var(--hairline) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-surface-glass) 58%, transparent);
+}
+
+.processing-modal-description {
+  margin: 0;
+  color: var(--color-text-soft);
+}
+
+.processing-modal-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  border-block-start: var(--hairline) solid var(--color-border);
+}
+
+/* Recording rows: compact shared Cards instead of oversized filled panels. */
+.song-recordings-body {
+  padding: var(--space-4);
+}
+
+.song-recordings-list {
+  gap: var(--space-3);
+}
+
+.song-recording-item {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.7fr) minmax(16rem, 2fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-surface-glass) 36%, transparent);
+  box-shadow: none;
+}
+
+.song-recording-meta {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.song-recording-player {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.song-recording-item-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.song-recording-delete {
+  inline-size: 2.25rem;
+  padding: 0;
+}
+
+@media (max-width: 60rem) {
+  .song-recording-item {
+    grid-template-columns: minmax(8rem, 0.55fr) minmax(14rem, 1.45fr);
+  }
+
+  .song-recording-item-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 42rem) {
+  .song-recording-item,
+  .song-recording-player {
+    grid-template-columns: 1fr;
+  }
+
+  .song-recording-item-actions {
+    justify-content: stretch;
+  }
+
+  .song-recording-item-actions .btn:first-child {
+    flex: 1;
+  }
+}
+
+:root[data-theme="light"] .processing-signal {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 48%), transparent),
+    color-mix(in srgb, var(--color-nude) 72%, transparent);
+}

@@ -6,10 +6,11 @@ import {
   Settings2,
   Trash2
 } from "lucide-react";
-import { Card, ProgressBar, StatusBadge } from "../../../components/ui";
+import { Card, StatusBadge } from "../../../components/ui";
 import { getSongCardTilt } from "../card-tilt";
-import { formatLibraryDate, getSongCardState } from "../utils";
+import { getSongCardState } from "../utils";
 import SongCardArtwork from "./SongCardArtwork";
+import ProcessingSignal from "./ProcessingSignal";
 
 function applyCardTilt(element, tilt) {
   if (!tilt) return;
@@ -71,7 +72,7 @@ export default function LibrarySongCard({
               <span className="song-genre-name">{song.genre}</span>
             )}
           </div>
-          {!isReady && <StatusBadge status={song.status} />}
+          <StatusBadge status={song.status} />
         </div>
 
         <p className="library-song-card-meta">
@@ -80,40 +81,30 @@ export default function LibrarySongCard({
           {song.difficulty_override ? ` · ${song.difficulty_override}` : ""}
         </p>
 
-        {isWorking ? (
+        {isWorking && (
           <button
             className="library-song-card-progress"
             type="button"
             onClick={() => onOpenProcessing(song)}
           >
-            <ProgressBar percent={song.progress_percent} />
-            <span>{song.progress_percent}% · Открыть обработку</span>
+            <ProcessingSignal progress={song.progress_percent} compact />
+            <span>Открыть обработку</span>
           </button>
-        ) : (
-          <div className="library-song-card-ready u-row">
-            <span />
-            {isReady
-              ? "Готова к исполнению"
-              : `${song.progress_percent || 0}% подготовлено`}
-          </div>
         )}
 
         <div className="library-song-card-footer">
-          <span className="text-secondary">
-            {formatLibraryDate(song.created_at)}
-          </span>
           <div className="library-song-card-actions">
             {isReady ? (
               <>
                 <button
-                  className="btn btn-primary library-song-card-primary"
+                  className="btn btn-primary btn-sm library-song-card-primary"
                   type="button"
                   onClick={() => onOpenKaraoke(song)}
                 >
-                  <Play size={15} fill="currentColor" /> Караоке
+                  <Play size={16} fill="currentColor" />
                 </button>
                 <button
-                  className="btn btn-ghost library-song-card-icon"
+                  className="btn btn-ghost btn-sm library-song-card-icon"
                   type="button"
                   title="Прослушать записи"
                   aria-label="Прослушать записи"
@@ -124,7 +115,7 @@ export default function LibrarySongCard({
               </>
             ) : canManageLibrary ? (
               <button
-                className="btn btn-primary library-song-card-primary"
+                className="btn btn-primary btn-sm library-song-card-primary"
                 disabled={isWorking}
                 type="button"
                 onClick={() => onProcess(song)}
@@ -135,7 +126,7 @@ export default function LibrarySongCard({
 
             {canManageLibrary && (
               <button
-                className="btn btn-ghost library-song-card-icon"
+                className="btn btn-ghost btn-sm library-song-card-icon"
                 title="Настройки песни"
                 aria-label="Настройки песни"
                 type="button"
@@ -146,7 +137,7 @@ export default function LibrarySongCard({
             )}
             {canManageLibrary && (
               <button
-                className="btn btn-ghost library-song-card-icon"
+                className="btn btn-ghost btn-sm library-song-card-icon"
                 type="button"
                 title="Открыть папку"
                 aria-label="Открыть папку"
@@ -157,7 +148,7 @@ export default function LibrarySongCard({
             )}
             {canManageLibrary && isReady && (
               <button
-                className="btn btn-ghost library-song-card-icon"
+                className="btn btn-ghost btn-sm library-song-card-icon"
                 type="button"
                 title="Переобработать MIDI"
                 aria-label="Переобработать MIDI"
@@ -168,7 +159,7 @@ export default function LibrarySongCard({
             )}
             {canManageLibrary && (
               <button
-                className="btn btn-danger library-song-card-icon"
+                className="btn btn-danger btn-sm library-song-card-icon"
                 type="button"
                 title="Удалить"
                 aria-label="Удалить песню"

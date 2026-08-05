@@ -238,3 +238,35 @@
 .ui-card--neon > .ui-card__panel > .ui-card__content {
   min-inline-size: 0;
 }
+
+/* Shared modal interaction: preserve crisp text while restoring the Card hover FX. */
+.modal-card.ui-card--neon:is(:hover, :focus-within) .ui-card__glow {
+  opacity: 0.86;
+  filter: blur(1.65rem) saturate(125%);
+}
+
+.modal-card.ui-card--neon:is(:hover, :focus-within) .ui-card__glow-mid {
+  opacity: 0.96;
+  filter: blur(0.68rem) saturate(130%);
+}
+
+.modal-card.ui-card--neon:is(:hover, :focus-within) .ui-card__edge {
+  filter: brightness(1.18) saturate(125%);
+}
+
+.modal-card.ui-card--neon:is(:hover, :focus-within) .ui-card__glint {
+  opacity: 1;
+  filter: brightness(1.3);
+}
+
+.modal-card.ui-card--neon:is(:hover, :focus-within) .ui-card__sheen {
+  opacity: 1;
+}
+
+.modal-card.ui-card--neon .ui-card__glow,
+.modal-card.ui-card--neon .ui-card__glow-mid,
+.modal-card.ui-card--neon .ui-card__edge,
+.modal-card.ui-card--neon .ui-card__glint,
+.modal-card.ui-card--neon .ui-card__sheen {
+  transition: opacity 180ms ease, filter 180ms ease;
+}
