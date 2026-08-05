@@ -4,11 +4,11 @@ import { Card } from "../../../components/ui";
 export default function LibraryHero({ songCount, readyCount }) {
   return (
     <section className="library-hero">
-      <div className="library-hero-brand-mark" aria-hidden="true">
+      <Card className="library-hero-brand-mark" aria-hidden="true">
         <Music2 size={30} />
         <i />
         <i />
-      </div>
+      </Card>
       <div className="library-hero-copy">
         <span>ВАША МУЗЫКАЛЬНАЯ КОЛЛЕКЦИЯ</span>
         <h1>Библиотека песен</h1>
@@ -17,11 +17,11 @@ export default function LibraryHero({ songCount, readyCount }) {
         </p>
       </div>
       <div className="library-hero-stats">
-        <Card className="library-stat-card">
+        <Card className="library-stat-card" variant="glass">
           <b>{songCount}</b>
           <span>всего песен</span>
         </Card>
-        <Card className="library-stat-card">
+        <Card className="library-stat-card" variant="glass">
           <b>{readyCount}</b>
           <span>готово к караоке</span>
         </Card>

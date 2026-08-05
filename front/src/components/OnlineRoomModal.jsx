@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useOnlineRoom } from "../contexts/OnlineRoomContext";
 import { normalizeRoomId } from "../services/onlineRoom";
 import Modal from "./Modal";
+import { ModalTitle } from "./ui";
 
 export function OnlineRoomModal({ onlineName, onClose }) {
   const room = useOnlineRoom();
@@ -36,9 +37,12 @@ export function OnlineRoomModal({ onlineName, onClose }) {
       closeClassName="karaoke-settings-close"
       closeIconSize={18}
     >
-      <div className="microphone-panel-title">
-        <UsersRound size={17} aria-hidden="true" /> Совместное исполнение
-      </div>
+      <ModalTitle
+        icon={UsersRound}
+        eyebrow="ОНЛАЙН-КОМНАТА"
+        title="Совместное исполнение"
+        description="Создайте комнату или подключитесь по коду ведущего."
+      />
 
       {!joinMode ? (
         <div className="online-room-form">

@@ -1,13 +1,21 @@
-export default function LibraryModalHeader({ icon: Icon, eyebrow, title }) {
+import { ModalTitle } from "../../../components/ui";
+
+export default function LibraryModalHeader({
+  icon,
+  eyebrow,
+  title,
+  description,
+  actions,
+  className = ""
+}) {
   return (
-    <div className="song-recordings-modal-head u-row">
-      <div className="song-recordings-modal-icon">
-        <Icon size={21} />
-      </div>
-      <div>
-        <span>{eyebrow}</span>
-        <h2>{title}</h2>
-      </div>
-    </div>
+    <ModalTitle
+      icon={icon}
+      eyebrow={eyebrow}
+      title={title}
+      description={description}
+      actions={actions}
+      className={`library-modal-title ${className}`.trim()}
+    />
   );
 }

@@ -163,18 +163,133 @@
   background-clip: padding-box;
 }
 
+/* Shared modal shell and title used by every application dialog. */
+.app-modal-backdrop {
+  position: fixed;
+  z-index: 600;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--color-background) 68%, transparent);
+  backdrop-filter: blur(1rem) saturate(120%);
+}
 
-/* Reusable field presentations. Select with field.variant. */
-.settings-field.field-variant-stacked,
-.settings-toggle.field-variant-switch-card {
+.app-modal {
   min-inline-size: 0;
+  min-block-size: 0;
+  transform-style: preserve-3d;
+}
+
+.app-modal-close {
+  position: absolute;
+  z-index: 80;
+  inset-block-start: var(--space-3);
+  inset-inline-end: var(--space-3);
+  display: grid;
+  inline-size: 2.5rem;
+  aspect-ratio: 1;
+  place-items: center;
+  border: var(--hairline) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  color: var(--color-text-soft);
+  background: color-mix(in srgb, var(--color-surface-strong) 74%, transparent);
+  box-shadow: inset 0 var(--hairline) rgb(255 255 255 / 8%);
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+
+.app-modal-close:hover {
+  color: var(--color-text);
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 18%, var(--color-surface-strong));
+  box-shadow: var(--shadow-neon-primary);
+  transform: scale(1.06);
+}
+
+.modal-title {
+  position: relative;
+  z-index: 10;
+  display: grid;
+  flex: none;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  min-block-size: 6.25rem;
+  padding: var(--space-4) calc(var(--space-8) + var(--space-4)) var(--space-4) var(--space-5);
+  border-block-end: var(--hairline) solid var(--color-border);
+  background:
+    linear-gradient(90deg,
+      color-mix(in srgb, var(--color-primary) 14%, transparent),
+      color-mix(in srgb, var(--color-surface-glass) 30%, transparent) 42%,
+      transparent 100%);
+}
+
+.modal-title__icon {
+  display: grid;
+  inline-size: 3.5rem;
+  aspect-ratio: 1;
+  place-items: center;
+  border: var(--hairline) solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--color-primary-soft);
+  background:
+    radial-gradient(circle at 32% 24%, rgb(255 255 255 / 16%), transparent 42%),
+    color-mix(in srgb, var(--color-primary) 14%, var(--color-surface-glass));
+  box-shadow:
+    var(--shadow-neon-soft),
+    inset 0 var(--hairline) rgb(255 255 255 / 12%);
+}
+
+.modal-title__copy {
+  min-inline-size: 0;
+}
+
+.modal-title__eyebrow {
+  display: block;
+  color: var(--color-primary-soft);
+  font: 850 var(--font-size-xs) / 1 var(--font-display);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.modal-title__heading {
+  margin: var(--space-1) 0;
+  color: var(--color-text);
+  font: 850 clamp(1.45rem, 2.25vw, 2.1rem) / 1.05 var(--font-display);
+  letter-spacing: 0.01em;
+}
+
+.modal-title__description {
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modal-title__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Reusable field appearances. */
+.settings-field--card,
+.settings-toggle--switch-card {
+  padding: var(--space-4);
   border: var(--hairline) solid var(--color-border);
   border-radius: var(--radius-lg);
   background:
     linear-gradient(145deg,
-      color-mix(in srgb, var(--color-surface-glass) 82%, transparent),
-      color-mix(in srgb, var(--color-surface-soft) 64%, transparent));
-  box-shadow: inset 0 1px 0 color-mix(in srgb, white 7%, transparent);
+      color-mix(in srgb, var(--color-surface-glass) 76%, transparent),
+      color-mix(in srgb, var(--color-surface-soft) 58%, transparent));
+  box-shadow: inset 0 var(--hairline) rgb(255 255 255 / 7%);
   transition:
     border-color var(--duration-fast) var(--ease-standard),
     background var(--duration-fast) var(--ease-standard),
@@ -182,105 +297,82 @@
     transform var(--duration-fast) var(--ease-standard);
 }
 
-.settings-field.field-variant-stacked {
-  display: grid;
-  grid-template-columns: 1fr;
-  align-content: start;
-  gap: var(--space-3);
-  padding: var(--space-4);
-}
-
-.settings-field.field-variant-stacked:hover,
-.settings-field.field-variant-stacked:focus-within,
-.settings-toggle.field-variant-switch-card:hover,
-.settings-toggle.field-variant-switch-card:focus-within {
+.settings-field--card:hover,
+.settings-field--card:focus-within,
+.settings-toggle--switch-card:hover,
+.settings-toggle--switch-card:focus-within {
   border-color: var(--color-border-strong);
   background:
     linear-gradient(145deg,
       color-mix(in srgb, var(--color-primary) 9%, var(--color-surface-glass)),
-      color-mix(in srgb, var(--color-surface-soft) 74%, transparent));
-  box-shadow: var(--shadow-neon-soft), inset 0 1px 0 color-mix(in srgb, white 12%, transparent);
+      color-mix(in srgb, var(--color-surface-soft) 66%, transparent));
+  box-shadow: var(--shadow-neon-soft), inset 0 var(--hairline) rgb(255 255 255 / 10%);
 }
 
-.settings-field.field-variant-stacked > span {
+.settings-toggle--switch-card {
   display: grid;
-  gap: var(--space-1);
-}
-
-.settings-field.field-variant-stacked strong,
-.settings-toggle.field-variant-switch-card strong {
-  color: var(--color-text);
-  font: 800 var(--font-size-sm) / 1.15 var(--font-display);
-}
-
-.settings-field.field-variant-stacked small,
-.settings-toggle.field-variant-switch-card small {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-}
-
-.settings-field.field-variant-stacked .input,
-.settings-field.field-variant-stacked .app-dropdown-trigger {
-  min-block-size: 2.8rem;
-  border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
-  background: color-mix(in srgb, var(--color-surface-strong) 82%, transparent);
-}
-
-.settings-toggle.field-variant-switch-card {
-  display: flex;
-  min-block-size: 5.75rem;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-4);
 }
 
-.settings-toggle.field-variant-switch-card > span {
+.settings-toggle--switch-card > span {
   display: grid;
-  flex: 1;
   gap: var(--space-1);
 }
 
-.settings-toggle.field-variant-switch-card input[type="checkbox"] {
+.settings-toggle--switch-card > input[type="checkbox"] {
   position: relative;
-  flex: none;
-  inline-size: 3.25rem;
-  block-size: 1.75rem;
-  margin: 0;
+  inline-size: 3rem;
+  block-size: 1.65rem;
   appearance: none;
   border: var(--hairline) solid var(--color-border-strong);
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--color-surface-strong) 86%, transparent);
-  box-shadow: inset 0 0.15rem 0.5rem rgb(0 0 0 / 20%);
+  background: color-mix(in srgb, var(--color-surface-strong) 76%, transparent);
+  box-shadow: inset 0 0.15rem 0.45rem rgb(0 0 0 / 16%);
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
 }
 
-.settings-toggle.field-variant-switch-card input[type="checkbox"]::after {
+.settings-toggle--switch-card > input[type="checkbox"]::after {
   content: "";
   position: absolute;
-  inset-block-start: 0.18rem;
-  inset-inline-start: 0.2rem;
-  inline-size: 1.28rem;
+  inset-block-start: 0.16rem;
+  inset-inline-start: 0.16rem;
+  inline-size: 1.2rem;
   aspect-ratio: 1;
   border-radius: 50%;
-  background: var(--color-text-soft);
-  box-shadow: 0 0.18rem 0.45rem rgb(0 0 0 / 30%);
-  transition: transform var(--duration-fast) var(--ease-emphasized), background var(--duration-fast) var(--ease-standard);
+  background: var(--color-text);
+  box-shadow: 0 0.16rem 0.5rem rgb(0 0 0 / 28%);
+  transition: transform var(--duration-fast) var(--ease-standard);
 }
 
-.settings-toggle.field-variant-switch-card input[type="checkbox"]:checked {
+.settings-toggle--switch-card > input[type="checkbox"]:checked {
+  border-color: var(--color-primary-soft);
   background: var(--gradient-primary);
   box-shadow: var(--shadow-neon-primary);
 }
 
-.settings-toggle.field-variant-switch-card input[type="checkbox"]:checked::after {
-  transform: translateX(1.48rem);
-  background: white;
+.settings-toggle--switch-card > input[type="checkbox"]:checked::after {
+  transform: translateX(1.32rem);
+  background: #fff;
 }
 
-:root[data-theme="light"] .settings-field.field-variant-stacked,
-:root[data-theme="light"] .settings-toggle.field-variant-switch-card {
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 85%), 0 0.65rem 1.8rem rgb(123 73 82 / 8%);
+@media (max-width: 42rem) {
+  .modal-title {
+    grid-template-columns: auto minmax(0, 1fr);
+    min-block-size: auto;
+    padding-inline: var(--space-4) calc(var(--space-8) + var(--space-3));
+  }
+
+  .modal-title__actions {
+    grid-column: 1 / -1;
+  }
+
+  .modal-title__actions > * {
+    inline-size: 100%;
+  }
 }

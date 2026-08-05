@@ -1,29 +1,29 @@
 import { Settings2 } from "lucide-react";
+import Button from "../../components/fields/button";
+import { ModalTitle } from "../../components/ui";
 import { SAVE_BUTTONS } from "./config";
 
 export default function SettingsHeader({ status, onSave }) {
   const { text, Icon } = SAVE_BUTTONS[status] ?? SAVE_BUTTONS.idle;
+
   return (
-    <section className="settings-header">
-      <div className="settings-hero-icon">
-        <Settings2 size={28} />
-      </div>
-
-      <div className="settings-hero-content">
-        <span>КОНТРОЛЬНЫЙ ЦЕНТР</span>
-        <h1>Настройки приложения</h1>
-        <p>Персонализируйте студию, обработку и рабочее пространство.</p>
-      </div>
-
-      <button
-        type="button"
-        className="btn btn-primary settings-save"
-        disabled={status === "saving"}
-        onClick={onSave}
-      >
-        <Icon size={16} />
-        {text}
-      </button>
-    </section>
+    <ModalTitle
+      className="settings-header"
+      icon={Settings2}
+      eyebrow="КОНТРОЛЬНЫЙ ЦЕНТР"
+      title="Настройки приложения"
+      description="Персонализируйте студию, обработку и рабочее пространство."
+      actions={
+        <Button
+          icon={Icon}
+          variant="primary"
+          className="settings-save"
+          disabled={status === "saving"}
+          onClick={onSave}
+        >
+          {text}
+        </Button>
+      }
+    />
   );
 }

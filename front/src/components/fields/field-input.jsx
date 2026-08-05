@@ -99,8 +99,8 @@ export default function FieldInput({
       hint={field.hint}
       error={field.error}
       inline={field.type === "toggle"}
-      variant={field.variant ?? "default"}
       className={field.wrapperClassName}
+      variant={field.variant}
     >
       {control}
     </Field>

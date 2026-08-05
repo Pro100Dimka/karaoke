@@ -78,10 +78,10 @@ export default function AppLayout() {
           isOpen={isSettingsOpen}
           onClose={closeSettings}
           ariaLabel="Настройки приложения"
-          backdropClassName="settings-modal-backdrop"
-          modalClassName="settings-modal modal-card"
+          backdropClassName="app-modal-backdrop settings-modal-backdrop"
+          modalClassName="app-modal settings-modal modal-card"
           cardVariant="neon"
-          closeClassName="settings-modal-close"
+          closeClassName="app-modal-close settings-modal-close"
           closeAriaLabel="Закрыть настройки"
           closeIconSize={20}
         >
@@ -92,10 +92,10 @@ export default function AppLayout() {
           isOpen={Boolean(songSettingsId)}
           onClose={closeSongSettings}
           ariaLabel="Настройки песни"
-          backdropClassName="song-recordings-backdrop"
-          modalClassName="song-settings-modal modal-card"
+          backdropClassName="app-modal-backdrop song-recordings-backdrop"
+          modalClassName="app-modal song-settings-modal modal-card"
           cardVariant="neon"
-          closeClassName="song-recordings-close"
+          closeClassName="app-modal-close song-recordings-close"
           closeAriaLabel="Закрыть настройки"
           closeIconSize={18}
           portal

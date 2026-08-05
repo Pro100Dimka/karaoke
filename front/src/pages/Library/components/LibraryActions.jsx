@@ -1,4 +1,5 @@
 import { Plus, UsersRound } from "lucide-react";
+import { Card } from "../../../components/ui";
 
 export default function LibraryActions({
   canManageLibrary,
@@ -12,14 +13,26 @@ export default function LibraryActions({
   return (
     <div className="library-actions u-row u-cluster">
       {!roomActive && (
-        <button className="btn btn-ghost" onClick={onOpenRoom} type="button">
+        <Card
+          as="button"
+          variant="glass"
+          className="btn btn-ghost library-action-card"
+          onClick={onOpenRoom}
+          type="button"
+        >
           <UsersRound size={15} /> Петь вместе
-        </button>
+        </Card>
       )}
       {canManageLibrary && (
-        <button className="btn btn-primary" onClick={onAdd} type="button">
+        <Card
+          as="button"
+          variant="glass"
+          className="btn btn-primary library-action-card"
+          onClick={onAdd}
+          type="button"
+        >
           <Plus size={15} /> Добавить песню
-        </button>
+        </Card>
       )}
       {includeFileInput && (
         <input

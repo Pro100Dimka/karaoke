@@ -1,8 +1,9 @@
-import { Trash2, Trophy } from "lucide-react";
+import { BarChart3, Trash2, Trophy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../../api/client";
 import { AudioPlayer } from "../../../components/AudioPlayer";
 import Modal from "../../../components/Modal";
+import { ModalTitle } from "../../../components/ui";
 import { useAppDialog } from "../../../contexts/AppDialog";
 import { getErrorMessage } from "../../../utils/errors";
 import {
@@ -88,7 +89,12 @@ export default function PerformanceAnalysisModal({
           ))}
         </div>
       </div>
-      <div className="performance-analysis-heading">Анализ выступления</div>
+      <ModalTitle
+        icon={BarChart3}
+        eyebrow="РЕЗУЛЬТАТ ИСПОЛНЕНИЯ"
+        title="Анализ выступления"
+        description="Точность нот, ритм и рекомендации по исполнению."
+      />
       {!result && !error && (
         <p className="text-muted">Анализируем ноты и ритм исполнения…</p>
       )}

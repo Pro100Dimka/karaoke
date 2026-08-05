@@ -1,8 +1,9 @@
+import { Music2, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../../../api/client";
 import FieldInput, { FieldList, FieldRow } from "../../../components/fields";
 import Button from "../../../components/fields/button";
-import { Panel } from "../../../components/ui";
+import { ModalTitle, Panel } from "../../../components/ui";
 import { useAppDialog } from "../../../contexts/AppDialog";
 import { usePolling } from "../../../hooks/usePolling";
 import { EMPTY_LYRICS, NOTE_RANGE_FIELDS, SONG_FIELDS } from "./config";
@@ -173,23 +174,30 @@ export default function SongSettings({ songId }) {
 
   return (
     <div className="song-settings-shell">
+      <ModalTitle
+        className="song-settings-title"
+        icon={Music2}
+        eyebrow="КАРАОКЕ · РЕДАКТОР"
+        title="Настройки песни"
+        description={song.title}
+        actions={
+          <Button
+            icon={Save}
+            variant="primary"
+            className="song-settings-title-save"
+            disabled={saving}
+            onClick={save}
+          >
+            {saving ? "Сохранение…" : "Сохранить"}
+          </Button>
+        }
+      />
+
       <div className="song-settings-scroll modal-scroll">
         <div className="song-settings-workspace">
-          <Panel
-            className="song-settings-panel"
-            title={`Настройки песни — ${song.title}`}
-          >
+          <Panel className="song-settings-panel" title="Параметры песни">
             <div className="song-settings-panel-body">
               <SongFields form={form} onChange={updateField} />
-
-              <Button
-                className="song-settings-save"
-                variant="primary"
-                disabled={saving}
-                onClick={save}
-              >
-                {saving ? "Сохранение..." : "Сохранить"}
-              </Button>
             </div>
           </Panel>
 

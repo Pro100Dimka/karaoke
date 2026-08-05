@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { OnlineRoomModal } from "../../components/OnlineRoomModal";
-import { Panel } from "../../components/ui";
+import { Card, Panel } from "../../components/ui";
 import { useAppDialog } from "../../contexts/AppDialog";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import { usePolling } from "../../hooks/usePolling";
@@ -229,7 +229,7 @@ export default function Library({ onOpenSongSettings }) {
       <LibraryHero songCount={visibleSongs.length} readyCount={readyCount} />
       <Panel className="library-collection-panel">
         <div className="library-toolbar u-row-between">
-          <div className="library-search">
+          <Card className="library-search" variant="glass">
             <Search className="library-search-icon" size={14} />
             <input
               className="input library-search-input"
@@ -237,7 +237,7 @@ export default function Library({ onOpenSongSettings }) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
-          </div>
+          </Card>
           <LibraryActions
             canManageLibrary={canManageLibrary}
             fileInputRef={fileInputRef}
