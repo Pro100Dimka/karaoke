@@ -1,4 +1,5 @@
 import { Music2 } from "lucide-react";
+import { Card } from "../../../components/ui";
 
 export default function LibraryHero({ songCount, readyCount }) {
   return (
@@ -24,14 +25,14 @@ export default function LibraryHero({ songCount, readyCount }) {
         </p>
       </div>
       <div className="library-hero-stats">
-        <div>
+        <Card className="library-stat-card">
           <b>{songCount}</b>
           <span>всего песен</span>
-        </div>
-        <div>
+        </Card>
+        <Card className="library-stat-card">
           <b>{readyCount}</b>
           <span>готово к караоке</span>
-        </div>
+        </Card>
       </div>
     </section>
   );

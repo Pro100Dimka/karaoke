@@ -46,8 +46,8 @@ a {
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent-1);
-  outline-offset: 2px;
+  outline: 0.125rem solid var(--accent-1);
+  outline-offset: 0.125rem;
 }
 
 /* Shared application states */
@@ -61,9 +61,9 @@ a {
 }
 
 .application-error__card {
-  width: min(520px, 100%);
+  width: min(32.5rem, 100%);
   padding: var(--space-8);
-  border: 1px solid var(--color-border);
+  border: 0.0625rem solid var(--color-border);
   border-radius: var(--radius-xl);
   background: var(--color-surface-elevated);
   box-shadow: var(--shadow-lg);
@@ -86,7 +86,7 @@ a {
   width: var(--control-height-md);
   height: var(--control-height-md);
   padding: 0;
-  border: 1px solid var(--color-border);
+  border: 0.0625rem solid var(--color-border);
   border-radius: var(--radius-md);
   color: var(--color-text);
   background: var(--color-surface);
@@ -110,10 +110,10 @@ a {
 
 .sr-only {
   position: absolute;
-  width: 1px;
-  height: 1px;
+  width: 0.0625rem;
+  height: 0.0625rem;
   padding: 0;
-  margin: -1px;
+  margin: -0.0625rem;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
@@ -125,10 +125,10 @@ a {
   flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
-  height: 40px;
+  height: 2.5rem;
   padding-left: var(--space-4);
   background: rgb(10 7 21 / 60%);
-  border-bottom: 1px solid var(--card-border);
+  border-bottom: 0.0625rem solid var(--card-border);
   -webkit-app-region: drag;
 }
 
@@ -146,8 +146,8 @@ a {
 
 .title-bar__indicator {
   display: inline-block;
-  width: 8px;
-  height: 8px;
+  width: 0.5rem;
+  height: 0.5rem;
   background: var(--accent-gradient);
   border-radius: var(--radius-round);
 }
@@ -158,8 +158,8 @@ a {
 
 .title-bar__button {
   display: grid;
-  width: 44px;
-  height: 40px;
+  width: 2.75rem;
+  height: 2.5rem;
   padding: 0;
   color: var(--text-secondary);
   background: transparent;
@@ -213,3 +213,14 @@ body::before {
   background: transparent;
 }
 
+
+/* The background is mounted as a library layer too, but this fallback keeps it
+   visible on every route and prevents transparent-root regressions. */
+body {
+  background-color: var(--color-bg-deep);
+  background-image: url("../assets/karaoke/library-neon-space.png");
+  background-position: 50% 50%;
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-attachment: fixed;
+}

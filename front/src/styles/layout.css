@@ -1,18 +1,18 @@
 .app-shell { min-height: 100vh; background: var(--color-bg); }
 .app-body,
 .app-main { min-width: 0; min-height: calc(100vh - var(--titlebar-height)); }
-.title-bar { position: relative; z-index: 500; height: var(--titlebar-height); background: rgba(2, 4, 25, 0.92); border-bottom: 1px solid rgba(90, 145, 255, 0.2); }
+.title-bar { position: relative; z-index: 500; height: var(--titlebar-height); background: rgba(2, 4, 25, 0.92); border-bottom: 0.0625rem solid rgba(90, 145, 255, 0.2); }
 
 .app-settings-fab {
   position: fixed;
   z-index: 80;
-  right: 26px;
-  bottom: 24px;
+  right: 1.625rem;
+  bottom: 1.5rem;
   display: grid;
-  width: 58px;
-  height: 58px;
+  width: 3.625rem;
+  height: 3.625rem;
   place-items: center;
-  border: 1px solid rgba(75, 226, 255, 0.7);
+  border: 0.0625rem solid rgba(75, 226, 255, 0.7);
   border-radius: 50%;
   color: #dffcff;
   background: radial-gradient(circle at 35% 25%, rgba(62, 231, 255, 0.48), rgba(9, 35, 116, 0.92) 55%, rgba(20, 5, 75, 0.98));
@@ -29,10 +29,10 @@
   inset: 0;
   display: grid;
   place-items: center;
-  padding: clamp(12px, 3vw, 36px);
+  padding: clamp(0.75rem, 3vw, 2.25rem);
   overflow: auto;
   background: rgba(1, 2, 18, 0.76);
-  backdrop-filter: blur(18px) saturate(130%);
+  backdrop-filter: blur(1.125rem) saturate(130%);
 }
 
 .settings-modal,
@@ -41,10 +41,10 @@
 .app-dialog,
 .modal {
   position: relative;
-  width: min(1120px, 100%);
-  max-height: calc(100vh - 48px);
+  width: min(70rem, 100%);
+  max-height: calc(100vh - 3rem);
   overflow: auto;
-  border: 1px solid rgba(64, 211, 255, 0.66);
+  border: 0.0625rem solid rgba(64, 211, 255, 0.66);
   border-radius: var(--radius-xl);
   background: linear-gradient(145deg, rgba(9, 18, 80, 0.96), rgba(3, 7, 40, 0.96));
   box-shadow: var(--shadow-lg), var(--shadow-neon-mixed);
@@ -58,11 +58,11 @@
   top: var(--space-4);
   float: right;
   display: grid;
-  width: 38px;
-  height: 38px;
+  width: 2.375rem;
+  height: 2.375rem;
   margin: var(--space-4) var(--space-4) 0 0;
   place-items: center;
-  border: 1px solid rgba(91, 194, 255, 0.38);
+  border: 0.0625rem solid rgba(91, 194, 255, 0.38);
   border-radius: 50%;
   color: var(--color-text-soft);
   background: rgba(4, 11, 51, 0.82);
@@ -70,19 +70,74 @@
 }
 
 .application-error { display: grid; min-height: 100vh; place-items: center; padding: var(--space-6); background: var(--color-bg-deep); }
-.application-error__card { width: min(560px, 100%); padding: var(--space-8); border: 1px solid var(--color-border-strong); border-radius: var(--radius-xl); background: var(--color-surface-strong); box-shadow: var(--shadow-lg); }
+.application-error__card { width: min(35rem, 100%); padding: var(--space-8); border: 0.0625rem solid var(--color-border-strong); border-radius: var(--radius-xl); background: var(--color-surface-strong); box-shadow: var(--shadow-lg); }
 
-@media (max-width: 720px) {
+@media (max-width: 45rem) {
   .settings-field { grid-template-columns: 1fr; }
   .field-row { flex-wrap: wrap; }
-  .app-settings-fab { right: 14px; bottom: 14px; width: 52px; height: 52px; }
+  .app-settings-fab { right: 0.875rem; bottom: 0.875rem; width: 3.25rem; height: 3.25rem; }
 }
 
 /* Crimson title bar belongs to application layout, not compatibility styles. */
 .title-bar {
   background: linear-gradient(180deg, rgba(24, 1, 7, 0.92), rgba(16, 0, 5, 0.72));
   border-bottom-color: var(--color-border);
-  box-shadow: 0 8px 32px rgba(4, 0, 1, 0.42), 0 0 28px rgba(207, 10, 47, 0.1);
-  backdrop-filter: blur(18px) saturate(135%);
+  box-shadow: 0 0.5rem 2rem rgba(4, 0, 1, 0.42), 0 0 1.75rem rgba(207, 10, 47, 0.1);
+  backdrop-filter: blur(1.125rem) saturate(135%);
 }
 
+
+/* Desktop window chrome: fixed, transparent and aligned to the Windows edge. */
+.app-shell {
+  position: relative;
+  min-block-size: 100dvh;
+  padding-block-start: var(--titlebar-height);
+  isolation: isolate;
+}
+
+.app-body,
+.app-main {
+  min-block-size: calc(100dvh - var(--titlebar-height));
+}
+
+.app-main {
+  position: relative;
+}
+
+.title-bar {
+  position: fixed;
+  z-index: 1000;
+  inset: 0 0 auto;
+  display: flex;
+  inline-size: 100%;
+  block-size: var(--titlebar-height);
+  padding: 0;
+  color: var(--color-text-soft);
+  background: linear-gradient(180deg, rgb(15 0 5 / 44%), rgb(7 0 3 / 18%));
+  border-block-end: max(0.0625rem, 0.06vw) solid rgb(255 105 124 / 18%);
+  box-shadow: 0 0.5rem 1.8rem rgb(5 0 2 / 20%);
+  backdrop-filter: blur(0.8rem) saturate(125%);
+  -webkit-app-region: drag;
+}
+
+.title-bar__brand {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  padding-inline-start: clamp(0.7rem, 1.25vw, 1.2rem);
+}
+
+.title-bar__actions {
+  flex: 0 0 auto;
+  align-self: stretch;
+  margin-inline-start: auto;
+}
+
+.title-bar__button {
+  inline-size: clamp(2.7rem, 3.1vw, 3.25rem);
+  block-size: 100%;
+  border-radius: 0;
+}
+
+.title-bar__button:last-child {
+  margin-inline-end: 0;
+}

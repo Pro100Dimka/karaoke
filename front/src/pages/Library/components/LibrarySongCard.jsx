@@ -6,7 +6,7 @@ import {
   Settings2,
   Trash2
 } from "lucide-react";
-import { ProgressBar, StatusBadge } from "../../../components/ui";
+import { Card, ProgressBar, StatusBadge } from "../../../components/ui";
 import { getSongCardTilt } from "../card-tilt";
 import { formatLibraryDate, getSongCardState } from "../utils";
 import SongCardArtwork from "./SongCardArtwork";
@@ -52,7 +52,9 @@ export default function LibrarySongCard({
   };
 
   return (
-    <article
+    <Card
+      as="article"
+      variant="interactive"
       className={`library-song-card library-song-card--${status}`}
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
@@ -178,6 +180,6 @@ export default function LibrarySongCard({
           </div>
         </div>
       </div>
-    </article>
+    </Card>
   );
 }

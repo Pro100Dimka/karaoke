@@ -2,7 +2,7 @@
   position: relative;
   isolation: isolate;
   min-height: calc(100vh - var(--titlebar-height));
-  padding: clamp(26px, 4vw, 64px) clamp(20px, 4vw, 66px) 90px;
+  padding: clamp(1.625rem, 4vw, 4rem) clamp(1.25rem, 4vw, 4.125rem) 5.625rem;
   overflow: hidden;
   background: transparent;
 }
@@ -29,10 +29,10 @@
 }
 
 .library-glass {
-  border: 1px solid var(--color-border);
+  border: 0.0625rem solid var(--color-border);
   background: var(--gradient-glass);
   box-shadow: var(--shadow-glass);
-  backdrop-filter: blur(18px) saturate(135%);
+  backdrop-filter: blur(1.125rem) saturate(135%);
 }
 
 .library-hero-3d-scene,
@@ -87,10 +87,10 @@
   inset: 62% -10% -30%;
   opacity: 0.42;
   background-image:
-    linear-gradient(rgba(255, 69, 92, 0.22) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(152, 8, 39, 0.18) 1px, transparent 1px);
-  background-size: 54px 42px;
-  transform: perspective(520px) rotateX(62deg);
+    linear-gradient(rgba(255, 69, 92, 0.22) 0.0625rem, transparent 0.0625rem),
+    linear-gradient(90deg, rgba(152, 8, 39, 0.18) 0.0625rem, transparent 0.0625rem);
+  background-size: 3.375rem 2.625rem;
+  transform: perspective(32.5rem) rotateX(62deg);
   transform-origin: top;
   mask-image: linear-gradient(to bottom, #000, transparent 88%);
 }
@@ -122,17 +122,17 @@
   align-items: center;
   gap: var(--space-5);
   width: min(var(--content-max), 100%);
-  margin: 0 auto clamp(42px, 6vw, 82px);
+  margin: 0 auto clamp(2.625rem, 6vw, 5.125rem);
 }
 
 .library-hero-brand-mark {
   position: relative;
   display: grid;
-  width: 74px;
-  height: 74px;
+  width: 4.625rem;
+  height: 4.625rem;
   place-items: center;
-  border: 1px solid rgba(255, 157, 166, 0.86);
-  border-radius: 22px;
+  border: 0.0625rem solid rgba(255, 157, 166, 0.86);
+  border-radius: 1.375rem;
   color: #fff;
   background: radial-gradient(
     circle at 35% 25%,
@@ -145,9 +145,9 @@
 .library-hero-brand-mark::before {
   content: "";
   position: absolute;
-  inset: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.42);
-  border-radius: 18px;
+  inset: 0.25rem;
+  border: 0.0625rem solid rgba(255, 255, 255, 0.42);
+  border-radius: 1.125rem;
 }
 .library-hero-brand-mark i {
   display: none;
@@ -159,7 +159,7 @@
   font-weight: 900;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  text-shadow: 0 0 14px rgba(255, 57, 205, 0.5);
+  text-shadow: 0 0 0.875rem rgba(255, 57, 205, 0.5);
 }
 .library-hero-copy h1 {
   margin: 0.35rem 0 0.35rem;
@@ -169,7 +169,7 @@
   background: var(--gradient-text);
   background-clip: text;
   color: transparent;
-  text-shadow: 0 0 30px rgba(94, 176, 255, 0.26);
+  text-shadow: 0 0 1.875rem rgba(94, 176, 255, 0.26);
 }
 .library-hero-copy p {
   margin: 0;
@@ -179,14 +179,14 @@
 
 .library-hero-stats {
   display: grid;
-  grid-template-columns: repeat(2, minmax(130px, 1fr));
+  grid-template-columns: repeat(2, minmax(8.125rem, 1fr));
   gap: var(--space-4);
 }
 .library-hero-stats > div {
   position: relative;
-  min-width: 150px;
+  min-width: 9.375rem;
   padding: var(--space-5);
-  border: 1px solid rgba(255, 87, 106, 0.62);
+  border: 0.0625rem solid rgba(255, 87, 106, 0.62);
   border-radius: var(--radius-lg);
   background: linear-gradient(
     145deg,
@@ -194,7 +194,7 @@
     rgba(25, 16, 101, 0.62)
   );
   box-shadow:
-    inset 0 0 26px rgba(55, 95, 255, 0.18),
+    inset 0 0 1.625rem rgba(55, 95, 255, 0.18),
     var(--shadow-neon-cyan);
   overflow: hidden;
 }
@@ -244,24 +244,24 @@
 }
 .library-search {
   position: relative;
-  width: min(440px, 100%);
+  width: min(27.5rem, 100%);
 }
 .library-search-icon {
   position: absolute;
   z-index: 2;
-  left: 15px;
+  left: 0.9375rem;
   top: 50%;
   transform: translateY(-50%);
   color: var(--color-accent);
 }
 .library-search-input {
-  height: 46px;
-  padding-left: 42px;
+  height: 2.875rem;
+  padding-left: 2.625rem;
   border-color: var(--color-border-strong);
   border-radius: var(--radius-md);
   box-shadow:
-    inset 0 0 24px rgba(42, 86, 255, 0.11),
-    0 0 18px rgba(38, 126, 255, 0.14);
+    inset 0 0 1.5rem rgba(42, 86, 255, 0.11),
+    0 0 1.125rem rgba(38, 126, 255, 0.14);
 }
 .library-actions {
   display: flex;
@@ -273,8 +273,8 @@
 .library-card-deck {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: clamp(22px, 3vw, 42px);
-  perspective: 1200px;
+  gap: clamp(1.375rem, 3vw, 2.625rem);
+  perspective: 75rem;
 }
 .library-song-card {
   --tilt-x: 0deg;
@@ -285,17 +285,17 @@
   position: relative;
   isolation: isolate;
   display: grid;
-  grid-template-columns: 94px minmax(0, 1fr);
-  min-height: 280px;
-  padding: 2px;
-  border: 1px solid rgba(170, 222, 255, 0.2);
-  border-radius: 30px;
+  grid-template-columns: 5.875rem minmax(0, 1fr);
+  min-height: 17.5rem;
+  padding: 0.125rem;
+  border: 0.0625rem solid rgba(170, 222, 255, 0.2);
+  border-radius: 1.875rem;
   background: rgba(45, 3, 13, 0.2);
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.07),
-    inset 0 1px 0 rgba(255, 255, 255, 0.24),
-    0 0 0 1px rgba(48, 133, 255, 0.09),
-    0 14px 52px rgba(0, 8, 56, 0.38);
+    inset 0 0 0 0.0625rem rgba(255, 255, 255, 0.07),
+    inset 0 0.0625rem 0 rgba(255, 255, 255, 0.24),
+    0 0 0 0.0625rem rgba(48, 133, 255, 0.09),
+    0 0.875rem 3.25rem rgba(0, 8, 56, 0.38);
   transform: rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
   transform-style: preserve-3d;
   transition:
@@ -310,20 +310,20 @@
   content: "";
   position: absolute;
   z-index: 2;
-  inset: -1px;
-  padding: 1.5px;
+  inset: -0.0625rem;
+  padding: 0.09375rem;
   border-radius: inherit;
   pointer-events: none;
   background:
     radial-gradient(
-      64px 18px at var(--border-flow) 0%,
+      4rem 1.125rem at var(--border-flow) 0%,
       rgba(255, 255, 255, 0.98) 0 5%,
       rgba(108, 226, 255, 0.95) 18%,
       rgba(72, 121, 255, 0.38) 48%,
       transparent 74%
     ),
     radial-gradient(
-      18px 64px at 100% calc(100% - var(--border-flow)),
+      1.125rem 4rem at 100% calc(100% - var(--border-flow)),
       rgba(255, 255, 255, 0.92) 0 5%,
       rgba(118, 102, 255, 0.88) 20%,
       transparent 72%
@@ -344,7 +344,7 @@
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   opacity: 0.9;
-  filter: drop-shadow(0 0 3px rgba(101, 208, 255, 0.72));
+  filter: drop-shadow(0 0 0.1875rem rgba(101, 208, 255, 0.72));
   animation: library-border-flow 6.8s linear infinite;
 }
 
@@ -353,8 +353,8 @@
   content: "";
   position: absolute;
   z-index: -1;
-  inset: -7px;
-  border-radius: 35px;
+  inset: -0.4375rem;
+  border-radius: 2.1875rem;
   pointer-events: none;
   background:
     radial-gradient(
@@ -369,8 +369,8 @@
       rgba(255, 71, 200, 0.1)
     );
   opacity: 0.56;
-  filter: blur(14px);
-  transform: translateZ(-1px);
+  filter: blur(0.875rem);
+  transform: translateZ(-0.0625rem);
   transition: opacity var(--duration-normal) var(--ease-standard);
 }
 
@@ -388,7 +388,7 @@
       transparent 34%
     ),
     linear-gradient(145deg, rgba(23, 49, 151, 0.76), rgba(5, 14, 70, 0.88));
-  box-shadow: inset 0 0 38px rgba(77, 68, 255, 0.16);
+  box-shadow: inset 0 0 2.375rem rgba(77, 68, 255, 0.16);
 }
 .library-song-card-art {
   display: flex;
@@ -397,16 +397,16 @@
   justify-content: space-between;
   gap: var(--space-5);
   padding: var(--space-8) var(--space-4);
-  border-radius: 27px 0 0 27px;
+  border-radius: 1.6875rem 0 0 1.6875rem;
   color: #ff67d7;
-  border-right: 1px solid rgba(74, 229, 255, 0.55);
+  border-right: 0.0625rem solid rgba(74, 229, 255, 0.55);
 }
 .library-song-card-main {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  padding: clamp(24px, 3vw, 38px);
-  border-radius: 0 27px 27px 0;
+  padding: clamp(1.5rem, 3vw, 2.375rem);
+  border-radius: 0 1.6875rem 1.6875rem 0;
 }
 .library-song-card-heading {
   display: flex;
@@ -425,7 +425,7 @@
   font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-shadow: 0 0 15px rgba(53, 222, 255, 0.42);
+  text-shadow: 0 0 0.9375rem rgba(53, 222, 255, 0.42);
 }
 .song-artist-name {
   margin-left: var(--space-2);
@@ -451,11 +451,11 @@
   font-weight: 750;
 }
 .library-song-card-ready > span {
-  width: 9px;
-  height: 9px;
+  width: 0.5625rem;
+  height: 0.5625rem;
   border-radius: 50%;
   background: var(--color-success);
-  box-shadow: 0 0 16px var(--color-success);
+  box-shadow: 0 0 1rem var(--color-success);
 }
 .library-song-card-progress {
   display: grid;
@@ -482,28 +482,28 @@
   gap: var(--space-2);
 }
 .library-song-card-actions .btn {
-  min-width: 42px;
-  min-height: 40px;
+  min-width: 2.625rem;
+  min-height: 2.5rem;
   padding-inline: 0.78rem;
 }
 .library-song-card-wave {
   display: flex;
-  height: 46px;
+  height: 2.875rem;
   align-items: center;
-  gap: 3px;
+  gap: 0.1875rem;
 }
 .library-song-card-wave i {
-  width: 3px;
-  min-height: 8px;
+  width: 0.1875rem;
+  min-height: 0.5rem;
   border-radius: var(--radius-pill);
   background: linear-gradient(#44f4ff, #7771ff, #ff45cb);
-  box-shadow: 0 0 8px #38e9ff;
+  box-shadow: 0 0 0.5rem #38e9ff;
   animation: library-wave 1.4s ease-in-out infinite alternate;
 }
 .library-card-empty {
   grid-column: 1 / -1;
   padding: var(--space-16);
-  border: 1px dashed rgba(79, 164, 255, 0.4);
+  border: 0.0625rem dashed rgba(79, 164, 255, 0.4);
   border-radius: var(--radius-xl);
   text-align: center;
   background: rgba(5, 11, 52, 0.52);
@@ -538,7 +538,7 @@
 }
 @keyframes library-notes-float {
   to {
-    transform: translateY(-28px) rotate(4deg);
+    transform: translateY(-1.75rem) rotate(4deg);
   }
 }
 
@@ -546,44 +546,44 @@
   .library-song-card:hover {
     filter: brightness(1.06);
     box-shadow:
-      inset 0 0 0 1px rgba(255, 255, 255, 0.1),
-      inset 0 1px 0 rgba(255, 255, 255, 0.3),
-      0 0 0 1px rgba(72, 160, 255, 0.13),
-      0 18px 62px rgba(0, 7, 54, 0.46);
+      inset 0 0 0 0.0625rem rgba(255, 255, 255, 0.1),
+      inset 0 0.0625rem 0 rgba(255, 255, 255, 0.3),
+      0 0 0 0.0625rem rgba(72, 160, 255, 0.13),
+      0 1.125rem 3.875rem rgba(0, 7, 54, 0.46);
   }
   .library-song-card:hover::before {
     opacity: 1;
-    filter: drop-shadow(0 0 5px rgba(111, 221, 255, 0.9));
+    filter: drop-shadow(0 0 0.3125rem rgba(111, 221, 255, 0.9));
   }
   .library-song-card:hover::after {
     opacity: 0.78;
   }
 }
 
-@media (max-width: 1050px) {
+@media (max-width: 65.625rem) {
   .library-hero {
     grid-template-columns: auto minmax(0, 1fr);
   }
   .library-hero-stats {
     grid-column: 1 / -1;
-    width: min(520px, 100%);
+    width: min(32.5rem, 100%);
   }
   .library-card-deck {
     grid-template-columns: 1fr;
   }
 }
-@media (max-width: 680px) {
+@media (max-width: 42.5rem) {
   .library-page {
-    padding-inline: 14px;
+    padding-inline: 0.875rem;
   }
   .library-hero {
-    grid-template-columns: 56px minmax(0, 1fr);
+    grid-template-columns: 3.5rem minmax(0, 1fr);
     gap: var(--space-3);
   }
   .library-hero-brand-mark {
-    width: 56px;
-    height: 56px;
-    border-radius: 17px;
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: 1.0625rem;
   }
   .library-hero-copy > span {
     font-size: 0.62rem;
@@ -617,7 +617,7 @@
     display: none;
   }
   .library-song-card-main {
-    border-radius: 27px;
+    border-radius: 1.6875rem;
     padding: var(--space-5);
   }
   .library-song-card-footer {
@@ -646,14 +646,14 @@
 .library-concert-backdrop::after {
   opacity: 0.14;
   background-image:
-    linear-gradient(rgba(255, 69, 92, 0.22) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(152, 8, 39, 0.18) 1px, transparent 1px);
-  filter: drop-shadow(0 0 10px rgba(237, 20, 57, 0.22));
+    linear-gradient(rgba(255, 69, 92, 0.22) 0.0625rem, transparent 0.0625rem),
+    linear-gradient(90deg, rgba(152, 8, 39, 0.18) 0.0625rem, transparent 0.0625rem);
+  filter: drop-shadow(0 0 0.625rem rgba(237, 20, 57, 0.22));
 }
 
 .library-bg-notes {
   color: rgba(255, 111, 125, 0.5);
-  text-shadow: 0 0 10px rgba(255, 55, 79, 0.9), 0 0 30px rgba(145, 4, 35, 0.72);
+  text-shadow: 0 0 0.625rem rgba(255, 55, 79, 0.9), 0 0 1.875rem rgba(145, 4, 35, 0.72);
 }
 
 .library-hero-brand-mark {
@@ -661,24 +661,24 @@
   background:
     radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.92), transparent 12%),
     linear-gradient(145deg, #ff8993 0%, #f22549 44%, #8b0927 100%);
-  box-shadow: 0 0 12px rgba(255, 122, 134, 0.82), 0 0 34px rgba(238, 25, 62, 0.52), 0 0 62px rgba(117, 2, 28, 0.38);
+  box-shadow: 0 0 0.75rem rgba(255, 122, 134, 0.82), 0 0 2.125rem rgba(238, 25, 62, 0.52), 0 0 3.875rem rgba(117, 2, 28, 0.38);
 }
 
 .library-hero-copy > span {
   color: #ffbdc5;
-  text-shadow: 0 0 12px rgba(255, 58, 83, 0.68), 0 0 28px rgba(141, 4, 35, 0.42);
+  text-shadow: 0 0 0.75rem rgba(255, 58, 83, 0.68), 0 0 1.75rem rgba(141, 4, 35, 0.42);
 }
 
 .library-hero-copy h1 {
   background: linear-gradient(90deg, #ffffff 0%, #ffe3e6 38%, #ffb3bd 70%, #ff7889 100%);
   background-clip: text;
   color: transparent;
-  filter: drop-shadow(0 0 16px rgba(255, 50, 78, 0.28));
+  filter: drop-shadow(0 0 1rem rgba(255, 50, 78, 0.28));
 }
 
 .library-hero-copy p {
   color: var(--color-text-soft);
-  text-shadow: 0 2px 14px rgba(8, 0, 2, 0.95);
+  text-shadow: 0 0.125rem 0.875rem rgba(8, 0, 2, 0.95);
 }
 
 .library-hero-stats > div {
@@ -687,40 +687,40 @@
     radial-gradient(circle at 18% 0%, rgba(255, 77, 99, 0.18), transparent 38%),
     radial-gradient(circle at 90% 100%, rgba(117, 3, 28, 0.2), transparent 44%),
     linear-gradient(145deg, rgba(74, 8, 22, 0.7), rgba(24, 1, 8, 0.78));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.14), inset 0 0 34px rgba(190, 8, 45, 0.14), 0 0 13px rgba(245, 34, 67, 0.28), 0 18px 46px rgba(5,0,1,.42);
-  backdrop-filter: blur(16px) saturate(130%);
+  box-shadow: inset 0 0.0625rem 0 rgba(255,255,255,.14), inset 0 0 2.125rem rgba(190, 8, 45, 0.14), 0 0 0.8125rem rgba(245, 34, 67, 0.28), 0 1.125rem 2.875rem rgba(5,0,1,.42);
+  backdrop-filter: blur(1rem) saturate(130%);
 }
 
 .library-search-input {
   color: var(--color-text);
   border-color: rgba(255, 84, 105, 0.56);
   background: var(--gradient-glass);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.1), inset 0 0 26px rgba(160, 4, 35, 0.13), 0 0 18px rgba(240, 24, 60, 0.14);
-  backdrop-filter: blur(14px) saturate(125%);
+  box-shadow: inset 0 0.0625rem 0 rgba(255,255,255,.1), inset 0 0 1.625rem rgba(160, 4, 35, 0.13), 0 0 1.125rem rgba(240, 24, 60, 0.14);
+  backdrop-filter: blur(0.875rem) saturate(125%);
 }
 
 .library-search-input:focus {
   border-color: rgba(255, 151, 162, 0.94);
-  box-shadow: 0 0 0 3px rgba(255, 57, 82, 0.12), 0 0 25px rgba(246, 29, 65, 0.28), 0 0 44px rgba(123, 2, 29, 0.22);
+  box-shadow: 0 0 0 0.1875rem rgba(255, 57, 82, 0.12), 0 0 1.5625rem rgba(246, 29, 65, 0.28), 0 0 2.75rem rgba(123, 2, 29, 0.22);
 }
 
 .library-search-icon {
   color: var(--color-accent);
-  filter: drop-shadow(0 0 7px rgba(255, 55, 81, 0.72));
+  filter: drop-shadow(0 0 0.4375rem rgba(255, 55, 81, 0.72));
 }
 
 .library-song-card {
   border-color: rgba(255, 128, 141, 0.22);
   background: rgba(45, 3, 13, 0.2);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), inset 0 1px 0 rgba(255,255,255,.16), 0 16px 58px rgba(4,0,1,.52), 0 0 28px rgba(190, 7, 43, 0.1);
+  box-shadow: inset 0 0 0 0.0625rem rgba(255,255,255,.06), inset 0 0.0625rem 0 rgba(255,255,255,.16), 0 1rem 3.625rem rgba(4,0,1,.52), 0 0 1.75rem rgba(190, 7, 43, 0.1);
 }
 
 .library-song-card::before {
   background:
-    radial-gradient(64px 18px at var(--border-flow) 0%, #fff 0 5%, #ffabb5 18%, rgba(249, 39, 70, 0.5) 48%, transparent 74%),
-    radial-gradient(18px 64px at 100% calc(100% - var(--border-flow)), #fff 0 5%, #d80d3a 20%, transparent 72%),
+    radial-gradient(4rem 1.125rem at var(--border-flow) 0%, #fff 0 5%, #ffabb5 18%, rgba(249, 39, 70, 0.5) 48%, transparent 74%),
+    radial-gradient(1.125rem 4rem at 100% calc(100% - var(--border-flow)), #fff 0 5%, #d80d3a 20%, transparent 72%),
     linear-gradient(115deg, rgba(255,255,255,.84), #ff9eaa 17%, #ff3c5c 40%, #ba0a34 64%, #ff5b73 82%, #ffb3bb 94%);
-  filter: drop-shadow(0 0 4px rgba(255, 100, 118, 0.7)) drop-shadow(0 0 11px rgba(184, 6, 42, 0.34));
+  filter: drop-shadow(0 0 0.25rem rgba(255, 100, 118, 0.7)) drop-shadow(0 0 0.6875rem rgba(184, 6, 42, 0.34));
 }
 
 .library-song-card::after {
@@ -736,33 +736,33 @@
     radial-gradient(circle at var(--glow-x) var(--glow-y), rgba(255, 66, 91, 0.16), transparent 34%),
     radial-gradient(circle at 90% 10%, rgba(118, 2, 28, 0.12), transparent 35%),
     linear-gradient(145deg, rgba(67, 7, 20, 0.75), rgba(19, 1, 7, 0.86));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), inset 0 0 42px rgba(148, 4, 35, 0.14);
-  backdrop-filter: blur(18px) saturate(135%);
+  box-shadow: inset 0 0.0625rem 0 rgba(255,255,255,.08), inset 0 0 2.625rem rgba(148, 4, 35, 0.14);
+  backdrop-filter: blur(1.125rem) saturate(135%);
 }
 
 .library-song-card-art {
   color: #ff8492;
   border-right-color: rgba(255, 77, 100, 0.44);
-  text-shadow: 0 0 14px rgba(255, 52, 79, 0.72);
+  text-shadow: 0 0 0.875rem rgba(255, 52, 79, 0.72);
 }
 
 .song-title-name {
   color: var(--color-text);
-  text-shadow: 0 0 12px rgba(255, 72, 94, 0.36), 0 2px 18px rgba(6,0,2,.95);
+  text-shadow: 0 0 0.75rem rgba(255, 72, 94, 0.36), 0 0.125rem 1.125rem rgba(6,0,2,.95);
 }
 .song-artist-name { color: var(--color-text-soft); }
 .library-song-card-ready { color: var(--color-highlight); }
 
 .library-song-card-wave i {
   background: linear-gradient(#ffb1ba, #ff405f, #aa082f);
-  box-shadow: 0 0 8px rgba(255, 70, 94, 0.86), 0 0 17px rgba(159, 4, 36, 0.44);
+  box-shadow: 0 0 0.5rem rgba(255, 70, 94, 0.86), 0 0 1.0625rem rgba(159, 4, 36, 0.44);
 }
 
 .library-card-empty {
   border-color: rgba(255, 78, 101, 0.38);
   background: linear-gradient(145deg, rgba(55, 5, 17, 0.68), rgba(18, 1, 7, 0.7));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 18px 52px rgba(4,0,1,.44);
-  backdrop-filter: blur(18px) saturate(125%);
+  box-shadow: inset 0 0.0625rem 0 rgba(255,255,255,.07), 0 1.125rem 3.25rem rgba(4,0,1,.44);
+  backdrop-filter: blur(1.125rem) saturate(125%);
 }
 
 /* Animated crimson wireframe terrain along the bottom edge. */
@@ -771,9 +771,9 @@
   z-index: 1;
   left: 0;
   right: 0;
-  bottom: -2px;
+  bottom: -0.125rem;
   width: 100%;
-  height: clamp(220px, 38vh, 430px);
+  height: clamp(13.75rem, 38vh, 26.875rem);
   display: block;
   opacity: 0.84;
   pointer-events: none;
@@ -791,9 +791,9 @@
   display: none;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 47.5rem) {
   .library-wave-terrain {
-    height: clamp(170px, 30vh, 260px);
+    height: clamp(10.625rem, 30vh, 16.25rem);
     opacity: 0.68;
   }
 }
@@ -801,5 +801,259 @@
 @media (prefers-reduced-motion: reduce) {
   .library-wave-terrain {
     opacity: 0.55;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Responsive library pass. Layout dimensions use relative units; hairline
+   borders intentionally remain one device-safe CSS pixel through max().
+   -------------------------------------------------------------------------- */
+.library-page {
+  min-block-size: calc(100dvh - var(--titlebar-height));
+  padding: clamp(1rem, 3.2vw, 3.8rem) clamp(0.85rem, 3.4vw, 4rem) clamp(4.5rem, 8vh, 7rem);
+  overflow: clip;
+}
+
+.library-concert-backdrop {
+  position: fixed;
+  inset: var(--titlebar-height) 0 0;
+}
+
+.library-neon-space {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  object-position: 50% 50%;
+  filter: saturate(1.08) contrast(1.06) brightness(0.76);
+  transform: scale(1.012);
+}
+
+.library-concert-backdrop::before {
+  z-index: 1;
+}
+
+.library-wave-terrain {
+  z-index: 3;
+  bottom: -0.15rem;
+  height: clamp(12rem, 36vh, 27rem);
+}
+
+.library-hero,
+.library-collection-panel {
+  width: min(92%, var(--content-max));
+}
+
+.library-hero {
+  grid-template-columns: clamp(3.7rem, 7vw, 5rem) minmax(0, 1fr) auto;
+  gap: clamp(0.75rem, 2vw, 1.5rem);
+  margin-block-end: clamp(2rem, 6vw, 5rem);
+}
+
+.library-hero-brand-mark {
+  inline-size: 100%;
+  aspect-ratio: 1;
+  block-size: auto;
+  border-radius: 28%;
+}
+
+.library-hero-stats {
+  grid-template-columns: repeat(2, minmax(7.5rem, 1fr));
+  gap: clamp(0.55rem, 1.3vw, 1rem);
+}
+
+.library-hero-stats > .library-stat-card {
+  min-inline-size: 0;
+  padding: clamp(0.8rem, 1.5vw, 1.25rem);
+  overflow: hidden;
+  border-color: rgb(255 87 106 / 62%);
+  background:
+    radial-gradient(circle at 18% 0%, rgb(255 77 99 / 18%), transparent 38%),
+    linear-gradient(145deg, rgb(74 8 22 / 70%), rgb(24 1 8 / 78%));
+}
+
+.library-toolbar {
+  gap: clamp(0.75rem, 2vw, 1.25rem);
+  margin-block-end: clamp(1rem, 2vw, 1.5rem);
+}
+
+.library-search {
+  inline-size: min(38%, 28rem);
+  min-inline-size: min(100%, 15rem);
+}
+
+.library-search-icon {
+  inset-inline-start: 3.5%;
+}
+
+.library-search-input {
+  block-size: clamp(2.6rem, 4vw, 3rem);
+  padding-inline-start: clamp(2.35rem, 4vw, 2.8rem);
+}
+
+.library-card-deck {
+  gap: clamp(0.8rem, 1.7vw, 1.35rem);
+}
+
+.library-song-card {
+  border-width: max(0.0625rem, 0.06vw);
+}
+
+.library-song-card-main {
+  padding: clamp(0.9rem, 2vw, 1.5rem);
+}
+
+.library-song-card-actions {
+  gap: clamp(0.35rem, 0.8vw, 0.65rem);
+}
+
+/* Ten lightweight 3D-style ambient objects, all rendered from one JSX map. */
+.library-space-decor,
+.library-space-object {
+  position: absolute;
+  pointer-events: none;
+}
+
+.library-space-decor {
+  z-index: 2;
+  inset: 0;
+  overflow: hidden;
+  perspective: 75rem;
+}
+
+.library-space-object {
+  --size: clamp(2.8rem, 6vw, 7rem);
+  inline-size: var(--size);
+  aspect-ratio: 1;
+  opacity: 0.34;
+  filter: drop-shadow(0 0 0.8rem rgb(255 43 74 / 52%));
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.library-space-object--orb {
+  --size: clamp(3.5rem, 7vw, 7.5rem);
+  inset: 9% auto auto 5%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #fff, #ff6f83 10%, #b40735 42%, rgb(38 0 10 / 15%) 72%);
+  box-shadow: inset -1rem -1rem 2rem rgb(20 0 6 / 75%), 0 0 2.5rem rgb(255 36 70 / 45%);
+  animation: library-orb-drift 10s ease-in-out infinite alternate;
+}
+
+.library-space-object--prism {
+  inset: 18% 8% auto auto;
+  clip-path: polygon(50% 0, 100% 85%, 0 85%);
+  background: linear-gradient(135deg, rgb(255 255 255 / 78%), rgb(255 54 87 / 58%), rgb(92 0 24 / 25%));
+  animation: library-prism-spin 13s linear infinite;
+}
+
+.library-space-object--torus {
+  inset: 44% auto auto 10%;
+  border: clamp(0.35rem, 0.7vw, 0.7rem) solid rgb(255 76 103 / 48%);
+  border-radius: 50%;
+  box-shadow: inset 0 0 1rem rgb(255 209 215 / 42%), 0 0 1.8rem rgb(207 8 49 / 48%);
+  animation: library-torus-turn 11s linear infinite;
+}
+
+.library-space-object--helix {
+  inset: 28% 20% auto auto;
+  background: repeating-linear-gradient(90deg, transparent 0 12%, rgb(255 92 116 / 72%) 13% 16%, transparent 17% 26%);
+  border-radius: 50%;
+  animation: library-helix-wave 7s ease-in-out infinite;
+}
+
+.library-space-object--diamond {
+  --size: clamp(2.7rem, 5vw, 5.5rem);
+  inset: 62% auto auto 23%;
+  transform: rotate(45deg);
+  border: max(0.0625rem, 0.06vw) solid rgb(255 176 186 / 72%);
+  background: linear-gradient(135deg, rgb(255 92 116 / 32%), rgb(88 0 23 / 8%));
+  animation: library-diamond-float 8s ease-in-out infinite alternate;
+}
+
+.library-space-object--satellite {
+  --size: clamp(2.5rem, 4vw, 4.8rem);
+  inset: 12% 34% auto auto;
+  border-radius: 50%;
+  border: 0.18rem solid rgb(255 130 145 / 62%);
+  box-shadow: -1.7rem 0 0 -1rem rgb(255 75 101 / 70%), 1.7rem 0 0 -1rem rgb(255 75 101 / 70%);
+  animation: library-satellite-orbit 15s linear infinite;
+}
+
+.library-space-object--wave {
+  --size: clamp(4rem, 9vw, 10rem);
+  inset: auto 5% 26% auto;
+  block-size: calc(var(--size) * 0.42);
+  border-block-start: 0.18rem solid rgb(255 91 114 / 68%);
+  border-radius: 50%;
+  animation: library-wave-pulse 4.5s ease-in-out infinite;
+}
+
+.library-space-object--equalizer {
+  --size: clamp(4rem, 8vw, 8rem);
+  inset: auto auto 17% 4%;
+  block-size: calc(var(--size) * 0.55);
+  background: repeating-linear-gradient(90deg, rgb(255 68 97 / 62%) 0 5%, transparent 5% 11%);
+  transform-origin: bottom;
+  animation: library-eq-breathe 2.2s steps(6) infinite alternate;
+}
+
+.library-space-object--comet {
+  --size: clamp(3rem, 6vw, 7rem);
+  inset: 8% auto auto 48%;
+  block-size: 0.16rem;
+  border-radius: 999rem;
+  background: linear-gradient(90deg, transparent, #fff 76%, #ff5d78);
+  animation: library-comet-flight 9s ease-in-out infinite;
+}
+
+.library-space-object--portal {
+  --size: clamp(5rem, 10vw, 11rem);
+  inset: auto 18% 8% auto;
+  border: 0.22rem solid rgb(255 85 111 / 48%);
+  border-radius: 50%;
+  box-shadow: inset 0 0 1.6rem rgb(255 55 88 / 45%), 0 0 2.6rem rgb(160 3 39 / 45%);
+  animation: library-portal-turn 12s linear infinite;
+}
+
+@keyframes library-orb-drift { to { transform: translate3d(22%, 18%, 4rem) rotate(18deg); } }
+@keyframes library-prism-spin { to { transform: rotateY(360deg) rotateZ(360deg); } }
+@keyframes library-torus-turn { to { transform: rotateX(360deg) rotateY(180deg); } }
+@keyframes library-helix-wave { 50% { transform: rotate(180deg) scaleY(0.58); } }
+@keyframes library-diamond-float { to { transform: translateY(-35%) rotate(225deg) rotateY(45deg); } }
+@keyframes library-satellite-orbit { to { transform: rotate(360deg) translateX(55%) rotate(-360deg); } }
+@keyframes library-wave-pulse { 50% { transform: scaleX(1.35) translateY(-28%); opacity: 0.7; } }
+@keyframes library-eq-breathe { to { transform: scaleY(0.28); filter: drop-shadow(0 0 1.4rem rgb(255 74 101 / 75%)); } }
+@keyframes library-comet-flight { 0%, 25% { transform: translate3d(-45vw, -8vh, 0) rotate(-12deg); opacity: 0; } 35%, 72% { opacity: 0.75; } 100% { transform: translate3d(50vw, 18vh, 0) rotate(-12deg); opacity: 0; } }
+@keyframes library-portal-turn { to { transform: rotateX(65deg) rotateZ(360deg); } }
+
+@media (max-width: 48rem) {
+  .library-hero {
+    grid-template-columns: clamp(3.2rem, 14vw, 4.3rem) minmax(0, 1fr);
+  }
+
+  .library-hero-stats {
+    grid-column: 1 / -1;
+    inline-size: 100%;
+  }
+
+  .library-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .library-search {
+    inline-size: 100%;
+  }
+
+  .library-space-object:nth-child(n + 7) {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .library-space-object {
+    animation-play-state: paused;
   }
 }

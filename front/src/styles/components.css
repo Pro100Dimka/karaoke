@@ -165,3 +165,23 @@ select:focus,
 
 .progress-track { height: 8px; overflow: hidden; border-radius: var(--radius-pill); background: rgba(120, 141, 220, 0.18); }
 .progress-fill { height: 100%; border-radius: inherit; background: var(--gradient-primary); box-shadow: var(--shadow-neon-cyan); transition: width var(--duration-slow) var(--ease-standard); }
+
+/* Reusable surface primitive. Variants replace repeated panel/card declarations. */
+.ui-card {
+  position: relative;
+  min-inline-size: 0;
+  border: max(0.0625rem, 0.06vw) solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.ui-card--glass {
+  background: var(--gradient-glass);
+  box-shadow: var(--shadow-glass);
+  backdrop-filter: blur(1.1rem) saturate(135%);
+}
+
+.ui-card--interactive {
+  background: var(--gradient-panel);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(1.1rem) saturate(135%);
+}
