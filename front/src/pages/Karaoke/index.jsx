@@ -19,6 +19,7 @@ import { api } from "../../api/client";
 import { KARAOKE_THEMES, shuffleThemes } from "../../assets/karaoke/themes";
 import Dropdown from "../../components/fields/dropdown";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
+import useLatestRef from "../../hooks/useLatestRef";
 import { usePolling } from "../../hooks/usePolling";
 import { getErrorMessage } from "../../utils/errors";
 import KaraokeLyricLine from "./components/KaraokeLyricLine";
@@ -28,6 +29,7 @@ import PerformanceAnalysisModal from "./components/PerformanceAnalysisModal";
 import SliderField from "./components/SliderField";
 import WaveformTimeline from "./components/WaveformTimeline";
 import { MONITORING_MODES } from "./config";
+import useKaraokeHotkeys from "./hooks/useKaraokeHotkeys";
 import useKaraokePreferences from "./hooks/useKaraokePreferences";
 import useKaraokeResult from "./hooks/useKaraokeResult";
 import {
@@ -73,7 +75,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { data: songs } = usePolling(api.listSongs, 15000, []);
-  const [songId] = useState(location.state?.songId || null);
+  const songId = location.state?.songId || null;
   const song = songId
     ? (songs || []).find((s) => s.id === songId)
     : (songs || []).find((s) => s.status === "done");
@@ -155,9 +157,6 @@ export default function Karaoke({ onOpenAppSettings }) {
   const panoramaPathRef = useRef(createPanoramaPath());
   const currentTimeRef = useRef(currentTime);
   const durationRef = useRef(duration);
-  const togglePlayRef = useRef(null);
-  const seekToRef = useRef(null);
-  const stopRef = useRef(null);
   const controlsTimerRef = useRef(null);
   const lastControlsActivityRef = useRef(Date.now());
   const microphoneVolumeInitializedRef = useRef(false);
@@ -879,52 +878,41 @@ export default function Karaoke({ onOpenAppSettings }) {
   const skip = (delta) =>
     seekTo(clampPlaybackPosition(currentTime + delta, duration));
 
-  togglePlayRef.current = togglePlay;
-  seekToRef.current = seekTo;
-  stopRef.current = stop;
+  const togglePlayRef = useLatestRef(togglePlay);
+  const seekToRef = useLatestRef(seekTo);
+  const stopRef = useLatestRef(stop);
+  const roomCommand = onlineRoom?.roomCommand;
 
   useEffect(() => {
-    const command = onlineRoom?.roomCommand;
     if (
-      command?.type !== "karaoke-player" ||
+      roomCommand?.type !== "karaoke-player" ||
       !song?.id ||
-      command.songId !== song.id ||
+      roomCommand.songId !== song.id ||
       !instrumentalRef.current
     )
       return;
 
-    const position = Number(command.position);
-    if (Number.isFinite(position)) seekTo(position, { broadcast: false });
-    if (command.action === "play") {
-      togglePlay({ broadcast: false, forcePlaying: true });
-    } else if (command.action === "pause") {
-      togglePlay({ broadcast: false, forcePlaying: false });
-    } else if (command.action === "stop") {
-      stop({ broadcast: false });
+    const position = Number(roomCommand.position);
+    if (Number.isFinite(position)) {
+      seekToRef.current(position, { broadcast: false });
     }
-  }, [onlineRoom?.roomCommand]);
 
-  useEffect(() => {
-    const onKeyDown = (event) => {
-      if (event.target.closest("input, select, textarea, button")) return;
-      if (event.code === "Space") {
-        event.preventDefault();
-        togglePlayRef.current?.();
-      } else if (event.code === "ArrowLeft") {
-        event.preventDefault();
-        seekToRef.current?.(Math.max(0, currentTimeRef.current - 5));
-      } else if (event.code === "ArrowRight") {
-        event.preventDefault();
-        seekToRef.current?.(
-          Math.min(durationRef.current, currentTimeRef.current + 5)
-        );
-      } else if (event.code === "Escape") {
-        stopRef.current?.();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+    if (roomCommand.action === "play") {
+      togglePlayRef.current({ broadcast: false, forcePlaying: true });
+    } else if (roomCommand.action === "pause") {
+      togglePlayRef.current({ broadcast: false, forcePlaying: false });
+    } else if (roomCommand.action === "stop") {
+      stopRef.current({ broadcast: false });
+    }
+  }, [roomCommand, seekToRef, song?.id, stopRef, togglePlayRef]);
+
+  useKaraokeHotkeys({
+    currentTime,
+    duration,
+    onTogglePlay: togglePlay,
+    onSeek: seekTo,
+    onStop: stop
+  });
 
   const toggleFullscreen = () => {
     if (!containerRef.current) return;

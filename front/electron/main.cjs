@@ -20,8 +20,15 @@ const {
   shell
 } = require("electron");
 
+const {
+  getPackagedRendererUrl,
+  isAllowedRendererUrl,
+  isTrustedIpcEvent
+} = require("./security.cjs");
+
 const isDev = !app.isPackaged;
 const BACKEND_URL = "http://127.0.0.1:8000";
+const DEV_RENDERER_ORIGIN = "http://127.0.0.1:5173";
 
 // Keep the development profile self-contained. It avoids Windows profile
 // permission/cache corruption from making `start-dev.bat` look like a broken
@@ -170,18 +177,23 @@ function createWindow() {
     }
   });
 
+  const packagedIndexPath = path.join(__dirname, "..", "dist", "index.html");
+  const packagedIndexUrl = getPackagedRendererUrl(packagedIndexPath);
+
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   mainWindow.webContents.on("will-navigate", (event, navigationUrl) => {
-    const allowed = isDev
-      ? navigationUrl.startsWith("http://127.0.0.1:5173")
-      : navigationUrl.startsWith("file://");
+    const allowed = isAllowedRendererUrl(navigationUrl, {
+      isDev,
+      devOrigin: DEV_RENDERER_ORIGIN,
+      packagedIndexUrl
+    });
     if (!allowed) event.preventDefault();
   });
 
   if (isDev) {
-    mainWindow.loadURL("http://127.0.0.1:5173");
+    mainWindow.loadURL(DEV_RENDERER_ORIGIN);
   } else {
-    mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
+    mainWindow.loadFile(packagedIndexPath);
   }
 
   mainWindow.on("closed", () => {
@@ -189,14 +201,23 @@ function createWindow() {
   });
 }
 
-ipcMain.handle("window:minimize", () => mainWindow?.minimize());
-ipcMain.handle("window:maximize", () => {
+function handleTrustedIpc(channel, handler) {
+  ipcMain.handle(channel, (event, ...args) => {
+    if (!isTrustedIpcEvent(event, mainWindow?.webContents)) {
+      throw new Error(`Rejected IPC request: ${channel}`);
+    }
+    return handler(...args);
+  });
+}
+
+handleTrustedIpc("window:minimize", () => mainWindow?.minimize());
+handleTrustedIpc("window:maximize", () => {
   if (!mainWindow) return;
   if (mainWindow.isMaximized()) mainWindow.unmaximize();
   else mainWindow.maximize();
 });
-ipcMain.handle("window:close", () => mainWindow?.close());
-ipcMain.handle("shell:openSongFolder", (_event, targetPath) => {
+handleTrustedIpc("window:close", () => mainWindow?.close());
+handleTrustedIpc("shell:openSongFolder", (targetPath) => {
   if (typeof targetPath !== "string" || !targetPath) {
     return "A song folder was not provided.";
   }
@@ -204,8 +225,6 @@ ipcMain.handle("shell:openSongFolder", (_event, targetPath) => {
   let songsDir;
   let folderPath;
   try {
-    // Resolve links before the containment check: a link inside Song/ must
-    // not become an indirect way to open arbitrary folders from the renderer.
     songsDir = fs.realpathSync.native(resolveSongOutputDir());
     folderPath = fs.realpathSync.native(targetPath);
   } catch {
@@ -216,8 +235,8 @@ ipcMain.handle("shell:openSongFolder", (_event, targetPath) => {
   }
   return shell.openPath(folderPath);
 });
-ipcMain.handle("backend:url", () => BACKEND_URL);
-ipcMain.handle("clipboard:writeText", (_event, value) => {
+handleTrustedIpc("backend:url", () => BACKEND_URL);
+handleTrustedIpc("clipboard:writeText", (value) => {
   if (typeof value !== "string" || value.length > 256) return false;
   clipboard.writeText(value);
   return true;
@@ -226,11 +245,17 @@ ipcMain.handle("clipboard:writeText", (_event, value) => {
 app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler(
     (webContents, permission, callback, details) => {
-      const requestUrl = details?.requestingUrl || "";
+      const requestUrl = details?.requestingUrl || webContents.getURL();
+      const packagedIndexUrl = getPackagedRendererUrl(
+        path.join(__dirname, "..", "dist", "index.html")
+      );
       const trustedRenderer =
         webContents === mainWindow?.webContents &&
-        (requestUrl.startsWith("file://") ||
-          requestUrl.startsWith("http://127.0.0.1:5173"));
+        isAllowedRendererUrl(requestUrl, {
+          isDev,
+          devOrigin: DEV_RENDERER_ORIGIN,
+          packagedIndexUrl
+        });
       // The app uses only the microphone. Never grant media permissions to a
       // navigation, popup, or arbitrary origin that happens to share a session.
       callback(permission === "media" && trustedRenderer);
