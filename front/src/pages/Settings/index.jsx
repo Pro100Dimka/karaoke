@@ -7,7 +7,7 @@ import SettingsHeader from "./header";
 import SettingsContent from "./settings-content";
 import SettingsTabs from "./settings-tabs";
 
-export default function Settings({ initialTab = "appearance" }) {
+export default function Settings({ initialTab = "audio" }) {
   const { alert } = useAppDialog();
   const settings = useSettingsForm(alert);
   const navigation = useSettingsNavigation(initialTab);

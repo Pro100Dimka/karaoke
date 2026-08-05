@@ -5,6 +5,11 @@ import screens from "./screens";
 const option = (value, label = value) => ({ value, label });
 
 export const SETTINGS = {
+  audio: {
+    label: "Аудио и запись",
+    icon: SlidersHorizontal,
+    component: AudioSettings
+  },
   appearance: {
     label: "Интерфейс",
     icon: Palette,
@@ -53,11 +58,6 @@ export const SETTINGS = {
     ]
   },
 
-  audio: {
-    label: "Аудио и запись",
-    icon: SlidersHorizontal,
-    component: AudioSettings
-  },
   ai: {
     label: "AI и обработка",
     icon: Cpu,

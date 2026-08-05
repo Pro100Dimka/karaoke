@@ -28,12 +28,12 @@ function AppSettingsButton({ onClick }) {
 export default function AppLayout() {
   const location = useLocation();
   const [isSettingsOpen, setSettingsOpen] = useState(false);
-  const [settingsInitialTab, setSettingsInitialTab] = useState("appearance");
+  const [settingsInitialTab, setSettingsInitialTab] = useState("audio");
   const [songSettingsId, setSongSettingsId] = useState(null);
 
   const isKaraoke = location.pathname === ROUTES.karaoke;
 
-  const openSettings = useCallback((tab = "appearance") => {
+  const openSettings = useCallback((tab = "audio") => {
     setSongSettingsId(null);
     setSettingsInitialTab(tab);
     setSettingsOpen(true);

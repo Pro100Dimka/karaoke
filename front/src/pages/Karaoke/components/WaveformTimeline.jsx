@@ -47,7 +47,7 @@ export default function WaveformTimeline({ value, duration, onChange }) {
               width="1.5"
               height={amplitude}
               rx=".75"
-              fill={played ? "rgba(196,181,253,.98)" : "rgba(255,255,255,.18)"}
+              fill={played ? "currentColor" : "var(--waveform-future, rgba(255,255,255,.18))"}
             />
           );
         })}

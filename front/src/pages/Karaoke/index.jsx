@@ -953,7 +953,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   return (
     <div
       ref={containerRef}
-      className={`panel karaoke-stage ${isPlaying ? "karaoke-is-playing" : ""} ${!controlsVisible ? "karaoke-ui-hidden" : ""}`}
+      className={`karaoke-stage ${isPlaying ? "karaoke-is-playing" : ""} ${!controlsVisible ? "karaoke-ui-hidden" : ""}`}
       onMouseMove={revealControls}
     >
       <audio
@@ -1069,21 +1069,7 @@ export default function Karaoke({ onOpenAppSettings }) {
                   <div className="karaoke-settings-section-title">
                     Отображение и воспроизведение
                   </div>
-                  <div className="karaoke-settings-toggles">
-                    <button
-                      type="button"
-                      className={`btn ${showLyrics ? "btn-primary" : "btn-ghost"}`}
-                      onClick={() => setShowLyrics((value) => !value)}
-                    >
-                      <Type size={14} /> Текст
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn ${showNotes ? "btn-primary" : "btn-ghost"}`}
-                      onClick={() => setShowNotes((value) => !value)}
-                    >
-                      <AudioLines size={14} /> Ноты
-                    </button>
+                  <div className="karaoke-settings-toggles karaoke-settings-toggles--playback">
                     <div className="karaoke-setting-choice">
                       <span>Тональность</span>
                       <div className="karaoke-key-stepper">
@@ -1462,6 +1448,15 @@ export default function Karaoke({ onOpenAppSettings }) {
             >
               <AudioLines size={20} />
               <span>Эффекты</span>
+            </button>
+            <button
+              type="button"
+              className={`karaoke-labeled-action ${showNotes ? "is-active" : ""}`}
+              title="Показать или скрыть ноты"
+              onClick={() => setShowNotes((value) => !value)}
+            >
+              <AudioLines size={20} />
+              <span>Ноты</span>
             </button>
             <button
               type="button"
