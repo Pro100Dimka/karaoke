@@ -24,8 +24,20 @@ const LYRICS_FIELD = {
   hint: "Каждая строка — отдельная строка песни. Тайминги сохраняются автоматически."
 };
 
-const SONG_FIELDS_BEFORE_RANGE = SONG_FIELDS.slice(0, 5);
-const SONG_FIELDS_AFTER_RANGE = SONG_FIELDS.slice(5);
+const FIELD_BY_NAME = Object.fromEntries(
+  SONG_FIELDS.map((field) => [field.name, field])
+);
+
+const SONG_FIELD_ROWS = [
+  ["title", "artist"],
+  ["genre", "key_override", "tempo_override"]
+];
+
+const SONG_FIELDS_AFTER_RANGE = [
+  FIELD_BY_NAME.video_url,
+  FIELD_BY_NAME.show_lyrics,
+  FIELD_BY_NAME.show_notes
+];
 
 export default function SongSettings({ songId }) {
   const { alert: notify } = useAppDialog();
@@ -193,12 +205,31 @@ export default function SongSettings({ songId }) {
 function SongFields({ form, onChange }) {
   return (
     <div className="song-settings-fields">
-      <FieldList
-        fields={SONG_FIELDS_BEFORE_RANGE}
-        values={form}
-        onChange={onChange}
-      />
-      <NoteRangeFields form={form} onChange={onChange} />
+      {SONG_FIELD_ROWS.map((fields) => (
+        <div
+          key={fields.join("-")}
+          className={`song-settings-field-row song-settings-field-row--${fields.length}`}
+        >
+          {fields.map((name) => (
+            <FieldInput
+              key={name}
+              field={FIELD_BY_NAME[name]}
+              value={form[name]}
+              onChange={(value) => onChange(name, value)}
+            />
+          ))}
+        </div>
+      ))}
+
+      <div className="song-settings-field-row song-settings-field-row--2">
+        <FieldInput
+          field={FIELD_BY_NAME.difficulty_override}
+          value={form.difficulty_override}
+          onChange={(value) => onChange("difficulty_override", value)}
+        />
+        <NoteRangeFields form={form} onChange={onChange} />
+      </div>
+
       <FieldList
         fields={SONG_FIELDS_AFTER_RANGE}
         values={form}
@@ -210,7 +241,7 @@ function SongFields({ form, onChange }) {
 
 function NoteRangeFields({ form, onChange }) {
   return (
-    <div className="settings-field">
+    <div className="settings-field song-settings-note-range">
       <span>
         <strong>Диапазон нот (MIDI)</strong>
       </span>

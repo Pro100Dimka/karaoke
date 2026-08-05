@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
+import Card from "./ui/Card";
 import { FOCUSABLE_SELECTOR } from "./modal-focus";
 
 export default function Modal({
@@ -13,7 +14,8 @@ export default function Modal({
   modalClassName = "modal",
   closeClassName = "modal-close",
   closeIconSize = 20,
-  closeAriaLabel = "Закрыть"
+  closeAriaLabel = "Закрыть",
+  cardVariant = null
 }) {
   const dialogRef = useRef(null);
   const titleId = useId();
@@ -80,8 +82,10 @@ export default function Modal({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <section
+      <Card
         ref={dialogRef}
+        as="section"
+        variant={cardVariant ?? "glass"}
         className={modalClassName}
         role="dialog"
         aria-modal="true"
@@ -100,7 +104,7 @@ export default function Modal({
           <X size={closeIconSize} aria-hidden="true" />
         </button>
         {children}
-      </section>
+      </Card>
     </div>
   );
 

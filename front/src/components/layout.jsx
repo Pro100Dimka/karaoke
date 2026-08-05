@@ -79,7 +79,8 @@ export default function AppLayout() {
           onClose={closeSettings}
           ariaLabel="Настройки приложения"
           backdropClassName="settings-modal-backdrop"
-          modalClassName="settings-modal"
+          modalClassName="settings-modal modal-card"
+          cardVariant="neon"
           closeClassName="settings-modal-close"
           closeAriaLabel="Закрыть настройки"
           closeIconSize={20}
@@ -92,7 +93,8 @@ export default function AppLayout() {
           onClose={closeSongSettings}
           ariaLabel="Настройки песни"
           backdropClassName="song-recordings-backdrop"
-          modalClassName="song-settings-modal modal-card ui-card ui-card--neon"
+          modalClassName="song-settings-modal modal-card"
+          cardVariant="neon"
           closeClassName="song-recordings-close"
           closeAriaLabel="Закрыть настройки"
           closeIconSize={18}

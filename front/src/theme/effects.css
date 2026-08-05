@@ -1,106 +1,118 @@
+@property --card-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@property --card-angle-reverse {
+  syntax: "<angle>";
+  initial-value: 180deg;
+  inherits: false;
+}
+
 :root {
-  --card-fx-hot: #ff3c5f;
-  --card-fx-warm: #ff8c56;
-  --card-fx-bright: #ffe8df;
-  --card-fx-deep: #85001f;
-  --card-fx-sheen: rgb(255 225 214 / 18%);
-  --card-fx-sheen-soft: rgb(255 140 105 / 5%);
-  --card-fx-outer-opacity: 0.58;
-  --card-fx-mid-opacity: 0.72;
+  --card-fx-1: var(--color-highlight);
+  --card-fx-2: var(--color-primary);
+  --card-fx-3: var(--color-accent);
+  --card-fx-4: var(--color-primary-strong);
+  --card-edge-1: #fff5f7;
+  --card-edge-2: var(--color-primary-hover);
+  --card-edge-3: var(--color-primary);
+  --card-edge-4: var(--color-accent-strong);
+  --card-glint: rgb(255 248 249 / 98%);
+  --card-panel-top: rgb(55 18 14 / 72%);
+  --card-panel-bottom: rgb(28 8 8 / 85%);
+  --card-panel-accent: rgb(120 30 10 / 35%);
+  --card-panel-accent-deep: rgb(40 4 4 / 35%);
+  --card-sheen: rgb(255 220 180 / 16%);
+  --card-sheen-soft: rgb(255 180 120 / 4%);
+  --card-panel-shadow: 0 1.875rem 5rem rgb(0 0 0 / 65%);
 }
 
 :root[data-theme="light"] {
-  --card-fx-hot: #e92f63;
-  --card-fx-warm: #f4a07f;
-  --card-fx-bright: #ffffff;
-  --card-fx-deep: #bd315d;
-  --card-fx-sheen: rgb(255 255 255 / 62%);
-  --card-fx-sheen-soft: rgb(239 98 133 / 13%);
-  --card-fx-outer-opacity: 0.4;
-  --card-fx-mid-opacity: 0.56;
+  --card-fx-1: #ffffff;
+  --card-fx-2: var(--color-primary);
+  --card-fx-3: var(--color-peach);
+  --card-fx-4: var(--color-raspberry);
+  --card-edge-1: #ffffff;
+  --card-edge-2: var(--color-primary-hover);
+  --card-edge-3: var(--color-coral);
+  --card-edge-4: var(--color-accent);
+  --card-glint: rgb(255 255 255 / 98%);
+  --card-panel-top: rgb(255 253 251 / 82%);
+  --card-panel-bottom: rgb(255 235 228 / 88%);
+  --card-panel-accent: rgb(239 63 101 / 12%);
+  --card-panel-accent-deep: rgb(246 160 128 / 16%);
+  --card-sheen: rgb(255 255 255 / 64%);
+  --card-sheen-soft: rgb(239 98 133 / 10%);
+  --card-panel-shadow: 0 1.875rem 5rem rgb(118 68 78 / 18%);
 }
 
-/* Reusable layered glass-neon effect for Card variant="neon". */
 .fx-neon-frame,
 .ui-card--neon {
   --card-mx: 50%;
   --card-my: 20%;
+  --tilt-x: 0deg;
+  --tilt-y: 0deg;
   position: relative;
   isolation: isolate;
-  border-color: transparent;
+  overflow: visible;
+  border: 0;
+  background: transparent;
   transform-style: preserve-3d;
-  box-shadow:
-    var(--shadow-lg),
-    inset 0 var(--hairline) 0 rgb(255 255 255 / 8%);
-}
-
-.ui-card--neon > :not(.ui-card__fx) {
-  position: relative;
-  z-index: 3;
+  transform: rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
+  transition: transform 0.15s ease-out;
+  will-change: transform;
 }
 
 .ui-card__fx {
   position: absolute;
   pointer-events: none;
-  border-radius: inherit;
-}
-
-/* Transform-driven layers: reliable in Electron/Chromium without animated CSS custom properties. */
-.ui-card__glow,
-.ui-card__glow-mid,
-.ui-card__edge,
-.ui-card__glint {
-  overflow: hidden;
-}
-
-.ui-card__glow::before,
-.ui-card__glow-mid::before,
-.ui-card__edge::before,
-.ui-card__glint::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: max(180%, 90rem);
-  aspect-ratio: 1;
-  translate: -50% -50%;
-  background: conic-gradient(
-    var(--card-fx-bright),
-    var(--card-fx-hot),
-    var(--card-fx-warm),
-    var(--card-fx-deep),
-    var(--card-fx-bright),
-    var(--card-fx-hot),
-    var(--card-fx-bright)
-  );
-  will-change: transform;
 }
 
 .ui-card__glow {
-  z-index: 0;
-  inset: -1rem;
-  filter: blur(1.25rem);
-  opacity: var(--card-fx-outer-opacity);
-  animation: card-fx-breathe 4s ease-in-out infinite;
+  z-index: -2;
+  inset: -1.125rem;
+  border-radius: calc(var(--radius-xl) + 0.75rem);
+  padding: 0.1875rem;
+  background: conic-gradient(
+    from var(--card-angle),
+    var(--card-fx-1),
+    var(--card-fx-2),
+    var(--card-fx-3),
+    var(--card-fx-4),
+    var(--card-fx-1)
+  );
+  filter: blur(1.375rem);
+  opacity: 0.55;
+  animation:
+    card-spin 7s linear infinite,
+    card-breathe 4s ease-in-out infinite;
 }
-
-.ui-card__glow::before { animation: card-fx-rotate 7s linear infinite; }
 
 .ui-card__glow-mid {
-  z-index: 0;
-  inset: -0.42rem;
-  filter: blur(0.58rem);
-  opacity: var(--card-fx-mid-opacity);
+  z-index: -1;
+  inset: -0.375rem;
+  border-radius: calc(var(--radius-xl) + 0.375rem);
+  background: conic-gradient(
+    from var(--card-angle-reverse),
+    var(--card-edge-1),
+    var(--card-fx-2),
+    var(--card-fx-3),
+    var(--card-fx-4),
+    var(--card-edge-1)
+  );
+  filter: blur(0.5625rem);
+  opacity: 0.7;
+  animation: card-spin-reverse 9s linear infinite;
 }
 
-.ui-card__glow-mid::before { animation: card-fx-rotate-reverse 9s linear infinite; }
-
-/* Mask the animated layers to a crisp ring. */
 .ui-card__edge,
 .ui-card__glint {
   z-index: 5;
-  inset: calc(-1 * max(var(--hairline), 0.09rem));
-  padding: max(var(--hairline), 0.09rem);
+  inset: -0.09375rem;
+  border-radius: calc(var(--radius-xl) + 0.125rem);
+  padding: 0.09375rem;
   -webkit-mask:
     linear-gradient(#fff 0 0) content-box,
     linear-gradient(#fff 0 0);
@@ -109,71 +121,120 @@
 }
 
 .ui-card__edge {
-  filter:
-    drop-shadow(0 0 0.18rem color-mix(in srgb, var(--card-fx-bright) 78%, transparent))
-    drop-shadow(0 0 0.65rem color-mix(in srgb, var(--card-fx-hot) 62%, transparent));
-}
-
-.ui-card__edge::before { animation: card-fx-rotate 7s linear infinite; }
-
-.ui-card__glint::before {
   background: conic-gradient(
-    transparent 0deg,
-    transparent 260deg,
-    color-mix(in srgb, var(--card-fx-bright) 100%, transparent) 282deg,
-    color-mix(in srgb, var(--card-fx-warm) 80%, transparent) 294deg,
-    transparent 313deg,
-    transparent 360deg
+    from var(--card-angle),
+    var(--card-edge-1),
+    var(--card-edge-2),
+    var(--card-edge-3),
+    var(--card-edge-4),
+    var(--card-edge-1)
   );
-  animation: card-fx-rotate-reverse 3.2s linear infinite;
+  animation: card-spin 7s linear infinite;
 }
 
 .ui-card__glint {
   z-index: 6;
-  filter:
-    drop-shadow(0 0 0.24rem var(--card-fx-bright))
-    drop-shadow(0 0 0.8rem color-mix(in srgb, var(--card-fx-hot) 70%, transparent));
+  background: conic-gradient(
+    from var(--card-angle-reverse),
+    transparent 0deg,
+    transparent 260deg,
+    var(--card-glint) 285deg,
+    transparent 310deg,
+    transparent 360deg
+  );
+  animation: card-spin-reverse 3.2s linear infinite;
   mix-blend-mode: screen;
+}
+
+.ui-card__panel {
+  position: relative;
+  z-index: 3;
+  inline-size: 100%;
+  block-size: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  background:
+    linear-gradient(180deg, var(--card-panel-top), var(--card-panel-bottom)),
+    linear-gradient(135deg, var(--card-panel-accent), var(--card-panel-accent-deep));
+  box-shadow:
+    var(--card-panel-shadow),
+    inset 0 var(--hairline) 0 rgb(255 255 255 / 6%);
+  backdrop-filter: blur(1.125rem) saturate(140%);
+  -webkit-backdrop-filter: blur(1.125rem) saturate(140%);
+}
+
+.ui-card__content {
+  position: relative;
+  z-index: 5;
+  inline-size: 100%;
+  block-size: 100%;
 }
 
 .ui-card__sheen {
-  z-index: 2;
+  z-index: 4;
   inset: 0;
+  border-radius: inherit;
   background: radial-gradient(
-    circle 20rem at var(--card-mx) var(--card-my),
-    var(--card-fx-sheen),
-    var(--card-fx-sheen-soft) 40%,
-    transparent 72%
+    20rem 20rem at var(--card-mx) var(--card-my),
+    var(--card-sheen),
+    var(--card-sheen-soft) 40%,
+    transparent 70%
   );
   mix-blend-mode: screen;
-  opacity: 0.84;
-  transition: opacity var(--duration-fast) var(--ease-standard);
 }
 
-.ui-card--neon:hover .ui-card__sheen { opacity: 1; }
-.fx-neon-pulse { animation: card-fx-breathe 4s ease-in-out infinite; }
 
-@keyframes card-fx-rotate { to { transform: rotate(1turn); } }
-@keyframes card-fx-rotate-reverse { to { transform: rotate(-1turn); } }
-@keyframes card-fx-breathe {
-  0%, 100% { opacity: calc(var(--card-fx-outer-opacity) * 0.82); }
-  50% { opacity: min(0.86, calc(var(--card-fx-outer-opacity) * 1.38)); }
+.ui-card--neon:hover .ui-card__glow {
+  opacity: 0.78;
+  filter: blur(1.55rem);
 }
 
-:root[data-theme="light"] .ui-card--neon {
-  box-shadow:
-    0 1.5rem 4rem rgb(118 68 78 / 14%),
-    inset 0 var(--hairline) 0 rgb(255 255 255 / 88%);
+.ui-card--neon:hover .ui-card__glow-mid {
+  opacity: 0.9;
 }
 
-:root[data-theme="light"] .ui-card__edge {
-  filter:
-    drop-shadow(0 0 0.2rem rgb(255 255 255 / 96%))
-    drop-shadow(0 0 0.72rem rgb(227 71 108 / 38%));
+.ui-card--neon:hover .ui-card__sheen {
+  opacity: 1;
 }
 
-:root[data-theme="light"] .ui-card__glint {
-  filter:
-    drop-shadow(0 0 0.24rem rgb(255 255 255 / 100%))
-    drop-shadow(0 0 0.78rem rgb(235 83 118 / 44%));
+@keyframes card-spin {
+  to { --card-angle: 360deg; }
+}
+
+@keyframes card-spin-reverse {
+  from { --card-angle-reverse: 360deg; }
+  to { --card-angle-reverse: 0deg; }
+}
+
+@keyframes card-breathe {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.75; }
+}
+
+.fx-neon-pulse { animation: card-breathe 4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-card__glow,
+  .ui-card__glow-mid,
+  .ui-card__edge,
+  .ui-card__glint {
+    animation-play-state: paused;
+  }
+}
+
+/* Chromium/Electron fallback: keep the reference effect animated even when
+   registered custom-property interpolation is unavailable or inconsistent. */
+@supports not (background: conic-gradient(from 1deg, red, blue)) {
+  .ui-card__glow,
+  .ui-card__glow-mid,
+  .ui-card__edge,
+  .ui-card__glint { animation: none; }
+}
+
+.ui-card--neon > .ui-card__panel {
+  min-inline-size: 0;
+}
+
+.ui-card--neon > .ui-card__panel > .ui-card__content {
+  min-inline-size: 0;
 }
