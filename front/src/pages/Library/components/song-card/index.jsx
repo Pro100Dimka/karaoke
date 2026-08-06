@@ -101,7 +101,7 @@ export default function LibrarySongCard({
           </Button>
         )}
         <div className="library-song-card-footer">
-          <p className="library-song-card-meta">
+          <p className="library-song-card-meta u-muted-xs">
             <TextItems items={metadata} />
           </p>
           <div className="library-song-card-actions">

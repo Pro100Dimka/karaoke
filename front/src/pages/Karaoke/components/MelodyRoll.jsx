@@ -89,13 +89,13 @@ export default function MelodyRoll({
 
   return (
     <div className="melody-roll">
-      <div className="melody-roll-header">
+      <div className="melody-roll-header u-between-3">
         <div>
-          <div className="melody-roll-caption">Мелодическая карта</div>
+          <div className="melody-roll-caption u-muted-xs">Мелодическая карта</div>
           <strong>{songTitle}</strong>
         </div>
         <div
-          className="melody-roll-legend"
+          className="melody-roll-legend u-muted-xs u-between-3"
           aria-label="Обозначения мелодической карты"
         >
           <span>

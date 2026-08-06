@@ -77,7 +77,7 @@ export default function RecordingsModal({
           ))}
         </div>
         {!recordings.length && !error && (
-          <div className="song-recordings-empty">
+          <div className="song-recordings-empty u-empty-state">
             Для этой песни пока нет записанных исполнений.
           </div>
         )}

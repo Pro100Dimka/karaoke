@@ -4,7 +4,7 @@ export function DiagnosticCheck({ label, ok }) {
   const status = ok ? "success" : "error";
   const Icon = STATUS_ICONS[status];
   return (
-    <div className="diagnostics-check">
+    <div className="diagnostics-check u-surface-card">
       <span>{label}</span>
       <Icon className={`diagnostics-icon ${status}`} />
     </div>
@@ -14,7 +14,7 @@ export function VersionList({ components }) {
   const entries = Object.entries(components ?? {});
   if (!entries.length) return null;
   return (
-    <div className="diagnostics-versions">
+    <div className="diagnostics-versions u-stack-2">
       <div className="panel-title diagnostics-versions-title">Версии</div>
       {entries.map(([name, version]) => (
         <div key={name} className="diagnostics-version-row">

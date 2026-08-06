@@ -28,7 +28,7 @@ export default function MicrophoneSettingsModal({
   return (
     <div className="karaoke-settings-backdrop" onMouseDown={onClose}>
       <div
-        className="microphone-panel karaoke-settings-modal"
+        className="microphone-panel karaoke-settings-modal u-surface-card"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="microphone-panel-title">
@@ -52,7 +52,7 @@ export default function MicrophoneSettingsModal({
         />
 
         {isEffectsView ? (
-          <div className="microphone-effects karaoke-effects-panel">
+          <div className="microphone-effects karaoke-effects-panel u-stack-4">
             {EFFECT_FIELDS.map(({ key, label }) => (
               <SliderField
                 key={key}
@@ -69,11 +69,11 @@ export default function MicrophoneSettingsModal({
           </div>
         ) : (
           <>
-            <div className="karaoke-settings-section">
+            <div className="karaoke-settings-section u-stack-4">
               <div className="karaoke-settings-section-title">
                 Отображение и воспроизведение
               </div>
-              <div className="karaoke-settings-toggles karaoke-settings-toggles--playback">
+              <div className="karaoke-settings-toggles karaoke-settings-toggles--playback u-stack-4">
                 <div className="karaoke-setting-choice">
                   <span>Тональность</span>
                   <div className="karaoke-key-stepper">
@@ -102,7 +102,7 @@ export default function MicrophoneSettingsModal({
                   </small>
                 </div>
               </div>
-              <div className="karaoke-settings-sliders karaoke-settings-sliders--single">
+              <div className="karaoke-settings-sliders karaoke-settings-sliders--single u-grid-2">
                 <div className="karaoke-setting-choice">
                   <span>Скорость</span>
                   <div className="karaoke-speed-switch" role="group" aria-label="Скорость">

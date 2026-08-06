@@ -60,7 +60,7 @@ export function AudioPlayer({ src, className = "" }) {
         label={playing ? "Пауза" : "Воспроизвести запись"}
         onClick={toggle}
       />
-      <div className="performance-player-track">
+      <div className="performance-player-track u-muted-xs">
         <RangeInput
           aria-label="Позиция записи"
           min="0"

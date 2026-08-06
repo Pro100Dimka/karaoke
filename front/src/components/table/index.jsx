@@ -32,7 +32,7 @@ export default function Table({
         ))}
         {!rows.length && (
           <tr>
-            <td colSpan={columns.length} className="table-empty text-muted">
+            <td colSpan={columns.length} className="table-empty text-muted u-empty-state">
               {emptyText}
             </td>
           </tr>

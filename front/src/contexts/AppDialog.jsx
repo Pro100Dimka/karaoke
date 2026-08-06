@@ -52,7 +52,7 @@ function DialogModal({ dialog, onClose }) {
       />
 
       <div className="app-dialog-body">
-        <div className="app-dialog-actions">
+        <div className="app-dialog-actions u-actions-end">
           {isConfirmation && (
             <Button variant="ghost" onClick={() => onClose(false)}>
               {dialog.cancelText}

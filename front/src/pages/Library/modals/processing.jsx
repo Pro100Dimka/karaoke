@@ -52,7 +52,7 @@ export default function ProcessingModal({
           <strong>{Math.round(progress)}%</strong>
         </div>
         <ProcessingSignal progress={progress} />
-        <div className="processing-modal-stage">
+        <div className="processing-modal-stage u-between-3">
           <span>{status?.progress_step ?? "Подготовка"}</span>
           {active && (
             <strong>Осталось: {formatEta(status?.eta_seconds)}</strong>

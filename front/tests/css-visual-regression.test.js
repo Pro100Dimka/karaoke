@@ -3,15 +3,7 @@ import test from "node:test";
 import { readCssBundle } from "./helpers/css.js";
 
 const css = readCssBundle([
-  new URL("../src/theme/index.css", import.meta.url),
-  new URL("../src/styles/reset.css", import.meta.url),
-  new URL("../src/styles/components.css", import.meta.url),
-  new URL("../src/styles/layout.css", import.meta.url),
-  new URL("../src/styles/compat.css", import.meta.url),
-  new URL("../src/pages/Library/library.css", import.meta.url),
-  new URL("../src/pages/Library/modals/song-settings/song-settings.css", import.meta.url),
-  new URL("../src/pages/Settings/settings.css", import.meta.url),
-  new URL("../src/pages/Karaoke/karaoke.css", import.meta.url)
+  new URL("../src/styles/app.css", import.meta.url)
 ]);
 
 const criticalSelectors = [

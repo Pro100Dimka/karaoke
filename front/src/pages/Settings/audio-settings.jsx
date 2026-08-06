@@ -104,7 +104,7 @@ export default function AudioSettings() {
 
   return (
     <div className="audio-settings-grid">
-      <section className="audio-settings-group">
+      <section className="audio-settings-group u-stack-4">
         <header className="audio-settings-group__header">
           <Mic2 size={18} />
           <div>
@@ -163,7 +163,7 @@ export default function AudioSettings() {
         </div>
       </section>
 
-      <section className="audio-settings-group">
+      <section className="audio-settings-group u-stack-4">
         <header className="audio-settings-group__header">
           <Headphones size={18} />
           <div>

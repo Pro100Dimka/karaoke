@@ -86,7 +86,7 @@ export default function SongSettings({ songId, onClose }) {
           )}
         </div>
       </div>
-      <div className="song-settings-actions">
+      <div className="song-settings-actions u-actions-end">
         {actions.map(
           ([
             Icon,

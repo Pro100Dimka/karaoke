@@ -15,7 +15,7 @@ export default function SliderField({
   const generatedId = useId();
   const inputId = `slider-${generatedId.replace(/:/g, "")}`;
   return (
-    <label className="slider-field" htmlFor={inputId}>
+    <label className="slider-field u-stack-2" htmlFor={inputId}>
       <span className="slider-field__header">
         <span>{label}</span>
         <span className="mono">{display}</span>

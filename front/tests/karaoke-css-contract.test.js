@@ -39,17 +39,7 @@ function sourceClassNames() {
 
 test("application CSS imports use the new theme and page architecture", () => {
   const indexCss = fs.readFileSync(path.join(root, "src/index.css"), "utf8");
-  const expected = [
-    "./theme/index.css",
-    "./styles/reset.css",
-    "./styles/components.css",
-    "./styles/layout.css",
-    "./styles/compat.css",
-    "./pages/Library/library.css",
-    "./pages/Library/modals/song-settings/song-settings.css",
-    "./pages/Settings/settings.css",
-    "./pages/Karaoke/karaoke.css"
-  ];
+  const expected = ["./styles/app.css"];
   const actual = [...indexCss.matchAll(/@import\s+["']([^"']+)["']/g)].map(
     (match) => match[1]
   );

@@ -31,7 +31,7 @@ export default function SettingsContent(props) {
   }
   if (tab === "service") {
     return (
-      <div className="settings-service-grid">
+      <div className="settings-service-grid u-grid-2">
         {SETTINGS.service.screens.map(({ id, title, text }) => (
           <Button
             key={id}

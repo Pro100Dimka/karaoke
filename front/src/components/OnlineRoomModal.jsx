@@ -67,13 +67,13 @@ export function OnlineRoomModal({ onlineName, onClose }) {
 
       <div className="modal-scroll online-room-modal__content">
         {!joinMode ? (
-          <div className="online-room-form">
+          <div className="online-room-form u-stack-4">
             <p>
               Создайте комнату и отправьте другу автоматически созданный код или
               войдите по коду ведущего.
             </p>
             {error && <p className="karaoke-recording-error">{error}</p>}
-            <div className="online-room-actions">
+            <div className="online-room-actions u-actions-end">
               <Button
                 variant="primary"
                 disabled={busy}
@@ -91,7 +91,7 @@ export function OnlineRoomModal({ onlineName, onClose }) {
             </div>
           </div>
         ) : (
-          <div className="online-room-form">
+          <div className="online-room-form u-stack-4">
             <FieldInput
               id="online-room-code"
               field={{
@@ -110,7 +110,7 @@ export function OnlineRoomModal({ onlineName, onClose }) {
               }}
             />
             {error && <p className="karaoke-recording-error">{error}</p>}
-            <div className="online-room-actions">
+            <div className="online-room-actions u-actions-end">
               <Button
                 variant="primary"
                 disabled={busy || roomId.length < 4}
