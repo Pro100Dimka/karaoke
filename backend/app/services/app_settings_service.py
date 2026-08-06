@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
-import os
+import threading
 from typing import Any
 
 import config
+from app.utils.json_files import read_json, write_json
 
 SETTINGS_FILE = config.DATA_DIR / "settings.json"
+_settings_lock = threading.RLock()
+
 DEFAULT_SETTINGS: dict[str, Any] = {
     "language": "ru",
     "theme": "dark",
@@ -32,25 +35,27 @@ def path_settings() -> dict[str, str]:
     }
 
 
-def read_settings() -> dict[str, Any]:
+def _read_settings_unlocked() -> dict[str, Any]:
     try:
-        raw = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        raw = read_json(SETTINGS_FILE, default={})
+    except (json.JSONDecodeError, OSError):
         raw = {}
     stored = raw if isinstance(raw, dict) else {}
     known_values = {key: stored[key] for key in DEFAULT_SETTINGS if key in stored}
     return {**DEFAULT_SETTINGS, **known_values, **path_settings()}
 
 
+def read_settings() -> dict[str, Any]:
+    with _settings_lock:
+        return _read_settings_unlocked()
+
+
 def update_settings(patch: dict[str, Any]) -> dict[str, Any]:
-    """Atomically persist known preferences and return their display representation."""
-    data = {**read_settings(), **patch}
-    persisted = {key: data[key] for key in DEFAULT_SETTINGS if key in data}
-    SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    temporary_file = SETTINGS_FILE.with_suffix(".tmp")
-    with temporary_file.open("w", encoding="utf-8") as file:
-        json.dump(persisted, file, ensure_ascii=False, indent=2)
-        file.flush()
-        os.fsync(file.fileno())
-    temporary_file.replace(SETTINGS_FILE)
-    return read_settings()
+    """Merge and persist preferences without losing concurrent partial updates."""
+    with _settings_lock:
+        data = {**read_settings(), **patch}
+        if not data["use_gpu"] and not data["use_cpu"]:
+            raise ValueError("At least one AI compute target must remain enabled")
+        persisted = {key: data[key] for key in DEFAULT_SETTINGS if key in data}
+        write_json(SETTINGS_FILE, persisted)
+        return read_settings()

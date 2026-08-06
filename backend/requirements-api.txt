@@ -1,0 +1,11 @@
+# Lightweight API/runtime dependencies. Install this for backend development
+# when the AI pipeline itself is not required.
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+python-multipart>=0.0.9,<1
+sqlalchemy>=2.0,<3
+pydantic>=2.8,<3
+sounddevice>=0.5,<1
+soundfile>=0.12,<1
+numpy>=1.26,<3
+mutagen>=1.47,<2

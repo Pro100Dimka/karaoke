@@ -1,50 +1,40 @@
-"""Анализ голоса: сравнение записи пользователя с эталонной мелодией."""
+"""Voice-analysis endpoints."""
+
+from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
 
 import models
 import schemas
+from app import repositories
+from app.api.dependencies import AnalysisDependency, DatabaseSession, RecordingDependency
 from app.services import analysis_service
-from database import get_db
+from app.utils.json_values import parse_json_value
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 
 
-def _get_recording_or_404(recording_id: str, db: Session) -> models.Recording:
-    recording = db.query(models.Recording).filter(models.Recording.id == recording_id).first()
-    if recording is None:
-        raise HTTPException(status_code=404, detail="Запись не найдена")
-    return recording
-
-
 def _to_out(result: models.AnalysisResult) -> schemas.AnalysisOut:
-    sections = json.loads(result.sections_json) if result.sections_json else None
     return schemas.AnalysisOut(
         id=result.id,
         recording_id=result.recording_id,
         pitch_accuracy_percent=result.pitch_accuracy_percent,
         mean_deviation_semitones=result.mean_deviation_semitones,
-        sections=sections,
+        sections=parse_json_value(result.sections_json, None),
         created_at=result.created_at,
     )
 
 
 @router.post("/{recording_id}/run", response_model=schemas.AnalysisOut)
-def run_analysis(recording_id: str, db: Session = Depends(get_db)):
-    recording = _get_recording_or_404(recording_id, db)
-    song = db.query(models.Song).filter(models.Song.id == recording.song_id).first()
+def run_analysis(recording: RecordingDependency, db: DatabaseSession):
+    song = repositories.get_song(db, recording.song_id)
     if song is None:
         raise HTTPException(status_code=404, detail="Песня для этой записи не найдена")
 
-    existing = (
-        db.query(models.AnalysisResult)
-        .filter(models.AnalysisResult.recording_id == recording_id)
-        .first()
-    )
+    existing = repositories.get_analysis_by_recording(db, recording.id)
     if existing is not None:
         return _to_out(existing)
 
@@ -53,80 +43,46 @@ def run_analysis(recording_id: str, db: Session = Depends(get_db)):
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    sections_json = (
-        json.dumps(analysis["sections"], ensure_ascii=False) if analysis["sections"] else None
-    )
-
     result = models.AnalysisResult(
-        recording_id=recording_id,
+        recording_id=recording.id,
         pitch_accuracy_percent=analysis["pitch_accuracy_percent"],
         mean_deviation_semitones=analysis["mean_deviation_semitones"],
-        sections_json=sections_json,
+        sections_json=(
+            json.dumps(analysis["sections"], ensure_ascii=False)
+            if analysis["sections"]
+            else None
+        ),
     )
     db.add(result)
-
     try:
         db.commit()
         db.refresh(result)
     except IntegrityError:
-        # Two clients can request the same analysis simultaneously (for
-        # example React StrictMode during development). The other request may
-        # already have committed the unique recording result; return it.
         db.rollback()
-        existing_result = (
-            db.query(models.AnalysisResult)
-            .filter(models.AnalysisResult.recording_id == recording_id)
-            .first()
-        )
-        if existing_result is None:
+        result = repositories.get_analysis_by_recording(db, recording.id)
+        if result is None:
             raise
-        result = existing_result
+    except Exception:
+        db.rollback()
+        raise
     return _to_out(result)
 
 
 @router.get("/{recording_id}", response_model=schemas.AnalysisOut)
-def get_analysis(recording_id: str, db: Session = Depends(get_db)):
-    result = (
-        db.query(models.AnalysisResult)
-        .filter(models.AnalysisResult.recording_id == recording_id)
-        .first()
-    )
-    if result is None:
-        raise HTTPException(status_code=404, detail="Анализ ещё не выполнялся для этой записи")
+def get_analysis(result: AnalysisDependency):
     return _to_out(result)
 
 
 @router.get("/{recording_id}/accuracy")
-def get_accuracy(recording_id: str, db: Session = Depends(get_db)):
-    result = (
-        db.query(models.AnalysisResult)
-        .filter(models.AnalysisResult.recording_id == recording_id)
-        .first()
-    )
-    if result is None:
-        raise HTTPException(status_code=404, detail="Анализ ещё не выполнялся для этой записи")
+def get_accuracy(result: AnalysisDependency):
     return {"pitch_accuracy_percent": result.pitch_accuracy_percent}
 
 
 @router.get("/{recording_id}/deviation")
-def get_deviation(recording_id: str, db: Session = Depends(get_db)):
-    result = (
-        db.query(models.AnalysisResult)
-        .filter(models.AnalysisResult.recording_id == recording_id)
-        .first()
-    )
-    if result is None:
-        raise HTTPException(status_code=404, detail="Анализ ещё не выполнялся для этой записи")
+def get_deviation(result: AnalysisDependency):
     return {"mean_deviation_semitones": result.mean_deviation_semitones}
 
 
 @router.get("/{recording_id}/sections")
-def get_sections(recording_id: str, db: Session = Depends(get_db)):
-    result = (
-        db.query(models.AnalysisResult)
-        .filter(models.AnalysisResult.recording_id == recording_id)
-        .first()
-    )
-    if result is None:
-        raise HTTPException(status_code=404, detail="Анализ ещё не выполнялся для этой записи")
-    return {"sections": json.loads(result.sections_json) if result.sections_json else None}
+def get_sections(result: AnalysisDependency):
+    return {"sections": parse_json_value(result.sections_json, None)}

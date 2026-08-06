@@ -17,6 +17,25 @@ def _env_path(name: str, default: Path) -> Path:
     return Path(value).expanduser().resolve() if value else default
 
 
+def _env_int(name: str, default: int, *, minimum: int, maximum: int | None = None) -> int:
+    """Read a bounded integer environment variable with an actionable error."""
+    raw = os.environ.get(name)
+    try:
+        value = int(raw) if raw is not None else default
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer, got {raw!r}") from exc
+    if value < minimum or (maximum is not None and value > maximum):
+        range_text = f"{minimum}..{maximum}" if maximum is not None else f">= {minimum}"
+        raise ValueError(f"{name} must be in range {range_text}, got {value}")
+    return value
+
+
+def _unique_csv(name: str, defaults: tuple[str, ...]) -> tuple[str, ...]:
+    """Read a comma-separated setting, trim it and preserve unique order."""
+    raw = os.environ.get(name, ",".join(defaults))
+    return tuple(dict.fromkeys(item.strip() for item in raw.split(",") if item.strip()))
+
+
 # --------------------------------------------------------------------
 # Базовые пути
 # --------------------------------------------------------------------
@@ -35,7 +54,7 @@ LOGS_DIRNAME = "logs"                        # подпапка внутри Son
 # macOS при упаковке в инсталлятор.
 DATA_DIR = _env_path("SONGAPP_DATA_DIR", BASE_DIR / "data")
 DB_PATH = DATA_DIR / "app.db"
-_DEFAULT_LOG_DIR = DATA_DIR / "logs" if IS_FROZEN else BASE_DIR.parent / "logs"
+_DEFAULT_LOG_DIR = DATA_DIR / "logs"
 APP_LOG_DIR = _env_path("SONGAPP_LOG_DIR", _DEFAULT_LOG_DIR)
 
 # Keep the development layout. The packaged application gets SONGAPP_DATA_DIR
@@ -58,6 +77,10 @@ DEFAULT_WHISPER_MODEL = "turbo"
 DEFAULT_LANGUAGE = None  # автоопределение
 
 ALLOWED_AUDIO_EXTENSIONS = {".mp3", ".wav", ".flac", ".m4a", ".ogg"}
+MAX_AUDIO_UPLOAD_BYTES = _env_int(
+    "SONGAPP_MAX_AUDIO_UPLOAD_BYTES", 2 * 1024**3, minimum=1
+)
+UPLOAD_CHUNK_SIZE = _env_int("SONGAPP_UPLOAD_CHUNK_SIZE", 1024 * 1024, minimum=4096)
 
 # Стандартный формат аудио, который backend гарантирует на выходе
 # (используется при оптимизации/конвертации файлов песни, см. cache_service).
@@ -76,7 +99,14 @@ RECORDING_CHANNELS = 1
 # --------------------------------------------------------------------
 
 HOST = os.environ.get("SONGAPP_HOST", "127.0.0.1")   # локальный десктоп-бекенд — наружу не торчит
-PORT = int(os.environ.get("SONGAPP_PORT", "8000"))
+PORT = _env_int("SONGAPP_PORT", 8000, minimum=1, maximum=65535)
+DEFAULT_UI_ORIGINS = (
+    "http://127.0.0.1:3000",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+)
+CORS_ORIGINS = _unique_csv("SONGAPP_CORS_ORIGINS", DEFAULT_UI_ORIGINS)
 
 
 def ensure_directories() -> None:

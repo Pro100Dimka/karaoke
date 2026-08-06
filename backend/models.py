@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import enum
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -14,6 +14,10 @@ from database import Base
 
 def _new_id() -> str:
     return uuid.uuid4().hex
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
 
 
 class SongStatus(str, enum.Enum):
@@ -49,9 +53,9 @@ class Song(Base):
     show_lyrics: Mapped[bool] = mapped_column(Boolean, default=True)
     show_notes: Mapped[bool] = mapped_column(Boolean, default=True)
     optimized: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True), default=_utc_now, onupdate=_utc_now
     )
 
     recordings: Mapped[list[Recording]] = relationship(
@@ -71,7 +75,7 @@ class Recording(Base):
     path: Mapped[str] = mapped_column(String, nullable=False)
     duration_sec: Mapped[float | None] = mapped_column(Float)
     sample_rate: Mapped[int | None] = mapped_column(Integer)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
     song: Mapped[Song] = relationship(back_populates="recordings")
     analysis: Mapped[AnalysisResult | None] = relationship(
@@ -87,7 +91,7 @@ class AnalysisResult(Base):
     pitch_accuracy_percent: Mapped[float | None] = mapped_column(Float)
     mean_deviation_semitones: Mapped[float | None] = mapped_column(Float)
     sections_json: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
     recording: Mapped[Recording] = relationship(back_populates="analysis")
 
@@ -99,7 +103,7 @@ class PlaybackState(Base):
     position_sec: Mapped[float] = mapped_column(Float, default=0.0)
     is_playing: Mapped[bool] = mapped_column(Boolean, default=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True), default=_utc_now, onupdate=_utc_now
     )
 
     song: Mapped[Song] = relationship(back_populates="playback_state")
@@ -123,5 +127,5 @@ class AudioSettings(Base):
     echo: Mapped[float] = mapped_column(Float, default=0.0)
     delay: Mapped[float] = mapped_column(Float, default=0.0)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True), default=_utc_now, onupdate=_utc_now
     )

@@ -2,7 +2,8 @@
 name = "karaoke-ai-backend"
 version = "0.1.0"
 description = "Локальный FastAPI backend поверх AI-пайплайна (Karaoke AI)."
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
+readme = "README.md"
 
 [tool.ruff]
 line-length = 100
@@ -40,5 +41,15 @@ warn_unused_ignores = true
 exclude = ["AI/", "Song/", "full_songs/"]
 
 [tool.pytest.ini_options]
-testpaths = ["AI/tests"]
+testpaths = ["tests", "AI/tests"]
 pythonpath = ["."]
+
+[tool.coverage.run]
+branch = true
+source = ["app"]
+omit = ["AI/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 55

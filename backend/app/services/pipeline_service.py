@@ -9,7 +9,7 @@ run_all.py уже печатает прогресс по шагам в духе 
 
 import contextlib
 import io
-import json
+import logging
 import os
 import re
 import shutil
@@ -22,8 +22,13 @@ from typing import TextIO, cast
 
 import config
 import models
+from app import repositories
 from app.services import ai_bridge, app_settings_service, cache_service, song_service
+from app.services.db_utils import commit
+from app.utils.json_files import read_json
 from database import SessionLocal
+
+logger = logging.getLogger(__name__)
 
 _STEP_RE = re.compile(r"(?P<step>\d+(?:\.\d+)?)\s*/\s*13")
 
@@ -123,32 +128,43 @@ class _ProgressCapture(io.TextIOBase):
 
     def __init__(self, song_id: str, log_path: Path):
         self._song_id = song_id
+        self._lock = threading.RLock()
+        self._closed = False
         # The stream deliberately stays open for the lifetime of the capture.
         self._log_file = open(log_path, "a", encoding="utf-8")  # noqa: SIM115
 
     def write(self, text: str) -> int:
-        if _is_cancelled(self._song_id):
-            raise ProcessingCancelled("Processing cancelled by user")
-        self._log_file.write(text)
-        self._log_file.flush()
-        match = _STEP_RE.search(text)
-        if match:
-            step = match.group("step")
-            _set_runtime_step(self._song_id, float(step), text)
-            _update_progress(
-                self._song_id,
-                step_label=f"{step}/13",
-                percent=_percent_from_step(step),
-            )
-        elif text.strip():
-            _set_runtime_detail(self._song_id, text)
-        return len(text)
+        with self._lock:
+            if self._closed:
+                raise ValueError("I/O operation on closed progress capture")
+            if _is_cancelled(self._song_id):
+                raise ProcessingCancelled("Processing cancelled by user")
+            self._log_file.write(text)
+            self._log_file.flush()
+            match = _STEP_RE.search(text)
+            if match:
+                step = match.group("step")
+                _set_runtime_step(self._song_id, float(step), text)
+                _update_progress(
+                    self._song_id,
+                    step_label=f"{step}/13",
+                    percent=_percent_from_step(step),
+                )
+            elif text.strip():
+                _set_runtime_detail(self._song_id, text)
+            return len(text)
 
     def flush(self) -> None:
-        self._log_file.flush()
+        with self._lock:
+            if not self._closed:
+                self._log_file.flush()
 
     def close(self) -> None:
-        self._log_file.close()
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+            self._log_file.close()
 
 
 def _percent_from_step(step_str: str) -> float:
@@ -199,11 +215,12 @@ def _set_runtime_detail(song_id: str, log_text: str) -> None:
 
 
 def _begin_runtime_progress(song_id: str) -> None:
+    now = time.monotonic()
     with _progress_runtime_lock:
         _progress_runtime[song_id] = {
-            "started_at": time.monotonic(),
+            "started_at": now,
             "step": 0.0,
-            "step_started_at": time.monotonic(),
+            "step_started_at": now,
             "completed_step_seconds": {},
             "detail": "Подготовка AI-пайплайна",
         }
@@ -212,6 +229,31 @@ def _begin_runtime_progress(song_id: str) -> None:
 def _end_runtime_progress(song_id: str) -> None:
     with _progress_runtime_lock:
         _progress_runtime.pop(song_id, None)
+
+
+def _runtime_speed_factor(completed_steps: dict) -> float:
+    """Estimate relative pipeline speed from completed weighted stages."""
+    expected_total = 0.0
+    actual_total = 0.0
+    for completed_step, seconds in completed_steps.items():
+        plan = _STEP_PLAN.get(float(completed_step))
+        if plan is None:
+            continue
+        expected_total += plan[2]
+        actual_total += float(seconds)
+    if expected_total < 10.0 or actual_total <= 0:
+        return 1.0
+    return min(3.0, max(0.25, actual_total / expected_total))
+
+
+def _remaining_seconds(step: float, expected: float, elapsed: float, speed_factor: float) -> int:
+    remaining = max(0.0, expected * speed_factor - elapsed)
+    remaining += sum(
+        seconds * speed_factor
+        for plan_step, (_, _, seconds) in _STEP_PLAN.items()
+        if plan_step > step
+    )
+    return max(1, int(round(remaining)))
 
 
 def get_processing_telemetry(song_id: str) -> dict:
@@ -224,51 +266,31 @@ def get_processing_telemetry(song_id: str) -> dict:
     now = time.monotonic()
     step = float(runtime.get("step", 0.0))
     base, end, expected = _STEP_PLAN.get(step, (0.0, 1.0, 10))
-    elapsed_step = max(0.0, now - runtime.get("step_started_at", now))
-    # Move smoothly inside a stage but never claim completion before the next
-    # real pipeline signal arrives.
-    fraction = min(0.94, elapsed_step / max(1, expected))
-    percent = round(base + (end - base) * fraction, 1)
-    # Adapt the remaining-time prediction to this computer and this song.
-    # The plan supplies a safe initial estimate, then every completed stage
-    # calibrates it using measured wall-clock time.  Bounds avoid an early
-    # ultra-fast metadata step from producing a wildly optimistic ETA.
-    completed = runtime.get("completed_step_seconds", {})
-    expected_completed = 0.0
-    actual_completed = 0.0
-    for completed_step, seconds in completed.items():
-        plan = _STEP_PLAN.get(float(completed_step))
-        if plan is not None:
-            expected_completed += plan[2]
-            actual_completed += float(seconds)
-    speed_factor = 1.0
-    if expected_completed >= 10.0 and actual_completed > 0:
-        speed_factor = min(3.0, max(0.25, actual_completed / expected_completed))
-
-    estimated_current = expected * speed_factor
-    remaining = max(0.0, estimated_current - elapsed_step)
-    for plan_step, (_, _, seconds) in _STEP_PLAN.items():
-        if plan_step > step:
-            remaining += seconds * speed_factor
+    elapsed = max(0.0, now - runtime.get("step_started_at", now))
+    fraction = min(0.94, elapsed / max(1, expected))
+    speed_factor = _runtime_speed_factor(runtime.get("completed_step_seconds", {}))
     return {
         "step": step,
-        "progress_percent": percent,
+        "progress_percent": round(base + (end - base) * fraction, 1),
         "progress_detail": runtime.get("detail"),
-        "eta_seconds": max(1, int(round(remaining))),
+        "eta_seconds": _remaining_seconds(step, expected, elapsed, speed_factor),
     }
 
 
 def _progress_heartbeat(song_id: str, stop_event: threading.Event) -> None:
     while not stop_event.wait(1.0):
-        telemetry = get_processing_telemetry(song_id)
-        if telemetry:
-            step = telemetry["step"]
-            detail = telemetry.get("progress_detail") or "Обработка AI"
-            _update_progress(
-                song_id,
-                step_label=f"{step:g}/13 · {detail}",
-                percent=telemetry["progress_percent"],
-            )
+        try:
+            telemetry = get_processing_telemetry(song_id)
+            if telemetry:
+                step = telemetry["step"]
+                detail = telemetry.get("progress_detail") or "Обработка AI"
+                _update_progress(
+                    song_id,
+                    step_label=f"{step:g}/13 · {detail}",
+                    percent=telemetry["progress_percent"],
+                )
+        except Exception:  # A transient SQLite error must not kill telemetry forever.
+            logger.warning("Could not persist pipeline heartbeat for song %s", song_id, exc_info=True)
 
 
 def _update_progress(
@@ -280,7 +302,7 @@ def _update_progress(
 ) -> None:
     db = SessionLocal()
     try:
-        song = db.query(models.Song).filter(models.Song.id == song_id).first()
+        song = repositories.get_song(db, song_id)
         if song is None:
             return
         if step_label is not None:
@@ -291,7 +313,7 @@ def _update_progress(
             song.status = status
         if error_message is not None:
             song.error_message = error_message
-        db.commit()
+        commit(db)
     finally:
         db.close()
 
@@ -309,30 +331,44 @@ def _release_active_job(song_id: str) -> None:
             _active_jobs.pop(song_id, None)
 
 
-def start_processing(song_id: str) -> bool:
-    """Запускает обработку в фоновом потоке. Возвращает False, если песня
-    уже обрабатывается (чтобы не плодить параллельные запуски одной и той же
-    песни)."""
+def _job_entrypoint(song_id: str, target) -> None:
+    """Run one worker and always release all per-job runtime state."""
+    try:
+        target(song_id)
+    finally:
+        with _active_jobs_lock:
+            _cancelled_jobs.discard(song_id)
+        _release_active_job(song_id)
+
+
+def _start_background_job(song_id: str, target) -> bool:
+    """Reserve one processing slot and start its daemon worker atomically."""
     with _active_jobs_lock:
         _cancelled_jobs.discard(song_id)
         if is_processing(song_id):
             return False
-        thread = threading.Thread(target=_run_job, args=(song_id,), daemon=True)
+        thread = threading.Thread(
+            target=_job_entrypoint,
+            args=(song_id, target),
+            daemon=True,
+        )
         _active_jobs[song_id] = thread
-        thread.start()
-    return True
+        try:
+            thread.start()
+        except Exception:
+            _active_jobs.pop(song_id, None)
+            raise
+        return True
+
+
+def start_processing(song_id: str) -> bool:
+    """Start a full processing job unless this song already has one running."""
+    return _start_background_job(song_id, _run_job)
 
 
 def start_reprocessing(song_id: str) -> bool:
     """Start a clean full reprocessing run for one song."""
-    with _active_jobs_lock:
-        _cancelled_jobs.discard(song_id)
-        if is_processing(song_id):
-            return False
-        thread = threading.Thread(target=_run_reprocessing, args=(song_id,), daemon=True)
-        _active_jobs[song_id] = thread
-        thread.start()
-    return True
+    return _start_background_job(song_id, _run_reprocessing)
 
 
 def cancel_processing(song_id: str) -> bool:
@@ -350,37 +386,74 @@ def _is_cancelled(song_id: str) -> bool:
         return song_id in _cancelled_jobs
 
 
-def _run_job(song_id: str) -> None:
+def _load_job_paths(song_id: str) -> tuple[str, Path] | None:
     db = SessionLocal()
     try:
-        song = db.query(models.Song).filter(models.Song.id == song_id).first()
+        song = repositories.get_song(db, song_id)
         if song is None:
-            return
-        source_path = song.source_path
-        slug = song.slug
+            return None
+        return song.source_path, config.SONG_OUTPUT_DIR / song.slug
     finally:
         db.close()
 
-    if _is_cancelled(song_id):
-        return
-    _update_progress(song_id, status=models.SongStatus.PROCESSING, percent=0.0, step_label="0/13")
-    _begin_runtime_progress(song_id)
-    heartbeat_stop = threading.Event()
-    heartbeat = threading.Thread(
+
+def _start_progress_heartbeat(song_id: str) -> tuple[threading.Event, threading.Thread]:
+    stop_event = threading.Event()
+    thread = threading.Thread(
         target=_progress_heartbeat,
-        args=(song_id, heartbeat_stop),
+        args=(song_id, stop_event),
         daemon=True,
     )
-    heartbeat.start()
+    thread.start()
+    return stop_event, thread
 
-    out_dir = config.SONG_OUTPUT_DIR / slug
+
+def _create_progress_capture(song_id: str, out_dir: Path) -> _ProgressCapture:
     log_dir = out_dir / config.LOGS_DIRNAME
     log_dir.mkdir(parents=True, exist_ok=True)
-    log_path = log_dir / "pipeline.log"
+    return _ProgressCapture(song_id, log_dir / "pipeline.log")
 
-    capture = _ProgressCapture(song_id, log_path)
-    pipeline_succeeded = False
+
+def _stop_progress_heartbeat(
+    stop_event: threading.Event | None,
+    thread: threading.Thread | None,
+) -> None:
+    """Stop a heartbeat created during worker setup without leaking a thread."""
+    if stop_event is None:
+        return
+    stop_event.set()
+    if thread is not None and thread is not threading.current_thread():
+        thread.join(timeout=2.0)
+
+
+def _write_pipeline_error(capture: _ProgressCapture | None, exc: Exception) -> None:
+    """Persist a worker traceback when its log stream was created successfully."""
+    if capture is None:
+        return
+    with contextlib.suppress(OSError, ValueError):
+        capture.write(f"\n[backend] ОШИБКА: {exc}\n{traceback.format_exc()}\n")
+
+
+def _run_job(song_id: str) -> None:
+    paths = _load_job_paths(song_id)
+    if paths is None or _is_cancelled(song_id):
+        return
+    source_path, out_dir = paths
+
+    capture: _ProgressCapture | None = None
+    heartbeat_stop: threading.Event | None = None
+    heartbeat_thread: threading.Thread | None = None
     try:
+        _update_progress(
+            song_id,
+            status=models.SongStatus.PROCESSING,
+            percent=0.0,
+            step_label="0/13",
+        )
+        _begin_runtime_progress(song_id)
+        heartbeat_stop, heartbeat_thread = _start_progress_heartbeat(song_id)
+        capture = _create_progress_capture(song_id, out_dir)
+
         device = _configure_ai_runtime()
         capture.write(f"[backend] AI runtime: device={device}\n")
         run_pipeline = ai_bridge.get_run_all_pipeline()
@@ -388,59 +461,46 @@ def _run_job(song_id: str) -> None:
             contextlib.redirect_stdout(cast(TextIO, capture)),
             contextlib.redirect_stderr(cast(TextIO, capture)),
         ):
-            # run_all.run(input_mp3, out_dir, ...) — out_dir тут должен быть
-            # УЖЕ конечной папкой песни (Song/<slug>), а не родительским Song/:
-            # именно так его вызывает и сам run_all.py в своём main().
+            # out_dir is already the final Song/<slug> directory, matching
+            # the direct invocation contract of AI/run_all.py.
             run_pipeline(
                 source_path,
                 str(out_dir),
                 whisper_model=app_settings_service.read_settings()["whisper_model"],
                 language=config.DEFAULT_LANGUAGE,
             )
-        pipeline_succeeded = True
     except ProcessingCancelled:
         _update_progress(song_id, status=models.SongStatus.CANCELLED, step_label="Отменено")
         return
-    except Exception as exc:  # noqa: BLE001 — сознательно широкий catch: это фоновый воркер
+    except Exception as exc:  # noqa: BLE001 — background-worker boundary
         if _is_cancelled(song_id):
             _update_progress(song_id, status=models.SongStatus.CANCELLED, step_label="Отменено")
             return
-        capture.write(f"\n[backend] ОШИБКА: {exc}\n{traceback.format_exc()}\n")
-        _update_progress(
-            song_id,
-            status=models.SongStatus.ERROR,
-            error_message=str(exc),
-        )
+        _write_pipeline_error(capture, exc)
+        _update_progress(song_id, status=models.SongStatus.ERROR, error_message=str(exc))
         return
     finally:
-        capture.close()
-        heartbeat_stop.set()
+        if capture is not None:
+            capture.close()
+        _stop_progress_heartbeat(heartbeat_stop, heartbeat_thread)
         _end_runtime_progress(song_id)
-        # Keep a successful worker reserved until its generated output and
-        # database state are finalized. Otherwise a new run can start in the
-        # small gap below and be overwritten by the old worker.
-        if not pipeline_succeeded:
-            _release_active_job(song_id)
 
-    try:
-        if not _is_cancelled(song_id):
-            try:
-                _finalize_success(song_id, out_dir)
-            except Exception as exc:  # noqa: BLE001 - finalization is a worker boundary
-                _update_progress(
-                    song_id,
-                    status=models.SongStatus.ERROR,
-                    error_message=f"Could not finalize processing results: {exc}",
-                )
-    finally:
-        _release_active_job(song_id)
+    if not _is_cancelled(song_id):
+        try:
+            _finalize_success(song_id, out_dir)
+        except Exception as exc:  # noqa: BLE001 - finalization is a worker boundary
+            _update_progress(
+                song_id,
+                status=models.SongStatus.ERROR,
+                error_message=f"Could not finalize processing results: {exc}",
+            )
 
 
 def _run_reprocessing(song_id: str) -> None:
     """Rebuild generated artefacts without deleting user performance takes."""
     db = SessionLocal()
     try:
-        song = db.query(models.Song).filter(models.Song.id == song_id).first()
+        song = repositories.get_song(db, song_id)
         if song is None:
             return
         out_dir = song_service.resolve_output_dir(song)
@@ -484,35 +544,55 @@ def _run_reprocessing(song_id: str) -> None:
             recordings_backup.replace(destination)
 
 
+def _read_optional_generated_json(path: Path, default):
+    try:
+        return read_json(path, default=default)
+    except (OSError, ValueError, TypeError):
+        return default
+
+
+def _apply_generated_metadata(song: models.Song, out_dir: Path) -> None:
+    """Persist optional metadata discovered in generated pipeline files."""
+    music = _read_optional_generated_json(out_dir / "music.json", {})
+    if isinstance(music, dict):
+        song.key_override = song.key_override or music.get("key")
+        song.tempo_override = song.tempo_override or music.get("bpm")
+
+    reference = _read_optional_generated_json(out_dir / "reference.json", [])
+    if not isinstance(reference, list):
+        return
+    try:
+        midi = [
+            int(note["midi"])
+            for note in reference
+            if isinstance(note, dict) and note.get("midi") is not None
+        ]
+    except (TypeError, ValueError):
+        return
+    if not midi:
+        return
+    if song.note_range_min is None:
+        song.note_range_min = min(midi)
+    if song.note_range_max is None:
+        song.note_range_max = max(midi)
+
+
 def _finalize_success(song_id: str, out_dir: Path) -> None:
     db = SessionLocal()
     try:
-        song = db.query(models.Song).filter(models.Song.id == song_id).first()
+        song = repositories.get_song(db, song_id)
         if song is None:
             return
         song.output_dir = str(out_dir)
         _apply_source_metadata(song)
         # Persist the facts discovered by the pipeline so the library and the
         # song editor do not need to infer them from generated files again.
-        with contextlib.suppress(OSError, ValueError, TypeError):
-            music = json.loads((out_dir / "music.json").read_text(encoding="utf-8"))
-            song.key_override = song.key_override or music.get("key")
-            song.tempo_override = song.tempo_override or music.get("bpm")
-        with contextlib.suppress(OSError, ValueError, TypeError):
-            reference = json.loads((out_dir / "reference.json").read_text(encoding="utf-8"))
-            midi = [int(note["midi"]) for note in reference if note.get("midi") is not None]
-            if midi:
-                song.note_range_min = (
-                    song.note_range_min if song.note_range_min is not None else min(midi)
-                )
-                song.note_range_max = (
-                    song.note_range_max if song.note_range_max is not None else max(midi)
-                )
+        _apply_generated_metadata(song, out_dir)
         song.status = models.SongStatus.DONE
         song.progress_percent = 100.0
         song.progress_step = "13/13"
         song.error_message = None
-        db.commit()
+        commit(db)
     finally:
         db.close()
 

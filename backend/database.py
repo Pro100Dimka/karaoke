@@ -6,7 +6,7 @@ SQLite выбрана потому, что это десктоп-програм�
 чего-либо дополнительного пользователем.
 """
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 import config
@@ -18,8 +18,22 @@ import config
 # фоновую задачу через SessionLocal(), а не шарим одно соединение.
 engine = create_engine(
     config.DATABASE_URL,
-    connect_args={"check_same_thread": False},
+    connect_args={"check_same_thread": False, "timeout": 30},
+    pool_pre_ping=True,
 )
+
+
+@event.listens_for(engine, "connect")
+def _configure_sqlite(dbapi_connection, _connection_record) -> None:
+    """Enable integrity and concurrency settings for every SQLite connection."""
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA busy_timeout=30000")
+    finally:
+        cursor.close()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -28,61 +42,62 @@ class Base(DeclarativeBase):
     """Shared declarative base for all persisted application models."""
 
 
+_SONG_COLUMN_MIGRATIONS = {
+    "video_url": "ALTER TABLE songs ADD COLUMN video_url VARCHAR",
+    "artist": "ALTER TABLE songs ADD COLUMN artist VARCHAR",
+    "genre": "ALTER TABLE songs ADD COLUMN genre VARCHAR",
+}
+
+_AUDIO_COLUMN_MIGRATIONS = {
+    "audio_driver": (
+        "ALTER TABLE audio_settings ADD COLUMN audio_driver VARCHAR DEFAULT 'auto'"
+    ),
+    "asio_driver_name": "ALTER TABLE audio_settings ADD COLUMN asio_driver_name VARCHAR",
+    "buffer_size": "ALTER TABLE audio_settings ADD COLUMN buffer_size INTEGER DEFAULT 64",
+    "output_device_id": "ALTER TABLE audio_settings ADD COLUMN output_device_id INTEGER",
+    "reverb": "ALTER TABLE audio_settings ADD COLUMN reverb FLOAT DEFAULT 0",
+    "echo": "ALTER TABLE audio_settings ADD COLUMN echo FLOAT DEFAULT 0",
+    "delay": "ALTER TABLE audio_settings ADD COLUMN delay FLOAT DEFAULT 0",
+}
+
+
+def _apply_additive_migrations(connection, existing: set[str], migrations: dict[str, str]) -> None:
+    """Apply missing-column migrations without rebuilding user tables."""
+    for column, statement in migrations.items():
+        if column not in existing:
+            connection.execute(text(statement))
+
+
+def _mark_interrupted_jobs(connection) -> None:
+    connection.execute(
+        text(
+            "UPDATE songs "
+            "SET status = :cancelled, progress_step = :step, progress_percent = 0, "
+            "error_message = :message "
+            "WHERE status IN (:queued, :processing)"
+        ),
+        {
+            "cancelled": "CANCELLED",
+            "queued": "QUEUED",
+            "processing": "PROCESSING",
+            "step": "Interrupted",
+            "message": "Processing was interrupted by an application restart",
+        },
+    )
+
+
 def init_db() -> None:
-    """Создаёт таблицы, если их ещё нет. Вызывается один раз при старте приложения."""
-    import models  # noqa: F401  (регистрирует модели в Base.metadata перед create_all)
+    """Create tables and apply backward-compatible SQLite migrations."""
+    import models  # noqa: F401  (registers models before create_all)
 
     Base.metadata.create_all(bind=engine)
-    # create_all deliberately does not alter existing SQLite tables. Keep
-    # additive migrations so installed libraries upgrade without data loss.
-    song_columns = {column["name"] for column in inspect(engine).get_columns("songs")}
-    audio_columns = {column["name"] for column in inspect(engine).get_columns("audio_settings")}
+    inspector = inspect(engine)
+    song_columns = {column["name"] for column in inspector.get_columns("songs")}
+    audio_columns = {column["name"] for column in inspector.get_columns("audio_settings")}
     with engine.begin() as connection:
-        if "video_url" not in song_columns:
-            connection.execute(text("ALTER TABLE songs ADD COLUMN video_url VARCHAR"))
-        for column in ("artist", "genre"):
-            if column not in song_columns:
-                connection.execute(text(f"ALTER TABLE songs ADD COLUMN {column} VARCHAR"))
-        if "audio_driver" not in audio_columns:
-            connection.execute(
-                text("ALTER TABLE audio_settings ADD COLUMN audio_driver VARCHAR DEFAULT 'auto'")
-            )
-        if "asio_driver_name" not in audio_columns:
-            connection.execute(
-                text("ALTER TABLE audio_settings ADD COLUMN asio_driver_name VARCHAR")
-            )
-        if "buffer_size" not in audio_columns:
-            connection.execute(
-                text("ALTER TABLE audio_settings ADD COLUMN buffer_size INTEGER DEFAULT 64")
-            )
-        if "output_device_id" not in audio_columns:
-            connection.execute(
-                text("ALTER TABLE audio_settings ADD COLUMN output_device_id INTEGER")
-            )
-        for column in ("reverb", "echo", "delay"):
-            if column not in audio_columns:
-                connection.execute(
-                    text(f"ALTER TABLE audio_settings ADD COLUMN {column} FLOAT DEFAULT 0")
-                )
-        # Background AI workers are in-process threads. They cannot survive a
-        # backend restart, so retaining PROCESSING/QUEUED would leave a song
-        # permanently locked in the UI. Make only those orphaned states
-        # actionable again; completed and pending library entries are intact.
-        connection.execute(
-            text(
-                "UPDATE songs "
-                "SET status = :cancelled, progress_step = :step, progress_percent = 0, "
-                "error_message = :message "
-                "WHERE status IN (:queued, :processing)"
-            ),
-            {
-                "cancelled": "CANCELLED",
-                "queued": "QUEUED",
-                "processing": "PROCESSING",
-                "step": "Interrupted",
-                "message": "Processing was interrupted by an application restart",
-            },
-        )
+        _apply_additive_migrations(connection, song_columns, _SONG_COLUMN_MIGRATIONS)
+        _apply_additive_migrations(connection, audio_columns, _AUDIO_COLUMN_MIGRATIONS)
+        _mark_interrupted_jobs(connection)
 
 
 def get_db():

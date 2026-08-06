@@ -1,4 +1,4 @@
-"""Кэш и производительность."""
+"""Cache and storage-maintenance endpoints."""
 
 from fastapi import APIRouter, HTTPException
 
@@ -6,6 +6,10 @@ import schemas
 from app.services import cache_service
 
 router = APIRouter(prefix="/cache", tags=["cache"])
+
+
+def _clear_temp_response() -> dict[str, int]:
+    return {"freed_bytes": cache_service.clear_temp_files()}
 
 
 @router.get("/size", response_model=schemas.CacheSizeOut)
@@ -20,14 +24,12 @@ def get_free_space():
 
 @router.post("/clear")
 def clear_cache():
-    freed = cache_service.clear_temp_files()
-    return {"freed_bytes": freed}
+    return _clear_temp_response()
 
 
 @router.delete("/temp")
 def delete_temp():
-    freed = cache_service.clear_temp_files()
-    return {"freed_bytes": freed}
+    return _clear_temp_response()
 
 
 @router.post("/optimize/{song_id}", response_model=schemas.OptimizeResultOut)

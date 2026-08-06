@@ -9,6 +9,7 @@
 SONGAPP_HOST / SONGAPP_PORT — см. config.py).
 """
 import logging
+import sys
 from logging.handlers import RotatingFileHandler
 
 import uvicorn
@@ -23,7 +24,8 @@ def configure_logging() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        handlers=[handler],
+        handlers=[handler, logging.StreamHandler(sys.stdout)],
+        force=True,
     )
 
 

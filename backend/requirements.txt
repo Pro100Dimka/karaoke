@@ -1,18 +1,3 @@
-# Зависимости backend-слоя (API/БД). Тяжёлые ML-зависимости самого
-# AI-пайплайна (librosa/demucs/whisper/pretty_midi/...) — отдельно в
-# AI/requirements.txt (подключены строкой -r ниже), чтобы backend можно
-# было поднять и без них — для разработки API/БД без прогона пайплайна
-# используй requirements-dev.txt.
-
-fastapi
-uvicorn[standard]
-python-multipart      # нужен FastAPI для приёма файлов (UploadFile)
-sqlalchemy
-pydantic
-
-# Запись голоса и работа с аудио-устройствами
-sounddevice
-soundfile
-numpy
-
+# Complete offline runtime: API/audio layer plus the AI pipeline.
+-r requirements-api.txt
 -r AI/requirements.txt

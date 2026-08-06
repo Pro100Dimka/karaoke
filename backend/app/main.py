@@ -10,8 +10,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+import config
 from app.routers import analysis, application, audio, cache, diagnostics, player, recording, songs
-from app.services import audio_service
+from app.services import audio_service, recording_service
 from database import init_db
 
 
@@ -21,9 +22,11 @@ async def lifespan(_app: FastAPI):
     try:
         yield
     finally:
-        # The direct monitor owns a native audio device in a child process.
-        # Always release it when Uvicorn/Electron shuts down.
-        audio_service.stop_monitoring()
+        # Each cleanup must run even if the other one unexpectedly fails.
+        try:
+            recording_service.close_all_sessions()
+        finally:
+            audio_service.stop_monitoring()
 
 
 app = FastAPI(
@@ -33,24 +36,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Локальная десктоп-программа: UI открывается как отдельное окно/процесс
-# (Electron/Tauri/браузер) на localhost. allow_credentials=True вместе с
-# allow_origins=["*"] запрещён спецификацией CORS и браузеры такой ответ
-# всё равно отклонят — поэтому здесь явный список localhost-портов, а не
-# wildcard. При появлении конкретного UI-порта оставь только его.
-_LOCAL_UI_ORIGINS = [
-    "http://127.0.0.1:3000",
-    "http://localhost:3000",
-    "http://127.0.0.1:5173",
-    "http://localhost:5173",
-]
-
+# CORS is explicit and configurable. Production Electron builds should pass
+# only their actual origin through SONGAPP_CORS_ORIGINS.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_LOCAL_UI_ORIGINS,
+    allow_origins=list(config.CORS_ORIGINS),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Accept", "Authorization", "Content-Type"],
 )
 
 app.include_router(songs.router)

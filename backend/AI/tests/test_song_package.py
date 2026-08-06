@@ -13,7 +13,7 @@ from database import Base
 def _session():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
-    return sessionmaker(bind=engine)()
+    return sessionmaker(bind=engine)(), engine
 
 
 def test_song_package_round_trip(tmp_path, monkeypatch):
@@ -36,7 +36,7 @@ def test_song_package_round_trip(tmp_path, monkeypatch):
     (processed / "logs").mkdir()
     (processed / "logs" / "pipeline.log").write_text("private log", encoding="utf-8")
 
-    export_db = _session()
+    export_db, export_engine = _session()
     song = models.Song(
         id="shared-song-id",
         title="Shared song",
@@ -63,13 +63,18 @@ def test_song_package_round_trip(tmp_path, monkeypatch):
     imported_output.mkdir()
     monkeypatch.setattr(config, "FULL_SONGS_DIR", imported_source)
     monkeypatch.setattr(config, "SONG_OUTPUT_DIR", imported_output)
-    import_db = _session()
+    import_db, import_engine = _session()
     imported = song_package_service.import_package(import_db, package)
 
     assert imported.id == song.id
     assert imported.title == song.title
     assert (imported_source / "demo.mp3").read_bytes() == b"source-audio"
     assert (imported_output / "demo" / "vocals.mp3").read_bytes() == b"vocals"
+
+    export_db.close()
+    import_db.close()
+    export_engine.dispose()
+    import_engine.dispose()
 
 
 def test_song_package_rejects_parent_paths(tmp_path):

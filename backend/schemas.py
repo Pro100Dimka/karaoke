@@ -9,7 +9,7 @@ Pydantic-схемы: тела запросов/ответов API.
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from models import SongStatus
 
@@ -50,7 +50,7 @@ class SongOut(BaseModel):
 class SongUpdate(BaseModel):
     """Все поля опциональны — PATCH-семантика, меняем только переданное."""
 
-    title: str | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=255)
     artist: str | None = Field(default=None, max_length=255)
     genre: str | None = Field(default=None, max_length=255)
     key_override: str | None = None
@@ -61,6 +61,26 @@ class SongUpdate(BaseModel):
     video_url: str | None = Field(default=None, max_length=2048)
     show_lyrics: bool | None = None
     show_notes: bool | None = None
+
+    @field_validator("title", "artist", "genre", "key_override", "difficulty_override", "video_url")
+    @classmethod
+    def strip_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("Value must not be blank")
+        return value
+
+    @model_validator(mode="after")
+    def validate_note_range(self) -> "SongUpdate":
+        if (
+            self.note_range_min is not None
+            and self.note_range_max is not None
+            and self.note_range_min > self.note_range_max
+        ):
+            raise ValueError("note_range_min must not exceed note_range_max")
+        return self
 
 
 class LyricWord(BaseModel):

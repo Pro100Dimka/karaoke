@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
@@ -43,7 +43,10 @@ def get_settings() -> dict:
 
 @router.patch("/settings")
 def update_settings(patch: AppSettingsPatch) -> dict:
-    return app_settings_service.update_settings(patch.model_dump(exclude_none=True))
+    try:
+        return app_settings_service.update_settings(patch.model_dump(exclude_none=True))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/history")

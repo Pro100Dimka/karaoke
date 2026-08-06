@@ -9,6 +9,8 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from app.services.db_utils import commit_refresh
+
 import config
 import models
 
@@ -24,7 +26,19 @@ except Exception:
 _monitor_process: subprocess.Popen[str] | None = None
 _monitor_reader: threading.Thread | None = None
 _monitor_lock = threading.Lock()
-_monitor_signal = {"rms_db": -120.0, "clipping": False, "silent": True}
+_EMPTY_MONITOR_SIGNAL = {"rms_db": -120.0, "clipping": False, "silent": True}
+_MONITOR_RESTART_FIELDS = frozenset({
+    "input_device_id",
+    "output_device_id",
+    "volume",
+    "audio_driver",
+    "asio_driver_name",
+    "buffer_size",
+    "reverb",
+    "echo",
+    "delay",
+})
+_monitor_signal = dict(_EMPTY_MONITOR_SIGNAL)
 logger = logging.getLogger(__name__)
 
 
@@ -155,55 +169,43 @@ def preferred_sample_rate(input_device_id: int | None = None, driver: str = "aut
     return config.RECORDING_SAMPLE_RATE
 
 
-def list_input_devices() -> list[dict]:
+def _list_devices(kind: str) -> list[dict]:
     if not _AUDIO_BACKEND_AVAILABLE:
         return []
-    devices = sd.query_devices()
+    channel_field = f"max_{kind}_channels"
     result = []
-    for idx, dev in enumerate(devices):
-        if dev.get("max_input_channels", 0) > 0:
-            host_api = _host_api_name(dev)
-            result.append(
-                {
-                    "index": idx,
-                    "name": f"{dev.get('name', f'device-{idx}')} [{host_api}]",
-                    "max_input_channels": dev.get("max_input_channels", 0),
-                    "default_samplerate": dev.get("default_samplerate"),
-                    "host_api": host_api,
-                    "is_asio": "asio" in host_api.lower(),
-                }
-            )
+    for index, device in enumerate(sd.query_devices()):
+        if device.get(channel_field, 0) <= 0:
+            continue
+        host_api = _host_api_name(device)
+        result.append(
+            {
+                "index": index,
+                "name": f"{device.get('name', f'device-{index}')} [{host_api}]",
+                channel_field: device.get(channel_field, 0),
+                "default_samplerate": device.get("default_samplerate"),
+                "host_api": host_api,
+                "is_asio": "asio" in host_api.lower(),
+            }
+        )
     return result
+
+
+def list_input_devices() -> list[dict]:
+    return _list_devices("input")
 
 
 def list_output_devices() -> list[dict]:
-    if not _AUDIO_BACKEND_AVAILABLE:
-        return []
-    result = []
-    for idx, dev in enumerate(sd.query_devices()):
-        if dev.get("max_output_channels", 0) > 0:
-            host_api = _host_api_name(dev)
-            result.append(
-                {
-                    "index": idx,
-                    "name": f"{dev.get('name', f'device-{idx}')} [{host_api}]",
-                    "max_output_channels": dev.get("max_output_channels", 0),
-                    "default_samplerate": dev.get("default_samplerate"),
-                    "host_api": host_api,
-                    "is_asio": "asio" in host_api.lower(),
-                }
-            )
-    return result
+    return _list_devices("output")
 
 
 def _get_or_create_settings(db: Session) -> models.AudioSettings:
-    settings = db.query(models.AudioSettings).filter(models.AudioSettings.id == 1).first()
-    if settings is None:
-        settings = models.AudioSettings(id=1)
-        db.add(settings)
-        db.commit()
-        db.refresh(settings)
-    return settings
+    settings = db.get(models.AudioSettings, 1)
+    if settings is not None:
+        return settings
+    settings = models.AudioSettings(id=1)
+    db.add(settings)
+    return commit_refresh(db, settings)
 
 
 def get_settings(db: Session) -> models.AudioSettings:
@@ -218,59 +220,113 @@ def get_settings(db: Session) -> models.AudioSettings:
                 drivers[0],
             )
             settings.audio_driver = "asio"
-            db.commit()
-            db.refresh(settings)
+            commit_refresh(db, settings)
     return settings
 
 
-def update_settings(db: Session, patch: dict) -> models.AudioSettings:
-    settings = _get_or_create_settings(db)
-    restart_fields = {
-        "input_device_id",
-        "output_device_id",
-        "volume",
-        "audio_driver",
-        "asio_driver_name",
-        "buffer_size",
-        "reverb",
-        "echo",
-        "delay",
-    }
+def _input_device_name(device_id: int | None) -> str | None:
+    if device_id is None or not _AUDIO_BACKEND_AVAILABLE:
+        return None
+    devices = sd.query_devices()
+    if 0 <= device_id < len(devices):
+        return str(devices[device_id].get("name") or "") or None
+    return None
+
+
+def _normalized_settings_patch(
+    settings: models.AudioSettings, patch: dict
+) -> tuple[dict, set[str]]:
+    updates: dict = {}
     changed_fields: set[str] = set()
     for field, value in patch.items():
         if field in {"input_device_id", "output_device_id"} and value is None:
             if getattr(settings, field) is not None:
-                setattr(settings, field, None)
+                updates[field] = None
                 changed_fields.add(field)
             if field == "input_device_id":
-                settings.input_device_name = None
+                updates["input_device_name"] = None
             continue
         if value is None:
             continue
-        if field == "input_device_id" and _AUDIO_BACKEND_AVAILABLE:
-            devices = sd.query_devices()
-            if 0 <= value < len(devices):
-                settings.input_device_name = devices[value].get("name")
         if getattr(settings, field) != value:
-            setattr(settings, field, value)
+            updates[field] = value
             changed_fields.add(field)
-    if settings.audio_driver not in {"auto", "asio"}:
+        if field == "input_device_id":
+            updates["input_device_name"] = _input_device_name(value)
+
+    driver = updates.get("audio_driver", settings.audio_driver)
+    asio_name = updates.get("asio_driver_name", settings.asio_driver_name)
+    if driver not in {"auto", "asio"}:
         raise RuntimeError("Unsupported audio driver")
-    if settings.audio_driver == "asio":
+    if driver == "asio":
         drivers = list_asio_drivers()
         if not drivers:
             raise RuntimeError("Native ASIO bridge is not installed or no ASIO drivers were found")
-        if settings.asio_driver_name not in drivers:
-            settings.asio_driver_name = drivers[0]
-    db.commit()
-    db.refresh(settings)
-    # Saving an unrelated value must not close and reopen the native audio
-    # stream. Besides being slow, some ASIO drivers reject quick reopen calls.
-    restart_monitor = settings.monitoring_enabled and bool(restart_fields & changed_fields)
-    if restart_monitor:
-        configure_monitoring(settings)
-    return settings
+        if asio_name not in drivers:
+            updates["asio_driver_name"] = drivers[0]
+            changed_fields.add("asio_driver_name")
+    return updates, changed_fields
 
+
+def update_settings(db: Session, patch: dict) -> models.AudioSettings:
+    settings = _get_or_create_settings(db)
+    updates, changed_fields = _normalized_settings_patch(settings, patch)
+    previous = {field: getattr(settings, field) for field in updates}
+    reconfigure_monitoring = bool(
+        "monitoring_enabled" in changed_fields
+        or (settings.monitoring_enabled and _MONITOR_RESTART_FIELDS & changed_fields)
+    )
+
+    for field, value in updates.items():
+        setattr(settings, field, value)
+
+    try:
+        # Apply the runtime configuration before committing. If either the
+        # audio driver or SQLite rejects the change, both layers are restored.
+        if reconfigure_monitoring:
+            configure_monitoring(settings)
+        db.commit()
+        db.refresh(settings)
+        return settings
+    except Exception:
+        db.rollback()
+        for field, value in previous.items():
+            setattr(settings, field, value)
+        if reconfigure_monitoring:
+            try:
+                configure_monitoring(settings)
+            except Exception as restore_error:
+                logger.warning(
+                    "Could not restore direct monitoring after settings failure: %s",
+                    restore_error,
+                )
+        raise
+
+
+
+def set_monitoring_enabled(db: Session, enabled: bool) -> models.AudioSettings:
+    """Change direct-monitor state while keeping runtime and SQLite in sync."""
+    settings = get_settings(db)
+    previous = settings.monitoring_enabled
+    if previous == enabled:
+        if enabled:
+            configure_monitoring(settings)
+        else:
+            stop_monitoring()
+        return settings
+
+    settings.monitoring_enabled = enabled
+    try:
+        configure_monitoring(settings)
+        return commit_refresh(db, settings)
+    except Exception:
+        db.rollback()
+        settings.monitoring_enabled = previous
+        try:
+            configure_monitoring(settings)
+        except Exception as restore_error:
+            logger.warning("Could not restore direct monitoring after failure: %s", restore_error)
+        raise
 
 def stop_monitoring() -> None:
     global _monitor_process, _monitor_reader
@@ -278,7 +334,7 @@ def stop_monitoring() -> None:
         process = _monitor_process
         _monitor_process = None
         _monitor_reader = None
-        _monitor_signal.update({"rms_db": -120.0, "clipping": False, "silent": True})
+        _monitor_signal.update(_EMPTY_MONITOR_SIGNAL)
     if process is None or process.poll() is not None:
         return
     try:
@@ -423,7 +479,7 @@ def _launch_monitor_process(command: list[str], *, cwd: Path) -> None:
             ready.set()
         with _monitor_lock:
             if _monitor_process is process and process.poll() is not None:
-                _monitor_signal.update({"rms_db": -120.0, "clipping": False, "silent": True})
+                _monitor_signal.update(_EMPTY_MONITOR_SIGNAL)
 
     reader = threading.Thread(target=consume_output, name="audio-monitor-reader", daemon=True)
     with _monitor_lock:
@@ -457,7 +513,7 @@ def check_signal_quality(
             return dict(_monitor_signal)
         if process is not None:
             _monitor_process = None
-            _monitor_signal.update({"rms_db": -120.0, "clipping": False, "silent": True})
+            _monitor_signal.update(_EMPTY_MONITOR_SIGNAL)
         if monitoring_expected:
             return dict(_monitor_signal)
 

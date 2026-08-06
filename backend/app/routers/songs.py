@@ -1,9 +1,9 @@
 """Управление песнями + запуск AI-обработки."""
 
-import json
 import tempfile
-import zipfile
+from collections.abc import Callable
 from pathlib import Path
+import zipfile
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -12,27 +12,70 @@ from sqlalchemy.orm import Session
 import config
 import models
 import schemas
+from app.api.dependencies import SongDependency
 from app.services import ai_bridge, pipeline_service, song_package_service, song_service
+from app.utils.files import read_text_tail
+from app.utils.json_files import read_json, write_json
+from app.utils.uploads import save_upload_limited
 from database import get_db
 
 router = APIRouter(prefix="/songs", tags=["songs"])
 
 
-def _read_json(path: Path):
-    if not path.exists():
-        return None
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+def _processing_status(
+    song: models.Song,
+    *,
+    telemetry: dict[str, object] | None = None,
+) -> schemas.ProcessingStatusOut:
+    telemetry = telemetry or {}
+    return schemas.ProcessingStatusOut(
+        song_id=song.id,
+        status=song.status,
+        progress_step=song.progress_step,
+        progress_percent=song.progress_percent,
+        progress_detail=telemetry.get("progress_detail"),
+        eta_seconds=telemetry.get("eta_seconds"),
+        error_message=song.error_message,
+    )
 
 
-def _read_log_tail(path: Path, max_lines: int = 500, max_bytes: int = 1_000_000) -> list[str]:
-    """Read a bounded tail without loading an unbounded pipeline log into memory."""
-    with path.open("rb") as log_file:
-        log_file.seek(0, 2)
-        start = max(0, log_file.tell() - max_bytes)
-        log_file.seek(start)
-        content = log_file.read()
-    return content.decode("utf-8", errors="replace").splitlines()[-max_lines:]
+def _queue_song_job(
+    db: Session,
+    song: models.Song,
+    start_job: Callable[[str], bool],
+    **queued_values: object,
+) -> None:
+    """Persist queued state and compensate if the worker cannot be started."""
+    previous = {field: getattr(song, field) for field in queued_values}
+
+    def restore_previous_state() -> None:
+        for field, value in previous.items():
+            setattr(song, field, value)
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+
+    for field, value in queued_values.items():
+        setattr(song, field, value)
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        for field, value in previous.items():
+            setattr(song, field, value)
+        raise
+
+    try:
+        started = start_job(song.id)
+    except Exception:
+        restore_previous_state()
+        raise
+    if started:
+        return
+    restore_previous_state()
+    raise HTTPException(status_code=409, detail="Обработка уже запущена")
 
 
 @router.post("", response_model=schemas.SongOut, status_code=201)
@@ -41,12 +84,35 @@ async def add_song(
     title: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
-    file_bytes = await file.read()
+    config.FULL_SONGS_DIR.mkdir(parents=True, exist_ok=True)
+    temporary = tempfile.NamedTemporaryFile(
+        prefix=".song-upload-",
+        suffix=".tmp",
+        dir=config.FULL_SONGS_DIR,
+        delete=False,
+    )
+    temporary_path = Path(temporary.name)
+    temporary.close()
     try:
-        song = song_service.create_song(db, title or "", file.filename or "song", file_bytes)
+        await save_upload_limited(
+            file,
+            temporary_path,
+            limit=config.MAX_AUDIO_UPLOAD_BYTES,
+            chunk_size=config.UPLOAD_CHUNK_SIZE,
+            too_large_message="Audio file is too large",
+        )
+        return song_service.create_song_from_path(
+            db,
+            title or "",
+            file.filename or "song",
+            temporary_path,
+        )
+    except HTTPException:
+        raise
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return song
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
 
 @router.get("", response_model=list[schemas.SongOut])
@@ -55,22 +121,12 @@ def get_songs(db: Session = Depends(get_db)):
 
 
 @router.get("/{song_id}", response_model=schemas.SongOut)
-def get_song(song_id: str, db: Session = Depends(get_db)):
-    song = song_service.get_song(db, song_id)
-    if song is None:
-        raise HTTPException(status_code=404, detail="Песня не найдена")
+def get_song(song: SongDependency):
     return song
 
 
 @router.get("/{song_id}/package")
-def export_song_package(
-    song_id: str,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-):
-    song = song_service.get_song(db, song_id)
-    if song is None:
-        raise HTTPException(status_code=404, detail="Song not found")
+def export_song_package(song: SongDependency, background_tasks: BackgroundTasks):
     if song.status != models.SongStatus.DONE:
         raise HTTPException(status_code=409, detail="Song processing is not complete")
     try:
@@ -91,6 +147,7 @@ async def import_song_package(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
+    config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     temporary = tempfile.NamedTemporaryFile(
         prefix="karaoke-import-",
         suffix=".zip",
@@ -98,38 +155,37 @@ async def import_song_package(
         delete=False,
     )
     temporary_path = Path(temporary.name)
-    received = 0
+    temporary.close()
     try:
-        while chunk := await file.read(1024 * 1024):
-            received += len(chunk)
-            if received > song_package_service.MAX_PACKAGE_BYTES:
-                raise ValueError("Song package is too large")
-            temporary.write(chunk)
-        temporary.close()
+        await save_upload_limited(
+            file,
+            temporary_path,
+            limit=song_package_service.MAX_PACKAGE_BYTES,
+            chunk_size=1024 * 1024,
+            too_large_message="Song package is too large",
+        )
         return song_package_service.import_package(db, temporary_path)
+    except HTTPException:
+        raise
     except (OSError, ValueError, zipfile.BadZipFile) as exc:
         raise HTTPException(
             status_code=400, detail=f"Could not import song package: {exc}"
         ) from exc
     finally:
-        temporary.close()
         temporary_path.unlink(missing_ok=True)
 
 
 @router.patch("/{song_id}", response_model=schemas.SongOut)
-def patch_song(song_id: str, patch: schemas.SongUpdate, db: Session = Depends(get_db)):
-    song = song_service.get_song(db, song_id)
-    if song is None:
-        raise HTTPException(status_code=404, detail="Песня не найдена")
-    return song_service.update_song(db, song, patch)
+def patch_song(song: SongDependency, patch: schemas.SongUpdate, db: Session = Depends(get_db)):
+    try:
+        return song_service.update_song(db, song, patch)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.delete("/{song_id}", status_code=204)
-def remove_song(song_id: str, db: Session = Depends(get_db)):
-    song = song_service.get_song(db, song_id)
-    if song is None:
-        raise HTTPException(status_code=404, detail="Песня не найдена")
-    if pipeline_service.is_processing(song_id):
+def remove_song(song: SongDependency, db: Session = Depends(get_db)):
+    if pipeline_service.is_processing(song.id):
         raise HTTPException(
             status_code=409, detail="Песня сейчас обрабатывается, дождитесь завершения"
         )
@@ -140,105 +196,66 @@ def remove_song(song_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/{song_id}/process", response_model=schemas.ProcessingStatusOut, status_code=202)
-def process_song(song_id: str, db: Session = Depends(get_db)):
-    song = song_service.get_song(db, song_id)
-    if song is None:
-        raise HTTPException(status_code=404, detail="Песня не найдена")
-    if pipeline_service.is_processing(song_id):
+def process_song(song: SongDependency, db: Session = Depends(get_db)):
+    if pipeline_service.is_processing(song.id):
         raise HTTPException(status_code=409, detail="Обработка уже запущена")
 
-    song.status = models.SongStatus.QUEUED
-    song.error_message = None
-    db.commit()
-
-    pipeline_service.start_processing(song_id)
-    db.refresh(song)
-    return schemas.ProcessingStatusOut(
-        song_id=song.id,
-        status=song.status,
-        progress_step=song.progress_step,
-        progress_percent=song.progress_percent,
-        error_message=song.error_message,
+    _queue_song_job(
+        db,
+        song,
+        pipeline_service.start_processing,
+        status=models.SongStatus.QUEUED,
+        error_message=None,
     )
+    db.refresh(song)
+    return _processing_status(song)
 
 
 @router.post("/{song_id}/reprocess", response_model=schemas.ProcessingStatusOut, status_code=202)
-def reprocess_melody(song_id: str, db: Session = Depends(get_db)):
+def reprocess_melody(song: SongDependency, db: Session = Depends(get_db)):
     """Clear prior generated files and rebuild the song with the current MIDI algorithm."""
-    song = song_service.get_song(db, song_id)
-    if song is None:
-        raise HTTPException(status_code=404, detail="Песня не найдена")
     if not song.output_dir or song.status != models.SongStatus.DONE:
         raise HTTPException(status_code=409, detail="Сначала завершите полную обработку песни")
-    if pipeline_service.is_processing(song_id):
+    if pipeline_service.is_processing(song.id):
         raise HTTPException(status_code=409, detail="Обработка уже запущена")
 
-    song.status = models.SongStatus.QUEUED
-    song.error_message = None
-    song.progress_percent = 0.0
-    song.progress_step = "0/13"
-    db.commit()
-    pipeline_service.start_reprocessing(song_id)
-    db.refresh(song)
-    return schemas.ProcessingStatusOut(
-        song_id=song.id,
-        status=song.status,
-        progress_step=song.progress_step,
-        progress_percent=song.progress_percent,
-        error_message=song.error_message,
+    _queue_song_job(
+        db,
+        song,
+        pipeline_service.start_reprocessing,
+        status=models.SongStatus.QUEUED,
+        error_message=None,
+        progress_percent=0.0,
+        progress_step="0/13",
     )
+    db.refresh(song)
+    return _processing_status(song)
 
 
 @router.get("/{song_id}/status", response_model=schemas.ProcessingStatusOut)
-def get_status(song_id: str, db: Session = Depends(get_db)):
-    song = song_service.get_song(db, song_id)
-    if song is None:
-        raise HTTPException(status_code=404, detail="Песня не найдена")
-    telemetry = pipeline_service.get_processing_telemetry(song_id)
-    return schemas.ProcessingStatusOut(
-        song_id=song.id,
-        status=song.status,
-        progress_step=song.progress_step,
-        progress_percent=song.progress_percent,
-        progress_detail=telemetry.get("progress_detail"),
-        eta_seconds=telemetry.get("eta_seconds"),
-        error_message=song.error_message,
-    )
+def get_status(song: SongDependency):
+    telemetry = pipeline_service.get_processing_telemetry(song.id)
+    return _processing_status(song, telemetry=telemetry)
 
 
 @router.post("/{song_id}/cancel", response_model=schemas.ProcessingStatusOut)
-def cancel_processing(song_id: str, db: Session = Depends(get_db)):
-    song = song_service.get_song(db, song_id)
-    if song is None:
-        raise HTTPException(status_code=404, detail="Song not found")
-    if not pipeline_service.cancel_processing(song_id):
+def cancel_processing(song: SongDependency, db: Session = Depends(get_db)):
+    if not pipeline_service.cancel_processing(song.id):
         raise HTTPException(status_code=409, detail="Song is not being processed")
     db.refresh(song)
-    return schemas.ProcessingStatusOut(
-        song_id=song.id,
-        status=song.status,
-        progress_step=song.progress_step,
-        progress_percent=song.progress_percent,
-        error_message=song.error_message,
-    )
+    return _processing_status(song)
 
 
 @router.get("/{song_id}/log")
-def get_processing_log(song_id: str, db: Session = Depends(get_db)):
-    song = song_service.get_song(db, song_id)
-    if song is None:
-        raise HTTPException(status_code=404, detail="Song not found")
+def get_processing_log(song: SongDependency):
     log_path = song_service.resolve_output_dir(song) / config.LOGS_DIRNAME / "pipeline.log"
     if not log_path.exists():
         return {"lines": []}
-    return {"lines": _read_log_tail(log_path)}
+    return {"lines": read_text_tail(log_path)}
 
 
 @router.get("/{song_id}/audio/{track}")
-def get_audio_track(song_id: str, track: str, db: Session = Depends(get_db)):
-    song = song_service.get_song(db, song_id)
-    if song is None:
-        raise HTTPException(status_code=404, detail="Song not found")
+def get_audio_track(track: str, song: SongDependency):
     if track not in {"instrumental", "vocals", "song"}:
         raise HTTPException(status_code=404, detail="Unknown audio track")
     output_dir = song_service.resolve_output_dir(song)
@@ -255,46 +272,34 @@ def get_audio_track(song_id: str, track: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{song_id}/result", response_model=schemas.SongResultOut)
-def get_result(song_id: str, db: Session = Depends(get_db)):
-    song = song_service.get_song(db, song_id)
-    if song is None:
-        raise HTTPException(status_code=404, detail="Песня не найдена")
+def get_result(song: SongDependency):
     if song.status != models.SongStatus.DONE or not song.output_dir:
         raise HTTPException(status_code=409, detail="Песня ещё не обработана")
 
     out_dir = song_service.resolve_output_dir(song)
     return schemas.SongResultOut(
         song=schemas.SongOut.model_validate(song),
-        music=_read_json(out_dir / "music.json"),
-        reference_notes=_read_json(out_dir / "reference.json"),
-        lyrics_sync=_read_json(out_dir / "lyrics.json"),
-        song_map=_read_json(out_dir / "songInfo.json"),
-        difficulty=_read_json(out_dir / "difficulty.json"),
-        structure=_read_json(out_dir / "structure.json"),
-        breaths=_read_json(out_dir / "breaths.json"),
+        music=read_json(out_dir / "music.json"),
+        reference_notes=read_json(out_dir / "reference.json"),
+        lyrics_sync=read_json(out_dir / "lyrics.json"),
+        song_map=read_json(out_dir / "songInfo.json"),
+        difficulty=read_json(out_dir / "difficulty.json"),
+        structure=read_json(out_dir / "structure.json"),
+        breaths=read_json(out_dir / "breaths.json"),
         manifest=None,
     )
 
 
 @router.put("/{song_id}/lyrics")
-def update_lyrics(song_id: str, body: schemas.LyricsUpdate, db: Session = Depends(get_db)):
-    song = song_service.get_song(db, song_id)
-    if song is None:
-        raise HTTPException(status_code=404, detail="Song not found")
+def update_lyrics(body: schemas.LyricsUpdate, song: SongDependency):
     if song.status != models.SongStatus.DONE or not song.output_dir:
         raise HTTPException(status_code=409, detail="Song has not been processed yet")
 
     lyrics_path = song_service.resolve_output_dir(song) / "lyrics.json"
-    temporary_path = lyrics_path.with_suffix(".tmp")
     try:
         reconcile_lyric_words = ai_bridge.get_reconcile_lyric_words()
         lyrics = reconcile_lyric_words([line.model_dump() for line in body.lyrics])
-        temporary_path.write_text(
-            json.dumps(lyrics, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        temporary_path.replace(lyrics_path)
+        write_json(lyrics_path, lyrics)
     except (OSError, TypeError, ValueError) as exc:
-        temporary_path.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=f"Could not save lyrics: {exc}") from exc
     return {"status": "saved"}

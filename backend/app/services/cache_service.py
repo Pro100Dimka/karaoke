@@ -9,8 +9,9 @@ import subprocess
 from pathlib import Path
 
 import config
-import models
+from app import repositories
 from app.services import song_service
+from app.services.db_utils import commit
 from database import SessionLocal
 
 # Промежуточные артефакты AI-пайплайна, которые не нужны после того как
@@ -94,54 +95,61 @@ def clear_temp_files() -> int:
     return freed
 
 
+def _optimization_result(song_id: str, freed: int = 0, actions: list[str] | None = None) -> dict:
+    return {
+        "song_id": song_id,
+        "freed_bytes": freed,
+        "freed_human": _human(freed),
+        "actions": actions or [],
+    }
+
+
+def _remove_intermediate_directories(out_dir: Path, actions: list[str]) -> int:
+    freed = 0
+    for name in _HEAVY_INTERMEDIATE_DIRNAMES:
+        target = out_dir / name
+        if not target.exists():
+            continue
+        freed += _dir_size_bytes(target)
+        shutil.rmtree(target, ignore_errors=True)
+        actions.append(f"удалена временная папка {name}/")
+    return freed
+
+
+def _convert_heavy_wavs(out_dir: Path, actions: list[str]) -> int:
+    freed = 0
+    for wav_name in _HEAVY_KEEP_AS_MP3:
+        wav_path = out_dir / wav_name
+        if not wav_path.exists():
+            continue
+        mp3_path = wav_path.with_suffix(".mp3")
+        try:
+            _encode_mp3(wav_path, mp3_path)
+        except Exception:
+            # Preserve the source when conversion fails; losing a large WAV is
+            # worse than postponing optimization.
+            continue
+        freed += wav_path.stat().st_size
+        wav_path.unlink()
+        actions.append(f"{wav_name} -> {mp3_path.name}")
+    return freed
+
+
 def optimize_song_files(song_id: str) -> dict:
-    """Пост-обработка одной песни после успешной сборки:
-    - конвертирует тяжёлые wav (song/vocals/instrumental) в mp3;
-    - удаляет исходные wav и промежуточные артефакты сепарации;
-    - оставляет мелодию (melody.mid) и все json как есть — они лёгкие и
-      нужны как есть.
-    Идемпотентна: повторный вызов на уже оптимизированной песне ничего не
-    ломает, просто не находит, что делать."""
+    """Convert heavy WAV files and remove disposable pipeline artefacts."""
     db = SessionLocal()
     try:
-        song = db.query(models.Song).filter(models.Song.id == song_id).first()
+        song = repositories.get_song(db, song_id)
         if song is None or not song.output_dir:
-            return {"song_id": song_id, "freed_bytes": 0, "freed_human": "0.0 B", "actions": []}
+            return _optimization_result(song_id)
 
         out_dir = song_service.resolve_output_dir(song)
         actions: list[str] = []
-        freed = 0
-
-        for wav_name in _HEAVY_KEEP_AS_MP3:
-            wav_path = out_dir / wav_name
-            if not wav_path.exists():
-                continue
-            mp3_path = wav_path.with_suffix(".mp3")
-            try:
-                _encode_mp3(wav_path, mp3_path)
-            except Exception:
-                # если конвертация не удалась — не удаляем исходник, лучше
-                # оставить тяжёлый wav, чем потерять файл вовсе
-                continue
-            freed += wav_path.stat().st_size
-            wav_path.unlink()
-            actions.append(f"{wav_name} -> {mp3_path.name}")
-
-        for name in _HEAVY_INTERMEDIATE_DIRNAMES:
-            target = out_dir / name
-            if target.exists():
-                freed += _dir_size_bytes(target)
-                shutil.rmtree(target, ignore_errors=True)
-                actions.append(f"удалена временная папка {name}/")
+        freed = _convert_heavy_wavs(out_dir, actions)
+        freed += _remove_intermediate_directories(out_dir, actions)
 
         song.optimized = True
-        db.commit()
-
-        return {
-            "song_id": song_id,
-            "freed_bytes": freed,
-            "freed_human": _human(freed),
-            "actions": actions,
-        }
+        commit(db)
+        return _optimization_result(song_id, freed, actions)
     finally:
         db.close()

@@ -40,27 +40,15 @@ def update_settings(patch: schemas.AudioSettingsUpdate, db: Session = Depends(ge
 
 @router.post("/direct-monitor/start", response_model=schemas.AudioSettingsOut)
 def start_direct_monitoring(db: Session = Depends(get_db)):
-    settings = audio_service.get_settings(db)
-    settings.monitoring_enabled = True
-    db.commit()
-    db.refresh(settings)
     try:
-        audio_service.configure_monitoring(settings)
+        return audio_service.set_monitoring_enabled(db, True)
     except RuntimeError as exc:
-        settings.monitoring_enabled = False
-        db.commit()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return settings
 
 
 @router.post("/direct-monitor/stop", response_model=schemas.AudioSettingsOut)
 def stop_direct_monitoring(db: Session = Depends(get_db)):
-    settings = audio_service.get_settings(db)
-    audio_service.stop_monitoring()
-    settings.monitoring_enabled = False
-    db.commit()
-    db.refresh(settings)
-    return settings
+    return audio_service.set_monitoring_enabled(db, False)
 
 
 @router.post("/devices/select", response_model=schemas.AudioSettingsOut)
