@@ -4,10 +4,8 @@ import { api } from "../../api/client";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import { usePolling } from "../../hooks/usePolling";
 import KaraokeConsole from "./components/console";
-import KaraokeMedia from "./components/KaraokeMedia";
-import KaraokePerformanceStage from "./components/KaraokePerformanceStage";
-import MicrophoneSettingsModal from "./components/MicrophoneSettingsModal";
-import PerformanceAnalysisModal from "./components/PerformanceAnalysisModal";
+import KaraokeMedia from "./components/karaoke-media";
+import KaraokePerformanceStage from "./components/karaoke-performance-stage";
 import useAudioOutputRouting from "./hooks/useAudioOutputRouting";
 import useKaraokeControls from "./hooks/useKaraokeControls";
 import useKaraokeHotkeys from "./hooks/useKaraokeHotkeys";
@@ -20,6 +18,8 @@ import useKaraokeTransport from "./hooks/useKaraokeTransport";
 import useMelodyGuide from "./hooks/useMelodyGuide";
 import useMicrophoneSettings from "./hooks/useMicrophoneSettings";
 import usePitchDetection from "./hooks/usePitchDetection";
+import MicrophoneSettingsModal from "./modals/microphone-settings-modal";
+import PerformanceAnalysisModal from "./modals/performance-analysis-modal";
 import {
   getYouTubeVideoId,
   normalizeLyrics,

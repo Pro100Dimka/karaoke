@@ -1,5 +1,9 @@
-import { midiToWesternNote } from "../utils/format";
-import { getMelodyCue, getMelodyRange, getVisibleNotes } from "../utils/melody";
+import { midiToWesternNote } from "../../utils/format";
+import {
+  getMelodyCue,
+  getMelodyRange,
+  getVisibleNotes
+} from "../../utils/melody";
 
 const VIEW = {
   width: 1000,

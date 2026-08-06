@@ -1,7 +1,7 @@
 import { Mic } from "lucide-react";
-import EffectDial from "../EffectDial";
-import SliderField from "../SliderField";
+import SliderField from "../slider-field";
 import { EFFECT_FIELDS, METER_BARS, MIXER_FIELDS } from "./config";
+import EffectDial from "./effect-dial";
 import { clamp } from "./utils";
 
 function MicrophoneMeter({ level }) {

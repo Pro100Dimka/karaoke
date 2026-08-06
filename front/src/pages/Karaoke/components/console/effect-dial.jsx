@@ -1,5 +1,5 @@
 import { useId, useRef } from "react";
-import { RangeInput } from "../../../components/fields";
+import { RangeInput } from "../../../../components/fields";
 
 const clamp = (value) => Math.max(0, Math.min(1, value));
 const normalizeId = (id) => id.replace(/:/g, "");

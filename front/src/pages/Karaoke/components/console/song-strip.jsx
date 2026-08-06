@@ -1,6 +1,6 @@
 import { Mic } from "lucide-react";
 import { formatTime } from "../../utils/format";
-import WaveformTimeline from "../WaveformTimeline";
+import WaveformTimeline from "../waveform-timeline";
 
 export default function SongStrip({ song, currentTime, duration, onSeek }) {
   const { title, artist, performer } = song;

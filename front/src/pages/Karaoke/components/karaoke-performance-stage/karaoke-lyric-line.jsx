@@ -1,4 +1,4 @@
-import { buildLyricWordTimings, getLyricFill } from "../utils/lyrics";
+import { buildLyricWordTimings, getLyricFill } from "../../utils/lyrics";
 
 const percent = (value) => `${Math.round(value * 100)}%`;
 const clamp = (value) => Math.max(0, Math.min(1, value));
