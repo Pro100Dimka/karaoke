@@ -1,0 +1,200 @@
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #090103;
+  --color-bg-deep: #030001;
+  --color-bg-elevated: #150207;
+  --color-surface: rgba(33, 3, 10, 0.76);
+  --color-surface-strong: rgba(48, 5, 15, 0.93);
+  --color-surface-soft: rgba(76, 8, 23, 0.54);
+  --color-surface-hover: rgba(105, 13, 31, 0.68);
+  --color-surface-glass: rgba(40, 4, 13, 0.66);
+  --color-text: #fff8f9;
+  --color-text-soft: #f2d6da;
+  --color-text-muted: #bd8790;
+  --color-text-inverse: #1a0206;
+  --color-primary: #ff405d;
+  --color-primary-hover: #ff6279;
+  --color-primary-strong: #d80b36;
+  --color-secondary: #b7133a;
+  --color-accent: #ff8998;
+  --color-accent-strong: #ff1f48;
+  --color-highlight: #ffd0d6;
+  --color-success: #62e6ad;
+  --color-warning: #ffc778;
+  --color-danger: #ff3b5f;
+  --color-rose: #ef7f9c;
+  --color-raspberry: #d62f62;
+  --color-peach: #f18068;
+  --color-coral: #ff5b6e;
+  --color-nude: #edc6cc;
+  --color-champagne: #ffe9df;
+  --color-border: rgba(255, 94, 115, 0.3);
+  --color-border-strong: rgba(255, 116, 133, 0.72);
+  --color-border-accent: rgba(255, 42, 77, 0.9);
+  --color-focus: #ffabb6;
+  --gradient-primary: linear-gradient(
+    135deg,
+    #ff8998 0%,
+    #f1284c 44%,
+    #8d0828 100%
+  );
+  --gradient-primary-hover: linear-gradient(
+    135deg,
+    #ffabb5 0%,
+    #ff4867 46%,
+    #b10c34 100%
+  );
+  --gradient-panel: linear-gradient(
+    145deg,
+    rgba(76, 8, 23, 0.8),
+    rgba(18, 1, 6, 0.9)
+  );
+  --gradient-glass: linear-gradient(
+    145deg,
+    rgba(68, 7, 20, 0.72),
+    rgba(18, 1, 7, 0.84)
+  );
+  --gradient-border: linear-gradient(
+    110deg,
+    #ffd0d6,
+    #ff526d 30%,
+    #b30935 64%,
+    #ff8b9a 100%
+  );
+  --gradient-text: linear-gradient(
+    90deg,
+    #ffffff 0%,
+    #ffe4e7 48%,
+    #ffadba 100%
+  );
+  --shadow-sm: 0 8px 24px var(--theme-color-914f45b4);
+  --shadow-md: 0 18px 55px var(--theme-color-b6b9cc23);
+  --shadow-lg: 0 28px 90px var(--theme-color-d83050d5);
+  --shadow-glass:
+    inset 0 1px 0 var(--theme-color-08e65743),
+    0 18px 52px var(--theme-color-906e1993);
+  --shadow-neon-soft:
+    0 0 12px var(--theme-color-a0010367), 0 0 30px var(--theme-color-57e58778);
+  --shadow-neon-primary:
+    0 0 9px var(--theme-color-ea192811), 0 0 28px var(--theme-color-4979c6b8);
+  --shadow-neon-mixed:
+    0 0 10px var(--theme-color-fc7ed36d), 0 0 34px var(--theme-color-f6917e68),
+    0 0 58px var(--theme-color-b9fc153c);
+  --card-fx-1: var(--color-highlight);
+  --card-fx-2: var(--color-primary);
+  --card-fx-3: var(--color-accent);
+  --card-fx-4: var(--color-primary-strong);
+  --card-edge-1: var(--theme-color-c01a5920);
+  --card-edge-2: var(--color-primary-hover);
+  --card-edge-3: var(--color-primary);
+  --card-edge-4: var(--color-accent-strong);
+  --card-glint: var(--theme-color-648f86d4);
+  --card-panel-top: var(--theme-color-7de672b7);
+  --card-panel-bottom: var(--theme-color-59405b65);
+  --card-panel-accent: var(--theme-color-1238d10d);
+  --card-panel-accent-deep: var(--theme-color-9a1ff302);
+  --card-sheen: var(--theme-color-5bdb45e8);
+  --card-sheen-soft: var(--theme-color-04cfd001);
+  --card-panel-shadow: 0 1.875rem 5rem var(--theme-color-0b3c575c);
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-bg: #fffaf7;
+  --color-bg-deep: #f8eee9;
+  --color-bg-elevated: #fffdfb;
+  --color-surface: rgba(255, 252, 250, 0.72);
+  --color-surface-strong: rgba(255, 253, 251, 0.94);
+  --color-surface-soft: rgba(255, 235, 229, 0.7);
+  --color-surface-hover: rgba(255, 216, 215, 0.82);
+  --color-surface-glass: rgba(255, 248, 244, 0.7);
+  --color-text: #482f35;
+  --color-text-soft: #75565e;
+  --color-text-muted: #9b7d83;
+  --color-text-inverse: #fffaf8;
+  --color-primary: #ef3f65;
+  --color-primary-hover: #ff5878;
+  --color-primary-strong: #c7274d;
+  --color-secondary: #f28b73;
+  --color-accent: #d62f62;
+  --color-accent-strong: #b51e4b;
+  --color-highlight: #fff7f2;
+  --color-success: #27996c;
+  --color-warning: #c4772d;
+  --color-danger: #d73548;
+  --color-rose: #ef7f9c;
+  --color-raspberry: #d62f62;
+  --color-peach: #f6a080;
+  --color-coral: #ee6e67;
+  --color-nude: #e8c9bd;
+  --color-champagne: #f3d6bd;
+  --color-border: rgba(174, 75, 94, 0.2);
+  --color-border-strong: rgba(215, 64, 94, 0.42);
+  --color-border-accent: rgba(235, 61, 98, 0.72);
+  --color-focus: #d92f5a;
+  --gradient-primary: linear-gradient(
+    135deg,
+    #ff9bac 0%,
+    #ef4768 48%,
+    #c92950 100%
+  );
+  --gradient-primary-hover: linear-gradient(
+    135deg,
+    #ffb3bf 0%,
+    #fa5d78 48%,
+    #db3459 100%
+  );
+  --gradient-panel: linear-gradient(
+    145deg,
+    rgba(255, 253, 251, 0.9),
+    rgba(255, 235, 228, 0.84)
+  );
+  --gradient-glass: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.74),
+    rgba(255, 239, 233, 0.7)
+  );
+  --gradient-border: linear-gradient(
+    110deg,
+    #ffffff,
+    #f8b2be 28%,
+    #ef6d7e 58%,
+    #f4a27f 82%,
+    #fff7f2
+  );
+  --gradient-text: linear-gradient(
+    90deg,
+    #4b3036 0%,
+    #96394f 48%,
+    #db4b69 100%
+  );
+  --shadow-sm: 0 0.5rem 1.5rem var(--theme-color-63057c91);
+  --shadow-md: 0 1.15rem 3rem var(--theme-color-f633714d);
+  --shadow-lg: 0 1.8rem 5rem var(--theme-color-ad5a0940);
+  --shadow-glass:
+    inset 0 0.0625rem 0 var(--theme-color-cc53ce15),
+    0 1.15rem 3rem var(--theme-color-ebcea82f);
+  --shadow-neon-soft:
+    0 0 0.8rem var(--theme-color-2b7b5f0f),
+    0 0 2.1rem var(--theme-color-284ce349);
+  --shadow-neon-primary:
+    0 0 0.7rem var(--theme-color-e499e632), 0 0 2rem var(--theme-color-54c941d7);
+  --shadow-neon-mixed:
+    0 0 0.75rem var(--theme-color-8fafb20d),
+    0 0 2rem var(--theme-color-a7fed561), 0 0 3.5rem var(--theme-color-8b6d75c5);
+  --card-fx-1: var(--color-white);
+  --card-fx-2: var(--color-primary);
+  --card-fx-3: var(--color-peach);
+  --card-fx-4: var(--color-raspberry);
+  --card-edge-1: var(--color-white);
+  --card-edge-2: var(--color-primary-hover);
+  --card-edge-3: var(--color-coral);
+  --card-edge-4: var(--color-accent);
+  --card-glint: var(--theme-color-56fbf368);
+  --card-panel-top: var(--theme-color-a9414880);
+  --card-panel-bottom: var(--theme-color-abf1a865);
+  --card-panel-accent: var(--theme-color-d0cc8651);
+  --card-panel-accent-deep: var(--theme-color-ca50af8c);
+  --card-sheen: var(--theme-color-3fa6fc78);
+  --card-sheen-soft: var(--theme-color-4a41b00a);
+  --card-panel-shadow: 0 1.875rem 5rem var(--theme-color-1de7d4a2);
+}
