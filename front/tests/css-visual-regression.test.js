@@ -9,7 +9,7 @@ const css = readCssBundle([
   new URL("../src/styles/layout.css", import.meta.url),
   new URL("../src/styles/compat.css", import.meta.url),
   new URL("../src/pages/Library/library.css", import.meta.url),
-  new URL("../src/pages/Library/song-settings/song-settings.css", import.meta.url),
+  new URL("../src/pages/Library/modals/song-settings/song-settings.css", import.meta.url),
   new URL("../src/pages/Settings/settings.css", import.meta.url),
   new URL("../src/pages/Karaoke/karaoke.css", import.meta.url)
 ]);

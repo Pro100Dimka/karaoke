@@ -1,4 +1,5 @@
 import { createFileUrl, request } from "../core";
+import { normalizeRecording } from "../normalizers";
 
 export const recordingsApi = {
   getRecordingSettings: () => request("/recording/settings"),
@@ -29,8 +30,14 @@ export const recordingsApi = {
     request(`/recording/resume?session_id=${sessionId}`, { method: "POST" }),
   stopRecording: (sessionId) =>
     request(`/recording/stop?session_id=${sessionId}`, { method: "POST" }),
-  listRecordingsForSong: (songId) => request(`/recording/by-song/${songId}`),
-  listRecordingLibrary: () => request("/recording/library"),
+  listRecordingsForSong: (songId) =>
+    request(`/recording/by-song/${songId}`).then((items) =>
+      Array.isArray(items) ? items.map(normalizeRecording) : []
+    ),
+  listRecordingLibrary: () =>
+    request("/recording/library").then((items) =>
+      Array.isArray(items) ? items.map(normalizeRecording) : []
+    ),
   deleteRecording: (id) => request(`/recording/${id}`, { method: "DELETE" }),
   getRecordingFileUrl: (id) => createFileUrl(`/recording/${id}/file`),
   getPerformanceFileUrl: (id) => createFileUrl(`/recording/${id}/performance`),

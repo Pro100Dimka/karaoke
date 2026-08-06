@@ -7,8 +7,8 @@ const read = (path) =>
 const layout = read("src/components/layout.jsx");
 const routes = read("src/components/routes.jsx");
 const library = read("src/pages/Library/index.jsx");
-const songSettings = read("src/pages/Library/song-settings/index.jsx");
-const modal = read("src/components/Modal.jsx");
+const songSettings = read("src/pages/Library/modals/song-settings/index.jsx");
+const modal = read("src/components/modal/index.jsx");
 const performanceModal = read(
   "src/pages/Karaoke/components/PerformanceAnalysisModal.jsx"
 );
@@ -33,8 +33,8 @@ const layoutContracts = [
   "openSongSettings",
   "closeSongSettings",
   "onOpenSongSettings={openSongSettings}",
-  "<SongSettings songId={songSettingsId} />",
-  "isOpen={Boolean(songSettingsId)}"
+  "songId={songSettingsId}",
+  "onClose={closeSongSettings}"
 ];
 for (const contract of layoutContracts) {
   test(`layout keeps modal state contract: ${contract}`, () => {
@@ -60,15 +60,13 @@ for (const contract of modalContracts) {
 }
 
 test("SongSettings receives songId as a prop instead of router state", () => {
-  assert.match(songSettings, /function SongSettings\(\{ songId \}\)/);
+  assert.match(songSettings, /function SongSettings\(\{ songId, onClose \}\)/);
   assert.equal(songSettings.includes("useLocation"), false);
 });
 
 test("Library opens song settings through a callback", () => {
   assert.equal(
-    library.includes(
-      "onOpenSettings={(songId) => onOpenSongSettings?.(songId)}"
-    ),
+    library.includes("onOpenSettings={() => onOpenSongSettings?.(song.id)}"),
     true
   );
 });

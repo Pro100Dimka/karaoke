@@ -1,7 +1,11 @@
 import { request } from "../core";
+import { normalizeModel } from "../normalizers";
 
 export const modelsApi = {
-  listWhisperModels: () => request("/models/whisper"),
+  listWhisperModels: () =>
+    request("/models/whisper").then((models) =>
+      Array.isArray(models) ? models.map(normalizeModel) : []
+    ),
   downloadModel: (name) =>
     request(`/models/whisper/${name}/download`, { method: "POST" }),
   deleteModel: (name) =>

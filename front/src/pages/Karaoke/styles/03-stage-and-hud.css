@@ -23,8 +23,8 @@
 .karaoke-performance-stage::before {
   z-index: 3;
   background:
-    radial-gradient(ellipse 62% 46% at 50% 50%, transparent 30%, rgb(0 0 0 / 14%) 68%, rgb(0 0 0 / 58%) 100%),
-    linear-gradient(180deg, rgb(0 0 0 / 22%) 0%, transparent 28%, transparent 58%, rgb(0 0 0 / 62%) 100%);
+    radial-gradient(ellipse 62% 46% at 50% 50%, transparent 30%, var(--theme-color-71747aaa) 68%, var(--theme-color-27dec73b) 100%),
+    linear-gradient(180deg, var(--theme-color-0b194ce1) 0%, transparent 28%, transparent 58%, var(--theme-color-aaa8664f) 100%);
 }
 
 .karaoke-performance-stage::after {
@@ -58,9 +58,9 @@
       color-mix(in srgb, var(--color-bg-deep) 74%, transparent),
       color-mix(in srgb, var(--color-bg-deep) 52%, transparent));
   box-shadow:
-    0 1.1rem 3rem rgb(0 0 0 / 28%),
+    0 1.1rem 3rem var(--theme-color-26abe301),
     0 0 1.3rem color-mix(in srgb, var(--color-primary) 13%, transparent),
-    inset 0 var(--hairline) rgb(255 255 255 / 8%);
+    inset 0 var(--hairline) var(--theme-color-7f46531f);
   backdrop-filter: blur(.68rem) saturate(145%);
 }
 
@@ -72,14 +72,14 @@
   border-radius: inherit;
   pointer-events: none;
   background:
-    linear-gradient(115deg, transparent 12%, rgb(255 255 255 / 4%) 30%, transparent 46%),
+    linear-gradient(115deg, transparent 12%, var(--theme-color-58879084) 30%, transparent 46%),
     radial-gradient(circle at 28% 0%, color-mix(in srgb, var(--color-primary) 11%, transparent), transparent 34%);
 }
 
 .melody-roll-header {
   min-block-size: 3.15rem;
   padding: .58rem 1rem .5rem;
-  background: linear-gradient(180deg, rgb(255 255 255 / 4%), transparent);
+  background: linear-gradient(180deg, var(--theme-color-58879084), transparent);
 }
 
 .melody-roll-caption {
@@ -115,16 +115,16 @@
   inset: clamp(11.5rem, 25dvh, 15rem) 50% auto auto;
   inline-size: min(72rem, 90vw);
   transform: translateX(50%);
-  filter: drop-shadow(0 .35rem .5rem rgb(0 0 0 / 76%));
+  filter: drop-shadow(0 .35rem .5rem var(--theme-color-3b3916bd));
 }
 
 .karaoke-lyric {
-  color: rgb(255 255 255 / 98%);
+  color: var(--theme-color-56fbf368);
   font: 900 clamp(2.2rem, 4.6vw, 5rem) / 1.02 var(--font-display);
   letter-spacing: .006em;
   text-shadow:
-    0 .15rem .12rem rgb(0 0 0 / 90%),
-    0 .35rem .85rem rgb(0 0 0 / 86%),
+    0 .15rem .12rem var(--theme-color-f2d3816a),
+    0 .35rem .85rem var(--theme-color-fc94185b),
     0 0 1.5rem color-mix(in srgb, var(--color-primary) 46%, transparent);
 }
 
@@ -134,10 +134,10 @@
 
 .karaoke-lyric-next {
   margin-block-start: .72rem;
-  color: rgb(255 255 255 / 58%);
+  color: var(--theme-color-9c92b49c);
   font-size: .58em;
   font-weight: 760;
-  text-shadow: 0 .2rem .7rem rgb(0 0 0 / 88%);
+  text-shadow: 0 .2rem .7rem var(--theme-color-78216e08);
 }
 
 .karaoke-lyric-character {
@@ -145,8 +145,8 @@
   background-image: linear-gradient(90deg,
     var(--color-highlight) 0,
     var(--color-primary) var(--character-fill),
-    rgb(255 255 255 / 98%) var(--character-fill),
-    rgb(255 255 255 / 98%) 100%);
+    var(--theme-color-56fbf368) var(--character-fill),
+    var(--theme-color-56fbf368) 100%);
   background-clip: text;
   -webkit-background-clip: text;
   filter: drop-shadow(0 0 .32rem color-mix(in srgb, var(--color-primary) 26%, transparent));
@@ -155,7 +155,7 @@
 .karaoke-lyric-next .karaoke-lyric-character {
   background-image: linear-gradient(90deg,
     color-mix(in srgb, var(--color-primary) 58%, white) var(--character-fill),
-    rgb(255 255 255 / 58%) var(--character-fill));
+    var(--theme-color-9c92b49c) var(--character-fill));
   filter: none;
 }
 
@@ -204,8 +204,8 @@
       color-mix(in srgb, var(--color-surface) 52%, transparent),
       color-mix(in srgb, var(--color-bg-deep) 66%, transparent));
   box-shadow:
-    inset 0 var(--hairline) rgb(255 255 255 / 10%),
-    0 .7rem 1.6rem rgb(0 0 0 / 16%);
+    inset 0 var(--hairline) var(--theme-color-fa8c7339),
+    0 .7rem 1.6rem var(--theme-color-4e065e18);
 }
 
 .karaoke-microphone-meter i {
@@ -242,8 +242,8 @@
 
 [data-theme="light"] .karaoke-performance-stage::before {
   background:
-    radial-gradient(ellipse 62% 46% at 50% 50%, transparent 32%, rgb(91 45 53 / 8%) 72%, rgb(80 35 45 / 28%) 100%),
-    linear-gradient(180deg, rgb(255 255 255 / 7%), transparent 48%, rgb(75 38 47 / 18%) 100%);
+    radial-gradient(ellipse 62% 46% at 50% 50%, transparent 32%, var(--theme-color-4dc76887) 72%, var(--theme-color-266a532e) 100%),
+    linear-gradient(180deg, var(--theme-color-3fb99aa4), transparent 48%, var(--theme-color-cb8db78c) 100%);
 }
 
 [data-theme="light"] .karaoke-video,
@@ -254,21 +254,21 @@
 [data-theme="light"] .karaoke-lyric,
 [data-theme="light"] .karaoke-lyric-character {
   text-shadow:
-    0 .12rem .15rem rgb(255 255 255 / 85%),
-    0 .28rem .8rem rgb(86 40 51 / 42%),
+    0 .12rem .15rem var(--theme-color-60dccc44),
+    0 .28rem .8rem var(--theme-color-a2faa951),
     0 0 1.1rem color-mix(in srgb, var(--color-primary) 25%, transparent);
 }
 
 [data-theme="light"] .karaoke-lyric-character {
   background-image: linear-gradient(90deg,
     var(--color-primary) var(--character-fill),
-    rgb(70 40 46 / 96%) var(--character-fill));
+    var(--theme-color-74d0569d) var(--character-fill));
 }
 
 [data-theme="light"] .karaoke-lyric-next .karaoke-lyric-character {
   background-image: linear-gradient(90deg,
     var(--color-primary) var(--character-fill),
-    rgb(86 57 63 / 60%) var(--character-fill));
+    var(--theme-color-3e92e13b) var(--character-fill));
 }
 
 @keyframes karaoke-scene-breathe {
@@ -432,15 +432,15 @@
 /* Final karaoke readability and quick-display controls. */
 .karaoke-lyric,
 .karaoke-lyric-character {
-  color: rgb(255 250 252 / 100%);
+  color: var(--theme-color-f62915d1);
   -webkit-text-fill-color: transparent;
 }
 
 .karaoke-lyric {
-  -webkit-text-fill-color: rgb(255 250 252 / 100%);
+  -webkit-text-fill-color: var(--theme-color-f62915d1);
   text-shadow:
-    0 .16rem .16rem rgb(0 0 0 / 92%),
-    0 .35rem .9rem rgb(0 0 0 / 88%),
+    0 .16rem .16rem var(--theme-color-8d470513),
+    0 .35rem .9rem var(--theme-color-78216e08),
     0 0 1.25rem color-mix(in srgb, var(--color-primary) 42%, transparent);
 }
 
@@ -449,8 +449,8 @@
     90deg,
     var(--color-highlight) 0,
     var(--color-primary) var(--character-fill),
-    rgb(255 250 252 / 100%) var(--character-fill),
-    rgb(255 250 252 / 100%) 100%
+    var(--theme-color-f62915d1) var(--character-fill),
+    var(--theme-color-f62915d1) 100%
   );
   background-clip: text;
   -webkit-background-clip: text;
@@ -458,7 +458,7 @@
 
 .karaoke-lyric-next,
 .karaoke-lyric-next .karaoke-lyric-character {
-  color: rgb(255 244 247 / 68%);
+  color: var(--theme-color-5f72d5c4);
 }
 
 .karaoke-lyric-next .karaoke-lyric-character {
@@ -466,16 +466,16 @@
   background-image: linear-gradient(
     90deg,
     color-mix(in srgb, var(--color-primary) 62%, white) var(--character-fill),
-    rgb(255 244 247 / 68%) var(--character-fill)
+    var(--theme-color-5f72d5c4) var(--character-fill)
   );
 }
 
 [data-theme="light"] .karaoke-lyric {
-  color: rgb(255 255 255 / 100%);
-  -webkit-text-fill-color: rgb(255 255 255 / 100%);
+  color: var(--theme-color-c2789cfe);
+  -webkit-text-fill-color: var(--theme-color-c2789cfe);
   text-shadow:
-    0 .15rem .16rem rgb(62 25 34 / 88%),
-    0 .34rem .85rem rgb(62 25 34 / 72%),
+    0 .15rem .16rem var(--theme-color-befd97c8),
+    0 .34rem .85rem var(--theme-color-bca88bca),
     0 0 1.15rem color-mix(in srgb, var(--color-primary) 38%, transparent);
 }
 
@@ -484,8 +484,8 @@
     90deg,
     var(--color-primary) 0,
     var(--color-primary) var(--character-fill),
-    rgb(255 255 255 / 100%) var(--character-fill),
-    rgb(255 255 255 / 100%) 100%
+    var(--theme-color-c2789cfe) var(--character-fill),
+    var(--theme-color-c2789cfe) 100%
   );
 }
 
@@ -512,8 +512,8 @@
 .karaoke-performance-stage::before {
   z-index: 3;
   background:
-    radial-gradient(ellipse 66% 50% at 50% 48%, transparent 30%, rgb(0 0 0 / 12%) 68%, rgb(0 0 0 / 56%) 100%),
-    linear-gradient(180deg, rgb(0 0 0 / 17%) 0%, transparent 28%, transparent 57%, rgb(0 0 0 / 68%) 100%);
+    radial-gradient(ellipse 66% 50% at 50% 48%, transparent 30%, var(--theme-color-0eebab72) 68%, var(--theme-color-bcf9ee64) 100%),
+    linear-gradient(180deg, var(--theme-color-f7c590f0) 0%, transparent 28%, transparent 57%, var(--theme-color-9e5de86d) 100%);
 }
 
 .karaoke-video,
@@ -532,9 +532,9 @@
       color-mix(in srgb, var(--color-bg-deep) 69%, transparent),
       color-mix(in srgb, var(--color-bg-deep) 47%, transparent));
   box-shadow:
-    0 .9rem 2.4rem rgb(0 0 0 / 23%),
+    0 .9rem 2.4rem var(--theme-color-0583ea68),
     0 0 1.25rem color-mix(in srgb, var(--color-primary) 12%, transparent),
-    inset 0 var(--hairline) rgb(255 255 255 / 9%);
+    inset 0 var(--hairline) var(--theme-color-45414b18);
   backdrop-filter: blur(.5rem) saturate(138%);
 }
 
@@ -565,20 +565,20 @@
   inset: -28% -7%;
   border-radius: 50%;
   background: radial-gradient(ellipse at center,
-    rgb(0 0 0 / 50%) 0%,
-    rgb(0 0 0 / 24%) 45%,
+    var(--theme-color-d5e99793) 0%,
+    var(--theme-color-dbf68963) 45%,
     transparent 74%);
   filter: blur(.8rem);
 }
 
 .karaoke-lyric {
-  color: #fff;
-  -webkit-text-fill-color: #fff;
+  color: var(--color-white);
+  -webkit-text-fill-color: var(--color-white);
   font: 900 clamp(2rem, 4.1vw, 4.65rem) / 1.05 var(--font-display);
   letter-spacing: .008em;
   text-shadow:
-    0 .12rem .18rem rgb(0 0 0 / 78%),
-    0 .32rem .85rem rgb(0 0 0 / 72%),
+    0 .12rem .18rem var(--theme-color-a0a759ce),
+    0 .32rem .85rem var(--theme-color-17e64dbe),
     0 0 .85rem color-mix(in srgb, var(--color-primary) 34%, transparent);
 }
 
@@ -590,8 +590,8 @@
   background-image: linear-gradient(90deg,
     var(--color-highlight) 0,
     var(--color-primary) var(--character-fill),
-    #fff var(--character-fill),
-    #fff 100%);
+    var(--color-white) var(--character-fill),
+    var(--color-white) 100%);
   background-clip: text;
   -webkit-background-clip: text;
   filter: drop-shadow(0 0 .22rem color-mix(in srgb, var(--color-primary) 24%, transparent));
@@ -599,18 +599,18 @@
 
 .karaoke-lyric-next {
   margin-block-start: .8rem;
-  color: rgb(255 255 255 / 62%);
-  -webkit-text-fill-color: rgb(255 255 255 / 62%);
+  color: var(--theme-color-cecd7d17);
+  -webkit-text-fill-color: var(--theme-color-cecd7d17);
   font-size: .52em;
   font-weight: 760;
-  text-shadow: 0 .18rem .6rem rgb(0 0 0 / 74%);
+  text-shadow: 0 .18rem .6rem var(--theme-color-c72afc40);
 }
 
 .karaoke-lyric-next .karaoke-lyric-character {
   -webkit-text-fill-color: transparent;
   background-image: linear-gradient(90deg,
     color-mix(in srgb, var(--color-primary) 68%, white) var(--character-fill),
-    rgb(255 255 255 / 62%) var(--character-fill));
+    var(--theme-color-cecd7d17) var(--character-fill));
 }
 
 /* One unified glass HUD instead of visually disconnected controls. */
@@ -626,8 +626,8 @@
       color-mix(in srgb, var(--color-surface) 55%, transparent),
       color-mix(in srgb, var(--color-bg-deep) 77%, transparent));
   box-shadow:
-    0 1rem 2.8rem rgb(0 0 0 / 34%),
-    inset 0 var(--hairline) rgb(255 255 255 / 10%);
+    0 1rem 2.8rem var(--theme-color-c58ed263),
+    inset 0 var(--hairline) var(--theme-color-fa8c7339);
   backdrop-filter: blur(1.15rem) saturate(150%);
 }
 
@@ -697,25 +697,25 @@
 [data-theme="light"] .karaoke-transport-area {
   background:
     linear-gradient(145deg,
-      rgb(255 252 250 / 72%),
-      rgb(255 235 230 / 58%));
+      var(--theme-color-a7ad2465),
+      var(--theme-color-907845a1));
   box-shadow:
-    0 .85rem 2.2rem rgb(104 43 57 / 18%),
-    inset 0 var(--hairline) rgb(255 255 255 / 88%);
+    0 .85rem 2.2rem var(--theme-color-dba380e9),
+    inset 0 var(--hairline) var(--theme-color-0cb2eedf);
 }
 
 [data-theme="light"] .karaoke-lyrics::before {
   background: radial-gradient(ellipse at center,
-    rgb(52 24 31 / 42%) 0%,
-    rgb(52 24 31 / 18%) 48%,
+    var(--theme-color-84e2ab35) 0%,
+    var(--theme-color-3863c35b) 48%,
     transparent 74%);
 }
 
 [data-theme="light"] .karaoke-lyric,
 [data-theme="light"] .karaoke-lyric-character {
   text-shadow:
-    0 .12rem .18rem rgb(46 21 28 / 78%),
-    0 .3rem .75rem rgb(46 21 28 / 58%),
+    0 .12rem .18rem var(--theme-color-27cb34bc),
+    0 .3rem .75rem var(--theme-color-4f37be98),
     0 0 .8rem color-mix(in srgb, var(--color-primary) 30%, transparent);
 }
 

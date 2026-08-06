@@ -1,8 +1,9 @@
 import { createFileUrl, request, requestBlob } from "../core";
+import { normalizeSong, normalizeSongList } from "../normalizers";
 
 export const songsApi = {
-  listSongs: () => request("/songs"),
-  getSong: (id) => request(`/songs/${id}`),
+  listSongs: () => request("/songs").then(normalizeSongList),
+  getSong: (id) => request(`/songs/${id}`).then(normalizeSong),
   addSong: (file, title) => {
     const form = new FormData();
     form.append("file", file);

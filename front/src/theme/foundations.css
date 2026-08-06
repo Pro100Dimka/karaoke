@@ -78,14 +78,14 @@ svg {
 
 .title-bar {
   position: fixed;
-  z-index: 1000;
+  z-index: var(--z-titlebar);
   inset: 0 0 auto;
   display: flex;
   align-items: stretch;
   block-size: var(--titlebar-height);
-  border-block-end: var(--hairline) solid rgb(255 255 255 / 8%);
-  background: rgb(8 0 3 / 8%);
-  box-shadow: 0 var(--hairline) 0 rgb(255 58 91 / 10%);
+  border-block-end: var(--hairline) solid var(--theme-color-7f46531f);
+  background: var(--theme-color-7463d56d);
+  box-shadow: 0 var(--hairline) 0 var(--theme-color-b72a7db7);
   backdrop-filter: blur(var(--space-2)) saturate(115%);
   -webkit-app-region: drag;
 }
@@ -104,7 +104,7 @@ svg {
   font: 700 var(--font-size-xs) / 1 var(--font-display);
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  text-shadow: 0 0 var(--space-4) rgb(255 64 93 / 45%);
+  text-shadow: 0 0 var(--space-4) var(--theme-color-ec866f0c);
 }
 
 .title-bar__indicator {
@@ -127,7 +127,7 @@ svg {
   padding: 0;
   place-items: center;
   border: 0;
-  border-inline-start: var(--hairline) solid rgb(255 255 255 / 6%);
+  border-inline-start: var(--hairline) solid var(--theme-color-69b04917);
   color: var(--color-text-soft);
   background: transparent;
   transition:

@@ -31,7 +31,7 @@
 .karaoke-panoramic-sky {
   z-index: 0;
   background-image:
-    linear-gradient(180deg, rgb(2 0 6 / 12%), rgb(2 0 6 / 46%)),
+    linear-gradient(180deg, var(--theme-color-8791cf05), var(--theme-color-1ee6f6f3)),
     var(--panorama-image);
   background-position: var(--panorama-x, 50%) var(--panorama-y, 50%);
   background-size: cover;
@@ -92,7 +92,7 @@
   inset: 0;
   opacity: .2;
   background:
-    radial-gradient(circle at 18% 24%, rgb(255 255 255 / 18%), transparent 20%),
+    radial-gradient(circle at 18% 24%, var(--theme-color-15d6a68c), transparent 20%),
     radial-gradient(circle at 74% 58%, color-mix(in srgb, var(--color-primary) 38%, transparent), transparent 28%);
   filter: blur(2rem);
 }
@@ -124,7 +124,7 @@
   background:
     linear-gradient(var(--color-border) var(--hairline), transparent var(--hairline)) 0 0 / 100% 2.2rem,
     linear-gradient(90deg, var(--color-border) var(--hairline), transparent var(--hairline)) 0 0 / 3.2rem 100%;
-  mask-image: linear-gradient(transparent, #000 32%);
+  mask-image: linear-gradient(transparent, var(--color-black) 32%);
   transform: perspective(28rem) rotateX(58deg);
   transform-origin: bottom;
 }
@@ -202,7 +202,7 @@
   border: var(--hairline) solid var(--color-border);
   border-radius: var(--radius-xl);
   background: color-mix(in srgb, var(--color-bg-deep) 62%, transparent);
-  box-shadow: var(--shadow-lg), inset 0 var(--hairline) rgb(255 255 255 / 8%);
+  box-shadow: var(--shadow-lg), inset 0 var(--hairline) var(--theme-color-7f46531f);
   backdrop-filter: blur(1rem) saturate(130%);
 }
 
@@ -236,15 +236,15 @@
 }
 
 .karaoke-lyric {
-  color: rgb(255 255 255 / 96%);
+  color: var(--theme-color-f3a489de);
   font: 900 clamp(1.7rem, 4vw, 4.5rem) / 1.06 var(--font-display);
   letter-spacing: .015em;
-  text-shadow: 0 .12rem .35rem rgb(0 0 0 / 90%), 0 0 1.4rem var(--color-primary);
+  text-shadow: 0 .12rem .35rem var(--theme-color-f2d3816a), 0 0 1.4rem var(--color-primary);
 }
 
 .karaoke-lyric-next {
   margin-block-start: var(--space-3);
-  color: rgb(255 255 255 / 48%);
+  color: var(--theme-color-f5f651e0);
   font-size: .58em;
 }
 
@@ -252,7 +252,7 @@
 .karaoke-lyric-word { display: inline-block; margin-inline-end: .28em; }
 .karaoke-lyric-character {
   color: transparent;
-  background: linear-gradient(90deg, var(--color-highlight) var(--character-fill), rgb(255 255 255 / 48%) var(--character-fill));
+  background: linear-gradient(90deg, var(--color-highlight) var(--character-fill), var(--theme-color-f5f651e0) var(--character-fill));
   background-clip: text;
   -webkit-background-clip: text;
 }
@@ -265,7 +265,7 @@
   padding: var(--space-3) clamp(1rem, 3vw, 2.5rem) var(--space-4);
   border-block-start: var(--hairline) solid var(--color-border);
   background: color-mix(in srgb, var(--color-bg-deep) 80%, transparent);
-  box-shadow: 0 -1rem 3rem rgb(0 0 0 / 38%);
+  box-shadow: 0 -1rem 3rem var(--theme-color-29dc93ff);
   backdrop-filter: blur(1.2rem) saturate(135%);
   transition: opacity var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard);
 }
@@ -409,7 +409,7 @@
   block-size: .7rem;
   overflow: hidden;
   border-radius: var(--radius-pill);
-  background: rgb(255 255 255 / 10%);
+  background: var(--theme-color-fa8c7339);
 }
 .microphone-level-fill { block-size: 100%; border-radius: inherit; background: var(--gradient-primary); box-shadow: var(--shadow-neon-primary); }
 

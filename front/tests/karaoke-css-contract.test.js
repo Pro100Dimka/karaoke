@@ -46,7 +46,7 @@ test("application CSS imports use the new theme and page architecture", () => {
     "./styles/layout.css",
     "./styles/compat.css",
     "./pages/Library/library.css",
-    "./pages/Library/song-settings/song-settings.css",
+    "./pages/Library/modals/song-settings/song-settings.css",
     "./pages/Settings/settings.css",
     "./pages/Karaoke/karaoke.css"
   ];

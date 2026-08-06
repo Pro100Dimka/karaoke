@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useOnlineRoomNavigation } from "../hooks/useOnlineRoomNavigation";
 import { useRequireOnlineName } from "../hooks/useRequireOnlineName";
+import SongSettings from "../pages/Library/modals/song-settings";
 import Settings from "../pages/Settings";
 import TitleBar from "./TitleBar";
 import Modal from "./modal";
@@ -70,6 +71,12 @@ export default function AppLayout() {
           />
         </main>
         {!isKaraoke && <AppSettingsButton onClick={openSettings} />}
+        {songSettingsId && (
+          <SongSettings
+            songId={songSettingsId}
+            onClose={closeSongSettings}
+          />
+        )}
         <Modal
           isOpen={isSettingsOpen}
           onClose={closeSettings}

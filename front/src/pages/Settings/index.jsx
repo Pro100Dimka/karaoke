@@ -11,7 +11,6 @@ export default function Settings({ initialTab = "audio" }) {
   const { alert } = useAppDialog();
   const settings = useSettingsForm(alert);
   const navigation = useSettingsNavigation(initialTab);
-  console.log(navigation.tab);
   return (
     <div className="settings-page">
       <SettingsHeader status={settings.saveStatus} onSave={settings.save} />

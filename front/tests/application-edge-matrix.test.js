@@ -8,7 +8,7 @@ import {
   lyricsToText,
   normalizeText,
   parseLyricsText
-} from "../src/pages/Library/song-settings/utils.js";
+} from "../src/pages/Library/modals/song-settings/utils.js";
 
 const hostileValues = [
   null,

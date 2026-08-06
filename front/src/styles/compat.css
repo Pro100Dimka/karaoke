@@ -297,7 +297,7 @@
   height: 10px;
   overflow: hidden;
   border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--theme-color-ddaf538b);
 }
 .microphone-level-fill {
   height: 100%;
@@ -318,7 +318,7 @@
   display: grid;
   place-items: center;
   padding: var(--space-4);
-  background: rgba(1, 2, 18, 0.76);
+  background: var(--theme-color-49ae0278);
   backdrop-filter: blur(16px);
 }
 .karaoke-settings-modal {
@@ -411,7 +411,7 @@
   text-align: center;
 }
 .karaoke-lyric-current {
-  color: #fff;
+  color: var(--color-white);
 }
 .karaoke-lyric-upcoming,
 .karaoke-lyric-next {
@@ -467,7 +467,7 @@
   display: grid;
   place-items: center;
   padding: var(--space-4);
-  background: rgba(1, 2, 18, 0.78);
+  background: var(--theme-color-043c595d);
   backdrop-filter: blur(16px);
 }
 .performance-analysis-modal,

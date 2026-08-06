@@ -8,7 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const library = read("src/pages/Library/index.jsx");
 const dialog = read("src/contexts/AppDialog.jsx");
-const modal = read("src/components/Modal.jsx");
+const modal = read("src/components/modal/index.jsx");
 const audioPlayer = read("src/components/AudioPlayer.jsx");
 const theme = read("src/utils/theme.js");
 const routes = read("src/components/routes.jsx");

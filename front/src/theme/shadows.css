@@ -1,11 +1,11 @@
 :root {
-  --shadow-sm: 0 8px 24px rgba(5, 0, 2, 0.24);
-  --shadow-md: 0 18px 55px rgba(5, 0, 2, 0.4);
-  --shadow-lg: 0 28px 90px rgba(4, 0, 1, 0.58);
-  --shadow-glass: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 18px 52px rgba(4, 0, 1, 0.44);
-  --shadow-neon-soft: 0 0 12px rgba(255, 116, 132, 0.5), 0 0 30px rgba(222, 16, 55, 0.26);
-  --shadow-neon-primary: 0 0 9px rgba(255, 77, 101, 0.88), 0 0 28px rgba(181, 5, 42, 0.5);
-  --shadow-neon-mixed: 0 0 10px rgba(255, 143, 154, 0.82), 0 0 34px rgba(242, 29, 66, 0.46), 0 0 58px rgba(111, 3, 27, 0.34);
+  --shadow-sm: 0 8px 24px var(--theme-color-914f45b4);
+  --shadow-md: 0 18px 55px var(--theme-color-b6b9cc23);
+  --shadow-lg: 0 28px 90px var(--theme-color-d83050d5);
+  --shadow-glass: inset 0 1px 0 var(--theme-color-08e65743), 0 18px 52px var(--theme-color-906e1993);
+  --shadow-neon-soft: 0 0 12px var(--theme-color-a0010367), 0 0 30px var(--theme-color-57e58778);
+  --shadow-neon-primary: 0 0 9px var(--theme-color-ea192811), 0 0 28px var(--theme-color-4979c6b8);
+  --shadow-neon-mixed: 0 0 10px var(--theme-color-fc7ed36d), 0 0 34px var(--theme-color-f6917e68), 0 0 58px var(--theme-color-b9fc153c);
 
   /* Compatibility aliases; new code should use the semantic names above. */
   --shadow-neon-cyan: var(--shadow-neon-soft);
@@ -13,11 +13,11 @@
 }
 
 :root[data-theme="light"] {
-  --shadow-sm: 0 0.5rem 1.5rem rgba(114, 61, 73, 0.1);
-  --shadow-md: 0 1.15rem 3rem rgba(120, 59, 74, 0.14);
-  --shadow-lg: 0 1.8rem 5rem rgba(105, 53, 65, 0.18);
-  --shadow-glass: inset 0 0.0625rem 0 rgba(255, 255, 255, 0.92), 0 1.15rem 3rem rgba(139, 72, 85, 0.12);
-  --shadow-neon-soft: 0 0 0.8rem rgba(239, 93, 126, 0.22), 0 0 2.1rem rgba(246, 160, 128, 0.16);
-  --shadow-neon-primary: 0 0 0.7rem rgba(239, 63, 101, 0.3), 0 0 2rem rgba(214, 47, 98, 0.16);
-  --shadow-neon-mixed: 0 0 0.75rem rgba(255, 255, 255, 0.9), 0 0 2rem rgba(239, 127, 156, 0.2), 0 0 3.5rem rgba(246, 160, 128, 0.12);
+  --shadow-sm: 0 0.5rem 1.5rem var(--theme-color-63057c91);
+  --shadow-md: 0 1.15rem 3rem var(--theme-color-f633714d);
+  --shadow-lg: 0 1.8rem 5rem var(--theme-color-ad5a0940);
+  --shadow-glass: inset 0 0.0625rem 0 var(--theme-color-cc53ce15), 0 1.15rem 3rem var(--theme-color-ebcea82f);
+  --shadow-neon-soft: 0 0 0.8rem var(--theme-color-2b7b5f0f), 0 0 2.1rem var(--theme-color-284ce349);
+  --shadow-neon-primary: 0 0 0.7rem var(--theme-color-e499e632), 0 0 2rem var(--theme-color-54c941d7);
+  --shadow-neon-mixed: 0 0 0.75rem var(--theme-color-8fafb20d), 0 0 2rem var(--theme-color-a7fed561), 0 0 3.5rem var(--theme-color-8b6d75c5);
 }

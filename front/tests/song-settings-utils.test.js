@@ -7,7 +7,7 @@ import {
   lyricsToText,
   normalizeText,
   parseLyricsText
-} from "../src/pages/Library/song-settings/utils.js";
+} from "../src/pages/Library/modals/song-settings/utils.js";
 
 test("normalizeText trims values and preserves empty fallback semantics", () => {
   assert.equal(normalizeText("  Song  "), "Song");

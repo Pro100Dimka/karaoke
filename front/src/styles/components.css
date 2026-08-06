@@ -34,7 +34,7 @@
   justify-content: space-between;
   gap: var(--space-4);
   padding: var(--space-5) var(--space-6);
-  border-bottom: 1px solid rgba(120, 174, 255, 0.17);
+  border-bottom: 1px solid var(--theme-color-f6a78f2e);
 }
 
 .panel-title {
@@ -76,11 +76,11 @@
 }
 
 .btn-primary {
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.38);
+  color: var(--color-white);
+  border-color: var(--theme-color-57899006);
   background: var(--gradient-primary);
   box-shadow:
-    0 8px 24px rgba(92, 80, 255, 0.34),
+    0 8px 24px var(--theme-color-66f2386b),
     var(--shadow-neon-pink);
 }
 .btn-primary:hover:not(:disabled) {
@@ -89,25 +89,25 @@
 }
 
 .btn-ghost {
-  border-color: rgba(78, 175, 255, 0.34);
-  background: rgba(12, 24, 87, 0.58);
-  box-shadow: inset 0 0 20px rgba(48, 111, 255, 0.08);
+  border-color: var(--theme-color-7afcadc0);
+  background: var(--theme-color-0c591531);
+  box-shadow: inset 0 0 20px var(--theme-color-ee3ab421);
 }
 .btn-ghost:hover:not(:disabled) {
   border-color: var(--color-border-strong);
-  background: rgba(18, 46, 131, 0.72);
+  background: var(--theme-color-657a610a);
   box-shadow: var(--shadow-neon-cyan);
 }
 
 .btn-danger {
-  color: #fff;
-  border-color: rgba(255, 84, 168, 0.55);
+  color: var(--color-white);
+  border-color: var(--theme-color-c58f2d9f);
   background: linear-gradient(
     135deg,
-    rgba(255, 39, 135, 0.92),
-    rgba(177, 37, 193, 0.8)
+    var(--theme-color-44b01fc3),
+    var(--theme-color-9bf399e1)
   );
-  box-shadow: 0 0 18px rgba(255, 45, 153, 0.24);
+  box-shadow: 0 0 18px var(--theme-color-9fcfac40);
 }
 
 .input,
@@ -117,11 +117,11 @@ select {
   width: 100%;
   min-width: 0;
   min-height: 42px;
-  border: 1px solid rgba(79, 169, 255, 0.34);
+  border: 1px solid var(--theme-color-5cf34c5c);
   border-radius: var(--radius-md);
   color: var(--color-text);
-  background: rgba(3, 10, 46, 0.72);
-  box-shadow: inset 0 0 22px rgba(38, 82, 255, 0.1);
+  background: var(--theme-color-ad44e8c0);
+  box-shadow: inset 0 0 22px var(--theme-color-8ab702c7);
   transition:
     border-color var(--duration-normal),
     box-shadow var(--duration-normal),
@@ -135,13 +135,13 @@ select {
 }
 .input::placeholder,
 textarea::placeholder {
-  color: rgba(167, 180, 229, 0.55);
+  color: var(--theme-color-4ef7e4c6);
 }
 .input:hover,
 textarea:hover,
 select:hover,
 .app-dropdown-trigger:hover {
-  border-color: rgba(55, 222, 255, 0.68);
+  border-color: var(--theme-color-ad2cc28f);
 }
 .input:focus,
 textarea:focus,
@@ -149,8 +149,8 @@ select:focus,
 .app-dropdown-trigger:focus-visible {
   border-color: var(--color-primary);
   box-shadow:
-    inset 0 0 20px rgba(46, 232, 255, 0.08),
-    0 0 0 3px rgba(46, 232, 255, 0.13),
+    inset 0 0 20px var(--theme-color-8a93a74b),
+    0 0 0 3px var(--theme-color-8893ec7d),
     var(--shadow-neon-cyan);
 }
 
@@ -160,12 +160,12 @@ select:focus,
   align-items: center;
   gap: var(--space-4);
   padding: var(--space-4);
-  border: 1px solid rgba(68, 146, 255, 0.23);
+  border: 1px solid var(--theme-color-6a6ab8cf);
   border-radius: var(--radius-lg);
   background: linear-gradient(
     135deg,
-    rgba(20, 39, 118, 0.32),
-    rgba(4, 10, 48, 0.3)
+    var(--theme-color-9b1174e5),
+    var(--theme-color-9470387f)
   );
 }
 .settings-field > span {
@@ -198,7 +198,7 @@ select:focus,
   min-width: 0;
 }
 .field-error {
-  color: #ff83ba;
+  color: var(--theme-color-94b14456);
   font-size: var(--font-size-sm);
 }
 
@@ -222,9 +222,9 @@ select:focus,
   left: 0;
   right: 0;
   padding: var(--space-2);
-  border: 1px solid rgba(69, 205, 255, 0.55);
+  border: 1px solid var(--theme-color-8553523c);
   border-radius: var(--radius-md);
-  background: rgba(5, 11, 50, 0.97);
+  background: var(--theme-color-3d524f1c);
   box-shadow: var(--shadow-lg), var(--shadow-neon-cyan);
 }
 .app-dropdown-option {
@@ -241,8 +241,8 @@ select:focus,
 }
 .app-dropdown-option:hover,
 .app-dropdown-option.is-selected {
-  color: #fff;
-  background: rgba(73, 92, 255, 0.34);
+  color: var(--color-white);
+  background: var(--theme-color-2a5e33a5);
 }
 
 .badge {
@@ -253,7 +253,7 @@ select:focus,
   border-radius: var(--radius-pill);
   font-size: var(--font-size-xs);
   font-weight: 800;
-  background: rgba(8, 18, 70, 0.68);
+  background: var(--theme-color-8f212393);
 }
 .badge-dot {
   width: 8px;
@@ -280,7 +280,7 @@ select:focus,
   height: 8px;
   overflow: hidden;
   border-radius: var(--radius-pill);
-  background: rgba(120, 141, 220, 0.18);
+  background: var(--theme-color-54f754b3);
 }
 .progress-fill {
   height: 100%;

@@ -15,37 +15,37 @@
   --card-fx-2: var(--color-primary);
   --card-fx-3: var(--color-accent);
   --card-fx-4: var(--color-primary-strong);
-  --card-edge-1: #fff5f7;
+  --card-edge-1: var(--theme-color-c01a5920);
   --card-edge-2: var(--color-primary-hover);
   --card-edge-3: var(--color-primary);
   --card-edge-4: var(--color-accent-strong);
-  --card-glint: rgb(255 248 249 / 98%);
-  --card-panel-top: rgb(55 18 14 / 72%);
-  --card-panel-bottom: rgb(28 8 8 / 85%);
-  --card-panel-accent: rgb(120 30 10 / 35%);
-  --card-panel-accent-deep: rgb(40 4 4 / 35%);
-  --card-sheen: rgb(255 220 180 / 16%);
-  --card-sheen-soft: rgb(255 180 120 / 4%);
-  --card-panel-shadow: 0 1.875rem 5rem rgb(0 0 0 / 65%);
+  --card-glint: var(--theme-color-648f86d4);
+  --card-panel-top: var(--theme-color-7de672b7);
+  --card-panel-bottom: var(--theme-color-59405b65);
+  --card-panel-accent: var(--theme-color-1238d10d);
+  --card-panel-accent-deep: var(--theme-color-9a1ff302);
+  --card-sheen: var(--theme-color-5bdb45e8);
+  --card-sheen-soft: var(--theme-color-04cfd001);
+  --card-panel-shadow: 0 1.875rem 5rem var(--theme-color-0b3c575c);
 }
 
 :root[data-theme="light"] {
-  --card-fx-1: #ffffff;
+  --card-fx-1: var(--color-white);
   --card-fx-2: var(--color-primary);
   --card-fx-3: var(--color-peach);
   --card-fx-4: var(--color-raspberry);
-  --card-edge-1: #ffffff;
+  --card-edge-1: var(--color-white);
   --card-edge-2: var(--color-primary-hover);
   --card-edge-3: var(--color-coral);
   --card-edge-4: var(--color-accent);
-  --card-glint: rgb(255 255 255 / 98%);
-  --card-panel-top: rgb(255 253 251 / 82%);
-  --card-panel-bottom: rgb(255 235 228 / 88%);
-  --card-panel-accent: rgb(239 63 101 / 12%);
-  --card-panel-accent-deep: rgb(246 160 128 / 16%);
-  --card-sheen: rgb(255 255 255 / 64%);
-  --card-sheen-soft: rgb(239 98 133 / 10%);
-  --card-panel-shadow: 0 1.875rem 5rem rgb(118 68 78 / 18%);
+  --card-glint: var(--theme-color-56fbf368);
+  --card-panel-top: var(--theme-color-a9414880);
+  --card-panel-bottom: var(--theme-color-abf1a865);
+  --card-panel-accent: var(--theme-color-d0cc8651);
+  --card-panel-accent-deep: var(--theme-color-ca50af8c);
+  --card-sheen: var(--theme-color-3fa6fc78);
+  --card-sheen-soft: var(--theme-color-4a41b00a);
+  --card-panel-shadow: 0 1.875rem 5rem var(--theme-color-1de7d4a2);
 }
 
 .fx-neon-frame,
@@ -114,8 +114,8 @@
   border-radius: calc(var(--radius-xl) + 0.125rem);
   padding: 0.09375rem;
   -webkit-mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
+    linear-gradient(var(--color-white) 0 0) content-box,
+    linear-gradient(var(--color-white) 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
 }
@@ -162,7 +162,7 @@
     );
   box-shadow:
     var(--card-panel-shadow),
-    inset 0 var(--hairline) 0 rgb(255 255 255 / 6%);
+    inset 0 var(--hairline) 0 var(--theme-color-69b04917);
 }
 
 .ui-card__content {

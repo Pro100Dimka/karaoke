@@ -69,8 +69,8 @@ p {
 }
 
 ::selection {
-  color: #fff;
-  background: rgba(255, 56, 199, 0.62);
+  color: var(--color-white);
+  background: var(--theme-color-aea9e571);
 }
 
 ::-webkit-scrollbar {
@@ -79,11 +79,11 @@ p {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(3, 7, 35, 0.5);
+  background: var(--theme-color-daf7015c);
 }
 
 ::-webkit-scrollbar-thumb {
-  border: 2px solid rgba(3, 7, 35, 0.7);
+  border: 2px solid var(--theme-color-581f2125);
   border-radius: var(--radius-pill);
   background: linear-gradient(var(--color-secondary), var(--color-accent));
 }

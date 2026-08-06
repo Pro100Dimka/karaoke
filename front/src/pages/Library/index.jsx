@@ -19,7 +19,6 @@ import useLibraryRoomSync from "./hooks/use-room-sync";
 import useLibrarySongActions from "./hooks/use-song-actions";
 import ProcessingModal from "./modals/processing";
 import RecordingsModal from "./modals/recordings";
-import SongSettings from "./modals/song-settings";
 import {
   countReadySongs,
   filterSongs,
@@ -29,7 +28,6 @@ import {
 
 export default function Library({ onOpenSongSettings }) {
   const [query, setQuery] = useState("");
-  const [selectedSong, setSelectedSong] = useState(null);
   const [recordingsSong, setRecordingsSong] = useState(null);
   const [processingSong, setProcessingSong] = useState(null);
   const [analysisRecordingId, setAnalysisRecordingId] = useState(null);
@@ -142,7 +140,6 @@ export default function Library({ onOpenSongSettings }) {
 
   const filtered = filterSongs(visibleSongs, query);
   const readyCount = countReadySongs(visibleSongs);
-  console.log(selectedSong);
   return (
     <div className="library-page">
       <LibraryBackdrop />
@@ -199,7 +196,7 @@ export default function Library({ onOpenSongSettings }) {
               }}
               onOpenProcessing={setProcessingSong}
               onOpenRecordings={setRecordingsSong}
-              onOpenSettings={() => setSelectedSong(song)}
+              onOpenSettings={() => onOpenSongSettings?.(song.id)}
               onProcess={handleProcess}
               onReprocess={handleReprocess}
             />
@@ -217,10 +214,6 @@ export default function Library({ onOpenSongSettings }) {
           onClose={() => setOnlineRoomOpen(false)}
         />
       )}
-      <SongSettings
-        songId={selectedSong?.id}
-        onClose={() => setSelectedSong(null)}
-      />
       <RecordingsModal
         song={recordingsSong}
         recordings={songRecordings || []}

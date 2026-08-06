@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { multiSourceContract, sourceContract } from "./helpers/project.js";
 
 const contracts = [
-  ["Modal keeps stable lifecycle listeners", "src/components/Modal.jsx", [
+  ["Modal keeps stable lifecycle listeners", "src/components/modal/index.jsx", [
     /const onCloseRef = useRef\(onClose\)/,
     /onCloseRef\.current = onClose/,
     /onCloseRef\.current\?\.\(\)/,
@@ -20,7 +20,7 @@ const contracts = [
   ]],
   ["Library uses centralized app settings", "src/pages/Library/index.jsx", [
     /useAppSettings/,
-    /const \{ reloadSettings \} = useAppSettings\(\)/
+    /const \{ reloadSettings(?:, settings)? \} = useAppSettings\(\)/
   ], [/api\.getAppSettings\(\)/, /setAppSettings/]],
   ["polling queues refreshes and supports hidden documents", "src/hooks/usePolling.js", [
     /let refreshQueued = false/,
@@ -45,12 +45,12 @@ const contracts = [
     /useLibrarySongActions\(/,
     /useLibraryRoomSync\(/
   ], [/window\.electronAPI\?\.openSongFolder/]],
-  ["song folder errors are handled", "src/pages/Library/hooks/useLibrarySongActions.js", [
-    /await window\.electronAPI\.openSongFolder/,
+  ["song folder errors are handled", "src/pages/Library/hooks/use-song-actions.js", [
+    /const openFolder = window\.electronAPI\?\.openSongFolder/,
     /catch \(error\)/,
     /Не удалось открыть папку:/
   ]],
-  ["remote library queries are event-driven", "src/pages/Library/hooks/useLibraryRoomSync.js", [
+  ["remote library queries are event-driven", "src/pages/Library/hooks/use-room-sync.js", [
     /roomEventId/,
     /roomQueryRef\.current/,
     /queryRef\.current/,
@@ -89,7 +89,7 @@ for (const [name, path, includes, excludes = [], count = []] of contracts) {
 multiSourceContract(
   "feature components use shared controls",
   [
-    "src/pages/Library/components/LibrarySongCard.jsx",
+    "src/pages/Library/components/song-card/index.jsx",
     "src/components/TitleBar.jsx",
     "src/components/ui/ErrorBoundary.jsx",
     "src/components/OnlineRoomDock.jsx",
@@ -187,7 +187,7 @@ const additionalContracts = [
     /api\.pauseRecording\(activeRecordingId\)/,
     /operationId !== operationRef\.current/
   ], [/const setDirectMonitoring\s*=/, /manualMonitoringRef/, /AudioLines/]],
-  ["song settings saves are exclusive", "src/pages/Library/song-settings/index.jsx", [/useExclusiveAsyncAction/]],
+  ["song settings saves are exclusive", "src/pages/Library/modals/song-settings/index.jsx", [/useExclusiveAsyncAction/]],
   ["room dock actions are exclusive", "src/components/OnlineRoomDock.jsx", [/useExclusiveAsyncAction/], [/document\.execCommand/]],
   ["title bar consumes rejected IPC promises", "src/components/TitleBar.jsx", [/Promise\.resolve\(electronAPI\[action\]\?\.\(\)\)\.catch/, /invokeWindowAction\(electronAPI, id\)/]]
 ];
