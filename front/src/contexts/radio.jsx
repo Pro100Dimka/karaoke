@@ -105,20 +105,41 @@ export function RadioProvider({ children }) {
   }, []);
 
   const prepareAudioGraph = useCallback(() => {
-    if (audioContextRef.current || !audioRef.current) return;
+    const audio = audioRef.current;
+    if (!audio) return null;
+
+    const existing = audioContextRef.current;
+    if (existing && existing.state !== "closed") return existing;
+
     const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
+    if (!AudioContext) return null;
+
     const context = new AudioContext();
     const analyser = context.createAnalyser();
-    const source = context.createMediaElementSource(audioRef.current);
+    const source = context.createMediaElementSource(audio);
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = 0.72;
     source.connect(analyser);
     analyser.connect(context.destination);
+
     audioContextRef.current = context;
     analyserRef.current = analyser;
     frequencyDataRef.current = new Uint8Array(analyser.frequencyBinCount);
+    return context;
   }, []);
+
+  const unlockAudioAnalysis = useCallback(async () => {
+    try {
+      const context = prepareAudioGraph();
+      if (!context) return;
+      if (context.state === "suspended") await context.resume();
+      if (!audioRef.current?.paused) startAnalysis();
+    } catch (reason) {
+      // Радио продолжает играть и без Web Audio. Анализатор подключится
+      // после следующего пользовательского жеста.
+      console.warn("Radio analyser activation deferred", reason);
+    }
+  }, [prepareAudioGraph, startAnalysis]);
 
   const loadStream = useCallback((index = 0, nextStation = station) => {
     const audio = audioRef.current;
@@ -128,19 +149,17 @@ export function RadioProvider({ children }) {
     audio.load();
   }, [station]);
 
-  const turnOn = useCallback(async ({ remember = true } = {}) => {
+  const turnOn = useCallback(async ({ remember = true, analyse = true } = {}) => {
     const audio = audioRef.current;
     if (!audio || suspendedRef.current) return;
     setError("");
     setLoading(true);
     try {
       if (!audio.src) loadStream(0);
-      prepareAudioGraph();
-      await audioContextRef.current?.resume();
       await audio.play();
       setPlaying(true);
       if (remember) persist({ enabled: true });
-      startAnalysis();
+      if (analyse) await unlockAudioAnalysis();
     } catch (reason) {
       setPlaying(false);
       setError("Не удалось запустить радио");
@@ -148,7 +167,7 @@ export function RadioProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [loadStream, persist, prepareAudioGraph, startAnalysis]);
+  }, [loadStream, persist, unlockAudioAnalysis]);
 
   const turnOff = useCallback(({ remember = true } = {}) => {
     audioRef.current?.pause();
@@ -220,13 +239,24 @@ export function RadioProvider({ children }) {
   }, [volume]);
 
   useEffect(() => {
-    if (initial.enabled) turnOn({ remember: false });
-    return () => {
-      stopAnalysis();
-      audioRef.current?.pause();
-      audioContextRef.current?.close();
-    };
+    if (initial.enabled) turnOn({ remember: false, analyse: false });
+    return stopAnalysis;
   }, []);
+
+  useEffect(() => {
+    const unlock = () => {
+      unlockAudioAnalysis();
+      window.removeEventListener("pointerdown", unlock, true);
+      window.removeEventListener("keydown", unlock, true);
+    };
+
+    window.addEventListener("pointerdown", unlock, true);
+    window.addEventListener("keydown", unlock, true);
+    return () => {
+      window.removeEventListener("pointerdown", unlock, true);
+      window.removeEventListener("keydown", unlock, true);
+    };
+  }, [unlockAudioAnalysis]);
 
   const value = useMemo(() => ({
     error,

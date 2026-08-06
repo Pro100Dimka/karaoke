@@ -7501,34 +7501,34 @@ select:focus,
   flex: 1;
 }
 
-/* Dense white particle terrain: generated entirely on canvas, no image asset. */
+/* Wide multi-ridge particle terrain generated entirely on canvas. */
 .library-wave-terrain {
   z-index: 2;
-  block-size: min(52vh, 35rem);
-  opacity: 0.92;
+  block-size: min(56vh, 39rem);
+  opacity: 0.96;
   mix-blend-mode: screen;
   mask-image: linear-gradient(
     to bottom,
     transparent 0%,
-    rgba(0, 0, 0, 0.24) 8%,
-    #000 24%,
-    #000 84%,
+    rgba(0, 0, 0, 0.34) 6%,
+    #000 18%,
+    #000 91%,
     transparent 100%
   );
   filter:
-    contrast(1.18)
-    brightness(calc(0.92 + var(--radio-bass, 0) * 0.9))
+    contrast(1.36)
+    brightness(calc(0.96 + var(--radio-bass, 0) * 0.68))
     drop-shadow(
-      0 0 calc(0.25rem + var(--radio-bass, 0) * 1.45rem)
-      rgba(255, 255, 255, calc(0.12 + var(--radio-bass, 0) * 0.34))
+      0 0 calc(0.08rem + var(--radio-bass, 0) * 0.28rem)
+      rgba(255, 255, 255, calc(0.12 + var(--radio-bass, 0) * 0.22))
     );
 }
 
 :root[data-theme="light"] .library-wave-terrain {
-  opacity: 0.68;
+  opacity: 0.62;
   mix-blend-mode: multiply;
   filter:
     grayscale(1)
-    contrast(1.32)
-    brightness(calc(0.78 + var(--radio-bass, 0) * 0.42));
+    contrast(1.45)
+    brightness(calc(0.72 + var(--radio-bass, 0) * 0.34));
 }

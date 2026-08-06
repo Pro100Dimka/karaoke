@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 import { useRadio } from "../../../../contexts/radio";
 
-const ROWS = 46;
-const COLUMNS = 104;
+const ROWS = 32;
+const COLUMNS = 96;
+const TARGET_FRAME_TIME = 1000 / 30;
 const TAU = Math.PI * 2;
 
 const clamp = (value, min = 0, max = 1) =>
@@ -18,60 +19,74 @@ const gaussian = (x, center, width) => {
   return Math.exp(-distance * distance);
 };
 
-function createParticles() {
-  return Array.from({ length: ROWS }, (_, row) => {
-    const depth = row / (ROWS - 1);
+const COLUMNS_DATA = Array.from({ length: COLUMNS }, (_, column) => {
+  const x = (column / (COLUMNS - 1)) * 2 - 1;
 
-    return Array.from({ length: COLUMNS }, (_, column) => {
-      const x = column / (COLUMNS - 1) * 2 - 1;
-      const random = hash(column, row, 1);
-      const random2 = hash(column, row, 2);
+  return {
+    x,
+    edge: clamp(1 - Math.abs(x) ** 4.2),
+    silhouette:
+      gaussian(x, -0.76, 0.13) * 0.25 +
+      gaussian(x, -0.51, 0.19) * 0.5 +
+      gaussian(x, -0.22, 0.2) * 0.62 +
+      gaussian(x, 0.08, 0.24) * 0.54 +
+      gaussian(x, 0.39, 0.19) * 0.5 +
+      gaussian(x, 0.68, 0.16) * 0.39 +
+      gaussian(x, 0.88, 0.09) * 0.18,
+    bassShape:
+      gaussian(x, -0.52, 0.23) * 0.66 +
+      gaussian(x, -0.13, 0.27) * 0.88 +
+      gaussian(x, 0.34, 0.23) * 0.74 +
+      gaussian(x, 0.7, 0.19) * 0.5
+  };
+});
 
-      return {
-        x,
-        depth,
-        random,
-        random2,
-        phase: hash(column, row, 3) * TAU,
-        size: 0.35 + random * 1.05,
-        visible: random2 > 0.08
-      };
-    });
-  });
-}
+const PARTICLES = Array.from({ length: ROWS }, (_, row) => {
+  const depth = row / (ROWS - 1);
 
-const PARTICLES = createParticles();
+  return Array.from({ length: COLUMNS }, (_, column) => ({
+    depth,
+    phase: hash(column, row, 1) * TAU,
+    random: hash(column, row, 2),
+    visible: hash(column, row, 3) > 0.28,
+    size: 0.45 + hash(column, row, 4) * 0.65
+  }));
+});
 
-function getMountainHeight(x, depth, time, bass, particle) {
-  const centerShift = Math.sin(time * 0.11) * 0.045;
-  const mainPeak = gaussian(x, centerShift - 0.06, 0.24) * 1.12;
-  const leftPeak = gaussian(x, -0.53, 0.17) * 0.62;
-  const rightPeak = gaussian(x, 0.48, 0.21) * 0.72;
-  const farLeft = gaussian(x, -0.82, 0.11) * 0.28;
-  const farRight = gaussian(x, 0.83, 0.13) * 0.34;
+const POINTS = Array.from({ length: ROWS }, () =>
+  Array.from({ length: COLUMNS }, () => ({
+    x: 0,
+    y: 0,
+    terrain: 0,
+    brightness: 0
+  }))
+);
 
-  const silhouette = mainPeak + leftPeak + rightPeak + farLeft + farRight;
-  const depthEnvelope = Math.sin(Math.PI * depth) ** 0.72;
-  const edgeEnvelope = clamp(1 - Math.abs(x) ** 3.2);
+function getTerrainHeight(column, particle, time, energy, hit) {
+  const { x, edge, silhouette, bassShape } = COLUMNS_DATA[column];
+  const depth = particle.depth;
+  const depthCurve = Math.sin(Math.PI * depth);
 
-  const broadWave =
-    Math.sin(x * 6.2 + depth * 5.4 - time * 0.42) * 0.07 +
-    Math.sin(x * 13.5 - depth * 8.2 + time * 0.31) * 0.045;
+  const surface =
+    Math.sin(x * 7.6 + depth * 6.2 - time * (0.78 + energy * 0.85)) * 0.05 +
+    Math.sin(x * 16.4 - depth * 9.8 + time * (0.68 + energy * 0.62)) * 0.026 +
+    Math.cos(x * 29 + depth * 18 + particle.phase + time * 0.46) * 0.012;
 
-  const detail =
-    Math.sin(x * 31 + depth * 19 + particle.phase + time * 0.26) * 0.025 +
-    Math.cos(x * 52 - depth * 27 + particle.phase * 0.7) * 0.015;
+  const bassLift =
+    bassShape *
+    depthCurve ** 1.08 *
+    (energy * 0.16 + hit * 0.25) *
+    (0.86 + particle.random * 0.16);
 
-  const bassPulse = Math.pow(clamp(bass), 1.25);
-  const bassShape =
-    gaussian(x, -0.08, 0.38) *
-    Math.sin(depth * Math.PI) ** 1.4 *
-    (0.24 + particle.random * 0.12) *
-    bassPulse;
+  const transientRipple =
+    Math.sin(x * 22 - time * 4.2 + particle.phase) *
+    hit *
+    0.022 *
+    depthCurve;
 
   return (
-    (silhouette * depthEnvelope + broadWave + detail + bassShape) *
-    edgeEnvelope
+    (silhouette * depthCurve ** 0.72 + surface + bassLift + transientRipple) *
+    edge
   );
 }
 
@@ -81,190 +96,187 @@ export default function LibraryWaveTerrain() {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    const context = canvas?.getContext("2d", { alpha: true });
+    const context = canvas?.getContext("2d", {
+      alpha: true,
+      desynchronized: true
+    });
     if (!canvas || !context) return undefined;
 
     const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
     let width = 0;
     let height = 0;
     let frameId = 0;
-    let smoothBass = 0;
+    let lastFrame = 0;
+    let energy = 0;
+    let previousRawBass = 0;
+    let hit = 0;
 
     const resize = () => {
       width = canvas.clientWidth;
       height = canvas.clientHeight;
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+      // Высокий DPR здесь почти незаметен, но резко увеличивает нагрузку GPU.
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
       canvas.width = Math.max(1, Math.round(width * dpr));
       canvas.height = Math.max(1, Math.round(height * dpr));
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
 
-    const project = (particle, time, bass) => {
-      const perspective = 0.46 + particle.depth * 0.82;
-      const mountain = getMountainHeight(
-        particle.x,
-        particle.depth,
-        time,
-        bass,
-        particle
-      );
+    const updatePoints = (time) => {
+      for (let row = 0; row < ROWS; row += 1) {
+        for (let column = 0; column < COLUMNS; column += 1) {
+          const particle = PARTICLES[row][column];
+          const point = POINTS[row][column];
+          const { x } = COLUMNS_DATA[column];
+          const perspective = 0.52 + particle.depth * 0.76;
+          const terrain = getTerrainHeight(
+            column,
+            particle,
+            time,
+            energy,
+            hit
+          );
+          const drift =
+            Math.sin(time * 0.3 + particle.depth * 2.5) * 0.009;
 
-      const drift = Math.sin(time * 0.18 + particle.depth * 2.3) * 0.018;
-      const x =
-        width * 0.5 +
-        (particle.x + drift) * width * 0.57 * perspective;
-
-      const baseY = height * (0.76 - particle.depth * 0.24);
-      const y = baseY - mountain * height * (0.48 + particle.depth * 0.12);
-
-      return {
-        x,
-        y,
-        depth: particle.depth,
-        mountain,
-        brightness: clamp(
-          0.14 +
-            particle.depth * 0.52 +
-            mountain * 0.58 +
-            particle.random * 0.22
-        )
-      };
+          point.x =
+            width * 0.5 + (x + drift) * width * 0.57 * perspective;
+          point.y =
+            height * (0.87 - particle.depth * 0.35) -
+            terrain * height * (0.32 + particle.depth * 0.08);
+          point.terrain = terrain;
+          point.brightness = clamp(
+            0.09 +
+              particle.depth * 0.42 +
+              terrain * 0.7 +
+              particle.random * 0.14
+          );
+        }
+      }
     };
 
-    const drawConnections = (projected, bass) => {
+    const drawMesh = () => {
       context.save();
       context.globalCompositeOperation = "lighter";
       context.lineCap = "round";
 
       for (let row = 0; row < ROWS; row += 2) {
-        const rowPoints = projected[row];
         context.beginPath();
         let started = false;
 
         for (let column = 0; column < COLUMNS; column += 1) {
-          const point = rowPoints[column];
-          if (!point || point.mountain < 0.025) {
+          const point = POINTS[row][column];
+          if (point.terrain < 0.018) {
             started = false;
             continue;
           }
 
-          if (!started) {
+          if (started) context.lineTo(point.x, point.y);
+          else {
             context.moveTo(point.x, point.y);
             started = true;
-          } else {
-            context.lineTo(point.x, point.y);
           }
         }
 
-        const rowDepth = row / (ROWS - 1);
-        context.strokeStyle = `rgba(255,255,255,${0.025 + rowDepth * 0.085 + bass * 0.035})`;
-        context.lineWidth = 0.35 + rowDepth * 0.45;
+        const depth = row / (ROWS - 1);
+        context.strokeStyle = `rgba(255,255,255,${
+          0.018 + depth * 0.07 + hit * 0.04
+        })`;
+        context.lineWidth = 0.3 + depth * 0.28;
         context.stroke();
       }
 
-      for (let column = 0; column < COLUMNS; column += 4) {
+      for (let column = 0; column < COLUMNS; column += 8) {
         context.beginPath();
         let started = false;
 
         for (let row = 0; row < ROWS; row += 1) {
-          const point = projected[row][column];
-          if (!point || point.mountain < 0.035) {
+          const point = POINTS[row][column];
+          if (point.terrain < 0.025) {
             started = false;
             continue;
           }
 
-          if (!started) {
+          if (started) context.lineTo(point.x, point.y);
+          else {
             context.moveTo(point.x, point.y);
             started = true;
-          } else {
-            context.lineTo(point.x, point.y);
           }
         }
 
-        context.strokeStyle = `rgba(255,255,255,${0.018 + bass * 0.025})`;
-        context.lineWidth = 0.35;
+        context.strokeStyle = `rgba(255,255,255,${0.012 + hit * 0.02})`;
+        context.lineWidth = 0.25;
         context.stroke();
       }
 
       context.restore();
     };
 
-    const drawParticles = (projected, bass) => {
+    const drawParticles = () => {
       context.save();
       context.globalCompositeOperation = "lighter";
 
       for (let row = 0; row < ROWS; row += 1) {
         for (let column = 0; column < COLUMNS; column += 1) {
           const particle = PARTICLES[row][column];
-          const point = projected[row][column];
-          if (!particle.visible || point.mountain < 0.018) continue;
+          const point = POINTS[row][column];
+          if (!particle.visible || point.terrain < 0.014) continue;
 
-          const ridge = clamp(point.mountain * 1.3);
-          const pulse = 1 + bass * (0.7 + ridge * 1.5);
-          const radius = particle.size * (0.42 + point.depth * 0.65) * pulse;
+          const size =
+            particle.size *
+            (0.45 + particle.depth * 0.45) *
+            (1 + hit * 0.12);
           const alpha = clamp(
             point.brightness *
-              (0.22 + particle.random * 0.58) *
-              (0.68 + bass * 0.52),
+              (0.36 + particle.random * 0.42) *
+              (0.8 + energy * 0.3 + hit * 0.38),
             0,
-            0.96
+            0.9
           );
 
           context.fillStyle = `rgba(255,255,255,${alpha})`;
-          context.beginPath();
-          context.arc(point.x, point.y, radius, 0, TAU);
-          context.fill();
-
-          if (ridge > 0.52 && particle.random > 0.78) {
-            context.fillStyle = `rgba(255,255,255,${alpha * 0.16})`;
-            context.beginPath();
-            context.arc(point.x, point.y, radius * (2.6 + bass * 2.4), 0, TAU);
-            context.fill();
-          }
+          // Для субпиксельных частиц fillRect значительно дешевле тысяч arc().
+          context.fillRect(point.x, point.y, size, size);
         }
       }
 
       context.restore();
     };
 
-    const drawMist = (bass) => {
-      const gradient = context.createRadialGradient(
-        width * 0.5,
-        height * 0.54,
-        0,
-        width * 0.5,
-        height * 0.54,
-        width * 0.52
-      );
-      gradient.addColorStop(0, `rgba(255,255,255,${0.025 + bass * 0.035})`);
-      gradient.addColorStop(0.42, `rgba(255,255,255,${0.012 + bass * 0.018})`);
-      gradient.addColorStop(1, "rgba(255,255,255,0)");
-      context.fillStyle = gradient;
-      context.fillRect(0, 0, width, height);
-    };
-
-    const draw = (timestamp = 0) => {
+    const render = (timestamp = 0) => {
       const paused = reducedMotion.matches;
+
+      if (!paused && timestamp - lastFrame < TARGET_FRAME_TIME) {
+        frameId = requestAnimationFrame(render);
+        return;
+      }
+
+      lastFrame = timestamp;
       const time = paused ? 0 : timestamp / 1000;
-      const targetBass = isPlaying ? getBassLevel() : 0;
-      smoothBass += (targetBass - smoothBass) * (targetBass > smoothBass ? 0.34 : 0.08);
+      const rawBass = isPlaying ? clamp(getBassLevel()) : 0;
+      const attack = rawBass > energy ? 0.72 : 0.2;
+
+      energy += (rawBass - energy) * attack;
+      hit = Math.max(clamp((rawBass - previousRawBass) * 5.6), hit * 0.68);
+      previousRawBass = rawBass;
 
       context.clearRect(0, 0, width, height);
-      drawMist(smoothBass);
+      updatePoints(time);
+      drawMesh();
+      drawParticles();
 
-      const projected = PARTICLES.map((row) =>
-        row.map((particle) => project(particle, time, smoothBass))
-      );
-
-      drawConnections(projected, smoothBass);
-      drawParticles(projected, smoothBass);
-
-      if (!paused) frameId = requestAnimationFrame(draw);
+      if (!paused) frameId = requestAnimationFrame(render);
     };
 
     const restart = () => {
       cancelAnimationFrame(frameId);
-      draw();
+      lastFrame = 0;
+      render();
+    };
+
+    const handleVisibility = () => {
+      if (document.hidden) cancelAnimationFrame(frameId);
+      else restart();
     };
 
     const handleResize = () => {
@@ -274,11 +286,13 @@ export default function LibraryWaveTerrain() {
 
     handleResize();
     addEventListener("resize", handleResize);
+    document.addEventListener("visibilitychange", handleVisibility);
     reducedMotion.addEventListener("change", restart);
 
     return () => {
       cancelAnimationFrame(frameId);
       removeEventListener("resize", handleResize);
+      document.removeEventListener("visibilitychange", handleVisibility);
       reducedMotion.removeEventListener("change", restart);
     };
   }, [getBassLevel, isPlaying]);

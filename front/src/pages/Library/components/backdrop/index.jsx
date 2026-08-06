@@ -9,8 +9,8 @@ const BACKGROUNDS = [
 
 const MUSIC_DECOR = [
   ["record", 4],
-  ["microphone", 4],
-  ["equalizer", 24],
+  // ["microphone", 4],
+  // ["equalizer", 24],
   ["notes", 6]
 ];
 
