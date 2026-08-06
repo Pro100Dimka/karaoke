@@ -75,7 +75,7 @@ export default function SongSettings({ songId, onClose }) {
     >
       <div className="song-settings-scroll modal-scroll">
         <div className="song-settings-workspace">
-          <Panel className="song-settings-panel" title="Параметры песни">
+          <Panel className="song-settings-panel">
             <div className="song-settings-panel-body">
               <SongFields form={form} onChange={updateField} />
             </div>
@@ -168,10 +168,7 @@ function NoteRangeFields({ form, onChange }) {
 
 function LyricsEditor({ lyrics, onChange }) {
   return (
-    <Panel
-      className="song-settings-panel song-lyrics-panel"
-      title="Редактор текста"
-    >
+    <Panel className="song-settings-panel song-lyrics-panel">
       <div className="song-settings-panel-body song-lyrics-body">
         <div className="song-lyrics-field">
           <FieldInput

@@ -18,13 +18,6 @@ svg {
 
 /* Main application settings launcher. */
 
-.app-settings-fab:hover {
-  transform: translateY(-0.25rem) scale(1.04);
-  box-shadow:
-    var(--shadow-lg),
-    0 0 3rem color-mix(in srgb, var(--color-primary) 50%, transparent);
-}
-
 /* Small, reusable layout utilities shared by every screen. */
 .u-row,
 .u-row-between,
@@ -202,8 +195,8 @@ svg {
   border-radius: calc(var(--radius-xl) + 0.125rem);
   padding: 0.09375rem;
   -webkit-mask:
-    linear-gradient(var(--color-white) 0 0) content-box,
-    linear-gradient(var(--color-white) 0 0);
+    linear-gradient(var(--color-highlight) 0 0) content-box,
+    linear-gradient(var(--color-highlight) 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
 }
@@ -251,7 +244,7 @@ svg {
   box-shadow:
     var(--card-panel-shadow),
     inset 0 var(--hairline) 0
-      color-mix(in srgb, var(--color-white) 6%, transparent);
+      color-mix(in srgb, var(--color-highlight) 6%, transparent);
 }
 
 .ui-card__content {
@@ -425,7 +418,7 @@ svg {
   display: grid;
   place-items: center;
   padding: var(--space-4);
-  background: color-mix(in srgb, var(--color-background) 68%, transparent);
+  background: color-mix(in srgb, var(--color-bg) 68%, transparent);
   backdrop-filter: blur(1rem) saturate(120%);
 }
 
@@ -443,7 +436,7 @@ svg {
   color: var(--color-text-soft);
   background: color-mix(in srgb, var(--color-surface-strong) 74%, transparent);
   box-shadow: inset 0 var(--hairline)
-    color-mix(in srgb, var(--color-white) 8%, transparent);
+    color-mix(in srgb, var(--color-highlight) 8%, transparent);
   transition:
     color var(--duration-fast) var(--ease-standard),
     border-color var(--duration-fast) var(--ease-standard),
@@ -460,7 +453,9 @@ svg {
     var(--color-primary) 18%,
     var(--color-surface-strong)
   );
-  box-shadow: var(--shadow-neon-primary);
+  box-shadow:
+    0 0 0.5625rem color-mix(in srgb, var(--color-primary) 48%, transparent),
+    0 0 1.75rem color-mix(in srgb, var(--color-primary-strong) 38%, transparent);
   transform: scale(1.06);
 }
 
@@ -491,18 +486,19 @@ svg {
   place-items: center;
   border: var(--hairline) solid var(--color-border-strong);
   border-radius: var(--radius-lg);
-  color: var(--color-primary-soft);
+  color: var(--color-primary-hover);
   background:
     radial-gradient(
       circle at 32% 24%,
-      color-mix(in srgb, var(--color-white) 16%, transparent),
+      color-mix(in srgb, var(--color-highlight) 16%, transparent),
       transparent 42%
     ),
     color-mix(in srgb, var(--color-primary) 14%, var(--color-surface-glass));
   box-shadow:
-    var(--shadow-neon-soft),
+    0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
+    0 0 1.875rem color-mix(in srgb, var(--color-accent) 24%, transparent),
     inset 0 var(--hairline)
-      color-mix(in srgb, var(--color-white) 12%, transparent);
+      color-mix(in srgb, var(--color-highlight) 12%, transparent);
 }
 
 .modal-title__copy {
@@ -511,7 +507,7 @@ svg {
 
 .modal-title__eyebrow {
   display: block;
-  color: var(--color-primary-soft);
+  color: var(--color-primary-hover);
   font: 850 var(--font-size-xs) / 1 var(--font-display);
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -551,7 +547,7 @@ svg {
     color-mix(in srgb, var(--color-surface-soft) 58%, transparent)
   );
   box-shadow: inset 0 var(--hairline)
-    color-mix(in srgb, var(--color-white) 7%, transparent);
+    color-mix(in srgb, var(--color-highlight) 7%, transparent);
   transition:
     border-color var(--duration-fast) var(--ease-standard),
     background var(--duration-fast) var(--ease-standard),
@@ -570,9 +566,10 @@ svg {
     color-mix(in srgb, var(--color-surface-soft) 66%, transparent)
   );
   box-shadow:
-    var(--shadow-neon-soft),
+    0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
+    0 0 1.875rem color-mix(in srgb, var(--color-accent) 24%, transparent),
     inset 0 var(--hairline)
-      color-mix(in srgb, var(--color-white) 10%, transparent);
+      color-mix(in srgb, var(--color-highlight) 10%, transparent);
 }
 
 .settings-toggle--switch-card {
@@ -596,7 +593,7 @@ svg {
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--color-surface-strong) 76%, transparent);
   box-shadow: inset 0 0.15rem 0.45rem
-    color-mix(in srgb, var(--color-black) 16%, transparent);
+    color-mix(in srgb, var(--color-bg-deep) 16%, transparent);
   cursor: pointer;
   transition:
     border-color var(--duration-fast) var(--ease-standard),
@@ -614,19 +611,21 @@ svg {
   border-radius: 50%;
   background: var(--color-text);
   box-shadow: 0 0.16rem 0.5rem
-    color-mix(in srgb, var(--color-black) 28%, transparent);
+    color-mix(in srgb, var(--color-bg-deep) 28%, transparent);
   transition: transform var(--duration-fast) var(--ease-standard);
 }
 
 .settings-toggle--switch-card > input[type="checkbox"]:checked {
-  border-color: var(--color-primary-soft);
+  border-color: var(--color-primary-hover);
   background: var(--gradient-primary);
-  box-shadow: var(--shadow-neon-primary);
+  box-shadow:
+    0 0 0.5625rem color-mix(in srgb, var(--color-primary) 48%, transparent),
+    0 0 1.75rem color-mix(in srgb, var(--color-primary-strong) 38%, transparent);
 }
 
 .settings-toggle--switch-card > input[type="checkbox"]:checked::after {
   transform: translateX(1.32rem);
-  background: var(--color-white);
+  background: var(--color-highlight);
 }
 
 /* Settings fields reuse the shared control styling without nested glowing cards. */
@@ -781,7 +780,6 @@ svg {
   --color-border-strong: rgba(255, 116, 133, 0.72);
   --color-border-accent: rgba(255, 42, 77, 0.9);
   --color-focus: #ffabb6;
-
   --gradient-primary: linear-gradient(
     135deg,
     #ff8998 0%,
@@ -850,7 +848,6 @@ body {
   min-block-size: 100dvh;
   overflow-x: hidden;
   color: var(--color-text);
-
   font: var(--font-size-md) / var(--line-height-base) var(--font-sans);
   min-height: 100vh;
   background: var(--color-bg);
@@ -899,7 +896,7 @@ p {
 }
 
 ::selection {
-  color: var(--color-white);
+  color: var(--color-highlight);
   background: color-mix(in srgb, var(--color-accent) 62%, transparent);
 }
 
@@ -909,11 +906,11 @@ p {
 }
 
 ::-webkit-scrollbar-track {
-  background: color-mix(in srgb, var(--color-black) 50%, transparent);
+  background: color-mix(in srgb, var(--color-bg-deep) 50%, transparent);
 }
 
 ::-webkit-scrollbar-thumb {
-  border: 2px solid color-mix(in srgb, var(--color-black) 70%, transparent);
+  border: 2px solid color-mix(in srgb, var(--color-bg-deep) 70%, transparent);
   border-radius: var(--radius-pill);
   background: linear-gradient(var(--color-secondary), var(--color-accent));
 }
@@ -955,7 +952,6 @@ p {
   display: flex;
   align-items: center;
   justify-content: space-between;
-
   border-block-end: var(--hairline) solid var(--color-border);
   gap: var(--space-4);
   padding: var(--space-5) var(--space-6);
@@ -965,7 +961,6 @@ p {
 
 .panel-title {
   font: 800 var(--font-size-md) / 1.2 var(--font-display);
-
   text-transform: uppercase;
   font-weight: 800;
   letter-spacing: var(--letter-spacing-title);
@@ -978,12 +973,10 @@ p {
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-
   border-radius: var(--radius-md);
   color: var(--color-text);
   background: var(--color-surface-glass);
   font: 800 var(--font-size-xs) / 1 var(--font-display);
-
   min-height: 40px;
   padding: 0.62rem 1rem;
   border: 1px solid transparent;
@@ -1002,8 +995,9 @@ p {
 .btn:hover:not(:disabled) {
   border-color: var(--color-border-strong);
   background: var(--color-surface-hover);
-  box-shadow: var(--shadow-neon-soft);
-
+  box-shadow:
+    0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
+    0 0 1.875rem color-mix(in srgb, var(--color-accent) 24%, transparent);
   transform: translateY(-2px);
 }
 .btn:active:not(:disabled) {
@@ -1015,34 +1009,64 @@ p {
 }
 
 .btn-primary {
-  background: var(--gradient-primary);
-
-  color: var(--color-white);
-  border-color: color-mix(in srgb, var(--color-white) 38%, transparent);
+  background: var(--gradient-primary) !important;
+  color: var(--color-highlight);
+  border-color: color-mix(in srgb, var(--color-highlight) 38%, transparent);
   box-shadow:
     0 8px 24px color-mix(in srgb, var(--color-bg-elevated) 34%, transparent),
-    var(--shadow-neon-pink);
+    0 0 0.5625rem color-mix(in srgb, var(--color-primary) 42%, transparent),
+    0 0 1.75rem color-mix(in srgb, var(--color-primary-strong) 30%, transparent) !important;
 }
 .btn-primary:hover:not(:disabled) {
-  background: var(--gradient-primary-hover);
-
-  box-shadow: var(--shadow-neon-mixed);
+  background: var(--gradient-primary-hover) !important;
+  box-shadow:
+    0 0 0.625rem color-mix(in srgb, var(--color-primary-hover) 46%, transparent),
+    0 0 2.125rem color-mix(in srgb, var(--color-primary) 32%, transparent),
+    0 0 3.625rem color-mix(in srgb, var(--color-secondary) 22%, transparent) !important;
 }
 
 .btn-ghost {
-  border-color: color-mix(in srgb, var(--color-success) 34%, transparent);
-  background: color-mix(in srgb, var(--color-black) 58%, transparent);
-  box-shadow: inset 0 0 20px
-    color-mix(in srgb, var(--color-text) 8%, transparent);
-}
-.btn-ghost:hover:not(:disabled) {
-  border-color: var(--color-border-strong);
-  background: color-mix(in srgb, var(--color-bg-deep) 72%, transparent);
-  box-shadow: var(--shadow-neon-cyan);
+  color: var(--color-text-soft);
+  border-color: var(--color-border);
+  background: color-mix(in srgb, var(--color-surface-glass) 82%, transparent);
+  box-shadow:
+    inset 0 0.0625rem 0
+      color-mix(in srgb, var(--color-highlight) 12%, transparent),
+    0 0.5rem 1.5rem color-mix(in srgb, var(--color-bg-deep) 18%, transparent);
 }
 
+.btn-ghost:hover:not(:disabled) {
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+  background: color-mix(
+    in srgb,
+    var(--color-primary) 10%,
+    var(--color-surface-hover)
+  );
+  box-shadow:
+    inset 0 0.0625rem 0
+      color-mix(in srgb, var(--color-highlight) 18%, transparent),
+    0 0 1.25rem color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+.btn-ghost:active:not(:disabled) {
+  background: color-mix(
+    in srgb,
+    var(--color-primary-strong) 14%,
+    var(--color-surface-strong)
+  );
+  box-shadow: inset 0 0.125rem 0.5rem
+    color-mix(in srgb, var(--color-bg-deep) 24%, transparent);
+}
+
+.btn-ghost:focus-visible {
+  border-color: var(--color-focus);
+  box-shadow:
+    0 0 0 0.1875rem color-mix(in srgb, var(--color-focus) 18%, transparent),
+    0 0 1.25rem color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
 .btn-danger {
-  color: var(--color-white);
+  color: var(--color-highlight);
   border-color: color-mix(in srgb, var(--color-focus) 55%, transparent);
   background: linear-gradient(
     135deg,
@@ -1059,10 +1083,10 @@ select {
   width: 100%;
   min-width: 0;
   min-height: 42px;
-  border: 1px solid color-mix(in srgb, var(--color-success) 34%, transparent);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   color: var(--color-text);
-  background: color-mix(in srgb, var(--color-black) 72%, transparent);
+  background: color-mix(in srgb, var(--color-surface-glass) 88%, transparent);
   box-shadow: inset 0 0 22px
     color-mix(in srgb, var(--color-bg-elevated) 10%, transparent);
   transition:
@@ -1084,7 +1108,7 @@ textarea::placeholder {
 textarea:hover,
 select:hover,
 .app-dropdown-trigger:hover {
-  border-color: color-mix(in srgb, var(--color-success) 68%, transparent);
+  border-color: var(--color-border-strong);
 }
 .input:focus,
 textarea:focus,
@@ -1092,9 +1116,10 @@ select:focus,
 .app-dropdown-trigger:focus-visible {
   border-color: var(--color-primary);
   box-shadow:
-    inset 0 0 20px color-mix(in srgb, var(--color-success) 8%, transparent),
-    0 0 0 3px color-mix(in srgb, var(--color-success) 13%, transparent),
-    var(--shadow-neon-cyan);
+    inset 0 0 20px color-mix(in srgb, var(--color-primary) 8%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--color-focus) 16%, transparent),
+    0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 28%, transparent),
+    0 0 1.875rem color-mix(in srgb, var(--color-accent) 18%, transparent);
 }
 
 .settings-toggle {
@@ -1122,7 +1147,7 @@ select:focus,
 
 .app-dropdown-option:hover,
 .app-dropdown-option.is-selected {
-  color: var(--color-white);
+  color: var(--color-highlight);
   background: color-mix(in srgb, var(--color-bg-elevated) 34%, transparent);
 }
 
@@ -1130,16 +1155,31 @@ select:focus,
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-
+  padding: 0.36rem 0.65rem;
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--color-text-soft);
   border: var(--hairline) solid var(--color-border);
   border-radius: var(--radius-pill);
-  color: var(--color-text-soft);
-
-  font-size: var(--font-size-xs);
-  padding: 0.36rem 0.65rem;
-  font-weight: 800;
-  background: color-mix(in srgb, var(--color-black) 68%, transparent);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--color-surface-strong) 96%, transparent),
+    color-mix(in srgb, var(--color-surface-soft) 84%, transparent)
+  );
+  backdrop-filter: blur(0.75rem) saturate(135%);
+  box-shadow:
+    inset 0 0.0625rem 0
+      color-mix(in srgb, var(--color-highlight) 16%, transparent),
+    0 0.5rem 1.25rem color-mix(in srgb, var(--color-bg-deep) 14%, transparent);
+  transition:
+    background var(--transition-normal),
+    border-color var(--transition-normal),
+    color var(--transition-normal),
+    box-shadow var(--transition-normal),
+    transform var(--transition-fast);
 }
+
 .badge-dot {
   inline-size: var(--space-1);
   aspect-ratio: 1;
@@ -1168,7 +1208,6 @@ select:focus,
   block-size: var(--space-2);
   overflow: hidden;
   border-radius: var(--radius-pill);
-
   height: 8px;
   background: color-mix(in srgb, var(--color-text) 18%, transparent);
 }
@@ -1176,16 +1215,20 @@ select:focus,
   block-size: 100%;
   border-radius: inherit;
   background: var(--gradient-primary);
-
   height: 100%;
-  box-shadow: var(--shadow-neon-cyan);
+  box-shadow:
+    0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 28%, transparent),
+    0 0 1.875rem color-mix(in srgb, var(--color-accent) 18%, transparent);
   transition: width var(--duration-slow) var(--ease-standard);
 }
 
 /* Reusable surface primitive. Variants replace repeated panel/card declarations. */
 .ui-card {
   background: var(--gradient-glass);
-  box-shadow: var(--shadow-glass);
+  box-shadow:
+    inset 0 0.0625rem 0
+      color-mix(in srgb, var(--color-highlight) 12%, transparent),
+    0 1.125rem 3.25rem color-mix(in srgb, var(--color-bg-deep) 42%, transparent);
   backdrop-filter: blur(var(--space-4)) saturate(135%);
   position: relative;
   min-inline-size: 0;
@@ -1195,49 +1238,95 @@ select:focus,
 
 .ui-card--glass {
   background: var(--gradient-glass);
-  box-shadow: var(--shadow-glass);
+  box-shadow:
+    inset 0 0.0625rem 0
+      color-mix(in srgb, var(--color-highlight) 12%, transparent),
+    0 1.125rem 3.25rem color-mix(in srgb, var(--color-bg-deep) 42%, transparent);
   backdrop-filter: blur(1.1rem) saturate(135%);
 }
 
 .ui-card--interactive {
   background: var(--gradient-panel);
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 1.125rem 3.4375rem
+    color-mix(in srgb, var(--color-bg-deep) 38%, transparent);
   backdrop-filter: blur(1.1rem) saturate(135%);
 }
 
 .app-settings-fab {
   position: fixed;
-
   inset-inline-end: var(--space-5);
   inset-block-end: var(--space-5);
   display: grid;
-
-  aspect-ratio: 1;
   place-items: center;
-
+  aspect-ratio: 1;
   border-radius: 50%;
-
-  backdrop-filter: blur(var(--space-3));
-  inline-size: clamp(6.5rem, 8vw, 8rem);
-  block-size: clamp(6.5rem, 8vw, 8rem);
-  border-width: max(0.1rem, 0.08vw);
-
-  z-index: 80;
-  right: 1.625rem;
-  bottom: 1.5rem;
-  width: 3.625rem;
-  height: 3.625rem;
-  border: 0.0625rem solid
-    color-mix(in srgb, var(--color-success) 70%, transparent);
-  color: var(--color-white);
-  background: radial-gradient(
-    circle at 35% 25%,
-    color-mix(in srgb, var(--color-success) 48%, transparent),
-    color-mix(in srgb, var(--color-black) 92%, transparent) 55%,
-    color-mix(in srgb, var(--color-black) 98%, transparent)
-  );
-  box-shadow: var(--shadow-neon-cyan), var(--shadow-lg);
+  border: 0.0625rem solid var(--color-border-strong);
+  color: var(--color-text);
   cursor: pointer;
+  z-index: 80;
+  backdrop-filter: blur(1rem) saturate(140%);
+  background:
+    radial-gradient(
+      circle at 30% 22%,
+      color-mix(in srgb, var(--color-highlight) 30%, transparent),
+      transparent 34%
+    ),
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--color-surface-strong) 96%, transparent),
+      color-mix(in srgb, var(--color-surface-soft) 88%, transparent)
+    );
+  box-shadow:
+    inset 0 0.0625rem 0
+      color-mix(in srgb, var(--color-highlight) 18%, transparent),
+    0 0.875rem 2.2rem color-mix(in srgb, var(--color-bg-deep) 26%, transparent);
+}
+
+.app-settings-fab:hover {
+  color: var(--color-primary);
+  border-color: var(--color-border-accent);
+  background:
+    radial-gradient(
+      circle at 30% 22%,
+      color-mix(in srgb, var(--color-highlight) 36%, transparent),
+      transparent 34%
+    ),
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--color-primary) 12%, var(--color-surface-strong)),
+      color-mix(
+        in srgb,
+        var(--color-primary-hover) 8%,
+        var(--color-surface-soft)
+      )
+    );
+  box-shadow:
+    inset 0 0.0625rem 0
+      color-mix(in srgb, var(--color-highlight) 22%, transparent),
+    0 0 1.25rem color-mix(in srgb, var(--color-primary) 22%, transparent),
+    0 1rem 2.5rem color-mix(in srgb, var(--color-bg-deep) 30%, transparent);
+  transform: translateY(-0.125rem) scale(1.04);
+}
+
+.app-settings-fab:active {
+  transform: scale(0.97);
+  background: linear-gradient(
+    145deg,
+    color-mix(
+      in srgb,
+      var(--color-primary-strong) 18%,
+      var(--color-surface-strong)
+    ),
+    color-mix(in srgb, var(--color-primary) 12%, var(--color-surface-soft))
+  );
+}
+
+.app-settings-fab:focus-visible {
+  outline: none;
+  border-color: var(--color-focus);
+  box-shadow:
+    0 0 0 0.1875rem color-mix(in srgb, var(--color-focus) 22%, transparent),
+    0 0 1.5rem color-mix(in srgb, var(--color-primary) 26%, transparent);
 }
 
 .settings-modal-backdrop,
@@ -1251,7 +1340,7 @@ select:focus,
   place-items: center;
   padding: clamp(0.75rem, 3vw, 2.25rem);
   overflow: auto;
-  background: color-mix(in srgb, var(--color-black) 76%, transparent);
+  background: color-mix(in srgb, var(--color-surface-strong) 88%, transparent);
   backdrop-filter: blur(1.125rem) saturate(130%);
 }
 
@@ -1264,15 +1353,18 @@ select:focus,
   width: min(70rem, 100%);
   max-height: calc(100vh - 3rem);
   overflow: auto;
-  border: 0.0625rem solid
-    color-mix(in srgb, var(--color-success) 66%, transparent);
+  border: 0.0625rem solid var(--color-border-strong);
   border-radius: var(--radius-xl);
   background: linear-gradient(
     145deg,
-    color-mix(in srgb, var(--color-black) 96%, transparent),
-    color-mix(in srgb, var(--color-black) 96%, transparent)
+    color-mix(in srgb, var(--color-surface-strong) 96%, transparent),
+    color-mix(in srgb, var(--color-surface-glass) 92%, transparent)
   );
-  box-shadow: var(--shadow-lg), var(--shadow-neon-mixed);
+  box-shadow:
+    0 1.75rem 5.625rem color-mix(in srgb, var(--color-bg-deep) 52%, transparent),
+    0 0 0.625rem color-mix(in srgb, var(--color-primary-hover) 46%, transparent),
+    0 0 2.125rem color-mix(in srgb, var(--color-primary) 32%, transparent),
+    0 0 3.625rem color-mix(in srgb, var(--color-secondary) 22%, transparent);
 }
 
 .settings-modal-close,
@@ -1287,11 +1379,10 @@ select:focus,
   height: 2.375rem;
   margin: var(--space-4) var(--space-4) 0 0;
   place-items: center;
-  border: 0.0625rem solid
-    color-mix(in srgb, var(--color-success) 38%, transparent);
+  border: 0.0625rem solid var(--color-border);
   border-radius: 50%;
   color: var(--color-text-soft);
-  background: color-mix(in srgb, var(--color-black) 82%, transparent);
+  background: color-mix(in srgb, var(--color-bg-deep) 82%, transparent);
   cursor: pointer;
 }
 
@@ -1308,13 +1399,24 @@ select:focus,
   border: 0.0625rem solid var(--color-border-strong);
   border-radius: var(--radius-xl);
   background: var(--color-surface-strong);
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 1.75rem 5.625rem
+    color-mix(in srgb, var(--color-bg-deep) 52%, transparent);
 }
 
 @media (max-width: 45rem) {
   .settings-field {
-    grid-template-columns: 1fr;
+    align-items: stretch;
   }
+
+  .settings-field > span,
+  .settings-field > .input,
+  .settings-field > .app-dropdown,
+  .settings-field > .app-dropdown-trigger,
+  .settings-field > textarea,
+  .settings-field > select {
+    flex-basis: 100%;
+  }
+
   .field-row {
     flex-wrap: wrap;
   }
@@ -1335,7 +1437,6 @@ select:focus,
   position: relative;
   min-block-size: 100dvh;
   padding-block-start: var(--titlebar-height);
-
   isolation: isolate;
   min-height: 100vh;
   background: var(--color-bg);
@@ -1351,14 +1452,12 @@ select:focus,
 
 .title-bar {
   position: fixed;
-
   inset: 0 0 auto;
   display: flex;
   align-items: stretch;
   block-size: var(--titlebar-height);
   border-block-end: var(--hairline) solid
-    color-mix(in srgb, var(--color-white) 8%, transparent);
-
+    color-mix(in srgb, var(--color-highlight) 8%, transparent);
   backdrop-filter: blur(var(--space-2)) saturate(115%);
   -webkit-app-region: drag;
   z-index: 1000;
@@ -1379,11 +1478,9 @@ select:focus,
 .title-bar__brand {
   min-inline-size: 0;
   gap: var(--space-2);
-
   font: 700 var(--font-size-xs) / 1 var(--font-display);
   letter-spacing: 0.1em;
   text-transform: uppercase;
-
   flex: 1 1 auto;
   padding-inline: clamp(0.75rem, 1.4vw, 1.25rem);
   text-shadow: 0 0 1rem
@@ -1393,7 +1490,6 @@ select:focus,
 .title-bar__indicator {
   aspect-ratio: 1;
   border-radius: 50%;
-
   inline-size: 0.55rem;
   background: var(--gradient-primary);
   box-shadow: 0 0 0.9rem var(--color-primary);
@@ -1407,14 +1503,11 @@ select:focus,
 
 .title-bar__button {
   display: grid;
-
   block-size: 100%;
   padding: 0;
   place-items: center;
   border: 0;
-
   color: var(--color-text-soft);
-
   position: relative;
   inline-size: clamp(2.8rem, 3.2vw, 3.35rem);
   border-inline-start: 0.0625rem solid
@@ -1422,7 +1515,7 @@ select:focus,
   border-radius: 0;
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--color-white) 4%, transparent),
+    color-mix(in srgb, var(--color-highlight) 4%, transparent),
     transparent
   );
   transition:
@@ -1432,7 +1525,7 @@ select:focus,
 }
 
 .title-bar__button:hover {
-  color: var(--color-white);
+  color: var(--color-highlight);
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--color-primary-hover) 22%, transparent),
@@ -1448,7 +1541,7 @@ select:focus,
   color: var(--color-rose);
 }
 .title-bar__button.is-danger:hover {
-  color: var(--color-white);
+  color: var(--color-highlight);
   background: linear-gradient(
     180deg,
     var(--color-border-accent),
@@ -1471,7 +1564,10 @@ select:focus,
   place-items: center;
   border-radius: 50%;
   background: var(--gradient-primary);
-  box-shadow: var(--shadow-neon-mixed);
+  box-shadow:
+    0 0 0.625rem color-mix(in srgb, var(--color-primary-hover) 46%, transparent),
+    0 0 2.125rem color-mix(in srgb, var(--color-primary) 32%, transparent),
+    0 0 3.625rem color-mix(in srgb, var(--color-secondary) 22%, transparent);
 }
 .about-logo {
   width: 80px;
@@ -1500,7 +1596,6 @@ select:focus,
 .app-dialog {
   inline-size: min(34rem, calc(100vw - 2 * var(--space-4)));
   max-block-size: min(80dvh, 34rem);
-
   overflow: visible;
   border: 0;
   background: transparent;
@@ -1672,7 +1767,7 @@ select:focus,
   display: grid;
   place-items: center;
   padding: var(--space-4);
-  background: color-mix(in srgb, var(--color-black) 78%, transparent);
+  background: color-mix(in srgb, var(--color-bg-deep) 78%, transparent);
   backdrop-filter: blur(16px);
 }
 .performance-analysis-modal,
@@ -1685,7 +1780,11 @@ select:focus,
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-xl);
   background: var(--color-surface-strong);
-  box-shadow: var(--shadow-lg), var(--shadow-neon-mixed);
+  box-shadow:
+    0 1.75rem 5.625rem color-mix(in srgb, var(--color-bg-deep) 52%, transparent),
+    0 0 0.625rem color-mix(in srgb, var(--color-primary-hover) 46%, transparent),
+    0 0 2.125rem color-mix(in srgb, var(--color-primary) 32%, transparent),
+    0 0 3.625rem color-mix(in srgb, var(--color-secondary) 22%, transparent);
 }
 
 /* ==================== LIBRARY ==================== */
@@ -1734,14 +1833,14 @@ select:focus,
     radial-gradient(
       circle at 50% 12%,
       transparent 0 20%,
-      color-mix(in srgb, var(--color-black) 18%, transparent) 52%,
-      color-mix(in srgb, var(--color-black) 66%, transparent) 100%
+      color-mix(in srgb, var(--color-bg-deep) 18%, transparent) 52%,
+      color-mix(in srgb, var(--color-bg-deep) 66%, transparent) 100%
     ),
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--color-black) 6%, transparent),
-      color-mix(in srgb, var(--color-black) 18%, transparent) 54%,
-      color-mix(in srgb, var(--color-black) 72%, transparent)
+      color-mix(in srgb, var(--color-bg-deep) 6%, transparent),
+      color-mix(in srgb, var(--color-bg-deep) 18%, transparent) 54%,
+      color-mix(in srgb, var(--color-bg-deep) 72%, transparent)
     );
 }
 
@@ -1760,7 +1859,7 @@ select:focus,
   clip-path: polygon(49% 0, 51% 0, 100% 100%, 0 100%);
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--color-white) 13%, transparent),
+    color-mix(in srgb, var(--color-highlight) 13%, transparent),
     color-mix(in srgb, var(--color-primary) 4%, transparent) 52%,
     transparent 86%
   );
@@ -1791,8 +1890,8 @@ select:focus,
   mask-image: linear-gradient(
     to bottom,
     transparent,
-    var(--color-black) 30%,
-    var(--color-black)
+    var(--color-bg-deep) 30%,
+    var(--color-bg-deep)
   );
 }
 
@@ -1821,18 +1920,18 @@ select:focus,
     repeating-radial-gradient(
       circle,
       transparent 0 8%,
-      color-mix(in srgb, var(--color-black) 20%, transparent) 8.5% 9.2%
+      color-mix(in srgb, var(--color-bg-deep) 20%, transparent) 8.5% 9.2%
     ),
     conic-gradient(
       from 20deg,
-      var(--color-white),
+      var(--color-highlight),
       var(--color-bg),
-      var(--color-white),
+      var(--color-highlight),
       var(--color-bg-deep),
-      var(--color-white)
+      var(--color-highlight)
     );
   box-shadow: inset 0 0 var(--space-8)
-    color-mix(in srgb, var(--color-white) 25%, transparent);
+    color-mix(in srgb, var(--color-highlight) 25%, transparent);
   animation: library-record 16s linear infinite;
 }
 
@@ -1857,7 +1956,7 @@ select:focus,
 .library-music-object--record span {
   inset: calc(8% + var(--part) * 7%);
   border: var(--hairline) solid
-    color-mix(in srgb, var(--color-white) 20%, transparent);
+    color-mix(in srgb, var(--color-highlight) 20%, transparent);
   border-radius: 50%;
 }
 
@@ -1874,10 +1973,10 @@ select:focus,
   border-radius: 48% 48% 42% 42%;
   background: repeating-linear-gradient(
     90deg,
-    var(--color-white) 0 6%,
+    var(--color-highlight) 0 6%,
     var(--color-bg-deep) 7% 12%
   );
-  box-shadow: inset 0 0 var(--space-4) var(--color-black);
+  box-shadow: inset 0 0 var(--space-4) var(--color-bg-deep);
 }
 
 .library-music-object--microphone span:nth-child(2) {
@@ -1886,7 +1985,7 @@ select:focus,
   background: linear-gradient(
     90deg,
     var(--color-bg-deep),
-    var(--color-white) 48%,
+    var(--color-highlight) 48%,
     var(--color-bg-deep)
   );
 }
@@ -1949,7 +2048,9 @@ select:focus,
   content: "♪";
   color: var(--color-highlight);
   font: 700 clamp(0.8rem, 1.5vw, 1.35rem) / 1 var(--font-display);
-  text-shadow: var(--shadow-neon-soft);
+  text-shadow:
+    0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
+    0 0 1.875rem color-mix(in srgb, var(--color-accent) 24%, transparent);
 }
 
 .library-music-object--notes span {
@@ -2009,14 +2110,16 @@ select:focus,
   border-radius: var(--radius-xl);
   color: var(--color-text);
   background: var(--gradient-primary);
-  box-shadow: var(--shadow-neon-primary);
+  box-shadow:
+    0 0 0.5625rem color-mix(in srgb, var(--color-primary) 48%, transparent),
+    0 0 1.75rem color-mix(in srgb, var(--color-primary-strong) 38%, transparent);
 }
 
 .library-hero-brand-mark i {
   position: absolute;
   inset: -35%;
   border: var(--hairline) solid
-    color-mix(in srgb, var(--color-white) 28%, transparent);
+    color-mix(in srgb, var(--color-highlight) 28%, transparent);
   border-radius: 46%;
   animation: library-orbit 9s linear infinite;
 }
@@ -2119,7 +2222,7 @@ select:focus,
   padding-inline: 2.8rem var(--space-4);
   border-color: color-mix(in srgb, var(--color-primary-hover) 22%, transparent);
   box-shadow: inset 0 var(--hairline)
-    color-mix(in srgb, var(--color-white) 5%, transparent);
+    color-mix(in srgb, var(--color-highlight) 5%, transparent);
 }
 
 .library-search-input:focus {
@@ -2152,7 +2255,8 @@ select:focus,
 .library-song-card:hover {
   border-color: color-mix(in srgb, var(--color-nude) 56%, transparent);
   box-shadow:
-    var(--shadow-md),
+    0 1.125rem 3.4375rem
+      color-mix(in srgb, var(--color-bg-deep) 38%, transparent),
     0 0 1.8rem color-mix(in srgb, var(--color-border-accent) 23%, transparent),
     0 0 3.2rem color-mix(in srgb, var(--color-text) 7%, transparent);
 }
@@ -2249,7 +2353,7 @@ select:focus,
   place-items: center;
   padding: clamp(var(--space-3), 3vw, var(--space-8));
   overflow: auto;
-  background: color-mix(in srgb, var(--color-black) 76%, transparent);
+  background: color-mix(in srgb, var(--color-bg-deep) 82%, transparent);
   backdrop-filter: blur(var(--space-4));
   perspective: 87.5rem;
 }
@@ -2265,7 +2369,10 @@ select:focus,
   border: var(--hairline) solid var(--color-border-strong);
   border-radius: var(--radius-xl);
   background: var(--gradient-panel);
-  box-shadow: var(--shadow-lg), var(--shadow-neon-primary);
+  box-shadow:
+    0 1.75rem 5.625rem color-mix(in srgb, var(--color-bg-deep) 52%, transparent),
+    0 0 0.5625rem color-mix(in srgb, var(--color-primary) 48%, transparent),
+    0 0 1.75rem color-mix(in srgb, var(--color-primary-strong) 38%, transparent);
 }
 
 .song-recordings-close,
@@ -2300,7 +2407,9 @@ select:focus,
   place-items: center;
   border-radius: 50%;
   background: var(--gradient-primary);
-  box-shadow: var(--shadow-neon-primary);
+  box-shadow:
+    0 0 0.5625rem color-mix(in srgb, var(--color-primary) 48%, transparent),
+    0 0 1.75rem color-mix(in srgb, var(--color-primary-strong) 38%, transparent);
 }
 
 .song-recording-item > div:first-child {
@@ -2398,10 +2507,6 @@ select:focus,
   backdrop-filter: none;
 }
 
-.song-settings-panel + .song-settings-panel {
-  border-inline-start: var(--hairline) solid var(--color-border);
-}
-
 .song-settings-panel-body {
   display: flex;
   min-block-size: 0;
@@ -2419,10 +2524,9 @@ select:focus,
 
 /* Flat form composition copied from the clean reference: label + one control. */
 .settings-field {
-  display: grid;
-  grid-template-columns: minmax(125px, 0.85fr) minmax(0, 1.15fr);
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-
   --field-control-size: 2.9rem;
   gap: var(--space-2);
   padding: 0;
@@ -2438,7 +2542,8 @@ select:focus,
 }
 
 .settings-field > span {
-  min-width: 0;
+  min-width: 7.8125rem;
+  flex: 0.85 1 7.8125rem;
   display: grid;
   gap: var(--space-1);
   padding-inline: var(--space-1);
@@ -2460,6 +2565,15 @@ select:focus,
   font-size: var(--font-size-xs);
 }
 
+.settings-field > .input,
+.settings-field > .app-dropdown,
+.settings-field > .app-dropdown-trigger,
+.settings-field > textarea,
+.settings-field > select {
+  min-width: 0;
+  flex: 1.15 1 12rem;
+}
+
 .settings-field .input,
 .settings-field .app-dropdown-trigger {
   block-size: var(--field-control-size);
@@ -2468,12 +2582,12 @@ select:focus,
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--color-surface-strong) 74%, transparent);
   box-shadow: inset 0 var(--hairline)
-    color-mix(in srgb, var(--color-white) 5%, transparent);
+    color-mix(in srgb, var(--color-highlight) 5%, transparent);
 }
 
 .settings-field .input:hover,
 .settings-field .app-dropdown-trigger:hover {
-  border-color: var(--color-primary-soft);
+  border-color: var(--color-primary-hover);
 }
 
 .settings-field .input:focus,
@@ -2503,38 +2617,30 @@ select:focus,
 @media (max-width: 32rem) {
   .library-page {
   }
-
   .library-hero {
     grid-template-columns: 1fr;
   }
-
   .library-hero-brand-mark {
     display: none;
   }
-
   .library-hero-stats {
     grid-template-columns: repeat(2, 1fr);
     inline-size: 100%;
   }
-
   .library-song-card {
     grid-template-columns: 1fr;
   }
-
   .library-song-card-art {
     min-block-size: 4.5rem;
   }
-
   .library-song-card-wave {
     inset: auto 18% 15%;
     block-size: 35%;
   }
-
   .library-song-card-heading {
     align-items: flex-start;
     flex-direction: column;
   }
-
   .song-lyrics-editor {
     min-block-size: 20rem;
   }
@@ -2547,9 +2653,9 @@ select:focus,
     var(--color-border) 16%,
     transparent
   );
-  background: color-mix(in srgb, var(--color-white) 18%, transparent);
+  background: color-mix(in srgb, var(--color-highlight) 18%, transparent);
   box-shadow: 0 var(--hairline) 0
-    color-mix(in srgb, var(--color-white) 70%, transparent);
+    color-mix(in srgb, var(--color-highlight) 70%, transparent);
 }
 
 :root[data-theme="light"] .title-bar__brand {
@@ -2577,7 +2683,7 @@ select:focus,
   background:
     radial-gradient(
       circle at 24% 18%,
-      color-mix(in srgb, var(--color-white) 8%, transparent),
+      color-mix(in srgb, var(--color-highlight) 8%, transparent),
       transparent 38%
     ),
     radial-gradient(
@@ -2587,8 +2693,8 @@ select:focus,
     ),
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--color-white) 4%, transparent),
-      color-mix(in srgb, var(--color-white) 10%, transparent) 58%,
+      color-mix(in srgb, var(--color-highlight) 4%, transparent),
+      color-mix(in srgb, var(--color-highlight) 10%, transparent) 58%,
       color-mix(in srgb, var(--color-champagne) 25%, transparent)
     );
 }
@@ -2596,7 +2702,7 @@ select:focus,
 :root[data-theme="light"] .library-stage-lights i {
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--color-white) 82%, transparent),
+    color-mix(in srgb, var(--color-highlight) 82%, transparent),
     color-mix(in srgb, var(--color-primary) 20%, transparent) 46%,
     color-mix(in srgb, var(--color-peach) 8%, transparent) 68%,
     transparent 90%
@@ -2651,7 +2757,7 @@ select:focus,
     color-mix(in srgb, var(--color-secondary) 26%, transparent);
   box-shadow:
     inset 0 0 var(--space-8)
-      color-mix(in srgb, var(--color-white) 72%, transparent),
+      color-mix(in srgb, var(--color-highlight) 72%, transparent),
     0 0 var(--space-5)
       color-mix(in srgb, var(--color-raspberry) 22%, transparent),
     0 0 var(--space-8) color-mix(in srgb, var(--color-peach) 16%, transparent);
@@ -2688,7 +2794,7 @@ select:focus,
 :root[data-theme="light"] .library-search-input {
   border-color: color-mix(in srgb, var(--color-secondary) 18%, transparent);
   box-shadow: inset 0 var(--hairline)
-    color-mix(in srgb, var(--color-white) 86%, transparent);
+    color-mix(in srgb, var(--color-highlight) 86%, transparent);
 }
 
 :root[data-theme="light"] .library-search-input:focus {
@@ -2698,7 +2804,7 @@ select:focus,
 
 :root[data-theme="light"] .btn-primary {
   box-shadow: inset 0 var(--hairline)
-    color-mix(in srgb, var(--color-white) 55%, transparent);
+    color-mix(in srgb, var(--color-highlight) 55%, transparent);
 }
 
 :root[data-theme="light"] .btn-danger {
@@ -2721,7 +2827,7 @@ select:focus,
     ),
     linear-gradient(
       145deg,
-      color-mix(in srgb, var(--color-white) 72%, transparent),
+      color-mix(in srgb, var(--color-highlight) 72%, transparent),
       color-mix(in srgb, var(--color-highlight) 76%, transparent)
     );
   backdrop-filter: blur(1rem) saturate(155%);
@@ -2730,13 +2836,14 @@ select:focus,
 :root[data-theme="light"] .library-song-card:hover {
   border-color: color-mix(in srgb, var(--color-raspberry) 42%, transparent);
   box-shadow:
-    var(--shadow-md),
+    0 1.125rem 3.4375rem
+      color-mix(in srgb, var(--color-bg-deep) 38%, transparent),
     0 0 1.8rem color-mix(in srgb, var(--color-primary) 14%, transparent),
     0 0 3.2rem color-mix(in srgb, var(--color-peach) 8%, transparent);
 }
 
 :root[data-theme="light"] .library-song-card-art {
-  color: var(--color-white);
+  color: var(--color-highlight);
   background: linear-gradient(
     160deg,
     var(--color-raspberry),
@@ -2778,8 +2885,8 @@ select:focus,
     ),
     linear-gradient(
       145deg,
-      color-mix(in srgb, var(--color-black) 88%, transparent),
-      color-mix(in srgb, var(--color-black) 91%, transparent)
+      color-mix(in srgb, var(--color-bg-deep) 88%, transparent),
+      color-mix(in srgb, var(--color-bg-deep) 91%, transparent)
     );
 }
 
@@ -2814,7 +2921,7 @@ select:focus,
     ),
     linear-gradient(
       145deg,
-      color-mix(in srgb, var(--color-white) 78%, transparent),
+      color-mix(in srgb, var(--color-highlight) 78%, transparent),
       color-mix(in srgb, var(--color-highlight) 86%, transparent)
     );
 }
@@ -2861,9 +2968,7 @@ select:focus,
 
 .song-settings-panel .panel-header {
   flex: none;
-
   padding: var(--space-4) var(--space-5);
-
   border-block-end: var(--hairline) solid var(--color-border);
   background: color-mix(in srgb, var(--color-surface-glass) 30%, transparent);
   min-block-size: 3.6rem;
@@ -2887,7 +2992,9 @@ select:focus,
 
 .library-search.ui-card:focus-within {
   border-color: var(--color-primary);
-  box-shadow: var(--shadow-neon-soft);
+  box-shadow:
+    0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
+    0 0 1.875rem color-mix(in srgb, var(--color-accent) 24%, transparent);
 }
 
 .library-action-card.ui-card {
@@ -2915,35 +3022,28 @@ select:focus,
   .library-page {
     padding-block-start: var(--space-4);
   }
-
   .library-toolbar {
     align-items: stretch;
     flex-direction: column;
   }
-
   .library-search {
     max-inline-size: none;
   }
-
   .library-actions {
     justify-content: stretch;
   }
-
   .library-actions .btn {
     flex: 1 1 auto;
   }
-
   .library-music-object--record,
   .library-music-object--microphone,
   .library-music-object--notes {
     display: none;
   }
-
   .song-recordings-modal {
     inline-size: calc(100vw - 2 * var(--space-3));
     block-size: min(90dvh, 46rem);
   }
-
   .song-recording-item {
     grid-template-columns: 1fr;
   }
@@ -2952,7 +3052,6 @@ select:focus,
 /* Final compact song-card composition. */
 .library-song-card-heading {
   display: flex;
-
   justify-content: space-between;
   gap: var(--space-3);
   align-items: flex-start;
@@ -2974,7 +3073,6 @@ select:focus,
 
 .library-song-card-icon {
   flex: 0 0 clamp(2.25rem, 5.8vw, 2.7rem);
-
   padding: 0;
   aspect-ratio: 1;
   flex-basis: 2.25rem;
@@ -3003,14 +3101,14 @@ select:focus,
   overflow: hidden;
   -webkit-mask-image: linear-gradient(
     90deg,
-    var(--color-black) 0 var(--processing-progress),
-    color-mix(in srgb, var(--color-black) 24%, transparent)
+    var(--color-bg-deep) 0 var(--processing-progress),
+    color-mix(in srgb, var(--color-bg-deep) 24%, transparent)
       var(--processing-progress) 100%
   );
   mask-image: linear-gradient(
     90deg,
-    var(--color-black) 0 var(--processing-progress),
-    color-mix(in srgb, var(--color-black) 24%, transparent)
+    var(--color-bg-deep) 0 var(--processing-progress),
+    color-mix(in srgb, var(--color-bg-deep) 24%, transparent)
       var(--processing-progress) 100%
   );
 }
@@ -3099,7 +3197,6 @@ select:focus,
   .song-recording-item {
     grid-template-columns: minmax(8rem, 0.55fr) minmax(14rem, 1.45fr);
   }
-
   .song-recording-item-actions {
     grid-column: 1 / -1;
     justify-content: flex-end;
@@ -3110,7 +3207,7 @@ select:focus,
   background:
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--color-white) 48%, transparent),
+      color-mix(in srgb, var(--color-highlight) 48%, transparent),
       transparent
     ),
     color-mix(in srgb, var(--color-nude) 72%, transparent);
@@ -3125,7 +3222,6 @@ select:focus,
   position: relative;
   isolation: isolate;
   display: block;
-
   overflow: visible;
   border-color: transparent;
   background: transparent;
@@ -3175,7 +3271,6 @@ select:focus,
   --processing-progress: 0%;
   position: relative;
   display: grid;
-
   align-items: center;
   padding: var(--space-4);
   overflow: hidden;
@@ -3184,12 +3279,12 @@ select:focus,
   background:
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--color-white) 4%, transparent),
+      color-mix(in srgb, var(--color-highlight) 4%, transparent),
       transparent
     ),
     color-mix(in srgb, var(--color-bg-deep) 72%, transparent);
   box-shadow: inset 0 0 2rem
-    color-mix(in srgb, var(--color-black) 24%, transparent);
+    color-mix(in srgb, var(--color-bg-deep) 24%, transparent);
   min-block-size: 8rem;
 }
 
@@ -3245,24 +3340,19 @@ select:focus,
     min-block-size: auto;
     padding-inline: var(--space-4) calc(var(--space-8) + var(--space-3));
   }
-
   .modal-title__actions {
     grid-column: 1 / -1;
   }
-
   .modal-title__actions > * {
     inline-size: 100%;
   }
-
   .song-recording-item-actions .btn:first-child {
     flex: 1;
   }
-
   .song-recording-item,
   .song-recording-player {
     grid-template-columns: 1fr;
   }
-
   .song-recording-item-actions {
     justify-content: stretch;
     grid-column: auto;
@@ -3285,30 +3375,28 @@ select:focus,
     color-mix(in srgb, var(--color-surface-strong) 72%, transparent)
   );
   box-shadow: inset 0 var(--hairline)
-    color-mix(in srgb, var(--color-white) 7%, transparent);
+    color-mix(in srgb, var(--color-highlight) 7%, transparent);
 }
 
 .app-dropdown-menu {
   position: absolute;
-
   top: calc(100% + 8px);
   left: 0;
   right: 0;
-
   border-radius: var(--radius-md);
-
   z-index: 40;
   margin-block-start: var(--space-1);
-
   border: var(--hairline) solid var(--color-border-strong);
-
   backdrop-filter: blur(var(--space-3));
   display: grid;
   gap: 0.3rem;
   padding: 0.45rem;
   border-color: var(--color-border-strong);
   background: color-mix(in srgb, var(--color-surface-strong) 94%, transparent);
-  box-shadow: var(--shadow-lg), var(--shadow-neon-soft);
+  box-shadow:
+    0 1.75rem 5.625rem color-mix(in srgb, var(--color-bg-deep) 52%, transparent),
+    0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
+    0 0 1.875rem color-mix(in srgb, var(--color-accent) 24%, transparent);
 }
 
 .app-dropdown-option {
@@ -3316,7 +3404,6 @@ select:focus,
   width: 100%;
   align-items: center;
   justify-content: space-between;
-
   color: var(--color-text-soft);
   background: transparent;
   cursor: pointer;
@@ -3352,7 +3439,6 @@ select:focus,
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-
   padding: var(--space-4);
 }
 
@@ -3386,31 +3472,25 @@ select:focus,
   .library-hero {
     grid-template-columns: auto minmax(0, 1fr);
   }
-
   .library-hero-stats {
     grid-column: 1 / -1;
     justify-self: start;
   }
-
   .library-music-object--record,
   .library-music-object--microphone {
     opacity: 0.2;
   }
-
   .song-settings-modal {
     inline-size: calc(100vw - 2 * var(--space-3));
     block-size: min(92dvh, 54rem);
   }
-
   .song-settings-workspace {
     grid-template-columns: 1fr;
     grid-template-rows: repeat(2, minmax(0, 1fr));
   }
-
   .song-lyrics-panel {
     min-block-size: 0;
   }
-
   .song-recordings-list {
     grid-template-columns: 1fr;
   }
@@ -3421,7 +3501,6 @@ select:focus,
   display: grid;
   gap: var(--space-3);
   margin-block-start: auto;
-
   padding-block-start: var(--space-3);
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -3452,7 +3531,6 @@ select:focus,
   .library-song-card-footer {
     grid-template-columns: 1fr;
   }
-
   .library-song-card-actions {
     justify-content: flex-start;
   }
@@ -3475,7 +3553,6 @@ select:focus,
   border: 0;
   background: transparent;
   box-shadow: none;
-
   inline-size: min(70rem, calc(100vw - 2 * var(--space-4)));
 }
 
@@ -3490,7 +3567,6 @@ select:focus,
 /* Recordings are compact timeline rows, not oversized two-column tiles. */
 .song-recordings-list {
   display: grid;
-
   gap: var(--space-4);
   grid-template-columns: minmax(0, 1fr);
 }
@@ -3512,7 +3588,6 @@ select:focus,
 
 .processing-modal-body {
   display: grid;
-
   gap: var(--space-3);
   padding: var(--space-4) var(--space-5);
 }
@@ -3529,7 +3604,6 @@ select:focus,
   flex: none;
   flex-wrap: wrap;
   margin: 0;
-
   border-block-start: var(--hairline) solid var(--color-border);
   padding: var(--space-3) var(--space-5) var(--space-4);
 }
@@ -3573,18 +3647,12 @@ select:focus,
 .song-recording-item {
   align-items: center;
   justify-content: space-between;
-
   border-radius: var(--radius-lg);
   display: grid;
-
   border: var(--hairline) solid var(--color-border);
-
   box-shadow: none;
-
   gap: var(--space-5);
-
   align-content: start;
-
   min-block-size: 0;
   padding: var(--space-3) var(--space-4);
   background: color-mix(in srgb, var(--color-surface-strong) 64%, transparent);
@@ -3610,10 +3678,8 @@ select:focus,
 
 .song-recording-player {
   display: grid;
-
   align-items: center;
   gap: var(--space-3);
-
   min-inline-size: 0;
   grid-area: player;
   grid-template-columns: 2.75rem minmax(0, 1fr) auto;
@@ -3637,7 +3703,6 @@ select:focus,
 
 .song-recording-player .performance-player-volume {
   display: grid;
-
   align-items: center;
   gap: var(--space-2);
   grid-template-columns: 2.25rem 6.5rem;
@@ -3691,7 +3756,9 @@ select:focus,
   color: var(--color-primary);
   font-family: var(--font-mono);
   letter-spacing: 0.12em;
-  text-shadow: var(--shadow-neon);
+  text-shadow:
+    0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
+    0 0 1.875rem color-mix(in srgb, var(--color-accent) 24%, transparent);
 }
 
 .online-room-dock-people {
@@ -3724,7 +3791,9 @@ select:focus,
   transform: translateY(-0.08rem);
   border-color: var(--color-primary);
   color: var(--color-primary);
-  box-shadow: var(--shadow-neon);
+  box-shadow:
+    0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
+    0 0 1.875rem color-mix(in srgb, var(--color-accent) 24%, transparent);
 }
 
 .online-room-icon-button.is-off,
@@ -3747,24 +3816,20 @@ select:focus,
   .song-recording-item-actions .btn:first-child {
     flex: 1;
   }
-
   .song-recordings-modal,
   .processing-modal {
     max-inline-size: calc(100vw - 2 * var(--space-3));
     max-block-size: calc(100dvh - 2 * var(--space-3));
   }
-
   .song-recording-header {
     align-items: flex-start;
     flex-direction: column;
     display: flex;
   }
-
   .song-recording-actions {
     grid-column: auto;
     justify-self: stretch;
   }
-
   .song-recording-item {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
@@ -3772,21 +3837,17 @@ select:focus,
       "player"
       "actions";
   }
-
   .song-recording-item-actions {
     inline-size: 100%;
     justify-content: flex-start;
   }
-
   .song-recording-player {
     grid-template-columns: 2.75rem minmax(0, 1fr);
   }
-
   .song-recording-player .performance-player-volume {
     grid-column: 2;
     grid-template-columns: 2.25rem minmax(4rem, 7rem);
   }
-
   .online-room-dock {
     inset-inline: var(--space-3);
     inline-size: auto;
@@ -3797,7 +3858,6 @@ select:focus,
 
 .online-room-dock > .ui-card__panel > .ui-card__content {
   display: grid;
-
   overflow: auto;
   gap: var(--space-2);
   padding: var(--space-3);
@@ -3805,7 +3865,6 @@ select:focus,
 
 .online-room-dock-heading {
   justify-content: space-between;
-
   border-block-end: 1px solid var(--color-border);
   gap: var(--space-2);
   padding-block-end: var(--space-2);
@@ -3821,7 +3880,6 @@ select:focus,
   place-items: center;
   width: 34px;
   height: 34px;
-
   padding: 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-round);
@@ -3840,7 +3898,6 @@ select:focus,
 /* The room stays connected while its panel is moved outside the viewport. */
 .online-room-dock {
   position: fixed;
-
   left: var(--space-4);
   bottom: var(--space-4);
   width: min(360px, calc(100vw - 2rem));
@@ -3848,11 +3905,13 @@ select:focus,
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-lg);
   background: var(--color-surface-strong);
-  box-shadow: var(--shadow-lg), var(--shadow-neon-cyan);
+  box-shadow:
+    0 1.75rem 5.625rem color-mix(in srgb, var(--color-bg-deep) 52%, transparent),
+    0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 28%, transparent),
+    0 0 1.875rem color-mix(in srgb, var(--color-accent) 18%, transparent);
   z-index: 95;
   inset-inline-start: clamp(var(--space-3), 2vw, var(--space-5));
   inset-block-end: clamp(var(--space-3), 2vw, var(--space-5));
-
   inline-size: min(22rem, calc(100vw - 2 * var(--space-3)));
   max-block-size: min(24rem, calc(100dvh - 5rem));
   transition:
@@ -3889,7 +3948,11 @@ select:focus,
   border-radius: 0 var(--radius-round) var(--radius-round) 0;
   background: var(--color-surface-strong);
   color: var(--color-text);
-  box-shadow: var(--shadow-neon), var(--shadow-card);
+  box-shadow:
+    0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
+    0 0 1.875rem color-mix(in srgb, var(--color-accent) 24%, transparent),
+    0 1.125rem 3.4375rem
+      color-mix(in srgb, var(--color-bg-deep) 38%, transparent);
   backdrop-filter: blur(var(--blur-md)) saturate(150%);
   cursor: pointer;
   animation: online-room-restore-in var(--motion-normal) ease both;
@@ -3909,7 +3972,11 @@ select:focus,
 .online-room-restore-button:hover {
   border-color: var(--color-primary);
   color: var(--color-primary);
-  box-shadow: var(--shadow-neon-strong), var(--shadow-card);
+  box-shadow:
+    0 0 0.5625rem color-mix(in srgb, var(--color-primary) 48%, transparent),
+    0 0 1.75rem color-mix(in srgb, var(--color-primary-strong) 38%, transparent),
+    0 1.125rem 3.4375rem
+      color-mix(in srgb, var(--color-bg-deep) 38%, transparent);
 }
 
 @keyframes online-room-restore-in {
@@ -3945,7 +4012,6 @@ select:focus,
 .online-room-person {
   justify-content: space-between;
   gap: var(--space-3);
-
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface-soft);
@@ -4085,9 +4151,7 @@ select:focus,
   block-size: min(88dvh, 54rem);
   max-block-size: calc(100dvh - 2 * var(--space-4));
   flex-direction: column;
-
   border-color: transparent;
-
   width: min(1220px, 100%);
   padding: clamp(18px, 2.4vw, 32px);
   overflow: auto;
@@ -4104,18 +4168,15 @@ select:focus,
     ),
     linear-gradient(
       145deg,
-      color-mix(in srgb, var(--color-black) 97%, transparent),
-      color-mix(in srgb, var(--color-black) 98%, transparent)
+      color-mix(in srgb, var(--color-bg-deep) 97%, transparent),
+      color-mix(in srgb, var(--color-bg-deep) 98%, transparent)
     );
 }
 
 .song-settings-workspace {
-  display: grid;
+  display: flex;
   block-size: 100%;
-
   align-items: stretch;
-  grid-template-columns: minmax(340px, 0.92fr) minmax(420px, 1.08fr);
-  gap: clamp(22px, 2.5vw, 34px);
   width: 100%;
   min-width: 0;
 }
@@ -4126,6 +4187,7 @@ select:focus,
  * reflective edge, and ::after is a wider coloured light spill.
  */
 .song-settings-workspace > .panel {
+  flex: 1;
   --frame-angle: 0deg;
   --frame-glow: 0.72;
   position: relative;
@@ -4133,101 +4195,7 @@ select:focus,
   min-width: 0;
   padding-bottom: var(--space-6);
   overflow: visible;
-  border: 1px solid color-mix(in srgb, var(--color-highlight) 34%, transparent);
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--color-white) 10.5%, transparent),
-      transparent 18% 72%,
-      color-mix(in srgb, var(--color-text) 8%, transparent)
-    ),
-    radial-gradient(
-      circle at 22% 12%,
-      color-mix(in srgb, var(--color-success) 16%, transparent),
-      transparent 34%
-    ),
-    radial-gradient(
-      circle at 82% 88%,
-      color-mix(in srgb, var(--color-accent) 12%, transparent),
-      transparent 38%
-    ),
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--color-black) 77%, transparent),
-      color-mix(in srgb, var(--color-black) 91%, transparent)
-    );
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--color-white) 30%, transparent),
-    inset 1px 0 0 color-mix(in srgb, var(--color-success) 20%, transparent),
-    inset -1px 0 0 color-mix(in srgb, var(--color-rose) 13%, transparent),
-    inset 0 -18px 44px color-mix(in srgb, var(--color-black) 52%, transparent),
-    0 20px 55px color-mix(in srgb, var(--color-black) 48%, transparent),
-    0 0 18px color-mix(in srgb, var(--color-success) 16%, transparent);
-  backdrop-filter: blur(18px) saturate(1.22);
-  -webkit-backdrop-filter: blur(18px) saturate(1.22);
   transform: translateZ(0);
-}
-
-/* Sharp, layered, animated reflection flowing around the perimeter. */
-.song-settings-workspace > .panel::before {
-  content: "";
-  position: absolute;
-  z-index: 2;
-  inset: -2px;
-  padding: 2px;
-  border-radius: inherit;
-  pointer-events: none;
-  background: conic-gradient(
-    from var(--frame-angle),
-    color-mix(in srgb, var(--color-success) 25%, transparent) 0deg,
-    var(--color-white) 18deg,
-    var(--color-success) 42deg,
-    color-mix(in srgb, var(--color-bg-elevated) 40%, transparent) 76deg,
-    var(--color-text-soft) 116deg,
-    var(--color-rose) 148deg,
-    color-mix(in srgb, var(--color-rose) 28%, transparent) 181deg,
-    var(--color-text) 222deg,
-    var(--color-success) 272deg,
-    var(--color-white) 305deg,
-    var(--color-success) 334deg,
-    color-mix(in srgb, var(--color-success) 25%, transparent) 360deg
-  );
-  filter: saturate(1.18) brightness(1.12);
-  opacity: 0.96;
-  -webkit-mask:
-    linear-gradient(var(--color-black) 0 0) content-box,
-    linear-gradient(var(--color-black) 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation: song-settings-frame-flow 7.5s linear infinite;
-}
-
-/* Broad light spill plus a narrow travelling specular highlight. */
-.song-settings-workspace > .panel::after {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  inset: -12px;
-  border-radius: calc(var(--radius-xl) + 10px);
-  pointer-events: none;
-  background: conic-gradient(
-    from var(--frame-angle),
-    transparent 0 8%,
-    color-mix(in srgb, var(--color-success) 78%, transparent) 12%,
-    color-mix(in srgb, var(--color-text) 28%, transparent) 20%,
-    transparent 31% 42%,
-    color-mix(in srgb, var(--color-accent) 70%, transparent) 49%,
-    color-mix(in srgb, var(--color-text) 30%, transparent) 58%,
-    transparent 70% 86%,
-    color-mix(in srgb, var(--color-white) 64%, transparent) 92%,
-    transparent 100%
-  );
-  opacity: var(--frame-glow);
-  filter: blur(17px);
-  transform: translateZ(-1px) scale(0.995);
-  animation:
-    song-settings-frame-flow 7.5s linear infinite,
-    song-settings-frame-breathe 3.6s ease-in-out infinite alternate;
 }
 
 .song-settings-workspace > .panel:nth-child(2) {
@@ -4239,19 +4207,6 @@ select:focus,
   animation-delay:
     -2.9s,
     -1.1s;
-}
-
-@media (hover: hover) {
-  .song-settings-workspace > .panel:hover {
-    --frame-glow: 0.96;
-    box-shadow:
-      inset 0 1px 0 color-mix(in srgb, var(--color-white) 38%, transparent),
-      inset 1px 0 0 color-mix(in srgb, var(--color-success) 26%, transparent),
-      inset -1px 0 0 color-mix(in srgb, var(--color-rose) 20%, transparent),
-      inset 0 -18px 44px color-mix(in srgb, var(--color-black) 48%, transparent),
-      0 24px 65px color-mix(in srgb, var(--color-black) 54%, transparent),
-      0 0 28px color-mix(in srgb, var(--color-success) 24%, transparent);
-  }
 }
 
 .song-settings-workspace .panel-header {
@@ -4266,26 +4221,23 @@ select:focus,
   content: "✦";
   margin-right: var(--space-3);
   color: var(--color-accent);
-  text-shadow: var(--shadow-neon-pink);
+  text-shadow:
+    0 0 0.5625rem color-mix(in srgb, var(--color-primary) 42%, transparent),
+    0 0 1.75rem color-mix(in srgb, var(--color-primary-strong) 30%, transparent);
 }
 
 .song-settings-fields {
-  display: grid;
-
-  gap: var(--space-3);
+  display: flex;
+  align-content: space-between;
+  flex-wrap: wrap;
   padding: 0 var(--space-5);
 }
 .song-settings-fields .settings-field {
-  min-height: 72px;
-  border-color: color-mix(in srgb, var(--color-success) 28%, transparent);
-  background: linear-gradient(
-    115deg,
-    color-mix(in srgb, var(--color-black) 38%, transparent),
-    color-mix(in srgb, var(--color-black) 42%, transparent)
-  );
+  padding: var(--space-2) 0;
+  border-color: var(--color-border);
 }
 .song-settings-fields .settings-field:hover {
-  border-color: color-mix(in srgb, var(--color-success) 66%, transparent);
+  border-color: var(--color-border-strong);
   box-shadow:
     inset 0 0 26px color-mix(in srgb, var(--color-success) 12%, transparent),
     0 0 14px color-mix(in srgb, var(--color-success) 14%, transparent);
@@ -4294,7 +4246,6 @@ select:focus,
   flex: none;
   inline-size: calc(100% - 2 * var(--space-5));
   min-block-size: 3rem;
-
   width: calc(100% - 2 * var(--space-5));
   margin: var(--space-6) var(--space-5) 0;
 }
@@ -4308,7 +4259,6 @@ select:focus,
   display: flex;
   min-block-size: 0;
   flex: 1;
-
   min-width: 0;
   padding: 0 var(--space-5);
 }
@@ -4332,7 +4282,6 @@ select:focus,
 .song-lyrics-editor {
   min-block-size: 0;
   flex: 1;
-
   scrollbar-width: none;
   display: block;
   width: 100%;
@@ -4343,7 +4292,7 @@ select:focus,
   white-space: pre-wrap;
   overflow-x: hidden;
   overflow-y: auto;
-  border-color: color-mix(in srgb, var(--color-success) 64%, transparent);
+  border-color: var(--color-border-strong);
   border-radius: var(--radius-lg);
   font-family: var(--font-mono);
   font-size: 0.95rem;
@@ -4358,7 +4307,7 @@ select:focus,
       color-mix(in srgb, var(--color-bg-deep) 8%, transparent) 1px,
       transparent 1px
     ),
-    color-mix(in srgb, var(--color-black) 82%, transparent);
+    color-mix(in srgb, var(--color-bg-deep) 82%, transparent);
   background-size: 28px 28px;
   box-shadow:
     inset 0 0 45px color-mix(in srgb, var(--color-bg-deep) 16%, transparent),
@@ -4449,7 +4398,9 @@ select:focus,
   border-radius: var(--radius-lg);
   color: var(--color-primary);
   background: color-mix(in srgb, var(--color-primary) 12%, transparent);
-  box-shadow: var(--shadow-neon-soft);
+  box-shadow:
+    0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
+    0 0 1.875rem color-mix(in srgb, var(--color-accent) 24%, transparent);
 }
 
 .settings-hero-content {
@@ -4460,7 +4411,7 @@ select:focus,
 }
 
 .settings-hero-content span {
-  color: var(--color-primary-soft);
+  color: var(--color-primary-hover);
   font: 800 var(--font-size-xs) / 1 var(--font-display);
   letter-spacing: 0.16em;
 }
@@ -4534,7 +4485,9 @@ select:focus,
     var(--color-primary) 10%,
     var(--color-surface-glass)
   );
-  box-shadow: var(--shadow-neon-soft);
+  box-shadow:
+    0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
+    0 0 1.875rem color-mix(in srgb, var(--color-accent) 24%, transparent);
 }
 
 .settings-tabs button:hover {
@@ -4597,7 +4550,7 @@ select:focus,
 }
 
 .settings-service-link b {
-  color: var(--color-primary-soft);
+  color: var(--color-primary-hover);
 }
 
 .settings-service-screen {
@@ -4615,7 +4568,6 @@ select:focus,
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-4);
-
   padding: var(--space-4) calc(var(--space-8) + var(--space-3)) var(--space-4)
     var(--space-5);
   border-block-end: var(--hairline) solid var(--color-border);
@@ -4645,7 +4597,6 @@ select:focus,
 .settings-modal > .ui-card__panel,
 .settings-modal > .ui-card__panel > .ui-card__content {
   inline-size: 100%;
-
   min-block-size: 0;
   block-size: auto;
   max-block-size: 90dvh;
@@ -4722,7 +4673,7 @@ select:focus,
   background: linear-gradient(
     90deg,
     var(--color-primary),
-    var(--color-primary-soft)
+    var(--color-primary-hover)
   );
   box-shadow: 0 0 0.8rem
     color-mix(in srgb, var(--color-primary) 55%, transparent);
@@ -4794,7 +4745,7 @@ select:focus,
   background:
     radial-gradient(
       circle at 18% 24%,
-      color-mix(in srgb, var(--color-white) 18%, transparent),
+      color-mix(in srgb, var(--color-highlight) 18%, transparent),
       transparent 20%
     ),
     radial-gradient(
@@ -4844,7 +4795,7 @@ select:focus,
         transparent var(--hairline)
       )
       0 0 / 3.2rem 100%;
-  mask-image: linear-gradient(transparent, var(--color-black) 32%);
+  mask-image: linear-gradient(transparent, var(--color-bg-deep) 32%);
   transform: perspective(28rem) rotateX(58deg);
   transform-origin: bottom;
 }
@@ -4991,14 +4942,12 @@ select:focus,
 
 .karaoke-settings-backdrop {
   position: fixed;
-
   inset: 0;
   display: grid;
   place-items: center;
   padding: var(--space-4);
-
   z-index: 650;
-  background: color-mix(in srgb, var(--color-bg-deep) 72%, transparent);
+  background: color-mix(in srgb, var(--color-surface-glass) 88%, transparent);
   backdrop-filter: blur(1rem);
 }
 
@@ -5007,9 +4956,7 @@ select:focus,
   width: min(900px, 100%);
   max-height: 90vh;
   overflow: auto;
-
   border-radius: var(--radius-xl);
-
   display: grid;
   inline-size: min(46rem, 92vw);
   max-block-size: 88dvh;
@@ -5017,7 +4964,10 @@ select:focus,
   padding: var(--space-5);
   border: var(--hairline) solid var(--color-border-strong);
   background: var(--gradient-panel);
-  box-shadow: var(--shadow-lg), var(--shadow-neon-primary);
+  box-shadow:
+    0 1.75rem 5.625rem color-mix(in srgb, var(--color-bg-deep) 52%, transparent),
+    0 0 0.5625rem color-mix(in srgb, var(--color-primary) 48%, transparent),
+    0 0 1.75rem color-mix(in srgb, var(--color-primary-strong) 38%, transparent);
 }
 
 .microphone-panel-title {
@@ -5099,16 +5049,17 @@ select:focus,
   height: 10px;
   overflow: hidden;
   border-radius: var(--radius-pill);
-
   block-size: 0.7rem;
-  background: color-mix(in srgb, var(--color-white) 10%, transparent);
+  background: color-mix(in srgb, var(--color-highlight) 10%, transparent);
 }
 .microphone-level-fill {
   height: 100%;
   background: var(--gradient-primary);
   block-size: 100%;
   border-radius: inherit;
-  box-shadow: var(--shadow-neon-primary);
+  box-shadow:
+    0 0 0.5625rem color-mix(in srgb, var(--color-primary) 48%, transparent),
+    0 0 1.75rem color-mix(in srgb, var(--color-primary-strong) 38%, transparent);
 }
 
 .karaoke-recording-error {
@@ -5267,7 +5218,7 @@ select:focus,
     linear-gradient(
       90deg,
       transparent,
-      color-mix(in srgb, var(--color-white) 3%, transparent),
+      color-mix(in srgb, var(--color-highlight) 3%, transparent),
       transparent
     );
   mix-blend-mode: screen;
@@ -5277,7 +5228,9 @@ select:focus,
   position: absolute;
   border-radius: var(--radius-sm);
   background: var(--gradient-primary);
-  box-shadow: var(--shadow-neon-cyan);
+  box-shadow:
+    0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 28%, transparent),
+    0 0 1.875rem color-mix(in srgb, var(--color-accent) 18%, transparent);
   transition: opacity var(--duration-fast) var(--ease-standard);
 }
 
@@ -5308,11 +5261,11 @@ select:focus,
 }
 
 [data-theme="light"] .melody-roll-header {
-  background: color-mix(in srgb, var(--color-white) 68%, transparent);
+  background: color-mix(in srgb, var(--color-highlight) 68%, transparent);
 }
 
 [data-theme="light"] .melody-roll-legend {
-  background: color-mix(in srgb, var(--color-white) 42%, transparent);
+  background: color-mix(in srgb, var(--color-highlight) 42%, transparent);
 }
 
 @media (max-width: 44rem) {
@@ -5325,7 +5278,6 @@ select:focus,
   .melody-roll-header {
     display: none;
   }
-
   .karaoke-lyrics {
     inset-block-end: var(--space-5);
   }
@@ -5353,7 +5305,6 @@ select:focus,
   .performance-analysis-metrics {
     grid-template-columns: 1fr;
   }
-
   .melody-roll svg {
     block-size: clamp(9.5rem, 24vh, 13rem);
   }
@@ -5366,7 +5317,6 @@ select:focus,
 
 .karaoke-panoramic-sky {
   z-index: 0;
-
   background-position: var(--panorama-x, 50%) var(--panorama-y, 50%);
   background-size: cover;
   transform: scale(1.045);
@@ -5396,7 +5346,6 @@ select:focus,
   max-inline-size: none;
   object-fit: cover;
   pointer-events: none;
-
   opacity: 0.92;
 }
 .karaoke-aurora-world {
@@ -5469,7 +5418,7 @@ select:focus,
 [data-theme="light"] .melody-roll {
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--color-white) 70%, transparent),
+    color-mix(in srgb, var(--color-highlight) 70%, transparent),
     color-mix(in srgb, var(--color-highlight) 52%, transparent)
   );
   box-shadow:
@@ -5477,14 +5426,14 @@ select:focus,
       color-mix(in srgb, var(--color-primary-strong) 15%, transparent),
     0 0 1.4rem color-mix(in srgb, var(--color-primary) 12%, transparent),
     inset 0 var(--hairline)
-      color-mix(in srgb, var(--color-white) 84%, transparent);
+      color-mix(in srgb, var(--color-highlight) 84%, transparent);
 }
 
 [data-theme="light"] .melody-roll-header,
 [data-theme="light"] .melody-roll-legend,
 [data-theme="light"] .karaoke-microphone-dock,
 [data-theme="light"] .karaoke-labeled-action svg {
-  background: color-mix(in srgb, var(--color-white) 66%, transparent);
+  background: color-mix(in srgb, var(--color-highlight) 66%, transparent);
 }
 
 [data-theme="light"] .karaoke-lyric-next {
@@ -5500,29 +5449,24 @@ select:focus,
     scroll-behavior: auto !important;
     transition-duration: 1ms !important;
   }
-
   .ui-card__glow,
   .ui-card__glow-mid,
   .ui-card__edge,
   .ui-card__glint {
     animation-play-state: paused;
   }
-
   .online-room-dock,
   .online-room-restore-button {
     transition: none;
     animation: none;
   }
-
   .online-room-speaking-meter i.is-active {
     animation: none;
   }
-
   .song-settings-workspace > .panel::before,
   .song-settings-workspace > .panel::after {
     animation: none;
   }
-
   .karaoke-stage *,
   .karaoke-stage *::before,
   .karaoke-stage *::after {
@@ -5582,7 +5526,7 @@ select:focus,
     linear-gradient(
       115deg,
       transparent 12%,
-      color-mix(in srgb, var(--color-white) 4%, transparent) 30%,
+      color-mix(in srgb, var(--color-highlight) 4%, transparent) 30%,
       transparent 46%
     ),
     radial-gradient(
@@ -5595,7 +5539,7 @@ select:focus,
 /* Lyrics are the hero element, with a clean white base and theme-progress fill. */
 
 .karaoke-lyric-current {
-  color: var(--color-white);
+  color: var(--color-highlight);
   filter: drop-shadow(
     0 0 0.75rem color-mix(in srgb, var(--color-primary) 26%, transparent)
   );
@@ -5609,13 +5553,11 @@ select:focus,
   grid-template-columns: auto auto minmax(3.5rem, 1fr) auto;
   align-items: center;
   gap: 0.7rem;
-
   padding: 0.65rem 0.85rem;
   border: var(--hairline) solid
     color-mix(in srgb, var(--color-primary) 34%, var(--color-border));
   border-radius: 1rem;
   color: var(--color-text);
-
   backdrop-filter: blur(0.75rem) saturate(135%);
   cursor: pointer;
   transition:
@@ -5630,13 +5572,12 @@ select:focus,
   );
   box-shadow:
     inset 0 var(--hairline)
-      color-mix(in srgb, var(--color-white) 10%, transparent),
-    0 0.7rem 1.6rem color-mix(in srgb, var(--color-black) 16%, transparent);
+      color-mix(in srgb, var(--color-highlight) 10%, transparent),
+    0 0.7rem 1.6rem color-mix(in srgb, var(--color-bg-deep) 16%, transparent);
 }
 
 .karaoke-microphone-meter i {
   inline-size: 0.16rem;
-
   max-block-size: 100%;
   min-block-size: 0.22rem;
   border-radius: var(--radius-pill);
@@ -5664,13 +5605,13 @@ select:focus,
       ellipse 62% 46% at 50% 50%,
       transparent 32%,
       color-mix(in srgb, var(--color-primary-strong) 8%, transparent) 72%,
-      color-mix(in srgb, var(--color-black) 28%, transparent) 100%
+      color-mix(in srgb, var(--color-bg-deep) 28%, transparent) 100%
     ),
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--color-white) 7%, transparent),
+      color-mix(in srgb, var(--color-highlight) 7%, transparent),
       transparent 48%,
-      color-mix(in srgb, var(--color-black) 18%, transparent) 100%
+      color-mix(in srgb, var(--color-bg-deep) 18%, transparent) 100%
     );
 }
 
@@ -5737,32 +5678,27 @@ select:focus,
     grid-column: 1 / -1;
     justify-self: end;
   }
-
   .song-recording-item {
     grid-template-columns: minmax(7rem, 0.7fr) minmax(0, 1fr);
     grid-template-areas:
       "meta actions"
       "player player";
   }
-
   .karaoke-performance-stage {
     min-block-size: 32rem;
   }
-
   .melody-roll-header {
     display: none;
   }
   .melody-roll svg {
     block-size: 100%;
   }
-
   .karaoke-microphone-dock {
     display: none;
   }
   .karaoke-corner-actions {
     flex-wrap: wrap;
   }
-
   .karaoke-stage {
     --karaoke-roll-height: 9rem;
     --karaoke-controls-height: 11.5rem;
@@ -5841,7 +5777,6 @@ select:focus,
         auto
       );
   }
-
   .karaoke-quick-mixer {
     grid-template-columns: repeat(2, minmax(5rem, 1fr));
   }
@@ -5851,11 +5786,9 @@ select:focus,
   .karaoke-playback-controls {
     grid-template-columns: 1fr auto;
   }
-
   .karaoke-mixer-dock {
     grid-column: 1 / -1;
   }
-
   .karaoke-corner-actions {
     grid-column: 1 / -1;
     justify-content: center;
@@ -5865,13 +5798,13 @@ select:focus,
 /* Final karaoke readability and quick-display controls. */
 .karaoke-lyric,
 .karaoke-lyric-character {
-  color: var(--color-white);
+  color: var(--color-highlight);
   -webkit-text-fill-color: transparent;
 }
 
 .karaoke-lyric-next,
 .karaoke-lyric-next .karaoke-lyric-character {
-  color: color-mix(in srgb, var(--color-white) 68%, transparent);
+  color: color-mix(in srgb, var(--color-highlight) 68%, transparent);
 }
 
 [data-theme="light"] .karaoke-lyric-character {
@@ -5879,8 +5812,8 @@ select:focus,
     90deg,
     var(--color-primary) 0,
     var(--color-primary) var(--character-fill),
-    var(--color-white) var(--character-fill),
-    var(--color-white) 100%
+    var(--color-highlight) var(--character-fill),
+    var(--color-highlight) 100%
   );
 }
 
@@ -5888,27 +5821,26 @@ select:focus,
   grid-template-columns: minmax(0, 1fr);
 }
 
-/* ========================================================================== 
+/* ==========================================================================
    FINAL CINEMATIC KARAOKE LAYOUT
    Pure layout/theme overrides: playback logic and existing components remain.
    ========================================================================== */
 
 .karaoke-performance-stage::before {
   z-index: 3;
-
   background:
     radial-gradient(
       ellipse 66% 50% at 50% 48%,
       transparent 30%,
-      color-mix(in srgb, var(--color-black) 12%, transparent) 68%,
-      color-mix(in srgb, var(--color-black) 56%, transparent) 100%
+      color-mix(in srgb, var(--color-bg-deep) 12%, transparent) 68%,
+      color-mix(in srgb, var(--color-bg-deep) 56%, transparent) 100%
     ),
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--color-black) 17%, transparent) 0%,
+      color-mix(in srgb, var(--color-bg-deep) 17%, transparent) 0%,
       transparent 28%,
       transparent 57%,
-      color-mix(in srgb, var(--color-black) 68%, transparent) 100%
+      color-mix(in srgb, var(--color-bg-deep) 68%, transparent) 100%
     );
 }
 
@@ -5919,7 +5851,6 @@ select:focus,
 
 .karaoke-lyric-word {
   display: inline-block;
-
   margin-inline-end: 0.24em;
 }
 
@@ -5927,23 +5858,19 @@ select:focus,
 
 .karaoke-player-meta {
   display: grid;
-
   min-inline-size: 0;
   align-self: center;
-
   gap: 0;
 }
 
 .karaoke-player-meta span {
   color: var(--color-text-muted);
-
   font-size: 0.65rem;
 }
 .karaoke-timecode {
   font-variant-numeric: tabular-nums;
   min-inline-size: auto;
   color: var(--color-text);
-
   font-weight: 800;
   font-size: 0.65rem;
 }
@@ -5952,7 +5879,6 @@ select:focus,
   display: block;
   inline-size: 100%;
   block-size: 100%;
-
   opacity: 0.94;
   filter: drop-shadow(
       0 0 0.18rem color-mix(in srgb, var(--color-primary) 42%, transparent)
@@ -5969,7 +5895,6 @@ select:focus,
   grid-template-columns: auto auto;
   align-content: center;
   align-items: center;
-
   min-inline-size: 4.65rem;
   gap: 0.2rem 0.38rem;
 }
@@ -5977,8 +5902,8 @@ select:focus,
 [data-theme="light"] .karaoke-lyrics::before {
   background: radial-gradient(
     ellipse at center,
-    color-mix(in srgb, var(--color-black) 42%, transparent) 0%,
-    color-mix(in srgb, var(--color-black) 18%, transparent) 48%,
+    color-mix(in srgb, var(--color-bg-deep) 42%, transparent) 0%,
+    color-mix(in srgb, var(--color-bg-deep) 18%, transparent) 48%,
     transparent 74%
   );
 }
@@ -5988,19 +5913,15 @@ select:focus,
   .settings-service-grid {
     grid-template-columns: 1fr;
   }
-
   .settings-header {
     padding-inline-start: var(--space-4);
   }
-
   .settings-hero-icon {
     display: none;
   }
-
   .audio-monitor-card {
     grid-template-columns: 1fr;
   }
-
   .karaoke-stage {
     --karaoke-roll-height: 7rem;
   }
@@ -6022,7 +5943,7 @@ select:focus,
   }
 }
 
-/* ========================================================================== 
+/* ==========================================================================
    KARAOKE POLISH PASS — clean cinematic composition
    ========================================================================== */
 
@@ -6032,33 +5953,32 @@ select:focus,
 
 [data-theme="light"] .karaoke-lyric {
   text-shadow:
-    0 0.15rem 0.16rem color-mix(in srgb, var(--color-black) 88%, transparent),
-    0 0.34rem 0.85rem color-mix(in srgb, var(--color-black) 72%, transparent),
+    0 0.15rem 0.16rem color-mix(in srgb, var(--color-bg-deep) 88%, transparent),
+    0 0.34rem 0.85rem color-mix(in srgb, var(--color-bg-deep) 72%, transparent),
     0 0 1.15rem color-mix(in srgb, var(--color-primary) 38%, transparent);
-  color: var(--color-white) !important;
-  -webkit-text-fill-color: var(--color-white) !important;
+  color: var(--color-highlight) !important;
+  -webkit-text-fill-color: var(--color-highlight) !important;
   -webkit-text-stroke: 0.018em
-    color-mix(in srgb, var(--color-black) 78%, transparent);
+    color-mix(in srgb, var(--color-bg-deep) 78%, transparent);
 }
 
 [data-theme="light"] .karaoke-timeline-row,
 [data-theme="light"] .karaoke-mixer-dock,
 [data-theme="light"] .karaoke-transport-buttons,
 [data-theme="light"] .karaoke-corner-actions {
-  background: color-mix(in srgb, var(--color-white) 62%, transparent);
+  background: color-mix(in srgb, var(--color-highlight) 62%, transparent);
   box-shadow:
     0 0.5rem 1.4rem
       color-mix(in srgb, var(--color-primary-strong) 14%, transparent),
     inset 0 var(--hairline)
-      color-mix(in srgb, var(--color-white) 82%, transparent);
+      color-mix(in srgb, var(--color-highlight) 82%, transparent);
 }
 
-/* ========================================================================== 
+/* ==========================================================================
    KARAOKE POLISH PASS 3 — readable lyrics and balanced studio HUD
    ========================================================================== */
 .karaoke-stage {
   position: relative;
-
   grid-template-rows: minmax(0, 1fr) auto;
   overflow: hidden;
   border-radius: 0;
@@ -6068,16 +5988,13 @@ select:focus,
   display: block;
   --karaoke-roll-top: clamp(0.7rem, 1.8vh, 1.35rem);
   --karaoke-roll-inline: clamp(0.75rem, 2.2vw, 2.25rem);
-
   --karaoke-controls-height: clamp(8.75rem, 17dvh, 11.5rem);
   --karaoke-accent-glow: color-mix(
     in srgb,
     var(--color-primary) 58%,
     transparent
   );
-
   --waveform-future: color-mix(in srgb, var(--color-text) 16%, transparent);
-
   --karaoke-hud-height: auto;
   inline-size: 100%;
   block-size: calc(100dvh - var(--titlebar-height));
@@ -6097,17 +6014,17 @@ select:focus,
   background:
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--color-black) 20%, transparent) 0%,
+      color-mix(in srgb, var(--color-bg-deep) 20%, transparent) 0%,
       transparent 18%,
       transparent 52%,
-      color-mix(in srgb, var(--color-black) 34%, transparent) 74%,
-      color-mix(in srgb, var(--color-black) 76%, transparent) 100%
+      color-mix(in srgb, var(--color-bg-deep) 34%, transparent) 74%,
+      color-mix(in srgb, var(--color-bg-deep) 76%, transparent) 100%
     ),
     radial-gradient(
       circle at 50% 42%,
       transparent 24%,
-      color-mix(in srgb, var(--color-black) 16%, transparent) 68%,
-      color-mix(in srgb, var(--color-black) 42%, transparent) 100%
+      color-mix(in srgb, var(--color-bg-deep) 16%, transparent) 68%,
+      color-mix(in srgb, var(--color-bg-deep) 42%, transparent) 100%
     );
 }
 
@@ -6116,69 +6033,51 @@ select:focus,
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-
   border-block-end: var(--hairline) solid var(--color-border);
   position: relative;
   z-index: 3;
-
   backdrop-filter: blur(1.25rem) saturate(150%);
-
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--color-white) 4%, transparent),
+    color-mix(in srgb, var(--color-highlight) 4%, transparent),
     transparent
   );
-
   min-block-size: 1.85rem;
   padding: 0.2rem 0.62rem 0.18rem;
 }
 
 .melody-roll-caption {
   text-transform: uppercase;
-
   font-weight: 850;
-
   letter-spacing: 0.13em;
   color: color-mix(in srgb, var(--color-primary) 70%, var(--color-text-soft));
-
   font-size: 0.48rem;
 }
 .melody-roll-header strong {
   display: block;
-
   color: var(--color-text);
-
   letter-spacing: 0.015em;
   margin-block-start: 0.08rem;
-
   font: 800 clamp(0.9rem, 1.15vw, 1.08rem) / 1.1 var(--font-display);
-
   font-size: clamp(0.68rem, 0.75vw, 0.8rem);
 }
 .melody-roll-legend {
   display: flex;
   align-items: center;
-
   border-radius: var(--radius-pill);
-
   border: var(--hairline) solid
     color-mix(in srgb, var(--color-primary) 24%, var(--color-border));
   background: color-mix(in srgb, var(--color-bg-deep) 50%, transparent);
   backdrop-filter: blur(0.45rem);
-
   gap: 0.55rem;
-
   padding: 0.18rem 0.38rem;
   font-size: 0.52rem;
 }
 .melody-roll svg {
   display: block;
-
   position: relative;
-
   min-block-size: 0;
   z-index: 2;
-
   block-size: calc(100% - 1.85rem);
 }
 
@@ -6186,21 +6085,20 @@ select:focus,
   content: "";
   position: absolute;
   z-index: -1;
-
   inset: -18% -4%;
   border-radius: 2.4rem;
   background:
     linear-gradient(
       90deg,
       transparent,
-      color-mix(in srgb, var(--color-black) 20%, transparent) 16%,
-      color-mix(in srgb, var(--color-black) 32%, transparent) 50%,
-      color-mix(in srgb, var(--color-black) 20%, transparent) 84%,
+      color-mix(in srgb, var(--color-bg-deep) 20%, transparent) 16%,
+      color-mix(in srgb, var(--color-bg-deep) 32%, transparent) 50%,
+      color-mix(in srgb, var(--color-bg-deep) 20%, transparent) 84%,
       transparent
     ),
     radial-gradient(
       ellipse at center,
-      color-mix(in srgb, var(--color-black) 26%, transparent),
+      color-mix(in srgb, var(--color-bg-deep) 26%, transparent),
       transparent 72%
     );
   filter: blur(0.38rem);
@@ -6208,17 +6106,15 @@ select:focus,
 
 .karaoke-lyric {
   text-align: center;
-
   font-size: clamp(2rem, 3.65vw, 4.15rem);
-
-  color: var(--color-white) !important;
-  -webkit-text-fill-color: var(--color-white) !important;
+  color: var(--color-highlight) !important;
+  -webkit-text-fill-color: var(--color-highlight) !important;
   font: 850 clamp(2rem, 3.45vw, 3.9rem) / 1.08 var(--font-display) !important;
   letter-spacing: 0.004em;
   -webkit-text-stroke: 0 !important;
   text-shadow:
-    0 0.08rem 0.12rem color-mix(in srgb, var(--color-black) 88%, transparent),
-    0 0.18rem 0.42rem color-mix(in srgb, var(--color-black) 72%, transparent),
+    0 0.08rem 0.12rem color-mix(in srgb, var(--color-bg-deep) 88%, transparent),
+    0 0.18rem 0.42rem color-mix(in srgb, var(--color-bg-deep) 72%, transparent),
     0 0 0.52rem color-mix(in srgb, var(--color-primary) 28%, transparent) !important;
 }
 
@@ -6228,22 +6124,22 @@ select:focus,
     90deg,
     var(--color-highlight) 0%,
     var(--color-primary) var(--character-fill),
-    var(--color-white) var(--character-fill),
-    var(--color-white) 100%
+    var(--color-highlight) var(--character-fill),
+    var(--color-highlight) 100%
   ) !important;
   background-clip: text !important;
   -webkit-background-clip: text !important;
-
-  color: var(--color-white) !important;
+  color: var(--color-highlight) !important;
   background-image: linear-gradient(
     90deg,
     var(--color-highlight) 0%,
     var(--color-primary) var(--character-fill),
-    var(--color-white) var(--character-fill),
-    var(--color-white) 100%
+    var(--color-highlight) var(--character-fill),
+    var(--color-highlight) 100%
   ) !important;
   filter: drop-shadow(
-      0 0.06rem 0.08rem color-mix(in srgb, var(--color-black) 80%, transparent)
+      0 0.06rem 0.08rem
+        color-mix(in srgb, var(--color-bg-deep) 80%, transparent)
     )
     drop-shadow(
       0 0 0.18rem color-mix(in srgb, var(--color-primary) 22%, transparent)
@@ -6252,61 +6148,51 @@ select:focus,
 
 .karaoke-lyric-next {
   opacity: 0.9;
-
   font-weight: 760;
-
   -webkit-text-stroke: 0;
-
   margin-block-start: 0.52rem;
   font-size: 0.46em !important;
-  color: color-mix(in srgb, var(--color-white) 70%, transparent) !important;
+  color: color-mix(in srgb, var(--color-highlight) 70%, transparent) !important;
   -webkit-text-fill-color: color-mix(
     in srgb,
-    var(--color-white) 70%,
+    var(--color-highlight) 70%,
     transparent
   ) !important;
   text-shadow: 0 0.1rem 0.3rem
-    color-mix(in srgb, var(--color-black) 80%, transparent) !important;
+    color-mix(in srgb, var(--color-bg-deep) 80%, transparent) !important;
 }
 
 .karaoke-lyric-next .karaoke-lyric-character {
   -webkit-text-fill-color: transparent;
-
   background: linear-gradient(
     90deg,
     color-mix(in srgb, var(--color-primary) 68%, white) var(--character-fill),
-    color-mix(in srgb, var(--color-white) 68%, transparent)
+    color-mix(in srgb, var(--color-highlight) 68%, transparent)
       var(--character-fill)
   ) !important;
   background-image: linear-gradient(
     90deg,
     color-mix(in srgb, var(--color-primary) 58%, white) var(--character-fill),
-    color-mix(in srgb, var(--color-white) 70%, transparent)
+    color-mix(in srgb, var(--color-highlight) 70%, transparent)
       var(--character-fill)
   ) !important;
   filter: drop-shadow(
-    0 0.05rem 0.08rem color-mix(in srgb, var(--color-black) 72%, transparent)
+    0 0.05rem 0.08rem color-mix(in srgb, var(--color-bg-deep) 72%, transparent)
   );
 }
 
 .karaoke-transport-area {
   display: grid;
-
   border-block-start: var(--hairline) solid var(--color-border);
-
   transition:
     opacity var(--duration-fast) var(--ease-standard),
     transform var(--duration-fast) var(--ease-standard);
   position: absolute;
   z-index: 30;
-
   border: 0;
-
   box-shadow: none;
   backdrop-filter: none;
-
   inset: auto var(--karaoke-hud-inset) var(--karaoke-hud-inset);
-
   min-block-size: 0;
   padding: 0;
   border-radius: 0;
@@ -6316,21 +6202,15 @@ select:focus,
 
 .karaoke-timeline-row {
   display: grid;
-
   align-items: center;
-
   gap: 0.62rem;
-
   grid-template-columns: minmax(8rem, 11rem) auto minmax(0, 1fr) auto;
-
   border: var(--hairline) solid
     color-mix(in srgb, var(--color-primary) 24%, var(--color-border));
-
   box-shadow:
-    0 0.5rem 1.4rem color-mix(in srgb, var(--color-black) 20%, transparent),
+    0 0.5rem 1.4rem color-mix(in srgb, var(--color-bg-deep) 20%, transparent),
     inset 0 var(--hairline)
-      color-mix(in srgb, var(--color-white) 7%, transparent);
-
+      color-mix(in srgb, var(--color-highlight) 7%, transparent);
   min-block-size: 2.25rem;
   padding: 0.22rem 0.58rem;
   border-radius: 0.78rem;
@@ -6344,7 +6224,6 @@ select:focus,
   white-space: nowrap;
   color: var(--color-text);
   font: 800 clamp(0.88rem, 1.1vw, 1.05rem) / 1.15 var(--font-display);
-
   font-size: 0.76rem;
 }
 .karaoke-player-meta span,
@@ -6356,19 +6235,14 @@ select:focus,
   width: 100%;
   min-height: 52px;
   min-inline-size: 0;
-
   cursor: pointer;
-
   color: var(--color-primary);
-
   block-size: 1.62rem;
 }
 
 .karaoke-playback-controls {
   display: grid;
-
   align-items: end;
-
   grid-template-columns: minmax(25rem, 1.35fr) auto minmax(18rem, 0.8fr);
   gap: 0.52rem;
 }
@@ -6385,22 +6259,18 @@ select:focus,
   gap: 0.85rem;
   min-inline-size: 0;
   cursor: default;
-
   background: color-mix(in srgb, var(--color-bg-deep) 36%, transparent);
-
   padding: 0.34rem 0.48rem;
   border-radius: 0.82rem;
 }
 
 .karaoke-mixer-heading > span:first-of-type {
   font-weight: 800;
-
   font-size: 0.68rem;
 }
 .karaoke-mixer-settings {
   display: grid;
   place-items: center;
-
   padding: 0;
   border: var(--hairline) solid
     color-mix(in srgb, var(--color-primary) 34%, var(--color-border));
@@ -6408,28 +6278,22 @@ select:focus,
   color: var(--color-text);
   background: color-mix(in srgb, var(--color-surface) 55%, transparent);
   cursor: pointer;
-
   inline-size: 1.55rem;
   block-size: 1.55rem;
 }
 .karaoke-quick-mixer {
   display: grid;
   grid-template-columns: repeat(4, minmax(4.2rem, 1fr));
-
   min-inline-size: 0;
-
   gap: 0.36rem;
 }
 .karaoke-quick-mixer .slider-field__header {
   gap: 0.25rem;
-
   white-space: nowrap;
-
   font-size: 0.5rem;
 }
 .karaoke-quick-mixer .slider-field__header .mono {
   color: var(--color-text-muted);
-
   font-size: 0.48rem;
 }
 
@@ -6437,9 +6301,7 @@ select:focus,
   display: flex;
   justify-content: center;
   align-items: center;
-
   align-self: center;
-
   border-radius: 999px;
   padding: 0.25rem 0.32rem;
   gap: 0.3rem;
@@ -6448,21 +6310,16 @@ select:focus,
 .karaoke-transport-button {
   padding: 0;
   border-radius: 0.9rem;
-
   inline-size: 2.35rem;
   block-size: 2.35rem;
 }
 .karaoke-play-button {
   border-radius: 50%;
-
   padding: 0;
-
   box-shadow:
     0 0 0 0.1rem color-mix(in srgb, var(--color-highlight) 68%, transparent),
     0 0 1.65rem color-mix(in srgb, var(--color-primary) 54%, transparent);
-
   animation: karaoke-play-breathe 3.8s ease-in-out infinite;
-
   inline-size: clamp(3.55rem, 4vw, 4rem);
   block-size: clamp(3.55rem, 4vw, 4rem);
 }
@@ -6474,12 +6331,9 @@ select:focus,
   right: var(--space-4);
   display: flex;
   justify-self: end;
-
   justify-content: flex-end;
   align-items: flex-end;
-
   align-self: center;
-
   padding: 0.2rem 0.28rem;
   border-radius: 0.82rem;
   gap: 0.12rem;
@@ -6489,7 +6343,6 @@ select:focus,
   display: grid;
   justify-items: center;
   gap: 0.28rem;
-
   border: 0;
   color: var(--color-text-muted);
   background: transparent;
@@ -6497,16 +6350,13 @@ select:focus,
   transition:
     color var(--duration-fast),
     transform var(--duration-fast);
-
   min-inline-size: 2.75rem;
   padding: 0.18rem 0.12rem 0.02rem;
 }
 .karaoke-labeled-action svg {
   box-sizing: content-box;
-
   border: var(--hairline) solid
     color-mix(in srgb, var(--color-primary) 28%, var(--color-border));
-
   transition:
     border-color var(--duration-fast),
     background var(--duration-fast),
@@ -6517,7 +6367,6 @@ select:focus,
     color-mix(in srgb, var(--color-bg-deep) 58%, transparent)
   );
   backdrop-filter: blur(0.55rem);
-
   padding: 0.4rem;
   border-radius: 0.62rem;
 }
@@ -6528,8 +6377,8 @@ select:focus,
 [data-theme="light"] .karaoke-lyric,
 [data-theme="light"] .karaoke-lyric-character {
   text-shadow:
-    0 0.08rem 0.12rem color-mix(in srgb, var(--color-black) 85%, transparent),
-    0 0.18rem 0.42rem color-mix(in srgb, var(--color-black) 65%, transparent),
+    0 0.08rem 0.12rem color-mix(in srgb, var(--color-bg-deep) 85%, transparent),
+    0 0.18rem 0.42rem color-mix(in srgb, var(--color-bg-deep) 65%, transparent),
     0 0 0.48rem color-mix(in srgb, var(--color-primary) 28%, transparent) !important;
 }
 
@@ -6537,27 +6386,22 @@ select:focus,
   .song-recording-item {
     grid-template-columns: 8rem minmax(0, 1fr);
   }
-
   .song-recording-item-actions {
     grid-column: 2;
     justify-content: flex-end;
   }
-
   .settings-modal {
     inline-size: calc(100vw - 2 * var(--space-3));
     block-size: min(92dvh, 52rem);
   }
-
   .settings-save {
     grid-column: 1 / -1;
     inline-size: 100%;
   }
-
   .settings-layout {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);
   }
-
   .settings-tabs {
     flex-direction: row;
     padding: var(--space-3);
@@ -6565,25 +6409,20 @@ select:focus,
     border-inline-end: 0;
     border-block-end: var(--hairline) solid var(--color-border);
   }
-
   .settings-tabs button {
     inline-size: auto;
     flex: none;
   }
-
   .settings-tabs button:hover {
     transform: translateY(calc(-1 * var(--hairline)));
   }
-
   .settings-header {
     grid-template-columns: auto minmax(0, 1fr);
   }
-
   .settings-header .modal-title__actions {
     grid-column: 1 / -1;
     inline-size: 100%;
   }
-
   .karaoke-transport-area {
     inset-inline: 0.45rem;
     inset-block-end: 0.45rem;
@@ -6594,7 +6433,6 @@ select:focus,
   .karaoke-player-meta {
     grid-column: 1 / -1;
   }
-
   .karaoke-mixer-dock {
     grid-template-columns: 1fr;
   }
@@ -6608,7 +6446,6 @@ select:focus,
   .karaoke-corner-actions {
     flex-wrap: wrap;
   }
-
   .karaoke-mixer-dock,
   .karaoke-corner-actions {
     justify-self: stretch;
@@ -6616,7 +6453,6 @@ select:focus,
   .karaoke-transport-buttons {
     justify-self: center;
   }
-
   .karaoke-stage {
     --karaoke-roll-height: 5.9rem;
   }
@@ -6796,16 +6632,12 @@ select:focus,
 .karaoke-lyrics {
   position: absolute;
   z-index: 8;
-
   transform: translateX(50%);
   text-align: center;
   pointer-events: none;
   text-wrap: balance;
-
   inset: clamp(10rem, 24dvh, 13rem) 50% auto auto;
-
   filter: none;
-
   inline-size: min(76rem, 90vw);
   padding: clamp(0.72rem, 1.4vh, 1.05rem) clamp(1rem, 2.2vw, 2.3rem);
   inset-block-start: clamp(12.5rem, 24vh, 16rem);
@@ -6813,7 +6645,6 @@ select:focus,
 }
 .karaoke-performance-stage {
   position: relative;
-
   overflow: hidden;
   background: var(--color-bg-deep);
   block-size: calc(100dvh - var(--titlebar-height));
@@ -6826,16 +6657,11 @@ select:focus,
   overflow: hidden;
   position: absolute;
   z-index: 5;
-
   isolation: isolate;
-
   border: var(--hairline) solid
     color-mix(in srgb, var(--color-primary) 48%, var(--color-border));
-
   border-radius: clamp(0.9rem, 1.35vw, 1.25rem);
-
   inset: clamp(0.45rem, 0.8vh, 0.7rem) clamp(0.55rem, 1.25vw, 1.15rem) auto;
-
   border-color: color-mix(
     in srgb,
     var(--color-primary) 62%,
@@ -6847,10 +6673,10 @@ select:focus,
     color-mix(in srgb, var(--color-bg-deep) 34%, transparent)
   );
   box-shadow:
-    0 0.55rem 1.45rem color-mix(in srgb, var(--color-black) 16%, transparent),
+    0 0.55rem 1.45rem color-mix(in srgb, var(--color-bg-deep) 16%, transparent),
     0 0 0.75rem color-mix(in srgb, var(--color-primary) 9%, transparent),
     inset 0 var(--hairline)
-      color-mix(in srgb, var(--color-white) 8%, transparent);
+      color-mix(in srgb, var(--color-highlight) 8%, transparent);
   backdrop-filter: blur(0.32rem) saturate(122%);
   block-size: clamp(9.5rem, 18vh, 12.5rem);
 }
@@ -6860,12 +6686,12 @@ select:focus,
 [data-theme="light"] .karaoke-console-center {
   background: linear-gradient(
     145deg,
-    color-mix(in srgb, var(--color-white) 72%, transparent),
+    color-mix(in srgb, var(--color-highlight) 72%, transparent),
     color-mix(in srgb, var(--color-highlight) 62%, transparent)
   );
   box-shadow:
     inset 0 var(--hairline)
-      color-mix(in srgb, var(--color-white) 88%, transparent),
+      color-mix(in srgb, var(--color-highlight) 88%, transparent),
     0 0.7rem 1.8rem
       color-mix(in srgb, var(--color-primary-strong) 12%, transparent);
 }
@@ -6881,7 +6707,6 @@ select:focus,
 .karaoke-quick-mixer--vertical {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-
   gap: 0.35rem;
   block-size: 100%;
 }
@@ -6925,7 +6750,7 @@ select:focus,
     color-mix(in srgb, var(--color-highlight) 18%, transparent);
   background: radial-gradient(
     circle at 35% 25%,
-    color-mix(in srgb, var(--color-white) 16%, transparent),
+    color-mix(in srgb, var(--color-highlight) 16%, transparent),
     transparent 30%
   );
 }
@@ -7008,7 +6833,6 @@ select:focus,
     color-mix(in srgb, var(--color-primary) 50%, var(--color-border));
   border-radius: 0.75rem;
   color: var(--color-highlight);
-
   background:
     radial-gradient(
       circle at 30% 22%,
@@ -7059,8 +6883,8 @@ select:focus,
     color-mix(in srgb, var(--color-bg-deep) 82%, transparent)
   ); */
   /* box-shadow:
-    inset 0 var(--hairline) color-mix(in srgb, var(--color-white) 8%, transparent),
-    0 0.7rem 1.8rem color-mix(in srgb, var(--color-black) 20%, transparent); */
+    inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 8%, transparent),
+    0 0.7rem 1.8rem color-mix(in srgb, var(--color-bg-deep) 20%, transparent); */
   backdrop-filter: blur(0.2rem);
   /* border-color: color-mix(
     in srgb,
@@ -7099,9 +6923,7 @@ select:focus,
   display: grid;
   justify-items: center;
   align-content: end;
-
   min-inline-size: 0;
-
   border-radius: 0.65rem;
   position: relative;
   grid-template-rows: auto 1fr auto;
@@ -7130,9 +6952,7 @@ select:focus,
   background: transparent;
   border: none;
   outline: none;
-
   cursor: pointer;
-
   accent-color: var(--channel-color);
   filter: drop-shadow(
     0 0 0.48rem color-mix(in srgb, var(--channel-color) 54%, transparent)
@@ -7142,7 +6962,6 @@ select:focus,
 .karaoke-quick-mixer--vertical input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-
   background: var(--channel-color);
   box-shadow:
     0 0 0.35rem color-mix(in srgb, var(--channel-color) 80%, transparent),
@@ -7151,7 +6970,6 @@ select:focus,
 
 .karaoke-effect-dial strong {
   justify-self: end;
-
   font-size: 0.63rem;
   color: var(--dial-color);
 }
@@ -7176,7 +6994,7 @@ select:focus,
       transparent 75% 100%
     );
   box-shadow:
-    inset 0 0 0.7rem color-mix(in srgb, var(--color-black) 45%, transparent),
+    inset 0 0 0.7rem color-mix(in srgb, var(--color-bg-deep) 45%, transparent),
     0 0 0.9rem color-mix(in srgb, var(--dial-color) 30%, transparent);
 }
 .karaoke-effect-dial__knob::before {
@@ -7188,7 +7006,6 @@ select:focus,
   block-size: 0.7rem;
   border-radius: 999rem;
   background: var(--color-highlight);
-
   transform: translateX(-50%);
   box-shadow: 0 0 0.55rem var(--dial-color);
 }
@@ -7291,7 +7108,6 @@ select:focus,
   z-index: 1;
   inset: 0.54rem;
   border-radius: 50%;
-
   transform: rotate(var(--dial-angle));
   transition: transform 90ms linear;
 }
@@ -7455,7 +7271,6 @@ select:focus,
   .melody-roll {
     block-size: clamp(11.5rem, 22vh, 14rem);
   }
-
   .karaoke-stage {
     --karaoke-controls-height: 10rem;
     --karaoke-roll-height: clamp(7rem, 14dvh, 8.7rem);
@@ -7464,7 +7279,6 @@ select:focus,
   .karaoke-lyrics {
     inset-block-start: clamp(8.8rem, 21dvh, 11rem);
   }
-
   .karaoke-playback-controls {
     grid-template-columns: minmax(19rem, 1fr) auto;
   }
@@ -7473,7 +7287,6 @@ select:focus,
     justify-content: center;
     justify-self: center;
   }
-
   .karaoke-console-grid {
     grid-template-columns: 1fr 1fr;
   }
@@ -7485,14 +7298,12 @@ select:focus,
       3.8rem minmax(8rem, 12rem) auto minmax(10rem, 1fr)
       auto;
   }
-
   .karaoke-mixer-body {
     grid-template-columns: minmax(0, 1fr) 5.2rem;
   }
   .karaoke-effect-dial__control {
     inline-size: 2.65rem;
   }
-
   .karaoke-effect-presets {
     grid-template-columns: repeat(8, minmax(4rem, 1fr));
   }
@@ -7517,7 +7328,6 @@ select:focus,
   .karaoke-lyrics {
     inset-block-start: 11rem;
   }
-
   .karaoke-effect-presets {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -7552,7 +7362,6 @@ select:focus,
 /* Top toolbar owns all scene-level actions; inactive toggles deliberately dim. */
 .karaoke-tool-tabs {
   display: grid;
-
   gap: 0.38rem;
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
@@ -7570,9 +7379,7 @@ select:focus,
 
 .karaoke-tools-panel {
   display: grid;
-
   gap: 0.65rem;
-
   --panel-accent: var(--color-success);
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
