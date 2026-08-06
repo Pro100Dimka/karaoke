@@ -155,12 +155,14 @@
   border-radius: var(--radius-xl);
   background:
     linear-gradient(180deg, var(--card-panel-top), var(--card-panel-bottom)),
-    linear-gradient(135deg, var(--card-panel-accent), var(--card-panel-accent-deep));
+    linear-gradient(
+      135deg,
+      var(--card-panel-accent),
+      var(--card-panel-accent-deep)
+    );
   box-shadow:
     var(--card-panel-shadow),
     inset 0 var(--hairline) 0 rgb(255 255 255 / 6%);
-  backdrop-filter: blur(1.125rem) saturate(140%);
-  -webkit-backdrop-filter: blur(1.125rem) saturate(140%);
 }
 
 .ui-card__content {
@@ -183,7 +185,6 @@
   mix-blend-mode: screen;
 }
 
-
 .ui-card--neon:hover .ui-card__glow {
   opacity: 0.78;
   filter: blur(1.55rem);
@@ -198,19 +199,29 @@
 }
 
 @keyframes card-spin {
-  to { --card-angle: 360deg; }
+  to {
+    --card-angle: 360deg;
+  }
 }
 
 @keyframes card-spin-reverse {
-  from { --card-angle-reverse: 360deg; }
-  to { --card-angle-reverse: 0deg; }
+  from {
+    --card-angle-reverse: 360deg;
+  }
+  to {
+    --card-angle-reverse: 0deg;
+  }
 }
 
 @keyframes card-breathe {
-  0%, 100% { opacity: 0.45; }
-  50% { opacity: 0.75; }
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.75;
+  }
 }
-
 
 @media (prefers-reduced-motion: reduce) {
   .ui-card__glow,
@@ -227,7 +238,9 @@
   .ui-card__glow,
   .ui-card__glow-mid,
   .ui-card__edge,
-  .ui-card__glint { animation: none; }
+  .ui-card__glint {
+    animation: none;
+  }
 }
 
 .ui-card--neon > .ui-card__panel {
@@ -267,5 +280,7 @@
 .modal-card.ui-card--neon .ui-card__edge,
 .modal-card.ui-card--neon .ui-card__glint,
 .modal-card.ui-card--neon .ui-card__sheen {
-  transition: opacity 180ms ease, filter 180ms ease;
+  transition:
+    opacity 180ms ease,
+    filter 180ms ease;
 }
