@@ -72,10 +72,7 @@ export default function AppLayout() {
         </main>
         {!isKaraoke && <AppSettingsButton onClick={openSettings} />}
         {songSettingsId && (
-          <SongSettings
-            songId={songSettingsId}
-            onClose={closeSongSettings}
-          />
+          <SongSettings songId={songSettingsId} onClose={closeSongSettings} />
         )}
         <Modal
           isOpen={isSettingsOpen}
@@ -87,6 +84,7 @@ export default function AppLayout() {
           closeClassName="app-modal-close settings-modal-close"
           closeAriaLabel="Закрыть настройки"
           closeIconSize={20}
+          portal
         >
           <Settings />
         </Modal>

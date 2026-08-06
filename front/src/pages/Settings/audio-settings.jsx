@@ -1,59 +1,103 @@
 import { Activity, Headphones, Mic2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import Dropdown from "../../components/fields/Dropdown";
-import RangeInput from "../../components/fields/range-input";
-import Field from "../../components/fields/field";
 import Button from "../../components/fields/button";
+import Field from "../../components/fields/field";
+import RangeInput from "../../components/fields/range-input";
 import { useAppDialog } from "../../contexts/AppDialog";
 import useAsyncQueue from "../../hooks/useAsyncQueue";
 import useExclusiveAsyncAction from "../../hooks/useExclusiveAsyncAction";
 import { usePolling } from "../../hooks/usePolling";
-import { getErrorMessage } from "../../utils/errors";
 import {
   getAudioPreferences,
   saveAudioPreferences
 } from "../../utils/audio-preferences";
-import { MONITORING_MODES } from "../Karaoke/config";
+import { getErrorMessage } from "../../utils/errors";
 import { groupBrowserAudioDevices } from "../Karaoke/utils/audio-settings";
 import {
   createBrowserDeviceOptions,
   createBufferSizeOptions,
   createIndexedDeviceOptions
 } from "../Karaoke/utils/devices";
+import {
+  EMPTY_BROWSER_DEVICES,
+  LATENCY_OPTIONS,
+  MONITOR_MODE_OPTIONS
+} from "./config";
 
-const LATENCY_OPTIONS = [
-  { value: "interactive", label: "Низкая задержка" },
-  { value: "balanced", label: "Автоматический" },
-  { value: "playback", label: "Стабильное воспроизведение" }
-];
+function GroupHeader({ icon: Icon, title, text }) {
+  return (
+    <header className="audio-settings-group__header">
+      <Icon size={18} />
 
-const MONITOR_MODE_OPTIONS = MONITORING_MODES.map(({ id, title }) => ({
-  value: id,
-  label: title
-}));
+      <div>
+        <strong>{title}</strong>
+        <small>{text}</small>
+      </div>
+    </header>
+  );
+}
+
+function DropdownField({ label, hint, value, options, disabled, onChange }) {
+  return (
+    <Field label={label} hint={hint} variant="card">
+      <Dropdown
+        value={value}
+        options={options}
+        disabled={disabled}
+        onChange={onChange}
+      />
+    </Field>
+  );
+}
+
+function getSignalLevel(rmsDb) {
+  const db = Number(rmsDb);
+
+  if (!Number.isFinite(db)) return 0;
+
+  return Math.max(0, Math.min(100, ((db + 60) / 60) * 100));
+}
 
 export default function AudioSettings() {
   const { alert } = useAppDialog();
-  const { data: settings, refresh } = usePolling(api.getAudioSettings, 15000, []);
+
+  const { data: settings, refresh } = usePolling(
+    api.getAudioSettings,
+    15000,
+    []
+  );
   const { data: devices } = usePolling(api.listAudioDevices, 30000, []);
   const { data: outputs } = usePolling(api.listAudioOutputDevices, 30000, []);
   const { data: asioDrivers } = usePolling(api.listAsioDrivers, 30000, []);
   const { data: signal } = usePolling(api.getSignalQuality, 1200, []);
-  const [browserDevices, setBrowserDevices] = useState({ inputs: [], outputs: [] });
+
+  const [browserDevices, setBrowserDevices] = useState(EMPTY_BROWSER_DEVICES);
   const [preferences, setPreferences] = useState(getAudioPreferences);
+
   const { pending: saving, run: enqueueAudioUpdate } = useAsyncQueue();
   const { pending: togglingMonitoring, run: runMonitoringToggle } =
     useExclusiveAsyncAction();
 
+  const audioDriver = settings?.audio_driver ?? "auto";
+  const monitoringEnabled = Boolean(settings?.monitoring_enabled);
+  const volume = settings?.volume ?? 1;
+  const level = getSignalLevel(signal?.rms_db);
+
   useEffect(() => {
-    if (!navigator.mediaDevices?.enumerateDevices) return undefined;
+    const enumerateDevices = navigator.mediaDevices?.enumerateDevices;
+
+    if (!enumerateDevices) return undefined;
 
     let active = true;
-    navigator.mediaDevices
-      .enumerateDevices()
+
+    enumerateDevices
+      .call(navigator.mediaDevices)
       .then((entries) => {
-        if (active) setBrowserDevices(groupBrowserAudioDevices(entries));
+        if (active) {
+          setBrowserDevices(groupBrowserAudioDevices(entries));
+        }
       })
       .catch(() => {});
 
@@ -62,174 +106,215 @@ export default function AudioSettings() {
     };
   }, []);
 
-  const audioDriver = settings?.audio_driver || "auto";
-  const monitoringEnabled = Boolean(settings?.monitoring_enabled);
-  const level = useMemo(() => {
-    const db = Number(signal?.rms_db);
-    if (!Number.isFinite(db)) return 0;
-    return Math.max(0, Math.min(100, ((db + 60) / 60) * 100));
-  }, [signal?.rms_db]);
-
-  const updateBackend = (patch) =>
+  const runAudioAction = (action, errorText) =>
     enqueueAudioUpdate(async () => {
       try {
-        await api.updateAudioSettings(patch);
+        await action();
         await refresh?.();
       } catch (error) {
-        await alert(
-          `Не удалось сохранить аудионастройки: ${getErrorMessage(error)}`
-        );
+        await alert(`${errorText}: ${getErrorMessage(error)}`);
       }
     });
 
+  const updateBackend = (patch) =>
+    runAudioAction(
+      () => api.updateAudioSettings(patch),
+      "Не удалось сохранить аудионастройки"
+    );
+
   const updatePreference = (name, value) => {
-    const next = saveAudioPreferences({ [name]: value });
-    setPreferences(next);
+    setPreferences(saveAudioPreferences({ [name]: value }));
+  };
+
+  const updateNullableDevice = (name, value) => {
+    updateBackend({
+      [name]: value === "" ? null : Number(value)
+    });
   };
 
   const toggleMonitoring = () =>
     runMonitoringToggle(() =>
-      enqueueAudioUpdate(async () => {
-        try {
-          if (monitoringEnabled) await api.stopDirectMonitoring();
-          else await api.startDirectMonitoring();
-          await refresh?.();
-        } catch (error) {
-          await alert(
-            `Не удалось изменить прослушивание: ${getErrorMessage(error)}`
-          );
-        }
-      })
+      runAudioAction(
+        monitoringEnabled
+          ? api.stopDirectMonitoring
+          : api.startDirectMonitoring,
+        "Не удалось изменить прослушивание"
+      )
     );
+  const DRIVER_OPTIONS = [
+    { value: "auto", label: "Авто · Windows / PortAudio" },
+    ...(asioDrivers?.length
+      ? [{ value: "asio", label: "ASIO · минимальная задержка" }]
+      : [])
+  ];
+
+  const recordingFields = [
+    [
+      "Устройство ввода",
+      "Микрофон для записи",
+      settings?.input_device_id ?? "",
+      createIndexedDeviceOptions(devices),
+      "input_device_id",
+      "nullable-number"
+    ],
+    [
+      "Аудиодрайвер",
+      "ASIO даёт минимальную задержку",
+      audioDriver,
+      DRIVER_OPTIONS,
+      "audio_driver",
+      "string",
+      monitoringEnabled
+    ],
+    ...(audioDriver === "asio"
+      ? [
+          [
+            "ASIO-драйвер",
+            "Нативный драйвер аудиоинтерфейса",
+            settings?.asio_driver_name ?? "",
+            (asioDrivers ?? []).map(({ name }) => ({
+              value: name,
+              label: name
+            })),
+            "asio_driver_name",
+            "string",
+            monitoringEnabled
+          ]
+        ]
+      : []),
+    [
+      "Буфер аудио",
+      "Меньше буфер — ниже задержка",
+      settings?.buffer_size ?? 64,
+      createBufferSizeOptions(),
+      "buffer_size",
+      "number",
+      monitoringEnabled
+    ]
+  ];
+
+  const updateRecordingField = (name, type, value) => {
+    const parsers = {
+      string: (nextValue) => nextValue,
+      number: Number,
+      "nullable-number": (nextValue) =>
+        nextValue === "" ? null : Number(nextValue)
+    };
+
+    updateBackend({
+      [name]: parsers[type](value)
+    });
+  };
+
+  const monitoringFields = [
+    [
+      "Выход прямого мониторинга",
+      "Выход того же аудиоинтерфейса",
+      settings?.output_device_id ?? "",
+      createIndexedDeviceOptions(outputs, "Системное устройство"),
+      "backendDevice",
+      "output_device_id"
+    ],
+    [
+      "Вход для прослушивания",
+      null,
+      preferences.monitorInputDeviceId,
+      createBrowserDeviceOptions(browserDevices.inputs, "Микрофон"),
+      "preference",
+      "monitorInputDeviceId"
+    ],
+    [
+      "Выход для прослушивания",
+      null,
+      preferences.monitorOutputDeviceId,
+      createBrowserDeviceOptions(browserDevices.outputs, "Аудиоустройство"),
+      "preference",
+      "monitorOutputDeviceId"
+    ],
+    [
+      "Режим задержки",
+      null,
+      preferences.monitorLatencyHint,
+      LATENCY_OPTIONS,
+      "preference",
+      "monitorLatencyHint"
+    ],
+    [
+      "Режим прослушивания",
+      null,
+      preferences.monitorMode,
+      MONITOR_MODE_OPTIONS,
+      "preference",
+      "monitorMode"
+    ]
+  ];
+
+  const handleMonitoringChange = (type, name, value) => {
+    if (type === "backendDevice") {
+      updateNullableDevice(name, value);
+      return;
+    }
+
+    updatePreference(name, value);
+  };
 
   return (
     <div className="audio-settings-grid">
       <section className="audio-settings-group u-stack-4">
-        <header className="audio-settings-group__header">
-          <Mic2 size={18} />
-          <div>
-            <strong>Запись и драйвер</strong>
-            <small>Основное устройство и режим работы аудиосистемы</small>
-          </div>
-        </header>
-
+        <GroupHeader
+          icon={Mic2}
+          title="Запись и драйвер"
+          text="Основное устройство и режим работы аудиосистемы"
+        />
         <div className="settings-field-grid">
-          <Field label="Устройство ввода" hint="Микрофон для записи" variant="card">
-            <Dropdown
-              value={settings?.input_device_id ?? ""}
-              options={createIndexedDeviceOptions(devices)}
-              onChange={(value) =>
-                updateBackend({ input_device_id: value === "" ? null : Number(value) })
-              }
-            />
-          </Field>
-
-          <Field label="Аудиодрайвер" hint="ASIO даёт минимальную задержку" variant="card">
-            <Dropdown
-              value={audioDriver}
-              disabled={monitoringEnabled}
-              options={[
-                { value: "auto", label: "Авто · Windows / PortAudio" },
-                ...((asioDrivers || []).length
-                  ? [{ value: "asio", label: "ASIO · минимальная задержка" }]
-                  : [])
-              ]}
-              onChange={(value) => updateBackend({ audio_driver: value })}
-            />
-          </Field>
-
-          {audioDriver === "asio" && (
-            <Field label="ASIO-драйвер" hint="Нативный драйвер аудиоинтерфейса" variant="card">
-              <Dropdown
-                value={settings?.asio_driver_name ?? ""}
-                disabled={monitoringEnabled}
-                options={(asioDrivers || []).map((driver) => ({
-                  value: driver.name,
-                  label: driver.name
-                }))}
-                onChange={(value) => updateBackend({ asio_driver_name: value })}
+          {recordingFields.map(
+            ([label, hint, value, options, name, type, disabled = false]) => (
+              <DropdownField
+                key={name}
+                label={label}
+                hint={hint}
+                value={value}
+                options={options}
+                disabled={disabled}
+                onChange={(value) => updateRecordingField(name, type, value)}
               />
-            </Field>
+            )
           )}
-
-          <Field label="Буфер аудио" hint="Меньше буфер — ниже задержка" variant="card">
-            <Dropdown
-              value={settings?.buffer_size ?? 64}
-              disabled={monitoringEnabled}
-              options={createBufferSizeOptions()}
-              onChange={(value) => updateBackend({ buffer_size: Number(value) })}
-            />
-          </Field>
         </div>
       </section>
-
       <section className="audio-settings-group u-stack-4">
-        <header className="audio-settings-group__header">
-          <Headphones size={18} />
-          <div>
-            <strong>Прослушивание</strong>
-            <small>Маршрутизация микрофона и задержка мониторинга</small>
-          </div>
-        </header>
-
+        <GroupHeader
+          icon={Headphones}
+          title="Прослушивание"
+          text="Маршрутизация микрофона и задержка мониторинга"
+        />
         <div className="settings-field-grid">
-          <Field label="Выход прямого мониторинга" hint="Выход того же аудиоинтерфейса" variant="card">
-            <Dropdown
-              value={settings?.output_device_id ?? ""}
+          {monitoringFields.map(([label, hint, value, options, type, name]) => (
+            <DropdownField
+              key={name}
+              label={label}
+              hint={hint}
+              value={value}
+              options={options}
               disabled={monitoringEnabled}
-              options={createIndexedDeviceOptions(outputs, "Системное устройство")}
-              onChange={(value) =>
-                updateBackend({ output_device_id: value === "" ? null : Number(value) })
-              }
+              onChange={(value) => handleMonitoringChange(type, name, value)}
             />
-          </Field>
-
-          <Field label="Вход для прослушивания" variant="card">
-            <Dropdown
-              value={preferences.monitorInputDeviceId}
-              disabled={monitoringEnabled}
-              options={createBrowserDeviceOptions(browserDevices.inputs, "Микрофон")}
-              onChange={(value) => updatePreference("monitorInputDeviceId", value)}
-            />
-          </Field>
-
-          <Field label="Выход для прослушивания" variant="card">
-            <Dropdown
-              value={preferences.monitorOutputDeviceId}
-              disabled={monitoringEnabled}
-              options={createBrowserDeviceOptions(browserDevices.outputs, "Аудиоустройство")}
-              onChange={(value) => updatePreference("monitorOutputDeviceId", value)}
-            />
-          </Field>
-
-          <Field label="Режим задержки" variant="card">
-            <Dropdown
-              value={preferences.monitorLatencyHint}
-              disabled={monitoringEnabled}
-              options={LATENCY_OPTIONS}
-              onChange={(value) => updatePreference("monitorLatencyHint", value)}
-            />
-          </Field>
-
-          <Field label="Режим прослушивания" variant="card">
-            <Dropdown
-              value={preferences.monitorMode}
-              disabled={monitoringEnabled}
-              options={MONITOR_MODE_OPTIONS}
-              onChange={(value) => updatePreference("monitorMode", value)}
-            />
-          </Field>
-
-          <Field label="Уровень микрофона" hint="Громкость записи и мониторинга" variant="card">
+          ))}
+          <Field
+            label="Уровень микрофона"
+            hint="Громкость записи и мониторинга"
+            variant="card"
+          >
             <div className="audio-level-control">
               <RangeInput
                 min="0"
                 max="4"
                 step="0.05"
-                value={settings?.volume ?? 1}
-                onChange={(volume) => updateBackend({ volume })}
+                value={volume}
+                onChange={(value) => updateBackend({ volume: value })}
               />
-              <strong>{Math.round(((settings?.volume ?? 1) / 4) * 100)}%</strong>
+
+              <strong>{Math.round((volume / 4) * 100)}%</strong>
             </div>
           </Field>
         </div>
@@ -237,14 +322,21 @@ export default function AudioSettings() {
         <div className="audio-monitor-card">
           <div className="audio-monitor-card__copy">
             <Activity size={18} />
+
             <div>
               <strong>Прослушивать с этого устройства</strong>
-              <small>{monitoringEnabled ? "Прослушивание включено" : "Прослушивание выключено"}</small>
+              <small>
+                Прослушивание {monitoringEnabled ? "включено" : "выключено"}
+              </small>
             </div>
           </div>
-          <div className="audio-monitor-meter" aria-label={`Уровень ${Math.round(level)}%`}>
+          <div
+            className="audio-monitor-meter"
+            aria-label={`Уровень ${Math.round(level)}%`}
+          >
             <span style={{ inlineSize: `${level}%` }} />
           </div>
+
           <Button
             variant={monitoringEnabled ? "danger" : "primary"}
             disabled={saving || togglingMonitoring}

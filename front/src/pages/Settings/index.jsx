@@ -2,7 +2,6 @@ import { Panel } from "../../components/ui";
 import { useAppDialog } from "../../contexts/AppDialog";
 import useSettingsForm from "../../hooks/useSettingsForm";
 import useSettingsNavigation from "../../hooks/useSettingsNavigation";
-import { SETTINGS } from "./config";
 import SettingsHeader from "./header";
 import SettingsContent from "./settings-content";
 import SettingsTabs from "./settings-tabs";
@@ -16,10 +15,7 @@ export default function Settings({ initialTab = "audio" }) {
       <SettingsHeader status={settings.saveStatus} onSave={settings.save} />
       <div className="settings-layout">
         <SettingsTabs value={navigation.tab} onChange={navigation.selectTab} />
-        <Panel
-          className="settings-content-panel"
-          title={SETTINGS[navigation.tab]?.label}
-        >
+        <Panel className="settings-content-panel">
           {settings.form ? (
             <SettingsContent
               tab={navigation.tab}

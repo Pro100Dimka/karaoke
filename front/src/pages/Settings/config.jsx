@@ -1,4 +1,13 @@
-import { Check, Cpu, FolderCog, Palette, Save, SlidersHorizontal, Wrench } from "lucide-react";
+import {
+  Check,
+  Cpu,
+  FolderCog,
+  Palette,
+  Save,
+  SlidersHorizontal,
+  Wrench
+} from "lucide-react";
+import { MONITORING_MODES } from "../Karaoke/config";
 import AudioSettings from "./audio-settings";
 import screens from "./screens";
 
@@ -40,21 +49,22 @@ export const SETTINGS = {
         placeholder: "Например, Дима",
         maxLength: 40,
         saveOnBlur: true
-      },
-      {
-        type: "toggle",
-        variant: "switch-card",
-        name: "autosave",
-        label: "Автосохранение",
-        hint: "Сохранять изменения автоматически"
-      },
-      {
-        type: "toggle",
-        variant: "switch-card",
-        name: "autoupdate",
-        label: "Автообновление",
-        hint: "Проверять новые версии приложения"
       }
+      // НЕ УДАЛЯТЬ
+      // {
+      //   type: "toggle",
+      //   variant: "switch-card",
+      //   name: "autosave",
+      //   label: "Автосохранение",
+      //   hint: "Сохранять изменения автоматически"
+      // },
+      // {
+      //   type: "toggle",
+      //   variant: "switch-card",
+      //   name: "autoupdate",
+      //   label: "Автообновление",
+      //   hint: "Проверять новые версии приложения"
+      // }
     ]
   },
 
@@ -103,10 +113,30 @@ export const SETTINGS = {
     icon: FolderCog,
     className: "settings-field-grid settings-path-grid",
     fields: [
-      { type: "readonly", variant: "card", name: "songs_folder", label: "Папка с песнями" },
-      { type: "readonly", variant: "card", name: "ai_folder", label: "Папка AI" },
-      { type: "readonly", variant: "card", name: "recordings_folder", label: "Папка записей" },
-      { type: "readonly", variant: "card", name: "cache_folder", label: "Папка кэша" }
+      {
+        type: "readonly",
+        variant: "card",
+        name: "songs_folder",
+        label: "Папка с песнями"
+      },
+      {
+        type: "readonly",
+        variant: "card",
+        name: "ai_folder",
+        label: "Папка AI"
+      },
+      {
+        type: "readonly",
+        variant: "card",
+        name: "recordings_folder",
+        label: "Папка записей"
+      },
+      {
+        type: "readonly",
+        variant: "card",
+        name: "cache_folder",
+        label: "Папка кэша"
+      }
     ]
   },
   service: {
@@ -130,4 +160,19 @@ export const SAVE_BUTTONS = {
   idle: { text: "Сохранить изменения", Icon: Save },
   saving: { text: "Сохраняем…", Icon: Save },
   saved: { text: "Сохранено", Icon: Check }
+};
+export const LATENCY_OPTIONS = [
+  ["interactive", "Низкая задержка"],
+  ["balanced", "Автоматический"],
+  ["playback", "Стабильное воспроизведение"]
+].map(([value, label]) => ({ value, label }));
+
+export const MONITOR_MODE_OPTIONS = MONITORING_MODES.map(({ id, title }) => ({
+  value: id,
+  label: title
+}));
+
+export const EMPTY_BROWSER_DEVICES = {
+  inputs: [],
+  outputs: []
 };
