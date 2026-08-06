@@ -136,108 +136,6 @@ svg {
   inherits: false;
 }
 
-:root[data-theme="light"] {
-  color-scheme: light;
-  --color-bg: #fffaf7;
-  --color-bg-deep: #f8eee9;
-  --color-bg-elevated: #fffdfb;
-  --color-surface: rgba(255, 252, 250, 0.72);
-  --color-surface-strong: rgba(255, 253, 251, 0.94);
-  --color-surface-soft: rgba(255, 235, 229, 0.7);
-  --color-surface-hover: rgba(255, 216, 215, 0.82);
-  --color-surface-glass: rgba(255, 248, 244, 0.7);
-  --color-text: #482f35;
-  --color-text-soft: #75565e;
-  --color-text-muted: #9b7d83;
-  --color-text-inverse: #fffaf8;
-  --color-primary: #ef3f65;
-  --color-primary-hover: #ff5878;
-  --color-primary-strong: #c7274d;
-  --color-secondary: #f28b73;
-  --color-accent: #d62f62;
-  --color-accent-strong: #b51e4b;
-  --color-highlight: #fff7f2;
-  --color-success: #27996c;
-  --color-warning: #c4772d;
-  --color-danger: #d73548;
-  --color-rose: #ef7f9c;
-  --color-raspberry: #d62f62;
-  --color-peach: #f6a080;
-  --color-coral: #ee6e67;
-  --color-nude: #e8c9bd;
-  --color-champagne: #f3d6bd;
-  --color-border: rgba(174, 75, 94, 0.2);
-  --color-border-strong: rgba(215, 64, 94, 0.42);
-  --color-border-accent: rgba(235, 61, 98, 0.72);
-  --color-focus: #d92f5a;
-  --gradient-primary: linear-gradient(
-    135deg,
-    #ff9bac 0%,
-    #ef4768 48%,
-    #c92950 100%
-  );
-  --gradient-primary-hover: linear-gradient(
-    135deg,
-    #ffb3bf 0%,
-    #fa5d78 48%,
-    #db3459 100%
-  );
-  --gradient-panel: linear-gradient(
-    145deg,
-    rgba(255, 253, 251, 0.9),
-    rgba(255, 235, 228, 0.84)
-  );
-  --gradient-glass: linear-gradient(
-    145deg,
-    rgba(255, 255, 255, 0.74),
-    rgba(255, 239, 233, 0.7)
-  );
-  --gradient-border: linear-gradient(
-    110deg,
-    #ffffff,
-    #f8b2be 28%,
-    #ef6d7e 58%,
-    #f4a27f 82%,
-    #fff7f2
-  );
-  --gradient-text: linear-gradient(
-    90deg,
-    #4b3036 0%,
-    #96394f 48%,
-    #db4b69 100%
-  );
-  --shadow-sm: 0 0.5rem 1.5rem var(--theme-color-63057c91);
-  --shadow-md: 0 1.15rem 3rem var(--theme-color-f633714d);
-  --shadow-lg: 0 1.8rem 5rem var(--theme-color-ad5a0940);
-  --shadow-glass:
-    inset 0 0.0625rem 0 var(--theme-color-cc53ce15),
-    0 1.15rem 3rem var(--theme-color-ebcea82f);
-  --shadow-neon-soft:
-    0 0 0.8rem var(--theme-color-2b7b5f0f),
-    0 0 2.1rem var(--theme-color-284ce349);
-  --shadow-neon-primary:
-    0 0 0.7rem var(--theme-color-e499e632), 0 0 2rem var(--theme-color-54c941d7);
-  --shadow-neon-mixed:
-    0 0 0.75rem var(--theme-color-8fafb20d),
-    0 0 2rem var(--theme-color-a7fed561), 0 0 3.5rem var(--theme-color-8b6d75c5);
-  --card-fx-1: var(--color-white);
-  --card-fx-2: var(--color-primary);
-  --card-fx-3: var(--color-peach);
-  --card-fx-4: var(--color-raspberry);
-  --card-edge-1: var(--color-white);
-  --card-edge-2: var(--color-primary-hover);
-  --card-edge-3: var(--color-coral);
-  --card-edge-4: var(--color-accent);
-  --card-glint: var(--theme-color-56fbf368);
-  --card-panel-top: var(--theme-color-a9414880);
-  --card-panel-bottom: var(--theme-color-abf1a865);
-  --card-panel-accent: var(--theme-color-d0cc8651);
-  --card-panel-accent-deep: var(--theme-color-ca50af8c);
-  --card-sheen: var(--theme-color-3fa6fc78);
-  --card-sheen-soft: var(--theme-color-4a41b00a);
-  --card-panel-shadow: 0 1.875rem 5rem var(--theme-color-1de7d4a2);
-}
-
 .fx-neon-frame,
 .ui-card--neon {
   --card-mx: 50%;
@@ -352,7 +250,8 @@ svg {
     );
   box-shadow:
     var(--card-panel-shadow),
-    inset 0 var(--hairline) 0 var(--theme-color-69b04917);
+    inset 0 var(--hairline) 0
+      color-mix(in srgb, var(--color-white) 6%, transparent);
 }
 
 .ui-card__content {
@@ -543,7 +442,8 @@ svg {
   border-radius: var(--radius-md);
   color: var(--color-text-soft);
   background: color-mix(in srgb, var(--color-surface-strong) 74%, transparent);
-  box-shadow: inset 0 var(--hairline) var(--theme-color-7f46531f);
+  box-shadow: inset 0 var(--hairline)
+    color-mix(in srgb, var(--color-white) 8%, transparent);
   transition:
     color var(--duration-fast) var(--ease-standard),
     border-color var(--duration-fast) var(--ease-standard),
@@ -595,13 +495,14 @@ svg {
   background:
     radial-gradient(
       circle at 32% 24%,
-      var(--theme-color-69b23e0a),
+      color-mix(in srgb, var(--color-white) 16%, transparent),
       transparent 42%
     ),
     color-mix(in srgb, var(--color-primary) 14%, var(--color-surface-glass));
   box-shadow:
     var(--shadow-neon-soft),
-    inset 0 var(--hairline) var(--theme-color-a0ac8502);
+    inset 0 var(--hairline)
+      color-mix(in srgb, var(--color-white) 12%, transparent);
 }
 
 .modal-title__copy {
@@ -649,7 +550,8 @@ svg {
     color-mix(in srgb, var(--color-surface-glass) 76%, transparent),
     color-mix(in srgb, var(--color-surface-soft) 58%, transparent)
   );
-  box-shadow: inset 0 var(--hairline) var(--theme-color-3fb99aa4);
+  box-shadow: inset 0 var(--hairline)
+    color-mix(in srgb, var(--color-white) 7%, transparent);
   transition:
     border-color var(--duration-fast) var(--ease-standard),
     background var(--duration-fast) var(--ease-standard),
@@ -669,7 +571,8 @@ svg {
   );
   box-shadow:
     var(--shadow-neon-soft),
-    inset 0 var(--hairline) var(--theme-color-fa8c7339);
+    inset 0 var(--hairline)
+      color-mix(in srgb, var(--color-white) 10%, transparent);
 }
 
 .settings-toggle--switch-card {
@@ -692,7 +595,8 @@ svg {
   border: var(--hairline) solid var(--color-border-strong);
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--color-surface-strong) 76%, transparent);
-  box-shadow: inset 0 0.15rem 0.45rem var(--theme-color-4e065e18);
+  box-shadow: inset 0 0.15rem 0.45rem
+    color-mix(in srgb, var(--color-black) 16%, transparent);
   cursor: pointer;
   transition:
     border-color var(--duration-fast) var(--ease-standard),
@@ -709,7 +613,8 @@ svg {
   aspect-ratio: 1;
   border-radius: 50%;
   background: var(--color-text);
-  box-shadow: 0 0.16rem 0.5rem var(--theme-color-26abe301);
+  box-shadow: 0 0.16rem 0.5rem
+    color-mix(in srgb, var(--color-black) 28%, transparent);
   transition: transform var(--duration-fast) var(--ease-standard);
 }
 
@@ -876,7 +781,7 @@ svg {
   --color-border-strong: rgba(255, 116, 133, 0.72);
   --color-border-accent: rgba(255, 42, 77, 0.9);
   --color-focus: #ffabb6;
-  --z-titlebar: 1000;
+
   --gradient-primary: linear-gradient(
     135deg,
     #ff8998 0%,
@@ -912,459 +817,6 @@ svg {
     #ffe4e7 48%,
     #ffadba 100%
   );
-  --color-white: #fff;
-  --color-black: #000;
-  --theme-color-92bf7265: #090104;
-  --theme-color-25cfe425: #120206;
-  --theme-color-fa6ecc04: #13bfff;
-  --theme-color-c0c0f196: #160307;
-  --theme-color-45b020e7: #20dfff;
-  --theme-color-eb2714bb: #27060d;
-  --theme-color-638aaf5f: #272a32;
-  --theme-color-1b1518cc: #2a0710;
-  --theme-color-05b580d8: #34d399;
-  --theme-color-4ee97ae2: #37996b;
-  --theme-color-2b80e91a: #43232e;
-  --theme-color-beb9ff2b: #4b4f59;
-  --theme-color-f3526fe1: #4c505a;
-  --theme-color-21346fbd: #565b65;
-  --theme-color-434e8449: #56efff;
-  --theme-color-f2c8be43: #5f6570;
-  --theme-color-706b816e: #747985;
-  --theme-color-1bc64ba8: #795361;
-  --theme-color-537a03cb: #79fbff;
-  --theme-color-f8f9af4c: #826dff;
-  --theme-color-ca359a24: #966cff;
-  --theme-color-e085e202: #9a727d;
-  --theme-color-5d92f84b: #9d082d;
-  --theme-color-9cd11995: #ae7781;
-  --theme-color-001970c6: #bd315e;
-  --theme-color-ad2e69d9: #bd4e72;
-  --theme-color-87f35db3: #c8872e;
-  --theme-color-e609a32c: #d13f5d;
-  --theme-color-b430e1a7: #d5ffff;
-  --theme-color-e799d8e7: #d92f67;
-  --theme-color-b3a707de: #dffcff;
-  --theme-color-fd3af616: #e8e6ff;
-  --theme-color-b097242f: #edc6cc;
-  --theme-color-e3f30ded: #eff0f4;
-  --theme-color-74bb81e5: #f02d50;
-  --theme-color-4c952f13: #f18068;
-  --theme-color-40eea782: #f21d42;
-  --theme-color-000d003e: #f3f4f6;
-  --theme-color-0bcbd222: #f5d8dd;
-  --theme-color-ffcc03d3: #f6f7f9;
-  --theme-color-2464b21c: #f8eee9;
-  --theme-color-cc3228da: #fb4e69;
-  --theme-color-6bc1d563: #fbbf24;
-  --theme-color-3df89977: #fce9e5;
-  --theme-color-d90e9506: #ff52d7;
-  --theme-color-a1f28bc6: #ff7185;
-  --theme-color-5f542475: #ff7785;
-  --theme-color-94b14456: #ff83ba;
-  --theme-color-687a4064: #ff91c2;
-  --theme-color-71834676: #ff9ca8;
-  --theme-color-8f52a958: #ffadb7;
-  --theme-color-529752fd: #ffe9df;
-  --theme-color-c01a5920: #fff5f7;
-  --theme-color-c92fe897: #fff7f3;
-  --theme-color-c94eb89b: #fff7f8;
-  --theme-color-07ccebd8: #fffaf7;
-  --theme-color-0eebab72: rgb(0 0 0 / 12%);
-  --theme-color-71747aaa: rgb(0 0 0 / 14%);
-  --theme-color-b615c10e: rgb(0 0 0 / 15%);
-  --theme-color-4e065e18: rgb(0 0 0 / 16%);
-  --theme-color-f7c590f0: rgb(0 0 0 / 17%);
-  --theme-color-5933b75c: rgb(0 0 0 / 18%);
-  --theme-color-66de1059: rgb(0 0 0 / 20%);
-  --theme-color-0b194ce1: rgb(0 0 0 / 22%);
-  --theme-color-0583ea68: rgb(0 0 0 / 23%);
-  --theme-color-dbf68963: rgb(0 0 0 / 24%);
-  --theme-color-23f32cc1: rgb(0 0 0 / 26%);
-  --theme-color-26abe301: rgb(0 0 0 / 28%);
-  --theme-color-6e88e0c5: rgb(0 0 0 / 32%);
-  --theme-color-c58ed263: rgb(0 0 0 / 34%);
-  --theme-color-29dc93ff: rgb(0 0 0 / 38%);
-  --theme-color-23fdf118: rgb(0 0 0 / 42%);
-  --theme-color-44b8e432: rgb(0 0 0 / 45%);
-  --theme-color-d5e99793: rgb(0 0 0 / 50%);
-  --theme-color-bcf9ee64: rgb(0 0 0 / 56%);
-  --theme-color-27dec73b: rgb(0 0 0 / 58%);
-  --theme-color-aaa8664f: rgb(0 0 0 / 62%);
-  --theme-color-0b3c575c: rgb(0 0 0 / 65%);
-  --theme-color-30f9dfac: rgb(0 0 0 / 66%);
-  --theme-color-9e5de86d: rgb(0 0 0 / 68%);
-  --theme-color-17e64dbe: rgb(0 0 0 / 72%);
-  --theme-color-c72afc40: rgb(0 0 0 / 74%);
-  --theme-color-3b3916bd: rgb(0 0 0 / 76%);
-  --theme-color-a0a759ce: rgb(0 0 0 / 78%);
-  --theme-color-3ad7b442: rgb(0 0 0 / 80%);
-  --theme-color-fc94185b: rgb(0 0 0 / 86%);
-  --theme-color-78216e08: rgb(0 0 0 / 88%);
-  --theme-color-f2d3816a: rgb(0 0 0 / 90%);
-  --theme-color-8d470513: rgb(0 0 0 / 92%);
-  --theme-color-866f5d81: rgb(0 0 0 / 96%);
-  --theme-color-eba9a6ec: rgb(104 43 57 / 14%);
-  --theme-color-dba380e9: rgb(104 43 57 / 18%);
-  --theme-color-85d08ccc: rgb(106 83 255 / 7%);
-  --theme-color-3cc10139: rgb(110 7 31 / 45%);
-  --theme-color-5e3adbde: rgb(114 4 31 / 20%);
-  --theme-color-1de7d4a2: rgb(118 68 78 / 18%);
-  --theme-color-1238d10d: rgb(120 30 10 / 35%);
-  --theme-color-d6296381: rgb(122 52 65 / 12%);
-  --theme-color-71409027: rgb(122 52 65 / 15%);
-  --theme-color-83507fe2: rgb(122 52 65 / 18%);
-  --theme-color-88037ec4: rgb(18 0 9 / 91%);
-  --theme-color-cddb4d98: rgb(2 0 2 / 16%);
-  --theme-color-391ff2aa: rgb(2 0 2 / 42%);
-  --theme-color-8791cf05: rgb(2 0 6 / 12%);
-  --theme-color-1ee6f6f3: rgb(2 0 6 / 46%);
-  --theme-color-681cfa7f: rgb(210 12 53 / 28%);
-  --theme-color-e6c6eb1e: rgb(238 32 74 / 55%);
-  --theme-color-d0cc8651: rgb(239 63 101 / 12%);
-  --theme-color-4a41b00a: rgb(239 98 133 / 10%);
-  --theme-color-0242c150: rgb(246 160 128 / 12%);
-  --theme-color-ca50af8c: rgb(246 160 128 / 16%);
-  --theme-color-3afb0184: rgb(255 120 137 / 16%);
-  --theme-color-b21112ed: rgb(255 122 139 / 9%);
-  --theme-color-e18b3c5f: rgb(255 174 197 / 56%);
-  --theme-color-04cfd001: rgb(255 180 120 / 4%);
-  --theme-color-5bdb45e8: rgb(255 220 180 / 16%);
-  --theme-color-abf1a865: rgb(255 235 228 / 88%);
-  --theme-color-907845a1: rgb(255 235 230 / 58%);
-  --theme-color-88455d14: rgb(255 236 231 / 58%);
-  --theme-color-7545761c: rgb(255 237 232 / 62%);
-  --theme-color-a8f161d6: rgb(255 238 232 / 86%);
-  --theme-color-934321d9: rgb(255 239 234 / 52%);
-  --theme-color-5f72d5c4: rgb(255 244 247 / 68%);
-  --theme-color-4a70a5f9: rgb(255 247 244 / 62%);
-  --theme-color-648f86d4: rgb(255 248 249 / 98%);
-  --theme-color-118cafdf: rgb(255 248 250 / 68%);
-  --theme-color-f252ac56: rgb(255 250 248 / 70%);
-  --theme-color-8e1640ee: rgb(255 250 248 / 78%);
-  --theme-color-f62915d1: rgb(255 250 252 / 100%);
-  --theme-color-6e391816: rgb(255 252 250 / 66%);
-  --theme-color-d790b253: rgb(255 252 250 / 68%);
-  --theme-color-a7ad2465: rgb(255 252 250 / 72%);
-  --theme-color-de081f8d: rgb(255 252 253 / 100%);
-  --theme-color-a9414880: rgb(255 253 251 / 82%);
-  --theme-color-fa8c7339: rgb(255 255 255 / 10%);
-  --theme-color-c2789cfe: rgb(255 255 255 / 100%);
-  --theme-color-a0ac8502: rgb(255 255 255 / 12%);
-  --theme-color-11db84d3: rgb(255 255 255 / 13%);
-  --theme-color-69b23e0a: rgb(255 255 255 / 16%);
-  --theme-color-15d6a68c: rgb(255 255 255 / 18%);
-  --theme-color-fda3cb23: rgb(255 255 255 / 20%);
-  --theme-color-602ae8cd: rgb(255 255 255 / 22%);
-  --theme-color-fdfe51a7: rgb(255 255 255 / 25%);
-  --theme-color-65c065f9: rgb(255 255 255 / 28%);
-  --theme-color-42b54995: rgb(255 255 255 / 3%);
-  --theme-color-58879084: rgb(255 255 255 / 4%);
-  --theme-color-6bb8a08c: rgb(255 255 255 / 42%);
-  --theme-color-f5f651e0: rgb(255 255 255 / 48%);
-  --theme-color-90fd4ff1: rgb(255 255 255 / 5%);
-  --theme-color-9c92b49c: rgb(255 255 255 / 58%);
-  --theme-color-69b04917: rgb(255 255 255 / 6%);
-  --theme-color-cecd7d17: rgb(255 255 255 / 62%);
-  --theme-color-3fa6fc78: rgb(255 255 255 / 64%);
-  --theme-color-3fb99aa4: rgb(255 255 255 / 7%);
-  --theme-color-452fe259: rgb(255 255 255 / 70%);
-  --theme-color-20c210c8: rgb(255 255 255 / 72%);
-  --theme-color-a83a6ec1: rgb(255 255 255 / 78%);
-  --theme-color-7f46531f: rgb(255 255 255 / 8%);
-  --theme-color-76180e86: rgb(255 255 255 / 82%);
-  --theme-color-413f7f50: rgb(255 255 255 / 84%);
-  --theme-color-60dccc44: rgb(255 255 255 / 85%);
-  --theme-color-ee843374: rgb(255 255 255 / 86%);
-  --theme-color-0cb2eedf: rgb(255 255 255 / 88%);
-  --theme-color-45414b18: rgb(255 255 255 / 9%);
-  --theme-color-08d5b1db: rgb(255 255 255 / 90%);
-  --theme-color-f3a489de: rgb(255 255 255 / 96%);
-  --theme-color-56fbf368: rgb(255 255 255 / 98%);
-  --theme-color-a7c694d8: rgb(255 40 102 / 23%);
-  --theme-color-57a803af: rgb(255 47 82 / 24%);
-  --theme-color-1247ae6c: rgb(255 52 86 / 55%);
-  --theme-color-b72a7db7: rgb(255 58 91 / 10%);
-  --theme-color-9f9f1cf4: rgb(255 62 94 / 18%);
-  --theme-color-65069b66: rgb(255 64 93 / 10%);
-  --theme-color-ec866f0c: rgb(255 64 93 / 45%);
-  --theme-color-065f1a97: rgb(255 64 94 / 4%);
-  --theme-color-a3b0a116: rgb(255 68 126 / 15%);
-  --theme-color-f787723a: rgb(255 72 96 / 45%);
-  --theme-color-3e9fff64: rgb(255 83 108 / 72%);
-  --theme-color-40dc1d88: rgb(255 86 111 / 22%);
-  --theme-color-840c696c: rgb(255 92 114 / 22%);
-  --theme-color-59405b65: rgb(28 8 8 / 85%);
-  --theme-color-26352c2f: rgb(3 0 1 / 18%);
-  --theme-color-b12efc34: rgb(3 0 1 / 6%);
-  --theme-color-56c2d4cf: rgb(3 0 1 / 66%);
-  --theme-color-2b61a118: rgb(3 0 1 / 72%);
-  --theme-color-374d147e: rgb(34 5 13 / 82%);
-  --theme-color-f1f6074a: rgb(4 0 2 / 76%);
-  --theme-color-d0169547: rgb(4 1 3 / 20%);
-  --theme-color-dc56c918: rgb(4 1 3 / 34%);
-  --theme-color-6b8d200e: rgb(4 1 3 / 76%);
-  --theme-color-f65fd38d: rgb(40 17 24 / 65%);
-  --theme-color-8d7aa37e: rgb(40 17 24 / 85%);
-  --theme-color-9a1ff302: rgb(40 4 4 / 35%);
-  --theme-color-4f37be98: rgb(46 21 28 / 58%);
-  --theme-color-27cb34bc: rgb(46 21 28 / 78%);
-  --theme-color-3863c35b: rgb(52 24 31 / 18%);
-  --theme-color-84e2ab35: rgb(52 24 31 / 42%);
-  --theme-color-7de672b7: rgb(55 18 14 / 72%);
-  --theme-color-a6b9ce0c: rgb(58 2 20 / 88%);
-  --theme-color-bca88bca: rgb(62 25 34 / 72%);
-  --theme-color-befd97c8: rgb(62 25 34 / 88%);
-  --theme-color-74d0569d: rgb(70 40 46 / 96%);
-  --theme-color-e4745318: rgb(73 32 42 / 78%);
-  --theme-color-6e9f527a: rgb(74 43 49 / 96%);
-  --theme-color-cb8db78c: rgb(75 38 47 / 18%);
-  --theme-color-7463d56d: rgb(8 0 3 / 8%);
-  --theme-color-266a532e: rgb(80 35 45 / 28%);
-  --theme-color-a2faa951: rgb(86 40 51 / 42%);
-  --theme-color-3e92e13b: rgb(86 57 63 / 60%);
-  --theme-color-4dc76887: rgb(91 45 53 / 8%);
-  --theme-color-0ac121c3: rgb(91 61 66 / 58%);
-  --theme-color-f9d68a1d: rgb(99 59 255 / 5%);
-  --theme-color-bacd6d4d: rgba(0, 0, 0, 0.18);
-  --theme-color-eb22a8ac: rgba(0, 0, 0, 0.24);
-  --theme-color-487cf26c: rgba(0, 0, 0, 0.32);
-  --theme-color-485d29c1: rgba(0, 2, 28, 0.48);
-  --theme-color-9bf7d0fa: rgba(0, 2, 28, 0.54);
-  --theme-color-49ae0278: rgba(1, 2, 18, 0.76);
-  --theme-color-043c595d: rgba(1, 2, 18, 0.78);
-  --theme-color-03d95bd7: rgba(10, 29, 112, 0.77);
-  --theme-color-ad5a0940: rgba(105, 53, 65, 0.18);
-  --theme-color-90e0beea: rgba(110, 248, 255, 0.64);
-  --theme-color-b9fc153c: rgba(111, 3, 27, 0.34);
-  --theme-color-63057c91: rgba(114, 61, 73, 0.1);
-  --theme-color-ed0af885: rgba(116, 74, 83, 0.1);
-  --theme-color-0c591531: rgba(12, 24, 87, 0.58);
-  --theme-color-54f754b3: rgba(120, 141, 220, 0.18);
-  --theme-color-f6a78f2e: rgba(120, 174, 255, 0.17);
-  --theme-color-f633714d: rgba(120, 59, 74, 0.14);
-  --theme-color-36e4aeb4: rgba(126, 75, 255, 0.3);
-  --theme-color-1bf1f42d: rgba(129, 220, 255, 0.34);
-  --theme-color-9cbdc564: rgba(132, 4, 35, 0.18);
-  --theme-color-ebcea82f: rgba(139, 72, 85, 0.12);
-  --theme-color-f000db31: rgba(151, 74, 91, 0.26);
-  --theme-color-61b3df14: rgba(16, 38, 119, 0.38);
-  --theme-color-4ef7e4c6: rgba(167, 180, 229, 0.55);
-  --theme-color-30dd1360: rgba(174, 75, 94, 0.18);
-  --theme-color-7ce7102d: rgba(176, 84, 101, 0.1);
-  --theme-color-9bf399e1: rgba(177, 37, 193, 0.8);
-  --theme-color-657a610a: rgba(18, 46, 131, 0.72);
-  --theme-color-4979c6b8: rgba(181, 5, 42, 0.5);
-  --theme-color-6c33f5b4: rgba(191, 86, 103, 0.16);
-  --theme-color-7a2e5cc3: rgba(2, 7, 37, 0.82);
-  --theme-color-9b1174e5: rgba(20, 39, 118, 0.32);
-  --theme-color-7945c641: rgba(20, 5, 75, 0.98);
-  --theme-color-100ffac7: rgba(211, 55, 102, 0.22);
-  --theme-color-ae1950ab: rgba(211, 55, 102, 0.46);
-  --theme-color-aac630b0: rgba(214, 47, 98, 0.12);
-  --theme-color-54c941d7: rgba(214, 47, 98, 0.16);
-  --theme-color-c51423e1: rgba(214, 47, 98, 0.22);
-  --theme-color-69c801ce: rgba(214, 47, 98, 0.28);
-  --theme-color-7586f259: rgba(214, 47, 98, 0.3);
-  --theme-color-44ee193f: rgba(214, 47, 98, 0.32);
-  --theme-color-b24f3827: rgba(214, 47, 98, 0.42);
-  --theme-color-c8b15032: rgba(215, 53, 72, 0.08);
-  --theme-color-9d77b824: rgba(217, 47, 103, 0.13);
-  --theme-color-57e58778: rgba(222, 16, 55, 0.26);
-  --theme-color-540ff057: rgba(239, 127, 156, 0.06);
-  --theme-color-5477bbc8: rgba(239, 127, 156, 0.13);
-  --theme-color-a7fed561: rgba(239, 127, 156, 0.2);
-  --theme-color-a5654241: rgba(239, 63, 101, 0.1);
-  --theme-color-c4a13b3d: rgba(239, 63, 101, 0.14);
-  --theme-color-e7c1f9e7: rgba(239, 63, 101, 0.2);
-  --theme-color-e499e632: rgba(239, 63, 101, 0.3);
-  --theme-color-2b7b5f0f: rgba(239, 93, 126, 0.22);
-  --theme-color-2beed8c2: rgba(241, 128, 104, 0.16);
-  --theme-color-7c1a5149: rgba(242, 29, 66, 0.18);
-  --theme-color-51adaecf: rgba(242, 29, 66, 0.22);
-  --theme-color-f6917e68: rgba(242, 29, 66, 0.46);
-  --theme-color-a5908b15: rgba(245, 219, 211, 0.25);
-  --theme-color-c8e922ee: rgba(246, 160, 128, 0.08);
-  --theme-color-8b6d75c5: rgba(246, 160, 128, 0.12);
-  --theme-color-284ce349: rgba(246, 160, 128, 0.16);
-  --theme-color-b13b5526: rgba(246, 160, 128, 0.18);
-  --theme-color-a0010367: rgba(255, 116, 132, 0.5);
-  --theme-color-fc7ed36d: rgba(255, 143, 154, 0.82);
-  --theme-color-89fb0a73: rgba(255, 239, 233, 0.76);
-  --theme-color-9b9bb09c: rgba(255, 247, 241, 0.1);
-  --theme-color-8512e243: rgba(255, 250, 247, 0.04);
-  --theme-color-bb342b51: rgba(255, 250, 247, 0.18);
-  --theme-color-6d99215a: rgba(255, 251, 249, 0.82);
-  --theme-color-7408cbce: rgba(255, 255, 255, 0.07);
-  --theme-color-b3a3e8cf: rgba(255, 255, 255, 0.08);
-  --theme-color-08e65743: rgba(255, 255, 255, 0.09);
-  --theme-color-ff3c07e6: rgba(255, 255, 255, 0.105);
-  --theme-color-ddaf538b: rgba(255, 255, 255, 0.12);
-  --theme-color-a07f2a9c: rgba(255, 255, 255, 0.3);
-  --theme-color-57899006: rgba(255, 255, 255, 0.38);
-  --theme-color-16115198: rgba(255, 255, 255, 0.55);
-  --theme-color-bb8474cf: rgba(255, 255, 255, 0.7);
-  --theme-color-dc0ed917: rgba(255, 255, 255, 0.72);
-  --theme-color-923a33a9: rgba(255, 255, 255, 0.82);
-  --theme-color-dec94ca2: rgba(255, 255, 255, 0.86);
-  --theme-color-8fafb20d: rgba(255, 255, 255, 0.9);
-  --theme-color-cc53ce15: rgba(255, 255, 255, 0.92);
-  --theme-color-44b01fc3: rgba(255, 39, 135, 0.92);
-  --theme-color-9fcfac40: rgba(255, 45, 153, 0.24);
-  --theme-color-8e879a02: rgba(255, 47, 202, 0.14);
-  --theme-color-de476281: rgba(255, 53, 205, 0.12);
-  --theme-color-2db70653: rgba(255, 55, 205, 0.7);
-  --theme-color-aea9e571: rgba(255, 56, 199, 0.62);
-  --theme-color-89b0ac50: rgba(255, 74, 99, 0.28);
-  --theme-color-ea192811: rgba(255, 77, 101, 0.88);
-  --theme-color-a0c44b80: rgba(255, 83, 207, 0.28);
-  --theme-color-c58f2d9f: rgba(255, 84, 168, 0.55);
-  --theme-color-16029d22: rgba(255, 89, 110, 0.58);
-  --theme-color-e70b598a: rgba(255, 91, 222, 0.13);
-  --theme-color-05e9ae65: rgba(255, 91, 222, 0.2);
-  --theme-color-29264241: rgba(28, 74, 216, 0.16);
-  --theme-color-ad44e8c0: rgba(3, 10, 46, 0.72);
-  --theme-color-daf7015c: rgba(3, 7, 35, 0.5);
-  --theme-color-581f2125: rgba(3, 7, 35, 0.7);
-  --theme-color-631a68aa: rgba(3, 7, 39, 0.98);
-  --theme-color-87eab277: rgba(3, 7, 40, 0.96);
-  --theme-color-bf7fd8d8: rgba(3, 9, 48, 0.91);
-  --theme-color-c1b56ae3: rgba(34, 226, 255, 0.78);
-  --theme-color-115356ab: rgba(35, 4, 11, 0.8);
-  --theme-color-a524293a: rgba(37, 214, 255, 0.12);
-  --theme-color-8ab702c7: rgba(38, 82, 255, 0.1);
-  --theme-color-906e1993: rgba(4, 0, 1, 0.44);
-  --theme-color-d83050d5: rgba(4, 0, 1, 0.58);
-  --theme-color-9470387f: rgba(4, 10, 48, 0.3);
-  --theme-color-7c192979: rgba(4, 11, 51, 0.82);
-  --theme-color-d893d3a3: rgba(40, 73, 211, 0.08);
-  --theme-color-63a897a4: rgba(40, 73, 211, 0.1);
-  --theme-color-c84ba155: rgba(42, 108, 255, 0.4);
-  --theme-color-807ed195: rgba(45, 115, 255, 0.12);
-  --theme-color-8a93a74b: rgba(46, 232, 255, 0.08);
-  --theme-color-8893ec7d: rgba(46, 232, 255, 0.13);
-  --theme-color-cc9c6136: rgba(46, 232, 255, 0.14);
-  --theme-color-ee3ab421: rgba(48, 111, 255, 0.08);
-  --theme-color-914f45b4: rgba(5, 0, 2, 0.24);
-  --theme-color-b6b9cc23: rgba(5, 0, 2, 0.4);
-  --theme-color-3d524f1c: rgba(5, 11, 50, 0.97);
-  --theme-color-b4607112: rgba(5, 12, 53, 0.42);
-  --theme-color-79e69fbb: rgba(5, 12, 64, 0.48);
-  --theme-color-a5e1bb8e: rgba(5, 12, 64, 0.52);
-  --theme-color-2fe7fe1c: rgba(50, 224, 255, 0.16);
-  --theme-color-1a9dcca1: rgba(50, 224, 255, 0.24);
-  --theme-color-e4f9f31b: rgba(53, 229, 255, 0.64);
-  --theme-color-ad2cc28f: rgba(55, 222, 255, 0.68);
-  --theme-color-e41069de: rgba(58, 229, 255, 0.66);
-  --theme-color-70c4727e: rgba(62, 231, 255, 0.48);
-  --theme-color-3c0cfd2b: rgba(64, 211, 255, 0.66);
-  --theme-color-90d976ad: rgba(64, 85, 255, 0.21);
-  --theme-color-57da1e0b: rgba(66, 190, 255, 0.28);
-  --theme-color-2b6209cf: rgba(67, 236, 255, 0.16);
-  --theme-color-06a205a9: rgba(68, 115, 255, 0.28);
-  --theme-color-6a6ab8cf: rgba(68, 146, 255, 0.23);
-  --theme-color-8553523c: rgba(69, 205, 255, 0.55);
-  --theme-color-2a5e33a5: rgba(73, 92, 255, 0.34);
-  --theme-color-c329e81a: rgba(75, 226, 255, 0.7);
-  --theme-color-a657efa2: rgba(77, 239, 255, 0.25);
-  --theme-color-7afcadc0: rgba(78, 175, 255, 0.34);
-  --theme-color-5cf34c5c: rgba(79, 169, 255, 0.34);
-  --theme-color-8f212393: rgba(8, 18, 70, 0.68);
-  --theme-color-5802913d: rgba(8, 18, 80, 0.97);
-  --theme-color-c5d7cf15: rgba(84, 231, 255, 0.2);
-  --theme-color-01b3bdaf: rgba(84, 231, 255, 0.26);
-  --theme-color-ea4d843d: rgba(87, 54, 62, 0.28);
-  --theme-color-2086529c: rgba(9, 18, 80, 0.96);
-  --theme-color-7b870aa0: rgba(9, 35, 116, 0.92);
-  --theme-color-6ff488b4: rgba(91, 194, 255, 0.38);
-  --theme-color-66f2386b: rgba(92, 80, 255, 0.34);
-  --theme-color-42461ffd: rgba(98, 124, 255, 0.08);
-  --theme-color-6d2178f8: rgba(99, 52, 63, 0.18);
-  --font-sans:
-    "Bahnschrift", "Aptos", "Segoe UI Variable", "Segoe UI", system-ui,
-    sans-serif;
-  --font-display:
-    "Bahnschrift", "Aptos Display", "Segoe UI Variable Display", sans-serif;
-  --font-mono: Consolas, "SFMono-Regular", monospace;
-  --font-size-xs: 0.75rem;
-  --font-size-sm: 0.875rem;
-  --font-size-md: 1rem;
-  --font-size-lg: 1.125rem;
-  --font-size-xl: clamp(1.35rem, 2vw, 1.8rem);
-  --font-size-2xl: clamp(2.2rem, 5vw, 4.8rem);
-  --line-height-tight: 1.08;
-  --line-height-base: 1.5;
-  --line-height-relaxed: 1.7;
-  --letter-spacing-ui: 0.015em;
-  --letter-spacing-title: 0.035em;
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-5: 1.25rem;
-  --space-6: 1.5rem;
-  --space-8: 2rem;
-  --space-10: 2.5rem;
-  --space-12: 3rem;
-  --space-16: 4rem;
-  --radius-sm: 0.55rem;
-  --radius-md: 0.85rem;
-  --radius-lg: 1.2rem;
-  --radius-xl: 1.65rem;
-  --radius-pill: 62.4375rem;
-  --radius-round: var(--radius-pill);
-  --content-max: 90rem;
-  --titlebar-height: 2.125rem;
-  --hairline: max(0.0625rem, 0.06vw);
-  --library-gutter: clamp(1rem, 3vw, 3rem);
-  --shadow-sm: 0 8px 24px var(--theme-color-914f45b4);
-  --shadow-md: 0 18px 55px var(--theme-color-b6b9cc23);
-  --shadow-lg: 0 28px 90px var(--theme-color-d83050d5);
-  --shadow-glass:
-    inset 0 1px 0 var(--theme-color-08e65743),
-    0 18px 52px var(--theme-color-906e1993);
-  --shadow-neon-soft:
-    0 0 12px var(--theme-color-a0010367), 0 0 30px var(--theme-color-57e58778);
-  --shadow-neon-primary:
-    0 0 9px var(--theme-color-ea192811), 0 0 28px var(--theme-color-4979c6b8);
-  --shadow-neon-mixed:
-    0 0 10px var(--theme-color-fc7ed36d), 0 0 34px var(--theme-color-f6917e68),
-    0 0 58px var(--theme-color-b9fc153c);
-  --shadow-neon-cyan: var(--shadow-neon-soft);
-  --shadow-neon-pink: var(--shadow-neon-primary);
-  --duration-fast: 140ms;
-  --duration-normal: 240ms;
-  --duration-slow: 520ms;
-  --transition-fast: var(--duration-fast);
-  --transition-normal: var(--duration-normal);
-  --transition-slow: var(--duration-slow);
-  --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
-  --card-fx-1: var(--color-highlight);
-  --card-fx-2: var(--color-primary);
-  --card-fx-3: var(--color-accent);
-  --card-fx-4: var(--color-primary-strong);
-  --card-edge-1: var(--theme-color-c01a5920);
-  --card-edge-2: var(--color-primary-hover);
-  --card-edge-3: var(--color-primary);
-  --card-edge-4: var(--color-accent-strong);
-  --card-glint: var(--theme-color-648f86d4);
-  --card-panel-top: var(--theme-color-7de672b7);
-  --card-panel-bottom: var(--theme-color-59405b65);
-  --card-panel-accent: var(--theme-color-1238d10d);
-  --card-panel-accent-deep: var(--theme-color-9a1ff302);
-  --card-sheen: var(--theme-color-5bdb45e8);
-  --card-sheen-soft: var(--theme-color-04cfd001);
-  --card-panel-shadow: 0 1.875rem 5rem var(--theme-color-0b3c575c);
-  --color-background: var(--color-bg);
-  --color-primary-soft: var(--color-primary-hover);
-  --blur-md: 16px;
-  --motion-fast: var(--transition-fast);
-  --motion-normal: var(--transition-normal);
-  --motion-slow: var(--transition-slow);
-  --shadow-card: var(--shadow-md);
-  --shadow-neon: var(--shadow-neon-soft);
-  --shadow-neon-strong: var(--shadow-neon-primary);
 }
 
 /* ==================== GLOBAL FOUNDATION AND COMPONENTS ==================== */
@@ -1448,7 +900,7 @@ p {
 
 ::selection {
   color: var(--color-white);
-  background: var(--theme-color-aea9e571);
+  background: color-mix(in srgb, var(--color-accent) 62%, transparent);
 }
 
 ::-webkit-scrollbar {
@@ -1457,11 +909,11 @@ p {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--theme-color-daf7015c);
+  background: color-mix(in srgb, var(--color-black) 50%, transparent);
 }
 
 ::-webkit-scrollbar-thumb {
-  border: 2px solid var(--theme-color-581f2125);
+  border: 2px solid color-mix(in srgb, var(--color-black) 70%, transparent);
   border-radius: var(--radius-pill);
   background: linear-gradient(var(--color-secondary), var(--color-accent));
 }
@@ -1507,7 +959,8 @@ p {
   border-block-end: var(--hairline) solid var(--color-border);
   gap: var(--space-4);
   padding: var(--space-5) var(--space-6);
-  border-bottom: 1px solid var(--theme-color-f6a78f2e);
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--color-text-soft) 17%, transparent);
 }
 
 .panel-title {
@@ -1565,9 +1018,9 @@ p {
   background: var(--gradient-primary);
 
   color: var(--color-white);
-  border-color: var(--theme-color-57899006);
+  border-color: color-mix(in srgb, var(--color-white) 38%, transparent);
   box-shadow:
-    0 8px 24px var(--theme-color-66f2386b),
+    0 8px 24px color-mix(in srgb, var(--color-bg-elevated) 34%, transparent),
     var(--shadow-neon-pink);
 }
 .btn-primary:hover:not(:disabled) {
@@ -1577,25 +1030,26 @@ p {
 }
 
 .btn-ghost {
-  border-color: var(--theme-color-7afcadc0);
-  background: var(--theme-color-0c591531);
-  box-shadow: inset 0 0 20px var(--theme-color-ee3ab421);
+  border-color: color-mix(in srgb, var(--color-success) 34%, transparent);
+  background: color-mix(in srgb, var(--color-black) 58%, transparent);
+  box-shadow: inset 0 0 20px
+    color-mix(in srgb, var(--color-text) 8%, transparent);
 }
 .btn-ghost:hover:not(:disabled) {
   border-color: var(--color-border-strong);
-  background: var(--theme-color-657a610a);
+  background: color-mix(in srgb, var(--color-bg-deep) 72%, transparent);
   box-shadow: var(--shadow-neon-cyan);
 }
 
 .btn-danger {
   color: var(--color-white);
-  border-color: var(--theme-color-c58f2d9f);
+  border-color: color-mix(in srgb, var(--color-focus) 55%, transparent);
   background: linear-gradient(
     135deg,
-    var(--theme-color-44b01fc3),
-    var(--theme-color-9bf399e1)
+    color-mix(in srgb, var(--color-primary) 92%, transparent),
+    color-mix(in srgb, var(--color-raspberry) 80%, transparent)
   );
-  box-shadow: 0 0 18px var(--theme-color-9fcfac40);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--color-primary) 24%, transparent);
 }
 
 .input,
@@ -1605,11 +1059,12 @@ select {
   width: 100%;
   min-width: 0;
   min-height: 42px;
-  border: 1px solid var(--theme-color-5cf34c5c);
+  border: 1px solid color-mix(in srgb, var(--color-success) 34%, transparent);
   border-radius: var(--radius-md);
   color: var(--color-text);
-  background: var(--theme-color-ad44e8c0);
-  box-shadow: inset 0 0 22px var(--theme-color-8ab702c7);
+  background: color-mix(in srgb, var(--color-black) 72%, transparent);
+  box-shadow: inset 0 0 22px
+    color-mix(in srgb, var(--color-bg-elevated) 10%, transparent);
   transition:
     border-color var(--duration-normal),
     box-shadow var(--duration-normal),
@@ -1623,13 +1078,13 @@ select {
 }
 .input::placeholder,
 textarea::placeholder {
-  color: var(--theme-color-4ef7e4c6);
+  color: color-mix(in srgb, var(--color-nude) 55%, transparent);
 }
 .input:hover,
 textarea:hover,
 select:hover,
 .app-dropdown-trigger:hover {
-  border-color: var(--theme-color-ad2cc28f);
+  border-color: color-mix(in srgb, var(--color-success) 68%, transparent);
 }
 .input:focus,
 textarea:focus,
@@ -1637,8 +1092,8 @@ select:focus,
 .app-dropdown-trigger:focus-visible {
   border-color: var(--color-primary);
   box-shadow:
-    inset 0 0 20px var(--theme-color-8a93a74b),
-    0 0 0 3px var(--theme-color-8893ec7d),
+    inset 0 0 20px color-mix(in srgb, var(--color-success) 8%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--color-success) 13%, transparent),
     var(--shadow-neon-cyan);
 }
 
@@ -1655,7 +1110,7 @@ select:focus,
 }
 
 .field-error {
-  color: var(--theme-color-94b14456);
+  color: var(--color-rose);
   font-size: var(--font-size-sm);
 }
 
@@ -1668,7 +1123,7 @@ select:focus,
 .app-dropdown-option:hover,
 .app-dropdown-option.is-selected {
   color: var(--color-white);
-  background: var(--theme-color-2a5e33a5);
+  background: color-mix(in srgb, var(--color-bg-elevated) 34%, transparent);
 }
 
 .badge {
@@ -1683,7 +1138,7 @@ select:focus,
   font-size: var(--font-size-xs);
   padding: 0.36rem 0.65rem;
   font-weight: 800;
-  background: var(--theme-color-8f212393);
+  background: color-mix(in srgb, var(--color-black) 68%, transparent);
 }
 .badge-dot {
   inline-size: var(--space-1);
@@ -1715,7 +1170,7 @@ select:focus,
   border-radius: var(--radius-pill);
 
   height: 8px;
-  background: var(--theme-color-54f754b3);
+  background: color-mix(in srgb, var(--color-text) 18%, transparent);
 }
 .progress-fill {
   block-size: 100%;
@@ -1772,13 +1227,14 @@ select:focus,
   bottom: 1.5rem;
   width: 3.625rem;
   height: 3.625rem;
-  border: 0.0625rem solid var(--theme-color-c329e81a);
-  color: var(--theme-color-b3a707de);
+  border: 0.0625rem solid
+    color-mix(in srgb, var(--color-success) 70%, transparent);
+  color: var(--color-white);
   background: radial-gradient(
     circle at 35% 25%,
-    var(--theme-color-70c4727e),
-    var(--theme-color-7b870aa0) 55%,
-    var(--theme-color-7945c641)
+    color-mix(in srgb, var(--color-success) 48%, transparent),
+    color-mix(in srgb, var(--color-black) 92%, transparent) 55%,
+    color-mix(in srgb, var(--color-black) 98%, transparent)
   );
   box-shadow: var(--shadow-neon-cyan), var(--shadow-lg);
   cursor: pointer;
@@ -1795,7 +1251,7 @@ select:focus,
   place-items: center;
   padding: clamp(0.75rem, 3vw, 2.25rem);
   overflow: auto;
-  background: var(--theme-color-49ae0278);
+  background: color-mix(in srgb, var(--color-black) 76%, transparent);
   backdrop-filter: blur(1.125rem) saturate(130%);
 }
 
@@ -1808,12 +1264,13 @@ select:focus,
   width: min(70rem, 100%);
   max-height: calc(100vh - 3rem);
   overflow: auto;
-  border: 0.0625rem solid var(--theme-color-3c0cfd2b);
+  border: 0.0625rem solid
+    color-mix(in srgb, var(--color-success) 66%, transparent);
   border-radius: var(--radius-xl);
   background: linear-gradient(
     145deg,
-    var(--theme-color-2086529c),
-    var(--theme-color-87eab277)
+    color-mix(in srgb, var(--color-black) 96%, transparent),
+    color-mix(in srgb, var(--color-black) 96%, transparent)
   );
   box-shadow: var(--shadow-lg), var(--shadow-neon-mixed);
 }
@@ -1830,10 +1287,11 @@ select:focus,
   height: 2.375rem;
   margin: var(--space-4) var(--space-4) 0 0;
   place-items: center;
-  border: 0.0625rem solid var(--theme-color-6ff488b4);
+  border: 0.0625rem solid
+    color-mix(in srgb, var(--color-success) 38%, transparent);
   border-radius: 50%;
   color: var(--color-text-soft);
-  background: var(--theme-color-7c192979);
+  background: color-mix(in srgb, var(--color-black) 82%, transparent);
   cursor: pointer;
 }
 
@@ -1898,7 +1356,8 @@ select:focus,
   display: flex;
   align-items: stretch;
   block-size: var(--titlebar-height);
-  border-block-end: var(--hairline) solid var(--theme-color-7f46531f);
+  border-block-end: var(--hairline) solid
+    color-mix(in srgb, var(--color-white) 8%, transparent);
 
   backdrop-filter: blur(var(--space-2)) saturate(115%);
   -webkit-app-region: drag;
@@ -1907,7 +1366,8 @@ select:focus,
   color: var(--color-text-soft);
   background: transparent;
   border: 0;
-  box-shadow: inset 0 -0.0625rem var(--theme-color-3afb0184);
+  box-shadow: inset 0 -0.0625rem
+    color-mix(in srgb, var(--color-focus) 16%, transparent);
 }
 
 .title-bar__brand,
@@ -1926,7 +1386,8 @@ select:focus,
 
   flex: 1 1 auto;
   padding-inline: clamp(0.75rem, 1.4vw, 1.25rem);
-  text-shadow: 0 0 1rem var(--theme-color-f787723a);
+  text-shadow: 0 0 1rem
+    color-mix(in srgb, var(--color-primary) 45%, transparent);
 }
 
 .title-bar__indicator {
@@ -1956,9 +1417,14 @@ select:focus,
 
   position: relative;
   inline-size: clamp(2.8rem, 3.2vw, 3.35rem);
-  border-inline-start: 0.0625rem solid var(--theme-color-b21112ed);
+  border-inline-start: 0.0625rem solid
+    color-mix(in srgb, var(--color-focus) 9%, transparent);
   border-radius: 0;
-  background: linear-gradient(180deg, var(--theme-color-58879084), transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-white) 4%, transparent),
+    transparent
+  );
   transition:
     background var(--duration-fast),
     color var(--duration-fast),
@@ -1969,25 +1435,27 @@ select:focus,
   color: var(--color-white);
   background: linear-gradient(
     180deg,
-    var(--theme-color-40dc1d88),
-    var(--theme-color-5e3adbde)
+    color-mix(in srgb, var(--color-primary-hover) 22%, transparent),
+    color-mix(in srgb, var(--color-primary-strong) 20%, transparent)
   );
   box-shadow:
-    inset 0 -0.15rem var(--theme-color-3e9fff64),
-    0 0 1.2rem var(--theme-color-681cfa7f);
+    inset 0 -0.15rem
+      color-mix(in srgb, var(--color-primary-hover) 72%, transparent),
+    0 0 1.2rem color-mix(in srgb, var(--color-primary-strong) 28%, transparent);
 }
 
 .title-bar__button.is-danger {
-  color: var(--theme-color-71834676);
+  color: var(--color-rose);
 }
 .title-bar__button.is-danger:hover {
   color: var(--color-white);
   background: linear-gradient(
     180deg,
-    var(--theme-color-74bb81e5),
-    var(--theme-color-5d92f84b)
+    var(--color-border-accent),
+    var(--color-primary-strong)
   );
-  box-shadow: 0 0 1.6rem var(--theme-color-e6c6eb1e);
+  box-shadow: 0 0 1.6rem
+    color-mix(in srgb, var(--color-accent-strong) 55%, transparent);
 }
 
 /* Shared compatibility styles for screens that are not part of the library redesign yet. */
@@ -2204,7 +1672,7 @@ select:focus,
   display: grid;
   place-items: center;
   padding: var(--space-4);
-  background: var(--theme-color-043c595d);
+  background: color-mix(in srgb, var(--color-black) 78%, transparent);
   backdrop-filter: blur(16px);
 }
 .performance-analysis-modal,
@@ -2266,14 +1734,14 @@ select:focus,
     radial-gradient(
       circle at 50% 12%,
       transparent 0 20%,
-      var(--theme-color-26352c2f) 52%,
-      var(--theme-color-56c2d4cf) 100%
+      color-mix(in srgb, var(--color-black) 18%, transparent) 52%,
+      color-mix(in srgb, var(--color-black) 66%, transparent) 100%
     ),
     linear-gradient(
       180deg,
-      var(--theme-color-b12efc34),
-      var(--theme-color-26352c2f) 54%,
-      var(--theme-color-2b61a118)
+      color-mix(in srgb, var(--color-black) 6%, transparent),
+      color-mix(in srgb, var(--color-black) 18%, transparent) 54%,
+      color-mix(in srgb, var(--color-black) 72%, transparent)
     );
 }
 
@@ -2292,8 +1760,8 @@ select:focus,
   clip-path: polygon(49% 0, 51% 0, 100% 100%, 0 100%);
   background: linear-gradient(
     180deg,
-    var(--theme-color-11db84d3),
-    var(--theme-color-065f1a97) 52%,
+    color-mix(in srgb, var(--color-white) 13%, transparent),
+    color-mix(in srgb, var(--color-primary) 4%, transparent) 52%,
     transparent 86%
   );
   filter: blur(var(--space-2));
@@ -2338,7 +1806,10 @@ select:focus,
 
 .library-music-object {
   opacity: 0.38;
-  filter: drop-shadow(0 0 var(--space-8) var(--theme-color-57a803af));
+  filter: drop-shadow(
+    0 0 var(--space-8)
+      color-mix(in srgb, var(--color-border-accent) 24%, transparent)
+  );
 }
 
 .library-music-object--record {
@@ -2350,17 +1821,18 @@ select:focus,
     repeating-radial-gradient(
       circle,
       transparent 0 8%,
-      var(--theme-color-66de1059) 8.5% 9.2%
+      color-mix(in srgb, var(--color-black) 20%, transparent) 8.5% 9.2%
     ),
     conic-gradient(
       from 20deg,
       var(--color-white),
-      var(--theme-color-706b816e),
-      var(--theme-color-ffcc03d3),
-      var(--theme-color-beb9ff2b),
+      var(--color-bg),
+      var(--color-white),
+      var(--color-bg-deep),
       var(--color-white)
     );
-  box-shadow: inset 0 0 var(--space-8) var(--theme-color-fdfe51a7);
+  box-shadow: inset 0 0 var(--space-8)
+    color-mix(in srgb, var(--color-white) 25%, transparent);
   animation: library-record 16s linear infinite;
 }
 
@@ -2384,7 +1856,8 @@ select:focus,
 
 .library-music-object--record span {
   inset: calc(8% + var(--part) * 7%);
-  border: var(--hairline) solid var(--theme-color-fda3cb23);
+  border: var(--hairline) solid
+    color-mix(in srgb, var(--color-white) 20%, transparent);
   border-radius: 50%;
 }
 
@@ -2401,10 +1874,10 @@ select:focus,
   border-radius: 48% 48% 42% 42%;
   background: repeating-linear-gradient(
     90deg,
-    var(--theme-color-e3f30ded) 0 6%,
-    var(--theme-color-f2c8be43) 7% 12%
+    var(--color-white) 0 6%,
+    var(--color-bg-deep) 7% 12%
   );
-  box-shadow: inset 0 0 var(--space-4) var(--theme-color-638aaf5f);
+  box-shadow: inset 0 0 var(--space-4) var(--color-black);
 }
 
 .library-music-object--microphone span:nth-child(2) {
@@ -2412,9 +1885,9 @@ select:focus,
   border-radius: var(--radius-pill);
   background: linear-gradient(
     90deg,
-    var(--theme-color-f3526fe1),
-    var(--theme-color-000d003e) 48%,
-    var(--theme-color-21346fbd)
+    var(--color-bg-deep),
+    var(--color-white) 48%,
+    var(--color-bg-deep)
   );
 }
 
@@ -2459,7 +1932,8 @@ select:focus,
     var(--color-primary),
     var(--color-primary-strong)
   );
-  box-shadow: 0 0 var(--space-3) var(--theme-color-1247ae6c);
+  box-shadow: 0 0 var(--space-3)
+    color-mix(in srgb, var(--color-border-accent) 55%, transparent);
   transform-origin: bottom;
   animation: library-equalizer 1.35s var(--ease-standard) infinite alternate;
   animation-delay: calc(var(--part) * -70ms);
@@ -2499,7 +1973,6 @@ select:focus,
 
 /* Main Library composition. */
 .library-page {
-  --library-gutter: 10vw;
   --library-content: 100%;
   position: relative;
   min-block-size: calc(100dvh - var(--titlebar-height));
@@ -2542,7 +2015,8 @@ select:focus,
 .library-hero-brand-mark i {
   position: absolute;
   inset: -35%;
-  border: var(--hairline) solid var(--theme-color-65c065f9);
+  border: var(--hairline) solid
+    color-mix(in srgb, var(--color-white) 28%, transparent);
   border-radius: 46%;
   animation: library-orbit 9s linear infinite;
 }
@@ -2567,7 +2041,9 @@ select:focus,
     var(--font-display);
   letter-spacing: var(--letter-spacing-title);
   text-transform: uppercase;
-  filter: drop-shadow(0 0 var(--space-5) var(--theme-color-9f9f1cf4));
+  filter: drop-shadow(
+    0 0 var(--space-5) color-mix(in srgb, var(--color-primary) 18%, transparent)
+  );
 }
 
 .library-hero p {
@@ -2641,14 +2117,16 @@ select:focus,
 .library-search-input {
   block-size: 3rem;
   padding-inline: 2.8rem var(--space-4);
-  border-color: var(--theme-color-840c696c);
-  box-shadow: inset 0 var(--hairline) var(--theme-color-90fd4ff1);
+  border-color: color-mix(in srgb, var(--color-primary-hover) 22%, transparent);
+  box-shadow: inset 0 var(--hairline)
+    color-mix(in srgb, var(--color-white) 5%, transparent);
 }
 
 .library-search-input:focus {
   border-color: var(--color-primary);
   background: var(--color-surface);
-  box-shadow: 0 0 0 var(--space-1) var(--theme-color-65069b66);
+  box-shadow: 0 0 0 var(--space-1)
+    color-mix(in srgb, var(--color-primary) 10%, transparent);
 }
 
 .library-search-input::placeholder {
@@ -2672,11 +2150,11 @@ select:focus,
 }
 
 .library-song-card:hover {
-  border-color: var(--theme-color-e18b3c5f);
+  border-color: color-mix(in srgb, var(--color-nude) 56%, transparent);
   box-shadow:
     var(--shadow-md),
-    0 0 1.8rem var(--theme-color-a7c694d8),
-    0 0 3.2rem var(--theme-color-85d08ccc);
+    0 0 1.8rem color-mix(in srgb, var(--color-border-accent) 23%, transparent),
+    0 0 3.2rem color-mix(in srgb, var(--color-text) 7%, transparent);
 }
 
 .library-song-card-art {
@@ -2771,7 +2249,7 @@ select:focus,
   place-items: center;
   padding: clamp(var(--space-3), 3vw, var(--space-8));
   overflow: auto;
-  background: var(--theme-color-f1f6074a);
+  background: color-mix(in srgb, var(--color-black) 76%, transparent);
   backdrop-filter: blur(var(--space-4));
   perspective: 87.5rem;
 }
@@ -2989,7 +2467,8 @@ select:focus,
   border: var(--hairline) solid var(--color-border-strong);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--color-surface-strong) 74%, transparent);
-  box-shadow: inset 0 var(--hairline) var(--theme-color-90fd4ff1);
+  box-shadow: inset 0 var(--hairline)
+    color-mix(in srgb, var(--color-white) 5%, transparent);
 }
 
 .settings-field .input:hover,
@@ -3023,7 +2502,6 @@ select:focus,
 
 @media (max-width: 32rem) {
   .library-page {
-    --library-gutter: var(--space-4);
   }
 
   .library-hero {
@@ -3064,21 +2542,31 @@ select:focus,
 
 /* Light library composition: moonlight glass, peach haze and raspberry accents. */
 :root[data-theme="light"] .title-bar {
-  border-block-end-color: var(--theme-color-6c33f5b4);
-  background: var(--theme-color-bb342b51);
-  box-shadow: 0 var(--hairline) 0 var(--theme-color-bb8474cf);
+  border-block-end-color: color-mix(
+    in srgb,
+    var(--color-border) 16%,
+    transparent
+  );
+  background: color-mix(in srgb, var(--color-white) 18%, transparent);
+  box-shadow: 0 var(--hairline) 0
+    color-mix(in srgb, var(--color-white) 70%, transparent);
 }
 
 :root[data-theme="light"] .title-bar__brand {
-  text-shadow: 0 0 var(--space-4) var(--theme-color-c51423e1);
+  text-shadow: 0 0 var(--space-4)
+    color-mix(in srgb, var(--color-raspberry) 22%, transparent);
 }
 
 :root[data-theme="light"] .title-bar__button {
-  border-inline-start-color: var(--theme-color-7ce7102d);
+  border-inline-start-color: color-mix(
+    in srgb,
+    var(--color-border) 10%,
+    transparent
+  );
 }
 
 :root[data-theme="light"] .library-concert-backdrop {
-  background: var(--theme-color-2464b21c);
+  background: var(--color-highlight);
 }
 
 :root[data-theme="light"] .library-theme-space {
@@ -3089,28 +2577,28 @@ select:focus,
   background:
     radial-gradient(
       circle at 24% 18%,
-      var(--theme-color-b3a3e8cf),
+      color-mix(in srgb, var(--color-white) 8%, transparent),
       transparent 38%
     ),
     radial-gradient(
       circle at 76% 38%,
-      var(--theme-color-540ff057),
+      color-mix(in srgb, var(--color-rose) 6%, transparent),
       transparent 34%
     ),
     linear-gradient(
       180deg,
-      var(--theme-color-8512e243),
-      var(--theme-color-9b9bb09c) 58%,
-      var(--theme-color-a5908b15)
+      color-mix(in srgb, var(--color-white) 4%, transparent),
+      color-mix(in srgb, var(--color-white) 10%, transparent) 58%,
+      color-mix(in srgb, var(--color-champagne) 25%, transparent)
     );
 }
 
 :root[data-theme="light"] .library-stage-lights i {
   background: linear-gradient(
     180deg,
-    var(--theme-color-923a33a9),
-    var(--theme-color-e7c1f9e7) 46%,
-    var(--theme-color-c8e922ee) 68%,
+    color-mix(in srgb, var(--color-white) 82%, transparent),
+    color-mix(in srgb, var(--color-primary) 20%, transparent) 46%,
+    color-mix(in srgb, var(--color-peach) 8%, transparent) 68%,
     transparent 90%
   );
   filter: blur(var(--space-1)) saturate(1.28);
@@ -3125,8 +2613,13 @@ select:focus,
 
 :root[data-theme="light"] .library-music-object {
   opacity: 0.48;
-  filter: drop-shadow(0 0 var(--space-4) var(--theme-color-69c801ce))
-    drop-shadow(0 0 var(--space-8) var(--theme-color-b13b5526));
+  filter: drop-shadow(
+      0 0 var(--space-4)
+        color-mix(in srgb, var(--color-raspberry) 28%, transparent)
+    )
+    drop-shadow(
+      0 0 var(--space-8) color-mix(in srgb, var(--color-peach) 18%, transparent)
+    );
 }
 
 :root[data-theme="light"] .library-music-object--equalizer {
@@ -3139,7 +2632,8 @@ select:focus,
     var(--color-primary),
     var(--color-peach)
   );
-  box-shadow: 0 0 var(--space-3) var(--theme-color-b24f3827);
+  box-shadow: 0 0 var(--space-3)
+    color-mix(in srgb, var(--color-raspberry) 42%, transparent);
 }
 
 :root[data-theme="light"] .library-music-object--notes span {
@@ -3148,29 +2642,43 @@ select:focus,
 
 :root[data-theme="light"] .library-music-object--notes span::before {
   color: var(--color-raspberry);
-  text-shadow: 0 0 var(--space-3) var(--theme-color-7586f259);
+  text-shadow: 0 0 var(--space-3)
+    color-mix(in srgb, var(--color-raspberry) 30%, transparent);
 }
 
 :root[data-theme="light"] .library-music-object--record {
-  border: var(--hairline) solid var(--theme-color-f000db31);
+  border: var(--hairline) solid
+    color-mix(in srgb, var(--color-secondary) 26%, transparent);
   box-shadow:
-    inset 0 0 var(--space-8) var(--theme-color-dc0ed917),
-    0 0 var(--space-5) var(--theme-color-c51423e1),
-    0 0 var(--space-8) var(--theme-color-284ce349);
+    inset 0 0 var(--space-8)
+      color-mix(in srgb, var(--color-white) 72%, transparent),
+    0 0 var(--space-5)
+      color-mix(in srgb, var(--color-raspberry) 22%, transparent),
+    0 0 var(--space-8) color-mix(in srgb, var(--color-peach) 16%, transparent);
 }
 
 :root[data-theme="light"] .library-music-object--record::before {
   color: var(--color-text-inverse);
-  box-shadow: 0 0 var(--space-4) var(--theme-color-69c801ce);
+  box-shadow: 0 0 var(--space-4)
+    color-mix(in srgb, var(--color-raspberry) 28%, transparent);
 }
 
 :root[data-theme="light"] .library-music-object--microphone {
-  filter: drop-shadow(0 0 var(--space-3) var(--theme-color-44ee193f))
-    drop-shadow(0 var(--space-2) var(--space-5) var(--theme-color-6d2178f8));
+  filter: drop-shadow(
+      0 0 var(--space-3)
+        color-mix(in srgb, var(--color-raspberry) 32%, transparent)
+    )
+    drop-shadow(
+      0 var(--space-2) var(--space-5)
+        color-mix(in srgb, var(--color-primary-strong) 18%, transparent)
+    );
 }
 
 :root[data-theme="light"] .library-hero h1 {
-  filter: drop-shadow(0 0 var(--space-5) var(--theme-color-aac630b0));
+  filter: drop-shadow(
+    0 0 var(--space-5)
+      color-mix(in srgb, var(--color-raspberry) 12%, transparent)
+  );
 }
 
 :root[data-theme="light"] .ui-card {
@@ -3178,50 +2686,53 @@ select:focus,
 }
 
 :root[data-theme="light"] .library-search-input {
-  border-color: var(--theme-color-30dd1360);
-  box-shadow: inset 0 var(--hairline) var(--theme-color-dec94ca2);
+  border-color: color-mix(in srgb, var(--color-secondary) 18%, transparent);
+  box-shadow: inset 0 var(--hairline)
+    color-mix(in srgb, var(--color-white) 86%, transparent);
 }
 
 :root[data-theme="light"] .library-search-input:focus {
-  box-shadow: 0 0 0 var(--space-1) var(--theme-color-a5654241);
+  box-shadow: 0 0 0 var(--space-1)
+    color-mix(in srgb, var(--color-primary) 10%, transparent);
 }
 
 :root[data-theme="light"] .btn-primary {
-  box-shadow: inset 0 var(--hairline) var(--theme-color-16115198);
+  box-shadow: inset 0 var(--hairline)
+    color-mix(in srgb, var(--color-white) 55%, transparent);
 }
 
 :root[data-theme="light"] .btn-danger {
   color: var(--color-danger);
-  background: var(--theme-color-c8b15032);
+  background: color-mix(in srgb, var(--color-danger) 8%, transparent);
 }
 
 :root[data-theme="light"] .library-song-card {
-  border-color: var(--theme-color-c51423e1);
+  border-color: color-mix(in srgb, var(--color-raspberry) 22%, transparent);
   background:
     radial-gradient(
       circle at var(--glow-x) var(--glow-y),
-      var(--theme-color-5477bbc8),
+      color-mix(in srgb, var(--color-rose) 13%, transparent),
       transparent 34%
     ),
     radial-gradient(
       circle at 58% 70%,
-      var(--theme-color-c8e922ee),
+      color-mix(in srgb, var(--color-peach) 8%, transparent),
       transparent 42%
     ),
     linear-gradient(
       145deg,
-      var(--theme-color-dc0ed917),
-      var(--theme-color-89fb0a73)
+      color-mix(in srgb, var(--color-white) 72%, transparent),
+      color-mix(in srgb, var(--color-highlight) 76%, transparent)
     );
   backdrop-filter: blur(1rem) saturate(155%);
 }
 
 :root[data-theme="light"] .library-song-card:hover {
-  border-color: var(--theme-color-b24f3827);
+  border-color: color-mix(in srgb, var(--color-raspberry) 42%, transparent);
   box-shadow:
     var(--shadow-md),
-    0 0 1.8rem var(--theme-color-c4a13b3d),
-    0 0 3.2rem var(--theme-color-c8e922ee);
+    0 0 1.8rem color-mix(in srgb, var(--color-primary) 14%, transparent),
+    0 0 3.2rem color-mix(in srgb, var(--color-peach) 8%, transparent);
 }
 
 :root[data-theme="light"] .library-song-card-art {
@@ -3234,12 +2745,12 @@ select:focus,
 }
 
 :root[data-theme="light"] .progress-track {
-  background: var(--theme-color-ed0af885);
+  background: color-mix(in srgb, var(--color-bg-deep) 10%, transparent);
 }
 
 :root[data-theme="light"] .song-recordings-backdrop,
 :root[data-theme="light"] .modal-backdrop {
-  background: var(--theme-color-ea4d843d);
+  background: color-mix(in srgb, var(--color-bg-deep) 28%, transparent);
 }
 
 /* Neon Card uses a real inner glass panel, matching the reference structure. */
@@ -3257,18 +2768,18 @@ select:focus,
   background:
     radial-gradient(
       circle at var(--glow-x) var(--glow-y),
-      var(--theme-color-a3b0a116),
+      color-mix(in srgb, var(--color-primary-hover) 15%, transparent),
       transparent 34%
     ),
     radial-gradient(
       circle at 58% 70%,
-      var(--theme-color-f9d68a1d),
+      color-mix(in srgb, var(--color-bg-elevated) 5%, transparent),
       transparent 42%
     ),
     linear-gradient(
       145deg,
-      var(--theme-color-a6b9ce0c),
-      var(--theme-color-88037ec4)
+      color-mix(in srgb, var(--color-black) 88%, transparent),
+      color-mix(in srgb, var(--color-black) 91%, transparent)
     );
 }
 
@@ -3293,18 +2804,18 @@ select:focus,
   background:
     radial-gradient(
       circle at var(--glow-x) var(--glow-y),
-      var(--theme-color-d0cc8651),
+      color-mix(in srgb, var(--color-primary) 12%, transparent),
       transparent 35%
     ),
     radial-gradient(
       circle at 58% 70%,
-      var(--theme-color-0242c150),
+      color-mix(in srgb, var(--color-peach) 12%, transparent),
       transparent 44%
     ),
     linear-gradient(
       145deg,
-      var(--theme-color-a83a6ec1),
-      var(--theme-color-a8f161d6)
+      color-mix(in srgb, var(--color-white) 78%, transparent),
+      color-mix(in srgb, var(--color-highlight) 86%, transparent)
     );
 }
 
@@ -3493,12 +3004,14 @@ select:focus,
   -webkit-mask-image: linear-gradient(
     90deg,
     var(--color-black) 0 var(--processing-progress),
-    var(--theme-color-dbf68963) var(--processing-progress) 100%
+    color-mix(in srgb, var(--color-black) 24%, transparent)
+      var(--processing-progress) 100%
   );
   mask-image: linear-gradient(
     90deg,
     var(--color-black) 0 var(--processing-progress),
-    var(--theme-color-dbf68963) var(--processing-progress) 100%
+    color-mix(in srgb, var(--color-black) 24%, transparent)
+      var(--processing-progress) 100%
   );
 }
 
@@ -3595,7 +3108,11 @@ select:focus,
 
 :root[data-theme="light"] .processing-signal {
   background:
-    linear-gradient(180deg, var(--theme-color-f5f651e0), transparent),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-white) 48%, transparent),
+      transparent
+    ),
     color-mix(in srgb, var(--color-nude) 72%, transparent);
 }
 
@@ -3665,9 +3182,14 @@ select:focus,
   border: var(--hairline) solid var(--color-border);
   border-radius: var(--radius-lg);
   background:
-    linear-gradient(180deg, var(--theme-color-58879084), transparent),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-white) 4%, transparent),
+      transparent
+    ),
     color-mix(in srgb, var(--color-bg-deep) 72%, transparent);
-  box-shadow: inset 0 0 2rem var(--theme-color-dbf68963);
+  box-shadow: inset 0 0 2rem
+    color-mix(in srgb, var(--color-black) 24%, transparent);
   min-block-size: 8rem;
 }
 
@@ -3762,7 +3284,8 @@ select:focus,
     color-mix(in srgb, var(--color-surface-glass) 82%, transparent),
     color-mix(in srgb, var(--color-surface-strong) 72%, transparent)
   );
-  box-shadow: inset 0 var(--hairline) var(--theme-color-3fb99aa4);
+  box-shadow: inset 0 var(--hairline)
+    color-mix(in srgb, var(--color-white) 7%, transparent);
 }
 
 .app-dropdown-menu {
@@ -4571,18 +4094,18 @@ select:focus,
   background:
     radial-gradient(
       circle at 18% 22%,
-      var(--theme-color-90d976ad),
+      color-mix(in srgb, var(--color-bg-elevated) 21%, transparent),
       transparent 28%
     ),
     radial-gradient(
       circle at 85% 74%,
-      var(--theme-color-8e879a02),
+      color-mix(in srgb, var(--color-accent) 14%, transparent),
       transparent 30%
     ),
     linear-gradient(
       145deg,
-      var(--theme-color-5802913d),
-      var(--theme-color-631a68aa)
+      color-mix(in srgb, var(--color-black) 97%, transparent),
+      color-mix(in srgb, var(--color-black) 98%, transparent)
     );
 }
 
@@ -4610,36 +4133,36 @@ select:focus,
   min-width: 0;
   padding-bottom: var(--space-6);
   overflow: visible;
-  border: 1px solid var(--theme-color-1bf1f42d);
+  border: 1px solid color-mix(in srgb, var(--color-highlight) 34%, transparent);
   background:
     linear-gradient(
       135deg,
-      var(--theme-color-ff3c07e6),
+      color-mix(in srgb, var(--color-white) 10.5%, transparent),
       transparent 18% 72%,
-      var(--theme-color-42461ffd)
+      color-mix(in srgb, var(--color-text) 8%, transparent)
     ),
     radial-gradient(
       circle at 22% 12%,
-      var(--theme-color-2b6209cf),
+      color-mix(in srgb, var(--color-success) 16%, transparent),
       transparent 34%
     ),
     radial-gradient(
       circle at 82% 88%,
-      var(--theme-color-de476281),
+      color-mix(in srgb, var(--color-accent) 12%, transparent),
       transparent 38%
     ),
     linear-gradient(
       145deg,
-      var(--theme-color-03d95bd7),
-      var(--theme-color-bf7fd8d8)
+      color-mix(in srgb, var(--color-black) 77%, transparent),
+      color-mix(in srgb, var(--color-black) 91%, transparent)
     );
   box-shadow:
-    inset 0 1px 0 var(--theme-color-a07f2a9c),
-    inset 1px 0 0 var(--theme-color-c5d7cf15),
-    inset -1px 0 0 var(--theme-color-e70b598a),
-    inset 0 -18px 44px var(--theme-color-a5e1bb8e),
-    0 20px 55px var(--theme-color-485d29c1),
-    0 0 18px var(--theme-color-2fe7fe1c);
+    inset 0 1px 0 color-mix(in srgb, var(--color-white) 30%, transparent),
+    inset 1px 0 0 color-mix(in srgb, var(--color-success) 20%, transparent),
+    inset -1px 0 0 color-mix(in srgb, var(--color-rose) 13%, transparent),
+    inset 0 -18px 44px color-mix(in srgb, var(--color-black) 52%, transparent),
+    0 20px 55px color-mix(in srgb, var(--color-black) 48%, transparent),
+    0 0 18px color-mix(in srgb, var(--color-success) 16%, transparent);
   backdrop-filter: blur(18px) saturate(1.22);
   -webkit-backdrop-filter: blur(18px) saturate(1.22);
   transform: translateZ(0);
@@ -4656,18 +4179,18 @@ select:focus,
   pointer-events: none;
   background: conic-gradient(
     from var(--frame-angle),
-    var(--theme-color-a657efa2) 0deg,
-    var(--theme-color-537a03cb) 18deg,
-    var(--theme-color-fa6ecc04) 42deg,
-    var(--theme-color-c84ba155) 76deg,
-    var(--theme-color-ca359a24) 116deg,
-    var(--theme-color-d90e9506) 148deg,
-    var(--theme-color-a0c44b80) 181deg,
-    var(--theme-color-f8f9af4c) 222deg,
-    var(--theme-color-45b020e7) 272deg,
-    var(--theme-color-b430e1a7) 305deg,
-    var(--theme-color-434e8449) 334deg,
-    var(--theme-color-a657efa2) 360deg
+    color-mix(in srgb, var(--color-success) 25%, transparent) 0deg,
+    var(--color-white) 18deg,
+    var(--color-success) 42deg,
+    color-mix(in srgb, var(--color-bg-elevated) 40%, transparent) 76deg,
+    var(--color-text-soft) 116deg,
+    var(--color-rose) 148deg,
+    color-mix(in srgb, var(--color-rose) 28%, transparent) 181deg,
+    var(--color-text) 222deg,
+    var(--color-success) 272deg,
+    var(--color-white) 305deg,
+    var(--color-success) 334deg,
+    color-mix(in srgb, var(--color-success) 25%, transparent) 360deg
   );
   filter: saturate(1.18) brightness(1.12);
   opacity: 0.96;
@@ -4690,13 +4213,13 @@ select:focus,
   background: conic-gradient(
     from var(--frame-angle),
     transparent 0 8%,
-    var(--theme-color-c1b56ae3) 12%,
-    var(--theme-color-06a205a9) 20%,
+    color-mix(in srgb, var(--color-success) 78%, transparent) 12%,
+    color-mix(in srgb, var(--color-text) 28%, transparent) 20%,
     transparent 31% 42%,
-    var(--theme-color-2db70653) 49%,
-    var(--theme-color-36e4aeb4) 58%,
+    color-mix(in srgb, var(--color-accent) 70%, transparent) 49%,
+    color-mix(in srgb, var(--color-text) 30%, transparent) 58%,
     transparent 70% 86%,
-    var(--theme-color-90e0beea) 92%,
+    color-mix(in srgb, var(--color-white) 64%, transparent) 92%,
     transparent 100%
   );
   opacity: var(--frame-glow);
@@ -4722,12 +4245,12 @@ select:focus,
   .song-settings-workspace > .panel:hover {
     --frame-glow: 0.96;
     box-shadow:
-      inset 0 1px 0 var(--theme-color-57899006),
-      inset 1px 0 0 var(--theme-color-01b3bdaf),
-      inset -1px 0 0 var(--theme-color-05e9ae65),
-      inset 0 -18px 44px var(--theme-color-79e69fbb),
-      0 24px 65px var(--theme-color-9bf7d0fa),
-      0 0 28px var(--theme-color-1a9dcca1);
+      inset 0 1px 0 color-mix(in srgb, var(--color-white) 38%, transparent),
+      inset 1px 0 0 color-mix(in srgb, var(--color-success) 26%, transparent),
+      inset -1px 0 0 color-mix(in srgb, var(--color-rose) 20%, transparent),
+      inset 0 -18px 44px color-mix(in srgb, var(--color-black) 48%, transparent),
+      0 24px 65px color-mix(in srgb, var(--color-black) 54%, transparent),
+      0 0 28px color-mix(in srgb, var(--color-success) 24%, transparent);
   }
 }
 
@@ -4736,7 +4259,7 @@ select:focus,
   padding: var(--space-6) var(--space-6) var(--space-4);
 }
 .song-settings-workspace .panel-title {
-  color: var(--theme-color-fd3af616);
+  color: var(--color-highlight);
   text-transform: uppercase;
 }
 .song-settings-workspace .panel-title::before {
@@ -4754,18 +4277,18 @@ select:focus,
 }
 .song-settings-fields .settings-field {
   min-height: 72px;
-  border-color: var(--theme-color-57da1e0b);
+  border-color: color-mix(in srgb, var(--color-success) 28%, transparent);
   background: linear-gradient(
     115deg,
-    var(--theme-color-61b3df14),
-    var(--theme-color-b4607112)
+    color-mix(in srgb, var(--color-black) 38%, transparent),
+    color-mix(in srgb, var(--color-black) 42%, transparent)
   );
 }
 .song-settings-fields .settings-field:hover {
-  border-color: var(--theme-color-e41069de);
+  border-color: color-mix(in srgb, var(--color-success) 66%, transparent);
   box-shadow:
-    inset 0 0 26px var(--theme-color-807ed195),
-    0 0 14px var(--theme-color-cc9c6136);
+    inset 0 0 26px color-mix(in srgb, var(--color-success) 12%, transparent),
+    0 0 14px color-mix(in srgb, var(--color-success) 14%, transparent);
 }
 .song-settings-save {
   flex: none;
@@ -4820,23 +4343,30 @@ select:focus,
   white-space: pre-wrap;
   overflow-x: hidden;
   overflow-y: auto;
-  border-color: var(--theme-color-e4f9f31b);
+  border-color: color-mix(in srgb, var(--color-success) 64%, transparent);
   border-radius: var(--radius-lg);
   font-family: var(--font-mono);
   font-size: 0.95rem;
   line-height: var(--line-height-relaxed);
   background:
-    linear-gradient(90deg, var(--theme-color-63a897a4) 1px, transparent 1px),
-    linear-gradient(var(--theme-color-d893d3a3) 1px, transparent 1px),
-    var(--theme-color-7a2e5cc3);
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--color-bg-deep) 10%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      color-mix(in srgb, var(--color-bg-deep) 8%, transparent) 1px,
+      transparent 1px
+    ),
+    color-mix(in srgb, var(--color-black) 82%, transparent);
   background-size: 28px 28px;
   box-shadow:
-    inset 0 0 45px var(--theme-color-29264241),
-    0 0 22px var(--theme-color-a524293a);
+    inset 0 0 45px color-mix(in srgb, var(--color-bg-deep) 16%, transparent),
+    0 0 22px color-mix(in srgb, var(--color-success) 12%, transparent);
 }
 .song-lyrics-error {
   margin: var(--space-3) var(--space-5) 0;
-  color: var(--theme-color-687a4064);
+  color: var(--color-rose);
 }
 
 @property --frame-angle {
@@ -5264,7 +4794,7 @@ select:focus,
   background:
     radial-gradient(
       circle at 18% 24%,
-      var(--theme-color-15d6a68c),
+      color-mix(in srgb, var(--color-white) 18%, transparent),
       transparent 20%
     ),
     radial-gradient(
@@ -5571,7 +5101,7 @@ select:focus,
   border-radius: var(--radius-pill);
 
   block-size: 0.7rem;
-  background: var(--theme-color-fa8c7339);
+  background: color-mix(in srgb, var(--color-white) 10%, transparent);
 }
 .microphone-level-fill {
   height: 100%;
@@ -5737,7 +5267,7 @@ select:focus,
     linear-gradient(
       90deg,
       transparent,
-      var(--theme-color-42b54995),
+      color-mix(in srgb, var(--color-white) 3%, transparent),
       transparent
     );
   mix-blend-mode: screen;
@@ -5778,11 +5308,11 @@ select:focus,
 }
 
 [data-theme="light"] .melody-roll-header {
-  background: var(--theme-color-d790b253);
+  background: color-mix(in srgb, var(--color-white) 68%, transparent);
 }
 
 [data-theme="light"] .melody-roll-legend {
-  background: var(--theme-color-6bb8a08c);
+  background: color-mix(in srgb, var(--color-white) 42%, transparent);
 }
 
 @media (max-width: 44rem) {
@@ -5939,24 +5469,26 @@ select:focus,
 [data-theme="light"] .melody-roll {
   background: linear-gradient(
     180deg,
-    var(--theme-color-f252ac56),
-    var(--theme-color-934321d9)
+    color-mix(in srgb, var(--color-white) 70%, transparent),
+    color-mix(in srgb, var(--color-highlight) 52%, transparent)
   );
   box-shadow:
-    0 1rem 2.6rem var(--theme-color-71409027),
+    0 1rem 2.6rem
+      color-mix(in srgb, var(--color-primary-strong) 15%, transparent),
     0 0 1.4rem color-mix(in srgb, var(--color-primary) 12%, transparent),
-    inset 0 var(--hairline) var(--theme-color-413f7f50);
+    inset 0 var(--hairline)
+      color-mix(in srgb, var(--color-white) 84%, transparent);
 }
 
 [data-theme="light"] .melody-roll-header,
 [data-theme="light"] .melody-roll-legend,
 [data-theme="light"] .karaoke-microphone-dock,
 [data-theme="light"] .karaoke-labeled-action svg {
-  background: var(--theme-color-6e391816);
+  background: color-mix(in srgb, var(--color-white) 66%, transparent);
 }
 
 [data-theme="light"] .karaoke-lyric-next {
-  color: var(--theme-color-0ac121c3);
+  color: color-mix(in srgb, var(--color-bg-deep) 58%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -6050,7 +5582,7 @@ select:focus,
     linear-gradient(
       115deg,
       transparent 12%,
-      var(--theme-color-58879084) 30%,
+      color-mix(in srgb, var(--color-white) 4%, transparent) 30%,
       transparent 46%
     ),
     radial-gradient(
@@ -6097,8 +5629,9 @@ select:focus,
     color-mix(in srgb, var(--color-bg-deep) 66%, transparent)
   );
   box-shadow:
-    inset 0 var(--hairline) var(--theme-color-fa8c7339),
-    0 0.7rem 1.6rem var(--theme-color-4e065e18);
+    inset 0 var(--hairline)
+      color-mix(in srgb, var(--color-white) 10%, transparent),
+    0 0.7rem 1.6rem color-mix(in srgb, var(--color-black) 16%, transparent);
 }
 
 .karaoke-microphone-meter i {
@@ -6130,14 +5663,14 @@ select:focus,
     radial-gradient(
       ellipse 62% 46% at 50% 50%,
       transparent 32%,
-      var(--theme-color-4dc76887) 72%,
-      var(--theme-color-266a532e) 100%
+      color-mix(in srgb, var(--color-primary-strong) 8%, transparent) 72%,
+      color-mix(in srgb, var(--color-black) 28%, transparent) 100%
     ),
     linear-gradient(
       180deg,
-      var(--theme-color-3fb99aa4),
+      color-mix(in srgb, var(--color-white) 7%, transparent),
       transparent 48%,
-      var(--theme-color-cb8db78c) 100%
+      color-mix(in srgb, var(--color-black) 18%, transparent) 100%
     );
 }
 
@@ -6150,7 +5683,8 @@ select:focus,
   background-image: linear-gradient(
     90deg,
     var(--color-primary) var(--character-fill),
-    var(--theme-color-3e92e13b) var(--character-fill)
+    color-mix(in srgb, var(--color-bg-deep) 60%, transparent)
+      var(--character-fill)
   );
 }
 
@@ -6331,13 +5865,13 @@ select:focus,
 /* Final karaoke readability and quick-display controls. */
 .karaoke-lyric,
 .karaoke-lyric-character {
-  color: var(--theme-color-f62915d1);
+  color: var(--color-white);
   -webkit-text-fill-color: transparent;
 }
 
 .karaoke-lyric-next,
 .karaoke-lyric-next .karaoke-lyric-character {
-  color: var(--theme-color-5f72d5c4);
+  color: color-mix(in srgb, var(--color-white) 68%, transparent);
 }
 
 [data-theme="light"] .karaoke-lyric-character {
@@ -6345,8 +5879,8 @@ select:focus,
     90deg,
     var(--color-primary) 0,
     var(--color-primary) var(--character-fill),
-    var(--theme-color-c2789cfe) var(--character-fill),
-    var(--theme-color-c2789cfe) 100%
+    var(--color-white) var(--character-fill),
+    var(--color-white) 100%
   );
 }
 
@@ -6366,15 +5900,15 @@ select:focus,
     radial-gradient(
       ellipse 66% 50% at 50% 48%,
       transparent 30%,
-      var(--theme-color-0eebab72) 68%,
-      var(--theme-color-bcf9ee64) 100%
+      color-mix(in srgb, var(--color-black) 12%, transparent) 68%,
+      color-mix(in srgb, var(--color-black) 56%, transparent) 100%
     ),
     linear-gradient(
       180deg,
-      var(--theme-color-f7c590f0) 0%,
+      color-mix(in srgb, var(--color-black) 17%, transparent) 0%,
       transparent 28%,
       transparent 57%,
-      var(--theme-color-9e5de86d) 100%
+      color-mix(in srgb, var(--color-black) 68%, transparent) 100%
     );
 }
 
@@ -6440,22 +5974,11 @@ select:focus,
   gap: 0.2rem 0.38rem;
 }
 
-[data-theme="light"] .karaoke-transport-area {
-  background: linear-gradient(
-    145deg,
-    var(--theme-color-a7ad2465),
-    var(--theme-color-907845a1)
-  );
-  box-shadow:
-    0 0.85rem 2.2rem var(--theme-color-dba380e9),
-    inset 0 var(--hairline) var(--theme-color-0cb2eedf);
-}
-
 [data-theme="light"] .karaoke-lyrics::before {
   background: radial-gradient(
     ellipse at center,
-    var(--theme-color-84e2ab35) 0%,
-    var(--theme-color-3863c35b) 48%,
+    color-mix(in srgb, var(--color-black) 42%, transparent) 0%,
+    color-mix(in srgb, var(--color-black) 18%, transparent) 48%,
     transparent 74%
   );
 }
@@ -6509,22 +6032,25 @@ select:focus,
 
 [data-theme="light"] .karaoke-lyric {
   text-shadow:
-    0 0.15rem 0.16rem var(--theme-color-befd97c8),
-    0 0.34rem 0.85rem var(--theme-color-bca88bca),
+    0 0.15rem 0.16rem color-mix(in srgb, var(--color-black) 88%, transparent),
+    0 0.34rem 0.85rem color-mix(in srgb, var(--color-black) 72%, transparent),
     0 0 1.15rem color-mix(in srgb, var(--color-primary) 38%, transparent);
   color: var(--color-white) !important;
   -webkit-text-fill-color: var(--color-white) !important;
-  -webkit-text-stroke: 0.018em var(--theme-color-e4745318);
+  -webkit-text-stroke: 0.018em
+    color-mix(in srgb, var(--color-black) 78%, transparent);
 }
 
 [data-theme="light"] .karaoke-timeline-row,
 [data-theme="light"] .karaoke-mixer-dock,
 [data-theme="light"] .karaoke-transport-buttons,
 [data-theme="light"] .karaoke-corner-actions {
-  background: var(--theme-color-4a70a5f9);
+  background: color-mix(in srgb, var(--color-white) 62%, transparent);
   box-shadow:
-    0 0.5rem 1.4rem var(--theme-color-eba9a6ec),
-    inset 0 var(--hairline) var(--theme-color-76180e86);
+    0 0.5rem 1.4rem
+      color-mix(in srgb, var(--color-primary-strong) 14%, transparent),
+    inset 0 var(--hairline)
+      color-mix(in srgb, var(--color-white) 82%, transparent);
 }
 
 /* ========================================================================== 
@@ -6571,17 +6097,17 @@ select:focus,
   background:
     linear-gradient(
       180deg,
-      var(--theme-color-d0169547) 0%,
+      color-mix(in srgb, var(--color-black) 20%, transparent) 0%,
       transparent 18%,
       transparent 52%,
-      var(--theme-color-dc56c918) 74%,
-      var(--theme-color-6b8d200e) 100%
+      color-mix(in srgb, var(--color-black) 34%, transparent) 74%,
+      color-mix(in srgb, var(--color-black) 76%, transparent) 100%
     ),
     radial-gradient(
       circle at 50% 42%,
       transparent 24%,
-      var(--theme-color-cddb4d98) 68%,
-      var(--theme-color-391ff2aa) 100%
+      color-mix(in srgb, var(--color-black) 16%, transparent) 68%,
+      color-mix(in srgb, var(--color-black) 42%, transparent) 100%
     );
 }
 
@@ -6597,7 +6123,11 @@ select:focus,
 
   backdrop-filter: blur(1.25rem) saturate(150%);
 
-  background: linear-gradient(180deg, var(--theme-color-58879084), transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-white) 4%, transparent),
+    transparent
+  );
 
   min-block-size: 1.85rem;
   padding: 0.2rem 0.62rem 0.18rem;
@@ -6663,14 +6193,14 @@ select:focus,
     linear-gradient(
       90deg,
       transparent,
-      var(--theme-color-66de1059) 16%,
-      var(--theme-color-6e88e0c5) 50%,
-      var(--theme-color-66de1059) 84%,
+      color-mix(in srgb, var(--color-black) 20%, transparent) 16%,
+      color-mix(in srgb, var(--color-black) 32%, transparent) 50%,
+      color-mix(in srgb, var(--color-black) 20%, transparent) 84%,
       transparent
     ),
     radial-gradient(
       ellipse at center,
-      var(--theme-color-23f32cc1),
+      color-mix(in srgb, var(--color-black) 26%, transparent),
       transparent 72%
     );
   filter: blur(0.38rem);
@@ -6687,8 +6217,8 @@ select:focus,
   letter-spacing: 0.004em;
   -webkit-text-stroke: 0 !important;
   text-shadow:
-    0 0.08rem 0.12rem var(--theme-color-78216e08),
-    0 0.18rem 0.42rem var(--theme-color-17e64dbe),
+    0 0.08rem 0.12rem color-mix(in srgb, var(--color-black) 88%, transparent),
+    0 0.18rem 0.42rem color-mix(in srgb, var(--color-black) 72%, transparent),
     0 0 0.52rem color-mix(in srgb, var(--color-primary) 28%, transparent) !important;
 }
 
@@ -6698,8 +6228,8 @@ select:focus,
     90deg,
     var(--color-highlight) 0%,
     var(--color-primary) var(--character-fill),
-    var(--theme-color-de081f8d) var(--character-fill),
-    var(--theme-color-de081f8d) 100%
+    var(--color-white) var(--character-fill),
+    var(--color-white) 100%
   ) !important;
   background-clip: text !important;
   -webkit-background-clip: text !important;
@@ -6712,7 +6242,9 @@ select:focus,
     var(--color-white) var(--character-fill),
     var(--color-white) 100%
   ) !important;
-  filter: drop-shadow(0 0.06rem 0.08rem var(--theme-color-3ad7b442))
+  filter: drop-shadow(
+      0 0.06rem 0.08rem color-mix(in srgb, var(--color-black) 80%, transparent)
+    )
     drop-shadow(
       0 0 0.18rem color-mix(in srgb, var(--color-primary) 22%, transparent)
     );
@@ -6727,9 +6259,14 @@ select:focus,
 
   margin-block-start: 0.52rem;
   font-size: 0.46em !important;
-  color: var(--theme-color-452fe259) !important;
-  -webkit-text-fill-color: var(--theme-color-452fe259) !important;
-  text-shadow: 0 0.1rem 0.3rem var(--theme-color-3ad7b442) !important;
+  color: color-mix(in srgb, var(--color-white) 70%, transparent) !important;
+  -webkit-text-fill-color: color-mix(
+    in srgb,
+    var(--color-white) 70%,
+    transparent
+  ) !important;
+  text-shadow: 0 0.1rem 0.3rem
+    color-mix(in srgb, var(--color-black) 80%, transparent) !important;
 }
 
 .karaoke-lyric-next .karaoke-lyric-character {
@@ -6738,14 +6275,18 @@ select:focus,
   background: linear-gradient(
     90deg,
     color-mix(in srgb, var(--color-primary) 68%, white) var(--character-fill),
-    var(--theme-color-118cafdf) var(--character-fill)
+    color-mix(in srgb, var(--color-white) 68%, transparent)
+      var(--character-fill)
   ) !important;
   background-image: linear-gradient(
     90deg,
     color-mix(in srgb, var(--color-primary) 58%, white) var(--character-fill),
-    var(--theme-color-452fe259) var(--character-fill)
+    color-mix(in srgb, var(--color-white) 70%, transparent)
+      var(--character-fill)
   ) !important;
-  filter: drop-shadow(0 0.05rem 0.08rem var(--theme-color-17e64dbe));
+  filter: drop-shadow(
+    0 0.05rem 0.08rem color-mix(in srgb, var(--color-black) 72%, transparent)
+  );
 }
 
 .karaoke-transport-area {
@@ -6786,8 +6327,9 @@ select:focus,
     color-mix(in srgb, var(--color-primary) 24%, var(--color-border));
 
   box-shadow:
-    0 0.5rem 1.4rem var(--theme-color-66de1059),
-    inset 0 var(--hairline) var(--theme-color-3fb99aa4);
+    0 0.5rem 1.4rem color-mix(in srgb, var(--color-black) 20%, transparent),
+    inset 0 var(--hairline)
+      color-mix(in srgb, var(--color-white) 7%, transparent);
 
   min-block-size: 2.25rem;
   padding: 0.22rem 0.58rem;
@@ -6986,8 +6528,8 @@ select:focus,
 [data-theme="light"] .karaoke-lyric,
 [data-theme="light"] .karaoke-lyric-character {
   text-shadow:
-    0 0.08rem 0.12rem var(--theme-color-8d7aa37e),
-    0 0.18rem 0.42rem var(--theme-color-f65fd38d),
+    0 0.08rem 0.12rem color-mix(in srgb, var(--color-black) 85%, transparent),
+    0 0.18rem 0.42rem color-mix(in srgb, var(--color-black) 65%, transparent),
     0 0 0.48rem color-mix(in srgb, var(--color-primary) 28%, transparent) !important;
 }
 
@@ -7305,9 +6847,10 @@ select:focus,
     color-mix(in srgb, var(--color-bg-deep) 34%, transparent)
   );
   box-shadow:
-    0 0.55rem 1.45rem var(--theme-color-4e065e18),
+    0 0.55rem 1.45rem color-mix(in srgb, var(--color-black) 16%, transparent),
     0 0 0.75rem color-mix(in srgb, var(--color-primary) 9%, transparent),
-    inset 0 var(--hairline) var(--theme-color-7f46531f);
+    inset 0 var(--hairline)
+      color-mix(in srgb, var(--color-white) 8%, transparent);
   backdrop-filter: blur(0.32rem) saturate(122%);
   block-size: clamp(9.5rem, 18vh, 12.5rem);
 }
@@ -7317,12 +6860,14 @@ select:focus,
 [data-theme="light"] .karaoke-console-center {
   background: linear-gradient(
     145deg,
-    var(--theme-color-20c210c8),
-    var(--theme-color-7545761c)
+    color-mix(in srgb, var(--color-white) 72%, transparent),
+    color-mix(in srgb, var(--color-highlight) 62%, transparent)
   );
   box-shadow:
-    inset 0 var(--hairline) var(--theme-color-0cb2eedf),
-    0 0.7rem 1.8rem var(--theme-color-d6296381);
+    inset 0 var(--hairline)
+      color-mix(in srgb, var(--color-white) 88%, transparent),
+    0 0.7rem 1.8rem
+      color-mix(in srgb, var(--color-primary-strong) 12%, transparent);
 }
 
 /* Studio mixer: vertical channel faders + quick effect dials. */
@@ -7380,7 +6925,7 @@ select:focus,
     color-mix(in srgb, var(--color-highlight) 18%, transparent);
   background: radial-gradient(
     circle at 35% 25%,
-    var(--theme-color-69b23e0a),
+    color-mix(in srgb, var(--color-white) 16%, transparent),
     transparent 30%
   );
 }
@@ -7514,8 +7059,8 @@ select:focus,
     color-mix(in srgb, var(--color-bg-deep) 82%, transparent)
   ); */
   /* box-shadow:
-    inset 0 var(--hairline) var(--theme-color-7f46531f),
-    0 0.7rem 1.8rem var(--theme-color-66de1059); */
+    inset 0 var(--hairline) color-mix(in srgb, var(--color-white) 8%, transparent),
+    0 0.7rem 1.8rem color-mix(in srgb, var(--color-black) 20%, transparent); */
   backdrop-filter: blur(0.2rem);
   /* border-color: color-mix(
     in srgb,
@@ -7631,7 +7176,7 @@ select:focus,
       transparent 75% 100%
     );
   box-shadow:
-    inset 0 0 0.7rem var(--theme-color-44b8e432),
+    inset 0 0 0.7rem color-mix(in srgb, var(--color-black) 45%, transparent),
     0 0 0.9rem color-mix(in srgb, var(--dial-color) 30%, transparent);
 }
 .karaoke-effect-dial__knob::before {

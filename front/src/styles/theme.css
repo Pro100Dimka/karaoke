@@ -67,35 +67,6 @@
     #ffe4e7 48%,
     #ffadba 100%
   );
-  --shadow-sm: 0 8px 24px var(--theme-color-914f45b4);
-  --shadow-md: 0 18px 55px var(--theme-color-b6b9cc23);
-  --shadow-lg: 0 28px 90px var(--theme-color-d83050d5);
-  --shadow-glass:
-    inset 0 1px 0 var(--theme-color-08e65743),
-    0 18px 52px var(--theme-color-906e1993);
-  --shadow-neon-soft:
-    0 0 12px var(--theme-color-a0010367), 0 0 30px var(--theme-color-57e58778);
-  --shadow-neon-primary:
-    0 0 9px var(--theme-color-ea192811), 0 0 28px var(--theme-color-4979c6b8);
-  --shadow-neon-mixed:
-    0 0 10px var(--theme-color-fc7ed36d), 0 0 34px var(--theme-color-f6917e68),
-    0 0 58px var(--theme-color-b9fc153c);
-  --card-fx-1: var(--color-highlight);
-  --card-fx-2: var(--color-primary);
-  --card-fx-3: var(--color-accent);
-  --card-fx-4: var(--color-primary-strong);
-  --card-edge-1: var(--theme-color-c01a5920);
-  --card-edge-2: var(--color-primary-hover);
-  --card-edge-3: var(--color-primary);
-  --card-edge-4: var(--color-accent-strong);
-  --card-glint: var(--theme-color-648f86d4);
-  --card-panel-top: var(--theme-color-7de672b7);
-  --card-panel-bottom: var(--theme-color-59405b65);
-  --card-panel-accent: var(--theme-color-1238d10d);
-  --card-panel-accent-deep: var(--theme-color-9a1ff302);
-  --card-sheen: var(--theme-color-5bdb45e8);
-  --card-sheen-soft: var(--theme-color-04cfd001);
-  --card-panel-shadow: 0 1.875rem 5rem var(--theme-color-0b3c575c);
 }
 :root[data-theme="light"] {
   color-scheme: light;
@@ -167,34 +138,4 @@
     #96394f 48%,
     #db4b69 100%
   );
-  --shadow-sm: 0 0.5rem 1.5rem var(--theme-color-63057c91);
-  --shadow-md: 0 1.15rem 3rem var(--theme-color-f633714d);
-  --shadow-lg: 0 1.8rem 5rem var(--theme-color-ad5a0940);
-  --shadow-glass:
-    inset 0 0.0625rem 0 var(--theme-color-cc53ce15),
-    0 1.15rem 3rem var(--theme-color-ebcea82f);
-  --shadow-neon-soft:
-    0 0 0.8rem var(--theme-color-2b7b5f0f),
-    0 0 2.1rem var(--theme-color-284ce349);
-  --shadow-neon-primary:
-    0 0 0.7rem var(--theme-color-e499e632), 0 0 2rem var(--theme-color-54c941d7);
-  --shadow-neon-mixed:
-    0 0 0.75rem var(--theme-color-8fafb20d),
-    0 0 2rem var(--theme-color-a7fed561), 0 0 3.5rem var(--theme-color-8b6d75c5);
-  --card-fx-1: var(--color-white);
-  --card-fx-2: var(--color-primary);
-  --card-fx-3: var(--color-peach);
-  --card-fx-4: var(--color-raspberry);
-  --card-edge-1: var(--color-white);
-  --card-edge-2: var(--color-primary-hover);
-  --card-edge-3: var(--color-coral);
-  --card-edge-4: var(--color-accent);
-  --card-glint: var(--theme-color-56fbf368);
-  --card-panel-top: var(--theme-color-a9414880);
-  --card-panel-bottom: var(--theme-color-abf1a865);
-  --card-panel-accent: var(--theme-color-d0cc8651);
-  --card-panel-accent-deep: var(--theme-color-ca50af8c);
-  --card-sheen: var(--theme-color-3fa6fc78);
-  --card-sheen-soft: var(--theme-color-4a41b00a);
-  --card-panel-shadow: 0 1.875rem 5rem var(--theme-color-1de7d4a2);
 }
