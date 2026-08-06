@@ -1,23 +1,13 @@
-"""
-Шаг 12. Создание проекта песни.
-Собирает все файлы предыдущих шагов в единую структуру:
+"""Assemble generated artefacts into the final song project directory."""
 
-Song/
-├── instrumental.wav
-├── vocals.wav
-├── pitch.json
-├── reference.json
-├── lyrics.json        (lyricsSync.json)
-├── music.json
-├── difficulty.json
-├── songMap.json
-├── songInfo.json
-└── cover.jpg           (опционально)
-"""
+from __future__ import annotations
+
 import argparse
 import json
 import shutil
 from pathlib import Path
+
+from src.common.json_io import save_json
 
 FILES_MAP = {
     "song_info": "songInfo.json",
@@ -33,59 +23,56 @@ FILES_MAP = {
     "midi": "melody.mid",
     "cover": "cover.jpg",
 }
+REQUIRED_PROJECT_FILES = frozenset(
+    {"instrumental", "vocals", "pitch", "reference", "lyrics_sync", "music", "song_map"}
+)
+
+
+def _copy_source(source: str | Path, destination: Path) -> bool:
+    source_path = Path(source)
+    if not source_path.is_file():
+        return False
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if source_path.resolve() != destination.resolve():
+        shutil.copy2(source_path, destination)
+    return True
 
 
 def build_project(project_dir: str, **sources):
-    """
-    sources: song_info=path, instrumental=path, vocals=path, pitch=path,
-             reference=path, lyrics_sync=path, music=path, breaths=path,
-             difficulty=path, song_map=path, cover=path (любые опциональны)
-    """
-    project_dir = Path(project_dir)
-    project_dir.mkdir(parents=True, exist_ok=True)
+    project = Path(project_dir)
+    project.mkdir(parents=True, exist_ok=True)
 
     copied = {}
     for key, target_name in FILES_MAP.items():
-        src = sources.get(key)
-        if src and Path(src).exists():
-            src_path = Path(src).resolve()
-            dst = project_dir / target_name
-            dst_path = dst.resolve()
-            if src_path != dst_path:
-                shutil.copy(src_path, dst_path)
-            copied[key] = str(dst)
+        source = sources.get(key)
+        destination = project / target_name
+        if source and _copy_source(source, destination):
+            copied[key] = str(destination)
 
-    # манифест проекта — что уже готово
     manifest = {
-        "project": project_dir.name,
+        "project": project.name,
         "files": copied,
-        "complete": all(k in copied for k in
-                         ["instrumental", "vocals", "pitch", "reference",
-                          "lyrics_sync", "music", "song_map"]),
+        "complete": REQUIRED_PROJECT_FILES.issubset(copied),
     }
-    with open(project_dir / "manifest.json", "w", encoding="utf-8") as f:
-        json.dump(manifest, f, ensure_ascii=False, indent=2)
-
+    save_json(manifest, project / "manifest.json")
     return manifest
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Сборка финального проекта песни")
     parser.add_argument("project_dir", help="Папка проекта, напр. Song/")
     for key in FILES_MAP:
         parser.add_argument(f"--{key.replace('_', '-')}", default=None)
     args = parser.parse_args()
 
-    sources = {key: getattr(args, key) for key in FILES_MAP}
-    manifest = build_project(args.project_dir, **sources)
-
+    manifest = build_project(
+        args.project_dir, **{key: getattr(args, key) for key in FILES_MAP}
+    )
     print(json.dumps(manifest, ensure_ascii=False, indent=2))
     if manifest["complete"]:
         print("\n✅ Проект полностью готов для караоке.")
     else:
-        missing = [k for k in ["instrumental", "vocals", "pitch", "reference",
-                                "lyrics_sync", "music", "song_map"]
-                   if k not in manifest["files"]]
+        missing = sorted(REQUIRED_PROJECT_FILES.difference(manifest["files"]))
         print(f"\n⚠️  Не хватает: {', '.join(missing)}")
 
 

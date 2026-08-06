@@ -1,119 +1,144 @@
-"""
-Дополнительный шаг. Человекочитаемый отчёт по песне.
-Все json-файлы проекта -> report.md
+"""Create a human-readable Markdown summary for one generated song project."""
 
-Собирает ключевые цифры в один markdown-файл, чтобы не открывать
-десяток json-ов вручную для быстрой проверки результата.
-"""
+from __future__ import annotations
+
 import argparse
-import json
 from pathlib import Path
+from typing import Any
+
+from src.common.json_io import load_json
+
+
+def _load_optional(path: Path, default):
+    return load_json(path) if path.is_file() else default
 
 
 def _load_if_exists(path: Path):
-    if path and Path(path).exists():
-        with open(path, encoding="utf-8") as f:
-            return json.load(f)
-    return None
+    """Backward-compatible optional JSON loader used by older callers."""
+    return _load_optional(Path(path), None)
 
 
-def build_report(project_dir: str) -> str:
-    d = Path(project_dir)
-
-    song_info = _load_if_exists(d / "songInfo.json") or {}
-    music = _load_if_exists(d / "music.json") or {}
-    reference_notes = _load_if_exists(d / "reference.json") or []
-    difficulty = _load_if_exists(d / "difficulty.json") or []
-    difficulty_by_structure = _load_if_exists(d / "difficultyByStructure.json") or []
-    breaths = _load_if_exists(d / "breaths.json") or {}
-    lyrics_sync = _load_if_exists(d / "lyricsSync.json") or []
-
-    lines = []
-    lines.append(f"# Отчёт по песне: {d.name}")
+def _append_general(lines: list[str], info: dict[str, Any]) -> None:
+    lines.extend(("## Общая информация",))
+    if info:
+        duration = info.get("duration_sec")
+        duration_text = f"{int(duration // 60)}:{int(duration % 60):02d}" if duration else "?"
+        lines.extend(
+            (
+                f"- Длительность: {duration_text}",
+                f"- Формат исходника: {info.get('format', '?')}, "
+                f"{info.get('sample_rate_hz', '?')} Hz, {info.get('channels', '?')} канал(ов)",
+            )
+        )
     lines.append("")
 
-    lines.append("## Общая информация")
-    if song_info:
-        duration = song_info.get("duration_sec")
-        duration_str = f"{int(duration // 60)}:{int(duration % 60):02d}" if duration else "?"
-        lines.append(f"- Длительность: {duration_str}")
-        lines.append(f"- Формат исходника: {song_info.get('format', '?')}, "
-                      f"{song_info.get('sample_rate_hz', '?')} Hz, "
-                      f"{song_info.get('channels', '?')} канал(ов)")
-    lines.append("")
 
+def _append_music(lines: list[str], music: dict[str, Any]) -> None:
     lines.append("## Музыка")
     if music:
-        lines.append(f"- BPM: **{music.get('bpm', '?')}** "
-                      f"(сырое значение до коррекции: {music.get('bpm_raw', '?')})")
-        lines.append(f"- Тональность: **{music.get('key', '?')}** "
-                      f"(уверенность {music.get('key_confidence', '?')})")
-        key_candidates = music.get("key_candidates", [])
-        if len(key_candidates) > 1:
-            alt = ", ".join(f"{c['key']} ({c['score']})" for c in key_candidates[1:])
-            lines.append(f"  - другие варианты: {alt} — если счёт близок к победителю, "
-                          f"тональность стоит проверить на слух")
-        lines.append(f"- Размер такта: {music.get('time_signature', '?')} "
-                      f"(уверенность {music.get('time_signature_confidence', '?')}, "
-                      f"{music.get('time_signature_note', '')})")
-        key_changes = music.get("key_changes", [])
-        if len(key_changes) > 1:
-            lines.append(f"- Смен тональности: {len(key_changes) - 1}")
-            for kc in key_changes[1:]:
-                lines.append(f"  - {kc['time']:.1f}s -> {kc['key']}")
+        lines.extend(
+            (
+                f"- BPM: **{music.get('bpm', '?')}** "
+                f"(сырое значение до коррекции: {music.get('bpm_raw', '?')})",
+                f"- Тональность: **{music.get('key', '?')}** "
+                f"(уверенность {music.get('key_confidence', '?')})",
+                f"- Размер такта: {music.get('time_signature', '?')} "
+                f"(уверенность {music.get('time_signature_confidence', '?')}, "
+                f"{music.get('time_signature_note', '')})",
+            )
+        )
+        candidates = music.get("key_candidates", [])
+        if len(candidates) > 1:
+            alternatives = ", ".join(
+                f"{candidate['key']} ({candidate['score']})" for candidate in candidates[1:]
+            )
+            lines.append(
+                f"  - другие варианты: {alternatives} — если счёт близок к победителю, "
+                "тональность стоит проверить на слух"
+            )
+        changes = music.get("key_changes", [])
+        if len(changes) > 1:
+            lines.append(f"- Смен тональности: {len(changes) - 1}")
+            lines.extend(f"  - {change['time']:.1f}s -> {change['key']}" for change in changes[1:])
     lines.append("")
 
+
+def _append_vocal(lines: list[str], notes: list[dict], breaths: dict[str, Any]) -> None:
     lines.append("## Вокал")
-    if reference_notes:
-        durations = [n["duration"] for n in reference_notes]
-        lines.append(f"- Всего нот: {len(reference_notes)}")
-        lines.append(f"- Средняя длительность ноты: {sum(durations) / len(durations):.2f} сек")
+    if notes:
+        durations = [float(note["duration"]) for note in notes]
+        lines.extend(
+            (
+                f"- Всего нот: {len(notes)}",
+                f"- Средняя длительность ноты: {sum(durations) / len(durations):.2f} сек",
+            )
+        )
     if breaths:
-        n_breaths = sum(1 for p in breaths.get("pauses", []) if p["type"] == "breath")
-        n_phrase_ends = sum(1 for p in breaths.get("pauses", []) if p["type"] == "phrase_end")
-        lines.append(f"- Фраз (по паузам): {len(breaths.get('phrases', []))}")
-        lines.append(f"- Вдохов обнаружено: {n_breaths}, концов фраз: {n_phrase_ends}")
+        pauses = breaths.get("pauses", [])
+        lines.extend(
+            (
+                f"- Фраз (по паузам): {len(breaths.get('phrases', []))}",
+                f"- Вдохов обнаружено: {sum(p.get('type') == 'breath' for p in pauses)}, "
+                f"концов фраз: {sum(p.get('type') == 'phrase_end' for p in pauses)}",
+            )
+        )
         if "top_db_used" in breaths:
             lines.append(f"- Порог тишины (адаптивный): {breaths['top_db_used']} дБ")
     lines.append("")
 
-    lines.append("## Текст")
-    if lyrics_sync:
-        lines.append(f"- Строк распознано/синхронизировано: {len(lyrics_sync)}")
-    lines.append("")
 
+def _append_difficulty(lines: list[str], difficulty: list[dict], structured: list[dict]) -> None:
     if difficulty:
-        overall = [s["difficulty"] for s in difficulty if s.get("difficulty")]
+        values = [section["difficulty"] for section in difficulty if section.get("difficulty")]
         lines.append("## Сложность (по строкам текста)")
-        lines.append(f"- Средняя сложность: **{sum(overall) / len(overall):.1f}/10**" if overall else "- Нет данных")
-        hardest = max(difficulty, key=lambda s: s.get("difficulty") or 0, default=None)
+        lines.append(
+            f"- Средняя сложность: **{sum(values) / len(values):.1f}/10**"
+            if values
+            else "- Нет данных"
+        )
+        hardest = max(difficulty, key=lambda section: section.get("difficulty") or 0, default=None)
         if hardest:
-            lines.append(f"- Самая сложная строка: \"{hardest.get('text', '?')}\" "
-                          f"({hardest['difficulty']}/10, диапазон {hardest.get('range', '?')})")
+            lines.append(
+                f"- Самая сложная строка: \"{hardest.get('text', '?')}\" "
+                f"({hardest['difficulty']}/10, диапазон {hardest.get('range', '?')})"
+            )
         lines.append("")
-
-    if difficulty_by_structure:
+    if structured:
         lines.append("## Сложность (по структурным блокам)")
-        for s in difficulty_by_structure:
-            lines.append(f"- {s.get('label', '?')} ({s['start']:.0f}s-{s['end']:.0f}s): "
-                          f"сложность {s.get('difficulty', '?')}/10, "
-                          f"диапазон {s.get('range', '?')}")
+        lines.extend(
+            f"- {section.get('label', '?')} ({section['start']:.0f}s-{section['end']:.0f}s): "
+            f"сложность {section.get('difficulty', '?')}/10, диапазон {section.get('range', '?')}"
+            for section in structured
+        )
         lines.append("")
 
+
+def build_report(project_dir: str) -> str:
+    directory = Path(project_dir)
+    song_info = _load_optional(directory / "songInfo.json", {})
+    music = _load_optional(directory / "music.json", {})
+    notes = _load_optional(directory / "reference.json", [])
+    difficulty = _load_optional(directory / "difficulty.json", [])
+    structured = _load_optional(directory / "difficultyByStructure.json", [])
+    breaths = _load_optional(directory / "breaths.json", {})
+    lyrics = _load_optional(directory / "lyricsSync.json", [])
+
+    lines = [f"# Отчёт по песне: {directory.name}", ""]
+    _append_general(lines, song_info)
+    _append_music(lines, music)
+    _append_vocal(lines, notes, breaths)
+    lines.extend(("## Текст", f"- Строк распознано/синхронизировано: {len(lyrics)}" if lyrics else "", ""))
+    _append_difficulty(lines, difficulty, structured)
     return "\n".join(lines)
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Сборка человекочитаемого отчёта по проекту песни")
-    parser.add_argument("project_dir", help="папка проекта, напр. Song/название_песни")
-    parser.add_argument("output", nargs="?", default=None,
-                         help="куда сохранить (по умолчанию <project_dir>/report.md)")
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Сборка отчёта по проекту песни")
+    parser.add_argument("project_dir")
+    parser.add_argument("output", nargs="?", default=None)
     args = parser.parse_args()
-
-    output = args.output or str(Path(args.project_dir) / "report.md")
-    report_text = build_report(args.project_dir)
-
-    Path(output).write_text(report_text, encoding="utf-8")
+    output = Path(args.output) if args.output else Path(args.project_dir) / "report.md"
+    output.write_text(build_report(args.project_dir), encoding="utf-8")
     print(f"Отчёт сохранён: {output}")
 
 

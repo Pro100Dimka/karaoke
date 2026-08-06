@@ -1,81 +1,90 @@
-"""
-Шаг 10. Построение карты песни.
-music.json + reference.json + lyricsSync.json + breaths.json + pitch.json
-  -> songMap.json
+"""Build the frame-by-frame song map consumed by the karaoke player."""
 
-Собирает единую временную структуру: на каждый момент времени —
-текст, ноты, темп, громкость, паузы.
-"""
+from __future__ import annotations
+
 import argparse
 import bisect
-import json
+from collections.abc import Sequence
+from typing import Any
 
+from src.common.json_io import load_json, save_json
 
-def load(path):
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
 
 
 def find_current(items, time, start_key="start", end_key="end"):
-    """Находит элемент(ы) списка, активные в момент time."""
-    return [it for it in items if it[start_key] <= time <= it[end_key]]
+    """Compatibility helper returning all intervals active at *time*."""
+    return [item for item in items if item[start_key] <= time <= item[end_key]]
 
 
-def build_song_map(music: dict, reference_notes: list, lyrics_lines: list,
-                    breaths: dict, pitch_frames: list) -> dict:
-    # Список временных меток — берём из pitch.json (самая частая сетка)
+def _sorted_intervals(items: Sequence[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[float]]:
+    ordered = sorted(items, key=lambda item: float(item["start"]))
+    return ordered, [float(item["start"]) for item in ordered]
+
+
+def _active_item(
+    items: Sequence[dict[str, Any]], starts: Sequence[float], time: float
+) -> dict[str, Any] | None:
+    index = bisect.bisect_right(starts, time) - 1
+    if index < 0:
+        return None
+    candidate = items[index]
+    return candidate if float(candidate["end"]) >= time else None
+
+
+def _nearest_bpm(music: dict[str, Any]):
+    curve = sorted(music.get("tempo_curve", []), key=lambda point: float(point["time"]))
+    times = [float(point["time"]) for point in curve]
+    fallback = music.get("bpm")
+
+    def lookup(time: float):
+        if not curve:
+            return fallback
+        index = bisect.bisect_left(times, time)
+        if index <= 0:
+            return curve[0]["bpm"]
+        if index >= len(curve):
+            return curve[-1]["bpm"]
+        before, after = curve[index - 1], curve[index]
+        return before["bpm"] if time - before["time"] <= after["time"] - time else after["bpm"]
+
+    return lookup
+
+
+def build_song_map(
+    music: dict,
+    reference_notes: list,
+    lyrics_lines: list,
+    breaths: dict,
+    pitch_frames: list,
+) -> dict:
+    """Combine independent analysis products into one indexed timeline.
+
+    All interval lookups use binary search.  This matters for long songs where
+    checking every pause or lyric line for every 10 ms pitch frame becomes
+    noticeably expensive.
+    """
+    notes, note_starts = _sorted_intervals(reference_notes)
+    lines, line_starts = _sorted_intervals(lyrics_lines)
+    pauses, pause_starts = _sorted_intervals(breaths.get("pauses", []))
+    bpm_at = _nearest_bpm(music)
+
     timeline = []
-    note_starts = [n["start"] for n in reference_notes]
-    line_starts = [line["start"] for line in lyrics_lines]
-
-    # tempo_curve отсортирован по времени — используем bisect вместо
-    # линейного min(...) на каждый кадр (было O(N*M), стало O(log M))
-    tempo_curve = music.get("tempo_curve", [])
-    tempo_times = [p["time"] for p in tempo_curve]
-
-    def bpm_at(t):
-        if not tempo_curve:
-            return music.get("bpm")
-        idx = bisect.bisect_left(tempo_times, t)
-        if idx == 0:
-            return tempo_curve[0]["bpm"]
-        if idx >= len(tempo_curve):
-            return tempo_curve[-1]["bpm"]
-        # ближайшая из двух соседних точек
-        before, after = tempo_curve[idx - 1], tempo_curve[idx]
-        if abs(before["time"] - t) <= abs(after["time"] - t):
-            return before["bpm"]
-        return after["bpm"]
-
     for frame in pitch_frames:
-        t = frame["time"]
-
-        # текущая нота (эталон)
-        idx = bisect.bisect_right(note_starts, t) - 1
-        current_note = None
-        if 0 <= idx < len(reference_notes) and reference_notes[idx]["end"] >= t:
-            current_note = reference_notes[idx]["note"]
-
-        # текущая строка текста
-        idx_l = bisect.bisect_right(line_starts, t) - 1
-        current_line = None
-        if 0 <= idx_l < len(lyrics_lines) and lyrics_lines[idx_l]["end"] >= t:
-            current_line = lyrics_lines[idx_l]["text"]
-
-        # пауза?
-        in_pause = any(p["start"] <= t <= p["end"] for p in breaths.get("pauses", []))
-
-        bpm = bpm_at(t)
-
-        timeline.append({
-            "time": round(t, 3),
-            "text": current_line,
-            "note": current_note,
-            "f0_hz": frame.get("f0_hz"),
-            "bpm": round(bpm, 1) if bpm else None,
-            "loudness_db": frame.get("loudness_db"),
-            "pause": in_pause,
-        })
+        time = float(frame["time"])
+        note = _active_item(notes, note_starts, time)
+        line = _active_item(lines, line_starts, time)
+        bpm = bpm_at(time)
+        timeline.append(
+            {
+                "time": round(time, 3),
+                "text": line.get("text") if line else None,
+                "note": note.get("note") if note else None,
+                "f0_hz": frame.get("f0_hz"),
+                "bpm": round(float(bpm), 1) if bpm is not None else None,
+                "loudness_db": frame.get("loudness_db"),
+                "pause": _active_item(pauses, pause_starts, time) is not None,
+            }
+        )
 
     return {
         "key": music.get("key"),
@@ -88,7 +97,7 @@ def build_song_map(music: dict, reference_notes: list, lyrics_lines: list,
     }
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Сборка общей карты песни")
     parser.add_argument("--music", required=True, help="music.json")
     parser.add_argument("--reference", required=True, help="reference.json")
@@ -98,17 +107,14 @@ def main():
     parser.add_argument("output", nargs="?", default="songMap.json")
     args = parser.parse_args()
 
-    music = load(args.music)
-    reference_notes = load(args.reference)
-    lyrics_lines = load(args.lyrics_sync)
-    breaths = load(args.breaths)
-    pitch_frames = load(args.pitch)
-
-    song_map = build_song_map(music, reference_notes, lyrics_lines, breaths, pitch_frames)
-
-    with open(args.output, "w", encoding="utf-8") as f:
-        json.dump(song_map, f, ensure_ascii=False, indent=2)
-
+    song_map = build_song_map(
+        load_json(args.music),
+        load_json(args.reference),
+        load_json(args.lyrics_sync),
+        load_json(args.breaths),
+        load_json(args.pitch),
+    )
+    save_json(song_map, args.output)
     print(f"Карта песни собрана: {args.output} ({len(song_map['timeline'])} кадров)")
 
 

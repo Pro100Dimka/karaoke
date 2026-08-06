@@ -1,34 +1,17 @@
+"""End-to-end karaoke preparation pipeline.
+
+The public :func:`run` function is used both by the backend and by the batch
+CLI.  Heavy analysis stages stay cached on disk; cheap derived artefacts are
+rebuilt when the reference melody changes.
 """
-Полный пайплайн: song.mp3 -> готовый проект в Song/
 
-Структура проекта:
-    AI/
-    └── src/
-        ├── analyze/       (music.py, vocal.py, breath.py)
-        ├── build/         (convert.py, reference.py, unified_song_map.py,
-        │                   project.py, midi.py)
-        ├── evaluation/    (difficulty_map.py)
-        ├── lyrics/        (get_text.py, sync.py)
-        └── preprocessing/ (probe.py, separate.py)
-    ├── run_all.py
-    ├── requirements.txt
-    └── song.mp3
-
-Запуск (обрабатывает все аудиофайлы в папке):
-    python run_all.py --input-dir full_songs --out Song
-
-Требует: ffmpeg в PATH и pip install -r requirements.txt
-
-Функция run(input_mp3, out_dir, ...) из этого модуля также вызывается
-напрямую из backend/app/services/pipeline_service.py (через ai_bridge.py)
-для обработки одной песни — CLI (main()) нужен только для пакетной
-обработки всей папки из командной строки.
-"""
+from __future__ import annotations
 
 import argparse
-import json
 import os
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Callable, TypeVar
 
 from src.analyze.breath import analyze_breath
 from src.analyze.game import extract_game_reference
@@ -52,15 +35,55 @@ from src.build.split_notes import (
     trim_quiet_unanchored_note_tails,
 )
 from src.build.unified_song_map import build_song_map
+from src.common.json_io import load_json, save_json
 from src.evaluation.difficulty_map import build_difficulty_map
 from src.lyrics.get_text import get_lyrics
 from src.lyrics.sync import sync_existing_lyrics_with_whisper
 from src.preprocessing.probe import probe_file
 from src.preprocessing.separate import separate
 
+T = TypeVar("T")
+AUDIO_PATTERNS = ("*.mp3", "*.wav", "*.flac", "*.m4a", "*.ogg")
+DERIVED_REFERENCE_FILES = (
+    "songMap.json",
+    "difficulty.json",
+    "difficultyByStructure.json",
+    "melody.mid",
+    "manifest.json",
+    "report.md",
+)
+
+
+@dataclass(frozen=True)
+class PipelinePaths:
+    """All stable filesystem locations used by one pipeline run."""
+
+    out: Path
+
+    @classmethod
+    def create(cls, out_dir: str | Path) -> "PipelinePaths":
+        out = Path(out_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        return cls(out=out)
+
+    def file(self, name: str) -> Path:
+        return self.out / name
+
+    @property
+    def separated(self) -> Path:
+        return self.out / "separated"
+
+    @property
+    def vocals(self) -> Path:
+        return self.separated / "vocals.wav"
+
+    @property
+    def instrumental(self) -> Path:
+        return self.separated / "instrumental.wav"
+
 
 def _use_game_melody_engine() -> bool:
-    """Whether GAME supplies pitch, making the slower pYIN pass redundant."""
+    """Return whether GAME supplies melody events for this installation."""
     if os.getenv("SONGAPP_MIDI_ENGINE", "auto").strip().lower() == "pyin":
         return False
     from src.common.model_paths import game_model_dir
@@ -68,348 +91,301 @@ def _use_game_melody_engine() -> bool:
     return (game_model_dir() / "config.json").exists()
 
 
-def save_json(obj, path):
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(obj, f, ensure_ascii=False, indent=2)
+def _cached_json(path: Path, label: str, builder: Callable[[], T]) -> T:
+    if path.exists():
+        print(f"{label} — уже есть, пропускаю")
+        return load_json(path)
+    print(f"{label}...")
+    value = builder()
+    save_json(value, path)
+    return value
 
 
-def load_json(path):
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+def _ensure_song_info(input_audio: str, paths: PipelinePaths) -> None:
+    _cached_json(paths.file("songInfo.json"), "1/13 Проверка файла", lambda: probe_file(input_audio))
 
 
-def run(input_mp3: str, out_dir: str, whisper_model: str = "medium", language: str | None = None):
-    out = Path(out_dir)
-    out.mkdir(parents=True, exist_ok=True)
-
-    # --- 1/13 Проверка файла ---
-    song_info_path = out / "songInfo.json"
-    if song_info_path.exists():
-        print("1/13 Проверка файла — уже есть, пропускаю")
-    else:
-        print("1/13 Проверка файла...")
-        song_info = probe_file(input_mp3)
-        save_json(song_info, song_info_path)
-
-    # --- 2/13 Конвертация ---
-    song_wav = out / "song.wav"
+def _ensure_song_wav(input_audio: str, paths: PipelinePaths) -> Path:
+    song_wav = paths.file("song.wav")
     if song_wav.exists():
         print("2/13 Конвертация — уже есть, пропускаю")
     else:
         print("2/13 Конвертация...")
-        convert(input_mp3, str(song_wav))
+        convert(input_audio, str(song_wav))
+    return song_wav
 
-    # --- 3/13 Разделение дорожек ---
-    vocals_path = out / "separated" / "vocals.wav"
-    instrumental_path = out / "separated" / "instrumental.wav"
-    if vocals_path.exists() and instrumental_path.exists():
+
+def _ensure_stems(song_wav: Path, paths: PipelinePaths) -> tuple[Path, Path]:
+    if paths.vocals.exists() and paths.instrumental.exists():
         print("3/13 Разделение дорожек — уже есть, пропускаю")
-    else:
-        print("3/13 Разделение дорожек (Demucs, может занять время)...")
-        stems = separate(str(song_wav), str(out / "separated"))
-        vocals_path = Path(stems["vocals"])
-        instrumental_path = Path(stems["instrumental"])
-    vocals_path, instrumental_path = str(vocals_path), str(instrumental_path)
+        return paths.vocals, paths.instrumental
 
-    # --- 3.5/13 Нормализация громкости ---
-    # Пороги в analyze_breath (top_db) и confidence в pitch-детекторах
-    # калибровались на "типичной" громкости. Нормализация приводит все
-    # песни к одному уровню (-16 LUFS) перед анализом, чтобы пороги
-    # срабатывали одинаково независимо от того, как трек был сведён.
-    normalized_flag = out / "separated" / ".normalized"
-    if normalized_flag.exists():
+    print("3/13 Разделение дорожек (Demucs, может занять время)...")
+    stems = separate(str(song_wav), str(paths.separated))
+    return Path(stems["vocals"]), Path(stems["instrumental"])
+
+
+def _normalize_stems(stems: tuple[Path, Path], paths: PipelinePaths) -> None:
+    flag = paths.separated / ".normalized"
+    if flag.exists():
         print("3.5/13 Нормализация громкости — уже есть, пропускаю")
-    else:
-        print("3.5/13 Нормализация громкости...")
-        for p in (vocals_path, instrumental_path):
-            tmp_path = p + ".tmp.wav"
-            normalize_loudness(p, tmp_path)
-            Path(tmp_path).replace(p)
-        normalized_flag.touch()
+        return
 
-    # --- 4/13 Анализ минусовки ---
-    music_path = out / "music.json"
-    if music_path.exists():
-        print("4/13 Анализ минусовки — уже есть, пропускаю")
-        music = load_json(music_path)
-    else:
-        print("4/13 Анализ минусовки...")
-        music = analyze_music(instrumental_path)
-        save_json(music, music_path)
+    print("3.5/13 Нормализация громкости...")
+    for source in stems:
+        temporary = source.with_name(f"{source.name}.tmp.wav")
+        try:
+            normalize_loudness(str(source), str(temporary))
+            temporary.replace(source)
+        finally:
+            temporary.unlink(missing_ok=True)
+    flag.touch()
 
-    # --- 5/13 Анализ вокала (pitch) ---
-    pitch_path = out / "pitch.json"
-    if pitch_path.exists():
-        print("5/13 Анализ вокала — уже есть, пропускаю")
-        pitch_frames = load_json(pitch_path)
-    else:
-        print("5/13 Анализ вокала (pitch)...")
-        pitch_engine = "torchcrepe" if _use_game_melody_engine() else "pyin"
-        if pitch_engine == "torchcrepe":
+
+def _build_pitch(vocals: Path, paths: PipelinePaths) -> list[dict[str, Any]]:
+    def analyze() -> list[dict[str, Any]]:
+        engine = "torchcrepe" if _use_game_melody_engine() else "pyin"
+        if engine == "torchcrepe":
             print("   GAME supplies note events; TorchCrepe verifies vocal pitch.")
-        pitch_frames = analyze_vocal(vocals_path, engine=pitch_engine)
-        save_json(pitch_frames, pitch_path)
+        return analyze_vocal(str(vocals), engine=engine)
 
-    # --- 6/13 Эталонная мелодия ---
-    reference_path = out / "reference.json"
-    # GAME's raw output is cached, but its normalization is cheap and evolves
-    # with the app. Rebuild the clean baseline from it on every pipeline run.
-    game_cache_available = (out / "game_notes.json").exists()
-    if game_cache_available:
+    return _cached_json(paths.file("pitch.json"), "5/13 Анализ вокала (pitch)", analyze)
+
+
+def _fallback_reference(pitch_frames: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return build_reference(
+        pitch_frames,
+        min_note_duration=0.12,
+        confidence_percentile=18.0,
+        min_confidence_floor=0.03,
+        max_confidence_ceiling=0.42,
+        smoothing_window=9,
+        stable_frames=7,
+        max_gap_sec=0.12,
+    )
+
+
+def _build_reference(
+    vocals: Path,
+    pitch_frames: list[dict[str, Any]],
+    paths: PipelinePaths,
+    language: str | None,
+) -> list[dict[str, Any]]:
+    reference_path = paths.file("reference.json")
+    game_cache = paths.file("game_notes.json").exists()
+    if game_cache:
         print("6/13 Нормализация эталонной мелодии GAME...")
-        reference_notes = extract_game_reference(vocals_path, out, language)
-        if reference_notes is None:
+        notes = extract_game_reference(str(vocals), paths.out, language)
+        if notes is None:
             raise RuntimeError("Cached GAME melody could not be normalized")
-        save_json(reference_notes, reference_path)
-    elif reference_path.exists():
+        save_json(notes, reference_path)
+        return notes
+    if reference_path.exists():
         print("6/13 Эталонная мелодия — уже есть, пропускаю")
-        reference_notes = load_json(reference_path)
-    else:
-        print("6/13 Построение эталонной мелодии...")
-        reference_notes = extract_game_reference(vocals_path, out, language)
-        if reference_notes is None:
-            reference_notes = build_reference(
-                pitch_frames,
-                # Keep quiet syllables in the guide while still filtering
-                # single-frame pYIN artefacts in the post-processing stages.
-                min_note_duration=0.12,
-                confidence_percentile=18.0,
-                min_confidence_floor=0.03,
-                max_confidence_ceiling=0.42,
-                # A vocal pitch tracker reports vibrato as repeated semitone
-                # crossings. Require a short held contour before emitting a new
-                # karaoke note, so the guide follows melody rather than tremolo.
-                smoothing_window=9,
-                stable_frames=7,
-                max_gap_sec=0.12,
-            )
-        save_json(reference_notes, reference_path)
+        return load_json(reference_path)
 
-    # --- 7/13 Анализ дыхания ---
-    breaths_path = out / "breaths.json"
-    if breaths_path.exists():
-        print("7/13 Анализ дыхания — уже есть, пропускаю")
-        breaths = load_json(breaths_path)
-    else:
-        print("7/13 Анализ дыхания...")
-        breaths = analyze_breath(vocals_path, pitch_frames=pitch_frames)
-        save_json(breaths, breaths_path)
+    print("6/13 Построение эталонной мелодии...")
+    notes = extract_game_reference(str(vocals), paths.out, language)
+    notes = notes if notes is not None else _fallback_reference(pitch_frames)
+    save_json(notes, reference_path)
+    return notes
 
-    # --- 8/13 Текст ---
-    lyrics_path = out / "lyrics.txt"
+
+def _ensure_lyrics(
+    input_audio: str,
+    vocals: Path,
+    paths: PipelinePaths,
+    whisper_model: str,
+    language: str | None,
+) -> Path:
+    lyrics_path = paths.file("lyrics.txt")
     if lyrics_path.exists():
         print("8/13 Получение текста — уже есть, пропускаю")
-    else:
-        print("8/13 Получение текста...")
-        # Step 9 transcribes with word timestamps and already returns the text.
-        # Do not run Whisper here as well: that used to make every untagged
-        # track pay for a full second transcription with no extra data.
-        lyrics_text, source = get_lyrics(
-            input_mp3,
-            whisper_model,
-            language,
-            whisper_audio_path=vocals_path,
-            transcribe_if_missing=False,
-        )
-        lyrics_path.write_text(lyrics_text, encoding="utf-8")
-        print(f"   источник текста: {source}")
+        return lyrics_path
 
-    # --- 9/13 Синхронизация текста ---
-    lyrics_sync_path = out / "lyricsSync.json"
-    if lyrics_sync_path.exists():
-        print("9/13 Синхронизация текста — уже есть, пропускаю")
-        lyrics_sync = load_json(lyrics_sync_path)
-    else:
-        print("9/13 Синхронизация текста...")
-        lyrics_sync = sync_existing_lyrics_with_whisper(
-            vocals_path, str(lyrics_path), whisper_model, language
-        )
-        save_json(lyrics_sync, lyrics_sync_path)
+    print("8/13 Получение текста...")
+    text, source = get_lyrics(
+        input_audio,
+        whisper_model,
+        language,
+        whisper_audio_path=str(vocals),
+        transcribe_if_missing=False,
+    )
+    lyrics_path.write_text(text, encoding="utf-8")
+    print(f"   источник текста: {source}")
+    return lyrics_path
 
-    # --- 9.5/13 Дозаполнение пробелов + разбиение долгих нот по слогам ---
-    # ИСПРАВЛЕНО (v2): раньше здесь только резали ноты по каждой границе
-    # слога вслепую (по тексту) — это давало "кашу"/лаг там, где певец
-    # реально тянул легато без повторной атаки, а тайминги Whisper на
-    # границах слов сами по себе неточны. Теперь:
-    #  1) fill_gaps_during_active_singing закрывает провалы МЕЖДУ нотами,
-    #     если весь провал приходится на активное пение по тексту, а
-    #     сырые (до отсечки confidence) кадры pitch.json показывают, что
-    #     высота там всё-таки была — это дыра детектора, а не тишина;
-    #  2) split_notes_by_syllables режет долгую ноту по слогу, ТОЛЬКО
-    #     если рядом есть настоящий провал громкости (акустическое
-    #     подтверждение повторной атаки), и снапает точку разреза к нему,
-    #     а не к тексту — легато при этом не трогается.
-    # Выполняется каждый раз (не кэшируется по наличию файла), чтобы
-    # проекты, собранные до этого шага, тоже получили исправление при
-    # повторном запуске; сам шаг идемпотентен.
-    print("9.5/13 Дозаполнение пробелов и разбиение долгих нот по слогам...")
-    notes_before = len(reference_notes)
-    reference_before_postprocessing = reference_notes
-    using_game = (out / "game_notes.json").exists()
+
+def _postprocess_reference(
+    notes: list[dict[str, Any]],
+    lyrics_sync: list[dict[str, Any]],
+    pitch_frames: list[dict[str, Any]],
+    using_game: bool,
+) -> list[dict[str, Any]]:
     if using_game:
-        # GAME is the pitch authority.  Remove only isolated, acoustically
-        # unsupported glitches before preserving its real repeated attacks.
-        reference_notes = refine_neural_reference(reference_notes, pitch_frames)
-        reference_notes = correct_confirmed_neural_octaves(reference_notes, pitch_frames)
-    if not using_game:
-        reference_notes = fill_gaps_during_active_singing(
-            reference_notes, lyrics_sync, pitch_frames
-        )
-    # GAME is better at pitch than pYIN, but it can merge a long repeated
-    # pitch across several sung words. Split only at a word attack confirmed
-    # by a real vocal-energy dip; this restores lyric rhythm without inventing
-    # notes from Whisper timestamps alone.
-    reference_notes = split_notes_by_syllables(
+        notes = refine_neural_reference(notes, pitch_frames)
+        notes = correct_confirmed_neural_octaves(notes, pitch_frames)
+    else:
+        notes = fill_gaps_during_active_singing(notes, lyrics_sync, pitch_frames)
+
+    notes = split_notes_by_syllables(
+        notes,
+        lyrics_sync,
+        pitch_frames,
+        acoustic_search_window=0.20,
+        acoustic_dip_margin_db=1.5,
+        include_syllables=not using_game,
+    )
+    notes = align_note_boundaries_to_words(notes, lyrics_sync, pitch_frames)
+    notes = trim_quiet_unanchored_note_tails(notes, lyrics_sync, pitch_frames)
+    return filter_unanchored_long_notes(notes, lyrics_sync)
+
+
+def _invalidate_reference_dependents(paths: PipelinePaths) -> None:
+    for name in DERIVED_REFERENCE_FILES:
+        paths.file(name).unlink(missing_ok=True)
+
+
+def _ensure_midi(music: dict[str, Any], notes: list[dict[str, Any]], paths: PipelinePaths) -> Path:
+    midi_path = paths.file("melody.mid")
+    if midi_path.exists():
+        print("12/13 MIDI — уже есть, пропускаю")
+        return midi_path
+
+    print("12/13 Экспорт мелодии в MIDI...")
+    tempo = float(music.get("bpm", 120.0))
+    first_beat = float(music.get("first_beat_sec", 0.0))
+    midi_notes = quantize_notes(notes, tempo, first_beat, division=16, strength=0.5)
+    midi = build_midi(midi_notes, instrument_name="Voice Oohs", tempo=tempo)
+    add_tempo_and_key(midi, str(paths.file("music.json")))
+    midi.write(str(midi_path))
+    return midi_path
+
+
+def run(
+    input_mp3: str,
+    out_dir: str,
+    whisper_model: str = "medium",
+    language: str | None = None,
+):
+    """Prepare one song and return its generated project manifest."""
+    paths = PipelinePaths.create(out_dir)
+    _ensure_song_info(input_mp3, paths)
+    song_wav = _ensure_song_wav(input_mp3, paths)
+    vocals, instrumental = _ensure_stems(song_wav, paths)
+    _normalize_stems((vocals, instrumental), paths)
+
+    music = _cached_json(
+        paths.file("music.json"),
+        "4/13 Анализ минусовки",
+        lambda: analyze_music(str(instrumental)),
+    )
+    pitch_frames = _build_pitch(vocals, paths)
+    reference_notes = _build_reference(vocals, pitch_frames, paths, language)
+    breaths = _cached_json(
+        paths.file("breaths.json"),
+        "7/13 Анализ дыхания",
+        lambda: analyze_breath(str(vocals), pitch_frames=pitch_frames),
+    )
+    lyrics_path = _ensure_lyrics(input_mp3, vocals, paths, whisper_model, language)
+    lyrics_sync = _cached_json(
+        paths.file("lyricsSync.json"),
+        "9/13 Синхронизация текста",
+        lambda: sync_existing_lyrics_with_whisper(
+            str(vocals), str(lyrics_path), whisper_model, language
+        ),
+    )
+
+    print("9.5/13 Дозаполнение пробелов и разбиение долгих нот по слогам...")
+    original_reference = reference_notes
+    reference_notes = _postprocess_reference(
         reference_notes,
         lyrics_sync,
         pitch_frames,
-        # Real vocal attacks are frequently only 1.5–3 dB quieter than the
-        # vowel around them after source separation.  The former 3.5 dB gate
-        # left repeated notes merged into one long block.
-        acoustic_search_window=0.20,
-        acoustic_dip_margin_db=1.5,
-        # GAME already identifies musical attacks. For it, lyric words may
-        # refine timing but estimated syllables must not invent extra events.
-        include_syllables=not using_game,
+        using_game=paths.file("game_notes.json").exists(),
     )
-    reference_notes = align_note_boundaries_to_words(reference_notes, lyrics_sync, pitch_frames)
-    reference_notes = trim_quiet_unanchored_note_tails(reference_notes, lyrics_sync, pitch_frames)
-    reference_notes = filter_unanchored_long_notes(reference_notes, lyrics_sync)
-    if len(reference_notes) != notes_before:
-        print(f"   ноты: {notes_before} -> {len(reference_notes)}")
-    save_json(reference_notes, reference_path)
+    if len(reference_notes) != len(original_reference):
+        print(f"   ноты: {len(original_reference)} -> {len(reference_notes)}")
+    save_json(reference_notes, paths.file("reference.json"))
+    if reference_notes != original_reference:
+        _invalidate_reference_dependents(paths)
 
-    # The outputs below embed ``reference.json``. They used to remain stale
-    # when a cached run refined the guide, making the player and MIDI export
-    # disagree. Only small derived artefacts are rebuilt; audio and lyrics
-    # remain cached.
-    if reference_notes != reference_before_postprocessing:
-        for derived_path in (
-            out / "songMap.json",
-            out / "difficulty.json",
-            out / "difficultyByStructure.json",
-            out / "melody.mid",
-            out / "manifest.json",
-            out / "report.md",
-        ):
-            derived_path.unlink(missing_ok=True)
+    _cached_json(
+        paths.file("songMap.json"),
+        "10/13 Построение карты песни",
+        lambda: build_song_map(music, reference_notes, lyrics_sync, breaths, pitch_frames),
+    )
+    _cached_json(
+        paths.file("difficulty.json"),
+        "11/13 Карта сложности",
+        lambda: build_difficulty_map(reference_notes, lyrics_sync),
+    )
 
-    # --- 10/13 Карта песни ---
-    song_map_path = out / "songMap.json"
-    if song_map_path.exists():
-        print("10/13 Карта песни — уже есть, пропускаю")
-    else:
-        print("10/13 Построение карты песни...")
-        song_map = build_song_map(music, reference_notes, lyrics_sync, breaths, pitch_frames)
-        save_json(song_map, song_map_path)
-
-    # --- 11/13 Карта сложности (по строкам текста) ---
-    difficulty_path = out / "difficulty.json"
-    if difficulty_path.exists():
-        print("11/13 Карта сложности — уже есть, пропускаю")
-    else:
-        print("11/13 Карта сложности...")
-        difficulty = build_difficulty_map(reference_notes, lyrics_sync)
-        save_json(difficulty, difficulty_path)
-
-    # --- 11.5/13 Структурная сегментация + карта сложности по блокам ---
-    structure_path = out / "structure.json"
-    difficulty_by_structure_path = out / "difficultyByStructure.json"
+    structure_path = paths.file("structure.json")
+    difficulty_by_structure_path = paths.file("difficultyByStructure.json")
     if structure_path.exists() and difficulty_by_structure_path.exists():
         print("11.5/13 Структура песни — уже есть, пропускаю")
     else:
         print("11.5/13 Структурная сегментация (куплет/припев)...")
-        structure_sections = segment_structure(instrumental_path)
-        save_json(structure_sections, structure_path)
-        difficulty_by_structure = build_difficulty_map(reference_notes, structure_sections)
-        save_json(difficulty_by_structure, difficulty_by_structure_path)
+        sections = segment_structure(str(instrumental))
+        save_json(sections, structure_path)
+        save_json(build_difficulty_map(reference_notes, sections), difficulty_by_structure_path)
 
-    # --- 12/13 MIDI ---
-    midi_path = out / "melody.mid"
-    if midi_path.exists():
-        print("12/13 MIDI — уже есть, пропускаю")
-    else:
-        print("12/13 Экспорт мелодии в MIDI...")
-        tempo = float(music.get("bpm", 120.0))
-        first_beat = float(music.get("first_beat_sec", 0.0))
-
-        midi_notes = quantize_notes(reference_notes, tempo, first_beat, division=16, strength=0.5)
-
-        midi = build_midi(
-            midi_notes,
-            instrument_name="Voice Oohs",
-            tempo=tempo,
-        )
-
-        add_tempo_and_key(midi, str(music_path))
-
-        midi.write(str(midi_path))
-
-    # --- 13/13 Сборка проекта (манифест) ---
+    midi_path = _ensure_midi(music, reference_notes, paths)
     print("13/13 Сборка проекта...")
     manifest = build_project(
-        str(out),
-        song_info=str(song_info_path),
-        instrumental=instrumental_path,
-        vocals=vocals_path,
-        pitch=str(pitch_path),
-        reference=str(reference_path),
-        lyrics_sync=str(lyrics_sync_path),
-        music=str(music_path),
-        breaths=str(breaths_path),
-        difficulty=str(difficulty_path),
-        song_map=str(song_map_path),
+        str(paths.out),
+        song_info=str(paths.file("songInfo.json")),
+        instrumental=str(instrumental),
+        vocals=str(vocals),
+        pitch=str(paths.file("pitch.json")),
+        reference=str(paths.file("reference.json")),
+        lyrics_sync=str(paths.file("lyricsSync.json")),
+        music=str(paths.file("music.json")),
+        breaths=str(paths.file("breaths.json")),
+        difficulty=str(paths.file("difficulty.json")),
+        song_map=str(paths.file("songMap.json")),
         midi=str(midi_path),
     )
 
     print("13.5/13 Формирование отчёта...")
-    report_text = build_report(str(out))
-    (out / "report.md").write_text(report_text, encoding="utf-8")
-
-    print("Готово! Проект собран в:", out)
+    paths.file("report.md").write_text(build_report(str(paths.out)), encoding="utf-8")
+    print("Готово! Проект собран в:", paths.out)
     return manifest
 
 
-def main():
+def _find_audio_files(input_dir: Path) -> list[Path]:
+    return sorted(file for pattern in AUDIO_PATTERNS for file in input_dir.glob(pattern))
+
+
+def main() -> None:
     parser = argparse.ArgumentParser(description="Полный пайплайн подготовки караоке")
-    parser.add_argument(
-        "--input-dir", default="full_songs", help="Папка с песнями (mp3/wav/flac/m4a)"
-    )
-    parser.add_argument("--out", default="Song", help="Папка, куда будут складываться проекты")
+    parser.add_argument("--input-dir", default="full_songs", help="Папка с песнями")
+    parser.add_argument("--out", default="Song", help="Папка для готовых проектов")
     parser.add_argument("--whisper-model", default="medium")
     parser.add_argument("--language", default=None)
-
     args = parser.parse_args()
 
     input_dir = Path(args.input_dir)
-
     if not input_dir.exists():
         print(f"Папка не найдена: {input_dir}")
         return
 
-    audio_extensions = ("*.mp3", "*.wav", "*.flac", "*.m4a", "*.ogg")
-    song_files = sorted(f for ext in audio_extensions for f in input_dir.glob(ext))
-
-    if not song_files:
-        print(f"В папке '{input_dir}' не найдено аудиофайлов " f"({', '.join(audio_extensions)}).")
+    songs = _find_audio_files(input_dir)
+    if not songs:
+        print(f"В папке '{input_dir}' не найдено аудиофайлов ({', '.join(AUDIO_PATTERNS)}).")
         return
 
-    print(f"Найдено песен: {len(song_files)}")
-
-    for index, song_file in enumerate(song_files, start=1):
-        song_name = song_file.stem
-        out_dir = Path(args.out) / song_name
-
+    print(f"Найдено песен: {len(songs)}")
+    for index, song in enumerate(songs, start=1):
         print("\n" + "=" * 80)
-        print(f"[{index}/{len(song_files)}] {song_name}")
+        print(f"[{index}/{len(songs)}] {song.stem}")
         print("=" * 80)
-
         try:
-            run(str(song_file), str(out_dir), args.whisper_model, args.language)
-        except Exception as e:
-            print(f"\nОшибка при обработке '{song_name}':")
-            print(e)
-
+            run(str(song), str(Path(args.out) / song.stem), args.whisper_model, args.language)
+        except Exception as error:  # CLI must continue with the remaining files.
+            print(f"\nОшибка при обработке '{song.stem}':")
+            print(error)
     print("\nВсе песни обработаны.")
 
 

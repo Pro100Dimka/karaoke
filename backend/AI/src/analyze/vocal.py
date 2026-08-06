@@ -13,14 +13,15 @@ vocals.wav -> pitch.json
 """
 
 import argparse
-import json
 import os
 
 import librosa
 import numpy as np
 
+from src.common.json_io import save_json
 
-def freq_to_note(freq: float) -> str:
+
+def freq_to_note(freq: float) -> str | None:
     if freq <= 0 or np.isnan(freq):
         return None
     note_number = 12 * np.log2(freq / 440.0) + 69  # MIDI number, A4=69
@@ -156,6 +157,61 @@ def _analyze_torchcrepe(y: np.ndarray, sr: int, frame_step_sec: float, fmin: str
     return times, f0, voiced_flag, periodicity, rms_db_aligned
 
 
+def _run_engine(
+    engine: str,
+    y: np.ndarray,
+    sr: int,
+    frame_step_sec: float,
+    fmin: str,
+    fmax: str,
+    crepe_model: str,
+):
+    if engine == "energy":
+        return _analyze_energy(y, sr, frame_step_sec)
+    if engine == "torchcrepe":
+        try:
+            return _analyze_torchcrepe(y, sr, frame_step_sec, fmin, fmax)
+        except (ImportError, RuntimeError) as exc:
+            print(f"TorchCrepe unavailable ({exc}); using fast vocal activity map.")
+            return _analyze_energy(y, sr, frame_step_sec)
+    if engine == "crepe":
+        try:
+            return _analyze_crepe(
+                y, sr, frame_step_sec, fmin, fmax, model_capacity=crepe_model
+            )
+        except ImportError:
+            print(
+                "crepe/tensorflow не установлены — откатываюсь на pyin. "
+                "Установить: pip install crepe tensorflow"
+            )
+    return _analyze_pyin(y, sr, frame_step_sec, fmin, fmax)
+
+
+def _build_frames(times, frequencies, voiced_flags, probabilities, loudness):
+    frames = []
+    for time, frequency, voiced, probability, loud in zip(
+        times, frequencies, voiced_flags, probabilities, loudness, strict=False
+    ):
+        is_voiced = bool(voiced)
+        valid_frequency = (
+            is_voiced
+            and frequency is not None
+            and not np.isnan(frequency)
+            and frequency > 0
+        )
+        frames.append(
+            {
+                "time": round(float(time), 3),
+                "note": freq_to_note(frequency) if valid_frequency else None,
+                "f0_hz": round(float(frequency), 2) if valid_frequency else None,
+                "voiced": is_voiced,
+                "confidence": round(float(probability), 3),
+                "loudness_db": round(float(loud), 1),
+            }
+        )
+    return frames
+
+
 def analyze_vocal(
     input_path: str,
     frame_step_sec: float = 0.01,
@@ -164,69 +220,13 @@ def analyze_vocal(
     engine: str = "pyin",
     crepe_model: str = "full",
 ):
+    if frame_step_sec <= 0:
+        raise ValueError("frame_step_sec must be positive")
     y, sr = librosa.load(input_path, sr=None, mono=True)
+    analysis = _run_engine(engine, y, sr, frame_step_sec, fmin, fmax, crepe_model)
+    return _build_frames(*analysis)
 
-    if engine == "energy":
-        times, f0, voiced_flag, voiced_probs, rms_db = _analyze_energy(
-            y,
-            sr,
-            frame_step_sec,
-        )
-    elif engine == "torchcrepe":
-        try:
-            times, f0, voiced_flag, voiced_probs, rms_db = _analyze_torchcrepe(
-                y,
-                sr,
-                frame_step_sec,
-                fmin,
-                fmax,
-            )
-        except (ImportError, RuntimeError) as exc:
-            print(f"TorchCrepe unavailable ({exc}); using fast vocal activity map.")
-            times, f0, voiced_flag, voiced_probs, rms_db = _analyze_energy(
-                y,
-                sr,
-                frame_step_sec,
-            )
-    elif engine == "crepe":
-        try:
-            times, f0, voiced_flag, voiced_probs, rms_db = _analyze_crepe(
-                y, sr, frame_step_sec, fmin, fmax, model_capacity=crepe_model
-            )
-        except ImportError:
-            print(
-                "crepe/tensorflow не установлены — откатываюсь на pyin. "
-                "Установить: pip install crepe tensorflow"
-            )
-            times, f0, voiced_flag, voiced_probs, rms_db = _analyze_pyin(
-                y, sr, frame_step_sec, fmin, fmax
-            )
-    else:
-        times, f0, voiced_flag, voiced_probs, rms_db = _analyze_pyin(
-            y, sr, frame_step_sec, fmin, fmax
-        )
-
-    frames = []
-    for t, freq, voiced, prob, loud in zip(
-        times, f0, voiced_flag, voiced_probs, rms_db, strict=False
-    ):
-        voiced = bool(voiced)
-        freq_valid = voiced and freq is not None and not np.isnan(freq) and freq > 0
-        frames.append(
-            {
-                "time": round(float(t), 3),
-                "note": freq_to_note(freq) if freq_valid else None,
-                "f0_hz": round(float(freq), 2) if freq_valid else None,
-                "voiced": voiced,
-                "confidence": round(float(prob), 3),
-                "loudness_db": round(float(loud), 1),
-            }
-        )
-
-    return frames
-
-
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Анализ вокала: pitch (F0) по кадрам")
     parser.add_argument("input", help="vocals.wav")
     parser.add_argument("output", nargs="?", default="pitch.json")
@@ -249,8 +249,7 @@ def main():
         args.input, frame_step_sec=args.step, engine=args.engine, crepe_model=args.crepe_model
     )
 
-    with open(args.output, "w", encoding="utf-8") as f:
-        json.dump(frames, f, ensure_ascii=False, indent=2)
+    save_json(frames, args.output)
     print(f"Сохранено {len(frames)} кадров в {args.output} (движок: {args.engine})")
 
 

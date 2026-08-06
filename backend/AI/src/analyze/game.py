@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 
 from src.analyze.game_onnx import extract
+from src.common.json_io import load_json, save_json
 from src.common.model_paths import game_model_dir
 from src.common.notes import midi_to_note, note_to_midi
 
@@ -100,14 +100,14 @@ def extract_game_reference(
     if not raw_path.exists():
         try:
             payload = extract(vocals_path, model_dir, language)
-            raw_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            save_json(payload, raw_path)
             print(f"GAME melody extraction: {len(payload['notes'])} notes")
         except Exception as exc:
             print(f"GAME melody extraction failed; using pYIN. {exc}")
             return None
 
     try:
-        payload = json.loads(raw_path.read_text(encoding="utf-8"))
+        payload = load_json(raw_path)
         raw_notes = payload["notes"]
         notes = [
             {
@@ -128,6 +128,6 @@ def extract_game_reference(
             raise ValueError("the engine returned no voiced notes")
         print(f"GAME melody accepted: {len(notes)} notes ({payload.get('provider', 'unknown')}).")
         return notes
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+    except (KeyError, TypeError, ValueError) as exc:
         print(f"Invalid GAME result; using pYIN. {exc}")
         return None
