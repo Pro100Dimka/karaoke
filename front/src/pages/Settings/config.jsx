@@ -3,12 +3,14 @@ import {
   Cpu,
   FolderCog,
   Palette,
+  Radio,
   Save,
   SlidersHorizontal,
   Wrench
 } from "lucide-react";
 import { MONITORING_MODES } from "../Karaoke/config";
 import AudioSettings from "./audio-settings";
+import RadioSettings from "./radio-settings";
 import screens from "./screens";
 
 const option = (value, label = value) => ({ value, label });
@@ -18,6 +20,11 @@ export const SETTINGS = {
     label: "Аудио и запись",
     icon: SlidersHorizontal,
     component: AudioSettings
+  },
+  radio: {
+    label: "Радио",
+    icon: Radio,
+    component: RadioSettings
   },
   appearance: {
     label: "Интерфейс",

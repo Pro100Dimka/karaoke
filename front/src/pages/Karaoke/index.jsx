@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
+import { useRadio } from "../../contexts/radio";
 import { usePolling } from "../../hooks/usePolling";
 import KaraokeConsole from "./components/console";
 import KaraokeMedia from "./components/karaoke-media";
@@ -36,6 +37,7 @@ import { getMicrophoneLevel } from "./utils/transport";
 
 export default function Karaoke({ onOpenAppSettings }) {
   const onlineRoom = useOnlineRoom();
+  const { setRecordingActive } = useRadio();
   const location = useLocation();
   const navigate = useNavigate();
   const { data: songs } = usePolling(api.listSongs, 15000, []);
@@ -81,6 +83,11 @@ export default function Karaoke({ onOpenAppSettings }) {
   const [microphoneSettingsView, setMicrophoneSettingsView] = useState("music");
   const [recordingError, setRecordingError] = useState(null);
   const [effectPreset, setEffectPreset] = useState("studio");
+
+  useEffect(() => {
+    setRecordingActive(Boolean(recordingSessionId));
+    return () => setRecordingActive(false);
+  }, [recordingSessionId, setRecordingActive]);
   const [auroraSeed] = useState(() => Math.floor(Math.random() * 997));
   const { activeTheme, panoramaRef: panoramaSkyRef } = useKaraokePanorama(
     song?.id,

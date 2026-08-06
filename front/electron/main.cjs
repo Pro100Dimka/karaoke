@@ -28,6 +28,9 @@ const {
 } = require("./security.cjs");
 const { findMatchingSongFolder } = require("./song-folders.cjs");
 
+// Background radio is an intentional desktop feature.
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+
 const isDev = !app.isPackaged;
 const BACKEND_URL = "http://127.0.0.1:8000";
 const DEV_RENDERER_ORIGIN = "http://127.0.0.1:5173";

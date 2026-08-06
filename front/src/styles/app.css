@@ -7433,3 +7433,102 @@ select:focus,
 @media (prefers-reduced-motion: reduce) {
   .title-bar__radio svg { animation: none !important; }
 }
+
+.title-bar__radio-wrap {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  block-size: 100%;
+}
+
+.title-bar__radio-volume {
+  position: absolute;
+  inset-block-start: calc(100% + 0.45rem);
+  inset-inline-end: 0.35rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  inline-size: 13rem;
+  padding: 0.65rem 0.75rem;
+  border: var(--hairline) solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-soft);
+  background: var(--color-surface-strong);
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-0.35rem);
+  pointer-events: none;
+  transition: opacity var(--duration-fast), transform var(--duration-fast), visibility var(--duration-fast);
+  z-index: 1010;
+}
+
+.title-bar__radio-wrap:hover .title-bar__radio-volume,
+.title-bar__radio-wrap:focus-within .title-bar__radio-volume {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.title-bar__radio-volume::before {
+  content: "";
+  position: absolute;
+  inset: -0.55rem 0 100%;
+}
+
+.title-bar__radio-volume input {
+  min-inline-size: 0;
+  flex: 1;
+  accent-color: var(--color-primary);
+}
+
+.title-bar__radio-volume span {
+  min-inline-size: 2.4rem;
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+  text-align: end;
+}
+
+.radio-settings-control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.radio-settings-control .dropdown {
+  min-inline-size: 0;
+  flex: 1;
+}
+
+/* Dense white particle terrain: generated entirely on canvas, no image asset. */
+.library-wave-terrain {
+  z-index: 2;
+  block-size: min(52vh, 35rem);
+  opacity: 0.92;
+  mix-blend-mode: screen;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0, 0, 0, 0.24) 8%,
+    #000 24%,
+    #000 84%,
+    transparent 100%
+  );
+  filter:
+    contrast(1.18)
+    brightness(calc(0.92 + var(--radio-bass, 0) * 0.9))
+    drop-shadow(
+      0 0 calc(0.25rem + var(--radio-bass, 0) * 1.45rem)
+      rgba(255, 255, 255, calc(0.12 + var(--radio-bass, 0) * 0.34))
+    );
+}
+
+:root[data-theme="light"] .library-wave-terrain {
+  opacity: 0.68;
+  mix-blend-mode: multiply;
+  filter:
+    grayscale(1)
+    contrast(1.32)
+    brightness(calc(0.78 + var(--radio-bass, 0) * 0.42));
+}
