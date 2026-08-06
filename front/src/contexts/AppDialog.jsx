@@ -8,9 +8,9 @@ import {
   useRef,
   useState
 } from "react";
-import Modal from "../components/Modal";
 import { Button } from "../components/fields";
-import { ModalTitle } from "../components/ui";
+import Modal from "../components/modal";
+import ModalTitle from "../components/modal/title";
 import {
   createDialogConfig,
   getDialogCloseResult,

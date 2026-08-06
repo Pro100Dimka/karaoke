@@ -15,8 +15,10 @@ export default function useLibraryRoomSync({
   const queryRef = useLatestRef(query);
   const roomQueryRef = useLatestRef(roomQuery);
   const localSongsRef = useLatestRef(localSongs);
-  const songsSignature = useMemo(() => JSON.stringify(localSongs), [localSongs]);
-
+  const songsSignature = useMemo(
+    () => JSON.stringify(localSongs),
+    [localSongs]
+  );
   useEffect(() => {
     const remoteQuery = roomQueryRef.current;
     if (typeof remoteQuery !== "string") return;
@@ -24,21 +26,17 @@ export default function useLibraryRoomSync({
       applyingRemoteUiRef.current = false;
       return;
     }
-
     applyingRemoteUiRef.current = true;
     setQuery(remoteQuery);
   }, [queryRef, roomEventId, roomQueryRef, setQuery]);
-
   useEffect(() => {
     if (!room) return;
     if (applyingRemoteUiRef.current) {
       applyingRemoteUiRef.current = false;
       return;
     }
-
     syncUi({ query });
   }, [query, room, syncUi]);
-
   useEffect(() => {
     if (!room?.host) return;
     syncUi({ songs: localSongsRef.current });

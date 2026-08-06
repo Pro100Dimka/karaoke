@@ -1,12 +1,12 @@
 import { ArrowLeft, UsersRound } from "lucide-react";
 import { useRef, useState } from "react";
-import useMountedRef from "../hooks/useMountedRef";
 import { useOnlineRoom } from "../contexts/OnlineRoomContext";
+import useMountedRef from "../hooks/useMountedRef";
 import { normalizeRoomId } from "../services/onlineRoom";
 import { getErrorMessage } from "../utils/errors";
-import Modal from "./Modal";
 import { Button, FieldInput } from "./fields";
-import { ModalTitle } from "./ui";
+import Modal from "./modal";
+import ModalTitle from "./modal/title";
 
 export function OnlineRoomModal({ onlineName, onClose }) {
   const room = useOnlineRoom();
@@ -69,8 +69,8 @@ export function OnlineRoomModal({ onlineName, onClose }) {
         {!joinMode ? (
           <div className="online-room-form">
             <p>
-              Создайте комнату и отправьте другу автоматически созданный код
-              или войдите по коду ведущего.
+              Создайте комнату и отправьте другу автоматически созданный код или
+              войдите по коду ведущего.
             </p>
             {error && <p className="karaoke-recording-error">{error}</p>}
             <div className="online-room-actions">

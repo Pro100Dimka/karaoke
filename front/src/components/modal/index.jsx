@@ -1,9 +1,10 @@
 import { X } from "lucide-react";
 import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
-import { IconButton } from "./ui";
-import Card from "./ui/Card";
-import { FOCUSABLE_SELECTOR } from "./modal-focus";
+import { FOCUSABLE_SELECTOR } from "../modal-focus";
+import { IconButton } from "../ui";
+import Card from "../ui/Card";
+import ModalTitle from "./title";
 
 export default function Modal({
   children,
@@ -11,13 +12,9 @@ export default function Modal({
   onClose,
   ariaLabel = "Диалог",
   portal = false,
-  backdropClassName = "modal-backdrop",
-  modalClassName = "modal",
-  closeClassName = "modal-close",
   closeIconSize = 20,
-  closeAriaLabel = "Закрыть",
-  cardVariant = null,
-  tilt = true
+  tilt = true,
+  titleProps
 }) {
   const dialogRef = useRef(null);
   const onCloseRef = useRef(onClose);
@@ -83,7 +80,7 @@ export default function Modal({
 
   const content = (
     <div
-      className={backdropClassName}
+      className="app-modal-backdrop settings-modal-backdrop"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
@@ -92,9 +89,9 @@ export default function Modal({
       <Card
         ref={dialogRef}
         as="section"
-        variant={cardVariant ?? "glass"}
+        variant="neon"
         tilt={tilt}
-        className={modalClassName}
+        className="app-modal settings-modal modal-card"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -107,10 +104,11 @@ export default function Modal({
           unstyled
           icon={X}
           size={closeIconSize}
-          className={closeClassName}
+          className="app-modal-close settings-modal-close"
           onClick={onClose}
-          label={closeAriaLabel}
+          label="Закрыть"
         />
+        {titleProps && <ModalTitle {...titleProps} />}
         {children}
       </Card>
     </div>

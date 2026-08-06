@@ -1,6 +1,6 @@
 import { Settings2 } from "lucide-react";
 import Button from "../../components/fields/button";
-import { ModalTitle } from "../../components/ui";
+import ModalTitle from "../../components/modal/title";
 import { SAVE_BUTTONS } from "./config";
 
 export default function SettingsHeader({ status, onSave }) {

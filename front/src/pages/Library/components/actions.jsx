@@ -10,30 +10,24 @@ export default function LibraryActions({
   onOpenRoom,
   roomActive
 }) {
+  const actions = [
+    !roomActive && [UsersRound, "Петь вместе", "btn-ghost", onOpenRoom],
+    canManageLibrary && [Plus, "Добавить песню", "btn-primary", onAdd]
+  ].filter(Boolean);
   return (
     <div className="library-actions u-row u-cluster">
-      {!roomActive && (
+      {actions.map(([Icon, text, className, onClick]) => (
         <Card
+          key={text}
           as="button"
           variant="glass"
-          className="btn btn-ghost library-action-card"
-          onClick={onOpenRoom}
-          type="button"
+          className={`btn ${className} library-action-card`}
+          onClick={onClick}
         >
-          <UsersRound size={15} /> Петь вместе
+          <Icon size={15} />
+          {text}
         </Card>
-      )}
-      {canManageLibrary && (
-        <Card
-          as="button"
-          variant="glass"
-          className="btn btn-primary library-action-card"
-          onClick={onAdd}
-          type="button"
-        >
-          <Plus size={15} /> Добавить песню
-        </Card>
-      )}
+      ))}
       {includeFileInput && (
         <input
           ref={fileInputRef}

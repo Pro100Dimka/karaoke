@@ -3,12 +3,11 @@ import { useCallback, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useOnlineRoomNavigation } from "../hooks/useOnlineRoomNavigation";
 import { useRequireOnlineName } from "../hooks/useRequireOnlineName";
-import SongSettings from "../pages/Library/song-settings";
 import Settings from "../pages/Settings";
-import Modal from "./Modal";
-import { IconButton } from "./ui";
 import TitleBar from "./TitleBar";
+import Modal from "./modal";
 import AppRoutes from "./routes";
+import { IconButton } from "./ui";
 
 const ROUTES = { karaoke: "/karaoke" };
 
@@ -28,14 +27,12 @@ function AppSettingsButton({ onClick }) {
 export default function AppLayout() {
   const location = useLocation();
   const [isSettingsOpen, setSettingsOpen] = useState(false);
-  const [settingsInitialTab, setSettingsInitialTab] = useState("audio");
   const [songSettingsId, setSongSettingsId] = useState(null);
 
   const isKaraoke = location.pathname === ROUTES.karaoke;
 
-  const openSettings = useCallback((tab = "audio") => {
+  const openSettings = useCallback(() => {
     setSongSettingsId(null);
-    setSettingsInitialTab(tab);
     setSettingsOpen(true);
   }, []);
 
@@ -65,7 +62,6 @@ export default function AppLayout() {
         .join(" ")}
     >
       <TitleBar />
-
       <div className="app-body">
         <main className="app-main">
           <AppRoutes
@@ -73,9 +69,7 @@ export default function AppLayout() {
             onOpenSongSettings={openSongSettings}
           />
         </main>
-
         {!isKaraoke && <AppSettingsButton onClick={openSettings} />}
-
         <Modal
           isOpen={isSettingsOpen}
           onClose={closeSettings}
@@ -87,22 +81,7 @@ export default function AppLayout() {
           closeAriaLabel="Закрыть настройки"
           closeIconSize={20}
         >
-          <Settings key={settingsInitialTab} initialTab={settingsInitialTab} />
-        </Modal>
-
-        <Modal
-          isOpen={Boolean(songSettingsId)}
-          onClose={closeSongSettings}
-          ariaLabel="Настройки песни"
-          backdropClassName="app-modal-backdrop song-recordings-backdrop"
-          modalClassName="app-modal song-settings-modal modal-card"
-          cardVariant="neon"
-          closeClassName="app-modal-close song-recordings-close"
-          closeAriaLabel="Закрыть настройки"
-          closeIconSize={18}
-          portal
-        >
-          <SongSettings songId={songSettingsId} />
+          <Settings />
         </Modal>
       </div>
     </div>

@@ -2,15 +2,34 @@ import { useCallback } from "react";
 import { api } from "../../../api/client";
 import { getErrorMessage } from "../../../utils/errors";
 
-export default function useLibrarySongActions({
-  confirmDialog,
-  notify,
-  processingSongId,
-  recordingsSongId,
-  setHiddenSongIds,
-  setProcessingSong,
-  setRecordingsSong
-}) {
+const getFolderPayload = ({ output_dir, slug, title, id }) => ({
+  path: output_dir ?? "",
+  slug: slug ?? "",
+  title: title ?? "",
+  id: id ?? ""
+});
+
+export default function useLibrarySongActions(props) {
+  const {
+    confirmDialog,
+    notify,
+    processingSongId,
+    recordingsSongId,
+    setHiddenSongIds,
+    setProcessingSong,
+    setRecordingsSong
+  } = props;
+  const runProcessingAction = useCallback(
+    async (song, action, errorMessage) => {
+      try {
+        await action(song.id);
+        setProcessingSong(song);
+      } catch (error) {
+        await notify(`${errorMessage}: ${getErrorMessage(error)}`);
+      }
+    },
+    [notify, setProcessingSong]
+  );
   const deleteSong = useCallback(
     async (song) => {
       const confirmed = await confirmDialog(
@@ -18,11 +37,9 @@ export default function useLibrarySongActions({
         "Удалить песню?"
       );
       if (!confirmed) return;
-
       setHiddenSongIds((ids) => new Set(ids).add(song.id));
       if (recordingsSongId === song.id) setRecordingsSong(null);
       if (processingSongId === song.id) setProcessingSong(null);
-
       try {
         await api.deleteSong(song.id);
       } catch (error) {
@@ -31,6 +48,7 @@ export default function useLibrarySongActions({
           next.delete(song.id);
           return next;
         });
+
         await notify(`Не удалось удалить: ${getErrorMessage(error)}`);
       }
     },
@@ -44,38 +62,28 @@ export default function useLibrarySongActions({
       setRecordingsSong
     ]
   );
-
   const processSong = useCallback(
-    async (song) => {
-      try {
-        await api.processSong(song.id);
-        setProcessingSong(song);
-      } catch (error) {
-        await notify(
-          `Не удалось запустить обработку: ${getErrorMessage(error)}`
-        );
-      }
-    },
-    [notify, setProcessingSong]
+    (song) =>
+      runProcessingAction(
+        song,
+        api.processSong,
+        "Не удалось запустить обработку"
+      ),
+    [runProcessingAction]
   );
-
   const reprocessSong = useCallback(
-    async (song) => {
-      try {
-        await api.reprocessMelody(song.id);
-        setProcessingSong(song);
-      } catch (error) {
-        await notify(
-          `Не удалось переобработать MIDI: ${getErrorMessage(error)}`
-        );
-      }
-    },
-    [notify, setProcessingSong]
+    (song) =>
+      runProcessingAction(
+        song,
+        api.reprocessMelody,
+        "Не удалось переобработать MIDI"
+      ),
+    [runProcessingAction]
   );
-
   const openSongFolder = useCallback(
     async (song) => {
-      if (!window.electronAPI?.openSongFolder) {
+      const openFolder = window.electronAPI?.openSongFolder;
+      if (!openFolder) {
         await notify(
           "Открытие папки доступно только в установленном приложении."
         );
@@ -83,16 +91,9 @@ export default function useLibrarySongActions({
       }
 
       try {
-        const errorMessage = await window.electronAPI.openSongFolder({
-          path: song.output_dir || "",
-          slug: song.slug || "",
-          title: song.title || "",
-          id: song.id || ""
-        });
-
-        if (errorMessage) {
+        const errorMessage = await openFolder(getFolderPayload(song));
+        if (errorMessage)
           await notify(errorMessage, "Не удалось открыть папку");
-        }
       } catch (error) {
         await notify(
           `Не удалось открыть папку: ${getErrorMessage(error)}`,
@@ -102,6 +103,5 @@ export default function useLibrarySongActions({
     },
     [notify]
   );
-
   return { deleteSong, openSongFolder, processSong, reprocessSong };
 }

@@ -4,6 +4,6 @@
 @import "./styles/layout.css";
 @import "./styles/compat.css";
 @import "./pages/Library/library.css";
-@import "./pages/Library/song-settings/song-settings.css";
+@import "./pages/Library/modals/song-settings/song-settings.css";
 @import "./pages/Settings/settings.css";
 @import "./pages/Karaoke/karaoke.css";

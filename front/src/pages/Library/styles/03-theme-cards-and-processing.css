@@ -249,7 +249,6 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-
 .song-settings-field-row > .settings-field,
 .song-settings-note-range {
   min-inline-size: 0;
@@ -546,11 +545,6 @@
   background: color-mix(in srgb, var(--color-surface-glass) 58%, transparent);
 }
 
-.processing-modal-description {
-  margin: 0;
-  color: var(--color-text-soft);
-}
-
 .processing-modal-actions {
   display: flex;
   flex: none;
@@ -636,4 +630,3 @@
     linear-gradient(180deg, rgb(255 255 255 / 48%), transparent),
     color-mix(in srgb, var(--color-nude) 72%, transparent);
 }
-

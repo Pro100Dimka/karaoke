@@ -5,7 +5,10 @@ export const DIFFICULTY_OPTIONS = [
     label: value
   }))
 ];
-
+export const SONG_FIELD_ROWS = [
+  ["title", "artist"],
+  ["genre", "key_override", "tempo_override"]
+];
 export const SONG_FIELDS = [
   { name: "key_override", label: "Тональность", placeholder: "напр. C#m" },
   { name: "title", label: "Название песни", type: "text" },
@@ -45,3 +48,22 @@ export const NOTE_RANGE_FIELDS = [
 ];
 
 export const EMPTY_LYRICS = { text: "", data: [], error: null };
+export const LYRICS_FIELD = {
+  name: "lyrics",
+  label: "Текст песни",
+  type: "textarea",
+  rows: 16,
+  spellCheck: false,
+  className: "song-lyrics-editor",
+  hint: "Каждая строка — отдельная строка песни. Тайминги сохраняются автоматически."
+};
+
+export const FIELD_BY_NAME = Object.fromEntries(
+  SONG_FIELDS.map((field) => [field.name, field])
+);
+
+export const SONG_FIELDS_AFTER_RANGE = [
+  "video_url",
+  "show_lyrics",
+  "show_notes"
+].map((name) => FIELD_BY_NAME[name]);

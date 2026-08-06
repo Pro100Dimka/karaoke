@@ -9,16 +9,17 @@ import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import useAppSettings from "../../hooks/useAppSettings";
 import { usePolling } from "../../hooks/usePolling";
 import { getErrorMessage } from "../../utils/errors";
-import useLibraryFileImport from "./hooks/useLibraryFileImport";
-import useLibraryRoomSync from "./hooks/useLibraryRoomSync";
-import useLibrarySongActions from "./hooks/useLibrarySongActions";
 import PerformanceAnalysisModal from "../Karaoke/components/PerformanceAnalysisModal";
-import LibraryActions from "./components/LibraryActions";
-import LibraryBackdrop from "./components/LibraryBackdrop";
-import LibraryHero from "./components/LibraryHero";
-import LibrarySongCard from "./components/LibrarySongCard";
-import ProcessingModal from "./components/ProcessingModal";
-import RecordingsModal from "./components/RecordingsModal";
+import LibraryActions from "./components/actions";
+import LibraryBackdrop from "./components/backdrop";
+import LibraryHero from "./components/hero";
+import LibrarySongCard from "./components/song-card";
+import useLibraryFileImport from "./hooks/use-file-import";
+import useLibraryRoomSync from "./hooks/use-room-sync";
+import useLibrarySongActions from "./hooks/use-song-actions";
+import ProcessingModal from "./modals/processing";
+import RecordingsModal from "./modals/recordings";
+import SongSettings from "./modals/song-settings";
 import {
   countReadySongs,
   filterSongs,
@@ -28,6 +29,7 @@ import {
 
 export default function Library({ onOpenSongSettings }) {
   const [query, setQuery] = useState("");
+  const [selectedSong, setSelectedSong] = useState(null);
   const [recordingsSong, setRecordingsSong] = useState(null);
   const [processingSong, setProcessingSong] = useState(null);
   const [analysisRecordingId, setAnalysisRecordingId] = useState(null);
@@ -37,9 +39,9 @@ export default function Library({ onOpenSongSettings }) {
   const navigate = useNavigate();
   const { alert: notify, confirm: confirmDialog } = useAppDialog();
   const sharedRoom = useOnlineRoom();
-  const { reloadSettings } = useAppSettings();
-  const canManageLibrary = !sharedRoom?.room || sharedRoom.room.host;
+  const { reloadSettings, settings } = useAppSettings();
 
+  const canManageLibrary = !sharedRoom?.room || sharedRoom.room.host;
   const { data: songs, error } = usePolling(api.listSongs, 3000, []);
   const openOnlineRoom = async () => {
     let settings;
@@ -140,14 +142,18 @@ export default function Library({ onOpenSongSettings }) {
 
   const filtered = filterSongs(visibleSongs, query);
   const readyCount = countReadySongs(visibleSongs);
-
+  console.log(selectedSong);
   return (
     <div className="library-page">
       <LibraryBackdrop />
       <LibraryHero songCount={visibleSongs.length} readyCount={readyCount} />
       <Panel className="library-collection-panel">
         <div className="library-toolbar u-row-between">
-          <Card className="library-search" variant="glass">
+          <Card
+            className="library-search"
+            variant="neon"
+            cardPanel={{ style: { background: "unset" } }}
+          >
             <Search className="library-search-icon" size={14} />
             <input
               className="input library-search-input"
@@ -193,7 +199,7 @@ export default function Library({ onOpenSongSettings }) {
               }}
               onOpenProcessing={setProcessingSong}
               onOpenRecordings={setRecordingsSong}
-              onOpenSettings={(songId) => onOpenSongSettings?.(songId)}
+              onOpenSettings={() => setSelectedSong(song)}
               onProcess={handleProcess}
               onReprocess={handleReprocess}
             />
@@ -207,11 +213,14 @@ export default function Library({ onOpenSongSettings }) {
       </Panel>
       {onlineRoomOpen && (
         <OnlineRoomModal
-          onlineName={appSettings?.online_name?.trim() || ""}
+          onlineName={settings?.online_name?.trim() || ""}
           onClose={() => setOnlineRoomOpen(false)}
         />
       )}
-
+      <SongSettings
+        songId={selectedSong?.id}
+        onClose={() => setSelectedSong(null)}
+      />
       <RecordingsModal
         song={recordingsSong}
         recordings={songRecordings || []}
