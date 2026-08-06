@@ -1,6 +1,19 @@
 import { api } from "../../../api/client";
 import { playbackGain, youTubeEmbedUrl } from "../utils/data";
 
+function AudioTrack({ track, audioRef, songId, volume }) {
+  return (
+    <audio
+      ref={audioRef}
+      src={api.getAudioTrackUrl(songId, track)}
+      preload="auto"
+      onLoadedMetadata={(event) => {
+        event.currentTarget.volume = playbackGain(volume);
+      }}
+    />
+  );
+}
+
 export default function KaraokeMedia({
   instrumentalRef,
   isPlaying,
@@ -15,24 +28,27 @@ export default function KaraokeMedia({
   youTubeClipRef,
   youTubeVideoId
 }) {
+  const tracks = [
+    ["instrumental", instrumentalRef, musicVolume],
+    ["vocals", vocalsRef, vocalVolume]
+  ];
+  const handleYouTubeLoad = () => {
+    sendYouTubeCommand("mute");
+    sendYouTubeCommand("setPlaybackRate", [speed]);
+    syncSecondaryMedia(instrumentalRef.current?.currentTime || 0, true);
+    if (isPlaying) sendYouTubeCommand("playVideo");
+  };
   return (
     <>
-      <audio
-        ref={instrumentalRef}
-        src={api.getAudioTrackUrl(song.id, "instrumental")}
-        preload="auto"
-        onLoadedMetadata={(event) => {
-          event.currentTarget.volume = playbackGain(musicVolume);
-        }}
-      />
-      <audio
-        ref={vocalsRef}
-        src={api.getAudioTrackUrl(song.id, "vocals")}
-        preload="auto"
-        onLoadedMetadata={(event) => {
-          event.currentTarget.volume = playbackGain(vocalVolume);
-        }}
-      />
+      {tracks.map(([track, audioRef, volume]) => (
+        <AudioTrack
+          key={track}
+          track={track}
+          audioRef={audioRef}
+          songId={song.id}
+          volume={volume}
+        />
+      ))}
       {youTubeVideoId ? (
         <iframe
           ref={youTubeClipRef}
@@ -40,12 +56,7 @@ export default function KaraokeMedia({
           src={youTubeEmbedUrl(youTubeVideoId)}
           title={`Клип: ${song.title}`}
           allow="autoplay; encrypted-media; picture-in-picture"
-          onLoad={() => {
-            sendYouTubeCommand("mute");
-            sendYouTubeCommand("setPlaybackRate", [speed]);
-            syncSecondaryMedia(instrumentalRef.current?.currentTime || 0, true);
-            if (isPlaying) sendYouTubeCommand("playVideo");
-          }}
+          onLoad={handleYouTubeLoad}
         />
       ) : (
         song.video_url && (

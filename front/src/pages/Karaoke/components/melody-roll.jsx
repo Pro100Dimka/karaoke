@@ -1,6 +1,17 @@
 import { midiToWesternNote } from "../utils/format";
 import { getMelodyCue, getMelodyRange, getVisibleNotes } from "../utils/melody";
 
+const VIEW = {
+  width: 1000,
+  height: 264,
+  scaleWidth: 52,
+  noteLaneStart: 64,
+  seconds: 10
+};
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+const formatTime = (time) =>
+  `${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, "0")}`;
+
 export default function MelodyRoll({
   notes,
   currentTime,
@@ -13,13 +24,15 @@ export default function MelodyRoll({
   noteRangeMin,
   noteRangeMax
 }) {
-  const width = 1000;
-  const height = 264;
-  const scaleWidth = 52;
-  const noteLaneStart = 64;
+  const {
+    width,
+    height,
+    scaleWidth,
+    noteLaneStart,
+    seconds: windowSeconds
+  } = VIEW;
   // Keep a moderately shorter window: notes are more legible without making
   // the timeline feel detached from the music.
-  const windowSeconds = 10;
   const viewStart = Math.max(0, currentTime - 2.5);
   const viewEnd = viewStart + windowSeconds;
   const visibleNotes = getVisibleNotes(notes, viewStart, viewEnd);
@@ -62,7 +75,7 @@ export default function MelodyRoll({
   );
   const phraseCenter = (phraseMin + phraseMax) / 2;
   let minMidi = Math.floor(phraseCenter - viewportSpan / 2);
-  minMidi = Math.max(songMinMidi, Math.min(minMidi, songMaxMidi - viewportSpan + 1));
+  minMidi = clamp(minMidi, songMinMidi, songMaxMidi - viewportSpan + 1);
   const maxMidi = minMidi + viewportSpan - 1;
   const pitchRange = maxMidi - minMidi + 1;
   const rowHeight = height / pitchRange;
@@ -71,8 +84,9 @@ export default function MelodyRoll({
     { length: pitchRange },
     (_, index) => minMidi + index
   );
-  const timeMarkers = Array.from({ length: windowSeconds + 1 }, (_, index) =>
-    viewStart + index
+  const timeMarkers = Array.from(
+    { length: windowSeconds + 1 },
+    (_, index) => viewStart + index
   );
   const labeledTimeMarkers = timeMarkers.filter((_, index) => index % 2 === 0);
 
@@ -84,14 +98,15 @@ export default function MelodyRoll({
     ? y(indicatorMidi) + rowHeight / 2
     : height - 16;
   const indicatorY =
-    pitchY +
-    (height - 16 - pitchY) * Math.min(1, Math.max(0, pitchRestProgress));
+    pitchY + (height - 16 - pitchY) * clamp(pitchRestProgress, 0, 1);
 
   return (
     <div className="melody-roll">
       <div className="melody-roll-header u-between-3">
         <div>
-          <div className="melody-roll-caption u-muted-xs">Мелодическая карта</div>
+          <div className="melody-roll-caption u-muted-xs">
+            Мелодическая карта
+          </div>
           <strong>{songTitle}</strong>
         </div>
         <div
@@ -117,24 +132,64 @@ export default function MelodyRoll({
       >
         <defs>
           <linearGradient id="melody-stage-bg" x1="0" x2="1" y1="0" y2="1">
-            <stop offset="0" stopColor="var(--color-bg-deep)" stopOpacity=".78" />
-            <stop offset=".55" stopColor="var(--color-surface)" stopOpacity=".42" />
-            <stop offset="1" stopColor="var(--color-bg-deep)" stopOpacity=".88" />
+            <stop
+              offset="0"
+              stopColor="var(--color-bg-deep)"
+              stopOpacity=".78"
+            />
+            <stop
+              offset=".55"
+              stopColor="var(--color-surface)"
+              stopOpacity=".42"
+            />
+            <stop
+              offset="1"
+              stopColor="var(--color-bg-deep)"
+              stopOpacity=".88"
+            />
           </linearGradient>
           <linearGradient id="melody-now-zone" x1="0" x2="1">
             <stop offset="0" stopColor="var(--color-primary)" stopOpacity="0" />
-            <stop offset=".48" stopColor="var(--color-primary)" stopOpacity=".12" />
-            <stop offset=".5" stopColor="var(--color-highlight)" stopOpacity=".2" />
-            <stop offset=".52" stopColor="var(--color-primary)" stopOpacity=".12" />
+            <stop
+              offset=".48"
+              stopColor="var(--color-primary)"
+              stopOpacity=".12"
+            />
+            <stop
+              offset=".5"
+              stopColor="var(--color-highlight)"
+              stopOpacity=".2"
+            />
+            <stop
+              offset=".52"
+              stopColor="var(--color-primary)"
+              stopOpacity=".12"
+            />
             <stop offset="1" stopColor="var(--color-primary)" stopOpacity="0" />
           </linearGradient>
           <linearGradient id="melody-note-past" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stopColor="var(--color-text-soft)" stopOpacity=".42" />
-            <stop offset="1" stopColor="var(--color-text-muted)" stopOpacity=".16" />
+            <stop
+              offset="0"
+              stopColor="var(--color-text-soft)"
+              stopOpacity=".42"
+            />
+            <stop
+              offset="1"
+              stopColor="var(--color-text-muted)"
+              stopOpacity=".16"
+            />
           </linearGradient>
           <linearGradient id="melody-note-upcoming" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stopColor="var(--color-highlight)" stopOpacity=".94" />
-            <stop offset="1" stopColor="var(--color-primary)" stopOpacity=".68" />
+            <stop
+              offset="0"
+              stopColor="var(--color-highlight)"
+              stopOpacity=".94"
+            />
+            <stop
+              offset="1"
+              stopColor="var(--color-primary)"
+              stopOpacity=".68"
+            />
           </linearGradient>
           <linearGradient id="melody-note-active" x1="0" x2="1" y1="0" y2="1">
             <stop offset="0" stopColor="var(--color-highlight)" />
@@ -144,7 +199,10 @@ export default function MelodyRoll({
           <linearGradient id="melody-note-hit" x1="0" x2="1" y1="0" y2="1">
             <stop offset="0" stopColor="var(--color-highlight)" />
             <stop offset=".45" stopColor="var(--color-success)" />
-            <stop offset="1" stopColor="var(--color-success-strong, var(--color-success))" />
+            <stop
+              offset="1"
+              stopColor="var(--color-success-strong, var(--color-success))"
+            />
           </linearGradient>
           <filter
             id="melody-active-glow"
@@ -180,11 +238,15 @@ export default function MelodyRoll({
             x={x(time)}
             y="18"
             textAnchor="middle"
-            fill={Math.abs(time - currentTime) < 1 ? "var(--color-primary)" : "rgba(255,255,255,.68)"}
+            fill={
+              Math.abs(time - currentTime) < 1
+                ? "var(--color-primary)"
+                : "rgba(255,255,255,.68)"
+            }
             fontSize="10"
             fontWeight="800"
           >
-            {`${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, "0")}`}
+            {formatTime(time)}
           </text>
         ))}
         <rect
@@ -200,7 +262,11 @@ export default function MelodyRoll({
             x2={x(time)}
             y1="0"
             y2={height}
-            stroke={index % 2 === 0 ? "rgba(255,255,255,.08)" : "rgba(255,255,255,.035)"}
+            stroke={
+              index % 2 === 0
+                ? "rgba(255,255,255,.08)"
+                : "rgba(255,255,255,.035)"
+            }
             strokeDasharray={index % 2 === 0 ? "0" : "3 7"}
           />
         ))}

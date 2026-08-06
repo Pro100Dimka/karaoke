@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import { usePolling } from "../../hooks/usePolling";
-import KaraokeConsole from "./components/KaraokeConsole";
+import KaraokeConsole from "./components/console";
 import KaraokeMedia from "./components/KaraokeMedia";
 import KaraokePerformanceStage from "./components/KaraokePerformanceStage";
 import MicrophoneSettingsModal from "./components/MicrophoneSettingsModal";
@@ -13,13 +13,13 @@ import useKaraokeControls from "./hooks/useKaraokeControls";
 import useKaraokeHotkeys from "./hooks/useKaraokeHotkeys";
 import useKaraokeMediaSync from "./hooks/useKaraokeMediaSync";
 import useKaraokePanorama from "./hooks/useKaraokePanorama";
+import useKaraokePreferences from "./hooks/useKaraokePreferences";
+import useKaraokeResult from "./hooks/useKaraokeResult";
 import useKaraokeStageLayout from "./hooks/useKaraokeStageLayout";
 import useKaraokeTransport from "./hooks/useKaraokeTransport";
 import useMelodyGuide from "./hooks/useMelodyGuide";
 import useMicrophoneSettings from "./hooks/useMicrophoneSettings";
 import usePitchDetection from "./hooks/usePitchDetection";
-import useKaraokePreferences from "./hooks/useKaraokePreferences";
-import useKaraokeResult from "./hooks/useKaraokeResult";
 import {
   getYouTubeVideoId,
   normalizeLyrics,
@@ -196,17 +196,13 @@ export default function Karaoke({ onOpenAppSettings }) {
     youTubeClipRef
   });
 
-  const {
-    sungMidi,
-    isPitchDetected,
-    isPitchAttacking,
-    pitchRestProgress
-  } = usePitchDetection({
-    browserMonitorRef,
-    isPlaying,
-    monitorInputDeviceId,
-    monitoringEnabled
-  });
+  const { sungMidi, isPitchDetected, isPitchAttacking, pitchRestProgress } =
+    usePitchDetection({
+      browserMonitorRef,
+      isPlaying,
+      monitorInputDeviceId,
+      monitoringEnabled
+    });
 
   const { returnToLibrary, seekTo, skip, stop, togglePlay } =
     useKaraokeTransport({

@@ -9,7 +9,7 @@ import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import useAppSettings from "../../hooks/useAppSettings";
 import { usePolling } from "../../hooks/usePolling";
 import { getErrorMessage } from "../../utils/errors";
-import PerformanceAnalysisModal from "../Karaoke/components/PerformanceAnalysisModal";
+import PerformanceAnalysisModal from "../Karaoke/modals/performance-analysis-modal";
 import LibraryActions from "./components/actions";
 import LibraryBackdrop from "./components/backdrop";
 import LibraryHero from "./components/hero";

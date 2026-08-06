@@ -14,6 +14,73 @@ import {
   normalizeAnalysisResult
 } from "../utils/analysis";
 
+const CONFETTI = Array.from({ length: 26 }, (_, index) => index);
+
+function VictoryScene() {
+  return (
+    <div className="analysis-victory-scene" aria-hidden="true">
+      <div className="analysis-trophy">
+        <Trophy size={38} fill="currentColor" />
+      </div>
+      <div className="analysis-crystal" />
+      <div className="analysis-confetti">
+        {CONFETTI.map((index) => (
+          <i key={index} style={{ "--j": index }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AnalysisSummary({ result }) {
+  const feedback = getAnalysisFeedback(result);
+  const {
+    accuracy,
+    scoredSections,
+    bestSection,
+    needsPractice,
+    grade,
+    advice,
+    mean_deviation_semitones: meanDeviation
+  } = feedback;
+
+  const metrics = [
+    [
+      "Среднее отклонение",
+      meanDeviation != null ? `±${meanDeviation} п/т` : "—"
+    ],
+    ["Проверено фрагментов", scoredSections.length || 0],
+    ["Лучший фрагмент", bestSection ? `${bestSection.accuracy_percent}%` : "—"],
+    [
+      "Нуждается в работе",
+      needsPractice ? `${needsPractice.accuracy_percent}%` : "—"
+    ]
+  ];
+
+  return (
+    <>
+      <div className="performance-analysis-grade">{grade}</div>
+      <div className="performance-analysis-score">
+        {accuracy ?? "—"}
+        <small>%</small>
+      </div>
+      <div className="text-muted">Попадание в ноты</div>
+      <div className="performance-analysis-metrics performance-analysis-metrics-expanded">
+        {metrics.map(([label, value]) => (
+          <div key={label}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+          </div>
+        ))}
+      </div>
+      <div className="performance-analysis-advice">
+        <strong>Рекомендация</strong>
+        <span>{advice}</span>
+      </div>
+    </>
+  );
+}
+
 export default function PerformanceAnalysisModal({
   recordingId,
   onClose,
@@ -22,22 +89,21 @@ export default function PerformanceAnalysisModal({
 }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const { pending: deleting, run: runDelete } = useExclusiveAsyncAction();
-  const analysisRequestRef = useRef({ recordingId: null, promise: null });
+  const requestRef = useRef([null, null]);
   const mountedRef = useMountedRef();
   const { confirm: confirmDialog } = useAppDialog();
+  const { pending: deleting, run: runDelete } = useExclusiveAsyncAction();
 
   useEffect(() => {
     let active = true;
     setResult(null);
     setError(null);
-    if (analysisRequestRef.current.recordingId !== recordingId) {
-      analysisRequestRef.current = {
-        recordingId,
-        promise: api.runAnalysis(recordingId)
-      };
+
+    if (requestRef.current[0] !== recordingId) {
+      requestRef.current = [recordingId, api.runAnalysis(recordingId)];
     }
-    analysisRequestRef.current.promise
+
+    requestRef.current[1]
       .then((analysis) => {
         if (active) setResult(normalizeAnalysisResult(analysis));
       })
@@ -48,6 +114,7 @@ export default function PerformanceAnalysisModal({
           );
         }
       });
+
     return () => {
       active = false;
     };
@@ -85,27 +152,19 @@ export default function PerformanceAnalysisModal({
       cardVariant="neon"
       portal
     >
-      <div className="analysis-victory-scene" aria-hidden="true">
-        <div className="analysis-trophy">
-          <Trophy size={38} fill="currentColor" />
-        </div>
-        <div className="analysis-crystal" />
-        <div className="analysis-confetti">
-          {Array.from({ length: 26 }, (_, index) => (
-            <i key={index} style={{ "--j": index }} />
-          ))}
-        </div>
-      </div>
+      <VictoryScene />
       <ModalTitle
         icon={BarChart3}
         eyebrow="РЕЗУЛЬТАТ ИСПОЛНЕНИЯ"
         title="Анализ выступления"
         description="Точность нот, ритм и рекомендации по исполнению."
       />
+
       <div className="performance-analysis-body modal-scroll">
         {!result && !error && (
           <p className="text-muted">Анализируем ноты и ритм исполнения…</p>
         )}
+
         {error && (
           <>
             <p className="song-lyrics-error">
@@ -116,6 +175,7 @@ export default function PerformanceAnalysisModal({
             </Button>
           </>
         )}
+
         {result && (
           <>
             <AnalysisSummary result={result} />
@@ -138,56 +198,5 @@ export default function PerformanceAnalysisModal({
         )}
       </div>
     </Modal>
-  );
-}
-
-function AnalysisSummary({ result }) {
-  const {
-    accuracy,
-    scoredSections,
-    bestSection,
-    needsPractice,
-    grade,
-    advice,
-    mean_deviation_semitones: meanDeviation
-  } = getAnalysisFeedback(result);
-
-  return (
-    <>
-      <div className="performance-analysis-grade">{grade}</div>
-      <div className="performance-analysis-score">
-        {accuracy ?? "—"}
-        <small>%</small>
-      </div>
-      <div className="text-muted">Попадание в ноты</div>
-      <div className="performance-analysis-metrics performance-analysis-metrics-expanded">
-        <div>
-          <span>Среднее отклонение</span>
-          <strong>
-            {meanDeviation != null ? `±${meanDeviation} п/т` : "—"}
-          </strong>
-        </div>
-        <div>
-          <span>Проверено фрагментов</span>
-          <strong>{scoredSections.length || 0}</strong>
-        </div>
-        <div>
-          <span>Лучший фрагмент</span>
-          <strong>
-            {bestSection ? `${bestSection.accuracy_percent}%` : "—"}
-          </strong>
-        </div>
-        <div>
-          <span>Нуждается в работе</span>
-          <strong>
-            {needsPractice ? `${needsPractice.accuracy_percent}%` : "—"}
-          </strong>
-        </div>
-      </div>
-      <div className="performance-analysis-advice">
-        <strong>Рекомендация</strong>
-        <span>{advice}</span>
-      </div>
-    </>
   );
 }
