@@ -1,4 +1,5 @@
-import { Minus, Square, X } from "lucide-react";
+import { Minus, Radio, Square, X } from "lucide-react";
+import { useRadio } from "../contexts/radio";
 import { IconButton } from "./ui";
 
 const WINDOW_ACTIONS = [
@@ -15,6 +16,7 @@ function invokeWindowAction(electronAPI, action) {
 
 export default function TitleBar({ title = "Karaoke Studio" }) {
   const { electronAPI } = window;
+  const { error, isLoading, isPlaying, toggle } = useRadio();
 
   return (
     <header className="title-bar">
@@ -23,9 +25,25 @@ export default function TitleBar({ title = "Karaoke Studio" }) {
         <span className="text-secondary">{title}</span>
       </div>
 
-      {electronAPI && (
-        <div className="title-bar__actions">
-          {WINDOW_ACTIONS.map(({ id, label, Icon, size, danger }) => (
+      <div className="title-bar__actions">
+        <IconButton
+          unstyled
+          icon={Radio}
+          size={15}
+          label={
+            error || (isPlaying ? "Выключить радио" : "Включить SomaFM USA")
+          }
+          className={[
+            "title-bar__button title-bar__radio",
+            isPlaying && "is-playing",
+            isLoading && "is-loading"
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          onClick={toggle}
+        />
+        {electronAPI &&
+          WINDOW_ACTIONS.map(({ id, label, Icon, size, danger }) => (
             <IconButton
               key={id}
               unstyled
@@ -36,8 +54,7 @@ export default function TitleBar({ title = "Karaoke Studio" }) {
               onClick={() => invokeWindowAction(electronAPI, id)}
             />
           ))}
-        </div>
-      )}
+      </div>
     </header>
   );
 }

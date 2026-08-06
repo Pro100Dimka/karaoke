@@ -7389,3 +7389,47 @@ select:focus,
   --panel-accent: var(--color-success);
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
+
+.title-bar__radio {
+  color: var(--color-text-muted);
+}
+
+.title-bar__radio.is-playing {
+  color: var(--color-highlight);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-primary-hover) 24%, transparent),
+    color-mix(in srgb, var(--color-primary-strong) 18%, transparent)
+  );
+  box-shadow:
+    inset 0 -0.15rem color-mix(in srgb, var(--color-primary-hover) 76%, transparent),
+    0 0 calc(0.8rem + var(--radio-bass, 0) * 1.2rem)
+      color-mix(in srgb, var(--color-primary) 38%, transparent);
+}
+
+.title-bar__radio.is-playing svg {
+  animation: radio-button-pulse 1.1s ease-in-out infinite alternate;
+}
+
+.title-bar__radio.is-loading svg {
+  animation: radio-button-spin 0.9s linear infinite;
+}
+
+.library-wave-terrain {
+  filter:
+    brightness(calc(1 + var(--radio-bass, 0) * 0.75))
+    drop-shadow(0 0 calc(var(--radio-bass, 0) * 1.6rem)
+      color-mix(in srgb, var(--color-primary) 68%, transparent));
+}
+
+@keyframes radio-button-pulse {
+  to { transform: scale(1.14); filter: drop-shadow(0 0 0.55rem currentColor); }
+}
+
+@keyframes radio-button-spin {
+  to { transform: rotate(1turn); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title-bar__radio svg { animation: none !important; }
+}

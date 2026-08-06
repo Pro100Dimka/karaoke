@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useRadio } from "../../../../contexts/radio";
 
 const ROWS = 26;
 const COLUMNS = 56;
@@ -9,6 +10,7 @@ const THEMES = {
 
 export default function LibraryWaveTerrain() {
   const canvasRef = useRef(null);
+  const { getBassLevel, isPlaying } = useRadio();
   useEffect(() => {
     const canvas = canvasRef.current;
     const context = canvas?.getContext("2d");
@@ -27,13 +29,16 @@ export default function LibraryWaveTerrain() {
     const project = (row, column, time) => {
       const scale = (row / ROWS) ** 2;
       const horizontal = column / COLUMNS - 0.5;
-      const amplitude = 3 + scale * 32;
+      const bass = isPlaying ? getBassLevel() : 0;
+      const bassCurve = Math.pow(Math.max(0, bass), 1.35);
+      const amplitude = 3 + scale * (32 + bassCurve * 82);
       const horizon = height * 0.06;
       const wave =
         amplitude *
         (Math.sin(horizontal * 6 + row * 0.35 + time * 1.05) * 0.6 +
           Math.sin(horizontal * 2.2 - row * 0.22 + time * 0.68) * 0.7 +
-          Math.cos(row * 0.5 + time * 1.5) * 0.3);
+          Math.cos(row * 0.5 + time * 1.5) * 0.3 +
+          Math.sin(horizontal * 11 - time * 2.8) * bassCurve * (0.7 + scale * 1.4));
       return {
         x: width / 2 + horizontal * width * (0.24 + scale * 1.2),
         y: horizon + scale * (height - horizon) - wave * (0.3 + scale * 0.9),
@@ -114,7 +119,7 @@ export default function LibraryWaveTerrain() {
       removeEventListener("resize", handleResize);
       reducedMotion.removeEventListener("change", restart);
     };
-  }, []);
+  }, [getBassLevel, isPlaying]);
 
   return <canvas ref={canvasRef} className="library-wave-terrain" />;
 }
