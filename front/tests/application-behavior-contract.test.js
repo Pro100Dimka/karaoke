@@ -8,12 +8,13 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const library = read("src/pages/Library/index.jsx");
 const dialog = read("src/contexts/AppDialog.jsx");
+const modal = read("src/components/Modal.jsx");
 const audioPlayer = read("src/components/AudioPlayer.jsx");
 const theme = read("src/utils/theme.js");
 const routes = read("src/components/routes.jsx");
 
 const libraryContracts = [
-  "<LibraryBackdrop image={libraryNeonSpace} />",
+  "<LibraryBackdrop />",
   "<LibraryHero songCount={visibleSongs.length} readyCount={readyCount} />",
   "<LibrarySongCard",
   "getLocalVisibleSongs(songs, hiddenSongIds)",
@@ -39,22 +40,22 @@ test("Library does not read unknown thrown values through err.message", () => {
 
 test("AppDialog backdrop is not a fake keyboard button", () => {
   assert.equal(dialog.includes('role="button"'), false);
-  assert.equal(dialog.includes('role="presentation"'), true);
+  assert.equal(modal.includes('role="presentation"'), true);
 });
 
 test("AppDialog has one backdrop activation path", () => {
-  assert.equal(dialog.includes("onMouseDown={handleBackdropMouseDown}"), true);
-  assert.equal(dialog.includes("onTouchStart="), false);
-  assert.equal(dialog.includes("onKeyDown={handleBackdropKeyDown}"), false);
+  assert.equal(modal.includes("onMouseDown={(event)"), true);
+  assert.equal(modal.includes("onTouchStart="), false);
+  assert.equal(modal.includes("onKeyDown="), false);
 });
 
 test("AppDialog locks and restores document scrolling", () => {
   assert.equal(
-    dialog.includes('document.body.style.overflow = "hidden"'),
+    modal.includes('document.body.style.overflow = "hidden"'),
     true
   );
   assert.equal(
-    dialog.includes("document.body.style.overflow = previousOverflow"),
+    modal.includes("document.body.style.overflow = previousOverflow"),
     true
   );
 });

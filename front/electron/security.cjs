@@ -24,6 +24,27 @@ function isAllowedRendererUrl(value, { isDev, devOrigin, packagedIndexUrl }) {
   return url.href === packagedIndexUrl || url.href.startsWith(`${packagedIndexUrl}#`);
 }
 
+function isAllowedPermissionRequest({
+  permission,
+  requestUrl,
+  mediaTypes,
+  webContents,
+  expectedWebContents,
+  rendererOptions
+}) {
+  if (
+    permission !== "media" ||
+    webContents !== expectedWebContents ||
+    expectedWebContents?.isDestroyed()
+  ) {
+    return false;
+  }
+
+  if (!isAllowedRendererUrl(requestUrl, rendererOptions)) return false;
+  if (!Array.isArray(mediaTypes) || mediaTypes.length === 0) return true;
+  return mediaTypes.every((type) => type === "audio");
+}
+
 function isTrustedIpcEvent(event, expectedWebContents) {
   return Boolean(
     expectedWebContents &&
@@ -33,6 +54,7 @@ function isTrustedIpcEvent(event, expectedWebContents) {
 }
 
 module.exports = {
+  isAllowedPermissionRequest,
   getPackagedRendererUrl,
   isAllowedRendererUrl,
   isTrustedIpcEvent

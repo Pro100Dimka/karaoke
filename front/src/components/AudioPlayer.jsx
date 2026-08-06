@@ -1,5 +1,7 @@
 import { Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { useRef, useState } from "react";
+import { RangeInput } from "./fields";
+import { IconButton } from "./ui";
 import {
   formatAudioTime,
   normalizeAudioDuration,
@@ -50,44 +52,42 @@ export function AudioPlayer({ src, className = "" }) {
           setPosition(0);
         }}
       />
-      <button
+      <IconButton
+        unstyled
         className="performance-player-play"
-        type="button"
-        aria-label={playing ? "Пауза" : "Воспроизвести запись"}
+        icon={playing ? Pause : Play}
+        size={18}
+        label={playing ? "Пауза" : "Воспроизвести запись"}
         onClick={toggle}
-      >
-        {playing ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
-      </button>
+      />
       <div className="performance-player-track">
-        <input
+        <RangeInput
           aria-label="Позиция записи"
-          type="range"
           min="0"
           max={duration || 0}
           step="0.01"
           value={Math.min(position, duration || 0)}
-          onChange={(event) => seek(event.target.value)}
+          onChange={seek}
         />
         <span>
           {formatAudioTime(position)} / {formatAudioTime(duration)}
         </span>
       </div>
       <div className="performance-player-volume">
-        <button
-          type="button"
-          aria-label={volume ? "Выключить звук" : "Включить звук"}
+        <IconButton
+          unstyled
+          icon={volume ? Volume2 : VolumeX}
+          size={16}
+          label={volume ? "Выключить звук" : "Включить звук"}
           onClick={() => changeVolume(volume ? 0 : 1)}
-        >
-          {volume ? <Volume2 size={16} /> : <VolumeX size={16} />}
-        </button>
-        <input
+        />
+        <RangeInput
           aria-label="Громкость записи"
-          type="range"
           min="0"
           max="1"
           step="0.05"
           value={volume}
-          onChange={(event) => changeVolume(event.target.value)}
+          onChange={changeVolume}
         />
       </div>
     </div>

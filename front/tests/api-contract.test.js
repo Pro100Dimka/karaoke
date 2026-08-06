@@ -87,3 +87,9 @@ test("domain API keeps the complete legacy method contract", () => {
   const client = fs.readFileSync(path.join(root, "src/api/client.js"), "utf8");
   assert.match(client, /Object\.freeze\s*\(/);
 });
+
+test("song package export uses the shared blob transport", () => {
+  const songs = fs.readFileSync(path.join(domainDir, "songs.js"), "utf8");
+  assert.equal(songs.includes("requestBlob(`/songs/${id}/package`)"), true);
+  assert.doesNotMatch(songs, /\bfetch\s*\(/);
+});

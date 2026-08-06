@@ -1,4 +1,5 @@
 import { useId, useRef } from "react";
+import { RangeInput } from "../../../components/fields";
 
 const clamp = (value) => Math.max(0, Math.min(1, value));
 
@@ -55,15 +56,14 @@ export default function EffectDial({ label, value, onChange, accent = "primary" 
         <span className="karaoke-effect-dial__knob" />
       </span>
       <strong>{percent}%</strong>
-      <input
+      <RangeInput
         id={inputId}
-        type="range"
         min="0"
         max="1"
         step="0.05"
         value={normalized}
         aria-label={label}
-        onChange={(event) => onChange(Number(event.target.value))}
+        onChange={onChange}
       />
     </label>
   );

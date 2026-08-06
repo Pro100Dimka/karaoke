@@ -2,9 +2,12 @@ import { Activity, Headphones, Mic2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import Dropdown from "../../components/fields/Dropdown";
+import RangeInput from "../../components/fields/range-input";
 import Field from "../../components/fields/field";
 import Button from "../../components/fields/button";
 import { useAppDialog } from "../../contexts/AppDialog";
+import useAsyncQueue from "../../hooks/useAsyncQueue";
+import useExclusiveAsyncAction from "../../hooks/useExclusiveAsyncAction";
 import { usePolling } from "../../hooks/usePolling";
 import { getErrorMessage } from "../../utils/errors";
 import {
@@ -39,14 +42,24 @@ export default function AudioSettings() {
   const { data: signal } = usePolling(api.getSignalQuality, 1200, []);
   const [browserDevices, setBrowserDevices] = useState({ inputs: [], outputs: [] });
   const [preferences, setPreferences] = useState(getAudioPreferences);
-  const [saving, setSaving] = useState(false);
+  const { pending: saving, run: enqueueAudioUpdate } = useAsyncQueue();
+  const { pending: togglingMonitoring, run: runMonitoringToggle } =
+    useExclusiveAsyncAction();
 
   useEffect(() => {
-    if (!navigator.mediaDevices?.enumerateDevices) return;
+    if (!navigator.mediaDevices?.enumerateDevices) return undefined;
+
+    let active = true;
     navigator.mediaDevices
       .enumerateDevices()
-      .then((entries) => setBrowserDevices(groupBrowserAudioDevices(entries)))
+      .then((entries) => {
+        if (active) setBrowserDevices(groupBrowserAudioDevices(entries));
+      })
       .catch(() => {});
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const audioDriver = settings?.audio_driver || "auto";
@@ -57,35 +70,37 @@ export default function AudioSettings() {
     return Math.max(0, Math.min(100, ((db + 60) / 60) * 100));
   }, [signal?.rms_db]);
 
-  const updateBackend = async (patch) => {
-    setSaving(true);
-    try {
-      await api.updateAudioSettings(patch);
-      await refresh?.();
-    } catch (error) {
-      alert(`Не удалось сохранить аудионастройки: ${getErrorMessage(error)}`);
-    } finally {
-      setSaving(false);
-    }
-  };
+  const updateBackend = (patch) =>
+    enqueueAudioUpdate(async () => {
+      try {
+        await api.updateAudioSettings(patch);
+        await refresh?.();
+      } catch (error) {
+        await alert(
+          `Не удалось сохранить аудионастройки: ${getErrorMessage(error)}`
+        );
+      }
+    });
 
   const updatePreference = (name, value) => {
     const next = saveAudioPreferences({ [name]: value });
     setPreferences(next);
   };
 
-  const toggleMonitoring = async () => {
-    setSaving(true);
-    try {
-      if (monitoringEnabled) await api.stopDirectMonitoring();
-      else await api.startDirectMonitoring();
-      await refresh?.();
-    } catch (error) {
-      alert(`Не удалось изменить прослушивание: ${getErrorMessage(error)}`);
-    } finally {
-      setSaving(false);
-    }
-  };
+  const toggleMonitoring = () =>
+    runMonitoringToggle(() =>
+      enqueueAudioUpdate(async () => {
+        try {
+          if (monitoringEnabled) await api.stopDirectMonitoring();
+          else await api.startDirectMonitoring();
+          await refresh?.();
+        } catch (error) {
+          await alert(
+            `Не удалось изменить прослушивание: ${getErrorMessage(error)}`
+          );
+        }
+      })
+    );
 
   return (
     <div className="audio-settings-grid">
@@ -207,15 +222,12 @@ export default function AudioSettings() {
 
           <Field label="Уровень микрофона" hint="Громкость записи и мониторинга" variant="card">
             <div className="audio-level-control">
-              <input
-                type="range"
+              <RangeInput
                 min="0"
                 max="4"
                 step="0.05"
                 value={settings?.volume ?? 1}
-                onChange={(event) =>
-                  updateBackend({ volume: Number(event.currentTarget.value) })
-                }
+                onChange={(volume) => updateBackend({ volume })}
               />
               <strong>{Math.round(((settings?.volume ?? 1) / 4) * 100)}%</strong>
             </div>
@@ -235,7 +247,7 @@ export default function AudioSettings() {
           </div>
           <Button
             variant={monitoringEnabled ? "danger" : "primary"}
-            disabled={saving}
+            disabled={saving || togglingMonitoring}
             onClick={toggleMonitoring}
           >
             {monitoringEnabled ? "Остановить" : "Прослушивать"}

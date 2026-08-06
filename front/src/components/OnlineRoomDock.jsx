@@ -1,47 +1,32 @@
 import {
   Check,
   Copy,
-  LogOut,
-  Mic,
-  ShieldCheck,
   PanelLeftClose,
   PanelLeftOpen,
-  MicOff,
-  Volume2,
-  VolumeX
+  ShieldCheck
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import useExclusiveAsyncAction from "../hooks/useExclusiveAsyncAction";
+import useMountedRef from "../hooks/useMountedRef";
 import { useOnlineRoom } from "../contexts/OnlineRoomContext";
-import { Card } from "./ui";
-
-async function copyText(value) {
-  if (window.electronAPI?.copyText) return window.electronAPI.copyText(value);
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(value);
-    return true;
-  }
-  const input = document.createElement("textarea");
-  input.value = value;
-  input.style.position = "fixed";
-  input.style.opacity = "0";
-  document.body.append(input);
-  input.select();
-  const copied = document.execCommand("copy");
-  input.remove();
-  return copied;
-}
+import { copyText } from "../utils/clipboard";
+import OnlineRoomParticipant from "./OnlineRoomParticipant";
+import Button from "./fields/button";
+import { Card, IconButton } from "./ui";
 
 export function OnlineRoomDock() {
   const onlineRoom = useOnlineRoom();
   const [copied, setCopied] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const [requestingMicrophone, setRequestingMicrophone] = useState(false);
+  const { pending: requestingMicrophone, run: requestMicrophone } =
+    useExclusiveAsyncAction();
   const copiedTimerRef = useRef(null);
+  const mountedRef = useMountedRef();
 
   useEffect(
     () => () => {
       if (copiedTimerRef.current) {
-        window.clearTimeout(copiedTimerRef.current);
+        globalThis.clearTimeout(copiedTimerRef.current);
       }
     },
     []
@@ -49,217 +34,105 @@ export function OnlineRoomDock() {
 
   if (!onlineRoom?.room) return null;
 
-  const handleRequestMicrophone = async () => {
-    if (requestingMicrophone) return;
-    setRequestingMicrophone(true);
-    try {
-      await onlineRoom.requestMicrophoneAccess();
-    } finally {
-      setRequestingMicrophone(false);
-    }
-  };
+  const handleRequestMicrophone = () =>
+    requestMicrophone(() => onlineRoom.requestMicrophoneAccess());
 
   const handleCopy = async () => {
-    if (!(await copyText(onlineRoom.room.id))) return;
+    if (!(await copyText(onlineRoom.room.id)) || !mountedRef.current) return;
     setCopied(true);
     if (copiedTimerRef.current) {
-      window.clearTimeout(copiedTimerRef.current);
+      globalThis.clearTimeout(copiedTimerRef.current);
     }
-    copiedTimerRef.current = window.setTimeout(() => {
+    copiedTimerRef.current = globalThis.setTimeout(() => {
       copiedTimerRef.current = null;
-      setCopied(false);
+      if (mountedRef.current) setCopied(false);
     }, 1600);
   };
 
   return (
     <>
-    <Card
-      as="aside"
-      className={`online-room-dock ${collapsed ? "is-collapsed" : ""}`}
-      aria-hidden={collapsed}
-      inert={collapsed ? true : undefined}
-      variant="neon"
-      tilt={false}
-      aria-label="Участники комнаты"
-    >
-      <div className="online-room-dock-heading">
-        <span>Комната · {onlineRoom.room.host ? "ведущий" : "участник"}</span>
-        <div className="online-room-dock-code">
-          <button
-            type="button"
-            className="online-room-icon-button"
-            onClick={() => setCollapsed(true)}
-            title="Скрыть панель комнаты"
-            aria-label="Скрыть панель комнаты"
-          >
-            <PanelLeftClose size={16} />
-          </button>
-          <strong>{onlineRoom.room.id}</strong>
-          <button
-            type="button"
-            className="online-room-icon-button"
-            onClick={handleCopy}
-            title="Копировать код комнаты"
-            aria-label="Копировать код комнаты"
-          >
-            {copied ? <Check size={16} /> : <Copy size={16} />}
-          </button>
-        </div>
-      </div>
-
-      <div className="online-room-dock-people">
-        {onlineRoom.participants.map((person) => {
-          const isSelf = person.id === onlineRoom.room.selfId;
-          const isLocallyMuted = onlineRoom.mutedPeople.has(person.id);
-          const rawLevel = isSelf
-            ? onlineRoom.localSpeakingLevel
-            : onlineRoom.speakingLevels[person.id] || 0;
-          const microphoneInactive = isSelf
-            ? onlineRoom.microphoneMuted || onlineRoom.roomSoundMuted
-            : person.micMuted;
-          const speakingLevel = microphoneInactive ? 0 : rawLevel;
-          const isSpeaking = speakingLevel > 0.08;
-          return (
-            <div
-              className={`online-room-person ${isSelf ? "is-self" : ""} ${isSpeaking ? "is-speaking" : ""}`}
-              key={person.id}
-              style={{ "--voice-level": speakingLevel }}
-            >
-              <span className="online-room-person-name">
-                <span className="online-room-person-identity">
-                  <b>{person.name}</b>
-                  {person.role === "host" && <small>ведущий</small>}
-                </span>
-                <span
-                  className="online-room-speaking-meter"
-                  aria-label={isSpeaking ? `${person.name} говорит` : `${person.name} молчит`}
-                  title={isSpeaking ? "Сейчас говорит" : "Нет голосового сигнала"}
-                >
-                  {[0.18, 0.38, 0.6, 0.82].map((threshold) => (
-                    <i
-                      key={threshold}
-                      className={speakingLevel >= threshold ? "is-active" : ""}
-                    />
-                  ))}
-                </span>
-              </span>
-              <div className="online-room-person-actions">
-                {isSelf ? (
-                  <>
-                    <button
-                      type="button"
-                      className={`online-room-icon-button ${onlineRoom.microphoneMuted ? "is-off" : ""}`}
-                      disabled={onlineRoom.roomSoundMuted}
-                      onClick={() =>
-                        onlineRoom.setMicrophoneMuted(
-                          !onlineRoom.microphoneMuted
-                        )
-                      }
-                      title={
-                        onlineRoom.microphoneMuted
-                          ? "Включить микрофон"
-                          : "Выключить микрофон"
-                      }
-                      aria-label={
-                        onlineRoom.microphoneMuted
-                          ? "Включить микрофон"
-                          : "Выключить микрофон"
-                      }
-                    >
-                      {onlineRoom.microphoneMuted ? (
-                        <MicOff size={16} />
-                      ) : (
-                        <Mic size={16} />
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      className={`online-room-icon-button ${onlineRoom.roomSoundMuted ? "is-off" : ""}`}
-                      onClick={() =>
-                        onlineRoom.setRoomSoundMuted(!onlineRoom.roomSoundMuted)
-                      }
-                      title={
-                        onlineRoom.roomSoundMuted
-                          ? "Включить звук приложения"
-                          : "Выключить звук приложения"
-                      }
-                      aria-label={
-                        onlineRoom.roomSoundMuted
-                          ? "Включить звук приложения"
-                          : "Выключить звук приложения"
-                      }
-                    >
-                      {onlineRoom.roomSoundMuted ? (
-                        <VolumeX size={16} />
-                      ) : (
-                        <Volume2 size={16} />
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      className="online-room-icon-button is-leave"
-                      onClick={onlineRoom.leaveRoom}
-                      title="Выйти из комнаты"
-                      aria-label="Выйти из комнаты"
-                    >
-                      <LogOut size={16} />
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    className={`online-room-icon-button ${isLocallyMuted ? "is-off" : ""}`}
-                    onClick={() => onlineRoom.togglePersonMuted(person.id)}
-                    title={
-                      isLocallyMuted
-                        ? `Включить ${person.name}`
-                        : `Не слышать ${person.name}`
-                    }
-                    aria-label={
-                      isLocallyMuted
-                        ? `Включить ${person.name}`
-                        : `Не слышать ${person.name}`
-                    }
-                  >
-                    {isLocallyMuted ? (
-                      <VolumeX size={16} />
-                    ) : (
-                      <Volume2 size={16} />
-                    )}
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      {onlineRoom.voiceError && (
-        <div className="online-room-voice-warning">
-          <p className="online-room-voice-error">{onlineRoom.voiceError}</p>
-          <button
-            type="button"
-            className="btn btn-sm online-room-permission-button"
-            onClick={handleRequestMicrophone}
-            disabled={requestingMicrophone}
-          >
-            <ShieldCheck size={15} />
-            {requestingMicrophone ? "Запрашиваем…" : "Разрешить микрофон"}
-          </button>
-        </div>
-      )}
-    </Card>
-    {collapsed && (
-      <button
-        type="button"
-        className="online-room-restore-button"
-        onClick={() => setCollapsed(false)}
-        title="Показать панель комнаты"
-        aria-label="Показать панель комнаты"
+      <Card
+        as="aside"
+        className={`online-room-dock ${collapsed ? "is-collapsed" : ""}`}
+        aria-hidden={collapsed}
+        inert={collapsed ? true : undefined}
+        variant="neon"
+        tilt={false}
+        aria-label="Участники комнаты"
       >
-        <PanelLeftOpen size={18} />
-        <span>{onlineRoom.room.id}</span>
-      </button>
-    )}
+        <div className="online-room-dock-heading">
+          <span>
+            Комната · {onlineRoom.room.host ? "ведущий" : "участник"}
+          </span>
+          <div className="online-room-dock-code">
+            <IconButton
+              unstyled
+              icon={PanelLeftClose}
+              size={16}
+              label="Скрыть панель комнаты"
+              className="online-room-icon-button"
+              onClick={() => setCollapsed(true)}
+            />
+            <strong>{onlineRoom.room.id}</strong>
+            <IconButton
+              unstyled
+              icon={copied ? Check : Copy}
+              size={16}
+              label="Копировать код комнаты"
+              className="online-room-icon-button"
+              onClick={handleCopy}
+            />
+          </div>
+        </div>
+
+        <div className="online-room-dock-people">
+          {onlineRoom.participants.map((person) => (
+            <OnlineRoomParticipant
+              key={person.id}
+              person={person}
+              room={onlineRoom.room}
+              localSpeakingLevel={onlineRoom.localSpeakingLevel}
+              speakingLevel={onlineRoom.speakingLevels[person.id] || 0}
+              microphoneMuted={onlineRoom.microphoneMuted}
+              roomSoundMuted={onlineRoom.roomSoundMuted}
+              isLocallyMuted={onlineRoom.mutedPeople.has(person.id)}
+              onLeave={onlineRoom.leaveRoom}
+              onSetMicrophoneMuted={onlineRoom.setMicrophoneMuted}
+              onSetRoomSoundMuted={onlineRoom.setRoomSoundMuted}
+              onTogglePersonMuted={onlineRoom.togglePersonMuted}
+            />
+          ))}
+        </div>
+
+        {onlineRoom.voiceError && (
+          <div className="online-room-voice-warning">
+            <p className="online-room-voice-error">{onlineRoom.voiceError}</p>
+            <Button
+              unstyled
+              icon={ShieldCheck}
+              className="btn btn-sm online-room-permission-button"
+              onClick={handleRequestMicrophone}
+              disabled={requestingMicrophone}
+            >
+              {requestingMicrophone ? "Запрашиваем…" : "Разрешить микрофон"}
+            </Button>
+          </div>
+        )}
+      </Card>
+
+      {collapsed && (
+        <Button
+          unstyled
+          icon={PanelLeftOpen}
+          iconSize={18}
+          className="online-room-restore-button"
+          onClick={() => setCollapsed(false)}
+          title="Показать панель комнаты"
+          aria-label="Показать панель комнаты"
+        >
+          <span>{onlineRoom.room.id}</span>
+        </Button>
+      )}
     </>
   );
 }

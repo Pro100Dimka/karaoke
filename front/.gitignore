@@ -10,6 +10,6 @@ Thumbs.db
 .vscode/
 .idea/
 coverage/
-*.zip
+
 test-results/
 *-snapshots/

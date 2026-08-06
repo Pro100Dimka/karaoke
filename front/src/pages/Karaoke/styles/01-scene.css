@@ -1,0 +1,500 @@
+/* Karaoke page layout. Shared surfaces, buttons, fields and theme colors come
+   from src/theme; this file owns only the karaoke stage and its responsive flow. */
+.karaoke-stage {
+  position: relative;
+  display: grid;
+  min-block-size: calc(100dvh - var(--titlebar-height));
+  grid-template-rows: minmax(0, 1fr) auto;
+  overflow: hidden;
+  border-radius: 0;
+  color: var(--color-text);
+  background: var(--color-bg-deep);
+  isolation: isolate;
+}
+
+.karaoke-app-shell .app-settings-fab { display: none; }
+
+.karaoke-performance-stage {
+  position: relative;
+  min-block-size: 0;
+  overflow: hidden;
+  background: var(--color-bg-deep);
+}
+
+.karaoke-panoramic-sky,
+.karaoke-aurora-world,
+.karaoke-video {
+  position: absolute;
+  inset: 0;
+}
+
+.karaoke-panoramic-sky {
+  z-index: 0;
+  background-image:
+    linear-gradient(180deg, rgb(2 0 6 / 12%), rgb(2 0 6 / 46%)),
+    var(--panorama-image);
+  background-position: var(--panorama-x, 50%) var(--panorama-y, 50%);
+  background-size: cover;
+  transform: scale(1.045);
+  transition: opacity var(--duration-slow) var(--ease-standard);
+}
+
+.karaoke-video {
+  z-index: 1;
+  inline-size: var(--karaoke-video-width, 100%);
+  block-size: var(--karaoke-video-height, 100%);
+  max-inline-size: none;
+  object-fit: cover;
+  pointer-events: none;
+  opacity: .7;
+}
+
+.karaoke-youtube-video { border: 0; }
+
+.karaoke-aurora-world {
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+.aurora-nebula,
+.aurora-cloud-texture,
+.aurora-solar-flare,
+.aurora-grid-floor,
+.aurora-horizon-city,
+.aurora-ring,
+.aurora-ribbon,
+.aurora-comet,
+.aurora-floor-pulse,
+.aurora-arc-pulse,
+.aurora-stars,
+.aurora-particles {
+  position: absolute;
+  pointer-events: none;
+}
+
+.aurora-nebula {
+  inline-size: 48vmax;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  filter: blur(5rem);
+  opacity: .22;
+  background: radial-gradient(circle, var(--color-primary), transparent 68%);
+  animation: karaoke-drift 18s ease-in-out infinite alternate;
+}
+
+.aurora-nebula--left { inset: -22% auto auto -16%; }
+.aurora-nebula--center { inset: 8% auto auto 36%; animation-delay: -6s; }
+.aurora-nebula--right { inset: auto -18% -28% auto; animation-delay: -12s; }
+
+.aurora-cloud-texture {
+  inset: 0;
+  opacity: .2;
+  background:
+    radial-gradient(circle at 18% 24%, rgb(255 255 255 / 18%), transparent 20%),
+    radial-gradient(circle at 74% 58%, color-mix(in srgb, var(--color-primary) 38%, transparent), transparent 28%);
+  filter: blur(2rem);
+}
+
+.aurora-cloud-texture--right { transform: scaleX(-1); opacity: .14; }
+
+.aurora-solar-flare {
+  inset: 10% 14% auto auto;
+  inline-size: 18rem;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  opacity: .3;
+  background: radial-gradient(circle, var(--color-highlight), transparent 66%);
+  filter: blur(1.2rem);
+  animation: karaoke-breathe 4.5s ease-in-out infinite;
+}
+
+.aurora-horizon-city {
+  inset: auto 0 0;
+  block-size: 24%;
+  opacity: .18;
+  background: linear-gradient(180deg, transparent, var(--color-bg-deep));
+}
+
+.aurora-grid-floor {
+  inset: auto -12% -24%;
+  block-size: 58%;
+  opacity: .26;
+  background:
+    linear-gradient(var(--color-border) var(--hairline), transparent var(--hairline)) 0 0 / 100% 2.2rem,
+    linear-gradient(90deg, var(--color-border) var(--hairline), transparent var(--hairline)) 0 0 / 3.2rem 100%;
+  mask-image: linear-gradient(transparent, #000 32%);
+  transform: perspective(28rem) rotateX(58deg);
+  transform-origin: bottom;
+}
+
+.aurora-ring {
+  inset: 50% auto auto 50%;
+  inline-size: 30vmin;
+  aspect-ratio: 1;
+  border: var(--hairline) solid color-mix(in srgb, var(--color-primary) 58%, transparent);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: karaoke-ring 8s linear infinite;
+}
+
+.aurora-ring--two { inline-size: 46vmin; animation-delay: -2.5s; }
+.aurora-ring--three { inline-size: 62vmin; animation-delay: -5s; }
+
+.aurora-ribbon {
+  inset: 18% -16% auto;
+  block-size: .2rem;
+  opacity: .45;
+  background: linear-gradient(90deg, transparent, var(--color-primary), var(--color-highlight), transparent);
+  filter: blur(.1rem);
+  transform: rotate(-8deg);
+  animation: karaoke-ribbon 7s ease-in-out infinite alternate;
+}
+
+.aurora-ribbon--two { inset-block-start: 46%; animation-delay: -2.3s; transform: rotate(5deg); }
+.aurora-ribbon--three { inset-block-start: 70%; animation-delay: -4.6s; transform: rotate(-3deg); }
+
+.aurora-comet {
+  inline-size: 8rem;
+  block-size: .12rem;
+  opacity: .5;
+  background: linear-gradient(90deg, transparent, var(--color-highlight));
+  animation: karaoke-comet 9s linear infinite;
+}
+
+.aurora-comet--one { inset: 18% auto auto -10%; }
+.aurora-comet--two { inset: 42% auto auto -18%; animation-delay: -3s; }
+.aurora-comet--three { inset: 66% auto auto -14%; animation-delay: -6s; }
+
+.aurora-stars,
+.aurora-particles { inset: 0; }
+
+.aurora-stars i,
+.aurora-particles i {
+  position: absolute;
+  left: var(--aurora-x, 50%);
+  top: var(--aurora-y, 50%);
+  inline-size: calc(var(--aurora-depth, 1) * .08rem);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--color-highlight);
+  box-shadow: 0 0 .8rem var(--color-primary);
+  animation: karaoke-twinkle 4s ease-in-out var(--aurora-delay, 0ms) infinite;
+}
+
+.aurora-particles i {
+  left: 50%;
+  top: 50%;
+  inline-size: var(--particle-size, .12rem);
+  background: var(--particle-color, var(--color-primary));
+  animation: karaoke-particle 6s linear var(--particle-delay, 0ms) infinite;
+}
+
+.aurora-floor-pulse,
+.aurora-arc-pulse { display: none; }
+
+.melody-roll {
+  position: absolute;
+  z-index: 5;
+  inset: clamp(1rem, 3vh, 2.5rem) clamp(1rem, 4vw, 4rem) auto;
+  overflow: hidden;
+  border: var(--hairline) solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--color-bg-deep) 62%, transparent);
+  box-shadow: var(--shadow-lg), inset 0 var(--hairline) rgb(255 255 255 / 8%);
+  backdrop-filter: blur(1rem) saturate(130%);
+}
+
+.melody-roll-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-block-end: var(--hairline) solid var(--color-border);
+}
+
+.melody-roll-caption,
+.melody-roll-legend { color: var(--color-text-muted); font-size: var(--font-size-xs); }
+.melody-roll-legend { display: flex; align-items: center; gap: var(--space-4); }
+.melody-roll-legend span { display: inline-flex; align-items: center; gap: var(--space-2); }
+.melody-legend-dot { inline-size: .55rem; aspect-ratio: 1; border-radius: 50%; }
+.melody-legend-active { background: var(--color-success); box-shadow: 0 0 .8rem var(--color-success); }
+.melody-legend-reference { background: var(--color-primary); box-shadow: 0 0 .8rem var(--color-primary); }
+.melody-roll svg { display: block; block-size: clamp(12rem, 34vh, 22rem); }
+
+.karaoke-lyrics {
+  position: absolute;
+  z-index: 8;
+  inset: auto 50% clamp(1.5rem, 5vh, 4rem) auto;
+  inline-size: min(68rem, 92vw);
+  transform: translateX(50%);
+  text-align: center;
+  pointer-events: none;
+  text-wrap: balance;
+}
+
+.karaoke-lyric {
+  color: rgb(255 255 255 / 96%);
+  font: 900 clamp(1.7rem, 4vw, 4.5rem) / 1.06 var(--font-display);
+  letter-spacing: .015em;
+  text-shadow: 0 .12rem .35rem rgb(0 0 0 / 90%), 0 0 1.4rem var(--color-primary);
+}
+
+.karaoke-lyric-next {
+  margin-block-start: var(--space-3);
+  color: rgb(255 255 255 / 48%);
+  font-size: .58em;
+}
+
+.karaoke-lyric-upcoming { opacity: .72; }
+.karaoke-lyric-word { display: inline-block; margin-inline-end: .28em; }
+.karaoke-lyric-character {
+  color: transparent;
+  background: linear-gradient(90deg, var(--color-highlight) var(--character-fill), rgb(255 255 255 / 48%) var(--character-fill));
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
+.karaoke-transport-area {
+  position: relative;
+  z-index: 20;
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) clamp(1rem, 3vw, 2.5rem) var(--space-4);
+  border-block-start: var(--hairline) solid var(--color-border);
+  background: color-mix(in srgb, var(--color-bg-deep) 80%, transparent);
+  box-shadow: 0 -1rem 3rem rgb(0 0 0 / 38%);
+  backdrop-filter: blur(1.2rem) saturate(135%);
+  transition: opacity var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard);
+}
+
+.karaoke-timeline-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.karaoke-timecode {
+  min-inline-size: 3.4rem;
+  color: var(--color-text-soft);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+.karaoke-timecode-end { text-align: end; }
+
+.waveform-timeline {
+  position: relative;
+  min-inline-size: 0;
+  block-size: 2.75rem;
+  color: var(--color-highlight);
+  cursor: pointer;
+}
+.waveform-timeline svg { display: block; inline-size: 100%; block-size: 100%; }
+.waveform-timeline input { position: absolute; inset: 0; inline-size: 100%; opacity: 0; cursor: pointer; }
+
+.karaoke-playback-controls {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) auto auto auto auto minmax(10rem, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.karaoke-player-meta { display: grid; min-inline-size: 0; gap: var(--space-1); }
+.karaoke-player-meta span { color: var(--color-text-muted); font-size: var(--font-size-xs); }
+.karaoke-player-meta strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.karaoke-play-button { inline-size: 3.25rem; block-size: 3.25rem; padding: 0; border-radius: 50%; }
+
+.karaoke-corner-actions {
+  display: flex;
+  justify-self: end;
+  align-items: center;
+  gap: var(--space-2);
+}
+.karaoke-corner-actions .btn { inline-size: 2.75rem; padding-inline: 0; }
+.karaoke-app-settings { border-color: var(--color-border-strong); background: var(--gradient-primary); }
+
+.karaoke-ui-hidden .karaoke-transport-area { opacity: 0; transform: translateY(100%); pointer-events: none; }
+
+.karaoke-settings-backdrop {
+  position: fixed;
+  z-index: 650;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--color-bg-deep) 72%, transparent);
+  backdrop-filter: blur(1rem);
+}
+
+.karaoke-settings-modal {
+  position: relative;
+  display: grid;
+  inline-size: min(46rem, 92vw);
+  max-block-size: 88dvh;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  overflow: auto;
+  border: var(--hairline) solid var(--color-border-strong);
+  border-radius: var(--radius-xl);
+  background: var(--gradient-panel);
+  box-shadow: var(--shadow-lg), var(--shadow-neon-primary);
+}
+
+.microphone-panel-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: 850 var(--font-size-lg) / 1.2 var(--font-display);
+}
+
+.karaoke-settings-close {
+  position: absolute;
+  inset: var(--space-3) var(--space-3) auto auto;
+  display: grid;
+  inline-size: 2.5rem;
+  aspect-ratio: 1;
+  place-items: center;
+  border: var(--hairline) solid var(--color-border);
+  border-radius: 50%;
+  color: var(--color-text);
+  background: var(--color-surface-glass);
+}
+
+.karaoke-settings-section,
+.microphone-controls-content,
+.microphone-effects {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.karaoke-settings-section {
+  padding: var(--space-4);
+  border: var(--hairline) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-surface-glass) 82%, transparent);
+}
+
+.karaoke-settings-section-title,
+.microphone-effects-title { font-weight: 850; }
+.karaoke-settings-toggles { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.karaoke-settings-sliders { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.karaoke-setting-choice,
+.slider-field,
+.microphone-level,
+.microphone-gain-setting,
+.advanced-audio-setting,
+.asio-driver-setting,
+.audio-driver-setting { display: grid; gap: var(--space-2); }
+.slider-field__header { display: flex; justify-content: space-between; gap: var(--space-3); }
+
+.karaoke-key-stepper,
+.karaoke-speed-switch { display: inline-flex; align-items: center; gap: var(--space-1); }
+.karaoke-key-stepper button,
+.karaoke-speed-switch button {
+  min-block-size: 2.3rem;
+  padding-inline: var(--space-3);
+  border: var(--hairline) solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  background: var(--color-surface-glass);
+}
+.karaoke-speed-switch button.is-active { border-color: var(--color-primary); background: var(--gradient-primary); }
+
+.microphone-controls-launcher { display: flex; justify-content: flex-end; }
+.microphone-monitoring { display: flex; align-items: center; gap: var(--space-2); }
+.microphone-level-track {
+  block-size: .7rem;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 10%);
+}
+.microphone-level-fill { block-size: 100%; border-radius: inherit; background: var(--gradient-primary); box-shadow: var(--shadow-neon-primary); }
+
+.karaoke-recording-error {
+  position: absolute;
+  z-index: 40;
+  inset: var(--space-4) auto auto 50%;
+  max-inline-size: min(36rem, 90vw);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: var(--hairline) solid var(--color-danger);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-danger) 24%, var(--color-bg-deep));
+  transform: translateX(-50%);
+}
+
+.performance-analysis-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.performance-analysis-metrics-expanded { grid-column: 1 / -1; }
+.performance-analysis-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); }
+.performance-analysis-score,
+.performance-analysis-grade { font-weight: 900; }
+.performance-analysis-advice { padding: var(--space-4); border-radius: var(--radius-lg); background: var(--color-surface-soft); }
+.performance-player-play { inline-size: 3rem; aspect-ratio: 1; border-radius: 50%; }
+.performance-player-track,
+.performance-player-volume { inline-size: 100%; }
+.analysis-victory-scene,
+.analysis-confetti,
+.analysis-crystal,
+.analysis-trophy { pointer-events: none; }
+
+@media (max-width: 62rem) {
+  .melody-roll { inset-inline: var(--space-4); }
+  .karaoke-playback-controls { grid-template-columns: minmax(0, 1fr) repeat(4, auto); }
+  .karaoke-corner-actions { grid-column: 1 / -1; justify-self: stretch; justify-content: flex-end; }
+  .karaoke-settings-sliders { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 44rem) {
+  .karaoke-stage { grid-template-rows: minmax(0, 1fr) auto; }
+  .melody-roll { inset-block-start: var(--space-3); }
+  .melody-roll-header { display: none; }
+  .melody-roll svg { block-size: clamp(10rem, 28vh, 15rem); }
+  .karaoke-lyrics { inset-block-end: var(--space-5); }
+  .karaoke-lyric { font-size: clamp(1.45rem, 8vw, 2.8rem); }
+  .karaoke-timeline-row { gap: var(--space-2); }
+  .karaoke-timecode { min-inline-size: auto; }
+  .karaoke-playback-controls { grid-template-columns: 1fr repeat(4, auto); }
+  .karaoke-player-meta { grid-column: 1 / -1; }
+  .karaoke-corner-actions { justify-content: space-between; }
+  .karaoke-settings-modal { padding: var(--space-4); }
+  .performance-analysis-metrics { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .karaoke-stage *,
+  .karaoke-stage *::before,
+  .karaoke-stage *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
+
+@keyframes karaoke-drift {
+  to { transform: translate3d(10%, 6%, 0) scale(1.08); }
+}
+@keyframes karaoke-breathe {
+  50% { opacity: .55; transform: scale(1.08); }
+}
+@keyframes karaoke-ring {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.72); }
+  45% { opacity: .38; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.32); }
+}
+@keyframes karaoke-ribbon {
+  to { translate: 8% 2rem; opacity: .72; }
+}
+@keyframes karaoke-comet {
+  from { translate: 0 0; opacity: 0; }
+  12% { opacity: .6; }
+  to { translate: 130vw 28vh; opacity: 0; }
+}
+@keyframes karaoke-twinkle {
+  50% { opacity: .25; transform: scale(.55); }
+}
+@keyframes karaoke-particle {
+  from { transform: rotate(var(--particle-angle)) translateX(0); opacity: 0; }
+  20% { opacity: .8; }
+  to { transform: rotate(var(--particle-angle)) translateX(var(--particle-distance)); opacity: 0; }
+}
+

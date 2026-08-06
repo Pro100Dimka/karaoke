@@ -6,7 +6,8 @@ import {
   Settings2,
   Trash2
 } from "lucide-react";
-import { Card, StatusBadge } from "../../../components/ui";
+import { Button } from "../../../components/fields";
+import { Card, IconButton, StatusBadge } from "../../../components/ui";
 import { getSongCardTilt } from "../card-tilt";
 import { getSongCardState } from "../utils";
 import SongCardArtwork from "./SongCardArtwork";
@@ -30,6 +31,76 @@ function applyCardTilt(element, tilt) {
   element.style.setProperty("--glow-y", tilt.glowY);
 }
 
+function getSongActions({
+  canManageLibrary,
+  isReady,
+  isWorking,
+  onDelete,
+  onOpenFolder,
+  onOpenRecordings,
+  onOpenSettings,
+  onProcess,
+  onReprocess,
+  song
+}) {
+  const primaryAction = isReady
+    ? {
+        icon: Headphones,
+        label: "Прослушать записи",
+        onClick: () => onOpenRecordings(song),
+        size: 15,
+        variant: "ghost"
+      }
+    : canManageLibrary
+      ? {
+          className: "library-song-card-process",
+          disabled: isWorking,
+          icon: AudioWaveform,
+          label: "Обработать песню",
+          onClick: () => onProcess(song),
+          size: 16,
+          variant: "primary"
+        }
+      : null;
+
+  const managementActions = canManageLibrary
+    ? [
+        {
+          icon: Settings2,
+          label: "Настройки песни",
+          onClick: () => onOpenSettings(song.id),
+          size: 14,
+          variant: "ghost"
+        },
+        {
+          icon: FolderOpen,
+          label: "Открыть папку",
+          onClick: () => onOpenFolder(song),
+          size: 14,
+          variant: "ghost"
+        },
+        isReady
+          ? {
+              icon: RotateCcw,
+              label: "Переобработать MIDI",
+              onClick: () => onReprocess(song),
+              size: 14,
+              variant: "ghost"
+            }
+          : null,
+        {
+          icon: Trash2,
+          label: "Удалить песню",
+          onClick: () => onDelete(song),
+          size: 15,
+          variant: "danger"
+        }
+      ].filter(Boolean)
+    : [];
+
+  return [primaryAction, ...managementActions].filter(Boolean);
+}
+
 export default function LibrarySongCard({
   canManageLibrary,
   cardIndex,
@@ -44,6 +115,18 @@ export default function LibrarySongCard({
   song
 }) {
   const { isWorking, isReady, status } = getSongCardState(song);
+  const actions = getSongActions({
+    canManageLibrary,
+    isReady,
+    isWorking,
+    onDelete,
+    onOpenFolder,
+    onOpenRecordings,
+    onOpenSettings,
+    onProcess,
+    onReprocess,
+    song
+  });
 
   const handlePointerMove = (event) => {
     const element = event.currentTarget;
@@ -104,14 +187,14 @@ export default function LibrarySongCard({
 
 
         {isWorking && (
-          <button
+          <Button
+            unstyled
             className="library-song-card-progress"
-            type="button"
             onClick={() => onOpenProcessing(song)}
           >
             <ProcessingSignal progress={song.progress_percent} compact />
             <span>Открыть обработку</span>
-          </button>
+          </Button>
         )}
 
         <div className="library-song-card-footer">
@@ -123,73 +206,16 @@ export default function LibrarySongCard({
             ) : null}
           </p>
           <div className="library-song-card-actions">
-            {isReady ? (
-              <button
-                className="btn btn-ghost btn-sm library-song-card-icon"
-                type="button"
-                title="Прослушать записи"
-                aria-label="Прослушать записи"
-                onClick={() => onOpenRecordings(song)}
-              >
-                <Headphones size={15} />
-              </button>
-            ) : canManageLibrary ? (
-              <button
-                className="btn btn-primary btn-sm library-song-card-icon library-song-card-process"
-                disabled={isWorking}
-                type="button"
-                title="Обработать песню"
-                aria-label="Обработать песню"
-                onClick={() => onProcess(song)}
-              >
-                <AudioWaveform size={16} />
-              </button>
-            ) : null}
-
-            {canManageLibrary && (
-              <button
-                className="btn btn-ghost btn-sm library-song-card-icon"
-                title="Настройки песни"
-                aria-label="Настройки песни"
-                type="button"
-                onClick={() => onOpenSettings(song.id)}
-              >
-                <Settings2 size={14} />
-              </button>
-            )}
-            {canManageLibrary && (
-              <button
-                className="btn btn-ghost btn-sm library-song-card-icon"
-                type="button"
-                title="Открыть папку"
-                aria-label="Открыть папку"
-                onClick={() => onOpenFolder(song)}
-              >
-                <FolderOpen size={14} />
-              </button>
-            )}
-            {canManageLibrary && isReady && (
-              <button
-                className="btn btn-ghost btn-sm library-song-card-icon"
-                type="button"
-                title="Переобработать MIDI"
-                aria-label="Переобработать MIDI"
-                onClick={() => onReprocess(song)}
-              >
-                <RotateCcw size={14} />
-              </button>
-            )}
-            {canManageLibrary && (
-              <button
-                className="btn btn-danger btn-sm library-song-card-icon"
-                type="button"
-                title="Удалить"
-                aria-label="Удалить песню"
-                onClick={() => onDelete(song)}
-              >
-                <Trash2 size={15} />
-              </button>
-            )}
+            {actions.map(({ className = "", icon, label, variant, ...props }) => (
+              <IconButton
+                key={label}
+                unstyled
+                className={`btn btn-${variant} btn-sm library-song-card-icon ${className}`.trim()}
+                icon={icon}
+                label={label}
+                {...props}
+              />
+            ))}
           </div>
         </div>
       </div>

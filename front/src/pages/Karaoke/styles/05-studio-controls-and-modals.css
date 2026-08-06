@@ -1,0 +1,555 @@
+/* Studio mixer: vertical channel faders + quick effect dials. */
+.karaoke-mixer-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 5.8rem;
+  gap: .65rem;
+  min-block-size: 9.8rem;
+}
+
+.karaoke-quick-mixer--vertical {
+  gap: .35rem;
+  block-size: 100%;
+}
+
+.karaoke-quick-mixer--vertical .slider-field {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  justify-items: center;
+  align-items: center;
+  gap: .25rem;
+  min-block-size: 9.6rem;
+  padding: .35rem .2rem .45rem;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 5%, transparent), transparent 35%),
+    color-mix(in srgb, var(--color-bg-deep) 64%, transparent);
+}
+
+.karaoke-quick-mixer--vertical .slider-field__header {
+  display: contents;
+}
+
+.karaoke-quick-mixer--vertical .slider-field__header > span:first-child {
+  grid-row: 1;
+  color: var(--color-text-soft);
+  font-size: .63rem;
+  white-space: nowrap;
+}
+
+.karaoke-quick-mixer--vertical .slider-field__header > .mono {
+  grid-row: 3;
+  color: var(--color-primary);
+  font-size: .65rem;
+}
+
+.karaoke-quick-mixer--vertical input[type="range"] {
+  grid-row: 2;
+  inline-size: 5.9rem;
+  block-size: 1.1rem;
+  margin: 0;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  appearance: slider-vertical;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+  filter: drop-shadow(0 0 .45rem color-mix(in srgb, var(--color-primary) 48%, transparent));
+}
+
+.karaoke-mixer-effects {
+  display: grid;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: .42rem;
+}
+
+.karaoke-effect-dial {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto 1fr;
+  align-items: center;
+  gap: .15rem .35rem;
+  min-inline-size: 0;
+  padding: .4rem .42rem;
+  border: var(--hairline) solid color-mix(in srgb, var(--color-primary) 15%, var(--color-border));
+  border-radius: .65rem;
+  color: var(--color-text-soft);
+  background: color-mix(in srgb, var(--color-bg-deep) 67%, transparent);
+  cursor: pointer;
+}
+
+.karaoke-effect-dial__label {
+  font-size: .6rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.karaoke-effect-dial strong {
+  justify-self: end;
+  color: var(--color-primary);
+  font-size: .63rem;
+}
+
+.karaoke-effect-dial__control {
+  grid-column: 1 / -1;
+  position: relative;
+  place-self: center;
+  inline-size: 3rem;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, var(--color-bg-deep) 52%, transparent 54%),
+    conic-gradient(from 225deg,
+      var(--color-primary) 0 var(--dial-value),
+      color-mix(in srgb, var(--color-border) 70%, transparent) var(--dial-value) 75%,
+      transparent 75% 100%);
+  box-shadow:
+    inset 0 0 .7rem rgb(0 0 0 / 45%),
+    0 0 .8rem color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+.karaoke-effect-dial__control::after {
+  content: "";
+  position: absolute;
+  inset: .42rem;
+  border-radius: 50%;
+  border: var(--hairline) solid color-mix(in srgb, var(--color-highlight) 18%, transparent);
+  background: radial-gradient(circle at 35% 25%, rgb(255 255 255 / 16%), transparent 30%);
+}
+
+.karaoke-effect-dial__knob {
+  position: absolute;
+  z-index: 1;
+  inset: .54rem;
+  border-radius: 50%;
+  transform: rotate(calc(-135deg + (270deg * var(--dial-value) / 100%)));
+}
+
+.karaoke-effect-dial__knob::before {
+  content: "";
+  position: absolute;
+  inset-block-start: .08rem;
+  inset-inline-start: 50%;
+  inline-size: .12rem;
+  block-size: .7rem;
+  border-radius: 999rem;
+  background: var(--color-highlight);
+  box-shadow: 0 0 .5rem var(--color-primary);
+  transform: translateX(-50%);
+}
+
+.karaoke-effect-dial input {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.karaoke-effect-dial:focus-within,
+.karaoke-effect-dial:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 .85rem color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+
+.karaoke-tools-panel {
+  grid-template-rows: auto 1fr;
+}
+
+@media (max-width: 78rem) {
+  .karaoke-mixer-body { grid-template-columns: minmax(0, 1fr) 5.2rem; }
+  .karaoke-effect-dial__control { inline-size: 2.65rem; }
+}
+
+/* Compact studio controls: BPM, key name and vocal range. */
+.karaoke-performance-controls > .karaoke-performance-control {
+  grid-template-columns: 1.9rem minmax(4.8rem, 1fr) 1.9rem;
+}
+
+.karaoke-performance-control button {
+  display: grid;
+  place-items: center;
+  inline-size: 1.9rem;
+  block-size: 1.9rem;
+  padding: 0;
+  border: var(--hairline) solid color-mix(in srgb, var(--color-primary) 26%, var(--color-border));
+  border-radius: .55rem;
+  background: color-mix(in srgb, var(--color-surface) 42%, transparent);
+  transition: border-color var(--motion-fast), background var(--motion-fast), transform var(--motion-fast);
+}
+
+.karaoke-performance-control button:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 72%, white 12%);
+  background: color-mix(in srgb, var(--color-primary) 14%, var(--color-surface));
+  transform: translateY(-.06rem);
+}
+
+.karaoke-performance-control strong {
+  font-size: .86rem;
+  white-space: nowrap;
+}
+
+.karaoke-performance-control--key strong {
+  color: color-mix(in srgb, var(--color-text) 78%, var(--color-primary));
+  font-size: 1rem;
+  letter-spacing: .02em;
+}
+
+.karaoke-performance-control--range {
+  grid-template-columns: 1fr;
+}
+
+.karaoke-performance-control--range strong {
+  grid-column: 1;
+}
+
+/* Theme-only color polish for the studio console. Layout is intentionally unchanged. */
+.karaoke-song-strip {
+  border-color: color-mix(in srgb, var(--color-accent) 34%, var(--color-border));
+  background:
+    radial-gradient(circle at 12% 20%, color-mix(in srgb, var(--color-primary) 10%, transparent), transparent 30%),
+    radial-gradient(circle at 72% 0%, color-mix(in srgb, var(--color-success) 8%, transparent), transparent 34%),
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--color-surface) 72%, transparent),
+      color-mix(in srgb, var(--color-bg-deep) 78%, transparent));
+  box-shadow:
+    inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 14%, transparent),
+    0 0 1.5rem color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+
+.karaoke-song-cover {
+  background:
+    radial-gradient(circle at 30% 22%, color-mix(in srgb, var(--color-highlight) 30%, transparent), transparent 27%),
+    linear-gradient(145deg, var(--color-primary), var(--color-accent) 52%, var(--color-primary-strong));
+  box-shadow:
+    inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 25%, transparent),
+    0 0 1.25rem color-mix(in srgb, var(--color-primary) 34%, transparent);
+}
+
+.karaoke-song-strip .waveform-timeline {
+  color: var(--color-primary);
+  filter:
+    drop-shadow(0 0 .22rem color-mix(in srgb, var(--color-primary) 55%, transparent))
+    drop-shadow(0 0 .5rem color-mix(in srgb, var(--color-accent) 24%, transparent));
+}
+
+.karaoke-song-strip .waveform-timeline::after {
+  content: "";
+  position: absolute;
+  inset: 18% 0;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+    transparent,
+    color-mix(in srgb, var(--color-highlight) 16%, transparent) 46%,
+    color-mix(in srgb, var(--color-highlight) 34%, transparent) 50%,
+    transparent 54%);
+  mix-blend-mode: screen;
+  opacity: .65;
+}
+
+.karaoke-console-panel,
+.karaoke-console-center {
+  border-color: color-mix(in srgb, var(--panel-accent, var(--color-primary)) 30%, var(--color-border));
+  box-shadow:
+    inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 9%, transparent),
+    0 0 1.25rem color-mix(in srgb, var(--panel-accent, var(--color-primary)) 8%, transparent);
+}
+
+.karaoke-mixer-panel { --panel-accent: var(--color-accent); }
+.karaoke-console-center { --panel-accent: var(--color-primary); }
+.karaoke-tools-panel { --panel-accent: var(--color-success); }
+
+.karaoke-quick-mixer--vertical .slider-field:nth-child(1) { --channel-color: var(--color-primary); }
+.karaoke-quick-mixer--vertical .slider-field:nth-child(2) { --channel-color: var(--color-success); }
+.karaoke-quick-mixer--vertical .slider-field:nth-child(3) { --channel-color: var(--color-accent); }
+.karaoke-quick-mixer--vertical .slider-field:nth-child(4) { --channel-color: var(--color-secondary); }
+
+.karaoke-quick-mixer--vertical .slider-field {
+  background:
+    radial-gradient(circle at 50% 18%, color-mix(in srgb, var(--channel-color) 13%, transparent), transparent 34%),
+    color-mix(in srgb, var(--color-bg-deep) 64%, transparent);
+}
+
+.karaoke-quick-mixer--vertical .slider-field__header > span:first-child,
+.karaoke-quick-mixer--vertical .slider-field__header > .mono {
+  color: var(--channel-color);
+  text-shadow: 0 0 .55rem color-mix(in srgb, var(--channel-color) 34%, transparent);
+}
+
+.karaoke-quick-mixer--vertical input[type="range"] {
+  accent-color: var(--channel-color);
+  filter: drop-shadow(0 0 .48rem color-mix(in srgb, var(--channel-color) 54%, transparent));
+}
+
+.karaoke-quick-mixer--vertical input[type="range"]::-webkit-slider-thumb {
+  background: var(--channel-color);
+  box-shadow:
+    0 0 .35rem color-mix(in srgb, var(--channel-color) 80%, transparent),
+    0 0 .85rem color-mix(in srgb, var(--channel-color) 42%, transparent);
+}
+
+.karaoke-effect-dial { --dial-color: var(--color-primary); }
+
+.karaoke-effect-dial {
+  border-color: color-mix(in srgb, var(--dial-color) 27%, var(--color-border));
+  background:
+    radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--dial-color) 10%, transparent), transparent 46%),
+    color-mix(in srgb, var(--color-bg-deep) 67%, transparent);
+}
+
+.karaoke-effect-dial strong { color: var(--dial-color); }
+.karaoke-effect-dial__control {
+  background:
+    radial-gradient(circle at center, var(--color-bg-deep) 52%, transparent 54%),
+    conic-gradient(from 225deg,
+      var(--dial-color) 0 var(--dial-value),
+      color-mix(in srgb, var(--color-border) 70%, transparent) var(--dial-value) 75%,
+      transparent 75% 100%);
+  box-shadow:
+    inset 0 0 .7rem rgb(0 0 0 / 45%),
+    0 0 .9rem color-mix(in srgb, var(--dial-color) 30%, transparent);
+}
+.karaoke-effect-dial__knob::before {
+  box-shadow: 0 0 .55rem var(--dial-color);
+}
+.karaoke-effect-dial:focus-within,
+.karaoke-effect-dial:hover {
+  border-color: var(--dial-color);
+  box-shadow: 0 0 .9rem color-mix(in srgb, var(--dial-color) 24%, transparent);
+}
+
+.karaoke-performance-control:nth-child(1) { --control-color: var(--color-primary); }
+.karaoke-performance-control:nth-child(2) { --control-color: var(--color-success); }
+.karaoke-performance-control:nth-child(3) { --control-color: var(--color-accent); }
+
+.karaoke-performance-controls > .karaoke-performance-control {
+  border-color: color-mix(in srgb, var(--control-color) 34%, var(--color-border));
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--control-color) 12%, transparent), transparent 50%),
+    color-mix(in srgb, var(--color-bg-deep) 54%, transparent);
+  box-shadow: 0 0 .85rem color-mix(in srgb, var(--control-color) 10%, transparent);
+}
+.karaoke-performance-controls span,
+.karaoke-performance-controls button { color: var(--control-color); }
+.karaoke-performance-controls strong {
+  color: color-mix(in srgb, var(--control-color) 45%, var(--color-text));
+  text-shadow: 0 0 .5rem color-mix(in srgb, var(--control-color) 25%, transparent);
+}
+
+.karaoke-tool-tabs button:nth-child(1) { --tool-color: var(--color-primary); }
+.karaoke-tool-tabs button:nth-child(2) { --tool-color: var(--color-success); }
+.karaoke-tool-tabs button:nth-child(3) { --tool-color: var(--color-accent); }
+.karaoke-tool-tabs button:nth-child(4) { --tool-color: var(--color-secondary); }
+
+.karaoke-tool-tabs button {
+  border-color: color-mix(in srgb, var(--tool-color) 22%, var(--color-border));
+}
+.karaoke-tool-tabs button:hover,
+.karaoke-tool-tabs button.is-active {
+  color: color-mix(in srgb, var(--tool-color) 42%, var(--color-highlight));
+  border-color: var(--tool-color);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--tool-color) 16%, var(--color-surface-glass)),
+      color-mix(in srgb, var(--color-bg-deep) 62%, transparent));
+  box-shadow:
+    inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 18%, transparent),
+    0 0 1rem color-mix(in srgb, var(--tool-color) 28%, transparent);
+}
+
+.karaoke-console-actions button:first-child { --action-color: var(--color-secondary); }
+.karaoke-console-actions button:last-child { --action-color: var(--color-accent); }
+.karaoke-console-actions button:hover {
+  color: color-mix(in srgb, var(--action-color) 45%, var(--color-highlight));
+  border-color: var(--action-color);
+  box-shadow: 0 0 .9rem color-mix(in srgb, var(--action-color) 24%, transparent);
+}
+
+[data-theme="light"] .karaoke-song-strip .waveform-timeline {
+  filter:
+    drop-shadow(0 0 .16rem color-mix(in srgb, var(--color-primary) 34%, transparent))
+    drop-shadow(0 0 .34rem color-mix(in srgb, var(--color-accent) 18%, transparent));
+}
+
+/* Interaction and alignment polish for the studio console. */
+.karaoke-effect-dial {
+  touch-action: none;
+  user-select: none;
+}
+
+.karaoke-effect-dial__knob {
+  transform: rotate(var(--dial-angle));
+  transition: transform 90ms linear;
+}
+
+.karaoke-effect-dial:active .karaoke-effect-dial__knob {
+  transition: none;
+}
+
+.karaoke-console-center {
+  justify-items: center;
+}
+
+.karaoke-console-center > * {
+  margin-inline: auto;
+}
+
+.karaoke-transport-buttons--hero,
+.karaoke-performance-controls {
+  inline-size: min(100%, 31rem);
+}
+
+.karaoke-transport-buttons--hero {
+  justify-content: center;
+}
+
+.karaoke-performance-controls {
+  align-items: stretch;
+}
+
+.karaoke-performance-controls > .karaoke-performance-control {
+  align-content: center;
+  justify-items: center;
+}
+
+.karaoke-performance-control--range {
+  grid-template-columns: 1fr;
+}
+
+.karaoke-tools-panel {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.karaoke-effect-presets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .42rem;
+  align-content: center;
+}
+
+.karaoke-effect-presets button {
+  --preset-color: var(--color-primary);
+  display: grid;
+  place-items: center;
+  gap: .28rem;
+  min-block-size: 3.45rem;
+  padding: .42rem .25rem;
+  border: var(--hairline) solid color-mix(in srgb, var(--preset-color) 24%, var(--color-border));
+  border-radius: .62rem;
+  color: var(--color-text-soft);
+  background:
+    radial-gradient(circle at 50% 24%, color-mix(in srgb, var(--preset-color) 10%, transparent), transparent 48%),
+    color-mix(in srgb, var(--color-bg-deep) 58%, transparent);
+  cursor: pointer;
+  transition:
+    color var(--duration-fast),
+    border-color var(--duration-fast),
+    background var(--duration-fast),
+    box-shadow var(--duration-fast),
+    transform var(--duration-fast);
+}
+
+.karaoke-effect-presets button:nth-child(2),
+.karaoke-effect-presets button:nth-child(6) { --preset-color: var(--color-success); }
+.karaoke-effect-presets button:nth-child(3),
+.karaoke-effect-presets button:nth-child(7) { --preset-color: var(--color-accent); }
+.karaoke-effect-presets button:nth-child(4),
+.karaoke-effect-presets button:nth-child(8) { --preset-color: var(--color-secondary); }
+
+.karaoke-effect-presets button > span {
+  display: grid;
+  place-items: center;
+  inline-size: 1.85rem;
+  block-size: 1.85rem;
+  border: var(--hairline) solid color-mix(in srgb, var(--preset-color) 38%, var(--color-border));
+  border-radius: .52rem;
+  color: var(--preset-color);
+  font: 800 1rem/1 var(--font-display);
+  box-shadow: inset 0 0 .65rem color-mix(in srgb, var(--preset-color) 8%, transparent);
+}
+
+.karaoke-effect-presets button small {
+  color: inherit;
+  font: 700 .59rem/1 var(--font-sans);
+}
+
+.karaoke-effect-presets button:hover,
+.karaoke-effect-presets button.is-active {
+  color: color-mix(in srgb, var(--preset-color) 45%, var(--color-highlight));
+  border-color: var(--preset-color);
+  background:
+    radial-gradient(circle at 50% 20%, color-mix(in srgb, var(--preset-color) 20%, transparent), transparent 55%),
+    color-mix(in srgb, var(--color-bg-deep) 52%, transparent);
+  box-shadow:
+    inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 18%, transparent),
+    0 0 .85rem color-mix(in srgb, var(--preset-color) 24%, transparent);
+  transform: translateY(-.04rem);
+}
+
+.karaoke-effect-presets button.is-active > span {
+  background: color-mix(in srgb, var(--preset-color) 14%, transparent);
+  box-shadow:
+    inset 0 0 .65rem color-mix(in srgb, var(--preset-color) 14%, transparent),
+    0 0 .7rem color-mix(in srgb, var(--preset-color) 30%, transparent);
+}
+
+@media (max-width: 78rem) {
+  .karaoke-effect-presets {
+    grid-template-columns: repeat(8, minmax(4rem, 1fr));
+  }
+}
+
+@media (max-width: 56rem) {
+  .karaoke-effect-presets {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Shared analysis modal: same geometry and Card system as the application modals. */
+.performance-analysis-modal {
+  inline-size: min(43.75rem, 90vw);
+  max-block-size: 90dvh;
+}
+
+.performance-analysis-modal > .ui-card__panel,
+.performance-analysis-modal > .ui-card__panel > .ui-card__content {
+  min-block-size: 0;
+  max-block-size: inherit;
+}
+
+.performance-analysis-modal > .ui-card__panel > .ui-card__content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.performance-analysis-body {
+  display: grid;
+  gap: var(--space-4);
+  min-block-size: 0;
+  padding: var(--space-4);
+  overflow: auto;
+}
+
+/* Top toolbar owns all scene-level actions; inactive toggles deliberately dim. */
+.karaoke-tool-tabs {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.karaoke-tool-tabs button[aria-pressed="false"] {
+  color: var(--color-text-muted);
+  border-color: var(--color-border);
+  box-shadow: none;
+  opacity: .68;
+}
+
+.karaoke-tool-tabs button[aria-pressed="true"] {
+  opacity: 1;
+}
+
+.karaoke-tools-panel {
+  grid-template-rows: auto 1fr;
+}

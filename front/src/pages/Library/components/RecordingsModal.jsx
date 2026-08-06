@@ -1,10 +1,10 @@
 import { BarChart3, Music2, Trash2 } from "lucide-react";
 import { api } from "../../../api/client";
 import { AudioPlayer } from "../../../components/AudioPlayer";
-import Modal from "../../../components/Modal";
-import { Card } from "../../../components/ui";
+import { Card, IconButton } from "../../../components/ui";
 import { getErrorMessage } from "../../../utils/errors";
 import { formatLibraryDate } from "../utils";
+import LibraryModal from "./LibraryModal";
 import LibraryModalHeader from "./LibraryModalHeader";
 
 export default function RecordingsModal({
@@ -16,16 +16,11 @@ export default function RecordingsModal({
   onDelete
 }) {
   return (
-    <Modal
+    <LibraryModal
       isOpen={Boolean(song)}
       onClose={onClose}
       ariaLabel={song ? `Исполнения песни ${song.title}` : "Исполнения песни"}
-      backdropClassName="app-modal-backdrop song-recordings-backdrop"
-      modalClassName="app-modal modal-card song-recordings-modal"
-      closeClassName="app-modal-close song-recordings-close"
-      cardVariant="neon"
-      closeIconSize={18}
-      portal
+      modalClassName="song-recordings-modal"
     >
       {song && (
         <>
@@ -58,22 +53,22 @@ export default function RecordingsModal({
                     src={api.getPerformanceFileUrl(recording.id)}
                   />
                   <div className="song-recording-item-actions">
-                    <button
+                    <IconButton
+                      unstyled
                       className="btn btn-ghost btn-sm"
-                      type="button"
+                      icon={BarChart3}
+                      size={15}
+                      label="Анализировать запись"
                       onClick={() => onAnalyze(recording)}
-                    >
-                      <BarChart3 size={15} />
-                    </button>
-                    <button
+                    />
+                    <IconButton
+                      unstyled
                       className="btn btn-danger btn-sm song-recording-delete"
-                      title="Удалить запись"
-                      aria-label="Удалить запись"
+                      icon={Trash2}
+                      size={14}
+                      label="Удалить запись"
                       onClick={() => onDelete(recording)}
-                      type="button"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    />
                   </div>
                 </Card>
               ))}
@@ -86,6 +81,6 @@ export default function RecordingsModal({
           </div>
         </>
       )}
-    </Modal>
+    </LibraryModal>
   );
 }

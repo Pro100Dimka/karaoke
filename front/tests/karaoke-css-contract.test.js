@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { readCssBundle } from "./helpers/css.js";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -17,9 +18,7 @@ function walk(directory, extension) {
 }
 
 function readAllCss() {
-  return walk(stylesRoot, ".css")
-    .map((file) => fs.readFileSync(file, "utf8"))
-    .join("\n");
+  return readCssBundle(walk(stylesRoot, ".css"));
 }
 
 function sourceClassNames() {
@@ -142,6 +141,15 @@ test("all non-dynamic CSS custom properties are declared", () => {
     "--aurora-depth",
     "--aurora-x",
     "--aurora-y",
+    "--bar-height",
+    "--bar-index",
+    "--character-fill",
+    "--dial-angle",
+    "--dial-value",
+    "--meter-level",
+    "--microphone-level",
+    "--part",
+    "--voice-level",
     "--cosmic-delay",
     "--cosmic-size",
     "--cosmic-x",

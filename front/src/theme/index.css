@@ -8,3 +8,16 @@
 @import "./effects.css";
 
 @import "./components.css";
+
+/* Legacy semantic aliases kept while page styles migrate to the theme tokens. */
+:root {
+  --color-background: var(--color-bg);
+  --color-primary-soft: var(--color-primary-hover);
+  --blur-md: 16px;
+  --motion-fast: var(--transition-fast);
+  --motion-normal: var(--transition-normal);
+  --motion-slow: var(--transition-slow);
+  --shadow-card: var(--shadow-md);
+  --shadow-neon: var(--shadow-neon-soft);
+  --shadow-neon-strong: var(--shadow-neon-primary);
+}

@@ -1,10 +1,17 @@
 import { Minus, Square, X } from "lucide-react";
+import { IconButton } from "./ui";
 
 const WINDOW_ACTIONS = [
   { id: "minimize", label: "Свернуть окно", Icon: Minus, size: 14 },
   { id: "maximize", label: "Развернуть окно", Icon: Square, size: 12 },
   { id: "close", label: "Закрыть окно", Icon: X, size: 14, danger: true }
 ];
+
+function invokeWindowAction(electronAPI, action) {
+  Promise.resolve(electronAPI[action]?.()).catch((error) => {
+    console.error(`Window action failed: ${action}`, error);
+  });
+}
 
 export default function TitleBar({ title = "Karaoke Studio" }) {
   const { electronAPI } = window;
@@ -19,15 +26,15 @@ export default function TitleBar({ title = "Karaoke Studio" }) {
       {electronAPI && (
         <div className="title-bar__actions">
           {WINDOW_ACTIONS.map(({ id, label, Icon, size, danger }) => (
-            <button
+            <IconButton
               key={id}
-              type="button"
+              unstyled
+              icon={Icon}
+              size={size}
+              label={label}
               className={`title-bar__button ${danger ? "is-danger" : ""}`.trim()}
-              aria-label={label}
-              onClick={() => electronAPI[id]()}
-            >
-              <Icon size={size} aria-hidden="true" />
-            </button>
+              onClick={() => invokeWindowAction(electronAPI, id)}
+            />
           ))}
         </div>
       )}

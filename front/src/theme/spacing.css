@@ -15,6 +15,7 @@
   --radius-lg: 1.2rem;
   --radius-xl: 1.65rem;
   --radius-pill: 62.4375rem;
+  --radius-round: var(--radius-pill);
 
   --content-max: 90rem;
   --titlebar-height: 2.125rem;

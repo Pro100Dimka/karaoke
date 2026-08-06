@@ -9,6 +9,7 @@ import {
   useState
 } from "react";
 import Modal from "../components/Modal";
+import { Button } from "../components/fields";
 import { ModalTitle } from "../components/ui";
 import {
   createDialogConfig,
@@ -53,22 +54,18 @@ function DialogModal({ dialog, onClose }) {
       <div className="app-dialog-body">
         <div className="app-dialog-actions">
           {isConfirmation && (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => onClose(false)}
-            >
+            <Button variant="ghost" onClick={() => onClose(false)}>
               {dialog.cancelText}
-            </button>
+            </Button>
           )}
 
-          <button
-            type="button"
+          <Button
+            unstyled
             className={dialog.confirmClassName}
             onClick={() => onClose(true)}
           >
             {dialog.confirmText}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

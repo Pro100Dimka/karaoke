@@ -1,85 +1,34 @@
-import {
-  ArrowLeft,
-  AudioLines,
-  ChevronLeft,
-  ChevronRight,
-  Cog,
-  Mic,
-  Pause,
-  Play,
-  Settings2,
-  SkipBack,
-  SkipForward,
-  SlidersHorizontal,
-  Square,
-  Type,
-  X
-} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
-import { KARAOKE_THEMES, shuffleThemes } from "../../assets/karaoke/themes";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
-import useLatestRef from "../../hooks/useLatestRef";
 import { usePolling } from "../../hooks/usePolling";
-import { getErrorMessage } from "../../utils/errors";
-import { getAudioPreferences } from "../../utils/audio-preferences";
-import EffectDial from "./components/EffectDial";
-import KaraokeLyricLine from "./components/KaraokeLyricLine";
-import MelodyRoll from "./components/MelodyRoll";
+import KaraokeConsole from "./components/KaraokeConsole";
+import KaraokeMedia from "./components/KaraokeMedia";
+import KaraokePerformanceStage from "./components/KaraokePerformanceStage";
+import MicrophoneSettingsModal from "./components/MicrophoneSettingsModal";
 import PerformanceAnalysisModal from "./components/PerformanceAnalysisModal";
-import SliderField from "./components/SliderField";
-import WaveformTimeline from "./components/WaveformTimeline";
+import useAudioOutputRouting from "./hooks/useAudioOutputRouting";
+import useKaraokeControls from "./hooks/useKaraokeControls";
 import useKaraokeHotkeys from "./hooks/useKaraokeHotkeys";
+import useKaraokeMediaSync from "./hooks/useKaraokeMediaSync";
+import useKaraokePanorama from "./hooks/useKaraokePanorama";
+import useKaraokeStageLayout from "./hooks/useKaraokeStageLayout";
+import useKaraokeTransport from "./hooks/useKaraokeTransport";
+import useMelodyGuide from "./hooks/useMelodyGuide";
+import useMicrophoneSettings from "./hooks/useMicrophoneSettings";
+import usePitchDetection from "./hooks/usePitchDetection";
 import useKaraokePreferences from "./hooks/useKaraokePreferences";
 import useKaraokeResult from "./hooks/useKaraokeResult";
 import {
-  findMatchingBrowserOutput,
-  findPreferredOutputDevice,
-  normalizeAudioEffects
-} from "./utils/audio-settings";
-import {
-  createPanoramaPath,
   getYouTubeVideoId,
   normalizeLyrics,
   normalizeNotes,
-  playbackGain,
-  transposeKey,
-  youTubeEmbedUrl
+  transposeKey
 } from "./utils/data";
-import { formatTime } from "./utils/format";
-import { getKaraokeStageLayout } from "./utils/layout";
+import { formatCompactKey } from "./utils/display";
 import { getLyricDisplayState } from "./utils/lyrics";
-import { getMelodyGuideState } from "./utils/melody-guide";
-import { getPanoramaPosition } from "./utils/panorama";
-import { detectMidiFromAnalyser } from "./utils/pitch";
-import {
-  clampPlaybackPosition,
-  createPlayerSyncCommand,
-  getMicrophoneLevel,
-  getSecondaryMediaPosition,
-  shouldSyncMedia
-} from "./utils/transport";
-
-
-function formatCompactKey(key) {
-  return String(key || "—")
-    .replace(/\s*(major|maj)\b/gi, "maj")
-    .replace(/\s*(minor|min)\b/gi, "m")
-    .replace(/\s+/g, "")
-    .replace(/mmaj$/i, "maj");
-}
-
-const EFFECT_PRESETS = [
-  { id: "hall", label: "Hall", symbol: "⌗", reverb: 0.72, echo: 0.22, delay: 0.16 },
-  { id: "room", label: "Room", symbol: "◇", reverb: 0.42, echo: 0.12, delay: 0.08 },
-  { id: "plate", label: "Plate", symbol: "◉", reverb: 0.58, echo: 0.08, delay: 0.05 },
-  { id: "studio", label: "Studio", symbol: "◌", reverb: 0.28, echo: 0.06, delay: 0.03 },
-  { id: "classic", label: "Классика", symbol: "♬", reverb: 0.64, echo: 0.18, delay: 0.12 },
-  { id: "pop", label: "Поп", symbol: "☆", reverb: 0.36, echo: 0.24, delay: 0.1 },
-  { id: "rock", label: "Рок", symbol: "ϟ", reverb: 0.3, echo: 0.12, delay: 0.07 },
-  { id: "club", label: "Клуб", symbol: "◎", reverb: 0.5, echo: 0.38, delay: 0.22 }
-];
+import { getMicrophoneLevel } from "./utils/transport";
 
 // Karaoke data is normalized at the UI boundary so playback and visual
 // components operate on one predictable shape. Pure transformations live in
@@ -101,17 +50,8 @@ export default function Karaoke({ onOpenAppSettings }) {
   const videoRef = useRef(null);
   const youTubeClipRef = useRef(null);
   const containerRef = useRef(null);
-  const melodyGuideRef = useRef(null);
-  const melodyNotesRef = useRef([]);
-  const melodyVolumeRef = useRef(0);
-  const melodyKeyShiftRef = useRef(0);
-  const transportOperationRef = useRef(0);
 
   const [isPlaying, setIsPlaying] = useState(false);
-  const [sungMidi, setSungMidi] = useState(null);
-  const [isPitchDetected, setIsPitchDetected] = useState(false);
-  const [isPitchAttacking, setIsPitchAttacking] = useState(false);
-  const [pitchRestProgress, setPitchRestProgress] = useState(1);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const {
@@ -140,38 +80,16 @@ export default function Karaoke({ onOpenAppSettings }) {
   const [microphoneOpen, setMicrophoneOpen] = useState(false);
   const [microphoneSettingsView, setMicrophoneSettingsView] = useState("music");
   const [recordingError, setRecordingError] = useState(null);
-  const [microphoneVolume, setMicrophoneVolume] = useState(1);
-  const [microphoneEffects, setMicrophoneEffects] = useState({
-    reverb: 0,
-    echo: 0,
-    delay: 0
-  });
   const [effectPreset, setEffectPreset] = useState("studio");
-  const [audioDriver, setAudioDriver] = useState("auto");
-  const [directOutputDeviceId, setDirectOutputDeviceId] = useState("");
-  const [monitoringEnabled, setMonitoringEnabled] = useState(false);
-  const [monitorInputDeviceId, setMonitorInputDeviceId] = useState(
-    () => getAudioPreferences().monitorInputDeviceId
-  );
-  const [controlsVisible, setControlsVisible] = useState(true);
   const [auroraSeed] = useState(() => Math.floor(Math.random() * 997));
-  const themeQueueRef = useRef(shuffleThemes());
-  const appliedThemeSongRef = useRef(song?.id);
-  const [activeTheme, setActiveTheme] = useState(
-    () => themeQueueRef.current.pop() || KARAOKE_THEMES[0]
+  const { activeTheme, panoramaRef: panoramaSkyRef } = useKaraokePanorama(
+    song?.id,
+    isPlaying
   );
-  const panoramaSkyRef = useRef(null);
-  const panoramaClockRef = useRef(0);
-  const panoramaPathRef = useRef(createPanoramaPath());
+  const { controlsVisible, revealControls } = useKaraokeControls();
   const currentTimeRef = useRef(currentTime);
   const durationRef = useRef(duration);
-  const controlsTimerRef = useRef(null);
-  const lastControlsActivityRef = useRef(Date.now());
-  const microphoneVolumeInitializedRef = useRef(false);
-  const microphoneEffectsInitializedRef = useRef(false);
   const browserMonitorRef = useRef(null);
-  const manualMonitoringRef = useRef(false);
-  const lastSecondarySyncRef = useRef(0);
   currentTimeRef.current = currentTime;
   durationRef.current = duration;
   const { data: directOutputDevices } = usePolling(
@@ -190,155 +108,39 @@ export default function Karaoke({ onOpenAppSettings }) {
     [microphoneOpen]
   );
 
-  useEffect(() => {
-    const syncAudioPreferences = (event) => {
-      const next = event.detail || getAudioPreferences();
-      setMonitorInputDeviceId(next.monitorInputDeviceId || "default");
-    };
-    window.addEventListener("audio-preferences-changed", syncAudioPreferences);
-    return () =>
-      window.removeEventListener("audio-preferences-changed", syncAudioPreferences);
-  }, []);
-
-  useEffect(() => {
-    if (!song?.id || appliedThemeSongRef.current === song.id) return;
-    appliedThemeSongRef.current = song.id;
-
-    if (!themeQueueRef.current.length) {
-      themeQueueRef.current = shuffleThemes();
-    }
-    setActiveTheme(themeQueueRef.current.pop() || KARAOKE_THEMES[0]);
-    panoramaClockRef.current = 0;
-    panoramaPathRef.current = createPanoramaPath();
-  }, [song?.id]);
-
-  useEffect(() => {
-    const panorama = panoramaSkyRef.current;
-    if (!panorama || !isPlaying) return undefined;
-    let frameId;
-    const startedAt = performance.now() - panoramaClockRef.current;
-    const path = panoramaPathRef.current;
-    // Background panoramas are decorative. Keep camera drift slow enough that
-    // the visual scene feels alive without competing with lyrics or causing
-    // motion discomfort during a full song.
-    const cycleMs = 240_000;
-
-    const move = (now) => {
-      const elapsed = now - startedAt;
-      // Integer harmonics make the 240-second path closed: frame 0 and the
-      // final frame have identical position and velocity, so no loop is seen.
-      const { x, y } = getPanoramaPosition(elapsed, cycleMs, path);
-      panorama.style.setProperty("--panorama-x", `-${x.toFixed(3)}cqh`);
-      panorama.style.setProperty("--panorama-y", `${y.toFixed(3)}%`);
-      panoramaClockRef.current = elapsed;
-      frameId = requestAnimationFrame(move);
-    };
-
-    frameId = requestAnimationFrame(move);
-    return () => cancelAnimationFrame(frameId);
-  }, [isPlaying]);
-
-  useEffect(() => {
-    if (
-      audioSettings?.volume != null &&
-      !microphoneVolumeInitializedRef.current
-    ) {
-      microphoneVolumeInitializedRef.current = true;
-      setMicrophoneVolume(audioSettings.volume);
-    }
-  }, [audioSettings?.volume]);
-
-  useEffect(() => {
-    if (!audioSettings || microphoneEffectsInitializedRef.current) return;
-    microphoneEffectsInitializedRef.current = true;
-    setMicrophoneEffects(normalizeAudioEffects(audioSettings));
-  }, [audioSettings]);
-
-  useEffect(() => {
-    if (audioSettings?.audio_driver) setAudioDriver(audioSettings.audio_driver);
-    if (audioSettings?.monitoring_enabled != null)
-      setMonitoringEnabled(audioSettings.monitoring_enabled);
-  }, [
-    audioSettings?.audio_driver,
-    audioSettings?.monitoring_enabled
-  ]);
-
-  useEffect(() => {
-    setDirectOutputDeviceId(audioSettings?.output_device_id ?? "");
-  }, [audioSettings?.output_device_id]);
-
-  // Keep browser playback on the same physical interface as the ASIO monitor.
-  // The ASIO bridge handles the microphone; HTML media uses the matching
-  // Windows endpoint so both are heard through the Audient headphones output.
-  useEffect(() => {
-    if (
-      !microphoneOpen ||
-      audioDriver !== "asio" ||
-      audioSettings?.output_device_id != null
-    )
-      return;
-    const preferred = findPreferredOutputDevice(directOutputDevices);
-    if (preferred && String(directOutputDeviceId) !== String(preferred.index)) {
-      setDirectOutputDeviceId(preferred.index);
-      updateMicrophone({ output_device_id: preferred.index });
-    }
-  }, [
+  const microphoneLevel = getMicrophoneLevel(signal);
+  const microphoneSettings = useMicrophoneSettings({
+    audioSettings,
+    onError: setRecordingError
+  });
+  const {
+    microphoneVolume,
+    setMicrophoneVolume,
+    microphoneEffects,
+    setMicrophoneEffects
+  } = microphoneSettings;
+  const {
     audioDriver,
-    audioSettings?.output_device_id,
-    directOutputDevices,
     directOutputDeviceId,
-    microphoneOpen
-  ]);
+    setDirectOutputDeviceId,
+    monitoringEnabled,
+    setMonitoringEnabled
+  } = microphoneSettings;
+  const { monitorInputDeviceId, updateMicrophone } = microphoneSettings;
 
-  useEffect(() => {
-    if (
-      !microphoneOpen ||
-      !directOutputDeviceId ||
-      !navigator.mediaDevices?.enumerateDevices
-    )
-      return;
-    const selected = (directOutputDevices || []).find(
-      (device) => String(device.index) === String(directOutputDeviceId)
-    );
-    if (!selected) return;
-    navigator.mediaDevices
-      .enumerateDevices()
-      .then((entries) => {
-        const output = findMatchingBrowserOutput(entries, selected);
-        if (!output?.deviceId) return;
-        [instrumentalRef.current, vocalsRef.current, videoRef.current].forEach(
-          (media) => media?.setSinkId?.(output.deviceId).catch(() => {})
-        );
-      })
-      .catch(() => {});
-  }, [directOutputDevices, directOutputDeviceId, microphoneOpen]);
-
-  useEffect(
-    () => () => {
-      const monitor = browserMonitorRef.current;
-      monitor?.stream.getTracks().forEach((track) => track.stop());
-      monitor?.context.close();
-      browserMonitorRef.current = null;
-      const guide = melodyGuideRef.current;
-      guide?.oscillator.stop();
-      guide?.context.close();
-      melodyGuideRef.current = null;
-    },
-    []
-  );
-
-  useEffect(() => {
-    // Do not put this request in the component cleanup: React development
-    // mode deliberately runs cleanups once while mounting.  That could race
-    // with Play.  ``pagehide`` runs only for a real window/page shutdown.
-    const releaseMonitorOnClose = () => {
-      api.releaseDirectMonitoring();
-    };
-    window.addEventListener("pagehide", releaseMonitorOnClose);
-    return () => window.removeEventListener("pagehide", releaseMonitorOnClose);
-  }, []);
-
-
+  useAudioOutputRouting({
+    audioDriver,
+    audioSettings,
+    browserMonitorRef,
+    directOutputDeviceId,
+    directOutputDevices,
+    instrumentalRef,
+    microphoneOpen,
+    setDirectOutputDeviceId,
+    updateMicrophone,
+    videoRef,
+    vocalsRef
+  });
 
   useEffect(() => {
     setIsPlaying(false);
@@ -351,9 +153,13 @@ export default function Karaoke({ onOpenAppSettings }) {
     () => normalizeNotes(result?.reference_notes),
     [result]
   );
-  melodyNotesRef.current = notes;
-  melodyVolumeRef.current = melodyVolume;
-  melodyKeyShiftRef.current = keyShift;
+  const { startMelodyGuide, updateMelodyGuide, silenceMelodyGuide } =
+    useMelodyGuide({
+      notes,
+      volume: melodyVolume,
+      keyShift,
+      currentTimeRef
+    });
   const youTubeVideoId = getYouTubeVideoId(song?.video_url);
 
   // Lyrics and melody use the same instrumental clock.  A former global
@@ -366,522 +172,71 @@ export default function Karaoke({ onOpenAppSettings }) {
     lyricTime
   );
 
-  const sendYouTubeCommand = (func, args = []) => {
-    youTubeClipRef.current?.contentWindow?.postMessage(
-      JSON.stringify({ event: "command", func, args }),
-      "*"
-    );
-  };
+  const { sendYouTubeCommand, syncSecondaryMedia } = useKaraokeMediaSync({
+    browserMonitorRef,
+    currentTimeRef,
+    instrumentalRef,
+    isPlaying,
+    keyShift,
+    melodyVolume,
+    microphoneEffects,
+    microphoneVolume,
+    musicVolume,
+    setCurrentTime,
+    setDuration,
+    setIsPlaying,
+    silenceMelodyGuide,
+    songId: song?.id,
+    speed,
+    startMelodyGuide,
+    updateMelodyGuide,
+    videoRef,
+    vocalVolume,
+    vocalsRef,
+    youTubeClipRef
+  });
 
-  const syncSecondaryMedia = (position, force = false) => {
-    [vocalsRef.current, videoRef.current].forEach((media) => {
-      if (!media || !Number.isFinite(media.duration)) return;
-      if (force || shouldSyncMedia(media.currentTime, position)) {
-        media.currentTime = getSecondaryMediaPosition(position, media.duration);
-      }
+  const {
+    sungMidi,
+    isPitchDetected,
+    isPitchAttacking,
+    pitchRestProgress
+  } = usePitchDetection({
+    browserMonitorRef,
+    isPlaying,
+    monitorInputDeviceId,
+    monitoringEnabled
+  });
+
+  const { returnToLibrary, seekTo, skip, stop, togglePlay } =
+    useKaraokeTransport({
+      browserMonitorRef,
+      currentTime,
+      duration,
+      durationRef,
+      instrumentalRef,
+      isPlaying,
+      microphoneEffects,
+      microphoneVolume,
+      musicVolume,
+      navigate,
+      onlineRoom,
+      recordingSessionId,
+      sendYouTubeCommand,
+      setAnalysisRecordingId,
+      setCurrentTime,
+      setIsPlaying,
+      setMonitoringEnabled,
+      setRecordingError,
+      setRecordingSessionId,
+      silenceMelodyGuide,
+      song,
+      startMelodyGuide,
+      syncSecondaryMedia,
+      videoRef,
+      vocalVolume,
+      vocalsRef
     });
-    if (force) sendYouTubeCommand("seekTo", [position, true]);
-  };
-
-  function updateMelodyGuide(position) {
-    const guide = melodyGuideRef.current;
-    if (!guide || guide.context.state === "closed") return;
-
-    const now = guide.context.currentTime;
-    const state = getMelodyGuideState({
-      notes: melodyNotesRef.current,
-      position,
-      keyShift: melodyKeyShiftRef.current,
-      volume: melodyVolumeRef.current
-    });
-    if (!state.active) {
-      guide.gain.gain.setTargetAtTime(state.gain, now, 0.018);
-      return;
-    }
-
-    guide.oscillator.frequency.setTargetAtTime(state.frequency, now, 0.012);
-    guide.gain.gain.setTargetAtTime(state.gain, now, 0.015);
-  }
-
-  async function startMelodyGuide() {
-    if (melodyVolumeRef.current <= 0 || !melodyNotesRef.current.length) return;
-
-    let guide = melodyGuideRef.current;
-    if (!guide || guide.context.state === "closed") {
-      const context = new AudioContext({ latencyHint: "interactive" });
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.type = "triangle";
-      gain.gain.value = 0.0001;
-      oscillator.connect(gain).connect(context.destination);
-      oscillator.start();
-      guide = { context, oscillator, gain };
-      melodyGuideRef.current = guide;
-    }
-    await guide.context.resume();
-    updateMelodyGuide(currentTimeRef.current);
-  }
-
-  function silenceMelodyGuide() {
-    const guide = melodyGuideRef.current;
-    if (guide && guide.context.state !== "closed") {
-      const now = guide.context.currentTime;
-      guide.gain.gain.cancelScheduledValues(now);
-      guide.gain.gain.setValueAtTime(0.0001, now);
-    }
-  }
-
-  // Instrumental is the single time source. Vocal and video are gently
-  // corrected from it so seeking and long playback cannot accumulate drift.
-  useEffect(() => {
-    const instr = instrumentalRef.current;
-    const voc = vocalsRef.current;
-    if (!instr || !voc) return undefined;
-    const onLoadedMeta = () => setDuration(instr.duration || 0);
-    const onEnded = () => {
-      // The instrumental track owns the transport clock. Do not let vocals,
-      // video, or the synthetic melody continue after that clock has ended.
-      voc.pause();
-      videoRef.current?.pause();
-      sendYouTubeCommand("pauseVideo");
-      silenceMelodyGuide();
-      setIsPlaying(false);
-    };
-    instr.addEventListener("loadedmetadata", onLoadedMeta);
-    instr.addEventListener("ended", onEnded);
-    return () => {
-      instr.removeEventListener("loadedmetadata", onLoadedMeta);
-      instr.removeEventListener("ended", onEnded);
-    };
-  }, [song?.id]);
-
-  useEffect(() => {
-    if (!isPlaying) return undefined;
-    let animationFrameId;
-    const updatePosition = () => {
-      const position = instrumentalRef.current?.currentTime;
-      if (Number.isFinite(position)) {
-        setCurrentTime(position);
-        updateMelodyGuide(position);
-        if (performance.now() - lastSecondarySyncRef.current > 450) {
-          syncSecondaryMedia(position);
-          lastSecondarySyncRef.current = performance.now();
-        }
-      }
-      animationFrameId = requestAnimationFrame(updatePosition);
-    };
-    updatePosition();
-    return () => {
-      cancelAnimationFrame(animationFrameId);
-    };
-  }, [isPlaying]);
-
-  useEffect(() => {
-    if (!isPlaying || !navigator.mediaDevices?.getUserMedia) {
-      setSungMidi(null);
-      setIsPitchDetected(false);
-      setIsPitchAttacking(false);
-      setPitchRestProgress(1);
-      return undefined;
-    }
-
-    let cancelled = false;
-    let animationFrameId = 0;
-    let ownsStream = false;
-    let ownsContext = false;
-    let stream;
-    let context;
-    let lastMeasurementAt = 0;
-    let lastAnimationAt = 0;
-    let lastRenderAt = 0;
-    let lastVoicedAt = 0;
-    let targetMidi = null;
-    let displayedMidi = null;
-    let restStartedAt = 0;
-    let attackUntil = 0;
-    const recentMidi = [];
-
-    const start = async () => {
-      try {
-        const monitor = browserMonitorRef.current;
-        stream = monitor?.stream;
-        context = monitor?.context;
-        if (!stream) {
-          stream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              echoCancellation: false,
-              noiseSuppression: false,
-              autoGainControl: false,
-              ...(monitorInputDeviceId !== "default"
-                ? { deviceId: { exact: monitorInputDeviceId } }
-                : {})
-            }
-          });
-          ownsStream = true;
-        }
-        if (!context) {
-          context = new AudioContext({ latencyHint: "interactive" });
-          ownsContext = true;
-        }
-        if (cancelled) {
-          if (ownsStream) stream.getTracks().forEach((track) => track.stop());
-          if (ownsContext) context.close();
-          return;
-        }
-        const analyser = context.createAnalyser();
-        analyser.fftSize = 2048;
-        analyser.smoothingTimeConstant = 0.2;
-        context.createMediaStreamSource(stream).connect(analyser);
-        const buffer = new Float32Array(analyser.fftSize);
-        const updatePitch = (timestamp) => {
-          if (cancelled) return;
-          if (timestamp - lastMeasurementAt >= 35) {
-            lastMeasurementAt = timestamp;
-            const detectedMidi = detectMidiFromAnalyser(
-              analyser,
-              buffer,
-              context.sampleRate
-            );
-            if (Number.isFinite(detectedMidi)) {
-              // Individual autocorrelation readings can jump by a semitone or octave.
-              // Use a short median window; the visible marker itself moves separately
-              // at a capped, constant speed below.
-              recentMidi.push(detectedMidi);
-              if (recentMidi.length > 3) recentMidi.shift();
-              const sortedMidi = [...recentMidi].sort(
-                (left, right) => left - right
-              );
-              const medianMidi = sortedMidi[Math.floor(sortedMidi.length / 2)];
-              targetMidi = Number.isFinite(targetMidi)
-                ? targetMidi + (medianMidi - targetMidi) * 0.42
-                : medianMidi;
-              const wasResting =
-                restStartedAt > 0 || !Number.isFinite(displayedMidi);
-              lastVoicedAt = timestamp;
-              restStartedAt = 0;
-              if (wasResting) {
-                // A new phrase must react immediately; only the return to rest is eased.
-                displayedMidi = targetMidi;
-                setSungMidi(targetMidi);
-                attackUntil = timestamp + 130;
-                setIsPitchAttacking(true);
-              }
-              setIsPitchDetected(true);
-              setPitchRestProgress(0);
-            }
-          }
-          if (timestamp - lastVoicedAt > 110) {
-            targetMidi = null;
-            if (!restStartedAt && Number.isFinite(displayedMidi)) {
-              restStartedAt = timestamp;
-              setIsPitchDetected(false);
-              setIsPitchAttacking(false);
-            }
-          }
-          if (attackUntil && timestamp >= attackUntil) {
-            attackUntil = 0;
-            setIsPitchAttacking(false);
-          }
-          if (Number.isFinite(targetMidi)) {
-            const elapsedSeconds = Math.min(
-              0.05,
-              Math.max(0.001, (timestamp - lastAnimationAt) / 1000)
-            );
-            const maxStep = 22 * elapsedSeconds;
-            const difference = targetMidi - displayedMidi;
-            displayedMidi = Number.isFinite(displayedMidi)
-              ? displayedMidi +
-                Math.max(-maxStep, Math.min(maxStep, difference))
-              : targetMidi;
-            if (timestamp - lastRenderAt >= 15) {
-              setSungMidi(displayedMidi);
-              lastRenderAt = timestamp;
-            }
-          } else if (restStartedAt) {
-            const restProgress = Math.min(1, (timestamp - restStartedAt) / 380);
-            if (timestamp - lastRenderAt >= 32) {
-              setPitchRestProgress(restProgress);
-              lastRenderAt = timestamp;
-            }
-            if (restProgress >= 1) {
-              displayedMidi = null;
-              recentMidi.length = 0;
-              setSungMidi(null);
-              restStartedAt = 0;
-            }
-          }
-          lastAnimationAt = timestamp;
-          animationFrameId = requestAnimationFrame(updatePitch);
-        };
-        animationFrameId = requestAnimationFrame(updatePitch);
-      } catch {
-        if (!cancelled) {
-          setSungMidi(null);
-          setIsPitchDetected(false);
-          setIsPitchAttacking(false);
-          setPitchRestProgress(1);
-        }
-      }
-    };
-
-    start();
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(animationFrameId);
-      if (ownsStream) stream?.getTracks().forEach((track) => track.stop());
-      if (ownsContext) context?.close();
-      setSungMidi(null);
-      setIsPitchDetected(false);
-      setIsPitchAttacking(false);
-      setPitchRestProgress(1);
-    };
-  }, [isPlaying, monitorInputDeviceId, monitoringEnabled]);
-
-  useEffect(() => {
-    lastControlsActivityRef.current = Date.now();
-    const watcher = window.setInterval(() => {
-      setControlsVisible(Date.now() - lastControlsActivityRef.current < 2200);
-    }, 250);
-    return () => window.clearInterval(watcher);
-  }, []);
-
-  useEffect(() => {
-    if (instrumentalRef.current)
-      instrumentalRef.current.volume = playbackGain(musicVolume);
-  }, [musicVolume]);
-  useEffect(() => {
-    if (browserMonitorRef.current) {
-      browserMonitorRef.current.gainNode.gain.value = microphoneVolume;
-    }
-  }, [microphoneVolume]);
-  useEffect(() => {
-    browserMonitorRef.current?.effects?.apply(microphoneEffects);
-  }, [microphoneEffects]);
-  useEffect(() => {
-    if (vocalsRef.current) vocalsRef.current.volume = playbackGain(vocalVolume);
-  }, [vocalVolume]);
-  useEffect(() => {
-    if (isPlaying && melodyVolume > 0) {
-      startMelodyGuide().catch(() => {});
-    } else {
-      silenceMelodyGuide();
-    }
-  }, [isPlaying, melodyVolume, keyShift]);
-  useEffect(() => {
-    [instrumentalRef.current, vocalsRef.current, videoRef.current].forEach(
-      (el) => el && (el.playbackRate = speed)
-    );
-    sendYouTubeCommand("setPlaybackRate", [speed]);
-  }, [speed]);
-
-  const togglePlay = async ({ broadcast = true, forcePlaying = null } = {}) => {
-    const instr = instrumentalRef.current;
-    const voc = vocalsRef.current;
-    if (!instr || !voc) return undefined;
-    const operationId = ++transportOperationRef.current;
-    const shouldPlay = forcePlaying == null ? !isPlaying : forcePlaying;
-    if (!shouldPlay) {
-      instr.pause();
-      voc.pause();
-      videoRef.current?.pause();
-      sendYouTubeCommand("pauseVideo");
-      silenceMelodyGuide();
-      setIsPlaying(false);
-      if (recordingSessionId)
-        await api.pauseRecording(recordingSessionId).catch(() => {});
-      if (broadcast && onlineRoom?.room) {
-        onlineRoom.syncCommand(
-          createPlayerSyncCommand("pause", song.id, instr.currentTime)
-        );
-      }
-      return true;
-    } else {
-      // Create/resume Web Audio while this click is still a user gesture.
-      const melodyStart = startMelodyGuide().catch(() => {});
-      let activeRecordingId = recordingSessionId;
-      try {
-        if (recordingSessionId) {
-          await api.resumeRecording(recordingSessionId);
-        } else {
-          const session = await api.startRecording(
-            song.id,
-            instr.currentTime,
-            playbackGain(musicVolume),
-            microphoneVolume,
-            microphoneEffects.reverb,
-            microphoneEffects.echo,
-            microphoneEffects.delay
-          );
-          activeRecordingId = session.recording_session_id;
-          setRecordingSessionId(activeRecordingId);
-        }
-        setRecordingError(null);
-      } catch (error) {
-        silenceMelodyGuide();
-        setRecordingError(
-          `Не удалось начать запись: ${getErrorMessage(error, "неизвестная ошибка")}`
-        );
-        return false;
-      }
-      if (operationId !== transportOperationRef.current) {
-        if (activeRecordingId) {
-          await api.pauseRecording(activeRecordingId).catch(() => {});
-        }
-        silenceMelodyGuide();
-        return false;
-      }
-      syncSecondaryMedia(instr.currentTime, true);
-      instr.volume = playbackGain(musicVolume);
-      voc.volume = playbackGain(vocalVolume);
-      sendYouTubeCommand("playVideo");
-      try {
-        await melodyStart;
-        await instr.play();
-        await Promise.allSettled(
-          [voc.play(), videoRef.current?.play()].filter(Boolean)
-        );
-      } catch {
-        setIsPlaying(false);
-        return false;
-      }
-    }
-    if (operationId !== transportOperationRef.current) return false;
-    setIsPlaying(true);
-    if (broadcast && onlineRoom?.room) {
-      onlineRoom.syncCommand(
-        createPlayerSyncCommand("play", song.id, instr.currentTime)
-      );
-    }
-    return true;
-  };
-
-  const stop = async ({ broadcast = true } = {}) => {
-    const instr = instrumentalRef.current;
-    const voc = vocalsRef.current;
-    if (!instr || !voc) return undefined;
-    transportOperationRef.current += 1;
-    instr.pause();
-    voc.pause();
-    videoRef.current?.pause();
-    sendYouTubeCommand("pauseVideo");
-    silenceMelodyGuide();
-    instr.currentTime = 0;
-    syncSecondaryMedia(0, true);
-    setIsPlaying(false);
-    setCurrentTime(0);
-    if (broadcast && onlineRoom?.room) {
-      onlineRoom.syncCommand(createPlayerSyncCommand("stop", song.id, 0));
-    }
-    if (recordingSessionId) {
-      try {
-        const recording = await api.stopRecording(recordingSessionId);
-        setRecordingSessionId(null);
-        setAnalysisRecordingId(recording.id);
-      } catch (error) {
-        setRecordingError(
-          `Не удалось сохранить запись: ${getErrorMessage(error, "неизвестная ошибка")}`
-        );
-      }
-    }
-    // A monitor enabled by the user remains active after a take; only the
-    // temporary recording monitor is released by Stop.
-    if (manualMonitoringRef.current) return true;
-    const monitor = browserMonitorRef.current;
-    monitor?.stream.getTracks().forEach((track) => track.stop());
-    monitor?.context.close();
-    browserMonitorRef.current = null;
-    setMonitoringEnabled(false);
-    await api.stopDirectMonitoring().catch(() => {});
-    return true;
-  };
-
-  const returnToLibrary = async () => {
-    await stop({ broadcast: false });
-    if (onlineRoom?.room) onlineRoom.syncCommand({ type: "open-library" });
-    navigate("/");
-  };
-
-  const updateMicrophone = async (patch) => {
-    try {
-      const updated = await api.updateAudioSettings(patch);
-      if (updated.volume != null) setMicrophoneVolume(updated.volume);
-    } catch (error) {
-      setRecordingError(
-        `Не удалось сохранить настройки микрофона: ${getErrorMessage(error, "неизвестная ошибка")}`
-      );
-    }
-  };
-
-  const setDirectMonitoring = async (enabled) => {
-    const activeMonitor = browserMonitorRef.current;
-    activeMonitor?.stream.getTracks().forEach((track) => track.stop());
-    activeMonitor?.context.close();
-    browserMonitorRef.current = null;
-    try {
-      if (enabled) {
-        await updateMicrophone({ volume: microphoneVolume });
-        await api.startDirectMonitoring();
-      } else {
-        await api.stopDirectMonitoring();
-      }
-      manualMonitoringRef.current = enabled;
-      setMonitoringEnabled(enabled);
-    } catch (error) {
-      manualMonitoringRef.current = false;
-      setMonitoringEnabled(false);
-      if (!enabled) await api.stopDirectMonitoring().catch(() => {});
-      setRecordingError(
-        `Не удалось включить прямое прослушивание: ${getErrorMessage(error, "неизвестная ошибка")}`
-      );
-    }
-  };
-
-  const microphoneLevel = getMicrophoneLevel(signal);
-
-  const seekTo = (time, { broadcast = true } = {}) => {
-    const instr = instrumentalRef.current;
-    if (!instr) return;
-    const position = clampPlaybackPosition(time, durationRef.current);
-    instr.currentTime = position;
-    syncSecondaryMedia(position, true);
-    setCurrentTime(position);
-    if (broadcast && onlineRoom?.room) {
-      onlineRoom.syncCommand(
-        createPlayerSyncCommand("seek", song.id, position)
-      );
-    }
-  };
-
-  const skip = (delta) =>
-    seekTo(clampPlaybackPosition(currentTime + delta, duration));
-
-  const togglePlayRef = useLatestRef(togglePlay);
-  const seekToRef = useLatestRef(seekTo);
-  const stopRef = useLatestRef(stop);
-  const roomCommand = onlineRoom?.roomCommand;
-
-  useEffect(() => {
-    if (
-      roomCommand?.type !== "karaoke-player" ||
-      !song?.id ||
-      roomCommand.songId !== song.id ||
-      !instrumentalRef.current
-    )
-      return;
-
-    const position = Number(roomCommand.position);
-    if (Number.isFinite(position)) {
-      seekToRef.current(position, { broadcast: false });
-    }
-
-    if (roomCommand.action === "play") {
-      togglePlayRef.current({ broadcast: false, forcePlaying: true });
-    } else if (roomCommand.action === "pause") {
-      togglePlayRef.current({ broadcast: false, forcePlaying: false });
-    } else if (roomCommand.action === "stop") {
-      stopRef.current({ broadcast: false });
-    }
-  }, [roomCommand, seekToRef, song?.id, stopRef, togglePlayRef]);
 
   useKaraokeHotkeys({
     currentTime,
@@ -891,62 +246,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     onStop: stop
   });
 
-
-  useEffect(() => {
-    const onFullscreenChange = () => {
-      setControlsVisible(true);
-    };
-    document.addEventListener("fullscreenchange", onFullscreenChange);
-    return () => {
-      document.removeEventListener("fullscreenchange", onFullscreenChange);
-      clearTimeout(controlsTimerRef.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    const shell = document.querySelector(".karaoke-app-shell");
-    const main = containerRef.current?.parentElement;
-    const stage = containerRef.current;
-    if (!shell || !main || !stage) return undefined;
-
-    const syncStageAspect = () => {
-      const currentExtra = Number.parseFloat(
-        getComputedStyle(shell).getPropertyValue("--karaoke-nav-extra")
-      );
-      const layout = getKaraokeStageLayout({
-        mainWidth: main.clientWidth,
-        mainHeight: main.clientHeight,
-        stageWidth: stage.clientWidth,
-        stageHeight: stage.clientHeight,
-        currentNavExtra: currentExtra
-      });
-      shell.style.setProperty("--karaoke-nav-extra", `${layout.navExtra}px`);
-      stage.style.setProperty(
-        "--karaoke-video-width",
-        `${layout.videoWidth}px`
-      );
-      stage.style.setProperty(
-        "--karaoke-video-height",
-        `${layout.videoHeight}px`
-      );
-    };
-
-    const observer = new ResizeObserver(syncStageAspect);
-    observer.observe(main);
-    observer.observe(stage);
-    syncStageAspect();
-    return () => {
-      observer.disconnect();
-      shell.style.removeProperty("--karaoke-nav-extra");
-      stage.style.removeProperty("--karaoke-video-width");
-      stage.style.removeProperty("--karaoke-video-height");
-    };
-  }, []);
-
-  const revealControls = () => {
-    lastControlsActivityRef.current = Date.now();
-    setControlsVisible(true);
-  };
+  useKaraokeStageLayout(containerRef);
 
   if (!song) {
     return (
@@ -993,193 +293,37 @@ export default function Karaoke({ onOpenAppSettings }) {
       className={`karaoke-stage ${isPlaying ? "karaoke-is-playing" : ""} ${!controlsVisible ? "karaoke-ui-hidden" : ""}`}
       onMouseMove={revealControls}
     >
-      <audio
-        ref={instrumentalRef}
-        src={api.getAudioTrackUrl(song.id, "instrumental")}
-        preload="auto"
-        onLoadedMetadata={(event) => {
-          event.currentTarget.volume = playbackGain(musicVolume);
-        }}
+      <KaraokeMedia
+        instrumentalRef={instrumentalRef}
+        isPlaying={isPlaying}
+        musicVolume={musicVolume}
+        sendYouTubeCommand={sendYouTubeCommand}
+        song={song}
+        speed={speed}
+        syncSecondaryMedia={syncSecondaryMedia}
+        videoRef={videoRef}
+        vocalVolume={vocalVolume}
+        vocalsRef={vocalsRef}
+        youTubeClipRef={youTubeClipRef}
+        youTubeVideoId={youTubeVideoId}
       />
-      <audio
-        ref={vocalsRef}
-        src={api.getAudioTrackUrl(song.id, "vocals")}
-        preload="auto"
-        onLoadedMetadata={(event) => {
-          event.currentTarget.volume = playbackGain(vocalVolume);
-        }}
-      />
-      {youTubeVideoId ? (
-        <iframe
-          ref={youTubeClipRef}
-          className="karaoke-video karaoke-youtube-video"
-          src={youTubeEmbedUrl(youTubeVideoId)}
-          title={`Клип: ${song.title}`}
-          allow="autoplay; encrypted-media; picture-in-picture"
-          onLoad={() => {
-            sendYouTubeCommand("mute");
-            sendYouTubeCommand("setPlaybackRate", [speed]);
-            syncSecondaryMedia(instrumentalRef.current?.currentTime || 0, true);
-            if (isPlaying) sendYouTubeCommand("playVideo");
-          }}
-        />
-      ) : (
-        song.video_url && (
-          <video
-            ref={videoRef}
-            className="karaoke-video"
-            src={song.video_url}
-            preload="metadata"
-            muted
-            playsInline
-          />
-        )
-      )}
 
       {microphoneOpen && (
-        <div
-          className="karaoke-settings-backdrop"
-          onMouseDown={() => setMicrophoneOpen(false)}
-        >
-          <div
-            className="microphone-panel karaoke-settings-modal"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="microphone-panel-title">
-              {microphoneSettingsView === "effects" ? (
-                <><AudioLines size={15} /> Эффекты микрофона</>
-              ) : (
-                <><Settings2 size={15} /> Настройки караоке</>
-              )}
-            </div>
-            <button
-              type="button"
-              className="karaoke-settings-close"
-              title="Закрыть настройки"
-              onClick={() => setMicrophoneOpen(false)}
-            >
-              <X size={16} />
-            </button>
-
-            {microphoneSettingsView === "effects" ? (
-              <div className="microphone-effects karaoke-effects-panel">
-                <SliderField
-                  label="Reverb"
-                  value={microphoneEffects.reverb}
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  display={`${Math.round(microphoneEffects.reverb * 100)}%`}
-                  onChange={(value) =>
-                    setMicrophoneEffects((effects) => ({ ...effects, reverb: value }))
-                  }
-                  onCommit={(value) => updateMicrophone({ reverb: value })}
-                />
-                <SliderField
-                  label="Echo"
-                  value={microphoneEffects.echo}
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  display={`${Math.round(microphoneEffects.echo * 100)}%`}
-                  onChange={(value) =>
-                    setMicrophoneEffects((effects) => ({ ...effects, echo: value }))
-                  }
-                  onCommit={(value) => updateMicrophone({ echo: value })}
-                />
-                <SliderField
-                  label="Delay"
-                  value={microphoneEffects.delay}
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  display={`${Math.round(microphoneEffects.delay * 100)}%`}
-                  onChange={(value) =>
-                    setMicrophoneEffects((effects) => ({ ...effects, delay: value }))
-                  }
-                  onCommit={(value) => updateMicrophone({ delay: value })}
-                />
-              </div>
-            ) : (
-              <>
-                <div className="karaoke-settings-section">
-                  <div className="karaoke-settings-section-title">
-                    Отображение и воспроизведение
-                  </div>
-                  <div className="karaoke-settings-toggles karaoke-settings-toggles--playback">
-                    <div className="karaoke-setting-choice">
-                      <span>Тональность</span>
-                      <div className="karaoke-key-stepper">
-                        <button
-                          type="button"
-                          aria-label="Понизить тональность"
-                          disabled={keyShift <= -6}
-                          onClick={() =>
-                            setKeyShift((value) => Math.max(-6, value - 1))
-                          }
-                        >
-                          −
-                        </button>
-                        <strong>{transposeKey(song?.key_override, keyShift)}</strong>
-                        <button
-                          type="button"
-                          aria-label="Повысить тональность"
-                          disabled={keyShift >= 6}
-                          onClick={() =>
-                            setKeyShift((value) => Math.min(6, value + 1))
-                          }
-                        >
-                          +
-                        </button>
-                      </div>
-                      <small>
-                        {keyShift === 0
-                          ? "Оригинальная"
-                          : `${keyShift > 0 ? "+" : ""}${keyShift} полутонов`}
-                      </small>
-                    </div>
-                  </div>
-                  <div className="karaoke-settings-sliders karaoke-settings-sliders--single">
-                    <div className="karaoke-setting-choice">
-                      <span>Скорость</span>
-                      <div
-                        className="karaoke-speed-switch"
-                        role="group"
-                        aria-label="Скорость"
-                      >
-                        {[0.5, 0.75, 1, 1.25, 1.5].map((value) => (
-                          <button
-                            type="button"
-                            key={value}
-                            className={speed === value ? "is-active" : ""}
-                            onClick={() => setSpeed(value)}
-                          >
-                            {value === 1 ? "1×" : `${value}×`}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="microphone-controls-launcher">
-                  {onOpenAppSettings && (
-                    <button
-                      type="button"
-                      className="btn btn-ghost"
-                      onClick={() => {
-                        setMicrophoneOpen(false);
-                        onOpenAppSettings("audio");
-                      }}
-                    >
-                      <Settings2 size={15} />
-                      Аудио и запись
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+        <MicrophoneSettingsModal
+          view={microphoneSettingsView}
+          effects={microphoneEffects}
+          keyShift={keyShift}
+          speed={speed}
+          songKey={transposeKey(song?.key_override, keyShift)}
+          onClose={() => setMicrophoneOpen(false)}
+          onEffectsChange={(key, value) =>
+            setMicrophoneEffects((effects) => ({ ...effects, [key]: value }))
+          }
+          onEffectCommit={(key, value) => updateMicrophone({ [key]: value })}
+          onKeyShiftChange={setKeyShift}
+          onSpeedChange={setSpeed}
+          onOpenAudioSettings={onOpenAppSettings}
+        />
       )}
 
       {recordingError && (
@@ -1200,261 +344,77 @@ export default function Karaoke({ onOpenAppSettings }) {
         />
       )}
 
-      <div
-        className={`karaoke-performance-stage karaoke-aurora-stage ${isPlaying ? "is-playing" : ""}`}
-      >
-        <div
-          ref={panoramaSkyRef}
-          className="karaoke-panoramic-sky"
-          style={{ "--panorama-image": `url(${activeTheme.image})` }}
-          aria-hidden="true"
-        />
-        <div className="karaoke-aurora-world" aria-hidden="true">
-          <i className="aurora-nebula aurora-nebula--left" />
-          <i className="aurora-nebula aurora-nebula--center" />
-          <i className="aurora-nebula aurora-nebula--right" />
-          <i className="aurora-cloud-texture aurora-cloud-texture--left" />
-          <i className="aurora-cloud-texture aurora-cloud-texture--right" />
-          <i className="aurora-solar-flare" />
-          <i className="aurora-horizon-city" />
-          <i className="aurora-grid-floor" />
-          <i className="aurora-floor-pulse aurora-floor-pulse--one" />
-          <i className="aurora-floor-pulse aurora-floor-pulse--two" />
-          <i className="aurora-floor-pulse aurora-floor-pulse--three" />
-          <i className="aurora-ring aurora-ring--one" />
-          <i className="aurora-ring aurora-ring--two" />
-          <i className="aurora-ring aurora-ring--three" />
-          <i className="aurora-ribbon aurora-ribbon--one" />
-          <i className="aurora-ribbon aurora-ribbon--two" />
-          <i className="aurora-ribbon aurora-ribbon--three" />
-          <i className="aurora-arc-pulse aurora-arc-pulse--one" />
-          <i className="aurora-arc-pulse aurora-arc-pulse--two" />
-          <i className="aurora-arc-pulse aurora-arc-pulse--three" />
-          <i className="aurora-comet aurora-comet--one" />
-          <i className="aurora-comet aurora-comet--two" />
-          <i className="aurora-comet aurora-comet--three" />
-          <div className="aurora-stars">
-            {Array.from({ length: 96 }, (_, index) => (
-              <i
-                key={index}
-                style={{
-                  "--aurora-x": `${(index * 47 + auroraSeed) % 100}%`,
-                  "--aurora-y": `${(index * 29 + auroraSeed * 3) % 92}%`,
-                  "--aurora-delay": `${(index * -137) % 5800}ms`,
-                  "--aurora-depth": `${1 + (index % 4)}`
-                }}
-              />
-            ))}
-          </div>
-          <div className="aurora-particles">
-            {Array.from({ length: 112 }, (_, index) => (
-              <i
-                key={index}
-                style={{
-                  "--particle-angle": `${(index * 137.5 + auroraSeed) % 360}deg`,
-                  "--particle-distance": `${32 + ((index * 29) % 74)}vmax`,
-                  "--particle-delay": `${(index * -211) % 6000}ms`,
-                  "--particle-size": `${1 + (index % 6)}px`,
-                  "--particle-color": [
-                    "#ff5c99",
-                    "#ff9d42",
-                    "#c786ff",
-                    "#fff3d5"
-                  ][index % 4]
-                }}
-              />
-            ))}
-          </div>
-        </div>
-        {/* Piano-roll notes: visible pitch lanes make melody and intervals readable. */}
-        {showNotes && notes.length > 0 && (
-          <MelodyRoll
-            notes={notes}
-            currentTime={currentTime}
-            sungMidi={sungMidi}
-            isPitchDetected={isPitchDetected}
-            isPitchAttacking={isPitchAttacking}
-            pitchRestProgress={pitchRestProgress}
-            keyShift={keyShift}
-            songTitle={song.title}
-            noteRangeMin={song.note_range_min}
-            noteRangeMax={song.note_range_max}
-          />
-        )}
+      <KaraokePerformanceStage
+        activeTheme={activeTheme}
+        auroraSeed={auroraSeed}
+        currentLine={currentLine}
+        currentTime={lyricTime}
+        isPitchAttacking={isPitchAttacking}
+        isPitchDetected={isPitchDetected}
+        isPlaying={isPlaying}
+        keyShift={keyShift}
+        lyrics={lyrics}
+        nextLine={nextLine}
+        noteRangeMax={song.note_range_max}
+        noteRangeMin={song.note_range_min}
+        notes={notes}
+        panoramaRef={panoramaSkyRef}
+        pitchRestProgress={pitchRestProgress}
+        showLyrics={showLyrics}
+        showNotes={showNotes}
+        songTitle={song.title}
+        sungMidi={sungMidi}
+        upcomingLine={upcomingLine}
+      />
 
-        {/* Large, high-contrast lyric cue, placed over the note stage. */}
-        {showLyrics && (
-          <div className="karaoke-lyrics">
-            {lyrics.length === 0 && (
-              <p className="text-muted">Синхронизированный текст недоступен</p>
-            )}
-            {currentLine ? (
-              <KaraokeLyricLine
-                key={`${currentLine.start}-${currentLine.text}`}
-                line={currentLine}
-                currentTime={lyricTime}
-                className="karaoke-lyric karaoke-lyric-current"
-              />
-            ) : upcomingLine ? (
-              <KaraokeLyricLine
-                key={`${upcomingLine.start}-${upcomingLine.text}`}
-                line={upcomingLine}
-                currentTime={lyricTime}
-                className="karaoke-lyric karaoke-lyric-current karaoke-lyric-upcoming"
-              />
-            ) : (
-              lyrics.length > 0 && (
-                <div className="karaoke-lyric karaoke-lyric-current">
-                  {
-                    "\u041f\u0435\u0441\u043d\u044f \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0430"
-                  }
-                </div>
-              )
-            )}
-            {nextLine && (
-              <KaraokeLyricLine
-                line={nextLine}
-                currentTime={lyricTime}
-                className="karaoke-lyric karaoke-lyric-next"
-              />
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Нижняя студийная консоль: дорожка, микшер, транспорт и быстрые действия. */}
-      <div className="karaoke-transport-area karaoke-studio-console">
-        <div className="karaoke-song-strip">
-          <div className="karaoke-song-cover" aria-hidden="true">
-            <Mic size={30} />
-          </div>
-          <div className="karaoke-player-meta">
-            <strong>{song.title}</strong>
-            <span>{song.artist || song.performer || "Караоке"}</span>
-          </div>
-          <span className="mono karaoke-timecode">{formatTime(currentTime)}</span>
-          <WaveformTimeline value={currentTime} duration={duration} onChange={seekTo} />
-          <span className="mono karaoke-timecode karaoke-timecode-end">{formatTime(duration)}</span>
-        </div>
-
-        <div className="karaoke-console-grid">
-          <section
-            className="karaoke-console-panel karaoke-mixer-panel"
-            style={{ "--microphone-level": Math.max(0, Math.min(1, microphoneLevel)) }}
-          >
-            <div className="karaoke-console-title">
-              <Mic size={18} />
-              <strong>Микшер</strong>
-              <span className="karaoke-microphone-meter" aria-hidden="true">
-                {Array.from({ length: 7 }, (_, index) => (
-                  <i key={index} style={{ "--meter-level": `${Math.max(18, Math.min(100, microphoneLevel * 100 - index * 6 + 34))}%` }} />
-                ))}
-              </span>
-            </div>
-            <div className="karaoke-mixer-body">
-              <div className="karaoke-quick-mixer karaoke-quick-mixer--vertical">
-                <SliderField label="Мик" value={microphoneVolume} min={0} max={1} step={0.05} display={`${Math.round(microphoneVolume * 100)}%`} onChange={setMicrophoneVolume} onCommit={(value) => updateMicrophone({ volume: value })} />
-                <SliderField label="Музыка" value={musicVolume} min={0} max={1} step={0.05} display={`${Math.round(musicVolume * 100)}%`} onChange={setMusicVolume} />
-                <SliderField label="Вокал" value={vocalVolume} min={0} max={1} step={0.05} display={`${Math.round(vocalVolume * 100)}%`} onChange={setVocalVolume} />
-                <SliderField label="Мелодия" value={melodyVolume} min={0} max={1} step={0.05} display={`${Math.round(melodyVolume * 100)}%`} onChange={setMelodyVolume} />
-              </div>
-              <div className="karaoke-mixer-effects" aria-label="Быстрые эффекты микрофона">
-                <EffectDial
-                  label="Эхо"
-                  value={microphoneEffects.echo}
-                  onChange={(value) => {
-                    setEffectPreset("custom");
-                    setMicrophoneEffects((effects) => ({ ...effects, echo: value }));
-                  }}
-                />
-                <EffectDial
-                  label="Реверб"
-                  value={microphoneEffects.reverb}
-                  accent="secondary"
-                  onChange={(value) => {
-                    setEffectPreset("custom");
-                    setMicrophoneEffects((effects) => ({ ...effects, reverb: value }));
-                  }}
-                />
-              </div>
-            </div>
-          </section>
-
-          <section className="karaoke-console-center">
-            <div className="karaoke-transport-buttons karaoke-transport-buttons--hero">
-              <button type="button" className="btn btn-ghost karaoke-transport-button" aria-label="Назад на 5 секунд" title="Назад на 5 секунд" onClick={() => skip(-5)}><SkipBack size={22} /></button>
-              <button type="button" className="btn btn-primary karaoke-play-button" aria-label={isPlaying ? "Пауза" : "Воспроизвести"} title={isPlaying ? "Пауза" : "Воспроизвести"} onClick={() => togglePlay()}>{isPlaying ? <Pause size={30} /> : <Play size={30} />}</button>
-              <button type="button" className="btn btn-ghost karaoke-transport-button" aria-label="Остановить" title="Остановить" onClick={() => stop()}><Square size={20} /></button>
-              <button type="button" className="btn btn-ghost karaoke-transport-button" aria-label="Вперёд на 5 секунд" title="Вперёд на 5 секунд" onClick={() => skip(5)}><SkipForward size={22} /></button>
-            </div>
-            <div className="karaoke-performance-controls">
-              <div className="karaoke-performance-control">
-                <span>Темп</span>
-                <button type="button" aria-label="Уменьшить темп на 1 BPM" onClick={() => changeTempo(-1)}>−</button>
-                <strong>{currentTempo} BPM</strong>
-                <button type="button" aria-label="Увеличить темп на 1 BPM" onClick={() => changeTempo(1)}>+</button>
-              </div>
-              <div className="karaoke-performance-control karaoke-performance-control--key">
-                <span>Тональность</span>
-                <button type="button" aria-label="Понизить тональность" onClick={() => setKeyShift(Math.max(-12, keyShift - 1))}>
-                  <ChevronLeft size={17} />
-                </button>
-                <strong>{compactKey}</strong>
-                <button type="button" aria-label="Повысить тональность" onClick={() => setKeyShift(Math.min(12, keyShift + 1))}>
-                  <ChevronRight size={17} />
-                </button>
-              </div>
-              <div className="karaoke-performance-control karaoke-performance-control--range">
-                <span>Диапазон</span>
-                <strong>{song.note_range_min || "C2"} – {song.note_range_max || "C5"}</strong>
-              </div>
-            </div>
-          </section>
-
-          <section className="karaoke-console-panel karaoke-tools-panel">
-            <div className="karaoke-tool-tabs">
-              <button
-                type="button"
-                className={microphoneOpen && microphoneSettingsView === "effects" ? "is-active" : ""}
-                aria-pressed={microphoneOpen && microphoneSettingsView === "effects"}
-                onClick={() => { setMicrophoneSettingsView("effects"); setMicrophoneOpen(true); }}
-              ><AudioLines size={17} /><span>Эффекты</span></button>
-              <button
-                type="button"
-                className={showNotes ? "is-active" : ""}
-                aria-pressed={showNotes}
-                onClick={() => setShowNotes((value) => !value)}
-              ><AudioLines size={17} /><span>Ноты</span></button>
-              <button
-                type="button"
-                className={showLyrics ? "is-active" : ""}
-                aria-pressed={showLyrics}
-                onClick={() => setShowLyrics((value) => !value)}
-              ><Type size={17} /><span>Текст</span></button>
-              <button type="button" onClick={returnToLibrary}><ArrowLeft size={17} /><span>Назад</span></button>
-              {onOpenAppSettings && (
-                <button type="button" onClick={onOpenAppSettings}><Cog size={17} /><span>Настройки</span></button>
-              )}
-            </div>
-            <div className="karaoke-effect-presets" aria-label="Режимы эффектов микрофона">
-              {EFFECT_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  className={effectPreset === preset.id ? "is-active" : ""}
-                  onClick={() => applyEffectPreset(preset)}
-                  aria-pressed={effectPreset === preset.id}
-                  title={`${preset.label}: эхо ${Math.round(preset.echo * 100)}%, реверб ${Math.round(preset.reverb * 100)}%`}
-                >
-                  <span aria-hidden="true">{preset.symbol}</span>
-                  <small>{preset.label}</small>
-                </button>
-              ))}
-            </div>
-
-          </section>
-        </div>
-      </div>
+      <KaraokeConsole
+        song={song}
+        currentTime={currentTime}
+        duration={duration}
+        microphoneLevel={microphoneLevel}
+        volumes={{
+          microphone: microphoneVolume,
+          music: musicVolume,
+          vocal: vocalVolume,
+          melody: melodyVolume
+        }}
+        onVolumeChange={{
+          microphone: setMicrophoneVolume,
+          music: setMusicVolume,
+          vocal: setVocalVolume,
+          melody: setMelodyVolume
+        }}
+        onMicrophoneCommit={(value) => updateMicrophone({ volume: value })}
+        microphoneEffects={microphoneEffects}
+        onEffectChange={(key, value) => {
+          setEffectPreset("custom");
+          setMicrophoneEffects((effects) => ({ ...effects, [key]: value }));
+        }}
+        isPlaying={isPlaying}
+        onSkip={skip}
+        onTogglePlay={() => togglePlay()}
+        onStop={() => stop()}
+        currentTempo={currentTempo}
+        onTempoChange={changeTempo}
+        compactKey={compactKey}
+        keyShift={keyShift}
+        onKeyShiftChange={setKeyShift}
+        microphoneOpen={microphoneOpen}
+        microphoneSettingsView={microphoneSettingsView}
+        onOpenEffects={() => {
+          setMicrophoneSettingsView("effects");
+          setMicrophoneOpen(true);
+        }}
+        showNotes={showNotes}
+        onToggleNotes={() => setShowNotes((value) => !value)}
+        showLyrics={showLyrics}
+        onToggleLyrics={() => setShowLyrics((value) => !value)}
+        onReturn={returnToLibrary}
+        onOpenAppSettings={onOpenAppSettings}
+        effectPreset={effectPreset}
+        onApplyEffectPreset={applyEffectPreset}
+        onSeek={seekTo}
+      />
     </div>
   );
 }

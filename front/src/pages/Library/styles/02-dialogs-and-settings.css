@@ -1,0 +1,467 @@
+/* Progress, badges and Library-owned dialogs. */
+.song-recordings-backdrop,
+.modal-backdrop {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: clamp(var(--space-3), 3vw, var(--space-8));
+  overflow: auto;
+  background: rgb(4 0 2 / 76%);
+  backdrop-filter: blur(var(--space-4));
+  perspective: 87.5rem;
+}
+
+.song-recordings-modal,
+.processing-modal,
+.modal {
+  position: relative;
+  inline-size: min(58rem, 100%);
+  max-block-size: calc(100dvh - var(--space-8));
+  padding: clamp(var(--space-4), 3vw, var(--space-8));
+  overflow: auto;
+  border: var(--hairline) solid var(--color-border-strong);
+  border-radius: var(--radius-xl);
+  background: var(--gradient-panel);
+  box-shadow: var(--shadow-lg), var(--shadow-neon-primary);
+}
+
+.song-recordings-close,
+.modal-close {
+  position: absolute;
+  z-index: 4;
+  inset-block-start: var(--space-3);
+  inset-inline-end: var(--space-3);
+  display: grid;
+  inline-size: 2.5rem;
+  aspect-ratio: 1;
+  place-items: center;
+  border: var(--hairline) solid var(--color-border);
+  border-radius: 50%;
+  color: var(--color-text);
+  background: var(--color-surface-soft);
+}
+
+.song-recordings-modal-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-block-end: var(--space-5);
+}
+
+.song-recordings-modal-icon {
+  display: grid;
+  inline-size: 3.2rem;
+  aspect-ratio: 1;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--gradient-primary);
+  box-shadow: var(--shadow-neon-primary);
+}
+
+.song-recordings-list {
+  gap: var(--space-3);
+}
+
+.song-recording-item {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) minmax(14rem, 2fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+}
+
+.song-recording-item > div:first-child {
+  display: grid;
+}
+
+.song-recording-item span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.song-recordings-empty {
+  padding: var(--space-8);
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.processing-modal-actions {
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-block-start: var(--space-5);
+}
+
+.processing-modal-detail,
+.processing-modal-progress-head {
+  gap: var(--space-4);
+  margin-block: var(--space-4);
+}
+
+.performance-player {
+  gap: var(--space-3);
+  min-inline-size: 0;
+}
+
+.performance-player-play,
+.performance-player-volume button {
+  display: grid;
+  flex: none;
+  inline-size: 2.5rem;
+  aspect-ratio: 1;
+  place-items: center;
+  border: var(--hairline) solid var(--color-border);
+  border-radius: 50%;
+  color: var(--color-text);
+  background: var(--gradient-primary);
+}
+
+.performance-player-track {
+  display: grid;
+  flex: 1;
+  min-inline-size: 8rem;
+}
+
+.performance-player-track input,
+.performance-player-volume input {
+  accent-color: var(--color-primary);
+}
+
+.performance-player-track span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.performance-player-volume {
+  gap: var(--space-2);
+}
+
+.performance-player-volume button {
+  inline-size: 2rem;
+  background: var(--color-surface-soft);
+}
+
+/* Song settings: one bounded Card, with internal scrolling only. */
+.song-settings-modal {
+  display: flex;
+  inline-size: min(76rem, calc(100vw - 2 * var(--space-5)));
+  block-size: min(88dvh, 54rem);
+  max-block-size: calc(100dvh - 2 * var(--space-4));
+  flex-direction: column;
+  padding: 0;
+  overflow: visible;
+  border-color: transparent;
+  background: transparent;
+}
+
+.song-settings-modal > .song-recordings-close {
+  position: absolute;
+  z-index: 30;
+  inset-block-start: var(--space-3);
+  inset-inline-end: var(--space-3);
+}
+
+.song-settings-shell,
+.song-settings-scroll,
+.song-settings-workspace,
+.song-settings-panel,
+.song-settings-panel-body {
+  min-block-size: 0;
+}
+
+.song-settings-shell {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: inherit;
+  background: transparent;
+}
+
+.song-settings-scroll {
+  flex: 1;
+  padding: 0;
+  overflow: hidden;
+}
+
+.song-settings-workspace {
+  display: grid;
+  block-size: 100%;
+  grid-template-columns: minmax(18rem, 0.92fr) minmax(24rem, 1.08fr);
+  align-items: stretch;
+}
+
+.song-settings-panel {
+  display: flex;
+  min-inline-size: 0;
+  block-size: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.song-settings-panel + .song-settings-panel {
+  border-inline-start: var(--hairline) solid var(--color-border);
+}
+
+.song-settings-panel .panel-header {
+  flex: none;
+  min-block-size: 4rem;
+  padding: var(--space-4) var(--space-5);
+  padding-inline-end: calc(var(--space-8) + var(--space-3));
+  border-block-end: var(--hairline) solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface-glass) 30%, transparent);
+}
+
+.song-settings-panel-body {
+  display: flex;
+  min-block-size: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.song-settings-panel-body::-webkit-scrollbar,
+.song-lyrics-editor::-webkit-scrollbar {
+  display: none;
+}
+
+.song-settings-fields {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
+/* Flat form composition copied from the clean reference: label + one control. */
+.settings-field {
+  --field-control-size: 2.9rem;
+  display: grid;
+  gap: var(--space-2);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.settings-field:focus-within {
+  transform: none;
+}
+
+.settings-field > span {
+  display: grid;
+  gap: var(--space-1);
+  padding-inline: var(--space-1);
+}
+
+.settings-field strong {
+  color: var(--color-text);
+  font: 750 var(--font-size-sm) / 1.2 var(--font-display);
+  letter-spacing: 0.01em;
+}
+
+.settings-field small {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  line-height: 1.35;
+}
+
+.settings-field .input,
+.settings-field .app-dropdown-trigger {
+  block-size: var(--field-control-size);
+  padding-inline: var(--space-3);
+  border: var(--hairline) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-surface-strong) 74%, transparent);
+  box-shadow: inset 0 var(--hairline) rgb(255 255 255 / 5%);
+}
+
+.settings-field .input:hover,
+.settings-field .app-dropdown-trigger:hover {
+  border-color: var(--color-primary-soft);
+}
+
+.settings-field .input:focus,
+.settings-field .app-dropdown-trigger:focus-visible {
+  border-color: var(--color-primary);
+  box-shadow:
+    0 0 0 0.16rem color-mix(in srgb, var(--color-primary) 14%, transparent),
+    0 0 1rem color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.app-dropdown,
+.app-dropdown-trigger {
+  inline-size: 100%;
+}
+
+.app-dropdown-menu {
+  z-index: 40;
+  margin-block-start: var(--space-1);
+  padding: var(--space-1);
+  border: var(--hairline) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-strong);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(var(--space-3));
+}
+
+.app-dropdown-option {
+  border-radius: var(--radius-sm);
+}
+
+.song-settings-save {
+  flex: none;
+  inline-size: calc(100% - 2 * var(--space-5));
+  min-block-size: 3rem;
+  margin: 0 var(--space-5) var(--space-5);
+}
+
+.song-lyrics-body {
+  overflow: hidden;
+}
+
+.song-lyrics-field {
+  display: flex;
+  min-block-size: 0;
+  flex: 1;
+  padding: var(--space-5);
+}
+
+.song-lyrics-field > .settings-field {
+  display: flex;
+  inline-size: 100%;
+  min-block-size: 0;
+  flex-direction: column;
+}
+
+.song-lyrics-field > .settings-field > span {
+  flex: none;
+  padding-block-end: var(--space-3);
+}
+
+.song-lyrics-editor {
+  min-block-size: 0;
+  flex: 1;
+  resize: none;
+  scrollbar-width: none;
+}
+
+@media (max-width: 64rem) {
+  .library-hero {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .library-hero-stats {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .library-music-object--record,
+  .library-music-object--microphone {
+    opacity: 0.2;
+  }
+
+  .song-settings-modal {
+    inline-size: calc(100vw - 2 * var(--space-3));
+    block-size: min(92dvh, 54rem);
+  }
+
+  .song-settings-workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+
+  .song-lyrics-panel {
+    min-block-size: 0;
+  }
+}
+
+@media (max-width: 48rem) {
+  .library-page {
+    padding-block-start: var(--space-4);
+  }
+
+  .library-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .library-search {
+    max-inline-size: none;
+  }
+
+  .library-actions {
+    justify-content: stretch;
+  }
+
+  .library-actions .btn {
+    flex: 1 1 auto;
+  }
+
+  .song-recording-item {
+    grid-template-columns: 1fr;
+  }
+
+  .library-music-object--record,
+  .library-music-object--microphone,
+  .library-music-object--notes {
+    display: none;
+  }
+}
+
+@media (max-width: 32rem) {
+  .library-page {
+    --library-gutter: var(--space-4);
+  }
+
+  .library-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .library-hero-brand-mark {
+    display: none;
+  }
+
+  .library-hero-stats {
+    grid-template-columns: repeat(2, 1fr);
+    inline-size: 100%;
+  }
+
+  .library-song-card {
+    grid-template-columns: 1fr;
+  }
+
+  .library-song-card-art {
+    min-block-size: 4.5rem;
+  }
+
+  .library-song-card-wave {
+    inset: auto 18% 15%;
+    block-size: 35%;
+  }
+
+  .library-song-card-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .song-lyrics-editor {
+    min-block-size: 20rem;
+  }
+}
+

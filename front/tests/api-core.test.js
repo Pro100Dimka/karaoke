@@ -1,7 +1,7 @@
 /* eslint-disable import/extensions */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { request } from "../src/api/core.js";
+import { request, requestBlob } from "../src/api/core.js";
 
 function response({
   ok = true,
@@ -9,6 +9,7 @@ function response({
   statusText = "",
   json,
   text = "",
+  blob = new Blob(["blob"]),
   url = "http://api/test"
 }) {
   return {
@@ -22,6 +23,9 @@ function response({
     },
     async text() {
       return text;
+    },
+    async blob() {
+      return blob;
     }
   };
 }
@@ -163,6 +167,26 @@ test("request propagates network failures", async () => {
     },
     async () => {
       await assert.rejects(request("/test"), /network down/);
+    }
+  );
+});
+
+test("requestBlob uses the shared backend error parser", async () => {
+  await withFetch(
+    async () =>
+      response({ ok: false, status: 409, json: { detail: "Пакет не готов" } }),
+    async () => {
+      await assert.rejects(requestBlob("/songs/1/package"), /Пакет не готов/);
+    }
+  );
+});
+
+test("requestBlob returns the response payload", async () => {
+  const payload = new Blob(["karaoke"], { type: "application/zip" });
+  await withFetch(
+    async () => response({ blob: payload }),
+    async () => {
+      assert.equal(await requestBlob("/songs/1/package"), payload);
     }
   );
 });

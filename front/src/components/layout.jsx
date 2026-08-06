@@ -6,6 +6,7 @@ import { useRequireOnlineName } from "../hooks/useRequireOnlineName";
 import SongSettings from "../pages/Library/song-settings";
 import Settings from "../pages/Settings";
 import Modal from "./Modal";
+import { IconButton } from "./ui";
 import TitleBar from "./TitleBar";
 import AppRoutes from "./routes";
 
@@ -13,15 +14,14 @@ const ROUTES = { karaoke: "/karaoke" };
 
 function AppSettingsButton({ onClick }) {
   return (
-    <button
-      type="button"
+    <IconButton
+      unstyled
       className="app-settings-fab"
+      icon={Cog}
+      size={56}
+      label="Настройки приложения"
       onClick={onClick}
-      title="Настройки приложения"
-      aria-label="Настройки приложения"
-    >
-      <Cog size={56} strokeWidth={1.8} />
-    </button>
+    />
   );
 }
 

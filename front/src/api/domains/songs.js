@@ -1,4 +1,4 @@
-import { BASE_URL, createFileUrl, request } from "../core";
+import { createFileUrl, request, requestBlob } from "../core";
 
 export const songsApi = {
   listSongs: () => request("/songs"),
@@ -25,13 +25,7 @@ export const songsApi = {
       body: JSON.stringify({ lyrics })
     }),
   getAudioTrackUrl: (id, track) => createFileUrl(`/songs/${id}/audio/${track}`),
-  exportSongPackage: async (id) => {
-    const response = await fetch(`${BASE_URL}/songs/${id}/package`);
-    if (!response.ok) {
-      throw new Error(`Не удалось подготовить песню: ${response.status}`);
-    }
-    return response.blob();
-  },
+  exportSongPackage: (id) => requestBlob(`/songs/${id}/package`),
   importSongPackage: (blob, filename = "song.karaoke.zip") => {
     const form = new FormData();
     form.append("file", blob, filename);

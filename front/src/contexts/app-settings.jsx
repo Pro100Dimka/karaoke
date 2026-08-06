@@ -33,19 +33,27 @@ export default function AppSettingsProvider({ children }) {
     error: null
   });
   const isMounted = useRef(false);
+  const loadRequestRef = useRef(0);
 
   const loadSettings = useCallback(() => {
+    const requestId = loadRequestRef.current + 1;
+    loadRequestRef.current = requestId;
     dispatch({ type: "LOAD_START" });
+
     return api
       .getAppSettings()
       .then((payload) => {
-        isMounted.current && dispatch({ type: "LOAD_SUCCESS", payload });
+        if (isMounted.current && requestId === loadRequestRef.current) {
+          dispatch({ type: "LOAD_SUCCESS", payload });
+        }
         return payload;
       })
-      .catch(
-        (payload) =>
-          isMounted.current && dispatch({ type: "LOAD_ERROR", payload })
-      );
+      .catch((payload) => {
+        if (isMounted.current && requestId === loadRequestRef.current) {
+          dispatch({ type: "LOAD_ERROR", payload });
+        }
+        throw payload;
+      });
   }, []);
   const value = useMemo(
     () => ({
@@ -62,8 +70,11 @@ export default function AppSettingsProvider({ children }) {
   }, [state.settings?.theme]);
   useEffect(() => {
     isMounted.current = true;
-    loadSettings();
-    return () => (isMounted.current = false);
+    loadSettings().catch(() => {});
+    return () => {
+      isMounted.current = false;
+      loadRequestRef.current += 1;
+    };
   }, [loadSettings]);
 
   return (

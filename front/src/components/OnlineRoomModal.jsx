@@ -1,8 +1,11 @@
 import { ArrowLeft, UsersRound } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import useMountedRef from "../hooks/useMountedRef";
 import { useOnlineRoom } from "../contexts/OnlineRoomContext";
 import { normalizeRoomId } from "../services/onlineRoom";
+import { getErrorMessage } from "../utils/errors";
 import Modal from "./Modal";
+import { Button, FieldInput } from "./fields";
 import { ModalTitle } from "./ui";
 
 export function OnlineRoomModal({ onlineName, onClose }) {
@@ -11,18 +14,34 @@ export function OnlineRoomModal({ onlineName, onClose }) {
   const [roomId, setRoomId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const connectionPendingRef = useRef(false);
+  const mountedRef = useMountedRef();
 
   const connect = async (host) => {
+    if (connectionPendingRef.current) return;
+
+    const normalizedRoomId = normalizeRoomId(roomId);
+    if (!host && normalizedRoomId.length < 4) {
+      setError("Введите корректный код комнаты.");
+      return;
+    }
+
+    connectionPendingRef.current = true;
     setBusy(true);
     setError("");
     try {
       if (host) await room.createRoom(onlineName);
-      else await room.joinRoom(roomId, onlineName);
-      onClose();
+      else await room.joinRoom(normalizedRoomId, onlineName);
+      if (mountedRef.current) onClose();
     } catch (connectError) {
-      setError(connectError?.message || "Не удалось подключиться к комнате.");
+      if (mountedRef.current) {
+        setError(
+          getErrorMessage(connectError, "Не удалось подключиться к комнате.")
+        );
+      }
     } finally {
-      setBusy(false);
+      connectionPendingRef.current = false;
+      if (mountedRef.current) setBusy(false);
     }
   };
 
@@ -47,74 +66,72 @@ export function OnlineRoomModal({ onlineName, onClose }) {
       />
 
       <div className="modal-scroll online-room-modal__content">
-      {!joinMode ? (
-        <div className="online-room-form">
-          <p>
-            Создайте комнату и отправьте другу автоматически созданный код или
-            войдите по коду ведущего.
-          </p>
-          {error && <p className="karaoke-recording-error">{error}</p>}
-          <div className="online-room-actions">
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={busy}
-              onClick={() => connect(true)}
-            >
-              {busy ? "Подключение…" : "Создать комнату"}
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              disabled={busy}
-              onClick={() => setJoinMode(true)}
-            >
-              Войти по коду
-            </button>
+        {!joinMode ? (
+          <div className="online-room-form">
+            <p>
+              Создайте комнату и отправьте другу автоматически созданный код
+              или войдите по коду ведущего.
+            </p>
+            {error && <p className="karaoke-recording-error">{error}</p>}
+            <div className="online-room-actions">
+              <Button
+                variant="primary"
+                disabled={busy}
+                onClick={() => connect(true)}
+              >
+                {busy ? "Подключение…" : "Создать комнату"}
+              </Button>
+              <Button
+                variant="ghost"
+                disabled={busy}
+                onClick={() => setJoinMode(true)}
+              >
+                Войти по коду
+              </Button>
+            </div>
           </div>
-        </div>
-      ) : (
-        <div className="online-room-form">
-          <label htmlFor="online-room-code">
-            Код комнаты
-            <input
+        ) : (
+          <div className="online-room-form">
+            <FieldInput
               id="online-room-code"
-              className="input"
+              field={{
+                name: "roomId",
+                label: "Код комнаты",
+                placeholder: "Например, E15235FE",
+                maxLength: 32
+              }}
               value={roomId}
-              placeholder="Например, E15235FE"
-              maxLength={32}
-              onChange={(event) =>
-                setRoomId(normalizeRoomId(event.target.value))
-              }
+              onChange={(value) => setRoomId(normalizeRoomId(value))}
               onKeyDown={(event) => {
-                if (event.key === "Enter" && roomId.length >= 4) connect(false);
+                if (event.key === "Enter" && roomId.length >= 4) {
+                  event.preventDefault();
+                  connect(false);
+                }
               }}
             />
-          </label>
-          {error && <p className="karaoke-recording-error">{error}</p>}
-          <div className="online-room-actions">
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={busy || roomId.length < 4}
-              onClick={() => connect(false)}
-            >
-              {busy ? "Подключение…" : "Войти"}
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              disabled={busy}
-              onClick={() => {
-                setJoinMode(false);
-                setError("");
-              }}
-            >
-              <ArrowLeft size={15} aria-hidden="true" /> Назад
-            </button>
+            {error && <p className="karaoke-recording-error">{error}</p>}
+            <div className="online-room-actions">
+              <Button
+                variant="primary"
+                disabled={busy || roomId.length < 4}
+                onClick={() => connect(false)}
+              >
+                {busy ? "Подключение…" : "Войти"}
+              </Button>
+              <Button
+                icon={ArrowLeft}
+                variant="ghost"
+                disabled={busy}
+                onClick={() => {
+                  setJoinMode(false);
+                  setError("");
+                }}
+              >
+                Назад
+              </Button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
       </div>
     </Modal>
   );

@@ -1,26 +1,18 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readCssBundle } from "./helpers/css.js";
 
-const read = (path) =>
-  readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const css = [
-  "src/theme/palette.css",
-  "src/theme/typography.css",
-  "src/theme/spacing.css",
-  "src/theme/shadows.css",
-  "src/theme/motion.css",
-  "src/styles/reset.css",
-  "src/styles/components.css",
-  "src/styles/layout.css",
-  "src/styles/compat.css",
-  "src/pages/Library/library.css",
-  "src/pages/Library/song-settings/song-settings.css",
-  "src/pages/Settings/settings.css",
-  "src/pages/Karaoke/karaoke.css"
-]
-  .map(read)
-  .join("\n");
+const css = readCssBundle([
+  new URL("../src/theme/index.css", import.meta.url),
+  new URL("../src/styles/reset.css", import.meta.url),
+  new URL("../src/styles/components.css", import.meta.url),
+  new URL("../src/styles/layout.css", import.meta.url),
+  new URL("../src/styles/compat.css", import.meta.url),
+  new URL("../src/pages/Library/library.css", import.meta.url),
+  new URL("../src/pages/Library/song-settings/song-settings.css", import.meta.url),
+  new URL("../src/pages/Settings/settings.css", import.meta.url),
+  new URL("../src/pages/Karaoke/karaoke.css", import.meta.url)
+]);
 
 const criticalSelectors = [
   ".song-recordings-backdrop",

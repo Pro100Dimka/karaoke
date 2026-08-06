@@ -21,7 +21,7 @@
     "audit:css": "node scripts/audit-css.mjs",
     "audit:exports": "node scripts/audit-exports.mjs",
     "check:sizes": "node scripts/check-file-sizes.mjs",
-    "audit": "npm run audit:css && npm run audit:exports && npm run audit:react && npm run audit:cycles && npm run audit:complexity && npm run check:sizes && npm run audit:duplicates && npm run audit:architecture",
+    "audit": "npm run check:syntax && npm run audit:css && npm run audit:exports && npm run audit:reachability && npm run audit:react && npm run audit:cycles && npm run audit:complexity && npm run check:sizes && npm run audit:duplicates && npm run audit:architecture",
     "audit:react": "node scripts/audit-react.mjs",
     "audit:cycles": "node scripts/audit-cycles.mjs",
     "audit:complexity": "node scripts/audit-complexity.mjs",
@@ -45,7 +45,9 @@
     "clean": "node scripts/clean.mjs",
     "verify": "npm run check:imports && npm run test:unit && npm run lint && npm run format:check && npm run audit && npm run build",
     "verify:ui": "npm run build:mock && npm run test:e2e",
-    "test:e2e:update": "playwright test -c e2e/playwright.config.mjs --update-snapshots"
+    "test:e2e:update": "playwright test -c e2e/playwright.config.mjs --update-snapshots",
+    "audit:reachability": "node scripts/audit-reachability.mjs",
+    "check:syntax": "node scripts/check-syntax.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.383.0",

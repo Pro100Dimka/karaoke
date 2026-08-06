@@ -14,6 +14,7 @@ export default function FieldInput({
   value,
   onChange,
   onBlur = identity,
+  onKeyDown,
   bare = false
 }) {
   const generatedId = useId();
@@ -25,7 +26,8 @@ export default function FieldInput({
     disabled: field.disabled,
     required: field.required,
     "aria-invalid": Boolean(field.error) || undefined,
-    "aria-describedby": field.hint ? `${inputId}-hint` : undefined
+    "aria-describedby": field.hint ? `${inputId}-hint` : undefined,
+    onKeyDown
   };
 
   const textProps = {

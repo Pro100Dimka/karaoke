@@ -3,6 +3,8 @@
   --duration-normal: 240ms;
   --duration-slow: 520ms;
   --transition-fast: var(--duration-fast);
+  --transition-normal: var(--duration-normal);
+  --transition-slow: var(--duration-slow);
   --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
 }

@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
+import { IconButton } from "./ui";
 import Card from "./ui/Card";
 import { FOCUSABLE_SELECTOR } from "./modal-focus";
 
@@ -19,7 +20,12 @@ export default function Modal({
   tilt = true
 }) {
   const dialogRef = useRef(null);
+  const onCloseRef = useRef(onClose);
   const titleId = useId();
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -37,7 +43,7 @@ export default function Modal({
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current?.();
         return;
       }
 
@@ -71,7 +77,7 @@ export default function Modal({
       document.body.style.overflow = previousOverflow;
       if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -97,14 +103,14 @@ export default function Modal({
         <span id={titleId} className="sr-only">
           {ariaLabel}
         </span>
-        <button
-          type="button"
+        <IconButton
+          unstyled
+          icon={X}
+          size={closeIconSize}
           className={closeClassName}
           onClick={onClose}
-          aria-label={closeAriaLabel}
-        >
-          <X size={closeIconSize} aria-hidden="true" />
-        </button>
+          label={closeAriaLabel}
+        />
         {children}
       </Card>
     </div>

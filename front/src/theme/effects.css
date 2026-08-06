@@ -211,7 +211,6 @@
   50% { opacity: 0.75; }
 }
 
-.fx-neon-pulse { animation: card-breathe 4s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   .ui-card__glow,

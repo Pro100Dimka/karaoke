@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { RangeInput } from "../../../components/fields";
 
 export default function SliderField({
   label,
@@ -13,29 +14,21 @@ export default function SliderField({
 }) {
   const generatedId = useId();
   const inputId = `slider-${generatedId.replace(/:/g, "")}`;
-  const commit = (event) => onCommit?.(Number(event.currentTarget.value));
-
   return (
     <label className="slider-field" htmlFor={inputId}>
       <span className="slider-field__header">
         <span>{label}</span>
         <span className="mono">{display}</span>
       </span>
-      <input
+      <RangeInput
         id={inputId}
-        type="range"
         min={min}
         max={max}
         step={step}
         value={value}
         disabled={disabled}
-        onChange={(event) => onChange(Number(event.target.value))}
-        onPointerUp={commit}
-        onKeyUp={(event) => {
-          if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
-            commit(event);
-          }
-        }}
+        onChange={onChange}
+        onCommit={onCommit}
       />
     </label>
   );

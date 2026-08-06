@@ -1,6 +1,7 @@
 import { Check, ChevronDown } from "lucide-react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import Button from "./button";
 
 export default function Dropdown({
   id,
@@ -23,6 +24,8 @@ export default function Dropdown({
   );
 
   useEffect(() => {
+    if (!open) return undefined;
+
     const close = (event) => {
       if (
         !ref.current?.contains(event.target) &&
@@ -33,14 +36,18 @@ export default function Dropdown({
       if (event.key === "Escape") setOpen(false);
     };
     // Settings modals stop bubbling mouse events. Capture sees the click
-    // before that handler, so a dropdown always closes outside itself.
+    // before that handler, so an open dropdown always closes outside itself.
     document.addEventListener("pointerdown", close, true);
     document.addEventListener("keydown", closeOnEscape, true);
     return () => {
       document.removeEventListener("pointerdown", close, true);
       document.removeEventListener("keydown", closeOnEscape, true);
     };
-  }, []);
+  }, [open]);
+
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
 
   useEffect(() => {
     const closeWhenAnotherOpens = (event) => {
@@ -53,7 +60,6 @@ export default function Dropdown({
         closeWhenAnotherOpens
       );
   }, []);
-
 
   useLayoutEffect(() => {
     if (!open || !ref.current) return undefined;
@@ -95,9 +101,9 @@ export default function Dropdown({
 
   return (
     <div className={`app-dropdown ${className}`} ref={ref}>
-      <button
+      <Button
+        unstyled
         id={dropdownId}
-        type="button"
         className="app-dropdown-trigger"
         disabled={disabled}
         aria-haspopup="listbox"
@@ -106,8 +112,8 @@ export default function Dropdown({
         onClick={toggle}
       >
         <span>{selected?.label || placeholder}</span>
-        <ChevronDown size={15} />
-      </button>
+        <ChevronDown size={15} aria-hidden="true" />
+      </Button>
       {open && menuStyle && createPortal(
         <div
           ref={menuRef}
@@ -119,8 +125,8 @@ export default function Dropdown({
           {options.map((option) => {
             const isSelected = String(option.value) === String(value);
             return (
-              <button
-                type="button"
+              <Button
+                unstyled
                 key={String(option.value)}
                 role="option"
                 aria-selected={isSelected}
@@ -132,8 +138,8 @@ export default function Dropdown({
                 }}
               >
                 <span>{option.label}</span>
-                {isSelected && <Check size={15} />}
-              </button>
+                {isSelected && <Check size={15} aria-hidden="true" />}
+              </Button>
             );
           })}
         </div>,

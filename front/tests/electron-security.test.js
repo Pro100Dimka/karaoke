@@ -5,6 +5,7 @@ import test from "node:test";
 const require = createRequire(import.meta.url);
 const {
   getPackagedRendererUrl,
+  isAllowedPermissionRequest,
   isAllowedRendererUrl,
   isTrustedIpcEvent
 } = require("../electron/security.cjs");
@@ -42,4 +43,46 @@ test("IPC requests are accepted only from the active renderer", () => {
   assert.equal(isTrustedIpcEvent({ sender: other }, sender), false);
   assert.equal(isTrustedIpcEvent({ sender }, null), false);
   assert.equal(isTrustedIpcEvent({ sender }, { isDestroyed: () => true }), false);
+});
+
+test("media permission is limited to audio from the active renderer", () => {
+  const webContents = { isDestroyed: () => false };
+  const rendererOptions = {
+    isDev: true,
+    devOrigin: DEV_ORIGIN,
+    packagedIndexUrl
+  };
+  const base = {
+    permission: "media",
+    requestUrl: `${DEV_ORIGIN}/#/karaoke`,
+    mediaTypes: ["audio"],
+    webContents,
+    expectedWebContents: webContents,
+    rendererOptions
+  };
+
+  assert.equal(isAllowedPermissionRequest(base), true);
+  assert.equal(
+    isAllowedPermissionRequest({ ...base, mediaTypes: ["video"] }),
+    false
+  );
+  assert.equal(
+    isAllowedPermissionRequest({ ...base, mediaTypes: ["audio", "video"] }),
+    false
+  );
+  assert.equal(
+    isAllowedPermissionRequest({ ...base, permission: "notifications" }),
+    false
+  );
+  assert.equal(
+    isAllowedPermissionRequest({ ...base, requestUrl: "https://evil.example" }),
+    false
+  );
+  assert.equal(
+    isAllowedPermissionRequest({
+      ...base,
+      webContents: { isDestroyed: () => false }
+    }),
+    false
+  );
 });

@@ -1,7 +1,8 @@
 import { CircleDot, Library, OctagonX, Play } from "lucide-react";
-import Modal from "../../../components/Modal";
+import Button from "../../../components/fields/button";
 import { StatusBadge } from "../../../components/ui";
 import { formatEta, getProcessingProgress, isProcessingActive } from "../utils";
+import LibraryModal from "./LibraryModal";
 import LibraryModalHeader from "./LibraryModalHeader";
 import ProcessingSignal from "./ProcessingSignal";
 
@@ -16,16 +17,11 @@ export default function ProcessingModal({
   const progress = getProcessingProgress(status, song);
 
   return (
-    <Modal
+    <LibraryModal
       isOpen={Boolean(song)}
       onClose={onClose}
       ariaLabel={song ? `Обработка песни ${song.title}` : "Обработка песни"}
-      backdropClassName="app-modal-backdrop song-recordings-backdrop"
-      modalClassName="app-modal modal-card processing-modal"
-      closeClassName="app-modal-close song-recordings-close"
-      cardVariant="neon"
-      closeIconSize={18}
-      portal
+      modalClassName="processing-modal"
     >
       {song && (
         <>
@@ -64,27 +60,28 @@ export default function ProcessingModal({
 
           <div className="processing-modal-actions">
             {isProcessingActive(currentStatus) && (
-              <button className="btn btn-danger" onClick={onCancel} type="button">
-                <OctagonX size={15} /> Отменить
-              </button>
+              <Button variant="danger" icon={OctagonX} onClick={onCancel}>
+                Отменить
+              </Button>
             )}
             {currentStatus === "done" && (
               <>
-                <button className="btn btn-ghost" onClick={onClose} type="button">
-                  <Library size={15} /> В библиотеку
-                </button>
-                <button
-                  className="btn btn-primary"
-                  type="button"
+                <Button variant="ghost" icon={Library} onClick={onClose}>
+                  В библиотеку
+                </Button>
+                <Button
+                  variant="primary"
+                  icon={Play}
+                  iconProps={{ fill: "currentColor" }}
                   onClick={() => onOpenKaraoke(song.id)}
                 >
-                  <Play size={15} fill="currentColor" /> Открыть
-                </button>
+                  Открыть
+                </Button>
               </>
             )}
           </div>
         </>
       )}
-    </Modal>
+    </LibraryModal>
   );
 }

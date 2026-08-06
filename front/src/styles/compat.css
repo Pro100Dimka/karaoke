@@ -307,34 +307,10 @@
 .microphone-gain-setting,
 .advanced-audio-setting,
 .asio-driver-setting,
-.audio-driver-setting,
-.legacy-browser-monitoring {
+.audio-driver-setting {
   display: grid;
   gap: var(--space-2);
 }
-.monitoring-mode-picker {
-  position: relative;
-}
-.monitoring-mode-trigger {
-  width: 100%;
-}
-.monitoring-mode-menu {
-  position: absolute;
-  z-index: 220;
-  width: 100%;
-  padding: var(--space-2);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-strong);
-}
-.monitoring-mode-menu-title,
-.monitoring-mode-option-copy {
-  color: var(--color-text-soft);
-}
-.monitoring-mode-check {
-  color: var(--color-success);
-}
-
 .karaoke-settings-backdrop {
   position: fixed;
   z-index: 600;

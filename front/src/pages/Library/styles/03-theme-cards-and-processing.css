@@ -1,0 +1,639 @@
+/* Light library composition: moonlight glass, peach haze and raspberry accents. */
+:root[data-theme="light"] .title-bar {
+  border-block-end-color: rgba(191, 86, 103, 0.16);
+  background: rgba(255, 250, 247, 0.18);
+  box-shadow: 0 var(--hairline) 0 rgba(255, 255, 255, 0.7);
+}
+
+:root[data-theme="light"] .title-bar__brand {
+  text-shadow: 0 0 var(--space-4) rgba(214, 47, 98, 0.22);
+}
+
+:root[data-theme="light"] .title-bar__button {
+  border-inline-start-color: rgba(176, 84, 101, 0.1);
+}
+
+:root[data-theme="light"] .library-concert-backdrop {
+  background: #f8eee9;
+}
+
+:root[data-theme="light"] .library-theme-space {
+  filter: saturate(0.95) contrast(0.98) brightness(1.02);
+}
+
+:root[data-theme="light"] .library-concert-backdrop::before {
+  background:
+    radial-gradient(
+      circle at 24% 18%,
+      rgba(255, 255, 255, 0.08),
+      transparent 38%
+    ),
+    radial-gradient(
+      circle at 76% 38%,
+      rgba(239, 127, 156, 0.06),
+      transparent 34%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 250, 247, 0.04),
+      rgba(255, 247, 241, 0.1) 58%,
+      rgba(245, 219, 211, 0.25)
+    );
+}
+
+:root[data-theme="light"] .library-stage-lights i {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.82),
+    rgba(239, 63, 101, 0.2) 46%,
+    rgba(246, 160, 128, 0.08) 68%,
+    transparent 90%
+  );
+  filter: blur(var(--space-1)) saturate(1.28);
+  mix-blend-mode: multiply;
+  opacity: 0.62;
+}
+
+:root[data-theme="light"] .library-wave-terrain {
+  opacity: 0.48;
+  filter: saturate(1.35) contrast(1.08);
+}
+
+:root[data-theme="light"] .library-music-object {
+  opacity: 0.48;
+  filter: drop-shadow(0 0 var(--space-4) rgba(214, 47, 98, 0.28))
+    drop-shadow(0 0 var(--space-8) rgba(246, 160, 128, 0.18));
+}
+
+:root[data-theme="light"] .library-music-object--equalizer {
+  opacity: 0.56;
+}
+
+:root[data-theme="light"] .library-music-object--equalizer span {
+  background: linear-gradient(
+    var(--color-raspberry),
+    var(--color-primary),
+    var(--color-peach)
+  );
+  box-shadow: 0 0 var(--space-3) rgba(214, 47, 98, 0.42);
+}
+
+:root[data-theme="light"] .library-music-object--notes span {
+  opacity: 0.48;
+}
+
+:root[data-theme="light"] .library-music-object--notes span::before {
+  color: var(--color-raspberry);
+  text-shadow: 0 0 var(--space-3) rgba(214, 47, 98, 0.3);
+}
+
+:root[data-theme="light"] .library-music-object--record {
+  border: var(--hairline) solid rgba(151, 74, 91, 0.26);
+  box-shadow:
+    inset 0 0 var(--space-8) rgba(255, 255, 255, 0.72),
+    0 0 var(--space-5) rgba(214, 47, 98, 0.22),
+    0 0 var(--space-8) rgba(246, 160, 128, 0.16);
+}
+
+:root[data-theme="light"] .library-music-object--record::before {
+  color: var(--color-text-inverse);
+  box-shadow: 0 0 var(--space-4) rgba(214, 47, 98, 0.28);
+}
+
+:root[data-theme="light"] .library-music-object--microphone {
+  filter: drop-shadow(0 0 var(--space-3) rgba(214, 47, 98, 0.32))
+    drop-shadow(0 var(--space-2) var(--space-5) rgba(99, 52, 63, 0.18));
+}
+
+:root[data-theme="light"] .library-hero h1 {
+  filter: drop-shadow(0 0 var(--space-5) rgba(214, 47, 98, 0.12));
+}
+
+:root[data-theme="light"] .ui-card {
+  backdrop-filter: blur(var(--space-4)) saturate(150%);
+}
+
+:root[data-theme="light"] .library-search-input {
+  border-color: rgba(174, 75, 94, 0.18);
+  box-shadow: inset 0 var(--hairline) rgba(255, 255, 255, 0.86);
+}
+
+:root[data-theme="light"] .library-search-input:focus {
+  box-shadow: 0 0 0 var(--space-1) rgba(239, 63, 101, 0.1);
+}
+
+:root[data-theme="light"] .btn-primary {
+  box-shadow: inset 0 var(--hairline) rgba(255, 255, 255, 0.55);
+}
+
+:root[data-theme="light"] .btn-danger {
+  color: var(--color-danger);
+  background: rgba(215, 53, 72, 0.08);
+}
+
+:root[data-theme="light"] .library-song-card {
+  border-color: rgba(214, 47, 98, 0.22);
+  background:
+    radial-gradient(
+      circle at var(--glow-x) var(--glow-y),
+      rgba(239, 127, 156, 0.13),
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 58% 70%,
+      rgba(246, 160, 128, 0.08),
+      transparent 42%
+    ),
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.72),
+      rgba(255, 239, 233, 0.76)
+    );
+  backdrop-filter: blur(1rem) saturate(155%);
+}
+
+:root[data-theme="light"] .library-song-card:hover {
+  border-color: rgba(214, 47, 98, 0.42);
+  box-shadow:
+    var(--shadow-md),
+    0 0 1.8rem rgba(239, 63, 101, 0.14),
+    0 0 3.2rem rgba(246, 160, 128, 0.08);
+}
+
+:root[data-theme="light"] .library-song-card-art {
+  color: #fff;
+  background: linear-gradient(
+    160deg,
+    var(--color-raspberry),
+    var(--color-peach)
+  );
+}
+
+:root[data-theme="light"] .progress-track {
+  background: rgba(116, 74, 83, 0.1);
+}
+
+:root[data-theme="light"] .song-recordings-backdrop,
+:root[data-theme="light"] .modal-backdrop {
+  background: rgba(87, 54, 62, 0.28);
+}
+
+/* Neon Card uses a real inner glass panel, matching the reference structure. */
+.library-song-card > .ui-card__panel,
+.library-song-card > .ui-card__panel > .ui-card__content {
+  min-block-size: inherit;
+}
+
+.library-song-card > .ui-card__panel > .ui-card__content {
+  display: grid;
+  grid-template-columns: clamp(4.6rem, 8vw, 5.5rem) minmax(0, 1fr);
+}
+
+.library-song-card > .ui-card__panel {
+  background:
+    radial-gradient(
+      circle at var(--glow-x) var(--glow-y),
+      rgb(255 68 126 / 15%),
+      transparent 34%
+    ),
+    radial-gradient(circle at 58% 70%, rgb(99 59 255 / 5%), transparent 42%),
+    linear-gradient(145deg, rgb(58 2 20 / 88%), rgb(18 0 9 / 91%));
+}
+
+.library-song-card {
+  overflow: visible;
+  background: transparent;
+  border: 0;
+}
+
+.song-settings-modal > .ui-card__panel,
+.song-settings-modal > .ui-card__panel > .ui-card__content {
+  display: flex;
+  min-block-size: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.song-settings-modal > .ui-card__panel {
+  overflow: hidden;
+  max-block-size: 88dvh;
+}
+
+.song-settings-modal {
+  background: transparent;
+}
+
+.song-settings-modal .song-recordings-close {
+  z-index: 20;
+}
+
+:root[data-theme="light"] .library-song-card > .ui-card__panel {
+  background:
+    radial-gradient(
+      circle at var(--glow-x) var(--glow-y),
+      rgb(239 63 101 / 12%),
+      transparent 35%
+    ),
+    radial-gradient(circle at 58% 70%, rgb(246 160 128 / 12%), transparent 44%),
+    linear-gradient(145deg, rgb(255 255 255 / 78%), rgb(255 238 232 / 86%));
+}
+
+/* Compact semantic rows for the song form. */
+.song-settings-field-row {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--space-4);
+}
+
+.song-settings-field-row--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+
+.song-settings-field-row > .settings-field,
+.song-settings-note-range {
+  min-inline-size: 0;
+}
+
+.song-settings-note-range .field-row {
+  block-size: var(--field-control-size);
+}
+
+@media (max-width: 46rem) {
+  .song-settings-field-row--2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Shared title bar inside the song settings modal. */
+.song-settings-title {
+  flex: none;
+}
+
+.song-settings-title-save {
+  min-inline-size: 9.5rem;
+}
+
+.song-settings-shell > .song-settings-scroll {
+  min-block-size: 0;
+  flex: 1;
+}
+
+.song-settings-panel .panel-header {
+  min-block-size: 3.6rem;
+  padding-inline-end: var(--space-5);
+}
+
+/* Card primitives used by the highlighted hero controls. */
+.library-search.ui-card {
+  display: flex;
+  align-items: center;
+  min-block-size: 3rem;
+  overflow: visible;
+  background: color-mix(in srgb, var(--color-surface-glass) 76%, transparent);
+}
+
+.library-search.ui-card .library-search-input {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.library-search.ui-card:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-neon-soft);
+}
+
+.library-action-card.ui-card {
+  cursor: pointer;
+}
+
+/* .library-modal-title {
+  margin: calc(-1 * var(--space-5)) calc(-1 * var(--space-5)) var(--space-5);
+} */
+
+/* Recordings uses the same shared bounded neon modal shell as Settings/SongSettings. */
+.song-recordings-modal {
+  inline-size: min(72rem, calc(100vw - 2 * var(--space-4)));
+  block-size: min(84dvh, 46rem);
+  max-block-size: calc(100dvh - 2 * var(--space-4));
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.song-recordings-modal > .ui-card__panel,
+.song-recordings-modal > .ui-card__panel > .ui-card__content {
+  inline-size: 100%;
+  block-size: 100%;
+  min-block-size: 0;
+}
+
+.song-recordings-modal > .ui-card__panel {
+  overflow: hidden;
+}
+
+.song-recordings-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
+.song-recordings-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.song-recording-item {
+  border: var(--hairline) solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface-glass) 54%, transparent);
+}
+
+@media (max-width: 48rem) {
+  .song-recordings-modal {
+    inline-size: calc(100vw - 2 * var(--space-3));
+    block-size: min(90dvh, 46rem);
+  }
+
+  .song-recording-item {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Final compact song-card composition. */
+.library-song-card-heading {
+  align-items: flex-start;
+}
+
+.library-song-card-heading .badge {
+  flex: none;
+  max-inline-size: 46%;
+}
+
+.library-song-card-footer {
+  margin-block-start: auto;
+  padding-block-start: var(--space-3);
+}
+
+.library-song-card-actions {
+  justify-content: flex-end;
+}
+
+.library-song-card-primary {
+  flex: 0 0 2.45rem;
+  inline-size: 2.45rem;
+  min-inline-size: 2.45rem;
+  block-size: 2.45rem;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.library-song-card-icon {
+  flex-basis: 2.25rem;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+}
+
+.library-song-card-progress {
+  margin-block-start: var(--space-2);
+}
+
+/* Cubase-inspired animated processing meter. */
+.processing-signal {
+  --processing-progress: 0%;
+  position: relative;
+  display: grid;
+  min-block-size: 7rem;
+  align-items: center;
+  padding: var(--space-4);
+  overflow: hidden;
+  border: var(--hairline) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 4%), transparent),
+    color-mix(in srgb, var(--color-bg-deep) 72%, transparent);
+  box-shadow: inset 0 0 2rem rgb(0 0 0 / 24%);
+}
+
+.processing-signal__bars {
+  display: flex;
+  block-size: 4.2rem;
+  align-items: center;
+  gap: 0.16rem;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    #000 0 var(--processing-progress),
+    rgb(0 0 0 / 24%) var(--processing-progress) 100%
+  );
+  mask-image: linear-gradient(
+    90deg,
+    #000 0 var(--processing-progress),
+    rgb(0 0 0 / 24%) var(--processing-progress) 100%
+  );
+}
+
+.processing-signal__bars i {
+  flex: 1;
+  min-inline-size: 0.12rem;
+  block-size: var(--bar-height);
+  max-block-size: 100%;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(
+    180deg,
+    var(--color-highlight),
+    var(--color-primary),
+    var(--color-accent)
+  );
+  box-shadow: 0 0 0.6rem
+    color-mix(in srgb, var(--color-primary) 58%, transparent);
+  transform-origin: center;
+  animation: processing-signal-wave 0.8s ease-in-out infinite alternate;
+  animation-delay: calc(var(--bar-index) * -0.055s);
+}
+
+.processing-signal__cursor {
+  position: absolute;
+  inset-block: var(--space-3);
+  inset-inline-start: var(--processing-progress);
+  inline-size: 0.12rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-highlight);
+  box-shadow: 0 0 0.9rem var(--color-primary);
+  transform: translateX(-50%);
+}
+
+.processing-signal__value {
+  position: absolute;
+  inset-block-start: var(--space-2);
+  inset-inline-end: var(--space-3);
+  color: var(--color-text);
+  font: 850 var(--font-size-xs) / 1 var(--font-display);
+}
+
+.processing-signal--compact {
+  min-block-size: 3rem;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+}
+
+.processing-signal--compact .processing-signal__bars {
+  block-size: 1.75rem;
+}
+
+.processing-signal--compact .processing-signal__cursor {
+  inset-block: var(--space-1);
+}
+
+.processing-signal--compact .processing-signal__value {
+  inset-block-start: 0.3rem;
+  inset-inline-end: 0.45rem;
+  font-size: 0.62rem;
+}
+
+@keyframes processing-signal-wave {
+  from {
+    transform: scaleY(0.48);
+    opacity: 0.62;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+/* Processing modal: same shared shell, calmer composition. */
+.processing-modal {
+  inline-size: min(46rem, calc(100vw - 2 * var(--space-4)));
+  max-block-size: min(84dvh, 42rem);
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+}
+
+.processing-modal > .ui-card__panel {
+  overflow: hidden;
+}
+
+.processing-modal > .ui-card__panel > .ui-card__content {
+  display: flex;
+  min-block-size: 0;
+  flex-direction: column;
+}
+
+.processing-modal-body {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
+.processing-modal-summary,
+.processing-modal-stage {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.processing-modal-stage {
+  padding: var(--space-3) var(--space-4);
+  border: var(--hairline) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-surface-glass) 58%, transparent);
+}
+
+.processing-modal-description {
+  margin: 0;
+  color: var(--color-text-soft);
+}
+
+.processing-modal-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  border-block-start: var(--hairline) solid var(--color-border);
+}
+
+/* Recording rows: compact shared Cards instead of oversized filled panels. */
+.song-recordings-body {
+  padding: var(--space-4);
+}
+
+.song-recordings-list {
+  gap: var(--space-3);
+}
+
+.song-recording-item {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.7fr) minmax(16rem, 2fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-surface-glass) 36%, transparent);
+  box-shadow: none;
+}
+
+.song-recording-meta {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.song-recording-player {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.song-recording-item-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.song-recording-delete {
+  inline-size: 2.25rem;
+  padding: 0;
+}
+
+@media (max-width: 60rem) {
+  .song-recording-item {
+    grid-template-columns: minmax(8rem, 0.55fr) minmax(14rem, 1.45fr);
+  }
+
+  .song-recording-item-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 42rem) {
+  .song-recording-item,
+  .song-recording-player {
+    grid-template-columns: 1fr;
+  }
+
+  .song-recording-item-actions {
+    justify-content: stretch;
+  }
+
+  .song-recording-item-actions .btn:first-child {
+    flex: 1;
+  }
+}
+
+:root[data-theme="light"] .processing-signal {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 48%), transparent),
+    color-mix(in srgb, var(--color-nude) 72%, transparent);
+}
+

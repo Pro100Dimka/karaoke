@@ -1,5 +1,6 @@
 import { Component } from "react";
 import { getErrorMessage } from "../../utils/errors";
+import { Button } from "../fields";
 
 export default class ErrorBoundary extends Component {
   constructor(props) {
@@ -25,13 +26,9 @@ export default class ErrorBoundary extends Component {
           <span className="application-error__eyebrow">Karaoke Studio</span>
           <h1>Не удалось открыть экран</h1>
           <p>{getErrorMessage(error, "Произошла непредвиденная ошибка.")}</p>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => window.location.reload()}
-          >
+          <Button variant="primary" onClick={() => window.location.reload()}>
             Перезапустить интерфейс
-          </button>
+          </Button>
         </div>
       </main>
     );

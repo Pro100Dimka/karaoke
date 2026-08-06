@@ -36,6 +36,7 @@ test("route configuration does not use unstable array index keys", () => {
 test("localStorage access remains behind approved helpers", () => {
   const allow = new Set([
     "src/utils/theme.js",
+    "src/utils/storage.js",
     "src/pages/Karaoke/utils/preferences.js"
   ]);
   const offenders = files

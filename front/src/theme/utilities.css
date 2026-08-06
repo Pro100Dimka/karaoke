@@ -14,17 +14,5 @@
   flex-wrap: wrap;
 }
 
-.u-stack {
-  display: grid;
-}
 
-.u-glass {
-  border: var(--hairline) solid var(--color-border);
-  background: var(--gradient-glass);
-  box-shadow: var(--shadow-glass);
-  backdrop-filter: blur(var(--space-4)) saturate(135%);
-}
 
-.u-muted {
-  color: var(--color-text-muted);
-}

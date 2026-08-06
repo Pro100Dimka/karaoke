@@ -19,7 +19,9 @@ export function usePolling(fetchFn, intervalMs, deps = []) {
     let active = true;
     let timerId = null;
     let inFlight = false;
-    const isHidden = () => document.visibilityState === "hidden";
+    let refreshQueued = false;
+    const documentRef = globalThis.document;
+    const isHidden = () => documentRef?.visibilityState === "hidden";
 
     const scheduleNext = () => {
       if (
@@ -29,12 +31,20 @@ export function usePolling(fetchFn, intervalMs, deps = []) {
         intervalMs <= 0
       )
         return;
-      timerId = window.setTimeout(run, intervalMs);
+      timerId = globalThis.setTimeout(run, intervalMs);
     };
 
     const run = async () => {
-      if (!active || inFlight || isHidden()) return;
-      if (timerId) window.clearTimeout(timerId);
+      if (!active) return;
+      if (isHidden()) {
+        refreshQueued = true;
+        return;
+      }
+      if (inFlight) {
+        refreshQueued = true;
+        return;
+      }
+      if (timerId) globalThis.clearTimeout(timerId);
       timerId = null;
       inFlight = true;
       try {
@@ -47,7 +57,12 @@ export function usePolling(fetchFn, intervalMs, deps = []) {
         if (active) setError(requestError);
       } finally {
         inFlight = false;
-        scheduleNext();
+        if (refreshQueued) {
+          refreshQueued = false;
+          run();
+        } else {
+          scheduleNext();
+        }
       }
     };
 
@@ -55,17 +70,18 @@ export function usePolling(fetchFn, intervalMs, deps = []) {
     run();
     const refreshWhenVisible = () => {
       if (isHidden()) return;
-      if (timerId) window.clearTimeout(timerId);
+      if (timerId) globalThis.clearTimeout(timerId);
       timerId = null;
       run();
     };
-    document.addEventListener("visibilitychange", refreshWhenVisible);
+    documentRef?.addEventListener("visibilitychange", refreshWhenVisible);
 
     return () => {
       active = false;
-      if (timerId) window.clearTimeout(timerId);
+      refreshQueued = false;
+      if (timerId) globalThis.clearTimeout(timerId);
       refreshRef.current = null;
-      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      documentRef?.removeEventListener("visibilitychange", refreshWhenVisible);
     };
     // Callers provide a stable dependency list for the resource being polled.
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -22,9 +22,11 @@ const {
 
 const {
   getPackagedRendererUrl,
+  isAllowedPermissionRequest,
   isAllowedRendererUrl,
   isTrustedIpcEvent
 } = require("./security.cjs");
+const { findMatchingSongFolder } = require("./song-folders.cjs");
 
 const isDev = !app.isPackaged;
 const BACKEND_URL = "http://127.0.0.1:8000";
@@ -72,6 +74,19 @@ function isPathInside(parentPath, candidatePath) {
   );
 }
 
+function scheduleBackendRestart() {
+  if (
+    isQuitting ||
+    backendStopRequested ||
+    process.env.KARAOKE_BACKEND_EXTERNAL === "1"
+  ) {
+    return;
+  }
+
+  clearTimeout(backendRestartTimer);
+  backendRestartTimer = setTimeout(startBackend, 1200);
+}
+
 function startBackend() {
   if (process.env.KARAOKE_BACKEND_EXTERNAL === "1") return;
   backendStopRequested = false;
@@ -92,7 +107,7 @@ function startBackend() {
     : path.join(app.getPath("userData"), "logs");
 
   try {
-    backendProcess = spawn(backendCommand, backendArgs, {
+    const childProcess = spawn(backendCommand, backendArgs, {
       cwd: backendDir,
       // Keep the packaged app quiet, but expose backend startup errors in the
       // terminal launched by start-dev.bat. Otherwise a missing dependency or
@@ -107,20 +122,30 @@ function startBackend() {
         PATH: `${backendDir}${path.delimiter}${process.env.PATH || ""}`
       }
     });
-    backendProcess.on("error", (err) => {
+    backendProcess = childProcess;
+    childProcess.on("error", (err) => {
       console.error("Не удалось запустить backend:", err);
+      if (backendProcess === childProcess) backendProcess = null;
+      scheduleBackendRestart();
     });
-    backendProcess.on("exit", (code, signal) => {
-      backendProcess = null;
-      if (isQuitting || process.env.KARAOKE_BACKEND_EXTERNAL === "1") return;
+    childProcess.on("exit", (code, signal) => {
+      if (backendProcess === childProcess) backendProcess = null;
+      if (
+        isQuitting ||
+        backendStopRequested ||
+        process.env.KARAOKE_BACKEND_EXTERNAL === "1"
+      ) {
+        return;
+      }
       console.error(
         `Backend stopped (${code ?? "unknown"}, ${signal ?? "no signal"}); restarting…`
       );
-      clearTimeout(backendRestartTimer);
-      backendRestartTimer = setTimeout(startBackend, 1200);
+      scheduleBackendRestart();
     });
   } catch (err) {
+    backendProcess = null;
     console.error("Не удалось запустить backend:", err);
+    scheduleBackendRestart();
   }
 }
 
@@ -174,7 +199,8 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      sandbox: true
     }
   });
 
@@ -251,26 +277,16 @@ handleTrustedIpc("shell:openSongFolder", async (target) => {
     }
   }
 
-  const normalizeName = (value) =>
-    String(value || "")
-      .toLocaleLowerCase("ru")
-      .replace(/[^a-zа-яё0-9]+/giu, "")
-      .trim();
-  const requestedNames = [request.slug, request.title, request.id]
-    .map(normalizeName)
-    .filter(Boolean);
-
   try {
-    const matchingEntry = fs.readdirSync(realSongsDir, { withFileTypes: true }).find((entry) => {
-      if (!entry.isDirectory()) return false;
-      const entryName = normalizeName(entry.name);
-      return requestedNames.some(
-        (requested) => entryName === requested || entryName.includes(requested) || requested.includes(entryName)
-      );
-    });
+    const matchingEntry = findMatchingSongFolder(
+      fs.readdirSync(realSongsDir, { withFileTypes: true }),
+      [request.slug, request.title, request.id]
+    );
 
     if (matchingEntry) {
-      const error = await shell.openPath(path.join(realSongsDir, matchingEntry.name));
+      const error = await shell.openPath(
+        path.join(realSongsDir, matchingEntry.name)
+      );
       return error || "";
     }
   } catch {
@@ -287,22 +303,40 @@ handleTrustedIpc("clipboard:writeText", (value) => {
 });
 
 app.whenReady().then(() => {
+  const packagedIndexUrl = getPackagedRendererUrl(
+    path.join(__dirname, "..", "dist", "index.html")
+  );
+  const rendererOptions = {
+    isDev,
+    devOrigin: DEV_RENDERER_ORIGIN,
+    packagedIndexUrl
+  };
+  const permissionAllowed = (webContents, permission, requestUrl, details) =>
+    isAllowedPermissionRequest({
+      permission,
+      requestUrl: requestUrl || webContents?.getURL(),
+      mediaTypes: details?.mediaTypes,
+      webContents,
+      expectedWebContents: mainWindow?.webContents,
+      rendererOptions
+    });
+
+  session.defaultSession.setPermissionCheckHandler(
+    (webContents, permission, requestingOrigin, details) =>
+      permissionAllowed(webContents, permission, requestingOrigin, details)
+  );
   session.defaultSession.setPermissionRequestHandler(
     (webContents, permission, callback, details) => {
-      const requestUrl = details?.requestingUrl || webContents.getURL();
-      const packagedIndexUrl = getPackagedRendererUrl(
-        path.join(__dirname, "..", "dist", "index.html")
+      // The app uses audio capture only. Never grant camera/media permissions
+      // to a navigation, popup, or arbitrary origin sharing the session.
+      callback(
+        permissionAllowed(
+          webContents,
+          permission,
+          details?.requestingUrl,
+          details
+        )
       );
-      const trustedRenderer =
-        webContents === mainWindow?.webContents &&
-        isAllowedRendererUrl(requestUrl, {
-          isDev,
-          devOrigin: DEV_RENDERER_ORIGIN,
-          packagedIndexUrl
-        });
-      // The app uses only the microphone. Never grant media permissions to a
-      // navigation, popup, or arbitrary origin that happens to share a session.
-      callback(permission === "media" && trustedRenderer);
     }
   );
   startBackend();
@@ -314,9 +348,10 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
+  if (process.platform === "darwin") return;
   isQuitting = true;
   stopBackend();
-  if (process.platform !== "darwin") app.quit();
+  app.quit();
 });
 
 app.on("before-quit", () => {

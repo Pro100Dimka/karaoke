@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { RangeInput } from "../../../components/fields";
 import { getSeekTime, getTimelineProgress } from "../utils/timeline";
 
 const BAR_COUNT = 220;
@@ -78,14 +79,13 @@ export default function WaveformTimeline({ value, duration, onChange }) {
           strokeWidth="1.5"
         />
       </svg>
-      <input
+      <RangeInput
         aria-label="Позиция песни"
-        type="range"
         min="0"
         max={duration || 0}
         step="0.01"
         value={Math.min(value, duration || 0)}
-        onChange={(event) => onChange(Number(event.target.value))}
+        onChange={onChange}
       />
     </div>
   );

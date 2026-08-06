@@ -3,8 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../../../api/client";
 import { AudioPlayer } from "../../../components/AudioPlayer";
 import Modal from "../../../components/Modal";
+import { Button } from "../../../components/fields";
 import { ModalTitle } from "../../../components/ui";
 import { useAppDialog } from "../../../contexts/AppDialog";
+import useExclusiveAsyncAction from "../../../hooks/useExclusiveAsyncAction";
+import useMountedRef from "../../../hooks/useMountedRef";
 import { getErrorMessage } from "../../../utils/errors";
 import {
   getAnalysisFeedback,
@@ -19,8 +22,9 @@ export default function PerformanceAnalysisModal({
 }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const [deleting, setDeleting] = useState(false);
+  const { pending: deleting, run: runDelete } = useExclusiveAsyncAction();
   const analysisRequestRef = useRef({ recordingId: null, promise: null });
+  const mountedRef = useMountedRef();
   const { confirm: confirmDialog } = useAppDialog();
 
   useEffect(() => {
@@ -49,22 +53,24 @@ export default function PerformanceAnalysisModal({
     };
   }, [recordingId]);
 
-  const deleteRecording = async () => {
-    if (!(await confirmDialog("Удалить это записанное исполнение?"))) return;
-    setDeleting(true);
-    try {
-      await api.deleteRecording(recordingId);
-      onDeleted();
-    } catch (deleteError) {
-      setError(
-        `Не удалось удалить запись: ${getErrorMessage(
-          deleteError,
-          "неизвестная ошибка"
-        )}`
-      );
-      setDeleting(false);
-    }
-  };
+  const deleteRecording = () =>
+    runDelete(async () => {
+      if (!(await confirmDialog("Удалить это записанное исполнение?"))) return;
+      if (!mountedRef.current) return;
+
+      try {
+        await api.deleteRecording(recordingId);
+        if (mountedRef.current) onDeleted();
+      } catch (deleteError) {
+        if (!mountedRef.current) return;
+        setError(
+          `Не удалось удалить запись: ${getErrorMessage(
+            deleteError,
+            "неизвестная ошибка"
+          )}`
+        );
+      }
+    });
 
   return (
     <Modal
@@ -105,9 +111,9 @@ export default function PerformanceAnalysisModal({
             <p className="song-lyrics-error">
               Не удалось выполнить анализ: {error}
             </p>
-            <button type="button" className="btn btn-primary" onClick={onClose}>
+            <Button variant="primary" onClick={onClose}>
               Закрыть
-            </button>
+            </Button>
           </>
         )}
         {result && (
@@ -115,17 +121,18 @@ export default function PerformanceAnalysisModal({
             <AnalysisSummary result={result} />
             <AudioPlayer src={api.getPerformanceFileUrl(recordingId)} />
             <div className="performance-analysis-actions">
-              <button
-                type="button"
-                className="btn btn-danger"
+              <Button
+                icon={Trash2}
+                iconSize={14}
+                variant="danger"
                 onClick={deleteRecording}
                 disabled={deleting}
               >
-                <Trash2 size={14} /> {deleting ? "Удаляем…" : "Удалить запись"}
-              </button>
-              <button type="button" className="btn btn-primary" onClick={onDone}>
+                {deleting ? "Удаляем…" : "Удалить запись"}
+              </Button>
+              <Button variant="primary" onClick={onDone}>
                 Готово
-              </button>
+              </Button>
             </div>
           </>
         )}

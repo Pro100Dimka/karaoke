@@ -5,7 +5,9 @@ import FieldInput, { FieldList, FieldRow } from "../../../components/fields";
 import Button from "../../../components/fields/button";
 import { ModalTitle, Panel } from "../../../components/ui";
 import { useAppDialog } from "../../../contexts/AppDialog";
+import useExclusiveAsyncAction from "../../../hooks/useExclusiveAsyncAction";
 import { usePolling } from "../../../hooks/usePolling";
+import { getErrorMessage } from "../../../utils/errors";
 import { EMPTY_LYRICS, NOTE_RANGE_FIELDS, SONG_FIELDS } from "./config";
 import {
   buildLyricsData,
@@ -47,7 +49,7 @@ export default function SongSettings({ songId }) {
   const song = getSelectedSong(songs, songId);
 
   const [form, setForm] = useState(null);
-  const [saving, setSaving] = useState(false);
+  const { pending: saving, run: runSave } = useExclusiveAsyncAction();
   const [lyrics, setLyrics] = useState(EMPTY_LYRICS);
 
   useEffect(() => {
@@ -82,7 +84,7 @@ export default function SongSettings({ songId }) {
 
         setLyrics({
           ...EMPTY_LYRICS,
-          error: error?.message ?? null
+          error: getErrorMessage(error, null)
         });
       }
     }
@@ -145,32 +147,25 @@ export default function SongSettings({ songId }) {
     } catch (error) {
       setLyrics((current) => ({
         ...current,
-        error: error?.message ?? "Не удалось сохранить текст"
+        error: getErrorMessage(error, "Не удалось сохранить текст")
       }));
 
       return false;
     }
   };
 
-  const save = async () => {
-    if (saving) return;
+  const save = () =>
+    runSave(async () => {
+      try {
+        if (song.status === "done" && !(await saveLyrics())) {
+          return;
+        }
 
-    setSaving(true);
-
-    try {
-      if (song.status === "done" && !(await saveLyrics())) {
-        return;
+        await api.updateSong(song.id, createSongPayload(form, song));
+      } catch (error) {
+        await notify(`Не удалось сохранить: ${getErrorMessage(error)}`);
       }
-
-      await api.updateSong(song.id, createSongPayload(form, song));
-    } catch (error) {
-      await notify(
-        `Не удалось сохранить: ${error?.message ?? "Неизвестная ошибка"}`
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
+    });
 
   return (
     <div className="song-settings-shell">

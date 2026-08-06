@@ -1,13 +1,17 @@
 import { Search } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { OnlineRoomModal } from "../../components/OnlineRoomModal";
 import { Card, Panel } from "../../components/ui";
 import { useAppDialog } from "../../contexts/AppDialog";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
+import useAppSettings from "../../hooks/useAppSettings";
 import { usePolling } from "../../hooks/usePolling";
 import { getErrorMessage } from "../../utils/errors";
+import useLibraryFileImport from "./hooks/useLibraryFileImport";
+import useLibraryRoomSync from "./hooks/useLibraryRoomSync";
+import useLibrarySongActions from "./hooks/useLibrarySongActions";
 import PerformanceAnalysisModal from "../Karaoke/components/PerformanceAnalysisModal";
 import LibraryActions from "./components/LibraryActions";
 import LibraryBackdrop from "./components/LibraryBackdrop";
@@ -29,44 +33,18 @@ export default function Library({ onOpenSongSettings }) {
   const [analysisRecordingId, setAnalysisRecordingId] = useState(null);
   const [hiddenSongIds, setHiddenSongIds] = useState(() => new Set());
   const [onlineRoomOpen, setOnlineRoomOpen] = useState(false);
-  const [appSettings, setAppSettings] = useState(null);
-  const applyingRemoteRoomUiRef = useRef(false);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const { alert: notify, confirm: confirmDialog } = useAppDialog();
   const sharedRoom = useOnlineRoom();
+  const { reloadSettings } = useAppSettings();
   const canManageLibrary = !sharedRoom?.room || sharedRoom.room.host;
 
   const { data: songs, error } = usePolling(api.listSongs, 3000, []);
-  useEffect(() => {
-    api
-      .getAppSettings()
-      .then(setAppSettings)
-      .catch(() => {});
-  }, []);
-  useEffect(() => {
-    if (typeof sharedRoom?.roomUi?.query !== "string") return;
-    if (sharedRoom.roomUi.query === query) {
-      applyingRemoteRoomUiRef.current = false;
-      return;
-    }
-    applyingRemoteRoomUiRef.current = true;
-    setQuery(sharedRoom.roomUi.query);
-  }, [sharedRoom?.roomUi?.__eventId]);
-  useEffect(() => {
-    if (!sharedRoom?.room) return;
-    if (applyingRemoteRoomUiRef.current) {
-      applyingRemoteRoomUiRef.current = false;
-      return;
-    }
-    sharedRoom.syncUi({ query });
-  }, [query, sharedRoom?.room]);
-
   const openOnlineRoom = async () => {
-    let settings = appSettings;
+    let settings;
     try {
-      settings = await api.getAppSettings();
-      setAppSettings(settings);
+      settings = await reloadSettings();
     } catch (error) {
       await notify(
         `Не удалось проверить настройки онлайн-режима: ${getErrorMessage(error)}`
@@ -96,96 +74,27 @@ export default function Library({ onOpenSongSettings }) {
     [processingSong?.id]
   );
 
-  const handleAddClick = useCallback(() => fileInputRef.current?.click(), []);
+  const { importFile: handleFileChosen, openFilePicker: handleAddClick } =
+    useLibraryFileImport({
+      fileInputRef,
+      notify,
+      onStarted: setProcessingSong
+    });
 
-  const handleFileChosen = useCallback(
-    async (e) => {
-      const file = e.target.files?.[0];
-      e.target.value = "";
-      if (!file) return;
-      try {
-        const song = await api.addSong(file, file.name.replace(/\.[^.]+$/, ""));
-        await api.processSong(song.id);
-        setProcessingSong(song);
-      } catch (err) {
-        await notify(
-          `Не удалось добавить и запустить обработку песни: ${getErrorMessage(err)}`
-        );
-      }
-    },
-    [notify]
-  );
-
-  const handleDelete = useCallback(
-    async (song) => {
-      if (
-        !(await confirmDialog(
-          `Удалить «${song.title}»? Это удалит все файлы песни.`,
-          "Удалить песню?"
-        ))
-      )
-        return;
-      try {
-        setHiddenSongIds((ids) => new Set(ids).add(song.id));
-        if (recordingsSong?.id === song.id) setRecordingsSong(null);
-        if (processingSong?.id === song.id) setProcessingSong(null);
-        await api.deleteSong(song.id);
-      } catch (err) {
-        setHiddenSongIds((ids) => {
-          const next = new Set(ids);
-          next.delete(song.id);
-          return next;
-        });
-        await notify(`Не удалось удалить: ${getErrorMessage(err)}`);
-      }
-    },
-    [confirmDialog, notify, processingSong?.id, recordingsSong?.id]
-  );
-
-  const handleProcess = useCallback(
-    async (song) => {
-      try {
-        await api.processSong(song.id);
-        setProcessingSong(song);
-      } catch (err) {
-        await notify(`Не удалось запустить обработку: ${getErrorMessage(err)}`);
-      }
-    },
-    [notify]
-  );
-
-  const handleReprocess = useCallback(
-    async (song) => {
-      try {
-        await api.reprocessMelody(song.id);
-        setProcessingSong(song);
-      } catch (err) {
-        await notify(`Не удалось переобработать MIDI: ${getErrorMessage(err)}`);
-      }
-    },
-    [notify]
-  );
-
-  const handleOpenFolder = useCallback(
-    async (song) => {
-      if (!window.electronAPI?.openSongFolder) {
-        await notify("Открытие папки доступно только в установленном приложении.");
-        return;
-      }
-
-      const errorMessage = await window.electronAPI.openSongFolder({
-        path: song.output_dir || "",
-        slug: song.slug || "",
-        title: song.title || "",
-        id: song.id || ""
-      });
-
-      if (errorMessage) {
-        await notify(errorMessage, "Не удалось открыть папку");
-      }
-    },
-    [notify]
-  );
+  const {
+    deleteSong: handleDelete,
+    openSongFolder: handleOpenFolder,
+    processSong: handleProcess,
+    reprocessSong: handleReprocess
+  } = useLibrarySongActions({
+    confirmDialog,
+    notify,
+    processingSongId: processingSong?.id,
+    recordingsSongId: recordingsSong?.id,
+    setHiddenSongIds,
+    setProcessingSong,
+    setRecordingsSong
+  });
 
   const handleDeleteRecording = useCallback(
     async (recording) => {
@@ -218,18 +127,17 @@ export default function Library({ onOpenSongSettings }) {
     room: sharedRoom?.room,
     roomSongs: sharedRoom?.roomUi?.songs
   });
-  const librarySyncSignature = useMemo(
-    () => JSON.stringify(localVisibleSongs),
-    [songs, hiddenSongIds]
-  );
-  useEffect(() => {
-    if (!sharedRoom?.room?.host) return;
-    sharedRoom.syncUi({ songs: localVisibleSongs });
-  }, [
-    librarySyncSignature,
-    sharedRoom?.participants?.length,
-    sharedRoom?.room?.host
-  ]);
+  useLibraryRoomSync({
+    localSongs: localVisibleSongs,
+    participantCount: sharedRoom?.participants?.length,
+    query,
+    room: sharedRoom?.room,
+    roomEventId: sharedRoom?.roomUi?.__eventId,
+    roomQuery: sharedRoom?.roomUi?.query,
+    setQuery,
+    syncUi: sharedRoom.syncUi
+  });
+
   const filtered = filterSongs(visibleSongs, query);
   const readyCount = countReadySongs(visibleSongs);
 
