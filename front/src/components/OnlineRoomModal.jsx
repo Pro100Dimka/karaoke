@@ -60,7 +60,21 @@ export function OnlineRoomModal({ onlineName, onClose }) {
         icon: UsersRound,
         eyebrow: "ОНЛАЙН-КОМНАТА",
         title: "Совместное исполнение",
-        description: "Создайте комнату или подключитесь по коду ведущего."
+        description: "Создайте комнату или подключитесь по коду ведущего.",
+        actions: (
+          <Button
+            variant="primary"
+            disabled={busy || (joinMode && roomId.length < 4)}
+            onClick={() => connect(!joinMode)}
+            className="modal-title-action"
+          >
+            {busy
+              ? "Подключение…"
+              : joinMode
+                ? "Войти"
+                : "Создать комнату"}
+          </Button>
+        )
       }}
     >
       <div className="modal-scroll online-room-modal__content">
@@ -72,13 +86,6 @@ export function OnlineRoomModal({ onlineName, onClose }) {
             </p>
             {error && <p className="karaoke-recording-error">{error}</p>}
             <div className="online-room-actions u-actions-end">
-              <Button
-                variant="primary"
-                disabled={busy}
-                onClick={() => connect(true)}
-              >
-                {busy ? "Подключение…" : "Создать комнату"}
-              </Button>
               <Button
                 variant="ghost"
                 disabled={busy}
@@ -109,13 +116,6 @@ export function OnlineRoomModal({ onlineName, onClose }) {
             />
             {error && <p className="karaoke-recording-error">{error}</p>}
             <div className="online-room-actions u-actions-end">
-              <Button
-                variant="primary"
-                disabled={busy || roomId.length < 4}
-                onClick={() => connect(false)}
-              >
-                {busy ? "Подключение…" : "Войти"}
-              </Button>
               <Button
                 icon={ArrowLeft}
                 variant="ghost"

@@ -43,7 +43,19 @@ export default function ProcessingModal({
         eyebrow: "ОБРАБОТКА ПЕСНИ",
         title: song.title,
         description:
-          "Следите за этапами подготовки и управляйте обработкой песни."
+          "Следите за этапами подготовки и управляйте обработкой песни.",
+        actions: actions.map(([Icon, text, variant, onClick, iconProps]) => (
+          <Button
+            key={text}
+            variant={variant}
+            icon={Icon}
+            iconProps={iconProps}
+            onClick={onClick}
+            className="modal-title-action"
+          >
+            {text}
+          </Button>
+        ))
       }}
     >
       <div className="processing-modal-body modal-scroll">
@@ -65,19 +77,6 @@ export default function ProcessingModal({
             Ошибка обработки: {status.error_message}
           </p>
         )}
-      </div>
-      <div className="processing-modal-actions">
-        {actions.map(([Icon, text, variant, onClick, iconProps]) => (
-          <Button
-            key={text}
-            variant={variant}
-            icon={Icon}
-            iconProps={iconProps}
-            onClick={onClick}
-          >
-            {text}
-          </Button>
-        ))}
       </div>
     </Modal>
   );

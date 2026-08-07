@@ -160,7 +160,16 @@ export default function PerformanceAnalysisModal({
         icon: BarChart3,
         eyebrow: "РЕЗУЛЬТАТ ИСПОЛНЕНИЯ",
         title: "Анализ выступления",
-        description: "Точность нот, ритм и рекомендации по исполнению."
+        description: "Точность нот, ритм и рекомендации по исполнению.",
+        actions: (result || error) ? (
+          <Button
+            variant="primary"
+            onClick={result ? (onDone ?? onClose) : onClose}
+            className="modal-title-action"
+          >
+            {result ? "Готово" : "Закрыть"}
+          </Button>
+        ) : null
       }}
     >
       <VictoryScene />
@@ -170,21 +179,16 @@ export default function PerformanceAnalysisModal({
         )}
 
         {error && (
-          <>
-            <p className="song-lyrics-error">
-              Не удалось выполнить анализ: {error}
-            </p>
-            <Button variant="primary" onClick={onClose}>
-              Закрыть
-            </Button>
-          </>
+          <p className="song-lyrics-error">
+            Не удалось выполнить анализ: {error}
+          </p>
         )}
 
         {result && (
           <>
             <AnalysisSummary result={result} />
             <AudioPlayer src={api.getPerformanceFileUrl(recordingId)} />
-            <div className="performance-analysis-actions">
+            <div className="performance-analysis-actions performance-analysis-actions--secondary">
               <Button
                 icon={Trash2}
                 iconSize={14}
@@ -193,9 +197,6 @@ export default function PerformanceAnalysisModal({
                 disabled={deleting}
               >
                 {deleting ? "Удаляем…" : "Удалить запись"}
-              </Button>
-              <Button variant="primary" onClick={onDone ?? onClose}>
-                Готово
               </Button>
             </div>
           </>

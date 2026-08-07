@@ -70,7 +70,22 @@ export default function SongSettings({ songId, onClose }) {
         icon: Music2,
         eyebrow: "КАРАОКЕ · РЕДАКТОР",
         title: "Настройки песни",
-        description: song.title
+        description: song.title,
+        actions: actions.map(
+          ([Icon, text, variant, onClick, { disabled = false, iconProps } = {}]) => (
+            <Button
+              key={text}
+              icon={Icon}
+              variant={variant}
+              disabled={disabled}
+              iconProps={iconProps}
+              onClick={onClick}
+              className="modal-title-action"
+            >
+              {text}
+            </Button>
+          )
+        )
       }}
     >
       <div className="song-settings-scroll modal-scroll">
@@ -85,28 +100,6 @@ export default function SongSettings({ songId, onClose }) {
             <LyricsEditor lyrics={lyrics} onChange={updateLyricsText} />
           )}
         </div>
-      </div>
-      <div className="song-settings-actions u-actions-end">
-        {actions.map(
-          ([
-            Icon,
-            text,
-            variant,
-            onClick,
-            { disabled = false, iconProps } = {}
-          ]) => (
-            <Button
-              key={text}
-              icon={Icon}
-              variant={variant}
-              disabled={disabled}
-              iconProps={iconProps}
-              onClick={onClick}
-            >
-              {text}
-            </Button>
-          )
-        )}
       </div>
     </Modal>
   );

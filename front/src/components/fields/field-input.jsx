@@ -85,14 +85,18 @@ export default function FieldInput({
     ),
     readonly: <input {...commonProps} value={value ?? ""} readOnly />,
     toggle: (
-      <input
-        id={inputId}
-        type="checkbox"
-        checked={Boolean(value)}
-        disabled={field.disabled}
-        onChange={(event) => onChange(event.target.checked)}
-        onBlur={(event) => onBlur(event.target.checked)}
-      />
+      <span className="app-checkbox">
+        <input
+          id={inputId}
+          className="app-checkbox__input"
+          type="checkbox"
+          checked={Boolean(value)}
+          disabled={field.disabled}
+          onChange={(event) => onChange(event.target.checked)}
+          onBlur={(event) => onBlur(event.target.checked)}
+        />
+        <span className="app-checkbox__box" aria-hidden="true" />
+      </span>
     )
   };
 

@@ -39,26 +39,27 @@ function DialogModal({ dialog, onClose }) {
         icon: Icon,
         eyebrow: dialog.label,
         title: dialog.title,
-        description: dialog.message
-      }}
-    >
-      <div className="app-dialog-body">
-        <div className="app-dialog-actions u-actions-end">
-          {isConfirmation && (
-            <Button variant="ghost" onClick={() => onClose(false)}>
-              {dialog.cancelText}
-            </Button>
-          )}
-
+        description: dialog.message,
+        actions: (
           <Button
             unstyled
-            className={dialog.confirmClassName}
+            className={`${dialog.confirmClassName} modal-title-action`.trim()}
             onClick={() => onClose(true)}
           >
             {dialog.confirmText}
           </Button>
+        )
+      }}
+    >
+      {isConfirmation && (
+        <div className="app-dialog-body">
+          <div className="app-dialog-actions u-actions-end">
+            <Button variant="ghost" onClick={() => onClose(false)}>
+              {dialog.cancelText}
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
     </Modal>
   );
 }
