@@ -1757,26 +1757,6 @@ select:focus,
   opacity: 1;
 }
 
-.library-concert-backdrop::before {
-  content: "";
-  position: absolute;
-  z-index: 1;
-  inset: 0;
-  background:
-    radial-gradient(
-      circle at 50% 12%,
-      transparent 0 20%,
-      color-mix(in srgb, var(--color-bg-deep) 18%, transparent) 52%,
-      color-mix(in srgb, var(--color-bg-deep) 66%, transparent) 100%
-    ),
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--color-bg-deep) 6%, transparent),
-      color-mix(in srgb, var(--color-bg-deep) 18%, transparent) 54%,
-      color-mix(in srgb, var(--color-bg-deep) 72%, transparent)
-    );
-}
-
 .library-stage-lights,
 .library-music-decor {
   position: absolute;
@@ -2610,10 +2590,6 @@ select:focus,
     var(--color-border) 10%,
     transparent
   );
-}
-
-:root[data-theme="light"] .library-concert-backdrop {
-  background: var(--color-highlight);
 }
 
 :root[data-theme="light"] .library-theme-space {
