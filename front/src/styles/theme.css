@@ -245,6 +245,7 @@
     #c10028 93%,
     #8a0016 100%
   );
+  --bg-image: url("../assets/karaoke/library-neon-space.png");
 }
 
 :root[data-theme="light"] {
@@ -476,4 +477,5 @@
     #f69b7f 94%,
     #efb18d 100%
   );
+  --bg-image: url("../assets/karaoke/library-light-space.webp");
 }

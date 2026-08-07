@@ -27,14 +27,14 @@ function MusicObject({ type, parts }) {
 export default function LibraryBackdrop() {
   return (
     <div className="library-concert-backdrop" aria-hidden="true">
-      {BACKGROUNDS.map(([theme, src]) => (
+      {/* {BACKGROUNDS.map(([theme, src]) => (
         <img
           key={theme}
           className={`library-theme-space library-theme-space--${theme}`}
           src={src}
           alt=""
         />
-      ))}
+      ))} */}
       <div className="library-stage-lights">
         <i />
         <i />

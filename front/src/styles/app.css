@@ -751,72 +751,6 @@ svg {
   margin: 0;
 }
 
-/* Legacy semantic aliases kept while page styles migrate to the theme tokens. */
-:root {
-  color-scheme: dark;
-  --color-bg: #090103;
-  --color-bg-deep: #030001;
-  --color-bg-elevated: #150207;
-  --color-surface: rgba(33, 3, 10, 0.76);
-  --color-surface-strong: rgba(48, 5, 15, 0.93);
-  --color-surface-soft: rgba(76, 8, 23, 0.54);
-  --color-surface-hover: rgba(105, 13, 31, 0.68);
-  --color-surface-glass: rgba(40, 4, 13, 0.66);
-  --color-text: #fff8f9;
-  --color-text-soft: #f2d6da;
-  --color-text-muted: #bd8790;
-  --color-text-inverse: #1a0206;
-  --color-primary: #ff405d;
-  --color-primary-hover: #ff6279;
-  --color-primary-strong: #d80b36;
-  --color-secondary: #b7133a;
-  --color-accent: #ff8998;
-  --color-accent-strong: #ff1f48;
-  --color-highlight: #ffd0d6;
-  --color-success: #62e6ad;
-  --color-warning: #ffc778;
-  --color-danger: #ff3b5f;
-  --color-border: rgba(255, 94, 115, 0.3);
-  --color-border-strong: rgba(255, 116, 133, 0.72);
-  --color-border-accent: rgba(255, 42, 77, 0.9);
-  --color-focus: #ffabb6;
-  --gradient-primary: linear-gradient(
-    135deg,
-    #ff8998 0%,
-    #f1284c 44%,
-    #8d0828 100%
-  );
-  --gradient-primary-hover: linear-gradient(
-    135deg,
-    #ffabb5 0%,
-    #ff4867 46%,
-    #b10c34 100%
-  );
-  --gradient-panel: linear-gradient(
-    145deg,
-    rgba(76, 8, 23, 0.8),
-    rgba(18, 1, 6, 0.9)
-  );
-  --gradient-glass: linear-gradient(
-    145deg,
-    rgba(68, 7, 20, 0.72),
-    rgba(18, 1, 7, 0.84)
-  );
-  --gradient-border: linear-gradient(
-    110deg,
-    #ffd0d6,
-    #ff526d 30%,
-    #b30935 64%,
-    #ff8b9a 100%
-  );
-  --gradient-text: linear-gradient(
-    90deg,
-    #ffffff 0%,
-    #ffe4e7 48%,
-    #ffadba 100%
-  );
-}
-
 /* ==================== GLOBAL FOUNDATION AND COMPONENTS ==================== */
 /* Global reset, shared components, application layout and compatibility rules. */
 
@@ -837,7 +771,6 @@ body,
 }
 
 html {
-  background: var(--color-bg-deep);
   font-family: var(--font-sans);
   color: var(--color-text);
   text-rendering: optimizeLegibility;
@@ -850,7 +783,10 @@ body {
   color: var(--color-text);
   font: var(--font-size-md) / var(--line-height-base) var(--font-sans);
   min-height: 100vh;
-  background: var(--color-bg);
+  background-image: var(--bg-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 button,
@@ -1438,7 +1374,6 @@ select:focus,
   padding-block-start: var(--titlebar-height);
   isolation: isolate;
   min-height: 100vh;
-  background: var(--color-bg);
 }
 
 .app-body,
@@ -1796,7 +1731,6 @@ select:focus,
   inset: 0;
   overflow: hidden;
   pointer-events: none;
-  background: var(--color-bg-deep);
 }
 
 .library-theme-space {
@@ -5413,9 +5347,6 @@ select:focus,
 }
 
 /* Light theme preserves the same composition but swaps to pearl/peach glass. */
-[data-theme="light"] .karaoke-performance-stage {
-  background: var(--color-bg);
-}
 
 [data-theme="light"] .karaoke-panoramic-sky {
   filter: saturate(0.92) brightness(1.04);
@@ -6652,7 +6583,6 @@ select:focus,
 .karaoke-performance-stage {
   position: relative;
   overflow: hidden;
-  background: var(--color-bg-deep);
   block-size: calc(100dvh - var(--titlebar-height));
   min-block-size: 36rem;
   isolation: isolate;
@@ -7402,7 +7332,8 @@ select:focus,
     color-mix(in srgb, var(--color-primary-strong) 18%, transparent)
   );
   box-shadow:
-    inset 0 -0.15rem color-mix(in srgb, var(--color-primary-hover) 76%, transparent),
+    inset 0 -0.15rem
+      color-mix(in srgb, var(--color-primary-hover) 76%, transparent),
     0 0 calc(0.8rem + var(--radio-bass, 0) * 1.2rem)
       color-mix(in srgb, var(--color-primary) 38%, transparent);
 }
@@ -7416,22 +7347,30 @@ select:focus,
 }
 
 .library-wave-terrain {
-  filter:
-    brightness(calc(1 + var(--radio-bass, 0) * 0.75))
-    drop-shadow(0 0 calc(var(--radio-bass, 0) * 1.6rem)
-      color-mix(in srgb, var(--color-primary) 68%, transparent));
+  filter: brightness(calc(1 + var(--radio-bass, 0) * 0.75))
+    drop-shadow(
+      0 0 calc(var(--radio-bass, 0) * 1.6rem)
+        color-mix(in srgb, var(--color-primary) 68%, transparent)
+    );
 }
 
 @keyframes radio-button-pulse {
-  to { transform: scale(1.14); filter: drop-shadow(0 0 0.55rem currentColor); }
+  to {
+    transform: scale(1.14);
+    filter: drop-shadow(0 0 0.55rem currentColor);
+  }
 }
 
 @keyframes radio-button-spin {
-  to { transform: rotate(1turn); }
+  to {
+    transform: rotate(1turn);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .title-bar__radio svg { animation: none !important; }
+  .title-bar__radio svg {
+    animation: none !important;
+  }
 }
 
 .title-bar__radio-wrap {
@@ -7459,7 +7398,10 @@ select:focus,
   visibility: hidden;
   transform: translateY(-0.35rem);
   pointer-events: none;
-  transition: opacity var(--duration-fast), transform var(--duration-fast), visibility var(--duration-fast);
+  transition:
+    opacity var(--duration-fast),
+    transform var(--duration-fast),
+    visibility var(--duration-fast);
   z-index: 1010;
 }
 
@@ -7515,20 +7457,16 @@ select:focus,
     #000 91%,
     transparent 100%
   );
-  filter:
-    contrast(1.36)
-    brightness(calc(0.96 + var(--radio-bass, 0) * 0.68))
+  filter: contrast(1.36) brightness(calc(0.96 + var(--radio-bass, 0) * 0.68))
     drop-shadow(
       0 0 calc(0.08rem + var(--radio-bass, 0) * 0.28rem)
-      rgba(255, 255, 255, calc(0.12 + var(--radio-bass, 0) * 0.22))
+        rgba(255, 255, 255, calc(0.12 + var(--radio-bass, 0) * 0.22))
     );
 }
 
 :root[data-theme="light"] .library-wave-terrain {
   opacity: 0.62;
   mix-blend-mode: multiply;
-  filter:
-    grayscale(1)
-    contrast(1.45)
+  filter: grayscale(1) contrast(1.45)
     brightness(calc(0.72 + var(--radio-bass, 0) * 0.34));
 }
