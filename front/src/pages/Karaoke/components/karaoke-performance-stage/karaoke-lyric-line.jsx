@@ -26,8 +26,11 @@ function LyricWord({ word, currentTime }) {
 }
 
 export default function KaraokeLyricLine({ line, currentTime, className }) {
+  const textLength = Array.from(line?.text || "").length;
+  const scale = Math.max(0.62, Math.min(1, 34 / Math.max(34, textLength)));
+
   return (
-    <div className={className}>
+    <div className={className} style={{ "--lyric-line-scale": scale }}>
       {buildLyricWordTimings(line).map((word, index) => (
         <LyricWord
           key={`${word.text}-${index}`}

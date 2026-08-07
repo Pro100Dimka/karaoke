@@ -1,6 +1,6 @@
 import { Search } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { OnlineRoomModal } from "../../components/OnlineRoomModal";
 import { Card, Panel } from "../../components/ui";
@@ -27,17 +27,37 @@ import {
 } from "./utils";
 
 export default function Library({ onOpenSongSettings }) {
+  const location = useLocation();
   const [query, setQuery] = useState("");
   const [recordingsSong, setRecordingsSong] = useState(null);
   const [processingSong, setProcessingSong] = useState(null);
-  const [analysisRecordingId, setAnalysisRecordingId] = useState(null);
+  const [analysisRecordingId, setAnalysisRecordingId] = useState(
+    () => location.state?.analysisRecordingId || null
+  );
   const [hiddenSongIds, setHiddenSongIds] = useState(() => new Set());
   const [onlineRoomOpen, setOnlineRoomOpen] = useState(false);
+  const returningFromKaraoke = Boolean(location.state?.fromKaraokeFade);
+  const [karaokeTransitioning, setKaraokeTransitioning] = useState(returningFromKaraoke);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const { alert: notify, confirm: confirmDialog } = useAppDialog();
   const sharedRoom = useOnlineRoom();
   const { reloadSettings, settings } = useAppSettings();
+
+  useEffect(() => {
+    if (location.state?.analysisRecordingId) {
+      setAnalysisRecordingId(location.state.analysisRecordingId);
+    }
+  }, [location.state?.analysisRecordingId]);
+
+  useEffect(() => {
+    if (!returningFromKaraoke) return undefined;
+
+    // Library is mounted behind a black overlay. Let the analysis modal and
+    // page render under that blackout, then reveal everything together.
+    const timer = window.setTimeout(() => setKaraokeTransitioning(false), 90);
+    return () => window.clearTimeout(timer);
+  }, [returningFromKaraoke]);
 
   const canManageLibrary = !sharedRoom?.room || sharedRoom.room.host;
   const { data: songs, error } = usePolling(api.listSongs, 3000, []);
@@ -190,6 +210,7 @@ export default function Library({ onOpenSongSettings }) {
               onDelete={handleDelete}
               onOpenFolder={handleOpenFolder}
               onOpenKaraoke={async (selectedSong) => {
+                if (karaokeTransitioning) return;
                 try {
                   if (sharedRoom?.room) {
                     const readyLocally = await sharedRoom.openKaraoke(
@@ -197,10 +218,17 @@ export default function Library({ onOpenSongSettings }) {
                     );
                     if (!readyLocally) return;
                   }
+
+                  // Fade the Library itself to black before route navigation.
+                  // Karaoke starts already black, so the route switch is never
+                  // visible as a hard cut.
+                  setKaraokeTransitioning(true);
+                  await new Promise((resolve) => window.setTimeout(resolve, 920));
                   navigate("/karaoke", {
-                    state: { songId: selectedSong.id }
+                    state: { songId: selectedSong.id, autoPlay: true }
                   });
                 } catch (openError) {
+                  setKaraokeTransitioning(false);
                   await notify(
                     `Не удалось открыть песню: ${getErrorMessage(openError)}`
                   );
@@ -220,6 +248,10 @@ export default function Library({ onOpenSongSettings }) {
           )}
         </div>
       </Panel>
+      <div
+        className={`library-route-blackout ${karaokeTransitioning ? "is-visible" : ""}`}
+        aria-hidden="true"
+      />
       {onlineRoomOpen && (
         <OnlineRoomModal
           onlineName={settings?.online_name?.trim() || ""}

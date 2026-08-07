@@ -35,11 +35,8 @@ function EffectPresets({ activePreset, onApply }) {
 }
 
 function ToolTabs({
-  microphoneOpen,
-  microphoneSettingsView,
   showNotes,
   showLyrics,
-  onOpenEffects,
   onToggleNotes,
   onToggleLyrics,
   onOpenAppSettings,
@@ -47,13 +44,6 @@ function ToolTabs({
   onAutoHideChange
 }) {
   const tools = [
-    [
-      "effects",
-      AudioLines,
-      "Эффекты",
-      microphoneOpen && microphoneSettingsView === "effects",
-      onOpenEffects
-    ],
     ["notes", AudioLines, "Ноты", showNotes, onToggleNotes],
     ["lyrics", Type, "Текст", showLyrics, onToggleLyrics],
     [

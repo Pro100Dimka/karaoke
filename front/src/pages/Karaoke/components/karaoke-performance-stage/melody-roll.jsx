@@ -7,9 +7,9 @@ import {
 
 const VIEW = {
   width: 1200,
-  height: 220,
-  labelWidth: 58,
-  keyboardWidth: 40,
+  height: 288,
+  labelWidth: 0,
+  keyboardWidth: 74,
   seconds: 10
 };
 
@@ -58,13 +58,12 @@ export default function MelodyRoll({
   const phraseMax = visibleMidiValues.length
     ? Math.max(...visibleMidiValues)
     : songMaxMidi;
-  const viewportSpan = Math.min(
-    songMaxMidi - songMinMidi + 1,
-    Math.max(10, phraseMax - phraseMin + 4)
-  );
+  // Always show exactly two chromatic octaves (24 semitones). This keeps the
+  // piano scale stable instead of zooming in/out from phrase to phrase.
+  const viewportSpan = 24;
   const phraseCenter = (phraseMin + phraseMax) / 2;
-  let minMidi = Math.floor(phraseCenter - viewportSpan / 2);
-  minMidi = clamp(minMidi, songMinMidi, songMaxMidi - viewportSpan + 1);
+  let minMidi = Math.round(phraseCenter - (viewportSpan - 1) / 2);
+  minMidi = clamp(minMidi, 0, 127 - viewportSpan + 1);
   const maxMidi = minMidi + viewportSpan - 1;
   const pitchRange = maxMidi - minMidi + 1;
   const rowHeight = height / pitchRange;
@@ -108,44 +107,17 @@ export default function MelodyRoll({
         {/* Keep only the label + piano-key area opaque. The actual note lane is
             transparent so the karaoke scene remains visible behind the notes. */}
         <rect
+          className="piano-roll-keyboard-bed"
           x="0"
           y="0"
           width={noteLaneStart}
           height={height}
           fill="url(#piano-roll-bg)"
+          opacity=".32"
         />
 
-        {/* Pitch lanes and note labels. The keyboard itself is rendered separately
-            below so black keys can overlap the white keys like a real piano. */}
-        {lanes.map((midi) => {
-          const isActive = activeMidi === midi;
-          const laneY = y(midi);
-          return (
-            <g key={`lane-${midi}`}>
-              {isActive && (
-                <rect
-                  x="0"
-                  y={laneY}
-                  width={labelWidth}
-                  height={rowHeight}
-                  fill="#d8173f"
-                  opacity=".9"
-                />
-              )}
-              <text
-                x="18"
-                y={laneY + rowHeight / 2 + Math.min(4, rowHeight * 0.24)}
-                fill={isActive ? "#fff1f4" : "#b9b8c4"}
-                fontSize={Math.min(12, Math.max(8.5, rowHeight * 0.58))}
-                fontWeight={isActive ? "800" : "650"}
-                fontFamily="Inter, Segoe UI, sans-serif"
-              >
-                {midiToWesternNote(midi)}
-              </text>
-            </g>
-          );
-        })}
-
+        {/* The note names live directly on the piano keys. No separate label
+            column is rendered, so the keyboard reads as one continuous instrument. */}
         {/* Real piano-style keyboard: a continuous bed of white keys first,
             then shorter black keys layered on top at C#, D#, F#, G# and A#. */}
         {lanes
@@ -172,18 +144,34 @@ export default function MelodyRoll({
               : Math.min(height, center + rowHeight);
             const isActive = activeMidi === midi;
 
+            const keyTop = top + 0.35;
+            const keyHeight = Math.max(2, bottom - top - 0.7);
             return (
-              <rect
-                key={`white-key-${midi}`}
-                x={labelWidth}
-                y={top + 0.35}
-                width={keyboardWidth}
-                height={Math.max(2, bottom - top - 0.7)}
-                rx="1.2"
-                fill={isActive ? "#ed214b" : "#dedde5"}
-                stroke={isActive ? "#ff6b84" : "#20202b"}
-                strokeWidth=".85"
-              />
+              <g key={`white-key-${midi}`}>
+                <rect
+                  x={labelWidth}
+                  y={keyTop}
+                  width={keyboardWidth}
+                  height={keyHeight}
+                  rx="1.2"
+                  fill={isActive ? "#ed214b" : "#f4f3f7"}
+                  fillOpacity={isActive ? ".72" : ".12"}
+                  stroke={isActive ? "#ff6b84" : "#ffffff"}
+                  strokeOpacity={isActive ? ".72" : ".16"}
+                  strokeWidth=".8"
+                />
+                <text
+                  x={keyboardWidth - 8}
+                  y={keyTop + keyHeight / 2 + Math.min(4, keyHeight * 0.18)}
+                  textAnchor="end"
+                  fill={isActive ? "#fff" : "rgba(255,255,255,.72)"}
+                  fontSize={Math.min(12, Math.max(8, keyHeight * 0.38))}
+                  fontWeight={isActive ? "850" : "700"}
+                  fontFamily="Inter, Segoe UI, sans-serif"
+                >
+                  {midiToWesternNote(midi)}
+                </text>
+              </g>
             );
           })}
 
@@ -193,18 +181,34 @@ export default function MelodyRoll({
             const center = y(midi) + rowHeight / 2;
             const blackHeight = Math.max(4, rowHeight * 0.72);
             const isActive = activeMidi === midi;
+            const keyY = center - blackHeight / 2;
+            const keyWidth = keyboardWidth * 0.66;
             return (
-              <rect
-                key={`black-key-${midi}`}
-                x={labelWidth}
-                y={center - blackHeight / 2}
-                width={keyboardWidth * 0.62}
-                height={blackHeight}
-                rx="1"
-                fill={isActive ? "#f3234c" : "#07070e"}
-                stroke={isActive ? "#ff7188" : "#262531"}
-                strokeWidth=".85"
-              />
+              <g key={`black-key-${midi}`}>
+                <rect
+                  x={labelWidth}
+                  y={keyY}
+                  width={keyWidth}
+                  height={blackHeight}
+                  rx="1"
+                  fill={isActive ? "#f3234c" : "#05050b"}
+                  fillOpacity={isActive ? ".76" : ".32"}
+                  stroke={isActive ? "#ff7188" : "#ffffff"}
+                  strokeOpacity={isActive ? ".76" : ".12"}
+                  strokeWidth=".8"
+                />
+                <text
+                  x={keyWidth - 6}
+                  y={keyY + blackHeight / 2 + Math.min(3.5, blackHeight * 0.2)}
+                  textAnchor="end"
+                  fill={isActive ? "#fff" : "rgba(255,255,255,.82)"}
+                  fontSize={Math.min(10.5, Math.max(7.5, blackHeight * 0.46))}
+                  fontWeight="800"
+                  fontFamily="Inter, Segoe UI, sans-serif"
+                >
+                  {midiToWesternNote(midi)}
+                </text>
+              </g>
             );
           })}
 

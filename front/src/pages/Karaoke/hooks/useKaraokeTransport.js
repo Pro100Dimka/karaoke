@@ -65,6 +65,40 @@ export default function useKaraokeTransport({
     silenceMelodyGuide();
   };
 
+  const preparePlayback = async () => {
+    const instr = instrumentalRef.current;
+    const voc = vocalsRef.current;
+    if (!instr || !voc || !song?.id || recordingSessionRef.current) return true;
+
+    // Warm up the backend recording session while the cinematic intro is
+    // still on screen. The session is paused immediately, so actual recording
+    // starts only together with playback. This removes the visible delay after
+    // the blackout has fully revealed the scene.
+    try {
+      const session = await api.startRecording(
+        song.id,
+        instr.currentTime,
+        playbackGain(musicVolume),
+        microphoneVolume,
+        microphoneEffects.reverb,
+        microphoneEffects.echo,
+        microphoneEffects.delay
+      );
+      const sessionId = session?.recording_session_id;
+      if (!sessionId) throw new Error("Backend не вернул идентификатор записи");
+      await api.pauseRecording(sessionId).catch(() => {});
+      recordingSessionRef.current = sessionId;
+      setRecordingSessionId(sessionId);
+      setRecordingError(null);
+      return true;
+    } catch (error) {
+      setRecordingError(
+        `Не удалось подготовить запись: ${getErrorMessage(error, "неизвестная ошибка")}`
+      );
+      return false;
+    }
+  };
+
   const togglePlay = async ({ broadcast = true, forcePlaying = null } = {}) => {
     const instr = instrumentalRef.current;
     const voc = vocalsRef.current;
@@ -277,5 +311,5 @@ export default function useKaraokeTransport({
     togglePlayRef
   ]);
 
-  return { returnToLibrary, seekTo, skip, stop, togglePlay };
+  return { preparePlayback, returnToLibrary, seekTo, skip, stop, togglePlay };
 }

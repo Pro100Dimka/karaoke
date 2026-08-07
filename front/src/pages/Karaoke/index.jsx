@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, Radio, SlidersHorizontal } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
+import { IconButton } from "../../components/ui";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import { useRadio } from "../../contexts/radio";
 import { usePolling } from "../../hooks/usePolling";
@@ -37,7 +38,13 @@ import { getMicrophoneLevel } from "./utils/transport";
 
 export default function Karaoke({ onOpenAppSettings }) {
   const onlineRoom = useOnlineRoom();
-  const { setRecordingActive } = useRadio();
+  const {
+    isPlaying: isRadioPlaying,
+    setRecordingActive,
+    toggle: toggleRadio,
+    turnOff: turnOffRadio,
+    turnOn: turnOnRadio
+  } = useRadio();
   const location = useLocation();
   const navigate = useNavigate();
   const { data: songs } = usePolling(api.listSongs, 15000, []);
@@ -53,6 +60,8 @@ export default function Karaoke({ onOpenAppSettings }) {
   const youTubeClipRef = useRef(null);
   const sceneVideoRef = useRef(null);
   const sceneTransitionRef = useRef(false);
+  const resumeRadioOnPauseRef = useRef(false);
+  const hasStartedPlaybackRef = useRef(false);
   const stageActionTimerRef = useRef(null);
   const containerRef = useRef(null);
 
@@ -82,19 +91,37 @@ export default function Karaoke({ onOpenAppSettings }) {
   // сдвиг тональности звука — это отдельная задача.
   const [recordingSessionId, setRecordingSessionId] = useState(null);
   const [analysisRecordingId, setAnalysisRecordingId] = useState(null);
+  const analysisRecordingIdRef = useRef(null);
+  const updateAnalysisRecordingId = useCallback((value) => {
+    if (typeof value === "function") {
+      setAnalysisRecordingId((previous) => {
+        const next = value(previous);
+        analysisRecordingIdRef.current = next;
+        return next;
+      });
+      return;
+    }
+    analysisRecordingIdRef.current = value;
+    setAnalysisRecordingId(value);
+  }, []);
   const [microphoneOpen, setMicrophoneOpen] = useState(false);
   const [microphoneSettingsView, setMicrophoneSettingsView] = useState("music");
   const [recordingError, setRecordingError] = useState(null);
   const [effectPreset, setEffectPreset] = useState("studio");
 
   useEffect(() => {
-    setRecordingActive(Boolean(recordingSessionId));
+    // A paused recording session must not block the background radio. Only
+    // suspend radio output while karaoke playback is actually running.
+    setRecordingActive(Boolean(recordingSessionId) && isPlaying);
     return () => setRecordingActive(false);
-  }, [recordingSessionId, setRecordingActive]);
+  }, [isPlaying, recordingSessionId, setRecordingActive]);
   const [autoHideConsole, setAutoHideConsole] = useState(true);
   const [stageActionsVisible, setStageActionsVisible] = useState(true);
-  const [sceneBlackout, setSceneBlackout] = useState(false);
+  const autoStartRequested = Boolean(location.state?.autoPlay);
+  const [sceneBlackout, setSceneBlackout] = useState(autoStartRequested);
   const [sceneIntroVisible, setSceneIntroVisible] = useState(false);
+  const [sceneTransitioning, setSceneTransitioning] = useState(autoStartRequested);
+  const autoStartedSongRef = useRef(null);
   const {
     controlsVisible,
     hideControls,
@@ -191,6 +218,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     setIsPlaying(false);
     setCurrentTime(0);
     setDuration(0);
+    hasStartedPlaybackRef.current = false;
   }, [song?.id]);
 
   const lyrics = useMemo(() => normalizeLyrics(result?.lyrics_sync), [result]);
@@ -250,7 +278,7 @@ export default function Karaoke({ onOpenAppSettings }) {
       monitoringEnabled
     });
 
-  const { returnToLibrary, seekTo, skip, stop, togglePlay } =
+  const { preparePlayback, returnToLibrary, seekTo, skip, stop, togglePlay } =
     useKaraokeTransport({
       browserMonitorRef,
       currentTime,
@@ -265,7 +293,7 @@ export default function Karaoke({ onOpenAppSettings }) {
       onlineRoom,
       recordingSessionId,
       sendYouTubeCommand,
-      setAnalysisRecordingId,
+      setAnalysisRecordingId: updateAnalysisRecordingId,
       setCurrentTime,
       setIsPlaying,
       setMonitoringEnabled,
@@ -286,12 +314,44 @@ export default function Karaoke({ onOpenAppSettings }) {
     []
   );
 
+  const preloadSongMedia = useCallback(async () => {
+    const media = [instrumentalRef.current, vocalsRef.current].filter(Boolean);
+    await Promise.all(
+      media.map((element) => {
+        if (element.readyState >= 3) return Promise.resolve();
+        element.load?.();
+        return new Promise((resolve) => {
+          let settled = false;
+          const finish = () => {
+            if (settled) return;
+            settled = true;
+            element.removeEventListener("canplay", finish);
+            element.removeEventListener("error", finish);
+            resolve();
+          };
+          element.addEventListener("canplay", finish, { once: true });
+          element.addEventListener("error", finish, { once: true });
+          window.setTimeout(finish, 2200);
+        });
+      })
+    );
+  }, []);
+
   const runSceneTransition = useCallback(
-    async (action, { showIntro = false, actionAfterReveal = false } = {}) => {
+    async (
+      action,
+      { showIntro = false, actionAfterReveal = false, prepareAction = null } = {}
+    ) => {
       if (sceneTransitionRef.current) return false;
       sceneTransitionRef.current = true;
+      setSceneTransitioning(true);
+      hideControls();
+      setStageActionsVisible(false);
       setSceneIntroVisible(false);
       setSceneBlackout(true);
+      const preparation = prepareAction
+        ? Promise.resolve().then(prepareAction).catch(() => false)
+        : Promise.resolve(true);
 
       try {
         await waitForScene(420);
@@ -304,12 +364,16 @@ export default function Karaoke({ onOpenAppSettings }) {
           await waitForScene(180);
         }
 
+        await preparation;
+
         if (!actionAfterReveal) {
           await Promise.resolve(action());
         }
 
         setSceneBlackout(false);
-        await waitForScene(560);
+        // The reveal is deliberately cinematic. Playback begins only after the
+        // scene is fully visible, never while the screen is still fading out.
+        await waitForScene(2480);
 
         if (actionAfterReveal) {
           await Promise.resolve(action());
@@ -319,26 +383,136 @@ export default function Karaoke({ onOpenAppSettings }) {
         setSceneBlackout(false);
         await waitForScene(120);
         sceneTransitionRef.current = false;
+        setSceneTransitioning(false);
       }
       return true;
     },
-    [randomizeSceneVideo, waitForScene]
+    [hideControls, randomizeSceneVideo, waitForScene]
   );
 
-  const handleTogglePlay = useCallback(() => {
-    if (isPlaying) return togglePlay();
-    return runSceneTransition(() => togglePlay(), {
-      showIntro: true,
-      actionAfterReveal: true
+  const startSongWithIntro = useCallback(() => {
+    resumeRadioOnPauseRef.current = isRadioPlaying;
+    turnOffRadio({ remember: false });
+    return runSceneTransition(
+      async () => {
+        const started = await togglePlay({ forcePlaying: true });
+        if (started) hasStartedPlaybackRef.current = true;
+        return started;
+      },
+      {
+        showIntro: true,
+        actionAfterReveal: true,
+        prepareAction: () => Promise.all([preloadSongMedia(), preparePlayback()])
+      }
+    );
+  }, [
+    isRadioPlaying,
+    preloadSongMedia,
+    preparePlayback,
+    runSceneTransition,
+    togglePlay,
+    turnOffRadio
+  ]);
+
+  const handleTogglePlay = useCallback(async () => {
+    if (isPlaying) {
+      const paused = await togglePlay({ forcePlaying: false });
+      if (paused && resumeRadioOnPauseRef.current) {
+        // Release the radio synchronously instead of waiting for the React
+        // effect that follows setIsPlaying(false).
+        setRecordingActive(false);
+        turnOnRadio({ remember: false, fadeIn: true }).catch(() => {});
+      }
+      return paused;
+    }
+
+    // Resume is immediate: no cinematic blackout is repeated after Pause.
+    if (hasStartedPlaybackRef.current) {
+      turnOffRadio({ remember: false });
+      return togglePlay({ forcePlaying: true });
+    }
+
+    return startSongWithIntro();
+  }, [
+    isPlaying,
+    setRecordingActive,
+    startSongWithIntro,
+    togglePlay,
+    turnOffRadio,
+    turnOnRadio
+  ]);
+
+  const navigateToLibraryFromBlackout = useCallback((analysisId = null) => {
+    navigate("/", {
+      replace: true,
+      state: {
+        fromKaraokeFade: true,
+        analysisRecordingId: analysisId || null
+      }
     });
-  }, [isPlaying, runSceneTransition, togglePlay]);
+  }, [navigate]);
 
-  const handleStop = useCallback(
-    () => runSceneTransition(() => stop()),
-    [runSceneTransition, stop]
-  );
+  const handleStop = useCallback(async () => {
+    if (sceneTransitionRef.current) return false;
 
-  playbackEndedRef.current = () => stop({ broadcast: true });
+    sceneTransitionRef.current = true;
+    setSceneTransitioning(true);
+    hideControls();
+    setStageActionsVisible(false);
+    setSceneIntroVisible(false);
+    setSceneBlackout(true);
+
+    // Fade the live scene out first. Saving the take and starting analysis then
+    // happens while the screen is already black, so the end of a performance
+    // feels like one continuous transition instead of a hard UI change.
+    await waitForScene(430);
+
+    const stopped = await stop();
+    if (stopped) hasStartedPlaybackRef.current = false;
+
+    const analysisId = analysisRecordingIdRef.current;
+
+    // Switch routes while the stage is fully black. Library receives the
+    // recording id and opens the analysis modal there, so the user is already
+    // back in Library underneath the result instead of being stranded on the
+    // Karaoke route until the modal is closed.
+    navigateToLibraryFromBlackout(analysisId);
+    return stopped;
+  }, [hideControls, navigateToLibraryFromBlackout, stop, waitForScene]);
+
+  useEffect(() => {
+    if (!autoStartRequested || !song?.id || autoStartedSongRef.current === song.id) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    let attempts = 0;
+    let timerId = null;
+
+    const tryAutoStart = () => {
+      if (cancelled) return;
+      if (instrumentalRef.current && vocalsRef.current) {
+        autoStartedSongRef.current = song.id;
+        startSongWithIntro();
+        return;
+      }
+      attempts += 1;
+      if (attempts < 40) {
+        timerId = window.setTimeout(tryAutoStart, 120);
+      } else {
+        setSceneBlackout(false);
+        setSceneTransitioning(false);
+      }
+    };
+
+    timerId = window.setTimeout(tryAutoStart, 80);
+    return () => {
+      cancelled = true;
+      if (timerId) window.clearTimeout(timerId);
+    };
+  }, [autoStartRequested, song?.id, startSongWithIntro]);
+
+  playbackEndedRef.current = () => handleStop();
 
   useKaraokeHotkeys({
     currentTime,
@@ -392,8 +566,9 @@ export default function Karaoke({ onOpenAppSettings }) {
   return (
     <div
       ref={containerRef}
-      className={`karaoke-stage ${isPlaying ? "karaoke-is-playing" : ""} ${!controlsVisible ? "karaoke-ui-hidden" : ""}`}
+      className={`karaoke-stage ${isPlaying ? "karaoke-is-playing" : ""} ${!controlsVisible || sceneTransitioning ? "karaoke-ui-hidden" : ""}`}
       onMouseMove={() => {
+        if (sceneTransitioning) return;
         revealStageActions();
         revealControls();
       }}
@@ -437,42 +612,54 @@ export default function Karaoke({ onOpenAppSettings }) {
       {analysisRecordingId && (
         <PerformanceAnalysisModal
           recordingId={analysisRecordingId}
-          onClose={() => setAnalysisRecordingId(null)}
+          onClose={() => {
+            updateAnalysisRecordingId(null);
+            navigateToLibraryFromBlackout();
+          }}
           onDone={() => {
-            setAnalysisRecordingId(null);
-            navigate("/");
+            updateAnalysisRecordingId(null);
+            navigateToLibraryFromBlackout();
           }}
           onDeleted={() => {
-            setAnalysisRecordingId(null);
-            navigate("/");
+            updateAnalysisRecordingId(null);
+            navigateToLibraryFromBlackout();
           }}
         />
       )}
 
       <div
-        className={`karaoke-stage-actions ${stageActionsVisible ? "is-visible" : ""}`}
+        className={`karaoke-stage-actions ${stageActionsVisible && !sceneTransitioning ? "is-visible" : ""}`}
         aria-label="Навигация караоке"
       >
-        <button
-          type="button"
+        <IconButton
+          unstyled
           className="karaoke-stage-action"
+          icon={ArrowLeft}
+          size={25}
+          label="Назад в библиотеку"
           onClick={returnToLibrary}
-          title="Назад в библиотеку"
-        >
-          <ArrowLeft size={18} />
-          <span>Назад</span>
-        </button>
+        />
         {!autoHideConsole && (
-          <button
-            type="button"
+          <IconButton
+            unstyled
             className={`karaoke-stage-action ${controlsVisible ? "is-active" : ""}`}
+            icon={SlidersHorizontal}
+            size={25}
+            label={controlsVisible ? "Скрыть консоль" : "Показать консоль"}
             aria-pressed={controlsVisible}
-            onClick={showControls}
-            title="Показать консоль"
-          >
-            <SlidersHorizontal size={18} />
-            <span>Консоль</span>
-          </button>
+            onClick={controlsVisible ? hideControls : showControls}
+          />
+        )}
+        {!isPlaying && (
+          <IconButton
+            unstyled
+            className={`karaoke-stage-action karaoke-stage-radio ${isRadioPlaying ? "is-active" : ""}`}
+            icon={Radio}
+            size={24}
+            label={isRadioPlaying ? "Выключить радио" : "Включить радио"}
+            aria-pressed={isRadioPlaying}
+            onClick={toggleRadio}
+          />
         )}
       </div>
 
@@ -542,10 +729,6 @@ export default function Karaoke({ onOpenAppSettings }) {
         onKeyShiftChange={setKeyShift}
         microphoneOpen={microphoneOpen}
         microphoneSettingsView={microphoneSettingsView}
-        onOpenEffects={() => {
-          setMicrophoneSettingsView("effects");
-          setMicrophoneOpen(true);
-        }}
         showNotes={showNotes}
         onToggleNotes={() => setShowNotes((value) => !value)}
         showLyrics={showLyrics}
