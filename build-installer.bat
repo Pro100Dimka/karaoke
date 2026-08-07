@@ -1,23 +1,6 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
-rem ============================================================
-rem CLOSE RUNNING APPLICATION BEFORE BUILD
-rem ============================================================
 
-echo.
-echo Closing running A^&D Voice and Electron processes...
-
-rem Kill the packaged application together with all child processes.
-taskkill /F /T /IM "A&D Voice.exe" >nul 2>&1
-
-rem Kill development Electron instances as well.
-taskkill /F /T /IM "electron.exe" >nul 2>&1
-
-rem Give Windows time to release app.asar handles.
-timeout /t 3 /nobreak >nul
-
-echo Running application processes closed.
-echo.
 title A^&D Voice - Complete Offline Installer Builder
 
 rem ============================================================
@@ -71,6 +54,7 @@ set "ROOT=%~dp0"
 set "BACKEND=%ROOT%backend"
 set "FRONTEND=%ROOT%front"
 set "RELEASE=%ROOT%release"
+set "KARAOKE_RELEASE=%RELEASE%"
 
 set "UNPACKED=%RELEASE%\win-unpacked"
 set "INSTALLER_DIR=%RELEASE%\installer"
@@ -257,18 +241,54 @@ rem ============================================================
 echo.
 echo [0/6] Closing old A^&D Voice build processes...
 
-taskkill /F /IM KaraokeBackend.exe >nul 2>&1
-taskkill /F /IM KaraokeAudioMonitor.exe >nul 2>&1
-taskkill /F /IM KaraokeAsioBridge.exe >nul 2>&1
-taskkill /F /IM electron.exe >nul 2>&1
-taskkill /F /IM makensis.exe >nul 2>&1
-taskkill /F /IM ISCC.exe >nul 2>&1
-taskkill /F /IM ffmpeg.exe >nul 2>&1
+rem Close the packaged application and all known helper processes.
+taskkill /F /T /IM "%APP_EXE%" >nul 2>&1
+taskkill /F /T /IM KaraokeBackend.exe >nul 2>&1
+taskkill /F /T /IM KaraokeAudioMonitor.exe >nul 2>&1
+taskkill /F /T /IM KaraokeAsioBridge.exe >nul 2>&1
+taskkill /F /T /IM electron.exe >nul 2>&1
+taskkill /F /T /IM node.exe >nul 2>&1
+taskkill /F /T /IM makensis.exe >nul 2>&1
+taskkill /F /T /IM ISCC.exe >nul 2>&1
+taskkill /F /T /IM ffmpeg.exe >nul 2>&1
 
-timeout /t 1 /nobreak >nul
+rem Close any executable that is physically running from the old release tree.
+if exist "%RELEASE%\" (
+    powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+        "$release = [IO.Path]::GetFullPath($env:KARAOKE_RELEASE);" ^
+        "Get-Process -ErrorAction SilentlyContinue | ForEach-Object {" ^
+        "  try {" ^
+        "    $path = $_.Path;" ^
+        "    if ($path) {" ^
+        "      $full = [IO.Path]::GetFullPath($path);" ^
+        "      if ($full.StartsWith($release, [StringComparison]::OrdinalIgnoreCase)) {" ^
+        "        Write-Host ('  Closing PID ' + $_.Id + ': ' + $_.ProcessName);" ^
+        "        Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue;" ^
+        "      }" ^
+        "    }" ^
+        "  } catch {}" ^
+        "}"
+)
+
+rem Also close helper processes whose command line explicitly references release.
+if exist "%RELEASE%\" (
+    powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+        "$release = [IO.Path]::GetFullPath($env:KARAOKE_RELEASE);" ^
+        "$self = $PID;" ^
+        "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ForEach-Object {" ^
+        "  if ($_.ProcessId -ne $self -and $_.CommandLine -and $_.CommandLine.IndexOf($release, [StringComparison]::OrdinalIgnoreCase) -ge 0) {" ^
+        "    try {" ^
+        "      Write-Host ('  Closing PID ' + $_.ProcessId + ': ' + $_.Name);" ^
+        "      Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue;" ^
+        "    } catch {}" ^
+        "  }" ^
+        "}"
+)
+
+rem Windows sometimes keeps app.asar/DLL handles alive briefly after termination.
+timeout /t 3 /nobreak >nul
 
 exit /b 0
-
 
 rem ============================================================
 rem PREPARE OUTPUT FOR SELECTED MODE
@@ -882,23 +902,70 @@ exit /b 1
 
 
 :remove_directory
-if not exist "%~1\" (
+set "REMOVE_TARGET=%~1"
+
+if not exist "%REMOVE_TARGET%\" (
     exit /b 0
 )
 
-rmdir /S /Q "%~1"
+echo Removing:
+echo   %REMOVE_TARGET%
 
-if exist "%~1\" (
-    echo.
-    echo [ERROR] Could not remove directory:
-    echo   %~1
-    echo.
-    echo Close applications or Explorer windows using this directory.
-    exit /b 1
+rem Retry because Windows can release app.asar and DLL handles asynchronously.
+for /L %%I in (1,1,10) do (
+    rmdir /S /Q "%REMOVE_TARGET%" >nul 2>&1
+
+    if not exist "%REMOVE_TARGET%\" (
+        exit /b 0
+    )
+
+    echo   Directory is still locked. Retry %%I/10...
+
+    rem If this is the Electron release tree, stop old app processes again.
+    if /I "%REMOVE_TARGET%"=="%RELEASE%" (
+        taskkill /F /T /IM "%APP_EXE%" >nul 2>&1
+        taskkill /F /T /IM electron.exe >nul 2>&1
+        taskkill /F /T /IM node.exe >nul 2>&1
+        taskkill /F /T /IM KaraokeBackend.exe >nul 2>&1
+        taskkill /F /T /IM KaraokeAudioMonitor.exe >nul 2>&1
+        taskkill /F /T /IM KaraokeAsioBridge.exe >nul 2>&1
+
+        powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+            "$release = [IO.Path]::GetFullPath($env:KARAOKE_RELEASE);" ^
+            "Get-Process -ErrorAction SilentlyContinue | ForEach-Object {" ^
+            "  try {" ^
+            "    $path = $_.Path;" ^
+            "    if ($path -and [IO.Path]::GetFullPath($path).StartsWith($release, [StringComparison]::OrdinalIgnoreCase)) {" ^
+            "      Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue;" ^
+            "    }" ^
+            "  } catch {}" ^
+            "}"
+
+        rem Explorer can keep a handle to app.asar when release was opened in a window.
+        if %%I EQU 3 (
+            echo   Restarting Windows Explorer to release file handles...
+            taskkill /F /IM explorer.exe >nul 2>&1
+            timeout /t 1 /nobreak >nul
+            start "" explorer.exe
+        )
+    )
+
+    timeout /t 2 /nobreak >nul
 )
 
-exit /b 0
-
+echo.
+echo [ERROR] Could not remove directory:
+echo   %REMOVE_TARGET%
+echo.
+echo A file in this directory is still being used by another process.
+echo.
+echo To find the exact process locking app.asar:
+echo   1. Press Win+R
+echo   2. Run: resmon
+echo   3. Open CPU ^> Associated Handles
+echo   4. Search for: app.asar
+echo.
+exit /b 1
 
 :find_inno
 set "INNO_COMPILER="
