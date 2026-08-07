@@ -16,12 +16,12 @@ const option = (value, label = value) => ({ value, label });
 
 export const SETTINGS = {
   audio: {
-    label: "Аудио и запись",
+    label: "Звук и микрофон",
     icon: SlidersHorizontal,
     component: AudioSettings
   },
   radio: {
-    label: "Радио",
+    label: "Фоновая музыка",
     icon: Radio,
     component: RadioSettings
   },
@@ -35,7 +35,7 @@ export const SETTINGS = {
         variant: "card",
         name: "language",
         label: "Язык интерфейса",
-        hint: "Язык элементов приложения",
+        hint: "На каком языке будут показаны кнопки, подсказки и меню",
         options: [option("ru", "Русский"), option("en", "English")]
       },
       {
@@ -43,7 +43,7 @@ export const SETTINGS = {
         variant: "card",
         name: "theme",
         label: "Тема",
-        hint: "Применяется и сохраняется сразу, без перезапуска",
+        hint: "Изменения применяются сразу и сохраняются автоматически",
         saveOnChange: true,
         options: [
           option("dark", "Тёмная"),
@@ -57,8 +57,8 @@ export const SETTINGS = {
         type: "text",
         variant: "card",
         name: "online_name",
-        label: "Имя для онлайн-комнат",
-        hint: "Его увидят другие участники совместного исполнения",
+        label: "Ваше имя в онлайн-комнатах",
+        hint: "Это имя увидят другие участники комнаты",
         placeholder: "Например, Дима",
         maxLength: 40,
         saveOnBlur: true
@@ -82,7 +82,7 @@ export const SETTINGS = {
   },
 
   ai: {
-    label: "AI и обработка",
+    label: "Обработка песен",
     icon: Cpu,
     className: "settings-field-grid",
     fields: [
@@ -90,18 +90,24 @@ export const SETTINGS = {
         type: "select",
         variant: "card",
         name: "whisper_model",
-        label: "Модель Whisper",
-        hint: "Качество распознавания текста",
-        options: "tiny,base,small,medium,large,turbo,large-v3-turbo"
-          .split(",")
-          .map(option)
+        label: "Точность распознавания слов",
+        hint: "Более точная модель лучше распознаёт слова, но дольше обрабатывает песню",
+        options: [
+          option("tiny", "Очень быстро · минимальная точность"),
+          option("base", "Быстро · базовая точность"),
+          option("small", "Баланс скорости и точности"),
+          option("medium", "Высокая точность"),
+          option("large", "Максимальная точность · медленнее"),
+          option("turbo", "Очень быстро · хорошая точность"),
+          option("large-v3-turbo", "Рекомендуется · быстро и точно")
+        ]
       },
       {
         type: "number",
         variant: "card",
         name: "thread_count",
-        label: "Потоки CPU",
-        hint: "Больше потоков — быстрее обработка",
+        label: "Потоки процессора",
+        hint: "Сколько ресурсов процессора можно использовать. Больше — обычно быстрее",
         min: 1,
         max: 64
       },
@@ -109,20 +115,20 @@ export const SETTINGS = {
         type: "toggle",
         variant: "switch-card",
         name: "use_gpu",
-        label: "Использовать GPU",
-        hint: "Ускоряет AI, если видеокарта поддерживается"
+        label: "Использовать видеокарту",
+        hint: "Заметно ускоряет обработку на совместимых видеокартах"
       },
       {
         type: "toggle",
         variant: "switch-card",
         name: "use_cpu",
-        label: "Использовать CPU",
-        hint: "Резервный режим обработки"
+        label: "Разрешить обработку на процессоре",
+        hint: "Использовать процессор, если видеокарта недоступна или не подходит"
       }
     ]
   },
   storage: {
-    label: "Файлы",
+    label: "Папки и файлы",
     icon: FolderCog,
     className: "settings-field-grid settings-path-grid",
     fields: [
@@ -130,30 +136,30 @@ export const SETTINGS = {
         type: "readonly",
         variant: "card",
         name: "songs_folder",
-        label: "Папка с песнями"
+        label: "Где хранятся песни"
       },
       {
         type: "readonly",
         variant: "card",
         name: "ai_folder",
-        label: "Папка AI"
+        label: "Файлы обработки песен"
       },
       {
         type: "readonly",
         variant: "card",
         name: "recordings_folder",
-        label: "Папка записей"
+        label: "Где хранятся ваши записи"
       },
       {
         type: "readonly",
         variant: "card",
         name: "cache_folder",
-        label: "Папка кэша"
+        label: "Временные файлы"
       }
     ]
   },
   service: {
-    label: "Обслуживание",
+    label: "Дополнительно",
     icon: Wrench,
     className: "settings-service-grid",
     screens

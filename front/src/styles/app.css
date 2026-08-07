@@ -4511,17 +4511,32 @@ select:focus,
 }
 
 .audio-monitor-card {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-3) var(--space-4);
   padding: var(--space-4);
 }
 
+.audio-monitor-card__copy {
+  min-inline-size: 0;
+}
+
+.audio-monitor-card__copy > div {
+  min-inline-size: 0;
+}
+
+.audio-monitor-card__copy strong,
+.audio-monitor-card__copy small {
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .audio-monitor-meter {
+  grid-column: 1 / -1;
   block-size: 0.55rem;
-  width: 50%;
+  width: 100%;
   overflow: hidden;
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--color-text) 12%, transparent);
@@ -5780,6 +5795,12 @@ select:focus,
   }
   .audio-monitor-card {
     grid-template-columns: 1fr;
+  }
+  .audio-monitor-card .btn {
+    width: 100%;
+  }
+  .audio-monitor-meter {
+    grid-column: 1;
   }
   .karaoke-stage {
     --karaoke-roll-height: 7rem;
@@ -9750,4 +9771,172 @@ body {
 
 .performance-analysis-actions--secondary {
   justify-content: flex-start;
+}
+
+
+/* ========================================================================== 
+   MODAL CORNER + MONITOR METER FIX
+   ========================================================================== */
+
+/* Keep the animated neon border inside the actual modal bounds. */
+.modal-card.ui-card--neon > .ui-card__edge,
+.modal-card.ui-card--neon > .ui-card__glint {
+  inset: 0 !important;
+  border-radius: inherit !important;
+}
+
+/* Close button stays on the corner, but is fully opaque so the neon border
+   cannot be seen through the control. */
+.modal-card .app-modal-close,
+.modal-card .settings-modal-close,
+.modal-card .song-recordings-close,
+.modal-card .modal-close,
+.modal-card .performance-analysis-close,
+.modal-card .app-dialog-close {
+  background: var(--color-bg-elevated) !important;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 68%, var(--color-border-strong)) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow:
+    0 0.45rem 1.1rem color-mix(in srgb, var(--color-bg-deep) 62%, transparent),
+    0 0 0.8rem color-mix(in srgb, var(--color-primary) 34%, transparent) !important;
+}
+
+.modal-card .app-modal-close:hover,
+.modal-card .settings-modal-close:hover,
+.modal-card .song-recordings-close:hover,
+.modal-card .modal-close:hover,
+.modal-card .performance-analysis-close:hover,
+.modal-card .app-dialog-close:hover {
+  background: color-mix(in srgb, var(--color-primary) 18%, var(--color-bg-elevated)) !important;
+}
+
+/* Direct-monitor meter: zero really means zero, and the bar moves smoothly
+   instead of leaving a visible sliver or jumping once per long poll. */
+.audio-monitor-meter {
+  position: relative;
+  min-inline-size: 8rem;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  background: color-mix(in srgb, var(--color-surface-strong) 74%, transparent);
+  box-shadow: inset 0 0.15rem 0.45rem color-mix(in srgb, var(--color-bg-deep) 30%, transparent);
+}
+
+.audio-monitor-meter span {
+  min-inline-size: 0 !important;
+  box-shadow:
+    0 0 0.6rem color-mix(in srgb, var(--color-primary) 46%, transparent),
+    inset 0 1px color-mix(in srgb, var(--color-highlight) 22%, transparent);
+  transition: inline-size 180ms ease-out;
+}
+
+
+/* ==========================================================================
+   LIBRARY RADIO REACTIVE HERO + DENser NOTES / KARAOKE LYRIC FIT
+   ========================================================================== */
+
+/* The library title keeps the theme palette, but its highlight sweeps and
+   breathes with the live radio analyser. */
+.library-hero h1 {
+  --library-title-energy: var(--radio-bass, 0);
+  background-image:
+    linear-gradient(
+      105deg,
+      color-mix(in srgb, var(--color-primary) 72%, white) 0%,
+      var(--color-highlight) 27%,
+      color-mix(in srgb, var(--color-primary-hover) 62%, white) 48%,
+      var(--color-primary) 72%,
+      color-mix(in srgb, var(--color-accent) 68%, white) 100%
+    ) !important;
+  background-size: 240% 100% !important;
+  background-position: calc(48% + var(--library-title-energy) * 24%) 50% !important;
+  filter:
+    brightness(calc(1 + var(--library-title-energy) * 0.2))
+    saturate(calc(1.02 + var(--library-title-energy) * 0.28))
+    drop-shadow(
+      0 0 calc(0.75rem + var(--library-title-energy) * 1.1rem)
+      color-mix(in srgb, var(--color-primary) 34%, transparent)
+    ) !important;
+  transform: scale(calc(1 + var(--library-title-energy) * 0.006));
+  transform-origin: left center;
+  animation: library-title-shimmer 5.5s linear infinite;
+}
+
+@keyframes library-title-shimmer {
+  0% { background-position-x: 10%; }
+  50% { background-position-x: 90%; }
+  100% { background-position-x: 10%; }
+}
+
+/* More floating notes, spread lower through the middle of the scene. */
+.library-music-object--notes {
+  inset: 24% 5% auto 11% !important;
+  inline-size: 84% !important;
+  block-size: 34% !important;
+}
+
+.library-music-object--notes span {
+  inset-inline-start: var(--note-x) !important;
+  inset-block-start: var(--note-y) !important;
+  opacity: calc(0.32 + var(--radio-bass, 0) * 0.36) !important;
+  transform: scale(var(--note-scale, 1));
+  animation-duration: var(--note-duration, 7s);
+}
+
+.library-music-object--notes span::before {
+  font-size: clamp(1.25rem, 2.35vw, 2.55rem) !important;
+}
+
+:root[data-theme="light"] .library-music-object--notes span {
+  opacity: calc(0.44 + var(--radio-bass, 0) * 0.28) !important;
+}
+
+/* Keep the lyric glass panel compact enough to never clip a long sentence.
+   One current line + one next line still remain visually stable. */
+.karaoke-lyrics {
+  inline-size: min(86rem, 90vw) !important;
+  max-inline-size: 90vw !important;
+  padding: clamp(0.72rem, 1.2vh, 1rem) clamp(1.1rem, 2vw, 2rem) !important;
+  gap: clamp(0.24rem, 0.55vh, 0.45rem) !important;
+}
+
+.karaoke-lyric {
+  box-sizing: border-box !important;
+  inline-size: 100% !important;
+  max-inline-size: 100% !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  font-size: calc(clamp(1.85rem, 3.15vw, 3.65rem) * var(--lyric-line-scale, 1)) !important;
+  line-height: 1.05 !important;
+  font-weight: 780 !important;
+  letter-spacing: -0.018em !important;
+  text-overflow: clip !important;
+  text-shadow:
+    0 2px 3px rgba(0, 0, 0, 0.72),
+    0 7px 22px rgba(0, 0, 0, 0.38) !important;
+}
+
+.karaoke-lyric-next {
+  font-size: calc(clamp(1.45rem, 2.3vw, 2.65rem) * var(--lyric-line-scale, 1)) !important;
+  font-weight: 650 !important;
+  opacity: 0.68 !important;
+}
+
+@media (max-width: 1100px) {
+  .karaoke-lyrics {
+    inline-size: 94vw !important;
+    max-inline-size: 94vw !important;
+  }
+
+  .karaoke-lyric {
+    font-size: calc(clamp(1.55rem, 3vw, 2.9rem) * var(--lyric-line-scale, 1)) !important;
+  }
+
+  .karaoke-lyric-next {
+    font-size: calc(clamp(1.25rem, 2.2vw, 2.1rem) * var(--lyric-line-scale, 1)) !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .library-hero h1 { animation: none !important; }
 }

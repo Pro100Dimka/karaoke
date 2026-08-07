@@ -20,7 +20,6 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
   const [monitorInputDeviceId, setMonitorInputDeviceId] = useState(
     () => getAudioPreferences().monitorInputDeviceId
   );
-  const volumeInitializedRef = useRef(false);
   const effectsInitializedRef = useRef(false);
   const mountedRef = useMountedRef();
   const { run: enqueueUpdate } = useAsyncQueue();
@@ -36,10 +35,27 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
   }, []);
 
   useEffect(() => {
-    if (!audioSettings || volumeInitializedRef.current) return;
-    volumeInitializedRef.current = true;
-    setMicrophoneVolume(normalizeAudioRuntimeSettings(audioSettings).volume);
+    if (!audioSettings) return;
+    const nextVolume = normalizeAudioRuntimeSettings(audioSettings).volume;
+    setMicrophoneVolume((current) =>
+      Math.abs(current - nextVolume) < 0.0001 ? current : nextVolume
+    );
   }, [audioSettings]);
+
+  useEffect(() => {
+    const syncAudioSettings = (event) => {
+      if (!event.detail) return;
+      const normalized = normalizeAudioRuntimeSettings(event.detail);
+      setMicrophoneVolume(normalized.volume);
+      setAudioDriver(normalized.audioDriver);
+      setMonitoringEnabled(normalized.monitoringEnabled);
+      setDirectOutputDeviceId(normalized.outputDeviceId);
+    };
+
+    globalThis.addEventListener?.("audio-settings-changed", syncAudioSettings);
+    return () =>
+      globalThis.removeEventListener?.("audio-settings-changed", syncAudioSettings);
+  }, []);
 
   useEffect(() => {
     if (!audioSettings || effectsInitializedRef.current) return;
@@ -67,6 +83,11 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
           ) {
             setMicrophoneVolume(updated.volume);
           }
+          try {
+            globalThis.dispatchEvent?.(
+              new CustomEvent("audio-settings-changed", { detail: updated })
+            );
+          } catch {}
           return updated;
         } catch (error) {
           if (mountedRef.current) {

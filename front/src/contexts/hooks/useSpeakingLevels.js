@@ -87,6 +87,22 @@ export default function useSpeakingLevels() {
     return audioContext;
   }, []);
 
+  const prepareSpeakingMeter = useCallback(() => {
+    const audioContext = getAudioContext();
+    if (!audioContext) return false;
+
+    if (audioContext.state === "suspended") {
+      try {
+        const resumeResult = audioContext.resume();
+        Promise.resolve(resumeResult).catch(() => {});
+      } catch {
+        return false;
+      }
+    }
+
+    return true;
+  }, [getAudioContext]);
+
   const startSpeakingMeter = useCallback(
     (key, stream) => {
       stopSpeakingMeter(key);
@@ -178,6 +194,7 @@ export default function useSpeakingLevels() {
   return {
     localSpeakingLevel,
     speakingLevels,
+    prepareSpeakingMeter,
     startSpeakingMeter,
     stopSpeakingMeter,
     stopAllSpeakingMeters

@@ -39,7 +39,8 @@ export default function Modal({
   modalClassName = "",
   closeClassName = "",
   closeAriaLabel = "Закрыть",
-  cardVariant = "neon"
+  cardVariant = "neon",
+  maxWidth
 }) {
   const dialogRef = useRef(null);
   const onCloseRef = useRef(onClose);
@@ -154,6 +155,7 @@ export default function Modal({
         variant={cardVariant}
         tilt={tilt}
         className={modalClasses}
+        style={maxWidth ? { maxInlineSize: maxWidth, maxWidth } : undefined}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
