@@ -106,27 +106,6 @@ export default function MelodyRoll({
 
   return (
     <div className="melody-roll">
-      <div className="melody-roll-header u-between-3">
-        <div>
-          <div className="melody-roll-caption u-muted-xs">
-            Мелодическая карта
-          </div>
-          <strong>{songTitle}</strong>
-        </div>
-        <div
-          className="melody-roll-legend u-muted-xs u-between-3"
-          aria-label="Обозначения мелодической карты"
-        >
-          <span>
-            <i className="melody-legend-dot melody-legend-reference" />
-            Эталон
-          </span>
-          <span>
-            <i className="melody-legend-dot melody-legend-active" />
-            Сейчас
-          </span>
-        </div>
-      </div>
       <svg
         viewBox={`0 0 ${width} ${height}`}
         width="100%"
