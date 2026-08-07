@@ -57,7 +57,12 @@ export default function SettingsContent(props) {
           key={field.name}
           field={field}
           value={form[field.name]}
-          onChange={(value) => onChange(field.name, value)}
+          onChange={(value) => {
+            onChange(field.name, value);
+            if (field.saveOnChange) {
+              onFieldBlur(field.name, value);
+            }
+          }}
           onBlur={(value) => {
             if (field.saveOnBlur) {
               onFieldBlur(field.name, value);

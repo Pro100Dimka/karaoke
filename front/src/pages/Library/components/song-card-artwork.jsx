@@ -14,7 +14,9 @@ export default function SongCardArtwork({ cardIndex }) {
             key={i}
             style={{
               height: `${height}%`,
-              animationDelay: `${(cardIndex + i) * -85}ms`
+              "--wave-min": `${Math.max(18, Math.round(height * 0.34)) / height}`,
+              animationDelay: `${(cardIndex + i) * -85}ms`,
+              animationDuration: `${620 + ((cardIndex * 37 + i * 113) % 680)}ms`
             }}
           />
         ))}

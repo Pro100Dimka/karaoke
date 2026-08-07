@@ -7366,27 +7366,100 @@ select:focus,
 /* Wide multi-ridge particle terrain generated entirely on canvas. */
 .library-wave-terrain {
   z-index: 2;
-  block-size: min(56vh, 39rem);
-  opacity: 0.96;
+  block-size: min(62vh, 44rem);
+  opacity: 1;
   mix-blend-mode: screen;
   mask-image: linear-gradient(
     to bottom,
     transparent 0%,
-    rgba(0, 0, 0, 0.34) 6%,
-    #000 18%,
-    #000 91%,
-    transparent 100%
+    rgba(0, 0, 0, 0.5) 5%,
+    #000 15%,
+    #000 100%
   );
-  filter: contrast(1.36) brightness(calc(0.96 + var(--radio-bass, 0) * 0.68))
+  filter: contrast(1.62) brightness(calc(1.18 + var(--radio-bass, 0) * 0.82))
     drop-shadow(
-      0 0 calc(0.08rem + var(--radio-bass, 0) * 0.28rem)
-        rgba(255, 255, 255, calc(0.12 + var(--radio-bass, 0) * 0.22))
+      0 0 calc(0.16rem + var(--radio-bass, 0) * 0.42rem)
+        color-mix(in srgb, var(--color-primary) 42%, transparent)
+    )
+    drop-shadow(
+      0 0 calc(0.12rem + var(--radio-bass, 0) * 0.32rem)
+        rgba(255, 255, 255, calc(0.2 + var(--radio-bass, 0) * 0.28))
     );
 }
 
 :root[data-theme="light"] .library-wave-terrain {
-  opacity: 0.62;
+  opacity: 0.84;
   mix-blend-mode: multiply;
-  filter: grayscale(1) contrast(1.45)
-    brightness(calc(0.72 + var(--radio-bass, 0) * 0.34));
+  filter: grayscale(0.7) contrast(1.7)
+    brightness(calc(0.84 + var(--radio-bass, 0) * 0.42));
+}
+
+/* Animated equalizer on each song artwork. Scale keeps the original random
+   silhouette while every bar moves independently. */
+.library-song-card-wave i {
+  transform-origin: 50% 100%;
+  will-change: transform, filter;
+  animation-name: library-card-equalizer;
+  animation-timing-function: cubic-bezier(0.45, 0.05, 0.55, 0.95);
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+@keyframes library-card-equalizer {
+  0% {
+    transform: scaleY(var(--wave-min, 0.35));
+    filter: brightness(0.82);
+  }
+  45% {
+    transform: scaleY(0.68);
+    filter: brightness(1.05);
+  }
+  100% {
+    transform: scaleY(1);
+    filter: brightness(1.24);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .library-song-card-wave i {
+    animation: none;
+  }
+}
+
+/* Terrain color is read by the canvas itself. White + multiply made the light
+   theme nearly invisible, so each theme now gets a deliberate visible ink. */
+.library-wave-terrain {
+  --wave-terrain-rgb: 255, 240, 246;
+  opacity: 1;
+  mix-blend-mode: screen;
+  filter: contrast(1.48) brightness(calc(1.28 + var(--radio-bass, 0) * 0.9))
+    saturate(1.3)
+    drop-shadow(0 0 0.32rem color-mix(in srgb, var(--color-primary) 62%, transparent))
+    drop-shadow(0 0 0.8rem color-mix(in srgb, var(--color-primary) 30%, transparent));
+}
+
+:root[data-theme="light"] .library-wave-terrain {
+  --wave-terrain-rgb: 150, 24, 74;
+  opacity: 0.96;
+  mix-blend-mode: multiply;
+  filter: contrast(1.34) saturate(1.22)
+    drop-shadow(0 0 0.22rem color-mix(in srgb, var(--color-primary) 48%, transparent));
+}
+
+:root[data-theme="green"] .library-wave-terrain {
+  --wave-terrain-rgb: 184, 255, 220;
+  opacity: 1;
+  mix-blend-mode: screen;
+  filter: contrast(1.5) brightness(calc(1.25 + var(--radio-bass, 0) * 0.88))
+    saturate(1.4)
+    drop-shadow(0 0 0.38rem color-mix(in srgb, var(--color-primary) 64%, transparent));
+}
+
+:root[data-theme="violet"] .library-wave-terrain {
+  --wave-terrain-rgb: 244, 214, 255;
+  opacity: 1;
+  mix-blend-mode: screen;
+  filter: contrast(1.52) brightness(calc(1.28 + var(--radio-bass, 0) * 0.9))
+    saturate(1.45)
+    drop-shadow(0 0 0.4rem color-mix(in srgb, var(--color-primary) 66%, transparent));
 }

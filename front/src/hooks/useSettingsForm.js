@@ -3,6 +3,7 @@ import useAsyncQueue from "./useAsyncQueue";
 import { api } from "../api/client";
 import { getErrorMessage } from "../utils/errors";
 import { applyTheme } from "../utils/theme";
+import useAppSettings from "./useAppSettings";
 import {
   mergeSettings,
   prepareSettingValue,
@@ -24,6 +25,7 @@ export default function useSettingsForm(notify) {
   const pendingSaveCountRef = useRef(0);
   const saveFailedRef = useRef(false);
   const { run: queueSave } = useAsyncQueue();
+  const { updateSettings: updateAppSettings } = useAppSettings();
 
   const beginSave = () => {
     pendingSaveCountRef.current += 1;
@@ -80,6 +82,14 @@ export default function useSettingsForm(notify) {
   const updateField = (name, value) => {
     setSaveStatus(SAVE_STATUS.IDLE);
     setForm((current) => ({ ...current, [name]: value }));
+
+    // Keep the global settings context in sync with fields that affect the
+    // whole application immediately. LibraryHero and other screens read the
+    // theme from AppSettingsContext, not from this page-local form.
+    if (name === "theme") {
+      applyTheme(value);
+      updateAppSettings((current) => ({ ...current, theme: value }));
+    }
   };
 
   const save = () => {
@@ -97,6 +107,7 @@ export default function useSettingsForm(notify) {
         if (!mountedRef.current || requestId !== saveRequestRef.current) return;
 
         setForm((current) => mergeSettings(current, updated));
+        updateAppSettings((current) => mergeSettings(current, updated));
       } catch (error) {
         if (!mountedRef.current || requestId !== saveRequestRef.current) return;
 
@@ -125,9 +136,14 @@ export default function useSettingsForm(notify) {
           return;
         }
 
+        const savedValue = resolveSavedSetting(updated, name, preparedValue);
         setForm((current) => ({
           ...current,
-          [name]: resolveSavedSetting(updated, name, preparedValue)
+          [name]: savedValue
+        }));
+        updateAppSettings((current) => ({
+          ...current,
+          [name]: savedValue
         }));
       } catch (error) {
         if (

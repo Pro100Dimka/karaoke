@@ -110,6 +110,16 @@ export default function LibraryWaveTerrain() {
     let energy = 0;
     let previousRawBass = 0;
     let hit = 0;
+    let terrainRgb = "255,255,255";
+
+    const readTerrainColor = () => {
+      const value = getComputedStyle(canvas)
+        .getPropertyValue("--wave-terrain-rgb")
+        .trim();
+      terrainRgb = /^\d+\s*,\s*\d+\s*,\s*\d+$/.test(value)
+        ? value
+        : "255,255,255";
+    };
 
     const resize = () => {
       width = canvas.clientWidth;
@@ -179,10 +189,10 @@ export default function LibraryWaveTerrain() {
         }
 
         const depth = row / (ROWS - 1);
-        context.strokeStyle = `rgba(255,255,255,${
-          0.018 + depth * 0.07 + hit * 0.04
+        context.strokeStyle = `rgba(${terrainRgb},${
+          0.05 + depth * 0.14 + hit * 0.08
         })`;
-        context.lineWidth = 0.3 + depth * 0.28;
+        context.lineWidth = 0.42 + depth * 0.48;
         context.stroke();
       }
 
@@ -204,8 +214,8 @@ export default function LibraryWaveTerrain() {
           }
         }
 
-        context.strokeStyle = `rgba(255,255,255,${0.012 + hit * 0.02})`;
-        context.lineWidth = 0.25;
+        context.strokeStyle = `rgba(${terrainRgb},${0.035 + hit * 0.05})`;
+        context.lineWidth = 0.34;
         context.stroke();
       }
 
@@ -228,13 +238,13 @@ export default function LibraryWaveTerrain() {
             (1 + hit * 0.12);
           const alpha = clamp(
             point.brightness *
-              (0.36 + particle.random * 0.42) *
-              (0.8 + energy * 0.3 + hit * 0.38),
+              (0.58 + particle.random * 0.5) *
+              (0.96 + energy * 0.42 + hit * 0.5),
             0,
-            0.9
+            1
           );
 
-          context.fillStyle = `rgba(255,255,255,${alpha})`;
+          context.fillStyle = `rgba(${terrainRgb},${alpha})`;
           // Для субпиксельных частиц fillRect значительно дешевле тысяч arc().
           context.fillRect(point.x, point.y, size, size);
         }
@@ -284,7 +294,17 @@ export default function LibraryWaveTerrain() {
       restart();
     };
 
+    readTerrainColor();
     handleResize();
+    const themeObserver = new MutationObserver(() => {
+      readTerrainColor();
+      restart();
+    });
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"]
+    });
+
     addEventListener("resize", handleResize);
     document.addEventListener("visibilitychange", handleVisibility);
     reducedMotion.addEventListener("change", restart);
@@ -294,6 +314,7 @@ export default function LibraryWaveTerrain() {
       removeEventListener("resize", handleResize);
       document.removeEventListener("visibilitychange", handleVisibility);
       reducedMotion.removeEventListener("change", restart);
+      themeObserver.disconnect();
     };
   }, [getBassLevel, isPlaying]);
 

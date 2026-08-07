@@ -43,7 +43,8 @@ export const SETTINGS = {
         variant: "card",
         name: "theme",
         label: "Тема",
-        hint: "Применяется сразу, без перезапуска",
+        hint: "Применяется и сохраняется сразу, без перезапуска",
+        saveOnChange: true,
         options: [
           option("dark", "Тёмная"),
           option("light", "Светлая"),
