@@ -1,6 +1,6 @@
-import { AudioLines, Settings2, X } from "lucide-react";
+import { AudioLines, Settings2 } from "lucide-react";
 import Button from "../../../components/fields/button";
-import { IconButton } from "../../../components/ui";
+import Modal from "../../../components/modal";
 import SliderField from "../components/slider-field";
 import { PLAYBACK_SPEEDS } from "../constants";
 
@@ -15,15 +15,6 @@ const VIEW_TITLES = {
   settings: [Settings2, "Настройки караоке"]
 };
 
-function ModalHeading({ view }) {
-  const [Icon, title] =
-    VIEW_TITLES[view === "effects" ? "effects" : "settings"];
-  return (
-    <div className="microphone-panel-title">
-      <Icon size={15} /> {title}
-    </div>
-  );
-}
 
 function EffectsView({ effects, onEffectsChange, onEffectCommit }) {
   return (
@@ -138,28 +129,32 @@ export default function MicrophoneSettingsModal(props) {
   const { view, onClose } = props;
   const isEffectsView = view === "effects";
 
-  return (
-    <div className="karaoke-settings-backdrop" onMouseDown={onClose}>
-      <div
-        className="microphone-panel karaoke-settings-modal u-surface-card"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <ModalHeading view={view} />
-        <IconButton
-          icon={X}
-          label="Закрыть настройки"
-          size={16}
-          className="karaoke-settings-close"
-          unstyled
-          onClick={onClose}
-        />
+  const [TitleIcon, title] = VIEW_TITLES[isEffectsView ? "effects" : "settings"];
 
-        {isEffectsView ? (
-          <EffectsView {...props} />
-        ) : (
-          <KaraokeSettings {...props} />
-        )}
-      </div>
-    </div>
+  return (
+    <Modal
+      isOpen
+      onClose={onClose}
+      ariaLabel={title}
+      modalClassName="microphone-panel karaoke-settings-modal"
+      closeClassName="karaoke-settings-close"
+      closeAriaLabel="Закрыть настройки"
+      closeIconSize={16}
+      tilt={false}
+      titleProps={{
+        icon: TitleIcon,
+        eyebrow: isEffectsView ? "МИКРОФОН" : "КАРАОКЕ",
+        title,
+        description: isEffectsView
+          ? "Настройте обработку микрофона."
+          : "Настройте тональность и скорость воспроизведения."
+      }}
+    >
+      {isEffectsView ? (
+        <EffectsView {...props} />
+      ) : (
+        <KaraokeSettings {...props} />
+      )}
+    </Modal>
   );
 }

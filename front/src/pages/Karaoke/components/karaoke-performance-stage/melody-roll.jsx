@@ -155,7 +155,7 @@ export default function MelodyRoll({
                   height={keyHeight}
                   rx="1.2"
                   fill={isActive ? "#ed214b" : "#f4f3f7"}
-                  fillOpacity={isActive ? ".58" : ".065"}
+                  fillOpacity={isActive ? ".68" : ".11"}
                 />
                 <line
                   x1={
@@ -167,14 +167,14 @@ export default function MelodyRoll({
                   y1={keyTop}
                   y2={keyTop}
                   stroke={isActive ? "#ff91a4" : "#ffffff"}
-                  strokeOpacity={isActive ? ".58" : ".13"}
+                  strokeOpacity={isActive ? ".7" : ".18"}
                   strokeWidth=".75"
                 />
                 <text
                   x={7}
                   y={keyTop + keyHeight / 2}
                   textAnchor="start"
-                  dominantBaseline="middle"
+                  dominantBaseline="central"
                   fill={isActive ? "#fff" : "rgba(255,255,255,.72)"}
                   fontSize={Math.min(12, Math.max(8, keyHeight * 0.38))}
                   fontWeight={isActive ? "850" : "700"}
@@ -190,7 +190,7 @@ export default function MelodyRoll({
           .filter((midi) => BLACK_KEY_CLASSES.has(((midi % 12) + 12) % 12))
           .map((midi) => {
             const center = y(midi) + rowHeight / 2;
-            const blackHeight = Math.max(4, rowHeight * 0.72);
+            const blackHeight = Math.max(5, rowHeight * 0.86);
             const isActive = activeMidi === midi;
             const keyY = center - blackHeight / 2;
             const keyWidth = keyboardWidth * 0.62;
@@ -203,16 +203,16 @@ export default function MelodyRoll({
                   height={blackHeight}
                   rx="1"
                   fill={isActive ? "#f3234c" : "#05050b"}
-                  fillOpacity={isActive ? ".62" : ".16"}
+                  fillOpacity={isActive ? ".72" : ".26"}
                   stroke={isActive ? "#ff7188" : "#ffffff"}
-                  strokeOpacity={isActive ? ".62" : ".1"}
+                  strokeOpacity={isActive ? ".72" : ".14"}
                   strokeWidth=".8"
                 />
                 <text
                   x={5}
-                  y={keyY + blackHeight / 2}
+                  y={center + 0.2}
                   textAnchor="start"
-                  dominantBaseline="middle"
+                  dominantBaseline="central"
                   fill={isActive ? "#fff" : "rgba(255,255,255,.82)"}
                   fontSize={Math.min(10.5, Math.max(7.5, blackHeight * 0.46))}
                   fontWeight="800"
@@ -223,16 +223,6 @@ export default function MelodyRoll({
               </g>
             );
           })}
-
-        {/* Piano/key separator. The note lane intentionally has no cell grid. */}
-        <line
-          x1={noteLaneStart}
-          x2={noteLaneStart}
-          y1="0"
-          y2={height}
-          stroke="#4d2133"
-          strokeWidth="1"
-        />
 
         {/* Melody notes. */}
         {visibleNotes.map((note, index) => {

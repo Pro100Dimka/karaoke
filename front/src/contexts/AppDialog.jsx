@@ -10,7 +10,6 @@ import {
 } from "react";
 import { Button } from "../components/fields";
 import Modal from "../components/modal";
-import ModalTitle from "../components/modal/title";
 import {
   createDialogConfig,
   getDialogCloseResult,
@@ -19,13 +18,6 @@ import {
 
 const DialogContext = createContext(null);
 
-function DialogIcon({ kind }) {
-  if (kind === "confirm") {
-    return <AlertTriangle size={22} aria-hidden="true" />;
-  }
-
-  return <Info size={22} aria-hidden="true" />;
-}
 
 function DialogModal({ dialog, onClose }) {
   const isConfirmation = dialog.kind === "confirm";
@@ -43,14 +35,13 @@ function DialogModal({ dialog, onClose }) {
       cardVariant="neon"
       closeIconSize={18}
       portal
+      titleProps={{
+        icon: Icon,
+        eyebrow: dialog.label,
+        title: dialog.title,
+        description: dialog.message
+      }}
     >
-      <ModalTitle
-        icon={Icon}
-        eyebrow={dialog.label}
-        title={dialog.title}
-        description={dialog.message}
-      />
-
       <div className="app-dialog-body">
         <div className="app-dialog-actions u-actions-end">
           {isConfirmation && (

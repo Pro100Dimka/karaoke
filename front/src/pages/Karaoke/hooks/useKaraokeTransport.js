@@ -119,13 +119,21 @@ export default function useKaraokeTransport({
       return true;
     }
 
-    // Create/resume Web Audio while this call is still initiated by the user.
+    // Start the melody guide and resume an already-prepared recording in
+    // parallel with media playback. Waiting for backend/audio-context round
+    // trips here used to create a noticeable pause after the reveal.
     const melodyStart = startMelodyGuide().catch(() => {});
     let activeRecordingId = recordingSessionRef.current;
+    let recordingResume = Promise.resolve();
 
     try {
       if (activeRecordingId) {
-        await api.resumeRecording(activeRecordingId);
+        recordingResume = api.resumeRecording(activeRecordingId).catch((error) => {
+          setRecordingError(
+            `Не удалось возобновить запись: ${getErrorMessage(error, "неизвестная ошибка")}`
+          );
+          return null;
+        });
       } else {
         if (!recordingStartPromiseRef.current) {
           const startPromise = api
@@ -179,10 +187,9 @@ export default function useKaraokeTransport({
     sendYouTubeCommand("playVideo");
 
     try {
-      await melodyStart;
       await instr.play();
       await Promise.allSettled(
-        [voc.play(), videoRef.current?.play()].filter(Boolean)
+        [voc.play(), videoRef.current?.play(), melodyStart, recordingResume].filter(Boolean)
       );
     } catch {
       pausePlaybackResources();

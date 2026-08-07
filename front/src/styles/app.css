@@ -8970,7 +8970,7 @@ body {
   inline-size: 2.65rem;
   block-size: 2.65rem;
   aspect-ratio: 1;
-  transform: translate(50%, -50%);
+  transform: translate(30%, -30%);
   border: var(--hairline) solid var(--color-border-strong);
   border-radius: 50%;
   background: color-mix(in srgb, var(--color-surface-strong) 92%, transparent);
@@ -8987,10 +8987,10 @@ body {
 .modal-close:hover,
 .performance-analysis-close:hover,
 .app-dialog-close:hover {
-  transform: translate(50%, -50%) scale(1.08);
+  transform: translate(30%, -30%) scale(1.06);
 }
 
-/* The microphone settings modal is the one custom modal not built on <Modal>. */
+/* Legacy microphone modal selectors retained for compatibility; the dialog now uses <Modal>. */
 .karaoke-settings-modal {
   overflow: visible;
 }
@@ -9000,7 +9000,7 @@ body {
   margin: 0;
   inline-size: 2.65rem;
   block-size: 2.65rem;
-  transform: translate(50%, -50%);
+  transform: translate(30%, -30%);
   border-color: var(--color-border-strong);
   background: color-mix(in srgb, var(--color-surface-strong) 92%, transparent);
   backdrop-filter: blur(0.75rem) saturate(145%);
@@ -9010,7 +9010,7 @@ body {
 }
 
 .karaoke-settings-close:hover {
-  transform: translate(50%, -50%) scale(1.08);
+  transform: translate(30%, -30%) scale(1.06);
 }
 
 /* Performance analysis: one predictable flex shell, one scrolling body, and
@@ -9158,4 +9158,114 @@ body {
 body {
   background-size: calc(100% + 3rem) auto;
   background-color: var(--color-bg-deep);
+}
+
+
+/* ==========================================================================
+   KARAOKE MICRO-POLISH · immediate playback, clearer lyrics, steadier controls
+   ========================================================================== */
+
+.melody-roll .piano-roll-keyboard-bed {
+  opacity: 0.16 !important;
+}
+
+.karaoke-lyric {
+  font-family: Inter, "Segoe UI", Arial, sans-serif !important;
+  font-weight: 800 !important;
+  font-size: calc(clamp(2.15rem, 3.7vw, 4.35rem) * var(--lyric-line-scale, 1)) !important;
+  line-height: 1.08 !important;
+  letter-spacing: 0.002em !important;
+  -webkit-text-stroke: 1.15px rgba(0, 0, 0, 0.62) !important;
+  text-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.88),
+    0 5px 18px rgba(0, 0, 0, 0.5) !important;
+}
+
+.karaoke-lyric-current .karaoke-lyric-character,
+[data-theme="light"] .karaoke-lyric-current .karaoke-lyric-character {
+  -webkit-text-stroke: 1.05px rgba(0, 0, 0, 0.62) !important;
+  text-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.88),
+    0 5px 18px rgba(0, 0, 0, 0.5) !important;
+}
+
+.karaoke-lyric-next {
+  font-family: Inter, "Segoe UI", Arial, sans-serif !important;
+  font-weight: 760 !important;
+  font-size: calc(clamp(1.7rem, 2.7vw, 3.15rem) * var(--lyric-line-scale, 1)) !important;
+  opacity: 0.86 !important;
+}
+
+.karaoke-lyric-next .karaoke-lyric-character,
+[data-theme="light"] .karaoke-lyric-next .karaoke-lyric-character {
+  -webkit-text-stroke: 0.9px rgba(0, 0, 0, 0.58) !important;
+  text-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.84),
+    0 4px 14px rgba(0, 0, 0, 0.45) !important;
+}
+
+.karaoke-tool-tabs button,
+.karaoke-effect-presets button,
+.karaoke-performance-controls > .karaoke-performance-control {
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+
+/* ==========================================================================
+   MODAL UNIFICATION · one shell, clean corner control, clipped neon artifacts
+   ========================================================================== */
+.modal-card {
+  isolation: isolate;
+}
+
+/* Modal close sits on the border, but only slightly outside it. */
+.modal-card .app-modal-close {
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  inline-size: 2.45rem;
+  block-size: 2.45rem;
+  transform: translate(30%, -30%);
+}
+
+.modal-card .app-modal-close:hover {
+  transform: translate(30%, -30%) scale(1.06);
+}
+
+/* A modal is not an interactive neon card: keep the border, hide decorative
+   layers that can protrude beyond the opposite edge when the shell overflows. */
+.modal-card.ui-card--neon > .ui-card__glow,
+.modal-card.ui-card--neon > .ui-card__glow-mid,
+.modal-card.ui-card--neon > .ui-card__edge,
+.modal-card.ui-card--neon > .ui-card__glint,
+.modal-card.ui-card--neon > .ui-card__panel > .ui-card__sheen {
+  display: none;
+}
+
+.modal-card.ui-card--neon > .ui-card__panel,
+.modal-card.ui-card--neon > .ui-card__panel > .ui-card__content {
+  overflow: visible;
+  border-radius: inherit;
+}
+
+/* Settings and microphone dialogs now use the same Modal shell. */
+.karaoke-settings-backdrop {
+  display: contents;
+}
+
+.karaoke-settings-modal {
+  inline-size: min(34rem, calc(100vw - 2rem));
+  max-block-size: min(86dvh, 42rem);
+}
+
+.karaoke-settings-modal > .ui-card__panel > .ui-card__content {
+  display: flex;
+  min-block-size: 0;
+  flex-direction: column;
+}
+
+.karaoke-settings-modal .microphone-effects,
+.karaoke-settings-modal .karaoke-settings-section {
+  min-block-size: 0;
+  padding: var(--space-5);
 }

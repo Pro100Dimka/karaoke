@@ -6,7 +6,6 @@ import { normalizeRoomId } from "../services/onlineRoom";
 import { getErrorMessage } from "../utils/errors";
 import { Button, FieldInput } from "./fields";
 import Modal from "./modal";
-import ModalTitle from "./modal/title";
 
 export function OnlineRoomModal({ onlineName, onClose }) {
   const room = useOnlineRoom();
@@ -57,14 +56,13 @@ export function OnlineRoomModal({ onlineName, onClose }) {
       closeIconSize={18}
       cardVariant="neon"
       tilt
+      titleProps={{
+        icon: UsersRound,
+        eyebrow: "ОНЛАЙН-КОМНАТА",
+        title: "Совместное исполнение",
+        description: "Создайте комнату или подключитесь по коду ведущего."
+      }}
     >
-      <ModalTitle
-        icon={UsersRound}
-        eyebrow="ОНЛАЙН-КОМНАТА"
-        title="Совместное исполнение"
-        description="Создайте комнату или подключитесь по коду ведущего."
-      />
-
       <div className="modal-scroll online-room-modal__content">
         {!joinMode ? (
           <div className="online-room-form u-stack-4">

@@ -88,7 +88,11 @@ export default function Karaoke({ onOpenAppSettings }) {
     showLyrics,
     setShowLyrics,
     showNotes,
-    setShowNotes
+    setShowNotes,
+    autoHideConsole,
+    setAutoHideConsole,
+    effectPreset,
+    setEffectPreset
   } = useKaraokePreferences();
   // ВАЖНО: keyShift сейчас смещает только отображаемую линию мелодии
   // (транспонирует ноты на экране), а НЕ реальный питч аудио — честный
@@ -113,7 +117,6 @@ export default function Karaoke({ onOpenAppSettings }) {
   const [microphoneOpen, setMicrophoneOpen] = useState(false);
   const [microphoneSettingsView, setMicrophoneSettingsView] = useState("music");
   const [recordingError, setRecordingError] = useState(null);
-  const [effectPreset, setEffectPreset] = useState("studio");
 
   useEffect(() => {
     // A paused recording session must not block the background radio. Only
@@ -121,7 +124,6 @@ export default function Karaoke({ onOpenAppSettings }) {
     setRecordingActive(Boolean(recordingSessionId) && isPlaying);
     return () => setRecordingActive(false);
   }, [isPlaying, recordingSessionId, setRecordingActive]);
-  const [autoHideConsole, setAutoHideConsole] = useState(true);
   const [stageActionsVisible, setStageActionsVisible] = useState(true);
   const autoStartRequested = Boolean(location.state?.autoPlay);
   const [sceneBlackout, setSceneBlackout] = useState(autoStartRequested);
@@ -389,7 +391,7 @@ export default function Karaoke({ onOpenAppSettings }) {
         setSceneBlackout(false);
         // The reveal is deliberately cinematic. Playback begins only after the
         // scene is fully visible, never while the screen is still fading out.
-        await waitForScene(2480);
+        await waitForScene(2400);
 
         if (actionAfterReveal) {
           await Promise.resolve(action());

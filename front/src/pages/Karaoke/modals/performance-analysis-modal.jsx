@@ -4,7 +4,6 @@ import { api } from "../../../api/client";
 import { AudioPlayer } from "../../../components/AudioPlayer";
 import { Button } from "../../../components/fields";
 import Modal from "../../../components/modal";
-import ModalTitle from "../../../components/modal/title";
 import { useAppDialog } from "../../../contexts/AppDialog";
 import useExclusiveAsyncAction from "../../../hooks/useExclusiveAsyncAction";
 import useMountedRef from "../../../hooks/useMountedRef";
@@ -157,15 +156,14 @@ export default function PerformanceAnalysisModal({
       closeIconSize={18}
       cardVariant="neon"
       portal
+      titleProps={{
+        icon: BarChart3,
+        eyebrow: "РЕЗУЛЬТАТ ИСПОЛНЕНИЯ",
+        title: "Анализ выступления",
+        description: "Точность нот, ритм и рекомендации по исполнению."
+      }}
     >
       <VictoryScene />
-      <ModalTitle
-        icon={BarChart3}
-        eyebrow="РЕЗУЛЬТАТ ИСПОЛНЕНИЯ"
-        title="Анализ выступления"
-        description="Точность нот, ритм и рекомендации по исполнению."
-      />
-
       <div className="performance-analysis-body modal-scroll">
         {!result && !error && (
           <p className="text-muted">Анализируем ноты и ритм исполнения…</p>

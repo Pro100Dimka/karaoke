@@ -23,6 +23,12 @@ export default function useKaraokePreferences() {
   const [showNotes, setShowNotes] = useState(
     () => preferences.showNotes ?? true
   );
+  const [autoHideConsole, setAutoHideConsole] = useState(
+    () => preferences.autoHideConsole ?? true
+  );
+  const [effectPreset, setEffectPreset] = useState(
+    () => preferences.effectPreset ?? "studio"
+  );
 
   useEffect(() => {
     saveKaraokePreferences({
@@ -32,7 +38,9 @@ export default function useKaraokePreferences() {
       speed,
       keyShift,
       showLyrics,
-      showNotes
+      showNotes,
+      autoHideConsole,
+      effectPreset
     });
   }, [
     musicVolume,
@@ -41,7 +49,9 @@ export default function useKaraokePreferences() {
     speed,
     keyShift,
     showLyrics,
-    showNotes
+    showNotes,
+    autoHideConsole,
+    effectPreset
   ]);
 
   return {
@@ -58,6 +68,10 @@ export default function useKaraokePreferences() {
     showLyrics,
     setShowLyrics,
     showNotes,
-    setShowNotes
+    setShowNotes,
+    autoHideConsole,
+    setAutoHideConsole,
+    effectPreset,
+    setEffectPreset
   };
 }

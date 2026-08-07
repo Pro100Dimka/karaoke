@@ -7,7 +7,6 @@ import { useRequireOnlineName } from "../hooks/useRequireOnlineName";
 import SongSettings from "../pages/Library/modals/song-settings";
 import Settings from "../pages/Settings";
 import TitleBar from "./TitleBar";
-import Modal from "./modal";
 import AppRoutes from "./routes";
 import { IconButton } from "./ui";
 
@@ -129,20 +128,9 @@ export default function AppLayout() {
           className={`app-route-blackout ${routeBlackout ? "is-visible" : ""}`}
           aria-hidden="true"
         />
-        <Modal
-          isOpen={isSettingsOpen}
-          onClose={closeSettings}
-          ariaLabel="Настройки приложения"
-          backdropClassName="app-modal-backdrop settings-modal-backdrop"
-          modalClassName="app-modal settings-modal modal-card"
-          cardVariant="neon"
-          closeClassName="app-modal-close settings-modal-close"
-          closeAriaLabel="Закрыть настройки"
-          closeIconSize={20}
-          portal
-        >
-          <Settings />
-        </Modal>
+        {isSettingsOpen && (
+          <Settings isOpen onClose={closeSettings} />
+        )}
       </div>
     </div>
   );
