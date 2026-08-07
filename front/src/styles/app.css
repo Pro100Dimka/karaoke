@@ -7998,3 +7998,71 @@ body {
 .karaoke-ui-hidden .karaoke-performance-stage::before {
   opacity: 0;
 }
+
+/* ========================================================================== 
+   KARAOKE STAGE PLACEMENT — melody roll at the bottom + white sung lyrics
+   ========================================================================== */
+
+/* MelodyRoll belongs to the stage itself, not to KaraokeConsole. Keep it
+   near the bottom edge of the viewport; the absolute console may overlap it. */
+.melody-roll {
+  inset-block-start: auto;
+  inset-block-end: clamp(0.75rem, 1.8vh, 1.5rem);
+  inset-inline: clamp(0.55rem, 1.25vw, 1.15rem);
+}
+
+/* The part of the current lyric that has already been sung is pure white.
+   The not-yet-sung part keeps the theme accent so the progress remains clear. */
+.karaoke-lyric-current .karaoke-lyric-character {
+  -webkit-text-fill-color: transparent !important;
+  color: #fff !important;
+  background-image: linear-gradient(
+    90deg,
+    #fff 0%,
+    #fff var(--character-fill),
+    color-mix(in srgb, var(--color-primary) 72%, white 18%) var(--character-fill),
+    color-mix(in srgb, var(--color-primary) 72%, white 18%) 100%
+  ) !important;
+  background-clip: text !important;
+  -webkit-background-clip: text !important;
+}
+
+@media (max-width: 78rem) {
+  .melody-roll {
+    inset-block-start: auto;
+    inset-block-end: clamp(0.6rem, 1.5vh, 1rem);
+  }
+}
+
+/* ========================================================================== 
+   MELODY ROLL — dark piano-roll reference presentation
+   ========================================================================== */
+.melody-roll {
+  block-size: clamp(11.5rem, 24vh, 14rem);
+  min-block-size: 0;
+  max-block-size: none;
+  background: #080812;
+  border: 0;
+  border-radius: 0;
+  box-shadow:
+    0 -0.1rem 1.4rem rgba(0, 0, 0, 0.28),
+    inset 0 1px rgba(255, 255, 255, 0.025);
+}
+
+.melody-roll svg {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  min-block-size: 0;
+  background: #080812;
+}
+
+/* Keep this piano roll intentionally dark in every app theme, matching the
+   karaoke reference and preserving note/grid contrast over light scenes. */
+[data-theme="light"] .melody-roll,
+[data-theme="green"] .melody-roll,
+[data-theme="violet"] .melody-roll,
+[data-theme="dark"] .melody-roll {
+  background: #080812;
+  border-color: transparent;
+}
