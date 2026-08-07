@@ -1,10 +1,6 @@
+import SCENE_VIDEO_URL from "../../../../assets/karaoke/videoplayback.mp4";
 import KaraokeLyricLine from "./karaoke-lyric-line";
 import MelodyRoll from "./melody-roll";
-
-const SCENE_VIDEO_URL = new URL(
-  "../../../../assets/karaoke/videoplayback.mp4",
-  import.meta.url
-).href;
 
 function Lyrics({ lyrics, currentLine, upcomingLine, nextLine, currentTime }) {
   const activeLine = currentLine || upcomingLine;
@@ -89,7 +85,11 @@ export default function KaraokePerformanceStage(props) {
         <div className="karaoke-song-intro-card">
           <span className="karaoke-song-intro-kicker">Сейчас прозвучит</span>
           <strong>{sceneIntro?.title || "Караоке"}</strong>
-          {sceneIntro?.artist && <span className="karaoke-song-intro-artist">{sceneIntro.artist}</span>}
+          {sceneIntro?.artist && (
+            <span className="karaoke-song-intro-artist">
+              {sceneIntro.artist}
+            </span>
+          )}
           <div className="karaoke-song-intro-meta">
             {sceneIntro?.genre && <span>{sceneIntro.genre}</span>}
             {sceneIntro?.key && <span>{sceneIntro.key}</span>}
