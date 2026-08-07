@@ -47,7 +47,8 @@ export const SETTINGS = {
         options: [
           option("dark", "Тёмная"),
           option("light", "Светлая"),
-          option("green", "Зеленая")
+          option("green", "Зеленая"),
+          option("violet", "Фиолетовая")
         ]
       },
 

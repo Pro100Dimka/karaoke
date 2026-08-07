@@ -673,3 +673,197 @@
 
   --bg-image: url("../assets/karaoke/green.webp");
 }
+
+:root[data-theme="violet"] {
+  color-scheme: dark;
+
+  --color-bg: #06020f;
+  --color-bg-deep: #020106;
+  --color-bg-elevated: #140b24;
+
+  --color-surface: rgba(24, 12, 44, 0.88);
+  --color-surface-strong: rgba(40, 20, 72, 0.96);
+  --color-surface-soft: rgba(64, 38, 110, 0.82);
+  --color-surface-hover: rgba(98, 60, 170, 0.92);
+  --color-surface-glass: rgba(18, 10, 35, 0.8);
+
+  --color-text: #fcfbff;
+  --color-text-soft: #eadcff;
+  --color-text-muted: #b6a2dd;
+  --color-text-inverse: #12071d;
+
+  --color-primary: #b85cff;
+  --color-primary-hover: #cd88ff;
+  --color-primary-strong: #8a2cff;
+
+  --color-secondary: #9854ff;
+  --color-accent: #ff9dff;
+  --color-accent-strong: #d348ff;
+  --color-highlight: #fff0ff;
+
+  --color-success: #7cf4d0;
+  --color-warning: #ffd36b;
+  --color-danger: #ff5b98;
+
+  --color-rose: #ef89ff;
+  --color-raspberry: #b44dff;
+  --color-peach: #ffc5ff;
+  --color-coral: #ff7bd6;
+  --color-nude: #bca5dc;
+  --color-champagne: #f2dfff;
+
+  --color-border: rgba(191, 118, 255, 0.28);
+  --color-border-strong: rgba(211, 157, 255, 0.62);
+  --color-border-accent: rgba(184, 92, 255, 0.95);
+  --color-focus: #d18dff;
+
+  --gradient-primary:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.84) 0%,
+      rgba(255, 255, 255, 0.34) 7%,
+      rgba(255, 255, 255, 0.09) 18%,
+      transparent 42%
+    ),
+    radial-gradient(
+      ellipse at 12% -12%,
+      rgba(255, 255, 255, 0.95) 0%,
+      rgba(242, 222, 255, 0.75) 12%,
+      rgba(214, 140, 255, 0.38) 28%,
+      transparent 54%
+    ),
+    radial-gradient(
+      ellipse at 100% 0%,
+      rgba(183, 94, 255, 0.34) 0%,
+      transparent 42%
+    ),
+    radial-gradient(
+      ellipse at 50% 118%,
+      rgba(108, 42, 215, 0.34) 0%,
+      transparent 48%
+    ),
+    linear-gradient(
+      145deg,
+      #ffffff 0%,
+      #f7efff 6%,
+      #ead5ff 14%,
+      #cf9dff 27%,
+      #b566ff 42%,
+      #9138ff 58%,
+      #6820d5 74%,
+      #3a116e 90%,
+      #12041f 100%
+    );
+
+  --gradient-primary-hover:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.94) 0%,
+      rgba(255, 255, 255, 0.42) 8%,
+      rgba(255, 255, 255, 0.12) 20%,
+      transparent 44%
+    ),
+    radial-gradient(
+      ellipse at 12% -12%,
+      rgba(255, 255, 255, 0.98) 0%,
+      rgba(248, 235, 255, 0.82) 12%,
+      rgba(225, 168, 255, 0.45) 28%,
+      transparent 56%
+    ),
+    radial-gradient(
+      ellipse at 100% 0%,
+      rgba(206, 132, 255, 0.36) 0%,
+      transparent 44%
+    ),
+    radial-gradient(
+      ellipse at 50% 118%,
+      rgba(130, 60, 235, 0.38) 0%,
+      transparent 50%
+    ),
+    linear-gradient(
+      145deg,
+      #ffffff 0%,
+      #fbf6ff 6%,
+      #f1deff 15%,
+      #dcb8ff 28%,
+      #c785ff 44%,
+      #a44eff 60%,
+      #7626e6 77%,
+      #461583 91%,
+      #19062b 100%
+    );
+
+  --gradient-panel:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.16) 0%,
+      rgba(255, 255, 255, 0.05) 18%,
+      transparent 45%
+    ),
+    radial-gradient(
+      ellipse at 0% -12%,
+      rgba(215, 160, 255, 0.25) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse at 100% -8%,
+      rgba(168, 88, 255, 0.18) 0%,
+      transparent 48%
+    ),
+    linear-gradient(
+      145deg,
+      rgba(35, 20, 58, 0.98) 0%,
+      rgba(26, 14, 44, 0.99) 35%,
+      rgba(17, 9, 30, 1) 66%,
+      rgba(7, 3, 14, 1) 100%
+    );
+
+  --gradient-glass:
+    linear-gradient(
+      165deg,
+      rgba(255, 255, 255, 0.18) 0%,
+      rgba(255, 255, 255, 0.06) 20%,
+      transparent 56%
+    ),
+    radial-gradient(
+      ellipse at 0% -10%,
+      rgba(233, 186, 255, 0.22) 0%,
+      transparent 48%
+    ),
+    radial-gradient(
+      ellipse at 100% 0%,
+      rgba(183, 92, 255, 0.14) 0%,
+      transparent 40%
+    ),
+    linear-gradient(
+      145deg,
+      rgba(25, 15, 42, 0.92) 0%,
+      rgba(18, 10, 32, 0.95) 55%,
+      rgba(8, 4, 16, 0.98) 100%
+    );
+
+  --gradient-border: linear-gradient(
+    110deg,
+    #ffffff 0%,
+    #f8edff 10%,
+    #ebcbff 24%,
+    #d99dff 40%,
+    #b85cff 55%,
+    #8f2fff 70%,
+    #b85cff 86%,
+    #f8edff 100%
+  );
+
+  --gradient-text: linear-gradient(
+    90deg,
+    #ffffff 0%,
+    #f9f3ff 18%,
+    #eedaff 35%,
+    #ddb2ff 52%,
+    #ca84ff 68%,
+    #b85cff 82%,
+    #8a2cff 100%
+  );
+
+  --bg-image: url("../assets/karaoke/violet.webp");
+}
