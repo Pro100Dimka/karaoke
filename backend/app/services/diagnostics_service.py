@@ -9,7 +9,7 @@ import subprocess
 
 import config
 
-BACKEND_VERSION = "0.2.0"
+BACKEND_VERSION = "0.2.4"
 
 
 def _ffmpeg_available() -> bool:

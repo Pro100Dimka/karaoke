@@ -13,7 +13,7 @@ from .config import CoreConfig
 from .engines.pitch import PyinFallbackPitchEstimator
 from .engines.registry import EngineRegistry
 from .engines.separation import CenterChannelFallbackSeparator
-from .engines.text import UniformTextFallback, resolve_alignment_language
+from .engines.text import ASR_PIPELINE_VERSION, UniformTextFallback, resolve_alignment_language
 from .errors import EngineUnavailableError, ProcessingCancelledError
 from .locks import ThreadFileLock
 from .midi import write_midi
@@ -27,7 +27,7 @@ from .models import (
     to_dict,
 )
 from .music import estimate_tempo
-from .notes import build_game_notes, build_vocal_notes
+from .notes import NOTE_DECODER_VERSION, build_game_notes, build_vocal_notes
 from .syllables import align_syllables
 from .utils.io import read_json, write_json_atomic, write_text_atomic
 from .pitch_post import stabilize_pitch
@@ -77,7 +77,7 @@ class PipelineResult:
 
 
 class KaraokePipeline:
-    VERSION = "2026.20"
+    VERSION = "2026.24"
 
     def __init__(
         self,
@@ -350,6 +350,7 @@ class KaraokePipeline:
                     "language": request.language,
                     "engine": self.engines.transcriber.name,
                     "model": getattr(self.engines.transcriber, "model_name", None),
+                    "algorithm": ASR_PIPELINE_VERSION,
                     "aligner": self.engines.aligner.name,
                     "aligner_model": getattr(self.engines.aligner, "model_name", None),
                 },
@@ -398,6 +399,7 @@ class KaraokePipeline:
                 "confidence": self.config.min_voiced_confidence,
                 "split": self.config.split_note_semitones,
                 "gap": self.config.max_gap_sec,
+                "decoder": NOTE_DECODER_VERSION,
             },
         )
         derivation_outputs = [syllable_path, reference, contour, notes_path]

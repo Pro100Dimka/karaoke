@@ -1,6 +1,6 @@
 [project]
 name = "karaoke-ai-backend"
-version = "0.2.0"
+version = "0.2.4"
 description = "Локальный FastAPI backend поверх AI-пайплайна (Karaoke AI)."
 requires-python = ">=3.11,<3.13"
 readme = "README.md"
