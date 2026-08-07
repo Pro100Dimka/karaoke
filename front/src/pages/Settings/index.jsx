@@ -28,9 +28,9 @@ export default function Settings({ isOpen = true, onClose = () => {}, initialTab
       titleProps={{
         className: "settings-header",
         icon: Settings2,
-        eyebrow: "КОНТРОЛЬНЫЙ ЦЕНТР",
+        eyebrow: "НАСТРОЙКИ",
         title: "Настройки приложения",
-        description: "Персонализируйте студию, обработку и рабочее пространство.",
+        description: "Настройте звук, внешний вид и обработку песен под себя.",
         actions: (
           <Button
             icon={Icon}

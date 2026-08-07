@@ -1,7 +1,24 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
+rem ============================================================
+rem CLOSE RUNNING APPLICATION BEFORE BUILD
+rem ============================================================
 
-title A&D Voice - Complete Offline Installer Builder
+echo.
+echo Closing running A^&D Voice and Electron processes...
+
+rem Kill the packaged application together with all child processes.
+taskkill /F /T /IM "A&D Voice.exe" >nul 2>&1
+
+rem Kill development Electron instances as well.
+taskkill /F /T /IM "electron.exe" >nul 2>&1
+
+rem Give Windows time to release app.asar handles.
+timeout /t 3 /nobreak >nul
+
+echo Running application processes closed.
+echo.
+title A^&D Voice - Complete Offline Installer Builder
 
 rem ============================================================
 rem BUILD MODES
@@ -95,7 +112,7 @@ rem ============================================================
 
 echo.
 echo ============================================================
-echo  A&D Voice - COMPLETE OFFLINE INSTALLER
+echo  A^&D - COMPLETE OFFLINE INSTALLER
 echo ============================================================
 echo.
 echo Build mode:
@@ -238,7 +255,7 @@ rem ============================================================
 
 :stop_build_processes
 echo.
-echo [0/6] Closing old A&D Voice build processes...
+echo [0/6] Closing old A^&D Voice build processes...
 
 taskkill /F /IM KaraokeBackend.exe >nul 2>&1
 taskkill /F /IM KaraokeAudioMonitor.exe >nul 2>&1

@@ -8,7 +8,7 @@ export default function RadioSettings() {
   const { stationId, stations, setStation, volume, setVolume } = useRadio();
   return (
     <div className="settings-field-grid">
-      <Field label="Радиостанция" hint="Музыка, которая играет в фоне приложения" variant="card">
+      <Field label="Радиостанция" hint="Выберите музыку, которая будет играть в библиотеке" variant="card">
         <div className="radio-settings-control">
           <Radio size={18} />
           <Dropdown
@@ -21,7 +21,7 @@ export default function RadioSettings() {
           />
         </div>
       </Field>
-      <Field label="Громкость радио" hint="Также доступна при наведении на кнопку радио" variant="card">
+      <Field label="Громкость фоновой музыки" hint="Отдельная громкость радио. Она не влияет на песни Karaoke" variant="card">
         <div className="audio-level-control">
           <Volume2 size={18} />
           <RangeInput min="0" max="1" step="0.01" value={volume} onChange={setVolume} />

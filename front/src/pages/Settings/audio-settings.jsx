@@ -1,5 +1,5 @@
-import { Activity, Headphones, Mic2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Activity, Headphones, Mic2, Volume2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../api/client";
 import Dropdown from "../../components/fields/Dropdown";
 import Button from "../../components/fields/button";
@@ -8,6 +8,7 @@ import RangeInput from "../../components/fields/range-input";
 import { useAppDialog } from "../../contexts/AppDialog";
 import useAsyncQueue from "../../hooks/useAsyncQueue";
 import useExclusiveAsyncAction from "../../hooks/useExclusiveAsyncAction";
+import useSpeakingLevels from "../../contexts/hooks/useSpeakingLevels";
 import { usePolling } from "../../hooks/usePolling";
 import {
   getAudioPreferences,
@@ -74,13 +75,18 @@ export default function AudioSettings() {
   const { data: devices } = usePolling(api.listAudioDevices, 30000, []);
   const { data: outputs } = usePolling(api.listAudioOutputDevices, 30000, []);
   const { data: asioDrivers } = usePolling(api.listAsioDrivers, 30000, []);
-  const { data: signal } = usePolling(api.getSignalQuality, 350, []);
+  const { data: signal } = usePolling(api.getSignalQuality, 80, []);
 
   const [browserDevices, setBrowserDevices] = useState(EMPTY_BROWSER_DEVICES);
   const [preferences, setPreferences] = useState(getAudioPreferences);
-  const [monitorLevel, setMonitorLevel] = useState(0);
-  const [liveMonitorAvailable, setLiveMonitorAvailable] = useState(false);
-  const liveMeterCleanupRef = useRef(null);
+  const [speakerTestState, setSpeakerTestState] = useState("idle");
+  const monitorStreamRef = useRef(null);
+  const {
+    localSpeakingLevel,
+    prepareSpeakingMeter,
+    startSpeakingMeter,
+    stopSpeakingMeter
+  } = useSpeakingLevels();
 
   const { pending: saving, run: enqueueAudioUpdate } = useAsyncQueue();
   const { pending: togglingMonitoring, run: runMonitoringToggle } =
@@ -91,113 +97,126 @@ export default function AudioSettings() {
   const monitoringEnabled = runtimeSettings.monitoringEnabled;
   const volume = runtimeSettings.volume;
   const rawMonitorLevel = monitoringEnabled ? getSignalLevel(signal) : 0;
+  const monitorTargetLevel = monitoringEnabled
+    ? Math.max(localSpeakingLevel * 100, rawMonitorLevel)
+    : 0;
+  const [monitorLevel, setMonitorLevel] = useState(0);
+  const monitorTargetRef = useRef(0);
+  const monitorPeakHoldUntilRef = useRef(0);
 
   useEffect(() => {
-    liveMeterCleanupRef.current?.();
-    liveMeterCleanupRef.current = null;
-    setLiveMonitorAvailable(false);
-
-    if (!monitoringEnabled) {
-      setMonitorLevel(0);
-      return undefined;
+    const now = performance.now();
+    monitorTargetRef.current = monitorTargetLevel;
+    if (monitorTargetLevel > 0) {
+      monitorPeakHoldUntilRef.current = now + 240;
     }
 
-    const mediaDevices = globalThis.navigator?.mediaDevices;
-    if (typeof mediaDevices?.getUserMedia !== "function") return undefined;
-
-    let cancelled = false;
-    let stream = null;
-    let audioContext = null;
-    let source = null;
-    let analyser = null;
-    let intervalId = null;
-
-    const stop = () => {
-      cancelled = true;
-      if (intervalId) globalThis.clearInterval(intervalId);
-      try { source?.disconnect(); } catch {}
-      try { analyser?.disconnect(); } catch {}
-      stream?.getTracks?.().forEach((track) => track.stop());
-      if (audioContext?.state !== "closed") {
-        try { Promise.resolve(audioContext?.close?.()).catch(() => {}); } catch {}
-      }
-    };
-
-    liveMeterCleanupRef.current = stop;
-
-    const selectedInput = preferences.monitorInputDeviceId;
-    const audio = {
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false,
-      ...(selectedInput && selectedInput !== "default"
-        ? { deviceId: { exact: selectedInput } }
-        : {})
-    };
-
-    mediaDevices
-      .getUserMedia({ audio })
-      .then((nextStream) => {
-        if (cancelled) {
-          nextStream.getTracks?.().forEach((track) => track.stop());
-          return;
-        }
-
-        const AudioContextClass =
-          globalThis.AudioContext || globalThis.webkitAudioContext;
-        if (typeof AudioContextClass !== "function") {
-          nextStream.getTracks?.().forEach((track) => track.stop());
-          return;
-        }
-
-        stream = nextStream;
-        audioContext = new AudioContextClass({ latencyHint: "interactive" });
-        source = audioContext.createMediaStreamSource(stream);
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 256;
-        analyser.smoothingTimeConstant = 0.72;
-        source.connect(analyser);
-
-        const samples = new Uint8Array(analyser.fftSize);
-        let smoothed = 0;
-        setLiveMonitorAvailable(true);
-
-        intervalId = globalThis.setInterval(() => {
-          if (cancelled || !analyser) return;
-          try {
-            analyser.getByteTimeDomainData(samples);
-          } catch {
-            return;
-          }
-
-          let sum = 0;
-          for (const sample of samples) {
-            const normalized = (sample - 128) / 128;
-            sum += normalized * normalized;
-          }
-
-          const rms = Math.sqrt(sum / samples.length);
-          const normalizedLevel = Math.min(1, Math.max(0, (rms - 0.012) / 0.16));
-          smoothed = smoothed * 0.68 + normalizedLevel * 0.32;
-          const level = smoothed < 0.035 ? 0 : smoothed * 100;
-          setMonitorLevel(level);
-        }, 70);
-      })
-      .catch(() => {
-        if (!cancelled) setLiveMonitorAvailable(false);
-      });
-
-    return stop;
-  }, [monitoringEnabled, preferences.monitorInputDeviceId]);
+    if (!monitoringEnabled) {
+      monitorPeakHoldUntilRef.current = 0;
+      setMonitorLevel(0);
+    }
+  }, [monitorTargetLevel, monitoringEnabled]);
 
   useEffect(() => {
-    if (!monitoringEnabled || liveMonitorAvailable) return;
-    setMonitorLevel((current) =>
-      Math.abs(rawMonitorLevel - current) < 0.5
-        ? rawMonitorLevel
-        : current * 0.45 + rawMonitorLevel * 0.55
-    );
-  }, [liveMonitorAvailable, monitoringEnabled, rawMonitorLevel]);
+    if (!monitoringEnabled) return undefined;
+
+    const intervalId = globalThis.setInterval(() => {
+      const target = monitorTargetRef.current;
+      const now = performance.now();
+
+      setMonitorLevel((current) => {
+        if (target >= current) return Math.min(100, target);
+        if (now < monitorPeakHoldUntilRef.current) return current;
+
+        const next = current * 0.78;
+        return next < 0.8 ? 0 : next;
+      });
+    }, 50);
+
+    return () => globalThis.clearInterval(intervalId);
+  }, [monitoringEnabled]);
+
+  const stopLocalMeter = useCallback(() => {
+    stopSpeakingMeter("local");
+    monitorStreamRef.current?.getTracks?.().forEach((track) => track.stop());
+    monitorStreamRef.current = null;
+  }, [stopSpeakingMeter]);
+
+  const startLocalMeter = useCallback(async () => {
+    const mediaDevices = globalThis.navigator?.mediaDevices;
+    if (typeof mediaDevices?.getUserMedia !== "function") return false;
+
+    stopLocalMeter();
+
+    const selectedInput = preferences.monitorInputDeviceId;
+    const baseAudio = {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      channelCount: 1
+    };
+
+    const candidates = [];
+    if (selectedInput && selectedInput !== "default") {
+      candidates.push({ ...baseAudio, deviceId: { exact: selectedInput } });
+    }
+    candidates.push(baseAudio);
+
+    let stream = null;
+    for (const audio of candidates) {
+      try {
+        stream = await mediaDevices.getUserMedia({ audio });
+        break;
+      } catch {
+        // Try the default input when a saved browser device id became stale.
+      }
+    }
+
+    if (!stream) return false;
+
+    monitorStreamRef.current = stream;
+    prepareSpeakingMeter();
+    startSpeakingMeter("local", stream);
+    return true;
+  }, [
+    preferences.monitorInputDeviceId,
+    prepareSpeakingMeter,
+    startSpeakingMeter,
+    stopLocalMeter
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!monitoringEnabled) {
+      stopLocalMeter();
+      return stopLocalMeter;
+    }
+
+    startLocalMeter().then((started) => {
+      if (cancelled && started) stopLocalMeter();
+    });
+
+    const unlockOnGesture = () => {
+      prepareSpeakingMeter();
+      if (!monitorStreamRef.current) startLocalMeter();
+    };
+
+    globalThis.addEventListener?.("pointerdown", unlockOnGesture, { once: true });
+    globalThis.addEventListener?.("keydown", unlockOnGesture, { once: true });
+
+    return () => {
+      cancelled = true;
+      globalThis.removeEventListener?.("pointerdown", unlockOnGesture);
+      globalThis.removeEventListener?.("keydown", unlockOnGesture);
+      stopLocalMeter();
+    };
+  }, [
+    monitoringEnabled,
+    prepareSpeakingMeter,
+    startLocalMeter,
+    stopLocalMeter
+  ]);
 
   useEffect(() => {
     const mediaDevices = globalThis.navigator?.mediaDevices;
@@ -252,8 +271,17 @@ export default function AudioSettings() {
     });
   };
 
-  const toggleMonitoring = () =>
-    runMonitoringToggle(() =>
+  const toggleMonitoring = () => {
+    if (!monitoringEnabled) {
+      // Must happen synchronously inside the user gesture, otherwise Chromium
+      // may keep AudioContext suspended and the analyser will read silence.
+      prepareSpeakingMeter();
+      void startLocalMeter();
+    } else {
+      stopLocalMeter();
+    }
+
+    return runMonitoringToggle(() =>
       runAudioAction(
         monitoringEnabled
           ? api.stopDirectMonitoring
@@ -261,25 +289,96 @@ export default function AudioSettings() {
         "Не удалось изменить прослушивание"
       )
     );
+  };
+
+  const testSpeakers = useCallback(async () => {
+    if (speakerTestState === "playing") return;
+
+    const AudioContextClass =
+      globalThis.AudioContext || globalThis.webkitAudioContext;
+
+    if (typeof AudioContextClass !== "function") {
+      await alert("Не удалось запустить проверку звука: аудиосистема браузера недоступна.");
+      return;
+    }
+
+    setSpeakerTestState("playing");
+
+    let context;
+    let audio;
+    try {
+      context = new AudioContextClass({ latencyHint: "interactive" });
+      if (context.state === "suspended") await context.resume();
+
+      const destination = context.createMediaStreamDestination();
+      const gain = context.createGain();
+      const oscillator = context.createOscillator();
+
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.14, context.currentTime + 0.04);
+      gain.gain.setValueAtTime(0.14, context.currentTime + 0.55);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.85);
+
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(523.25, context.currentTime);
+      oscillator.frequency.setValueAtTime(659.25, context.currentTime + 0.42);
+      oscillator.connect(gain);
+      gain.connect(destination);
+
+      audio = document.createElement("audio");
+      audio.srcObject = destination.stream;
+      audio.volume = 1;
+
+      const outputId = preferences.monitorOutputDeviceId;
+      if (
+        outputId &&
+        outputId !== "default" &&
+        typeof audio.setSinkId === "function"
+      ) {
+        await audio.setSinkId(outputId);
+      }
+
+      await audio.play();
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.9);
+
+      await new Promise((resolve) => globalThis.setTimeout(resolve, 1050));
+      setSpeakerTestState("success");
+      globalThis.setTimeout(() => setSpeakerTestState("idle"), 1800);
+    } catch (error) {
+      setSpeakerTestState("error");
+      await alert(`Не удалось проверить динамики: ${getErrorMessage(error)}`);
+      globalThis.setTimeout(() => setSpeakerTestState("idle"), 1800);
+    } finally {
+      try {
+        audio?.pause?.();
+        audio?.srcObject?.getTracks?.().forEach((track) => track.stop());
+      } catch {}
+      try {
+        await context?.close?.();
+      } catch {}
+    }
+  }, [alert, preferences.monitorOutputDeviceId, speakerTestState]);
+
   const DRIVER_OPTIONS = [
-    { value: "auto", label: "Авто · Windows / PortAudio" },
+    { value: "auto", label: "Автоматически · рекомендуется" },
     ...(asioDrivers?.length
-      ? [{ value: "asio", label: "ASIO · минимальная задержка" }]
+      ? [{ value: "asio", label: "ASIO · для аудиоинтерфейсов" }]
       : [])
   ];
 
   const recordingFields = [
     [
-      "Устройство ввода",
-      "Микрофон для записи",
+      "Микрофон",
+      "С этого устройства будет записываться ваш голос",
       settings?.input_device_id ?? "",
       createIndexedDeviceOptions(devices),
       "input_device_id",
       "nullable-number"
     ],
     [
-      "Аудиодрайвер",
-      "ASIO даёт минимальную задержку",
+      "Режим работы звука",
+      "Оставьте «Автоматически», если не используете профессиональный аудиоинтерфейс",
       audioDriver,
       DRIVER_OPTIONS,
       "audio_driver",
@@ -289,8 +388,8 @@ export default function AudioSettings() {
     ...(audioDriver === "asio"
       ? [
           [
-            "ASIO-драйвер",
-            "Нативный драйвер аудиоинтерфейса",
+            "Драйвер аудиоинтерфейса",
+            "Выберите фирменный драйвер вашего аудиоинтерфейса",
             settings?.asio_driver_name ?? "",
             (asioDrivers ?? []).map(({ name }) => ({
               value: name,
@@ -303,8 +402,8 @@ export default function AudioSettings() {
         ]
       : []),
     [
-      "Буфер аудио",
-      "Меньше буфер — ниже задержка",
+      "Задержка звука",
+      "Меньшее значение быстрее передаёт голос, но может сильнее нагружать компьютер",
       settings?.buffer_size ?? 64,
       createBufferSizeOptions(),
       "buffer_size",
@@ -328,40 +427,40 @@ export default function AudioSettings() {
 
   const monitoringFields = [
     [
-      "Выход прямого мониторинга",
-      "Выход того же аудиоинтерфейса",
+      "Куда выводить голос без задержки",
+      "Обычно выбирают наушники или выход того же аудиоинтерфейса",
       settings?.output_device_id ?? "",
       createIndexedDeviceOptions(outputs, "Системное устройство"),
       "backendDevice",
       "output_device_id"
     ],
     [
-      "Вход для прослушивания",
-      null,
+      "Микрофон для проверки",
+      "Используется для индикатора уровня и проверки вашего голоса",
       preferences.monitorInputDeviceId,
       createBrowserDeviceOptions(browserDevices.inputs, "Микрофон"),
       "preference",
       "monitorInputDeviceId"
     ],
     [
-      "Выход для прослушивания",
-      null,
+      "Динамики или наушники",
+      "Сюда будет выводиться звук проверки и прослушивания",
       preferences.monitorOutputDeviceId,
       createBrowserDeviceOptions(browserDevices.outputs, "Аудиоустройство"),
       "preference",
       "monitorOutputDeviceId"
     ],
     [
-      "Режим задержки",
-      null,
+      "Приоритет воспроизведения",
+      "Низкая задержка лучше для пения, стабильный режим — если звук прерывается",
       preferences.monitorLatencyHint,
       LATENCY_OPTIONS,
       "preference",
       "monitorLatencyHint"
     ],
     [
-      "Режим прослушивания",
-      null,
+      "Как прослушивать микрофон",
+      "Выберите способ, которым приложение будет возвращать ваш голос в наушники",
       preferences.monitorMode,
       MONITOR_MODE_OPTIONS,
       "preference",
@@ -383,8 +482,8 @@ export default function AudioSettings() {
       <section className="audio-settings-group u-stack-4">
         <GroupHeader
           icon={Mic2}
-          title="Запись и драйвер"
-          text="Основное устройство и режим работы аудиосистемы"
+          title="Микрофон и запись"
+          text="Выберите микрофон и настройте запись голоса"
         />
         <div className="settings-field-grid">
           {recordingFields.map(
@@ -405,8 +504,8 @@ export default function AudioSettings() {
       <section className="audio-settings-group u-stack-4">
         <GroupHeader
           icon={Headphones}
-          title="Прослушивание"
-          text="Маршрутизация микрофона и задержка мониторинга"
+          title="Проверка звука и прослушивание"
+          text="Проверьте микрофон, динамики и при необходимости включите прослушивание своего голоса"
         />
         <div className="settings-field-grid">
           {monitoringFields.map(([label, hint, value, options, type, name]) => (
@@ -421,8 +520,8 @@ export default function AudioSettings() {
             />
           ))}
           <Field
-            label="Уровень микрофона"
-            hint="Та же громкость микрофона, что используется в микшере Karaoke"
+            label="Громкость вашего голоса"
+            hint="Эта же громкость используется в микшере во время Karaoke"
             variant="card"
           >
             <div className="audio-level-control">
@@ -439,14 +538,41 @@ export default function AudioSettings() {
           </Field>
         </div>
 
+        <div className="audio-monitor-card audio-speaker-test-card">
+          <div className="audio-monitor-card__copy">
+            <Volume2 size={18} />
+
+            <div>
+              <strong>Проверить динамики или наушники</strong>
+              <small>
+                {speakerTestState === "playing"
+                  ? "Воспроизводим тестовый звук…"
+                  : speakerTestState === "success"
+                    ? "Тестовый звук воспроизведён"
+                    : speakerTestState === "error"
+                      ? "Проверка не удалась"
+                      : "Нажмите кнопку и убедитесь, что слышите короткий сигнал"}
+              </small>
+            </div>
+          </div>
+
+          <Button
+            variant="primary"
+            disabled={speakerTestState === "playing"}
+            onClick={testSpeakers}
+          >
+            {speakerTestState === "playing" ? "Проверяем…" : "Проверить звук"}
+          </Button>
+        </div>
+
         <div className="audio-monitor-card">
           <div className="audio-monitor-card__copy">
             <Activity size={18} />
 
             <div>
-              <strong>Прослушивать с этого устройства</strong>
+              <strong>Слышать свой голос в наушниках</strong>
               <small>
-                Прослушивание {monitoringEnabled ? "включено" : "выключено"}
+                Сейчас {monitoringEnabled ? "включено" : "выключено"}. Говорите в микрофон — индикатор ниже покажет уровень
               </small>
             </div>
           </div>
@@ -462,7 +588,7 @@ export default function AudioSettings() {
             disabled={saving || togglingMonitoring}
             onClick={toggleMonitoring}
           >
-            {monitoringEnabled ? "Остановить" : "Прослушивать"}
+            {monitoringEnabled ? "Выключить прослушивание" : "Слышать себя"}
           </Button>
         </div>
       </section>
