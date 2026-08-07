@@ -7463,3 +7463,204 @@ select:focus,
     saturate(1.45)
     drop-shadow(0 0 0.4rem color-mix(in srgb, var(--color-primary) 66%, transparent));
 }
+
+/* Library floating actions: radio lives next to Settings and uses the same FAB. */
+.app-floating-controls {
+  position: fixed;
+  inset-inline-end: var(--space-5);
+  inset-block-end: var(--space-5);
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  z-index: 80;
+}
+
+.app-floating-controls .app-settings-fab {
+  position: relative;
+  inset: auto;
+  inline-size: 3.85rem;
+  block-size: 3.85rem;
+  flex: 0 0 3.85rem;
+  transition:
+    transform var(--duration-fast),
+    color var(--duration-fast),
+    background var(--duration-fast),
+    border-color var(--duration-fast),
+    box-shadow var(--duration-fast);
+}
+
+.app-radio-fab-wrap {
+  position: relative;
+}
+
+.app-radio-fab.is-playing {
+  color: var(--color-highlight);
+  border-color: color-mix(in srgb, var(--color-primary) 58%, var(--color-border-strong));
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--color-primary) 20%, var(--color-surface-strong)),
+    color-mix(in srgb, var(--color-primary-strong) 12%, var(--color-surface-soft))
+  );
+  box-shadow:
+    inset 0 0.0625rem 0 color-mix(in srgb, var(--color-highlight) 25%, transparent),
+    0 0 calc(0.9rem + var(--radio-bass, 0) * 1.8rem)
+      color-mix(in srgb, var(--color-primary) 48%, transparent),
+    0 0.875rem 2.2rem color-mix(in srgb, var(--color-bg-deep) 26%, transparent);
+}
+
+.app-radio-fab.is-playing svg {
+  animation: radio-button-pulse 0.95s ease-in-out infinite alternate;
+}
+
+.app-radio-fab.is-loading svg {
+  animation: radio-button-spin 0.9s linear infinite;
+}
+
+.app-radio-volume {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-end: calc(100% + 0.55rem);
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  inline-size: 13rem;
+  padding: 0.68rem 0.75rem;
+  border: var(--hairline) solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-soft);
+  background: var(--color-surface-strong);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(1rem) saturate(140%);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(0.35rem);
+  pointer-events: none;
+  transition:
+    opacity var(--duration-fast),
+    transform var(--duration-fast),
+    visibility var(--duration-fast);
+}
+
+.app-radio-fab-wrap:hover .app-radio-volume,
+.app-radio-fab-wrap:focus-within .app-radio-volume {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.app-radio-volume::after {
+  content: "";
+  position: absolute;
+  inset: 100% 0 -0.65rem;
+}
+
+.app-radio-volume input {
+  min-inline-size: 0;
+  flex: 1;
+  accent-color: var(--color-primary);
+}
+
+.app-radio-volume span {
+  min-inline-size: 2.4rem;
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+  text-align: end;
+}
+
+/* Stronger theme-colored music terrain. No fade at the bottom: the mesh stays
+   visible all the way to the lower edge and audio bands deform it separately. */
+.library-wave-terrain {
+  --wave-terrain-rgb: 255, 224, 236;
+  --wave-terrain-accent-rgb: 255, 72, 126;
+  block-size: min(72vh, 50rem);
+  opacity: 1;
+  mix-blend-mode: screen;
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 9%, #000 100%);
+  filter:
+    contrast(1.72)
+    brightness(calc(1.38 + var(--radio-bass, 0) * 1.1))
+    saturate(1.6)
+    drop-shadow(0 0 0.36rem color-mix(in srgb, var(--color-primary) 72%, transparent))
+    drop-shadow(0 0 1rem color-mix(in srgb, var(--color-primary) 42%, transparent));
+}
+
+:root[data-theme="light"] .library-wave-terrain {
+  --wave-terrain-rgb: 116, 13, 62;
+  --wave-terrain-accent-rgb: 232, 34, 105;
+  opacity: 1;
+  mix-blend-mode: multiply;
+  filter:
+    contrast(1.62)
+    saturate(1.65)
+    brightness(calc(0.94 + var(--radio-bass, 0) * 0.24))
+    drop-shadow(0 0 0.28rem color-mix(in srgb, var(--color-primary) 64%, transparent));
+}
+
+:root[data-theme="green"] .library-wave-terrain {
+  --wave-terrain-rgb: 177, 255, 215;
+  --wave-terrain-accent-rgb: 58, 255, 163;
+  opacity: 1;
+  mix-blend-mode: screen;
+  filter:
+    contrast(1.72)
+    brightness(calc(1.4 + var(--radio-bass, 0) * 1.08))
+    saturate(1.7)
+    drop-shadow(0 0 0.42rem color-mix(in srgb, var(--color-primary) 72%, transparent))
+    drop-shadow(0 0 1.05rem color-mix(in srgb, var(--color-primary) 42%, transparent));
+}
+
+:root[data-theme="violet"] .library-wave-terrain {
+  --wave-terrain-rgb: 239, 213, 255;
+  --wave-terrain-accent-rgb: 190, 78, 255;
+  opacity: 1;
+  mix-blend-mode: screen;
+  filter:
+    contrast(1.76)
+    brightness(calc(1.42 + var(--radio-bass, 0) * 1.1))
+    saturate(1.75)
+    drop-shadow(0 0 0.44rem color-mix(in srgb, var(--color-primary) 74%, transparent))
+    drop-shadow(0 0 1.08rem color-mix(in srgb, var(--color-primary) 44%, transparent));
+}
+
+/* Song card bars normally keep their decorative idle movement. While radio is
+   playing, each one follows its own analyser band in real time. */
+.library-song-card-art.is-radio-reactive .library-song-card-wave i {
+  animation: none;
+  transform: scaleY(
+    clamp(
+      var(--wave-min, 0.28),
+      calc(0.24 + var(--audio-band, 0) * 1.18),
+      1.18
+    )
+  );
+  filter:
+    brightness(calc(0.9 + var(--audio-band, 0) * 0.65))
+    drop-shadow(
+      0 0 calc(var(--audio-band, 0) * 0.38rem)
+        color-mix(in srgb, var(--color-primary) 62%, transparent)
+    );
+  transition: transform 70ms linear, filter 70ms linear;
+}
+
+@media (max-width: 42rem) {
+  .app-floating-controls {
+    inset-inline-end: 0.875rem;
+    inset-block-end: 0.875rem;
+    gap: 0.55rem;
+  }
+
+  .app-floating-controls .app-settings-fab {
+    inline-size: 3.25rem;
+    block-size: 3.25rem;
+    flex-basis: 3.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-radio-fab svg,
+  .library-song-card-art.is-radio-reactive .library-song-card-wave i {
+    animation: none !important;
+    transition: none;
+  }
+}

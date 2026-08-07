@@ -78,6 +78,7 @@ export function RadioProvider({ children }) {
   const analyserRef = useRef(null);
   const frequencyDataRef = useRef(null);
   const bassRef = useRef(0);
+  const spectrumRef = useRef(Array(18).fill(0));
   const animationRef = useRef(0);
   const volumeFadeRef = useRef(0);
   const analysisVersionRef = useRef(0);
@@ -139,7 +140,13 @@ export function RadioProvider({ children }) {
     analysisVersionRef.current += 1;
     cancelAnimationFrame(animationRef.current);
     bassRef.current = 0;
-    document.documentElement.style.setProperty("--radio-bass", "0");
+    spectrumRef.current.fill(0);
+    const rootStyle = document.documentElement.style;
+    rootStyle.setProperty("--radio-bass", "0");
+    rootStyle.setProperty("--radio-analysis-active", "0");
+    spectrumRef.current.forEach((_, index) => {
+      rootStyle.setProperty(`--radio-band-${index}`, "0");
+    });
   }, []);
 
   const startAnalysis = useCallback(() => {
@@ -163,13 +170,41 @@ export function RadioProvider({ children }) {
         return;
       }
       const binHz = audioContext.sampleRate / analyser.fftSize;
-      const firstBin = Math.max(1, Math.floor(35 / binHz));
-      const lastBin = Math.min(data.length - 1, Math.ceil(180 / binHz));
-      let sum = 0;
-      for (let index = firstBin; index <= lastBin; index += 1) sum += data[index];
-      const raw = sum / Math.max(1, lastBin - firstBin + 1) / 255;
-      bassRef.current += (raw - bassRef.current) * (raw > bassRef.current ? 0.38 : 0.1);
-      document.documentElement.style.setProperty("--radio-bass", bassRef.current.toFixed(3));
+      const averageRange = (fromHz, toHz) => {
+        const first = Math.max(1, Math.floor(fromHz / binHz));
+        const last = Math.min(data.length - 1, Math.ceil(toHz / binHz));
+        let sum = 0;
+        for (let index = first; index <= last; index += 1) sum += data[index];
+        return sum / Math.max(1, last - first + 1) / 255;
+      };
+
+      const rawBass = averageRange(35, 180);
+      bassRef.current +=
+        (rawBass - bassRef.current) * (rawBass > bassRef.current ? 0.46 : 0.12);
+
+      // 18 logarithmic-ish bands. Each visual column gets its own energy, so
+      // the terrain and song cards behave like an equalizer instead of one
+      // surface moving up and down as a whole.
+      const bands = spectrumRef.current;
+      const minHz = 45;
+      const maxHz = Math.min(12000, audioContext.sampleRate * 0.45);
+      for (let band = 0; band < bands.length; band += 1) {
+        const t0 = band / bands.length;
+        const t1 = (band + 1) / bands.length;
+        const fromHz = minHz * (maxHz / minHz) ** t0;
+        const toHz = minHz * (maxHz / minHz) ** t1;
+        const raw = averageRange(fromHz, toHz);
+        const boosted = Math.min(1, raw * (band < 5 ? 1.42 : band < 12 ? 1.72 : 2.05));
+        const response = boosted > bands[band] ? 0.58 : 0.16;
+        bands[band] += (boosted - bands[band]) * response;
+      }
+
+      const rootStyle = document.documentElement.style;
+      rootStyle.setProperty("--radio-bass", bassRef.current.toFixed(3));
+      rootStyle.setProperty("--radio-analysis-active", "1");
+      bands.forEach((level, index) => {
+        rootStyle.setProperty(`--radio-band-${index}`, level.toFixed(3));
+      });
       animationRef.current = requestAnimationFrame(readBass);
     };
 
@@ -418,7 +453,7 @@ export function RadioProvider({ children }) {
 
   useEffect(() => {
     mountedRef.current = true;
-    if (initial.enabled) turnOn({ remember: false, analyse: false, fadeIn: true });
+    if (initial.enabled) turnOn({ remember: false, analyse: true, fadeIn: true });
     return () => {
       mountedRef.current = false;
       playbackVersionRef.current += 1;
@@ -473,7 +508,8 @@ export function RadioProvider({ children }) {
     toggle,
     turnOff,
     turnOn,
-    getBassLevel: () => bassRef.current
+    getBassLevel: () => bassRef.current,
+    getSpectrumLevels: () => spectrumRef.current
   }), [error, isLoading, isPlaying, setRecordingActive, setStation, setVolume, station, stationId, toggle, turnOff, turnOn, volume]);
 
   return (

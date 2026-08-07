@@ -1,5 +1,4 @@
-import { Minus, Radio, Square, Volume2, X } from "lucide-react";
-import { useRadio } from "../contexts/radio";
+import { Minus, Square, X } from "lucide-react";
 import { IconButton } from "./ui";
 
 const WINDOW_ACTIONS = [
@@ -16,8 +15,6 @@ function invokeWindowAction(electronAPI, action) {
 
 export default function TitleBar({ title = "A&D Voice" }) {
   const { electronAPI } = window;
-  const { error, isLoading, isPlaying, station, toggle, volume, setVolume } =
-    useRadio();
 
   return (
     <header className="title-bar">
@@ -27,39 +24,6 @@ export default function TitleBar({ title = "A&D Voice" }) {
       </div>
 
       <div className="title-bar__actions">
-        <div className="title-bar__radio-wrap">
-          <IconButton
-            unstyled
-            icon={Radio}
-            size={15}
-            label={
-              error ||
-              (isPlaying
-                ? `Выключить ${station.name}`
-                : `Включить ${station.name}`)
-            }
-            className={[
-              "title-bar__button title-bar__radio",
-              isPlaying && "is-playing",
-              isLoading && "is-loading"
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            onClick={toggle}
-          />
-          <div className="title-bar__radio-volume" aria-label="Громкость радио">
-            <Volume2 size={14} />
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={volume}
-              onChange={(event) => setVolume(event.target.value)}
-            />
-            <span>{Math.round(volume * 100)}%</span>
-          </div>
-        </div>
         {electronAPI &&
           WINDOW_ACTIONS.map(({ id, label, Icon, size, danger }) => (
             <IconButton
