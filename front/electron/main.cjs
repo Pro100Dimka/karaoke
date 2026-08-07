@@ -206,16 +206,41 @@ function stopBackend() {
   request.end();
   setTimeout(finish, 550);
 }
+const THEME_ICONS = {
+  app: "app.ico",
+  dark: "dark.ico",
+  light: "light.ico",
+  green: "green.ico",
+  violet: "violet.ico"
+};
 
+function getThemeIcon(theme = "app") {
+  const icon = THEME_ICONS[theme] ?? THEME_ICONS.app;
+
+  return path.join(__dirname, "..", "assets", "icons", icon);
+}
+
+handleTrustedIpc("window:setIconTheme", (theme) => {
+  if (!mainWindow) return false;
+  if (!THEME_ICONS[theme] || theme === "app") return false;
+
+  mainWindow.setIcon(getThemeIcon(theme));
+
+  return true;
+});
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 1100,
     minHeight: 700,
-    frame: false, // свой titlebar — см. src/components/TitleBar.jsx
+    frame: false,
+
+    icon: getThemeIcon("app"),
+
     backgroundColor: "#0d0a1a",
     show: false,
+
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,

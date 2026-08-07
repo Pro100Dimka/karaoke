@@ -84,7 +84,8 @@
     "productName": "A&D Voice",
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "assets/icons/**/*"
     ],
     "extraResources": [
       {
@@ -96,7 +97,8 @@
       "output": "../release"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "assets/icons/app.ico"
     },
     "nsis": {
       "oneClick": false,
