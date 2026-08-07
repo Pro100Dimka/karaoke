@@ -78,22 +78,41 @@ export default function useLibrarySongActions(props) {
     ]
   );
   const processSong = useCallback(
-    (song) =>
-      runProcessingAction(
+    async (song) => {
+      const status = String(song?.status || "pending").toLowerCase();
+      const isFirstProcessing = status === "pending";
+
+      if (!isFirstProcessing) {
+        const confirmed = await confirmDialog(
+          `Вы точно хотите обработать заново песню «${song?.title || "Без названия"}»? Ранее созданные результаты обработки будут обновлены.`,
+          "Обработать песню заново?"
+        );
+        if (!confirmed) return;
+      }
+
+      await runProcessingAction(
         song,
         api.processSong,
         "Не удалось запустить обработку"
-      ),
-    [runProcessingAction]
+      );
+    },
+    [confirmDialog, runProcessingAction]
   );
   const reprocessSong = useCallback(
-    (song) =>
-      runProcessingAction(
+    async (song) => {
+      const confirmed = await confirmDialog(
+        `Вы точно хотите обработать заново песню «${song?.title || "Без названия"}»? Текущие данные мелодии будут пересозданы.`,
+        "Обработать песню заново?"
+      );
+      if (!confirmed) return;
+
+      await runProcessingAction(
         song,
         api.reprocessMelody,
         "Не удалось переобработать MIDI"
-      ),
-    [runProcessingAction]
+      );
+    },
+    [confirmDialog, runProcessingAction]
   );
   const openSongFolder = useCallback(
     async (song) => {

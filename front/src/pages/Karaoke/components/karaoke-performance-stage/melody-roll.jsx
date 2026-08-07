@@ -9,7 +9,7 @@ const VIEW = {
   width: 1200,
   height: 288,
   labelWidth: 0,
-  keyboardWidth: 74,
+  keyboardWidth: 48,
   seconds: 10
 };
 
@@ -155,15 +155,26 @@ export default function MelodyRoll({
                   height={keyHeight}
                   rx="1.2"
                   fill={isActive ? "#ed214b" : "#f4f3f7"}
-                  fillOpacity={isActive ? ".72" : ".12"}
-                  stroke={isActive ? "#ff6b84" : "#ffffff"}
-                  strokeOpacity={isActive ? ".72" : ".16"}
-                  strokeWidth=".8"
+                  fillOpacity={isActive ? ".58" : ".065"}
+                />
+                <line
+                  x1={
+                    naturalAbove != null && midi - naturalAbove === -2
+                      ? keyboardWidth * 0.62
+                      : 0
+                  }
+                  x2={keyboardWidth}
+                  y1={keyTop}
+                  y2={keyTop}
+                  stroke={isActive ? "#ff91a4" : "#ffffff"}
+                  strokeOpacity={isActive ? ".58" : ".13"}
+                  strokeWidth=".75"
                 />
                 <text
-                  x={keyboardWidth - 8}
-                  y={keyTop + keyHeight / 2 + Math.min(4, keyHeight * 0.18)}
-                  textAnchor="end"
+                  x={7}
+                  y={keyTop + keyHeight / 2}
+                  textAnchor="start"
+                  dominantBaseline="middle"
                   fill={isActive ? "#fff" : "rgba(255,255,255,.72)"}
                   fontSize={Math.min(12, Math.max(8, keyHeight * 0.38))}
                   fontWeight={isActive ? "850" : "700"}
@@ -182,7 +193,7 @@ export default function MelodyRoll({
             const blackHeight = Math.max(4, rowHeight * 0.72);
             const isActive = activeMidi === midi;
             const keyY = center - blackHeight / 2;
-            const keyWidth = keyboardWidth * 0.66;
+            const keyWidth = keyboardWidth * 0.62;
             return (
               <g key={`black-key-${midi}`}>
                 <rect
@@ -192,15 +203,16 @@ export default function MelodyRoll({
                   height={blackHeight}
                   rx="1"
                   fill={isActive ? "#f3234c" : "#05050b"}
-                  fillOpacity={isActive ? ".76" : ".32"}
+                  fillOpacity={isActive ? ".62" : ".16"}
                   stroke={isActive ? "#ff7188" : "#ffffff"}
-                  strokeOpacity={isActive ? ".76" : ".12"}
+                  strokeOpacity={isActive ? ".62" : ".1"}
                   strokeWidth=".8"
                 />
                 <text
-                  x={keyWidth - 6}
-                  y={keyY + blackHeight / 2 + Math.min(3.5, blackHeight * 0.2)}
-                  textAnchor="end"
+                  x={5}
+                  y={keyY + blackHeight / 2}
+                  textAnchor="start"
+                  dominantBaseline="middle"
                   fill={isActive ? "#fff" : "rgba(255,255,255,.82)"}
                   fontSize={Math.min(10.5, Math.max(7.5, blackHeight * 0.46))}
                   fontWeight="800"
@@ -231,8 +243,17 @@ export default function MelodyRoll({
           const noteRight = Math.min(width, x(note.end));
           const noteWidth = Math.max(5, noteRight - noteX - 5);
           const noteY = y(midi) + (rowHeight - noteHeight) / 2;
+          const secondsPast = Math.max(0, currentTime - note.end);
+          const isPast = note.end <= currentTime;
+          const pastOpacity = isPast
+            ? clamp(0.56 * (1 - secondsPast / 2.8), 0.035, 0.56)
+            : 1;
           return (
-            <g key={`note-${index}`}>
+            <g
+              key={`note-${index}`}
+              opacity={pastOpacity}
+              className={isPast ? "melody-note-past" : undefined}
+            >
               <rect
                 x={noteX}
                 y={noteY}
@@ -244,8 +265,9 @@ export default function MelodyRoll({
                     ? "url(#piano-roll-note-current)"
                     : "url(#piano-roll-note)"
                 }
+                fillOpacity={isPast ? ".34" : "1"}
                 stroke="#ffc0ca"
-                strokeOpacity=".94"
+                strokeOpacity={isPast ? ".42" : ".94"}
                 strokeWidth="1.1"
               />
               <line
@@ -254,7 +276,7 @@ export default function MelodyRoll({
                 y1={noteY + 2}
                 y2={noteY + 2}
                 stroke="#fff"
-                strokeOpacity=".54"
+                strokeOpacity={isPast ? ".18" : ".54"}
                 strokeWidth="1"
                 strokeLinecap="round"
               />

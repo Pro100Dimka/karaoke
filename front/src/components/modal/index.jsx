@@ -34,7 +34,12 @@ export default function Modal({
   portal = false,
   closeIconSize = 20,
   tilt = true,
-  titleProps
+  titleProps,
+  backdropClassName = "",
+  modalClassName = "",
+  closeClassName = "",
+  closeAriaLabel = "Закрыть",
+  cardVariant = "neon"
 }) {
   const dialogRef = useRef(null);
   const onCloseRef = useRef(onClose);
@@ -114,9 +119,25 @@ export default function Modal({
 
   if (!isOpen) return null;
 
+  const joinClasses = (...values) =>
+    [...new Set(values.flatMap((value) => String(value || "").split(/\s+/)).filter(Boolean))].join(" ");
+
+  const backdropClasses = joinClasses(
+    "app-modal-backdrop settings-modal-backdrop",
+    backdropClassName
+  );
+  const modalClasses = joinClasses(
+    "app-modal settings-modal modal-card",
+    modalClassName
+  );
+  const closeClasses = joinClasses(
+    "app-modal-close settings-modal-close",
+    closeClassName
+  );
+
   const content = (
     <div
-      className="app-modal-backdrop settings-modal-backdrop"
+      className={backdropClasses}
       role="presentation"
       onMouseDown={(event) => {
         if (
@@ -130,9 +151,9 @@ export default function Modal({
       <Card
         ref={dialogRef}
         as="section"
-        variant="neon"
+        variant={cardVariant}
         tilt={tilt}
-        className="app-modal settings-modal modal-card"
+        className={modalClasses}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -145,9 +166,9 @@ export default function Modal({
           unstyled
           icon={X}
           size={closeIconSize}
-          className="app-modal-close settings-modal-close"
+          className={closeClasses}
           onClick={() => onCloseRef.current?.()}
-          label="Закрыть"
+          label={closeAriaLabel}
         />
         {titleProps && <ModalTitle {...titleProps} />}
         {children}

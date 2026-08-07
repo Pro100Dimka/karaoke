@@ -26,6 +26,12 @@ import {
   resolveVisibleSongs
 } from "./utils";
 
+const setGlobalRouteBlackout = (visible) => {
+  window.dispatchEvent(
+    new CustomEvent("app:route-blackout", { detail: { visible } })
+  );
+};
+
 export default function Library({ onOpenSongSettings }) {
   const location = useLocation();
   const [query, setQuery] = useState("");
@@ -55,7 +61,12 @@ export default function Library({ onOpenSongSettings }) {
 
     // Library is mounted behind a black overlay. Let the analysis modal and
     // page render under that blackout, then reveal everything together.
-    const timer = window.setTimeout(() => setKaraokeTransitioning(false), 90);
+    const timer = window.setTimeout(() => {
+      setKaraokeTransitioning(false);
+      // The app-level blackout survives the route swap and is released only
+      // after Library has mounted, so the themed body can never flash through.
+      setGlobalRouteBlackout(false);
+    }, 120);
     return () => window.clearTimeout(timer);
   }, [returningFromKaraoke]);
 
@@ -222,6 +233,7 @@ export default function Library({ onOpenSongSettings }) {
                   // Fade the Library itself to black before route navigation.
                   // Karaoke starts already black, so the route switch is never
                   // visible as a hard cut.
+                  setGlobalRouteBlackout(true);
                   setKaraokeTransitioning(true);
                   await new Promise((resolve) => window.setTimeout(resolve, 920));
                   navigate("/karaoke", {
@@ -229,6 +241,7 @@ export default function Library({ onOpenSongSettings }) {
                   });
                 } catch (openError) {
                   setKaraokeTransitioning(false);
+                  setGlobalRouteBlackout(false);
                   await notify(
                     `Не удалось открыть песню: ${getErrorMessage(openError)}`
                   );

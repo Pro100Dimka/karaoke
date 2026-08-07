@@ -8849,3 +8849,313 @@ body {
 .melody-roll .piano-roll-keyboard-bed {
   opacity: 0.12 !important;
 }
+
+
+/* ==========================================================================
+   KARAOKE VIEWPORT + PIANO/NODE POLISH
+   The window chrome is overlay-only, so Karaoke must consume the whole
+   viewport. Piano keys stay subtle and passed notes fade like glass.
+   ========================================================================== */
+.karaoke-app-shell,
+.karaoke-app-shell .app-body,
+.karaoke-app-shell .app-main,
+.karaoke-stage,
+.karaoke-performance-stage.karaoke-video-stage {
+  inline-size: 100% !important;
+  block-size: 100dvh !important;
+  min-block-size: 100dvh !important;
+  max-block-size: 100dvh !important;
+}
+
+.karaoke-app-shell {
+  overflow: hidden !important;
+}
+
+.karaoke-app-shell .app-body,
+.karaoke-app-shell .app-main {
+  overflow: hidden !important;
+}
+
+.melody-roll .melody-note-past {
+  mix-blend-mode: screen;
+}
+
+
+/* ==========================================================================
+   GLOBAL ROUTE BLACKOUT + STRONGER LIBRARY MUSIC NOTES
+   ========================================================================== */
+.app-route-blackout {
+  position: fixed;
+  z-index: 2147483000;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 420ms ease, visibility 0s linear 420ms;
+}
+
+.app-route-blackout.is-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 420ms ease, visibility 0s linear 0s;
+}
+
+.library-music-object--notes {
+  inset: 14% 9% auto 17% !important;
+  inline-size: 72% !important;
+  block-size: 20% !important;
+  z-index: 3;
+}
+
+.library-music-object--notes span {
+  opacity: 0.56 !important;
+}
+
+.library-music-object--notes span::before {
+  font-size: clamp(1.35rem, 2.65vw, 2.8rem) !important;
+  font-weight: 800 !important;
+  color: color-mix(in srgb, var(--color-primary) 62%, white) !important;
+  text-shadow:
+    0 0 0.45rem color-mix(in srgb, var(--color-primary) 72%, transparent),
+    0 0 1.15rem color-mix(in srgb, var(--color-primary-hover) 55%, transparent),
+    0 0 2.4rem color-mix(in srgb, var(--color-accent) 38%, transparent) !important;
+}
+
+:root[data-theme="light"] .library-music-object--notes span {
+  opacity: 0.72 !important;
+}
+
+:root[data-theme="light"] .library-music-object--notes span::before {
+  color: var(--color-raspberry) !important;
+  text-shadow:
+    0 0 0.35rem color-mix(in srgb, white 72%, transparent),
+    0 0 0.9rem color-mix(in srgb, var(--color-raspberry) 56%, transparent) !important;
+}
+
+/* ========================================================================== 
+   MODAL POLISH · corner close controls + stable performance analysis layout
+   ========================================================================== */
+
+/* The close control sits directly on the modal corner and intentionally hangs
+   half outside the card. Modal scrolling belongs to .modal-scroll, not the shell. */
+.app-modal.modal-card,
+.settings-modal.modal-card,
+.song-settings-modal.modal-card,
+.processing-modal.modal-card,
+.song-recordings-modal.modal-card,
+.online-room-modal.modal-card,
+.app-dialog.modal-card,
+.performance-analysis-modal.modal-card {
+  overflow: visible;
+}
+
+.app-modal > .ui-card__panel,
+.app-modal > .ui-card__panel > .ui-card__content {
+  overflow: visible;
+}
+
+.app-modal-close,
+.settings-modal-close,
+.song-recordings-close,
+.modal-close,
+.performance-analysis-close,
+.app-dialog-close {
+  position: absolute;
+  z-index: 120;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  margin: 0;
+  inline-size: 2.65rem;
+  block-size: 2.65rem;
+  aspect-ratio: 1;
+  transform: translate(50%, -50%);
+  border: var(--hairline) solid var(--color-border-strong);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-surface-strong) 92%, transparent);
+  backdrop-filter: blur(0.75rem) saturate(145%);
+  box-shadow:
+    0 0.55rem 1.25rem color-mix(in srgb, var(--color-bg-deep) 34%, transparent),
+    0 0 0.7rem color-mix(in srgb, var(--color-primary) 32%, transparent),
+    inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 10%, transparent);
+}
+
+.app-modal-close:hover,
+.settings-modal-close:hover,
+.song-recordings-close:hover,
+.modal-close:hover,
+.performance-analysis-close:hover,
+.app-dialog-close:hover {
+  transform: translate(50%, -50%) scale(1.08);
+}
+
+/* The microphone settings modal is the one custom modal not built on <Modal>. */
+.karaoke-settings-modal {
+  overflow: visible;
+}
+
+.karaoke-settings-close {
+  inset: 0 0 auto auto;
+  margin: 0;
+  inline-size: 2.65rem;
+  block-size: 2.65rem;
+  transform: translate(50%, -50%);
+  border-color: var(--color-border-strong);
+  background: color-mix(in srgb, var(--color-surface-strong) 92%, transparent);
+  backdrop-filter: blur(0.75rem) saturate(145%);
+  box-shadow:
+    0 0.55rem 1.25rem color-mix(in srgb, var(--color-bg-deep) 34%, transparent),
+    0 0 0.7rem color-mix(in srgb, var(--color-primary) 32%, transparent);
+}
+
+.karaoke-settings-close:hover {
+  transform: translate(50%, -50%) scale(1.08);
+}
+
+/* Performance analysis: one predictable flex shell, one scrolling body, and
+   metric cards that cannot overlap or escape their grid. */
+.performance-analysis-modal {
+  inline-size: min(48rem, calc(100vw - 3rem));
+  max-inline-size: min(48rem, calc(100vw - 3rem));
+  max-block-size: min(88dvh, 50rem);
+  padding: 0;
+}
+
+.performance-analysis-modal > .ui-card__panel,
+.performance-analysis-modal > .ui-card__panel > .ui-card__content {
+  min-inline-size: 0;
+  min-block-size: 0;
+  max-block-size: min(88dvh, 50rem);
+  overflow: visible;
+}
+
+.performance-analysis-modal .modal-title {
+  flex: 0 0 auto;
+  padding: var(--space-5) var(--space-6) var(--space-4);
+  border-bottom: var(--hairline) solid var(--color-border);
+}
+
+.performance-analysis-body {
+  display: flex;
+  min-inline-size: 0;
+  min-block-size: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6) var(--space-6);
+  overflow: auto;
+}
+
+.performance-analysis-grade {
+  align-self: center;
+  max-inline-size: 100%;
+  color: var(--color-primary-hover);
+  font: 900 clamp(1rem, 1.8vw, 1.35rem) / 1.15 var(--font-display);
+  text-align: center;
+}
+
+.performance-analysis-score {
+  align-self: center;
+  font: 950 clamp(3rem, 8vw, 5.4rem) / 0.9 var(--font-display);
+  letter-spacing: -0.055em;
+  text-align: center;
+}
+
+.performance-analysis-score small {
+  margin-inline-start: 0.18em;
+  font-size: 0.34em;
+  letter-spacing: 0;
+}
+
+.performance-analysis-body > .text-muted {
+  margin-block-start: calc(var(--space-2) * -1);
+  text-align: center;
+}
+
+.performance-analysis-metrics,
+.performance-analysis-metrics-expanded {
+  display: grid;
+  inline-size: 100%;
+  min-inline-size: 0;
+  grid-column: auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.performance-analysis-metrics > div {
+  display: flex;
+  min-inline-size: 0;
+  min-block-size: 5rem;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: var(--hairline) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-surface-soft) 78%, transparent);
+}
+
+.performance-analysis-metrics > div span {
+  overflow-wrap: anywhere;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.performance-analysis-metrics > div strong {
+  overflow-wrap: anywhere;
+  color: var(--color-text);
+  font-size: clamp(1rem, 2vw, 1.3rem);
+}
+
+.performance-analysis-advice {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--space-2);
+  border: var(--hairline) solid var(--color-border);
+}
+
+.performance-analysis-advice span {
+  overflow-wrap: anywhere;
+  color: var(--color-text-soft);
+  line-height: 1.55;
+}
+
+.performance-analysis-body .audio-player,
+.performance-analysis-body audio {
+  inline-size: 100%;
+  max-inline-size: 100%;
+}
+
+.performance-analysis-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding-block-start: var(--space-1);
+}
+
+@media (max-width: 40rem) {
+  .performance-analysis-modal {
+    inline-size: calc(100vw - 1.5rem);
+    max-inline-size: calc(100vw - 1.5rem);
+  }
+
+  .performance-analysis-modal .modal-title,
+  .performance-analysis-body {
+    padding-inline: var(--space-4);
+  }
+
+  .performance-analysis-metrics,
+  .performance-analysis-metrics-expanded {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Library theme image overscan. Parallax can now move a few pixels without
+   revealing the image boundary or the body background. */
+body {
+  background-size: calc(100% + 3rem) auto;
+  background-color: var(--color-bg-deep);
+}

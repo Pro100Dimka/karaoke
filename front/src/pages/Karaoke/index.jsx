@@ -36,6 +36,12 @@ import { getMicrophoneLevel } from "./utils/transport";
 // components operate on one predictable shape. Pure transformations live in
 // utils/data.js and are covered by regression tests.
 
+const setGlobalRouteBlackout = (visible) => {
+  window.dispatchEvent(
+    new CustomEvent("app:route-blackout", { detail: { visible } })
+  );
+};
+
 export default function Karaoke({ onOpenAppSettings }) {
   const onlineRoom = useOnlineRoom();
   const {
@@ -128,6 +134,16 @@ export default function Karaoke({ onOpenAppSettings }) {
     revealControls,
     showControls
   } = useKaraokeControls({ autoHideEnabled: autoHideConsole });
+
+  useEffect(() => {
+    if (!autoStartRequested) return undefined;
+
+    // Library keeps an app-level black layer mounted across the route change.
+    // Karaoke already starts with its own blackout, so hand off the cover only
+    // after this route has painted once.
+    const timer = window.setTimeout(() => setGlobalRouteBlackout(false), 80);
+    return () => window.clearTimeout(timer);
+  }, [autoStartRequested]);
 
   const randomizeSceneVideo = useCallback(() => {
     const video = sceneVideoRef.current;
@@ -471,6 +487,12 @@ export default function Karaoke({ onOpenAppSettings }) {
     if (stopped) hasStartedPlaybackRef.current = false;
 
     const analysisId = analysisRecordingIdRef.current;
+
+    // Keep one blackout mounted outside the routed pages themselves. This
+    // survives Karaoke unmounting and prevents the themed body from flashing
+    // for a frame before Library mounts.
+    setGlobalRouteBlackout(true);
+    await waitForScene(40);
 
     // Switch routes while the stage is fully black. Library receives the
     // recording id and opens the analysis modal there, so the user is already

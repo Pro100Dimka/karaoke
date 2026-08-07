@@ -3,7 +3,7 @@ import LibraryWaveTerrain from "./wave-terrain";
 
 const MUSIC_DECOR = [
   ["record", 4],
-  ["notes", 6]
+  ["notes", 9]
 ];
 
 function MusicObject({ type, parts }) {

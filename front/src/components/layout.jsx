@@ -1,5 +1,5 @@
 import { Cog, Radio, Volume2 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useRadio } from "../contexts/radio";
 import { useOnlineRoomNavigation } from "../hooks/useOnlineRoomNavigation";
@@ -70,8 +70,18 @@ export default function AppLayout() {
   const location = useLocation();
   const [isSettingsOpen, setSettingsOpen] = useState(false);
   const [songSettingsId, setSongSettingsId] = useState(null);
+  const [routeBlackout, setRouteBlackout] = useState(false);
 
   const isKaraoke = location.pathname === ROUTES.karaoke;
+
+  useEffect(() => {
+    const handleRouteBlackout = (event) => {
+      setRouteBlackout(Boolean(event?.detail?.visible));
+    };
+
+    window.addEventListener("app:route-blackout", handleRouteBlackout);
+    return () => window.removeEventListener("app:route-blackout", handleRouteBlackout);
+  }, []);
 
   const openSettings = useCallback(() => {
     setSongSettingsId(null);
@@ -115,6 +125,10 @@ export default function AppLayout() {
         {songSettingsId && (
           <SongSettings songId={songSettingsId} onClose={closeSongSettings} />
         )}
+        <div
+          className={`app-route-blackout ${routeBlackout ? "is-visible" : ""}`}
+          aria-hidden="true"
+        />
         <Modal
           isOpen={isSettingsOpen}
           onClose={closeSettings}
