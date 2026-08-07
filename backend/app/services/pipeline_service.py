@@ -263,6 +263,14 @@ def get_processing_telemetry(song_id: str) -> dict:
     if not runtime:
         return {}
 
+    if "direct_percent" in runtime:
+        return {
+            "step": float(runtime.get("step", 0.0)),
+            "progress_percent": round(float(runtime["direct_percent"]), 1),
+            "progress_detail": runtime.get("detail"),
+            "eta_seconds": None,
+        }
+
     now = time.monotonic()
     step = float(runtime.get("step", 0.0))
     base, end, expected = _STEP_PLAN.get(step, (0.0, 1.0, 10))
@@ -456,18 +464,29 @@ def _run_job(song_id: str) -> None:
 
         device = _configure_ai_runtime()
         capture.write(f"[backend] AI runtime: device={device}\n")
-        run_pipeline = ai_bridge.get_run_all_pipeline()
+        def on_ai_progress(stage: str, percent: float, detail: str) -> None:
+            if _is_cancelled(song_id):
+                raise ProcessingCancelled("Processing cancelled by user")
+            percent = max(0.0, min(99.7, float(percent)))
+            label = f"{stage} · {detail}" if detail else stage
+            with _progress_runtime_lock:
+                runtime = _progress_runtime.get(song_id)
+                if runtime is not None:
+                    runtime["direct_percent"] = percent
+                    runtime["detail"] = label[:120]
+            _update_progress(song_id, step_label=label[:255], percent=percent)
+            capture.write(f"[AI] {percent:5.1f}% {label}\n")
+
         with (
             contextlib.redirect_stdout(cast(TextIO, capture)),
             contextlib.redirect_stderr(cast(TextIO, capture)),
         ):
-            # out_dir is already the final Song/<slug> directory, matching
-            # the direct invocation contract of AI/run_all.py.
-            run_pipeline(
+            ai_bridge.process_song(
                 source_path,
-                str(out_dir),
-                whisper_model=app_settings_service.read_settings()["whisper_model"],
+                out_dir,
                 language=config.DEFAULT_LANGUAGE,
+                progress=on_ai_progress,
+                cancelled=lambda: _is_cancelled(song_id),
             )
     except ProcessingCancelled:
         _update_progress(song_id, status=models.SongStatus.CANCELLED, step_label="Отменено")
@@ -558,14 +577,17 @@ def _apply_generated_metadata(song: models.Song, out_dir: Path) -> None:
         song.key_override = song.key_override or music.get("key")
         song.tempo_override = song.tempo_override or music.get("bpm")
 
-    reference = _read_optional_generated_json(out_dir / "reference.json", [])
+    reference = _read_optional_generated_json(out_dir / "reference.json", {})
+    if isinstance(reference, dict):
+        reference = reference.get("notes", [])
     if not isinstance(reference, list):
         return
     try:
         midi = [
-            int(note["midi"])
+            int(note.get("midi_note", note.get("midi")))
             for note in reference
-            if isinstance(note, dict) and note.get("midi") is not None
+            if isinstance(note, dict)
+            and note.get("midi_note", note.get("midi")) is not None
         ]
     except (TypeError, ValueError):
         return

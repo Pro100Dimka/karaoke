@@ -111,7 +111,7 @@ CORS_ORIGINS = _unique_csv("SONGAPP_CORS_ORIGINS", DEFAULT_UI_ORIGINS)
 
 def ensure_directories() -> None:
     """Создаёт все рабочие директории при первом запуске, если их ещё нет."""
-    for path in (AI_DIR, FULL_SONGS_DIR, SONG_OUTPUT_DIR, DATA_DIR, APP_LOG_DIR):
+    for path in (FULL_SONGS_DIR, SONG_OUTPUT_DIR, DATA_DIR, APP_LOG_DIR):
         path.mkdir(parents=True, exist_ok=True)
 
 

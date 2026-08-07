@@ -54,3 +54,16 @@ python scripts/check.py
 ## Правила проекта
 
 Не добавляйте в репозиторий `__pycache__`, базы, пользовательские песни, логи, CMake build-каталоги, установщики и сгенерированные модели. Новая логика должна иметь тест и проходить `python scripts/check.py`.
+
+## AI Core 2026 integration
+
+The backend now imports the new `AI` package directly (`AI.service`) instead of
+legacy `run_all/src/...` modules.  Canonical generated files are
+`lyricsSync.json`, `songMap.json`, and object-shaped `reference.json`.
+`app.services.ai_bridge` creates temporary compatibility JSON files used by the
+current frontend (`lyrics.json`, `songInfo.json`, `difficulty.json`,
+`structure.json`, `breaths.json`) without modifying the canonical AI artefacts.
+
+Production AI dependencies are listed in `AI/requirements.txt`.  Model weights
+are intentionally **not** part of the PyInstaller bundle or repository archive;
+they should be installed to the external models directory used by the app.

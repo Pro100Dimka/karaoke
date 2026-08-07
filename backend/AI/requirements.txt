@@ -1,29 +1,10 @@
-# Зависимости AI-пайплайна (backend/AI). Тяжёлые ML-библиотеки — держим
-# отдельно от backend/requirements.txt, чтобы API/БД можно было поднять
-# и разрабатывать без установки torch/whisper/demucs.
-#
-# Требуется также системный ffmpeg в PATH (используется через subprocess
-# в src/preprocessing/probe.py и src/build/convert.py).
-
-numpy
-librosa
-torchcrepe
-pretty_midi
-mutagen
-
-# Разделение вокала/инструментала (src/preprocessing/separate.py вызывает
-# демукс как CLI-команду).
-demucs
-torch
-onnxruntime-gpu
-
-# Распознавание и синхронизация текста (src/lyrics/get_text.py, sync.py).
-openai-whisper
-
-# Опционально — точнее (forced alignment), но не обязателен: sync.py сам
-# откатывается на whisper, если whisperx не установлен.
-# whisperx
-
-# Быстрый Whisper на CTranslate2: GPU float16 / CPU int8.
-# Код автоматически откатывается на openai-whisper, если пакет недоступен.
-faster-whisper
+# AI Core 2026 runtime. Install PyTorch with the CUDA wheel appropriate for the
+# target machine before this file when GPU acceleration is required.
+numpy>=1.26,<3
+scipy>=1.11,<2
+soundfile>=0.12,<1
+librosa>=0.10,<1
+mido>=1.3,<2
+psutil>=5.9,<8
+torchfcpe==0.0.4
+qwen-asr==0.0.6

@@ -1,39 +1,27 @@
-"""Диагностика окружения: доступность ffmpeg/AI-моделей, версии, ошибки."""
+"""Backend and AI Core diagnostics."""
 
+from __future__ import annotations
+
+import importlib.metadata
 import platform
 import shutil
 import subprocess
 
 import config
 
-BACKEND_VERSION = "0.1.0"
+BACKEND_VERSION = "0.2.0"
 
 
 def _ffmpeg_available() -> bool:
     return shutil.which("ffmpeg") is not None
 
 
-def _demucs_available() -> bool:
+def _package_available(distribution: str) -> bool:
     try:
-        import demucs  # noqa: F401
-
+        importlib.metadata.version(distribution)
         return True
-    except Exception:
+    except importlib.metadata.PackageNotFoundError:
         return False
-
-
-def _whisper_available() -> bool:
-    try:
-        import whisper  # noqa: F401
-
-        return True
-    except Exception:
-        try:
-            import faster_whisper  # noqa: F401
-
-            return True
-        except Exception:
-            return False
 
 
 def _torch_info() -> tuple[bool, bool, str | None]:
@@ -41,19 +29,38 @@ def _torch_info() -> tuple[bool, bool, str | None]:
         import torch
 
         return True, torch.cuda.is_available(), torch.__version__
-    except Exception:
+    except (ImportError, RuntimeError):
         return False, False, None
 
 
+
+def _ai_package_available() -> bool:
+    try:
+        import AI  # noqa: F401
+        from AI.service import AICoreService  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
 def pipeline_health() -> dict:
     torch_available, cuda_available, _ = _torch_info()
+    try:
+        from app.services import ai_bridge
+
+        health = ai_bridge.get_service().health()
+        separator_available = bool(health.get("separation_configured"))
+    except Exception:
+        separator_available = False
+
+    # Keep legacy field names because the existing frontend schema uses them.
+    # Their meaning is now "source separator" and "speech/alignment stack".
     return {
         "ffmpeg_available": _ffmpeg_available(),
-        "demucs_available": _demucs_available(),
-        "whisper_available": _whisper_available(),
+        "demucs_available": separator_available,
+        "whisper_available": _package_available("qwen-asr"),
         "torch_available": torch_available,
         "cuda_available": cuda_available,
-        "ai_dir_found": config.AI_DIR.exists() and (config.AI_DIR / "run_all.py").exists(),
+        "ai_dir_found": _ai_package_available(),
     }
 
 
@@ -62,17 +69,28 @@ def versions() -> dict:
     components: dict[str, str | None] = {"torch": torch_version}
 
     try:
-        result = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True, timeout=5)
+        result = subprocess.run(
+            ["ffmpeg", "-version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
         components["ffmpeg"] = result.stdout.splitlines()[0] if result.stdout else None
-    except Exception:
+    except (OSError, subprocess.SubprocessError):
         components["ffmpeg"] = None
 
-    for pkg in ("demucs", "whisper", "librosa", "pretty_midi"):
+    for display, package in (
+        ("qwen_asr", "qwen-asr"),
+        ("torchfcpe", "torchfcpe"),
+        ("librosa", "librosa"),
+        ("mido", "mido"),
+        ("soundfile", "soundfile"),
+    ):
         try:
-            module = __import__(pkg)
-            components[pkg] = getattr(module, "__version__", "unknown")
-        except Exception:
-            components[pkg] = None
+            components[display] = importlib.metadata.version(package)
+        except importlib.metadata.PackageNotFoundError:
+            components[display] = None
 
     return {
         "backend_version": BACKEND_VERSION,
@@ -82,9 +100,6 @@ def versions() -> dict:
 
 
 def recent_errors(limit: int = 20) -> list[dict]:
-    """Собирает последние ошибки из pipeline.log всех песен, у которых
-    статус ERROR — чтобы можно было быстро посмотреть, что пошло не так,
-    не копаясь по файлам вручную."""
     import models
     from database import SessionLocal
 
@@ -99,12 +114,12 @@ def recent_errors(limit: int = 20) -> list[dict]:
         )
         return [
             {
-                "song_id": s.id,
-                "title": s.title,
-                "error_message": s.error_message,
-                "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+                "song_id": song.id,
+                "title": song.title,
+                "error_message": song.error_message,
+                "updated_at": song.updated_at.isoformat() if song.updated_at else None,
             }
-            for s in errored
+            for song in errored
         ]
     finally:
         db.close()

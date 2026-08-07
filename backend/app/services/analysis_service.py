@@ -69,9 +69,9 @@ def analyze_recording(recording: models.Recording, song: models.Song) -> dict[st
         raise ValueError("Песня ещё не обработана — нет эталонной мелодии для сравнения")
 
     output_dir = song_service.resolve_output_dir(song)
-    reference_notes = read_json(output_dir / "reference.json")
+    reference_notes = ai_bridge.get_reference_notes(output_dir)
     structure = read_json(output_dir / "structure.json")
-    if not isinstance(reference_notes, list):
+    if not reference_notes:
         raise ValueError("Не найден reference.json — эталонная мелодия ещё не построена")
 
     reference_index = ReferenceIndex.build(reference_notes)

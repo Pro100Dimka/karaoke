@@ -280,13 +280,13 @@ def get_result(song: SongDependency):
     return schemas.SongResultOut(
         song=schemas.SongOut.model_validate(song),
         music=read_json(out_dir / "music.json"),
-        reference_notes=read_json(out_dir / "reference.json"),
+        reference_notes=ai_bridge.get_reference_notes(out_dir),
         lyrics_sync=read_json(out_dir / "lyrics.json"),
         song_map=read_json(out_dir / "songInfo.json"),
         difficulty=read_json(out_dir / "difficulty.json"),
         structure=read_json(out_dir / "structure.json"),
         breaths=read_json(out_dir / "breaths.json"),
-        manifest=None,
+        manifest=read_json(out_dir / "manifest.json"),
     )
 
 

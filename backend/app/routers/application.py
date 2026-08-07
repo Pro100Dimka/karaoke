@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
 import models
-from app.services import app_settings_service
+from app.services import app_settings_service, diagnostics_service
 from database import get_db
 
 router = APIRouter(tags=["application"])
@@ -84,7 +84,7 @@ def get_history(db: Session = Depends(get_db)) -> list[dict]:
 def about() -> dict[str, str]:
     return {
         "name": "Karaoke Studio",
-        "version": "0.1.0",
-        "backend_version": "0.1.0",
+        "version": diagnostics_service.BACKEND_VERSION,
+        "backend_version": diagnostics_service.BACKEND_VERSION,
         "generated_at": datetime.now().astimezone().isoformat(),
     }
