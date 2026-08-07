@@ -53,6 +53,8 @@ export default function KaraokePerformanceStage(props) {
     lyrics,
     nextLine,
     sceneBlackout,
+    sceneIntroVisible,
+    sceneIntro,
     sceneVideoRef,
     showLyrics,
     showNotes,
@@ -79,6 +81,23 @@ export default function KaraokePerformanceStage(props) {
         className={`karaoke-scene-blackout ${sceneBlackout ? "is-visible" : ""}`}
         aria-hidden="true"
       />
+
+      <div
+        className={`karaoke-song-intro ${sceneIntroVisible ? "is-visible" : ""}`}
+        aria-hidden={!sceneIntroVisible}
+      >
+        <div className="karaoke-song-intro-card">
+          <span className="karaoke-song-intro-kicker">Сейчас прозвучит</span>
+          <strong>{sceneIntro?.title || "Караоке"}</strong>
+          {sceneIntro?.artist && <span className="karaoke-song-intro-artist">{sceneIntro.artist}</span>}
+          <div className="karaoke-song-intro-meta">
+            {sceneIntro?.genre && <span>{sceneIntro.genre}</span>}
+            {sceneIntro?.key && <span>{sceneIntro.key}</span>}
+            {sceneIntro?.tempo && <span>{sceneIntro.tempo} BPM</span>}
+            {sceneIntro?.difficulty && <span>{sceneIntro.difficulty}</span>}
+          </div>
+        </div>
+      </div>
 
       {showNotes && notes.length > 0 && <MelodyRoll {...props} />}
       {showLyrics && (

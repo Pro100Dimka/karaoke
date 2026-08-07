@@ -94,6 +94,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   const [autoHideConsole, setAutoHideConsole] = useState(true);
   const [stageActionsVisible, setStageActionsVisible] = useState(true);
   const [sceneBlackout, setSceneBlackout] = useState(false);
+  const [sceneIntroVisible, setSceneIntroVisible] = useState(false);
   const {
     controlsVisible,
     hideControls,
@@ -279,32 +280,57 @@ export default function Karaoke({ onOpenAppSettings }) {
       vocalsRef
     });
 
+  const waitForScene = useCallback(
+    (milliseconds) =>
+      new Promise((resolve) => window.setTimeout(resolve, milliseconds)),
+    []
+  );
+
   const runSceneTransition = useCallback(
-    async (action) => {
+    async (action, { showIntro = false, actionAfterReveal = false } = {}) => {
       if (sceneTransitionRef.current) return false;
       sceneTransitionRef.current = true;
+      setSceneIntroVisible(false);
       setSceneBlackout(true);
 
-      await new Promise((resolve) => window.setTimeout(resolve, 240));
-      randomizeSceneVideo();
-
       try {
-        await action();
-      } finally {
-        await new Promise((resolve) => window.setTimeout(resolve, 90));
+        await waitForScene(420);
+        randomizeSceneVideo();
+
+        if (showIntro) {
+          setSceneIntroVisible(true);
+          await waitForScene(1350);
+          setSceneIntroVisible(false);
+          await waitForScene(180);
+        }
+
+        if (!actionAfterReveal) {
+          await Promise.resolve(action());
+        }
+
         setSceneBlackout(false);
-        window.setTimeout(() => {
-          sceneTransitionRef.current = false;
-        }, 380);
+        await waitForScene(560);
+
+        if (actionAfterReveal) {
+          await Promise.resolve(action());
+        }
+      } finally {
+        setSceneIntroVisible(false);
+        setSceneBlackout(false);
+        await waitForScene(120);
+        sceneTransitionRef.current = false;
       }
       return true;
     },
-    [randomizeSceneVideo]
+    [randomizeSceneVideo, waitForScene]
   );
 
   const handleTogglePlay = useCallback(() => {
     if (isPlaying) return togglePlay();
-    return runSceneTransition(() => togglePlay());
+    return runSceneTransition(() => togglePlay(), {
+      showIntro: true,
+      actionAfterReveal: true
+    });
   }, [isPlaying, runSceneTransition, togglePlay]);
 
   const handleStop = useCallback(
@@ -464,6 +490,15 @@ export default function Karaoke({ onOpenAppSettings }) {
         notes={notes}
         pitchRestProgress={pitchRestProgress}
         sceneBlackout={sceneBlackout}
+        sceneIntroVisible={sceneIntroVisible}
+        sceneIntro={{
+          title: song.title,
+          artist: song.artist,
+          genre: song.genre,
+          key: compactKey,
+          tempo: currentTempo,
+          difficulty: song.difficulty_override
+        }}
         sceneVideoRef={sceneVideoRef}
         onSceneVideoReady={randomizeSceneVideo}
         showLyrics={showLyrics}

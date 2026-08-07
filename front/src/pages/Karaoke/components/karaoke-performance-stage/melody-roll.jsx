@@ -70,11 +70,6 @@ export default function MelodyRoll({
   const rowHeight = height / pitchRange;
   const noteHeight = Math.min(15, Math.max(9, rowHeight * 0.62));
   const lanes = Array.from({ length: pitchRange }, (_, index) => minMidi + index);
-  const timeMarkers = Array.from(
-    { length: windowSeconds * 2 + 1 },
-    (_, index) => viewStart + index / 2
-  );
-
   const x = (time) =>
     noteLaneStart +
     ((time - viewStart) / windowSeconds) * (width - noteLaneStart);
@@ -123,8 +118,6 @@ export default function MelodyRoll({
         {/* Pitch lanes and note labels. The keyboard itself is rendered separately
             below so black keys can overlap the white keys like a real piano. */}
         {lanes.map((midi) => {
-          const pitchClass = ((midi % 12) + 12) % 12;
-          const isSharp = BLACK_KEY_CLASSES.has(pitchClass);
           const isActive = activeMidi === midi;
           const laneY = y(midi);
           return (
@@ -139,15 +132,6 @@ export default function MelodyRoll({
                   opacity=".9"
                 />
               )}
-              <line
-                x1={noteLaneStart}
-                x2={width}
-                y1={laneY + rowHeight}
-                y2={laneY + rowHeight}
-                stroke={isSharp ? "#361226" : "#4a1427"}
-                strokeOpacity={isSharp ? ".56" : ".72"}
-                strokeWidth=".75"
-              />
               <text
                 x="18"
                 y={laneY + rowHeight / 2 + Math.min(4, rowHeight * 0.24)}
@@ -224,7 +208,7 @@ export default function MelodyRoll({
             );
           })}
 
-        {/* Piano/key separator and vertical time grid. */}
+        {/* Piano/key separator. The note lane intentionally has no cell grid. */}
         <line
           x1={noteLaneStart}
           x2={noteLaneStart}
@@ -233,18 +217,6 @@ export default function MelodyRoll({
           stroke="#4d2133"
           strokeWidth="1"
         />
-        {timeMarkers.map((time, index) => (
-          <line
-            key={`grid-time-${index}`}
-            x1={x(time)}
-            x2={x(time)}
-            y1="0"
-            y2={height}
-            stroke={index % 2 === 0 ? "#4a1b34" : "#35142a"}
-            strokeOpacity={index % 2 === 0 ? ".78" : ".48"}
-            strokeWidth={index % 2 === 0 ? ".85" : ".65"}
-          />
-        ))}
 
         {/* Melody notes. */}
         {visibleNotes.map((note, index) => {

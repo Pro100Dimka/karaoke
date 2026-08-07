@@ -59,7 +59,7 @@ function ToolTabs({
     [
       "auto",
       MousePointer2,
-      "Авто",
+      "Автоскрытие",
       autoHideEnabled,
       () => onAutoHideChange?.(!autoHideEnabled)
     ],
@@ -74,6 +74,7 @@ function ToolTabs({
           unstyled
           className={active ? "is-active" : ""}
           aria-pressed={typeof active === "boolean" ? active : undefined}
+          title={id === "auto" ? "Автоматически показывать и скрывать консоль при движении мыши" : undefined}
           onClick={onClick}
         >
           <Icon size={17} />

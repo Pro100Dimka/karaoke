@@ -8329,3 +8329,194 @@ body {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 }
+
+/* ==========================================================================
+   KARAOKE REFINEMENT — full-width / lower console + cinematic song intro
+   ========================================================================== */
+
+/* Restore the console's original wide footprint. Only its vertical density is
+   reduced below; it still floats above the stage and MelodyRoll. */
+.karaoke-studio-console {
+  inset-inline-start: var(--karaoke-hud-inset) !important;
+  inset-inline-end: var(--karaoke-hud-inset) !important;
+  inline-size: auto !important;
+  translate: 0 0 !important;
+  padding: 0.3rem 0.5rem 0.34rem !important;
+  gap: 0.28rem !important;
+}
+
+.karaoke-console-grid {
+  grid-template-columns: minmax(20rem, 0.95fr) minmax(22rem, 0.82fr) minmax(22rem, 1.08fr) !important;
+  gap: 0.38rem !important;
+}
+
+.karaoke-console-panel,
+.karaoke-console-center {
+  padding-block: 0.28rem !important;
+}
+
+.karaoke-console-title {
+  margin-block-end: 0.2rem !important;
+}
+
+.karaoke-song-strip {
+  min-block-size: 3.25rem !important;
+  grid-template-columns: 3.45rem minmax(9rem, 13rem) auto minmax(14rem, 1fr) auto !important;
+  gap: 0.52rem !important;
+}
+
+.karaoke-song-cover {
+  inline-size: 2.85rem !important;
+}
+
+.karaoke-song-strip .waveform-timeline {
+  block-size: 2.25rem !important;
+}
+
+.karaoke-quick-mixer--vertical .slider-field {
+  min-block-size: 7.1rem !important;
+  padding-block: 0.2rem 0.26rem !important;
+  gap: 0.12rem !important;
+}
+
+.karaoke-quick-mixer--vertical input[type="range"] {
+  inline-size: 4.55rem !important;
+}
+
+.karaoke-console-center {
+  gap: 0.32rem !important;
+}
+
+.karaoke-transport-buttons--hero {
+  gap: 0.42rem !important;
+  padding-block: 0.24rem !important;
+}
+
+.karaoke-performance-controls {
+  gap: 0.32rem !important;
+}
+
+.karaoke-performance-controls > .karaoke-performance-control {
+  min-block-size: 2.3rem !important;
+  padding-block: 0.2rem !important;
+}
+
+.karaoke-tool-tabs {
+  gap: 0.28rem !important;
+}
+
+.karaoke-tool-tabs button {
+  min-block-size: 1.95rem !important;
+  padding-block: 0.25rem !important;
+}
+
+.karaoke-effect-presets {
+  gap: 0.28rem !important;
+}
+
+.karaoke-effect-presets button {
+  min-block-size: 2.55rem !important;
+  padding-block: 0.24rem !important;
+  gap: 0.12rem !important;
+}
+
+.karaoke-effect-presets button > span {
+  inline-size: 1.45rem !important;
+  block-size: 1.45rem !important;
+  font-size: 0.82rem !important;
+}
+
+/* A blackout is intentionally slower now: playback begins only after the
+   reveal has completed. */
+.karaoke-scene-blackout {
+  transition: opacity 420ms ease !important;
+}
+
+.karaoke-song-intro {
+  position: absolute;
+  z-index: 56;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.985);
+  transition:
+    opacity 220ms ease,
+    transform 320ms ease;
+}
+
+.karaoke-song-intro.is-visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.karaoke-song-intro-card {
+  display: grid;
+  justify-items: center;
+  gap: 0.42rem;
+  min-inline-size: min(32rem, 80vw);
+  max-inline-size: min(46rem, 88vw);
+  padding: clamp(1.15rem, 2vw, 1.8rem) clamp(1.5rem, 3vw, 2.8rem);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 62%, transparent);
+  border-radius: 1.2rem;
+  color: #fff;
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--color-primary) 24%, transparent), transparent 58%),
+    rgba(8, 5, 10, 0.78);
+  box-shadow:
+    0 1.2rem 4rem rgba(0, 0, 0, 0.48),
+    inset 0 1px rgba(255, 255, 255, 0.12),
+    0 0 2.6rem color-mix(in srgb, var(--color-primary) 20%, transparent);
+  backdrop-filter: blur(1rem);
+  text-align: center;
+}
+
+.karaoke-song-intro-kicker {
+  color: color-mix(in srgb, var(--color-primary) 66%, white);
+  font: 800 0.68rem/1 var(--font-sans);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.karaoke-song-intro-card > strong {
+  margin-block-start: 0.15rem;
+  color: #fff;
+  font: 900 clamp(1.7rem, 3vw, 3rem)/1.05 var(--font-display);
+  letter-spacing: 0.02em;
+  text-wrap: balance;
+}
+
+.karaoke-song-intro-artist {
+  color: rgba(255, 255, 255, 0.78);
+  font: 750 clamp(0.9rem, 1.35vw, 1.12rem)/1.2 var(--font-sans);
+}
+
+.karaoke-song-intro-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.42rem;
+  margin-block-start: 0.4rem;
+}
+
+.karaoke-song-intro-meta span {
+  padding: 0.34rem 0.58rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999rem;
+  color: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.055);
+  font: 750 0.7rem/1 var(--font-sans);
+}
+
+@media (max-width: 64rem) {
+  .karaoke-studio-console {
+    inset-inline: 0.5rem !important;
+    inline-size: auto !important;
+  }
+
+  .karaoke-console-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
