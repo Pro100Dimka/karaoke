@@ -44,8 +44,13 @@ export const SETTINGS = {
         name: "theme",
         label: "Тема",
         hint: "Применяется сразу, без перезапуска",
-        options: [option("dark", "Тёмная"), option("light", "Светлая")]
+        options: [
+          option("dark", "Тёмная"),
+          option("light", "Светлая"),
+          option("green", "Зеленая")
+        ]
       },
+
       {
         type: "text",
         variant: "card",

@@ -245,7 +245,7 @@
     #c10028 93%,
     #8a0016 100%
   );
-  --bg-image: url("../assets/karaoke/library-neon-space.png");
+  --bg-image: url("../assets/karaoke/dark.webp");
 }
 
 :root[data-theme="light"] {
@@ -477,5 +477,199 @@
     #f69b7f 94%,
     #efb18d 100%
   );
-  --bg-image: url("../assets/karaoke/library-light-space.webp");
+  --bg-image: url("../assets/karaoke/light.webp");
+}
+
+:root[data-theme="green"] {
+  color-scheme: dark;
+
+  --color-bg: #020904;
+  --color-bg-deep: #010402;
+  --color-bg-elevated: #0b1810;
+
+  --color-surface: rgba(10, 28, 18, 0.88);
+  --color-surface-strong: rgba(18, 44, 28, 0.96);
+  --color-surface-soft: rgba(34, 74, 48, 0.82);
+  --color-surface-hover: rgba(55, 115, 74, 0.92);
+  --color-surface-glass: rgba(8, 24, 15, 0.8);
+
+  --color-text: #f6fff8;
+  --color-text-soft: #d8ffe2;
+  --color-text-muted: #91c5a2;
+  --color-text-inverse: #06110b;
+
+  --color-primary: #2fff8d;
+  --color-primary-hover: #5effab;
+  --color-primary-strong: #00c764;
+
+  --color-secondary: #1fd37d;
+  --color-accent: #7affcf;
+  --color-accent-strong: #00ff8c;
+  --color-highlight: #dffff0;
+
+  --color-success: #50ff9f;
+  --color-warning: #d8ff73;
+  --color-danger: #ff5370;
+
+  --color-rose: #63f8b0;
+  --color-raspberry: #19d87d;
+  --color-peach: #6cffcb;
+  --color-coral: #35ff97;
+  --color-nude: #88caa4;
+  --color-champagne: #b7ffe1;
+
+  --color-border: rgba(65, 255, 156, 0.26);
+  --color-border-strong: rgba(90, 255, 174, 0.62);
+  --color-border-accent: rgba(47, 255, 141, 0.95);
+  --color-focus: #73ffbe;
+
+  --gradient-primary:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.82) 0%,
+      rgba(255, 255, 255, 0.34) 7%,
+      rgba(255, 255, 255, 0.08) 17%,
+      transparent 40%
+    ),
+    radial-gradient(
+      ellipse at 12% -12%,
+      rgba(255, 255, 255, 0.9) 0%,
+      rgba(180, 255, 220, 0.72) 12%,
+      rgba(86, 255, 168, 0.34) 26%,
+      transparent 52%
+    ),
+    radial-gradient(
+      ellipse at 100% 0%,
+      rgba(0, 255, 170, 0.28) 0%,
+      transparent 42%
+    ),
+    radial-gradient(
+      ellipse at 50% 118%,
+      rgba(0, 170, 90, 0.34) 0%,
+      transparent 46%
+    ),
+    linear-gradient(
+      145deg,
+      #ffffff 0%,
+      #dffff0 6%,
+      #8dffd0 15%,
+      #44ffae 28%,
+      #13e27d 42%,
+      #00b95d 58%,
+      #00853f 75%,
+      #004723 90%,
+      #00170a 100%
+    );
+
+  --gradient-primary-hover:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92) 0%,
+      rgba(255, 255, 255, 0.42) 8%,
+      rgba(255, 255, 255, 0.12) 20%,
+      transparent 42%
+    ),
+    radial-gradient(
+      ellipse at 12% -12%,
+      rgba(255, 255, 255, 0.95) 0%,
+      rgba(207, 255, 233, 0.8) 12%,
+      rgba(100, 255, 181, 0.42) 26%,
+      transparent 54%
+    ),
+    radial-gradient(
+      ellipse at 100% 0%,
+      rgba(40, 255, 183, 0.34) 0%,
+      transparent 45%
+    ),
+    radial-gradient(
+      ellipse at 50% 118%,
+      rgba(20, 210, 110, 0.38) 0%,
+      transparent 48%
+    ),
+    linear-gradient(
+      145deg,
+      #ffffff 0%,
+      #ecfff5 6%,
+      #b8ffe1 16%,
+      #6fffc3 30%,
+      #31ee94 44%,
+      #00ca6a 60%,
+      #00914a 77%,
+      #005227 91%,
+      #002010 100%
+    );
+
+  --gradient-panel:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.16) 0%,
+      rgba(255, 255, 255, 0.05) 18%,
+      transparent 45%
+    ),
+    radial-gradient(
+      ellipse at 0% -12%,
+      rgba(82, 255, 178, 0.25) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse at 100% -8%,
+      rgba(0, 255, 170, 0.18) 0%,
+      transparent 48%
+    ),
+    linear-gradient(
+      145deg,
+      rgba(17, 43, 28, 0.98) 0%,
+      rgba(12, 31, 20, 0.99) 34%,
+      rgba(8, 21, 14, 1) 66%,
+      rgba(2, 8, 5, 1) 100%
+    );
+
+  --gradient-glass:
+    linear-gradient(
+      165deg,
+      rgba(255, 255, 255, 0.18) 0%,
+      rgba(255, 255, 255, 0.06) 20%,
+      transparent 56%
+    ),
+    radial-gradient(
+      ellipse at 0% -10%,
+      rgba(150, 255, 210, 0.22) 0%,
+      transparent 48%
+    ),
+    radial-gradient(
+      ellipse at 100% 0%,
+      rgba(0, 255, 170, 0.14) 0%,
+      transparent 40%
+    ),
+    linear-gradient(
+      145deg,
+      rgba(12, 34, 21, 0.92) 0%,
+      rgba(8, 22, 14, 0.95) 55%,
+      rgba(3, 10, 6, 0.98) 100%
+    );
+
+  --gradient-border: linear-gradient(
+    110deg,
+    #ffffff 0%,
+    #dffff0 10%,
+    #a4ffd8 24%,
+    #62ffbc 40%,
+    #2fff8d 55%,
+    #00cf69 70%,
+    #2fff8d 86%,
+    #dffff0 100%
+  );
+
+  --gradient-text: linear-gradient(
+    90deg,
+    #ffffff 0%,
+    #effff5 18%,
+    #c6ffe2 35%,
+    #8fffd0 52%,
+    #57ffb0 68%,
+    #2fff8d 82%,
+    #00cf69 100%
+  );
+
+  --bg-image: url("../assets/karaoke/green.webp");
 }

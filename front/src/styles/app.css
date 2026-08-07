@@ -785,7 +785,7 @@ body {
   font: var(--font-size-md) / var(--line-height-base) var(--font-sans);
   min-height: 100vh;
   background-image: var(--bg-image);
-  background-size: cover;
+  background-size: 100% auto;
   background-position: center;
   background-repeat: no-repeat;
 }
