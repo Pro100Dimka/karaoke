@@ -44,12 +44,26 @@ class MSSTMelRoformerSeparator(Separator):
     def available(self) -> bool:
         if not (self.command and self.config and self.checkpoint):
             return False
-        return Path(self.config).is_file() and Path(self.checkpoint).is_file()
+        if not (Path(self.config).is_file() and Path(self.checkpoint).is_file()):
+            return False
+        try:
+            command = shlex.split(self.command, posix=True)
+        except ValueError:
+            return False
+        if not command:
+            return False
+        executable = Path(command[0])
+        if not executable.is_file():
+            return False
+        if len(command) > 1 and command[1].lower().endswith((".py", ".pyw")):
+            if not Path(command[1]).is_file():
+                return False
+        return True
 
     def _build_command(self, input_dir: Path, output_dir: Path) -> list[str]:
         if not self.command:
             raise EngineUnavailableError("MSST_INFERENCE_COMMAND is not configured")
-        command = shlex.split(self.command, posix=os.name != "nt")
+        command = shlex.split(self.command, posix=True)
         command.extend(
             [
                 "--model_type",
@@ -92,8 +106,10 @@ class MSSTMelRoformerSeparator(Separator):
                     timeout=60 * 30,
                 )
             except FileNotFoundError as exc:
+                command = self._build_command(input_dir, output_dir)
                 raise EngineUnavailableError(
-                    "MSST inference command could not be started"
+                    "MSST inference command could not be started. "
+                    f"Executable: {command[0]!r}"
                 ) from exc
             except subprocess.TimeoutExpired as exc:
                 raise AICoreError("MSST exceeded the 30-minute safety timeout") from exc

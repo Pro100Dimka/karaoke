@@ -68,6 +68,29 @@ def _apply_additive_migrations(connection, existing: set[str], migrations: dict[
             connection.execute(text(statement))
 
 
+
+
+def _repair_invalid_audio_settings_datetime(connection) -> None:
+    """Repair legacy/corrupted SQLite datetime values before ORM reads them."""
+    inspector = inspect(connection)
+    if "audio_settings" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("audio_settings")}
+    if "updated_at" not in columns:
+        return
+    # SQLAlchemy's SQLite DateTime processor uses datetime.fromisoformat().
+    # SQLite datetime(value) returns NULL for malformed values, letting us
+    # repair only rows that the ORM would otherwise fail to deserialize.
+    connection.execute(
+        text(
+            "UPDATE audio_settings "
+            "SET updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now') "
+            "WHERE updated_at IS NULL "
+            "OR typeof(updated_at) != 'text' "
+            "OR datetime(updated_at) IS NULL"
+        )
+    )
+
 def _mark_interrupted_jobs(connection) -> None:
     connection.execute(
         text(
@@ -97,6 +120,7 @@ def init_db() -> None:
     with engine.begin() as connection:
         _apply_additive_migrations(connection, song_columns, _SONG_COLUMN_MIGRATIONS)
         _apply_additive_migrations(connection, audio_columns, _AUDIO_COLUMN_MIGRATIONS)
+        _repair_invalid_audio_settings_datetime(connection)
         _mark_interrupted_jobs(connection)
 
 

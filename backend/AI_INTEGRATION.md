@@ -15,3 +15,11 @@ the bridge generates lightweight compatibility artefacts: `lyrics.json`,
 `songInfo.json`, `difficulty.json`, `structure.json`, and `breaths.json`. Canonical
 AI files (`lyricsSync.json`, `songMap.json`, object-shaped `reference.json`) are
 left untouched so caching remains valid.
+
+AI Core integration patch v2.2:
+- preserve Qwen auto-detected language for forced alignment
+- never pass None to Qwen3 Forced Aligner
+- infer language from transcript when metadata is unavailable
+- suppress avoidable pad_token_id warning by setting generation config
+- repair non-text SQLite audio_settings.updated_at values
+- regression suite: 137 passed

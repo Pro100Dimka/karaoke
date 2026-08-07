@@ -3,7 +3,7 @@ setlocal EnableExtensions EnableDelayedExpansion
 
 rem ============================================================
 rem  A&D Voice - AI Core 2026
-rem  Full runtime + offline model installer
+rem  Full runtime + offline model installer v6 v4
 rem
 rem  Put this file into:
 rem      backend\scripts\install-ai-models.bat
@@ -40,12 +40,13 @@ set "MSST_DIR=%ENGINES_DIR%\msst"
 set "MSST_VENV=%MSST_DIR%\.venv"
 set "MSST_PYTHON=%MSST_VENV%\Scripts\python.exe"
 set "MSST_INFERENCE=%MSST_DIR%\inference.py"
-set "MSST_CONFIG=%MSST_DIR%\configs\config_mel_band_roformer_vocals.yaml"
+set "MSST_CONFIG=%MSST_DIR%\configs\KimberleyJensen\config_vocals_mel_band_roformer_kj.yaml"
 
 set "ROFORMER_DIR=%MODELS_DIR%\roformer"
-set "MSST_CHECKPOINT=%ROFORMER_DIR%\model_vocals_mel_band_roformer_sdr_8.42.ckpt"
-set "ROFORMER_SHA256=d9ce706b49cebf0af018590d8deb47ad5434987bf8f7bd3a87a4e5e8c30acb26"
-set "ROFORMER_URL=https://github.com/ZFTurbo/Music-Source-Separation-Training/releases/download/v1.0.0/model_vocals_mel_band_roformer_sdr_8.42.ckpt"
+set "MSST_CHECKPOINT=%ROFORMER_DIR%\MelBandRoformer.ckpt"
+set "ROFORMER_SHA256=87201f4d31afb5bc79993230fc49446918425574db48c01c405e44f365c7559e"
+set "ROFORMER_REPO=KimberleyJSN/melbandroformer"
+set "ROFORMER_FILENAME=MelBandRoformer.ckpt"
 
 rem Reproducible CUDA runtime.
 set "TORCH_VERSION=2.8.0"
@@ -53,10 +54,24 @@ set "TORCHVISION_VERSION=0.23.0"
 set "TORCHAUDIO_VERSION=2.8.0"
 set "TORCH_INDEX=https://download.pytorch.org/whl/cu126"
 
+rem Quiet pip output: hide "Requirement already satisfied" and package chatter.
+rem Errors still make the command fail and our stage messages remain visible.
+set "ADVOICE_PIP_FLAGS=--quiet --disable-pip-version-check --no-input"
+
+rem pip treats PIP_QUIET as a special configuration environment variable.
+rem Clear it in case it was inherited from a previous installer/terminal.
+set "PIP_QUIET="
+set "MSST_SETUPTOOLS_VERSION=80.9.0"
+
 set "ENV_FILE=%ROOT%\ai-environment.bat"
 set "TMP_ROOT=%TEMP%\advoice-ai-install"
 
 title A^&D Voice - AI installation
+
+rem Keep third-party deprecation chatter out of the installer UI.
+set "PYTHONWARNINGS=ignore::DeprecationWarning"
+set "HF_HUB_DISABLE_TELEMETRY=1"
+set "TOKENIZERS_PARALLELISM=false"
 
 echo.
 echo ============================================================
@@ -179,7 +194,7 @@ if errorlevel 1 goto :fail
 echo.
 echo Updating pip...
 "%PYTHON%" -m ensurepip --upgrade >nul 2>&1
-"%PYTHON%" -m pip install --upgrade pip setuptools wheel
+"%PYTHON%" -m pip install %ADVOICE_PIP_FLAGS% --upgrade pip setuptools wheel
 if errorlevel 1 goto :fail
 
 rem ============================================================
@@ -189,7 +204,7 @@ rem ============================================================
 echo.
 echo [2/10] Installing CUDA PyTorch %TORCH_VERSION%...
 
-"%PYTHON%" -m pip install --upgrade ^
+"%PYTHON%" -m pip install %ADVOICE_PIP_FLAGS% --upgrade ^
     "torch==%TORCH_VERSION%" ^
     "torchvision==%TORCHVISION_VERSION%" ^
     "torchaudio==%TORCHAUDIO_VERSION%" ^
@@ -204,14 +219,19 @@ rem ============================================================
 echo.
 echo [3/10] Installing backend and AI Core dependencies...
 
-"%PYTHON%" -m pip install -r "%ROOT%\requirements.txt"
+"%PYTHON%" -m pip install %ADVOICE_PIP_FLAGS% -r "%ROOT%\requirements.txt"
 if errorlevel 1 goto :fail
 
-"%PYTHON%" -m pip install --upgrade "huggingface_hub[cli]"
+"%PYTHON%" -m pip install %ADVOICE_PIP_FLAGS% --upgrade "huggingface_hub>=0.34,<1.0"
 if errorlevel 1 goto :fail
+
+echo Checking Transformers / Hugging Face compatibility...
+"%PYTHON%" -c "import huggingface_hub, transformers; from packaging.version import Version; assert Version(huggingface_hub.__version__) < Version('1.0.0'), 'huggingface_hub must be < 1.0 for installed transformers'" >nul
+if errorlevel 1 goto :fail
+echo Hugging Face runtime: OK
 
 rem Re-assert the CUDA build in case a dependency resolver replaced torch.
-"%PYTHON%" -m pip install --upgrade ^
+"%PYTHON%" -m pip install %ADVOICE_PIP_FLAGS% --upgrade ^
     "torch==%TORCH_VERSION%" ^
     "torchvision==%TORCHVISION_VERSION%" ^
     "torchaudio==%TORCHAUDIO_VERSION%" ^
@@ -302,7 +322,7 @@ if not exist "%MSST_INFERENCE%" (
 
     where git >nul 2>&1
     if not errorlevel 1 (
-        git clone --depth 1 ^
+        git clone --quiet --depth 1 ^
             https://github.com/ZFTurbo/Music-Source-Separation-Training.git ^
             "%MSST_DIR%"
         if errorlevel 1 goto :fail
@@ -312,7 +332,7 @@ if not exist "%MSST_INFERENCE%" (
         set "MSST_ZIP=%TMP_ROOT%\msst.zip"
         set "MSST_UNPACK=%TMP_ROOT%\msst-unpack"
 
-        curl.exe -L --fail --retry 5 --retry-delay 3 ^
+        curl.exe -L --fail --retry 5 --retry-delay 3 --progress-bar ^
             -o "!MSST_ZIP!" ^
             "https://github.com/ZFTurbo/Music-Source-Separation-Training/archive/refs/heads/main.zip"
 
@@ -336,6 +356,11 @@ if not exist "%MSST_INFERENCE%" (
 if not exist "%MSST_CONFIG%" (
     echo [ERROR] Required MSST Mel-Band RoFormer config is missing:
     echo   %MSST_CONFIG%
+    echo.
+    echo The expected current upstream config is:
+    echo   configs\KimberleyJensen\config_vocals_mel_band_roformer_kj.yaml
+    echo.
+    echo MSST repository contents may have changed upstream.
     goto :fail
 )
 
@@ -351,16 +376,17 @@ if not exist "%MSST_PYTHON%" (
     if errorlevel 1 goto :fail
 )
 
-"%MSST_PYTHON%" -m pip install --upgrade pip setuptools wheel
+echo Updating MSST package tools...
+"%MSST_PYTHON%" -m pip install %ADVOICE_PIP_FLAGS% --upgrade pip wheel
 if errorlevel 1 goto :fail
 
-if exist "%MSST_DIR%\requirements.txt" (
-    "%MSST_PYTHON%" -m pip install -r "%MSST_DIR%\requirements.txt"
-    if errorlevel 1 goto :fail
-)
+rem MSST currently pulls an older librosa that still imports pkg_resources.
+rem pkg_resources was removed from setuptools 82+, so keep the last compatible line.
+"%MSST_PYTHON%" -m pip install %ADVOICE_PIP_FLAGS% --force-reinstall "setuptools==%MSST_SETUPTOOLS_VERSION%"
+if errorlevel 1 goto :fail
 
-rem Force the same known CUDA PyTorch after MSST requirements.
-"%MSST_PYTHON%" -m pip install --upgrade ^
+rem Install CUDA PyTorch FIRST so MSST dependencies cannot pull a different build.
+"%MSST_PYTHON%" -m pip install %ADVOICE_PIP_FLAGS% --upgrade ^
     "torch==%TORCH_VERSION%" ^
     "torchvision==%TORCHVISION_VERSION%" ^
     "torchaudio==%TORCHAUDIO_VERSION%" ^
@@ -368,53 +394,73 @@ rem Force the same known CUDA PyTorch after MSST requirements.
 
 if errorlevel 1 goto :fail
 
+if exist "%MSST_DIR%\requirements.txt" (
+    echo Preparing MSST requirements without torch/torchvision/torchaudio...
+
+    set "MSST_FILTERED_REQUIREMENTS=%TMP_ROOT%\msst-requirements-filtered.txt"
+
+    "%PYTHON%" -c "from pathlib import Path; from packaging.requirements import Requirement; src=Path(r'%MSST_DIR%\requirements.txt'); dst=Path(r'!MSST_FILTERED_REQUIREMENTS!'); skip={'torch','torchvision','torchaudio'}; lines=src.read_text(encoding='utf-8').splitlines(); out=[]; [out.append(line) for line in lines if (not line.strip() or line.lstrip().startswith('#') or Requirement(line).name.lower() not in skip)]; dst.write_text(chr(10).join(out)+chr(10), encoding='utf-8'); print('Filtered MSST requirements:', dst)"
+    if errorlevel 1 goto :fail
+
+    "%MSST_PYTHON%" -m pip install %ADVOICE_PIP_FLAGS% -r "!MSST_FILTERED_REQUIREMENTS!"
+    if errorlevel 1 goto :fail
+)
+
 echo.
 echo Checking Mel-Band RoFormer checkpoint...
 
 set "CHECKPOINT_OK=0"
+
 if exist "%MSST_CHECKPOINT%" (
-    for /f %%H in ('powershell.exe -NoProfile -Command "(Get-FileHash -Algorithm SHA256 -LiteralPath ''%MSST_CHECKPOINT%'').Hash.ToLower()"') do (
-        if /I "%%H"=="%ROFORMER_SHA256%" set "CHECKPOINT_OK=1"
+    "%PYTHON%" -c "from pathlib import Path; import hashlib, sys; p=Path(r'%MSST_CHECKPOINT%'); expected=r'%ROFORMER_SHA256%'.lower(); h=hashlib.sha256(); f=p.open('rb'); [h.update(b) for b in iter(lambda:f.read(8*1024*1024), b'')]; f.close(); actual=h.hexdigest().lower(); print('RoFormer SHA-256:', actual); sys.exit(0 if actual==expected else 5)"
+    if not errorlevel 1 (
+        set "CHECKPOINT_OK=1"
+    ) else (
+        echo Existing checkpoint hash does not match the official model.
+        echo It will be replaced.
     )
 )
 
-if "%CHECKPOINT_OK%"=="1" (
+if "!CHECKPOINT_OK!"=="1" (
     echo RoFormer checkpoint already installed and SHA-256 is valid.
 ) else (
-    if exist "%MSST_CHECKPOINT%" (
-        echo Existing checkpoint has an unexpected hash. Re-downloading...
-        del /q "%MSST_CHECKPOINT%"
-    )
+    echo Downloading Kimberley Jensen Mel-Band RoFormer checkpoint...
 
-    set "CHECKPOINT_TMP=%MSST_CHECKPOINT%.download"
+    set "HF_HOME=%HF_HOME%"
+    set "HF_HUB_CACHE=%HF_HOME%\hub"
 
-    if exist "!CHECKPOINT_TMP!" del /q "!CHECKPOINT_TMP!"
-
-    curl.exe -L --fail --retry 5 --retry-delay 5 ^
-        -o "!CHECKPOINT_TMP!" ^
-        "%ROFORMER_URL%"
-
+    "%PYTHON%" -c "from huggingface_hub import hf_hub_download; from pathlib import Path; p=hf_hub_download(repo_id=r'%ROFORMER_REPO%', filename=r'%ROFORMER_FILENAME%', local_dir=r'%ROFORMER_DIR%'); print('RoFormer downloaded:', p)"
     if errorlevel 1 goto :fail
 
-    for /f %%H in ('powershell.exe -NoProfile -Command "(Get-FileHash -Algorithm SHA256 -LiteralPath ''!CHECKPOINT_TMP!'').Hash.ToLower()"') do (
-        set "DOWNLOADED_HASH=%%H"
-    )
-
-    if /I not "!DOWNLOADED_HASH!"=="%ROFORMER_SHA256%" (
-        echo.
-        echo [ERROR] RoFormer SHA-256 verification failed.
-        echo Expected:
-        echo   %ROFORMER_SHA256%
-        echo Actual:
-        echo   !DOWNLOADED_HASH!
-        del /q "!CHECKPOINT_TMP!" >nul 2>&1
+    if not exist "%MSST_CHECKPOINT%" (
+        echo [ERROR] RoFormer checkpoint was not created:
+        echo   %MSST_CHECKPOINT%
         goto :fail
     )
 
-    move /y "!CHECKPOINT_TMP!" "%MSST_CHECKPOINT%" >nul
+    echo Verifying RoFormer SHA-256 with Python...
+
+    "%PYTHON%" -c "from pathlib import Path; import hashlib, sys; p=Path(r'%MSST_CHECKPOINT%'); expected=r'%ROFORMER_SHA256%'.lower(); h=hashlib.sha256(); f=p.open('rb'); [h.update(b) for b in iter(lambda:f.read(8*1024*1024), b'')]; f.close(); actual=h.hexdigest().lower(); print('Expected:', expected); print('Actual:  ', actual); sys.exit(0 if actual==expected else 6)"
+    if errorlevel 1 (
+        echo.
+        echo [ERROR] RoFormer SHA-256 verification failed.
+        echo The downloaded file was kept for inspection and WILL NOT be deleted.
+        goto :fail
+    )
+
+    echo RoFormer SHA-256: OK
 )
 
-"%MSST_PYTHON%" "%MSST_INFERENCE%" --help >nul
+echo Verifying MSST Python compatibility...
+"%MSST_PYTHON%" -c "import setuptools, pkg_resources; print('MSST setuptools:', setuptools.__version__); print('pkg_resources: OK')" >nul
+if errorlevel 1 (
+    echo [ERROR] MSST compatibility layer pkg_resources is unavailable.
+    echo Reinstalling setuptools %MSST_SETUPTOOLS_VERSION%...
+    "%MSST_PYTHON%" -m pip install %ADVOICE_PIP_FLAGS% --force-reinstall "setuptools==%MSST_SETUPTOOLS_VERSION%"
+    if errorlevel 1 goto :fail
+)
+
+"%MSST_PYTHON%" "%MSST_INFERENCE%" --help >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] MSST inference runtime test failed.
     goto :fail
@@ -466,6 +512,25 @@ if errorlevel 1 goto :fail
 
 rem Apply the same values to this installer process for verification.
 call "%ENV_FILE%"
+
+echo.
+echo Checking Python dependency consistency...
+
+"%PYTHON%" -m pip check > "%TMP_ROOT%\pip-check-main.log" 2>&1
+if errorlevel 1 (
+    echo [ERROR] Main Python dependency conflicts detected:
+    type "%TMP_ROOT%\pip-check-main.log"
+    goto :fail
+)
+
+"%MSST_PYTHON%" -m pip check > "%TMP_ROOT%\pip-check-msst.log" 2>&1
+if errorlevel 1 (
+    echo [ERROR] MSST dependency conflicts detected:
+    type "%TMP_ROOT%\pip-check-msst.log"
+    goto :fail
+)
+
+echo Dependencies: OK
 
 echo.
 echo Running final AI Core health check...

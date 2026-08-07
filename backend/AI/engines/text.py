@@ -33,7 +33,41 @@ def tokenize(text: str) -> list[str]:
 def _language_name(language: str | None) -> str | None:
     if not language:
         return None
-    return _LANGUAGE_NAMES.get(language.lower(), language)
+    value = str(language).strip()
+    if not value:
+        return None
+    return _LANGUAGE_NAMES.get(value.lower(), value)
+
+
+def resolve_alignment_language(text: str, language: str | None = None) -> str:
+    """Return a non-empty language name suitable for Qwen Forced Aligner.
+
+    Qwen3-ASR accepts language=None for automatic language detection, but the
+    official Forced Aligner calls ``language.lower()`` internally and therefore
+    cannot accept None.  Prefer an explicit/detected language and only infer
+    from the transcript when no language metadata is available.
+    """
+    explicit = _language_name(language)
+    if explicit:
+        return explicit
+
+    sample = str(text or "")
+    lowered = sample.lower()
+    if any(ch in lowered for ch in "іїєґ"):
+        return "Ukrainian"
+    if re.search(r"[а-яё]", lowered):
+        return "Russian"
+    if re.search(r"[a-z]", lowered):
+        return "English"
+    if re.search(r"[\u4e00-\u9fff]", sample):
+        return "Chinese"
+    if re.search(r"[\u3040-\u30ff]", sample):
+        return "Japanese"
+    if re.search(r"[\uac00-\ud7af]", sample):
+        return "Korean"
+    # Qwen's forced aligner requires a string. Russian is the safest default
+    # for this application's primary Cyrillic karaoke workflow.
+    return "Russian"
 
 
 def _first(value, names, default=None):
@@ -101,6 +135,7 @@ class Qwen3Transcriber(Transcriber):
     def __init__(self, model="Qwen/Qwen3-ASR-0.6B"):
         self.model_name = model
         self._model = None
+        self.last_language: str | None = None
 
     def _load(self):
         try:
@@ -118,15 +153,28 @@ class Qwen3Transcriber(Transcriber):
                 "max_new_tokens": 1024,
             }
             self._model = Qwen3ASRModel.from_pretrained(self.model_name, **kwargs)
+            generation_config = getattr(getattr(self._model, "model", self._model), "generation_config", None)
+            if generation_config is not None and getattr(generation_config, "pad_token_id", None) is None:
+                eos_token_id = getattr(generation_config, "eos_token_id", None)
+                if eos_token_id is not None:
+                    generation_config.pad_token_id = eos_token_id
         return self._model
 
     def transcribe(self, audio, language):
         model = self._load()
-        result = model.transcribe(audio=str(audio), language=_language_name(language))
+        requested_language = _language_name(language)
+        kwargs = {"audio": str(audio)}
+        # Omitting the argument is the official auto-detection path and avoids
+        # passing a nullable value through older qwen-asr wrappers.
+        if requested_language:
+            kwargs["language"] = requested_language
+        result = model.transcribe(**kwargs)
         item = _unwrap_single_result(result)
-        text = _first(item, ("text", "transcription"), "")
+        text = str(_first(item, ("text", "transcription"), "") or "").strip()
+        detected_language = _first(item, ("language", "lang"), None)
+        self.last_language = _language_name(detected_language) or requested_language
         words = _words_from_items(_unwrap_items(item))
-        return str(text or "").strip(), words
+        return text, words
 
 
 class Qwen3ForcedAligner(Aligner):
@@ -155,10 +203,11 @@ class Qwen3ForcedAligner(Aligner):
         return self._model
 
     def align(self, audio, text, language):
+        resolved_language = resolve_alignment_language(text, language)
         result = self._load().align(
             audio=str(audio),
             text=text,
-            language=_language_name(language),
+            language=resolved_language,
         )
         item = _unwrap_single_result(result)
         words = _words_from_items(item if isinstance(item, (list, tuple)) else _unwrap_items(item))

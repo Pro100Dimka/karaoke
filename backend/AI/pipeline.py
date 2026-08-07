@@ -13,7 +13,7 @@ from .config import CoreConfig
 from .engines.pitch import PyinFallbackPitchEstimator
 from .engines.registry import EngineRegistry
 from .engines.separation import CenterChannelFallbackSeparator
-from .engines.text import UniformTextFallback
+from .engines.text import UniformTextFallback, resolve_alignment_language
 from .errors import EngineUnavailableError, ProcessingCancelledError
 from .locks import ThreadFileLock
 from .midi import write_midi
@@ -301,6 +301,7 @@ class KaraokePipeline:
         validate_within_duration(pitch, song_duration, "pitch", self.config.hop_seconds * 2)
 
         supplied = ""
+        effective_language = request.language
         if request.lyrics_path and Path(request.lyrics_path).exists():
             supplied = Path(request.lyrics_path).read_text(encoding="utf-8").strip()
         lyrics_txt = output / "lyrics.txt"
@@ -328,10 +329,11 @@ class KaraokePipeline:
                 words = [Word(**item) for item in raw.get("words", [])]
                 reports.append(StageReport("alignment", 0, True, "cached"))
             else:
+                effective_language = resolve_alignment_language(supplied, effective_language)
                 words = self._run(
                     "alignment",
                     self.engines.aligner,
-                    lambda engine: engine.align(vocals, supplied, request.language),
+                    lambda engine: engine.align(vocals, supplied, effective_language),
                     reports,
                     warnings,
                 )
@@ -364,11 +366,14 @@ class KaraokePipeline:
                     reports,
                     warnings,
                 )
+                if not effective_language:
+                    effective_language = getattr(self.engines.transcriber, "last_language", None)
                 if text and not words:
+                    effective_language = resolve_alignment_language(text, effective_language)
                     words = self._run(
                         "alignment",
                         self.engines.aligner,
-                        lambda engine: engine.align(vocals, text, request.language),
+                        lambda engine: engine.align(vocals, text, effective_language),
                         reports,
                         warnings,
                     )
@@ -530,7 +535,7 @@ class KaraokePipeline:
             [to_dict(report) for report in reports],
             warnings,
             title=request.title,
-            language=request.language,
+            language=effective_language or request.language,
             integrity=integrity,
         )
         manifest_path = output / "manifest.json"
