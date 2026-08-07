@@ -3,14 +3,45 @@
 from __future__ import annotations
 
 import argparse
-import ctypes
 import os
+import threading
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 from src.common.json_io import save_json
 from src.common.model_paths import whisper_dir
-from src.lyrics.alignment import reconcile_lyric_words
+from src.lyrics.alignment import project_lyrics_onto_timing, reconcile_lyric_words
+
+
+
+_TRANSCRIBE_LOCK = threading.Lock()
+_MODEL_LOAD_LOCK = threading.Lock()
+
+
+@lru_cache(maxsize=1)
+def _faster_whisper_model(model_name: str, device: str, compute_type: str):
+    """Keep one heavy model alive across sequential frontend jobs."""
+    from faster_whisper import WhisperModel
+
+    with _MODEL_LOAD_LOCK:
+        return WhisperModel(
+            model_name,
+            device=device,
+            compute_type=compute_type,
+            download_root=str(whisper_dir() / "faster-whisper"),
+            cpu_threads=max(1, min(8, os.cpu_count() or 4)),
+            num_workers=1,
+        )
+
+
+
+
+@lru_cache(maxsize=1)
+def _openai_whisper_model(model_size: str):
+    import whisper
+
+    return whisper.load_model(model_size, download_root=str(whisper_dir()))
 
 
 def _faster_whisper_runtime() -> tuple[str, str]:
@@ -19,21 +50,12 @@ def _faster_whisper_runtime() -> tuple[str, str]:
         return "cpu", "int8"
     try:
         import ctranslate2
-    except ImportError:
-        return "cpu", "int8"
 
-    cuda_runtime_ready = os.name != "nt"
-    if os.name == "nt":
-        try:
-            ctypes.WinDLL("cublas64_12.dll")
-            cuda_runtime_ready = True
-        except OSError:
-            cuda_runtime_ready = False
-    try:
-        has_cuda = ctranslate2.get_cuda_device_count() > 0
-    except RuntimeError:
-        has_cuda = False
-    return ("cuda", "float16") if has_cuda and cuda_runtime_ready else ("cpu", "int8")
+        if ctranslate2.get_cuda_device_count() > 0:
+            return "cuda", "float16"
+    except (ImportError, OSError, RuntimeError):
+        pass
+    return "cpu", "int8"
 
 
 def _segment_dict(segment: Any, words: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -64,23 +86,34 @@ def _word_dict(word: Any, fallback_start: float = 0.0, fallback_end: float = 0.0
     return {"word": text, "start": round(float(start), 3), "end": round(float(end), 3)}
 
 
-def _transcribe_faster(audio_path: str, language: str | None, device: str, compute_type: str) -> list:
-    from faster_whisper import WhisperModel
-
-    model = WhisperModel(
-        os.getenv("SONGAPP_FASTER_WHISPER_MODEL", "large-v3-turbo"),
-        device=device,
-        compute_type=compute_type,
-        download_root=str(whisper_dir() / "faster-whisper"),
-    )
-    segments, _ = model.transcribe(
-        audio_path,
+def _transcribe_faster(audio_path: str, language: str | None, device: str, compute_type: str, initial_prompt: str | None = None) -> list:
+    model_name = os.getenv("SONGAPP_FASTER_WHISPER_MODEL", "large-v3-turbo")
+    model = _faster_whisper_model(model_name, device, compute_type)
+    # Singing contains long vowels and quiet consonants. A softer VAD keeps them
+    # while still skipping large instrumental pauses.
+    vad_enabled = os.getenv("SONGAPP_WHISPER_VAD", "1").lower() not in {"0", "false", "no"}
+    kwargs = dict(
         language=language,
-        beam_size=5,
+        beam_size=max(1, int(os.getenv("SONGAPP_WHISPER_BEAM_SIZE", "2"))),
         word_timestamps=True,
-        vad_filter=True,
+        vad_filter=vad_enabled,
         condition_on_previous_text=False,
+        initial_prompt=initial_prompt,
+        temperature=0.0,
+        compression_ratio_threshold=2.6,
+        log_prob_threshold=-1.2,
+        no_speech_threshold=0.55,
     )
+    if vad_enabled:
+        kwargs["vad_parameters"] = {
+            "threshold": 0.25,
+            "min_speech_duration_ms": 100,
+            "min_silence_duration_ms": 450,
+            "speech_pad_ms": 250,
+        }
+    with _TRANSCRIBE_LOCK:
+        segments, _ = model.transcribe(audio_path, **kwargs)
+        segments = list(segments)
     lines = []
     for segment in segments:
         words = [item for word in (segment.words or []) if (item := _word_dict(word))]
@@ -89,21 +122,30 @@ def _transcribe_faster(audio_path: str, language: str | None, device: str, compu
     return reconcile_lyric_words(lines)
 
 
-def sync_with_faster_whisper(audio_path: str, language: str | None = None) -> list:
+def sync_with_faster_whisper(audio_path: str, language: str | None = None, initial_prompt: str | None = None) -> list:
     device, compute_type = _faster_whisper_runtime()
     try:
-        return _transcribe_faster(audio_path, language, device, compute_type)
-    except RuntimeError:
+        if initial_prompt is None:
+            return _transcribe_faster(audio_path, language, device, compute_type)
+        return _transcribe_faster(audio_path, language, device, compute_type, initial_prompt)
+    except (OSError, RuntimeError, ValueError):
         if device != "cuda":
             raise
-        return _transcribe_faster(audio_path, language, "cpu", "int8")
+        if initial_prompt is None:
+            return _transcribe_faster(audio_path, language, "cpu", "int8")
+        return _transcribe_faster(audio_path, language, "cpu", "int8", initial_prompt)
 
 
-def sync_with_whisper(audio_path: str, model_size: str = "medium", language: str | None = None) -> list:
-    import whisper
-
-    model = whisper.load_model(model_size, download_root=str(whisper_dir()))
-    result = model.transcribe(audio_path, language=language, word_timestamps=True)
+def sync_with_whisper(audio_path: str, model_size: str = "medium", language: str | None = None, initial_prompt: str | None = None) -> list:
+    model = _openai_whisper_model(model_size)
+    result = model.transcribe(
+        audio_path,
+        language=language,
+        word_timestamps=True,
+        initial_prompt=initial_prompt,
+        temperature=0.0,
+        condition_on_previous_text=False,
+    )
     lines = []
     for segment in result.get("segments", []):
         words = [
@@ -144,14 +186,20 @@ def sync_with_whisperx(
     return reconcile_lyric_words(lines)
 
 
-def _sync_raw(audio_path: str, model_size: str, language: str | None, engine: str) -> list:
+def _sync_raw(
+    audio_path: str,
+    model_size: str,
+    language: str | None,
+    engine: str,
+    initial_prompt: str | None = None,
+) -> list:
     if engine in {"auto", "faster-whisper"}:
         try:
-            lines = sync_with_faster_whisper(audio_path, language)
+            lines = sync_with_faster_whisper(audio_path, language, initial_prompt)
             if lines:
                 return lines
             raise RuntimeError("faster-whisper returned no speech segments")
-        except (ImportError, OSError, RuntimeError) as exc:
+        except (ImportError, OSError, RuntimeError, ValueError) as exc:
             print(f"faster-whisper failed; falling back to Whisper. {exc}")
     if engine == "whisperx":
         try:
@@ -160,7 +208,7 @@ def _sync_raw(audio_path: str, model_size: str, language: str | None, engine: st
             print("whisperx не установлен — откатываюсь на whisper. Установить: pip install whisperx")
         except (OSError, RuntimeError, ValueError) as exc:
             print(f"whisperx завершился с ошибкой ({exc}) — откатываюсь на whisper.")
-    return sync_with_whisper(audio_path, model_size, language)
+    return sync_with_whisper(audio_path, model_size, language, initial_prompt)
 
 
 def sync_existing_lyrics_with_whisper(
@@ -170,17 +218,28 @@ def sync_existing_lyrics_with_whisper(
     language: str | None = None,
     engine: str = "auto",
 ) -> list:
-    lines = _sync_raw(audio_path, model_size, language, engine)
     given_lines = [
         line.strip()
         for line in Path(lyrics_path).read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    if len(given_lines) == len(lines):
-        for line, visible_text in zip(lines, given_lines, strict=True):
-            line["text"] = visible_text
-        lines = reconcile_lyric_words(lines)
-    return lines
+    # A complete song as prompt can force repeated hallucinations. Keep a
+    # compact, order-preserving vocabulary hint instead.
+    vocabulary: list[str] = []
+    seen: set[str] = set()
+    prompt_length = 0
+    for token in " ".join(given_lines).split():
+        key = token.casefold().strip(".,!?;:\"'()[]{}—-")
+        if key and key not in seen:
+            addition = len(token) + (1 if vocabulary else 0)
+            if prompt_length + addition > 900:
+                break
+            seen.add(key)
+            vocabulary.append(token)
+            prompt_length += addition
+    prompt = " ".join(vocabulary) or None
+    lines = _sync_raw(audio_path, model_size, language, engine, prompt)
+    return project_lyrics_onto_timing(given_lines, lines) if given_lines else lines
 
 
 def main() -> None:

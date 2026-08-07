@@ -99,11 +99,13 @@ def test_run_all_helpers_are_idempotent_and_cleanup_normalization_temp(monkeypat
         Path(destination).write_bytes(b"new")
 
     monkeypatch.setattr(run_all, "normalize_loudness", normalize)
+    monkeypatch.setenv("SONGAPP_NORMALIZE_STEMS", "1")
     run_all._normalize_stems((paths.vocals, paths.instrumental), paths)
     run_all._normalize_stems((paths.vocals, paths.instrumental), paths)
     assert len(calls) == 2
-    assert paths.vocals.read_bytes() == b"new"
-    assert paths.instrumental.read_bytes() == b"new"
+    assert paths.vocals.read_bytes() == b"old"
+    assert paths.instrumental.read_bytes() == b"old"
+    assert (paths.out / "playback" / "vocals.wav").read_bytes() == b"new"
     assert list(paths.separated.glob("*.tmp.wav")) == []
 
 

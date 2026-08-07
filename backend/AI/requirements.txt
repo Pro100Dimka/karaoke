@@ -23,3 +23,7 @@ openai-whisper
 # Опционально — точнее (forced alignment), но не обязателен: sync.py сам
 # откатывается на whisper, если whisperx не установлен.
 # whisperx
+
+# Быстрый Whisper на CTranslate2: GPU float16 / CPU int8.
+# Код автоматически откатывается на openai-whisper, если пакет недоступен.
+faster-whisper

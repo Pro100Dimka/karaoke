@@ -39,3 +39,29 @@ def test_reconcile_projects_more_visible_words_monotonically():
         left["start"] <= right["start"]
         for left, right in zip(line["words"], line["words"][1:], strict=False)
     )
+
+
+def test_project_lyrics_survives_different_line_segmentation():
+    from src.lyrics.alignment import project_lyrics_onto_timing
+
+    result = project_lyrics_onto_timing(
+        ["Мы поём", "вместе сейчас"],
+        [
+            {
+                "text": "Мы поём вместе сейчас",
+                "start": 0.1,
+                "end": 2.5,
+                "words": [
+                    {"word": "мы", "start": 0.1, "end": 0.4},
+                    {"word": "поем", "start": 0.5, "end": 1.0},
+                    {"word": "вместе", "start": 1.2, "end": 1.8},
+                    {"word": "сейчас", "start": 2.0, "end": 2.5},
+                ],
+            }
+        ],
+    )
+
+    assert [line["text"] for line in result] == ["Мы поём", "вместе сейчас"]
+    assert result[0]["start"] == 0.1
+    assert result[1]["end"] == 2.5
+    assert result[0]["end"] <= result[1]["start"]

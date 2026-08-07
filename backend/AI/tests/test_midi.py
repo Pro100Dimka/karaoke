@@ -35,3 +35,51 @@ def test_quantize_notes_empty_or_invalid_bpm():
     assert quantize_notes([], bpm=120.0) == []
     notes = [{"note": "G3", "start": 0.0, "end": 1.0, "duration": 1.0}]
     assert quantize_notes(notes, bpm=0) == notes
+
+
+def test_vocal_midi_retriggers_at_word_boundaries_and_adds_lyrics():
+    from src.build.midi import build_vocal_midi
+    frames = []
+    for i in range(100):
+        t = i * 0.01
+        frames.append({"time": t, "f0_hz": 220.0 if t < 0.5 else 246.94,
+                       "voiced": True, "confidence": 0.9})
+    lyrics = [{"words": [
+        {"word": "ла", "start": 0.0, "end": 0.5},
+        {"word": "ла", "start": 0.5, "end": 1.0},
+    ]}]
+    midi = build_vocal_midi(frames, lyrics)
+    assert len(midi.instruments[0].notes) >= 2
+    assert [lyric.text for lyric in midi.lyrics] == ["ла", "ла"]
+    assert abs(midi.instruments[0].notes[1].start - 0.5) < 0.02
+
+
+def test_vocal_midi_contains_pitch_bend_for_vibrato():
+    import math
+    from src.build.midi import build_vocal_midi
+    frames = [{"time": i * 0.01,
+               "f0_hz": 220.0 * 2 ** ((0.3 * math.sin(i / 4)) / 12),
+               "voiced": True, "confidence": 0.9} for i in range(60)]
+    lyrics = [{"words": [{"word": "аа", "start": 0.0, "end": 0.6}]}]
+    midi = build_vocal_midi(frames, lyrics)
+    assert midi.instruments[0].pitch_bends
+    assert any(pb.pitch != 0 for pb in midi.instruments[0].pitch_bends)
+
+
+def test_vocal_midi_writes_cyrillic_lyrics_as_utf8(tmp_path):
+    from src.build.midi import build_vocal_midi, decode_midi_utf8_text
+    import pretty_midi
+
+    frames = [
+        {"time": i * 0.01, "f0_hz": 220.0, "voiced": True, "confidence": 0.9}
+        for i in range(40)
+    ]
+    lyrics = [{"words": [{"word": "Привіт", "start": 0.0, "end": 0.4}]}]
+    path = tmp_path / "unicode.mid"
+
+    build_vocal_midi(frames, lyrics).write(str(path))
+
+    raw = path.read_bytes()
+    assert "Привіт".encode("utf-8") in raw
+    loaded = pretty_midi.PrettyMIDI(str(path))
+    assert decode_midi_utf8_text(loaded.lyrics[0].text) == "Привіт"

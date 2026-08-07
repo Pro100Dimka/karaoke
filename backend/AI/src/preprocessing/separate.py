@@ -11,6 +11,7 @@ from src.common.model_paths import demucs_cache_dir
 
 DEFAULT_MODEL = "htdemucs"
 DEFAULT_SHIFTS = 1
+DEFAULT_SEGMENT = 7
 
 
 def _positive_int(value: str | int, *, name: str) -> int:
@@ -32,7 +33,21 @@ def _resolve_device(requested: str) -> str:
 
 
 def _segment_for_model(model: str) -> int:
-    return 7 if model.startswith("htdemucs") else 10
+    configured = os.getenv("SONGAPP_DEMUCS_SEGMENT")
+    if configured:
+        return _positive_int(configured, name="Demucs segment")
+    # Hybrid Transformer Demucs was trained with short bounded segments.  A
+    # larger arbitrary value can trigger invalid internal reshapes in some
+    # Demucs/PyTorch combinations; seven seconds is the upstream-safe default.
+    return DEFAULT_SEGMENT if model.startswith("htdemucs") else 10
+
+
+def _overlap() -> float:
+    try:
+        value = float(os.getenv("SONGAPP_DEMUCS_OVERLAP", "0.15"))
+    except ValueError:
+        return 0.15
+    return max(0.05, min(value, 0.5))
 
 
 def _mix_stems(stems: dict[str, Any], *, excluded: str = "vocals"):
@@ -45,6 +60,83 @@ def _mix_stems(stems: dict[str, Any], *, excluded: str = "vocals"):
     return mixed
 
 
+def _create_separator(
+    separator_type,
+    *,
+    model: str,
+    device: str,
+    shifts: int,
+    segment: int,
+):
+    return separator_type(
+        model=model,
+        device=device,
+        shifts=shifts,
+        overlap=_overlap(),
+        split=True,
+        segment=segment,
+        progress=False,
+    )
+
+
+def _separate_with_retry(
+    separator_type,
+    input_path: str,
+    *,
+    model: str,
+    device: str,
+    shifts: int,
+):
+    configured = _segment_for_model(model)
+    attempts = []
+    for candidate in (configured, DEFAULT_SEGMENT, 6, 5):
+        if candidate not in attempts:
+            attempts.append(candidate)
+
+    last_error: RuntimeError | None = None
+    for index, segment in enumerate(attempts):
+        try:
+            separator = _create_separator(
+                separator_type,
+                model=model,
+                device=device,
+                shifts=shifts,
+                segment=segment,
+            )
+            _, stems = separator.separate_audio_file(Path(input_path))
+            return separator, stems
+        except RuntimeError as exc:
+            last_error = exc
+            message = str(exc).lower()
+            recoverable = (
+                ("shape" in message and "invalid" in message)
+                or "out of memory" in message
+                or "cuda" in message and "memory" in message
+            )
+            if not recoverable or index == len(attempts) - 1:
+                raise
+            next_segment = attempts[index + 1]
+            print(
+                f"Demucs failed with segment={segment}; "
+                f"retrying with segment={next_segment}. {exc}"
+            )
+            _release_cuda_cache(device)
+    assert last_error is not None
+    raise last_error
+
+
+
+def _release_cuda_cache(device: str) -> None:
+    if device != "cuda":
+        return
+    try:
+        import torch
+
+        torch.cuda.empty_cache()
+    except (ImportError, RuntimeError):
+        pass
+
+
 def separate(
     input_path: str,
     out_dir: str,
@@ -52,6 +144,7 @@ def separate(
     two_stems: bool = True,
     shifts: int | None = None,
 ):
+    source = Path(input_path)
     output = Path(out_dir)
     output.mkdir(parents=True, exist_ok=True)
     selected_model = model or os.getenv("SONGAPP_DEMUCS_MODEL", DEFAULT_MODEL)
@@ -65,17 +158,18 @@ def separate(
     os.environ.setdefault("HF_HOME", str(demucs_cache_dir()))
     from demucs.api import Separator, save_audio
 
-    print(f"Запуск Demucs: {selected_model} ({device}, shifts={selected_shifts})")
-    separator = Separator(
+    segment = _segment_for_model(selected_model)
+    print(
+        f"Запуск Demucs: {selected_model} "
+        f"({device}, shifts={selected_shifts}, segment={segment}, overlap={_overlap():.2f})"
+    )
+    separator, stems = _separate_with_retry(
+        Separator,
+        str(source),
         model=selected_model,
         device=device,
         shifts=selected_shifts,
-        overlap=0.25,
-        split=True,
-        segment=_segment_for_model(selected_model),
-        progress=False,
     )
-    _, stems = separator.separate_audio_file(Path(input_path))
     if "vocals" not in stems:
         raise RuntimeError("Demucs returned no vocals stem")
 
@@ -87,16 +181,24 @@ def separate(
     }
     vocals = output / "vocals.wav"
     instrumental = output / "instrumental.wav"
-    save_audio(stems["vocals"], vocals, **options)
-    save_audio(_mix_stems(stems), instrumental, **options)
+    try:
+        save_audio(stems["vocals"], vocals, **options)
+        save_audio(_mix_stems(stems), instrumental, **options)
+        if vocals.stat().st_size == 0 or instrumental.stat().st_size == 0:
+            raise RuntimeError("Demucs produced an empty stem")
+    except Exception:
+        vocals.unlink(missing_ok=True)
+        instrumental.unlink(missing_ok=True)
+        raise
 
     if not two_stems:
         for name in ("drums", "bass", "other"):
             if name in stems:
                 save_audio(stems[name], output / f"{name}.wav", **options)
 
-    if not vocals.is_file() or not instrumental.is_file():
-        raise RuntimeError("Demucs did not create the expected output files")
+    del stems
+    del separator
+    _release_cuda_cache(device)
     return {"vocals": str(vocals), "instrumental": str(instrumental)}
 
 
