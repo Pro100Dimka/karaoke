@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import { useRadio } from "../../../../contexts/radio";
 
-const ROWS = 32;
-const COLUMNS = 96;
+const ROWS = 36;
+const COLUMNS = 108;
 const TARGET_FRAME_TIME = 1000 / 30;
 const TAU = Math.PI * 2;
 
@@ -65,7 +65,7 @@ const POINTS = Array.from({ length: ROWS }, () =>
 function getTerrainHeight(column, particle, time, energy, hit, spectrum) {
   const { x, edge, silhouette, bassShape } = COLUMNS_DATA[column];
   const depth = particle.depth;
-  const depthCurve = 0.3 + Math.sin(Math.PI * depth) * 0.7;
+  const depthCurve = 0.48 + Math.sin(Math.PI * depth) * 0.72;
 
   const surface =
     Math.sin(x * 7.6 + depth * 6.2 - time * (0.78 + energy * 0.85)) * 0.05 +
@@ -75,7 +75,7 @@ function getTerrainHeight(column, particle, time, energy, hit, spectrum) {
   const bassLift =
     bassShape *
     depthCurve ** 1.08 *
-    (energy * 0.14 + hit * 0.22) *
+    (energy * 0.2 + hit * 0.38) *
     (0.86 + particle.random * 0.16);
 
   const bandPosition = (column / (COLUMNS - 1)) * (spectrum.length - 1);
@@ -90,13 +90,13 @@ function getTerrainHeight(column, particle, time, energy, hit, spectrum) {
     bandLevel ** 1.12 *
     bandEnvelope *
     depthCurve ** 0.88 *
-    (0.23 + particle.depth * 0.16) *
+    (0.38 + particle.depth * 0.3) *
     (0.9 + particle.random * 0.12);
 
   const transientRipple =
     Math.sin(x * 22 - time * 4.2 + particle.phase) *
     hit *
-    0.022 *
+    0.052 *
     depthCurve;
 
   return (
@@ -161,7 +161,7 @@ export default function LibraryWaveTerrain() {
           const particle = PARTICLES[row][column];
           const point = POINTS[row][column];
           const { x } = COLUMNS_DATA[column];
-          const perspective = 0.52 + particle.depth * 0.76;
+          const perspective = 0.44 + particle.depth * 0.9;
           const terrain = getTerrainHeight(
             column,
             particle,
@@ -172,17 +172,25 @@ export default function LibraryWaveTerrain() {
           );
           const drift =
             Math.sin(time * 0.3 + particle.depth * 2.5) * 0.009;
+          const cameraFlow =
+            Math.sin(time * 0.62 + particle.depth * 8.4) *
+            (0.004 + particle.depth * 0.006);
 
           point.x =
             width * 0.5 + (x + drift) * width * 0.57 * perspective;
-          point.y =
-            height * (0.87 - particle.depth * 0.35) -
-            terrain * height * (0.32 + particle.depth * 0.08);
+          // Keep the complete terrain inside the half-screen canvas.
+          // The previous full-screen projection could move strong peaks above
+          // the canvas after its height was reduced to 50vh, visually cutting
+          // off the upper part of the wave.
+          const horizon = 0.96 - particle.depth * 0.28 + cameraFlow * 0.55;
+          const amplitude = 0.3 + particle.depth * 0.1;
+
+          point.y = height * horizon - terrain * height * amplitude;
           point.terrain = terrain;
           point.brightness = clamp(
-            0.16 +
-              particle.depth * 0.5 +
-              terrain * 0.86 +
+            0.3 +
+              particle.depth * 0.52 +
+              terrain * 1.12 +
               particle.random * 0.16
           );
         }
@@ -200,7 +208,7 @@ export default function LibraryWaveTerrain() {
 
         for (let column = 0; column < COLUMNS; column += 1) {
           const point = POINTS[row][column];
-          if (point.terrain < 0.018) {
+          if (point.terrain < -0.08) {
             started = false;
             continue;
           }
@@ -215,9 +223,9 @@ export default function LibraryWaveTerrain() {
         const depth = row / (ROWS - 1);
         const rowColor = row % 4 === 0 ? terrainAccentRgb : terrainRgb;
         context.strokeStyle = `rgba(${rowColor},${
-          0.1 + depth * 0.2 + energy * 0.1 + hit * 0.12
+          0.18 + depth * 0.34 + energy * 0.16 + hit * 0.24
         })`;
-        context.lineWidth = 0.62 + depth * 0.62;
+        context.lineWidth = 0.72 + depth * 0.92;
         context.stroke();
       }
 
@@ -227,7 +235,7 @@ export default function LibraryWaveTerrain() {
 
         for (let row = 0; row < ROWS; row += 1) {
           const point = POINTS[row][column];
-          if (point.terrain < 0.025) {
+          if (point.terrain < -0.06) {
             started = false;
             continue;
           }
@@ -239,7 +247,7 @@ export default function LibraryWaveTerrain() {
           }
         }
 
-        context.strokeStyle = `rgba(${terrainAccentRgb},${0.07 + energy * 0.08 + hit * 0.08})`;
+        context.strokeStyle = `rgba(${terrainAccentRgb},${0.13 + energy * 0.13 + hit * 0.16})`;
         context.lineWidth = 0.48;
         context.stroke();
       }
@@ -255,16 +263,16 @@ export default function LibraryWaveTerrain() {
         for (let column = 0; column < COLUMNS; column += 1) {
           const particle = PARTICLES[row][column];
           const point = POINTS[row][column];
-          if (!particle.visible || point.terrain < 0.014) continue;
+          if (!particle.visible || point.terrain < -0.05) continue;
 
           const size =
             particle.size *
             (0.64 + particle.depth * 0.62) *
-            (1 + energy * 0.22 + hit * 0.18);
+            (1 + energy * 0.42 + hit * 0.45);
           const alpha = clamp(
             point.brightness *
               (0.68 + particle.random * 0.56) *
-              (1.02 + energy * 0.58 + hit * 0.62),
+              (1.12 + energy * 0.78 + hit * 0.94),
             0,
             1
           );
@@ -298,7 +306,7 @@ export default function LibraryWaveTerrain() {
       const attack = rawBass > energy ? 0.72 : 0.2;
 
       energy += (rawBass - energy) * attack;
-      hit = Math.max(clamp((rawBass - previousRawBass) * 5.6), hit * 0.68);
+      hit = Math.max(clamp((rawBass - previousRawBass) * 8.4), hit * 0.72);
       previousRawBass = rawBass;
 
       context.clearRect(0, 0, width, height);
