@@ -20,7 +20,7 @@ from app.utils.atomic_files import atomic_write
 MAX_PACKAGE_BYTES = 2 * 1024 * 1024 * 1024
 MAX_PACKAGE_FILES = 500
 MAX_PACKAGE_COMPRESSION_RATIO = 200
-_SKIPPED_DIRS = {config.LOGS_DIRNAME, config.RECORDINGS_DIRNAME, "separated"}
+_SKIPPED_DIRS = {config.LOGS_DIRNAME, config.RECORDINGS_DIRNAME}
 
 
 def _manifest(song: models.Song) -> dict[str, object]:

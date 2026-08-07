@@ -259,15 +259,21 @@ def get_audio_track(track: str, song: SongDependency):
     if track not in {"instrumental", "vocals", "song"}:
         raise HTTPException(status_code=404, detail="Unknown audio track")
     output_dir = song_service.resolve_output_dir(song)
-    for extension, media_type in ((".mp3", "audio/mpeg"), (".wav", "audio/wav")):
-        candidate = output_dir / f"{track}{extension}"
-        if candidate.is_file():
-            return FileResponse(
-                candidate,
-                media_type=media_type,
-                filename=candidate.name,
-                content_disposition_type="inline",
-            )
+    search_dirs = [output_dir]
+    if track in {"instrumental", "vocals"}:
+        # AI Core v2 stores production stems in separated/. Keep the root
+        # directory as a legacy fallback for songs created by older versions.
+        search_dirs.insert(0, output_dir / "separated")
+    for directory in search_dirs:
+        for extension, media_type in ((".mp3", "audio/mpeg"), (".wav", "audio/wav")):
+            candidate = directory / f"{track}{extension}"
+            if candidate.is_file():
+                return FileResponse(
+                    candidate,
+                    media_type=media_type,
+                    filename=candidate.name,
+                    content_disposition_type="inline",
+                )
     raise HTTPException(status_code=404, detail="Audio track is not available")
 
 

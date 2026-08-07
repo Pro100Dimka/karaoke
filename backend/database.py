@@ -91,6 +91,70 @@ def _repair_invalid_audio_settings_datetime(connection) -> None:
         )
     )
 
+
+
+def _repair_corrupted_audio_settings(connection) -> None:
+    """Reset only the audio settings row when legacy values no longer fit the schema.
+
+    Older application builds changed the AudioSettings layout several times. SQLite is
+    dynamically typed, so a legacy row can survive migrations with values such as an
+    ASIO driver name stored in a numeric effects column.  SQLAlchemy then either fails
+    while deserializing the row or FastAPI rejects the response.  Audio settings are
+    user preferences, not library data, so the safest recovery is to discard only the
+    corrupted settings row and let the ORM recreate it with current defaults.
+    """
+    inspector = inspect(connection)
+    if "audio_settings" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("audio_settings")}
+    required = {
+        "id", "volume", "sensitivity", "latency_ms", "audio_driver",
+        "buffer_size", "monitoring_enabled", "reverb", "echo", "delay",
+    }
+    if not required.issubset(columns):
+        return
+
+    rows = connection.execute(
+        text(
+            "SELECT id, volume, sensitivity, latency_ms, audio_driver, buffer_size, "
+            "monitoring_enabled, reverb, echo, delay FROM audio_settings"
+        )
+    ).mappings().all()
+
+    def is_number(value) -> bool:
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+    def in_range(value, low: float, high: float) -> bool:
+        return is_number(value) and low <= float(value) <= high
+
+    corrupted_ids: list[int] = []
+    for row in rows:
+        valid = (
+            isinstance(row["id"], int)
+            and in_range(row["volume"], 0.0, 4.0)
+            and in_range(row["sensitivity"], 0.0, 1.0)
+            and isinstance(row["latency_ms"], int)
+            and row["latency_ms"] >= 0
+            and isinstance(row["audio_driver"], str)
+            and row["audio_driver"] in {"auto", "asio"}
+            and isinstance(row["buffer_size"], int)
+            and 16 <= row["buffer_size"] <= 2048
+            and isinstance(row["monitoring_enabled"], int)
+            and row["monitoring_enabled"] in {0, 1}
+            and in_range(row["reverb"], 0.0, 1.0)
+            and in_range(row["echo"], 0.0, 1.0)
+            and in_range(row["delay"], 0.0, 1.0)
+        )
+        if not valid:
+            corrupted_ids.append(int(row["id"]))
+
+    for settings_id in corrupted_ids:
+        connection.execute(
+            text("DELETE FROM audio_settings WHERE id = :settings_id"),
+            {"settings_id": settings_id},
+        )
+
+
 def _mark_interrupted_jobs(connection) -> None:
     connection.execute(
         text(
@@ -121,6 +185,7 @@ def init_db() -> None:
         _apply_additive_migrations(connection, song_columns, _SONG_COLUMN_MIGRATIONS)
         _apply_additive_migrations(connection, audio_columns, _AUDIO_COLUMN_MIGRATIONS)
         _repair_invalid_audio_settings_datetime(connection)
+        _repair_corrupted_audio_settings(connection)
         _mark_interrupted_jobs(connection)
 
 

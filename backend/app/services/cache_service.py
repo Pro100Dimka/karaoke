@@ -16,8 +16,8 @@ from database import SessionLocal
 
 # Промежуточные артефакты AI-пайплайна, которые не нужны после того как
 # финальные результаты (json/mid/mp3) уже посчитаны.
-_HEAVY_INTERMEDIATE_DIRNAMES = ("separated", "tmp", "__pycache__")
-_HEAVY_KEEP_AS_MP3 = ("song.wav", "vocals.wav", "instrumental.wav")
+_HEAVY_INTERMEDIATE_DIRNAMES = ("tmp", "__pycache__")
+_HEAVY_KEEP_AS_MP3 = ("song.wav", "separated/vocals.wav", "separated/instrumental.wav")
 
 
 def _encode_mp3(wav_path: Path, mp3_path: Path) -> None:
@@ -123,6 +123,7 @@ def _convert_heavy_wavs(out_dir: Path, actions: list[str]) -> int:
         if not wav_path.exists():
             continue
         mp3_path = wav_path.with_suffix(".mp3")
+        mp3_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             _encode_mp3(wav_path, mp3_path)
         except Exception:
