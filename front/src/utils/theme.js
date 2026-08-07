@@ -17,17 +17,23 @@ export function readStoredTheme(storage) {
 
 export function writeStoredTheme(storage, theme) {
   const resolvedTheme = resolveTheme(theme);
+
   try {
     storage?.setItem?.(THEME_STORAGE_KEY, resolvedTheme);
   } catch {
     // Storage can be unavailable in private or restricted environments.
   }
+
   return resolvedTheme;
 }
 
 export function applyTheme(theme) {
   const resolvedTheme = writeStoredTheme(window.localStorage, theme);
+
   document.documentElement.dataset.theme = resolvedTheme;
+
+  window.electronAPI?.setIconTheme?.(resolvedTheme);
+
   return resolvedTheme;
 }
 
