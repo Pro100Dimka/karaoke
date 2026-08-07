@@ -164,6 +164,7 @@ export function OnlineRoomProvider({ children }) {
     setMicrophoneMutedState(false);
     setRoomUi({});
     setRoomCommand(null);
+    pendingSongCommandRef.current = null;
     setVoiceError("");
     intentionalDisconnectRef.current = false;
   }, [cleanupConnection, restoreApplicationAudio, setRoom]);
@@ -173,8 +174,18 @@ export function OnlineRoomProvider({ children }) {
       const connectionVersion = connectionVersionRef.current + 1;
       connectionVersionRef.current = connectionVersion;
       intentionalDisconnectRef.current = true;
+      restoreApplicationAudio();
       cleanupConnection();
       intentionalDisconnectRef.current = false;
+      setRoom(null);
+      setParticipants([]);
+      mutedPeopleRef.current = new Set();
+      setMutedPeople(new Set());
+      roomSoundMutedRef.current = false;
+      setRoomSoundMutedState(false);
+      setRoomUi({});
+      setRoomCommand(null);
+      pendingSongCommandRef.current = null;
       setVoiceError("");
 
       const client = new OnlineRoomClient();
@@ -332,6 +343,7 @@ export function OnlineRoomProvider({ children }) {
       applyRemoteAudioMute,
       cleanupConnection,
       removeRemoteAudio,
+      restoreApplicationAudio,
       setRoom,
       startSpeakingMeter
     ]

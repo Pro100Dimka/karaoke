@@ -37,6 +37,7 @@ export function usePolling(fetchFn, intervalMs, deps = []) {
     const run = async () => {
       if (!active) return;
       if (isHidden()) {
+        timerId = null;
         refreshQueued = true;
         return;
       }
@@ -72,6 +73,7 @@ export function usePolling(fetchFn, intervalMs, deps = []) {
       if (isHidden()) return;
       if (timerId) globalThis.clearTimeout(timerId);
       timerId = null;
+      refreshQueued = false;
       run();
     };
     documentRef?.addEventListener("visibilitychange", refreshWhenVisible);

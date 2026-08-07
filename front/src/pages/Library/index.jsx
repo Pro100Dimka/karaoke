@@ -74,8 +74,11 @@ export default function Library({ onOpenSongSettings }) {
     [processingSong?.id]
   );
 
-  const { importFile: handleFileChosen, openFilePicker: handleAddClick } =
-    useLibraryFileImport({
+  const {
+    importing,
+    importFile: handleFileChosen,
+    openFilePicker: handleAddClick
+  } = useLibraryFileImport({
       fileInputRef,
       notify,
       onStarted: setProcessingSong
@@ -163,6 +166,7 @@ export default function Library({ onOpenSongSettings }) {
             canManageLibrary={canManageLibrary}
             fileInputRef={fileInputRef}
             includeFileInput
+            importing={importing}
             onAdd={handleAddClick}
             onFileChosen={handleFileChosen}
             onOpenRoom={openOnlineRoom}
@@ -186,13 +190,21 @@ export default function Library({ onOpenSongSettings }) {
               onDelete={handleDelete}
               onOpenFolder={handleOpenFolder}
               onOpenKaraoke={async (selectedSong) => {
-                if (sharedRoom?.room) {
-                  const readyLocally = await sharedRoom.openKaraoke(
-                    selectedSong.id
+                try {
+                  if (sharedRoom?.room) {
+                    const readyLocally = await sharedRoom.openKaraoke(
+                      selectedSong.id
+                    );
+                    if (!readyLocally) return;
+                  }
+                  navigate("/karaoke", {
+                    state: { songId: selectedSong.id }
+                  });
+                } catch (openError) {
+                  await notify(
+                    `Не удалось открыть песню: ${getErrorMessage(openError)}`
                   );
-                  if (!readyLocally) return;
                 }
-                navigate("/karaoke", { state: { songId: selectedSong.id } });
               }}
               onOpenProcessing={setProcessingSong}
               onOpenRecordings={setRecordingsSong}

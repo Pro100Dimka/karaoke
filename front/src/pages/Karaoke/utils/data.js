@@ -48,7 +48,8 @@ export function noteNameToMidi(noteName) {
   const base = semitones[letter.toUpperCase()];
   const offset = accidental === "#" ? 1 : accidental === "b" ? -1 : 0;
 
-  return (Number(octaveText) + 1) * 12 + base + offset;
+  const midi = (Number(octaveText) + 1) * 12 + base + offset;
+  return Number.isInteger(midi) && midi >= 0 && midi <= 127 ? midi : null;
 }
 
 export function normalizeLyrics(raw) {
@@ -56,17 +57,25 @@ export function normalizeLyrics(raw) {
 
   const source = Array.isArray(raw) ? raw : raw.lines || raw.segments || [];
   const list = Array.isArray(source) ? source : [];
+  const toText = (value) =>
+    typeof value === "string" || typeof value === "number"
+      ? String(value).trim()
+      : "";
 
   return list
     .filter((line) => line && typeof line === "object")
     .map((line) => {
       const fallbackStart = Number(line.start ?? line.begin ?? 0);
-      const fallbackEnd = Number(line.end ?? fallbackStart + 2);
+      const rawFallbackEnd = Number(line.end ?? fallbackStart + 2);
+      if (!Number.isFinite(fallbackStart)) return null;
+      const fallbackEnd = Number.isFinite(rawFallbackEnd)
+        ? Math.max(fallbackStart, rawFallbackEnd)
+        : fallbackStart + 2;
       const words = Array.isArray(line.words)
         ? line.words
             .filter((word) => word && typeof word === "object")
             .map((word) => ({
-              text: word.word || word.text || "",
+              text: toText(word.word ?? word.text),
               start: Number(word.start ?? fallbackStart),
               end: Number(word.end ?? fallbackEnd)
             }))
@@ -81,17 +90,25 @@ export function normalizeLyrics(raw) {
               (left, right) => left.start - right.start || left.end - right.end
             )
         : [];
-      const start = words.length ? words[0].start : fallbackStart;
-      const end = words.length ? words.at(-1).end : fallbackEnd;
+      const startTime = words.length ? words[0].start : fallbackStart;
+      const endTime = words.length ? words.at(-1).end : fallbackEnd;
+      const text =
+        toText(line.text ?? line.line) ||
+        words.map((word) => word.text).join(" ").trim();
+
+      if (!text || !Number.isFinite(startTime) || !Number.isFinite(endTime)) {
+        return null;
+      }
 
       return {
-        start,
-        end: Math.max(start, end),
-        text: line.text || line.line || "",
+        start: startTime,
+        end: Math.max(startTime, endTime),
+        text,
         words
       };
     })
-    .filter((line) => line.text && Number.isFinite(line.start));
+    .filter(Boolean)
+    .sort((left, right) => left.start - right.start || left.end - right.end);
 }
 
 export const normalizeNotes = (raw) => normalizeNoteList(raw, noteNameToMidi);
@@ -124,6 +141,7 @@ export function getYouTubeVideoId(url) {
 
   try {
     const parsed = new URL(url);
+    if (!["http:", "https:"].includes(parsed.protocol)) return null;
     const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
     let id = null;
 
@@ -132,7 +150,12 @@ export function getYouTubeVideoId(url) {
       id = pathnameId;
     }
 
-    if (host === "youtube.com" || host.endsWith(".youtube.com")) {
+    if (
+      host === "youtube.com" ||
+      host.endsWith(".youtube.com") ||
+      host === "youtube-nocookie.com" ||
+      host.endsWith(".youtube-nocookie.com")
+    ) {
       id =
         parsed.searchParams.get("v") ||
         parsed.pathname.match(/^\/(?:embed|shorts|live)\/([^/?]+)/)?.[1];

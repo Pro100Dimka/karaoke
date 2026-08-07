@@ -39,11 +39,18 @@ export default function useMelodyGuide({
   }, []);
 
   const start = useCallback(async () => {
-    if (volumeRef.current <= 0 || !notesRef.current.length) return;
+    if (
+      volumeRef.current <= 0 ||
+      !Array.isArray(notesRef.current) ||
+      notesRef.current.length === 0
+    ) return false;
 
     let guide = guideRef.current;
     if (!guide || guide.context.state === "closed") {
-      const context = new AudioContext({ latencyHint: "interactive" });
+      const AudioContextClass =
+        globalThis.AudioContext || globalThis.webkitAudioContext;
+      if (!AudioContextClass) return false;
+      const context = new AudioContextClass({ latencyHint: "interactive" });
       const oscillator = context.createOscillator();
       const gain = context.createGain();
       oscillator.type = "triangle";
@@ -54,8 +61,22 @@ export default function useMelodyGuide({
       guideRef.current = guide;
     }
 
-    await guide.context.resume();
-    update(currentTimeRef.current);
+    try {
+      await guide.context.resume();
+      update(currentTimeRef.current);
+      return true;
+    } catch (error) {
+      if (guideRef.current === guide) {
+        guideRef.current = null;
+      }
+      try {
+        guide.oscillator.stop();
+      } catch {
+        // The oscillator may not have reached the running state.
+      }
+      await guide.context.close().catch(() => {});
+      throw error;
+    }
   }, [currentTimeRef, update]);
 
   const silence = useCallback(() => {

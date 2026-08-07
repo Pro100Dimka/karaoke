@@ -13,7 +13,11 @@ export default function usePitchDetection({
   const [pitchRestProgress, setPitchRestProgress] = useState(1);
 
   useEffect(() => {
-    if (!isPlaying || !navigator.mediaDevices?.getUserMedia) {
+    if (
+      !isPlaying ||
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices?.getUserMedia
+    ) {
       setSungMidi(null);
       setIsPitchDetected(false);
       setIsPitchAttacking(false);
@@ -27,6 +31,7 @@ export default function usePitchDetection({
     let ownsContext = false;
     let stream;
     let context;
+    let sourceNode;
     let lastMeasurementAt = 0;
     let lastAnimationAt = 0;
     let lastRenderAt = 0;
@@ -43,6 +48,8 @@ export default function usePitchDetection({
       setIsPitchAttacking(false);
       setPitchRestProgress(1);
     };
+
+    resetPitch();
 
     const start = async () => {
       try {
@@ -63,18 +70,25 @@ export default function usePitchDetection({
           ownsStream = true;
         }
         if (!context) {
-          context = new AudioContext({ latencyHint: "interactive" });
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContextClass) throw new Error("Web Audio API недоступен");
+          context = new AudioContextClass({ latencyHint: "interactive" });
           ownsContext = true;
         }
         if (cancelled) {
           if (ownsStream) stream.getTracks().forEach((track) => track.stop());
-          if (ownsContext) context.close();
+          if (ownsContext) await context.close().catch(() => {});
           return;
         }
+        if (context.state === "suspended") {
+          await context.resume().catch(() => {});
+        }
+        if (cancelled) return;
         const analyser = context.createAnalyser();
         analyser.fftSize = 2048;
         analyser.smoothingTimeConstant = 0.2;
-        context.createMediaStreamSource(stream).connect(analyser);
+        sourceNode = context.createMediaStreamSource(stream);
+        sourceNode.connect(analyser);
         const buffer = new Float32Array(analyser.fftSize);
         const updatePitch = (timestamp) => {
           if (cancelled) return;
@@ -162,9 +176,13 @@ export default function usePitchDetection({
     return () => {
       cancelled = true;
       cancelAnimationFrame(animationFrameId);
+      try {
+        sourceNode?.disconnect?.();
+      } catch {
+        // The graph may already be disconnected by the browser.
+      }
       if (ownsStream) stream?.getTracks().forEach((track) => track.stop());
-      if (ownsContext) context?.close();
-      resetPitch();
+      if (ownsContext) context?.close?.().catch(() => {});
     };
   }, [
     browserMonitorRef,

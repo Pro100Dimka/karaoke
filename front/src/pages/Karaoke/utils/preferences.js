@@ -17,10 +17,12 @@ export function saveKaraokePreferences(
   storage = globalThis.localStorage
 ) {
   try {
-    storage?.setItem?.(
-      KARAOKE_PREFERENCES_KEY,
-      JSON.stringify(preferences ?? {})
-    );
+    const value =
+      preferences && typeof preferences === "object" && !Array.isArray(preferences)
+        ? preferences
+        : {};
+    const serialized = JSON.stringify(value);
+    storage?.setItem?.(KARAOKE_PREFERENCES_KEY, serialized);
     return true;
   } catch {
     return false;

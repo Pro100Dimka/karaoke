@@ -14,7 +14,10 @@ import {
   saveAudioPreferences
 } from "../../utils/audio-preferences";
 import { getErrorMessage } from "../../utils/errors";
-import { groupBrowserAudioDevices } from "../Karaoke/utils/audio-settings";
+import {
+  groupBrowserAudioDevices,
+  normalizeAudioRuntimeSettings
+} from "../Karaoke/utils/audio-settings";
 import {
   createBrowserDeviceOptions,
   createBufferSizeOptions,
@@ -24,7 +27,7 @@ import {
   EMPTY_BROWSER_DEVICES,
   LATENCY_OPTIONS,
   MONITOR_MODE_OPTIONS
-} from "./config";
+} from "./audio-options";
 
 function GroupHeader({ icon: Icon, title, text }) {
   return (
@@ -80,20 +83,22 @@ export default function AudioSettings() {
   const { pending: togglingMonitoring, run: runMonitoringToggle } =
     useExclusiveAsyncAction();
 
-  const audioDriver = settings?.audio_driver ?? "auto";
-  const monitoringEnabled = Boolean(settings?.monitoring_enabled);
-  const volume = settings?.volume ?? 1;
+  const runtimeSettings = normalizeAudioRuntimeSettings(settings);
+  const audioDriver = runtimeSettings.audioDriver;
+  const monitoringEnabled = runtimeSettings.monitoringEnabled;
+  const volume = runtimeSettings.volume;
   const level = getSignalLevel(signal?.rms_db);
 
   useEffect(() => {
-    const enumerateDevices = navigator.mediaDevices?.enumerateDevices;
+    const mediaDevices = globalThis.navigator?.mediaDevices;
+    const enumerateDevices = mediaDevices?.enumerateDevices;
 
-    if (!enumerateDevices) return undefined;
+    if (typeof enumerateDevices !== "function") return undefined;
 
     let active = true;
 
     enumerateDevices
-      .call(navigator.mediaDevices)
+      .call(mediaDevices)
       .then((entries) => {
         if (active) {
           setBrowserDevices(groupBrowserAudioDevices(entries));

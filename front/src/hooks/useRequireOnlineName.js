@@ -22,7 +22,11 @@ export function useRequireOnlineName({ onMissingName }) {
     }
 
     notificationShownRef.current = true;
-    onMissingName();
-    alert(ONLINE_NAME_MESSAGE);
+    try {
+      onMissingName?.();
+    } catch {
+      // Navigation callbacks must not prevent the explanatory dialog.
+    }
+    Promise.resolve(alert(ONLINE_NAME_MESSAGE)).catch(() => {});
   }, [alert, error, isLoading, onMissingName, settings]);
 }

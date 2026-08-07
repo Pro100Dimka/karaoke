@@ -6,6 +6,26 @@ import { IconButton } from "../ui";
 import Card from "../ui/Card";
 import ModalTitle from "./title";
 
+const openModalStack = [];
+let bodyLockCount = 0;
+let previousOverflow = "";
+
+function lockBodyScroll() {
+  if (bodyLockCount === 0) {
+    previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+  }
+  bodyLockCount += 1;
+}
+
+function unlockBodyScroll() {
+  bodyLockCount = Math.max(0, bodyLockCount - 1);
+  if (bodyLockCount === 0) {
+    document.body.style.overflow = previousOverflow;
+    previousOverflow = "";
+  }
+}
+
 export default function Modal({
   children,
   isOpen,
@@ -18,6 +38,7 @@ export default function Modal({
 }) {
   const dialogRef = useRef(null);
   const onCloseRef = useRef(onClose);
+  const modalTokenRef = useRef(Symbol("modal"));
   const titleId = useId();
 
   useEffect(() => {
@@ -27,19 +48,24 @@ export default function Modal({
   useEffect(() => {
     if (!isOpen) return undefined;
 
+    const token = modalTokenRef.current;
     const previouslyFocused = document.activeElement;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    openModalStack.push(token);
+    lockBodyScroll();
 
     const frameId = requestAnimationFrame(() => {
+      if (openModalStack.at(-1) !== token) return;
       const firstFocusable =
         dialogRef.current?.querySelector(FOCUSABLE_SELECTOR);
       (firstFocusable || dialogRef.current)?.focus();
     });
 
     const handleKeyDown = (event) => {
+      if (openModalStack.at(-1) !== token) return;
+
       if (event.key === "Escape") {
         event.preventDefault();
+        event.stopPropagation();
         onCloseRef.current?.();
         return;
       }
@@ -66,13 +92,23 @@ export default function Modal({
       }
     };
 
-    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown, true);
 
     return () => {
       cancelAnimationFrame(frameId);
-      document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-      if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
+      document.removeEventListener("keydown", handleKeyDown, true);
+      const wasTopModal = openModalStack.at(-1) === token;
+      const stackIndex = openModalStack.lastIndexOf(token);
+      if (stackIndex >= 0) openModalStack.splice(stackIndex, 1);
+      unlockBodyScroll();
+
+      if (
+        wasTopModal &&
+        previouslyFocused instanceof HTMLElement &&
+        previouslyFocused.isConnected
+      ) {
+        previouslyFocused.focus();
+      }
     };
   }, [isOpen]);
 
@@ -83,7 +119,12 @@ export default function Modal({
       className="app-modal-backdrop settings-modal-backdrop"
       role="presentation"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (
+          event.target === event.currentTarget &&
+          openModalStack.at(-1) === modalTokenRef.current
+        ) {
+          onCloseRef.current?.();
+        }
       }}
     >
       <Card
@@ -105,7 +146,7 @@ export default function Modal({
           icon={X}
           size={closeIconSize}
           className="app-modal-close settings-modal-close"
-          onClick={onClose}
+          onClick={() => onCloseRef.current?.()}
           label="Закрыть"
         />
         {titleProps && <ModalTitle {...titleProps} />}

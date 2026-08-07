@@ -21,7 +21,22 @@ export default function useSettingsForm(notify) {
   const mountedRef = useRef(true);
   const saveRequestRef = useRef(0);
   const fieldRequestRef = useRef(new Map());
+  const pendingSaveCountRef = useRef(0);
+  const saveFailedRef = useRef(false);
   const { run: queueSave } = useAsyncQueue();
+
+  const beginSave = () => {
+    pendingSaveCountRef.current += 1;
+    setSaveStatus(SAVE_STATUS.SAVING);
+  };
+
+  const finishSave = (failed = false) => {
+    if (failed) saveFailedRef.current = true;
+    pendingSaveCountRef.current = Math.max(0, pendingSaveCountRef.current - 1);
+    if (!mountedRef.current || pendingSaveCountRef.current > 0) return;
+    setSaveStatus(saveFailedRef.current ? SAVE_STATUS.IDLE : SAVE_STATUS.SAVED);
+    saveFailedRef.current = false;
+  };
 
   useEffect(() => {
     // React Strict Mode mounts, cleans up and mounts effects again in
@@ -32,6 +47,8 @@ export default function useSettingsForm(notify) {
       mountedRef.current = false;
       saveRequestRef.current += 1;
       fieldRequestRef.current.clear();
+      pendingSaveCountRef.current = 0;
+      saveFailedRef.current = false;
     };
   }, []);
 
@@ -71,30 +88,34 @@ export default function useSettingsForm(notify) {
     const payload = form;
     const requestId = saveRequestRef.current + 1;
     saveRequestRef.current = requestId;
-    setSaveStatus(SAVE_STATUS.SAVING);
+    beginSave();
 
     return queueSave(async () => {
+      let failed = false;
       try {
         const updated = await api.updateAppSettings(payload);
         if (!mountedRef.current || requestId !== saveRequestRef.current) return;
 
         setForm((current) => mergeSettings(current, updated));
-        setSaveStatus(SAVE_STATUS.SAVED);
       } catch (error) {
         if (!mountedRef.current || requestId !== saveRequestRef.current) return;
 
-        setSaveStatus(SAVE_STATUS.IDLE);
+        failed = true;
         await notify(`Не удалось сохранить: ${getErrorMessage(error)}`);
+      } finally {
+        finishSave(failed);
       }
     });
   };
 
   const saveField = (name, value) => {
     const preparedValue = prepareSettingValue(value);
+    beginSave();
     const requestId = (fieldRequestRef.current.get(name) ?? 0) + 1;
     fieldRequestRef.current.set(name, requestId);
 
     return queueSave(async () => {
+      let failed = false;
       try {
         const updated = await api.updateAppSettings({ [name]: preparedValue });
         if (
@@ -108,7 +129,6 @@ export default function useSettingsForm(notify) {
           ...current,
           [name]: resolveSavedSetting(updated, name, preparedValue)
         }));
-        setSaveStatus(SAVE_STATUS.SAVED);
       } catch (error) {
         if (
           !mountedRef.current ||
@@ -117,7 +137,10 @@ export default function useSettingsForm(notify) {
           return;
         }
 
+        failed = true;
         await notify(`Не удалось сохранить настройку: ${getErrorMessage(error)}`);
+      } finally {
+        finishSave(failed);
       }
     });
   };

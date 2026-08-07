@@ -22,7 +22,9 @@ export default function useAudioOutputRouting(options) {
     const preferred = findPreferredOutputDevice(directOutputDevices);
     if (preferred && String(directOutputDeviceId) !== String(preferred.index)) {
       setDirectOutputDeviceId(preferred.index);
-      updateMicrophone({ output_device_id: preferred.index });
+      Promise.resolve(
+        updateMicrophone({ output_device_id: preferred.index })
+      ).catch(() => {});
     }
   }, [
     audioDriver,
@@ -38,22 +40,25 @@ export default function useAudioOutputRouting(options) {
     if (
       !microphoneOpen ||
       (directOutputDeviceId == null || directOutputDeviceId === "") ||
-      !navigator.mediaDevices?.enumerateDevices
+      typeof globalThis.navigator?.mediaDevices?.enumerateDevices !== "function"
     )
-      return;
+      return undefined;
     const selected = (directOutputDevices || []).find(
       (device) => String(device.index) === String(directOutputDeviceId)
     );
     if (!selected) return;
     let active = true;
-    navigator.mediaDevices
+    globalThis.navigator.mediaDevices
       .enumerateDevices()
       .then((entries) => {
         if (!active) return;
         const output = findMatchingBrowserOutput(entries, selected);
         if (!output?.deviceId) return;
         [instrumentalRef.current, vocalsRef.current, videoRef.current].forEach(
-          (media) => media?.setSinkId?.(output.deviceId).catch(() => {})
+          (media) => {
+            if (typeof media?.setSinkId !== "function") return;
+            Promise.resolve(media.setSinkId(output.deviceId)).catch(() => {});
+          }
         );
       })
       .catch(() => {});
@@ -73,18 +78,23 @@ export default function useAudioOutputRouting(options) {
   useEffect(
     () => () => {
       const monitor = browserMonitorRef.current;
-      monitor?.stream.getTracks().forEach((track) => track.stop());
-      monitor?.context.close().catch(() => {});
+      monitor?.stream?.getTracks?.().forEach((track) => track.stop());
+      if (monitor?.context && monitor.context.state !== "closed") {
+        monitor.context.close().catch(() => {});
+      }
       browserMonitorRef.current = null;
     },
     [browserMonitorRef]
   );
 
   useEffect(() => {
+    const windowRef = globalThis.window;
+    if (!windowRef?.addEventListener) return undefined;
     const releaseMonitorOnClose = () => {
-      api.releaseDirectMonitoring();
+      api.releaseDirectMonitoring().catch(() => {});
     };
-    window.addEventListener("pagehide", releaseMonitorOnClose);
-    return () => window.removeEventListener("pagehide", releaseMonitorOnClose);
+    windowRef.addEventListener("pagehide", releaseMonitorOnClose);
+    return () =>
+      windowRef.removeEventListener("pagehide", releaseMonitorOnClose);
   }, []);
 }

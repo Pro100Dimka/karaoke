@@ -1,10 +1,25 @@
 import { useId } from "react";
 
-const POINTS = [
-  22, 30, 18, 42, 28, 54, 24, 64, 36, 48, 18, 32, 46, 58, 26, 40, 16, 52, 68,
-  36, 24, 44, 30, 56, 20, 34, 62, 48, 28, 38, 18, 50, 70, 42, 26, 54, 32, 46,
-  20, 36, 58, 30, 16, 44, 66, 40, 24, 52
-];
+const WAVE_CONFIG = {
+  length: 96, // количество точек
+  start: 65, // стартовая высота
+  min: 36, // минимальная высота
+  max: 70, // максимальная высота
+  variation: 30 // насколько сильно может прыгать соседняя точка
+};
+
+const POINTS = (() => {
+  const { length, start, min, max, variation } = WAVE_CONFIG;
+
+  let value = start;
+
+  return Array.from({ length }, () => {
+    value += Math.floor(Math.random() * (variation * 2 + 1)) - variation;
+    value = Math.max(min, Math.min(max, value));
+
+    return value;
+  });
+})();
 const WIDTH = 960;
 const clamp = (value) => Math.max(0, Math.min(100, Number(value) || 0));
 

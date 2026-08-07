@@ -13,10 +13,15 @@ export default function useAsyncQueue() {
   const [pending, setPending] = useState(false);
 
   const run = useCallback((action) => {
+    if (typeof action !== "function") {
+      return Promise.reject(new TypeError("Операция очереди должна быть функцией"));
+    }
     pendingCountRef.current += 1;
     if (mountedRef.current) setPending(true);
 
-    const result = tailRef.current.catch(() => {}).then(action);
+    const result = tailRef.current
+      .catch(() => {})
+      .then(() => Promise.resolve().then(action));
     tailRef.current = result.catch(() => {});
 
     return result.finally(() => {

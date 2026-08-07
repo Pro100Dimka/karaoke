@@ -2,6 +2,8 @@ const DEFAULT_SIGNALING_URL =
   "wss://karaoke-studio-online.pro100dimka-and.workers.dev";
 
 const CONNECTION_TIMEOUT_MS = 10_000;
+const MAX_SIGNAL_MESSAGE_LENGTH = 256 * 1024;
+const MAX_PARTICIPANT_NAME_LENGTH = 64;
 
 
 export function createRoomId(
@@ -37,19 +39,36 @@ export function normalizeRoomId(value) {
 
 export class OnlineRoomClient {
   constructor(url = DEFAULT_SIGNALING_URL) {
-    this.url = url.replace(/^http/, "ws").replace(/\/$/, "");
+    const parsedUrl = new URL(String(url), DEFAULT_SIGNALING_URL);
+    if (parsedUrl.protocol === "http:") parsedUrl.protocol = "ws:";
+    if (parsedUrl.protocol === "https:") parsedUrl.protocol = "wss:";
+    if (!["ws:", "wss:"].includes(parsedUrl.protocol)) {
+      throw new TypeError("Некорректный адрес сервера комнат");
+    }
+    parsedUrl.username = "";
+    parsedUrl.password = "";
+    this.url = parsedUrl.toString().replace(/\/$/, "");
     this.listeners = new Set();
     this.socket = null;
     this.connectionVersion = 0;
   }
 
   onMessage(listener) {
+    if (typeof listener !== "function") {
+      throw new TypeError("Обработчик сообщений комнаты должен быть функцией");
+    }
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
 
   emit(message) {
-    this.listeners.forEach((listener) => listener(message));
+    for (const listener of this.listeners) {
+      try {
+        listener(message);
+      } catch (error) {
+        console.error("Online room listener failed", error);
+      }
+    }
   }
 
   connect({ id, name, host = false }) {
@@ -62,11 +81,31 @@ export class OnlineRoomClient {
 
     this.disconnect();
     const connectionVersion = this.connectionVersion;
+    const participantName = String(name ?? "")
+      .replace(/[\u0000-\u001F\u007F]/g, " ")
+      .trim()
+      .slice(0, MAX_PARTICIPANT_NAME_LENGTH) || "Гость";
     const query = new URLSearchParams({
-      name: name?.trim() || "Гость",
+      name: participantName,
       role: host ? "host" : "guest"
     });
-    const socket = new WebSocket(`${this.url}/rooms/${normalizedId}?${query}`);
+    if (typeof globalThis.WebSocket !== "function") {
+      return Promise.reject(
+        new Error("WebSocket не поддерживается в этом окружении.")
+      );
+    }
+    let socket;
+    try {
+      socket = new globalThis.WebSocket(
+        `${this.url}/rooms/${encodeURIComponent(normalizedId)}?${query}`
+      );
+    } catch (error) {
+      return Promise.reject(
+        error instanceof Error
+          ? error
+          : new Error("Не удалось создать WebSocket-соединение.")
+      );
+    }
     this.socket = socket;
 
     return new Promise((resolve, reject) => {
@@ -83,7 +122,7 @@ export class OnlineRoomClient {
         if (!isCurrent()) return;
         if (this.socket === socket) this.socket = null;
         settle(reject, new Error(message));
-        if (socket.readyState < WebSocket.CLOSING) socket.close();
+        if (socket.readyState < globalThis.WebSocket.CLOSING) socket.close();
       };
       const timeout = globalThis.setTimeout(
         () => fail("Сервер комнат не ответил."),
@@ -98,9 +137,15 @@ export class OnlineRoomClient {
         settle(resolve, normalizedId);
       };
       socket.onmessage = (event) => {
-        if (!isCurrent()) return;
+        if (!isCurrent() || typeof event.data !== "string") return;
+        if (event.data.length > MAX_SIGNAL_MESSAGE_LENGTH) {
+          socket.close(1009, "Message too large");
+          return;
+        }
         try {
-          this.emit(JSON.parse(event.data));
+          const message = JSON.parse(event.data);
+          if (!message || typeof message !== "object" || Array.isArray(message)) return;
+          this.emit(message);
         } catch {
           // A malformed packet must not interrupt the room connection.
         }
@@ -119,16 +164,27 @@ export class OnlineRoomClient {
   }
 
   send(type, payload = {}) {
-    if (this.socket?.readyState !== WebSocket.OPEN) return false;
-    this.socket.send(JSON.stringify({ type, ...payload }));
-    return true;
+    const socket = this.socket;
+    if (socket?.readyState !== 1) return false;
+    if (typeof type !== "string" || !type.trim()) return false;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return false;
+    }
+    try {
+      const serialized = JSON.stringify({ ...payload, type: type.trim() });
+      if (serialized.length > MAX_SIGNAL_MESSAGE_LENGTH) return false;
+      socket.send(serialized);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   disconnect() {
     this.connectionVersion += 1;
     const { socket } = this;
     this.socket = null;
-    if (socket && socket.readyState < WebSocket.CLOSING) {
+    if (socket && socket.readyState < 2) {
       socket.close(1000, "Client left room");
     }
   }

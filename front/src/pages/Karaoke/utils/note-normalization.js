@@ -11,8 +11,11 @@ export function normalizeNoteList(raw, resolveNamedNote = () => NaN) {
     .filter(
       (note) =>
         Number.isFinite(note.start) &&
+        note.start >= 0 &&
         Number.isFinite(note.end) &&
-        note.end >= note.start &&
-        Number.isFinite(note.midi)
+        note.end > note.start &&
+        Number.isFinite(note.midi) &&
+        note.midi >= 0 &&
+        note.midi <= 127
     );
 }

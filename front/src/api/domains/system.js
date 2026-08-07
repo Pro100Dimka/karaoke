@@ -1,4 +1,4 @@
-import { request } from "../core";
+import { encodePathSegment, request } from "../core";
 
 export const systemApi = {
   getCacheSize: () => request("/cache/size"),
@@ -6,7 +6,7 @@ export const systemApi = {
   clearCache: () => request("/cache/clear", { method: "POST" }),
   deleteTemp: () => request("/cache/temp", { method: "DELETE" }),
   optimizeSong: (songId) =>
-    request(`/cache/optimize/${songId}`, { method: "POST" }),
+    request(`/cache/optimize/${encodePathSegment(songId)}`, { method: "POST" }),
   getHealth: () => request("/diagnostics/health"),
   getPipelineHealth: () => request("/diagnostics/pipeline"),
   getVersions: () => request("/diagnostics/versions"),

@@ -97,6 +97,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   const currentTimeRef = useRef(currentTime);
   const durationRef = useRef(duration);
   const browserMonitorRef = useRef(null);
+  const playbackEndedRef = useRef(null);
   currentTimeRef.current = currentTime;
   durationRef.current = duration;
   const { data: directOutputDevices } = usePolling(
@@ -189,6 +190,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     microphoneEffects,
     microphoneVolume,
     musicVolume,
+    onPlaybackEndedRef: playbackEndedRef,
     setCurrentTime,
     setDuration,
     setIsPlaying,
@@ -240,6 +242,8 @@ export default function Karaoke({ onOpenAppSettings }) {
       vocalVolume,
       vocalsRef
     });
+
+  playbackEndedRef.current = () => stop({ broadcast: true });
 
   useKaraokeHotkeys({
     currentTime,

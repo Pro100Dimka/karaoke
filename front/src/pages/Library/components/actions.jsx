@@ -5,6 +5,7 @@ export default function LibraryActions({
   canManageLibrary,
   fileInputRef,
   includeFileInput = false,
+  importing = false,
   onAdd,
   onFileChosen,
   onOpenRoom,
@@ -23,6 +24,7 @@ export default function LibraryActions({
           variant="glass"
           className={`btn ${className} library-action-card`}
           onClick={onClick}
+          disabled={importing && text === "Добавить песню"}
         >
           <Icon size={15} />
           {text}
@@ -35,6 +37,7 @@ export default function LibraryActions({
           type="file"
           accept="audio/*,.mp3,.wav,.flac,.m4a,.ogg"
           onChange={onFileChosen}
+          disabled={importing}
         />
       )}
     </div>

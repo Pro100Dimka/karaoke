@@ -5,7 +5,9 @@ import Field from "./field";
 const identity = () => {};
 
 function toNumber(value) {
-  return value === "" ? null : Number(value);
+  if (value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 export default function FieldInput({
@@ -62,6 +64,10 @@ export default function FieldInput({
         options={field.options ?? []}
         placeholder={field.placeholder}
         disabled={field.disabled}
+        ariaInvalid={commonProps["aria-invalid"]}
+        ariaDescribedBy={commonProps["aria-describedby"]}
+        onKeyDown={onKeyDown}
+        onBlur={() => onBlur(value)}
         onChange={onChange}
       />
     ),

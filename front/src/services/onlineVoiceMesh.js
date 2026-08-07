@@ -12,8 +12,14 @@ const getBinaryChunk = (data) => {
   return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
 };
 
+const MAX_INCOMING_FILE_BYTES = 512 * 1024 * 1024;
+const MAX_TRANSFER_ID_LENGTH = 128;
+const MAX_FILENAME_LENGTH = 512;
+const MAX_PENDING_ICE_CANDIDATES = 256;
+const MAX_INCOMING_CHUNKS = 32_768;
+const MAX_DATA_MESSAGE_LENGTH = 16 * 1024;
 const isValidTransferSize = (size) =>
-  Number.isSafeInteger(size) && size >= 0;
+  Number.isSafeInteger(size) && size >= 0 && size <= MAX_INCOMING_FILE_BYTES;
 export default class OnlineVoiceMesh {
   constructor(roomClient) {
     this.roomClient = roomClient;
@@ -31,10 +37,21 @@ export default class OnlineVoiceMesh {
     this.onRemoteStream = null;
     this.onPeerClosed = null;
     this.onFile = null;
+    this.disconnectTimers = new Map();
   }
 
   async start() {
-    if (this.stream) return this.stream;
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      throw new Error("Захват микрофона не поддерживается в этом окружении");
+    }
+
+    const liveStream =
+      this.stream?.getAudioTracks?.().some((track) => track.readyState === "live");
+    if (liveStream) return this.stream;
+    if (this.stream) {
+      this.stream.getTracks?.().forEach((track) => track.stop());
+      this.stream = null;
+    }
     if (this.startPromise) return this.startPromise;
 
     const lifecycleVersion = this.lifecycleVersion;
@@ -82,10 +99,21 @@ export default class OnlineVoiceMesh {
   }
 
   createPeer(participantId) {
+    if (
+      typeof participantId !== "string" ||
+      !participantId ||
+      participantId.length > 128
+    ) {
+      throw new TypeError("Некорректный идентификатор участника");
+    }
+    if (typeof globalThis.RTCPeerConnection !== "function") {
+      throw new Error("WebRTC не поддерживается в этом окружении");
+    }
+
     const current = this.peers.get(participantId);
     if (current) return current;
 
-    const peer = new RTCPeerConnection({
+    const peer = new globalThis.RTCPeerConnection({
       iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }]
     });
     this.stream?.getTracks().forEach((track) => {
@@ -116,13 +144,25 @@ export default class OnlineVoiceMesh {
       this.setupDataChannel(participantId, channel);
     };
     peer.onconnectionstatechange = () => {
-      if (
-        !isCurrentPeer() ||
-        !["failed", "closed"].includes(peer.connectionState)
-      ) {
+      if (!isCurrentPeer()) return;
+      const previousTimer = this.disconnectTimers.get(participantId);
+      if (previousTimer) {
+        globalThis.clearTimeout(previousTimer);
+        this.disconnectTimers.delete(participantId);
+      }
+      if (["failed", "closed"].includes(peer.connectionState)) {
+        this.removePeer(participantId);
         return;
       }
-      this.removePeer(participantId);
+      if (peer.connectionState === "disconnected") {
+        const timer = globalThis.setTimeout(() => {
+          this.disconnectTimers.delete(participantId);
+          if (isCurrentPeer() && peer.connectionState === "disconnected") {
+            this.removePeer(participantId);
+          }
+        }, 10_000);
+        this.disconnectTimers.set(participantId, timer);
+      }
     };
     this.peers.set(participantId, peer);
     return peer;
@@ -167,7 +207,6 @@ export default class OnlineVoiceMesh {
     })().finally(() => {
       if (this.invitePromises.get(participantId) === invitePromise) {
         this.invitePromises.delete(participantId);
-    this.signalPromises.delete(participantId);
       }
     });
 
@@ -176,7 +215,16 @@ export default class OnlineVoiceMesh {
   }
 
   async accept(fromId, signal) {
-    if (!fromId || !signal) return false;
+    if (
+      typeof fromId !== "string" ||
+      !fromId ||
+      fromId.length > 128 ||
+      !signal ||
+      typeof signal !== "object" ||
+      Array.isArray(signal)
+    ) {
+      return false;
+    }
 
     const peerVersion = this.peerVersions.get(fromId) || 0;
     const previousSignal = this.signalPromises.get(fromId) || Promise.resolve();
@@ -199,6 +247,10 @@ export default class OnlineVoiceMesh {
             return isCurrentPeer();
           }
           const queue = this.pendingCandidates.get(fromId) || [];
+          if (queue.length >= MAX_PENDING_ICE_CANDIDATES) {
+            this.removePeer(fromId);
+            throw new Error("Получено слишком много ICE-кандидатов");
+          }
           queue.push(signal.candidate);
           this.pendingCandidates.set(fromId, queue);
           return true;
@@ -257,22 +309,45 @@ export default class OnlineVoiceMesh {
     channel.bufferedAmountLowThreshold = 256 * 1024;
     channel.onmessage = ({ data }) => {
       if (typeof data === "string") {
+        if (data.length > MAX_DATA_MESSAGE_LENGTH) return;
         let message;
         try {
           message = JSON.parse(data);
         } catch {
           return;
         }
+        if (!message || typeof message !== "object" || Array.isArray(message)) {
+          return;
+        }
         if (message.type === "file-start") {
+          if (this.incomingFiles.has(participantId)) return;
+          const transferId =
+            typeof message.transferId === "string" ? message.transferId : "";
           if (
-            !message.transferId ||
+            !transferId ||
+            transferId.length > MAX_TRANSFER_ID_LENGTH ||
             !isValidTransferSize(message.size)
           ) {
             this.incomingFiles.delete(participantId);
             return;
           }
+          const metadata = {
+            type: "file-start",
+            kind: typeof message.kind === "string" ? message.kind.slice(0, 64) : undefined,
+            songId: typeof message.songId === "string" ? message.songId.slice(0, 128) : undefined,
+            size: message.size,
+            transferId,
+            filename:
+              typeof message.filename === "string"
+                ? message.filename.slice(0, MAX_FILENAME_LENGTH)
+                : undefined,
+            mimeType:
+              typeof message.mimeType === "string"
+                ? message.mimeType.slice(0, 255)
+                : "application/octet-stream"
+          };
           this.incomingFiles.set(participantId, {
-            metadata: message,
+            metadata,
             chunks: [],
             received: 0
           });
@@ -286,16 +361,24 @@ export default class OnlineVoiceMesh {
           ) {
             return;
           }
-          const blob = new Blob(transfer.chunks, {
+          const BlobClass = globalThis.Blob;
+          if (typeof BlobClass !== "function") return;
+          const blob = new BlobClass(transfer.chunks, {
             type: transfer.metadata.mimeType
           });
-          this.onFile?.(participantId, blob, transfer.metadata);
+          Promise.resolve(
+            this.onFile?.(participantId, blob, transfer.metadata)
+          ).catch(() => {});
         }
         return;
       }
       const transfer = this.incomingFiles.get(participantId);
       const chunk = getBinaryChunk(data);
-      if (!transfer || !chunk) return;
+      if (!transfer || !chunk || chunk.byteLength === 0) return;
+      if (transfer.chunks.length >= MAX_INCOMING_CHUNKS) {
+        this.incomingFiles.delete(participantId);
+        return;
+      }
       transfer.received += chunk.byteLength;
       if (transfer.received > transfer.metadata.size) {
         this.incomingFiles.delete(participantId);
@@ -303,11 +386,13 @@ export default class OnlineVoiceMesh {
       }
       transfer.chunks.push(chunk);
     };
-    channel.onclose = () => {
+    const clearChannel = () => {
       if (this.channels.get(participantId) !== channel) return;
       this.channels.delete(participantId);
       this.incomingFiles.delete(participantId);
     };
+    channel.onclose = clearChannel;
+    channel.onerror = clearChannel;
     this.channels.set(participantId, channel);
   }
 
@@ -316,8 +401,11 @@ export default class OnlineVoiceMesh {
     timeoutMs = 15_000,
     lifecycleVersion = this.lifecycleVersion
   ) {
+    const safeTimeout = Number.isFinite(Number(timeoutMs))
+      ? Math.max(0, Math.min(60_000, Number(timeoutMs)))
+      : 15_000;
     const startedAt = Date.now();
-    while (Date.now() - startedAt < timeoutMs) {
+    while (Date.now() - startedAt < safeTimeout) {
       if (lifecycleVersion !== this.lifecycleVersion) {
         throw new Error("Передача файла отменена");
       }
@@ -334,8 +422,18 @@ export default class OnlineVoiceMesh {
   }
 
   async sendFile(participantId, blob, metadata = {}) {
-    if (!participantId || !(blob instanceof Blob)) {
+    const BlobClass = globalThis.Blob;
+    if (
+      typeof participantId !== "string" ||
+      !participantId ||
+      participantId.length > 128 ||
+      typeof BlobClass !== "function" ||
+      !(blob instanceof BlobClass)
+    ) {
       throw new TypeError("Для передачи нужны участник и файл");
+    }
+    if (blob.size > MAX_INCOMING_FILE_BYTES) {
+      throw new RangeError("Файл слишком большой для передачи через комнату");
     }
     const lifecycleVersion = this.lifecycleVersion;
     const channel = await this.waitForDataChannel(
@@ -343,14 +441,31 @@ export default class OnlineVoiceMesh {
       15_000,
       lifecycleVersion
     );
-    const transferId = crypto.randomUUID();
+    const transferId =
+      typeof globalThis.crypto?.randomUUID === "function"
+        ? globalThis.crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    if (channel.readyState !== "open") {
+      throw new Error("Канал передачи песни закрыт");
+    }
     channel.send(
       JSON.stringify({
-        ...(metadata && typeof metadata === "object" ? metadata : {}),
         type: "file-start",
         transferId,
         size: blob.size,
-        mimeType: blob.type || "application/octet-stream"
+        kind:
+          typeof metadata?.kind === "string"
+            ? metadata.kind.slice(0, 64)
+            : undefined,
+        songId:
+          typeof metadata?.songId === "string"
+            ? metadata.songId.slice(0, 128)
+            : undefined,
+        filename:
+          typeof metadata?.filename === "string"
+            ? metadata.filename.slice(0, MAX_FILENAME_LENGTH)
+            : undefined,
+        mimeType: (blob.type || "application/octet-stream").slice(0, 255)
       })
     );
     const chunkSize = 32 * 1024;
@@ -383,10 +498,21 @@ export default class OnlineVoiceMesh {
       }
       channel.send(chunk);
     }
+    if (
+      lifecycleVersion !== this.lifecycleVersion ||
+      channel.readyState !== "open"
+    ) {
+      throw new Error("Передача файла отменена");
+    }
     channel.send(JSON.stringify({ type: "file-end", transferId }));
   }
 
   removePeer(participantId) {
+    const disconnectTimer = this.disconnectTimers.get(participantId);
+    if (disconnectTimer) globalThis.clearTimeout(disconnectTimer);
+    this.disconnectTimers.delete(participantId);
+    const existed =
+      this.peers.has(participantId) || this.channels.has(participantId);
     this.peerVersions.set(
       participantId,
       (this.peerVersions.get(participantId) || 0) + 1
@@ -400,7 +526,7 @@ export default class OnlineVoiceMesh {
     this.channels.get(participantId)?.close();
     this.channels.delete(participantId);
     this.incomingFiles.delete(participantId);
-    this.onPeerClosed?.(participantId);
+    if (existed) this.onPeerClosed?.(participantId);
   }
 
   stop() {
@@ -408,8 +534,15 @@ export default class OnlineVoiceMesh {
     [...this.peers.keys()].forEach((id) => this.removePeer(id));
     this.stream?.getTracks().forEach((track) => track.stop());
     this.stream = null;
+    this.startPromise = null;
     this.pendingInvites.clear();
     this.invitePromises.clear();
     this.signalPromises.clear();
+    for (const timer of this.disconnectTimers.values()) {
+      globalThis.clearTimeout(timer);
+    }
+    this.disconnectTimers.clear();
+    this.incomingFiles.clear();
+    this.channels.clear();
   }
 }

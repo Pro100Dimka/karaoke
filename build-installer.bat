@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
-title Karaoke Studio - Complete Offline Installer Builder
+title A&D Voice - Complete Offline Installer Builder
 
 rem ============================================================
 rem BUILD MODES

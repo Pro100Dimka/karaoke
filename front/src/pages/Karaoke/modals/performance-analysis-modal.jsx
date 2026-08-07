@@ -89,7 +89,7 @@ export default function PerformanceAnalysisModal({
 }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const requestRef = useRef([null, null]);
+  const analysisRequestRef = useRef({ recordingId: null, promise: null });
   const mountedRef = useMountedRef();
   const { confirm: confirmDialog } = useAppDialog();
   const { pending: deleting, run: runDelete } = useExclusiveAsyncAction();
@@ -99,15 +99,21 @@ export default function PerformanceAnalysisModal({
     setResult(null);
     setError(null);
 
-    if (requestRef.current[0] !== recordingId) {
-      requestRef.current = [recordingId, api.runAnalysis(recordingId)];
+    if (analysisRequestRef.current.recordingId !== recordingId) {
+      analysisRequestRef.current = {
+        recordingId,
+        promise: api.runAnalysis(recordingId)
+      };
     }
 
-    requestRef.current[1]
+    analysisRequestRef.current.promise
       .then((analysis) => {
         if (active) setResult(normalizeAnalysisResult(analysis));
       })
       .catch((analysisError) => {
+        if (analysisRequestRef.current.recordingId === recordingId) {
+          analysisRequestRef.current = { recordingId: null, promise: null };
+        }
         if (active) {
           setError(
             getErrorMessage(analysisError, "Неизвестная ошибка анализа")
@@ -127,7 +133,7 @@ export default function PerformanceAnalysisModal({
 
       try {
         await api.deleteRecording(recordingId);
-        if (mountedRef.current) onDeleted();
+        if (mountedRef.current) onDeleted?.();
       } catch (deleteError) {
         if (!mountedRef.current) return;
         setError(
@@ -190,7 +196,7 @@ export default function PerformanceAnalysisModal({
               >
                 {deleting ? "Удаляем…" : "Удалить запись"}
               </Button>
-              <Button variant="primary" onClick={onDone}>
+              <Button variant="primary" onClick={onDone ?? onClose}>
                 Готово
               </Button>
             </div>

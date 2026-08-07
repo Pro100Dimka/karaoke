@@ -41,7 +41,9 @@ export default function useApplicationAudioMute(enabled) {
     if (!enabled || typeof document === "undefined") return undefined;
 
     muteApplicationAudio(document);
-    if (typeof MutationObserver === "undefined") return undefined;
+    if (typeof MutationObserver === "undefined") {
+      return restoreApplicationAudio;
+    }
 
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
@@ -51,8 +53,11 @@ export default function useApplicationAudioMute(enabled) {
       }
     });
     observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
-  }, [enabled, muteApplicationAudio]);
+    return () => {
+      observer.disconnect();
+      restoreApplicationAudio();
+    };
+  }, [enabled, muteApplicationAudio, restoreApplicationAudio]);
 
   useEffect(() => restoreApplicationAudio, [restoreApplicationAudio]);
 

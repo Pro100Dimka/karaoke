@@ -1,4 +1,4 @@
-import { request } from "../core";
+import { encodePathSegment, request } from "../core";
 import { normalizeModel } from "../normalizers";
 
 export const modelsApi = {
@@ -7,9 +7,9 @@ export const modelsApi = {
       Array.isArray(models) ? models.map(normalizeModel) : []
     ),
   downloadModel: (name) =>
-    request(`/models/whisper/${name}/download`, { method: "POST" }),
+    request(`/models/whisper/${encodePathSegment(name)}/download`, { method: "POST" }),
   deleteModel: (name) =>
-    request(`/models/whisper/${name}`, { method: "DELETE" }),
+    request(`/models/whisper/${encodePathSegment(name)}`, { method: "DELETE" }),
   selectModel: (name) =>
-    request(`/models/whisper/${name}/select`, { method: "POST" })
+    request(`/models/whisper/${encodePathSegment(name)}/select`, { method: "POST" })
 };

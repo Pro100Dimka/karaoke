@@ -49,6 +49,7 @@ export default function useSpeakingLevels() {
       if (!meter) return;
 
       window.clearInterval(meter.intervalId);
+      meter.track?.removeEventListener?.("ended", meter.stopWhenTrackEnds);
       disconnectNode(meter.source);
       disconnectNode(meter.analyser);
       metersRef.current.delete(key);
@@ -58,18 +59,30 @@ export default function useSpeakingLevels() {
   );
 
   const getAudioContext = useCallback(() => {
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextClass) return null;
+    const AudioContextClass =
+      globalThis.AudioContext || globalThis.webkitAudioContext;
+    if (typeof AudioContextClass !== "function") return null;
 
+    if (audioContextRef.current?.state === "closed") {
+      audioContextRef.current = null;
+    }
     if (!audioContextRef.current) {
-      audioContextRef.current = new AudioContextClass({
-        latencyHint: "interactive"
-      });
+      try {
+        audioContextRef.current = new AudioContextClass({
+          latencyHint: "interactive"
+        });
+      } catch {
+        return null;
+      }
     }
 
     const audioContext = audioContextRef.current;
     if (audioContext.state === "suspended") {
-      audioContext.resume().catch(() => {});
+      try {
+        Promise.resolve(audioContext.resume()).catch(() => {});
+      } catch {
+        return null;
+      }
     }
     return audioContext;
   }, []);
@@ -82,8 +95,16 @@ export default function useSpeakingLevels() {
       const audioContext = getAudioContext();
       if (!audioContext) return;
 
-      const source = audioContext.createMediaStreamSource(stream);
-      const analyser = audioContext.createAnalyser();
+      let source;
+      let analyser;
+      try {
+        source = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
+      } catch {
+        disconnectNode(source);
+        disconnectNode(analyser);
+        return;
+      }
       analyser.fftSize = 256;
       analyser.smoothingTimeConstant = 0.72;
       source.connect(analyser);
@@ -91,8 +112,26 @@ export default function useSpeakingLevels() {
       const samples = new Uint8Array(analyser.fftSize);
       let smoothed = 0;
       let lastPublished = -1;
-      const intervalId = window.setInterval(() => {
-        analyser.getByteTimeDomainData(samples);
+      const liveTrack = stream.getAudioTracks()[0];
+      if (!liveTrack || liveTrack.readyState !== "live") {
+        disconnectNode(source);
+        disconnectNode(analyser);
+        return;
+      }
+      const intervalId = globalThis.setInterval(() => {
+        if (
+          liveTrack.readyState !== "live" ||
+          audioContext.state === "closed"
+        ) {
+          stopSpeakingMeter(key);
+          return;
+        }
+        try {
+          analyser.getByteTimeDomainData(samples);
+        } catch {
+          stopSpeakingMeter(key);
+          return;
+        }
         let sum = 0;
         for (const sample of samples) {
           const normalized = (sample - 128) / 128;
@@ -108,15 +147,30 @@ export default function useSpeakingLevels() {
         publishLevel(key, published);
       }, METER_INTERVAL_MS);
 
-      metersRef.current.set(key, { analyser, intervalId, source });
+      const stopWhenTrackEnds = () => stopSpeakingMeter(key);
+      liveTrack?.addEventListener?.("ended", stopWhenTrackEnds, { once: true });
+      metersRef.current.set(key, {
+        analyser,
+        intervalId,
+        source,
+        track: liveTrack,
+        stopWhenTrackEnds
+      });
     },
     [getAudioContext, publishLevel, stopSpeakingMeter]
   );
 
   const stopAllSpeakingMeters = useCallback(() => {
     for (const key of [...metersRef.current.keys()]) stopSpeakingMeter(key);
-    audioContextRef.current?.close().catch(() => {});
+    const context = audioContextRef.current;
     audioContextRef.current = null;
+    if (context?.state !== "closed") {
+      try {
+        Promise.resolve(context.close()).catch(() => {});
+      } catch {
+        // Context may already be closing in another cleanup path.
+      }
+    }
   }, [stopSpeakingMeter]);
 
   useEffect(() => stopAllSpeakingMeters, [stopAllSpeakingMeters]);

@@ -1,5 +1,5 @@
 import { Pause, Play, Volume2, VolumeX } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RangeInput } from "./fields";
 import { IconButton } from "./ui";
 import {
@@ -12,23 +12,57 @@ import {
 
 export function AudioPlayer({ src, className = "" }) {
   const audioRef = useRef(null);
+  const previousVolumeRef = useRef(1);
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    audio?.pause();
+    if (audio) {
+      try {
+        audio.currentTime = 0;
+        audio.load();
+      } catch {
+        // The previous media resource may already be detached.
+      }
+    }
+    setPlaying(false);
+    setPosition(0);
+    setDuration(0);
+  }, [src]);
 
   const toggle = async () => {
     await toggleAudioPlayback(audioRef.current);
   };
   const seek = (value) => {
     const positionValue = normalizeAudioPosition(value, duration);
-    if (audioRef.current) audioRef.current.currentTime = positionValue;
+    if (audioRef.current) {
+      try {
+        audioRef.current.currentTime = positionValue;
+      } catch {
+        return;
+      }
+    }
     setPosition(positionValue);
   };
   const changeVolume = (value) => {
     const volumeValue = normalizeAudioVolume(value);
-    if (audioRef.current) audioRef.current.volume = volumeValue;
+    if (volumeValue > 0) previousVolumeRef.current = volumeValue;
+    if (audioRef.current) {
+      try {
+        audioRef.current.volume = volumeValue;
+      } catch {
+        return;
+      }
+    }
     setVolume(volumeValue);
+  };
+
+  const toggleMuted = () => {
+    changeVolume(volume > 0 ? 0 : previousVolumeRef.current || 1);
   };
 
   return (
@@ -42,12 +76,20 @@ export function AudioPlayer({ src, className = "" }) {
         }
         onTimeUpdate={(event) =>
           setPosition(
-            normalizeAudioPosition(event.currentTarget.currentTime, duration)
+            normalizeAudioPosition(
+              event.currentTarget.currentTime,
+              event.currentTarget.duration
+            )
           )
         }
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
-        onEnded={() => {
+        onEnded={(event) => {
+          try {
+            event.currentTarget.currentTime = 0;
+          } catch {
+            // Media can be detached while the ended event is being delivered.
+          }
           setPlaying(false);
           setPosition(0);
         }}
@@ -79,7 +121,7 @@ export function AudioPlayer({ src, className = "" }) {
           icon={volume ? Volume2 : VolumeX}
           size={16}
           label={volume ? "Выключить звук" : "Включить звук"}
-          onClick={() => changeVolume(volume ? 0 : 1)}
+          onClick={toggleMuted}
         />
         <RangeInput
           aria-label="Громкость записи"

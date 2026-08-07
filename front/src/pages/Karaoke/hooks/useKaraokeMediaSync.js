@@ -15,6 +15,7 @@ export default function useKaraokeMediaSync({
   microphoneEffects,
   microphoneVolume,
   musicVolume,
+  onPlaybackEndedRef,
   setCurrentTime,
   setDuration,
   setIsPlaying,
@@ -32,10 +33,26 @@ export default function useKaraokeMediaSync({
 
   const sendYouTubeCommand = useCallback(
     (func, args = []) => {
-      youTubeClipRef.current?.contentWindow?.postMessage(
-        JSON.stringify({ event: "command", func, args }),
-        "*"
+      const frame = youTubeClipRef.current;
+      const target = frame?.contentWindow;
+      if (!target || typeof func !== "string" || !func.trim()) return false;
+      let targetOrigin = "https://www.youtube.com";
+      try {
+        const origin = new URL(frame.src, globalThis.location?.href).origin;
+        if (
+          origin === "https://www.youtube.com" ||
+          origin === "https://www.youtube-nocookie.com"
+        ) {
+          targetOrigin = origin;
+        }
+      } catch {
+        // Keep the trusted default origin for malformed or not-yet-set src.
+      }
+      target.postMessage(
+        JSON.stringify({ event: "command", func: func.trim(), args }),
+        targetOrigin
       );
+      return true;
     },
     [youTubeClipRef]
   );
@@ -43,12 +60,18 @@ export default function useKaraokeMediaSync({
   const syncSecondaryMedia = useCallback(
     (position, force = false) => {
       [vocalsRef.current, videoRef.current].forEach((media) => {
-        if (!media || !Number.isFinite(media.duration)) return;
+        if (!media || !Number.isFinite(media.duration) || media.duration <= 0) {
+          return;
+        }
         if (force || shouldSyncMedia(media.currentTime, position)) {
-          media.currentTime = getSecondaryMediaPosition(
-            position,
-            media.duration
-          );
+          try {
+            media.currentTime = getSecondaryMediaPosition(
+              position,
+              media.duration
+            );
+          } catch {
+            // Media may become unavailable while sources are being replaced.
+          }
         }
       });
       if (force) sendYouTubeCommand("seekTo", [position, true]);
@@ -61,8 +84,15 @@ export default function useKaraokeMediaSync({
     const vocals = vocalsRef.current;
     if (!instrumental || !vocals) return undefined;
 
-    const handleMetadata = () => setDuration(instrumental.duration || 0);
+    const handleMetadata = () => {
+      const nextDuration = Number(instrumental.duration);
+      setDuration(Number.isFinite(nextDuration) && nextDuration > 0 ? nextDuration : 0);
+    };
     const handleEnded = () => {
+      if (onPlaybackEndedRef?.current) {
+        Promise.resolve(onPlaybackEndedRef.current()).catch(() => {});
+        return;
+      }
       vocals.pause();
       videoRef.current?.pause();
       sendYouTubeCommand("pauseVideo");
@@ -78,6 +108,7 @@ export default function useKaraokeMediaSync({
     };
   }, [
     instrumentalRef,
+    onPlaybackEndedRef,
     sendYouTubeCommand,
     setDuration,
     setIsPlaying,
@@ -91,23 +122,34 @@ export default function useKaraokeMediaSync({
     if (!isPlaying) return undefined;
 
     let animationFrameId;
+    let active = true;
     const updatePosition = () => {
+      if (!active) return;
       const position = instrumentalRef.current?.currentTime;
-      if (Number.isFinite(position)) {
-        currentTimeRef.current = position;
-        setCurrentTime(position);
-        updateMelodyGuide(position);
-        const now = performance.now();
+      const numericPosition = Number(position);
+      if (Number.isFinite(numericPosition) && numericPosition >= 0) {
+        currentTimeRef.current = numericPosition;
+        setCurrentTime(numericPosition);
+        updateMelodyGuide(numericPosition);
+        const now = globalThis.performance?.now?.() ?? Date.now();
         if (now - lastSecondarySyncRef.current > 450) {
-          syncSecondaryMedia(position);
+          syncSecondaryMedia(numericPosition);
           lastSecondarySyncRef.current = now;
         }
       }
-      animationFrameId = requestAnimationFrame(updatePosition);
+      if (active) {
+        animationFrameId = globalThis.requestAnimationFrame?.(updatePosition);
+      }
     };
 
+    if (typeof globalThis.requestAnimationFrame !== "function") return undefined;
     updatePosition();
-    return () => cancelAnimationFrame(animationFrameId);
+    return () => {
+      active = false;
+      if (animationFrameId != null) {
+        globalThis.cancelAnimationFrame?.(animationFrameId);
+      }
+    };
   }, [
     currentTimeRef,
     instrumentalRef,
@@ -124,9 +166,9 @@ export default function useKaraokeMediaSync({
   }, [instrumentalRef, musicVolume]);
 
   useEffect(() => {
-    if (browserMonitorRef.current) {
-      browserMonitorRef.current.gainNode.gain.value = microphoneVolume;
-    }
+    const gain = browserMonitorRef.current?.gainNode?.gain;
+    const value = Number(microphoneVolume);
+    if (gain && Number.isFinite(value)) gain.value = Math.max(0, Math.min(1, value));
   }, [browserMonitorRef, microphoneVolume]);
 
   useEffect(() => {
@@ -154,12 +196,22 @@ export default function useKaraokeMediaSync({
   ]);
 
   useEffect(() => {
+    const normalizedSpeed = Number(speed);
+    const playbackRate =
+      Number.isFinite(normalizedSpeed) && normalizedSpeed > 0
+        ? Math.max(0.25, Math.min(4, normalizedSpeed))
+        : 1;
     [instrumentalRef.current, vocalsRef.current, videoRef.current].forEach(
       (media) => {
-        if (media) media.playbackRate = speed;
+        if (!media) return;
+        try {
+          media.playbackRate = playbackRate;
+        } catch {
+          // A detached media element can reject rate changes.
+        }
       }
     );
-    sendYouTubeCommand("setPlaybackRate", [speed]);
+    sendYouTubeCommand("setPlaybackRate", [playbackRate]);
   }, [instrumentalRef, sendYouTubeCommand, speed, videoRef, vocalsRef]);
 
   return { sendYouTubeCommand, syncSecondaryMedia };

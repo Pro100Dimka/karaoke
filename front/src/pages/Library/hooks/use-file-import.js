@@ -1,9 +1,13 @@
 import { useCallback } from "react";
+import useExclusiveAsyncAction from "../../../hooks/useExclusiveAsyncAction";
 import { api } from "../../../api/client";
 import { getErrorMessage } from "../../../utils/errors";
 
 export default function useLibraryFileImport({ fileInputRef, notify, onStarted }) {
-  const openFilePicker = useCallback(() => fileInputRef.current?.click(), [fileInputRef]);
+  const { pending, run } = useExclusiveAsyncAction();
+  const openFilePicker = useCallback(() => {
+    if (!pending) fileInputRef.current?.click();
+  }, [fileInputRef, pending]);
 
   const importFile = useCallback(
     async (event) => {
@@ -12,18 +16,23 @@ export default function useLibraryFileImport({ fileInputRef, notify, onStarted }
       input.value = "";
       if (!file) return;
 
-      try {
-        const song = await api.addSong(file, file.name.replace(/\.[^.]+$/, ""));
-        await api.processSong(song.id);
-        onStarted(song);
-      } catch (error) {
-        await notify(
-          `Не удалось добавить и запустить обработку песни: ${getErrorMessage(error)}`
-        );
-      }
+      await run(async () => {
+        try {
+          const song = await api.addSong(
+            file,
+            file.name.replace(/\.[^.]+$/, "")
+          );
+          await api.processSong(song.id);
+          onStarted(song);
+        } catch (error) {
+          await notify(
+            `Не удалось добавить и запустить обработку песни: ${getErrorMessage(error)}`
+          );
+        }
+      });
     },
-    [notify, onStarted]
+    [notify, onStarted, run]
   );
 
-  return { importFile, openFilePicker };
+  return { importing: pending, importFile, openFilePicker };
 }

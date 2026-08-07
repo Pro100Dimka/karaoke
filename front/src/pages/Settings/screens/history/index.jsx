@@ -24,6 +24,20 @@ export default function History() {
   );
 }
 
+const formatDuration = (value) => {
+  if (value == null) return "—";
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds >= 0
+    ? `${Math.round(seconds)} с`
+    : "—";
+};
+
+const formatTimestamp = (value) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("ru-RU");
+};
+
 const getHistoryRow = ({
   song_title,
   kind,
@@ -35,10 +49,10 @@ const getHistoryRow = ({
   [HISTORY_ACTIONS[kind] ?? kind ?? "—", "text-secondary"],
   [renderStatus(kind, status)],
   [
-    duration_seconds == null ? "—" : `${Number(duration_seconds).toFixed(0)} с`,
+    formatDuration(duration_seconds),
     "mono text-muted"
   ],
-  [timestamp ? new Date(timestamp).toLocaleString("ru-RU") : "—", "text-muted"]
+  [formatTimestamp(timestamp), "text-muted"]
 ];
 
 const renderStatus = (kind, status) => {

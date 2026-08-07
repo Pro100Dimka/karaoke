@@ -51,6 +51,8 @@ let backendProcess = null;
 let isQuitting = false;
 let backendRestartTimer = null;
 let backendStopRequested = false;
+let backendRestartAttempts = 0;
+const MAX_BACKEND_RESTART_DELAY_MS = 30_000;
 
 function resolveBackendDir() {
   // В dev-режиме backend лежит рядом с проектом (../backend при обычной
@@ -87,11 +89,23 @@ function scheduleBackendRestart() {
   }
 
   clearTimeout(backendRestartTimer);
-  backendRestartTimer = setTimeout(startBackend, 1200);
+  const delay = Math.min(
+    MAX_BACKEND_RESTART_DELAY_MS,
+    1200 * 2 ** Math.min(backendRestartAttempts, 5)
+  );
+  backendRestartAttempts += 1;
+  backendRestartTimer = setTimeout(startBackend, delay);
 }
 
 function startBackend() {
-  if (process.env.KARAOKE_BACKEND_EXTERNAL === "1") return;
+  if (
+    process.env.KARAOKE_BACKEND_EXTERNAL === "1" ||
+    (backendProcess && !backendProcess.killed)
+  ) {
+    return;
+  }
+  clearTimeout(backendRestartTimer);
+  backendRestartTimer = null;
   backendStopRequested = false;
   const backendDir = resolveBackendDir();
   const backendCommand = isDev
@@ -126,6 +140,9 @@ function startBackend() {
       }
     });
     backendProcess = childProcess;
+    childProcess.once("spawn", () => {
+      backendRestartAttempts = 0;
+    });
     childProcess.on("error", (err) => {
       console.error("Не удалось запустить backend:", err);
       if (backendProcess === childProcess) backendProcess = null;
@@ -225,11 +242,13 @@ function createWindow() {
     mainWindow?.show();
   });
 
-  if (isDev) {
-    mainWindow.loadURL(DEV_RENDERER_ORIGIN);
-  } else {
-    mainWindow.loadFile(packagedIndexPath);
-  }
+  const loadPromise = isDev
+    ? mainWindow.loadURL(DEV_RENDERER_ORIGIN)
+    : mainWindow.loadFile(packagedIndexPath);
+  loadPromise.catch((error) => {
+    console.error("Не удалось загрузить интерфейс:", error);
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
+  });
 
   mainWindow.on("closed", () => {
     mainWindow = null;
@@ -305,7 +324,20 @@ handleTrustedIpc("clipboard:writeText", (value) => {
   return true;
 });
 
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  isQuitting = true;
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  });
+}
+
 app.whenReady().then(() => {
+  if (!hasSingleInstanceLock) return;
   const packagedIndexUrl = getPackagedRendererUrl(
     path.join(__dirname, "..", "dist", "index.html")
   );

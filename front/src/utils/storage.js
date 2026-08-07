@@ -8,7 +8,9 @@ export function getBrowserStorage() {
 
 export function readJsonStorage(key, fallback = {}, storage = getBrowserStorage()) {
   try {
-    const raw = storage?.getItem?.(key);
+    const normalizedKey = String(key ?? "").trim();
+    if (!normalizedKey) return fallback;
+    const raw = storage?.getItem?.(normalizedKey);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === "object" && !Array.isArray(parsed)
@@ -21,7 +23,11 @@ export function readJsonStorage(key, fallback = {}, storage = getBrowserStorage(
 
 export function writeJsonStorage(key, value, storage = getBrowserStorage()) {
   try {
-    storage?.setItem?.(key, JSON.stringify(value));
+    const normalizedKey = String(key ?? "").trim();
+    if (!normalizedKey) return false;
+    const serialized = JSON.stringify(value);
+    if (serialized === undefined) return false;
+    storage?.setItem?.(normalizedKey, serialized);
     return true;
   } catch {
     return false;

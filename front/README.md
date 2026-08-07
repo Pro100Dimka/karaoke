@@ -40,3 +40,8 @@ npm run audit
 ```
 
 See `docs/ARCHITECTURE.md`, `docs/TESTING.md`, `docs/SECURITY.md` and `docs/CONTRIBUTING.md` before making structural changes.
+
+
+## Audit rounds 11–15
+
+Последующие проверки описаны в `AUDIT-ROUND-11.md` — `AUDIT-ROUND-15.md`. Вёрстка и CSS не изменялись.

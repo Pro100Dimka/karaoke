@@ -55,7 +55,9 @@ export default function ProcessingModal({
         <div className="processing-modal-stage u-between-3">
           <span>{status?.progress_step ?? "Подготовка"}</span>
           {active && (
-            <strong>Осталось: {formatEta(status?.eta_seconds)}</strong>
+            <strong style={{ textAlign: "right", width: "100%" }}>
+              Осталось: {formatEta(status?.eta_seconds)}
+            </strong>
           )}
         </div>
         {status?.error_message && (

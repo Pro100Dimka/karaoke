@@ -10,7 +10,11 @@ export default function Dropdown({
   options = [],
   placeholder = "Выберите…",
   disabled = false,
-  className = ""
+  className = "",
+  onBlur,
+  onKeyDown,
+  ariaInvalid,
+  ariaDescribedBy
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -19,9 +23,10 @@ export default function Dropdown({
   const generatedId = useId();
   const dropdownId = id ?? `dropdown-${generatedId.replace(/:/g, "")}`;
   const eventIdRef = useRef(dropdownId);
-  const selected = options.find(
+  const selectedIndex = options.findIndex(
     (option) => String(option.value) === String(value)
   );
+  const selected = selectedIndex >= 0 ? options[selectedIndex] : null;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -33,7 +38,10 @@ export default function Dropdown({
       ) setOpen(false);
     };
     const closeOnEscape = (event) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setOpen(false);
+      ref.current?.querySelector("button")?.focus();
     };
     // Settings modals stop bubbling mouse events. Capture sees the click
     // before that handler, so an open dropdown always closes outside itself.
@@ -91,6 +99,41 @@ export default function Dropdown({
     };
   }, [open, options.length]);
 
+  const handleBlur = (event) => {
+    if (!onBlur) return;
+    const blurEvent = event;
+    queueMicrotask(() => {
+      const activeElement = document.activeElement;
+      if (
+        ref.current?.contains(activeElement) ||
+        menuRef.current?.contains(activeElement)
+      ) {
+        return;
+      }
+      onBlur(blurEvent);
+    });
+  };
+
+  const handleTriggerKeyDown = (event) => {
+    onKeyDown?.(event);
+    if (event.defaultPrevented || disabled) return;
+
+    if (["ArrowDown", "Enter", " "].includes(event.key)) {
+      event.preventDefault();
+      if (!open) {
+        window.dispatchEvent(
+          new CustomEvent("karaoke-dropdown-open", {
+            detail: eventIdRef.current
+          })
+        );
+        setOpen(true);
+      }
+    } else if (event.key === "Escape" && open) {
+      event.preventDefault();
+      setOpen(false);
+    }
+  };
+
   const toggle = () => {
     if (!open)
       window.dispatchEvent(
@@ -109,6 +152,10 @@ export default function Dropdown({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={`${dropdownId}-menu`}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
+        onBlur={handleBlur}
+        onKeyDown={handleTriggerKeyDown}
         onClick={toggle}
       >
         <span>{selected?.label || placeholder}</span>
@@ -135,6 +182,14 @@ export default function Dropdown({
                   event.stopPropagation();
                   setOpen(false);
                   onChange(option.value);
+                  ref.current?.querySelector("button")?.focus();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    setOpen(false);
+                    ref.current?.querySelector("button")?.focus();
+                  }
                 }}
               >
                 <span>{option.label}</span>

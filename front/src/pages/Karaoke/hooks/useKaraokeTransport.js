@@ -37,9 +37,17 @@ export default function useKaraokeTransport({
   setAnalysisRecordingId
 }) {
   const operationRef = useRef(0);
+  const latestOperationTypeRef = useRef("idle");
+  const recordingSessionRef = useRef(recordingSessionId);
+  const recordingStartPromiseRef = useRef(null);
+
+  recordingSessionRef.current = recordingSessionId;
 
   useEffect(() => {
     operationRef.current += 1;
+    latestOperationTypeRef.current = "song-change";
+    recordingStartPromiseRef.current = null;
+    recordingSessionRef.current = null;
   }, [song?.id]);
 
   const broadcastCommand = (action, position) => {
@@ -64,12 +72,14 @@ export default function useKaraokeTransport({
 
     const operationId = ++operationRef.current;
     const shouldPlay = forcePlaying == null ? !isPlaying : forcePlaying;
+    latestOperationTypeRef.current = shouldPlay ? "play" : "pause";
 
     if (!shouldPlay) {
       pausePlaybackResources();
       setIsPlaying(false);
-      if (recordingSessionId) {
-        await api.pauseRecording(recordingSessionId).catch(() => {});
+      const sessionId = recordingSessionRef.current;
+      if (sessionId) {
+        await api.pauseRecording(sessionId).catch(() => {});
       }
       if (broadcast) broadcastCommand("pause", instr.currentTime);
       return true;
@@ -77,22 +87,36 @@ export default function useKaraokeTransport({
 
     // Create/resume Web Audio while this call is still initiated by the user.
     const melodyStart = startMelodyGuide().catch(() => {});
-    let activeRecordingId = recordingSessionId;
+    let activeRecordingId = recordingSessionRef.current;
 
     try {
-      if (recordingSessionId) {
-        await api.resumeRecording(recordingSessionId);
+      if (activeRecordingId) {
+        await api.resumeRecording(activeRecordingId);
       } else {
-        const session = await api.startRecording(
-          song.id,
-          instr.currentTime,
-          playbackGain(musicVolume),
-          microphoneVolume,
-          microphoneEffects.reverb,
-          microphoneEffects.echo,
-          microphoneEffects.delay
-        );
+        if (!recordingStartPromiseRef.current) {
+          const startPromise = api
+            .startRecording(
+              song.id,
+              instr.currentTime,
+              playbackGain(musicVolume),
+              microphoneVolume,
+              microphoneEffects.reverb,
+              microphoneEffects.echo,
+              microphoneEffects.delay
+            )
+            .finally(() => {
+              if (recordingStartPromiseRef.current === startPromise) {
+                recordingStartPromiseRef.current = null;
+              }
+            });
+          recordingStartPromiseRef.current = startPromise;
+        }
+        const session = await recordingStartPromiseRef.current;
         activeRecordingId = session.recording_session_id;
+        if (!activeRecordingId) {
+          throw new Error("Backend не вернул идентификатор записи");
+        }
+        recordingSessionRef.current = activeRecordingId;
         setRecordingSessionId(activeRecordingId);
       }
       setRecordingError(null);
@@ -105,7 +129,10 @@ export default function useKaraokeTransport({
     }
 
     if (operationId !== operationRef.current) {
-      if (activeRecordingId) {
+      if (
+        latestOperationTypeRef.current !== "play" &&
+        activeRecordingId
+      ) {
         await api.pauseRecording(activeRecordingId).catch(() => {});
       }
       silenceMelodyGuide();
@@ -152,6 +179,7 @@ export default function useKaraokeTransport({
     if (!instr || !voc || !song?.id) return undefined;
 
     operationRef.current += 1;
+    latestOperationTypeRef.current = "stop";
     pausePlaybackResources();
     instr.currentTime = 0;
     syncSecondaryMedia(0, true);
@@ -159,9 +187,11 @@ export default function useKaraokeTransport({
     setCurrentTime(0);
     if (broadcast) broadcastCommand("stop", 0);
 
-    if (recordingSessionId) {
+    const activeRecordingId = recordingSessionRef.current;
+    if (activeRecordingId) {
       try {
-        const recording = await api.stopRecording(recordingSessionId);
+        const recording = await api.stopRecording(activeRecordingId);
+        recordingSessionRef.current = null;
         setRecordingSessionId(null);
         setAnalysisRecordingId(recording.id);
       } catch (error) {
@@ -172,8 +202,9 @@ export default function useKaraokeTransport({
     }
 
     const monitor = browserMonitorRef.current;
-    monitor?.stream.getTracks().forEach((track) => track.stop());
-    await monitor?.context.close().catch(() => {});
+    monitor?.stream?.getTracks?.().forEach((track) => track.stop());
+    const closeResult = monitor?.context?.close?.();
+    await closeResult?.catch?.(() => {});
     browserMonitorRef.current = null;
     setMonitoringEnabled(false);
     await api.stopDirectMonitoring().catch(() => {});
@@ -228,8 +259,23 @@ export default function useKaraokeTransport({
       stop: () => stopRef.current({ broadcast: false })
     };
 
-    roomActions[roomCommand.action]?.();
-  }, [instrumentalRef, roomCommand, seekToRef, song?.id, stopRef, togglePlayRef]);
+    Promise.resolve(roomActions[roomCommand.action]?.()).catch((error) => {
+      setRecordingError(
+        `Не удалось выполнить команду комнаты: ${getErrorMessage(
+          error,
+          "неизвестная ошибка"
+        )}`
+      );
+    });
+  }, [
+    instrumentalRef,
+    roomCommand,
+    seekToRef,
+    setRecordingError,
+    song?.id,
+    stopRef,
+    togglePlayRef
+  ]);
 
   return { returnToLibrary, seekTo, skip, stop, togglePlay };
 }

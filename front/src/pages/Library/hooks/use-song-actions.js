@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { api } from "../../../api/client";
 import { getErrorMessage } from "../../../utils/errors";
 
@@ -19,37 +19,52 @@ export default function useLibrarySongActions(props) {
     setProcessingSong,
     setRecordingsSong
   } = props;
+  const deletingSongIdsRef = useRef(new Set());
+  const processingSongIdsRef = useRef(new Set());
+
   const runProcessingAction = useCallback(
     async (song, action, errorMessage) => {
+      if (!song?.id || processingSongIdsRef.current.has(song.id)) return;
+      processingSongIdsRef.current.add(song.id);
       try {
         await action(song.id);
         setProcessingSong(song);
       } catch (error) {
         await notify(`${errorMessage}: ${getErrorMessage(error)}`);
+      } finally {
+        processingSongIdsRef.current.delete(song.id);
       }
     },
     [notify, setProcessingSong]
   );
   const deleteSong = useCallback(
     async (song) => {
-      const confirmed = await confirmDialog(
-        `Удалить «${song.title}»? Это удалит все файлы песни.`,
-        "Удалить песню?"
-      );
-      if (!confirmed) return;
-      setHiddenSongIds((ids) => new Set(ids).add(song.id));
-      if (recordingsSongId === song.id) setRecordingsSong(null);
-      if (processingSongId === song.id) setProcessingSong(null);
+      if (!song?.id || deletingSongIdsRef.current.has(song.id)) return;
+      deletingSongIdsRef.current.add(song.id);
       try {
-        await api.deleteSong(song.id);
-      } catch (error) {
-        setHiddenSongIds((ids) => {
-          const next = new Set(ids);
-          next.delete(song.id);
-          return next;
-        });
+        const confirmed = await confirmDialog(
+          `Удалить «${song.title}»? Это удалит все файлы песни.`,
+          "Удалить песню?"
+        );
+        if (!confirmed) return;
 
-        await notify(`Не удалось удалить: ${getErrorMessage(error)}`);
+        setHiddenSongIds((ids) => new Set(ids).add(song.id));
+        if (recordingsSongId === song.id) setRecordingsSong(null);
+        if (processingSongId === song.id) setProcessingSong(null);
+        try {
+          await api.deleteSong(song.id);
+        } catch (error) {
+          setHiddenSongIds((ids) => {
+            const next = new Set(ids);
+            next.delete(song.id);
+            return next;
+          });
+          await notify(`Не удалось удалить: ${getErrorMessage(error)}`);
+        }
+      } catch (error) {
+        await notify(`Не удалось подтвердить удаление: ${getErrorMessage(error)}`);
+      } finally {
+        deletingSongIdsRef.current.delete(song.id);
       }
     },
     [
