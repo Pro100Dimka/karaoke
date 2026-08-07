@@ -1,6 +1,10 @@
-import AuroraWorld from "./aurora-world";
 import KaraokeLyricLine from "./karaoke-lyric-line";
 import MelodyRoll from "./melody-roll";
+
+const SCENE_VIDEO_URL = new URL(
+  "../../../../assets/karaoke/videoplayback.mp4",
+  import.meta.url
+).href;
 
 function Lyrics({ lyrics, currentLine, upcomingLine, nextLine, currentTime }) {
   const activeLine = currentLine || upcomingLine;
@@ -45,34 +49,45 @@ function Lyrics({ lyrics, currentLine, upcomingLine, nextLine, currentTime }) {
 
 export default function KaraokePerformanceStage(props) {
   const {
-    activeTheme,
-    auroraSeed,
     currentTime,
-    isPlaying,
     lyrics,
-    notes,
-    panoramaRef,
+    nextLine,
+    sceneBlackout,
+    sceneVideoRef,
     showLyrics,
-    showNotes
+    showNotes,
+    notes,
+    onSceneVideoReady
   } = props;
 
   return (
-    <div
-      className={`karaoke-performance-stage karaoke-aurora-stage ${
-        isPlaying ? "is-playing" : ""
-      }`}
-    >
-      <div
-        ref={panoramaRef}
-        className="karaoke-panoramic-sky"
-        style={{ "--panorama-image": `url(${activeTheme.image})` }}
+    <div className="karaoke-performance-stage karaoke-video-stage">
+      <video
+        ref={sceneVideoRef}
+        className="karaoke-scene-video"
+        src={SCENE_VIDEO_URL}
+        muted
+        loop
+        autoPlay
+        playsInline
+        preload="auto"
+        onLoadedMetadata={onSceneVideoReady}
         aria-hidden="true"
       />
-      <AuroraWorld seed={auroraSeed} />
+
+      <div
+        className={`karaoke-scene-blackout ${sceneBlackout ? "is-visible" : ""}`}
+        aria-hidden="true"
+      />
 
       {showNotes && notes.length > 0 && <MelodyRoll {...props} />}
       {showLyrics && (
-        <Lyrics {...props} lyrics={lyrics} currentTime={currentTime} />
+        <Lyrics
+          {...props}
+          lyrics={lyrics}
+          currentTime={currentTime}
+          nextLine={nextLine}
+        />
       )}
     </div>
   );

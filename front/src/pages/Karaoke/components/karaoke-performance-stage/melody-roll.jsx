@@ -108,45 +108,20 @@ export default function MelodyRoll({
             <stop offset=".52" stopColor="#ff4966" />
             <stop offset="1" stopColor="#ed123f" />
           </linearGradient>
-          <filter id="piano-roll-note-glow" x="-35%" y="-180%" width="170%" height="460%">
-            <feGaussianBlur stdDeviation="4.2" result="blur" />
-            <feColorMatrix
-              in="blur"
-              type="matrix"
-              values="1 0 0 0 0.35  0 0.22 0 0 0  0 0 0.18 0 0.02  0 0 0 0.95 0"
-              result="redGlow"
-            />
-            <feMerge>
-              <feMergeNode in="redGlow" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-          <filter id="piano-roll-playhead-glow" x="-500%" y="-10%" width="1100%" height="120%">
-            <feGaussianBlur stdDeviation="7" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-          <filter id="piano-roll-soft-glow" x="-200%" y="-200%" width="500%" height="500%">
-            <feGaussianBlur stdDeviation="12" />
-          </filter>
         </defs>
 
-        <rect width={width} height={height} fill="url(#piano-roll-bg)" />
-
-        {/* Subtle red glow around the playback area, like the reference. */}
+        {/* Keep only the label + piano-key area opaque. The actual note lane is
+            transparent so the karaoke scene remains visible behind the notes. */}
         <rect
-          x={Math.max(noteLaneStart, playheadX - 170)}
+          x="0"
           y="0"
-          width="340"
+          width={noteLaneStart}
           height={height}
-          fill="#ff173f"
-          opacity=".055"
-          filter="url(#piano-roll-soft-glow)"
+          fill="url(#piano-roll-bg)"
         />
 
-        {/* Pitch lanes. */}
+        {/* Pitch lanes and note labels. The keyboard itself is rendered separately
+            below so black keys can overlap the white keys like a real piano. */}
         {lanes.map((midi) => {
           const pitchClass = ((midi % 12) + 12) % 12;
           const isSharp = BLACK_KEY_CLASSES.has(pitchClass);
@@ -158,10 +133,10 @@ export default function MelodyRoll({
                 <rect
                   x="0"
                   y={laneY}
-                  width={noteLaneStart}
+                  width={labelWidth}
                   height={rowHeight}
                   fill="#d8173f"
-                  opacity=".78"
+                  opacity=".9"
                 />
               )}
               <line
@@ -176,42 +151,78 @@ export default function MelodyRoll({
               <text
                 x="18"
                 y={laneY + rowHeight / 2 + Math.min(4, rowHeight * 0.24)}
-                fill={isActive ? "#ffdae1" : "#b9b8c4"}
+                fill={isActive ? "#fff1f4" : "#b9b8c4"}
                 fontSize={Math.min(12, Math.max(8.5, rowHeight * 0.58))}
                 fontWeight={isActive ? "800" : "650"}
                 fontFamily="Inter, Segoe UI, sans-serif"
               >
                 {midiToWesternNote(midi)}
               </text>
-
-              {/* Piano keyboard. White keys span the full keyboard width; black keys sit on top. */}
-              {!isSharp && (
-                <rect
-                  x={labelWidth}
-                  y={laneY + 0.45}
-                  width={keyboardWidth}
-                  height={Math.max(1, rowHeight - 0.9)}
-                  rx="1"
-                  fill={isActive ? "#ee3153" : "#d7d5df"}
-                  stroke="#181722"
-                  strokeWidth=".7"
-                />
-              )}
-              {isSharp && (
-                <rect
-                  x={labelWidth}
-                  y={laneY + rowHeight * 0.13}
-                  width={keyboardWidth * 0.56}
-                  height={Math.max(3, rowHeight * 0.74)}
-                  rx="1"
-                  fill={isActive ? "#ff3156" : "#080812"}
-                  stroke="#211d2a"
-                  strokeWidth=".7"
-                />
-              )}
             </g>
           );
         })}
+
+        {/* Real piano-style keyboard: a continuous bed of white keys first,
+            then shorter black keys layered on top at C#, D#, F#, G# and A#. */}
+        {lanes
+          .filter((midi) => !BLACK_KEY_CLASSES.has(((midi % 12) + 12) % 12))
+          .map((midi) => {
+            const center = y(midi) + rowHeight / 2;
+            const naturalBelow = [...lanes]
+              .reverse()
+              .find(
+                (candidate) =>
+                  candidate < midi &&
+                  !BLACK_KEY_CLASSES.has(((candidate % 12) + 12) % 12)
+              );
+            const naturalAbove = lanes.find(
+              (candidate) =>
+                candidate > midi &&
+                !BLACK_KEY_CLASSES.has(((candidate % 12) + 12) % 12)
+            );
+            const top = naturalAbove != null
+              ? (center + y(naturalAbove) + rowHeight / 2) / 2
+              : Math.max(0, center - rowHeight);
+            const bottom = naturalBelow != null
+              ? (center + y(naturalBelow) + rowHeight / 2) / 2
+              : Math.min(height, center + rowHeight);
+            const isActive = activeMidi === midi;
+
+            return (
+              <rect
+                key={`white-key-${midi}`}
+                x={labelWidth}
+                y={top + 0.35}
+                width={keyboardWidth}
+                height={Math.max(2, bottom - top - 0.7)}
+                rx="1.2"
+                fill={isActive ? "#ed214b" : "#dedde5"}
+                stroke={isActive ? "#ff6b84" : "#20202b"}
+                strokeWidth=".85"
+              />
+            );
+          })}
+
+        {lanes
+          .filter((midi) => BLACK_KEY_CLASSES.has(((midi % 12) + 12) % 12))
+          .map((midi) => {
+            const center = y(midi) + rowHeight / 2;
+            const blackHeight = Math.max(4, rowHeight * 0.72);
+            const isActive = activeMidi === midi;
+            return (
+              <rect
+                key={`black-key-${midi}`}
+                x={labelWidth}
+                y={center - blackHeight / 2}
+                width={keyboardWidth * 0.62}
+                height={blackHeight}
+                rx="1"
+                fill={isActive ? "#f3234c" : "#07070e"}
+                stroke={isActive ? "#ff7188" : "#262531"}
+                strokeWidth=".85"
+              />
+            );
+          })}
 
         {/* Piano/key separator and vertical time grid. */}
         <line
@@ -245,7 +256,7 @@ export default function MelodyRoll({
           const noteWidth = Math.max(5, noteRight - noteX - 5);
           const noteY = y(midi) + (rowHeight - noteHeight) / 2;
           return (
-            <g key={`note-${index}`} filter="url(#piano-roll-note-glow)">
+            <g key={`note-${index}`}>
               <rect
                 x={noteX}
                 y={noteY}
@@ -285,7 +296,6 @@ export default function MelodyRoll({
             stroke="#ff2549"
             strokeWidth="2.2"
             opacity=".98"
-            filter="url(#piano-roll-playhead-glow)"
           />
           <line
             x1={playheadX}

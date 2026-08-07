@@ -1,4 +1,4 @@
-import { ArrowLeft, AudioLines, Cog, Type } from "lucide-react";
+import { AudioLines, Cog, MousePointer2, Type } from "lucide-react";
 import Button from "../../../../components/fields/button";
 import { EFFECT_PRESETS } from "../../constants";
 import { normalizePreset } from "./utils";
@@ -42,11 +42,11 @@ function ToolTabs({
   onOpenEffects,
   onToggleNotes,
   onToggleLyrics,
-  onReturn,
-  onOpenAppSettings
+  onOpenAppSettings,
+  autoHideEnabled,
+  onAutoHideChange
 }) {
   const tools = [
-    ["back", ArrowLeft, "Назад", null, onReturn],
     [
       "effects",
       AudioLines,
@@ -56,6 +56,13 @@ function ToolTabs({
     ],
     ["notes", AudioLines, "Ноты", showNotes, onToggleNotes],
     ["lyrics", Type, "Текст", showLyrics, onToggleLyrics],
+    [
+      "auto",
+      MousePointer2,
+      "Авто",
+      autoHideEnabled,
+      () => onAutoHideChange?.(!autoHideEnabled)
+    ],
     ["settings", Cog, "Настройки", null, onOpenAppSettings]
   ].filter(([, , , , onClick]) => onClick);
 

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, SlidersHorizontal } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
@@ -11,7 +12,6 @@ import useAudioOutputRouting from "./hooks/useAudioOutputRouting";
 import useKaraokeControls from "./hooks/useKaraokeControls";
 import useKaraokeHotkeys from "./hooks/useKaraokeHotkeys";
 import useKaraokeMediaSync from "./hooks/useKaraokeMediaSync";
-import useKaraokePanorama from "./hooks/useKaraokePanorama";
 import useKaraokePreferences from "./hooks/useKaraokePreferences";
 import useKaraokeResult from "./hooks/useKaraokeResult";
 import useKaraokeStageLayout from "./hooks/useKaraokeStageLayout";
@@ -51,6 +51,9 @@ export default function Karaoke({ onOpenAppSettings }) {
   const vocalsRef = useRef(null);
   const videoRef = useRef(null);
   const youTubeClipRef = useRef(null);
+  const sceneVideoRef = useRef(null);
+  const sceneTransitionRef = useRef(false);
+  const stageActionTimerRef = useRef(null);
   const containerRef = useRef(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -88,12 +91,45 @@ export default function Karaoke({ onOpenAppSettings }) {
     setRecordingActive(Boolean(recordingSessionId));
     return () => setRecordingActive(false);
   }, [recordingSessionId, setRecordingActive]);
-  const [auroraSeed] = useState(() => Math.floor(Math.random() * 997));
-  const { activeTheme, panoramaRef: panoramaSkyRef } = useKaraokePanorama(
-    song?.id,
-    isPlaying
-  );
-  const { controlsVisible, revealControls } = useKaraokeControls();
+  const [autoHideConsole, setAutoHideConsole] = useState(true);
+  const [stageActionsVisible, setStageActionsVisible] = useState(true);
+  const [sceneBlackout, setSceneBlackout] = useState(false);
+  const {
+    controlsVisible,
+    hideControls,
+    revealControls,
+    showControls
+  } = useKaraokeControls({ autoHideEnabled: autoHideConsole });
+
+  const randomizeSceneVideo = useCallback(() => {
+    const video = sceneVideoRef.current;
+    if (!video) return;
+    const videoDuration = Number(video.duration);
+    if (Number.isFinite(videoDuration) && videoDuration > 1) {
+      video.currentTime = Math.random() * Math.max(0.1, videoDuration - 0.5);
+    }
+    const playResult = video.play?.();
+    playResult?.catch?.(() => {});
+  }, []);
+
+  const revealStageActions = useCallback(() => {
+    setStageActionsVisible(true);
+    if (stageActionTimerRef.current) {
+      window.clearTimeout(stageActionTimerRef.current);
+    }
+    stageActionTimerRef.current = window.setTimeout(() => {
+      setStageActionsVisible(false);
+    }, 1800);
+  }, []);
+
+  useEffect(() => {
+    revealStageActions();
+    return () => {
+      if (stageActionTimerRef.current) {
+        window.clearTimeout(stageActionTimerRef.current);
+      }
+    };
+  }, [revealStageActions]);
   const currentTimeRef = useRef(currentTime);
   const durationRef = useRef(duration);
   const browserMonitorRef = useRef(null);
@@ -243,14 +279,47 @@ export default function Karaoke({ onOpenAppSettings }) {
       vocalsRef
     });
 
+  const runSceneTransition = useCallback(
+    async (action) => {
+      if (sceneTransitionRef.current) return false;
+      sceneTransitionRef.current = true;
+      setSceneBlackout(true);
+
+      await new Promise((resolve) => window.setTimeout(resolve, 240));
+      randomizeSceneVideo();
+
+      try {
+        await action();
+      } finally {
+        await new Promise((resolve) => window.setTimeout(resolve, 90));
+        setSceneBlackout(false);
+        window.setTimeout(() => {
+          sceneTransitionRef.current = false;
+        }, 380);
+      }
+      return true;
+    },
+    [randomizeSceneVideo]
+  );
+
+  const handleTogglePlay = useCallback(() => {
+    if (isPlaying) return togglePlay();
+    return runSceneTransition(() => togglePlay());
+  }, [isPlaying, runSceneTransition, togglePlay]);
+
+  const handleStop = useCallback(
+    () => runSceneTransition(() => stop()),
+    [runSceneTransition, stop]
+  );
+
   playbackEndedRef.current = () => stop({ broadcast: true });
 
   useKaraokeHotkeys({
     currentTime,
     duration,
-    onTogglePlay: togglePlay,
+    onTogglePlay: handleTogglePlay,
     onSeek: seekTo,
-    onStop: stop
+    onStop: handleStop
   });
 
   useKaraokeStageLayout(containerRef);
@@ -298,7 +367,10 @@ export default function Karaoke({ onOpenAppSettings }) {
     <div
       ref={containerRef}
       className={`karaoke-stage ${isPlaying ? "karaoke-is-playing" : ""} ${!controlsVisible ? "karaoke-ui-hidden" : ""}`}
-      onMouseMove={revealControls}
+      onMouseMove={() => {
+        revealStageActions();
+        revealControls();
+      }}
     >
       <KaraokeMedia
         instrumentalRef={instrumentalRef}
@@ -351,9 +423,34 @@ export default function Karaoke({ onOpenAppSettings }) {
         />
       )}
 
+      <div
+        className={`karaoke-stage-actions ${stageActionsVisible ? "is-visible" : ""}`}
+        aria-label="Навигация караоке"
+      >
+        <button
+          type="button"
+          className="karaoke-stage-action"
+          onClick={returnToLibrary}
+          title="Назад в библиотеку"
+        >
+          <ArrowLeft size={18} />
+          <span>Назад</span>
+        </button>
+        {!autoHideConsole && (
+          <button
+            type="button"
+            className={`karaoke-stage-action ${controlsVisible ? "is-active" : ""}`}
+            aria-pressed={controlsVisible}
+            onClick={showControls}
+            title="Показать консоль"
+          >
+            <SlidersHorizontal size={18} />
+            <span>Консоль</span>
+          </button>
+        )}
+      </div>
+
       <KaraokePerformanceStage
-        activeTheme={activeTheme}
-        auroraSeed={auroraSeed}
         currentLine={currentLine}
         currentTime={lyricTime}
         isPitchAttacking={isPitchAttacking}
@@ -365,8 +462,10 @@ export default function Karaoke({ onOpenAppSettings }) {
         noteRangeMax={song.note_range_max}
         noteRangeMin={song.note_range_min}
         notes={notes}
-        panoramaRef={panoramaSkyRef}
         pitchRestProgress={pitchRestProgress}
+        sceneBlackout={sceneBlackout}
+        sceneVideoRef={sceneVideoRef}
+        onSceneVideoReady={randomizeSceneVideo}
         showLyrics={showLyrics}
         showNotes={showNotes}
         songTitle={song.title}
@@ -399,8 +498,8 @@ export default function Karaoke({ onOpenAppSettings }) {
         }}
         isPlaying={isPlaying}
         onSkip={skip}
-        onTogglePlay={() => togglePlay()}
-        onStop={() => stop()}
+        onTogglePlay={handleTogglePlay}
+        onStop={handleStop}
         currentTempo={currentTempo}
         onTempoChange={changeTempo}
         compactKey={compactKey}
@@ -416,8 +515,10 @@ export default function Karaoke({ onOpenAppSettings }) {
         onToggleNotes={() => setShowNotes((value) => !value)}
         showLyrics={showLyrics}
         onToggleLyrics={() => setShowLyrics((value) => !value)}
-        onReturn={returnToLibrary}
         onOpenAppSettings={onOpenAppSettings}
+        autoHideEnabled={autoHideConsole}
+        onAutoHideChange={setAutoHideConsole}
+        onClose={hideControls}
         effectPreset={effectPreset}
         onApplyEffectPreset={applyEffectPreset}
         onSeek={seekTo}

@@ -8041,7 +8041,7 @@ body {
   block-size: clamp(11.5rem, 24vh, 14rem);
   min-block-size: 0;
   max-block-size: none;
-  background: #080812;
+  background: transparent;
   border: 0;
   border-radius: 0;
   box-shadow:
@@ -8054,15 +8054,278 @@ body {
   inline-size: 100%;
   block-size: 100%;
   min-block-size: 0;
-  background: #080812;
+  background: transparent;
 }
 
-/* Keep this piano roll intentionally dark in every app theme, matching the
-   karaoke reference and preserving note/grid contrast over light scenes. */
+/* The note lane is intentionally transparent in every theme. The SVG keeps
+   only the label/piano strip opaque so the scene remains visible behind notes. */
 [data-theme="light"] .melody-roll,
 [data-theme="green"] .melody-roll,
 [data-theme="violet"] .melody-roll,
 [data-theme="dark"] .melody-roll {
-  background: #080812;
+  background: transparent;
   border-color: transparent;
+}
+
+/* ========================================================================== 
+   KARAOKE CONSOLE CONTROLS
+   Manual open/close plus an optional mouse-driven auto-hide mode.
+   ========================================================================== */
+
+.karaoke-stage-actions {
+  position: absolute;
+  z-index: 42;
+  inset-block-start: clamp(0.7rem, 1.4vh, 1.1rem);
+  inset-inline-start: clamp(0.7rem, 1.4vw, 1.2rem);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.karaoke-stage-action,
+.karaoke-console-window-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  min-block-size: 2.35rem;
+  border: var(--hairline) solid
+    color-mix(in srgb, var(--color-primary) 38%, var(--color-border));
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-bg-deep) 68%, transparent);
+  box-shadow:
+    0 0.45rem 1.2rem color-mix(in srgb, var(--color-bg-deep) 30%, transparent),
+    inset 0 var(--hairline)
+      color-mix(in srgb, var(--color-highlight) 10%, transparent);
+  backdrop-filter: blur(0.8rem) saturate(130%);
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+
+.karaoke-stage-action {
+  padding: 0.48rem 0.72rem;
+  border-radius: 0.8rem;
+  font-weight: 800;
+  font-size: 0.76rem;
+}
+
+.karaoke-stage-action:hover,
+.karaoke-stage-action.is-active,
+.karaoke-console-window-actions button:hover,
+.karaoke-console-auto-toggle.is-active {
+  border-color: color-mix(in srgb, var(--color-primary) 76%, white 8%);
+  background: color-mix(
+    in srgb,
+    var(--color-primary) 18%,
+    var(--color-bg-deep) 64%
+  );
+  box-shadow:
+    0 0.5rem 1.35rem color-mix(in srgb, var(--color-bg-deep) 32%, transparent),
+    0 0 1rem color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+.karaoke-stage-action:hover,
+.karaoke-console-window-actions button:hover {
+  transform: translateY(-0.08rem);
+}
+
+.karaoke-console-window-actions {
+  position: absolute;
+  z-index: 4;
+  inset-block-start: 0.45rem;
+  inset-inline-end: 0.45rem;
+  display: flex;
+  align-items: center;
+  gap: 0.38rem;
+}
+
+.karaoke-console-window-actions button {
+  block-size: 2.1rem;
+  min-block-size: 2.1rem;
+  border-radius: 0.68rem;
+  font: inherit;
+}
+
+.karaoke-console-auto-toggle {
+  padding-inline: 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 850;
+}
+
+.karaoke-console-close {
+  inline-size: 2.1rem;
+  padding: 0;
+}
+
+.karaoke-studio-console {
+  position: absolute;
+}
+
+@media (max-width: 48rem) {
+  .karaoke-stage-action span,
+  .karaoke-console-auto-toggle span {
+    display: none;
+  }
+
+  .karaoke-stage-action,
+  .karaoke-console-auto-toggle {
+    inline-size: 2.35rem;
+    padding-inline: 0;
+  }
+}
+
+/* ========================================================================== 
+   KARAOKE VIDEO-ONLY STAGE
+   The performance scene contains only the looping background video, lyrics,
+   MelodyRoll and explicit controls. Legacy panorama/aurora layers are not used.
+   ========================================================================== */
+.karaoke-performance-stage.karaoke-video-stage {
+  position: relative;
+  block-size: calc(100dvh - var(--titlebar-height));
+  min-block-size: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #000;
+  isolation: isolate;
+}
+
+.karaoke-performance-stage.karaoke-video-stage::before,
+.karaoke-performance-stage.karaoke-video-stage::after {
+  display: none !important;
+  content: none !important;
+}
+
+.karaoke-scene-video {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  object-position: center;
+  background: #000;
+  pointer-events: none;
+}
+
+/* Song/YouTube clips may still exist as synchronized media internally, but
+   they are no longer part of the visual Karaoke scene. */
+.karaoke-video,
+.karaoke-youtube-video,
+.karaoke-panoramic-sky,
+.karaoke-aurora-world {
+  display: none !important;
+}
+
+.karaoke-scene-blackout {
+  position: absolute;
+  z-index: 55;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 240ms ease;
+}
+
+.karaoke-scene-blackout.is-visible {
+  opacity: 1;
+}
+
+/* MelodyRoll note lane is truly transparent: no ambient haze, no glass,
+   no pseudo-element glow. Piano labels/keys remain opaque inside the SVG. */
+.melody-roll,
+[data-theme="light"] .melody-roll,
+[data-theme="green"] .melody-roll,
+[data-theme="violet"] .melody-roll,
+[data-theme="dark"] .melody-roll {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.melody-roll::before,
+.melody-roll::after {
+  display: none !important;
+  content: none !important;
+}
+
+.melody-roll svg {
+  background: transparent !important;
+  filter: none !important;
+}
+
+/* External navigation is only a temporary mouse HUD. */
+.karaoke-stage-actions {
+  opacity: 0;
+  transform: translateY(-0.4rem);
+  pointer-events: none;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.karaoke-stage-actions.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* Compact studio console. It intentionally floats over MelodyRoll. */
+.karaoke-studio-console {
+  inset-inline-start: 50% !important;
+  inset-inline-end: auto !important;
+  inline-size: min(82vw, 72rem) !important;
+  padding: 0.42rem 0.58rem 0.5rem !important;
+  gap: 0.42rem !important;
+  translate: -50% 0;
+}
+
+.karaoke-console-grid {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 0.78fr) minmax(0, 1fr) !important;
+  gap: 0.45rem !important;
+}
+
+.karaoke-console-panel {
+  padding: 0.48rem 0.55rem !important;
+}
+
+.karaoke-console-title {
+  margin-block-end: 0.34rem !important;
+}
+
+.karaoke-transport-buttons--hero .karaoke-transport-button {
+  inline-size: 2.5rem !important;
+  block-size: 2.5rem !important;
+}
+
+.karaoke-transport-buttons--hero .karaoke-play-button {
+  inline-size: 3.5rem !important;
+  block-size: 3.5rem !important;
+  animation: none !important;
+}
+
+.karaoke-console-window-actions {
+  inset-block-start: 0.3rem;
+  inset-inline-end: 0.3rem;
+}
+
+.karaoke-console-window-actions .karaoke-console-close {
+  inline-size: 1.85rem;
+  block-size: 1.85rem;
+  min-block-size: 1.85rem;
+}
+
+@media (max-width: 64rem) {
+  .karaoke-studio-console {
+    inline-size: calc(100vw - 1rem) !important;
+  }
+
+  .karaoke-console-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
 }

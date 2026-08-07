@@ -1,13 +1,24 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const CONTROLS_VISIBLE_MS = 2200;
 const VISIBILITY_CHECK_MS = 250;
 
-export default function useKaraokeControls() {
+export default function useKaraokeControls({ autoHideEnabled = true } = {}) {
   const [controlsVisible, setControlsVisible] = useState(true);
   const lastActivityRef = useRef(Date.now());
 
+  const showControls = useCallback(() => {
+    lastActivityRef.current = Date.now();
+    setControlsVisible(true);
+  }, []);
+
+  const hideControls = useCallback(() => {
+    setControlsVisible(false);
+  }, []);
+
   useEffect(() => {
+    if (!autoHideEnabled) return undefined;
+
     const watcher = window.setInterval(() => {
       setControlsVisible(
         Date.now() - lastActivityRef.current < CONTROLS_VISIBLE_MS
@@ -15,22 +26,26 @@ export default function useKaraokeControls() {
     }, VISIBILITY_CHECK_MS);
 
     return () => window.clearInterval(watcher);
-  }, []);
+  }, [autoHideEnabled]);
 
   useEffect(() => {
-    const showControls = () => {
-      lastActivityRef.current = Date.now();
-      setControlsVisible(true);
-    };
-
     document.addEventListener("fullscreenchange", showControls);
     return () => document.removeEventListener("fullscreenchange", showControls);
-  }, []);
+  }, [showControls]);
 
-  const revealControls = () => {
-    lastActivityRef.current = Date.now();
-    setControlsVisible(true);
+  useEffect(() => {
+    if (autoHideEnabled) showControls();
+  }, [autoHideEnabled, showControls]);
+
+  const revealControls = useCallback(() => {
+    if (!autoHideEnabled) return;
+    showControls();
+  }, [autoHideEnabled, showControls]);
+
+  return {
+    controlsVisible,
+    hideControls,
+    revealControls,
+    showControls
   };
-
-  return { controlsVisible, revealControls };
 }
