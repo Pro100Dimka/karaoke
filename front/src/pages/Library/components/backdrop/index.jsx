@@ -3,15 +3,26 @@ import LibraryWaveTerrain from "./wave-terrain";
 
 const MUSIC_DECOR = [
   ["record", 4],
-  ["notes", 9]
+  ["notes", 18]
 ];
 
 function MusicObject({ type, parts }) {
   return (
     <i className={`library-music-object library-music-object--${type}`}>
-      {Array.from({ length: parts }, (_, part) => (
-        <span key={part} style={{ "--part": part }} />
-      ))}
+      {Array.from({ length: parts }, (_, part) => {
+        const noteStyle =
+          type === "notes"
+            ? {
+                "--part": part,
+                "--note-x": `${(part * 23 + 7) % 96}%`,
+                "--note-y": `${18 + ((part * 37 + 11) % 68)}%`,
+                "--note-scale": (0.82 + ((part * 17) % 35) / 100).toFixed(2),
+                "--note-duration": `${(6.2 + (part % 5) * 0.55).toFixed(2)}s`
+              }
+            : { "--part": part };
+
+        return <span key={part} style={noteStyle} />;
+      })}
     </i>
   );
 }

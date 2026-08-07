@@ -27,7 +27,7 @@ function LyricWord({ word, currentTime }) {
 
 export default function KaraokeLyricLine({ line, currentTime, className }) {
   const textLength = Array.from(line?.text || "").length;
-  const scale = Math.max(0.62, Math.min(1, 34 / Math.max(34, textLength)));
+  const scale = Math.max(0.48, Math.min(1, 28 / Math.max(28, textLength)));
 
   return (
     <div className={className} style={{ "--lyric-line-scale": scale }}>

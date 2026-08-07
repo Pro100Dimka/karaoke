@@ -1,5 +1,5 @@
 import { Activity, Headphones, Mic2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client";
 import Dropdown from "../../components/fields/Dropdown";
 import Button from "../../components/fields/button";
@@ -55,8 +55,8 @@ function DropdownField({ label, hint, value, options, disabled, onChange }) {
   );
 }
 
-function getSignalLevel(rmsDb) {
-  const db = Number(rmsDb);
+function getSignalLevel(signal) {
+  const db = Number(signal?.rms_db ?? signal?.rms_dbfs);
 
   if (!Number.isFinite(db)) return 0;
 
@@ -74,10 +74,13 @@ export default function AudioSettings() {
   const { data: devices } = usePolling(api.listAudioDevices, 30000, []);
   const { data: outputs } = usePolling(api.listAudioOutputDevices, 30000, []);
   const { data: asioDrivers } = usePolling(api.listAsioDrivers, 30000, []);
-  const { data: signal } = usePolling(api.getSignalQuality, 1200, []);
+  const { data: signal } = usePolling(api.getSignalQuality, 350, []);
 
   const [browserDevices, setBrowserDevices] = useState(EMPTY_BROWSER_DEVICES);
   const [preferences, setPreferences] = useState(getAudioPreferences);
+  const [monitorLevel, setMonitorLevel] = useState(0);
+  const [liveMonitorAvailable, setLiveMonitorAvailable] = useState(false);
+  const liveMeterCleanupRef = useRef(null);
 
   const { pending: saving, run: enqueueAudioUpdate } = useAsyncQueue();
   const { pending: togglingMonitoring, run: runMonitoringToggle } =
@@ -87,7 +90,114 @@ export default function AudioSettings() {
   const audioDriver = runtimeSettings.audioDriver;
   const monitoringEnabled = runtimeSettings.monitoringEnabled;
   const volume = runtimeSettings.volume;
-  const level = getSignalLevel(signal?.rms_db);
+  const rawMonitorLevel = monitoringEnabled ? getSignalLevel(signal) : 0;
+
+  useEffect(() => {
+    liveMeterCleanupRef.current?.();
+    liveMeterCleanupRef.current = null;
+    setLiveMonitorAvailable(false);
+
+    if (!monitoringEnabled) {
+      setMonitorLevel(0);
+      return undefined;
+    }
+
+    const mediaDevices = globalThis.navigator?.mediaDevices;
+    if (typeof mediaDevices?.getUserMedia !== "function") return undefined;
+
+    let cancelled = false;
+    let stream = null;
+    let audioContext = null;
+    let source = null;
+    let analyser = null;
+    let intervalId = null;
+
+    const stop = () => {
+      cancelled = true;
+      if (intervalId) globalThis.clearInterval(intervalId);
+      try { source?.disconnect(); } catch {}
+      try { analyser?.disconnect(); } catch {}
+      stream?.getTracks?.().forEach((track) => track.stop());
+      if (audioContext?.state !== "closed") {
+        try { Promise.resolve(audioContext?.close?.()).catch(() => {}); } catch {}
+      }
+    };
+
+    liveMeterCleanupRef.current = stop;
+
+    const selectedInput = preferences.monitorInputDeviceId;
+    const audio = {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+      ...(selectedInput && selectedInput !== "default"
+        ? { deviceId: { exact: selectedInput } }
+        : {})
+    };
+
+    mediaDevices
+      .getUserMedia({ audio })
+      .then((nextStream) => {
+        if (cancelled) {
+          nextStream.getTracks?.().forEach((track) => track.stop());
+          return;
+        }
+
+        const AudioContextClass =
+          globalThis.AudioContext || globalThis.webkitAudioContext;
+        if (typeof AudioContextClass !== "function") {
+          nextStream.getTracks?.().forEach((track) => track.stop());
+          return;
+        }
+
+        stream = nextStream;
+        audioContext = new AudioContextClass({ latencyHint: "interactive" });
+        source = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.72;
+        source.connect(analyser);
+
+        const samples = new Uint8Array(analyser.fftSize);
+        let smoothed = 0;
+        setLiveMonitorAvailable(true);
+
+        intervalId = globalThis.setInterval(() => {
+          if (cancelled || !analyser) return;
+          try {
+            analyser.getByteTimeDomainData(samples);
+          } catch {
+            return;
+          }
+
+          let sum = 0;
+          for (const sample of samples) {
+            const normalized = (sample - 128) / 128;
+            sum += normalized * normalized;
+          }
+
+          const rms = Math.sqrt(sum / samples.length);
+          const normalizedLevel = Math.min(1, Math.max(0, (rms - 0.012) / 0.16));
+          smoothed = smoothed * 0.68 + normalizedLevel * 0.32;
+          const level = smoothed < 0.035 ? 0 : smoothed * 100;
+          setMonitorLevel(level);
+        }, 70);
+      })
+      .catch(() => {
+        if (!cancelled) setLiveMonitorAvailable(false);
+      });
+
+    return stop;
+  }, [monitoringEnabled, preferences.monitorInputDeviceId]);
+
+  useEffect(() => {
+    if (!monitoringEnabled || liveMonitorAvailable) return;
+    setMonitorLevel((current) =>
+      Math.abs(rawMonitorLevel - current) < 0.5
+        ? rawMonitorLevel
+        : current * 0.45 + rawMonitorLevel * 0.55
+    );
+  }, [liveMonitorAvailable, monitoringEnabled, rawMonitorLevel]);
 
   useEffect(() => {
     const mediaDevices = globalThis.navigator?.mediaDevices;
@@ -122,10 +232,15 @@ export default function AudioSettings() {
     });
 
   const updateBackend = (patch) =>
-    runAudioAction(
-      () => api.updateAudioSettings(patch),
-      "Не удалось сохранить аудионастройки"
-    );
+    runAudioAction(async () => {
+      const updated = await api.updateAudioSettings(patch);
+      try {
+        globalThis.dispatchEvent?.(
+          new CustomEvent("audio-settings-changed", { detail: updated })
+        );
+      } catch {}
+      return updated;
+    }, "Не удалось сохранить аудионастройки");
 
   const updatePreference = (name, value) => {
     setPreferences(saveAudioPreferences({ [name]: value }));
@@ -307,19 +422,19 @@ export default function AudioSettings() {
           ))}
           <Field
             label="Уровень микрофона"
-            hint="Громкость записи и мониторинга"
+            hint="Та же громкость микрофона, что используется в микшере Karaoke"
             variant="card"
           >
             <div className="audio-level-control">
               <RangeInput
                 min="0"
-                max="4"
+                max="1"
                 step="0.05"
                 value={volume}
                 onChange={(value) => updateBackend({ volume: value })}
               />
 
-              <strong>{Math.round((volume / 4) * 100)}%</strong>
+              <strong>{Math.round(volume * 100)}%</strong>
             </div>
           </Field>
         </div>
@@ -337,9 +452,9 @@ export default function AudioSettings() {
           </div>
           <div
             className="audio-monitor-meter"
-            aria-label={`Уровень ${Math.round(level)}%`}
+            aria-label={`Уровень ${Math.round(monitorLevel)}%`}
           >
-            <span style={{ inlineSize: `${level}%` }} />
+            <span style={{ inlineSize: `${monitorLevel}%` }} />
           </div>
 
           <Button
