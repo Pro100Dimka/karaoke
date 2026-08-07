@@ -1,6 +1,6 @@
 export const APP_INFO = {
-  title: "Karaoke Studio",
+  title: "A&D Voice",
   description:
     "Инструмент для создания и исполнения караоке с AI-анализом голоса",
-  copyright: "© 2026 Karaoke Studio"
+  copyright: "© 2026 A&D Voice"
 };

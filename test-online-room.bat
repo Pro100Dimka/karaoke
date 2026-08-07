@@ -3,7 +3,7 @@ setlocal
 set "ROOT=%~dp0"
 set "WORKER_URL=https://karaoke-studio-online.pro100dimka-and.workers.dev"
 
-echo Testing Karaoke Studio online room server...
+echo Testing A&D Voice online room server...
 node "%ROOT%scripts\test-online-room.mjs" "%WORKER_URL%"
 if errorlevel 1 (
   echo.

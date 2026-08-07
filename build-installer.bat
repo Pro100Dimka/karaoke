@@ -75,15 +75,15 @@ set "VCVARS=%VS%\VC\Auxiliary\Build\vcvars64.bat"
 set "CMAKE=%VS%\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
 set "NINJA=%VS%\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe"
 
-set "APP_NAME=Karaoke Studio"
+set "APP_NAME=A&D Voice"
 set "APP_VERSION=1.0.0"
-set "APP_EXE=Karaoke Studio.exe"
+set "APP_EXE=A&D Voice.exe"
 set "APP_ID=E734496E-2622-5565-89D3-45451D9DE7EE"
 
 set "MODEL_SCRIPT=%ROOT%scripts\ensure-offline-models.bat"
 set "INNO_TEMPLATE=%ROOT%scripts\karaoke-studio.iss"
 
-set "INSTALLER_EXE=%INSTALLER_DIR%\Karaoke Studio Setup %APP_VERSION%.exe"
+set "INSTALLER_EXE=%INSTALLER_DIR%\A&D Voice Setup %APP_VERSION%.exe"
 set "CHECKSUM_FILE=%INSTALLER_DIR%\SHA256SUMS.txt"
 
 set "PYINSTALLER_CLEAN="
@@ -95,7 +95,7 @@ rem ============================================================
 
 echo.
 echo ============================================================
-echo  KARAOKE STUDIO - COMPLETE OFFLINE INSTALLER
+echo  A&D Voice - COMPLETE OFFLINE INSTALLER
 echo ============================================================
 echo.
 echo Build mode:
@@ -238,7 +238,7 @@ rem ============================================================
 
 :stop_build_processes
 echo.
-echo [0/6] Closing old Karaoke Studio build processes...
+echo [0/6] Closing old A&D Voice build processes...
 
 taskkill /F /IM KaraokeBackend.exe >nul 2>&1
 taskkill /F /IM KaraokeAudioMonitor.exe >nul 2>&1

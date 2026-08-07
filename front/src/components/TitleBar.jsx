@@ -14,9 +14,10 @@ function invokeWindowAction(electronAPI, action) {
   });
 }
 
-export default function TitleBar({ title = "Karaoke Studio" }) {
+export default function TitleBar({ title = "A&D Voice" }) {
   const { electronAPI } = window;
-  const { error, isLoading, isPlaying, station, toggle, volume, setVolume } = useRadio();
+  const { error, isLoading, isPlaying, station, toggle, volume, setVolume } =
+    useRadio();
 
   return (
     <header className="title-bar">
@@ -31,12 +32,19 @@ export default function TitleBar({ title = "Karaoke Studio" }) {
             unstyled
             icon={Radio}
             size={15}
-            label={error || (isPlaying ? `Выключить ${station.name}` : `Включить ${station.name}`)}
+            label={
+              error ||
+              (isPlaying
+                ? `Выключить ${station.name}`
+                : `Включить ${station.name}`)
+            }
             className={[
               "title-bar__button title-bar__radio",
               isPlaying && "is-playing",
               isLoading && "is-loading"
-            ].filter(Boolean).join(" ")}
+            ]
+              .filter(Boolean)
+              .join(" ")}
             onClick={toggle}
           />
           <div className="title-bar__radio-volume" aria-label="Громкость радио">

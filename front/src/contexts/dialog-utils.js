@@ -8,7 +8,7 @@ export const DIALOG_DEFAULTS = Object.freeze({
   }),
   alert: Object.freeze({
     title: "Уведомление",
-    label: "Karaoke Studio",
+    label: "A&D Voice",
     confirmText: "Понятно",
     confirmClassName: "btn btn-primary"
   })

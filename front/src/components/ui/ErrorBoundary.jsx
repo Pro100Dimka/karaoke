@@ -23,7 +23,7 @@ export default class ErrorBoundary extends Component {
     return (
       <main className="application-error" role="alert">
         <div className="application-error__card">
-          <span className="application-error__eyebrow">Karaoke Studio</span>
+          <span className="application-error__eyebrow">A&D Voice</span>
           <h1>Не удалось открыть экран</h1>
           <p>{getErrorMessage(error, "Произошла непредвиденная ошибка.")}</p>
           <Button variant="primary" onClick={() => window.location.reload()}>

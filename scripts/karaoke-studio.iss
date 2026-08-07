@@ -1,5 +1,5 @@
 #ifndef MyAppName
-  #define MyAppName "Karaoke Studio"
+  #define MyAppName "A&D Voice"
 #endif
 
 #ifndef MyAppVersion
@@ -7,7 +7,7 @@
 #endif
 
 #ifndef MyAppExeName
-  #define MyAppExeName "Karaoke Studio.exe"
+  #define MyAppExeName "A&D Voice.exe"
 #endif
 
 #ifndef MyAppId
@@ -27,14 +27,14 @@ AppId={#MyAppId}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
-AppPublisher=Karaoke Studio
+AppPublisher=A&D Voice
 
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 
 OutputDir={#OutputDir}
-OutputBaseFilename=Karaoke Studio Setup {#MyAppVersion}
+OutputBaseFilename=A&D Voice Setup {#MyAppVersion}
 
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible

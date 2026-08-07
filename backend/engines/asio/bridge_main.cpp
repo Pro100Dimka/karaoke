@@ -1,4 +1,4 @@
-// Karaoke Studio ASIO bridge (GPLv3 option of the Steinberg ASIO SDK).
+// A&D Voice ASIO bridge (GPLv3 option of the Steinberg ASIO SDK).
 //
 // The bridge is intentionally a small, independent process.  ASIO drivers are
 // vendor-native DLLs: isolating them keeps a driver failure from terminating

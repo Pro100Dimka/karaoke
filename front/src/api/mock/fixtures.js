@@ -4,7 +4,7 @@ export const mockSongs = [
   {
     id: MOCK_SONG_ID,
     title: "Тестовая песня",
-    artist: "Karaoke Studio",
+    artist: "A&D Voice",
     genre: "Pop",
     status: "done",
     progress_percent: 100,
@@ -28,7 +28,7 @@ export const mockKaraokeResult = {
     {
       start: 0,
       end: 5,
-      text: "Добро пожаловать в Karaoke Studio",
+      text: "Добро пожаловать в A&D Voice",
       words: [
         { text: "Добро", start: 0, end: 1 },
         { text: "пожаловать", start: 1, end: 2.4 },

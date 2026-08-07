@@ -1,8 +1,8 @@
 {
   "name": "karaoke-studio",
   "version": "0.0.1",
-  "description": "Karaoke Studio — десктопное приложение (AI-караоке-тренажёр)",
-  "author": "Karaoke Studio",
+  "description": "A&D Voice — десктопное приложение (AI-караоке-тренажёр)",
+  "author": "A&D Voice",
   "private": true,
   "main": "electron/main.cjs",
   "scripts": {
@@ -81,7 +81,7 @@
   },
   "build": {
     "appId": "com.karaokestudio.app",
-    "productName": "Karaoke Studio",
+    "productName": "A&D Voice",
     "files": [
       "dist/**/*",
       "electron/**/*"
@@ -103,7 +103,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Karaoke Studio"
+      "shortcutName": "A&D Voice"
     },
     "mac": {
       "target": "dmg"
