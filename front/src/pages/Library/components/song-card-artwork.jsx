@@ -1,8 +1,11 @@
 import { Music2 } from "lucide-react";
 import { useRadio } from "../../../contexts/radio";
 
-const WAVE_HEIGHTS = Object.freeze(
-  Array.from({ length: 18 }, () => Math.floor(Math.random() * 61) + 24)
+const WAVE_BARS = Object.freeze(
+  Array.from({ length: 18 }, (_, index) => ({
+    idle: 0.16 + ((index * 37 + 19) % 61) / 100,
+    speed: 720 + ((index * 113 + 47) % 620)
+  }))
 );
 
 export default function SongCardArtwork({ cardIndex }) {
@@ -20,15 +23,14 @@ export default function SongCardArtwork({ cardIndex }) {
     >
       <Music2 size={26} />
       <div className="library-song-card-wave">
-        {WAVE_HEIGHTS.map((height, i) => (
+        {WAVE_BARS.map(({ idle, speed }, i) => (
           <i
             key={i}
             style={{
-              height: `${height}%`,
-              "--wave-min": `${Math.max(18, Math.round(height * 0.34)) / height}`,
+              "--idle-level": idle.toFixed(2),
               "--audio-band": `var(--radio-band-${i}, 0)`,
               animationDelay: `${(cardIndex + i) * -85}ms`,
-              animationDuration: `${620 + ((cardIndex * 37 + i * 113) % 680)}ms`
+              animationDuration: `${speed + ((cardIndex * 29) % 240)}ms`
             }}
           />
         ))}

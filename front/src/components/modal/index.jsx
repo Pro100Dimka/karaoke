@@ -123,15 +123,15 @@ export default function Modal({
     [...new Set(values.flatMap((value) => String(value || "").split(/\s+/)).filter(Boolean))].join(" ");
 
   const backdropClasses = joinClasses(
-    "app-modal-backdrop settings-modal-backdrop",
+    "app-modal-backdrop",
     backdropClassName
   );
   const modalClasses = joinClasses(
-    "app-modal settings-modal modal-card",
+    "app-modal modal-card",
     modalClassName
   );
   const closeClasses = joinClasses(
-    "app-modal-close settings-modal-close",
+    "app-modal-close",
     closeClassName
   );
 

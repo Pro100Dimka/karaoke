@@ -75,11 +75,11 @@ export default function SongSettings({ songId, onClose }) {
     >
       <div className="song-settings-scroll modal-scroll">
         <div className="song-settings-workspace">
-          <Panel className="song-settings-panel">
+          <section className="song-settings-panel">
             <div className="song-settings-panel-body">
               <SongFields form={form} onChange={updateField} />
             </div>
-          </Panel>
+          </section>
 
           {song.status === "done" && (
             <LyricsEditor lyrics={lyrics} onChange={updateLyricsText} />
@@ -168,7 +168,7 @@ function NoteRangeFields({ form, onChange }) {
 
 function LyricsEditor({ lyrics, onChange }) {
   return (
-    <Panel className="song-settings-panel song-lyrics-panel">
+    <section className="song-settings-panel song-lyrics-panel">
       <div className="song-settings-panel-body song-lyrics-body">
         <div className="song-lyrics-field">
           <FieldInput
@@ -179,6 +179,6 @@ function LyricsEditor({ lyrics, onChange }) {
         </div>
         {lyrics.error && <p className="song-lyrics-error">{lyrics.error}</p>}
       </div>
-    </Panel>
+    </section>
   );
 }
