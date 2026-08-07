@@ -16,6 +16,7 @@ from .engines.separation import CenterChannelFallbackSeparator
 from .engines.text import ASR_PIPELINE_VERSION, UniformTextFallback, resolve_alignment_language
 from .errors import EngineUnavailableError, ProcessingCancelledError
 from .locks import ThreadFileLock
+from .lyrics_sources import discover_lyrics
 from .midi import write_midi
 from .models import (
     PipelineManifest,
@@ -77,7 +78,7 @@ class PipelineResult:
 
 
 class KaraokePipeline:
-    VERSION = "2026.24"
+    VERSION = "2026.35"
 
     def __init__(
         self,
@@ -302,8 +303,14 @@ class KaraokePipeline:
 
         supplied = ""
         effective_language = request.language
+        lyrics_source = None
         if request.lyrics_path and Path(request.lyrics_path).exists():
-            supplied = Path(request.lyrics_path).read_text(encoding="utf-8").strip()
+            supplied = Path(request.lyrics_path).read_text(encoding="utf-8-sig").strip()
+            lyrics_source = "explicit"
+        if not supplied:
+            supplied, lyrics_source = discover_lyrics(source)
+            if supplied:
+                warnings.append(f"Using trusted {lyrics_source} lyrics instead of ASR")
         lyrics_txt = output / "lyrics.txt"
         words_path = output / "lyricsSync.json"
         text_hash = StageCache.key("text", {"text": supplied})
@@ -360,6 +367,8 @@ class KaraokePipeline:
                 words = [Word(**item) for item in read_json(words_path, {}).get("words", [])]
                 reports.append(StageReport("transcription", 0, True, "cached"))
             else:
+                if hasattr(self.engines.transcriber, "set_pitch_activity"):
+                    self.engines.transcriber.set_pitch_activity(pitch)
                 text, words = self._run(
                     "transcription",
                     self.engines.transcriber,

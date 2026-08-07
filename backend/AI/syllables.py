@@ -6,7 +6,7 @@ from bisect import bisect_left
 
 from .models import PitchFrame, Syllable, Word
 
-VOWELS = frozenset("аеёиоуыэюяіїєґaeyuioAEYUIOАЕЁИОУЫЭЮЯІЇЄ")
+VOWELS = frozenset("аеёиоуыэюяіїєaeyuioAEYUIOАЕЁИОУЫЭЮЯІЇЄ")
 _WORD_EDGE = re.compile(r"(^[^\w'’ʼ-]+|[^\w'’ʼ-]+$)", re.UNICODE)
 
 
@@ -96,6 +96,30 @@ def _proportional_bounds(word: Word, parts: list[str]) -> list[float]:
     return bounds
 
 
+
+
+def _refine_proportional_bounds(word: Word, frames: list[PitchFrame], expected: list[float]) -> list[float]:
+    """Snap expected syllable boundaries to nearby acoustic transitions.
+
+    Global top-N peaks can attach the wrong consonant cluster to a syllable.
+    Search locally around each linguistic expectation instead, preserving order.
+    """
+    if not expected or len(frames) < 6:
+        return expected
+    candidates = _boundary_scores(word, frames, len(expected)+1)
+    if not candidates:
+        return expected
+    span = max(0.04, (word.end-word.start) / max(3.0, (len(expected)+1)*2.2))
+    result=[]
+    prev=word.start
+    for target in expected:
+        nearby=[value for value in candidates if abs(value-target) <= span and value > prev+0.025]
+        chosen=min(nearby, key=lambda value: abs(value-target)) if nearby else target
+        chosen=max(prev+0.025, min(word.end-0.025, chosen))
+        result.append(chosen)
+        prev=chosen
+    return result
+
 def align_syllables(words: list[Word], pitch: list[PitchFrame]) -> list[Syllable]:
     ordered_pitch = sorted(pitch, key=lambda frame: frame.time)
     pitch_times = [frame.time for frame in ordered_pitch]
@@ -106,9 +130,9 @@ def align_syllables(words: list[Word], pitch: list[PitchFrame]) -> list[Syllable
         if not parts:
             continue
         frames = _frame_slice(ordered_pitch, pitch_times, word.start, word.end)
-        acoustic_bounds = _boundary_scores(word, frames, len(parts))
-        used_acoustic = len(acoustic_bounds) == len(parts) - 1
-        bounds = acoustic_bounds if used_acoustic else _proportional_bounds(word, parts)
+        expected_bounds = _proportional_bounds(word, parts)
+        bounds = _refine_proportional_bounds(word, frames, expected_bounds)
+        used_acoustic = any(abs(a-b) > 1e-4 for a, b in zip(bounds, expected_bounds))
         edges = [word.start, *bounds, word.end]
         confidence = min(1.0, max(0.0, word.confidence) * (0.92 if used_acoustic else 0.58))
         for local_index, part in enumerate(parts):
