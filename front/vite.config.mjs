@@ -11,9 +11,10 @@ export default defineConfig({
     // avoids a Windows localhost resolving to IPv6-only (::1) Vite server.
     host: "127.0.0.1",
     port: 5173,
-    strictPort: true,
+    strictPort: true
   },
   build: {
-    outDir: "dist",
-  },
+    outDir: "../build/frontend/dist",
+    emptyOutDir: true
+  }
 });

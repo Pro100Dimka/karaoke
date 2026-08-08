@@ -3,10 +3,7 @@ setlocal EnableExtensions EnableDelayedExpansion
 
 rem ============================================================
 rem  A&D Voice - AI Core 2026
-rem  Full runtime + offline model installer v6 v4
-rem
-rem  Put this file into:
-rem      backend\scripts\install-ai-models.bat
+rem  Full runtime + offline model installer
 rem
 rem  It installs:
 rem    - backend venv from downloads\runtimes\python312 (if needed)
@@ -17,7 +14,7 @@ rem    - Qwen3-ForcedAligner-0.6B
 rem    - TorchFCPE bundled model
 rem    - MSST inference through the shared backend runtime
 rem    - Mel-Band RoFormer vocals checkpoint
-rem    - persistent user environment variables
+rem    - portable project-relative environment manifest
 rem
 rem  Safe to run repeatedly. Existing valid files are reused.
 rem ============================================================
@@ -62,8 +59,6 @@ set "ADVOICE_PIP_FLAGS=--quiet --disable-pip-version-check --no-input"
 rem pip treats PIP_QUIET as a special configuration environment variable.
 rem Clear it in case it was inherited from a previous installer/terminal.
 set "PIP_QUIET="
-set "MSST_SETUPTOOLS_VERSION=80.9.0"
-
 set "ENV_FILE=%DOWNLOADS%\ai-environment.bat"
 set "TMP_ROOT=%TEMP%\advoice-ai-install"
 
@@ -440,7 +435,7 @@ echo [10/10] Writing AI environment configuration...
     echo set "KARAOKE_AI_ASR_MODEL=%QWEN_ASR_DIR%"
     echo set "KARAOKE_AI_ALIGNER_MODEL=%QWEN_ALIGNER_DIR%"
     echo set "KARAOKE_AI_ALLOW_FALLBACK=false"
-    echo set "MSST_INFERENCE_COMMAND="%MSST_PYTHON%" "%MSST_INFERENCE%""
+    echo set "MSST_ENGINE_DIR=%MSST_DIR%"
     echo set "MSST_CONFIG=%MSST_CONFIG%"
     echo set "MSST_CHECKPOINT=%MSST_CHECKPOINT%"
 ) > "%ENV_FILE%"

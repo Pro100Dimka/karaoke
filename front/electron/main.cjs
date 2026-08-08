@@ -85,9 +85,9 @@ function resolveSceneVideoPath() {
     ? path.resolve(
         __dirname,
         "..",
-        "src",
-        "assets",
-        "karaoke",
+        "..",
+        "downloads",
+        "media",
         "videoplayback.mp4"
       )
     : path.join(process.resourcesPath, "media", "videoplayback.mp4");

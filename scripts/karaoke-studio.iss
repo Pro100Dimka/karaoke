@@ -22,12 +22,22 @@
   #error OutputDir is not defined
 #endif
 
+#ifndef SetupIcon
+  #error SetupIcon is not defined
+#endif
+
 [Setup]
 AppId={#MyAppId}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher=A&D Voice
+AppCopyright=Copyright (C) 2026 A&D Voice
+VersionInfoCompany=A&D Voice
+VersionInfoDescription=A&D Voice offline karaoke studio
+VersionInfoProductName=A&D Voice
+VersionInfoProductVersion={#MyAppVersion}
+VersionInfoVersion={#MyAppVersion}
 
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
@@ -43,6 +53,9 @@ PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=dialog
 
 WizardStyle=modern
+WizardResizable=no
+SetupIconFile={#SetupIcon}
+MinVersion=10.0.17763
 
 Compression=lzma2/fast
 SolidCompression=no
@@ -50,13 +63,15 @@ SolidCompression=no
 ; The complete offline package is larger than the 4.2 GB single-setup limit.
 ; Keep every generated Setup-*.bin beside Setup.exe when distributing it.
 DiskSpanning=yes
-DiskSliceSize=2000000000
+DiskSliceSize=max
 SlicesPerDisk=1
 
 
 SetupLogging=yes
 CloseApplications=yes
 RestartApplications=no
+UsePreviousAppDir=yes
+UsePreviousLanguage=yes
 
 UninstallDisplayName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}

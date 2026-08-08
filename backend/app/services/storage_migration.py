@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import suppress
 from pathlib import Path
 
 import config
@@ -11,6 +12,15 @@ from app.services.db_utils import commit
 from database import SessionLocal
 
 logger = logging.getLogger(__name__)
+
+
+def _existing_source(target: Path) -> Path | None:
+    """Find the normalized or retained source after an interrupted legacy move."""
+    for pattern in ("song.mp3", "song.wav", "source.*"):
+        candidate = next((path for path in target.glob(pattern) if path.is_file()), None)
+        if candidate is not None:
+            return candidate
+    return None
 
 
 def _legacy_output(song: models.Song) -> Path:
@@ -46,6 +56,11 @@ def migrate_legacy_song_storage() -> None:
             elif previous_output != target and previous_output in previous_source.parents:
                 song.source_path = str(target / previous_source.relative_to(previous_output))
 
+            if not Path(song.source_path).is_file():
+                retained_source = _existing_source(target)
+                if retained_source is not None:
+                    song.source_path = str(retained_source)
+
             song.output_dir = str(target)
         commit(db)
     except Exception:
@@ -56,7 +71,5 @@ def migrate_legacy_song_storage() -> None:
         db.close()
 
     for legacy in (config.BASE_DIR / "Song", config.BASE_DIR / "full_songs"):
-        try:
+        with suppress(FileNotFoundError, OSError):
             legacy.rmdir()
-        except (FileNotFoundError, OSError):
-            pass

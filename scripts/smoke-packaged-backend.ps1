@@ -1,5 +1,5 @@
 param(
-    [string] $Executable = "release\win-unpacked\resources\backend\KaraokeBackend.exe",
+    [string] $Executable = "build\electron\win-unpacked\resources\backend\KaraokeBackend.exe",
     [int] $Port = 18765,
     [int] $TimeoutSeconds = 180
 )

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2] / "backend"
 FORBIDDEN_DIRS = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "htmlcov"}
 FORBIDDEN_SUFFIXES = {".pyc", ".pyo", ".db", ".db-wal", ".db-shm"}
 FORBIDDEN_FILES = {".coverage"}
-IGNORED_ROOTS = {"engines", "Song", "full_songs", ".venv", "venv"}
+IGNORED_ROOTS = {"engines", ".venv", "venv"}
 
 
 def violations() -> list[Path]:

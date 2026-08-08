@@ -12,11 +12,11 @@ rem       Rebuild backend, ASIO, models, Electron and installer.
 rem       Reuses PyInstaller cache for faster repeated builds.
 rem
 rem   build-installer.bat fast
-rem       Reuses backend\dist\KaraokeBackend.
+rem       Reuses build\backend\dist\KaraokeBackend.
 rem       Rebuilds React, Electron and installer.
 rem
 rem   build-installer.bat installer
-rem       Reuses release\win-unpacked.
+rem       Reuses build\electron\win-unpacked.
 rem       Builds only the Inno Setup installer and checksums.
 rem
 rem   build-installer.bat clean
@@ -53,25 +53,27 @@ rem ============================================================
 set "ROOT=%~dp0"
 set "BACKEND=%ROOT%backend"
 set "FRONTEND=%ROOT%front"
+set "BUILD=%ROOT%build"
+set "DOWNLOADS=%ROOT%downloads"
 set "RELEASE=%ROOT%release"
 set "KARAOKE_RELEASE=%RELEASE%"
 
-set "UNPACKED=%RELEASE%\win-unpacked"
-set "INSTALLER_DIR=%RELEASE%\installer"
-set "TEMP_DIR=%RELEASE%\installer-build"
+set "UNPACKED=%BUILD%\electron\win-unpacked"
+set "INSTALLER_DIR=%RELEASE%"
+set "TEMP_DIR=%BUILD%\installer"
 
 set "PYTHON=%BACKEND%\venv\Scripts\python.exe"
 
-set "BACKEND_DIST=%BACKEND%\dist\KaraokeBackend"
+set "BACKEND_DIST=%BUILD%\backend\dist\KaraokeBackend"
 set "PACKAGED_BACKEND=%UNPACKED%\resources\backend"
-set "SCENE_VIDEO_SOURCE=%FRONTEND%\src\assets\karaoke\videoplayback.mp4"
+set "SCENE_VIDEO_SOURCE=%DOWNLOADS%\media\videoplayback.mp4"
 set "PACKAGED_SCENE_VIDEO=%UNPACKED%\resources\media\videoplayback.mp4"
 
 set "ASIO=%BACKEND%\engines\asio"
-set "ASIO_BUILD=%ASIO%\build"
-
-set "GAME_MODEL=%BACKEND%\engines\game\models\GAME-1.0.3-large-onnx"
-set "PACKAGED_GAME_MODEL=%BACKEND_DIST%\_internal\models\game\GAME-1.0.3-large-onnx"
+set "ASIO_BUILD=%BUILD%\asio"
+set "ASIO_SDK=%DOWNLOADS%\engines\asio-sdk"
+set "MODELS=%DOWNLOADS%\models"
+set "MSST_ENGINE=%DOWNLOADS%\engines\msst"
 
 set "VS=C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools"
 set "VCVARS=%VS%\VC\Auxiliary\Build\vcvars64.bat"
@@ -85,6 +87,8 @@ set "APP_ID=E734496E-2622-5565-89D3-45451D9DE7EE"
 
 set "MODEL_SCRIPT=%ROOT%scripts\ensure-offline-models.bat"
 set "INNO_TEMPLATE=%ROOT%scripts\karaoke-studio.iss"
+set "SIGN_SCRIPT=%ROOT%scripts\sign-windows.ps1"
+set "SETUP_ICON=%FRONTEND%\assets\icons\app.ico"
 
 set "INSTALLER_EXE=%INSTALLER_DIR%\A&D Voice Setup %APP_VERSION%.exe"
 set "CHECKSUM_FILE=%INSTALLER_DIR%\SHA256SUMS.txt"
@@ -109,8 +113,9 @@ echo.
 echo Project:
 echo   %ROOT%
 echo.
-echo No Python package, AI model, FFmpeg component or backend
-echo resource is intentionally excluded from the package.
+echo Build intermediates: %BUILD%
+echo Downloaded resources: %DOWNLOADS%
+echo Final release only: %RELEASE%
 echo.
 
 call :stop_build_processes
@@ -322,20 +327,17 @@ if /I "%BUILD_MODE%"=="fast" (
     exit /b 0
 )
 
-rem Full mode rebuilds backend dist but keeps PyInstaller build cache.
+rem Full mode rebuilds distributables but keeps reusable downloads.
 call :remove_directory "%RELEASE%"
 if errorlevel 1 exit /b 1
 
-call :remove_directory "%BACKEND%\dist"
+call :remove_directory "%BUILD%\backend\dist"
 if errorlevel 1 exit /b 1
 
 if /I "%BUILD_MODE%"=="clean" (
     echo Cleaning PyInstaller work directories and cache...
 
-    call :remove_directory "%BACKEND%\build"
-    if errorlevel 1 exit /b 1
-
-    call :remove_directory "%BACKEND%\build-audio-monitor"
+    call :remove_directory "%BUILD%"
     if errorlevel 1 exit /b 1
 
     call :remove_directory "%LOCALAPPDATA%\pyinstaller"
@@ -397,6 +399,9 @@ call :require_file "%NINJA%" "Visual Studio Ninja"
 if errorlevel 1 exit /b 1
 
 call :require_directory "%ASIO%" "ASIO source directory"
+if errorlevel 1 exit /b 1
+
+call :require_directory "%ASIO_SDK%" "ASIO SDK directory"
 if errorlevel 1 exit /b 1
 
 call :require_file "%MODEL_SCRIPT%" "Offline model verification script"
@@ -489,13 +494,19 @@ echo.
     %PYINSTALLER_CLEAN% ^
     --onedir ^
     --name KaraokeBackend ^
+    --distpath "%BUILD%\backend\dist" ^
+    --workpath "%BUILD%\backend\pyinstaller\KaraokeBackend" ^
+    --specpath "%BUILD%\backend\spec" ^
     --paths "%BACKEND%\AI" ^
+    --paths "%MSST_ENGINE%" ^
     --add-data "%BACKEND%\AI;AI" ^
     --add-binary "%FFMPEG%;." ^
     --hidden-import run_all ^
-    --collect-submodules app ^
-    --collect-all demucs ^
-    --collect-all onnxruntime ^
+    --collect-submodules omegaconf ^
+    --collect-submodules ml_collections ^
+    --collect-submodules beartype ^
+    --collect-submodules rotary_embedding_torch ^
+    --collect-submodules matplotlib ^
     run.py
 
 if errorlevel 1 (
@@ -516,8 +527,8 @@ echo.
     --onefile ^
     --name KaraokeAudioMonitor ^
     --distpath "%BACKEND_DIST%" ^
-    --workpath "%BACKEND%\build-audio-monitor" ^
-    --specpath "%BACKEND%\build-audio-monitor" ^
+    --workpath "%BUILD%\backend\audio-monitor" ^
+    --specpath "%BUILD%\backend\spec" ^
     --paths "%BACKEND%" ^
     app\services\monitor_worker.py
 
@@ -560,6 +571,7 @@ if errorlevel 1 (
     -B "%ASIO_BUILD%" ^
     -G Ninja ^
     -DCMAKE_BUILD_TYPE=Release ^
+    -DASIO_SDK_DIR="%ASIO_SDK%" ^
     -DCMAKE_MAKE_PROGRAM="%NINJA%"
 
 if errorlevel 1 (
@@ -589,6 +601,13 @@ if errorlevel 1 (
     exit /b 1
 )
 
+call :sign_file "%BACKEND_DIST%\KaraokeBackend.exe"
+if errorlevel 1 exit /b 1
+call :sign_file "%BACKEND_DIST%\KaraokeAudioMonitor.exe"
+if errorlevel 1 exit /b 1
+call :sign_file "%BACKEND_DIST%\KaraokeAsioBridge.exe"
+if errorlevel 1 exit /b 1
+
 exit /b 0
 
 
@@ -598,44 +617,22 @@ rem ============================================================
 
 :package_models
 echo.
-echo [4/6] Adding all offline AI models...
-
-call :require_directory "%BACKEND%\models" "Main models directory"
-if errorlevel 1 exit /b 1
+echo [4/6] Adding only production AI resources...
 
 call :require_directory "%BACKEND_DIST%\_internal" "PyInstaller internal directory"
 if errorlevel 1 exit /b 1
 
-call :require_directory "%GAME_MODEL%" "GAME model directory"
+call :copy_directory "%MODELS%\qwen\Qwen3-ASR-0.6B" "%BACKEND_DIST%\_internal\models\qwen\Qwen3-ASR-0.6B" "Qwen ASR model"
 if errorlevel 1 exit /b 1
 
-robocopy ^
-    "%BACKEND%\models" ^
-    "%BACKEND_DIST%\_internal\models" ^
-    /E /COPY:DAT /DCOPY:DAT /R:2 /W:1 /MT:8 /NFL /NDL /NJH /NJS
+call :copy_directory "%MODELS%\qwen\Qwen3-ForcedAligner-0.6B" "%BACKEND_DIST%\_internal\models\qwen\Qwen3-ForcedAligner-0.6B" "Qwen forced aligner"
+if errorlevel 1 exit /b 1
 
-set "ROBOCOPY_CODE=!ERRORLEVEL!"
+call :copy_directory "%MODELS%\roformer" "%BACKEND_DIST%\_internal\models\roformer" "Mel-Band RoFormer model"
+if errorlevel 1 exit /b 1
 
-if !ROBOCOPY_CODE! GEQ 8 (
-    echo.
-    echo [ERROR] Failed to copy main offline models.
-    echo Robocopy exit code: !ROBOCOPY_CODE!
-    exit /b 1
-)
-
-robocopy ^
-    "%GAME_MODEL%" ^
-    "%PACKAGED_GAME_MODEL%" ^
-    /E /COPY:DAT /DCOPY:DAT /R:2 /W:1 /MT:8 /NFL /NDL /NJH /NJS
-
-set "ROBOCOPY_CODE=!ERRORLEVEL!"
-
-if !ROBOCOPY_CODE! GEQ 8 (
-    echo.
-    echo [ERROR] Failed to copy GAME offline model.
-    echo Robocopy exit code: !ROBOCOPY_CODE!
-    exit /b 1
-)
+call :copy_directory "%MSST_ENGINE%" "%BACKEND_DIST%\_internal\engines\msst" "MSST inference engine"
+if errorlevel 1 exit /b 1
 
 call :verify_backend_dist
 if errorlevel 1 exit /b 1
@@ -657,10 +654,16 @@ if errorlevel 1 exit /b 1
 call :require_file "%BACKEND_DIST%\KaraokeAsioBridge.exe" "KaraokeAsioBridge.exe"
 if errorlevel 1 exit /b 1
 
-call :require_directory "%BACKEND_DIST%\_internal\models" "Packaged offline models"
+call :require_directory "%BACKEND_DIST%\_internal\models\qwen\Qwen3-ASR-0.6B" "Packaged Qwen ASR model"
 if errorlevel 1 exit /b 1
 
-call :require_directory "%PACKAGED_GAME_MODEL%" "Packaged GAME model"
+call :require_directory "%BACKEND_DIST%\_internal\models\qwen\Qwen3-ForcedAligner-0.6B" "Packaged Qwen aligner"
+if errorlevel 1 exit /b 1
+
+call :require_file "%BACKEND_DIST%\_internal\models\roformer\MelBandRoformer.ckpt" "Packaged RoFormer checkpoint"
+if errorlevel 1 exit /b 1
+
+call :require_file "%BACKEND_DIST%\_internal\engines\msst\inference.py" "Packaged MSST engine"
 if errorlevel 1 exit /b 1
 
 exit /b 0
@@ -717,6 +720,9 @@ if errorlevel 1 (
 
 popd
 
+call :sign_file "%UNPACKED%\%APP_EXE%"
+if errorlevel 1 exit /b 1
+
 call :verify_unpacked
 if errorlevel 1 exit /b 1
 
@@ -746,10 +752,10 @@ if errorlevel 1 exit /b 1
 call :require_file "%PACKAGED_BACKEND%\KaraokeAsioBridge.exe" "Electron ASIO bridge"
 if errorlevel 1 exit /b 1
 
-call :require_directory "%PACKAGED_BACKEND%\_internal\models" "Electron offline models"
+call :require_directory "%PACKAGED_BACKEND%\_internal\models\qwen\Qwen3-ASR-0.6B" "Electron ASR model"
 if errorlevel 1 exit /b 1
 
-call :require_directory "%PACKAGED_BACKEND%\_internal\models\game\GAME-1.0.3-large-onnx" "Electron GAME model"
+call :require_file "%PACKAGED_BACKEND%\_internal\models\roformer\MelBandRoformer.ckpt" "Electron RoFormer model"
 if errorlevel 1 exit /b 1
 
 exit /b 0
@@ -814,6 +820,7 @@ if errorlevel 1 (
     /DMyAppVersion="%APP_VERSION%" ^
     /DMyAppExeName="%APP_EXE%" ^
     /DMyAppId="%APP_ID%" ^
+    /DSetupIcon="%SETUP_ICON%" ^
     /DSourceDir="%UNPACKED%" ^
     /DOutputDir="%INSTALLER_DIR%" ^
     "%INNO_TEMPLATE%"
@@ -825,6 +832,9 @@ if errorlevel 1 (
 )
 
 call :require_file "%INSTALLER_EXE%" "Installer executable"
+if errorlevel 1 exit /b 1
+
+call :sign_file "%INSTALLER_EXE%"
 if errorlevel 1 exit /b 1
 
 dir /B "%INSTALLER_DIR%\*.bin" >nul 2>&1
@@ -865,6 +875,30 @@ exit /b 0
 rem ============================================================
 rem HELPERS
 rem ============================================================
+
+:copy_directory
+call :require_directory "%~1" "%~3"
+if errorlevel 1 exit /b 1
+
+robocopy "%~1" "%~2" /E /COPY:DAT /DCOPY:DAT /R:2 /W:1 /MT:8 /NFL /NDL /NJH /NJS
+set "ROBOCOPY_CODE=!ERRORLEVEL!"
+if !ROBOCOPY_CODE! GEQ 8 (
+    echo.
+    echo [ERROR] Failed to copy %~3.
+    echo Robocopy exit code: !ROBOCOPY_CODE!
+    exit /b 1
+)
+exit /b 0
+
+:sign_file
+powershell -NoProfile -ExecutionPolicy Bypass -File "%SIGN_SCRIPT%" -Path "%~1"
+if errorlevel 1 (
+    echo.
+    echo [ERROR] Code signing failed for:
+    echo   %~1
+    exit /b 1
+)
+exit /b 0
 
 :require_file
 if exist "%~1" (

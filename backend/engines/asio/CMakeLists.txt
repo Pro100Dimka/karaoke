@@ -5,7 +5,12 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-set(ASIO_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/sdk")
+set(ASIO_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../downloads/engines/asio-sdk"
+    CACHE PATH "Path to the Steinberg ASIO SDK")
+
+if(NOT EXISTS "${ASIO_SDK_DIR}/common/asio.cpp")
+  message(FATAL_ERROR "ASIO SDK was not found at ${ASIO_SDK_DIR}")
+endif()
 
 add_executable(KaraokeAsioBridge
   bridge_main.cpp

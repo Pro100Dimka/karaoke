@@ -7,7 +7,16 @@ from pathlib import Path
 import pytest
 
 import config
-from app.services import song_package_service, song_service
+from app.services import song_package_service, song_service, storage_migration
+
+
+def test_storage_migration_recovers_source_after_interrupted_legacy_move(tmp_path):
+    song_dir = tmp_path / "song"
+    song_dir.mkdir()
+    retained = song_dir / "song.wav"
+    retained.write_bytes(b"audio")
+
+    assert storage_migration._existing_source(song_dir) == retained
 
 
 class FakeDb:

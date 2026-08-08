@@ -71,10 +71,12 @@ def test_reprocessing_keeps_slot_until_recordings_are_restored(monkeypatch, tmp_
     monkeypatch.setattr(pipeline_service.threading, "current_thread", lambda: current)
     monkeypatch.setattr(pipeline_service.config, "SONG_OUTPUT_DIR", output_root)
     monkeypatch.setattr(pipeline_service, "SessionLocal", lambda: Mock(close=Mock()))
+    source = target / "source.wav"
+    source.write_bytes(b"audio")
     monkeypatch.setattr(
         pipeline_service.repositories,
         "get_song",
-        lambda _db, _song_id: Mock(slug="demo"),
+        lambda _db, _song_id: Mock(slug="demo", source_path=str(source)),
     )
     monkeypatch.setattr(pipeline_service.song_service, "resolve_output_dir", lambda _song: target)
     monkeypatch.setattr(pipeline_service, "_is_cancelled", lambda _song_id: False)

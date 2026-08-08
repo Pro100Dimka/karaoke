@@ -84,22 +84,25 @@
     "appId": "com.karaokestudio.app",
     "productName": "A&D Voice",
     "files": [
-      "dist/**/*",
+      {
+        "from": "../build/frontend/dist",
+        "to": "dist"
+      },
       "electron/**/*",
       "assets/icons/**/*"
     ],
     "extraResources": [
       {
-        "from": "../backend/dist/KaraokeBackend",
+        "from": "../build/backend/dist/KaraokeBackend",
         "to": "backend"
       },
       {
-        "from": "src/assets/karaoke/videoplayback.mp4",
+        "from": "../downloads/media/videoplayback.mp4",
         "to": "media/videoplayback.mp4"
       }
     ],
     "directories": {
-      "output": "../release"
+      "output": "../build/electron"
     },
     "win": {
       "target": "nsis",

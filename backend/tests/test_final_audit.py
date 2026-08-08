@@ -76,13 +76,22 @@ def test_audio_settings_restore_runtime_when_new_configuration_fails(monkeypatch
 
 
 def test_cache_optimization_rolls_back_failed_commit(monkeypatch, tmp_path):
-    song = SimpleNamespace(id="song", output_dir=str(tmp_path), slug="song", optimized=False)
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"audio")
+    song = SimpleNamespace(
+        id="song",
+        output_dir=str(tmp_path),
+        source_path=str(source),
+        slug="song",
+        optimized=False,
+    )
     db = Mock()
     db.commit.side_effect = RuntimeError("disk full")
     db.close = Mock()
     monkeypatch.setattr(cache_service, "SessionLocal", lambda: db)
     monkeypatch.setattr(cache_service.repositories, "get_song", lambda *_: song)
     monkeypatch.setattr(cache_service.song_service, "resolve_output_dir", lambda _song: tmp_path)
+    monkeypatch.setattr(cache_service.song_service, "resolve_source_path", lambda _song: source)
     monkeypatch.setattr(cache_service, "_convert_heavy_wavs", lambda *_: 0)
     monkeypatch.setattr(cache_service, "_remove_intermediate_directories", lambda *_: 0)
 

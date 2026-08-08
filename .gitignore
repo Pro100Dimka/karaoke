@@ -2,6 +2,10 @@
 .env
 .env.*
 !.env.example
+*.pfx
+*.p12
+*.pem
+*.key
 
 # Python environments, caches and test artefacts
 __pycache__/
@@ -15,7 +19,6 @@ ENV/
 downloads/
 karaoke_songs/
 data/
-backend/build-audio-monitor/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -31,8 +34,6 @@ dist/
 # Node/Electron dependencies and build output
 node_modules/
 front/node_modules/
-front/dist/
-front/release/
 /release/
 /logs/
 front/.vite/
@@ -40,26 +41,15 @@ front/.runtime/
 *.tsbuildinfo
 
 # Application runtime data and user media
-backend/data/
-backend/Song/
-backend/full_songs/
-backend/AI/Song/
-backend/AI/full_songs/
 *.db
 *.sqlite
 *.sqlite3
 
-# Optional local GAME melody engine and its installer runtime
-backend/engines/game/models/
-backend/engines/game/source/
-backend/engines/game/venv/
-backend/runtimes/
+# Downloaded tools and legacy local paths (kept ignored during migration)
 backend/tools/*.exe
 backend/models/
 
 # Packaging output and diagnostic files
-backend/build/
-backend/dist/
 backend/*.spec
 *.log
 *.tmp

@@ -5,8 +5,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-EXCLUDED_PARTS = {"AI", "engines", "Song", "full_songs", ".venv"}
+ROOT = Path(__file__).resolve().parents[2] / "backend"
+EXCLUDED_PARTS = {"AI", "engines", ".venv", "venv"}
 MAX_FUNCTION_LINES = 80
 
 
