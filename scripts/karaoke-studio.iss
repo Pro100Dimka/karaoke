@@ -44,10 +44,14 @@ PrivilegesRequiredOverridesAllowed=dialog
 
 WizardStyle=modern
 
-Compression=lzma2
+Compression=lzma2/fast
 SolidCompression=no
 
-DiskSpanning=no
+; The complete offline package is larger than the 4.2 GB single-setup limit.
+; Keep every generated Setup-*.bin beside Setup.exe when distributing it.
+DiskSpanning=yes
+DiskSliceSize=2000000000
+SlicesPerDisk=1
 
 
 SetupLogging=yes
@@ -66,7 +70,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Создать ярлык на рабочем столе"; GroupDescription: "Дополнительные ярлыки:"
 
 [Files]
-Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceDir}\*"; DestDir: "{app}"; Excludes: "resources\media\videoplayback.mp4"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceDir}\resources\media\videoplayback.mp4"; DestDir: "{app}\resources\media"; Flags: ignoreversion nocompression
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"

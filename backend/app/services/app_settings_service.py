@@ -37,7 +37,7 @@ def path_settings() -> dict[str, str]:
 
 def _read_settings_unlocked() -> dict[str, Any]:
     try:
-        raw = read_json(SETTINGS_FILE, default={})
+        raw: Any = read_json(SETTINGS_FILE, default={})
     except (json.JSONDecodeError, OSError):
         raw = {}
     stored = raw if isinstance(raw, dict) else {}

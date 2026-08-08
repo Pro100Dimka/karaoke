@@ -17,7 +17,6 @@ from app.services.db_utils import commit_refresh
 from app.services.resource_deletion import delete_with_files
 from app.utils.atomic_files import atomic_write_bytes
 
-
 _library_write_lock = threading.RLock()
 
 

@@ -1,7 +1,5 @@
 import { Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { RangeInput } from "./fields";
-import { IconButton } from "./ui";
 import {
   formatAudioTime,
   normalizeAudioDuration,
@@ -9,6 +7,8 @@ import {
   normalizeAudioVolume,
   toggleAudioPlayback
 } from "./audio-player-utils";
+import { RangeInput } from "./fields";
+import { IconButton } from "./ui";
 
 export function AudioPlayer({ src, className = "" }) {
   const audioRef = useRef(null);

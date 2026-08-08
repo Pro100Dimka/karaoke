@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import asdict
 import threading
 
 from .config import CoreConfig
@@ -58,9 +57,7 @@ class AICoreService:
             "pitch": engines.pitch.name,
             "transcriber": engines.transcriber.name,
             "aligner": engines.aligner.name,
-            "separation_configured": bool(
-                getattr(engines.separator, "available", lambda: True)()
-            ),
+            "separation_configured": bool(getattr(engines.separator, "available", lambda: True)()),
             "fallback_enabled": self.config.allow_fallback,
         }
 

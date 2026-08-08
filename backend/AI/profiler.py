@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import os
 import platform
 import time
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True, slots=True)

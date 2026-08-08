@@ -43,7 +43,8 @@ export default function useMelodyGuide({
       volumeRef.current <= 0 ||
       !Array.isArray(notesRef.current) ||
       notesRef.current.length === 0
-    ) return false;
+    )
+      return false;
 
     let guide = guideRef.current;
     if (!guide || guide.context.state === "closed") {

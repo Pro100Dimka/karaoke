@@ -298,7 +298,9 @@ def _progress_heartbeat(song_id: str, stop_event: threading.Event) -> None:
                     percent=telemetry["progress_percent"],
                 )
         except Exception:  # A transient SQLite error must not kill telemetry forever.
-            logger.warning("Could not persist pipeline heartbeat for song %s", song_id, exc_info=True)
+            logger.warning(
+                "Could not persist pipeline heartbeat for song %s", song_id, exc_info=True
+            )
 
 
 def _update_progress(
@@ -464,6 +466,7 @@ def _run_job(song_id: str) -> None:
 
         device = _configure_ai_runtime()
         capture.write(f"[backend] AI runtime: device={device}\n")
+
         def on_ai_progress(stage: str, percent: float, detail: str) -> None:
             if _is_cancelled(song_id):
                 raise ProcessingCancelled("Processing cancelled by user")
@@ -583,12 +586,13 @@ def _apply_generated_metadata(song: models.Song, out_dir: Path) -> None:
     if not isinstance(reference, list):
         return
     try:
-        midi = [
-            int(note.get("midi_note", note.get("midi")))
-            for note in reference
-            if isinstance(note, dict)
-            and note.get("midi_note", note.get("midi")) is not None
-        ]
+        midi = []
+        for note in reference:
+            if not isinstance(note, dict):
+                continue
+            value = note.get("midi_note", note.get("midi"))
+            if value is not None:
+                midi.append(int(value))
     except (TypeError, ValueError):
         return
     if not midi:

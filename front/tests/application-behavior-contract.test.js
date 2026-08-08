@@ -50,10 +50,7 @@ test("AppDialog has one backdrop activation path", () => {
 });
 
 test("AppDialog locks and restores document scrolling", () => {
-  assert.equal(
-    modal.includes('document.body.style.overflow = "hidden"'),
-    true
-  );
+  assert.equal(modal.includes('document.body.style.overflow = "hidden"'), true);
   assert.equal(
     modal.includes("document.body.style.overflow = previousOverflow"),
     true

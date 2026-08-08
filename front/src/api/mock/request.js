@@ -156,9 +156,11 @@ export async function mockRequest(path, options = {}) {
 }
 export async function mockBlobRequest(path, options = {}) {
   const method = String(options.method || "GET").toUpperCase();
-  const pathname = new URL(path, "http://mock.local").pathname;
+  const { pathname } = new URL(path, "http://mock.local");
   if (method === "GET" && /^\/songs\/[^/]+\/package$/.test(pathname)) {
     return new Blob(["mock karaoke package"], { type: "application/zip" });
   }
-  throw new Error(`Mock blob API route is not implemented: ${method} ${pathname}`);
+  throw new Error(
+    `Mock blob API route is not implemented: ${method} ${pathname}`
+  );
 }

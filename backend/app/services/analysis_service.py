@@ -21,7 +21,7 @@ class ReferenceIndex:
     notes: tuple[tuple[float, int | None], ...]
 
     @classmethod
-    def build(cls, reference_notes: list[dict[str, Any]]) -> "ReferenceIndex":
+    def build(cls, reference_notes: list[dict[str, Any]]) -> ReferenceIndex:
         normalized = sorted(reference_notes, key=lambda note: float(note.get("start", 0.0)))
         return cls(
             starts=tuple(float(note.get("start", 0.0)) for note in normalized),

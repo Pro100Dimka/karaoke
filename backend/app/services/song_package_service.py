@@ -51,14 +51,13 @@ def build_package(song: models.Song) -> Path:
     if not source.is_file() or not output_dir.is_dir():
         raise ValueError("Song files are incomplete")
 
-    package = tempfile.NamedTemporaryFile(
+    with tempfile.NamedTemporaryFile(
         prefix="karaoke-song-",
         suffix=".karaoke.zip",
         dir=config.DATA_DIR,
         delete=False,
-    )
-    package_path = Path(package.name)
-    package.close()
+    ) as package:
+        package_path = Path(package.name)
     try:
         with zipfile.ZipFile(package_path, "w", zipfile.ZIP_DEFLATED, compresslevel=4) as archive:
             archive.writestr(
@@ -253,4 +252,3 @@ def import_package(db: Session, package_path: Path) -> models.Song:
                 shutil.rmtree(output_dir, ignore_errors=True)
                 shutil.rmtree(temporary_output, ignore_errors=True)
                 raise
-

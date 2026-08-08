@@ -10,7 +10,8 @@ from app.services import cache_service
 def test_corrupted_audio_settings_row_is_reset():
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as connection:
-        connection.execute(text("""
+        connection.execute(
+            text("""
             CREATE TABLE audio_settings (
                 id INTEGER PRIMARY KEY,
                 input_device_id INTEGER,
@@ -28,8 +29,10 @@ def test_corrupted_audio_settings_row_is_reset():
                 delay FLOAT,
                 updated_at DATETIME
             )
-        """))
-        connection.execute(text("""
+        """)
+        )
+        connection.execute(
+            text("""
             INSERT INTO audio_settings (
                 id, volume, sensitivity, latency_ms, audio_driver,
                 asio_driver_name, buffer_size, monitoring_enabled,
@@ -39,7 +42,8 @@ def test_corrupted_audio_settings_row_is_reset():
                 'Audient USB Audio ASIO Driver', 0.0, 0.0,
                 '2026-08-07 20:00:00.000'
             )
-        """))
+        """)
+        )
         database._repair_corrupted_audio_settings(connection)
         count = connection.execute(text("SELECT COUNT(*) FROM audio_settings")).scalar_one()
     assert count == 0

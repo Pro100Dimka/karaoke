@@ -463,7 +463,6 @@ def _performance_mix_command(
     ]
 
 
-
 def _create_performance_mix_safely(
     recording: models.Recording,
     song: models.Song,

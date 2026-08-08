@@ -73,9 +73,7 @@ def test_require_session_rejects_unknown_session() -> None:
 
 def test_application_settings_ignore_unknown_keys(tmp_path: Path, monkeypatch) -> None:
     settings_file = tmp_path / "settings.json"
-    settings_file.write_text(
-        json.dumps({"theme": "light", "unknown": "ignored"}), encoding="utf-8"
-    )
+    settings_file.write_text(json.dumps({"theme": "light", "unknown": "ignored"}), encoding="utf-8")
     monkeypatch.setattr(app_settings_service, "SETTINGS_FILE", settings_file)
     settings = app_settings_service.read_settings()
     assert settings["theme"] == "light"

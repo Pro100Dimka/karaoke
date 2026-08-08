@@ -14,11 +14,7 @@ export default function Button({
     : `btn btn-${variant} ${className}`.trim();
 
   return (
-    <button
-      type={type}
-      className={buttonClassName || undefined}
-      {...props}
-    >
+    <button type={type} className={buttonClassName || undefined} {...props}>
       {Icon && <Icon size={iconSize} {...iconProps} />}
       {children}
     </button>

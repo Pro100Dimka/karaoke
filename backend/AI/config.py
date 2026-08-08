@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
 import math
 import os
+from dataclasses import asdict, dataclass
 
 from .errors import ConfigurationError
 
@@ -91,21 +91,21 @@ class CoreConfig:
             raise ConfigurationError("midi_bend_range must be between 1 and 24")
         if not self.asr_model.strip() or not self.aligner_model.strip():
             raise ConfigurationError("ASR and aligner model names cannot be empty")
-        supported = {
+        supported: dict[str, tuple[str, set[str]]] = {
             "separation_engine": (self.separation_engine, {"mel-roformer"}),
             "pitch_engine": (self.pitch_engine, {"fcpe"}),
             "transcription_engine": (self.transcription_engine, {"qwen3-asr"}),
             "alignment_engine": (self.alignment_engine, {"qwen3-forced-aligner"}),
         }
-        for field_name, (value, allowed) in supported.items():
-            if value not in allowed:
+        for field_name, (supported_value, allowed) in supported.items():
+            if supported_value not in allowed:
                 choices = ", ".join(sorted(allowed))
                 raise ConfigurationError(
-                    f"Unsupported {field_name}={value!r}; expected one of: {choices}"
+                    f"Unsupported {field_name}={supported_value!r}; expected one of: {choices}"
                 )
 
     @classmethod
-    def from_env(cls) -> "CoreConfig":
+    def from_env(cls) -> CoreConfig:
         return cls(
             sample_rate=_env_int("KARAOKE_AI_SAMPLE_RATE", 44100),
             pitch_sample_rate=_env_int("KARAOKE_AI_PITCH_SR", 16000),
@@ -122,9 +122,7 @@ class CoreConfig:
             transcription_engine=os.getenv("KARAOKE_AI_ASR", "qwen3-asr"),
             alignment_engine=os.getenv("KARAOKE_AI_ALIGNER", "qwen3-forced-aligner"),
             asr_model=os.getenv("KARAOKE_AI_ASR_MODEL", "Qwen/Qwen3-ASR-0.6B"),
-            aligner_model=os.getenv(
-                "KARAOKE_AI_ALIGNER_MODEL", "Qwen/Qwen3-ForcedAligner-0.6B"
-            ),
+            aligner_model=os.getenv("KARAOKE_AI_ALIGNER_MODEL", "Qwen/Qwen3-ForcedAligner-0.6B"),
             allow_fallback=_env_bool("KARAOKE_AI_ALLOW_FALLBACK", False),
             preserve_raw_pitch=_env_bool("KARAOKE_AI_PRESERVE_RAW_PITCH", True),
             write_quality_report=_env_bool("KARAOKE_AI_WRITE_QUALITY", True),

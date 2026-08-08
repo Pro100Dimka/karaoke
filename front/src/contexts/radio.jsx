@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import { readJsonStorage, writeJsonStorage } from "../utils/storage";
 
 export const RADIO_STATIONS = [
@@ -47,7 +55,7 @@ const RadioContext = createContext(null);
 
 const isAutoplayBlocked = (reason) =>
   reason?.name === "NotAllowedError" ||
-  /user didn\'t interact|user gesture|not allowed/i.test(
+  /user didn't interact|user gesture|not allowed/i.test(
     String(reason?.message ?? reason ?? "")
   );
 
@@ -96,7 +104,8 @@ export function RadioProvider({ children }) {
   const [error, setError] = useState("");
   const volumeRef = useRef(initial.volume);
 
-  const station = RADIO_STATIONS.find(({ id }) => id === stationId) || RADIO_STATIONS[0];
+  const station =
+    RADIO_STATIONS.find(({ id }) => id === stationId) || RADIO_STATIONS[0];
 
   const persist = useCallback((patch) => {
     const next = { ...loadRadioSettings(), ...patch };
@@ -108,33 +117,36 @@ export function RadioProvider({ children }) {
     volumeFadeRef.current = 0;
   }, []);
 
-  const fadeVolumeIn = useCallback((targetVolume, duration = STARTUP_FADE_MS) => {
-    const audio = audioRef.current;
-    if (!audio) return;
+  const fadeVolumeIn = useCallback(
+    (targetVolume, duration = STARTUP_FADE_MS) => {
+      const audio = audioRef.current;
+      if (!audio) return;
 
-    cancelVolumeFade();
-    const target = Math.max(0, Math.min(1, Number(targetVolume) || 0));
-    audio.volume = 0;
-    if (target === 0) return;
+      cancelVolumeFade();
+      const target = Math.max(0, Math.min(1, Number(targetVolume) || 0));
+      audio.volume = 0;
+      if (target === 0) return;
 
-    const startedAt = performance.now();
-    const step = (now) => {
-      if (audioRef.current !== audio || audio.paused) {
-        volumeFadeRef.current = 0;
-        return;
-      }
+      const startedAt = performance.now();
+      const step = (now) => {
+        if (audioRef.current !== audio || audio.paused) {
+          volumeFadeRef.current = 0;
+          return;
+        }
 
-      const progress = Math.min(1, (now - startedAt) / duration);
-      // Smoothstep: мягкий старт и мягкое достижение сохранённой громкости.
-      const eased = progress * progress * (3 - 2 * progress);
-      audio.volume = target * eased;
+        const progress = Math.min(1, (now - startedAt) / duration);
+        // Smoothstep: мягкий старт и мягкое достижение сохранённой громкости.
+        const eased = progress * progress * (3 - 2 * progress);
+        audio.volume = target * eased;
 
-      if (progress < 1) volumeFadeRef.current = requestAnimationFrame(step);
-      else volumeFadeRef.current = 0;
-    };
+        if (progress < 1) volumeFadeRef.current = requestAnimationFrame(step);
+        else volumeFadeRef.current = 0;
+      };
 
-    volumeFadeRef.current = requestAnimationFrame(step);
-  }, [cancelVolumeFade]);
+      volumeFadeRef.current = requestAnimationFrame(step);
+    },
+    [cancelVolumeFade]
+  );
 
   const stopAnalysis = useCallback(() => {
     analysisVersionRef.current += 1;
@@ -162,7 +174,8 @@ export function RadioProvider({ children }) {
         analysisVersion !== analysisVersionRef.current ||
         audioContext.state === "closed" ||
         analyserRef.current !== analyser
-      ) return;
+      )
+        return;
       try {
         analyser.getByteFrequencyData(data);
       } catch {
@@ -194,7 +207,10 @@ export function RadioProvider({ children }) {
         const fromHz = minHz * (maxHz / minHz) ** t0;
         const toHz = minHz * (maxHz / minHz) ** t1;
         const raw = averageRange(fromHz, toHz);
-        const boosted = Math.min(1, raw * (band < 5 ? 1.42 : band < 12 ? 1.72 : 2.05));
+        const boosted = Math.min(
+          1,
+          raw * (band < 5 ? 1.42 : band < 12 ? 1.72 : 2.05)
+        );
         const response = boosted > bands[band] ? 0.58 : 0.16;
         bands[band] += (boosted - bands[band]) * response;
       }
@@ -242,64 +258,56 @@ export function RadioProvider({ children }) {
       if (!context) return;
       if (context.state === "suspended") await context.resume();
       if (!audioRef.current?.paused) startAnalysis();
-    } catch (reason) {
+    } catch {
       // Радио продолжает играть и без Web Audio. Анализатор подключится
       // после следующего пользовательского жеста.
-      console.warn("Radio analyser activation deferred", reason);
     }
   }, [prepareAudioGraph, startAnalysis]);
 
-  const loadStream = useCallback((index = 0, nextStation = station) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    streamIndexRef.current = index;
-    audio.src = nextStation.streams[index];
-    audio.load();
-  }, [station]);
+  const loadStream = useCallback(
+    (index = 0, nextStation = station) => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      streamIndexRef.current = index;
+      audio.src = nextStation.streams[index];
+      audio.load();
+    },
+    [station]
+  );
 
-  const turnOn = useCallback(async ({
-    remember = true,
-    analyse = true,
-    startIndex = 0,
-    targetStation = station,
-    fadeIn = false
-  } = {}) => {
-    const audio = audioRef.current;
-    if (!audio || suspendedRef.current) return false;
+  const turnOn = useCallback(
+    async ({
+      remember = true,
+      analyse = true,
+      startIndex = 0,
+      targetStation = station,
+      fadeIn = false
+    } = {}) => {
+      const audio = audioRef.current;
+      if (!audio || suspendedRef.current) return false;
 
-    const playbackVersion = playbackVersionRef.current + 1;
-    playbackVersionRef.current = playbackVersion;
+      const playbackVersion = playbackVersionRef.current + 1;
+      playbackVersionRef.current = playbackVersion;
 
-    if (mountedRef.current) {
-      setError("");
-      setLoading(true);
-    }
+      if (mountedRef.current) {
+        setError("");
+        setLoading(true);
+      }
 
-    let lastError = null;
-    streamAttemptRef.current = true;
+      let lastError = null;
+      streamAttemptRef.current = true;
 
-    try {
-      // Try every mirror sequentially. Previously onError switched the stream
-      // while the original audio.play() promise was still pending, so that
-      // rejected promise could overwrite a successful fallback with an error.
-      for (let pass = 0; pass < 2; pass += 1) {
-        for (let index = startIndex; index < targetStation.streams.length; index += 1) {
-          if (
-            playbackVersion !== playbackVersionRef.current ||
-            suspendedRef.current ||
-            audioRef.current !== audio
+      try {
+        // Try every mirror sequentially. Previously onError switched the stream
+        // while the original audio.play() promise was still pending, so that
+        // rejected promise could overwrite a successful fallback with an error.
+        for (let pass = 0; pass < 2; pass += 1) {
+          for (
+            let index = startIndex;
+            index < targetStation.streams.length;
+            index += 1
           ) {
-            audio.pause();
-            return false;
-          }
-
-          try {
-            loadStream(index, targetStation);
-            if (fadeIn) audio.volume = 0;
-            await audio.play();
-
             if (
-              !mountedRef.current ||
               playbackVersion !== playbackVersionRef.current ||
               suspendedRef.current ||
               audioRef.current !== audio
@@ -308,126 +316,159 @@ export function RadioProvider({ children }) {
               return false;
             }
 
-            pendingStartupPlaybackRef.current = false;
-            setPlaying(true);
-            setError("");
-            if (fadeIn) fadeVolumeIn(volumeRef.current);
-            else audio.volume = volumeRef.current;
-            if (remember) persist({ enabled: true });
-            if (analyse) await unlockAudioAnalysis();
-            return true;
-          } catch (reason) {
-            lastError = reason;
-            audio.pause();
+            try {
+              loadStream(index, targetStation);
+              if (fadeIn) audio.volume = 0;
+              await audio.play();
 
-            // Chromium can still reject autoplay even when Electron requests
-            // a permissive policy. This is not a broken stream: defer the
-            // startup playback until the first real user gesture instead of
-            // cycling mirrors and showing a scary error.
-            if (fadeIn && isAutoplayBlocked(reason)) {
-              pendingStartupPlaybackRef.current = true;
-              if (mountedRef.current) {
-                setPlaying(false);
-                setLoading(false);
-                setError("");
+              if (
+                !mountedRef.current ||
+                playbackVersion !== playbackVersionRef.current ||
+                suspendedRef.current ||
+                audioRef.current !== audio
+              ) {
+                audio.pause();
+                return false;
               }
-              return false;
+
+              pendingStartupPlaybackRef.current = false;
+              setPlaying(true);
+              setError("");
+              if (fadeIn) fadeVolumeIn(volumeRef.current);
+              else audio.volume = volumeRef.current;
+              if (remember) persist({ enabled: true });
+              if (analyse) await unlockAudioAnalysis();
+              return true;
+            } catch (reason) {
+              lastError = reason;
+              audio.pause();
+
+              // Chromium can still reject autoplay even when Electron requests
+              // a permissive policy. This is not a broken stream: defer the
+              // startup playback until the first real user gesture instead of
+              // cycling mirrors and showing a scary error.
+              if (fadeIn && isAutoplayBlocked(reason)) {
+                pendingStartupPlaybackRef.current = true;
+                if (mountedRef.current) {
+                  setPlaying(false);
+                  setLoading(false);
+                  setError("");
+                }
+                return false;
+              }
             }
+          }
+
+          // A short second pass absorbs transient DNS/network/player startup
+          // failures without showing a false error immediately on app launch.
+          if (pass === 0) {
+            startIndex = 0;
+            await new Promise((resolve) => {
+              setTimeout(resolve, 500);
+            });
           }
         }
 
-        // A short second pass absorbs transient DNS/network/player startup
-        // failures without showing a false error immediately on app launch.
-        if (pass === 0) {
-          startIndex = 0;
-          await new Promise((resolve) => setTimeout(resolve, 500));
+        throw lastError || new Error("No radio stream could be played");
+      } catch (reason) {
+        if (
+          mountedRef.current &&
+          playbackVersion === playbackVersionRef.current
+        ) {
+          setPlaying(false);
+          setError("Не удалось запустить радио");
+          setError(
+            reason?.message
+              ? `Не удалось запустить радио: ${reason.message}`
+              : "Не удалось запустить радио"
+          );
+        }
+        return false;
+      } finally {
+        streamAttemptRef.current = false;
+        if (
+          mountedRef.current &&
+          playbackVersion === playbackVersionRef.current
+        ) {
+          setLoading(false);
         }
       }
+    },
+    [fadeVolumeIn, loadStream, persist, station, unlockAudioAnalysis]
+  );
 
-      throw lastError || new Error("No radio stream could be played");
-    } catch (reason) {
-      if (mountedRef.current && playbackVersion === playbackVersionRef.current) {
-        setPlaying(false);
-        setError("Не удалось запустить радио");
-        console.error("Radio playback failed", reason);
-      }
-      return false;
-    } finally {
-      streamAttemptRef.current = false;
-      if (mountedRef.current && playbackVersion === playbackVersionRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [fadeVolumeIn, loadStream, persist, station, unlockAudioAnalysis]);
-
-  const turnOff = useCallback(({ remember = true } = {}) => {
-    playbackVersionRef.current += 1;
-    cancelVolumeFade();
-    audioRef.current?.pause();
-    setPlaying(false);
-    setLoading(false);
-    if (remember) persist({ enabled: false });
-    stopAnalysis();
-  }, [cancelVolumeFade, persist, stopAnalysis]);
+  const turnOff = useCallback(
+    ({ remember = true } = {}) => {
+      playbackVersionRef.current += 1;
+      cancelVolumeFade();
+      audioRef.current?.pause();
+      setPlaying(false);
+      setLoading(false);
+      if (remember) persist({ enabled: false });
+      stopAnalysis();
+    },
+    [cancelVolumeFade, persist, stopAnalysis]
+  );
 
   const toggle = useCallback(() => {
     if (isPlaying) turnOff();
     else turnOn();
   }, [isPlaying, turnOff, turnOn]);
 
-  const setVolume = useCallback((value) => {
-    const numericValue = Number(value);
-    const next = Number.isFinite(numericValue)
-      ? Math.max(0, Math.min(1, numericValue))
-      : DEFAULT_SETTINGS.volume;
-    volumeRef.current = next;
-    setVolumeState(next);
-    cancelVolumeFade();
-    if (audioRef.current) audioRef.current.volume = next;
-    persist({ volume: next });
-  }, [cancelVolumeFade, persist]);
+  const setVolume = useCallback(
+    (value) => {
+      const numericValue = Number(value);
+      const next = Number.isFinite(numericValue)
+        ? Math.max(0, Math.min(1, numericValue))
+        : DEFAULT_SETTINGS.volume;
+      volumeRef.current = next;
+      setVolumeState(next);
+      cancelVolumeFade();
+      if (audioRef.current) audioRef.current.volume = next;
+      persist({ volume: next });
+    },
+    [cancelVolumeFade, persist]
+  );
 
-  const setStation = useCallback((nextId) => {
-    const next = RADIO_STATIONS.find(({ id }) => id === nextId);
-    if (!next || next.id === stationId) return;
-    const shouldResume = isPlaying || isLoading;
-    playbackVersionRef.current += 1;
-    audioRef.current?.pause();
-    stopAnalysis();
-    setPlaying(false);
-    setLoading(false);
-    setError("");
-    setStationIdState(next.id);
-    persist({ stationId: next.id });
-    streamIndexRef.current = 0;
-    loadStream(0, next);
-    if (shouldResume && !suspendedRef.current) {
-      turnOn({ remember: false, targetStation: next }).catch(() => {});
-    }
-  }, [
-    isLoading,
-    isPlaying,
-    loadStream,
-    persist,
-    stationId,
-    stopAnalysis,
-    turnOn
-  ]);
+  const setStation = useCallback(
+    (nextId) => {
+      const next = RADIO_STATIONS.find(({ id }) => id === nextId);
+      if (!next || next.id === stationId) return;
+      const shouldResume = isPlaying || isLoading;
+      playbackVersionRef.current += 1;
+      audioRef.current?.pause();
+      stopAnalysis();
+      setPlaying(false);
+      setLoading(false);
+      setError("");
+      setStationIdState(next.id);
+      persist({ stationId: next.id });
+      streamIndexRef.current = 0;
+      loadStream(0, next);
+      if (shouldResume && !suspendedRef.current) {
+        turnOn({ remember: false, targetStation: next }).catch(() => {});
+      }
+    },
+    [isLoading, isPlaying, loadStream, persist, stationId, stopAnalysis, turnOn]
+  );
 
-  const setRecordingActive = useCallback((active) => {
-    if (active && !suspendedRef.current) {
-      suspendedRef.current = true;
-      resumeAfterRecordingRef.current = isPlaying;
-      if (isPlaying) turnOff({ remember: false });
-      return;
-    }
-    if (!active && suspendedRef.current) {
-      suspendedRef.current = false;
-      const shouldResume = resumeAfterRecordingRef.current;
-      resumeAfterRecordingRef.current = false;
-      if (shouldResume) turnOn({ remember: false });
-    }
-  }, [isPlaying, turnOff, turnOn]);
+  const setRecordingActive = useCallback(
+    (active) => {
+      if (active && !suspendedRef.current) {
+        suspendedRef.current = true;
+        resumeAfterRecordingRef.current = isPlaying;
+        if (isPlaying) turnOff({ remember: false });
+        return;
+      }
+      if (!active && suspendedRef.current) {
+        suspendedRef.current = false;
+        const shouldResume = resumeAfterRecordingRef.current;
+        resumeAfterRecordingRef.current = false;
+        if (shouldResume) turnOn({ remember: false });
+      }
+    },
+    [isPlaying, turnOff, turnOn]
+  );
 
   const handleStreamError = useCallback(() => {
     // Initial/fallback playback is handled by turnOn() itself so onError must
@@ -448,18 +489,20 @@ export function RadioProvider({ children }) {
 
   useEffect(() => {
     volumeRef.current = volume;
-    if (audioRef.current && !volumeFadeRef.current) audioRef.current.volume = volume;
+    if (audioRef.current && !volumeFadeRef.current)
+      audioRef.current.volume = volume;
   }, [volume]);
 
   useEffect(() => {
+    const audio = audioRef.current;
     mountedRef.current = true;
-    if (initial.enabled) turnOn({ remember: false, analyse: true, fadeIn: true });
+    if (initial.enabled)
+      turnOn({ remember: false, analyse: true, fadeIn: true });
     return () => {
       mountedRef.current = false;
       playbackVersionRef.current += 1;
       cancelVolumeFade();
       stopAnalysis();
-      const audio = audioRef.current;
       audio?.pause();
       if (audio) {
         audio.removeAttribute("src");
@@ -471,16 +514,22 @@ export function RadioProvider({ children }) {
       frequencyDataRef.current = null;
       context?.close?.().catch(() => {});
     };
-  }, []);
+  }, [cancelVolumeFade, initial.enabled, stopAnalysis, turnOn]);
 
   useEffect(() => {
     const unlock = () => {
       // A genuine gesture is the only universally reliable way to satisfy
       // Chromium autoplay restrictions. If startup playback was blocked,
       // resume it here with the same gentle fade-in.
-      if (pendingStartupPlaybackRef.current && initial.enabled && !suspendedRef.current) {
+      if (
+        pendingStartupPlaybackRef.current &&
+        initial.enabled &&
+        !suspendedRef.current
+      ) {
         pendingStartupPlaybackRef.current = false;
-        turnOn({ remember: false, analyse: true, fadeIn: true }).catch(() => {});
+        turnOn({ remember: false, analyse: true, fadeIn: true }).catch(
+          () => {}
+        );
       } else {
         unlockAudioAnalysis();
       }
@@ -494,28 +543,49 @@ export function RadioProvider({ children }) {
     };
   }, [initial.enabled, turnOn, unlockAudioAnalysis]);
 
-  const value = useMemo(() => ({
-    error,
-    isLoading,
-    isPlaying,
-    station,
-    stationId,
-    stations: RADIO_STATIONS,
-    volume,
-    setRecordingActive,
-    setStation,
-    setVolume,
-    toggle,
-    turnOff,
-    turnOn,
-    getBassLevel: () => bassRef.current,
-    getSpectrumLevels: () => spectrumRef.current
-  }), [error, isLoading, isPlaying, setRecordingActive, setStation, setVolume, station, stationId, toggle, turnOff, turnOn, volume]);
+  const value = useMemo(
+    () => ({
+      error,
+      isLoading,
+      isPlaying,
+      station,
+      stationId,
+      stations: RADIO_STATIONS,
+      volume,
+      setRecordingActive,
+      setStation,
+      setVolume,
+      toggle,
+      turnOff,
+      turnOn,
+      getBassLevel: () => bassRef.current,
+      getSpectrumLevels: () => spectrumRef.current
+    }),
+    [
+      error,
+      isLoading,
+      isPlaying,
+      setRecordingActive,
+      setStation,
+      setVolume,
+      station,
+      stationId,
+      toggle,
+      turnOff,
+      turnOn,
+      volume
+    ]
+  );
 
   return (
     <RadioContext.Provider value={value}>
       {children}
-      <audio ref={audioRef} crossOrigin="anonymous" preload="none" onError={handleStreamError} />
+      <audio
+        ref={audioRef}
+        crossOrigin="anonymous"
+        preload="none"
+        onError={handleStreamError}
+      />
     </RadioContext.Provider>
   );
 }

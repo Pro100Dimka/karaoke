@@ -6,9 +6,9 @@ import {
   ShieldCheck
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useOnlineRoom } from "../contexts/OnlineRoomContext";
 import useExclusiveAsyncAction from "../hooks/useExclusiveAsyncAction";
 import useMountedRef from "../hooks/useMountedRef";
-import { useOnlineRoom } from "../contexts/OnlineRoomContext";
 import { copyText } from "../utils/clipboard";
 import OnlineRoomParticipant from "./OnlineRoomParticipant";
 import Button from "./fields/button";
@@ -61,9 +61,7 @@ export function OnlineRoomDock() {
         aria-label="Участники комнаты"
       >
         <div className="online-room-dock-heading">
-          <span>
-            Комната · {onlineRoom.room.host ? "ведущий" : "участник"}
-          </span>
+          <span>Комната · {onlineRoom.room.host ? "ведущий" : "участник"}</span>
           <div className="online-room-dock-code">
             <IconButton
               unstyled

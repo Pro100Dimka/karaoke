@@ -42,7 +42,7 @@ test("icon-only Karaoke buttons have an accessible name", () => {
   ];
   const source = [
     fs.readFileSync(
-      path.join(karaokeRoot, "components/PerformanceAnalysisModal.jsx"),
+      path.join(karaokeRoot, "modals/performance-analysis-modal.jsx"),
       "utf8"
     ),
     fs.readFileSync(path.join(root, "src/components/AudioPlayer.jsx"), "utf8")
@@ -52,7 +52,7 @@ test("icon-only Karaoke buttons have an accessible name", () => {
 
 test("analysis request cache is keyed by recording id", () => {
   const source = fs.readFileSync(
-    path.join(karaokeRoot, "components/PerformanceAnalysisModal.jsx"),
+    path.join(karaokeRoot, "modals/performance-analysis-modal.jsx"),
     "utf8"
   );
   assert.match(
@@ -83,7 +83,7 @@ test("Karaoke range inputs expose accessible labels", () => {
 
 test("dialog-like Karaoke overlays keep modal semantics", () => {
   const source = fs.readFileSync(
-    path.join(karaokeRoot, "components/PerformanceAnalysisModal.jsx"),
+    path.join(karaokeRoot, "modals/performance-analysis-modal.jsx"),
     "utf8"
   );
   assert.match(source, /<Modal/);
@@ -93,7 +93,7 @@ test("dialog-like Karaoke overlays keep modal semantics", () => {
 
 test("analysis UI uses normalized data helpers", () => {
   const modal = fs.readFileSync(
-    path.join(karaokeRoot, "components/PerformanceAnalysisModal.jsx"),
+    path.join(karaokeRoot, "modals/performance-analysis-modal.jsx"),
     "utf8"
   );
   assert.match(modal, /normalizeAnalysisResult/);

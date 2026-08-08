@@ -6,8 +6,7 @@ const COLUMNS = 108;
 const TARGET_FRAME_TIME = 1000 / 30;
 const TAU = Math.PI * 2;
 
-const clamp = (value, min = 0, max = 1) =>
-  Math.min(max, Math.max(min, value));
+const clamp = (value, min = 0, max = 1) => Math.min(max, Math.max(min, value));
 
 const hash = (x, y, seed = 0) => {
   const value = Math.sin(x * 127.1 + y * 311.7 + seed * 74.7) * 43758.5453;
@@ -64,7 +63,7 @@ const POINTS = Array.from({ length: ROWS }, () =>
 
 function getTerrainHeight(column, particle, time, energy, hit, spectrum) {
   const { x, edge, silhouette, bassShape } = COLUMNS_DATA[column];
-  const depth = particle.depth;
+  const { depth } = particle;
   const depthCurve = 0.48 + Math.sin(Math.PI * depth) * 0.72;
 
   const surface =
@@ -82,7 +81,8 @@ function getTerrainHeight(column, particle, time, energy, hit, spectrum) {
   const bandIndex = Math.floor(bandPosition);
   const nextBand = Math.min(spectrum.length - 1, bandIndex + 1);
   const blend = bandPosition - bandIndex;
-  const bandLevel = spectrum[bandIndex] * (1 - blend) + spectrum[nextBand] * blend;
+  const bandLevel =
+    spectrum[bandIndex] * (1 - blend) + spectrum[nextBand] * blend;
   const bandCell = (column / (COLUMNS - 1)) * spectrum.length;
   const bandCenter = Math.abs((bandCell % 1) - 0.5) * 2;
   const bandEnvelope = 0.52 + (1 - bandCenter ** 1.7) * 0.48;
@@ -94,13 +94,14 @@ function getTerrainHeight(column, particle, time, energy, hit, spectrum) {
     (0.9 + particle.random * 0.12);
 
   const transientRipple =
-    Math.sin(x * 22 - time * 4.2 + particle.phase) *
-    hit *
-    0.052 *
-    depthCurve;
+    Math.sin(x * 22 - time * 4.2 + particle.phase) * hit * 0.052 * depthCurve;
 
   return (
-    (silhouette * depthCurve ** 0.72 + surface + bassLift + equalizerLift + transientRipple) *
+    (silhouette * depthCurve ** 0.72 +
+      surface +
+      bassLift +
+      equalizerLift +
+      transientRipple) *
     edge
   );
 }
@@ -170,14 +171,12 @@ export default function LibraryWaveTerrain() {
             hit,
             spectrum
           );
-          const drift =
-            Math.sin(time * 0.3 + particle.depth * 2.5) * 0.009;
+          const drift = Math.sin(time * 0.3 + particle.depth * 2.5) * 0.009;
           const cameraFlow =
             Math.sin(time * 0.62 + particle.depth * 8.4) *
             (0.004 + particle.depth * 0.006);
 
-          point.x =
-            width * 0.5 + (x + drift) * width * 0.57 * perspective;
+          point.x = width * 0.5 + (x + drift) * width * 0.57 * perspective;
           // Keep the complete terrain inside the half-screen canvas.
           // The previous full-screen projection could move strong peaks above
           // the canvas after its height was reduced to 50vh, visually cutting

@@ -3,7 +3,6 @@ from unittest.mock import Mock
 
 import pytest
 
-import models
 import schemas
 from app.services import pipeline_service, recording_service, song_service
 from app.services.db_utils import commit

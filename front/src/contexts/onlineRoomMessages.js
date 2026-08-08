@@ -1,4 +1,7 @@
+// Node's direct ESM tests require explicit extensions for these source imports.
+// eslint-disable-next-line import/extensions
 import { normalizeRoomId } from "../services/onlineRoom.js";
+// eslint-disable-next-line import/extensions
 import { getErrorMessage } from "../utils/errors.js";
 
 const createEventId = (prefix = "room") =>
@@ -50,9 +53,7 @@ export function createOnlineRoomMessageHandler(options) {
     }
 
     if (message.type === "participant-joined") {
-      setParticipants((items) =>
-        upsertParticipant(items, message.participant)
-      );
+      setParticipants((items) => upsertParticipant(items, message.participant));
       if (message.participant?.id) {
         voice.invite(message.participant.id).catch(() => {});
       }
@@ -60,9 +61,7 @@ export function createOnlineRoomMessageHandler(options) {
     }
 
     if (message.type === "participant-updated") {
-      setParticipants((items) =>
-        upsertParticipant(items, message.participant)
-      );
+      setParticipants((items) => upsertParticipant(items, message.participant));
       return;
     }
 
@@ -162,10 +161,7 @@ export function createOnlineRoomMessageHandler(options) {
       return;
     }
 
-    if (
-      message.type === "connection-closed" &&
-      !disconnectIntentRef.current
-    ) {
+    if (message.type === "connection-closed" && !disconnectIntentRef.current) {
       setVoiceError("Соединение с комнатой потеряно.");
       cleanupConnection();
       setRoom(null);

@@ -43,7 +43,8 @@ export default function Library({ onOpenSongSettings }) {
   const [hiddenSongIds, setHiddenSongIds] = useState(() => new Set());
   const [onlineRoomOpen, setOnlineRoomOpen] = useState(false);
   const returningFromKaraoke = Boolean(location.state?.fromKaraokeFade);
-  const [karaokeTransitioning, setKaraokeTransitioning] = useState(returningFromKaraoke);
+  const [karaokeTransitioning, setKaraokeTransitioning] =
+    useState(returningFromKaraoke);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const { alert: notify, confirm: confirmDialog } = useAppDialog();
@@ -110,10 +111,10 @@ export default function Library({ onOpenSongSettings }) {
     importFile: handleFileChosen,
     openFilePicker: handleAddClick
   } = useLibraryFileImport({
-      fileInputRef,
-      notify,
-      onStarted: setProcessingSong
-    });
+    fileInputRef,
+    notify,
+    onStarted: setProcessingSong
+  });
 
   const {
     deleteSong: handleDelete,
@@ -235,7 +236,9 @@ export default function Library({ onOpenSongSettings }) {
                   // visible as a hard cut.
                   setGlobalRouteBlackout(true);
                   setKaraokeTransitioning(true);
-                  await new Promise((resolve) => window.setTimeout(resolve, 920));
+                  await new Promise((resolve) => {
+                    window.setTimeout(resolve, 920);
+                  });
                   navigate("/karaoke", {
                     state: { songId: selectedSong.id, autoPlay: true }
                   });

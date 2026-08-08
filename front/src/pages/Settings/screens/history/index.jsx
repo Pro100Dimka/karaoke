@@ -48,10 +48,7 @@ const getHistoryRow = ({
   [song_title ?? "—", "history-song"],
   [HISTORY_ACTIONS[kind] ?? kind ?? "—", "text-secondary"],
   [renderStatus(kind, status)],
-  [
-    formatDuration(duration_seconds),
-    "mono text-muted"
-  ],
+  [formatDuration(duration_seconds), "mono text-muted"],
   [formatTimestamp(timestamp), "text-muted"]
 ];
 

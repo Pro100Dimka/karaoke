@@ -12,25 +12,30 @@ export default function useAsyncQueue() {
   const pendingCountRef = useRef(0);
   const [pending, setPending] = useState(false);
 
-  const run = useCallback((action) => {
-    if (typeof action !== "function") {
-      return Promise.reject(new TypeError("Операция очереди должна быть функцией"));
-    }
-    pendingCountRef.current += 1;
-    if (mountedRef.current) setPending(true);
-
-    const result = tailRef.current
-      .catch(() => {})
-      .then(() => Promise.resolve().then(action));
-    tailRef.current = result.catch(() => {});
-
-    return result.finally(() => {
-      pendingCountRef.current = Math.max(0, pendingCountRef.current - 1);
-      if (mountedRef.current && pendingCountRef.current === 0) {
-        setPending(false);
+  const run = useCallback(
+    (action) => {
+      if (typeof action !== "function") {
+        return Promise.reject(
+          new TypeError("Операция очереди должна быть функцией")
+        );
       }
-    });
-  }, [mountedRef]);
+      pendingCountRef.current += 1;
+      if (mountedRef.current) setPending(true);
+
+      const result = tailRef.current
+        .catch(() => {})
+        .then(() => Promise.resolve().then(action));
+      tailRef.current = result.catch(() => {});
+
+      return result.finally(() => {
+        pendingCountRef.current = Math.max(0, pendingCountRef.current - 1);
+        if (mountedRef.current && pendingCountRef.current === 0) {
+          setPending(false);
+        }
+      });
+    },
+    [mountedRef]
+  );
 
   return { pending, run };
 }

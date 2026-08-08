@@ -89,8 +89,7 @@ def start_recording(body: schemas.RecordingStartRequest, db: DatabaseSession):
             playback_offset_sec=body.position_sec,
             blocksize=settings.buffer_size,
             music_gain=body.music_volume,
-            effects={"reverb": body.reverb,
-                     "echo": body.echo, "delay": body.delay},
+            effects={"reverb": body.reverb, "echo": body.echo, "delay": body.delay},
         )
     except RuntimeError as exc:
         _restore_monitoring(db)
@@ -118,8 +117,7 @@ def stop_recording(session_id: str, db: Session = Depends(get_db)):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except OSError as exc:
-        raise HTTPException(
-            status_code=500, detail=f"Could not save recording: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"Could not save recording: {exc}") from exc
     _restore_monitoring(db)
     return recording
 
@@ -133,8 +131,7 @@ def list_recordings_for_song(song: SongDependency, db: Session = Depends(get_db)
 def list_recording_library(db: Session = Depends(get_db)):
     rows = repositories.list_recording_library(db)
     return [
-        {**schemas.RecordingOut.model_validate(
-            recording).model_dump(), "song_title": title}
+        {**schemas.RecordingOut.model_validate(recording).model_dump(), "song_title": title}
         for recording, title in rows
     ]
 

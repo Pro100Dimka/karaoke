@@ -10,15 +10,14 @@ import {
 import { api } from "../api/client";
 import {
   createRoomId,
-  normalizeRoomId,
   OnlineRoomClient,
   OnlineVoiceMesh
 } from "../services/onlineRoom";
 import { getErrorMessage } from "../utils/errors";
-import { openKaraokeInRoom } from "./onlineRoomActions";
-import { createOnlineRoomMessageHandler } from "./onlineRoomMessages";
 import useApplicationAudioMute from "./hooks/useApplicationAudioMute";
 import useSpeakingLevels from "./hooks/useSpeakingLevels";
+import { openKaraokeInRoom } from "./onlineRoomActions";
+import { createOnlineRoomMessageHandler } from "./onlineRoomMessages";
 
 const OnlineRoomContext = createContext(null);
 
@@ -59,15 +58,18 @@ export function OnlineRoomProvider({ children }) {
     setRoomState(next);
   }, []);
 
-  const removeRemoteAudio = useCallback((participantId) => {
-    stopSpeakingMeter(participantId);
-    const audio = remoteAudioRef.current.get(participantId);
-    if (!audio) return;
-    audio.pause();
-    audio.srcObject = null;
-    audio.remove();
-    remoteAudioRef.current.delete(participantId);
-  }, [stopSpeakingMeter]);
+  const removeRemoteAudio = useCallback(
+    (participantId) => {
+      stopSpeakingMeter(participantId);
+      const audio = remoteAudioRef.current.get(participantId);
+      if (!audio) return;
+      audio.pause();
+      audio.srcObject = null;
+      audio.remove();
+      remoteAudioRef.current.delete(participantId);
+    },
+    [stopSpeakingMeter]
+  );
 
   const applyRemoteAudioMute = useCallback(() => {
     for (const [participantId, audio] of remoteAudioRef.current) {

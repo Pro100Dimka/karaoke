@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Radio, SlidersHorizontal } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { IconButton } from "../../components/ui";
@@ -64,7 +64,6 @@ export default function Karaoke({ onOpenAppSettings }) {
   const vocalsRef = useRef(null);
   const videoRef = useRef(null);
   const youTubeClipRef = useRef(null);
-  const sceneVideoRef = useRef(null);
   const sceneTransitionRef = useRef(false);
   const resumeRadioOnPauseRef = useRef(false);
   const hasStartedPlaybackRef = useRef(false);
@@ -115,7 +114,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     setAnalysisRecordingId(value);
   }, []);
   const [microphoneOpen, setMicrophoneOpen] = useState(false);
-  const [microphoneSettingsView, setMicrophoneSettingsView] = useState("music");
+  const [microphoneSettingsView] = useState("music");
   const [recordingError, setRecordingError] = useState(null);
 
   useEffect(() => {
@@ -128,14 +127,11 @@ export default function Karaoke({ onOpenAppSettings }) {
   const autoStartRequested = Boolean(location.state?.autoPlay);
   const [sceneBlackout, setSceneBlackout] = useState(autoStartRequested);
   const [sceneIntroVisible, setSceneIntroVisible] = useState(false);
-  const [sceneTransitioning, setSceneTransitioning] = useState(autoStartRequested);
+  const [sceneTransitioning, setSceneTransitioning] =
+    useState(autoStartRequested);
   const autoStartedSongRef = useRef(null);
-  const {
-    controlsVisible,
-    hideControls,
-    revealControls,
-    showControls
-  } = useKaraokeControls({ autoHideEnabled: autoHideConsole });
+  const { controlsVisible, hideControls, revealControls, showControls } =
+    useKaraokeControls({ autoHideEnabled: autoHideConsole });
 
   useEffect(() => {
     if (!autoStartRequested) return undefined;
@@ -146,17 +142,6 @@ export default function Karaoke({ onOpenAppSettings }) {
     const timer = window.setTimeout(() => setGlobalRouteBlackout(false), 80);
     return () => window.clearTimeout(timer);
   }, [autoStartRequested]);
-
-  const randomizeSceneVideo = useCallback(() => {
-    const video = sceneVideoRef.current;
-    if (!video) return;
-    const videoDuration = Number(video.duration);
-    if (Number.isFinite(videoDuration) && videoDuration > 1) {
-      video.currentTime = Math.random() * Math.max(0.1, videoDuration - 0.5);
-    }
-    const playResult = video.play?.();
-    playResult?.catch?.(() => {});
-  }, []);
 
   const revealStageActions = useCallback(() => {
     setStageActionsVisible(true);
@@ -328,7 +313,9 @@ export default function Karaoke({ onOpenAppSettings }) {
 
   const waitForScene = useCallback(
     (milliseconds) =>
-      new Promise((resolve) => window.setTimeout(resolve, milliseconds)),
+      new Promise((resolve) => {
+        window.setTimeout(resolve, milliseconds);
+      }),
     []
   );
 
@@ -358,7 +345,11 @@ export default function Karaoke({ onOpenAppSettings }) {
   const runSceneTransition = useCallback(
     async (
       action,
-      { showIntro = false, actionAfterReveal = false, prepareAction = null } = {}
+      {
+        showIntro = false,
+        actionAfterReveal = false,
+        prepareAction = null
+      } = {}
     ) => {
       if (sceneTransitionRef.current) return false;
       sceneTransitionRef.current = true;
@@ -368,13 +359,13 @@ export default function Karaoke({ onOpenAppSettings }) {
       setSceneIntroVisible(false);
       setSceneBlackout(true);
       const preparation = prepareAction
-        ? Promise.resolve().then(prepareAction).catch(() => false)
+        ? Promise.resolve()
+            .then(prepareAction)
+            .catch(() => false)
         : Promise.resolve(true);
 
       try {
         await waitForScene(420);
-        randomizeSceneVideo();
-
         if (showIntro) {
           setSceneIntroVisible(true);
           await waitForScene(1350);
@@ -405,7 +396,7 @@ export default function Karaoke({ onOpenAppSettings }) {
       }
       return true;
     },
-    [hideControls, randomizeSceneVideo, waitForScene]
+    [hideControls, waitForScene]
   );
 
   const startSongWithIntro = useCallback(() => {
@@ -420,7 +411,8 @@ export default function Karaoke({ onOpenAppSettings }) {
       {
         showIntro: true,
         actionAfterReveal: true,
-        prepareAction: () => Promise.all([preloadSongMedia(), preparePlayback()])
+        prepareAction: () =>
+          Promise.all([preloadSongMedia(), preparePlayback()])
       }
     );
   }, [
@@ -460,15 +452,18 @@ export default function Karaoke({ onOpenAppSettings }) {
     turnOnRadio
   ]);
 
-  const navigateToLibraryFromBlackout = useCallback((analysisId = null) => {
-    navigate("/", {
-      replace: true,
-      state: {
-        fromKaraokeFade: true,
-        analysisRecordingId: analysisId || null
-      }
-    });
-  }, [navigate]);
+  const navigateToLibraryFromBlackout = useCallback(
+    (analysisId = null) => {
+      navigate("/", {
+        replace: true,
+        state: {
+          fromKaraokeFade: true,
+          analysisRecordingId: analysisId || null
+        }
+      });
+    },
+    [navigate]
+  );
 
   const handleStop = useCallback(async () => {
     if (sceneTransitionRef.current) return false;
@@ -505,7 +500,11 @@ export default function Karaoke({ onOpenAppSettings }) {
   }, [hideControls, navigateToLibraryFromBlackout, stop, waitForScene]);
 
   useEffect(() => {
-    if (!autoStartRequested || !song?.id || autoStartedSongRef.current === song.id) {
+    if (
+      !autoStartRequested ||
+      !song?.id ||
+      autoStartedSongRef.current === song.id
+    ) {
       return undefined;
     }
 
@@ -710,8 +709,7 @@ export default function Karaoke({ onOpenAppSettings }) {
           tempo: currentTempo,
           difficulty: song.difficulty_override
         }}
-        sceneVideoRef={sceneVideoRef}
-        onSceneVideoReady={randomizeSceneVideo}
+        songId={song.id}
         showLyrics={showLyrics}
         showNotes={showNotes}
         songTitle={song.title}

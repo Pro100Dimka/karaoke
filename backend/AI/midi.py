@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 import mido
 
@@ -30,7 +30,9 @@ def _append_bend_range(track: mido.MidiTrack, semitones: int) -> None:
     )
 
 
-def _append_absolute_events(track: mido.MidiTrack, events: list[tuple[int, int, mido.Message]]) -> None:
+def _append_absolute_events(
+    track: mido.MidiTrack, events: list[tuple[int, int, mido.Message]]
+) -> None:
     previous_tick = 0
     for tick, _, message in sorted(events, key=lambda event: (event[0], event[1])):
         message.time = max(0, tick - previous_tick)

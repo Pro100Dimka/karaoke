@@ -6,9 +6,9 @@ import Button from "../../components/fields/button";
 import Field from "../../components/fields/field";
 import RangeInput from "../../components/fields/range-input";
 import { useAppDialog } from "../../contexts/AppDialog";
+import useSpeakingLevels from "../../contexts/hooks/useSpeakingLevels";
 import useAsyncQueue from "../../hooks/useAsyncQueue";
 import useExclusiveAsyncAction from "../../hooks/useExclusiveAsyncAction";
-import useSpeakingLevels from "../../contexts/hooks/useSpeakingLevels";
 import { usePolling } from "../../hooks/usePolling";
 import {
   getAudioPreferences,
@@ -81,6 +81,7 @@ export default function AudioSettings() {
   const [preferences, setPreferences] = useState(getAudioPreferences);
   const [speakerTestState, setSpeakerTestState] = useState("idle");
   const monitorStreamRef = useRef(null);
+  const speakerResetTimerRef = useRef(null);
   const {
     localSpeakingLevel,
     prepareSpeakingMeter,
@@ -92,10 +93,29 @@ export default function AudioSettings() {
   const { pending: togglingMonitoring, run: runMonitoringToggle } =
     useExclusiveAsyncAction();
 
+  const scheduleSpeakerReset = useCallback(() => {
+    if (speakerResetTimerRef.current) {
+      globalThis.clearTimeout(speakerResetTimerRef.current);
+    }
+    speakerResetTimerRef.current = globalThis.setTimeout(() => {
+      speakerResetTimerRef.current = null;
+      setSpeakerTestState("idle");
+    }, 1800);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (speakerResetTimerRef.current) {
+        globalThis.clearTimeout(speakerResetTimerRef.current);
+      }
+    },
+    []
+  );
+
   const runtimeSettings = normalizeAudioRuntimeSettings(settings);
-  const audioDriver = runtimeSettings.audioDriver;
-  const monitoringEnabled = runtimeSettings.monitoringEnabled;
-  const volume = runtimeSettings.volume;
+  const { audioDriver } = runtimeSettings;
+  const { monitoringEnabled } = runtimeSettings;
+  const { volume } = runtimeSettings;
   const rawMonitorLevel = monitoringEnabled ? getSignalLevel(signal) : 0;
   const monitorTargetLevel = monitoringEnabled
     ? Math.max(localSpeakingLevel * 100, rawMonitorLevel)
@@ -202,7 +222,9 @@ export default function AudioSettings() {
       if (!monitorStreamRef.current) startLocalMeter();
     };
 
-    globalThis.addEventListener?.("pointerdown", unlockOnGesture, { once: true });
+    globalThis.addEventListener?.("pointerdown", unlockOnGesture, {
+      once: true
+    });
     globalThis.addEventListener?.("keydown", unlockOnGesture, { once: true });
 
     return () => {
@@ -257,7 +279,9 @@ export default function AudioSettings() {
         globalThis.dispatchEvent?.(
           new CustomEvent("audio-settings-changed", { detail: updated })
         );
-      } catch {}
+      } catch {
+        // CustomEvent is unavailable in a few non-browser test runtimes.
+      }
       return updated;
     }, "Не удалось сохранить аудионастройки");
 
@@ -276,7 +300,7 @@ export default function AudioSettings() {
       // Must happen synchronously inside the user gesture, otherwise Chromium
       // may keep AudioContext suspended and the analyser will read silence.
       prepareSpeakingMeter();
-      void startLocalMeter();
+      startLocalMeter().catch(() => {});
     } else {
       stopLocalMeter();
     }
@@ -298,7 +322,9 @@ export default function AudioSettings() {
       globalThis.AudioContext || globalThis.webkitAudioContext;
 
     if (typeof AudioContextClass !== "function") {
-      await alert("Не удалось запустить проверку звука: аудиосистема браузера недоступна.");
+      await alert(
+        "Не удалось запустить проверку звука: аудиосистема браузера недоступна."
+      );
       return;
     }
 
@@ -317,7 +343,10 @@ export default function AudioSettings() {
       gain.gain.setValueAtTime(0.0001, context.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.14, context.currentTime + 0.04);
       gain.gain.setValueAtTime(0.14, context.currentTime + 0.55);
-      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.85);
+      gain.gain.exponentialRampToValueAtTime(
+        0.0001,
+        context.currentTime + 0.85
+      );
 
       oscillator.type = "sine";
       oscillator.frequency.setValueAtTime(523.25, context.currentTime);
@@ -342,23 +371,34 @@ export default function AudioSettings() {
       oscillator.start();
       oscillator.stop(context.currentTime + 0.9);
 
-      await new Promise((resolve) => globalThis.setTimeout(resolve, 1050));
+      await new Promise((resolve) => {
+        globalThis.setTimeout(resolve, 1050);
+      });
       setSpeakerTestState("success");
-      globalThis.setTimeout(() => setSpeakerTestState("idle"), 1800);
+      scheduleSpeakerReset();
     } catch (error) {
       setSpeakerTestState("error");
       await alert(`Не удалось проверить динамики: ${getErrorMessage(error)}`);
-      globalThis.setTimeout(() => setSpeakerTestState("idle"), 1800);
+      scheduleSpeakerReset();
     } finally {
       try {
         audio?.pause?.();
         audio?.srcObject?.getTracks?.().forEach((track) => track.stop());
-      } catch {}
+      } catch {
+        // The browser may already have released the temporary stream.
+      }
       try {
         await context?.close?.();
-      } catch {}
+      } catch {
+        // Closing an already closed AudioContext is harmless.
+      }
     }
-  }, [alert, preferences.monitorOutputDeviceId, speakerTestState]);
+  }, [
+    alert,
+    preferences.monitorOutputDeviceId,
+    scheduleSpeakerReset,
+    speakerTestState
+  ]);
 
   const DRIVER_OPTIONS = [
     { value: "auto", label: "Автоматически · рекомендуется" },
@@ -572,7 +612,8 @@ export default function AudioSettings() {
             <div>
               <strong>Слышать свой голос в наушниках</strong>
               <small>
-                Сейчас {monitoringEnabled ? "включено" : "выключено"}. Говорите в микрофон — индикатор ниже покажет уровень
+                Сейчас {monitoringEnabled ? "включено" : "выключено"}. Говорите
+                в микрофон — индикатор ниже покажет уровень
               </small>
             </div>
           </div>

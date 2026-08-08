@@ -3,9 +3,10 @@ import { createRequire } from "node:module";
 import test from "node:test";
 
 const require = createRequire(import.meta.url);
-const { findMatchingSongFolder, normalizeFolderName } = require(
-  "../electron/song-folders.cjs"
-);
+const {
+  findMatchingSongFolder,
+  normalizeFolderName
+} = require("../electron/song-folders.cjs");
 
 const directory = (name) => ({ name, isDirectory: () => true });
 const file = (name) => ({ name, isDirectory: () => false });

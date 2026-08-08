@@ -19,8 +19,8 @@ const EDITABLE_SELECTOR = [
 export function isKaraokeHotkeyTarget(target) {
   return Boolean(
     target &&
-      typeof target.closest === "function" &&
-      target.closest(EDITABLE_SELECTOR)
+    typeof target.closest === "function" &&
+    target.closest(EDITABLE_SELECTOR)
   );
 }
 

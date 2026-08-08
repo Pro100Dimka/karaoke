@@ -36,9 +36,7 @@ def test_invalid_audio_driver_does_not_mutate_settings():
 def test_asio_patch_selects_first_available_driver(monkeypatch):
     settings = _settings()
     monkeypatch.setattr(audio_service, "list_asio_drivers", lambda: ["Audient ASIO"])
-    updates, changed = audio_service._normalized_settings_patch(
-        settings, {"audio_driver": "asio"}
-    )
+    updates, changed = audio_service._normalized_settings_patch(settings, {"audio_driver": "asio"})
     assert updates == {"audio_driver": "asio", "asio_driver_name": "Audient ASIO"}
     assert changed == {"audio_driver", "asio_driver_name"}
 
@@ -75,8 +73,20 @@ def test_device_lists_share_same_shape(monkeypatch):
         fake_sd,
         "query_devices",
         lambda: [
-            {"name": "Mic", "hostapi": 0, "max_input_channels": 1, "max_output_channels": 0, "default_samplerate": 48000},
-            {"name": "Out", "hostapi": 0, "max_input_channels": 0, "max_output_channels": 2, "default_samplerate": 48000},
+            {
+                "name": "Mic",
+                "hostapi": 0,
+                "max_input_channels": 1,
+                "max_output_channels": 0,
+                "default_samplerate": 48000,
+            },
+            {
+                "name": "Out",
+                "hostapi": 0,
+                "max_input_channels": 0,
+                "max_output_channels": 2,
+                "default_samplerate": 48000,
+            },
         ],
         raising=False,
     )

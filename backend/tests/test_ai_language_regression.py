@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from sqlalchemy import create_engine, text
 
-from AI.engines.text import Qwen3Transcriber, Qwen3ForcedAligner, resolve_alignment_language
+from AI.engines.text import Qwen3ForcedAligner, Qwen3Transcriber, resolve_alignment_language
 from database import _repair_invalid_audio_settings_datetime
 
 
@@ -16,10 +16,14 @@ class _FakeASR:
 class _FakeAligner:
     def align(self, *, audio, text, language):
         assert language == "Russian"
-        return [SimpleNamespace(items=[
-            SimpleNamespace(text="Привет", start_time=0.0, end_time=0.5),
-            SimpleNamespace(text="мир", start_time=0.5, end_time=1.0),
-        ])]
+        return [
+            SimpleNamespace(
+                items=[
+                    SimpleNamespace(text="Привет", start_time=0.0, end_time=0.5),
+                    SimpleNamespace(text="мир", start_time=0.5, end_time=1.0),
+                ]
+            )
+        ]
 
 
 def test_qwen_auto_language_is_preserved(monkeypatch):
@@ -47,10 +51,14 @@ def test_alignment_language_inference():
 def test_audio_datetime_repair_handles_non_text_sqlite_values():
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as connection:
-        connection.execute(text("CREATE TABLE audio_settings (id INTEGER PRIMARY KEY, updated_at DATETIME)"))
+        connection.execute(
+            text("CREATE TABLE audio_settings (id INTEGER PRIMARY KEY, updated_at DATETIME)")
+        )
         connection.execute(text("INSERT INTO audio_settings (id, updated_at) VALUES (1, 12345)"))
         _repair_invalid_audio_settings_datetime(connection)
-        value = connection.execute(text("SELECT updated_at, typeof(updated_at) FROM audio_settings WHERE id=1")).one()
+        value = connection.execute(
+            text("SELECT updated_at, typeof(updated_at) FROM audio_settings WHERE id=1")
+        ).one()
         assert value[1] == "text"
         assert isinstance(value[0], str)
         assert "-" in value[0]

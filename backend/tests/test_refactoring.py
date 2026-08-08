@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pytest
 
 import config
@@ -9,10 +7,12 @@ from app.services.recording_service import resolve_recording_path
 
 
 def test_reference_index_finds_active_note_and_gaps():
-    index = ReferenceIndex.build([
-        {"start": 2.0, "end": 3.0, "midi": 64},
-        {"start": 0.0, "end": 1.0, "midi": 60},
-    ])
+    index = ReferenceIndex.build(
+        [
+            {"start": 2.0, "end": 3.0, "midi": 64},
+            {"start": 0.0, "end": 1.0, "midi": 60},
+        ]
+    )
     assert index.note_at(0.5) == 60
     assert index.note_at(1.5) is None
     assert index.note_at(2.5) == 64

@@ -22,18 +22,28 @@ test("karaoke hotkey map is immutable and complete", () => {
 
 test("karaoke hotkeys ignore editable and actionable targets", () => {
   assert.equal(isKaraokeHotkeyTarget(target(true)), true);
-  assert.equal(getKaraokeHotkeyAction({ code: "Space", target: target(true) }), null);
+  assert.equal(
+    getKaraokeHotkeyAction({ code: "Space", target: target(true) }),
+    null
+  );
 });
 
 test("karaoke hotkeys tolerate non-Element event targets", () => {
   assert.equal(isKaraokeHotkeyTarget(null), false);
   assert.equal(isKaraokeHotkeyTarget({}), false);
-  assert.equal(getKaraokeHotkeyAction({ code: "Space", target: null }), "toggle-playback");
+  assert.equal(
+    getKaraokeHotkeyAction({ code: "Space", target: null }),
+    "toggle-playback"
+  );
 });
 
 test("karaoke hotkeys ignore repeated and already handled events", () => {
   assert.equal(
-    getKaraokeHotkeyAction({ code: "Space", repeat: true, target: target(false) }),
+    getKaraokeHotkeyAction({
+      code: "Space",
+      repeat: true,
+      target: target(false)
+    }),
     null
   );
   assert.equal(
@@ -48,7 +58,13 @@ test("karaoke hotkeys ignore repeated and already handled events", () => {
 
 test("karaoke hotkeys map supported keys and reject unknown keys", () => {
   for (const [code, action] of Object.entries(KARAOKE_HOTKEYS)) {
-    assert.equal(getKaraokeHotkeyAction({ code, target: target(false) }), action);
+    assert.equal(
+      getKaraokeHotkeyAction({ code, target: target(false) }),
+      action
+    );
   }
-  assert.equal(getKaraokeHotkeyAction({ code: "KeyK", target: target(false) }), null);
+  assert.equal(
+    getKaraokeHotkeyAction({ code: "KeyK", target: target(false) }),
+    null
+  );
 });

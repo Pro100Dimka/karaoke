@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { playbackGain } from "../utils/data";
-import {
-  getSecondaryMediaPosition,
-  shouldSyncMedia
-} from "../utils/transport";
+import { getSecondaryMediaPosition, shouldSyncMedia } from "../utils/transport";
 
 export default function useKaraokeMediaSync({
   browserMonitorRef,
@@ -38,7 +35,7 @@ export default function useKaraokeMediaSync({
       if (!target || typeof func !== "string" || !func.trim()) return false;
       let targetOrigin = "https://www.youtube.com";
       try {
-        const origin = new URL(frame.src, globalThis.location?.href).origin;
+        const { origin } = new URL(frame.src, globalThis.location?.href);
         if (
           origin === "https://www.youtube.com" ||
           origin === "https://www.youtube-nocookie.com"
@@ -86,7 +83,9 @@ export default function useKaraokeMediaSync({
 
     const handleMetadata = () => {
       const nextDuration = Number(instrumental.duration);
-      setDuration(Number.isFinite(nextDuration) && nextDuration > 0 ? nextDuration : 0);
+      setDuration(
+        Number.isFinite(nextDuration) && nextDuration > 0 ? nextDuration : 0
+      );
     };
     const handleEnded = () => {
       if (onPlaybackEndedRef?.current) {
@@ -142,7 +141,8 @@ export default function useKaraokeMediaSync({
       }
     };
 
-    if (typeof globalThis.requestAnimationFrame !== "function") return undefined;
+    if (typeof globalThis.requestAnimationFrame !== "function")
+      return undefined;
     updatePosition();
     return () => {
       active = false;
@@ -168,7 +168,8 @@ export default function useKaraokeMediaSync({
   useEffect(() => {
     const gain = browserMonitorRef.current?.gainNode?.gain;
     const value = Number(microphoneVolume);
-    if (gain && Number.isFinite(value)) gain.value = Math.max(0, Math.min(1, value));
+    if (gain && Number.isFinite(value))
+      gain.value = Math.max(0, Math.min(1, value));
   }, [browserMonitorRef, microphoneVolume]);
 
   useEffect(() => {
@@ -187,13 +188,7 @@ export default function useKaraokeMediaSync({
     } else {
       silenceMelodyGuide();
     }
-  }, [
-    isPlaying,
-    keyShift,
-    melodyVolume,
-    silenceMelodyGuide,
-    startMelodyGuide
-  ]);
+  }, [isPlaying, keyShift, melodyVolume, silenceMelodyGuide, startMelodyGuide]);
 
   useEffect(() => {
     const normalizedSpeed = Number(speed);

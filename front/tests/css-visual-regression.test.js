@@ -3,12 +3,13 @@ import test from "node:test";
 import { readCssBundle } from "./helpers/css.js";
 
 const css = readCssBundle([
+  new URL("../src/styles/root.css", import.meta.url),
+  new URL("../src/styles/theme.css", import.meta.url),
   new URL("../src/styles/app.css", import.meta.url)
 ]);
 
 const criticalSelectors = [
-  ".song-recordings-backdrop",
-  ".song-recordings-modal",
+  ".song-recordings-body",
   ".processing-modal",
   ".performance-analysis-backdrop",
   ".performance-analysis-modal",
@@ -19,7 +20,7 @@ const criticalSelectors = [
   ".library-song-card",
   ".library-song-card-actions",
   ".karaoke-stage",
-  ".karaoke-playback-controls",
+  ".karaoke-transport-area",
   ".karaoke-lyrics",
   ".melody-roll",
   ".waveform-timeline",
@@ -75,7 +76,7 @@ for (const token of criticalTokens) {
 }
 
 const modalSelectors = [
-  ".song-recordings-modal",
+  ".song-recordings-body",
   ".processing-modal",
   ".performance-analysis-modal",
   ".settings-modal",

@@ -48,9 +48,7 @@ def run_analysis(recording: RecordingDependency, db: DatabaseSession):
         pitch_accuracy_percent=analysis["pitch_accuracy_percent"],
         mean_deviation_semitones=analysis["mean_deviation_semitones"],
         sections_json=(
-            json.dumps(analysis["sections"], ensure_ascii=False)
-            if analysis["sections"]
-            else None
+            json.dumps(analysis["sections"], ensure_ascii=False) if analysis["sections"] else None
         ),
     )
     db.add(result)
@@ -59,9 +57,10 @@ def run_analysis(recording: RecordingDependency, db: DatabaseSession):
         db.refresh(result)
     except IntegrityError:
         db.rollback()
-        result = repositories.get_analysis_by_recording(db, recording.id)
-        if result is None:
+        stored_result = repositories.get_analysis_by_recording(db, recording.id)
+        if stored_result is None:
             raise
+        result = stored_result
     except Exception:
         db.rollback()
         raise

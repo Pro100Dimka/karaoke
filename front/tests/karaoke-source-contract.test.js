@@ -33,7 +33,10 @@ test("Karaoke keeps critical media refs and one instrumental clock", () => {
 });
 
 test("Karaoke effects retain explicit resource cleanup", () => {
-  assert.match(infrastructureSource, /cancelAnimationFrame\(animationFrameId\)/);
+  assert.match(
+    infrastructureSource,
+    /cancelAnimationFrame\(animationFrameId\)/
+  );
   assert.match(infrastructureSource, /removeEventListener\("loadedmetadata"/);
   assert.match(infrastructureSource, /removeEventListener\("ended"/);
   assert.match(infrastructureSource, /observer\.disconnect\(\)/);
@@ -59,7 +62,10 @@ test("Karaoke uses extracted deterministic helpers", () => {
     "findPreferredOutputDevice",
     "findMatchingBrowserOutput"
   ]) {
-    assert.match(`${source}\n${infrastructureSource}`, new RegExp(`\\b${helper}\\b`));
+    assert.match(
+      `${source}\n${infrastructureSource}`,
+      new RegExp(`\\b${helper}\\b`)
+    );
   }
 });
 

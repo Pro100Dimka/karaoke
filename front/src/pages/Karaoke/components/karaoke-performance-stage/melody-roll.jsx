@@ -62,7 +62,10 @@ export default function MelodyRoll({
   const pitchRange = maxMidi - minMidi + 1;
   const rowHeight = height / pitchRange;
   const noteHeight = Math.min(15, Math.max(9, rowHeight * 0.62));
-  const lanes = Array.from({ length: pitchRange }, (_, index) => minMidi + index);
+  const lanes = Array.from(
+    { length: pitchRange },
+    (_, index) => minMidi + index
+  );
   const x = (time) =>
     noteLaneStart +
     ((time - viewStart) / windowSeconds) * (width - noteLaneStart);
@@ -90,7 +93,13 @@ export default function MelodyRoll({
             <stop offset=".52" stopColor="#ff536c" />
             <stop offset="1" stopColor="#f3224c" />
           </linearGradient>
-          <linearGradient id="piano-roll-note-current" x1="0" x2="0" y1="0" y2="1">
+          <linearGradient
+            id="piano-roll-note-current"
+            x1="0"
+            x2="0"
+            y1="0"
+            y2="1"
+          >
             <stop offset="0" stopColor="#fff0f3" />
             <stop offset=".16" stopColor="#ff9bab" />
             <stop offset=".52" stopColor="#ff4966" />
@@ -158,12 +167,16 @@ export default function MelodyRoll({
             (midi) => !BLACK_KEY_CLASSES.has(((midi % 12) + 12) % 12)
           );
           const naturalHeight = height / naturals.length;
-          const naturalIndex = new Map(naturals.map((midi, index) => [midi, index]));
+          const naturalIndex = new Map(
+            naturals.map((midi, index) => [midi, index])
+          );
 
           return lanes
             .filter((midi) => BLACK_KEY_CLASSES.has(((midi % 12) + 12) % 12))
             .map((midi) => {
-              const lowerNatural = [...naturals].reverse().find((value) => value < midi);
+              const lowerNatural = [...naturals]
+                .reverse()
+                .find((value) => value < midi);
               const index = naturalIndex.get(lowerNatural);
               if (index == null) return null;
 
@@ -252,6 +265,30 @@ export default function MelodyRoll({
             </g>
           );
         })}
+
+        {isPitchDetected &&
+          Number.isFinite(indicatorMidi) &&
+          indicatorMidi >= minMidi &&
+          indicatorMidi <= maxMidi && (
+            <g className="melody-pitch-indicator" pointerEvents="none">
+              <circle
+                cx={playheadX}
+                cy={y(indicatorMidi) + rowHeight / 2}
+                r="10"
+                fill="rgba(73, 255, 187, .16)"
+                stroke="rgba(73, 255, 187, .5)"
+                strokeWidth="1.4"
+              />
+              <circle
+                cx={playheadX}
+                cy={y(indicatorMidi) + rowHeight / 2}
+                r="4.2"
+                fill="#d9fff1"
+                stroke="#31eda7"
+                strokeWidth="2"
+              />
+            </g>
+          )}
 
         {/* Bright red playback cursor. */}
         <g pointerEvents="none">

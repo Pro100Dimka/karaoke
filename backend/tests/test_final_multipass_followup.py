@@ -37,9 +37,7 @@ def test_save_upload_limited_flushes_and_syncs(tmp_path: Path, monkeypatch):
     fsync = Mock()
     monkeypatch.setattr("app.utils.uploads.os.fsync", fsync)
 
-    result = asyncio.run(
-        save_upload_limited(upload, tmp_path / "song.tmp", limit=4, chunk_size=2)
-    )
+    result = asyncio.run(save_upload_limited(upload, tmp_path / "song.tmp", limit=4, chunk_size=2))
 
     assert result == 4
     fsync.assert_called_once()
@@ -47,6 +45,7 @@ def test_save_upload_limited_flushes_and_syncs(tmp_path: Path, monkeypatch):
 
 def test_concurrent_settings_updates_do_not_lose_fields(tmp_path: Path, monkeypatch):
     import threading
+
     from app.services import app_settings_service
 
     monkeypatch.setattr(app_settings_service, "SETTINGS_FILE", tmp_path / "settings.json")

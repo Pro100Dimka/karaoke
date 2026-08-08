@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 import statistics
-from bisect import bisect_left
 
 from .models import PitchFrame, Syllable, VocalNote
 
@@ -27,7 +26,7 @@ def _median_filter(values: list[float], radius: int = 2) -> list[float]:
 def _weighted_median(values: list[float], weights: list[float]) -> float:
     if not values:
         raise ValueError("weighted median requires at least one value")
-    pairs = sorted(zip(values, weights), key=lambda item: item[0])
+    pairs = sorted(zip(values, weights, strict=False), key=lambda item: item[0])
     total = sum(max(0.0, weight) for _, weight in pairs)
     if total <= 1e-12:
         return float(statistics.median(values))
@@ -38,8 +37,6 @@ def _weighted_median(values: list[float], weights: list[float]) -> float:
         if cursor >= midpoint:
             return float(value)
     return float(pairs[-1][0])
-
-
 
 
 def _robust_pitch_center(values: list[float], weights: list[float]) -> float:
@@ -61,9 +58,7 @@ def _voiced_runs(
     usable = [
         frame
         for frame in frames
-        if frame.voiced
-        and frame.frequency > 0
-        and frame.confidence >= min_confidence
+        if frame.voiced and frame.frequency > 0 and frame.confidence >= min_confidence
     ]
     if not usable:
         return []
@@ -103,16 +98,20 @@ def _sustained_pitch_segments(
         delta = value - global_center
         signs.append(1 if delta > 0.22 else -1 if delta < -0.22 else 0)
     compact = [value for value in signs if value]
-    reversals = sum(a != b for a, b in zip(compact, compact[1:]))
+    reversals = sum(a != b for a, b in zip(compact, compact[1:], strict=False))
     ordered = sorted(midi)
-    p10 = ordered[max(0, int(len(ordered)*0.10))]
-    p90 = ordered[min(len(ordered)-1, int(len(ordered)*0.90))]
-    oscillation_span = p90-p10
+    p10 = ordered[max(0, int(len(ordered) * 0.10))]
+    p90 = ordered[min(len(ordered) - 1, int(len(ordered) * 0.90))]
+    oscillation_span = p90 - p10
     if reversals >= 4 and oscillation_span <= 2.8:
         return [run]
-    step = statistics.median(
-        [b.time - a.time for a, b in zip(run, run[1:]) if b.time > a.time]
-    ) if len(run) > 1 else 0.01
+    step = (
+        statistics.median(
+            [b.time - a.time for a, b in zip(run, run[1:], strict=False) if b.time > a.time]
+        )
+        if len(run) > 1
+        else 0.01
+    )
     step = max(0.005, min(0.04, float(step)))
 
     # Require ~70 ms of stable evidence. Short ornaments remain pitch bends;
@@ -121,7 +120,10 @@ def _sustained_pitch_segments(
     history_frames = max(5, int(round(0.09 / step)))
     # Adapt the split threshold to the singer's local vibrato width.
     # Stable voices keep high sensitivity; wide vibrato needs a larger margin.
-    local_diffs = [abs(value - statistics.median(smooth[max(0, i-8):min(len(smooth), i+9)])) for i, value in enumerate(smooth)]
+    local_diffs = [
+        abs(value - statistics.median(smooth[max(0, i - 8) : min(len(smooth), i + 9)]))
+        for i, value in enumerate(smooth)
+    ]
     vibrato = statistics.median(local_diffs) if local_diffs else 0.0
     threshold = max(0.62, float(split_semitones), min(1.35, vibrato * 3.2 + 0.36))
 
@@ -142,8 +144,7 @@ def _sustained_pitch_segments(
             same_direction = sum(
                 1
                 for value in future
-                if (value - baseline) * delta > 0
-                and abs(value - baseline) >= threshold * 0.65
+                if (value - baseline) * delta > 0 and abs(value - baseline) >= threshold * 0.65
             )
             # A true note transition has most future frames on the new side of
             # the old center. Symmetric vibrato does not.
@@ -154,14 +155,14 @@ def _sustained_pitch_segments(
                 probe_end = min(len(run), index + max(sustain_frames, int(round(0.22 / step))))
                 probe = smooth[index:probe_end]
                 old_side = sum(
-                    1 for value in probe
-                    if (value - baseline) * delta < 0
-                    and abs(value - baseline) >= threshold * 0.45
+                    1
+                    for value in probe
+                    if (value - baseline) * delta < 0 and abs(value - baseline) >= threshold * 0.45
                 )
                 return_ratio = old_side / max(1, len(probe))
                 ordered_probe = sorted(probe)
                 lo_q = ordered_probe[max(0, int(len(ordered_probe) * 0.10))]
-                hi_q = ordered_probe[min(len(ordered_probe)-1, int(len(ordered_probe) * 0.90))]
+                hi_q = ordered_probe[min(len(ordered_probe) - 1, int(len(ordered_probe) * 0.90))]
                 probe_spread = hi_q - lo_q
                 stable_new_level = probe_spread <= max(0.48, threshold * 0.72)
                 if return_ratio <= 0.18 and stable_new_level:
@@ -176,7 +177,7 @@ def _sustained_pitch_segments(
         index += 1
 
     boundaries.append(len(run))
-    segments = [run[a:b] for a, b in zip(boundaries, boundaries[1:]) if b > a]
+    segments = [run[a:b] for a, b in zip(boundaries, boundaries[1:], strict=False) if b > a]
 
     # Merge tiny fragments into the closest neighbour instead of dropping them.
     merged: list[list[PitchFrame]] = []
@@ -195,46 +196,49 @@ def _sustained_pitch_segments(
     return merged
 
 
-
-
 def _energy_reattack_boundaries(segment: list[PitchFrame], min_note: float) -> list[int]:
     """Find short energy valleys followed by a clear same-pitch re-attack."""
     if len(segment) < 12:
         return []
-    steps = [b.time-a.time for a,b in zip(segment,segment[1:]) if b.time>a.time]
+    steps = [b.time - a.time for a, b in zip(segment, segment[1:], strict=False) if b.time > a.time]
     step = max(0.005, min(0.04, statistics.median(steps) if steps else 0.01))
-    min_frames = max(5, int(round(max(0.08, min_note)/step)))
-    energies=[max(0.0,f.energy) for f in segment]
-    positive=[e for e in energies if e>0]
+    min_frames = max(5, int(round(max(0.08, min_note) / step)))
+    energies = [max(0.0, f.energy) for f in segment]
+    positive = [e for e in energies if e > 0]
     if not positive:
         return []
-    typical=statistics.median(positive)
-    if typical<=1e-8:
+    typical = statistics.median(positive)
+    if typical <= 1e-8:
         return []
-    low_threshold=typical*0.52
-    min_low=max(2,int(round(0.018/step)))
-    max_low=max(min_low,int(round(0.11/step)))
-    context=max(3,int(round(0.045/step)))
-    boundaries=[]
-    i=min_frames
-    while i < len(segment)-min_frames:
+    low_threshold = typical * 0.52
+    min_low = max(2, int(round(0.018 / step)))
+    max_low = max(min_low, int(round(0.11 / step)))
+    context = max(3, int(round(0.045 / step)))
+    boundaries = []
+    i = min_frames
+    while i < len(segment) - min_frames:
         if energies[i] > low_threshold:
-            i+=1; continue
-        left=i
+            i += 1
+            continue
+        left = i
         while i < len(segment) and energies[i] <= low_threshold:
-            i+=1
-        right=i
-        width=right-left
+            i += 1
+        right = i
+        width = right - left
         if not min_low <= width <= max_low:
             continue
-        if left < context or right+context > len(segment):
+        if left < context or right + context > len(segment):
             continue
-        before=statistics.median(energies[left-context:left])
-        valley=statistics.median(energies[left:right])
-        after=statistics.median(energies[right:right+context])
-        if before >= typical*0.62 and after >= typical*0.68 and valley <= min(before,after)*0.55:
-            boundary=right
-            if boundary>=min_frames and len(segment)-boundary>=min_frames:
+        before = statistics.median(energies[left - context : left])
+        valley = statistics.median(energies[left:right])
+        after = statistics.median(energies[right : right + context])
+        if (
+            before >= typical * 0.62
+            and after >= typical * 0.68
+            and valley <= min(before, after) * 0.55
+        ):
+            boundary = right
+            if boundary >= min_frames and len(segment) - boundary >= min_frames:
                 boundaries.append(boundary)
     return boundaries
 
@@ -244,14 +248,27 @@ def _split_on_reattacks(segment: list[PitchFrame], min_note: float) -> list[list
     if not boundaries:
         return [segment]
     edges = [0, *boundaries, len(segment)]
-    parts = [segment[left:right] for left, right in zip(edges, edges[1:]) if right > left]
+    parts = [
+        segment[left:right] for left, right in zip(edges, edges[1:], strict=False) if right > left
+    ]
     # Keep only musically useful splits; otherwise return the original segment.
     durations = []
     for part in parts:
         if len(part) > 1:
-            step = max(0.005, min(0.04, statistics.median(
-                [b.time - a.time for a, b in zip(part, part[1:]) if b.time > a.time] or [0.01]
-            )))
+            step = max(
+                0.005,
+                min(
+                    0.04,
+                    statistics.median(
+                        [
+                            b.time - a.time
+                            for a, b in zip(part, part[1:], strict=False)
+                            if b.time > a.time
+                        ]
+                        or [0.01]
+                    ),
+                ),
+            )
         else:
             step = 0.01
         durations.append(part[-1].time - part[0].time + step)
@@ -273,14 +290,17 @@ def _bend_curve(
     result: list[tuple[float, float]] = []
     last_time = -1.0
     last_cents: float | None = None
-    for index, (frame, value) in enumerate(zip(segment, midi)):
+    for index, (frame, value) in enumerate(zip(segment, midi, strict=False)):
         relative = max(0.0, min(duration, frame.time - start))
         cents = max(-199.0, min(199.0, (value - base) * 100.0))
         # MIDI pitch-bend does not need a 100 Hz control stream. Keep changes
         # at ~25 ms resolution unless the bend changed materially.
-        if index not in {0, len(segment) - 1}:
-            if relative - last_time < 0.025 and last_cents is not None and abs(cents - last_cents) < 12.0:
-                continue
+        if index not in {0, len(segment) - 1} and (
+            relative - last_time < 0.025
+            and last_cents is not None
+            and abs(cents - last_cents) < 12.0
+        ):
+            continue
         result.append((relative, cents))
         last_time = relative
         last_cents = cents
@@ -296,7 +316,9 @@ def _note_from_segment(
     if not segment:
         return None
     step = (
-        statistics.median([b.time - a.time for a, b in zip(segment, segment[1:]) if b.time > a.time])
+        statistics.median(
+            [b.time - a.time for a, b in zip(segment, segment[1:], strict=False) if b.time > a.time]
+        )
         if len(segment) > 1
         else 0.01
     )
@@ -311,7 +333,7 @@ def _note_from_segment(
     max_energy = max(energies) if energies else 1.0
     weights = [
         max(0.02, frame.confidence) * (0.35 + 0.65 * energy / max_energy)
-        for frame, energy in zip(segment, energies)
+        for frame, energy in zip(segment, energies, strict=False)
     ]
     center = _robust_pitch_center(values, weights)
     base = max(0, min(127, int(round(center))))
@@ -329,20 +351,24 @@ def _note_from_segment(
     )
 
 
-def _best_syllable_for_segment(segment: list[PitchFrame], syllables: list[Syllable]) -> Syllable | None:
+def _best_syllable_for_segment(
+    segment: list[PitchFrame], syllables: list[Syllable]
+) -> Syllable | None:
     if not syllables or not segment:
         return None
-    start=segment[0].time
-    end=segment[-1].time + 0.01
-    midpoint=(start+end)/2
-    overlaps=[]
+    start = segment[0].time
+    end = segment[-1].time + 0.01
+    midpoint = (start + end) / 2
+    overlaps = []
     for syllable in syllables:
-        overlap=max(0.0,min(end,syllable.end)-max(start,syllable.start))
-        if overlap>0:
-            overlaps.append((overlap, -abs((syllable.start+syllable.end)/2-midpoint), syllable))
+        overlap = max(0.0, min(end, syllable.end) - max(start, syllable.start))
+        if overlap > 0:
+            overlaps.append(
+                (overlap, -abs((syllable.start + syllable.end) / 2 - midpoint), syllable)
+            )
     if overlaps:
-        return max(overlaps, key=lambda item:(item[0],item[1]))[2]
-    return min(syllables, key=lambda item: abs((item.start+item.end)/2-midpoint))
+        return max(overlaps, key=lambda item: (item[0], item[1]))[2]
+    return min(syllables, key=lambda item: abs((item.start + item.end) / 2 - midpoint))
 
 
 def build_vocal_notes(
@@ -360,7 +386,7 @@ def build_vocal_notes(
     energy re-attacks define notes; words/syllables only label the result.
     """
     frames = sorted(pitch, key=lambda frame: frame.time)
-    ordered_syllables = sorted(syllables, key=lambda item:(item.start,item.end))
+    ordered_syllables = sorted(syllables, key=lambda item: (item.start, item.end))
     output: list[VocalNote] = []
 
     runs = _voiced_runs(frames, max_gap=max_gap, min_confidence=min_confidence)
@@ -382,9 +408,17 @@ def build_vocal_notes(
             trimmed_end = max(previous.start, note.start)
             if trimmed_end - previous.start >= min_note:
                 monophonic[-1] = VocalNote(
-                    previous.start, trimmed_end, previous.midi_note, previous.velocity,
-                    previous.word_index, previous.syllable_index,
-                    tuple((time,cents) for time,cents in previous.cents if time <= trimmed_end-previous.start+1e-9),
+                    previous.start,
+                    trimmed_end,
+                    previous.midi_note,
+                    previous.velocity,
+                    previous.word_index,
+                    previous.syllable_index,
+                    tuple(
+                        (time, cents)
+                        for time, cents in previous.cents
+                        if time <= trimmed_end - previous.start + 1e-9
+                    ),
                 )
             else:
                 monophonic.pop()
@@ -397,16 +431,27 @@ def _repair_note_outliers(notes: list[VocalNote]) -> list[VocalNote]:
     if len(notes) < 3:
         return notes
     out = list(notes)
-    for i in range(1, len(out)-1):
-        prev, cur, nxt = out[i-1], out[i], out[i+1]
-        dur = cur.end-cur.start
-        if prev.syllable_index == cur.syllable_index == nxt.syllable_index:
-            if abs(prev.midi_note-nxt.midi_note) <= 1 and dur < 0.18:
-                for shift in (-12, 12):
-                    candidate = cur.midi_note + shift
-                    if abs(candidate-prev.midi_note) <= 1 and abs(candidate-nxt.midi_note) <= 1:
-                        out[i] = VocalNote(cur.start, cur.end, candidate, cur.velocity, cur.word_index, cur.syllable_index, cur.cents)
-                        break
+    for i in range(1, len(out) - 1):
+        prev, cur, nxt = out[i - 1], out[i], out[i + 1]
+        dur = cur.end - cur.start
+        if (
+            prev.syllable_index == cur.syllable_index == nxt.syllable_index
+            and abs(prev.midi_note - nxt.midi_note) <= 1
+            and dur < 0.18
+        ):
+            for shift in (-12, 12):
+                candidate = cur.midi_note + shift
+                if abs(candidate - prev.midi_note) <= 1 and abs(candidate - nxt.midi_note) <= 1:
+                    out[i] = VocalNote(
+                        cur.start,
+                        cur.end,
+                        candidate,
+                        cur.velocity,
+                        cur.word_index,
+                        cur.syllable_index,
+                        cur.cents,
+                    )
+                    break
     return out
 
 
@@ -435,11 +480,15 @@ def build_game_notes(vocal: list[VocalNote], min_note: float = 0.08) -> list[Voc
             tiny_gap = clean.start - previous.end <= 0.055
             # Merge same-pitch fragments. Also absorb a one-semitone micro-event
             # when it is very short; these are commonly residual vibrato edges.
-            if same_unit and tiny_gap and (
-                clean.midi_note == previous.midi_note
-                or (
-                    abs(clean.midi_note - previous.midi_note) == 1
-                    and clean.end - clean.start < 0.13
+            if (
+                same_unit
+                and tiny_gap
+                and (
+                    clean.midi_note == previous.midi_note
+                    or (
+                        abs(clean.midi_note - previous.midi_note) == 1
+                        and clean.end - clean.start < 0.13
+                    )
                 )
             ):
                 weighted_pitch = (

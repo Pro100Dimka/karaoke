@@ -48,6 +48,14 @@ class FCPEPitchEstimator(PitchEstimator):
         if y.size == 0:
             return []
 
+        # Source separators may emit floating-point samples just outside the
+        # conventional range. TorchFCPE rejects those tensors, so attenuate only
+        # truly clipped input while preserving the waveform and dynamics.
+        y = np.asarray(y, dtype=np.float32)
+        peak = float(np.max(np.abs(y)))
+        if peak > 0.999:
+            y = np.ascontiguousarray(y * (0.999 / peak), dtype=np.float32)
+
         # Official TorchFCPE input shape is [batch, samples, channel].
         tensor = (
             torch.from_numpy(np.asarray(y, dtype=np.float32))
@@ -93,7 +101,9 @@ class FCPEPitchEstimator(PitchEstimator):
             if len(candidate) == len(f0):
                 confidence = candidate
 
-        step = self.hop / self.sr if len(f0) == target_length else len(y) / self.sr / max(1, len(f0))
+        step = (
+            self.hop / self.sr if len(f0) == target_length else len(y) / self.sr / max(1, len(f0))
+        )
         energy_window = max(32, int(self.sr * 0.025))
         output: list[PitchFrame] = []
         for index, value in enumerate(f0):
@@ -101,9 +111,7 @@ class FCPEPitchEstimator(PitchEstimator):
             start = min(len(y), int(round(index * step * self.sr)))
             end = min(len(y), start + energy_window)
             energy = (
-                float(np.sqrt(np.mean(np.square(y[start:end])) + 1e-12))
-                if end > start
-                else 0.0
+                float(np.sqrt(np.mean(np.square(y[start:end])) + 1e-12)) if end > start else 0.0
             )
             valid = np.isfinite(hz) and self.fmin <= hz <= self.fmax
             conf = float(confidence[index]) if confidence is not None else min(1.0, energy * 20.0)

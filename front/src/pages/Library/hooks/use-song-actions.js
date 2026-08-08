@@ -62,7 +62,9 @@ export default function useLibrarySongActions(props) {
           await notify(`Не удалось удалить: ${getErrorMessage(error)}`);
         }
       } catch (error) {
-        await notify(`Не удалось подтвердить удаление: ${getErrorMessage(error)}`);
+        await notify(
+          `Не удалось подтвердить удаление: ${getErrorMessage(error)}`
+        );
       } finally {
         deletingSongIdsRef.current.delete(song.id);
       }

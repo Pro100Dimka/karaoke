@@ -19,6 +19,7 @@
     "check:imports": "node scripts/check-imports.mjs",
     "test:unit": "node --experimental-default-type=module --test tests/*.test.js",
     "audit:css": "node scripts/audit-css.mjs",
+    "clean:css": "node scripts/prune-unused-css.mjs && prettier --write src/**/*.css",
     "audit:exports": "node scripts/audit-exports.mjs",
     "check:sizes": "node scripts/check-file-sizes.mjs",
     "audit": "npm run check:syntax && npm run audit:css && npm run audit:exports && npm run audit:reachability && npm run audit:react && npm run audit:cycles && npm run audit:complexity && npm run check:sizes && npm run audit:duplicates && npm run audit:architecture",
@@ -53,17 +54,17 @@
     "lucide-react": "^0.383.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.24.0"
+    "react-router-dom": "^7.18.2"
   },
   "devDependencies": {
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
     "@babel/preset-env": "^7.29.7",
     "@babel/preset-react": "^7.29.7",
     "@playwright/test": "^1.62.1",
-    "@vitejs/plugin-react": "^4.3.1",
+    "@vitejs/plugin-react": "^6.0.5",
     "concurrently": "^8.2.2",
-    "electron": "^30.0.0",
-    "electron-builder": "^24.13.3",
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3",
     "eslint": "^8.54.0",
     "eslint-config-airbnb": "^19.0.4",
     "eslint-config-prettier": "^10.1.8",
@@ -76,7 +77,7 @@
     "postcss": "^8.5.25",
     "postcss-selector-parser": "^7.1.4",
     "prettier": "^3.9.6",
-    "vite": "^5.3.1",
+    "vite": "^8.2.1",
     "wait-on": "^7.2.0"
   },
   "build": {
@@ -91,6 +92,10 @@
       {
         "from": "../backend/dist/KaraokeBackend",
         "to": "backend"
+      },
+      {
+        "from": "src/assets/karaoke/videoplayback.mp4",
+        "to": "media/videoplayback.mp4"
       }
     ],
     "directories": {

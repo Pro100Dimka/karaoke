@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { FOCUSABLE_SELECTOR } from "../modal-focus";
 import { IconButton } from "../ui";
@@ -51,7 +51,7 @@ export default function Modal({
     onCloseRef.current = onClose;
   }, [onClose]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isOpen) return undefined;
 
     const token = modalTokenRef.current;
@@ -121,20 +121,17 @@ export default function Modal({
   if (!isOpen) return null;
 
   const joinClasses = (...values) =>
-    [...new Set(values.flatMap((value) => String(value || "").split(/\s+/)).filter(Boolean))].join(" ");
+    [
+      ...new Set(
+        values
+          .flatMap((value) => String(value || "").split(/\s+/))
+          .filter(Boolean)
+      )
+    ].join(" ");
 
-  const backdropClasses = joinClasses(
-    "app-modal-backdrop",
-    backdropClassName
-  );
-  const modalClasses = joinClasses(
-    "app-modal modal-card",
-    modalClassName
-  );
-  const closeClasses = joinClasses(
-    "app-modal-close",
-    closeClassName
-  );
+  const backdropClasses = joinClasses("app-modal-backdrop", backdropClassName);
+  const modalClasses = joinClasses("app-modal modal-card", modalClassName);
+  const closeClasses = joinClasses("app-modal-close", closeClassName);
 
   const content = (
     <div

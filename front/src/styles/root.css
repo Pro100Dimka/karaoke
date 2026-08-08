@@ -115,4 +115,15 @@
   --shadow-card: var(--shadow-md);
   --shadow-neon: var(--shadow-neon-soft);
   --shadow-neon-strong: var(--shadow-neon-primary);
+  --audio-band: 0;
+  --idle-level: 0.35;
+  --library-bg-x: 0px;
+  --library-bg-y: 0px;
+  --lyric-line-scale: 1;
+  --note-duration: 7s;
+  --note-scale: 1;
+  --note-x: 50%;
+  --note-y: 50%;
+  --radio-bass: 0;
+  --wave-min: 0;
 }

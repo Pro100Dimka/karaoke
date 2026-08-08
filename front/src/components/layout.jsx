@@ -79,7 +79,8 @@ export default function AppLayout() {
     };
 
     window.addEventListener("app:route-blackout", handleRouteBlackout);
-    return () => window.removeEventListener("app:route-blackout", handleRouteBlackout);
+    return () =>
+      window.removeEventListener("app:route-blackout", handleRouteBlackout);
   }, []);
 
   const openSettings = useCallback(() => {
@@ -128,9 +129,7 @@ export default function AppLayout() {
           className={`app-route-blackout ${routeBlackout ? "is-visible" : ""}`}
           aria-hidden="true"
         />
-        {isSettingsOpen && (
-          <Settings isOpen onClose={closeSettings} />
-        )}
+        {isSettingsOpen && <Settings isOpen onClose={closeSettings} />}
       </div>
     </div>
   );

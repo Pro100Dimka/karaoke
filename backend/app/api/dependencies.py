@@ -34,6 +34,7 @@ def require_analysis(recording_id: str, db: DatabaseSession) -> models.AnalysisR
         raise HTTPException(status_code=404, detail="Анализ ещё не выполнялся для этой записи")
     return result
 
+
 SongDependency = Annotated[models.Song, Depends(require_song)]
 RecordingDependency = Annotated[models.Recording, Depends(require_recording)]
 AnalysisDependency = Annotated[models.AnalysisResult, Depends(require_analysis)]

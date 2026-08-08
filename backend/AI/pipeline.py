@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import tempfile
+import time
+from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-import tempfile
-from typing import Callable
-import time
 
 from .artifacts import publish_files_atomically
 from .audio import decode_audio, duration
@@ -29,11 +30,11 @@ from .models import (
 )
 from .music import estimate_tempo
 from .notes import NOTE_DECODER_VERSION, build_game_notes, build_vocal_notes
-from .syllables import align_syllables
-from .utils.io import read_json, write_json_atomic, write_text_atomic
 from .pitch_post import stabilize_pitch
-from .quality import evaluate_quality
 from .profiler import environment_info
+from .quality import evaluate_quality
+from .syllables import SYLLABLE_ALIGNER_VERSION, align_syllables
+from .utils.io import read_json, write_json_atomic, write_text_atomic
 from .validators import (
     validate_audio,
     validate_derivation_json,
@@ -43,8 +44,8 @@ from .validators import (
     validate_pitch,
     validate_pitch_json,
     validate_timeline,
-    validate_words_json,
     validate_within_duration,
+    validate_words_json,
 )
 
 ProgressCallback = Callable[[str, float, str], None]
@@ -91,11 +92,8 @@ class KaraokePipeline:
     @staticmethod
     def _remove_stale(*paths: Path) -> None:
         for path in paths:
-            try:
+            with suppress(OSError):
                 path.unlink(missing_ok=True)
-            except OSError:
-                # A later atomic write will still fail loudly if the file is locked.
-                pass
 
     @staticmethod
     def _publish_text_alignment(
@@ -115,20 +113,31 @@ class KaraokePipeline:
 
     @staticmethod
     def _publish_midi_pair(
-        output: Path, vocal_midi: Path, game_midi: Path, vocal_notes, game_notes,
-        words, syllables, bpm: float, bend_range: int,
+        output: Path,
+        vocal_midi: Path,
+        game_midi: Path,
+        vocal_notes,
+        game_notes,
+        words,
+        syllables,
+        bpm: float,
+        bend_range: int,
     ) -> None:
         with tempfile.TemporaryDirectory(prefix="karaoke-midi-", dir=output) as temp_dir:
             root = Path(temp_dir)
             temp_vocal = root / "vocal.mid"
             temp_game = root / "game.mid"
             write_midi(temp_vocal, vocal_notes, words, syllables, bpm, True, bend_range)
-            write_midi(temp_game, game_notes or vocal_notes, words, syllables, bpm, False, bend_range)
+            write_midi(
+                temp_game, game_notes or vocal_notes, words, syllables, bpm, False, bend_range
+            )
             validate_midi(temp_vocal)
             validate_midi(temp_game)
             publish_files_atomically([(temp_vocal, vocal_midi), (temp_game, game_midi)])
 
-    def _cache_hit(self, cache: StageCache, stage: str, key: str, outputs: list[Path], validators=None) -> bool:
+    def _cache_hit(
+        self, cache: StageCache, stage: str, key: str, outputs: list[Path], validators=None
+    ) -> bool:
         if not self.config.validate_cached_artifacts:
             validators = None
         return cache.hit(stage, key, outputs, validators=validators)
@@ -206,7 +215,9 @@ class KaraokePipeline:
                 decode_audio(source, temporary_song, self.config.sample_rate)
                 validate_audio(temporary_song)
                 if cache.file_hash(source) != source_hash:
-                    raise RuntimeError("Source audio changed during decoding; retry with a stable file")
+                    raise RuntimeError(
+                        "Source audio changed during decoding; retry with a stable file"
+                    )
                 publish_files_atomically([(temporary_song, song_wav)])
             cache.commit("decode", decode_key, [song_wav])
             reports.append(StageReport("decode", time.perf_counter() - started, False, "ffmpeg"))
@@ -221,10 +232,18 @@ class KaraokePipeline:
                 "engine": self.engines.separator.name,
                 "command": getattr(self.engines.separator, "command", None),
                 "config": cache.optional_file_hash(getattr(self.engines.separator, "config", None)),
-                "checkpoint": cache.optional_file_hash(getattr(self.engines.separator, "checkpoint", None)),
+                "checkpoint": cache.optional_file_hash(
+                    getattr(self.engines.separator, "checkpoint", None)
+                ),
             },
         )
-        if self._cache_hit(cache, "separation", separation_key, [vocals, instrumental], {vocals: validate_audio, instrumental: validate_audio}):
+        if self._cache_hit(
+            cache,
+            "separation",
+            separation_key,
+            [vocals, instrumental],
+            {vocals: validate_audio, instrumental: validate_audio},
+        ):
             reports.append(StageReport("separation", 0, True, "cached"))
         else:
             with tempfile.TemporaryDirectory(prefix="karaoke-stems-", dir=output) as temp_dir:
@@ -241,16 +260,22 @@ class KaraokePipeline:
                 )
                 validate_audio(temporary_vocals)
                 validate_audio(temporary_instrumental)
-                publish_files_atomically([
-                    (temporary_vocals, vocals),
-                    (temporary_instrumental, instrumental),
-                ])
+                publish_files_atomically(
+                    [
+                        (temporary_vocals, vocals),
+                        (temporary_instrumental, instrumental),
+                    ]
+                )
             cache.commit("separation", separation_key, [vocals, instrumental])
 
         self._notify(request, "tempo", 48, "Анализ темпа")
         music_path = output / "music.json"
-        tempo_key = cache.key("tempo", {"instrumental": cache.file_hash(instrumental), "engine": "librosa-beat-v2"})
-        if self._cache_hit(cache, "tempo", tempo_key, [music_path], {music_path: validate_music_json}):
+        tempo_key = cache.key(
+            "tempo", {"instrumental": cache.file_hash(instrumental), "engine": "librosa-beat-v2"}
+        )
+        if self._cache_hit(
+            cache, "tempo", tempo_key, [music_path], {music_path: validate_music_json}
+        ):
             bpm = float(read_json(music_path, {}).get("bpm", 120.0))
             reports.append(StageReport("tempo", 0, True, "cached"))
         else:
@@ -258,7 +283,9 @@ class KaraokePipeline:
             bpm = estimate_tempo(instrumental)
             write_json_atomic(music_path, {"bpm": bpm})
             cache.commit("tempo", tempo_key, [music_path])
-            reports.append(StageReport("tempo", time.perf_counter() - started, False, "librosa-beat"))
+            reports.append(
+                StageReport("tempo", time.perf_counter() - started, False, "librosa-beat")
+            )
 
         self._notify(request, "pitch", 52, "Определение мелодии голоса")
         pitch_raw_path = output / "pitchRaw.json"
@@ -274,7 +301,9 @@ class KaraokePipeline:
                 "fmax": self.config.fmax_hz,
             },
         )
-        pitch_outputs = [pitch_raw_path, pitch_path] if self.config.preserve_raw_pitch else [pitch_path]
+        pitch_outputs = (
+            [pitch_raw_path, pitch_path] if self.config.preserve_raw_pitch else [pitch_path]
+        )
         pitch_validators = {path: validate_pitch_json for path in pitch_outputs}
         if self._cache_hit(cache, "pitch", pitch_key, pitch_outputs, pitch_validators):
             pitch = [PitchFrame(**item) for item in read_json(pitch_path, [])]
@@ -331,7 +360,9 @@ class KaraokePipeline:
             alignment_validators = {
                 words_path: lambda path: validate_json(path, ("text", "words")),
             }
-            if self._cache_hit(cache, "alignment", alignment_key, alignment_outputs, alignment_validators):
+            if self._cache_hit(
+                cache, "alignment", alignment_key, alignment_outputs, alignment_validators
+            ):
                 raw = read_json(words_path, {})
                 words = [Word(**item) for item in raw.get("words", [])]
                 reports.append(StageReport("alignment", 0, True, "cached"))
@@ -345,9 +376,7 @@ class KaraokePipeline:
                     warnings,
                 )
                 validate_timeline(words, "words")
-                self._publish_text_alignment(
-                    output, lyrics_txt, words_path, supplied, words
-                )
+                self._publish_text_alignment(output, lyrics_txt, words_path, supplied, words)
                 cache.commit("alignment", alignment_key, alignment_outputs)
         else:
             transcription_key = cache.key(
@@ -362,7 +391,13 @@ class KaraokePipeline:
                     "aligner_model": getattr(self.engines.aligner, "model_name", None),
                 },
             )
-            if self._cache_hit(cache, "transcription", transcription_key, [lyrics_txt, words_path], {words_path: validate_words_json}):
+            if self._cache_hit(
+                cache,
+                "transcription",
+                transcription_key,
+                [lyrics_txt, words_path],
+                {words_path: validate_words_json},
+            ):
                 text = lyrics_txt.read_text(encoding="utf-8")
                 words = [Word(**item) for item in read_json(words_path, {}).get("words", [])]
                 reports.append(StageReport("transcription", 0, True, "cached"))
@@ -388,9 +423,7 @@ class KaraokePipeline:
                         warnings,
                     )
                 validate_timeline(words, "words")
-                self._publish_text_alignment(
-                    output, lyrics_txt, words_path, text, words
-                )
+                self._publish_text_alignment(output, lyrics_txt, words_path, text, words)
                 cache.commit("transcription", transcription_key, [lyrics_txt, words_path])
         validate_within_duration(words, song_duration, "words", 0.5)
 
@@ -409,6 +442,7 @@ class KaraokePipeline:
                 "split": self.config.split_note_semitones,
                 "gap": self.config.max_gap_sec,
                 "decoder": NOTE_DECODER_VERSION,
+                "syllable_aligner": SYLLABLE_ALIGNER_VERSION,
             },
         )
         derivation_outputs = [syllable_path, reference, contour, notes_path]
@@ -418,8 +452,12 @@ class KaraokePipeline:
             contour: lambda path: validate_derivation_json(path, "frames"),
             notes_path: lambda path: validate_derivation_json(path, "notes"),
         }
-        if self._cache_hit(cache, "derivation", derivation_key, derivation_outputs, derivation_validators):
-            syllables = [Syllable(**item) for item in read_json(syllable_path, {}).get("syllables", [])]
+        if self._cache_hit(
+            cache, "derivation", derivation_key, derivation_outputs, derivation_validators
+        ):
+            syllables = [
+                Syllable(**item) for item in read_json(syllable_path, {}).get("syllables", [])
+            ]
             game_notes = [VocalNote(**item) for item in read_json(reference, {}).get("notes", [])]
             vocal_notes = [VocalNote(**item) for item in read_json(notes_path, {}).get("notes", [])]
             reports.append(StageReport("derivation", 0, True, "cached"))
@@ -443,7 +481,9 @@ class KaraokePipeline:
             write_json_atomic(contour, {"frames": [to_dict(item) for item in pitch]})
             write_json_atomic(notes_path, {"notes": [to_dict(item) for item in vocal_notes]})
             cache.commit("derivation", derivation_key, derivation_outputs)
-            reports.append(StageReport("derivation", time.perf_counter() - started, False, "word-aware"))
+            reports.append(
+                StageReport("derivation", time.perf_counter() - started, False, "word-aware")
+            )
         validate_within_duration(syllables, song_duration, "syllables", 0.5)
         validate_within_duration(vocal_notes, song_duration, "vocal notes", 0.1)
         validate_within_duration(game_notes, song_duration, "game notes", 0.1)
@@ -459,24 +499,57 @@ class KaraokePipeline:
                 "bend": self.config.midi_bend_range,
             },
         )
-        if vocal_notes and self._cache_hit(cache, "midi", midi_key, [vocal_midi, game_midi], {vocal_midi: validate_midi, game_midi: validate_midi}):
+        if vocal_notes and self._cache_hit(
+            cache,
+            "midi",
+            midi_key,
+            [vocal_midi, game_midi],
+            {vocal_midi: validate_midi, game_midi: validate_midi},
+        ):
             reports.append(StageReport("midi", 0, True, "cached"))
         elif vocal_notes:
             started = time.perf_counter()
             self._publish_midi_pair(
-                output, vocal_midi, game_midi, vocal_notes, game_notes,
-                words, syllables, bpm, self.config.midi_bend_range,
+                output,
+                vocal_midi,
+                game_midi,
+                vocal_notes,
+                game_notes,
+                words,
+                syllables,
+                bpm,
+                self.config.midi_bend_range,
             )
             cache.commit("midi", midi_key, [vocal_midi, game_midi])
-            reports.append(StageReport("midi", time.perf_counter() - started, False, "word-syllable-aware"))
+            reports.append(
+                StageReport("midi", time.perf_counter() - started, False, "word-syllable-aware")
+            )
         else:
             self._remove_stale(vocal_midi, game_midi)
             cache.invalidate("midi")
             warnings.append("No voiced notes detected; MIDI was not generated")
 
         song_map = output / "songMap.json"
-        song_map_key = cache.key("song-map", {"derivation": derivation_key, "duration": song_duration, "bpm": round(bpm, 6), "tempo": tempo_key})
-        if self._cache_hit(cache, "song-map", song_map_key, [song_map], {song_map: lambda path: validate_json(path, ("duration", "bpm", "words", "syllables", "notes"))}):
+        song_map_key = cache.key(
+            "song-map",
+            {
+                "derivation": derivation_key,
+                "duration": song_duration,
+                "bpm": round(bpm, 6),
+                "tempo": tempo_key,
+            },
+        )
+        if self._cache_hit(
+            cache,
+            "song-map",
+            song_map_key,
+            [song_map],
+            {
+                song_map: lambda path: validate_json(
+                    path, ("duration", "bpm", "words", "syllables", "notes")
+                )
+            },
+        ):
             reports.append(StageReport("song-map", 0, True, "cached"))
         else:
             write_json_atomic(
@@ -500,13 +573,16 @@ class KaraokePipeline:
             self._remove_stale(quality_path)
         warnings.extend(item for item in quality.warnings if item not in warnings)
         diagnostics_path = output / "diagnostics.json"
-        write_json_atomic(diagnostics_path, {
-            "environment": environment_info(),
-            "quality": to_dict(quality),
-            "stages": [to_dict(report) for report in reports],
-            "cache_hits": sum(1 for report in reports if report.cached),
-            "cache_misses": sum(1 for report in reports if not report.cached),
-        })
+        write_json_atomic(
+            diagnostics_path,
+            {
+                "environment": environment_info(),
+                "quality": to_dict(quality),
+                "stages": [to_dict(report) for report in reports],
+                "cache_hits": sum(1 for report in reports if report.cached),
+                "cache_misses": sum(1 for report in reports if not report.cached),
+            },
+        )
 
         outputs = {
             "song": "song.wav",

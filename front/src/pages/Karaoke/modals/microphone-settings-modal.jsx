@@ -15,7 +15,6 @@ const VIEW_TITLES = {
   settings: [Settings2, "Настройки караоке"]
 };
 
-
 function EffectsView({ effects, onEffectsChange, onEffectCommit }) {
   return (
     <div className="microphone-effects karaoke-effects-panel u-stack-4">
@@ -129,7 +128,8 @@ export default function MicrophoneSettingsModal(props) {
   const { view, onClose } = props;
   const isEffectsView = view === "effects";
 
-  const [TitleIcon, title] = VIEW_TITLES[isEffectsView ? "effects" : "settings"];
+  const [TitleIcon, title] =
+    VIEW_TITLES[isEffectsView ? "effects" : "settings"];
 
   return (
     <Modal

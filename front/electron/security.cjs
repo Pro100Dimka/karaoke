@@ -21,7 +21,9 @@ function isAllowedRendererUrl(value, { isDev, devOrigin, packagedIndexUrl }) {
   }
 
   if (url.protocol !== "file:") return false;
-  return url.href === packagedIndexUrl || url.href.startsWith(`${packagedIndexUrl}#`);
+  return (
+    url.href === packagedIndexUrl || url.href.startsWith(`${packagedIndexUrl}#`)
+  );
 }
 
 function isAllowedPermissionRequest({
@@ -48,8 +50,8 @@ function isAllowedPermissionRequest({
 function isTrustedIpcEvent(event, expectedWebContents) {
   return Boolean(
     expectedWebContents &&
-      event?.sender === expectedWebContents &&
-      !expectedWebContents.isDestroyed()
+    event?.sender === expectedWebContents &&
+    !expectedWebContents.isDestroyed()
   );
 }
 

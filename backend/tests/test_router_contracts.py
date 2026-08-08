@@ -9,7 +9,9 @@ from app.routers import application, audio, cache, diagnostics, player
 
 
 def test_application_settings_and_about(monkeypatch):
-    monkeypatch.setattr(application.app_settings_service, "read_settings", lambda: {"theme": "dark"})
+    monkeypatch.setattr(
+        application.app_settings_service, "read_settings", lambda: {"theme": "dark"}
+    )
     saved = []
     monkeypatch.setattr(
         application.app_settings_service,
@@ -111,8 +113,12 @@ def test_player_router_delegates(monkeypatch):
     monkeypatch.setattr(player.player_service, "get_sync_data", lambda value: ("sync", value.id))
     monkeypatch.setattr(player.player_service, "get_timeline", lambda value: ("timeline", value.id))
     monkeypatch.setattr(player.player_service, "get_state", lambda _db, song_id: ("state", song_id))
-    monkeypatch.setattr(player.player_service, "seek", lambda _db, song_id, position: (song_id, position))
-    monkeypatch.setattr(player.player_service, "set_playing", lambda _db, song_id, playing: (song_id, playing))
+    monkeypatch.setattr(
+        player.player_service, "seek", lambda _db, song_id, position: (song_id, position)
+    )
+    monkeypatch.setattr(
+        player.player_service, "set_playing", lambda _db, song_id, playing: (song_id, playing)
+    )
     monkeypatch.setattr(player.player_service, "stop", lambda _db, song_id: ("stop", song_id))
 
     assert player.get_sync(song) == ("sync", "song")

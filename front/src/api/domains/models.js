@@ -7,9 +7,13 @@ export const modelsApi = {
       Array.isArray(models) ? models.map(normalizeModel) : []
     ),
   downloadModel: (name) =>
-    request(`/models/whisper/${encodePathSegment(name)}/download`, { method: "POST" }),
+    request(`/models/whisper/${encodePathSegment(name)}/download`, {
+      method: "POST"
+    }),
   deleteModel: (name) =>
     request(`/models/whisper/${encodePathSegment(name)}`, { method: "DELETE" }),
   selectModel: (name) =>
-    request(`/models/whisper/${encodePathSegment(name)}/select`, { method: "POST" })
+    request(`/models/whisper/${encodePathSegment(name)}/select`, {
+      method: "POST"
+    })
 };

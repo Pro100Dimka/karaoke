@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import useAsyncQueue from "./useAsyncQueue";
 import { api } from "../api/client";
 import { getErrorMessage } from "../utils/errors";
 import { applyTheme } from "../utils/theme";
-import useAppSettings from "./useAppSettings";
 import {
   mergeSettings,
   prepareSettingValue,
   resolveSavedSetting
 } from "./settings-form-utils";
+import useAppSettings from "./useAppSettings";
+import useAsyncQueue from "./useAsyncQueue";
 
 const SAVE_STATUS = {
   IDLE: "idle",
@@ -48,6 +48,8 @@ export default function useSettingsForm(notify) {
     return () => {
       mountedRef.current = false;
       saveRequestRef.current += 1;
+      // The map object is stable for this hook's lifetime.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       fieldRequestRef.current.clear();
       pendingSaveCountRef.current = 0;
       saveFailedRef.current = false;
@@ -154,7 +156,9 @@ export default function useSettingsForm(notify) {
         }
 
         failed = true;
-        await notify(`Не удалось сохранить настройку: ${getErrorMessage(error)}`);
+        await notify(
+          `Не удалось сохранить настройку: ${getErrorMessage(error)}`
+        );
       } finally {
         finishSave(failed);
       }

@@ -49,4 +49,8 @@ def atomic_write(path: Path, writer: Callable[[BinaryIO], None]) -> None:
 
 def atomic_write_bytes(path: Path, payload: bytes) -> None:
     """Atomically write a bytes payload."""
-    atomic_write(path, lambda stream: stream.write(payload))
+
+    def write_payload(stream: BinaryIO) -> None:
+        stream.write(payload)
+
+    atomic_write(path, write_payload)

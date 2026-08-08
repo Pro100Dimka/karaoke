@@ -1,9 +1,9 @@
 """Управление песнями + запуск AI-обработки."""
 
 import tempfile
+import zipfile
 from collections.abc import Callable
 from pathlib import Path
-import zipfile
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -28,13 +28,15 @@ def _processing_status(
     telemetry: dict[str, object] | None = None,
 ) -> schemas.ProcessingStatusOut:
     telemetry = telemetry or {}
+    progress_detail = telemetry.get("progress_detail")
+    eta_seconds = telemetry.get("eta_seconds")
     return schemas.ProcessingStatusOut(
         song_id=song.id,
         status=song.status,
         progress_step=song.progress_step,
         progress_percent=song.progress_percent,
-        progress_detail=telemetry.get("progress_detail"),
-        eta_seconds=telemetry.get("eta_seconds"),
+        progress_detail=progress_detail if isinstance(progress_detail, str) else None,
+        eta_seconds=eta_seconds if isinstance(eta_seconds, int) else None,
         error_message=song.error_message,
     )
 
@@ -85,14 +87,13 @@ async def add_song(
     db: Session = Depends(get_db),
 ):
     config.FULL_SONGS_DIR.mkdir(parents=True, exist_ok=True)
-    temporary = tempfile.NamedTemporaryFile(
+    with tempfile.NamedTemporaryFile(
         prefix=".song-upload-",
         suffix=".tmp",
         dir=config.FULL_SONGS_DIR,
         delete=False,
-    )
-    temporary_path = Path(temporary.name)
-    temporary.close()
+    ) as temporary:
+        temporary_path = Path(temporary.name)
     try:
         await save_upload_limited(
             file,
@@ -148,14 +149,13 @@ async def import_song_package(
     db: Session = Depends(get_db),
 ):
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
-    temporary = tempfile.NamedTemporaryFile(
+    with tempfile.NamedTemporaryFile(
         prefix="karaoke-import-",
         suffix=".zip",
         dir=config.DATA_DIR,
         delete=False,
-    )
-    temporary_path = Path(temporary.name)
-    temporary.close()
+    ) as temporary:
+        temporary_path = Path(temporary.name)
     try:
         await save_upload_limited(
             file,

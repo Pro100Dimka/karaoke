@@ -7,10 +7,11 @@ remains independent from API schemas and legacy frontend artefacts.
 
 from __future__ import annotations
 
-from pathlib import Path
 import math
 import re
-from typing import Any, Callable
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
 
 from AI.engines.text import tokenize
 from AI.models import PitchFrame
@@ -51,9 +52,9 @@ def process_song(
     return result
 
 
-
 def get_run_all_pipeline():
     """Legacy callable kept for tests/extensions while using AI Core internally."""
+
     def _run(source_path, output_dir, whisper_model=None, language=None, **kwargs):
         del whisper_model
         return process_song(
@@ -64,6 +65,7 @@ def get_run_all_pipeline():
         )
 
     return _run
+
 
 def _pitch_frame_to_legacy(frame: PitchFrame) -> dict[str, Any]:
     midi = hz_to_midi(frame.frequency) if frame.voiced and frame.frequency > 0 else None
@@ -95,7 +97,8 @@ def _normalize_line_words(line: dict[str, Any]) -> dict[str, Any]:
     text = str(line.get("text") or "").strip()
     start = max(0.0, float(line.get("start") or 0.0))
     end = max(start, float(line.get("end") or start))
-    raw_words = line.get("words") if isinstance(line.get("words"), list) else []
+    candidate_words = line.get("words")
+    raw_words: list[Any] = candidate_words if isinstance(candidate_words, list) else []
 
     words: list[dict[str, Any]] = []
     for raw in raw_words:
@@ -104,8 +107,13 @@ def _normalize_line_words(line: dict[str, Any]) -> dict[str, Any]:
         token = str(raw.get("word") or raw.get("text") or "").strip()
         if not token:
             continue
-        word_start = max(start, float(raw.get("start") if raw.get("start") is not None else start))
-        word_end = min(end, max(word_start, float(raw.get("end") if raw.get("end") is not None else word_start)))
+        raw_start = raw.get("start")
+        raw_end = raw.get("end")
+        word_start = max(start, float(start if raw_start is None else raw_start))
+        word_end = min(
+            end,
+            max(word_start, float(word_start if raw_end is None else raw_end)),
+        )
         words.append({"word": token, "start": word_start, "end": word_end})
 
     if not words and text:
@@ -115,7 +123,7 @@ def _normalize_line_words(line: dict[str, Any]) -> dict[str, Any]:
             weights = [max(1, len(token)) for token in tokens]
             total = sum(weights)
             cursor = 0
-            for token, weight in zip(tokens, weights):
+            for token, weight in zip(tokens, weights, strict=True):
                 word_start = start + span * cursor / total
                 cursor += weight
                 word_end = start + span * cursor / total
@@ -181,7 +189,7 @@ def _group_words_into_lines(words: list[dict[str, Any]]) -> list[dict[str, Any]]
 
 
 def _reference_notes(output_dir: Path) -> list[dict[str, Any]]:
-    raw = read_json(output_dir / "reference.json", default={})
+    raw: Any = read_json(output_dir / "reference.json", default={})
     notes = raw.get("notes", []) if isinstance(raw, dict) else raw if isinstance(raw, list) else []
     result: list[dict[str, Any]] = []
     for note in notes:
@@ -209,11 +217,11 @@ def ensure_legacy_artifacts(output_dir: Path, *, title: str | None = None) -> No
     once the frontend consumes ``lyricsSync.json`` and ``songMap.json`` directly.
     """
     output_dir = Path(output_dir)
-    word_payload = read_json(output_dir / "lyricsSync.json", default={})
+    word_payload: Any = read_json(output_dir / "lyricsSync.json", default={})
     words = word_payload.get("words", []) if isinstance(word_payload, dict) else []
     write_json(output_dir / "lyrics.json", _group_words_into_lines(words))
 
-    song_map = read_json(output_dir / "songMap.json", default={})
+    song_map: Any = read_json(output_dir / "songMap.json", default={})
     if not isinstance(song_map, dict):
         song_map = {}
     song_info = dict(song_map)

@@ -14,16 +14,22 @@ export function listFiles(path, options = {}) {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const file = join(directory, entry.name);
       if (entry.isDirectory()) walk(file);
-      else if (!extensions || extensions.some((ext) => file.endsWith(ext))) files.push(file);
+      else if (!extensions || extensions.some((ext) => file.endsWith(ext)))
+        files.push(file);
     }
   };
   walk(sourcePath(path));
   return files;
 }
 
-export const relativeToRoot = (path) => relative(root, path).replaceAll("\\", "/");
+export const relativeToRoot = (path) =>
+  relative(root, path).replaceAll("\\", "/");
 
-export function sourceContract(name, path, { includes = [], excludes = [], count = [] }) {
+export function sourceContract(
+  name,
+  path,
+  { includes = [], excludes = [], count = [] }
+) {
   test(name, () => {
     const source = readSource(path);
     for (const pattern of includes) assert.match(source, pattern);
@@ -35,5 +41,7 @@ export function sourceContract(name, path, { includes = [], excludes = [], count
 }
 
 export function multiSourceContract(name, files, verify) {
-  test(name, () => verify(Object.fromEntries(files.map((path) => [path, readSource(path)]))));
+  test(name, () =>
+    verify(Object.fromEntries(files.map((path) => [path, readSource(path)])))
+  );
 }

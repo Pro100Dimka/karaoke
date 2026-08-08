@@ -5,7 +5,6 @@ const CONNECTION_TIMEOUT_MS = 10_000;
 const MAX_SIGNAL_MESSAGE_LENGTH = 256 * 1024;
 const MAX_PARTICIPANT_NAME_LENGTH = 64;
 
-
 export function createRoomId(
   cryptoApi = globalThis.crypto,
   random = Math.random
@@ -80,11 +79,16 @@ export class OnlineRoomClient {
     }
 
     this.disconnect();
-    const connectionVersion = this.connectionVersion;
-    const participantName = String(name ?? "")
-      .replace(/[\u0000-\u001F\u007F]/g, " ")
-      .trim()
-      .slice(0, MAX_PARTICIPANT_NAME_LENGTH) || "Гость";
+    const { connectionVersion } = this;
+    const participantName =
+      [...String(name ?? "")]
+        .map((character) => {
+          const code = character.charCodeAt(0);
+          return code <= 31 || code === 127 ? " " : character;
+        })
+        .join("")
+        .trim()
+        .slice(0, MAX_PARTICIPANT_NAME_LENGTH) || "Гость";
     const query = new URLSearchParams({
       name: participantName,
       role: host ? "host" : "guest"
@@ -144,7 +148,8 @@ export class OnlineRoomClient {
         }
         try {
           const message = JSON.parse(event.data);
-          if (!message || typeof message !== "object" || Array.isArray(message)) return;
+          if (!message || typeof message !== "object" || Array.isArray(message))
+            return;
           this.emit(message);
         } catch {
           // A malformed packet must not interrupt the room connection.
@@ -164,7 +169,7 @@ export class OnlineRoomClient {
   }
 
   send(type, payload = {}) {
-    const socket = this.socket;
+    const { socket } = this;
     if (socket?.readyState !== 1) return false;
     if (typeof type !== "string" || !type.trim()) return false;
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
@@ -190,4 +195,6 @@ export class OnlineRoomClient {
   }
 }
 
+// Node's direct ESM tests require the explicit source extension.
+// eslint-disable-next-line import/extensions
 export { default as OnlineVoiceMesh } from "./onlineVoiceMesh.js";

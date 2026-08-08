@@ -9,10 +9,9 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from app.services.db_utils import commit_refresh
-
 import config
 import models
+from app.services.db_utils import commit_refresh
 
 try:
     import numpy as np
@@ -27,17 +26,19 @@ _monitor_process: subprocess.Popen[str] | None = None
 _monitor_reader: threading.Thread | None = None
 _monitor_lock = threading.Lock()
 _EMPTY_MONITOR_SIGNAL = {"rms_db": -120.0, "clipping": False, "silent": True}
-_MONITOR_RESTART_FIELDS = frozenset({
-    "input_device_id",
-    "output_device_id",
-    "volume",
-    "audio_driver",
-    "asio_driver_name",
-    "buffer_size",
-    "reverb",
-    "echo",
-    "delay",
-})
+_MONITOR_RESTART_FIELDS = frozenset(
+    {
+        "input_device_id",
+        "output_device_id",
+        "volume",
+        "audio_driver",
+        "asio_driver_name",
+        "buffer_size",
+        "reverb",
+        "echo",
+        "delay",
+    }
+)
 _monitor_signal = dict(_EMPTY_MONITOR_SIGNAL)
 logger = logging.getLogger(__name__)
 
@@ -303,7 +304,6 @@ def update_settings(db: Session, patch: dict) -> models.AudioSettings:
         raise
 
 
-
 def set_monitoring_enabled(db: Session, enabled: bool) -> models.AudioSettings:
     """Change direct-monitor state while keeping runtime and SQLite in sync."""
     settings = get_settings(db)
@@ -327,6 +327,7 @@ def set_monitoring_enabled(db: Session, enabled: bool) -> models.AudioSettings:
         except Exception as restore_error:
             logger.warning("Could not restore direct monitoring after failure: %s", restore_error)
         raise
+
 
 def stop_monitoring() -> None:
     global _monitor_process, _monitor_reader

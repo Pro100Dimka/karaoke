@@ -41,8 +41,14 @@ export default function LibraryBackdrop() {
       currentY += (targetY - currentY) * 0.075;
       root.style.setProperty("--library-parallax-x", currentX.toFixed(3));
       root.style.setProperty("--library-parallax-y", currentY.toFixed(3));
-      root.style.setProperty("--library-bg-x", `${(-currentX * 7).toFixed(2)}px`);
-      root.style.setProperty("--library-bg-y", `${(-currentY * 4).toFixed(2)}px`);
+      root.style.setProperty(
+        "--library-bg-x",
+        `${(-currentX * 7).toFixed(2)}px`
+      );
+      root.style.setProperty(
+        "--library-bg-y",
+        `${(-currentY * 4).toFixed(2)}px`
+      );
       frame = requestAnimationFrame(render);
     };
 

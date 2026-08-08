@@ -31,9 +31,7 @@ def test_read_upload_limited_rejects_oversized_payload() -> None:
 def test_save_upload_limited_streams_file(tmp_path: Path) -> None:
     destination = tmp_path / "upload.bin"
     size = asyncio.run(
-        save_upload_limited(
-            make_upload(b"abcdef"), destination, limit=6, chunk_size=2
-        )
+        save_upload_limited(make_upload(b"abcdef"), destination, limit=6, chunk_size=2)
     )
     assert size == 6
     assert destination.read_bytes() == b"abcdef"
@@ -42,11 +40,7 @@ def test_save_upload_limited_streams_file(tmp_path: Path) -> None:
 def test_save_upload_limited_removes_partial_file_on_overflow(tmp_path: Path) -> None:
     destination = tmp_path / "upload.bin"
     with pytest.raises(HTTPException):
-        asyncio.run(
-            save_upload_limited(
-                make_upload(b"abcdef"), destination, limit=5, chunk_size=2
-            )
-        )
+        asyncio.run(save_upload_limited(make_upload(b"abcdef"), destination, limit=5, chunk_size=2))
     assert not destination.exists()
 
 

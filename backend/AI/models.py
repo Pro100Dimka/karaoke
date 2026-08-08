@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field, is_dataclass
 import math
+from dataclasses import asdict, dataclass, field, is_dataclass
 from typing import Any
 
 
@@ -133,8 +133,14 @@ class VocalNote(TimeSpan):
             previous = relative
         object.__setattr__(self, "midi_note", note)
         object.__setattr__(self, "velocity", velocity)
-        object.__setattr__(self, "word_index", None if self.word_index is None else int(self.word_index))
-        object.__setattr__(self, "syllable_index", None if self.syllable_index is None else int(self.syllable_index))
+        object.__setattr__(
+            self, "word_index", None if self.word_index is None else int(self.word_index)
+        )
+        object.__setattr__(
+            self,
+            "syllable_index",
+            None if self.syllable_index is None else int(self.syllable_index),
+        )
         object.__setattr__(self, "cents", tuple(normalized))
 
 

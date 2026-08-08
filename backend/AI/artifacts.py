@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import secrets
+from contextlib import suppress
+from pathlib import Path
 
 
 def publish_files_atomically(pairs: list[tuple[Path, Path]]) -> None:
@@ -37,19 +38,13 @@ def publish_files_atomically(pairs: list[tuple[Path, Path]]) -> None:
             published.append(target)
     except BaseException:
         for target in reversed(published):
-            try:
+            with suppress(OSError):
                 target.unlink(missing_ok=True)
-            except OSError:
-                pass
         for target, backup in reversed(backups):
             if backup.exists():
                 os.replace(backup, target)
         raise
     else:
         for _, backup in backups:
-            try:
+            with suppress(OSError):
                 backup.unlink(missing_ok=True)
-            except OSError:
-                # Publication succeeded; an orphaned backup is safer than reporting
-                # a false processing failure after replacing all targets.
-                pass

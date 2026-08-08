@@ -5,7 +5,6 @@
 правды, и отдаёт данные синхронизации, собранные AI-пайплайном.
 """
 
-
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 

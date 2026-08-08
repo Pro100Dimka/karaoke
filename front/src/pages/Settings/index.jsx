@@ -9,7 +9,11 @@ import { SAVE_BUTTONS } from "./config";
 import SettingsContent from "./settings-content";
 import SettingsTabs from "./settings-tabs";
 
-export default function Settings({ isOpen = true, onClose = () => {}, initialTab = "audio" }) {
+export default function Settings({
+  isOpen = true,
+  onClose = () => {},
+  initialTab = "audio"
+}) {
   const { alert } = useAppDialog();
   const settings = useSettingsForm(alert);
   const navigation = useSettingsNavigation(initialTab);
@@ -46,7 +50,10 @@ export default function Settings({ isOpen = true, onClose = () => {}, initialTab
     >
       <div className="settings-page">
         <div className="settings-layout">
-          <SettingsTabs value={navigation.tab} onChange={navigation.selectTab} />
+          <SettingsTabs
+            value={navigation.tab}
+            onChange={navigation.selectTab}
+          />
           <Panel className="settings-content-panel">
             {settings.form ? (
               <SettingsContent

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import math
-from pathlib import Path
-import subprocess
 import os
+import subprocess
 import tempfile
+from pathlib import Path
 
 import numpy as np
 import soundfile as sf
@@ -36,9 +36,23 @@ def decode_audio(
     os.close(descriptor)
     temporary = Path(temporary_name)
     command = [
-        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-        "-i", str(source_path), "-vn", "-ac", "2", "-ar", str(sample_rate),
-        "-c:a", "pcm_s24le", "-f", "wav", str(temporary),
+        "ffmpeg",
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        str(source_path),
+        "-vn",
+        "-ac",
+        "2",
+        "-ar",
+        str(sample_rate),
+        "-c:a",
+        "pcm_s24le",
+        "-f",
+        "wav",
+        str(temporary),
     ]
     try:
         subprocess.run(command, check=True, capture_output=True, timeout=timeout_sec)

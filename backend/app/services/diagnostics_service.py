@@ -7,8 +7,6 @@ import platform
 import shutil
 import subprocess
 
-import config
-
 BACKEND_VERSION = "0.2.4"
 
 
@@ -33,14 +31,15 @@ def _torch_info() -> tuple[bool, bool, str | None]:
         return False, False, None
 
 
-
 def _ai_package_available() -> bool:
     try:
         import AI  # noqa: F401
         from AI.service import AICoreService  # noqa: F401
+
         return True
     except ImportError:
         return False
+
 
 def pipeline_health() -> dict:
     torch_available, cuda_available, _ = _torch_info()

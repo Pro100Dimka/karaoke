@@ -31,7 +31,10 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
     };
     window.addEventListener("audio-preferences-changed", syncAudioPreferences);
     return () =>
-      window.removeEventListener("audio-preferences-changed", syncAudioPreferences);
+      window.removeEventListener(
+        "audio-preferences-changed",
+        syncAudioPreferences
+      );
   }, []);
 
   useEffect(() => {
@@ -54,7 +57,10 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
 
     globalThis.addEventListener?.("audio-settings-changed", syncAudioSettings);
     return () =>
-      globalThis.removeEventListener?.("audio-settings-changed", syncAudioSettings);
+      globalThis.removeEventListener?.(
+        "audio-settings-changed",
+        syncAudioSettings
+      );
   }, []);
 
   useEffect(() => {
@@ -87,7 +93,9 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
             globalThis.dispatchEvent?.(
               new CustomEvent("audio-settings-changed", { detail: updated })
             );
-          } catch {}
+          } catch {
+            // CustomEvent is unavailable in a few non-browser test runtimes.
+          }
           return updated;
         } catch (error) {
           if (mountedRef.current) {

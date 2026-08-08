@@ -70,7 +70,8 @@ export default function usePitchDetection({
           ownsStream = true;
         }
         if (!context) {
-          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          const AudioContextClass =
+            window.AudioContext || window.webkitAudioContext;
           if (!AudioContextClass) throw new Error("Web Audio API недоступен");
           context = new AudioContextClass({ latencyHint: "interactive" });
           ownsContext = true;
@@ -184,12 +185,7 @@ export default function usePitchDetection({
       if (ownsStream) stream?.getTracks().forEach((track) => track.stop());
       if (ownsContext) context?.close?.().catch(() => {});
     };
-  }, [
-    browserMonitorRef,
-    isPlaying,
-    monitorInputDeviceId,
-    monitoringEnabled
-  ]);
+  }, [browserMonitorRef, isPlaying, monitorInputDeviceId, monitoringEnabled]);
 
   return {
     sungMidi,

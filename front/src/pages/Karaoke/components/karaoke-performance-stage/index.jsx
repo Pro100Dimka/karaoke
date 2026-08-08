@@ -1,4 +1,6 @@
-import SCENE_VIDEO_URL from "../../../../assets/karaoke/videoplayback.mp4";
+import { useEffect, useRef } from "react";
+import useKaraokePanorama from "../../hooks/useKaraokePanorama";
+import AuroraWorld from "./aurora-world";
 import KaraokeLyricLine from "./karaoke-lyric-line";
 import MelodyRoll from "./melody-roll";
 
@@ -51,27 +53,70 @@ export default function KaraokePerformanceStage(props) {
     sceneBlackout,
     sceneIntroVisible,
     sceneIntro,
-    sceneVideoRef,
+    songId,
+    isPlaying,
     showLyrics,
     showNotes,
-    notes,
-    onSceneVideoReady
+    notes
   } = props;
+  const { activeTheme, panoramaRef } = useKaraokePanorama(songId, isPlaying);
+  const sceneVideoRef = useRef(null);
+  const sceneVideoUrl = globalThis.electronAPI?.getSceneVideoUrl?.() || "";
+  const sceneSeed = String(songId || "karaoke")
+    .split("")
+    .reduce(
+      (seed, character) => (seed * 31 + character.charCodeAt(0)) % 997,
+      17
+    );
+
+  useEffect(() => {
+    const video = sceneVideoRef.current;
+    if (!video) return;
+    if (!isPlaying) {
+      video.pause();
+      return;
+    }
+    video.play().catch(() => {});
+  }, [isPlaying, sceneVideoUrl]);
+
+  const prepareSceneVideo = () => {
+    const video = sceneVideoRef.current;
+    if (!video) return;
+    const videoDuration = Number(video.duration);
+    if (Number.isFinite(videoDuration) && videoDuration > 1) {
+      video.currentTime =
+        (sceneSeed * 37.17) % Math.max(0.1, videoDuration - 0.5);
+    }
+    if (isPlaying) video.play().catch(() => {});
+  };
 
   return (
-    <div className="karaoke-performance-stage karaoke-video-stage">
-      <video
-        ref={sceneVideoRef}
-        className="karaoke-scene-video"
-        src={SCENE_VIDEO_URL}
-        muted
-        loop
-        autoPlay
-        playsInline
-        preload="auto"
-        onLoadedMetadata={onSceneVideoReady}
-        aria-hidden="true"
-      />
+    <div
+      className={`karaoke-performance-stage karaoke-video-stage ${isPlaying ? "is-playing" : "is-paused"}`}
+    >
+      {sceneVideoUrl ? (
+        <video
+          ref={sceneVideoRef}
+          className="karaoke-scene-video"
+          src={sceneVideoUrl}
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          onLoadedMetadata={prepareSceneVideo}
+          aria-hidden="true"
+        />
+      ) : (
+        <>
+          <div
+            ref={panoramaRef}
+            className="karaoke-panoramic-sky"
+            style={{ "--panorama-image": `url("${activeTheme.image}")` }}
+            aria-hidden="true"
+          />
+          <AuroraWorld seed={sceneSeed} />
+        </>
+      )}
 
       <div
         className={`karaoke-scene-blackout ${sceneBlackout ? "is-visible" : ""}`}

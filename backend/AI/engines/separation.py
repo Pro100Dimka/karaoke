@@ -61,7 +61,7 @@ class MSSTMelRoformerSeparator(Separator):
         return True
 
     def _build_command(self, input_dir: Path, output_dir: Path) -> list[str]:
-        if not self.command:
+        if not self.command or not self.config or not self.checkpoint:
             raise EngineUnavailableError("MSST_INFERENCE_COMMAND is not configured")
         command = shlex.split(self.command, posix=True)
         command.extend(
@@ -108,8 +108,7 @@ class MSSTMelRoformerSeparator(Separator):
             except FileNotFoundError as exc:
                 command = self._build_command(input_dir, output_dir)
                 raise EngineUnavailableError(
-                    "MSST inference command could not be started. "
-                    f"Executable: {command[0]!r}"
+                    f"MSST inference command could not be started. Executable: {command[0]!r}"
                 ) from exc
             except subprocess.TimeoutExpired as exc:
                 raise AICoreError("MSST exceeded the 30-minute safety timeout") from exc
@@ -128,22 +127,17 @@ class MSSTMelRoformerSeparator(Separator):
             instrumental_candidates = [
                 path
                 for path in all_wavs
-                if "instrumental" in path.name.lower()
-                or "no_vocal" in path.name.lower()
+                if "instrumental" in path.name.lower() or "no_vocal" in path.name.lower()
             ]
             if not vocal_candidates:
                 tail = (completed.stdout or "")[-2000:]
                 raise AICoreError(f"MSST did not produce a vocals stem. Output: {tail}")
 
             mix_audio, sample_rate = sf.read(mix, dtype="float32", always_2d=True)
-            vocal_audio, vocal_rate = sf.read(
-                vocal_candidates[0], dtype="float32", always_2d=True
-            )
+            vocal_audio, vocal_rate = sf.read(vocal_candidates[0], dtype="float32", always_2d=True)
             if sample_rate != vocal_rate:
                 raise AICoreError("MSST vocals sample-rate mismatch")
-            vocal_audio = _fit_channels_and_length(
-                vocal_audio, mix_audio.shape[1], len(mix_audio)
-            )
+            vocal_audio = _fit_channels_and_length(vocal_audio, mix_audio.shape[1], len(mix_audio))
 
             if instrumental_candidates:
                 instrumental_audio, instrumental_rate = sf.read(

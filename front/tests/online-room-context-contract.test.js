@@ -8,9 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const context = read("src/contexts/OnlineRoomContext.jsx");
 const speakingLevels = read("src/contexts/hooks/useSpeakingLevels.js");
-const applicationAudio = read(
-  "src/contexts/hooks/useApplicationAudioMute.js"
-);
+const applicationAudio = read("src/contexts/hooks/useApplicationAudioMute.js");
 
 test("OnlineRoom delegates speaking level analysis to a dedicated hook", () => {
   assert.match(context, /useSpeakingLevels\(\)/);
@@ -22,7 +20,7 @@ test("speaking level hook cleans intervals, nodes and AudioContext", () => {
   assert.match(speakingLevels, /window\.clearInterval/);
   assert.match(speakingLevels, /disconnectNode\(meter\.source\)/);
   assert.match(speakingLevels, /disconnectNode\(meter\.analyser\)/);
-  assert.match(speakingLevels, /audioContextRef\.current\?\.close\(\)/);
+  assert.match(speakingLevels, /context\.close\(\)/);
 });
 
 test("room audio muting preserves and restores original audio state", () => {
@@ -74,9 +72,18 @@ test("room connections ignore stale asynchronous completions", () => {
 test("stale voice callbacks cannot mutate the active room", () => {
   assert.match(context, /const isCurrentConnection = \(\) =>/);
   assert.match(context, /if \(!isCurrentConnection\(\)\) \{/);
-  assert.match(context, /stream\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
-  assert.match(context, /if \(isCurrentConnection\(\)\) removeRemoteAudio\(participantId\)/);
-  assert.match(context, /if \(!isCurrentConnection\(\)\) return;\n\s+const pendingCommand/);
+  assert.match(
+    context,
+    /stream\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\)/
+  );
+  assert.match(
+    context,
+    /if \(isCurrentConnection\(\)\) removeRemoteAudio\(participantId\)/
+  );
+  assert.match(
+    context,
+    /if \(!isCurrentConnection\(\)\) return;\n\s+const pendingCommand/
+  );
 });
 
 test("stale microphone startup errors are ignored", () => {

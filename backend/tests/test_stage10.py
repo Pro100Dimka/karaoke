@@ -56,7 +56,9 @@ def test_delete_recording_restores_files_when_commit_fails(tmp_path, monkeypatch
         path.write_bytes(path.name.encode())
     recording = _recording(voice)
     monkeypatch.setattr(recording_service, "resolve_recording_path", lambda value: voice)
-    monkeypatch.setattr(recording_service, "performance_mix_paths", lambda value: (mix, tmp_path / "missing.wav"))
+    monkeypatch.setattr(
+        recording_service, "performance_mix_paths", lambda value: (mix, tmp_path / "missing.wav")
+    )
     db = FakeDb(fail_commit=True)
 
     with pytest.raises(RuntimeError, match="database locked"):

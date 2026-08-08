@@ -161,15 +161,16 @@ export default function PerformanceAnalysisModal({
         eyebrow: "РЕЗУЛЬТАТ ИСПОЛНЕНИЯ",
         title: "Анализ выступления",
         description: "Точность нот, ритм и рекомендации по исполнению.",
-        actions: (result || error) ? (
-          <Button
-            variant="primary"
-            onClick={result ? (onDone ?? onClose) : onClose}
-            className="modal-title-action"
-          >
-            {result ? "Готово" : "Закрыть"}
-          </Button>
-        ) : null
+        actions:
+          result || error ? (
+            <Button
+              variant="primary"
+              onClick={result ? (onDone ?? onClose) : onClose}
+              className="modal-title-action"
+            >
+              {result ? "Готово" : "Закрыть"}
+            </Button>
+          ) : null
       }}
     >
       <VictoryScene />

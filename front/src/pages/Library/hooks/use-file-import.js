@@ -1,9 +1,13 @@
 import { useCallback } from "react";
-import useExclusiveAsyncAction from "../../../hooks/useExclusiveAsyncAction";
 import { api } from "../../../api/client";
+import useExclusiveAsyncAction from "../../../hooks/useExclusiveAsyncAction";
 import { getErrorMessage } from "../../../utils/errors";
 
-export default function useLibraryFileImport({ fileInputRef, notify, onStarted }) {
+export default function useLibraryFileImport({
+  fileInputRef,
+  notify,
+  onStarted
+}) {
   const { pending, run } = useExclusiveAsyncAction();
   const openFilePicker = useCallback(() => {
     if (!pending) fileInputRef.current?.click();

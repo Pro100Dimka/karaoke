@@ -34,7 +34,9 @@ def test_lifespan_stops_monitoring_even_if_recording_cleanup_fails(monkeypatch):
 
     monkeypatch.setattr(main_module, "init_db", lambda: None)
     monkeypatch.setattr(main_module.recording_service, "close_all_sessions", fail_close)
-    monkeypatch.setattr(main_module.audio_service, "stop_monitoring", lambda: calls.append("monitor"))
+    monkeypatch.setattr(
+        main_module.audio_service, "stop_monitoring", lambda: calls.append("monitor")
+    )
 
     async def exercise():
         manager = main_module.lifespan(main_module.app)

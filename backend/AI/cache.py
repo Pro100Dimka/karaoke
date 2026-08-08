@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-from pathlib import Path
 import threading
-from typing import Callable
+from collections.abc import Callable
+from pathlib import Path
 
 from .locks import FileLock
 from .utils.io import read_json, write_json_atomic
@@ -41,7 +41,12 @@ class StageCache:
     def file_hash(self, path: str | Path, block: int = 1024 * 1024) -> str:
         source = Path(path)
         stat = source.stat()
-        memo_key = (str(source.resolve()), stat.st_size, stat.st_mtime_ns, getattr(stat, "st_ctime_ns", 0))
+        memo_key = (
+            str(source.resolve()),
+            stat.st_size,
+            stat.st_mtime_ns,
+            getattr(stat, "st_ctime_ns", 0),
+        )
         with self._lock:
             cached = self._hash_memo.get(memo_key)
         if cached is not None:
@@ -67,10 +72,22 @@ class StageCache:
 
     @staticmethod
     def key(stage: str, payload: dict) -> str:
-        raw = json.dumps({"stage": stage, "payload": payload}, sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=str)
+        raw = json.dumps(
+            {"stage": stage, "payload": payload},
+            sort_keys=True,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            default=str,
+        )
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
-    def hit(self, stage: str, key: str, outputs: list[Path], validators: dict[Path, Validator] | None = None) -> bool:
+    def hit(
+        self,
+        stage: str,
+        key: str,
+        outputs: list[Path],
+        validators: dict[Path, Validator] | None = None,
+    ) -> bool:
         with self._lock:
             self.index = self._load_index()
             entry = self.index.get("stages", {}).get(stage)
@@ -103,7 +120,10 @@ class StageCache:
             path = Path(output)
             if not path.is_file() or path.stat().st_size <= 0:
                 raise FileNotFoundError(f"Cannot cache missing artifact: {path}")
-            artifact_data[str(path.resolve())] = {"size": path.stat().st_size, "sha256": self.file_hash(path)}
+            artifact_data[str(path.resolve())] = {
+                "size": path.stat().st_size,
+                "sha256": self.file_hash(path),
+            }
         with self._lock, self._process_lock():
             self.index = self._load_index()
             self.index.setdefault("stages", {})[stage] = {"key": key, "outputs": artifact_data}

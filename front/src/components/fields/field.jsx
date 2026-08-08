@@ -9,11 +9,7 @@ export default function Field({
   children
 }) {
   const baseClass = inline ? "settings-toggle" : "settings-field";
-  const classes = [
-    baseClass,
-    variant && `${baseClass}--${variant}`,
-    className
-  ]
+  const classes = [baseClass, variant && `${baseClass}--${variant}`, className]
     .filter(Boolean)
     .join(" ");
 

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 import soundfile as sf
 
@@ -78,9 +78,7 @@ def validate_pitch(frames) -> None:
         if not 0 <= frame.confidence <= 1:
             raise InvalidArtifactError(f"Pitch confidence is out of range at frame {index}")
         if frame.voiced and frame.frequency <= 0:
-            raise InvalidArtifactError(
-                f"Voiced pitch frame {index} has no positive frequency"
-            )
+            raise InvalidArtifactError(f"Voiced pitch frame {index} has no positive frequency")
         previous_time = frame.time
 
 

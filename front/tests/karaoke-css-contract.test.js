@@ -39,7 +39,11 @@ function sourceClassNames() {
 
 test("application CSS imports use the new theme and page architecture", () => {
   const indexCss = fs.readFileSync(path.join(root, "src/index.css"), "utf8");
-  const expected = ["./styles/app.css"];
+  const expected = [
+    "./styles/root.css",
+    "./styles/theme.css",
+    "./styles/app.css"
+  ];
   const actual = [...indexCss.matchAll(/@import\s+["']([^"']+)["']/g)].map(
     (match) => match[1]
   );
@@ -95,10 +99,10 @@ test("critical Karaoke selectors and theme tokens remain available", () => {
     "karaoke-lyric-character",
     "waveform-timeline",
     "melody-roll",
-    "melody-note-platform",
+    "melody-pitch-indicator",
     "karaoke-settings-modal",
     "performance-analysis-modal",
-    "microphone-level-fill"
+    "karaoke-microphone-meter"
   ];
   const tokens = [
     "--color-bg",
@@ -133,6 +137,8 @@ test("all non-dynamic CSS custom properties are declared", () => {
     "--aurora-y",
     "--bar-height",
     "--bar-index",
+    "--card-mx",
+    "--card-my",
     "--character-fill",
     "--dial-angle",
     "--dial-value",

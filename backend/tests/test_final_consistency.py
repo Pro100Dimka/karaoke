@@ -152,7 +152,9 @@ def test_audio_settings_monitoring_toggle_reconfigures_runtime(monkeypatch):
             pass
 
     monkeypatch.setattr(audio_service, "_get_or_create_settings", lambda _db: settings)
-    monkeypatch.setattr(audio_service, "configure_monitoring", lambda value: calls.append(value.monitoring_enabled))
+    monkeypatch.setattr(
+        audio_service, "configure_monitoring", lambda value: calls.append(value.monitoring_enabled)
+    )
 
     result = audio_service.update_settings(Db(), {"monitoring_enabled": True})
 
@@ -162,6 +164,7 @@ def test_audio_settings_monitoring_toggle_reconfigures_runtime(monkeypatch):
 
 def test_song_patch_converts_combined_range_error_to_422(monkeypatch):
     from fastapi import HTTPException
+
     from app.routers import songs
 
     monkeypatch.setattr(
@@ -179,6 +182,7 @@ def test_song_patch_converts_combined_range_error_to_422(monkeypatch):
 
 def test_application_settings_converts_merged_validation_error_to_422(monkeypatch):
     from fastapi import HTTPException
+
     from app.routers import application
 
     monkeypatch.setattr(

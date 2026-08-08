@@ -52,7 +52,9 @@ def test_configure_recording_monitor_restores_persisted_values(monkeypatch):
 
 def test_configure_recording_monitor_stops_non_asio_monitor(monkeypatch):
     calls = []
-    monkeypatch.setattr(recording_router.audio_service, "stop_monitoring", lambda: calls.append(True))
+    monkeypatch.setattr(
+        recording_router.audio_service, "stop_monitoring", lambda: calls.append(True)
+    )
     assert recording_router._configure_recording_monitor(_settings("wasapi"), _request()) is False
     assert calls == [True]
 
@@ -65,7 +67,9 @@ def test_restore_monitoring_falls_back_to_stop(monkeypatch):
         "configure_monitoring",
         lambda settings: (_ for _ in ()).throw(RuntimeError("device unavailable")),
     )
-    monkeypatch.setattr(recording_router.audio_service, "stop_monitoring", lambda: calls.append(True))
+    monkeypatch.setattr(
+        recording_router.audio_service, "stop_monitoring", lambda: calls.append(True)
+    )
     recording_router._restore_monitoring(object())
     assert calls == [True]
 

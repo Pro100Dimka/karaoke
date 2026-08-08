@@ -23,7 +23,10 @@ test("createRoomId falls back to cryptographic random bytes", () => {
 });
 
 test("createRoomId has a deterministic last-resort fallback", () => {
-  assert.equal(createRoomId(null, () => 0.5), "80000000");
+  assert.equal(
+    createRoomId(null, () => 0.5),
+    "80000000"
+  );
 });
 
 test("stale karaoke lookup cannot send into a newer room", async () => {
@@ -35,9 +38,10 @@ test("stale karaoke lookup cannot send into a newer room", async () => {
     room: { selfId: "guest-1", host: false },
     client: { send: (...args) => sent.push(args) },
     roomApi: {
-      getSong: () => new Promise((resolve) => {
-        resolveSong = resolve;
-      })
+      getSong: () =>
+        new Promise((resolve) => {
+          resolveSong = resolve;
+        })
     },
     isCurrentConnection: () => current,
     pendingSongCommandRef: { current: null },
@@ -59,7 +63,11 @@ test("missing guest song requests a package only for the active room", async () 
     songId: "song-2",
     room: { selfId: "guest-2", host: false },
     client: { send: (...args) => sent.push(args) },
-    roomApi: { getSong: async () => { throw new Error("missing"); } },
+    roomApi: {
+      getSong: async () => {
+        throw new Error("missing");
+      }
+    },
     isCurrentConnection: () => true,
     pendingSongCommandRef,
     setVoiceError: (message) => errors.push(message)
@@ -69,11 +77,16 @@ test("missing guest song requests a package only for the active room", async () 
   assert.equal(pendingSongCommandRef.current.songId, "song-2");
   assert.equal(pendingSongCommandRef.current.__originatedHere, true);
   assert.equal(errors.at(-1), "Получаем песню от ведущего…");
-  assert.deepEqual(sent, [["sync", {
-    state: {
-      type: "song-request",
-      songId: "song-2",
-      requesterId: "guest-2"
-    }
-  }]]);
+  assert.deepEqual(sent, [
+    [
+      "sync",
+      {
+        state: {
+          type: "song-request",
+          songId: "song-2",
+          requesterId: "guest-2"
+        }
+      }
+    ]
+  ]);
 });

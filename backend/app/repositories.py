@@ -37,10 +37,9 @@ def list_recordings_for_song(db: Session, song_id: str) -> list[models.Recording
 
 
 def list_recording_library(db: Session) -> list[tuple[models.Recording, str]]:
-    return list(
-        db.execute(
-            select(models.Recording, models.Song.title)
-            .join(models.Song, models.Recording.song_id == models.Song.id)
-            .order_by(models.Recording.created_at.desc())
-        ).all()
-    )
+    rows = db.execute(
+        select(models.Recording, models.Song.title)
+        .join(models.Song, models.Recording.song_id == models.Song.id)
+        .order_by(models.Recording.created_at.desc())
+    ).all()
+    return [(recording, title) for recording, title in rows]

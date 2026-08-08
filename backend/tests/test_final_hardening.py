@@ -2,9 +2,6 @@ import io
 import threading
 import warnings
 import zipfile
-from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import Mock
 
 import pytest
 
@@ -59,15 +56,19 @@ def test_unique_slug_skips_orphaned_output_directory(tmp_path, monkeypatch):
 
 
 def test_package_rejects_windows_style_paths():
-    with _archive_with([("manifest.json", b"{}"), ("output\\..\\escape.txt", b"x")]) as archive:
-        with pytest.raises(ValueError, match="unsafe path"):
-            song_package_service._safe_members(archive)
+    with (
+        _archive_with([("manifest.json", b"{}"), ("output\\..\\escape.txt", b"x")]) as archive,
+        pytest.raises(ValueError, match="unsafe path"),
+    ):
+        song_package_service._safe_members(archive)
 
 
 def test_package_rejects_duplicate_paths():
-    with _archive_with([("manifest.json", b"{}"), ("manifest.json", b"{}")]) as archive:
-        with pytest.raises(ValueError, match="duplicate paths"):
-            song_package_service._safe_members(archive)
+    with (
+        _archive_with([("manifest.json", b"{}"), ("manifest.json", b"{}")]) as archive,
+        pytest.raises(ValueError, match="duplicate paths"),
+    ):
+        song_package_service._safe_members(archive)
 
 
 def test_atomic_write_removes_unique_temp_on_failure(tmp_path):
@@ -108,6 +109,8 @@ def test_concurrent_json_writes_do_not_share_temp_file(tmp_path):
 
 
 def test_package_rejects_windows_drive_components():
-    with _archive_with([("manifest.json", b"{}"), ("output/C:/escape.txt", b"x")]) as archive:
-        with pytest.raises(ValueError, match="unsafe path"):
-            song_package_service._safe_members(archive)
+    with (
+        _archive_with([("manifest.json", b"{}"), ("output/C:/escape.txt", b"x")]) as archive,
+        pytest.raises(ValueError, match="unsafe path"),
+    ):
+        song_package_service._safe_members(archive)

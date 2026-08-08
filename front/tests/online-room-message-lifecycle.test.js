@@ -61,22 +61,22 @@ test("stale open-karaoke lookup cannot update a newer room", async () => {
   let current = true;
   let command = null;
   const handler = createHandler({
-      roomApi: { getSong: () => lookup.promise },
-      isCurrentConnection: () => current,
-      setRoomCommand(next) {
-        command = next;
-      }
-    });
+    roomApi: { getSong: () => lookup.promise },
+    isCurrentConnection: () => current,
+    setRoomCommand(next) {
+      command = next;
+    }
+  });
 
-    handler({
-      type: "sync",
-      state: { type: "open-karaoke", songId: "song-1" }
-    });
-    current = false;
-    lookup.resolve({ id: "song-1" });
-    await flushPromises();
+  handler({
+    type: "sync",
+    state: { type: "open-karaoke", songId: "song-1" }
+  });
+  current = false;
+  lookup.resolve({ id: "song-1" });
+  await flushPromises();
 
-    assert.equal(command, null);
+  assert.equal(command, null);
 });
 
 test("stale song export cannot send a file or update room errors", async () => {
@@ -85,34 +85,34 @@ test("stale song export cannot send a file or update room errors", async () => {
   let sent = 0;
   const errors = [];
   const handler = createHandler({
-      roomApi: { exportSongPackage: () => exported.promise },
-      isCurrentConnection: () => current,
-      roomRef: { current: { host: true, selfId: "host" } },
-      voice: {
-        invite: async () => {},
-        removePeer() {},
-        accept: async () => {},
-        async sendFile() {
-          sent += 1;
-        }
-      },
-      setVoiceError(message) {
-        errors.push(message);
+    roomApi: { exportSongPackage: () => exported.promise },
+    isCurrentConnection: () => current,
+    roomRef: { current: { host: true, selfId: "host" } },
+    voice: {
+      invite: async () => {},
+      removePeer() {},
+      accept: async () => {},
+      async sendFile() {
+        sent += 1;
       }
-    });
+    },
+    setVoiceError(message) {
+      errors.push(message);
+    }
+  });
 
-    handler({
-      type: "sync",
-      state: {
-        type: "song-request",
-        requesterId: "guest",
-        songId: "song-1"
-      }
-    });
-    current = false;
-    exported.resolve(new Blob(["song"]));
-    await flushPromises();
+  handler({
+    type: "sync",
+    state: {
+      type: "song-request",
+      requesterId: "guest",
+      songId: "song-1"
+    }
+  });
+  current = false;
+  exported.resolve(new Blob(["song"]));
+  await flushPromises();
 
-    assert.equal(sent, 0);
-    assert.deepEqual(errors, []);
+  assert.equal(sent, 0);
+  assert.deepEqual(errors, []);
 });

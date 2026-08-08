@@ -72,7 +72,13 @@ export default function SongSettings({ songId, onClose }) {
         title: "Настройки песни",
         description: song.title,
         actions: actions.map(
-          ([Icon, text, variant, onClick, { disabled = false, iconProps } = {}]) => (
+          ([
+            Icon,
+            text,
+            variant,
+            onClick,
+            { disabled = false, iconProps } = {}
+          ]) => (
             <Button
               key={text}
               icon={Icon}

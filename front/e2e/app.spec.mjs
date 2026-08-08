@@ -17,13 +17,19 @@ test("modal navigation and focus remain stable", async ({ page }) => {
     if (!(await trigger.isVisible().catch(() => false))) continue;
     await trigger.click();
     await expect(page).toHaveURL(originalUrl);
-    expect(await page.evaluate(() => document.body.style.overflow)).toBe("hidden");
-    expect(
-      await page.locator('[role="dialog"]').evaluate((node) =>
-        node.contains(document.activeElement)
+    await expect(page.locator('[role="dialog"]')).toBeVisible();
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe(
+      "hidden"
+    );
+    await expect
+      .poll(() =>
+        page
+          .locator('[role="dialog"]')
+          .evaluate((node) => node.contains(document.activeElement))
       )
-    ).toBe(true);
+      .toBe(true);
     await page.keyboard.press("Escape");
+    await expect(page.locator('[role="dialog"]')).toBeHidden();
   }
 
   await expectViewportSafe(page);

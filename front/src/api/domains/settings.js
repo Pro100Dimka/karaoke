@@ -1,5 +1,5 @@
+import { getSavedTheme, saveTheme } from "../../utils/theme";
 import { request } from "../core";
-import { getSavedTheme, writeStoredTheme } from "../../utils/theme";
 
 export const settingsApi = {
   getAppSettings: async () => ({
@@ -15,7 +15,7 @@ export const settingsApi = {
     const localPatch = {};
 
     if (theme !== undefined) {
-      localPatch.theme = writeStoredTheme(window.localStorage, theme);
+      localPatch.theme = saveTheme(theme);
     }
 
     if (!Object.keys(backendPatch).length) return localPatch;

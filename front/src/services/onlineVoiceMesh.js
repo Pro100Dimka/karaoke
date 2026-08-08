@@ -41,12 +41,16 @@ export default class OnlineVoiceMesh {
   }
 
   async start() {
-    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices?.getUserMedia
+    ) {
       throw new Error("Захват микрофона не поддерживается в этом окружении");
     }
 
-    const liveStream =
-      this.stream?.getAudioTracks?.().some((track) => track.readyState === "live");
+    const liveStream = this.stream
+      ?.getAudioTracks?.()
+      .some((track) => track.readyState === "live");
     if (liveStream) return this.stream;
     if (this.stream) {
       this.stream.getTracks?.().forEach((track) => track.stop());
@@ -54,7 +58,7 @@ export default class OnlineVoiceMesh {
     }
     if (this.startPromise) return this.startPromise;
 
-    const lifecycleVersion = this.lifecycleVersion;
+    const { lifecycleVersion } = this;
     const startPromise = navigator.mediaDevices
       .getUserMedia({
         audio: {
@@ -174,7 +178,7 @@ export default class OnlineVoiceMesh {
     const pendingInvite = this.invitePromises.get(participantId);
     if (pendingInvite) return pendingInvite;
 
-    const lifecycleVersion = this.lifecycleVersion;
+    const { lifecycleVersion } = this;
     const peer = this.createPeer(participantId);
     const isCurrentPeer = () =>
       lifecycleVersion === this.lifecycleVersion &&
@@ -232,7 +236,7 @@ export default class OnlineVoiceMesh {
       .catch(() => {})
       .then(async () => {
         if ((this.peerVersions.get(fromId) || 0) !== peerVersion) return false;
-        const lifecycleVersion = this.lifecycleVersion;
+        const { lifecycleVersion } = this;
         const peer = this.createPeer(fromId);
         const isCurrentPeer = () =>
           lifecycleVersion === this.lifecycleVersion &&
@@ -333,8 +337,14 @@ export default class OnlineVoiceMesh {
           }
           const metadata = {
             type: "file-start",
-            kind: typeof message.kind === "string" ? message.kind.slice(0, 64) : undefined,
-            songId: typeof message.songId === "string" ? message.songId.slice(0, 128) : undefined,
+            kind:
+              typeof message.kind === "string"
+                ? message.kind.slice(0, 64)
+                : undefined,
+            songId:
+              typeof message.songId === "string"
+                ? message.songId.slice(0, 128)
+                : undefined,
             size: message.size,
             transferId,
             filename:
@@ -411,7 +421,10 @@ export default class OnlineVoiceMesh {
       }
       const channel = this.channels.get(participantId);
       if (channel?.readyState === "open") return channel;
-      if (channel?.readyState === "closing" || channel?.readyState === "closed") {
+      if (
+        channel?.readyState === "closing" ||
+        channel?.readyState === "closed"
+      ) {
         throw new Error("Канал передачи песни закрыт");
       }
       // Polling is intentionally sequential.
@@ -435,7 +448,7 @@ export default class OnlineVoiceMesh {
     if (blob.size > MAX_INCOMING_FILE_BYTES) {
       throw new RangeError("Файл слишком большой для передачи через комнату");
     }
-    const lifecycleVersion = this.lifecycleVersion;
+    const { lifecycleVersion } = this;
     const channel = await this.waitForDataChannel(
       participantId,
       15_000,

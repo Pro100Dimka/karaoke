@@ -4,16 +4,18 @@ import { shouldLoadKaraokeResult } from "../utils/result";
 
 export default function useKaraokeResult(song) {
   const [result, setResult] = useState(null);
+  const songId = song?.id;
+  const songStatus = song?.status;
 
   useEffect(() => {
-    if (!shouldLoadKaraokeResult(song)) {
+    if (!shouldLoadKaraokeResult({ id: songId, status: songStatus })) {
       setResult(null);
       return undefined;
     }
 
     let active = true;
     api
-      .getResult(song.id)
+      .getResult(songId)
       .then((nextResult) => {
         if (active) setResult(nextResult);
       })
@@ -24,7 +26,7 @@ export default function useKaraokeResult(song) {
     return () => {
       active = false;
     };
-  }, [song?.id, song?.status]);
+  }, [songId, songStatus]);
 
   return result;
 }

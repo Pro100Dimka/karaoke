@@ -10,20 +10,23 @@ export default function useExclusiveAsyncAction() {
   const mountedRef = useMountedRef();
   const [pending, setPending] = useState(false);
 
-  const run = useCallback((action) => {
-    if (activePromiseRef.current) return activePromiseRef.current;
+  const run = useCallback(
+    (action) => {
+      if (activePromiseRef.current) return activePromiseRef.current;
 
-    if (mountedRef.current) setPending(true);
-    const promise = Promise.resolve().then(action);
-    activePromiseRef.current = promise;
+      if (mountedRef.current) setPending(true);
+      const promise = Promise.resolve().then(action);
+      activePromiseRef.current = promise;
 
-    return promise.finally(() => {
-      if (activePromiseRef.current === promise) {
-        activePromiseRef.current = null;
-        if (mountedRef.current) setPending(false);
-      }
-    });
-  }, [mountedRef]);
+      return promise.finally(() => {
+        if (activePromiseRef.current === promise) {
+          activePromiseRef.current = null;
+          if (mountedRef.current) setPending(false);
+        }
+      });
+    },
+    [mountedRef]
+  );
 
   return { pending, run };
 }

@@ -18,7 +18,6 @@ import {
 
 const DialogContext = createContext(null);
 
-
 function DialogModal({ dialog, onClose }) {
   const isConfirmation = dialog.kind === "confirm";
   const closeResult = getDialogCloseResult(dialog.kind);

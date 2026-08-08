@@ -1,5 +1,4 @@
 import time
-import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -44,8 +43,12 @@ class _FakeSoundFile:
 
 def _recording_session(tmp_path: Path, monkeypatch) -> recording_service.RecordingSession:
     monkeypatch.setattr(config, "DATA_DIR", tmp_path)
-    monkeypatch.setattr(recording_service, "sd", SimpleNamespace(InputStream=_FakeStream), raising=False)
-    monkeypatch.setattr(recording_service, "sf", SimpleNamespace(SoundFile=_FakeSoundFile), raising=False)
+    monkeypatch.setattr(
+        recording_service, "sd", SimpleNamespace(InputStream=_FakeStream), raising=False
+    )
+    monkeypatch.setattr(
+        recording_service, "sf", SimpleNamespace(SoundFile=_FakeSoundFile), raising=False
+    )
     _FakeSoundFile.writes = []
     return recording_service.RecordingSession(
         "session-id",
@@ -83,8 +86,12 @@ def test_failed_recording_start_removes_temporary_file(tmp_path, monkeypatch):
             raise RuntimeError("device busy")
 
     monkeypatch.setattr(config, "DATA_DIR", tmp_path)
-    monkeypatch.setattr(recording_service, "sd", SimpleNamespace(InputStream=_FailingStream), raising=False)
-    monkeypatch.setattr(recording_service, "sf", SimpleNamespace(SoundFile=_FakeSoundFile), raising=False)
+    monkeypatch.setattr(
+        recording_service, "sd", SimpleNamespace(InputStream=_FailingStream), raising=False
+    )
+    monkeypatch.setattr(
+        recording_service, "sf", SimpleNamespace(SoundFile=_FakeSoundFile), raising=False
+    )
     session = recording_service.RecordingSession(
         "session-id", "song-id", None, None, 48_000, 1, 1.0, False
     )

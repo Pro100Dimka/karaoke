@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from contextlib import AbstractContextManager
 import json
 import os
-from pathlib import Path
 import secrets
 import threading
 import time
+from contextlib import AbstractContextManager, suppress
+from pathlib import Path
 
 
 class FileLock(AbstractContextManager):
@@ -77,7 +77,8 @@ class FileLock(AbstractContextManager):
             except OSError:
                 return False
         try:
-            pid = int(owner.get("pid", -1))
+            raw_pid = owner.get("pid", -1)
+            pid = int(raw_pid) if isinstance(raw_pid, (str, int, float)) else -1
         except (TypeError, ValueError):
             pid = -1
         if self._pid_alive(pid):
@@ -101,10 +102,10 @@ class FileLock(AbstractContextManager):
                 os.write(self.fd, payload)
                 os.fsync(self.fd)
                 return self
-            except FileExistsError:
+            except FileExistsError as exc:
                 self._remove_if_stale()
                 if time.monotonic() >= deadline:
-                    raise TimeoutError(f"Timed out waiting for lock: {self.path}")
+                    raise TimeoutError(f"Timed out waiting for lock: {self.path}") from exc
                 time.sleep(self.poll_sec)
 
     def __exit__(self, exc_type, exc, tb):
@@ -115,10 +116,8 @@ class FileLock(AbstractContextManager):
                 self.fd = None
         owner = self._read_owner()
         if owner and owner.get("token") == self.token:
-            try:
+            with suppress(FileNotFoundError):
                 self.path.unlink()
-            except FileNotFoundError:
-                pass
         return False
 
 

@@ -8,6 +8,7 @@ from .models import PitchFrame, Syllable, Word
 
 VOWELS = frozenset("аеёиоуыэюяіїєaeyuioAEYUIOАЕЁИОУЫЭЮЯІЇЄ")
 _WORD_EDGE = re.compile(r"(^[^\w'’ʼ-]+|[^\w'’ʼ-]+$)", re.UNICODE)
+SYLLABLE_ALIGNER_VERSION = "acoustic-syllables-v2"
 
 
 def split_written(word: str) -> list[str]:
@@ -25,7 +26,7 @@ def split_written(word: str) -> list[str]:
         return [cleaned]
 
     cuts: list[int] = []
-    for left, right in zip(nuclei, nuclei[1:]):
+    for left, right in zip(nuclei, nuclei[1:], strict=False):
         consonants = right - left - 1
         # Keep one consonant as the onset of the following syllable; clusters keep
         # all but the first consonant with the following syllable.
@@ -45,7 +46,9 @@ def split_written(word: str) -> list[str]:
     return parts or [cleaned]
 
 
-def _frame_slice(pitch: list[PitchFrame], times: list[float], start: float, end: float) -> list[PitchFrame]:
+def _frame_slice(
+    pitch: list[PitchFrame], times: list[float], start: float, end: float
+) -> list[PitchFrame]:
     left = bisect_left(times, start)
     right = bisect_left(times, end + 1e-9, lo=left)
     return pitch[left:right]
@@ -61,8 +64,16 @@ def _boundary_scores(word: Word, frames: list[PitchFrame], count: int) -> list[f
         edge = min(frame.time - word.start, word.end - frame.time)
         if edge <= 0.035:
             continue
-        before = [item.frequency for item in frames[index - 2:index] if item.voiced and item.frequency > 0]
-        after = [item.frequency for item in frames[index:index + 2] if item.voiced and item.frequency > 0]
+        before = [
+            item.frequency
+            for item in frames[index - 2 : index]
+            if item.voiced and item.frequency > 0
+        ]
+        after = [
+            item.frequency
+            for item in frames[index : index + 2]
+            if item.voiced and item.frequency > 0
+        ]
         jump = 0.0
         if before and after:
             ratio = max(1e-9, (sum(after) / len(after)) / (sum(before) / len(before)))
@@ -70,7 +81,9 @@ def _boundary_scores(word: Word, frames: list[PitchFrame], count: int) -> list[f
         confidence_drop = max(0.0, frames[index - 1].confidence - frame.confidence)
         energy_drop = max(0.0, frames[index - 1].energy - frame.energy)
         voicing_change = 0.8 if frames[index - 1].voiced != frame.voiced else 0.0
-        candidates.append((jump + confidence_drop * 1.5 + energy_drop * 8.0 + voicing_change, frame.time))
+        candidates.append(
+            (jump + confidence_drop * 1.5 + energy_drop * 8.0 + voicing_change, frame.time)
+        )
 
     candidates.sort(reverse=True)
     selected: list[float] = []
@@ -96,9 +109,9 @@ def _proportional_bounds(word: Word, parts: list[str]) -> list[float]:
     return bounds
 
 
-
-
-def _refine_proportional_bounds(word: Word, frames: list[PitchFrame], expected: list[float]) -> list[float]:
+def _refine_proportional_bounds(
+    word: Word, frames: list[PitchFrame], expected: list[float]
+) -> list[float]:
     """Snap expected syllable boundaries to nearby acoustic transitions.
 
     Global top-N peaks can attach the wrong consonant cluster to a syllable.
@@ -106,19 +119,22 @@ def _refine_proportional_bounds(word: Word, frames: list[PitchFrame], expected: 
     """
     if not expected or len(frames) < 6:
         return expected
-    candidates = _boundary_scores(word, frames, len(expected)+1)
+    candidates = _boundary_scores(word, frames, len(expected) + 1)
     if not candidates:
         return expected
-    span = max(0.04, (word.end-word.start) / max(3.0, (len(expected)+1)*2.2))
-    result=[]
-    prev=word.start
+    span = max(0.04, (word.end - word.start) / max(3.0, (len(expected) + 1) * 2.2))
+    result = []
+    prev = word.start
     for target in expected:
-        nearby=[value for value in candidates if abs(value-target) <= span and value > prev+0.025]
-        chosen=min(nearby, key=lambda value: abs(value-target)) if nearby else target
-        chosen=max(prev+0.025, min(word.end-0.025, chosen))
+        nearby = [
+            value for value in candidates if abs(value - target) <= span and value > prev + 0.025
+        ]
+        chosen = min(nearby, key=lambda value: abs(value - target)) if nearby else target
+        chosen = max(prev + 0.025, min(word.end - 0.025, chosen))
         result.append(chosen)
-        prev=chosen
+        prev = chosen
     return result
+
 
 def align_syllables(words: list[Word], pitch: list[PitchFrame]) -> list[Syllable]:
     ordered_pitch = sorted(pitch, key=lambda frame: frame.time)
@@ -132,14 +148,31 @@ def align_syllables(words: list[Word], pitch: list[PitchFrame]) -> list[Syllable
         frames = _frame_slice(ordered_pitch, pitch_times, word.start, word.end)
         expected_bounds = _proportional_bounds(word, parts)
         bounds = _refine_proportional_bounds(word, frames, expected_bounds)
-        used_acoustic = any(abs(a-b) > 1e-4 for a, b in zip(bounds, expected_bounds))
+        used_acoustic = any(
+            abs(a - b) > 1e-4 for a, b in zip(bounds, expected_bounds, strict=False)
+        )
         edges = [word.start, *bounds, word.end]
         confidence = min(1.0, max(0.0, word.confidence) * (0.92 if used_acoustic else 0.58))
         for local_index, part in enumerate(parts):
             start = edges[local_index]
             end = max(start, edges[local_index + 1])
-            result.append(
-                Syllable(start, end, part, word.index, syllable_index, confidence)
-            )
+            result.append(Syllable(start, end, part, word.index, syllable_index, confidence))
             syllable_index += 1
-    return result
+    # Forced alignment can produce overlapping word intervals around breaths,
+    # repeats and background vocals. Each word is still split independently,
+    # but downstream artifacts must be chronological and consistently indexed.
+    ordered = sorted(
+        result,
+        key=lambda item: (item.start, item.end, item.word_index, item.index),
+    )
+    return [
+        Syllable(
+            item.start,
+            item.end,
+            item.text,
+            item.word_index,
+            index,
+            item.confidence,
+        )
+        for index, item in enumerate(ordered)
+    ]

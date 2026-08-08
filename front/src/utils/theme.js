@@ -27,8 +27,12 @@ export function writeStoredTheme(storage, theme) {
   return resolvedTheme;
 }
 
+export function saveTheme(theme) {
+  return writeStoredTheme(window.localStorage, theme);
+}
+
 export function applyTheme(theme) {
-  const resolvedTheme = writeStoredTheme(window.localStorage, theme);
+  const resolvedTheme = saveTheme(theme);
 
   document.documentElement.dataset.theme = resolvedTheme;
 

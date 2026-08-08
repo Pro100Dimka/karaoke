@@ -9,7 +9,6 @@ readme = "README.md"
 line-length = 100
 target-version = "py311"
 extend-exclude = [
-    "AI/tests",
     "app/data",
     "dist",
     "engines",
@@ -41,7 +40,7 @@ warn_unused_ignores = true
 exclude = ["AI/", "Song/", "full_songs/"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "AI/tests"]
+testpaths = ["tests"]
 pythonpath = ["."]
 
 [tool.coverage.run]

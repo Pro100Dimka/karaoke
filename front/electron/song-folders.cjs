@@ -6,12 +6,17 @@ function normalizeFolderName(value) {
 }
 
 function findMatchingSongFolder(entries, requestedValues) {
-  const requestedNames = requestedValues.map(normalizeFolderName).filter(Boolean);
+  const requestedNames = requestedValues
+    .map(normalizeFolderName)
+    .filter(Boolean);
   if (requestedNames.length === 0) return null;
 
   const directories = entries
     .filter((entry) => entry?.isDirectory?.())
-    .map((entry) => ({ entry, normalizedName: normalizeFolderName(entry.name) }))
+    .map((entry) => ({
+      entry,
+      normalizedName: normalizeFolderName(entry.name)
+    }))
     .filter(({ normalizedName }) => normalizedName);
 
   const exact = directories.find(({ normalizedName }) =>

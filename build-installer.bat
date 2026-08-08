@@ -64,6 +64,8 @@ set "PYTHON=%BACKEND%\venv\Scripts\python.exe"
 
 set "BACKEND_DIST=%BACKEND%\dist\KaraokeBackend"
 set "PACKAGED_BACKEND=%UNPACKED%\resources\backend"
+set "SCENE_VIDEO_SOURCE=%FRONTEND%\src\assets\karaoke\videoplayback.mp4"
+set "PACKAGED_SCENE_VIDEO=%UNPACKED%\resources\media\videoplayback.mp4"
 
 set "ASIO=%BACKEND%\engines\asio"
 set "ASIO_BUILD=%ASIO%\build"
@@ -86,6 +88,8 @@ set "INNO_TEMPLATE=%ROOT%scripts\karaoke-studio.iss"
 
 set "INSTALLER_EXE=%INSTALLER_DIR%\A&D Voice Setup %APP_VERSION%.exe"
 set "CHECKSUM_FILE=%INSTALLER_DIR%\SHA256SUMS.txt"
+set "KARAOKE_INSTALLER_DIR=%INSTALLER_DIR%"
+set "KARAOKE_CHECKSUM_FILE=%CHECKSUM_FILE%"
 
 set "PYINSTALLER_CLEAN="
 if /I "%BUILD_MODE%"=="clean" set "PYINSTALLER_CLEAN=--clean"
@@ -219,7 +223,7 @@ echo Complete offline installer:
 echo   %INSTALLER_DIR%
 echo.
 echo Main installer:
-echo   %INSTALLER_EXE%
+echo   !INSTALLER_EXE!
 echo.
 echo IMPORTANT:
 echo   Keep the Setup.exe and every Setup-*.bin file together.
@@ -241,16 +245,13 @@ rem ============================================================
 echo.
 echo [0/6] Closing old A^&D Voice build processes...
 
-rem Close the packaged application and all known helper processes.
+rem Close only this product's named binaries. Generic electron.exe, node.exe,
+rem ffmpeg.exe and build tools may belong to unrelated applications and must
+rem never be terminated globally.
 taskkill /F /T /IM "%APP_EXE%" >nul 2>&1
 taskkill /F /T /IM KaraokeBackend.exe >nul 2>&1
 taskkill /F /T /IM KaraokeAudioMonitor.exe >nul 2>&1
 taskkill /F /T /IM KaraokeAsioBridge.exe >nul 2>&1
-taskkill /F /T /IM electron.exe >nul 2>&1
-taskkill /F /T /IM node.exe >nul 2>&1
-taskkill /F /T /IM makensis.exe >nul 2>&1
-taskkill /F /T /IM ISCC.exe >nul 2>&1
-taskkill /F /T /IM ffmpeg.exe >nul 2>&1
 
 rem Close any executable that is physically running from the old release tree.
 if exist "%RELEASE%\" (
@@ -493,10 +494,7 @@ echo.
     --add-binary "%FFMPEG%;." ^
     --hidden-import run_all ^
     --collect-submodules app ^
-    --collect-submodules src ^
     --collect-all demucs ^
-    --collect-all whisper ^
-    --collect-all torch ^
     --collect-all onnxruntime ^
     run.py
 
@@ -521,7 +519,6 @@ echo.
     --workpath "%BACKEND%\build-audio-monitor" ^
     --specpath "%BACKEND%\build-audio-monitor" ^
     --paths "%BACKEND%" ^
-    --collect-submodules app ^
     app\services\monitor_worker.py
 
 if errorlevel 1 (
@@ -677,6 +674,9 @@ rem ============================================================
 echo.
 echo [5/6] Building the complete Electron application...
 
+call :require_file "%SCENE_VIDEO_SOURCE%" "Karaoke scene video"
+if errorlevel 1 exit /b 1
+
 call :remove_directory "%UNPACKED%"
 if errorlevel 1 exit /b 1
 
@@ -732,6 +732,9 @@ rem ============================================================
 
 :verify_unpacked
 call :require_file "%UNPACKED%\%APP_EXE%" "Electron application"
+if errorlevel 1 exit /b 1
+
+call :require_file "%PACKAGED_SCENE_VIDEO%" "Karaoke scene video"
 if errorlevel 1 exit /b 1
 
 call :require_file "%PACKAGED_BACKEND%\KaraokeBackend.exe" "Electron backend"
@@ -843,28 +846,14 @@ rem ============================================================
 echo.
 echo Creating SHA-256 checksums...
 
-if exist "%CHECKSUM_FILE%" (
-    del /Q "%CHECKSUM_FILE%"
-)
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\generate-checksums.ps1" ^
+    -InstallerDirectory "%INSTALLER_DIR%" ^
+    -OutputFile "%CHECKSUM_FILE%"
 
-for %%F in ("%INSTALLER_DIR%\*.exe") do (
-    if exist "%%~fF" (
-        for /f "tokens=1" %%H in ('
-            certutil -hashfile "%%~fF" SHA256 ^| findstr /R /V "hash CertUtil"
-        ') do (
-            >>"%CHECKSUM_FILE%" echo %%H  %%~nxF
-        )
-    )
-)
-
-for %%F in ("%INSTALLER_DIR%\*.bin") do (
-    if exist "%%~fF" (
-        for /f "tokens=1" %%H in ('
-            certutil -hashfile "%%~fF" SHA256 ^| findstr /R /V "hash CertUtil"
-        ') do (
-            >>"%CHECKSUM_FILE%" echo %%H  %%~nxF
-        )
-    )
+if errorlevel 1 (
+    echo.
+    echo [ERROR] Could not create SHA-256 checksums.
+    exit /b 1
 )
 
 call :require_file "%CHECKSUM_FILE%" "SHA-256 checksum file"
@@ -924,8 +913,6 @@ for /L %%I in (1,1,10) do (
     rem If this is the Electron release tree, stop old app processes again.
     if /I "%REMOVE_TARGET%"=="%RELEASE%" (
         taskkill /F /T /IM "%APP_EXE%" >nul 2>&1
-        taskkill /F /T /IM electron.exe >nul 2>&1
-        taskkill /F /T /IM node.exe >nul 2>&1
         taskkill /F /T /IM KaraokeBackend.exe >nul 2>&1
         taskkill /F /T /IM KaraokeAudioMonitor.exe >nul 2>&1
         taskkill /F /T /IM KaraokeAsioBridge.exe >nul 2>&1
@@ -941,13 +928,6 @@ for /L %%I in (1,1,10) do (
             "  } catch {}" ^
             "}"
 
-        rem Explorer can keep a handle to app.asar when release was opened in a window.
-        if %%I EQU 3 (
-            echo   Restarting Windows Explorer to release file handles...
-            taskkill /F /IM explorer.exe >nul 2>&1
-            timeout /t 1 /nobreak >nul
-            start "" explorer.exe
-        )
     )
 
     timeout /t 2 /nobreak >nul
@@ -1027,5 +1007,4 @@ echo.
 echo Check the first error shown above.
 echo.
 
-pause
 exit /b 1

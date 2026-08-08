@@ -11,11 +11,14 @@ const { spawn } = require("child_process");
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
+const { pathToFileURL } = require("url");
 const {
   app,
   BrowserWindow,
   clipboard,
   ipcMain,
+  net,
+  protocol,
   session,
   shell
 } = require("electron");
@@ -30,6 +33,17 @@ const { findMatchingSongFolder } = require("./song-folders.cjs");
 
 // Background radio is an intentional desktop feature.
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "karaoke-media",
+    privileges: {
+      secure: true,
+      standard: true,
+      stream: true,
+      supportFetchAPI: true
+    }
+  }
+]);
 
 const isDev = !app.isPackaged;
 const BACKEND_URL = "http://127.0.0.1:8000";
@@ -64,6 +78,37 @@ function resolveBackendDir() {
     return path.resolve(__dirname, "..", "..", "backend");
   }
   return path.join(process.resourcesPath, "backend");
+}
+
+function resolveSceneVideoPath() {
+  return isDev
+    ? path.resolve(
+        __dirname,
+        "..",
+        "src",
+        "assets",
+        "karaoke",
+        "videoplayback.mp4"
+      )
+    : path.join(process.resourcesPath, "media", "videoplayback.mp4");
+}
+
+function registerMediaProtocol() {
+  protocol.handle("karaoke-media", (request) => {
+    const requestUrl = new URL(request.url);
+    if (requestUrl.hostname !== "scene" || requestUrl.pathname !== "/main") {
+      return new Response("Not found", { status: 404 });
+    }
+
+    const scenePath = resolveSceneVideoPath();
+    if (!fs.existsSync(scenePath)) {
+      return new Response("Scene video is unavailable", { status: 404 });
+    }
+
+    return net.fetch(pathToFileURL(scenePath).href, {
+      headers: request.headers
+    });
+  });
 }
 
 function resolveSongOutputDir() {
@@ -363,6 +408,7 @@ if (!hasSingleInstanceLock) {
 
 app.whenReady().then(() => {
   if (!hasSingleInstanceLock) return;
+  registerMediaProtocol();
   const packagedIndexUrl = getPackagedRendererUrl(
     path.join(__dirname, "..", "dist", "index.html")
   );

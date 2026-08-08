@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   getBackendUrl: () => ipcRenderer.invoke("backend:url"),
 
+  getSceneVideoUrl: () => "karaoke-media://scene/main",
+
   copyText: (value) => ipcRenderer.invoke("clipboard:writeText", value),
 
   setIconTheme: (theme) => ipcRenderer.invoke("window:setIconTheme", theme),

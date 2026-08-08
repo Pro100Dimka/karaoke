@@ -7,10 +7,17 @@ import {
 
 export default function useAudioOutputRouting(options) {
   const {
-    audioDriver, audioSettings, browserMonitorRef,
-    directOutputDeviceId, directOutputDevices, instrumentalRef,
-    microphoneOpen, setDirectOutputDeviceId, updateMicrophone,
-    videoRef, vocalsRef
+    audioDriver,
+    audioSettings,
+    browserMonitorRef,
+    directOutputDeviceId,
+    directOutputDevices,
+    instrumentalRef,
+    microphoneOpen,
+    setDirectOutputDeviceId,
+    updateMicrophone,
+    videoRef,
+    vocalsRef
   } = options;
   useEffect(() => {
     if (
@@ -39,14 +46,15 @@ export default function useAudioOutputRouting(options) {
   useEffect(() => {
     if (
       !microphoneOpen ||
-      (directOutputDeviceId == null || directOutputDeviceId === "") ||
+      directOutputDeviceId == null ||
+      directOutputDeviceId === "" ||
       typeof globalThis.navigator?.mediaDevices?.enumerateDevices !== "function"
     )
       return undefined;
     const selected = (directOutputDevices || []).find(
       (device) => String(device.index) === String(directOutputDeviceId)
     );
-    if (!selected) return;
+    if (!selected) return undefined;
     let active = true;
     globalThis.navigator.mediaDevices
       .enumerateDevices()

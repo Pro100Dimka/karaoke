@@ -94,7 +94,10 @@ export function normalizeLyrics(raw) {
       const endTime = words.length ? words.at(-1).end : fallbackEnd;
       const text =
         toText(line.text ?? line.line) ||
-        words.map((word) => word.text).join(" ").trim();
+        words
+          .map((word) => word.text)
+          .join(" ")
+          .trim();
 
       if (!text || !Number.isFinite(startTime) || !Number.isFinite(endTime)) {
         return null;

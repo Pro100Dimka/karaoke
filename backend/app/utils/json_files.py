@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, BinaryIO, TypeVar
 
 from app.utils.atomic_files import atomic_write
 
@@ -23,4 +23,8 @@ def write_json(path: Path, payload: Any, *, indent: int = 2) -> None:
     """Atomically write UTF-8 JSON so interrupted writes cannot corrupt state."""
 
     encoded = (json.dumps(payload, ensure_ascii=False, indent=indent) + "\n").encode("utf-8")
-    atomic_write(path, lambda stream: stream.write(encoded))
+
+    def write_payload(stream: BinaryIO) -> None:
+        stream.write(encoded)
+
+    atomic_write(path, write_payload)

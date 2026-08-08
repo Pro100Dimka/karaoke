@@ -52,9 +52,7 @@ export default function useKaraokeTransport({
 
   const broadcastCommand = (action, position) => {
     if (!onlineRoom?.room || !song?.id) return;
-    onlineRoom.syncCommand(
-      createPlayerSyncCommand(action, song.id, position)
-    );
+    onlineRoom.syncCommand(createPlayerSyncCommand(action, song.id, position));
   };
 
   const pausePlaybackResources = () => {
@@ -128,12 +126,14 @@ export default function useKaraokeTransport({
 
     try {
       if (activeRecordingId) {
-        recordingResume = api.resumeRecording(activeRecordingId).catch((error) => {
-          setRecordingError(
-            `Не удалось возобновить запись: ${getErrorMessage(error, "неизвестная ошибка")}`
-          );
-          return null;
-        });
+        recordingResume = api
+          .resumeRecording(activeRecordingId)
+          .catch((error) => {
+            setRecordingError(
+              `Не удалось возобновить запись: ${getErrorMessage(error, "неизвестная ошибка")}`
+            );
+            return null;
+          });
       } else {
         if (!recordingStartPromiseRef.current) {
           const startPromise = api
@@ -171,10 +171,7 @@ export default function useKaraokeTransport({
     }
 
     if (operationId !== operationRef.current) {
-      if (
-        latestOperationTypeRef.current !== "play" &&
-        activeRecordingId
-      ) {
+      if (latestOperationTypeRef.current !== "play" && activeRecordingId) {
         await api.pauseRecording(activeRecordingId).catch(() => {});
       }
       silenceMelodyGuide();
@@ -189,7 +186,12 @@ export default function useKaraokeTransport({
     try {
       await instr.play();
       await Promise.allSettled(
-        [voc.play(), videoRef.current?.play(), melodyStart, recordingResume].filter(Boolean)
+        [
+          voc.play(),
+          videoRef.current?.play(),
+          melodyStart,
+          recordingResume
+        ].filter(Boolean)
       );
     } catch {
       pausePlaybackResources();

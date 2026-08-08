@@ -68,11 +68,7 @@ export function OnlineRoomModal({ onlineName, onClose }) {
             onClick={() => connect(!joinMode)}
             className="modal-title-action"
           >
-            {busy
-              ? "Подключение…"
-              : joinMode
-                ? "Войти"
-                : "Создать комнату"}
+            {busy ? "Подключение…" : joinMode ? "Войти" : "Создать комнату"}
           </Button>
         )
       }}

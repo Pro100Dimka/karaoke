@@ -35,7 +35,8 @@ export default function Dropdown({
       if (
         !ref.current?.contains(event.target) &&
         !menuRef.current?.contains(event.target)
-      ) setOpen(false);
+      )
+        setOpen(false);
     };
     const closeOnEscape = (event) => {
       if (event.key !== "Escape") return;
@@ -103,7 +104,7 @@ export default function Dropdown({
     if (!onBlur) return;
     const blurEvent = event;
     queueMicrotask(() => {
-      const activeElement = document.activeElement;
+      const { activeElement } = document;
       if (
         ref.current?.contains(activeElement) ||
         menuRef.current?.contains(activeElement)
@@ -161,45 +162,47 @@ export default function Dropdown({
         <span>{selected?.label || placeholder}</span>
         <ChevronDown size={15} aria-hidden="true" />
       </Button>
-      {open && menuStyle && createPortal(
-        <div
-          ref={menuRef}
-          id={`${dropdownId}-menu`}
-          className="app-dropdown-menu app-dropdown-menu--portal"
-          role="listbox"
-          style={menuStyle}
-        >
-          {options.map((option) => {
-            const isSelected = String(option.value) === String(value);
-            return (
-              <Button
-                unstyled
-                key={String(option.value)}
-                role="option"
-                aria-selected={isSelected}
-                className={`app-dropdown-option ${isSelected ? "is-selected" : ""}`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setOpen(false);
-                  onChange(option.value);
-                  ref.current?.querySelector("button")?.focus();
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") {
-                    event.preventDefault();
+      {open &&
+        menuStyle &&
+        createPortal(
+          <div
+            ref={menuRef}
+            id={`${dropdownId}-menu`}
+            className="app-dropdown-menu app-dropdown-menu--portal"
+            role="listbox"
+            style={menuStyle}
+          >
+            {options.map((option) => {
+              const isSelected = String(option.value) === String(value);
+              return (
+                <Button
+                  unstyled
+                  key={String(option.value)}
+                  role="option"
+                  aria-selected={isSelected}
+                  className={`app-dropdown-option ${isSelected ? "is-selected" : ""}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
                     setOpen(false);
+                    onChange(option.value);
                     ref.current?.querySelector("button")?.focus();
-                  }
-                }}
-              >
-                <span>{option.label}</span>
-                {isSelected && <Check size={15} aria-hidden="true" />}
-              </Button>
-            );
-          })}
-        </div>,
-        document.body
-      )}
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      setOpen(false);
+                      ref.current?.querySelector("button")?.focus();
+                    }
+                  }}
+                >
+                  <span>{option.label}</span>
+                  {isSelected && <Check size={15} aria-hidden="true" />}
+                </Button>
+              );
+            })}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

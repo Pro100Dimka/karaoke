@@ -59,7 +59,9 @@ function selectorPreludes(css) {
 
 const cssFiles = walk(path.join(root, "src"), cssExtensions);
 const sourceFiles = walk(path.join(root, "src"), sourceExtensions);
-const source = sourceFiles.map((file) => fs.readFileSync(file, "utf8")).join("\n");
+const source = sourceFiles
+  .map((file) => fs.readFileSync(file, "utf8"))
+  .join("\n");
 const candidates = new Map();
 const selectorPattern = /\.([_a-zA-Z]+[_a-zA-Z0-9-]*)/g;
 

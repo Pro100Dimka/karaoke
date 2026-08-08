@@ -32,8 +32,11 @@ forbid("destructured catch parameter", /catch\s*\(\s*\{/);
 forbid(
   "direct localStorage access",
   /(?:window\.|globalThis\.)?localStorage/,
-  new Set(["src/utils/theme.js",
-    "src/utils/storage.js", "src/pages/Karaoke/utils/preferences.js"])
+  new Set([
+    "src/utils/theme.js",
+    "src/utils/storage.js",
+    "src/pages/Karaoke/utils/preferences.js"
+  ])
 );
 forbid(
   "direct interpolation of unknown error.message",

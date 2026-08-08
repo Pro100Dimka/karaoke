@@ -18,7 +18,9 @@ export function saveKaraokePreferences(
 ) {
   try {
     const value =
-      preferences && typeof preferences === "object" && !Array.isArray(preferences)
+      preferences &&
+      typeof preferences === "object" &&
+      !Array.isArray(preferences)
         ? preferences
         : {};
     const serialized = JSON.stringify(value);

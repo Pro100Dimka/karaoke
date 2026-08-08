@@ -10,7 +10,7 @@ const library = read("src/pages/Library/index.jsx");
 const songSettings = read("src/pages/Library/modals/song-settings/index.jsx");
 const modal = read("src/components/modal/index.jsx");
 const performanceModal = read(
-  "src/pages/Karaoke/components/PerformanceAnalysisModal.jsx"
+  "src/pages/Karaoke/modals/performance-analysis-modal.jsx"
 );
 
 const forbiddenModalRoutes = ["/song-settings", "/analysis"];

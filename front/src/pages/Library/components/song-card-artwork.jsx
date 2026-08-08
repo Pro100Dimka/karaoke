@@ -13,10 +13,7 @@ export default function SongCardArtwork({ cardIndex }) {
 
   return (
     <div
-      className={[
-        "library-song-card-art",
-        isPlaying && "is-radio-reactive"
-      ]
+      className={["library-song-card-art", isPlaying && "is-radio-reactive"]
         .filter(Boolean)
         .join(" ")}
       aria-hidden="true"
