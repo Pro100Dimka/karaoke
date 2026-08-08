@@ -74,6 +74,8 @@ def build_package(song: models.Song) -> Path:
                     continue
                 if path.name.startswith("take-") or path.name == "pipeline.log":
                     continue
+                if path.resolve() == source.resolve():
+                    continue
                 archive.write(
                     path, (PurePosixPath("output") / PurePosixPath(relative.as_posix())).as_posix()
                 )
@@ -229,13 +231,14 @@ def import_package(db: Session, package_path: Path) -> models.Song:
             if existing is not None:
                 return existing
             slug = song_service.make_unique_slug(db, base_slug)
-            source_path = config.FULL_SONGS_DIR / f"{slug}{extension}"
             output_dir = config.SONG_OUTPUT_DIR / slug
             temporary_output = Path(tempfile.mkdtemp(prefix="song-import-", dir=config.DATA_DIR))
+            source_path = temporary_output / f"source{extension}"
             try:
                 _copy_archive_member(archive, source_member, source_path)
                 _extract_output(archive, members, temporary_output)
                 temporary_output.replace(output_dir)
+                source_path = output_dir / source_path.name
                 song = _song_from_manifest(
                     manifest,
                     song_id=song_id,
@@ -248,7 +251,6 @@ def import_package(db: Session, package_path: Path) -> models.Song:
                 return commit_refresh(db, song)
             except Exception:
                 db.rollback()
-                source_path.unlink(missing_ok=True)
                 shutil.rmtree(output_dir, ignore_errors=True)
                 shutil.rmtree(temporary_output, ignore_errors=True)
                 raise

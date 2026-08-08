@@ -8,6 +8,7 @@
 Хост/порт настраиваются через config.py (переменные окружения
 SONGAPP_HOST / SONGAPP_PORT — см. config.py).
 """
+
 import logging
 import sys
 from logging.handlers import RotatingFileHandler
@@ -35,4 +36,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    import multiprocessing
+
+    multiprocessing.freeze_support()
     main()

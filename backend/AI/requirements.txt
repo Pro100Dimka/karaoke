@@ -7,6 +7,14 @@ librosa>=0.10,<1
 mido>=1.3,<2
 psutil>=5.9,<8
 torchfcpe==0.0.4
+# Minimal inference-only dependencies for the bundled Mel-Band RoFormer.
+# The former standalone MSST environment duplicated PyTorch/CUDA and pulled in
+# training/UI packages that the application never executes.
+omegaconf==2.2.3
+ml-collections==1.1.0
+beartype==0.14.1
+rotary-embedding-torch==0.3.5
+matplotlib>=3.10,<4
 qwen-asr==0.0.6
 # qwen-asr 0.0.6 imports private Transformers APIs and currently hard-pins
 # this version. Models are bundled and trusted; never load user-supplied models.

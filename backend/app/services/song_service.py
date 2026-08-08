@@ -28,12 +28,7 @@ def library_write_lock():
 
 
 def _slug_has_files(slug: str) -> bool:
-    if (config.SONG_OUTPUT_DIR / slug).exists():
-        return True
-    return any(
-        (config.FULL_SONGS_DIR / f"{slug}{extension}").exists()
-        for extension in config.ALLOWED_AUDIO_EXTENSIONS
-    )
+    return (config.SONG_OUTPUT_DIR / slug).exists()
 
 
 def _slug_exists(db: Session, slug: str) -> bool:
@@ -51,7 +46,7 @@ def _ensure_path_within(path: Path, root: Path) -> Path:
 
 def resolve_source_path(song: models.Song) -> Path:
     """Return the validated path to a song's original audio file."""
-    return _ensure_path_within(Path(song.source_path), config.FULL_SONGS_DIR)
+    return _ensure_path_within(Path(song.source_path), config.SONG_OUTPUT_DIR)
 
 
 def resolve_output_dir(song: models.Song) -> Path:
@@ -105,13 +100,15 @@ def _persist_song(
     base_slug = slugify(title, fallback="song")
     with library_write_lock():
         slug = make_unique_slug(db, base_slug)
-        destination = config.FULL_SONGS_DIR / f"{slug}{extension}"
+        output_dir = config.SONG_OUTPUT_DIR / slug
+        destination = output_dir / f"source{extension}"
         write_source(destination)
         song = models.Song(
             title=title,
             original_filename=original_filename,
             source_path=str(destination),
             slug=slug,
+            output_dir=str(output_dir),
             status=models.SongStatus.PENDING,
         )
         db.add(song)
@@ -189,4 +186,10 @@ def update_song(db: Session, song: models.Song, patch: schemas.SongUpdate) -> mo
 
 def delete_song(db: Session, song: models.Song) -> None:
     """Delete a song without losing files when the database commit fails."""
-    delete_with_files(db, song, (resolve_output_dir(song), resolve_source_path(song)))
+    output_dir = resolve_output_dir(song)
+    source_path = resolve_source_path(song)
+    paths = (output_dir,) if output_dir == source_path or output_dir in source_path.parents else (
+        output_dir,
+        source_path,
+    )
+    delete_with_files(db, song, paths)

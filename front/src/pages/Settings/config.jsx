@@ -147,12 +147,6 @@ export const SETTINGS = {
       {
         type: "readonly",
         variant: "card",
-        name: "recordings_folder",
-        label: "Где хранятся ваши записи"
-      },
-      {
-        type: "readonly",
-        variant: "card",
         name: "cache_folder",
         label: "Временные файлы"
       }

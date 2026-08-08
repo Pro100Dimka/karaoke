@@ -36,19 +36,17 @@ def _archive_with(entries: list[tuple[str, bytes]]) -> zipfile.ZipFile:
 
 
 def test_unique_slug_skips_orphaned_source_file(tmp_path, monkeypatch):
-    monkeypatch.setattr(config, "FULL_SONGS_DIR", tmp_path / "sources")
     monkeypatch.setattr(config, "SONG_OUTPUT_DIR", tmp_path / "songs")
-    config.FULL_SONGS_DIR.mkdir()
     config.SONG_OUTPUT_DIR.mkdir()
-    (config.FULL_SONGS_DIR / "track.wav").write_bytes(b"orphan")
+    orphan = config.SONG_OUTPUT_DIR / "track"
+    orphan.mkdir()
+    (orphan / "source.wav").write_bytes(b"orphan")
 
     assert song_service.make_unique_slug(_SlugSession(), "track") == "track-2"
 
 
 def test_unique_slug_skips_orphaned_output_directory(tmp_path, monkeypatch):
-    monkeypatch.setattr(config, "FULL_SONGS_DIR", tmp_path / "sources")
     monkeypatch.setattr(config, "SONG_OUTPUT_DIR", tmp_path / "songs")
-    config.FULL_SONGS_DIR.mkdir()
     config.SONG_OUTPUT_DIR.mkdir()
     (config.SONG_OUTPUT_DIR / "track").mkdir()
 

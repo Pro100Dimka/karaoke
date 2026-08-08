@@ -7,6 +7,7 @@
 поэтому программу можно установить/скопировать в любую директорию на диске
 пользователя — ничего не захардкожено абсолютным путём.
 """
+
 import os
 import sys
 from pathlib import Path
@@ -44,24 +45,68 @@ BASE_DIR = Path(__file__).resolve().parent
 IS_FROZEN = bool(getattr(sys, "frozen", False))
 # PyInstaller places bundled read-only files in _MEIPASS.
 RUNTIME_DIR = Path(getattr(sys, "_MEIPASS", BASE_DIR))
+PROJECT_ROOT = BASE_DIR.parent
+
+
+def _default_data_dir() -> Path:
+    if not IS_FROZEN:
+        return PROJECT_ROOT / "data"
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    base = Path(local_app_data) if local_app_data else Path.home() / "AppData" / "Local"
+    return base / "A&D Voice"
 
 AI_DIR = _env_path("SONGAPP_AI_DIR", RUNTIME_DIR / "AI")
-RECORDINGS_DIRNAME = "recordings"            # подпапка внутри Song/<slug>/ для записей пользователя
-LOGS_DIRNAME = "logs"                        # подпапка внутри Song/<slug>/ для логов обработки
+DOWNLOADS_DIR = _env_path("SONGAPP_DOWNLOADS_DIR", PROJECT_ROOT / "downloads")
+MODELS_DIR = _env_path(
+    "SONGAPP_MODELS_DIR", RUNTIME_DIR / "models" if IS_FROZEN else DOWNLOADS_DIR / "models"
+)
+EXTERNAL_ENGINES_DIR = _env_path(
+    "SONGAPP_ENGINES_DIR", RUNTIME_DIR / "engines" if IS_FROZEN else DOWNLOADS_DIR / "engines"
+)
+RECORDINGS_DIRNAME = "recordings"  # подпапка внутри Song/<slug>/ для записей пользователя
+LOGS_DIRNAME = "logs"  # подпапка внутри Song/<slug>/ для логов обработки
 
 # Можно переопределить SONGAPP_DATA_DIR — например, чтобы хранить данные в
 # %APPDATA%/SongApp на Windows или ~/Library/Application Support/SongApp на
 # macOS при упаковке в инсталлятор.
-DATA_DIR = _env_path("SONGAPP_DATA_DIR", BASE_DIR / "data")
+DATA_DIR = _env_path("SONGAPP_DATA_DIR", _default_data_dir())
 DB_PATH = DATA_DIR / "app.db"
-_DEFAULT_LOG_DIR = DATA_DIR / "logs"
+_DEFAULT_LOG_DIR = DATA_DIR / "logs" if IS_FROZEN else PROJECT_ROOT / "logs"
 APP_LOG_DIR = _env_path("SONGAPP_LOG_DIR", _DEFAULT_LOG_DIR)
 
-# Keep the development layout. The packaged application gets SONGAPP_DATA_DIR
-# from Electron, so updates never overwrite songs, recordings or the database.
-_CONTENT_DIR = DATA_DIR if IS_FROZEN else BASE_DIR
-FULL_SONGS_DIR = _env_path("SONGAPP_FULL_SONGS_DIR", _CONTENT_DIR / "full_songs")
-SONG_OUTPUT_DIR = _env_path("SONGAPP_SONG_OUTPUT_DIR", _CONTENT_DIR / "Song")
+# Source uploads and generated artefacts live in one owned library. The original
+# upload is replaced by the pipeline's normalized song.mp3 after processing, so
+# the application never keeps a second full-song copy indefinitely.
+_DEFAULT_SONGS_DIR = DATA_DIR / "karaoke_songs" if IS_FROZEN else PROJECT_ROOT / "karaoke_songs"
+SONG_OUTPUT_DIR = _env_path("SONGAPP_SONG_OUTPUT_DIR", _DEFAULT_SONGS_DIR)
+UPLOAD_TEMP_DIR = SONG_OUTPUT_DIR / ".incoming"
+
+
+def configure_ai_resource_environment() -> None:
+    """Point the AI core at local resources without machine-specific bat files."""
+    asr_model = MODELS_DIR / "qwen" / "Qwen3-ASR-0.6B"
+    aligner_model = MODELS_DIR / "qwen" / "Qwen3-ForcedAligner-0.6B"
+    roformer = MODELS_DIR / "roformer" / "MelBandRoformer.ckpt"
+    msst = EXTERNAL_ENGINES_DIR / "msst"
+    msst_config = msst / "configs" / "KimberleyJensen" / "config_vocals_mel_band_roformer_kj.yaml"
+
+    def set_resource(name: str, path: Path, *, directory: bool = False) -> None:
+        configured = os.environ.get(name)
+        configured_path = Path(configured).expanduser() if configured else None
+        configured_exists = (
+            configured_path.is_dir() if configured_path and directory else configured_path.is_file()
+            if configured_path
+            else False
+        )
+        if not configured_exists and (path.is_dir() if directory else path.is_file()):
+            os.environ[name] = str(path)
+
+    set_resource("KARAOKE_AI_ASR_MODEL", asr_model, directory=True)
+    set_resource("KARAOKE_AI_ALIGNER_MODEL", aligner_model, directory=True)
+    set_resource("MSST_CHECKPOINT", roformer)
+    set_resource("MSST_ENGINE_DIR", msst, directory=True)
+    if msst_config.is_file():
+        set_resource("MSST_CONFIG", msst_config)
 
 # --------------------------------------------------------------------
 # База данных
@@ -77,9 +122,7 @@ DEFAULT_WHISPER_MODEL = "turbo"
 DEFAULT_LANGUAGE = None  # автоопределение
 
 ALLOWED_AUDIO_EXTENSIONS = {".mp3", ".wav", ".flac", ".m4a", ".ogg"}
-MAX_AUDIO_UPLOAD_BYTES = _env_int(
-    "SONGAPP_MAX_AUDIO_UPLOAD_BYTES", 2 * 1024**3, minimum=1
-)
+MAX_AUDIO_UPLOAD_BYTES = _env_int("SONGAPP_MAX_AUDIO_UPLOAD_BYTES", 2 * 1024**3, minimum=1)
 UPLOAD_CHUNK_SIZE = _env_int("SONGAPP_UPLOAD_CHUNK_SIZE", 1024 * 1024, minimum=4096)
 
 # Стандартный формат аудио, который backend гарантирует на выходе
@@ -98,7 +141,7 @@ RECORDING_CHANNELS = 1
 # Сервер
 # --------------------------------------------------------------------
 
-HOST = os.environ.get("SONGAPP_HOST", "127.0.0.1")   # локальный десктоп-бекенд — наружу не торчит
+HOST = os.environ.get("SONGAPP_HOST", "127.0.0.1")  # локальный десктоп-бекенд — наружу не торчит
 PORT = _env_int("SONGAPP_PORT", 8000, minimum=1, maximum=65535)
 DEFAULT_UI_ORIGINS = (
     "http://127.0.0.1:3000",
@@ -111,8 +154,9 @@ CORS_ORIGINS = _unique_csv("SONGAPP_CORS_ORIGINS", DEFAULT_UI_ORIGINS)
 
 def ensure_directories() -> None:
     """Создаёт все рабочие директории при первом запуске, если их ещё нет."""
-    for path in (FULL_SONGS_DIR, SONG_OUTPUT_DIR, DATA_DIR, APP_LOG_DIR):
+    for path in (SONG_OUTPUT_DIR, UPLOAD_TEMP_DIR, DATA_DIR, APP_LOG_DIR):
         path.mkdir(parents=True, exist_ok=True)
 
 
 ensure_directories()
+configure_ai_resource_environment()

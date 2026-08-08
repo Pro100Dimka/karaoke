@@ -86,11 +86,11 @@ async def add_song(
     title: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
-    config.FULL_SONGS_DIR.mkdir(parents=True, exist_ok=True)
+    config.UPLOAD_TEMP_DIR.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
         prefix=".song-upload-",
         suffix=".tmp",
-        dir=config.FULL_SONGS_DIR,
+        dir=config.UPLOAD_TEMP_DIR,
         delete=False,
     ) as temporary:
         temporary_path = Path(temporary.name)

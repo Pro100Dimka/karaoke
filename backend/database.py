@@ -35,6 +35,7 @@ def _configure_sqlite(dbapi_connection, _connection_record) -> None:
     finally:
         cursor.close()
 
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -49,9 +50,7 @@ _SONG_COLUMN_MIGRATIONS = {
 }
 
 _AUDIO_COLUMN_MIGRATIONS = {
-    "audio_driver": (
-        "ALTER TABLE audio_settings ADD COLUMN audio_driver VARCHAR DEFAULT 'auto'"
-    ),
+    "audio_driver": ("ALTER TABLE audio_settings ADD COLUMN audio_driver VARCHAR DEFAULT 'auto'"),
     "asio_driver_name": "ALTER TABLE audio_settings ADD COLUMN asio_driver_name VARCHAR",
     "buffer_size": "ALTER TABLE audio_settings ADD COLUMN buffer_size INTEGER DEFAULT 64",
     "output_device_id": "ALTER TABLE audio_settings ADD COLUMN output_device_id INTEGER",
@@ -66,8 +65,6 @@ def _apply_additive_migrations(connection, existing: set[str], migrations: dict[
     for column, statement in migrations.items():
         if column not in existing:
             connection.execute(text(statement))
-
-
 
 
 def _repair_invalid_audio_settings_datetime(connection) -> None:
@@ -92,7 +89,6 @@ def _repair_invalid_audio_settings_datetime(connection) -> None:
     )
 
 
-
 def _repair_corrupted_audio_settings(connection) -> None:
     """Reset only the audio settings row when legacy values no longer fit the schema.
 
@@ -108,18 +104,30 @@ def _repair_corrupted_audio_settings(connection) -> None:
         return
     columns = {column["name"] for column in inspector.get_columns("audio_settings")}
     required = {
-        "id", "volume", "sensitivity", "latency_ms", "audio_driver",
-        "buffer_size", "monitoring_enabled", "reverb", "echo", "delay",
+        "id",
+        "volume",
+        "sensitivity",
+        "latency_ms",
+        "audio_driver",
+        "buffer_size",
+        "monitoring_enabled",
+        "reverb",
+        "echo",
+        "delay",
     }
     if not required.issubset(columns):
         return
 
-    rows = connection.execute(
-        text(
-            "SELECT id, volume, sensitivity, latency_ms, audio_driver, buffer_size, "
-            "monitoring_enabled, reverb, echo, delay FROM audio_settings"
+    rows = (
+        connection.execute(
+            text(
+                "SELECT id, volume, sensitivity, latency_ms, audio_driver, buffer_size, "
+                "monitoring_enabled, reverb, echo, delay FROM audio_settings"
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
 
     def is_number(value) -> bool:
         return isinstance(value, (int, float)) and not isinstance(value, bool)

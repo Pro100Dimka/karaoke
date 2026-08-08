@@ -1,4 +1,5 @@
 """Make project imports stable regardless of the directory pytest is launched from."""
+
 from __future__ import annotations
 
 import sys

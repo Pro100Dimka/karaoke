@@ -28,9 +28,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 def path_settings() -> dict[str, str]:
     """Expose paths for display only; they are never persisted as preferences."""
     return {
-        "songs_folder": str(config.FULL_SONGS_DIR),
-        "ai_folder": str(config.AI_DIR),
-        "recordings_folder": str(config.SONG_OUTPUT_DIR),
+        "songs_folder": str(config.SONG_OUTPUT_DIR),
+        "ai_folder": str(config.MODELS_DIR),
         "cache_folder": str(config.DATA_DIR),
     }
 

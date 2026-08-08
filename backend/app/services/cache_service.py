@@ -60,8 +60,7 @@ def _human(num_bytes: int) -> str:
 
 def cache_size() -> dict:
     breakdown = {
-        "full_songs": _dir_size_bytes(config.FULL_SONGS_DIR),
-        "song_results": _dir_size_bytes(config.SONG_OUTPUT_DIR),
+        "karaoke_songs": _dir_size_bytes(config.SONG_OUTPUT_DIR),
         "database": Path(config.DB_PATH).stat().st_size if Path(config.DB_PATH).exists() else 0,
     }
     total = sum(breakdown.values())
@@ -148,6 +147,15 @@ def optimize_song_files(song_id: str) -> dict:
         actions: list[str] = []
         freed = _convert_heavy_wavs(out_dir, actions)
         freed += _remove_intermediate_directories(out_dir, actions)
+
+        normalized_source = out_dir / "song.mp3"
+        previous_source = song_service.resolve_source_path(song)
+        if normalized_source.is_file() and previous_source != normalized_source:
+            if previous_source.is_file():
+                freed += previous_source.stat().st_size
+                previous_source.unlink()
+                actions.append(f"removed duplicate source {previous_source.name}")
+            song.source_path = str(normalized_source)
 
         song.optimized = True
         commit(db)

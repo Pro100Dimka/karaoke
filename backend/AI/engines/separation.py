@@ -1,17 +1,40 @@
 from __future__ import annotations
 
 import os
+import importlib.util
+import multiprocessing
 from pathlib import Path
-import shlex
+from queue import Empty
 import shutil
-import subprocess
+import sys
 import tempfile
+import traceback
 
 import numpy as np
 import soundfile as sf
 
 from .base import Separator
 from ..errors import AICoreError, EngineUnavailableError
+
+
+def _run_msst_worker(engine_dir: str, arguments: dict[str, object], result_queue) -> None:
+    """Run third-party MSST in an isolated process without a duplicate Python env."""
+    engine_path = Path(engine_dir).resolve()
+    previous_models = sys.modules.pop("models", None)
+    sys.path.insert(0, str(engine_path))
+    try:
+        spec = importlib.util.spec_from_file_location("advoice_msst_inference", engine_path / "inference.py")
+        if spec is None or spec.loader is None:
+            raise RuntimeError("Could not load MSST inference module")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        module.proc_folder(arguments)
+        result_queue.put(None)
+    except BaseException:  # The child must report all failures to its parent.
+        result_queue.put(traceback.format_exc())
+    finally:
+        if previous_models is not None:
+            sys.modules["models"] = previous_models
 
 
 def _fit_channels_and_length(audio: np.ndarray, channels: int, frames: int) -> np.ndarray:
@@ -33,58 +56,61 @@ class MSSTMelRoformerSeparator(Separator):
 
     def __init__(
         self,
-        command: str | None = None,
+        engine_dir: str | None = None,
         config: str | None = None,
         checkpoint: str | None = None,
     ):
-        self.command = command or os.getenv("MSST_INFERENCE_COMMAND")
+        self.engine_dir = engine_dir or os.getenv("MSST_ENGINE_DIR")
         self.config = config or os.getenv("MSST_CONFIG")
         self.checkpoint = checkpoint or os.getenv("MSST_CHECKPOINT")
 
     def available(self) -> bool:
-        if not (self.command and self.config and self.checkpoint):
+        if not (self.engine_dir and self.config and self.checkpoint):
             return False
-        if not (Path(self.config).is_file() and Path(self.checkpoint).is_file()):
-            return False
-        try:
-            command = shlex.split(self.command, posix=True)
-        except ValueError:
-            return False
-        if not command:
-            return False
-        executable = Path(command[0])
-        if not executable.is_file():
-            return False
-        if len(command) > 1 and command[1].lower().endswith((".py", ".pyw")):
-            if not Path(command[1]).is_file():
-                return False
-        return True
-
-    def _build_command(self, input_dir: Path, output_dir: Path) -> list[str]:
-        if not self.command or not self.config or not self.checkpoint:
-            raise EngineUnavailableError("MSST_INFERENCE_COMMAND is not configured")
-        command = shlex.split(self.command, posix=True)
-        command.extend(
-            [
-                "--model_type",
-                "mel_band_roformer",
-                "--config_path",
-                str(Path(self.config).resolve()),
-                "--start_check_point",
-                str(Path(self.checkpoint).resolve()),
-                "--input_folder",
-                str(input_dir),
-                "--store_dir",
-                str(output_dir),
-            ]
+        return all(
+            path.is_file()
+            for path in (
+                Path(self.engine_dir) / "inference.py",
+                Path(self.config),
+                Path(self.checkpoint),
+            )
         )
-        return command
+
+    def _run_engine(self, input_dir: Path, output_dir: Path) -> None:
+        if not self.engine_dir or not self.config or not self.checkpoint:
+            raise EngineUnavailableError("Mel-Band RoFormer resources are not configured")
+        arguments = {
+            "model_type": "mel_band_roformer",
+            "config_path": str(Path(self.config).resolve()),
+            "start_check_point": str(Path(self.checkpoint).resolve()),
+            "input_folder": str(input_dir),
+            "store_dir": str(output_dir),
+        }
+        context = multiprocessing.get_context("spawn")
+        result_queue = context.Queue(maxsize=1)
+        process = context.Process(
+            target=_run_msst_worker,
+            args=(self.engine_dir, arguments, result_queue),
+            daemon=False,
+        )
+        process.start()
+        process.join(timeout=60 * 30)
+        if process.is_alive():
+            process.terminate()
+            process.join(timeout=10)
+            raise AICoreError("MSST exceeded the 30-minute safety timeout")
+        try:
+            error = result_queue.get(timeout=5)
+        except Empty:
+            error = None
+        if process.exitcode != 0 or error:
+            raise AICoreError(error or f"MSST process exited with code {process.exitcode}")
 
     def separate(self, mix, vocals, instrumental):
         if not self.available():
             raise EngineUnavailableError(
-                "Mel-Band RoFormer is not configured. Set MSST_INFERENCE_COMMAND, "
-                "MSST_CONFIG and MSST_CHECKPOINT to existing files."
+                "Mel-Band RoFormer is not configured. Set MSST_ENGINE_DIR, MSST_CONFIG "
+                "and MSST_CHECKPOINT to existing files."
             )
 
         with tempfile.TemporaryDirectory(prefix="karaoke-msst-") as temporary:
@@ -95,26 +121,7 @@ class MSSTMelRoformerSeparator(Separator):
             output_dir.mkdir()
             shutil.copy2(mix, input_dir / "song.wav")
 
-            try:
-                completed = subprocess.run(
-                    self._build_command(input_dir, output_dir),
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=60 * 30,
-                )
-            except FileNotFoundError as exc:
-                command = self._build_command(input_dir, output_dir)
-                raise EngineUnavailableError(
-                    f"MSST inference command could not be started. Executable: {command[0]!r}"
-                ) from exc
-            except subprocess.TimeoutExpired as exc:
-                raise AICoreError("MSST exceeded the 30-minute safety timeout") from exc
-            except subprocess.CalledProcessError as exc:
-                details = (exc.stderr or exc.stdout or "MSST failed").strip()
-                raise AICoreError(details) from exc
+            self._run_engine(input_dir, output_dir)
 
             all_wavs = sorted(output_dir.rglob("*.wav"))
             vocal_candidates = [
@@ -130,8 +137,7 @@ class MSSTMelRoformerSeparator(Separator):
                 if "instrumental" in path.name.lower() or "no_vocal" in path.name.lower()
             ]
             if not vocal_candidates:
-                tail = (completed.stdout or "")[-2000:]
-                raise AICoreError(f"MSST did not produce a vocals stem. Output: {tail}")
+                raise AICoreError("MSST did not produce a vocals stem")
 
             mix_audio, sample_rate = sf.read(mix, dtype="float32", always_2d=True)
             vocal_audio, vocal_rate = sf.read(vocal_candidates[0], dtype="float32", always_2d=True)

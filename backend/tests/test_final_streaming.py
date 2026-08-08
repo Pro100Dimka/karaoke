@@ -42,20 +42,19 @@ class FakeDb:
 
 
 def _configure_library(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(config, "FULL_SONGS_DIR", tmp_path / "full_songs")
-    monkeypatch.setattr(config, "SONG_OUTPUT_DIR", tmp_path / "Song")
+    monkeypatch.setattr(config, "SONG_OUTPUT_DIR", tmp_path / "karaoke_songs")
 
 
 def test_create_song_from_path_moves_streamed_upload(monkeypatch, tmp_path):
     _configure_library(monkeypatch, tmp_path)
-    temporary = config.FULL_SONGS_DIR / ".upload.tmp"
+    temporary = config.SONG_OUTPUT_DIR / ".upload.tmp"
     temporary.parent.mkdir(parents=True)
     temporary.write_bytes(b"audio")
     db = FakeDb()
 
     song = song_service.create_song_from_path(db, "  Test Song  ", "folder/input.WAV", temporary)
 
-    destination = config.FULL_SONGS_DIR / "test-song.wav"
+    destination = config.SONG_OUTPUT_DIR / "test-song" / "source.wav"
     assert song.title == "Test Song"
     assert song.original_filename == "input.WAV"
     assert Path(song.source_path) == destination
@@ -66,7 +65,7 @@ def test_create_song_from_path_moves_streamed_upload(monkeypatch, tmp_path):
 
 def test_create_song_from_path_removes_moved_file_when_commit_fails(monkeypatch, tmp_path):
     _configure_library(monkeypatch, tmp_path)
-    temporary = config.FULL_SONGS_DIR / ".upload.tmp"
+    temporary = config.SONG_OUTPUT_DIR / ".upload.tmp"
     temporary.parent.mkdir(parents=True)
     temporary.write_bytes(b"audio")
     db = FakeDb(fail_commit=True)
@@ -75,13 +74,13 @@ def test_create_song_from_path_removes_moved_file_when_commit_fails(monkeypatch,
         song_service.create_song_from_path(db, "Test", "input.wav", temporary)
 
     assert not temporary.exists()
-    assert not (config.FULL_SONGS_DIR / "test.wav").exists()
+    assert not (config.SONG_OUTPUT_DIR / "test" / "source.wav").exists()
     assert db.rolled_back is True
 
 
 def test_create_song_from_path_rejects_empty_file(monkeypatch, tmp_path):
     _configure_library(monkeypatch, tmp_path)
-    temporary = config.FULL_SONGS_DIR / ".upload.tmp"
+    temporary = config.SONG_OUTPUT_DIR / ".upload.tmp"
     temporary.parent.mkdir(parents=True)
     temporary.touch()
 

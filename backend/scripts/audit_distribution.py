@@ -1,7 +1,7 @@
 """Reject runtime and build artifacts that must never ship with source updates."""
+
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,7 +22,9 @@ def violations() -> list[Path]:
             continue
         if not path.is_file():
             continue
-        if path.name in FORBIDDEN_FILES or any(path.name.endswith(suffix) for suffix in FORBIDDEN_SUFFIXES):
+        if path.name in FORBIDDEN_FILES or any(
+            path.name.endswith(suffix) for suffix in FORBIDDEN_SUFFIXES
+        ):
             found.append(relative)
     return sorted(set(found))
 

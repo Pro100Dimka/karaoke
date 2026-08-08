@@ -9,13 +9,13 @@ rem  Put this file into:
 rem      backend\scripts\install-ai-models.bat
 rem
 rem  It installs:
-rem    - backend venv from runtimes\python312 (if needed)
+rem    - backend venv from downloads\runtimes\python312 (if needed)
 rem    - CUDA PyTorch
 rem    - backend + AI Core requirements
 rem    - Qwen3-ASR-0.6B
 rem    - Qwen3-ForcedAligner-0.6B
 rem    - TorchFCPE bundled model
-rem    - MSST in an isolated venv
+rem    - MSST inference through the shared backend runtime
 rem    - Mel-Band RoFormer vocals checkpoint
 rem    - persistent user environment variables
 rem
@@ -23,22 +23,23 @@ rem  Safe to run repeatedly. Existing valid files are reused.
 rem ============================================================
 
 set "SCRIPT_DIR=%~dp0"
-for %%I in ("%SCRIPT_DIR%..") do set "ROOT=%%~fI"
+for %%I in ("%SCRIPT_DIR%..") do set "PROJECT_ROOT=%%~fI"
+set "ROOT=%PROJECT_ROOT%\backend"
+set "DOWNLOADS=%PROJECT_ROOT%\downloads"
 
-set "RUNTIME_PYTHON=%ROOT%\runtimes\python312\python.exe"
+set "RUNTIME_PYTHON=%DOWNLOADS%\runtimes\python312\python.exe"
 set "VENV_DIR=%ROOT%\venv"
 set "PYTHON=%VENV_DIR%\Scripts\python.exe"
 
-set "MODELS_DIR=%ROOT%\models"
+set "MODELS_DIR=%DOWNLOADS%\models"
 set "HF_HOME=%MODELS_DIR%\huggingface"
 set "QWEN_DIR=%MODELS_DIR%\qwen"
 set "QWEN_ASR_DIR=%QWEN_DIR%\Qwen3-ASR-0.6B"
 set "QWEN_ALIGNER_DIR=%QWEN_DIR%\Qwen3-ForcedAligner-0.6B"
 
-set "ENGINES_DIR=%ROOT%\engines"
+set "ENGINES_DIR=%DOWNLOADS%\engines"
 set "MSST_DIR=%ENGINES_DIR%\msst"
-set "MSST_VENV=%MSST_DIR%\.venv"
-set "MSST_PYTHON=%MSST_VENV%\Scripts\python.exe"
+set "MSST_PYTHON=%PYTHON%"
 set "MSST_INFERENCE=%MSST_DIR%\inference.py"
 set "MSST_CONFIG=%MSST_DIR%\configs\KimberleyJensen\config_vocals_mel_band_roformer_kj.yaml"
 
@@ -63,7 +64,7 @@ rem Clear it in case it was inherited from a previous installer/terminal.
 set "PIP_QUIET="
 set "MSST_SETUPTOOLS_VERSION=80.9.0"
 
-set "ENV_FILE=%ROOT%\ai-environment.bat"
+set "ENV_FILE=%DOWNLOADS%\ai-environment.bat"
 set "TMP_ROOT=%TEMP%\advoice-ai-install"
 
 title A^&D Voice - AI installation
@@ -365,46 +366,13 @@ if not exist "%MSST_CONFIG%" (
 )
 
 rem ============================================================
-rem 9. MSST ISOLATED VENV + CHECKPOINT
+rem 9. SHARED MSST RUNTIME + CHECKPOINT
 rem ============================================================
 
 echo.
-echo [9/10] Installing isolated MSST runtime...
-
-if not exist "%MSST_PYTHON%" (
-    "%RUNTIME_PYTHON%" -m venv "%MSST_VENV%"
-    if errorlevel 1 goto :fail
-)
-
-echo Updating MSST package tools...
-"%MSST_PYTHON%" -m pip install %ADVOICE_PIP_FLAGS% --upgrade pip wheel
-if errorlevel 1 goto :fail
-
-rem MSST currently pulls an older librosa that still imports pkg_resources.
-rem pkg_resources was removed from setuptools 82+, so keep the last compatible line.
-"%MSST_PYTHON%" -m pip install %ADVOICE_PIP_FLAGS% --force-reinstall "setuptools==%MSST_SETUPTOOLS_VERSION%"
-if errorlevel 1 goto :fail
-
-rem Install CUDA PyTorch FIRST so MSST dependencies cannot pull a different build.
-"%MSST_PYTHON%" -m pip install %ADVOICE_PIP_FLAGS% --upgrade ^
-    "torch==%TORCH_VERSION%" ^
-    "torchvision==%TORCHVISION_VERSION%" ^
-    "torchaudio==%TORCHAUDIO_VERSION%" ^
-    --index-url "%TORCH_INDEX%"
-
-if errorlevel 1 goto :fail
-
-if exist "%MSST_DIR%\requirements.txt" (
-    echo Preparing MSST requirements without torch/torchvision/torchaudio...
-
-    set "MSST_FILTERED_REQUIREMENTS=%TMP_ROOT%\msst-requirements-filtered.txt"
-
-    "%PYTHON%" -c "from pathlib import Path; from packaging.requirements import Requirement; src=Path(r'%MSST_DIR%\requirements.txt'); dst=Path(r'!MSST_FILTERED_REQUIREMENTS!'); skip={'torch','torchvision','torchaudio'}; lines=src.read_text(encoding='utf-8').splitlines(); out=[]; [out.append(line) for line in lines if (not line.strip() or line.lstrip().startswith('#') or Requirement(line).name.lower() not in skip)]; dst.write_text(chr(10).join(out)+chr(10), encoding='utf-8'); print('Filtered MSST requirements:', dst)"
-    if errorlevel 1 goto :fail
-
-    "%MSST_PYTHON%" -m pip install %ADVOICE_PIP_FLAGS% -r "!MSST_FILTERED_REQUIREMENTS!"
-    if errorlevel 1 goto :fail
-)
+echo [9/10] Verifying shared MSST runtime...
+echo MSST now uses backend\venv and the same PyTorch/CUDA libraries as AI Core.
+echo No duplicate virtual environment or training dependencies are installed.
 
 echo.
 echo Checking Mel-Band RoFormer checkpoint...
@@ -451,15 +419,6 @@ if "!CHECKPOINT_OK!"=="1" (
     echo RoFormer SHA-256: OK
 )
 
-echo Verifying MSST Python compatibility...
-"%MSST_PYTHON%" -c "import setuptools, pkg_resources; print('MSST setuptools:', setuptools.__version__); print('pkg_resources: OK')" >nul
-if errorlevel 1 (
-    echo [ERROR] MSST compatibility layer pkg_resources is unavailable.
-    echo Reinstalling setuptools %MSST_SETUPTOOLS_VERSION%...
-    "%MSST_PYTHON%" -m pip install %ADVOICE_PIP_FLAGS% --force-reinstall "setuptools==%MSST_SETUPTOOLS_VERSION%"
-    if errorlevel 1 goto :fail
-)
-
 "%MSST_PYTHON%" "%MSST_INFERENCE%" --help >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] MSST inference runtime test failed.
@@ -486,31 +445,9 @@ echo [10/10] Writing AI environment configuration...
     echo set "MSST_CHECKPOINT=%MSST_CHECKPOINT%"
 ) > "%ENV_FILE%"
 
-rem Persist for newly started backend/Electron processes.
-rem Pass values through temporary environment variables so paths with spaces are safe.
-set "ADVOICE_HF_HOME=%HF_HOME%"
-set "ADVOICE_HF_HUB_CACHE=%HF_HOME%\hub"
-set "ADVOICE_QWEN_ASR=%QWEN_ASR_DIR%"
-set "ADVOICE_QWEN_ALIGNER=%QWEN_ALIGNER_DIR%"
-set "ADVOICE_MSST_COMMAND="%MSST_PYTHON%" "%MSST_INFERENCE%""
-set "ADVOICE_MSST_CONFIG=%MSST_CONFIG%"
-set "ADVOICE_MSST_CHECKPOINT=%MSST_CHECKPOINT%"
-
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
-    "$values = @{" ^
-    "'HF_HOME'=$env:ADVOICE_HF_HOME;" ^
-    "'HF_HUB_CACHE'=$env:ADVOICE_HF_HUB_CACHE;" ^
-    "'KARAOKE_AI_ASR_MODEL'=$env:ADVOICE_QWEN_ASR;" ^
-    "'KARAOKE_AI_ALIGNER_MODEL'=$env:ADVOICE_QWEN_ALIGNER;" ^
-    "'KARAOKE_AI_ALLOW_FALLBACK'='false';" ^
-    "'MSST_INFERENCE_COMMAND'=$env:ADVOICE_MSST_COMMAND;" ^
-    "'MSST_CONFIG'=$env:ADVOICE_MSST_CONFIG;" ^
-    "'MSST_CHECKPOINT'=$env:ADVOICE_MSST_CHECKPOINT" ^
-    "}; foreach ($item in $values.GetEnumerator()) { [Environment]::SetEnvironmentVariable($item.Key, $item.Value, 'User') }"
-
-if errorlevel 1 goto :fail
-
-rem Apply the same values to this installer process for verification.
+rem Apply paths only to this verification process. Runtime code resolves the
+rem project-relative paths itself, so moving the project never leaves stale
+rem machine-wide environment variables behind.
 call "%ENV_FILE%"
 
 echo.
@@ -520,13 +457,6 @@ echo Checking Python dependency consistency...
 if errorlevel 1 (
     echo [ERROR] Main Python dependency conflicts detected:
     type "%TMP_ROOT%\pip-check-main.log"
-    goto :fail
-)
-
-"%MSST_PYTHON%" -m pip check > "%TMP_ROOT%\pip-check-msst.log" 2>&1
-if errorlevel 1 (
-    echo [ERROR] MSST dependency conflicts detected:
-    type "%TMP_ROOT%\pip-check-msst.log"
     goto :fail
 )
 
@@ -561,12 +491,10 @@ echo.
 echo Environment file:
 echo   %ENV_FILE%
 echo.
-echo IMPORTANT:
-echo   Close and reopen A^&D Voice / terminal after this installer.
-echo   User environment variables are visible only to NEW processes.
-echo.
-echo The AI models live outside the Electron package and should NOT
-echo be copied into win-unpacked / Setup.exe.
+echo Resources are stored under:
+echo   %DOWNLOADS%
+echo Runtime paths are resolved dynamically; no machine-wide variables
+echo or absolute project paths are persisted.
 echo.
 goto :success
 

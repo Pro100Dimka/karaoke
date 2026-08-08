@@ -20,7 +20,7 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-class SongStatus(str, enum.Enum):
+class SongStatus(enum.StrEnum):
     PENDING = "pending"
     QUEUED = "queued"
     PROCESSING = "processing"

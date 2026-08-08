@@ -12,13 +12,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import config
 from app.routers import analysis, application, audio, cache, diagnostics, player, recording, songs
-from app.services import audio_service, recording_service
+from app.services import audio_service, recording_service, storage_migration
 from database import init_db
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
+    storage_migration.migrate_legacy_song_storage()
     try:
         yield
     finally:

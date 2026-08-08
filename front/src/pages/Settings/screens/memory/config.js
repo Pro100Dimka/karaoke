@@ -7,8 +7,7 @@ export const DEFAULT_OPTIMIZE_OPTION = {
   label: "Оптимизировать файлы песни..."
 };
 export const MEMORY_SECTIONS = [
-  ["full_songs", "Песни (оригиналы)"],
-  ["song_results", "Результаты AI"],
+  ["karaoke_songs", "Песни и результаты обработки"],
   ["database", "База данных"]
 ];
 

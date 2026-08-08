@@ -1,6 +1,7 @@
 param(
     [string] $Executable = "release\win-unpacked\resources\backend\KaraokeBackend.exe",
-    [int] $Port = 18765
+    [int] $Port = 18765,
+    [int] $TimeoutSeconds = 180
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,17 +13,21 @@ $env:SONGAPP_PORT = $Port.ToString()
 $env:SONGAPP_DATA_DIR = $smokeData
 $env:SONGAPP_LOG_DIR = Join-Path $smokeData "logs"
 
-$process = Start-Process -FilePath $resolvedExecutable -WindowStyle Hidden -PassThru
+$stdoutPath = Join-Path $smokeData "stdout.log"
+$stderrPath = Join-Path $smokeData "stderr.log"
+$process = Start-Process -FilePath $resolvedExecutable -WindowStyle Hidden -PassThru `
+    -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
 
 try {
     $health = $null
-    for ($attempt = 0; $attempt -lt 60; $attempt += 1) {
+    $attempts = [Math]::Max(1, $TimeoutSeconds * 2)
+    for ($attempt = 0; $attempt -lt $attempts; $attempt += 1) {
         Start-Sleep -Milliseconds 500
         if ($process.HasExited) {
             break
         }
         try {
-            $health = Invoke-RestMethod "http://127.0.0.1:$Port/health" -TimeoutSec 2
+            $health = Invoke-RestMethod "http://127.0.0.1:$Port/diagnostics/health" -TimeoutSec 2
             break
         }
         catch {

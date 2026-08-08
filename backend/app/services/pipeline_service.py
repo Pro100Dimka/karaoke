@@ -526,10 +526,12 @@ def _run_reprocessing(song_id: str) -> None:
         if song is None:
             return
         out_dir = song_service.resolve_output_dir(song)
+        source_path = song_service.resolve_source_path(song)
     finally:
         db.close()
 
     recordings_backup: Path | None = None
+    source_backup: Path | None = None
     try:
         output_root = config.SONG_OUTPUT_DIR.resolve()
         target_dir = out_dir.resolve()
@@ -539,12 +541,34 @@ def _run_reprocessing(song_id: str) -> None:
         if recordings_dir.is_dir():
             recordings_backup = output_root / (f".{target_dir.name}.recordings-{uuid.uuid4().hex}")
             recordings_dir.replace(recordings_backup)
+        if target_dir in source_path.parents:
+            source_backup = output_root / (
+                f".{target_dir.name}.source-{uuid.uuid4().hex}{source_path.suffix.lower()}"
+            )
+            source_path.replace(source_backup)
         if target_dir.exists():
             shutil.rmtree(target_dir)
+        if source_backup is not None:
+            target_dir.mkdir(parents=True, exist_ok=True)
+            restored_source = target_dir / f"source{source_backup.suffix.lower()}"
+            source_backup.replace(restored_source)
+            db = SessionLocal()
+            try:
+                current_song = repositories.get_song(db, song_id)
+                if current_song is None:
+                    raise ValueError("Song disappeared during reprocessing")
+                current_song.source_path = str(restored_source)
+                current_song.output_dir = str(target_dir)
+                commit(db)
+            finally:
+                db.close()
     except Exception as exc:  # noqa: BLE001
         if recordings_backup and recordings_backup.exists():
             target_dir.mkdir(parents=True, exist_ok=True)
             recordings_backup.replace(target_dir / config.RECORDINGS_DIRNAME)
+        if source_backup and source_backup.exists():
+            target_dir.mkdir(parents=True, exist_ok=True)
+            source_backup.replace(target_dir / f"source{source_backup.suffix.lower()}")
         if _is_cancelled(song_id):
             _update_progress(song_id, status=models.SongStatus.CANCELLED, step_label="Отменено")
             return
