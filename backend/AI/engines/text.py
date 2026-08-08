@@ -1,21 +1,20 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+import re
+import tempfile
+from bisect import bisect_right
 from collections import Counter
+from collections.abc import Iterable
 from difflib import SequenceMatcher
 from pathlib import Path
-from bisect import bisect_right
-import re
 
 import numpy as np
 
-from ..audio import load_mono
-
-from .base import Aligner, Transcriber
-from .device import select_torch_device
-from ..audio import duration
+from ..audio import duration, load_mono
 from ..errors import EngineUnavailableError, InvalidArtifactError
 from ..models import Word
+from .base import Aligner, Transcriber
+from .device import select_torch_device
 
 _TOKEN = re.compile(r"[\w’'-]+", re.UNICODE)
 _LANGUAGE_NAMES = {
@@ -101,7 +100,11 @@ def _unwrap_items(result):
     for name in ("words", "time_stamps", "timestamps", "items", "segments"):
         value = _first(result, (name,))
         if value is not None:
-            if isinstance(value, (list, tuple)) and len(value) == 1 and isinstance(value[0], (list, tuple)):
+            if (
+                isinstance(value, (list, tuple))
+                and len(value) == 1
+                and isinstance(value[0], (list, tuple))
+            ):
                 return value[0]
             return value
     if isinstance(result, Iterable) and not isinstance(result, (str, bytes, dict)):
@@ -137,8 +140,8 @@ def _words_from_items(items) -> list[Word]:
     return words
 
 
-
-ASR_PIPELINE_VERSION = "singing-batched-consensus-v10"
+ASR_PIPELINE_VERSION = "singing-batched-consensus-v11-segmented-alignment"
+LONG_TEXT_ALIGNMENT_VERSION = "v2-short-windows-pathology-guard"
 
 
 def _normalize_singing_audio(y: np.ndarray) -> np.ndarray:
@@ -159,13 +162,17 @@ def _normalize_singing_audio(y: np.ndarray) -> np.ndarray:
     return np.ascontiguousarray(audio, dtype=np.float32)
 
 
-def _singing_chunks(y: np.ndarray, sr: int, activity_hints: list[tuple[float, float]] | None = None) -> list[np.ndarray]:
+def _singing_chunk_windows(
+    y: np.ndarray,
+    sr: int,
+    activity_hints: list[tuple[float, float]] | None = None,
+) -> list[tuple[np.ndarray, float, float]]:
     """Split long singing audio near energy valleys, not at fixed seconds."""
     if y.size == 0:
         return []
     total_sec = len(y) / sr
     if total_sec <= 32.0:
-        return [_normalize_singing_audio(y)]
+        return [(_normalize_singing_audio(y), 0.0, total_sec)]
 
     hop = max(1, int(sr * 0.025))
     frame = max(hop, int(sr * 0.05))
@@ -173,7 +180,7 @@ def _singing_chunks(y: np.ndarray, sr: int, activity_hints: list[tuple[float, fl
     rms = np.empty(count, dtype=np.float32)
     for index in range(count):
         start = index * hop
-        chunk = y[start:min(len(y), start + frame)]
+        chunk = y[start : min(len(y), start + frame)]
         rms[index] = float(np.sqrt(np.mean(chunk * chunk) + 1e-12)) if chunk.size else 0.0
 
     target = 16.0
@@ -191,7 +198,7 @@ def _singing_chunks(y: np.ndarray, sr: int, activity_hints: list[tuple[float, fl
         if hi_i <= lo_i:
             cut_sec = min(total_sec, cursor_sec + target)
         else:
-            region = rms[lo_i:hi_i + 1]
+            region = rms[lo_i : hi_i + 1]
             # Prefer a low-energy valley which is also outside FCPE voiced activity.
             # Pitch was already computed by the pipeline, so this signal is free.
             floor = float(np.min(region))
@@ -213,9 +220,9 @@ def _singing_chunks(y: np.ndarray, sr: int, activity_hints: list[tuple[float, fl
         cursor_sec = cut_sample / sr
 
     starts.append(len(y))
-    chunks: list[np.ndarray] = []
+    chunks: list[tuple[np.ndarray, float, float]] = []
     overlap = int(0.42 * sr)
-    for chunk_index, (left, right) in enumerate(zip(starts, starts[1:])):
+    for chunk_index, (left, right) in enumerate(zip(starts, starts[1:], strict=False)):
         # Give the ASR a little context on both sides of every energy-valley cut.
         # `_merge_transcript_parts` removes the duplicated words afterwards.
         # This is much safer for sung consonants than a hard boundary.
@@ -223,8 +230,117 @@ def _singing_chunks(y: np.ndarray, sr: int, activity_hints: list[tuple[float, fl
         padded_right = right if chunk_index == len(starts) - 2 else min(len(y), right + overlap)
         segment = y[padded_left:padded_right]
         if segment.size >= int(0.4 * sr):
-            chunks.append(_normalize_singing_audio(segment))
-    return chunks or [_normalize_singing_audio(y)]
+            chunks.append(
+                (
+                    _normalize_singing_audio(segment),
+                    padded_left / sr,
+                    padded_right / sr,
+                )
+            )
+    return chunks or [(_normalize_singing_audio(y), 0.0, total_sec)]
+
+
+def _singing_chunks(
+    y: np.ndarray,
+    sr: int,
+    activity_hints: list[tuple[float, float]] | None = None,
+) -> list[np.ndarray]:
+    """Compatibility wrapper used by focused unit tests and older callers."""
+    return [audio for audio, _start, _end in _singing_chunk_windows(y, sr, activity_hints)]
+
+
+def _group_lyric_text(text: str, target_words: int = 9, maximum_words: int = 12) -> list[str]:
+    """Build aligner-sized phrases while preserving author-provided line order."""
+    groups: list[str] = []
+    current: list[str] = []
+    current_words = 0
+    for raw in str(text or "").splitlines():
+        line = raw.strip()
+        if not line:
+            if current:
+                groups.append(" ".join(current))
+                current = []
+                current_words = 0
+            continue
+        line_words = len(tokenize(line))
+        if current and current_words + line_words > maximum_words:
+            groups.append(" ".join(current))
+            current = []
+            current_words = 0
+        current.append(line)
+        current_words += line_words
+        if current_words >= target_words:
+            groups.append(" ".join(current))
+            current = []
+            current_words = 0
+    if current:
+        groups.append(" ".join(current))
+    return groups
+
+
+def _activity_quantile_times(audio: np.ndarray, sample_rate: int) -> list[float]:
+    """Return ordered wall-clock samples representing likely vocal activity."""
+    hop = max(1, int(sample_rate * 0.04))
+    frame = max(hop, int(sample_rate * 0.08))
+    if audio.size < frame:
+        return [0.0, len(audio) / max(1, sample_rate)]
+    values = []
+    times = []
+    for start in range(0, max(1, len(audio) - frame + 1), hop):
+        chunk = audio[start : start + frame]
+        values.append(float(np.sqrt(np.mean(chunk * chunk) + 1e-12)))
+        times.append((start + frame / 2) / sample_rate)
+    rms = np.asarray(values, dtype=np.float32)
+    threshold = max(float(np.percentile(rms, 25)) * 1.8, float(np.percentile(rms, 90)) * 0.10)
+    active = [time for time, value in zip(times, rms, strict=True) if value >= threshold]
+    return active if len(active) >= 2 else [0.0, len(audio) / sample_rate]
+
+
+def _long_text_segments(audio, text: str) -> list[tuple[float, float, str]]:
+    """Give long trusted lyrics bounded windows derived from the vocal stem."""
+    groups = _group_lyric_text(text)
+    if not groups:
+        return []
+    source, sample_rate = load_mono(audio, 16000)
+    duration_sec = len(source) / sample_rate
+    active_times = _activity_quantile_times(source, sample_rate)
+    weights = [max(1, sum(len(token) for token in tokenize(group))) for group in groups]
+    total = sum(weights)
+    cursor = 0
+    output: list[tuple[float, float, str]] = []
+    last_index = len(active_times) - 1
+    for group, weight in zip(groups, weights, strict=True):
+        start_fraction = cursor / total
+        cursor += weight
+        end_fraction = cursor / total
+        start = active_times[min(last_index, int(round(start_fraction * last_index)))]
+        end = active_times[min(last_index, int(round(end_fraction * last_index)))]
+        start = max(0.0, start - 1.6)
+        end = min(duration_sec, max(start + 3.0, end + 1.6))
+        output.append((start, end, group))
+    return output
+
+
+def _pathological_alignment(words: list[Word], span: float) -> bool:
+    """Detect context collapse before it reaches lyrics and MIDI artefacts."""
+    if not words:
+        return True
+    durations = [max(0.0, word.end - word.start) for word in words]
+    collapsed = sum(duration <= 0.025 for duration in durations)
+    return max(durations) > max(4.5, span * 0.62) or collapsed > max(2, len(words) // 4)
+
+
+def _proportional_words(tokens: list[str], span: float) -> list[Word]:
+    weights = [max(1, len(token)) for token in tokens]
+    total = sum(weights)
+    offset = 0
+    output = []
+    for index, (token, weight) in enumerate(zip(tokens, weights, strict=True)):
+        word_start = span * offset / total
+        offset += weight
+        word_end = span * offset / total
+        output.append(Word(word_start, word_end, token, 0.05, index))
+    return output
 
 
 def _speech_focus_variant(audio: np.ndarray) -> np.ndarray:
@@ -270,7 +386,7 @@ def _transcript_quality(text: str, duration_sec: float, language: str | None) ->
         score -= min(0.42, (rate - 4.0) * 0.18)
     long_tokens = sum(len(token) > 28 for token in tokens)
     score -= min(0.25, long_tokens * 0.08)
-    repeated = sum(a.casefold() == b.casefold() for a, b in zip(tokens, tokens[1:]))
+    repeated = sum(a.casefold() == b.casefold() for a, b in zip(tokens, tokens[1:], strict=False))
     if len(tokens) >= 4:
         score -= min(0.22, repeated / max(1, len(tokens) - 1) * 0.5)
     score -= max(0.0, 0.82 - _script_ratio(value, language)) * 0.45
@@ -336,10 +452,10 @@ def _clean_transcript_part(text: str) -> str:
         index = 0
         cleaned: list[str] = []
         while index < len(tokens):
-            block = tokens[index:index + width]
+            block = tokens[index : index + width]
             repeats = 1
             cursor = index + width
-            while tokens[cursor:cursor + width] == block:
+            while tokens[cursor : cursor + width] == block:
                 repeats += 1
                 cursor += width
             cleaned.extend(block)
@@ -352,17 +468,14 @@ def _clean_transcript_part(text: str) -> str:
     return " ".join(tokens).strip()
 
 
-def _merge_transcript_parts(parts: list[str]) -> str:
-    """Merge overlapping ASR chunks with conservative fuzzy token matching.
-
-    Exact overlap was too brittle for singing: one chunk could emit ``тебя`` and
-    the neighbour ``тебя,`` or ``е``/``ё`` and both copies survived.  We allow
-    fuzzy overlap only when at least two boundary tokens agree strongly.
-    """
+def _trim_transcript_overlaps(parts: list[str]) -> list[str]:
+    """Remove duplicated boundary tokens while preserving phrase ownership."""
     merged: list[str] = []
+    trimmed: list[str] = []
     for part in parts:
         tokens = _clean_transcript_part(part).split()
         if not tokens:
+            trimmed.append("")
             continue
         overlap = 0
         maximum = min(10, len(merged), len(tokens))
@@ -373,12 +486,26 @@ def _merge_transcript_parts(parts: list[str]) -> str:
                 overlap = size
                 break
             if size >= 2:
-                similarities = [SequenceMatcher(None, a, b).ratio() for a, b in zip(left, right)]
+                similarities = [
+                    SequenceMatcher(None, a, b).ratio() for a, b in zip(left, right, strict=False)
+                ]
                 if min(similarities) >= 0.80 and sum(similarities) / size >= 0.90:
                     overlap = size
                     break
-        merged.extend(tokens[overlap:])
-    return " ".join(merged).strip()
+        owned = tokens[overlap:]
+        trimmed.append(" ".join(owned))
+        merged.extend(owned)
+    return trimmed
+
+
+def _merge_transcript_parts(parts: list[str]) -> str:
+    """Merge overlapping ASR chunks with conservative fuzzy token matching.
+
+    Exact overlap was too brittle for singing: one chunk could emit ``тебя`` and
+    the neighbour ``тебя,`` or ``е``/``ё`` and both copies survived.  We allow
+    fuzzy overlap only when at least two boundary tokens agree strongly.
+    """
+    return " ".join(part for part in _trim_transcript_overlaps(parts) if part).strip()
 
 
 def _majority_language(values: list[str | None], requested: str | None) -> str | None:
@@ -391,13 +518,16 @@ def _majority_language(values: list[str | None], requested: str | None) -> str |
         return Counter(normalized).most_common(1)[0][0]
     return None
 
+
 class Qwen3Transcriber(Transcriber):
     name = "qwen3-asr"
 
     def __init__(self, model="Qwen/Qwen3-ASR-0.6B"):
         self.model_name = model
         self._model = None
+        self._call_batch_size = 1
         self.last_language: str | None = None
+        self.last_segments: list[tuple[float, float, str]] = []
         self._activity_hints: list[tuple[float, float]] = []
 
     def set_pitch_activity(self, frames) -> None:
@@ -427,15 +557,25 @@ class Qwen3Transcriber(Transcriber):
         if self._model is None:
             device = select_torch_device(torch)
             use_cuda = device.startswith("cuda")
+            self._call_batch_size = 2 if use_cuda else 1
             kwargs = {
                 "device_map": device,
                 "dtype": torch.float16 if use_cuda else torch.float32,
-                "max_inference_batch_size": 1,
+                # The 0.6B model fits several singing phrases into an 8 GB GPU.
+                # A batch size of one made every phrase a separate generation
+                # and dominated total processing time. CPU keeps the conservative
+                # single-item path to avoid excessive RAM pressure.
+                "max_inference_batch_size": 2 if use_cuda else 1,
                 "max_new_tokens": 256,
             }
             self._model = Qwen3ASRModel.from_pretrained(self.model_name, **kwargs)
-            generation_config = getattr(getattr(self._model, "model", self._model), "generation_config", None)
-            if generation_config is not None and getattr(generation_config, "pad_token_id", None) is None:
+            generation_config = getattr(
+                getattr(self._model, "model", self._model), "generation_config", None
+            )
+            if (
+                generation_config is not None
+                and getattr(generation_config, "pad_token_id", None) is None
+            ):
                 eos_token_id = getattr(generation_config, "eos_token_id", None)
                 if eos_token_id is not None:
                     generation_config.pad_token_id = eos_token_id
@@ -448,7 +588,9 @@ class Qwen3Transcriber(Transcriber):
         values = list(result) if isinstance(result, (list, tuple)) else [result]
         if len(values) < count:
             values.extend([None] * (count - len(values)))
-        return [_unwrap_single_result(value) if value is not None else {} for value in values[:count]]
+        return [
+            _unwrap_single_result(value) if value is not None else {} for value in values[:count]
+        ]
 
     def _transcribe_batch(self, model, audios, language):
         if not audios:
@@ -471,6 +613,7 @@ class Qwen3Transcriber(Transcriber):
 
     def transcribe(self, audio, language):
         model = self._load()
+        self.last_segments = []
         requested_language = _language_name(language)
         audio_path = Path(audio) if isinstance(audio, (str, Path)) else None
         if audio_path is not None and not audio_path.is_file():
@@ -483,40 +626,33 @@ class Qwen3Transcriber(Transcriber):
             result = model.transcribe(**kwargs)
             item = _unwrap_single_result(result)
             text = _clean_transcript_part(str(_first(item, ("text", "transcription"), "") or ""))
-            self.last_language = _language_name(_first(item, ("language", "lang"), None)) or requested_language
+            self.last_language = (
+                _language_name(_first(item, ("language", "lang"), None)) or requested_language
+            )
             return text, _words_from_items(_unwrap_items(item))
 
         y, sr = load_mono(audio, 16000)
-        chunks = _singing_chunks(y, sr, self._activity_hints)
+        windows = _singing_chunk_windows(y, sr, self._activity_hints)
+        chunks = [chunk for chunk, _start, _end in windows]
 
         # Long songs are recognized phrase-by-phrase. This substantially reduces
         # singing hallucinations and forgotten lines compared with giving the
         # autoregressive ASR an entire 3-5 minute vocal stem in one request.
         inputs = [(chunk, sr) for chunk in chunks]
-        languages = [requested_language] * len(inputs) if requested_language else [None] * len(inputs)
-        kwargs = {"audio": inputs if len(inputs) > 1 else inputs[0]}
-        if len(inputs) > 1:
-            kwargs["language"] = languages
-        elif requested_language:
-            kwargs["language"] = requested_language
-
-        try:
-            result = model.transcribe(**kwargs)
-        except (TypeError, ValueError):
-            # Compatibility path for qwen-asr builds that do not accept a batch
-            # of numpy tuples. We still keep the high-quality segmentation.
-            result = []
-            for item_audio in inputs:
-                item_kwargs = {"audio": item_audio}
-                if requested_language:
-                    item_kwargs["language"] = requested_language
-                partial = model.transcribe(**item_kwargs)
-                if isinstance(partial, (list, tuple)):
-                    result.extend(partial)
-                else:
-                    result.append(partial)
-
-        results = list(result) if isinstance(result, (list, tuple)) else [result]
+        # Do not hand the complete song to qwen-asr as one giant Python list.
+        # The frontend model preprocessor materializes features for that whole
+        # list before its own inference batching starts; on an 8 GB GPU this
+        # exhausted VRAM and terminated the complete backend process. Two
+        # phrases per call keeps memory bounded while retaining GPU batching.
+        results = []
+        for start in range(0, len(inputs), self._call_batch_size):
+            results.extend(
+                self._transcribe_batch(
+                    model,
+                    inputs[start : start + self._call_batch_size],
+                    requested_language,
+                )
+            )
         # Some qwen-asr versions may return fewer batch elements on malformed
         # inputs. Pad rather than silently shifting chunk/result correspondence.
         if len(results) < len(inputs):
@@ -526,7 +662,7 @@ class Qwen3Transcriber(Transcriber):
         detected: list[str | None] = []
         direct_words: list[Word] = []
         parsed_items = []
-        for raw in results[:len(inputs)]:
+        for raw in results[: len(inputs)]:
             item = _unwrap_single_result(raw) if raw is not None else {}
             parsed_items.append(item)
             part = str(_first(item, ("text", "transcription"), "") or "").strip()
@@ -541,7 +677,9 @@ class Qwen3Transcriber(Transcriber):
         # Retry only low-quality / language-inconsistent chunks. The retry pass
         # is batched, preserving GPU throughput while allowing stronger consensus.
         suspicious: list[tuple[float, int]] = []
-        for index, (chunk, part, detected_language) in enumerate(zip(chunks, initial_parts, detected)):
+        for index, (chunk, part, detected_language) in enumerate(
+            zip(chunks, initial_parts, detected, strict=False)
+        ):
             chunk_duration = len(chunk) / sr
             quality = _transcript_quality(part, chunk_duration, consensus_language)
             language_mismatch = bool(
@@ -556,15 +694,21 @@ class Qwen3Transcriber(Transcriber):
         retry_indices = [index for _, index in sorted(suspicious)[:5]]
         retry_audio = [(_speech_focus_variant(chunks[index]), sr) for index in retry_indices]
         retry_items = self._transcribe_batch(model, retry_audio, consensus_language)
-        candidate_map: dict[int, list[str]] = {index: [initial_parts[index]] for index in retry_indices}
-        for index, item in zip(retry_indices, retry_items):
-            candidate_map[index].append(str(_first(item, ("text", "transcription"), "") or "").strip())
+        candidate_map: dict[int, list[str]] = {
+            index: [initial_parts[index]] for index in retry_indices
+        }
+        for index, item in zip(retry_indices, retry_items, strict=False):
+            candidate_map[index].append(
+                str(_first(item, ("text", "transcription"), "") or "").strip()
+            )
 
         # Only the two least convincing chunks receive a third view.  A tiny
         # context trim changes autoregressive decoding without reprocessing the song.
         second_round: list[int] = []
         for index in retry_indices:
-            best_so_far = _select_candidate(candidate_map[index], len(chunks[index]) / sr, consensus_language)
+            best_so_far = _select_candidate(
+                candidate_map[index], len(chunks[index]) / sr, consensus_language
+            )
             if _transcript_quality(best_so_far, len(chunks[index]) / sr, consensus_language) < 0.72:
                 second_round.append(index)
         second_round = second_round[:2]
@@ -575,15 +719,23 @@ class Qwen3Transcriber(Transcriber):
             trimmed = chunk[trim:-trim] if len(chunk) > 2 * trim else chunk
             second_audio.append((_normalize_singing_audio(trimmed), sr))
         second_items = self._transcribe_batch(model, second_audio, consensus_language)
-        for index, item in zip(second_round, second_items):
-            candidate_map[index].append(str(_first(item, ("text", "transcription"), "") or "").strip())
+        for index, item in zip(second_round, second_items, strict=False):
+            candidate_map[index].append(
+                str(_first(item, ("text", "transcription"), "") or "").strip()
+            )
 
         for index in retry_indices:
             chosen_parts[index] = _select_candidate(
                 candidate_map[index], len(chunks[index]) / sr, consensus_language
             )
 
-        text = _merge_transcript_parts(chosen_parts)
+        owned_parts = _trim_transcript_overlaps(chosen_parts)
+        text = " ".join(part for part in owned_parts if part).strip()
+        self.last_segments = [
+            (start, end, part)
+            for (_chunk, start, end), part in zip(windows, owned_parts, strict=False)
+            if part
+        ]
         # A selective retry may replace the transcript even for a short song.
         # Timestamps from the original ASR result would then refer to different
         # words, so force the dedicated aligner to rebuild them.
@@ -631,6 +783,70 @@ class Qwen3ForcedAligner(Aligner):
             raise InvalidArtifactError("Forced aligner returned no timed words")
         return words
 
+    def align_segments(self, audio, segments, language):
+        """Align short ASR-owned phrases and return one global word timeline.
+
+        Qwen's forced aligner can collapse a long song after its context limit,
+        assigning dozens of words the same timestamp. The ASR already split the
+        vocal at acoustic valleys, so reuse those exact windows for alignment.
+        """
+        try:
+            import soundfile as sf
+        except ImportError as exc:
+            raise EngineUnavailableError("soundfile is required for segmented alignment") from exc
+
+        source, sample_rate = load_mono(audio, 16000)
+        output: list[Word] = []
+        cursor = 0.0
+        with tempfile.TemporaryDirectory(prefix="karaoke-align-") as temp_dir:
+            root = Path(temp_dir)
+            for segment_index, (start, end, text) in enumerate(
+                sorted(segments, key=lambda item: (float(item[0]), float(item[1])))
+            ):
+                tokens = tokenize(text)
+                if not tokens:
+                    continue
+                segment_start = max(0.0, float(start))
+                segment_end = max(segment_start + 0.02, float(end))
+                left = max(0, min(max(0, len(source) - 1), int(segment_start * sample_rate)))
+                right = max(left + 1, min(len(source), int(segment_end * sample_rate)))
+                path = root / f"segment-{segment_index:03d}.wav"
+                sf.write(path, source[left:right], sample_rate, subtype="PCM_16")
+                try:
+                    local_words = self.align(path, text, language)
+                    if _pathological_alignment(local_words, segment_end - segment_start):
+                        local_words = _proportional_words(
+                            tokens, max(0.08, segment_end - segment_start)
+                        )
+                except (InvalidArtifactError, RuntimeError, ValueError):
+                    span = max(0.08, segment_end - segment_start)
+                    local_words = _proportional_words(tokens, span)
+
+                for word in local_words:
+                    word_start = max(cursor, segment_start + word.start)
+                    word_end = max(word_start + 0.02, segment_start + word.end)
+                    word_end = min(max(segment_end, word_start + 0.02), word_end)
+                    output.append(
+                        Word(
+                            word_start,
+                            word_end,
+                            word.text,
+                            word.confidence,
+                            len(output),
+                        )
+                    )
+                    cursor = word_end
+        if not output:
+            raise InvalidArtifactError("Segmented forced aligner returned no timed words")
+        return output
+
+    def align_long_text(self, audio, text, language):
+        """Align trusted full-song lyrics without overflowing model context."""
+        segments = _long_text_segments(audio, text)
+        if len(segments) <= 1:
+            return self.align(audio, text, language)
+        return self.align_segments(audio, segments, language)
+
 
 class UniformTextFallback(Transcriber, Aligner):
     name = "uniform-text-fallback"
@@ -647,7 +863,7 @@ class UniformTextFallback(Transcriber, Aligner):
         total_weight = sum(weights)
         cursor = 0.0
         output = []
-        for index, (token, weight) in enumerate(zip(tokens, weights)):
+        for index, (token, weight) in enumerate(zip(tokens, weights, strict=False)):
             start = total_duration * cursor / total_weight
             cursor += weight
             end = total_duration * cursor / total_weight

@@ -5,6 +5,7 @@
 (добавится позже) будет стучаться сюда по http://127.0.0.1:8000.
 """
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -15,14 +16,44 @@ from app.routers import analysis, application, audio, cache, diagnostics, player
 from app.services import audio_service, recording_service, storage_migration
 from database import init_db
 
+_BENIGN_WINDOWS_DISCONNECTS = {64, 109, 232, 10053, 10054}
+
+
+def _is_benign_client_disconnect(context: dict) -> bool:
+    """Return true for normal Windows socket teardown noise.
+
+    Chromium cancels keep-alive requests when a view reloads or Electron exits.
+    ProactorEventLoop reports that expected disconnect as an unhandled callback
+    error even though the request is already gone. It must not pollute the app
+    console and persistent error log with a traceback.
+    """
+    error = context.get("exception")
+    return (
+        isinstance(error, (ConnectionResetError, BrokenPipeError))
+        and getattr(error, "winerror", None) in _BENIGN_WINDOWS_DISCONNECTS
+    )
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    loop = asyncio.get_running_loop()
+    previous_exception_handler = loop.get_exception_handler()
+
+    def handle_loop_exception(active_loop, context):
+        if _is_benign_client_disconnect(context):
+            return
+        if previous_exception_handler is not None:
+            previous_exception_handler(active_loop, context)
+        else:
+            active_loop.default_exception_handler(context)
+
+    loop.set_exception_handler(handle_loop_exception)
     init_db()
     storage_migration.migrate_legacy_song_storage()
     try:
         yield
     finally:
+        loop.set_exception_handler(previous_exception_handler)
         # Each cleanup must run even if the other one unexpectedly fails.
         try:
             recording_service.close_all_sessions()

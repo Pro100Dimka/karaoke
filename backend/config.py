@@ -55,6 +55,7 @@ def _default_data_dir() -> Path:
     base = Path(local_app_data) if local_app_data else Path.home() / "AppData" / "Local"
     return base / "A&D Voice"
 
+
 AI_DIR = _env_path("SONGAPP_AI_DIR", RUNTIME_DIR / "AI")
 DOWNLOADS_DIR = _env_path("SONGAPP_DOWNLOADS_DIR", PROJECT_ROOT / "downloads")
 MODELS_DIR = _env_path(
@@ -65,6 +66,7 @@ EXTERNAL_ENGINES_DIR = _env_path(
 )
 RECORDINGS_DIRNAME = "recordings"  # подпапка внутри Song/<slug>/ для записей пользователя
 LOGS_DIRNAME = "logs"  # подпапка внутри Song/<slug>/ для логов обработки
+TRUSTED_LYRICS_FILENAME = "trusted_lyrics.txt"
 
 # Можно переопределить SONGAPP_DATA_DIR — например, чтобы хранить данные в
 # %APPDATA%/SongApp на Windows или ~/Library/Application Support/SongApp на
@@ -94,7 +96,9 @@ def configure_ai_resource_environment() -> None:
         configured = os.environ.get(name)
         configured_path = Path(configured).expanduser() if configured else None
         configured_exists = (
-            configured_path.is_dir() if configured_path and directory else configured_path.is_file()
+            configured_path.is_dir()
+            if configured_path and directory
+            else configured_path.is_file()
             if configured_path
             else False
         )
@@ -107,6 +111,7 @@ def configure_ai_resource_environment() -> None:
     set_resource("MSST_ENGINE_DIR", msst, directory=True)
     if msst_config.is_file():
         set_resource("MSST_CONFIG", msst_config)
+
 
 # --------------------------------------------------------------------
 # База данных

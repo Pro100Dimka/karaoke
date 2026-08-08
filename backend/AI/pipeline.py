@@ -14,7 +14,12 @@ from .config import CoreConfig
 from .engines.pitch import PyinFallbackPitchEstimator
 from .engines.registry import EngineRegistry
 from .engines.separation import CenterChannelFallbackSeparator
-from .engines.text import ASR_PIPELINE_VERSION, UniformTextFallback, resolve_alignment_language
+from .engines.text import (
+    ASR_PIPELINE_VERSION,
+    LONG_TEXT_ALIGNMENT_VERSION,
+    UniformTextFallback,
+    resolve_alignment_language,
+)
 from .errors import EngineUnavailableError, ProcessingCancelledError
 from .locks import ThreadFileLock
 from .lyrics_sources import discover_lyrics
@@ -344,7 +349,12 @@ class KaraokePipeline:
         words_path = output / "lyricsSync.json"
         text_hash = StageCache.key("text", {"text": supplied})
 
-        self._notify(request, "alignment", 70, "Синхронизация слов")
+        self._notify(
+            request,
+            "alignment" if supplied else "transcription",
+            70,
+            "Синхронизация готового текста" if supplied else "Распознавание текста песни",
+        )
         if supplied:
             alignment_key = cache.key(
                 "alignment",
@@ -354,6 +364,7 @@ class KaraokePipeline:
                     "language": request.language,
                     "engine": self.engines.aligner.name,
                     "model": getattr(self.engines.aligner, "model_name", None),
+                    "long_text_algorithm": LONG_TEXT_ALIGNMENT_VERSION,
                 },
             )
             alignment_outputs = [lyrics_txt, words_path]
@@ -371,7 +382,12 @@ class KaraokePipeline:
                 words = self._run(
                     "alignment",
                     self.engines.aligner,
-                    lambda engine: engine.align(vocals, supplied, effective_language),
+                    lambda engine: (
+                        engine.align_long_text(vocals, supplied, effective_language)
+                        if len(supplied.split()) >= 60
+                        and callable(getattr(engine, "align_long_text", None))
+                        else engine.align(vocals, supplied, effective_language)
+                    ),
                     reports,
                     warnings,
                 )
@@ -414,11 +430,17 @@ class KaraokePipeline:
                 if not effective_language:
                     effective_language = getattr(self.engines.transcriber, "last_language", None)
                 if text and not words:
+                    self._notify(request, "alignment", 78, "Синхронизация распознанных слов")
                     effective_language = resolve_alignment_language(text, effective_language)
+                    segments = getattr(self.engines.transcriber, "last_segments", None)
                     words = self._run(
                         "alignment",
                         self.engines.aligner,
-                        lambda engine: engine.align(vocals, text, effective_language),
+                        lambda engine: (
+                            engine.align_segments(vocals, segments, effective_language)
+                            if segments and callable(getattr(engine, "align_segments", None))
+                            else engine.align(vocals, text, effective_language)
+                        ),
                         reports,
                         warnings,
                     )

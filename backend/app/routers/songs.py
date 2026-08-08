@@ -301,11 +301,17 @@ def update_lyrics(body: schemas.LyricsUpdate, song: SongDependency):
     if song.status != models.SongStatus.DONE or not song.output_dir:
         raise HTTPException(status_code=409, detail="Song has not been processed yet")
 
-    lyrics_path = song_service.resolve_output_dir(song) / "lyrics.json"
+    out_dir = song_service.resolve_output_dir(song)
+    lyrics_path = out_dir / "lyrics.json"
     try:
         reconcile_lyric_words = ai_bridge.get_reconcile_lyric_words()
         lyrics = reconcile_lyric_words([line.model_dump() for line in body.lyrics])
         write_json(lyrics_path, lyrics)
+        trusted_text = "\n".join(str(line.get("text") or "").strip() for line in lyrics).strip()
+        if trusted_text:
+            (out_dir / config.TRUSTED_LYRICS_FILENAME).write_text(
+                trusted_text + "\n", encoding="utf-8"
+            )
     except (OSError, TypeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=f"Could not save lyrics: {exc}") from exc
     return {"status": "saved"}

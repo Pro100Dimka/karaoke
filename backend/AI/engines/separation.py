@@ -1,26 +1,42 @@
 from __future__ import annotations
 
-import os
 import importlib.util
 import multiprocessing
-from pathlib import Path
-from queue import Empty
+import os
 import shutil
 import sys
 import tempfile
 import traceback
+from contextlib import suppress
+from pathlib import Path
+from queue import Empty
+from types import ModuleType
 
 import numpy as np
 import soundfile as sf
 
-from .base import Separator
 from ..errors import AICoreError, EngineUnavailableError
+from .base import Separator
 
 
 def _run_msst_worker(engine_dir: str, arguments: dict[str, object], result_queue) -> None:
     """Run third-party MSST in an isolated process without a duplicate Python env."""
     engine_path = Path(engine_dir).resolve()
-    previous_models = sys.modules.pop("models", None)
+    previous_models = {
+        name: module
+        for name, module in tuple(sys.modules.items())
+        if name == "models" or name.startswith("models.")
+    }
+    for name in previous_models:
+        sys.modules.pop(name, None)
+
+    # MSST has a namespace directory named ``models`` (without __init__.py),
+    # while the application has backend/models.py. A regular module wins over
+    # a namespace package, so bind the third-party namespace explicitly.
+    model_package = ModuleType("models")
+    model_package.__package__ = "models"
+    model_package.__path__ = [str(engine_path / "models")]
+    sys.modules["models"] = model_package
     sys.path.insert(0, str(engine_path))
     try:
         spec = importlib.util.spec_from_file_location("advoice_msst_inference", engine_path / "inference.py")
@@ -33,8 +49,12 @@ def _run_msst_worker(engine_dir: str, arguments: dict[str, object], result_queue
     except BaseException:  # The child must report all failures to its parent.
         result_queue.put(traceback.format_exc())
     finally:
-        if previous_models is not None:
-            sys.modules["models"] = previous_models
+        for name in tuple(sys.modules):
+            if name == "models" or name.startswith("models."):
+                sys.modules.pop(name, None)
+        sys.modules.update(previous_models)
+        with suppress(ValueError):
+            sys.path.remove(str(engine_path))
 
 
 def _fit_channels_and_length(audio: np.ndarray, channels: int, frames: int) -> np.ndarray:

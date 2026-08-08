@@ -31,6 +31,10 @@ from database import SessionLocal
 logger = logging.getLogger(__name__)
 
 _STEP_RE = re.compile(r"(?P<step>\d+(?:\.\d+)?)\s*/\s*13")
+_NOISY_PROGRESS_RE = re.compile(
+    r"(?:warning|traceback|token_id|generation[_ ](?:config|flags)|transformers_verbosity|deprecated|onnxruntime|cudaexecutionprovider)",
+    re.IGNORECASE,
+)
 
 # песни, которые прямо сейчас обрабатываются (song_id -> Thread) — чтобы не
 # запускать одну и ту же песню повторно, пока предыдущий запуск не завершился
@@ -76,23 +80,30 @@ def _first_audio_tag(tags: object, *names: str) -> str | None:
 
 def _apply_source_metadata(song: models.Song) -> None:
     """Fill library fields from embedded audio tags, preserving user edits."""
+    default_title = Path(song.original_filename).stem.strip()
     try:
         from mutagen import File as MutagenFile
 
         tags = MutagenFile(song.source_path, easy=True)
     except Exception:  # Metadata is a convenience, never a pipeline failure.
-        return
-    if tags is None:
-        return
+        tags = None
 
-    tagged_title = _first_audio_tag(tags, "title")
-    default_title = Path(song.original_filename).stem
+    tagged_title = _first_audio_tag(tags, "title") if tags is not None else None
     if tagged_title and song.title == default_title:
         song.title = tagged_title
     if not song.artist:
-        song.artist = _first_audio_tag(tags, "artist", "albumartist")
+        song.artist = _first_audio_tag(tags, "artist", "albumartist") if tags is not None else None
     if not song.genre:
-        song.genre = _first_audio_tag(tags, "genre")
+        song.genre = _first_audio_tag(tags, "genre") if tags is not None else None
+
+    # Many local collections have no ID3 metadata but consistently use
+    # ``Artist - Title.mp3``.  Populate the two distinct editor fields instead
+    # of presenting the whole filename as a title. User edits and real tags
+    # always win over this conservative filename fallback.
+    if not song.artist and song.title == default_title:
+        parts = re.split(r"\s+[-–—]\s+", default_title, maxsplit=1)
+        if len(parts) == 2 and all(part.strip() for part in parts):
+            song.artist, song.title = (part.strip() for part in parts)
 
 
 # The expensive AI stages receive a larger share of the indicator.  This makes
@@ -206,7 +217,9 @@ def _set_runtime_step(song_id: str, step: float, log_line: str) -> None:
 
 def _set_runtime_detail(song_id: str, log_text: str) -> None:
     detail = log_text.strip().splitlines()[-1].strip()
-    if not detail or len(detail) > 160:
+    # stdout/stderr is also used by third-party ML libraries.  Their warnings
+    # belong in processing.log, never in the user-facing stage label.
+    if not detail or len(detail) > 160 or _NOISY_PROGRESS_RE.search(detail):
         return
     with _progress_runtime_lock:
         runtime = _progress_runtime.get(song_id)
@@ -488,6 +501,11 @@ def _run_job(song_id: str) -> None:
                 source_path,
                 out_dir,
                 language=config.DEFAULT_LANGUAGE,
+                lyrics_path=(
+                    out_dir / config.TRUSTED_LYRICS_FILENAME
+                    if (out_dir / config.TRUSTED_LYRICS_FILENAME).is_file()
+                    else None
+                ),
                 progress=on_ai_progress,
                 cancelled=lambda: _is_cancelled(song_id),
             )
@@ -532,12 +550,16 @@ def _run_reprocessing(song_id: str) -> None:
 
     recordings_backup: Path | None = None
     source_backup: Path | None = None
+    trusted_lyrics: str | None = None
     try:
         output_root = config.SONG_OUTPUT_DIR.resolve()
         target_dir = out_dir.resolve()
         if target_dir.parent != output_root:
             raise ValueError("Недопустимый путь к результатам песни")
         recordings_dir = target_dir / config.RECORDINGS_DIRNAME
+        trusted_path = target_dir / config.TRUSTED_LYRICS_FILENAME
+        if trusted_path.is_file():
+            trusted_lyrics = trusted_path.read_text(encoding="utf-8-sig")
         if recordings_dir.is_dir():
             recordings_backup = output_root / (f".{target_dir.name}.recordings-{uuid.uuid4().hex}")
             recordings_dir.replace(recordings_backup)
@@ -562,6 +584,11 @@ def _run_reprocessing(song_id: str) -> None:
                 commit(db)
             finally:
                 db.close()
+        if trusted_lyrics:
+            target_dir.mkdir(parents=True, exist_ok=True)
+            (target_dir / config.TRUSTED_LYRICS_FILENAME).write_text(
+                trusted_lyrics.strip() + "\n", encoding="utf-8"
+            )
     except Exception as exc:  # noqa: BLE001
         if recordings_backup and recordings_backup.exists():
             target_dir.mkdir(parents=True, exist_ok=True)

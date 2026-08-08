@@ -18,9 +18,11 @@ class _ASRItem:
 class _BatchASR:
     def __init__(self):
         self.calls = 0
+        self.batch_sizes = []
 
     def transcribe(self, audio, language=None):
         self.calls += 1
+        self.batch_sizes.append(len(audio) if isinstance(audio, list) else 1)
         if isinstance(audio, list):
             return [_ASRItem(f"фраза {i}") for i in range(len(audio))]
         return [_ASRItem("короткая фраза")]
@@ -40,10 +42,12 @@ def test_long_singing_is_segmented_before_asr(tmp_path, monkeypatch):
 
     fake = _BatchASR()
     engine = Qwen3Transcriber("fake")
+    engine._call_batch_size = 2
     monkeypatch.setattr(engine, "_load", lambda: fake)
     text, words = engine.transcribe(wav, "ru")
 
-    assert fake.calls == 1
+    assert fake.calls >= 2
+    assert max(fake.batch_sizes) <= 2
     assert text.count("фраза") >= 2
     assert words == []  # chunk-local timestamps intentionally go to forced aligner
     assert engine.last_language == "Russian"

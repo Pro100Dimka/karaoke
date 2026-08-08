@@ -116,18 +116,27 @@ def _normalize_line_words(line: dict[str, Any]) -> dict[str, Any]:
         )
         words.append({"word": token, "start": word_start, "end": word_end})
 
-    if not words and text:
-        tokens = tokenize(text)
-        if tokens:
-            span = max(0.0, end - start)
-            weights = [max(1, len(token)) for token in tokens]
-            total = sum(weights)
-            cursor = 0
-            for token, weight in zip(tokens, weights, strict=True):
-                word_start = start + span * cursor / total
-                cursor += weight
-                word_end = start + span * cursor / total
-                words.append({"word": token, "start": word_start, "end": word_end})
+    tokens = tokenize(text)
+    old_tokens = [str(item["word"]) for item in words]
+    if tokens != old_tokens:
+        if words and len(tokens) == len(words):
+            # A spelling-only correction must retain the accurate AI timing.
+            words = [{**word, "word": token} for token, word in zip(tokens, words, strict=True)]
+        else:
+            # Inserted/deleted words have no trustworthy individual timestamps.
+            # Rebuild only this line instead of leaving stale word labels that
+            # make karaoke highlight a completely different sentence.
+            words = []
+            if tokens:
+                span = max(0.0, end - start)
+                weights = [max(1, len(token)) for token in tokens]
+                total = sum(weights)
+                cursor = 0
+                for token, weight in zip(tokens, weights, strict=True):
+                    word_start = start + span * cursor / total
+                    cursor += weight
+                    word_end = start + span * cursor / total
+                    words.append({"word": token, "start": word_start, "end": word_end})
 
     return {"text": text, "start": start, "end": end, "words": words}
 

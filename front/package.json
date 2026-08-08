@@ -84,6 +84,7 @@
     "appId": "com.karaokestudio.app",
     "productName": "A&D Voice",
     "files": [
+      "package.json",
       {
         "from": "../build/frontend/dist",
         "to": "dist"

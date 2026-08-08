@@ -46,7 +46,12 @@ logger = logging.getLogger(__name__)
 def _asio_bridge_path() -> Path:
     if config.IS_FROZEN:
         return Path(sys.executable).with_name("KaraokeAsioBridge.exe")
-    return Path(config.BASE_DIR) / "engines" / "asio" / "build" / "KaraokeAsioBridge.exe"
+    # Native artifacts are shared by the backend, frontend and installer and
+    # therefore live in the repository-level build directory.  Keeping the
+    # development lookup here in sync with the build scripts is important:
+    # a missing bridge used to make karaoke playback fail before the first
+    # audio frame even though the executable had been built successfully.
+    return Path(config.PROJECT_ROOT) / "build" / "asio" / "KaraokeAsioBridge.exe"
 
 
 def list_asio_drivers() -> list[str]:
