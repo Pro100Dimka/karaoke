@@ -420,6 +420,21 @@ def _load_job_paths(song_id: str) -> tuple[str, Path] | None:
         db.close()
 
 
+def _load_searchable_title(song_id: str) -> str | None:
+    db = SessionLocal()
+    try:
+        song = repositories.get_song(db, song_id)
+        if song is None:
+            return None
+        original_title = Path(song.original_filename).stem
+        searchable_title = original_title if " - " in original_title else song.title
+        if song.artist and " - " not in searchable_title:
+            searchable_title = f"{song.artist} - {searchable_title}"
+        return searchable_title
+    finally:
+        db.close()
+
+
 def _start_progress_heartbeat(song_id: str) -> tuple[threading.Event, threading.Thread]:
     stop_event = threading.Event()
     thread = threading.Thread(
@@ -462,6 +477,7 @@ def _run_job(song_id: str) -> None:
     if paths is None or _is_cancelled(song_id):
         return
     source_path, out_dir = paths
+    searchable_title = _load_searchable_title(song_id)
 
     capture: _ProgressCapture | None = None
     heartbeat_stop: threading.Event | None = None
@@ -506,6 +522,7 @@ def _run_job(song_id: str) -> None:
                     if (out_dir / config.TRUSTED_LYRICS_FILENAME).is_file()
                     else None
                 ),
+                title=searchable_title,
                 progress=on_ai_progress,
                 cancelled=lambda: _is_cancelled(song_id),
             )
@@ -629,7 +646,12 @@ def _apply_generated_metadata(song: models.Song, out_dir: Path) -> None:
     music = _read_optional_generated_json(out_dir / "music.json", {})
     if isinstance(music, dict):
         song.key_override = song.key_override or music.get("key")
-        song.tempo_override = song.tempo_override or music.get("bpm")
+        detected_bpm = music.get("bpm")
+        if detected_bpm is not None and (
+            song.tempo_override is None
+            or abs(float(song.tempo_override) - float(detected_bpm)) < 2.0
+        ):
+            song.tempo_override = round(float(detected_bpm), 1)
 
     reference = _read_optional_generated_json(out_dir / "reference.json", {})
     if isinstance(reference, dict):

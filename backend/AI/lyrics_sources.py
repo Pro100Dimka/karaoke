@@ -1,10 +1,28 @@
 from __future__ import annotations
 
+import json
+import os
 import re
+import urllib.error
+import urllib.parse
+import urllib.request
+from dataclasses import dataclass
+from difflib import SequenceMatcher
 from pathlib import Path
 
-_LRC_TIME = re.compile(r"\[(?:\d{1,2}:)?\d{1,2}:\d{1,2}(?:[.:]\d+)?\]")
+_LRC_TIME = re.compile(r"\[(?P<minutes>\d{1,3}):(?P<seconds>\d{1,2}(?:[.:]\d+)?)\]")
 _META = re.compile(r"^\[(?:ar|ti|al|by|offset|re|ve):.*?\]\s*$", re.I)
+_TITLE_NOISE = re.compile(
+    r"\s*[\[(](?:official|lyrics?|audio|video|music video|320\s*kbps|hq|hd).*?[\])]\s*",
+    re.I,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class LyricsDiscovery:
+    text: str = ""
+    source: str | None = None
+    segments: tuple[tuple[float, float, str], ...] = ()
 
 
 def _clean(text: str) -> str:
@@ -18,17 +36,41 @@ def _clean(text: str) -> str:
     return "\n".join(lines).strip()
 
 
-def _sidecar(source: Path) -> str:
+def _parse_lrc(text: str, duration_sec: float | None = None) -> tuple[tuple[float, float, str], ...]:
+    timed: list[tuple[float, str]] = []
+    for raw in str(text or "").replace("\ufeff", "").splitlines():
+        match = _LRC_TIME.search(raw)
+        if not match:
+            continue
+        value = _LRC_TIME.sub("", raw).strip()
+        if not value:
+            continue
+        start = int(match.group("minutes")) * 60 + float(match.group("seconds").replace(":", "."))
+        timed.append((start, value))
+    timed.sort(key=lambda item: item[0])
+    result: list[tuple[float, float, str]] = []
+    for index, (start, value) in enumerate(timed):
+        next_start = timed[index + 1][0] if index + 1 < len(timed) else start + 8.0
+        if duration_sec and index + 1 == len(timed):
+            next_start = min(next_start, duration_sec)
+        end = max(start + 0.25, next_start - 0.02)
+        result.append((start, end, value))
+    return tuple(result)
+
+
+def _local_file(path: Path) -> LyricsDiscovery:
     for suffix in (".lrc", ".txt"):
-        path = source.with_suffix(suffix)
-        if path.is_file():
-            try:
-                value = _clean(path.read_text(encoding="utf-8-sig"))
-            except (OSError, UnicodeError):
-                continue
-            if len(value.split()) >= 3:
-                return value
-    return ""
+        candidate = path.with_suffix(suffix)
+        if not candidate.is_file():
+            continue
+        try:
+            raw = candidate.read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeError):
+            continue
+        value = _clean(raw)
+        if len(value.split()) >= 3:
+            return LyricsDiscovery(value, "sidecar", _parse_lrc(raw))
+    return LyricsDiscovery()
 
 
 def _embedded(source: Path) -> str:
@@ -42,12 +84,10 @@ def _embedded(source: Path) -> str:
     if not tags:
         return ""
     candidates = []
-    # ID3/MP3 unsynchronised lyrics.
     getall = getattr(tags, "getall", None)
     if callable(getall):
         for frame in getall("USLT") or []:
             candidates.append(getattr(frame, "text", ""))
-    # MP4 and Vorbis/FLAC common keys.
     for key in ("\xa9lyr", "LYRICS", "lyrics", "UNSYNCEDLYRICS", "unsyncedlyrics"):
         try:
             value = tags.get(key)
@@ -62,13 +102,85 @@ def _embedded(source: Path) -> str:
     return max(cleaned, key=len, default="")
 
 
-def discover_lyrics(source: str | Path) -> tuple[str, str | None]:
-    """Return trusted local lyrics and their source, without network access."""
+def _normalize_name(value: str) -> str:
+    value = _TITLE_NOISE.sub(" ", str(value or ""))
+    value = re.sub(r"[^\wа-яё]+", " ", value.casefold(), flags=re.I)
+    return " ".join(value.split())
+
+
+def _track_signature(title: str | None) -> tuple[str, str]:
+    value = _TITLE_NOISE.sub(" ", str(title or "")).strip(" -_")
+    parts = re.split(r"\s+[–—-]\s+", value, maxsplit=1)
+    if len(parts) != 2:
+        return "", value
+    artist = parts[0].strip()
+    track = re.sub(r"\s*[\[(].*?[\])]\s*$", "", parts[1]).strip()
+    return artist, track
+
+
+def _similarity(left: str, right: str) -> float:
+    return SequenceMatcher(None, _normalize_name(left), _normalize_name(right)).ratio()
+
+
+def _online(title: str | None, duration_sec: float | None) -> LyricsDiscovery:
+    if os.getenv("KARAOKE_ONLINE_LYRICS", "1").strip().lower() in {"0", "false", "off"}:
+        return LyricsDiscovery()
+    artist, track = _track_signature(title)
+    if not artist or not track:
+        return LyricsDiscovery()
+    query = urllib.parse.urlencode({"track_name": track, "artist_name": artist})
+    request = urllib.request.Request(
+        f"https://lrclib.net/api/search?{query}",
+        headers={"User-Agent": "KaraokeStudio/2026.35 (desktop karaoke application)"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=8.0) as response:  # noqa: S310
+            records = json.loads(response.read().decode("utf-8"))
+    except (OSError, UnicodeError, ValueError, urllib.error.URLError):
+        return LyricsDiscovery()
+    if not isinstance(records, list):
+        return LyricsDiscovery()
+
+    ranked: list[tuple[float, dict]] = []
+    for item in records:
+        if not isinstance(item, dict) or item.get("instrumental"):
+            continue
+        plain = _clean(str(item.get("plainLyrics") or item.get("syncedLyrics") or ""))
+        if len(plain.split()) < 15:
+            continue
+        track_score = _similarity(track, str(item.get("trackName") or ""))
+        artist_score = _similarity(artist, str(item.get("artistName") or ""))
+        if track_score < 0.72 or artist_score < 0.65:
+            continue
+        duration_score = 1.0
+        if duration_sec and item.get("duration"):
+            delta = abs(float(item["duration"]) - duration_sec)
+            duration_score = max(0.0, 1.0 - delta / 12.0)
+            if delta > 18.0:
+                continue
+        ranked.append((track_score * 0.48 + artist_score * 0.37 + duration_score * 0.15, item))
+    if not ranked:
+        return LyricsDiscovery()
+    score, item = max(ranked, key=lambda pair: pair[0])
+    if score < 0.76:
+        return LyricsDiscovery()
+    synced = str(item.get("syncedLyrics") or "")
+    plain = _clean(str(item.get("plainLyrics") or synced))
+    return LyricsDiscovery(plain, "LRCLIB", _parse_lrc(synced, duration_sec))
+
+
+def discover_lyrics(
+    source: str | Path,
+    *,
+    title: str | None = None,
+    duration_sec: float | None = None,
+) -> LyricsDiscovery:
+    """Find verified lyrics without ever silently trusting chat/example text."""
     path = Path(source)
-    sidecar = _sidecar(path)
-    if sidecar:
-        return sidecar, "sidecar"
+    local = _local_file(path)
+    if local.text:
+        return local
     embedded = _embedded(path)
     if embedded:
-        return embedded, "embedded"
-    return "", None
+        return LyricsDiscovery(embedded, "embedded")
+    return _online(title, duration_sec)

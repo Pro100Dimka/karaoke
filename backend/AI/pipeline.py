@@ -33,7 +33,7 @@ from .models import (
     Word,
     to_dict,
 )
-from .music import estimate_tempo
+from .music import analyze_music
 from .notes import NOTE_DECODER_VERSION, build_game_notes, build_vocal_notes
 from .pitch_post import stabilize_pitch
 from .profiler import environment_info
@@ -276,17 +276,20 @@ class KaraokePipeline:
         self._notify(request, "tempo", 48, "Анализ темпа")
         music_path = output / "music.json"
         tempo_key = cache.key(
-            "tempo", {"instrumental": cache.file_hash(instrumental), "engine": "librosa-beat-v2"}
+            "tempo",
+            {"instrumental": cache.file_hash(instrumental), "engine": "librosa-music-v3"},
         )
         if self._cache_hit(
             cache, "tempo", tempo_key, [music_path], {music_path: validate_music_json}
         ):
-            bpm = float(read_json(music_path, {}).get("bpm", 120.0))
+            music_analysis = read_json(music_path, {})
+            bpm = float(music_analysis.get("bpm", 120.0))
             reports.append(StageReport("tempo", 0, True, "cached"))
         else:
             started = time.perf_counter()
-            bpm = estimate_tempo(instrumental)
-            write_json_atomic(music_path, {"bpm": bpm})
+            music_analysis = analyze_music(instrumental)
+            bpm = float(music_analysis["bpm"])
+            write_json_atomic(music_path, music_analysis)
             cache.commit("tempo", tempo_key, [music_path])
             reports.append(
                 StageReport("tempo", time.perf_counter() - started, False, "librosa-beat")
@@ -336,13 +339,21 @@ class KaraokePipeline:
         validate_within_duration(pitch, song_duration, "pitch", self.config.hop_seconds * 2)
 
         supplied = ""
+        supplied_segments: tuple[tuple[float, float, str], ...] = ()
         effective_language = request.language
         lyrics_source = None
         if request.lyrics_path and Path(request.lyrics_path).exists():
             supplied = Path(request.lyrics_path).read_text(encoding="utf-8-sig").strip()
             lyrics_source = "explicit"
         if not supplied:
-            supplied, lyrics_source = discover_lyrics(source)
+            discovery = discover_lyrics(
+                source,
+                title=request.title,
+                duration_sec=song_duration,
+            )
+            supplied = discovery.text
+            supplied_segments = discovery.segments
+            lyrics_source = discovery.source
             if supplied:
                 warnings.append(f"Using trusted {lyrics_source} lyrics instead of ASR")
         lyrics_txt = output / "lyrics.txt"
@@ -365,6 +376,7 @@ class KaraokePipeline:
                     "engine": self.engines.aligner.name,
                     "model": getattr(self.engines.aligner, "model_name", None),
                     "long_text_algorithm": LONG_TEXT_ALIGNMENT_VERSION,
+                    "timed_segments": supplied_segments,
                 },
             )
             alignment_outputs = [lyrics_txt, words_path]
@@ -383,10 +395,15 @@ class KaraokePipeline:
                     "alignment",
                     self.engines.aligner,
                     lambda engine: (
-                        engine.align_long_text(vocals, supplied, effective_language)
-                        if len(supplied.split()) >= 60
-                        and callable(getattr(engine, "align_long_text", None))
-                        else engine.align(vocals, supplied, effective_language)
+                        engine.align_segments(vocals, supplied_segments, effective_language)
+                        if supplied_segments
+                        and callable(getattr(engine, "align_segments", None))
+                        else (
+                            engine.align_long_text(vocals, supplied, effective_language)
+                            if len(supplied.split()) >= 60
+                            and callable(getattr(engine, "align_long_text", None))
+                            else engine.align(vocals, supplied, effective_language)
+                        )
                     ),
                     reports,
                     warnings,
