@@ -17,7 +17,8 @@ from database import SessionLocal
 # Промежуточные артефакты AI-пайплайна, которые не нужны после того как
 # финальные результаты (json/mid/mp3) уже посчитаны.
 _HEAVY_INTERMEDIATE_DIRNAMES = ("tmp", "__pycache__")
-_HEAVY_KEEP_AS_MP3 = ("song.wav", "separated/vocals.wav", "separated/instrumental.wav")
+_HEAVY_KEEP_AS_MP3 = ("song.wav",)
+_LOSSLESS_STEMS = ("separated/vocals.wav", "separated/instrumental.wav")
 
 
 def _encode_mp3(wav_path: Path, mp3_path: Path) -> None:
@@ -33,9 +34,29 @@ def _encode_mp3(wav_path: Path, mp3_path: Path) -> None:
             str(wav_path),
             "-codec:a",
             "libmp3lame",
-            "-qscale:a",
-            "2",
+            "-b:a",
+            "320k",
             str(mp3_path),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+
+
+def _encode_flac(wav_path: Path, flac_path: Path) -> None:
+    """Compress AI stems losslessly so they remain a reusable processing cache."""
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(wav_path),
+            "-codec:a",
+            "flac",
+            "-compression_level",
+            "5",
+            str(flac_path),
         ],
         check=True,
         stdout=subprocess.DEVNULL,
@@ -129,9 +150,21 @@ def _convert_heavy_wavs(out_dir: Path, actions: list[str]) -> int:
             # Preserve the source when conversion fails; losing a large WAV is
             # worse than postponing optimization.
             continue
-        freed += wav_path.stat().st_size
+        freed += max(0, wav_path.stat().st_size - mp3_path.stat().st_size)
         wav_path.unlink()
         actions.append(f"{wav_name} -> {mp3_path.name}")
+    for wav_name in _LOSSLESS_STEMS:
+        wav_path = out_dir / wav_name
+        if not wav_path.exists():
+            continue
+        flac_path = wav_path.with_suffix(".flac")
+        try:
+            _encode_flac(wav_path, flac_path)
+        except Exception:
+            continue
+        freed += max(0, wav_path.stat().st_size - flac_path.stat().st_size)
+        wav_path.unlink()
+        actions.append(f"{wav_name} -> {flac_path.name} (lossless)")
     return freed
 
 

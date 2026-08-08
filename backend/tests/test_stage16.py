@@ -65,6 +65,9 @@ def test_reprocessing_keeps_slot_until_recordings_are_restored(monkeypatch, tmp_
     recordings = target / "recordings"
     recordings.mkdir(parents=True)
     (recordings / "take.wav").write_bytes(b"take")
+    stems = target / "separated"
+    stems.mkdir()
+    (stems / "vocals.flac").write_bytes(b"cached-vocals")
 
     pipeline_service._active_jobs.clear()
     pipeline_service._active_jobs["song"] = current
@@ -93,5 +96,6 @@ def test_reprocessing_keeps_slot_until_recordings_are_restored(monkeypatch, tmp_
 
     assert observed["reserved_during_run"] is True
     assert (target / "recordings" / "take.wav").read_bytes() == b"take"
+    assert (target / "separated" / "vocals.flac").read_bytes() == b"cached-vocals"
     assert pipeline_service._active_jobs["song"] is current
     pipeline_service._active_jobs.clear()

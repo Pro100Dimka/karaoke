@@ -55,6 +55,7 @@ from .validators import (
 
 ProgressCallback = Callable[[str, float, str], None]
 CancelCallback = Callable[[], bool]
+PIPELINE_LOCK_TIMEOUT_SECONDS = 180.0
 
 
 class _OutputDirectoryLock(ThreadFileLock):
@@ -182,7 +183,12 @@ class KaraokePipeline:
     def run(self, request: PipelineRequest) -> PipelineResult:
         output = Path(request.output_dir).resolve()
         output.mkdir(parents=True, exist_ok=True)
-        with ThreadFileLock(output / ".pipeline.lock", timeout_sec=30.0):
+        # A development launcher can briefly overlap the old and the restarted
+        # backend. Wait for the real owner instead of marking a valid song as
+        # failed after an arbitrary 30 seconds.
+        with ThreadFileLock(
+            output / ".pipeline.lock", timeout_sec=PIPELINE_LOCK_TIMEOUT_SECONDS
+        ):
             return self._run_unlocked(request)
 
     def _run_unlocked(self, request: PipelineRequest) -> PipelineResult:
@@ -254,15 +260,48 @@ class KaraokePipeline:
             with tempfile.TemporaryDirectory(prefix="karaoke-stems-", dir=output) as temp_dir:
                 temporary_vocals = Path(temp_dir) / "vocals.wav"
                 temporary_instrumental = Path(temp_dir) / "instrumental.wav"
-                self._run(
-                    "separation",
-                    self.engines.separator,
-                    lambda engine: engine.separate(
-                        song_wav, temporary_vocals, temporary_instrumental
+                compressed_vocals = next(
+                    (
+                        path
+                        for suffix in (".flac", ".mp3")
+                        if (path := vocals.with_suffix(suffix)).is_file()
                     ),
-                    reports,
-                    warnings,
+                    None,
                 )
+                compressed_instrumental = next(
+                    (
+                        path
+                        for suffix in (".flac", ".mp3")
+                        if (path := instrumental.with_suffix(suffix)).is_file()
+                    ),
+                    None,
+                )
+                if compressed_vocals and compressed_instrumental:
+                    started = time.perf_counter()
+                    decode_audio(compressed_vocals, temporary_vocals, self.config.sample_rate)
+                    decode_audio(
+                        compressed_instrumental,
+                        temporary_instrumental,
+                        self.config.sample_rate,
+                    )
+                    reports.append(
+                        StageReport(
+                            "separation",
+                            time.perf_counter() - started,
+                            True,
+                            "compressed-stem-cache",
+                        )
+                    )
+                else:
+                    self._run(
+                        "separation",
+                        self.engines.separator,
+                        lambda engine: engine.separate(
+                            song_wav, temporary_vocals, temporary_instrumental
+                        ),
+                        reports,
+                        warnings,
+                    )
                 validate_audio(temporary_vocals)
                 validate_audio(temporary_instrumental)
                 publish_files_atomically(
@@ -273,11 +312,34 @@ class KaraokePipeline:
                 )
             cache.commit("separation", separation_key, [vocals, instrumental])
 
+        # Post-processing stores large stems as lossless FLAC. Fingerprinting
+        # that stable representation keeps tempo, pitch and alignment caches
+        # valid across future incremental reprocessing runs.
+        vocal_fingerprint = next(
+            (
+                path
+                for suffix in (".flac", ".mp3")
+                if (path := vocals.with_suffix(suffix)).is_file()
+            ),
+            vocals,
+        )
+        instrumental_fingerprint = next(
+            (
+                path
+                for suffix in (".flac", ".mp3")
+                if (path := instrumental.with_suffix(suffix)).is_file()
+            ),
+            instrumental,
+        )
+
         self._notify(request, "tempo", 48, "Анализ темпа")
         music_path = output / "music.json"
         tempo_key = cache.key(
             "tempo",
-            {"instrumental": cache.file_hash(instrumental), "engine": "librosa-music-v3"},
+            {
+                "instrumental": cache.file_hash(instrumental_fingerprint),
+                "engine": "librosa-music-v3",
+            },
         )
         if self._cache_hit(
             cache, "tempo", tempo_key, [music_path], {music_path: validate_music_json}
@@ -301,7 +363,7 @@ class KaraokePipeline:
         pitch_key = cache.key(
             "pitch",
             {
-                "vocals": cache.file_hash(vocals),
+                "vocals": cache.file_hash(vocal_fingerprint),
                 "engine": self.engines.pitch.name,
                 "engine_config": getattr(self.engines.pitch, "fingerprint", lambda: {})(),
                 "hop": self.config.hop_seconds,
@@ -370,7 +432,7 @@ class KaraokePipeline:
             alignment_key = cache.key(
                 "alignment",
                 {
-                    "vocals": cache.file_hash(vocals),
+                    "vocals": cache.file_hash(vocal_fingerprint),
                     "text": text_hash,
                     "language": request.language,
                     "engine": self.engines.aligner.name,
@@ -415,7 +477,7 @@ class KaraokePipeline:
             transcription_key = cache.key(
                 "transcription",
                 {
-                    "vocals": cache.file_hash(vocals),
+                    "vocals": cache.file_hash(vocal_fingerprint),
                     "language": request.language,
                     "engine": self.engines.transcriber.name,
                     "model": getattr(self.engines.transcriber, "model_name", None),

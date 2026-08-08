@@ -21,6 +21,16 @@ from .base import Separator
 
 def _run_msst_worker(engine_dir: str, arguments: dict[str, object], result_queue) -> None:
     """Run third-party MSST in an isolated process without a duplicate Python env."""
+    # Consumer NVIDIA cards gain a substantial speed-up from TF32 for the large
+    # RoFormer matrix multiplications, while inference quality remains stable.
+    with suppress(ImportError, RuntimeError):
+        import torch
+
+        if torch.cuda.is_available():
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.allow_tf32 = True
+            torch.backends.cudnn.benchmark = True
+            torch.set_float32_matmul_precision("high")
     engine_path = Path(engine_dir).resolve()
     previous_models = {
         name: module

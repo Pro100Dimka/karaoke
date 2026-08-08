@@ -67,3 +67,36 @@ def test_online_lyrics_reject_wrong_track(tmp_path: Path, monkeypatch):
 
     assert not found.text
     assert found.source is None
+
+
+def test_online_lyrics_accept_filename_without_spaces_around_dash(
+    tmp_path: Path, monkeypatch
+):
+    source = tmp_path / "source.mp3"
+    source.write_bytes(b"not-an-audio-file")
+    payload = [
+        {
+            "trackName": "31-я весна",
+            "artistName": "TRITIA",
+            "duration": 145,
+            "instrumental": False,
+            "plainLyrics": "Большой широкий город магистрали и дома\n" * 8,
+        }
+    ]
+    captured_url = ""
+
+    def fake_urlopen(request, **_kwargs):
+        nonlocal captured_url
+        captured_url = request.full_url
+        return _Response(payload)
+
+    monkeypatch.setattr(lyrics_sources.urllib.request, "urlopen", fake_urlopen)
+
+    found = lyrics_sources.discover_lyrics(
+        source,
+        title="TRITIA-31-я весна",
+        duration_sec=145.1,
+    )
+
+    assert found.source == "LRCLIB"
+    assert "q=" in captured_url

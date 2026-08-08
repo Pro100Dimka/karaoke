@@ -57,6 +57,30 @@ def test_convert_heavy_wavs_preserves_source_when_encoder_fails(tmp_path: Path, 
     assert actions == []
 
 
+def test_convert_heavy_wavs_keeps_stems_as_lossless_cache(tmp_path: Path, monkeypatch):
+    separated = tmp_path / "separated"
+    separated.mkdir()
+    vocals = separated / "vocals.wav"
+    instrumental = separated / "instrumental.wav"
+    vocals.write_bytes(b"v" * 100)
+    instrumental.write_bytes(b"i" * 120)
+
+    def fake_flac(_source: Path, target: Path):
+        target.write_bytes(b"lossless" * 4)
+
+    monkeypatch.setattr(cache_service, "_encode_flac", fake_flac)
+    actions: list[str] = []
+
+    freed = cache_service._convert_heavy_wavs(tmp_path, actions)
+
+    assert freed == 156
+    assert not vocals.exists()
+    assert not instrumental.exists()
+    assert (separated / "vocals.flac").exists()
+    assert (separated / "instrumental.flac").exists()
+    assert all("lossless" in action for action in actions)
+
+
 def test_remove_intermediate_directories_counts_removed_bytes(tmp_path: Path):
     temporary = tmp_path / "tmp"
     temporary.mkdir()

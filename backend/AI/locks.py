@@ -32,15 +32,36 @@ class FileLock(AbstractContextManager):
         if os.name == "nt":
             try:
                 import ctypes
+                from ctypes import wintypes
 
                 process_query_limited_information = 0x1000
-                handle = ctypes.windll.kernel32.OpenProcess(
+                kernel32 = ctypes.windll.kernel32
+                kernel32.OpenProcess.argtypes = (
+                    wintypes.DWORD,
+                    wintypes.BOOL,
+                    wintypes.DWORD,
+                )
+                kernel32.OpenProcess.restype = wintypes.HANDLE
+                kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+                kernel32.CloseHandle.restype = wintypes.BOOL
+                kernel32.GetExitCodeProcess.argtypes = (
+                    wintypes.HANDLE,
+                    ctypes.POINTER(wintypes.DWORD),
+                )
+                kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+                handle = kernel32.OpenProcess(
                     process_query_limited_information, False, pid
                 )
                 if handle:
-                    ctypes.windll.kernel32.CloseHandle(handle)
-                    return True
-                error = ctypes.windll.kernel32.GetLastError()
+                    exit_code = wintypes.DWORD()
+                    try:
+                        queried = kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))
+                    finally:
+                        kernel32.CloseHandle(handle)
+                    # A terminated Windows process remains queryable while any
+                    # third-party handle is open. Only STILL_ACTIVE means alive.
+                    return bool(queried and exit_code.value == 259)
+                error = kernel32.GetLastError()
                 return error == 5  # Access denied means the process exists.
             except (AttributeError, OSError):
                 return True
@@ -53,6 +74,83 @@ class FileLock(AbstractContextManager):
         except OSError:
             return True
         return True
+
+    @staticmethod
+    def _process_birth(pid: int) -> float | None:
+        """Return the OS creation time for *pid* when it can be queried.
+
+        A PID alone is not a stable process identity: Windows can reuse it after
+        a crashed backend.  Recording the creation timestamp prevents a stale
+        lock from being attributed to an unrelated, newly-created process.
+        """
+        if pid <= 0 or os.name != "nt":
+            return None
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            process_query_limited_information = 0x1000
+            kernel32 = ctypes.windll.kernel32
+            kernel32.OpenProcess.argtypes = (
+                wintypes.DWORD,
+                wintypes.BOOL,
+                wintypes.DWORD,
+            )
+            kernel32.OpenProcess.restype = wintypes.HANDLE
+            kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+            kernel32.CloseHandle.restype = wintypes.BOOL
+            handle = kernel32.OpenProcess(
+                process_query_limited_information, False, pid
+            )
+            if not handle:
+                return None
+            creation = wintypes.FILETIME()
+            exit_time = wintypes.FILETIME()
+            kernel = wintypes.FILETIME()
+            user = wintypes.FILETIME()
+            try:
+                kernel32.GetProcessTimes.argtypes = (
+                    wintypes.HANDLE,
+                    ctypes.POINTER(wintypes.FILETIME),
+                    ctypes.POINTER(wintypes.FILETIME),
+                    ctypes.POINTER(wintypes.FILETIME),
+                    ctypes.POINTER(wintypes.FILETIME),
+                )
+                kernel32.GetProcessTimes.restype = wintypes.BOOL
+                if not kernel32.GetProcessTimes(
+                    handle,
+                    ctypes.byref(creation),
+                    ctypes.byref(exit_time),
+                    ctypes.byref(kernel),
+                    ctypes.byref(user),
+                ):
+                    return None
+            finally:
+                kernel32.CloseHandle(handle)
+            ticks = (creation.dwHighDateTime << 32) | creation.dwLowDateTime
+            return ticks / 10_000_000 - 11_644_473_600
+        except (AttributeError, OSError, TypeError, ValueError):
+            return None
+
+    @classmethod
+    def _owner_is_alive(cls, owner: dict[str, object]) -> bool:
+        try:
+            raw_pid = owner.get("pid", -1)
+            pid = int(raw_pid) if isinstance(raw_pid, (str, int, float)) else -1
+        except (TypeError, ValueError):
+            return False
+        if not cls._pid_alive(pid):
+            return False
+        recorded_birth = owner.get("process_birth")
+        if not isinstance(recorded_birth, (str, int, float)):
+            return True  # Compatibility with locks created by older versions.
+        actual_birth = cls._process_birth(pid)
+        if actual_birth is None:
+            return True  # Never break a lock merely because querying was denied.
+        try:
+            return abs(actual_birth - float(recorded_birth)) < 1.0
+        except (TypeError, ValueError):
+            return False
 
     def _read_owner(self) -> dict[str, object] | None:
         try:
@@ -76,12 +174,7 @@ class FileLock(AbstractContextManager):
                 return True
             except OSError:
                 return False
-        try:
-            raw_pid = owner.get("pid", -1)
-            pid = int(raw_pid) if isinstance(raw_pid, (str, int, float)) else -1
-        except (TypeError, ValueError):
-            pid = -1
-        if self._pid_alive(pid):
+        if self._owner_is_alive(owner):
             return False
         try:
             self.path.unlink()
@@ -92,8 +185,14 @@ class FileLock(AbstractContextManager):
     def __enter__(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
         deadline = time.monotonic() + self.timeout_sec
+        pid = os.getpid()
         payload = json.dumps(
-            {"pid": os.getpid(), "token": self.token, "created": time.time()},
+            {
+                "pid": pid,
+                "token": self.token,
+                "created": time.time(),
+                "process_birth": self._process_birth(pid),
+            },
             separators=(",", ":"),
         ).encode("utf-8")
         while True:

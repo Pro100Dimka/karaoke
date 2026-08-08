@@ -126,9 +126,18 @@ def _online(title: str | None, duration_sec: float | None) -> LyricsDiscovery:
     if os.getenv("KARAOKE_ONLINE_LYRICS", "1").strip().lower() in {"0", "false", "off"}:
         return LyricsDiscovery()
     artist, track = _track_signature(title)
-    if not artist or not track:
+    if not track:
         return LyricsDiscovery()
-    query = urllib.parse.urlencode({"track_name": track, "artist_name": artist})
+    # Prefer structured metadata, but do not require one exact filename style.
+    # Downloads frequently use ``Artist-Title`` without spaces and files with
+    # title-only metadata are valid too. LRCLIB's free query handles both while
+    # the ranking below still rejects unrelated results.
+    query_params = (
+        {"track_name": track, "artist_name": artist}
+        if artist
+        else {"q": str(title or track)}
+    )
+    query = urllib.parse.urlencode(query_params)
     request = urllib.request.Request(
         f"https://lrclib.net/api/search?{query}",
         headers={"User-Agent": "KaraokeStudio/2026.35 (desktop karaoke application)"},
@@ -149,16 +158,30 @@ def _online(title: str | None, duration_sec: float | None) -> LyricsDiscovery:
         if len(plain.split()) < 15:
             continue
         track_score = _similarity(track, str(item.get("trackName") or ""))
-        artist_score = _similarity(artist, str(item.get("artistName") or ""))
-        if track_score < 0.72 or artist_score < 0.65:
-            continue
+        candidate_artist = str(item.get("artistName") or "")
+        artist_score = _similarity(artist, candidate_artist) if artist else 0.0
         duration_score = 1.0
         if duration_sec and item.get("duration"):
             delta = abs(float(item["duration"]) - duration_sec)
             duration_score = max(0.0, 1.0 - delta / 12.0)
             if delta > 18.0:
                 continue
-        ranked.append((track_score * 0.48 + artist_score * 0.37 + duration_score * 0.15, item))
+        if artist:
+            if track_score < 0.72 or artist_score < 0.65:
+                continue
+            score = track_score * 0.48 + artist_score * 0.37 + duration_score * 0.15
+        else:
+            candidate_full = f"{candidate_artist} - {item.get('trackName') or ''}"
+            full_score = _similarity(str(title or track), candidate_full)
+            # With missing artist metadata, require either a strong full-name
+            # match or an almost exact track name plus matching duration.
+            if full_score < 0.72 and track_score < 0.90:
+                continue
+            score = max(
+                full_score * 0.85 + duration_score * 0.15,
+                track_score * 0.80 + duration_score * 0.20,
+            )
+        ranked.append((score, item))
     if not ranked:
         return LyricsDiscovery()
     score, item = max(ranked, key=lambda pair: pair[0])

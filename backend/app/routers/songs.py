@@ -265,7 +265,11 @@ def get_audio_track(track: str, song: SongDependency):
         # directory as a legacy fallback for songs created by older versions.
         search_dirs.insert(0, output_dir / "separated")
     for directory in search_dirs:
-        for extension, media_type in ((".mp3", "audio/mpeg"), (".wav", "audio/wav")):
+        for extension, media_type in (
+            (".flac", "audio/flac"),
+            (".mp3", "audio/mpeg"),
+            (".wav", "audio/wav"),
+        ):
             candidate = directory / f"{track}{extension}"
             if candidate.is_file():
                 return FileResponse(

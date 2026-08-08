@@ -12,11 +12,9 @@ import io
 import logging
 import os
 import re
-import shutil
 import threading
 import time
 import traceback
-import uuid
 from pathlib import Path
 from typing import TextIO, cast
 
@@ -554,84 +552,27 @@ def _run_job(song_id: str) -> None:
 
 
 def _run_reprocessing(song_id: str) -> None:
-    """Rebuild generated artefacts without deleting user performance takes."""
+    """Incrementally rebuild stale AI artefacts while retaining expensive stems."""
     db = SessionLocal()
     try:
         song = repositories.get_song(db, song_id)
         if song is None:
             return
         out_dir = song_service.resolve_output_dir(song)
-        source_path = song_service.resolve_source_path(song)
     finally:
         db.close()
-
-    recordings_backup: Path | None = None
-    source_backup: Path | None = None
-    trusted_lyrics: str | None = None
-    try:
-        output_root = config.SONG_OUTPUT_DIR.resolve()
-        target_dir = out_dir.resolve()
-        if target_dir.parent != output_root:
-            raise ValueError("Недопустимый путь к результатам песни")
-        recordings_dir = target_dir / config.RECORDINGS_DIRNAME
-        trusted_path = target_dir / config.TRUSTED_LYRICS_FILENAME
-        if trusted_path.is_file():
-            trusted_lyrics = trusted_path.read_text(encoding="utf-8-sig")
-        if recordings_dir.is_dir():
-            recordings_backup = output_root / (f".{target_dir.name}.recordings-{uuid.uuid4().hex}")
-            recordings_dir.replace(recordings_backup)
-        if target_dir in source_path.parents:
-            source_backup = output_root / (
-                f".{target_dir.name}.source-{uuid.uuid4().hex}{source_path.suffix.lower()}"
-            )
-            source_path.replace(source_backup)
-        if target_dir.exists():
-            shutil.rmtree(target_dir)
-        if source_backup is not None:
-            target_dir.mkdir(parents=True, exist_ok=True)
-            restored_source = target_dir / f"source{source_backup.suffix.lower()}"
-            source_backup.replace(restored_source)
-            db = SessionLocal()
-            try:
-                current_song = repositories.get_song(db, song_id)
-                if current_song is None:
-                    raise ValueError("Song disappeared during reprocessing")
-                current_song.source_path = str(restored_source)
-                current_song.output_dir = str(target_dir)
-                commit(db)
-            finally:
-                db.close()
-        if trusted_lyrics:
-            target_dir.mkdir(parents=True, exist_ok=True)
-            (target_dir / config.TRUSTED_LYRICS_FILENAME).write_text(
-                trusted_lyrics.strip() + "\n", encoding="utf-8"
-            )
-    except Exception as exc:  # noqa: BLE001
-        if recordings_backup and recordings_backup.exists():
-            target_dir.mkdir(parents=True, exist_ok=True)
-            recordings_backup.replace(target_dir / config.RECORDINGS_DIRNAME)
-        if source_backup and source_backup.exists():
-            target_dir.mkdir(parents=True, exist_ok=True)
-            source_backup.replace(target_dir / f"source{source_backup.suffix.lower()}")
-        if _is_cancelled(song_id):
-            _update_progress(song_id, status=models.SongStatus.CANCELLED, step_label="Отменено")
-            return
+    output_root = config.SONG_OUTPUT_DIR.resolve()
+    target_dir = out_dir.resolve()
+    if target_dir.parent != output_root:
         _update_progress(
             song_id,
             status=models.SongStatus.ERROR,
-            error_message=f"Не удалось очистить старые результаты: {exc}",
+            error_message="Недопустимый путь к результатам песни",
         )
         return
-
-    try:
-        _run_job(song_id)
-    finally:
-        if recordings_backup and recordings_backup.exists():
-            target_dir.mkdir(parents=True, exist_ok=True)
-            destination = target_dir / config.RECORDINGS_DIRNAME
-            if destination.exists():
-                shutil.rmtree(destination)
-            recordings_backup.replace(destination)
+    # StageCache fingerprints every stage. Keeping valid results makes repeated
+    # MIDI/text processing skip decode, source separation and pitch extraction.
+    _run_job(song_id)
 
 
 def _read_optional_generated_json(path: Path, default):
