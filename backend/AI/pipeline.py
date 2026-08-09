@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import tempfile
 import time
 from collections.abc import Callable
@@ -56,6 +57,29 @@ from .validators import (
 ProgressCallback = Callable[[str, float, str], None]
 CancelCallback = Callable[[], bool]
 PIPELINE_LOCK_TIMEOUT_SECONDS = 180.0
+
+
+def _lyrics_console(*parts: object) -> None:
+    """Write UTF-8 lyrics diagnostics to the real console, bypassing capture."""
+    text = " ".join(str(part) for part in parts)
+    stream = getattr(sys, "__stdout__", None) or sys.stdout
+    try:
+        # Electron/concurrently expects UTF-8 from the backend process on Windows.
+        # Reconfigure once so Cyrillic is not emitted using a legacy code page.
+        if hasattr(stream, "reconfigure") and getattr(stream, "encoding", "").lower() != "utf-8":
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        print(text, file=stream, flush=True)
+    except (OSError, ValueError, UnicodeError):
+        pass
+
+
+def _print_full_lyrics(source: str, text: str, query: str | None) -> None:
+    _lyrics_console(f"[lyrics] search query: {query or '<empty>'}")
+    _lyrics_console(f"[lyrics] source: {source or 'unknown'}")
+    _lyrics_console("[lyrics] ===== FULL LYRICS BEGIN =====")
+    _lyrics_console(text)
+    _lyrics_console("[lyrics] ===== FULL LYRICS END =====")
+
 
 
 class _OutputDirectoryLock(ThreadFileLock):
@@ -233,6 +257,39 @@ class KaraokePipeline:
 
         song_duration = duration(song_wav)
 
+        # Resolve title-based lyrics BEFORE expensive source separation so the
+        # operator can immediately verify that we found the correct song text.
+        supplied = ""
+        supplied_segments: tuple[tuple[float, float, str], ...] = ()
+        effective_language = request.language
+        lyrics_source = None
+        if request.lyrics_path and Path(request.lyrics_path).exists():
+            supplied = Path(request.lyrics_path).read_text(encoding="utf-8-sig").strip()
+            lyrics_source = "explicit"
+        if not supplied:
+            discovery = discover_lyrics(
+                source,
+                title=request.title,
+                duration_sec=song_duration,
+            )
+            supplied = discovery.text
+            supplied_segments = discovery.segments
+            lyrics_source = discovery.source
+            if supplied:
+                warnings.append(f"Using trusted {lyrics_source} lyrics instead of ASR")
+
+        if supplied:
+            _print_full_lyrics(
+                lyrics_source or "unknown", supplied, getattr(discovery, "query", None) or request.title
+            )
+        else:
+            from .lyrics_sources import _metadata_search_candidates
+            attempts = _metadata_search_candidates(source, request.title)
+            for index, query in enumerate(attempts, 1):
+                _lyrics_console(f"[lyrics] search #{index}: {query}")
+                _lyrics_console(f"[lyrics] search #{index}: NOT FOUND")
+            _lyrics_console("[lyrics] all title searches failed -> ASR fallback")
+
         self._notify(request, "separation", 8, "Выделение вокала и минуса")
         separation_key = cache.key(
             "separation",
@@ -399,38 +456,9 @@ class KaraokePipeline:
             cache.commit("pitch", pitch_key, pitch_outputs)
         validate_within_duration(pitch, song_duration, "pitch", self.config.hop_seconds * 2)
 
-        def log_full_lyrics(text: str, source_name: str) -> None:
-            value = str(text or "").strip()
-            print(f"[lyrics] source={source_name}")
-            print("[lyrics] ===== FULL LYRICS BEGIN =====")
-            print(value if value else "<empty>")
-            print("[lyrics] ===== FULL LYRICS END =====")
-
-        supplied = ""
-        supplied_segments: tuple[tuple[float, float, str], ...] = ()
-        effective_language = request.language
-        lyrics_source = None
-        if request.lyrics_path and Path(request.lyrics_path).exists():
-            supplied = Path(request.lyrics_path).read_text(encoding="utf-8-sig").strip()
-            lyrics_source = "explicit"
-        if not supplied:
-            print(f"[lyrics] title search query: {request.title or '<none>'}")
-            discovery = discover_lyrics(
-                source,
-                title=request.title,
-                duration_sec=song_duration,
-                allow_local=False,
-            )
-            supplied = discovery.text
-            supplied_segments = discovery.segments
-            lyrics_source = discovery.source
-            if supplied:
-                warnings.append(f"Using trusted {lyrics_source} lyrics instead of ASR")
-                log_full_lyrics(supplied, lyrics_source or "online")
-            else:
-                print("[lyrics] title search found nothing; falling back to ASR")
         lyrics_txt = output / "lyrics.txt"
         words_path = output / "lyricsSync.json"
+
         text_hash = StageCache.key("text", {"text": supplied})
 
         self._notify(
@@ -506,7 +534,6 @@ class KaraokePipeline:
                 text = lyrics_txt.read_text(encoding="utf-8")
                 words = [Word(**item) for item in read_json(words_path, {}).get("words", [])]
                 reports.append(StageReport("transcription", 0, True, "cached"))
-                log_full_lyrics(text, "ASR cached")
             else:
                 if hasattr(self.engines.transcriber, "set_pitch_activity"):
                     self.engines.transcriber.set_pitch_activity(pitch)
@@ -517,7 +544,6 @@ class KaraokePipeline:
                     reports,
                     warnings,
                 )
-                log_full_lyrics(text, "ASR")
                 if not effective_language:
                     effective_language = getattr(self.engines.transcriber, "last_language", None)
                 if text and not words:
@@ -538,6 +564,9 @@ class KaraokePipeline:
                 validate_timeline(words, "words")
                 self._publish_text_alignment(output, lyrics_txt, words_path, text, words)
                 cache.commit("transcription", transcription_key, [lyrics_txt, words_path])
+
+            _print_full_lyrics("ASR", text, request.title)
+
         validate_within_duration(words, song_duration, "words", 0.5)
 
         self._notify(request, "syllables", 82, "Разметка слогов и нот")

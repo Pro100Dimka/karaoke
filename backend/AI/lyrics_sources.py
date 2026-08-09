@@ -46,6 +46,7 @@ class LyricsDiscovery:
     text: str = ""
     source: str | None = None
     segments: tuple[tuple[float, float, str], ...] = ()
+    query: str | None = None
 
 
 class _LyricsHTMLParser(HTMLParser):
@@ -411,21 +412,93 @@ def _web_online(title: str | None) -> LyricsDiscovery:
     return LyricsDiscovery()
 
 
+def _plain_search_query(value: str | None) -> str:
+    """Remove separator dashes/noisy trailing release tags and collapse spaces."""
+    value = str(value or "")
+    value = re.sub(r"\s*[\[(][^\]\)]*(?:19|20)\d{2}[^\]\)]*[\])]\s*$", " ", value)
+    return " ".join(
+        value.replace("-", " ").replace("–", " ").replace("—", " ").split()
+    )
+
+
+def _metadata_search_candidates(source: str | Path, fallback: str | None) -> list[str]:
+    """Build strict search order: cleaned metadata, title only, filename."""
+    source = Path(source)
+    tagged_title = ""
+    tagged_artist = ""
+    try:
+        from mutagen import File as MutagenFile
+
+        audio = MutagenFile(source, easy=True)
+        if audio is not None:
+            def first(*keys: str) -> str:
+                for key in keys:
+                    value = audio.get(key)
+                    if isinstance(value, (list, tuple)) and value:
+                        value = value[0]
+                    if value:
+                        return str(value).strip()
+                return ""
+
+            tagged_title = first("title")
+            tagged_artist = first("artist", "albumartist")
+    except Exception:
+        pass
+
+    candidates: list[str] = []
+
+    if tagged_title:
+        # Some MP3s contain garbage like:
+        #   artist = "AMATORY vs Animal ДжаZ Три Полоски Single (2012)"
+        #   title  = "Три Полоски"
+        # Remove the duplicated title, release marker and year from ARTIST.
+        clean_artist = tagged_artist
+        if clean_artist:
+            clean_artist = re.sub(
+                re.escape(tagged_title), " ", clean_artist, flags=re.I
+            )
+            clean_artist = re.sub(r"\b(?:single|album|ep)\b", " ", clean_artist, flags=re.I)
+            clean_artist = re.sub(r"[\[(]\s*(?:19|20)\d{2}\s*[\])]", " ", clean_artist)
+            clean_artist = _plain_search_query(clean_artist)
+
+        combined = _plain_search_query(f"{clean_artist} {tagged_title}")
+        title_only = _plain_search_query(tagged_title)
+        if combined:
+            candidates.append(combined)
+        if title_only:
+            candidates.append(title_only)
+
+    filename_query = _plain_search_query(source.stem)
+    if filename_query:
+        candidates.append(filename_query)
+
+    fallback_query = _plain_search_query(fallback)
+    if fallback_query:
+        candidates.append(fallback_query)
+
+    # Keep order, drop duplicates case-insensitively.
+    unique: list[str] = []
+    seen: set[str] = set()
+    for query in candidates:
+        key = query.casefold()
+        if key not in seen:
+            seen.add(key)
+            unique.append(query)
+    return unique
+
+
 def discover_lyrics(
     source: str | Path,
     *,
     title: str | None = None,
     duration_sec: float | None = None,
-    allow_local: bool = True,
 ) -> LyricsDiscovery:
-    """Find lyrics, optionally restricting discovery to title-based online search."""
-    path = Path(source)
-    if allow_local:
-        local = _local_file(path)
-        if local.text:
-            return local
-        embedded = _embedded(path)
-        if embedded:
-            return LyricsDiscovery(embedded, "embedded")
-    online = _online(title, duration_sec)
-    return online if online.text else _web_online(title)
+    """Search metadata -> title only -> filename, then let caller use ASR."""
+    for query in _metadata_search_candidates(source, title):
+        online = _online(query, duration_sec)
+        if online.text:
+            return LyricsDiscovery(online.text, online.source, online.segments, query)
+        web = _web_online(query)
+        if web.text:
+            return LyricsDiscovery(web.text, web.source, web.segments, query)
+    return LyricsDiscovery()

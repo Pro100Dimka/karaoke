@@ -419,7 +419,14 @@ def _load_job_paths(song_id: str) -> tuple[str, Path] | None:
 
 
 def _load_searchable_title(song_id: str) -> str | None:
-    """Use embedded track metadata first; fall back to the original filename stem."""
+    """Build the lyrics search query in one strict order.
+
+    1. Embedded audio TITLE metadata (optionally prefixed by ARTIST metadata).
+    2. Original filename stem when TITLE metadata is missing.
+
+    Database/editor titles are intentionally not used here: automatic lyrics
+    discovery must describe the actual source file, not a stale library value.
+    """
     db = SessionLocal()
     try:
         song = repositories.get_song(db, song_id)
@@ -439,10 +446,18 @@ def _load_searchable_title(song_id: str) -> str | None:
             # Missing/broken metadata must never block processing.
             pass
 
-        if tagged_title:
-            return f"{tagged_artist} - {tagged_title}" if tagged_artist else tagged_title
+        def normalize_lyrics_query(value: str | None) -> str:
+            # Search engines handle plain words more reliably here. Remove all
+            # dash variants from metadata/filenames and collapse whitespace.
+            return " ".join(
+                str(value or "").replace("-", " ").replace("–", " ").replace("—", " ").split()
+            )
 
-        return Path(song.original_filename).stem.strip() or song.title or None
+        if tagged_title:
+            metadata_query = f"{tagged_artist or ''} {tagged_title}"
+            return normalize_lyrics_query(metadata_query) or None
+
+        return normalize_lyrics_query(Path(song.original_filename).stem) or None
     finally:
         db.close()
 
