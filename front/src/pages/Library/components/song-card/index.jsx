@@ -1,6 +1,11 @@
-import { Button } from "../../../../components/fields";
-import { IconButton, StatusBadge } from "../../../../components/ui";
-import { Card, Stack, Typography } from "../../../../theme/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  IconButton,
+  Stack,
+  Typography
+} from "../../../../theme/ui";
 import { getSongCardTilt } from "../../card-tilt";
 import { getSongCardState } from "../../utils";
 import ProcessingSignal from "../processing-signal";
@@ -9,19 +14,35 @@ import { applyCardTilt, formatSongKey, getSongActions } from "./utils";
 
 const INTERACTIVE_SELECTOR = "button, a, input, select, textarea";
 const ACTIVATION_KEYS = ["Enter", " "];
+const STATUS = {
+  pending: ["Ожидание", "badge-pending"],
+  queued: ["В очереди", "badge-pending"],
+  processing: ["Обрабатывается", "badge-processing"],
+  cancelling: ["Отмена...", "badge-processing"],
+  cancelled: ["Отменено", "badge-cancelled"],
+  done: ["Готово", "badge-done"],
+  error: ["Ошибка", "badge-error"]
+};
 const clearCardTilt = ({ currentTarget }) =>
   ["--tilt-x", "--tilt-y", "--glow-x", "--glow-y"].forEach(
     currentTarget.style.removeProperty.bind(currentTarget.style)
   );
 const TextItems = ({ items }) =>
   items.map(
-    ([v, c], key) =>
-      v && (
-        <span key={key} className={c}>
-          {v}
-        </span>
-      )
+    ([value, className], key) => value && <span key={key}>{value}</span>
   );
+const SongStatusBadge = ({ status }) => {
+  const [label, className] = STATUS[status] ?? [
+    status || "Неизвестно",
+    "badge-pending"
+  ];
+  return (
+    <Badge invisible className={`badge ${className}`}>
+      <span className="badge-dot" aria-hidden="true" />
+      {label}
+    </Badge>
+  );
+};
 
 export default function LibrarySongCard({
   cardIndex,
@@ -40,12 +61,11 @@ export default function LibrarySongCard({
     tempo_override: tempo,
     title
   } = song;
-  const { isWorking, isReady, status } = getSongCardState(song);
+  const { isWorking, isReady } = getSongCardState(song);
   const actions = getSongActions({ ...props, isReady, isWorking, song });
   const titleDetails = [
     [title, "song-title-name"],
-    [artist, "song-artist-name"],
-    [genre, "song-genre-name"]
+    [artist, "song-artist-name"]
   ];
   const metadata = [
     [formatSongKey(songKey)],
@@ -71,21 +91,42 @@ export default function LibrarySongCard({
   };
   return (
     <Card
+      as="article"
       variant="animation"
-      cardContent={{ style: { display: "flex", flexDirection: "row" } }}
+      interactive={isReady}
+      className={`library-song-card library-song-card--${songStatus}`}
+      style={{ blockSize: "auto", alignSelf: "start" }}
+      cardPanel={{ style: { blockSize: "auto" } }}
+      cardContent={{
+        style: {
+          blockSize: "auto"
+        }
+      }}
+      onPointerMove={handlePointerMove}
+      onPointerLeave={clearCardTilt}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      role={isReady ? "button" : undefined}
+      tabIndex={isReady ? 0 : undefined}
+      aria-label={isReady ? `Открыть ${title} в караоке` : undefined}
     >
       <SongCardArtwork cardIndex={cardIndex} />
-      <Stack sx={{ flex: "1 1 0" }}>
-        <Stack direction="row" justify="space-between" align="flex-start">
+      <Stack className="library-song-card-main" sx={{ flex: "1 1 0" }}>
+        <Stack
+          className="library-song-card-heading"
+          direction="row"
+          justify="space-between"
+          align="flex-start"
+        >
           <div className="song-title-content">
             <TextItems items={titleDetails} />
           </div>
-          <StatusBadge status={songStatus} />
+          <SongStatusBadge status={songStatus} />
         </Stack>
         {isWorking && (
           <Button
-            unstyled
             type="button"
+            variant="ghost"
             className="library-song-card-progress"
             onClick={() => onOpenProcessing(song)}
           >
@@ -93,13 +134,21 @@ export default function LibrarySongCard({
             <span>Открыть обработку</span>
           </Button>
         )}
-        <Stack direction="row" justify="space-between">
+        <Stack
+          className="library-song-card-footer"
+          direction="row"
+          justify="space-between"
+        >
           <div style={{ width: "100%" }}>
-            <Typography>
+            <Typography className="library-song-card-meta" sx={{ padding: 0 }}>
               <TextItems items={metadata} />
             </Typography>
           </div>
-          <Stack direction="row" gap="0.5rem">
+          <Stack
+            className="library-song-card-actions"
+            direction="row"
+            gap="0.5rem"
+          >
             {actions.map(
               ([
                 Icon,
@@ -111,14 +160,17 @@ export default function LibrarySongCard({
               ]) => (
                 <IconButton
                   key={label}
-                  unstyled
-                  icon={Icon}
-                  label={label}
-                  size={size}
+                  variant={variant === "primary" ? "solid" : "ghost"}
+                  tone={variant === "danger" ? "danger" : "primary"}
+                  size="sm"
+                  aria-label={label}
+                  title={label}
                   onClick={onClick}
                   disabled={disabled}
                   className={`btn btn-${variant} btn-sm library-song-card-icon ${className}`.trim()}
-                />
+                >
+                  <Icon size={size} aria-hidden="true" />
+                </IconButton>
               )
             )}
           </Stack>
