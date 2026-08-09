@@ -35,7 +35,7 @@ from .models import (
 )
 from .music import analyze_music
 from .notes import NOTE_DECODER_VERSION, build_game_notes, build_vocal_notes
-from .pitch_post import stabilize_pitch
+from .pitch_post import PITCH_STABILIZER_VERSION, stabilize_pitch
 from .profiler import environment_info
 from .quality import evaluate_quality
 from .syllables import SYLLABLE_ALIGNER_VERSION, align_syllables
@@ -369,6 +369,7 @@ class KaraokePipeline:
                 "hop": self.config.hop_seconds,
                 "fmin": self.config.fmin_hz,
                 "fmax": self.config.fmax_hz,
+                "postprocessor": PITCH_STABILIZER_VERSION,
             },
         )
         pitch_outputs = (

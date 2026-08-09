@@ -9,7 +9,7 @@ rem  It installs:
 rem    - backend venv from downloads\runtimes\python312 (if needed)
 rem    - CUDA PyTorch
 rem    - backend + AI Core requirements
-rem    - Qwen3-ASR-0.6B
+rem    - Qwen3-ASR-1.7B
 rem    - Qwen3-ForcedAligner-0.6B
 rem    - TorchFCPE bundled model
 rem    - MSST inference through the shared backend runtime
@@ -31,7 +31,7 @@ set "PYTHON=%VENV_DIR%\Scripts\python.exe"
 set "MODELS_DIR=%DOWNLOADS%\models"
 set "HF_HOME=%MODELS_DIR%\huggingface"
 set "QWEN_DIR=%MODELS_DIR%\qwen"
-set "QWEN_ASR_DIR=%QWEN_DIR%\Qwen3-ASR-0.6B"
+set "QWEN_ASR_DIR=%QWEN_DIR%\Qwen3-ASR-1.7B"
 set "QWEN_ALIGNER_DIR=%QWEN_DIR%\Qwen3-ForcedAligner-0.6B"
 
 set "ENGINES_DIR=%DOWNLOADS%\engines"
@@ -258,7 +258,7 @@ rem 5. QWEN ASR
 rem ============================================================
 
 echo.
-echo [5/10] Installing Qwen3-ASR-0.6B locally...
+echo [5/10] Installing Qwen3-ASR-1.7B locally...
 
 set "HF_HOME=%HF_HOME%"
 set "HF_HUB_CACHE=%HF_HOME%\hub"
@@ -266,7 +266,7 @@ set "HF_HUB_CACHE=%HF_HOME%\hub"
 if exist "%QWEN_ASR_DIR%\config.json" (
     echo Qwen3-ASR already exists. Verifying files...
 ) else (
-    "%PYTHON%" -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='Qwen/Qwen3-ASR-0.6B', local_dir=r'%QWEN_ASR_DIR%'); print('Qwen3-ASR download complete.')"
+    "%PYTHON%" -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='Qwen/Qwen3-ASR-1.7B', local_dir=r'%QWEN_ASR_DIR%'); print('Qwen3-ASR download complete.')"
     if errorlevel 1 goto :fail
 )
 

@@ -4,9 +4,109 @@ import math
 
 from .models import PitchFrame
 
+PITCH_STABILIZER_VERSION = "harmonic-viterbi-v1"
+_HARMONIC_SHIFTS = (0.0, -12.0, 12.0, -19.01955, 19.01955, -24.0, 24.0)
+
 
 def _midi(hz: float) -> float:
     return 69 + 12 * math.log2(hz / 440.0)
+
+
+def _hz(midi: float) -> float:
+    return 440.0 * 2 ** ((midi - 69.0) / 12.0)
+
+
+def _transition_cost(left: float, right: float) -> float:
+    distance = min(24.0, abs(right - left))
+    return 0.12 * distance + 0.035 * distance * distance
+
+
+def _shift_cost(shift: float, confidence: float) -> float:
+    if abs(shift) < 0.01:
+        return 0.0
+    base = 1.0 if abs(shift) < 13 else 1.25 if abs(shift) < 20 else 1.5
+    # Trust high-confidence FCPE output more, while still permitting a short
+    # harmonic excursion to be folded back onto the continuous lead melody.
+    return base * (0.72 + 0.38 * max(0.0, min(1.0, confidence)))
+
+
+def _stabilize_voiced_run(run: list[PitchFrame]) -> list[PitchFrame]:
+    """Select the most plausible monophonic path through harmonic candidates.
+
+    Source-separated vocals still contain reverb and backing harmonies. FCPE can
+    briefly jump to the 2nd/3rd harmonic (12 or 19 semitones). A dynamic path
+    removes those short detours but preserves a genuine sustained register jump,
+    because corrected candidates pay an emission cost on every frame.
+    """
+    if len(run) < 3:
+        return run
+    candidates: list[list[tuple[float, float]]] = []
+    for frame in run:
+        raw = _midi(frame.frequency)
+        values = [
+            (raw + shift, shift)
+            for shift in _HARMONIC_SHIFTS
+            if 28.0 <= raw + shift <= 100.0
+        ]
+        candidates.append(values)
+
+    costs = [_shift_cost(shift, run[0].confidence) for _, shift in candidates[0]]
+    parents: list[list[int]] = [[-1] * len(candidates[0])]
+    for index in range(1, len(run)):
+        next_costs: list[float] = []
+        next_parents: list[int] = []
+        for value, shift in candidates[index]:
+            choices = [
+                cost + _transition_cost(previous_value, value)
+                for cost, (previous_value, _) in zip(
+                    costs, candidates[index - 1], strict=False
+                )
+            ]
+            parent = min(range(len(choices)), key=choices.__getitem__)
+            next_costs.append(choices[parent] + _shift_cost(shift, run[index].confidence))
+            next_parents.append(parent)
+        costs = next_costs
+        parents.append(next_parents)
+
+    selected = [0] * len(run)
+    selected[-1] = min(range(len(costs)), key=costs.__getitem__)
+    for index in range(len(run) - 1, 0, -1):
+        selected[index - 1] = parents[index][selected[index]]
+
+    output: list[PitchFrame] = []
+    for frame, options, option_index in zip(run, candidates, selected, strict=False):
+        midi, shift = options[option_index]
+        output.append(
+            PitchFrame(
+                frame.time,
+                _hz(midi),
+                frame.confidence * (0.97 if shift else 1.0),
+                frame.voiced,
+                frame.energy,
+            )
+        )
+    return output
+
+
+def _stabilize_harmonics(frames: list[PitchFrame]) -> list[PitchFrame]:
+    output = list(frames)
+    index = 0
+    while index < len(frames):
+        frame = frames[index]
+        if not frame.voiced or frame.frequency <= 0:
+            index += 1
+            continue
+        end = index + 1
+        while (
+            end < len(frames)
+            and frames[end].voiced
+            and frames[end].frequency > 0
+            and frames[end].time - frames[end - 1].time <= 0.035
+        ):
+            end += 1
+        output[index:end] = _stabilize_voiced_run(frames[index:end])
+        index = end
+    return output
 
 
 def stabilize_pitch(frames: list[PitchFrame], max_octave_jump=10.5) -> list[PitchFrame]:
@@ -17,7 +117,7 @@ def stabilize_pitch(frames: list[PitchFrame], max_octave_jump=10.5) -> list[Pitc
     """
     if len(frames) < 3:
         return frames
-    out = list(frames)
+    out = _stabilize_harmonics(frames)
     for i in range(1, len(out) - 1):
         prev, cur, nxt = out[i - 1], out[i], out[i + 1]
         if (

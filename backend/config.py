@@ -86,7 +86,9 @@ UPLOAD_TEMP_DIR = SONG_OUTPUT_DIR / ".incoming"
 
 def configure_ai_resource_environment() -> None:
     """Point the AI core at local resources without machine-specific bat files."""
-    asr_model = MODELS_DIR / "qwen" / "Qwen3-ASR-0.6B"
+    preferred_asr = MODELS_DIR / "qwen" / "Qwen3-ASR-1.7B"
+    legacy_asr = MODELS_DIR / "qwen" / "Qwen3-ASR-0.6B"
+    asr_model = preferred_asr if preferred_asr.is_dir() else legacy_asr
     aligner_model = MODELS_DIR / "qwen" / "Qwen3-ForcedAligner-0.6B"
     roformer = MODELS_DIR / "roformer" / "MelBandRoformer.ckpt"
     msst = EXTERNAL_ENGINES_DIR / "msst"

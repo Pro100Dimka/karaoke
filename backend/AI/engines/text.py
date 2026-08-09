@@ -522,7 +522,7 @@ def _majority_language(values: list[str | None], requested: str | None) -> str |
 class Qwen3Transcriber(Transcriber):
     name = "qwen3-asr"
 
-    def __init__(self, model="Qwen/Qwen3-ASR-0.6B"):
+    def __init__(self, model="Qwen/Qwen3-ASR-1.7B"):
         self.model_name = model
         self._model = None
         self._call_batch_size = 1

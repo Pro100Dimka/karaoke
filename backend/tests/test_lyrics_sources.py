@@ -16,7 +16,7 @@ class _Response:
     def __exit__(self, *_args):
         return False
 
-    def read(self):
+    def read(self, *_args):
         return json.dumps(self.payload, ensure_ascii=False).encode()
 
 
@@ -100,3 +100,41 @@ def test_online_lyrics_accept_filename_without_spaces_around_dash(
 
     assert found.source == "LRCLIB"
     assert "q=" in captured_url
+
+
+def test_web_search_is_used_before_asr_when_lrclib_has_no_record(
+    tmp_path: Path, monkeypatch
+):
+    source = tmp_path / "source.mp3"
+    source.write_bytes(b"not-an-audio-file")
+    search_page = b'''<a class="result__a" href="https://muztext.com/lyrics/example-song">
+        Example Artist - Example Song lyrics</a>'''
+    lyrics_page = (
+        '<table><tr><td class="lyrics-cell">First verified lyric line</td></tr>'
+        + '<tr><td class="lyrics-cell">Second verified lyric line with enough words</td></tr>' * 6
+        + "</table>"
+    ).encode()
+
+    def fake_urlopen(request, **_kwargs):
+        url = request.full_url
+        if "lrclib.net" in url:
+            return _Response([])
+        if "duckduckgo.com" in url:
+            return _ByteResponse(search_page)
+        return _ByteResponse(lyrics_page)
+
+    monkeypatch.setattr(lyrics_sources.urllib.request, "urlopen", fake_urlopen)
+
+    found = lyrics_sources.discover_lyrics(
+        source,
+        title="Example Artist - Example Song",
+        duration_sec=180,
+    )
+
+    assert found.source == "web:muztext.com"
+    assert "First verified lyric line" in found.text
+
+
+class _ByteResponse(_Response):
+    def read(self, *_args):
+        return self.payload

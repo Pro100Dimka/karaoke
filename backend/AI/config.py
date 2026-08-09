@@ -55,7 +55,7 @@ class CoreConfig:
     pitch_engine: str = "fcpe"
     transcription_engine: str = "qwen3-asr"
     alignment_engine: str = "qwen3-forced-aligner"
-    asr_model: str = "Qwen/Qwen3-ASR-0.6B"
+    asr_model: str = "Qwen/Qwen3-ASR-1.7B"
     aligner_model: str = "Qwen/Qwen3-ForcedAligner-0.6B"
     allow_fallback: bool = False
     preserve_raw_pitch: bool = True
@@ -121,7 +121,7 @@ class CoreConfig:
             pitch_engine=os.getenv("KARAOKE_AI_PITCH", "fcpe"),
             transcription_engine=os.getenv("KARAOKE_AI_ASR", "qwen3-asr"),
             alignment_engine=os.getenv("KARAOKE_AI_ALIGNER", "qwen3-forced-aligner"),
-            asr_model=os.getenv("KARAOKE_AI_ASR_MODEL", "Qwen/Qwen3-ASR-0.6B"),
+            asr_model=os.getenv("KARAOKE_AI_ASR_MODEL", "Qwen/Qwen3-ASR-1.7B"),
             aligner_model=os.getenv("KARAOKE_AI_ALIGNER_MODEL", "Qwen/Qwen3-ForcedAligner-0.6B"),
             allow_fallback=_env_bool("KARAOKE_AI_ALLOW_FALLBACK", False),
             preserve_raw_pitch=_env_bool("KARAOKE_AI_PRESERVE_RAW_PITCH", True),

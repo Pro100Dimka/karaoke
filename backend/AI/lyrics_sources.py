@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import json
 import os
 import re
@@ -8,6 +9,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+from html.parser import HTMLParser
 from pathlib import Path
 
 _LRC_TIME = re.compile(r"\[(?P<minutes>\d{1,3}):(?P<seconds>\d{1,2}(?:[.:]\d+)?)\]")
@@ -16,6 +18,20 @@ _TITLE_NOISE = re.compile(
     r"\s*[\[(](?:official|lyrics?|audio|video|music video|320\s*kbps|hq|hd).*?[\])]\s*",
     re.I,
 )
+_WEB_LYRICS_HOSTS = {
+    "muztext.com",
+    "mychords.net",
+    "genius.com",
+    "lyricsworld.ru",
+    "tekstan.ru",
+    "tekstovnet.ru",
+    "l-hit.com",
+    "tekstipesen.com",
+    "altwall.net",
+    "tekst-pesni.online",
+    "911pesni.ru",
+    "zaycev.net",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +39,68 @@ class LyricsDiscovery:
     text: str = ""
     source: str | None = None
     segments: tuple[tuple[float, float, str], ...] = ()
+
+
+class _LyricsHTMLParser(HTMLParser):
+    """Extract lyrics from known semantic containers without script execution."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.depth = 0
+        self.mode: str | None = None
+        self.skip_depth = 0
+        self.lines: list[str] = []
+        self.buffer: list[str] = []
+
+    @staticmethod
+    def _attrs(attrs) -> dict[str, str]:
+        return {str(key): str(value or "") for key, value in attrs}
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        values = self._attrs(attrs)
+        classes = set(values.get("class", "").split())
+        if self.mode is None and tag == "td" and "lyrics-cell" in classes:
+            self.mode = "cell"
+            self.depth = 1
+            self.buffer = []
+            return
+        if self.mode is None and values.get("itemprop") == "lyrics":
+            self.mode = "semantic"
+            self.depth = 1
+            self.buffer = []
+            return
+        if self.mode is None:
+            return
+        self.depth += 1
+        if "b-accord__symbol" in classes:
+            self.skip_depth = self.depth
+        if tag == "br" or "pline" in classes or "single-line" in classes:
+            self.buffer.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if self.mode is None:
+            return
+        if self.skip_depth == self.depth:
+            self.skip_depth = 0
+        self.depth -= 1
+        if self.depth > 0:
+            return
+        value = "\n".join(
+            " ".join(line.split())
+            for line in "".join(self.buffer).splitlines()
+            if line.strip()
+        )
+        if value:
+            self.lines.append(value)
+        self.mode = None
+        self.buffer = []
+
+    def handle_data(self, data: str) -> None:
+        if self.mode is not None and not self.skip_depth:
+            self.buffer.append(data)
+
+    def text(self) -> str:
+        return "\n".join(self.lines)
 
 
 def _clean(text: str) -> str:
@@ -192,6 +270,93 @@ def _online(title: str | None, duration_sec: float | None) -> LyricsDiscovery:
     return LyricsDiscovery(plain, "LRCLIB", _parse_lrc(synced, duration_sec))
 
 
+def _search_tokens_match(query: str, result_title: str) -> bool:
+    query_tokens = set(_normalize_name(query).split())
+    title_tokens = set(_normalize_name(result_title).split())
+    meaningful = {token for token in query_tokens if len(token) >= 2}
+    if not meaningful:
+        return False
+    coverage = len(meaningful & title_tokens) / len(meaningful)
+    return coverage >= 0.66 or _similarity(query, result_title) >= 0.68
+
+
+def _safe_result_url(raw: str) -> str | None:
+    value = html.unescape(raw)
+    parsed = urllib.parse.urlparse(value)
+    if parsed.hostname and parsed.hostname.endswith("duckduckgo.com"):
+        target = urllib.parse.parse_qs(parsed.query).get("uddg", [""])[0]
+        parsed = urllib.parse.urlparse(target)
+        value = target
+    host = (parsed.hostname or "").casefold().removeprefix("www.")
+    if parsed.scheme != "https" or host not in _WEB_LYRICS_HOSTS:
+        return None
+    return value
+
+
+def _web_search(title: str) -> list[tuple[str, str]]:
+    query = f'{title} "текст песни" lyrics'
+    request = urllib.request.Request(
+        "https://html.duckduckgo.com/html/",
+        data=urllib.parse.urlencode({"q": query}).encode("utf-8"),
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) KaraokeStudio/2026.35",
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=8.0) as response:  # noqa: S310
+            page = response.read(1_500_000).decode("utf-8", "ignore")
+    except (OSError, UnicodeError, urllib.error.URLError):
+        return []
+    matches = re.findall(
+        r'<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>',
+        page,
+        flags=re.I | re.S,
+    )
+    output: list[tuple[str, str]] = []
+    for raw_url, raw_title in matches:
+        result_title = re.sub(r"<[^>]+>", " ", html.unescape(raw_title))
+        result_title = " ".join(result_title.split())
+        url = _safe_result_url(raw_url)
+        if url and _search_tokens_match(title, result_title):
+            output.append((url, result_title))
+    return output[:6]
+
+
+def _fetch_web_lyrics(url: str) -> str:
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) KaraokeStudio/2026.35",
+            "Accept-Language": "ru,en;q=0.8",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=7.0) as response:  # noqa: S310
+            page = response.read(3_000_000).decode("utf-8", "ignore")
+    except (OSError, UnicodeError, urllib.error.URLError):
+        return ""
+    parser = _LyricsHTMLParser()
+    try:
+        parser.feed(page)
+    except (ValueError, UnicodeError):
+        return ""
+    value = _clean(parser.text())
+    words = value.split()
+    return value if 30 <= len(words) <= 2500 else ""
+
+
+def _web_online(title: str | None) -> LyricsDiscovery:
+    if not title:
+        return LyricsDiscovery()
+    for url, _result_title in _web_search(title):
+        text = _fetch_web_lyrics(url)
+        if text:
+            host = (urllib.parse.urlparse(url).hostname or "web").removeprefix("www.")
+            return LyricsDiscovery(text, f"web:{host}")
+    return LyricsDiscovery()
+
+
 def discover_lyrics(
     source: str | Path,
     *,
@@ -206,4 +371,5 @@ def discover_lyrics(
     embedded = _embedded(path)
     if embedded:
         return LyricsDiscovery(embedded, "embedded")
-    return _online(title, duration_sec)
+    online = _online(title, duration_sec)
+    return online if online.text else _web_online(title)
