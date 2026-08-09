@@ -5,7 +5,7 @@
     height: 1px;
     margin: 0;
     border: 0;
-    background: var(--palette-border);
+    background: var(--ui-border);
   }
 
   .ui-divider[data-vertical] {

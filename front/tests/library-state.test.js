@@ -5,6 +5,7 @@ import {
   filterSongs,
   getLocalVisibleSongs,
   getSongCardState,
+  hasActiveSongProcessing,
   resolveVisibleSongs
 } from "../src/pages/Library/utils.js";
 
@@ -19,6 +20,14 @@ const songs = [
   },
   { id: "3", title: "Gamma", artist: "Singer", genre: "Jazz", status: "error" }
 ];
+
+test("library polling runs only while song processing is active", () => {
+  assert.equal(hasActiveSongProcessing(songs), true);
+  assert.equal(hasActiveSongProcessing([{ status: "queued" }]), true);
+  assert.equal(hasActiveSongProcessing([{ status: "cancelling" }]), true);
+  assert.equal(hasActiveSongProcessing([{ status: "done" }]), false);
+  assert.equal(hasActiveSongProcessing(null), false);
+});
 
 for (const value of [null, undefined, 0, false, {}, "songs"]) {
   test(`library helpers tolerate non-array source ${String(value)}`, () => {

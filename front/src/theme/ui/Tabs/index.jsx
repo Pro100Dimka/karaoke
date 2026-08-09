@@ -1,5 +1,6 @@
 import { useId } from "react";
 import useControllable from "../_internal/useControllable";
+import mergeSx from "../_internal/sx";
 import "./tabs.css";
 
 export default function Tabs({
@@ -7,7 +8,9 @@ export default function Tabs({
   value,
   defaultValue,
   onChange,
-  className = ""
+  className = "",
+  sx,
+  style
 }) {
   const id = useId().replace(/:/g, "");
   const [current, setCurrent] = useControllable(
@@ -24,7 +27,7 @@ export default function Tabs({
   };
 
   return (
-    <div className={`ui-tabs ${className}`.trim()}>
+    <div className={`ui-tabs ${className}`.trim()} style={mergeSx(sx, style)}>
       <div
         className="ui-tabs-list"
         role="tablist"

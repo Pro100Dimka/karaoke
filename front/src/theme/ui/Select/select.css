@@ -3,11 +3,11 @@
     inline-size: 100%;
     min-block-size: var(--control-md);
     padding-inline: var(--control-pad-md) 2.125rem;
-    border: 1px solid var(--palette-border);
+    border: 1px solid var(--ui-border);
     border-radius: var(--shape-md);
     outline: 0;
-    background: var(--palette-surface-main);
-    color: var(--palette-text-primary);
+    background: var(--ui-surface);
+    color: var(--ui-text);
     cursor: pointer;
   }
 }

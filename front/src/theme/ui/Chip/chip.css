@@ -8,8 +8,8 @@
     max-width: 100%;
     border: 1px solid transparent;
     border-radius: var(--shape-round);
-    background: var(--palette-surface-soft);
-    color: var(--palette-text-secondary);
+    background: var(--ui-surface-soft);
+    color: var(--ui-text-soft);
     white-space: nowrap;
   }
 
@@ -19,23 +19,23 @@
 
   .ui-chip[data-tone="primary"],
   .ui-chip[data-selected] {
-    background: color-mix(in srgb, var(--palette-primary-main) 15%, transparent);
-    color: var(--palette-primary-light);
-    border-color: color-mix(in srgb, var(--palette-primary-main) 35%, transparent);
+    background: color-mix(in srgb, var(--ui-primary) 15%, transparent);
+    color: var(--ui-primary-hover);
+    border-color: color-mix(in srgb, var(--ui-primary) 35%, transparent);
   }
 
   .ui-chip[data-tone="success"] {
-    background: color-mix(in srgb, var(--palette-success) 15%, transparent);
-    color: var(--palette-success);
+    background: color-mix(in srgb, var(--ui-success) 15%, transparent);
+    color: var(--ui-success);
   }
 
   .ui-chip[data-tone="danger"] {
-    background: color-mix(in srgb, var(--palette-error) 15%, transparent);
-    color: var(--palette-error);
+    background: color-mix(in srgb, var(--ui-danger) 15%, transparent);
+    color: var(--ui-danger);
   }
 
-  .ui-chip[data-variant="outline"] { background: transparent; border-color: var(--palette-border); }
-  .ui-chip[data-variant="solid"] { background: var(--palette-primary-main); color: var(--palette-primary-contrast); }
+  .ui-chip[data-variant="outline"] { background: transparent; border-color: var(--ui-border); }
+  .ui-chip[data-variant="solid"] { background: var(--ui-primary); color: var(--ui-text-inverse); }
 
   .ui-chip-remove {
     display: inline-grid;

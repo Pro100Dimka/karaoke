@@ -7,9 +7,9 @@
     background:
       linear-gradient(
         90deg,
-        var(--palette-surface-soft),
-        color-mix(in srgb, var(--palette-text-primary) 8%, var(--palette-surface-soft)),
-        var(--palette-surface-soft)
+        var(--ui-surface-soft),
+        color-mix(in srgb, var(--ui-text) 8%, var(--ui-surface-soft)),
+        var(--ui-surface-soft)
       );
     background-size: 200% 100%;
     animation: ui-skeleton 1.25s linear infinite;

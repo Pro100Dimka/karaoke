@@ -5,8 +5,8 @@
     flex: none;
     overflow: hidden;
     border-radius: 50%;
-    background: var(--palette-surface-soft);
-    color: var(--palette-text-primary);
+    background: var(--ui-surface-soft);
+    color: var(--ui-text);
     object-fit: cover;
     font-weight: 700;
     user-select: none;

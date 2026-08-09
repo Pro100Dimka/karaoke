@@ -1967,6 +1967,9 @@ select:focus,
 .library-page {
   --library-content: 100%;
   position: relative;
+  display: flex;
+  flex-direction: column;
+  block-size: 100dvh;
   min-block-size: calc(100dvh - var(--titlebar-height));
   padding: clamp(1.25rem, 2vw, 2rem) var(--library-gutter)
     clamp(5rem, 8vw, 7rem);
@@ -1983,6 +1986,7 @@ select:focus,
 .library-hero {
   position: relative;
   z-index: 4;
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -2075,13 +2079,18 @@ select:focus,
 .library-collection-panel {
   position: relative;
   z-index: 5;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-block-size: 0;
   padding: 0;
-  overflow: visible;
+  overflow: hidden;
   border: 0;
   background: transparent;
 }
 
 .library-toolbar {
+  flex: 0 0 auto;
   gap: var(--space-4);
   margin-block-end: var(--space-5);
   padding: var(--space-2) 0;
@@ -2134,12 +2143,18 @@ select:focus,
 
 .library-card-deck {
   display: grid;
+  flex: 1 1 auto;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 27rem), 34rem));
+  align-content: start;
   justify-content: start;
+  min-block-size: 0;
   gap: clamp(0.9rem, 2vw, 1.35rem);
-  margin: calc(-1 * var(--space-6));
+  margin: calc(-1 * var(--space-6)) calc(-1 * var(--space-6)) 0;
   padding: var(--space-6);
-  overflow: visible;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   perspective: 75rem;
 }
 

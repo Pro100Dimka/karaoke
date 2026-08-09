@@ -9,10 +9,10 @@
     align-items: center;
     inline-size: 100%;
     min-block-size: var(--control-size, var(--control-md));
-    border: 1px solid var(--palette-border);
+    border: 1px solid var(--field-border);
     border-radius: var(--shape-md);
-    background: var(--palette-surface-main);
-    color: var(--palette-text-primary);
+    background: var(--field-bg);
+    color: var(--field-fg);
     transition:
       border-color var(--motion-duration-fast) var(--motion-easing-standard),
       box-shadow var(--motion-duration-fast) var(--motion-easing-standard),
@@ -20,21 +20,21 @@
   }
 
   .ui-text-field:focus-within {
-    border-color: var(--palette-focus);
+    border-color: var(--ui-focus);
     box-shadow: var(--focus-shadow);
   }
 
-  .ui-text-field[data-error] { border-color: var(--palette-error); }
+  .ui-text-field[data-error] { border-color: var(--ui-danger); }
 
   .ui-text-field-input {
     inline-size: 100%;
     min-block-size: var(--control-size, var(--control-md));
     padding-inline: var(--control-pad, var(--control-pad-md));
-    border: 1px solid var(--palette-border);
+    border: 1px solid var(--field-border);
     border-radius: var(--shape-md);
     outline: 0;
-    background: var(--palette-surface-main);
-    color: var(--palette-text-primary);
+    background: var(--field-bg);
+    color: var(--field-fg);
     line-height: 1.2;
     transition:
       border-color var(--motion-duration-fast) var(--motion-easing-standard),
@@ -56,11 +56,11 @@
   .ui-text-field-input[data-size="lg"] { font-size: 1rem; }
 
   .ui-text-field-input::placeholder {
-    color: var(--palette-text-muted);
+    color: var(--field-placeholder);
     opacity: 1;
   }
 
-  .ui-text-field-input[aria-invalid="true"] { border-color: var(--palette-error); }
+  .ui-text-field-input[aria-invalid="true"] { border-color: var(--ui-danger); }
 
   .ui-text-field-slot {
     display: inline-flex;
@@ -68,7 +68,7 @@
     justify-content: center;
     flex: none;
     padding-inline: var(--control-pad, var(--control-pad-md));
-    color: var(--palette-text-muted);
+    color: var(--field-placeholder);
   }
 
     .ui-text-field-slot > svg {

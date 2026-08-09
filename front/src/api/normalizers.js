@@ -1,4 +1,12 @@
-const SONG_STATUSES = new Set(["pending", "processing", "done", "error"]);
+const SONG_STATUSES = new Set([
+  "pending",
+  "queued",
+  "processing",
+  "cancelling",
+  "cancelled",
+  "done",
+  "error"
+]);
 
 export function clampNumber(value, min, max, fallback = min) {
   const number = Number(value);

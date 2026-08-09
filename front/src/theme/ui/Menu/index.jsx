@@ -1,7 +1,8 @@
 import { useRef } from "react";
+import mergeSx from "../_internal/sx";
 import "./menu.css";
 
-export default function Menu({ items = [], onSelect, className = "" }) {
+export default function Menu({ items = [], onSelect, className = "", sx, style }) {
   const ref = useRef(null);
 
   const move = (from, step) => {
@@ -17,6 +18,7 @@ export default function Menu({ items = [], onSelect, className = "" }) {
       ref={ref}
       className={`ui-menu ${className}`.trim()}
       role="menu"
+      style={mergeSx(sx, style)}
       onKeyDown={event => {
         if (event.key === "ArrowDown") {
           event.preventDefault();

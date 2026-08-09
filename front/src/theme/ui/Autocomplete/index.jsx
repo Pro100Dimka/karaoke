@@ -3,6 +3,7 @@ import TextField from "../TextField";
 import useClickOutside from "../_internal/useClickOutside";
 import useControllable from "../_internal/useControllable";
 import { optionText } from "../_internal/option";
+import mergeSx from "../_internal/sx";
 import "./autocomplete.css";
 
 export default function Autocomplete({
@@ -24,6 +25,8 @@ export default function Autocomplete({
   disabled = false,
   onFocus,
   onKeyDown,
+  sx,
+  style,
   ...props
 }) {
   const id = useId().replace(/:/g, "");
@@ -67,7 +70,7 @@ export default function Autocomplete({
   const activeId = open && active >= 0 ? `${id}-option-${active}` : undefined;
 
   return (
-    <div ref={rootRef} className="ui-autocomplete">
+    <div ref={rootRef} className="ui-autocomplete" style={mergeSx(sx, style)}>
       <TextField
         {...props}
         value={query}

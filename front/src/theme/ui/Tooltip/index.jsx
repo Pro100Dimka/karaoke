@@ -1,4 +1,5 @@
 import { cloneElement, useEffect, useId, useRef, useState } from "react";
+import mergeSx from "../_internal/sx";
 import "./tooltip.css";
 
 export default function Tooltip({
@@ -6,7 +7,9 @@ export default function Tooltip({
   children,
   delay = 350,
   placement = "top",
-  disabled = false
+  disabled = false,
+  sx,
+  style
 }) {
   const id = useId();
   const timerRef = useRef();
@@ -46,7 +49,7 @@ export default function Tooltip({
   });
 
   return (
-    <span className="ui-tooltip-anchor" data-placement={placement}>
+    <span className="ui-tooltip-anchor" data-placement={placement} style={mergeSx(sx, style)}>
       {child}
       {open && (
         <span id={id} role="tooltip" className="ui-tooltip">

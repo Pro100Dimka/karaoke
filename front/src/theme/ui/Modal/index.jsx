@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import mergeSx from "../_internal/sx";
 import "./modal.css";
 
 export default function Modal({
@@ -6,7 +7,9 @@ export default function Modal({
   onClose,
   children,
   closeOnBackdrop = true,
-  className = ""
+  className = "",
+  sx,
+  style
 }) {
   const ref = useRef(null);
   const requestedCloseRef = useRef(false);
@@ -34,6 +37,7 @@ export default function Modal({
     <dialog
       ref={ref}
       className={`ui-modal ${className}`.trim()}
+      style={mergeSx(sx, style)}
       onCancel={event => {
         event.preventDefault();
         requestClose(event);

@@ -22,8 +22,8 @@
     background:
       linear-gradient(
         to right,
-        var(--palette-primary-main) 0 var(--slider-value),
-        var(--palette-surface-soft) var(--slider-value) 100%
+        var(--ui-primary) 0 var(--slider-value),
+        var(--ui-surface-soft) var(--slider-value) 100%
       );
   }
 
@@ -35,7 +35,7 @@
       calc((var(--slider-track, .25rem) - var(--slider-thumb, 1rem)) / 2);
     border: 0;
     border-radius: 50%;
-    background: var(--palette-text-primary);
+    background: var(--ui-text);
     box-shadow: var(--shadows-1);
     cursor: grab;
     transition:
@@ -46,13 +46,13 @@
   .ui-slider::-moz-range-track {
     block-size: var(--slider-track, .25rem);
     border-radius: var(--shape-round);
-    background: var(--palette-surface-soft);
+    background: var(--ui-surface-soft);
   }
 
   .ui-slider::-moz-range-progress {
     block-size: var(--slider-track, .25rem);
     border-radius: var(--shape-round);
-    background: var(--palette-primary-main);
+    background: var(--ui-primary);
   }
 
   .ui-slider::-moz-range-thumb {
@@ -60,7 +60,7 @@
     block-size: var(--slider-thumb, 1rem);
     border: 0;
     border-radius: 50%;
-    background: var(--palette-text-primary);
+    background: var(--ui-text);
     box-shadow: var(--shadows-1);
     cursor: grab;
   }
@@ -80,7 +80,7 @@
   .ui-slider:focus-visible::-webkit-slider-thumb {
     box-shadow:
       var(--shadows-1),
-      0 0 0 .1875rem color-mix(in srgb, var(--palette-focus) 22%, transparent);
+      0 0 0 .1875rem color-mix(in srgb, var(--ui-focus) 22%, transparent);
   }
 
   @media (prefers-reduced-motion: reduce) {

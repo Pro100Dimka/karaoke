@@ -23,6 +23,5 @@ export default function createTheme(
 ) {
   if (!root) return config;
   writeVars(root.style, config);
-  root.style.colorScheme = config.palette?.mode || "dark";
   return config;
 }

@@ -1,6 +1,7 @@
 import { forwardRef } from "react";
 import useControllable from "../_internal/useControllable";
 import cx from "../_internal/cx";
+import mergeSx from "../_internal/sx";
 import "./slider.css";
 
 const clamp = (value, min, max) =>
@@ -20,6 +21,7 @@ const Slider = forwardRef(function Slider({
   size = "md",
   showValue = false,
   className,
+  sx,
   style,
   onInput,
   onChange,
@@ -46,7 +48,7 @@ const Slider = forwardRef(function Slider({
       step={step}
       value={safe}
       disabled={disabled}
-      style={{ "--slider-value": `${percent}%`, ...style }}
+      style={mergeSx({ "--slider-value": `${percent}%`, ...sx }, style)}
       onInput={event => onInput?.(Number(event.currentTarget.value), event)}
       onChange={event => setCurrent(Number(event.currentTarget.value), event)}
       onPointerUp={event => onCommit?.(Number(event.currentTarget.value), event)}

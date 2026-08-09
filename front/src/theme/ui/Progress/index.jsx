@@ -1,3 +1,4 @@
+import mergeSx from "../_internal/sx";
 import "./progress.css";
 
 export default function Progress({
@@ -5,6 +6,8 @@ export default function Progress({
   max = 100,
   size = "md",
   className = "",
+  sx,
+  style,
   ...props
 }) {
   const indeterminate = value == null;
@@ -18,10 +21,11 @@ export default function Progress({
       aria-valuemin={0}
       aria-valuemax={max}
       aria-valuenow={indeterminate ? undefined : value}
-      style={{
+      style={mergeSx({
         "--progress-value":
-          indeterminate ? 0 : `${Math.max(0, Math.min(100, value / max * 100))}%`
-      }}
+          indeterminate ? 0 : `${Math.max(0, Math.min(100, value / max * 100))}%`,
+        ...sx
+      }, style)}
       {...props}
     />
   );

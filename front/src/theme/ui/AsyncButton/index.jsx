@@ -24,19 +24,14 @@ export default function AsyncButton({
   style,
   ...props
 }) {
-  const asyncAction = useAction({
-    action,
-    state,
-    successDuration,
-    errorDuration
-  });
+  const asyncAction = useAction({ action, state, successDuration, errorDuration });
   const text = {
     loading: loadingText,
     success: successText,
     error: errorText
   }[asyncAction.state];
 
-  const click = async (event) => {
+  const click = async event => {
     onClick?.(event);
     if (event.defaultPrevented || !action) return;
 
@@ -56,22 +51,16 @@ export default function AsyncButton({
       onClick={click}
       style={{
         "--button-progress":
-          progress == null
-            ? undefined
-            : `${Math.max(0, Math.min(100, progress))}%`,
+          progress == null ? undefined : `${Math.max(0, Math.min(100, progress))}%`,
         ...style
       }}
     >
       {text ? (
         <>
           <span className="ui-button-base-label">{children}</span>
-          <span className="ui-button-status" aria-live="polite">
-            {text}
-          </span>
+          <span className="ui-button-status" aria-live="polite">{text}</span>
         </>
-      ) : (
-        children
-      )}
+      ) : children}
     </Button>
   );
 }

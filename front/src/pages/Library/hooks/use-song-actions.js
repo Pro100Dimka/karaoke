@@ -13,6 +13,7 @@ export default function useLibrarySongActions(props) {
   const {
     confirmDialog,
     notify,
+    onChanged,
     processingSongId,
     recordingsSongId,
     setHiddenSongIds,
@@ -29,13 +30,14 @@ export default function useLibrarySongActions(props) {
       try {
         await action(song.id);
         setProcessingSong(song);
+        await onChanged?.();
       } catch (error) {
         await notify(`${errorMessage}: ${getErrorMessage(error)}`);
       } finally {
         processingSongIdsRef.current.delete(song.id);
       }
     },
-    [notify, setProcessingSong]
+    [notify, onChanged, setProcessingSong]
   );
   const deleteSong = useCallback(
     async (song) => {
@@ -53,6 +55,7 @@ export default function useLibrarySongActions(props) {
         if (processingSongId === song.id) setProcessingSong(null);
         try {
           await api.deleteSong(song.id);
+          await onChanged?.();
         } catch (error) {
           setHiddenSongIds((ids) => {
             const next = new Set(ids);
@@ -72,6 +75,7 @@ export default function useLibrarySongActions(props) {
     [
       confirmDialog,
       notify,
+      onChanged,
       processingSongId,
       recordingsSongId,
       setHiddenSongIds,

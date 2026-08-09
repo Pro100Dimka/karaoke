@@ -1,3 +1,4 @@
+import mergeSx from "../_internal/sx";
 import "./badge.css";
 
 export default function Badge({
@@ -5,10 +6,12 @@ export default function Badge({
   tone = "primary",
   invisible,
   children,
-  className = ""
+  className = "",
+  sx,
+  style
 }) {
   return (
-    <span className={`ui-badge ${className}`.trim()}>
+    <span className={`ui-badge ${className}`.trim()} style={mergeSx(sx, style)}>
       {children}
       {!invisible && <span className="ui-badge-content" data-tone={tone}>{content}</span>}
     </span>

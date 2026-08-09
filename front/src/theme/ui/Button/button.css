@@ -1,7 +1,7 @@
 @layer ui.components {
   .ui-button {
-    --button-bg: var(--palette-primary-main);
-    --button-fg: var(--palette-primary-contrast);
+    --_button-bg: var(--button-bg);
+    --_button-fg: var(--button-fg);
 
     position: relative;
     display: inline-grid;
@@ -12,8 +12,8 @@
     border-radius: var(--shape-md);
     overflow: hidden;
     isolation: isolate;
-    background: var(--button-bg);
-    color: var(--button-fg);
+    background: var(--_button-bg);
+    color: var(--_button-fg);
     font-weight: 700;
     line-height: 1;
     cursor: pointer;
@@ -43,29 +43,29 @@
   .ui-button[data-size="lg"] { font-size: 1rem; }
 
   .ui-button[data-tone="secondary"] {
-    --button-bg: var(--palette-secondary-main);
-    --button-fg: var(--palette-secondary-contrast);
+    --_button-bg: var(--ui-secondary);
+    --_button-fg: var(--button-fg);
   }
 
   .ui-button[data-tone="danger"] {
-    --button-bg: var(--palette-error);
+    --_button-bg: var(--ui-danger);
     --button-fg: #fff;
   }
 
   .ui-button[data-variant="soft"] {
-    --button-bg: color-mix(in srgb, var(--palette-primary-main) 14%, transparent);
-    --button-fg: var(--palette-primary-light);
+    --_button-bg: color-mix(in srgb, var(--ui-primary) 14%, transparent);
+    --_button-fg: var(--ui-primary-hover);
   }
 
   .ui-button[data-variant="ghost"] {
-    --button-bg: transparent;
-    --button-fg: var(--palette-text-primary);
+    --_button-bg: transparent;
+    --_button-fg: var(--ui-text);
   }
 
   .ui-button[data-variant="outline"] {
-    --button-bg: transparent;
-    --button-fg: var(--palette-text-primary);
-    box-shadow: inset 0 0 0 1px var(--palette-border);
+    --_button-bg: transparent;
+    --_button-fg: var(--ui-text);
+    box-shadow: inset 0 0 0 1px var(--ui-border);
   }
 
   @media (hover: hover) and (pointer: fine) {

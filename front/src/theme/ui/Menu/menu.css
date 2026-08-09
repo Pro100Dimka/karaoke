@@ -6,12 +6,12 @@
     border: 0;
     border-radius: var(--shape-sm);
     background: transparent;
-    color: var(--palette-text-primary);
+    color: var(--ui-text);
     font: inherit;
     text-align: start;
     cursor: pointer;
   }
   .ui-menu-item:hover,
-  .ui-menu-item:focus-visible { background: var(--palette-surface-soft); outline: 0; }
+  .ui-menu-item:focus-visible { background: var(--ui-surface-soft); outline: 0; }
   .ui-menu-item:disabled { opacity: var(--states-disabled-opacity); cursor: not-allowed; }
 }

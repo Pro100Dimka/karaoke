@@ -4,9 +4,9 @@
     z-index: var(--z-index-popover);
     min-width: 180px;
     padding: 6px;
-    border: 1px solid var(--palette-border);
+    border: 1px solid var(--overlay-border);
     border-radius: var(--shape-md);
-    background: var(--palette-background-elevated);
+    background: var(--overlay-bg);
     box-shadow: var(--shadows-3);
   }
 

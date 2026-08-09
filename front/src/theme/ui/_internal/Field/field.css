@@ -3,27 +3,27 @@
     display: grid;
     gap: .375rem;
     min-inline-size: 0;
-    color: var(--palette-text-primary);
+    color: var(--ui-text);
   }
 
   .ui-field-label {
     min-inline-size: 0;
-    color: var(--palette-text-secondary);
+    color: var(--ui-text-soft);
     font-size: var(--typography-body2-size);
     font-weight: 600;
     line-height: var(--typography-body2-line-height);
   }
 
-  .ui-field-required { color: var(--palette-error); }
+  .ui-field-required { color: var(--ui-danger); }
 
   .ui-field-message {
     min-inline-size: 0;
-    color: var(--palette-text-muted);
+    color: var(--ui-text-muted);
     font-size: var(--typography-caption-size);
     line-height: var(--typography-caption-line-height);
   }
 
-  .ui-field-message[data-error] { color: var(--palette-error); }
+  .ui-field-message[data-error] { color: var(--ui-danger); }
 
   .ui-field[data-disabled] { opacity: var(--states-disabled-opacity); }
 }

@@ -5,9 +5,9 @@
     place-content: center;
     flex: none;
     margin: 0;
-    border: 1px solid var(--palette-border);
+    border: 1px solid var(--ui-border);
     border-radius: var(--shape-xs);
-    background: var(--palette-surface-main);
+    background: var(--ui-surface);
     cursor: pointer;
 
     transition:
@@ -29,9 +29,9 @@
 
   .ui-checkbox:checked,
   .ui-checkbox:indeterminate {
-    border-color: var(--palette-primary-main);
-    background: var(--palette-primary-main);
-    color: var(--palette-primary-contrast);
+    border-color: var(--ui-primary);
+    background: var(--ui-primary);
+    color: var(--ui-text-inverse);
   }
 
   .ui-checkbox:checked::before {
@@ -67,7 +67,7 @@
     align-items: center;
     gap: calc(var(--spacing) * 1);
     min-width: 0;
-    color: var(--palette-text-primary);
+    color: var(--ui-text);
     cursor: pointer;
     user-select: none;
   }
@@ -79,7 +79,7 @@
 
   @media (hover: hover) and (pointer: fine) {
     .ui-checkbox:not(:disabled):hover {
-      border-color: var(--palette-primary-main);
+      border-color: var(--ui-primary);
     }
   }
 

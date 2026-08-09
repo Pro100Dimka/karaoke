@@ -10,12 +10,12 @@
     height: 18px;
     padding-inline: 5px;
     border-radius: var(--shape-round);
-    background: var(--palette-primary-main);
-    color: var(--palette-primary-contrast);
+    background: var(--ui-primary);
+    color: var(--ui-text-inverse);
     font-size: .6875rem;
     font-weight: 700;
     transform: translate(45%, -45%);
   }
-  .ui-badge-content[data-tone="danger"] { background: var(--palette-error); }
-  .ui-badge-content[data-tone="success"] { background: var(--palette-success); }
+  .ui-badge-content[data-tone="danger"] { background: var(--ui-danger); }
+  .ui-badge-content[data-tone="success"] { background: var(--ui-success); }
 }

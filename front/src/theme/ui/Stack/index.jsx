@@ -2,6 +2,8 @@ import Primitive from "../_internal/Primitive";
 import cx from "../_internal/cx";
 import "./stack.css";
 
+const unit = (value) => (typeof value === "number" ? `${value}px` : value);
+
 export default function Stack({
   as = "div",
   direction = "column",
@@ -19,7 +21,7 @@ export default function Stack({
       className={cx("ui-stack", className)}
       style={{
         "--stack-direction": direction,
-        "--stack-gap": gap,
+        "--stack-gap": unit(gap),
         "--stack-align": align,
         "--stack-justify": justify,
         "--stack-wrap": wrap ? "wrap" : "nowrap",

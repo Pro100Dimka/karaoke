@@ -10,10 +10,10 @@
     width: max-content;
     max-width: 260px;
     padding: 6px 8px;
-    border: 1px solid var(--palette-border);
+    border: 1px solid var(--overlay-border);
     border-radius: var(--shape-sm);
-    background: var(--palette-background-elevated);
-    color: var(--palette-text-primary);
+    background: var(--overlay-bg);
+    color: var(--overlay-fg);
     box-shadow: var(--shadows-2);
     font-size: var(--typography-caption-size);
     line-height: 1.3;

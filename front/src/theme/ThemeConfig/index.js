@@ -1,6 +1,6 @@
 import createTheme from "./createTheme";
 import motion from "./motion";
-import palette from "./palette";
+import setTheme from "./setTheme";
 import shadows from "./shadows";
 import shape from "./shape";
 import spacing from "./spacing";
@@ -9,7 +9,6 @@ import typography from "./typography";
 import zIndex from "./zIndex";
 
 const theme = {
-  palette,
   typography,
   shape,
   shadows,
@@ -19,5 +18,5 @@ const theme = {
   zIndex
 };
 
-export { createTheme };
+export { createTheme, setTheme };
 export default theme;

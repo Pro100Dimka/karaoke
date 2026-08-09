@@ -92,9 +92,10 @@ def _lyrics_language_hint(value: str | None) -> str | None:
 def _print_full_lyrics(source: str, text: str, query: str | None) -> None:
     _lyrics_console(f"[lyrics] search query: {query or '<empty>'}")
     _lyrics_console(f"[lyrics] source: {source or 'unknown'}")
-    _lyrics_console("[lyrics] ===== FULL LYRICS BEGIN =====")
-    _lyrics_console(text)
-    _lyrics_console("[lyrics] ===== FULL LYRICS END =====")
+    line_count = len([line for line in text.splitlines() if line.strip()])
+    _lyrics_console(
+        f"[lyrics] text received: {line_count} non-empty lines, {len(text)} characters"
+    )
 
 
 

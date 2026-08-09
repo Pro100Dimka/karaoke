@@ -4,7 +4,7 @@
     width: 100%;
     overflow: hidden;
     border-radius: var(--shape-round);
-    background: var(--palette-surface-soft);
+    background: var(--ui-surface-soft);
   }
 
   .ui-progress[data-size="sm"] { height: 3px; }
@@ -18,7 +18,7 @@
     inset-inline-start: 0;
     width: var(--progress-value);
     border-radius: inherit;
-    background: var(--palette-primary-main);
+    background: var(--ui-primary);
     transition: width var(--motion-duration-normal) var(--motion-easing-standard);
   }
 

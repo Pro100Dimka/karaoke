@@ -1,6 +1,7 @@
 import { forwardRef } from "react";
 import Field from "../_internal/Field";
 import cx from "../_internal/cx";
+import mergeSx from "../_internal/sx";
 import "./text-field.css";
 
 const TextField = forwardRef(function TextField({
@@ -17,6 +18,8 @@ const TextField = forwardRef(function TextField({
   end,
   className,
   fieldClassName,
+  sx,
+  style,
   inputClassName,
   value,
   defaultValue,
@@ -40,6 +43,7 @@ const TextField = forwardRef(function TextField({
         value={value !== undefined ? value ?? "" : undefined}
         defaultValue={value === undefined ? defaultValue : undefined}
         onChange={event => onChange?.(event.target.value, event)}
+        style={!start && !end ? mergeSx(sx, style) : undefined}
         {...fieldProps}
         {...props}
       />
@@ -53,6 +57,7 @@ const TextField = forwardRef(function TextField({
         data-size={size}
         data-disabled={disabled || undefined}
         data-error={!!error || undefined}
+        style={mergeSx(sx, style)}
       >
         {start && <span className="ui-text-field-slot">{start}</span>}
         {input}

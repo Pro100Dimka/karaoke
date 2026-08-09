@@ -1,5 +1,6 @@
 import { forwardRef } from "react";
 import cx from "../_internal/cx";
+import mergeSx from "../_internal/sx";
 import "./switch.css";
 
 const Switch = forwardRef(function Switch({
@@ -9,6 +10,8 @@ const Switch = forwardRef(function Switch({
   size = "md",
   label,
   className,
+  sx,
+  style,
   onChange,
   ...props
 }, ref) {
@@ -25,6 +28,7 @@ const Switch = forwardRef(function Switch({
       defaultChecked={controlled ? undefined : defaultChecked}
       disabled={disabled}
       onChange={event => onChange?.(event.target.checked, event)}
+      style={mergeSx(sx, style)}
       {...props}
     />
   );

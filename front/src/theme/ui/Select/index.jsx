@@ -1,6 +1,7 @@
 import { forwardRef } from "react";
 import Field from "../_internal/Field";
 import { optionItem } from "../_internal/option";
+import mergeSx from "../_internal/sx";
 import "./select.css";
 
 const Select = forwardRef(function Select({
@@ -13,6 +14,8 @@ const Select = forwardRef(function Select({
   defaultValue,
   onChange,
   className = "",
+  sx,
+  style,
   ...props
 }, ref) {
   const control = fieldProps => (
@@ -22,6 +25,7 @@ const Select = forwardRef(function Select({
       value={value}
       defaultValue={value === undefined ? defaultValue : undefined}
       onChange={event => onChange?.(event.target.value, event)}
+      style={mergeSx(sx, style)}
       {...fieldProps}
       {...props}
     >

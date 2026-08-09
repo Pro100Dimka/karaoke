@@ -1,10 +1,13 @@
 import { forwardRef } from "react";
+import mergeSx from "../_internal/sx";
 import "./radio.css";
 
 const Radio = forwardRef(function Radio({
   label,
   size = "md",
   className = "",
+  sx,
+  style,
   onChange,
   ...props
 }, ref) {
@@ -15,6 +18,7 @@ const Radio = forwardRef(function Radio({
       className={`ui-radio ui-focus-ring ui-disabled ui-motion ${className}`.trim()}
       data-size={size}
       onChange={event => onChange?.(event.target.value, event)}
+      style={mergeSx(sx, style)}
       {...props}
     />
   );

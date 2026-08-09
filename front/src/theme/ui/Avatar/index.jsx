@@ -1,3 +1,4 @@
+import mergeSx from "../_internal/sx";
 import "./avatar.css";
 
 export default function Avatar({
@@ -6,11 +7,14 @@ export default function Avatar({
   name = "",
   size = "md",
   className = "",
+  sx,
+  style,
   ...props
 }) {
   const common = {
     className: `ui-avatar ${className}`.trim(),
     "data-size": size,
+    style: mergeSx(sx, style),
     ...props
   };
 

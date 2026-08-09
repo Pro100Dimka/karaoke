@@ -23,6 +23,8 @@ import {
   countReadySongs,
   filterSongs,
   getLocalVisibleSongs,
+  hasActiveSongProcessing,
+  isProcessingActive,
   resolveVisibleSongs
 } from "./utils";
 
@@ -37,6 +39,7 @@ export default function Library({ onOpenSongSettings }) {
   const [query, setQuery] = useState("");
   const [recordingsSong, setRecordingsSong] = useState(null);
   const [processingSong, setProcessingSong] = useState(null);
+  const [trackedSongId, setTrackedSongId] = useState(null);
   const [analysisRecordingId, setAnalysisRecordingId] = useState(
     () => location.state?.analysisRecordingId || null
   );
@@ -72,7 +75,16 @@ export default function Library({ onOpenSongSettings }) {
   }, [returningFromKaraoke]);
 
   const canManageLibrary = !sharedRoom?.room || sharedRoom.room.host;
-  const { data: songs, error } = usePolling(api.listSongs, 3000, []);
+  const {
+    data: songs,
+    error,
+    refresh: refreshSongs
+  } = usePolling(api.listSongs, 0, []);
+
+  const trackProcessingSong = useCallback((song) => {
+    setProcessingSong(song);
+    setTrackedSongId(song?.id || null);
+  }, []);
   const openOnlineRoom = async () => {
     let settings;
     try {
@@ -101,10 +113,28 @@ export default function Library({ onOpenSongSettings }) {
   );
   const { data: processingStatus } = usePolling(
     () =>
-      processingSong ? api.getStatus(processingSong.id) : Promise.resolve(null),
-    1000,
-    [processingSong?.id]
+      trackedSongId ? api.getStatus(trackedSongId) : Promise.resolve(null),
+    trackedSongId ? 1000 : 0,
+    [trackedSongId],
+    { shouldContinue: (status) => isProcessingActive(status?.status) }
   );
+
+  useEffect(() => {
+    if (trackedSongId || !hasActiveSongProcessing(songs)) return;
+    const activeSong = songs.find((song) => isProcessingActive(song?.status));
+    setTrackedSongId(activeSong?.id || null);
+  }, [songs, trackedSongId]);
+
+  useEffect(() => {
+    if (
+      !trackedSongId ||
+      processingStatus?.song_id !== trackedSongId ||
+      isProcessingActive(processingStatus?.status)
+    )
+      return;
+    refreshSongs();
+    setTrackedSongId(null);
+  }, [processingStatus, refreshSongs, trackedSongId]);
 
   const {
     importing,
@@ -113,7 +143,10 @@ export default function Library({ onOpenSongSettings }) {
   } = useLibraryFileImport({
     fileInputRef,
     notify,
-    onStarted: setProcessingSong
+    onStarted: (song) => {
+      trackProcessingSong(song);
+      refreshSongs();
+    }
   });
 
   const {
@@ -124,10 +157,11 @@ export default function Library({ onOpenSongSettings }) {
   } = useLibrarySongActions({
     confirmDialog,
     notify,
+    onChanged: refreshSongs,
     processingSongId: processingSong?.id,
     recordingsSongId: recordingsSong?.id,
     setHiddenSongIds,
-    setProcessingSong,
+    setProcessingSong: trackProcessingSong,
     setRecordingsSong
   });
 
@@ -151,10 +185,11 @@ export default function Library({ onOpenSongSettings }) {
       return;
     try {
       await api.cancelProcessing(processingSong.id);
+      refreshSongs();
     } catch (err) {
       await notify(`Не удалось отменить обработку: ${getErrorMessage(err)}`);
     }
-  }, [confirmDialog, notify, processingSong]);
+  }, [confirmDialog, notify, processingSong, refreshSongs]);
 
   const localVisibleSongs = getLocalVisibleSongs(songs, hiddenSongIds);
   const visibleSongs = resolveVisibleSongs({
@@ -250,7 +285,7 @@ export default function Library({ onOpenSongSettings }) {
                   );
                 }
               }}
-              onOpenProcessing={setProcessingSong}
+              onOpenProcessing={trackProcessingSong}
               onOpenRecordings={setRecordingsSong}
               onOpenSettings={() => onOpenSongSettings?.(song.id)}
               onProcess={handleProcess}

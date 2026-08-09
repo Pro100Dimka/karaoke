@@ -29,7 +29,16 @@ export function getProcessingProgress(status, song) {
 }
 
 export function isProcessingActive(status) {
-  return status === "processing" || status === "queued";
+  return (
+    status === "processing" || status === "queued" || status === "cancelling"
+  );
+}
+
+export function hasActiveSongProcessing(songs) {
+  return (
+    Array.isArray(songs) &&
+    songs.some((song) => isProcessingActive(String(song?.status || "")))
+  );
 }
 
 export function getLocalVisibleSongs(songs, hiddenSongIds) {

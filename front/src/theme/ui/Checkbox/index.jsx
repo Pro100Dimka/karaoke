@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useRef } from "react";
 import mergeRefs from "../_internal/mergeRefs";
+import mergeSx from "../_internal/sx";
 import "./checkbox.css";
 
 const Checkbox = forwardRef(function Checkbox({
@@ -10,6 +11,8 @@ const Checkbox = forwardRef(function Checkbox({
   size = "md",
   label,
   className = "",
+  sx,
+  style,
   onChange,
   ...props
 }, ref) {
@@ -32,6 +35,7 @@ const Checkbox = forwardRef(function Checkbox({
       disabled={disabled}
       aria-checked={indeterminate ? "mixed" : undefined}
       onChange={event => onChange?.(event.target.checked, event)}
+      style={mergeSx(sx, style)}
       {...props}
     />
   );

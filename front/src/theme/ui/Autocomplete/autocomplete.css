@@ -13,7 +13,7 @@
     border: 0;
     border-radius: 50%;
     background: transparent;
-    color: var(--palette-text-muted);
+    color: var(--ui-text-muted);
     font: inherit;
     cursor: pointer;
   }
@@ -26,9 +26,9 @@
     max-block-size: min(17.5rem, 45vb);
     overflow: auto;
     padding: .375rem;
-    border: 1px solid var(--palette-border);
+    border: 1px solid var(--overlay-border);
     border-radius: var(--shape-md);
-    background: var(--palette-background-elevated);
+    background: var(--overlay-bg);
     box-shadow: var(--shadows-3);
     scrollbar-width: thin;
   }
@@ -42,7 +42,7 @@
     border: 0;
     border-radius: var(--shape-sm);
     background: transparent;
-    color: var(--palette-text-primary);
+    color: var(--overlay-fg);
     font: inherit;
     text-align: start;
     cursor: pointer;
@@ -50,17 +50,17 @@
 
   .ui-autocomplete-option[data-active],
   .ui-autocomplete-option:hover {
-    background: var(--palette-surface-soft);
+    background: var(--ui-surface-soft);
   }
 
   .ui-autocomplete-option[data-selected] {
-    color: var(--palette-primary-light);
-    background: color-mix(in srgb, var(--palette-primary-main) 14%, transparent);
+    color: var(--ui-primary-hover);
+    background: color-mix(in srgb, var(--ui-primary) 14%, transparent);
   }
 
   .ui-autocomplete-empty {
     padding: .625rem;
-    color: var(--palette-text-muted);
+    color: var(--ui-text-muted);
     font-size: var(--typography-body2-size);
   }
 }

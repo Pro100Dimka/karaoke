@@ -5,15 +5,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * This avoids overlapping network calls when a local AI operation or an audio
  * driver endpoint responds slower than its polling interval.
  */
-export function usePolling(fetchFn, intervalMs, deps = []) {
+export function usePolling(fetchFn, intervalMs, deps = [], options = {}) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const fetchRef = useRef(fetchFn);
+  const shouldContinueRef = useRef(options.shouldContinue);
   const refreshRef = useRef(null);
 
   useEffect(() => {
     fetchRef.current = fetchFn;
   }, [fetchFn]);
+
+  useEffect(() => {
+    shouldContinueRef.current = options.shouldContinue;
+  }, [options.shouldContinue]);
 
   useEffect(() => {
     let active = true;
@@ -23,12 +28,16 @@ export function usePolling(fetchFn, intervalMs, deps = []) {
     const documentRef = globalThis.document;
     const isHidden = () => documentRef?.visibilityState === "hidden";
 
-    const scheduleNext = () => {
+    const scheduleNext = (result, requestFailed = false) => {
+      const shouldContinue = shouldContinueRef.current;
       if (
         !active ||
         isHidden() ||
         !Number.isFinite(intervalMs) ||
-        intervalMs <= 0
+        intervalMs <= 0 ||
+        (!requestFailed &&
+          typeof shouldContinue === "function" &&
+          !shouldContinue(result))
       )
         return;
       timerId = globalThis.setTimeout(run, intervalMs);
@@ -48,13 +57,16 @@ export function usePolling(fetchFn, intervalMs, deps = []) {
       if (timerId) globalThis.clearTimeout(timerId);
       timerId = null;
       inFlight = true;
+      let result;
+      let requestFailed = false;
       try {
-        const result = await fetchRef.current();
+        result = await fetchRef.current();
         if (active) {
           setData(result);
           setError(null);
         }
       } catch (requestError) {
+        requestFailed = true;
         if (active) setError(requestError);
       } finally {
         inFlight = false;
@@ -62,7 +74,7 @@ export function usePolling(fetchFn, intervalMs, deps = []) {
           refreshQueued = false;
           run();
         } else {
-          scheduleNext();
+          scheduleNext(result, requestFailed);
         }
       }
     };
