@@ -1,0 +1,134 @@
+@layer ui.components {
+  .ui-switch {
+    appearance: none;
+    position: relative;
+    flex: none;
+    margin: 0;
+    border: 1px solid var(--palette-border);
+    border-radius: var(--shape-round);
+    background: var(--palette-surface-soft);
+    cursor: pointer;
+
+    transition:
+      background var(--motion-duration-fast) var(--motion-easing-standard),
+      border-color var(--motion-duration-fast) var(--motion-easing-standard),
+      box-shadow var(--motion-duration-fast) var(--motion-easing-standard);
+  }
+
+  .ui-switch::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 2px;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: var(--palette-text-primary);
+    transform: translate(0, -50%);
+
+    transition:
+      transform var(--motion-duration-fast) var(--motion-easing-spring),
+      opacity var(--motion-duration-fast) var(--motion-easing-standard);
+  }
+
+  .ui-switch:checked {
+    border-color: var(--palette-primary-main);
+    background: var(--palette-primary-main);
+  }
+
+  .ui-switch[data-size="sm"] {
+    width: 32px;
+    height: 18px;
+  }
+
+  .ui-switch[data-size="md"] {
+    width: 40px;
+    height: 22px;
+  }
+
+  .ui-switch[data-size="lg"] {
+    width: 48px;
+    height: 26px;
+  }
+
+  .ui-switch[data-size="sm"]::before {
+    width: 12px;
+  }
+
+  .ui-switch[data-size="md"]::before {
+    width: 16px;
+  }
+
+  .ui-switch[data-size="lg"]::before {
+    width: 20px;
+  }
+
+  .ui-switch[data-size="sm"]:checked::before {
+    transform: translate(14px, -50%);
+  }
+
+  .ui-switch[data-size="md"]:checked::before {
+    transform: translate(20px, -50%);
+  }
+
+  .ui-switch[data-size="lg"]:checked::before {
+    transform: translate(24px, -50%);
+  }
+
+  .ui-switch[data-state="loading"]::after {
+    content: "";
+    position: absolute;
+    inset: 3px;
+    border-radius: inherit;
+    background:
+      linear-gradient(
+        90deg,
+        transparent 0%,
+        color-mix(in srgb, white 18%, transparent) 50%,
+        transparent 100%
+      );
+    background-size: 200% 100%;
+    animation: ui-switch-loading 900ms linear infinite;
+    pointer-events: none;
+  }
+
+  .ui-switch[data-state="error"] {
+    border-color: var(--palette-error);
+  }
+
+  .ui-switch[data-state="success"] {
+    border-color: var(--palette-success);
+  }
+
+
+
+  .ui-switch-label {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 1);
+    min-width: 0;
+    color: var(--palette-text-primary);
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .ui-switch-label[data-disabled] {
+    cursor: not-allowed;
+    opacity: var(--states-disabled-opacity);
+  }
+
+  @keyframes ui-switch-loading {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ui-switch,
+    .ui-switch::before {
+      transition: none;
+    }
+
+    .ui-switch[data-state="loading"]::after {
+      animation: none;
+    }
+  }
+}

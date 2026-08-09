@@ -151,3 +151,95 @@ def test_web_search_is_used_before_asr_when_lrclib_has_no_record(tmp_path: Path,
 class _ByteResponse(_Response):
     def read(self, *_args):
         return self.payload
+
+
+def test_search_tokens_rejects_unrelated_english_song():
+    from AI.lyrics_sources import _search_tokens_match
+
+    assert not _search_tokens_match(
+        "TRITIA 31 я весна",
+        "Sho Shallow - Jugg & Finesse lyrics",
+    )
+
+
+def test_search_tokens_accepts_matching_tritia_result():
+    from AI.lyrics_sources import _search_tokens_match
+
+    assert _search_tokens_match(
+        "TRITIA 31 я весна",
+        "TRITIA - 31-я весна текст песни lyrics",
+    )
+
+
+def test_filename_candidates_include_title_only_for_no_metadata(monkeypatch, tmp_path):
+    from AI.lyrics_sources import _metadata_search_candidates
+
+    source = tmp_path / "TRITIA-31-я весна(2).mp3"
+    source.write_bytes(b"not-a-real-mp3")
+    queries = _metadata_search_candidates(source, "TRITIA 31-я весна")
+    assert queries[0] == "TRITIA 31 я весна"
+    assert "31 я весна" in queries
+
+
+def test_track_signature_splits_artist_before_numeric_title():
+    from AI.lyrics_sources import _track_signature
+
+    artist, title = _track_signature("TRITIA-31-я весна(2)")
+    assert artist == "TRITIA"
+    assert title == "31-я весна"
+
+
+def test_discover_logs_exact_queries_before_lookup(monkeypatch, tmp_path):
+    import AI.lyrics_sources as lyrics_sources
+
+    source = tmp_path / "TRITIA-31-я весна(2).mp3"
+    source.write_bytes(b"not-real-audio-for-parser-test")
+
+    monkeypatch.setattr(
+        lyrics_sources,
+        "_metadata_search_candidates",
+        lambda source, title: ["TRITIA 31 я весна", "31 я весна"],
+    )
+    monkeypatch.setattr(
+        lyrics_sources,
+        "_online",
+        lambda query, duration: lyrics_sources.LyricsDiscovery(),
+    )
+    monkeypatch.setattr(
+        lyrics_sources,
+        "_web_online",
+        lambda query: lyrics_sources.LyricsDiscovery(),
+    )
+
+    messages = []
+    monkeypatch.setattr(lyrics_sources, "_lyrics_debug", messages.append)
+
+    result = lyrics_sources.discover_lyrics(source)
+    assert not result.text
+    assert messages.index("[lyrics] SEARCH #1 BEGIN: TRITIA 31 я весна") < messages.index(
+        "[lyrics] SEARCH #1 LRCLIB NOT FOUND: TRITIA 31 я весна"
+    )
+    assert "[lyrics] SEARCH #2 BEGIN: 31 я весна" in messages
+    assert messages[-1] == "[lyrics] ALL SEARCH QUERIES FAILED -> ASR"
+
+
+def test_temp_source_name_never_enters_search_plan(tmp_path):
+    import AI.lyrics_sources as lyrics_sources
+
+    source = tmp_path / "source.mp3"
+    source.write_bytes(b"fake")
+
+    assert lyrics_sources._metadata_search_candidates(
+        source, "TRITIA - 31-я весна"
+    ) == ["TRITIA 31 я весна", "31 я весна"]
+
+
+def test_real_filename_can_supply_title_only_when_fallback_is_flat(tmp_path):
+    import AI.lyrics_sources as lyrics_sources
+
+    source = tmp_path / "TRITIA-31-я весна(2).mp3"
+    source.write_bytes(b"fake")
+
+    assert lyrics_sources._metadata_search_candidates(
+        source, "TRITIA 31-я весна"
+    ) == ["TRITIA 31 я весна", "31 я весна"]

@@ -12,7 +12,7 @@ export const SONG_FIELD_ROWS = [
 export const SONG_FIELDS = [
   { name: "key_override", label: "Тональность", placeholder: "напр. C#m" },
   { name: "title", label: "Название песни", type: "text" },
-  { name: "artist", label: "Группа / исполнитель", placeholder: "Muse" },
+  { name: "artist", label: "Исполнитель", placeholder: "Muse" },
   { name: "genre", label: "Жанр", placeholder: "Alternative rock" },
   { name: "tempo_override", label: "Темп (BPM)", type: "number", min: 1 },
   {

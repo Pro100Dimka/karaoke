@@ -1,0 +1,20 @@
+@layer ui.components {
+  .ui-spinner {
+    display: inline-block;
+    aspect-ratio: 1;
+    border: 2px solid color-mix(in srgb, currentColor 22%, transparent);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: ui-spinner .7s linear infinite;
+  }
+
+  .ui-spinner[data-size="sm"] { width: 14px; }
+  .ui-spinner[data-size="md"] { width: 18px; }
+  .ui-spinner[data-size="lg"] { width: 24px; }
+
+  @keyframes ui-spinner { to { transform: rotate(360deg); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ui-spinner { animation-duration: 1.4s; }
+  }
+}

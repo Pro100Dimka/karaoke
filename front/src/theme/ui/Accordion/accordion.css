@@ -1,0 +1,16 @@
+@layer ui.components {
+  .ui-accordion {
+    border: 1px solid var(--palette-border);
+    border-radius: var(--shape-md);
+    background: var(--palette-surface-main);
+  }
+
+  .ui-accordion > summary {
+    padding: 12px 14px;
+    cursor: pointer;
+    color: var(--palette-text-primary);
+    font-weight: 600;
+  }
+
+  .ui-accordion-content { padding: 0 14px 14px; color: var(--palette-text-secondary); }
+}

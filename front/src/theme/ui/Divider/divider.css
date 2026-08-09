@@ -1,0 +1,16 @@
+@layer ui.components {
+  .ui-divider {
+    flex: none;
+    width: 100%;
+    height: 1px;
+    margin: 0;
+    border: 0;
+    background: var(--palette-border);
+  }
+
+  .ui-divider[data-vertical] {
+    width: 1px;
+    height: auto;
+    align-self: stretch;
+  }
+}

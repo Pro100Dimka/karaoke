@@ -1,0 +1,13 @@
+@layer ui.components {
+  .ui-icon-button {
+    inline-size: var(--control-size, var(--control-md));
+    padding: 0;
+    aspect-ratio: 1;
+  }
+
+  .ui-icon-button > svg {
+    inline-size: 1.15em;
+    block-size: 1.15em;
+    flex: none;
+  }
+}

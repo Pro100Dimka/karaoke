@@ -1,0 +1,78 @@
+@layer ui.components {
+  .ui-text-field,
+  .ui-text-field-input {
+    min-inline-size: 0;
+  }
+
+  .ui-text-field {
+    display: flex;
+    align-items: center;
+    inline-size: 100%;
+    min-block-size: var(--control-size, var(--control-md));
+    border: 1px solid var(--palette-border);
+    border-radius: var(--shape-md);
+    background: var(--palette-surface-main);
+    color: var(--palette-text-primary);
+    transition:
+      border-color var(--motion-duration-fast) var(--motion-easing-standard),
+      box-shadow var(--motion-duration-fast) var(--motion-easing-standard),
+      background var(--motion-duration-fast) var(--motion-easing-standard);
+  }
+
+  .ui-text-field:focus-within {
+    border-color: var(--palette-focus);
+    box-shadow: var(--focus-shadow);
+  }
+
+  .ui-text-field[data-error] { border-color: var(--palette-error); }
+
+  .ui-text-field-input {
+    inline-size: 100%;
+    min-block-size: var(--control-size, var(--control-md));
+    padding-inline: var(--control-pad, var(--control-pad-md));
+    border: 1px solid var(--palette-border);
+    border-radius: var(--shape-md);
+    outline: 0;
+    background: var(--palette-surface-main);
+    color: var(--palette-text-primary);
+    line-height: 1.2;
+    transition:
+      border-color var(--motion-duration-fast) var(--motion-easing-standard),
+      box-shadow var(--motion-duration-fast) var(--motion-easing-standard),
+      background var(--motion-duration-fast) var(--motion-easing-standard);
+  }
+
+  .ui-text-field > .ui-text-field-input {
+    flex: 1;
+    min-block-size: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .ui-text-field-input[data-size="sm"] { font-size: .8125rem; }
+  .ui-text-field-input[data-size="md"] { font-size: .875rem; }
+  .ui-text-field-input[data-size="lg"] { font-size: 1rem; }
+
+  .ui-text-field-input::placeholder {
+    color: var(--palette-text-muted);
+    opacity: 1;
+  }
+
+  .ui-text-field-input[aria-invalid="true"] { border-color: var(--palette-error); }
+
+  .ui-text-field-slot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    padding-inline: var(--control-pad, var(--control-pad-md));
+    color: var(--palette-text-muted);
+  }
+
+    .ui-text-field-slot > svg {
+    inline-size: 1.1em;
+    block-size: 1.1em;
+  }
+}

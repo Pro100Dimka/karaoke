@@ -1,0 +1,31 @@
+@layer ui.components {
+  .ui-tabs { min-width: 0; }
+  .ui-tabs-list {
+    display: flex;
+    gap: 4px;
+    min-width: 0;
+    border-bottom: 1px solid var(--palette-border);
+  }
+  .ui-tab {
+    position: relative;
+    min-height: 38px;
+    padding-inline: 12px;
+    border: 0;
+    background: transparent;
+    color: var(--palette-text-muted);
+    font: inherit;
+    cursor: pointer;
+  }
+  .ui-tab[data-active] { color: var(--palette-text-primary); }
+  .ui-tab[data-active]::after {
+    content: "";
+    position: absolute;
+    inset-inline: 8px;
+    bottom: -1px;
+    height: 2px;
+    border-radius: var(--shape-round);
+    background: var(--palette-primary-main);
+  }
+  .ui-tab:focus-visible { outline: 2px solid var(--palette-focus); outline-offset: -2px; }
+  .ui-tab-panel { padding-block: 14px; }
+}

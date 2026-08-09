@@ -1,0 +1,29 @@
+@layer ui.components {
+  .ui-radio {
+    appearance: none;
+    display: inline-grid;
+    place-content: center;
+    margin: 0;
+    border: 1px solid var(--palette-border);
+    border-radius: 50%;
+    background: var(--palette-surface-main);
+    cursor: pointer;
+  }
+
+  .ui-radio::before {
+    content: "";
+    width: 50%;
+    height: 50%;
+    border-radius: 50%;
+    background: var(--palette-primary-main);
+    transform: scale(0);
+    transition: transform var(--motion-duration-fast) var(--motion-easing-spring);
+  }
+
+  .ui-radio:checked { border-color: var(--palette-primary-main); }
+  .ui-radio:checked::before { transform: scale(1); }
+  .ui-radio[data-size="sm"] { width: 16px; height: 16px; }
+  .ui-radio[data-size="md"] { width: 18px; height: 18px; }
+  .ui-radio[data-size="lg"] { width: 22px; height: 22px; }
+  .ui-radio-label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+}

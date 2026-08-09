@@ -1,0 +1,66 @@
+@layer ui.components {
+  .ui-autocomplete {
+    position: relative;
+    min-inline-size: 0;
+  }
+
+  .ui-autocomplete-clear {
+    display: inline-grid;
+    place-items: center;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--palette-text-muted);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .ui-autocomplete-list {
+    position: absolute;
+    z-index: var(--z-index-dropdown);
+    inset-inline: 0;
+    inset-block-start: calc(100% + .375rem);
+    max-block-size: min(17.5rem, 45vb);
+    overflow: auto;
+    padding: .375rem;
+    border: 1px solid var(--palette-border);
+    border-radius: var(--shape-md);
+    background: var(--palette-background-elevated);
+    box-shadow: var(--shadows-3);
+    scrollbar-width: thin;
+  }
+
+  .ui-autocomplete-option {
+    display: flex;
+    inline-size: 100%;
+    min-block-size: 2.25rem;
+    align-items: center;
+    padding-inline: .625rem;
+    border: 0;
+    border-radius: var(--shape-sm);
+    background: transparent;
+    color: var(--palette-text-primary);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .ui-autocomplete-option[data-active],
+  .ui-autocomplete-option:hover {
+    background: var(--palette-surface-soft);
+  }
+
+  .ui-autocomplete-option[data-selected] {
+    color: var(--palette-primary-light);
+    background: color-mix(in srgb, var(--palette-primary-main) 14%, transparent);
+  }
+
+  .ui-autocomplete-empty {
+    padding: .625rem;
+    color: var(--palette-text-muted);
+    font-size: var(--typography-body2-size);
+  }
+}

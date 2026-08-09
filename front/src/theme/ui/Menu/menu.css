@@ -1,0 +1,17 @@
+@layer ui.components {
+  .ui-menu { display: grid; gap: 2px; min-width: 160px; }
+  .ui-menu-item {
+    min-height: 34px;
+    padding-inline: 10px;
+    border: 0;
+    border-radius: var(--shape-sm);
+    background: transparent;
+    color: var(--palette-text-primary);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+  .ui-menu-item:hover,
+  .ui-menu-item:focus-visible { background: var(--palette-surface-soft); outline: 0; }
+  .ui-menu-item:disabled { opacity: var(--states-disabled-opacity); cursor: not-allowed; }
+}

@@ -1,0 +1,81 @@
+@layer ui.components {
+  .ui-button {
+    --button-bg: var(--palette-primary-main);
+    --button-fg: var(--palette-primary-contrast);
+
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    min-block-size: var(--control-size, var(--control-md));
+    padding-inline: calc(var(--control-pad, var(--control-pad-md)) + .25rem);
+    border: 0;
+    border-radius: var(--shape-md);
+    overflow: hidden;
+    isolation: isolate;
+    background: var(--button-bg);
+    color: var(--button-fg);
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    text-decoration: none;
+    transition:
+      transform var(--motion-duration-fast) var(--motion-easing-spring),
+      opacity var(--motion-duration-fast) var(--motion-easing-standard),
+      box-shadow var(--motion-duration-fast) var(--motion-easing-standard),
+      background var(--motion-duration-fast) var(--motion-easing-standard);
+  }
+
+  .ui-button::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    inline-size: var(--button-progress, 0%);
+    background: color-mix(in srgb, currentColor 14%, transparent);
+    pointer-events: none;
+    transition: inline-size var(--motion-duration-normal) var(--motion-easing-standard);
+  }
+
+  .ui-button[data-size="sm"] { font-size: .8125rem; }
+  .ui-button[data-size="md"] { font-size: .875rem; }
+  .ui-button[data-size="lg"] { font-size: 1rem; }
+
+  .ui-button[data-tone="secondary"] {
+    --button-bg: var(--palette-secondary-main);
+    --button-fg: var(--palette-secondary-contrast);
+  }
+
+  .ui-button[data-tone="danger"] {
+    --button-bg: var(--palette-error);
+    --button-fg: #fff;
+  }
+
+  .ui-button[data-variant="soft"] {
+    --button-bg: color-mix(in srgb, var(--palette-primary-main) 14%, transparent);
+    --button-fg: var(--palette-primary-light);
+  }
+
+  .ui-button[data-variant="ghost"] {
+    --button-bg: transparent;
+    --button-fg: var(--palette-text-primary);
+  }
+
+  .ui-button[data-variant="outline"] {
+    --button-bg: transparent;
+    --button-fg: var(--palette-text-primary);
+    box-shadow: inset 0 0 0 1px var(--palette-border);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .ui-button:not(:disabled):not([aria-disabled="true"]):hover {
+      transform: translateY(-.0625rem);
+      filter: brightness(1.06);
+    }
+  }
+
+  .ui-button:not(:disabled):not([aria-disabled="true"]):active {
+    transform: scale(var(--motion-press));
+  }
+}

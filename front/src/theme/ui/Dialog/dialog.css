@@ -1,0 +1,6 @@
+@layer ui.components {
+  .ui-dialog { min-width: min(420px, 92vw); }
+  .ui-dialog-title { margin: 0; padding: 18px 20px 8px; font-size: var(--typography-h3-size); }
+  .ui-dialog-content { padding: 10px 20px 18px; color: var(--palette-text-secondary); }
+  .ui-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 0 20px 18px; }
+}

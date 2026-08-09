@@ -140,7 +140,7 @@ def _words_from_items(items) -> list[Word]:
     return words
 
 
-ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v12-segmented-alignment"
+ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v13-title-language-guard"
 LONG_TEXT_ALIGNMENT_VERSION = "v2-short-windows-pathology-guard"
 
 

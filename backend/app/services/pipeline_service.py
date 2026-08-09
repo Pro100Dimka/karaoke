@@ -441,7 +441,9 @@ def _load_searchable_title(song_id: str) -> str | None:
         artist, title = song_service._read_source_identity(
             Path(song.source_path), song.original_filename, song.title
         )
-        return " ".join(part for part in (artist, title) if part).strip() or None
+        if artist and title:
+            return f"{artist} - {title}"
+        return (title or artist or "").strip() or None
     finally:
         db.close()
 

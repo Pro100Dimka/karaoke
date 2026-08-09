@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 import sys
 import tempfile
 import time
@@ -71,6 +73,20 @@ def _lyrics_console(*parts: object) -> None:
         print(text, file=stream, flush=True)
     except (OSError, ValueError, UnicodeError):
         pass
+
+
+def _lyrics_language_hint(value: str | None) -> str | None:
+    """Infer a safe ASR hint from the known song identity.
+
+    A Cyrillic title is much stronger evidence than Qwen's first sung chunk,
+    which can otherwise lock onto English and hallucinate an unrelated song.
+    """
+    text = str(value or "").casefold()
+    if any(ch in text for ch in "іїєґ"):
+        return "uk"
+    if re.search(r"[а-яё]", text):
+        return "ru"
+    return None
 
 
 def _print_full_lyrics(source: str, text: str, query: str | None) -> None:
@@ -262,6 +278,7 @@ class KaraokePipeline:
         supplied = ""
         supplied_segments: tuple[tuple[float, float, str], ...] = ()
         effective_language = request.language
+        asr_language = request.language or _lyrics_language_hint(request.title)
         lyrics_source = None
         if request.lyrics_path and Path(request.lyrics_path).exists():
             supplied = Path(request.lyrics_path).read_text(encoding="utf-8-sig").strip()
@@ -289,6 +306,8 @@ class KaraokePipeline:
                 _lyrics_console(f"[lyrics] search #{index}: {query}")
                 _lyrics_console(f"[lyrics] search #{index}: NOT FOUND")
             _lyrics_console("[lyrics] all title searches failed -> ASR fallback")
+            if asr_language:
+                _lyrics_console(f"[lyrics] ASR language forced: {asr_language}")
 
         self._notify(request, "separation", 8, "Выделение вокала и минуса")
         separation_key = cache.key(
@@ -522,7 +541,7 @@ class KaraokePipeline:
                 "transcription",
                 {
                     "vocals": cache.file_hash(vocal_fingerprint),
-                    "language": request.language,
+                    "language": asr_language,
                     "engine": self.engines.transcriber.name,
                     "model": getattr(self.engines.transcriber, "model_name", None),
                     "algorithm": ASR_PIPELINE_VERSION,
@@ -546,7 +565,7 @@ class KaraokePipeline:
                 text, words = self._run(
                     "transcription",
                     self.engines.transcriber,
-                    lambda engine: engine.transcribe(vocals, request.language),
+                    lambda engine: engine.transcribe(vocals, asr_language),
                     reports,
                     warnings,
                 )

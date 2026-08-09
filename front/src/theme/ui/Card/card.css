@@ -1,0 +1,58 @@
+@layer ui.components {
+  .ui-card {
+    position: relative;
+    min-inline-size: 0;
+    border: 1px solid var(--palette-border);
+    border-radius: var(--shape-lg);
+    background: var(--palette-surface-main);
+    color: var(--palette-text-primary);
+    box-shadow: var(--card-shadow, none);
+  }
+
+  .ui-card[data-surface="raised"] { background: var(--palette-background-elevated); }
+  .ui-card[data-surface="soft"] { background: var(--palette-surface-soft); }
+  .ui-card[data-surface="glass"] {
+    background: color-mix(in srgb, var(--palette-surface-main) 80%, transparent);
+    backdrop-filter: blur(1rem);
+  }
+
+  .ui-card[data-interactive] {
+    transition:
+      transform var(--motion-duration-fast) var(--motion-easing-spring),
+      border-color var(--motion-duration-fast) var(--motion-easing-standard),
+      box-shadow var(--motion-duration-fast) var(--motion-easing-standard);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .ui-card[data-interactive]:hover {
+      transform: translateY(-.125rem);
+      border-color: color-mix(in srgb, var(--palette-primary-main) 35%, var(--palette-border));
+    }
+  }
+
+  .ui-card[data-loading]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, white 7%, transparent),
+      transparent
+    );
+    background-size: 200% 100%;
+    animation: ui-card-loading 1.2s linear infinite;
+    pointer-events: none;
+  }
+
+  @keyframes ui-card-loading {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ui-card[data-interactive] { transition: none; }
+    .ui-card[data-loading]::after { animation: none; }
+  }
+}

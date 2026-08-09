@@ -1,0 +1,29 @@
+@layer ui.components {
+  .ui-field {
+    display: grid;
+    gap: .375rem;
+    min-inline-size: 0;
+    color: var(--palette-text-primary);
+  }
+
+  .ui-field-label {
+    min-inline-size: 0;
+    color: var(--palette-text-secondary);
+    font-size: var(--typography-body2-size);
+    font-weight: 600;
+    line-height: var(--typography-body2-line-height);
+  }
+
+  .ui-field-required { color: var(--palette-error); }
+
+  .ui-field-message {
+    min-inline-size: 0;
+    color: var(--palette-text-muted);
+    font-size: var(--typography-caption-size);
+    line-height: var(--typography-caption-line-height);
+  }
+
+  .ui-field-message[data-error] { color: var(--palette-error); }
+
+  .ui-field[data-disabled] { opacity: var(--states-disabled-opacity); }
+}

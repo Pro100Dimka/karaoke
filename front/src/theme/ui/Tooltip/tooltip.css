@@ -1,0 +1,56 @@
+@layer ui.components {
+  .ui-tooltip-anchor {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .ui-tooltip {
+    position: absolute;
+    z-index: var(--z-index-tooltip);
+    width: max-content;
+    max-width: 260px;
+    padding: 6px 8px;
+    border: 1px solid var(--palette-border);
+    border-radius: var(--shape-sm);
+    background: var(--palette-background-elevated);
+    color: var(--palette-text-primary);
+    box-shadow: var(--shadows-2);
+    font-size: var(--typography-caption-size);
+    line-height: 1.3;
+    pointer-events: none;
+    animation: ui-tooltip-in var(--motion-duration-fast) var(--motion-easing-enter);
+  }
+
+  .ui-tooltip-anchor[data-placement="top"] > .ui-tooltip {
+    left: 50%;
+    bottom: calc(100% + 8px);
+    transform: translateX(-50%);
+  }
+
+  .ui-tooltip-anchor[data-placement="bottom"] > .ui-tooltip {
+    left: 50%;
+    top: calc(100% + 8px);
+    transform: translateX(-50%);
+  }
+
+  .ui-tooltip-anchor[data-placement="left"] > .ui-tooltip {
+    right: calc(100% + 8px);
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .ui-tooltip-anchor[data-placement="right"] > .ui-tooltip {
+    left: calc(100% + 8px);
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  @keyframes ui-tooltip-in {
+    from { opacity: 0; scale: .96; }
+    to { opacity: 1; scale: 1; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ui-tooltip { animation: none; }
+  }
+}

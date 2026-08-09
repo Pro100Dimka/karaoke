@@ -1,0 +1,51 @@
+@layer ui.base {
+  :root {
+    --control-sm: 2rem;
+    --control-md: 2.5rem;
+    --control-lg: 3rem;
+
+    --control-pad-sm: .625rem;
+    --control-pad-md: .75rem;
+    --control-pad-lg: .875rem;
+
+    --focus-width: .125rem;
+    --focus-offset: .125rem;
+    --focus-shadow:
+      0 0 0 var(--focus-width)
+      color-mix(in srgb, var(--palette-focus) 18%, transparent);
+  }
+
+  .ui-control {
+    box-sizing: border-box;
+    min-inline-size: 0;
+    font: inherit;
+  }
+
+  .ui-control[data-size="sm"] { --control-size: var(--control-sm); --control-pad: var(--control-pad-sm); }
+  .ui-control[data-size="md"] { --control-size: var(--control-md); --control-pad: var(--control-pad-md); }
+  .ui-control[data-size="lg"] { --control-size: var(--control-lg); --control-pad: var(--control-pad-lg); }
+
+  .ui-focus-ring:focus-visible {
+    outline: var(--focus-width) solid var(--palette-focus);
+    outline-offset: var(--focus-offset);
+  }
+
+  .ui-focus-shadow:focus-visible {
+    outline: 0;
+    border-color: var(--palette-focus);
+    box-shadow: var(--focus-shadow);
+  }
+
+  .ui-disabled:disabled,
+  .ui-disabled[aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: var(--states-disabled-opacity);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ui-motion {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+}

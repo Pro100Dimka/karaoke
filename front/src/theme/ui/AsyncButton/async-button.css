@@ -1,0 +1,11 @@
+@layer ui.components {
+  .ui-button-base-label,
+  .ui-button-status {
+    grid-area: 1 / 1;
+    white-space: nowrap;
+  }
+
+  .ui-button[data-state] .ui-button-base-label { visibility: hidden; }
+  .ui-button[data-state="success"] { --button-bg: var(--palette-success); }
+  .ui-button[data-state="error"] { --button-bg: var(--palette-error); }
+}

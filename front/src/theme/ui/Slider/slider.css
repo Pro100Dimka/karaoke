@@ -1,0 +1,89 @@
+@layer ui.components {
+  .ui-slider-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing);
+    min-inline-size: 0;
+  }
+
+  .ui-slider {
+    appearance: none;
+    inline-size: 100%;
+    min-inline-size: 0;
+    block-size: 1.25rem;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .ui-slider::-webkit-slider-runnable-track {
+    block-size: var(--slider-track, .25rem);
+    border-radius: var(--shape-round);
+    background:
+      linear-gradient(
+        to right,
+        var(--palette-primary-main) 0 var(--slider-value),
+        var(--palette-surface-soft) var(--slider-value) 100%
+      );
+  }
+
+  .ui-slider::-webkit-slider-thumb {
+    appearance: none;
+    inline-size: var(--slider-thumb, 1rem);
+    block-size: var(--slider-thumb, 1rem);
+    margin-block-start:
+      calc((var(--slider-track, .25rem) - var(--slider-thumb, 1rem)) / 2);
+    border: 0;
+    border-radius: 50%;
+    background: var(--palette-text-primary);
+    box-shadow: var(--shadows-1);
+    cursor: grab;
+    transition:
+      transform var(--motion-duration-fast) var(--motion-easing-spring),
+      box-shadow var(--motion-duration-fast) var(--motion-easing-standard);
+  }
+
+  .ui-slider::-moz-range-track {
+    block-size: var(--slider-track, .25rem);
+    border-radius: var(--shape-round);
+    background: var(--palette-surface-soft);
+  }
+
+  .ui-slider::-moz-range-progress {
+    block-size: var(--slider-track, .25rem);
+    border-radius: var(--shape-round);
+    background: var(--palette-primary-main);
+  }
+
+  .ui-slider::-moz-range-thumb {
+    inline-size: var(--slider-thumb, 1rem);
+    block-size: var(--slider-thumb, 1rem);
+    border: 0;
+    border-radius: 50%;
+    background: var(--palette-text-primary);
+    box-shadow: var(--shadows-1);
+    cursor: grab;
+  }
+
+  .ui-slider[data-size="sm"] { --slider-track: .1875rem; --slider-thumb: .875rem; }
+  .ui-slider[data-size="md"] { --slider-track: .25rem; --slider-thumb: 1rem; }
+  .ui-slider[data-size="lg"] { --slider-track: .3125rem; --slider-thumb: 1.25rem; }
+
+  .ui-slider:focus-visible { outline: 0; }
+
+  @media (hover: hover) and (pointer: fine) {
+    .ui-slider:not(:disabled):hover::-webkit-slider-thumb { transform: scale(1.08); }
+  }
+
+  .ui-slider:active::-webkit-slider-thumb { transform: scale(.96); cursor: grabbing; }
+
+  .ui-slider:focus-visible::-webkit-slider-thumb {
+    box-shadow:
+      var(--shadows-1),
+      0 0 0 .1875rem color-mix(in srgb, var(--palette-focus) 22%, transparent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ui-slider::-webkit-slider-thumb { transition: none; }
+  }
+}

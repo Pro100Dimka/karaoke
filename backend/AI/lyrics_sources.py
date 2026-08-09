@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import html
 import json
 import os
@@ -109,6 +110,15 @@ class _LyricsHTMLParser(HTMLParser):
         return "\n".join(self.lines)
 
 
+def _lyrics_debug(message: str) -> None:
+    """Write lyrics diagnostics directly to the real backend console."""
+    stream = getattr(sys, "__stdout__", None) or sys.stdout
+    try:
+        print(message, file=stream, flush=True)
+    except Exception:
+        pass
+
+
 def _clean(text: str) -> str:
     lines = []
     for raw in str(text or "").replace("\ufeff", "").splitlines():
@@ -201,7 +211,7 @@ def _track_signature(title: str | None) -> tuple[str, str]:
     # surrounding whitespace is deliberately not split when the right hand side
     # starts with a digit (for example ``TRITIA-31-я весна``).
     parts = re.split(
-        r"\s*[–—]\s*|\s+-\s*|\s*-\s+|(?<=[A-Za-zА-Яа-яЁё])-\s*(?=[A-Za-zА-Яа-яЁё])",
+        r"\s*[–—]\s*|\s+-\s*|\s*-\s+|(?<=[A-Za-zА-Яа-яЁё])-\s*(?=[A-Za-zА-Яа-яЁё0-9])",
         value,
         maxsplit=1,
     )
@@ -218,17 +228,24 @@ def _similarity(left: str, right: str) -> float:
 
 def _online(title: str | None, duration_sec: float | None) -> LyricsDiscovery:
     if os.getenv("KARAOKE_ONLINE_LYRICS", "1").strip().lower() in {"0", "false", "off"}:
+        _lyrics_debug("[lyrics] LRCLIB disabled")
         return LyricsDiscovery()
+
     artist, track = _track_signature(title)
     if not track:
+        _lyrics_debug(f"[lyrics] LRCLIB skipped: could not parse query={title!r}")
         return LyricsDiscovery()
-    # Prefer structured metadata, but do not require one exact filename style.
-    # Downloads frequently use ``Artist-Title`` without spaces and files with
-    # title-only metadata are valid too. LRCLIB's free query handles both while
-    # the ranking below still rejects unrelated results.
+
     query_params = (
-        {"track_name": track, "artist_name": artist} if artist else {"q": str(title or track)}
+        {"track_name": track, "artist_name": artist}
+        if artist
+        else {"q": str(title or track)}
     )
+    _lyrics_debug(
+        f"[lyrics] LRCLIB request: query={title!r} "
+        f"artist={artist!r} track={track!r}"
+    )
+
     query = urllib.parse.urlencode(query_params)
     request = urllib.request.Request(
         f"https://lrclib.net/api/search?{query}",
@@ -237,61 +254,119 @@ def _online(title: str | None, duration_sec: float | None) -> LyricsDiscovery:
     try:
         with urllib.request.urlopen(request, timeout=8.0) as response:  # noqa: S310
             records = json.loads(response.read().decode("utf-8"))
-    except (OSError, UnicodeError, ValueError, urllib.error.URLError):
-        return LyricsDiscovery()
-    if not isinstance(records, list):
+    except (OSError, UnicodeError, ValueError, urllib.error.URLError) as exc:
+        _lyrics_debug(f"[lyrics] LRCLIB request failed: {type(exc).__name__}")
         return LyricsDiscovery()
 
+    if not isinstance(records, list):
+        _lyrics_debug("[lyrics] LRCLIB returned non-list response")
+        return LyricsDiscovery()
+
+    _lyrics_debug(f"[lyrics] LRCLIB candidates returned: {len(records)}")
     ranked: list[tuple[float, dict]] = []
-    for item in records:
+
+    for number, item in enumerate(records, 1):
         if not isinstance(item, dict) or item.get("instrumental"):
             continue
+
         plain = _clean(str(item.get("plainLyrics") or item.get("syncedLyrics") or ""))
         if len(plain.split()) < 15:
             continue
-        track_score = _similarity(track, str(item.get("trackName") or ""))
+
+        candidate_track = str(item.get("trackName") or "")
         candidate_artist = str(item.get("artistName") or "")
+        track_score = _similarity(track, candidate_track)
         artist_score = _similarity(artist, candidate_artist) if artist else 0.0
+
         duration_score = 1.0
+        duration_delta = None
         if duration_sec and item.get("duration"):
-            delta = abs(float(item["duration"]) - duration_sec)
-            duration_score = max(0.0, 1.0 - delta / 12.0)
-            if delta > 18.0:
+            duration_delta = abs(float(item["duration"]) - duration_sec)
+            duration_score = max(0.0, 1.0 - duration_delta / 12.0)
+            if duration_delta > 18.0:
+                _lyrics_debug(
+                    f"[lyrics] LRCLIB candidate #{number}: "
+                    f"artist={candidate_artist!r} title={candidate_track!r} "
+                    f"track={track_score:.3f} artistScore={artist_score:.3f} "
+                    f"durationDelta={duration_delta:.1f}s -> REJECT duration"
+                )
                 continue
+
+        accepted = False
+        reason = ""
+        score = 0.0
+
         if artist:
-            if track_score < 0.72 or artist_score < 0.65:
-                continue
-            score = track_score * 0.48 + artist_score * 0.37 + duration_score * 0.15
+            if track_score < 0.88:
+                reason = "track mismatch"
+            elif artist_score < 0.82:
+                reason = "artist mismatch"
+            else:
+                score = track_score * 0.48 + artist_score * 0.37 + duration_score * 0.15
+                accepted = score >= 0.84
+                reason = "accepted" if accepted else "score too low"
         else:
-            candidate_full = f"{candidate_artist} - {item.get('trackName') or ''}"
+            candidate_full = f"{candidate_artist} {candidate_track}".strip()
             full_score = _similarity(str(title or track), candidate_full)
-            # With missing artist metadata, require either a strong full-name
-            # match or an almost exact track name plus matching duration.
-            if full_score < 0.72 and track_score < 0.90:
-                continue
-            score = max(
-                full_score * 0.85 + duration_score * 0.15,
-                track_score * 0.80 + duration_score * 0.20,
-            )
-        ranked.append((score, item))
+            if full_score < 0.86 and track_score < 0.96:
+                reason = "title/full-name mismatch"
+            else:
+                score = max(
+                    full_score * 0.85 + duration_score * 0.15,
+                    track_score * 0.80 + duration_score * 0.20,
+                )
+                accepted = score >= 0.84
+                reason = "accepted" if accepted else "score too low"
+
+        _lyrics_debug(
+            f"[lyrics] LRCLIB candidate #{number}: "
+            f"artist={candidate_artist!r} title={candidate_track!r} "
+            f"track={track_score:.3f} artistScore={artist_score:.3f} "
+            f"score={score:.3f} -> {'ACCEPT' if accepted else 'REJECT'} ({reason})"
+        )
+
+        if accepted:
+            ranked.append((score, item))
+
     if not ranked:
+        _lyrics_debug(f"[lyrics] LRCLIB: no acceptable candidate for query={title!r}")
         return LyricsDiscovery()
+
     score, item = max(ranked, key=lambda pair: pair[0])
-    if score < 0.76:
-        return LyricsDiscovery()
+    candidate_track = str(item.get("trackName") or "")
+    candidate_artist = str(item.get("artistName") or "")
+    _lyrics_debug(
+        f"[lyrics] LRCLIB SELECTED: query={title!r} "
+        f"artist={candidate_artist!r} title={candidate_track!r} score={score:.3f}"
+    )
+
     synced = str(item.get("syncedLyrics") or "")
     plain = _clean(str(item.get("plainLyrics") or synced))
     return LyricsDiscovery(plain, "LRCLIB", _parse_lrc(synced, duration_sec))
 
 
+
 def _search_tokens_match(query: str, result_title: str) -> bool:
-    query_tokens = set(_normalize_name(query).split())
+    """Reject unrelated web results aggressively.
+
+    A lyrics page is allowed only when the search-result title contains most of
+    the actual query tokens. This intentionally prefers ASR over accepting a
+    different song with vaguely similar search-engine text.
+    """
+    query_tokens = [token for token in _normalize_name(query).split() if len(token) >= 2]
     title_tokens = set(_normalize_name(result_title).split())
-    meaningful = {token for token in query_tokens if len(token) >= 2}
-    if not meaningful:
+    if not query_tokens:
         return False
-    coverage = len(meaningful & title_tokens) / len(meaningful)
-    return coverage >= 0.66 or _similarity(query, result_title) >= 0.68
+
+    matched = sum(token in title_tokens for token in query_tokens)
+    coverage = matched / len(query_tokens)
+    similarity = _similarity(query, result_title)
+
+    # Multi-token artist+title queries must match almost completely.  For a
+    # short/title-only query require an even stronger textual similarity.
+    if len(query_tokens) >= 3:
+        return coverage >= 0.85 and similarity >= 0.55
+    return coverage >= 1.0 and similarity >= 0.72
 
 
 def _safe_result_url(raw: str) -> str | None:
@@ -404,12 +479,29 @@ def _fetch_web_lyrics(url: str) -> str:
 def _web_online(title: str | None) -> LyricsDiscovery:
     if not title:
         return LyricsDiscovery()
-    for url, _result_title in _web_search(title):
+
+    _lyrics_debug(f"[lyrics] WEB request: query={title!r}")
+    results = _web_search(title)
+    _lyrics_debug(f"[lyrics] WEB matching search results: {len(results)}")
+
+    for number, (url, result_title) in enumerate(results, 1):
+        _lyrics_debug(
+            f"[lyrics] WEB candidate #{number}: title={result_title!r} url={url!r}"
+        )
         text = _fetch_web_lyrics(url)
         if text:
             host = (urllib.parse.urlparse(url).hostname or "web").removeprefix("www.")
+            _lyrics_debug(
+                f"[lyrics] WEB SELECTED: query={title!r} "
+                f"result={result_title!r} source={host!r}"
+            )
             return LyricsDiscovery(text, f"web:{host}")
+
+        _lyrics_debug(f"[lyrics] WEB candidate #{number}: no usable lyrics -> REJECT")
+
+    _lyrics_debug(f"[lyrics] WEB: no acceptable candidate for query={title!r}")
     return LyricsDiscovery()
+
 
 
 def _plain_search_query(value: str | None) -> str:
@@ -421,11 +513,32 @@ def _plain_search_query(value: str | None) -> str:
     )
 
 
-def _metadata_search_candidates(source: str | Path, fallback: str | None) -> list[str]:
-    """Build strict search order: cleaned metadata, title only, filename."""
+def _strip_filename_copy_suffix(value: str) -> str:
+    """Drop downloader duplicate suffixes like ``(2)`` without touching song text."""
+    return re.sub(r"\s*[\[(]\s*\d{1,3}\s*[\])]\s*$", "", str(value or "")).strip()
+
+
+def _filename_search_identity(source: Path) -> tuple[str, str]:
+    """Parse Artist-Title filenames when tags are absent.
+
+    ``TRITIA-31-я весна(2)`` -> (``TRITIA``, ``31-я весна``).  The
+    hyphen inside ``31-я`` remains part of the title because splitting happens
+    only once at the artist/title boundary.
+    """
+    stem = _strip_filename_copy_suffix(source.stem)
+    artist, track = _track_signature(stem)
+    return artist.strip(), _strip_filename_copy_suffix(track).strip()
+
+
+def _metadata_search_candidates(
+    source: str | Path,
+    fallback: str | None,
+) -> list[str]:
+    """Build queries from real song identity and reject temp pipeline names."""
     source = Path(source)
     tagged_title = ""
     tagged_artist = ""
+
     try:
         from mutagen import File as MutagenFile
 
@@ -446,37 +559,59 @@ def _metadata_search_candidates(source: str | Path, fallback: str | None) -> lis
         pass
 
     candidates: list[str] = []
+    technical_names = {
+        "source", "song", "audio", "input", "upload", "uploaded",
+        "temp", "temporary", "decoded", "converted",
+    }
 
+    def add_query(value: str) -> None:
+        query = _plain_search_query(value)
+        if query and query.casefold() not in technical_names:
+            candidates.append(query)
+
+    def add_identity(artist: str, title: str) -> None:
+        artist = str(artist or "").strip()
+        title = _strip_filename_copy_suffix(str(title or "").strip())
+        if not title:
+            return
+        add_query(f"{artist} {title}" if artist else title)
+        add_query(title)
+
+    # 1) Embedded metadata has highest priority.
     if tagged_title:
-        # Some MP3s contain garbage like:
-        #   artist = "AMATORY vs Animal ДжаZ Три Полоски Single (2012)"
-        #   title  = "Три Полоски"
-        # Remove the duplicated title, release marker and year from ARTIST.
         clean_artist = tagged_artist
         if clean_artist:
             clean_artist = re.sub(
                 re.escape(tagged_title), " ", clean_artist, flags=re.I
             )
-            clean_artist = re.sub(r"\b(?:single|album|ep)\b", " ", clean_artist, flags=re.I)
-            clean_artist = re.sub(r"[\[(]\s*(?:19|20)\d{2}\s*[\])]", " ", clean_artist)
+            clean_artist = re.sub(
+                r"\b(?:single|album|ep)\b", " ", clean_artist, flags=re.I
+            )
+            clean_artist = re.sub(
+                r"[\[(]\s*(?:19|20)\d{2}\s*[\])]", " ", clean_artist
+            )
             clean_artist = _plain_search_query(clean_artist)
+        add_identity(clean_artist, tagged_title)
 
-        combined = _plain_search_query(f"{clean_artist} {tagged_title}")
-        title_only = _plain_search_query(tagged_title)
-        if combined:
-            candidates.append(combined)
-        if title_only:
-            candidates.append(title_only)
+    # 2) Backend-provided identity. It may be structured as "Artist - Title".
+    fallback_value = str(fallback or "").strip()
+    if not tagged_title and fallback_value:
+        fallback_artist, fallback_title = _track_signature(fallback_value)
+        if fallback_artist and fallback_title:
+            add_identity(fallback_artist, fallback_title)
+        else:
+            add_query(fallback_value)
 
-    filename_query = _plain_search_query(source.stem)
-    if filename_query:
-        candidates.append(filename_query)
+    # 3) Real filename can refine the identity (especially title-only), but a
+    # temp filename such as source.wav must NEVER become a lyrics query.
+    clean_stem = _strip_filename_copy_suffix(source.stem)
+    normalized_stem = _normalize_name(clean_stem)
+    if not tagged_title and normalized_stem not in technical_names:
+        file_artist, file_title = _filename_search_identity(source)
+        if file_title:
+            add_identity(file_artist, file_title)
 
-    fallback_query = _plain_search_query(fallback)
-    if fallback_query:
-        candidates.append(fallback_query)
-
-    # Keep order, drop duplicates case-insensitively.
+    # Stable de-duplication.
     unique: list[str] = []
     seen: set[str] = set()
     for query in candidates:
@@ -486,7 +621,6 @@ def _metadata_search_candidates(source: str | Path, fallback: str | None) -> lis
             unique.append(query)
     return unique
 
-
 def discover_lyrics(
     source: str | Path,
     *,
@@ -494,11 +628,34 @@ def discover_lyrics(
     duration_sec: float | None = None,
 ) -> LyricsDiscovery:
     """Search metadata -> title only -> filename, then let caller use ASR."""
-    for query in _metadata_search_candidates(source, title):
+    queries = _metadata_search_candidates(source, title)
+    _lyrics_debug(f"[lyrics] exact search plan ({len(queries)} queries): {queries!r}")
+
+    for index, query in enumerate(queries, 1):
+        _lyrics_debug(f"[lyrics] SEARCH #{index} BEGIN: {query}")
+
         online = _online(query, duration_sec)
         if online.text:
-            return LyricsDiscovery(online.text, online.source, online.segments, query)
+            _lyrics_debug(
+                f"[lyrics] SEARCH #{index} FOUND via {online.source}: {query}"
+            )
+            return LyricsDiscovery(
+                online.text, online.source, online.segments, query
+            )
+
+        _lyrics_debug(f"[lyrics] SEARCH #{index} LRCLIB NOT FOUND: {query}")
+
         web = _web_online(query)
         if web.text:
-            return LyricsDiscovery(web.text, web.source, web.segments, query)
+            _lyrics_debug(
+                f"[lyrics] SEARCH #{index} FOUND via {web.source}: {query}"
+            )
+            return LyricsDiscovery(
+                web.text, web.source, web.segments, query
+            )
+
+        _lyrics_debug(f"[lyrics] SEARCH #{index} END NOT FOUND: {query}")
+
+    _lyrics_debug("[lyrics] ALL SEARCH QUERIES FAILED -> ASR")
     return LyricsDiscovery()
+
