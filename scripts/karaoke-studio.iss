@@ -85,8 +85,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Создать ярлык на рабочем столе"; GroupDescription: "Дополнительные ярлыки:"
 
 [Files]
-Source: "{#SourceDir}\*"; DestDir: "{app}"; Excludes: "resources\media\videoplayback.mp4"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "{#SourceDir}\resources\media\videoplayback.mp4"; DestDir: "{app}\resources\media"; Flags: ignoreversion nocompression
+Source: "{#SourceDir}\*"; DestDir: "{app}"; Excludes: "resources\media\videoplayback.webm"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceDir}\resources\media\videoplayback.webm"; DestDir: "{app}\resources\media"; Flags: ignoreversion nocompression
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"

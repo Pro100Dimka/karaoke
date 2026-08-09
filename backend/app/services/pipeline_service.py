@@ -419,16 +419,30 @@ def _load_job_paths(song_id: str) -> tuple[str, Path] | None:
 
 
 def _load_searchable_title(song_id: str) -> str | None:
+    """Use embedded track metadata first; fall back to the original filename stem."""
     db = SessionLocal()
     try:
         song = repositories.get_song(db, song_id)
         if song is None:
             return None
-        original_title = Path(song.original_filename).stem
-        searchable_title = original_title if " - " in original_title else song.title
-        if song.artist and " - " not in searchable_title:
-            searchable_title = f"{song.artist} - {searchable_title}"
-        return searchable_title
+
+        tagged_title = None
+        tagged_artist = None
+        try:
+            from mutagen import File as MutagenFile
+
+            tags = MutagenFile(song.source_path, easy=True)
+            if tags is not None:
+                tagged_title = _first_audio_tag(tags, "title")
+                tagged_artist = _first_audio_tag(tags, "artist", "albumartist")
+        except Exception:
+            # Missing/broken metadata must never block processing.
+            pass
+
+        if tagged_title:
+            return f"{tagged_artist} - {tagged_title}" if tagged_artist else tagged_title
+
+        return Path(song.original_filename).stem.strip() or song.title or None
     finally:
         db.close()
 
@@ -515,11 +529,7 @@ def _run_job(song_id: str) -> None:
                 source_path,
                 out_dir,
                 language=config.DEFAULT_LANGUAGE,
-                lyrics_path=(
-                    out_dir / config.TRUSTED_LYRICS_FILENAME
-                    if (out_dir / config.TRUSTED_LYRICS_FILENAME).is_file()
-                    else None
-                ),
+                lyrics_path=None,
                 title=searchable_title,
                 progress=on_ai_progress,
                 cancelled=lambda: _is_cancelled(song_id),

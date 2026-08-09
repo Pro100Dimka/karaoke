@@ -399,6 +399,13 @@ class KaraokePipeline:
             cache.commit("pitch", pitch_key, pitch_outputs)
         validate_within_duration(pitch, song_duration, "pitch", self.config.hop_seconds * 2)
 
+        def log_full_lyrics(text: str, source_name: str) -> None:
+            value = str(text or "").strip()
+            print(f"[lyrics] source={source_name}")
+            print("[lyrics] ===== FULL LYRICS BEGIN =====")
+            print(value if value else "<empty>")
+            print("[lyrics] ===== FULL LYRICS END =====")
+
         supplied = ""
         supplied_segments: tuple[tuple[float, float, str], ...] = ()
         effective_language = request.language
@@ -407,16 +414,21 @@ class KaraokePipeline:
             supplied = Path(request.lyrics_path).read_text(encoding="utf-8-sig").strip()
             lyrics_source = "explicit"
         if not supplied:
+            print(f"[lyrics] title search query: {request.title or '<none>'}")
             discovery = discover_lyrics(
                 source,
                 title=request.title,
                 duration_sec=song_duration,
+                allow_local=False,
             )
             supplied = discovery.text
             supplied_segments = discovery.segments
             lyrics_source = discovery.source
             if supplied:
                 warnings.append(f"Using trusted {lyrics_source} lyrics instead of ASR")
+                log_full_lyrics(supplied, lyrics_source or "online")
+            else:
+                print("[lyrics] title search found nothing; falling back to ASR")
         lyrics_txt = output / "lyrics.txt"
         words_path = output / "lyricsSync.json"
         text_hash = StageCache.key("text", {"text": supplied})
@@ -494,6 +506,7 @@ class KaraokePipeline:
                 text = lyrics_txt.read_text(encoding="utf-8")
                 words = [Word(**item) for item in read_json(words_path, {}).get("words", [])]
                 reports.append(StageReport("transcription", 0, True, "cached"))
+                log_full_lyrics(text, "ASR cached")
             else:
                 if hasattr(self.engines.transcriber, "set_pitch_activity"):
                     self.engines.transcriber.set_pitch_activity(pitch)
@@ -504,6 +517,7 @@ class KaraokePipeline:
                     reports,
                     warnings,
                 )
+                log_full_lyrics(text, "ASR")
                 if not effective_language:
                     effective_language = getattr(self.engines.transcriber, "last_language", None)
                 if text and not words:

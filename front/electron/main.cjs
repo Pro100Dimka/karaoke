@@ -88,9 +88,9 @@ function resolveSceneVideoPath() {
         "..",
         "downloads",
         "media",
-        "videoplayback.mp4"
+        "videoplayback.webm"
       )
-    : path.join(process.resourcesPath, "media", "videoplayback.mp4");
+    : path.join(process.resourcesPath, "media", "videoplayback.webm");
 }
 
 function registerMediaProtocol() {

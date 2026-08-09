@@ -98,8 +98,8 @@
         "to": "backend"
       },
       {
-        "from": "../downloads/media/videoplayback.mp4",
-        "to": "media/videoplayback.mp4"
+        "from": "../downloads/media/videoplayback.webm",
+        "to": "media/videoplayback.webm"
       }
     ],
     "directories": {

@@ -66,8 +66,8 @@ set "PYTHON=%BACKEND%\venv\Scripts\python.exe"
 
 set "BACKEND_DIST=%BUILD%\backend\dist\KaraokeBackend"
 set "PACKAGED_BACKEND=%UNPACKED%\resources\backend"
-set "SCENE_VIDEO_SOURCE=%DOWNLOADS%\media\videoplayback.mp4"
-set "PACKAGED_SCENE_VIDEO=%UNPACKED%\resources\media\videoplayback.mp4"
+set "SCENE_VIDEO_SOURCE=%DOWNLOADS%\media\videoplayback.webm"
+set "PACKAGED_SCENE_VIDEO=%UNPACKED%\resources\media\videoplayback.webm"
 
 set "ASIO=%BACKEND%\engines\asio"
 set "ASIO_BUILD=%BUILD%\asio"

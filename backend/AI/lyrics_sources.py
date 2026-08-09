@@ -416,14 +416,16 @@ def discover_lyrics(
     *,
     title: str | None = None,
     duration_sec: float | None = None,
+    allow_local: bool = True,
 ) -> LyricsDiscovery:
-    """Find verified lyrics without ever silently trusting chat/example text."""
+    """Find lyrics, optionally restricting discovery to title-based online search."""
     path = Path(source)
-    local = _local_file(path)
-    if local.text:
-        return local
-    embedded = _embedded(path)
-    if embedded:
-        return LyricsDiscovery(embedded, "embedded")
+    if allow_local:
+        local = _local_file(path)
+        if local.text:
+            return local
+        embedded = _embedded(path)
+        if embedded:
+            return LyricsDiscovery(embedded, "embedded")
     online = _online(title, duration_sec)
     return online if online.text else _web_online(title)
