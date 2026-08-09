@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Callable
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
@@ -152,12 +153,105 @@ def get_reconcile_lyric_words():
     return reconcile_lyric_words
 
 
-def _group_words_into_lines(words: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _source_line_boundaries(text: str, words: list[dict[str, Any]]) -> list[int]:
+    """Map the lyricist's line breaks onto the aligned word timeline."""
+    source_lines: list[str] = []
+    for raw_line in str(text or "").splitlines():
+        raw_line = raw_line.strip()
+        if not tokenize(raw_line):
+            continue
+        if len(tokenize(raw_line)) <= 10:
+            source_lines.append(raw_line)
+            continue
+
+        sentences = [
+            sentence.strip()
+            for sentence in re.split(r"(?<=[.!?…])\s+", raw_line)
+            if tokenize(sentence)
+        ]
+        for sentence in sentences:
+            if len(tokenize(sentence)) <= 10:
+                source_lines.append(sentence)
+                continue
+            clauses = [
+                clause.strip()
+                for clause in re.split(r"(?<=[,;])\s+", sentence)
+                if tokenize(clause)
+            ]
+            current: list[str] = []
+            current_size = 0
+            for clause in clauses:
+                clause_size = len(tokenize(clause))
+                if current and current_size + clause_size > 8:
+                    source_lines.append(" ".join(current))
+                    current = []
+                    current_size = 0
+                current.append(clause)
+                current_size += clause_size
+            if current:
+                source_lines.append(" ".join(current))
+    if len(source_lines) < 2:
+        return []
+
+    source_tokens = [token for line in source_lines for token in tokenize(line)]
+    aligned_tokens = [item["word"] for item in words]
+    matcher = SequenceMatcher(
+        None,
+        [token.casefold() for token in source_tokens],
+        [token.casefold() for token in aligned_tokens],
+        autojunk=False,
+    )
+
+    def map_boundary(source_index: int) -> int:
+        for _tag, left_start, left_end, right_start, right_end in matcher.get_opcodes():
+            if source_index > left_end:
+                continue
+            if left_end == left_start:
+                return right_end
+            ratio = (max(left_start, min(source_index, left_end)) - left_start) / (
+                left_end - left_start
+            )
+            return round(right_start + ratio * (right_end - right_start))
+        return len(aligned_tokens)
+
+    boundaries: list[int] = []
+    cursor = 0
+    for line in source_lines[:-1]:
+        cursor += len(tokenize(line))
+        boundary = max(boundaries[-1] if boundaries else 0, map_boundary(cursor))
+        boundaries.append(min(len(aligned_tokens), boundary))
+    return boundaries
+
+
+def _group_words_into_lines(
+    words: list[dict[str, Any]], source_text: str = ""
+) -> list[dict[str, Any]]:
     """Convert word-level AI alignment to the line format consumed by the UI."""
     if not words:
         return []
 
-    lines: list[list[dict[str, Any]]] = []
+    normalized_words: list[dict[str, Any]] = []
+    for word in words:
+        if not isinstance(word, dict):
+            continue
+        token = str(word.get("text") or word.get("word") or "").strip()
+        if not token:
+            continue
+        start = float(word.get("start") or 0.0)
+        end = max(start, float(word.get("end") or start))
+        normalized_words.append({"word": token, "start": start, "end": end})
+
+    boundaries = _source_line_boundaries(source_text, normalized_words)
+    if boundaries:
+        lines: list[list[dict[str, Any]]] = []
+        cursor = 0
+        for boundary in [*boundaries, len(normalized_words)]:
+            if boundary > cursor:
+                lines.append(normalized_words[cursor:boundary])
+            cursor = boundary
+        return _lines_payload(lines)
+
+    lines = []
     current: list[dict[str, Any]] = []
     sentence_end = re.compile(r"[.!?…]+$")
 
@@ -185,6 +279,10 @@ def _group_words_into_lines(words: list[dict[str, Any]]) -> list[dict[str, Any]]
     if current:
         lines.append(current)
 
+    return _lines_payload(lines)
+
+
+def _lines_payload(lines: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
     return [
         {
             "text": " ".join(item["word"] for item in line),
@@ -228,7 +326,8 @@ def ensure_legacy_artifacts(output_dir: Path, *, title: str | None = None) -> No
     output_dir = Path(output_dir)
     word_payload: Any = read_json(output_dir / "lyricsSync.json", default={})
     words = word_payload.get("words", []) if isinstance(word_payload, dict) else []
-    write_json(output_dir / "lyrics.json", _group_words_into_lines(words))
+    source_text = word_payload.get("text", "") if isinstance(word_payload, dict) else ""
+    write_json(output_dir / "lyrics.json", _group_words_into_lines(words, source_text))
 
     song_map: Any = read_json(output_dir / "songMap.json", default={})
     if not isinstance(song_map, dict):

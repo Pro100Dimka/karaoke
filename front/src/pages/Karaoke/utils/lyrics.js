@@ -1,16 +1,24 @@
 export function getLyricDisplayState(lyrics, currentTime) {
-  const safeLyrics = (Array.isArray(lyrics) ? lyrics : []).filter(
-    (line) => line && typeof line === "object"
-  );
+  const safeLyrics = (Array.isArray(lyrics) ? lyrics : [])
+    .filter(
+      (line) =>
+        line &&
+        typeof line === "object" &&
+        Number.isFinite(Number(line.start)) &&
+        Number.isFinite(Number(line.end))
+    );
   const time = Number.isFinite(Number(currentTime)) ? Number(currentTime) : 0;
   const currentLineIndex = safeLyrics.findIndex(
-    (line) => time >= line.start && time < line.end
+    (line) => time >= Number(line.start) && time < Number(line.end)
   );
   const currentLine = safeLyrics[currentLineIndex] || null;
-  const upcomingLine = safeLyrics.find((line) => line.start > time) || null;
-  const nextLine = currentLine
-    ? safeLyrics[currentLineIndex + 1] || null
-    : null;
+  const upcomingLineIndex = safeLyrics.findIndex(
+    (line) => Number(line.start) > time
+  );
+  const upcomingLine = safeLyrics[upcomingLineIndex] || null;
+  const primaryLineIndex = currentLine ? currentLineIndex : upcomingLineIndex;
+  const nextLine =
+    primaryLineIndex >= 0 ? safeLyrics[primaryLineIndex + 1] || null : null;
 
   return { currentLineIndex, currentLine, upcomingLine, nextLine };
 }
@@ -25,13 +33,13 @@ export function buildLyricWordTimings(line) {
     : startTime;
   const safeLine = { ...sourceLine, start: startTime, end: endTime };
   const declaredWords = Array.isArray(safeLine.words)
-    ? safeLine.words.filter(
-        (word) =>
-          word &&
-          typeof word === "object" &&
-          typeof word.text === "string" &&
-          word.text.trim()
-      )
+    ? safeLine.words
+        .filter((word) => word && typeof word === "object")
+        .map((word) => ({
+          ...word,
+          text: String(word.text ?? word.word ?? "").trim()
+        }))
+        .filter((word) => word.text)
     : [];
   const words = declaredWords.length
     ? declaredWords

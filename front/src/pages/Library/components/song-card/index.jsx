@@ -92,7 +92,7 @@ export default function LibrarySongCard({
   return (
     <Card
       as="article"
-      variant="animation"
+      variant="neon"
       interactive={isReady}
       className={`library-song-card library-song-card--${songStatus}`}
       style={{ blockSize: "auto", alignSelf: "start" }}

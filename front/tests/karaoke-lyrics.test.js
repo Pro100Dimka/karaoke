@@ -18,12 +18,27 @@ test("getLyricDisplayState selects current, upcoming and next lines", () => {
     currentLineIndex: -1,
     currentLine: null,
     upcomingLine: lyrics[0],
-    nextLine: null
+    nextLine: lyrics[1]
   });
   assert.deepEqual(getLyricDisplayState(lyrics, 4.5), {
     currentLineIndex: 1,
     currentLine: lyrics[1],
     upcomingLine: lyrics[2],
+    nextLine: lyrics[2]
+  });
+});
+
+test("getLyricDisplayState keeps two prepared lines during a pause", () => {
+  const lyrics = [
+    { start: 1, end: 2, text: "one" },
+    { start: 5, end: 6, text: "two" },
+    { start: 9, end: 10, text: "three" }
+  ];
+
+  assert.deepEqual(getLyricDisplayState(lyrics, 3), {
+    currentLineIndex: -1,
+    currentLine: null,
+    upcomingLine: lyrics[1],
     nextLine: lyrics[2]
   });
 });
@@ -42,6 +57,24 @@ test("buildLyricWordTimings preserves declared timings", () => {
     [
       { text: "hello", start: 0.2, end: 1.1 },
       { text: "world", start: 1.2, end: 2.8 }
+    ]
+  );
+});
+
+test("buildLyricWordTimings accepts the backend word field", () => {
+  assert.deepEqual(
+    buildLyricWordTimings({
+      start: 1,
+      end: 3,
+      text: "hello world",
+      words: [
+        { word: "hello", start: 1.1, end: 1.8 },
+        { word: "world", start: 2, end: 2.9 }
+      ]
+    }),
+    [
+      { word: "hello", text: "hello", start: 1.1, end: 1.8 },
+      { word: "world", text: "world", start: 2, end: 2.9 }
     ]
   );
 });
