@@ -55,12 +55,15 @@ def test_trusted_lyrics_are_split_into_small_aligner_groups():
         "one two three four five\nsix seven eight nine ten\neleven twelve thirteen fourteen fifteen"
     )
 
-    assert len(groups) >= 2
     assert groups == [
-        "one two three four five",
-        "six seven eight nine ten",
-        "eleven twelve thirteen fourteen fifteen",
+        "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen"
     ]
+
+
+def test_many_author_lines_are_packed_below_the_model_context_limit():
+    groups = _group_lyric_text("\n".join(["one two three four five"] * 8))
+
+    assert [len(group.split()) for group in groups] == [35, 5]
 
 
 def test_alignment_context_collapse_is_rejected():
@@ -85,19 +88,28 @@ def test_alignment_with_many_implausibly_short_words_is_rejected():
     assert _pathological_alignment(words, 2.0)
 
 
+def test_alignment_rejects_a_complete_line_compressed_into_one_burst():
+    words = [
+        Word(index * 0.04, index * 0.04 + 0.04, token, 1.0, index)
+        for index, token in enumerate("one complete lyric line here".split())
+    ]
+
+    assert _pathological_alignment(words, 8.0)
+
+
 def test_rejected_alignment_falls_back_inside_nearest_vocal_region():
     sample_rate = 1000
     audio = np.zeros(sample_rate * 4, dtype=np.float32)
     audio[500:1100] = 0.8
-    audio[2400:3300] = 0.8
-    hint = [Word(2.5, 2.7, "next", 1.0, 0)]
+    audio[2800:3700] = 0.8
+    hint = [Word(2.9, 3.1, "next", 1.0, 0)]
 
     words = _activity_fallback_words(
         ["sing", "now"], audio, sample_rate, hint
     )
 
-    assert words[0].start >= 2.3
-    assert words[-1].end <= 3.4
+    assert words[0].start >= 2.7
+    assert words[-1].end <= 3.8
 
 
 def test_activity_fallback_never_reuses_a_previous_phrase_region():
@@ -116,3 +128,20 @@ def test_activity_fallback_never_reuses_a_previous_phrase_region():
     )
 
     assert words[0].start >= 2.3
+
+
+def test_activity_fallback_uses_all_islands_in_one_sung_phrase():
+    sample_rate = 1000
+    audio = np.zeros(sample_rate * 5, dtype=np.float32)
+    audio[500:1100] = 0.8
+    audio[1500:2200] = 0.8
+    audio[2600:3400] = 0.8
+    misleading_collapsed_hint = [Word(0.55, 0.70, "collapsed", 1.0, 0)]
+
+    words = _activity_fallback_words(
+        ["complete", "lyric", "line"], audio, sample_rate, misleading_collapsed_hint
+    )
+
+    assert words[0].start < 0.7
+    assert words[-1].end > 3.1
+    assert all(word.end - word.start >= 0.02 for word in words)

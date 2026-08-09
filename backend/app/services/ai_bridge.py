@@ -380,6 +380,114 @@ def _snap_lines_to_vocals(
     return _snap_lines_to_regions(lines, regions)
 
 
+def _line_timing_is_impossible(line: dict[str, Any]) -> bool:
+    words = list(line.get("words") or [])
+    if not words:
+        return True
+    span = max(0.0, float(line.get("end") or 0.0) - float(line.get("start") or 0.0))
+    return span < max(0.18, len(words) * 0.115)
+
+
+def _repair_impossible_alignment_chunks(
+    lines: list[dict[str, Any]], output_dir: Path, maximum_words: int = 38
+) -> list[dict[str, Any]]:
+    """Repair only consecutive impossible lines, preserving valid neighbours."""
+    vocals = next(
+        (
+            path
+            for path in (
+                output_dir / "separated" / "vocals.flac",
+                output_dir / "separated" / "vocals.wav",
+            )
+            if path.is_file()
+        ),
+        None,
+    )
+    if vocals is None or not lines:
+        return lines
+    try:
+        audio, sample_rate = load_mono(vocals, 16000)
+    except (OSError, RuntimeError, ValueError):
+        return lines
+
+    del maximum_words  # retained for compatibility with focused tests/callers
+    groups: list[tuple[int, int]] = []
+    index = 0
+    while index < len(lines):
+        if not _line_timing_is_impossible(lines[index]):
+            index += 1
+            continue
+        end_index = index + 1
+        while end_index < len(lines) and _line_timing_is_impossible(lines[end_index]):
+            end_index += 1
+        boundary_start = float(lines[index - 1]["end"]) if index > 0 else 0.0
+        while end_index < len(lines):
+            word_count = sum(
+                len(line.get("words") or []) for line in lines[index:end_index]
+            )
+            available = float(lines[end_index]["start"]) - boundary_start
+            if available >= max(0.18, word_count * 0.115):
+                break
+            end_index += 1
+        groups.append((index, end_index))
+        index = end_index
+
+    result = list(lines)
+    for first, after_last in groups:
+        group = lines[first:after_last]
+        start = float(lines[first - 1]["end"]) if first > 0 else 0.0
+        end = float(lines[after_last]["start"]) if after_last < len(lines) else len(audio) / sample_rate
+        end = max(start + 0.08, end)
+        left = max(0, int(start * sample_rate))
+        right = min(len(audio), max(left + 1, int(end * sample_rate)))
+        regions = [
+            (start + region_start, start + region_end)
+            for region_start, region_end in _vocal_activity_regions(audio[left:right], sample_rate)
+        ]
+        if not regions:
+            regions = [(start, end)]
+        active_duration = sum(max(0.0, b - a) for a, b in regions)
+        words = [word for line in group for word in list(line.get("words") or [])]
+        if active_duration < len(words) * 0.115:
+            # A locally adaptive energy threshold can miss breathy or heavily
+            # processed vocals.  Never compress the text to the few surviving
+            # peaks; retain the bounded chunk's wall-clock span instead.
+            regions = [(start, end)]
+            active_duration = end - start
+        weights = [max(2, len(str(word.get("word") or word.get("text") or ""))) for word in words]
+        total_weight = max(1, sum(weights))
+
+        def at(offset: float) -> float:
+            remaining = max(0.0, min(active_duration, offset))
+            for region_start, region_end in regions:
+                region_span = max(0.0, region_end - region_start)
+                if remaining <= region_span:
+                    return region_start + remaining
+                remaining -= region_span
+            return regions[-1][1]
+
+        repaired_words: list[dict[str, Any]] = []
+        consumed = 0
+        for word, weight in zip(words, weights, strict=True):
+            word_start = at(active_duration * consumed / total_weight)
+            consumed += weight
+            word_end = at(active_duration * consumed / total_weight)
+            repaired_words.append({**word, "start": word_start, "end": max(word_start + 0.02, word_end)})
+
+        cursor = 0
+        for line_index, line in enumerate(group, first):
+            size = len(line.get("words") or [])
+            line_words = repaired_words[cursor : cursor + size]
+            cursor += size
+            result[line_index] = {
+                **line,
+                "start": line_words[0]["start"],
+                "end": line_words[-1]["end"],
+                "words": line_words,
+            }
+    return result
+
+
 def _reference_notes(output_dir: Path) -> list[dict[str, Any]]:
     raw: Any = read_json(output_dir / "reference.json", default={})
     notes = raw.get("notes", []) if isinstance(raw, dict) else raw if isinstance(raw, list) else []
@@ -413,7 +521,12 @@ def ensure_legacy_artifacts(output_dir: Path, *, title: str | None = None) -> No
     words = word_payload.get("words", []) if isinstance(word_payload, dict) else []
     source_text = word_payload.get("text", "") if isinstance(word_payload, dict) else ""
     lines = _group_words_into_lines(words, source_text)
-    write_json(output_dir / "lyrics.json", _snap_lines_to_vocals(lines, output_dir))
+    # The forced aligner already works against the separated vocal stem.  A
+    # second global activity pass cannot know which short activity island belongs
+    # to which word and used to compress complete lines into 0.2-0.8 seconds.
+    # Preserve the canonical word alignment here; acoustic repair is performed
+    # locally inside the aligner's bounded phrase window when it is needed.
+    write_json(output_dir / "lyrics.json", _repair_impossible_alignment_chunks(lines, output_dir))
 
     song_map: Any = read_json(output_dir / "songMap.json", default={})
     if not isinstance(song_map, dict):

@@ -141,7 +141,7 @@ def _words_from_items(items) -> list[Word]:
 
 
 ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v13-title-language-guard"
-LONG_TEXT_ALIGNMENT_VERSION = "v5-sequential-acoustic-fallback"
+LONG_TEXT_ALIGNMENT_VERSION = "v11-balanced-acoustic-chunks"
 
 
 def _normalize_singing_audio(y: np.ndarray) -> np.ndarray:
@@ -249,18 +249,30 @@ def _singing_chunks(
     return [audio for audio, _start, _end in _singing_chunk_windows(y, sr, activity_hints)]
 
 
-def _group_lyric_text(text: str, maximum_words: int = 8) -> list[str]:
-    """Give the aligner short karaoke phrases without merging author lines."""
+def _group_lyric_text(text: str, maximum_words: int = 38) -> list[str]:
+    """Pack adjacent author lines into context-safe acoustic alignment chunks."""
     groups: list[str] = []
+    current: list[str] = []
+    current_count = 0
     for raw in str(text or "").splitlines():
         line = raw.strip()
         if not line:
             continue
         tokens = tokenize(line)
-        for start in range(0, len(tokens), maximum_words):
-            group = " ".join(tokens[start : start + maximum_words]).strip()
-            if group:
-                groups.append(group)
+        if len(tokens) > maximum_words:
+            if current:
+                groups.append(" ".join(current))
+                current, current_count = [], 0
+            for start in range(0, len(tokens), maximum_words):
+                groups.append(" ".join(tokens[start : start + maximum_words]))
+            continue
+        if current and current_count + len(tokens) > maximum_words:
+            groups.append(" ".join(current))
+            current, current_count = [], 0
+        current.extend(tokens)
+        current_count += len(tokens)
+    if current:
+        groups.append(" ".join(current))
     return groups
 
 
@@ -301,8 +313,12 @@ def _long_text_segments(audio, text: str) -> list[tuple[float, float, str]]:
         end_fraction = cursor / total
         start = active_times[min(last_index, int(round(start_fraction * last_index)))]
         end = active_times[min(last_index, int(round(end_fraction * last_index)))]
-        start = max(0.0, start - 1.6)
-        end = min(duration_sec, max(start + 3.0, end + 1.6))
+        # Character-weighted activity quantiles are only a coarse location hint.
+        # Singing contains long held notes and instrumental gaps, so a narrow
+        # window can omit most of the requested line.  The forced aligner can
+        # select the words inside a wider window; give it enough context to do so.
+        start = max(0.0, start - 3.0)
+        end = min(duration_sec, max(start + 8.0, end + 3.0))
         output.append((start, end, group))
     return output
 
@@ -323,17 +339,23 @@ def _pathological_alignment(words: list[Word], span: float) -> bool:
         right.start < left.end - 0.015
         for left, right in zip(words, words[1:], strict=False)
     )
+    token_count = sum(max(1, len(tokenize(word.text))) for word in words)
+    total_span = max(0.0, words[-1].end - words[0].start)
     return (
         max(durations) > max(4.5, span * 0.62)
         or collapsed > max(2, len(words) // 4)
         or compressed > max(2, len(words) // 3)
         or implausible_long_word
         or overlaps > max(1, len(words) // 5)
+        # Even very fast sung lyrics cannot fit a whole multi-word line into a
+        # few frames.  This catches high-confidence context misses from the
+        # aligner before they are published as karaoke timings.
+        or (token_count >= 2 and total_span < token_count * 0.115)
     )
 
 
 def _proportional_words(tokens: list[str], span: float) -> list[Word]:
-    weights = [max(1, len(token)) for token in tokens]
+    weights = [max(2, len(token)) for token in tokens]
     total = sum(weights)
     offset = 0
     output = []
@@ -395,27 +417,73 @@ def _activity_fallback_words(
     hint_words: list[Word] | None = None,
     minimum_start: float | None = None,
 ) -> list[Word]:
-    """Distribute rejected timings inside the nearest actual vocal phrase."""
+    """Distribute rejected timings across the complete nearby sung phrase.
+
+    Activity detection commonly splits one lyric line into several islands (one
+    per word or syllable).  Picking only the nearest island compresses an entire
+    line into a few hundred milliseconds.  Keep neighbouring islands together
+    and advance word boundaries through *active* time so instrumental gaps do
+    not consume lyric words.
+    """
     regions = _vocal_activity_regions(audio, sample_rate)
     if minimum_start is not None:
-        unused_regions = [region for region in regions if region[0] >= minimum_start - 0.08]
+        unused_regions = [
+            (max(region[0], minimum_start), region[1])
+            for region in regions
+            if region[1] >= minimum_start + 0.02
+        ]
         if unused_regions:
             regions = unused_regions
     if not regions:
         return _proportional_words(tokens, max(0.08, len(audio) / sample_rate))
-    if hint_words:
+
+    clusters: list[list[tuple[float, float]]] = []
+    for region in regions:
+        if clusters and region[0] - clusters[-1][-1][1] <= 1.50:
+            clusters[-1].append(region)
+        else:
+            clusters.append([region])
+    if len(tokens) >= 10:
+        # A failed multi-line chunk may legitimately contain several phrases
+        # separated by breaths or instrumental punctuation.
+        selected = regions
+    elif hint_words:
         hint_center = (hint_words[0].start + hint_words[-1].end) / 2
-        start, end = min(
-            regions,
-            key=lambda region: abs((region[0] + region[1]) / 2 - hint_center),
+        selected = min(
+            clusters,
+            key=lambda cluster: abs((cluster[0][0] + cluster[-1][1]) / 2 - hint_center),
         )
     else:
-        start, end = regions[0][0], regions[-1][1]
-    local = _proportional_words(tokens, max(0.08, end - start))
-    return [
-        Word(start + word.start, start + word.end, word.text, word.confidence, word.index)
-        for word in local
-    ]
+        selected = clusters[0]
+
+    weights = [max(1, len(token)) for token in tokens]
+    total_weight = max(1, sum(weights))
+    active_duration = sum(max(0.0, end - start) for start, end in selected)
+    if active_duration <= 0.02:
+        start, end = selected[0][0], selected[-1][1]
+        local = _proportional_words(tokens, max(0.08, end - start))
+        return [
+            Word(start + word.start, start + word.end, word.text, word.confidence, word.index)
+            for word in local
+        ]
+
+    def active_offset_to_time(offset: float) -> float:
+        remaining = max(0.0, min(active_duration, offset))
+        for start, end in selected:
+            span = max(0.0, end - start)
+            if remaining <= span:
+                return start + remaining
+            remaining -= span
+        return selected[-1][1]
+
+    output: list[Word] = []
+    consumed = 0
+    for index, (token, weight) in enumerate(zip(tokens, weights, strict=True)):
+        start = active_offset_to_time(active_duration * consumed / total_weight)
+        consumed += weight
+        end = active_offset_to_time(active_duration * consumed / total_weight)
+        output.append(Word(start, max(start + 0.02, end), token, 0.05, index))
+    return output
 
 
 def _speech_focus_variant(audio: np.ndarray) -> np.ndarray:
@@ -922,7 +990,13 @@ class Qwen3ForcedAligner(Aligner):
                 sf.write(path, segment_audio, sample_rate, subtype="PCM_16")
                 try:
                     local_words = self.align(path, text, language)
-                    if _pathological_alignment(local_words, segment_end - segment_start):
+                    candidate_start = segment_start + local_words[0].start if local_words else 0.0
+                    candidate_end = segment_start + local_words[-1].end if local_words else 0.0
+                    if (
+                        _pathological_alignment(local_words, segment_end - segment_start)
+                        or candidate_start < cursor - 0.08
+                        or candidate_end <= cursor + 0.02
+                    ):
                         local_words = _activity_fallback_words(
                             tokens,
                             segment_audio,
@@ -939,9 +1013,10 @@ class Qwen3ForcedAligner(Aligner):
                     )
 
                 for word in local_words:
-                    word_start = max(cursor, segment_start + word.start)
+                    word_start = segment_start + word.start
                     word_end = max(word_start + 0.02, segment_start + word.end)
-                    word_end = min(max(segment_end, word_start + 0.02), word_end)
+                    word_start = max(cursor, word_start)
+                    word_end = min(segment_end, max(word_start + 0.02, word_end))
                     output.append(
                         Word(
                             word_start,

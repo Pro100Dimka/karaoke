@@ -1,4 +1,9 @@
-from app.services.ai_bridge import _group_words_into_lines, _snap_lines_to_regions
+from pathlib import Path
+
+import numpy as np
+
+from app.services import ai_bridge
+from app.services.ai_bridge import _group_words_into_lines, _repair_impossible_alignment_chunks
 
 
 def _timed_words(text: str):
@@ -34,28 +39,29 @@ def test_grouping_splits_single_line_source_at_song_phrases():
     ]
 
 
-def test_consecutive_lines_do_not_reuse_the_previous_vocal_phrase():
+def test_only_chunk_with_impossible_line_is_retimed(monkeypatch):
     lines = [
-        {
-            "text": "previous",
-            "start": 27.1,
-            "end": 28.2,
-            "words": [{"word": "previous", "start": 27.1, "end": 28.2}],
-        },
-        {
-            "text": "next line",
-            "start": 28.28,
-            "end": 28.92,
-            "words": [
-                {"word": "next", "start": 28.28, "end": 28.55},
-                {"word": "line", "start": 28.55, "end": 28.92},
-            ],
-        },
+        {"text": "good line", "start": 1.0, "end": 2.0, "words": [
+            {"word": "good", "start": 1.0, "end": 1.4},
+            {"word": "line", "start": 1.5, "end": 2.0},
+        ]},
+        {"text": "bad timing here", "start": 3.0, "end": 3.1, "words": [
+            {"word": "bad", "start": 3.0, "end": 3.03},
+            {"word": "timing", "start": 3.03, "end": 3.06},
+            {"word": "here", "start": 3.06, "end": 3.1},
+        ]},
+        {"text": "following line", "start": 4.3, "end": 4.9, "words": [
+            {"word": "following", "start": 4.3, "end": 4.6},
+            {"word": "line", "start": 4.6, "end": 4.9},
+        ]},
     ]
-    regions = [(27.24, 28.84), (29.64, 31.32)]
+    audio = np.zeros(5000, dtype=np.float32)
+    audio[1000:2000] = 0.8
+    audio[2800:4200] = 0.8
+    monkeypatch.setattr(ai_bridge, "load_mono", lambda *_args: (audio, 1000))
+    monkeypatch.setattr(Path, "is_file", lambda self: self.name == "vocals.flac")
 
-    snapped = _snap_lines_to_regions(lines, regions)
+    repaired = _repair_impossible_alignment_chunks(lines, Path("unused"), maximum_words=2)
 
-    assert snapped[0]["start"] == 27.24
-    assert snapped[1]["start"] == 29.64
-    assert snapped[1]["words"][0]["start"] == 29.64
+    assert repaired[0] == lines[0]
+    assert repaired[1]["end"] - repaired[1]["start"] > 0.3
