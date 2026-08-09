@@ -23,6 +23,7 @@ export default function Settings({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
+      maxWidth="100vw"
       ariaLabel="Настройки приложения"
       modalClassName="settings-modal"
       closeClassName="settings-modal-close"

@@ -21,7 +21,7 @@ const mainSource = readFileSync(
 test("karaoke scene video uses a private local media protocol", () => {
   assert.match(mainSource, /protocol\.registerSchemesAsPrivileged/);
   assert.match(mainSource, /protocol\.handle\("karaoke-media"/);
-  assert.match(mainSource, /videoplayback\.mp4/);
+  assert.match(mainSource, /videoplayback\.webm/);
 });
 
 test("development navigation accepts only the exact renderer origin", () => {

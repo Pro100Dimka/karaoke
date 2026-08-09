@@ -141,7 +141,7 @@ def _words_from_items(items) -> list[Word]:
 
 
 ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v13-title-language-guard"
-LONG_TEXT_ALIGNMENT_VERSION = "v2-short-windows-pathology-guard"
+LONG_TEXT_ALIGNMENT_VERSION = "v5-sequential-acoustic-fallback"
 
 
 def _normalize_singing_audio(y: np.ndarray) -> np.ndarray:
@@ -249,32 +249,18 @@ def _singing_chunks(
     return [audio for audio, _start, _end in _singing_chunk_windows(y, sr, activity_hints)]
 
 
-def _group_lyric_text(text: str, target_words: int = 9, maximum_words: int = 12) -> list[str]:
-    """Build aligner-sized phrases while preserving author-provided line order."""
+def _group_lyric_text(text: str, maximum_words: int = 8) -> list[str]:
+    """Give the aligner short karaoke phrases without merging author lines."""
     groups: list[str] = []
-    current: list[str] = []
-    current_words = 0
     for raw in str(text or "").splitlines():
         line = raw.strip()
         if not line:
-            if current:
-                groups.append(" ".join(current))
-                current = []
-                current_words = 0
             continue
-        line_words = len(tokenize(line))
-        if current and current_words + line_words > maximum_words:
-            groups.append(" ".join(current))
-            current = []
-            current_words = 0
-        current.append(line)
-        current_words += line_words
-        if current_words >= target_words:
-            groups.append(" ".join(current))
-            current = []
-            current_words = 0
-    if current:
-        groups.append(" ".join(current))
+        tokens = tokenize(line)
+        for start in range(0, len(tokens), maximum_words):
+            group = " ".join(tokens[start : start + maximum_words]).strip()
+            if group:
+                groups.append(group)
     return groups
 
 
@@ -327,7 +313,23 @@ def _pathological_alignment(words: list[Word], span: float) -> bool:
         return True
     durations = [max(0.0, word.end - word.start) for word in words]
     collapsed = sum(duration <= 0.025 for duration in durations)
-    return max(durations) > max(4.5, span * 0.62) or collapsed > max(2, len(words) // 4)
+    compressed = sum(duration <= 0.09 for duration in durations)
+    implausible_long_word = any(
+        len(tokenize(word.text)[0]) >= 4 and duration <= 0.09
+        for word, duration in zip(words, durations, strict=True)
+        if tokenize(word.text)
+    )
+    overlaps = sum(
+        right.start < left.end - 0.015
+        for left, right in zip(words, words[1:], strict=False)
+    )
+    return (
+        max(durations) > max(4.5, span * 0.62)
+        or collapsed > max(2, len(words) // 4)
+        or compressed > max(2, len(words) // 3)
+        or implausible_long_word
+        or overlaps > max(1, len(words) // 5)
+    )
 
 
 def _proportional_words(tokens: list[str], span: float) -> list[Word]:
@@ -341,6 +343,79 @@ def _proportional_words(tokens: list[str], span: float) -> list[Word]:
         word_end = span * offset / total
         output.append(Word(word_start, word_end, token, 0.05, index))
     return output
+
+
+def _vocal_activity_regions(
+    audio: np.ndarray, sample_rate: int, *, join_gap: float = 0.30
+) -> list[tuple[float, float]]:
+    """Find sung regions inside a short vocal-stem window."""
+    source = np.asarray(audio, dtype=np.float32)
+    hop = max(1, int(sample_rate * 0.04))
+    frame = max(hop, int(sample_rate * 0.08))
+    if source.size < frame:
+        return []
+    values = np.asarray(
+        [
+            float(np.sqrt(np.mean(source[start : start + frame] ** 2) + 1e-12))
+            for start in range(0, source.size - frame + 1, hop)
+        ],
+        dtype=np.float32,
+    )
+    threshold = max(
+        float(np.percentile(values, 25)) * 1.8,
+        float(np.percentile(values, 90)) * 0.10,
+    )
+    regions: list[tuple[float, float]] = []
+    region_start: float | None = None
+    last_active: float | None = None
+    for index, value in enumerate(values):
+        timestamp = (index * hop + frame / 2) / sample_rate
+        if value >= threshold:
+            if region_start is None:
+                region_start = timestamp
+            last_active = timestamp
+        elif (
+            region_start is not None
+            and last_active is not None
+            and timestamp - last_active > join_gap
+        ):
+            if last_active - region_start >= 0.12:
+                regions.append((region_start, last_active))
+            region_start = None
+            last_active = None
+    if region_start is not None and last_active is not None and last_active - region_start >= 0.12:
+        regions.append((region_start, last_active))
+    return regions
+
+
+def _activity_fallback_words(
+    tokens: list[str],
+    audio: np.ndarray,
+    sample_rate: int,
+    hint_words: list[Word] | None = None,
+    minimum_start: float | None = None,
+) -> list[Word]:
+    """Distribute rejected timings inside the nearest actual vocal phrase."""
+    regions = _vocal_activity_regions(audio, sample_rate)
+    if minimum_start is not None:
+        unused_regions = [region for region in regions if region[0] >= minimum_start - 0.08]
+        if unused_regions:
+            regions = unused_regions
+    if not regions:
+        return _proportional_words(tokens, max(0.08, len(audio) / sample_rate))
+    if hint_words:
+        hint_center = (hint_words[0].start + hint_words[-1].end) / 2
+        start, end = min(
+            regions,
+            key=lambda region: abs((region[0] + region[1]) / 2 - hint_center),
+        )
+    else:
+        start, end = regions[0][0], regions[-1][1]
+    local = _proportional_words(tokens, max(0.08, end - start))
+    return [
+        Word(start + word.start, start + word.end, word.text, word.confidence, word.index)
+        for word in local
+    ]
 
 
 def _speech_focus_variant(audio: np.ndarray) -> np.ndarray:
@@ -843,16 +918,25 @@ class Qwen3ForcedAligner(Aligner):
                 left = max(0, min(max(0, len(source) - 1), int(segment_start * sample_rate)))
                 right = max(left + 1, min(len(source), int(segment_end * sample_rate)))
                 path = root / f"segment-{segment_index:03d}.wav"
-                sf.write(path, source[left:right], sample_rate, subtype="PCM_16")
+                segment_audio = source[left:right]
+                sf.write(path, segment_audio, sample_rate, subtype="PCM_16")
                 try:
                     local_words = self.align(path, text, language)
                     if _pathological_alignment(local_words, segment_end - segment_start):
-                        local_words = _proportional_words(
-                            tokens, max(0.08, segment_end - segment_start)
+                        local_words = _activity_fallback_words(
+                            tokens,
+                            segment_audio,
+                            sample_rate,
+                            local_words,
+                            max(0.0, cursor - segment_start),
                         )
                 except (InvalidArtifactError, RuntimeError, ValueError):
-                    span = max(0.08, segment_end - segment_start)
-                    local_words = _proportional_words(tokens, span)
+                    local_words = _activity_fallback_words(
+                        tokens,
+                        segment_audio,
+                        sample_rate,
+                        minimum_start=max(0.0, cursor - segment_start),
+                    )
 
                 for word in local_words:
                     word_start = max(cursor, segment_start + word.start)

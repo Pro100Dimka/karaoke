@@ -14,7 +14,8 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
-from AI.engines.text import tokenize
+from AI.audio import load_mono
+from AI.engines.text import _vocal_activity_regions, tokenize
 from AI.models import PitchFrame
 from AI.notes import hz_to_midi
 from AI.service import AICoreService, get_ai_service
@@ -295,6 +296,90 @@ def _lines_payload(lines: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
     ]
 
 
+def _snap_lines_to_regions(
+    lines: list[dict[str, Any]], regions: list[tuple[float, float]]
+) -> list[dict[str, Any]]:
+    """Attach consecutive lyric lines to consecutive sung vocal regions."""
+    if not lines or not regions:
+        return lines
+    result: list[dict[str, Any]] = []
+    previous_region = -1
+    for line in lines:
+        old_start = float(line["start"])
+        search_start = max(0, previous_region)
+        candidates = range(search_start, min(len(regions), search_start + 8))
+        region_index = min(
+            candidates,
+            key=lambda index: (
+                abs(regions[index][0] - old_start)
+                + (0.85 if index == previous_region else 0.0)
+            ),
+            default=previous_region,
+        )
+        if region_index < 0:
+            result.append(line)
+            continue
+        region_start, region_end = regions[region_index]
+        if region_end <= region_start:
+            result.append(line)
+            continue
+
+        words = list(line.get("words") or [])
+        old_end = float(line["end"])
+        old_span = max(0.02, old_end - old_start)
+        region_span = region_end - region_start
+        timed_words = []
+        for word in words:
+            relative_start = max(
+                0.0, min(1.0, (float(word["start"]) - old_start) / old_span)
+            )
+            relative_end = max(
+                relative_start,
+                min(1.0, (float(word["end"]) - old_start) / old_span),
+            )
+            timed_words.append(
+                {
+                    **word,
+                    "start": region_start + region_span * relative_start,
+                    "end": region_start + region_span * relative_end,
+                }
+            )
+        result.append(
+            {
+                **line,
+                "start": region_start,
+                "end": region_end,
+                "words": timed_words,
+            }
+        )
+        previous_region = region_index
+    return result
+
+
+def _snap_lines_to_vocals(
+    lines: list[dict[str, Any]], output_dir: Path
+) -> list[dict[str, Any]]:
+    vocals = next(
+        (
+            path
+            for path in (
+                output_dir / "separated" / "vocals.flac",
+                output_dir / "separated" / "vocals.wav",
+            )
+            if path.is_file()
+        ),
+        None,
+    )
+    if vocals is None:
+        return lines
+    try:
+        audio, sample_rate = load_mono(vocals, 16000)
+        regions = _vocal_activity_regions(audio, sample_rate)
+    except (OSError, RuntimeError, ValueError):
+        return lines
+    return _snap_lines_to_regions(lines, regions)
+
+
 def _reference_notes(output_dir: Path) -> list[dict[str, Any]]:
     raw: Any = read_json(output_dir / "reference.json", default={})
     notes = raw.get("notes", []) if isinstance(raw, dict) else raw if isinstance(raw, list) else []
@@ -327,7 +412,8 @@ def ensure_legacy_artifacts(output_dir: Path, *, title: str | None = None) -> No
     word_payload: Any = read_json(output_dir / "lyricsSync.json", default={})
     words = word_payload.get("words", []) if isinstance(word_payload, dict) else []
     source_text = word_payload.get("text", "") if isinstance(word_payload, dict) else ""
-    write_json(output_dir / "lyrics.json", _group_words_into_lines(words, source_text))
+    lines = _group_words_into_lines(words, source_text)
+    write_json(output_dir / "lyrics.json", _snap_lines_to_vocals(lines, output_dir))
 
     song_map: Any = read_json(output_dir / "songMap.json", default={})
     if not isinstance(song_map, dict):

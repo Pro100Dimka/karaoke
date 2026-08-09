@@ -209,10 +209,9 @@ export default function Library({ onOpenSongSettings }) {
   const filtered = filterSongs(visibleSongs, query);
   const readyCount = countReadySongs(visibleSongs);
   return (
-    <Stack align="center">
+    <Stack align="center" sx={{ height: "100vh" }}>
       <LibraryBackdrop />
       <Stack
-        gap="2rem"
         align="center"
         sx={{ width: "90%", height: "100vh", overflow: "visible" }}
       >
@@ -239,66 +238,75 @@ export default function Library({ onOpenSongSettings }) {
             Пока нет ни одной песни — добавьте первую
           </div>
         ) : (
-          <Grid
-            minItemWidth="33rem"
-            gap={20}
+          <Stack
             sx={{
-              width: "100%",
-              alignItems: "stretch",
-              alignContent: "start",
-              overflow: "visible"
+              width: "110%",
+              overflow: "auto",
+              overflowX: "hidden",
+              padding: "4% 5%"
             }}
           >
-            {filtered.map((song, cardIndex) => (
-              <LibrarySongCard
-                key={song.id}
-                canManageLibrary={canManageLibrary}
-                cardIndex={cardIndex}
-                song={song}
-                onDelete={handleDelete}
-                onOpenFolder={handleOpenFolder}
-                onOpenKaraoke={async (selectedSong) => {
-                  if (karaokeTransitioning) return;
+            <Grid
+              minItemWidth="30rem"
+              gap={20}
+              sx={{
+                width: "100%",
+                alignItems: "stretch",
+                alignContent: "start",
+                overflow: "visible"
+              }}
+            >
+              {filtered.map((song, cardIndex) => (
+                <LibrarySongCard
+                  key={song.id}
+                  canManageLibrary={canManageLibrary}
+                  cardIndex={cardIndex}
+                  song={song}
+                  onDelete={handleDelete}
+                  onOpenFolder={handleOpenFolder}
+                  onOpenKaraoke={async (selectedSong) => {
+                    if (karaokeTransitioning) return;
 
-                  try {
-                    if (sharedRoom?.room) {
-                      const readyLocally = await sharedRoom.openKaraoke(
-                        selectedSong.id
-                      );
+                    try {
+                      if (sharedRoom?.room) {
+                        const readyLocally = await sharedRoom.openKaraoke(
+                          selectedSong.id
+                        );
 
-                      if (!readyLocally) return;
-                    }
-
-                    setGlobalRouteBlackout(true);
-                    setKaraokeTransitioning(true);
-
-                    await new Promise((resolve) => {
-                      window.setTimeout(resolve, 920);
-                    });
-
-                    navigate("/karaoke", {
-                      state: {
-                        songId: selectedSong.id,
-                        autoPlay: true
+                        if (!readyLocally) return;
                       }
-                    });
-                  } catch (openError) {
-                    setKaraokeTransitioning(false);
-                    setGlobalRouteBlackout(false);
 
-                    await notify(
-                      `Не удалось открыть песню: ${getErrorMessage(openError)}`
-                    );
-                  }
-                }}
-                onOpenProcessing={trackProcessingSong}
-                onOpenRecordings={setRecordingsSong}
-                onOpenSettings={() => onOpenSongSettings?.(song.id)}
-                onProcess={handleProcess}
-                onReprocess={handleReprocess}
-              />
-            ))}
-          </Grid>
+                      setGlobalRouteBlackout(true);
+                      setKaraokeTransitioning(true);
+
+                      await new Promise((resolve) => {
+                        window.setTimeout(resolve, 920);
+                      });
+
+                      navigate("/karaoke", {
+                        state: {
+                          songId: selectedSong.id,
+                          autoPlay: true
+                        }
+                      });
+                    } catch (openError) {
+                      setKaraokeTransitioning(false);
+                      setGlobalRouteBlackout(false);
+
+                      await notify(
+                        `Не удалось открыть песню: ${getErrorMessage(openError)}`
+                      );
+                    }
+                  }}
+                  onOpenProcessing={trackProcessingSong}
+                  onOpenRecordings={setRecordingsSong}
+                  onOpenSettings={() => onOpenSongSettings?.(song.id)}
+                  onProcess={handleProcess}
+                  onReprocess={handleReprocess}
+                />
+              ))}
+            </Grid>
+          </Stack>
         )}
       </Stack>
 

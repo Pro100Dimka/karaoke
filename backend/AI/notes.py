@@ -5,7 +5,7 @@ import statistics
 
 from .models import PitchFrame, Syllable, VocalNote
 
-NOTE_DECODER_VERSION = "adaptive-note-events-v10"
+NOTE_DECODER_VERSION = "lyric-anchored-lead-v11"
 
 
 def hz_to_midi(hz: float) -> float:
@@ -26,7 +26,8 @@ def _median_filter(values: list[float], radius: int = 2) -> list[float]:
 def _weighted_median(values: list[float], weights: list[float]) -> float:
     if not values:
         raise ValueError("weighted median requires at least one value")
-    pairs = sorted(zip(values, weights, strict=False), key=lambda item: item[0])
+    pairs = sorted(zip(values, weights, strict=False),
+                   key=lambda item: item[0])
     total = sum(max(0.0, weight) for _, weight in pairs)
     if total <= 1e-12:
         return float(statistics.median(values))
@@ -107,7 +108,8 @@ def _sustained_pitch_segments(
         return [run]
     step = (
         statistics.median(
-            [b.time - a.time for a, b in zip(run, run[1:], strict=False) if b.time > a.time]
+            [b.time - a.time for a,
+                b in zip(run, run[1:], strict=False) if b.time > a.time]
         )
         if len(run) > 1
         else 0.01
@@ -121,11 +123,13 @@ def _sustained_pitch_segments(
     # Adapt the split threshold to the singer's local vibrato width.
     # Stable voices keep high sensitivity; wide vibrato needs a larger margin.
     local_diffs = [
-        abs(value - statistics.median(smooth[max(0, i - 8) : min(len(smooth), i + 9)]))
+        abs(value -
+            statistics.median(smooth[max(0, i - 8): min(len(smooth), i + 9)]))
         for i, value in enumerate(smooth)
     ]
     vibrato = statistics.median(local_diffs) if local_diffs else 0.0
-    threshold = max(0.62, float(split_semitones), min(1.35, vibrato * 3.2 + 0.36))
+    threshold = max(0.62, float(split_semitones),
+                    min(1.35, vibrato * 3.2 + 0.36))
 
     boundaries = [0]
     segment_start = 0
@@ -152,7 +156,8 @@ def _sustained_pitch_segments(
                 # Wide/slow vibrato can stay on one side for 70-100 ms. Look
                 # farther ahead and reject a transition that clearly returns to
                 # the old pitch centre. A real note change normally does not.
-                probe_end = min(len(run), index + max(sustain_frames, int(round(0.22 / step))))
+                probe_end = min(len(run), index +
+                                max(sustain_frames, int(round(0.22 / step))))
                 probe = smooth[index:probe_end]
                 old_side = sum(
                     1
@@ -162,13 +167,16 @@ def _sustained_pitch_segments(
                 return_ratio = old_side / max(1, len(probe))
                 ordered_probe = sorted(probe)
                 lo_q = ordered_probe[max(0, int(len(ordered_probe) * 0.10))]
-                hi_q = ordered_probe[min(len(ordered_probe) - 1, int(len(ordered_probe) * 0.90))]
+                hi_q = ordered_probe[min(
+                    len(ordered_probe) - 1, int(len(ordered_probe) * 0.90))]
                 probe_spread = hi_q - lo_q
                 stable_new_level = probe_spread <= max(0.48, threshold * 0.72)
                 if return_ratio <= 0.18 and stable_new_level:
                     boundary = index
-                    left_duration = run[boundary - 1].time - run[segment_start].time + step
-                    right_duration = run[future_end - 1].time - run[boundary].time + step
+                    left_duration = run[boundary - 1].time - \
+                        run[segment_start].time + step
+                    right_duration = run[future_end -
+                                         1].time - run[boundary].time + step
                     if left_duration >= min_note and right_duration >= min_note:
                         boundaries.append(boundary)
                         segment_start = boundary
@@ -177,7 +185,8 @@ def _sustained_pitch_segments(
         index += 1
 
     boundaries.append(len(run))
-    segments = [run[a:b] for a, b in zip(boundaries, boundaries[1:], strict=False) if b > a]
+    segments = [run[a:b]
+                for a, b in zip(boundaries, boundaries[1:], strict=False) if b > a]
 
     # Merge tiny fragments into the closest neighbour instead of dropping them.
     merged: list[list[PitchFrame]] = []
@@ -187,7 +196,8 @@ def _sustained_pitch_segments(
             merged.append(segment)
             continue
         previous = merged[-1]
-        previous_center = statistics.median(hz_to_midi(f.frequency) for f in previous)
+        previous_center = statistics.median(
+            hz_to_midi(f.frequency) for f in previous)
         center = statistics.median(hz_to_midi(f.frequency) for f in segment)
         if abs(center - previous_center) < 2.0:
             previous.extend(segment)
@@ -200,7 +210,8 @@ def _energy_reattack_boundaries(segment: list[PitchFrame], min_note: float) -> l
     """Find short energy valleys followed by a clear same-pitch re-attack."""
     if len(segment) < 12:
         return []
-    steps = [b.time - a.time for a, b in zip(segment, segment[1:], strict=False) if b.time > a.time]
+    steps = [b.time - a.time for a,
+             b in zip(segment, segment[1:], strict=False) if b.time > a.time]
     step = max(0.005, min(0.04, statistics.median(steps) if steps else 0.01))
     min_frames = max(5, int(round(max(0.08, min_note) / step)))
     energies = [max(0.0, f.energy) for f in segment]
@@ -229,9 +240,9 @@ def _energy_reattack_boundaries(segment: list[PitchFrame], min_note: float) -> l
             continue
         if left < context or right + context > len(segment):
             continue
-        before = statistics.median(energies[left - context : left])
+        before = statistics.median(energies[left - context: left])
         valley = statistics.median(energies[left:right])
-        after = statistics.median(energies[right : right + context])
+        after = statistics.median(energies[right: right + context])
         if (
             before >= typical * 0.62
             and after >= typical * 0.68
@@ -286,7 +297,8 @@ def _bend_curve(
 ) -> tuple[tuple[float, float], ...]:
     if not segment:
         return ()
-    midi = _median_filter([hz_to_midi(frame.frequency) for frame in segment], radius=1)
+    midi = _median_filter([hz_to_midi(frame.frequency)
+                          for frame in segment], radius=1)
     result: list[tuple[float, float]] = []
     last_time = -1.0
     last_cents: float | None = None
@@ -317,7 +329,8 @@ def _note_from_segment(
         return None
     step = (
         statistics.median(
-            [b.time - a.time for a, b in zip(segment, segment[1:], strict=False) if b.time > a.time]
+            [b.time - a.time for a,
+                b in zip(segment, segment[1:], strict=False) if b.time > a.time]
         )
         if len(segment) > 1
         else 0.01
@@ -371,6 +384,96 @@ def _best_syllable_for_segment(
     return min(syllables, key=lambda item: abs((item.start + item.end) / 2 - midpoint))
 
 
+def _lyric_activity_intervals(
+    syllables: list[Syllable],
+    *,
+    pad: float = 0.035,
+    merge_gap: float = 0.11,
+) -> list[tuple[float, float]]:
+    """Build lead-vocal activity intervals from aligned syllables.
+
+    Nearby syllables are merged, so lyric segmentation can never manufacture
+    extra musical notes. Only real phrase-sized gaps remain as cut points.
+    """
+    if not syllables:
+        return []
+
+    raw = [
+        (max(0.0, syllable.start - pad), syllable.end + pad)
+        for syllable in sorted(syllables, key=lambda item: (item.start, item.end))
+    ]
+    merged: list[tuple[float, float]] = []
+    for start, end in raw:
+        if not merged or start - merged[-1][1] > merge_gap:
+            merged.append((start, end))
+        else:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+    return merged
+
+
+def _clip_note_to_lyric_activity(
+    note: VocalNote,
+    syllables: list[Syllable],
+    *,
+    min_note: float,
+) -> list[VocalNote]:
+    """Clip one pitch-derived note to lyric-active regions.
+
+    This never invents a pitch event. A note is split only when it spans a real
+    lyric silence (> ~110 ms), which is where backing vocals/doubles commonly
+    leak into a monophonic tracker.
+    """
+    if not syllables:
+        return [note]
+
+    intervals = _lyric_activity_intervals(syllables)
+    pieces: list[VocalNote] = []
+
+    for active_start, active_end in intervals:
+        start = max(note.start, active_start)
+        end = min(note.end, active_end)
+        if end - start < min_note:
+            continue
+
+        midpoint = (start + end) / 2.0
+        overlapping = [
+            syllable
+            for syllable in syllables
+            if min(end, syllable.end) - max(start, syllable.start) > 0
+        ]
+        syllable = (
+            max(
+                overlapping,
+                key=lambda item: min(end, item.end) - max(start, item.start),
+            )
+            if overlapping
+            else min(
+                syllables,
+                key=lambda item: abs((item.start + item.end) / 2.0 - midpoint),
+            )
+        )
+
+        offset = start - note.start
+        cents = tuple(
+            (time - offset, value)
+            for time, value in note.cents
+            if offset <= time <= offset + (end - start) + 1e-9
+        )
+        pieces.append(
+            VocalNote(
+                start,
+                end,
+                note.midi_note,
+                note.velocity,
+                syllable.word_index,
+                syllable.index,
+                cents,
+            )
+        )
+
+    return pieces
+
+
 def build_vocal_notes(
     pitch: list[PitchFrame],
     syllables: list[Syllable],
@@ -379,15 +482,16 @@ def build_vocal_notes(
     max_gap: float = 0.05,
     min_confidence: float = 0.42,
 ) -> list[VocalNote]:
-    """Decode the vocal contour first, then attach linguistic metadata.
+    """Decode musical events from pitch, then gate them by lyric activity.
 
-    Musical event detection must not depend on ASR syllable count: a wrong lyric
-    must never manufacture a MIDI note.  Pitch changes, voicing gaps and genuine
-    energy re-attacks define notes; words/syllables only label the result.
+    Pitch alone defines note count and pitch changes. Aligned syllables only
+    remove phrase-sized regions where the lead lyric is inactive, preventing
+    backing vocals/doubles from causing MIDI drift around chorus transitions.
     """
     frames = sorted(pitch, key=lambda frame: frame.time)
-    ordered_syllables = sorted(syllables, key=lambda item: (item.start, item.end))
-    output: list[VocalNote] = []
+    ordered_syllables = sorted(
+        syllables, key=lambda item: (item.start, item.end))
+    pitch_notes: list[VocalNote] = []
 
     runs = _voiced_runs(frames, max_gap=max_gap, min_confidence=min_confidence)
     for run in runs:
@@ -395,10 +499,25 @@ def build_vocal_notes(
             run, split_semitones=split_semitones, min_note=min_note
         ):
             for segment in _split_on_reattacks(pitch_segment, min_note):
-                syllable = _best_syllable_for_segment(segment, ordered_syllables)
-                note = _note_from_segment(segment, syllable, min_note=min_note)
+                # Linguistic metadata is deliberately NOT used during event
+                # detection; wrong syllable counts must never create notes.
+                note = _note_from_segment(segment, None, min_note=min_note)
                 if note is not None:
-                    output.append(note)
+                    pitch_notes.append(note)
+
+    # Lyrics act only as a temporal activity mask after musical decoding.
+    output: list[VocalNote] = []
+    if ordered_syllables:
+        for note in pitch_notes:
+            output.extend(
+                _clip_note_to_lyric_activity(
+                    note,
+                    ordered_syllables,
+                    min_note=min_note,
+                )
+            )
+    else:
+        output = pitch_notes
 
     ordered = sorted(output, key=lambda note: (note.start, note.end))
     monophonic: list[VocalNote] = []
@@ -423,6 +542,7 @@ def build_vocal_notes(
             else:
                 monophonic.pop()
         monophonic.append(note)
+
     return _repair_note_outliers(monophonic)
 
 
