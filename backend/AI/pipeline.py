@@ -400,12 +400,18 @@ class KaraokePipeline:
             cache, "tempo", tempo_key, [music_path], {music_path: validate_music_json}
         ):
             music_analysis = read_json(music_path, {})
-            bpm = float(music_analysis.get("bpm", 120.0))
+            bpm = int(round(float(music_analysis.get("bpm", 120.0))))
+            # Upgrade old cached decimal BPM values in place so every artifact
+            # and API consumer sees the same integer tempo.
+            if music_analysis.get("bpm") != bpm:
+                music_analysis["bpm"] = bpm
+                write_json_atomic(music_path, music_analysis)
             reports.append(StageReport("tempo", 0, True, "cached"))
         else:
             started = time.perf_counter()
             music_analysis = analyze_music(instrumental)
-            bpm = float(music_analysis["bpm"])
+            bpm = int(round(float(music_analysis["bpm"])))
+            music_analysis["bpm"] = bpm
             write_json_atomic(music_path, music_analysis)
             cache.commit("tempo", tempo_key, [music_path])
             reports.append(

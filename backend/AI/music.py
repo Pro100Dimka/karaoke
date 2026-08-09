@@ -144,7 +144,7 @@ def analyze_music(path: str | Path) -> dict[str, float | str | None]:
         return {"bpm": 120.0, "tempo_confidence": 0.0, "key": None, "key_confidence": 0.0}
 
     return {
-        "bpm": round(min(300.0, max(30.0, bpm)), 1),
+        "bpm": int(round(min(300.0, max(30.0, bpm)))),
         "tempo_confidence": round(tempo_confidence, 3),
         "key": key,
         "key_confidence": round(key_confidence, 3),

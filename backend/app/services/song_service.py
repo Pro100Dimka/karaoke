@@ -55,6 +55,112 @@ def resolve_output_dir(song: models.Song) -> Path:
     return _ensure_path_within(path, config.SONG_OUTPUT_DIR)
 
 
+def _first_audio_tag(tags: object, *names: str) -> str | None:
+    get = getattr(tags, "get", None)
+    if not callable(get):
+        return None
+    for name in names:
+        value = get(name)
+        if isinstance(value, (list, tuple)):
+            value = next((item for item in value if isinstance(item, str) and item.strip()), None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+_COPY_SUFFIX_RE = re.compile(r"\s*\(\d+\)\s*$")
+_WINDOWS_FORBIDDEN_RE = re.compile(r'[<>:"/\\|?*]+')
+_RELEASE_WORD_RE = re.compile(r"\b(?:single|album|ep)\b", re.IGNORECASE)
+_YEAR_RE = re.compile(r"[\[(]\s*(?:19|20)\d{2}\s*[\])]")
+
+
+def _clean_copy_suffix(value: str) -> str:
+    return _COPY_SUFFIX_RE.sub("", value).strip()
+
+
+def _clean_artist_tag(artist: str | None, title: str | None) -> str | None:
+    value = str(artist or "").strip()
+    if not value:
+        return None
+    if title:
+        value = re.sub(re.escape(title.strip()), " ", value, flags=re.IGNORECASE)
+    value = _RELEASE_WORD_RE.sub(" ", value)
+    value = _YEAR_RE.sub(" ", value)
+    value = " ".join(value.replace("–", " ").replace("—", " ").split())
+    return value or None
+
+
+def parse_filename_identity(filename: str) -> tuple[str | None, str]:
+    """Infer ``artist`` and ``title`` from a metadata-less audio filename.
+
+    Handles both ``Artist - Title`` and compact ``Artist-Title`` forms.  Only
+    the separator between artist/title is removed; hyphens inside the title
+    (for example ``31-я``) are preserved.  Browser/Windows duplicate suffixes
+    such as ``(2)`` are ignored.
+    """
+    stem = _clean_copy_suffix(Path(filename).stem.strip())
+    if not stem:
+        return None, "song"
+
+    spaced = re.split(r"\s+[-–—]\s+", stem, maxsplit=1)
+    if len(spaced) == 2 and all(part.strip() for part in spaced):
+        return spaced[0].strip(), spaced[1].strip()
+
+    # Metadata-less libraries often use Artist-Title without spaces. Split
+    # only the first separator so title punctuation such as ``31-я`` survives.
+    compact = re.match(r"^(.+?)[–—-](.+)$", stem)
+    if compact:
+        artist = compact.group(1).strip()
+        title = compact.group(2).strip()
+        if artist and title and any(ch.isalpha() for ch in artist):
+            return artist, title
+
+    return None, stem
+
+
+def _read_source_identity(
+    source_path: Path, original_filename: str, requested_title: str
+) -> tuple[str | None, str]:
+    """Resolve identity in strict order: embedded metadata, then filename."""
+    tagged_title: str | None = None
+    tagged_artist: str | None = None
+    try:
+        from mutagen import File as MutagenFile
+
+        tags = MutagenFile(source_path, easy=True)
+        if tags is not None:
+            tagged_title = _first_audio_tag(tags, "title")
+            tagged_artist = _first_audio_tag(tags, "artist", "albumartist")
+    except Exception:
+        pass
+
+    filename_artist, filename_title = parse_filename_identity(original_filename)
+    if tagged_title:
+        artist = _clean_artist_tag(tagged_artist, tagged_title) or filename_artist
+        return artist, tagged_title.strip()
+
+    if filename_artist:
+        return filename_artist, filename_title
+
+    return None, requested_title.strip() or filename_title
+
+
+def _folder_name(artist: str | None, title: str, fallback: str) -> str:
+    identity = " ".join(part for part in (artist, title) if part and part.strip()).strip()
+    value = _WINDOWS_FORBIDDEN_RE.sub(" ", identity)
+    value = " ".join(value.split()).rstrip(" .")
+    return value[:180].rstrip(" .") or fallback
+
+
+def _unique_output_dir(base_name: str) -> Path:
+    candidate = config.SONG_OUTPUT_DIR / base_name
+    suffix = 2
+    while candidate.exists():
+        candidate = config.SONG_OUTPUT_DIR / f"{base_name} ({suffix})"
+        suffix += 1
+    return candidate
+
+
 def slugify(title: str, fallback: str) -> str:
     """Человекочитаемое, но filesystem-safe имя папки под Song/<slug>.
     Не гарантирует уникальность сама по себе — уникальность обеспечивает
@@ -92,19 +198,25 @@ def _persist_song(
     db: Session,
     *,
     title: str,
+    artist: str | None,
     original_filename: str,
     extension: str,
     write_source,
 ) -> models.Song:
     """Allocate a library name, store its source, and commit the database row."""
-    base_slug = slugify(title, fallback="song")
+    identity = " ".join(part for part in (artist, title) if part).strip() or title
+    base_slug = slugify(identity, fallback="song")
     with library_write_lock():
         slug = make_unique_slug(db, base_slug)
-        output_dir = config.SONG_OUTPUT_DIR / slug
+        # Keep the legacy slug folder when no artist can be inferred. Once we
+        # know both parts, use the human-readable ``Artist Title`` directory.
+        folder_base = _folder_name(artist, title, slug) if artist else slug
+        output_dir = _unique_output_dir(folder_base)
         destination = output_dir / f"source{extension}"
         write_source(destination)
         song = models.Song(
             title=title,
+            artist=artist,
             original_filename=original_filename,
             source_path=str(destination),
             slug=slug,
@@ -124,9 +236,13 @@ def create_song(db: Session, title: str, original_filename: str, file_bytes: byt
     clean_title, safe_name, extension = _song_input(title, original_filename)
     if not file_bytes:
         raise ValueError("Audio file is empty")
+    parsed_artist, parsed_title = parse_filename_identity(safe_name)
+    if title.strip():
+        parsed_title = clean_title
     return _persist_song(
         db,
-        title=clean_title,
+        title=parsed_title,
+        artist=parsed_artist,
         original_filename=safe_name,
         extension=extension,
         write_source=lambda destination: atomic_write_bytes(destination, file_bytes),
@@ -144,13 +260,16 @@ def create_song_from_path(
     if not temporary_source.is_file() or temporary_source.stat().st_size == 0:
         raise ValueError("Audio file is empty")
 
+    artist, resolved_title = _read_source_identity(temporary_source, safe_name, clean_title)
+
     def move_source(destination: Path) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
         temporary_source.replace(destination)
 
     return _persist_song(
         db,
-        title=clean_title,
+        title=resolved_title,
+        artist=artist,
         original_filename=safe_name,
         extension=extension,
         write_source=move_source,

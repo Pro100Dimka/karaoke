@@ -77,31 +77,34 @@ def _first_audio_tag(tags: object, *names: str) -> str | None:
 
 
 def _apply_source_metadata(song: models.Song) -> None:
-    """Fill library fields from embedded audio tags, preserving user edits."""
-    default_title = Path(song.original_filename).stem.strip()
+    """Fill library identity from tags, then from the original filename."""
     try:
         from mutagen import File as MutagenFile
 
         tags = MutagenFile(song.source_path, easy=True)
-    except Exception:  # Metadata is a convenience, never a pipeline failure.
+    except Exception:
         tags = None
 
     tagged_title = _first_audio_tag(tags, "title") if tags is not None else None
-    if tagged_title and song.title == default_title:
+    tagged_artist = (
+        _first_audio_tag(tags, "artist", "albumartist") if tags is not None else None
+    )
+    filename_artist, filename_title = song_service.parse_filename_identity(
+        song.original_filename
+    )
+
+    if tagged_title:
         song.title = tagged_title
-    if not song.artist:
-        song.artist = _first_audio_tag(tags, "artist", "albumartist") if tags is not None else None
+        song.artist = song_service._clean_artist_tag(tagged_artist, tagged_title) or filename_artist
+    else:
+        if filename_artist:
+            song.artist = filename_artist
+            song.title = filename_title
+        elif not song.title:
+            song.title = filename_title
+
     if not song.genre:
         song.genre = _first_audio_tag(tags, "genre") if tags is not None else None
-
-    # Many local collections have no ID3 metadata but consistently use
-    # ``Artist - Title.mp3``.  Populate the two distinct editor fields instead
-    # of presenting the whole filename as a title. User edits and real tags
-    # always win over this conservative filename fallback.
-    if not song.artist and song.title == default_title:
-        parts = re.split(r"\s+[-–—]\s+", default_title, maxsplit=1)
-        if len(parts) == 2 and all(part.strip() for part in parts):
-            song.artist, song.title = (part.strip() for part in parts)
 
 
 # The expensive AI stages receive a larger share of the indicator.  This makes
@@ -413,51 +416,32 @@ def _load_job_paths(song_id: str) -> tuple[str, Path] | None:
         song = repositories.get_song(db, song_id)
         if song is None:
             return None
-        return song.source_path, config.SONG_OUTPUT_DIR / song.slug
+        stored_output = getattr(song, "output_dir", None)
+        if isinstance(stored_output, (str, os.PathLike)) and str(stored_output):
+            out_dir = song_service.resolve_output_dir(song)
+        else:
+            out_dir = config.SONG_OUTPUT_DIR / song.slug
+        return song.source_path, out_dir
     finally:
         db.close()
 
 
 def _load_searchable_title(song_id: str) -> str | None:
-    """Build the lyrics search query in one strict order.
+    """Build a clean lyrics query from source identity.
 
-    1. Embedded audio TITLE metadata (optionally prefixed by ARTIST metadata).
-    2. Original filename stem when TITLE metadata is missing.
-
-    Database/editor titles are intentionally not used here: automatic lyrics
-    discovery must describe the actual source file, not a stale library value.
+    Metadata wins. Without metadata the original filename is parsed as
+    ``artist + title`` first, so ``TRITIA-31-я весна(2).mp3`` becomes
+    ``TRITIA 31-я весна`` instead of one opaque filename.
     """
     db = SessionLocal()
     try:
         song = repositories.get_song(db, song_id)
         if song is None:
             return None
-
-        tagged_title = None
-        tagged_artist = None
-        try:
-            from mutagen import File as MutagenFile
-
-            tags = MutagenFile(song.source_path, easy=True)
-            if tags is not None:
-                tagged_title = _first_audio_tag(tags, "title")
-                tagged_artist = _first_audio_tag(tags, "artist", "albumartist")
-        except Exception:
-            # Missing/broken metadata must never block processing.
-            pass
-
-        def normalize_lyrics_query(value: str | None) -> str:
-            # Search engines handle plain words more reliably here. Remove all
-            # dash variants from metadata/filenames and collapse whitespace.
-            return " ".join(
-                str(value or "").replace("-", " ").replace("–", " ").replace("—", " ").split()
-            )
-
-        if tagged_title:
-            metadata_query = f"{tagged_artist or ''} {tagged_title}"
-            return normalize_lyrics_query(metadata_query) or None
-
-        return normalize_lyrics_query(Path(song.original_filename).stem) or None
+        artist, title = song_service._read_source_identity(
+            Path(song.source_path), song.original_filename, song.title
+        )
+        return " ".join(part for part in (artist, title) if part).strip() or None
     finally:
         db.close()
 
@@ -621,7 +605,7 @@ def _apply_generated_metadata(song: models.Song, out_dir: Path) -> None:
             song.key_override = music["key"]
         detected_bpm = music.get("bpm")
         if detected_bpm is not None and not tempo_user_edited:
-            song.tempo_override = round(float(detected_bpm), 1)
+            song.tempo_override = int(round(float(detected_bpm)))
 
     reference = _read_optional_generated_json(out_dir / "reference.json", {})
     if isinstance(reference, dict):
