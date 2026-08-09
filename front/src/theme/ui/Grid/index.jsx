@@ -2,6 +2,8 @@ import Primitive from "../_internal/Primitive";
 import cx from "../_internal/cx";
 import "./grid.css";
 
+const unit = value => (typeof value === "number" ? `${value}px` : value);
+
 export default function Grid({
   as = "div",
   columns,
@@ -12,6 +14,7 @@ export default function Grid({
   align,
   justify,
   className,
+  sx,
   style,
   ...props
 }) {
@@ -22,13 +25,14 @@ export default function Grid({
       as={as}
       className={cx("ui-grid", className)}
       data-adaptive={adaptive || undefined}
+      sx={sx}
       style={{
         "--grid-columns": columns ?? 1,
-        "--grid-gap": gap,
-        "--grid-row-gap": rowGap,
-        "--grid-column-gap": columnGap,
+        "--grid-gap": unit(gap),
+        "--grid-row-gap": unit(rowGap ?? gap),
+        "--grid-column-gap": unit(columnGap ?? gap),
         "--grid-min-item-width":
-          typeof minItemWidth === "number" ? `${minItemWidth}rem` : minItemWidth,
+          typeof minItemWidth === "number" ? `${minItemWidth}px` : minItemWidth,
         "--grid-align": align,
         "--grid-justify": justify,
         ...style

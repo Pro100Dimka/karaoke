@@ -1,5 +1,6 @@
 import { Button } from "../../../../components/fields";
-import { Card, IconButton, StatusBadge } from "../../../../components/ui";
+import { IconButton, StatusBadge } from "../../../../components/ui";
+import { Card, Stack, Typography } from "../../../../theme/ui";
 import { getSongCardTilt } from "../../card-tilt";
 import { getSongCardState } from "../../utils";
 import ProcessingSignal from "../processing-signal";
@@ -70,25 +71,17 @@ export default function LibrarySongCard({
   };
   return (
     <Card
-      as="article"
-      variant="neon"
-      className={`library-song-card library-song-card--${status}`}
-      onPointerMove={handlePointerMove}
-      onPointerLeave={clearCardTilt}
-      onClick={handleClick}
-      onKeyDown={handleKeyDown}
-      role={isReady ? "button" : undefined}
-      tabIndex={isReady ? 0 : undefined}
-      aria-label={isReady ? `Открыть ${title} в караоке` : undefined}
+      variant="animation"
+      cardContent={{ style: { display: "flex", flexDirection: "row" } }}
     >
       <SongCardArtwork cardIndex={cardIndex} />
-      <div className="library-song-card-main">
-        <div className="library-song-card-heading u-row-between">
+      <Stack sx={{ flex: "1 1 0" }}>
+        <Stack direction="row" justify="space-between" align="flex-start">
           <div className="song-title-content">
             <TextItems items={titleDetails} />
           </div>
           <StatusBadge status={songStatus} />
-        </div>
+        </Stack>
         {isWorking && (
           <Button
             unstyled
@@ -100,11 +93,13 @@ export default function LibrarySongCard({
             <span>Открыть обработку</span>
           </Button>
         )}
-        <div className="library-song-card-footer">
-          <p className="library-song-card-meta u-muted-xs">
-            <TextItems items={metadata} />
-          </p>
-          <div className="library-song-card-actions">
+        <Stack direction="row" justify="space-between">
+          <div style={{ width: "100%" }}>
+            <Typography>
+              <TextItems items={metadata} />
+            </Typography>
+          </div>
+          <Stack direction="row" gap="0.5rem">
             {actions.map(
               ([
                 Icon,
@@ -126,9 +121,9 @@ export default function LibrarySongCard({
                 />
               )
             )}
-          </div>
-        </div>
-      </div>
+          </Stack>
+        </Stack>
+      </Stack>
     </Card>
   );
 }

@@ -209,33 +209,49 @@ export default function Library({ onOpenSongSettings }) {
   const filtered = filterSongs(visibleSongs, query);
   const readyCount = countReadySongs(visibleSongs);
   return (
-    <Stack className="library-page" gap="2rem" align="center" justify="center">
+    <Stack align="center">
       <LibraryBackdrop />
-      <LibraryHero
-        songCount={visibleSongs.length}
-        readyCount={readyCount}
-        canManageLibrary={canManageLibrary}
-        fileInputRef={fileInputRef}
-        includeFileInput
-        importing={importing}
-        onAdd={handleAddClick}
-        onFileChosen={handleFileChosen}
-        onOpenRoom={openOnlineRoom}
-        roomActive={Boolean(sharedRoom?.room)}
-        query={query}
-        setQuery={setQuery}
-      />
-      {error && (
-        <p className="field-error">
-          Не удалось загрузить список: {getErrorMessage(error)}
-        </p>
-      )}
-      <Stack>
-        <Grid container>
-          {filtered.map((song, cardIndex) => (
-            <Grid item key={song.id} xs={12} sm={6} md={4}>
+      <Stack
+        gap="2rem"
+        align="center"
+        sx={{ width: "90%", height: "100vh", overflow: "visible" }}
+      >
+        <LibraryHero
+          songCount={visibleSongs.length}
+          readyCount={readyCount}
+          canManageLibrary={canManageLibrary}
+          fileInputRef={fileInputRef}
+          includeFileInput
+          importing={importing}
+          onAdd={handleAddClick}
+          onFileChosen={handleFileChosen}
+          onOpenRoom={openOnlineRoom}
+          roomActive={Boolean(sharedRoom?.room)}
+          query={query}
+          setQuery={setQuery}
+        />
+        {error ? (
+          <p className="field-error">
+            Не удалось загрузить список: {getErrorMessage(error)}
+          </p>
+        ) : filtered.length === 0 ? (
+          <div className="library-card-empty text-muted">
+            Пока нет ни одной песни — добавьте первую
+          </div>
+        ) : (
+          <Grid
+            minItemWidth="33rem"
+            gap={20}
+            sx={{
+              width: "100%",
+              alignItems: "stretch",
+              alignContent: "start",
+              overflow: "visible"
+            }}
+          >
+            {filtered.map((song, cardIndex) => (
               <LibrarySongCard
-                key={`card-${song.id}`}
+                key={song.id}
                 canManageLibrary={canManageLibrary}
                 cardIndex={cardIndex}
                 song={song}
@@ -243,28 +259,33 @@ export default function Library({ onOpenSongSettings }) {
                 onOpenFolder={handleOpenFolder}
                 onOpenKaraoke={async (selectedSong) => {
                   if (karaokeTransitioning) return;
+
                   try {
                     if (sharedRoom?.room) {
                       const readyLocally = await sharedRoom.openKaraoke(
                         selectedSong.id
                       );
+
                       if (!readyLocally) return;
                     }
 
-                    // Fade the Library itself to black before route navigation.
-                    // Karaoke starts already black, so the route switch is never
-                    // visible as a hard cut.
                     setGlobalRouteBlackout(true);
                     setKaraokeTransitioning(true);
+
                     await new Promise((resolve) => {
                       window.setTimeout(resolve, 920);
                     });
+
                     navigate("/karaoke", {
-                      state: { songId: selectedSong.id, autoPlay: true }
+                      state: {
+                        songId: selectedSong.id,
+                        autoPlay: true
+                      }
                     });
                   } catch (openError) {
                     setKaraokeTransitioning(false);
                     setGlobalRouteBlackout(false);
+
                     await notify(
                       `Не удалось открыть песню: ${getErrorMessage(openError)}`
                     );
@@ -276,16 +297,11 @@ export default function Library({ onOpenSongSettings }) {
                 onProcess={handleProcess}
                 onReprocess={handleReprocess}
               />
-            </Grid>
-          ))}
-        </Grid>
-
-        {filtered.length === 0 && !error && (
-          <div className="library-card-empty text-muted">
-            Пока нет ни одной песни — добавьте первую
-          </div>
+            ))}
+          </Grid>
         )}
       </Stack>
+
       <div
         className={`library-route-blackout ${karaokeTransitioning ? "is-visible" : ""}`}
         aria-hidden="true"

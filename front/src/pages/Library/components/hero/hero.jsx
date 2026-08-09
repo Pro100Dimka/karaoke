@@ -49,7 +49,11 @@ export default function LibraryHero({ songCount, readyCount }) {
       </Stack>
       <Stack direction="row" gap="2rem" justify="flex-end">
         {STATS.map(([label, key]) => (
-          <Card key={key} sx={{ textAlign: "center" }} variant="animation">
+          <Card
+            key={key}
+            sx={{ textAlign: "center", minWidth: "100px" }}
+            variant="animation"
+          >
             <Typography variant="h3">{values[key]}</Typography>
             <Typography
               variant="caption"

@@ -36,6 +36,8 @@ const Card = forwardRef(
 
         event.currentTarget.style.setProperty("--card-mx", `${x}%`);
         event.currentTarget.style.setProperty("--card-my", `${y}%`);
+        event.currentTarget.style.setProperty("--glow-x", `${x}%`);
+        event.currentTarget.style.setProperty("--glow-y", `${y}%`);
 
         if (tilt) {
           const tiltX = (0.5 - y / 100) * 8;
@@ -51,42 +53,18 @@ const Card = forwardRef(
 
     const handlePointerLeave = (event) => {
       if (isNeon) {
-        event.currentTarget.style.removeProperty("--card-mx");
-        event.currentTarget.style.removeProperty("--card-my");
-
-        if (tilt) {
-          event.currentTarget.style.removeProperty("--tilt-x");
-          event.currentTarget.style.removeProperty("--tilt-y");
-        }
+        [
+          "--card-mx",
+          "--card-my",
+          "--glow-x",
+          "--glow-y",
+          "--tilt-x",
+          "--tilt-y"
+        ].forEach((name) => event.currentTarget.style.removeProperty(name));
       }
 
       onPointerLeave?.(event);
     };
-
-    const content = isNeon ? (
-      <>
-        <span className="ui-card__fx ui-card__glow" aria-hidden="true" />
-        <span className="ui-card__fx ui-card__glow-mid" aria-hidden="true" />
-        <span className="ui-card__fx ui-card__edge" aria-hidden="true" />
-        <span className="ui-card__fx ui-card__glint" aria-hidden="true" />
-
-        <div
-          {...cardPanel}
-          className={cx("ui-card__panel", cardPanel?.className)}
-        >
-          <span className="ui-card__fx ui-card__sheen" aria-hidden="true" />
-
-          <div
-            {...cardContent}
-            className={cx("ui-card__content", cardContent?.className)}
-          >
-            {children}
-          </div>
-        </div>
-      </>
-    ) : (
-      children
-    );
 
     return (
       <Primitive
@@ -111,7 +89,32 @@ const Card = forwardRef(
         onPointerLeave={handlePointerLeave}
         {...props}
       >
-        {content}
+        {isNeon ? (
+          <>
+            <span className="ui-card__fx ui-card__glow" aria-hidden="true" />
+            <span
+              className="ui-card__fx ui-card__glow-mid"
+              aria-hidden="true"
+            />
+            <span className="ui-card__fx ui-card__edge" aria-hidden="true" />
+            <span className="ui-card__fx ui-card__glint" aria-hidden="true" />
+            <div
+              {...cardPanel}
+              className={cx("ui-card__panel", cardPanel?.className)}
+            >
+              <span className="ui-card__fx ui-card__sheen" aria-hidden="true" />
+
+              <div
+                {...cardContent}
+                className={cx("ui-card__content", cardContent?.className)}
+              >
+                {children}
+              </div>
+            </div>
+          </>
+        ) : (
+          children
+        )}
       </Primitive>
     );
   }
