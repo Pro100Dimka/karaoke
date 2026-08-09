@@ -33,7 +33,7 @@ from .models import (
     Word,
     to_dict,
 )
-from .music import analyze_music
+from .music import MUSIC_ANALYZER_VERSION, analyze_music
 from .notes import NOTE_DECODER_VERSION, build_game_notes, build_vocal_notes
 from .pitch_post import PITCH_STABILIZER_VERSION, stabilize_pitch
 from .profiler import environment_info
@@ -186,9 +186,7 @@ class KaraokePipeline:
         # A development launcher can briefly overlap the old and the restarted
         # backend. Wait for the real owner instead of marking a valid song as
         # failed after an arbitrary 30 seconds.
-        with ThreadFileLock(
-            output / ".pipeline.lock", timeout_sec=PIPELINE_LOCK_TIMEOUT_SECONDS
-        ):
+        with ThreadFileLock(output / ".pipeline.lock", timeout_sec=PIPELINE_LOCK_TIMEOUT_SECONDS):
             return self._run_unlocked(request)
 
     def _run_unlocked(self, request: PipelineRequest) -> PipelineResult:
@@ -338,7 +336,7 @@ class KaraokePipeline:
             "tempo",
             {
                 "instrumental": cache.file_hash(instrumental_fingerprint),
-                "engine": "librosa-music-v3",
+                "engine": MUSIC_ANALYZER_VERSION,
             },
         )
         if self._cache_hit(
@@ -430,12 +428,13 @@ class KaraokePipeline:
             "Синхронизация готового текста" if supplied else "Распознавание текста песни",
         )
         if supplied:
+            effective_language = resolve_alignment_language(supplied, effective_language)
             alignment_key = cache.key(
                 "alignment",
                 {
                     "vocals": cache.file_hash(vocal_fingerprint),
                     "text": text_hash,
-                    "language": request.language,
+                    "language": effective_language,
                     "engine": self.engines.aligner.name,
                     "model": getattr(self.engines.aligner, "model_name", None),
                     "long_text_algorithm": LONG_TEXT_ALIGNMENT_VERSION,
@@ -453,14 +452,12 @@ class KaraokePipeline:
                 words = [Word(**item) for item in raw.get("words", [])]
                 reports.append(StageReport("alignment", 0, True, "cached"))
             else:
-                effective_language = resolve_alignment_language(supplied, effective_language)
                 words = self._run(
                     "alignment",
                     self.engines.aligner,
                     lambda engine: (
                         engine.align_segments(vocals, supplied_segments, effective_language)
-                        if supplied_segments
-                        and callable(getattr(engine, "align_segments", None))
+                        if supplied_segments and callable(getattr(engine, "align_segments", None))
                         else (
                             engine.align_long_text(vocals, supplied, effective_language)
                             if len(supplied.split()) >= 60

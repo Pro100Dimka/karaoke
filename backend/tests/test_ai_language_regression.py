@@ -3,7 +3,12 @@ from types import SimpleNamespace
 
 from sqlalchemy import create_engine, text
 
-from AI.engines.text import Qwen3ForcedAligner, Qwen3Transcriber, resolve_alignment_language
+from AI.engines.text import (
+    Qwen3ForcedAligner,
+    Qwen3Transcriber,
+    _consensus_language,
+    resolve_alignment_language,
+)
 from database import _repair_invalid_audio_settings_datetime
 
 
@@ -46,6 +51,21 @@ def test_alignment_language_inference():
     assert resolve_alignment_language("Привет мир") == "Russian"
     assert resolve_alignment_language("Привіт світ") == "Ukrainian"
     assert resolve_alignment_language("Hello world") == "English"
+
+
+def test_language_consensus_weights_actual_script_not_chunk_count():
+    texts = [
+        "Мы так старались и хотели, чтобы кто-нибудь услышал",
+        "Дети мертвых улиц собирали счастье из осколков",
+        "Twilight years",
+        "Falling down",
+        "Oh",
+    ]
+
+    assert (
+        _consensus_language(texts, ["Russian", "Russian", "English", "English", "English"], None)
+        == "Russian"
+    )
 
 
 def test_audio_datetime_repair_handles_non_text_sqlite_values():

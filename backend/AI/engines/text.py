@@ -140,7 +140,7 @@ def _words_from_items(items) -> list[Word]:
     return words
 
 
-ASR_PIPELINE_VERSION = "singing-batched-consensus-v11-segmented-alignment"
+ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v12-segmented-alignment"
 LONG_TEXT_ALIGNMENT_VERSION = "v2-short-windows-pathology-guard"
 
 
@@ -519,6 +519,30 @@ def _majority_language(values: list[str | None], requested: str | None) -> str |
     return None
 
 
+def _consensus_language(
+    texts: list[str], detected: list[str | None], requested: str | None
+) -> str | None:
+    """Resolve language from all recognized letters, not one vote per chunk.
+
+    Chunk voting is biased by silence: a few short hallucinated English chunks
+    can outvote long, correctly recognized Russian verses.  Script evidence is
+    weighted by actual letters and therefore represents the song as a whole.
+    """
+    explicit = _language_name(requested)
+    if explicit:
+        return explicit
+    combined = " ".join(texts).casefold()
+    cyrillic = len(re.findall(r"[а-яёіїєґ]", combined))
+    latin = len(re.findall(r"[a-z]", combined))
+    if cyrillic >= 24 and cyrillic >= latin * 1.25:
+        if any(character in combined for character in "іїєґ"):
+            return "Ukrainian"
+        return "Russian"
+    if latin >= 24 and latin >= cyrillic * 1.25:
+        return "English"
+    return _majority_language(detected, None)
+
+
 class Qwen3Transcriber(Transcriber):
     name = "qwen3-asr"
 
@@ -671,7 +695,7 @@ class Qwen3Transcriber(Transcriber):
             if len(inputs) == 1:
                 direct_words = _words_from_items(_unwrap_items(item))
 
-        consensus_language = _majority_language(detected, requested_language)
+        consensus_language = _consensus_language(initial_parts, detected, requested_language)
         chosen_parts = list(initial_parts)
 
         # Retry only low-quality / language-inconsistent chunks. The retry pass
@@ -691,7 +715,15 @@ class Qwen3Transcriber(Transcriber):
                 priority = quality - (0.30 if language_mismatch else 0.0)
                 suspicious.append((priority, index))
 
-        retry_indices = [index for _, index in sorted(suspicious)[:5]]
+        mismatched = {
+            index
+            for index, language in enumerate(detected)
+            if consensus_language and language and _language_name(language) != consensus_language
+        }
+        # Always repair chunks generated in the wrong language.  In addition,
+        # retry at most five weak same-language chunks to bound processing time.
+        weakest = [index for _, index in sorted(suspicious) if index not in mismatched][:5]
+        retry_indices = sorted(mismatched | set(weakest))
         retry_audio = [(_speech_focus_variant(chunks[index]), sr) for index in retry_indices]
         retry_items = self._transcribe_batch(model, retry_audio, consensus_language)
         candidate_map: dict[int, list[str]] = {
@@ -741,7 +773,7 @@ class Qwen3Transcriber(Transcriber):
         # words, so force the dedicated aligner to rebuild them.
         if len(inputs) == 1 and chosen_parts != initial_parts:
             direct_words = []
-        self.last_language = consensus_language
+        self.last_language = resolve_alignment_language(text, consensus_language)
         return text, direct_words
 
 

@@ -586,12 +586,16 @@ def _apply_generated_metadata(song: models.Song, out_dir: Path) -> None:
     """Persist optional metadata discovered in generated pipeline files."""
     music = _read_optional_generated_json(out_dir / "music.json", {})
     if isinstance(music, dict):
-        song.key_override = song.key_override or music.get("key")
+        key_user_edited = getattr(
+            song, "key_user_edited", getattr(song, "key_override", None) is not None
+        )
+        tempo_user_edited = getattr(
+            song, "tempo_user_edited", getattr(song, "tempo_override", None) is not None
+        )
+        if not key_user_edited and music.get("key"):
+            song.key_override = music["key"]
         detected_bpm = music.get("bpm")
-        if detected_bpm is not None and (
-            song.tempo_override is None
-            or abs(float(song.tempo_override) - float(detected_bpm)) < 2.0
-        ):
+        if detected_bpm is not None and not tempo_user_edited:
             song.tempo_override = round(float(detected_bpm), 1)
 
     reference = _read_optional_generated_json(out_dir / "reference.json", {})

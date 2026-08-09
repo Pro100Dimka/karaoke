@@ -174,13 +174,25 @@ def update_song(db: Session, song: models.Song, patch: schemas.SongUpdate) -> mo
     if note_min is not None and note_max is not None and note_min > note_max:
         raise ValueError("note_range_min must not exceed note_range_max")
     previous = {field: getattr(song, field) for field in changes}
+    previous_edit_flags = (
+        getattr(song, "key_user_edited", False),
+        getattr(song, "tempo_user_edited", False),
+    )
     for field, value in changes.items():
         setattr(song, field, value)
+    if "key_override" in changes:
+        song.key_user_edited = changes["key_override"] is not None
+    if "tempo_override" in changes:
+        song.tempo_user_edited = changes["tempo_override"] is not None
     try:
         return commit_refresh(db, song)
     except Exception:
         for field, value in previous.items():
             setattr(song, field, value)
+        if hasattr(song, "key_user_edited"):
+            song.key_user_edited = previous_edit_flags[0]
+        if hasattr(song, "tempo_user_edited"):
+            song.tempo_user_edited = previous_edit_flags[1]
         raise
 
 
@@ -188,8 +200,12 @@ def delete_song(db: Session, song: models.Song) -> None:
     """Delete a song without losing files when the database commit fails."""
     output_dir = resolve_output_dir(song)
     source_path = resolve_source_path(song)
-    paths = (output_dir,) if output_dir == source_path or output_dir in source_path.parents else (
-        output_dir,
-        source_path,
+    paths = (
+        (output_dir,)
+        if output_dir == source_path or output_dir in source_path.parents
+        else (
+            output_dir,
+            source_path,
+        )
     )
     delete_with_files(db, song, paths)

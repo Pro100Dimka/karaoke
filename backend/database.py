@@ -47,6 +47,10 @@ _SONG_COLUMN_MIGRATIONS = {
     "video_url": "ALTER TABLE songs ADD COLUMN video_url VARCHAR",
     "artist": "ALTER TABLE songs ADD COLUMN artist VARCHAR",
     "genre": "ALTER TABLE songs ADD COLUMN genre VARCHAR",
+    "key_user_edited": ("ALTER TABLE songs ADD COLUMN key_user_edited BOOLEAN NOT NULL DEFAULT 0"),
+    "tempo_user_edited": (
+        "ALTER TABLE songs ADD COLUMN tempo_user_edited BOOLEAN NOT NULL DEFAULT 0"
+    ),
 }
 
 _AUDIO_COLUMN_MIGRATIONS = {

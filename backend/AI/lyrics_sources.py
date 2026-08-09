@@ -14,6 +14,11 @@ from pathlib import Path
 
 _LRC_TIME = re.compile(r"\[(?P<minutes>\d{1,3}):(?P<seconds>\d{1,2}(?:[.:]\d+)?)\]")
 _META = re.compile(r"^\[(?:ar|ti|al|by|offset|re|ve):.*?\]\s*$", re.I)
+_SECTION_LABEL = re.compile(
+    r"^(?:(?:припев|куплет|бридж|проигрыш|вступление|финал|chorus|verse|bridge|intro|outro)"
+    r"(?:\s*\d+)?)\s*[:.]?\s*$",
+    re.I,
+)
 _TITLE_NOISE = re.compile(
     r"\s*[\[(](?:official|lyrics?|audio|video|music video|320\s*kbps|hq|hd).*?[\])]\s*",
     re.I,
@@ -32,6 +37,8 @@ _WEB_LYRICS_HOSTS = {
     "911pesni.ru",
     "zaycev.net",
 }
+
+_HTML_CHARSET = re.compile(rb"charset\s*=\s*['\"]?([a-zA-Z0-9._-]+)", re.I)
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,9 +93,7 @@ class _LyricsHTMLParser(HTMLParser):
         if self.depth > 0:
             return
         value = "\n".join(
-            " ".join(line.split())
-            for line in "".join(self.buffer).splitlines()
-            if line.strip()
+            " ".join(line.split()) for line in "".join(self.buffer).splitlines() if line.strip()
         )
         if value:
             self.lines.append(value)
@@ -109,12 +114,14 @@ def _clean(text: str) -> str:
         if _META.match(raw.strip()):
             continue
         line = _LRC_TIME.sub("", raw).strip()
-        if line:
+        if line and not _SECTION_LABEL.match(line):
             lines.append(line)
     return "\n".join(lines).strip()
 
 
-def _parse_lrc(text: str, duration_sec: float | None = None) -> tuple[tuple[float, float, str], ...]:
+def _parse_lrc(
+    text: str, duration_sec: float | None = None
+) -> tuple[tuple[float, float, str], ...]:
     timed: list[tuple[float, str]] = []
     for raw in str(text or "").replace("\ufeff", "").splitlines():
         match = _LRC_TIME.search(raw)
@@ -188,7 +195,15 @@ def _normalize_name(value: str) -> str:
 
 def _track_signature(title: str | None) -> tuple[str, str]:
     value = _TITLE_NOISE.sub(" ", str(title or "")).strip(" -_")
-    parts = re.split(r"\s+[–—-]\s+", value, maxsplit=1)
+    # Accept the filename forms produced by common downloaders: ``Artist - Title``,
+    # ``Artist -Title`` and ``Artist–Title``.  A bare ASCII hyphen without any
+    # surrounding whitespace is deliberately not split when the right hand side
+    # starts with a digit (for example ``TRITIA-31-я весна``).
+    parts = re.split(
+        r"\s*[–—]\s*|\s+-\s*|\s*-\s+|(?<=[A-Za-zА-Яа-яЁё])-\s*(?=[A-Za-zА-Яа-яЁё])",
+        value,
+        maxsplit=1,
+    )
     if len(parts) != 2:
         return "", value
     artist = parts[0].strip()
@@ -211,9 +226,7 @@ def _online(title: str | None, duration_sec: float | None) -> LyricsDiscovery:
     # title-only metadata are valid too. LRCLIB's free query handles both while
     # the ranking below still rejects unrelated results.
     query_params = (
-        {"track_name": track, "artist_name": artist}
-        if artist
-        else {"q": str(title or track)}
+        {"track_name": track, "artist_name": artist} if artist else {"q": str(title or track)}
     )
     query = urllib.parse.urlencode(query_params)
     request = urllib.request.Request(
@@ -333,9 +346,50 @@ def _fetch_web_lyrics(url: str) -> str:
     )
     try:
         with urllib.request.urlopen(request, timeout=7.0) as response:  # noqa: S310
-            page = response.read(3_000_000).decode("utf-8", "ignore")
+            payload = response.read(3_000_000)
+            headers = getattr(response, "headers", None)
+            get_charset = getattr(headers, "get_content_charset", None)
+            header_charset = get_charset() if callable(get_charset) else None
     except (OSError, UnicodeError, urllib.error.URLError):
         return ""
+    declared = _HTML_CHARSET.search(payload[:20_000])
+    encoding = header_charset or (declared.group(1).decode("ascii", "ignore") if declared else None)
+    candidates = []
+    for candidate in (encoding, "utf-8", "windows-1251"):
+        if not candidate or candidate in candidates:
+            continue
+        candidates.append(candidate)
+    decoded = []
+    for candidate in candidates:
+        try:
+            value = payload.decode(candidate)
+        except (LookupError, UnicodeDecodeError):
+            continue
+        # Correctly decoded Russian pages contain substantially more Cyrillic
+        # than mojibake punctuation/control characters.
+        cyrillic = len(re.findall(r"[А-Яа-яЁё]", value))
+        replacement = value.count("\ufffd")
+        decoded.append((cyrillic - replacement * 20, value))
+    if not decoded:
+        return ""
+    page = max(decoded, key=lambda item: item[0])[1]
+
+    host = (urllib.parse.urlparse(url).hostname or "").casefold().removeprefix("www.")
+    if host == "tekstipesen.com":
+        # This site exposes no semantic lyrics attribute.  Its song body is the
+        # first plain div after the advertising placeholder and ends before the
+        # second advertisement block.
+        match = re.search(
+            r'<div\s+class="cls".*?</div>\s*<br\s*/?>\s*<div>(.*?)</div>',
+            page,
+            flags=re.I | re.S,
+        )
+        if match:
+            fragment = re.sub(r"<br\s*/?>", "\n", match.group(1), flags=re.I)
+            fragment = re.sub(r"<[^>]+>", " ", fragment)
+            value = _clean(html.unescape(fragment))
+            if 30 <= len(value.split()) <= 2500:
+                return value
     parser = _LyricsHTMLParser()
     try:
         parser.feed(page)

@@ -33,7 +33,9 @@ def test_online_lyrics_require_metadata_match_and_keep_synced_lines(tmp_path: Pa
             "syncedLyrics": "[00:10.00] День застыл строкой\n[00:14.00] В новой песне мой апрель",
         }
     ]
-    monkeypatch.setattr(lyrics_sources.urllib.request, "urlopen", lambda *_a, **_k: _Response(payload))
+    monkeypatch.setattr(
+        lyrics_sources.urllib.request, "urlopen", lambda *_a, **_k: _Response(payload)
+    )
 
     found = lyrics_sources.discover_lyrics(
         source,
@@ -57,7 +59,9 @@ def test_online_lyrics_reject_wrong_track(tmp_path: Path, monkeypatch):
             "plainLyrics": "неверный текст " * 20,
         }
     ]
-    monkeypatch.setattr(lyrics_sources.urllib.request, "urlopen", lambda *_a, **_k: _Response(payload))
+    monkeypatch.setattr(
+        lyrics_sources.urllib.request, "urlopen", lambda *_a, **_k: _Response(payload)
+    )
 
     found = lyrics_sources.discover_lyrics(
         source,
@@ -69,9 +73,7 @@ def test_online_lyrics_reject_wrong_track(tmp_path: Path, monkeypatch):
     assert found.source is None
 
 
-def test_online_lyrics_accept_filename_without_spaces_around_dash(
-    tmp_path: Path, monkeypatch
-):
+def test_online_lyrics_accept_filename_without_spaces_around_dash(tmp_path: Path, monkeypatch):
     source = tmp_path / "source.mp3"
     source.write_bytes(b"not-an-audio-file")
     payload = [
@@ -102,13 +104,24 @@ def test_online_lyrics_accept_filename_without_spaces_around_dash(
     assert "q=" in captured_url
 
 
-def test_web_search_is_used_before_asr_when_lrclib_has_no_record(
-    tmp_path: Path, monkeypatch
-):
+def test_track_signature_accepts_one_sided_ascii_dash():
+    artist, title = lyrics_sources._track_signature("4 Апреля -Падаем вниз")
+
+    assert artist == "4 Апреля"
+    assert title == "Падаем вниз"
+
+
+def test_clean_removes_section_labels_but_keeps_lyrics():
+    value = lyrics_sources._clean("Куплет 1:\nПервая строка песни\nПрипев:\nВторая строка песни")
+
+    assert value == "Первая строка песни\nВторая строка песни"
+
+
+def test_web_search_is_used_before_asr_when_lrclib_has_no_record(tmp_path: Path, monkeypatch):
     source = tmp_path / "source.mp3"
     source.write_bytes(b"not-an-audio-file")
-    search_page = b'''<a class="result__a" href="https://muztext.com/lyrics/example-song">
-        Example Artist - Example Song lyrics</a>'''
+    search_page = b"""<a class="result__a" href="https://muztext.com/lyrics/example-song">
+        Example Artist - Example Song lyrics</a>"""
     lyrics_page = (
         '<table><tr><td class="lyrics-cell">First verified lyric line</td></tr>'
         + '<tr><td class="lyrics-cell">Second verified lyric line with enough words</td></tr>' * 6
