@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-
 import sys
 import tempfile
 import time
@@ -59,6 +58,19 @@ from .validators import (
 ProgressCallback = Callable[[str, float, str], None]
 CancelCallback = Callable[[], bool]
 PIPELINE_LOCK_TIMEOUT_SECONDS = 180.0
+
+
+def _bound_word_durations(words: list[Word]) -> list[Word]:
+    """Reject aligner intervals that stretch one token across a long gap."""
+    bounded: list[Word] = []
+    for word in words:
+        token_length = max(1, len(word.text.strip()))
+        maximum = min(3.2, max(0.7, 0.42 + token_length * 0.22))
+        end = min(word.end, word.start + maximum)
+        bounded.append(
+            Word(word.start, max(word.start + 0.02, end), word.text, word.confidence, word.index)
+        )
+    return bounded
 
 
 def _lyrics_console(*parts: object) -> None:
@@ -420,7 +432,7 @@ class KaraokePipeline:
             cache, "tempo", tempo_key, [music_path], {music_path: validate_music_json}
         ):
             music_analysis = read_json(music_path, {})
-            bpm = int(round(float(music_analysis.get("bpm", 120.0))))
+            bpm = int(round(float(music_analysis.get("bpm") or 120.0)))
             # Upgrade old cached decimal BPM values in place so every artifact
             # and API consumer sees the same integer tempo.
             if music_analysis.get("bpm") != bpm:
@@ -430,7 +442,7 @@ class KaraokePipeline:
         else:
             started = time.perf_counter()
             music_analysis = analyze_music(instrumental)
-            bpm = int(round(float(music_analysis["bpm"])))
+            bpm = int(round(float(music_analysis.get("bpm") or 120.0)))
             music_analysis["bpm"] = bpm
             write_json_atomic(music_path, music_analysis)
             cache.commit("tempo", tempo_key, [music_path])
@@ -515,7 +527,11 @@ class KaraokePipeline:
                 cache, "alignment", alignment_key, alignment_outputs, alignment_validators
             ):
                 raw = read_json(words_path, {})
-                words = [Word(**item) for item in raw.get("words", [])]
+                words = _bound_word_durations(
+                    [Word(**item) for item in raw.get("words", [])]
+                )
+                self._publish_text_alignment(output, lyrics_txt, words_path, supplied, words)
+                cache.commit("alignment", alignment_key, alignment_outputs)
                 reports.append(StageReport("alignment", 0, True, "cached"))
             else:
                 words = self._run(
@@ -534,6 +550,7 @@ class KaraokePipeline:
                     reports,
                     warnings,
                 )
+                words = _bound_word_durations(words)
                 validate_timeline(words, "words")
                 self._publish_text_alignment(output, lyrics_txt, words_path, supplied, words)
                 cache.commit("alignment", alignment_key, alignment_outputs)
@@ -558,7 +575,11 @@ class KaraokePipeline:
                 {words_path: validate_words_json},
             ):
                 text = lyrics_txt.read_text(encoding="utf-8")
-                words = [Word(**item) for item in read_json(words_path, {}).get("words", [])]
+                words = _bound_word_durations(
+                    [Word(**item) for item in read_json(words_path, {}).get("words", [])]
+                )
+                self._publish_text_alignment(output, lyrics_txt, words_path, text, words)
+                cache.commit("transcription", transcription_key, [lyrics_txt, words_path])
                 reports.append(StageReport("transcription", 0, True, "cached"))
             else:
                 if hasattr(self.engines.transcriber, "set_pitch_activity"):
@@ -587,6 +608,7 @@ class KaraokePipeline:
                         reports,
                         warnings,
                     )
+                words = _bound_word_durations(words)
                 validate_timeline(words, "words")
                 self._publish_text_alignment(output, lyrics_txt, words_path, text, words)
                 cache.commit("transcription", transcription_key, [lyrics_txt, words_path])

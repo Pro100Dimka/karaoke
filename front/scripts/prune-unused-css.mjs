@@ -5,6 +5,11 @@ import selectorParser from "postcss-selector-parser";
 
 const root = process.cwd();
 const sourceRoot = resolve(root, "src");
+const requestedFile = process.argv.find((argument) => argument.startsWith("--file="));
+const targetFile = requestedFile
+  ? resolve(root, requestedFile.slice("--file=".length))
+  : null;
+const dryRun = process.argv.includes("--dry-run");
 const sourceExtensions = new Set([".js", ".jsx", ".html"]);
 const cssExtensions = new Set([".css"]);
 const dynamicPrefixes = [
@@ -47,6 +52,7 @@ const parsedFiles = await Promise.all(
 const knownClasses = new Set();
 
 for (const parsed of parsedFiles) {
+  if (targetFile && resolve(parsed.file) !== targetFile) continue;
   parsed.root.walkRules((rule) => {
     selectorParser((selectors) => {
       selectors.walkClasses((node) => knownClasses.add(node.value));
@@ -97,10 +103,13 @@ for (const parsed of parsedFiles) {
     });
   }
 
-  await writeFile(parsed.file, parsed.root.toString(), "utf8");
+  if (!dryRun) await writeFile(parsed.file, parsed.root.toString(), "utf8");
 }
 
 console.log(`Unused CSS classes: ${unusedClasses.size}`);
 console.log(`Removed selectors: ${removedSelectors}`);
 console.log(`Removed rules: ${removedRules}`);
-for (const file of cssFiles) console.log(`Checked ${relative(root, file)}`);
+console.log(`Mode: ${dryRun ? "dry-run" : "write"}`);
+for (const file of cssFiles.filter((file) => !targetFile || resolve(file) === targetFile)) {
+  console.log(`Checked ${relative(root, file)}`);
+}

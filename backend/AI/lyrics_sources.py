@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import sys
 import html
 import json
 import os
 import re
+import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from contextlib import suppress
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from html.parser import HTMLParser
@@ -113,10 +114,8 @@ class _LyricsHTMLParser(HTMLParser):
 def _lyrics_debug(message: str) -> None:
     """Write lyrics diagnostics directly to the real backend console."""
     stream = getattr(sys, "__stdout__", None) or sys.stdout
-    try:
+    with suppress(Exception):
         print(message, file=stream, flush=True)
-    except Exception:
-        pass
 
 
 def _clean(text: str) -> str:
@@ -658,4 +657,3 @@ def discover_lyrics(
 
     _lyrics_debug("[lyrics] ALL SEARCH QUERIES FAILED -> ASR")
     return LyricsDiscovery()
-

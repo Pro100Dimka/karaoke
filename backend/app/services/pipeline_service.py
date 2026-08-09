@@ -129,6 +129,22 @@ _STEP_PLAN = {
     13.0: (99.0, 99.7, 5),
 }
 
+# AI Core reports semantic stages instead of the historical N/13 counter.
+# Each entry describes the next observable boundary, a conservative duration
+# and text intended for a person rather than an internal engine log.
+_AI_STAGE_PLAN = {
+    "decode": (8.0, 5, "Подготавливаем аудио"),
+    "separation": (35.0, 120, "Отделяем голос исполнителя от музыки"),
+    "tempo": (55.0, 20, "Определяем темп и тональность"),
+    "pitch": (70.0, 45, "Определяем мелодию голоса"),
+    "transcription": (82.0, 75, "Распознаём слова песни"),
+    "alignment": (82.0, 75, "Синхронизируем слова с голосом"),
+    "syllables": (90.0, 15, "Уточняем слоги и вокальные ноты"),
+    "midi": (96.0, 10, "Создаём ноты для караоке"),
+    "manifest": (99.7, 4, "Проверяем результат"),
+    "complete": (99.7, 2, "Завершаем обработку"),
+}
+
 
 class ProcessingCancelled(RuntimeError):
     """Raised at a safe pipeline boundary after a user cancellation."""
@@ -225,6 +241,10 @@ def _set_runtime_detail(song_id: str, log_text: str) -> None:
     with _progress_runtime_lock:
         runtime = _progress_runtime.get(song_id)
         if runtime:
+            # Semantic callbacks already supplied a translated stage label.
+            # Do not replace it with captured internal log output.
+            if "direct_percent" in runtime:
+                return
             runtime["detail"] = detail
 
 
@@ -236,7 +256,8 @@ def _begin_runtime_progress(song_id: str) -> None:
             "step": 0.0,
             "step_started_at": now,
             "completed_step_seconds": {},
-            "detail": "Подготовка AI-пайплайна",
+            "completed_stage_seconds": {},
+            "detail": "Подготавливаем обработку песни",
         }
 
 
@@ -278,15 +299,52 @@ def get_processing_telemetry(song_id: str) -> dict:
         return {}
 
     if "direct_percent" in runtime:
+        now = time.monotonic()
+        stage = str(runtime.get("stage") or "")
+        base = float(runtime.get("direct_percent", 0.0))
+        next_percent, expected, _label = _AI_STAGE_PLAN.get(
+            stage, (min(99.7, base + 1.0), 10, runtime.get("detail") or "Обрабатываем песню")
+        )
+        elapsed = max(0.0, now - float(runtime.get("stage_started_at", now)))
+        completed = runtime.get("completed_stage_seconds", {})
+        expected_done = sum(
+            _AI_STAGE_PLAN[name][1] for name in completed if name in _AI_STAGE_PLAN
+        )
+        actual_done = sum(float(value) for value in completed.values())
+        speed_factor = (
+            min(3.0, max(0.35, actual_done / expected_done))
+            if expected_done >= 5 and actual_done > 0
+            else 1.0
+        )
+        fraction = min(0.94, elapsed / max(1.0, expected * speed_factor))
+        percent = base + (next_percent - base) * fraction
+        stage_names = list(_AI_STAGE_PLAN)
+        try:
+            stage_index = stage_names.index(stage)
+        except ValueError:
+            stage_index = len(stage_names) - 1
+        remaining = max(0.0, expected * speed_factor - elapsed)
+        remaining += sum(
+            _AI_STAGE_PLAN[name][1] * speed_factor
+            for name in stage_names[stage_index + 1 :]
+        )
         return {
             "step": float(runtime.get("step", 0.0)),
-            "progress_percent": round(float(runtime["direct_percent"]), 1),
+            "progress_percent": round(min(99.7, percent), 1),
             "progress_detail": runtime.get("detail"),
-            "eta_seconds": None,
+            "eta_seconds": max(1, int(round(remaining))),
+            "semantic": True,
         }
 
     now = time.monotonic()
     step = float(runtime.get("step", 0.0))
+    if step <= 0:
+        return {
+            "step": 0.0,
+            "progress_percent": 0.5,
+            "progress_detail": runtime.get("detail"),
+            "eta_seconds": None,
+        }
     base, end, expected = _STEP_PLAN.get(step, (0.0, 1.0, 10))
     elapsed = max(0.0, now - runtime.get("step_started_at", now))
     fraction = min(0.94, elapsed / max(1, expected))
@@ -306,9 +364,10 @@ def _progress_heartbeat(song_id: str, stop_event: threading.Event) -> None:
             if telemetry:
                 step = telemetry["step"]
                 detail = telemetry.get("progress_detail") or "Обработка AI"
+                label = detail if telemetry.get("semantic") else f"{step:g}/13 · {detail}"
                 _update_progress(
                     song_id,
-                    step_label=f"{step:g}/13 · {detail}",
+                    step_label=label,
                     percent=telemetry["progress_percent"],
                 )
         except Exception:  # A transient SQLite error must not kill telemetry forever.
@@ -513,14 +572,24 @@ def _run_job(song_id: str) -> None:
             if _is_cancelled(song_id):
                 raise ProcessingCancelled("Processing cancelled by user")
             percent = max(0.0, min(99.7, float(percent)))
-            label = f"{stage} · {detail}" if detail else stage
+            friendly = _AI_STAGE_PLAN.get(stage, (0, 0, "Обрабатываем песню"))[2]
             with _progress_runtime_lock:
                 runtime = _progress_runtime.get(song_id)
                 if runtime is not None:
+                    now = time.monotonic()
+                    previous_stage = runtime.get("stage")
+                    if previous_stage and previous_stage != stage:
+                        completed = runtime.setdefault("completed_stage_seconds", {})
+                        completed[previous_stage] = max(
+                            0.0, now - float(runtime.get("stage_started_at", now))
+                        )
+                    if previous_stage != stage:
+                        runtime["stage_started_at"] = now
+                    runtime["stage"] = stage
                     runtime["direct_percent"] = percent
-                    runtime["detail"] = label[:120]
-            _update_progress(song_id, step_label=label[:255], percent=percent)
-            capture.write(f"[AI] {percent:5.1f}% {label}\n")
+                    runtime["detail"] = friendly
+            _update_progress(song_id, step_label=friendly, percent=percent)
+            capture.write(f"[AI] {percent:5.1f}% {stage} · {detail}\n")
 
         with (
             contextlib.redirect_stdout(cast(TextIO, capture)),

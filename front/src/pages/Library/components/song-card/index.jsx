@@ -1,3 +1,4 @@
+import { memo } from "react";
 import {
   Badge,
   Button,
@@ -28,9 +29,7 @@ const clearCardTilt = ({ currentTarget }) =>
     currentTarget.style.removeProperty.bind(currentTarget.style)
   );
 const TextItems = ({ items }) =>
-  items.map(
-    ([value, className], key) => value && <span key={key}>{value}</span>
-  );
+  items.map((value, key) => value && <span key={key}>{value}</span>);
 const SongStatusBadge = ({ status }) => {
   const [label, className] = STATUS[status] ?? [
     status || "Неизвестно",
@@ -44,7 +43,7 @@ const SongStatusBadge = ({ status }) => {
   );
 };
 
-export default function LibrarySongCard({
+function LibrarySongCard({
   cardIndex,
   onOpenKaraoke,
   onOpenProcessing,
@@ -54,7 +53,6 @@ export default function LibrarySongCard({
   const {
     artist,
     difficulty_override: difficulty,
-    genre,
     key_override: songKey,
     progress_percent: progress,
     status: songStatus,
@@ -63,14 +61,11 @@ export default function LibrarySongCard({
   } = song;
   const { isWorking, isReady } = getSongCardState(song);
   const actions = getSongActions({ ...props, isReady, isWorking, song });
-  const titleDetails = [
-    [title, "song-title-name"],
-    [artist, "song-artist-name"]
-  ];
+  const titleDetails = [title, artist];
   const metadata = [
-    [formatSongKey(songKey)],
-    [tempo && `${tempo} BPM`],
-    [difficulty]
+    formatSongKey(songKey),
+    tempo && `${tempo} BPM`,
+    difficulty
   ];
   const handlePointerMove = ({ clientX, clientY, currentTarget }) =>
     applyCardTilt(
@@ -95,7 +90,12 @@ export default function LibrarySongCard({
       variant="neon"
       interactive={isReady}
       className={`library-song-card library-song-card--${songStatus}`}
-      style={{ blockSize: "auto", alignSelf: "start" }}
+      style={{
+        blockSize: "auto",
+        alignSelf: "start",
+        contentVisibility: "auto",
+        containIntrinsicBlockSize: "8rem"
+      }}
       cardPanel={{ style: { blockSize: "auto" } }}
       cardContent={{
         style: {
@@ -179,3 +179,5 @@ export default function LibrarySongCard({
     </Card>
   );
 }
+
+export default memo(LibrarySongCard);

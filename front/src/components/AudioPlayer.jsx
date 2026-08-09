@@ -10,12 +10,13 @@ import {
 import { RangeInput } from "./fields";
 import { IconButton } from "./ui";
 
-export function AudioPlayer({ src, className = "" }) {
+export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
   const audioRef = useRef(null);
   const previousVolumeRef = useRef(1);
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const fallbackDuration = normalizeAudioDuration(initialDuration);
+  const [duration, setDuration] = useState(fallbackDuration);
   const [volume, setVolume] = useState(1);
 
   useEffect(() => {
@@ -31,8 +32,8 @@ export function AudioPlayer({ src, className = "" }) {
     }
     setPlaying(false);
     setPosition(0);
-    setDuration(0);
-  }, [src]);
+    setDuration(fallbackDuration);
+  }, [fallbackDuration, src]);
 
   const toggle = async () => {
     await toggleAudioPlayback(audioRef.current);
@@ -71,14 +72,17 @@ export function AudioPlayer({ src, className = "" }) {
         ref={audioRef}
         preload="metadata"
         src={src}
-        onLoadedMetadata={(event) =>
-          setDuration(normalizeAudioDuration(event.currentTarget.duration))
-        }
+        onLoadedMetadata={(event) => {
+          const mediaDuration = normalizeAudioDuration(
+            event.currentTarget.duration
+          );
+          setDuration(mediaDuration || fallbackDuration);
+        }}
         onTimeUpdate={(event) =>
           setPosition(
             normalizeAudioPosition(
               event.currentTarget.currentTime,
-              event.currentTarget.duration
+              normalizeAudioDuration(event.currentTarget.duration) || duration
             )
           )
         }

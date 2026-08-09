@@ -5,7 +5,7 @@ import statistics
 
 from .models import PitchFrame, Syllable, VocalNote
 
-NOTE_DECODER_VERSION = "lyric-anchored-lead-v11"
+NOTE_DECODER_VERSION = "vocal-pitch-independent-v12"
 
 
 def hz_to_midi(hz: float) -> float:
@@ -505,19 +505,42 @@ def build_vocal_notes(
                 if note is not None:
                     pitch_notes.append(note)
 
-    # Lyrics act only as a temporal activity mask after musical decoding.
-    output: list[VocalNote] = []
-    if ordered_syllables:
-        for note in pitch_notes:
-            output.extend(
-                _clip_note_to_lyric_activity(
-                    note,
-                    ordered_syllables,
-                    min_note=min_note,
-                )
+    # The separated vocal pitch is the musical source of truth. Lyrics may be
+    # imperfectly aligned and must never erase real notes at chorus boundaries.
+    # Attach the nearest linguistic metadata for scoring, without clipping the
+    # detected vocal event to the word interval.
+    output = []
+    for note in pitch_notes:
+        syllable = _best_syllable_for_segment(
+            [
+                PitchFrame(
+                    time=note.start,
+                    frequency=440.0 * 2 ** ((note.midi_note - 69) / 12),
+                    confidence=1.0,
+                    energy=1.0,
+                    voiced=True,
+                ),
+                PitchFrame(
+                    time=max(note.start, note.end - 0.01),
+                    frequency=440.0 * 2 ** ((note.midi_note - 69) / 12),
+                    confidence=1.0,
+                    energy=1.0,
+                    voiced=True,
+                ),
+            ],
+            ordered_syllables,
+        )
+        output.append(
+            VocalNote(
+                note.start,
+                note.end,
+                note.midi_note,
+                note.velocity,
+                syllable.word_index if syllable is not None else None,
+                syllable.index if syllable is not None else None,
+                note.cents,
             )
-    else:
-        output = pitch_notes
+        )
 
     ordered = sorted(output, key=lambda note: (note.start, note.end))
     monophonic: list[VocalNote] = []

@@ -26,6 +26,7 @@ function RecordingCard({ recording, onAnalyze, onDelete }) {
       <AudioPlayer
         className="song-recording-player"
         src={api.getPerformanceFileUrl(recording.id)}
+        initialDuration={recording.duration_sec}
       />
       <div className="song-recording-item-actions">
         {actions.map(([Icon, size, label, className, handler]) => (

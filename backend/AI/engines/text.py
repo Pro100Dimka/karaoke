@@ -140,8 +140,8 @@ def _words_from_items(items) -> list[Word]:
     return words
 
 
-ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v13-title-language-guard"
-LONG_TEXT_ALIGNMENT_VERSION = "v11-balanced-acoustic-chunks"
+ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v14-duration-guard"
+LONG_TEXT_ALIGNMENT_VERSION = "v15-phrase-sized-forced-alignment"
 
 
 def _normalize_singing_audio(y: np.ndarray) -> np.ndarray:
@@ -249,7 +249,7 @@ def _singing_chunks(
     return [audio for audio, _start, _end in _singing_chunk_windows(y, sr, activity_hints)]
 
 
-def _group_lyric_text(text: str, maximum_words: int = 38) -> list[str]:
+def _group_lyric_text(text: str, maximum_words: int = 10) -> list[str]:
     """Pack adjacent author lines into context-safe acoustic alignment chunks."""
     groups: list[str] = []
     current: list[str] = []
@@ -335,6 +335,14 @@ def _pathological_alignment(words: list[Word], span: float) -> bool:
         for word, duration in zip(words, durations, strict=True)
         if tokenize(word.text)
     )
+    # A single written word cannot occupy most of a phrase window.  The old
+    # span-relative threshold accepted 9-11 second words in wide chorus
+    # windows, shifting every lyric and every derived note after them.
+    implausible_held_word = any(
+        duration > min(3.2, max(1.8, 0.42 + len(tokenize(word.text)[0]) * 0.22))
+        for word, duration in zip(words, durations, strict=True)
+        if tokenize(word.text)
+    )
     overlaps = sum(
         right.start < left.end - 0.015
         for left, right in zip(words, words[1:], strict=False)
@@ -343,6 +351,7 @@ def _pathological_alignment(words: list[Word], span: float) -> bool:
     total_span = max(0.0, words[-1].end - words[0].start)
     return (
         max(durations) > max(4.5, span * 0.62)
+        or implausible_held_word
         or collapsed > max(2, len(words) // 4)
         or compressed > max(2, len(words) // 3)
         or implausible_long_word
@@ -447,6 +456,21 @@ def _activity_fallback_words(
         # A failed multi-line chunk may legitimately contain several phrases
         # separated by breaths or instrumental punctuation.
         selected = regions
+    elif hint_words and len(tokens) <= 3:
+        # Synced lyric providers often timestamp a short line until the next
+        # line starts. A one-word line can therefore own a 10 second window,
+        # although the singer voices it for only one nearby activity island.
+        # Select that island instead of stretching the word across the complete
+        # provider interval.
+        hint_start = hint_words[0].start
+        region = min(
+            regions,
+            key=lambda candidate: abs(candidate[0] - hint_start),
+        )
+        maximum_span = sum(
+            min(3.2, max(0.7, 0.42 + len(token) * 0.22)) for token in tokens
+        )
+        selected = [(region[0], min(region[1], region[0] + maximum_span))]
     elif hint_words:
         hint_center = (hint_words[0].start + hint_words[-1].end) / 2
         selected = min(

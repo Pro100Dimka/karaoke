@@ -1,5 +1,6 @@
 import { HashRouter } from "react-router-dom";
 import { OnlineRoomDock } from "./components/OnlineRoomDock";
+import RoomRadioSync from "./components/RoomRadioSync";
 import AppLayout from "./components/layout";
 import { ErrorBoundary } from "./components/ui";
 import ContextProviders from "./contexts";
@@ -16,6 +17,7 @@ export default function App() {
         <HashRouter future={routerFutureConfig}>
           <AppLayout />
           <OnlineRoomDock />
+          <RoomRadioSync />
         </HashRouter>
       </ContextProviders>
     </ErrorBoundary>

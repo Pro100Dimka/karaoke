@@ -17,6 +17,7 @@ export default function ProcessingModal({
   const progress = getProcessingProgress(status, song);
   const active = isProcessingActive(currentStatus);
   const isDone = currentStatus === "done";
+  const visibleProgress = active ? Math.max(1, progress) : progress;
   const actions = [
     active && [OctagonX, "Отменить", "danger", onCancel],
     ...(isDone
@@ -61,11 +62,17 @@ export default function ProcessingModal({
       <div className="processing-modal-body modal-scroll">
         <div className="processing-modal-summary u-row-between">
           <StatusBadge status={currentStatus} />
-          <strong>{Math.round(progress)}%</strong>
+          <strong>{Math.round(visibleProgress)}%</strong>
         </div>
-        <ProcessingSignal progress={progress} />
+        <ProcessingSignal progress={visibleProgress} />
         <div className="processing-modal-stage u-between-3">
-          <span>{status?.progress_step ?? "Подготовка"}</span>
+          <span>
+            {isDone
+              ? "Песня готова к караоке"
+              : status?.progress_detail ??
+                status?.progress_step ??
+                "Подготавливаем обработку песни"}
+          </span>
           {active && (
             <strong style={{ textAlign: "right", width: "100%" }}>
               Осталось: {formatEta(status?.eta_seconds)}

@@ -388,6 +388,18 @@ def _line_timing_is_impossible(line: dict[str, Any]) -> bool:
     return span < max(0.18, len(words) * 0.115)
 
 
+def _active_offset_to_time(
+    regions: list[tuple[float, float]], active_duration: float, offset: float
+) -> float:
+    remaining = max(0.0, min(active_duration, offset))
+    for region_start, region_end in regions:
+        region_span = max(0.0, region_end - region_start)
+        if remaining <= region_span:
+            return region_start + remaining
+        remaining -= region_span
+    return regions[-1][1]
+
+
 def _repair_impossible_alignment_chunks(
     lines: list[dict[str, Any]], output_dir: Path, maximum_words: int = 38
 ) -> list[dict[str, Any]]:
@@ -457,21 +469,16 @@ def _repair_impossible_alignment_chunks(
         weights = [max(2, len(str(word.get("word") or word.get("text") or ""))) for word in words]
         total_weight = max(1, sum(weights))
 
-        def at(offset: float) -> float:
-            remaining = max(0.0, min(active_duration, offset))
-            for region_start, region_end in regions:
-                region_span = max(0.0, region_end - region_start)
-                if remaining <= region_span:
-                    return region_start + remaining
-                remaining -= region_span
-            return regions[-1][1]
-
         repaired_words: list[dict[str, Any]] = []
         consumed = 0
         for word, weight in zip(words, weights, strict=True):
-            word_start = at(active_duration * consumed / total_weight)
+            word_start = _active_offset_to_time(
+                regions, active_duration, active_duration * consumed / total_weight
+            )
             consumed += weight
-            word_end = at(active_duration * consumed / total_weight)
+            word_end = _active_offset_to_time(
+                regions, active_duration, active_duration * consumed / total_weight
+            )
             repaired_words.append({**word, "start": word_start, "end": max(word_start + 0.02, word_end)})
 
         cursor = 0
@@ -486,6 +493,28 @@ def _repair_impossible_alignment_chunks(
                 "words": line_words,
             }
     return result
+
+
+def _bound_legacy_word_durations(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep acoustic word starts while preventing highlights across long gaps."""
+    output: list[dict[str, Any]] = []
+    for line in lines:
+        words = []
+        for word in list(line.get("words") or []):
+            start = float(word.get("start") or 0.0)
+            end = max(start + 0.02, float(word.get("end") or start))
+            token = str(word.get("word") or word.get("text") or "").strip()
+            maximum = min(3.2, max(0.7, 0.42 + len(token) * 0.22))
+            words.append({**word, "start": start, "end": min(end, start + maximum)})
+        output.append(
+            {
+                **line,
+                "start": words[0]["start"] if words else line.get("start", 0.0),
+                "end": words[-1]["end"] if words else line.get("end", 0.0),
+                "words": words,
+            }
+        )
+    return output
 
 
 def _reference_notes(output_dir: Path) -> list[dict[str, Any]]:
@@ -526,7 +555,8 @@ def ensure_legacy_artifacts(output_dir: Path, *, title: str | None = None) -> No
     # to which word and used to compress complete lines into 0.2-0.8 seconds.
     # Preserve the canonical word alignment here; acoustic repair is performed
     # locally inside the aligner's bounded phrase window when it is needed.
-    write_json(output_dir / "lyrics.json", _repair_impossible_alignment_chunks(lines, output_dir))
+    repaired_lines = _repair_impossible_alignment_chunks(lines, output_dir)
+    write_json(output_dir / "lyrics.json", _bound_legacy_word_durations(repaired_lines))
 
     song_map: Any = read_json(output_dir / "songMap.json", default={})
     if not isinstance(song_map, dict):

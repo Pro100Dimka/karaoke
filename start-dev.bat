@@ -25,7 +25,7 @@ call "%ROOT%scripts\ensure-offline-models.bat"
 if errorlevel 1 exit /b 1
 
 echo Stopping previous development processes on ports 8000 and 5173...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ports = 8000,5173; Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -in $ports } | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ports = 8000,5173; $owners = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -in $ports } | Select-Object -ExpandProperty OwningProcess -Unique; foreach ($ownerPid in $owners) { $process = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $ownerPid) -ErrorAction SilentlyContinue; if ($process -and $process.Name -eq 'KaraokeBackend.exe' -and $process.ParentProcessId) { Stop-Process -Id $process.ParentProcessId -Force -ErrorAction SilentlyContinue }; Stop-Process -Id $ownerPid -Force -ErrorAction SilentlyContinue }"
 set "KARAOKE_PYTHON=%PYTHON%"
 cd /d "%ROOT%front"
 call npm run dev:electron

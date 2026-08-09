@@ -50,6 +50,8 @@ export default function Library({ onOpenSongSettings }) {
   const navigate = useNavigate();
   const { alert: notify, confirm: confirmDialog } = useAppDialog();
   const sharedRoom = useOnlineRoom();
+  const activeRoom = sharedRoom?.room;
+  const openKaraokeInRoom = sharedRoom?.openKaraoke;
   const { reloadSettings, settings } = useAppSettings();
 
   useEffect(() => {
@@ -101,12 +103,16 @@ export default function Library({ onOpenSongSettings }) {
     }
     setOnlineRoomOpen(true);
   };
-  const { data: songRecordings, error: recordingsError } = usePolling(
+  const {
+    data: songRecordings,
+    error: recordingsError,
+    refresh: refreshRecordings
+  } = usePolling(
     () =>
       recordingsSong
         ? api.listRecordingsForSong(recordingsSong.id)
         : Promise.resolve([]),
-    2500,
+    0,
     [recordingsSong?.id]
   );
   const { data: processingStatus } = usePolling(
@@ -168,11 +174,12 @@ export default function Library({ onOpenSongSettings }) {
       if (!(await confirmDialog("Удалить это записанное исполнение?"))) return;
       try {
         await api.deleteRecording(recording.id);
+        refreshRecordings();
       } catch (err) {
         await notify(`Не удалось удалить запись: ${getErrorMessage(err)}`);
       }
     },
-    [confirmDialog, notify]
+    [confirmDialog, notify, refreshRecordings]
   );
 
   const cancelProcessing = useCallback(async () => {
@@ -208,6 +215,44 @@ export default function Library({ onOpenSongSettings }) {
 
   const filtered = filterSongs(visibleSongs, query);
   const readyCount = countReadySongs(visibleSongs);
+  const openSongSettings = useCallback(
+    (songId) => onOpenSongSettings?.(songId),
+    [onOpenSongSettings]
+  );
+  const openSongInKaraoke = useCallback(
+    async (selectedSong) => {
+      if (karaokeTransitioning) return;
+
+      try {
+        if (activeRoom) {
+          const readyLocally = await openKaraokeInRoom(selectedSong.id);
+          if (!readyLocally) return;
+        }
+
+        setGlobalRouteBlackout(true);
+        setKaraokeTransitioning(true);
+        await new Promise((resolve) => {
+          window.setTimeout(resolve, 920);
+        });
+        navigate("/karaoke", {
+          state: { songId: selectedSong.id, autoPlay: true }
+        });
+      } catch (openError) {
+        setKaraokeTransitioning(false);
+        setGlobalRouteBlackout(false);
+        await notify(
+          `Не удалось открыть песню: ${getErrorMessage(openError)}`
+        );
+      }
+    },
+    [
+      karaokeTransitioning,
+      navigate,
+      notify,
+      activeRoom,
+      openKaraokeInRoom
+    ]
+  );
   return (
     <Stack align="center" sx={{ height: "100vh" }}>
       <LibraryBackdrop />
@@ -264,43 +309,10 @@ export default function Library({ onOpenSongSettings }) {
                   song={song}
                   onDelete={handleDelete}
                   onOpenFolder={handleOpenFolder}
-                  onOpenKaraoke={async (selectedSong) => {
-                    if (karaokeTransitioning) return;
-
-                    try {
-                      if (sharedRoom?.room) {
-                        const readyLocally = await sharedRoom.openKaraoke(
-                          selectedSong.id
-                        );
-
-                        if (!readyLocally) return;
-                      }
-
-                      setGlobalRouteBlackout(true);
-                      setKaraokeTransitioning(true);
-
-                      await new Promise((resolve) => {
-                        window.setTimeout(resolve, 920);
-                      });
-
-                      navigate("/karaoke", {
-                        state: {
-                          songId: selectedSong.id,
-                          autoPlay: true
-                        }
-                      });
-                    } catch (openError) {
-                      setKaraokeTransitioning(false);
-                      setGlobalRouteBlackout(false);
-
-                      await notify(
-                        `Не удалось открыть песню: ${getErrorMessage(openError)}`
-                      );
-                    }
-                  }}
+                  onOpenKaraoke={openSongInKaraoke}
                   onOpenProcessing={trackProcessingSong}
                   onOpenRecordings={setRecordingsSong}
-                  onOpenSettings={() => onOpenSongSettings?.(song.id)}
+                  onOpenSettings={openSongSettings}
                   onProcess={handleProcess}
                   onReprocess={handleReprocess}
                 />

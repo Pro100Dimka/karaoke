@@ -35,6 +35,7 @@ export default function LibraryBackdrop() {
     let targetY = 0;
     let currentX = 0;
     let currentY = 0;
+    let running = false;
 
     const render = () => {
       currentX += (targetX - currentX) * 0.075;
@@ -49,22 +50,36 @@ export default function LibraryBackdrop() {
         "--library-bg-y",
         `${(-currentY * 4).toFixed(2)}px`
       );
+      const moving =
+        Math.abs(targetX - currentX) > 0.001 ||
+        Math.abs(targetY - currentY) > 0.001;
+      if (moving) frame = requestAnimationFrame(render);
+      else {
+        frame = 0;
+        running = false;
+      }
+    };
+
+    const requestRender = () => {
+      if (running) return;
+      running = true;
       frame = requestAnimationFrame(render);
     };
 
     const handlePointer = ({ clientX, clientY }) => {
       targetX = (clientX / Math.max(1, innerWidth) - 0.5) * 2;
       targetY = (clientY / Math.max(1, innerHeight) - 0.5) * 2;
+      requestRender();
     };
 
     const resetPointer = () => {
       targetX = 0;
       targetY = 0;
+      requestRender();
     };
 
     addEventListener("pointermove", handlePointer, { passive: true });
     document.addEventListener("mouseleave", resetPointer);
-    frame = requestAnimationFrame(render);
 
     return () => {
       cancelAnimationFrame(frame);

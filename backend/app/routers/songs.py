@@ -29,12 +29,17 @@ def _processing_status(
 ) -> schemas.ProcessingStatusOut:
     telemetry = telemetry or {}
     progress_detail = telemetry.get("progress_detail")
+    live_percent = telemetry.get("progress_percent")
     eta_seconds = telemetry.get("eta_seconds")
     return schemas.ProcessingStatusOut(
         song_id=song.id,
         status=song.status,
         progress_step=song.progress_step,
-        progress_percent=song.progress_percent,
+        progress_percent=(
+            float(live_percent)
+            if isinstance(live_percent, int | float)
+            else song.progress_percent
+        ),
         progress_detail=progress_detail if isinstance(progress_detail, str) else None,
         eta_seconds=eta_seconds if isinstance(eta_seconds, int) else None,
         error_message=song.error_message,

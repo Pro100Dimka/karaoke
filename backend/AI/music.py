@@ -153,4 +153,4 @@ def analyze_music(path: str | Path) -> dict[str, float | str | None]:
 
 def estimate_tempo(path: str | Path) -> float:
     """Backward-compatible tempo-only API."""
-    return float(analyze_music(path)["bpm"])
+    return float(analyze_music(path)["bpm"] or 120.0)
