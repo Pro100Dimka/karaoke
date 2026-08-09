@@ -2,6 +2,7 @@
   .ui-grid {
     display: grid;
     min-inline-size: 0;
+    width: 100%;
     grid-template-columns: repeat(var(--grid-columns), minmax(0, 1fr));
     row-gap: calc(var(--spacing) * var(--grid-row-gap, var(--grid-gap)));
     column-gap: calc(var(--spacing) * var(--grid-column-gap, var(--grid-gap)));
@@ -10,7 +11,9 @@
   }
 
   .ui-grid[data-adaptive] {
-    grid-template-columns:
-      repeat(auto-fit, minmax(min(100%, var(--grid-min-item-width)), 1fr));
+    grid-template-columns: repeat(
+      auto-fit,
+      minmax(min(100%, var(--grid-min-item-width)), 1fr)
+    );
   }
 }

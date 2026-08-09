@@ -1,9 +1,9 @@
 const kebab = (value) =>
-  value.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
+  String(value).replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
 
 function writeVars(style, value, path = []) {
   if (Array.isArray(value)) {
-    value.forEach((item, index) => writeVars(style, item, [...path, index]));
+    value.forEach((item, index) => writeVars(style, item, [...path, String(index)]));
     return;
   }
 
@@ -13,6 +13,8 @@ function writeVars(style, value, path = []) {
     );
     return;
   }
+
+  if (!path.length || value == null) return;
 
   style.setProperty(`--${path.map(kebab).join("-")}`, String(value));
 }

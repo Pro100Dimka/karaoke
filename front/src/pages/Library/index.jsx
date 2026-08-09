@@ -1,16 +1,14 @@
-import { Search } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { OnlineRoomModal } from "../../components/OnlineRoomModal";
-import { Card, Panel } from "../../components/ui";
 import { useAppDialog } from "../../contexts/AppDialog";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import useAppSettings from "../../hooks/useAppSettings";
 import { usePolling } from "../../hooks/usePolling";
+import { Grid, Stack } from "../../theme/ui";
 import { getErrorMessage } from "../../utils/errors";
 import PerformanceAnalysisModal from "../Karaoke/modals/performance-analysis-modal";
-import LibraryActions from "./components/actions";
 import LibraryBackdrop from "./components/backdrop";
 import LibraryHero from "./components/hero";
 import LibrarySongCard from "./components/song-card";
@@ -211,94 +209,83 @@ export default function Library({ onOpenSongSettings }) {
   const filtered = filterSongs(visibleSongs, query);
   const readyCount = countReadySongs(visibleSongs);
   return (
-    <div className="library-page">
+    <Stack className="library-page" gap="2rem" align="center" justify="center">
       <LibraryBackdrop />
-      <LibraryHero songCount={visibleSongs.length} readyCount={readyCount} />
-      <Panel className="library-collection-panel">
-        <div className="library-toolbar u-row-between">
-          <Card
-            className="library-search"
-            variant="neon"
-            cardPanel={{ style: { background: "unset" } }}
-          >
-            <Search className="library-search-icon" size={14} />
-            <input
-              className="input library-search-input"
-              placeholder="Поиск..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </Card>
-          <LibraryActions
-            canManageLibrary={canManageLibrary}
-            fileInputRef={fileInputRef}
-            includeFileInput
-            importing={importing}
-            onAdd={handleAddClick}
-            onFileChosen={handleFileChosen}
-            onOpenRoom={openOnlineRoom}
-            roomActive={Boolean(sharedRoom?.room)}
-          />
-        </div>
-
-        {error && (
-          <p className="field-error">
-            Не удалось загрузить список: {getErrorMessage(error)}
-          </p>
-        )}
-
-        <div className="library-card-deck">
+      <LibraryHero
+        songCount={visibleSongs.length}
+        readyCount={readyCount}
+        canManageLibrary={canManageLibrary}
+        fileInputRef={fileInputRef}
+        includeFileInput
+        importing={importing}
+        onAdd={handleAddClick}
+        onFileChosen={handleFileChosen}
+        onOpenRoom={openOnlineRoom}
+        roomActive={Boolean(sharedRoom?.room)}
+        query={query}
+        setQuery={setQuery}
+      />
+      {error && (
+        <p className="field-error">
+          Не удалось загрузить список: {getErrorMessage(error)}
+        </p>
+      )}
+      <Stack>
+        <Grid container>
           {filtered.map((song, cardIndex) => (
-            <LibrarySongCard
-              key={`card-${song.id}`}
-              canManageLibrary={canManageLibrary}
-              cardIndex={cardIndex}
-              song={song}
-              onDelete={handleDelete}
-              onOpenFolder={handleOpenFolder}
-              onOpenKaraoke={async (selectedSong) => {
-                if (karaokeTransitioning) return;
-                try {
-                  if (sharedRoom?.room) {
-                    const readyLocally = await sharedRoom.openKaraoke(
-                      selectedSong.id
-                    );
-                    if (!readyLocally) return;
-                  }
+            <Grid item key={song.id} xs={12} sm={6} md={4}>
+              <LibrarySongCard
+                key={`card-${song.id}`}
+                canManageLibrary={canManageLibrary}
+                cardIndex={cardIndex}
+                song={song}
+                onDelete={handleDelete}
+                onOpenFolder={handleOpenFolder}
+                onOpenKaraoke={async (selectedSong) => {
+                  if (karaokeTransitioning) return;
+                  try {
+                    if (sharedRoom?.room) {
+                      const readyLocally = await sharedRoom.openKaraoke(
+                        selectedSong.id
+                      );
+                      if (!readyLocally) return;
+                    }
 
-                  // Fade the Library itself to black before route navigation.
-                  // Karaoke starts already black, so the route switch is never
-                  // visible as a hard cut.
-                  setGlobalRouteBlackout(true);
-                  setKaraokeTransitioning(true);
-                  await new Promise((resolve) => {
-                    window.setTimeout(resolve, 920);
-                  });
-                  navigate("/karaoke", {
-                    state: { songId: selectedSong.id, autoPlay: true }
-                  });
-                } catch (openError) {
-                  setKaraokeTransitioning(false);
-                  setGlobalRouteBlackout(false);
-                  await notify(
-                    `Не удалось открыть песню: ${getErrorMessage(openError)}`
-                  );
-                }
-              }}
-              onOpenProcessing={trackProcessingSong}
-              onOpenRecordings={setRecordingsSong}
-              onOpenSettings={() => onOpenSongSettings?.(song.id)}
-              onProcess={handleProcess}
-              onReprocess={handleReprocess}
-            />
+                    // Fade the Library itself to black before route navigation.
+                    // Karaoke starts already black, so the route switch is never
+                    // visible as a hard cut.
+                    setGlobalRouteBlackout(true);
+                    setKaraokeTransitioning(true);
+                    await new Promise((resolve) => {
+                      window.setTimeout(resolve, 920);
+                    });
+                    navigate("/karaoke", {
+                      state: { songId: selectedSong.id, autoPlay: true }
+                    });
+                  } catch (openError) {
+                    setKaraokeTransitioning(false);
+                    setGlobalRouteBlackout(false);
+                    await notify(
+                      `Не удалось открыть песню: ${getErrorMessage(openError)}`
+                    );
+                  }
+                }}
+                onOpenProcessing={trackProcessingSong}
+                onOpenRecordings={setRecordingsSong}
+                onOpenSettings={() => onOpenSongSettings?.(song.id)}
+                onProcess={handleProcess}
+                onReprocess={handleReprocess}
+              />
+            </Grid>
           ))}
-          {filtered.length === 0 && !error && (
-            <div className="library-card-empty text-muted">
-              Пока нет ни одной песни — добавьте первую
-            </div>
-          )}
-        </div>
-      </Panel>
+        </Grid>
+
+        {filtered.length === 0 && !error && (
+          <div className="library-card-empty text-muted">
+            Пока нет ни одной песни — добавьте первую
+          </div>
+        )}
+      </Stack>
       <div
         className={`library-route-blackout ${karaokeTransitioning ? "is-visible" : ""}`}
         aria-hidden="true"
@@ -335,6 +322,6 @@ export default function Library({ onOpenSongSettings }) {
         onCancel={cancelProcessing}
         onOpenKaraoke={(songId) => navigate("/karaoke", { state: { songId } })}
       />
-    </div>
+    </Stack>
   );
 }

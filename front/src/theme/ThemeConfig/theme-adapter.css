@@ -45,7 +45,7 @@
     --button-fg: var(--ui-text-inverse);
     --button-border: var(--ui-border);
 
-    --card-bg: var(--ui-gradient-panel, var(--ui-surface));
+    --card-bg: var(--ui-surface);
     --card-bg-soft: var(--ui-surface-soft);
     --card-bg-glass: var(--ui-gradient-glass, var(--ui-surface-glass));
     --card-fg: var(--ui-text);

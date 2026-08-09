@@ -1,10 +1,9 @@
-import darkIcon from "../../../assets/icons/dark.png";
-import greenIcon from "../../../assets/icons/green.png";
-import lightIcon from "../../../assets/icons/light.png";
-import violetIcon from "../../../assets/icons/violet.png";
-
-import useAppSettings from "../../../hooks/useAppSettings";
-import { Box, Stack, Typography } from "../../../theme/ui";
+import darkIcon from "../../../../assets/icons/dark.png";
+import greenIcon from "../../../../assets/icons/green.png";
+import lightIcon from "../../../../assets/icons/light.png";
+import violetIcon from "../../../../assets/icons/violet.png";
+import useAppSettings from "../../../../hooks/useAppSettings";
+import { Box, Card, Stack, Typography } from "../../../../theme/ui";
 
 const STATS = [
   ["всего песен", "songCount"],
@@ -30,9 +29,8 @@ const LIB_INFO = [
 export default function LibraryHero({ songCount, readyCount }) {
   const { theme } = useAppSettings()?.settings || {};
   const values = { songCount, readyCount };
-
   return (
-    <Stack direction="row" align="center" justify="space-between" py="2rem">
+    <Stack direction="row" align="center" justify="space-between">
       <Stack direction="row" align="center" gap="2rem">
         <Box sx={{ width: "91px", height: "91px", flex: "0 0 91px" }}>
           <img
@@ -49,33 +47,10 @@ export default function LibraryHero({ songCount, readyCount }) {
           ))}
         </Stack>
       </Stack>
-      <Stack direction="row" gap="2rem">
+      <Stack direction="row" gap="2rem" justify="flex-end">
         {STATS.map(([label, key]) => (
-          <Box
-            key={key}
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: "20px",
-              border:
-                "1px solid color-mix(in srgb, var(--color-primary) 42%, transparent)",
-              background:
-                "color-mix(in srgb, var(--color-bg-deep) 88%, transparent)"
-            }}
-          >
-            <Typography
-              variant="h3"
-              sx={{
-                fontSize: "28px",
-                fontWeight: 900,
-                lineHeight: 1
-              }}
-            >
-              {values[key]}
-            </Typography>
-
+          <Card key={key} sx={{ textAlign: "center" }} variant="animation">
+            <Typography variant="h3">{values[key]}</Typography>
             <Typography
               variant="caption"
               sx={{
@@ -87,7 +62,7 @@ export default function LibraryHero({ songCount, readyCount }) {
             >
               {label}
             </Typography>
-          </Box>
+          </Card>
         ))}
       </Stack>
     </Stack>

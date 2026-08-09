@@ -12,6 +12,7 @@ export default function Stack({
   justify,
   wrap = false,
   className,
+  sx,
   style,
   ...props
 }) {
@@ -19,6 +20,7 @@ export default function Stack({
     <Primitive
       as={as}
       className={cx("ui-stack", className)}
+      sx={sx}
       style={{
         "--stack-direction": direction,
         "--stack-gap": unit(gap),
