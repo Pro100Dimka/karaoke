@@ -18,6 +18,7 @@ export { default as Grid } from "./Grid";
 export { default as IconButton } from "./IconButton";
 export { default as Menu } from "./Menu";
 export { default as Modal } from "./Modal";
+export { default as NoteRange } from "./NoteRange";
 export { default as Popover } from "./Popover";
 export { default as Progress } from "./Progress";
 export { default as Radio } from "./Radio";

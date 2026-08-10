@@ -1,4 +1,5 @@
 import Button from "../Button";
+import NoteRange from "../NoteRange";
 import Select from "../Select";
 import Slider from "../Slider";
 import Stack from "../Stack";
@@ -40,6 +41,10 @@ const DEFAULT_RENDERERS = {
   text: inputRenderer("text"),
 
   number: inputRenderer("number"),
+
+  noteRange: ({ props, value, change }) => (
+    <NoteRange {...props} value={value} onChange={change} />
+  ),
 
   readonly: ({ props, value }) => (
     <TextField {...props} value={value ?? ""} readOnly />

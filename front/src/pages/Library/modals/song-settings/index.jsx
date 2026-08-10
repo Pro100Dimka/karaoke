@@ -8,7 +8,7 @@ import { Panel } from "../../../../components/ui";
 import { useAppDialog } from "../../../../contexts/AppDialog";
 import useExclusiveAsyncAction from "../../../../hooks/useExclusiveAsyncAction";
 import { usePolling } from "../../../../hooks/usePolling";
-import { ConfigForm, Stack, TextField } from "../../../../theme/ui";
+import { ConfigForm } from "../../../../theme/ui";
 import { getErrorMessage } from "../../../../utils/errors";
 
 import { SONG_FIELDS } from "./config";
@@ -17,37 +17,6 @@ import { createSongPayload, getSelectedSong } from "./utils";
 
 const setField = (setter, name, value) =>
   setter((current) => ({ ...current, [name]: value }));
-
-const parseNumber = (value) =>
-  value === "" || value == null ? null : Number(value);
-
-const SONG_RENDERERS = {
-  noteRange: ({ field, context }) => (
-    <Stack gap={1}>
-      <strong>{field.label}</strong>
-
-      <Stack direction="row" gap={2}>
-        <TextField
-          type="number"
-          placeholder="Мин."
-          value={context.form?.note_range_min ?? ""}
-          onChange={(value) =>
-            context.onChange("note_range_min", parseNumber(value))
-          }
-        />
-
-        <TextField
-          type="number"
-          placeholder="Макс."
-          value={context.form?.note_range_max ?? ""}
-          onChange={(value) =>
-            context.onChange("note_range_max", parseNumber(value))
-          }
-        />
-      </Stack>
-    </Stack>
-  )
-};
 
 export default function SongSettings({ songId, onClose }) {
   const { alert: notify } = useAppDialog();
@@ -109,7 +78,6 @@ export default function SongSettings({ songId, onClose }) {
       <ConfigForm
         fields={SONG_FIELDS}
         context={{ form, onChange: updateField }}
-        renderers={SONG_RENDERERS}
         columns={12}
         sx={{ padding: "1rem" }}
       />

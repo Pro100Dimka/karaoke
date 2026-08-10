@@ -55,7 +55,23 @@ export const SONG_FIELDS = [
     type: "noteRange",
     name: "note_range",
     label: "Диапазон нот",
-    span: HALF
+    tooltip: "Минимальная и максимальная MIDI-нота для этой песни",
+    span: HALF,
+    min: 0,
+    max: 127,
+    step: 1,
+    minPlaceholder: "Мин.",
+    maxPlaceholder: "Макс.",
+
+    getValue: ({ form }) => ({
+      min: form?.note_range_min ?? null,
+      max: form?.note_range_max ?? null
+    }),
+
+    setValue: ({ onChange }, value) => {
+      onChange("note_range_min", value?.min ?? null);
+      onChange("note_range_max", value?.max ?? null);
+    }
   },
 
   formField("video_url", {

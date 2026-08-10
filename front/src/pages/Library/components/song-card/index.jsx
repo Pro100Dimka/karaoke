@@ -131,7 +131,6 @@ function LibrarySongCard({
             onClick={() => onOpenProcessing(song)}
           >
             <ProcessingSignal progress={progress} compact />
-            <span>Открыть обработку</span>
           </Button>
         )}
         <Stack
