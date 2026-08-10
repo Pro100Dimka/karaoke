@@ -8,11 +8,17 @@ export function DiagnosticCheck({ label, ok }) {
   return (
     <Card
       as="div"
-      variant="animation"
-      tilt={false}
-      cardContent={{ style: { padding: "0.85rem 1rem" } }}
+      surface="soft"
+      className="settings-diagnostic-row"
+      sx={{ width: "100%" }}
     >
-      <Stack direction="row" align="center" justify="space-between" gap={0.75}>
+      <Stack
+        direction="row"
+        align="center"
+        justify="space-between"
+        gap={0.75}
+        sx={{ padding: ".8rem 1rem" }}
+      >
         <Typography variant="body2">{label}</Typography>
         <Icon className={`diagnostics-icon ${status}`} size={18} />
       </Stack>
@@ -32,14 +38,21 @@ export function VersionList({ components }) {
         <Card
           key={name}
           as="div"
-          variant="animation"
-          tilt={false}
-          cardContent={{ style: { padding: "0.8rem 1rem" } }}
+          surface="soft"
+          className="settings-diagnostic-row"
+          sx={{ width: "100%" }}
         >
-          <Stack direction="row" align="center" justify="space-between" gap={1}>
+          <Stack
+            direction="row"
+            align="center"
+            justify="space-between"
+            gap={1}
+            sx={{ padding: ".75rem 1rem" }}
+          >
             <Typography variant="body2" tone="muted">
               {name}
             </Typography>
+
             <Typography variant="body2" className="mono">
               {version ?? "—"}
             </Typography>
@@ -69,15 +82,17 @@ function ErrorItem({ error }) {
   return (
     <Card
       as="div"
-      variant="animation"
-      tilt={false}
-      cardContent={{ style: { padding: "0.9rem 1rem" } }}
+      surface="soft"
+      className="settings-diagnostic-row"
+      sx={{ width: "100%" }}
     >
-      <Stack gap={0.3}>
+      <Stack gap={0.3} sx={{ padding: ".85rem 1rem" }}>
         <Typography variant="body2">{title}</Typography>
+
         <Typography variant="caption" tone="muted">
           {updatedAt}
         </Typography>
+
         <Typography variant="body2" tone="muted">
           {message}
         </Typography>

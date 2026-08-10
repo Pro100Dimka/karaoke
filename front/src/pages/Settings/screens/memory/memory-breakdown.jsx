@@ -11,6 +11,7 @@ export default function MemoryBreakdown({ breakdown = {} }) {
           as="article"
           variant="animation"
           tilt={false}
+          className="settings-neon-card"
           cardContent={{ style: { padding: "1rem" } }}
         >
           <Stack gap={0.35}>

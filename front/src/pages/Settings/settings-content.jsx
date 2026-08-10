@@ -54,7 +54,7 @@ function ServiceContent({ service, onOpen, onClose }) {
           variant="animation"
           tilt={false}
           interactive
-          className="settings-service-link"
+          className="settings-service-link settings-neon-card"
           onClick={() => onOpen(id)}
           sx={{
             width: "100%",

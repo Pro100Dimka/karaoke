@@ -18,11 +18,11 @@ export default function Diagnostics() {
   ];
 
   return (
-    <Grid minItemWidth="min(100%, 24rem)" gap="var(--space-4)">
+    <Grid minItemWidth="min(100%, 26rem)" gap="var(--space-4)">
       <Card
         variant="animation"
         tilt={false}
-        className="settings-screen-card"
+        className="settings-screen-card settings-neon-card"
         cardContent={{ style: { padding: "1.25rem" } }}
       >
         <Stack gap={0.9}>
@@ -39,7 +39,7 @@ export default function Diagnostics() {
       <Card
         variant="animation"
         tilt={false}
-        className="settings-screen-card"
+        className="settings-screen-card settings-neon-card"
         cardContent={{ style: { padding: "1.25rem" } }}
       >
         <Stack gap={0.9}>

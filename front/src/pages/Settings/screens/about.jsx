@@ -22,6 +22,7 @@ export default function About() {
         as="div"
         variant="animation"
         tilt={false}
+        className="settings-neon-card"
         sx={{ width: "4.5rem", height: "4.5rem" }}
         cardContent={{
           style: {
@@ -54,6 +55,7 @@ export default function About() {
             as="div"
             variant="animation"
             tilt={false}
+            className="settings-neon-card"
             cardContent={{ style: { padding: "1rem 1.1rem" } }}
           >
             <Stack gap={0.35}>

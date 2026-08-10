@@ -1,6 +1,13 @@
 import { Trash2 } from "lucide-react";
 
-import { Button, Card, Grid, Select, Stack, Typography } from "../../../../theme/ui";
+import {
+  Button,
+  Card,
+  Grid,
+  Select,
+  Stack,
+  Typography
+} from "../../../../theme/ui";
 import { getErrorMessage } from "../../../../utils/errors";
 
 export async function runMemoryAction({ request, getMessage, notify }) {
@@ -30,12 +37,14 @@ export function MemoryStats({ size, free }) {
           as="div"
           variant="animation"
           tilt={false}
+          className="settings-neon-card"
           cardContent={{ style: { padding: "1rem" } }}
         >
           <Stack gap={0.35}>
             <Typography variant="caption" tone="muted">
               {label}
             </Typography>
+
             <Typography variant="h3">{value}</Typography>
           </Stack>
         </Card>
@@ -68,16 +77,11 @@ export function MemoryActions({ actions, notify }) {
 
 export function OptimizeSong({ value, options, onChange, onOptimize }) {
   return (
-    <Card
-      as="div"
-      variant="animation"
-      tilt={false}
-      cardContent={{ style: { padding: "1rem" } }}
-    >
+    <Card as="div" surface="soft" className="settings-plain-card">
       <Grid
         columns={2}
         gap="var(--space-3)"
-        sx={{ alignItems: "end" }}
+        sx={{ alignItems: "end", padding: "1rem" }}
       >
         <Select
           label="Оптимизировать песню"
@@ -86,11 +90,7 @@ export function OptimizeSong({ value, options, onChange, onOptimize }) {
           onChange={onChange}
         />
 
-        <Button
-          variant="outline"
-          disabled={!value}
-          onClick={onOptimize}
-        >
+        <Button variant="outline" disabled={!value} onClick={onOptimize}>
           <Trash2 size={15} />
           Оптимизировать
         </Button>
