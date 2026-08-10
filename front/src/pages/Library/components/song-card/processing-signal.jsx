@@ -51,7 +51,10 @@ export default function ProcessingSignal({ progress = 0, compact = false }) {
       className={`processing-signal${
         compact ? " processing-signal--compact" : ""
       }`}
-      style={{ "--processing-progress": `${normalized}%` }}
+      style={{
+        width: "100%",
+        "--processing-progress": `${normalized}%`
+      }}
       aria-label={`Обработка: ${rounded}%`}
       role="progressbar"
       aria-valuemin={0}

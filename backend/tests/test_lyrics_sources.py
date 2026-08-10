@@ -243,3 +243,23 @@ def test_real_filename_can_supply_title_only_when_fallback_is_flat(tmp_path):
     assert lyrics_sources._metadata_search_candidates(
         source, "TRITIA 31-я весна"
     ) == ["TRITIA 31 я весна", "31 я весна"]
+
+
+def test_lrclib_synced_text_is_canonical_when_plain_text_has_extra_outro(tmp_path: Path, monkeypatch):
+    source = tmp_path / "source.mp3"
+    source.write_bytes(b"not-an-audio-file")
+    payload = [{
+        "trackName": "31-я весна",
+        "artistName": "TRITIA",
+        "duration": 145,
+        "instrumental": False,
+        "plainLyrics": "первая строка песни\nвторая строка песни\nлишний повтор которого нет в аудио " * 5,
+        "syncedLyrics": "[00:05.60] первая строка песни\n[00:10.39] вторая строка песни",
+    }]
+    monkeypatch.setattr(lyrics_sources.urllib.request, "urlopen", lambda *_a, **_k: _Response(payload))
+
+    found = lyrics_sources.discover_lyrics(source, title="TRITIA - 31-я весна", duration_sec=145.1)
+
+    assert found.text == "первая строка песни\nвторая строка песни"
+    assert len(found.segments) == 2
+    assert "лишний повтор" not in found.text

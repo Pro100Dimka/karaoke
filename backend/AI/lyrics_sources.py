@@ -340,8 +340,18 @@ def _online(title: str | None, duration_sec: float | None) -> LyricsDiscovery:
     )
 
     synced = str(item.get("syncedLyrics") or "")
+    segments = _parse_lrc(synced, duration_sec)
+    # Never combine text from plainLyrics with timings from a different/incomplete
+    # syncedLyrics payload. LRCLIB records can contain an outro/repetition in
+    # plainLyrics that is absent from the timed version for this exact audio.
+    # Mixing those two sources makes the pipeline force non-existent words into
+    # the final seconds of the song and destroys both lyric and MIDI timing.
+    if segments:
+        synced_text = "\n".join(segment[2] for segment in segments).strip()
+        if len(synced_text.split()) >= 3:
+            return LyricsDiscovery(synced_text, "LRCLIB", segments)
     plain = _clean(str(item.get("plainLyrics") or synced))
-    return LyricsDiscovery(plain, "LRCLIB", _parse_lrc(synced, duration_sec))
+    return LyricsDiscovery(plain, "LRCLIB")
 
 
 

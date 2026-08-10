@@ -10,7 +10,7 @@ from .audio import load_mono
 
 from .models import PitchFrame, Syllable, VocalNote, Word
 
-NOTE_DECODER_VERSION = "acoustic-only-note-events-v26"
+NOTE_DECODER_VERSION = "acoustic-only-note-events-v27"
 
 
 def hz_to_midi(hz: float) -> float:
@@ -46,12 +46,19 @@ def _weighted_median(values: list[float], weights: list[float]) -> float:
 
 
 def _robust_pitch_center(values: list[float], weights: list[float]) -> float:
-    """Return a stable note centre without following vibrato lobes.
+    """Return the perceived centre of a sung pitch without following vibrato lobes.
 
-    The weighted median is deliberately preferred over a histogram mode: a finite
-    window of wide vibrato can spend slightly longer on one lobe and make the mode
-    one semitone wrong. Median remains centred while resisting slides/outliers.
+    A plain median can land almost one semitone off-centre when a finite note ends
+    on one side of a wide vibrato cycle.  For compact, vibrato-sized distributions
+    use the midpoint of robust lower/upper quantiles; for wider contours keep the
+    weighted median so slides and true transitions are not averaged together.
     """
+    if not values:
+        raise ValueError("pitch centre requires at least one value")
+    array = np.asarray(values, dtype=float)
+    q10, q25, q75, q90 = np.percentile(array, [10, 25, 75, 90])
+    if float(q90 - q10) <= 2.6:
+        return float((q25 + q75) / 2.0)
     return _weighted_median(values, weights)
 
 
@@ -132,6 +139,12 @@ def _sustained_pitch_segments(
         needed = max(min_frames, int(math.ceil((0.045 if attack >= 0.55 else 0.075) / step)))
         if i + needed > len(run):
             break
+        # Never manufacture a tail note from the last lobe of a vibrato.  When
+        # there is no acoustic re-attack, require enough remaining audio to prove
+        # that the new pitch is a sustained destination rather than an unfinished
+        # oscillation at end-of-phrase.
+        if attack < 0.45 and len(run) - i < max(needed, int(math.ceil(0.20 / step))):
+            break
         future = observed[i:i + needed]
         new_center = statistics.median(future)
         delta = new_center - center
@@ -148,6 +161,27 @@ def _sustained_pitch_segments(
         if len(supporters) < math.ceil(needed * 0.82):
             i += 1
             continue
+
+        # Wide vibrato can remain beyond a semitone for 70-120 ms and used to
+        # satisfy the short confirmation window.  A real note transition stays
+        # near the destination; vibrato returns through the old centre.  Inspect
+        # a longer look-ahead before accepting a boundary.
+        lookahead_frames = max(needed, int(math.ceil(0.22 / step)))
+        lookahead = observed[i:min(len(observed), i + lookahead_frames)]
+        if len(lookahead) >= needed + 2:
+            return_band = max(0.48, threshold * 0.62)
+            returns_to_old = sum(abs(value - center) <= return_band for value in lookahead)
+            destination = statistics.median(future)
+            stays_near_destination = sum(
+                abs(value - destination) <= max(0.62, threshold * 0.72)
+                for value in lookahead
+            )
+            if (
+                returns_to_old >= max(2, int(math.ceil(len(lookahead) * 0.16)))
+                and stays_near_destination < int(math.ceil(len(lookahead) * 0.70))
+            ):
+                i += 1
+                continue
 
         # Require a reasonably stable destination. Wide sweeps are represented
         # with pitch bend and do not manufacture a staircase of MIDI notes.
@@ -948,8 +982,13 @@ def _repair_isolated_harmonic_notes(
         )
     return work
 
-def _merge_verified_fragments(notes: list[VocalNote], *, max_gap: float = 0.035) -> list[VocalNote]:
-    """Merge fragments that became the same note after register verification."""
+def _merge_verified_fragments(
+    notes: list[VocalNote],
+    frames: list[PitchFrame] | None = None,
+    *,
+    max_gap: float = 0.035,
+) -> list[VocalNote]:
+    """Merge register-repair fragments without deleting real same-pitch attacks."""
     if not notes:
         return []
     output = [notes[0]]
@@ -960,7 +999,13 @@ def _merge_verified_fragments(notes: list[VocalNote], *, max_gap: float = 0.035)
             note.word_index == previous.word_index
             and note.syllable_index == previous.syllable_index
         )
-        if same_pitch and same_unit and note.start - previous.end <= max_gap:
+        attack = _pitch_attack_strength(frames or [], note.start)
+        if (
+            same_pitch
+            and same_unit
+            and 0.0 <= note.start - previous.end <= max_gap
+            and attack < 0.34
+        ):
             output[-1] = VocalNote(
                 previous.start,
                 max(previous.end, note.end),
@@ -1012,7 +1057,7 @@ def build_vocal_notes(
     notes = _make_monophonic(notes, min_note)
     notes = _audio_verify_note_register(notes, audio)
     notes = _repair_isolated_harmonic_notes(notes, frames)
-    notes = _merge_verified_fragments(notes)
+    notes = _merge_verified_fragments(notes, frames)
     notes = _consolidate_micro_fragments(notes, frames)
     # Do not run a second octave/harmonic repair pass here.  A second pass can
     # undo the audio-verified register chosen above and makes the decoder
@@ -1115,7 +1160,8 @@ def _consolidate_micro_fragments(
         should_merge = (
             gap <= max_gap
             and same_unit
-            and (delta == 0 or (delta == 1 and short_side and no_attack))
+            and no_attack
+            and (delta == 0 or (delta == 1 and short_side))
         )
         if not should_merge:
             output.append(note)

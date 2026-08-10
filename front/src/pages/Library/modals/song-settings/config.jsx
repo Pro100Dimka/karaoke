@@ -1,3 +1,6 @@
+import { NumberField, Stack } from "../../../../theme/ui";
+import Field from "../../../../theme/ui/_internal/Field";
+
 export const HALF = 6;
 export const QUARTER = 3;
 export const THIRD = 4;
@@ -84,23 +87,48 @@ export const SONG_FIELDS = [
     span: HALF
   }),
 
-  formField("note_range_min", {
-    type: "number",
-    label: "Диапазон нот · от",
-    min: 0,
-    max: 127,
-    parse: "nullable-number",
-    span: QUARTER
-  }),
-
-  formField("note_range_max", {
-    type: "number",
-    label: "До",
-    min: 0,
-    max: 127,
-    parse: "nullable-number",
-    span: QUARTER
-  }),
+  {
+    type: "custom",
+    name: "note_range",
+    label: "Диапазон нот",
+    span: HALF,
+    render: ({ context }) => (
+      <Field label="Диапазон нот">
+        {({ id }) => (
+          <Stack direction="row" gap={1} sx={{ width: "100%" }}>
+            <NumberField
+              id={`${id}-min`}
+              value={context.form?.note_range_min ?? ""}
+              min={0}
+              max={127}
+              placeholder="От"
+              aria-label="Нижняя нота"
+              onChange={(value) =>
+                context.onChange(
+                  "note_range_min",
+                  value === "" ? null : Number(value)
+                )
+              }
+            />
+            <NumberField
+              id={`${id}-max`}
+              value={context.form?.note_range_max ?? ""}
+              min={0}
+              max={127}
+              placeholder="До"
+              aria-label="Верхняя нота"
+              onChange={(value) =>
+                context.onChange(
+                  "note_range_max",
+                  value === "" ? null : Number(value)
+                )
+              }
+            />
+          </Stack>
+        )}
+      </Field>
+    )
+  },
 
   /* Видео */
   formField("video_url", {

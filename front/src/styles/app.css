@@ -1035,18 +1035,11 @@ select:focus,
 }
 
 /* Reusable surface primitive. Variants replace repeated panel/card declarations. */
-.ui-card {
+/* .ui-card {
   background: var(--gradient-glass);
-  box-shadow:
-    inset 0 0.0625rem 0
-      color-mix(in srgb, var(--color-highlight) 12%, transparent),
-    0 1.125rem 3.25rem color-mix(in srgb, var(--color-bg-deep) 42%, transparent);
-  backdrop-filter: blur(var(--space-4)) saturate(135%);
-  position: relative;
-  min-inline-size: 0;
-  border: max(0.0625rem, 0.06vw) solid var(--color-border);
+  
   border-radius: var(--radius-lg);
-}
+} */
 
 .app-settings-fab {
   position: fixed;

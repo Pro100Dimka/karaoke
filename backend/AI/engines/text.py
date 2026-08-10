@@ -141,7 +141,7 @@ def _words_from_items(items) -> list[Word]:
 
 
 ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v14-duration-guard"
-LONG_TEXT_ALIGNMENT_VERSION = "v20-stable-v16-rollback"
+LONG_TEXT_ALIGNMENT_VERSION = "v22-synced-lyrics-anchor-guard"
 
 
 def _normalize_singing_audio(y: np.ndarray) -> np.ndarray:
@@ -521,6 +521,25 @@ def _activity_fallback_words(
         output.append(Word(start, max(start + 0.02, end), token, 0.05, index))
     return output
 
+
+
+def _timed_segment_fallback_words(tokens: list[str], span: float) -> list[Word]:
+    """Build safe word timings inside an authoritative LRC line window.
+
+    A synced-lyrics timestamp is a much stronger line-level anchor than a
+    failed forced-aligner result.  Keep the line start and reserve a realistic
+    sung phrase duration instead of compressing many words into one detected
+    energy island or stretching them all the way to the next LRC line.
+    """
+    span = max(0.08, float(span))
+    if not tokens:
+        return []
+    characters = sum(len(token) for token in tokens)
+    expected = 0.34 * len(tokens) + 0.024 * characters
+    # Allow expressive singing, but never let fallback consume a huge
+    # instrumental gap between two authoritative LRC line starts.
+    usable = min(span, max(0.55, min(expected * 1.35, expected + 1.15)))
+    return _proportional_words(tokens, usable)
 
 def _speech_focus_variant(audio: np.ndarray) -> np.ndarray:
     """Cheap consonant-focused retry input for uncertain singing phrases."""
@@ -992,6 +1011,30 @@ class Qwen3ForcedAligner(Aligner):
         words = _words_from_items(item if isinstance(item, (list, tuple)) else _unwrap_items(item))
         if not words:
             raise InvalidArtifactError("Forced aligner returned no timed words")
+
+        # Qwen timestamps are quantized and some releases can emit repeated or
+        # zero-duration word spans.  Direct alignment previously accepted those
+        # values unchanged; segmented/long-text modes had guards, so short songs
+        # could be *less* reliable than long ones.  Validate every alignment at
+        # the engine boundary and rebuild only pathological timing from vocal
+        # activity while preserving the trusted word sequence.
+        try:
+            span = duration(audio)
+        except (OSError, RuntimeError, ValueError):
+            # Keep compatibility with synthetic/mocked aligner callers.  Real
+            # pipeline inputs are validated audio files before this stage.
+            return words
+        if _pathological_alignment(words, span):
+            source, sample_rate = load_mono(audio, 16000)
+            tokens = tokenize(text)
+            repaired = _activity_fallback_words(
+                tokens,
+                source,
+                sample_rate,
+                words,
+            )
+            if repaired:
+                words = repaired
         return words
 
     def align_segments(self, audio, segments, language):
@@ -1028,24 +1071,22 @@ class Qwen3ForcedAligner(Aligner):
                     local_words = self.align(path, text, language)
                     candidate_start = segment_start + local_words[0].start if local_words else 0.0
                     candidate_end = segment_start + local_words[-1].end if local_words else 0.0
+                    fallback_confidence = (
+                        sum(word.confidence for word in local_words) / len(local_words)
+                        if local_words else 0.0
+                    )
                     if (
                         _pathological_alignment(local_words, segment_end - segment_start)
+                        or fallback_confidence <= 0.10
                         or candidate_start < cursor - 0.08
                         or candidate_end <= cursor + 0.02
                     ):
-                        local_words = _activity_fallback_words(
-                            tokens,
-                            segment_audio,
-                            sample_rate,
-                            local_words,
-                            max(0.0, cursor - segment_start),
+                        local_words = _timed_segment_fallback_words(
+                            tokens, segment_end - segment_start
                         )
                 except (InvalidArtifactError, RuntimeError, ValueError):
-                    local_words = _activity_fallback_words(
-                        tokens,
-                        segment_audio,
-                        sample_rate,
-                        minimum_start=max(0.0, cursor - segment_start),
+                    local_words = _timed_segment_fallback_words(
+                        tokens, segment_end - segment_start
                     )
 
                 for word in local_words:

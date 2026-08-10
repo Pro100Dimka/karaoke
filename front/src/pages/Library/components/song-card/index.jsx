@@ -86,24 +86,10 @@ function LibrarySongCard({
   };
   return (
     <Card
-      as="article"
       variant="neon"
-      interactive={isReady}
       className={`library-song-card library-song-card--${songStatus}`}
-      style={{
-        blockSize: "auto",
-        alignSelf: "start",
-        contentVisibility: "auto",
-        containIntrinsicBlockSize: "8rem"
-      }}
-      cardPanel={{ style: { blockSize: "auto" } }}
-      cardContent={{
-        style: {
-          blockSize: "auto"
-        }
-      }}
-      onPointerMove={handlePointerMove}
-      onPointerLeave={clearCardTilt}
+      // onPointerMove={handlePointerMove}
+      // onPointerLeave={clearCardTilt}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       role={isReady ? "button" : undefined}
@@ -127,6 +113,7 @@ function LibrarySongCard({
           <Button
             type="button"
             variant="ghost"
+            style={{ width: "100%" }}
             className="library-song-card-progress"
             onClick={() => onOpenProcessing(song)}
           >

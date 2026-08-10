@@ -51,7 +51,8 @@ export default function LibraryHero({ songCount, readyCount }) {
         {STATS.map(([label, key]) => (
           <Card
             key={key}
-            sx={{ textAlign: "center", minWidth: "100px" }}
+            sx={{ textAlign: "center", minWidth: "130px" }}
+            cardContent={{ style: { padding: "1rem" } }}
             variant="animation"
           >
             <Typography variant="h3">{values[key]}</Typography>

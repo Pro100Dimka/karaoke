@@ -558,13 +558,13 @@ def ensure_legacy_artifacts(output_dir: Path, *, title: str | None = None) -> No
     words = word_payload.get("words", []) if isinstance(word_payload, dict) else []
     source_text = word_payload.get("text", "") if isinstance(word_payload, dict) else ""
     lines = _group_words_into_lines(words, source_text)
-    # The forced aligner already works against the separated vocal stem.  A
-    # second global activity pass cannot know which short activity island belongs
-    # to which word and used to compress complete lines into 0.2-0.8 seconds.
-    # Preserve the canonical word alignment here; acoustic repair is performed
-    # locally inside the aligner's bounded phrase window when it is needed.
-    repaired_lines = _repair_impossible_alignment_chunks(lines, output_dir)
-    write_json(output_dir / "lyrics.json", _bound_legacy_word_durations(repaired_lines))
+    # The canonical forced-alignment timeline is the single source of truth.
+    # Never run a second timing redistribution while creating the legacy payload:
+    # reference/MIDI use canonical seconds, so moving word starts here makes the
+    # frontend lyric clock disagree with the melody even though both came from
+    # the same processing run.  Keep starts exactly as lyricsSync.json produced
+    # them; only cap implausibly long highlight ends for legacy UI compatibility.
+    write_json(output_dir / "lyrics.json", _bound_legacy_word_durations(lines))
 
     song_map: Any = read_json(output_dir / "songMap.json", default={})
     if not isinstance(song_map, dict):

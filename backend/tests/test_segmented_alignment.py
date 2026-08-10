@@ -153,3 +153,31 @@ def test_activity_fallback_uses_all_islands_in_one_sung_phrase():
     assert words[0].start < 0.7
     assert words[-1].end > 3.1
     assert all(word.end - word.start >= 0.02 for word in words)
+
+
+def test_synced_segment_fallback_never_collapses_whole_line(monkeypatch):
+    monkeypatch.setattr(
+        text_engine,
+        "load_mono",
+        lambda _audio, _sample_rate: (np.zeros(16_000 * 10, dtype=np.float32), 16_000),
+    )
+    aligner = Qwen3ForcedAligner("unused")
+
+    def collapsed(_path, phrase, _language):
+        tokens = phrase.split()
+        return [
+            Word(index * 0.02, index * 0.02 + 0.02, token, 0.05, index)
+            for index, token in enumerate(tokens)
+        ]
+
+    monkeypatch.setattr(aligner, "align", collapsed)
+    words = aligner.align_segments(
+        "song.wav",
+        [(2.0, 8.0, "Пропал без вести в японских лагерях")],
+        "Russian",
+    )
+
+    assert words[0].start == pytest.approx(2.0)
+    assert words[-1].end - words[0].start > 2.0
+    assert words[-1].end <= 8.0
+    assert all(word.end - word.start >= 0.02 for word in words)
