@@ -8,7 +8,6 @@ import {
   audioSlider,
   fieldType,
   FORM_FIELDS,
-  formReadonly,
   HALF,
   monitorDisabled,
   opts,
@@ -70,7 +69,6 @@ const GENERAL_FORM_FIELDS = [
       save: "blur"
     }
   ],
-
   [
     "select",
     "language",
@@ -81,7 +79,6 @@ const GENERAL_FORM_FIELDS = [
       options: LANGUAGE_OPTIONS
     }
   ],
-
   [
     "select",
     "theme",
@@ -110,7 +107,6 @@ const RADIO_FIELDS = [
     {
       span: HALF,
       startIcon: Radio,
-
       getOptions: ({ radio }) =>
         (radio?.stations ?? []).map(({ id, name, description }) => ({
           value: id,
@@ -119,7 +115,6 @@ const RADIO_FIELDS = [
         }))
     }
   ],
-
   [
     "slider",
     "volume",
@@ -130,7 +125,6 @@ const RADIO_FIELDS = [
       min: 0,
       max: 1,
       step: 0.01,
-
       getLabel: percent("Громкость")
     }
   ]
@@ -148,21 +142,33 @@ const GENERAL_FIELDS = [...GENERAL_FORM_FIELDS, ...RADIO_FIELDS];
    STORAGE
    ========================================================= */
 
+const pickFolder = async (_context, currentPath) => {
+  const selectFolder = globalThis.electronAPI?.selectFolder;
+  if (typeof selectFolder !== "function") return null;
+  return selectFolder(currentPath || undefined);
+};
+
 const STORAGE_FIELDS = [
-  ["songs_folder", "Песни"],
-
-  ["ai_folder", "Обработанные файлы"],
-
-  ["cache_folder", "Кэш"]
-].map(([name, label]) =>
-  formReadonly(name, {
+  ["songs_folder", "Песни", "Папка с библиотекой песен"],
+  ["ai_folder", "Обработанные файлы", "Папка с результатами обработки"],
+  ["cache_folder", "Кэш", "Папка временных файлов"]
+].map(([name, label, tooltip]) =>
+  FORM_FIELDS.folder(name, {
     label,
-    span: 4
+    tooltip,
+    span: 4,
+    save: "change",
+    pick: pickFolder,
+    browseLabel: `Выбрать папку: ${label}`
   })
 );
 
 /* =========================================================
    AUDIO
+
+   Основные настройки показываются сразу.
+   Технические параметры, которые обычно корректно выбираются
+   автоматически, помечены advanced и открываются по запросу.
    ========================================================= */
 
 const AUDIO_SELECT_FIELDS = [
@@ -172,45 +178,48 @@ const AUDIO_SELECT_FIELDS = [
     "Микрофон",
     "Устройство для записи голоса",
     {
+      span: 4,
       startIcon: Mic2,
       parse: "nullable-number"
     }
   ],
-
+  [
+    "output_device_id",
+    "outputDevices",
+    "Динамики или наушники",
+    "Куда выводить звук приложения",
+    {
+      span: 8,
+      parse: "nullable-number"
+    }
+  ],
   [
     "audio_driver",
     "audioDrivers",
     "Режим звука",
-    "Автоматический режим подходит большинству пользователей"
+    "Автоматический режим подходит большинству пользователей",
+    {
+      advanced: true
+    }
   ],
-
   [
     "asio_driver_name",
     "asioDrivers",
-    "Аудиодрайвер",
-    "Драйвер вашего аудиоинтерфейса",
+    "ASIO-драйвер",
+    "Нужен только при ручном использовании ASIO",
     {
+      advanced: true,
       isVisible: audioDriverVisible
     }
   ],
-
   [
     "buffer_size",
     "bufferSizes",
-    "Задержка",
-    "Меньше — быстрее отклик, но выше нагрузка",
+    "Буфер аудио",
+    "Меньше — ниже задержка, но выше нагрузка и риск щелчков",
     {
+      advanced: true,
       parse: "number"
-    }
-  ],
-
-  [
-    "output_device_id",
-    "outputDevices",
-    "Выход голоса",
-    "Куда выводить голос при прослушивании",
-    {
-      parse: "nullable-number"
     }
   ]
 ].map(([name, source, label, tooltip, extra = {}]) =>
@@ -227,33 +236,31 @@ const PREFERENCE_FIELDS = [
     "monitorInputDeviceId",
     "browserInputs",
     "Микрофон для проверки",
-    "Используется для проверки уровня голоса"
+    "Отдельный микрофон только для браузерного индикатора уровня"
   ],
-
   [
     "monitorOutputDeviceId",
     "browserOutputs",
-    "Динамики или наушники",
-    "Устройство для проверки звука"
+    "Выход для проверки",
+    "Отдельное устройство только для тестового сигнала"
   ],
-
   [
     "monitorLatencyHint",
     LATENCY_OPTIONS,
-    "Задержка воспроизведения",
-    "Низкая задержка лучше подходит для пения"
+    "Режим задержки",
+    "Автоматического режима достаточно в большинстве случаев"
   ],
-
   [
     "monitorMode",
     MONITOR_MODE_OPTIONS,
-    "Прослушивание микрофона",
-    "Как возвращать ваш голос в наушники"
+    "Режим прослушивания",
+    "Способ возврата голоса в наушники"
   ]
 ].map(([name, source, label, tooltip]) =>
   preferenceSelect(name, source, {
     label,
     tooltip,
+    advanced: true,
     isDisabled: monitorDisabled
   })
 );
@@ -262,36 +269,28 @@ const AUDIO_SPECIAL_FIELDS = [
   [
     "action",
     "speakerTest",
-    HALF,
+    4,
     "Проверить звук",
     "Воспроизвести короткий тестовый сигнал",
     {
       idleText: "Проверить звук",
-
       pendingText: "Проверяем…",
-
       isPending: speakerPlaying,
-
       isDisabled: speakerPlaying,
-
       run: ({ audio }) => audio.actions?.testSpeakers?.()
     }
   ],
-
   [
     "monitor",
     "monitoringEnabled",
-    FULL,
+    3,
     "Слышать свой голос",
     "Включить прямое прослушивание микрофона",
     {
       getValue: ({ audio }) => audio.states?.monitoringEnabled,
-
       getLevel: ({ audio }) => audio.states?.monitorLevel ?? 0,
-
       isDisabled: ({ audio }) =>
         audio.states?.saving || audio.states?.togglingMonitoring,
-
       run: ({ audio }) => audio.actions?.toggleMonitoring?.()
     }
   ]
@@ -304,23 +303,27 @@ const AUDIO_SPECIAL_FIELDS = [
   ...extra
 }));
 
+const [MICROPHONE_FIELD, OUTPUT_FIELD, ...ADVANCED_AUDIO_FIELDS] =
+  AUDIO_SELECT_FIELDS;
+
+const VOICE_VOLUME_FIELD = audioSlider("volume", {
+  span: 5,
+  label: "Громкость голоса",
+  tooltip: "Громкость вашего голоса при прослушивании",
+  min: 0,
+  max: 1,
+  step: 0.05,
+  getLabel: percent("Громкость голоса")
+});
+
 const AUDIO_FIELDS = [
-  ...AUDIO_SELECT_FIELDS,
-  ...PREFERENCE_FIELDS,
-
-  audioSlider("volume", {
-    label: "Громкость голоса",
-
-    tooltip: "Громкость вашего голоса при прослушивании",
-
-    min: 0,
-    max: 1,
-    step: 0.05,
-
-    getLabel: percent("Громкость голоса")
-  }),
-
-  ...AUDIO_SPECIAL_FIELDS
+  OUTPUT_FIELD,
+  AUDIO_SPECIAL_FIELDS[0],
+  MICROPHONE_FIELD,
+  VOICE_VOLUME_FIELD,
+  AUDIO_SPECIAL_FIELDS[1],
+  ...ADVANCED_AUDIO_FIELDS,
+  ...PREFERENCE_FIELDS
 ];
 
 /* =========================================================
@@ -337,7 +340,6 @@ const AI_SETTINGS_FIELDS = [
       options: WHISPER_OPTIONS
     }
   ],
-
   [
     "number",
     "thread_count",
@@ -349,9 +351,7 @@ const AI_SETTINGS_FIELDS = [
       parse: "number"
     }
   ],
-
   ["toggle", "use_gpu", "Использовать видеокарту", "Ускоряет обработку"],
-
   [
     "toggle",
     "use_cpu",
@@ -375,9 +375,7 @@ const AI_FIELDS = [...AI_SETTINGS_FIELDS, ...STORAGE_FIELDS];
 export const SETTINGS = Object.fromEntries(
   [
     ["appearance", "Общее", Palette, GENERAL_FIELDS],
-
     ["audio", "Звук", SlidersHorizontal, AUDIO_FIELDS],
-
     ["ai", "Обработка", Cpu, AI_FIELDS]
   ].map(([id, label, icon, fields]) => [
     id,

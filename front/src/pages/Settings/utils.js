@@ -94,7 +94,8 @@ export const FORM_FIELDS = {
   text: fieldType(formField, "text"),
   number: formNumber,
   toggle: formToggle,
-  readonly: formReadonly
+  readonly: formReadonly,
+  folder: fieldType(formField, "folder")
 };
 
 const audioOption =

@@ -1,1 +1,1 @@
-AI_BUILD_ID = "midi-v34-lossless-canonical-alignment-20260810"
+AI_BUILD_ID = "midi-v35-monotonic-canonical-alignment-20260810"

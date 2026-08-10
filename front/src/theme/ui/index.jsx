@@ -15,6 +15,7 @@ export { default as ConfigForm } from "./ConfigForm";
 export { default as Dialog } from "./Dialog";
 export { default as Divider } from "./Divider";
 export { default as Grid } from "./Grid";
+export { default as FolderField } from "./FolderField";
 export { default as IconButton } from "./IconButton";
 export { default as Menu } from "./Menu";
 export { default as Modal } from "./Modal";

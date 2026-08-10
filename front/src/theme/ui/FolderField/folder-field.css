@@ -1,0 +1,62 @@
+@layer ui.components {
+  .ui-folder-field {
+    display: flex;
+    align-items: stretch;
+    inline-size: 100%;
+    min-inline-size: 0;
+    min-block-size: var(--control-md);
+    overflow: hidden;
+    border: 1px solid var(--field-border);
+    border-radius: var(--shape-md);
+    background: var(--field-bg);
+    color: var(--field-fg);
+    transition:
+      border-color var(--motion-duration-fast) var(--motion-easing-standard),
+      box-shadow var(--motion-duration-fast) var(--motion-easing-standard),
+      background var(--motion-duration-fast) var(--motion-easing-standard);
+  }
+
+  .ui-folder-field:focus-within {
+    border-color: var(--ui-focus);
+    box-shadow: var(--focus-shadow);
+  }
+
+  .ui-folder-field[data-error] {
+    border-color: var(--ui-danger);
+  }
+
+  .ui-folder-field[data-disabled] {
+    opacity: var(--disabled-opacity, 0.55);
+  }
+
+  .ui-folder-field__input {
+    flex: 1;
+    inline-size: 100%;
+    min-inline-size: 0;
+    padding-inline: var(--control-pad-md);
+    overflow: hidden;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--field-fg);
+    font: inherit;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: default;
+  }
+
+  .ui-folder-field__input::placeholder {
+    color: var(--field-placeholder);
+    opacity: 1;
+  }
+
+  .ui-folder-field__browse {
+    flex: none;
+    align-self: stretch;
+    min-block-size: auto;
+    inline-size: var(--control-md);
+    border: 0;
+    border-inline-start: 1px solid var(--field-border);
+    border-radius: 0;
+  }
+}

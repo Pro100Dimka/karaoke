@@ -1,4 +1,5 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, SlidersHorizontal } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { useRadio } from "../../contexts/radio";
 import {
@@ -97,9 +98,23 @@ export default function SettingsContent({
   onOpenService,
   onCloseService
 }) {
+  const [showAdvancedAudio, setShowAdvancedAudio] = useState(false);
+
   const radio = useRadio();
   const audio = useAudioSettingsSource();
   const ServiceScreen = SCREEN_BY_ID[service]?.component;
+
+  const section = SETTINGS[tab];
+
+  const fields = useMemo(() => {
+    if (!section?.fields) return [];
+
+    if (tab !== "audio") return section.fields;
+
+    return section.fields.filter(
+      (field) => showAdvancedAudio || !field.advanced
+    );
+  }, [section, showAdvancedAudio, tab]);
 
   if (ServiceScreen) {
     return (
@@ -111,18 +126,45 @@ export default function SettingsContent({
     );
   }
 
-  const section = SETTINGS[tab];
   if (!section) return null;
 
   return (
     <Stack gap={1}>
       <ConfigForm
-        fields={section.fields}
+        fields={fields}
         className={section.className}
         context={{ form, radio, audio, onChange, onFieldBlur }}
         renderers={SETTINGS_RENDERERS}
         sx={{ padding: "0 1rem" }}
       />
+
+      {tab === "audio" && (
+        <Stack
+          className="settings-audio-advanced-toggle"
+          sx={{ paddingInline: "1rem" }}
+        >
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowAdvancedAudio((value) => !value)}
+            aria-expanded={showAdvancedAudio}
+          >
+            <Stack direction="row" align="center" gap={0.5}>
+              <SlidersHorizontal size={15} />
+              <span>
+                {showAdvancedAudio
+                  ? "Скрыть дополнительные настройки"
+                  : "Дополнительные настройки"}
+              </span>
+              {showAdvancedAudio ? (
+                <ChevronUp size={15} />
+              ) : (
+                <ChevronDown size={15} />
+              )}
+            </Stack>
+          </Button>
+        </Stack>
+      )}
 
       {tab === "appearance" && (
         <ServiceContent

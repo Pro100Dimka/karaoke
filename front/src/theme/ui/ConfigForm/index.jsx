@@ -1,4 +1,5 @@
 import Button from "../Button";
+import FolderField from "../FolderField";
 import NumberField from "../NumberField";
 import Select from "../Select";
 import Slider from "../Slider";
@@ -53,6 +54,17 @@ const DEFAULT_RENDERERS = {
     <TextField {...props} value={value ?? ""} readOnly />
   ),
 
+  folder: ({ props, value, change, field, context }) => (
+    <FolderField
+      {...props}
+      value={value ?? ""}
+      onBrowse={async () => {
+        const nextValue = await field.pick?.(context, value);
+        if (nextValue) change(nextValue);
+      }}
+    />
+  ),
+
   toggle: ({ props, value, change }) => (
     <Switch {...props} checked={Boolean(value)} onChange={change} />
   ),
@@ -82,6 +94,7 @@ function ConfigField({ field, context, renderers, parsers, columns }) {
     key,
 
     span = columns,
+    advanced: _advanced,
 
     parse = "default",
     save,
@@ -99,6 +112,7 @@ function ConfigField({ field, context, renderers, parsers, columns }) {
 
     run,
     render,
+    pick,
     getLevel,
 
     idleText,
@@ -192,6 +206,7 @@ function ConfigField({ field, context, renderers, parsers, columns }) {
 
           run,
           render,
+          pick,
           getLevel,
 
           isPending,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 import sys
 import tempfile
@@ -120,17 +121,84 @@ def _canonical_alignment_matches(text: str, words: list[Word]) -> bool:
     return all(normalize(token) == normalize(word.text) for token, word in zip(expected, words, strict=True))
 
 
+def _canonical_timeline_is_publishable(words: list[Word], total_duration: float) -> bool:
+    """Return True only for a canonical stream that is safe to publish.
+
+    The v9 guard previously validated token identity/count only. A local Qwen
+    window could therefore return the right words from an earlier timestamp,
+    producing a backwards jump that survived until validate_timeline().
+    """
+    if not words:
+        return False
+    previous_end = -1.0
+    for word in words:
+        start = float(word.start)
+        end = float(word.end)
+        if not math.isfinite(start) or not math.isfinite(end):
+            return False
+        if start < -1e-6 or end <= start + 0.009 or end > total_duration + 0.10:
+            return False
+        # Karaoke words are a canonical sequence: do not allow a later token to
+        # jump behind the previous token. A tiny tolerance is retained for
+        # floating-point serialization only.
+        if start < previous_end - 1e-4:
+            return False
+        previous_end = end
+    return True
+
+
+def _repair_canonical_timeline_locally(words: list[Word], total_duration: float) -> list[Word] | None:
+    """Repair small Qwen ordering mistakes without sorting/replacing lyrics.
+
+    Words remain in canonical text order. We shift only offending timestamps
+    forward and preserve their measured durations. If the repair would cascade
+    too far or run past EOF, return None so the whole-song lossless fallback can
+    rebuild a safe monotonic map instead of publishing distorted timings.
+    """
+    if not words or total_duration <= 0.04:
+        return None
+    repaired: list[Word] = []
+    cumulative_shift = 0.0
+    max_single_shift = 0.0
+    for index, word in enumerate(words):
+        original_start = max(0.0, float(word.start))
+        duration = max(0.02, min(3.2, float(word.end) - float(word.start)))
+        required_start = repaired[-1].end if repaired else original_start
+        start = max(original_start, required_start)
+        shift = start - original_start
+        cumulative_shift += shift
+        max_single_shift = max(max_single_shift, shift)
+        end = start + duration
+        if end > total_duration + 1e-6:
+            return None
+        repaired.append(Word(start, end, word.text, min(float(word.confidence), 0.25), index))
+
+    # A tiny local overlap/reversal is safe to heal. A multi-second correction
+    # means the anchor map itself is wrong; in that case use deterministic
+    # whole-song retiming rather than cascading the error through the chorus.
+    if max_single_shift > 1.25 or cumulative_shift > max(2.5, len(words) * 0.08):
+        return None
+    return repaired if _canonical_timeline_is_publishable(repaired, total_duration) else None
+
+
 def _pipeline_lossless_canonical_words(text: str, words: list[Word], total_duration: float) -> list[Word]:
     """Absolute last-resort invariant guard before publishing lyricsSync.json."""
     tokens = tokenize(text)
     if not tokens or total_duration <= 0.04:
         return words
-    if _canonical_alignment_matches(text, words):
+
+    canonical_match = _canonical_alignment_matches(text, words)
+    if canonical_match and _canonical_timeline_is_publishable(words, total_duration):
         return words
+    if canonical_match:
+        repaired = _repair_canonical_timeline_locally(words, total_duration)
+        if repaired is not None:
+            return repaired
+
     start = max(0.0, words[0].start if words else 0.0)
-    # A partial aligner result must never compress all missing canonical words
-    # into the tiny span covered by that prefix (the v8 18/186 failure).
-    # Use the remaining song duration as the last-resort canvas.
+    # A partial/unsorted aligner result must never compress all canonical words
+    # into the tiny span covered by that prefix. Use the remaining song duration
+    # as the deterministic last-resort canvas.
     end = total_duration
     if end <= start + 0.08:
         start, end = 0.0, total_duration

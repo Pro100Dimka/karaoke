@@ -141,7 +141,7 @@ def _words_from_items(items) -> list[Word]:
 
 
 ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v14-duration-guard"
-LONG_TEXT_ALIGNMENT_VERSION = "v27-lossless-canonical-local-qwen"
+LONG_TEXT_ALIGNMENT_VERSION = "v28-monotonic-canonical-local-qwen"
 
 
 def _normalize_singing_audio(y: np.ndarray) -> np.ndarray:

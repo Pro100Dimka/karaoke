@@ -8608,3 +8608,73 @@ body {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 }
+
+/* ========================================================================== 
+   SETTINGS · AUDIO · compact two-row layout
+   ========================================================================== */
+
+.settings-audio-action,
+.settings-audio-monitor {
+  min-inline-size: 0;
+  block-size: 100%;
+}
+
+.settings-audio-action {
+  justify-content: end;
+}
+
+.settings-audio-test-button,
+.settings-audio-monitor__button {
+  inline-size: 100%;
+  min-block-size: var(--control-md);
+}
+
+.settings-audio-test-button .ui-stack {
+  inline-size: 100%;
+}
+
+.settings-audio-monitor {
+  justify-content: end;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.settings-audio-monitor > .ui-stack:first-child {
+  min-block-size: 1.25rem;
+  color: var(--color-text);
+}
+
+.settings-audio-monitor > .ui-stack:first-child svg {
+  color: var(--color-primary-hover);
+}
+
+.settings-audio-monitor__level {
+  inline-size: 100%;
+  margin-block-start: 0.1rem;
+}
+
+.settings-audio-advanced-toggle {
+  align-items: flex-start;
+  margin-block-start: 0.1rem;
+}
+
+.settings-audio-advanced-toggle .ui-button {
+  min-block-size: 2.25rem;
+  padding-inline: 0.55rem;
+  color: var(--color-text-muted);
+}
+
+.settings-audio-advanced-toggle .ui-button:hover {
+  color: var(--color-text);
+}
+
+@media (max-width: 48rem) {
+  .settings-audio-action,
+  .settings-audio-monitor {
+    block-size: auto;
+  }
+}
+
