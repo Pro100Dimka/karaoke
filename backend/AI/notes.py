@@ -5,7 +5,7 @@ import statistics
 
 from .models import PitchFrame, Syllable, VocalNote
 
-NOTE_DECODER_VERSION = "vocal-pitch-independent-v12"
+NOTE_DECODER_VERSION = "vocal-pitch-independent-v13"
 
 
 def hz_to_midi(hz: float) -> float:
@@ -634,10 +634,12 @@ def build_game_notes(vocal: list[VocalNote], min_note: float = 0.08) -> list[Voc
                     )
                 )
             ):
+                previous_duration = previous.end - previous.start
+                clean_duration = clean.end - clean.start
                 weighted_pitch = (
-                    previous.midi_note * (previous.end - previous.start)
-                    + clean.midi_note * (clean.end - clean.start)
-                ) / max(1e-6, clean.end - previous.start)
+                    previous.midi_note * previous_duration
+                    + clean.midi_note * clean_duration
+                ) / max(1e-6, previous_duration + clean_duration)
                 output[-1] = VocalNote(
                     previous.start,
                     clean.end,

@@ -29,6 +29,7 @@ class FCPEPitchEstimator(PitchEstimator):
             "fmax": self.fmax,
             "decoder": "local_argmax",
             "threshold": 0.006,
+            "confidence_semantics": "fcpe-vuv-v2",
         }
 
     def _load_model(self):
@@ -114,13 +115,21 @@ class FCPEPitchEstimator(PitchEstimator):
                 float(np.sqrt(np.mean(np.square(y[start:end])) + 1e-12)) if end > start else 0.0
             )
             valid = np.isfinite(hz) and self.fmin <= hz <= self.fmax
-            conf = float(confidence[index]) if confidence is not None else min(1.0, energy * 20.0)
-            voiced = bool(valid and conf >= 0.05)
+            if confidence is not None:
+                conf = max(0.0, min(1.0, float(confidence[index])))
+                voiced = bool(valid and conf >= 0.05)
+            else:
+                # TorchFCPE's documented infer() API returns f0 after its own
+                # threshold-based V/UV decision. Do not reinterpret waveform RMS
+                # as model confidence: doing so silently deletes quiet valid notes
+                # and promotes loud leakage/noise. Energy remains a separate feature.
+                voiced = bool(valid)
+                conf = 1.0 if voiced else 0.0
             output.append(
                 PitchFrame(
                     time=index * step,
                     frequency=hz if voiced else 0.0,
-                    confidence=max(0.0, min(1.0, conf)) if voiced else 0.0,
+                    confidence=conf if voiced else 0.0,
                     voiced=voiced,
                     energy=energy,
                 )

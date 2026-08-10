@@ -24,11 +24,13 @@ class AICoreService:
         self,
         source_path,
         output_dir,
-        language="ru",
+        language=None,
         lyrics_path=None,
         title=None,
         progress=None,
         cancelled=None,
+        bpm_override=None,
+        key_override=None,
     ) -> PipelineResult:
         with self._inference_lock:
             return self.pipeline.run(
@@ -38,6 +40,8 @@ class AICoreService:
                     language=language,
                     lyrics_path=lyrics_path,
                     title=title,
+                    bpm_override=bpm_override,
+                    key_override=key_override,
                     progress=progress,
                     cancelled=cancelled,
                 )

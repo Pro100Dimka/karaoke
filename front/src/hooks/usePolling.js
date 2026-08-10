@@ -10,6 +10,7 @@ export function usePolling(fetchFn, intervalMs, deps = [], options = {}) {
   const [error, setError] = useState(null);
   const fetchRef = useRef(fetchFn);
   const shouldContinueRef = useRef(options.shouldContinue);
+  const shouldRetryErrorRef = useRef(options.shouldRetryError);
   const refreshRef = useRef(null);
 
   useEffect(() => {
@@ -21,6 +22,10 @@ export function usePolling(fetchFn, intervalMs, deps = [], options = {}) {
   }, [options.shouldContinue]);
 
   useEffect(() => {
+    shouldRetryErrorRef.current = options.shouldRetryError;
+  }, [options.shouldRetryError]);
+
+  useEffect(() => {
     let active = true;
     let timerId = null;
     let inFlight = false;
@@ -28,14 +33,18 @@ export function usePolling(fetchFn, intervalMs, deps = [], options = {}) {
     const documentRef = globalThis.document;
     const isHidden = () => documentRef?.visibilityState === "hidden";
 
-    const scheduleNext = (result, requestFailed = false) => {
+    const scheduleNext = (result, requestError = null) => {
       const shouldContinue = shouldContinueRef.current;
+      const shouldRetryError = shouldRetryErrorRef.current;
       if (
         !active ||
         isHidden() ||
         !Number.isFinite(intervalMs) ||
         intervalMs <= 0 ||
-        (!requestFailed &&
+        (requestError &&
+          typeof shouldRetryError === "function" &&
+          !shouldRetryError(requestError)) ||
+        (!requestError &&
           typeof shouldContinue === "function" &&
           !shouldContinue(result))
       )
@@ -58,23 +67,23 @@ export function usePolling(fetchFn, intervalMs, deps = [], options = {}) {
       timerId = null;
       inFlight = true;
       let result;
-      let requestFailed = false;
+      let requestError = null;
       try {
         result = await fetchRef.current();
         if (active) {
           setData(result);
           setError(null);
         }
-      } catch (requestError) {
-        requestFailed = true;
-        if (active) setError(requestError);
+      } catch (error) {
+        requestError = error;
+        if (active) setError(error);
       } finally {
         inFlight = false;
         if (refreshQueued) {
           refreshQueued = false;
           run();
         } else {
-          scheduleNext(result, requestFailed);
+          scheduleNext(result, requestError);
         }
       }
     };

@@ -141,7 +141,7 @@ def _words_from_items(items) -> list[Word]:
 
 
 ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v14-duration-guard"
-LONG_TEXT_ALIGNMENT_VERSION = "v17-source-token-locked-alignment"
+LONG_TEXT_ALIGNMENT_VERSION = "v20-stable-v16-rollback"
 
 
 def _normalize_singing_audio(y: np.ndarray) -> np.ndarray:
@@ -321,62 +321,6 @@ def _long_text_segments(audio, text: str) -> list[tuple[float, float, str]]:
         end = min(duration_sec, max(start + 8.0, end + 3.0))
         output.append((start, end, group))
     return output
-
-
-
-
-def _canonical_aligned_words(tokens: list[str], words: list[Word]) -> list[Word] | None:
-    """Return aligner timings with the trusted source tokens locked 1:1.
-
-    Forced aligners occasionally omit punctuation-adjacent words, merge two
-    tokens, or emit a different lexical token while still returning plausible
-    timestamps.  Karaoke must never let that rewrite the supplied lyrics.
-    Expand any multi-token timestamp item, compare it to the source line, and
-    only accept the timings when every source token is represented in order.
-    """
-    expanded: list[Word] = []
-    for word in words:
-        parts = tokenize(word.text)
-        if not parts:
-            continue
-        if len(parts) == 1:
-            expanded.append(
-                Word(word.start, word.end, parts[0], word.confidence, len(expanded))
-            )
-            continue
-        weights = [max(1, len(part)) for part in parts]
-        total = sum(weights)
-        consumed = 0
-        span = max(0.02, word.end - word.start)
-        for part, weight in zip(parts, weights, strict=True):
-            part_start = word.start + span * consumed / total
-            consumed += weight
-            part_end = word.start + span * consumed / total
-            expanded.append(
-                Word(part_start, max(part_start + 0.02, part_end), part, word.confidence, len(expanded))
-            )
-
-    if len(expanded) != len(tokens):
-        return None
-
-    def normalize(value: str) -> str:
-        return re.sub(r"[^\w]+", "", value.casefold(), flags=re.UNICODE).replace("ё", "е")
-
-    if any(normalize(source) != normalize(aligned.text) for source, aligned in zip(tokens, expanded, strict=True)):
-        return None
-
-    return [
-        Word(aligned.start, aligned.end, source, aligned.confidence, index)
-        for index, (source, aligned) in enumerate(zip(tokens, expanded, strict=True))
-    ]
-
-
-def _minimum_line_duration(tokens: list[str]) -> float:
-    """Conservative lower bound used only to reject impossible tail packing."""
-    if not tokens:
-        return 0.0
-    letters = sum(len(token) for token in tokens)
-    return max(0.45, 0.17 * len(tokens) + 0.018 * letters)
 
 
 def _pathological_alignment(words: list[Word], span: float) -> bool:
@@ -1081,15 +1025,11 @@ class Qwen3ForcedAligner(Aligner):
                 segment_audio = source[left:right]
                 sf.write(path, segment_audio, sample_rate, subtype="PCM_16")
                 try:
-                    raw_words = self.align(path, text, language)
-                    canonical_words = _canonical_aligned_words(tokens, raw_words)
-                    lexical_match = canonical_words is not None
-                    local_words = canonical_words or raw_words
+                    local_words = self.align(path, text, language)
                     candidate_start = segment_start + local_words[0].start if local_words else 0.0
                     candidate_end = segment_start + local_words[-1].end if local_words else 0.0
                     if (
-                        not lexical_match
-                        or _pathological_alignment(local_words, segment_end - segment_start)
+                        _pathological_alignment(local_words, segment_end - segment_start)
                         or candidate_start < cursor - 0.08
                         or candidate_end <= cursor + 0.02
                     ):
@@ -1097,7 +1037,7 @@ class Qwen3ForcedAligner(Aligner):
                             tokens,
                             segment_audio,
                             sample_rate,
-                            canonical_words if lexical_match else None,
+                            local_words,
                             max(0.0, cursor - segment_start),
                         )
                 except (InvalidArtifactError, RuntimeError, ValueError):
@@ -1161,17 +1101,6 @@ class Qwen3ForcedAligner(Aligner):
                 if not tokens:
                     continue
 
-                # If a provider returned lyrics for a longer arrangement, never
-                # cram the unmatched tail into the final seconds of this audio.
-                # Preserve the portion that can physically fit and stop cleanly.
-                remaining_minimum = sum(
-                    _minimum_line_duration(tokenize(rest))
-                    for rest in groups[line_index:]
-                )
-                remaining_audio = max(0.0, duration_sec - cursor)
-                if line_index > 0 and remaining_minimum > remaining_audio * 1.45 + 2.0:
-                    break
-
                 # Sung words are substantially slower than speech.  This value
                 # is not used as a timing result; it only sizes the search
                 # horizon.  The minimum 16 s horizon also crosses normal
@@ -1194,29 +1123,21 @@ class Qwen3ForcedAligner(Aligner):
 
                 local_words: list[Word] = []
                 try:
-                    raw_words = self.align(path, line, language)
-                    canonical_words = _canonical_aligned_words(tokens, raw_words)
-                    lexical_match = canonical_words is not None
-                    local_words = canonical_words or raw_words
+                    local_words = self.align(path, line, language)
                     candidate_start = search_start + local_words[0].start if local_words else 0.0
                     candidate_end = search_start + local_words[-1].end if local_words else 0.0
                     invalid = (
-                        not lexical_match
-                        or _pathological_alignment(local_words, search_end - search_start)
+                        _pathological_alignment(local_words, search_end - search_start)
                         or candidate_start < cursor - 0.20
                         or candidate_end <= cursor + 0.04
                         or candidate_end > search_end + 0.10
                     )
                     if invalid:
-                        # A lexical mismatch means the aligner did not actually
-                        # align this source line.  Do not use those wrong words
-                        # as an acoustic hint, otherwise the fallback follows the
-                        # wrong phrase and the error cascades into the chorus.
                         local_words = _activity_fallback_words(
                             tokens,
                             line_audio,
                             sample_rate,
-                            canonical_words if lexical_match else None,
+                            local_words,
                             max(0.0, cursor - search_start),
                         )
                 except (InvalidArtifactError, RuntimeError, ValueError):

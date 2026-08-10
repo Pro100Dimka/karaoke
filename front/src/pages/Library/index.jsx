@@ -115,13 +115,21 @@ export default function Library({ onOpenSongSettings }) {
     0,
     [recordingsSong?.id]
   );
-  const { data: processingStatus } = usePolling(
+  const { data: processingStatus, error: processingStatusError } = usePolling(
     () =>
       trackedSongId ? api.getStatus(trackedSongId) : Promise.resolve(null),
     trackedSongId ? 1000 : 0,
     [trackedSongId],
-    { shouldContinue: (status) => isProcessingActive(status?.status) }
+    {
+      shouldContinue: (status) => isProcessingActive(status?.status),
+      shouldRetryError: (requestError) => requestError?.status !== 404
+    }
   );
+
+  useEffect(() => {
+    if (processingStatusError?.status !== 404) return;
+    setTrackedSongId(null);
+  }, [processingStatusError]);
 
   useEffect(() => {
     if (trackedSongId || !hasActiveSongProcessing(songs)) return;

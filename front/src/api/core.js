@@ -76,7 +76,12 @@ async function fetchSuccessfulResponse(path, options) {
     `${BASE_URL}${requestPath}`,
     buildRequestOptions(options)
   );
-  if (!response.ok) throw new Error(await readErrorDetail(response));
+  if (!response.ok) {
+    const error = new Error(await readErrorDetail(response));
+    error.status = response.status;
+    error.url = response.url || `${BASE_URL}${requestPath}`;
+    throw error;
+  }
   return response;
 }
 

@@ -122,11 +122,13 @@ class _OutputDirectoryLock(ThreadFileLock):
 class PipelineRequest:
     source_path: str | Path
     output_dir: str | Path
-    language: str | None = "ru"
+    language: str | None = None
     lyrics_path: str | Path | None = None
     title: str | None = None
     progress: ProgressCallback | None = None
     cancelled: CancelCallback | None = None
+    bpm_override: float | None = None
+    key_override: str | None = None
 
 
 @dataclass(frozen=True)
@@ -138,7 +140,7 @@ class PipelineResult:
 
 
 class KaraokePipeline:
-    VERSION = "2026.35"
+    VERSION = "2026.36"
 
     def __init__(
         self,
@@ -293,6 +295,7 @@ class KaraokePipeline:
         effective_language = request.language
         asr_language = request.language or _lyrics_language_hint(request.title)
         lyrics_source = None
+        lyrics_query = request.title
         if request.lyrics_path and Path(request.lyrics_path).exists():
             supplied = Path(request.lyrics_path).read_text(encoding="utf-8-sig").strip()
             lyrics_source = "explicit"
@@ -305,13 +308,12 @@ class KaraokePipeline:
             supplied = discovery.text
             supplied_segments = discovery.segments
             lyrics_source = discovery.source
+            lyrics_query = discovery.query or request.title
             if supplied:
                 warnings.append(f"Using trusted {lyrics_source} lyrics instead of ASR")
 
         if supplied:
-            _print_full_lyrics(
-                lyrics_source or "unknown", supplied, getattr(discovery, "query", None) or request.title
-            )
+            _print_full_lyrics(lyrics_source or "unknown", supplied, lyrics_query)
         else:
             from .lyrics_sources import _metadata_search_candidates
             attempts = _metadata_search_candidates(source, request.title)
@@ -333,6 +335,11 @@ class KaraokePipeline:
                 "checkpoint": cache.optional_file_hash(
                     getattr(self.engines.separator, "checkpoint", None)
                 ),
+                "engine_code": cache.optional_file_hash(
+                    (Path(getattr(self.engines.separator, "engine_dir", "")) / "inference.py")
+                    if getattr(self.engines.separator, "engine_dir", None)
+                    else None
+                ),
             },
         )
         if self._cache_hit(
@@ -347,48 +354,19 @@ class KaraokePipeline:
             with tempfile.TemporaryDirectory(prefix="karaoke-stems-", dir=output) as temp_dir:
                 temporary_vocals = Path(temp_dir) / "vocals.wav"
                 temporary_instrumental = Path(temp_dir) / "instrumental.wav"
-                compressed_vocals = next(
-                    (
-                        path
-                        for suffix in (".flac", ".mp3")
-                        if (path := vocals.with_suffix(suffix)).is_file()
+                # Never trust loose vocals.flac/.mp3 sidecars as a separation cache.
+                # They carry no provenance and may belong to an older source song or
+                # separator configuration. StageCache already provides a content-
+                # addressed cache for the canonical WAV stems.
+                self._run(
+                    "separation",
+                    self.engines.separator,
+                    lambda engine: engine.separate(
+                        song_wav, temporary_vocals, temporary_instrumental
                     ),
-                    None,
+                    reports,
+                    warnings,
                 )
-                compressed_instrumental = next(
-                    (
-                        path
-                        for suffix in (".flac", ".mp3")
-                        if (path := instrumental.with_suffix(suffix)).is_file()
-                    ),
-                    None,
-                )
-                if compressed_vocals and compressed_instrumental:
-                    started = time.perf_counter()
-                    decode_audio(compressed_vocals, temporary_vocals, self.config.sample_rate)
-                    decode_audio(
-                        compressed_instrumental,
-                        temporary_instrumental,
-                        self.config.sample_rate,
-                    )
-                    reports.append(
-                        StageReport(
-                            "separation",
-                            time.perf_counter() - started,
-                            True,
-                            "compressed-stem-cache",
-                        )
-                    )
-                else:
-                    self._run(
-                        "separation",
-                        self.engines.separator,
-                        lambda engine: engine.separate(
-                            song_wav, temporary_vocals, temporary_instrumental
-                        ),
-                        reports,
-                        warnings,
-                    )
                 validate_audio(temporary_vocals)
                 validate_audio(temporary_instrumental)
                 publish_files_atomically(
@@ -399,25 +377,11 @@ class KaraokePipeline:
                 )
             cache.commit("separation", separation_key, [vocals, instrumental])
 
-        # Post-processing stores large stems as lossless FLAC. Fingerprinting
-        # that stable representation keeps tempo, pitch and alignment caches
-        # valid across future incremental reprocessing runs.
-        vocal_fingerprint = next(
-            (
-                path
-                for suffix in (".flac", ".mp3")
-                if (path := vocals.with_suffix(suffix)).is_file()
-            ),
-            vocals,
-        )
-        instrumental_fingerprint = next(
-            (
-                path
-                for suffix in (".flac", ".mp3")
-                if (path := instrumental.with_suffix(suffix)).is_file()
-            ),
-            instrumental,
-        )
+        # All downstream stages must fingerprint the exact files they consume.
+        # Using an optional sidecar here can make cache identity diverge from the
+        # actual vocals.wav/instrumental.wav passed to pitch/alignment/music.
+        vocal_fingerprint = vocals
+        instrumental_fingerprint = instrumental
 
         self._notify(request, "tempo", 48, "Анализ темпа")
         music_path = output / "music.json"
@@ -426,28 +390,59 @@ class KaraokePipeline:
             {
                 "instrumental": cache.file_hash(instrumental_fingerprint),
                 "engine": MUSIC_ANALYZER_VERSION,
+                "bpm_override": request.bpm_override,
+                "key_override": request.key_override,
             },
         )
+        if request.bpm_override is not None:
+            override_bpm = float(request.bpm_override)
+            if not 20.0 <= override_bpm <= 300.0:
+                raise ValueError(f"bpm_override must be between 20 and 300, got {override_bpm}")
+        else:
+            override_bpm = None
+        override_key = str(request.key_override).strip() if request.key_override is not None else ""
+
         if self._cache_hit(
             cache, "tempo", tempo_key, [music_path], {music_path: validate_music_json}
         ):
             music_analysis = read_json(music_path, {})
             bpm = int(round(float(music_analysis.get("bpm") or 120.0)))
-            # Upgrade old cached decimal BPM values in place so every artifact
-            # and API consumer sees the same integer tempo.
-            if music_analysis.get("bpm") != bpm:
-                music_analysis["bpm"] = bpm
-                write_json_atomic(music_path, music_analysis)
             reports.append(StageReport("tempo", 0, True, "cached"))
         else:
             started = time.perf_counter()
-            music_analysis = analyze_music(instrumental)
+            # If both authoritative values are supplied, do not spend time
+            # estimating them only to overwrite the result afterwards.
+            music_analysis = (
+                {
+                    "bpm": int(round(override_bpm)),
+                    "tempo_confidence": 1.0,
+                    "tempo_source": "override",
+                    "key": override_key,
+                    "key_confidence": 1.0,
+                    "key_source": "override",
+                }
+                if override_bpm is not None and override_key
+                else analyze_music(instrumental)
+            )
+            if override_bpm is not None:
+                music_analysis["bpm"] = int(round(override_bpm))
+                music_analysis["tempo_confidence"] = 1.0
+                music_analysis["tempo_source"] = "override"
+            if override_key:
+                music_analysis["key"] = override_key
+                music_analysis["key_confidence"] = 1.0
+                music_analysis["key_source"] = "override"
             bpm = int(round(float(music_analysis.get("bpm") or 120.0)))
             music_analysis["bpm"] = bpm
             write_json_atomic(music_path, music_analysis)
             cache.commit("tempo", tempo_key, [music_path])
             reports.append(
-                StageReport("tempo", time.perf_counter() - started, False, "librosa-beat")
+                StageReport(
+                    "tempo",
+                    time.perf_counter() - started,
+                    False,
+                    "override" if override_bpm is not None or override_key else "librosa-beat",
+                )
             )
 
         self._notify(request, "pitch", 52, "Определение мелодии голоса")
@@ -726,6 +721,7 @@ class KaraokePipeline:
                 "derivation": derivation_key,
                 "duration": song_duration,
                 "bpm": round(bpm, 6),
+                "key": music_analysis.get("key"),
                 "tempo": tempo_key,
             },
         )
@@ -747,6 +743,7 @@ class KaraokePipeline:
                 {
                     "duration": song_duration,
                     "bpm": bpm,
+                    "key": music_analysis.get("key"),
                     "words": [to_dict(word) for word in words],
                     "syllables": [to_dict(item) for item in syllables],
                     "notes": [to_dict(item) for item in game_notes],
@@ -768,6 +765,24 @@ class KaraokePipeline:
             {
                 "environment": environment_info(),
                 "quality": to_dict(quality),
+                "data_flow": {
+                    "source_sha256": source_hash,
+                    "song_sha256": cache.file_hash(song_wav),
+                    "vocals_sha256": cache.file_hash(vocals),
+                    "instrumental_sha256": cache.file_hash(instrumental),
+                    "bpm": bpm,
+                    "bpm_source": music_analysis.get("tempo_source", "analysis"),
+                    "key": music_analysis.get("key"),
+                    "key_source": music_analysis.get("key_source", "analysis"),
+                    "pitch_frames": len(pitch),
+                    "voiced_pitch_frames": sum(
+                        1 for frame in pitch if frame.voiced and frame.frequency > 0
+                    ),
+                    "words": len(words),
+                    "syllables": len(syllables),
+                    "vocal_notes": len(vocal_notes),
+                    "game_notes": len(game_notes),
+                },
                 "stages": [to_dict(report) for report in reports],
                 "cache_hits": sum(1 for report in reports if report.cached),
                 "cache_misses": sum(1 for report in reports if not report.cached),
