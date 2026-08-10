@@ -144,7 +144,7 @@ def _words_from_items(items) -> list[Word]:
 
 
 ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v14-duration-guard"
-LONG_TEXT_ALIGNMENT_VERSION = "v34-acoustic-gap-physical-bounds"
+LONG_TEXT_ALIGNMENT_VERSION = "v35-anchor-nudge-active-gap-fill"
 
 
 def _normalize_singing_audio(y: np.ndarray) -> np.ndarray:
@@ -531,6 +531,9 @@ def _anchor_preserving_canonical_alignment(
     def minimum_run_span(begin: int, end: int) -> float:
         return sum(minimum_word_span(tokens[pos]) for pos in range(begin, end))
 
+    anchor_boundary_tolerance = 0.22
+    anchor_min_duration = 0.055
+
     # First choose a monotonic high-value chain.
     ordered = sorted(candidates.items())
     min_gap_per_missing_word = 0.035
@@ -543,7 +546,8 @@ def _anchor_preserving_canonical_alignment(
             prev_idx, (prev_word, _prev_kind, _prev_priority) = ordered[prev_pos]
             missing = max(0, idx - prev_idx - 1)
             required = minimum_run_span(prev_idx + 1, idx) if missing else 0.0
-            if word.start + 1e-6 < prev_word.end + required:
+            shortage = (prev_word.end + required) - word.start
+            if shortage > (anchor_boundary_tolerance * 2.0) + 1e-6:
                 continue
             score = dp_score[prev_pos] + priority
             if score > best_score:
@@ -574,6 +578,166 @@ def _anchor_preserving_canonical_alignment(
     active_end = min(duration_sec, float(active[-1])) if active else duration_sec
     if active_end <= active_start + 0.08:
         active_start, active_end = 0.0, duration_sec
+
+    activity_regions = _vocal_activity_regions(source, sample_rate, join_gap=0.45)
+
+    def nudge_conflicting_pair(left_idx: int, right_idx: int, required_gap: float) -> bool:
+        """Recover a tight gap by trimming only acoustic anchor boundaries.
+
+        CTC gives useful acoustic locations, but frame-level word boundaries are
+        not sacred to the millisecond.  Before dropping an anchor, allow a small
+        inward boundary adjustment while keeping the anchor's center/order and
+        confidence intact.
+        """
+        if left_idx not in selected or right_idx not in selected:
+            return False
+        left_word, left_kind, left_priority = selected[left_idx]
+        right_word, right_kind, right_priority = selected[right_idx]
+        shortage = (left_word.end + required_gap) - right_word.start
+        if shortage <= 1e-6:
+            return True
+
+        left_room = min(
+            anchor_boundary_tolerance,
+            max(0.0, (left_word.end - left_word.start) - anchor_min_duration),
+        )
+        right_room = min(
+            anchor_boundary_tolerance,
+            max(0.0, (right_word.end - right_word.start) - anchor_min_duration),
+        )
+        if shortage > left_room + right_room + 1e-6:
+            return False
+
+        # Prefer changing the lower-priority boundary first; for equal anchors
+        # split the correction so neither acoustic word is distorted too much.
+        if left_priority + 1e-6 < right_priority:
+            trim_left = min(shortage, left_room)
+            trim_right = shortage - trim_left
+        elif right_priority + 1e-6 < left_priority:
+            trim_right = min(shortage, right_room)
+            trim_left = shortage - trim_right
+        else:
+            trim_left = min(left_room, shortage / 2.0)
+            trim_right = shortage - trim_left
+            if trim_right > right_room:
+                extra = trim_right - right_room
+                trim_right = right_room
+                trim_left += extra
+
+        if trim_left > left_room + 1e-6 or trim_right > right_room + 1e-6:
+            return False
+
+        selected[left_idx] = (
+            Word(
+                left_word.start,
+                max(left_word.start + anchor_min_duration, left_word.end - trim_left),
+                left_word.text,
+                left_word.confidence,
+                left_word.index,
+            ),
+            left_kind,
+            left_priority,
+        )
+        selected[right_idx] = (
+            Word(
+                min(right_word.end - anchor_min_duration, right_word.start + trim_right),
+                right_word.end,
+                right_word.text,
+                right_word.confidence,
+                right_word.index,
+            ),
+            right_kind,
+            right_priority,
+        )
+        return True
+
+    def activity_gap_words(
+        run_start: int,
+        run_end: int,
+        left_time: float,
+        right_time: float,
+    ) -> list[Word] | None:
+        """Place a long missing lyric run into real vocal islands.
+
+        Wall-clock interpolation across a multi-second breath/instrumental gap
+        makes karaoke words crawl through silence.  Partition the canonical words
+        across active vocal regions instead; silence remains between word groups.
+        """
+        count = run_end - run_start
+        if count <= 0:
+            return []
+        wall_span = right_time - left_time
+        minimum_span = minimum_run_span(run_start, run_end)
+        if wall_span < max(2.4, minimum_span * 2.25):
+            return None
+
+        regions = []
+        for start, end in activity_regions:
+            start = max(left_time, float(start))
+            end = min(right_time, float(end))
+            if end - start >= 0.10:
+                regions.append((start, end))
+        if len(regions) < 2:
+            return None
+
+        minima = [minimum_word_span(tokens[pos]) for pos in range(run_start, run_end)]
+        capacities = [end - start for start, end in regions]
+        if sum(capacities) + 1e-6 < sum(minima):
+            return None
+
+        # Dynamic partition: assign consecutive words to consecutive vocal
+        # regions while respecting each region's physical capacity.
+        prefix = [0.0]
+        for value in minima:
+            prefix.append(prefix[-1] + value)
+        total_capacity = max(1e-9, sum(capacities))
+        states: dict[int, tuple[float, list[int]]] = {0: (0.0, [])}
+        for region_index, capacity in enumerate(capacities):
+            next_states: dict[int, tuple[float, list[int]]] = {}
+            target_fraction = capacity / total_capacity
+            for token_index, (cost, allocation) in states.items():
+                remaining = count - token_index
+                for take in range(0, remaining + 1):
+                    needed = prefix[token_index + take] - prefix[token_index]
+                    if needed > capacity + 1e-6:
+                        break
+                    if region_index == len(capacities) - 1 and take != remaining:
+                        continue
+                    fraction = take / max(1, count)
+                    new_cost = cost + (fraction - target_fraction) ** 2
+                    end_index = token_index + take
+                    previous = next_states.get(end_index)
+                    if previous is None or new_cost < previous[0]:
+                        next_states[end_index] = (new_cost, allocation + [take])
+            states = next_states
+            if not states:
+                return None
+
+        final_state = states.get(count)
+        if final_state is None:
+            return None
+        allocation = final_state[1]
+
+        output: list[Word] = []
+        token_index = run_start
+        for (region_start, region_end), take in zip(regions, allocation, strict=True):
+            if take <= 0:
+                continue
+            positions = list(range(token_index, token_index + take))
+            local_minima = [minimum_word_span(tokens[pos]) for pos in positions]
+            minimum_total = sum(local_minima)
+            extra = max(0.0, (region_end - region_start) - minimum_total)
+            weights = [max(1.0, float(len(normalize(tokens[pos])))) for pos in positions]
+            total_weight = max(1.0, sum(weights))
+            cursor = region_start
+            for pos, minimum, weight in zip(positions, local_minima, weights, strict=True):
+                duration = minimum + extra * weight / total_weight
+                end = min(region_end, cursor + duration)
+                output.append(Word(cursor, end, tokens[pos], 0.018, pos))
+                cursor = end
+            token_index += take
+
+        return output if len(output) == count else None
 
     def weaker_anchor(left_idx: int, right_idx: int) -> int:
         """Return the weaker conflicting anchor index.
@@ -607,6 +771,10 @@ def _anchor_preserving_canonical_alignment(
             missing = right_idx - left_idx - 1
             required = minimum_run_span(left_idx + 1, right_idx) if missing > 0 else 0.0
             if right_word.start < left_word.end + required - 1e-6:
+                if nudge_conflicting_pair(left_idx, right_idx, required):
+                    # Selected anchors changed; restart the build with the
+                    # adjusted acoustic boundaries.
+                    return None, (-1, -1)
                 return None, (left_idx, right_idx)
 
         index = 0
@@ -650,26 +818,46 @@ def _anchor_preserving_canonical_alignment(
                     return None, (left_idx, left_idx)
                 return None, None
 
-            minima = [minimum_word_span(tokens[pos]) for pos in range(run_start, run_end)]
-            minimum_total = sum(minima)
-            extra = max(0.0, (right_time - left_time) - minimum_total)
-            lexical_weights = [max(1.0, float(len(normalize(tokens[pos])))) for pos in range(run_start, run_end)]
-            lexical_total = max(1.0, sum(lexical_weights))
-            cursor_time = left_time
-            for pos, minimum, weight in zip(
-                range(run_start, run_end),
-                minima,
-                lexical_weights,
-                strict=True,
-            ):
-                duration = minimum + extra * weight / lexical_total
-                start = cursor_time
-                end = min(right_time, start + duration)
-                if end <= start + 0.009:
-                    end = min(right_time, start + 0.01)
-                result[pos] = Word(start, min(duration_sec, end), tokens[pos], 0.012, pos)
-                source_kind[pos] = "interpolated"
-                cursor_time = end
+            activity_words = activity_gap_words(
+                run_start,
+                run_end,
+                left_time,
+                right_time,
+            )
+            if activity_words is not None:
+                for word in activity_words:
+                    result[word.index] = word
+                    source_kind[word.index] = "interpolated"
+            else:
+                minima = [minimum_word_span(tokens[pos]) for pos in range(run_start, run_end)]
+                minimum_total = sum(minima)
+                extra = max(0.0, (right_time - left_time) - minimum_total)
+                lexical_weights = [
+                    max(1.0, float(len(normalize(tokens[pos]))))
+                    for pos in range(run_start, run_end)
+                ]
+                lexical_total = max(1.0, sum(lexical_weights))
+                cursor_time = left_time
+                for pos, minimum, weight in zip(
+                    range(run_start, run_end),
+                    minima,
+                    lexical_weights,
+                    strict=True,
+                ):
+                    duration = minimum + extra * weight / lexical_total
+                    start = cursor_time
+                    end = min(right_time, start + duration)
+                    if end <= start + 0.009:
+                        end = min(right_time, start + 0.01)
+                    result[pos] = Word(
+                        start,
+                        min(duration_sec, end),
+                        tokens[pos],
+                        0.012,
+                        pos,
+                    )
+                    source_kind[pos] = "interpolated"
+                    cursor_time = end
 
         final = [word for word in result if word is not None]
         if len(final) != len(tokens):
@@ -715,6 +903,10 @@ def _anchor_preserving_canonical_alignment(
             )
         else:
             left_idx, right_idx = conflict
+            if left_idx == -1 and right_idx == -1:
+                # A small acoustic-boundary nudge was applied; rebuild before
+                # considering anchor removal.
+                continue
             if left_idx == right_idx:
                 drop_idx = left_idx
             elif left_idx in selected and right_idx in selected:

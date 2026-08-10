@@ -713,3 +713,55 @@ def test_anchor_merge_does_not_squeeze_phrase_into_subsecond_gap():
     assert all(right.start >= left.end - 1e-6 for left, right in zip(merged, merged[1:]))
     assert stats["ctc"] >= 1
     assert stats["interpolated"] >= 6
+
+
+def test_anchor_merge_nudges_tight_ctc_boundaries_before_dropping_anchor():
+    from types import SimpleNamespace
+
+    groups = ["left", "one two three", "right"]
+    ctc_lines = [
+        SimpleNamespace(words=[Word(5.00, 5.55, "left", 0.92, 0)], confidence=0.92),
+        None,
+        SimpleNamespace(words=[Word(6.08, 6.55, "right", 0.90, 0)], confidence=0.90),
+    ]
+    audio = np.ones(16000 * 12, dtype=np.float32) * 0.02
+
+    merged, stats = _anchor_preserving_canonical_alignment(
+        groups, ctc_lines, [], audio, 16000, 12.0
+    )
+
+    assert len(merged) == 5
+    assert stats["ctc"] == 2
+    assert stats["interpolated"] == 3
+    assert merged[0].end < 5.55 or merged[-1].start > 6.08
+    assert all(right.start >= left.end - 1e-6 for left, right in zip(merged, merged[1:]))
+
+
+def test_long_interpolated_gap_uses_vocal_islands_instead_of_spanning_silence(monkeypatch):
+    from types import SimpleNamespace
+
+    groups = ["left", "alpha beta gamma delta", "right"]
+    ctc_lines = [
+        SimpleNamespace(words=[Word(10.0, 10.3, "left", 0.9, 0)], confidence=0.9),
+        None,
+        SimpleNamespace(words=[Word(17.7, 18.0, "right", 0.9, 0)], confidence=0.9),
+    ]
+    # Two separated vocal islands inside a long wall-clock gap.
+    monkeypatch.setattr(
+        text_engine,
+        "_vocal_activity_regions",
+        lambda *_args, **_kwargs: [(10.5, 12.2), (15.0, 17.2)],
+    )
+    audio = np.ones(16000 * 20, dtype=np.float32) * 0.02
+
+    merged, stats = _anchor_preserving_canonical_alignment(
+        groups, ctc_lines, [], audio, 16000, 20.0
+    )
+
+    middle = merged[1:5]
+    assert len(middle) == 4
+    assert stats["ctc"] == 2
+    assert stats["interpolated"] == 4
+    # At least one real pause between word groups must survive.
+    gaps = [right.start - left.end for left, right in zip(middle, middle[1:])]
+    assert max(gaps) > 1.0
