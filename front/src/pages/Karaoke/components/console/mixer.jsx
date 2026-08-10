@@ -1,85 +1,71 @@
 import { Mic } from "lucide-react";
 
-import { Stack } from "../../../../theme/ui";
+import { Stack, Typography } from "../../../../theme/ui";
 
 import { EFFECT_FIELDS, MIXER_FIELDS } from "./config";
-
 import EffectDial from "./effect-dial";
 import { clamp } from "./utils";
 
 const MIXER_COLORS = {
-  microphone: "#ff1744",
-  music: "#38e6b0",
-  vocal: "#ff7043",
-  melody: "#c2183a"
+  microphone: "var(--color-primary)",
+  music: "var(--color-success)",
+  vocal: "var(--color-warning)",
+  melody: "var(--color-secondary)"
 };
 
 function VerticalSlider({ label, value, color, onChange, onCommit }) {
   const percent = Math.round((value ?? 0) * 100);
 
   return (
-    <Stack
-      align="center"
-      gap={1}
-      sx={{
-        minWidth: 72,
-        userSelect: "none"
-      }}
-    >
-      <span
-        style={{
-          fontSize: 12,
-          fontWeight: 700,
-          color
+    <Stack gap={0.45} sx={{ userSelect: "none", width: "auto" }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color,
+          fontSize: 10.5,
+          fontWeight: 800,
+          lineHeight: 1,
+          whiteSpace: "nowrap"
         }}
       >
         {label}
-      </span>
+      </Typography>
 
       <div
         style={{
           position: "relative",
-
-          width: 28,
-          height: 120,
-
+          width: 26,
+          height: 116,
           display: "grid",
           placeItems: "center"
         }}
       >
         <div
+          aria-hidden="true"
           style={{
             position: "absolute",
-
-            width: 8,
+            width: 6,
             height: "100%",
-
             borderRadius: 999,
-
             background:
-              "color-mix(in srgb, var(--color-surface-strong) 84%, transparent)",
-
+              "color-mix(in srgb, var(--color-surface-strong) 76%, var(--color-bg-deep))",
             border:
-              "1px solid color-mix(in srgb, var(--color-border-strong) 72%, transparent)",
-
+              "1px solid color-mix(in srgb, var(--color-border-strong) 55%, transparent)",
             boxShadow:
-              "inset 0 0 0.45rem color-mix(in srgb, var(--color-bg-deep) 65%, transparent)"
+              "inset 0 0 0.4rem color-mix(in srgb, var(--color-bg-deep) 72%, transparent)"
           }}
         />
 
         <div
+          aria-hidden="true"
           style={{
             position: "absolute",
             bottom: 0,
-
-            width: 8,
+            width: 6,
             height: `${percent}%`,
-
             borderRadius: 999,
-
             background: color,
-
-            boxShadow: `0 0 12px ${color}`
+            boxShadow: `0 0 0.7rem ${color}`
           }}
         />
 
@@ -90,56 +76,49 @@ function VerticalSlider({ label, value, color, onChange, onCommit }) {
           step={0.05}
           value={value}
           aria-label={label}
+          aria-valuetext={`${percent}%`}
           onChange={(event) => onChange?.(Number(event.target.value))}
           onPointerUp={(event) => onCommit?.(Number(event.currentTarget.value))}
           onKeyUp={(event) => onCommit?.(Number(event.currentTarget.value))}
           style={{
             position: "absolute",
-
-            width: 120,
-            height: 28,
-
+            width: 116,
+            height: 26,
             margin: 0,
-
             transform: "rotate(-90deg)",
-
             transformOrigin: "center",
-
             opacity: 0,
-
             cursor: "pointer"
           }}
         />
 
         <div
+          aria-hidden="true"
           style={{
             position: "absolute",
-
-            bottom: `calc(${percent}% - 7px)`,
-
-            width: 15,
-            height: 15,
-
+            bottom: `clamp(0px, calc(${percent}% - 7px), calc(100% - 14px))`,
+            width: 14,
+            height: 14,
+            border: `1px solid color-mix(in srgb, ${color} 78%, white)`,
             borderRadius: "50%",
-
             background: color,
-
-            boxShadow: `0 0 14px ${color}`,
-
+            boxShadow: `0 0 0.8rem ${color}`,
             pointerEvents: "none"
           }}
         />
       </div>
 
-      <span
-        style={{
-          fontSize: 11,
-          fontWeight: 700,
-          color
+      <Typography
+        variant="caption"
+        sx={{
+          color,
+          fontSize: 10,
+          fontWeight: 800,
+          lineHeight: 1
         }}
       >
         {percent}%
-      </span>
+      </Typography>
     </Stack>
   );
 }
@@ -155,42 +134,25 @@ export default function MixerPanel({
   const level = clamp(microphoneLevel, 0, 1);
 
   return (
-    <Stack
-      gap={0.5}
-      style={{
-        "--microphone-level": level
-      }}
-    >
-      <Stack direction="row" align="center" gap={0.5}>
-        <Mic size={16} />
-
-        <strong>Микшер</strong>
+    <Stack gap="1rem" style={{ "--microphone-level": level }}>
+      <Stack direction="row" align="center" gap={0.4}>
+        <Mic size={15} strokeWidth={2.2} />
+        <Typography
+          variant="caption"
+          sx={{
+            color: "var(--color-text)",
+            fontSize: 11.5,
+            fontWeight: 850,
+            lineHeight: 1
+          }}
+        >
+          Микшер
+        </Typography>
       </Stack>
-
-      <Stack
-        direction="row"
-        align="center"
-        justify="space-around"
-        gap={3}
-        sx={{
-          width: "100%",
-          overflowX: "auto",
-
-          /*
-           * Было:
-           * padding: "0.5rem 0"
-           *
-           * Оно ещё добавляло
-           * 8px сверху и снизу.
-           */
-          padding: 0
-        }}
-      >
+      <Stack direction="row" align="center" justify="space-between">
         {MIXER_FIELDS.flatMap(([key, label], index) => {
           const value = volumes[key] ?? 0;
-
           const effect = EFFECT_FIELDS[index];
-
           const items = [
             <VerticalSlider
               key={`mixer-${key}`}
@@ -211,7 +173,7 @@ export default function MixerPanel({
                 label={effectLabel}
                 value={microphoneEffects[effectKey]}
                 accent={accent}
-                onChange={(value) => onEffectChange(effectKey, value)}
+                onChange={(nextValue) => onEffectChange(effectKey, nextValue)}
               />
             );
           }

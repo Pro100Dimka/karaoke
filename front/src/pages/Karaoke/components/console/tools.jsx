@@ -17,7 +17,8 @@ const PRESET_ACCENTS = {
 };
 
 const TOOL_BUTTON_SX = {
-  padding: "0.55rem 0.9rem",
+  minHeight: 38,
+  padding: "0.45rem 0.75rem",
 
   borderRadius: "var(--shape-md)",
 
@@ -48,7 +49,8 @@ function EffectPreset({ label, symbol, echo, reverb, active, onClick }) {
       onClick={onClick}
       sx={{
         minWidth: 0,
-        padding: "0.5rem",
+        minHeight: 62,
+        padding: "0.4rem 0.45rem",
         display: "grid",
         placeItems: "center",
         borderRadius: "var(--shape-lg)",
@@ -72,12 +74,12 @@ function EffectPreset({ label, symbol, echo, reverb, active, onClick }) {
             display: "grid",
             placeItems: "center",
 
-            minWidth: 34,
-            minHeight: 34,
+            minWidth: 30,
+            minHeight: 30,
 
             color: accent,
 
-            fontSize: 28,
+            fontSize: 24,
             lineHeight: 1,
 
             filter: active
@@ -100,7 +102,7 @@ function EffectPreset({ label, symbol, echo, reverb, active, onClick }) {
           sx={{
             color: active ? accent : "var(--color-text-soft)",
 
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: 800,
 
             lineHeight: 1,
@@ -171,7 +173,7 @@ function ToolButton({ icon: Icon, label, active, title, onClick }) {
           variant="caption"
           sx={{
             color: "inherit",
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: 800,
             whiteSpace: "nowrap"
           }}
@@ -212,7 +214,7 @@ function ToolTabs({
   return (
     <Stack
       direction="row"
-      gap={0.65}
+      gap={0.5}
       sx={{
         width: "100%"
       }}
@@ -233,7 +235,7 @@ function ToolTabs({
 
 export default function ToolsPanel(props) {
   return (
-    <Stack gap={1} justify="flex-end">
+    <Stack gap={0.75} justify="flex-end">
       <ToolTabs {...props} />
       <EffectPresets {...props} />
     </Stack>

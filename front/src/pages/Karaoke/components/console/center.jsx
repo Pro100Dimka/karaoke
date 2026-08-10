@@ -100,8 +100,9 @@ function PerformanceCard({
       surface="base"
       tilt={false}
       sx={{
-        padding: "0.5rem 0.6rem",
-        flex: 1,
+        padding: "0.45rem 0.55rem",
+        minHeight: 72,
+        flex: "1 1 0",
         borderRadius: "var(--shape-lg)",
         border:
           "1px solid color-mix(in srgb, var(--control-accent) 62%, var(--color-border))",
@@ -111,7 +112,6 @@ function PerformanceCard({
           "0 0 0.85rem color-mix(in srgb, var(--control-accent) 9%, transparent)"
       }}
       style={{ "--control-accent": accent }}
-      cardContent={{ style: { padding: "0.55rem 0.6rem" } }}
     >
       <Stack
         gap={0.75}
@@ -305,7 +305,7 @@ function TransportButtons({ isPlaying, onSkip, onTogglePlay, onStop }) {
       direction="row"
       align="center"
       justify="center"
-      gap={1}
+      gap={0.75}
       aria-label="Управление воспроизведением"
     >
       <TransportButton
@@ -329,7 +329,7 @@ function TransportButtons({ isPlaying, onSkip, onTogglePlay, onStop }) {
 
 export default function ConsoleCenter(props) {
   return (
-    <Stack gap={2.25} align="center" justify="flex-end">
+    <Stack gap={1.15} align="center" justify="flex-end">
       <TransportButtons {...props} />
       <PerformanceControls {...props} />
     </Stack>
