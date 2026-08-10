@@ -11,7 +11,7 @@ import SettingsContent from "./settings-content";
 export default function Settings({
   isOpen = true,
   onClose = () => {},
-  initialTab = "appearance"
+  initialTab = "general"
 }) {
   const { alert } = useAppDialog();
   const settings = useSettingsForm(alert);
@@ -46,7 +46,7 @@ export default function Settings({
         icon: Settings2,
         eyebrow: "НАСТРОЙКИ",
         title: "Настройки приложения",
-        description: "Настройте звук, внешний вид и обработку песен под себя."
+        description: "Настройте приложение, звук и обработку песен под себя."
       }}
     >
       <Tabs

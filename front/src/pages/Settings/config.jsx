@@ -1,11 +1,9 @@
 import {
   Cpu,
-  FolderCog,
   Mic2,
   Palette,
   Radio,
-  SlidersHorizontal,
-  Wrench
+  SlidersHorizontal
 } from "lucide-react";
 import { MONITORING_MODES } from "../Karaoke/config";
 import screens from "./screens";
@@ -63,49 +61,20 @@ const WHISPER_OPTIONS = opts([
 ]);
 
 /* =========================================================
-   APPEARANCE
+   GENERAL
    ========================================================= */
 
-const APPEARANCE_FIELDS = [
+const GENERAL_FIELDS_TOP = [
   ...[
-    [
-      "select",
-      "language",
-      "Язык",
-      "Язык интерфейса приложения",
-      {
-        options: LANGUAGE_OPTIONS
-      }
-    ],
-
-    [
-      "select",
-      "theme",
-      "Тема",
-      "Цветовое оформление приложения",
-      {
-        options: THEME_OPTIONS,
-        save: "change"
-      }
-    ],
-
-    [
-      "text",
-      "online_name",
-      "Имя в сети",
-      "Это имя увидят другие участники комнаты",
-      {
-        placeholder: "Например, Дима",
-        maxLength: 40,
-        save: "blur"
-      }
-    ]
+    ["select", "language", "Язык", "Язык интерфейса приложения", {
+      options: LANGUAGE_OPTIONS
+    }],
+    ["select", "theme", "Тема", "Цветовое оформление приложения", {
+      options: THEME_OPTIONS,
+      save: "change"
+    }]
   ].map(([type, name, label, tooltip, extra = {}]) =>
-    FORM_FIELDS[type](name, {
-      label,
-      tooltip,
-      ...extra
-    })
+    FORM_FIELDS[type](name, { label, tooltip, ...extra })
   ),
 
   ...[
@@ -116,7 +85,6 @@ const APPEARANCE_FIELDS = [
       "Выберите фоновую музыку",
       {
         startIcon: Radio,
-
         getOptions: ({ radio }) =>
           (radio?.stations ?? []).map(({ id, name, description }) => ({
             value: id,
@@ -125,7 +93,6 @@ const APPEARANCE_FIELDS = [
           }))
       }
     ],
-
     [
       "slider",
       "volume",
@@ -142,6 +109,14 @@ const APPEARANCE_FIELDS = [
     fieldType(radioField, type)(name, { label, tooltip, ...extra })
   )
 ];
+
+const ONLINE_NAME_FIELD = FORM_FIELDS.text("online_name", {
+  label: "Имя в сети",
+  tooltip: "Это имя увидят другие участники комнаты",
+  placeholder: "Например, Дима",
+  maxLength: 40,
+  save: "blur"
+});
 
 /* =========================================================
    AUDIO SELECTS
@@ -329,7 +304,13 @@ const STORAGE_FIELDS = [
   ["songs_folder", "Песни"],
   ["ai_folder", "Обработанные файлы"],
   ["cache_folder", "Кэш"]
-].map(([name, label]) => formReadonly(name, { label }));
+].map(([name, label]) => formReadonly(name, { label, span: 4 }));
+
+const GENERAL_FIELDS = [
+  ...GENERAL_FIELDS_TOP,
+  ...STORAGE_FIELDS,
+  ONLINE_NAME_FIELD
+];
 
 /* =========================================================
    SETTINGS
@@ -337,20 +318,12 @@ const STORAGE_FIELDS = [
 
 export const SETTINGS = Object.fromEntries(
   [
-    ["appearance", "Интерфейс", Palette, APPEARANCE_FIELDS],
+    ["general", "Общее", Palette, GENERAL_FIELDS, { screens }],
     ["audio", "Звук", SlidersHorizontal, AUDIO_FIELDS],
-    ["ai", "Обработка", Cpu, AI_FIELDS],
-    [
-      "storage",
-      "Файлы",
-      FolderCog,
-      STORAGE_FIELDS,
-      { className: "settings-path-grid" }
-    ],
-    ["service", "Дополнительно", Wrench, null, { screens }]
+    ["ai", "Обработка", Cpu, AI_FIELDS]
   ].map(([id, label, icon, fields, extra = {}]) => [
     id,
-    { label, icon, ...(fields ? { fields } : {}), ...extra }
+    { label, icon, fields, ...extra }
   ])
 );
 
