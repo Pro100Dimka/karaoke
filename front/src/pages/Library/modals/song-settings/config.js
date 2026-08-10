@@ -1,9 +1,11 @@
 export const HALF = 6;
+export const QUARTER = 3;
 export const THIRD = 4;
 export const FULL = 12;
 
 export const DIFFICULTY_OPTIONS = [
   { value: "", label: "Авто (по AI)" },
+
   ...["Лёгкий", "Средний", "Сложный", "Эксперт"].map((value) => ({
     value,
     label: value
@@ -13,14 +15,19 @@ export const DIFFICULTY_OPTIONS = [
 const formField = (name, config = {}) => ({
   name,
   span: HALF,
+
   getValue: ({ form }) => form?.[name],
+
   setValue: ({ onChange }, value) => onChange(name, value),
+
   ...config
 });
 
 export const SONG_FIELDS = [
+  /* Исполнитель + название */
   ...[
     ["artist", "Исполнитель", "Muse"],
+
     ["title", "Название песни", "Название песни"]
   ].map(([name, label, placeholder]) =>
     formField(name, {
@@ -31,10 +38,35 @@ export const SONG_FIELDS = [
     })
   ),
 
+  /* Темп + тональность + жанр */
   ...[
-    ["tempo_override", "Темп", "number", { min: 1, parse: "nullable-number" }],
-    ["key_override", "Тональность", "text", { placeholder: "напр. C#m" }],
-    ["genre", "Жанр", "text", { placeholder: "Alternative rock" }]
+    [
+      "tempo_override",
+      "Темп",
+      "number",
+      {
+        min: 1,
+        parse: "nullable-number"
+      }
+    ],
+
+    [
+      "key_override",
+      "Тональность",
+      "text",
+      {
+        placeholder: "напр. C#m"
+      }
+    ],
+
+    [
+      "genre",
+      "Жанр",
+      "text",
+      {
+        placeholder: "Alternative rock"
+      }
+    ]
   ].map(([name, label, type, extra]) =>
     formField(name, {
       type,
@@ -44,6 +76,7 @@ export const SONG_FIELDS = [
     })
   ),
 
+  /* Сложность + диапазон нот */
   formField("difficulty_override", {
     type: "select",
     label: "Сложность",
@@ -51,35 +84,34 @@ export const SONG_FIELDS = [
     span: HALF
   }),
 
-  {
-    type: "noteRange",
-    name: "note_range",
-    label: "Диапазон нот",
-    tooltip: "Минимальная и максимальная MIDI-нота для этой песни",
-    span: HALF,
+  formField("note_range_min", {
+    type: "number",
+    label: "Диапазон нот · от",
     min: 0,
     max: 127,
-    step: 1,
-    minPlaceholder: "Мин.",
-    maxPlaceholder: "Макс.",
+    parse: "nullable-number",
+    span: QUARTER
+  }),
 
-    getValue: ({ form }) => ({
-      min: form?.note_range_min ?? null,
-      max: form?.note_range_max ?? null
-    }),
+  formField("note_range_max", {
+    type: "number",
+    label: "До",
+    min: 0,
+    max: 127,
+    parse: "nullable-number",
+    span: QUARTER
+  }),
 
-    setValue: ({ onChange }, value) => {
-      onChange("note_range_min", value?.min ?? null);
-      onChange("note_range_max", value?.max ?? null);
-    }
-  },
-
+  /* Видео */
   formField("video_url", {
     type: "text",
     label: "Ссылка на клип",
+
     placeholder: "https://example.com/video.mp4",
+
     tooltip:
       "Поддерживаются YouTube-ссылки и прямые ссылки на MP4/WebM. Клип будет идти без звука и синхронно с песней.",
+
     span: FULL
   })
 ];
@@ -94,9 +126,13 @@ export const LYRICS_FIELD = {
   name: "lyrics",
   label: "Текст песни",
   type: "textarea",
+
   rows: 16,
   spellCheck: false,
+
   className: "song-lyrics-editor",
-  hint:
-    "Каждая строка — отдельная строка песни. Тайминги сохраняются автоматически."
+
+  hint: "Каждая строка — отдельная строка песни. Тайминги сохраняются автоматически.",
+
+  span: FULL
 };

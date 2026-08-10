@@ -1,5 +1,5 @@
 import Button from "../Button";
-import NoteRange from "../NoteRange";
+import NumberField from "../NumberField";
 import Select from "../Select";
 import Slider from "../Slider";
 import Stack from "../Stack";
@@ -40,10 +40,13 @@ const DEFAULT_RENDERERS = {
 
   text: inputRenderer("text"),
 
-  number: inputRenderer("number"),
-
-  noteRange: ({ props, value, change }) => (
-    <NoteRange {...props} value={value} onChange={change} />
+  number: ({ props, value, change, blur }) => (
+    <NumberField
+      {...props}
+      value={value ?? ""}
+      onChange={change}
+      onBlur={(event) => blur(event?.target?.value ?? value)}
+    />
   ),
 
   readonly: ({ props, value }) => (
