@@ -13,7 +13,7 @@ from .models import PitchFrame
 # Harmonic tracking is needed on dense vocal stems, but transitions must become
 # cheap at a real acoustic re-attack.  This keeps short melodic leaps while
 # folding unsupported octave/harmonic detours back onto the lead trajectory.
-PITCH_STABILIZER_VERSION = "periodicity-confidence-harmonic-viterbi-v4"
+PITCH_STABILIZER_VERSION = "fcpe-yin-consensus-v5"
 _HARMONIC_SHIFTS = (0.0, -12.0, 12.0, -19.01955, 19.01955, -24.0, 24.0)
 
 
@@ -103,6 +103,144 @@ def refine_pitch_confidence(
             )
         )
     return output
+
+
+def fuse_pitch_with_yin(
+    frames: list[PitchFrame],
+    audio: str | Path,
+    *,
+    sample_rate: int = 16000,
+) -> list[PitchFrame]:
+    """Fuse FCPE with an independent fast YIN contour on the same 10 ms grid.
+
+    FCPE is excellent on clean monophonic passages but dense sung doubles can make
+    it jump to a harmonic. YIN fails differently. We keep both as candidates and
+    select a phrase-local trajectory using direct waveform periodicity plus a weak
+    continuity prior. State is reset whenever neither estimator has acoustic support,
+    so one bad register decision cannot poison the rest of the song.
+    """
+    if not frames:
+        return []
+    try:
+        import librosa
+        y, sr = load_mono(audio, sample_rate)
+    except Exception:
+        return list(frames)
+    if y.size < 2048:
+        return list(frames)
+    y = np.asarray(y, dtype=np.float32)
+    gaps = [b.time-a.time for a,b in zip(frames, frames[1:], strict=False) if 0 < b.time-a.time < .05]
+    step = statistics.median(gaps) if gaps else .01
+    hop = max(64, int(round(sr * step)))
+    try:
+        yin = librosa.yin(
+            y, fmin=55.0, fmax=1400.0, sr=sr, frame_length=2048,
+            hop_length=hop, trough_threshold=0.10, center=True,
+        )
+    except Exception:
+        return list(frames)
+
+    half_window = max(256, int(round(sr * 0.025)))
+    def support(index: int, hz: float) -> float:
+        if not np.isfinite(hz) or hz < 55.0 or hz > 1400.0:
+            return 0.0
+        center = int(round(frames[index].time * sr))
+        start = max(0, center-half_window); end = min(len(y), center+half_window)
+        window = y[start:end]
+        lag = int(round(sr / hz))
+        return _normalized_periodicity(window, lag)
+
+    rows: list[list[tuple[float,float,float]]] = []
+    energies = [max(0.0, float(f.energy)) for f in frames]
+    attacks: list[float] = []
+    for i, energy in enumerate(energies):
+        history = energies[max(0, i-8):i]
+        baseline = statistics.median(history) if history else energy
+        ratio = (energy + 1e-7) / (baseline + 1e-7)
+        attacks.append(max(0.0, min(1.0, (ratio - 1.15) / 0.95)))
+
+    for i, frame in enumerate(frames):
+        yi = min(len(yin)-1, max(0, int(round(frame.time * sr / hop))))
+        sources = []
+        if frame.voiced and frame.frequency > 0:
+            sources.append((float(frame.frequency), 0.06))
+        yh = float(yin[yi]) if 0 <= yi < len(yin) and np.isfinite(yin[yi]) else 0.0
+        if yh > 0:
+            sources.append((yh, 0.0))
+        candidates: list[tuple[float,float,float]] = []
+        for hz, source_bonus in sources:
+            base_support = support(i, hz)
+            if base_support >= 0.17:
+                m = _midi(hz)
+                candidates.append((m, base_support + source_bonus, hz))
+            # The most common dense-vocal failure is selecting the 2nd harmonic.
+            lower = hz / 2.0
+            if lower >= 55.0:
+                lower_support = support(i, lower)
+                if lower_support >= max(0.22, base_support + 0.055):
+                    candidates.append((_midi(lower), lower_support - 0.01, lower))
+        # Deduplicate nearly identical FCPE/YIN candidates.
+        candidates.sort(key=lambda item: item[1], reverse=True)
+        unique: list[tuple[float,float,float]] = []
+        for item in candidates:
+            if not any(abs(item[0]-other[0]) < 0.30 for other in unique):
+                unique.append(item)
+        rows.append(unique[:4])
+
+    result: list[PitchFrame] = [
+        PitchFrame(f.time, 0.0, 0.0, False, f.energy) for f in frames
+    ]
+    i = 0
+    while i < len(frames):
+        if not rows[i]:
+            i += 1
+            continue
+        j = i
+        # Phrase-local decode. Hard cap prevents register history from spanning
+        # a long dense chorus even if the tracker never emits silence.
+        while j < len(frames) and rows[j] and j-i < max(120, int(round(8.0/step))):
+            j += 1
+        costs: list[float] = []
+        back: list[list[int]] = []
+        for k in range(i, j):
+            current = rows[k]
+            current_costs: list[float] = []
+            current_back: list[int] = []
+            for ci, (midi_value, obs, _hz_value) in enumerate(current):
+                emission = -3.4 * obs
+                if not costs:
+                    current_costs.append(emission); current_back.append(-1); continue
+                best = float('inf'); best_index = 0
+                for pi, previous_cost in enumerate(costs):
+                    previous_midi = rows[k-1][pi][0]
+                    delta = abs(midi_value - previous_midi)
+                    transition = (
+                        0.045*delta + 0.30*max(0.0, delta-2.0) + 0.72*max(0.0, delta-7.0)
+                    ) * (1.0 - 0.84*attacks[k])
+                    value = previous_cost + transition + emission
+                    if value < best:
+                        best = value; best_index = pi
+                current_costs.append(best); current_back.append(best_index)
+            costs = current_costs
+            back.append(current_back)
+        if costs:
+            state = min(range(len(costs)), key=costs.__getitem__)
+            chosen: list[int] = []
+            for k in range(j-1, i-1, -1):
+                chosen.append(state)
+                state = back[k-i][state]
+                if state < 0 and k > i:
+                    state = 0
+            chosen.reverse()
+            for offset, state in enumerate(chosen):
+                k = i + offset
+                midi_value, obs, hz_value = rows[k][state]
+                confidence = max(0.0, min(1.0, obs))
+                result[k] = PitchFrame(
+                    frames[k].time, float(hz_value), confidence, confidence >= 0.17, frames[k].energy
+                )
+        i = max(i+1, j)
+    return result
 
 def _midi(hz: float) -> float:
     return 69.0 + 12.0 * math.log2(hz / 440.0)

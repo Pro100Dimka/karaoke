@@ -37,7 +37,7 @@ from .models import (
 )
 from .music import MUSIC_ANALYZER_VERSION, analyze_music
 from .notes import NOTE_DECODER_VERSION, build_game_notes, build_vocal_notes
-from .pitch_post import PITCH_STABILIZER_VERSION, refine_pitch_confidence, stabilize_pitch
+from .pitch_post import PITCH_STABILIZER_VERSION, fuse_pitch_with_yin, refine_pitch_confidence, stabilize_pitch
 from .profiler import environment_info
 from .quality import evaluate_quality
 from .syllables import SYLLABLE_ALIGNER_VERSION, align_syllables
@@ -635,6 +635,7 @@ class KaraokePipeline:
                 "pipeline_code": cache.optional_file_hash(Path(__file__)),
                 "build": AI_BUILD_ID,
                 "syllable_aligner": SYLLABLE_ALIGNER_VERSION,
+                "trusted_activity_segments": supplied_segments,
             },
         )
         derivation_outputs = [syllable_path, reference, contour, notes_path]
@@ -665,6 +666,7 @@ class KaraokePipeline:
                 min_confidence=self.config.min_voiced_confidence,
                 words=words,
                 audio=vocals,
+                activity_segments=supplied_segments,
             )
             game_notes = build_game_notes(vocal_notes)
             validate_timeline(words, "words")

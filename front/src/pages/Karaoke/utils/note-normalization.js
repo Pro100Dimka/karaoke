@@ -6,7 +6,13 @@ export function normalizeNoteList(raw, resolveNamedNote = () => NaN) {
     .map((note) => ({
       start: Number(note.start),
       end: Number(note.end),
-      midi: Number(note.midi ?? note.pitch ?? resolveNamedNote(note.note))
+      midi: Number(
+        note.midi ??
+          note.midi_note ??
+          note.midiNote ??
+          note.pitch ??
+          resolveNamedNote(note.note)
+      )
     }))
     .filter(
       (note) =>
@@ -17,5 +23,6 @@ export function normalizeNoteList(raw, resolveNamedNote = () => NaN) {
         Number.isFinite(note.midi) &&
         note.midi >= 0 &&
         note.midi <= 127
-    );
+    )
+    .sort((a, b) => a.start - b.start || a.end - b.end || a.midi - b.midi);
 }

@@ -1,1 +1,1 @@
-AI_BUILD_ID = "midi-v24-pitch-independent-of-lyrics-20260810"
+AI_BUILD_ID = "midi-v25-fcpe-yin-lrc-phrase-20260810"

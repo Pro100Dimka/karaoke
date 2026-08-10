@@ -50,18 +50,17 @@ export default function MelodyRoll({
   });
   const indicatorMidi = Number.isFinite(sungMidi) ? sungMidi : targetMidi;
 
-  // Keep the pitch window fixed for the whole song. It used to follow the
-  // current phrase / detected vocal pitch, which made the keyboard jump while
-  // the singer moved up or down and was very disorienting. Two octaves stay
-  // anchored to the song's full melody range instead.
-  const viewportSpan = 24;
-  const songCenter = (songMinMidi + songMaxMidi) / 2;
-  let minMidi = Math.round(songCenter - (viewportSpan - 1) / 2);
-  minMidi = clamp(minMidi, 0, 127 - viewportSpan + 1);
-  const maxMidi = minMidi + viewportSpan - 1;
-  const pitchRange = maxMidi - minMidi + 1;
+  // Keep one stable vertical scale for the whole song and NEVER crop valid
+  // reference notes. The previous hard 24-semitone viewport silently hid any
+  // notes outside two octaves. Songs with a wider vocal range therefore looked
+  // increasingly broken when later phrases moved outside that artificial
+  // window. getMelodyRange() already includes a small safety margin, so render
+  // that complete range instead of following the current phrase.
+  const minMidi = clamp(Math.floor(songMinMidi), 0, 127);
+  const maxMidi = clamp(Math.ceil(songMaxMidi), minMidi, 127);
+  const pitchRange = Math.max(1, maxMidi - minMidi + 1);
   const rowHeight = height / pitchRange;
-  const noteHeight = Math.min(15, Math.max(9, rowHeight * 0.62));
+  const noteHeight = Math.min(15, Math.max(5, rowHeight * 0.72));
   const lanes = Array.from(
     { length: pitchRange },
     (_, index) => minMidi + index

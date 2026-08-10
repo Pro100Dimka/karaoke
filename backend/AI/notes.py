@@ -10,7 +10,7 @@ from .audio import load_mono
 
 from .models import PitchFrame, Syllable, VocalNote, Word
 
-NOTE_DECODER_VERSION = "pitch-independent-of-lyrics-v24"
+NOTE_DECODER_VERSION = "fcpe-yin-lrc-phrase-v25"
 
 
 def hz_to_midi(hz: float) -> float:
@@ -983,6 +983,7 @@ def build_vocal_notes(
     min_confidence: float = 0.42,
     words: list[Word] | None = None,
     audio: str | Path | None = None,
+    activity_segments: list[tuple[float, float, str]] | tuple[tuple[float, float, str], ...] | None = None,
 ) -> list[VocalNote]:
     """Build MIDI from the acoustic pitch contour, with lyrics as soft context.
 
@@ -992,13 +993,28 @@ def build_vocal_notes(
     """
     frames = sorted(pitch, key=lambda frame: frame.time)
     ordered_syllables = sorted(syllables, key=lambda item: (item.start, item.end))
-    notes = _decode_pitch_only(
-        frames,
-        min_note=min_note,
-        split_semitones=split_semitones,
-        max_gap=max_gap,
-        min_confidence=min_confidence,
-    )
+    trusted_segments = [
+        (max(0.0, float(start)), max(float(start), float(end)), str(text))
+        for start, end, text in (activity_segments or [])
+        if float(end) > float(start)
+    ]
+    if trusted_segments:
+        # LRCLIB synchronized line times are much safer phrase boundaries than
+        # low-confidence forced word timestamps. Decode each line independently
+        # so a wrong harmonic/register decision cannot leak into the next line.
+        notes = []
+        for start, end, _text in trusted_segments:
+            local = [f for f in frames if start - 0.06 <= f.time <= end + 0.06]
+            notes.extend(_decode_pitch_only(
+                local, min_note=min_note, split_semitones=split_semitones,
+                max_gap=max_gap, min_confidence=min_confidence,
+            ))
+        notes = sorted(notes, key=lambda n: (n.start, n.end, n.midi_note))
+    else:
+        notes = _decode_pitch_only(
+            frames, min_note=min_note, split_semitones=split_semitones,
+            max_gap=max_gap, min_confidence=min_confidence,
+        )
     # MIDI melody must NEVER be cut or created from lyric timestamps.
     # Forced alignment can be locally wrong even when the lyric text itself is
     # perfect (e.g. a short phrase may be stretched over many seconds).  Using
@@ -1013,6 +1029,8 @@ def build_vocal_notes(
     notes = _merge_verified_fragments(notes)
     notes = _consolidate_micro_fragments(notes, frames)
     notes = _repair_isolated_harmonic_notes(notes, frames)
+    notes = _repair_short_isolated_spikes(notes, frames)
+    notes = _merge_same_pitch_gaps(notes, frames)
     return _repair_note_outliers(notes)
 
 
@@ -1130,6 +1148,62 @@ def _consolidate_micro_fragments(
             (),
         )
     return output
+
+def _repair_short_isolated_spikes(
+    notes: list[VocalNote], frames: list[PitchFrame], *, max_duration: float = 0.115
+) -> list[VocalNote]:
+    """Repair a short pitch spike only when nearby notes form a tight cluster."""
+    if len(notes) < 3:
+        return list(notes)
+    work = list(notes)
+    for i in range(1, len(work)-1):
+        mid = work[i]
+        if mid.end-mid.start > max_duration or _pitch_attack_strength(frames, mid.start) >= 0.32:
+            continue
+        neighbours = []
+        for j in range(max(0, i-2), min(len(work), i+3)):
+            if j == i:
+                continue
+            candidate = work[j]
+            if candidate.end < mid.start-0.18 or candidate.start > mid.end+0.18:
+                continue
+            neighbours.append(candidate.midi_note)
+        if len(neighbours) < 2:
+            continue
+        target = int(round(statistics.median(neighbours)))
+        tight = sum(abs(value-target) <= 2 for value in neighbours) >= max(2, len(neighbours)-1)
+        if tight and abs(mid.midi_note-target) >= 5:
+            work[i] = VocalNote(
+                mid.start, mid.end, target, mid.velocity,
+                mid.word_index, mid.syllable_index, (),
+            )
+    return work
+
+
+def _merge_same_pitch_gaps(
+    notes: list[VocalNote], frames: list[PitchFrame], *, max_gap: float = 0.085
+) -> list[VocalNote]:
+    if not notes:
+        return []
+    output=[notes[0]]
+    for note in notes[1:]:
+        prev=output[-1]
+        gap=note.start-prev.end
+        if (
+            note.midi_note == prev.midi_note
+            and 0 <= gap <= max_gap
+            and _pitch_attack_strength(frames, note.start) < 0.28
+        ):
+            output[-1]=VocalNote(
+                prev.start, note.end, prev.midi_note, max(prev.velocity,note.velocity),
+                prev.word_index if prev.word_index == note.word_index else None,
+                prev.syllable_index if prev.syllable_index == note.syllable_index else None,
+                (),
+            )
+        else:
+            output.append(note)
+    return output
+
 
 def _repair_note_outliers(notes: list[VocalNote]) -> list[VocalNote]:
     """Preserve decoded pitches.
