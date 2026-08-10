@@ -9,7 +9,7 @@ export default function History() {
   const { data: history, error } = usePolling(api.getHistory, 5000, []);
 
   return (
-    <Stack gap={1}>
+    <Stack gap={1} className="settings-table-screen">
       <Typography variant="h3">История</Typography>
 
       {error && (
@@ -18,15 +18,17 @@ export default function History() {
         </Typography>
       )}
 
-      <Table
-        columns={HISTORY_COLUMNS}
-        data={history ?? []}
-        getRowKey={(item, index) =>
-          item.id ?? `${item.song_title}-${item.kind}-${item.timestamp ?? index}`
-        }
-        renderRow={getHistoryRow}
-        emptyText="История пуста"
-      />
+      <div className="settings-table-wrap">
+        <Table
+          columns={HISTORY_COLUMNS}
+          data={history ?? []}
+          getRowKey={(item, index) =>
+            item.id ?? `${item.song_title}-${item.kind}-${item.timestamp ?? index}`
+          }
+          renderRow={getHistoryRow}
+          emptyText="История пуста"
+        />
+      </div>
     </Stack>
   );
 }

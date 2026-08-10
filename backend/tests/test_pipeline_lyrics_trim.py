@@ -1,14 +1,18 @@
 from AI.models import Word
-from AI.pipeline import _trim_supplied_text_to_aligned_words
+from AI.pipeline import (
+    _canonical_alignment_matches,
+    _pipeline_lossless_canonical_words,
+)
 
 
-def test_plain_lyrics_tail_without_timed_words_is_not_published():
+def test_pipeline_guard_restores_all_canonical_words_instead_of_trimming_text():
     text = "one two\nthree four five\nsix seven"
-    words = [
-        Word(0.0, 0.3, "one", 0.9, 0),
-        Word(0.3, 0.6, "two", 0.9, 1),
-        Word(1.0, 1.3, "three", 0.9, 2),
-        Word(1.3, 1.6, "four", 0.9, 3),
-        Word(1.6, 1.9, "five", 0.9, 4),
+    partial = [
+        Word(1.0, 1.3, "one", 0.9, 0),
+        Word(1.3, 1.6, "two", 0.9, 1),
     ]
-    assert _trim_supplied_text_to_aligned_words(text, words) == "one two\nthree four five"
+    repaired = _pipeline_lossless_canonical_words(text, partial, 10.0)
+    assert [word.text for word in repaired] == ["one", "two", "three", "four", "five", "six", "seven"]
+    assert _canonical_alignment_matches(text, repaired)
+    assert repaired[-1].end <= 10.0
+    assert all(right.start >= left.end - 1e-6 for left, right in zip(repaired, repaired[1:]))

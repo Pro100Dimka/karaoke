@@ -1,27 +1,21 @@
-import { Card, Grid, Stack, Typography } from "../../../../theme/ui";
+import { Grid, Stack, Typography } from "../../../../theme/ui";
 import { MEMORY_SECTIONS } from "./config";
 import { formatBytes } from "./format";
 
 export default function MemoryBreakdown({ breakdown = {} }) {
-  return (
-    <Grid minItemWidth="min(100%, 14rem)" gap="var(--space-3)">
-      {Object.entries(breakdown).map(([key, bytes]) => (
-        <Card
-          key={key}
-          as="article"
-          variant="animation"
-          tilt={false}
-          className="settings-neon-card"
-          cardContent={{ style: { padding: "1rem" } }}
-        >
-          <Stack gap={0.35}>
-            <Typography variant="caption" tone="muted">
-              {MEMORY_SECTIONS[key] ?? key}
-            </Typography>
+  const entries = Object.entries(breakdown);
+  if (!entries.length) return null;
 
-            <Typography variant="h3">{formatBytes(bytes)}</Typography>
-          </Stack>
-        </Card>
+  return (
+    <Grid minItemWidth="min(100%, 13rem)" gap="var(--space-2)" className="settings-metric-grid">
+      {entries.map(([key, bytes]) => (
+        <Stack key={key} gap={0.2} className="settings-metric-item">
+          <Typography variant="caption" tone="muted">
+            {MEMORY_SECTIONS[key] ?? key}
+          </Typography>
+
+          <Typography variant="h3">{formatBytes(bytes)}</Typography>
+        </Stack>
       ))}
     </Grid>
   );

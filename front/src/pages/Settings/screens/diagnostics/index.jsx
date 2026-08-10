@@ -1,5 +1,5 @@
 import useDiagnostics from "../../../../hooks/useDiagnostics";
-import { Card, Grid, Stack, Typography } from "../../../../theme/ui";
+import { Grid, Stack, Typography } from "../../../../theme/ui";
 import { PIPELINE_CHECKS } from "./config";
 import { DiagnosticCheck, ErrorList, VersionList } from "./utils";
 
@@ -9,44 +9,28 @@ export default function Diagnostics() {
   const checks = [
     ["backend", "Backend сервер", Boolean(health)],
     ...(pipeline
-      ? PIPELINE_CHECKS.map(([key, label]) => [
-          key,
-          label,
-          Boolean(pipeline[key])
-        ])
+      ? PIPELINE_CHECKS.map(([key, label]) => [key, label, Boolean(pipeline[key])])
       : [])
   ];
 
   return (
-    <Grid minItemWidth="min(100%, 26rem)" gap="var(--space-4)">
-      <Card
-        variant="animation"
-        tilt={false}
-        className="settings-screen-card settings-neon-card"
-        cardContent={{ style: { padding: "1.25rem" } }}
-      >
-        <Stack gap={0.9}>
-          <Typography variant="h3">Диагностика</Typography>
+    <Stack gap={1.5} className="settings-diagnostics-screen">
+      <Stack gap={0.65} className="settings-screen-section">
+        <Typography variant="h3">Диагностика</Typography>
 
+        <Grid columns={2} gap="var(--space-2)" className="settings-diagnostics-grid">
           {checks.map(([key, label, ok]) => (
             <DiagnosticCheck key={key} label={label} ok={ok} />
           ))}
+        </Grid>
+      </Stack>
 
-          <VersionList components={versions?.components} />
-        </Stack>
-      </Card>
+      <VersionList components={versions?.components} />
 
-      <Card
-        variant="animation"
-        tilt={false}
-        className="settings-screen-card settings-neon-card"
-        cardContent={{ style: { padding: "1.25rem" } }}
-      >
-        <Stack gap={0.9}>
-          <Typography variant="h3">Журнал ошибок</Typography>
-          <ErrorList errors={errors?.errors} />
-        </Stack>
-      </Card>
-    </Grid>
+      <Stack gap={0.5} className="settings-screen-section">
+        <Typography variant="h3">Журнал ошибок</Typography>
+        <ErrorList errors={errors?.errors} />
+      </Stack>
+    </Stack>
   );
 }

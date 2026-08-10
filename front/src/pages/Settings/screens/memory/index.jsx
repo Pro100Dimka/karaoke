@@ -36,24 +36,8 @@ export default function MemoryManager() {
     if (success) setOptimizeTarget("");
   };
 
-  const sections = [
-    ["breakdown", MemoryBreakdown, { breakdown: size?.breakdown }],
-    ["stats", MemoryStats, { size, free }],
-    ["actions", MemoryActions, { actions: MEMORY_ACTIONS, notify }],
-    [
-      "optimize",
-      OptimizeSong,
-      {
-        value: optimizeTarget,
-        options: optimizeOptions,
-        onChange: setOptimizeTarget,
-        onOptimize: handleOptimize
-      }
-    ]
-  ];
-
   return (
-    <Stack gap={1}>
+    <Stack gap={1.4} className="settings-memory-screen">
       <Typography variant="h3">Управление памятью</Typography>
 
       {error && (
@@ -62,10 +46,19 @@ export default function MemoryManager() {
         </Typography>
       )}
 
-      {size &&
-        sections.map(([id, Component, props]) => (
-          <Component key={id} {...props} />
-        ))}
+      {size && (
+        <>
+          <MemoryBreakdown breakdown={size?.breakdown} />
+          <MemoryStats size={size} free={free} />
+          <MemoryActions actions={MEMORY_ACTIONS} notify={notify} />
+          <OptimizeSong
+            value={optimizeTarget}
+            options={optimizeOptions}
+            onChange={setOptimizeTarget}
+            onOptimize={handleOptimize}
+          />
+        </>
+      )}
     </Stack>
   );
 }

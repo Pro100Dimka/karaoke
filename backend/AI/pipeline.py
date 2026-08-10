@@ -47,7 +47,9 @@ from .utils.io import read_json, write_json_atomic, write_text_atomic
 from .version import AI_BUILD_ID
 from .vocal_preprocess import (
     VOCAL_ANALYSIS_PREPROCESS_VERSION,
+    choose_best_pitch_track,
     prefer_cleaned_pitch,
+    prepare_midi_analysis_variants,
     prepare_midi_analysis_vocal,
     score_pitch_track,
 )
@@ -108,6 +110,42 @@ def _trim_supplied_text_to_aligned_words(text: str, words: list[Word]) -> str:
         if used == remaining:
             break
     return "\n".join(kept).strip() if kept else text.strip()
+
+
+def _canonical_alignment_matches(text: str, words: list[Word]) -> bool:
+    expected = tokenize(text)
+    if len(expected) != len(words):
+        return False
+    normalize = lambda value: re.sub(r"[^\w]+", "", str(value).casefold(), flags=re.UNICODE)
+    return all(normalize(token) == normalize(word.text) for token, word in zip(expected, words, strict=True))
+
+
+def _pipeline_lossless_canonical_words(text: str, words: list[Word], total_duration: float) -> list[Word]:
+    """Absolute last-resort invariant guard before publishing lyricsSync.json."""
+    tokens = tokenize(text)
+    if not tokens or total_duration <= 0.04:
+        return words
+    if _canonical_alignment_matches(text, words):
+        return words
+    start = max(0.0, words[0].start if words else 0.0)
+    # A partial aligner result must never compress all missing canonical words
+    # into the tiny span covered by that prefix (the v8 18/186 failure).
+    # Use the remaining song duration as the last-resort canvas.
+    end = total_duration
+    if end <= start + 0.08:
+        start, end = 0.0, total_duration
+    weights = [max(1, len(token)) for token in tokens]
+    total = max(1, sum(weights))
+    cursor = 0
+    output: list[Word] = []
+    for index, (token, weight) in enumerate(zip(tokens, weights, strict=True)):
+        word_start = start + (end - start) * cursor / total
+        cursor += weight
+        word_end = start + (end - start) * cursor / total
+        if word_end <= word_start + 0.019:
+            word_end = min(total_duration, word_start + 0.02)
+        output.append(Word(word_start, word_end, token, 0.004, index))
+    return output
 
 
 def _lyrics_console(*parts: object) -> None:
@@ -486,6 +524,8 @@ class KaraokePipeline:
         pitch_raw_path = output / "pitchRaw.json"
         pitch_path = output / "pitch.json"
         midi_analysis_vocal = output / "separated" / "vocals.midi-analysis.wav"
+        midi_tail_vocal = output / "separated" / "vocals.midi-analysis-tail.wav"
+        cleanup_outputs = [midi_analysis_vocal, midi_tail_vocal]
         cleanup_key = cache.key(
             "midi-vocal-cleanup",
             {
@@ -495,13 +535,14 @@ class KaraokePipeline:
             },
         )
         if not self._cache_hit(
-            cache, "midi-vocal-cleanup", cleanup_key, [midi_analysis_vocal],
-            {midi_analysis_vocal: validate_audio},
+            cache, "midi-vocal-cleanup", cleanup_key, cleanup_outputs,
+            {path: validate_audio for path in cleanup_outputs},
         ):
             started_cleanup = time.perf_counter()
-            prepare_midi_analysis_vocal(vocals, midi_analysis_vocal)
-            validate_audio(midi_analysis_vocal)
-            cache.commit("midi-vocal-cleanup", cleanup_key, [midi_analysis_vocal])
+            prepare_midi_analysis_variants(vocals, midi_analysis_vocal, midi_tail_vocal)
+            for path in cleanup_outputs:
+                validate_audio(path)
+            cache.commit("midi-vocal-cleanup", cleanup_key, cleanup_outputs)
             reports.append(StageReport(
                 "midi-vocal-cleanup", time.perf_counter() - started_cleanup, False,
                 VOCAL_ANALYSIS_PREPROCESS_VERSION,
@@ -513,7 +554,7 @@ class KaraokePipeline:
             "pitch",
             {
                 "vocals": cache.file_hash(vocal_fingerprint),
-                "midi_analysis_vocals": cache.file_hash(midi_analysis_vocal),
+                "midi_analysis_vocals": [cache.file_hash(path) for path in cleanup_outputs],
                 "cleanup": VOCAL_ANALYSIS_PREPROCESS_VERSION,
                 "engine": self.engines.pitch.name,
                 "engine_config": getattr(self.engines.pitch, "fingerprint", lambda: {})(),
@@ -531,41 +572,43 @@ class KaraokePipeline:
         pitch_analysis_source = "cached"
         original_quality = None
         cleaned_quality = None
+        tail_quality = None
         if self._cache_hit(cache, "pitch", pitch_key, pitch_outputs, pitch_validators):
             pitch = [PitchFrame(**item) for item in read_json(pitch_path, [])]
             reports.append(StageReport("pitch", 0, True, "cached"))
         else:
-            original_pitch = self._run(
-                "pitch-original",
-                self.engines.pitch,
-                lambda engine: engine.estimate(vocals),
-                reports,
-                warnings,
-            )
-            cleaned_pitch = self._run(
-                "pitch-cleaned",
-                self.engines.pitch,
-                lambda engine: engine.estimate(midi_analysis_vocal),
-                reports,
-                warnings,
-            )
-            validate_pitch(original_pitch)
-            validate_pitch(cleaned_pitch)
-            original_quality = score_pitch_track(list(original_pitch))
-            cleaned_quality = score_pitch_track(list(cleaned_pitch))
-            use_cleaned_pitch = prefer_cleaned_pitch(original_quality, cleaned_quality)
-            pitch_analysis_source = "cleaned" if use_cleaned_pitch else "original"
-            pitch_analysis_audio = midi_analysis_vocal if use_cleaned_pitch else vocals
-            pitch = cleaned_pitch if use_cleaned_pitch else original_pitch
-            reports.append(StageReport(
-                "pitch-source-selection",
-                0.0,
-                False,
-                (
-                    f"cleaned score={cleaned_quality.score:.4f} original={original_quality.score:.4f}"
-                    if use_cleaned_pitch
-                    else f"original score={original_quality.score:.4f} cleaned={cleaned_quality.score:.4f}"
+            pitch_candidates = {
+                "original": self._run(
+                    "pitch-original", self.engines.pitch,
+                    lambda engine: engine.estimate(vocals), reports, warnings,
                 ),
+                "denoise": self._run(
+                    "pitch-denoise", self.engines.pitch,
+                    lambda engine: engine.estimate(midi_analysis_vocal), reports, warnings,
+                ),
+                "tail-suppressed": self._run(
+                    "pitch-tail-suppressed", self.engines.pitch,
+                    lambda engine: engine.estimate(midi_tail_vocal), reports, warnings,
+                ),
+            }
+            for candidate in pitch_candidates.values():
+                validate_pitch(candidate)
+            qualities = {name: score_pitch_track(list(value)) for name, value in pitch_candidates.items()}
+            original_quality = qualities["original"]
+            cleaned_quality = qualities["denoise"]
+            tail_quality = qualities["tail-suppressed"]
+            pitch_analysis_source = choose_best_pitch_track(qualities)
+            pitch_audio_by_source = {
+                "original": vocals,
+                "denoise": midi_analysis_vocal,
+                "tail-suppressed": midi_tail_vocal,
+            }
+            pitch_analysis_audio = pitch_audio_by_source[pitch_analysis_source]
+            pitch = pitch_candidates[pitch_analysis_source]
+            reports.append(StageReport(
+                "pitch-source-selection", 0.0, False,
+                " ".join(f"{name}={quality.score:.4f}" for name, quality in qualities.items())
+                + f" selected={pitch_analysis_source}",
             ))
             raw_pitch = list(pitch)
             validate_pitch(raw_pitch)
@@ -573,10 +616,6 @@ class KaraokePipeline:
                 raw_pitch, pitch_analysis_audio, sample_rate=self.config.pitch_sample_rate
             )
             validate_pitch(confidence_pitch)
-            # IMPORTANT: v25 imported the FCPE+YIN consensus decoder but never
-            # called it, so all of that code was dead.  Run the independent YIN
-            # verifier before harmonic stabilization so dense vocal doubles do
-            # not rely on FCPE alone.
             consensus_pitch = fuse_pitch_with_yin(
                 confidence_pitch, pitch_analysis_audio, sample_rate=self.config.pitch_sample_rate
             )
@@ -629,13 +668,49 @@ class KaraokePipeline:
                 words = _bound_word_durations(
                     [Word(**item) for item in raw.get("words", [])]
                 )
-                cached_text = (
-                    supplied if supplied_segments else _trim_supplied_text_to_aligned_words(supplied, words)
-                )
+                if supplied_segments:
+                    cached_text = supplied
+                else:
+                    words = _pipeline_lossless_canonical_words(supplied, words, song_duration)
+                    cached_text = supplied
                 self._publish_text_alignment(output, lyrics_txt, words_path, cached_text, words)
                 cache.commit("alignment", alignment_key, alignment_outputs)
                 reports.append(StageReport("alignment", 0, True, "cached"))
             else:
+                # For long plain lyrics, first run an independent ASR navigation
+                # pass. Its recognized text is NOT published and cannot replace
+                # the trusted lyrics; only coarse time windows are transferred
+                # to the forced aligner. This prevents a single long-text Qwen
+                # call from losing its place around repeated choruses.
+                if (
+                    not supplied_segments
+                    and len(supplied.split()) >= 60
+                    and callable(getattr(self.engines.transcriber, "transcribe", None))
+                    and callable(getattr(self.engines.aligner, "set_global_asr_segments", None))
+                ):
+                    started_anchor = time.perf_counter()
+                    anchor_segments = []
+                    try:
+                        if hasattr(self.engines.transcriber, "set_pitch_activity"):
+                            self.engines.transcriber.set_pitch_activity(pitch)
+                        self.engines.transcriber.transcribe(vocals, effective_language)
+                        anchor_segments = list(
+                            getattr(self.engines.transcriber, "last_segments", None) or []
+                        )
+                    except (EngineUnavailableError, RuntimeError, ValueError) as exc:
+                        warnings.append(f"ASR anchor pass unavailable: {exc}")
+                    finally:
+                        release = getattr(self.engines.transcriber, "release", None)
+                        if callable(release):
+                            release()
+                    self.engines.aligner.set_global_asr_segments(anchor_segments)
+                    reports.append(StageReport(
+                        "alignment-anchor-asr",
+                        time.perf_counter() - started_anchor,
+                        False,
+                        f"{self.engines.transcriber.name} segments={len(anchor_segments)}",
+                    ))
+
                 words = self._run(
                     "alignment",
                     self.engines.aligner,
@@ -657,7 +732,10 @@ class KaraokePipeline:
                     words = enforce_segmented_timing_safety(words, supplied_segments, song_duration)
                     publish_text = supplied
                 else:
-                    publish_text = _trim_supplied_text_to_aligned_words(supplied, words)
+                    # Canonical lyrics are lossless. ASR/forced alignment may
+                    # estimate timing, but may never delete or replace words.
+                    words = _pipeline_lossless_canonical_words(supplied, words, song_duration)
+                    publish_text = supplied
                 validate_timeline(words, "words")
                 self._publish_text_alignment(output, lyrics_txt, words_path, publish_text, words)
                 cache.commit("alignment", alignment_key, alignment_outputs)
@@ -899,6 +977,7 @@ class KaraokePipeline:
                     "song_sha256": cache.file_hash(song_wav),
                     "vocals_sha256": cache.file_hash(vocals),
                     "midi_analysis_vocals_sha256": cache.file_hash(midi_analysis_vocal),
+                    "midi_analysis_tail_vocals_sha256": cache.file_hash(midi_tail_vocal),
                     "pitch_analysis_source": pitch_analysis_source,
                     "pitch_preprocess_version": VOCAL_ANALYSIS_PREPROCESS_VERSION,
                     "pitch_original_quality": to_dict(original_quality) if original_quality is not None else None,

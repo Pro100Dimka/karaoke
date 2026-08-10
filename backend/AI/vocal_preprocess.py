@@ -13,7 +13,7 @@ import soundfile as sf
 from .errors import AICoreError
 from .models import PitchFrame
 
-VOCAL_ANALYSIS_PREPROCESS_VERSION = "v1-conservative-denoise-20260810"
+VOCAL_ANALYSIS_PREPROCESS_VERSION = "v2-multivariant-denoise-tail-20260810"
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,16 +26,7 @@ class PitchTrackQuality:
     octave_flip_rate: float
 
 
-def prepare_midi_analysis_vocal(source: Path, target: Path) -> Path:
-    """Create a conservative analysis-only vocal stem for pitch extraction.
-
-    The audible/reference vocal is never replaced.  This copy intentionally
-    avoids compressors, time-domain stretching and pitch correction because
-    those can move note attacks.  The chain only removes sub-bass/very-high
-    frequency leakage and applies moderate FFT-domain stationary-noise
-    reduction.  FFmpeg's afftdn works sample-for-sample in time, so the output
-    keeps the original song clock.
-    """
+def _render_analysis_variant(source: Path, target: Path, filter_graph: str) -> Path:
     source = Path(source)
     target = Path(target)
     if not source.is_file():
@@ -47,33 +38,11 @@ def prepare_midi_analysis_vocal(source: Path, target: Path) -> Path:
     )
     os.close(descriptor)
     temporary = Path(temporary_name)
-
-    # Deliberately conservative.  Stronger denoise/gating often damages sung
-    # consonant attacks and vibrato, which is worse for note segmentation than
-    # leaving a little residual ambience in place.
-    filter_graph = (
-        "highpass=f=65:p=2,"
-        "lowpass=f=6500:p=2,"
-        "afftdn=nr=8:nf=-48:tn=1:gs=4"
-    )
     command = [
-        "ffmpeg",
-        "-y",
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-i",
-        str(source),
-        "-vn",
-        "-af",
-        filter_graph,
-        "-c:a",
-        "pcm_s24le",
-        "-f",
-        "wav",
-        str(temporary),
+        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+        "-i", str(source), "-vn", "-af", filter_graph,
+        "-c:a", "pcm_s24le", "-f", "wav", str(temporary),
     ]
-
     try:
         subprocess.run(command, check=True, capture_output=True, timeout=30 * 60)
         source_info = sf.info(source)
@@ -97,8 +66,41 @@ def prepare_midi_analysis_vocal(source: Path, target: Path) -> Path:
         raise AICoreError(details or "FFmpeg vocal preprocessing failed") from exc
     finally:
         temporary.unlink(missing_ok=True)
-
     return target
+
+
+def prepare_midi_analysis_vocal(source: Path, target: Path) -> Path:
+    """Backward-compatible conservative denoise analysis copy."""
+    return _render_analysis_variant(
+        source,
+        target,
+        "highpass=f=65:p=2,lowpass=f=6500:p=2,afftdn=nr=8:nf=-48:tn=1:gs=4",
+    )
+
+
+def prepare_midi_analysis_variants(
+    source: Path,
+    denoise_target: Path,
+    tail_target: Path,
+) -> dict[str, Path]:
+    """Create time-preserving analysis variants for automatic F0 A/B/C selection.
+
+    ``denoise`` removes stationary background leakage. ``tail`` additionally
+    applies a gentle downward expander after denoise so low-level reverb/delay
+    tails are attenuated while sung attacks remain intact. Neither branch uses
+    pitch correction, time stretching or phase-vocoder resynthesis.
+    """
+    denoise = prepare_midi_analysis_vocal(source, denoise_target)
+    tail = _render_analysis_variant(
+        source,
+        tail_target,
+        (
+            "highpass=f=65:p=2,lowpass=f=6500:p=2,"
+            "afftdn=nr=6:nf=-50:tn=1:gs=3,"
+            "agate=threshold=0.012:ratio=2.0:attack=8:release=85:knee=2"
+        ),
+    )
+    return {"denoise": denoise, "tail-suppressed": tail}
 
 
 def _midi(freq: float) -> float:
@@ -189,3 +191,30 @@ def prefer_cleaned_pitch(
     if cleaned.mean_confidence + 0.04 < original.mean_confidence:
         return False
     return cleaned.score >= original.score + 0.012
+
+
+
+def choose_best_pitch_track(
+    qualities: dict[str, PitchTrackQuality],
+    *,
+    original_key: str = "original",
+) -> str:
+    """Pick the safest pitch-analysis source among original and cleanup variants."""
+    if original_key not in qualities:
+        raise ValueError("original pitch quality is required")
+    original = qualities[original_key]
+    winner = original_key
+    winner_score = original.score
+    for name, candidate in qualities.items():
+        if name == original_key:
+            continue
+        if candidate.voiced_ratio < max(0.04, original.voiced_ratio * 0.68):
+            continue
+        if candidate.mean_confidence + 0.04 < original.mean_confidence:
+            continue
+        # A cleanup branch must materially beat the untouched stem. Between two
+        # cleanup branches, keep the highest score once that safety margin clears.
+        if candidate.score >= original.score + 0.012 and candidate.score > winner_score:
+            winner = name
+            winner_score = candidate.score
+    return winner

@@ -1,4 +1,4 @@
-import { Card, Stack, Typography } from "../../../../theme/ui";
+import { Stack, Typography } from "../../../../theme/ui";
 import { STATUS_ICONS } from "./config";
 
 export function DiagnosticCheck({ label, ok }) {
@@ -6,23 +6,16 @@ export function DiagnosticCheck({ label, ok }) {
   const Icon = STATUS_ICONS[status];
 
   return (
-    <Card
-      as="div"
-      surface="soft"
+    <Stack
+      direction="row"
+      align="center"
+      justify="space-between"
+      gap={0.75}
       className="settings-diagnostic-row"
-      sx={{ width: "100%" }}
     >
-      <Stack
-        direction="row"
-        align="center"
-        justify="space-between"
-        gap={0.75}
-        sx={{ padding: ".8rem 1rem" }}
-      >
-        <Typography variant="body2">{label}</Typography>
-        <Icon className={`diagnostics-icon ${status}`} size={18} />
-      </Stack>
-    </Card>
+      <Typography variant="body2">{label}</Typography>
+      <Icon className={`diagnostics-icon ${status}`} size={18} />
+    </Stack>
   );
 }
 
@@ -31,47 +24,46 @@ export function VersionList({ components }) {
   if (!entries.length) return null;
 
   return (
-    <Stack gap={0.65}>
+    <Stack gap={0.5} className="settings-screen-section">
       <Typography variant="h3">Версии</Typography>
 
-      {entries.map(([name, version]) => (
-        <Card
-          key={name}
-          as="div"
-          surface="soft"
-          className="settings-diagnostic-row"
-          sx={{ width: "100%" }}
-        >
+      <Stack className="settings-version-list">
+        {entries.map(([name, version]) => (
           <Stack
+            key={name}
             direction="row"
             align="center"
             justify="space-between"
             gap={1}
-            sx={{ padding: ".75rem 1rem" }}
+            className="settings-version-row"
           >
             <Typography variant="body2" tone="muted">
               {name}
             </Typography>
 
-            <Typography variant="body2" className="mono">
+            <Typography
+              variant="body2"
+              className="mono"
+              sx={{ overflowWrap: "anywhere", textAlign: "right" }}
+            >
               {version ?? "—"}
             </Typography>
           </Stack>
-        </Card>
-      ))}
+        ))}
+      </Stack>
     </Stack>
   );
 }
 
 export const ErrorList = ({ errors = [] }) =>
   errors.length ? (
-    <Stack gap={0.75}>
+    <Stack className="settings-error-list">
       {errors.map((error) => (
         <ErrorItem key={getErrorKey(error)} error={error} />
       ))}
     </Stack>
   ) : (
-    <Typography variant="body2" tone="muted">
+    <Typography variant="body2" tone="muted" className="settings-empty-line">
       Ошибок не найдено
     </Typography>
   );
@@ -80,24 +72,18 @@ function ErrorItem({ error }) {
   const { title, updated_at: updatedAt, error_message: message } = error;
 
   return (
-    <Card
-      as="div"
-      surface="soft"
-      className="settings-diagnostic-row"
-      sx={{ width: "100%" }}
-    >
-      <Stack gap={0.3} sx={{ padding: ".85rem 1rem" }}>
+    <Stack gap={0.25} className="settings-error-row">
+      <Stack direction="row" align="baseline" justify="space-between" gap={1}>
         <Typography variant="body2">{title}</Typography>
-
         <Typography variant="caption" tone="muted">
           {updatedAt}
         </Typography>
-
-        <Typography variant="body2" tone="muted">
-          {message}
-        </Typography>
       </Stack>
-    </Card>
+
+      <Typography variant="body2" tone="muted">
+        {message}
+      </Typography>
+    </Stack>
   );
 }
 

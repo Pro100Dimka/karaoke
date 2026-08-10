@@ -1,13 +1,6 @@
 import { Trash2 } from "lucide-react";
 
-import {
-  Button,
-  Card,
-  Grid,
-  Select,
-  Stack,
-  Typography
-} from "../../../../theme/ui";
+import { Button, Grid, Select, Stack, Typography } from "../../../../theme/ui";
 import { getErrorMessage } from "../../../../utils/errors";
 
 export async function runMemoryAction({ request, getMessage, notify }) {
@@ -30,24 +23,15 @@ export function MemoryStats({ size, free }) {
   ];
 
   return (
-    <Grid minItemWidth="min(100%, 14rem)" gap="var(--space-3)">
+    <Grid minItemWidth="min(100%, 13rem)" gap="var(--space-2)" className="settings-metric-grid">
       {items.map(([label, value]) => (
-        <Card
-          key={label}
-          as="div"
-          variant="animation"
-          tilt={false}
-          className="settings-neon-card"
-          cardContent={{ style: { padding: "1rem" } }}
-        >
-          <Stack gap={0.35}>
-            <Typography variant="caption" tone="muted">
-              {label}
-            </Typography>
+        <Stack key={label} gap={0.2} className="settings-metric-item">
+          <Typography variant="caption" tone="muted">
+            {label}
+          </Typography>
 
-            <Typography variant="h3">{value}</Typography>
-          </Stack>
-        </Card>
+          <Typography variant="h3">{value}</Typography>
+        </Stack>
       ))}
     </Grid>
   );
@@ -55,7 +39,7 @@ export function MemoryStats({ size, free }) {
 
 export function MemoryActions({ actions, notify }) {
   return (
-    <Stack direction="row" gap={0.75} wrap>
+    <Stack direction="row" gap={0.75} wrap className="settings-memory-actions">
       {actions.map(([id, label, icon, variant, request, getMessage]) => {
         const Icon = icon;
 
@@ -77,14 +61,12 @@ export function MemoryActions({ actions, notify }) {
 
 export function OptimizeSong({ value, options, onChange, onOptimize }) {
   return (
-    <Card as="div" surface="soft" className="settings-plain-card">
-      <Grid
-        columns={2}
-        gap="var(--space-3)"
-        sx={{ alignItems: "end", padding: "1rem" }}
-      >
+    <Stack gap={0.65} className="settings-screen-section settings-optimize-section">
+      <Typography variant="body2">Оптимизация песни</Typography>
+
+      <Grid columns={2} gap="var(--space-3)" sx={{ alignItems: "end" }}>
         <Select
-          label="Оптимизировать песню"
+          label="Песня"
           value={value}
           options={options}
           onChange={onChange}
@@ -95,6 +77,6 @@ export function OptimizeSong({ value, options, onChange, onOptimize }) {
           Оптимизировать
         </Button>
       </Grid>
-    </Card>
+    </Stack>
   );
 }

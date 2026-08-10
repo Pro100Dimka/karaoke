@@ -41,11 +41,7 @@ function ServiceContent({ service, onOpen, onClose }) {
   }
 
   return (
-    <Grid
-      columns={3}
-      gap="var(--space-3)"
-      sx={{ padding: "1rem" }}
-    >
+    <Grid columns={2} gap="var(--space-3)" sx={{ padding: "1rem" }}>
       {SERVICE_SCREENS.map(({ id, title, text }) => (
         <Card
           key={id}

@@ -141,7 +141,7 @@ def _words_from_items(items) -> list[Word]:
 
 
 ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v14-duration-guard"
-LONG_TEXT_ALIGNMENT_VERSION = "v25-production-line-anchor-fallback"
+LONG_TEXT_ALIGNMENT_VERSION = "v27-lossless-canonical-local-qwen"
 
 
 def _normalize_singing_audio(y: np.ndarray) -> np.ndarray:
@@ -247,6 +247,171 @@ def _singing_chunks(
 ) -> list[np.ndarray]:
     """Compatibility wrapper used by focused unit tests and older callers."""
     return [audio for audio, _start, _end in _singing_chunk_windows(y, sr, activity_hints)]
+
+
+
+def _normalized_match_tokens(text: str) -> list[str]:
+    return [re.sub(r"[^\w]+", "", token.casefold(), flags=re.UNICODE) for token in tokenize(text)]
+
+
+def _asr_line_anchor_windows(
+    groups: list[str],
+    segments: list[tuple[float, float, str]] | None,
+) -> dict[int, tuple[float, float, float]]:
+    """Map trusted lyric lines onto coarse ASR segment time using global token order.
+
+    ASR text is used only as a navigation signal. Qwen Forced Aligner still owns
+    final word boundaries. SequenceMatcher over the whole song makes repeated
+    choruses resolve monotonically instead of jumping to an earlier occurrence.
+    """
+    if not groups or not segments:
+        return {}
+    lyric_tokens: list[str] = []
+    line_ranges: list[tuple[int, int]] = []
+    for group in groups:
+        start = len(lyric_tokens)
+        lyric_tokens.extend(_normalized_match_tokens(group))
+        line_ranges.append((start, len(lyric_tokens)))
+
+    asr_tokens: list[str] = []
+    asr_times: list[tuple[float, float]] = []
+    for raw_start, raw_end, text in sorted(segments, key=lambda item: (item[0], item[1])):
+        tokens = _normalized_match_tokens(text)
+        if not tokens:
+            continue
+        start = max(0.0, float(raw_start))
+        end = max(start + 0.05, float(raw_end))
+        span = end - start
+        weights = [max(1, len(token)) for token in tokens]
+        total = max(1, sum(weights))
+        cursor = 0
+        for token, weight in zip(tokens, weights, strict=False):
+            token_start = start + span * cursor / total
+            cursor += weight
+            token_end = start + span * cursor / total
+            asr_tokens.append(token)
+            asr_times.append((token_start, token_end))
+    if not lyric_tokens or not asr_tokens:
+        return {}
+
+    matcher = SequenceMatcher(None, lyric_tokens, asr_tokens, autojunk=False)
+    token_map: dict[int, tuple[float, float]] = {}
+    for block in matcher.get_matching_blocks():
+        for offset in range(block.size):
+            li = block.a + offset
+            ai = block.b + offset
+            if 0 <= ai < len(asr_times):
+                token_map[li] = asr_times[ai]
+
+    result: dict[int, tuple[float, float, float]] = {}
+    for line_index, (left, right) in enumerate(line_ranges):
+        matched = [token_map[index] for index in range(left, right) if index in token_map]
+        token_count = max(1, right - left)
+        score = len(matched) / token_count
+        if not matched or score < 0.18:
+            continue
+        start = min(item[0] for item in matched)
+        end = max(item[1] for item in matched)
+        margin = 1.8 if len(matched) == 1 else 1.0
+        result[line_index] = (max(0.0, start - margin), end + margin, score)
+    return result
+
+
+
+def _canonical_words_match(words: list[Word], tokens: list[str]) -> bool:
+    if len(words) != len(tokens):
+        return False
+    return all(
+        re.sub(r"[^\w]+", "", word.text.casefold(), flags=re.UNICODE)
+        == re.sub(r"[^\w]+", "", token.casefold(), flags=re.UNICODE)
+        for word, token in zip(words, tokens, strict=True)
+    )
+
+
+def _lossless_canonical_alignment(
+    groups: list[str],
+    source: np.ndarray,
+    sample_rate: int,
+    duration_sec: float,
+    anchor_windows: dict[int, tuple[float, float, float]] | None = None,
+) -> list[Word]:
+    """Return every canonical lyric token exactly once with monotonic timing.
+
+    ASR anchors are hints only.  This is the final production safety net used
+    when local forced alignment loses lines or reaches EOF too early.  It uses
+    anchor positions when available and interpolates the rest over the active
+    vocal span, so a partial ASR match can never delete lyrics.
+    """
+    line_tokens = [tokenize(group) for group in groups]
+    all_tokens = [token for tokens in line_tokens for token in tokens]
+    if not all_tokens or duration_sec <= 0.04:
+        return []
+
+    active = _activity_quantile_times(source, sample_rate)
+    active_start = max(0.0, float(active[0])) if active else 0.0
+    active_end = min(duration_sec, float(active[-1])) if active else duration_sec
+    if active_end <= active_start + 0.08:
+        active_start, active_end = 0.0, duration_sec
+
+    # Build desired line weights from sung-duration estimates.
+    weights = [max(0.35, _expected_sung_phrase_duration(tokens)) for tokens in line_tokens]
+    total_weight = max(1e-6, sum(weights))
+    nominal_starts = []
+    acc = 0.0
+    span = max(0.08, active_end - active_start)
+    for weight in weights:
+        nominal_starts.append(active_start + span * acc / total_weight)
+        acc += weight
+    nominal_starts.append(active_end)
+
+    # Blend trustworthy ASR line anchors into the nominal map without allowing
+    # backwards jumps or impossible compression.
+    anchors = anchor_windows or {}
+    fixed: dict[int, float] = {0: active_start, len(line_tokens): active_end}
+    for idx, anchor in anchors.items():
+        if 0 <= idx < len(line_tokens):
+            astart, _aend, score = anchor
+            if score >= 0.18:
+                fixed[idx] = min(active_end, max(active_start, float(astart)))
+
+    fixed_items = sorted(fixed.items())
+    line_starts = list(nominal_starts)
+    for (li, lt), (ri, rt) in zip(fixed_items, fixed_items[1:], strict=False):
+        li = max(0, min(li, len(line_tokens)))
+        ri = max(li + 1, min(ri, len(line_tokens)))
+        lt = max(active_start, min(float(lt), active_end))
+        rt = max(lt + 0.08, min(float(rt), active_end))
+        segment_weight = sum(weights[li:ri]) or 1.0
+        acc = 0.0
+        for idx in range(li, ri):
+            line_starts[idx] = lt + (rt - lt) * acc / segment_weight
+            acc += weights[idx]
+        line_starts[ri] = rt
+
+    # Enforce monotonic boundaries with a tiny positive room for every line.
+    for idx in range(1, len(line_starts)):
+        line_starts[idx] = max(line_starts[idx], line_starts[idx - 1] + 0.04)
+    if line_starts[-1] > duration_sec:
+        scale = (duration_sec - active_start) / max(0.08, line_starts[-1] - active_start)
+        line_starts = [active_start + (value - active_start) * scale for value in line_starts]
+
+    output: list[Word] = []
+    for line_index, tokens in enumerate(line_tokens):
+        if not tokens:
+            continue
+        start = max(0.0, line_starts[line_index])
+        end = min(duration_sec, max(start + 0.08, line_starts[line_index + 1]))
+        token_weights = [max(1, len(token)) for token in tokens]
+        total = max(1, sum(token_weights))
+        cursor_weight = 0
+        for token, weight in zip(tokens, token_weights, strict=True):
+            word_start = start + (end - start) * cursor_weight / total
+            cursor_weight += weight
+            word_end = start + (end - start) * cursor_weight / total
+            if word_end <= word_start + 0.019:
+                word_end = min(duration_sec, word_start + 0.02)
+            output.append(Word(word_start, word_end, token, 0.008, len(output)))
+    return output
 
 
 def _group_lyric_text(text: str, maximum_words: int = 35) -> list[str]:
@@ -1175,12 +1340,31 @@ class Qwen3Transcriber(Transcriber):
         return text, direct_words
 
 
+    def release(self) -> None:
+        """Release ASR weights before loading the forced aligner on small GPUs."""
+        self._model = None
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except ImportError:
+            pass
+
+
 class Qwen3ForcedAligner(Aligner):
     name = "qwen3-forced-aligner"
 
     def __init__(self, model="Qwen/Qwen3-ForcedAligner-0.6B"):
         self.model_name = model
         self._model = None
+        self._global_asr_segments: list[tuple[float, float, str]] = []
+
+    def set_global_asr_segments(self, segments) -> None:
+        self._global_asr_segments = [
+            (float(start), float(end), str(text))
+            for start, end, text in (segments or [])
+            if text and float(end) > float(start)
+        ]
 
     def _load(self):
         try:
@@ -1416,6 +1600,7 @@ class Qwen3ForcedAligner(Aligner):
         durations.  No word is clamped individually against the global cursor.
         """
         groups = _group_lyric_text(text)
+        anchor_windows = _asr_line_anchor_windows(groups, self._global_asr_segments)
         if len(groups) <= 1:
             return self.align(audio, text, language)
 
@@ -1433,13 +1618,27 @@ class Qwen3ForcedAligner(Aligner):
             root = Path(temp_dir)
             for line_index, line in enumerate(groups):
                 tokens = tokenize(line)
-                if not tokens or cursor >= duration_sec - 0.08:
+                if not tokens:
                     continue
+                if cursor >= duration_sec - 0.08:
+                    # Do not drop this or later canonical lines. The final
+                    # lossless safety pass below will retime the whole lyric.
+                    break
 
                 expected = _expected_sung_phrase_duration(tokens)
-                search_start = max(0.0, cursor - 0.65)
-                search_span = min(24.0, max(16.0, expected * 3.2 + 5.0))
-                search_end = min(duration_sec, search_start + search_span)
+                anchor = anchor_windows.get(line_index)
+                if anchor is not None:
+                    anchor_start, anchor_end, anchor_score = anchor
+                    search_start = max(0.0, cursor - 0.30, anchor_start - 0.80)
+                    minimum_window = max(5.0, expected * 2.25 + 1.5)
+                    search_end = min(
+                        duration_sec,
+                        max(anchor_end + 1.1, search_start + minimum_window),
+                    )
+                else:
+                    search_start = max(0.0, cursor - 0.65)
+                    search_span = min(24.0, max(16.0, expected * 3.2 + 5.0))
+                    search_end = min(duration_sec, search_start + search_span)
                 if search_end <= search_start + 0.10:
                     break
 
@@ -1527,13 +1726,22 @@ class Qwen3ForcedAligner(Aligner):
                         break
                     safe_line.append(Word(word_start, word_end, word.text, word.confidence, 0))
 
-                # If the line cannot physically fit before EOF, stop instead of
-                # publishing a partial/micro-timed lyric tail.
+                # Never publish a partial canonical line. If it cannot fit,
+                # leave the local pass and let the lossless whole-song safety
+                # pass reconstruct ALL canonical words instead of truncating.
                 if len(safe_line) != len(tokens):
                     break
                 for word in safe_line:
                     output.append(Word(word.start, word.end, word.text, word.confidence, len(output)))
                 cursor = safe_line[-1].end
+
+        canonical_tokens = [token for group in groups for token in tokenize(group)]
+        if not _canonical_words_match(output, canonical_tokens):
+            lossless = _lossless_canonical_alignment(
+                groups, source, sample_rate, duration_sec, anchor_windows
+            )
+            if _canonical_words_match(lossless, canonical_tokens):
+                return lossless
 
         if not output:
             # Production safety net: Qwen can occasionally return an empty
@@ -1571,6 +1779,8 @@ class Qwen3ForcedAligner(Aligner):
                     for word in _proportional_words(all_tokens, duration_sec)
                 ]
             raise InvalidArtifactError("Long-text forced aligner returned no timed words")
+        if not _canonical_words_match(output, canonical_tokens):
+            raise InvalidArtifactError("Long-text aligner violated canonical lyric invariant")
         return output
 
 

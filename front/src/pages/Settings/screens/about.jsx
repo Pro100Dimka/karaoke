@@ -2,7 +2,7 @@ import { Mic } from "lucide-react";
 
 import { api } from "../../../api/client";
 import { usePolling } from "../../../hooks/usePolling";
-import { Card, Grid, Stack, Typography } from "../../../theme/ui";
+import { Grid, Stack, Typography } from "../../../theme/ui";
 import { APP_INFO } from "../../../utils/config";
 
 const INFO_FIELDS = [
@@ -17,22 +17,10 @@ export default function About() {
   const about = data ?? {};
 
   return (
-    <Stack align="center" gap={1.25}>
-      <Card
-        as="div"
-        variant="animation"
-        tilt={false}
-        className="settings-neon-card"
-        sx={{ width: "4.5rem", height: "4.5rem" }}
-        cardContent={{
-          style: {
-            display: "grid",
-            placeItems: "center"
-          }
-        }}
-      >
+    <Stack align="center" gap={1.4} className="settings-about-screen">
+      <div className="settings-about-icon" aria-hidden="true">
         <Mic size={34} />
-      </Card>
+      </div>
 
       <Stack align="center" gap={0.35}>
         <Typography variant="h2" align="center">
@@ -45,33 +33,25 @@ export default function About() {
       </Stack>
 
       <Grid
-        minItemWidth="min(100%, 19rem)"
-        gap="var(--space-3)"
+        columns={2}
+        gap="0"
+        className="settings-about-info"
         sx={{ width: "100%", maxWidth: "56rem" }}
       >
         {INFO_FIELDS.map(([key, label]) => (
-          <Card
-            key={key}
-            as="div"
-            variant="animation"
-            tilt={false}
-            className="settings-neon-card"
-            cardContent={{ style: { padding: "1rem 1.1rem" } }}
-          >
-            <Stack gap={0.35}>
-              <Typography variant="caption" tone="muted">
-                {label}
-              </Typography>
+          <Stack key={key} gap={0.25} className="settings-about-info-item">
+            <Typography variant="caption" tone="muted">
+              {label}
+            </Typography>
 
-              <Typography
-                variant="body2"
-                className="mono"
-                sx={{ overflowWrap: "anywhere" }}
-              >
-                {about[key] ?? "—"}
-              </Typography>
-            </Stack>
-          </Card>
+            <Typography
+              variant="body2"
+              className="mono"
+              sx={{ overflowWrap: "anywhere" }}
+            >
+              {about[key] ?? "—"}
+            </Typography>
+          </Stack>
         ))}
       </Grid>
 

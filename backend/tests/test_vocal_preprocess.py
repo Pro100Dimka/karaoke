@@ -33,3 +33,10 @@ def test_cleanup_is_not_selected_if_it_erases_too_much_vocal():
     original = score_pitch_track(_track([220.0] * 100))
     cleaned = score_pitch_track(_track([220.0] * 10 + [0.0] * 90, confidence=0.99))
     assert not prefer_cleaned_pitch(original, cleaned)
+
+
+def test_multivariant_selector_requires_material_gain_over_original():
+    from AI.vocal_preprocess import choose_best_pitch_track
+    original = score_pitch_track(_track([220.0] * 100))
+    almost_same = score_pitch_track(_track([220.0] * 99 + [221.0]))
+    assert choose_best_pitch_track({"original": original, "denoise": almost_same}) == "original"

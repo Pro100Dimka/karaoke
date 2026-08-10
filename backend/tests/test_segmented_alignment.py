@@ -380,3 +380,67 @@ def test_long_text_empty_qwen_does_not_abort_pipeline(monkeypatch):
     assert all(right.start >= left.end - 1e-6 for left, right in zip(words, words[1:]))
     assert all(word.end > word.start for word in words)
     assert all(word.confidence <= 0.03 for word in words)
+
+
+def test_asr_global_anchor_maps_repeated_lyrics_monotonically():
+    groups = ["hello world", "repeat chorus", "repeat chorus", "final line"]
+    segments = [
+        (1.0, 5.0, "hello world"),
+        (10.0, 15.0, "repeat chorus"),
+        (30.0, 35.0, "repeat chorus"),
+        (40.0, 45.0, "final line"),
+    ]
+    anchors = text_engine._asr_line_anchor_windows(groups, segments)
+    assert anchors[0][0] < anchors[1][0] < anchors[2][0] < anchors[3][0]
+    assert anchors[2][0] > 25.0
+
+
+def test_long_text_uses_asr_anchor_to_skip_wrong_early_occurrence(monkeypatch):
+    monkeypatch.setattr(
+        text_engine,
+        "load_mono",
+        lambda _audio, _sample_rate: (np.zeros(16_000 * 50, dtype=np.float32), 16_000),
+    )
+    aligner = Qwen3ForcedAligner("unused")
+    aligner.set_global_asr_segments([(25.0, 31.0, "target lyric line")])
+    seen = []
+
+    def fake_align(path, phrase, _language):
+        import soundfile as sf
+        seen.append(sf.info(path).duration)
+        tokens = phrase.split()
+        return [Word(i * 0.45, i * 0.45 + 0.35, token, 0.9, i) for i, token in enumerate(tokens)]
+
+    monkeypatch.setattr(aligner, "align", fake_align)
+    words = aligner.align_long_text("song.wav", "target lyric line\n" + "other words here " * 25, "English")
+    assert words
+    # The target line should be searched near the 25s ASR anchor, not at song start.
+    assert words[0].start > 20.0
+
+
+def test_long_text_never_drops_canonical_tail_when_local_pass_reaches_eof(monkeypatch):
+    sample_rate = 16_000
+    audio = np.zeros(sample_rate * 20, dtype=np.float32)
+    audio[sample_rate * 1:sample_rate * 19] = 0.1
+    monkeypatch.setattr(text_engine, "load_mono", lambda _audio, _sample_rate: (audio, sample_rate))
+    aligner = Qwen3ForcedAligner("unused")
+
+    # First lines intentionally consume absurd amounts of time, reproducing the
+    # v8 production failure where only a small prefix (18/186 words) survived.
+    calls = {"n": 0}
+    def bad_align(_path, phrase, _language):
+        calls["n"] += 1
+        tokens = phrase.split()
+        if calls["n"] <= 2:
+            return [Word(i * 2.0, i * 2.0 + 1.5, token, 0.8, i) for i, token in enumerate(tokens)]
+        return []
+
+    monkeypatch.setattr(aligner, "align", bad_align)
+    text = "\n".join([f"line {i} alpha beta gamma delta" for i in range(31)])
+    expected = text_engine.tokenize(text)
+    words = aligner.align_long_text("song.wav", text, "English")
+
+    assert len(words) == len(expected)
+    assert [w.text for w in words] == expected
+    assert all(b.start >= a.end - 1e-6 for a, b in zip(words, words[1:]))
+    assert words[-1].end <= 20.0
