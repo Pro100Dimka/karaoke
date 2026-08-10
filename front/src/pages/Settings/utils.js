@@ -1,4 +1,9 @@
-import { HALF, radioActions } from "./config";
+export const HALF = 6;
+
+export const radioActions = {
+  stationId: "setStation",
+  volume: "setVolume"
+};
 
 export const opts = (items) =>
   items.map(([value, label]) => ({ value, label }));
@@ -24,10 +29,6 @@ export const fieldType =
   (name, config = {}) =>
     factory(name, { type, ...config });
 
-/* =========================================================
-   SOURCES
-   ========================================================= */
-
 const formField = createField({
   get:
     (name) =>
@@ -44,6 +45,7 @@ const formField = createField({
     ({ onFieldBlur }, value) =>
       onFieldBlur(name, value)
 });
+
 export const radioField = createField({
   get:
     (name) =>
@@ -65,9 +67,7 @@ const audioField = createField({
   set:
     (name) =>
     ({ audio }, value) =>
-      audio.updateBackend({
-        [name]: value
-      })
+      audio.updateBackend({ [name]: value })
 });
 
 const preferenceField = createField({
@@ -81,6 +81,7 @@ const preferenceField = createField({
     ({ audio }, value) =>
       audio.updatePreference(name, value)
 });
+
 const formSelect = fieldType(formField, "select");
 const formToggle = fieldType(formField, "toggle");
 const formNumber = fieldType(formField, "number");
@@ -96,10 +97,6 @@ export const FORM_FIELDS = {
   readonly: formReadonly
 };
 
-/* =========================================================
-   SELECT SOURCES
-   ========================================================= */
-
 const audioOption =
   (name) =>
   ({ audio }) =>
@@ -110,24 +107,14 @@ const selectFrom =
   (name, source, config = {}) =>
     factory(name, {
       type: "select",
-
       ...(typeof source === "string"
-        ? {
-            getOptions: audioOption(source)
-          }
-        : {
-            options: source
-          }),
-
+        ? { getOptions: audioOption(source) }
+        : { options: source }),
       ...config
     });
 
 export const audioSelect = selectFrom(audioField);
 export const preferenceSelect = selectFrom(preferenceField);
-
-/* =========================================================
-   CONDITIONS
-   ========================================================= */
 
 export const monitorDisabled = ({ audio }) =>
   Boolean(audio.states?.monitoringEnabled);

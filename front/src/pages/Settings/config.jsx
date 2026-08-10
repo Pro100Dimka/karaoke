@@ -1,10 +1,5 @@
-import {
-  Cpu,
-  Mic2,
-  Palette,
-  Radio,
-  SlidersHorizontal
-} from "lucide-react";
+import { Cpu, Mic2, Palette, Radio, SlidersHorizontal } from "lucide-react";
+
 import { MONITORING_MODES } from "../Karaoke/config";
 import screens from "./screens";
 import {
@@ -14,6 +9,7 @@ import {
   fieldType,
   FORM_FIELDS,
   formReadonly,
+  HALF,
   monitorDisabled,
   opts,
   percent,
@@ -22,10 +18,7 @@ import {
   speakerPlaying
 } from "./utils";
 
-export const HALF = 6;
 export const FULL = 12;
-
-export const radioActions = { stationId: "setStation", volume: "setVolume" };
 
 export const LATENCY_OPTIONS = opts([
   ["interactive", "Низкая задержка"],
@@ -64,62 +57,112 @@ const WHISPER_OPTIONS = opts([
    GENERAL
    ========================================================= */
 
-const GENERAL_FIELDS_TOP = [
-  ...[
-    ["select", "language", "Язык", "Язык интерфейса приложения", {
+const GENERAL_FORM_FIELDS = [
+  [
+    "text",
+    "online_name",
+    "Имя в сети",
+    "Это имя увидят другие участники комнаты",
+    {
+      span: 4,
+      placeholder: "Например, Дима",
+      maxLength: 40,
+      save: "blur"
+    }
+  ],
+
+  [
+    "select",
+    "language",
+    "Язык",
+    "Язык интерфейса приложения",
+    {
+      span: 4,
       options: LANGUAGE_OPTIONS
-    }],
-    ["select", "theme", "Тема", "Цветовое оформление приложения", {
+    }
+  ],
+
+  [
+    "select",
+    "theme",
+    "Тема",
+    "Цветовое оформление приложения",
+    {
+      span: 4,
       options: THEME_OPTIONS,
       save: "change"
-    }]
-  ].map(([type, name, label, tooltip, extra = {}]) =>
-    FORM_FIELDS[type](name, { label, tooltip, ...extra })
-  ),
+    }
+  ]
+].map(([type, name, label, tooltip, extra = {}]) =>
+  FORM_FIELDS[type](name, {
+    label,
+    tooltip,
+    ...extra
+  })
+);
 
-  ...[
-    [
-      "select",
-      "stationId",
-      "Радиостанция",
-      "Выберите фоновую музыку",
-      {
-        startIcon: Radio,
-        getOptions: ({ radio }) =>
-          (radio?.stations ?? []).map(({ id, name, description }) => ({
-            value: id,
-            label: name,
-            description
-          }))
-      }
-    ],
-    [
-      "slider",
-      "volume",
-      "Громкость",
-      "Громкость фоновой музыки",
-      {
-        min: 0,
-        max: 1,
-        step: 0.01,
-        getLabel: percent("Громкость")
-      }
-    ]
-  ].map(([type, name, label, tooltip, extra = {}]) =>
-    fieldType(radioField, type)(name, { label, tooltip, ...extra })
-  )
-];
+const RADIO_FIELDS = [
+  [
+    "select",
+    "stationId",
+    "Радиостанция",
+    "Выберите фоновую музыку",
+    {
+      span: HALF,
+      startIcon: Radio,
 
-const ONLINE_NAME_FIELD = FORM_FIELDS.text("online_name", {
-  label: "Имя в сети",
-  tooltip: "Это имя увидят другие участники комнаты",
-  placeholder: "Например, Дима",
-  maxLength: 40,
-  save: "blur"
-});
+      getOptions: ({ radio }) =>
+        (radio?.stations ?? []).map(({ id, name, description }) => ({
+          value: id,
+          label: name,
+          description
+        }))
+    }
+  ],
+
+  [
+    "slider",
+    "volume",
+    "Громкость",
+    "Громкость фоновой музыки",
+    {
+      span: HALF,
+      min: 0,
+      max: 1,
+      step: 0.01,
+
+      getLabel: percent("Громкость")
+    }
+  ]
+].map(([type, name, label, tooltip, extra = {}]) =>
+  fieldType(radioField, type)(name, {
+    label,
+    tooltip,
+    ...extra
+  })
+);
+
+const GENERAL_FIELDS = [...GENERAL_FORM_FIELDS, ...RADIO_FIELDS];
 
 /* =========================================================
-   AUDIO SELECTS
+   STORAGE
+   ========================================================= */
+
+const STORAGE_FIELDS = [
+  ["songs_folder", "Песни"],
+
+  ["ai_folder", "Обработанные файлы"],
+
+  ["cache_folder", "Кэш"]
+].map(([name, label]) =>
+  formReadonly(name, {
+    label,
+    span: 4
+  })
+);
+
+/* =========================================================
+   AUDIO
    ========================================================= */
 
 const AUDIO_SELECT_FIELDS = [
@@ -128,34 +171,47 @@ const AUDIO_SELECT_FIELDS = [
     "inputDevices",
     "Микрофон",
     "Устройство для записи голоса",
-    { startIcon: Mic2, parse: "nullable-number" }
+    {
+      startIcon: Mic2,
+      parse: "nullable-number"
+    }
   ],
+
   [
     "audio_driver",
     "audioDrivers",
     "Режим звука",
     "Автоматический режим подходит большинству пользователей"
   ],
+
   [
     "asio_driver_name",
     "asioDrivers",
     "Аудиодрайвер",
     "Драйвер вашего аудиоинтерфейса",
-    { isVisible: audioDriverVisible }
+    {
+      isVisible: audioDriverVisible
+    }
   ],
+
   [
     "buffer_size",
     "bufferSizes",
     "Задержка",
     "Меньше — быстрее отклик, но выше нагрузка",
-    { parse: "number" }
+    {
+      parse: "number"
+    }
   ],
+
   [
     "output_device_id",
     "outputDevices",
     "Выход голоса",
     "Куда выводить голос при прослушивании",
-    { parse: "nullable-number" }
+    {
+      parse: "nullable-number"
+    }
   ]
 ].map(([name, source, label, tooltip, extra = {}]) =>
   audioSelect(name, source, {
@@ -166,10 +222,6 @@ const AUDIO_SELECT_FIELDS = [
   })
 );
 
-/* =========================================================
-   AUDIO PREFERENCES
-   ========================================================= */
-
 const PREFERENCE_FIELDS = [
   [
     "monitorInputDeviceId",
@@ -177,18 +229,21 @@ const PREFERENCE_FIELDS = [
     "Микрофон для проверки",
     "Используется для проверки уровня голоса"
   ],
+
   [
     "monitorOutputDeviceId",
     "browserOutputs",
     "Динамики или наушники",
     "Устройство для проверки звука"
   ],
+
   [
     "monitorLatencyHint",
     LATENCY_OPTIONS,
     "Задержка воспроизведения",
     "Низкая задержка лучше подходит для пения"
   ],
+
   [
     "monitorMode",
     MONITOR_MODE_OPTIONS,
@@ -203,10 +258,6 @@ const PREFERENCE_FIELDS = [
   })
 );
 
-/* =========================================================
-   AUDIO SPECIAL FIELDS
-   ========================================================= */
-
 const AUDIO_SPECIAL_FIELDS = [
   [
     "action",
@@ -216,12 +267,17 @@ const AUDIO_SPECIAL_FIELDS = [
     "Воспроизвести короткий тестовый сигнал",
     {
       idleText: "Проверить звук",
+
       pendingText: "Проверяем…",
+
       isPending: speakerPlaying,
+
       isDisabled: speakerPlaying,
+
       run: ({ audio }) => audio.actions?.testSpeakers?.()
     }
   ],
+
   [
     "monitor",
     "monitoringEnabled",
@@ -248,21 +304,22 @@ const AUDIO_SPECIAL_FIELDS = [
   ...extra
 }));
 
-/* =========================================================
-   AUDIO
-   ========================================================= */
-
 const AUDIO_FIELDS = [
   ...AUDIO_SELECT_FIELDS,
   ...PREFERENCE_FIELDS,
+
   audioSlider("volume", {
     label: "Громкость голоса",
+
     tooltip: "Громкость вашего голоса при прослушивании",
+
     min: 0,
     max: 1,
     step: 0.05,
+
     getLabel: percent("Громкость голоса")
   }),
+
   ...AUDIO_SPECIAL_FIELDS
 ];
 
@@ -270,22 +327,31 @@ const AUDIO_FIELDS = [
    AI
    ========================================================= */
 
-const AI_FIELDS = [
+const AI_SETTINGS_FIELDS = [
   [
     "select",
     "whisper_model",
     "Распознавание текста",
     "Выберите баланс скорости и точности",
-    { options: WHISPER_OPTIONS }
+    {
+      options: WHISPER_OPTIONS
+    }
   ],
+
   [
     "number",
     "thread_count",
     "Потоки процессора",
     "Больше потоков обычно ускоряет обработку",
-    { min: 1, max: 64, parse: "number" }
+    {
+      min: 1,
+      max: 64,
+      parse: "number"
+    }
   ],
+
   ["toggle", "use_gpu", "Использовать видеокарту", "Ускоряет обработку"],
+
   [
     "toggle",
     "use_cpu",
@@ -293,24 +359,14 @@ const AI_FIELDS = [
     "Используется, если видеокарта недоступна"
   ]
 ].map(([type, name, label, tooltip, extra = {}]) =>
-  FORM_FIELDS[type](name, { label, tooltip, ...extra })
+  FORM_FIELDS[type](name, {
+    label,
+    tooltip,
+    ...extra
+  })
 );
 
-/* =========================================================
-   STORAGE
-   ========================================================= */
-
-const STORAGE_FIELDS = [
-  ["songs_folder", "Песни"],
-  ["ai_folder", "Обработанные файлы"],
-  ["cache_folder", "Кэш"]
-].map(([name, label]) => formReadonly(name, { label, span: 4 }));
-
-const GENERAL_FIELDS = [
-  ...GENERAL_FIELDS_TOP,
-  ...STORAGE_FIELDS,
-  ONLINE_NAME_FIELD
-];
+const AI_FIELDS = [...AI_SETTINGS_FIELDS, ...STORAGE_FIELDS];
 
 /* =========================================================
    SETTINGS
@@ -318,25 +374,36 @@ const GENERAL_FIELDS = [
 
 export const SETTINGS = Object.fromEntries(
   [
-    ["general", "Общее", Palette, GENERAL_FIELDS, { screens }],
+    ["appearance", "Общее", Palette, GENERAL_FIELDS],
+
     ["audio", "Звук", SlidersHorizontal, AUDIO_FIELDS],
+
     ["ai", "Обработка", Cpu, AI_FIELDS]
-  ].map(([id, label, icon, fields, extra = {}]) => [
+  ].map(([id, label, icon, fields]) => [
     id,
-    { label, icon, fields, ...extra }
+    {
+      label,
+      icon,
+      fields
+    }
   ])
 );
 
-/* =========================================================
-   DERIVED CONFIG
-   ========================================================= */
+export const SERVICE_SCREENS = screens;
 
 export const SETTINGS_TABS = Object.entries(SETTINGS).map(
-  ([id, { label, icon }]) => ({ id, label, icon })
+  ([id, { label, icon }]) => ({
+    id,
+    label,
+    icon
+  })
 );
 
 export const SCREEN_BY_ID = Object.fromEntries(
   screens.map((screen) => [screen.id, screen])
 );
 
-export const EMPTY_BROWSER_DEVICES = Object.freeze({ inputs: [], outputs: [] });
+export const EMPTY_BROWSER_DEVICES = Object.freeze({
+  inputs: [],
+  outputs: []
+});
