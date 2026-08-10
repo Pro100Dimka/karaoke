@@ -28,7 +28,7 @@ import {
   EMPTY_BROWSER_DEVICES,
   LATENCY_OPTIONS,
   MONITOR_MODE_OPTIONS
-} from "./audio-options";
+} from "./config";
 
 function GroupHeader({ icon: Icon, title, text }) {
   return (

@@ -9,8 +9,8 @@ import {
 } from "../../../../theme/ui";
 import { getSongCardTilt } from "../../card-tilt";
 import { getSongCardState } from "../../utils";
-import ProcessingSignal from "../processing-signal";
-import SongCardArtwork from "../song-card-artwork";
+import ProcessingSignal from "./processing-signal";
+import SongCardArtwork from "./song-card-artwork";
 import { applyCardTilt, formatSongKey, getSongActions } from "./utils";
 
 const INTERACTIVE_SELECTOR = "button, a, input, select, textarea";

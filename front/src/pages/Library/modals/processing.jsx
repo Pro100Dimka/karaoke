@@ -2,7 +2,7 @@ import { CircleDot, Library, OctagonX, Play } from "lucide-react";
 import Button from "../../../components/fields/button";
 import Modal from "../../../components/modal";
 import { StatusBadge } from "../../../components/ui";
-import ProcessingSignal from "../components/processing-signal";
+import ProcessingSignal from "../components/song-card/processing-signal";
 import { formatEta, getProcessingProgress, isProcessingActive } from "../utils";
 
 export default function ProcessingModal({
@@ -69,9 +69,9 @@ export default function ProcessingModal({
           <span>
             {isDone
               ? "Песня готова к караоке"
-              : status?.progress_detail ??
+              : (status?.progress_detail ??
                 status?.progress_step ??
-                "Подготавливаем обработку песни"}
+                "Подготавливаем обработку песни")}
           </span>
           {active && (
             <strong style={{ textAlign: "right", width: "100%" }}>

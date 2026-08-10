@@ -1,5 +1,5 @@
 import { Music2 } from "lucide-react";
-import { useRadio } from "../../../contexts/radio";
+import { useRadio } from "../../../../contexts/radio";
 
 const WAVE_BARS = Object.freeze(
   Array.from({ length: 18 }, (_, index) => ({

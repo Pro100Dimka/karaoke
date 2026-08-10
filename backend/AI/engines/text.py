@@ -16,7 +16,7 @@ from ..models import Word
 from .base import Aligner, Transcriber
 from .device import select_torch_device
 
-_TOKEN = re.compile(r"[\w’'-]+", re.UNICODE)
+_TOKEN = re.compile(r"\w+(?:[’'-]\w+)*", re.UNICODE)
 _LANGUAGE_NAMES = {
     "ru": "Russian",
     "uk": "Ukrainian",
@@ -141,7 +141,7 @@ def _words_from_items(items) -> list[Word]:
 
 
 ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v14-duration-guard"
-LONG_TEXT_ALIGNMENT_VERSION = "v15-phrase-sized-forced-alignment"
+LONG_TEXT_ALIGNMENT_VERSION = "v17-source-token-locked-alignment"
 
 
 def _normalize_singing_audio(y: np.ndarray) -> np.ndarray:
@@ -249,31 +249,31 @@ def _singing_chunks(
     return [audio for audio, _start, _end in _singing_chunk_windows(y, sr, activity_hints)]
 
 
-def _group_lyric_text(text: str, maximum_words: int = 10) -> list[str]:
-    """Pack adjacent author lines into context-safe acoustic alignment chunks."""
-    groups: list[str] = []
-    current: list[str] = []
-    current_count = 0
-    for raw in str(text or "").splitlines():
-        line = raw.strip()
-        if not line:
-            continue
-        tokens = tokenize(line)
-        if len(tokens) > maximum_words:
-            if current:
-                groups.append(" ".join(current))
-                current, current_count = [], 0
-            for start in range(0, len(tokens), maximum_words):
-                groups.append(" ".join(tokens[start : start + maximum_words]))
-            continue
-        if current and current_count + len(tokens) > maximum_words:
-            groups.append(" ".join(current))
-            current, current_count = [], 0
-        current.extend(tokens)
-        current_count += len(tokens)
-    if current:
-        groups.append(" ".join(current))
-    return groups
+def _group_lyric_text(text: str, maximum_words: int = 35) -> list[str]:
+    """Preserve trusted author lines; split only truly unstructured text.
+
+    Lyrics providers and sidecar files already contain meaningful line breaks.
+    Those boundaries are valuable karaoke anchors and must not be merged again.
+    If a provider returns one long paragraph, chunk only that paragraph to keep
+    the forced-aligner context bounded.
+    """
+    lines = [line.strip() for line in str(text or "").splitlines() if line.strip()]
+    if not lines:
+        return []
+
+    # Multiple source lines are authoritative: keep them exactly 1:1.
+    if len(lines) > 1:
+        return lines
+
+    tokens = tokenize(lines[0])
+    if not tokens:
+        return []
+    if len(tokens) <= maximum_words:
+        return [" ".join(tokens)]
+    return [
+        " ".join(tokens[start : start + maximum_words])
+        for start in range(0, len(tokens), maximum_words)
+    ]
 
 
 def _activity_quantile_times(audio: np.ndarray, sample_rate: int) -> list[float]:
@@ -321,6 +321,62 @@ def _long_text_segments(audio, text: str) -> list[tuple[float, float, str]]:
         end = min(duration_sec, max(start + 8.0, end + 3.0))
         output.append((start, end, group))
     return output
+
+
+
+
+def _canonical_aligned_words(tokens: list[str], words: list[Word]) -> list[Word] | None:
+    """Return aligner timings with the trusted source tokens locked 1:1.
+
+    Forced aligners occasionally omit punctuation-adjacent words, merge two
+    tokens, or emit a different lexical token while still returning plausible
+    timestamps.  Karaoke must never let that rewrite the supplied lyrics.
+    Expand any multi-token timestamp item, compare it to the source line, and
+    only accept the timings when every source token is represented in order.
+    """
+    expanded: list[Word] = []
+    for word in words:
+        parts = tokenize(word.text)
+        if not parts:
+            continue
+        if len(parts) == 1:
+            expanded.append(
+                Word(word.start, word.end, parts[0], word.confidence, len(expanded))
+            )
+            continue
+        weights = [max(1, len(part)) for part in parts]
+        total = sum(weights)
+        consumed = 0
+        span = max(0.02, word.end - word.start)
+        for part, weight in zip(parts, weights, strict=True):
+            part_start = word.start + span * consumed / total
+            consumed += weight
+            part_end = word.start + span * consumed / total
+            expanded.append(
+                Word(part_start, max(part_start + 0.02, part_end), part, word.confidence, len(expanded))
+            )
+
+    if len(expanded) != len(tokens):
+        return None
+
+    def normalize(value: str) -> str:
+        return re.sub(r"[^\w]+", "", value.casefold(), flags=re.UNICODE).replace("ё", "е")
+
+    if any(normalize(source) != normalize(aligned.text) for source, aligned in zip(tokens, expanded, strict=True)):
+        return None
+
+    return [
+        Word(aligned.start, aligned.end, source, aligned.confidence, index)
+        for index, (source, aligned) in enumerate(zip(tokens, expanded, strict=True))
+    ]
+
+
+def _minimum_line_duration(tokens: list[str]) -> float:
+    """Conservative lower bound used only to reject impossible tail packing."""
+    if not tokens:
+        return 0.0
+    letters = sum(len(token) for token in tokens)
+    return max(0.45, 0.17 * len(tokens) + 0.018 * letters)
 
 
 def _pathological_alignment(words: list[Word], span: float) -> bool:
@@ -457,20 +513,32 @@ def _activity_fallback_words(
         # separated by breaths or instrumental punctuation.
         selected = regions
     elif hint_words and len(tokens) <= 3:
-        # Synced lyric providers often timestamp a short line until the next
-        # line starts. A one-word line can therefore own a 10 second window,
-        # although the singer voices it for only one nearby activity island.
-        # Select that island instead of stretching the word across the complete
-        # provider interval.
+        # A short written line may still be sung across several nearby activity
+        # islands (separate words/syllables divided by small breaths).  Select
+        # the nearest *phrase cluster*, not a single island.  Clusters are split
+        # above at gaps > 1.50 s, which prevents a short line from stealing the
+        # next distant phrase while preserving one line spread over local gaps.
         hint_start = hint_words[0].start
-        region = min(
-            regions,
-            key=lambda candidate: abs(candidate[0] - hint_start),
+        selected = min(
+            clusters,
+            key=lambda cluster: min(
+                abs(cluster[0][0] - hint_start),
+                abs(cluster[-1][1] - hint_start),
+                0.0 if cluster[0][0] <= hint_start <= cluster[-1][1] else float("inf"),
+            ),
         )
         maximum_span = sum(
             min(3.2, max(0.7, 0.42 + len(token) * 0.22)) for token in tokens
         )
-        selected = [(region[0], min(region[1], region[0] + maximum_span))]
+        cluster_start = selected[0][0]
+        cluster_end = selected[-1][1]
+        if cluster_end - cluster_start > maximum_span:
+            clipped_end = cluster_start + maximum_span
+            selected = [
+                (start, min(end, clipped_end))
+                for start, end in selected
+                if start < clipped_end
+            ]
     elif hint_words:
         hint_center = (hint_words[0].start + hint_words[-1].end) / 2
         selected = min(
@@ -1013,11 +1081,15 @@ class Qwen3ForcedAligner(Aligner):
                 segment_audio = source[left:right]
                 sf.write(path, segment_audio, sample_rate, subtype="PCM_16")
                 try:
-                    local_words = self.align(path, text, language)
+                    raw_words = self.align(path, text, language)
+                    canonical_words = _canonical_aligned_words(tokens, raw_words)
+                    lexical_match = canonical_words is not None
+                    local_words = canonical_words or raw_words
                     candidate_start = segment_start + local_words[0].start if local_words else 0.0
                     candidate_end = segment_start + local_words[-1].end if local_words else 0.0
                     if (
-                        _pathological_alignment(local_words, segment_end - segment_start)
+                        not lexical_match
+                        or _pathological_alignment(local_words, segment_end - segment_start)
                         or candidate_start < cursor - 0.08
                         or candidate_end <= cursor + 0.02
                     ):
@@ -1025,7 +1097,7 @@ class Qwen3ForcedAligner(Aligner):
                             tokens,
                             segment_audio,
                             sample_rate,
-                            local_words,
+                            canonical_words if lexical_match else None,
                             max(0.0, cursor - segment_start),
                         )
                 except (InvalidArtifactError, RuntimeError, ValueError):
@@ -1056,11 +1128,119 @@ class Qwen3ForcedAligner(Aligner):
         return output
 
     def align_long_text(self, audio, text, language):
-        """Align trusted full-song lyrics without overflowing model context."""
-        segments = _long_text_segments(audio, text)
-        if len(segments) <= 1:
+        """Align trusted author lines sequentially with acoustic look-ahead.
+
+        Long trusted lyrics used to be converted to many overlapping coarse
+        windows.  ``align_segments`` then enforced one global cursor across
+        those overlaps, so one rejected line could push every following line
+        to the end of its window and collapse a whole chorus into 20 ms words.
+
+        Keep the source line breaks, but locate every next line *after the
+        actually aligned previous line*.  A generous look-ahead lets the
+        forced aligner skip instrumental gaps while the monotonic cursor keeps
+        repeated chorus lines in the correct occurrence.
+        """
+        groups = _group_lyric_text(text)
+        if len(groups) <= 1:
             return self.align(audio, text, language)
-        return self.align_segments(audio, segments, language)
+
+        try:
+            import soundfile as sf
+        except ImportError as exc:
+            raise EngineUnavailableError("soundfile is required for long-text alignment") from exc
+
+        source, sample_rate = load_mono(audio, 16000)
+        duration_sec = len(source) / sample_rate
+        output: list[Word] = []
+        cursor = 0.0
+
+        with tempfile.TemporaryDirectory(prefix="karaoke-align-lines-") as temp_dir:
+            root = Path(temp_dir)
+            for line_index, line in enumerate(groups):
+                tokens = tokenize(line)
+                if not tokens:
+                    continue
+
+                # If a provider returned lyrics for a longer arrangement, never
+                # cram the unmatched tail into the final seconds of this audio.
+                # Preserve the portion that can physically fit and stop cleanly.
+                remaining_minimum = sum(
+                    _minimum_line_duration(tokenize(rest))
+                    for rest in groups[line_index:]
+                )
+                remaining_audio = max(0.0, duration_sec - cursor)
+                if line_index > 0 and remaining_minimum > remaining_audio * 1.45 + 2.0:
+                    break
+
+                # Sung words are substantially slower than speech.  This value
+                # is not used as a timing result; it only sizes the search
+                # horizon.  The minimum 16 s horizon also crosses normal
+                # instrumental punctuation between verse lines.
+                expected = min(
+                    8.0,
+                    max(1.5, 0.42 * len(tokens) + 0.035 * sum(len(token) for token in tokens)),
+                )
+                search_start = max(0.0, cursor - 0.65)
+                search_span = min(24.0, max(16.0, expected * 3.2 + 5.0))
+                search_end = min(duration_sec, search_start + search_span)
+                if search_end <= search_start + 0.10:
+                    break
+
+                left = max(0, int(search_start * sample_rate))
+                right = min(len(source), max(left + 1, int(search_end * sample_rate)))
+                line_audio = source[left:right]
+                path = root / f"line-{line_index:03d}.wav"
+                sf.write(path, line_audio, sample_rate, subtype="PCM_16")
+
+                local_words: list[Word] = []
+                try:
+                    raw_words = self.align(path, line, language)
+                    canonical_words = _canonical_aligned_words(tokens, raw_words)
+                    lexical_match = canonical_words is not None
+                    local_words = canonical_words or raw_words
+                    candidate_start = search_start + local_words[0].start if local_words else 0.0
+                    candidate_end = search_start + local_words[-1].end if local_words else 0.0
+                    invalid = (
+                        not lexical_match
+                        or _pathological_alignment(local_words, search_end - search_start)
+                        or candidate_start < cursor - 0.20
+                        or candidate_end <= cursor + 0.04
+                        or candidate_end > search_end + 0.10
+                    )
+                    if invalid:
+                        # A lexical mismatch means the aligner did not actually
+                        # align this source line.  Do not use those wrong words
+                        # as an acoustic hint, otherwise the fallback follows the
+                        # wrong phrase and the error cascades into the chorus.
+                        local_words = _activity_fallback_words(
+                            tokens,
+                            line_audio,
+                            sample_rate,
+                            canonical_words if lexical_match else None,
+                            max(0.0, cursor - search_start),
+                        )
+                except (InvalidArtifactError, RuntimeError, ValueError):
+                    local_words = _activity_fallback_words(
+                        tokens,
+                        line_audio,
+                        sample_rate,
+                        minimum_start=max(0.0, cursor - search_start),
+                    )
+
+                for word in local_words:
+                    word_start = max(cursor, search_start + word.start)
+                    word_end = max(word_start + 0.02, search_start + word.end)
+                    word_end = min(duration_sec, word_end)
+                    if word_end <= word_start:
+                        continue
+                    output.append(
+                        Word(word_start, word_end, word.text, word.confidence, len(output))
+                    )
+                    cursor = word_end
+
+        if not output:
+            raise InvalidArtifactError("Long-text forced aligner returned no timed words")
+        return output
 
 
 class UniformTextFallback(Transcriber, Aligner):

@@ -49,28 +49,23 @@ export default function Settings({
         )
       }}
     >
-      <div className="settings-page">
-        <div className="settings-layout">
-          <SettingsTabs
-            value={navigation.tab}
-            onChange={navigation.selectTab}
-          />
-          <Panel className="settings-content-panel">
-            {settings.form ? (
-              <SettingsContent
-                tab={navigation.tab}
-                service={navigation.service}
-                form={settings.form}
-                onChange={settings.updateField}
-                onFieldBlur={settings.saveField}
-                onOpenService={navigation.openService}
-                onCloseService={navigation.closeService}
-              />
-            ) : (
-              <p className="text-muted">Загружаем центр управления…</p>
-            )}
-          </Panel>
-        </div>
+      <div className="settings-layout">
+        <SettingsTabs value={navigation.tab} onChange={navigation.selectTab} />
+        <Panel className="settings-content-panel">
+          {settings.form ? (
+            <SettingsContent
+              tab={navigation.tab}
+              service={navigation.service}
+              form={settings.form}
+              onChange={settings.updateField}
+              onFieldBlur={settings.saveField}
+              onOpenService={navigation.openService}
+              onCloseService={navigation.closeService}
+            />
+          ) : (
+            <p className="text-muted">Загружаем центр управления…</p>
+          )}
+        </Panel>
       </div>
     </Modal>
   );

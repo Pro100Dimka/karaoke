@@ -50,18 +50,26 @@ def test_segmented_aligner_offsets_short_phrase_timings(monkeypatch):
     assert all(left.end <= right.start for left, right in zip(words, words[1:], strict=False))
 
 
-def test_trusted_lyrics_are_split_into_small_aligner_groups():
-    groups = _group_lyric_text(
-        "one two three four five\nsix seven eight nine ten\neleven twelve thirteen fourteen fifteen"
+def test_trusted_lyrics_preserve_author_lines_exactly():
+    source = (
+        "one two three four five\n"
+        "six seven eight nine ten\n"
+        "eleven twelve thirteen fourteen fifteen"
     )
 
-    assert groups == [
-        "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen"
-    ]
+    assert _group_lyric_text(source) == source.splitlines()
 
 
-def test_many_author_lines_are_packed_below_the_model_context_limit():
-    groups = _group_lyric_text("\n".join(["one two three four five"] * 8))
+def test_many_author_lines_are_never_repacked():
+    lines = ["one two three four five"] * 8
+
+    assert _group_lyric_text("\n".join(lines)) == lines
+
+
+def test_unstructured_single_line_is_chunked_below_model_context_limit():
+    source = " ".join(["word"] * 40)
+
+    groups = _group_lyric_text(source)
 
     assert [len(group.split()) for group in groups] == [35, 5]
 
