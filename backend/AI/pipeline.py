@@ -182,24 +182,92 @@ def _repair_canonical_timeline_locally(words: list[Word], total_duration: float)
     return repaired if _canonical_timeline_is_publishable(repaired, total_duration) else None
 
 
+def _preserve_complete_canonical_timeline(words: list[Word], total_duration: float) -> list[Word] | None:
+    """Preserve a complete acoustic alignment and heal only timing defects.
+
+    Once the aligner has returned the full canonical word sequence, pipeline.py
+    must never replace all acoustic CTC/Qwen timestamps with a synthetic global
+    retiming.  This pass keeps each word confidence/source timing and repairs
+    only local overlaps/bounds.
+    """
+    if not words or total_duration <= 0.04:
+        return None
+
+    repaired: list[Word] = []
+    for index, word in enumerate(words):
+        start = max(0.0, min(total_duration, float(word.start)))
+        end = max(start + 0.01, min(total_duration, float(word.end)))
+        confidence = max(0.0, min(1.0, float(word.confidence)))
+
+        if repaired and start < repaired[-1].end:
+            previous = repaired[-1]
+            # Prefer splitting the overlap at its midpoint.  This moves both
+            # boundaries by the minimum amount and preserves acoustic anchors
+            # far better than shifting the whole remainder of the song.
+            boundary = max(previous.start + 0.01, min(end - 0.01, (previous.end + start) * 0.5))
+            if boundary > previous.start + 0.009 and boundary < end - 0.009:
+                repaired[-1] = Word(
+                    previous.start, boundary, previous.text, previous.confidence, previous.index
+                )
+                start = boundary
+            else:
+                start = previous.end
+                end = max(end, start + 0.01)
+
+        if end > total_duration:
+            end = total_duration
+        if end <= start + 0.009:
+            # A pathological final overlap is repaired with a tiny local window.
+            # If even that cannot fit, a backwards normalization below handles it.
+            end = min(total_duration, start + 0.01)
+        repaired.append(Word(start, end, word.text, confidence, index))
+
+    # If the very end was compressed against EOF, make a small backwards pass
+    # over only the affected suffix. Confidence and canonical identity remain
+    # untouched.
+    for index in range(len(repaired) - 1, -1, -1):
+        word = repaired[index]
+        max_end = total_duration if index == len(repaired) - 1 else repaired[index + 1].start
+        end = min(word.end, max_end)
+        if end <= word.start + 0.009:
+            start = max(0.0, end - 0.01)
+            if index > 0 and start < repaired[index - 1].end:
+                start = repaired[index - 1].end
+            if end <= start + 0.009:
+                return None
+            repaired[index] = Word(start, end, word.text, word.confidence, word.index)
+        elif end != word.end:
+            repaired[index] = Word(word.start, end, word.text, word.confidence, word.index)
+
+    return repaired if _canonical_timeline_is_publishable(repaired, total_duration) else None
+
+
 def _pipeline_lossless_canonical_words(text: str, words: list[Word], total_duration: float) -> list[Word]:
-    """Absolute last-resort invariant guard before publishing lyricsSync.json."""
+    """Final invariant guard before publishing lyricsSync.json.
+
+    A complete canonical alignment is authoritative: preserve its acoustic
+    timestamps/confidences and repair only local timeline defects. Synthetic
+    whole-song retiming is reserved exclusively for an actually incomplete or
+    text-mismatched aligner result.
+    """
     tokens = tokenize(text)
     if not tokens or total_duration <= 0.04:
         return words
 
     canonical_match = _canonical_alignment_matches(text, words)
-    if canonical_match and _canonical_timeline_is_publishable(words, total_duration):
-        return words
     if canonical_match:
-        repaired = _repair_canonical_timeline_locally(words, total_duration)
-        if repaired is not None:
-            return repaired
+        preserved = _preserve_complete_canonical_timeline(words, total_duration)
+        if preserved is None:
+            raise InvalidArtifactError(
+                "Complete canonical acoustic alignment could not be locally normalized; "
+                "refusing to discard CTC/Qwen anchors with global retiming"
+            )
+        return preserved
 
+    # Only an incomplete/text-mismatched stream may use deterministic emergency
+    # retiming. This keeps the lossless invariant while making it impossible for
+    # pipeline.py to erase a valid CTC/Qwen merge.
     start = max(0.0, words[0].start if words else 0.0)
-    # A partial/unsorted aligner result must never compress all canonical words
-    # into the tiny span covered by that prefix. Use the remaining song duration
-    # as the deterministic last-resort canvas.
     end = total_duration
     if end <= start + 0.08:
         start, end = 0.0, total_duration
@@ -215,7 +283,6 @@ def _pipeline_lossless_canonical_words(text: str, words: list[Word], total_durat
             word_end = min(total_duration, word_start + 0.02)
         output.append(Word(word_start, word_end, token, 0.004, index))
     return output
-
 
 def _lyrics_console(*parts: object) -> None:
     """Write UTF-8 lyrics diagnostics to the real console, bypassing capture."""

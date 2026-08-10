@@ -616,3 +616,100 @@ def test_anchor_preserving_merge_maps_partial_ctc_line_tokens_directly():
     assert merged[3].start == pytest.approx(4.0)
     assert stats["ctc"] == 5
     assert stats["interpolated"] == 1
+
+
+def test_anchor_preserving_merge_completes_large_canonical_stream_with_sparse_ctc():
+    from types import SimpleNamespace
+    import numpy as np
+
+    # Regression for production v15: many canonical words, only a sparse set of
+    # CTC anchors, and one locally conflicting anchor. The merger must keep a
+    # useful acoustic subset and interpolate every remaining canonical word.
+    groups = []
+    counter = 0
+    for _ in range(37):
+        row = []
+        for _ in range(5):
+            row.append(f"слово{counter}")
+            counter += 1
+        groups.append(" ".join(row))
+    groups[-1] += f" слово{counter}"  # 186 canonical words total
+
+    canonical = [token for group in groups for token in text_engine.tokenize(group)]
+    assert len(canonical) == 186
+
+    ctc_lines = [None] * len(groups)
+    for line_idx in range(11):
+        expected = text_engine.tokenize(groups[line_idx])
+        base_time = 4.0 + line_idx * 7.0
+        words = []
+        for local_idx, token in enumerate(expected):
+            start = base_time + local_idx * 0.55
+            end = start + 0.34
+            # One deliberately conflicting late word: v15 used to abort the
+            # complete merge rather than dropping only this anchor.
+            if line_idx == 5 and local_idx == 3:
+                start = base_time - 0.2
+                end = start + 0.3
+            words.append(Word(start, end, token, 0.85, local_idx))
+        ctc_lines[line_idx] = SimpleNamespace(words=words, confidence=0.85)
+
+    audio = np.ones(16000 * 145, dtype=np.float32) * 0.02
+    merged, stats = _anchor_preserving_canonical_alignment(
+        groups,
+        ctc_lines,
+        [],
+        audio,
+        16000,
+        145.0,
+    )
+
+    assert len(merged) == 186
+    assert [word.text for word in merged] == canonical
+    assert stats["ctc"] > 0
+    assert stats["interpolated"] > 0
+    assert all(right.start >= left.end - 1e-6 for left, right in zip(merged, merged[1:]))
+
+
+def test_anchor_merge_does_not_squeeze_phrase_into_subsecond_gap():
+    from types import SimpleNamespace
+
+    groups = [
+        "intro",
+        "Пропал без вести в японских лагерях",
+        "next",
+    ]
+    # Strong-ish anchor before the phrase, weaker anchor immediately after it.
+    # The old merger accepted ~0.46 s for six words. The new merger must discard
+    # the conflicting weak anchor and give the phrase a physically plausible span.
+    ctc_lines = [
+        SimpleNamespace(
+            words=[Word(20.90, 21.10, "intro", 0.92, 0)],
+            confidence=0.92,
+        ),
+        None,
+        SimpleNamespace(
+            words=[Word(21.56, 21.82, "next", 0.35, 0)],
+            confidence=0.35,
+        ),
+    ]
+    audio = np.ones(16000 * 30, dtype=np.float32) * 0.02
+
+    merged, stats = _anchor_preserving_canonical_alignment(
+        groups,
+        ctc_lines,
+        [],
+        audio,
+        16000,
+        30.0,
+    )
+
+    assert [word.text for word in merged] == [
+        "intro", "Пропал", "без", "вести", "в", "японских", "лагерях", "next"
+    ]
+    phrase = merged[1:7]
+    assert phrase[-1].end - phrase[0].start >= 1.45
+    assert all(word.end - word.start >= 0.099 for word in phrase)
+    assert all(right.start >= left.end - 1e-6 for left, right in zip(merged, merged[1:]))
+    assert stats["ctc"] >= 1
+    assert stats["interpolated"] >= 6

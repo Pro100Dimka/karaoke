@@ -329,13 +329,7 @@ function TransportButtons({ isPlaying, onSkip, onTogglePlay, onStop }) {
 
 export default function ConsoleCenter(props) {
   return (
-    <Stack
-      gap={2.25}
-      align="center"
-      sx={{
-        width: "100%"
-      }}
-    >
+    <Stack gap={2.25} align="center" justify="flex-end">
       <TransportButtons {...props} />
       <PerformanceControls {...props} />
     </Stack>

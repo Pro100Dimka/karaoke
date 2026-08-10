@@ -17,7 +17,6 @@ const PRESET_ACCENTS = {
 };
 
 const TOOL_BUTTON_SX = {
-  minHeight: 40,
   padding: "0.55rem 0.9rem",
 
   borderRadius: "var(--shape-md)",
@@ -49,34 +48,24 @@ function EffectPreset({ label, symbol, echo, reverb, active, onClick }) {
       onClick={onClick}
       sx={{
         minWidth: 0,
-        minHeight: 78,
-
-        padding: "0.65rem 0.5rem",
-
+        padding: "0.5rem",
         display: "grid",
         placeItems: "center",
-
         borderRadius: "var(--shape-lg)",
-
         color: active ? "var(--preset-accent)" : "var(--color-text-soft)",
-
         border: active
           ? "1px solid var(--preset-accent)"
           : "1px solid color-mix(in srgb, var(--preset-accent) 42%, var(--color-border))",
-
         background: active
           ? "linear-gradient(180deg, color-mix(in srgb, var(--preset-accent) 13%, var(--color-bg-deep)), var(--color-bg-deep))"
           : "color-mix(in srgb, var(--color-bg-deep) 90%, transparent)",
-
         boxShadow: active
           ? "0 0 1rem color-mix(in srgb, var(--preset-accent) 24%, transparent), inset 0 1px 0 color-mix(in srgb, var(--color-highlight) 7%, transparent)"
           : "inset 0 1px 0 color-mix(in srgb, var(--color-highlight) 4%, transparent)"
       }}
-      style={{
-        "--preset-accent": accent
-      }}
+      style={{ "--preset-accent": accent }}
     >
-      <Stack align="center" gap={0.45}>
+      <Stack align="center">
         <span
           aria-hidden="true"
           style={{
@@ -244,12 +233,7 @@ function ToolTabs({
 
 export default function ToolsPanel(props) {
   return (
-    <Stack
-      gap={1.35}
-      sx={{
-        width: "100%"
-      }}
-    >
+    <Stack gap={1} justify="flex-end">
       <ToolTabs {...props} />
       <EffectPresets {...props} />
     </Stack>

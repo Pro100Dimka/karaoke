@@ -1,4 +1,9 @@
-import { ArrowLeft, ChevronDown, ChevronUp, SlidersHorizontal } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronUp,
+  SlidersHorizontal
+} from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { useRadio } from "../../contexts/radio";

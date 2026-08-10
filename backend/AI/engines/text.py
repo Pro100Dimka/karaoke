@@ -144,7 +144,7 @@ def _words_from_items(items) -> list[Word]:
 
 
 ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v14-duration-guard"
-LONG_TEXT_ALIGNMENT_VERSION = "v32-direct-ctc-canonical-anchor-merge"
+LONG_TEXT_ALIGNMENT_VERSION = "v34-acoustic-gap-physical-bounds"
 
 
 def _normalize_singing_audio(y: np.ndarray) -> np.ndarray:
@@ -428,11 +428,11 @@ def _anchor_preserving_canonical_alignment(
 ) -> tuple[list[Word], dict[str, int]]:
     """Build a complete canonical timeline while preserving acoustic anchors.
 
-    Raw CTC line results are mapped directly to canonical token indices.  The
-    secondary local-Qwen/output stream may fill additional indices, but can never
-    replace CTC.  A maximum-weight monotonic anchor chain is selected so one bad
-    or overlapping anchor only removes that anchor instead of invalidating the
-    whole song.  Only gaps between the surviving anchors are interpolated.
+    Raw CTC line results are mapped directly to canonical token indices.
+    Surviving CTC/Qwen anchors are kept whenever physically possible.  If two
+    anchors leave too little room for the canonical words between them, only the
+    weaker conflicting anchor is discarded and the merge is retried.  Missing
+    words are then interpolated *only* inside the remaining gaps.
     """
     from difflib import SequenceMatcher
 
@@ -451,9 +451,7 @@ def _anchor_preserving_canonical_alignment(
         offsets.append(offset)
         offset += len(row)
 
-    # idx -> (word, source, priority weight).  CTC always wins at the same
-    # canonical index; confidence only breaks ties between candidates of the
-    # same source.
+    # idx -> (word, source, priority)
     candidates: dict[int, tuple[Word, str, float]] = {}
 
     def add_candidate(idx: int, word: Word, kind: str, source_quality: float | None = None) -> None:
@@ -469,16 +467,10 @@ def _anchor_preserving_canonical_alignment(
             or end > duration_sec + 0.10
         ):
             return
-        # Reserve a tiny amount of room for canonical words on either side.
-        # This prevents a valid-looking anchor at t=0 from making preceding
-        # canonical tokens physically impossible to place.
-        min_word_room = 0.04
-        if start + 1e-6 < min_word_room * idx:
-            return
-        if end - 1e-6 > duration_sec - min_word_room * (len(tokens) - idx - 1):
-            return
         confidence = max(0.0, min(1.0, float(getattr(word, "confidence", 0.0) or 0.0)))
-        quality = confidence if source_quality is None else max(confidence, max(0.0, min(1.0, float(source_quality))))
+        quality = confidence if source_quality is None else max(
+            confidence, max(0.0, min(1.0, float(source_quality)))
+        )
         priority = (100.0 + 900.0 * quality) if kind == "ctc" else (10.0 + 90.0 * quality)
         existing = candidates.get(idx)
         if existing is None or priority > existing[2]:
@@ -488,10 +480,7 @@ def _anchor_preserving_canonical_alignment(
                 priority,
             )
 
-    # Map raw CTC lines directly.  Exact line-position mapping is preferred,
-    # because align_lines was called with these same canonical groups.  A local
-    # SequenceMatcher fallback handles tokenizer punctuation/normalization drift
-    # without discarding the entire acoustic line.
+    # Direct canonical mapping from raw CTC line results.
     for line_index, result in enumerate(ctc_lines or []):
         if result is None or line_index >= len(line_tokens):
             continue
@@ -512,9 +501,8 @@ def _anchor_preserving_canonical_alignment(
             for delta in range(block.size):
                 add_candidate(base + block.b + delta, words[block.a + delta], "ctc", line_quality)
 
-    # The secondary stream may be a prefix or a sparse mixture of CTC/Qwen
-    # lines.  Text sequence matching maps it to canonical indices without
-    # assuming that output position == canonical position (the v14 bug).
+    # Secondary Qwen/output anchors fill only canonical positions that do not
+    # already have CTC evidence.
     secondary = [word for word in (qwen_words or []) if normalize(word.text)]
     if secondary:
         secondary_norm = [normalize(word.text) for word in secondary]
@@ -529,21 +517,32 @@ def _anchor_preserving_canonical_alignment(
     if not candidates:
         return [], {"ctc": 0, "qwen": 0, "interpolated": 0}
 
-    # Select the best monotonic/physically feasible anchor chain with dynamic
-    # programming.  Crucially, a single contradictory anchor can no longer make
-    # this function return an empty alignment and erase every good CTC word.
+    def minimum_word_span(token: str) -> float:
+        """Conservative physical lower bound for a sung word.
+
+        The previous 20 ms/word guard allowed whole lyric phrases to collapse
+        between neighboring acoustic anchors.  This bound is deliberately
+        conservative (fast singing is still allowed) but rejects physically
+        impossible 20-80 ms word streams.
+        """
+        chars = max(1, len(normalize(token)))
+        return max(0.10, min(0.48, 0.065 + 0.038 * chars))
+
+    def minimum_run_span(begin: int, end: int) -> float:
+        return sum(minimum_word_span(tokens[pos]) for pos in range(begin, end))
+
+    # First choose a monotonic high-value chain.
     ordered = sorted(candidates.items())
-    min_gap_per_missing_word = 0.04
+    min_gap_per_missing_word = 0.035
     dp_score: list[float] = []
     dp_prev: list[int] = []
-    for pos, (idx, (word, kind, priority)) in enumerate(ordered):
-        # Reward CTC heavily, then Qwen, while still preferring more anchors.
+    for pos, (idx, (word, _kind, priority)) in enumerate(ordered):
         best_score = priority
         best_prev = -1
         for prev_pos in range(pos):
             prev_idx, (prev_word, _prev_kind, _prev_priority) = ordered[prev_pos]
             missing = max(0, idx - prev_idx - 1)
-            required = min_gap_per_missing_word * missing
+            required = minimum_run_span(prev_idx + 1, idx) if missing else 0.0
             if word.start + 1e-6 < prev_word.end + required:
                 continue
             score = dp_score[prev_pos] + priority
@@ -559,89 +558,185 @@ def _anchor_preserving_canonical_alignment(
         selected_positions.append(end_pos)
         end_pos = dp_prev[end_pos]
     selected_positions.reverse()
-    selected: dict[int, tuple[Word, str]] = {
-        ordered[pos][0]: (ordered[pos][1][0], ordered[pos][1][1])
+    selected: dict[int, tuple[Word, str, float]] = {
+        ordered[pos][0]: (
+            ordered[pos][1][0],
+            ordered[pos][1][1],
+            ordered[pos][1][2],
+        )
         for pos in selected_positions
     }
 
+    # Prefer real song bounds for edge interpolation. Activity is useful as a
+    # hint, but must never make a full canonical stream impossible to place.
     active = _activity_quantile_times(source, sample_rate)
     active_start = max(0.0, float(active[0])) if active else 0.0
     active_end = min(duration_sec, float(active[-1])) if active else duration_sec
     if active_end <= active_start + 0.08:
         active_start, active_end = 0.0, duration_sec
 
-    result: list[Word | None] = [None] * len(tokens)
-    source_kind: list[str | None] = [None] * len(tokens)
-    for idx, (word, kind) in selected.items():
-        result[idx] = Word(word.start, word.end, tokens[idx], word.confidence, idx)
-        source_kind[idx] = kind
+    def weaker_anchor(left_idx: int, right_idx: int) -> int:
+        """Return the weaker conflicting anchor index.
 
-    # Fill missing runs only.  Confirmed acoustic timestamps are never moved.
-    index = 0
-    while index < len(tokens):
-        if result[index] is not None:
-            index += 1
-            continue
-        run_start = index
-        while index < len(tokens) and result[index] is None:
-            index += 1
-        run_end = index
-        count = run_end - run_start
-        left_word = result[run_start - 1] if run_start > 0 else None
-        right_word = result[run_end] if run_end < len(tokens) else None
-        left_time = float(left_word.end) if left_word is not None else active_start
-        right_time = float(right_word.start) if right_word is not None else active_end
+        Qwen is always weaker than CTC. Between equal sources, lower priority
+        (confidence) loses. Ties prefer dropping the later anchor because that
+        preserves already established earlier chronology.
+        """
+        left_word, left_kind, left_priority = selected[left_idx]
+        right_word, right_kind, right_priority = selected[right_idx]
+        if left_kind != right_kind:
+            return left_idx if left_kind == "qwen" else right_idx
+        if abs(left_priority - right_priority) > 1e-9:
+            return left_idx if left_priority < right_priority else right_idx
+        return right_idx
 
-        # Activity quantiles are only hints at song edges.  If they leave too
-        # little room, widen to absolute audio bounds rather than touching an
-        # acoustic anchor.
-        minimum_span = 0.04 * count
-        if right_time < left_time + minimum_span:
+    def try_build() -> tuple[list[Word] | None, tuple[int, int] | None]:
+        result: list[Word | None] = [None] * len(tokens)
+        source_kind: list[str | None] = [None] * len(tokens)
+        for idx, (word, kind, _priority) in selected.items():
+            result[idx] = Word(word.start, word.end, tokens[idx], word.confidence, idx)
+            source_kind[idx] = kind
+
+        # Detect direct overlaps and impossible internal gaps before filling.
+        anchor_indices = sorted(selected)
+        for left_idx, right_idx in zip(anchor_indices, anchor_indices[1:], strict=False):
+            left_word = result[left_idx]
+            right_word = result[right_idx]
+            if left_word is None or right_word is None:
+                continue
+            missing = right_idx - left_idx - 1
+            required = minimum_run_span(left_idx + 1, right_idx) if missing > 0 else 0.0
+            if right_word.start < left_word.end + required - 1e-6:
+                return None, (left_idx, right_idx)
+
+        index = 0
+        while index < len(tokens):
+            if result[index] is not None:
+                index += 1
+                continue
+            run_start = index
+            while index < len(tokens) and result[index] is None:
+                index += 1
+            run_end = index
+            count = run_end - run_start
+            left_idx = run_start - 1 if run_start > 0 else None
+            right_idx = run_end if run_end < len(tokens) else None
+            left_word = result[left_idx] if left_idx is not None else None
+            right_word = result[right_idx] if right_idx is not None else None
+
+            left_time = float(left_word.end) if left_word is not None else 0.0
+            right_time = float(right_word.start) if right_word is not None else duration_sec
+
+            # At song edges, activity narrows the region only if there is still
+            # sufficient room for all missing canonical words.
+            minimum_span = minimum_run_span(run_start, run_end)
             if left_word is None:
-                left_time = 0.0
+                hinted = max(0.0, active_start)
+                if right_time - hinted >= minimum_span:
+                    left_time = hinted
             if right_word is None:
-                right_time = duration_sec
-        if right_time < left_time + minimum_span - 1e-6:
-            # This should be rare because the DP chain already reserves room.
-            # Drop no anchors here; signal the caller so diagnostics expose a
-            # real merger bug instead of silently destroying CTC evidence.
-            return [], {
-                "ctc": sum(1 for _idx, (_word, kind) in selected.items() if kind == "ctc"),
-                "qwen": sum(1 for _idx, (_word, kind) in selected.items() if kind == "qwen"),
-                "interpolated": 0,
+                hinted = min(duration_sec, active_end)
+                if hinted - left_time >= minimum_span:
+                    right_time = hinted
+
+            if right_time < left_time + minimum_span - 1e-6:
+                if left_idx is not None and right_idx is not None:
+                    return None, (left_idx, right_idx)
+                # Edge case: one anchor itself leaves no room for the prefix or
+                # suffix. Drop that edge anchor on the next retry.
+                if right_idx is not None:
+                    return None, (right_idx, right_idx)
+                if left_idx is not None:
+                    return None, (left_idx, left_idx)
+                return None, None
+
+            minima = [minimum_word_span(tokens[pos]) for pos in range(run_start, run_end)]
+            minimum_total = sum(minima)
+            extra = max(0.0, (right_time - left_time) - minimum_total)
+            lexical_weights = [max(1.0, float(len(normalize(tokens[pos])))) for pos in range(run_start, run_end)]
+            lexical_total = max(1.0, sum(lexical_weights))
+            cursor_time = left_time
+            for pos, minimum, weight in zip(
+                range(run_start, run_end),
+                minima,
+                lexical_weights,
+                strict=True,
+            ):
+                duration = minimum + extra * weight / lexical_total
+                start = cursor_time
+                end = min(right_time, start + duration)
+                if end <= start + 0.009:
+                    end = min(right_time, start + 0.01)
+                result[pos] = Word(start, min(duration_sec, end), tokens[pos], 0.012, pos)
+                source_kind[pos] = "interpolated"
+                cursor_time = end
+
+        final = [word for word in result if word is not None]
+        if len(final) != len(tokens):
+            return None, None
+        for pos, (left, right) in enumerate(zip(final, final[1:], strict=False)):
+            if right.start < left.end - 1e-6:
+                left_idx = pos if pos in selected else None
+                right_idx = pos + 1 if (pos + 1) in selected else None
+                if left_idx is not None and right_idx is not None:
+                    return None, (left_idx, right_idx)
+                return None, None
+        return final, None
+
+    # Iteratively prune only conflicting anchors until the remaining chain can
+    # support every canonical word. This guarantees a complete monotonic result
+    # while retaining as much real acoustic timing as physically possible.
+    max_retries = len(selected) + 2
+    for _ in range(max_retries):
+        built, conflict = try_build()
+        if built is not None:
+            kinds = []
+            for idx in range(len(tokens)):
+                if idx in selected:
+                    kinds.append(selected[idx][1])
+                else:
+                    kinds.append("interpolated")
+            return built, {
+                "ctc": sum(1 for kind in kinds if kind == "ctc"),
+                "qwen": sum(1 for kind in kinds if kind == "qwen"),
+                "interpolated": sum(1 for kind in kinds if kind == "interpolated"),
             }
 
-        weights = [max(1, len(tokens[pos])) for pos in range(run_start, run_end)]
-        total_weight = max(1, sum(weights))
-        consumed = 0
-        span = right_time - left_time
-        for pos, weight in zip(range(run_start, run_end), weights, strict=True):
-            start = left_time + span * consumed / total_weight
-            consumed += weight
-            end = left_time + span * consumed / total_weight
-            # Numerical floor only; normal spans are much larger.
-            if end <= start + 0.019:
-                end = start + 0.02
-            if right_word is not None:
-                end = min(end, right_word.start)
-            result[pos] = Word(start, min(duration_sec, end), tokens[pos], 0.012, pos)
-            source_kind[pos] = "interpolated"
+        if not selected:
+            break
+        if conflict is None:
+            # Defensive fallback: remove the globally weakest anchor.
+            drop_idx = min(
+                selected,
+                key=lambda idx: (
+                    0 if selected[idx][1] == "qwen" else 1,
+                    selected[idx][2],
+                ),
+            )
+        else:
+            left_idx, right_idx = conflict
+            if left_idx == right_idx:
+                drop_idx = left_idx
+            elif left_idx in selected and right_idx in selected:
+                drop_idx = weaker_anchor(left_idx, right_idx)
+            elif left_idx in selected:
+                drop_idx = left_idx
+            elif right_idx in selected:
+                drop_idx = right_idx
+            else:
+                drop_idx = min(
+                    selected,
+                    key=lambda idx: (
+                        0 if selected[idx][1] == "qwen" else 1,
+                        selected[idx][2],
+                    ),
+                )
+        selected.pop(drop_idx, None)
 
-    final = [word for word in result if word is not None]
-    if len(final) != len(tokens):
-        return [], {"ctc": 0, "qwen": 0, "interpolated": 0}
-    for left, right in zip(final, final[1:], strict=False):
-        if right.start < left.end - 1e-6:
-            return [], {
-                "ctc": sum(1 for kind in source_kind if kind == "ctc"),
-                "qwen": sum(1 for kind in source_kind if kind == "qwen"),
-                "interpolated": sum(1 for kind in source_kind if kind == "interpolated"),
-            }
-
-    return final, {
-        "ctc": sum(1 for kind in source_kind if kind == "ctc"),
-        "qwen": sum(1 for kind in source_kind if kind == "qwen"),
-        "interpolated": sum(1 for kind in source_kind if kind == "interpolated"),
+    return [], {
+        "ctc": 0,
+        "qwen": 0,
+        "interpolated": 0,
     }
 
 def _group_lyric_text(text: str, maximum_words: int = 35) -> list[str]:

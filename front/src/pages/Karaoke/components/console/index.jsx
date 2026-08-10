@@ -1,5 +1,7 @@
 import { Grid, Stack } from "../../../../theme/ui";
+import ConsoleCenter from "./center";
 import MixerPanel from "./mixer";
+import ToolsPanel from "./tools";
 
 export default function KaraokeConsole({
   autoHideEnabled,
@@ -7,19 +9,16 @@ export default function KaraokeConsole({
   ...props
 }) {
   return (
-    <Stack
-      className="karaoke-transport-area"
-      style={{ backgroundColor: "black" }}
-    >
+    <Stack className="karaoke-transport-area">
       {/* <SongStrip {...props} /> */}
-      <Grid columns={3} gap="1rem" px="1rem">
+      <Grid columns={3} gap="1rem" px="1rem" sx={{ paddingInline: "unset" }}>
         <MixerPanel {...props} />
-        {/* <ConsoleCenter {...props} />
+        <ConsoleCenter {...props} />
         <ToolsPanel
           {...props}
           autoHideEnabled={autoHideEnabled}
           onAutoHideChange={onAutoHideChange}
-        /> */}
+        />
       </Grid>
     </Stack>
   );

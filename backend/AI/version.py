@@ -1,1 +1,1 @@
-AI_BUILD_ID = "midi-v40-direct-ctc-anchor-merge-20260810"
+AI_BUILD_ID = "midi-v43-acoustic-gap-filling-20260810"
