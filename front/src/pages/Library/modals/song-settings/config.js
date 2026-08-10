@@ -1,3 +1,7 @@
+export const HALF = 6;
+export const THIRD = 4;
+export const FULL = 12;
+
 export const DIFFICULTY_OPTIONS = [
   { value: "", label: "Авто (по AI)" },
   ...["Лёгкий", "Средний", "Сложный", "Эксперт"].map((value) => ({
@@ -5,49 +9,71 @@ export const DIFFICULTY_OPTIONS = [
     label: value
   }))
 ];
-export const SONG_FIELD_ROWS = [
-  ["title", "artist"],
-  ["genre", "key_override", "tempo_override"]
-];
+
+const formField = (name, config = {}) => ({
+  name,
+  span: HALF,
+  getValue: ({ form }) => form?.[name],
+  setValue: ({ onChange }, value) => onChange(name, value),
+  ...config
+});
+
 export const SONG_FIELDS = [
-  { name: "key_override", label: "Тональность", placeholder: "напр. C#m" },
-  { name: "title", label: "Название песни", type: "text" },
-  { name: "artist", label: "Исполнитель", placeholder: "Muse" },
-  { name: "genre", label: "Жанр", placeholder: "Alternative rock" },
-  { name: "tempo_override", label: "Темп (BPM)", type: "number", min: 1 },
-  {
-    name: "difficulty_override",
-    label: "Уровень сложности",
+  ...[
+    ["artist", "Исполнитель", "Muse"],
+    ["title", "Название песни", "Название песни"]
+  ].map(([name, label, placeholder]) =>
+    formField(name, {
+      type: "text",
+      label,
+      placeholder,
+      span: HALF
+    })
+  ),
+
+  ...[
+    ["tempo_override", "Темп", "number", { min: 1, parse: "nullable-number" }],
+    ["key_override", "Тональность", "text", { placeholder: "напр. C#m" }],
+    ["genre", "Жанр", "text", { placeholder: "Alternative rock" }]
+  ].map(([name, label, type, extra]) =>
+    formField(name, {
+      type,
+      label,
+      span: THIRD,
+      ...extra
+    })
+  ),
+
+  formField("difficulty_override", {
     type: "select",
-    options: DIFFICULTY_OPTIONS
-  },
+    label: "Сложность",
+    options: DIFFICULTY_OPTIONS,
+    span: HALF
+  }),
+
   {
-    name: "video_url",
+    type: "noteRange",
+    name: "note_range",
+    label: "Диапазон нот",
+    span: HALF
+  },
+
+  formField("video_url", {
+    type: "text",
     label: "Ссылка на клип",
-    type: "url",
     placeholder: "https://example.com/video.mp4",
-    hint: "Поддерживаются YouTube-ссылки и прямые ссылки на MP4/WebM. Клип будет идти без звука и синхронно с песней."
-  },
-  { name: "show_lyrics", label: "Показывать текст", type: "toggle" },
-  { name: "show_notes", label: "Показывать ноты", type: "toggle" }
+    tooltip:
+      "Поддерживаются YouTube-ссылки и прямые ссылки на MP4/WebM. Клип будет идти без звука и синхронно с песней.",
+    span: FULL
+  })
 ];
 
-export const NOTE_RANGE_FIELDS = [
-  {
-    name: "note_range_min",
-    type: "number",
-    placeholder: "min",
-    className: "note-range-input"
-  },
-  {
-    name: "note_range_max",
-    type: "number",
-    placeholder: "max",
-    className: "note-range-input"
-  }
-];
+export const EMPTY_LYRICS = {
+  text: "",
+  data: [],
+  error: null
+};
 
-export const EMPTY_LYRICS = { text: "", data: [], error: null };
 export const LYRICS_FIELD = {
   name: "lyrics",
   label: "Текст песни",
@@ -55,15 +81,6 @@ export const LYRICS_FIELD = {
   rows: 16,
   spellCheck: false,
   className: "song-lyrics-editor",
-  hint: "Каждая строка — отдельная строка песни. Тайминги сохраняются автоматически."
+  hint:
+    "Каждая строка — отдельная строка песни. Тайминги сохраняются автоматически."
 };
-
-export const FIELD_BY_NAME = Object.fromEntries(
-  SONG_FIELDS.map((field) => [field.name, field])
-);
-
-export const SONG_FIELDS_AFTER_RANGE = [
-  "video_url",
-  "show_lyrics",
-  "show_notes"
-].map((name) => FIELD_BY_NAME[name]);
