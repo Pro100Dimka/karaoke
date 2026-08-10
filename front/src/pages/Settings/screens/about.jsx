@@ -1,7 +1,8 @@
 import { Mic } from "lucide-react";
+
 import { api } from "../../../api/client";
-import { Panel } from "../../../components/ui";
 import { usePolling } from "../../../hooks/usePolling";
+import { Card, Grid, Stack, Typography } from "../../../theme/ui";
 import { APP_INFO } from "../../../utils/config";
 
 const INFO_FIELDS = [
@@ -10,27 +11,78 @@ const INFO_FIELDS = [
   ["ai_version", "Версия AI"],
   ["data_dir", "Путь к данным"]
 ];
+
 export default function About() {
   const { data } = usePolling(api.getAbout, 10000, []);
   const about = data ?? {};
+
   return (
-    <Panel>
-      <div className="about-screen">
-        <div className="about-logo">
-          <Mic size={36} />
-        </div>
-        <h1 className="about-title">{APP_INFO.title}</h1>
-        <p className="text-secondary">{APP_INFO.description}</p>
-        <div className="about-info">
+    <Card
+      variant="animation"
+      tilt={false}
+      className="settings-screen-card"
+      cardContent={{ style: { padding: "1.5rem" } }}
+    >
+      <Stack align="center" gap={1.25}>
+        <Card
+          as="div"
+          variant="animation"
+          tilt={false}
+          sx={{ width: "4.5rem", height: "4.5rem" }}
+          cardContent={{
+            style: {
+              display: "grid",
+              placeItems: "center"
+            }
+          }}
+        >
+          <Mic size={34} />
+        </Card>
+
+        <Stack align="center" gap={0.35}>
+          <Typography variant="h2" align="center">
+            {APP_INFO.title}
+          </Typography>
+
+          <Typography variant="body2" tone="muted" align="center">
+            {APP_INFO.description}
+          </Typography>
+        </Stack>
+
+        <Grid
+          minItemWidth="min(100%, 19rem)"
+          gap="var(--space-3)"
+          sx={{ width: "100%", maxWidth: "56rem" }}
+        >
           {INFO_FIELDS.map(([key, label]) => (
-            <div key={key} className="about-info-row">
-              <span className="text-muted">{label}</span>
-              <span className="mono">{about[key] ?? "—"}</span>
-            </div>
+            <Card
+              key={key}
+              as="div"
+              variant="animation"
+              tilt={false}
+              cardContent={{ style: { padding: "1rem 1.1rem" } }}
+            >
+              <Stack gap={0.35}>
+                <Typography variant="caption" tone="muted">
+                  {label}
+                </Typography>
+
+                <Typography
+                  variant="body2"
+                  className="mono"
+                  sx={{ overflowWrap: "anywhere" }}
+                >
+                  {about[key] ?? "—"}
+                </Typography>
+              </Stack>
+            </Card>
           ))}
-        </div>
-        <p className="about-copyright text-muted">{APP_INFO.copyright}</p>
-      </div>
-    </Panel>
+        </Grid>
+
+        <Typography variant="caption" tone="muted" align="center">
+          {APP_INFO.copyright}
+        </Typography>
+      </Stack>
+    </Card>
   );
 }

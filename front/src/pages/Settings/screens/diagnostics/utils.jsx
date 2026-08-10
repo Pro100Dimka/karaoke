@@ -1,44 +1,88 @@
+import { Card, Stack, Typography } from "../../../../theme/ui";
 import { STATUS_ICONS } from "./config";
 
 export function DiagnosticCheck({ label, ok }) {
   const status = ok ? "success" : "error";
   const Icon = STATUS_ICONS[status];
+
   return (
-    <div className="diagnostics-check u-surface-card">
-      <span>{label}</span>
-      <Icon className={`diagnostics-icon ${status}`} />
-    </div>
+    <Card
+      as="div"
+      variant="animation"
+      tilt={false}
+      cardContent={{ style: { padding: "0.85rem 1rem" } }}
+    >
+      <Stack direction="row" align="center" justify="space-between" gap={0.75}>
+        <Typography variant="body2">{label}</Typography>
+        <Icon className={`diagnostics-icon ${status}`} size={18} />
+      </Stack>
+    </Card>
   );
 }
+
 export function VersionList({ components }) {
   const entries = Object.entries(components ?? {});
   if (!entries.length) return null;
+
   return (
-    <div className="diagnostics-versions u-stack-2">
-      <div className="panel-title diagnostics-versions-title">Версии</div>
+    <Stack gap={0.65}>
+      <Typography variant="h3">Версии</Typography>
+
       {entries.map(([name, version]) => (
-        <div key={name} className="diagnostics-version-row">
-          <span className="text-muted">{name}</span>
-          <span className="mono">{version ?? "—"}</span>
-        </div>
+        <Card
+          key={name}
+          as="div"
+          variant="animation"
+          tilt={false}
+          cardContent={{ style: { padding: "0.8rem 1rem" } }}
+        >
+          <Stack direction="row" align="center" justify="space-between" gap={1}>
+            <Typography variant="body2" tone="muted">
+              {name}
+            </Typography>
+            <Typography variant="body2" className="mono">
+              {version ?? "—"}
+            </Typography>
+          </Stack>
+        </Card>
       ))}
-    </div>
+    </Stack>
   );
 }
+
 export const ErrorList = ({ errors = [] }) =>
   errors.length ? (
-    errors.map((error) => <ErrorItem key={getErrorKey(error)} error={error} />)
+    <Stack gap={0.75}>
+      {errors.map((error) => (
+        <ErrorItem key={getErrorKey(error)} error={error} />
+      ))}
+    </Stack>
   ) : (
-    <p className="text-muted">Ошибок не найдено</p>
+    <Typography variant="body2" tone="muted">
+      Ошибок не найдено
+    </Typography>
   );
+
 function ErrorItem({ error }) {
   const { title, updated_at: updatedAt, error_message: message } = error;
+
   return (
-    <div className="diagnostics-error-item">
-      <div className="diagnostics-error-title">{title}</div>
-      <div className="diagnostics-error-meta text-muted">{updatedAt}</div>
-      <div className="diagnostics-error-message">{message}</div>
-    </div>
+    <Card
+      as="div"
+      variant="animation"
+      tilt={false}
+      cardContent={{ style: { padding: "0.9rem 1rem" } }}
+    >
+      <Stack gap={0.3}>
+        <Typography variant="body2">{title}</Typography>
+        <Typography variant="caption" tone="muted">
+          {updatedAt}
+        </Typography>
+        <Typography variant="body2" tone="muted">
+          {message}
+        </Typography>
+      </Stack>
+    </Card>
   );
 }
 

@@ -1,6 +1,9 @@
 import { useState } from "react";
 
-const DEFAULT_NAVIGATION = { tab: "audio", service: null };
+const DEFAULT_NAVIGATION = {
+  tab: "audio",
+  service: null
+};
 
 export default function useSettingsNavigation(initialTab = "audio") {
   const [navigation, setNavigation] = useState({
@@ -8,10 +11,31 @@ export default function useSettingsNavigation(initialTab = "audio") {
     tab: initialTab
   });
 
+  const selectTab = (tab) => {
+    setNavigation({
+      tab,
+      service: null
+    });
+  };
+
+  const openService = (service) => {
+    setNavigation((current) => ({
+      ...current,
+      service
+    }));
+  };
+
+  const closeService = () => {
+    setNavigation((current) => ({
+      ...current,
+      service: null
+    }));
+  };
+
   return {
     ...navigation,
-    selectTab: (tab) => setNavigation({ tab, service: null }),
-    openService: (service) => setNavigation({ tab: "service", service }),
-    closeService: () => setNavigation((c) => ({ ...c, service: null }))
+    selectTab,
+    openService,
+    closeService
   };
 }

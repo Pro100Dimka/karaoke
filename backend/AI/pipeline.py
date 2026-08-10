@@ -20,7 +20,9 @@ from .engines.text import (
     ASR_PIPELINE_VERSION,
     LONG_TEXT_ALIGNMENT_VERSION,
     UniformTextFallback,
+    enforce_segmented_timing_safety,
     resolve_alignment_language,
+    tokenize,
 )
 from .errors import EngineUnavailableError, ProcessingCancelledError
 from .locks import ThreadFileLock
@@ -72,6 +74,34 @@ def _bound_word_durations(words: list[Word]) -> list[Word]:
             Word(word.start, max(word.start + 0.02, end), word.text, word.confidence, word.index)
         )
     return bounded
+
+
+def _trim_supplied_text_to_aligned_words(text: str, words: list[Word]) -> str:
+    """Keep lyrics.txt text exactly representable by the timed word stream.
+
+    Plain LRCLIB can contain an outro/repetition that does not exist in this
+    recording.  If long-text alignment reaches EOF first, publish only complete
+    author lines whose tokens have corresponding timed words.
+    """
+    remaining = len(words)
+    if remaining <= 0:
+        return ""
+    lines = [line.strip() for line in str(text or "").splitlines() if line.strip()]
+    if not lines:
+        return text.strip()
+    kept: list[str] = []
+    used = 0
+    for line in lines:
+        count = len(tokenize(line))
+        if count <= 0:
+            continue
+        if used + count > remaining:
+            break
+        kept.append(line)
+        used += count
+        if used == remaining:
+            break
+    return "\n".join(kept).strip() if kept else text.strip()
 
 
 def _lyrics_console(*parts: object) -> None:
@@ -539,7 +569,10 @@ class KaraokePipeline:
                 words = _bound_word_durations(
                     [Word(**item) for item in raw.get("words", [])]
                 )
-                self._publish_text_alignment(output, lyrics_txt, words_path, supplied, words)
+                cached_text = (
+                    supplied if supplied_segments else _trim_supplied_text_to_aligned_words(supplied, words)
+                )
+                self._publish_text_alignment(output, lyrics_txt, words_path, cached_text, words)
                 cache.commit("alignment", alignment_key, alignment_outputs)
                 reports.append(StageReport("alignment", 0, True, "cached"))
             else:
@@ -560,8 +593,13 @@ class KaraokePipeline:
                     warnings,
                 )
                 words = _bound_word_durations(words)
+                if supplied_segments:
+                    words = enforce_segmented_timing_safety(words, supplied_segments, song_duration)
+                    publish_text = supplied
+                else:
+                    publish_text = _trim_supplied_text_to_aligned_words(supplied, words)
                 validate_timeline(words, "words")
-                self._publish_text_alignment(output, lyrics_txt, words_path, supplied, words)
+                self._publish_text_alignment(output, lyrics_txt, words_path, publish_text, words)
                 cache.commit("alignment", alignment_key, alignment_outputs)
         else:
             transcription_key = cache.key(

@@ -141,7 +141,7 @@ def _words_from_items(items) -> list[Word]:
 
 
 ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v14-duration-guard"
-LONG_TEXT_ALIGNMENT_VERSION = "v24-production-soft-lrc-acoustic-windows"
+LONG_TEXT_ALIGNMENT_VERSION = "v25-production-line-anchor-fallback"
 
 
 def _normalize_singing_audio(y: np.ndarray) -> np.ndarray:
@@ -586,6 +586,99 @@ def _expected_sung_phrase_duration(tokens: list[str]) -> float:
 def _lrc_window_is_plausible(tokens: list[str], span: float) -> bool:
     return float(span) + 1e-6 >= _minimum_sung_phrase_duration(tokens)
 
+def enforce_segmented_timing_safety(
+    words: list[Word],
+    segments: list[tuple[float, float, str]] | tuple[tuple[float, float, str], ...],
+    duration_sec: float,
+) -> list[Word]:
+    """Final production invariant for provider-timed lyrics.
+
+    This runs independently of Qwen's internal decision path.  It groups the
+    returned words back into the exact provider lyric lines and refuses to
+    publish a multi-word line whose total duration is physically impossible.
+    Corrupt *end* anchors are ignored; the line start is retained and a safe
+    sung duration is reserved.  This is intentionally deterministic so a bad
+    acoustic island can never recreate a 20 ms-word train.
+    """
+    if not words or not segments:
+        return words
+
+    output: list[Word] = []
+    offset = 0
+    cursor = 0.0
+    duration_sec = max(0.0, float(duration_sec))
+
+    for segment in sorted(segments, key=lambda item: (float(item[0]), float(item[1]))):
+        anchor_start, _anchor_end, text = segment
+        tokens = tokenize(text)
+        if not tokens:
+            continue
+        count = len(tokens)
+        group = words[offset : offset + count]
+        offset += count
+        if len(group) != count:
+            break
+
+        token_match = all(
+            tokenize(word.text) and tokenize(word.text)[0].casefold() == token.casefold()
+            for word, token in zip(group, tokens, strict=True)
+        )
+        line_span = max(0.0, float(group[-1].end) - float(group[0].start))
+        minimum = _minimum_sung_phrase_duration(tokens)
+        has_micro_train = sum((word.end - word.start) <= 0.025 for word in group) > max(1, count // 4)
+        monotonic = all(
+            right.start >= left.end - 0.02
+            for left, right in zip(group, group[1:], strict=False)
+        )
+        valid = token_match and monotonic and line_span + 1e-6 >= minimum and not has_micro_train
+
+        if valid:
+            safe_group = []
+            for word in group:
+                start = max(cursor, float(word.start))
+                end = min(duration_sec, float(word.end)) if duration_sec > 0 else float(word.end)
+                if end <= start + 0.019:
+                    valid = False
+                    break
+                safe_group.append(Word(start, end, word.text, word.confidence, 0))
+            if valid:
+                for word in safe_group:
+                    output.append(Word(word.start, word.end, word.text, word.confidence, len(output)))
+                cursor = output[-1].end
+                continue
+
+        # Broken line: keep its start anchor, but never its impossible end.
+        start = max(cursor, max(0.0, float(anchor_start)))
+        expected = _expected_sung_phrase_duration(tokens)
+        target = max(minimum * 1.35, expected * 1.12)
+        if duration_sec > 0:
+            target = min(target, max(0.08, duration_sec - start))
+        rebuilt = _proportional_words(tokens, max(0.08, target))
+        for word in rebuilt:
+            end = start + word.end
+            if duration_sec > 0:
+                end = min(duration_sec, end)
+            output.append(
+                Word(start + word.start, max(start + word.start + 0.02, end), word.text, 0.03, len(output))
+            )
+        if rebuilt:
+            cursor = output[-1].end
+
+    # Preserve any tail only when grouping could not consume it.  This keeps the
+    # function safe for non-provider/mixed callers while the normal production
+    # path consumes every word exactly.
+    if offset < len(words):
+        for word in words[offset:]:
+            start = max(cursor, float(word.start))
+            end = max(start + 0.02, float(word.end))
+            if duration_sec > 0:
+                end = min(duration_sec, end)
+            if end > start:
+                output.append(Word(start, end, word.text, word.confidence, len(output)))
+                cursor = end
+    return output or words
+
+
 def _timed_segment_fallback_words(tokens: list[str], span: float) -> list[Word]:
     """Build safe word timings inside an authoritative LRC line window.
 
@@ -603,6 +696,50 @@ def _timed_segment_fallback_words(tokens: list[str], span: float) -> list[Word]:
     # instrumental gap between two authoritative LRC line starts.
     usable = min(span, max(0.55, min(expected * 1.35, expected + 1.15)))
     return _proportional_words(tokens, usable)
+
+def _long_text_line_fallback(
+    tokens: list[str],
+    search_span: float,
+    *,
+    candidate_words: list[Word] | None = None,
+    minimum_start: float = 0.0,
+    audio: np.ndarray | None = None,
+    sample_rate: int | None = None,
+) -> list[Word]:
+    """Deterministic safety fallback for untimed/plain lyric lines.
+
+    Qwen often still knows *where* a line begins even when all of its word
+    boundaries collapse.  Preserve that useful start hint, but never preserve
+    the collapsed durations.  If there is no usable candidate start, use the
+    first vocal-activity region after the monotonic cursor.
+    """
+    if not tokens:
+        return []
+    search_span = max(0.08, float(search_span))
+    minimum_start = max(0.0, min(search_span, float(minimum_start)))
+
+    start = minimum_start
+    if candidate_words:
+        candidate_start = float(candidate_words[0].start)
+        if minimum_start - 0.20 <= candidate_start <= search_span - 0.05:
+            start = max(minimum_start, candidate_start)
+    elif audio is not None and sample_rate:
+        regions = _vocal_activity_regions(audio, int(sample_rate))
+        for region_start, region_end in regions:
+            if region_end >= minimum_start + 0.02:
+                start = max(minimum_start, region_start)
+                break
+
+    minimum = _minimum_sung_phrase_duration(tokens)
+    expected = _expected_sung_phrase_duration(tokens)
+    target = max(minimum * 1.35, expected * 1.12)
+    available = max(0.08, search_span - start)
+    span = min(available, target)
+    return [
+        Word(start + word.start, start + word.end, word.text, 0.03, word.index)
+        for word in _proportional_words(tokens, span)
+    ]
+
 
 def _speech_focus_variant(audio: np.ndarray) -> np.ndarray:
     """Cheap consonant-focused retry input for uncertain singing phrases."""
@@ -1201,16 +1338,24 @@ class Qwen3ForcedAligner(Aligner):
                         search_start = anchor_start
                         search_end = anchor_end
                     else:
-                        # Broken provider timing is only a hint. Acoustic fallback
-                        # operates on the expanded search audio and is therefore
-                        # able to continue past an impossible next timestamp.
-                        local_words = _activity_fallback_words(
-                            tokens,
-                            segment_audio,
-                            sample_rate,
-                            candidate or None,
-                            max(0.0, cursor - search_start),
+                        # IMPORTANT: do not choose a short energy island here.  A
+                        # corrupt next-LRC timestamp often sits inside the same sung
+                        # phrase.  Energy-only fallback can then rediscover exactly
+                        # that tiny island and compress the whole line again.
+                        #
+                        # The line *start* is still our strongest provider hint.
+                        # Reserve a physically plausible sung duration from that
+                        # start.  Qwen remains the primary path above; this branch is
+                        # only the deterministic production safety net.
+                        fallback_start = max(cursor, anchor_start)
+                        room = max(0.08, search_end - fallback_start)
+                        target = max(
+                            _minimum_sung_phrase_duration(tokens) * 1.35,
+                            expected * 1.12,
                         )
+                        safe_span = min(room, target)
+                        local_words = _proportional_words(tokens, safe_span)
+                        search_start = fallback_start
 
                 # Validate the whole line atomically. Do not clamp every word to
                 # anchor_end: that was exactly how trains of 20 ms words appeared.
@@ -1233,9 +1378,15 @@ class Qwen3ForcedAligner(Aligner):
                     # Last-resort timing stays inside the widened acoustic window
                     # and starts at/after the monotonic cursor.  It is intentionally
                     # low-confidence, but never physically impossible.
-                    fallback_start = max(cursor, anchor_start if plausible_anchor else search_start)
+                    fallback_start = max(cursor, anchor_start)
                     available = max(0.08, search_end - fallback_start)
-                    safe_span = min(available, max(_minimum_sung_phrase_duration(tokens), expected * 1.25))
+                    safe_span = min(
+                        available,
+                        max(
+                            _minimum_sung_phrase_duration(tokens) * 1.35,
+                            expected * 1.12,
+                        ),
+                    )
                     line_words = [
                         Word(
                             fallback_start + word.start,
@@ -1254,20 +1405,15 @@ class Qwen3ForcedAligner(Aligner):
 
         if not output:
             raise InvalidArtifactError("Segmented forced aligner returned no timed words")
-        return output
+        return enforce_segmented_timing_safety(output, ordered, duration_sec)
 
     def align_long_text(self, audio, text, language):
-        """Align trusted author lines sequentially with acoustic look-ahead.
+        """Align untimed/plain lyric lines sequentially without micro-word collapse.
 
-        Long trusted lyrics used to be converted to many overlapping coarse
-        windows.  ``align_segments`` then enforced one global cursor across
-        those overlaps, so one rejected line could push every following line
-        to the end of its window and collapse a whole chorus into 20 ms words.
-
-        Keep the source line breaks, but locate every next line *after the
-        actually aligned previous line*.  A generous look-ahead lets the
-        forced aligner skip instrumental gaps while the monotonic cursor keeps
-        repeated chorus lines in the correct occurrence.
+        This is the real production path when LRCLIB has plainLyrics but no
+        usable syncedLyrics.  Every line is handled atomically: a bad Qwen
+        result may contribute a *start location*, but never collapsed word
+        durations.  No word is clamped individually against the global cursor.
         """
         groups = _group_lyric_text(text)
         if len(groups) <= 1:
@@ -1287,17 +1433,10 @@ class Qwen3ForcedAligner(Aligner):
             root = Path(temp_dir)
             for line_index, line in enumerate(groups):
                 tokens = tokenize(line)
-                if not tokens:
+                if not tokens or cursor >= duration_sec - 0.08:
                     continue
 
-                # Sung words are substantially slower than speech.  This value
-                # is not used as a timing result; it only sizes the search
-                # horizon.  The minimum 16 s horizon also crosses normal
-                # instrumental punctuation between verse lines.
-                expected = min(
-                    8.0,
-                    max(1.5, 0.42 * len(tokens) + 0.035 * sum(len(token) for token in tokens)),
-                )
+                expected = _expected_sung_phrase_duration(tokens)
                 search_start = max(0.0, cursor - 0.65)
                 search_span = min(24.0, max(16.0, expected * 3.2 + 5.0))
                 search_end = min(duration_sec, search_start + search_span)
@@ -1309,44 +1448,92 @@ class Qwen3ForcedAligner(Aligner):
                 line_audio = source[left:right]
                 path = root / f"line-{line_index:03d}.wav"
                 sf.write(path, line_audio, sample_rate, subtype="PCM_16")
+                local_cursor = max(0.0, cursor - search_start)
 
+                candidate: list[Word] = []
                 local_words: list[Word] = []
                 try:
-                    local_words = self.align(path, line, language)
-                    candidate_start = search_start + local_words[0].start if local_words else 0.0
-                    candidate_end = search_start + local_words[-1].end if local_words else 0.0
-                    invalid = (
-                        _pathological_alignment(local_words, search_end - search_start)
-                        or candidate_start < cursor - 0.20
-                        or candidate_end <= cursor + 0.04
-                        or candidate_end > search_end + 0.10
+                    candidate = self.align(path, line, language)
+                    candidate_start = search_start + candidate[0].start if candidate else 0.0
+                    candidate_end = search_start + candidate[-1].end if candidate else 0.0
+                    candidate_span = candidate[-1].end - candidate[0].start if candidate else 0.0
+                    valid = bool(candidate) and (
+                        not _pathological_alignment(candidate, search_end - search_start)
+                        and candidate_start >= cursor - 0.20
+                        and candidate_end > cursor + 0.04
+                        and candidate_end <= search_end + 0.10
+                        and candidate_span >= _minimum_sung_phrase_duration(tokens)
+                        and len(candidate) == len(tokens)
                     )
-                    if invalid:
-                        local_words = _activity_fallback_words(
+                    if valid:
+                        local_words = candidate
+                    else:
+                        local_words = _long_text_line_fallback(
                             tokens,
-                            line_audio,
-                            sample_rate,
-                            local_words,
-                            max(0.0, cursor - search_start),
+                            search_end - search_start,
+                            candidate_words=candidate or None,
+                            minimum_start=local_cursor,
+                            audio=line_audio,
+                            sample_rate=sample_rate,
                         )
                 except (InvalidArtifactError, RuntimeError, ValueError):
-                    local_words = _activity_fallback_words(
+                    local_words = _long_text_line_fallback(
                         tokens,
-                        line_audio,
-                        sample_rate,
-                        minimum_start=max(0.0, cursor - search_start),
+                        search_end - search_start,
+                        minimum_start=local_cursor,
+                        audio=line_audio,
+                        sample_rate=sample_rate,
                     )
 
+                # Validate and transform the complete line atomically.  Never
+                # clamp each word with max(cursor, ...): that was the mechanism
+                # that recreated 20 ms trains after an earlier timing error.
+                line_words: list[Word] = []
                 for word in local_words:
-                    word_start = max(cursor, search_start + word.start)
-                    word_end = max(word_start + 0.02, search_start + word.end)
-                    word_end = min(duration_sec, word_end)
-                    if word_end <= word_start:
-                        continue
-                    output.append(
-                        Word(word_start, word_end, word.text, word.confidence, len(output))
+                    start = search_start + float(word.start)
+                    end = search_start + float(word.end)
+                    line_words.append(Word(start, end, word.text, word.confidence, 0))
+
+                line_span = line_words[-1].end - line_words[0].start if line_words else 0.0
+                invalid_line = (
+                    len(line_words) != len(tokens)
+                    or line_span < _minimum_sung_phrase_duration(tokens)
+                    or (line_words and line_words[0].start < cursor - 0.20)
+                    or any(
+                        right.start < left.end - 0.02
+                        for left, right in zip(line_words, line_words[1:], strict=False)
                     )
-                    cursor = word_end
+                )
+                if invalid_line:
+                    local_words = _long_text_line_fallback(
+                        tokens,
+                        search_end - search_start,
+                        candidate_words=candidate or None,
+                        minimum_start=local_cursor,
+                        audio=line_audio,
+                        sample_rate=sample_rate,
+                    )
+                    line_words = [
+                        Word(search_start + word.start, search_start + word.end, word.text, 0.03, 0)
+                        for word in local_words
+                    ]
+
+                safe_line: list[Word] = []
+                for word in line_words:
+                    word_start = max(cursor, float(word.start)) if not safe_line else max(safe_line[-1].end, float(word.start))
+                    word_end = min(duration_sec, float(word.end))
+                    if word_end <= word_start + 0.019:
+                        safe_line = []
+                        break
+                    safe_line.append(Word(word_start, word_end, word.text, word.confidence, 0))
+
+                # If the line cannot physically fit before EOF, stop instead of
+                # publishing a partial/micro-timed lyric tail.
+                if len(safe_line) != len(tokens):
+                    break
+                for word in safe_line:
+                    output.append(Word(word.start, word.end, word.text, word.confidence, len(output)))
+                cursor = safe_line[-1].end
 
         if not output:
             raise InvalidArtifactError("Long-text forced aligner returned no timed words")

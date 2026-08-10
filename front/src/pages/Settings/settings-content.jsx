@@ -1,14 +1,17 @@
 import { ArrowLeft } from "lucide-react";
 
 import { useRadio } from "../../contexts/radio";
-import { Button, ConfigForm, Stack } from "../../theme/ui";
+import {
+  Button,
+  Card,
+  ConfigForm,
+  Grid,
+  Stack,
+  Typography
+} from "../../theme/ui";
 
 import useAudioSettingsSource from "./audio-source";
-import {
-  SCREEN_BY_ID,
-  SERVICE_SCREENS,
-  SETTINGS
-} from "./config";
+import { SCREEN_BY_ID, SERVICE_SCREENS, SETTINGS } from "./config";
 import { SETTINGS_RENDERERS } from "./renderers";
 
 function ServiceContent({ service, onOpen, onClose }) {
@@ -16,8 +19,8 @@ function ServiceContent({ service, onOpen, onClose }) {
 
   if (ServiceScreen) {
     return (
-      <Stack className="settings-service-screen" gap={2}>
-        <Button variant="ghost" onClick={onClose}>
+      <Stack className="settings-service-screen" gap={1}>
+        <Button variant="ghost" onClick={onClose} sx={{ alignSelf: "start" }}>
           <ArrowLeft size={16} />
           Назад
         </Button>
@@ -28,21 +31,54 @@ function ServiceContent({ service, onOpen, onClose }) {
   }
 
   return (
-    <Stack className="settings-service-grid u-grid-2" gap={2}>
+    <Grid
+      columns={3}
+      gap="var(--space-3)"
+      sx={{ padding: "0 1rem", paddingTop: "1rem" }}
+    >
       {SERVICE_SCREENS.map(({ id, title, text }) => (
-        <Button
+        <Card
           key={id}
+          as="button"
+          type="button"
+          variant="animation"
+          tilt={false}
+          interactive
           className="settings-service-link"
           onClick={() => onOpen(id)}
+          sx={{
+            width: "100%",
+            minWidth: 0,
+            padding: 0,
+            textAlign: "left",
+            cursor: "pointer"
+          }}
+          cardContent={{
+            style: { padding: "1rem 1.1rem", height: "100%" }
+          }}
         >
-          <Stack align="start" gap={1}>
-            <strong>{title}</strong>
-            <span>{text}</span>
-            <b>Открыть →</b>
+          <Stack
+            align="start"
+            gap={0.35}
+            justify="space-between"
+            sx={{ height: "100%" }}
+          >
+            <Typography variant="body1" sx={{ fontWeight: 800 }}>
+              {title}
+            </Typography>
+            <Typography variant="body2" tone="muted">
+              {text}
+            </Typography>
+            <Typography
+              variant="caption"
+              sx={{ color: "var(--ui-primary-hover)" }}
+            >
+              Открыть →
+            </Typography>
           </Stack>
-        </Button>
+        </Card>
       ))}
-    </Stack>
+    </Grid>
   );
 }
 
@@ -73,7 +109,7 @@ export default function SettingsContent({
   if (!section) return null;
 
   return (
-    <Stack gap={3}>
+    <Stack gap={1}>
       <ConfigForm
         fields={section.fields}
         className={section.className}

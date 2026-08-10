@@ -1,6 +1,6 @@
 import { Trash2 } from "lucide-react";
-import Dropdown from "../../../../components/fields/Dropdown";
-import Button from "../../../../components/fields/button";
+
+import { Button, Card, Grid, Select, Stack, Typography } from "../../../../theme/ui";
 import { getErrorMessage } from "../../../../utils/errors";
 
 export async function runMemoryAction({ request, getMessage, notify }) {
@@ -15,51 +15,86 @@ export async function runMemoryAction({ request, getMessage, notify }) {
 }
 
 export function MemoryStats({ size, free }) {
+  const items = [
+    ["Всего занято", size?.total_human ?? "—"],
+    ...(free
+      ? [["Свободно на диске", `${free.free_human} из ${free.total_human}`]]
+      : [])
+  ];
+
   return (
-    <div className="memory-stats">
-      <p className="memory-stats-total">
-        Всего занято: <strong>{size.total_human}</strong>
-      </p>
-      {free && (
-        <p className="memory-stats-free text-muted">
-          Свободно на диске: {free.free_human} из {free.total_human}
-        </p>
-      )}
-    </div>
+    <Grid minItemWidth="min(100%, 14rem)" gap="var(--space-3)">
+      {items.map(([label, value]) => (
+        <Card
+          key={label}
+          as="div"
+          variant="animation"
+          tilt={false}
+          cardContent={{ style: { padding: "1rem" } }}
+        >
+          <Stack gap={0.35}>
+            <Typography variant="caption" tone="muted">
+              {label}
+            </Typography>
+            <Typography variant="h3">{value}</Typography>
+          </Stack>
+        </Card>
+      ))}
+    </Grid>
   );
 }
 
 export function MemoryActions({ actions, notify }) {
   return (
-    <div className="memory-actions">
-      {actions.map(([id, label, icon, variant, request, getMessage]) => (
-        <Button
-          key={id}
-          icon={icon}
-          iconSize={14}
-          variant={variant}
-          onClick={() => runMemoryAction({ request, getMessage, notify })}
-        >
-          {label}
-        </Button>
-      ))}
-    </div>
+    <Stack direction="row" gap={0.75} wrap>
+      {actions.map(([id, label, icon, variant, request, getMessage]) => {
+        const Icon = icon;
+
+        return (
+          <Button
+            key={id}
+            variant={variant === "ghost" ? "outline" : "solid"}
+            tone="primary"
+            onClick={() => runMemoryAction({ request, getMessage, notify })}
+          >
+            {Icon && <Icon size={15} />}
+            {label}
+          </Button>
+        );
+      })}
+    </Stack>
   );
 }
 
 export function OptimizeSong({ value, options, onChange, onOptimize }) {
   return (
-    <div className="memory-actions memory-optimize">
-      <Dropdown value={value} options={options} onChange={onChange} />
-      <Button
-        icon={Trash2}
-        iconSize={14}
-        variant="ghost"
-        disabled={!value}
-        onClick={onOptimize}
+    <Card
+      as="div"
+      variant="animation"
+      tilt={false}
+      cardContent={{ style: { padding: "1rem" } }}
+    >
+      <Grid
+        columns={2}
+        gap="var(--space-3)"
+        sx={{ alignItems: "end" }}
       >
-        Оптимизировать
-      </Button>
-    </div>
+        <Select
+          label="Оптимизировать песню"
+          value={value}
+          options={options}
+          onChange={onChange}
+        />
+
+        <Button
+          variant="outline"
+          disabled={!value}
+          onClick={onOptimize}
+        >
+          <Trash2 size={15} />
+          Оптимизировать
+        </Button>
+      </Grid>
+    </Card>
   );
 }

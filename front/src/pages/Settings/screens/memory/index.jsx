@@ -1,8 +1,9 @@
 import { useState } from "react";
+
 import { api } from "../../../../api/client";
-import { Panel } from "../../../../components/ui";
 import { useAppDialog } from "../../../../contexts/AppDialog";
 import { usePolling } from "../../../../hooks/usePolling";
+import { Card, Stack, Typography } from "../../../../theme/ui";
 import { getErrorMessage } from "../../../../utils/errors";
 import { buildOptimizeOptions, MEMORY_ACTIONS } from "./config";
 import MemoryBreakdown from "./memory-breakdown";
@@ -19,17 +20,22 @@ export default function MemoryManager() {
   const { data: free } = usePolling(api.getFreeSpace, 10000, []);
   const { data: songs } = usePolling(api.listSongs, 8000, []);
   const [optimizeTarget, setOptimizeTarget] = useState("");
+
   const optimizeOptions = buildOptimizeOptions(songs ?? []);
+
   const handleOptimize = async () => {
     if (!optimizeTarget) return;
+
     const success = await runMemoryAction({
       request: () => api.optimizeSong(optimizeTarget),
       getMessage: ({ freed_human: freedHuman }) =>
         `Освобождено: ${freedHuman ?? "—"}`,
       notify
     });
+
     if (success) setOptimizeTarget("");
   };
+
   const sections = [
     ["breakdown", MemoryBreakdown, { breakdown: size?.breakdown }],
     ["stats", MemoryStats, { size, free }],
@@ -45,13 +51,28 @@ export default function MemoryManager() {
       }
     ]
   ];
+
   return (
-    <Panel title="Управление памятью">
-      {error && <p className="field-error">{getErrorMessage(error)}</p>}
-      {size &&
-        sections.map(([id, Component, props]) => (
-          <Component key={id} {...props} />
-        ))}
-    </Panel>
+    <Card
+      variant="animation"
+      tilt={false}
+      className="settings-screen-card"
+      cardContent={{ style: { padding: "1.25rem" } }}
+    >
+      <Stack gap={1}>
+        <Typography variant="h3">Управление памятью</Typography>
+
+        {error && (
+          <Typography variant="body2" sx={{ color: "var(--ui-danger)" }}>
+            {getErrorMessage(error)}
+          </Typography>
+        )}
+
+        {size &&
+          sections.map(([id, Component, props]) => (
+            <Component key={id} {...props} />
+          ))}
+      </Stack>
+    </Card>
   );
 }

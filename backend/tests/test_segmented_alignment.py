@@ -298,3 +298,61 @@ def test_production_fallback_for_corrupt_lrc_boundary_has_physical_duration(monk
     assert words[-1].end - words[0].start >= 1.0
     assert words[-1].end > 24.23
     assert all(word.end - word.start > 0.025 for word in words)
+
+
+def test_real_tritia_failure_shape_does_not_recollapse_to_first_energy_island(monkeypatch):
+    """Exact v4 production shape: bad 23.79->24.23 line + short local vocal island."""
+    sample_rate = 16_000
+    audio = np.zeros(sample_rate * 40, dtype=np.float32)
+    # This short island mirrors the real separated vocal around the broken anchor.
+    audio[int(23.56 * sample_rate):int(24.60 * sample_rate)] = 0.8
+    # Later phrase activity must not matter to the corrupt-line fallback.
+    audio[int(31.98 * sample_rate):int(35.80 * sample_rate)] = 0.8
+    monkeypatch.setattr(text_engine, "load_mono", lambda _audio, _sample_rate: (audio, sample_rate))
+    aligner = Qwen3ForcedAligner("unused")
+
+    def collapsed(_path, phrase, _language):
+        # What the failing production aligner effectively produced: six words
+        # squeezed into the bad provider interval.
+        tokens = phrase.split()
+        return [
+            Word(index * 0.02, index * 0.02 + 0.02, token, 0.05, index)
+            for index, token in enumerate(tokens)
+        ]
+
+    monkeypatch.setattr(aligner, "align", collapsed)
+    words = aligner.align_segments(
+        "song.wav",
+        [(23.79, 24.23, "Пропал без вести в японских лагерях")],
+        "Russian",
+    )
+
+    assert words[0].start == pytest.approx(23.79)
+    assert words[-1].end >= 26.0
+    assert words[-1].end - words[0].start >= 2.5
+    assert not any(word.end - word.start <= 0.025 for word in words)
+
+
+def test_long_text_collapsed_qwen_line_uses_candidate_start_but_not_candidate_duration(monkeypatch):
+    sample_rate = 16_000
+    audio = np.zeros(sample_rate * 50, dtype=np.float32)
+    monkeypatch.setattr(text_engine, "load_mono", lambda _audio, _sample_rate: (audio, sample_rate))
+    aligner = Qwen3ForcedAligner("unused")
+
+    calls = {"n": 0}
+    def collapsed(_path, phrase, _language):
+        calls["n"] += 1
+        tokens = phrase.split()
+        base = 3.0 if calls["n"] == 1 else 1.0
+        return [Word(base + i * 0.02, base + i * 0.02 + 0.02, t, 0.05, i) for i, t in enumerate(tokens)]
+
+    monkeypatch.setattr(aligner, "align", collapsed)
+    words = aligner.align_long_text(
+        "song.wav",
+        "Пропал без вести в японских лагерях\nСледующая строка песни",
+        "Russian",
+    )
+    first = words[:6]
+    assert first[0].start == pytest.approx(3.0)
+    assert first[-1].end - first[0].start >= 2.5
+    assert not any(w.end - w.start <= 0.025 for w in first)
