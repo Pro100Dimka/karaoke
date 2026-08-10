@@ -1,56 +1,129 @@
 @layer ui.components {
-  .ui-tooltip-anchor {
-    position: relative;
+  .ui-tooltip-trigger {
     display: inline-flex;
   }
 
   .ui-tooltip {
-    position: absolute;
-    z-index: var(--z-index-tooltip);
+    position: fixed;
+    z-index: 999999;
+
     width: max-content;
     max-width: 260px;
-    padding: 6px 8px;
+
+    padding: 0.45rem 0.6rem;
+
     border: 1px solid var(--overlay-border);
     border-radius: var(--shape-sm);
+
     background: var(--overlay-bg);
     color: var(--overlay-fg);
+
     box-shadow: var(--shadows-2);
+
     font-size: var(--typography-caption-size);
-    line-height: 1.3;
+    font-weight: 500;
+    line-height: 1.35;
+
     pointer-events: none;
-    animation: ui-tooltip-in var(--motion-duration-fast) var(--motion-easing-enter);
   }
 
-  .ui-tooltip-anchor[data-placement="top"] > .ui-tooltip {
+  /* Верх */
+
+  .ui-tooltip[data-placement="top"] {
+    transform: translate(-50%, -100%);
+  }
+
+  .ui-tooltip[data-placement="top"]::after {
+    content: "";
+
+    position: absolute;
+
+    top: 100%;
     left: 50%;
-    bottom: calc(100% + 8px);
+
+    width: 8px;
+    height: 8px;
+
+    background: var(--overlay-bg);
+
+    border-right: 1px solid var(--overlay-border);
+    border-bottom: 1px solid var(--overlay-border);
+
+    transform: translate(-50%, -50%) rotate(45deg);
+  }
+
+  /* Низ */
+
+  .ui-tooltip[data-placement="bottom"] {
     transform: translateX(-50%);
   }
 
-  .ui-tooltip-anchor[data-placement="bottom"] > .ui-tooltip {
+  .ui-tooltip[data-placement="bottom"]::after {
+    content: "";
+
+    position: absolute;
+
+    bottom: 100%;
     left: 50%;
-    top: calc(100% + 8px);
-    transform: translateX(-50%);
+
+    width: 8px;
+    height: 8px;
+
+    background: var(--overlay-bg);
+
+    border-left: 1px solid var(--overlay-border);
+    border-top: 1px solid var(--overlay-border);
+
+    transform: translate(-50%, 50%) rotate(45deg);
   }
 
-  .ui-tooltip-anchor[data-placement="left"] > .ui-tooltip {
-    right: calc(100% + 8px);
+  /* Слева */
+
+  .ui-tooltip[data-placement="left"] {
+    transform: translate(-100%, -50%);
+  }
+
+  .ui-tooltip[data-placement="left"]::after {
+    content: "";
+
+    position: absolute;
+
     top: 50%;
+    left: 100%;
+
+    width: 8px;
+    height: 8px;
+
+    background: var(--overlay-bg);
+
+    border-right: 1px solid var(--overlay-border);
+    border-top: 1px solid var(--overlay-border);
+
+    transform: translate(-50%, -50%) rotate(45deg);
+  }
+
+  /* Справа */
+
+  .ui-tooltip[data-placement="right"] {
     transform: translateY(-50%);
   }
 
-  .ui-tooltip-anchor[data-placement="right"] > .ui-tooltip {
-    left: calc(100% + 8px);
+  .ui-tooltip[data-placement="right"]::after {
+    content: "";
+
+    position: absolute;
+
     top: 50%;
-    transform: translateY(-50%);
-  }
+    right: 100%;
 
-  @keyframes ui-tooltip-in {
-    from { opacity: 0; scale: .96; }
-    to { opacity: 1; scale: 1; }
-  }
+    width: 8px;
+    height: 8px;
 
-  @media (prefers-reduced-motion: reduce) {
-    .ui-tooltip { animation: none; }
+    background: var(--overlay-bg);
+
+    border-left: 1px solid var(--overlay-border);
+    border-bottom: 1px solid var(--overlay-border);
+
+    transform: translate(50%, -50%) rotate(45deg);
   }
 }

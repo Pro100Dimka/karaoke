@@ -42,6 +42,7 @@ from .profiler import environment_info
 from .quality import evaluate_quality
 from .syllables import SYLLABLE_ALIGNER_VERSION, align_syllables
 from .utils.io import read_json, write_json_atomic, write_text_atomic
+from .version import AI_BUILD_ID
 from .validators import (
     validate_audio,
     validate_derivation_json,
@@ -140,7 +141,7 @@ class PipelineResult:
 
 
 class KaraokePipeline:
-    VERSION = "2026.36"
+    VERSION = f"2026.37-{AI_BUILD_ID}"
 
     def __init__(
         self,
@@ -458,6 +459,7 @@ class KaraokePipeline:
                 "fmin": self.config.fmin_hz,
                 "fmax": self.config.fmax_hz,
                 "postprocessor": PITCH_STABILIZER_VERSION,
+                "pitch_post_code": cache.optional_file_hash(Path(__file__).with_name("pitch_post.py")),
             },
         )
         pitch_outputs = (
@@ -627,6 +629,9 @@ class KaraokePipeline:
                 "split": self.config.split_note_semitones,
                 "gap": self.config.max_gap_sec,
                 "decoder": NOTE_DECODER_VERSION,
+                "decoder_code": cache.optional_file_hash(Path(__file__).with_name("notes.py")),
+                "pipeline_code": cache.optional_file_hash(Path(__file__)),
+                "build": AI_BUILD_ID,
                 "syllable_aligner": SYLLABLE_ALIGNER_VERSION,
             },
         )
@@ -656,6 +661,8 @@ class KaraokePipeline:
                 split_semitones=self.config.split_note_semitones,
                 max_gap=self.config.max_gap_sec,
                 min_confidence=self.config.min_voiced_confidence,
+                words=words,
+                audio=vocals,
             )
             game_notes = build_game_notes(vocal_notes)
             validate_timeline(words, "words")
@@ -723,6 +730,7 @@ class KaraokePipeline:
                 "bpm": round(bpm, 6),
                 "key": music_analysis.get("key"),
                 "tempo": tempo_key,
+                "build": AI_BUILD_ID,
             },
         )
         if self._cache_hit(
@@ -744,6 +752,8 @@ class KaraokePipeline:
                     "duration": song_duration,
                     "bpm": bpm,
                     "key": music_analysis.get("key"),
+                    "ai_build_id": AI_BUILD_ID,
+                    "note_decoder_version": NOTE_DECODER_VERSION,
                     "words": [to_dict(word) for word in words],
                     "syllables": [to_dict(item) for item in syllables],
                     "notes": [to_dict(item) for item in game_notes],
@@ -763,6 +773,13 @@ class KaraokePipeline:
         write_json_atomic(
             diagnostics_path,
             {
+                "build": {
+                    "ai_build_id": AI_BUILD_ID,
+                    "pipeline_version": self.VERSION,
+                    "note_decoder_version": NOTE_DECODER_VERSION,
+                    "pitch_stabilizer_version": PITCH_STABILIZER_VERSION,
+                    "pipeline_file": str(Path(__file__).resolve()),
+                },
                 "environment": environment_info(),
                 "quality": to_dict(quality),
                 "data_flow": {

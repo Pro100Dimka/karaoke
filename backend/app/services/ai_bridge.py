@@ -37,6 +37,8 @@ def process_song(
     language: str | None = None,
     lyrics_path: str | Path | None = None,
     title: str | None = None,
+    bpm_override: float | None = None,
+    key_override: str | None = None,
     progress: ProgressCallback | None = None,
     cancelled: CancelCallback | None = None,
 ):
@@ -47,6 +49,8 @@ def process_song(
         language=language,
         lyrics_path=lyrics_path,
         title=title,
+        bpm_override=bpm_override,
+        key_override=key_override,
         progress=progress,
         cancelled=cancelled,
     )

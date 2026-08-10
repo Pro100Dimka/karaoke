@@ -20,6 +20,11 @@ from typing import TextIO, cast
 
 import config
 import models
+from AI.cache import StageCache
+from AI.notes import NOTE_DECODER_VERSION
+from AI.pipeline import KaraokePipeline
+from AI.pitch_post import PITCH_STABILIZER_VERSION
+from AI.version import AI_BUILD_ID
 from app import repositories
 from app.services import ai_bridge, app_settings_service, cache_service, song_service
 from app.services.db_utils import commit
@@ -485,6 +490,37 @@ def _load_job_paths(song_id: str) -> tuple[str, Path] | None:
         db.close()
 
 
+
+def _load_ai_inputs(song_id: str, out_dir: Path) -> tuple[Path | None, float | None, str | None]:
+    """Return user-authored lyrics and authoritative musical overrides for AI Core.
+
+    These values used to stop at the DB/UI layer. Reprocessing then silently
+    re-detected BPM/key and rediscovered lyrics, so the note decoder could work
+    from different inputs than the user had already corrected.
+    """
+    db = SessionLocal()
+    try:
+        song = repositories.get_song(db, song_id)
+        if song is None:
+            return None, None, None
+
+        lyrics_path = out_dir / config.TRUSTED_LYRICS_FILENAME
+        if not lyrics_path.is_file() or not lyrics_path.read_text(
+            encoding="utf-8-sig", errors="ignore"
+        ).strip():
+            lyrics_path = None
+
+        tempo_value = getattr(song, "tempo_override", None)
+        key_value = getattr(song, "key_override", None)
+        tempo_edited = bool(getattr(song, "tempo_user_edited", tempo_value is not None))
+        key_edited = bool(getattr(song, "key_user_edited", key_value is not None))
+
+        bpm_override = float(tempo_value) if tempo_edited and tempo_value is not None else None
+        key_override = str(key_value).strip() if key_edited and key_value else None
+        return lyrics_path, bpm_override, key_override
+    finally:
+        db.close()
+
 def _load_searchable_title(song_id: str) -> str | None:
     """Build a clean lyrics query from source identity.
 
@@ -550,6 +586,7 @@ def _run_job(song_id: str) -> None:
         return
     source_path, out_dir = paths
     searchable_title = _load_searchable_title(song_id)
+    lyrics_path, bpm_override, key_override = _load_ai_inputs(song_id, out_dir)
 
     capture: _ProgressCapture | None = None
     heartbeat_stop: threading.Event | None = None
@@ -566,6 +603,11 @@ def _run_job(song_id: str) -> None:
         capture = _create_progress_capture(song_id, out_dir)
 
         device = _configure_ai_runtime()
+        capture.write(
+            f"[backend] AI build={AI_BUILD_ID} pipeline={KaraokePipeline.VERSION} "
+            f"decoder={NOTE_DECODER_VERSION} pitch={PITCH_STABILIZER_VERSION}\n"
+        )
+        capture.write(f"[backend] AI module={Path(__file__).resolve()}\n")
         capture.write(f"[backend] AI runtime: device={device}\n")
 
         def on_ai_progress(stage: str, percent: float, detail: str) -> None:
@@ -598,9 +640,11 @@ def _run_job(song_id: str) -> None:
             ai_bridge.process_song(
                 source_path,
                 out_dir,
-                language=config.DEFAULT_LANGUAGE,
-                lyrics_path=None,
+                language=None if lyrics_path is not None else config.DEFAULT_LANGUAGE,
+                lyrics_path=lyrics_path,
                 title=searchable_title,
+                bpm_override=bpm_override,
+                key_override=key_override,
                 progress=on_ai_progress,
                 cancelled=lambda: _is_cancelled(song_id),
             )
@@ -631,6 +675,41 @@ def _run_job(song_id: str) -> None:
             )
 
 
+_MIDI_REBUILD_FILES = (
+    "pitchRaw.json",
+    "pitch.json",
+    "syllables.json",
+    "reference.json",
+    "melodyContour.json",
+    "vocal.mid",
+    "game.mid",
+    "songMap.json",
+    "songInfo.json",
+    "difficulty.json",
+    "quality.json",
+    "diagnostics.json",
+    "manifest.json",
+)
+
+
+def _force_midi_rebuild(out_dir: Path) -> None:
+    """Remove every downstream melody artefact and its cache entries.
+
+    Reprocessing previously claimed to clear generated melody files but simply
+    called the normal cached pipeline.  That made it possible to keep showing an
+    old reference/MIDI after code changes.  Preserve expensive decode/separation,
+    music analysis and trusted lyric alignment, but force pitch -> notes -> MIDI
+    -> song map to be produced again by the code loaded in this process.
+    """
+    cache = StageCache(out_dir / ".ai-cache")
+    cache.invalidate("pitch", "derivation", "midi", "song-map")
+    for relative in _MIDI_REBUILD_FILES:
+        with contextlib.suppress(OSError):
+            (out_dir / relative).unlink(missing_ok=True)
+    with contextlib.suppress(OSError):
+        (out_dir / ".ai-cache" / "vocal-notes.json").unlink(missing_ok=True)
+
+
 def _run_reprocessing(song_id: str) -> None:
     """Incrementally rebuild stale AI artefacts while retaining expensive stems."""
     db = SessionLocal()
@@ -650,8 +729,7 @@ def _run_reprocessing(song_id: str) -> None:
             error_message="Недопустимый путь к результатам песни",
         )
         return
-    # StageCache fingerprints every stage. Keeping valid results makes repeated
-    # MIDI/text processing skip decode, source separation and pitch extraction.
+    _force_midi_rebuild(out_dir)
     _run_job(song_id)
 
 

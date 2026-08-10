@@ -5,7 +5,7 @@ import zipfile
 from collections.abc import Callable
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -287,11 +287,13 @@ def get_audio_track(track: str, song: SongDependency):
 
 
 @router.get("/{song_id}/result", response_model=schemas.SongResultOut)
-def get_result(song: SongDependency):
+def get_result(song: SongDependency, response: Response):
     if song.status != models.SongStatus.DONE or not song.output_dir:
         raise HTTPException(status_code=409, detail="Песня ещё не обработана")
 
     out_dir = song_service.resolve_output_dir(song)
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
     return schemas.SongResultOut(
         song=schemas.SongOut.model_validate(song),
         music=read_json(out_dir / "music.json"),

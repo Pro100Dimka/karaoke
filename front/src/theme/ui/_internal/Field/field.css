@@ -6,16 +6,6 @@
     color: var(--ui-text);
   }
 
-  .ui-field-label {
-    min-inline-size: 0;
-    color: var(--ui-text-soft);
-    font-size: var(--typography-body2-size);
-    font-weight: 600;
-    line-height: var(--typography-body2-line-height);
-  }
-
-  .ui-field-required { color: var(--ui-danger); }
-
   .ui-field-message {
     min-inline-size: 0;
     color: var(--ui-text-muted);
@@ -23,7 +13,11 @@
     line-height: var(--typography-caption-line-height);
   }
 
-  .ui-field-message[data-error] { color: var(--ui-danger); }
+  .ui-field-message[data-error] {
+    color: var(--ui-danger);
+  }
 
-  .ui-field[data-disabled] { opacity: var(--states-disabled-opacity); }
+  .ui-field[data-disabled] {
+    opacity: var(--states-disabled-opacity);
+  }
 }

@@ -1,45 +1,81 @@
 from __future__ import annotations
 
 import math
+import statistics
 
 from .models import PitchFrame
 
-PITCH_STABILIZER_VERSION = "harmonic-viterbi-v1"
+# Harmonic tracking is needed on dense vocal stems, but transitions must become
+# cheap at a real acoustic re-attack.  This keeps short melodic leaps while
+# folding unsupported octave/harmonic detours back onto the lead trajectory.
+PITCH_STABILIZER_VERSION = "attack-aware-harmonic-viterbi-v3"
 _HARMONIC_SHIFTS = (0.0, -12.0, 12.0, -19.01955, 19.01955, -24.0, 24.0)
 
 
 def _midi(hz: float) -> float:
-    return 69 + 12 * math.log2(hz / 440.0)
+    return 69.0 + 12.0 * math.log2(hz / 440.0)
 
 
 def _hz(midi: float) -> float:
-    return 440.0 * 2 ** ((midi - 69.0) / 12.0)
+    return 440.0 * 2.0 ** ((midi - 69.0) / 12.0)
 
 
-def _transition_cost(left: float, right: float) -> float:
+def _frame_step(frames: list[PitchFrame]) -> float:
+    gaps = [
+        b.time - a.time
+        for a, b in zip(frames, frames[1:], strict=False)
+        if 0 < b.time - a.time <= 0.08
+    ]
+    return max(0.005, min(0.04, statistics.median(gaps) if gaps else 0.01))
+
+
+def _attack_strength(run: list[PitchFrame], index: int) -> float:
+    """Return 0..1 re-attack evidence from the already-computed vocal energy.
+
+    A true new sung note often starts with renewed energy, while a tracker jump
+    to an octave/harmonic usually happens inside one continuous voiced sound.
+    Only strong relative rises count; ordinary vibrato/dynamics stay near zero.
+    """
+    if index <= 0:
+        return 0.0
+    current = max(0.0, run[index].energy)
+    lo = max(0, index - 5)
+    history = [max(0.0, run[i].energy) for i in range(lo, index)]
+    if not history:
+        return 0.0
+    baseline = statistics.median(history)
+    if baseline <= 1e-8:
+        return 1.0 if current > 1e-5 else 0.0
+    ratio = current / baseline
+    # No discount below ~1.25x; full attack discount at ~2.1x.
+    return max(0.0, min(1.0, (ratio - 1.25) / 0.85))
+
+
+def _transition_cost(left: float, right: float, attack: float) -> float:
     distance = min(24.0, abs(right - left))
-    return 0.12 * distance + 0.035 * distance * distance
+    base = 0.12 * distance + 0.035 * distance * distance
+    # At a strong acoustic attack, a real large melodic leap should be allowed.
+    # Still keep a small cost so noise does not make the path completely free.
+    scale = 1.0 - 0.88 * max(0.0, min(1.0, attack))
+    return base * max(0.12, scale)
 
 
 def _shift_cost(shift: float, confidence: float) -> float:
     if abs(shift) < 0.01:
         return 0.0
-    base = 1.0 if abs(shift) < 13 else 1.25 if abs(shift) < 20 else 1.5
-    # Trust high-confidence FCPE output more, while still permitting a short
-    # harmonic excursion to be folded back onto the continuous lead melody.
-    return base * (0.72 + 0.38 * max(0.0, min(1.0, confidence)))
+    magnitude = abs(shift)
+    base = 1.0 if magnitude < 13 else 1.25 if magnitude < 20 else 1.5
+    # Never treat fallback confidence as absolute truth.  Confidence only adds a
+    # modest source prior; sustained raw notes still win because a correction
+    # pays this emission cost on every frame.
+    trust = max(0.0, min(1.0, confidence))
+    return base * (0.78 + 0.28 * trust)
 
 
 def _stabilize_voiced_run(run: list[PitchFrame]) -> list[PitchFrame]:
-    """Select the most plausible monophonic path through harmonic candidates.
-
-    Source-separated vocals still contain reverb and backing harmonies. FCPE can
-    briefly jump to the 2nd/3rd harmonic (12 or 19 semitones). A dynamic path
-    removes those short detours but preserves a genuine sustained register jump,
-    because corrected candidates pay an emission cost on every frame.
-    """
     if len(run) < 3:
-        return run
+        return list(run)
+
     candidates: list[list[tuple[float, float]]] = []
     for frame in run:
         raw = _midi(frame.frequency)
@@ -48,22 +84,27 @@ def _stabilize_voiced_run(run: list[PitchFrame]) -> list[PitchFrame]:
             for shift in _HARMONIC_SHIFTS
             if 28.0 <= raw + shift <= 100.0
         ]
-        candidates.append(values)
+        candidates.append(values or [(raw, 0.0)])
 
+    attacks = [_attack_strength(run, index) for index in range(len(run))]
     costs = [_shift_cost(shift, run[0].confidence) for _, shift in candidates[0]]
     parents: list[list[int]] = [[-1] * len(candidates[0])]
+
     for index in range(1, len(run)):
         next_costs: list[float] = []
         next_parents: list[int] = []
+        attack = attacks[index]
         for value, shift in candidates[index]:
             choices = [
-                cost + _transition_cost(previous_value, value)
+                cost + _transition_cost(previous_value, value, attack)
                 for cost, (previous_value, _) in zip(
                     costs, candidates[index - 1], strict=False
                 )
             ]
             parent = min(range(len(choices)), key=choices.__getitem__)
-            next_costs.append(choices[parent] + _shift_cost(shift, run[index].confidence))
+            next_costs.append(
+                choices[parent] + _shift_cost(shift, run[index].confidence)
+            )
             next_parents.append(parent)
         costs = next_costs
         parents.append(next_parents)
@@ -80,7 +121,7 @@ def _stabilize_voiced_run(run: list[PitchFrame]) -> list[PitchFrame]:
             PitchFrame(
                 frame.time,
                 _hz(midi),
-                frame.confidence * (0.97 if shift else 1.0),
+                frame.confidence * (0.97 if abs(shift) > 0.01 else 1.0),
                 frame.voiced,
                 frame.energy,
             )
@@ -109,59 +150,36 @@ def _stabilize_harmonics(frames: list[PitchFrame]) -> list[PitchFrame]:
     return output
 
 
-def stabilize_pitch(frames: list[PitchFrame], max_octave_jump=10.5) -> list[PitchFrame]:
-    """Repair tiny pitch-tracker failures without smoothing real singing detail.
+def _repair_single_frame_holes(frames: list[PitchFrame]) -> list[PitchFrame]:
+    out = list(frames)
+    step = _frame_step(out)
+    for index in range(1, len(out) - 1):
+        prev, cur, nxt = out[index - 1], out[index], out[index + 1]
+        if cur.voiced or not prev.voiced or not nxt.voiced:
+            continue
+        if prev.frequency <= 0 or nxt.frequency <= 0:
+            continue
+        if nxt.time - prev.time > step * 2.8:
+            continue
+        if abs(_midi(prev.frequency) - _midi(nxt.frequency)) > 0.55:
+            continue
+        out[index] = PitchFrame(
+            cur.time,
+            math.sqrt(prev.frequency * nxt.frequency),
+            min(prev.confidence, nxt.confidence) * 0.84,
+            True,
+            cur.energy,
+        )
+    return out
 
-    Handles one-frame voicing holes and short octave-error runs up to about 60 ms.
-    Vibrato, slides and true melodic changes are deliberately left untouched.
+
+def stabilize_pitch(frames: list[PitchFrame], max_octave_jump=10.5) -> list[PitchFrame]:
+    """Denoise harmonic/octave tracker errors without flattening real attacks.
+
+    `max_octave_jump` remains for API compatibility.  The decoder works on
+    absolute harmonic candidates and uses energy re-attacks to relax continuity
+    exactly where a genuine new sung note is most plausible.
     """
     if len(frames) < 3:
-        return frames
-    out = _stabilize_harmonics(frames)
-    for i in range(1, len(out) - 1):
-        prev, cur, nxt = out[i - 1], out[i], out[i + 1]
-        if (
-            not cur.voiced
-            and prev.voiced
-            and nxt.voiced
-            and nxt.time - prev.time <= 0.035
-            and abs(_midi(prev.frequency) - _midi(nxt.frequency)) < 0.6
-        ):
-            hz = math.sqrt(prev.frequency * nxt.frequency)
-            out[i] = PitchFrame(
-                cur.time, hz, min(prev.confidence, nxt.confidence) * 0.85, True, cur.energy
-            )
-
-    # Correct short contiguous octave slips when stable neighbours on both sides
-    # agree. This removes violent pitch-bends while preserving actual octave jumps.
-    i = 1
-    while i < len(out) - 1:
-        if not out[i].voiced or not out[i - 1].voiced:
-            i += 1
-            continue
-        reference = _midi(out[i - 1].frequency)
-        delta = _midi(out[i].frequency) - reference
-        if abs(abs(delta) - 12.0) > 1.2:
-            i += 1
-            continue
-        direction = 1 if delta > 0 else -1
-        j = i
-        while j < len(out) - 1 and j - i < 7 and out[j].voiced:
-            current_delta = _midi(out[j].frequency) - reference
-            if direction * current_delta < 10.5 or direction * current_delta > 13.5:
-                break
-            j += 1
-        if j > i and j < len(out) and out[j].voiced:
-            after = _midi(out[j].frequency)
-            elapsed = out[j - 1].time - out[i].time + 0.01
-            if abs(after - reference) < 0.8 and elapsed <= 0.075:
-                target_hz = math.sqrt(out[i - 1].frequency * out[j].frequency)
-                for k in range(i, j):
-                    frame = out[k]
-                    out[k] = PitchFrame(
-                        frame.time, target_hz, frame.confidence * 0.9, True, frame.energy
-                    )
-                i = j
-                continue
-        i += 1
-    return out
+        return list(frames)
+    return _repair_single_frame_holes(_stabilize_harmonics(frames))

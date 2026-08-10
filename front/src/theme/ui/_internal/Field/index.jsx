@@ -1,21 +1,28 @@
 import { useId } from "react";
 import cx from "../cx";
+import FieldLabel from "../FieldLabel";
+import mergeSx from "../sx";
 import "./field.css";
 
 export default function Field({
   id,
   label,
+  tooltip,
   hint,
   error,
   required = false,
   disabled = false,
   className,
+  sx,
+  style,
   children
 }) {
   const uid = useId().replace(/:/g, "");
+
   const controlId = id || `ui-field-${uid}`;
   const hintId = hint ? `${controlId}-hint` : undefined;
   const errorId = error ? `${controlId}-error` : undefined;
+
   const describedBy = [errorId, hintId].filter(Boolean).join(" ") || undefined;
 
   const control = children({
@@ -24,20 +31,23 @@ export default function Field({
     "aria-invalid": error ? true : undefined
   });
 
-  if (!label && !hint && !error) return control;
+  if (!label && !hint && !error) {
+    return control;
+  }
 
   return (
     <div
       className={cx("ui-field", className)}
       data-disabled={disabled || undefined}
       data-error={!!error || undefined}
+      style={mergeSx(sx, style)}
     >
-      {label && (
-        <label className="ui-field-label" htmlFor={controlId}>
-          {label}
-          {required && <span className="ui-field-required" aria-hidden="true"> *</span>}
-        </label>
-      )}
+      <FieldLabel
+        htmlFor={controlId}
+        label={label}
+        tooltip={tooltip}
+        required={required}
+      />
 
       {control}
 

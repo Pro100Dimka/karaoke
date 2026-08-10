@@ -8,6 +8,7 @@ const TextField = forwardRef(function TextField({
   id,
   label,
   hint,
+  tooltip,
   error,
   required = false,
   disabled = false,
@@ -70,6 +71,7 @@ const TextField = forwardRef(function TextField({
     <Field
       id={id}
       label={label}
+      tooltip={tooltip}
       hint={hint}
       error={error}
       required={required}

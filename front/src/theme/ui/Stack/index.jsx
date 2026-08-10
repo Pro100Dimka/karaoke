@@ -2,7 +2,7 @@ import Primitive from "../_internal/Primitive";
 import cx from "../_internal/cx";
 import "./stack.css";
 
-const unit = (value) => (typeof value === "number" ? `${value}px` : value);
+const unit = (value) => (typeof value === "number" ? `${value}rem` : value);
 
 export default function Stack({
   as = "div",

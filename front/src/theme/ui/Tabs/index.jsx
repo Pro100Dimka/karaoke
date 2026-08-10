@@ -1,6 +1,6 @@
 import { useId } from "react";
-import useControllable from "../_internal/useControllable";
 import mergeSx from "../_internal/sx";
+import useControllable from "../_internal/useControllable";
 import "./tabs.css";
 
 export default function Tabs({
@@ -13,17 +13,26 @@ export default function Tabs({
   style
 }) {
   const id = useId().replace(/:/g, "");
+
   const [current, setCurrent] = useControllable(
     value,
     defaultValue ?? items[0]?.value,
     onChange
   );
-  const activeItem = items.find(item => item.value === current);
-  const currentIndex = Math.max(0, items.findIndex(item => item.value === current));
+
+  const activeItem = items.find((item) => item.value === current);
+
+  const currentIndex = Math.max(
+    0,
+    items.findIndex((item) => item.value === current)
+  );
 
   const move = (index, event) => {
     const item = items[index];
-    if (item && !item.disabled) setCurrent(item.value, event);
+
+    if (item && !item.disabled) {
+      setCurrent(item.value, event);
+    }
   };
 
   return (
@@ -31,7 +40,8 @@ export default function Tabs({
       <div
         className="ui-tabs-list"
         role="tablist"
-        onKeyDown={event => {
+        tabIndex={0}
+        onKeyDown={(event) => {
           if (!items.length) return;
 
           if (event.key === "ArrowRight") {
@@ -49,7 +59,7 @@ export default function Tabs({
           }
         }}
       >
-        {items.map(item => {
+        {items.map((item) => {
           const active = item.value === current;
           const tabId = `${id}-tab-${item.value}`;
           const panelId = `${id}-panel-${item.value}`;
@@ -66,9 +76,15 @@ export default function Tabs({
               disabled={item.disabled}
               className="ui-tab"
               data-active={active || undefined}
-              onClick={event => setCurrent(item.value, event)}
+              onClick={(event) => setCurrent(item.value, event)}
             >
-              {item.label}
+              {item.icon && (
+                <span className="ui-tab-icon" aria-hidden="true">
+                  {item.icon}
+                </span>
+              )}
+
+              <span className="ui-tab-label">{item.label}</span>
             </button>
           );
         })}
