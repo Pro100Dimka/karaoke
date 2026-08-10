@@ -45,6 +45,12 @@ from .quality import evaluate_quality
 from .syllables import SYLLABLE_ALIGNER_VERSION, align_syllables
 from .utils.io import read_json, write_json_atomic, write_text_atomic
 from .version import AI_BUILD_ID
+from .vocal_preprocess import (
+    VOCAL_ANALYSIS_PREPROCESS_VERSION,
+    prefer_cleaned_pitch,
+    prepare_midi_analysis_vocal,
+    score_pitch_track,
+)
 from .validators import (
     validate_audio,
     validate_derivation_json,
@@ -476,13 +482,39 @@ class KaraokePipeline:
                 )
             )
 
-        self._notify(request, "pitch", 52, "Определение мелодии голоса")
+        self._notify(request, "pitch", 52, "Очистка вокала и определение мелодии")
         pitch_raw_path = output / "pitchRaw.json"
         pitch_path = output / "pitch.json"
+        midi_analysis_vocal = output / "separated" / "vocals.midi-analysis.wav"
+        cleanup_key = cache.key(
+            "midi-vocal-cleanup",
+            {
+                "vocals": cache.file_hash(vocal_fingerprint),
+                "algorithm": VOCAL_ANALYSIS_PREPROCESS_VERSION,
+                "code": cache.optional_file_hash(Path(__file__).with_name("vocal_preprocess.py")),
+            },
+        )
+        if not self._cache_hit(
+            cache, "midi-vocal-cleanup", cleanup_key, [midi_analysis_vocal],
+            {midi_analysis_vocal: validate_audio},
+        ):
+            started_cleanup = time.perf_counter()
+            prepare_midi_analysis_vocal(vocals, midi_analysis_vocal)
+            validate_audio(midi_analysis_vocal)
+            cache.commit("midi-vocal-cleanup", cleanup_key, [midi_analysis_vocal])
+            reports.append(StageReport(
+                "midi-vocal-cleanup", time.perf_counter() - started_cleanup, False,
+                VOCAL_ANALYSIS_PREPROCESS_VERSION,
+            ))
+        else:
+            reports.append(StageReport("midi-vocal-cleanup", 0, True, "cached"))
+
         pitch_key = cache.key(
             "pitch",
             {
                 "vocals": cache.file_hash(vocal_fingerprint),
+                "midi_analysis_vocals": cache.file_hash(midi_analysis_vocal),
+                "cleanup": VOCAL_ANALYSIS_PREPROCESS_VERSION,
                 "engine": self.engines.pitch.name,
                 "engine_config": getattr(self.engines.pitch, "fingerprint", lambda: {})(),
                 "hop": self.config.hop_seconds,
@@ -496,21 +528,49 @@ class KaraokePipeline:
             [pitch_raw_path, pitch_path] if self.config.preserve_raw_pitch else [pitch_path]
         )
         pitch_validators = {path: validate_pitch_json for path in pitch_outputs}
+        pitch_analysis_source = "cached"
+        original_quality = None
+        cleaned_quality = None
         if self._cache_hit(cache, "pitch", pitch_key, pitch_outputs, pitch_validators):
             pitch = [PitchFrame(**item) for item in read_json(pitch_path, [])]
             reports.append(StageReport("pitch", 0, True, "cached"))
         else:
-            pitch = self._run(
-                "pitch",
+            original_pitch = self._run(
+                "pitch-original",
                 self.engines.pitch,
                 lambda engine: engine.estimate(vocals),
                 reports,
                 warnings,
             )
+            cleaned_pitch = self._run(
+                "pitch-cleaned",
+                self.engines.pitch,
+                lambda engine: engine.estimate(midi_analysis_vocal),
+                reports,
+                warnings,
+            )
+            validate_pitch(original_pitch)
+            validate_pitch(cleaned_pitch)
+            original_quality = score_pitch_track(list(original_pitch))
+            cleaned_quality = score_pitch_track(list(cleaned_pitch))
+            use_cleaned_pitch = prefer_cleaned_pitch(original_quality, cleaned_quality)
+            pitch_analysis_source = "cleaned" if use_cleaned_pitch else "original"
+            pitch_analysis_audio = midi_analysis_vocal if use_cleaned_pitch else vocals
+            pitch = cleaned_pitch if use_cleaned_pitch else original_pitch
+            reports.append(StageReport(
+                "pitch-source-selection",
+                0.0,
+                False,
+                (
+                    f"cleaned score={cleaned_quality.score:.4f} original={original_quality.score:.4f}"
+                    if use_cleaned_pitch
+                    else f"original score={original_quality.score:.4f} cleaned={cleaned_quality.score:.4f}"
+                ),
+            ))
             raw_pitch = list(pitch)
             validate_pitch(raw_pitch)
             confidence_pitch = refine_pitch_confidence(
-                raw_pitch, vocals, sample_rate=self.config.pitch_sample_rate
+                raw_pitch, pitch_analysis_audio, sample_rate=self.config.pitch_sample_rate
             )
             validate_pitch(confidence_pitch)
             # IMPORTANT: v25 imported the FCPE+YIN consensus decoder but never
@@ -518,7 +578,7 @@ class KaraokePipeline:
             # verifier before harmonic stabilization so dense vocal doubles do
             # not rely on FCPE alone.
             consensus_pitch = fuse_pitch_with_yin(
-                confidence_pitch, vocals, sample_rate=self.config.pitch_sample_rate
+                confidence_pitch, pitch_analysis_audio, sample_rate=self.config.pitch_sample_rate
             )
             validate_pitch(consensus_pitch)
             pitch = stabilize_pitch(consensus_pitch)
@@ -838,6 +898,11 @@ class KaraokePipeline:
                     "source_sha256": source_hash,
                     "song_sha256": cache.file_hash(song_wav),
                     "vocals_sha256": cache.file_hash(vocals),
+                    "midi_analysis_vocals_sha256": cache.file_hash(midi_analysis_vocal),
+                    "pitch_analysis_source": pitch_analysis_source,
+                    "pitch_preprocess_version": VOCAL_ANALYSIS_PREPROCESS_VERSION,
+                    "pitch_original_quality": to_dict(original_quality) if original_quality is not None else None,
+                    "pitch_cleaned_quality": to_dict(cleaned_quality) if cleaned_quality is not None else None,
                     "instrumental_sha256": cache.file_hash(instrumental),
                     "bpm": bpm,
                     "bpm_source": music_analysis.get("tempo_source", "analysis"),
@@ -861,6 +926,7 @@ class KaraokePipeline:
         outputs = {
             "song": "song.wav",
             "vocals": "separated/vocals.wav",
+            "midiAnalysisVocals": "separated/vocals.midi-analysis.wav",
             "instrumental": "separated/instrumental.wav",
             "music": "music.json",
             "lyrics": "lyrics.txt",

@@ -1,1 +1,1 @@
-AI_BUILD_ID = "midi-v30-production-line-anchor-20260810"
+AI_BUILD_ID = "midi-v32-empty-align-fallback-20260810"

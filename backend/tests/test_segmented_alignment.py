@@ -356,3 +356,27 @@ def test_long_text_collapsed_qwen_line_uses_candidate_start_but_not_candidate_du
     assert first[0].start == pytest.approx(3.0)
     assert first[-1].end - first[0].start >= 2.5
     assert not any(w.end - w.start <= 0.025 for w in first)
+
+
+def test_long_text_empty_qwen_does_not_abort_pipeline(monkeypatch):
+    sample_rate = 16_000
+    audio = np.zeros(sample_rate * 12, dtype=np.float32)
+    # Two sung regions so the activity-envelope fallback has real timing anchors.
+    audio[sample_rate * 1:sample_rate * 5] = 0.15
+    audio[sample_rate * 6:sample_rate * 10] = 0.12
+    monkeypatch.setattr(text_engine, "load_mono", lambda _audio, _sample_rate: (audio, sample_rate))
+    aligner = Qwen3ForcedAligner("unused")
+    monkeypatch.setattr(aligner, "align", lambda *_args, **_kwargs: [])
+
+    words = aligner.align_long_text(
+        "song.wav",
+        "Первая строка песни здесь\nВторая строка песни тоже",
+        "Russian",
+    )
+
+    assert len(words) == 8
+    assert words[0].start >= 0.0
+    assert words[-1].end <= 12.0
+    assert all(right.start >= left.end - 1e-6 for left, right in zip(words, words[1:]))
+    assert all(word.end > word.start for word in words)
+    assert all(word.confidence <= 0.03 for word in words)

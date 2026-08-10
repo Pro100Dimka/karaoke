@@ -19,10 +19,20 @@ function ServiceContent({ service, onOpen, onClose }) {
 
   if (ServiceScreen) {
     return (
-      <Stack className="settings-service-screen" gap={1}>
-        <Button variant="ghost" onClick={onClose} sx={{ alignSelf: "start" }}>
-          <ArrowLeft size={16} />
-          Назад
+      <Stack
+        className="settings-service-screen"
+        gap={1.25}
+        sx={{ padding: "1rem" }}
+      >
+        <Button
+          variant="ghost"
+          onClick={onClose}
+          sx={{ alignSelf: "start", paddingInline: ".5rem" }}
+        >
+          <Stack direction="row" align="center" gap={0.5}>
+            <ArrowLeft size={16} />
+            <span>Назад</span>
+          </Stack>
         </Button>
 
         <ServiceScreen />
@@ -34,7 +44,7 @@ function ServiceContent({ service, onOpen, onClose }) {
     <Grid
       columns={3}
       gap="var(--space-3)"
-      sx={{ padding: "0 1rem", paddingTop: "1rem" }}
+      sx={{ padding: "1rem" }}
     >
       {SERVICE_SCREENS.map(({ id, title, text }) => (
         <Card

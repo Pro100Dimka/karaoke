@@ -1,7 +1,7 @@
 import { api } from "../../../../api/client";
 import Table from "../../../../components/table";
 import { usePolling } from "../../../../hooks/usePolling";
-import { Card, Chip, Stack, Typography } from "../../../../theme/ui";
+import { Chip, Stack, Typography } from "../../../../theme/ui";
 import { getErrorMessage } from "../../../../utils/errors";
 import { HISTORY_ACTIONS, HISTORY_COLUMNS, RECORDING_STATUSES } from "./config";
 
@@ -9,48 +9,36 @@ export default function History() {
   const { data: history, error } = usePolling(api.getHistory, 5000, []);
 
   return (
-    <Card
-      variant="animation"
-      tilt={false}
-      className="settings-screen-card"
-      cardContent={{ style: { padding: "1.25rem" } }}
-    >
-      <Stack gap={1}>
-        <Typography variant="h3">История</Typography>
+    <Stack gap={1}>
+      <Typography variant="h3">История</Typography>
 
-        {error && (
-          <Typography variant="body2" sx={{ color: "var(--ui-danger)" }}>
-            {getErrorMessage(error)}
-          </Typography>
-        )}
+      {error && (
+        <Typography variant="body2" sx={{ color: "var(--ui-danger)" }}>
+          {getErrorMessage(error)}
+        </Typography>
+      )}
 
-        <Table
-          columns={HISTORY_COLUMNS}
-          data={history}
-          getRowKey={(item, index) =>
-            item.id ??
-            `${item.song_title}-${item.kind}-${item.timestamp ?? index}`
-          }
-          renderRow={getHistoryRow}
-          emptyText="История пуста"
-        />
-      </Stack>
-    </Card>
+      <Table
+        columns={HISTORY_COLUMNS}
+        data={history ?? []}
+        getRowKey={(item, index) =>
+          item.id ?? `${item.song_title}-${item.kind}-${item.timestamp ?? index}`
+        }
+        renderRow={getHistoryRow}
+        emptyText="История пуста"
+      />
+    </Stack>
   );
 }
 
 const formatDuration = (value) => {
   if (value == null) return "—";
   const seconds = Number(value);
-
-  return Number.isFinite(seconds) && seconds >= 0
-    ? `${Math.round(seconds)} с`
-    : "—";
+  return Number.isFinite(seconds) && seconds >= 0 ? `${Math.round(seconds)} с` : "—";
 };
 
 const formatTimestamp = (value) => {
   if (!value) return "—";
-
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("ru-RU");
 };

@@ -1536,6 +1536,40 @@ class Qwen3ForcedAligner(Aligner):
                 cursor = safe_line[-1].end
 
         if not output:
+            # Production safety net: Qwen can occasionally return an empty
+            # alignment for an otherwise valid sung-vocal stem.  Do not abort
+            # the whole song.  Build a deterministic monotonic timing map from
+            # the vocal activity envelope and the trusted lyric line order.
+            # Confidence is intentionally low so downstream diagnostics still
+            # expose that forced alignment failed.
+            active = _activity_quantile_times(source, sample_rate)
+            if not active:
+                active = [0.0, duration_sec]
+            active_start = max(0.0, float(active[0]))
+            active_end = min(duration_sec, max(active_start + 0.08, float(active[-1])))
+            all_tokens = [token for group in groups for token in tokenize(group)]
+            if all_tokens and active_end > active_start + 0.04:
+                weights = [max(1, len(token)) for token in all_tokens]
+                total_weight = max(1, sum(weights))
+                cursor_weight = 0
+                fallback: list[Word] = []
+                span = active_end - active_start
+                for index, (token, weight) in enumerate(zip(all_tokens, weights, strict=True)):
+                    start = active_start + span * (cursor_weight / total_weight)
+                    cursor_weight += weight
+                    end = active_start + span * (cursor_weight / total_weight)
+                    if end <= start + 0.019:
+                        end = min(duration_sec, start + 0.02)
+                    fallback.append(Word(start, end, token, 0.01, index))
+                if fallback and fallback[-1].end > fallback[0].start:
+                    return fallback
+            # Absolute last resort for nearly-silent/degenerate audio.  Preserve
+            # text order and return timed words instead of crashing the pipeline.
+            if all_tokens and duration_sec > 0.08:
+                return [
+                    Word(word.start, word.end, word.text, 0.005, word.index)
+                    for word in _proportional_words(all_tokens, duration_sec)
+                ]
             raise InvalidArtifactError("Long-text forced aligner returned no timed words")
         return output
 

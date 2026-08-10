@@ -3,7 +3,7 @@ import { useState } from "react";
 import { api } from "../../../../api/client";
 import { useAppDialog } from "../../../../contexts/AppDialog";
 import { usePolling } from "../../../../hooks/usePolling";
-import { Card, Stack, Typography } from "../../../../theme/ui";
+import { Stack, Typography } from "../../../../theme/ui";
 import { getErrorMessage } from "../../../../utils/errors";
 import { buildOptimizeOptions, MEMORY_ACTIONS } from "./config";
 import MemoryBreakdown from "./memory-breakdown";
@@ -53,26 +53,19 @@ export default function MemoryManager() {
   ];
 
   return (
-    <Card
-      variant="animation"
-      tilt={false}
-      className="settings-screen-card"
-      cardContent={{ style: { padding: "1.25rem" } }}
-    >
-      <Stack gap={1}>
-        <Typography variant="h3">Управление памятью</Typography>
+    <Stack gap={1}>
+      <Typography variant="h3">Управление памятью</Typography>
 
-        {error && (
-          <Typography variant="body2" sx={{ color: "var(--ui-danger)" }}>
-            {getErrorMessage(error)}
-          </Typography>
-        )}
+      {error && (
+        <Typography variant="body2" sx={{ color: "var(--ui-danger)" }}>
+          {getErrorMessage(error)}
+        </Typography>
+      )}
 
-        {size &&
-          sections.map(([id, Component, props]) => (
-            <Component key={id} {...props} />
-          ))}
-      </Stack>
-    </Card>
+      {size &&
+        sections.map(([id, Component, props]) => (
+          <Component key={id} {...props} />
+        ))}
+    </Stack>
   );
 }
