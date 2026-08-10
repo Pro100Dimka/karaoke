@@ -21,62 +21,70 @@ import {
 import { clamp } from "./utils";
 
 const CONTROL_ACCENTS = {
-  tempo: {
-    color: "var(--color-primary)",
-    border: "var(--color-primary)",
-    glow: "color-mix(in srgb, var(--color-primary) 38%, transparent)"
-  },
+  tempo: "var(--color-primary)",
+  key: "var(--color-success)",
+  range: "var(--color-warning)"
+};
 
-  key: {
-    color: "var(--color-success)",
-    border: "var(--color-success)",
-    glow: "color-mix(in srgb, var(--color-success) 34%, transparent)"
-  },
+const TRANSPORT_BUTTON_SX = {
+  inlineSize: 42,
+  blockSize: 42,
+  minInlineSize: 42,
+  padding: 0,
 
-  range: {
-    color: "var(--color-warning)",
-    border: "var(--color-warning)",
-    glow: "color-mix(in srgb, var(--color-warning) 30%, transparent)"
-  }
+  borderRadius: "50%",
+
+  color: "var(--color-text-soft)",
+
+  border:
+    "1px solid color-mix(in srgb, var(--color-primary) 44%, var(--color-border))",
+
+  background: "color-mix(in srgb, var(--color-bg-deep) 88%, transparent)",
+
+  boxShadow:
+    "inset 0 1px 0 color-mix(in srgb, var(--color-highlight) 6%, transparent)",
+
+  transition:
+    "transform 140ms ease, color 140ms ease, border-color 140ms ease, background 140ms ease, box-shadow 140ms ease"
 };
 
 function StepButton({ icon: Icon, label, onClick, accent }) {
   return (
     <IconButton
       icon={Icon}
-      label={label}
+      aria-label={label}
+      title={label}
       variant="ghost"
-      size="small"
+      size="sm"
       onClick={onClick}
       sx={{
-        inlineSize: 34,
-        blockSize: 34,
-        flex: "0 0 auto",
+        inlineSize: 32,
+        blockSize: 32,
+        minInlineSize: 32,
 
-        border: "1px solid color-mix(in srgb, currentColor 60%, transparent)",
+        padding: 0,
+
+        flex: "0 0 auto",
 
         borderRadius: "var(--shape-md)",
 
         color: accent,
 
-        background: "color-mix(in srgb, var(--color-bg-deep) 80%, transparent)",
+        border: "1px solid color-mix(in srgb, currentColor 58%, transparent)",
+
+        background: "color-mix(in srgb, var(--color-bg-deep) 90%, transparent)",
+
+        boxShadow:
+          "inset 0 1px 0 color-mix(in srgb, var(--color-highlight) 5%, transparent)",
 
         transition:
-          "transform 140ms ease, background 140ms ease, box-shadow 140ms ease",
-
-        "&:hover": {
-          transform: "translateY(-1px)",
-          background:
-            "color-mix(in srgb, currentColor 12%, var(--color-bg-deep))",
-          boxShadow:
-            "0 0 0.8rem color-mix(in srgb, currentColor 30%, transparent)"
-        }
+          "transform 140ms ease, background 140ms ease, box-shadow 140ms ease, border-color 140ms ease"
       }}
     />
   );
 }
 
-function PerformanceControl({
+function PerformanceCard({
   label,
   value,
   accent,
@@ -92,78 +100,85 @@ function PerformanceControl({
       surface="base"
       tilt={false}
       sx={{
-        minWidth: 0,
+        padding: "0.5rem 0.6rem",
         flex: 1,
         borderRadius: "var(--shape-lg)",
-
         border:
-          "1px solid color-mix(in srgb, var(--control-accent) 72%, var(--color-border))",
-
+          "1px solid color-mix(in srgb, var(--control-accent) 62%, var(--color-border))",
         background:
-          "linear-gradient(180deg, color-mix(in srgb, var(--control-accent) 7%, var(--color-bg-deep)), var(--color-bg-deep))",
-
+          "linear-gradient(180deg, color-mix(in srgb, var(--control-accent) 4%, var(--color-bg-deep)), var(--color-bg-deep))",
         boxShadow:
-          "0 0 1rem color-mix(in srgb, var(--control-accent) 12%, transparent)"
+          "0 0 0.85rem color-mix(in srgb, var(--control-accent) 9%, transparent)"
       }}
-      style={{
-        "--control-accent": accent.color
-      }}
-      cardContent={{
-        style: {
-          padding: "0.6rem 0.7rem"
-        }
-      }}
+      style={{ "--control-accent": accent }}
+      cardContent={{ style: { padding: "0.55rem 0.6rem" } }}
     >
-      <Stack gap={1} align="center">
+      <Stack
+        gap={0.75}
+        align="center"
+        justify="center"
+        sx={{
+          justifyContent: "space-between",
+          height: "100%"
+        }}
+      >
         <Typography
           variant="caption"
           sx={{
-            color: accent.color,
-            fontWeight: 800,
+            color: accent,
+            fontSize: 11,
+            fontWeight: 850,
+            lineHeight: 1,
             textTransform: "uppercase",
-            letterSpacing: "0.04em"
+            letterSpacing: "0.055em"
           }}
         >
           {label}
         </Typography>
-
         <Stack
           direction="row"
           align="center"
-          justify="center"
-          gap={1}
+          justify="space-between"
+          gap={0.75}
           sx={{
             width: "100%"
           }}
         >
-          {onDecrease && (
+          {onDecrease ? (
             <StepButton
               icon={leftIcon ?? Minus}
               label={decreaseLabel}
               onClick={onDecrease}
-              accent={accent.color}
+              accent={accent}
             />
+          ) : (
+            <span style={{ width: 32 }} />
           )}
 
           <Typography
             variant="body2"
             sx={{
-              minWidth: 74,
+              minWidth: 68,
+              color: "var(--color-text)",
+              fontSize: 13,
+              fontWeight: 850,
+              lineHeight: 1,
               textAlign: "center",
-              fontWeight: 800,
-              color: "var(--color-text)"
+              whiteSpace: "nowrap"
             }}
           >
             {value}
           </Typography>
 
-          {onIncrease && (
+          {onIncrease ? (
             <StepButton
               icon={rightIcon ?? Plus}
               label={increaseLabel}
               onClick={onIncrease}
-              accent={accent.color}
+              accent={accent}
             />
+          ) : (
+            <span style={{ width: 32 }} />
           )}
         </Stack>
       </Stack>
@@ -186,13 +201,13 @@ function PerformanceControls({
   return (
     <Stack
       direction="row"
-      gap={1.5}
+      gap={1}
       align="stretch"
       sx={{
         width: "100%"
       }}
     >
-      <PerformanceControl
+      <PerformanceCard
         label="Темп"
         value={`${currentTempo} BPM`}
         accent={CONTROL_ACCENTS.tempo}
@@ -201,8 +216,7 @@ function PerformanceControls({
         decreaseLabel="Уменьшить темп на 1 BPM"
         increaseLabel="Увеличить темп на 1 BPM"
       />
-
-      <PerformanceControl
+      <PerformanceCard
         label="Тональность"
         value={compactKey}
         accent={CONTROL_ACCENTS.key}
@@ -213,63 +227,75 @@ function PerformanceControls({
         decreaseLabel="Понизить тональность"
         increaseLabel="Повысить тональность"
       />
-
-      <Card
-        surface="base"
-        tilt={false}
-        sx={{
-          flex: 1,
-          minWidth: 0,
-
-          border:
-            "1px solid color-mix(in srgb, var(--color-warning) 72%, var(--color-border))",
-
-          borderRadius: "var(--shape-lg)",
-
-          background:
-            "linear-gradient(180deg, color-mix(in srgb, var(--color-warning) 7%, var(--color-bg-deep)), var(--color-bg-deep))",
-
-          boxShadow:
-            "0 0 1rem color-mix(in srgb, var(--color-warning) 12%, transparent)"
-        }}
-        cardContent={{
-          style: {
-            padding: "0.6rem 0.7rem"
-          }
-        }}
-      >
-        <Stack
-          align="center"
-          justify="center"
-          gap={1}
-          sx={{
-            height: "100%"
-          }}
-        >
-          <Typography
-            variant="caption"
-            sx={{
-              color: "var(--color-warning)",
-              fontWeight: 800,
-              textTransform: "uppercase",
-              letterSpacing: "0.04em"
-            }}
-          >
-            Диапазон
-          </Typography>
-
-          <Typography
-            variant="body2"
-            sx={{
-              fontWeight: 800,
-              color: "var(--color-text)"
-            }}
-          >
-            {noteRange}
-          </Typography>
-        </Stack>
-      </Card>
+      <PerformanceCard
+        label="Диапазон"
+        value={noteRange}
+        accent={CONTROL_ACCENTS.range}
+      />
     </Stack>
+  );
+}
+
+function TransportButton({ icon, label, onClick }) {
+  return (
+    <IconButton
+      icon={icon}
+      aria-label={label}
+      title={label}
+      variant="ghost"
+      size="lg"
+      onClick={onClick}
+      sx={TRANSPORT_BUTTON_SX}
+    />
+  );
+}
+
+function PlayButton({ isPlaying, onClick }) {
+  return (
+    <Button
+      variant="primary"
+      aria-label={isPlaying ? "Пауза" : "Воспроизвести"}
+      title={isPlaying ? "Пауза" : "Воспроизвести"}
+      onClick={onClick}
+      sx={{
+        inlineSize: 58,
+        blockSize: 58,
+        minInlineSize: 58,
+
+        padding: 0,
+
+        display: "grid",
+        placeItems: "center",
+
+        borderRadius: "50%",
+
+        color: "var(--color-text)",
+
+        background:
+          "linear-gradient(145deg, var(--color-primary-hover), var(--color-primary-strong))",
+
+        border:
+          "1px solid color-mix(in srgb, var(--color-highlight) 54%, var(--color-primary))",
+
+        boxShadow:
+          "0 0 0.85rem color-mix(in srgb, var(--color-primary) 52%, transparent), 0 0 1.9rem color-mix(in srgb, var(--color-primary-strong) 22%, transparent), inset 0 1px 0 color-mix(in srgb, var(--color-highlight) 48%, transparent)",
+
+        transition:
+          "transform 150ms ease, filter 150ms ease, box-shadow 150ms ease"
+      }}
+    >
+      {isPlaying ? (
+        <Pause size={26} strokeWidth={2.1} />
+      ) : (
+        <Play
+          size={27}
+          strokeWidth={2.1}
+          style={{
+            marginInlineStart: 2
+          }}
+        />
+      )}
+    </Button>
   );
 }
 
@@ -279,104 +305,23 @@ function TransportButtons({ isPlaying, onSkip, onTogglePlay, onStop }) {
       direction="row"
       align="center"
       justify="center"
-      gap={1.25}
+      gap={1}
       aria-label="Управление воспроизведением"
     >
-      <IconButton
+      <TransportButton
         icon={SkipBack}
         label="Назад на 5 секунд"
-        variant="ghost"
-        size="large"
         onClick={() => onSkip(-5)}
-        sx={{
-          inlineSize: 44,
-          blockSize: 44,
-          borderRadius: "50%",
-          border:
-            "1px solid color-mix(in srgb, var(--color-primary) 50%, var(--color-border))"
-        }}
       />
 
-      <Button
-        variant="primary"
-        aria-label={isPlaying ? "Пауза" : "Воспроизвести"}
-        onClick={onTogglePlay}
-        sx={{
-          inlineSize: 62,
-          blockSize: 62,
-          minInlineSize: 62,
+      <PlayButton isPlaying={isPlaying} onClick={onTogglePlay} />
 
-          padding: 0,
+      <TransportButton icon={Square} label="Остановить" onClick={onStop} />
 
-          borderRadius: "50%",
-
-          display: "grid",
-          placeItems: "center",
-
-          background:
-            "linear-gradient(145deg, var(--color-primary-hover), var(--color-primary-strong))",
-
-          border:
-            "1px solid color-mix(in srgb, var(--color-highlight) 62%, var(--color-primary))",
-
-          boxShadow:
-            "0 0 1rem color-mix(in srgb, var(--color-primary) 55%, transparent), 0 0 2.4rem color-mix(in srgb, var(--color-primary-strong) 28%, transparent), inset 0 1px 0 color-mix(in srgb, var(--color-highlight) 55%, transparent)",
-
-          transition:
-            "transform 150ms ease, box-shadow 150ms ease, filter 150ms ease",
-
-          "&:hover": {
-            transform: "scale(1.06)",
-            filter: "brightness(1.08)",
-            boxShadow:
-              "0 0 1.3rem color-mix(in srgb, var(--color-primary) 72%, transparent), 0 0 3rem color-mix(in srgb, var(--color-primary-strong) 40%, transparent), inset 0 1px 0 color-mix(in srgb, var(--color-highlight) 65%, transparent)"
-          },
-
-          "&:active": {
-            transform: "scale(0.97)"
-          }
-        }}
-      >
-        {isPlaying ? (
-          <Pause size={30} />
-        ) : (
-          <Play
-            size={30}
-            style={{
-              marginLeft: 3
-            }}
-          />
-        )}
-      </Button>
-
-      <IconButton
-        icon={Square}
-        label="Остановить"
-        variant="ghost"
-        size="large"
-        onClick={onStop}
-        sx={{
-          inlineSize: 44,
-          blockSize: 44,
-          borderRadius: "50%",
-          border:
-            "1px solid color-mix(in srgb, var(--color-primary) 50%, var(--color-border))"
-        }}
-      />
-
-      <IconButton
+      <TransportButton
         icon={SkipForward}
         label="Вперёд на 5 секунд"
-        variant="ghost"
-        size="large"
         onClick={() => onSkip(5)}
-        sx={{
-          inlineSize: 44,
-          blockSize: 44,
-          borderRadius: "50%",
-          border:
-            "1px solid color-mix(in srgb, var(--color-primary) 50%, var(--color-border))"
-        }}
       />
     </Stack>
   );
@@ -385,14 +330,13 @@ function TransportButtons({ isPlaying, onSkip, onTogglePlay, onStop }) {
 export default function ConsoleCenter(props) {
   return (
     <Stack
-      gap={2}
+      gap={2.25}
       align="center"
       sx={{
         width: "100%"
       }}
     >
       <TransportButtons {...props} />
-
       <PerformanceControls {...props} />
     </Stack>
   );

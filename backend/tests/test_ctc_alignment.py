@@ -78,3 +78,63 @@ def test_ctc_model_discovery_exposes_missing_resource_reason(tmp_path, monkeypat
     assert details["available"] is False
     assert details["checked"]
     assert any("does not exist" in item["reason"] for item in details["checked"])
+
+
+def test_ctc_load_falls_back_from_lm_processor_without_pyctcdecode(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    import sys
+    import types
+
+    from AI.engines.ctc_alignment import CTCWordAligner
+
+    model = tmp_path / "model"
+    model.mkdir()
+    for name in ("config.json", "preprocessor_config.json", "tokenizer_config.json", "vocab.json"):
+        (model / name).write_text("{}", encoding="utf-8")
+    (model / "model.safetensors").write_bytes(b"x")
+
+    class FakeAutoProcessor:
+        @classmethod
+        def from_pretrained(cls, *_args, **_kwargs):
+            raise ImportError("Wav2Vec2ProcessorWithLM requires the pyctcdecode library")
+
+    feature = object()
+    tokenizer = object()
+
+    class FakeAutoFeatureExtractor:
+        @classmethod
+        def from_pretrained(cls, *_args, **_kwargs):
+            return feature
+
+    class FakeAutoTokenizer:
+        @classmethod
+        def from_pretrained(cls, *_args, **_kwargs):
+            return tokenizer
+
+    class FakeProcessor:
+        def __init__(self, feature_extractor, tokenizer):
+            self.feature_extractor = feature_extractor
+            self.tokenizer = tokenizer
+
+    class FakeModel:
+        @classmethod
+        def from_pretrained(cls, *_args, **_kwargs):
+            return cls()
+        def eval(self):
+            return self
+        def to(self, _device):
+            return self
+
+    fake_transformers = types.ModuleType("transformers")
+    fake_transformers.AutoFeatureExtractor = FakeAutoFeatureExtractor
+    fake_transformers.AutoModelForCTC = FakeModel
+    fake_transformers.AutoProcessor = FakeAutoProcessor
+    fake_transformers.AutoTokenizer = FakeAutoTokenizer
+    fake_transformers.Wav2Vec2Processor = FakeProcessor
+    monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
+
+    aligner = CTCWordAligner(models={"ru": str(model)})
+    monkeypatch.setattr("AI.engines.ctc_alignment.select_torch_device", lambda _torch: "cpu")
+    processor, _model = aligner._load("ru", "Привет")
+    assert processor.feature_extractor is feature
+    assert processor.tokenizer is tokenizer

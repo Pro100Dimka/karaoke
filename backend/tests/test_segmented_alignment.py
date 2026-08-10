@@ -5,6 +5,7 @@ from AI.engines import text as text_engine
 from AI.engines.text import (
     Qwen3ForcedAligner,
     _activity_fallback_words,
+    _anchor_preserving_canonical_alignment,
     _group_lyric_text,
     _pathological_alignment,
     _trim_transcript_overlaps,
@@ -514,3 +515,104 @@ def test_long_text_required_ctc_reports_checked_paths(monkeypatch):
     message = str(error.value)
     assert "config.json is missing" in message
     assert "C:/models/ctc/ru" in message
+
+
+def test_anchor_preserving_merge_keeps_partial_ctc_words_and_fills_only_gaps():
+    from AI.engines.ctc_alignment import CTCLineResult
+
+    groups = ["one two", "three four", "five six"]
+    ctc_lines = [
+        CTCLineResult(
+            (Word(1.0, 1.4, "one", 0.91, 0), Word(1.4, 1.9, "two", 0.88, 1)),
+            0.90, 0.5, 2.5,
+        ),
+        None,
+        CTCLineResult(
+            (Word(6.0, 6.5, "five", 0.84, 0), Word(6.5, 7.0, "six", 0.86, 1)),
+            0.85, 5.0, 8.0,
+        ),
+    ]
+    audio = np.zeros(10_000, dtype=np.float32)
+
+    merged, stats = _anchor_preserving_canonical_alignment(
+        groups, ctc_lines, [], audio, 1000, 10.0
+    )
+
+    assert [word.text for word in merged] == ["one", "two", "three", "four", "five", "six"]
+    assert len(merged) == 6
+    assert merged[0].start == pytest.approx(1.0)
+    assert merged[1].end == pytest.approx(1.9)
+    assert merged[4].start == pytest.approx(6.0)
+    assert merged[5].end == pytest.approx(7.0)
+    assert merged[0].confidence == pytest.approx(0.91)
+    assert merged[4].confidence == pytest.approx(0.84)
+    assert merged[2].confidence == pytest.approx(0.012)
+    assert merged[3].confidence == pytest.approx(0.012)
+    assert stats == {"ctc": 4, "qwen": 0, "interpolated": 2}
+    assert all(right.start >= left.end - 1e-6 for left, right in zip(merged, merged[1:]))
+
+
+def test_anchor_preserving_merge_drops_only_conflicting_anchor_not_all_ctc():
+    from AI.engines.ctc_alignment import CTCLineResult
+
+    groups = ["one two", "three four", "five six"]
+    ctc_lines = [
+        CTCLineResult(
+            (Word(1.0, 1.4, "one", 0.91, 0), Word(1.4, 1.9, "two", 0.88, 1)),
+            0.90, 0.5, 2.5,
+        ),
+        # This line conflicts with the first line and should be discarded by
+        # the monotonic maximum-weight chain without erasing the good anchors.
+        CTCLineResult(
+            (Word(1.5, 1.7, "three", 0.10, 0), Word(1.7, 1.85, "four", 0.10, 1)),
+            0.10, 1.4, 2.0,
+        ),
+        CTCLineResult(
+            (Word(6.0, 6.5, "five", 0.84, 0), Word(6.5, 7.0, "six", 0.86, 1)),
+            0.85, 5.0, 8.0,
+        ),
+    ]
+    audio = np.zeros(10_000, dtype=np.float32)
+
+    merged, stats = _anchor_preserving_canonical_alignment(
+        groups, ctc_lines, [], audio, 1000, 10.0
+    )
+
+    assert [word.text for word in merged] == ["one", "two", "three", "four", "five", "six"]
+    assert merged[0].start == pytest.approx(1.0)
+    assert merged[1].end == pytest.approx(1.9)
+    assert merged[4].start == pytest.approx(6.0)
+    assert merged[5].end == pytest.approx(7.0)
+    assert stats["ctc"] == 4
+    assert stats["interpolated"] == 2
+    assert all(right.start >= left.end - 1e-6 for left, right in zip(merged, merged[1:]))
+
+
+def test_anchor_preserving_merge_maps_partial_ctc_line_tokens_directly():
+    from AI.engines.ctc_alignment import CTCLineResult
+
+    groups = ["Пропал без вести", "в японских лагерях"]
+    # Simulate a tokenizer/result mismatch where one CTC token is absent. The
+    # matching acoustic words must still survive instead of rejecting the line.
+    ctc_lines = [
+        CTCLineResult(
+            (Word(2.0, 2.6, "Пропал", 0.8, 0), Word(3.0, 3.5, "вести", 0.75, 1)),
+            0.77, 1.5, 4.0,
+        ),
+        CTCLineResult(
+            (Word(4.0, 4.2, "в", 0.9, 0), Word(4.2, 5.0, "японских", 0.86, 1), Word(5.0, 5.8, "лагерях", 0.84, 2)),
+            0.86, 3.5, 6.5,
+        ),
+    ]
+    audio = np.zeros(8_000, dtype=np.float32)
+
+    merged, stats = _anchor_preserving_canonical_alignment(
+        groups, ctc_lines, [], audio, 1000, 8.0
+    )
+
+    assert [word.text for word in merged] == ["Пропал", "без", "вести", "в", "японских", "лагерях"]
+    assert merged[0].start == pytest.approx(2.0)
+    assert merged[2].start == pytest.approx(3.0)
+    assert merged[3].start == pytest.approx(4.0)
+    assert stats["ctc"] == 5
+    assert stats["interpolated"] == 1

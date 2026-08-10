@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
 rem ============================================================
@@ -490,8 +490,24 @@ echo Dependencies: OK
 echo.
 echo Running final AI Core health check...
 
-"%PYTHON%" -c "import os, torch; from AI.config import CoreConfig; from AI.service import AICoreService; c=CoreConfig.from_env(); s=AICoreService(c); h=s.health(); print('AI Core:', h); print('CUDA:', torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'); assert h['separation_configured'], 'RoFormer/MSST is not configured'; assert not h['fallback_enabled'], 'Production fallback must be disabled'"
-if errorlevel 1 goto :fail
+rem AI is a top-level package inside backend.  The installer may be launched
+rem from the project root, PowerShell, Explorer, or another working directory,
+rem so never rely on the caller's current directory for Python imports.
+set "_OLD_PYTHONPATH=%PYTHONPATH%"
+if defined PYTHONPATH (
+    set "PYTHONPATH=%ROOT%;%PYTHONPATH%"
+) else (
+    set "PYTHONPATH=%ROOT%"
+)
+
+pushd "%ROOT%"
+"%PYTHON%" -c "import os, sys, torch; from pathlib import Path; assert Path.cwd().resolve() == Path(r'%ROOT%').resolve(), f'Unexpected health-check cwd: {Path.cwd()}'; from AI.config import CoreConfig; from AI.service import AICoreService; c=CoreConfig.from_env(); s=AICoreService(c); h=s.health(); print('AI Core:', h); print('CUDA:', torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'); assert h['separation_configured'], 'RoFormer/MSST is not configured'; assert not h['fallback_enabled'], 'Production fallback must be disabled'"
+set "HEALTH_ERROR=%ERRORLEVEL%"
+popd
+set "PYTHONPATH=%_OLD_PYTHONPATH%"
+set "_OLD_PYTHONPATH="
+if not "%HEALTH_ERROR%"=="0" goto :fail
+set "HEALTH_ERROR="
 
 echo.
 echo ============================================================

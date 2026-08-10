@@ -312,13 +312,45 @@ class CTCWordAligner:
             return self._processor, self._model
         try:
             import torch
-            from transformers import AutoModelForCTC, AutoProcessor
+            from transformers import (
+                AutoFeatureExtractor,
+                AutoModelForCTC,
+                AutoProcessor,
+                AutoTokenizer,
+                Wav2Vec2Processor,
+            )
         except ImportError as exc:
             raise EngineUnavailableError("transformers + torch are required for CTC alignment") from exc
 
         self.release()
         self._device = select_torch_device(torch)
-        self._processor = AutoProcessor.from_pretrained(model_path, local_files_only=True)
+
+        # Some local CTC checkpoints (notably *-with-small-lm models) advertise
+        # Wav2Vec2ProcessorWithLM in their metadata. AutoProcessor then requires
+        # pyctcdecode/kenlm even though this aligner never decodes with an LM: we
+        # consume the model logits directly in a CTC Viterbi forced alignment.
+        # Prefer AutoProcessor for ordinary checkpoints, but transparently fall
+        # back to a plain feature-extractor + tokenizer processor when the LM
+        # wrapper dependency is unavailable.
+        try:
+            self._processor = AutoProcessor.from_pretrained(
+                model_path, local_files_only=True
+            )
+        except ImportError as exc:
+            message = str(exc).lower()
+            if "pyctcdecode" not in message and "processorwithlm" not in message:
+                raise
+            feature_extractor = AutoFeatureExtractor.from_pretrained(
+                model_path, local_files_only=True
+            )
+            tokenizer = AutoTokenizer.from_pretrained(
+                model_path, local_files_only=True
+            )
+            self._processor = Wav2Vec2Processor(
+                feature_extractor=feature_extractor,
+                tokenizer=tokenizer,
+            )
+
         self._model = AutoModelForCTC.from_pretrained(model_path, local_files_only=True)
         self._model.eval().to(self._device)
         self._loaded_key = model_path

@@ -1,26 +1,26 @@
-import { Grid } from "../../../../theme/ui";
-import ConsoleCenter from "./center";
+import { Grid, Stack } from "../../../../theme/ui";
 import MixerPanel from "./mixer";
-// import ToolsPanel from "./tools";
 
 export default function KaraokeConsole({
   autoHideEnabled,
   onAutoHideChange,
-  onClose,
   ...props
 }) {
   return (
-    <div className="karaoke-transport-area karaoke-studio-console">
+    <Stack
+      className="karaoke-transport-area"
+      style={{ backgroundColor: "black" }}
+    >
       {/* <SongStrip {...props} /> */}
-      <Grid columns={3}>
+      <Grid columns={3} gap="1rem" px="1rem">
         <MixerPanel {...props} />
-        <ConsoleCenter {...props} />
-        {/*  <ToolsPanel
+        {/* <ConsoleCenter {...props} />
+        <ToolsPanel
           {...props}
           autoHideEnabled={autoHideEnabled}
           onAutoHideChange={onAutoHideChange}
         /> */}
       </Grid>
-    </div>
+    </Stack>
   );
 }

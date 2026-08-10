@@ -1428,12 +1428,6 @@ select:focus,
   gap: var(--space-2);
 }
 
-.karaoke-transport-area {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
 .karaoke-timecode,
 .karaoke-timecode-end {
   font-family: var(--font-mono);
@@ -4446,7 +4440,6 @@ select:focus,
   }
   .karaoke-stage {
     --karaoke-roll-height: 9rem;
-    --karaoke-controls-height: 11.5rem;
   }
   .melody-roll {
     block-size: clamp(10rem, 21vh, 12rem);
@@ -4459,9 +4452,7 @@ select:focus,
   .karaoke-lyric {
     font-size: clamp(1.9rem, 7.5vw, 3.2rem);
   }
-  .karaoke-transport-area {
-    padding-inline: 0.7rem;
-  }
+
   .karaoke-player-meta {
     grid-column: 1 / -1;
   }
@@ -4675,7 +4666,6 @@ select:focus,
   display: block;
   --karaoke-roll-top: clamp(0.7rem, 1.8vh, 1.35rem);
   --karaoke-roll-inline: clamp(0.75rem, 2.2vw, 2.25rem);
-  --karaoke-controls-height: clamp(8.75rem, 17dvh, 11.5rem);
   --karaoke-accent-glow: color-mix(
     in srgb,
     var(--color-primary) 58%,
@@ -4823,8 +4813,6 @@ select:focus,
 }
 
 .karaoke-transport-area {
-  display: grid;
-  border-block-start: var(--hairline) solid var(--color-border);
   transition:
     opacity var(--duration-fast) var(--ease-standard),
     transform var(--duration-fast) var(--ease-standard);
@@ -4834,11 +4822,7 @@ select:focus,
   box-shadow: none;
   backdrop-filter: none;
   inset: auto var(--karaoke-hud-inset) var(--karaoke-hud-inset);
-  min-block-size: 0;
-  padding: 0;
-  border-radius: 0;
   background: transparent;
-  gap: 0.36rem;
 }
 
 .karaoke-player-meta strong {
@@ -4958,10 +4942,7 @@ select:focus,
     grid-column: 1 / -1;
     inline-size: 100%;
   }
-  .karaoke-transport-area {
-    inset-inline: 0.45rem;
-    inset-block-end: 0.45rem;
-  }
+
   .karaoke-player-meta {
     grid-column: 1 / -1;
   }
@@ -5713,7 +5694,6 @@ select:focus,
     block-size: clamp(11.5rem, 22vh, 14rem);
   }
   .karaoke-stage {
-    --karaoke-controls-height: 10rem;
     --karaoke-roll-height: clamp(7rem, 14dvh, 8.7rem);
     --karaoke-hud-height: auto;
   }
