@@ -53,7 +53,11 @@ export default function Karaoke({ onOpenAppSettings }) {
   } = useRadio();
   const location = useLocation();
   const navigate = useNavigate();
-  const { data: songs } = usePolling(api.listSongs, 15000, []);
+  const { data: songs, error: songsError } = usePolling(
+    api.listSongs,
+    15000,
+    []
+  );
   const songId = location.state?.songId || null;
   const song = songId
     ? (songs || []).find((s) => s.id === songId)
@@ -547,12 +551,31 @@ export default function Karaoke({ onOpenAppSettings }) {
 
   useKaraokeStageLayout(containerRef);
 
+  if (songsError) {
+    return (
+      <div className="panel">
+        <p className="field-error">
+          Не удалось загрузить библиотеку: {songsError.message || "ошибка соединения"}.
+        </p>
+      </div>
+    );
+  }
+
+  if (!songs) {
+    return (
+      <div className="panel">
+        <p className="text-muted">Загружаем песню…</p>
+      </div>
+    );
+  }
+
   if (!song) {
     return (
       <div className="panel">
         <p className="text-muted">
-          Нет готовой песни для воспроизведения. Сначала обработайте песню в
-          Библиотеке.
+          {songId
+            ? "Выбранная песня не найдена. Вернитесь в Библиотеку и откройте её снова."
+            : "Нет готовой песни для воспроизведения. Сначала обработайте песню в Библиотеке."}
         </p>
       </div>
     );

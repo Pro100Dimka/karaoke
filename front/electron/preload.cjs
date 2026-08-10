@@ -7,6 +7,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   openSongFolder: (song) => ipcRenderer.invoke("shell:openSongFolder", song),
 
+  selectFolder: (currentPath) =>
+    ipcRenderer.invoke("dialog:selectFolder", currentPath),
+
   getBackendUrl: () => ipcRenderer.invoke("backend:url"),
 
   getSceneVideoUrl: () => "karaoke-media://scene/main",

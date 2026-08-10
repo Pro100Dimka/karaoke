@@ -6,6 +6,7 @@ from AI.engines.text import (
     Qwen3ForcedAligner,
     _activity_fallback_words,
     _anchor_preserving_canonical_alignment,
+    _line_aware_canonical_alignment,
     _group_lyric_text,
     _pathological_alignment,
     _trim_transcript_overlaps,
@@ -765,3 +766,208 @@ def test_long_interpolated_gap_uses_vocal_islands_instead_of_spanning_silence(mo
     # At least one real pause between word groups must survive.
     gaps = [right.start - left.end for left, right in zip(middle, middle[1:])]
     assert max(gaps) > 1.0
+
+
+def test_line_aware_merge_never_scatter_one_line_across_remote_vocal_islands(monkeypatch):
+    from types import SimpleNamespace
+
+    groups = [
+        "Пропал голубем синицею в руке",
+        "Я застывал в ожидании тебя",
+        "Неблагодарно",
+    ]
+    # Good acoustic anchors for the lines around the problematic missing line.
+    ctc_lines = [
+        SimpleNamespace(
+            words=[
+                Word(24.2, 24.7, "Пропал", 0.92, 0),
+                Word(24.8, 25.4, "голубем", 0.88, 1),
+                Word(25.5, 26.2, "синицею", 0.84, 2),
+                Word(26.3, 26.42, "в", 0.97, 3),
+                Word(26.45, 26.9, "руке", 0.90, 4),
+            ],
+            confidence=0.90,
+        ),
+        None,
+        SimpleNamespace(
+            words=[Word(33.0, 34.0, "Неблагодарно", 0.91, 0)],
+            confidence=0.91,
+        ),
+    ]
+    # Even with many remote activity islands, one written line must get one
+    # bounded local window instead of one word per island.
+    monkeypatch.setattr(
+        text_engine,
+        "_activity_quantile_times",
+        lambda *_args, **_kwargs: [23.5, 35.0],
+    )
+    audio = np.ones(16000 * 36, dtype=np.float32) * 0.02
+    merged, stats = _line_aware_canonical_alignment(
+        groups, ctc_lines, [], audio, 16000, 36.0, {}
+    )
+
+    assert len(merged) == 11
+    second = merged[5:10]
+    assert [word.text for word in second] == ["Я", "застывал", "в", "ожидании", "тебя"]
+    assert second[-1].end - second[0].start < 7.0
+    assert max(
+        [right.start - left.end for left, right in zip(second, second[1:])] or [0.0]
+    ) <= 1.65
+    assert stats["ctc"] >= 5
+
+
+def test_line_aware_merge_preserves_ctc_confidence_inside_complete_line():
+    from types import SimpleNamespace
+
+    groups = ["one two three", "four five"]
+    ctc_lines = [
+        SimpleNamespace(
+            words=[
+                Word(2.0, 2.4, "one", 0.91, 0),
+                Word(2.45, 2.9, "two", 0.87, 1),
+                Word(3.0, 3.5, "three", 0.93, 2),
+            ],
+            confidence=0.90,
+        ),
+        None,
+    ]
+    audio = np.ones(16000 * 10, dtype=np.float32) * 0.02
+    merged, stats = _line_aware_canonical_alignment(
+        groups, ctc_lines, [], audio, 16000, 10.0, {}
+    )
+    assert len(merged) == 5
+    assert merged[0].confidence == pytest.approx(0.91)
+    assert merged[1].confidence == pytest.approx(0.87)
+    assert merged[2].confidence == pytest.approx(0.93)
+    assert stats["ctc"] == 3
+    assert stats["interpolated"] == 2
+
+
+def test_line_aware_merge_anti_squeeze_is_per_line_not_global():
+    groups = [
+        "intro",
+        "Пропал без вести в японских лагерях",
+        "outro",
+    ]
+    # Bad coarse ASR windows try to place the middle line into a tiny global
+    # area. They are hints only; the line must still retain a physical span.
+    anchors = {
+        0: (4.8, 5.3, 0.8),
+        1: (5.35, 5.75, 0.25),
+        2: (8.1, 8.7, 0.8),
+    }
+    audio = np.ones(16000 * 12, dtype=np.float32) * 0.02
+    merged, stats = _line_aware_canonical_alignment(
+        groups, [None, None, None], [], audio, 16000, 12.0, anchors
+    )
+    assert len(merged) == 8
+    phrase = merged[1:7]
+    assert phrase[-1].end - phrase[0].start >= 1.4
+    assert all(word.end - word.start >= 0.075 for word in phrase)
+
+
+def test_long_text_does_not_abort_when_all_raw_ctc_anchors_are_rejected(monkeypatch):
+    from types import SimpleNamespace
+
+    sample_rate = 16_000
+    audio = np.ones(sample_rate * 20, dtype=np.float32) * 0.05
+    monkeypatch.setattr(
+        text_engine,
+        "load_mono",
+        lambda _audio, _sample_rate: (audio, sample_rate),
+    )
+
+    aligner = Qwen3ForcedAligner("unused")
+    groups = ["one two three", "four five six", "seven eight nine"]
+
+    class FakeCTC:
+        last_resource_diagnostics = {}
+
+        def available_for(self, language, text):
+            return True
+
+        def align_lines(self, audio_path, lines, language, anchors):
+            # Raw CTC exists, but every line is intentionally placed in a
+            # mutually incompatible part of the song so line-aware merge may
+            # reject all acoustic anchors. This must fall back, not crash.
+            return [
+                SimpleNamespace(
+                    words=[
+                        Word(18.0, 18.4, "one", 0.9, 0),
+                        Word(18.45, 18.9, "two", 0.9, 1),
+                        Word(19.0, 19.4, "three", 0.9, 2),
+                    ],
+                    confidence=0.9,
+                ),
+                SimpleNamespace(
+                    words=[
+                        Word(1.0, 1.3, "four", 0.9, 0),
+                        Word(1.35, 1.7, "five", 0.9, 1),
+                        Word(1.75, 2.1, "six", 0.9, 2),
+                    ],
+                    confidence=0.9,
+                ),
+                None,
+            ]
+
+        def release(self):
+            return None
+
+    aligner._ctc = FakeCTC()
+    monkeypatch.setattr(aligner, "align", lambda *_args, **_kwargs: [])
+
+    lyric_text = "\n".join(groups)
+    words = aligner.align_long_text("song.wav", lyric_text, "English")
+    expected = [token for group in groups for token in text_engine.tokenize(group)]
+
+    assert [word.text for word in words] == expected
+    assert len(words) == len(expected)
+    assert all(
+        right.start >= left.end - 1e-6
+        for left, right in zip(words, words[1:], strict=False)
+    )
+
+
+def test_lossless_baseline_ignores_pathological_asr_anchor_compression():
+    sample_rate = 16_000
+    audio = np.ones(sample_rate * 145, dtype=np.float32) * 0.05
+    groups = [
+        "Большой широкий город магистрали и дома",
+        "Гусары в окнах бесполезная тюрьма",
+        "Зеленым яблоком железо запоет",
+        "Ты станешь слаще",
+        "А я",
+        "Пропал без вести в японских лагерях",
+        "Пропал голубем синицею в руке",
+        "Я застывал в ожидании тебя",
+        "Неблагодарно",
+        "С тобой",
+    ] + [f"длинная тестовая строка номер {i}" for i in range(27)]
+
+    # Reproduce the class of v22 failure: late ASR anchors force many following
+    # lines into a tiny sub-second range. The canonical safety baseline must not
+    # obey these destructive anchors.
+    anchors = {
+        7: (43.0, 45.0, 0.8),
+        13: (95.5, 96.0, 0.9),
+        29: (96.2, 97.0, 0.9),
+    }
+    words = text_engine._lossless_canonical_alignment(
+        groups, audio, sample_rate, 145.0, anchors
+    )
+
+    expected = [token for group in groups for token in text_engine.tokenize(group)]
+    assert [word.text for word in words] == expected
+    assert all(
+        right.start >= left.end - 1e-6
+        for left, right in zip(words, words[1:], strict=False)
+    )
+
+    offset = 0
+    for group in groups:
+        tokens = text_engine.tokenize(group)
+        line = words[offset:offset + len(tokens)]
+        assert len(line) == len(tokens)
+        assert line[-1].end - line[0].start >= text_engine._minimum_sung_phrase_duration(tokens) - 1e-6
+        assert all(word.end - word.start >= 0.019 for word in line)
+        offset += len(tokens)

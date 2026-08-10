@@ -376,7 +376,6 @@ export function RadioProvider({ children }) {
           playbackVersion === playbackVersionRef.current
         ) {
           setPlaying(false);
-          setError("Не удалось запустить радио");
           setError(
             reason?.message
               ? `Не удалось запустить радио: ${reason.message}`

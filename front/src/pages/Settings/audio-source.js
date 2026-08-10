@@ -41,22 +41,38 @@ const getSignalLevel = (signal) => {
     : 0;
 };
 
-export default function useAudioSettingsSource() {
+export default function useAudioSettingsSource({ enabled = true } = {}) {
   const { alert } = useAppDialog();
 
   const { data: settings, refresh } = usePolling(
-    api.getAudioSettings,
-    15000,
-    []
+    () => (enabled ? api.getAudioSettings() : Promise.resolve(null)),
+    enabled ? 15000 : 0,
+    [enabled]
   );
 
-  const { data: devices } = usePolling(api.listAudioDevices, 30000, []);
+  const { data: devices } = usePolling(
+    () => (enabled ? api.listAudioDevices() : Promise.resolve([])),
+    enabled ? 30000 : 0,
+    [enabled]
+  );
 
-  const { data: outputs } = usePolling(api.listAudioOutputDevices, 30000, []);
+  const { data: outputs } = usePolling(
+    () => (enabled ? api.listAudioOutputDevices() : Promise.resolve([])),
+    enabled ? 30000 : 0,
+    [enabled]
+  );
 
-  const { data: asioDrivers } = usePolling(api.listAsioDrivers, 30000, []);
+  const { data: asioDrivers } = usePolling(
+    () => (enabled ? api.listAsioDrivers() : Promise.resolve([])),
+    enabled ? 30000 : 0,
+    [enabled]
+  );
 
-  const { data: signal } = usePolling(api.getSignalQuality, 80, []);
+  const { data: signal } = usePolling(
+    () => (enabled ? api.getSignalQuality() : Promise.resolve(null)),
+    enabled ? 80 : 0,
+    [enabled]
+  );
 
   const [browserDevices, setBrowserDevices] = useState(EMPTY_BROWSER_DEVICES);
 
@@ -90,7 +106,7 @@ export default function useAudioSettingsSource() {
 
   const { audioDriver, monitoringEnabled, volume } = runtime;
 
-  const targetLevel = monitoringEnabled
+  const targetLevel = enabled && monitoringEnabled
     ? Math.max(localSpeakingLevel * 100, getSignalLevel(signal))
     : 0;
 
@@ -121,7 +137,7 @@ export default function useAudioSettingsSource() {
   }, [targetLevel, monitoringEnabled]);
 
   useEffect(() => {
-    if (!monitoringEnabled) {
+    if (!enabled || !monitoringEnabled) {
       return;
     }
 
@@ -146,7 +162,7 @@ export default function useAudioSettingsSource() {
     }, 50);
 
     return () => clearInterval(timer);
-  }, [monitoringEnabled]);
+  }, [enabled, monitoringEnabled]);
 
   const stopLocalMeter = useCallback(() => {
     stopSpeakingMeter("local");
@@ -216,7 +232,7 @@ export default function useAudioSettingsSource() {
   ]);
 
   useEffect(() => {
-    if (!monitoringEnabled) {
+    if (!enabled || !monitoringEnabled) {
       stopLocalMeter();
 
       return stopLocalMeter;
@@ -254,6 +270,7 @@ export default function useAudioSettingsSource() {
       stopLocalMeter();
     };
   }, [
+    enabled,
     monitoringEnabled,
     prepareSpeakingMeter,
     startLocalMeter,
@@ -261,6 +278,11 @@ export default function useAudioSettingsSource() {
   ]);
 
   useEffect(() => {
+    if (!enabled) {
+      setBrowserDevices(EMPTY_BROWSER_DEVICES);
+      return undefined;
+    }
+
     const mediaDevices = globalThis.navigator?.mediaDevices;
 
     if (typeof mediaDevices?.enumerateDevices !== "function") {
@@ -281,7 +303,7 @@ export default function useAudioSettingsSource() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [enabled]);
 
   const execute = (action, errorText) =>
     queue(async () => {
@@ -290,9 +312,10 @@ export default function useAudioSettingsSource() {
 
         await refresh?.();
 
-        return result;
+        return { ok: true, value: result };
       } catch (error) {
         await alert(`${errorText}: ${getErrorMessage(error)}`);
+        return { ok: false, error };
       }
     });
 
@@ -324,25 +347,28 @@ export default function useAudioSettingsSource() {
       })
     );
 
-  const toggleMonitoring = () => {
-    if (monitoringEnabled) {
-      stopLocalMeter();
-    } else {
-      prepareSpeakingMeter();
-
-      startLocalMeter().catch(() => {});
-    }
-
-    return runMonitoring(() =>
-      execute(
-        monitoringEnabled
-          ? api.stopDirectMonitoring
-          : api.startDirectMonitoring,
-
+  const toggleMonitoring = () =>
+    runMonitoring(async () => {
+      const enabling = !monitoringEnabled;
+      const result = await execute(
+        enabling ? api.startDirectMonitoring : api.stopDirectMonitoring,
         "Не удалось изменить прослушивание"
-      )
-    );
-  };
+      );
+
+      if (!result?.ok) {
+        if (enabling) stopLocalMeter();
+        return false;
+      }
+
+      if (enabling) {
+        prepareSpeakingMeter();
+        await startLocalMeter().catch(() => false);
+      } else {
+        stopLocalMeter();
+      }
+
+      return true;
+    });
 
   const testSpeakers = useCallback(async () => {
     if (speakerTestState === "playing") {

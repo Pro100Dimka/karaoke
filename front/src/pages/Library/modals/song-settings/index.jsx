@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { api } from "../../../../api/client";
 import Button from "../../../../components/fields/button";
 import Modal from "../../../../components/modal";
-import { Panel } from "../../../../components/ui";
 import { useAppDialog } from "../../../../contexts/AppDialog";
 import useExclusiveAsyncAction from "../../../../hooks/useExclusiveAsyncAction";
 import { usePolling } from "../../../../hooks/usePolling";
@@ -12,8 +11,11 @@ import { ConfigForm, NumberField, Stack } from "../../../../theme/ui";
 import { getErrorMessage } from "../../../../utils/errors";
 
 import { SONG_FIELDS } from "./config";
-import useSongLyrics from "./hooks/use-song-lyrics";
-import { createSongPayload, getSelectedSong } from "./utils";
+import {
+  createSongPayload,
+  getSelectedSong,
+  validateSongSettings
+} from "./utils";
 
 const setField = (setter, name, value) =>
   setter((current) => ({ ...current, [name]: value }));
@@ -49,32 +51,43 @@ const SONG_RENDERERS = {
 
 export default function SongSettings({ songId, onClose }) {
   const { alert: notify } = useAppDialog();
-  const { data: songs } = usePolling(api.listSongs, 5000, []);
+  const {
+    data: songs,
+    error: songsError,
+    refresh: refreshSongs
+  } = usePolling(api.listSongs, 5000, []);
   const { pending: saving, run: runSave } = useExclusiveAsyncAction();
 
   const song = getSelectedSong(songs, songId);
   const [form, setForm] = useState(null);
-  const { lyrics, saveLyrics, updateLyricsText } = useSongLyrics(song);
 
   useEffect(() => {
     setForm(song ? { ...song } : null);
   }, [song]);
 
-  if (!song || !form) {
-    return (
-      <Panel title="Настройки песни">
-        <p className="text-muted">Нет песен — добавьте песню в Библиотеке.</p>
-      </Panel>
-    );
-  }
-
   const updateField = (name, value) => setField(setForm, name, value);
 
   const save = () =>
     runSave(async () => {
+      if (!song || !form) return;
+
+      const validationError = validateSongSettings(form);
+      if (validationError) {
+        await notify(validationError);
+        return;
+      }
+
       try {
-        if (song.status === "done" && !(await saveLyrics())) return;
-        await api.updateSong(song.id, createSongPayload(form, song));
+        const updated = await api.updateSong(
+          song.id,
+          createSongPayload(form, song)
+        );
+
+        if (updated && typeof updated === "object") {
+          setForm((current) => ({ ...current, ...updated }));
+        }
+
+        await refreshSongs?.();
       } catch (error) {
         await notify(`Не удалось сохранить: ${getErrorMessage(error)}`);
       }
@@ -85,13 +98,13 @@ export default function SongSettings({ songId, onClose }) {
       isOpen
       portal
       onClose={onClose}
-      ariaLabel={`Настройки песни ${song.title}`}
+      ariaLabel={`Настройки песни ${song?.title || ""}`.trim()}
       titleProps={{
         icon: Music2,
         eyebrow: "КАРАОКЕ · РЕДАКТОР",
         title: "Настройки песни",
-        description: song.title,
-        actions: (
+        description: song?.title || "Загружаем данные песни…",
+        actions: song && form ? (
           <Button
             icon={Save}
             variant="primary"
@@ -101,16 +114,39 @@ export default function SongSettings({ songId, onClose }) {
           >
             {saving ? "Сохранение…" : "Сохранить"}
           </Button>
-        )
+        ) : null
       }}
     >
-      <ConfigForm
-        fields={SONG_FIELDS}
-        context={{ form, onChange: updateField }}
-        renderers={SONG_RENDERERS}
-        columns={12}
-        sx={{ padding: "1rem" }}
-      />
+      {songsError ? (
+        <Stack gap={1} sx={{ padding: "1rem" }}>
+          <p className="field-error">
+            Не удалось загрузить песню: {getErrorMessage(songsError)}
+          </p>
+          <Button variant="ghost" onClick={() => refreshSongs?.()}>
+            Повторить
+          </Button>
+        </Stack>
+      ) : !songs ? (
+        <p className="text-muted" style={{ padding: "1rem" }}>
+          Загружаем настройки песни…
+        </p>
+      ) : !song ? (
+        <p className="field-error" style={{ padding: "1rem" }}>
+          Песня не найдена. Возможно, она была удалена.
+        </p>
+      ) : !form ? (
+        <p className="text-muted" style={{ padding: "1rem" }}>
+          Подготавливаем настройки…
+        </p>
+      ) : (
+        <ConfigForm
+          fields={SONG_FIELDS}
+          context={{ form, onChange: updateField }}
+          renderers={SONG_RENDERERS}
+          columns={12}
+          sx={{ padding: "1rem" }}
+        />
+      )}
     </Modal>
   );
 }

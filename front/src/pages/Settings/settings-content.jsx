@@ -106,7 +106,7 @@ export default function SettingsContent({
   const [showAdvancedAudio, setShowAdvancedAudio] = useState(false);
 
   const radio = useRadio();
-  const audio = useAudioSettingsSource();
+  const audio = useAudioSettingsSource({ enabled: tab === "audio" });
   const ServiceScreen = SCREEN_BY_ID[service]?.component;
 
   const section = SETTINGS[tab];

@@ -16,6 +16,7 @@ const {
   app,
   BrowserWindow,
   clipboard,
+  dialog,
   ipcMain,
   net,
   protocol,
@@ -386,6 +387,23 @@ handleTrustedIpc("shell:openSongFolder", async (target) => {
   }
 
   return "Папка песни не найдена.";
+});
+handleTrustedIpc("dialog:selectFolder", async (currentPath) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return null;
+
+  const defaultPath =
+    typeof currentPath === "string" && currentPath.trim()
+      ? currentPath.trim()
+      : undefined;
+
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: "Выберите папку",
+    defaultPath,
+    properties: ["openDirectory", "createDirectory"]
+  });
+
+  if (result.canceled || !result.filePaths?.length) return null;
+  return result.filePaths[0];
 });
 handleTrustedIpc("backend:url", () => BACKEND_URL);
 handleTrustedIpc("clipboard:writeText", (value) => {

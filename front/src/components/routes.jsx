@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import Karaoke from "../pages/Karaoke";
 import Library from "../pages/Library";
 
@@ -22,6 +22,7 @@ export default function AppRoutes({ onOpenAppSettings, onOpenSongSettings }) {
           }
         />
       ))}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
