@@ -1,26 +1,53 @@
+import { Box, Stack } from "../../theme/ui";
+
 export default function ModalTitle({
   icon: Icon,
   eyebrow,
   title,
   description,
-  actions,
-  className = ""
+  actions
 }) {
   return (
-    <header className={`modal-title ${className}`.trim()}>
+    <Stack
+      direction="row"
+      align="center"
+      justify="space-between"
+      p="2rem"
+      gap="2rem"
+    >
       {Icon && (
-        <div className="modal-title__icon" aria-hidden="true">
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: `1.2rem`,
+            border: `var(--hairline) solid var(--color-border-strong)`,
+            borderRadius: `var(--radius-lg)`,
+            color: `var(--color-primary-hover)`,
+            background: `radial-gradient(
+      circle at 32% 24%,
+      color-mix(in srgb, var(--color-highlight) 16%, transparent),
+      transparent 42%
+    ),
+    color-mix(in srgb, var(--color-primary) 14%, var(--color-surface-glass))`,
+            boxShadow: `0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
+    0 0 1.875rem color-mix(in srgb, var(--color-accent) 24%, transparent),
+    inset 0 var(--hairline)
+      color-mix(in srgb, var(--color-highlight) 12%, transparent)`
+          }}
+        >
           <Icon size={24} />
-        </div>
+        </Box>
       )}
-      <div className="modal-title__copy">
+      <Stack align="start">
         {eyebrow && <span className="modal-title__eyebrow">{eyebrow}</span>}
         <h1 className="modal-title__heading">{title}</h1>
         {description && (
           <p className="modal-title__description">{description}</p>
         )}
-      </div>
+      </Stack>
       {actions && <div className="modal-title__actions">{actions}</div>}
-    </header>
+    </Stack>
   );
 }

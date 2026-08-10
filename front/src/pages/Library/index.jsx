@@ -248,18 +248,10 @@ export default function Library({ onOpenSongSettings }) {
       } catch (openError) {
         setKaraokeTransitioning(false);
         setGlobalRouteBlackout(false);
-        await notify(
-          `Не удалось открыть песню: ${getErrorMessage(openError)}`
-        );
+        await notify(`Не удалось открыть песню: ${getErrorMessage(openError)}`);
       }
     },
-    [
-      karaokeTransitioning,
-      navigate,
-      notify,
-      activeRoom,
-      openKaraokeInRoom
-    ]
+    [karaokeTransitioning, navigate, notify, activeRoom, openKaraokeInRoom]
   );
   return (
     <Stack align="center" sx={{ height: "100vh" }}>
@@ -296,18 +288,20 @@ export default function Library({ onOpenSongSettings }) {
               width: "110%",
               overflow: "auto",
               overflowX: "hidden",
-              padding: "4% 5%"
+              padding: "0.5% 5%"
             }}
           >
             <Grid
-              minItemWidth="30rem"
+              columns={3}
               gap={20}
-              sx={{
-                width: "100%",
-                alignItems: "stretch",
-                alignContent: "start",
-                overflow: "visible"
-              }}
+              sx={{ margin: "1rem 0", marginBottom: "7rem" }}
+              // minItemWidth="30rem"
+              // sx={{
+              //   width: "100%",
+              //   alignItems: "stretch",
+              //   alignContent: "start",
+              //   overflow: "visible"
+              // }}
             >
               {filtered.map((song, cardIndex) => (
                 <LibrarySongCard

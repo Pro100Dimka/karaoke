@@ -2,7 +2,7 @@ import Primitive from "../_internal/Primitive";
 import cx from "../_internal/cx";
 import "./grid.css";
 
-const unit = value => (typeof value === "number" ? `${value}px` : value);
+const unit = (value) => (typeof value === "number" ? `${value}px` : value);
 
 export default function Grid({
   as = "div",

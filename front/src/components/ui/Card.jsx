@@ -7,6 +7,7 @@ const Card = forwardRef(
       className = "",
       variant = "glass",
       children,
+      overlay,
       onPointerMove,
       onPointerLeave,
       tilt = true,
@@ -42,6 +43,7 @@ const Card = forwardRef(
       if (isNeon) {
         event.currentTarget.style.removeProperty("--card-mx");
         event.currentTarget.style.removeProperty("--card-my");
+
         if (tilt) {
           event.currentTarget.style.removeProperty("--tilt-x");
           event.currentTarget.style.removeProperty("--tilt-y");
@@ -54,7 +56,9 @@ const Card = forwardRef(
     return (
       <Component
         ref={ref}
-        className={`ui-card ui-card--${variant} ${!tilt ? "ui-card--no-tilt" : ""} ${className}`.trim()}
+        className={`ui-card ui-card--${variant} ${
+          !tilt ? "ui-card--no-tilt" : ""
+        } ${className}`.trim()}
         onPointerMove={handlePointerMove}
         onPointerLeave={handlePointerLeave}
         {...props}
@@ -68,11 +72,13 @@ const Card = forwardRef(
             />
             <span className="ui-card__fx ui-card__edge" aria-hidden="true" />
             <span className="ui-card__fx ui-card__glint" aria-hidden="true" />
+
             <div
               {...cardPanel}
               className={`ui-card__panel ${cardPanel?.className || ""}`}
             >
               <span className="ui-card__fx ui-card__sheen" aria-hidden="true" />
+
               <div
                 {...cardContent}
                 className={`ui-card__content ${cardContent?.className || ""}`}
@@ -80,13 +86,20 @@ const Card = forwardRef(
                 {children}
               </div>
             </div>
+
+            {overlay}
           </>
         ) : (
-          children
+          <>
+            {children}
+            {overlay}
+          </>
         )}
       </Component>
     );
   }
 );
+
+Card.displayName = "Card";
 
 export default Card;

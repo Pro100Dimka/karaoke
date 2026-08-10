@@ -141,7 +141,7 @@ def _words_from_items(items) -> list[Word]:
 
 
 ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v14-duration-guard"
-LONG_TEXT_ALIGNMENT_VERSION = "v22-synced-lyrics-anchor-guard"
+LONG_TEXT_ALIGNMENT_VERSION = "v24-production-soft-lrc-acoustic-windows"
 
 
 def _normalize_singing_audio(y: np.ndarray) -> np.ndarray:
@@ -522,6 +522,69 @@ def _activity_fallback_words(
     return output
 
 
+
+def _segment_alignment_is_usable(
+    words: list[Word], tokens: list[str], span: float
+) -> bool:
+    """Accept forced-alignment output only if it fits its authoritative LRC window.
+
+    Qwen can occasionally return plausible-looking durations at timestamps from a
+    different context.  The old code checked durations but not absolute bounds,
+    then clamped those out-of-window words one by one to ``segment_end``.  That
+    converted an entire lyric line into a train of 20 ms words.
+    """
+    if not words or not tokens or len(words) != len(tokens):
+        return False
+    span = max(0.0, float(span))
+    if span <= 0.04 or _pathological_alignment(words, span):
+        return False
+
+    expected = [token.casefold() for token in tokens]
+    actual = []
+    for word in words:
+        parts = tokenize(word.text)
+        if len(parts) != 1:
+            return False
+        actual.append(parts[0].casefold())
+    if actual != expected:
+        return False
+
+    previous_end = -1e-6
+    for word in words:
+        start = float(word.start)
+        end = float(word.end)
+        if start < -0.05 or end > span + 0.05 or end <= start + 0.009:
+            return False
+        if start < previous_end - 0.02:
+            return False
+        previous_end = end
+    return True
+
+
+
+
+def _minimum_sung_phrase_duration(tokens: list[str]) -> float:
+    """Conservative physical lower bound for a sung lyric line.
+
+    LRC providers occasionally contain corrupt neighbouring timestamps.  A six-word
+    line cannot truthfully occupy a few hundred milliseconds, so such a boundary
+    must be treated as a hint rather than as an authoritative crop.
+    """
+    if not tokens:
+        return 0.0
+    characters = sum(len(token) for token in tokens)
+    return max(0.28, 0.135 * len(tokens) + 0.0065 * characters)
+
+
+def _expected_sung_phrase_duration(tokens: list[str]) -> float:
+    if not tokens:
+        return 0.5
+    characters = sum(len(token) for token in tokens)
+    return max(0.65, 0.34 * len(tokens) + 0.024 * characters)
+
+
+def _lrc_window_is_plausible(tokens: list[str], span: float) -> bool:
+    return float(span) + 1e-6 >= _minimum_sung_phrase_duration(tokens)
 
 def _timed_segment_fallback_words(tokens: list[str], span: float) -> list[Word]:
     """Build safe word timings inside an authoritative LRC line window.
@@ -1038,11 +1101,19 @@ class Qwen3ForcedAligner(Aligner):
         return words
 
     def align_segments(self, audio, segments, language):
-        """Align short ASR-owned phrases and return one global word timeline.
+        """Align timed lyric lines using LRC timestamps as *soft* acoustic hints.
 
-        Qwen's forced aligner can collapse a long song after its context limit,
-        assigning dozens of words the same timestamp. The ASR already split the
-        vocal at acoustic valleys, so reuse those exact windows for alignment.
+        Production lyrics providers sometimes contain one or more corrupt LRC
+        anchors.  Cropping a line strictly at the next bad timestamp was the cause
+        of the TRITIA regression: a six-word phrase was forced into ~0.44 s.
+
+        Rules used here:
+        * a physically plausible LRC interval remains a strong location hint;
+        * an implausibly short interval is automatically widened;
+        * Qwen is allowed to move word boundaries inside the widened search window;
+        * a monotonic acoustic cursor prevents repeated chorus lines from jumping
+          backwards to an earlier occurrence;
+        * no candidate is ever clamped word-by-word to a broken LRC boundary.
         """
         try:
             import soundfile as sf
@@ -1050,60 +1121,137 @@ class Qwen3ForcedAligner(Aligner):
             raise EngineUnavailableError("soundfile is required for segmented alignment") from exc
 
         source, sample_rate = load_mono(audio, 16000)
+        duration_sec = len(source) / sample_rate
         output: list[Word] = []
         cursor = 0.0
+        ordered = sorted(segments, key=lambda item: (float(item[0]), float(item[1])))
+
         with tempfile.TemporaryDirectory(prefix="karaoke-align-") as temp_dir:
             root = Path(temp_dir)
-            for segment_index, (start, end, text) in enumerate(
-                sorted(segments, key=lambda item: (float(item[0]), float(item[1])))
-            ):
+            for segment_index, (start, end, text) in enumerate(ordered):
                 tokens = tokenize(text)
                 if not tokens:
                     continue
-                segment_start = max(0.0, float(start))
-                segment_end = max(segment_start + 0.02, float(end))
-                left = max(0, min(max(0, len(source) - 1), int(segment_start * sample_rate)))
-                right = max(left + 1, min(len(source), int(segment_end * sample_rate)))
+
+                anchor_start = max(0.0, float(start))
+                if anchor_start >= duration_sec - 0.01:
+                    continue
+                anchor_end = min(duration_sec, max(anchor_start + 0.04, float(end)))
+                anchor_span = max(0.0, anchor_end - anchor_start)
+                plausible_anchor = _lrc_window_is_plausible(tokens, anchor_span)
+                expected = _expected_sung_phrase_duration(tokens)
+
+                # Good LRC gets a modest acoustic margin.  Bad LRC gets a generous
+                # look-ahead so the aligner can find the real sung phrase rather
+                # than being forced into the corrupt next timestamp.
+                pre_roll = 0.0 if plausible_anchor else 1.25
+                post_roll = max(0.85, expected * 0.55) if plausible_anchor else max(5.0, expected * 2.4)
+                search_start = max(0.0, anchor_start - pre_roll)
+                search_start = max(search_start, max(0.0, cursor - 0.18))
+                search_end = min(
+                    duration_sec,
+                    max(
+                        anchor_end + post_roll,
+                        search_start + expected * (2.1 if plausible_anchor else 3.6) + 1.5,
+                    ),
+                )
+                if search_end <= search_start + 0.10:
+                    continue
+
+                left = max(0, min(len(source) - 1, int(search_start * sample_rate)))
+                right = max(left + 1, min(len(source), int(search_end * sample_rate)))
                 path = root / f"segment-{segment_index:03d}.wav"
                 segment_audio = source[left:right]
                 sf.write(path, segment_audio, sample_rate, subtype="PCM_16")
-                try:
-                    local_words = self.align(path, text, language)
-                    candidate_start = segment_start + local_words[0].start if local_words else 0.0
-                    candidate_end = segment_start + local_words[-1].end if local_words else 0.0
-                    fallback_confidence = (
-                        sum(word.confidence for word in local_words) / len(local_words)
-                        if local_words else 0.0
-                    )
-                    if (
-                        _pathological_alignment(local_words, segment_end - segment_start)
-                        or fallback_confidence <= 0.10
-                        or candidate_start < cursor - 0.08
-                        or candidate_end <= cursor + 0.02
-                    ):
-                        local_words = _timed_segment_fallback_words(
-                            tokens, segment_end - segment_start
-                        )
-                except (InvalidArtifactError, RuntimeError, ValueError):
-                    local_words = _timed_segment_fallback_words(
-                        tokens, segment_end - segment_start
-                    )
+                search_span = search_end - search_start
 
-                for word in local_words:
-                    word_start = segment_start + word.start
-                    word_end = max(word_start + 0.02, segment_start + word.end)
-                    word_start = max(cursor, word_start)
-                    word_end = min(segment_end, max(word_start + 0.02, word_end))
-                    output.append(
-                        Word(
-                            word_start,
-                            word_end,
-                            word.text,
-                            word.confidence,
-                            len(output),
+                local_words: list[Word] = []
+                candidate: list[Word] = []
+                try:
+                    candidate = self.align(path, text, language)
+                    candidate_ok = _segment_alignment_is_usable(candidate, tokens, search_span)
+                    if candidate_ok:
+                        absolute_start = search_start + candidate[0].start
+                        absolute_end = search_start + candidate[-1].end
+                        candidate_duration = absolute_end - absolute_start
+                        candidate_ok = (
+                            absolute_start >= cursor - 0.20
+                            and absolute_end <= search_end + 0.05
+                            and candidate_duration >= _minimum_sung_phrase_duration(tokens)
                         )
-                    )
-                    cursor = word_end
+                        # For a healthy timestamp keep alignment near its line
+                        # anchor. Corrupt timestamps are deliberately allowed to
+                        # move much farther so Qwen can recover the real phrase.
+                        if plausible_anchor:
+                            candidate_ok = candidate_ok and (
+                                absolute_start >= anchor_start - 0.85
+                                and absolute_start <= anchor_end + 1.25
+                            )
+                    if candidate_ok:
+                        local_words = candidate
+                except (InvalidArtifactError, RuntimeError, ValueError):
+                    candidate = []
+
+                if not local_words:
+                    if plausible_anchor:
+                        # Healthy provider timing remains authoritative when Qwen
+                        # itself fails.  Do not let a fallback wander into the
+                        # neighbouring lyric line.
+                        local_words = _timed_segment_fallback_words(tokens, anchor_span)
+                        search_start = anchor_start
+                        search_end = anchor_end
+                    else:
+                        # Broken provider timing is only a hint. Acoustic fallback
+                        # operates on the expanded search audio and is therefore
+                        # able to continue past an impossible next timestamp.
+                        local_words = _activity_fallback_words(
+                            tokens,
+                            segment_audio,
+                            sample_rate,
+                            candidate or None,
+                            max(0.0, cursor - search_start),
+                        )
+
+                # Validate the whole line atomically. Do not clamp every word to
+                # anchor_end: that was exactly how trains of 20 ms words appeared.
+                line_words: list[Word] = []
+                for word in local_words:
+                    word_start = max(cursor, search_start + float(word.start))
+                    word_end = min(duration_sec, search_start + float(word.end))
+                    if word_end <= word_start + 0.009:
+                        line_words = []
+                        break
+                    line_words.append(Word(word_start, word_end, word.text, word.confidence, 0))
+
+                line_duration = (
+                    line_words[-1].end - line_words[0].start if line_words else 0.0
+                )
+                if (
+                    len(line_words) != len(tokens)
+                    or line_duration < _minimum_sung_phrase_duration(tokens)
+                ):
+                    # Last-resort timing stays inside the widened acoustic window
+                    # and starts at/after the monotonic cursor.  It is intentionally
+                    # low-confidence, but never physically impossible.
+                    fallback_start = max(cursor, anchor_start if plausible_anchor else search_start)
+                    available = max(0.08, search_end - fallback_start)
+                    safe_span = min(available, max(_minimum_sung_phrase_duration(tokens), expected * 1.25))
+                    line_words = [
+                        Word(
+                            fallback_start + word.start,
+                            fallback_start + word.end,
+                            word.text,
+                            0.03,
+                            0,
+                        )
+                        for word in _proportional_words(tokens, safe_span)
+                    ]
+
+                for word in line_words:
+                    output.append(Word(word.start, word.end, word.text, word.confidence, len(output)))
+                if line_words:
+                    cursor = max(cursor, line_words[-1].end)
+
         if not output:
             raise InvalidArtifactError("Segmented forced aligner returned no timed words")
         return output

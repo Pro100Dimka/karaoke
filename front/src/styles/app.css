@@ -137,7 +137,7 @@ svg {
 
 .ui-card__glow {
   z-index: -2;
-  inset: -1.125rem;
+  inset: 0.5rem;
   border-radius: calc(var(--radius-xl) + 0.75rem);
   padding: 0.1875rem;
   background: conic-gradient(
@@ -157,7 +157,7 @@ svg {
 
 .ui-card__glow-mid {
   z-index: -1;
-  inset: -0.375rem;
+  inset: 0rem;
   border-radius: calc(var(--radius-xl) + 0.375rem);
   background: conic-gradient(
     from var(--card-angle-reverse),
@@ -411,16 +411,24 @@ svg {
   z-index: 80;
   inset-block-start: var(--space-3);
   inset-inline-end: var(--space-3);
+
   display: grid;
   inline-size: 2.5rem;
   aspect-ratio: 1;
   place-items: center;
+
   border: var(--hairline) solid var(--color-border-strong);
-  border-radius: var(--radius-md);
+  border-radius: 50%;
+
   color: var(--color-text-soft);
-  background: color-mix(in srgb, var(--color-surface-strong) 74%, transparent);
+
+  /* полностью непрозрачный фон */
+  background: var(--color-surface-strong);
+  opacity: 1;
+
   box-shadow: inset 0 var(--hairline)
     color-mix(in srgb, var(--color-highlight) 8%, transparent);
+
   transition:
     color var(--duration-fast) var(--ease-standard),
     border-color var(--duration-fast) var(--ease-standard),
@@ -8176,31 +8184,46 @@ body {
 
 /* Close button stays on the corner, but is fully opaque so the neon border
    cannot be seen through the control. */
-.modal-card .app-modal-close,
-.modal-card .settings-modal-close,
-.modal-card .modal-close,
-.modal-card .performance-analysis-close,
-.modal-card .app-dialog-close {
-  background: var(--color-bg-elevated) !important;
-  border: 1px solid
-    color-mix(in srgb, var(--color-primary) 68%, var(--color-border-strong)) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
+.app-modal-close,
+.settings-modal-close,
+.modal-close,
+.performance-analysis-close,
+.app-dialog-close {
+  position: absolute;
+  z-index: 120;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  margin: 0;
+
+  inline-size: 2.65rem;
+  block-size: 2.65rem;
+  aspect-ratio: 1;
+
+  transform: translate(30%, -30%);
+
+  border: var(--hairline) solid var(--color-border-strong);
+  border-radius: 50%;
+
+  background: var(--color-bg-elevated);
+
+  opacity: 1;
+
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+
   box-shadow:
-    0 0.45rem 1.1rem color-mix(in srgb, var(--color-bg-deep) 62%, transparent),
-    0 0 0.8rem color-mix(in srgb, var(--color-primary) 34%, transparent) !important;
+    0 0.55rem 1.25rem color-mix(in srgb, var(--color-bg-deep) 34%, transparent),
+    0 0 0.7rem color-mix(in srgb, var(--color-primary) 32%, transparent);
 }
 
-.modal-card .app-modal-close:hover,
-.modal-card .settings-modal-close:hover,
-.modal-card .modal-close:hover,
-.modal-card .performance-analysis-close:hover,
-.modal-card .app-dialog-close:hover {
-  background: color-mix(
-    in srgb,
-    var(--color-primary) 18%,
-    var(--color-bg-elevated)
-  ) !important;
+.app-modal-close:hover,
+.settings-modal-close:hover,
+.modal-close:hover,
+.performance-analysis-close:hover,
+.app-dialog-close:hover {
+  transform: translate(30%, -30%) scale(1.06);
+
+  background: var(--color-bg-elevated);
 }
 
 /* Direct-monitor meter: zero really means zero, and the bar moves smoothly
@@ -8296,4 +8319,17 @@ body {
       clamp(1.25rem, 2.2vw, 2.1rem) * var(--lyric-line-scale, 1)
     ) !important;
   }
+}
+
+/* Modal close overlay: direct child of Card, always above the card edge and fully opaque. */
+.modal-card > .app-modal-close,
+.modal-card > .settings-modal-close,
+.modal-card > .modal-close,
+.modal-card > .performance-analysis-close,
+.modal-card > .app-dialog-close {
+  z-index: 1000 !important;
+  background: var(--color-bg-elevated) !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }

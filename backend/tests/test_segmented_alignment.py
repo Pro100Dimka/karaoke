@@ -181,3 +181,120 @@ def test_synced_segment_fallback_never_collapses_whole_line(monkeypatch):
     assert words[-1].end - words[0].start > 2.0
     assert words[-1].end <= 8.0
     assert all(word.end - word.start >= 0.02 for word in words)
+
+
+def test_segmented_aligner_rejects_valid_durations_outside_lrc_window(monkeypatch):
+    monkeypatch.setattr(
+        text_engine,
+        "load_mono",
+        lambda _audio, _sample_rate: (np.zeros(16_000 * 12, dtype=np.float32), 16_000),
+    )
+    aligner = Qwen3ForcedAligner("unused")
+
+    def wrong_context(_path, phrase, _language):
+        tokens = phrase.split()
+        # Durations look realistic, but timestamps belong to a different chunk.
+        return [
+            Word(8.0 + index * 0.4, 8.3 + index * 0.4, token, 0.95, index)
+            for index, token in enumerate(tokens)
+        ]
+
+    monkeypatch.setattr(aligner, "align", wrong_context)
+    words = aligner.align_segments(
+        "song.wav",
+        [(2.0, 7.0, "Пропал без вести в японских лагерях")],
+        "Russian",
+    )
+
+    assert words[0].start == pytest.approx(2.0)
+    assert words[-1].end <= 7.0
+    assert words[-1].end - words[0].start > 2.0
+    assert not any(word.end - word.start <= 0.025 for word in words)
+
+
+def test_segmented_aligner_skips_segments_after_audio_duration(monkeypatch):
+    monkeypatch.setattr(
+        text_engine,
+        "load_mono",
+        lambda _audio, _sample_rate: (np.zeros(16_000 * 5, dtype=np.float32), 16_000),
+    )
+    aligner = Qwen3ForcedAligner("unused")
+    monkeypatch.setattr(
+        aligner,
+        "align",
+        lambda _path, phrase, _language: [Word(0.0, 0.5, phrase, 0.9, 0)],
+    )
+
+    words = aligner.align_segments(
+        "song.wav",
+        [(1.0, 2.0, "inside"), (5.5, 6.5, "outside")],
+        "English",
+    )
+
+    assert [word.text for word in words] == ["inside"]
+    assert words[0].end <= 5.0
+
+
+def test_production_corrupt_lrc_boundary_is_soft_and_does_not_compress_line(monkeypatch):
+    """Regression from TRITIA: 6 words had a ~0.44 s provider interval."""
+    monkeypatch.setattr(
+        text_engine,
+        "load_mono",
+        lambda _audio, _sample_rate: (np.zeros(16_000 * 40, dtype=np.float32), 16_000),
+    )
+    aligner = Qwen3ForcedAligner("unused")
+
+    def acoustic_alignment(_path, phrase, _language):
+        tokens = phrase.split()
+        if phrase.startswith("Пропал без"):
+            # The real phrase is found after the broken 23.79->24.23 LRC crop.
+            base = 1.35
+            return [
+                Word(base + index * 0.31, base + index * 0.31 + 0.26, token, 0.94, index)
+                for index, token in enumerate(tokens)
+            ]
+        return [Word(7.2 + index * 0.45, 7.55 + index * 0.45, token, 0.9, index)
+                for index, token in enumerate(tokens)]
+
+    monkeypatch.setattr(aligner, "align", acoustic_alignment)
+    words = aligner.align_segments(
+        "song.wav",
+        [
+            (23.79, 24.23, "Пропал без вести в японских лагерях"),
+            (24.25, 35.76, "Пропал голубем синицею в руке"),
+        ],
+        "Russian",
+    )
+
+    first = words[:6]
+    second = words[6:]
+    assert first[-1].end - first[0].start >= 1.5
+    assert first[-1].end > 24.23  # never clamp back to the broken provider end
+    assert second[0].start >= first[-1].end
+    assert not any(word.end - word.start <= 0.025 for word in words)
+
+
+def test_production_fallback_for_corrupt_lrc_boundary_has_physical_duration(monkeypatch):
+    sample_rate = 16_000
+    audio = np.zeros(sample_rate * 35, dtype=np.float32)
+    # Real vocal activity following the bad 23.79 timestamp.
+    audio[int(23.55 * sample_rate):int(25.10 * sample_rate)] = 0.8
+    monkeypatch.setattr(text_engine, "load_mono", lambda _audio, _sample_rate: (audio, sample_rate))
+    aligner = Qwen3ForcedAligner("unused")
+
+    def collapsed(_path, phrase, _language):
+        return [
+            Word(index * 0.02, index * 0.02 + 0.02, token, 0.05, index)
+            for index, token in enumerate(phrase.split())
+        ]
+
+    monkeypatch.setattr(aligner, "align", collapsed)
+    words = aligner.align_segments(
+        "song.wav",
+        [(23.79, 24.23, "Пропал без вести в японских лагерях")],
+        "Russian",
+    )
+
+    assert words[-1].end - words[0].start >= 1.0
+    assert words[-1].end > 24.23
+    assert all(word.end - word.start > 0.025 for word in words)

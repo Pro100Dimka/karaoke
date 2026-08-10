@@ -263,3 +263,48 @@ def test_lrclib_synced_text_is_canonical_when_plain_text_has_extra_outro(tmp_pat
     assert found.text == "первая строка песни\nвторая строка песни"
     assert len(found.segments) == 2
     assert "лишний повтор" not in found.text
+
+
+def test_lrc_drops_lines_that_start_after_audio_end():
+    raw = (
+        "[02:20.00] still inside\n"
+        "[02:24.50] final audible line\n"
+        "[02:26.00] belongs to longer cut\n"
+        "[02:30.00] also outside\n"
+    )
+
+    segments = lyrics_sources._parse_lrc(raw, duration_sec=145.12)
+
+    assert [segment[2] for segment in segments] == ["still inside", "final audible line"]
+    assert segments[-1][1] <= 145.12
+
+
+def test_lrclib_synced_text_matches_only_in_range_segments(tmp_path: Path, monkeypatch):
+    source = tmp_path / "source.mp3"
+    source.write_bytes(b"not-an-audio-file")
+    payload = [
+        {
+            "trackName": "31-я весна",
+            "artistName": "TRITIA",
+            "duration": 145,
+            "instrumental": False,
+            "plainLyrics": "plain words " * 30,
+            "syncedLyrics": (
+                "[00:05.00] Первая строка песни здесь\n"
+                "[02:24.00] Последняя строка внутри\n"
+                "[02:26.00] Лишняя строка другой версии"
+            ),
+        }
+    ]
+    monkeypatch.setattr(
+        lyrics_sources.urllib.request, "urlopen", lambda *_a, **_k: _Response(payload)
+    )
+
+    found = lyrics_sources.discover_lyrics(
+        source,
+        title="TRITIA-31-я весна",
+        duration_sec=145.12,
+    )
+
+    assert "Лишняя строка" not in found.text
+    assert len(found.segments) == 2

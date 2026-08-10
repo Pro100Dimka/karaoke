@@ -137,14 +137,11 @@ export default function Modal({
     <div
       className={backdropClasses}
       role="presentation"
-      onMouseDown={(event) => {
-        if (
-          event.target === event.currentTarget &&
-          openModalStack.at(-1) === modalTokenRef.current
-        ) {
-          onCloseRef.current?.();
-        }
-      }}
+      onMouseDown={(event) =>
+        event.target === event.currentTarget &&
+        openModalStack.at(-1) === modalTokenRef.current &&
+        onCloseRef.current?.()
+      }
     >
       <Card
         ref={dialogRef}
@@ -157,18 +154,26 @@ export default function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
+        overlay={
+          <IconButton
+            unstyled
+            icon={X}
+            size={closeIconSize}
+            className={closeClasses}
+            onClick={() => onCloseRef.current?.()}
+            label={closeAriaLabel}
+            style={{
+              background: "var(--color-bg-elevated)",
+              opacity: 1,
+              backdropFilter: "none",
+              WebkitBackdropFilter: "none"
+            }}
+          />
+        }
       >
         <span id={titleId} className="sr-only">
           {ariaLabel}
         </span>
-        <IconButton
-          unstyled
-          icon={X}
-          size={closeIconSize}
-          className={closeClasses}
-          onClick={() => onCloseRef.current?.()}
-          label={closeAriaLabel}
-        />
         {titleProps && <ModalTitle {...titleProps} />}
         {children}
       </Card>

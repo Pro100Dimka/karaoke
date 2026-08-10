@@ -143,13 +143,27 @@ def _parse_lrc(
         start = int(match.group("minutes")) * 60 + float(match.group("seconds").replace(":", "."))
         timed.append((start, value))
     timed.sort(key=lambda item: item[0])
+
+    # A synced-lyrics provider may return a different/extended cut of the song.
+    # Never publish lyric lines whose anchors are already outside this audio file:
+    # they cannot be aligned, and keeping them makes lyrics.txt contain words that
+    # lyricsSync.json/MIDI can never represent.  This was the direct cause of the
+    # TRITIA regression where 186 lyric words were published but only 166 words
+    # fitted before the 145 s audio ended.
+    if duration_sec is not None and duration_sec > 0:
+        limit = max(0.0, float(duration_sec) - 0.05)
+        timed = [(start, value) for start, value in timed if 0.0 <= start < limit]
+
     result: list[tuple[float, float, str]] = []
     for index, (start, value) in enumerate(timed):
         next_start = timed[index + 1][0] if index + 1 < len(timed) else start + 8.0
-        if duration_sec and index + 1 == len(timed):
-            next_start = min(next_start, duration_sec)
+        if duration_sec is not None and duration_sec > 0:
+            next_start = min(next_start, float(duration_sec))
         end = max(start + 0.25, next_start - 0.02)
-        result.append((start, end, value))
+        if duration_sec is not None and duration_sec > 0:
+            end = min(end, float(duration_sec))
+        if end > start + 0.01:
+            result.append((start, end, value))
     return tuple(result)
 
 
