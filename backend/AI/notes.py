@@ -10,7 +10,7 @@ from .audio import load_mono
 
 from .models import PitchFrame, Syllable, VocalNote, Word
 
-NOTE_DECODER_VERSION = "phrase-reset-audio-viterbi-v21"
+NOTE_DECODER_VERSION = "pitch-independent-of-lyrics-v24"
 
 
 def hz_to_midi(hz: float) -> float:
@@ -999,10 +999,13 @@ def build_vocal_notes(
         max_gap=max_gap,
         min_confidence=min_confidence,
     )
+    # MIDI melody must NEVER be cut or created from lyric timestamps.
+    # Forced alignment can be locally wrong even when the lyric text itself is
+    # perfect (e.g. a short phrase may be stretched over many seconds).  Using
+    # those intervals as an acoustic gate corrupts an otherwise valid pitch
+    # contour.  Lyrics are metadata only: they may label already-existing notes,
+    # but cannot change note start/end/pitch or suppress notes.
     if ordered_syllables:
-        notes = _filter_to_lyric_phrases(
-            notes, ordered_syllables, min_note=min_note, words=words
-        )
         notes = _attach_soft_lyric_labels(notes, ordered_syllables)
     notes = _make_monophonic(notes, min_note)
     notes = _audio_verify_note_register(notes, audio)
@@ -1137,11 +1140,16 @@ def _repair_note_outliers(notes: list[VocalNote]) -> list[VocalNote]:
     """
     return list(notes)
 
-def build_game_notes(vocal: list[VocalNote], min_note: float = 0.08) -> list[VocalNote]:
-    """Create a stable karaoke scoring melody from the detailed vocal MIDI."""
-    output: list[VocalNote] = []
-    for note in vocal:
-        clean = VocalNote(
+def build_game_notes(vocal: list[VocalNote], min_note: float = 0.0) -> list[VocalNote]:
+    """Mirror the canonical vocal melody exactly, only removing pitch bends.
+
+    The frontend reads reference.json/game notes while vocal.mid used a different
+    detailed sequence.  That made MIDI fixes invisible in the UI and could make
+    scoring disagree with the displayed melody.  There is now one canonical note
+    sequence for display, scoring and MIDI note-on/off timing.
+    """
+    return [
+        VocalNote(
             note.start,
             note.end,
             int(note.midi_note),
@@ -1150,44 +1158,6 @@ def build_game_notes(vocal: list[VocalNote], min_note: float = 0.08) -> list[Voc
             note.syllable_index,
             (),
         )
-        if clean.end - clean.start < min_note:
-            continue
-
-        if output:
-            previous = output[-1]
-            same_unit = (
-                clean.word_index == previous.word_index
-                and clean.syllable_index == previous.syllable_index
-            )
-            tiny_gap = clean.start - previous.end <= 0.055
-            # Merge same-pitch fragments. Also absorb a one-semitone micro-event
-            # when it is very short; these are commonly residual vibrato edges.
-            if (
-                same_unit
-                and tiny_gap
-                and (
-                    clean.midi_note == previous.midi_note
-                    or (
-                        abs(clean.midi_note - previous.midi_note) == 1
-                        and clean.end - clean.start < 0.13
-                    )
-                )
-            ):
-                previous_duration = previous.end - previous.start
-                clean_duration = clean.end - clean.start
-                weighted_pitch = (
-                    previous.midi_note * previous_duration
-                    + clean.midi_note * clean_duration
-                ) / max(1e-6, previous_duration + clean_duration)
-                output[-1] = VocalNote(
-                    previous.start,
-                    clean.end,
-                    int(round(weighted_pitch)),
-                    max(previous.velocity, clean.velocity),
-                    previous.word_index,
-                    previous.syllable_index,
-                    (),
-                )
-                continue
-        output.append(clean)
-    return output
+        for note in vocal
+        if note.end > note.start and (note.end - note.start) >= max(0.0, float(min_note))
+    ]

@@ -1,0 +1,26 @@
+@layer ui.components {
+  .ui-config-form {
+    display: grid;
+
+    grid-template-columns: repeat(
+      var(--config-form-columns, 12),
+      minmax(0, 1fr)
+    );
+
+    gap: var(--config-form-gap, var(--space-2));
+
+    width: 100%;
+    min-width: 0;
+  }
+
+  .ui-config-form-field {
+    grid-column: span var(--config-field-span, 12);
+
+    min-width: 0;
+  }
+
+  .ui-config-form-field > * {
+    width: 100%;
+    min-width: 0;
+  }
+}

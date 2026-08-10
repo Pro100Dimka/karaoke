@@ -522,7 +522,11 @@ def _bound_legacy_word_durations(lines: list[dict[str, Any]]) -> list[dict[str, 
 
 
 def _reference_notes(output_dir: Path) -> list[dict[str, Any]]:
-    raw: Any = read_json(output_dir / "reference.json", default={})
+    # Prefer the exact canonical vocal-note sequence used to create vocal.mid.
+    # reference.json remains a compatibility mirror, but must never hide a newer
+    # detailed MIDI result behind separately simplified game notes.
+    canonical = output_dir / ".ai-cache" / "vocal-notes.json"
+    raw: Any = read_json(canonical, default={}) if canonical.exists() else read_json(output_dir / "reference.json", default={})
     notes = raw.get("notes", []) if isinstance(raw, dict) else raw if isinstance(raw, list) else []
     result: list[dict[str, Any]] = []
     for note in notes:

@@ -2,15 +2,107 @@ from __future__ import annotations
 
 import math
 import statistics
+from pathlib import Path
+
+import numpy as np
+
+from .audio import load_mono
 
 from .models import PitchFrame
 
 # Harmonic tracking is needed on dense vocal stems, but transitions must become
 # cheap at a real acoustic re-attack.  This keeps short melodic leaps while
 # folding unsupported octave/harmonic detours back onto the lead trajectory.
-PITCH_STABILIZER_VERSION = "attack-aware-harmonic-viterbi-v3"
+PITCH_STABILIZER_VERSION = "periodicity-confidence-harmonic-viterbi-v4"
 _HARMONIC_SHIFTS = (0.0, -12.0, 12.0, -19.01955, 19.01955, -24.0, 24.0)
 
+
+
+def _normalized_periodicity(signal: np.ndarray, lag: int) -> float:
+    """Normalized autocorrelation at one candidate period, 0..1."""
+    lag = int(lag)
+    if lag < 2 or signal.size <= lag + 8:
+        return 0.0
+    left = signal[:-lag].astype(np.float64, copy=False)
+    right = signal[lag:].astype(np.float64, copy=False)
+    left = left - float(np.mean(left))
+    right = right - float(np.mean(right))
+    denom = float(np.linalg.norm(left) * np.linalg.norm(right))
+    if denom <= 1e-10:
+        return 0.0
+    return max(0.0, min(1.0, float(np.dot(left, right) / denom)))
+
+
+def refine_pitch_confidence(
+    frames: list[PitchFrame],
+    audio: str | Path,
+    *,
+    sample_rate: int = 16000,
+) -> list[PitchFrame]:
+    """Replace fake FCPE confidence=1 with confidence measured from audio.
+
+    Some TorchFCPE releases return only F0.  Treating every voiced value as
+    confidence 1.0 makes backing vocals and harmonic mistakes indistinguishable
+    from a clean lead.  We independently measure periodic support for the exact
+    predicted F0 directly in the separated vocal waveform.  This does *not*
+    rewrite pitch; it only tells downstream decoding how much to trust it.
+    """
+    if not frames:
+        return []
+    try:
+        y, sr = load_mono(audio, sample_rate)
+    except Exception:
+        return list(frames)
+    if y.size < 256:
+        return list(frames)
+
+    y = np.asarray(y, dtype=np.float32)
+    # 50 ms gives several periods even for low male vocals while staying local
+    # enough for attacks and fast melodic movement.
+    half_window = max(192, int(round(sr * 0.025)))
+    output: list[PitchFrame] = []
+    raw_confidences = [float(f.confidence) for f in frames if f.voiced and f.frequency > 0]
+    # Detect the exact problematic API case: essentially every voiced frame was
+    # assigned confidence=1 because the model exposed no confidence tensor.
+    fake_unity = bool(raw_confidences) and sum(c >= 0.999 for c in raw_confidences) / len(raw_confidences) >= 0.97
+
+    for frame in frames:
+        if not frame.voiced or frame.frequency <= 0:
+            output.append(frame)
+            continue
+        center = int(round(frame.time * sr))
+        start = max(0, center - half_window)
+        end = min(len(y), center + half_window)
+        window = y[start:end]
+        lag = int(round(sr / max(1e-6, frame.frequency)))
+        periodicity = _normalized_periodicity(window, lag)
+
+        # Octave ambiguity check.  If twice the period explains the waveform much
+        # better, the current F0 is likely a harmonic.  Lower confidence strongly
+        # rather than silently changing the note here; the phrase decoder can
+        # then choose using neighbouring evidence.
+        lower_periodicity = _normalized_periodicity(window, lag * 2)
+        if lower_periodicity > periodicity + 0.10:
+            periodicity *= max(0.25, 1.0 - (lower_periodicity - periodicity) * 1.8)
+
+        measured = max(0.0, min(1.0, periodicity))
+        if fake_unity:
+            confidence = measured
+        else:
+            # If FCPE supplies genuine confidence, require agreement between the
+            # network and waveform periodicity instead of replacing either one.
+            confidence = math.sqrt(max(0.0, min(1.0, frame.confidence)) * measured)
+        voiced = confidence >= 0.16
+        output.append(
+            PitchFrame(
+                frame.time,
+                frame.frequency if voiced else 0.0,
+                confidence if voiced else 0.0,
+                voiced,
+                frame.energy,
+            )
+        )
+    return output
 
 def _midi(hz: float) -> float:
     return 69.0 + 12.0 * math.log2(hz / 440.0)

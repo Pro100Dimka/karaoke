@@ -37,7 +37,7 @@ from .models import (
 )
 from .music import MUSIC_ANALYZER_VERSION, analyze_music
 from .notes import NOTE_DECODER_VERSION, build_game_notes, build_vocal_notes
-from .pitch_post import PITCH_STABILIZER_VERSION, stabilize_pitch
+from .pitch_post import PITCH_STABILIZER_VERSION, refine_pitch_confidence, stabilize_pitch
 from .profiler import environment_info
 from .quality import evaluate_quality
 from .syllables import SYLLABLE_ALIGNER_VERSION, align_syllables
@@ -479,7 +479,9 @@ class KaraokePipeline:
             )
             raw_pitch = list(pitch)
             validate_pitch(raw_pitch)
-            pitch = stabilize_pitch(raw_pitch)
+            confidence_pitch = refine_pitch_confidence(raw_pitch, vocals, sample_rate=self.config.pitch_sample_rate)
+            validate_pitch(confidence_pitch)
+            pitch = stabilize_pitch(confidence_pitch)
             validate_pitch(pitch)
             pitch_outputs = [pitch_path]
             if self.config.preserve_raw_pitch:

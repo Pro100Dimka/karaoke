@@ -1,4 +1,1 @@
-from __future__ import annotations
-
-AI_BUILD_ID = "midi-v22-runtime-proof-20260810"
-
+AI_BUILD_ID = "midi-v24-pitch-independent-of-lyrics-20260810"
