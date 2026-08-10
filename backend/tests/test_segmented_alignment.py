@@ -334,6 +334,7 @@ def test_real_tritia_failure_shape_does_not_recollapse_to_first_energy_island(mo
 
 
 def test_long_text_collapsed_qwen_line_uses_candidate_start_but_not_candidate_duration(monkeypatch):
+    monkeypatch.setenv("KARAOKE_AI_REQUIRE_CTC", "0")
     sample_rate = 16_000
     audio = np.zeros(sample_rate * 50, dtype=np.float32)
     monkeypatch.setattr(text_engine, "load_mono", lambda _audio, _sample_rate: (audio, sample_rate))
@@ -359,6 +360,7 @@ def test_long_text_collapsed_qwen_line_uses_candidate_start_but_not_candidate_du
 
 
 def test_long_text_empty_qwen_does_not_abort_pipeline(monkeypatch):
+    monkeypatch.setenv("KARAOKE_AI_REQUIRE_CTC", "0")
     sample_rate = 16_000
     audio = np.zeros(sample_rate * 12, dtype=np.float32)
     # Two sung regions so the activity-envelope fallback has real timing anchors.
@@ -444,3 +446,71 @@ def test_long_text_never_drops_canonical_tail_when_local_pass_reaches_eof(monkey
     assert [w.text for w in words] == expected
     assert all(b.start >= a.end - 1e-6 for a, b in zip(words, words[1:]))
     assert words[-1].end <= 20.0
+
+
+def test_long_text_prefers_acoustic_ctc_lines_before_qwen(monkeypatch, tmp_path):
+    import numpy as np
+    import soundfile as sf
+    from AI.engines.ctc_alignment import CTCLineResult
+
+    audio = tmp_path / "vocals.wav"
+    sf.write(audio, np.zeros(16000 * 8, dtype=np.float32), 16000)
+    aligner = Qwen3ForcedAligner("unused")
+    text = "Первая строка\nВторая строка"
+
+    class FakeCTC:
+        def available_for(self, language, text):
+            return True
+
+        def align_lines(self, audio, groups, language, anchors):
+            return [
+                CTCLineResult((
+                    Word(1.0, 1.5, "Первая", 0.8, 0),
+                    Word(1.5, 2.0, "строка", 0.8, 1),
+                ), 0.8, 0.0, 4.0),
+                CTCLineResult((
+                    Word(3.0, 3.5, "Вторая", 0.85, 0),
+                    Word(3.5, 4.0, "строка", 0.85, 1),
+                ), 0.85, 2.0, 6.0),
+            ]
+
+        def release(self):
+            pass
+
+    aligner._ctc = FakeCTC()
+
+    def qwen_must_not_run(*args, **kwargs):
+        raise AssertionError("Qwen fallback should not run for accepted CTC lines")
+
+    monkeypatch.setattr(aligner, "align", qwen_must_not_run)
+    words = aligner.align_long_text(audio, text, "Russian")
+    assert [word.text for word in words] == ["Первая", "строка", "Вторая", "строка"]
+    assert [word.start for word in words] == [1.0, 1.5, 3.0, 3.5]
+    assert aligner.last_alignment_diagnostics["ctc_lines"] == 2
+    assert aligner.last_alignment_diagnostics["qwen_fallback_lines"] == 0
+
+
+def test_long_text_required_ctc_reports_checked_paths(monkeypatch):
+    import numpy as np
+    monkeypatch.setenv("KARAOKE_AI_REQUIRE_CTC", "1")
+    monkeypatch.setattr(text_engine, "load_mono", lambda _audio, _sample_rate: (np.zeros(16000 * 5), 16000))
+    aligner = Qwen3ForcedAligner("unused")
+
+    class MissingCTC:
+        last_resource_diagnostics = {
+            "ru": {
+                "available": False,
+                "reason": "config.json is missing",
+                "checked": [{"path": "C:/models/ctc/ru", "reason": "config.json is missing"}],
+            }
+        }
+        def available_for(self, language, text): return False
+        def release(self): pass
+
+    aligner._ctc = MissingCTC()
+    import pytest
+    with pytest.raises(text_engine.EngineUnavailableError) as error:
+        aligner.align_long_text("song.wav", "Первая строка\nВторая строка", "Russian")
+    message = str(error.value)
+    assert "config.json is missing" in message
+    assert "C:/models/ctc/ru" in message

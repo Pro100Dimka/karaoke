@@ -90,6 +90,8 @@ def configure_ai_resource_environment() -> None:
     legacy_asr = MODELS_DIR / "qwen" / "Qwen3-ASR-0.6B"
     asr_model = preferred_asr if preferred_asr.is_dir() else legacy_asr
     aligner_model = MODELS_DIR / "qwen" / "Qwen3-ForcedAligner-0.6B"
+    ctc_ru_model = MODELS_DIR / "ctc" / "wav2vec2-large-xlsr-53-russian"
+    ctc_uk_model = MODELS_DIR / "ctc" / "wav2vec2-xls-r-300m-uk"
     roformer = MODELS_DIR / "roformer" / "MelBandRoformer.ckpt"
     msst = EXTERNAL_ENGINES_DIR / "msst"
     msst_config = msst / "configs" / "KimberleyJensen" / "config_vocals_mel_band_roformer_kj.yaml"
@@ -109,6 +111,9 @@ def configure_ai_resource_environment() -> None:
 
     set_resource("KARAOKE_AI_ASR_MODEL", asr_model, directory=True)
     set_resource("KARAOKE_AI_ALIGNER_MODEL", aligner_model, directory=True)
+    set_resource("KARAOKE_AI_CTC_RU_MODEL", ctc_ru_model, directory=True)
+    set_resource("KARAOKE_AI_CTC_UK_MODEL", ctc_uk_model, directory=True)
+    os.environ.setdefault("KARAOKE_AI_REQUIRE_CTC", "1")
     set_resource("MSST_CHECKPOINT", roformer)
     set_resource("MSST_ENGINE_DIR", msst, directory=True)
     if msst_config.is_file():

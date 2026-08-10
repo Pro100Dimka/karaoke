@@ -1,21 +1,120 @@
 import { Mic } from "lucide-react";
-import SliderField from "../slider-field";
-import { EFFECT_FIELDS, METER_BARS, MIXER_FIELDS } from "./config";
+import { Stack } from "../../../../theme/ui";
+import { EFFECT_FIELDS, MIXER_FIELDS } from "./config";
 import EffectDial from "./effect-dial";
 import { clamp } from "./utils";
 
-function MicrophoneMeter({ level }) {
+const MIXER_COLORS = {
+  microphone: "#ff1744",
+  music: "#38e6b0",
+  vocal: "#ff7043",
+  melody: "#c2183a"
+};
+
+function VerticalSlider({ label, value, color, onChange, onCommit }) {
+  const percent = Math.round((value ?? 0) * 100);
+
   return (
-    <span className="karaoke-microphone-meter" aria-hidden="true">
-      {METER_BARS.map((index) => (
-        <i
-          key={index}
+    <Stack
+      align="center"
+      gap={1}
+      sx={{
+        minWidth: 72,
+        userSelect: "none"
+      }}
+    >
+      <span
+        style={{
+          fontSize: 12,
+          fontWeight: 700,
+          color
+        }}
+      >
+        {label}
+      </span>
+
+      <div
+        style={{
+          position: "relative",
+          width: 28,
+          height: 120,
+          display: "grid",
+          placeItems: "center"
+        }}
+      >
+        <div
           style={{
-            "--meter-level": `${clamp(level * 100 - index * 6 + 34, 18, 100)}%`
+            position: "absolute",
+            width: 8,
+            height: "100%",
+            borderRadius: 999,
+            background:
+              "color-mix(in srgb, var(--color-surface-strong) 84%, transparent)",
+            border:
+              "1px solid color-mix(in srgb, var(--color-border-strong) 72%, transparent)",
+            boxShadow:
+              "inset 0 0 0.45rem color-mix(in srgb, var(--color-bg-deep) 65%, transparent)"
           }}
         />
-      ))}
-    </span>
+
+        <div
+          style={{
+            position: "absolute",
+            bottom: 0,
+            width: 8,
+            height: `${percent}%`,
+            borderRadius: 999,
+            background: color,
+            boxShadow: `0 0 12px ${color}`
+          }}
+        />
+
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={value}
+          aria-label={label}
+          onChange={(event) => onChange?.(Number(event.target.value))}
+          onPointerUp={(event) => onCommit?.(Number(event.currentTarget.value))}
+          onKeyUp={(event) => onCommit?.(Number(event.currentTarget.value))}
+          style={{
+            position: "absolute",
+            width: 120,
+            height: 28,
+            margin: 0,
+            transform: "rotate(-90deg)",
+            transformOrigin: "center",
+            opacity: 0,
+            cursor: "pointer"
+          }}
+        />
+
+        <div
+          style={{
+            position: "absolute",
+            bottom: `calc(${percent}% - 7px)`,
+            width: 15,
+            height: 15,
+            borderRadius: "50%",
+            background: color,
+            boxShadow: `0 0 14px ${color}`,
+            pointerEvents: "none"
+          }}
+        />
+      </div>
+
+      <span
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          color
+        }}
+      >
+        {percent}%
+      </span>
+    </Stack>
   );
 }
 
@@ -30,52 +129,55 @@ export default function MixerPanel({
   const level = clamp(microphoneLevel, 0, 1);
 
   return (
-    <section
-      className="karaoke-console-panel karaoke-mixer-panel"
-      style={{ "--microphone-level": level }}
-    >
-      <div className="karaoke-console-title">
-        <Mic size={18} />
+    <Stack style={{ "--microphone-level": level }} gap={2}>
+      <Stack direction="row" align="center" gap={1}>
+        <Mic size={16} />
         <strong>Микшер</strong>
-        <MicrophoneMeter level={level} />
-      </div>
+      </Stack>
 
-      <div className="karaoke-mixer-body">
-        <div className="karaoke-quick-mixer karaoke-quick-mixer--vertical">
-          {MIXER_FIELDS.map(([key, label]) => {
-            const value = volumes[key] ?? 0;
+      <Stack
+        direction="row"
+        align="center"
+        justify="space-around"
+        gap={3}
+        sx={{
+          width: "100%",
+          overflowX: "auto",
+          padding: "0.5rem 0"
+        }}
+      >
+        {MIXER_FIELDS.flatMap(([key, label], index) => {
+          const value = volumes[key] ?? 0;
+          const effect = EFFECT_FIELDS[index];
 
-            return (
-              <SliderField
-                key={key}
-                label={label}
-                value={value}
-                min={0}
-                max={1}
-                step={0.05}
-                display={`${Math.round(value * 100)}%`}
-                onChange={onVolumeChange[key]}
-                onCommit={key === "microphone" ? onMicrophoneCommit : undefined}
+          const items = [
+            <VerticalSlider
+              key={`mixer-${key}`}
+              label={label}
+              value={value}
+              color={MIXER_COLORS[key] ?? "var(--color-primary)"}
+              onChange={onVolumeChange[key]}
+              onCommit={key === "microphone" ? onMicrophoneCommit : undefined}
+            />
+          ];
+
+          if (effect) {
+            const [effectKey, effectLabel, accent] = effect;
+
+            items.push(
+              <EffectDial
+                key={`effect-${effectKey}`}
+                label={effectLabel}
+                value={microphoneEffects[effectKey]}
+                accent={accent}
+                onChange={(value) => onEffectChange(effectKey, value)}
               />
             );
-          })}
-        </div>
+          }
 
-        <div
-          className="karaoke-mixer-effects"
-          aria-label="Быстрые эффекты микрофона"
-        >
-          {EFFECT_FIELDS.map(([key, label, accent]) => (
-            <EffectDial
-              key={key}
-              label={label}
-              value={microphoneEffects[key]}
-              accent={accent}
-              onChange={(value) => onEffectChange(key, value)}
-            />
-          ))}
-        </div>
-      </div>
-    </section>
+          return items;
+        })}
+      </Stack>
+    </Stack>
   );
 }

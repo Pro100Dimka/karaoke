@@ -33,6 +33,9 @@ set "HF_HOME=%MODELS_DIR%\huggingface"
 set "QWEN_DIR=%MODELS_DIR%\qwen"
 set "QWEN_ASR_DIR=%QWEN_DIR%\Qwen3-ASR-1.7B"
 set "QWEN_ALIGNER_DIR=%QWEN_DIR%\Qwen3-ForcedAligner-0.6B"
+set "CTC_DIR=%MODELS_DIR%\ctc"
+set "CTC_RU_DIR=%CTC_DIR%\wav2vec2-large-xlsr-53-russian"
+set "CTC_UK_DIR=%CTC_DIR%\wav2vec2-xls-r-300m-uk"
 
 set "ENGINES_DIR=%DOWNLOADS%\engines"
 set "MSST_DIR=%ENGINES_DIR%\msst"
@@ -109,6 +112,7 @@ if not exist "%RUNTIME_PYTHON%" if not exist "%PYTHON%" (
 if not exist "%MODELS_DIR%" mkdir "%MODELS_DIR%"
 if not exist "%HF_HOME%" mkdir "%HF_HOME%"
 if not exist "%QWEN_DIR%" mkdir "%QWEN_DIR%"
+if not exist "%CTC_DIR%" mkdir "%CTC_DIR%"
 if not exist "%ROFORMER_DIR%" mkdir "%ROFORMER_DIR%"
 if not exist "%ENGINES_DIR%" mkdir "%ENGINES_DIR%"
 
@@ -291,6 +295,30 @@ if exist "%QWEN_ALIGNER_DIR%\config.json" (
 if errorlevel 1 goto :fail
 
 rem ============================================================
+rem 6.5 CTC WORD ALIGNMENT MODELS
+rem ============================================================
+
+echo.
+echo [6.5/10] Installing acoustic CTC word alignment models...
+
+if exist "%CTC_RU_DIR%\config.json" (
+    echo Russian CTC aligner already exists.
+) else (
+    "%PYTHON%" -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='jonatasgrosman/wav2vec2-large-xlsr-53-russian', local_dir=r'%CTC_RU_DIR%'); print('Russian CTC aligner download complete.')"
+    if errorlevel 1 goto :fail
+)
+
+if exist "%CTC_UK_DIR%\config.json" (
+    echo Ukrainian CTC aligner already exists.
+) else (
+    "%PYTHON%" -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='Yehor/wav2vec2-xls-r-300m-uk-with-small-lm', local_dir=r'%CTC_UK_DIR%'); print('Ukrainian CTC aligner download complete.')"
+    if errorlevel 1 goto :fail
+)
+
+"%PYTHON%" -c "from pathlib import Path; roots=[Path(r'%CTC_RU_DIR%'),Path(r'%CTC_UK_DIR%')]; assert all((p/'config.json').is_file() for p in roots), 'CTC aligner config missing'; assert all(any(p.rglob('*.safetensors')) or any(p.rglob('pytorch_model.bin')) for p in roots), 'CTC aligner weights missing'; print('CTC word aligners: OK')"
+if errorlevel 1 goto :fail
+
+rem ============================================================
 rem 7. FCPE
 rem ============================================================
 
@@ -434,6 +462,8 @@ echo [10/10] Writing AI environment configuration...
     echo set "HF_HUB_CACHE=%HF_HOME%\hub"
     echo set "KARAOKE_AI_ASR_MODEL=%QWEN_ASR_DIR%"
     echo set "KARAOKE_AI_ALIGNER_MODEL=%QWEN_ALIGNER_DIR%"
+    echo set "KARAOKE_AI_CTC_RU_MODEL=%CTC_RU_DIR%"
+    echo set "KARAOKE_AI_CTC_UK_MODEL=%CTC_UK_DIR%"
     echo set "KARAOKE_AI_ALLOW_FALLBACK=false"
     echo set "MSST_ENGINE_DIR=%MSST_DIR%"
     echo set "MSST_CONFIG=%MSST_CONFIG%"
@@ -476,6 +506,12 @@ echo   %QWEN_ASR_DIR%
 echo.
 echo Qwen Forced Aligner:
 echo   %QWEN_ALIGNER_DIR%
+echo.
+echo Russian CTC Word Aligner:
+echo   %CTC_RU_DIR%
+echo.
+echo Ukrainian CTC Word Aligner:
+echo   %CTC_UK_DIR%
 echo.
 echo RoFormer:
 echo   %MSST_CHECKPOINT%

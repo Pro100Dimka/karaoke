@@ -18,6 +18,7 @@ function EffectPresets({ activePreset, onApply }) {
               key={id}
               unstyled
               className={active ? "is-active" : ""}
+              style={{ border: "none" }}
               aria-pressed={active}
               title={`${label}: эхо ${Math.round(
                 echo * 100

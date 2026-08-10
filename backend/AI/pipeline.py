@@ -25,6 +25,7 @@ from .engines.text import (
     resolve_alignment_language,
     tokenize,
 )
+from .engines.ctc_alignment import CTC_ALIGNMENT_VERSION
 from .errors import EngineUnavailableError, ProcessingCancelledError
 from .locks import ThreadFileLock
 from .lyrics_sources import discover_lyrics
@@ -722,6 +723,8 @@ class KaraokePipeline:
                     "engine": self.engines.aligner.name,
                     "model": getattr(self.engines.aligner, "model_name", None),
                     "long_text_algorithm": LONG_TEXT_ALIGNMENT_VERSION,
+                    "ctc_alignment_algorithm": CTC_ALIGNMENT_VERSION,
+                    "ctc_models": getattr(getattr(self.engines.aligner, "_ctc", None), "models", {}),
                     "timed_segments": supplied_segments,
                 },
             )
@@ -795,6 +798,14 @@ class KaraokePipeline:
                     reports,
                     warnings,
                 )
+                alignment_diagnostics = getattr(
+                    self.engines.aligner, "last_alignment_diagnostics", None
+                ) or {}
+                if alignment_diagnostics:
+                    details = " ".join(
+                        f"{key}={value}" for key, value in alignment_diagnostics.items()
+                    )
+                    reports.append(StageReport("alignment-acoustic", 0.0, False, details))
                 words = _bound_word_durations(words)
                 if supplied_segments:
                     words = enforce_segmented_timing_safety(words, supplied_segments, song_duration)

@@ -44,6 +44,8 @@ export default function EffectDial({
       className={`karaoke-effect-dial karaoke-effect-dial--${accent}`}
       htmlFor={inputId}
       style={{
+        display: "flex",
+        flexDirection: "column",
         "--dial-value": `${percent}%`,
         "--dial-angle": `${-135 + normalized * 270}deg`
       }}

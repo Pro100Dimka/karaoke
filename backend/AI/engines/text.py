@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import os
 import tempfile
 from bisect import bisect_right
 from collections import Counter
@@ -15,6 +16,7 @@ from ..errors import EngineUnavailableError, InvalidArtifactError
 from ..models import Word
 from .base import Aligner, Transcriber
 from .device import select_torch_device
+from .ctc_alignment import CTC_ALIGNMENT_VERSION, CTCWordAligner, _language_code
 
 _TOKEN = re.compile(r"\w+(?:[’'-]\w+)*", re.UNICODE)
 _LANGUAGE_NAMES = {
@@ -141,7 +143,7 @@ def _words_from_items(items) -> list[Word]:
 
 
 ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v14-duration-guard"
-LONG_TEXT_ALIGNMENT_VERSION = "v28-monotonic-canonical-local-qwen"
+LONG_TEXT_ALIGNMENT_VERSION = "v29-ctc-primary-local-qwen-lossless"
 
 
 def _normalize_singing_audio(y: np.ndarray) -> np.ndarray:
@@ -1352,12 +1354,14 @@ class Qwen3Transcriber(Transcriber):
 
 
 class Qwen3ForcedAligner(Aligner):
-    name = "qwen3-forced-aligner"
+    name = "ctc-qwen-hybrid-aligner"
 
     def __init__(self, model="Qwen/Qwen3-ForcedAligner-0.6B"):
         self.model_name = model
         self._model = None
         self._global_asr_segments: list[tuple[float, float, str]] = []
+        self._ctc = CTCWordAligner.from_environment()
+        self.last_alignment_diagnostics: dict[str, object] = {}
 
     def set_global_asr_segments(self, segments) -> None:
         self._global_asr_segments = [
@@ -1614,6 +1618,63 @@ class Qwen3ForcedAligner(Aligner):
         output: list[Word] = []
         cursor = 0.0
 
+        # Primary production path: character-level CTC forced alignment against
+        # the canonical lyric text. ASR is used only to provide coarse windows;
+        # the CTC target is the trusted lyric itself, so recognition can never
+        # delete or replace words. Qwen is retained only for lines where the CTC
+        # acoustic posterior is unavailable or too weak.
+        ctc_lines = [None] * len(groups)
+        ctc_attempted = False
+        ctc_failure_reason = ""
+        try:
+            ctc_attempted = self._ctc.available_for(language, text)
+            if ctc_attempted:
+                ctc_lines = self._ctc.align_lines(
+                    audio, groups, language, anchor_windows
+                )
+            else:
+                code = _language_code(language, text)
+                resource = self._ctc.last_resource_diagnostics.get(code, {})
+                ctc_failure_reason = str(resource.get("reason", "CTC model unavailable"))
+        except (EngineUnavailableError, InvalidArtifactError, RuntimeError, ValueError) as exc:
+            ctc_lines = [None] * len(groups)
+            ctc_failure_reason = f"{type(exc).__name__}: {exc}"
+        finally:
+            # A 300M/large Wav2Vec2 model plus Qwen can exceed 8 GB on some
+            # cards. Finish the whole CTC pass first, then release it before any
+            # Qwen fallback lines are evaluated.
+            self._ctc.release()
+
+        require_ctc = os.getenv("KARAOKE_AI_REQUIRE_CTC", "0").strip().casefold() in {"1", "true", "yes", "on"}
+        ctc_language = _language_code(language, text)
+        if require_ctc and ctc_language in {"ru", "uk"} and not ctc_attempted:
+            resource = getattr(self._ctc, "last_resource_diagnostics", {}).get(ctc_language, {})
+            checked = resource.get("checked", []) if isinstance(resource, dict) else []
+            checked_text = "; ".join(
+                f"{item.get('path', '?')} [{item.get('reason', '?')}]"
+                for item in checked[:8]
+                if isinstance(item, dict)
+            )
+            raise EngineUnavailableError(
+                "Acoustic CTC word alignment is required but its local model is unavailable. "
+                f"Language={ctc_language}; reason={ctc_failure_reason or resource.get('reason', 'not found')}. "
+                f"Checked: {checked_text or 'no candidate paths'}. "
+                "Run scripts\\install-ai-models.bat once or set KARAOKE_AI_CTC_RU_MODEL/"
+                "KARAOKE_AI_CTC_UK_MODEL to the model directory."
+            )
+
+        ctc_accepted = sum(1 for item in ctc_lines if item is not None)
+        qwen_fallback_lines = 0
+        self.last_alignment_diagnostics = {
+            "ctc_version": CTC_ALIGNMENT_VERSION,
+            "ctc_attempted": ctc_attempted,
+            "ctc_lines": ctc_accepted,
+            "total_lines": len(groups),
+            "qwen_fallback_lines": 0,
+            "ctc_failure_reason": ctc_failure_reason,
+            "ctc_resource": dict(getattr(self._ctc, "last_resource_diagnostics", {}) or {}),
+        }
+
         with tempfile.TemporaryDirectory(prefix="karaoke-align-lines-") as temp_dir:
             root = Path(temp_dir)
             for line_index, line in enumerate(groups):
@@ -1625,6 +1686,26 @@ class Qwen3ForcedAligner(Aligner):
                     # lossless safety pass below will retime the whole lyric.
                     break
 
+                ctc_line = ctc_lines[line_index] if line_index < len(ctc_lines) else None
+                if ctc_line is not None:
+                    ctc_words = list(ctc_line.words)
+                    if (
+                        len(ctc_words) == len(tokens)
+                        and _canonical_words_match(ctc_words, tokens)
+                        and ctc_words[0].start >= cursor - 0.25
+                        and all(
+                            right.start >= left.end - 0.02
+                            for left, right in zip(ctc_words, ctc_words[1:], strict=False)
+                        )
+                    ):
+                        for word in ctc_words:
+                            output.append(
+                                Word(word.start, word.end, word.text, word.confidence, len(output))
+                            )
+                        cursor = ctc_words[-1].end
+                        continue
+
+                qwen_fallback_lines += 1
                 expected = _expected_sung_phrase_duration(tokens)
                 anchor = anchor_windows.get(line_index)
                 if anchor is not None:
@@ -1734,6 +1815,12 @@ class Qwen3ForcedAligner(Aligner):
                 for word in safe_line:
                     output.append(Word(word.start, word.end, word.text, word.confidence, len(output)))
                 cursor = safe_line[-1].end
+
+        self.last_alignment_diagnostics["qwen_fallback_lines"] = qwen_fallback_lines
+        self.last_alignment_diagnostics["ctc_words"] = sum(
+            len(item.words) for item in ctc_lines if item is not None
+        )
+        self.last_alignment_diagnostics["published_words_before_guard"] = len(output)
 
         canonical_tokens = [token for group in groups for token in tokenize(group)]
         if not _canonical_words_match(output, canonical_tokens):

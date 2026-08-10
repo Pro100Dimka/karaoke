@@ -5666,8 +5666,9 @@ select:focus,
 .karaoke-effect-presets button > span {
   display: grid;
   place-items: center;
-  inline-size: 1.85rem;
-  block-size: 1.85rem;
+  inline-size: 4.85rem;
+  block-size: 4.85rem;
+  font-size: 2rem !important;
   border: var(--hairline) solid
     color-mix(in srgb, var(--preset-color) 38%, var(--color-border));
   border-radius: 0.52rem;
@@ -5679,7 +5680,7 @@ select:focus,
 
 .karaoke-effect-presets button small {
   color: inherit;
-  font: 700 0.59rem/1 var(--font-sans);
+  font: 700 1rem/1 var(--font-sans);
 }
 
 .karaoke-effect-presets button:hover,
@@ -6862,12 +6863,6 @@ body {
   min-block-size: 2.55rem !important;
   padding-block: 0.24rem !important;
   gap: 0.12rem !important;
-}
-
-.karaoke-effect-presets button > span {
-  inline-size: 1.45rem !important;
-  block-size: 1.45rem !important;
-  font-size: 0.82rem !important;
 }
 
 /* A blackout is intentionally slower now: playback begins only after the
@@ -8412,12 +8407,14 @@ body {
   filter: blur(clamp(0.12rem, 0.7cqi, 0.26rem));
 }
 
-.settings-compact-neon-card.ui-card--neon:is(:hover, :focus-within) .ui-card__glow {
+.settings-compact-neon-card.ui-card--neon:is(:hover, :focus-within)
+  .ui-card__glow {
   opacity: 0.3;
   filter: blur(clamp(0.28rem, 1.55cqi, 0.62rem)) saturate(112%);
 }
 
-.settings-compact-neon-card.ui-card--neon:is(:hover, :focus-within) .ui-card__glow-mid {
+.settings-compact-neon-card.ui-card--neon:is(:hover, :focus-within)
+  .ui-card__glow-mid {
   opacity: 0.46;
 }
 
@@ -8572,7 +8569,8 @@ body {
     color-mix(in srgb, var(--color-surface-strong) 90%, transparent)
   );
   box-shadow:
-    inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 10%, transparent),
+    inset 0 var(--hairline)
+      color-mix(in srgb, var(--color-highlight) 10%, transparent),
     0 0 1.2rem color-mix(in srgb, var(--color-primary) 16%, transparent);
 }
 
@@ -8677,4 +8675,3 @@ body {
     block-size: auto;
   }
 }
-
