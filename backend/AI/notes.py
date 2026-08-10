@@ -10,7 +10,7 @@ from .audio import load_mono
 
 from .models import PitchFrame, Syllable, VocalNote, Word
 
-NOTE_DECODER_VERSION = "fcpe-yin-lrc-phrase-v25"
+NOTE_DECODER_VERSION = "acoustic-only-note-events-v26"
 
 
 def hz_to_midi(hz: float) -> float:
@@ -993,28 +993,14 @@ def build_vocal_notes(
     """
     frames = sorted(pitch, key=lambda frame: frame.time)
     ordered_syllables = sorted(syllables, key=lambda item: (item.start, item.end))
-    trusted_segments = [
-        (max(0.0, float(start)), max(float(start), float(end)), str(text))
-        for start, end, text in (activity_segments or [])
-        if float(end) > float(start)
-    ]
-    if trusted_segments:
-        # LRCLIB synchronized line times are much safer phrase boundaries than
-        # low-confidence forced word timestamps. Decode each line independently
-        # so a wrong harmonic/register decision cannot leak into the next line.
-        notes = []
-        for start, end, _text in trusted_segments:
-            local = [f for f in frames if start - 0.06 <= f.time <= end + 0.06]
-            notes.extend(_decode_pitch_only(
-                local, min_note=min_note, split_semitones=split_semitones,
-                max_gap=max_gap, min_confidence=min_confidence,
-            ))
-        notes = sorted(notes, key=lambda n: (n.start, n.end, n.midi_note))
-    else:
-        notes = _decode_pitch_only(
-            frames, min_note=min_note, split_semitones=split_semitones,
-            max_gap=max_gap, min_confidence=min_confidence,
-        )
+    # Lyrics/alignment are metadata only.  Even synchronized LRC lines are not
+    # precise enough to gate note extraction: intros, pickups, melismas and
+    # line-level offsets can otherwise delete valid acoustic melody. Decode the
+    # complete pitch contour and attach text only after note events exist.
+    notes = _decode_pitch_only(
+        frames, min_note=min_note, split_semitones=split_semitones,
+        max_gap=max_gap, min_confidence=min_confidence,
+    )
     # MIDI melody must NEVER be cut or created from lyric timestamps.
     # Forced alignment can be locally wrong even when the lyric text itself is
     # perfect (e.g. a short phrase may be stretched over many seconds).  Using
@@ -1028,7 +1014,9 @@ def build_vocal_notes(
     notes = _repair_isolated_harmonic_notes(notes, frames)
     notes = _merge_verified_fragments(notes)
     notes = _consolidate_micro_fragments(notes, frames)
-    notes = _repair_isolated_harmonic_notes(notes, frames)
+    # Do not run a second octave/harmonic repair pass here.  A second pass can
+    # undo the audio-verified register chosen above and makes the decoder
+    # order-dependent.
     notes = _repair_short_isolated_spikes(notes, frames)
     notes = _merge_same_pitch_gaps(notes, frames)
     return _repair_note_outliers(notes)

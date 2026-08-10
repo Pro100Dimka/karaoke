@@ -479,9 +479,19 @@ class KaraokePipeline:
             )
             raw_pitch = list(pitch)
             validate_pitch(raw_pitch)
-            confidence_pitch = refine_pitch_confidence(raw_pitch, vocals, sample_rate=self.config.pitch_sample_rate)
+            confidence_pitch = refine_pitch_confidence(
+                raw_pitch, vocals, sample_rate=self.config.pitch_sample_rate
+            )
             validate_pitch(confidence_pitch)
-            pitch = stabilize_pitch(confidence_pitch)
+            # IMPORTANT: v25 imported the FCPE+YIN consensus decoder but never
+            # called it, so all of that code was dead.  Run the independent YIN
+            # verifier before harmonic stabilization so dense vocal doubles do
+            # not rely on FCPE alone.
+            consensus_pitch = fuse_pitch_with_yin(
+                confidence_pitch, vocals, sample_rate=self.config.pitch_sample_rate
+            )
+            validate_pitch(consensus_pitch)
+            pitch = stabilize_pitch(consensus_pitch)
             validate_pitch(pitch)
             pitch_outputs = [pitch_path]
             if self.config.preserve_raw_pitch:

@@ -773,10 +773,11 @@ def _apply_generated_metadata(song: models.Song, out_dir: Path) -> None:
         return
     if not midi:
         return
-    if song.note_range_min is None:
-        song.note_range_min = min(midi)
-    if song.note_range_max is None:
-        song.note_range_max = max(midi)
+    # This range is derived from the current reference.  Keeping the first-ever
+    # values after reprocess makes the frontend crop notes produced by a newer
+    # decoder, so refresh it after every successful pipeline run.
+    song.note_range_min = min(midi)
+    song.note_range_max = max(midi)
 
 
 def _finalize_success(song_id: str, out_dir: Path) -> None:

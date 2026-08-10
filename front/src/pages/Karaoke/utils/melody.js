@@ -30,16 +30,16 @@ export function getMelodyRange({
   const finiteFallback = Number.isFinite(Number(fallbackMidi))
     ? Number(fallbackMidi)
     : DEFAULT_MIDI_CENTER;
+  // The database range may come from an older processing run. Never let stale
+  // metadata crop notes that are actually present in the current /result.
+  const actualMin = noteMidiValues.length ? Math.min(...noteMidiValues) : null;
+  const actualMax = noteMidiValues.length ? Math.max(...noteMidiValues) : null;
   const sourceMin = hasSavedRange
-    ? savedMin + shift
-    : noteMidiValues.length
-      ? Math.min(...noteMidiValues)
-      : finiteFallback;
+    ? actualMin == null ? savedMin + shift : Math.min(savedMin + shift, actualMin)
+    : actualMin ?? finiteFallback;
   const sourceMax = hasSavedRange
-    ? savedMax + shift
-    : noteMidiValues.length
-      ? Math.max(...noteMidiValues)
-      : finiteFallback;
+    ? actualMax == null ? savedMax + shift : Math.max(savedMax + shift, actualMax)
+    : actualMax ?? finiteFallback;
   const minMidi = Math.floor(sourceMin) - 2;
   const maxMidi = Math.ceil(sourceMax) + 2;
 

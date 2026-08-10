@@ -47,7 +47,7 @@ class CoreConfig:
     fmin_hz: float = 55.0
     fmax_hz: float = 1400.0
     min_note_sec: float = 0.055
-    min_voiced_confidence: float = 0.42
+    min_voiced_confidence: float = 0.38
     split_note_semitones: float = 0.78
     max_gap_sec: float = 0.05
     midi_bend_range: int = 2
@@ -113,7 +113,7 @@ class CoreConfig:
             fmin_hz=_env_float("KARAOKE_AI_FMIN_HZ", 55.0),
             fmax_hz=_env_float("KARAOKE_AI_FMAX_HZ", 1400.0),
             min_note_sec=_env_float("KARAOKE_AI_MIN_NOTE_SEC", 0.055),
-            min_voiced_confidence=_env_float("KARAOKE_AI_MIN_CONFIDENCE", 0.42),
+            min_voiced_confidence=_env_float("KARAOKE_AI_MIN_CONFIDENCE", 0.38),
             split_note_semitones=_env_float("KARAOKE_AI_SPLIT_SEMITONES", 0.78),
             max_gap_sec=_env_float("KARAOKE_AI_MAX_GAP_SEC", 0.05),
             midi_bend_range=_env_int("KARAOKE_AI_MIDI_BEND_RANGE", 2),
