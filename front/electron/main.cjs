@@ -112,9 +112,51 @@ function registerMediaProtocol() {
   });
 }
 
-function resolveSongOutputDir() {
-  if (isDev) return path.join(resolveBackendDir(), "Song");
-  return path.join(app.getPath("userData"), "backend-data", "Song");
+function requestBackendJson(pathname, timeoutMs = 1200) {
+  return new Promise((resolve, reject) => {
+    const request = http.get(`${BACKEND_URL}${pathname}`, (response) => {
+      let body = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => {
+        if (body.length < 1024 * 1024) body += chunk;
+      });
+      response.on("end", () => {
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          reject(new Error(`Backend returned HTTP ${response.statusCode}`));
+          return;
+        }
+        try {
+          resolve(JSON.parse(body));
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+    request.setTimeout(timeoutMs, () => {
+      request.destroy(new Error("Backend request timed out"));
+    });
+    request.on("error", reject);
+  });
+}
+
+async function resolveSongOutputDir() {
+  try {
+    const settings = await requestBackendJson("/settings");
+    const configuredPath = settings?.songs_folder;
+    if (typeof configuredPath === "string" && configuredPath.trim()) {
+      return path.resolve(configuredPath.trim());
+    }
+  } catch (error) {
+    console.warn(
+      "Не удалось получить папку библиотеки от backend, используется путь по умолчанию:",
+      error?.message || error
+    );
+  }
+
+  if (isDev) {
+    return path.resolve(resolveBackendDir(), "..", "karaoke_songs");
+  }
+  return path.join(app.getPath("userData"), "backend-data", "karaoke_songs");
 }
 
 function isPathInside(parentPath, candidatePath) {
@@ -371,7 +413,7 @@ handleTrustedIpc("window:maximize", () => {
 handleTrustedIpc("window:close", () => mainWindow?.close());
 handleTrustedIpc("shell:openSongFolder", async (target) => {
   const request = typeof target === "string" ? { path: target } : target || {};
-  const songsDir = resolveSongOutputDir();
+  const songsDir = await resolveSongOutputDir();
   const candidates = [
     request.path,
     request.slug && path.join(songsDir, request.slug),
