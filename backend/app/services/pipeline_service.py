@@ -698,6 +698,7 @@ _MIDI_REBUILD_FILES = (
     "pitch.json",
     "syllables.json",
     "reference.json",
+    "acousticNotes.json",
     "melodyContour.json",
     "vocal.mid",
     "game.mid",
@@ -726,7 +727,7 @@ def _force_midi_rebuild(out_dir: Path) -> None:
         with contextlib.suppress(OSError):
             (out_dir / relative).unlink(missing_ok=True)
     with contextlib.suppress(OSError):
-        (out_dir / ".ai-cache" / "vocal-notes.json").unlink(missing_ok=True)
+        (out_dir / "acousticNotes.json").unlink(missing_ok=True)
 
 
 def _run_reprocessing(song_id: str) -> None:

@@ -33,7 +33,7 @@ import { getLyricDisplayState } from "./utils/lyrics";
 import { getMicrophoneLevel } from "./utils/transport";
 
 // Karaoke timing is authoritative on the backend. The UI only reads the ready
-// karaoke_timeline and advances it with the instrumental playback clock. Legacy
+// songMap.json and advances it with the instrumental playback clock. Legacy
 // normalization remains only as a compatibility fallback for older payloads.
 
 const setGlobalRouteBlackout = (visible) => {
@@ -228,22 +228,24 @@ export default function Karaoke({ onOpenAppSettings }) {
     hasStartedPlaybackRef.current = false;
   }, [song?.id]);
 
-  const karaokeTimeline = result?.karaoke_timeline;
+  // songMap.json is the single ready-to-render karaoke contract produced by
+  // the backend.  Do not rebuild word/syllable/note timing in the browser.
+  const songMap = result?.song_map;
   const lyrics = useMemo(
     () =>
-      Array.isArray(karaokeTimeline?.lines)
-        ? karaokeTimeline.lines
+      Array.isArray(songMap?.lines)
+        ? songMap.lines
         : normalizeLyrics(result?.lyrics_sync),
-    [karaokeTimeline, result]
+    [songMap, result]
   );
   const notes = useMemo(
     () =>
       normalizeNotes(
-        Array.isArray(karaokeTimeline?.notes)
-          ? karaokeTimeline.notes
+        Array.isArray(songMap?.display_notes)
+          ? songMap.display_notes
           : result?.game_notes ?? result?.reference_notes
       ),
-    [karaokeTimeline, result]
+    [songMap, result]
   );
   const { startMelodyGuide, updateMelodyGuide, silenceMelodyGuide } =
     useMelodyGuide({

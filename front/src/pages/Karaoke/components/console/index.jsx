@@ -1,6 +1,7 @@
 import { Grid, Stack } from "../../../../theme/ui";
 import ConsoleCenter from "./center";
 import MixerPanel from "./mixer";
+import SongStrip from "./song-strip";
 import ToolsPanel from "./tools";
 
 export default function KaraokeConsole({
@@ -22,6 +23,7 @@ export default function KaraokeConsole({
         WebkitBackdropFilter: "blur(0.2rem)"
       }}
     >
+      <SongStrip {...props} />
       <Grid columns={3} gap="1rem" sx={{ padding: "0.9rem" }}>
         <MixerPanel {...props} />
         <ConsoleCenter {...props} />

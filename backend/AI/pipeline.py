@@ -42,6 +42,7 @@ from .models import (
 )
 from .music import MUSIC_ANALYZER_VERSION, analyze_music
 from .notes import NOTE_DECODER_VERSION, build_game_notes, build_vocal_notes, get_note_diagnostics
+from .karaoke_timeline import KARAOKE_TIMELINE_VERSION, build_karaoke_song_map
 from .pitch_post import PITCH_STABILIZER_VERSION, fuse_pitch_with_yin, refine_pitch_confidence, stabilize_pitch
 from .profiler import environment_info
 from .quality import evaluate_quality
@@ -968,7 +969,7 @@ class KaraokePipeline:
         syllable_path = output / "syllables.json"
         reference = output / "reference.json"
         contour = output / "melodyContour.json"
-        notes_path = output / ".ai-cache" / "vocal-notes.json"
+        notes_path = output / "acousticNotes.json"
         derivation_key = cache.key(
             "derivation",
             {
@@ -1077,6 +1078,16 @@ class KaraokePipeline:
             cache.invalidate("midi")
             warnings.append("No voiced notes detected; MIDI was not generated")
 
+        # Always read the canonical lyrics that were actually published by the
+        # alignment/transcription stage. The local variable ``text`` is only
+        # assigned in the transcription branch, so using it here made the
+        # supplied-lyrics branch fail after MIDI generation.
+        canonical_lyrics_text = (
+            lyrics_txt.read_text(encoding="utf-8")
+            if lyrics_txt.exists()
+            else str(supplied or "")
+        )
+
         song_map = output / "songMap.json"
         song_map_key = cache.key(
             "song-map",
@@ -1104,16 +1115,17 @@ class KaraokePipeline:
         else:
             write_json_atomic(
                 song_map,
-                {
-                    "duration": song_duration,
-                    "bpm": bpm,
-                    "key": music_analysis.get("key"),
-                    "ai_build_id": AI_BUILD_ID,
-                    "note_decoder_version": NOTE_DECODER_VERSION,
-                    "words": [to_dict(word) for word in words],
-                    "syllables": [to_dict(item) for item in syllables],
-                    "notes": [to_dict(item) for item in game_notes],
-                },
+                build_karaoke_song_map(
+                    lyrics_text=canonical_lyrics_text,
+                    words=words,
+                    syllables=syllables,
+                    game_notes=game_notes,
+                    duration=song_duration,
+                    bpm=bpm,
+                    key=music_analysis.get("key"),
+                    ai_build_id=AI_BUILD_ID,
+                    note_decoder_version=NOTE_DECODER_VERSION,
+                ),
             )
             cache.commit("song-map", song_map_key, [song_map])
             reports.append(StageReport("song-map", 0.0, False, "builder"))
@@ -1216,6 +1228,7 @@ class KaraokePipeline:
             "pitch": "pitch.json",
             "syllables": "syllables.json",
             "reference": "reference.json",
+            "acousticNotes": "acousticNotes.json",
             "melodyContour": "melodyContour.json",
             "songMap": "songMap.json",
             "diagnostics": "diagnostics.json",

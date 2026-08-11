@@ -523,8 +523,11 @@ def _bound_legacy_word_durations(lines: list[dict[str, Any]]) -> list[dict[str, 
 
 
 def get_karaoke_lyrics(output_dir: str | Path) -> list[dict[str, Any]]:
-    """Return canonical forced-aligned lyric lines without legacy timing edits."""
+    """Return ready lyric lines from songMap.json for processed songs."""
     output_dir = Path(output_dir)
+    song_map: Any = read_json(output_dir / "songMap.json", default={})
+    if isinstance(song_map, dict) and isinstance(song_map.get("lines"), list):
+        return [item for item in song_map["lines"] if isinstance(item, dict)]
     payload: Any = read_json(output_dir / "lyricsSync.json", default={})
     if not isinstance(payload, dict):
         return []
@@ -535,8 +538,11 @@ def get_karaoke_lyrics(output_dir: str | Path) -> list[dict[str, Any]]:
 
 
 def get_game_notes(output_dir: str | Path) -> list[dict[str, Any]]:
-    """Return syllable-aware karaoke/game note events from reference.json."""
-    payload: Any = read_json(Path(output_dir) / "reference.json", default={})
+    """Return canonical full game notes, preferring songMap.json."""
+    output_dir = Path(output_dir)
+    payload: Any = read_json(output_dir / "songMap.json", default={})
+    if not (isinstance(payload, dict) and isinstance(payload.get("notes"), list)):
+        payload = read_json(output_dir / "reference.json", default={})
     notes = payload.get("notes", []) if isinstance(payload, dict) else []
     if not isinstance(notes, list):
         return []
@@ -550,12 +556,22 @@ def get_game_notes(output_dir: str | Path) -> list[dict[str, Any]]:
 
 
 def get_syllables(output_dir: str | Path) -> list[dict[str, Any]]:
-    payload: Any = read_json(Path(output_dir) / "syllables.json", default={})
+    output_dir = Path(output_dir)
+    payload: Any = read_json(output_dir / "songMap.json", default={})
+    if not (isinstance(payload, dict) and isinstance(payload.get("syllables"), list)):
+        payload = read_json(output_dir / "syllables.json", default={})
     syllables = payload.get("syllables", []) if isinstance(payload, dict) else []
     return [item for item in syllables if isinstance(item, dict)] if isinstance(syllables, list) else []
 
 
 def get_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
+    """Return the ready timeline from songMap.json; rebuild only for legacy songs."""
+    payload: Any = read_json(Path(output_dir) / "songMap.json", default={})
+    if isinstance(payload, dict) and isinstance(payload.get("lines"), list) and isinstance(payload.get("display_notes"), list):
+        return payload
+    return _build_legacy_karaoke_timeline(output_dir)
+
+def _build_legacy_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
     """Build the single authoritative presentation timeline for Karaoke UI.
 
     The frontend must not re-align words, syllables, or notes.  This payload
@@ -683,12 +699,19 @@ def get_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
         "notes": notes,
     }
 
+
 def _reference_notes(output_dir: Path) -> list[dict[str, Any]]:
     # Prefer the exact canonical vocal-note sequence used to create vocal.mid.
     # reference.json remains a compatibility mirror, but must never hide a newer
     # detailed MIDI result behind separately simplified game notes.
-    canonical = output_dir / ".ai-cache" / "vocal-notes.json"
-    raw: Any = read_json(canonical, default={}) if canonical.exists() else read_json(output_dir / "reference.json", default={})
+    canonical = output_dir / "acousticNotes.json"
+    legacy_cache = output_dir / ".ai-cache" / "vocal-notes.json"
+    if canonical.exists():
+        raw: Any = read_json(canonical, default={})
+    elif legacy_cache.exists():
+        raw = read_json(legacy_cache, default={})
+    else:
+        raw = read_json(output_dir / "reference.json", default={})
     notes = raw.get("notes", []) if isinstance(raw, dict) else raw if isinstance(raw, list) else []
     result: list[dict[str, Any]] = []
     for note in notes:
