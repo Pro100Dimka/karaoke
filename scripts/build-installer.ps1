@@ -107,7 +107,21 @@ $script:BackendFingerprint = ""
 $script:AsioFingerprint = ""
 $script:FrontendFingerprint = ""
 $script:ModelsFingerprint = ""
-$BuildSchemaVersion = "2026.08.11-v22-single-runtime-archive"
+$LegacyV23SchemaVersion = "2026.08.11-v23-parallel-safe"
+
+# Increment ONLY the component whose OUTPUT FORMAT/BUILD RULES changed.
+# Never bump all of these just because build-installer.ps1 itself changed.
+$BackendSchemaVersion   = "backend-v1"
+$AsioSchemaVersion      = "asio-v1"
+$FrontendSchemaVersion  = "frontend-v1"
+$ModelsSchemaVersion    = "models-v1"
+$FinalizeSchemaVersion  = "finalize-v1"
+$ElectronSchemaVersion  = "electron-v2-nosign-nosmoke"
+$RuntimeSchemaVersion   = "runtime-zip-v1"
+$InstallerSchemaVersion = "installer-bootstrap-v1"
+$IsoSchemaVersion       = "iso-runtimezip-rawmodels-v2-imapi-stream"
+$ElectronSignSchemaVersion  = "electron-sign-v1"
+$ElectronSmokeSchemaVersion = "electron-smoke-v1"
 
 function Write-Header([string]$Text) {
     Write-Host ""
@@ -437,6 +451,39 @@ function Test-StepNeeded(
     return $false
 }
 
+function Migrate-StateIfCompatible(
+    [string]$Name,
+    [string]$NewFingerprint,
+    [string[]]$LegacyFingerprints = @(),
+    [string[]]$RequiredOutputs = @()
+) {
+    $saved = Get-State $Name
+
+    if ($saved -eq $NewFingerprint) {
+        return $false
+    }
+
+    if ([string]::IsNullOrWhiteSpace($saved)) {
+        return $false
+    }
+
+    foreach ($output in $RequiredOutputs) {
+        if (-not (Test-Path -LiteralPath $output)) {
+            return $false
+        }
+    }
+
+    foreach ($legacy in $LegacyFingerprints) {
+        if (-not [string]::IsNullOrWhiteSpace($legacy) -and $saved -eq $legacy) {
+            Set-State $Name $NewFingerprint
+            Write-Host "  $Name`: compatible state migrated [skip]"
+            return $true
+        }
+    }
+
+    return $false
+}
+
 function Get-PythonEnvironmentFingerprint {
     $version = & $Python -c "import sys;print(sys.version)" 2>$null
     if ($LASTEXITCODE -ne 0) { return "python-unavailable" }
@@ -466,12 +513,17 @@ function Get-IsoEngineFingerprint {
     return "windows-imapi2fs"
 }
 
-function Get-BackendFingerprint {
+function Get-BackendInputFingerprint {
     $source = Get-ContentFingerprint @($Backend) `
         @("venv","data","Song","full_songs","recordings","__pycache__",".pytest_cache",".cache","dist","build") `
         @("*.pyc","*.pyo","*.log","*.db","*.sqlite","*.sqlite3")
 
-    $ffmpegFp = if ($script:Ffmpeg) { Get-ToolFileFingerprint @($script:Ffmpeg) } else { "ffmpeg-missing" }
+    $ffmpegFp = if ($script:Ffmpeg) {
+        Get-ToolFileFingerprint @($script:Ffmpeg)
+    }
+    else {
+        "ffmpeg-missing"
+    }
 
     return Get-CombinedFingerprint @(
         $source,
@@ -480,13 +532,27 @@ function Get-BackendFingerprint {
     )
 }
 
-function Get-FrontendFingerprint {
+function Get-BackendFingerprint {
+    return Get-CombinedFingerprint @(
+        (Get-BackendInputFingerprint),
+        $BackendSchemaVersion
+    )
+}
+
+function Get-FrontendInputFingerprint {
     return Get-ContentFingerprint @($Frontend) `
         @("node_modules","dist","build",".git",".cache",".vite","coverage","playwright-report","test-results") `
         @("*.log")
 }
 
-function Get-AsioFingerprint {
+function Get-FrontendFingerprint {
+    return Get-CombinedFingerprint @(
+        (Get-FrontendInputFingerprint),
+        $FrontendSchemaVersion
+    )
+}
+
+function Get-AsioInputFingerprint {
     $source = Get-ContentFingerprint @($Asio,$AsioSdk) `
         @("build",".git",".cache","__pycache__") `
         @("*.obj","*.pdb","*.ilk","*.log")
@@ -497,23 +563,40 @@ function Get-AsioFingerprint {
     )
 }
 
-function Get-ModelsFingerprint {
+function Get-AsioFingerprint {
+    return Get-CombinedFingerprint @(
+        (Get-AsioInputFingerprint),
+        $AsioSchemaVersion
+    )
+}
+
+function Get-ModelsInputFingerprint {
     $payload = Get-Fingerprint @($Models,$MsstEngine) `
         @(".cache",".git","__pycache__") `
         @("*.metadata","*.lock","*.tmp","*.part")
 
     $registryInputs = @($ModelCheck)
+
     foreach ($candidate in @(
-        (Join-Path $Backend "AI\\model_registry.py"),
-        (Join-Path $Backend "AI\\config.py"),
-        (Join-Path $Backend "AI\\requirements.txt")
+        (Join-Path $Backend "AI\model_registry.py"),
+        (Join-Path $Backend "AI\config.py"),
+        (Join-Path $Backend "AI\requirements.txt")
     )) {
-        if (Test-Path -LiteralPath $candidate) { $registryInputs += $candidate }
+        if (Test-Path -LiteralPath $candidate) {
+            $registryInputs += $candidate
+        }
     }
 
     return Get-CombinedFingerprint @(
         $payload,
         (Get-SmallFileFingerprint $registryInputs)
+    )
+}
+
+function Get-ModelsFingerprint {
+    return Get-CombinedFingerprint @(
+        (Get-ModelsInputFingerprint),
+        $ModelsSchemaVersion
     )
 }
 
@@ -523,25 +606,68 @@ function Get-SmallFileFingerprint([string[]]$Paths) {
 
 function Get-ElectronConfigFingerprint {
     $paths = @()
+
     foreach ($candidate in @(
         (Join-Path $Frontend "package.json"),
         (Join-Path $Frontend "package-lock.json"),
         (Join-Path $Frontend "electron"),
         $SceneVideoSource
     )) {
-        if (Test-Path -LiteralPath $candidate) { $paths += $candidate }
+        if (Test-Path -LiteralPath $candidate) {
+            $paths += $candidate
+        }
     }
-    return Get-ContentFingerprint $paths @("node_modules","dist","build",".git",".cache") @("*.log") @()
+
+    return Get-ContentFingerprint `
+        $paths `
+        @("node_modules","dist","build",".git",".cache") `
+        @("*.log") `
+        @()
+}
+
+function Get-InnoInputFingerprint {
+    return Get-CombinedFingerprint @(
+        (Get-SmallFileFingerprint @(
+            $InnoTemplate,
+            $SetupIcon,
+            $SignScript,
+            $ChecksumScript
+        )),
+        $AppName,
+        $AppVersion,
+        $AppExe,
+        (Get-InnoCompilerFingerprint)
+    )
 }
 
 function Get-InnoFingerprint {
     return Get-CombinedFingerprint @(
-        (Get-SmallFileFingerprint @($InnoTemplate,$SetupIcon,$SignScript,$ChecksumScript)),
-        $AppName,
-        $AppVersion,
-        $AppExe,
-        (Get-InnoCompilerFingerprint),
-        $BuildSchemaVersion
+        (Get-InnoInputFingerprint),
+        $InstallerSchemaVersion
+    )
+}
+
+function Get-SigningFingerprint {
+    $items = @($SignScript)
+
+    if ($env:ADVOICE_SIGN_PFX -and
+        (Test-Path -LiteralPath $env:ADVOICE_SIGN_PFX -PathType Leaf)) {
+        $items += $env:ADVOICE_SIGN_PFX
+    }
+
+    return Get-CombinedFingerprint @(
+        (Get-SmallFileFingerprint $items),
+        [string]([bool]$env:ADVOICE_SIGN_PFX),
+        [string]([bool]$env:ADVOICE_SIGN_PASSWORD)
+    )
+}
+
+function Get-FinalizeFingerprint {
+    return Get-CombinedFingerprint @(
+        $script:BackendFingerprint,
+        $script:AsioFingerprint,
+        (Get-SigningFingerprint),
+        $FinalizeSchemaVersion
     )
 }
 
@@ -551,33 +677,121 @@ function Get-ElectronFingerprint {
         $script:AsioFingerprint,
         $script:FrontendFingerprint,
         (Get-ElectronConfigFingerprint),
-        $BuildSchemaVersion
+        $ElectronSchemaVersion
+    )
+}
+
+function Get-RuntimeFingerprint(
+    [string]$ElectronFingerprint,
+    [string]$ElectronSignFingerprint = ""
+) {
+    $tar = if ($script:TarExe) {
+        Get-ToolFileFingerprint @($script:TarExe)
+    }
+    else {
+        "tar-missing"
+    }
+
+    return Get-CombinedFingerprint @(
+        $ElectronFingerprint,
+        $ElectronSignFingerprint,
+        $tar,
+        $RuntimeSchemaVersion
     )
 }
 
 function Get-InstallerFingerprint {
-    # Bootstrap-only installer: it contains no Electron/backend/AI payload.
-    # Therefore changes in app/runtime/models must NOT rebuild Inno Setup.
+    # Bootstrap-only installer is independent of Electron/runtime/models.
     return Get-CombinedFingerprint @(
         (Get-InnoFingerprint),
-        $BuildSchemaVersion
+        $InstallerSchemaVersion
     )
 }
 
 function Get-IsoFingerprint(
     [string]$InstallerFingerprint,
-    [string]$ElectronFingerprint,
+    [string]$RuntimeFingerprint,
     [string]$ModelsFingerprint
 ) {
-    # ISO owns the external payload, so any app/runtime/model change rebuilds
-    # only the ISO, not the Inno bootstrap.
     return Get-CombinedFingerprint @(
         $InstallerFingerprint,
-        $ElectronFingerprint,
+        $RuntimeFingerprint,
         $ModelsFingerprint,
         $AppVersion,
         (Get-IsoEngineFingerprint),
-        $BuildSchemaVersion
+        $IsoSchemaVersion
+    )
+}
+
+# Exact v23 hashes are retained ONLY to migrate an already successful build
+# without rebuilding anything when upgrading the builder to v24.
+function Get-LegacyV23FinalizeFingerprint(
+    [string]$LegacyBackendFingerprint,
+    [string]$LegacyAsioFingerprint
+) {
+    return Get-CombinedFingerprint @(
+        $LegacyBackendFingerprint,
+        $LegacyAsioFingerprint,
+        (Get-SigningFingerprint),
+        $LegacyV23SchemaVersion
+    )
+}
+
+function Get-LegacyV23ElectronBaseFingerprint(
+    [string]$LegacyBackendFingerprint,
+    [string]$LegacyAsioFingerprint,
+    [string]$LegacyFrontendFingerprint
+) {
+    return Get-CombinedFingerprint @(
+        $LegacyBackendFingerprint,
+        $LegacyAsioFingerprint,
+        $LegacyFrontendFingerprint,
+        (Get-ElectronConfigFingerprint),
+        $LegacyV23SchemaVersion
+    )
+}
+
+function Get-LegacyV23ElectronFingerprint(
+    [string]$LegacyBackendFingerprint,
+    [string]$LegacyAsioFingerprint,
+    [string]$LegacyFrontendFingerprint,
+    [string]$LegacyFinalizeFingerprint
+) {
+    return Get-CombinedFingerprint @(
+        (Get-LegacyV23ElectronBaseFingerprint `
+            $LegacyBackendFingerprint `
+            $LegacyAsioFingerprint `
+            $LegacyFrontendFingerprint),
+        $LegacyFinalizeFingerprint
+    )
+}
+
+function Get-LegacyV23InnoFingerprint {
+    return Get-CombinedFingerprint @(
+        (Get-InnoInputFingerprint),
+        $LegacyV23SchemaVersion
+    )
+}
+
+function Get-LegacyV23InstallerFingerprint {
+    return Get-CombinedFingerprint @(
+        (Get-LegacyV23InnoFingerprint),
+        $LegacyV23SchemaVersion
+    )
+}
+
+function Get-LegacyV23IsoFingerprint(
+    [string]$LegacyInstallerFingerprint,
+    [string]$LegacyElectronFingerprint,
+    [string]$LegacyModelsFingerprint
+) {
+    return Get-CombinedFingerprint @(
+        $LegacyInstallerFingerprint,
+        $LegacyElectronFingerprint,
+        $LegacyModelsFingerprint,
+        $AppVersion,
+        (Get-IsoEngineFingerprint),
+        $LegacyV23SchemaVersion
     )
 }
 
@@ -992,19 +1206,40 @@ function Initialize-ImapiStreamWriter {
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.ComTypes;
 
 namespace AdVoice
 {
     public static class ImapiStreamWriter
     {
-        public static void CopyToFile(IStream source, string path)
+        private static readonly Guid IID_IStream =
+            new Guid("0000000C-0000-0000-C000-000000000046");
+
+        public static void CopyToFile(object comStream, string path)
         {
-            byte[] buffer = new byte[1024 * 1024];
-            IntPtr readPtr = Marshal.AllocHGlobal(sizeof(int));
+            if (comStream == null)
+                throw new ArgumentNullException("comStream");
+
+            IntPtr unknown = IntPtr.Zero;
+            IntPtr streamPtr = IntPtr.Zero;
+            IntPtr readPtr = IntPtr.Zero;
 
             try
             {
+                unknown = Marshal.GetIUnknownForObject(comStream);
+
+                Guid iid = IID_IStream;
+                int hr = Marshal.QueryInterface(unknown, ref iid, out streamPtr);
+
+                if (hr != 0 || streamPtr == IntPtr.Zero)
+                    Marshal.ThrowExceptionForHR(hr);
+
+                object streamObject = Marshal.GetObjectForIUnknown(streamPtr);
+                System.Runtime.InteropServices.ComTypes.IStream stream =
+                    (System.Runtime.InteropServices.ComTypes.IStream)streamObject;
+
+                byte[] buffer = new byte[4 * 1024 * 1024];
+                readPtr = Marshal.AllocHGlobal(sizeof(int));
+
                 using (FileStream output = new FileStream(
                     path,
                     FileMode.Create,
@@ -1016,23 +1251,31 @@ namespace AdVoice
                     while (true)
                     {
                         Marshal.WriteInt32(readPtr, 0);
-                        source.Read(buffer, buffer.Length, readPtr);
-                        int read = Marshal.ReadInt32(readPtr);
+                        stream.Read(buffer, buffer.Length, readPtr);
 
+                        int read = Marshal.ReadInt32(readPtr);
                         if (read <= 0)
-                        {
                             break;
-                        }
 
                         output.Write(buffer, 0, read);
                     }
 
-                    output.Flush();
+                    output.Flush(true);
                 }
+
+                if (Marshal.IsComObject(streamObject))
+                    Marshal.FinalReleaseComObject(streamObject);
             }
             finally
             {
-                Marshal.FreeHGlobal(readPtr);
+                if (readPtr != IntPtr.Zero)
+                    Marshal.FreeHGlobal(readPtr);
+
+                if (streamPtr != IntPtr.Zero)
+                    Marshal.Release(streamPtr);
+
+                if (unknown != IntPtr.Zero)
+                    Marshal.Release(unknown);
             }
         }
     }
@@ -1088,12 +1331,12 @@ function New-IsoWithWindowsImapi(
             Remove-Item -LiteralPath $OutputFile -Force
         }
 
-        Write-Host "Writing ISO:"
+        Write-Host "Writing ISO via COM IStream bridge:"
         Write-Host "  $OutputFile"
         Write-Host ""
 
         [AdVoice.ImapiStreamWriter]::CopyToFile(
-            [System.Runtime.InteropServices.ComTypes.IStream]$stream,
+            $stream,
             $OutputFile
         )
     }
@@ -1628,7 +1871,7 @@ function Sync-DirectoryIfChanged(
     }
 
     & robocopy.exe $Source $Destination `
-        /MIR /COPY:DAT /DCOPY:DAT /R:2 /W:1 /MT:16 /J `
+        /MIR /COPY:DAT /DCOPY:DAT /R:2 /W:1 /MT:32 /J `
         /XD ".cache" ".git" "__pycache__" `
         /XF "*.metadata" "*.lock" "*.tmp" "*.part" `
         /NFL /NDL /NJH /NJS /NP
@@ -1729,28 +1972,6 @@ function Sync-ModelTree {
 
     Remove-IgnoredPayloadFiles $modelDest
     Verify-ModelTree $modelDest "Packaged AI models"
-}
-
-function Get-SigningFingerprint {
-    $items = @($SignScript)
-    if ($env:ADVOICE_SIGN_PFX -and (Test-Path -LiteralPath $env:ADVOICE_SIGN_PFX -PathType Leaf)) {
-        $items += $env:ADVOICE_SIGN_PFX
-    }
-
-    return Get-CombinedFingerprint @(
-        (Get-SmallFileFingerprint $items),
-        [string]([bool]$env:ADVOICE_SIGN_PFX),
-        [string]([bool]$env:ADVOICE_SIGN_PASSWORD)
-    )
-}
-
-function Get-FinalizeFingerprint {
-    return Get-CombinedFingerprint @(
-        $script:BackendFingerprint,
-        $script:AsioFingerprint,
-        (Get-SigningFingerprint),
-        $BuildSchemaVersion
-    )
 }
 
 function Verify-BackendBase {
@@ -1880,6 +2101,7 @@ function Build-RuntimeArchive([string]$SourceDirectory) {
 
     Write-Host ""
     Write-Host "Creating compressed application runtime..."
+    Write-Host "  CPU policy: compression starts after PyInstaller/Vite/ASIO workers finish."
     Write-Host "  Source:  $SourceDirectory"
     Write-Host "  Archive: $RuntimeArchive"
     Write-Host ""
@@ -1940,9 +2162,6 @@ function Build-ElectronPackage {
     Write-Host "Electron output:"
     Write-Host "  $newUnpacked"
     Write-Host ""
-    Write-Host "A new output directory is used for every build."
-    Write-Host "Locked app.asar files from older builds cannot block this build."
-    Write-Host ""
 
     Push-Location $Frontend
 
@@ -1971,10 +2190,41 @@ function Build-ElectronPackage {
         throw "Electron builder completed but win-unpacked was not created: $newUnpacked"
     }
 
-    # Switch all downstream paths to this new run only after the directory exists.
     Set-ElectronOutputPath $newUnpacked
+    Verify-Unpacked
+    Save-ElectronOutputPath $newUnpacked
 
+    Write-Host ""
+    Write-Host "Electron package verified successfully."
+    Write-Host "Current Electron output:"
+    Write-Host "  $Unpacked"
+    Write-Host ""
+
+    Remove-OldElectronRuns $Unpacked
+}
+
+function Get-ElectronSignFingerprint([string]$ElectronFingerprint) {
+    return Get-CombinedFingerprint @(
+        $ElectronFingerprint,
+        (Get-SigningFingerprint),
+        $ElectronSignSchemaVersion
+    )
+}
+
+function Sign-ElectronPackage {
+    Require-File (Join-Path $Unpacked $AppExe) "Electron application"
     Sign-File (Join-Path $Unpacked $AppExe)
+}
+
+function Get-ElectronSmokeFingerprint([string]$ElectronFingerprint) {
+    return Get-CombinedFingerprint @(
+        $ElectronFingerprint,
+        (Get-SmallFileFingerprint @($SmokeScript)),
+        $ElectronSmokeSchemaVersion
+    )
+}
+
+function Smoke-TestElectronPackage {
     Verify-Unpacked
 
     Write-Host ""
@@ -1998,23 +2248,6 @@ function Build-ElectronPackage {
     finally {
         Remove-SmokeTestJunctions $links
     }
-
-    Verify-Unpacked
-
-    # Archive the complete verified runtime once. The ISO uses only this archive,
-    # so win-unpacked is no longer copied into ISO staging.
-    Build-RuntimeArchive $newUnpacked
-
-    # The archive is now the persistent runtime artifact.
-    Save-ElectronOutputPath $newUnpacked
-
-    Write-Host ""
-    Write-Host "Electron package verified successfully."
-    Write-Host "Current Electron output:"
-    Write-Host "  $Unpacked"
-    Write-Host ""
-
-    Remove-OldElectronRuns $Unpacked
 }
 
 function Find-Inno {
@@ -2055,6 +2288,25 @@ function Find-Inno {
     }
 
     return $null
+}
+
+function Ensure-RuntimeSource(
+    [string]$ElectronFingerprint,
+    [string]$FinalizeFingerprint
+) {
+    $appPath = Join-Path $Unpacked $AppExe
+
+    if (Test-Path -LiteralPath $appPath -PathType Leaf) {
+        return
+    }
+
+    Write-Host ""
+    Write-Host "Runtime archive must be refreshed, but Electron source is missing."
+    Write-Host "Rebuilding Electron source only because it is required for runtime packaging."
+    Write-Host ""
+
+    Build-ElectronPackage
+    Set-State "electron" $ElectronFingerprint
 }
 
 function Build-Installer {
@@ -2422,6 +2674,10 @@ function Run-Parallel([string[]]$Workers) {
 
 function Parallel-FullBuild {
     Write-Header "SMART PARALLEL BUILD"
+    Write-Host "Parallel policy: backend + ASIO + frontend + AI verification"
+    Write-Host "Large file sync: robocopy /MT:32 /J"
+    Write-Host "Runtime compression is intentionally deferred to avoid CPU/RAM contention."
+    Write-Host ""
 
     $force = ($Mode -eq "clean")
 
@@ -2446,14 +2702,21 @@ function Parallel-FullBuild {
         @((Join-Path $Build "frontend\dist\index.html")) `
         -Force:$force
 
+    $script:ModelsChanged = Test-StepNeeded `
+        "models" `
+        $script:ModelsFingerprint `
+        @($Models,(Join-Path $MsstEngine "inference.py")) `
+        -Force:$force
+
     $workers = @()
     if ($script:BackendChanged) { $workers += "backend" }
     if ($script:AsioChanged) { $workers += "asio" }
     if ($script:FrontendChanged) { $workers += "frontend" }
+    if ($script:ModelsChanged) { $workers += "package-models" }
 
     if ($workers.Count -eq 0) {
         Write-Host ""
-        Write-Host "Backend, ASIO and frontend are unchanged. Nothing to rebuild."
+        Write-Host "Backend, ASIO, frontend and AI models are unchanged. Nothing to rebuild."
         return
     }
 
@@ -2467,6 +2730,7 @@ function Parallel-FullBuild {
     if ($script:BackendChanged) { Set-State "backend" $script:BackendFingerprint }
     if ($script:AsioChanged) { Set-State "asio" $script:AsioFingerprint }
     if ($script:FrontendChanged) { Set-State "frontend" $script:FrontendFingerprint }
+    if ($script:ModelsChanged) { Set-State "models" $script:ModelsFingerprint }
 
     Write-Host ""
     Write-Host "Smart parallel build completed."
@@ -2505,6 +2769,7 @@ try {
                     Build-Frontend
                 }
                 "package-models" {
+                    Check-Models
                     Package-Models
                 }
             }
@@ -2556,38 +2821,159 @@ try {
     Check-Environment
     Prepare-Output
 
-    # Fast dependency graph. Nothing expensive is launched before these checks.
-    $script:BackendFingerprint = Get-BackendFingerprint
-    $script:AsioFingerprint = Get-AsioFingerprint
-    $script:FrontendFingerprint = Get-FrontendFingerprint
-    $script:ModelsFingerprint = Get-ModelsFingerprint
+    # Fast dependency graph. Builder source changes by themselves do NOT
+    # invalidate application artifacts. Only component inputs/schemas do.
+    $legacyBackendFp = Get-BackendInputFingerprint
+    $legacyAsioFp = Get-AsioInputFingerprint
+    $legacyFrontendFp = Get-FrontendInputFingerprint
+    $legacyModelsFp = Get-ModelsInputFingerprint
+
+    $script:BackendFingerprint = Get-CombinedFingerprint @(
+        $legacyBackendFp,
+        $BackendSchemaVersion
+    )
+    $script:AsioFingerprint = Get-CombinedFingerprint @(
+        $legacyAsioFp,
+        $AsioSchemaVersion
+    )
+    $script:FrontendFingerprint = Get-CombinedFingerprint @(
+        $legacyFrontendFp,
+        $FrontendSchemaVersion
+    )
+    $script:ModelsFingerprint = Get-CombinedFingerprint @(
+        $legacyModelsFp,
+        $ModelsSchemaVersion
+    )
+
+    # Zero-cost state migration from v23: if the old hash still exactly matches
+    # current inputs and the artifact exists, rewrite only the hash and skip build.
+    [void](Migrate-StateIfCompatible `
+        "backend" `
+        $script:BackendFingerprint `
+        @($legacyBackendFp) `
+        @(
+            (Join-Path $BackendDist "KaraokeBackend.exe"),
+            (Join-Path $BackendDist "KaraokeAudioMonitor.exe")
+        ))
+
+    [void](Migrate-StateIfCompatible `
+        "asio" `
+        $script:AsioFingerprint `
+        @($legacyAsioFp) `
+        @((Join-Path $AsioBuild "KaraokeAsioBridge.exe")))
+
+    [void](Migrate-StateIfCompatible `
+        "frontend" `
+        $script:FrontendFingerprint `
+        @($legacyFrontendFp) `
+        @((Join-Path $Build "frontend\dist\index.html")))
+
+    [void](Migrate-StateIfCompatible `
+        "models" `
+        $script:ModelsFingerprint `
+        @($legacyModelsFp) `
+        @($Models,(Join-Path $MsstEngine "inference.py")))
+
+    $legacyFinalizeFp = Get-LegacyV23FinalizeFingerprint `
+        $legacyBackendFp `
+        $legacyAsioFp
+
+    $finalizeFp = Get-FinalizeFingerprint
+
+    [void](Migrate-StateIfCompatible `
+        "finalize" `
+        $finalizeFp `
+        @($legacyFinalizeFp) `
+        @((Join-Path $BackendDist "KaraokeAsioBridge.exe")))
+
+    $legacyElectronFp = Get-LegacyV23ElectronFingerprint `
+        $legacyBackendFp `
+        $legacyAsioFp `
+        $legacyFrontendFp `
+        $legacyFinalizeFp
+
+    $electronFp = Get-CombinedFingerprint @(
+        (Get-ElectronFingerprint),
+        $finalizeFp
+    )
+
+    # v23 considered app-runtime.zip the Electron output. Accept it during
+    # migration so upgrading the builder alone does not rebuild Electron.
+    [void](Migrate-StateIfCompatible `
+        "electron" `
+        $electronFp `
+        @($legacyElectronFp) `
+        @($RuntimeArchive))
+
+    $electronSignFp = Get-ElectronSignFingerprint $electronFp
+    $runtimeFp = Get-RuntimeFingerprint $electronFp $electronSignFp
+
+    # v23 had no separate runtime state. A valid v23 Electron state + archive
+    # proves this exact runtime archive already exists, so seed runtime state.
+    if ([string]::IsNullOrWhiteSpace((Get-State "runtime")) -and
+        (Test-Path -LiteralPath $RuntimeArchive -PathType Leaf)) {
+        $savedElectron = Get-State "electron"
+
+        if ($savedElectron -eq $electronFp) {
+            Set-State "runtime" $runtimeFp
+            Write-Host "  runtime: state initialized from compatible archive [skip]"
+        }
+    }
+
+    $legacyInstallerFp = Get-LegacyV23InstallerFingerprint
+    $installerFp = Get-InstallerFingerprint
+
+    [void](Migrate-StateIfCompatible `
+        "installer" `
+        $installerFp `
+        @($legacyInstallerFp) `
+        @($InstallerExe,$ChecksumFile))
+
+    $legacyIsoFp = Get-LegacyV23IsoFingerprint `
+        $legacyInstallerFp `
+        $legacyElectronFp `
+        $legacyModelsFp
+
+    $isoFp = Get-IsoFingerprint `
+        $installerFp `
+        $runtimeFp `
+        $script:ModelsFingerprint
+
+    [void](Migrate-StateIfCompatible `
+        "iso" `
+        $isoFp `
+        @($legacyIsoFp) `
+        @($IsoFile))
 
     if ($Mode -eq "installer") {
         $script:BackendChanged = $false
         $script:AsioChanged = $false
         $script:FrontendChanged = $false
-        Verify-Unpacked
+        $script:ModelsChanged = $false
     }
     else {
         Parallel-FullBuild
     }
 
-    $modelsNeeded = Test-StepNeeded `
-        "models" `
-        $script:ModelsFingerprint `
-        @($Models,(Join-Path $MsstEngine "inference.py")) `
-        -Force:($Mode -eq "clean")
+    if ($Mode -eq "installer") {
+        $modelsNeeded = Test-StepNeeded `
+            "models" `
+            $script:ModelsFingerprint `
+            @($Models,(Join-Path $MsstEngine "inference.py")) `
+            -Force:($Mode -eq "clean")
 
-    if ($modelsNeeded) {
-        Check-Models
-        Package-Models
-        Set-State "models" $script:ModelsFingerprint
+        if ($modelsNeeded) {
+            Check-Models
+            Package-Models
+            Set-State "models" $script:ModelsFingerprint
+        }
+        else {
+            Write-Host "  AI model verification: unchanged [skip]"
+        }
     }
-    else {
+    elseif (-not $script:ModelsChanged) {
         Write-Host "  AI model verification: unchanged [skip]"
     }
-
-    $finalizeFp = Get-FinalizeFingerprint
 
     if ($Mode -ne "installer") {
         $needFinalize = Test-StepNeeded `
@@ -2599,17 +2985,38 @@ try {
         if ($needFinalize) {
             Finalize-Asio
             Set-State "finalize" $finalizeFp
+
+            # Finalized backend bytes changed, therefore Electron input changes.
+            $electronFp = Get-CombinedFingerprint @(
+                (Get-ElectronFingerprint),
+                $finalizeFp
+            )
+            $electronSignFp = Get-ElectronSignFingerprint $electronFp
+    $runtimeFp = Get-RuntimeFingerprint $electronFp $electronSignFp
+            $isoFp = Get-IsoFingerprint `
+                $installerFp `
+                $runtimeFp `
+                $script:ModelsFingerprint
         }
         else {
             Write-Host "  backend signing / ASIO finalize: unchanged [skip]"
         }
     }
 
-    $electronFp = Get-CombinedFingerprint @((Get-ElectronFingerprint),$finalizeFp)
+    # Electron is rebuilt only when its real inputs changed. A valid runtime
+    # archive is enough to preserve a no-op build even if an old win-unpacked
+    # directory was cleaned.
+    $electronRequiredOutput = if (Test-Path -LiteralPath $RuntimeArchive -PathType Leaf) {
+        $RuntimeArchive
+    }
+    else {
+        Join-Path $Unpacked $AppExe
+    }
+
     $electronNeeded = Test-StepNeeded `
         "electron" `
         $electronFp `
-        @($RuntimeArchive) `
+        @($electronRequiredOutput) `
         -Force:($Mode -eq "clean")
 
     if ($electronNeeded) {
@@ -2619,6 +3026,50 @@ try {
         $sw.Stop()
         Set-PreviousDuration "electron" $sw.Elapsed.TotalSeconds
         Set-State "electron" $electronFp
+    }
+
+    # Electron signing is cached separately.
+    $electronSignFp = Get-ElectronSignFingerprint $electronFp
+    $electronSignNeeded = Test-StepNeeded `
+        "electron-sign" `
+        $electronSignFp `
+        @((Join-Path $Unpacked $AppExe)) `
+        -Force:($Mode -eq "clean")
+
+    if ($electronSignNeeded) {
+        Sign-ElectronPackage
+        Set-State "electron-sign" $electronSignFp
+    }
+
+    # Smoke-test is also cached separately; unchanged Electron never starts backend.
+    $electronSmokeFp = Get-ElectronSmokeFingerprint $electronFp
+    $electronSmokeNeeded = Test-StepNeeded `
+        "electron-smoke" `
+        $electronSmokeFp `
+        @((Join-Path $Unpacked $AppExe)) `
+        -Force:($Mode -eq "clean")
+
+    if ($electronSmokeNeeded) {
+        Smoke-TestElectronPackage
+        Set-State "electron-smoke" $electronSmokeFp
+    }
+
+    # Runtime archive is independently cached. Changing runtime compression
+    # rules rebuilds ONLY the archive + ISO, never Electron.
+    $electronSignFp = Get-ElectronSignFingerprint $electronFp
+    $runtimeFp = Get-RuntimeFingerprint $electronFp $electronSignFp
+    $runtimeNeeded = Test-StepNeeded `
+        "runtime" `
+        $runtimeFp `
+        @($RuntimeArchive) `
+        -Force:($Mode -eq "clean")
+
+    if ($runtimeNeeded) {
+        Ensure-RuntimeSource $electronFp $finalizeFp
+
+        Write-StepEstimate "runtime-archive"
+        Build-RuntimeArchive $Unpacked
+        Set-State "runtime" $runtimeFp
     }
 
     $installerFp = Get-InstallerFingerprint
@@ -2638,7 +3089,11 @@ try {
         Set-State "installer" $installerFp
     }
 
-    $isoFp = Get-IsoFingerprint $installerFp $electronFp $script:ModelsFingerprint
+    $isoFp = Get-IsoFingerprint `
+        $installerFp `
+        $runtimeFp `
+        $script:ModelsFingerprint
+
     $isoNeeded = Test-StepNeeded `
         "iso" `
         $isoFp `
@@ -2665,8 +3120,8 @@ try {
     Write-Host "Single-file offline distribution:"
     Write-Host "  $IsoFile"
     Write-Host ""
-    Write-Host "The ISO contains a small Setup.exe plus external app, models and MSST."
-    Write-Host "Mount the ISO and run Setup.exe. Torch/CUDA are copied, not recompressed."
+    Write-Host "The ISO contains Setup.exe, cached app-runtime.zip, raw models and MSST."
+    Write-Host "Only artifacts whose real inputs changed are rebuilt."
     Write-Host ""
 
     Start-Process explorer.exe $Release
