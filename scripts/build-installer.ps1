@@ -52,13 +52,6 @@ if (Test-Path -LiteralPath $InstallerCurrentFile -PathType Leaf) {
         $InstallerDir = [IO.Path]::GetFullPath($savedInstallerPath)
     }
 }
-$ExternalPayload = Join-Path $Build "external-ai"
-$ExternalModels = Join-Path $ExternalPayload "models"
-$ExternalMsst = Join-Path $ExternalPayload "msst"
-
-$PreservedAI = Join-Path $Build "preserved-ai"
-$PreservedModels = Join-Path $PreservedAI "models"
-$PreservedMSST = Join-Path $PreservedAI "msst"
 $ParallelDir = Join-Path $Build "parallel"
 
 $Python = Join-Path $Backend "venv\Scripts\python.exe"
@@ -92,7 +85,8 @@ $InstallerExe = Join-Path $InstallerDir "A&D Voice Setup $AppVersion.exe"
 $ChecksumFile = Join-Path $InstallerDir "SHA256SUMS.txt"
 $IsoName = "A&D Voice $AppVersion.iso"
 $IsoFile = Join-Path $Release $IsoName
-$IsoStage = Join-Path $Build "iso-root"
+$IsoView = Join-Path $Build "iso-view"
+$LegacyIsoStage = Join-Path $Build "iso-root"
 $IsoTemp = Join-Path $Build $IsoName
 $PackagesDir = Join-Path $Build "packages"
 $RuntimeArchive = Join-Path $PackagesDir "app-runtime.zip"
@@ -119,7 +113,8 @@ $FinalizeSchemaVersion  = "finalize-v1"
 $ElectronSchemaVersion  = "electron-v2-nosign-nosmoke"
 $RuntimeSchemaVersion   = "runtime-zip-v1"
 $InstallerSchemaVersion = "installer-bootstrap-v1"
-$IsoSchemaVersion       = "iso-runtimezip-rawmodels-v3-native-istream"
+$IsoSchemaVersion       = "iso-runtimezip-direct-hardlink-view-v4"
+$IsoViewSchemaVersion   = "iso-view-hardlinks-v1"
 $ElectronSignSchemaVersion  = "electron-sign-v1"
 $ElectronSmokeSchemaVersion = "electron-smoke-v1"
 
@@ -719,6 +714,7 @@ function Get-IsoFingerprint(
         $ModelsFingerprint,
         $AppVersion,
         (Get-IsoEngineFingerprint),
+        $IsoViewSchemaVersion,
         $IsoSchemaVersion
     )
 }
@@ -793,26 +789,6 @@ function Get-LegacyV23IsoFingerprint(
         (Get-IsoEngineFingerprint),
         $LegacyV23SchemaVersion
     )
-}
-
-function Remove-IgnoredPayloadFiles([string]$RootPath) {
-    if (-not (Test-Path -LiteralPath $RootPath -PathType Container)) { return }
-
-    Get-ChildItem -LiteralPath $RootPath -Recurse -Directory -Force -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -in @(".cache",".git","__pycache__") } |
-        Sort-Object { $_.FullName.Length } -Descending |
-        ForEach-Object {
-            Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
-        }
-
-    Get-ChildItem -LiteralPath $RootPath -Recurse -File -Force -ErrorAction SilentlyContinue |
-        Where-Object {
-            $_.Name -like "*.metadata" -or
-            $_.Name -like "*.lock" -or
-            $_.Name -like "*.tmp" -or
-            $_.Name -like "*.part"
-        } |
-        Remove-Item -Force -ErrorAction SilentlyContinue
 }
 
 function Format-Duration([double]$Seconds) {
@@ -1400,7 +1376,6 @@ function New-DistributionIsoImage(
             -FilePath $script:Oscdimg `
             -ArgumentList @(
                 "-m",
-                "-o",
                 "-u2",
                 "-udfver102",
                 "-l$VolumeName",
@@ -1505,76 +1480,6 @@ function Check-Environment {
     Write-Host ""
 }
 
-function Preserve-PackagedAI {
-    if ($Mode -eq "clean") {
-        return
-    }
-
-    $currentModels = Join-Path $BackendDist "_internal\models"
-    $currentMsst = Join-Path $BackendDist "_internal\engines\msst"
-
-    if (Test-Path -LiteralPath $PreservedAI) {
-        Remove-Directory $PreservedAI
-    }
-
-    New-Item -ItemType Directory -Path $PreservedAI -Force | Out-Null
-
-    if (Test-Path -LiteralPath $currentModels) {
-        Write-Host ""
-        Write-Host "Preserving existing packaged AI models..."
-        Write-Host "  FROM: $currentModels"
-        Write-Host "  TO:   $PreservedModels"
-        Move-Item -LiteralPath $currentModels -Destination $PreservedModels -Force
-    }
-
-    if (Test-Path -LiteralPath $currentMsst) {
-        Write-Host "Preserving existing packaged MSST engine..."
-        Move-Item -LiteralPath $currentMsst -Destination $PreservedMSST -Force
-    }
-}
-
-function Restore-PackagedAI {
-    if ($Mode -eq "clean") {
-        return
-    }
-
-    $internal = Join-Path $BackendDist "_internal"
-    $modelsDst = Join-Path $internal "models"
-    $enginesDst = Join-Path $internal "engines"
-    $msstDst = Join-Path $enginesDst "msst"
-
-    if (Test-Path -LiteralPath $PreservedModels) {
-        Write-Host ""
-        Write-Host "Restoring preserved AI models..."
-
-        New-Item -ItemType Directory -Path $internal -Force | Out-Null
-
-        if (Test-Path -LiteralPath $modelsDst) {
-            Remove-Directory $modelsDst
-        }
-
-        Move-Item -LiteralPath $PreservedModels -Destination $modelsDst -Force
-        Write-Host "  AI models restored."
-    }
-
-    if (Test-Path -LiteralPath $PreservedMSST) {
-        Write-Host "Restoring preserved MSST inference engine..."
-
-        New-Item -ItemType Directory -Path $enginesDst -Force | Out-Null
-
-        if (Test-Path -LiteralPath $msstDst) {
-            Remove-Directory $msstDst
-        }
-
-        Move-Item -LiteralPath $PreservedMSST -Destination $msstDst -Force
-        Write-Host "  MSST engine restored."
-    }
-
-    if (Test-Path -LiteralPath $PreservedAI) {
-        Remove-Item -LiteralPath $PreservedAI -Force -ErrorAction SilentlyContinue
-    }
-}
-
 function Prepare-Output {
     Write-Host ""
     Write-Host "[0/7] Preparing smart incremental build..."
@@ -1599,6 +1504,17 @@ function Prepare-Output {
     New-Item -ItemType Directory -Path $StateDir -Force | Out-Null
     New-Item -ItemType Directory -Path $InstallerRoot -Force | Out-Null
     New-Item -ItemType Directory -Path $PackagesDir -Force | Out-Null
+
+    # Old versions physically copied 10-20 GB into build\iso-root.
+    # Delete that obsolete duplicate once. The new iso-view contains links only.
+    if (Test-Path -LiteralPath $LegacyIsoStage) {
+        Write-Host ""
+        Write-Host "Removing obsolete physical ISO staging:"
+        Write-Host "  $LegacyIsoStage"
+        Remove-Directory $LegacyIsoStage
+    }
+
+    New-Item -ItemType Directory -Path $IsoView -Force | Out-Null
 }
 
 function Check-Models {
@@ -1748,8 +1664,6 @@ function Build-Backend {
             throw "KaraokeBackend PyInstaller build failed."
         }
 
-        Restore-PackagedAI
-
         Write-Host ""
         Write-Host "Building KaraokeAudioMonitor.exe..."
         Write-Host ""
@@ -1788,6 +1702,7 @@ function Build-Backend {
         Pop-Location
     }
 
+    Remove-LegacyEmbeddedAI
     Require-File (Join-Path $BackendDist "KaraokeBackend.exe") "KaraokeBackend.exe"
     Require-File (Join-Path $BackendDist "KaraokeAudioMonitor.exe") "KaraokeAudioMonitor.exe"
 }
@@ -1856,148 +1771,6 @@ function Get-TreeSignature([string]$Path) {
     )
 }
 
-function Trees-Equal([string]$Source, [string]$Destination) {
-    if (-not (Test-Path -LiteralPath $Destination -PathType Container)) {
-        return $false
-    }
-
-    $a = Get-TreeSignature $Source
-    $b = Get-TreeSignature $Destination
-
-    if ($a.Count -ne $b.Count) { return $false }
-
-    for ($i = 0; $i -lt $a.Count; $i++) {
-        if ($a[$i] -cne $b[$i]) { return $false }
-    }
-
-    return $true
-}
-
-function Sync-DirectoryIfChanged(
-    [string]$Source,
-    [string]$Destination,
-    [string]$Label
-) {
-    Require-Directory $Source $Label
-
-    if (Trees-Equal $Source $Destination) {
-        Remove-IgnoredPayloadFiles $Destination
-        Write-Host "  ${Label}: unchanged [skip]"
-        return
-    }
-
-    if (Test-Path -LiteralPath $Destination) {
-        Write-Host "  ${Label}: changed - synchronizing..."
-    }
-    else {
-        Write-Host "  ${Label}: new - synchronizing..."
-        New-Item -ItemType Directory -Path $Destination -Force | Out-Null
-    }
-
-    & robocopy.exe $Source $Destination `
-        /MIR /COPY:DAT /DCOPY:DAT /R:2 /W:1 /MT:32 /J `
-        /XD ".cache" ".git" "__pycache__" `
-        /XF "*.metadata" "*.lock" "*.tmp" "*.part" `
-        /NFL /NDL /NJH /NJS /NP
-
-    $rc = $LASTEXITCODE
-
-    if ($rc -ge 8) {
-        throw "Failed to synchronize $Label. Robocopy exit code: $rc"
-    }
-
-    Remove-IgnoredPayloadFiles $Destination
-
-    if (-not (Trees-Equal $Source $Destination)) {
-        throw "$Label still differs after synchronization."
-    }
-
-    Write-Host "  ${Label}: synchronized"
-}
-
-function Verify-ModelTree([string]$Destination, [string]$Label) {
-    Require-Directory $Models "Offline AI models directory"
-    Require-Directory $Destination $Label
-
-    $source = Get-TreeSignature $Models
-    $target = Get-TreeSignature $Destination
-
-    if ($source.Count -ne $target.Count) {
-        throw "Model file count differs after cache exclusion: source=$($source.Count), packaged=$($target.Count)"
-    }
-
-    for ($i = 0; $i -lt $source.Count; $i++) {
-        if ($source[$i] -cne $target[$i]) {
-            throw "Packaged model tree differs from downloads\models."
-        }
-    }
-
-    $bytes = [int64]0
-    Get-ChildItem -LiteralPath $Destination -Recurse -File -Force -ErrorAction SilentlyContinue |
-        Where-Object {
-            -not (Test-ExcludedPath $_.FullName `
-                @(".cache",".git","__pycache__") `
-                @("*.metadata","*.lock","*.tmp","*.part"))
-        } |
-        ForEach-Object { $bytes += $_.Length }
-
-    $gb = [Math]::Round($bytes / 1GB, 2)
-    Write-Host "  Model tree verified: $($target.Count) files, $gb GB (cache excluded)."
-}
-
-function Sync-ModelTree {
-    $modelDest = Join-Path $BackendDist "_internal\models"
-    New-Item -ItemType Directory -Path $modelDest -Force | Out-Null
-
-    foreach ($dir in Get-ChildItem -LiteralPath $Models -Directory -Force) {
-        if ($dir.Name -in @(".cache",".git","__pycache__")) { continue }
-
-        Sync-DirectoryIfChanged `
-            $dir.FullName `
-            (Join-Path $modelDest $dir.Name) `
-            "AI model $($dir.Name)"
-    }
-
-    foreach ($file in Get-ChildItem -LiteralPath $Models -File -Force) {
-        if ($file.Name -like "*.metadata" -or
-            $file.Name -like "*.lock" -or
-            $file.Name -like "*.tmp" -or
-            $file.Name -like "*.part") { continue }
-
-        $target = Join-Path $modelDest $file.Name
-        $copy = $true
-
-        if (Test-Path -LiteralPath $target -PathType Leaf) {
-            $existing = Get-Item -LiteralPath $target -Force
-            $srcSec = [int64]($file.LastWriteTimeUtc.Ticks / 10000000)
-            $dstSec = [int64]($existing.LastWriteTimeUtc.Ticks / 10000000)
-            $copy = $existing.Length -ne $file.Length -or $srcSec -ne $dstSec
-        }
-
-        if ($copy) {
-            Write-Host "  Updating model file: $($file.Name)"
-            Copy-Item -LiteralPath $file.FullName -Destination $target -Force
-            (Get-Item -LiteralPath $target -Force).LastWriteTimeUtc = $file.LastWriteTimeUtc
-        }
-        else {
-            Write-Host "  Model file $($file.Name): unchanged [skip]"
-        }
-    }
-
-    foreach ($item in Get-ChildItem -LiteralPath $modelDest -Force) {
-        $sourceItem = Join-Path $Models $item.Name
-
-        if (-not (Test-Path -LiteralPath $sourceItem) -or
-            $item.Name -in @(".cache",".git","__pycache__")) {
-            Write-Host "  Removing stale packaged model: $($item.Name)"
-            Remove-Item -LiteralPath $item.FullName -Recurse -Force
-        }
-    }
-
-    Remove-IgnoredPayloadFiles $modelDest
-    Verify-ModelTree $modelDest "Packaged AI models"
-}
-
 function Verify-BackendBase {
     Require-File (Join-Path $BackendDist "KaraokeBackend.exe") "KaraokeBackend.exe"
     Require-File (Join-Path $BackendDist "KaraokeAudioMonitor.exe") "KaraokeAudioMonitor.exe"
@@ -2016,18 +1789,17 @@ function Package-Models {
 
     Require-Directory $Models "Offline AI models directory"
     Require-Directory $MsstEngine "MSST inference engine"
+    Require-File (Join-Path $MsstEngine "inference.py") "MSST inference.py"
 
     $sourceSignature = Get-TreeSignature $Models
-
     if ($sourceSignature.Count -eq 0) {
         throw "Offline AI model directory is empty."
     }
 
-    Require-File (Join-Path $MsstEngine "inference.py") "MSST inference.py"
-
     Write-Host ("  External AI models: {0} files [OK]" -f $sourceSignature.Count)
-    Write-Host "  Models are NOT copied into PyInstaller backend."
-    Write-Host "  They are synchronized only once into persistent ISO staging."
+    Write-Host "  Models stay only in downloads\models."
+    Write-Host "  MSST stays only in downloads\engines\msst."
+    Write-Host "  ISO uses NTFS hardlinks; no model/MSST data is copied into build."
     Write-Host ""
 }
 
@@ -2406,6 +2178,166 @@ function Create-Checksums {
     Require-File $ChecksumFile "SHA-256 checksum file"
 }
 
+function Test-IsoPayloadExcluded([string]$Path) {
+    return Test-ExcludedPath `
+        $Path `
+        @(".cache",".git","__pycache__") `
+        @("*.metadata","*.lock","*.tmp","*.part") `
+        @()
+}
+
+function Assert-SameVolumeForHardLink(
+    [string]$Source,
+    [string]$DestinationRoot,
+    [string]$Label
+) {
+    $srcRoot = [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($Source))
+    $dstRoot = [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($DestinationRoot))
+
+    if (-not $srcRoot.Equals($dstRoot,[StringComparison]::OrdinalIgnoreCase)) {
+        throw "$Label cannot use zero-copy hardlinks because source and ISO view are on different volumes: $srcRoot -> $dstRoot"
+    }
+}
+
+function New-IsoHardLink(
+    [string]$Source,
+    [string]$Destination,
+    [string]$Label
+) {
+    Require-File $Source $Label
+    Assert-SameVolumeForHardLink $Source $IsoView $Label
+
+    $parent = Split-Path -Parent $Destination
+    if ($parent) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
+
+    if (Test-Path -LiteralPath $Destination) {
+        Remove-Item -LiteralPath $Destination -Force
+    }
+
+    try {
+        New-Item -ItemType HardLink -Path $Destination -Value $Source -ErrorAction Stop | Out-Null
+    }
+    catch {
+        throw "Could not create zero-copy hardlink for $Label. Source: $Source Destination: $Destination Error: $($_.Exception.Message)"
+    }
+}
+
+function Add-TreeToIsoView(
+    [string]$SourceRoot,
+    [string]$DestinationRoot,
+    [string]$Label
+) {
+    Require-Directory $SourceRoot $Label
+    Assert-SameVolumeForHardLink $SourceRoot $IsoView $Label
+
+    $sourceFull = [IO.Path]::GetFullPath($SourceRoot).TrimEnd('\')
+    $files = @(
+        Get-ChildItem -LiteralPath $sourceFull -Recurse -File -Force -ErrorAction Stop |
+        Where-Object { -not (Test-IsoPayloadExcluded $_.FullName) }
+    )
+
+    foreach ($file in $files) {
+        $relative = $file.FullName.Substring($sourceFull.Length).TrimStart('\')
+        $destination = Join-Path $DestinationRoot $relative
+        $parent = Split-Path -Parent $destination
+
+        if ($parent) {
+            New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        }
+
+        try {
+            New-Item -ItemType HardLink -Path $destination -Value $file.FullName -ErrorAction Stop | Out-Null
+        }
+        catch {
+            throw "Could not create zero-copy hardlink for $Label file: $($file.FullName). Error: $($_.Exception.Message)"
+        }
+    }
+
+    Write-Host ("  {0}: {1} hardlinks [zero-copy]" -f $Label,$files.Count)
+}
+
+function Reset-IsoView {
+    if (Test-Path -LiteralPath $IsoView) {
+        # iso-view contains hardlinks only. Deleting links does not delete source data.
+        Remove-Item -LiteralPath $IsoView -Recurse -Force -ErrorAction Stop
+    }
+
+    New-Item -ItemType Directory -Path $IsoView -Force | Out-Null
+}
+
+function Build-IsoView {
+    Require-File $InstallerExe "Installer executable"
+    Require-File $ChecksumFile "SHA-256 checksum file"
+    Require-File $RuntimeArchive "Application runtime archive"
+    Require-Directory $Models "Offline AI models directory"
+    Require-Directory $MsstEngine "MSST inference engine"
+
+    Write-Host ""
+    Write-Host "Preparing zero-copy ISO view..."
+    Write-Host "  No models, MSST or runtime data is copied."
+    Write-Host "  NTFS hardlinks reference the original files directly."
+    Write-Host ""
+
+    Reset-IsoView
+
+    New-IsoHardLink `
+        $InstallerExe `
+        (Join-Path $IsoView (Split-Path $InstallerExe -Leaf)) `
+        "Installer executable"
+
+    New-IsoHardLink `
+        $ChecksumFile `
+        (Join-Path $IsoView "SHA256SUMS.txt") `
+        "SHA-256 checksum file"
+
+    New-IsoHardLink `
+        $RuntimeArchive `
+        (Join-Path $IsoView "app-runtime.zip") `
+        "Application runtime archive"
+
+    Add-TreeToIsoView `
+        $Models `
+        (Join-Path $IsoView "models") `
+        "ISO AI models"
+
+    Add-TreeToIsoView `
+        $MsstEngine `
+        (Join-Path $IsoView "msst") `
+        "ISO MSST engine"
+
+    $legacyBins = @(
+        Get-ChildItem -LiteralPath $IsoView -File -Filter "A&D Voice Setup *.bin" -ErrorAction SilentlyContinue
+    )
+
+    if ($legacyBins.Count -gt 0) {
+        throw "Legacy Inno .bin files leaked into ISO view."
+    }
+
+    if (Test-Path -LiteralPath (Join-Path $IsoView "app") -PathType Container) {
+        throw "Duplicated raw Electron app directory exists in ISO view."
+    }
+
+    $files = @(
+        Get-ChildItem -LiteralPath $IsoView -Recurse -File -Force -ErrorAction Stop
+    )
+
+    $bytes = [int64]0
+    foreach ($file in $files) {
+        $bytes += $file.Length
+    }
+
+    Write-Host ""
+    Write-Host ("ISO view: {0} files, {1:N2} GB logical, ~0 GB duplicated payload" -f $files.Count,($bytes / 1GB))
+    Write-Host ""
+
+    return @{
+        Files = $files.Count
+        Bytes = $bytes
+    }
+}
+
 function Create-DistributionIso {
     Write-Host ""
     Write-Host "[7/7] Creating single-file distribution ISO..."
@@ -2415,82 +2347,29 @@ function Create-DistributionIso {
         $script:Oscdimg = Find-Oscdimg
     }
 
-    Require-File $InstallerExe "Installer executable"
-    Require-File $ChecksumFile "SHA-256 checksum file"
-    Require-File $RuntimeArchive "Application runtime archive"
-
-    # ISO staging is authoritative. Remove legacy app/installer slices from older
-    # builder versions so stale Setup-*.bin or duplicated win-unpacked data can
-    # never leak into the image.
-    New-Item -ItemType Directory -Path $IsoStage -Force | Out-Null
-
-    foreach ($legacy in @(
-        (Join-Path $IsoStage "app"),
-        (Join-Path $IsoStage "app-runtime.zip")
-    )) {
-        if (Test-Path -LiteralPath $legacy) {
-            Remove-Item -LiteralPath $legacy -Recurse -Force -ErrorAction SilentlyContinue
-        }
-    }
-
-    Get-ChildItem -LiteralPath $IsoStage -File -Force -ErrorAction SilentlyContinue |
-        Where-Object {
-            $_.Name -like "A&D Voice Setup *.exe" -or
-            $_.Name -like "A&D Voice Setup *.bin" -or
-            $_.Name -eq "SHA256SUMS.txt"
-        } |
-        Remove-Item -Force -ErrorAction SilentlyContinue
-
-    # Copy ONLY the exact bootstrap EXE/checksum and the single runtime archive.
-    Copy-Item -LiteralPath $InstallerExe -Destination (Join-Path $IsoStage (Split-Path $InstallerExe -Leaf)) -Force
-    Copy-Item -LiteralPath $ChecksumFile -Destination (Join-Path $IsoStage "SHA256SUMS.txt") -Force
-    Copy-Item -LiteralPath $RuntimeArchive -Destination (Join-Path $IsoStage "app-runtime.zip") -Force
-
-    # Large neural-network weights are already compressed binary data in many
-    # cases; keep them raw to avoid wasting build/install time.
-    Sync-DirectoryIfChanged $Models (Join-Path $IsoStage "models") "ISO AI models"
-    Sync-DirectoryIfChanged $MsstEngine (Join-Path $IsoStage "msst") "ISO MSST engine"
-
-    Remove-IgnoredPayloadFiles (Join-Path $IsoStage "models")
-    Remove-IgnoredPayloadFiles (Join-Path $IsoStage "msst")
-
-    # Regression guard: old Inno disk slices and duplicated app trees are forbidden.
-    $legacyBins = @(Get-ChildItem -LiteralPath $IsoStage -File -Filter "A&D Voice Setup *.bin" -ErrorAction SilentlyContinue)
-    if ($legacyBins.Count -gt 0) {
-        throw "Legacy Inno .bin files leaked into ISO staging."
-    }
-
-    if (Test-Path -LiteralPath (Join-Path $IsoStage "app") -PathType Container) {
-        throw "Duplicated ISO app directory exists. Runtime must be stored only in app-runtime.zip."
-    }
+    $viewStats = Build-IsoView
 
     if (Test-Path -LiteralPath $IsoTemp -PathType Leaf) {
         Remove-Item -LiteralPath $IsoTemp -Force
     }
 
     $volume = ("ADVOICE_" + $AppVersion.Replace(".","_")).ToUpperInvariant()
-    if ($volume.Length -gt 32) { $volume = $volume.Substring(0,32) }
+    if ($volume.Length -gt 32) {
+        $volume = $volume.Substring(0,32)
+    }
 
-    $isoBytes = [int64]0
-    $isoFiles = 0
-    Get-ChildItem -LiteralPath $IsoStage -Recurse -File -Force -ErrorAction SilentlyContinue |
-        ForEach-Object {
-            $isoFiles += 1
-            $isoBytes += $_.Length
-        }
-
-    Write-Host ""
-    Write-Host "Creating ISO from:"
-    Write-Host "  $IsoStage"
-    Write-Host ("  Payload: {0} files, {1:N2} GB" -f $isoFiles,($isoBytes / 1GB))
-    Write-Host "  Runtime: app-runtime.zip"
-    Write-Host "  Models:  raw / incremental"
+    Write-Host "Creating ISO directly from zero-copy view:"
+    Write-Host "  $IsoView"
+    Write-Host ("  Payload: {0} files, {1:N2} GB" -f $viewStats.Files,($viewStats.Bytes / 1GB))
+    Write-Host "  Runtime: hardlink -> build\\packages\\app-runtime.zip"
+    Write-Host "  Models:  hardlinks -> downloads\\models"
+    Write-Host "  MSST:    hardlinks -> downloads\\engines\\msst"
     Write-Host ""
 
     $isoSw = [Diagnostics.Stopwatch]::StartNew()
 
     New-DistributionIsoImage `
-        -SourceDirectory $IsoStage `
+        -SourceDirectory $IsoView `
         -OutputFile $IsoTemp `
         -VolumeName $volume
 
@@ -2499,11 +2378,15 @@ function Create-DistributionIso {
     Write-Host ("ISO image creation elapsed: {0}" -f (Format-Duration $isoSw.Elapsed.TotalSeconds))
 
     Require-File $IsoTemp "Distribution ISO"
-    if ((Get-Item -LiteralPath $IsoTemp).Length -le 0) { throw "Created ISO is empty." }
+    if ((Get-Item -LiteralPath $IsoTemp).Length -le 0) {
+        throw "Created ISO is empty."
+    }
 
     New-Item -ItemType Directory -Path $Release -Force | Out-Null
-    Get-ChildItem -LiteralPath $Release -Force -ErrorAction SilentlyContinue |
-        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
+    if (Test-Path -LiteralPath $IsoFile -PathType Leaf) {
+        Remove-Item -LiteralPath $IsoFile -Force
+    }
 
     Move-Item -LiteralPath $IsoTemp -Destination $IsoFile -Force
     Require-File $IsoFile "Final distribution ISO"
@@ -3144,7 +3027,7 @@ try {
     Write-Host "Single-file offline distribution:"
     Write-Host "  $IsoFile"
     Write-Host ""
-    Write-Host "The ISO contains Setup.exe, cached app-runtime.zip, raw models and MSST."
+    Write-Host "The ISO is built from a zero-copy hardlink view; models/MSST stay only in downloads."
     Write-Host "Only artifacts whose real inputs changed are rebuilt."
     Write-Host ""
 

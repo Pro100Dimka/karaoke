@@ -1,1 +1,1 @@
-AI_BUILD_ID = "midi-v59-final-guard-v2-conservative-register-20260811"
+AI_BUILD_ID = "midi-v60-partial-anchors-v2-evidence-chain-20260811"
