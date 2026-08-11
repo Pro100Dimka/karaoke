@@ -1054,3 +1054,59 @@ def test_atomic_line_alignment_drops_only_incompatible_ctc_line():
     assert stats["ctc"] == 2
     assert stats["atomic_ctc_lines"] == 1
     assert stats["dropped_word_anchors"] == 2
+
+
+def test_line_aware_merge_never_rolls_back_late_acoustic_anchors_after_bad_middle_line():
+    from types import SimpleNamespace
+
+    groups = [
+        "alpha beta",
+        "missing middle phrase with several words",
+        "late anchor",
+        "final evidence",
+    ]
+    ctc_lines = [
+        SimpleNamespace(
+            words=[
+                Word(1.0, 1.35, "alpha", 0.94, 0),
+                Word(1.40, 1.82, "beta", 0.92, 1),
+            ],
+            confidence=0.93,
+        ),
+        None,
+        SimpleNamespace(
+            words=[
+                Word(6.20, 6.55, "late", 0.96, 0),
+                Word(6.60, 7.05, "anchor", 0.95, 1),
+            ],
+            confidence=0.95,
+        ),
+        SimpleNamespace(
+            words=[
+                Word(8.10, 8.45, "final", 0.97, 0),
+                Word(8.50, 9.00, "evidence", 0.96, 1),
+            ],
+            confidence=0.96,
+        ),
+    ]
+    # Deliberately misleading middle ASR hint used to trigger a tail rollback.
+    anchors = {1: (1.85, 2.15, 0.2)}
+    audio = np.ones(16000 * 11, dtype=np.float32) * 0.02
+
+    merged, stats = _line_aware_canonical_alignment(
+        groups, ctc_lines, [], audio, 16000, 11.0, anchors
+    )
+
+    assert [word.text for word in merged] == [
+        "alpha", "beta", "missing", "middle", "phrase", "with", "several", "words",
+        "late", "anchor", "final", "evidence",
+    ]
+    # Good anchors after the missing line must survive unchanged instead of
+    # becoming 0.01-confidence baseline interpolation.
+    assert merged[8].start == pytest.approx(6.20)
+    assert merged[8].confidence >= 0.9
+    assert merged[9].start == pytest.approx(6.60)
+    assert merged[10].start == pytest.approx(8.10)
+    assert merged[11].confidence >= 0.9
+    assert stats["ctc"] >= 6
+    assert "tail_rollback_from_line" not in stats

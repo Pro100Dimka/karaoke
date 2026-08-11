@@ -17,10 +17,26 @@ $Downloads = Join-Path $Root "downloads"
 $Release = Join-Path $Root "release"
 
 $BackendDist = Join-Path $Build "backend\dist\KaraokeBackend"
-$Unpacked = Join-Path $Build "electron\win-unpacked"
 $InstallerDir = Join-Path $Build "installer-output"
 $TempDir = Join-Path $Build "installer-temp"
 $StateDir = Join-Path $Build ".state"
+$TimingDir = Join-Path $StateDir "timings"
+
+$ElectronRoot = Join-Path $Build "electron"
+$ElectronCurrentFile = Join-Path $StateDir "electron-current.txt"
+$Unpacked = Join-Path $ElectronRoot "win-unpacked"
+
+if (Test-Path -LiteralPath $ElectronCurrentFile -PathType Leaf) {
+    $savedElectronPath = (
+        Get-Content -LiteralPath $ElectronCurrentFile -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    )
+
+    if ($savedElectronPath -and
+        (Test-Path -LiteralPath $savedElectronPath -PathType Container)) {
+        $Unpacked = [IO.Path]::GetFullPath($savedElectronPath)
+    }
+}
 $ExternalPayload = Join-Path $Build "external-ai"
 $ExternalModels = Join-Path $ExternalPayload "models"
 $ExternalMsst = Join-Path $ExternalPayload "msst"
@@ -108,6 +124,76 @@ function Require-Directory([string]$Path, [string]$Name) {
     Write-Host ""
 }
 
+function Set-ElectronOutputPath([string]$Path) {
+    $resolved = [IO.Path]::GetFullPath($Path)
+
+    $script:Unpacked = $resolved
+    $script:PackagedBackend = Join-Path $resolved "resources\backend"
+    $script:PackagedSceneVideo = Join-Path $resolved "resources\media\videoplayback.webm"
+}
+
+function Save-ElectronOutputPath([string]$Path) {
+    New-Item -ItemType Directory -Path $StateDir -Force | Out-Null
+    $resolved = [IO.Path]::GetFullPath($Path)
+    $resolved | Set-Content -LiteralPath $ElectronCurrentFile -Encoding UTF8
+    Set-ElectronOutputPath $resolved
+}
+
+function Remove-OldElectronRuns([string]$KeepPath) {
+    if (-not (Test-Path -LiteralPath $ElectronRoot -PathType Container)) {
+        return
+    }
+
+    $keep = ""
+    if ($KeepPath) {
+        try { $keep = [IO.Path]::GetFullPath($KeepPath).TrimEnd('\') } catch {}
+    }
+
+    $runs = @(
+        Get-ChildItem -LiteralPath $ElectronRoot -Directory -Force -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like "run-*" } |
+        Sort-Object LastWriteTimeUtc -Descending
+    )
+
+    # Keep current successful run + one previous run. Cleanup is best-effort only.
+    $keptExtra = 0
+
+    foreach ($run in $runs) {
+        $candidate = Join-Path $run.FullName "win-unpacked"
+        $candidateFull = [IO.Path]::GetFullPath($candidate).TrimEnd('\')
+
+        if ($keep -and $candidateFull -eq $keep) {
+            continue
+        }
+
+        if ($keptExtra -lt 1) {
+            $keptExtra += 1
+            continue
+        }
+
+        try {
+            Remove-Item -LiteralPath $run.FullName -Recurse -Force -ErrorAction Stop
+            Write-Host "  Removed old Electron run: $($run.Name)"
+        }
+        catch {
+            Write-Host "  Old Electron run is locked; leaving it for later cleanup: $($run.Name)"
+        }
+    }
+
+    # Legacy folder from old builder is also best-effort cleanup only.
+    $legacy = Join-Path $ElectronRoot "win-unpacked"
+
+    if (Test-Path -LiteralPath $legacy -PathType Container) {
+        try {
+            Remove-Item -LiteralPath $legacy -Recurse -Force -ErrorAction Stop
+            Write-Host "  Removed legacy Electron output."
+        }
+        catch {
+            Write-Host "  Legacy Electron output is locked; ignored."
+        }
+    }
+}
+
 function Test-ExcludedPath(
     [string]$FullName,
     [string[]]$ExcludeDirectoryNames = @(),
@@ -184,6 +270,63 @@ function Get-Fingerprint(
     }
 }
 
+function Get-ContentFingerprint(
+    [string[]]$Paths,
+    [string[]]$ExcludeDirectoryNames = @(),
+    [string[]]$ExcludeFilePatterns = @(),
+    [string[]]$ExcludeRegexes = @()
+) {
+    $sha = [Security.Cryptography.SHA256]::Create()
+
+    try {
+        $files = New-Object System.Collections.Generic.List[object]
+
+        foreach ($path in $Paths) {
+            if ([string]::IsNullOrWhiteSpace($path) -or -not (Test-Path -LiteralPath $path)) {
+                continue
+            }
+
+            $item = Get-Item -LiteralPath $path -Force
+
+            if ($item.PSIsContainer) {
+                Get-ChildItem -LiteralPath $item.FullName -Recurse -File -Force -ErrorAction SilentlyContinue |
+                    ForEach-Object {
+                        if (-not (Test-ExcludedPath $_.FullName $ExcludeDirectoryNames $ExcludeFilePatterns $ExcludeRegexes)) {
+                            $files.Add($_)
+                        }
+                    }
+            }
+            elseif (-not (Test-ExcludedPath $item.FullName $ExcludeDirectoryNames $ExcludeFilePatterns $ExcludeRegexes)) {
+                $files.Add($item)
+            }
+        }
+
+        foreach ($file in ($files | Sort-Object FullName)) {
+            $pathBytes = [Text.Encoding]::UTF8.GetBytes($file.FullName.ToLowerInvariant() + "`n")
+            [void]$sha.TransformBlock($pathBytes,0,$pathBytes.Length,$null,0)
+
+            $stream = [IO.File]::OpenRead($file.FullName)
+
+            try {
+                $buffer = New-Object byte[] (1024 * 1024)
+
+                while (($read = $stream.Read($buffer,0,$buffer.Length)) -gt 0) {
+                    [void]$sha.TransformBlock($buffer,0,$read,$null,0)
+                }
+            }
+            finally {
+                $stream.Dispose()
+            }
+        }
+
+        [void]$sha.TransformFinalBlock([byte[]]::new(0),0,0)
+        return ([BitConverter]::ToString($sha.Hash)).Replace("-","").ToLowerInvariant()
+    }
+    finally {
+        $sha.Dispose()
+    }
+}
+
 function Get-CombinedFingerprint([string[]]$Values) {
     $payload = [Text.Encoding]::UTF8.GetBytes(($Values -join "|"))
     $sha = [Security.Cryptography.SHA256]::Create()
@@ -239,19 +382,19 @@ function Test-StepNeeded(
 }
 
 function Get-BackendFingerprint {
-    return Get-Fingerprint @($Backend) `
+    return Get-ContentFingerprint @($Backend) `
         @("venv","data","Song","full_songs","recordings","__pycache__",".pytest_cache",".cache","dist","build") `
         @("*.pyc","*.pyo","*.log","*.db","*.sqlite","*.sqlite3")
 }
 
 function Get-FrontendFingerprint {
-    return Get-Fingerprint @($Frontend) `
+    return Get-ContentFingerprint @($Frontend) `
         @("node_modules","dist","build",".git",".cache",".vite","coverage","playwright-report","test-results") `
         @("*.log")
 }
 
 function Get-AsioFingerprint {
-    return Get-Fingerprint @($Asio,$AsioSdk) `
+    return Get-ContentFingerprint @($Asio,$AsioSdk) `
         @("build",".git",".cache","__pycache__") `
         @("*.obj","*.pdb","*.ilk","*.log")
 }
@@ -309,6 +452,210 @@ function Remove-IgnoredPayloadFiles([string]$RootPath) {
         Remove-Item -Force -ErrorAction SilentlyContinue
 }
 
+function Format-Duration([double]$Seconds) {
+    if ($Seconds -lt 0) { return "--:--" }
+
+    $ts = [TimeSpan]::FromSeconds([Math]::Floor($Seconds))
+
+    if ($ts.TotalHours -ge 1) {
+        return "{0:00}:{1:00}:{2:00}" -f [int]$ts.TotalHours,$ts.Minutes,$ts.Seconds
+    }
+
+    return "{0:00}:{1:00}" -f $ts.Minutes,$ts.Seconds
+}
+
+function Get-TimingPath([string]$Name) {
+    return Join-Path $TimingDir "$Name.seconds"
+}
+
+function Get-PreviousDuration([string]$Name) {
+    $path = Get-TimingPath $Name
+
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        return 0.0
+    }
+
+    $raw = Get-Content -LiteralPath $path -ErrorAction SilentlyContinue | Select-Object -First 1
+    $value = 0.0
+
+    if ([double]::TryParse(
+        $raw,
+        [Globalization.NumberStyles]::Float,
+        [Globalization.CultureInfo]::InvariantCulture,
+        [ref]$value
+    )) {
+        return $value
+    }
+
+    return 0.0
+}
+
+function Set-PreviousDuration([string]$Name, [double]$Seconds) {
+    New-Item -ItemType Directory -Path $TimingDir -Force | Out-Null
+
+    $Seconds.ToString(
+        "0.000",
+        [Globalization.CultureInfo]::InvariantCulture
+    ) | Set-Content -LiteralPath (Get-TimingPath $Name) -Encoding ASCII
+}
+
+function Write-StepProgress(
+    [string]$Name,
+    [double]$ElapsedSeconds,
+    [double]$ExpectedSeconds = 0,
+    [string]$Status = "RUNNING"
+) {
+    $elapsedText = Format-Duration $ElapsedSeconds
+
+    if ($Status -ne "RUNNING") {
+        Write-Host ("  [{0}] {1}: {2} | elapsed {3}" -f $Status,$Name,$Status,$elapsedText)
+        return
+    }
+
+    if ($ExpectedSeconds -gt 1) {
+        $pct = [Math]::Min(99, [Math]::Max(1, [int](100 * $ElapsedSeconds / $ExpectedSeconds)))
+        $remaining = [Math]::Max(0, $ExpectedSeconds - $ElapsedSeconds)
+        $etaText = Format-Duration $remaining
+
+        Write-Host ("  [PROGRESS] {0}: {1}% | elapsed {2} | ETA ~{3}" -f $Name,$pct,$elapsedText,$etaText)
+    }
+    else {
+        Write-Host ("  [PROGRESS] {0}: elapsed {1} | ETA learning from this build" -f $Name,$elapsedText)
+    }
+}
+
+function Invoke-TimedStep(
+    [string]$Name,
+    [scriptblock]$Action
+) {
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    Write-Host ""
+    Write-Host ("[START] {0}" -f $Name)
+
+    try {
+        & $Action
+    }
+    finally {
+        $sw.Stop()
+    }
+
+    Set-PreviousDuration $Name $sw.Elapsed.TotalSeconds
+
+    Write-Host ("[DONE] {0} | elapsed {1}" -f $Name,(Format-Duration $sw.Elapsed.TotalSeconds))
+}
+
+function Stop-ProcessesUsingPath([string]$Path) {
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return
+    }
+
+    $target = [IO.Path]::GetFullPath($Path).TrimEnd('\')
+    $targetLower = $target.ToLowerInvariant()
+    $currentPid = $PID
+
+    Write-Host "Checking processes that may lock:"
+    Write-Host "  $target"
+
+    $found = $false
+
+    try {
+        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                if ($_.ProcessId -eq $currentPid) {
+                    return
+                }
+
+                $exe = ""
+                $cmd = ""
+
+                try { $exe = [string]$_.ExecutablePath } catch {}
+                try { $cmd = [string]$_.CommandLine } catch {}
+
+                $match = $false
+
+                if ($exe) {
+                    try {
+                        $exeFull = [IO.Path]::GetFullPath($exe).ToLowerInvariant()
+                        if ($exeFull.StartsWith($targetLower + "\") -or $exeFull -eq $targetLower) {
+                            $match = $true
+                        }
+                    }
+                    catch {
+                    }
+                }
+
+                if (-not $match -and $cmd) {
+                    if ($cmd.ToLowerInvariant().Contains($targetLower)) {
+                        $match = $true
+                    }
+                }
+
+                if ($match) {
+                    $found = $true
+                    Write-Host ("  Stopping PID {0}: {1}" -f $_.ProcessId,$_.Name)
+
+                    try {
+                        Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop
+                    }
+                    catch {
+                        try {
+                            & taskkill.exe /PID $_.ProcessId /T /F *> $null
+                        }
+                        catch {
+                        }
+                    }
+                }
+            }
+    }
+    catch {
+    }
+
+    if ($found) {
+        Start-Sleep -Milliseconds 800
+    }
+    else {
+        Write-Host "  No matching process found."
+    }
+}
+
+function Clear-ReadOnlyAttributes([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return
+    }
+
+    try {
+        & attrib.exe -R "$Path\*" /S /D *> $null
+    }
+    catch {
+    }
+}
+
+function Remove-DirectoryWithRobocopyFallback([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
+        return
+    }
+
+    $empty = Join-Path $env:TEMP ("advoice-empty-" + [Guid]::NewGuid().ToString("N"))
+
+    try {
+        New-Item -ItemType Directory -Path $empty -Force | Out-Null
+
+        & robocopy.exe $empty $Path /MIR /R:1 /W:1 /NFL /NDL /NJH /NJS /NP *> $null
+        $rc = $LASTEXITCODE
+
+        if ($rc -lt 8) {
+            try {
+                Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+            }
+            catch {
+            }
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $empty -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Remove-Directory([string]$Path) {
     if ([string]::IsNullOrWhiteSpace($Path)) {
         throw "Refusing to remove an empty path."
@@ -318,30 +665,68 @@ function Remove-Directory([string]$Path) {
         return
     }
 
-    Write-Host "Removing:"
-    Write-Host "  $Path"
+    $fullPath = [IO.Path]::GetFullPath($Path)
 
-    for ($i = 1; $i -le 10; $i++) {
+    Write-Host "Removing:"
+    Write-Host "  $fullPath"
+
+    Stop-ProcessesUsingPath $fullPath
+    Clear-ReadOnlyAttributes $fullPath
+
+    for ($i = 1; $i -le 6; $i++) {
         try {
-            Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+            Remove-Item -LiteralPath $fullPath -Recurse -Force -ErrorAction Stop
         }
         catch {
         }
 
-        if (-not (Test-Path -LiteralPath $Path)) {
+        if (-not (Test-Path -LiteralPath $fullPath)) {
             return
         }
 
-        Write-Host "  Directory is still locked. Retry $i/10..."
-
-        if ([IO.Path]::GetFullPath($Path).TrimEnd('\') -eq [IO.Path]::GetFullPath($Release).TrimEnd('\')) {
-            Stop-BuildProcesses -Quiet
+        if ($i -eq 2 -or $i -eq 4) {
+            Stop-ProcessesUsingPath $fullPath
+            Clear-ReadOnlyAttributes $fullPath
         }
 
-        Start-Sleep -Seconds 2
+        if ($i -eq 5) {
+            Write-Host "  Standard deletion still blocked. Trying robocopy cleanup..."
+            Remove-DirectoryWithRobocopyFallback $fullPath
+        }
+
+        if (-not (Test-Path -LiteralPath $fullPath)) {
+            return
+        }
+
+        Write-Host "  Directory is still locked. Retry $i/6..."
+        Start-Sleep -Seconds 1
     }
 
-    throw "Could not remove directory: $Path"
+    # Last diagnostic pass
+    Stop-ProcessesUsingPath $fullPath
+
+    $lockedItems = @()
+    try {
+        $lockedItems = @(
+            Get-ChildItem -LiteralPath $fullPath -Recurse -Force -ErrorAction SilentlyContinue |
+            Select-Object -First 10 -ExpandProperty FullName
+        )
+    }
+    catch {
+    }
+
+    Write-Host ""
+    Write-Host "[ERROR] Directory could not be removed:"
+    Write-Host "  $fullPath"
+
+    if ($lockedItems.Count -gt 0) {
+        Write-Host "Remaining files/directories:"
+        foreach ($item in $lockedItems) {
+            Write-Host "  $item"
+        }
+    }
+
+    throw "Could not remove directory: $fullPath"
 }
 
 function Stop-BuildProcesses {
@@ -349,7 +734,7 @@ function Stop-BuildProcesses {
 
     if (-not $Quiet) {
         Write-Host ""
-        Write-Host "[0/6] Closing old A&D Voice build processes..."
+        Write-Host "[0/7] Closing old A&D Voice build processes..."
     }
 
     foreach ($name in @("A&D Voice","KaraokeBackend","KaraokeAudioMonitor","KaraokeAsioBridge")) {
@@ -379,8 +764,30 @@ function Stop-BuildProcesses {
         }
     }
 
+    # Kill only node/electron/electron-builder processes that belong to this project.
+    $projectLower = [IO.Path]::GetFullPath($Root).TrimEnd('\').ToLowerInvariant()
+
+    try {
+        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.ProcessId -ne $PID -and
+                $_.Name -match '^(node|electron|electron-builder|7za)\.exe$' -and
+                $_.CommandLine -and
+                $_.CommandLine.ToLowerInvariant().Contains($projectLower)
+            } |
+            ForEach-Object {
+                if (-not $Quiet) {
+                    Write-Host ("  Closing project process PID {0}: {1}" -f $_.ProcessId,$_.Name)
+                }
+
+                Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+            }
+    }
+    catch {
+    }
+
     if (-not $Quiet) {
-        Start-Sleep -Seconds 2
+        Start-Sleep -Seconds 1
     }
 }
 
@@ -609,7 +1016,7 @@ function New-DistributionIsoImage(
 
 function Check-Environment {
     Write-Host ""
-    Write-Host "[0/6] Checking build environment..."
+    Write-Host "[0/7] Checking build environment..."
     Write-Host ""
 
     Require-Directory $Backend "Backend directory"
@@ -760,6 +1167,8 @@ function Prepare-Output {
         Remove-Directory $Release
         Remove-Directory $Build
 
+        Set-ElectronOutputPath (Join-Path $ElectronRoot "win-unpacked")
+
         $pyInstallerCache = Join-Path $env:LOCALAPPDATA "pyinstaller"
         Remove-Directory $pyInstallerCache
     }
@@ -772,7 +1181,7 @@ function Prepare-Output {
 
 function Check-Models {
     Write-Host ""
-    Write-Host "[1/6] Checking all registered offline AI models..."
+    Write-Host "[1/7] Checking all registered offline AI models..."
 
     $old = $env:PYTHONPATH
 
@@ -865,7 +1274,7 @@ function Ensure-PyInstaller {
 
 function Build-Backend {
     Write-Host ""
-    Write-Host "[2/6] Building Python executables..."
+    Write-Host "[2/7] Building Python executables..."
 
     Ensure-PyInstaller
 
@@ -904,7 +1313,10 @@ function Build-Backend {
             "--collect-submodules","ml_collections",
             "--collect-submodules","beartype",
             "--collect-submodules","rotary_embedding_torch",
-            "--collect-submodules","matplotlib",
+            "--exclude-module","tkinter",
+            "--exclude-module","_tkinter",
+            "--exclude-module","idlelib",
+            "--exclude-module","turtledemo",
             "run.py"
         )
 
@@ -937,6 +1349,10 @@ function Build-Backend {
             "--workpath",(Join-Path $Build "backend\audio-monitor"),
             "--specpath",(Join-Path $Build "backend\spec"),
             "--paths",$Backend,
+            "--exclude-module","tkinter",
+            "--exclude-module","_tkinter",
+            "--exclude-module","idlelib",
+            "--exclude-module","turtledemo",
             "app\services\monitor_worker.py"
         )
 
@@ -956,7 +1372,7 @@ function Build-Backend {
 
 function Build-Asio {
     Write-Host ""
-    Write-Host "[3/6] Compiling native ASIO bridge..."
+    Write-Host "[3/7] Compiling native ASIO bridge..."
 
     New-Item -ItemType Directory -Path $AsioBuild -Force | Out-Null
 
@@ -1169,53 +1585,35 @@ function Verify-BackendBase {
 
 function Verify-BackendDist {
     Verify-BackendBase
-
-    $modelDir = Join-Path $BackendDist "_internal\models"
-    Require-Directory $modelDir "Packaged AI models directory"
-    Verify-ModelTree $modelDir "Packaged backend AI models"
-
-    Require-File `
-        (Join-Path $BackendDist "_internal\engines\msst\inference.py") `
-        "Packaged MSST engine"
 }
 
 function Package-Models {
     Write-Host ""
-    Write-Host "[4/6] Checking offline AI model folders..."
+    Write-Host "[4/7] Verifying external AI resources..."
+    Write-Host ""
 
-    $internal = Join-Path $BackendDist "_internal"
-
-    Require-Directory $internal "PyInstaller internal directory"
     Require-Directory $Models "Offline AI models directory"
+    Require-Directory $MsstEngine "MSST inference engine"
 
-    $modelDest = Join-Path $internal "models"
-    New-Item -ItemType Directory -Path $modelDest -Force | Out-Null
+    Remove-IgnoredPayloadFiles $Models
 
+    $sourceSignature = Get-TreeSignature $Models
+
+    if ($sourceSignature.Count -eq 0) {
+        throw "Offline AI model directory is empty."
+    }
+
+    Require-File (Join-Path $MsstEngine "inference.py") "MSST inference.py"
+
+    Write-Host ("  External AI models: {0} files [OK]" -f $sourceSignature.Count)
+    Write-Host "  Models are NOT copied into PyInstaller backend."
+    Write-Host "  They are synchronized only once into persistent ISO staging."
     Write-Host ""
-    Write-Host "Models source:"
-    Write-Host "  $Models"
-    Write-Host ""
-    Write-Host "Model destination:"
-    Write-Host "  $modelDest"
-    Write-Host ""
-    Write-Host "Any new first-level model folder is detected automatically."
-    Write-Host "Existing unchanged folders remain exactly where they are."
-    Write-Host "Unchanged folders are skipped completely."
-    Write-Host "Changed folders are synchronized individually."
-    Write-Host "Only changed files inside a changed folder are copied."
-    Write-Host ""
-
-    Sync-ModelTree
-
-    $msstDest = Join-Path $internal "engines\msst"
-    Sync-DirectoryIfChanged $MsstEngine $msstDest "MSST inference engine"
-
-    Verify-BackendDist
 }
 
 function Build-Frontend {
     Write-Host ""
-    Write-Host "[5/6] Building React frontend..."
+    Write-Host "[5/7] Building React frontend..."
 
     Push-Location $Frontend
 
@@ -1247,40 +1645,18 @@ function Verify-Unpacked {
     }
 }
 
-function Move-HeavyAIOutOfBackend {
-    New-Item -ItemType Directory -Path $ExternalPayload -Force | Out-Null
-
+function Remove-LegacyEmbeddedAI {
     $modelsPath = Join-Path $BackendDist "_internal\models"
     $msstPath = Join-Path $BackendDist "_internal\engines\msst"
 
-    Remove-Directory $ExternalModels
-    Remove-Directory $ExternalMsst
-
-    if (Test-Path -LiteralPath $modelsPath -PathType Container) {
-        Move-Item -LiteralPath $modelsPath -Destination $ExternalModels
+    if (Test-Path -LiteralPath $modelsPath) {
+        Write-Host "Removing legacy embedded AI models from backend dist..."
+        Remove-Directory $modelsPath
     }
 
-    if (Test-Path -LiteralPath $msstPath -PathType Container) {
-        New-Item -ItemType Directory -Path (Split-Path $ExternalMsst -Parent) -Force | Out-Null
-        Move-Item -LiteralPath $msstPath -Destination $ExternalMsst
-    }
-}
-
-function Restore-HeavyAIToBackend {
-    $modelsPath = Join-Path $BackendDist "_internal\models"
-    $enginesPath = Join-Path $BackendDist "_internal\engines"
-    $msstPath = Join-Path $enginesPath "msst"
-
-    if (Test-Path -LiteralPath $ExternalModels -PathType Container) {
-        New-Item -ItemType Directory -Path (Split-Path $modelsPath -Parent) -Force | Out-Null
-        if (Test-Path -LiteralPath $modelsPath) { Remove-Directory $modelsPath }
-        Move-Item -LiteralPath $ExternalModels -Destination $modelsPath
-    }
-
-    if (Test-Path -LiteralPath $ExternalMsst -PathType Container) {
-        New-Item -ItemType Directory -Path $enginesPath -Force | Out-Null
-        if (Test-Path -LiteralPath $msstPath) { Remove-Directory $msstPath }
-        Move-Item -LiteralPath $ExternalMsst -Destination $msstPath
+    if (Test-Path -LiteralPath $msstPath) {
+        Write-Host "Removing legacy embedded MSST from backend dist..."
+        Remove-Directory $msstPath
     }
 }
 
@@ -1313,33 +1689,56 @@ function Remove-SmokeTestJunctions([string[]]$Links) {
 function Build-ElectronPackage {
     Write-Host ""
     Write-Host "[5/7] Building complete Electron application..."
-
     Require-File $SceneVideoSource "Karaoke scene video"
 
-    Move-HeavyAIOutOfBackend
+    Remove-LegacyEmbeddedAI
+
+    $runName = "run-{0}-{1}" -f `
+        ([DateTime]::UtcNow.ToString("yyyyMMdd-HHmmss")), `
+        ([Guid]::NewGuid().ToString("N").Substring(0,8))
+
+    $runRoot = Join-Path $ElectronRoot $runName
+    $newUnpacked = Join-Path $runRoot "win-unpacked"
+
+    New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
+
+    Write-Host ""
+    Write-Host "Electron output:"
+    Write-Host "  $newUnpacked"
+    Write-Host ""
+    Write-Host "A new output directory is used for every build."
+    Write-Host "Locked app.asar files from older builds cannot block this build."
+    Write-Host ""
+
+    Push-Location $Frontend
 
     try {
-        Remove-Directory $Unpacked
+        Write-Host "Building Electron win-unpacked WITHOUT AI models..."
+        Write-Host ""
 
-        Push-Location $Frontend
-        try {
-            Write-Host ""
-            Write-Host "Building Electron win-unpacked WITHOUT AI models..."
-            Write-Host ""
+        $outputArg = "--config.directories.output=$runRoot"
 
-            & $script:NpxCmd electron-builder --win --x64 --dir
+        & $script:NpxCmd `
+            electron-builder `
+            --win `
+            --x64 `
+            --dir `
+            $outputArg
 
-            if ($LASTEXITCODE -ne 0) {
-                throw "Electron win-unpacked build failed."
-            }
-        }
-        finally {
-            Pop-Location
+        if ($LASTEXITCODE -ne 0) {
+            throw "Electron win-unpacked build failed."
         }
     }
     finally {
-        Restore-HeavyAIToBackend
+        Pop-Location
     }
+
+    if (-not (Test-Path -LiteralPath $newUnpacked -PathType Container)) {
+        throw "Electron builder completed but win-unpacked was not created: $newUnpacked"
+    }
+
+    # Switch all downstream paths to this new run only after the directory exists.
+    Set-ElectronOutputPath $newUnpacked
 
     Sign-File (Join-Path $Unpacked $AppExe)
     Verify-Unpacked
@@ -1367,8 +1766,17 @@ function Build-ElectronPackage {
     }
 
     Verify-Unpacked
+
+    # Only a fully verified Electron build becomes the current package.
+    Save-ElectronOutputPath $newUnpacked
+
     Write-Host ""
-    Write-Host "Electron package verified successfully; AI stays external."
+    Write-Host "Electron package verified successfully."
+    Write-Host "Current Electron output:"
+    Write-Host "  $Unpacked"
+    Write-Host ""
+
+    Remove-OldElectronRuns $Unpacked
 }
 
 function Find-Inno {
@@ -1413,7 +1821,7 @@ function Find-Inno {
 
 function Build-Installer {
     Write-Host ""
-    Write-Host "[6/6] Building complete offline installer..."
+    Write-Host "[6/7] Building complete offline installer..."
 
     $inno = Find-Inno
 
@@ -1526,15 +1934,31 @@ function Create-DistributionIso {
         $volume = $volume.Substring(0,32)
     }
 
+    $isoBytes = [int64]0
+    $isoFiles = 0
+
+    Get-ChildItem -LiteralPath $IsoStage -Recurse -File -Force -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            $isoFiles += 1
+            $isoBytes += $_.Length
+        }
+
     Write-Host ""
     Write-Host "Creating ISO from:"
     Write-Host "  $IsoStage"
+    Write-Host ("  Payload: {0} files, {1:N2} GB" -f $isoFiles,($isoBytes / 1GB))
     Write-Host ""
+
+    $isoSw = [Diagnostics.Stopwatch]::StartNew()
 
     New-DistributionIsoImage `
         -SourceDirectory $IsoStage `
         -OutputFile $IsoTemp `
         -VolumeName $volume
+
+    $isoSw.Stop()
+    Set-PreviousDuration "iso-create" $isoSw.Elapsed.TotalSeconds
+    Write-Host ("ISO image creation elapsed: {0}" -f (Format-Duration $isoSw.Elapsed.TotalSeconds))
 
     Require-File $IsoTemp "Distribution ISO"
 
@@ -1593,20 +2017,31 @@ function Run-Parallel([string[]]$Workers) {
     New-Item -ItemType Directory -Path $ParallelDir -Force | Out-Null
 
     $processes = @{}
-    $last = @{}
+    $started = @{}
+    $expected = @{}
+    $lastLog = @{}
+    $completedAt = @{}
+    $lastProgressSecond = -1
 
     foreach ($name in $Workers) {
+        $started[$name] = [DateTime]::UtcNow
+        $expected[$name] = Get-PreviousDuration "worker-$name"
         $processes[$name] = Start-WorkerProcess $name
     }
 
     while ($true) {
         $allDone = $true
+        $now = [DateTime]::UtcNow
+        $second = [int](($now - ($started.Values | Sort-Object | Select-Object -First 1)).TotalSeconds)
 
         foreach ($name in $Workers) {
             $exitFile = Join-Path $ParallelDir "$name.exit"
 
             if (-not (Test-Path -LiteralPath $exitFile -PathType Leaf)) {
                 $allDone = $false
+            }
+            elseif (-not $completedAt.ContainsKey($name)) {
+                $completedAt[$name] = [DateTime]::UtcNow
             }
 
             $outLog = Join-Path $ParallelDir "$name.out.log"
@@ -1630,13 +2065,14 @@ function Run-Parallel([string[]]$Workers) {
             if ($lines.Count -gt 0) {
                 $joined = $lines -join " | "
 
-                if (-not $last.ContainsKey($name) -or $last[$name] -ne $joined) {
+                if (-not $lastLog.ContainsKey($name) -or $lastLog[$name] -ne $joined) {
                     Write-Host "  $name`: $joined"
-                    $last[$name] = $joined
+                    $lastLog[$name] = $joined
                 }
             }
 
             $proc = $processes[$name]
+
             if ($proc.HasExited -and -not (Test-Path -LiteralPath $exitFile)) {
                 "1" | Set-Content -LiteralPath $exitFile -Encoding ASCII
             }
@@ -1646,7 +2082,35 @@ function Run-Parallel([string[]]$Workers) {
             break
         }
 
-        Start-Sleep -Seconds 3
+        if ($second -ne $lastProgressSecond -and ($second % 10) -eq 0) {
+            Write-Host ""
+            foreach ($name in $Workers) {
+                $exitFile = Join-Path $ParallelDir "$name.exit"
+                if ($completedAt.ContainsKey($name)) {
+                    $elapsed = ($completedAt[$name] - $started[$name]).TotalSeconds
+                }
+                else {
+                    $elapsed = ([DateTime]::UtcNow - $started[$name]).TotalSeconds
+                }
+
+                if (Test-Path -LiteralPath $exitFile -PathType Leaf) {
+                    $raw = Get-Content -LiteralPath $exitFile -ErrorAction SilentlyContinue | Select-Object -First 1
+                    if ($raw -eq "0") {
+                        Write-Host ("  [DONE] {0} | elapsed {1}" -f $name,(Format-Duration $elapsed))
+                    }
+                    else {
+                        Write-Host ("  [FAILED] {0} | elapsed {1}" -f $name,(Format-Duration $elapsed))
+                    }
+                }
+                else {
+                    Write-StepProgress $name $elapsed $expected[$name]
+                }
+            }
+            Write-Host ""
+            $lastProgressSecond = $second
+        }
+
+        Start-Sleep -Seconds 2
     }
 
     $failed = $false
@@ -1655,11 +2119,18 @@ function Run-Parallel([string[]]$Workers) {
         $proc = $processes[$name]
         try { $proc.WaitForExit() } catch {}
 
+        if ($completedAt.ContainsKey($name)) {
+            $elapsed = ($completedAt[$name] - $started[$name]).TotalSeconds
+        }
+        else {
+            $elapsed = ([DateTime]::UtcNow - $started[$name]).TotalSeconds
+        }
+
         $exitFile = Join-Path $ParallelDir "$name.exit"
         $code = 1
 
         if (Test-Path -LiteralPath $exitFile) {
-            $raw = (Get-Content -LiteralPath $exitFile -ErrorAction SilentlyContinue | Select-Object -First 1)
+            $raw = Get-Content -LiteralPath $exitFile -ErrorAction SilentlyContinue | Select-Object -First 1
 
             if ($raw -match '^[0-9]+$') {
                 $code = [int]$raw
@@ -1684,7 +2155,8 @@ function Run-Parallel([string[]]$Workers) {
             }
         }
         else {
-            Write-Host "[OK] Parallel worker: $name"
+            Set-PreviousDuration "worker-$name" $elapsed
+            Write-Host ("[OK] Parallel worker: {0} | elapsed {1}" -f $name,(Format-Duration $elapsed))
         }
     }
 
@@ -1850,14 +2322,15 @@ try {
         }
 
         $script:ModelsFingerprint = Get-ModelsFingerprint
-        $modelsOutput = Join-Path $BackendDist "_internal\models"
-        $msstOutput = Join-Path $BackendDist "_internal\engines\msst\inference.py"
 
         $script:ModelsChanged = Test-StepNeeded `
             "models" `
             $script:ModelsFingerprint `
-            @($modelsOutput,$msstOutput) `
-            -Force:(($Mode -eq "clean") -or $script:BackendChanged)
+            @(
+                $Models,
+                (Join-Path $MsstEngine "inference.py")
+            ) `
+            -Force:($Mode -eq "clean")
 
         if ($script:ModelsChanged) {
             Package-Models

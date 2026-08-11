@@ -1,1 +1,1 @@
-AI_BUILD_ID = "midi-v52-multi-evidence-context-alignment-20260811"
+AI_BUILD_ID = "midi-v54-evidence-preserving-gap-fit-20260811"
