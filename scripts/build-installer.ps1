@@ -17,7 +17,6 @@ $Downloads = Join-Path $Root "downloads"
 $Release = Join-Path $Root "release"
 
 $BackendDist = Join-Path $Build "backend\dist\KaraokeBackend"
-$InstallerDir = Join-Path $Build "installer-output"
 $TempDir = Join-Path $Build "installer-temp"
 $StateDir = Join-Path $Build ".state"
 $TimingDir = Join-Path $StateDir "timings"
@@ -25,6 +24,10 @@ $TimingDir = Join-Path $StateDir "timings"
 $ElectronRoot = Join-Path $Build "electron"
 $ElectronCurrentFile = Join-Path $StateDir "electron-current.txt"
 $Unpacked = Join-Path $ElectronRoot "win-unpacked"
+
+$InstallerRoot = Join-Path $Build "installer"
+$InstallerCurrentFile = Join-Path $StateDir "installer-current.txt"
+$InstallerDir = Join-Path $InstallerRoot "current"
 
 if (Test-Path -LiteralPath $ElectronCurrentFile -PathType Leaf) {
     $savedElectronPath = (
@@ -35,6 +38,18 @@ if (Test-Path -LiteralPath $ElectronCurrentFile -PathType Leaf) {
     if ($savedElectronPath -and
         (Test-Path -LiteralPath $savedElectronPath -PathType Container)) {
         $Unpacked = [IO.Path]::GetFullPath($savedElectronPath)
+    }
+}
+
+if (Test-Path -LiteralPath $InstallerCurrentFile -PathType Leaf) {
+    $savedInstallerPath = (
+        Get-Content -LiteralPath $InstallerCurrentFile -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    )
+
+    if ($savedInstallerPath -and
+        (Test-Path -LiteralPath $savedInstallerPath -PathType Container)) {
+        $InstallerDir = [IO.Path]::GetFullPath($savedInstallerPath)
     }
 }
 $ExternalPayload = Join-Path $Build "external-ai"
@@ -67,7 +82,6 @@ $Ninja = Join-Path $Vs "Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja
 $AppName = "A&D Voice"
 $AppVersion = "1.0.0"
 $AppExe = "A&D Voice.exe"
-$AppId = "E734496E-2622-5565-89D3-45451D9DE7EE"
 
 $ModelCheck = Join-Path $Backend "AI\install_models.py"
 $InnoTemplate = Join-Path $Root "scripts\karaoke-studio.iss"
@@ -80,6 +94,8 @@ $IsoName = "A&D Voice $AppVersion.iso"
 $IsoFile = Join-Path $Release $IsoName
 $IsoStage = Join-Path $Build "iso-root"
 $IsoTemp = Join-Path $Build $IsoName
+$PackagesDir = Join-Path $Build "packages"
+$RuntimeArchive = Join-Path $PackagesDir "app-runtime.zip"
 
 $SmokeScript = Join-Path $Root "scripts\smoke-packaged-backend.ps1"
 $ChecksumScript = Join-Path $Root "scripts\generate-checksums.ps1"
@@ -91,6 +107,7 @@ $script:BackendFingerprint = ""
 $script:AsioFingerprint = ""
 $script:FrontendFingerprint = ""
 $script:ModelsFingerprint = ""
+$BuildSchemaVersion = "2026.08.11-v22-single-runtime-archive"
 
 function Write-Header([string]$Text) {
     Write-Host ""
@@ -130,6 +147,45 @@ function Set-ElectronOutputPath([string]$Path) {
     $script:Unpacked = $resolved
     $script:PackagedBackend = Join-Path $resolved "resources\backend"
     $script:PackagedSceneVideo = Join-Path $resolved "resources\media\videoplayback.webm"
+}
+
+function Set-InstallerOutputPath([string]$Path) {
+    $resolved = [IO.Path]::GetFullPath($Path)
+    $script:InstallerDir = $resolved
+    $script:InstallerExe = Join-Path $resolved ("A&D Voice Setup {0}.exe" -f $AppVersion)
+    $script:ChecksumFile = Join-Path $resolved "SHA256SUMS.txt"
+}
+
+function Save-InstallerOutputPath([string]$Path) {
+    New-Item -ItemType Directory -Path $StateDir -Force | Out-Null
+    $resolved = [IO.Path]::GetFullPath($Path)
+    $resolved | Set-Content -LiteralPath $InstallerCurrentFile -Encoding UTF8
+    Set-InstallerOutputPath $resolved
+}
+
+function Remove-OldInstallerRuns([string]$KeepPath) {
+    if (-not (Test-Path -LiteralPath $InstallerRoot -PathType Container)) { return }
+
+    $keep = ""
+    if ($KeepPath) {
+        try { $keep = [IO.Path]::GetFullPath($KeepPath).TrimEnd('\\') } catch {}
+    }
+
+    $runs = @(
+        Get-ChildItem -LiteralPath $InstallerRoot -Directory -Force -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like "run-*" } |
+        Sort-Object LastWriteTimeUtc -Descending
+    )
+
+    $keptExtra = 0
+    foreach ($run in $runs) {
+        $candidate = [IO.Path]::GetFullPath($run.FullName).TrimEnd('\\')
+        if ($keep -and $candidate -eq $keep) { continue }
+        if ($keptExtra -lt 1) { $keptExtra += 1; continue }
+
+        try { Remove-Item -LiteralPath $run.FullName -Recurse -Force -ErrorAction Stop }
+        catch { Write-Host "  Old installer run is locked; ignored: $($run.Name)" }
+    }
 }
 
 function Save-ElectronOutputPath([string]$Path) {
@@ -381,10 +437,47 @@ function Test-StepNeeded(
     return $false
 }
 
+function Get-PythonEnvironmentFingerprint {
+    $version = & $Python -c "import sys;print(sys.version)" 2>$null
+    if ($LASTEXITCODE -ne 0) { return "python-unavailable" }
+
+    $freeze = & $Python -m pip freeze --all --disable-pip-version-check 2>$null
+    if ($LASTEXITCODE -ne 0) { $freeze = @() }
+
+    return Get-CombinedFingerprint @(
+        ($version -join "`n"),
+        (($freeze | Sort-Object) -join "`n")
+    )
+}
+
+function Get-ToolFileFingerprint([string[]]$Paths) {
+    return Get-Fingerprint $Paths @() @() @()
+}
+
+function Get-InnoCompilerFingerprint {
+    $inno = Find-Inno
+    if (-not $inno) { return "inno-missing" }
+    return Get-ToolFileFingerprint @($inno)
+}
+
+function Get-IsoEngineFingerprint {
+    $osc = Find-Oscdimg
+    if ($osc) { return Get-CombinedFingerprint @("oscdimg",(Get-ToolFileFingerprint @($osc))) }
+    return "windows-imapi2fs"
+}
+
 function Get-BackendFingerprint {
-    return Get-ContentFingerprint @($Backend) `
+    $source = Get-ContentFingerprint @($Backend) `
         @("venv","data","Song","full_songs","recordings","__pycache__",".pytest_cache",".cache","dist","build") `
         @("*.pyc","*.pyo","*.log","*.db","*.sqlite","*.sqlite3")
+
+    $ffmpegFp = if ($script:Ffmpeg) { Get-ToolFileFingerprint @($script:Ffmpeg) } else { "ffmpeg-missing" }
+
+    return Get-CombinedFingerprint @(
+        $source,
+        (Get-PythonEnvironmentFingerprint),
+        $ffmpegFp
+    )
 }
 
 function Get-FrontendFingerprint {
@@ -394,42 +487,98 @@ function Get-FrontendFingerprint {
 }
 
 function Get-AsioFingerprint {
-    return Get-ContentFingerprint @($Asio,$AsioSdk) `
+    $source = Get-ContentFingerprint @($Asio,$AsioSdk) `
         @("build",".git",".cache","__pycache__") `
         @("*.obj","*.pdb","*.ilk","*.log")
+
+    return Get-CombinedFingerprint @(
+        $source,
+        (Get-ToolFileFingerprint @($VcVars,$CMake,$Ninja))
+    )
 }
 
 function Get-ModelsFingerprint {
-    return Get-Fingerprint @($Models,$MsstEngine) `
+    $payload = Get-Fingerprint @($Models,$MsstEngine) `
         @(".cache",".git","__pycache__") `
         @("*.metadata","*.lock","*.tmp","*.part")
+
+    $registryInputs = @($ModelCheck)
+    foreach ($candidate in @(
+        (Join-Path $Backend "AI\\model_registry.py"),
+        (Join-Path $Backend "AI\\config.py"),
+        (Join-Path $Backend "AI\\requirements.txt")
+    )) {
+        if (Test-Path -LiteralPath $candidate) { $registryInputs += $candidate }
+    }
+
+    return Get-CombinedFingerprint @(
+        $payload,
+        (Get-SmallFileFingerprint $registryInputs)
+    )
 }
 
-function Get-ElectronFingerprint {
-    return Get-Fingerprint @(
-        (Join-Path $Build "frontend\dist"),
-        $BackendDist,
+function Get-SmallFileFingerprint([string[]]$Paths) {
+    return Get-ContentFingerprint $Paths @() @() @()
+}
+
+function Get-ElectronConfigFingerprint {
+    $paths = @()
+    foreach ($candidate in @(
         (Join-Path $Frontend "package.json"),
         (Join-Path $Frontend "package-lock.json"),
         (Join-Path $Frontend "electron"),
         $SceneVideoSource
-    ) `
-        @(".cache",".git","__pycache__") `
-        @("*.metadata","*.lock") `
-        @(
-            '(?i)\\_internal\\models(\\|$)',
-            '(?i)\\_internal\\engines\\msst(\\|$)'
-        )
+    )) {
+        if (Test-Path -LiteralPath $candidate) { $paths += $candidate }
+    }
+    return Get-ContentFingerprint $paths @("node_modules","dist","build",".git",".cache") @("*.log") @()
+}
+
+function Get-InnoFingerprint {
+    return Get-CombinedFingerprint @(
+        (Get-SmallFileFingerprint @($InnoTemplate,$SetupIcon,$SignScript,$ChecksumScript)),
+        $AppName,
+        $AppVersion,
+        $AppExe,
+        (Get-InnoCompilerFingerprint),
+        $BuildSchemaVersion
+    )
+}
+
+function Get-ElectronFingerprint {
+    return Get-CombinedFingerprint @(
+        $script:BackendFingerprint,
+        $script:AsioFingerprint,
+        $script:FrontendFingerprint,
+        (Get-ElectronConfigFingerprint),
+        $BuildSchemaVersion
+    )
 }
 
 function Get-InstallerFingerprint {
-    return Get-Fingerprint @($Unpacked,$InnoTemplate,$SetupIcon) `
-        @(".cache",".git","__pycache__") `
-        @("*.metadata","*.lock") `
-        @(
-            '(?i)\\resources\\backend\\_internal\\models(\\|$)',
-            '(?i)\\resources\\backend\\_internal\\engines\\msst(\\|$)'
-        )
+    # Bootstrap-only installer: it contains no Electron/backend/AI payload.
+    # Therefore changes in app/runtime/models must NOT rebuild Inno Setup.
+    return Get-CombinedFingerprint @(
+        (Get-InnoFingerprint),
+        $BuildSchemaVersion
+    )
+}
+
+function Get-IsoFingerprint(
+    [string]$InstallerFingerprint,
+    [string]$ElectronFingerprint,
+    [string]$ModelsFingerprint
+) {
+    # ISO owns the external payload, so any app/runtime/model change rebuilds
+    # only the ISO, not the Inno bootstrap.
+    return Get-CombinedFingerprint @(
+        $InstallerFingerprint,
+        $ElectronFingerprint,
+        $ModelsFingerprint,
+        $AppVersion,
+        (Get-IsoEngineFingerprint),
+        $BuildSchemaVersion
+    )
 }
 
 function Remove-IgnoredPayloadFiles([string]$RootPath) {
@@ -462,6 +611,16 @@ function Format-Duration([double]$Seconds) {
     }
 
     return "{0:00}:{1:00}" -f $ts.Minutes,$ts.Seconds
+}
+
+function Write-StepEstimate([string]$Name) {
+    $previous = Get-PreviousDuration $Name
+    if ($previous -gt 0) {
+        Write-Host ("  Estimated from previous build: ~{0}" -f (Format-Duration $previous))
+    }
+    else {
+        Write-Host "  Estimated time: learning from this build"
+    }
 }
 
 function Get-TimingPath([string]$Name) {
@@ -737,9 +896,14 @@ function Stop-BuildProcesses {
         Write-Host "[0/7] Closing old A&D Voice build processes..."
     }
 
+    $stoppedAny = $false
+
     foreach ($name in @("A&D Voice","KaraokeBackend","KaraokeAudioMonitor","KaraokeAsioBridge")) {
-        Get-Process -Name $name -ErrorAction SilentlyContinue |
-            Stop-Process -Force -ErrorAction SilentlyContinue
+        $targets = @(Get-Process -Name $name -ErrorAction SilentlyContinue)
+        foreach ($target in $targets) {
+            Stop-Process -Id $target.Id -Force -ErrorAction SilentlyContinue
+            $stoppedAny = $true
+        }
     }
 
     if (Test-Path -LiteralPath $Release) {
@@ -756,6 +920,7 @@ function Stop-BuildProcesses {
                         }
 
                         Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+                        $stoppedAny = $true
                     }
                 }
             }
@@ -781,14 +946,13 @@ function Stop-BuildProcesses {
                 }
 
                 Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+                $stoppedAny = $true
             }
     }
     catch {
     }
 
-    if (-not $Quiet) {
-        Start-Sleep -Seconds 1
-    }
+    if ($stoppedAny) { Start-Sleep -Milliseconds 300 }
 }
 
 function Get-RequiredCommand([string]$Name) {
@@ -807,37 +971,13 @@ function Find-Oscdimg {
     }
 
     $cmd = Get-Command oscdimg.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmd) { return $cmd.Source }
 
-    if ($cmd) {
-        return $cmd.Source
-    }
-
-    $roots = @(
-        (Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\Assessment and Deployment Kit\Deployment Tools"),
-        (Join-Path $env:ProgramFiles "Windows Kits\10\Assessment and Deployment Kit\Deployment Tools")
-    )
-
-    foreach ($root in $roots) {
-        if (-not $root -or -not (Test-Path -LiteralPath $root -PathType Container)) {
-            continue
-        }
-
-        foreach ($candidate in @(
-            (Join-Path $root "amd64\Oscdimg\oscdimg.exe"),
-            (Join-Path $root "x86\Oscdimg\oscdimg.exe"),
-            (Join-Path $root "arm64\Oscdimg\oscdimg.exe")
-        )) {
-            if (Test-Path -LiteralPath $candidate -PathType Leaf) {
-                return $candidate
-            }
-        }
-
-        $found = Get-ChildItem -LiteralPath $root -Recurse -File -Filter "oscdimg.exe" -ErrorAction SilentlyContinue |
-            Select-Object -First 1
-
-        if ($found) {
-            return $found.FullName
-        }
+    foreach ($candidate in @(
+        (Join-Path ${env:ProgramFiles(x86)} "Windows Kits\\10\\Assessment and Deployment Kit\\Deployment Tools\\amd64\\Oscdimg\\oscdimg.exe"),
+        (Join-Path $env:ProgramFiles "Windows Kits\\10\\Assessment and Deployment Kit\\Deployment Tools\\amd64\\Oscdimg\\oscdimg.exe")
+    )) {
+        if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) { return $candidate }
     }
 
     return $null
@@ -923,6 +1063,10 @@ function New-IsoWithWindowsImapi(
         # 4 = UDF. UDF is required because AI model files may exceed 4 GB.
         $fsi.FileSystemsToCreate = 4
         $fsi.VolumeName = $VolumeName
+
+        # 0 = unlimited image size. Without this IMAPI assumes optical-media
+        # capacity and rejects large offline distributions.
+        $fsi.FreeMediaBlocks = 0
 
         try {
             # UDF 1.02 offers broad Windows compatibility.
@@ -1022,6 +1166,15 @@ function Check-Environment {
     Require-Directory $Backend "Backend directory"
     Require-Directory $Frontend "Frontend directory"
     Require-File $InnoTemplate "Inno Setup template"
+
+    $script:TarExe = Get-Command tar.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1
+    if (-not $script:TarExe) {
+        throw "Windows tar.exe was not found. Windows 10/11 built-in tar is required for app-runtime.zip."
+    }
+    Write-Host "Checking runtime archive tool:"
+    Write-Host "  $script:TarExe"
+    Write-Host "[OK] Windows tar.exe"
+    Write-Host ""
 
     $script:Oscdimg = Find-Oscdimg
 
@@ -1168,6 +1321,7 @@ function Prepare-Output {
         Remove-Directory $Build
 
         Set-ElectronOutputPath (Join-Path $ElectronRoot "win-unpacked")
+        Set-InstallerOutputPath (Join-Path $InstallerRoot "current")
 
         $pyInstallerCache = Join-Path $env:LOCALAPPDATA "pyinstaller"
         Remove-Directory $pyInstallerCache
@@ -1176,7 +1330,8 @@ function Prepare-Output {
     New-Item -ItemType Directory -Path $Build -Force | Out-Null
     New-Item -ItemType Directory -Path $Release -Force | Out-Null
     New-Item -ItemType Directory -Path $StateDir -Force | Out-Null
-    New-Item -ItemType Directory -Path $InstallerDir -Force | Out-Null
+    New-Item -ItemType Directory -Path $InstallerRoot -Force | Out-Null
+    New-Item -ItemType Directory -Path $PackagesDir -Force | Out-Null
 }
 
 function Check-Models {
@@ -1576,6 +1731,28 @@ function Sync-ModelTree {
     Verify-ModelTree $modelDest "Packaged AI models"
 }
 
+function Get-SigningFingerprint {
+    $items = @($SignScript)
+    if ($env:ADVOICE_SIGN_PFX -and (Test-Path -LiteralPath $env:ADVOICE_SIGN_PFX -PathType Leaf)) {
+        $items += $env:ADVOICE_SIGN_PFX
+    }
+
+    return Get-CombinedFingerprint @(
+        (Get-SmallFileFingerprint $items),
+        [string]([bool]$env:ADVOICE_SIGN_PFX),
+        [string]([bool]$env:ADVOICE_SIGN_PASSWORD)
+    )
+}
+
+function Get-FinalizeFingerprint {
+    return Get-CombinedFingerprint @(
+        $script:BackendFingerprint,
+        $script:AsioFingerprint,
+        (Get-SigningFingerprint),
+        $BuildSchemaVersion
+    )
+}
+
 function Verify-BackendBase {
     Require-File (Join-Path $BackendDist "KaraokeBackend.exe") "KaraokeBackend.exe"
     Require-File (Join-Path $BackendDist "KaraokeAudioMonitor.exe") "KaraokeAudioMonitor.exe"
@@ -1594,8 +1771,6 @@ function Package-Models {
 
     Require-Directory $Models "Offline AI models directory"
     Require-Directory $MsstEngine "MSST inference engine"
-
-    Remove-IgnoredPayloadFiles $Models
 
     $sourceSignature = Get-TreeSignature $Models
 
@@ -1686,6 +1861,65 @@ function Remove-SmokeTestJunctions([string[]]$Links) {
     }
 }
 
+function Build-RuntimeArchive([string]$SourceDirectory) {
+    Require-Directory $SourceDirectory "Electron runtime source"
+
+    if (-not $script:TarExe) {
+        $script:TarExe = Get-Command tar.exe -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty Source -First 1
+    }
+
+    if (-not $script:TarExe) {
+        throw "Windows tar.exe was not found."
+    }
+
+    New-Item -ItemType Directory -Path $PackagesDir -Force | Out-Null
+
+    $tmpArchive = Join-Path $PackagesDir "app-runtime.tmp.zip"
+    Remove-Item -LiteralPath $tmpArchive -Force -ErrorAction SilentlyContinue
+
+    Write-Host ""
+    Write-Host "Creating compressed application runtime..."
+    Write-Host "  Source:  $SourceDirectory"
+    Write-Host "  Archive: $RuntimeArchive"
+    Write-Host ""
+
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+
+    # Windows bsdtar selects ZIP compression from the .zip extension.
+    & $script:TarExe -a -cf $tmpArchive -C $SourceDirectory .
+
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $tmpArchive -PathType Leaf)) {
+        Remove-Item -LiteralPath $tmpArchive -Force -ErrorAction SilentlyContinue
+        throw "Could not create app-runtime.zip."
+    }
+
+    $tmpInfo = Get-Item -LiteralPath $tmpArchive
+    if ($tmpInfo.Length -le 0) {
+        Remove-Item -LiteralPath $tmpArchive -Force -ErrorAction SilentlyContinue
+        throw "Created app-runtime.zip is empty."
+    }
+
+    Move-Item -LiteralPath $tmpArchive -Destination $RuntimeArchive -Force
+
+    $sw.Stop()
+    Set-PreviousDuration "runtime-archive" $sw.Elapsed.TotalSeconds
+
+    $sourceBytes = [int64]0
+    Get-ChildItem -LiteralPath $SourceDirectory -Recurse -File -Force -ErrorAction SilentlyContinue |
+        ForEach-Object { $sourceBytes += $_.Length }
+
+    $archiveBytes = (Get-Item -LiteralPath $RuntimeArchive).Length
+    $ratio = if ($sourceBytes -gt 0) { 100.0 * $archiveBytes / $sourceBytes } else { 0 }
+
+    Write-Host ("  Runtime source:  {0:N2} GB" -f ($sourceBytes / 1GB))
+    Write-Host ("  Runtime archive: {0:N2} GB ({1:N1}% of source)" -f ($archiveBytes / 1GB),$ratio)
+    Write-Host ("  Archive elapsed: {0}" -f (Format-Duration $sw.Elapsed.TotalSeconds))
+    Write-Host ""
+
+    Require-File $RuntimeArchive "Application runtime archive"
+}
+
 function Build-ElectronPackage {
     Write-Host ""
     Write-Host "[5/7] Building complete Electron application..."
@@ -1767,7 +2001,11 @@ function Build-ElectronPackage {
 
     Verify-Unpacked
 
-    # Only a fully verified Electron build becomes the current package.
+    # Archive the complete verified runtime once. The ISO uses only this archive,
+    # so win-unpacked is no longer copied into ISO staging.
+    Build-RuntimeArchive $newUnpacked
+
+    # The archive is now the persistent runtime artifact.
     Save-ElectronOutputPath $newUnpacked
 
     Write-Host ""
@@ -1824,44 +2062,52 @@ function Build-Installer {
     Write-Host "[6/7] Building complete offline installer..."
 
     $inno = Find-Inno
+    if (-not $inno) { throw "Inno Setup compiler was not found. Install Inno Setup 6." }
 
-    if (-not $inno) {
-        throw "Inno Setup compiler was not found. Install Inno Setup 6."
-    }
+    $runName = "run-{0}-{1}" -f ([DateTime]::UtcNow.ToString("yyyyMMdd-HHmmss")),([Guid]::NewGuid().ToString("N").Substring(0,8))
+    $runDir = Join-Path $InstallerRoot $runName
+    New-Item -ItemType Directory -Path $runDir -Force | Out-Null
 
     Write-Host ""
     Write-Host "Inno Setup:"
     Write-Host "  $inno"
+    Write-Host "Installer output:"
+    Write-Host "  $runDir"
     Write-Host ""
 
-    Remove-Directory $InstallerDir
-    Remove-Directory $TempDir
-
-    New-Item -ItemType Directory -Path $InstallerDir -Force | Out-Null
-    New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
+    Write-Host "Bootstrap-only installer: application runtime is app-runtime.zip; AI models stay external/raw."
+    Write-Host "Inno does not recompress Electron/backend/Torch/CUDA."
+    Write-Host ""
 
     & $inno `
         "/DMyAppName=$AppName" `
         "/DMyAppVersion=$AppVersion" `
         "/DMyAppExeName=$AppExe" `
-        "/DMyAppId=$AppId" `
         "/DSetupIcon=$SetupIcon" `
-        "/DSourceDir=$Unpacked" `
-        "/DOutputDir=$InstallerDir" `
+        "/DOutputDir=$runDir" `
         $InnoTemplate
 
-    if ($LASTEXITCODE -ne 0) {
-        throw "Inno Setup compilation failed."
+    if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed." }
+
+    $candidateExe = Join-Path $runDir ("A&D Voice Setup {0}.exe" -f $AppVersion)
+    Require-File $candidateExe "Installer executable"
+    Sign-File $candidateExe
+
+    # Bootstrap-only Inno should not create multi-gigabyte .bin payloads.
+    $bins = @(Get-ChildItem -LiteralPath $runDir -Filter "*.bin" -File -ErrorAction SilentlyContinue)
+    if ($bins.Count -gt 0) {
+        $binBytes = ($bins | Measure-Object -Property Length -Sum).Sum
+        Write-Host ("  Inno data slices: {0} file(s), {1:N2} MB" -f $bins.Count,($binBytes / 1MB))
+        if ($binBytes -gt 100MB) {
+            throw "Bootstrap installer unexpectedly contains more than 100 MB of compressed payload."
+        }
+    }
+    else {
+        Write-Host "  Inno data slices: none [expected]"
     }
 
-    Require-File $InstallerExe "Installer executable"
-    Sign-File $InstallerExe
-
-    $bins = @(Get-ChildItem -LiteralPath $InstallerDir -Filter "*.bin" -File -ErrorAction SilentlyContinue)
-
-    if ($bins.Count -eq 0) {
-        throw "Installer .bin data files were not created."
-    }
+    Save-InstallerOutputPath $runDir
+    Remove-OldInstallerRuns $InstallerDir
 }
 
 function Create-Checksums {
@@ -1895,48 +2141,62 @@ function Create-DistributionIso {
 
     Require-File $InstallerExe "Installer executable"
     Require-File $ChecksumFile "SHA-256 checksum file"
+    Require-File $RuntimeArchive "Application runtime archive"
 
+    # ISO staging is authoritative. Remove legacy app/installer slices from older
+    # builder versions so stale Setup-*.bin or duplicated win-unpacked data can
+    # never leak into the image.
     New-Item -ItemType Directory -Path $IsoStage -Force | Out-Null
 
-    # Only top-level setup/checksum files are refreshed here. The very large
-    # model/MSST trees remain in persistent staging and are synchronized below.
-    Get-ChildItem -LiteralPath $IsoStage -File -Force -ErrorAction SilentlyContinue |
-        Remove-Item -Force
-
-    Get-ChildItem -LiteralPath $InstallerDir -File -Force |
-        ForEach-Object {
-            Copy-Item `
-                -LiteralPath $_.FullName `
-                -Destination (Join-Path $IsoStage $_.Name) `
-                -Force
+    foreach ($legacy in @(
+        (Join-Path $IsoStage "app"),
+        (Join-Path $IsoStage "app-runtime.zip")
+    )) {
+        if (Test-Path -LiteralPath $legacy) {
+            Remove-Item -LiteralPath $legacy -Recurse -Force -ErrorAction SilentlyContinue
         }
+    }
 
-    Sync-DirectoryIfChanged `
-        $Models `
-        (Join-Path $IsoStage "models") `
-        "ISO AI models"
+    Get-ChildItem -LiteralPath $IsoStage -File -Force -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.Name -like "A&D Voice Setup *.exe" -or
+            $_.Name -like "A&D Voice Setup *.bin" -or
+            $_.Name -eq "SHA256SUMS.txt"
+        } |
+        Remove-Item -Force -ErrorAction SilentlyContinue
 
-    Sync-DirectoryIfChanged `
-        $MsstEngine `
-        (Join-Path $IsoStage "msst") `
-        "ISO MSST engine"
+    # Copy ONLY the exact bootstrap EXE/checksum and the single runtime archive.
+    Copy-Item -LiteralPath $InstallerExe -Destination (Join-Path $IsoStage (Split-Path $InstallerExe -Leaf)) -Force
+    Copy-Item -LiteralPath $ChecksumFile -Destination (Join-Path $IsoStage "SHA256SUMS.txt") -Force
+    Copy-Item -LiteralPath $RuntimeArchive -Destination (Join-Path $IsoStage "app-runtime.zip") -Force
+
+    # Large neural-network weights are already compressed binary data in many
+    # cases; keep them raw to avoid wasting build/install time.
+    Sync-DirectoryIfChanged $Models (Join-Path $IsoStage "models") "ISO AI models"
+    Sync-DirectoryIfChanged $MsstEngine (Join-Path $IsoStage "msst") "ISO MSST engine"
 
     Remove-IgnoredPayloadFiles (Join-Path $IsoStage "models")
     Remove-IgnoredPayloadFiles (Join-Path $IsoStage "msst")
+
+    # Regression guard: old Inno disk slices and duplicated app trees are forbidden.
+    $legacyBins = @(Get-ChildItem -LiteralPath $IsoStage -File -Filter "A&D Voice Setup *.bin" -ErrorAction SilentlyContinue)
+    if ($legacyBins.Count -gt 0) {
+        throw "Legacy Inno .bin files leaked into ISO staging."
+    }
+
+    if (Test-Path -LiteralPath (Join-Path $IsoStage "app") -PathType Container) {
+        throw "Duplicated ISO app directory exists. Runtime must be stored only in app-runtime.zip."
+    }
 
     if (Test-Path -LiteralPath $IsoTemp -PathType Leaf) {
         Remove-Item -LiteralPath $IsoTemp -Force
     }
 
     $volume = ("ADVOICE_" + $AppVersion.Replace(".","_")).ToUpperInvariant()
-
-    if ($volume.Length -gt 32) {
-        $volume = $volume.Substring(0,32)
-    }
+    if ($volume.Length -gt 32) { $volume = $volume.Substring(0,32) }
 
     $isoBytes = [int64]0
     $isoFiles = 0
-
     Get-ChildItem -LiteralPath $IsoStage -Recurse -File -Force -ErrorAction SilentlyContinue |
         ForEach-Object {
             $isoFiles += 1
@@ -1947,6 +2207,8 @@ function Create-DistributionIso {
     Write-Host "Creating ISO from:"
     Write-Host "  $IsoStage"
     Write-Host ("  Payload: {0} files, {1:N2} GB" -f $isoFiles,($isoBytes / 1GB))
+    Write-Host "  Runtime: app-runtime.zip"
+    Write-Host "  Models:  raw / incremental"
     Write-Host ""
 
     $isoSw = [Diagnostics.Stopwatch]::StartNew()
@@ -1961,20 +2223,13 @@ function Create-DistributionIso {
     Write-Host ("ISO image creation elapsed: {0}" -f (Format-Duration $isoSw.Elapsed.TotalSeconds))
 
     Require-File $IsoTemp "Distribution ISO"
-
-    $isoInfo = Get-Item -LiteralPath $IsoTemp
-
-    if ($isoInfo.Length -le 0) {
-        throw "Created ISO is empty."
-    }
+    if ((Get-Item -LiteralPath $IsoTemp).Length -le 0) { throw "Created ISO is empty." }
 
     New-Item -ItemType Directory -Path $Release -Force | Out-Null
-
     Get-ChildItem -LiteralPath $Release -Force -ErrorAction SilentlyContinue |
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
     Move-Item -LiteralPath $IsoTemp -Destination $IsoFile -Force
-
     Require-File $IsoFile "Final distribution ISO"
 
     Write-Host ""
@@ -2170,10 +2425,6 @@ function Parallel-FullBuild {
 
     $force = ($Mode -eq "clean")
 
-    $script:BackendFingerprint = Get-BackendFingerprint
-    $script:AsioFingerprint = Get-AsioFingerprint
-    $script:FrontendFingerprint = Get-FrontendFingerprint
-
     $script:BackendChanged = Test-StepNeeded `
         "backend" `
         $script:BackendFingerprint `
@@ -2299,81 +2550,95 @@ try {
     Write-Host "  $Release"
     Write-Host ""
 
+    $overall = [Diagnostics.Stopwatch]::StartNew()
+
     Stop-BuildProcesses
     Check-Environment
     Prepare-Output
 
+    # Fast dependency graph. Nothing expensive is launched before these checks.
+    $script:BackendFingerprint = Get-BackendFingerprint
+    $script:AsioFingerprint = Get-AsioFingerprint
+    $script:FrontendFingerprint = Get-FrontendFingerprint
+    $script:ModelsFingerprint = Get-ModelsFingerprint
+
     if ($Mode -eq "installer") {
-        Write-Header "INSTALLER / ISO ONLY"
+        $script:BackendChanged = $false
+        $script:AsioChanged = $false
+        $script:FrontendChanged = $false
         Verify-Unpacked
     }
     else {
-        Check-Models
         Parallel-FullBuild
+    }
 
-        $needFinalize = $script:BackendChanged -or $script:AsioChanged -or `
-            -not (Test-Path -LiteralPath (Join-Path $BackendDist "KaraokeAsioBridge.exe"))
+    $modelsNeeded = Test-StepNeeded `
+        "models" `
+        $script:ModelsFingerprint `
+        @($Models,(Join-Path $MsstEngine "inference.py")) `
+        -Force:($Mode -eq "clean")
+
+    if ($modelsNeeded) {
+        Check-Models
+        Package-Models
+        Set-State "models" $script:ModelsFingerprint
+    }
+    else {
+        Write-Host "  AI model verification: unchanged [skip]"
+    }
+
+    $finalizeFp = Get-FinalizeFingerprint
+
+    if ($Mode -ne "installer") {
+        $needFinalize = Test-StepNeeded `
+            "finalize" `
+            $finalizeFp `
+            @((Join-Path $BackendDist "KaraokeAsioBridge.exe")) `
+            -Force:($Mode -eq "clean")
 
         if ($needFinalize) {
             Finalize-Asio
+            Set-State "finalize" $finalizeFp
         }
         else {
             Write-Host "  backend signing / ASIO finalize: unchanged [skip]"
         }
+    }
 
-        $script:ModelsFingerprint = Get-ModelsFingerprint
+    $electronFp = Get-CombinedFingerprint @((Get-ElectronFingerprint),$finalizeFp)
+    $electronNeeded = Test-StepNeeded `
+        "electron" `
+        $electronFp `
+        @($RuntimeArchive) `
+        -Force:($Mode -eq "clean")
 
-        $script:ModelsChanged = Test-StepNeeded `
-            "models" `
-            $script:ModelsFingerprint `
-            @(
-                $Models,
-                (Join-Path $MsstEngine "inference.py")
-            ) `
-            -Force:($Mode -eq "clean")
-
-        if ($script:ModelsChanged) {
-            Package-Models
-            Set-State "models" $script:ModelsFingerprint
-        }
-
-        $electronFp = Get-ElectronFingerprint
-        $electronNeeded = Test-StepNeeded `
-            "electron" `
-            $electronFp `
-            @(
-                (Join-Path $Unpacked $AppExe),
-                (Join-Path $PackagedBackend "KaraokeBackend.exe"),
-                (Join-Path $PackagedBackend "KaraokeAsioBridge.exe")
-            ) `
-            -Force:($Mode -eq "clean")
-
-        if ($electronNeeded) {
-            Build-ElectronPackage
-            Set-State "electron" $electronFp
-        }
+    if ($electronNeeded) {
+        Write-StepEstimate "electron"
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        Build-ElectronPackage
+        $sw.Stop()
+        Set-PreviousDuration "electron" $sw.Elapsed.TotalSeconds
+        Set-State "electron" $electronFp
     }
 
     $installerFp = Get-InstallerFingerprint
     $installerNeeded = Test-StepNeeded `
         "installer" `
         $installerFp `
-        @($InstallerExe) `
+        @($InstallerExe,$ChecksumFile) `
         -Force:($Mode -eq "clean")
 
     if ($installerNeeded) {
+        Write-StepEstimate "installer"
+        $sw = [Diagnostics.Stopwatch]::StartNew()
         Build-Installer
         Create-Checksums
+        $sw.Stop()
+        Set-PreviousDuration "installer" $sw.Elapsed.TotalSeconds
         Set-State "installer" $installerFp
     }
-    elseif (-not (Test-Path -LiteralPath $ChecksumFile -PathType Leaf)) {
-        Create-Checksums
-    }
 
-    $modelsFpForIso = Get-ModelsFingerprint
-    $installerPayloadFp = Get-Fingerprint @($InstallerDir) @(".cache",".git") @("*.tmp")
-    $isoFp = Get-CombinedFingerprint @($installerPayloadFp,$modelsFpForIso,$AppVersion)
-
+    $isoFp = Get-IsoFingerprint $installerFp $electronFp $script:ModelsFingerprint
     $isoNeeded = Test-StepNeeded `
         "iso" `
         $isoFp `
@@ -2381,9 +2646,17 @@ try {
         -Force:($Mode -eq "clean")
 
     if ($isoNeeded) {
+        Write-StepEstimate "iso"
+        $sw = [Diagnostics.Stopwatch]::StartNew()
         Create-DistributionIso
+        $sw.Stop()
+        Set-PreviousDuration "iso" $sw.Elapsed.TotalSeconds
         Set-State "iso" $isoFp
     }
+
+    $overall.Stop()
+    Write-Host ""
+    Write-Host ("Smart build elapsed: {0}" -f (Format-Duration $overall.Elapsed.TotalSeconds))
 
     Remove-Directory $TempDir
 
@@ -2392,11 +2665,11 @@ try {
     Write-Host "Single-file offline distribution:"
     Write-Host "  $IsoFile"
     Write-Host ""
-    Write-Host "The ISO contains Setup.exe, all Setup-*.bin files,"
-    Write-Host "and SHA256SUMS.txt. Mount the ISO and run Setup.exe."
+    Write-Host "The ISO contains a small Setup.exe plus external app, models and MSST."
+    Write-Host "Mount the ISO and run Setup.exe. Torch/CUDA are copied, not recompressed."
     Write-Host ""
 
-    Start-Process explorer.exe $InstallerDir
+    Start-Process explorer.exe $Release
     exit 0
 }
 catch {

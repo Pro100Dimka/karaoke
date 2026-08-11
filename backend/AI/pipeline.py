@@ -27,6 +27,7 @@ from .engines.text import (
 )
 from .engines.ctc_alignment import CTC_ALIGNMENT_VERSION
 from .errors import EngineUnavailableError, ProcessingCancelledError
+from .diagnostics import build_alignment_debug
 from .locks import ThreadFileLock
 from .lyrics_sources import discover_lyrics
 from .midi import write_midi
@@ -471,6 +472,7 @@ class KaraokePipeline:
 
         cache = StageCache(output / ".ai-cache")
         reports: list[StageReport] = []
+        alignment_debug_raw: dict[str, object] = {}
         warnings: list[str] = []
         source_hash = cache.file_hash(source)
 
@@ -869,8 +871,18 @@ class KaraokePipeline:
                     self.engines.aligner, "last_alignment_diagnostics", None
                 ) or {}
                 if alignment_diagnostics:
+                    alignment_debug_raw = {
+                        "word_sources": list(alignment_diagnostics.get("word_sources") or []),
+                        "word_candidates": list(alignment_diagnostics.get("word_candidates") or []),
+                    }
+                    public_alignment_diagnostics = {
+                        key: value
+                        for key, value in alignment_diagnostics.items()
+                        if key not in {"word_sources", "word_candidates"}
+                    }
+                    alignment_debug_raw["model_evidence"] = public_alignment_diagnostics
                     details = " ".join(
-                        f"{key}={value}" for key, value in alignment_diagnostics.items()
+                        f"{key}={value}" for key, value in public_alignment_diagnostics.items()
                     )
                     reports.append(StageReport("alignment-acoustic", 0.0, False, details))
                 words = _bound_word_durations(words)
@@ -1105,6 +1117,23 @@ class KaraokePipeline:
         else:
             self._remove_stale(quality_path)
         warnings.extend(item for item in quality.warnings if item not in warnings)
+        alignment_debug_path = output / "alignmentDebug.json"
+        alignment_debug = build_alignment_debug(
+            lyrics_text=lyrics_txt.read_text(encoding="utf-8") if lyrics_txt.exists() else "",
+            words=words,
+            syllables=syllables,
+            pitch=pitch,
+            notes=vocal_notes,
+            duration_sec=song_duration,
+            alignment_diagnostics={
+                **dict(alignment_debug_raw.get("model_evidence") or {}),
+                "word_sources": list(alignment_debug_raw.get("word_sources") or []),
+                "word_candidates": list(alignment_debug_raw.get("word_candidates") or []),
+            },
+            reports=reports,
+        )
+        write_json_atomic(alignment_debug_path, alignment_debug)
+
         diagnostics_path = output / "diagnostics.json"
         write_json_atomic(
             diagnostics_path,
@@ -1118,6 +1147,10 @@ class KaraokePipeline:
                 },
                 "environment": environment_info(),
                 "quality": to_dict(quality),
+                "health": alignment_debug.get("health", {}),
+                "alignment_summary": alignment_debug.get("summary", {}),
+                "alignment_suspicious_regions": alignment_debug.get("suspicious_regions", []),
+                "performance": alignment_debug.get("performance", {}),
                 "data_flow": {
                     "source_sha256": source_hash,
                     "song_sha256": cache.file_hash(song_wav),
@@ -1162,6 +1195,7 @@ class KaraokePipeline:
             "melodyContour": "melodyContour.json",
             "songMap": "songMap.json",
             "diagnostics": "diagnostics.json",
+            "alignmentDebug": "alignmentDebug.json",
         }
         if self.config.preserve_raw_pitch and pitch_raw_path.exists():
             outputs["pitchRaw"] = "pitchRaw.json"

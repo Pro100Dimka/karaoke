@@ -706,6 +706,7 @@ _MIDI_REBUILD_FILES = (
     "difficulty.json",
     "quality.json",
     "diagnostics.json",
+    "alignmentDebug.json",
     "manifest.json",
 )
 

@@ -7,18 +7,12 @@
 #ifndef MyAppExeName
   #error MyAppExeName is required
 #endif
-#ifndef MyAppId
-  #error MyAppId is required
-#endif
-#ifndef SourceDir
-  #error SourceDir is required
-#endif
 #ifndef OutputDir
   #error OutputDir is required
 #endif
 
 [Setup]
-AppId={{#MyAppId}
+AppId={{E734496E-2622-5565-89D3-45451D9DE7EE}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
@@ -33,11 +27,10 @@ ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=dialog
 WizardStyle=modern
-Compression=lzma2/fast
+SetupIconFile={#SetupIcon}
+Compression=zlib/fast
 SolidCompression=no
-DiskSpanning=yes
-DiskSliceSize=2000000000
-SlicesPerDisk=1
+DiskSpanning=no
 SetupLogging=yes
 CloseApplications=yes
 RestartApplications=no
@@ -53,7 +46,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Создать ярлык на рабочем столе"; GroupDescription: "Дополнительные ярлыки:"
 
 [Files]
-Source: "{#SourceDir}\*"; DestDir: "{app}"; Excludes: "resources\backend\_internal\models\*,resources\backend\_internal\engines\msst\*"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Runtime is already compressed once. Inno only copies the archive from ISO.
+Source: "{src}\app-runtime.zip"; DestDir: "{tmp}"; Flags: external ignoreversion deleteafterinstall
+; AI payload remains raw/external for fast builds and installs.
 Source: "{src}\models\*"; DestDir: "{app}\resources\backend\_internal\models"; Flags: external ignoreversion recursesubdirs createallsubdirs
 Source: "{src}\msst\*"; DestDir: "{app}\resources\backend\_internal\engines\msst"; Flags: external ignoreversion recursesubdirs createallsubdirs
 
@@ -63,3 +58,36 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDi
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Запустить {#MyAppName}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
+  TarExe: String;
+  ArchivePath: String;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    TarExe := ExpandConstant('{sys}\tar.exe');
+    ArchivePath := ExpandConstant('{tmp}\app-runtime.zip');
+
+    if not FileExists(TarExe) then
+      RaiseException('Windows tar.exe was not found. Windows 10/11 is required.');
+
+    if not Exec(
+      TarExe,
+      '-xf "' + ArchivePath + '" -C "' + ExpandConstant('{app}') + '"',
+      '',
+      SW_HIDE,
+      ewWaitUntilTerminated,
+      ResultCode
+    ) then
+      RaiseException('Could not start runtime extraction.');
+
+    if ResultCode <> 0 then
+      RaiseException('Runtime extraction failed. Exit code: ' + IntToStr(ResultCode));
+
+    if not FileExists(ExpandConstant('{app}\{#MyAppExeName}')) then
+      RaiseException('Runtime extraction completed, but the application executable is missing.');
+  end;
+end;

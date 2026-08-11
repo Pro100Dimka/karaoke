@@ -43,7 +43,7 @@ def test_run_job_cleans_up_when_log_creation_fails(monkeypatch, tmp_path: Path):
     pipeline_service._release_active_job.assert_not_called()
     assert update.call_args_list[-1].kwargs == {
         "status": models.SongStatus.ERROR,
-        "error_message": "disk full",
+        "error_message": "OSError: disk full",
     }
 
 

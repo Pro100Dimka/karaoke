@@ -1110,3 +1110,102 @@ def test_line_aware_merge_never_rolls_back_late_acoustic_anchors_after_bad_middl
     assert merged[11].confidence >= 0.9
     assert stats["ctc"] >= 6
     assert "tail_rollback_from_line" not in stats
+
+
+def test_relaxed_gap_fit_drops_weak_qwen_micro_anchor_instead_of_squeezing_gap():
+    from types import SimpleNamespace
+
+    groups = ["left A я right"]
+    ctc_lines = [
+        SimpleNamespace(
+            words=[
+                Word(1.0, 1.4, "left", 0.95, 0),
+                Word(3.0, 3.4, "right", 0.94, 1),
+            ],
+            confidence=0.94,
+        )
+    ]
+    # This is the class of bad evidence observed in production: a weak Qwen
+    # word occupying only a few milliseconds between strong CTC anchors.
+    qwen_words = [Word(1.55, 1.57, "A", 0.08, 0)]
+    audio = np.ones(16000 * 6, dtype=np.float32) * 0.02
+
+    merged, stats = _anchor_preserving_canonical_alignment(
+        groups,
+        ctc_lines,
+        qwen_words,
+        audio,
+        16000,
+        6.0,
+        relaxed_gap_fit=True,
+    )
+
+    assert [word.text for word in merged] == ["left", "A", "я", "right"]
+    assert merged[0].start == pytest.approx(1.0)
+    assert merged[-1].start == pytest.approx(3.0)
+    assert merged[1].end - merged[1].start > 0.02
+    assert merged[2].end - merged[2].start > 0.02
+    assert stats["qwen"] == 0
+    assert stats["ctc"] == 2
+
+
+def test_anchor_merge_preserves_consensus_provenance():
+    from types import SimpleNamespace
+
+    groups = ["one two"]
+    ctc_lines = [
+        SimpleNamespace(
+            words=[
+                Word(1.0, 1.4, "one", 0.90, 0),
+                Word(1.5, 2.0, "two", 0.88, 1),
+            ],
+            confidence=0.89,
+        )
+    ]
+    qwen_words = [
+        Word(1.02, 1.42, "one", 0.85, 0),
+        Word(1.48, 2.02, "two", 0.86, 1),
+    ]
+    audio = np.ones(16000 * 4, dtype=np.float32) * 0.02
+
+    merged, stats = _anchor_preserving_canonical_alignment(
+        groups, ctc_lines, qwen_words, audio, 16000, 4.0
+    )
+
+    assert [word.text for word in merged] == ["one", "two"]
+    assert stats["consensus"] == 2
+    # Consensus is still direct CTC acoustic evidence for coverage accounting.
+    assert stats["ctc"] == 2
+    assert stats["qwen"] == 0
+
+
+def test_relaxed_gap_fit_drops_late_weak_anchor_that_collapses_song_tail():
+    from types import SimpleNamespace
+
+    groups = ["start one two three four five six seven eight nine ten"]
+    ctc_lines = [
+        SimpleNamespace(words=[Word(1.0, 1.4, "start", 0.96, 0)], confidence=0.96)
+    ]
+    # A plausible-duration but weak late Qwen anchor must not force all words
+    # after it into the final few milliseconds of the song.
+    qwen_words = [Word(9.90, 9.96, "five", 0.09, 0)]
+    audio = np.ones(16000 * 10, dtype=np.float32) * 0.02
+
+    merged, stats = _anchor_preserving_canonical_alignment(
+        groups,
+        ctc_lines,
+        qwen_words,
+        audio,
+        16000,
+        10.0,
+        relaxed_gap_fit=True,
+    )
+
+    assert len(merged) == 11
+    assert [word.text for word in merged] == text_engine.tokenize(groups[0])
+    assert stats["ctc"] >= 1
+    # The weak late Qwen anchor is removed because it makes the canonical tail
+    # physically impossible under the song-adaptive floor.
+    assert stats["qwen"] == 0
+    tail = merged[-5:]
+    assert all(word.end - word.start > 0.02 for word in tail)
