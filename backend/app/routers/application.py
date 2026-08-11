@@ -28,6 +28,9 @@ class AppSettingsPatch(BaseModel):
     autosave: bool | None = None
     autoupdate: bool | None = None
     online_name: str | None = Field(default=None, max_length=40)
+    songs_folder: str | None = Field(default=None, max_length=4096)
+    ai_folder: str | None = Field(default=None, max_length=4096)
+    cache_folder: str | None = Field(default=None, max_length=4096)
 
     @model_validator(mode="after")
     def validate_compute_target(self) -> AppSettingsPatch:

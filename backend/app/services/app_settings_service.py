@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
+from pathlib import Path
 from typing import Any
 
 import config
 from app.utils.json_files import read_json, write_json
 
 SETTINGS_FILE = config.DATA_DIR / "settings.json"
+PATH_SETTINGS_FILE = config.PATH_SETTINGS_FILE
 _settings_lock = threading.RLock()
 
 DEFAULT_SETTINGS: dict[str, Any] = {
@@ -26,12 +29,34 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 
 
 def path_settings() -> dict[str, str]:
-    """Expose paths for display only; they are never persisted as preferences."""
+    """Return the storage paths currently used by the backend."""
     return {
         "songs_folder": str(config.SONG_OUTPUT_DIR),
         "ai_folder": str(config.MODELS_DIR),
-        "cache_folder": str(config.DATA_DIR),
+        "cache_folder": str(config.CACHE_DIR),
     }
+
+
+
+PATH_SETTING_KEYS = ("songs_folder", "ai_folder", "cache_folder")
+
+
+def _normalize_writable_directory(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{label}: выберите папку")
+    path = Path(value).expanduser().resolve()
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        probe = path / f".advoice-write-test-{os.getpid()}"
+        probe.write_bytes(b"")
+        probe.unlink(missing_ok=True)
+    except OSError as exc:
+        raise ValueError(f"Нет доступа на запись в папку {label}: {path}") from exc
+    return str(path)
+
+
+def _persist_path_settings(values: dict[str, str]) -> None:
+    write_json(PATH_SETTINGS_FILE, values)
 
 
 def _read_settings_unlocked() -> dict[str, Any]:
@@ -50,11 +75,28 @@ def read_settings() -> dict[str, Any]:
 
 
 def update_settings(patch: dict[str, Any]) -> dict[str, Any]:
-    """Merge and persist preferences without losing concurrent partial updates."""
+    """Merge preferences and immediately apply user-selected storage paths."""
     with _settings_lock:
         data = {**read_settings(), **patch}
         if not data["use_gpu"] and not data["use_cpu"]:
             raise ValueError("At least one AI compute target must remain enabled")
+
         persisted = {key: data[key] for key in DEFAULT_SETTINGS if key in data}
         write_json(SETTINGS_FILE, persisted)
+
+        current_paths = path_settings()
+        path_values = dict(current_paths)
+        labels = {
+            "songs_folder": "Песни",
+            "ai_folder": "AI-модели",
+            "cache_folder": "Кэш",
+        }
+        for key in PATH_SETTING_KEYS:
+            if key in patch:
+                path_values[key] = _normalize_writable_directory(patch[key], labels[key])
+
+        if any(key in patch for key in PATH_SETTING_KEYS):
+            _persist_path_settings(path_values)
+            config.apply_storage_paths(**path_values)
+
         return read_settings()

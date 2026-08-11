@@ -144,7 +144,7 @@ class RecordingSession:
         descriptor, name = tempfile.mkstemp(
             prefix="karaoke-recording-",
             suffix=".wav",
-            dir=config.DATA_DIR,
+            dir=config.CACHE_DIR,
         )
         # SoundFile reopens the path itself; do not leak the mkstemp descriptor.
         os.close(descriptor)

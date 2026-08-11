@@ -83,13 +83,14 @@ def cache_size() -> dict:
     breakdown = {
         "karaoke_songs": _dir_size_bytes(config.SONG_OUTPUT_DIR),
         "database": Path(config.DB_PATH).stat().st_size if Path(config.DB_PATH).exists() else 0,
+        "cache": _dir_size_bytes(config.CACHE_DIR),
     }
     total = sum(breakdown.values())
     return {"total_bytes": total, "total_human": _human(total), "breakdown": breakdown}
 
 
 def free_space() -> dict:
-    usage = shutil.disk_usage(config.BASE_DIR)
+    usage = shutil.disk_usage(config.CACHE_DIR)
     return {
         "free_bytes": usage.free,
         "free_human": _human(usage.free),

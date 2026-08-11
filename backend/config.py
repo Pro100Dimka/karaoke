@@ -8,6 +8,7 @@
 пользователя — ничего не захардкожено абсолютным путём.
 """
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -58,10 +59,28 @@ def _default_data_dir() -> Path:
     return base / "A&D Voice"
 
 
+DATA_DIR = _env_path("SONGAPP_DATA_DIR", _default_data_dir())
+DB_PATH = DATA_DIR / "app.db"
+PATH_SETTINGS_FILE = DATA_DIR / "path-settings.json"
+
+
+def _saved_path(name: str, default: Path) -> Path:
+    """Read a user-selected storage path without making DATA_DIR movable."""
+    try:
+        raw = json.loads(PATH_SETTINGS_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError):
+        raw = {}
+    value = raw.get(name) if isinstance(raw, dict) else None
+    if isinstance(value, str) and value.strip():
+        return Path(value).expanduser().resolve()
+    return default
+
+
 AI_DIR = _env_path("SONGAPP_AI_DIR", RUNTIME_DIR / "AI")
 DOWNLOADS_DIR = _env_path("SONGAPP_DOWNLOADS_DIR", PROJECT_ROOT / "downloads")
+_DEFAULT_MODELS_DIR = RUNTIME_DIR / "models" if IS_FROZEN else DOWNLOADS_DIR / "models"
 MODELS_DIR = _env_path(
-    "SONGAPP_MODELS_DIR", RUNTIME_DIR / "models" if IS_FROZEN else DOWNLOADS_DIR / "models"
+    "SONGAPP_MODELS_DIR", _saved_path("ai_folder", _DEFAULT_MODELS_DIR)
 )
 EXTERNAL_ENGINES_DIR = _env_path(
     "SONGAPP_ENGINES_DIR", RUNTIME_DIR / "engines" if IS_FROZEN else DOWNLOADS_DIR / "engines"
@@ -70,11 +89,6 @@ RECORDINGS_DIRNAME = "recordings"  # подпапка внутри Song/<slug>/ 
 LOGS_DIRNAME = "logs"  # подпапка внутри Song/<slug>/ для логов обработки
 TRUSTED_LYRICS_FILENAME = "trusted_lyrics.txt"
 
-# Можно переопределить SONGAPP_DATA_DIR — например, чтобы хранить данные в
-# %APPDATA%/SongApp на Windows или ~/Library/Application Support/SongApp на
-# macOS при упаковке в инсталлятор.
-DATA_DIR = _env_path("SONGAPP_DATA_DIR", _default_data_dir())
-DB_PATH = DATA_DIR / "app.db"
 _DEFAULT_LOG_DIR = DATA_DIR / "logs" if IS_FROZEN else PROJECT_ROOT / "logs"
 APP_LOG_DIR = _env_path("SONGAPP_LOG_DIR", _DEFAULT_LOG_DIR)
 
@@ -82,11 +96,35 @@ APP_LOG_DIR = _env_path("SONGAPP_LOG_DIR", _DEFAULT_LOG_DIR)
 # upload is replaced by the pipeline's normalized song.mp3 after processing, so
 # the application never keeps a second full-song copy indefinitely.
 _DEFAULT_SONGS_DIR = DATA_DIR / "karaoke_songs" if IS_FROZEN else PROJECT_ROOT / "karaoke_songs"
-SONG_OUTPUT_DIR = _env_path("SONGAPP_SONG_OUTPUT_DIR", _DEFAULT_SONGS_DIR)
-UPLOAD_TEMP_DIR = SONG_OUTPUT_DIR / ".incoming"
+SONG_OUTPUT_DIR = _env_path(
+    "SONGAPP_SONG_OUTPUT_DIR", _saved_path("songs_folder", _DEFAULT_SONGS_DIR)
+)
+_DEFAULT_CACHE_DIR = DATA_DIR / "cache"
+CACHE_DIR = _env_path("SONGAPP_CACHE_DIR", _saved_path("cache_folder", _DEFAULT_CACHE_DIR))
+UPLOAD_TEMP_DIR = CACHE_DIR / "uploads"
 
 
-def configure_ai_resource_environment() -> None:
+def apply_storage_paths(
+    *,
+    songs_folder: str | None = None,
+    ai_folder: str | None = None,
+    cache_folder: str | None = None,
+) -> None:
+    """Apply persisted user storage paths to the running backend process."""
+    global SONG_OUTPUT_DIR, MODELS_DIR, CACHE_DIR, UPLOAD_TEMP_DIR
+
+    if songs_folder is not None:
+        SONG_OUTPUT_DIR = Path(songs_folder).expanduser().resolve()
+    if ai_folder is not None:
+        MODELS_DIR = Path(ai_folder).expanduser().resolve()
+    if cache_folder is not None:
+        CACHE_DIR = Path(cache_folder).expanduser().resolve()
+    UPLOAD_TEMP_DIR = CACHE_DIR / "uploads"
+    ensure_directories()
+    configure_ai_resource_environment(force=True)
+
+
+def configure_ai_resource_environment(*, force: bool = False) -> None:
     """Point the AI core at resources declared by the backend model registry."""
     msst = EXTERNAL_ENGINES_DIR / "msst"
     msst_config = msst / "configs" / "KimberleyJensen" / "config_vocals_mel_band_roformer_kj.yaml"
@@ -101,7 +139,7 @@ def configure_ai_resource_environment() -> None:
             if configured_path
             else False
         )
-        if not configured_exists and (path.is_dir() if directory else path.is_file()):
+        if (force or not configured_exists) and (path.is_dir() if directory else path.is_file()):
             os.environ[name] = str(path)
 
     for model in MODELS:
@@ -160,7 +198,7 @@ CORS_ORIGINS = _unique_csv("SONGAPP_CORS_ORIGINS", DEFAULT_UI_ORIGINS)
 
 def ensure_directories() -> None:
     """Создаёт все рабочие директории при первом запуске, если их ещё нет."""
-    for path in (SONG_OUTPUT_DIR, UPLOAD_TEMP_DIR, DATA_DIR, APP_LOG_DIR):
+    for path in (SONG_OUTPUT_DIR, UPLOAD_TEMP_DIR, CACHE_DIR, DATA_DIR, APP_LOG_DIR):
         path.mkdir(parents=True, exist_ok=True)
 
 

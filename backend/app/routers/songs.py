@@ -157,7 +157,7 @@ async def import_song_package(
     with tempfile.NamedTemporaryFile(
         prefix="karaoke-import-",
         suffix=".zip",
-        dir=config.DATA_DIR,
+        dir=config.CACHE_DIR,
         delete=False,
     ) as temporary:
         temporary_path = Path(temporary.name)

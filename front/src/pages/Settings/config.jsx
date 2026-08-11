@@ -150,7 +150,7 @@ const pickFolder = async (_context, currentPath) => {
 
 const STORAGE_FIELDS = [
   ["songs_folder", "Песни", "Папка с библиотекой песен"],
-  ["ai_folder", "Обработанные файлы", "Папка с результатами обработки"],
+  ["ai_folder", "AI-модели", "Папка с локальными AI-моделями"],
   ["cache_folder", "Кэш", "Папка временных файлов"]
 ].map(([name, label, tooltip]) =>
   FORM_FIELDS.folder(name, {

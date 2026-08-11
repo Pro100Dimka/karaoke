@@ -54,7 +54,7 @@ def build_package(song: models.Song) -> Path:
     with tempfile.NamedTemporaryFile(
         prefix="karaoke-song-",
         suffix=".karaoke.zip",
-        dir=config.DATA_DIR,
+        dir=config.CACHE_DIR,
         delete=False,
     ) as package:
         package_path = Path(package.name)
@@ -232,7 +232,7 @@ def import_package(db: Session, package_path: Path) -> models.Song:
                 return existing
             slug = song_service.make_unique_slug(db, base_slug)
             output_dir = config.SONG_OUTPUT_DIR / slug
-            temporary_output = Path(tempfile.mkdtemp(prefix="song-import-", dir=config.DATA_DIR))
+            temporary_output = Path(tempfile.mkdtemp(prefix="song-import-", dir=config.CACHE_DIR))
             source_path = temporary_output / f"source{extension}"
             try:
                 _copy_archive_member(archive, source_member, source_path)
