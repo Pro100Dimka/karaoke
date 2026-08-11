@@ -119,7 +119,7 @@ $FinalizeSchemaVersion  = "finalize-v1"
 $ElectronSchemaVersion  = "electron-v2-nosign-nosmoke"
 $RuntimeSchemaVersion   = "runtime-zip-v1"
 $InstallerSchemaVersion = "installer-bootstrap-v1"
-$IsoSchemaVersion       = "iso-runtimezip-rawmodels-v2-imapi-stream"
+$IsoSchemaVersion       = "iso-runtimezip-rawmodels-v3-native-istream"
 $ElectronSignSchemaVersion  = "electron-sign-v1"
 $ElectronSmokeSchemaVersion = "electron-smoke-v1"
 
@@ -1214,6 +1214,14 @@ namespace AdVoice
         private static readonly Guid IID_IStream =
             new Guid("0000000C-0000-0000-C000-000000000046");
 
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int ReadDelegate(
+            IntPtr thisPtr,
+            [Out] byte[] buffer,
+            int count,
+            IntPtr bytesRead
+        );
+
         public static void CopyToFile(object comStream, string path)
         {
             if (comStream == null)
@@ -1221,7 +1229,7 @@ namespace AdVoice
 
             IntPtr unknown = IntPtr.Zero;
             IntPtr streamPtr = IntPtr.Zero;
-            IntPtr readPtr = IntPtr.Zero;
+            IntPtr bytesReadPtr = IntPtr.Zero;
 
             try
             {
@@ -1233,12 +1241,23 @@ namespace AdVoice
                 if (hr != 0 || streamPtr == IntPtr.Zero)
                     Marshal.ThrowExceptionForHR(hr);
 
-                object streamObject = Marshal.GetObjectForIUnknown(streamPtr);
-                System.Runtime.InteropServices.ComTypes.IStream stream =
-                    (System.Runtime.InteropServices.ComTypes.IStream)streamObject;
+                // IStream inherits ISequentialStream:
+                // vtable[0..2] = IUnknown
+                // vtable[3]    = ISequentialStream::Read
+                IntPtr vtable = Marshal.ReadIntPtr(streamPtr);
+                IntPtr readAddress = Marshal.ReadIntPtr(
+                    vtable,
+                    IntPtr.Size * 3
+                );
+
+                ReadDelegate read = (ReadDelegate)
+                    Marshal.GetDelegateForFunctionPointer(
+                        readAddress,
+                        typeof(ReadDelegate)
+                    );
 
                 byte[] buffer = new byte[4 * 1024 * 1024];
-                readPtr = Marshal.AllocHGlobal(sizeof(int));
+                bytesReadPtr = Marshal.AllocHGlobal(sizeof(int));
 
                 using (FileStream output = new FileStream(
                     path,
@@ -1250,26 +1269,34 @@ namespace AdVoice
                 {
                     while (true)
                     {
-                        Marshal.WriteInt32(readPtr, 0);
-                        stream.Read(buffer, buffer.Length, readPtr);
+                        Marshal.WriteInt32(bytesReadPtr, 0);
 
-                        int read = Marshal.ReadInt32(readPtr);
-                        if (read <= 0)
+                        hr = read(
+                            streamPtr,
+                            buffer,
+                            buffer.Length,
+                            bytesReadPtr
+                        );
+
+                        // S_OK (0) and S_FALSE (1) are both valid for Read.
+                        if (hr < 0)
+                            Marshal.ThrowExceptionForHR(hr);
+
+                        int readCount = Marshal.ReadInt32(bytesReadPtr);
+
+                        if (readCount <= 0)
                             break;
 
-                        output.Write(buffer, 0, read);
+                        output.Write(buffer, 0, readCount);
                     }
 
                     output.Flush(true);
                 }
-
-                if (Marshal.IsComObject(streamObject))
-                    Marshal.FinalReleaseComObject(streamObject);
             }
             finally
             {
-                if (readPtr != IntPtr.Zero)
-                    Marshal.FreeHGlobal(readPtr);
+                if (bytesReadPtr != IntPtr.Zero)
+                    Marshal.FreeHGlobal(bytesReadPtr);
 
                 if (streamPtr != IntPtr.Zero)
                     Marshal.Release(streamPtr);
@@ -1331,7 +1358,7 @@ function New-IsoWithWindowsImapi(
             Remove-Item -LiteralPath $OutputFile -Force
         }
 
-        Write-Host "Writing ISO via COM IStream bridge:"
+        Write-Host "Writing ISO via native COM IStream reader:"
         Write-Host "  $OutputFile"
         Write-Host ""
 
@@ -1344,18 +1371,15 @@ function New-IsoWithWindowsImapi(
         throw "Windows IMAPI ISO creation failed: $($_.Exception.Message)"
     }
     finally {
-        foreach ($comObject in @($stream, $result, $fsi)) {
-            if ($null -ne $comObject -and [Runtime.InteropServices.Marshal]::IsComObject($comObject)) {
-                try {
-                    [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($comObject)
-                }
-                catch {
-                }
-            }
-        }
+        # Do NOT call FinalReleaseComObject here. IMAPI objects may share RCWs;
+        # forcing an RCW reference count to zero can detach another live wrapper.
+        $stream = $null
+        $result = $null
+        $fsi = $null
 
         [GC]::Collect()
         [GC]::WaitForPendingFinalizers()
+        [GC]::Collect()
     }
 
     Require-File $OutputFile "Distribution ISO"
