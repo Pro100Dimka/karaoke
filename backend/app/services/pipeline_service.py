@@ -572,12 +572,23 @@ def _stop_progress_heartbeat(
         thread.join(timeout=2.0)
 
 
+def _format_processing_error(exc: BaseException) -> str:
+    """Return a useful error even for exceptions whose ``str(exc)`` is empty."""
+    error_type = type(exc).__name__
+    message = str(exc).strip()
+    return f"{error_type}: {message}" if message else error_type
+
+
 def _write_pipeline_error(capture: _ProgressCapture | None, exc: Exception) -> None:
     """Persist a worker traceback when its log stream was created successfully."""
     if capture is None:
+        logger.exception("Song processing failed before pipeline.log was available")
         return
     with contextlib.suppress(OSError, ValueError):
-        capture.write(f"\n[backend] ОШИБКА: {exc}\n{traceback.format_exc()}\n")
+        capture.write(
+            f"\n[backend] ОШИБКА: {_format_processing_error(exc)}\n"
+            f"{traceback.format_exc()}\n"
+        )
 
 
 def _run_job(song_id: str) -> None:
@@ -656,7 +667,11 @@ def _run_job(song_id: str) -> None:
             _update_progress(song_id, status=models.SongStatus.CANCELLED, step_label="Отменено")
             return
         _write_pipeline_error(capture, exc)
-        _update_progress(song_id, status=models.SongStatus.ERROR, error_message=str(exc))
+        _update_progress(
+            song_id,
+            status=models.SongStatus.ERROR,
+            error_message=_format_processing_error(exc),
+        )
         return
     finally:
         if capture is not None:
@@ -671,7 +686,10 @@ def _run_job(song_id: str) -> None:
             _update_progress(
                 song_id,
                 status=models.SongStatus.ERROR,
-                error_message=f"Could not finalize processing results: {exc}",
+                error_message=(
+                    "Could not finalize processing results: "
+                    f"{_format_processing_error(exc)}"
+                ),
             )
 
 

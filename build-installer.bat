@@ -1235,7 +1235,21 @@ call :verify_unpacked
 if errorlevel 1 exit /b 1
 
 echo.
-echo Electron package verified successfully.
+echo Running packaged backend + AI runtime smoke test...
+echo.
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%scripts\smoke-packaged-backend.ps1" ^
+    -Executable "%PACKAGED_BACKEND%\KaraokeBackend.exe"
+
+if errorlevel 1 (
+    echo.
+    echo [ERROR] Packaged backend runtime smoke test failed.
+    echo The installer will NOT be created from a broken packaged backend.
+    exit /b 1
+)
+
+echo.
+echo Electron package and packaged AI runtime verified successfully.
 
 exit /b 0
 

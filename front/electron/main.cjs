@@ -169,13 +169,27 @@ function startBackend() {
     ? path.resolve(__dirname, "..", "..", "logs")
     : path.join(app.getPath("userData"), "logs");
 
+  let backendLogFd = null;
   try {
+    if (!isDev) {
+      fs.mkdirSync(backendLogDir, { recursive: true });
+      backendLogFd = fs.openSync(
+        path.join(backendLogDir, "backend-process.log"),
+        "a"
+      );
+      fs.writeSync(
+        backendLogFd,
+        `\n\n===== backend start ${new Date().toISOString()} =====\n`
+      );
+    }
+
     const childProcess = spawn(backendCommand, backendArgs, {
       cwd: backendDir,
-      // Keep the packaged app quiet, but expose backend startup errors in the
-      // terminal launched by start-dev.bat. Otherwise a missing dependency or
-      // a port conflict looks like a frontend failure with no useful clue.
-      stdio: isDev ? "inherit" : "ignore",
+      // In development inherit the terminal. In the installed application keep
+      // stdout/stderr in a persistent file instead of discarding the traceback.
+      stdio: isDev
+        ? "inherit"
+        : ["ignore", backendLogFd, backendLogFd],
       windowsHide: true,
       env: {
         ...process.env,
@@ -188,6 +202,10 @@ function startBackend() {
     backendProcess = childProcess;
     childProcess.once("spawn", () => {
       backendRestartAttempts = 0;
+      if (backendLogFd !== null) {
+        fs.closeSync(backendLogFd);
+        backendLogFd = null;
+      }
     });
     childProcess.on("error", (err) => {
       console.error("Не удалось запустить backend:", err);
@@ -209,6 +227,15 @@ function startBackend() {
       scheduleBackendRestart();
     });
   } catch (err) {
+    if (backendLogFd !== null) {
+      try {
+        fs.writeSync(backendLogFd, `${err?.stack || err}\n`);
+        fs.closeSync(backendLogFd);
+      } catch {
+        // Ignore secondary logging failures while reporting the real startup error.
+      }
+      backendLogFd = null;
+    }
     backendProcess = null;
     console.error("Не удалось запустить backend:", err);
     scheduleBackendRestart();
