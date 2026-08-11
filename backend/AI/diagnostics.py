@@ -83,8 +83,13 @@ def build_alignment_debug(
     pitch: list[PitchFrame],
     notes: list[VocalNote],
     duration_sec: float,
+    raw_pitch: list[PitchFrame] | None = None,
+    game_notes: list[VocalNote] | None = None,
     alignment_diagnostics: dict[str, Any] | None,
     reports: list[StageReport],
+    note_diagnostics: dict[str, Any] | None = None,
+    music_diagnostics: dict[str, Any] | None = None,
+    pitch_source_diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     diag = dict(alignment_diagnostics or {})
     sources = list(diag.get("word_sources") or [])
@@ -241,6 +246,31 @@ def build_alignment_debug(
     )
     linked_notes = sum(1 for note in notes if note.word_index is not None or note.syllable_index is not None)
 
+    pitch_changes = {"compared_frames": 0, "voicing_changes": 0, "large_pitch_changes": 0, "mean_abs_semitone_delta": 0.0}
+    if raw_pitch:
+        raw_by_time = {round(frame.time, 6): frame for frame in raw_pitch}
+        deltas: list[float] = []
+        voicing_changes = 0
+        large_changes = 0
+        for frame in pitch:
+            original = raw_by_time.get(round(frame.time, 6))
+            if original is None:
+                continue
+            pitch_changes["compared_frames"] += 1
+            if bool(original.voiced) != bool(frame.voiced):
+                voicing_changes += 1
+            if original.voiced and frame.voiced and original.frequency > 0 and frame.frequency > 0:
+                semitones = abs(12.0 * math.log2(frame.frequency / original.frequency))
+                deltas.append(semitones)
+                if semitones >= 6.0:
+                    large_changes += 1
+        pitch_changes["voicing_changes"] = voicing_changes
+        pitch_changes["large_pitch_changes"] = large_changes
+        pitch_changes["mean_abs_semitone_delta"] = sum(deltas) / max(1, len(deltas))
+
+    game = list(game_notes or notes)
+    syllable_split_events = max(0, len(game) - len(notes))
+
     return {
         "version": 1,
         "summary": {
@@ -277,12 +307,21 @@ def build_alignment_debug(
             "voiced_ratio": voiced_frames / max(1, len(pitch)),
             "mean_voiced_confidence": pitch_mean_conf,
             "vocal_activity_regions": len(regions),
+            "postprocess_changes": pitch_changes,
         },
+        "note_analysis": dict(note_diagnostics or {}),
+        "music_analysis": dict(music_diagnostics or {}),
+        "pitch_source_analysis": dict(pitch_source_diagnostics or {}),
         "notes": {
             "count": len(notes),
+            "median_duration": _median([note.end - note.start for note in notes], 0.0),
+            "acoustic_count": len(notes),
+            "game_count": len(game),
+            "syllable_split_events": syllable_split_events,
             "linked_to_text": linked_notes,
             "linked_ratio": linked_notes / max(1, len(notes)),
-            "median_duration": _median([note.end - note.start for note in notes], 0.0),
+            "median_acoustic_duration": _median([note.end - note.start for note in notes], 0.0),
+            "median_game_duration": _median([note.end - note.start for note in game], 0.0),
         },
         "syllables": {
             "count": len(syllables),

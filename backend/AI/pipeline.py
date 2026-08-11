@@ -41,7 +41,7 @@ from .models import (
     to_dict,
 )
 from .music import MUSIC_ANALYZER_VERSION, analyze_music
-from .notes import NOTE_DECODER_VERSION, build_game_notes, build_vocal_notes
+from .notes import NOTE_DECODER_VERSION, build_game_notes, build_vocal_notes, get_note_diagnostics
 from .pitch_post import PITCH_STABILIZER_VERSION, fuse_pitch_with_yin, refine_pitch_confidence, stabilize_pitch
 from .profiler import environment_info
 from .quality import evaluate_quality
@@ -755,7 +755,11 @@ class KaraokePipeline:
             )
             validate_pitch(confidence_pitch)
             consensus_pitch = fuse_pitch_with_yin(
-                confidence_pitch, pitch_analysis_audio, sample_rate=self.config.pitch_sample_rate
+                confidence_pitch,
+                pitch_analysis_audio,
+                sample_rate=self.config.pitch_sample_rate,
+                fmin_hz=self.config.fmin_hz,
+                fmax_hz=self.config.fmax_hz,
             )
             validate_pitch(consensus_pitch)
             pitch = stabilize_pitch(consensus_pitch)
@@ -982,6 +986,7 @@ class KaraokePipeline:
                 "trusted_activity_segments": supplied_segments,
             },
         )
+        note_diagnostics: dict[str, object] = {}
         derivation_outputs = [syllable_path, reference, contour, notes_path]
         derivation_validators = {
             syllable_path: lambda path: validate_derivation_json(path, "syllables"),
@@ -1011,8 +1016,11 @@ class KaraokePipeline:
                 words=words,
                 audio=vocals,
                 activity_segments=supplied_segments,
+                fmin_hz=self.config.fmin_hz,
+                fmax_hz=self.config.fmax_hz,
             )
-            game_notes = build_game_notes(vocal_notes)
+            note_diagnostics = get_note_diagnostics()
+            game_notes = build_game_notes(vocal_notes, syllables, min_note=self.config.min_note_sec)
             validate_timeline(words, "words")
             validate_timeline(syllables, "syllables")
             validate_timeline(vocal_notes, "vocal notes")
@@ -1118,6 +1126,11 @@ class KaraokePipeline:
             self._remove_stale(quality_path)
         warnings.extend(item for item in quality.warnings if item not in warnings)
         alignment_debug_path = output / "alignmentDebug.json"
+        raw_pitch_for_debug = (
+            [PitchFrame(**item) for item in read_json(pitch_raw_path, [])]
+            if pitch_raw_path.exists()
+            else None
+        )
         alignment_debug = build_alignment_debug(
             lyrics_text=lyrics_txt.read_text(encoding="utf-8") if lyrics_txt.exists() else "",
             words=words,
@@ -1125,12 +1138,22 @@ class KaraokePipeline:
             pitch=pitch,
             notes=vocal_notes,
             duration_sec=song_duration,
+            raw_pitch=raw_pitch_for_debug,
+            game_notes=game_notes,
             alignment_diagnostics={
                 **dict(alignment_debug_raw.get("model_evidence") or {}),
                 "word_sources": list(alignment_debug_raw.get("word_sources") or []),
                 "word_candidates": list(alignment_debug_raw.get("word_candidates") or []),
             },
             reports=reports,
+            note_diagnostics=note_diagnostics,
+            music_diagnostics=music_analysis,
+            pitch_source_diagnostics={
+                "selected": pitch_analysis_source,
+                "original": to_dict(original_quality) if original_quality is not None else None,
+                "denoise": to_dict(cleaned_quality) if cleaned_quality is not None else None,
+                "tail_suppressed": to_dict(tail_quality) if tail_quality is not None else None,
+            },
         )
         write_json_atomic(alignment_debug_path, alignment_debug)
 
@@ -1159,6 +1182,7 @@ class KaraokePipeline:
                     "midi_analysis_tail_vocals_sha256": cache.file_hash(midi_tail_vocal),
                     "pitch_analysis_source": pitch_analysis_source,
                     "pitch_preprocess_version": VOCAL_ANALYSIS_PREPROCESS_VERSION,
+                    "note_analysis": note_diagnostics,
                     "pitch_original_quality": to_dict(original_quality) if original_quality is not None else None,
                     "pitch_cleaned_quality": to_dict(cleaned_quality) if cleaned_quality is not None else None,
                     "instrumental_sha256": cache.file_hash(instrumental),

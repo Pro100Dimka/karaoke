@@ -145,7 +145,7 @@ def _words_from_items(items) -> list[Word]:
 
 
 ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v14-duration-guard"
-LONG_TEXT_ALIGNMENT_VERSION = "v47-consensus-provenance-adaptive-gap-floor"
+LONG_TEXT_ALIGNMENT_VERSION = "v48-final-guard-v2-evidence-salvage"
 FALLBACK_WORD_CONFIDENCE = 0.012
 
 
@@ -2034,6 +2034,10 @@ def _anchor_preserving_canonical_alignment(
                 add_candidate(idx, qwen_word, "qwen")
 
     if not candidates:
+        if debug_out is not None:
+            debug_out.clear()
+            debug_out["failure_reason"] = "no_valid_acoustic_candidates"
+            debug_out["failure_stage"] = "candidate_collection"
         return [], {"ctc": 0, "qwen": 0, "interpolated": 0}
 
     # The relaxed pass must be less strict than the normal lyric-duration model,
@@ -2587,10 +2591,132 @@ def _anchor_preserving_canonical_alignment(
                 )
         selected.pop(drop_idx, None)
 
+    # Final guard v2: preserve the strongest monotonic acoustic evidence even
+    # when the strict/relaxed lyric-duration model cannot fit every unknown token.
+    salvage_selected = dict(selected)
+    if not salvage_selected and ordered:
+        # Maximum-value non-overlapping chain using only actual acoustic spans.
+        # No assumed lyric-duration floor participates in this final safeguard.
+        salvage_scores: list[float] = []
+        salvage_prev: list[int] = []
+        for pos, (_idx, (word, _kind, priority)) in enumerate(ordered):
+            best_score = priority
+            best_prev = -1
+            for prev_pos in range(pos):
+                prev_idx, (prev_word, _prev_kind, _prev_priority) = ordered[prev_pos]
+                idx = ordered[pos][0]
+                if prev_idx >= idx or word.start < prev_word.end - 1e-6:
+                    continue
+                score = salvage_scores[prev_pos] + priority
+                if score > best_score:
+                    best_score = score
+                    best_prev = prev_pos
+            salvage_scores.append(best_score)
+            salvage_prev.append(best_prev)
+
+        if salvage_scores:
+            pos = max(range(len(salvage_scores)), key=lambda item: salvage_scores[item])
+            chain_positions: list[int] = []
+            while pos >= 0:
+                chain_positions.append(pos)
+                pos = salvage_prev[pos]
+            chain_positions.reverse()
+            salvage_selected = {
+                ordered[pos][0]: ordered[pos][1]
+                for pos in chain_positions
+            }
+
+    impossible_pair: tuple[int, int] | None = None
+    if salvage_selected:
+        result: list[Word | None] = [None] * len(tokens)
+        source_kind: list[str | None] = [None] * len(tokens)
+        for idx, (word, kind, _priority) in salvage_selected.items():
+            result[idx] = Word(word.start, word.end, tokens[idx], word.confidence, idx)
+            source_kind[idx] = kind
+
+        anchors = sorted(salvage_selected)
+        for left_idx, right_idx in zip(anchors, anchors[1:], strict=False):
+            left = result[left_idx]
+            right = result[right_idx]
+            if left is not None and right is not None and right.start < left.end - 1e-6:
+                impossible_pair = (left_idx, right_idx)
+                break
+
+        if impossible_pair is None:
+            index = 0
+            while index < len(tokens):
+                if result[index] is not None:
+                    index += 1
+                    continue
+                run_start = index
+                while index < len(tokens) and result[index] is None:
+                    index += 1
+                run_end = index
+                left_word = result[run_start - 1] if run_start > 0 else None
+                right_word = result[run_end] if run_end < len(tokens) else None
+                left_time = float(left_word.end) if left_word is not None else 0.0
+                right_time = float(right_word.start) if right_word is not None else duration_sec
+                if right_time <= left_time + timeline_quantum:
+                    impossible_pair = (
+                        run_start - 1 if run_start > 0 else run_start,
+                        run_end if run_end < len(tokens) else run_start,
+                    )
+                    break
+                positions = list(range(run_start, run_end))
+                weights = [max(1.0, float(len(normalize(tokens[pos])))) for pos in positions]
+                total_weight = max(1.0, sum(weights))
+                cursor = left_time
+                available = right_time - left_time
+                used = 0.0
+                for offset, (pos, weight) in enumerate(zip(positions, weights, strict=True)):
+                    used += weight
+                    end = right_time if offset == len(positions) - 1 else left_time + available * (used / total_weight)
+                    end = max(cursor + timeline_quantum, min(right_time, end))
+                    result[pos] = Word(cursor, end, tokens[pos], FALLBACK_WORD_CONFIDENCE, pos)
+                    source_kind[pos] = "interpolated"
+                    cursor = end
+
+        final = [word for word in result if word is not None]
+        if (
+            impossible_pair is None
+            and len(final) == len(tokens)
+            and _canonical_words_match(final, tokens)
+            and all(right.start >= left.end - 1e-6 for left, right in zip(final, final[1:], strict=False))
+        ):
+            kinds = [str(kind or "interpolated") for kind in source_kind]
+            stats = {
+                "consensus": sum(1 for kind in kinds if kind == "consensus"),
+                "ctc": sum(1 for kind in kinds if kind in {"ctc", "consensus"}),
+                "qwen": sum(1 for kind in kinds if kind == "qwen"),
+                "reacquired": sum(1 for kind in kinds if kind == "reacquired"),
+                "interpolated": sum(1 for kind in kinds if kind == "interpolated"),
+            }
+            if debug_out is not None:
+                debug_out.clear()
+                debug_out["guard_v2_used"] = True
+                debug_out["failure_reason"] = "strict_gap_model_exhausted"
+                debug_out["failure_stage"] = "anchor_preserving_merge"
+                debug_out["word_sources"] = kinds
+                debug_out["word_candidates"] = [
+                    {"index": idx, "text": tokens[idx], **evidence_catalog.get(idx, {})}
+                    for idx in range(len(tokens))
+                ]
+            return final, stats
+
+    if debug_out is not None:
+        debug_out.setdefault("failure_reason", "final_guard_v2_could_not_build_monotonic_timeline")
+        debug_out.setdefault("failure_stage", "final_guard_v2")
+        debug_out["remaining_anchor_count"] = len(salvage_selected)
+        if impossible_pair is not None:
+            debug_out["conflict"] = {
+                "left_index": int(impossible_pair[0]),
+                "right_index": int(impossible_pair[1]),
+            }
     return [], {
         "consensus": 0,
         "ctc": 0,
         "qwen": 0,
+        "reacquired": 0,
         "interpolated": 0,
     }
 
@@ -4392,7 +4518,9 @@ class Qwen3ForcedAligner(Aligner):
                 debug_out=relaxed_debug,
             )
             if _canonical_words_match(relaxed_words, canonical_tokens):
-                self.last_alignment_diagnostics["alignment_merge_mode"] = "evidence-gap-fit"
+                self.last_alignment_diagnostics["alignment_merge_mode"] = (
+                    "final-guard-v2" if relaxed_debug.get("guard_v2_used") else "evidence-gap-fit"
+                )
                 self.last_alignment_diagnostics["preserved_consensus_words"] = int(relaxed_stats.get("consensus", 0) or 0)
                 self.last_alignment_diagnostics["preserved_ctc_words"] = int(relaxed_stats.get("ctc", 0) or 0)
                 self.last_alignment_diagnostics["preserved_qwen_words"] = int(relaxed_stats.get("qwen", 0) or 0)
@@ -4402,8 +4530,22 @@ class Qwen3ForcedAligner(Aligner):
                     self.last_alignment_diagnostics["word_sources"] = list(relaxed_debug.get("word_sources") or [])
                 if relaxed_debug.get("word_candidates"):
                     self.last_alignment_diagnostics["word_candidates"] = list(relaxed_debug.get("word_candidates") or [])
+                if relaxed_debug.get("guard_v2_used"):
+                    self.last_alignment_diagnostics["final_guard_v2"] = {
+                        "used": True,
+                        "reason": str(relaxed_debug.get("failure_reason") or ""),
+                        "stage": str(relaxed_debug.get("failure_stage") or ""),
+                    }
                 self.last_alignment_diagnostics["suspicious_regions"] = _low_confidence_regions(relaxed_words)
                 return relaxed_words
+
+            self.last_alignment_diagnostics["final_guard_v2"] = {
+                "used": False,
+                "reason": str(relaxed_debug.get("failure_reason") or "canonical_merge_failed"),
+                "stage": str(relaxed_debug.get("failure_stage") or "unknown"),
+                "remaining_anchor_count": int(relaxed_debug.get("remaining_anchor_count", 0) or 0),
+                "conflict": relaxed_debug.get("conflict"),
+            }
 
             # Absolute safety net only. This should now be reachable only when
             # the acoustic evidence itself is malformed/non-monotonic.
@@ -4412,6 +4554,13 @@ class Qwen3ForcedAligner(Aligner):
             )
             if _canonical_words_match(lossless, canonical_tokens):
                 self.last_alignment_diagnostics["alignment_merge_mode"] = "emergency-baseline"
+                self.last_alignment_diagnostics["emergency_fallback"] = {
+                    "reason": str(relaxed_debug.get("failure_reason") or "final_guard_v2_failed"),
+                    "stage": str(relaxed_debug.get("failure_stage") or "final_guard_v2"),
+                    "remaining_anchor_count": int(relaxed_debug.get("remaining_anchor_count", 0) or 0),
+                    "conflict": relaxed_debug.get("conflict"),
+                    "published_acoustic_words_before_fallback": int(raw_ctc_word_count),
+                }
                 return lossless
 
         if not output:

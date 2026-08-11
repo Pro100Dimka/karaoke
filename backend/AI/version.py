@@ -1,1 +1,1 @@
-AI_BUILD_ID = "midi-v56-deep-alignment-diagnostics-20260811"
+AI_BUILD_ID = "midi-v59-final-guard-v2-conservative-register-20260811"

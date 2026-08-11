@@ -17,7 +17,7 @@ from .device import select_torch_device
 
 _CLEAN = re.compile(r"[^\w]+", re.UNICODE)
 
-CTC_ALIGNMENT_VERSION = "v2-adaptive-window-local-retry"
+CTC_ALIGNMENT_VERSION = "v3-song-relative-window-local-retry"
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,7 +52,7 @@ def _expected_duration(tokens: list[str]) -> float:
     chars = sum(max(1, len(token)) for token in tokens)
     # Singing is slower than conversational speech. This is only a search-window
     # prior; final boundaries always come from the acoustic CTC path.
-    return max(0.75, min(10.0, 0.28 * len(tokens) + 0.055 * chars))
+    return max(0.25, 0.28 * len(tokens) + 0.055 * chars)
 
 
 def _normalize_word(word: str) -> str:
@@ -463,6 +463,13 @@ class CTCWordAligner:
         output: list[CTCLineResult | None] = [None] * len(groups)
         cursor = 0.0
         attempted = retried = recovered = 0
+        group_tokens = [[token for token in re.findall(r"\w+(?:[’'-]\w+)*", group, re.UNICODE) if token] for group in groups]
+        expected_values = [_expected_duration(tokens) for tokens in group_tokens if tokens]
+        typical_expected = float(np.median(expected_values)) if expected_values else 1.0
+        # Bounds follow this song's line-density distribution instead of assuming
+        # every lyric line must live inside a universal 0.75-10 second window.
+        expected_floor = max(0.18, float(np.percentile(expected_values, 10))*0.55) if expected_values else 0.25
+        expected_ceiling = max(typical_expected*2.5, float(np.percentile(expected_values, 90))*1.8) if expected_values else 8.0
 
         def run_window(start: float, end: float, words: list[str]):
             nonlocal attempted
@@ -487,8 +494,9 @@ class CTCWordAligner:
             words = [token for token in re.findall(r"\w+(?:[’'-]\w+)*", group, re.UNICODE) if token]
             if not words or cursor >= total:
                 continue
-            expected = _expected_duration(words)
-            minimum = max(0.12 * expected, expected / max(3.0, len(words) * 1.8))
+            expected = max(expected_floor, min(expected_ceiling, _expected_duration(words)))
+            density = expected / max(1, len(words))
+            minimum = max(density * 0.30, expected / max(3.0, len(words) * 2.0))
             anchor = anchors.get(line_index)
 
             # Bound an unanchored line by neighboring acoustic/ASR line anchors.

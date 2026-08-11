@@ -154,12 +154,27 @@ def _parse_lrc(
         limit = max(0.0, float(duration_sec) - 0.05)
         timed = [(start, value) for start, value in timed if 0.0 <= start < limit]
 
-    gaps = [
+    raw_gaps = [
         right[0] - left[0]
         for left, right in zip(timed, timed[1:], strict=False)
-        if 0.20 <= right[0] - left[0] <= 20.0
+        if right[0] > left[0]
     ]
-    typical_gap = sorted(gaps)[len(gaps) // 2] if gaps else 4.0
+    if raw_gaps:
+        ordered = sorted(raw_gaps)
+        median_gap = ordered[len(ordered) // 2]
+        deviations = sorted(abs(value - median_gap) for value in ordered)
+        mad = deviations[len(deviations) // 2] if deviations else 0.0
+        robust_limit = median_gap + max(median_gap, mad * 4.0)
+        gaps = [value for value in ordered if value <= robust_limit]
+        typical_gap = sorted(gaps)[len(gaps) // 2] if gaps else median_gap
+    else:
+        # No neighboring anchors: derive a song/text-relative phrase scale rather
+        # than assuming a universal four-second lyric line.
+        if duration_sec is not None and duration_sec > 0 and timed:
+            typical_gap = float(duration_sec) / max(1, len(timed))
+        else:
+            word_counts = [max(1, len(value.split())) for _, value in timed]
+            typical_gap = (sum(word_counts) / max(1, len(word_counts))) * 0.55 if word_counts else 1.0
 
     result: list[tuple[float, float, str]] = []
     for index, (start, value) in enumerate(timed):
@@ -172,12 +187,16 @@ def _parse_lrc(
         if duration_sec is not None and duration_sec > 0:
             next_start = min(next_start, float(duration_sec))
         span = max(0.0, next_start - start)
-        boundary_pad = max(0.008, min(0.05, span * 0.005))
-        minimum_span = max(0.12, min(0.35, typical_gap * 0.08))
+        # Boundary padding and the minimum usable span are both fractions of the
+        # actual local/typical line interval. The tiny numerical floor only keeps
+        # intervals strictly ordered and is not a song-timing prior.
+        boundary_pad = max(1e-4, span * 0.005)
+        word_count = max(1, len(value.split()))
+        minimum_span = min(span, max(1e-3, min(typical_gap * 0.10, span / max(2.0, word_count * 1.5))))
         end = max(start + minimum_span, next_start - boundary_pad)
         if duration_sec is not None and duration_sec > 0:
             end = min(end, float(duration_sec))
-        if end > start + 0.008:
+        if end > start + 1e-4:
             result.append((start, end, value))
     return tuple(result)
 

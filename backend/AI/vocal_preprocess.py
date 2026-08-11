@@ -9,11 +9,12 @@ from pathlib import Path
 from statistics import median
 
 import soundfile as sf
+import numpy as np
 
 from .errors import AICoreError
 from .models import PitchFrame
 
-VOCAL_ANALYSIS_PREPROCESS_VERSION = "v2-multivariant-denoise-tail-20260810"
+VOCAL_ANALYSIS_PREPROCESS_VERSION = "v3-adaptive-gate-relative-ranking-20260811"
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +70,24 @@ def _render_analysis_variant(source: Path, target: Path, filter_graph: str) -> P
     return target
 
 
+
+def _adaptive_gate_threshold(source: Path) -> float:
+    """Estimate a conservative expander threshold from the actual vocal stem."""
+    try:
+        audio, _sr = sf.read(source, dtype="float32", always_2d=False)
+        values = np.abs(np.asarray(audio, dtype=np.float32).reshape(-1))
+        values = values[np.isfinite(values)]
+        if values.size < 256:
+            raise ValueError
+        quiet = float(np.percentile(values, 35))
+        body = float(np.percentile(values, 75))
+        # Stay well below the sung body; the gate is only for low-level tails.
+        threshold = quiet + max(0.0, body - quiet) * 0.08
+        return max(0.001, min(0.03, threshold))
+    except Exception:
+        return 0.008
+
+
 def prepare_midi_analysis_vocal(source: Path, target: Path) -> Path:
     """Backward-compatible conservative denoise analysis copy."""
     return _render_analysis_variant(
@@ -91,13 +110,14 @@ def prepare_midi_analysis_variants(
     pitch correction, time stretching or phase-vocoder resynthesis.
     """
     denoise = prepare_midi_analysis_vocal(source, denoise_target)
+    gate_threshold = _adaptive_gate_threshold(source)
     tail = _render_analysis_variant(
         source,
         tail_target,
         (
             "highpass=f=65:p=2,lowpass=f=6500:p=2,"
             "afftdn=nr=6:nf=-50:tn=1:gs=3,"
-            "agate=threshold=0.012:ratio=2.0:attack=8:release=85:knee=2"
+            f"agate=threshold={gate_threshold:.6f}:ratio=2.0:attack=8:release=85:knee=2"
         ),
     )
     return {"denoise": denoise, "tail-suppressed": tail}
@@ -156,7 +176,8 @@ def score_pitch_track(frames: list[PitchFrame]) -> PitchTrackQuality:
     typical_hop = median(
         [frames[i].time - frames[i - 1].time for i in range(1, len(frames)) if frames[i].time > frames[i - 1].time]
     ) if len(frames) > 1 else 0.01
-    micro_limit = max(1, int(round(0.045 / max(0.001, typical_hop))))
+    typical_run = median(run_lengths) if run_lengths else 1
+    micro_limit = max(1, int(round(max(typical_hop * 2.0, typical_run * typical_hop * 0.22) / max(0.001, typical_hop))))
     micro_runs = sum(1 for length in run_lengths if length <= micro_limit)
     micro_run_rate = micro_runs / max(1, len(run_lengths))
 
@@ -181,40 +202,44 @@ def score_pitch_track(frames: list[PitchFrame]) -> PitchTrackQuality:
     )
 
 
-def prefer_cleaned_pitch(
-    original: PitchTrackQuality,
-    cleaned: PitchTrackQuality,
-) -> bool:
-    """Choose cleanup only when it is materially better and did not erase vocals."""
-    if cleaned.voiced_ratio < max(0.04, original.voiced_ratio * 0.68):
+def _quality_vector(value: PitchTrackQuality) -> tuple[float, float, float, float, float]:
+    return (
+        value.mean_confidence,
+        -value.jump_rate,
+        -value.micro_run_rate,
+        -value.octave_flip_rate,
+        value.voiced_ratio,
+    )
+
+
+def _relative_wins(candidate: PitchTrackQuality, reference: PitchTrackQuality) -> int:
+    left=_quality_vector(candidate); right=_quality_vector(reference)
+    return sum(a>b+1e-9 for a,b in zip(left,right)) - sum(a+1e-9<b for a,b in zip(left,right))
+
+
+def prefer_cleaned_pitch(original: PitchTrackQuality, cleaned: PitchTrackQuality) -> bool:
+    """Select cleanup by multi-metric dominance, not one hand-weighted score."""
+    if cleaned.voiced_ratio < original.voiced_ratio * 0.70:
         return False
-    if cleaned.mean_confidence + 0.04 < original.mean_confidence:
+    if cleaned.mean_confidence < original.mean_confidence * 0.92:
         return False
-    return cleaned.score >= original.score + 0.012
+    return _relative_wins(cleaned, original) >= 2
 
 
-
-def choose_best_pitch_track(
-    qualities: dict[str, PitchTrackQuality],
-    *,
-    original_key: str = "original",
-) -> str:
-    """Pick the safest pitch-analysis source among original and cleanup variants."""
+def choose_best_pitch_track(qualities: dict[str, PitchTrackQuality], *, original_key: str = "original") -> str:
     if original_key not in qualities:
         raise ValueError("original pitch quality is required")
-    original = qualities[original_key]
-    winner = original_key
-    winner_score = original.score
-    for name, candidate in qualities.items():
-        if name == original_key:
-            continue
-        if candidate.voiced_ratio < max(0.04, original.voiced_ratio * 0.68):
-            continue
-        if candidate.mean_confidence + 0.04 < original.mean_confidence:
-            continue
-        # A cleanup branch must materially beat the untouched stem. Between two
-        # cleanup branches, keep the highest score once that safety margin clears.
-        if candidate.score >= original.score + 0.012 and candidate.score > winner_score:
-            winner = name
-            winner_score = candidate.score
-    return winner
+    original=qualities[original_key]
+    viable={original_key: original}
+    for name,candidate in qualities.items():
+        if name==original_key: continue
+        if candidate.voiced_ratio < original.voiced_ratio*0.70: continue
+        if candidate.mean_confidence < original.mean_confidence*0.92: continue
+        if _relative_wins(candidate,original)>=2:
+            viable[name]=candidate
+    def rank(name: str):
+        c=viable[name]
+        wins=sum(_relative_wins(c, other) for other_name,other in viable.items() if other_name!=name)
+        # score remains a deterministic tie-breaker/diagnostic, not the gate.
+        return (wins,c.score,name==original_key)
+    return max(viable,key=rank)

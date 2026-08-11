@@ -4,7 +4,7 @@ import pytest
 
 from AI.engines.text import _merge_transcript_parts, _transcript_quality
 from AI.models import PitchFrame, Syllable, Word
-from AI.notes import build_vocal_notes
+from AI.notes import build_game_notes, build_vocal_notes
 from AI.syllables import align_syllables
 
 
@@ -196,3 +196,36 @@ def test_exact_candidate_majority_is_rewarded():
         "Russian",
     )
     assert selected == "я люблю тебя"
+
+
+def test_game_notes_split_sustained_acoustic_note_by_syllables():
+    syllables = [
+        Syllable(0.0, 0.45, "ма", 0, 0, 0.95),
+        Syllable(0.45, 1.0, "ма", 0, 1, 0.95),
+    ]
+    pitch = [_frame(i * 0.01, 69.0) for i in range(100)]
+    acoustic = build_vocal_notes(pitch, syllables)
+    assert len(acoustic) == 1
+
+    game = build_game_notes(acoustic, syllables, min_note=0.055)
+    assert len(game) == 2
+    assert [note.midi_note for note in game] == [69, 69]
+    assert [note.syllable_index for note in game] == [0, 1]
+    assert game[0].end == pytest.approx(game[1].start)
+    assert game[0].start == pytest.approx(acoustic[0].start)
+    assert game[-1].end == pytest.approx(acoustic[0].end)
+
+
+def test_syllable_game_split_never_moves_detected_pitch():
+    syllables = [
+        Syllable(0.0, 0.30, "ме", 0, 0, 0.9),
+        Syllable(0.30, 0.62, "ло", 0, 1, 0.9),
+        Syllable(0.62, 1.0, "ди", 0, 2, 0.9),
+    ]
+    pitch = [_frame(i * 0.01, 64.0) for i in range(100)]
+    acoustic = build_vocal_notes(pitch, syllables)
+    game = build_game_notes(acoustic, syllables, min_note=0.055)
+    assert acoustic and game
+    assert {note.midi_note for note in game} == {acoustic[0].midi_note}
+    assert game[0].start == pytest.approx(acoustic[0].start)
+    assert game[-1].end == pytest.approx(acoustic[0].end)

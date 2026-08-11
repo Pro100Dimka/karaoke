@@ -8,7 +8,7 @@ from .models import PitchFrame, Syllable, Word
 
 VOWELS = frozenset("аеёиоуыэюяіїєaeyuioAEYUIOАЕЁИОУЫЭЮЯІЇЄ")
 _WORD_EDGE = re.compile(r"(^[^\w'’ʼ-]+|[^\w'’ʼ-]+$)", re.UNICODE)
-SYLLABLE_ALIGNER_VERSION = "acoustic-syllables-v3-adaptive-timing"
+SYLLABLE_ALIGNER_VERSION = "acoustic-syllables-v4-adaptive-evidence"
 
 
 def split_written(word: str) -> list[str]:
@@ -96,20 +96,45 @@ def _boundary_scores(word: Word, frames: list[PitchFrame], count: int) -> list[f
         jump = 0.0
         if before and after:
             ratio = max(1e-9, (sum(after) / len(after)) / (sum(before) / len(before)))
-            jump = min(4.0, abs(12.0 * math.log2(ratio)))
+            jump = abs(12.0 * math.log2(ratio))
         confidence_drop = max(0.0, frames[index - 1].confidence - frame.confidence)
         energy_drop = max(0.0, frames[index - 1].energy - frame.energy)
-        voicing_change = 0.8 if frames[index - 1].voiced != frame.voiced else 0.0
-        candidates.append(
-            (jump + confidence_drop * 1.5 + energy_drop * 8.0 + voicing_change, frame.time)
-        )
+        voicing_change = 1.0 if frames[index - 1].voiced != frame.voiced else 0.0
+        candidates.append((jump, confidence_drop, energy_drop, voicing_change, frame.time))
 
-    candidates.sort(reverse=True)
+    if not candidates:
+        return []
+
+    # Normalize every acoustic cue against this word itself.  Absolute energy,
+    # confidence and pitch-jump scales vary hugely between singers, microphones
+    # and separation quality; relative salience inside the current word is the
+    # useful signal for a syllable boundary.
+    def scale(values: list[float]) -> float:
+        positive = sorted(value for value in values if value > 0.0)
+        if not positive:
+            return 1.0
+        return max(positive[len(positive) // 2], positive[-1] * 0.25, 1e-6)
+
+    jump_scale = scale([item[0] for item in candidates])
+    confidence_scale = scale([item[1] for item in candidates])
+    energy_scale = scale([item[2] for item in candidates])
+    ranked: list[tuple[float, float]] = []
+    for jump, confidence_drop, energy_drop, voicing_change, timestamp in candidates:
+        score = (
+            jump / jump_scale
+            + confidence_drop / confidence_scale
+            + energy_drop / energy_scale
+            + voicing_change
+        )
+        ranked.append((score, timestamp))
+
+    ranked.sort(reverse=True)
     selected: list[float] = []
     minimum_spacing = max(step * 3.0, word_span / (count * 3.0))
-    for score, timestamp in candidates:
-        if score < 0.12:
-            break
+    # Keep the strongest well-spaced candidates.  There is deliberately no
+    # song-independent absolute score threshold here; the later local search
+    # around linguistic expectations decides whether a candidate is useful.
+    for _score, timestamp in ranked:
         if all(abs(timestamp - existing) >= minimum_spacing for existing in selected):
             selected.append(timestamp)
         if len(selected) == count - 1:

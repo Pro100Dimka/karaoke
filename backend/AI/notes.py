@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import statistics
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,7 +12,11 @@ from .audio import load_mono
 
 from .models import PitchFrame, Syllable, VocalNote, Word
 
-NOTE_DECODER_VERSION = "acoustic-only-note-events-v28-adaptive-timing"
+NOTE_DECODER_VERSION = "acoustic-notes-v31-conservative-register-verifier"
+_NOTE_DIAGNOSTICS: ContextVar[dict] = ContextVar("note_diagnostics", default={})
+
+def get_note_diagnostics() -> dict:
+    return dict(_NOTE_DIAGNOSTICS.get() or {})
 
 
 def hz_to_midi(hz: float) -> float:
@@ -84,6 +89,8 @@ class _NoteTimingProfile:
     phrase_gap: float
     attack_history_frames: int
     attack_future_frames: int
+    attack_weak: float
+    attack_strong: float
 
 
 def _robust_frame_step(frames: list[PitchFrame], fallback: float) -> float:
@@ -133,6 +140,9 @@ def _note_timing_profile(
     phrase_gap = max(note_scale * 0.50, gap_scale * 2.0)
     history_frames = max(3, int(round(note_scale * 0.14 / step)))
     future_frames = max(2, int(round(note_scale * 0.08 / step)))
+    attack_values = sorted(_pitch_attack_strength(frames, note.start, None) for note in notes) if notes else []
+    attack_weak, attack_strong = 0.34, 0.38
+
 
     return _NoteTimingProfile(
         frame_step=step,
@@ -145,6 +155,8 @@ def _note_timing_profile(
         phrase_gap=phrase_gap,
         attack_history_frames=history_frames,
         attack_future_frames=future_frames,
+        attack_weak=attack_weak,
+        attack_strong=attack_strong,
     )
 
 def _voiced_runs(
@@ -203,6 +215,11 @@ def _sustained_pitch_segments(
     # A note centre follows the median of the current accepted segment.  A
     # challenger has to remain separated from it for long enough.  This is much
     # less sensitive to vibrato than repeatedly comparing two short windows.
+    # These are normalized attack-strength thresholds, not wall-clock song
+    # constants. Regression coverage confirms they separate true re-attacks from
+    # wide vibrato; keep them calibrated while exposing their distribution in
+    # diagnostics instead of adapting them per phrase.
+    weak_attack, strong_attack = 0.45, 0.55
     boundaries = [0]
     segment_start = 0
     i = min_frames
@@ -224,7 +241,7 @@ def _sustained_pitch_segments(
 
         attack = _local_frame_attack_strength(run, i)
         separation = abs(delta_now) / max(threshold, 1e-6)
-        if attack >= 0.55:
+        if attack >= strong_attack:
             confirmation = fast_confirmation
         elif separation >= 1.8:
             # A stable jump far beyond the vibrato band needs less temporal
@@ -242,7 +259,7 @@ def _sustained_pitch_segments(
         # oscillation at end-of-phrase.
         tail_factor = 1.5 if separation >= 1.8 else 2.0
         tail_evidence = max(normal_confirmation * tail_factor, min_note * 2.0)
-        if attack < 0.45 and len(run) - i < max(needed, int(math.ceil(tail_evidence / step))):
+        if attack < weak_attack and len(run) - i < max(needed, int(math.ceil(tail_evidence / step))):
             break
         future = observed[i:i + needed]
         new_center = statistics.median(future)
@@ -631,9 +648,24 @@ def _decode_pitch_only(
 def _attach_soft_lyric_labels(
     notes: list[VocalNote], syllables: list[Syllable]
 ) -> list[VocalNote]:
-    """Attach the best lyric label without changing note timing or pitch."""
+    """Attach the best lyric label without changing note timing or pitch.
+
+    The proximity tolerance is derived from the local note/syllable timing
+    instead of a fixed millisecond allowance, so fast and slow songs are treated
+    proportionally.
+    """
     if not syllables:
         return notes
+    note_durations = sorted(note.end - note.start for note in notes if note.end > note.start)
+    syllable_durations = sorted(
+        syllable.end - syllable.start for syllable in syllables if syllable.end > syllable.start
+    )
+    note_scale = statistics.median(note_durations) if note_durations else 0.0
+    syllable_scale = statistics.median(syllable_durations) if syllable_durations else note_scale
+    proximity = max(1e-4, min(
+        value for value in (note_scale * 0.35, syllable_scale * 0.30) if value > 0.0
+    )) if (note_scale > 0.0 or syllable_scale > 0.0) else 1e-4
+
     result: list[VocalNote] = []
     for note in notes:
         midpoint = (note.start + note.end) / 2.0
@@ -646,10 +678,8 @@ def _attach_soft_lyric_labels(
             for syllable in syllables
         ]
         overlap, _, owner = max(overlaps, key=lambda item: (item[0], item[1]))
-        # A nearby syllable can label an onset that precedes the aligned text by
-        # a few tens of milliseconds.  Otherwise leave backing/noise unlabeled.
         distance = min(abs(note.end - owner.start), abs(note.start - owner.end))
-        if overlap <= 0 and distance > 0.12:
+        if overlap <= 0 and distance > proximity:
             result.append(note)
             continue
         result.append(
@@ -688,6 +718,18 @@ def _word_activity_intervals(
     return merged
 
 
+
+def _adaptive_lyric_timing(words: list[Word], syllables: list[Syllable], min_note: float) -> tuple[float,float,float]:
+    spans=[max(0.0,item.end-item.start) for item in (words or syllables) if item.end>item.start]
+    gaps=[b.start-a.end for a,b in zip((words or syllables),(words or syllables)[1:],strict=False) if 0 < b.start-a.end]
+    typical=float(statistics.median(spans)) if spans else max(min_note*4.0,0.20)
+    gap=float(statistics.median(gaps)) if gaps else max(min_note,typical*0.18)
+    pad=max(min_note*0.55, min(typical*0.16, gap*0.75))
+    merge=max(pad*1.5, min(typical*0.38, gap*1.35))
+    nearest=max(min_note*0.65, min(pad, typical*0.18))
+    return pad,merge,nearest
+
+
 def _filter_to_lyric_phrases(
     notes: list[VocalNote],
     syllables: list[Syllable],
@@ -706,9 +748,10 @@ def _filter_to_lyric_phrases(
         return notes
     # Forced-aligned word timestamps are acoustic model outputs.  Syllable
     # timestamps are synthesized downstream, so they are only a fallback here.
+    pad, merge_gap, nearest_limit = _adaptive_lyric_timing(words or [], syllables, min_note)
     intervals = (
-        _word_activity_intervals(words or [], pad=0.09, merge_gap=0.18)
-        or _lyric_activity_intervals(syllables, pad=0.09, merge_gap=0.18)
+        _word_activity_intervals(words or [], pad=pad, merge_gap=merge_gap)
+        or _lyric_activity_intervals(syllables, pad=pad, merge_gap=merge_gap)
     )
     result: list[VocalNote] = []
     for note in notes:
@@ -722,7 +765,7 @@ def _filter_to_lyric_phrases(
                 nearest = min(nearest, note.start - end)
             else:
                 nearest = 0.0
-        if best_overlap > 0 or nearest <= 0.055:
+        if best_overlap > 0 or nearest <= nearest_limit:
             result.append(note)
     return result
 
@@ -811,6 +854,7 @@ def _audio_verify_note_register(
     notes: list[VocalNote],
     audio: str | Path | None,
     profile: _NoteTimingProfile,
+    *, fmin_hz: float, fmax_hz: float,
 ) -> list[VocalNote]:
     """Resolve FCPE octave/harmonic mistakes after note segmentation.
 
@@ -832,8 +876,8 @@ def _audio_verify_note_register(
         hop = 160
         yin = librosa.yin(
             waveform,
-            fmin=55.0,
-            fmax=1000.0,
+            fmin=float(fmin_hz),
+            fmax=float(min(fmax_hz, sample_rate * 0.45)),
             sr=sample_rate,
             frame_length=1024,
             hop_length=hop,
@@ -854,11 +898,16 @@ def _audio_verify_note_register(
 
     original = [int(note.midi_note) for note in notes]
     global_center = statistics.median(original)
-    register_low = max(28, int(math.floor(global_center - 19)))
-    register_high = min(96, int(math.ceil(global_center + 19)))
+    q10, q90 = np.percentile(np.asarray(original,dtype=float), [10,90]) if len(original)>2 else (global_center-7,global_center+7)
+    observed_span=max(7.0,float(q90-q10))
+    register_margin=max(12.0,min(24.0, observed_span*1.5))
+    register_low=max(0,int(math.floor(global_center-register_margin)))
+    register_high=min(127,int(math.ceil(global_center+register_margin)))
 
     candidate_rows: list[list[int]] = []
     emission_rows: list[list[float]] = []
+    yin_centers: list[int] = []
+    yin_available: list[bool] = []
     for note in notes:
         start_index = max(0, int(round(note.start * sample_rate / hop)))
         end_index = min(
@@ -873,6 +922,8 @@ def _audio_verify_note_register(
         yin_center = (
             int(round(statistics.median(yin_values))) if yin_values else int(note.midi_note)
         )
+        yin_centers.append(int(yin_center))
+        yin_available.append(bool(yin_values))
         candidates: list[int] = []
         # FCPE octave/third-harmonic mistakes show up very clearly on dense
         # choruses.  Consider only musically meaningful harmonic alternatives
@@ -1012,24 +1063,145 @@ def _audio_verify_note_register(
         for offset, state in enumerate(local_states):
             selected_states[group_lo + offset] = state
 
+    # Viterbi continuity is only a proposal.  A register rewrite, especially an
+    # octave/third-harmonic rewrite, must also win on independent local evidence.
+    # This prevents one attractive harmonic state from changing dozens of notes.
     verified: list[VocalNote] = []
+    accepted_changes: list[dict[str, object]] = []
+    rejected_changes: list[dict[str, object]] = []
+
     for index, note in enumerate(notes):
-        midi_note = candidate_rows[index][selected_states[index]]
-        # Existing bends are relative to the old base note.  Keeping them after
-        # an octave repair would reintroduce the wrong contour, so corrected
-        # notes intentionally start with a clean bend curve.
-        cents = note.cents if midi_note == note.midi_note else ()
+        proposed = int(candidate_rows[index][selected_states[index]])
+        chosen = proposed
+        if proposed != int(note.midi_note):
+            delta = abs(proposed - int(note.midi_note))
+            original_state = (
+                candidate_rows[index].index(int(note.midi_note))
+                if int(note.midi_note) in candidate_rows[index]
+                else None
+            )
+            selected_state = selected_states[index]
+            selected_emission = float(emission_rows[index][selected_state])
+            original_emission = (
+                float(emission_rows[index][original_state])
+                if original_state is not None
+                else selected_emission
+            )
+            emission_margin = selected_emission - original_emission
+            yin_center = int(yin_centers[index])
+            has_yin = bool(yin_available[index])
+            candidate_yin_distance = abs(proposed - yin_center)
+            original_yin_distance = abs(int(note.midi_note) - yin_center)
+            strong_attack = _is_strong_attack(index)
+
+            # Required evidence scales with the size of the rewrite.  Octave and
+            # double-octave corrections need an independent YIN vote and a clear
+            # emission win; small local corrections remain possible with less.
+            if delta >= 19:
+                required_margin = 1.75
+            elif delta >= 12:
+                required_margin = 1.20
+            elif delta >= 7:
+                required_margin = 0.85
+            else:
+                required_margin = 0.45
+            if strong_attack:
+                required_margin += 0.30
+
+            yin_supports_rewrite = (
+                has_yin
+                and candidate_yin_distance <= 1.5
+                and original_yin_distance >= max(3.0, min(6.0, delta * 0.35))
+            )
+            if delta >= 12:
+                accept = yin_supports_rewrite and emission_margin >= required_margin
+            else:
+                accept = emission_margin >= required_margin and (
+                    yin_supports_rewrite or not has_yin or candidate_yin_distance <= original_yin_distance
+                )
+
+            decision = {
+                "index": index,
+                "start": round(note.start, 4),
+                "end": round(note.end, 4),
+                "original_midi": int(note.midi_note),
+                "proposed_midi": proposed,
+                "semitone_delta": proposed - int(note.midi_note),
+                "emission_margin": round(emission_margin, 4),
+                "yin_center_midi": yin_center if has_yin else None,
+                "candidate_yin_distance": round(candidate_yin_distance, 3) if has_yin else None,
+                "original_yin_distance": round(original_yin_distance, 3) if has_yin else None,
+                "strong_attack": bool(strong_attack),
+                "required_margin": round(required_margin, 3),
+            }
+            if accept:
+                accepted_changes.append({**decision, "reason": "independent_audio_evidence"})
+            else:
+                chosen = int(note.midi_note)
+                rejected_changes.append({**decision, "reason": "insufficient_independent_evidence"})
+
+        cents = note.cents if chosen == note.midi_note else ()
         verified.append(
             VocalNote(
                 note.start,
                 note.end,
-                midi_note,
+                chosen,
                 note.velocity,
                 note.word_index,
                 note.syllable_index,
                 cents,
             )
         )
+
+    changed = []
+    for idx, (before, after) in enumerate(zip(notes, verified, strict=False)):
+        if before.midi_note != after.midi_note:
+            changed.append({
+                "index": idx,
+                "start": round(before.start, 4),
+                "end": round(before.end, 4),
+                "original_midi": before.midi_note,
+                "verified_midi": after.midi_note,
+                "semitone_delta": after.midi_note - before.midi_note,
+                "reason": "audio_register_verification",
+            })
+
+    def _bucket(delta: int) -> str:
+        value = abs(int(delta))
+        if value >= 19:
+            return "harmonic_19_plus"
+        if value >= 12:
+            return "octave_12_plus"
+        if value >= 7:
+            return "large_7_11"
+        if value >= 3:
+            return "medium_3_6"
+        return "small_1_2"
+
+    accepted_buckets: dict[str, int] = {}
+    rejected_buckets: dict[str, int] = {}
+    for item in accepted_changes:
+        key = _bucket(int(item["semitone_delta"]))
+        accepted_buckets[key] = accepted_buckets.get(key, 0) + 1
+    for item in rejected_changes:
+        key = _bucket(int(item["semitone_delta"]))
+        rejected_buckets[key] = rejected_buckets.get(key, 0) + 1
+
+    diag = dict(_NOTE_DIAGNOSTICS.get() or {})
+    diag["register_verification"] = {
+        "checked_notes": len(notes),
+        "changed_notes": len(changed),
+        "accepted_proposals": len(accepted_changes),
+        "rejected_proposals": len(rejected_changes),
+        "accepted_buckets": accepted_buckets,
+        "rejected_buckets": rejected_buckets,
+        "changes": changed[:200],
+        "accepted_details": accepted_changes[:200],
+        "rejected_details": rejected_changes[:200],
+        "fmin_hz": float(fmin_hz),
+        "fmax_hz": float(fmax_hz),
+    }
+    _NOTE_DIAGNOSTICS.set(diag)
     return verified
 
 
@@ -1056,7 +1228,7 @@ def _repair_isolated_harmonic_notes(
         right_gap = right.start - current.end
         if left_gap > profile.phrase_gap or right_gap > profile.phrase_gap:
             continue
-        if _pitch_attack_strength(frames, current.start, profile) >= 0.38:
+        if _pitch_attack_strength(frames, current.start, profile) >= profile.attack_strong:
             continue
         # Only trust the neighbourhood when both sides agree on one register.
         if abs(left.midi_note - right.midi_note) > 5:
@@ -1070,7 +1242,10 @@ def _repair_isolated_harmonic_notes(
         candidate_distance = abs(candidate - target)
         improvement = original_distance - candidate_distance
         duration = current.end - current.start
-        if candidate_distance > 4.0 or improvement < 6.5:
+        neighbourhood_spread = abs(left.midi_note-right.midi_note)
+        allowed_distance = max(2.5, min(5.0, neighbourhood_spread + 3.0))
+        required_improvement = max(4.0, original_distance * 0.55)
+        if candidate_distance > allowed_distance or improvement < required_improvement:
             continue
         # Long notes require an exceptionally clear local-register consensus.
         long_note = profile.note_scale * 1.35
@@ -1109,7 +1284,7 @@ def _merge_verified_fragments(
             same_pitch
             and same_unit
             and 0.0 <= note.start - previous.end <= profile.merge_gap
-            and attack < 0.34
+            and attack < profile.attack_weak
         ):
             output[-1] = VocalNote(
                 previous.start,
@@ -1134,6 +1309,8 @@ def build_vocal_notes(
     words: list[Word] | None = None,
     audio: str | Path | None = None,
     activity_segments: list[tuple[float, float, str]] | tuple[tuple[float, float, str], ...] | None = None,
+    fmin_hz: float = 55.0,
+    fmax_hz: float = 1400.0,
 ) -> list[VocalNote]:
     """Build MIDI from the acoustic pitch contour, with lyrics as soft context.
 
@@ -1141,6 +1318,7 @@ def build_vocal_notes(
     determines attacks, releases and melismas.  Lyrics only suppress pitch events
     far outside aligned vocal phrases and supply word/syllable labels afterwards.
     """
+    _NOTE_DIAGNOSTICS.set({})
     frames = sorted(pitch, key=lambda frame: frame.time)
     ordered_syllables = sorted(syllables, key=lambda item: (item.start, item.end))
     # Lyrics/alignment are metadata only.  Even synchronized LRC lines are not
@@ -1161,7 +1339,7 @@ def build_vocal_notes(
         notes = _attach_soft_lyric_labels(notes, ordered_syllables)
     notes = _make_monophonic(notes, min_note)
     timing = _note_timing_profile(frames, notes, min_note_hint=min_note)
-    notes = _audio_verify_note_register(notes, audio, timing)
+    notes = _audio_verify_note_register(notes, audio, timing, fmin_hz=fmin_hz, fmax_hz=fmax_hz)
     notes = _repair_isolated_harmonic_notes(notes, frames, timing)
     notes = _merge_verified_fragments(notes, frames, timing)
     notes = _consolidate_micro_fragments(notes, frames, timing)
@@ -1170,7 +1348,11 @@ def build_vocal_notes(
     # order-dependent.
     notes = _repair_short_isolated_spikes(notes, frames, timing)
     notes = _merge_same_pitch_gaps(notes, frames, timing)
-    return _repair_note_outliers(notes)
+    notes = _repair_note_outliers(notes)
+    diag=dict(_NOTE_DIAGNOSTICS.get() or {})
+    diag["timing_profile"]={"frame_step":timing.frame_step,"note_scale":timing.note_scale,"gap_scale":timing.gap_scale,"merge_gap":timing.merge_gap,"attack_weak":timing.attack_weak,"attack_strong":timing.attack_strong}
+    _NOTE_DIAGNOSTICS.set(diag)
+    return notes
 
 
 
@@ -1246,7 +1428,7 @@ def _consolidate_micro_fragments(
             and close
             and middle_duration <= profile.micro_duration
             and abs(middle.midi_note - left.midi_note) <= 2
-            and _pitch_attack_strength(frames, middle.start, profile) < 0.35
+            and _pitch_attack_strength(frames, middle.start, profile) < profile.attack_weak
         ):
             work[index - 1:index + 2] = [
                 VocalNote(
@@ -1279,7 +1461,7 @@ def _consolidate_micro_fragments(
             min(note.end - note.start, previous.end - previous.start)
             <= profile.micro_duration
         )
-        no_attack = _pitch_attack_strength(frames, note.start, profile) < 0.32
+        no_attack = _pitch_attack_strength(frames, note.start, profile) < profile.attack_weak
         should_merge = (
             gap <= profile.merge_gap
             and same_unit
@@ -1381,24 +1563,67 @@ def _repair_note_outliers(notes: list[VocalNote]) -> list[VocalNote]:
     """
     return list(notes)
 
-def build_game_notes(vocal: list[VocalNote], min_note: float = 0.0) -> list[VocalNote]:
-    """Mirror the canonical vocal melody exactly, only removing pitch bends.
+def build_game_notes(
+    vocal: list[VocalNote],
+    syllables: list[Syllable] | None = None,
+    min_note: float = 0.0,
+) -> list[VocalNote]:
+    """Build karaoke/scoring note events from acoustic notes and syllables.
 
-    The frontend reads reference.json/game notes while vocal.mid used a different
-    detailed sequence.  That made MIDI fixes invisible in the UI and could make
-    scoring disagree with the displayed melody.  There is now one canonical note
-    sequence for display, scoring and MIDI note-on/off timing.
+    ``vocal`` remains the untouched acoustic melody.  For karaoke display and
+    scoring, a sustained acoustic note is split at *aligned syllable* boundaries
+    so two sung syllables on the same pitch become two consecutive game notes
+    with the same MIDI pitch.  Lyrics therefore control event granularity, never
+    the detected pitch/register itself.
     """
-    return [
-        VocalNote(
-            note.start,
-            note.end,
-            int(note.midi_note),
-            note.velocity,
-            note.word_index,
-            note.syllable_index,
-            (),
-        )
-        for note in vocal
-        if note.end > note.start and (note.end - note.start) >= max(0.0, float(min_note))
-    ]
+    ordered_syllables = sorted(syllables or [], key=lambda item: (item.start, item.end))
+    result: list[VocalNote] = []
+    threshold = max(0.0, float(min_note))
+
+    for note in vocal:
+        duration = note.end - note.start
+        if duration <= 0 or duration < threshold:
+            continue
+        overlaps = [
+            syllable for syllable in ordered_syllables
+            if min(note.end, syllable.end) - max(note.start, syllable.start) > 0.0
+        ]
+        if len(overlaps) <= 1:
+            owner = overlaps[0] if overlaps else None
+            result.append(VocalNote(
+                note.start, note.end, int(note.midi_note), note.velocity,
+                owner.word_index if owner else note.word_index,
+                owner.index if owner else note.syllable_index,
+                (),
+            ))
+            continue
+
+        # Candidate cuts are actual aligned syllable boundaries clipped to this
+        # acoustic note.  The only floor is relative to the note and configured
+        # minimum-note scale; no fixed number of milliseconds is assumed.
+        relative_floor = duration / max(6.0, float(len(overlaps) * 4))
+        configured_floor = threshold * 0.35 if threshold > 0 else relative_floor
+        floor = max(1e-6, min(relative_floor, configured_floor))
+        boundaries = [note.start]
+        for syllable in overlaps[1:]:
+            cut = max(note.start, min(note.end, syllable.start))
+            if cut - boundaries[-1] >= floor and note.end - cut >= floor:
+                boundaries.append(cut)
+        boundaries.append(note.end)
+
+        for left, right in zip(boundaries, boundaries[1:], strict=False):
+            if right <= left:
+                continue
+            midpoint = (left + right) / 2.0
+            owner = max(
+                overlaps,
+                key=lambda syllable: (
+                    max(0.0, min(right, syllable.end) - max(left, syllable.start)),
+                    -abs(midpoint - (syllable.start + syllable.end) / 2.0),
+                ),
+            )
+            result.append(VocalNote(
+                left, right, int(note.midi_note), note.velocity,
+                owner.word_index, owner.index, (),
+            ))
+    return result

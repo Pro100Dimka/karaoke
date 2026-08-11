@@ -13,7 +13,7 @@ from .models import PitchFrame
 # Harmonic tracking is needed on dense vocal stems, but transitions must become
 # cheap at a real acoustic re-attack.  This keeps short melodic leaps while
 # folding unsupported octave/harmonic detours back onto the lead trajectory.
-PITCH_STABILIZER_VERSION = "fcpe-yin-consensus-v6-adaptive-timing"
+PITCH_STABILIZER_VERSION = "fcpe-yin-consensus-v8-adaptive-analysis-audit"
 _HARMONIC_SHIFTS = (0.0, -12.0, 12.0, -19.01955, 19.01955, -24.0, 24.0)
 
 
@@ -110,6 +110,8 @@ def fuse_pitch_with_yin(
     audio: str | Path,
     *,
     sample_rate: int = 16000,
+    fmin_hz: float = 55.0,
+    fmax_hz: float = 1400.0,
 ) -> list[PitchFrame]:
     """Fuse FCPE with an independent fast YIN contour on the same 10 ms grid.
 
@@ -134,7 +136,7 @@ def fuse_pitch_with_yin(
     hop = max(64, int(round(sr * step)))
     try:
         yin = librosa.yin(
-            y, fmin=55.0, fmax=1400.0, sr=sr, frame_length=2048,
+            y, fmin=float(fmin_hz), fmax=float(fmax_hz), sr=sr, frame_length=2048,
             hop_length=hop, trough_threshold=0.10, center=True,
         )
     except Exception:
@@ -142,7 +144,7 @@ def fuse_pitch_with_yin(
 
     half_window = max(256, int(round(sr * 0.025)))
     def support(index: int, hz: float) -> float:
-        if not np.isfinite(hz) or hz < 55.0 or hz > 1400.0:
+        if not np.isfinite(hz) or hz < float(fmin_hz) or hz > float(fmax_hz):
             return 0.0
         center = int(round(frames[index].time * sr))
         start = max(0, center-half_window); end = min(len(y), center+half_window)
@@ -175,7 +177,7 @@ def fuse_pitch_with_yin(
                 candidates.append((m, base_support + source_bonus, hz))
             # The most common dense-vocal failure is selecting the 2nd harmonic.
             lower = hz / 2.0
-            if lower >= 55.0:
+            if lower >= float(fmin_hz):
                 lower_support = support(i, lower)
                 if lower_support >= max(0.22, base_support + 0.055):
                     candidates.append((_midi(lower), lower_support - 0.01, lower))
