@@ -83,8 +83,7 @@ rem ============================================================================
 
 echo Starting frontend preparation in parallel...
 
-start "" /b "%ComSpec%" /d /c ^
-    ""%~f0" --front-job "%FRONT%" "%FRONT_LOG%" "%FRONT_RC%""
+start "" /b cmd.exe /c call "%~f0" --front-job "%FRONT%" "%FRONT_LOG%" "%FRONT_RC%"
 
 rem ============================================================================
 rem PYTHON / VENV
@@ -183,8 +182,7 @@ rem ============================================================================
 
 echo Starting AI Core preparation in parallel...
 
-start "" /b "%ComSpec%" /d /c ^
-    ""%~f0" --ai-job "%AI%" "%ROOT%" "%AI_LOG%" "%AI_RC%""
+start "" /b cmd.exe /c call "%~f0" --ai-job "%AI%" "%ROOT%" "%AI_LOG%" "%AI_RC%"
 
 rem ============================================================================
 rem PORT CLEANUP
@@ -212,8 +210,7 @@ echo.
 echo Waiting for parallel preparation tasks...
 echo.
 
-call :wait "%FRONT_RC%"
-call :wait "%AI_RC%"
+call :wait_parallel
 
 set "FRONT_CODE="
 set "AI_CODE="
@@ -375,16 +372,81 @@ echo Local Python %VER% ready.
 exit /b 0
 
 rem ============================================================================
-rem WAIT FOR BACKGROUND JOB
+rem WAIT FOR BACKGROUND JOBS WITH LIVE STATUS
 rem ============================================================================
 
-:wait
+:wait_parallel
 
-if exist "%~1" exit /b 0
+set /a WAIT_SECONDS=0
+set "LAST_FRONT_SIZE=-1"
+set "LAST_AI_SIZE=-1"
 
-timeout /t 1 /nobreak >nul
+:wait_parallel_loop
 
-goto :wait
+call :job_state "%FRONT_RC%" FRONT_STATE
+call :job_state "%AI_RC%" AI_STATE
+
+echo [WAIT %WAIT_SECONDS%s] Frontend: %FRONT_STATE% ^| AI Core: %AI_STATE%
+
+call :show_log_tail "Frontend" "%FRONT_LOG%" LAST_FRONT_SIZE
+call :show_log_tail "AI" "%AI_LOG%" LAST_AI_SIZE
+
+if exist "%FRONT_RC%" if exist "%AI_RC%" (
+    echo.
+    echo Parallel preparation finished.
+    exit /b 0
+)
+
+timeout /t 3 /nobreak >nul
+set /a WAIT_SECONDS+=3
+echo.
+goto :wait_parallel_loop
+
+rem ============================================================================
+rem BACKGROUND JOB STATE
+rem ============================================================================
+
+:job_state
+
+if exist "%~1" (
+    set "%~2=DONE"
+) else (
+    set "%~2=RUNNING"
+)
+
+exit /b 0
+
+rem ============================================================================
+rem SHOW NEWEST BACKGROUND LOG LINE WHEN LOG CHANGES
+rem ============================================================================
+
+:show_log_tail
+
+setlocal EnableExtensions
+set "LABEL=%~1"
+set "LOG=%~2"
+set "SIZE=0"
+
+if not exist "%LOG%" (
+    endlocal
+    exit /b 0
+)
+
+for %%F in ("%LOG%") do set "SIZE=%%~zF"
+
+call set "OLD_SIZE=%%%~3%%"
+
+if "%SIZE%"=="%OLD_SIZE%" (
+    endlocal
+    exit /b 0
+)
+
+for /f "usebackq delims=" %%L in (`powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$p='%LOG%';if(Test-Path -LiteralPath $p){$x=Get-Content -LiteralPath $p -Tail 1 -ErrorAction SilentlyContinue;if($null -ne $x){$x}}"`) do (
+    echo   %LABEL%: %%L
+)
+
+endlocal & set "%~3=%SIZE%"
+exit /b 0
 
 rem ============================================================================
 rem FRONTEND BACKGROUND JOB

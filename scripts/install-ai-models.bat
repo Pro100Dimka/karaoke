@@ -157,7 +157,7 @@ del /q "%MSST_RC%" "%MSST_LOG%" >nul 2>&1
 if exist "%MSST_INF%" (
     >"%MSST_RC%" echo 0
 ) else (
-    start "" /b "%ComSpec%" /d /c ""%~f0" --msst-worker "%ROOT%" "%MSST_RC%" "%MSST_LOG%""
+    start "" /b cmd.exe /c call "%~f0" --msst-worker "%ROOT%" "%MSST_RC%" "%MSST_LOG%"
 )
 
 set "PYTHONPATH=%BACK%;%PYTHONPATH%"
