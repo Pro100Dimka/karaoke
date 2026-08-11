@@ -217,7 +217,7 @@ export default function MelodyRoll({
 
         {/* Melody notes. */}
         {visibleNotes.map((note, index) => {
-          const midi = note.midi + keyShift;
+          const midi = note.midi + (Number(keyShift) || 0);
           if (midi < minMidi || midi > maxMidi) return null;
           const isCurrent = currentTime >= note.start && currentTime < note.end;
           const noteX = Math.max(noteLaneStart, x(note.start));

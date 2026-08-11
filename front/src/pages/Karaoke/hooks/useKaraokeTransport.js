@@ -61,6 +61,25 @@ export default function useKaraokeTransport({
     };
   }, [song?.id]);
 
+
+  const settleSupersededRecording = async (sessionId) => {
+    if (!sessionId) return;
+
+    if (latestOperationTypeRef.current === "pause") {
+      await api.pauseRecording(sessionId).catch(() => {});
+      return;
+    }
+
+    await api.stopRecording(sessionId).catch(() =>
+      api.pauseRecording(sessionId).catch(() => {})
+    );
+
+    if (recordingSessionRef.current === sessionId) {
+      recordingSessionRef.current = null;
+      setRecordingSessionId(null);
+    }
+  };
+
   const broadcastCommand = (action, position) => {
     if (!onlineRoom?.room || !song?.id) return;
     onlineRoom.syncCommand(createPlayerSyncCommand(action, song.id, position));
@@ -76,8 +95,8 @@ export default function useKaraokeTransport({
 
   const preparePlayback = async () => {
     const instr = instrumentalRef.current;
-    const voc = vocalsRef.current;
-    if (!instr || !voc || !song?.id || recordingSessionRef.current) return true;
+    if (!instr || !song?.id || recordingSessionRef.current) return true;
+    const operationId = operationRef.current;
 
     // Warm up the backend recording session while the cinematic intro is
     // still on screen. The session is paused immediately, so actual recording
@@ -103,6 +122,11 @@ export default function useKaraokeTransport({
         throw pauseError;
       }
 
+      if (operationId !== operationRef.current) {
+        await settleSupersededRecording(sessionId);
+        return false;
+      }
+
       recordingSessionRef.current = sessionId;
       setRecordingSessionId(sessionId);
       setRecordingError(null);
@@ -118,7 +142,7 @@ export default function useKaraokeTransport({
   const togglePlay = async ({ broadcast = true, forcePlaying = null } = {}) => {
     const instr = instrumentalRef.current;
     const voc = vocalsRef.current;
-    if (!instr || !voc || !song?.id) return undefined;
+    if (!instr || !song?.id) return undefined;
 
     const operationId = ++operationRef.current;
     const shouldPlay = forcePlaying == null ? !isPlaying : forcePlaying;
@@ -144,12 +168,21 @@ export default function useKaraokeTransport({
 
     try {
       if (activeRecordingId) {
+        const resumedSessionId = activeRecordingId;
         recordingResume = api
-          .resumeRecording(activeRecordingId)
-          .catch((error) => {
+          .resumeRecording(resumedSessionId)
+          .catch(async (error) => {
             setRecordingError(
-              `Не удалось возобновить запись: ${getErrorMessage(error, "неизвестная ошибка")}`
+              `Не удалось возобновить запись, караоке продолжит работу без неё: ${getErrorMessage(error, "неизвестная ошибка")}`
             );
+            await api.stopRecording(resumedSessionId).catch(() => {});
+            if (recordingSessionRef.current === resumedSessionId) {
+              recordingSessionRef.current = null;
+              setRecordingSessionId(null);
+            }
+            if (activeRecordingId === resumedSessionId) {
+              activeRecordingId = null;
+            }
             return null;
           });
       } else {
@@ -181,36 +214,51 @@ export default function useKaraokeTransport({
       }
       setRecordingError(null);
     } catch (error) {
-      silenceMelodyGuide();
+      // Recording is an optional companion feature. A microphone/backend
+      // failure must never prevent the actual karaoke playback from starting.
+      activeRecordingId = null;
+      recordingSessionRef.current = null;
+      setRecordingSessionId(null);
       setRecordingError(
-        `Не удалось начать запись: ${getErrorMessage(error, "неизвестная ошибка")}`
+        `Запись недоступна, караоке продолжит работу без неё: ${getErrorMessage(error, "неизвестная ошибка")}`
       );
-      return false;
     }
 
     if (operationId !== operationRef.current) {
-      if (latestOperationTypeRef.current !== "play" && activeRecordingId) {
-        await api.pauseRecording(activeRecordingId).catch(() => {});
-      }
+      await settleSupersededRecording(activeRecordingId);
       silenceMelodyGuide();
       return false;
     }
 
     syncSecondaryMedia(instr.currentTime, true);
     instr.volume = playbackGain(musicVolume);
-    voc.volume = playbackGain(vocalVolume);
+    if (voc) voc.volume = playbackGain(vocalVolume);
     sendYouTubeCommand("playVideo");
 
     try {
-      await instr.play();
-      await Promise.allSettled(
-        [
-          voc.play(),
-          videoRef.current?.play(),
-          melodyStart,
-          recordingResume
-        ].filter(Boolean)
-      );
+      // Start the master and secondary HTML media in the same task. Waiting for
+      // instrumental.play() before calling vocals.play() creates an avoidable
+      // start offset on some Chromium/audio-driver combinations.
+      const instrumentalPlay = Promise.resolve().then(() => instr.play());
+      const secondaryStarts = [
+        voc ? Promise.resolve().then(() => voc.play()) : null,
+        videoRef.current
+          ? Promise.resolve().then(() => videoRef.current.play())
+          : null,
+        melodyStart,
+        recordingResume
+      ].filter(Boolean);
+      const [instrumentalResult] = await Promise.all([
+        Promise.allSettled([instrumentalPlay]),
+        Promise.allSettled(secondaryStarts)
+      ]);
+      if (instrumentalResult[0]?.status === "rejected") {
+        throw instrumentalResult[0].reason;
+      }
+
+      // play() promises can settle on slightly different frames. Re-anchor all
+      // secondary media to the actual master clock immediately after startup.
+      syncSecondaryMedia(instr.currentTime, true);
     } catch {
       pausePlaybackResources();
       if (activeRecordingId) {
@@ -223,9 +271,7 @@ export default function useKaraokeTransport({
 
     if (operationId !== operationRef.current) {
       pausePlaybackResources();
-      if (activeRecordingId) {
-        await api.pauseRecording(activeRecordingId).catch(() => {});
-      }
+      await settleSupersededRecording(activeRecordingId);
       return false;
     }
 
@@ -236,8 +282,7 @@ export default function useKaraokeTransport({
 
   const stop = async ({ broadcast = true } = {}) => {
     const instr = instrumentalRef.current;
-    const voc = vocalsRef.current;
-    if (!instr || !voc || !song?.id) return undefined;
+    if (!instr || !song?.id) return undefined;
 
     operationRef.current += 1;
     latestOperationTypeRef.current = "stop";

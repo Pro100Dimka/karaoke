@@ -14,6 +14,7 @@ rem    - Qwen3-ForcedAligner-0.6B
 rem    - TorchFCPE bundled model
 rem    - MSST inference through the shared backend runtime
 rem    - Mel-Band RoFormer vocals checkpoint
+rem    - Hugging Face download cache under downloads\cache\huggingface
 rem    - portable project-relative environment manifest
 rem
 rem  Safe to run repeatedly. Existing valid files are reused.
@@ -29,7 +30,9 @@ set "VENV_DIR=%ROOT%\venv"
 set "PYTHON=%VENV_DIR%\Scripts\python.exe"
 
 set "MODELS_DIR=%DOWNLOADS%\models"
-set "HF_HOME=%MODELS_DIR%\huggingface"
+set "CACHE_DIR=%DOWNLOADS%\cache"
+set "HF_HOME=%CACHE_DIR%\huggingface"
+set "LEGACY_HF_HOME=%MODELS_DIR%\huggingface"
 set "QWEN_DIR=%MODELS_DIR%\qwen"
 set "QWEN_ASR_DIR=%QWEN_DIR%\Qwen3-ASR-1.7B"
 set "QWEN_ALIGNER_DIR=%QWEN_DIR%\Qwen3-ForcedAligner-0.6B"
@@ -110,6 +113,33 @@ if not exist "%RUNTIME_PYTHON%" if not exist "%PYTHON%" (
 )
 
 if not exist "%MODELS_DIR%" mkdir "%MODELS_DIR%"
+if not exist "%CACHE_DIR%" mkdir "%CACHE_DIR%"
+
+rem Migrate/merge the old Hugging Face cache out of downloads\models.
+rem downloads\models must contain production models only.
+if exist "%LEGACY_HF_HOME%\" (
+    echo Migrating Hugging Face cache:
+    echo   %LEGACY_HF_HOME%
+    echo -^> %HF_HOME%
+
+    if not exist "%HF_HOME%" mkdir "%HF_HOME%"
+
+    robocopy "%LEGACY_HF_HOME%" "%HF_HOME%" /E /MOVE /R:2 /W:1 /NFL /NDL /NJH /NJS >nul
+    set "HF_MIGRATE_CODE=!ERRORLEVEL!"
+    if !HF_MIGRATE_CODE! GEQ 8 (
+        echo [ERROR] Could not migrate old Hugging Face cache.
+        echo Robocopy exit code: !HF_MIGRATE_CODE!
+        goto :fail
+    )
+
+    if exist "%LEGACY_HF_HOME%\" rmdir /S /Q "%LEGACY_HF_HOME%" >nul 2>&1
+    if exist "%LEGACY_HF_HOME%\" (
+        echo [ERROR] Old Hugging Face cache directory still exists:
+        echo   %LEGACY_HF_HOME%
+        goto :fail
+    )
+)
+
 if not exist "%HF_HOME%" mkdir "%HF_HOME%"
 if not exist "%QWEN_DIR%" mkdir "%QWEN_DIR%"
 if not exist "%CTC_DIR%" mkdir "%CTC_DIR%"
@@ -537,6 +567,12 @@ echo   %MSST_DIR%
 echo.
 echo Environment file:
 echo   %ENV_FILE%
+echo.
+echo Production models are stored under:
+echo   %MODELS_DIR%
+echo.
+echo Download cache is stored under:
+echo   %CACHE_DIR%
 echo.
 echo Resources are stored under:
 echo   %DOWNLOADS%

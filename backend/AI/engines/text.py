@@ -144,7 +144,7 @@ def _words_from_items(items) -> list[Word]:
 
 
 ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v14-duration-guard"
-LONG_TEXT_ALIGNMENT_VERSION = "v39-physical-baseline-line-aware"
+LONG_TEXT_ALIGNMENT_VERSION = "v41-atomic-acoustic-line-anchors"
 
 
 def _normalize_singing_audio(y: np.ndarray) -> np.ndarray:
@@ -511,6 +511,469 @@ def _lossless_canonical_alignment(
     ):
         return []
     return output
+
+
+def _atomic_line_acoustic_alignment(
+    groups: list[str],
+    ctc_lines,
+    qwen_words: list[Word],
+    source: np.ndarray,
+    sample_rate: int,
+    duration_sec: float,
+    anchor_windows: dict[int, tuple[float, float, float]] | None = None,
+) -> tuple[list[Word], dict[str, int]]:
+    """Build a complete canonical timeline around whole acoustic lyric lines.
+
+    CTC already aligns a complete canonical line. Treat that result as an atomic
+    acoustic observation instead of clipping/re-matching its individual words
+    against a separately estimated line window. Compatible acoustic lines are
+    selected globally; only the missing line ranges are synthesized.
+    """
+    from difflib import SequenceMatcher
+
+    line_tokens = [tokenize(group) for group in groups]
+    canonical = [token for row in line_tokens for token in row]
+    line_count = len(line_tokens)
+    if not canonical or line_count == 0 or duration_sec <= 0.04:
+        return [], {
+            "ctc": 0,
+            "qwen": 0,
+            "interpolated": 0,
+            "lines": line_count,
+            "line_fallbacks": line_count,
+            "dropped_word_anchors": 0,
+            "atomic_ctc_lines": 0,
+        }
+
+    def norm(value: object) -> str:
+        return re.sub(r"[^\w]+", "", str(value).casefold(), flags=re.UNICODE)
+
+    def physical_word_minimum(token: str) -> float:
+        chars = max(1, len(norm(token)))
+        return max(0.075, min(0.42, 0.05 + 0.03 * chars))
+
+    line_min = [
+        max(
+            0.12,
+            _minimum_sung_phrase_duration(tokens),
+            sum(physical_word_minimum(token) for token in tokens),
+        )
+        if tokens else 0.08
+        for tokens in line_tokens
+    ]
+    line_expected = [
+        max(line_min[i], _expected_sung_phrase_duration(tokens))
+        for i, tokens in enumerate(line_tokens)
+    ]
+    line_max = [
+        min(8.5, max(line_expected[i] * 2.25 + 0.35, line_min[i] * 2.8, 1.1))
+        for i in range(line_count)
+    ]
+    line_gap_floor = 0.025
+
+    # Candidate: line_index -> list[(words, source, priority)]
+    candidates: dict[int, list[tuple[list[Word], str, float]]] = {}
+
+    # Raw CTC results are already canonical full-line alignments. Validate only
+    # their text/order/physics; do not rematch or clip individual words.
+    raw_ctc_words = 0
+    for line_index, result in enumerate(ctc_lines or []):
+        if result is None or line_index >= line_count:
+            continue
+        expected = line_tokens[line_index]
+        actual = list(getattr(result, "words", ()) or ())
+        raw_ctc_words += len(actual)
+        if not expected or len(actual) != len(expected):
+            continue
+        if [norm(word.text) for word in actual] != [norm(token) for token in expected]:
+            continue
+
+        words: list[Word] = []
+        valid = True
+        for local_index, (word, token) in enumerate(zip(actual, expected, strict=True)):
+            start = float(word.start)
+            end = float(word.end)
+            if (
+                not math.isfinite(start)
+                or not math.isfinite(end)
+                or start < -0.02
+                or end > duration_sec + 0.10
+                or end <= start + 0.009
+            ):
+                valid = False
+                break
+            words.append(
+                Word(
+                    max(0.0, start),
+                    min(duration_sec, end),
+                    token,
+                    max(0.0, min(1.0, float(word.confidence))),
+                    local_index,
+                )
+            )
+        if not valid or not words:
+            continue
+        if any(
+            right.start < left.end - 0.015
+            for left, right in zip(words, words[1:], strict=False)
+        ):
+            continue
+
+        span = words[-1].end - words[0].start
+        # Reject only physically impossible line results. A real sung line can
+        # be substantially longer than the text-duration estimate.
+        if span < line_min[line_index] * 0.65 or span > line_max[line_index] * 1.35:
+            continue
+        confidence = max(
+            float(getattr(result, "confidence", 0.0) or 0.0),
+            sum(word.confidence for word in words) / len(words),
+        )
+        priority = 10000.0 + 5000.0 * max(0.0, min(1.0, confidence))
+        candidates.setdefault(line_index, []).append((words, "ctc", priority))
+
+    # Secondary Qwen words may form a complete canonical line. Only complete
+    # line matches are promoted to atomic anchors; partial Qwen output remains
+    # merely fallback evidence and can never displace CTC.
+    qwen = [word for word in (qwen_words or []) if norm(word.text)]
+    if qwen:
+        qnorm = [norm(word.text) for word in qwen]
+        cnorm = [norm(token) for token in canonical]
+        matcher = SequenceMatcher(None, qnorm, cnorm, autojunk=False)
+        global_to_line: list[tuple[int, int]] = []
+        for line_index, tokens in enumerate(line_tokens):
+            for local_index in range(len(tokens)):
+                global_to_line.append((line_index, local_index))
+
+        per_line: dict[int, dict[int, Word]] = {}
+        for block in matcher.get_matching_blocks():
+            for delta in range(block.size):
+                cidx = block.b + delta
+                qidx = block.a + delta
+                if 0 <= cidx < len(global_to_line):
+                    li, local = global_to_line[cidx]
+                    per_line.setdefault(li, {})[local] = qwen[qidx]
+
+        for li, mapping in per_line.items():
+            expected = line_tokens[li]
+            if not expected or len(mapping) != len(expected):
+                continue
+            words = []
+            for local in range(len(expected)):
+                source_word = mapping[local]
+                words.append(
+                    Word(
+                        max(0.0, float(source_word.start)),
+                        min(duration_sec, float(source_word.end)),
+                        expected[local],
+                        max(0.0, min(1.0, float(source_word.confidence))),
+                        local,
+                    )
+                )
+            if any(
+                right.start < left.end - 0.015
+                for left, right in zip(words, words[1:], strict=False)
+            ):
+                continue
+            span = words[-1].end - words[0].start
+            if span < line_min[li] * 0.65 or span > line_max[li] * 1.35:
+                continue
+            mean_conf = sum(word.confidence for word in words) / len(words)
+            candidates.setdefault(li, []).append(
+                (words, "qwen", 1000.0 + 1000.0 * mean_conf)
+            )
+
+    # Flatten one best candidate per line (CTC always outranks Qwen).
+    best: list[tuple[int, list[Word], str, float]] = []
+    for li in sorted(candidates):
+        words, kind, priority = max(candidates[li], key=lambda item: item[2])
+        best.append((li, words, kind, priority))
+
+    def skipped_minimum(left_line: int, right_line: int) -> float:
+        if right_line <= left_line + 1:
+            return line_gap_floor
+        return (
+            sum(line_min[idx] for idx in range(left_line + 1, right_line))
+            + line_gap_floor * (right_line - left_line)
+        )
+
+    # Weighted monotonic chain over whole-line acoustic anchors.
+    # A candidate is compatible only if every skipped canonical line can still
+    # physically fit between the two observed line intervals.
+    selected: list[tuple[int, list[Word], str, float]] = []
+    if best:
+        scores: list[float] = []
+        prev: list[int] = []
+        for pos, (li, words, kind, priority) in enumerate(best):
+            best_score = priority
+            best_prev = -1
+            for ppos in range(pos):
+                pli, pwords, pkind, ppriority = best[ppos]
+                required = skipped_minimum(pli, li)
+                if words[0].start < pwords[-1].end + required - 1e-6:
+                    continue
+                score = scores[ppos] + priority
+                if score > best_score:
+                    best_score = score
+                    best_prev = ppos
+            scores.append(best_score)
+            prev.append(best_prev)
+
+        end_pos = max(range(len(best)), key=lambda pos: scores[pos])
+        selected_positions = []
+        while end_pos >= 0:
+            selected_positions.append(end_pos)
+            end_pos = prev[end_pos]
+        selected_positions.reverse()
+        selected = [best[pos] for pos in selected_positions]
+
+    selected_by_line = {li: (words, kind, priority) for li, words, kind, priority in selected}
+
+    active = _activity_quantile_times(source, sample_rate)
+    active_start = max(0.0, float(active[0])) if active else 0.0
+    active_end = min(duration_sec, float(active[-1])) if active else duration_sec
+    if active_end <= active_start + 0.08:
+        active_start, active_end = 0.0, duration_sec
+
+    # Ensure edges have enough physical room. If a chosen edge anchor makes the
+    # prefix/suffix impossible, drop only that edge anchor and retry selection.
+    def edge_compatible(items):
+        if not items:
+            return True
+        first_li, first_words, _kind, _priority = items[0]
+        prefix_need = sum(line_min[:first_li]) + line_gap_floor * first_li
+        if first_words[0].start < active_start + prefix_need - 1e-6:
+            return False
+        last_li, last_words, _kind, _priority = items[-1]
+        suffix_need = sum(line_min[last_li + 1:]) + line_gap_floor * (line_count - last_li - 1)
+        if active_end < last_words[-1].end + suffix_need - 1e-6:
+            return False
+        return True
+
+    # Edge pruning is rare; recompute selected map after removing only offending
+    # first/last anchors. Internal compatibility was already guaranteed by DP.
+    while selected and not edge_compatible(selected):
+        first_li, first_words, first_kind, first_priority = selected[0]
+        last_li, last_words, last_kind, last_priority = selected[-1]
+        prefix_need = sum(line_min[:first_li]) + line_gap_floor * first_li
+        suffix_need = sum(line_min[last_li + 1:]) + line_gap_floor * (line_count - last_li - 1)
+        first_bad = first_words[0].start < active_start + prefix_need - 1e-6
+        last_bad = active_end < last_words[-1].end + suffix_need - 1e-6
+        if first_bad and last_bad:
+            if first_priority <= last_priority:
+                selected.pop(0)
+            else:
+                selected.pop()
+        elif first_bad:
+            selected.pop(0)
+        else:
+            selected.pop()
+    selected_by_line = {li: (words, kind, priority) for li, words, kind, priority in selected}
+
+    # Fill a consecutive unanchored line range inside [left_time, right_time].
+    def synthesize_range(
+        begin_line: int,
+        end_line: int,
+        left_time: float,
+        right_time: float,
+    ) -> list[list[Word]] | None:
+        indices = list(range(begin_line, end_line))
+        if not indices:
+            return []
+        total_min = sum(line_min[i] for i in indices)
+        gap_count = len(indices) + 1
+        available = right_time - left_time
+        required = total_min + line_gap_floor * gap_count
+        if available < required - 1e-6:
+            return None
+
+        desired = [line_expected[i] for i in indices]
+        desired_total = sum(desired)
+        max_duration_budget = max(total_min, available - line_gap_floor * gap_count)
+        if desired_total <= max_duration_budget:
+            durations = desired
+        else:
+            reducible = sum(max(0.0, desired[k] - line_min[indices[k]]) for k in range(len(indices)))
+            shortage = desired_total - max_duration_budget
+            ratio = min(1.0, shortage / max(1e-9, reducible))
+            durations = [
+                desired[k] - (desired[k] - line_min[indices[k]]) * ratio
+                for k in range(len(indices))
+            ]
+
+        used = sum(durations)
+        gap = max(line_gap_floor, (available - used) / gap_count)
+        cursor = left_time + gap
+        result: list[list[Word]] = []
+        for pos, li in enumerate(indices):
+            duration_value = durations[pos]
+            line_end = min(right_time, cursor + duration_value)
+            tokens = line_tokens[li]
+
+            # Prefer activity-derived word placement only inside this bounded
+            # line window. It may refine word distribution but cannot move the
+            # line itself to another vocal island.
+            left_sample = max(0, int(cursor * sample_rate))
+            right_sample = min(len(source), max(left_sample + 1, int(line_end * sample_rate)))
+            local_audio = source[left_sample:right_sample]
+            activity_words = _activity_fallback_words(tokens, local_audio, sample_rate)
+            line_words: list[Word] = []
+            if (
+                len(activity_words) == len(tokens)
+                and activity_words
+                and activity_words[-1].end <= (line_end - cursor) + 0.05
+            ):
+                for local_idx, word in enumerate(activity_words):
+                    line_words.append(
+                        Word(
+                            cursor + word.start,
+                            min(line_end, cursor + word.end),
+                            tokens[local_idx],
+                            0.020,
+                            local_idx,
+                        )
+                    )
+            else:
+                local = _proportional_words(tokens, max(0.04, line_end - cursor))
+                for local_idx, word in enumerate(local):
+                    line_words.append(
+                        Word(
+                            cursor + word.start,
+                            min(line_end, cursor + word.end),
+                            tokens[local_idx],
+                            0.008,
+                            local_idx,
+                        )
+                    )
+            if len(line_words) != len(tokens):
+                return None
+            result.append(line_words)
+            cursor = line_end + gap
+        return result
+
+    line_results: list[list[Word] | None] = [None] * line_count
+
+    # Copy acoustic anchor lines byte-for-byte in timing/confidence.
+    for li, (words, kind, _priority) in selected_by_line.items():
+        line_results[li] = [
+            Word(word.start, word.end, line_tokens[li][idx], word.confidence, idx)
+            for idx, word in enumerate(words)
+        ]
+
+    # Fill prefix, interior gaps and suffix.
+    boundaries = [(-1, active_start, active_start)]
+    for li, words, kind, priority in selected:
+        boundaries.append((li, words[0].start, words[-1].end))
+    boundaries.append((line_count, active_end, active_end))
+
+    for bidx in range(len(boundaries) - 1):
+        left_li, left_start, left_end = boundaries[bidx]
+        right_li, right_start, right_end = boundaries[bidx + 1]
+        begin = left_li + 1
+        end = right_li
+        if begin >= end:
+            continue
+        generated = synthesize_range(begin, end, left_end, right_start)
+        if generated is None:
+            # This should be prevented by chain compatibility. If numerical
+            # rounding still makes the range impossible, use the known-good
+            # physical canonical baseline for this range only.
+            baseline = _lossless_canonical_alignment(
+                groups, source, sample_rate, duration_sec, anchor_windows
+            )
+            if not _canonical_words_match(baseline, canonical):
+                return [], {
+                    "ctc": 0, "qwen": 0, "interpolated": 0,
+                    "lines": line_count, "line_fallbacks": line_count,
+                    "dropped_word_anchors": raw_ctc_words,
+                    "atomic_ctc_lines": 0,
+                }
+            offsets = [0]
+            for row in line_tokens:
+                offsets.append(offsets[-1] + len(row))
+            generated = []
+            for li in range(begin, end):
+                generated.append([
+                    Word(w.start, w.end, w.text, w.confidence, idx)
+                    for idx, w in enumerate(baseline[offsets[li]:offsets[li+1]])
+                ])
+        for li, line_words in zip(range(begin, end), generated, strict=True):
+            line_results[li] = line_words
+
+    output: list[Word] = []
+    ctc_count = 0
+    qwen_count = 0
+    interpolated_count = 0
+    ctc_lines_kept = 0
+    qwen_lines_kept = 0
+    for li, tokens in enumerate(line_tokens):
+        line_words = line_results[li]
+        if line_words is None or len(line_words) != len(tokens):
+            return [], {
+                "ctc": ctc_count,
+                "qwen": qwen_count,
+                "interpolated": interpolated_count,
+                "lines": line_count,
+                "line_fallbacks": line_count - ctc_lines_kept - qwen_lines_kept,
+                "dropped_word_anchors": max(0, raw_ctc_words - ctc_count),
+                "atomic_ctc_lines": ctc_lines_kept,
+            }
+
+        source_kind = selected_by_line.get(li, (None, "interpolated", 0.0))[1]
+        if source_kind == "ctc":
+            ctc_lines_kept += 1
+            ctc_count += len(tokens)
+        elif source_kind == "qwen":
+            qwen_lines_kept += 1
+            qwen_count += len(tokens)
+        else:
+            interpolated_count += len(tokens)
+
+        for local_idx, word in enumerate(line_words):
+            output.append(
+                Word(
+                    float(word.start),
+                    float(word.end),
+                    tokens[local_idx],
+                    float(word.confidence),
+                    len(output),
+                )
+            )
+
+    if len(output) != len(canonical) or not _canonical_words_match(output, canonical):
+        return [], {
+            "ctc": ctc_count,
+            "qwen": qwen_count,
+            "interpolated": interpolated_count,
+            "lines": line_count,
+            "line_fallbacks": line_count - ctc_lines_kept - qwen_lines_kept,
+            "dropped_word_anchors": max(0, raw_ctc_words - ctc_count),
+            "atomic_ctc_lines": ctc_lines_kept,
+        }
+    if any(
+        right.start < left.end - 1e-6
+        for left, right in zip(output, output[1:], strict=False)
+    ):
+        return [], {
+            "ctc": ctc_count,
+            "qwen": qwen_count,
+            "interpolated": interpolated_count,
+            "lines": line_count,
+            "line_fallbacks": line_count - ctc_lines_kept - qwen_lines_kept,
+            "dropped_word_anchors": max(0, raw_ctc_words - ctc_count),
+            "atomic_ctc_lines": ctc_lines_kept,
+        }
+
+    return output, {
+        "ctc": ctc_count,
+        "qwen": qwen_count,
+        "interpolated": interpolated_count,
+        "lines": line_count,
+        "line_fallbacks": line_count - ctc_lines_kept - qwen_lines_kept,
+        "dropped_word_anchors": max(0, raw_ctc_words - ctc_count),
+        "atomic_ctc_lines": ctc_lines_kept,
+        "atomic_qwen_lines": qwen_lines_kept,
+    }
+
 
 def _line_aware_canonical_alignment(
     groups: list[str],
@@ -1147,6 +1610,78 @@ def _line_aware_canonical_alignment(
             )
         return result
 
+
+    accepted_line_stats: list[dict[str, int]] = []
+
+    def complete_with_baseline_tail(next_line_index: int) -> tuple[list[Word], dict[str, int]]:
+        """Keep the longest safe acoustic prefix and replace only the tail.
+
+        A late impossible line must never erase acoustic anchors accepted for
+        earlier lines. Walk backwards over line boundaries until the canonical
+        baseline tail fits after the retained acoustic prefix.
+        """
+        if not baseline_valid:
+            return [], stats
+
+        line_offsets = [0]
+        for row in line_tokens:
+            line_offsets.append(line_offsets[-1] + len(row))
+
+        max_cut = min(next_line_index, len(accepted_line_stats), len(line_tokens))
+        for cut in range(max_cut, -1, -1):
+            prefix_count = line_offsets[cut]
+            prefix = output[:prefix_count]
+            tail = baseline_words[prefix_count:]
+            if not tail:
+                rebuilt = [
+                    Word(w.start, w.end, w.text, w.confidence, i)
+                    for i, w in enumerate(prefix)
+                ]
+            else:
+                if prefix and tail[0].start < prefix[-1].end + 0.015:
+                    continue
+                rebuilt = [
+                    Word(w.start, w.end, w.text, w.confidence, i)
+                    for i, w in enumerate(prefix + tail)
+                ]
+
+            if len(rebuilt) != len(canonical):
+                continue
+            if not _canonical_words_match(rebuilt, canonical):
+                continue
+            if any(
+                right.start < left.end - 1e-6
+                for left, right in zip(rebuilt, rebuilt[1:], strict=False)
+            ):
+                continue
+
+            kept_stats = accepted_line_stats[:cut]
+            ctc_count = sum(int(item.get("ctc", 0)) for item in kept_stats)
+            qwen_count = sum(int(item.get("qwen", 0)) for item in kept_stats)
+            interpolated_count = (
+                sum(int(item.get("interpolated", 0)) for item in kept_stats)
+                + sum(len(row) for row in line_tokens[cut:])
+            )
+            dropped_count = sum(int(item.get("dropped", 0)) for item in kept_stats)
+            return rebuilt, {
+                **stats,
+                "ctc": ctc_count,
+                "qwen": qwen_count,
+                "interpolated": interpolated_count,
+                "dropped_word_anchors": dropped_count,
+                "line_fallbacks": int(stats.get("line_fallbacks", 0)) + (len(line_tokens) - cut),
+                "tail_rollback_from_line": cut,
+            }
+
+        return baseline_words, {
+            **stats,
+            "ctc": 0,
+            "qwen": 0,
+            "interpolated": len(canonical),
+            "line_fallbacks": int(stats.get("line_fallbacks", 0)) + len(line_tokens),
+            "tail_rollback_from_line": 0,
+        }
+
     for line_index, (start, end) in enumerate(line_windows):
         tokens = line_tokens[line_index]
         if not tokens:
@@ -1165,13 +1700,7 @@ def _line_aware_canonical_alignment(
                 # Do not abort an otherwise usable acoustic alignment. The
                 # complete canonical baseline will be used below as the final
                 # song-level safety net.
-                return baseline_words if baseline_valid else [], {
-                    **stats,
-                    "ctc": 0,
-                    "qwen": 0,
-                    "interpolated": len(canonical),
-                    "line_fallbacks": stats["line_fallbacks"] + 1,
-                }
+                return complete_with_baseline_tail(line_index)
             line_stats = {
                 "ctc": 0, "qwen": 0,
                 "interpolated": len(tokens), "dropped": 0,
@@ -1197,15 +1726,7 @@ def _line_aware_canonical_alignment(
                 new_start = output[-1].end + 0.02
                 remaining = duration_sec - new_start
                 if remaining <= 0.04:
-                    if baseline_valid:
-                        return baseline_words, {
-                            **stats,
-                            "ctc": 0,
-                            "qwen": 0,
-                            "interpolated": len(canonical),
-                            "line_fallbacks": stats["line_fallbacks"] + 1,
-                        }
-                    return [], stats
+                    return complete_with_baseline_tail(line_index)
                 available = min(
                     line_maximum[line_index],
                     max(0.04, min(line_minimum[line_index], remaining)),
@@ -1231,15 +1752,7 @@ def _line_aware_canonical_alignment(
                     )
                     line = baseline_line_for(line_index, previous_end, hard_end)
                     if len(line) != len(tokens):
-                        if baseline_valid:
-                            return baseline_words, {
-                                **stats,
-                                "ctc": 0,
-                                "qwen": 0,
-                                "interpolated": len(canonical),
-                                "line_fallbacks": stats["line_fallbacks"] + 1,
-                            }
-                        return [], stats
+                        return complete_with_baseline_tail(line_index)
                 line_stats = {
                     "ctc": 0, "qwen": 0,
                     "interpolated": len(tokens), "dropped": line_stats.get("dropped", 0),
@@ -1260,30 +1773,20 @@ def _line_aware_canonical_alignment(
         stats["qwen"] += int(line_stats.get("qwen", 0))
         stats["interpolated"] += int(line_stats.get("interpolated", 0))
         stats["dropped_word_anchors"] += int(line_stats.get("dropped", 0))
+        accepted_line_stats.append({
+            "ctc": int(line_stats.get("ctc", 0)),
+            "qwen": int(line_stats.get("qwen", 0)),
+            "interpolated": int(line_stats.get("interpolated", 0)),
+            "dropped": int(line_stats.get("dropped", 0)),
+        })
 
     if len(output) != len(canonical) or not _canonical_words_match(output, canonical):
-        if baseline_valid:
-            return baseline_words, {
-                **stats,
-                "ctc": 0,
-                "qwen": 0,
-                "interpolated": len(canonical),
-                "line_fallbacks": stats["line_fallbacks"] + 1,
-            }
-        return [], stats
+        return complete_with_baseline_tail(len(accepted_line_stats))
     if any(
         right.start < left.end - 1e-6
         for left, right in zip(output, output[1:], strict=False)
     ):
-        if baseline_valid:
-            return baseline_words, {
-                **stats,
-                "ctc": 0,
-                "qwen": 0,
-                "interpolated": len(canonical),
-                "line_fallbacks": stats["line_fallbacks"] + 1,
-            }
-        return [], stats
+        return complete_with_baseline_tail(len(accepted_line_stats))
 
     return output, stats
 
@@ -3214,7 +3717,7 @@ class Qwen3ForcedAligner(Aligner):
         # failed canonical validation, which allowed line-level publishing bugs
         # to erase the CTC evidence before the merger ever saw it.
         if raw_ctc_word_count > 0 or not _canonical_words_match(output, canonical_tokens):
-            merged, merge_stats = _line_aware_canonical_alignment(
+            merged, merge_stats = _atomic_line_acoustic_alignment(
                 groups,
                 ctc_lines,
                 output,
@@ -3230,6 +3733,10 @@ class Qwen3ForcedAligner(Aligner):
             self.last_alignment_diagnostics["line_aware_lines"] = int(merge_stats.get("lines", 0) or 0)
             self.last_alignment_diagnostics["line_fallbacks"] = int(merge_stats.get("line_fallbacks", 0) or 0)
             self.last_alignment_diagnostics["dropped_word_anchors"] = int(merge_stats.get("dropped_word_anchors", 0) or 0)
+            self.last_alignment_diagnostics["atomic_ctc_lines"] = int(merge_stats.get("atomic_ctc_lines", 0) or 0)
+            self.last_alignment_diagnostics["atomic_qwen_lines"] = int(merge_stats.get("atomic_qwen_lines", 0) or 0)
+            if "tail_rollback_from_line" in merge_stats:
+                self.last_alignment_diagnostics["tail_rollback_from_line"] = int(merge_stats.get("tail_rollback_from_line", 0) or 0)
             if raw_ctc_word_count > 0 and preserved_ctc <= 0:
                 # Line-aware mode is allowed to reject every raw acoustic word
                 # when the CTC anchors are globally incompatible with the

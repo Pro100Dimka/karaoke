@@ -37,7 +37,7 @@ export function createPlayerSyncCommand(action, songId, position) {
 }
 
 export function getMicrophoneLevel(signal) {
-  const rmsDb = Number(signal?.rms_db);
+  const rmsDb = Number(signal?.rms_db ?? signal?.rms_dbfs);
   if (!Number.isFinite(rmsDb)) return 0;
   return Math.max(0, Math.min(100, ((rmsDb + 60) / 60) * 100));
 }

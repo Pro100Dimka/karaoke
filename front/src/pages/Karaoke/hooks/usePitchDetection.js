@@ -56,20 +56,37 @@ export default function usePitchDetection({
         const monitor = browserMonitorRef.current;
         stream = monitor?.stream;
         context = monitor?.context;
-        if (!stream) {
-          stream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              echoCancellation: false,
-              noiseSuppression: false,
-              autoGainControl: false,
-              ...(monitorInputDeviceId !== "default"
-                ? { deviceId: { exact: monitorInputDeviceId } }
-                : {})
+        const streamHasLiveAudio = Boolean(
+          stream?.getAudioTracks?.().some((track) => track.readyState === "live")
+        );
+        if (!streamHasLiveAudio) {
+          const baseAudio = {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false
+          };
+          const candidates =
+            monitorInputDeviceId && monitorInputDeviceId !== "default"
+              ? [
+                  { ...baseAudio, deviceId: { exact: monitorInputDeviceId } },
+                  baseAudio
+                ]
+              : [baseAudio];
+
+          let lastError = null;
+          for (const audio of candidates) {
+            try {
+              stream = await navigator.mediaDevices.getUserMedia({ audio });
+              ownsStream = true;
+              lastError = null;
+              break;
+            } catch (error) {
+              lastError = error;
             }
-          });
-          ownsStream = true;
+          }
+          if (!stream) throw lastError || new Error("Микрофон недоступен");
         }
-        if (!context) {
+        if (!context || context.state === "closed") {
           const AudioContextClass =
             window.AudioContext || window.webkitAudioContext;
           if (!AudioContextClass) throw new Error("Web Audio API недоступен");
@@ -82,7 +99,11 @@ export default function usePitchDetection({
           return;
         }
         if (context.state === "suspended") {
-          await context.resume().catch(() => {});
+          try {
+            await context.resume();
+          } catch {
+            throw new Error("Не удалось активировать Web Audio API");
+          }
         }
         if (cancelled) return;
         const analyser = context.createAnalyser();

@@ -18,9 +18,9 @@ function normalizeDeviceId(value) {
 
 export function normalizeAudioEffects(settings) {
   return {
-    reverb: Math.max(0, toFiniteNumber(settings?.reverb)),
-    echo: Math.max(0, toFiniteNumber(settings?.echo)),
-    delay: Math.max(0, toFiniteNumber(settings?.delay))
+    reverb: Math.max(0, Math.min(1, toFiniteNumber(settings?.reverb))),
+    echo: Math.max(0, Math.min(1, toFiniteNumber(settings?.echo))),
+    delay: Math.max(0, Math.min(1, toFiniteNumber(settings?.delay)))
   };
 }
 

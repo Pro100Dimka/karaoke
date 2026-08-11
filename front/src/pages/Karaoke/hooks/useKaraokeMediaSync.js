@@ -79,7 +79,7 @@ export default function useKaraokeMediaSync({
   useEffect(() => {
     const instrumental = instrumentalRef.current;
     const vocals = vocalsRef.current;
-    if (!instrumental || !vocals) return undefined;
+    if (!instrumental) return undefined;
 
     const handleMetadata = () => {
       const nextDuration = Number(instrumental.duration);
@@ -92,7 +92,7 @@ export default function useKaraokeMediaSync({
         Promise.resolve(onPlaybackEndedRef.current()).catch(() => {});
         return;
       }
-      vocals.pause();
+      vocals?.pause();
       videoRef.current?.pause();
       sendYouTubeCommand("pauseVideo");
       silenceMelodyGuide();
@@ -100,9 +100,13 @@ export default function useKaraokeMediaSync({
     };
 
     instrumental.addEventListener("loadedmetadata", handleMetadata);
+    instrumental.addEventListener("durationchange", handleMetadata);
     instrumental.addEventListener("ended", handleEnded);
+    // The element may already have metadata before this effect subscribes.
+    handleMetadata();
     return () => {
       instrumental.removeEventListener("loadedmetadata", handleMetadata);
+      instrumental.removeEventListener("durationchange", handleMetadata);
       instrumental.removeEventListener("ended", handleEnded);
     };
   }, [

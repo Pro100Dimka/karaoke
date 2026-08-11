@@ -2,5 +2,12 @@ export const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 export const normalizePreset = (preset) =>
   Array.isArray(preset)
-    ? preset
-    : [preset.id, preset.label, preset.symbol, preset.echo, preset.reverb];
+    ? [preset[0], preset[1], preset[2], preset[3], preset[4], preset[5] ?? 0]
+    : [
+        preset?.id,
+        preset?.label,
+        preset?.symbol,
+        preset?.echo,
+        preset?.reverb,
+        preset?.delay ?? 0
+      ];

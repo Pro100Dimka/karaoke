@@ -17,7 +17,10 @@ export default function useKaraokeControls({ autoHideEnabled = true } = {}) {
   }, []);
 
   useEffect(() => {
-    if (!autoHideEnabled) return undefined;
+    if (!autoHideEnabled) {
+      setControlsVisible(true);
+      return undefined;
+    }
 
     const watcher = window.setInterval(() => {
       setControlsVisible(
@@ -34,7 +37,7 @@ export default function useKaraokeControls({ autoHideEnabled = true } = {}) {
   }, [showControls]);
 
   useEffect(() => {
-    if (autoHideEnabled) showControls();
+    showControls();
   }, [autoHideEnabled, showControls]);
 
   const revealControls = useCallback(() => {

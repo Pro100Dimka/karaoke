@@ -116,12 +116,12 @@ function EffectPreset({ label, symbol, echo, reverb, active, onClick }) {
   );
 }
 
-function EffectPresets({ activePreset, onApply }) {
+function EffectPresets({ effectPreset, onApplyEffectPreset }) {
   return (
     <Grid columns={4} gap="0.5rem" sx={{ width: "100%" }}>
       {EFFECT_PRESETS.map(normalizePreset).map(
-        ([id, label, symbol, echo, reverb]) => {
-          const preset = [id, label, symbol, echo, reverb];
+        ([id, label, symbol, echo, reverb, delay]) => {
+          const preset = { id, label, symbol, echo, reverb, delay };
           return (
             <EffectPreset
               key={id}
@@ -129,8 +129,8 @@ function EffectPresets({ activePreset, onApply }) {
               symbol={symbol}
               echo={echo}
               reverb={reverb}
-              active={activePreset === id}
-              onClick={() => onApply(preset)}
+              active={effectPreset === id}
+              onClick={() => onApplyEffectPreset?.(preset)}
             />
           );
         }

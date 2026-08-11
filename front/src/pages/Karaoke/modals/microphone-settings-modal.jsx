@@ -45,8 +45,8 @@ function KaraokeSettings({
   onOpenAudioSettings
 }) {
   const keyButtons = [
-    ["−", "Понизить тональность", keyShift <= -6, -1],
-    ["+", "Повысить тональность", keyShift >= 6, 1]
+    ["−", "Понизить тональность", keyShift <= -12, -1],
+    ["+", "Повысить тональность", keyShift >= 12, 1]
   ];
 
   return (
@@ -63,7 +63,7 @@ function KaraokeSettings({
                 unstyled
                 aria-label={keyButtons[0][1]}
                 disabled={keyButtons[0][2]}
-                onClick={() => onKeyShiftChange(Math.max(-6, keyShift - 1))}
+                onClick={() => onKeyShiftChange(Math.max(-12, keyShift - 1))}
               >
                 {keyButtons[0][0]}
               </Button>
@@ -72,7 +72,7 @@ function KaraokeSettings({
                 unstyled
                 aria-label={keyButtons[1][1]}
                 disabled={keyButtons[1][2]}
-                onClick={() => onKeyShiftChange(Math.min(6, keyShift + 1))}
+                onClick={() => onKeyShiftChange(Math.min(12, keyShift + 1))}
               >
                 {keyButtons[1][0]}
               </Button>

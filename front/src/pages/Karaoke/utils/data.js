@@ -61,57 +61,97 @@ export function normalizeLyrics(raw) {
     typeof value === "string" || typeof value === "number"
       ? String(value).trim()
       : "";
+  const readTime = (value, keys) => {
+    if (!value || typeof value !== "object") return null;
+    for (const key of keys) {
+      const rawValue = value[key];
+      if (rawValue === null || rawValue === undefined || rawValue === "") continue;
+      const number = Number(rawValue);
+      if (Number.isFinite(number) && number >= 0) return number;
+    }
+    return null;
+  };
+  const startKeys = ["start", "start_sec", "start_time", "begin", "from"];
+  const endKeys = ["end", "end_sec", "end_time", "finish", "to"];
 
   return list
     .filter((line) => line && typeof line === "object")
-    .map((line) => {
-      const fallbackStart = Number(line.start ?? line.begin ?? 0);
-      const rawFallbackEnd = Number(line.end ?? fallbackStart + 2);
-      if (!Number.isFinite(fallbackStart)) return null;
-      const fallbackEnd = Number.isFinite(rawFallbackEnd)
-        ? Math.max(fallbackStart, rawFallbackEnd)
-        : fallbackStart + 2;
+    .map((line, sourceIndex) => {
+      const declaredStart = readTime(line, startKeys);
+      const declaredEnd = readTime(line, endKeys);
       const words = Array.isArray(line.words)
         ? line.words
             .filter((word) => word && typeof word === "object")
-            .map((word) => ({
+            .map((word, wordIndex) => ({
+              ...word,
               text: toText(word.word ?? word.text),
-              start: Number(word.start ?? fallbackStart),
-              end: Number(word.end ?? fallbackEnd)
+              start: readTime(word, startKeys),
+              end: readTime(word, endKeys),
+              __wordIndex: wordIndex
             }))
-            .filter(
-              (word) =>
-                word.text &&
-                Number.isFinite(word.start) &&
-                Number.isFinite(word.end) &&
-                word.end >= word.start
-            )
-            .sort(
-              (left, right) => left.start - right.start || left.end - right.end
-            )
+            // Preserve the backend/source word order. Sorting a partially timed
+            // line by timestamp can move untimed words to the end and visibly
+            // scramble the lyric text. Timing repair happens later without
+            // changing the textual order.
+            .filter((word) => word.text)
         : [];
-      const startTime = words.length ? words[0].start : fallbackStart;
-      const endTime = words.length ? words.at(-1).end : fallbackEnd;
+
+      const timedWords = words.filter(
+        (word) => Number.isFinite(word.start) || Number.isFinite(word.end)
+      );
+      const finiteWordStarts = timedWords
+        .map((word) => word.start)
+        .filter(Number.isFinite);
+      const finiteWordEnds = timedWords
+        .map((word) => word.end)
+        .filter(Number.isFinite);
+      const wordStart = finiteWordStarts.length
+        ? Math.min(...finiteWordStarts)
+        : null;
+      const wordEnd = finiteWordEnds.length ? Math.max(...finiteWordEnds) : null;
+      const startTime = declaredStart ?? wordStart ?? null;
+      const endTime = declaredEnd ?? wordEnd ?? null;
       const text =
         toText(line.text ?? line.line) ||
-        words
-          .map((word) => word.text)
-          .join(" ")
-          .trim();
+        words.map((word) => word.text).join(" ").trim();
 
-      if (!text || !Number.isFinite(startTime) || !Number.isFinite(endTime)) {
-        return null;
-      }
+      // Untimed lines are unsafe for real-time karaoke. In particular, never
+      // coerce a missing start to zero: that makes an arbitrary line appear at
+      // the beginning of every song.
+      if (!text || startTime === null) return null;
+
+      const safeEnd =
+        endTime !== null && endTime >= startTime ? endTime : startTime;
 
       return {
+        ...line,
         start: startTime,
-        end: Math.max(startTime, endTime),
+        end: safeEnd,
         text,
-        words
+        words: words.map(({ __wordIndex, ...word }) => word),
+        __sourceIndex: sourceIndex
       };
     })
     .filter(Boolean)
-    .sort((left, right) => left.start - right.start || left.end - right.end);
+    .sort(
+      (left, right) =>
+        left.start - right.start ||
+        left.end - right.end ||
+        left.__sourceIndex - right.__sourceIndex
+    )
+    .map((line, index, lines) => {
+      const { __sourceIndex, ...cleanLine } = line;
+      // If a backend omitted/invalidated line end, use the next line boundary
+      // rather than creating a zero-length line that can never become current.
+      if (cleanLine.end <= cleanLine.start) {
+        const nextStart = lines[index + 1]?.start;
+        cleanLine.end =
+          Number.isFinite(nextStart) && nextStart > cleanLine.start
+            ? nextStart
+            : cleanLine.start + 2;
+      }
+      return cleanLine;
+    });
 }
 
 export const normalizeNotes = (raw) => normalizeNoteList(raw, noteNameToMidi);

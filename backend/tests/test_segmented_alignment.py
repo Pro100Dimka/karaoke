@@ -971,3 +971,86 @@ def test_lossless_baseline_ignores_pathological_asr_anchor_compression():
         assert line[-1].end - line[0].start >= text_engine._minimum_sung_phrase_duration(tokens) - 1e-6
         assert all(word.end - word.start >= 0.019 for word in line)
         offset += len(tokens)
+
+
+def test_atomic_line_alignment_preserves_complete_ctc_line_as_unit():
+    from types import SimpleNamespace
+
+    groups = [
+        "one two three",
+        "four five six",
+        "seven eight nine",
+    ]
+    audio = np.ones(16000 * 14, dtype=np.float32) * 0.05
+    ctc = [
+        SimpleNamespace(
+            words=[
+                Word(2.0, 2.35, "one", 0.91, 0),
+                Word(2.40, 2.78, "two", 0.89, 1),
+                Word(2.84, 3.30, "three", 0.93, 2),
+            ],
+            confidence=0.91,
+        ),
+        None,
+        None,
+    ]
+
+    merged, stats = text_engine._atomic_line_acoustic_alignment(
+        groups, ctc, [], audio, 16000, 14.0, {}
+    )
+
+    assert len(merged) == 9
+    assert [word.text for word in merged[:3]] == ["one", "two", "three"]
+    assert merged[0].start == pytest.approx(2.0)
+    assert merged[0].end == pytest.approx(2.35)
+    assert merged[1].start == pytest.approx(2.40)
+    assert merged[2].end == pytest.approx(3.30)
+    assert [word.confidence for word in merged[:3]] == pytest.approx([0.91, 0.89, 0.93])
+    assert stats["ctc"] == 3
+    assert stats["atomic_ctc_lines"] == 1
+    assert all(
+        right.start >= left.end - 1e-6
+        for left, right in zip(merged, merged[1:], strict=False)
+    )
+
+
+def test_atomic_line_alignment_drops_only_incompatible_ctc_line():
+    from types import SimpleNamespace
+
+    groups = [
+        "one two",
+        "three four",
+        "five six",
+        "seven eight",
+    ]
+    audio = np.ones(16000 * 18, dtype=np.float32) * 0.05
+    ctc = [
+        SimpleNamespace(
+            words=[
+                Word(2.0, 2.4, "one", 0.95, 0),
+                Word(2.45, 2.9, "two", 0.94, 1),
+            ],
+            confidence=0.95,
+        ),
+        None,
+        # This line occurs impossibly before the first CTC line and must lose.
+        SimpleNamespace(
+            words=[
+                Word(1.0, 1.3, "five", 0.50, 0),
+                Word(1.35, 1.7, "six", 0.50, 1),
+            ],
+            confidence=0.50,
+        ),
+        None,
+    ]
+
+    merged, stats = text_engine._atomic_line_acoustic_alignment(
+        groups, ctc, [], audio, 16000, 18.0, {}
+    )
+
+    assert len(merged) == 8
+    assert merged[0].start == pytest.approx(2.0)
+    assert merged[1].end == pytest.approx(2.9)
+    assert stats["ctc"] == 2
+    assert stats["atomic_ctc_lines"] == 1
+    assert stats["dropped_word_anchors"] == 2

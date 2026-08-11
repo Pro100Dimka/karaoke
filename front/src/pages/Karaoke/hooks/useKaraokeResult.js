@@ -3,30 +3,36 @@ import { api } from "../../../api/client";
 import { shouldLoadKaraokeResult } from "../utils/result";
 
 export default function useKaraokeResult(song) {
-  const [result, setResult] = useState(null);
+  const [state, setState] = useState({
+    result: null,
+    loading: false,
+    error: null
+  });
   const songId = song?.id;
   const songStatus = song?.status;
 
   useEffect(() => {
     if (!shouldLoadKaraokeResult({ id: songId, status: songStatus })) {
-      setResult(null);
+      setState({ result: null, loading: false, error: null });
       return undefined;
     }
 
     let active = true;
-    api
-      .getResult(songId)
-      .then((nextResult) => {
-        if (active) setResult(nextResult);
-      })
-      .catch(() => {
-        if (active) setResult(null);
-      });
+    setState({ result: null, loading: true, error: null });
+
+    api.getResult(songId).then(
+      (result) => {
+        if (active) setState({ result, loading: false, error: null });
+      },
+      (error) => {
+        if (active) setState({ result: null, loading: false, error });
+      }
+    );
 
     return () => {
       active = false;
     };
   }, [songId, songStatus]);
 
-  return result;
+  return state;
 }

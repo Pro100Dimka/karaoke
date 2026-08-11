@@ -63,7 +63,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     ? (songs || []).find((s) => s.id === songId)
     : (songs || []).find((s) => s.status === "done");
 
-  const result = useKaraokeResult(song);
+  const { result, loading: resultLoading, error: resultError } = useKaraokeResult(song);
   const instrumentalRef = useRef(null);
   const vocalsRef = useRef(null);
   const videoRef = useRef(null);
@@ -590,7 +590,27 @@ export default function Karaoke({ onOpenAppSettings }) {
     );
   }
 
-  const baseTempo = Number(result?.music?.tempo || song.tempo_override || 120);
+  if (resultLoading) {
+    return (
+      <div className="panel">
+        <p className="text-muted">Загружаем данные караоке…</p>
+      </div>
+    );
+  }
+
+  if (resultError || !result) {
+    return (
+      <div className="panel">
+        <p className="field-error">
+          Не удалось загрузить данные караоке: {resultError?.message || "результат обработки отсутствует"}.
+        </p>
+      </div>
+    );
+  }
+
+  const rawBaseTempo = Number(result?.music?.tempo ?? song.tempo_override);
+  const baseTempo =
+    Number.isFinite(rawBaseTempo) && rawBaseTempo > 0 ? rawBaseTempo : 120;
   const currentTempo = Math.max(1, Math.round(baseTempo * speed));
   const compactKey = formatCompactKey(
     transposeKey(song.key_override || result?.music?.key || "C", keyShift)
@@ -640,7 +660,10 @@ export default function Karaoke({ onOpenAppSettings }) {
           effects={microphoneEffects}
           keyShift={keyShift}
           speed={speed}
-          songKey={transposeKey(song?.key_override, keyShift)}
+          songKey={transposeKey(
+            song?.key_override || result?.music?.key || "C",
+            keyShift
+          )}
           onClose={() => setMicrophoneOpen(false)}
           onEffectsChange={(key, value) =>
             setMicrophoneEffects((effects) => ({ ...effects, [key]: value }))
