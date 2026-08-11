@@ -1,6 +1,13 @@
 @echo off
 setlocal EnableExtensions
 
+rem ============================================================================
+rem INTERNAL PARALLEL JOBS
+rem ============================================================================
+
+if /i "%~1"=="--front-job" goto :front_job
+if /i "%~1"=="--ai-job"    goto :ai_job
+
 title A^&D Voice - Development
 
 rem ============================================================================
@@ -8,24 +15,39 @@ rem CONFIG
 rem ============================================================================
 
 set "ROOT=%~dp0"
-set "BACKEND=%ROOT%backend"
-set "FRONTEND=%ROOT%front"
-set "SCRIPTS=%ROOT%scripts"
+set "BACK=%ROOT%backend"
+set "FRONT=%ROOT%front"
 
-set "DOWNLOADS=%ROOT%downloads"
-set "RUNTIMES=%DOWNLOADS%\runtimes"
+set "VENV=%BACK%\venv"
+set "PY=%VENV%\Scripts\python.exe"
 
-set "VENV=%BACKEND%\venv"
-set "PYTHON=%VENV%\Scripts\python.exe"
-set "ACTIVATE=%VENV%\Scripts\activate.bat"
+set "VER=3.12.10"
 
-set "PY_VERSION=3.12.10"
+set "RT=%ROOT%downloads\runtimes\python312"
+set "RTPY=%RT%\tools\python.exe"
 
-set "PY_RUNTIME=%RUNTIMES%\python312"
-set "PY_RUNTIME_EXE=%PY_RUNTIME%\tools\python.exe"
+set "ZIP=%TEMP%\advoice-python-%VER%.zip"
+set "URL=https://api.nuget.org/v3-flatcontainer/python/%VER%/python.%VER%.nupkg"
 
-set "PY_ARCHIVE=%TEMP%\advoice-python-%PY_VERSION%.zip"
-set "PY_URL=https://api.nuget.org/v3-flatcontainer/python/%PY_VERSION%/python.%PY_VERSION%.nupkg"
+set "AI=%ROOT%scripts\install-ai-models.bat"
+
+rem ============================================================================
+rem PARALLEL JOB FILES
+rem ============================================================================
+
+set "JOB_DIR=%TEMP%\advoice-dev-%RANDOM%-%RANDOM%"
+
+set "FRONT_RC=%JOB_DIR%\front.rc"
+set "FRONT_LOG=%JOB_DIR%\front.log"
+
+set "AI_RC=%JOB_DIR%\ai.rc"
+set "AI_LOG=%JOB_DIR%\ai.log"
+
+mkdir "%JOB_DIR%" >nul 2>&1 || goto :err
+
+rem ============================================================================
+rem HEADER
+rem ============================================================================
 
 echo.
 echo ============================================================
@@ -34,142 +56,214 @@ echo ============================================================
 echo.
 
 rem ============================================================================
-rem CHECK PROJECT
+rem PROJECT CHECK
 rem ============================================================================
 
-if not exist "%BACKEND%\" (
-    echo [ERROR] Backend directory was not found:
-    echo   %BACKEND%
-    goto :error
-)
-
-if not exist "%FRONTEND%\" (
-    echo [ERROR] Frontend directory was not found:
-    echo   %FRONTEND%
-    goto :error
-)
-
-rem ============================================================================
-rem ENSURE BACKEND VENV
-rem ============================================================================
-
-if not exist "%PYTHON%" (
-    echo Backend virtual environment was not found:
-    echo   %VENV%
-    echo.
-
-    call :ensure_python
-    if errorlevel 1 goto :error
-
-    call :create_venv
-    if errorlevel 1 goto :error
-)
-
-rem ============================================================================
-rem VERIFY EXISTING VENV
-rem ============================================================================
-
-"%PYTHON%" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3,12) else 1)" >nul 2>&1
-
-if errorlevel 1 (
-    echo Existing backend virtual environment does not use Python 3.12.
-    echo Recreating:
-    echo   %VENV%
-    echo.
-
-    call :ensure_python
-    if errorlevel 1 goto :error
-
-    call :remove_venv
-    if errorlevel 1 goto :error
-
-    call :create_venv
-    if errorlevel 1 goto :error
-)
-
-rem ============================================================================
-rem ACTIVATE CORRECT VENV
-rem ============================================================================
-
-call :activate_venv
-if errorlevel 1 goto :error
-
-rem ============================================================================
-rem ENVIRONMENT INFO
-rem ============================================================================
-
-echo.
-echo ============================================================
-echo  Python environment
-echo ============================================================
-echo.
-
-echo Runtime:
-echo   %PY_RUNTIME_EXE%
-echo.
-
-echo Active venv:
-echo   %VIRTUAL_ENV%
-echo.
-
-echo Python:
-echo   %PYTHON%
-echo.
-
-"%PYTHON%" --version
-
-rem ============================================================================
-rem DEV: OPTIONAL RESET SAVED AUDIO SETTINGS
-rem ============================================================================
-rem
-rem Settings are preserved by default.
-rem To reset only microphone/ASIO settings for a clean test,
-rem remove "rem " from the commands below.
-rem
-rem if exist "%ROOT%data\app.db" (
-rem     "%PYTHON%" -c "import sqlite3; db=sqlite3.connect(r'%ROOT%data\app.db'); db.execute('DELETE FROM audio_settings'); db.commit(); db.close()"
-rem )
-rem
-rem ============================================================================
-
-rem ============================================================================
-rem ENSURE OFFLINE AI MODELS
-rem ============================================================================
-
-if exist "%SCRIPTS%\ensure-offline-models.bat" (
-    echo.
-    echo Checking offline AI resources...
-    echo.
-
-    call "%SCRIPTS%\ensure-offline-models.bat"
-
-    if errorlevel 1 (
-        echo.
-        echo [ERROR] Failed to prepare offline AI resources.
-        goto :error
+for %%D in ("%BACK%" "%FRONT%") do (
+    if not exist "%%~D" (
+        echo [ERROR] Directory not found:
+        echo   %%~D
+        goto :err
     )
-) else (
-    echo.
-    echo [WARNING] Offline model checker was not found:
-    echo   %SCRIPTS%\ensure-offline-models.bat
-    echo.
+)
+
+if not exist "%AI%" (
+    echo [ERROR] AI installer not found:
+    echo   %AI%
+    goto :err
 )
 
 rem ============================================================================
-rem STOP OLD DEVELOPMENT PROCESSES
+rem FRONTEND - START IN PARALLEL
+rem ============================================================================
+rem
+rem Frontend dependencies do not depend on Python, so start them immediately.
+rem They will install in parallel while Python/backend are prepared.
+rem ============================================================================
+
+echo Starting frontend preparation in parallel...
+
+start "" /b "%ComSpec%" /d /c ^
+    ""%~f0" --front-job "%FRONT%" "%FRONT_LOG%" "%FRONT_RC%""
+
+rem ============================================================================
+rem PYTHON / VENV
+rem ============================================================================
+
+if exist "%PY%" (
+    "%PY%" -c "import sys;exit(sys.version_info[:2]!=(3,12))" >nul 2>&1
+
+    if not errorlevel 1 goto :venv
+
+    echo.
+    echo Recreating invalid virtual environment:
+    echo   %VENV%
+
+    rmdir /s /q "%VENV%" >nul 2>&1
+)
+
+call :runtime || goto :err
+
+echo.
+echo Creating backend virtual environment:
+echo   %VENV%
+echo.
+
+"%RTPY%" -m venv "%VENV%" || goto :err
+
+if not exist "%PY%" (
+    echo [ERROR] Virtual environment was not created correctly.
+    goto :err
+)
+
+rem ============================================================================
+rem PYTHON PACKAGES
 rem ============================================================================
 
 echo.
-echo Stopping previous development processes on ports 8000 and 5173...
+echo Preparing Python packages...
 echo.
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ports=8000,5173; $owners=Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -in $ports } | Select-Object -ExpandProperty OwningProcess -Unique; foreach($ownerPid in $owners){ $process=Get-CimInstance Win32_Process -Filter ('ProcessId=' + $ownerPid) -ErrorAction SilentlyContinue; if($process -and $process.Name -eq 'KaraokeBackend.exe' -and $process.ParentProcessId){ Stop-Process -Id $process.ParentProcessId -Force -ErrorAction SilentlyContinue }; Stop-Process -Id $ownerPid -Force -ErrorAction SilentlyContinue }"
+"%PY%" -m pip install ^
+    --disable-pip-version-check ^
+    --prefer-binary ^
+    -U pip setuptools wheel || goto :err
+
+rem Install both requirement files in ONE pip invocation.
+rem This avoids resolving dependencies twice.
+
+if exist "%BACK%\requirements.txt" (
+    if exist "%BACK%\requirements-dev.txt" (
+        echo Installing requirements.txt + requirements-dev.txt...
+
+        "%PY%" -m pip install ^
+            --disable-pip-version-check ^
+            --prefer-binary ^
+            -r "%BACK%\requirements.txt" ^
+            -r "%BACK%\requirements-dev.txt" || goto :err
+
+    ) else (
+        echo Installing requirements.txt...
+
+        "%PY%" -m pip install ^
+            --disable-pip-version-check ^
+            --prefer-binary ^
+            -r "%BACK%\requirements.txt" || goto :err
+    )
+
+) else if exist "%BACK%\requirements-dev.txt" (
+    echo Installing requirements-dev.txt...
+
+    "%PY%" -m pip install ^
+        --disable-pip-version-check ^
+        --prefer-binary ^
+        -r "%BACK%\requirements-dev.txt" || goto :err
+)
 
 rem ============================================================================
-rem START DEVELOPMENT
+rem VENV READY
 rem ============================================================================
 
-set "KARAOKE_PYTHON=%PYTHON%"
+:venv
+
+call "%VENV%\Scripts\activate.bat" || goto :err
+
+echo.
+echo Python:
+"%PY%" --version
+
+echo Venv:
+echo   %VIRTUAL_ENV%
+
+echo.
+
+rem ============================================================================
+rem AI - START IN PARALLEL
+rem ============================================================================
+
+echo Starting AI Core preparation in parallel...
+
+start "" /b "%ComSpec%" /d /c ^
+    ""%~f0" --ai-job "%AI%" "%ROOT%" "%AI_LOG%" "%AI_RC%""
+
+rem ============================================================================
+rem PORT CLEANUP
+rem ============================================================================
+rem
+rem Do this while AI installer is running.
+rem ============================================================================
+
+echo.
+echo Stopping processes on ports 8000 and 5173...
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
+    "$ports=8000,5173;" ^
+    "Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |" ^
+    "Where-Object { $_.LocalPort -in $ports } |" ^
+    "ForEach-Object {" ^
+    "Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue" ^
+    "}"
+
+rem ============================================================================
+rem WAIT FOR PARALLEL TASKS
+rem ============================================================================
+
+echo.
+echo Waiting for parallel preparation tasks...
+echo.
+
+call :wait "%FRONT_RC%"
+call :wait "%AI_RC%"
+
+set "FRONT_CODE="
+set "AI_CODE="
+
+set /p FRONT_CODE=<"%FRONT_RC%"
+set /p AI_CODE=<"%AI_RC%"
+
+if not "%FRONT_CODE%"=="0" (
+    echo.
+    echo ============================================================
+    echo [ERROR] Frontend preparation failed.
+    echo ============================================================
+    echo.
+
+    if exist "%FRONT_LOG%" type "%FRONT_LOG%"
+
+    goto :err
+)
+
+if not "%AI_CODE%"=="0" (
+    echo.
+    echo ============================================================
+    echo [ERROR] AI Core preparation failed.
+    echo ============================================================
+    echo.
+
+    if exist "%AI_LOG%" type "%AI_LOG%"
+
+    goto :err
+)
+
+rem ============================================================================
+rem AI ENVIRONMENT
+rem ============================================================================
+
+if exist "%ROOT%downloads\ai-environment.bat" (
+    call "%ROOT%downloads\ai-environment.bat"
+)
+
+rem ============================================================================
+rem CLEAN TEMP JOB DATA
+rem ============================================================================
+
+rmdir /s /q "%JOB_DIR%" >nul 2>&1
+
+rem ============================================================================
+rem START APPLICATION
+rem ============================================================================
+
+set "KARAOKE_PYTHON=%PY%"
 
 echo.
 echo ============================================================
@@ -177,529 +271,193 @@ echo  Starting A^&D Voice
 echo ============================================================
 echo.
 
-cd /d "%FRONTEND%"
+cd /d "%FRONT%" || goto :err
 
 call npm run dev:electron
 
-set "EXIT_CODE=%ERRORLEVEL%"
-
-exit /b %EXIT_CODE%
-
+exit /b %errorlevel%
 
 rem ============================================================================
-rem ENSURE LOCAL PYTHON 3.12
+rem LOCAL PYTHON
 rem ============================================================================
 
-:ensure_python
+:runtime
 
-rem ----------------------------------------------------------------------------
-rem VALID RUNTIME ALREADY EXISTS
-rem ----------------------------------------------------------------------------
-
-if exist "%PY_RUNTIME_EXE%" (
-    "%PY_RUNTIME_EXE%" -c "import sys; raise SystemExit(0 if sys.version_info[:3] == (3,12,10) else 1)" >nul 2>&1
+if exist "%RTPY%" (
+    "%RTPY%" -c "import sys,venv;exit(sys.version_info[:3]!=(3,12,10))" >nul 2>&1
 
     if not errorlevel 1 (
-        echo Local Python %PY_VERSION% found:
-        echo   %PY_RUNTIME_EXE%
-        echo.
         exit /b 0
     )
-
-    echo Existing Python runtime is invalid or has wrong version:
-    echo   %PY_RUNTIME%
-    echo.
-
-    echo Removing invalid runtime...
-
-    rmdir /s /q "%PY_RUNTIME%" >nul 2>&1
-
-    if exist "%PY_RUNTIME%\" (
-        echo.
-        echo [ERROR] Failed to remove invalid Python runtime:
-        echo   %PY_RUNTIME%
-        exit /b 1
-    )
 )
 
-rem ----------------------------------------------------------------------------
-rem REMOVE INCOMPLETE RUNTIME
-rem ----------------------------------------------------------------------------
-
-if exist "%PY_RUNTIME%\" (
-    echo Removing incomplete Python runtime:
-    echo   %PY_RUNTIME%
-    echo.
-
-    rmdir /s /q "%PY_RUNTIME%" >nul 2>&1
-
-    if exist "%PY_RUNTIME%\" (
-        echo [ERROR] Failed to remove incomplete Python runtime.
-        exit /b 1
-    )
-)
-
-rem ----------------------------------------------------------------------------
-rem CREATE DIRECTORIES
-rem ----------------------------------------------------------------------------
-
-if not exist "%DOWNLOADS%\" (
-    mkdir "%DOWNLOADS%" >nul 2>&1
-
-    if errorlevel 1 (
-        echo.
-        echo [ERROR] Failed to create:
-        echo   %DOWNLOADS%
-        exit /b 1
-    )
-)
-
-if not exist "%RUNTIMES%\" (
-    mkdir "%RUNTIMES%" >nul 2>&1
-
-    if errorlevel 1 (
-        echo.
-        echo [ERROR] Failed to create:
-        echo   %RUNTIMES%
-        exit /b 1
-    )
-)
-
-rem ----------------------------------------------------------------------------
-rem DOWNLOAD PYTHON
-rem ----------------------------------------------------------------------------
-
-echo Python %PY_VERSION% runtime was not found.
 echo.
-echo Downloading local Python %PY_VERSION%...
+echo Local Python %VER% not found.
+echo Preparing runtime:
+echo   %RT%
 echo.
 
-if exist "%PY_ARCHIVE%" (
-    del /q "%PY_ARCHIVE%" >nul 2>&1
-)
+rmdir /s /q "%RT%" >nul 2>&1
+del /q "%ZIP%" >nul 2>&1
+
+mkdir "%RT%" || exit /b 1
+
+echo Downloading Python %VER%...
 
 where curl.exe >nul 2>&1
 
 if not errorlevel 1 (
-    curl.exe -L --fail --retry 5 --retry-delay 2 --output "%PY_ARCHIVE%" "%PY_URL%"
+    curl.exe ^
+        -LfsS ^
+        --retry 5 ^
+        --retry-delay 2 ^
+        -o "%ZIP%" ^
+        "%URL%"
 )
 
-if not exist "%PY_ARCHIVE%" (
-    echo.
-    echo curl failed or is unavailable.
-    echo Trying PowerShell...
-    echo.
+if not exist "%ZIP%" (
+    echo curl failed. Trying PowerShell...
 
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; Invoke-WebRequest -UseBasicParsing -Uri '%PY_URL%' -OutFile '%PY_ARCHIVE%'"
+    powershell.exe ^
+        -NoProfile ^
+        -ExecutionPolicy Bypass ^
+        -Command ^
+        "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -UseBasicParsing -Uri '%URL%' -OutFile '%ZIP%'"
+)
 
-    if errorlevel 1 (
+if not exist "%ZIP%" (
+    echo.
+    echo [ERROR] Python runtime download failed.
+    exit /b 1
+)
+
+for %%F in ("%ZIP%") do (
+    if %%~zF==0 (
         echo.
-        echo [ERROR] Failed to download Python %PY_VERSION%.
+        echo [ERROR] Downloaded Python package is empty.
+
+        del /q "%ZIP%" >nul 2>&1
+
         exit /b 1
     )
 )
 
-if not exist "%PY_ARCHIVE%" (
+echo Extracting Python...
+
+powershell.exe ^
+    -NoProfile ^
+    -ExecutionPolicy Bypass ^
+    -Command ^
+    "Expand-Archive -LiteralPath '%ZIP%' -DestinationPath '%RT%' -Force" || exit /b 1
+
+del /q "%ZIP%" >nul 2>&1
+
+if not exist "%RTPY%" (
     echo.
-    echo [ERROR] Python archive was not downloaded:
-    echo   %PY_ARCHIVE%
+    echo [ERROR] Python executable not found:
+    echo   %RTPY%
+
     exit /b 1
 )
 
-for %%F in ("%PY_ARCHIVE%") do set "ARCHIVE_SIZE=%%~zF"
-
-if "%ARCHIVE_SIZE%"=="0" (
-    echo.
-    echo [ERROR] Downloaded Python archive is empty.
-
-    del /q "%PY_ARCHIVE%" >nul 2>&1
-    exit /b 1
-)
-
-echo.
-echo Download completed.
-echo.
-
-rem ----------------------------------------------------------------------------
-rem CREATE RUNTIME DIRECTORY
-rem ----------------------------------------------------------------------------
-
-mkdir "%PY_RUNTIME%" >nul 2>&1
+"%RTPY%" -c "import sys,venv;exit(sys.version_info[:3]!=(3,12,10))" >nul 2>&1
 
 if errorlevel 1 (
     echo.
-    echo [ERROR] Failed to create runtime directory:
-    echo   %PY_RUNTIME%
-    exit /b 1
-)
-
-rem ----------------------------------------------------------------------------
-rem EXTRACT PYTHON
-rem ----------------------------------------------------------------------------
-
-echo Extracting Python to:
-echo   %PY_RUNTIME%
-echo.
-
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; Expand-Archive -LiteralPath '%PY_ARCHIVE%' -DestinationPath '%PY_RUNTIME%' -Force"
-
-if errorlevel 1 (
-    echo.
-    echo [ERROR] Failed to extract Python archive.
-
-    if exist "%PY_RUNTIME%\" (
-        rmdir /s /q "%PY_RUNTIME%" >nul 2>&1
-    )
+    echo [ERROR] Invalid Python runtime:
+    echo   %RTPY%
 
     exit /b 1
 )
 
-del /q "%PY_ARCHIVE%" >nul 2>&1
-
-rem ----------------------------------------------------------------------------
-rem VERIFY PYTHON.EXE
-rem ----------------------------------------------------------------------------
-
-if not exist "%PY_RUNTIME_EXE%" (
-    echo.
-    echo [ERROR] Python executable was not found after extraction.
-    echo.
-    echo Expected:
-    echo   %PY_RUNTIME_EXE%
-    echo.
-    echo Runtime contents:
-    echo.
-
-    dir /b "%PY_RUNTIME%" 2>nul
-
-    exit /b 1
-)
-
-echo Python runtime extracted successfully.
-echo.
-
-"%PY_RUNTIME_EXE%" --version
-
-if errorlevel 1 (
-    echo.
-    echo [ERROR] Local Python could not be started:
-    echo   %PY_RUNTIME_EXE%
-    exit /b 1
-)
-
-"%PY_RUNTIME_EXE%" -c "import sys; raise SystemExit(0 if sys.version_info[:3] == (3,12,10) else 1)" >nul 2>&1
-
-if errorlevel 1 (
-    echo.
-    echo [ERROR] Downloaded Python has unexpected version.
-    echo.
-    echo Actual:
-    "%PY_RUNTIME_EXE%" --version
-    exit /b 1
-)
-
-rem ----------------------------------------------------------------------------
-rem VERIFY VENV SUPPORT
-rem ----------------------------------------------------------------------------
-
-"%PY_RUNTIME_EXE%" -c "import venv" >nul 2>&1
-
-if errorlevel 1 (
-    echo.
-    echo [ERROR] Python runtime does not contain the venv module:
-    echo   %PY_RUNTIME_EXE%
-    exit /b 1
-)
-
-echo.
-echo Local Python %PY_VERSION% is ready:
-echo   %PY_RUNTIME_EXE%
-echo.
+echo Local Python %VER% ready.
 
 exit /b 0
 
-
 rem ============================================================================
-rem REMOVE BACKEND VENV
-rem ============================================================================
-
-:remove_venv
-
-set "CURRENT_VENV="
-set "EXPECTED_VENV="
-
-for %%A in ("%VENV%") do set "EXPECTED_VENV=%%~fA"
-
-if defined VIRTUAL_ENV (
-    for %%A in ("%VIRTUAL_ENV%") do set "CURRENT_VENV=%%~fA"
-)
-
-if defined CURRENT_VENV (
-    if /I "%CURRENT_VENV%"=="%EXPECTED_VENV%" (
-        echo Deactivating current backend virtual environment...
-
-        if exist "%VENV%\Scripts\deactivate.bat" (
-            call "%VENV%\Scripts\deactivate.bat"
-        ) else (
-            set "VIRTUAL_ENV="
-            set "VIRTUAL_ENV_PROMPT="
-        )
-    )
-)
-
-if exist "%VENV%\" (
-    echo Removing backend virtual environment:
-    echo   %VENV%
-    echo.
-
-    rmdir /s /q "%VENV%" >nul 2>&1
-
-    if exist "%VENV%\" (
-        echo.
-        echo [ERROR] Failed to remove backend virtual environment.
-        echo Close all Python/backend processes and try again.
-        exit /b 1
-    )
-)
-
-exit /b 0
-
-
-rem ============================================================================
-rem CREATE BACKEND VENV
+rem WAIT FOR BACKGROUND JOB
 rem ============================================================================
 
-:create_venv
+:wait
 
-if not exist "%PY_RUNTIME_EXE%" (
-    echo.
-    echo [ERROR] Local Python runtime was not found:
-    echo   %PY_RUNTIME_EXE%
-    exit /b 1
-)
+if exist "%~1" exit /b 0
 
-if exist "%VENV%\" (
-    call :remove_venv
-    if errorlevel 1 exit /b 1
-)
+timeout /t 1 /nobreak >nul
 
-echo Creating backend virtual environment:
-echo   %VENV%
-echo.
+goto :wait
 
-"%PY_RUNTIME_EXE%" -m venv "%VENV%"
+rem ============================================================================
+rem FRONTEND BACKGROUND JOB
+rem ============================================================================
+
+:front_job
+
+setlocal EnableExtensions
+
+set "JOB_FRONT=%~2"
+set "JOB_LOG=%~3"
+set "JOB_RC=%~4"
+
+cd /d "%JOB_FRONT%" >"%JOB_LOG%" 2>&1
 
 if errorlevel 1 (
-    echo.
-    echo [ERROR] Failed to create backend virtual environment.
+    >"%JOB_RC%" echo 1
     exit /b 1
 )
 
-if not exist "%PYTHON%" (
-    echo.
-    echo [ERROR] Virtual environment was not created correctly.
-    echo.
-    echo Expected:
-    echo   %PYTHON%
-    exit /b 1
+rem Existing node_modules -> nothing to install.
+
+if exist "%JOB_FRONT%\node_modules" (
+    >>"%JOB_LOG%" echo Frontend dependencies already exist.
+    >"%JOB_RC%" echo 0
+
+    exit /b 0
 )
 
-"%PYTHON%" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3,12) else 1)" >nul 2>&1
-
-if errorlevel 1 (
-    echo.
-    echo [ERROR] Newly created virtual environment does not use Python 3.12.
-    exit /b 1
+if exist "%JOB_FRONT%\package-lock.json" (
+    >>"%JOB_LOG%" echo Running npm ci...
+    call npm ci >>"%JOB_LOG%" 2>&1
+) else (
+    >>"%JOB_LOG%" echo Running npm install...
+    call npm install >>"%JOB_LOG%" 2>&1
 )
 
-echo Virtual environment created successfully.
-echo.
+set "JOB_ERROR=%errorlevel%"
+
+>"%JOB_RC%" echo %JOB_ERROR%
+
+exit /b %JOB_ERROR%
 
 rem ============================================================================
-rem PREPARE PIP
+rem AI BACKGROUND JOB
 rem ============================================================================
 
-echo Preparing pip...
-echo.
+:ai_job
 
-"%PYTHON%" -m ensurepip --upgrade >nul 2>&1
+setlocal EnableExtensions
 
-"%PYTHON%" -m pip install --disable-pip-version-check --upgrade pip setuptools wheel
+set "JOB_AI=%~2"
+set "JOB_ROOT=%~3"
+set "JOB_LOG=%~4"
+set "JOB_RC=%~5"
 
-if errorlevel 1 (
-    echo.
-    echo [ERROR] Failed to prepare pip.
-    exit /b 1
-)
+call "%JOB_AI%" "%JOB_ROOT%" >"%JOB_LOG%" 2>&1
 
-rem ============================================================================
-rem BACKEND REQUIREMENTS
-rem ============================================================================
+set "JOB_ERROR=%errorlevel%"
 
-if exist "%BACKEND%\requirements.txt" (
-    echo.
-    echo Installing backend requirements...
-    echo.
+>"%JOB_RC%" echo %JOB_ERROR%
 
-    "%PYTHON%" -m pip install --disable-pip-version-check -r "%BACKEND%\requirements.txt"
-
-    if errorlevel 1 (
-        echo.
-        echo [ERROR] Failed to install backend requirements.
-        exit /b 1
-    )
-)
-
-if exist "%BACKEND%\requirements-dev.txt" (
-    echo.
-    echo Installing backend development requirements...
-    echo.
-
-    "%PYTHON%" -m pip install --disable-pip-version-check -r "%BACKEND%\requirements-dev.txt"
-
-    if errorlevel 1 (
-        echo.
-        echo [ERROR] Failed to install backend development requirements.
-        exit /b 1
-    )
-)
-
-echo.
-echo Backend virtual environment is ready:
-echo   %VENV%
-echo.
-
-exit /b 0
-
-
-rem ============================================================================
-rem ACTIVATE CORRECT BACKEND VENV
-rem ============================================================================
-
-:activate_venv
-
-if not exist "%ACTIVATE%" (
-    echo.
-    echo [ERROR] Venv activation script was not found:
-    echo   %ACTIVATE%
-    exit /b 1
-)
-
-set "EXPECTED_VENV="
-set "CURRENT_VENV="
-
-for %%A in ("%VENV%") do set "EXPECTED_VENV=%%~fA"
-
-if defined VIRTUAL_ENV (
-    for %%A in ("%VIRTUAL_ENV%") do set "CURRENT_VENV=%%~fA"
-)
-
-rem ----------------------------------------------------------------------------
-rem CORRECT VENV ALREADY ACTIVE
-rem ----------------------------------------------------------------------------
-
-if defined CURRENT_VENV (
-    if /I "%CURRENT_VENV%"=="%EXPECTED_VENV%" (
-        echo Correct backend virtual environment is already active:
-        echo   %EXPECTED_VENV%
-        echo.
-        exit /b 0
-    )
-)
-
-rem ----------------------------------------------------------------------------
-rem ANOTHER VENV IS ACTIVE
-rem ----------------------------------------------------------------------------
-
-if defined CURRENT_VENV (
-    echo Another virtual environment is active:
-    echo   %CURRENT_VENV%
-    echo.
-    echo Switching to:
-    echo   %EXPECTED_VENV%
-    echo.
-
-    if exist "%CURRENT_VENV%\Scripts\deactivate.bat" (
-        call "%CURRENT_VENV%\Scripts\deactivate.bat"
-    ) else (
-        set "VIRTUAL_ENV="
-        set "VIRTUAL_ENV_PROMPT="
-    )
-)
-
-rem ----------------------------------------------------------------------------
-rem ACTIVATE PROJECT VENV
-rem ----------------------------------------------------------------------------
-
-call "%ACTIVATE%"
-
-if errorlevel 1 (
-    echo.
-    echo [ERROR] Failed to activate backend virtual environment.
-    exit /b 1
-)
-
-if not defined VIRTUAL_ENV (
-    echo.
-    echo [ERROR] VIRTUAL_ENV was not set after activation.
-    exit /b 1
-)
-
-for %%A in ("%VIRTUAL_ENV%") do set "CURRENT_VENV=%%~fA"
-
-if /I not "%CURRENT_VENV%"=="%EXPECTED_VENV%" (
-    echo.
-    echo [ERROR] Wrong virtual environment is active.
-    echo.
-    echo Expected:
-    echo   %EXPECTED_VENV%
-    echo.
-    echo Active:
-    echo   %CURRENT_VENV%
-    exit /b 1
-)
-
-rem ----------------------------------------------------------------------------
-rem VERIFY EXACT PYTHON
-rem ----------------------------------------------------------------------------
-
-"%PYTHON%" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3,12) else 1)" >nul 2>&1
-
-if errorlevel 1 (
-    echo.
-    echo [ERROR] Active backend venv does not use Python 3.12.
-    exit /b 1
-)
-
-for /f "delims=" %%A in ('"%PYTHON%" -c "import sys; print(sys.executable)"') do set "ACTIVE_PYTHON=%%A"
-
-for %%A in ("%ACTIVE_PYTHON%") do set "ACTIVE_PYTHON=%%~fA"
-for %%A in ("%PYTHON%") do set "EXPECTED_PYTHON=%%~fA"
-
-if /I not "%ACTIVE_PYTHON%"=="%EXPECTED_PYTHON%" (
-    echo.
-    echo [ERROR] Wrong Python interpreter is active.
-    echo.
-    echo Expected:
-    echo   %EXPECTED_PYTHON%
-    echo.
-    echo Active:
-    echo   %ACTIVE_PYTHON%
-    exit /b 1
-)
-
-echo Backend virtual environment activated:
-echo   %VIRTUAL_ENV%
-echo.
-
-exit /b 0
-
+exit /b %JOB_ERROR%
 
 rem ============================================================================
 rem ERROR
 rem ============================================================================
 
-:error
+:err
+
+if defined JOB_DIR (
+    rmdir /s /q "%JOB_DIR%" >nul 2>&1
+)
 
 echo.
 echo ============================================================
@@ -708,4 +466,5 @@ echo ============================================================
 echo.
 
 pause
+
 exit /b 1
