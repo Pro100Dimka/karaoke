@@ -62,7 +62,7 @@ set "APP_NAME=A&D Voice"
 set "APP_VERSION=1.0.0"
 set "APP_EXE=A&D Voice.exe"
 set "APP_ID=E734496E-2622-5565-89D3-45451D9DE7EE"
-set "MODEL_SCRIPT=%ROOT%scripts\ensure-offline-models.bat"
+set "MODEL_CHECK=%BACKEND%\AI\install_models.py"
 set "INNO_TEMPLATE=%ROOT%scripts\karaoke-studio.iss"
 set "SIGN_SCRIPT=%ROOT%scripts\sign-windows.ps1"
 set "SETUP_ICON=%FRONTEND%\assets\icons\app.ico"
@@ -133,17 +133,6 @@ echo   %BACKEND_DIST%
 echo.
 echo Checking AI resources for changes...
 echo.
-call :verify_backend_base
-if errorlevel 1 (
-    echo.
-    echo [ERROR] Fast build cannot continue because the packaged
-    echo backend is missing or incomplete.
-    echo.
-    echo Run:
-    echo   build-installer.bat
-    echo.
-    goto :failed
-)
 call :parallel_fast_build
 if errorlevel 1 goto :failed
 goto :build_electron_package
@@ -288,56 +277,96 @@ exit /b 0
 :environment
 echo.
 echo [0/6] Checking build environment...
-call :require_directory "%BACKEND%" "Backend directory"
-if errorlevel 1 exit /b 1
-call :require_directory "%FRONTEND%" "Frontend directory"
-if errorlevel 1 exit /b 1
-call :require_file "%INNO_TEMPLATE%" "Inno Setup template"
-if errorlevel 1 exit /b 1
-if /I "%BUILD_MODE%"=="installer" (
-    exit /b 0
-)
-call :require_file "%PYTHON%" "Backend virtual environment Python"
-if errorlevel 1 exit /b 1
-where node.exe >nul 2>&1
-if errorlevel 1 (
-    echo.
-    echo [ERROR] Node.js was not found in PATH.
-    exit /b 1
-)
-where npm.cmd >nul 2>&1
-if errorlevel 1 (
-    echo.
-    echo [ERROR] npm was not found in PATH.
-    exit /b 1
-)
-if /I "%BUILD_MODE%"=="fast" (
-    exit /b 0
-)
-call :require_file "%VCVARS%" "Visual C++ Build Tools"
-if errorlevel 1 exit /b 1
-call :require_file "%CMAKE%" "Visual Studio CMake"
-if errorlevel 1 exit /b 1
-call :require_file "%NINJA%" "Visual Studio Ninja"
-if errorlevel 1 exit /b 1
-call :require_directory "%ASIO%" "ASIO source directory"
-if errorlevel 1 exit /b 1
-call :require_directory "%ASIO_SDK%" "ASIO SDK directory"
-if errorlevel 1 exit /b 1
-call :require_file "%MODEL_SCRIPT%" "Offline model verification script"
-if errorlevel 1 exit /b 1
-set "FFMPEG="
-for %%F in (ffmpeg.exe) do (
-    set "FFMPEG=%%~$PATH:F"
-)
-if not defined FFMPEG (
-    echo.
-    echo [ERROR] ffmpeg.exe was not found in PATH.
-    echo.
-    echo Add FFmpeg bin directory to PATH.
-    exit /b 1
-)
 echo.
+
+echo Checking Backend directory:
+echo   %BACKEND%
+if not exist "%BACKEND%\" goto :env_missing_backend
+echo [OK] Backend directory
+echo.
+
+echo Checking Frontend directory:
+echo   %FRONTEND%
+if not exist "%FRONTEND%\" goto :env_missing_frontend
+echo [OK] Frontend directory
+echo.
+
+echo Checking Inno Setup template:
+echo   %INNO_TEMPLATE%
+if not exist "%INNO_TEMPLATE%" goto :env_missing_inno
+echo [OK] Inno Setup template
+echo.
+
+if /I "%BUILD_MODE%"=="installer" exit /b 0
+
+echo Checking Backend virtual environment Python:
+echo   %PYTHON%
+if not exist "%PYTHON%" goto :env_missing_python
+echo [OK] Backend virtual environment Python
+echo.
+
+if /I "%BUILD_MODE%"=="fast" goto :env_fast
+
+echo Checking Visual C++ Build Tools:
+echo   %VCVARS%
+if not exist "%VCVARS%" goto :env_missing_vcvars
+echo [OK] Visual C++ Build Tools
+echo.
+
+echo Checking Visual Studio CMake:
+echo   %CMAKE%
+if not exist "%CMAKE%" goto :env_missing_cmake
+echo [OK] Visual Studio CMake
+echo.
+
+echo Checking Visual Studio Ninja:
+echo   %NINJA%
+if not exist "%NINJA%" goto :env_missing_ninja
+echo [OK] Visual Studio Ninja
+echo.
+
+echo Checking ASIO source directory:
+echo   %ASIO%
+if not exist "%ASIO%\" goto :env_missing_asio
+echo [OK] ASIO source directory
+echo.
+
+echo Checking ASIO SDK directory:
+echo   %ASIO_SDK%
+if not exist "%ASIO_SDK%\" goto :env_missing_asio_sdk
+echo [OK] ASIO SDK directory
+echo.
+
+echo Checking AI model verification script:
+echo   %MODEL_CHECK%
+if not exist "%MODEL_CHECK%" goto :env_missing_model_check
+echo [OK] AI model verification script
+echo.
+
+set "NODE_EXE="
+for /F "delims=" %%F in ('where node.exe 2^>nul') do if not defined NODE_EXE set "NODE_EXE=%%F"
+if not defined NODE_EXE goto :env_missing_node
+echo Checking node.exe:
+echo   %NODE_EXE%
+echo [OK] node.exe
+echo.
+
+set "NPM_CMD="
+for /F "delims=" %%F in ('where npm.cmd 2^>nul') do if not defined NPM_CMD set "NPM_CMD=%%F"
+if not defined NPM_CMD goto :env_missing_npm
+echo Checking npm.cmd:
+echo   %NPM_CMD%
+echo [OK] npm.cmd
+echo.
+
+set "FFMPEG="
+for /F "delims=" %%F in ('where ffmpeg.exe 2^>nul') do if not defined FFMPEG set "FFMPEG=%%F"
+if not defined FFMPEG goto :env_missing_ffmpeg
+echo Checking ffmpeg.exe:
+echo   %FFMPEG%
+echo [OK] ffmpeg.exe
+echo.
+
 echo Python:
 echo   %PYTHON%
 echo.
@@ -345,11 +374,88 @@ echo FFmpeg:
 echo   %FFMPEG%
 echo.
 exit /b 0
+
+:env_fast
+call :verify_backend_base
+if errorlevel 1 (
+    echo.
+    echo [ERROR] Fast build requires an existing packaged backend.
+    echo Run build-installer.bat once in full mode first.
+    exit /b 1
+)
+exit /b 0
+
+:env_missing_backend
+echo [ERROR] Backend directory was not found:
+echo   %BACKEND%
+exit /b 1
+
+:env_missing_frontend
+echo [ERROR] Frontend directory was not found:
+echo   %FRONTEND%
+exit /b 1
+
+:env_missing_inno
+echo [ERROR] Inno Setup template was not found:
+echo   %INNO_TEMPLATE%
+exit /b 1
+
+:env_missing_python
+echo [ERROR] Backend virtual environment Python was not found:
+echo   %PYTHON%
+exit /b 1
+
+:env_missing_vcvars
+echo [ERROR] Visual C++ Build Tools was not found:
+echo   %VCVARS%
+exit /b 1
+
+:env_missing_cmake
+echo [ERROR] Visual Studio CMake was not found:
+echo   %CMAKE%
+exit /b 1
+
+:env_missing_ninja
+echo [ERROR] Visual Studio Ninja was not found:
+echo   %NINJA%
+exit /b 1
+
+:env_missing_asio
+echo [ERROR] ASIO source directory was not found:
+echo   %ASIO%
+exit /b 1
+
+:env_missing_asio_sdk
+echo [ERROR] ASIO SDK directory was not found:
+echo   %ASIO_SDK%
+exit /b 1
+
+:env_missing_model_check
+echo [ERROR] AI model verification script was not found:
+echo   %MODEL_CHECK%
+exit /b 1
+
+:env_missing_node
+echo [ERROR] node.exe was not found in PATH.
+exit /b 1
+
+:env_missing_npm
+echo [ERROR] npm.cmd was not found in PATH.
+exit /b 1
+
+:env_missing_ffmpeg
+echo [ERROR] ffmpeg.exe was not found in PATH.
+exit /b 1
+
 :models
 echo.
-echo [1/6] Checking all offline AI models...
-call "%MODEL_SCRIPT%"
-if errorlevel 1 (
+echo [1/6] Checking all registered offline AI models...
+set "OLD_PYTHONPATH=%PYTHONPATH%"
+set "PYTHONPATH=%BACKEND%;%PYTHONPATH%"
+"%PYTHON%" "%MODEL_CHECK%" --downloads "%DOWNLOADS%" --msst "%MSST_ENGINE%" --env "%DOWNLOADS%\ai-environment.bat" --check
+set "MODEL_RC=!ERRORLEVEL!"
+set "PYTHONPATH=%OLD_PYTHONPATH%"
+if not "!MODEL_RC!"=="0" (
     echo.
     echo [ERROR] Offline model verification failed.
     exit /b 1
@@ -900,113 +1006,85 @@ call :verify_model_tree "%MODEL_DEST%" "Packaged AI models"
 if errorlevel 1 exit /b 1
 exit /b 0
 :sync_directory_if_changed
+if "%~1"=="" (
+    echo.
+    echo [ERROR] sync_directory_if_changed: source path is empty.
+    exit /b 1
+)
+if "%~2"=="" (
+    echo.
+    echo [ERROR] sync_directory_if_changed: destination path is empty.
+    exit /b 1
+)
+if "%~3"=="" (
+    echo.
+    echo [ERROR] sync_directory_if_changed: label is empty.
+    exit /b 1
+)
+
 set "SYNC_SRC=%~1"
 set "SYNC_DST=%~2"
 set "SYNC_LABEL=%~3"
+
 call :require_directory "%SYNC_SRC%" "%SYNC_LABEL%"
 if errorlevel 1 exit /b 1
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-    "$ErrorActionPreference='Stop';" ^
-    "$src=[IO.Path]::GetFullPath($env:SYNC_SRC).TrimEnd('\');" ^
-    "$dst=[IO.Path]::GetFullPath($env:SYNC_DST).TrimEnd('\');" ^
-    "if(-not (Test-Path -LiteralPath $dst -PathType Container)) { exit 10 };" ^
-    "function Snapshot([string]$root) {" ^
-    "  @(" ^
-    "    Get-ChildItem -LiteralPath $root -Recurse -File -Force |" ^
-    "    ForEach-Object {" ^
-    "      $relative=$_.FullName.Substring($root.Length).TrimStart('\').ToLowerInvariant();" ^
-    "      $seconds=[int64]($_.LastWriteTimeUtc.Ticks / 10000000);" ^
-    "      $relative + '|' + $_.Length + '|' + $seconds" ^
-    "    } | Sort-Object" ^
-    "  )" ^
-    "};" ^
-    "$sourceSnapshot=Snapshot $src;" ^
-    "$targetSnapshot=Snapshot $dst;" ^
-    "if($sourceSnapshot.Count -ne $targetSnapshot.Count) { exit 11 };" ^
-    "for($i=0;$i -lt $sourceSnapshot.Count;$i++) {" ^
-    "  if($sourceSnapshot[$i] -cne $targetSnapshot[$i]) { exit 12 }" ^
-    "};" ^
-    "exit 0"
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
+"$src=[IO.Path]::GetFullPath($args[0]).TrimEnd('\');$dst=[IO.Path]::GetFullPath($args[1]).TrimEnd('\');if(-not(Test-Path -LiteralPath $dst -PathType Container)){exit 10};function S($r){@(Get-ChildItem -LiteralPath $r -Recurse -File -Force|%%{$rel=$_.FullName.Substring($r.Length).TrimStart('\').ToLowerInvariant();$sec=[int64]($_.LastWriteTimeUtc.Ticks/10000000);$rel+'|'+$_.Length+'|'+$sec}|Sort-Object)};$a=S $src;$b=S $dst;if($a.Count-ne$b.Count){exit 11};for($i=0;$i-lt$a.Count;$i++){if($a[$i]-cne$b[$i]){exit 12}};exit 0" ^
+"%SYNC_SRC%" "%SYNC_DST%"
+
 set "SYNC_COMPARE_CODE=!ERRORLEVEL!"
+
 if "!SYNC_COMPARE_CODE!"=="0" (
     echo   %SYNC_LABEL%: unchanged [skip]
     exit /b 0
 )
+
 if !SYNC_COMPARE_CODE! GEQ 20 (
     echo.
     echo [ERROR] Could not compare %SYNC_LABEL%.
-    echo.
-    echo Source:
-    echo   %SYNC_SRC%
-    echo.
-    echo Destination:
-    echo   %SYNC_DST%
+    echo Source:      %SYNC_SRC%
+    echo Destination: %SYNC_DST%
     exit /b 1
 )
+
 if "!SYNC_COMPARE_CODE!"=="10" (
     echo   %SYNC_LABEL%: new - synchronizing...
 ) else (
     echo   %SYNC_LABEL%: changed - synchronizing...
 )
+
 if not exist "%SYNC_DST%\" (
     mkdir "%SYNC_DST%" >nul 2>&1
     if errorlevel 1 (
-        echo.
-        echo [ERROR] Could not create:
-        echo   %SYNC_DST%
+        echo [ERROR] Could not create: %SYNC_DST%
         exit /b 1
     )
 )
-robocopy "%SYNC_SRC%" "%SYNC_DST%" ^
-    /MIR ^
-    /COPY:DAT ^
-    /DCOPY:DAT ^
-    /R:2 ^
-    /W:1 ^
-    /MT:16 ^
-    /J ^
-    /NFL ^
-    /NDL ^
-    /NJH ^
-    /NJS ^
-    /NP
+
+robocopy "%SYNC_SRC%" "%SYNC_DST%" /MIR /COPY:DAT /DCOPY:DAT /R:2 /W:1 /MT:16 /J /NFL /NDL /NJH /NJS /NP
 set "ROBOCOPY_CODE=!ERRORLEVEL!"
+
 if !ROBOCOPY_CODE! GEQ 8 (
     echo.
     echo [ERROR] Failed to synchronize %SYNC_LABEL%.
-    echo.
-    echo Robocopy exit code:
-    echo   !ROBOCOPY_CODE!
+    echo Robocopy exit code: !ROBOCOPY_CODE!
     exit /b 1
 )
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-    "$ErrorActionPreference='Stop';" ^
-    "$src=[IO.Path]::GetFullPath($env:SYNC_SRC).TrimEnd('\');" ^
-    "$dst=[IO.Path]::GetFullPath($env:SYNC_DST).TrimEnd('\');" ^
-    "function Snapshot([string]$root) {" ^
-    "  @(" ^
-    "    Get-ChildItem -LiteralPath $root -Recurse -File -Force |" ^
-    "    ForEach-Object {" ^
-    "      $relative=$_.FullName.Substring($root.Length).TrimStart('\').ToLowerInvariant();" ^
-    "      $seconds=[int64]($_.LastWriteTimeUtc.Ticks / 10000000);" ^
-    "      $relative + '|' + $_.Length + '|' + $seconds" ^
-    "    } | Sort-Object" ^
-    "  )" ^
-    "};" ^
-    "$sourceSnapshot=Snapshot $src;" ^
-    "$targetSnapshot=Snapshot $dst;" ^
-    "if($sourceSnapshot.Count -ne $targetSnapshot.Count) { exit 1 };" ^
-    "for($i=0;$i -lt $sourceSnapshot.Count;$i++) {" ^
-    "  if($sourceSnapshot[$i] -cne $targetSnapshot[$i]) { exit 1 }" ^
-    "};" ^
-    "exit 0"
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
+"$src=[IO.Path]::GetFullPath($args[0]).TrimEnd('\');$dst=[IO.Path]::GetFullPath($args[1]).TrimEnd('\');function S($r){@(Get-ChildItem -LiteralPath $r -Recurse -File -Force|%%{$rel=$_.FullName.Substring($r.Length).TrimStart('\').ToLowerInvariant();$sec=[int64]($_.LastWriteTimeUtc.Ticks/10000000);$rel+'|'+$_.Length+'|'+$sec}|Sort-Object)};$a=S $src;$b=S $dst;if($a.Count-ne$b.Count){exit 1};for($i=0;$i-lt$a.Count;$i++){if($a[$i]-cne$b[$i]){exit 1}};exit 0" ^
+"%SYNC_SRC%" "%SYNC_DST%"
+
 if errorlevel 1 (
     echo.
     echo [ERROR] %SYNC_LABEL% still differs after synchronization.
     exit /b 1
 )
+
 echo   %SYNC_LABEL%: synchronized
 exit /b 0
+
 :verify_model_tree
 set "VERIFY_DEST=%~1"
 set "VERIFY_LABEL=%~2"
@@ -1055,16 +1133,50 @@ echo   [A] Python backend
 echo   [B] Native ASIO compilation
 echo   [C] React frontend
 echo.
-call :prepare_parallel_dir
-if errorlevel 1 exit /b 1
+
+if exist "%PARALLEL_DIR%\" rmdir /S /Q "%PARALLEL_DIR%" >nul 2>&1
+mkdir "%PARALLEL_DIR%" >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] Could not create parallel build directory:
+    echo   %PARALLEL_DIR%
+    exit /b 1
+)
+
 start "" /B cmd.exe /D /C call "%~f0" __worker_backend "%BUILD_MODE%"
 start "" /B cmd.exe /D /C call "%~f0" __worker_asio "%BUILD_MODE%"
 start "" /B cmd.exe /D /C call "%~f0" __worker_frontend "%BUILD_MODE%"
-call :wait_parallel_results backend asio frontend
-if errorlevel 1 exit /b 1
+
+set /A PARALLEL_WAIT_SECONDS=0
+:parallel_full_wait
+if exist "%PARALLEL_DIR%\backend.exit" if exist "%PARALLEL_DIR%\asio.exit" if exist "%PARALLEL_DIR%\frontend.exit" goto :parallel_full_done
+set /A PARALLEL_WAIT_SECONDS+=1
+if !PARALLEL_WAIT_SECONDS! GEQ 7200 (
+    echo [ERROR] Parallel build worker did not report completion.
+    exit /b 1
+)
+timeout /t 1 /nobreak >nul
+goto :parallel_full_wait
+
+:parallel_full_done
+set "PARALLEL_FAILED=0"
+
+for %%J in (backend asio frontend) do (
+    set "PARALLEL_CODE="
+    set /P "PARALLEL_CODE="<"%PARALLEL_DIR%\%%J.exit"
+    if not "!PARALLEL_CODE!"=="0" (
+        echo.
+        echo [ERROR] Parallel worker failed: %%J
+        echo Exit code: !PARALLEL_CODE!
+        set "PARALLEL_FAILED=1"
+    )
+)
+
+if "!PARALLEL_FAILED!"=="1" exit /b 1
+
 echo.
 echo Parallel build stage completed successfully.
 exit /b 0
+
 :parallel_fast_build
 echo.
 echo ============================================================
@@ -1075,69 +1187,49 @@ echo Running simultaneously:
 echo   [A] AI model synchronization
 echo   [B] React frontend
 echo.
-call :prepare_parallel_dir
-if errorlevel 1 exit /b 1
-start "" /B cmd.exe /D /C call "%~f0" __worker_package_models "%BUILD_MODE%"
-start "" /B cmd.exe /D /C call "%~f0" __worker_frontend "%BUILD_MODE%"
-call :wait_parallel_results package_models frontend
-if errorlevel 1 exit /b 1
-echo.
-echo Parallel fast stage completed successfully.
-exit /b 0
-:prepare_parallel_dir
-if exist "%PARALLEL_DIR%\" (
-    call :remove_directory "%PARALLEL_DIR%"
-    if errorlevel 1 exit /b 1
-)
+
+if exist "%PARALLEL_DIR%\" rmdir /S /Q "%PARALLEL_DIR%" >nul 2>&1
 mkdir "%PARALLEL_DIR%" >nul 2>&1
 if errorlevel 1 (
-    echo.
     echo [ERROR] Could not create parallel build directory:
     echo   %PARALLEL_DIR%
     exit /b 1
 )
-exit /b 0
-:wait_parallel_results
-set "PARALLEL_JOB_1=%~1"
-set "PARALLEL_JOB_2=%~2"
-set "PARALLEL_JOB_3=%~3"
-set /A "PARALLEL_WAIT_SECONDS=0"
-:wait_parallel_results_loop
-set "PARALLEL_ALL_DONE=1"
-if defined PARALLEL_JOB_1 (
-    if not exist "%PARALLEL_DIR%\!PARALLEL_JOB_1!.exit" set "PARALLEL_ALL_DONE=0"
-)
-if defined PARALLEL_JOB_2 (
-    if not exist "%PARALLEL_DIR%\!PARALLEL_JOB_2!.exit" set "PARALLEL_ALL_DONE=0"
-)
-if defined PARALLEL_JOB_3 (
-    if not exist "%PARALLEL_DIR%\!PARALLEL_JOB_3!.exit" set "PARALLEL_ALL_DONE=0"
-)
-if "!PARALLEL_ALL_DONE!"=="1" goto :wait_parallel_results_done
-set /A "PARALLEL_WAIT_SECONDS+=1"
+
+start "" /B cmd.exe /D /C call "%~f0" __worker_package_models "%BUILD_MODE%"
+start "" /B cmd.exe /D /C call "%~f0" __worker_frontend "%BUILD_MODE%"
+
+set /A PARALLEL_WAIT_SECONDS=0
+:parallel_fast_wait
+if exist "%PARALLEL_DIR%\package_models.exit" if exist "%PARALLEL_DIR%\frontend.exit" goto :parallel_fast_done
+set /A PARALLEL_WAIT_SECONDS+=1
 if !PARALLEL_WAIT_SECONDS! GEQ 7200 (
-    echo.
     echo [ERROR] Parallel build worker did not report completion.
     exit /b 1
 )
 timeout /t 1 /nobreak >nul
-goto :wait_parallel_results_loop
-:wait_parallel_results_done
+goto :parallel_fast_wait
+
+:parallel_fast_done
 set "PARALLEL_FAILED=0"
-for %%J in ("%PARALLEL_JOB_1%" "%PARALLEL_JOB_2%" "%PARALLEL_JOB_3%") do (
-    if not "%%~J"=="" (
-        set "PARALLEL_CODE="
-        set /P "PARALLEL_CODE="<"%PARALLEL_DIR%\%%~J.exit"
-        if not "!PARALLEL_CODE!"=="0" (
-            echo.
-            echo [ERROR] Parallel worker failed: %%~J
-            echo Exit code: !PARALLEL_CODE!
-            set "PARALLEL_FAILED=1"
-        )
+
+for %%J in (package_models frontend) do (
+    set "PARALLEL_CODE="
+    set /P "PARALLEL_CODE="<"%PARALLEL_DIR%\%%J.exit"
+    if not "!PARALLEL_CODE!"=="0" (
+        echo.
+        echo [ERROR] Parallel worker failed: %%J
+        echo Exit code: !PARALLEL_CODE!
+        set "PARALLEL_FAILED=1"
     )
 )
+
 if "!PARALLEL_FAILED!"=="1" exit /b 1
+
+echo.
+echo Parallel fast stage completed successfully.
 exit /b 0
+
 :parallel_worker_backend
 call :backend
 set "WORKER_EXIT=!ERRORLEVEL!"
@@ -1204,22 +1296,31 @@ if errorlevel 1 (
     exit /b 1
 )
 exit /b 0
+
 :require_file
-if exist "%~1" (
-    exit /b 0
+if "%~1"=="" (
+    echo.
+    echo [ERROR] %~2 path is empty.
+    exit /b 1
 )
+if exist "%~1" exit /b 0
 echo.
 echo [ERROR] %~2 was not found:
 echo   %~1
 exit /b 1
+
 :require_directory
-if exist "%~1\" (
-    exit /b 0
+if "%~1"=="" (
+    echo.
+    echo [ERROR] %~2 path is empty.
+    exit /b 1
 )
+if exist "%~1\" exit /b 0
 echo.
 echo [ERROR] %~2 was not found:
 echo   %~1
 exit /b 1
+
 :remove_directory
 set "REMOVE_TARGET=%~1"
 if not defined REMOVE_TARGET (

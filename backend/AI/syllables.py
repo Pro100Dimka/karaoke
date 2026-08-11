@@ -8,7 +8,7 @@ from .models import PitchFrame, Syllable, Word
 
 VOWELS = frozenset("аеёиоуыэюяіїєaeyuioAEYUIOАЕЁИОУЫЭЮЯІЇЄ")
 _WORD_EDGE = re.compile(r"(^[^\w'’ʼ-]+|[^\w'’ʼ-]+$)", re.UNICODE)
-SYLLABLE_ALIGNER_VERSION = "acoustic-syllables-v2"
+SYLLABLE_ALIGNER_VERSION = "acoustic-syllables-v3-adaptive-timing"
 
 
 def split_written(word: str) -> list[str]:
@@ -54,15 +54,34 @@ def _frame_slice(
     return pitch[left:right]
 
 
+
+def _local_step(frames: list[PitchFrame], span: float, count: int) -> float:
+    gaps = [
+        b.time - a.time
+        for a, b in zip(frames, frames[1:], strict=False)
+        if b.time > a.time
+    ]
+    if gaps:
+        median = sorted(gaps)[len(gaps) // 2]
+        compact = [gap for gap in gaps if gap <= median * 3.0]
+        if compact:
+            compact.sort()
+            return max(compact[len(compact) // 2], 1e-4)
+        return max(median, 1e-4)
+    return max(span / max(6, count * 6), 1e-4)
+
 def _boundary_scores(word: Word, frames: list[PitchFrame], count: int) -> list[float]:
-    if len(frames) < 6 or count <= 1 or word.end - word.start < 0.08:
+    word_span = max(0.0, word.end - word.start)
+    if len(frames) < 6 or count <= 1 or word_span <= 0:
         return []
+    step = _local_step(frames, word_span, count)
+    edge_guard = max(step * 2.0, word_span / max(12.0, count * 8.0))
 
     candidates: list[tuple[float, float]] = []
     for index in range(2, len(frames) - 2):
         frame = frames[index]
         edge = min(frame.time - word.start, word.end - frame.time)
-        if edge <= 0.035:
+        if edge <= edge_guard:
             continue
         before = [
             item.frequency
@@ -87,7 +106,7 @@ def _boundary_scores(word: Word, frames: list[PitchFrame], count: int) -> list[f
 
     candidates.sort(reverse=True)
     selected: list[float] = []
-    minimum_spacing = max(0.045, (word.end - word.start) / (count * 3.0))
+    minimum_spacing = max(step * 3.0, word_span / (count * 3.0))
     for score, timestamp in candidates:
         if score < 0.12:
             break
@@ -122,15 +141,18 @@ def _refine_proportional_bounds(
     candidates = _boundary_scores(word, frames, len(expected) + 1)
     if not candidates:
         return expected
-    span = max(0.04, (word.end - word.start) / max(3.0, (len(expected) + 1) * 2.2))
+    word_span = max(0.0, word.end - word.start)
+    step = _local_step(frames, word_span, len(expected) + 1)
+    span = max(step * 4.0, word_span / max(3.0, (len(expected) + 1) * 2.2))
+    margin = max(step * 2.0, word_span / max(20.0, (len(expected) + 1) * 10.0))
     result = []
     prev = word.start
     for target in expected:
         nearby = [
-            value for value in candidates if abs(value - target) <= span and value > prev + 0.025
+            value for value in candidates if abs(value - target) <= span and value > prev + margin
         ]
         chosen = min(nearby, key=lambda value: abs(value - target)) if nearby else target
-        chosen = max(prev + 0.025, min(word.end - 0.025, chosen))
+        chosen = max(prev + margin, min(word.end - margin, chosen))
         result.append(chosen)
         prev = chosen
     return result

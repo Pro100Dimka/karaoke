@@ -148,21 +148,36 @@ def _parse_lrc(
     # Never publish lyric lines whose anchors are already outside this audio file:
     # they cannot be aligned, and keeping them makes lyrics.txt contain words that
     # lyricsSync.json/MIDI can never represent.  This was the direct cause of the
-    # TRITIA regression where 186 lyric words were published but only 166 words
-    # fitted before the 145 s audio ended.
+    # A synced provider can contain lyrics from a longer/different cut.  Drop
+    # anchors outside the actual audio so canonical text and timing stay complete.
     if duration_sec is not None and duration_sec > 0:
         limit = max(0.0, float(duration_sec) - 0.05)
         timed = [(start, value) for start, value in timed if 0.0 <= start < limit]
 
+    gaps = [
+        right[0] - left[0]
+        for left, right in zip(timed, timed[1:], strict=False)
+        if 0.20 <= right[0] - left[0] <= 20.0
+    ]
+    typical_gap = sorted(gaps)[len(gaps) // 2] if gaps else 4.0
+
     result: list[tuple[float, float, str]] = []
     for index, (start, value) in enumerate(timed):
-        next_start = timed[index + 1][0] if index + 1 < len(timed) else start + 8.0
+        if index + 1 < len(timed):
+            next_start = timed[index + 1][0]
+        elif duration_sec is not None and duration_sec > start:
+            next_start = float(duration_sec)
+        else:
+            next_start = start + typical_gap
         if duration_sec is not None and duration_sec > 0:
             next_start = min(next_start, float(duration_sec))
-        end = max(start + 0.25, next_start - 0.02)
+        span = max(0.0, next_start - start)
+        boundary_pad = max(0.008, min(0.05, span * 0.005))
+        minimum_span = max(0.12, min(0.35, typical_gap * 0.08))
+        end = max(start + minimum_span, next_start - boundary_pad)
         if duration_sec is not None and duration_sec > 0:
             end = min(end, float(duration_sec))
-        if end > start + 0.01:
+        if end > start + 0.008:
             result.append((start, end, value))
     return tuple(result)
 
@@ -222,7 +237,7 @@ def _track_signature(title: str | None) -> tuple[str, str]:
     # Accept the filename forms produced by common downloaders: ``Artist - Title``,
     # ``Artist -Title`` and ``Artist–Title``.  A bare ASCII hyphen without any
     # surrounding whitespace is deliberately not split when the right hand side
-    # starts with a digit (for example ``TRITIA-31-я весна``).
+    # starts with a digit (for example an artist-title filename whose title begins with a year/number).
     parts = re.split(
         r"\s*[–—]\s*|\s+-\s*|\s*-\s+|(?<=[A-Za-zА-Яа-яЁё])-\s*(?=[A-Za-zА-Яа-яЁё0-9])",
         value,
@@ -544,7 +559,7 @@ def _strip_filename_copy_suffix(value: str) -> str:
 def _filename_search_identity(source: Path) -> tuple[str, str]:
     """Parse Artist-Title filenames when tags are absent.
 
-    ``TRITIA-31-я весна(2)`` -> (``TRITIA``, ``31-я весна``).  The
+    ``Artist-Track title(2)`` -> (``Artist``, ``Track title``).  The
     hyphen inside ``31-я`` remains part of the title because splitting happens
     only once at the artist/title boundary.
     """

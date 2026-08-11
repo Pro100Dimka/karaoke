@@ -13,7 +13,7 @@ from .models import PitchFrame
 # Harmonic tracking is needed on dense vocal stems, but transitions must become
 # cheap at a real acoustic re-attack.  This keeps short melodic leaps while
 # folding unsupported octave/harmonic detours back onto the lead trajectory.
-PITCH_STABILIZER_VERSION = "fcpe-yin-consensus-v5"
+PITCH_STABILIZER_VERSION = "fcpe-yin-consensus-v6-adaptive-timing"
 _HARMONIC_SHIFTS = (0.0, -12.0, 12.0, -19.01955, 19.01955, -24.0, 24.0)
 
 
@@ -361,6 +361,8 @@ def _stabilize_voiced_run(run: list[PitchFrame]) -> list[PitchFrame]:
 
 def _stabilize_harmonics(frames: list[PitchFrame]) -> list[PitchFrame]:
     output = list(frames)
+    step = _frame_step(frames)
+    run_gap = step * 3.5
     index = 0
     while index < len(frames):
         frame = frames[index]
@@ -372,7 +374,7 @@ def _stabilize_harmonics(frames: list[PitchFrame]) -> list[PitchFrame]:
             end < len(frames)
             and frames[end].voiced
             and frames[end].frequency > 0
-            and frames[end].time - frames[end - 1].time <= 0.035
+            and frames[end].time - frames[end - 1].time <= run_gap
         ):
             end += 1
         output[index:end] = _stabilize_voiced_run(frames[index:end])

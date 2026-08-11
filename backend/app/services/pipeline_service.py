@@ -525,8 +525,8 @@ def _load_searchable_title(song_id: str) -> str | None:
     """Build a clean lyrics query from source identity.
 
     Metadata wins. Without metadata the original filename is parsed as
-    ``artist + title`` first, so ``TRITIA-31-я весна(2).mp3`` becomes
-    ``TRITIA 31-я весна`` instead of one opaque filename.
+    ``artist + title`` first, so a filename containing artist, title and a
+    duplicate suffix becomes a clean artist/title query instead of one opaque filename.
     """
     db = SessionLocal()
     try:

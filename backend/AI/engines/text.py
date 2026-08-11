@@ -1282,7 +1282,12 @@ def _line_aware_canonical_alignment(
             if line_index + 1 < len(line_tokens)
             else active_end
         )
-        hard_end = min(duration_sec, next_start - 0.02 if line_index + 1 < len(line_tokens) else active_end)
+        if line_index + 1 < len(line_tokens):
+            boundary_span = max(0.0, next_start - start)
+            boundary_pad = _clamp_timing(boundary_span * 0.005, 0.008, 0.05)
+            hard_end = min(duration_sec, next_start - boundary_pad)
+        else:
+            hard_end = min(duration_sec, active_end)
         target_end = start + min(line_maximum[line_index], line_expected[line_index] * 1.20)
 
         evidence_ends: list[tuple[float, float]] = []
@@ -2370,11 +2375,15 @@ def _long_text_segments(audio, text: str) -> list[tuple[float, float, str]]:
         start = active_times[min(last_index, int(round(start_fraction * last_index)))]
         end = active_times[min(last_index, int(round(end_fraction * last_index)))]
         # Character-weighted activity quantiles are only a coarse location hint.
-        # Singing contains long held notes and instrumental gaps, so a narrow
-        # window can omit most of the requested line.  The forced aligner can
-        # select the words inside a wider window; give it enough context to do so.
-        start = max(0.0, start - 3.0)
-        end = min(duration_sec, max(start + 8.0, end + 3.0))
+        # Scale the surrounding context to the actual lyric line instead of
+        # giving every phrase the same multi-second crop.  This lowers the
+        # chance that a repeated lyric later in the song wins the alignment.
+        timing = _line_timing_profile(tokenize(group))
+        start = max(0.0, start - timing["context"])
+        end = min(
+            duration_sec,
+            max(start + timing["minimum_window"], end + timing["context"]),
+        )
         output.append((start, end, group))
     return output
 
@@ -2638,6 +2647,54 @@ def _expected_sung_phrase_duration(tokens: list[str]) -> float:
     characters = sum(len(token) for token in tokens)
     return max(0.65, 0.34 * len(tokens) + 0.024 * characters)
 
+
+
+
+def _clamp_timing(value: float, low: float, high: float) -> float:
+    return max(low, min(high, float(value)))
+
+
+def _line_timing_profile(tokens: list[str]) -> dict[str, float]:
+    """Return adaptive timing tolerances for one lyric line.
+
+    The old long-text path used fixed 16-24 second search windows and fixed
+    200-800 ms cursor tolerances for every line.  Those values are unnecessarily
+    wide for short phrases and can let a repeated lyric later in the song win.
+    Scale the search context from the physical/expected duration of this exact
+    line while keeping conservative bounds for slow or heavily sustained singing.
+    """
+    minimum = _minimum_sung_phrase_duration(tokens)
+    expected = _expected_sung_phrase_duration(tokens)
+    context = _clamp_timing(expected * 0.45, 0.75, 2.20)
+    cursor_backtrack = _clamp_timing(expected * 0.08, 0.10, 0.32)
+    anchor_lead = _clamp_timing(expected * 0.24, 0.35, 0.95)
+    candidate_slack = _clamp_timing(expected * 0.035, 0.05, 0.14)
+    overlap_slack = _clamp_timing(expected * 0.010, 0.012, 0.030)
+    min_word_duration = _clamp_timing(
+        (minimum / max(1, len(tokens))) * 0.18, 0.014, 0.030
+    )
+    minimum_window = max(
+        expected * 1.85 + context,
+        minimum * 2.4 + context,
+        3.8,
+    )
+    search_window = _clamp_timing(
+        expected * 2.7 + context * 2.0,
+        minimum_window,
+        14.0,
+    )
+    return {
+        "minimum": minimum,
+        "expected": expected,
+        "context": context,
+        "cursor_backtrack": cursor_backtrack,
+        "anchor_lead": anchor_lead,
+        "candidate_slack": candidate_slack,
+        "overlap_slack": overlap_slack,
+        "min_word_duration": min_word_duration,
+        "minimum_window": minimum_window,
+        "search_window": search_window,
+    }
 
 def _lrc_window_is_plausible(tokens: list[str], span: float) -> bool:
     return float(span) + 1e-6 >= _minimum_sung_phrase_duration(tokens)
@@ -3319,7 +3376,8 @@ class Qwen3ForcedAligner(Aligner):
 
         Production lyrics providers sometimes contain one or more corrupt LRC
         anchors.  Cropping a line strictly at the next bad timestamp was the cause
-        of the TRITIA regression: a six-word phrase was forced into ~0.44 s.
+        of a compressed-alignment regression where several words were forced
+        into an unrealistically short provider interval.
 
         Rules used here:
         * a physically plausible LRC interval remains a strong location hint;
@@ -3575,15 +3633,17 @@ class Qwen3ForcedAligner(Aligner):
                     # lossless safety pass below will retime the whole lyric.
                     break
 
+                timing = _line_timing_profile(tokens)
+                expected = timing["expected"]
                 ctc_line = ctc_lines[line_index] if line_index < len(ctc_lines) else None
                 if ctc_line is not None:
                     ctc_words = list(ctc_line.words)
                     if (
                         len(ctc_words) == len(tokens)
                         and _canonical_words_match(ctc_words, tokens)
-                        and ctc_words[0].start >= cursor - 0.25
+                        and ctc_words[0].start >= cursor - timing["cursor_backtrack"]
                         and all(
-                            right.start >= left.end - 0.02
+                            right.start >= left.end - timing["overlap_slack"]
                             for left, right in zip(ctc_words, ctc_words[1:], strict=False)
                         )
                     ):
@@ -3595,20 +3655,27 @@ class Qwen3ForcedAligner(Aligner):
                         continue
 
                 qwen_fallback_lines += 1
-                expected = _expected_sung_phrase_duration(tokens)
                 anchor = anchor_windows.get(line_index)
                 if anchor is not None:
                     anchor_start, anchor_end, anchor_score = anchor
-                    search_start = max(0.0, cursor - 0.30, anchor_start - 0.80)
-                    minimum_window = max(5.0, expected * 2.25 + 1.5)
+                    search_start = max(
+                        0.0,
+                        cursor - timing["cursor_backtrack"],
+                        anchor_start - timing["anchor_lead"],
+                    )
                     search_end = min(
                         duration_sec,
-                        max(anchor_end + 1.1, search_start + minimum_window),
+                        max(
+                            anchor_end + timing["context"],
+                            search_start + timing["minimum_window"],
+                        ),
                     )
                 else:
-                    search_start = max(0.0, cursor - 0.65)
-                    search_span = min(24.0, max(16.0, expected * 3.2 + 5.0))
-                    search_end = min(duration_sec, search_start + search_span)
+                    search_start = max(0.0, cursor - timing["cursor_backtrack"] * 1.8)
+                    search_end = min(
+                        duration_sec,
+                        search_start + timing["search_window"],
+                    )
                 if search_end <= search_start + 0.10:
                     break
 
@@ -3628,10 +3695,10 @@ class Qwen3ForcedAligner(Aligner):
                     candidate_span = candidate[-1].end - candidate[0].start if candidate else 0.0
                     valid = bool(candidate) and (
                         not _pathological_alignment(candidate, search_end - search_start)
-                        and candidate_start >= cursor - 0.20
-                        and candidate_end > cursor + 0.04
-                        and candidate_end <= search_end + 0.10
-                        and candidate_span >= _minimum_sung_phrase_duration(tokens)
+                        and candidate_start >= cursor - timing["cursor_backtrack"]
+                        and candidate_end > cursor + timing["min_word_duration"]
+                        and candidate_end <= search_end + timing["candidate_slack"]
+                        and candidate_span >= timing["minimum"]
                         and len(candidate) == len(tokens)
                     )
                     if valid:
@@ -3666,10 +3733,13 @@ class Qwen3ForcedAligner(Aligner):
                 line_span = line_words[-1].end - line_words[0].start if line_words else 0.0
                 invalid_line = (
                     len(line_words) != len(tokens)
-                    or line_span < _minimum_sung_phrase_duration(tokens)
-                    or (line_words and line_words[0].start < cursor - 0.20)
+                    or line_span < timing["minimum"]
+                    or (
+                        line_words
+                        and line_words[0].start < cursor - timing["cursor_backtrack"]
+                    )
                     or any(
-                        right.start < left.end - 0.02
+                        right.start < left.end - timing["overlap_slack"]
                         for left, right in zip(line_words, line_words[1:], strict=False)
                     )
                 )
@@ -3691,7 +3761,7 @@ class Qwen3ForcedAligner(Aligner):
                 for word in line_words:
                     word_start = max(cursor, float(word.start)) if not safe_line else max(safe_line[-1].end, float(word.start))
                     word_end = min(duration_sec, float(word.end))
-                    if word_end <= word_start + 0.019:
+                    if word_end <= word_start + timing["min_word_duration"]:
                         safe_line = []
                         break
                     safe_line.append(Word(word_start, word_end, word.text, word.confidence, 0))
