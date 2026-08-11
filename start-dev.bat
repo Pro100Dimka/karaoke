@@ -1,64 +1,31 @@
 @echo off
-setlocal EnableExtensions
-
-rem ============================================================================
-rem INTERNAL PARALLEL JOBS
-rem ============================================================================
-
-if /i "%~1"=="--front-job" goto :front_job
-if /i "%~1"=="--ai-job" goto :ai_job
-
+setlocal EnableExtensions EnableDelayedExpansion
+if /i "%~1"=="--job" goto :job
 title A^&D Voice - Development
 
-rem ============================================================================
-rem CONFIG
-rem ============================================================================
-
 set "ROOT=%~dp0"
-
 set "BACK=%ROOT%backend"
 set "FRONT=%ROOT%front"
-
 set "VENV=%BACK%\venv"
 set "PY=%VENV%\Scripts\python.exe"
 
 set "VER=3.12.10"
-
 set "RT=%ROOT%downloads\runtimes\python312"
 set "RTPY=%RT%\tools\python.exe"
-
-set "ZIP=%TEMP%\advoice-python-%VER%.zip"
+set "PKG=%TEMP%\advoice-python-%VER%.zip"
 set "URL=https://api.nuget.org/v3-flatcontainer/python/%VER%/python.%VER%.nupkg"
 
 set "AI=%ROOT%scripts\install-ai-models.bat"
+set "ASIO=%ROOT%scripts\install-asio-sdk.bat"
+set "JOBS=%TEMP%\advoice-dev-%RANDOM%-%RANDOM%"
 
-rem ============================================================================
-rem LIVE STATUS CONFIG
-rem ============================================================================
+set "PYTHONHOME="
+set "PYTHONPATH="
 
-rem How often to print heartbeat while background jobs are running.
-set "STATUS_INTERVAL=15"
-
-rem Number of newest log lines to show when a log changes.
-set "LOG_TAIL_LINES=3"
-
-rem ============================================================================
-rem PARALLEL JOB FILES
-rem ============================================================================
-
-set "JOB_DIR=%TEMP%\advoice-dev-%RANDOM%-%RANDOM%"
-
-set "FRONT_RC=%JOB_DIR%\front.rc"
-set "FRONT_LOG=%JOB_DIR%\front.log"
-
-set "AI_RC=%JOB_DIR%\ai.rc"
-set "AI_LOG=%JOB_DIR%\ai.log"
-
-mkdir "%JOB_DIR%" >nul 2>&1 || goto :err
-
-rem ============================================================================
-rem HEADER
-rem ============================================================================
+for %%J in (FRONT AI ASIO) do (
+    set "%%J_RC=%JOBS%\%%J.rc"
+    set "%%J_LOG=%JOBS%\%%J.log"
+)
 
 echo.
 echo ============================================================
@@ -66,174 +33,98 @@ echo  A^&D Voice - Development
 echo ============================================================
 echo.
 
-rem ============================================================================
-rem PROJECT CHECK
-rem ============================================================================
-
-for %%D in (
-    "%BACK%"
-    "%FRONT%"
-) do (
-    if not exist "%%~D\" (
-        echo [ERROR] Directory not found:
-        echo   %%~D
-        goto :err
-    )
-)
-
-if not exist "%AI%" (
-    echo [ERROR] AI installer not found:
-    echo   %AI%
+for %%D in ("%BACK%" "%FRONT%") do if not exist "%%~D\" (
+    echo [ERROR] Directory not found: %%~D
     goto :err
 )
 
-rem ============================================================================
-rem FRONTEND - START IN PARALLEL
-rem ============================================================================
+for %%F in ("%AI%" "%ASIO%") do if not exist "%%~F" (
+    echo [ERROR] Script not found: %%~F
+    goto :err
+)
 
-echo Starting frontend preparation in parallel...
+mkdir "%JOBS%" >nul 2>&1 || goto :err
 
-start "" /b cmd.exe /c call ^
-    "%~f0" ^
-    --front-job ^
-    "%FRONT%" ^
-    "%FRONT_LOG%" ^
-    "%FRONT_RC%"
+call :start front "%FRONT%" "" "%FRONT_LOG%" "%FRONT_RC%"
+call :start asio "%ASIO%" "%ROOT%" "%ASIO_LOG%" "%ASIO_RC%"
 
 rem ============================================================================
-rem PYTHON / VENV
+rem PYTHON
 rem ============================================================================
 
 if exist "%PY%" (
-
-    "%PY%" -c "import sys;exit(sys.version_info[:2]!=(3,12))" >nul 2>&1
-
+    "%PY%" -c "import sys;raise SystemExit(0 if sys.version_info[:3]==(3,12,10) else 1)" >nul 2>&1
     if not errorlevel 1 goto :venv
 
-    echo.
-    echo Recreating invalid virtual environment:
-    echo   %VENV%
-    echo.
-
+    echo Recreating invalid virtual environment...
     rmdir /s /q "%VENV%" >nul 2>&1
 )
 
-call :runtime || goto :err
+call :runtime
+if errorlevel 1 goto :err
 
 echo.
 echo Creating backend virtual environment:
 echo   %VENV%
 echo.
 
-"%RTPY%" -m venv "%VENV%" || goto :err
+"%RTPY%" -m venv "%VENV%"
+if errorlevel 1 goto :err
 
 if not exist "%PY%" (
-    echo [ERROR] Virtual environment was not created correctly.
+    echo [ERROR] Virtual environment was not created:
+    echo   %VENV%
     goto :err
 )
 
-rem ============================================================================
-rem PYTHON PACKAGES
-rem ============================================================================
-
-echo.
-echo Preparing Python packages...
-echo.
-
-"%PY%" -m pip install ^
-    --disable-pip-version-check ^
-    --prefer-binary ^
-    -U ^
-    pip ^
-    setuptools ^
-    wheel || goto :err
-
-rem ============================================================================
-rem REQUIREMENTS
-rem ============================================================================
+"%PY%" -m pip install --disable-pip-version-check --prefer-binary -U pip setuptools wheel
+if errorlevel 1 goto :err
 
 if exist "%BACK%\requirements.txt" (
-
     if exist "%BACK%\requirements-dev.txt" (
-
-        echo Installing requirements.txt + requirements-dev.txt...
-
-        "%PY%" -m pip install ^
-            --disable-pip-version-check ^
-            --prefer-binary ^
+        "%PY%" -m pip install --disable-pip-version-check --prefer-binary ^
             -r "%BACK%\requirements.txt" ^
-            -r "%BACK%\requirements-dev.txt" || goto :err
-
+            -r "%BACK%\requirements-dev.txt"
     ) else (
-
-        echo Installing requirements.txt...
-
-        "%PY%" -m pip install ^
-            --disable-pip-version-check ^
-            --prefer-binary ^
-            -r "%BACK%\requirements.txt" || goto :err
+        "%PY%" -m pip install --disable-pip-version-check --prefer-binary ^
+            -r "%BACK%\requirements.txt"
     )
 
+    if errorlevel 1 goto :err
 ) else if exist "%BACK%\requirements-dev.txt" (
+    "%PY%" -m pip install --disable-pip-version-check --prefer-binary ^
+        -r "%BACK%\requirements-dev.txt"
 
-    echo Installing requirements-dev.txt...
-
-    "%PY%" -m pip install ^
-        --disable-pip-version-check ^
-        --prefer-binary ^
-        -r "%BACK%\requirements-dev.txt" || goto :err
+    if errorlevel 1 goto :err
 )
-
-rem ============================================================================
-rem VENV READY
-rem ============================================================================
 
 :venv
 
-call "%VENV%\Scripts\activate.bat" || goto :err
+call "%VENV%\Scripts\activate.bat"
+if errorlevel 1 goto :err
 
 echo.
 echo Python:
 "%PY%" --version
-
 echo Venv:
 echo   %VIRTUAL_ENV%
 echo.
 
-rem ============================================================================
-rem AI - START IN PARALLEL
-rem ============================================================================
-
-echo Starting AI Core preparation in parallel...
-
-start "" /b cmd.exe /c call ^
-    "%~f0" ^
-    --ai-job ^
-    "%AI%" ^
-    "%ROOT%" ^
-    "%AI_LOG%" ^
-    "%AI_RC%"
+call :start ai "%AI%" "%ROOT%" "%AI_LOG%" "%AI_RC%"
 
 rem ============================================================================
-rem PORT CLEANUP
+rem PORTS
 rem ============================================================================
 
-echo.
 echo Stopping processes on ports 8000 and 5173...
 
-powershell.exe ^
-    -NoProfile ^
-    -ExecutionPolicy Bypass ^
-    -Command ^
-    "$ports=8000,5173;" ^
-    "Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |" ^
-    "Where-Object { $_.LocalPort -in $ports } |" ^
-    "ForEach-Object {" ^
-    "Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue" ^
-    "}"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
+"$p=8000,5173;$c=Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue;foreach($x in $c){if($p -contains $x.LocalPort){Stop-Process -Id $x.OwningProcess -Force -ErrorAction SilentlyContinue}}"
+
+if errorlevel 1 echo [WARN] Could not fully clean development ports.
 
 rem ============================================================================
-rem WAIT FOR PARALLEL TASKS
+rem WAIT
 rem ============================================================================
 
 echo.
@@ -242,86 +133,20 @@ echo  Preparing development environment
 echo ============================================================
 echo.
 
-call :wait_parallel
+call :wait
 
-rem ============================================================================
-rem READ RESULT CODES
-rem ============================================================================
-
-set "FRONT_CODE="
-set "AI_CODE="
-
-if exist "%FRONT_RC%" (
-    set /p FRONT_CODE=<"%FRONT_RC%"
+for %%J in (FRONT ASIO AI) do (
+    call :result %%J
+    if errorlevel 1 goto :err
 )
-
-if exist "%AI_RC%" (
-    set /p AI_CODE=<"%AI_RC%"
-)
-
-if not defined FRONT_CODE set "FRONT_CODE=1"
-if not defined AI_CODE set "AI_CODE=1"
-
-rem ============================================================================
-rem FRONTEND RESULT
-rem ============================================================================
-
-if not "%FRONT_CODE%"=="0" (
-
-    echo.
-    echo ============================================================
-    echo [ERROR] Frontend preparation failed.
-    echo ============================================================
-    echo.
-
-    if exist "%FRONT_LOG%" (
-        type "%FRONT_LOG%"
-    )
-
-    goto :err
-)
-
-rem ============================================================================
-rem AI RESULT
-rem ============================================================================
-
-if not "%AI_CODE%"=="0" (
-
-    echo.
-    echo ============================================================
-    echo [ERROR] AI Core preparation failed.
-    echo ============================================================
-    echo.
-
-    if exist "%AI_LOG%" (
-        type "%AI_LOG%"
-    )
-
-    goto :err
-)
-
-rem ============================================================================
-rem AI ENVIRONMENT
-rem ============================================================================
 
 if exist "%ROOT%downloads\ai-environment.bat" (
-
-    echo.
     echo Loading AI environment...
-
-    call "%ROOT%downloads\ai-environment.bat" || goto :err
+    call "%ROOT%downloads\ai-environment.bat"
+    if errorlevel 1 goto :err
 )
 
-rem ============================================================================
-rem CLEAN TEMP JOB DATA
-rem ============================================================================
-
-rmdir /s /q "%JOB_DIR%" >nul 2>&1
-
-rem ============================================================================
-rem START APPLICATION
-rem ============================================================================
-
+rmdir /s /q "%JOBS%" >nul 2>&1
 set "KARAOKE_PYTHON=%PY%"
 
 echo.
@@ -331,10 +156,17 @@ echo ============================================================
 echo.
 
 cd /d "%FRONT%" || goto :err
-
 call npm run dev:electron
-
 exit /b %errorlevel%
+
+rem ============================================================================
+rem START JOB
+rem ============================================================================
+
+:start
+echo Starting %~1 preparation...
+start "" /b cmd.exe /c call "%~f0" --job "%~1" "%~2" "%~3" "%~4" "%~5"
+exit /b 0
 
 rem ============================================================================
 rem LOCAL PYTHON
@@ -343,433 +175,248 @@ rem ============================================================================
 :runtime
 
 if exist "%RTPY%" (
+    call :check_runtime
+    if not errorlevel 1 exit /b 0
 
-    "%RTPY%" -c ^
-        "import sys,venv;exit(sys.version_info[:3]!=(3,12,10))" ^
-        >nul 2>&1
-
-    if not errorlevel 1 (
-        exit /b 0
-    )
+    echo Existing local Python runtime is invalid. Recreating...
 )
 
-echo.
-echo Local Python %VER% not found.
-echo Preparing runtime:
-echo   %RT%
-echo.
+echo Preparing local Python %VER%...
 
 rmdir /s /q "%RT%" >nul 2>&1
-del /q "%ZIP%" >nul 2>&1
+del /q "%PKG%" >nul 2>&1
 
 mkdir "%RT%" || exit /b 1
 
 echo Downloading Python %VER%...
 
 where curl.exe >nul 2>&1
-
 if not errorlevel 1 (
-
-    curl.exe ^
-        -LfsS ^
-        --retry 5 ^
-        --retry-delay 2 ^
-        -o "%ZIP%" ^
-        "%URL%"
+    curl.exe -LfsS --retry 5 --retry-delay 2 -o "%PKG%" "%URL%"
 )
 
-if not exist "%ZIP%" (
-
+if not exist "%PKG%" (
     echo curl failed. Trying PowerShell...
 
-    powershell.exe ^
-        -NoProfile ^
-        -ExecutionPolicy Bypass ^
-        -Command ^
-        "$ProgressPreference='SilentlyContinue';Invoke-WebRequest -UseBasicParsing -Uri '%URL%' -OutFile '%ZIP%'"
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
+    "$ProgressPreference='SilentlyContinue';Invoke-WebRequest -UseBasicParsing -Uri '%URL%' -OutFile '%PKG%'"
+
+    if errorlevel 1 exit /b 1
 )
 
-if not exist "%ZIP%" (
-
-    echo.
-    echo [ERROR] Python runtime download failed.
-
+if not exist "%PKG%" (
+    echo [ERROR] Python download failed.
     exit /b 1
 )
 
-for %%F in ("%ZIP%") do (
-
-    if %%~zF==0 (
-
-        echo.
-        echo [ERROR] Downloaded Python package is empty.
-
-        del /q "%ZIP%" >nul 2>&1
-
-        exit /b 1
-    )
+for %%F in ("%PKG%") do if %%~zF==0 (
+    echo [ERROR] Downloaded Python package is empty.
+    exit /b 1
 )
 
 echo Extracting Python...
 
-powershell.exe ^
-    -NoProfile ^
-    -ExecutionPolicy Bypass ^
-    -Command ^
-    "Expand-Archive -LiteralPath '%ZIP%' -DestinationPath '%RT%' -Force" ^
-    || exit /b 1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
+"Expand-Archive -LiteralPath '%PKG%' -DestinationPath '%RT%' -Force"
 
-del /q "%ZIP%" >nul 2>&1
-
-if not exist "%RTPY%" (
-
-    echo.
-    echo [ERROR] Python executable not found:
-    echo   %RTPY%
-
+if errorlevel 1 (
+    echo [ERROR] Python extraction failed.
     exit /b 1
 )
 
-"%RTPY%" -c ^
-    "import sys,venv;exit(sys.version_info[:3]!=(3,12,10))" ^
-    >nul 2>&1
+del /q "%PKG%" >nul 2>&1
+
+call :check_runtime
+exit /b %errorlevel%
+
+rem ============================================================================
+rem VERIFY LOCAL PYTHON
+rem ============================================================================
+
+:check_runtime
+
+if not exist "%RTPY%" (
+    echo [ERROR] Python executable not found:
+    echo   %RTPY%
+    exit /b 1
+)
+
+echo.
+echo Checking local Python runtime:
+echo   %RTPY%
+
+"%RTPY%" --version
+if errorlevel 1 (
+    echo [ERROR] Python executable cannot start.
+    exit /b 1
+)
+
+"%RTPY%" -c "import sys;print('Executable:',sys.executable);print('Version:',sys.version);raise SystemExit(0 if sys.version_info[:3]==(3,12,10) else 1)"
 
 if errorlevel 1 (
+    echo [ERROR] Expected Python %VER%.
+    exit /b 1
+)
 
-    echo.
-    echo [ERROR] Invalid Python runtime:
-    echo   %RTPY%
+"%RTPY%" -c "import venv;print('venv: OK')"
 
+if errorlevel 1 (
+    echo [ERROR] Python venv module is unavailable.
     exit /b 1
 )
 
 echo Local Python %VER% ready.
-
 exit /b 0
 
 rem ============================================================================
-rem WAIT FOR PARALLEL JOBS
+rem WAIT
 rem ============================================================================
 
-:wait_parallel
+:wait
+set /a SEC=0
 
-set /a WAIT_SECONDS=0
-set /a NEXT_STATUS=0
+:wait_loop
 
-set "LAST_FRONT_SIZE=-1"
-set "LAST_AI_SIZE=-1"
-
-set "FRONT_PREV_STATE="
-set "AI_PREV_STATE="
-
-:wait_parallel_loop
-
-call :job_state "%FRONT_RC%" FRONT_STATE FRONT_RESULT
-call :job_state "%AI_RC%" AI_STATE AI_RESULT
-
-rem ============================================================================
-rem SHOW STATE CHANGES IMMEDIATELY
-rem ============================================================================
-
-if not "%FRONT_STATE%"=="%FRONT_PREV_STATE%" (
-
-    call :print_job_state "Frontend" "%FRONT_STATE%" "%FRONT_RESULT%"
-
-    set "FRONT_PREV_STATE=%FRONT_STATE%"
-)
-
-if not "%AI_STATE%"=="%AI_PREV_STATE%" (
-
-    call :print_job_state "AI Core" "%AI_STATE%" "%AI_RESULT%"
-
-    set "AI_PREV_STATE=%AI_STATE%"
-)
-
-rem ============================================================================
-rem SHOW LOG ONLY WHEN IT ACTUALLY CHANGES
-rem ============================================================================
-
-call :show_log_tail ^
-    "Frontend" ^
-    "%FRONT_LOG%" ^
-    LAST_FRONT_SIZE ^
-    %LOG_TAIL_LINES%
-
-call :show_log_tail ^
-    "AI" ^
-    "%AI_LOG%" ^
-    LAST_AI_SIZE ^
-    %LOG_TAIL_LINES%
-
-rem ============================================================================
-rem FINISHED
-rem ============================================================================
-
-if exist "%FRONT_RC%" if exist "%AI_RC%" (
-
+if exist "%FRONT_RC%" if exist "%ASIO_RC%" if exist "%AI_RC%" (
     echo.
-    echo ============================================================
-    echo  Parallel preparation finished
-    echo ============================================================
-    echo.
-
+    echo Parallel preparation finished.
     exit /b 0
 )
 
-rem ============================================================================
-rem HEARTBEAT
-rem ============================================================================
+set /a MOD=SEC%%15
 
-if %WAIT_SECONDS% GEQ %NEXT_STATUS% (
+if !MOD!==0 (
+    for %%J in (FRONT AI ASIO) do call :state %%J
 
     echo.
-    echo [STATUS %WAIT_SECONDS%s] Frontend: %FRONT_STATE% ^| AI Core: %AI_STATE%
+    echo [STATUS !SEC!s] Frontend: !FRONT_STATE! ^| AI Core: !AI_STATE! ^| ASIO: !ASIO_STATE!
 
-    set /a NEXT_STATUS=WAIT_SECONDS+STATUS_INTERVAL
+    for %%J in (FRONT AI ASIO) do call :tail %%J
 )
 
 timeout /t 1 /nobreak >nul
-
-set /a WAIT_SECONDS+=1
-
-goto :wait_parallel_loop
+set /a SEC+=1
+goto :wait_loop
 
 rem ============================================================================
-rem BACKGROUND JOB STATE
+rem STATE
 rem ============================================================================
 
-:job_state
+:state
 
-set "%~2=RUNNING"
-set "%~3="
+call set "R=%%%~1_RC%%"
+set "%~1_STATE=RUNNING"
 
-if not exist "%~1" (
-    exit /b 0
-)
+if not exist "%R%" exit /b 0
 
-set "JOB_STATE_CODE="
+set "C="
+set /p C=<"%R%"
 
-set /p JOB_STATE_CODE=<"%~1"
-
-if not defined JOB_STATE_CODE (
-    set "%~2=FINISHED"
-    set "%~3=?"
-    exit /b 0
-)
-
-if "%JOB_STATE_CODE%"=="0" (
-
-    set "%~2=DONE"
-    set "%~3=0"
-
+if "!C!"=="0" (
+    set "%~1_STATE=DONE"
 ) else (
-
-    set "%~2=FAILED"
-    set "%~3=%JOB_STATE_CODE%"
+    set "%~1_STATE=FAILED"
 )
 
 exit /b 0
 
 rem ============================================================================
-rem PRINT JOB STATE
+rem LOG
 rem ============================================================================
 
-:print_job_state
+:tail
 
-if /i "%~2"=="RUNNING" (
-    echo [%~1] RUNNING
+setlocal DisableDelayedExpansion
+call set "L=%%%~1_LOG%%"
+
+if not exist "%L%" (
+    endlocal
     exit /b 0
 )
 
-if /i "%~2"=="DONE" (
-    echo [%~1] DONE
-    exit /b 0
-)
+set "ADVOICE_LOG=%L%"
+set "ADVOICE_NAME=%~1"
 
-if /i "%~2"=="FAILED" (
-    echo [%~1] FAILED ^(exit code %~3^)
-    exit /b 0
-)
+for /f "usebackq delims=" %%L in (`
+    powershell.exe -NoProfile -Command ^
+    "$p=$env:ADVOICE_LOG;if(Test-Path -LiteralPath $p){Get-Content -LiteralPath $p -Tail 3 -ErrorAction SilentlyContinue|Where-Object{-not [string]::IsNullOrWhiteSpace($_)}|ForEach-Object{'  '+$env:ADVOICE_NAME+': '+$_}}"
+`) do echo %%L
 
-echo [%~1] %~2
-
+endlocal
 exit /b 0
 
 rem ============================================================================
-rem SHOW LOG TAIL ONLY WHEN FILE CHANGES
+rem RESULT
 rem ============================================================================
 
-:show_log_tail
+:result
 
-setlocal EnableExtensions
+call set "R=%%%~1_RC%%"
+call set "L=%%%~1_LOG%%"
 
-set "LABEL=%~1"
-set "LOG=%~2"
-set "SIZE=0"
-set "TAIL_LINES=%~4"
+if exist "%R%" (
+    set "C="
+    set /p C=<"%R%"
 
-if not defined TAIL_LINES (
-    set "TAIL_LINES=3"
-)
-
-if not exist "%LOG%" (
-    endlocal
-    exit /b 0
-)
-
-for %%F in ("%LOG%") do (
-    set "SIZE=%%~zF"
-)
-
-call set "OLD_SIZE=%%%~3%%"
-
-if "%SIZE%"=="%OLD_SIZE%" (
-    endlocal
-    exit /b 0
-)
-
-if "%SIZE%"=="0" (
-    endlocal & set "%~3=%SIZE%"
-    exit /b 0
+    if "!C!"=="0" (
+        echo [%~1] DONE
+        exit /b 0
+    )
 )
 
 echo.
+echo ============================================================
+echo [ERROR] %~1 preparation failed.
+echo ============================================================
+echo.
 
-powershell.exe ^
-    -NoProfile ^
-    -ExecutionPolicy Bypass ^
-    -Command ^
-    "$p=$env:ADVOICE_LOG;" ^
-    "$label=$env:ADVOICE_LABEL;" ^
-    "$n=[int]$env:ADVOICE_TAIL;" ^
-    "if(Test-Path -LiteralPath $p){" ^
-    "$lines=Get-Content -LiteralPath $p -Tail $n -ErrorAction SilentlyContinue;" ^
-    "foreach($line in $lines){" ^
-    "if(-not [string]::IsNullOrWhiteSpace($line)){" ^
-    "Write-Output ('  '+$label+': '+$line)" ^
-    "}" ^
-    "}" ^
-    "}" ^
-    >"%TEMP%\advoice-log-tail-%RANDOM%.tmp"
-
-rem PowerShell receives values through environment to avoid quoting issues.
-rem Re-run with environment variables safely populated.
-
-set "ADVOICE_LOG=%LOG%"
-set "ADVOICE_LABEL=%LABEL%"
-set "ADVOICE_TAIL=%TAIL_LINES%"
-
-for /f "usebackq delims=" %%L in (`
-    powershell.exe ^
-        -NoProfile ^
-        -ExecutionPolicy Bypass ^
-        -Command ^
-        "$p=$env:ADVOICE_LOG;" ^
-        "$label=$env:ADVOICE_LABEL;" ^
-        "$n=[int]$env:ADVOICE_TAIL;" ^
-        "if(Test-Path -LiteralPath $p){" ^
-        "$lines=Get-Content -LiteralPath $p -Tail $n -ErrorAction SilentlyContinue;" ^
-        "foreach($line in $lines){" ^
-        "if(-not [string]::IsNullOrWhiteSpace($line)){" ^
-        "Write-Output ('  '+$label+': '+$line)" ^
-        "}" ^
-        "}" ^
-        "}"
-`) do (
-    echo %%L
-)
-
-set "ADVOICE_LOG="
-set "ADVOICE_LABEL="
-set "ADVOICE_TAIL="
-
-endlocal & set "%~3=%SIZE%"
-
-exit /b 0
+if exist "%L%" type "%L%"
+exit /b 1
 
 rem ============================================================================
-rem FRONTEND BACKGROUND JOB
+rem JOB
 rem ============================================================================
 
-:front_job
+:job
 
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 
-set "JOB_FRONT=%~2"
-set "JOB_LOG=%~3"
-set "JOB_RC=%~4"
+set "NAME=%~2"
+set "TARGET=%~3"
+set "ARG=%~4"
+set "LOG=%~5"
+set "RC=%~6"
 
-cd /d "%JOB_FRONT%" >"%JOB_LOG%" 2>&1
+>"%LOG%" echo %NAME% worker started.
 
-if errorlevel 1 (
+if /i "%NAME%"=="front" (
+    cd /d "%TARGET%" >>"%LOG%" 2>&1 || goto :job_fail
 
-    >"%JOB_RC%" echo 1
+    if exist "%TARGET%\node_modules\" (
+        >>"%LOG%" echo Frontend dependencies already exist.
+        >"%RC%" echo 0
+        exit /b 0
+    )
 
-    exit /b 1
-)
-
-rem ============================================================================
-rem EXISTING NODE_MODULES
-rem ============================================================================
-
-if exist "%JOB_FRONT%\node_modules\" (
-
-    >>"%JOB_LOG%" echo Frontend dependencies already exist.
-
-    >"%JOB_RC%" echo 0
-
-    exit /b 0
-)
-
-rem ============================================================================
-rem INSTALL FRONTEND DEPENDENCIES
-rem ============================================================================
-
-if exist "%JOB_FRONT%\package-lock.json" (
-
-    >>"%JOB_LOG%" echo Running npm ci...
-
-    call npm ci >>"%JOB_LOG%" 2>&1
-
+    if exist "%TARGET%\package-lock.json" (
+        call npm ci >>"%LOG%" 2>&1
+    ) else (
+        call npm install >>"%LOG%" 2>&1
+    )
 ) else (
-
-    >>"%JOB_LOG%" echo Running npm install...
-
-    call npm install >>"%JOB_LOG%" 2>&1
+    if not exist "%TARGET%" goto :job_fail
+    call "%TARGET%" "%ARG%" >>"%LOG%" 2>&1
 )
 
-set "JOB_ERROR=%ERRORLEVEL%"
+set "E=!errorlevel!"
+>"%RC%" echo !E!
 
->"%JOB_RC%" echo %JOB_ERROR%
+exit /b !E!
 
-exit /b %JOB_ERROR%
+:job_fail
 
-rem ============================================================================
-rem AI BACKGROUND JOB
-rem ============================================================================
-
-:ai_job
-
-setlocal EnableExtensions
-
-set "JOB_AI=%~2"
-set "JOB_ROOT=%~3"
-set "JOB_LOG=%~4"
-set "JOB_RC=%~5"
-
-rem Always create a log immediately so parent knows worker started.
-
->"%JOB_LOG%" echo AI Core worker started.
-
-call "%JOB_AI%" "%JOB_ROOT%" >>"%JOB_LOG%" 2>&1
-
-set "JOB_ERROR=%ERRORLEVEL%"
-
-rem Always create RC file, including failures.
-
->"%JOB_RC%" echo %JOB_ERROR%
-
-exit /b %JOB_ERROR%
+>"%RC%" echo 1
+exit /b 1
 
 rem ============================================================================
 rem ERROR
@@ -777,16 +424,17 @@ rem ============================================================================
 
 :err
 
-if defined JOB_DIR (
-    rmdir /s /q "%JOB_DIR%" >nul 2>&1
-)
-
 echo.
 echo ============================================================
 echo [ERROR] Development environment could not be started.
 echo ============================================================
 echo.
 
-pause
+if defined JOBS (
+    echo Logs:
+    echo   %JOBS%
+    echo.
+)
 
+pause
 exit /b 1
