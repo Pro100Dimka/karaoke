@@ -5,6 +5,7 @@ import os
 from dataclasses import asdict, dataclass
 
 from .errors import ConfigurationError
+from .model_registry import get_model
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -55,8 +56,8 @@ class CoreConfig:
     pitch_engine: str = "fcpe"
     transcription_engine: str = "qwen3-asr"
     alignment_engine: str = "qwen3-forced-aligner"
-    asr_model: str = "Qwen/Qwen3-ASR-1.7B"
-    aligner_model: str = "Qwen/Qwen3-ForcedAligner-0.6B"
+    asr_model: str = get_model("asr").repo_id
+    aligner_model: str = get_model("aligner").repo_id
     allow_fallback: bool = False
     preserve_raw_pitch: bool = True
     write_quality_report: bool = True
@@ -121,8 +122,8 @@ class CoreConfig:
             pitch_engine=os.getenv("KARAOKE_AI_PITCH", "fcpe"),
             transcription_engine=os.getenv("KARAOKE_AI_ASR", "qwen3-asr"),
             alignment_engine=os.getenv("KARAOKE_AI_ALIGNER", "qwen3-forced-aligner"),
-            asr_model=os.getenv("KARAOKE_AI_ASR_MODEL", "Qwen/Qwen3-ASR-1.7B"),
-            aligner_model=os.getenv("KARAOKE_AI_ALIGNER_MODEL", "Qwen/Qwen3-ForcedAligner-0.6B"),
+            asr_model=os.getenv("KARAOKE_AI_ASR_MODEL", get_model("asr").repo_id),
+            aligner_model=os.getenv("KARAOKE_AI_ALIGNER_MODEL", get_model("aligner").repo_id),
             allow_fallback=_env_bool("KARAOKE_AI_ALLOW_FALLBACK", False),
             preserve_raw_pitch=_env_bool("KARAOKE_AI_PRESERVE_RAW_PITCH", True),
             write_quality_report=_env_bool("KARAOKE_AI_WRITE_QUALITY", True),

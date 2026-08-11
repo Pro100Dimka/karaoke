@@ -12,6 +12,7 @@ import numpy as np
 from ..audio import load_mono
 from ..errors import EngineUnavailableError, InvalidArtifactError
 from ..models import Word
+from ..model_registry import get_model
 from .device import select_torch_device
 
 _CLEAN = re.compile(r"[^\w]+", re.UNICODE)
@@ -175,8 +176,8 @@ class CTCWordAligner:
     """
 
     MODEL_DIR_NAMES = {
-        "ru": "wav2vec2-large-xlsr-53-russian",
-        "uk": "wav2vec2-xls-r-300m-uk",
+        "ru": get_model("ctc_ru").local_name,
+        "uk": get_model("ctc_uk").local_name,
     }
 
     def __init__(self, models: dict[str, str] | None = None):

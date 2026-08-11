@@ -15,6 +15,7 @@ import numpy as np
 from ..audio import duration, load_mono
 from ..errors import EngineUnavailableError, InvalidArtifactError
 from ..models import Word
+from ..model_registry import get_model
 from .base import Aligner, Transcriber
 from .device import select_torch_device
 from .ctc_alignment import CTC_ALIGNMENT_VERSION, CTCWordAligner, _language_code
@@ -2999,7 +3000,7 @@ def _consensus_language(
 class Qwen3Transcriber(Transcriber):
     name = "qwen3-asr"
 
-    def __init__(self, model="Qwen/Qwen3-ASR-1.7B"):
+    def __init__(self, model=get_model("asr").repo_id):
         self.model_name = model
         self._model = None
         self._call_batch_size = 1
@@ -3244,7 +3245,7 @@ class Qwen3Transcriber(Transcriber):
 class Qwen3ForcedAligner(Aligner):
     name = "ctc-qwen-hybrid-aligner"
 
-    def __init__(self, model="Qwen/Qwen3-ForcedAligner-0.6B"):
+    def __init__(self, model=get_model("aligner").repo_id):
         self.model_name = model
         self._model = None
         self._global_asr_segments: list[tuple[float, float, str]] = []
