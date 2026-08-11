@@ -297,9 +297,14 @@ def get_result(song: SongDependency, response: Response):
     return schemas.SongResultOut(
         song=schemas.SongOut.model_validate(song),
         music=read_json(out_dir / "music.json"),
+        # Keep acoustic notes for scoring compatibility, but expose the exact
+        # syllable-aware game timeline separately for the Karaoke UI.
         reference_notes=ai_bridge.get_reference_notes(out_dir),
-        lyrics_sync=read_json(out_dir / "lyrics.json"),
-        song_map=read_json(out_dir / "songInfo.json"),
+        game_notes=ai_bridge.get_game_notes(out_dir),
+        syllables=ai_bridge.get_syllables(out_dir),
+        lyrics_sync=ai_bridge.get_karaoke_lyrics(out_dir),
+        karaoke_timeline=ai_bridge.get_karaoke_timeline(out_dir),
+        song_map=read_json(out_dir / "songMap.json"),
         difficulty=read_json(out_dir / "difficulty.json"),
         structure=read_json(out_dir / "structure.json"),
         breaths=read_json(out_dir / "breaths.json"),

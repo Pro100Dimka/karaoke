@@ -244,7 +244,7 @@ def _group_words_into_lines(
             continue
         start = float(word.get("start") or 0.0)
         end = max(start, float(word.get("end") or start))
-        normalized_words.append({"word": token, "start": start, "end": end})
+        normalized_words.append({**word, "word": token, "text": token, "start": start, "end": end})
 
     boundaries = _source_line_boundaries(source_text, normalized_words)
     if boundaries:
@@ -268,7 +268,7 @@ def _group_words_into_lines(
             continue
         start = float(word.get("start") or 0.0)
         end = max(start, float(word.get("end") or start))
-        item = {"word": token, "start": start, "end": end}
+        item = {**word, "word": token, "text": token, "start": start, "end": end}
 
         if current:
             gap = start - current[-1]["end"]
@@ -520,6 +520,168 @@ def _bound_legacy_word_durations(lines: list[dict[str, Any]]) -> list[dict[str, 
         )
     return output
 
+
+
+def get_karaoke_lyrics(output_dir: str | Path) -> list[dict[str, Any]]:
+    """Return canonical forced-aligned lyric lines without legacy timing edits."""
+    output_dir = Path(output_dir)
+    payload: Any = read_json(output_dir / "lyricsSync.json", default={})
+    if not isinstance(payload, dict):
+        return []
+    words = payload.get("words", [])
+    if not isinstance(words, list):
+        words = []
+    return _group_words_into_lines(words, str(payload.get("text") or ""))
+
+
+def get_game_notes(output_dir: str | Path) -> list[dict[str, Any]]:
+    """Return syllable-aware karaoke/game note events from reference.json."""
+    payload: Any = read_json(Path(output_dir) / "reference.json", default={})
+    notes = payload.get("notes", []) if isinstance(payload, dict) else []
+    if not isinstance(notes, list):
+        return []
+    result: list[dict[str, Any]] = []
+    for note in notes:
+        if not isinstance(note, dict):
+            continue
+        midi = note.get("midi_note", note.get("midi"))
+        result.append({**note, "midi": midi, "pitch": midi})
+    return result
+
+
+def get_syllables(output_dir: str | Path) -> list[dict[str, Any]]:
+    payload: Any = read_json(Path(output_dir) / "syllables.json", default={})
+    syllables = payload.get("syllables", []) if isinstance(payload, dict) else []
+    return [item for item in syllables if isinstance(item, dict)] if isinstance(syllables, list) else []
+
+
+def get_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
+    """Build the single authoritative presentation timeline for Karaoke UI.
+
+    The frontend must not re-align words, syllables, or notes.  This payload
+    pre-links canonical forced-aligned words to syllables and syllable-aware
+    game notes, and exposes presentation start/end values derived from the
+    exact game-note intervals whenever a syllable has note evidence.
+    """
+    output_dir = Path(output_dir)
+    lines = get_karaoke_lyrics(output_dir)
+    syllables = get_syllables(output_dir)
+    notes = get_game_notes(output_dir)
+    song_map = read_json(output_dir / "songMap.json", default={})
+
+    syllables_by_word: dict[int, list[dict[str, Any]]] = {}
+    for syllable in syllables:
+        try:
+            word_index = int(syllable.get("word_index"))
+        except (TypeError, ValueError):
+            continue
+        syllables_by_word.setdefault(word_index, []).append(dict(syllable))
+
+    notes_by_syllable: dict[int, list[dict[str, Any]]] = {}
+    for note in notes:
+        try:
+            syllable_index = int(note.get("syllable_index"))
+        except (TypeError, ValueError):
+            continue
+        notes_by_syllable.setdefault(syllable_index, []).append(dict(note))
+
+    for values in syllables_by_word.values():
+        values.sort(key=lambda item: (float(item.get("start") or 0.0), int(item.get("index") or 0)))
+    for values in notes_by_syllable.values():
+        values.sort(key=lambda item: (float(item.get("start") or 0.0), float(item.get("end") or 0.0)))
+
+    timeline_lines: list[dict[str, Any]] = []
+    for line_index, line in enumerate(lines):
+        timeline_words: list[dict[str, Any]] = []
+        for source_word in list(line.get("words") or []):
+            word = dict(source_word)
+            try:
+                word_index = int(word.get("index"))
+            except (TypeError, ValueError):
+                word_index = -1
+
+            linked_syllables: list[dict[str, Any]] = []
+            for source_syllable in syllables_by_word.get(word_index, []):
+                syllable = dict(source_syllable)
+                try:
+                    syllable_index = int(syllable.get("index"))
+                except (TypeError, ValueError):
+                    syllable_index = -1
+                linked_notes = notes_by_syllable.get(syllable_index, [])
+                if linked_notes:
+                    presentation_start = min(float(note.get("start") or 0.0) for note in linked_notes)
+                    presentation_end = max(float(note.get("end") or presentation_start) for note in linked_notes)
+                    timing_source = "game_notes"
+                else:
+                    presentation_start = float(syllable.get("start") or word.get("start") or 0.0)
+                    presentation_end = max(
+                        presentation_start,
+                        float(syllable.get("end") or word.get("end") or presentation_start),
+                    )
+                    timing_source = "syllable_alignment"
+                linked_syllables.append(
+                    {
+                        **syllable,
+                        "start": presentation_start,
+                        "end": presentation_end,
+                        "timing_source": timing_source,
+                        "notes": linked_notes,
+                    }
+                )
+
+            if linked_syllables:
+                presentation_start = min(float(item["start"]) for item in linked_syllables)
+                presentation_end = max(float(item["end"]) for item in linked_syllables)
+                timing_source = "syllables_game_notes"
+            else:
+                presentation_start = float(word.get("start") or 0.0)
+                presentation_end = max(presentation_start, float(word.get("end") or presentation_start))
+                timing_source = "word_alignment"
+
+            timeline_words.append(
+                {
+                    **word,
+                    "start": presentation_start,
+                    "end": presentation_end,
+                    "timing_source": timing_source,
+                    "syllables": linked_syllables,
+                }
+            )
+
+        if timeline_words:
+            line_start = min(float(word["start"]) for word in timeline_words)
+            line_end = max(float(word["end"]) for word in timeline_words)
+        else:
+            line_start = float(line.get("start") or 0.0)
+            line_end = max(line_start, float(line.get("end") or line_start))
+        timeline_lines.append(
+            {
+                **line,
+                "index": line_index,
+                "start": line_start,
+                "end": line_end,
+                "words": timeline_words,
+            }
+        )
+
+    duration = 0.0
+    if isinstance(song_map, dict):
+        try:
+            duration = max(0.0, float(song_map.get("duration") or 0.0))
+        except (TypeError, ValueError):
+            duration = 0.0
+    if not duration:
+        candidates = [float(line.get("end") or 0.0) for line in timeline_lines]
+        candidates.extend(float(note.get("end") or 0.0) for note in notes)
+        duration = max(candidates, default=0.0)
+
+    return {
+        "version": 1,
+        "clock": "instrumental_seconds",
+        "duration": duration,
+        "lines": timeline_lines,
+        "notes": notes,
+    }
 
 def _reference_notes(output_dir: Path) -> list[dict[str, Any]]:
     # Prefer the exact canonical vocal-note sequence used to create vocal.mid.

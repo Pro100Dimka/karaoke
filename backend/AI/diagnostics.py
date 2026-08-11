@@ -270,6 +270,35 @@ def build_alignment_debug(
 
     game = list(game_notes or notes)
     syllable_split_events = max(0, len(game) - len(notes))
+    syllable_ids = {int(item.index) for item in syllables}
+    game_syllable_ids = [
+        int(note.syllable_index)
+        for note in game
+        if note.syllable_index is not None
+    ]
+    game_syllable_set = set(game_syllable_ids)
+    events_per_syllable: dict[int, int] = {}
+    for syllable_id in game_syllable_ids:
+        events_per_syllable[syllable_id] = events_per_syllable.get(syllable_id, 0) + 1
+    game_durations = [max(0.0, float(note.end) - float(note.start)) for note in game]
+    sorted_game_durations = sorted(value for value in game_durations if value > 0.0)
+    if sorted_game_durations:
+        def _quantile(frac: float) -> float:
+            pos = (len(sorted_game_durations) - 1) * frac
+            lo = int(math.floor(pos)); hi = int(math.ceil(pos))
+            if lo == hi:
+                return sorted_game_durations[lo]
+            weight = pos - lo
+            return sorted_game_durations[lo] * (1.0 - weight) + sorted_game_durations[hi] * weight
+        game_duration_quantiles = {
+            "p05": _quantile(0.05),
+            "p25": _quantile(0.25),
+            "p50": _quantile(0.50),
+            "p75": _quantile(0.75),
+            "p95": _quantile(0.95),
+        }
+    else:
+        game_duration_quantiles = {key: 0.0 for key in ("p05", "p25", "p50", "p75", "p95")}
 
     return {
         "version": 1,
@@ -322,11 +351,28 @@ def build_alignment_debug(
             "linked_ratio": linked_notes / max(1, len(notes)),
             "median_acoustic_duration": _median([note.end - note.start for note in notes], 0.0),
             "median_game_duration": _median([note.end - note.start for note in game], 0.0),
+            "game_duration_quantiles": game_duration_quantiles,
+            "game_events_with_syllable": len(game_syllable_ids),
+            "unique_syllables_with_game_event": len(game_syllable_set),
+            "max_game_events_per_syllable": max(events_per_syllable.values(), default=0),
+            "median_game_events_per_syllable": _median(list(events_per_syllable.values()), 0.0),
         },
         "syllables": {
             "count": len(syllables),
             "mean_confidence": (
                 sum(item.confidence for item in syllables) / max(1, len(syllables))
+            ),
+            "with_game_event": len(syllable_ids & game_syllable_set),
+            "without_game_event": len(syllable_ids - game_syllable_set),
+            "game_event_coverage": len(syllable_ids & game_syllable_set) / max(1, len(syllable_ids)),
+            "non_positive_duration": sum(1 for item in syllables if float(item.end) <= float(item.start)),
+            "duration_quantiles": (
+                {
+                    "p05": sorted([max(0.0, float(item.end)-float(item.start)) for item in syllables])[max(0, int((len(syllables)-1)*0.05))],
+                    "p50": _median([max(0.0, float(item.end)-float(item.start)) for item in syllables], 0.0),
+                    "p95": sorted([max(0.0, float(item.end)-float(item.start)) for item in syllables])[max(0, int((len(syllables)-1)*0.95))],
+                }
+                if syllables else {"p05": 0.0, "p50": 0.0, "p95": 0.0}
             ),
         },
     }

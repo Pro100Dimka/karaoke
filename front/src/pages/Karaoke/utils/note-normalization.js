@@ -4,6 +4,7 @@ export function normalizeNoteList(raw, resolveNamedNote = () => NaN) {
   return raw
     .filter((note) => note && typeof note === "object")
     .map((note) => ({
+      ...note,
       start: Number(note.start),
       end: Number(note.end),
       midi: Number(
@@ -12,7 +13,13 @@ export function normalizeNoteList(raw, resolveNamedNote = () => NaN) {
           note.midiNote ??
           note.pitch ??
           resolveNamedNote(note.note)
-      )
+      ),
+      wordIndex: Number.isInteger(Number(note.word_index ?? note.wordIndex))
+        ? Number(note.word_index ?? note.wordIndex)
+        : null,
+      syllableIndex: Number.isInteger(Number(note.syllable_index ?? note.syllableIndex))
+        ? Number(note.syllable_index ?? note.syllableIndex)
+        : null
     }))
     .filter(
       (note) =>

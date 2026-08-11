@@ -95,7 +95,7 @@ def parse_filename_identity(filename: str) -> tuple[str | None, str]:
 
     Handles both ``Artist - Title`` and compact ``Artist-Title`` forms.  Only
     the separator between artist/title is removed; hyphens inside the title
-    (for example ``31-я``) are preserved.  Browser/Windows duplicate suffixes
+    inside numeric titles are preserved.  Browser/Windows duplicate suffixes
     such as ``(2)`` are ignored.
     """
     stem = _clean_copy_suffix(Path(filename).stem.strip())
@@ -107,7 +107,7 @@ def parse_filename_identity(filename: str) -> tuple[str | None, str]:
         return spaced[0].strip(), spaced[1].strip()
 
     # Metadata-less libraries often use Artist-Title without spaces. Split
-    # only the first separator so title punctuation such as ``31-я`` survives.
+    # only the first separator so punctuation inside the title survives.
     compact = re.match(r"^(.+?)[–—-](.+)$", stem)
     if compact:
         artist = compact.group(1).strip()

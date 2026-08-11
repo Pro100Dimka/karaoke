@@ -222,7 +222,7 @@ export default function MelodyRoll({
           const isCurrent = currentTime >= note.start && currentTime < note.end;
           const noteX = Math.max(noteLaneStart, x(note.start));
           const noteRight = Math.min(width, x(note.end));
-          const noteWidth = Math.max(5, noteRight - noteX - 5);
+          const noteWidth = Math.max(1.5, noteRight - noteX);
           const noteY = y(midi) + (rowHeight - noteHeight) / 2;
           const secondsPast = Math.max(0, currentTime - note.end);
           const isPast = note.end <= currentTime;

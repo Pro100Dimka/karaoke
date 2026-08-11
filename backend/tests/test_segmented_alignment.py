@@ -1209,3 +1209,171 @@ def test_relaxed_gap_fit_drops_late_weak_anchor_that_collapses_song_tail():
     assert stats["qwen"] == 0
     tail = merged[-5:]
     assert all(word.end - word.start > 0.02 for word in tail)
+
+
+def test_relaxed_gap_fit_preserves_dense_acoustic_anchors_and_scales_only_gap():
+    from types import SimpleNamespace
+
+    groups = ["alpha missing omega"]
+    ctc_lines = [
+        SimpleNamespace(
+            words=[
+                Word(1.00, 1.30, "alpha", 0.98, 0),
+                Word(1.315, 1.62, "omega", 0.97, 1),
+            ],
+            confidence=0.97,
+        )
+    ]
+    audio = np.ones(16000 * 4, dtype=np.float32) * 0.02
+
+    merged, stats = _anchor_preserving_canonical_alignment(
+        groups, ctc_lines, [], audio, 16000, 4.0, relaxed_gap_fit=True
+    )
+
+    assert [word.text for word in merged] == ["alpha", "missing", "omega"]
+    assert merged[0].start == pytest.approx(1.00)
+    assert merged[0].end == pytest.approx(1.30)
+    assert merged[2].start == pytest.approx(1.315)
+    assert merged[2].end == pytest.approx(1.62)
+    assert merged[1].start >= merged[0].end - 1e-6
+    assert merged[1].end <= merged[2].start + 1e-6
+    assert stats["ctc"] == 2
+
+
+def test_line_anchor_window_rejects_wrong_repeated_occurrence():
+    from types import SimpleNamespace
+
+    groups = ["same chorus", "same chorus"]
+    ctc_lines = [
+        SimpleNamespace(
+            words=[Word(1.0, 1.3, "same", 0.95, 0), Word(1.35, 1.8, "chorus", 0.95, 1)],
+            confidence=0.95,
+        ),
+        # Text is perfect but timestamps point at a completely different repeat.
+        SimpleNamespace(
+            words=[Word(8.0, 8.3, "same", 0.99, 0), Word(8.35, 8.8, "chorus", 0.99, 1)],
+            confidence=0.99,
+        ),
+    ]
+    anchors = {
+        0: (0.8, 2.0, 1.0),
+        1: (3.0, 4.5, 1.0),
+    }
+    audio = np.ones(16000 * 10, dtype=np.float32) * 0.02
+    debug = {}
+
+    merged, stats = _anchor_preserving_canonical_alignment(
+        groups,
+        ctc_lines,
+        [],
+        audio,
+        16000,
+        10.0,
+        anchors,
+        relaxed_gap_fit=True,
+        debug_out=debug,
+    )
+
+    assert [word.text for word in merged] == ["same", "chorus", "same", "chorus"]
+    assert merged[0].start == pytest.approx(1.0)
+    assert merged[1].start == pytest.approx(1.35)
+    # The second line's false 8-second repeat is rejected by its own coarse line window.
+    assert merged[2].start < 6.0
+    assert debug["rejected_reasons"].get("outside_line_anchor_window", 0) >= 2
+
+
+def test_complete_line_windows_rejects_wrong_repeat_but_keeps_unique_asr():
+    groups = [
+        "unique opening words",
+        "same chorus",
+        "middle bridge words",
+        "same chorus",
+    ]
+    audio = np.ones(16000 * 20, dtype=np.float32) * 0.02
+    raw = {
+        0: (2.0, 4.0, 1.0),
+        # First repeated chorus is deliberately mapped to the later occurrence.
+        1: (15.0, 16.0, 1.0),
+        3: (15.0, 16.0, 1.0),
+    }
+
+    completed, provenance = text_engine._complete_line_anchor_windows(
+        groups, raw, audio, 16000, 20.0
+    )
+
+    assert provenance[0] == "asr_unique"
+    assert completed[0][0] == pytest.approx(2.0)
+    assert provenance[1].startswith("vocal_baseline")
+    assert completed[1][1] < completed[3][0]
+    assert completed[1][0] < 12.0
+
+
+def test_complete_line_windows_marks_embedded_short_phrase_ambiguous():
+    groups = [
+        "intro words",
+        "break glass",
+        "other bridge words here",
+        "chorus repeats break glass tonight",
+    ]
+    audio = np.ones(16000 * 24, dtype=np.float32) * 0.02
+    raw = {
+        # The short line is incorrectly matched inside the later longer line.
+        1: (19.0, 20.0, 1.0),
+        3: (18.0, 22.0, 1.0),
+    }
+
+    completed, provenance = text_engine._complete_line_anchor_windows(
+        groups, raw, audio, 16000, 24.0
+    )
+
+    assert provenance[1].startswith("vocal_baseline")
+    assert completed[1][0] < completed[3][0]
+
+
+def test_anchor_merge_uses_indexed_qwen_for_repeated_lyrics():
+    """Pure Qwen evidence must stay attached to its actual chorus occurrence."""
+    from types import SimpleNamespace
+
+    groups = ["same words", "bridge", "same words"]
+    ctc_lines = [None, None, None]
+    # Canonical indices are: same=0 words=1 bridge=2 same=3 words=4.
+    qwen_words = [
+        Word(8.0, 8.3, "same", 0.91, 3),
+        Word(8.35, 8.8, "words", 0.90, 4),
+    ]
+    audio = np.ones(16000 * 12, dtype=np.float32) * 0.02
+
+    merged, stats = _anchor_preserving_canonical_alignment(
+        groups, ctc_lines, qwen_words, audio, 16000, 12.0, relaxed_gap_fit=True
+    )
+
+    assert [word.text for word in merged] == ["same", "words", "bridge", "same", "words"]
+    assert merged[3].start == pytest.approx(8.0)
+    assert merged[4].start == pytest.approx(8.35)
+    assert stats["qwen"] == 2
+
+
+def test_anchor_merge_prefers_confident_qwen_over_near_zero_ctc_when_they_disagree():
+    """A source label alone must never make unusable CTC beat better Qwen evidence."""
+    from types import SimpleNamespace
+
+    groups = ["alpha beta"]
+    ctc_lines = [
+        SimpleNamespace(
+            words=[
+                Word(0.5, 0.8, "alpha", 1e-7, 0),
+                Word(2.5, 2.8, "beta", 0.9, 1),
+            ],
+            confidence=1e-7,
+        )
+    ]
+    qwen_words = [Word(1.5, 1.9, "alpha", 0.8, 0)]
+    audio = np.ones(16000 * 4, dtype=np.float32) * 0.02
+
+    merged, stats = _anchor_preserving_canonical_alignment(
+        groups, ctc_lines, qwen_words, audio, 16000, 4.0, relaxed_gap_fit=True
+    )
+
+    assert merged[0].start == pytest.approx(1.5)
+    assert merged[0].confidence == pytest.approx(0.8)
+    assert stats["qwen"] >= 1

@@ -10,6 +10,7 @@ export default function useKaraokeResult(song) {
   });
   const songId = song?.id;
   const songStatus = song?.status;
+  const songUpdatedAt = song?.updated_at;
 
   useEffect(() => {
     if (!shouldLoadKaraokeResult({ id: songId, status: songStatus })) {
@@ -32,7 +33,7 @@ export default function useKaraokeResult(song) {
     return () => {
       active = false;
     };
-  }, [songId, songStatus]);
+  }, [songId, songStatus, songUpdatedAt]);
 
   return state;
 }

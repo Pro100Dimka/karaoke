@@ -229,3 +229,23 @@ def test_syllable_game_split_never_moves_detected_pitch():
     assert {note.midi_note for note in game} == {acoustic[0].midi_note}
     assert game[0].start == pytest.approx(acoustic[0].start)
     assert game[-1].end == pytest.approx(acoustic[0].end)
+
+
+def test_game_notes_keep_every_syllable_when_boundaries_collapse():
+    syllables = [
+        Syllable(0.0, 0.50, "а", 0, 0, 0.9),
+        Syllable(0.4999, 0.5001, "я", 0, 1, 0.4),
+        Syllable(0.50, 1.00, "ой", 0, 2, 0.9),
+    ]
+    pitch = [_frame(i * 0.01, 67.0) for i in range(100)]
+    acoustic = build_vocal_notes(pitch, syllables)
+    assert len(acoustic) == 1
+    game = build_game_notes(acoustic, syllables, min_note=0.055)
+    # Zero-width/near-identical lyric boundaries must not silently delete a
+    # syllable from the karaoke layer.
+    assert len(game) == 3
+    assert [note.syllable_index for note in game] == [0, 1, 2]
+    assert all(note.midi_note == acoustic[0].midi_note for note in game)
+    assert game[0].start == pytest.approx(acoustic[0].start)
+    assert game[-1].end == pytest.approx(acoustic[0].end)
+    assert all(right.start == pytest.approx(left.end) for left, right in zip(game, game[1:]))

@@ -128,7 +128,10 @@ class SongResultOut(BaseModel):
     song: SongOut
     music: dict[str, Any] | None = None
     reference_notes: list[dict[str, Any]] | None = None
+    game_notes: list[dict[str, Any]] | None = None
+    syllables: list[dict[str, Any]] | None = None
     lyrics_sync: Any | None = None
+    karaoke_timeline: dict[str, Any] | None = None
     song_map: dict[str, Any] | None = None
     difficulty: Any | None = None
     structure: Any | None = None

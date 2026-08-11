@@ -579,7 +579,7 @@ def _filename_search_identity(source: Path) -> tuple[str, str]:
     """Parse Artist-Title filenames when tags are absent.
 
     ``Artist-Track title(2)`` -> (``Artist``, ``Track title``).  The
-    hyphen inside ``31-я`` remains part of the title because splitting happens
+    hyphen inside a numeric title remains part of the title because splitting happens
     only once at the artist/title boundary.
     """
     stem = _strip_filename_copy_suffix(source.stem)

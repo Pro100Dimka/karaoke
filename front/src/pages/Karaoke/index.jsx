@@ -32,9 +32,9 @@ import { formatCompactKey } from "./utils/display";
 import { getLyricDisplayState } from "./utils/lyrics";
 import { getMicrophoneLevel } from "./utils/transport";
 
-// Karaoke data is normalized at the UI boundary so playback and visual
-// components operate on one predictable shape. Pure transformations live in
-// utils/data.js and are covered by regression tests.
+// Karaoke timing is authoritative on the backend. The UI only reads the ready
+// karaoke_timeline and advances it with the instrumental playback clock. Legacy
+// normalization remains only as a compatibility fallback for older payloads.
 
 const setGlobalRouteBlackout = (visible) => {
   window.dispatchEvent(
@@ -228,10 +228,22 @@ export default function Karaoke({ onOpenAppSettings }) {
     hasStartedPlaybackRef.current = false;
   }, [song?.id]);
 
-  const lyrics = useMemo(() => normalizeLyrics(result?.lyrics_sync), [result]);
+  const karaokeTimeline = result?.karaoke_timeline;
+  const lyrics = useMemo(
+    () =>
+      Array.isArray(karaokeTimeline?.lines)
+        ? karaokeTimeline.lines
+        : normalizeLyrics(result?.lyrics_sync),
+    [karaokeTimeline, result]
+  );
   const notes = useMemo(
-    () => normalizeNotes(result?.reference_notes),
-    [result]
+    () =>
+      normalizeNotes(
+        Array.isArray(karaokeTimeline?.notes)
+          ? karaokeTimeline.notes
+          : result?.game_notes ?? result?.reference_notes
+      ),
+    [karaokeTimeline, result]
   );
   const { startMelodyGuide, updateMelodyGuide, silenceMelodyGuide } =
     useMelodyGuide({

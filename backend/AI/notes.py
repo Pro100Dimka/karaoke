@@ -1568,62 +1568,105 @@ def build_game_notes(
     syllables: list[Syllable] | None = None,
     min_note: float = 0.0,
 ) -> list[VocalNote]:
-    """Build karaoke/scoring note events from acoustic notes and syllables.
+    """Build karaoke/scoring events from acoustic notes and aligned syllables.
 
-    ``vocal`` remains the untouched acoustic melody.  For karaoke display and
-    scoring, a sustained acoustic note is split at *aligned syllable* boundaries
-    so two sung syllables on the same pitch become two consecutive game notes
-    with the same MIDI pitch.  Lyrics therefore control event granularity, never
-    the detected pitch/register itself.
+    Acoustic notes remain the musical truth.  The game/reference layer is more
+    granular: if one sustained pitch spans N aligned syllables, it emits N
+    consecutive events at the same MIDI pitch.  A syllable boundary is never
+    discarded merely because two lyric events are close in time; when raw
+    boundaries collapse, the acoustic note is partitioned proportionally across
+    the participating syllables instead.  This preserves lyric granularity
+    without inventing pitch changes.
     """
-    ordered_syllables = sorted(syllables or [], key=lambda item: (item.start, item.end))
+    ordered_syllables = sorted(
+        syllables or [],
+        key=lambda item: (item.start, item.end, item.index),
+    )
     result: list[VocalNote] = []
     threshold = max(0.0, float(min_note))
 
     for note in vocal:
-        duration = note.end - note.start
+        duration = float(note.end) - float(note.start)
         if duration <= 0 or duration < threshold:
             continue
+
         overlaps = [
-            syllable for syllable in ordered_syllables
+            syllable
+            for syllable in ordered_syllables
             if min(note.end, syllable.end) - max(note.start, syllable.start) > 0.0
         ]
+        # A syllable can be encountered through overlapping artifacts more than
+        # once in defensive callers.  Keep one canonical owner per syllable id.
+        unique: list[Syllable] = []
+        seen: set[int] = set()
+        for syllable in overlaps:
+            key = int(syllable.index)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(syllable)
+        overlaps = unique
+
         if len(overlaps) <= 1:
             owner = overlaps[0] if overlaps else None
             result.append(VocalNote(
-                note.start, note.end, int(note.midi_note), note.velocity,
+                note.start,
+                note.end,
+                int(note.midi_note),
+                note.velocity,
                 owner.word_index if owner else note.word_index,
                 owner.index if owner else note.syllable_index,
                 (),
             ))
             continue
 
-        # Candidate cuts are actual aligned syllable boundaries clipped to this
-        # acoustic note.  The only floor is relative to the note and configured
-        # minimum-note scale; no fixed number of milliseconds is assumed.
-        relative_floor = duration / max(6.0, float(len(overlaps) * 4))
-        configured_floor = threshold * 0.35 if threshold > 0 else relative_floor
-        floor = max(1e-6, min(relative_floor, configured_floor))
-        boundaries = [note.start]
-        for syllable in overlaps[1:]:
-            cut = max(note.start, min(note.end, syllable.start))
-            if cut - boundaries[-1] >= floor and note.end - cut >= floor:
-                boundaries.append(cut)
-        boundaries.append(note.end)
+        # Preferred cuts follow the aligned start of each following syllable.
+        raw_cuts = [float(note.start)] + [
+            max(float(note.start), min(float(note.end), float(syllable.start)))
+            for syllable in overlaps[1:]
+        ] + [float(note.end)]
 
-        for left, right in zip(boundaries, boundaries[1:], strict=False):
+        # If every cut is strictly increasing, retain the acoustic/lyric
+        # boundaries exactly.  Otherwise (e.g. several aligned syllables share a
+        # near-identical timestamp), partition the *same acoustic note* using
+        # relative lyric overlap weights.  This guarantees one game event per
+        # overlapping syllable without any fixed millisecond floor.
+        strictly_increasing = all(
+            right > left
+            for left, right in zip(raw_cuts, raw_cuts[1:], strict=False)
+        )
+        if strictly_increasing:
+            boundaries = raw_cuts
+        else:
+            weights = [
+                max(
+                    1e-9,
+                    min(float(note.end), float(syllable.end))
+                    - max(float(note.start), float(syllable.start)),
+                )
+                for syllable in overlaps
+            ]
+            total = max(1e-9, sum(weights))
+            boundaries = [float(note.start)]
+            accumulated = 0.0
+            for weight in weights[:-1]:
+                accumulated += weight
+                boundaries.append(float(note.start) + duration * (accumulated / total))
+            boundaries.append(float(note.end))
+
+        # One segment per participating syllable, same detected pitch.
+        for owner, left, right in zip(overlaps, boundaries[:-1], boundaries[1:], strict=True):
             if right <= left:
+                # Numerical last resort: proportional boundaries above should
+                # make this unreachable, but never create an invalid event.
                 continue
-            midpoint = (left + right) / 2.0
-            owner = max(
-                overlaps,
-                key=lambda syllable: (
-                    max(0.0, min(right, syllable.end) - max(left, syllable.start)),
-                    -abs(midpoint - (syllable.start + syllable.end) / 2.0),
-                ),
-            )
             result.append(VocalNote(
-                left, right, int(note.midi_note), note.velocity,
-                owner.word_index, owner.index, (),
+                left,
+                right,
+                int(note.midi_note),
+                note.velocity,
+                owner.word_index,
+                owner.index,
+                (),
             ))
     return result
