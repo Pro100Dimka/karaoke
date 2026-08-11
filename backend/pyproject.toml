@@ -30,7 +30,7 @@ ignore = [
 known-first-party = ["app"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 ignore_missing_imports = true
 warn_unused_ignores = true
 exclude = ["AI/"]
