@@ -1,1 +1,1 @@
-AI_BUILD_ID = "midi-v51-evidence-ranked-text-alignment-20260811"
+AI_BUILD_ID = "midi-v52-multi-evidence-context-alignment-20260811"

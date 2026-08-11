@@ -17,7 +17,7 @@ from .device import select_torch_device
 
 _CLEAN = re.compile(r"[^\w]+", re.UNICODE)
 
-CTC_ALIGNMENT_VERSION = "v1-wav2vec2-character-viterbi-local-lines"
+CTC_ALIGNMENT_VERSION = "v2-adaptive-window-local-retry"
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,6 +187,7 @@ class CTCWordAligner:
         self._loaded_key = ""
         self._device = "cpu"
         self.last_resource_diagnostics: dict[str, object] = {}
+        self.last_alignment_diagnostics: dict[str, object] = {}
 
     @staticmethod
     def _valid_model_dir(path: Path) -> tuple[bool, str]:
@@ -461,43 +462,103 @@ class CTCWordAligner:
         anchors = anchor_windows or {}
         output: list[CTCLineResult | None] = [None] * len(groups)
         cursor = 0.0
+        attempted = retried = recovered = 0
 
-        for line_index, group in enumerate(groups):
-            words = [token for token in re.findall(r"\w+(?:[’'-]\w+)*", group, re.UNICODE) if token]
-            if not words or cursor >= total - 0.08:
-                continue
-            expected = _expected_duration(words)
-            anchor = anchors.get(line_index)
-            if anchor is not None:
-                astart, aend, score = anchor
-                start = max(0.0, min(cursor - 0.55, float(astart) - (1.2 if score >= 0.45 else 2.0)))
-                end = min(total, max(float(aend) + 2.0, start + max(10.0, expected * 3.0 + 4.0)))
-            else:
-                start = max(0.0, cursor - 0.65)
-                end = min(total, start + min(26.0, max(14.0, expected * 3.6 + 5.0)))
-            if end <= start + 0.2:
-                continue
-            left = int(start * sample_rate)
+        def run_window(start: float, end: float, words: list[str]):
+            nonlocal attempted
+            if end <= start:
+                return None
+            attempted += 1
+            left = max(0, int(start * sample_rate))
             right = min(len(source), max(left + 1, int(end * sample_rate)))
             try:
                 local = self.align_window(source[left:right], sample_rate, words, language)
             except (EngineUnavailableError, InvalidArtifactError, RuntimeError, ValueError):
-                local = None
+                return None
             if local is None:
-                continue
-
-            absolute_words = tuple(
+                return None
+            absolute = tuple(
                 Word(start + word.start, start + word.end, raw, word.confidence, index)
                 for index, (word, raw) in enumerate(zip(local.words, words, strict=True))
             )
-            line_span = absolute_words[-1].end - absolute_words[0].start
-            min_span = max(0.35, 0.11 * len(words) + 0.018 * sum(len(word) for word in words))
-            # Low posterior or physically compressed alignment is not trusted.
-            # Qwen gets a chance for that line instead of silently publishing it.
-            if local.confidence < 0.035 or line_span < min_span:
+            return local, absolute
+
+        for line_index, group in enumerate(groups):
+            words = [token for token in re.findall(r"\w+(?:[’'-]\w+)*", group, re.UNICODE) if token]
+            if not words or cursor >= total:
                 continue
-            if absolute_words[0].start < cursor - 0.25:
+            expected = _expected_duration(words)
+            minimum = max(0.12 * expected, expected / max(3.0, len(words) * 1.8))
+            anchor = anchors.get(line_index)
+
+            # Bound an unanchored line by neighboring acoustic/ASR line anchors.
+            prev_bound = cursor
+            next_bound = total
+            for j in range(line_index + 1, len(groups)):
+                if j in anchors:
+                    next_bound = float(anchors[j][0])
+                    break
+
+            if anchor is not None:
+                astart, aend, score = map(float, anchor)
+                uncertainty = max(0.15, min(1.0, 1.0 - score))
+                lead = expected * (0.12 + 0.30 * uncertainty)
+                tail = expected * (0.35 + 0.55 * uncertainty)
+                start = max(0.0, min(cursor - expected * 0.06, astart - lead))
+                desired = expected * (1.8 + 1.4 * uncertainty)
+                end = min(total, max(aend + tail, start + desired))
+                if next_bound > start:
+                    end = min(end, max(aend + tail, next_bound + expected * 0.12))
+            else:
+                backtrack = expected * 0.08
+                start = max(0.0, cursor - backtrack)
+                forward = expected * 2.8
+                end = min(total, start + forward)
+                if next_bound > start:
+                    end = min(end, next_bound + expected * 0.25)
+
+            result = run_window(start, end, words)
+
+            def usable(item) -> bool:
+                if item is None:
+                    return False
+                local, absolute_words = item
+                line_span = absolute_words[-1].end - absolute_words[0].start
+                # The minimum accepted span scales with the expected sung line
+                # duration and token density instead of a fixed millisecond rule.
+                min_span = max(minimum, expected * 0.18)
+                return (
+                    local.confidence >= 0.035
+                    and line_span >= min_span
+                    and absolute_words[0].start >= cursor - expected * 0.08
+                )
+
+            # Local second pass only for a failed anchored line. It uses a much
+            # tighter anchor-centred clip so repeated chorus text outside this
+            # line cannot win the CTC path.
+            if not usable(result) and anchor is not None:
+                retried += 1
+                astart, aend, score = map(float, anchor)
+                narrow_lead = expected * (0.08 + 0.12 * max(0.0, 1.0-score))
+                narrow_tail = expected * (0.20 + 0.30 * max(0.0, 1.0-score))
+                retry_start = max(0.0, astart - narrow_lead, cursor - expected * 0.05)
+                retry_end = min(total, max(aend + narrow_tail, retry_start + expected * 1.25))
+                retry = run_window(retry_start, retry_end, words)
+                if usable(retry):
+                    result = retry
+                    recovered += 1
+
+            if not usable(result):
                 continue
+            local, absolute_words = result
             output[line_index] = CTCLineResult(absolute_words, local.confidence, start, end)
             cursor = absolute_words[-1].end
+
+        self.last_alignment_diagnostics = {
+            "attempted_windows": attempted,
+            "retry_lines": retried,
+            "retry_recovered_lines": recovered,
+            "accepted_lines": sum(item is not None for item in output),
+            "total_lines": len(groups),
+        }
         return output

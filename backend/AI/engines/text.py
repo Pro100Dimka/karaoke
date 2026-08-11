@@ -145,7 +145,7 @@ def _words_from_items(items) -> list[Word]:
 
 
 ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v14-duration-guard"
-LONG_TEXT_ALIGNMENT_VERSION = "v43-asr-reacquisition-acoustic-anchors"
+LONG_TEXT_ALIGNMENT_VERSION = "v44-multi-evidence-context-recovery"
 
 
 def _normalize_singing_audio(y: np.ndarray) -> np.ndarray:
@@ -3419,6 +3419,48 @@ class Qwen3Transcriber(Transcriber):
             pass
 
 
+
+def _adaptive_qwen_batch_size(clip_durations: list[float] | None = None) -> int:
+    """Choose a conservative forced-aligner batch from available accelerator memory.
+
+    Explicit KARAOKE_AI_ALIGN_BATCH_SIZE always wins. Otherwise the decision uses
+    free CUDA memory and the longest clip in the batch, so short lyric lines can
+    batch more aggressively without assuming every GPU or song has the same shape.
+    """
+    configured = os.getenv("KARAOKE_AI_ALIGN_BATCH_SIZE", "").strip()
+    if configured:
+        try:
+            return max(1, min(16, int(configured)))
+        except ValueError:
+            pass
+    longest = max((float(x) for x in (clip_durations or []) if float(x) > 0), default=6.0)
+    try:
+        import torch
+        if torch.cuda.is_available():
+            free, _total = torch.cuda.mem_get_info()
+            free_gb = float(free) / (1024.0 ** 3)
+            if free_gb >= 7.0 and longest <= 8.0:
+                return 8
+            if free_gb >= 4.0 and longest <= 12.0:
+                return 4
+            if free_gb >= 2.2:
+                return 2
+            return 1
+    except Exception:
+        pass
+    return 2
+
+
+def _line_agreement_score(left: list[Word] | tuple[Word, ...] | None, right: list[Word] | tuple[Word, ...] | None) -> tuple[int, float]:
+    """Return number of canonically matching words and their timestamp agreement."""
+    a, b = list(left or []), list(right or [])
+    if not a or not b or len(a) != len(b) or not _canonical_words_match(a, [w.text for w in b]):
+        return 0, 0.0
+    deltas = [abs(float(x.start)-float(y.start)) + abs(float(x.end)-float(y.end)) for x,y in zip(a,b,strict=True)]
+    scale = max(0.04, sum(max(0.02, float(x.end)-float(x.start)) for x in a) / max(1,len(a)))
+    score = sum(math.exp(-d / (2.0*scale)) for d in deltas) / len(deltas)
+    return len(a), float(max(0.0,min(1.0,score)))
+
 class Qwen3ForcedAligner(Aligner):
     name = "ctc-qwen-hybrid-aligner"
 
@@ -3491,21 +3533,61 @@ class Qwen3ForcedAligner(Aligner):
                 words = repaired
         return words
 
+    def _align_many(self, audios, texts, language):
+        """Run forced alignment for several independent clips in one model call.
+
+        Qwen3ForcedAligner natively supports list inputs.  Keeping batching here
+        avoids one autoregressive/model invocation per LRC line while preserving
+        the exact same per-line validation and fallback logic in ``align_segments``.
+        """
+        if not audios:
+            return []
+        if len(audios) == 1:
+            try:
+                return [self.align(audios[0], texts[0], language)]
+            except (InvalidArtifactError, RuntimeError, ValueError):
+                return [[]]
+
+        resolved_language = resolve_alignment_language(" ".join(texts), language)
+        try:
+            raw_results = self._load().align(
+                audio=[str(item) for item in audios],
+                text=list(texts),
+                language=[resolved_language] * len(audios),
+            )
+        except (EngineUnavailableError, TypeError, ValueError):
+            # Older qwen-asr builds or test doubles may not expose batch alignment.  Preserve
+            # compatibility without changing alignment semantics.
+            output = []
+            for audio_item, text_item in zip(audios, texts, strict=True):
+                try:
+                    output.append(self.align(audio_item, text_item, language))
+                except (InvalidArtifactError, RuntimeError, ValueError):
+                    output.append([])
+            return output
+
+        results = list(raw_results) if isinstance(raw_results, (list, tuple)) else [raw_results]
+        if len(results) < len(audios):
+            results.extend([None] * (len(audios) - len(results)))
+
+        parsed: list[list[Word]] = []
+        for raw in results[: len(audios)]:
+            if raw is None:
+                parsed.append([])
+                continue
+            item = _unwrap_single_result(raw)
+            words = _words_from_items(
+                item if isinstance(item, (list, tuple)) else _unwrap_items(item)
+            )
+            parsed.append(words)
+        return parsed
+
     def align_segments(self, audio, segments, language):
-        """Align timed lyric lines using LRC timestamps as *soft* acoustic hints.
+        """Align timed lyric lines using LRC timestamps as soft acoustic hints.
 
-        Production lyrics providers sometimes contain one or more corrupt LRC
-        anchors.  Cropping a line strictly at the next bad timestamp was the cause
-        of a compressed-alignment regression where several words were forced
-        into an unrealistically short provider interval.
-
-        Rules used here:
-        * a physically plausible LRC interval remains a strong location hint;
-        * an implausibly short interval is automatically widened;
-        * Qwen is allowed to move word boundaries inside the widened search window;
-        * a monotonic acoustic cursor prevents repeated chorus lines from jumping
-          backwards to an earlier occurrence;
-        * no candidate is ever clamped word-by-word to a broken LRC boundary.
+        Qwen inference is batched because the official aligner accepts list
+        inputs.  All candidate checks and fallbacks are still applied line by
+        line afterwards, so batching changes throughput, not timing policy.
         """
         try:
             import soundfile as sf
@@ -3518,49 +3600,91 @@ class Qwen3ForcedAligner(Aligner):
         cursor = 0.0
         ordered = sorted(segments, key=lambda item: (float(item[0]), float(item[1])))
 
+        clip_hints = [max(0.05, float(end) - float(start)) for start, end, text in ordered if tokenize(text)]
+        batch_size = _adaptive_qwen_batch_size(clip_hints)
+
         with tempfile.TemporaryDirectory(prefix="karaoke-align-") as temp_dir:
             root = Path(temp_dir)
-            for segment_index, (start, end, text) in enumerate(ordered):
-                tokens = tokenize(text)
-                if not tokens:
-                    continue
+            index = 0
+            while index < len(ordered):
+                prepared = []
+                batch_cursor = cursor
+                for segment_index in range(index, min(len(ordered), index + batch_size)):
+                    start, end, text = ordered[segment_index]
+                    tokens = tokenize(text)
+                    if not tokens:
+                        prepared.append(None)
+                        continue
 
-                anchor_start = max(0.0, float(start))
-                if anchor_start >= duration_sec - 0.01:
-                    continue
-                anchor_end = min(duration_sec, max(anchor_start + 0.04, float(end)))
-                anchor_span = max(0.0, anchor_end - anchor_start)
-                plausible_anchor = _lrc_window_is_plausible(tokens, anchor_span)
-                expected = _expected_sung_phrase_duration(tokens)
+                    anchor_start = max(0.0, float(start))
+                    if anchor_start >= duration_sec - 0.01:
+                        prepared.append(None)
+                        continue
+                    anchor_end = min(duration_sec, max(anchor_start + 0.04, float(end)))
+                    anchor_span = max(0.0, anchor_end - anchor_start)
+                    plausible_anchor = _lrc_window_is_plausible(tokens, anchor_span)
+                    expected = _expected_sung_phrase_duration(tokens)
 
-                # Good LRC gets a modest acoustic margin.  Bad LRC gets a generous
-                # look-ahead so the aligner can find the real sung phrase rather
-                # than being forced into the corrupt next timestamp.
-                pre_roll = 0.0 if plausible_anchor else 1.25
-                post_roll = max(0.85, expected * 0.55) if plausible_anchor else max(5.0, expected * 2.4)
-                search_start = max(0.0, anchor_start - pre_roll)
-                search_start = max(search_start, max(0.0, cursor - 0.18))
-                search_end = min(
-                    duration_sec,
-                    max(
-                        anchor_end + post_roll,
-                        search_start + expected * (2.1 if plausible_anchor else 3.6) + 1.5,
-                    ),
+                    pre_roll = 0.0 if plausible_anchor else 1.25
+                    post_roll = max(0.85, expected * 0.55) if plausible_anchor else max(5.0, expected * 2.4)
+                    search_start = max(0.0, anchor_start - pre_roll)
+                    search_start = max(search_start, max(0.0, batch_cursor - 0.18))
+                    search_end = min(
+                        duration_sec,
+                        max(
+                            anchor_end + post_roll,
+                            search_start + expected * (2.1 if plausible_anchor else 3.6) + 1.5,
+                        ),
+                    )
+                    if search_end <= search_start + 0.10:
+                        prepared.append(None)
+                        continue
+
+                    left = max(0, min(len(source) - 1, int(search_start * sample_rate)))
+                    right = max(left + 1, min(len(source), int(search_end * sample_rate)))
+                    path = root / f"segment-{segment_index:03d}.wav"
+                    sf.write(path, source[left:right], sample_rate, subtype="PCM_16")
+                    prepared.append({
+                        "segment_index": segment_index,
+                        "path": path,
+                        "text": text,
+                        "tokens": tokens,
+                        "anchor_start": anchor_start,
+                        "anchor_end": anchor_end,
+                        "anchor_span": anchor_span,
+                        "plausible_anchor": plausible_anchor,
+                        "expected": expected,
+                        "search_start": search_start,
+                        "search_end": search_end,
+                    })
+
+                active = [item for item in prepared if item is not None]
+                candidates = self._align_many(
+                    [item["path"] for item in active],
+                    [item["text"] for item in active],
+                    language,
                 )
-                if search_end <= search_start + 0.10:
-                    continue
+                candidate_by_index = {
+                    item["segment_index"]: candidate
+                    for item, candidate in zip(active, candidates, strict=True)
+                }
 
-                left = max(0, min(len(source) - 1, int(search_start * sample_rate)))
-                right = max(left + 1, min(len(source), int(search_end * sample_rate)))
-                path = root / f"segment-{segment_index:03d}.wav"
-                segment_audio = source[left:right]
-                sf.write(path, segment_audio, sample_rate, subtype="PCM_16")
-                search_span = search_end - search_start
+                for offset, item in enumerate(prepared):
+                    segment_index = index + offset
+                    if item is None:
+                        continue
+                    tokens = item["tokens"]
+                    anchor_start = item["anchor_start"]
+                    anchor_end = item["anchor_end"]
+                    anchor_span = item["anchor_span"]
+                    plausible_anchor = item["plausible_anchor"]
+                    expected = item["expected"]
+                    search_start = item["search_start"]
+                    search_end = item["search_end"]
+                    search_span = search_end - search_start
+                    candidate = candidate_by_index.get(segment_index, [])
 
-                local_words: list[Word] = []
-                candidate: list[Word] = []
-                try:
-                    candidate = self.align(path, text, language)
+                    local_words: list[Word] = []
                     candidate_ok = _segment_alignment_is_usable(candidate, tokens, search_span)
                     if candidate_ok:
                         absolute_start = search_start + candidate[0].start
@@ -3571,9 +3695,6 @@ class Qwen3ForcedAligner(Aligner):
                             and absolute_end <= search_end + 0.05
                             and candidate_duration >= _minimum_sung_phrase_duration(tokens)
                         )
-                        # For a healthy timestamp keep alignment near its line
-                        # anchor. Corrupt timestamps are deliberately allowed to
-                        # move much farther so Qwen can recover the real phrase.
                         if plausible_anchor:
                             candidate_ok = candidate_ok and (
                                 absolute_start >= anchor_start - 0.85
@@ -3581,82 +3702,60 @@ class Qwen3ForcedAligner(Aligner):
                             )
                     if candidate_ok:
                         local_words = candidate
-                except (InvalidArtifactError, RuntimeError, ValueError):
-                    candidate = []
 
-                if not local_words:
-                    if plausible_anchor:
-                        # Healthy provider timing remains authoritative when Qwen
-                        # itself fails.  Do not let a fallback wander into the
-                        # neighbouring lyric line.
-                        local_words = _timed_segment_fallback_words(tokens, anchor_span)
-                        search_start = anchor_start
-                        search_end = anchor_end
-                    else:
-                        # IMPORTANT: do not choose a short energy island here.  A
-                        # corrupt next-LRC timestamp often sits inside the same sung
-                        # phrase.  Energy-only fallback can then rediscover exactly
-                        # that tiny island and compress the whole line again.
-                        #
-                        # The line *start* is still our strongest provider hint.
-                        # Reserve a physically plausible sung duration from that
-                        # start.  Qwen remains the primary path above; this branch is
-                        # only the deterministic production safety net.
+                    if not local_words:
+                        if plausible_anchor:
+                            local_words = _timed_segment_fallback_words(tokens, anchor_span)
+                            search_start = anchor_start
+                            search_end = anchor_end
+                        else:
+                            fallback_start = max(cursor, anchor_start)
+                            room = max(0.08, search_end - fallback_start)
+                            target = max(
+                                _minimum_sung_phrase_duration(tokens) * 1.35,
+                                expected * 1.12,
+                            )
+                            safe_span = min(room, target)
+                            local_words = _proportional_words(tokens, safe_span)
+                            search_start = fallback_start
+
+                    line_words: list[Word] = []
+                    for word in local_words:
+                        word_start = max(cursor, search_start + float(word.start))
+                        word_end = min(duration_sec, search_start + float(word.end))
+                        if word_end <= word_start + 0.009:
+                            line_words = []
+                            break
+                        line_words.append(Word(word_start, word_end, word.text, word.confidence, 0))
+
+                    line_duration = line_words[-1].end - line_words[0].start if line_words else 0.0
+                    if len(line_words) != len(tokens) or line_duration < _minimum_sung_phrase_duration(tokens):
                         fallback_start = max(cursor, anchor_start)
-                        room = max(0.08, search_end - fallback_start)
-                        target = max(
-                            _minimum_sung_phrase_duration(tokens) * 1.35,
-                            expected * 1.12,
+                        available = max(0.08, search_end - fallback_start)
+                        safe_span = min(
+                            available,
+                            max(
+                                _minimum_sung_phrase_duration(tokens) * 1.35,
+                                expected * 1.12,
+                            ),
                         )
-                        safe_span = min(room, target)
-                        local_words = _proportional_words(tokens, safe_span)
-                        search_start = fallback_start
+                        line_words = [
+                            Word(
+                                fallback_start + word.start,
+                                fallback_start + word.end,
+                                word.text,
+                                0.03,
+                                0,
+                            )
+                            for word in _proportional_words(tokens, safe_span)
+                        ]
 
-                # Validate the whole line atomically. Do not clamp every word to
-                # anchor_end: that was exactly how trains of 20 ms words appeared.
-                line_words: list[Word] = []
-                for word in local_words:
-                    word_start = max(cursor, search_start + float(word.start))
-                    word_end = min(duration_sec, search_start + float(word.end))
-                    if word_end <= word_start + 0.009:
-                        line_words = []
-                        break
-                    line_words.append(Word(word_start, word_end, word.text, word.confidence, 0))
+                    for word in line_words:
+                        output.append(Word(word.start, word.end, word.text, word.confidence, len(output)))
+                    if line_words:
+                        cursor = max(cursor, line_words[-1].end)
 
-                line_duration = (
-                    line_words[-1].end - line_words[0].start if line_words else 0.0
-                )
-                if (
-                    len(line_words) != len(tokens)
-                    or line_duration < _minimum_sung_phrase_duration(tokens)
-                ):
-                    # Last-resort timing stays inside the widened acoustic window
-                    # and starts at/after the monotonic cursor.  It is intentionally
-                    # low-confidence, but never physically impossible.
-                    fallback_start = max(cursor, anchor_start)
-                    available = max(0.08, search_end - fallback_start)
-                    safe_span = min(
-                        available,
-                        max(
-                            _minimum_sung_phrase_duration(tokens) * 1.35,
-                            expected * 1.12,
-                        ),
-                    )
-                    line_words = [
-                        Word(
-                            fallback_start + word.start,
-                            fallback_start + word.end,
-                            word.text,
-                            0.03,
-                            0,
-                        )
-                        for word in _proportional_words(tokens, safe_span)
-                    ]
-
-                for word in line_words:
-                    output.append(Word(word.start, word.end, word.text, word.confidence, len(output)))
-                if line_words:
-                    cursor = max(cursor, line_words[-1].end)
+                index += batch_size
 
         if not output:
             raise InvalidArtifactError("Segmented forced aligner returned no timed words")
@@ -3740,10 +3839,108 @@ class Qwen3ForcedAligner(Aligner):
             "qwen_fallback_lines": 0,
             "ctc_failure_reason": ctc_failure_reason,
             "ctc_resource": dict(getattr(self._ctc, "last_resource_diagnostics", {}) or {}),
+            "ctc_pass": dict(getattr(self._ctc, "last_alignment_diagnostics", {}) or {}),
+            "qwen_model_resident": self._model is not None,
         }
 
         with tempfile.TemporaryDirectory(prefix="karaoke-align-lines-") as temp_dir:
             root = Path(temp_dir)
+
+            # Precompute Qwen evidence for every line that lacks a complete CTC
+            # alignment. This is the same forced alignment as the old per-line
+            # path, but submitted in adaptive GPU batches.
+            qwen_jobs: list[dict[str, object]] = []
+            for line_index, line in enumerate(groups):
+                tokens = tokenize(line)
+                ctc_line = ctc_lines[line_index] if line_index < len(ctc_lines) else None
+                if not tokens or (ctc_line is not None and len(ctc_line.words) == len(tokens) and _canonical_words_match(list(ctc_line.words), tokens)):
+                    continue
+                timing = _line_timing_profile(tokens)
+                anchor = anchor_windows.get(line_index)
+                if anchor is not None:
+                    a0, a1, _score = anchor
+                    search_start = max(0.0, a0 - timing["anchor_lead"])
+                    search_end = min(duration_sec, max(a1 + timing["context"], search_start + timing["minimum_window"]))
+                else:
+                    # No absolute lyric anchor: use neighboring anchored lines to
+                    # bound the search rather than a song-specific wall-clock span.
+                    prev_end = 0.0
+                    next_start = duration_sec
+                    for j in range(line_index - 1, -1, -1):
+                        if j in anchor_windows:
+                            prev_end = float(anchor_windows[j][1]); break
+                    for j in range(line_index + 1, len(groups)):
+                        if j in anchor_windows:
+                            next_start = float(anchor_windows[j][0]); break
+                    expected = timing["expected"]
+                    search_start = max(0.0, prev_end - timing["cursor_backtrack"])
+                    search_end = min(duration_sec, max(search_start + timing["minimum_window"], min(next_start + timing["context"], search_start + timing["search_window"])))
+                if search_end <= search_start + timing["min_word_duration"]:
+                    continue
+                left = max(0, int(search_start * sample_rate)); right = min(len(source), max(left+1, int(search_end*sample_rate)))
+                path = root / f"qwen-line-{line_index:03d}.wav"
+                sf.write(path, source[left:right], sample_rate, subtype="PCM_16")
+                qwen_jobs.append({"line": line_index, "path": path, "text": line, "start": search_start, "end": search_end})
+
+            qwen_candidate_map: dict[int, list[Word]] = {}
+            qwen_window_map: dict[int, tuple[float,float]] = {}
+            batch_size = _adaptive_qwen_batch_size([float(j["end"])-float(j["start"]) for j in qwen_jobs])
+            for pos in range(0, len(qwen_jobs), batch_size):
+                batch = qwen_jobs[pos:pos+batch_size]
+                results = self._align_many([j["path"] for j in batch], [str(j["text"]) for j in batch], language)
+                for job, result in zip(batch, results, strict=True):
+                    idx = int(job["line"]); qwen_candidate_map[idx] = list(result or [])
+                    qwen_window_map[idx] = (float(job["start"]), float(job["end"]))
+
+            # Second pass: if a line still has no acoustic Qwen evidence, align a
+            # 3-line context block. Repeated chorus text is then disambiguated by
+            # its neighbours instead of by a wider fixed search window.
+            context_jobs: list[dict[str, object]] = []
+            for line_index, line in enumerate(groups):
+                tokens = tokenize(line)
+                if not tokens or qwen_candidate_map.get(line_index):
+                    continue
+                lo=max(0,line_index-1); hi=min(len(groups),line_index+2)
+                block_lines=groups[lo:hi]; block_tokens=[tokenize(x) for x in block_lines]
+                if not all(block_tokens):
+                    continue
+                starts=[]; ends=[]
+                for j in range(lo,hi):
+                    if j in anchor_windows:
+                        starts.append(float(anchor_windows[j][0])); ends.append(float(anchor_windows[j][1]))
+                if not starts:
+                    continue
+                block_start=max(0.0,min(starts)-_line_timing_profile(tokenize(groups[lo]))["anchor_lead"])
+                block_end=min(duration_sec,max(ends)+_line_timing_profile(tokenize(groups[hi-1]))["context"])
+                if block_end<=block_start: continue
+                left=max(0,int(block_start*sample_rate)); right=min(len(source),max(left+1,int(block_end*sample_rate)))
+                path=root/f"qwen-context-{line_index:03d}.wav"; sf.write(path,source[left:right],sample_rate,subtype="PCM_16")
+                context_jobs.append({"line":line_index,"lo":lo,"tokens":block_tokens,"path":path,"text":"\n".join(block_lines),"start":block_start,"end":block_end})
+            context_recovered=0
+            for pos in range(0,len(context_jobs),batch_size):
+                batch=context_jobs[pos:pos+batch_size]
+                results=self._align_many([j["path"] for j in batch],[str(j["text"]) for j in batch],language)
+                for job,result in zip(batch,results,strict=True):
+                    flat=list(result or []); idx=int(job["line"]); offset=sum(len(x) for x in job["tokens"][:idx-int(job["lo"])]); count=len(job["tokens"][idx-int(job["lo"])])
+                    piece=flat[offset:offset+count]
+                    if len(piece)==count and _canonical_words_match(piece,tokenize(groups[idx])):
+                        qwen_candidate_map[idx]=piece; qwen_window_map[idx]=(float(job["start"]),float(job["end"])); context_recovered+=count
+
+            self.last_alignment_diagnostics["qwen_batch_size"] = batch_size
+            self.last_alignment_diagnostics["qwen_batched_lines"] = len(qwen_jobs)
+            self.last_alignment_diagnostics["context_recovered_words"] = context_recovered
+
+            consensus_words=0; consensus_sum=0.0; consensus_lines=0
+            for i, ctc_line in enumerate(ctc_lines):
+                q=qwen_candidate_map.get(i)
+                if ctc_line is not None and q:
+                    n,score=_line_agreement_score(list(ctc_line.words),q)
+                    if n:
+                        consensus_words+=n; consensus_sum+=score; consensus_lines+=1
+            self.last_alignment_diagnostics["consensus_lines"] = consensus_lines
+            self.last_alignment_diagnostics["consensus_words"] = consensus_words
+            self.last_alignment_diagnostics["consensus_agreement"] = consensus_sum/max(1,consensus_lines)
+
             for line_index, line in enumerate(groups):
                 tokens = tokenize(line)
                 if not tokens:
@@ -3806,36 +4003,43 @@ class Qwen3ForcedAligner(Aligner):
                 sf.write(path, line_audio, sample_rate, subtype="PCM_16")
                 local_cursor = max(0.0, cursor - search_start)
 
-                candidate: list[Word] = []
+                candidate: list[Word] = list(qwen_candidate_map.get(line_index, []))
                 local_words: list[Word] = []
-                try:
-                    candidate = self.align(path, line, language)
-                    candidate_start = search_start + candidate[0].start if candidate else 0.0
-                    candidate_end = search_start + candidate[-1].end if candidate else 0.0
+                candidate_window = qwen_window_map.get(line_index)
+                if candidate_window is not None:
+                    # Candidate timestamps are relative to the precomputed clip.
+                    precomputed_start, precomputed_end = candidate_window
+                    candidate_start = precomputed_start + candidate[0].start if candidate else 0.0
+                    candidate_end = precomputed_start + candidate[-1].end if candidate else 0.0
                     candidate_span = candidate[-1].end - candidate[0].start if candidate else 0.0
                     valid = bool(candidate) and (
-                        not _pathological_alignment(candidate, search_end - search_start)
+                        not _pathological_alignment(candidate, precomputed_end - precomputed_start)
                         and candidate_start >= cursor - timing["cursor_backtrack"]
                         and candidate_end > cursor + timing["min_word_duration"]
-                        and candidate_end <= search_end + timing["candidate_slack"]
+                        and candidate_end <= precomputed_end + timing["candidate_slack"]
                         and candidate_span >= timing["minimum"]
                         and len(candidate) == len(tokens)
+                        and _canonical_words_match(candidate, tokens)
                     )
                     if valid:
-                        local_words = candidate
-                    else:
-                        local_words = _long_text_line_fallback(
-                            tokens,
-                            search_end - search_start,
-                            candidate_words=candidate or None,
-                            minimum_start=local_cursor,
-                            audio=line_audio,
-                            sample_rate=sample_rate,
-                        )
-                except (InvalidArtifactError, RuntimeError, ValueError):
+                        # Rebase to the search_start expected by the unchanged
+                        # downstream line transformation code.
+                        shift = precomputed_start - search_start
+                        local_words = [Word(w.start+shift,w.end+shift,w.text,w.confidence,w.index) for w in candidate]
+                if not local_words:
+                    fallback_candidate = None
+                    if candidate and candidate_window is not None:
+                        precomputed_start, _precomputed_end = candidate_window
+                        shift = precomputed_start - search_start
+                        if float(candidate[0].start) + shift >= 0.0:
+                            fallback_candidate = [
+                                Word(w.start + shift, w.end + shift, w.text, w.confidence, w.index)
+                                for w in candidate
+                            ]
                     local_words = _long_text_line_fallback(
                         tokens,
                         search_end - search_start,
+                        candidate_words=fallback_candidate,
                         minimum_start=local_cursor,
                         audio=line_audio,
                         sample_rate=sample_rate,
@@ -3993,6 +4197,7 @@ class Qwen3ForcedAligner(Aligner):
                     self.last_alignment_diagnostics["tail_rollback_from_line"] = int(merge_stats.get("tail_rollback_from_line", 0) or 0)
                 if raw_ctc_word_count > 0 and preserved_ctc <= 0:
                     self.last_alignment_diagnostics["ctc_all_anchors_rejected"] = True
+                self.last_alignment_diagnostics["suspicious_regions"] = _low_confidence_regions(merged)
                 return merged
 
             # No evidence-preserving candidate could satisfy the canonical
@@ -4044,6 +4249,35 @@ class Qwen3ForcedAligner(Aligner):
         if not _canonical_words_match(output, canonical_tokens):
             raise InvalidArtifactError("Long-text aligner violated canonical lyric invariant")
         return output
+
+
+def _low_confidence_regions(words: list[Word]) -> list[dict[str, object]]:
+    """Describe contiguous weak regions relative to this alignment's own confidence distribution."""
+    if not words:
+        return []
+    confidences = np.asarray([float(w.confidence) for w in words], dtype=np.float32)
+    positive = confidences[confidences > 0]
+    if positive.size == 0:
+        return []
+    typical = float(np.median(positive))
+    floor = max(0.015, typical * 0.30)
+    regions=[]; current=[]
+    for word in words:
+        if float(word.confidence) <= floor:
+            current.append(word)
+        elif current:
+            regions.append(current); current=[]
+    if current: regions.append(current)
+    out=[]
+    for group in regions:
+        out.append({
+            "start": float(group[0].start),
+            "end": float(group[-1].end),
+            "words": len(group),
+            "mean_confidence": float(sum(w.confidence for w in group)/len(group)),
+            "text": " ".join(w.text for w in group[:8]),
+        })
+    return out[:24]
 
 
 class UniformTextFallback(Transcriber, Aligner):

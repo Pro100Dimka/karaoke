@@ -34,12 +34,14 @@ echo ============================================================
 echo.
 
 for %%D in ("%BACK%" "%FRONT%") do if not exist "%%~D\" (
-    echo [ERROR] Directory not found: %%~D
+    echo [ERROR] Directory not found:
+    echo   %%~D
     goto :err
 )
 
 for %%F in ("%AI%" "%ASIO%") do if not exist "%%~F" (
-    echo [ERROR] Script not found: %%~F
+    echo [ERROR] Script not found:
+    echo   %%~F
     goto :err
 )
 
@@ -55,7 +57,6 @@ rem ============================================================================
 if exist "%PY%" (
     "%PY%" -c "import sys;raise SystemExit(0 if sys.version_info[:3]==(3,12,10) else 1)" >nul 2>&1
     if not errorlevel 1 goto :venv
-
     echo Recreating invalid virtual environment...
     rmdir /s /q "%VENV%" >nul 2>&1
 )
@@ -89,17 +90,14 @@ if exist "%BACK%\requirements.txt" (
         "%PY%" -m pip install --disable-pip-version-check --prefer-binary ^
             -r "%BACK%\requirements.txt"
     )
-
     if errorlevel 1 goto :err
 ) else if exist "%BACK%\requirements-dev.txt" (
     "%PY%" -m pip install --disable-pip-version-check --prefer-binary ^
         -r "%BACK%\requirements-dev.txt"
-
     if errorlevel 1 goto :err
 )
 
 :venv
-
 call "%VENV%\Scripts\activate.bat"
 if errorlevel 1 goto :err
 
@@ -173,11 +171,9 @@ rem LOCAL PYTHON
 rem ============================================================================
 
 :runtime
-
 if exist "%RTPY%" (
     call :check_runtime
     if not errorlevel 1 exit /b 0
-
     echo Existing local Python runtime is invalid. Recreating...
 )
 
@@ -185,7 +181,6 @@ echo Preparing local Python %VER%...
 
 rmdir /s /q "%RT%" >nul 2>&1
 del /q "%PKG%" >nul 2>&1
-
 mkdir "%RT%" || exit /b 1
 
 echo Downloading Python %VER%...
@@ -197,10 +192,8 @@ if not errorlevel 1 (
 
 if not exist "%PKG%" (
     echo curl failed. Trying PowerShell...
-
     powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
     "$ProgressPreference='SilentlyContinue';Invoke-WebRequest -UseBasicParsing -Uri '%URL%' -OutFile '%PKG%'"
-
     if errorlevel 1 exit /b 1
 )
 
@@ -229,54 +222,35 @@ del /q "%PKG%" >nul 2>&1
 call :check_runtime
 exit /b %errorlevel%
 
-rem ============================================================================
-rem VERIFY LOCAL PYTHON
-rem ============================================================================
-
 :check_runtime
-
 if not exist "%RTPY%" (
     echo [ERROR] Python executable not found:
     echo   %RTPY%
     exit /b 1
 )
 
-echo.
-echo Checking local Python runtime:
-echo   %RTPY%
-
-"%RTPY%" --version
-if errorlevel 1 (
-    echo [ERROR] Python executable cannot start.
-    exit /b 1
-)
-
-"%RTPY%" -c "import sys;print('Executable:',sys.executable);print('Version:',sys.version);raise SystemExit(0 if sys.version_info[:3]==(3,12,10) else 1)"
-
+"%RTPY%" -c "import sys;raise SystemExit(0 if sys.version_info[:3]==(3,12,10) else 1)" >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Expected Python %VER%.
     exit /b 1
 )
 
-"%RTPY%" -c "import venv;print('venv: OK')"
-
+"%RTPY%" -c "import venv" >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Python venv module is unavailable.
     exit /b 1
 )
 
-echo Local Python %VER% ready.
 exit /b 0
 
 rem ============================================================================
-rem WAIT
+rem WAIT / STATUS
 rem ============================================================================
 
 :wait
 set /a SEC=0
 
 :wait_loop
-
 if exist "%FRONT_RC%" if exist "%ASIO_RC%" if exist "%AI_RC%" (
     echo.
     echo Parallel preparation finished.
@@ -287,10 +261,8 @@ set /a MOD=SEC%%15
 
 if !MOD!==0 (
     for %%J in (FRONT AI ASIO) do call :state %%J
-
     echo.
     echo [STATUS !SEC!s] Frontend: !FRONT_STATE! ^| AI Core: !AI_STATE! ^| ASIO: !ASIO_STATE!
-
     for %%J in (FRONT AI ASIO) do call :tail %%J
 )
 
@@ -298,12 +270,7 @@ timeout /t 1 /nobreak >nul
 set /a SEC+=1
 goto :wait_loop
 
-rem ============================================================================
-rem STATE
-rem ============================================================================
-
 :state
-
 call set "R=%%%~1_RC%%"
 set "%~1_STATE=RUNNING"
 
@@ -320,12 +287,7 @@ if "!C!"=="0" (
 
 exit /b 0
 
-rem ============================================================================
-rem LOG
-rem ============================================================================
-
 :tail
-
 setlocal DisableDelayedExpansion
 call set "L=%%%~1_LOG%%"
 
@@ -345,19 +307,13 @@ for /f "usebackq delims=" %%L in (`
 endlocal
 exit /b 0
 
-rem ============================================================================
-rem RESULT
-rem ============================================================================
-
 :result
-
 call set "R=%%%~1_RC%%"
 call set "L=%%%~1_LOG%%"
 
 if exist "%R%" (
     set "C="
     set /p C=<"%R%"
-
     if "!C!"=="0" (
         echo [%~1] DONE
         exit /b 0
@@ -378,7 +334,6 @@ rem JOB
 rem ============================================================================
 
 :job
-
 setlocal EnableExtensions EnableDelayedExpansion
 
 set "NAME=%~2"
@@ -410,11 +365,9 @@ if /i "%NAME%"=="front" (
 
 set "E=!errorlevel!"
 >"%RC%" echo !E!
-
 exit /b !E!
 
 :job_fail
-
 >"%RC%" echo 1
 exit /b 1
 
@@ -423,7 +376,6 @@ rem ERROR
 rem ============================================================================
 
 :err
-
 echo.
 echo ============================================================
 echo [ERROR] Development environment could not be started.
