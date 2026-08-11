@@ -1,1 +1,1 @@
-AI_BUILD_ID = "midi-v50-atomic-acoustic-line-anchors-20260810"
+AI_BUILD_ID = "midi-v51-evidence-ranked-text-alignment-20260811"

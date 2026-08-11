@@ -145,7 +145,7 @@ def _words_from_items(items) -> list[Word]:
 
 
 ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v14-duration-guard"
-LONG_TEXT_ALIGNMENT_VERSION = "v41-atomic-acoustic-line-anchors"
+LONG_TEXT_ALIGNMENT_VERSION = "v43-asr-reacquisition-acoustic-anchors"
 
 
 def _normalize_singing_audio(y: np.ndarray) -> np.ndarray:
@@ -312,11 +312,23 @@ def _asr_line_anchor_windows(
         matched = [token_map[index] for index in range(left, right) if index in token_map]
         token_count = max(1, right - left)
         score = len(matched) / token_count
-        if not matched or score < 0.18:
+        if not matched:
             continue
         start = min(item[0] for item in matched)
         end = max(item[1] for item in matched)
-        margin = 1.8 if len(matched) == 1 else 1.0
+
+        # ASR is only a coarse navigation signal.  Expand its matched token span
+        # by the amount of lyric duration that is still unobserved instead of
+        # using a fixed one/two-second margin for every song and every line.
+        # A nearly complete ASR match therefore gets a tight window, while a
+        # single matched word in a long sung line keeps enough context for local
+        # re-acquisition.
+        line_tokens = tokenize(groups[line_index])
+        expected_span = _expected_sung_phrase_duration(line_tokens)
+        matched_span = max(0.0, end - start)
+        missing_span = max(0.0, expected_span - matched_span)
+        profile = _line_timing_profile(line_tokens)
+        margin = max(profile["candidate_slack"], missing_span / 2.0)
         result[line_index] = (max(0.0, start - margin), end + margin, score)
     return result
 
@@ -1804,6 +1816,7 @@ def _anchor_preserving_canonical_alignment(
     source: np.ndarray,
     sample_rate: int,
     duration_sec: float,
+    anchor_windows: dict[int, tuple[float, float, float]] | None = None,
 ) -> tuple[list[Word], dict[str, int]]:
     """Build a complete canonical timeline while preserving acoustic anchors.
 
@@ -1829,6 +1842,11 @@ def _anchor_preserving_canonical_alignment(
     for row in line_tokens:
         offsets.append(offset)
         offset += len(row)
+
+    line_ranges = [
+        (offsets[index], offsets[index] + len(row))
+        for index, row in enumerate(line_tokens)
+    ]
 
     # idx -> (word, source, priority)
     candidates: dict[int, tuple[Word, str, float]] = {}
@@ -2118,6 +2136,93 @@ def _anchor_preserving_canonical_alignment(
 
         return output if len(output) == count else None
 
+    def reacquire_complete_lines(
+        result: list[Word | None],
+        source_kind: list[str | None],
+        run_start: int,
+        run_end: int,
+        left_time: float,
+        right_time: float,
+    ) -> bool:
+        """Re-anchor completely missing lyric lines with coarse ASR + VAD.
+
+        The ASR pass already provides a monotonic coarse window for some lyric
+        lines.  Earlier versions ignored those windows in partial-anchor mode;
+        after CTC evidence disappeared, every following word could therefore be
+        stretched across one large wall-clock gap.  Use an ASR window only as a
+        local search region, then derive word placement from vocal activity in
+        that region.  Existing CTC/Qwen anchors are never replaced.
+        """
+        if not anchor_windows or run_end <= run_start:
+            return False
+
+        changed = False
+        for line_index, (line_start, line_end) in enumerate(line_ranges):
+            if line_end <= run_start or line_start >= run_end:
+                continue
+            # Re-acquisition is deliberately line-atomic: if CTC preserved even
+            # one word in this line, leave the remaining gap to the normal
+            # anchor interpolation so the real word evidence stays authoritative.
+            if line_start < run_start or line_end > run_end:
+                continue
+            if any(result[pos] is not None for pos in range(line_start, line_end)):
+                continue
+            window = anchor_windows.get(line_index)
+            if window is None:
+                continue
+
+            hinted_start, hinted_end, hint_score = window
+            local_start = max(left_time, 0.0, float(hinted_start))
+            local_end = min(right_time, duration_sec, float(hinted_end))
+            tokens_for_line = tokens[line_start:line_end]
+            minimum_span = minimum_run_span(line_start, line_end)
+            if not tokens_for_line or local_end - local_start < minimum_span:
+                continue
+
+            sample_left = max(0, min(len(source), int(round(local_start * sample_rate))))
+            sample_right = max(sample_left, min(len(source), int(round(local_end * sample_rate))))
+            local_audio = source[sample_left:sample_right]
+            if local_audio.size <= 0:
+                continue
+
+            local_words = _activity_fallback_words(
+                tokens_for_line,
+                local_audio,
+                sample_rate,
+            )
+            if len(local_words) != len(tokens_for_line):
+                continue
+
+            absolute_words: list[Word] = []
+            previous_end = local_start
+            valid = True
+            # Confidence stays intentionally conservative: the timing is
+            # re-acquired from coarse ASR position plus local vocal activity,
+            # not from a forced word boundary.  The ASR match score only scales
+            # that evidence; it does not turn it into a high-confidence CTC word.
+            reacquired_confidence = max(0.02, min(0.30, float(hint_score) * 0.30))
+            for local_index, local_word in enumerate(local_words):
+                start = local_start + float(local_word.start)
+                end = local_start + float(local_word.end)
+                start = max(previous_end, start)
+                end = min(local_end, end)
+                if end <= start + 0.009:
+                    valid = False
+                    break
+                absolute_words.append(
+                    Word(start, end, tokens_for_line[local_index], reacquired_confidence, line_start + local_index)
+                )
+                previous_end = end
+            if not valid or len(absolute_words) != len(tokens_for_line):
+                continue
+
+            for word in absolute_words:
+                result[word.index] = word
+                source_kind[word.index] = "reacquired"
+            changed = True
+
+        return changed
+
     def weaker_anchor(left_idx: int, right_idx: int) -> int:
         """Return the weaker conflicting anchor index.
 
@@ -2197,6 +2302,17 @@ def _anchor_preserving_canonical_alignment(
                     return None, (left_idx, left_idx)
                 return None, None
 
+            # Before wall-clock interpolation, try to regain chronology from
+            # coarse ASR line position plus the *actual* local vocal envelope.
+            # Any newly acquired line splits this large missing run into smaller
+            # independent gaps, preventing one failed line from dragging the
+            # remainder of the song.
+            if reacquire_complete_lines(
+                result, source_kind, run_start, run_end, left_time, right_time
+            ):
+                index = run_start
+                continue
+
             activity_words = activity_gap_words(
                 run_start,
                 run_end,
@@ -2263,11 +2379,15 @@ def _anchor_preserving_canonical_alignment(
                     kinds.append(selected[idx][1])
                 else:
                     kinds.append("interpolated")
-            return built, {
+            stats = {
                 "ctc": sum(1 for kind in kinds if kind == "ctc"),
                 "qwen": sum(1 for kind in kinds if kind == "qwen"),
                 "interpolated": sum(1 for kind in kinds if kind == "interpolated"),
             }
+            reacquired_count = sum(1 for kind in kinds if kind == "reacquired")
+            if reacquired_count:
+                stats["reacquired"] = reacquired_count
+            return built, stats
 
         if not selected:
             break
@@ -3788,7 +3908,18 @@ class Qwen3ForcedAligner(Aligner):
         # failed canonical validation, which allowed line-level publishing bugs
         # to erase the CTC evidence before the merger ever saw it.
         if raw_ctc_word_count > 0 or not _canonical_words_match(output, canonical_tokens):
-            merged, merge_stats = _atomic_line_acoustic_alignment(
+            # Build several *canonical* acoustic reconstructions and choose by
+            # retained evidence, not by a song-specific timing threshold.
+            #
+            # Atomic mode is excellent when CTC aligned an entire lyric line,
+            # but it intentionally discards a partially aligned line.  Singing
+            # CTC often returns only the confident words in a line; throwing the
+            # whole line away caused nearly all timings to become interpolation
+            # on otherwise usable songs.  Anchor-preserving mode keeps those
+            # trustworthy words and fills only the missing canonical gaps.
+            merge_candidates: list[tuple[str, list[Word], dict[str, int]]] = []
+
+            atomic_words, atomic_stats = _atomic_line_acoustic_alignment(
                 groups,
                 ctc_lines,
                 output,
@@ -3797,34 +3928,81 @@ class Qwen3ForcedAligner(Aligner):
                 duration_sec,
                 anchor_windows,
             )
-            preserved_ctc = int(merge_stats.get("ctc", 0) or 0)
-            self.last_alignment_diagnostics["preserved_ctc_words"] = preserved_ctc
-            self.last_alignment_diagnostics["preserved_qwen_words"] = int(merge_stats.get("qwen", 0) or 0)
-            self.last_alignment_diagnostics["interpolated_words"] = int(merge_stats.get("interpolated", 0) or 0)
-            self.last_alignment_diagnostics["line_aware_lines"] = int(merge_stats.get("lines", 0) or 0)
-            self.last_alignment_diagnostics["line_fallbacks"] = int(merge_stats.get("line_fallbacks", 0) or 0)
-            self.last_alignment_diagnostics["dropped_word_anchors"] = int(merge_stats.get("dropped_word_anchors", 0) or 0)
-            self.last_alignment_diagnostics["atomic_ctc_lines"] = int(merge_stats.get("atomic_ctc_lines", 0) or 0)
-            self.last_alignment_diagnostics["atomic_qwen_lines"] = int(merge_stats.get("atomic_qwen_lines", 0) or 0)
-            if "tail_rollback_from_line" in merge_stats:
-                self.last_alignment_diagnostics["tail_rollback_from_line"] = int(merge_stats.get("tail_rollback_from_line", 0) or 0)
-            if raw_ctc_word_count > 0 and preserved_ctc <= 0:
-                # Line-aware mode is allowed to reject every raw acoustic word
-                # when the CTC anchors are globally incompatible with the
-                # canonical line sequence.  This is not a whole-song failure:
-                # the merger already has a complete per-line canonical baseline.
-                # Keep diagnostics explicit, but never abort processing.
-                self.last_alignment_diagnostics["ctc_all_anchors_rejected"] = True
-            if _canonical_words_match(merged, canonical_tokens):
+            if _canonical_words_match(atomic_words, canonical_tokens):
+                merge_candidates.append(("atomic", atomic_words, atomic_stats))
+
+            anchor_words, anchor_stats = _anchor_preserving_canonical_alignment(
+                groups,
+                ctc_lines,
+                output,
+                source,
+                sample_rate,
+                duration_sec,
+                anchor_windows,
+            )
+            if _canonical_words_match(anchor_words, canonical_tokens):
+                merge_candidates.append(("partial-anchors", anchor_words, anchor_stats))
+
+            line_words, line_stats = _line_aware_canonical_alignment(
+                groups,
+                ctc_lines,
+                output,
+                source,
+                sample_rate,
+                duration_sec,
+                anchor_windows,
+            )
+            if _canonical_words_match(line_words, canonical_tokens):
+                merge_candidates.append(("line-aware", line_words, line_stats))
+
+            def evidence_rank(item: tuple[str, list[Word], dict[str, int]]) -> tuple[int, int, int, int, int]:
+                _name, words, stats = item
+                # CTC is direct acoustic evidence; Qwen is secondary forced
+                # evidence.  ASR+VAD re-acquisition is weaker than either but is
+                # still preferable to unconstrained wall-clock interpolation.
+                ctc = int(stats.get("ctc", 0) or 0)
+                qwen = int(stats.get("qwen", 0) or 0)
+                reacquired = int(stats.get("reacquired", 0) or 0)
+                interpolated = int(stats.get("interpolated", len(words)) or 0)
+                confidence_milli = int(round(sum(float(w.confidence) for w in words) * 1000.0))
+                return (ctc, qwen, reacquired, -interpolated, confidence_milli)
+
+            if merge_candidates:
+                merge_mode, merged, merge_stats = max(merge_candidates, key=evidence_rank)
+                preserved_ctc = int(merge_stats.get("ctc", 0) or 0)
+                self.last_alignment_diagnostics["alignment_merge_mode"] = merge_mode
+                self.last_alignment_diagnostics["alignment_merge_candidates"] = {
+                    name: {
+                        "ctc": int(stats.get("ctc", 0) or 0),
+                        "qwen": int(stats.get("qwen", 0) or 0),
+                        "reacquired": int(stats.get("reacquired", 0) or 0),
+                        "interpolated": int(stats.get("interpolated", len(words)) or 0),
+                    }
+                    for name, words, stats in merge_candidates
+                }
+                self.last_alignment_diagnostics["preserved_ctc_words"] = preserved_ctc
+                self.last_alignment_diagnostics["preserved_qwen_words"] = int(merge_stats.get("qwen", 0) or 0)
+                self.last_alignment_diagnostics["reacquired_words"] = int(merge_stats.get("reacquired", 0) or 0)
+                self.last_alignment_diagnostics["interpolated_words"] = int(merge_stats.get("interpolated", 0) or 0)
+                self.last_alignment_diagnostics["line_aware_lines"] = int(merge_stats.get("lines", 0) or 0)
+                self.last_alignment_diagnostics["line_fallbacks"] = int(merge_stats.get("line_fallbacks", 0) or 0)
+                self.last_alignment_diagnostics["dropped_word_anchors"] = int(merge_stats.get("dropped_word_anchors", 0) or 0)
+                self.last_alignment_diagnostics["atomic_ctc_lines"] = int(merge_stats.get("atomic_ctc_lines", 0) or 0)
+                self.last_alignment_diagnostics["atomic_qwen_lines"] = int(merge_stats.get("atomic_qwen_lines", 0) or 0)
+                if "tail_rollback_from_line" in merge_stats:
+                    self.last_alignment_diagnostics["tail_rollback_from_line"] = int(merge_stats.get("tail_rollback_from_line", 0) or 0)
+                if raw_ctc_word_count > 0 and preserved_ctc <= 0:
+                    self.last_alignment_diagnostics["ctc_all_anchors_rejected"] = True
                 return merged
-            # A partial acoustic pass is no longer fatal. The line-aware
-            # merger already fills failed lines from the canonical line baseline.
-            # Keep the old lossless fallback only for the impossible case where
-            # the merger still returned a non-canonical stream.
+
+            # No evidence-preserving candidate could satisfy the canonical
+            # monotonic invariant. Use the complete acoustic-activity baseline
+            # rather than publishing a partial stream.
             lossless = _lossless_canonical_alignment(
                 groups, source, sample_rate, duration_sec, anchor_windows
             )
             if _canonical_words_match(lossless, canonical_tokens):
+                self.last_alignment_diagnostics["alignment_merge_mode"] = "lossless-baseline"
                 return lossless
 
         if not output:

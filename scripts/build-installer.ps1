@@ -1,0 +1,1268 @@
+﻿param(
+    [ValidateSet("full","fast","installer","clean")]
+    [string]$Mode = "full",
+
+    [ValidateSet("","backend","asio","frontend","package-models")]
+    [string]$Worker = ""
+)
+
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version 2
+
+$Root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
+$Backend = Join-Path $Root "backend"
+$Frontend = Join-Path $Root "front"
+$Build = Join-Path $Root "build"
+$Downloads = Join-Path $Root "downloads"
+$Release = Join-Path $Root "release"
+
+$BackendDist = Join-Path $Build "backend\dist\KaraokeBackend"
+$Unpacked = Join-Path $Build "electron\win-unpacked"
+$InstallerDir = $Release
+$TempDir = Join-Path $Build "installer"
+
+$PreservedAI = Join-Path $Build "preserved-ai"
+$PreservedModels = Join-Path $PreservedAI "models"
+$PreservedMSST = Join-Path $PreservedAI "msst"
+$ParallelDir = Join-Path $Build "parallel"
+
+$Python = Join-Path $Backend "venv\Scripts\python.exe"
+$PackagedBackend = Join-Path $Unpacked "resources\backend"
+
+$SceneVideoSource = Join-Path $Downloads "media\videoplayback.webm"
+$PackagedSceneVideo = Join-Path $Unpacked "resources\media\videoplayback.webm"
+
+$Asio = Join-Path $Backend "engines\asio"
+$AsioBuild = Join-Path $Build "asio"
+$AsioSdk = Join-Path $Downloads "engines\asio-sdk"
+
+$Models = Join-Path $Downloads "models"
+$MsstEngine = Join-Path $Downloads "engines\msst"
+
+$Vs = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools"
+$VcVars = Join-Path $Vs "VC\Auxiliary\Build\vcvars64.bat"
+$CMake = Join-Path $Vs "Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
+$Ninja = Join-Path $Vs "Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe"
+
+$AppName = "A&D Voice"
+$AppVersion = "1.0.0"
+$AppExe = "A&D Voice.exe"
+$AppId = "E734496E-2622-5565-89D3-45451D9DE7EE"
+
+$ModelCheck = Join-Path $Backend "AI\install_models.py"
+$InnoTemplate = Join-Path $Root "scripts\karaoke-studio.iss"
+$SignScript = Join-Path $Root "scripts\sign-windows.ps1"
+$SetupIcon = Join-Path $Frontend "assets\icons\app.ico"
+
+$InstallerExe = Join-Path $InstallerDir "A&D Voice Setup $AppVersion.exe"
+$ChecksumFile = Join-Path $InstallerDir "SHA256SUMS.txt"
+
+$SmokeScript = Join-Path $Root "scripts\smoke-packaged-backend.ps1"
+$ChecksumScript = Join-Path $Root "scripts\generate-checksums.ps1"
+
+function Write-Header([string]$Text) {
+    Write-Host ""
+    Write-Host ("=" * 60)
+    Write-Host " $Text"
+    Write-Host ("=" * 60)
+    Write-Host ""
+}
+
+function Require-File([string]$Path, [string]$Name) {
+    Write-Host "Checking ${Name}:"
+    Write-Host "  $Path"
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "$Name was not found: $Path"
+    }
+
+    Write-Host "[OK] $Name"
+    Write-Host ""
+}
+
+function Require-Directory([string]$Path, [string]$Name) {
+    Write-Host "Checking ${Name}:"
+    Write-Host "  $Path"
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
+        throw "$Name was not found: $Path"
+    }
+
+    Write-Host "[OK] $Name"
+    Write-Host ""
+}
+
+function Remove-Directory([string]$Path) {
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        throw "Refusing to remove an empty path."
+    }
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return
+    }
+
+    Write-Host "Removing:"
+    Write-Host "  $Path"
+
+    for ($i = 1; $i -le 10; $i++) {
+        try {
+            Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+        }
+        catch {
+        }
+
+        if (-not (Test-Path -LiteralPath $Path)) {
+            return
+        }
+
+        Write-Host "  Directory is still locked. Retry $i/10..."
+
+        if ([IO.Path]::GetFullPath($Path).TrimEnd('\') -eq [IO.Path]::GetFullPath($Release).TrimEnd('\')) {
+            Stop-BuildProcesses -Quiet
+        }
+
+        Start-Sleep -Seconds 2
+    }
+
+    throw "Could not remove directory: $Path"
+}
+
+function Stop-BuildProcesses {
+    param([switch]$Quiet)
+
+    if (-not $Quiet) {
+        Write-Host ""
+        Write-Host "[0/6] Closing old A&D Voice build processes..."
+    }
+
+    foreach ($name in @("A&D Voice","KaraokeBackend","KaraokeAudioMonitor","KaraokeAsioBridge")) {
+        Get-Process -Name $name -ErrorAction SilentlyContinue |
+            Stop-Process -Force -ErrorAction SilentlyContinue
+    }
+
+    if (Test-Path -LiteralPath $Release) {
+        $releaseFull = [IO.Path]::GetFullPath($Release)
+
+        Get-Process -ErrorAction SilentlyContinue | ForEach-Object {
+            try {
+                if ($_.Path) {
+                    $full = [IO.Path]::GetFullPath($_.Path)
+
+                    if ($full.StartsWith($releaseFull, [StringComparison]::OrdinalIgnoreCase)) {
+                        if (-not $Quiet) {
+                            Write-Host "  Closing PID $($_.Id): $($_.ProcessName)"
+                        }
+
+                        Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+                    }
+                }
+            }
+            catch {
+            }
+        }
+    }
+
+    if (-not $Quiet) {
+        Start-Sleep -Seconds 2
+    }
+}
+
+function Get-RequiredCommand([string]$Name) {
+    $cmd = Get-Command $Name -ErrorAction SilentlyContinue | Select-Object -First 1
+
+    if (-not $cmd) {
+        throw "$Name was not found in PATH."
+    }
+
+    return $cmd.Source
+}
+
+function Check-Environment {
+    Write-Host ""
+    Write-Host "[0/6] Checking build environment..."
+    Write-Host ""
+
+    Require-Directory $Backend "Backend directory"
+    Require-Directory $Frontend "Frontend directory"
+    Require-File $InnoTemplate "Inno Setup template"
+
+    if ($Mode -eq "installer") {
+        return
+    }
+
+    Require-File $Python "Backend virtual environment Python"
+
+    if ($Mode -eq "fast") {
+        Verify-BackendBase
+        return
+    }
+
+    Require-File $VcVars "Visual C++ Build Tools"
+    Require-File $CMake "Visual Studio CMake"
+    Require-File $Ninja "Visual Studio Ninja"
+    Require-Directory $Asio "ASIO source directory"
+    Require-Directory $AsioSdk "ASIO SDK directory"
+    Require-File $ModelCheck "AI model verification script"
+
+    $script:NodeExe = Get-RequiredCommand "node.exe"
+    $script:NpmCmd = Get-RequiredCommand "npm.cmd"
+    $script:NpxCmd = Get-RequiredCommand "npx.cmd"
+    $script:Ffmpeg = Get-RequiredCommand "ffmpeg.exe"
+
+    Write-Host "Checking node.exe:"
+    Write-Host "  $script:NodeExe"
+    Write-Host "[OK] node.exe"
+    Write-Host ""
+
+    Write-Host "Checking npm.cmd:"
+    Write-Host "  $script:NpmCmd"
+    Write-Host "[OK] npm.cmd"
+    Write-Host ""
+
+    Write-Host "Checking ffmpeg.exe:"
+    Write-Host "  $script:Ffmpeg"
+    Write-Host "[OK] ffmpeg.exe"
+    Write-Host ""
+
+    Write-Host "Python:"
+    Write-Host "  $Python"
+    Write-Host ""
+    Write-Host "FFmpeg:"
+    Write-Host "  $script:Ffmpeg"
+    Write-Host ""
+}
+
+function Preserve-PackagedAI {
+    if ($Mode -eq "clean") {
+        return
+    }
+
+    $currentModels = Join-Path $BackendDist "_internal\models"
+    $currentMsst = Join-Path $BackendDist "_internal\engines\msst"
+
+    if (Test-Path -LiteralPath $PreservedAI) {
+        Remove-Directory $PreservedAI
+    }
+
+    New-Item -ItemType Directory -Path $PreservedAI -Force | Out-Null
+
+    if (Test-Path -LiteralPath $currentModels) {
+        Write-Host ""
+        Write-Host "Preserving existing packaged AI models..."
+        Write-Host "  FROM: $currentModels"
+        Write-Host "  TO:   $PreservedModels"
+        Move-Item -LiteralPath $currentModels -Destination $PreservedModels -Force
+    }
+
+    if (Test-Path -LiteralPath $currentMsst) {
+        Write-Host "Preserving existing packaged MSST engine..."
+        Move-Item -LiteralPath $currentMsst -Destination $PreservedMSST -Force
+    }
+}
+
+function Restore-PackagedAI {
+    if ($Mode -eq "clean") {
+        return
+    }
+
+    $internal = Join-Path $BackendDist "_internal"
+    $modelsDst = Join-Path $internal "models"
+    $enginesDst = Join-Path $internal "engines"
+    $msstDst = Join-Path $enginesDst "msst"
+
+    if (Test-Path -LiteralPath $PreservedModels) {
+        Write-Host ""
+        Write-Host "Restoring preserved AI models..."
+
+        New-Item -ItemType Directory -Path $internal -Force | Out-Null
+
+        if (Test-Path -LiteralPath $modelsDst) {
+            Remove-Directory $modelsDst
+        }
+
+        Move-Item -LiteralPath $PreservedModels -Destination $modelsDst -Force
+        Write-Host "  AI models restored."
+    }
+
+    if (Test-Path -LiteralPath $PreservedMSST) {
+        Write-Host "Restoring preserved MSST inference engine..."
+
+        New-Item -ItemType Directory -Path $enginesDst -Force | Out-Null
+
+        if (Test-Path -LiteralPath $msstDst) {
+            Remove-Directory $msstDst
+        }
+
+        Move-Item -LiteralPath $PreservedMSST -Destination $msstDst -Force
+        Write-Host "  MSST engine restored."
+    }
+
+    if (Test-Path -LiteralPath $PreservedAI) {
+        Remove-Item -LiteralPath $PreservedAI -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Prepare-Output {
+    Write-Host ""
+    Write-Host "[0/6] Preparing build output..."
+
+    if ($Mode -eq "installer") {
+        Remove-Directory $InstallerDir
+        Remove-Directory $TempDir
+        return
+    }
+
+    if ($Mode -eq "fast") {
+        Remove-Directory $Unpacked
+        Remove-Directory $InstallerDir
+        Remove-Directory $TempDir
+        return
+    }
+
+    if ($Mode -eq "clean") {
+        Write-Host ""
+        Write-Host "Performing complete clean build..."
+        Write-Host ""
+
+        Remove-Directory $Release
+        Remove-Directory $Build
+
+        $pyInstallerCache = Join-Path $env:LOCALAPPDATA "pyinstaller"
+        Remove-Directory $pyInstallerCache
+        return
+    }
+
+    Preserve-PackagedAI
+    Remove-Directory $Release
+    Remove-Directory (Join-Path $Build "backend\dist")
+    Remove-Directory $Unpacked
+    Remove-Directory $TempDir
+}
+
+function Check-Models {
+    Write-Host ""
+    Write-Host "[1/6] Checking all registered offline AI models..."
+
+    $old = $env:PYTHONPATH
+
+    try {
+        if ($old) {
+            $env:PYTHONPATH = "$Backend;$old"
+        }
+        else {
+            $env:PYTHONPATH = $Backend
+        }
+
+        & $Python $ModelCheck `
+            --downloads $Downloads `
+            --msst $MsstEngine `
+            --env (Join-Path $Downloads "ai-environment.bat") `
+            --check
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Offline model verification failed."
+        }
+    }
+    finally {
+        $env:PYTHONPATH = $old
+    }
+}
+
+function Ensure-PyInstaller {
+    $checkOut = Join-Path $env:TEMP "advoice-pyinstaller-check.out"
+    $checkErr = Join-Path $env:TEMP "advoice-pyinstaller-check.err"
+
+    Remove-Item -LiteralPath $checkOut,$checkErr -Force -ErrorAction SilentlyContinue
+
+    $check = Start-Process `
+        -FilePath $Python `
+        -ArgumentList @("-m","PyInstaller","--version") `
+        -RedirectStandardOutput $checkOut `
+        -RedirectStandardError $checkErr `
+        -PassThru `
+        -Wait `
+        -NoNewWindow
+
+    if ($check.ExitCode -ne 0) {
+        Write-Host ""
+        Write-Host "PyInstaller is not installed. Installing..."
+        Write-Host ""
+
+        $install = Start-Process `
+            -FilePath $Python `
+            -ArgumentList @("-m","pip","install","pyinstaller") `
+            -PassThru `
+            -Wait `
+            -NoNewWindow
+
+        if ($install.ExitCode -ne 0) {
+            throw "PyInstaller installation failed. Exit code: $($install.ExitCode)"
+        }
+
+        Remove-Item -LiteralPath $checkOut,$checkErr -Force -ErrorAction SilentlyContinue
+
+        $check = Start-Process `
+            -FilePath $Python `
+            -ArgumentList @("-m","PyInstaller","--version") `
+            -RedirectStandardOutput $checkOut `
+            -RedirectStandardError $checkErr `
+            -PassThru `
+            -Wait `
+            -NoNewWindow
+
+        if ($check.ExitCode -ne 0) {
+            if (Test-Path -LiteralPath $checkErr) {
+                Get-Content -LiteralPath $checkErr
+            }
+            throw "PyInstaller is still unavailable after installation."
+        }
+    }
+
+    $version = ""
+    if (Test-Path -LiteralPath $checkOut) {
+        $version = (Get-Content -LiteralPath $checkOut -ErrorAction SilentlyContinue | Select-Object -First 1)
+    }
+
+    if ([string]::IsNullOrWhiteSpace($version)) {
+        $version = "installed"
+    }
+
+    Write-Host "PyInstaller version: $version"
+
+    Remove-Item -LiteralPath $checkOut,$checkErr -Force -ErrorAction SilentlyContinue
+}
+
+function Build-Backend {
+    Write-Host ""
+    Write-Host "[2/6] Building Python executables..."
+
+    Ensure-PyInstaller
+
+    Push-Location $Backend
+
+    try {
+        Write-Host ""
+        Write-Host "Building KaraokeBackend.exe..."
+        Write-Host ""
+
+        $args = @(
+            "-m","PyInstaller",
+            "--log-level","ERROR",
+            "--noconfirm"
+        )
+
+        if ($Mode -eq "clean") {
+            $args += "--clean"
+        }
+
+        $args += @(
+            "--onedir",
+            "--name","KaraokeBackend",
+            "--distpath",(Join-Path $Build "backend\dist"),
+            "--workpath",(Join-Path $Build "backend\pyinstaller\KaraokeBackend"),
+            "--specpath",(Join-Path $Build "backend\spec"),
+            "--paths",(Join-Path $Backend "AI"),
+            "--paths",$MsstEngine,
+            "--add-data","$(Join-Path $Backend 'AI');AI",
+            "--add-binary","$script:Ffmpeg;.",
+            "--hidden-import","run_all",
+            "--collect-submodules","omegaconf",
+            "--collect-submodules","ml_collections",
+            "--collect-submodules","beartype",
+            "--collect-submodules","rotary_embedding_torch",
+            "--collect-submodules","matplotlib",
+            "run.py"
+        )
+
+        & $Python @args
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "KaraokeBackend PyInstaller build failed."
+        }
+
+        Restore-PackagedAI
+
+        Write-Host ""
+        Write-Host "Building KaraokeAudioMonitor.exe..."
+        Write-Host ""
+
+        $monitorArgs = @(
+            "-m","PyInstaller",
+            "--log-level","ERROR",
+            "--noconfirm"
+        )
+
+        if ($Mode -eq "clean") {
+            $monitorArgs += "--clean"
+        }
+
+        $monitorArgs += @(
+            "--onefile",
+            "--name","KaraokeAudioMonitor",
+            "--distpath",$BackendDist,
+            "--workpath",(Join-Path $Build "backend\audio-monitor"),
+            "--specpath",(Join-Path $Build "backend\spec"),
+            "--paths",$Backend,
+            "app\services\monitor_worker.py"
+        )
+
+        & $Python @monitorArgs
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "KaraokeAudioMonitor build failed."
+        }
+    }
+    finally {
+        Pop-Location
+    }
+
+    Require-File (Join-Path $BackendDist "KaraokeBackend.exe") "KaraokeBackend.exe"
+    Require-File (Join-Path $BackendDist "KaraokeAudioMonitor.exe") "KaraokeAudioMonitor.exe"
+}
+
+function Build-Asio {
+    Write-Host ""
+    Write-Host "[3/6] Compiling native ASIO bridge..."
+
+    New-Item -ItemType Directory -Path $AsioBuild -Force | Out-Null
+
+    $cmd = @"
+call "$VcVars" >nul && "$CMake" -S "$Asio" -B "$AsioBuild" -G Ninja -DCMAKE_BUILD_TYPE=Release -DASIO_SDK_DIR="$AsioSdk" -DCMAKE_MAKE_PROGRAM="$Ninja" && "$CMake" --build "$AsioBuild" --parallel
+"@
+
+    & cmd.exe /D /S /C $cmd
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "ASIO compilation failed."
+    }
+
+    Require-File (Join-Path $AsioBuild "KaraokeAsioBridge.exe") "Compiled KaraokeAsioBridge.exe"
+}
+
+function Sign-File([string]$Path) {
+    Require-File $SignScript "Signing script"
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $SignScript -Path $Path
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Code signing failed for: $Path"
+    }
+}
+
+function Finalize-Asio {
+    Write-Host ""
+    Write-Host "Finalizing ASIO bridge and signing backend executables..."
+
+    $bridge = Join-Path $AsioBuild "KaraokeAsioBridge.exe"
+
+    Require-File $bridge "Compiled KaraokeAsioBridge.exe"
+    Require-Directory $BackendDist "Packaged backend directory"
+
+    Copy-Item -LiteralPath $bridge -Destination (Join-Path $BackendDist "KaraokeAsioBridge.exe") -Force
+
+    Sign-File (Join-Path $BackendDist "KaraokeBackend.exe")
+    Sign-File (Join-Path $BackendDist "KaraokeAudioMonitor.exe")
+    Sign-File (Join-Path $BackendDist "KaraokeAsioBridge.exe")
+}
+
+function Get-TreeSignature([string]$Path) {
+    $root = [IO.Path]::GetFullPath($Path).TrimEnd('\')
+
+    return @(
+        Get-ChildItem -LiteralPath $root -Recurse -File -Force |
+        ForEach-Object {
+            $rel = $_.FullName.Substring($root.Length).TrimStart('\').ToLowerInvariant()
+            $sec = [int64]($_.LastWriteTimeUtc.Ticks / 10000000)
+            "$rel|$($_.Length)|$sec"
+        } |
+        Sort-Object
+    )
+}
+
+function Trees-Equal([string]$Source, [string]$Destination) {
+    if (-not (Test-Path -LiteralPath $Destination -PathType Container)) {
+        return $false
+    }
+
+    $a = Get-TreeSignature $Source
+    $b = Get-TreeSignature $Destination
+
+    if ($a.Count -ne $b.Count) {
+        return $false
+    }
+
+    for ($i = 0; $i -lt $a.Count; $i++) {
+        if ($a[$i] -cne $b[$i]) {
+            return $false
+        }
+    }
+
+    return $true
+}
+
+function Sync-DirectoryIfChanged(
+    [string]$Source,
+    [string]$Destination,
+    [string]$Label
+) {
+    Require-Directory $Source $Label
+
+    if (Trees-Equal $Source $Destination) {
+        Write-Host "  ${Label}: unchanged [skip]"
+        return
+    }
+
+    if (Test-Path -LiteralPath $Destination) {
+        Write-Host "  ${Label}: changed - synchronizing..."
+    }
+    else {
+        Write-Host "  ${Label}: new - synchronizing..."
+        New-Item -ItemType Directory -Path $Destination -Force | Out-Null
+    }
+
+    & robocopy.exe $Source $Destination `
+        /MIR /COPY:DAT /DCOPY:DAT /R:2 /W:1 /MT:16 /J `
+        /NFL /NDL /NJH /NJS /NP
+
+    $rc = $LASTEXITCODE
+
+    if ($rc -ge 8) {
+        throw "Failed to synchronize $Label. Robocopy exit code: $rc"
+    }
+
+    if (-not (Trees-Equal $Source $Destination)) {
+        throw "$Label still differs after synchronization."
+    }
+
+    Write-Host "  ${Label}: synchronized"
+}
+
+function Verify-ModelTree([string]$Destination, [string]$Label) {
+    Require-Directory $Models "Offline AI models directory"
+    Require-Directory $Destination $Label
+
+    $src = [IO.Path]::GetFullPath($Models).TrimEnd('\')
+    $dst = [IO.Path]::GetFullPath($Destination).TrimEnd('\')
+
+    $source = @(Get-ChildItem -LiteralPath $src -Recurse -File -Force)
+    $target = @(Get-ChildItem -LiteralPath $dst -Recurse -File -Force)
+
+    if ($source.Count -ne $target.Count) {
+        throw "Model file count differs: source=$($source.Count), packaged=$($target.Count)"
+    }
+
+    [int64]$bytes = 0
+
+    foreach ($file in $source) {
+        $relative = $file.FullName.Substring($src.Length).TrimStart('\')
+        $copy = Join-Path $dst $relative
+
+        if (-not (Test-Path -LiteralPath $copy -PathType Leaf)) {
+            throw "Missing model file: $relative"
+        }
+
+        $packaged = Get-Item -LiteralPath $copy -Force
+
+        if ($packaged.Length -ne $file.Length) {
+            throw "Different model file size: $relative"
+        }
+
+        $bytes += $file.Length
+    }
+
+    $gb = [Math]::Round($bytes / 1GB, 2)
+    Write-Host "  Model tree verified: $($source.Count) files, $gb GB."
+}
+
+function Sync-ModelTree {
+    $modelDest = Join-Path $BackendDist "_internal\models"
+
+    New-Item -ItemType Directory -Path $modelDest -Force | Out-Null
+
+    foreach ($dir in Get-ChildItem -LiteralPath $Models -Directory -Force) {
+        Sync-DirectoryIfChanged `
+            $dir.FullName `
+            (Join-Path $modelDest $dir.Name) `
+            "AI model $($dir.Name)"
+    }
+
+    foreach ($file in Get-ChildItem -LiteralPath $Models -File -Force) {
+        $target = Join-Path $modelDest $file.Name
+        $copy = $true
+
+        if (Test-Path -LiteralPath $target -PathType Leaf) {
+            $existing = Get-Item -LiteralPath $target -Force
+            $srcSec = [int64]($file.LastWriteTimeUtc.Ticks / 10000000)
+            $dstSec = [int64]($existing.LastWriteTimeUtc.Ticks / 10000000)
+
+            $copy = $existing.Length -ne $file.Length -or $srcSec -ne $dstSec
+        }
+
+        if ($copy) {
+            Write-Host "  Updating model file: $($file.Name)"
+            Copy-Item -LiteralPath $file.FullName -Destination $target -Force
+            (Get-Item -LiteralPath $target -Force).LastWriteTimeUtc = $file.LastWriteTimeUtc
+        }
+        else {
+            Write-Host "  Model file $($file.Name): unchanged [skip]"
+        }
+    }
+
+    foreach ($item in Get-ChildItem -LiteralPath $modelDest -Force) {
+        $sourceItem = Join-Path $Models $item.Name
+
+        if (-not (Test-Path -LiteralPath $sourceItem)) {
+            Write-Host "  Removing stale packaged model: $($item.Name)"
+            Remove-Item -LiteralPath $item.FullName -Recurse -Force
+        }
+    }
+
+    Verify-ModelTree $modelDest "Packaged AI models"
+}
+
+function Verify-BackendBase {
+    Require-File (Join-Path $BackendDist "KaraokeBackend.exe") "KaraokeBackend.exe"
+    Require-File (Join-Path $BackendDist "KaraokeAudioMonitor.exe") "KaraokeAudioMonitor.exe"
+    Require-File (Join-Path $BackendDist "KaraokeAsioBridge.exe") "KaraokeAsioBridge.exe"
+    Require-Directory (Join-Path $BackendDist "_internal") "PyInstaller internal directory"
+}
+
+function Verify-BackendDist {
+    Verify-BackendBase
+
+    $modelDir = Join-Path $BackendDist "_internal\models"
+    Require-Directory $modelDir "Packaged AI models directory"
+    Verify-ModelTree $modelDir "Packaged backend AI models"
+
+    Require-File `
+        (Join-Path $BackendDist "_internal\engines\msst\inference.py") `
+        "Packaged MSST engine"
+}
+
+function Package-Models {
+    Write-Host ""
+    Write-Host "[4/6] Checking offline AI model folders..."
+
+    $internal = Join-Path $BackendDist "_internal"
+
+    Require-Directory $internal "PyInstaller internal directory"
+    Require-Directory $Models "Offline AI models directory"
+
+    $modelDest = Join-Path $internal "models"
+    New-Item -ItemType Directory -Path $modelDest -Force | Out-Null
+
+    Write-Host ""
+    Write-Host "Models source:"
+    Write-Host "  $Models"
+    Write-Host ""
+    Write-Host "Model destination:"
+    Write-Host "  $modelDest"
+    Write-Host ""
+    Write-Host "Any new first-level model folder is detected automatically."
+    Write-Host "Existing unchanged folders remain exactly where they are."
+    Write-Host "Unchanged folders are skipped completely."
+    Write-Host "Changed folders are synchronized individually."
+    Write-Host "Only changed files inside a changed folder are copied."
+    Write-Host ""
+
+    Sync-ModelTree
+
+    $msstDest = Join-Path $internal "engines\msst"
+    Sync-DirectoryIfChanged $MsstEngine $msstDest "MSST inference engine"
+
+    Verify-BackendDist
+}
+
+function Build-Frontend {
+    Write-Host ""
+    Write-Host "[5/6] Building React frontend..."
+
+    Push-Location $Frontend
+
+    try {
+        & $script:NpmCmd run build
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "React frontend build failed."
+        }
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+function Verify-Unpacked {
+    Require-File (Join-Path $Unpacked $AppExe) "Electron application"
+    Require-File $PackagedSceneVideo "Karaoke scene video"
+    Require-File (Join-Path $PackagedBackend "KaraokeBackend.exe") "Electron backend"
+    Require-File (Join-Path $PackagedBackend "KaraokeAudioMonitor.exe") "Electron audio monitor"
+    Require-File (Join-Path $PackagedBackend "KaraokeAsioBridge.exe") "Electron ASIO bridge"
+
+    $modelDir = Join-Path $PackagedBackend "_internal\models"
+    Require-Directory $modelDir "Electron AI models directory"
+    Verify-ModelTree $modelDir "Electron packaged AI models"
+
+    Require-File `
+        (Join-Path $PackagedBackend "_internal\engines\msst\inference.py") `
+        "Electron MSST engine"
+}
+
+function Build-ElectronPackage {
+    Write-Host ""
+    Write-Host "[5/6] Building complete Electron application..."
+
+    Require-File $SceneVideoSource "Karaoke scene video"
+    Remove-Directory $Unpacked
+
+    Push-Location $Frontend
+
+    try {
+        Write-Host ""
+        Write-Host "Building Electron win-unpacked directory..."
+        Write-Host ""
+
+        & $script:NpxCmd electron-builder --win --x64 --dir
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Electron win-unpacked build failed."
+        }
+    }
+    finally {
+        Pop-Location
+    }
+
+    Sign-File (Join-Path $Unpacked $AppExe)
+    Verify-Unpacked
+
+    Write-Host ""
+    Write-Host "Running packaged backend + AI runtime smoke test..."
+    Write-Host ""
+
+    Require-File $SmokeScript "Packaged backend smoke test"
+
+    & powershell.exe `
+        -NoProfile `
+        -ExecutionPolicy Bypass `
+        -File $SmokeScript `
+        -Executable (Join-Path $PackagedBackend "KaraokeBackend.exe")
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Packaged backend runtime smoke test failed."
+    }
+
+    Write-Host ""
+    Write-Host "Electron package and packaged AI runtime verified successfully."
+}
+
+function Find-Inno {
+    if ($env:INNO_COMPILER_OVERRIDE -and (Test-Path -LiteralPath $env:INNO_COMPILER_OVERRIDE -PathType Leaf)) {
+        return $env:INNO_COMPILER_OVERRIDE
+    }
+
+    $candidates = @(
+        (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),
+        (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe"),
+        (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 7\ISCC.exe"),
+        (Join-Path $env:ProgramFiles "Inno Setup 7\ISCC.exe")
+    )
+
+    foreach ($candidate in $candidates) {
+        if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+            return $candidate
+        }
+    }
+
+    foreach ($key in @(
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1",
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1"
+    )) {
+        try {
+            $location = (Get-ItemProperty -LiteralPath $key -ErrorAction Stop).InstallLocation
+
+            if ($location) {
+                $candidate = Join-Path $location "ISCC.exe"
+
+                if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                    return $candidate
+                }
+            }
+        }
+        catch {
+        }
+    }
+
+    return $null
+}
+
+function Build-Installer {
+    Write-Host ""
+    Write-Host "[6/6] Building complete offline installer..."
+
+    $inno = Find-Inno
+
+    if (-not $inno) {
+        throw "Inno Setup compiler was not found. Install Inno Setup 6."
+    }
+
+    Write-Host ""
+    Write-Host "Inno Setup:"
+    Write-Host "  $inno"
+    Write-Host ""
+
+    Remove-Directory $InstallerDir
+    Remove-Directory $TempDir
+
+    New-Item -ItemType Directory -Path $InstallerDir -Force | Out-Null
+    New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
+
+    & $inno `
+        "/DMyAppName=$AppName" `
+        "/DMyAppVersion=$AppVersion" `
+        "/DMyAppExeName=$AppExe" `
+        "/DMyAppId=$AppId" `
+        "/DSetupIcon=$SetupIcon" `
+        "/DSourceDir=$Unpacked" `
+        "/DOutputDir=$InstallerDir" `
+        $InnoTemplate
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Inno Setup compilation failed."
+    }
+
+    Require-File $InstallerExe "Installer executable"
+    Sign-File $InstallerExe
+
+    $bins = @(Get-ChildItem -LiteralPath $InstallerDir -Filter "*.bin" -File -ErrorAction SilentlyContinue)
+
+    if ($bins.Count -eq 0) {
+        throw "Installer .bin data files were not created."
+    }
+}
+
+function Create-Checksums {
+    Write-Host ""
+    Write-Host "Creating SHA-256 checksums..."
+
+    Require-File $ChecksumScript "Checksum generation script"
+
+    & powershell.exe `
+        -NoProfile `
+        -ExecutionPolicy Bypass `
+        -File $ChecksumScript `
+        -InstallerDirectory $InstallerDir `
+        -OutputFile $ChecksumFile
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not create SHA-256 checksums."
+    }
+
+    Require-File $ChecksumFile "SHA-256 checksum file"
+}
+
+function Start-WorkerProcess([string]$Name) {
+    $outLog = Join-Path $ParallelDir "$Name.out.log"
+    $errLog = Join-Path $ParallelDir "$Name.err.log"
+    $exitFile = Join-Path $ParallelDir "$Name.exit"
+
+    Remove-Item -LiteralPath $outLog,$errLog,$exitFile -Force -ErrorAction SilentlyContinue
+
+    $args = @(
+        "-NoProfile",
+        "-ExecutionPolicy","Bypass",
+        "-File",$PSCommandPath,
+        "-Mode",$Mode,
+        "-Worker",$Name
+    )
+
+    return Start-Process `
+        -FilePath "powershell.exe" `
+        -ArgumentList $args `
+        -RedirectStandardOutput $outLog `
+        -RedirectStandardError $errLog `
+        -PassThru `
+        -NoNewWindow
+}
+
+function Run-Parallel([string[]]$Workers) {
+    if (Test-Path -LiteralPath $ParallelDir) {
+        Remove-Directory $ParallelDir
+    }
+
+    New-Item -ItemType Directory -Path $ParallelDir -Force | Out-Null
+
+    $processes = @{}
+    $last = @{}
+
+    foreach ($name in $Workers) {
+        $processes[$name] = Start-WorkerProcess $name
+    }
+
+    while ($true) {
+        $allDone = $true
+
+        foreach ($name in $Workers) {
+            $exitFile = Join-Path $ParallelDir "$name.exit"
+
+            if (-not (Test-Path -LiteralPath $exitFile -PathType Leaf)) {
+                $allDone = $false
+            }
+
+            $outLog = Join-Path $ParallelDir "$name.out.log"
+            $errLog = Join-Path $ParallelDir "$name.err.log"
+            $lines = @()
+
+            if (Test-Path -LiteralPath $outLog) {
+                $lines += @(Get-Content -LiteralPath $outLog -Tail 2 -ErrorAction SilentlyContinue)
+            }
+
+            if (Test-Path -LiteralPath $errLog) {
+                $lines += @(Get-Content -LiteralPath $errLog -Tail 2 -ErrorAction SilentlyContinue)
+            }
+
+            $lines = @(
+                $lines |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+                Select-Object -Last 2
+            )
+
+            if ($lines.Count -gt 0) {
+                $joined = $lines -join " | "
+
+                if (-not $last.ContainsKey($name) -or $last[$name] -ne $joined) {
+                    Write-Host "  $name`: $joined"
+                    $last[$name] = $joined
+                }
+            }
+
+            $proc = $processes[$name]
+            if ($proc.HasExited -and -not (Test-Path -LiteralPath $exitFile)) {
+                "1" | Set-Content -LiteralPath $exitFile -Encoding ASCII
+            }
+        }
+
+        if ($allDone) {
+            break
+        }
+
+        Start-Sleep -Seconds 3
+    }
+
+    $failed = $false
+
+    foreach ($name in $Workers) {
+        $proc = $processes[$name]
+        try { $proc.WaitForExit() } catch {}
+
+        $exitFile = Join-Path $ParallelDir "$name.exit"
+        $code = 1
+
+        if (Test-Path -LiteralPath $exitFile) {
+            $raw = (Get-Content -LiteralPath $exitFile -ErrorAction SilentlyContinue | Select-Object -First 1)
+
+            if ($raw -match '^[0-9]+$') {
+                $code = [int]$raw
+            }
+        }
+
+        if ($code -ne 0) {
+            $failed = $true
+            Write-Host ""
+            Write-Host "[ERROR] Parallel worker failed: $name"
+            Write-Host "Exit code: $code"
+
+            $outLog = Join-Path $ParallelDir "$name.out.log"
+            $errLog = Join-Path $ParallelDir "$name.err.log"
+
+            if (Test-Path -LiteralPath $outLog) {
+                Get-Content -LiteralPath $outLog
+            }
+
+            if (Test-Path -LiteralPath $errLog) {
+                Get-Content -LiteralPath $errLog
+            }
+        }
+        else {
+            Write-Host "[OK] Parallel worker: $name"
+        }
+    }
+
+    if ($failed) {
+        throw "Parallel build stage failed."
+    }
+}
+
+function Parallel-FullBuild {
+    Write-Header "PARALLEL BUILD"
+
+    Write-Host "Running simultaneously:"
+    Write-Host "  [A] Python backend"
+    Write-Host "  [B] Native ASIO compilation"
+    Write-Host "  [C] React frontend"
+    Write-Host ""
+
+    Run-Parallel @("backend","asio","frontend")
+
+    Write-Host ""
+    Write-Host "Parallel build stage completed successfully."
+}
+
+function Parallel-FastBuild {
+    Write-Header "PARALLEL FAST BUILD"
+
+    Write-Host "Running simultaneously:"
+    Write-Host "  [A] AI model synchronization"
+    Write-Host "  [B] React frontend"
+    Write-Host ""
+
+    Run-Parallel @("package-models","frontend")
+
+    Write-Host ""
+    Write-Host "Parallel fast stage completed successfully."
+}
+
+function Initialize-WorkerCommands {
+    $script:NodeExe = (Get-Command node.exe -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+    $script:NpmCmd = (Get-Command npm.cmd -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+    $script:NpxCmd = (Get-Command npx.cmd -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+    $script:Ffmpeg = (Get-Command ffmpeg.exe -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+}
+
+try {
+    if ($Worker) {
+        Initialize-WorkerCommands
+        New-Item -ItemType Directory -Path $ParallelDir -Force | Out-Null
+
+        $workerExitFile = Join-Path $ParallelDir "$Worker.exit"
+        $workerCode = 0
+
+        try {
+            switch ($Worker) {
+                "backend" {
+                    Build-Backend
+                }
+                "asio" {
+                    Build-Asio
+                }
+                "frontend" {
+                    Build-Frontend
+                }
+                "package-models" {
+                    Package-Models
+                }
+            }
+        }
+        catch {
+            $workerCode = 1
+            Write-Host ""
+            Write-Host ("=" * 60)
+            Write-Host " BUILD FAILED"
+            Write-Host ("=" * 60)
+            Write-Host ""
+            Write-Host "[ERROR] $($_.Exception.Message)"
+            Write-Host ""
+
+            if ($_.ScriptStackTrace) {
+                Write-Host "PowerShell stack:"
+                Write-Host $_.ScriptStackTrace
+                Write-Host ""
+            }
+        }
+        finally {
+            $workerCode.ToString() | Set-Content -LiteralPath $workerExitFile -Encoding ASCII
+        }
+
+        exit $workerCode
+    }
+
+    Write-Header "A&D VOICE - COMPLETE OFFLINE INSTALLER"
+
+    Write-Host "Build mode:"
+    Write-Host "  $Mode"
+    Write-Host ""
+    Write-Host "Project:"
+    Write-Host "  $Root"
+    Write-Host ""
+    Write-Host "Build intermediates:"
+    Write-Host "  $Build"
+    Write-Host ""
+    Write-Host "Downloaded resources:"
+    Write-Host "  $Downloads"
+    Write-Host ""
+    Write-Host "Final release:"
+    Write-Host "  $Release"
+    Write-Host ""
+
+    Stop-BuildProcesses
+    Check-Environment
+    Prepare-Output
+
+    if ($Mode -eq "installer") {
+        Write-Header "INSTALLER ONLY"
+        Write-Host "Reusing:"
+        Write-Host "  $Unpacked"
+        Write-Host ""
+
+        Verify-Unpacked
+        Build-Installer
+        Create-Checksums
+    }
+    elseif ($Mode -eq "fast") {
+        Write-Header "FAST BUILD"
+        Write-Host "Reusing existing packaged backend:"
+        Write-Host "  $BackendDist"
+        Write-Host ""
+        Write-Host "Checking AI resources for changes..."
+        Write-Host ""
+
+        Parallel-FastBuild
+        Build-ElectronPackage
+        Build-Installer
+        Create-Checksums
+    }
+    else {
+        Check-Models
+        Parallel-FullBuild
+        Finalize-Asio
+        Package-Models
+        Build-ElectronPackage
+        Build-Installer
+        Create-Checksums
+    }
+
+    Remove-Directory $TempDir
+
+    Write-Header "BUILD COMPLETED SUCCESSFULLY"
+
+    Write-Host "Complete offline installer:"
+    Write-Host "  $InstallerDir"
+    Write-Host ""
+    Write-Host "Main installer:"
+    Write-Host "  $InstallerExe"
+    Write-Host ""
+    Write-Host "IMPORTANT:"
+    Write-Host "  Keep Setup.exe and every Setup-*.bin file together."
+    Write-Host ""
+    Write-Host "SHA-256 checksums:"
+    Write-Host "  $ChecksumFile"
+    Write-Host ""
+
+    Start-Process explorer.exe $InstallerDir
+    exit 0
+}
+catch {
+    Write-Host ""
+    Write-Host ("=" * 60)
+    Write-Host " BUILD FAILED"
+    Write-Host ("=" * 60)
+    Write-Host ""
+    Write-Host "[ERROR] $($_.Exception.Message)"
+    Write-Host ""
+
+    if ($_.ScriptStackTrace) {
+        Write-Host "PowerShell stack:"
+        Write-Host $_.ScriptStackTrace
+        Write-Host ""
+    }
+
+    exit 1
+}
