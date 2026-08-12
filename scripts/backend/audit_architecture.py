@@ -46,8 +46,12 @@ def audit_file(path: Path) -> list[str]:
         if module:
             if parts[:2] == ("app", "services") and module.startswith("app.routers"):
                 errors.append(f"{relative}:{node.lineno}: service imports router")
-            if parts[:2] == ("app", "utils") and module.startswith(("app.routers", "app.services")):
-                errors.append(f"{relative}:{node.lineno}: utility imports upper application layer")
+            if parts[:2] == ("app", "utils") and module.startswith(
+                ("app.routers", "app.services")
+            ):
+                errors.append(
+                    f"{relative}:{node.lineno}: utility imports upper application layer"
+                )
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             length = (node.end_lineno or node.lineno) - node.lineno + 1
             limit = FUNCTION_LINE_LIMITS.get((relative, node.name), MAX_FUNCTION_LINES)
@@ -62,7 +66,9 @@ def audit_file(path: Path) -> list[str]:
                     errors.append(
                         f"{relative}:{node.lineno}: function {node.name!r} uses a mutable default"
                     )
-        if isinstance(node, ast.ImportFrom) and any(alias.name == "*" for alias in node.names):
+        if isinstance(node, ast.ImportFrom) and any(
+            alias.name == "*" for alias in node.names
+        ):
             errors.append(f"{relative}:{node.lineno}: wildcard import")
         if isinstance(node, ast.ExceptHandler) and node.type is None:
             errors.append(f"{relative}:{node.lineno}: bare except")

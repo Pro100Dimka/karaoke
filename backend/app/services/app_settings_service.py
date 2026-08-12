@@ -19,7 +19,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "language": "ru",
     "theme": "dark",
     "whisper_model": config.DEFAULT_WHISPER_MODEL,
-    "thread_count": 4,
+    "thread_count": min(4, max(1, (os.cpu_count() or 2) // 2)),
     "use_gpu": True,
     "use_cpu": True,
     "autosave": True,

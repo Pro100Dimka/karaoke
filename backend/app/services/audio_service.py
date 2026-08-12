@@ -98,8 +98,8 @@ def _matching_asio_device_index(driver_name: str | None, kind: str) -> int | Non
     """Resolve native ASIO to its matching PortAudio device for recording.
 
     The native bridge owns direct monitoring; recording currently uses
-    PortAudio. Prefer the same interface by name so an Audient selection does
-    not silently fall back to Windows' default microphone.
+    PortAudio. Prefer the same interface by name so any selected ASIO device
+    does not silently fall back to Windows' default microphone.
     """
     if not _AUDIO_BACKEND_AVAILABLE:
         return None
@@ -215,19 +215,9 @@ def _get_or_create_settings(db: Session) -> models.AudioSettings:
 
 
 def get_settings(db: Session) -> models.AudioSettings:
-    settings = _get_or_create_settings(db)
-    # A professional interface with a native ASIO driver is the best default.
-    # Do this once, only while the user has not chosen a driver explicitly.
-    if settings.audio_driver == "auto" and not settings.asio_driver_name:
-        drivers = list_asio_drivers()
-        if drivers:
-            settings.asio_driver_name = next(
-                (name for name in drivers if "audient" in name.lower()),
-                drivers[0],
-            )
-            settings.audio_driver = "asio"
-            commit_refresh(db, settings)
-    return settings
+    # Keep the OS/default microphone path until the user explicitly selects
+    # ASIO. Merely having an ASIO driver installed must not hijack simple mics.
+    return _get_or_create_settings(db)
 
 
 def _input_device_name(device_id: int | None) -> str | None:

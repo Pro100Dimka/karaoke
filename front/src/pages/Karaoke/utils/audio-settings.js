@@ -43,18 +43,26 @@ export function normalizeAudioRuntimeSettings(settings) {
   };
 }
 
-export function findPreferredOutputDevice(devices, keyword = "audient") {
-  const normalizedKeyword = String(keyword || "")
-    .trim()
-    .toLowerCase();
-  if (!normalizedKeyword) return null;
-  return (
-    (Array.isArray(devices) ? devices : []).find((device) =>
-      String(device?.name || "")
-        .toLowerCase()
-        .includes(normalizedKeyword)
-    ) || null
-  );
+export function findDriverOutputDevice(devices, driverName) {
+  const tokens = String(driverName || "")
+    .toLowerCase()
+    .replaceAll(/\b(?:asio|driver)\b/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length > 2);
+  const outputs = Array.isArray(devices) ? devices : [];
+  const ranked = outputs
+    .map((device) => {
+      const name = String(device?.name || "").toLowerCase();
+      return {
+        device,
+        score:
+          tokens.filter((token) => name.includes(token)).length * 10 +
+          (device?.is_asio ? 5 : 0)
+      };
+    })
+    .filter(({ score }) => score > 0)
+    .sort((left, right) => right.score - left.score);
+  return ranked[0]?.device ?? outputs.find((device) => device?.is_asio) ?? null;
 }
 
 export function findMatchingBrowserOutput(entries, selectedDevice) {

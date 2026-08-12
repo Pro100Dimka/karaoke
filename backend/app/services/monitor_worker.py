@@ -21,6 +21,29 @@ _running = True
 _level = {"rms_db": -120.0, "clipping": False, "silent": True}
 
 
+def _stream_candidates(options: dict) -> list[dict]:
+    """Prefer the requested low latency, then relax only what the driver rejects."""
+    base = {
+        "samplerate": float(options["sample_rate"]),
+        "channels": (1, int(options["output_channels"])),
+        "device": (int(options["input_device_id"]), int(options["output_device_id"])),
+        "latency": "low",
+    }
+    blocks = dict.fromkeys((int(options["blocksize"]), 128, 256, 0))
+    candidates = []
+    for exclusive in (bool(options.get("wasapi_exclusive")), False):
+        for blocksize in blocks:
+            candidate = {**base, "blocksize": blocksize}
+            if exclusive:
+                candidate["extra_settings"] = (
+                    sd.WasapiSettings(exclusive=True),
+                    sd.WasapiSettings(exclusive=True),
+                )
+            if candidate not in candidates:
+                candidates.append(candidate)
+    return candidates
+
+
 def _emit(payload: dict) -> None:
     print(json.dumps(payload), flush=True)
 
@@ -35,7 +58,6 @@ def main() -> int:
     parser.add_argument("--config", required=True)
     options = json.loads(parser.parse_args().config)
     gain = float(options["gain"])
-    output_channels = int(options["output_channels"])
 
     def callback(indata, outdata, _frames, _time_info, _status):
         processed = np.clip(indata[:, 0] * gain, -1.0, 1.0)
@@ -52,32 +74,26 @@ def main() -> int:
             }
         )
 
-    stream_options = {
-        "samplerate": float(options["sample_rate"]),
-        "channels": (1, output_channels),
-        "device": (int(options["input_device_id"]), int(options["output_device_id"])),
-        "blocksize": int(options["blocksize"]),
-        "latency": "low",
-        "callback": callback,
-    }
-    if options.get("wasapi_exclusive"):
-        stream_options["extra_settings"] = (
-            sd.WasapiSettings(exclusive=True),
-            sd.WasapiSettings(exclusive=True),
-        )
-
     stream = None
     try:
-        try:
-            stream = sd.Stream(**stream_options)
-        except Exception as exclusive_error:
-            if not options.get("wasapi_exclusive"):
-                raise
-            # Some USB drivers reject WASAPI exclusive while another program
-            # has the device open.  Shared low-latency mode is still useful.
-            stream_options.pop("extra_settings", None)
-            stream = sd.Stream(**stream_options)
-            _emit({"event": "fallback", "message": str(exclusive_error)})
+        failures: list[str] = []
+        for candidate in _stream_candidates(options):
+            try:
+                stream = sd.Stream(**candidate, callback=callback)
+                if failures:
+                    _emit(
+                        {
+                            "event": "fallback",
+                            "message": failures[-1],
+                            "blocksize": candidate["blocksize"],
+                            "exclusive": "extra_settings" in candidate,
+                        }
+                    )
+                break
+            except Exception as error:
+                failures.append(str(error))
+        if stream is None:
+            raise RuntimeError(failures[-1] if failures else "No audio stream candidate")
         stream.start()
         _emit({"event": "started"})
         while _running:

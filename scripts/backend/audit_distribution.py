@@ -6,7 +6,13 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2] / "backend"
-FORBIDDEN_DIRS = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "htmlcov"}
+FORBIDDEN_DIRS = {
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    "htmlcov",
+}
 FORBIDDEN_SUFFIXES = {".pyc", ".pyo", ".db", ".db-wal", ".db-shm"}
 FORBIDDEN_FILES = {".coverage"}
 IGNORED_ROOTS = {"engines", ".venv", "venv"}
@@ -27,10 +33,10 @@ def violations() -> list[Path]:
         relative = Path(name).relative_to("backend")
         if relative.parts and relative.parts[0] in IGNORED_ROOTS:
             continue
-        if FORBIDDEN_DIRS.intersection(relative.parts):
-            found.append(relative)
-        elif relative.name in FORBIDDEN_FILES or any(
-            relative.name.endswith(suffix) for suffix in FORBIDDEN_SUFFIXES
+        if (
+            FORBIDDEN_DIRS.intersection(relative.parts)
+            or relative.name in FORBIDDEN_FILES
+            or any(relative.name.endswith(suffix) for suffix in FORBIDDEN_SUFFIXES)
         ):
             found.append(relative)
     return sorted(set(found))

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import shutil
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -34,7 +35,21 @@ def is_valid(models_root: Path, model: ModelSpec) -> bool:
     return (directory / "config.json").is_file() and _has_weights(directory)
 
 
+def prune_unused_artifacts(models_root: Path, model: ModelSpec) -> int:
+    directory = model_directory(models_root, model)
+    removed = 0
+    for pattern in model.ignore_patterns:
+        for path in directory.glob(pattern):
+            if path.is_dir():
+                shutil.rmtree(path)
+            elif path.is_file():
+                path.unlink()
+            removed += 1
+    return removed
+
+
 def install_one(models_root: Path, model: ModelSpec) -> tuple[str, str]:
+    prune_unused_artifacts(models_root, model)
     if is_valid(models_root, model):
         return model.name, "ready"
 
@@ -55,6 +70,7 @@ def install_one(models_root: Path, model: ModelSpec) -> tuple[str, str]:
         snapshot_download(
             repo_id=model.repo_id,
             local_dir=str(directory),
+            ignore_patterns=list(model.ignore_patterns) or None,
         )
 
     if not is_valid(models_root, model):
@@ -88,6 +104,9 @@ def write_environment(downloads: Path, models_root: Path, msst: Path, env_file: 
 def verify_all(models_root: Path) -> bool:
     ok = True
     for model in MODELS:
+        removed = prune_unused_artifacts(models_root, model)
+        if removed:
+            print(f"[PRUNE] {model.name}: removed {removed} unused artifacts")
         valid = is_valid(models_root, model)
         print(f"[{'OK' if valid else 'MISSING'}] {model.name}")
         ok = ok and valid

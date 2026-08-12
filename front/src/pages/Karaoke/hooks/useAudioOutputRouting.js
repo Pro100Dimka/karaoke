@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { api } from "../../../api/client";
 import {
-  findMatchingBrowserOutput,
-  findPreferredOutputDevice
+  findDriverOutputDevice,
+  findMatchingBrowserOutput
 } from "../utils/audio-settings";
 
 export default function useAudioOutputRouting(options) {
@@ -26,7 +26,10 @@ export default function useAudioOutputRouting(options) {
       audioSettings?.output_device_id != null
     )
       return;
-    const preferred = findPreferredOutputDevice(directOutputDevices);
+    const preferred = findDriverOutputDevice(
+      directOutputDevices,
+      audioSettings?.asio_driver_name
+    );
     if (preferred && String(directOutputDeviceId) !== String(preferred.index)) {
       setDirectOutputDeviceId(preferred.index);
       Promise.resolve(
@@ -35,6 +38,7 @@ export default function useAudioOutputRouting(options) {
     }
   }, [
     audioDriver,
+    audioSettings?.asio_driver_name,
     audioSettings?.output_device_id,
     directOutputDeviceId,
     directOutputDevices,

@@ -24,6 +24,7 @@ import {
   getLocalVisibleSongs,
   hasActiveSongProcessing,
   isProcessingActive,
+  mergeSongProcessingStatus,
   resolveVisibleSongs
 } from "./utils";
 
@@ -226,7 +227,8 @@ export default function Library({ onOpenSongSettings }) {
     }
   }, [confirmDialog, notify, processingSong, refreshSongs]);
 
-  const localVisibleSongs = getLocalVisibleSongs(songs, hiddenSongIds);
+  const currentSongs = mergeSongProcessingStatus(songs, processingStatus);
+  const localVisibleSongs = getLocalVisibleSongs(currentSongs, hiddenSongIds);
   const visibleSongs = resolveVisibleSongs({
     localSongs: localVisibleSongs,
     room: sharedRoom?.room,

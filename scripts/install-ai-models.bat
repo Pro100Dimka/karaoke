@@ -114,8 +114,8 @@ rem ============================================================================
 rem CUDA
 rem ============================================================================
 
-echo [4/7] CUDA...
-"%PY%" -c "import torch;ok=torch.cuda.is_available();print('Torch:',torch.__version__);print('CUDA:',torch.version.cuda);print('GPU:',torch.cuda.get_device_name(0) if ok else 'NOT AVAILABLE');raise SystemExit(0 if ok else 1)"
+echo [4/7] Compute backend...
+"%PY%" -c "import torch;ok=torch.cuda.is_available();print('Torch:',torch.__version__);print('CUDA:',torch.version.cuda);print('Compute:',torch.cuda.get_device_name(0) if ok else 'CPU fallback')"
 if errorlevel 1 goto :fail
 
 rem ============================================================================

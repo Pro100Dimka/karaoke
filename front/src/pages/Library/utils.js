@@ -36,6 +36,22 @@ export function hasActiveSongProcessing(songs) {
   );
 }
 
+export function mergeSongProcessingStatus(songs, status) {
+  if (!Array.isArray(songs) || !status?.song_id) return songs ?? [];
+  const songId = String(status.song_id);
+  return songs.map((song) =>
+    String(song?.id) === songId
+      ? {
+          ...song,
+          status: status.status ?? song.status,
+          progress_step: status.progress_step ?? song.progress_step,
+          progress_percent: status.progress_percent ?? song.progress_percent,
+          error_message: status.error_message ?? song.error_message
+        }
+      : song
+  );
+}
+
 export function getLocalVisibleSongs(songs, hiddenSongIds) {
   const hidden = hiddenSongIds instanceof Set ? hiddenSongIds : new Set();
   return Array.isArray(songs)
@@ -79,7 +95,7 @@ export function getSongCardState(song) {
   const status = typeof song?.status === "string" ? song.status : "pending";
   return {
     status,
-    isWorking: status === "processing" || status === "cancelling",
+    isWorking: isProcessingActive(status),
     isReady: status === "done"
   };
 }

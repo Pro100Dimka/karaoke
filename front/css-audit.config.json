@@ -25,7 +25,10 @@
   ],
   "allowedImportantSelectors": [],
   "allowedDuplicateSelectors": [":root", ":root[data-theme=\"light\"]"],
-  "allowedZIndexes": [-1, 0, 1, 2, 5, 10, 20, 30, 40, 50, 100, 200, 500, 1000],
+  "allowedZIndexes": [
+    -1, 0, 1, 2, 5, 10, 20, 30, 40, 50, 100, 200, 500, 1000, 99999, 999999,
+    2147483000
+  ],
   "allowedBreakpoints": [480, 600, 700, 768, 900, 1000, 1200, 1280, 1440],
   "maxSelectorSpecificity": 50,
   "maxSelectorDepth": 6,

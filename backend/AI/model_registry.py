@@ -17,6 +17,7 @@ class ModelSpec:
     kind: ModelKind = "snapshot"
     filename: str | None = None
     sha256: str | None = None
+    ignore_patterns: tuple[str, ...] = ()
 
     @property
     def local_name(self) -> str:
@@ -44,6 +45,9 @@ MODELS: tuple[ModelSpec, ...] = (
         repo_id="jonatasgrosman/wav2vec2-large-xlsr-53-russian",
         relative_path="ctc/wav2vec2-large-xlsr-53-russian",
         env_var="KARAOKE_AI_CTC_RU_MODEL",
+        # Forced alignment consumes acoustic logits directly. Decoder language
+        # models and alternate framework weights are never loaded.
+        ignore_patterns=("language_model/**", "flax_model.msgpack"),
     ),
     ModelSpec(
         key="ctc_uk",
@@ -51,6 +55,7 @@ MODELS: tuple[ModelSpec, ...] = (
         repo_id="Yehor/wav2vec2-xls-r-300m-uk-with-small-lm",
         relative_path="ctc/wav2vec2-xls-r-300m-uk",
         env_var="KARAOKE_AI_CTC_UK_MODEL",
+        ignore_patterns=("language_model/**", "flax_model.msgpack"),
     ),
     ModelSpec(
         key="roformer",

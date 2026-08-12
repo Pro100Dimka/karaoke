@@ -220,19 +220,11 @@ function Remove-OldElectronRuns([string]$KeepPath) {
         Sort-Object LastWriteTimeUtc -Descending
     )
 
-    # Keep current successful run + one previous run. Cleanup is best-effort only.
-    $keptExtra = 0
-
     foreach ($run in $runs) {
         $candidate = Join-Path $run.FullName "win-unpacked"
         $candidateFull = [IO.Path]::GetFullPath($candidate).TrimEnd('\')
 
         if ($keep -and $candidateFull -eq $keep) {
-            continue
-        }
-
-        if ($keptExtra -lt 1) {
-            $keptExtra += 1
             continue
         }
 
