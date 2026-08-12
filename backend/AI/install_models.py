@@ -63,12 +63,14 @@ def install_one(models_root: Path, model: ModelSpec) -> tuple[str, str]:
             raise RuntimeError(f"{model.name}: filename is missing in model registry")
         hf_hub_download(
             repo_id=model.repo_id,
+            revision=model.revision,
             filename=model.filename,
             local_dir=str(directory),
         )
     else:
         snapshot_download(
             repo_id=model.repo_id,
+            revision=model.revision,
             local_dir=str(directory),
             ignore_patterns=list(model.ignore_patterns) or None,
         )
@@ -113,29 +115,37 @@ def verify_all(models_root: Path) -> bool:
     return ok
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--downloads", required=True, type=Path)
-    parser.add_argument("--msst", required=True, type=Path)
-    parser.add_argument("--env", required=True, type=Path)
+    parser.add_argument("--downloads", type=Path)
+    parser.add_argument("--models-root", type=Path)
+    parser.add_argument("--msst", type=Path)
+    parser.add_argument("--env", type=Path)
+    parser.add_argument("--cache-dir", type=Path)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--check", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    downloads = args.downloads.resolve()
-    models_root = downloads / "models"
-    msst = args.msst.resolve()
-    env_file = args.env.resolve()
+    if args.models_root:
+        models_root = args.models_root.resolve()
+        downloads = args.downloads.resolve() if args.downloads else models_root.parent
+    elif args.downloads:
+        downloads = args.downloads.resolve()
+        models_root = downloads / "models"
+    else:
+        parser.error("one of --downloads or --models-root is required")
+
     models_root.mkdir(parents=True, exist_ok=True)
 
-    os.environ.setdefault("HF_HOME", str(downloads / "cache" / "huggingface"))
-    os.environ.setdefault("HF_HUB_CACHE", str(downloads / "cache" / "huggingface" / "hub"))
+    cache_dir = (args.cache_dir or downloads / "cache" / "huggingface").resolve()
+    os.environ.setdefault("HF_HOME", str(cache_dir))
+    os.environ.setdefault("HF_HUB_CACHE", str(cache_dir / "hub"))
     os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 
     if args.check:
         ok = verify_all(models_root)
-        if ok:
-            write_environment(downloads, models_root, msst, env_file)
+        if ok and args.msst and args.env:
+            write_environment(downloads, models_root, args.msst.resolve(), args.env.resolve())
         return 0 if ok else 1
 
     workers = max(1, min(args.workers, len(MODELS)))
@@ -156,7 +166,8 @@ def main() -> int:
     if failed or not verify_all(models_root):
         return 1
 
-    write_environment(downloads, models_root, msst, env_file)
+    if args.msst and args.env:
+        write_environment(downloads, models_root, args.msst.resolve(), args.env.resolve())
     print("All registered AI models are ready.")
     return 0
 

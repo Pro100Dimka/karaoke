@@ -48,9 +48,6 @@ Name: "desktopicon"; Description: "Создать ярлык на рабочем
 [Files]
 ; Runtime is already compressed once. Inno only copies the archive from ISO.
 Source: "{src}\app-runtime.zip"; DestDir: "{tmp}"; Flags: external ignoreversion deleteafterinstall
-; Models are compressed once by the smart builder and extracted during install.
-Source: "{src}\models.7z"; DestDir: "{tmp}"; Flags: external ignoreversion deleteafterinstall
-Source: "{src}\7zr.exe"; DestDir: "{tmp}"; Flags: external ignoreversion deleteafterinstall
 Source: "{src}\msst\*"; DestDir: "{app}\resources\backend\_internal\engines\msst"; Flags: external ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
@@ -60,9 +57,54 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDi
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Запустить {#MyAppName}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
 
+[UninstallDelete]
+; app-runtime.zip is extracted by tar, so register every installer-owned root
+; explicitly. User songs/settings are outside {app} and are handled separately.
+Type: filesandordirs; Name: "{app}\locales"
+Type: filesandordirs; Name: "{app}\resources"
+Type: files; Name: "{app}\{#MyAppExeName}"
+Type: files; Name: "{app}\chrome_100_percent.pak"
+Type: files; Name: "{app}\chrome_200_percent.pak"
+Type: files; Name: "{app}\d3dcompiler_47.dll"
+Type: files; Name: "{app}\dxcompiler.dll"
+Type: files; Name: "{app}\dxil.dll"
+Type: files; Name: "{app}\ffmpeg.dll"
+Type: files; Name: "{app}\icudtl.dat"
+Type: files; Name: "{app}\libEGL.dll"
+Type: files; Name: "{app}\libGLESv2.dll"
+Type: files; Name: "{app}\LICENSE.electron.txt"
+Type: files; Name: "{app}\LICENSES.chromium.html"
+Type: files; Name: "{app}\resources.pak"
+Type: files; Name: "{app}\snapshot_blob.bin"
+Type: files; Name: "{app}\v8_context_snapshot.bin"
+Type: files; Name: "{app}\vk_swiftshader.dll"
+Type: files; Name: "{app}\vk_swiftshader_icd.json"
+Type: files; Name: "{app}\vulkan-1.dll"
+
 [Code]
 var
   ThemePage: TInputOptionWizardPage;
+  RemoveUserData: Boolean;
+
+function InitializeUninstall: Boolean;
+begin
+  RemoveUserData :=
+    MsgBox(
+      'Удалить также настройки, кэш, библиотеку песен и записи пользователя?',
+      mbConfirmation,
+      MB_YESNO
+    ) = IDYES;
+  Result := True;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if (CurUninstallStep = usPostUninstall) and RemoveUserData then
+  begin
+    DelTree(ExpandConstant('{localappdata}\A&D Voice'), True, True, True);
+    DelTree(ExpandConstant('{userappdata}\A&D Voice'), True, True, True);
+  end;
+end;
 
 procedure ApplyInstallerTheme;
 begin
@@ -148,8 +190,9 @@ var
   ResultCode: Integer;
   TarExe: String;
   ArchivePath: String;
-  ModelsArchivePath: String;
-  SevenZipPath: String;
+  BackendExe: String;
+  ModelsDir: String;
+  ModelCacheDir: String;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -176,19 +219,26 @@ begin
     if not FileExists(ExpandConstant('{app}\{#MyAppExeName}')) then
       RaiseException('Runtime extraction completed, but the application executable is missing.');
 
-    ModelsArchivePath := ExpandConstant('{tmp}\models.7z');
-    SevenZipPath := ExpandConstant('{tmp}\7zr.exe');
-    ForceDirectories(ExpandConstant('{app}\resources\backend\_internal\models'));
+    BackendExe := ExpandConstant('{app}\resources\backend\KaraokeBackend.exe');
+    ModelsDir := ExpandConstant('{app}\resources\backend\_internal\models');
+    ModelCacheDir := ExpandConstant('{tmp}\huggingface-cache');
+    ForceDirectories(ModelsDir);
+    WizardForm.StatusLabel.Caption :=
+      'Загрузка AI-моделей. Файлы сохраняются локально и повторно не скачиваются...';
     if not Exec(
-      SevenZipPath,
-      'x -y -o"' + ExpandConstant('{app}\resources\backend\_internal\models') + '" "' + ModelsArchivePath + '"',
-      '',
+      BackendExe,
+      '--install-ai-models --models-root "' + ModelsDir +
+        '" --cache-dir "' + ModelCacheDir + '" --workers 4',
+      ExpandConstant('{app}\resources\backend'),
       SW_HIDE,
       ewWaitUntilTerminated,
       ResultCode
     ) then
-      RaiseException('Could not start AI model extraction.');
+      RaiseException('Не удалось запустить загрузку AI-моделей.');
     if ResultCode <> 0 then
-      RaiseException('AI model extraction failed. Exit code: ' + IntToStr(ResultCode));
+      RaiseException(
+        'Не удалось загрузить AI-модели. Проверьте подключение к интернету и повторите установку. Код: ' +
+        IntToStr(ResultCode)
+      );
   end;
 end;

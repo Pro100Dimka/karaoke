@@ -2,7 +2,7 @@
     [ValidateSet("full","fast","installer","setup","clean")]
     [string]$Mode = "full",
 
-    [ValidateSet("","backend","asio","frontend","package-models")]
+    [ValidateSet("","backend","asio","frontend","models")]
     [string]$Worker = ""
 )
 
@@ -66,7 +66,6 @@ $AsioSdk = Join-Path $Downloads "engines\asio-sdk"
 
 $Models = Join-Path $Downloads "models"
 $MsstEngine = Join-Path $Downloads "engines\msst"
-$SevenZip = Join-Path $Downloads "tools\7zip\7zr.exe"
 
 $Vs = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools"
 $VcVars = Join-Path $Vs "VC\Auxiliary\Build\vcvars64.bat"
@@ -91,7 +90,6 @@ $LegacyIsoStage = Join-Path $Build "iso-root"
 $IsoTemp = Join-Path $Build $IsoName
 $PackagesDir = Join-Path $Build "packages"
 $RuntimeArchive = Join-Path $PackagesDir "app-runtime.zip"
-$ModelsArchive = Join-Path $PackagesDir "models.7z"
 
 $SmokeScript = Join-Path $Root "scripts\smoke-packaged-backend.ps1"
 $ChecksumScript = Join-Path $Root "scripts\generate-checksums.ps1"
@@ -115,7 +113,7 @@ $FinalizeSchemaVersion  = "finalize-v1"
 $ElectronSchemaVersion  = "electron-v2-nosign-nosmoke"
 $RuntimeSchemaVersion   = "runtime-zip-v1"
 $InstallerSchemaVersion = "installer-bootstrap-v1"
-$IsoSchemaVersion       = "iso-compressed-models-v5"
+$IsoSchemaVersion       = "iso-download-models-v6"
 $IsoViewSchemaVersion   = "iso-view-hardlinks-v1"
 $ElectronSignSchemaVersion  = "electron-sign-v1"
 $ElectronSmokeSchemaVersion = "electron-smoke-v1"
@@ -585,7 +583,6 @@ function Get-ModelsInputFingerprint {
 function Get-ModelsFingerprint {
     return Get-CombinedFingerprint @(
         (Get-ModelsInputFingerprint),
-        (Get-SmallFileFingerprint @($SevenZip)),
         $ModelsSchemaVersion
     )
 }
@@ -700,13 +697,11 @@ function Get-InstallerFingerprint {
 
 function Get-IsoFingerprint(
     [string]$InstallerFingerprint,
-    [string]$RuntimeFingerprint,
-    [string]$ModelsFingerprint
+    [string]$RuntimeFingerprint
 ) {
     return Get-CombinedFingerprint @(
         $InstallerFingerprint,
         $RuntimeFingerprint,
-        $ModelsFingerprint,
         $AppVersion,
         (Get-IsoEngineFingerprint),
         $IsoViewSchemaVersion,
@@ -1646,6 +1641,7 @@ function Build-Backend {
             "--collect-submodules","ml_collections",
             "--collect-submodules","beartype",
             "--collect-submodules","rotary_embedding_torch",
+            "--collect-data","torchfcpe",
             "--exclude-module","tkinter",
             "--exclude-module","_tkinter",
             "--exclude-module","idlelib",
@@ -1771,61 +1767,13 @@ function Verify-BackendBase {
     Require-File (Join-Path $BackendDist "KaraokeAudioMonitor.exe") "KaraokeAudioMonitor.exe"
     Require-File (Join-Path $BackendDist "KaraokeAsioBridge.exe") "KaraokeAsioBridge.exe"
     Require-Directory (Join-Path $BackendDist "_internal") "PyInstaller internal directory"
+    Require-File `
+        (Join-Path $BackendDist "_internal\torchfcpe\assets\fcpe_c_v001.pt") `
+        "Bundled TorchFCPE checkpoint"
 }
 
 function Verify-BackendDist {
     Verify-BackendBase
-}
-
-function Package-Models {
-    Write-Host ""
-    Write-Host "[4/7] Verifying external AI resources..."
-    Write-Host ""
-
-    Require-Directory $Models "Offline AI models directory"
-    Require-Directory $MsstEngine "MSST inference engine"
-    Require-File (Join-Path $MsstEngine "inference.py") "MSST inference.py"
-    Require-File $SevenZip "7-Zip standalone compressor"
-
-    $sourceSignature = Get-TreeSignature $Models
-    if ($sourceSignature.Count -eq 0) {
-        throw "Offline AI model directory is empty."
-    }
-
-    $latestInputWrite = @(
-        Get-ChildItem -LiteralPath $Models -Recurse -File -Force
-        Get-Item -LiteralPath $SevenZip
-    ) | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
-
-    if ((Test-Path -LiteralPath $ModelsArchive -PathType Leaf) -and
-        (Get-Item -LiteralPath $ModelsArchive).LastWriteTimeUtc -ge $latestInputWrite.LastWriteTimeUtc) {
-        Write-Host "  Compressed AI models are current [skip]"
-        return
-    }
-
-    New-Item -ItemType Directory -Path $PackagesDir -Force | Out-Null
-    $temporaryArchive = "$ModelsArchive.tmp"
-    Remove-Item -LiteralPath $temporaryArchive -Force -ErrorAction SilentlyContinue
-
-    Write-Host ("  Compressing {0} model files with cached LZMA2..." -f $sourceSignature.Count)
-    Push-Location $Models
-    try {
-        & $SevenZip a -t7z $temporaryArchive ".\*" -m0=lzma2 -mx=5 -ms=on -mmt=on -y
-        if ($LASTEXITCODE -ne 0) { throw "7-Zip model compression failed." }
-    }
-    finally {
-        Pop-Location
-    }
-    Move-Item -LiteralPath $temporaryArchive -Destination $ModelsArchive -Force
-    Require-File $ModelsArchive "Compressed AI models"
-
-    $rawBytes = (Get-ChildItem -LiteralPath $Models -Recurse -File | Measure-Object Length -Sum).Sum
-    $archiveBytes = (Get-Item -LiteralPath $ModelsArchive).Length
-    Write-Host ("  Models: {0:N2} GB -> {1:N2} GB ({2:P1})" -f ($rawBytes / 1GB),($archiveBytes / 1GB),($archiveBytes / $rawBytes))
-    Write-Host "  Raw models stay only in downloads\models."
-    Write-Host "  MSST stays only in downloads\engines\msst."
-    Write-Host "  The archive is rebuilt only when models or compressor change."
-    Write-Host ""
 }
 
 function Build-Frontend {
@@ -2132,7 +2080,7 @@ function Ensure-RuntimeSource(
 
 function Build-Installer {
     Write-Host ""
-    Write-Host "[6/7] Building complete offline installer..."
+    Write-Host "[6/7] Building compact installer..."
 
     $inno = Find-Inno
     if (-not $inno) { throw "Inno Setup compiler was not found. Install Inno Setup 6." }
@@ -2148,8 +2096,9 @@ function Build-Installer {
     Write-Host "  $runDir"
     Write-Host ""
 
-    Write-Host "Bootstrap-only installer: application runtime and lossless model archive stay external."
-    Write-Host "Inno does not recompress Electron/backend/Torch/CUDA or AI models."
+    Write-Host "Bootstrap-only installer: application runtime stays external."
+    Write-Host "AI models are downloaded once from pinned public repositories during installation."
+    Write-Host "Inno does not recompress Electron/backend/Torch/CUDA."
     Write-Host ""
 
     & $inno `
@@ -2296,8 +2245,6 @@ function Build-IsoView {
     Require-File $InstallerExe "Installer executable"
     Require-File $ChecksumFile "SHA-256 checksum file"
     Require-File $RuntimeArchive "Application runtime archive"
-    Require-File $ModelsArchive "Compressed AI models"
-    Require-File $SevenZip "7-Zip standalone extractor"
     Require-Directory $MsstEngine "MSST inference engine"
 
     Write-Host ""
@@ -2322,16 +2269,6 @@ function Build-IsoView {
         $RuntimeArchive `
         (Join-Path $IsoView "app-runtime.zip") `
         "Application runtime archive"
-
-    New-IsoHardLink `
-        $ModelsArchive `
-        (Join-Path $IsoView "models.7z") `
-        "Compressed AI models"
-
-    New-IsoHardLink `
-        $SevenZip `
-        (Join-Path $IsoView "7zr.exe") `
-        "7-Zip extractor"
 
     Add-TreeToIsoView `
         $MsstEngine `
@@ -2393,7 +2330,7 @@ function Create-DistributionIso {
     Write-Host "  $IsoView"
     Write-Host ("  Payload: {0} files, {1:N2} GB" -f $viewStats.Files,($viewStats.Bytes / 1GB))
     Write-Host "  Runtime: hardlink -> build\\packages\\app-runtime.zip"
-    Write-Host "  Models:  hardlink -> build\\packages\\models.7z"
+    Write-Host "  Models:  downloaded once from official public repositories during installation"
     Write-Host "  MSST:    hardlinks -> downloads\\engines\\msst"
     Write-Host ""
 
@@ -2643,14 +2580,14 @@ function Parallel-FullBuild {
     $script:ModelsChanged = Test-StepNeeded `
         "models" `
         $script:ModelsFingerprint `
-        @($ModelsArchive,(Join-Path $MsstEngine "inference.py")) `
+        @((Join-Path $MsstEngine "inference.py")) `
         -Force:$force
 
     $workers = @()
     if ($script:BackendChanged) { $workers += "backend" }
     if ($script:AsioChanged) { $workers += "asio" }
     if ($script:FrontendChanged) { $workers += "frontend" }
-    if ($script:ModelsChanged) { $workers += "package-models" }
+    if ($script:ModelsChanged) { $workers += "models" }
 
     if ($workers.Count -eq 0) {
         Write-Host ""
@@ -2706,9 +2643,8 @@ try {
                 "frontend" {
                     Build-Frontend
                 }
-                "package-models" {
+                "models" {
                     Check-Models
-                    Package-Models
                 }
             }
         }
@@ -2735,7 +2671,7 @@ try {
         exit $workerCode
     }
 
-    Write-Header "A&D VOICE - COMPLETE OFFLINE INSTALLER"
+    Write-Header "A&D VOICE - COMPACT INSTALLER"
 
     Write-Host "Build mode:"
     Write-Host "  $Mode"
@@ -2852,7 +2788,7 @@ try {
         "models" `
         $script:ModelsFingerprint `
         @($legacyModelsFp) `
-        @($ModelsArchive,(Join-Path $MsstEngine "inference.py")))
+        @((Join-Path $MsstEngine "inference.py")))
 
     $legacyFinalizeFp = Get-LegacyV23FinalizeFingerprint `
         $legacyBackendFp `
@@ -2916,8 +2852,7 @@ try {
 
     $isoFp = Get-IsoFingerprint `
         $installerFp `
-        $runtimeFp `
-        $script:ModelsFingerprint
+        $runtimeFp
 
     [void](Migrate-StateIfCompatible `
         "iso" `
@@ -2939,12 +2874,11 @@ try {
         $modelsNeeded = Test-StepNeeded `
             "models" `
             $script:ModelsFingerprint `
-            @($ModelsArchive,(Join-Path $MsstEngine "inference.py")) `
+            @((Join-Path $MsstEngine "inference.py")) `
             -Force:($Mode -eq "clean")
 
         if ($modelsNeeded) {
             Check-Models
-            Package-Models
             Set-State "models" $script:ModelsFingerprint
         }
         else {
@@ -2975,8 +2909,7 @@ try {
     $runtimeFp = Get-RuntimeFingerprint $electronFp $electronSignFp
             $isoFp = Get-IsoFingerprint `
                 $installerFp `
-                $runtimeFp `
-                $script:ModelsFingerprint
+                $runtimeFp
         }
         else {
             Write-Host "  backend signing / ASIO finalize: unchanged [skip]"
@@ -3071,8 +3004,7 @@ try {
 
     $isoFp = Get-IsoFingerprint `
         $installerFp `
-        $runtimeFp `
-        $script:ModelsFingerprint
+        $runtimeFp
 
     $isoNeeded = Test-StepNeeded `
         "iso" `
@@ -3097,7 +3029,7 @@ try {
 
     Write-Header "BUILD COMPLETED SUCCESSFULLY"
 
-    Write-Host "Single-file offline distribution:"
+    Write-Host "Single-file compact distribution:"
     Write-Host "  $IsoFile"
     Write-Host ""
     Write-Host "The ISO is built from a zero-copy hardlink view; models/MSST stay only in downloads."

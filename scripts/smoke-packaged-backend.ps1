@@ -15,6 +15,17 @@ $env:SONGAPP_LOG_DIR = Join-Path $smokeData "logs"
 
 $stdoutPath = Join-Path $smokeData "stdout.log"
 $stderrPath = Join-Path $smokeData "stderr.log"
+$fcpeOut = Join-Path $smokeData "fcpe-stdout.log"
+$fcpeErr = Join-Path $smokeData "fcpe-stderr.log"
+$fcpe = Start-Process -FilePath $resolvedExecutable -ArgumentList "--verify-ai-runtime" `
+    -WindowStyle Hidden -Wait -PassThru `
+    -RedirectStandardOutput $fcpeOut -RedirectStandardError $fcpeErr
+if ($fcpe.ExitCode -ne 0) {
+    $details = (Get-Content -LiteralPath $fcpeErr -Raw -ErrorAction SilentlyContinue)
+    throw "Packaged TorchFCPE runtime check failed (exit code $($fcpe.ExitCode)): $details"
+}
+Write-Host (Get-Content -LiteralPath $fcpeOut -Raw)
+
 $process = Start-Process -FilePath $resolvedExecutable -WindowStyle Hidden -PassThru `
     -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
 

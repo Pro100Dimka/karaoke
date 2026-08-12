@@ -12,6 +12,7 @@ class ModelSpec:
     key: str
     name: str
     repo_id: str
+    revision: str
     relative_path: str
     env_var: str
     kind: ModelKind = "snapshot"
@@ -29,6 +30,7 @@ MODELS: tuple[ModelSpec, ...] = (
         key="asr",
         name="Qwen3 ASR",
         repo_id="Qwen/Qwen3-ASR-1.7B",
+        revision="7278e1e70fe206f11671096ffdd38061171dd6e5",
         relative_path="qwen/Qwen3-ASR-1.7B",
         env_var="KARAOKE_AI_ASR_MODEL",
     ),
@@ -36,6 +38,7 @@ MODELS: tuple[ModelSpec, ...] = (
         key="aligner",
         name="Qwen3 Forced Aligner",
         repo_id="Qwen/Qwen3-ForcedAligner-0.6B",
+        revision="c7cbfc2048c462b0d63a45797104fc9db3ad62b7",
         relative_path="qwen/Qwen3-ForcedAligner-0.6B",
         env_var="KARAOKE_AI_ALIGNER_MODEL",
     ),
@@ -43,6 +46,7 @@ MODELS: tuple[ModelSpec, ...] = (
         key="ctc_ru",
         name="Russian CTC aligner",
         repo_id="jonatasgrosman/wav2vec2-large-xlsr-53-russian",
+        revision="2329100508896c6d9b157019803ab5601e6f3406",
         relative_path="ctc/wav2vec2-large-xlsr-53-russian",
         env_var="KARAOKE_AI_CTC_RU_MODEL",
         # Forced alignment consumes acoustic logits directly. Decoder language
@@ -53,6 +57,7 @@ MODELS: tuple[ModelSpec, ...] = (
         key="ctc_uk",
         name="Ukrainian CTC aligner",
         repo_id="Yehor/wav2vec2-xls-r-300m-uk-with-small-lm",
+        revision="e3ced4def0d70be3aab0f2db598a59961fe9ab3b",
         relative_path="ctc/wav2vec2-xls-r-300m-uk",
         env_var="KARAOKE_AI_CTC_UK_MODEL",
         ignore_patterns=("language_model/**", "flax_model.msgpack"),
@@ -61,6 +66,7 @@ MODELS: tuple[ModelSpec, ...] = (
         key="roformer",
         name="Mel-Band RoFormer",
         repo_id="KimberleyJSN/melbandroformer",
+        revision="ac9b0614ab3cd7f77219e18ba494dfd93956c348",
         relative_path="roformer",
         env_var="MSST_CHECKPOINT",
         kind="file",
