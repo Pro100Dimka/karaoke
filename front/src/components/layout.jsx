@@ -72,6 +72,7 @@ export default function AppLayout() {
   const [routeBlackout, setRouteBlackout] = useState(false);
 
   const isKaraoke = location.pathname === ROUTES.karaoke;
+  const isEditor = location.pathname.startsWith("/editor/");
 
   useEffect(() => {
     const handleRouteBlackout = (event) => {
@@ -109,7 +110,7 @@ export default function AppLayout() {
 
   return (
     <div
-      className={["app-shell", isKaraoke && "karaoke-app-shell"]
+      className={["app-shell", isKaraoke && "karaoke-app-shell", isEditor && "melody-editor-app-shell"]
         .filter(Boolean)
         .join(" ")}
     >
@@ -121,7 +122,7 @@ export default function AppLayout() {
             onOpenSongSettings={openSongSettings}
           />
         </main>
-        {!isKaraoke && <AppFloatingControls onOpenSettings={openSettings} />}
+        {!isKaraoke && !isEditor && <AppFloatingControls onOpenSettings={openSettings} />}
         {songSettingsId && (
           <SongSettings songId={songSettingsId} onClose={closeSongSettings} />
         )}

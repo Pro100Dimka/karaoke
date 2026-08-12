@@ -17,7 +17,7 @@ export default function ProcessingModal({
   const progress = getProcessingProgress(status, song);
   const active = isProcessingActive(currentStatus);
   const isDone = currentStatus === "done";
-  const visibleProgress = active ? Math.max(1, progress) : progress;
+  const visibleProgress = isDone ? 100 : active ? Math.max(1, progress) : progress;
   const actions = [
     active && [OctagonX, "Отменить", "danger", onCancel],
     ...(isDone

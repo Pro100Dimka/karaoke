@@ -175,7 +175,7 @@ export default function Modal({
           {ariaLabel}
         </span>
         {titleProps && <ModalTitle {...titleProps} />}
-        {children}
+        <div className="app-modal-body">{children}</div>
       </Card>
     </div>
   );

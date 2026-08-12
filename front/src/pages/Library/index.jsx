@@ -144,8 +144,29 @@ export default function Library({ onOpenSongSettings }) {
       isProcessingActive(processingStatus?.status)
     )
       return;
-    refreshSongs();
-    setTrackedSongId(null);
+
+    // Keep the terminal status in the modal instead of dropping polling data
+    // immediately and falling back to the stale Song object that still says
+    // "processing". This was the reason the modal looked unprocessed after 100%.
+    setProcessingSong((current) =>
+      current?.id === trackedSongId
+        ? {
+            ...current,
+            status: processingStatus.status,
+            progress_step: processingStatus.progress_step,
+            progress_percent: processingStatus.progress_percent,
+            error_message: processingStatus.error_message
+          }
+        : current
+    );
+
+    let cancelled = false;
+    Promise.resolve(refreshSongs()).finally(() => {
+      if (!cancelled) setTrackedSongId(null);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [processingStatus, refreshSongs, trackedSongId]);
 
   const {

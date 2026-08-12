@@ -1,6 +1,7 @@
 """Управление песнями + запуск AI-обработки."""
 
 import tempfile
+from datetime import UTC, datetime
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
@@ -13,7 +14,7 @@ import config
 import models
 import schemas
 from app.api.dependencies import SongDependency
-from app.services import ai_bridge, pipeline_service, song_package_service, song_service
+from app.services import ai_bridge, pipeline_service, song_editor_service, song_package_service, song_service
 from app.utils.files import read_text_tail
 from app.utils.json_files import read_json, write_json
 from app.utils.uploads import save_upload_limited
@@ -261,7 +262,7 @@ def get_processing_log(song: SongDependency):
 
 @router.get("/{song_id}/audio/{track}")
 def get_audio_track(track: str, song: SongDependency):
-    if track not in {"instrumental", "vocals", "song"}:
+    if track not in {"instrumental", "vocals", "song", "diagnostic"}:
         raise HTTPException(status_code=404, detail="Unknown audio track")
     output_dir = song_service.resolve_output_dir(song)
     search_dirs = [output_dir]
@@ -284,6 +285,46 @@ def get_audio_track(track: str, song: SongDependency):
                     content_disposition_type="inline",
                 )
     raise HTTPException(status_code=404, detail="Audio track is not available")
+
+
+@router.get("/{song_id}/editor", response_model=schemas.SongEditorOut)
+def get_song_editor(song: SongDependency):
+    if song.status != models.SongStatus.DONE:
+        raise HTTPException(status_code=409, detail="Песня ещё не обработана")
+    try:
+        song_map, backup_exists = song_editor_service.load_editor(song_service.resolve_output_dir(song))
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return schemas.SongEditorOut(song_map=song_map, ai_backup_exists=backup_exists)
+
+
+@router.put("/{song_id}/editor", response_model=schemas.SongEditorOut)
+def save_song_editor(payload: schemas.SongEditorUpdate, song: SongDependency, db: Session = Depends(get_db)):
+    if song.status != models.SongStatus.DONE:
+        raise HTTPException(status_code=409, detail="Песня ещё не обработана")
+    try:
+        song_map = song_editor_service.save_editor(song_service.resolve_output_dir(song), payload.notes)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    song.updated_at = datetime.now(UTC)
+    db.add(song)
+    db.commit()
+    db.refresh(song)
+    return schemas.SongEditorOut(song_map=song_map, ai_backup_exists=True)
+
+
+@router.post("/{song_id}/editor/reset", response_model=schemas.SongEditorOut)
+def reset_song_editor(song: SongDependency, db: Session = Depends(get_db)):
+    if song.status != models.SongStatus.DONE:
+        raise HTTPException(status_code=409, detail="Песня ещё не обработана")
+    try:
+        song_map = song_editor_service.reset_editor(song_service.resolve_output_dir(song))
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    song.updated_at = datetime.now(UTC)
+    db.add(song)
+    db.commit()
+    return schemas.SongEditorOut(song_map=song_map, ai_backup_exists=True)
 
 
 @router.get("/{song_id}/result", response_model=schemas.SongResultOut)

@@ -1,5 +1,6 @@
-import { Music2, Save } from "lucide-react";
+import { Music2, Piano, Save } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { api } from "../../../../api/client";
 import Button from "../../../../components/fields/button";
@@ -60,6 +61,7 @@ export default function SongSettings({ songId, onClose }) {
 
   const song = getSelectedSong(songs, songId);
   const [form, setForm] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     setForm(song ? { ...song } : null);
@@ -139,13 +141,18 @@ export default function SongSettings({ songId, onClose }) {
           Подготавливаем настройки…
         </p>
       ) : (
-        <ConfigForm
-          fields={SONG_FIELDS}
-          context={{ form, onChange: updateField }}
-          renderers={SONG_RENDERERS}
-          columns={12}
-          sx={{ padding: "1rem" }}
-        />
+        <Stack gap={2} sx={{ padding: "1rem" }}>
+          <ConfigForm fields={SONG_FIELDS} context={{ form, onChange: updateField }} renderers={SONG_RENDERERS} columns={12} />
+          {song.status === "done" && (
+            <Stack gap={0.6}>
+              <strong>Мелодия и текст</strong>
+              <span className="text-muted">Откройте piano-roll редактор, чтобы на слух и визуально исправить ноты, длительность и привязку текста.</span>
+              <Button icon={Piano} variant="ghost" onClick={() => { onClose?.(); navigate(`/editor/${song.id}`); }}>
+                Открыть редактор
+              </Button>
+            </Stack>
+          )}
+        </Stack>
       )}
     </Modal>
   );

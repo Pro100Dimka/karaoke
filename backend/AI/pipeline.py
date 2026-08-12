@@ -1128,6 +1128,9 @@ class KaraokePipeline:
                 ),
             )
             cache.commit("song-map", song_map_key, [song_map])
+            # A fresh AI SongMap becomes the new editable baseline. Never keep
+            # a manual-editor backup from an older processing run.
+            self._remove_stale(output / "songMap.ai.json")
             reports.append(StageReport("song-map", 0.0, False, "builder"))
 
         quality_path = output / "quality.json"

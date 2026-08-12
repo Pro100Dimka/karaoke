@@ -32,6 +32,14 @@ export const songsApi = {
   getStatus: (id) => request(`/songs/${encodePathSegment(id)}/status`),
   getLog: (id) => request(`/songs/${encodePathSegment(id)}/log`),
   getResult: (id) => request(`/songs/${encodePathSegment(id)}/result`),
+  getSongEditor: (id) => request(`/songs/${encodePathSegment(id)}/editor`),
+  saveSongEditor: (id, notes) =>
+    request(`/songs/${encodePathSegment(id)}/editor`, {
+      method: "PUT",
+      body: JSON.stringify({ notes })
+    }),
+  resetSongEditor: (id) =>
+    request(`/songs/${encodePathSegment(id)}/editor/reset`, { method: "POST" }),
   updateLyrics: (id, lyrics) =>
     request(`/songs/${encodePathSegment(id)}/lyrics`, {
       method: "PUT",
