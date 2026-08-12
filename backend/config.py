@@ -79,9 +79,7 @@ def _saved_path(name: str, default: Path) -> Path:
 AI_DIR = _env_path("SONGAPP_AI_DIR", RUNTIME_DIR / "AI")
 DOWNLOADS_DIR = _env_path("SONGAPP_DOWNLOADS_DIR", PROJECT_ROOT / "downloads")
 _DEFAULT_MODELS_DIR = RUNTIME_DIR / "models" if IS_FROZEN else DOWNLOADS_DIR / "models"
-MODELS_DIR = _env_path(
-    "SONGAPP_MODELS_DIR", _saved_path("ai_folder", _DEFAULT_MODELS_DIR)
-)
+MODELS_DIR = _env_path("SONGAPP_MODELS_DIR", _saved_path("ai_folder", _DEFAULT_MODELS_DIR))
 EXTERNAL_ENGINES_DIR = _env_path(
     "SONGAPP_ENGINES_DIR", RUNTIME_DIR / "engines" if IS_FROZEN else DOWNLOADS_DIR / "engines"
 )

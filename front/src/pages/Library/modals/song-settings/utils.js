@@ -49,26 +49,3 @@ export function createSongPayload(form, song) {
     video_url: normalizeText(form.video_url)
   };
 }
-
-export const parseLyricsText = (text = "") =>
-  String(text ?? "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-export const lyricsToText = (lines = []) =>
-  (Array.isArray(lines) ? lines : [])
-    .filter((line) => line && typeof line === "object")
-    .map(({ text }) => text ?? "")
-    .join("\n");
-
-export const buildLyricsData = (lines, textLines) => {
-  const sourceLines = Array.isArray(lines) ? lines : [];
-  const replacementLines = Array.isArray(textLines) ? textLines : [];
-  return sourceLines
-    .filter((line) => line && typeof line === "object")
-    .map((line, index) => ({
-      ...line,
-      text: replacementLines[index] ?? line.text
-    }));
-};

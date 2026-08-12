@@ -1,12 +1,17 @@
 import { api } from "../../../../api/client";
 import Table from "../../../../components/table";
+import { POLLING_INTERVALS } from "../../../../config/runtime";
 import { usePolling } from "../../../../hooks/usePolling";
 import { Chip, Stack, Typography } from "../../../../theme/ui";
 import { getErrorMessage } from "../../../../utils/errors";
 import { HISTORY_ACTIONS, HISTORY_COLUMNS, RECORDING_STATUSES } from "./config";
 
 export default function History() {
-  const { data: history, error } = usePolling(api.getHistory, 5000, []);
+  const { data: history, error } = usePolling(
+    api.getHistory,
+    POLLING_INTERVALS.history,
+    []
+  );
 
   return (
     <Stack gap={1} className="settings-table-screen">
@@ -23,7 +28,8 @@ export default function History() {
           columns={HISTORY_COLUMNS}
           data={history ?? []}
           getRowKey={(item, index) =>
-            item.id ?? `${item.song_title}-${item.kind}-${item.timestamp ?? index}`
+            item.id ??
+            `${item.song_title}-${item.kind}-${item.timestamp ?? index}`
           }
           renderRow={getHistoryRow}
           emptyText="История пуста"
@@ -36,7 +42,9 @@ export default function History() {
 const formatDuration = (value) => {
   if (value == null) return "—";
   const seconds = Number(value);
-  return Number.isFinite(seconds) && seconds >= 0 ? `${Math.round(seconds)} с` : "—";
+  return Number.isFinite(seconds) && seconds >= 0
+    ? `${Math.round(seconds)} с`
+    : "—";
 };
 
 const formatTimestamp = (value) => {

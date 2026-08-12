@@ -43,7 +43,9 @@ def _line_max_duration(tokens: list[str]) -> float:
     return max(3.0, 1.35 * len(tokens) + 0.045 * letters)
 
 
-def _rms_activity(audio: np.ndarray, sample_rate: int, start: float, end: float) -> dict[str, float]:
+def _rms_activity(
+    audio: np.ndarray, sample_rate: int, start: float, end: float
+) -> dict[str, float]:
     left = max(0, min(len(audio), int(max(0.0, start) * sample_rate)))
     right = max(left, min(len(audio), int(max(start, end) * sample_rate)))
     chunk = np.asarray(audio[left:right], dtype=np.float32)
@@ -170,7 +172,9 @@ def build_alignment_debug(
         minimum = _line_min_duration(tokens)
         maximum = _line_max_duration(tokens)
         activity = _rms_activity(source_audio, sample_rate, start, end)
-        before_activity = _rms_activity(source_audio, sample_rate, max(previous_end, start - 2.5), start)
+        before_activity = _rms_activity(
+            source_audio, sample_rate, max(previous_end, start - 2.5), start
+        )
 
         item.update(
             {
@@ -228,14 +232,16 @@ def build_alignment_debug(
             for left, right in zip(line_words, line_words[1:], strict=False)
         ]
         if internal_gaps and max(internal_gaps) > 1.6:
-            item["reasons"].append(
-                f"Huge gap inside one written line: {max(internal_gaps):.2f}s"
-            )
+            item["reasons"].append(f"Huge gap inside one written line: {max(internal_gaps):.2f}s")
             item["severity"] += 25
 
         # Strong vocals immediately before a late line are a useful symptom of
         # a phrase that the aligner skipped and then resumed too far to the right.
-        if gap_before > 0.8 and before_activity["rms"] > activity["rms"] * 0.75 and before_activity["peak"] > 1e-4:
+        if (
+            gap_before > 0.8
+            and before_activity["rms"] > activity["rms"] * 0.75
+            and before_activity["peak"] > 1e-4
+        ):
             item["reasons"].append(
                 "There is substantial vocal energy in the gap before this line; the line may have been aligned too late"
             )
@@ -255,9 +261,7 @@ def build_alignment_debug(
 
         if report["first_suspect"] is None and item["severity"] >= 45:
             report["first_suspect"] = {
-                key: value
-                for key, value in item.items()
-                if key not in {"words"}
+                key: value for key, value in item.items() if key not in {"words"}
             }
 
     suspicious = sorted(
@@ -265,8 +269,7 @@ def build_alignment_debug(
         key=lambda item: (-int(item.get("severity", 0)), int(item.get("line_index", 0))),
     )
     report["top_suspects"] = [
-        {key: value for key, value in item.items() if key != "words"}
-        for item in suspicious[:12]
+        {key: value for key, value in item.items() if key != "words"} for item in suspicious[:12]
     ]
     return report
 

@@ -7,7 +7,6 @@ from pathlib import Path
 import numpy as np
 
 from .audio import load_mono
-
 from .models import PitchFrame
 
 # Harmonic tracking is needed on dense vocal stems, but transitions must become
@@ -15,7 +14,6 @@ from .models import PitchFrame
 # folding unsupported octave/harmonic detours back onto the lead trajectory.
 PITCH_STABILIZER_VERSION = "fcpe-yin-consensus-v8-adaptive-analysis-audit"
 _HARMONIC_SHIFTS = (0.0, -12.0, 12.0, -19.01955, 19.01955, -24.0, 24.0)
-
 
 
 def _normalized_periodicity(signal: np.ndarray, lag: int) -> float:
@@ -64,7 +62,10 @@ def refine_pitch_confidence(
     raw_confidences = [float(f.confidence) for f in frames if f.voiced and f.frequency > 0]
     # Detect the exact problematic API case: essentially every voiced frame was
     # assigned confidence=1 because the model exposed no confidence tensor.
-    fake_unity = bool(raw_confidences) and sum(c >= 0.999 for c in raw_confidences) / len(raw_confidences) >= 0.97
+    fake_unity = (
+        bool(raw_confidences)
+        and sum(c >= 0.999 for c in raw_confidences) / len(raw_confidences) >= 0.97
+    )
 
     for frame in frames:
         if not frame.voiced or frame.frequency <= 0:
@@ -125,51 +126,64 @@ def fuse_pitch_with_yin(
         return []
     try:
         import librosa
+
         y, sr = load_mono(audio, sample_rate)
     except Exception:
         return list(frames)
     if y.size < 2048:
         return list(frames)
     y = np.asarray(y, dtype=np.float32)
-    gaps = [b.time-a.time for a,b in zip(frames, frames[1:], strict=False) if 0 < b.time-a.time < .05]
-    step = statistics.median(gaps) if gaps else .01
+    gaps = [
+        b.time - a.time
+        for a, b in zip(frames, frames[1:], strict=False)
+        if 0 < b.time - a.time < 0.05
+    ]
+    step = statistics.median(gaps) if gaps else 0.01
     hop = max(64, int(round(sr * step)))
     try:
         yin = librosa.yin(
-            y, fmin=float(fmin_hz), fmax=float(fmax_hz), sr=sr, frame_length=2048,
-            hop_length=hop, trough_threshold=0.10, center=True,
+            y,
+            fmin=float(fmin_hz),
+            fmax=float(fmax_hz),
+            sr=sr,
+            frame_length=2048,
+            hop_length=hop,
+            trough_threshold=0.10,
+            center=True,
         )
     except Exception:
         return list(frames)
 
     half_window = max(256, int(round(sr * 0.025)))
+
     def support(index: int, hz: float) -> float:
         if not np.isfinite(hz) or hz < float(fmin_hz) or hz > float(fmax_hz):
             return 0.0
         center = int(round(frames[index].time * sr))
-        start = max(0, center-half_window); end = min(len(y), center+half_window)
+        start = max(0, center - half_window)
+        end = min(len(y), center + half_window)
         window = y[start:end]
         lag = int(round(sr / hz))
         return _normalized_periodicity(window, lag)
 
-    rows: list[list[tuple[float,float,float]]] = []
+    rows: list[list[tuple[float, float, float]]] = []
     energies = [max(0.0, float(f.energy)) for f in frames]
     attacks: list[float] = []
     for i, energy in enumerate(energies):
-        history = energies[max(0, i-8):i]
+        history = energies[max(0, i - 8) : i]
         baseline = statistics.median(history) if history else energy
         ratio = (energy + 1e-7) / (baseline + 1e-7)
         attacks.append(max(0.0, min(1.0, (ratio - 1.15) / 0.95)))
 
     for i, frame in enumerate(frames):
-        yi = min(len(yin)-1, max(0, int(round(frame.time * sr / hop))))
+        yi = min(len(yin) - 1, max(0, int(round(frame.time * sr / hop))))
         sources = []
         if frame.voiced and frame.frequency > 0:
             sources.append((float(frame.frequency), 0.06))
         yh = float(yin[yi]) if 0 <= yi < len(yin) and np.isfinite(yin[yi]) else 0.0
         if yh > 0:
             sources.append((yh, 0.0))
-        candidates: list[tuple[float,float,float]] = []
+        candidates: list[tuple[float, float, float]] = []
         for hz, source_bonus in sources:
             base_support = support(i, hz)
             if base_support >= 0.17:
@@ -183,15 +197,13 @@ def fuse_pitch_with_yin(
                     candidates.append((_midi(lower), lower_support - 0.01, lower))
         # Deduplicate nearly identical FCPE/YIN candidates.
         candidates.sort(key=lambda item: item[1], reverse=True)
-        unique: list[tuple[float,float,float]] = []
+        unique: list[tuple[float, float, float]] = []
         for item in candidates:
-            if not any(abs(item[0]-other[0]) < 0.30 for other in unique):
+            if not any(abs(item[0] - other[0]) < 0.30 for other in unique):
                 unique.append(item)
         rows.append(unique[:4])
 
-    result: list[PitchFrame] = [
-        PitchFrame(f.time, 0.0, 0.0, False, f.energy) for f in frames
-    ]
+    result: list[PitchFrame] = [PitchFrame(f.time, 0.0, 0.0, False, f.energy) for f in frames]
     i = 0
     while i < len(frames):
         if not rows[i]:
@@ -200,7 +212,7 @@ def fuse_pitch_with_yin(
         j = i
         # Phrase-local decode. Hard cap prevents register history from spanning
         # a long dense chorus even if the tracker never emits silence.
-        while j < len(frames) and rows[j] and j-i < max(120, int(round(8.0/step))):
+        while j < len(frames) and rows[j] and j - i < max(120, int(round(8.0 / step))):
             j += 1
         costs: list[float] = []
         back: list[list[int]] = []
@@ -208,29 +220,34 @@ def fuse_pitch_with_yin(
             current = rows[k]
             current_costs: list[float] = []
             current_back: list[int] = []
-            for ci, (midi_value, obs, _hz_value) in enumerate(current):
+            for midi_value, obs, _hz_value in current:
                 emission = -3.4 * obs
                 if not costs:
-                    current_costs.append(emission); current_back.append(-1); continue
-                best = float('inf'); best_index = 0
+                    current_costs.append(emission)
+                    current_back.append(-1)
+                    continue
+                best = float("inf")
+                best_index = 0
                 for pi, previous_cost in enumerate(costs):
-                    previous_midi = rows[k-1][pi][0]
+                    previous_midi = rows[k - 1][pi][0]
                     delta = abs(midi_value - previous_midi)
                     transition = (
-                        0.045*delta + 0.30*max(0.0, delta-2.0) + 0.72*max(0.0, delta-7.0)
-                    ) * (1.0 - 0.84*attacks[k])
+                        0.045 * delta + 0.30 * max(0.0, delta - 2.0) + 0.72 * max(0.0, delta - 7.0)
+                    ) * (1.0 - 0.84 * attacks[k])
                     value = previous_cost + transition + emission
                     if value < best:
-                        best = value; best_index = pi
-                current_costs.append(best); current_back.append(best_index)
+                        best = value
+                        best_index = pi
+                current_costs.append(best)
+                current_back.append(best_index)
             costs = current_costs
             back.append(current_back)
         if costs:
             state = min(range(len(costs)), key=costs.__getitem__)
             chosen: list[int] = []
-            for k in range(j-1, i-1, -1):
+            for k in range(j - 1, i - 1, -1):
                 chosen.append(state)
-                state = back[k-i][state]
+                state = back[k - i][state]
                 if state < 0 and k > i:
                     state = 0
             chosen.reverse()
@@ -239,10 +256,15 @@ def fuse_pitch_with_yin(
                 midi_value, obs, hz_value = rows[k][state]
                 confidence = max(0.0, min(1.0, obs))
                 result[k] = PitchFrame(
-                    frames[k].time, float(hz_value), confidence, confidence >= 0.17, frames[k].energy
+                    frames[k].time,
+                    float(hz_value),
+                    confidence,
+                    confidence >= 0.17,
+                    frames[k].energy,
                 )
-        i = max(i+1, j)
+        i = max(i + 1, j)
     return result
+
 
 def _midi(hz: float) -> float:
     return 69.0 + 12.0 * math.log2(hz / 440.0)
@@ -312,9 +334,7 @@ def _stabilize_voiced_run(run: list[PitchFrame]) -> list[PitchFrame]:
     for frame in run:
         raw = _midi(frame.frequency)
         values = [
-            (raw + shift, shift)
-            for shift in _HARMONIC_SHIFTS
-            if 28.0 <= raw + shift <= 100.0
+            (raw + shift, shift) for shift in _HARMONIC_SHIFTS if 28.0 <= raw + shift <= 100.0
         ]
         candidates.append(values or [(raw, 0.0)])
 
@@ -329,14 +349,10 @@ def _stabilize_voiced_run(run: list[PitchFrame]) -> list[PitchFrame]:
         for value, shift in candidates[index]:
             choices = [
                 cost + _transition_cost(previous_value, value, attack)
-                for cost, (previous_value, _) in zip(
-                    costs, candidates[index - 1], strict=False
-                )
+                for cost, (previous_value, _) in zip(costs, candidates[index - 1], strict=False)
             ]
             parent = min(range(len(choices)), key=choices.__getitem__)
-            next_costs.append(
-                choices[parent] + _shift_cost(shift, run[index].confidence)
-            )
+            next_costs.append(choices[parent] + _shift_cost(shift, run[index].confidence))
             next_parents.append(parent)
         costs = next_costs
         parents.append(next_parents)

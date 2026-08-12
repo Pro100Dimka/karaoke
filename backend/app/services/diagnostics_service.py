@@ -67,8 +67,9 @@ def versions() -> dict:
     _, _, torch_version = _torch_info()
     components: dict[str, str | None] = {"torch": torch_version}
     try:
-        from AI.version import AI_BUILD_ID
         from AI.pipeline import KaraokePipeline
+        from AI.version import AI_BUILD_ID
+
         components["ai_build"] = AI_BUILD_ID
         components["ai_pipeline"] = KaraokePipeline.VERSION
     except Exception:

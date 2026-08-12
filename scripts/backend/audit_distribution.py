@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2] / "backend"
@@ -12,18 +13,24 @@ IGNORED_ROOTS = {"engines", ".venv", "venv"}
 
 
 def violations() -> list[Path]:
+    project_root = ROOT.parent
+    tracked = subprocess.run(
+        ["git", "ls-files", "--", "backend"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    ).stdout.splitlines()
     found: list[Path] = []
-    for path in ROOT.rglob("*"):
-        relative = path.relative_to(ROOT)
+    for name in tracked:
+        relative = Path(name).relative_to("backend")
         if relative.parts and relative.parts[0] in IGNORED_ROOTS:
             continue
-        if path.is_dir() and path.name in FORBIDDEN_DIRS:
+        if FORBIDDEN_DIRS.intersection(relative.parts):
             found.append(relative)
-            continue
-        if not path.is_file():
-            continue
-        if path.name in FORBIDDEN_FILES or any(
-            path.name.endswith(suffix) for suffix in FORBIDDEN_SUFFIXES
+        elif relative.name in FORBIDDEN_FILES or any(
+            relative.name.endswith(suffix) for suffix in FORBIDDEN_SUFFIXES
         ):
             found.append(relative)
     return sorted(set(found))

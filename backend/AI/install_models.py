@@ -70,7 +70,10 @@ def write_environment(downloads: Path, models_root: Path, msst: Path, env_file: 
         "KARAOKE_AI_ALLOW_FALLBACK": "false",
         "KARAOKE_AI_REQUIRE_CTC": "1",
         "MSST_ENGINE_DIR": msst,
-        "MSST_CONFIG": msst / "configs" / "KimberleyJensen" / "config_vocals_mel_band_roformer_kj.yaml",
+        "MSST_CONFIG": msst
+        / "configs"
+        / "KimberleyJensen"
+        / "config_vocals_mel_band_roformer_kj.yaml",
     }
     for model in MODELS:
         values[model.env_var] = model_path(models_root, model)

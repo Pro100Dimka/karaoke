@@ -1,6 +1,7 @@
 import { Mic } from "lucide-react";
 
 import { api } from "../../../api/client";
+import { POLLING_INTERVALS } from "../../../config/runtime";
 import { usePolling } from "../../../hooks/usePolling";
 import { Grid, Stack, Typography } from "../../../theme/ui";
 import { APP_INFO } from "../../../utils/config";
@@ -13,7 +14,7 @@ const INFO_FIELDS = [
 ];
 
 export default function About() {
-  const { data } = usePolling(api.getAbout, 10000, []);
+  const { data } = usePolling(api.getAbout, POLLING_INTERVALS.about, []);
   const about = data ?? {};
 
   return (

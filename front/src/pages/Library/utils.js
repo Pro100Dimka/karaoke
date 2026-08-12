@@ -16,11 +16,6 @@ export function formatEta(seconds) {
     : `~${remainingSeconds} сек`;
 }
 
-export function formatRecordingDuration(seconds) {
-  const value = Number(seconds);
-  return `${Number.isFinite(value) && value > 0 ? value.toFixed(1) : "0.0"} сек`;
-}
-
 export function getProcessingProgress(status, song) {
   const raw = status?.progress_percent ?? song?.progress_percent ?? 0;
   const value = Number(raw);

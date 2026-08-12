@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../../../../api/client";
 import Button from "../../../../components/fields/button";
 import Modal from "../../../../components/modal";
+import { POLLING_INTERVALS } from "../../../../config/runtime";
 import { useAppDialog } from "../../../../contexts/AppDialog";
 import useExclusiveAsyncAction from "../../../../hooks/useExclusiveAsyncAction";
 import { usePolling } from "../../../../hooks/usePolling";
@@ -56,7 +57,7 @@ export default function SongSettings({ songId, onClose }) {
     data: songs,
     error: songsError,
     refresh: refreshSongs
-  } = usePolling(api.listSongs, 5000, []);
+  } = usePolling(api.listSongs, POLLING_INTERVALS.health, []);
   const { pending: saving, run: runSave } = useExclusiveAsyncAction();
 
   const song = getSelectedSong(songs, songId);
@@ -106,17 +107,18 @@ export default function SongSettings({ songId, onClose }) {
         eyebrow: "КАРАОКЕ · РЕДАКТОР",
         title: "Настройки песни",
         description: song?.title || "Загружаем данные песни…",
-        actions: song && form ? (
-          <Button
-            icon={Save}
-            variant="primary"
-            disabled={saving}
-            onClick={save}
-            className="modal-title-action"
-          >
-            {saving ? "Сохранение…" : "Сохранить"}
-          </Button>
-        ) : null
+        actions:
+          song && form ? (
+            <Button
+              icon={Save}
+              variant="primary"
+              disabled={saving}
+              onClick={save}
+              className="modal-title-action"
+            >
+              {saving ? "Сохранение…" : "Сохранить"}
+            </Button>
+          ) : null
       }}
     >
       {songsError ? (
@@ -142,12 +144,27 @@ export default function SongSettings({ songId, onClose }) {
         </p>
       ) : (
         <Stack gap={2} sx={{ padding: "1rem" }}>
-          <ConfigForm fields={SONG_FIELDS} context={{ form, onChange: updateField }} renderers={SONG_RENDERERS} columns={12} />
+          <ConfigForm
+            fields={SONG_FIELDS}
+            context={{ form, onChange: updateField }}
+            renderers={SONG_RENDERERS}
+            columns={12}
+          />
           {song.status === "done" && (
             <Stack gap={0.6}>
               <strong>Мелодия и текст</strong>
-              <span className="text-muted">Откройте piano-roll редактор, чтобы на слух и визуально исправить ноты, длительность и привязку текста.</span>
-              <Button icon={Piano} variant="ghost" onClick={() => { onClose?.(); navigate(`/editor/${song.id}`); }}>
+              <span className="text-muted">
+                Откройте piano-roll редактор, чтобы на слух и визуально
+                исправить ноты, длительность и привязку текста.
+              </span>
+              <Button
+                icon={Piano}
+                variant="ghost"
+                onClick={() => {
+                  onClose?.();
+                  navigate(`/editor/${song.id}`);
+                }}
+              >
                 Открыть редактор
               </Button>
             </Stack>

@@ -78,9 +78,23 @@ def write_diagnostic_audio(
     try:
         sf.write(wav, stereo, sample_rate, subtype="PCM_16")
         subprocess.run(
-            ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(wav),
-             "-c:a", "libmp3lame", "-b:a", "192k", str(temporary)],
-            check=True, capture_output=True, timeout=30 * 60,
+            [
+                "ffmpeg",
+                "-y",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-i",
+                str(wav),
+                "-c:a",
+                "libmp3lame",
+                "-b:a",
+                "192k",
+                str(temporary),
+            ],
+            check=True,
+            capture_output=True,
+            timeout=30 * 60,
         )
         if not temporary.is_file() or temporary.stat().st_size <= 0:
             raise AICoreError("FFmpeg did not create diagnostic MP3")

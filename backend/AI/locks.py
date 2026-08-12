@@ -49,9 +49,7 @@ class FileLock(AbstractContextManager):
                     ctypes.POINTER(wintypes.DWORD),
                 )
                 kernel32.GetExitCodeProcess.restype = wintypes.BOOL
-                handle = kernel32.OpenProcess(
-                    process_query_limited_information, False, pid
-                )
+                handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
                 if handle:
                     exit_code = wintypes.DWORD()
                     try:
@@ -99,9 +97,7 @@ class FileLock(AbstractContextManager):
             kernel32.OpenProcess.restype = wintypes.HANDLE
             kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
             kernel32.CloseHandle.restype = wintypes.BOOL
-            handle = kernel32.OpenProcess(
-                process_query_limited_information, False, pid
-            )
+            handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
             if not handle:
                 return None
             creation = wintypes.FILETIME()

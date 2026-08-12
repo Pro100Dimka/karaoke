@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { OnlineRoomModal } from "../../components/OnlineRoomModal";
+import { POLLING_INTERVALS } from "../../config/runtime";
 import { useAppDialog } from "../../contexts/AppDialog";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import useAppSettings from "../../hooks/useAppSettings";
@@ -118,7 +119,7 @@ export default function Library({ onOpenSongSettings }) {
   const { data: processingStatus, error: processingStatusError } = usePolling(
     () =>
       trackedSongId ? api.getStatus(trackedSongId) : Promise.resolve(null),
-    trackedSongId ? 1000 : 0,
+    trackedSongId ? POLLING_INTERVALS.processing : 0,
     [trackedSongId],
     {
       shouldContinue: (status) => isProcessingActive(status?.status),

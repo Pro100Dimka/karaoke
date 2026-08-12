@@ -1,9 +1,0 @@
-[
-  {"id":"library-desktop","path":"/","state":"library","viewport":[1440,900]},
-  {"id":"library-compact","path":"/","state":"library","viewport":[1024,720]},
-  {"id":"karaoke-desktop","path":"/karaoke","state":"karaoke","viewport":[1440,900]},
-  {"id":"karaoke-compact","path":"/karaoke","state":"karaoke","viewport":[1024,720]},
-  {"id":"settings-modal","path":"/","state":"settings-modal","viewport":[1440,900]},
-  {"id":"song-settings-modal","path":"/","state":"song-settings-modal","viewport":[1440,900]},
-  {"id":"online-room-modal","path":"/","state":"online-room-modal","viewport":[1440,900]}
-]

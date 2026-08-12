@@ -25,6 +25,13 @@ ProgressCallback = Callable[[str, float, str], None]
 CancelCallback = Callable[[], bool]
 
 
+def _int_or_default(value: Any, default: int = -1) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def get_service() -> AICoreService:
     """Return the single long-lived AI service used by the backend process."""
     return get_ai_service()
@@ -179,9 +186,7 @@ def _source_line_boundaries(text: str, words: list[dict[str, Any]]) -> list[int]
                 source_lines.append(sentence)
                 continue
             clauses = [
-                clause.strip()
-                for clause in re.split(r"(?<=[,;])\s+", sentence)
-                if tokenize(clause)
+                clause.strip() for clause in re.split(r"(?<=[,;])\s+", sentence) if tokenize(clause)
             ]
             current: list[str] = []
             current_size = 0
@@ -315,8 +320,7 @@ def _snap_lines_to_regions(
         region_index = min(
             candidates,
             key=lambda index: (
-                abs(regions[index][0] - old_start)
-                + (0.85 if index == previous_region else 0.0)
+                abs(regions[index][0] - old_start) + (0.85 if index == previous_region else 0.0)
             ),
             default=previous_region,
         )
@@ -334,9 +338,7 @@ def _snap_lines_to_regions(
         region_span = region_end - region_start
         timed_words = []
         for word in words:
-            relative_start = max(
-                0.0, min(1.0, (float(word["start"]) - old_start) / old_span)
-            )
+            relative_start = max(0.0, min(1.0, (float(word["start"]) - old_start) / old_span))
             relative_end = max(
                 relative_start,
                 min(1.0, (float(word["end"]) - old_start) / old_span),
@@ -360,9 +362,7 @@ def _snap_lines_to_regions(
     return result
 
 
-def _snap_lines_to_vocals(
-    lines: list[dict[str, Any]], output_dir: Path
-) -> list[dict[str, Any]]:
+def _snap_lines_to_vocals(lines: list[dict[str, Any]], output_dir: Path) -> list[dict[str, Any]]:
     vocals = next(
         (
             path
@@ -438,9 +438,7 @@ def _repair_impossible_alignment_chunks(
             end_index += 1
         boundary_start = float(lines[index - 1]["end"]) if index > 0 else 0.0
         while end_index < len(lines):
-            word_count = sum(
-                len(line.get("words") or []) for line in lines[index:end_index]
-            )
+            word_count = sum(len(line.get("words") or []) for line in lines[index:end_index])
             available = float(lines[end_index]["start"]) - boundary_start
             if available >= max(0.18, word_count * 0.115):
                 break
@@ -452,7 +450,11 @@ def _repair_impossible_alignment_chunks(
     for first, after_last in groups:
         group = lines[first:after_last]
         start = float(lines[first - 1]["end"]) if first > 0 else 0.0
-        end = float(lines[after_last]["start"]) if after_last < len(lines) else len(audio) / sample_rate
+        end = (
+            float(lines[after_last]["start"])
+            if after_last < len(lines)
+            else len(audio) / sample_rate
+        )
         end = max(start + 0.08, end)
         left = max(0, int(start * sample_rate))
         right = min(len(audio), max(left + 1, int(end * sample_rate)))
@@ -483,7 +485,9 @@ def _repair_impossible_alignment_chunks(
             word_end = _active_offset_to_time(
                 regions, active_duration, active_duration * consumed / total_weight
             )
-            repaired_words.append({**word, "start": word_start, "end": max(word_start + 0.02, word_end)})
+            repaired_words.append(
+                {**word, "start": word_start, "end": max(word_start + 0.02, word_end)}
+            )
 
         cursor = 0
         for line_index, line in enumerate(group, first):
@@ -519,7 +523,6 @@ def _bound_legacy_word_durations(lines: list[dict[str, Any]]) -> list[dict[str, 
             }
         )
     return output
-
 
 
 def get_karaoke_lyrics(output_dir: str | Path) -> list[dict[str, Any]]:
@@ -561,15 +564,24 @@ def get_syllables(output_dir: str | Path) -> list[dict[str, Any]]:
     if not (isinstance(payload, dict) and isinstance(payload.get("syllables"), list)):
         payload = read_json(output_dir / "syllables.json", default={})
     syllables = payload.get("syllables", []) if isinstance(payload, dict) else []
-    return [item for item in syllables if isinstance(item, dict)] if isinstance(syllables, list) else []
+    return (
+        [item for item in syllables if isinstance(item, dict)]
+        if isinstance(syllables, list)
+        else []
+    )
 
 
 def get_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
     """Return the ready timeline from songMap.json; rebuild only for legacy songs."""
     payload: Any = read_json(Path(output_dir) / "songMap.json", default={})
-    if isinstance(payload, dict) and isinstance(payload.get("lines"), list) and isinstance(payload.get("display_notes"), list):
+    if (
+        isinstance(payload, dict)
+        and isinstance(payload.get("lines"), list)
+        and isinstance(payload.get("display_notes"), list)
+    ):
         return payload
     return _build_legacy_karaoke_timeline(output_dir)
+
 
 def _build_legacy_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
     """Build the single authoritative presentation timeline for Karaoke UI.
@@ -583,50 +595,48 @@ def _build_legacy_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
     lines = get_karaoke_lyrics(output_dir)
     syllables = get_syllables(output_dir)
     notes = get_game_notes(output_dir)
-    song_map = read_json(output_dir / "songMap.json", default={})
+    song_map: Any = read_json(output_dir / "songMap.json", default={})
 
     syllables_by_word: dict[int, list[dict[str, Any]]] = {}
     for syllable in syllables:
-        try:
-            word_index = int(syllable.get("word_index"))
-        except (TypeError, ValueError):
+        word_index = _int_or_default(syllable.get("word_index"))
+        if word_index < 0:
             continue
         syllables_by_word.setdefault(word_index, []).append(dict(syllable))
 
     notes_by_syllable: dict[int, list[dict[str, Any]]] = {}
     for note in notes:
-        try:
-            syllable_index = int(note.get("syllable_index"))
-        except (TypeError, ValueError):
+        syllable_index = _int_or_default(note.get("syllable_index"))
+        if syllable_index < 0:
             continue
         notes_by_syllable.setdefault(syllable_index, []).append(dict(note))
 
     for values in syllables_by_word.values():
         values.sort(key=lambda item: (float(item.get("start") or 0.0), int(item.get("index") or 0)))
     for values in notes_by_syllable.values():
-        values.sort(key=lambda item: (float(item.get("start") or 0.0), float(item.get("end") or 0.0)))
+        values.sort(
+            key=lambda item: (float(item.get("start") or 0.0), float(item.get("end") or 0.0))
+        )
 
     timeline_lines: list[dict[str, Any]] = []
     for line_index, line in enumerate(lines):
         timeline_words: list[dict[str, Any]] = []
         for source_word in list(line.get("words") or []):
             word = dict(source_word)
-            try:
-                word_index = int(word.get("index"))
-            except (TypeError, ValueError):
-                word_index = -1
+            word_index = _int_or_default(word.get("index"))
 
             linked_syllables: list[dict[str, Any]] = []
             for source_syllable in syllables_by_word.get(word_index, []):
                 syllable = dict(source_syllable)
-                try:
-                    syllable_index = int(syllable.get("index"))
-                except (TypeError, ValueError):
-                    syllable_index = -1
+                syllable_index = _int_or_default(syllable.get("index"))
                 linked_notes = notes_by_syllable.get(syllable_index, [])
                 if linked_notes:
-                    presentation_start = min(float(note.get("start") or 0.0) for note in linked_notes)
-                    presentation_end = max(float(note.get("end") or presentation_start) for note in linked_notes)
+                    presentation_start = min(
+                        float(note.get("start") or 0.0) for note in linked_notes
+                    )
+                    presentation_end = max(
+                        float(note.get("end") or presentation_start) for note in linked_notes
+                    )
                     timing_source = "game_notes"
                 else:
                     presentation_start = float(syllable.get("start") or word.get("start") or 0.0)
@@ -651,7 +661,9 @@ def _build_legacy_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
                 timing_source = "syllables_game_notes"
             else:
                 presentation_start = float(word.get("start") or 0.0)
-                presentation_end = max(presentation_start, float(word.get("end") or presentation_start))
+                presentation_end = max(
+                    presentation_start, float(word.get("end") or presentation_start)
+                )
                 timing_source = "word_alignment"
 
             timeline_words.append(

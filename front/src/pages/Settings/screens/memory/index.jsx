@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { api } from "../../../../api/client";
+import { POLLING_INTERVALS } from "../../../../config/runtime";
 import { useAppDialog } from "../../../../contexts/AppDialog";
 import { usePolling } from "../../../../hooks/usePolling";
 import { Stack, Typography } from "../../../../theme/ui";
@@ -16,9 +17,21 @@ import {
 
 export default function MemoryManager() {
   const { alert: notify } = useAppDialog();
-  const { data: size, error } = usePolling(api.getCacheSize, 5000, []);
-  const { data: free } = usePolling(api.getFreeSpace, 10000, []);
-  const { data: songs } = usePolling(api.listSongs, 8000, []);
+  const { data: size, error } = usePolling(
+    api.getCacheSize,
+    POLLING_INTERVALS.memory,
+    []
+  );
+  const { data: free } = usePolling(
+    api.getFreeSpace,
+    POLLING_INTERVALS.freeSpace,
+    []
+  );
+  const { data: songs } = usePolling(
+    api.listSongs,
+    POLLING_INTERVALS.songs,
+    []
+  );
   const [optimizeTarget, setOptimizeTarget] = useState("");
 
   const optimizeOptions = buildOptimizeOptions(songs ?? []);

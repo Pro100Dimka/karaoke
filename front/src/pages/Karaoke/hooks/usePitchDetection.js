@@ -57,7 +57,9 @@ export default function usePitchDetection({
         stream = monitor?.stream;
         context = monitor?.context;
         const streamHasLiveAudio = Boolean(
-          stream?.getAudioTracks?.().some((track) => track.readyState === "live")
+          stream
+            ?.getAudioTracks?.()
+            .some((track) => track.readyState === "live")
         );
         if (!streamHasLiveAudio) {
           const baseAudio = {

@@ -54,13 +54,8 @@ def _frame_slice(
     return pitch[left:right]
 
 
-
 def _local_step(frames: list[PitchFrame], span: float, count: int) -> float:
-    gaps = [
-        b.time - a.time
-        for a, b in zip(frames, frames[1:], strict=False)
-        if b.time > a.time
-    ]
+    gaps = [b.time - a.time for a, b in zip(frames, frames[1:], strict=False) if b.time > a.time]
     if gaps:
         median = sorted(gaps)[len(gaps) // 2]
         compact = [gap for gap in gaps if gap <= median * 3.0]
@@ -69,6 +64,7 @@ def _local_step(frames: list[PitchFrame], span: float, count: int) -> float:
             return max(compact[len(compact) // 2], 1e-4)
         return max(median, 1e-4)
     return max(span / max(6, count * 6), 1e-4)
+
 
 def _boundary_scores(word: Word, frames: list[PitchFrame], count: int) -> list[float]:
     word_span = max(0.0, word.end - word.start)

@@ -174,7 +174,9 @@ def _parse_lrc(
             typical_gap = float(duration_sec) / max(1, len(timed))
         else:
             word_counts = [max(1, len(value.split())) for _, value in timed]
-            typical_gap = (sum(word_counts) / max(1, len(word_counts))) * 0.55 if word_counts else 1.0
+            typical_gap = (
+                (sum(word_counts) / max(1, len(word_counts))) * 0.55 if word_counts else 1.0
+            )
 
     result: list[tuple[float, float, str]] = []
     for index, (start, value) in enumerate(timed):
@@ -192,7 +194,9 @@ def _parse_lrc(
         # intervals strictly ordered and is not a song-timing prior.
         boundary_pad = max(1e-4, span * 0.005)
         word_count = max(1, len(value.split()))
-        minimum_span = min(span, max(1e-3, min(typical_gap * 0.10, span / max(2.0, word_count * 1.5))))
+        minimum_span = min(
+            span, max(1e-3, min(typical_gap * 0.10, span / max(2.0, word_count * 1.5)))
+        )
         end = max(start + minimum_span, next_start - boundary_pad)
         if duration_sec is not None and duration_sec > 0:
             end = min(end, float(duration_sec))
@@ -284,14 +288,9 @@ def _online(title: str | None, duration_sec: float | None) -> LyricsDiscovery:
         return LyricsDiscovery()
 
     query_params = (
-        {"track_name": track, "artist_name": artist}
-        if artist
-        else {"q": str(title or track)}
+        {"track_name": track, "artist_name": artist} if artist else {"q": str(title or track)}
     )
-    _lyrics_debug(
-        f"[lyrics] LRCLIB request: query={title!r} "
-        f"artist={artist!r} track={track!r}"
-    )
+    _lyrics_debug(f"[lyrics] LRCLIB request: query={title!r} artist={artist!r} track={track!r}")
 
     query = urllib.parse.urlencode(query_params)
     request = urllib.request.Request(
@@ -400,7 +399,6 @@ def _online(title: str | None, duration_sec: float | None) -> LyricsDiscovery:
             return LyricsDiscovery(synced_text, "LRCLIB", segments)
     plain = _clean(str(item.get("plainLyrics") or synced))
     return LyricsDiscovery(plain, "LRCLIB")
-
 
 
 def _search_tokens_match(query: str, result_title: str) -> bool:
@@ -542,15 +540,12 @@ def _web_online(title: str | None) -> LyricsDiscovery:
     _lyrics_debug(f"[lyrics] WEB matching search results: {len(results)}")
 
     for number, (url, result_title) in enumerate(results, 1):
-        _lyrics_debug(
-            f"[lyrics] WEB candidate #{number}: title={result_title!r} url={url!r}"
-        )
+        _lyrics_debug(f"[lyrics] WEB candidate #{number}: title={result_title!r} url={url!r}")
         text = _fetch_web_lyrics(url)
         if text:
             host = (urllib.parse.urlparse(url).hostname or "web").removeprefix("www.")
             _lyrics_debug(
-                f"[lyrics] WEB SELECTED: query={title!r} "
-                f"result={result_title!r} source={host!r}"
+                f"[lyrics] WEB SELECTED: query={title!r} result={result_title!r} source={host!r}"
             )
             return LyricsDiscovery(text, f"web:{host}")
 
@@ -560,14 +555,11 @@ def _web_online(title: str | None) -> LyricsDiscovery:
     return LyricsDiscovery()
 
 
-
 def _plain_search_query(value: str | None) -> str:
     """Remove separator dashes/noisy trailing release tags and collapse spaces."""
     value = str(value or "")
     value = re.sub(r"\s*[\[(][^\]\)]*(?:19|20)\d{2}[^\]\)]*[\])]\s*$", " ", value)
-    return " ".join(
-        value.replace("-", " ").replace("–", " ").replace("—", " ").split()
-    )
+    return " ".join(value.replace("-", " ").replace("–", " ").replace("—", " ").split())
 
 
 def _strip_filename_copy_suffix(value: str) -> str:
@@ -601,6 +593,7 @@ def _metadata_search_candidates(
 
         audio = MutagenFile(source, easy=True)
         if audio is not None:
+
             def first(*keys: str) -> str:
                 for key in keys:
                     value = audio.get(key)
@@ -617,8 +610,16 @@ def _metadata_search_candidates(
 
     candidates: list[str] = []
     technical_names = {
-        "source", "song", "audio", "input", "upload", "uploaded",
-        "temp", "temporary", "decoded", "converted",
+        "source",
+        "song",
+        "audio",
+        "input",
+        "upload",
+        "uploaded",
+        "temp",
+        "temporary",
+        "decoded",
+        "converted",
     }
 
     def add_query(value: str) -> None:
@@ -638,15 +639,9 @@ def _metadata_search_candidates(
     if tagged_title:
         clean_artist = tagged_artist
         if clean_artist:
-            clean_artist = re.sub(
-                re.escape(tagged_title), " ", clean_artist, flags=re.I
-            )
-            clean_artist = re.sub(
-                r"\b(?:single|album|ep)\b", " ", clean_artist, flags=re.I
-            )
-            clean_artist = re.sub(
-                r"[\[(]\s*(?:19|20)\d{2}\s*[\])]", " ", clean_artist
-            )
+            clean_artist = re.sub(re.escape(tagged_title), " ", clean_artist, flags=re.I)
+            clean_artist = re.sub(r"\b(?:single|album|ep)\b", " ", clean_artist, flags=re.I)
+            clean_artist = re.sub(r"[\[(]\s*(?:19|20)\d{2}\s*[\])]", " ", clean_artist)
             clean_artist = _plain_search_query(clean_artist)
         add_identity(clean_artist, tagged_title)
 
@@ -678,6 +673,7 @@ def _metadata_search_candidates(
             unique.append(query)
     return unique
 
+
 def discover_lyrics(
     source: str | Path,
     *,
@@ -693,23 +689,15 @@ def discover_lyrics(
 
         online = _online(query, duration_sec)
         if online.text:
-            _lyrics_debug(
-                f"[lyrics] SEARCH #{index} FOUND via {online.source}: {query}"
-            )
-            return LyricsDiscovery(
-                online.text, online.source, online.segments, query
-            )
+            _lyrics_debug(f"[lyrics] SEARCH #{index} FOUND via {online.source}: {query}")
+            return LyricsDiscovery(online.text, online.source, online.segments, query)
 
         _lyrics_debug(f"[lyrics] SEARCH #{index} LRCLIB NOT FOUND: {query}")
 
         web = _web_online(query)
         if web.text:
-            _lyrics_debug(
-                f"[lyrics] SEARCH #{index} FOUND via {web.source}: {query}"
-            )
-            return LyricsDiscovery(
-                web.text, web.source, web.segments, query
-            )
+            _lyrics_debug(f"[lyrics] SEARCH #{index} FOUND via {web.source}: {query}")
+            return LyricsDiscovery(web.text, web.source, web.segments, query)
 
         _lyrics_debug(f"[lyrics] SEARCH #{index} END NOT FOUND: {query}")
 

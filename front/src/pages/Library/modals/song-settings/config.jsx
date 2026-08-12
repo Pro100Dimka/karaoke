@@ -2,7 +2,6 @@ import { NumberField, Stack } from "../../../../theme/ui";
 import Field from "../../../../theme/ui/_internal/Field";
 
 export const HALF = 6;
-export const QUARTER = 3;
 export const THIRD = 4;
 export const FULL = 12;
 
@@ -143,24 +142,3 @@ export const SONG_FIELDS = [
     span: FULL
   })
 ];
-
-export const EMPTY_LYRICS = {
-  text: "",
-  data: [],
-  error: null
-};
-
-export const LYRICS_FIELD = {
-  name: "lyrics",
-  label: "Текст песни",
-  type: "textarea",
-
-  rows: 16,
-  spellCheck: false,
-
-  className: "song-lyrics-editor",
-
-  hint: "Каждая строка — отдельная строка песни. Тайминги сохраняются автоматически.",
-
-  span: FULL
-};

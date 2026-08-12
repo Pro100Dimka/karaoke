@@ -5,7 +5,7 @@ import statistics
 from typing import Any
 
 from .engines.text import tokenize
-from .models import PitchFrame, Syllable, VocalNote, Word, StageReport
+from .models import PitchFrame, StageReport, Syllable, VocalNote, Word
 
 
 def _clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
@@ -103,7 +103,11 @@ def build_alignment_debug(
     rejected_reasons: dict[str, int] = {}
     for index, word in enumerate(words):
         source = str(sources[index]) if index < len(sources) else "unknown"
-        candidate = candidates[index] if index < len(candidates) and isinstance(candidates[index], dict) else {}
+        candidate = (
+            candidates[index]
+            if index < len(candidates) and isinstance(candidates[index], dict)
+            else {}
+        )
         ctc = _candidate_for(candidate, "ctc")
         qwen = _candidate_for(candidate, "qwen")
         consensus = _candidate_for(candidate, "consensus")
@@ -111,7 +115,12 @@ def build_alignment_debug(
             if consensus:
                 source = "consensus"
             elif ctc and qwen:
-                source = "consensus" if abs(((ctc["start"]+ctc["end"])-(qwen["start"]+qwen["end"]))/2.0) <= max(0.08, typical_duration * 0.65) else "ctc_or_qwen"
+                source = (
+                    "consensus"
+                    if abs(((ctc["start"] + ctc["end"]) - (qwen["start"] + qwen["end"])) / 2.0)
+                    <= max(0.08, typical_duration * 0.65)
+                    else "ctc_or_qwen"
+                )
             elif ctc:
                 source = "ctc"
             elif qwen:
@@ -151,24 +160,26 @@ def build_alignment_debug(
         for reason in reasons:
             rejected_reasons[reason] = rejected_reasons.get(reason, 0) + 1
 
-        word_rows.append({
-            "index": index,
-            "text": word.text,
-            "final": {
-                "start": word.start,
-                "end": word.end,
-                "duration": span,
-                "confidence": word.confidence,
-                "source": source,
-            },
-            "candidates": {"ctc": ctc, "qwen": qwen, "consensus": consensus},
-            "agreement": {"ctc_qwen_delta_ms": disagreement_ms},
-            "vocal": {
-                "overlap_ratio": overlap,
-                "nearest_onset_ms": _nearest_ms(word.start, onsets),
-            },
-            "reasons": reasons,
-        })
+        word_rows.append(
+            {
+                "index": index,
+                "text": word.text,
+                "final": {
+                    "start": word.start,
+                    "end": word.end,
+                    "duration": span,
+                    "confidence": word.confidence,
+                    "source": source,
+                },
+                "candidates": {"ctc": ctc, "qwen": qwen, "consensus": consensus},
+                "agreement": {"ctc_qwen_delta_ms": disagreement_ms},
+                "vocal": {
+                    "overlap_ratio": overlap,
+                    "nearest_onset_ms": _nearest_ms(word.start, onsets),
+                },
+                "reasons": reasons,
+            }
+        )
 
     # Map canonical lyric lines to the final word stream without changing it.
     lines: list[dict[str, Any]] = []
@@ -178,7 +189,7 @@ def build_alignment_debug(
         lyric_lines = [" ".join(word.text for word in words)]
     for line_index, line in enumerate(lyric_lines):
         count = len(tokenize(line))
-        row = word_rows[cursor: cursor + count]
+        row = word_rows[cursor : cursor + count]
         cursor += count
         if not row:
             continue
@@ -186,33 +197,45 @@ def build_alignment_debug(
         for item in row:
             kind = item["final"]["source"]
             sources_here[kind] = sources_here.get(kind, 0) + 1
-        direct = sum(value for key, value in sources_here.items() if key in {"consensus", "ctc", "qwen"})
-        interpolated = sum(value for key, value in sources_here.items() if key in {"interpolated", "unknown"})
+        direct = sum(
+            value for key, value in sources_here.items() if key in {"consensus", "ctc", "qwen"}
+        )
+        interpolated = sum(
+            value for key, value in sources_here.items() if key in {"interpolated", "unknown"}
+        )
         confidences = [float(item["final"]["confidence"]) for item in row]
-        disagreements = [item["agreement"]["ctc_qwen_delta_ms"] for item in row if item["agreement"]["ctc_qwen_delta_ms"] is not None]
+        disagreements = [
+            item["agreement"]["ctc_qwen_delta_ms"]
+            for item in row
+            if item["agreement"]["ctc_qwen_delta_ms"] is not None
+        ]
         reasons = sorted({reason for item in row for reason in item["reasons"]})
-        lines.append({
-            "line": line_index,
-            "text": line,
-            "start": row[0]["final"]["start"],
-            "end": row[-1]["final"]["end"],
-            "duration": max(0.0, row[-1]["final"]["end"] - row[0]["final"]["start"]),
-            "word_count": len(row),
-            "acoustic_word_ratio": direct / max(1, len(row)),
-            "interpolated_word_ratio": interpolated / max(1, len(row)),
-            "mean_confidence": sum(confidences) / max(1, len(confidences)),
-            "min_confidence": min(confidences),
-            "max_ctc_qwen_delta_ms": max(disagreements) if disagreements else None,
-            "sources": sources_here,
-            "reasons": reasons,
-        })
+        lines.append(
+            {
+                "line": line_index,
+                "text": line,
+                "start": row[0]["final"]["start"],
+                "end": row[-1]["final"]["end"],
+                "duration": max(0.0, row[-1]["final"]["end"] - row[0]["final"]["start"]),
+                "word_count": len(row),
+                "acoustic_word_ratio": direct / max(1, len(row)),
+                "interpolated_word_ratio": interpolated / max(1, len(row)),
+                "mean_confidence": sum(confidences) / max(1, len(confidences)),
+                "min_confidence": min(confidences),
+                "max_ctc_qwen_delta_ms": max(disagreements) if disagreements else None,
+                "sources": sources_here,
+                "reasons": reasons,
+            }
+        )
 
     suspicious_regions: list[dict[str, Any]] = []
     current: list[dict[str, Any]] = []
     for item in word_rows:
         suspicious = bool(item["reasons"])
         if suspicious:
-            if current and item["final"]["start"] - current[-1]["final"]["end"] > max(0.8, typical_duration * 3.0):
+            if current and item["final"]["start"] - current[-1]["final"]["end"] > max(
+                0.8, typical_duration * 3.0
+            ):
                 suspicious_regions.append(_region(current))
                 current = []
             current.append(item)
@@ -222,11 +245,16 @@ def build_alignment_debug(
     if current:
         suspicious_regions.append(_region(current))
 
-    acoustic_words = sum(value for key, value in source_counts.items() if key in {"consensus", "ctc", "qwen"})
+    acoustic_words = sum(
+        value for key, value in source_counts.items() if key in {"consensus", "ctc", "qwen"}
+    )
     mean_conf = sum(word.confidence for word in words) / max(1, len(words))
     acoustic_ratio = acoustic_words / max(1, len(words))
     suspicious_ratio = sum(1 for row in word_rows if row["reasons"]) / max(1, len(word_rows))
-    text_health = round(100.0 * _clamp(0.48 * acoustic_ratio + 0.42 * mean_conf + 0.10 * (1.0 - suspicious_ratio)), 1)
+    text_health = round(
+        100.0 * _clamp(0.48 * acoustic_ratio + 0.42 * mean_conf + 0.10 * (1.0 - suspicious_ratio)),
+        1,
+    )
 
     total_elapsed = sum(max(0.0, float(report.elapsed_sec)) for report in reports)
     stage_perf = [
@@ -241,12 +269,19 @@ def build_alignment_debug(
     stage_perf.sort(key=lambda item: item["elapsed_sec"], reverse=True)
 
     voiced_frames = sum(1 for frame in pitch if frame.voiced and frame.frequency > 0.0)
-    pitch_mean_conf = (
-        sum(frame.confidence for frame in pitch if frame.voiced and frame.frequency > 0.0) / max(1, voiced_frames)
+    pitch_mean_conf = sum(
+        frame.confidence for frame in pitch if frame.voiced and frame.frequency > 0.0
+    ) / max(1, voiced_frames)
+    linked_notes = sum(
+        1 for note in notes if note.word_index is not None or note.syllable_index is not None
     )
-    linked_notes = sum(1 for note in notes if note.word_index is not None or note.syllable_index is not None)
 
-    pitch_changes = {"compared_frames": 0, "voicing_changes": 0, "large_pitch_changes": 0, "mean_abs_semitone_delta": 0.0}
+    pitch_changes = {
+        "compared_frames": 0,
+        "voicing_changes": 0,
+        "large_pitch_changes": 0,
+        "mean_abs_semitone_delta": 0.0,
+    }
     if raw_pitch:
         raw_by_time = {round(frame.time, 6): frame for frame in raw_pitch}
         deltas: list[float] = []
@@ -272,9 +307,7 @@ def build_alignment_debug(
     syllable_split_events = max(0, len(game) - len(notes))
     syllable_ids = {int(item.index) for item in syllables}
     game_syllable_ids = [
-        int(note.syllable_index)
-        for note in game
-        if note.syllable_index is not None
+        int(note.syllable_index) for note in game if note.syllable_index is not None
     ]
     game_syllable_set = set(game_syllable_ids)
     events_per_syllable: dict[int, int] = {}
@@ -283,13 +316,16 @@ def build_alignment_debug(
     game_durations = [max(0.0, float(note.end) - float(note.start)) for note in game]
     sorted_game_durations = sorted(value for value in game_durations if value > 0.0)
     if sorted_game_durations:
+
         def _quantile(frac: float) -> float:
             pos = (len(sorted_game_durations) - 1) * frac
-            lo = int(math.floor(pos)); hi = int(math.ceil(pos))
+            lo = int(math.floor(pos))
+            hi = int(math.ceil(pos))
             if lo == hi:
                 return sorted_game_durations[lo]
             weight = pos - lo
             return sorted_game_durations[lo] * (1.0 - weight) + sorted_game_durations[hi] * weight
+
         game_duration_quantiles = {
             "p05": _quantile(0.05),
             "p25": _quantile(0.25),
@@ -318,7 +354,8 @@ def build_alignment_debug(
             "note_linkage": round(100.0 * linked_notes / max(1, len(notes)), 1),
         },
         "model_evidence": {
-            key: value for key, value in diag.items()
+            key: value
+            for key, value in diag.items()
             if key not in {"word_sources", "word_candidates"}
         },
         "words": word_rows,
@@ -364,15 +401,25 @@ def build_alignment_debug(
             ),
             "with_game_event": len(syllable_ids & game_syllable_set),
             "without_game_event": len(syllable_ids - game_syllable_set),
-            "game_event_coverage": len(syllable_ids & game_syllable_set) / max(1, len(syllable_ids)),
-            "non_positive_duration": sum(1 for item in syllables if float(item.end) <= float(item.start)),
+            "game_event_coverage": len(syllable_ids & game_syllable_set)
+            / max(1, len(syllable_ids)),
+            "non_positive_duration": sum(
+                1 for item in syllables if float(item.end) <= float(item.start)
+            ),
             "duration_quantiles": (
                 {
-                    "p05": sorted([max(0.0, float(item.end)-float(item.start)) for item in syllables])[max(0, int((len(syllables)-1)*0.05))],
-                    "p50": _median([max(0.0, float(item.end)-float(item.start)) for item in syllables], 0.0),
-                    "p95": sorted([max(0.0, float(item.end)-float(item.start)) for item in syllables])[max(0, int((len(syllables)-1)*0.95))],
+                    "p05": sorted(
+                        [max(0.0, float(item.end) - float(item.start)) for item in syllables]
+                    )[max(0, int((len(syllables) - 1) * 0.05))],
+                    "p50": _median(
+                        [max(0.0, float(item.end) - float(item.start)) for item in syllables], 0.0
+                    ),
+                    "p95": sorted(
+                        [max(0.0, float(item.end) - float(item.start)) for item in syllables]
+                    )[max(0, int((len(syllables) - 1) * 0.95))],
                 }
-                if syllables else {"p05": 0.0, "p50": 0.0, "p95": 0.0}
+                if syllables
+                else {"p05": 0.0, "p50": 0.0, "p95": 0.0}
             ),
         },
     }
@@ -388,6 +435,7 @@ def _region(items: list[dict[str, Any]]) -> dict[str, Any]:
         "end": items[-1]["final"]["end"],
         "words": len(items),
         "text": " ".join(item["text"] for item in items[:24]),
-        "mean_confidence": sum(float(item["final"]["confidence"]) for item in items) / max(1, len(items)),
+        "mean_confidence": sum(float(item["final"]["confidence"]) for item in items)
+        / max(1, len(items)),
         "reasons": reasons,
     }

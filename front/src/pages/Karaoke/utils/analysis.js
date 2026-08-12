@@ -91,11 +91,3 @@ export function getAnalysisFeedback(result) {
     advice
   };
 }
-
-export function getAnalysisSectionLabel(section, index = 0) {
-  if (section?.label) return section.label;
-  if (Number.isFinite(section?.start) && Number.isFinite(section?.end)) {
-    return `${section.start.toFixed(1)}–${section.end.toFixed(1)} с`;
-  }
-  return `Фрагмент ${index + 1}`;
-}

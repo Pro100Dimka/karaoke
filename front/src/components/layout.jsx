@@ -110,7 +110,11 @@ export default function AppLayout() {
 
   return (
     <div
-      className={["app-shell", isKaraoke && "karaoke-app-shell", isEditor && "melody-editor-app-shell"]
+      className={[
+        "app-shell",
+        isKaraoke && "karaoke-app-shell",
+        isEditor && "melody-editor-app-shell"
+      ]
         .filter(Boolean)
         .join(" ")}
     >
@@ -122,7 +126,9 @@ export default function AppLayout() {
             onOpenSongSettings={openSongSettings}
           />
         </main>
-        {!isKaraoke && !isEditor && <AppFloatingControls onOpenSettings={openSettings} />}
+        {!isKaraoke && !isEditor && (
+          <AppFloatingControls onOpenSettings={openSettings} />
+        )}
         {songSettingsId && (
           <SongSettings songId={songSettingsId} onClose={closeSongSettings} />
         )}

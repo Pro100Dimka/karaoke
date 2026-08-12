@@ -11,13 +11,26 @@ export default function MelodyEditorPage() {
 
   useEffect(() => {
     let alive = true;
-    api.listSongs().then((songs) => {
-      if (!alive) return;
-      setSong((songs || []).find((item) => String(item.id) === String(songId)) || { id: songId, title: "Редактор мелодии" });
-    }).catch(() => alive && setSong({ id: songId, title: "Редактор мелодии" }));
-    return () => { alive = false; };
+    api
+      .listSongs()
+      .then((songs) => {
+        if (!alive) return;
+        setSong(
+          (songs || []).find((item) => String(item.id) === String(songId)) || {
+            id: songId,
+            title: "Редактор мелодии"
+          }
+        );
+      })
+      .catch(() => alive && setSong({ id: songId, title: "Редактор мелодии" }));
+    return () => {
+      alive = false;
+    };
   }, [songId]);
 
-  if (!song) return <div className="melody-editor-route-loading">Открываем редактор…</div>;
+  if (!song)
+    return (
+      <div className="melody-editor-route-loading">Открываем редактор…</div>
+    );
   return <MelodyEditor song={song} onClose={() => navigate("/")} />;
 }

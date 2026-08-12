@@ -14,6 +14,8 @@ from .artifacts import publish_files_atomically
 from .audio import decode_audio, duration
 from .cache import StageCache
 from .config import CoreConfig
+from .diagnostics import build_alignment_debug
+from .engines.ctc_alignment import CTC_ALIGNMENT_VERSION
 from .engines.pitch import PyinFallbackPitchEstimator
 from .engines.registry import EngineRegistry
 from .engines.separation import CenterChannelFallbackSeparator
@@ -25,9 +27,8 @@ from .engines.text import (
     resolve_alignment_language,
     tokenize,
 )
-from .engines.ctc_alignment import CTC_ALIGNMENT_VERSION
-from .errors import EngineUnavailableError, ProcessingCancelledError
-from .diagnostics import build_alignment_debug
+from .errors import EngineUnavailableError, InvalidArtifactError, ProcessingCancelledError
+from .karaoke_timeline import build_karaoke_song_map
 from .locks import ThreadFileLock
 from .lyrics_sources import discover_lyrics
 from .midi import write_midi
@@ -42,21 +43,16 @@ from .models import (
 )
 from .music import MUSIC_ANALYZER_VERSION, analyze_music
 from .notes import NOTE_DECODER_VERSION, build_game_notes, build_vocal_notes, get_note_diagnostics
-from .karaoke_timeline import KARAOKE_TIMELINE_VERSION, build_karaoke_song_map
-from .pitch_post import PITCH_STABILIZER_VERSION, fuse_pitch_with_yin, refine_pitch_confidence, stabilize_pitch
+from .pitch_post import (
+    PITCH_STABILIZER_VERSION,
+    fuse_pitch_with_yin,
+    refine_pitch_confidence,
+    stabilize_pitch,
+)
 from .profiler import environment_info
 from .quality import evaluate_quality
 from .syllables import SYLLABLE_ALIGNER_VERSION, align_syllables
 from .utils.io import read_json, write_json_atomic, write_text_atomic
-from .version import AI_BUILD_ID
-from .vocal_preprocess import (
-    VOCAL_ANALYSIS_PREPROCESS_VERSION,
-    choose_best_pitch_track,
-    prefer_cleaned_pitch,
-    prepare_midi_analysis_variants,
-    prepare_midi_analysis_vocal,
-    score_pitch_track,
-)
 from .validators import (
     validate_audio,
     validate_derivation_json,
@@ -68,6 +64,13 @@ from .validators import (
     validate_timeline,
     validate_within_duration,
     validate_words_json,
+)
+from .version import AI_BUILD_ID
+from .vocal_preprocess import (
+    VOCAL_ANALYSIS_PREPROCESS_VERSION,
+    choose_best_pitch_track,
+    prepare_midi_analysis_variants,
+    score_pitch_track,
 )
 
 ProgressCallback = Callable[[str, float, str], None]
@@ -120,8 +123,14 @@ def _canonical_alignment_matches(text: str, words: list[Word]) -> bool:
     expected = tokenize(text)
     if len(expected) != len(words):
         return False
-    normalize = lambda value: re.sub(r"[^\w]+", "", str(value).casefold(), flags=re.UNICODE)
-    return all(normalize(token) == normalize(word.text) for token, word in zip(expected, words, strict=True))
+
+    def normalize(value: object) -> str:
+        return re.sub(r"[^\w]+", "", str(value).casefold(), flags=re.UNICODE)
+
+    return all(
+        normalize(token) == normalize(word.text)
+        for token, word in zip(expected, words, strict=True)
+    )
 
 
 def _canonical_timeline_is_publishable(words: list[Word], total_duration: float) -> bool:
@@ -150,7 +159,9 @@ def _canonical_timeline_is_publishable(words: list[Word], total_duration: float)
     return True
 
 
-def _repair_canonical_timeline_locally(words: list[Word], total_duration: float) -> list[Word] | None:
+def _repair_canonical_timeline_locally(
+    words: list[Word], total_duration: float
+) -> list[Word] | None:
     """Repair small Qwen ordering mistakes without sorting/replacing lyrics.
 
     Words remain in canonical text order. We shift only offending timestamps
@@ -184,7 +195,9 @@ def _repair_canonical_timeline_locally(words: list[Word], total_duration: float)
     return repaired if _canonical_timeline_is_publishable(repaired, total_duration) else None
 
 
-def _preserve_complete_canonical_timeline(words: list[Word], total_duration: float) -> list[Word] | None:
+def _preserve_complete_canonical_timeline(
+    words: list[Word], total_duration: float
+) -> list[Word] | None:
     """Preserve a complete acoustic alignment and heal only timing defects.
 
     Once the aligner has returned the full canonical word sequence, pipeline.py
@@ -244,7 +257,9 @@ def _preserve_complete_canonical_timeline(words: list[Word], total_duration: flo
     return repaired if _canonical_timeline_is_publishable(repaired, total_duration) else None
 
 
-def _pipeline_lossless_canonical_words(text: str, words: list[Word], total_duration: float) -> list[Word]:
+def _pipeline_lossless_canonical_words(
+    text: str, words: list[Word], total_duration: float
+) -> list[Word]:
     """Final invariant guard before publishing lyricsSync.json.
 
     A complete canonical alignment is authoritative: preserve its acoustic
@@ -286,6 +301,7 @@ def _pipeline_lossless_canonical_words(text: str, words: list[Word], total_durat
         output.append(Word(word_start, word_end, token, 0.004, index))
     return output
 
+
 def _lyrics_console(*parts: object) -> None:
     """Write UTF-8 lyrics diagnostics to the real console, bypassing capture."""
     text = " ".join(str(part) for part in parts)
@@ -318,10 +334,7 @@ def _print_full_lyrics(source: str, text: str, query: str | None) -> None:
     _lyrics_console(f"[lyrics] search query: {query or '<empty>'}")
     _lyrics_console(f"[lyrics] source: {source or 'unknown'}")
     line_count = len([line for line in text.splitlines() if line.strip()])
-    _lyrics_console(
-        f"[lyrics] text received: {line_count} non-empty lines, {len(text)} characters"
-    )
-
+    _lyrics_console(f"[lyrics] text received: {line_count} non-empty lines, {len(text)} characters")
 
 
 class _OutputDirectoryLock(ThreadFileLock):
@@ -530,6 +543,7 @@ class KaraokePipeline:
             _print_full_lyrics(lyrics_source or "unknown", supplied, lyrics_query)
         else:
             from .lyrics_sources import _metadata_search_candidates
+
             attempts = _metadata_search_candidates(source, request.title)
             for index, query in enumerate(attempts, 1):
                 _lyrics_console(f"[lyrics] search #{index}: {query}")
@@ -674,7 +688,10 @@ class KaraokePipeline:
             },
         )
         if not self._cache_hit(
-            cache, "midi-vocal-cleanup", cleanup_key, cleanup_outputs,
+            cache,
+            "midi-vocal-cleanup",
+            cleanup_key,
+            cleanup_outputs,
             {path: validate_audio for path in cleanup_outputs},
         ):
             started_cleanup = time.perf_counter()
@@ -682,10 +699,14 @@ class KaraokePipeline:
             for path in cleanup_outputs:
                 validate_audio(path)
             cache.commit("midi-vocal-cleanup", cleanup_key, cleanup_outputs)
-            reports.append(StageReport(
-                "midi-vocal-cleanup", time.perf_counter() - started_cleanup, False,
-                VOCAL_ANALYSIS_PREPROCESS_VERSION,
-            ))
+            reports.append(
+                StageReport(
+                    "midi-vocal-cleanup",
+                    time.perf_counter() - started_cleanup,
+                    False,
+                    VOCAL_ANALYSIS_PREPROCESS_VERSION,
+                )
+            )
         else:
             reports.append(StageReport("midi-vocal-cleanup", 0, True, "cached"))
 
@@ -701,7 +722,9 @@ class KaraokePipeline:
                 "fmin": self.config.fmin_hz,
                 "fmax": self.config.fmax_hz,
                 "postprocessor": PITCH_STABILIZER_VERSION,
-                "pitch_post_code": cache.optional_file_hash(Path(__file__).with_name("pitch_post.py")),
+                "pitch_post_code": cache.optional_file_hash(
+                    Path(__file__).with_name("pitch_post.py")
+                ),
             },
         )
         pitch_outputs = (
@@ -718,21 +741,32 @@ class KaraokePipeline:
         else:
             pitch_candidates = {
                 "original": self._run(
-                    "pitch-original", self.engines.pitch,
-                    lambda engine: engine.estimate(vocals), reports, warnings,
+                    "pitch-original",
+                    self.engines.pitch,
+                    lambda engine: engine.estimate(vocals),
+                    reports,
+                    warnings,
                 ),
                 "denoise": self._run(
-                    "pitch-denoise", self.engines.pitch,
-                    lambda engine: engine.estimate(midi_analysis_vocal), reports, warnings,
+                    "pitch-denoise",
+                    self.engines.pitch,
+                    lambda engine: engine.estimate(midi_analysis_vocal),
+                    reports,
+                    warnings,
                 ),
                 "tail-suppressed": self._run(
-                    "pitch-tail-suppressed", self.engines.pitch,
-                    lambda engine: engine.estimate(midi_tail_vocal), reports, warnings,
+                    "pitch-tail-suppressed",
+                    self.engines.pitch,
+                    lambda engine: engine.estimate(midi_tail_vocal),
+                    reports,
+                    warnings,
                 ),
             }
             for candidate in pitch_candidates.values():
                 validate_pitch(candidate)
-            qualities = {name: score_pitch_track(list(value)) for name, value in pitch_candidates.items()}
+            qualities = {
+                name: score_pitch_track(list(value)) for name, value in pitch_candidates.items()
+            }
             original_quality = qualities["original"]
             cleaned_quality = qualities["denoise"]
             tail_quality = qualities["tail-suppressed"]
@@ -744,11 +778,15 @@ class KaraokePipeline:
             }
             pitch_analysis_audio = pitch_audio_by_source[pitch_analysis_source]
             pitch = pitch_candidates[pitch_analysis_source]
-            reports.append(StageReport(
-                "pitch-source-selection", 0.0, False,
-                " ".join(f"{name}={quality.score:.4f}" for name, quality in qualities.items())
-                + f" selected={pitch_analysis_source}",
-            ))
+            reports.append(
+                StageReport(
+                    "pitch-source-selection",
+                    0.0,
+                    False,
+                    " ".join(f"{name}={quality.score:.4f}" for name, quality in qualities.items())
+                    + f" selected={pitch_analysis_source}",
+                )
+            )
             raw_pitch = list(pitch)
             validate_pitch(raw_pitch)
             confidence_pitch = refine_pitch_confidence(
@@ -798,7 +836,9 @@ class KaraokePipeline:
                     "model": getattr(self.engines.aligner, "model_name", None),
                     "long_text_algorithm": LONG_TEXT_ALIGNMENT_VERSION,
                     "ctc_alignment_algorithm": CTC_ALIGNMENT_VERSION,
-                    "ctc_models": getattr(getattr(self.engines.aligner, "_ctc", None), "models", {}),
+                    "ctc_models": getattr(
+                        getattr(self.engines.aligner, "_ctc", None), "models", {}
+                    ),
                     "timed_segments": supplied_segments,
                 },
             )
@@ -810,9 +850,7 @@ class KaraokePipeline:
                 cache, "alignment", alignment_key, alignment_outputs, alignment_validators
             ):
                 raw = read_json(words_path, {})
-                words = _bound_word_durations(
-                    [Word(**item) for item in raw.get("words", [])]
-                )
+                words = _bound_word_durations([Word(**item) for item in raw.get("words", [])])
                 if supplied_segments:
                     cached_text = supplied
                 else:
@@ -849,12 +887,14 @@ class KaraokePipeline:
                         if callable(release):
                             release()
                     self.engines.aligner.set_global_asr_segments(anchor_segments)
-                    reports.append(StageReport(
-                        "alignment-anchor-asr",
-                        time.perf_counter() - started_anchor,
-                        False,
-                        f"{self.engines.transcriber.name} segments={len(anchor_segments)}",
-                    ))
+                    reports.append(
+                        StageReport(
+                            "alignment-anchor-asr",
+                            time.perf_counter() - started_anchor,
+                            False,
+                            f"{self.engines.transcriber.name} segments={len(anchor_segments)}",
+                        )
+                    )
 
                 words = self._run(
                     "alignment",
@@ -872,9 +912,9 @@ class KaraokePipeline:
                     reports,
                     warnings,
                 )
-                alignment_diagnostics = getattr(
-                    self.engines.aligner, "last_alignment_diagnostics", None
-                ) or {}
+                alignment_diagnostics = (
+                    getattr(self.engines.aligner, "last_alignment_diagnostics", None) or {}
+                )
                 if alignment_diagnostics:
                     alignment_debug_raw = {
                         "word_sources": list(alignment_diagnostics.get("word_sources") or []),
@@ -1083,9 +1123,7 @@ class KaraokePipeline:
         # assigned in the transcription branch, so using it here made the
         # supplied-lyrics branch fail after MIDI generation.
         canonical_lyrics_text = (
-            lyrics_txt.read_text(encoding="utf-8")
-            if lyrics_txt.exists()
-            else str(supplied or "")
+            lyrics_txt.read_text(encoding="utf-8") if lyrics_txt.exists() else str(supplied or "")
         )
 
         song_map = output / "songMap.json"
@@ -1198,8 +1236,12 @@ class KaraokePipeline:
                     "pitch_analysis_source": pitch_analysis_source,
                     "pitch_preprocess_version": VOCAL_ANALYSIS_PREPROCESS_VERSION,
                     "note_analysis": note_diagnostics,
-                    "pitch_original_quality": to_dict(original_quality) if original_quality is not None else None,
-                    "pitch_cleaned_quality": to_dict(cleaned_quality) if cleaned_quality is not None else None,
+                    "pitch_original_quality": to_dict(original_quality)
+                    if original_quality is not None
+                    else None,
+                    "pitch_cleaned_quality": to_dict(cleaned_quality)
+                    if cleaned_quality is not None
+                    else None,
                     "instrumental_sha256": cache.file_hash(instrumental),
                     "bpm": bpm,
                     "bpm_source": music_analysis.get("tempo_source", "analysis"),

@@ -65,7 +65,8 @@ export function normalizeLyrics(raw) {
     if (!value || typeof value !== "object") return null;
     for (const key of keys) {
       const rawValue = value[key];
-      if (rawValue === null || rawValue === undefined || rawValue === "") continue;
+      if (rawValue === null || rawValue === undefined || rawValue === "")
+        continue;
       const number = Number(rawValue);
       if (Number.isFinite(number) && number >= 0) return number;
     }
@@ -108,12 +109,17 @@ export function normalizeLyrics(raw) {
       const wordStart = finiteWordStarts.length
         ? Math.min(...finiteWordStarts)
         : null;
-      const wordEnd = finiteWordEnds.length ? Math.max(...finiteWordEnds) : null;
+      const wordEnd = finiteWordEnds.length
+        ? Math.max(...finiteWordEnds)
+        : null;
       const startTime = declaredStart ?? wordStart ?? null;
       const endTime = declaredEnd ?? wordEnd ?? null;
       const text =
         toText(line.text ?? line.line) ||
-        words.map((word) => word.text).join(" ").trim();
+        words
+          .map((word) => word.text)
+          .join(" ")
+          .trim();
 
       // Untimed lines are unsafe for real-time karaoke. In particular, never
       // coerce a missing start to zero: that makes an arbitrary line appear at
@@ -128,7 +134,7 @@ export function normalizeLyrics(raw) {
         start: startTime,
         end: safeEnd,
         text,
-        words: words.map(({ __wordIndex, ...word }) => word),
+        words: words.map(({ __wordIndex: _, ...word }) => word),
         __sourceIndex: sourceIndex
       };
     })
@@ -140,7 +146,7 @@ export function normalizeLyrics(raw) {
         left.__sourceIndex - right.__sourceIndex
     )
     .map((line, index, lines) => {
-      const { __sourceIndex, ...cleanLine } = line;
+      const { __sourceIndex: _, ...cleanLine } = line;
       // If a backend omitted/invalidated line end, use the next line boundary
       // rather than creating a zero-length line that can never become current.
       if (cleanLine.end <= cleanLine.start) {

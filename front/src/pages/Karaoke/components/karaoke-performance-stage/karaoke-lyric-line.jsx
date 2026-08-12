@@ -40,7 +40,9 @@ function KaraokeWord({ word, currentTime }) {
 
   const wordText = String(word?.text || word?.word || "");
   const joined = syllables.map((item) => String(item?.text || "")).join("");
-  const suffix = wordText.startsWith(joined) ? wordText.slice(joined.length) : "";
+  const suffix = wordText.startsWith(joined)
+    ? wordText.slice(joined.length)
+    : "";
 
   return (
     <span className="karaoke-lyric-word">

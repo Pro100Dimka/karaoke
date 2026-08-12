@@ -10,5 +10,3 @@ export const EFFECT_FIELDS = [
   ["reverb", "Реверб", "secondary"],
   ["delay", "Дилей"]
 ];
-
-export const METER_BARS = Array.from({ length: 7 }, (_, i) => i);

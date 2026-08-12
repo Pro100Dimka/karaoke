@@ -35,11 +35,15 @@ export function getMelodyRange({
   const actualMin = noteMidiValues.length ? Math.min(...noteMidiValues) : null;
   const actualMax = noteMidiValues.length ? Math.max(...noteMidiValues) : null;
   const sourceMin = hasSavedRange
-    ? actualMin == null ? savedMin + shift : Math.min(savedMin + shift, actualMin)
-    : actualMin ?? finiteFallback;
+    ? actualMin == null
+      ? savedMin + shift
+      : Math.min(savedMin + shift, actualMin)
+    : (actualMin ?? finiteFallback);
   const sourceMax = hasSavedRange
-    ? actualMax == null ? savedMax + shift : Math.max(savedMax + shift, actualMax)
-    : actualMax ?? finiteFallback;
+    ? actualMax == null
+      ? savedMax + shift
+      : Math.max(savedMax + shift, actualMax)
+    : (actualMax ?? finiteFallback);
   const minMidi = Math.floor(sourceMin) - 2;
   const maxMidi = Math.ceil(sourceMax) + 2;
 

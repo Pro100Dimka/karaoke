@@ -1,14 +1,12 @@
 /* eslint-disable import/extensions */
 // eslint-disable-next-line import/extensions
+import { API_BASE_URL } from "../config/runtime";
 import { mockBlobRequest, mockRequest } from "./mock/request.js";
 
 // Общая транспортная часть локального REST API.
 export const MOCK_API_ENABLED = import.meta.env?.VITE_USE_MOCK_API === "true";
 
-const configuredBaseUrl =
-  import.meta.env?.VITE_API_BASE_URL || "http://127.0.0.1:8000";
-
-export const BASE_URL = String(configuredBaseUrl).replace(/\/+$/, "");
+export const BASE_URL = API_BASE_URL;
 
 function normalizeHeaders(headers) {
   if (!headers) return undefined;

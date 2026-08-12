@@ -9,6 +9,8 @@ from AI.midi import write_midi
 from AI.models import Syllable, VocalNote, Word
 from app.utils.json_files import read_json, write_json
 
+JsonObject = dict[str, Any]
+
 
 def _number(value: Any, name: str) -> float:
     try:
@@ -27,6 +29,13 @@ def _int_or_none(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError) as exc:
         raise ValueError("Invalid index") from exc
+
+
+def _safe_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _indices(value: Any, fallback: Any = None) -> list[int]:
@@ -49,7 +58,7 @@ def _normalize_note(raw: dict[str, Any], duration: float) -> dict[str, Any]:
         raise ValueError("A note lies outside the song duration")
     if not 0 <= midi <= 127:
         raise ValueError("MIDI note must be between 0 and 127")
-    velocity = int(raw.get("velocity") or 96)
+    velocity = int(round(_number(raw.get("velocity") or 96, "note.velocity")))
     velocity = max(1, min(127, velocity))
     return {
         "start": round(start, 6),
@@ -65,7 +74,7 @@ def _normalize_note(raw: dict[str, Any], duration: float) -> dict[str, Any]:
     }
 
 
-def _words(song_map: dict[str, Any]) -> list[Word]:
+def _words(song_map: JsonObject) -> list[Word]:
     result: list[Word] = []
     for i, raw in enumerate(song_map.get("words") or []):
         if not isinstance(raw, dict):
@@ -76,13 +85,13 @@ def _words(song_map: dict[str, Any]) -> list[Word]:
                 max(float(raw.get("start") or 0.0), float(raw.get("end") or 0.0)),
                 str(raw.get("text") or raw.get("word") or "?").strip() or "?",
                 max(0.0, min(1.0, float(raw.get("confidence") or 1.0))),
-                int(raw.get("index", i)),
+                _safe_int(raw.get("index"), i),
             )
         )
     return result
 
 
-def _syllables(song_map: dict[str, Any]) -> list[Syllable]:
+def _syllables(song_map: JsonObject) -> list[Syllable]:
     result: list[Syllable] = []
     for i, raw in enumerate(song_map.get("syllables") or []):
         if not isinstance(raw, dict):
@@ -92,16 +101,16 @@ def _syllables(song_map: dict[str, Any]) -> list[Syllable]:
                 float(raw.get("start") or 0.0),
                 max(float(raw.get("start") or 0.0), float(raw.get("end") or 0.0)),
                 str(raw.get("text") or "?").strip() or "?",
-                int(raw.get("word_index") or 0),
-                int(raw.get("index", i)),
+                _safe_int(raw.get("word_index"), 0),
+                _safe_int(raw.get("index"), i),
                 max(0.0, min(1.0, float(raw.get("confidence") or 1.0))),
             )
         )
     return result
 
 
-def _refresh_lines(song_map: dict[str, Any], notes: list[dict[str, Any]]) -> None:
-    note_by_syllable: dict[int, list[dict[str, Any]]] = defaultdict(list)
+def _refresh_lines(song_map: JsonObject, notes: list[JsonObject]) -> None:
+    note_by_syllable: dict[int, list[JsonObject]] = defaultdict(list)
     for note in notes:
         indices = note.get("syllable_indices")
         if not isinstance(indices, list) or not indices:
@@ -113,15 +122,17 @@ def _refresh_lines(song_map: dict[str, Any], notes: list[dict[str, Any]]) -> Non
             except (TypeError, ValueError):
                 continue
 
-    syllable_lookup = {
-        int(item.get("index", i)): dict(item)
+    syllable_lookup: dict[int, JsonObject] = {
+        _safe_int(item.get("index"), i): dict(item)
         for i, item in enumerate(song_map.get("syllables") or [])
         if isinstance(item, dict)
     }
-    words = [dict(item) for item in song_map.get("words") or [] if isinstance(item, dict)]
-    word_lookup = {int(item.get("index", i)): item for i, item in enumerate(words)}
-    for word in words:
-        word["syllables"] = []
+    words: list[JsonObject] = [
+        dict(item) for item in song_map.get("words") or [] if isinstance(item, dict)
+    ]
+    word_lookup = {_safe_int(item.get("index"), i): item for i, item in enumerate(words)}
+    for word_payload in words:
+        word_payload["syllables"] = []
 
     for sid, syllable in syllable_lookup.items():
         linked = sorted(note_by_syllable.get(sid, []), key=lambda n: (n["start"], n["end"]))
@@ -130,26 +141,22 @@ def _refresh_lines(song_map: dict[str, Any], notes: list[dict[str, Any]]) -> Non
             syllable["start"] = min(n["start"] for n in linked)
             syllable["end"] = max(n["end"] for n in linked)
             syllable["timing_source"] = "editor_notes"
-        raw_word_index = syllable.get("word_index")
-        try:
-            word_index = int(raw_word_index)
-        except (TypeError, ValueError):
-            word_index = -1
-        word = word_lookup.get(word_index)
-        if word is not None:
-            word.setdefault("syllables", []).append(syllable)
+        word_index = _safe_int(syllable.get("word_index"), -1)
+        linked_word = word_lookup.get(word_index)
+        if linked_word is not None:
+            linked_word.setdefault("syllables", []).append(syllable)
 
-    for word in words:
-        linked = word.get("syllables") or []
+    for word_payload in words:
+        linked = word_payload.get("syllables") or []
         if linked:
-            word["start"] = min(float(s["start"]) for s in linked)
-            word["end"] = max(float(s["end"]) for s in linked)
-            word["timing_source"] = "editor_syllables"
+            word_payload["start"] = min(float(s["start"]) for s in linked)
+            word_payload["end"] = max(float(s["end"]) for s in linked)
+            word_payload["timing_source"] = "editor_syllables"
 
     song_map["syllables"] = [syllable_lookup[key] for key in sorted(syllable_lookup)]
     song_map["words"] = words
 
-    updated_lines: list[dict[str, Any]] = []
+    updated_lines: list[JsonObject] = []
     for line in song_map.get("lines") or []:
         if not isinstance(line, dict):
             continue
@@ -158,9 +165,8 @@ def _refresh_lines(song_map: dict[str, Any], notes: list[dict[str, Any]]) -> Non
         for old in line.get("words") or []:
             if not isinstance(old, dict):
                 continue
-            try:
-                wi = int(old.get("index"))
-            except (TypeError, ValueError):
+            wi = _safe_int(old.get("index"), -1)
+            if wi < 0:
                 continue
             line_words.append(dict(word_lookup.get(wi, old)))
         clone["words"] = line_words
@@ -171,14 +177,14 @@ def _refresh_lines(song_map: dict[str, Any], notes: list[dict[str, Any]]) -> Non
     song_map["lines"] = updated_lines
 
 
-def load_editor(output_dir: Path) -> tuple[dict[str, Any], bool]:
-    song_map = read_json(output_dir / "songMap.json", default={})
+def load_editor(output_dir: Path) -> tuple[JsonObject, bool]:
+    song_map: Any = read_json(output_dir / "songMap.json", default={})
     if not isinstance(song_map, dict) or not isinstance(song_map.get("notes"), list):
         raise ValueError("songMap.json is not available")
     return song_map, (output_dir / "songMap.ai.json").exists()
 
 
-def save_editor(output_dir: Path, raw_notes: list[dict[str, Any]]) -> dict[str, Any]:
+def save_editor(output_dir: Path, raw_notes: list[JsonObject]) -> JsonObject:
     output_dir = Path(output_dir)
     song_map, _ = load_editor(output_dir)
     backup = output_dir / "songMap.ai.json"
@@ -186,7 +192,7 @@ def save_editor(output_dir: Path, raw_notes: list[dict[str, Any]]) -> dict[str, 
         shutil.copy2(output_dir / "songMap.json", backup)
 
     duration = float(song_map.get("duration") or 0.0)
-    notes = [_normalize_note(item, duration) for item in raw_notes if isinstance(item, dict)]
+    notes: list[JsonObject] = [_normalize_note(item, duration) for item in raw_notes]
     notes.sort(key=lambda n: (n["start"], n["end"], n["midi_note"]))
     song_map["notes"] = notes
     song_map["display_notes"] = [dict(note, display_source="editor") for note in notes]
@@ -202,8 +208,13 @@ def save_editor(output_dir: Path, raw_notes: list[dict[str, Any]]) -> dict[str, 
 
     midi_notes = [
         VocalNote(
-            note["start"], note["end"], note["midi_note"], note["velocity"],
-            note.get("word_index"), note.get("syllable_index"), ()
+            note["start"],
+            note["end"],
+            note["midi_note"],
+            note["velocity"],
+            note.get("word_index"),
+            note.get("syllable_index"),
+            (),
         )
         for note in notes
     ]
@@ -216,37 +227,59 @@ def save_editor(output_dir: Path, raw_notes: list[dict[str, Any]]) -> dict[str, 
             float(song_map.get("bpm") or 120.0),
             False,
         )
+    else:
+        (output_dir / "game.mid").unlink(missing_ok=True)
 
-    manifest = read_json(output_dir / "manifest.json", default={})
+    manifest: Any = read_json(output_dir / "manifest.json", default={})
     if isinstance(manifest, dict):
         manifest["manual_editor"] = {"edited": True, "note_count": len(notes)}
         write_json(output_dir / "manifest.json", manifest)
     return song_map
 
 
-def reset_editor(output_dir: Path) -> dict[str, Any]:
+def reset_editor(output_dir: Path) -> JsonObject:
     output_dir = Path(output_dir)
     backup = output_dir / "songMap.ai.json"
     if not backup.exists():
         raise ValueError("AI backup is not available")
     shutil.copy2(backup, output_dir / "songMap.json")
-    song_map = read_json(output_dir / "songMap.json", default={})
+    song_map: Any = read_json(output_dir / "songMap.json", default={})
     if not isinstance(song_map, dict):
         raise ValueError("AI backup is invalid")
     notes = song_map.get("notes") or []
+    if not isinstance(notes, list):
+        raise ValueError("AI backup notes are invalid")
     write_json(output_dir / "reference.json", {"notes": notes})
     midi_notes = [
         VocalNote(
-            float(n["start"]), float(n["end"]), int(n.get("midi_note", n.get("midi"))),
-            int(n.get("velocity") or 96), _int_or_none(n.get("word_index")),
-            _int_or_none(n.get("syllable_index")), ()
+            float(n["start"]),
+            float(n["end"]),
+            _safe_int(n.get("midi_note", n.get("midi")), -1),
+            _safe_int(n.get("velocity"), 96),
+            _int_or_none(n.get("word_index")),
+            _int_or_none(n.get("syllable_index")),
+            (),
         )
-        for n in notes if isinstance(n, dict)
+        for n in notes
+        if isinstance(n, dict)
     ]
     if midi_notes:
-        write_midi(output_dir / "game.mid", midi_notes, _words(song_map), _syllables(song_map), float(song_map.get("bpm") or 120.0), False)
-    manifest = read_json(output_dir / "manifest.json", default={})
+        write_midi(
+            output_dir / "game.mid",
+            midi_notes,
+            _words(song_map),
+            _syllables(song_map),
+            float(song_map.get("bpm") or 120.0),
+            False,
+        )
+    else:
+        (output_dir / "game.mid").unlink(missing_ok=True)
+    manifest: Any = read_json(output_dir / "manifest.json", default={})
     if isinstance(manifest, dict):
-        manifest["manual_editor"] = {"edited": False, "restored_ai": True, "note_count": len(midi_notes)}
+        manifest["manual_editor"] = {
+            "edited": False,
+            "restored_ai": True,
+            "note_count": len(midi_notes),
+        }
         write_json(output_dir / "manifest.json", manifest)
     return song_map

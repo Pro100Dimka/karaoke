@@ -9,11 +9,11 @@ from pathlib import Path
 import numpy as np
 
 from .audio import load_mono
-
 from .models import PitchFrame, Syllable, VocalNote, Word
 
 NOTE_DECODER_VERSION = "acoustic-notes-v31-conservative-register-verifier"
-_NOTE_DIAGNOSTICS: ContextVar[dict] = ContextVar("note_diagnostics", default={})
+_NOTE_DIAGNOSTICS: ContextVar[dict | None] = ContextVar("note_diagnostics", default=None)
+
 
 def get_note_diagnostics() -> dict:
     return dict(_NOTE_DIAGNOSTICS.get() or {})
@@ -37,8 +37,7 @@ def _median_filter(values: list[float], radius: int = 2) -> list[float]:
 def _weighted_median(values: list[float], weights: list[float]) -> float:
     if not values:
         raise ValueError("weighted median requires at least one value")
-    pairs = sorted(zip(values, weights, strict=False),
-                   key=lambda item: item[0])
+    pairs = sorted(zip(values, weights, strict=False), key=lambda item: item[0])
     total = sum(max(0.0, weight) for _, weight in pairs)
     if total <= 1e-12:
         return float(statistics.median(values))
@@ -68,7 +67,6 @@ def _robust_pitch_center(values: list[float], weights: list[float]) -> float:
     return _weighted_median(values, weights)
 
 
-
 @dataclass(frozen=True)
 class _NoteTimingProfile:
     """Timing tolerances learned from the current pitch/note stream.
@@ -94,11 +92,7 @@ class _NoteTimingProfile:
 
 
 def _robust_frame_step(frames: list[PitchFrame], fallback: float) -> float:
-    gaps = [
-        b.time - a.time
-        for a, b in zip(frames, frames[1:], strict=False)
-        if b.time > a.time
-    ]
+    gaps = [b.time - a.time for a, b in zip(frames, frames[1:], strict=False) if b.time > a.time]
     if not gaps:
         return max(float(fallback), 1e-4)
     # Ignore sparse discontinuities without assuming a specific tracker hop.
@@ -116,9 +110,7 @@ def _note_timing_profile(
     hint = max(float(min_note_hint), 1e-4)
     step = _robust_frame_step(frames, hint / 6.0)
 
-    durations = sorted(
-        note.end - note.start for note in notes if note.end > note.start + step
-    )
+    durations = sorted(note.end - note.start for note in notes if note.end > note.start + step)
     note_scale = float(statistics.median(durations)) if durations else max(hint, step * 6.0)
     note_scale = max(note_scale, step * 4.0)
 
@@ -140,9 +132,7 @@ def _note_timing_profile(
     phrase_gap = max(note_scale * 0.50, gap_scale * 2.0)
     history_frames = max(3, int(round(note_scale * 0.14 / step)))
     future_frames = max(2, int(round(note_scale * 0.08 / step)))
-    attack_values = sorted(_pitch_attack_strength(frames, note.start, None) for note in notes) if notes else []
     attack_weak, attack_strong = 0.34, 0.38
-
 
     return _NoteTimingProfile(
         frame_step=step,
@@ -158,6 +148,7 @@ def _note_timing_profile(
         attack_weak=attack_weak,
         attack_strong=attack_strong,
     )
+
 
 def _voiced_runs(
     frames: list[PitchFrame],
@@ -202,16 +193,12 @@ def _sustained_pitch_segments(
 
     observed = _median_filter([hz_to_midi(frame.frequency) for frame in run], radius=2)
     gaps = [
-        b.time - a.time
-        for a, b in zip(run, run[1:], strict=False)
-        if 0 < b.time - a.time <= 0.08
+        b.time - a.time for a, b in zip(run, run[1:], strict=False) if 0 < b.time - a.time <= 0.08
     ]
     step = max(0.005, min(0.04, statistics.median(gaps) if gaps else 0.01))
     min_frames = max(4, int(math.ceil(min_note / step)))
     normal_confirmation = max(min_note * 1.5, step * 8.0)
     fast_confirmation = max(min_note, step * 5.0)
-    confirm_frames = max(min_frames, int(math.ceil(normal_confirmation / step)))
-
     # A note centre follows the median of the current accepted segment.  A
     # challenger has to remain separated from it for long enough.  This is much
     # less sensitive to vibrato than repeatedly comparing two short windows.
@@ -259,9 +246,11 @@ def _sustained_pitch_segments(
         # oscillation at end-of-phrase.
         tail_factor = 1.5 if separation >= 1.8 else 2.0
         tail_evidence = max(normal_confirmation * tail_factor, min_note * 2.0)
-        if attack < weak_attack and len(run) - i < max(needed, int(math.ceil(tail_evidence / step))):
+        if attack < weak_attack and len(run) - i < max(
+            needed, int(math.ceil(tail_evidence / step))
+        ):
             break
-        future = observed[i:i + needed]
+        future = observed[i : i + needed]
         new_center = statistics.median(future)
         delta = new_center - center
         if abs(delta) < threshold:
@@ -271,7 +260,8 @@ def _sustained_pitch_segments(
         # Most frames must consistently support the new side.  A glissando that
         # merely passes through another semitone therefore stays one bent note.
         supporters = [
-            value for value in future
+            value
+            for value in future
             if (value - center) * delta > 0 and abs(value - center) >= threshold * 0.82
         ]
         if len(supporters) < math.ceil(needed * 0.82):
@@ -284,19 +274,17 @@ def _sustained_pitch_segments(
         # a longer look-ahead before accepting a boundary.
         lookahead_duration = max(normal_confirmation * 3.0, min_note * 3.5)
         lookahead_frames = max(needed, int(math.ceil(lookahead_duration / step)))
-        lookahead = observed[i:min(len(observed), i + lookahead_frames)]
+        lookahead = observed[i : min(len(observed), i + lookahead_frames)]
         if len(lookahead) >= needed + 2:
             return_band = max(0.48, threshold * 0.62)
             returns_to_old = sum(abs(value - center) <= return_band for value in lookahead)
             destination = statistics.median(future)
             stays_near_destination = sum(
-                abs(value - destination) <= max(0.62, threshold * 0.72)
-                for value in lookahead
+                abs(value - destination) <= max(0.62, threshold * 0.72) for value in lookahead
             )
-            if (
-                returns_to_old >= max(2, int(math.ceil(len(lookahead) * 0.16)))
-                and stays_near_destination < int(math.ceil(len(lookahead) * 0.70))
-            ):
+            if returns_to_old >= max(
+                2, int(math.ceil(len(lookahead) * 0.16))
+            ) and stays_near_destination < int(math.ceil(len(lookahead) * 0.70)):
                 i += 1
                 continue
 
@@ -356,12 +344,12 @@ def _local_frame_attack_strength(run: list[PitchFrame], index: int) -> float:
     ratio = current / baseline
     return max(0.0, min(1.0, (ratio - 1.25) / 0.90))
 
+
 def _energy_reattack_boundaries(segment: list[PitchFrame], min_note: float) -> list[int]:
     """Find short energy valleys followed by a clear same-pitch re-attack."""
     if len(segment) < 12:
         return []
-    steps = [b.time - a.time for a,
-             b in zip(segment, segment[1:], strict=False) if b.time > a.time]
+    steps = [b.time - a.time for a, b in zip(segment, segment[1:], strict=False) if b.time > a.time]
     step = max(0.005, min(0.04, statistics.median(steps) if steps else 0.01))
     min_frames = max(5, int(round(max(min_note, step * 5.0) / step)))
     energies = [max(0.0, f.energy) for f in segment]
@@ -390,9 +378,9 @@ def _energy_reattack_boundaries(segment: list[PitchFrame], min_note: float) -> l
             continue
         if left < context or right + context > len(segment):
             continue
-        before = statistics.median(energies[left - context: left])
+        before = statistics.median(energies[left - context : left])
         valley = statistics.median(energies[left:right])
-        after = statistics.median(energies[right: right + context])
+        after = statistics.median(energies[right : right + context])
         if (
             before >= typical * 0.62
             and after >= typical * 0.68
@@ -447,8 +435,7 @@ def _bend_curve(
 ) -> tuple[tuple[float, float], ...]:
     if not segment:
         return ()
-    midi = _median_filter([hz_to_midi(frame.frequency)
-                          for frame in segment], radius=1)
+    midi = _median_filter([hz_to_midi(frame.frequency) for frame in segment], radius=1)
     result: list[tuple[float, float]] = []
     last_time = -1.0
     last_cents: float | None = None
@@ -458,7 +445,11 @@ def _bend_curve(
         # MIDI pitch-bend does not need a 100 Hz control stream. Keep changes
         # at ~25 ms resolution unless the bend changed materially.
         if index not in {0, len(segment) - 1} and (
-            relative - last_time < max(duration / max(12, len(segment)), _robust_frame_step(segment, duration / max(1, len(segment))) * 2.0)
+            relative - last_time
+            < max(
+                duration / max(12, len(segment)),
+                _robust_frame_step(segment, duration / max(1, len(segment))) * 2.0,
+            )
             and last_cents is not None
             and abs(cents - last_cents) < 12.0
         ):
@@ -479,8 +470,7 @@ def _note_from_segment(
         return None
     step = (
         statistics.median(
-            [b.time - a.time for a,
-                b in zip(segment, segment[1:], strict=False) if b.time > a.time]
+            [b.time - a.time for a, b in zip(segment, segment[1:], strict=False) if b.time > a.time]
         )
         if len(segment) > 1
         else max(min_note / 6.0, 1e-4)
@@ -645,9 +635,7 @@ def _decode_pitch_only(
     return sorted(output, key=lambda note: (note.start, note.end, note.midi_note))
 
 
-def _attach_soft_lyric_labels(
-    notes: list[VocalNote], syllables: list[Syllable]
-) -> list[VocalNote]:
+def _attach_soft_lyric_labels(notes: list[VocalNote], syllables: list[Syllable]) -> list[VocalNote]:
     """Attach the best lyric label without changing note timing or pitch.
 
     The proximity tolerance is derived from the local note/syllable timing
@@ -662,9 +650,11 @@ def _attach_soft_lyric_labels(
     )
     note_scale = statistics.median(note_durations) if note_durations else 0.0
     syllable_scale = statistics.median(syllable_durations) if syllable_durations else note_scale
-    proximity = max(1e-4, min(
-        value for value in (note_scale * 0.35, syllable_scale * 0.30) if value > 0.0
-    )) if (note_scale > 0.0 or syllable_scale > 0.0) else 1e-4
+    proximity = (
+        max(1e-4, min(value for value in (note_scale * 0.35, syllable_scale * 0.30) if value > 0.0))
+        if (note_scale > 0.0 or syllable_scale > 0.0)
+        else 1e-4
+    )
 
     result: list[VocalNote] = []
     for note in notes:
@@ -718,16 +708,23 @@ def _word_activity_intervals(
     return merged
 
 
-
-def _adaptive_lyric_timing(words: list[Word], syllables: list[Syllable], min_note: float) -> tuple[float,float,float]:
-    spans=[max(0.0,item.end-item.start) for item in (words or syllables) if item.end>item.start]
-    gaps=[b.start-a.end for a,b in zip((words or syllables),(words or syllables)[1:],strict=False) if 0 < b.start-a.end]
-    typical=float(statistics.median(spans)) if spans else max(min_note*4.0,0.20)
-    gap=float(statistics.median(gaps)) if gaps else max(min_note,typical*0.18)
-    pad=max(min_note*0.55, min(typical*0.16, gap*0.75))
-    merge=max(pad*1.5, min(typical*0.38, gap*1.35))
-    nearest=max(min_note*0.65, min(pad, typical*0.18))
-    return pad,merge,nearest
+def _adaptive_lyric_timing(
+    words: list[Word], syllables: list[Syllable], min_note: float
+) -> tuple[float, float, float]:
+    spans = [
+        max(0.0, item.end - item.start) for item in (words or syllables) if item.end > item.start
+    ]
+    gaps = [
+        b.start - a.end
+        for a, b in zip((words or syllables), (words or syllables)[1:], strict=False)
+        if b.start - a.end > 0
+    ]
+    typical = float(statistics.median(spans)) if spans else max(min_note * 4.0, 0.20)
+    gap = float(statistics.median(gaps)) if gaps else max(min_note, typical * 0.18)
+    pad = max(min_note * 0.55, min(typical * 0.16, gap * 0.75))
+    merge = max(pad * 1.5, min(typical * 0.38, gap * 1.35))
+    nearest = max(min_note * 0.65, min(pad, typical * 0.18))
+    return pad, merge, nearest
 
 
 def _filter_to_lyric_phrases(
@@ -749,10 +746,9 @@ def _filter_to_lyric_phrases(
     # Forced-aligned word timestamps are acoustic model outputs.  Syllable
     # timestamps are synthesized downstream, so they are only a fallback here.
     pad, merge_gap, nearest_limit = _adaptive_lyric_timing(words or [], syllables, min_note)
-    intervals = (
-        _word_activity_intervals(words or [], pad=pad, merge_gap=merge_gap)
-        or _lyric_activity_intervals(syllables, pad=pad, merge_gap=merge_gap)
-    )
+    intervals = _word_activity_intervals(
+        words or [], pad=pad, merge_gap=merge_gap
+    ) or _lyric_activity_intervals(syllables, pad=pad, merge_gap=merge_gap)
     result: list[VocalNote] = []
     for note in notes:
         best_overlap = 0.0
@@ -792,7 +788,11 @@ def _make_monophonic(notes: list[VocalNote], min_note: float) -> list[VocalNote]
                 previous.velocity,
                 previous.word_index,
                 previous.syllable_index,
-                tuple((time, cents) for time, cents in previous.cents if time <= boundary - previous.start + 1e-9),
+                tuple(
+                    (time, cents)
+                    for time, cents in previous.cents
+                    if time <= boundary - previous.start + 1e-9
+                ),
             )
         elif previous.end - previous.start < note.end - note.start:
             output.pop()
@@ -807,11 +807,14 @@ def _make_monophonic(notes: list[VocalNote], min_note: float) -> list[VocalNote]
                     note.velocity,
                     note.word_index,
                     note.syllable_index,
-                    tuple((max(0.0, time - offset), cents) for time, cents in note.cents if time >= offset - 1e-9),
+                    tuple(
+                        (max(0.0, time - offset), cents)
+                        for time, cents in note.cents
+                        if time >= offset - 1e-9
+                    ),
                 )
             )
     return output
-
 
 
 def _audio_harmonic_salience(
@@ -846,7 +849,7 @@ def _audio_harmonic_salience(
             fundamental_ratio = ratio
         score += weight * math.log1p(max(0.0, ratio))
     if fundamental_ratio < 2.0:
-        score -= (2.0 - fundamental_ratio)
+        score -= 2.0 - fundamental_ratio
     return score
 
 
@@ -854,7 +857,9 @@ def _audio_verify_note_register(
     notes: list[VocalNote],
     audio: str | Path | None,
     profile: _NoteTimingProfile,
-    *, fmin_hz: float, fmax_hz: float,
+    *,
+    fmin_hz: float,
+    fmax_hz: float,
 ) -> list[VocalNote]:
     """Resolve FCPE octave/harmonic mistakes after note segmentation.
 
@@ -885,9 +890,7 @@ def _audio_verify_note_register(
         )
         n_fft = 2048
         magnitude = np.abs(
-            librosa.stft(
-                waveform, n_fft=n_fft, hop_length=hop, win_length=n_fft, center=True
-            )
+            librosa.stft(waveform, n_fft=n_fft, hop_length=hop, win_length=n_fft, center=True)
         ).astype(np.float32, copy=False)
         onset = librosa.onset.onset_strength(
             y=waveform, sr=sample_rate, hop_length=hop, center=True
@@ -898,11 +901,15 @@ def _audio_verify_note_register(
 
     original = [int(note.midi_note) for note in notes]
     global_center = statistics.median(original)
-    q10, q90 = np.percentile(np.asarray(original,dtype=float), [10,90]) if len(original)>2 else (global_center-7,global_center+7)
-    observed_span=max(7.0,float(q90-q10))
-    register_margin=max(12.0,min(24.0, observed_span*1.5))
-    register_low=max(0,int(math.floor(global_center-register_margin)))
-    register_high=min(127,int(math.ceil(global_center+register_margin)))
+    q10, q90 = (
+        np.percentile(np.asarray(original, dtype=float), [10, 90])
+        if len(original) > 2
+        else (global_center - 7, global_center + 7)
+    )
+    observed_span = max(7.0, float(q90 - q10))
+    register_margin = max(12.0, min(24.0, observed_span * 1.5))
+    register_low = max(0, int(math.floor(global_center - register_margin)))
+    register_high = min(127, int(math.ceil(global_center + register_margin)))
 
     candidate_rows: list[list[int]] = []
     emission_rows: list[list[float]] = []
@@ -1039,10 +1046,7 @@ def _audio_verify_note_register(
                         abs(delta - harmonic) <= 1.1 for harmonic in (12, 19, 24)
                     ):
                         transition += 1.45
-                    value = (
-                        local_scores[-1][previous_state]
-                        - transition * transition_scale
-                    )
+                    value = local_scores[-1][previous_state] - transition * transition_scale
                     if value > best_score:
                         best_score = value
                         best_previous = previous_state
@@ -1117,7 +1121,9 @@ def _audio_verify_note_register(
                 accept = yin_supports_rewrite and emission_margin >= required_margin
             else:
                 accept = emission_margin >= required_margin and (
-                    yin_supports_rewrite or not has_yin or candidate_yin_distance <= original_yin_distance
+                    yin_supports_rewrite
+                    or not has_yin
+                    or candidate_yin_distance <= original_yin_distance
                 )
 
             decision = {
@@ -1156,15 +1162,17 @@ def _audio_verify_note_register(
     changed = []
     for idx, (before, after) in enumerate(zip(notes, verified, strict=False)):
         if before.midi_note != after.midi_note:
-            changed.append({
-                "index": idx,
-                "start": round(before.start, 4),
-                "end": round(before.end, 4),
-                "original_midi": before.midi_note,
-                "verified_midi": after.midi_note,
-                "semitone_delta": after.midi_note - before.midi_note,
-                "reason": "audio_register_verification",
-            })
+            changed.append(
+                {
+                    "index": idx,
+                    "start": round(before.start, 4),
+                    "end": round(before.end, 4),
+                    "original_midi": before.midi_note,
+                    "verified_midi": after.midi_note,
+                    "semitone_delta": after.midi_note - before.midi_note,
+                    "reason": "audio_register_verification",
+                }
+            )
 
     def _bucket(delta: int) -> str:
         value = abs(int(delta))
@@ -1205,7 +1213,6 @@ def _audio_verify_note_register(
     return verified
 
 
-
 def _repair_isolated_harmonic_notes(
     notes: list[VocalNote],
     frames: list[PitchFrame],
@@ -1242,7 +1249,7 @@ def _repair_isolated_harmonic_notes(
         candidate_distance = abs(candidate - target)
         improvement = original_distance - candidate_distance
         duration = current.end - current.start
-        neighbourhood_spread = abs(left.midi_note-right.midi_note)
+        neighbourhood_spread = abs(left.midi_note - right.midi_note)
         allowed_distance = max(2.5, min(5.0, neighbourhood_spread + 3.0))
         required_improvement = max(4.0, original_distance * 0.55)
         if candidate_distance > allowed_distance or improvement < required_improvement:
@@ -1262,6 +1269,7 @@ def _repair_isolated_harmonic_notes(
             (),
         )
     return work
+
 
 def _merge_verified_fragments(
     notes: list[VocalNote],
@@ -1299,6 +1307,7 @@ def _merge_verified_fragments(
             output.append(note)
     return output
 
+
 def build_vocal_notes(
     pitch: list[PitchFrame],
     syllables: list[Syllable],
@@ -1308,7 +1317,9 @@ def build_vocal_notes(
     min_confidence: float = 0.42,
     words: list[Word] | None = None,
     audio: str | Path | None = None,
-    activity_segments: list[tuple[float, float, str]] | tuple[tuple[float, float, str], ...] | None = None,
+    activity_segments: list[tuple[float, float, str]]
+    | tuple[tuple[float, float, str], ...]
+    | None = None,
     fmin_hz: float = 55.0,
     fmax_hz: float = 1400.0,
 ) -> list[VocalNote]:
@@ -1326,8 +1337,11 @@ def build_vocal_notes(
     # line-level offsets can otherwise delete valid acoustic melody. Decode the
     # complete pitch contour and attach text only after note events exist.
     notes = _decode_pitch_only(
-        frames, min_note=min_note, split_semitones=split_semitones,
-        max_gap=max_gap, min_confidence=min_confidence,
+        frames,
+        min_note=min_note,
+        split_semitones=split_semitones,
+        max_gap=max_gap,
+        min_confidence=min_confidence,
     )
     # MIDI melody must NEVER be cut or created from lyric timestamps.
     # Forced alignment can be locally wrong even when the lyric text itself is
@@ -1349,11 +1363,17 @@ def build_vocal_notes(
     notes = _repair_short_isolated_spikes(notes, frames, timing)
     notes = _merge_same_pitch_gaps(notes, frames, timing)
     notes = _repair_note_outliers(notes)
-    diag=dict(_NOTE_DIAGNOSTICS.get() or {})
-    diag["timing_profile"]={"frame_step":timing.frame_step,"note_scale":timing.note_scale,"gap_scale":timing.gap_scale,"merge_gap":timing.merge_gap,"attack_weak":timing.attack_weak,"attack_strong":timing.attack_strong}
+    diag = dict(_NOTE_DIAGNOSTICS.get() or {})
+    diag["timing_profile"] = {
+        "frame_step": timing.frame_step,
+        "note_scale": timing.note_scale,
+        "gap_scale": timing.gap_scale,
+        "merge_gap": timing.merge_gap,
+        "attack_weak": timing.attack_weak,
+        "attack_strong": timing.attack_strong,
+    }
     _NOTE_DIAGNOSTICS.set(diag)
     return notes
-
 
 
 def _pitch_attack_strength(
@@ -1366,6 +1386,7 @@ def _pitch_attack_strength(
         return 0.0
     times = [frame.time for frame in frames]
     import bisect
+
     index = bisect.bisect_left(times, timestamp)
     if profile is None:
         step = _robust_frame_step(frames, 1e-2)
@@ -1375,13 +1396,9 @@ def _pitch_attack_strength(
     else:
         history_count = profile.attack_history_frames
         future_count = profile.attack_future_frames
-    history = [
-        max(0.0, frames[i].energy)
-        for i in range(max(0, index - history_count), index)
-    ]
+    history = [max(0.0, frames[i].energy) for i in range(max(0, index - history_count), index)]
     future = [
-        max(0.0, frames[i].energy)
-        for i in range(index, min(len(frames), index + future_count))
+        max(0.0, frames[i].energy) for i in range(index, min(len(frames), index + future_count))
     ]
     if not history or not future:
         return 0.0
@@ -1430,7 +1447,7 @@ def _consolidate_micro_fragments(
             and abs(middle.midi_note - left.midi_note) <= 2
             and _pitch_attack_strength(frames, middle.start, profile) < profile.attack_weak
         ):
-            work[index - 1:index + 2] = [
+            work[index - 1 : index + 2] = [
                 VocalNote(
                     left.start,
                     right.end,
@@ -1458,8 +1475,7 @@ def _consolidate_micro_fragments(
         )
         delta = abs(note.midi_note - previous.midi_note)
         short_side = (
-            min(note.end - note.start, previous.end - previous.start)
-            <= profile.micro_duration
+            min(note.end - note.start, previous.end - previous.start) <= profile.micro_duration
         )
         no_attack = _pitch_attack_strength(frames, note.start, profile) < profile.attack_weak
         should_merge = (
@@ -1488,6 +1504,7 @@ def _consolidate_micro_fragments(
         )
     return output
 
+
 def _repair_short_isolated_spikes(
     notes: list[VocalNote],
     frames: list[PitchFrame],
@@ -1497,7 +1514,7 @@ def _repair_short_isolated_spikes(
     if len(notes) < 3:
         return list(notes)
     work = list(notes)
-    for i in range(1, len(work)-1):
+    for i in range(1, len(work) - 1):
         mid = work[i]
         if (
             mid.end - mid.start > profile.spike_duration
@@ -1505,7 +1522,7 @@ def _repair_short_isolated_spikes(
         ):
             continue
         neighbours = []
-        for j in range(max(0, i-2), min(len(work), i+3)):
+        for j in range(max(0, i - 2), min(len(work), i + 3)):
             if j == i:
                 continue
             candidate = work[j]
@@ -1518,11 +1535,16 @@ def _repair_short_isolated_spikes(
         if len(neighbours) < 2:
             continue
         target = int(round(statistics.median(neighbours)))
-        tight = sum(abs(value-target) <= 2 for value in neighbours) >= max(2, len(neighbours)-1)
-        if tight and abs(mid.midi_note-target) >= 5:
+        tight = sum(abs(value - target) <= 2 for value in neighbours) >= max(2, len(neighbours) - 1)
+        if tight and abs(mid.midi_note - target) >= 5:
             work[i] = VocalNote(
-                mid.start, mid.end, target, mid.velocity,
-                mid.word_index, mid.syllable_index, (),
+                mid.start,
+                mid.end,
+                target,
+                mid.velocity,
+                mid.word_index,
+                mid.syllable_index,
+                (),
             )
     return work
 
@@ -1534,17 +1556,20 @@ def _merge_same_pitch_gaps(
 ) -> list[VocalNote]:
     if not notes:
         return []
-    output=[notes[0]]
+    output = [notes[0]]
     for note in notes[1:]:
-        prev=output[-1]
-        gap=note.start-prev.end
+        prev = output[-1]
+        gap = note.start - prev.end
         if (
             note.midi_note == prev.midi_note
             and 0 <= gap <= max(profile.merge_gap, profile.gap_scale * 1.5)
             and _pitch_attack_strength(frames, note.start, profile) < 0.28
         ):
-            output[-1]=VocalNote(
-                prev.start, note.end, prev.midi_note, max(prev.velocity,note.velocity),
+            output[-1] = VocalNote(
+                prev.start,
+                note.end,
+                prev.midi_note,
+                max(prev.velocity, note.velocity),
                 prev.word_index if prev.word_index == note.word_index else None,
                 prev.syllable_index if prev.syllable_index == note.syllable_index else None,
                 (),
@@ -1562,6 +1587,7 @@ def _repair_note_outliers(notes: list[VocalNote]) -> list[VocalNote]:
     longer rewritten after acoustic segmentation.
     """
     return list(notes)
+
 
 def build_game_notes(
     vocal: list[VocalNote],
@@ -1609,22 +1635,28 @@ def build_game_notes(
 
         if len(overlaps) <= 1:
             owner = overlaps[0] if overlaps else None
-            result.append(VocalNote(
-                note.start,
-                note.end,
-                int(note.midi_note),
-                note.velocity,
-                owner.word_index if owner else note.word_index,
-                owner.index if owner else note.syllable_index,
-                (),
-            ))
+            result.append(
+                VocalNote(
+                    note.start,
+                    note.end,
+                    int(note.midi_note),
+                    note.velocity,
+                    owner.word_index if owner else note.word_index,
+                    owner.index if owner else note.syllable_index,
+                    (),
+                )
+            )
             continue
 
         # Preferred cuts follow the aligned start of each following syllable.
-        raw_cuts = [float(note.start)] + [
-            max(float(note.start), min(float(note.end), float(syllable.start)))
-            for syllable in overlaps[1:]
-        ] + [float(note.end)]
+        raw_cuts = (
+            [float(note.start)]
+            + [
+                max(float(note.start), min(float(note.end), float(syllable.start)))
+                for syllable in overlaps[1:]
+            ]
+            + [float(note.end)]
+        )
 
         # If every cut is strictly increasing, retain the acoustic/lyric
         # boundaries exactly.  Otherwise (e.g. several aligned syllables share a
@@ -1632,8 +1664,7 @@ def build_game_notes(
         # relative lyric overlap weights.  This guarantees one game event per
         # overlapping syllable without any fixed millisecond floor.
         strictly_increasing = all(
-            right > left
-            for left, right in zip(raw_cuts, raw_cuts[1:], strict=False)
+            right > left for left, right in zip(raw_cuts, raw_cuts[1:], strict=False)
         )
         if strictly_increasing:
             boundaries = raw_cuts
@@ -1660,13 +1691,15 @@ def build_game_notes(
                 # Numerical last resort: proportional boundaries above should
                 # make this unreachable, but never create an invalid event.
                 continue
-            result.append(VocalNote(
-                left,
-                right,
-                int(note.midi_note),
-                note.velocity,
-                owner.word_index,
-                owner.index,
-                (),
-            ))
+            result.append(
+                VocalNote(
+                    left,
+                    right,
+                    int(note.midi_note),
+                    note.velocity,
+                    owner.word_index,
+                    owner.index,
+                    (),
+                )
+            )
     return result

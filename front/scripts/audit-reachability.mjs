@@ -21,7 +21,11 @@ function walk(directory) {
 
 const sourceFiles = new Set(
   walk(sourceRoot)
-    .filter((filePath) => sourceExtensions.has(path.extname(filePath)))
+    .filter(
+      (filePath) =>
+        sourceExtensions.has(path.extname(filePath)) &&
+        !path.relative(sourceRoot, filePath).startsWith(`theme${path.sep}`)
+    )
     .map((filePath) => path.normalize(filePath))
 );
 

@@ -49,10 +49,7 @@ export function detectMidiFromAnalyser(analyser, buffer, sampleRate) {
   // 75..1000 Hz window could not detect C2 at all and also clipped high
   // soprano notes above roughly B5.
   const minLag = Math.max(2, Math.floor(rate / MAX_PITCH_HZ));
-  const maxLag = Math.min(
-    buffer.length - 2,
-    Math.ceil(rate / MIN_PITCH_HZ)
-  );
+  const maxLag = Math.min(buffer.length - 2, Math.ceil(rate / MIN_PITCH_HZ));
   if (maxLag <= minLag) return null;
 
   let bestLag = -1;
@@ -96,7 +93,7 @@ export function detectMidiFromAnalyser(analyser, buffer, sampleRate) {
     const right = scores[bestLag + 1];
     const denominator = left - 2 * center + right;
     if (Number.isFinite(denominator) && Math.abs(denominator) > 1e-9) {
-      const offset = 0.5 * (left - right) / denominator;
+      const offset = (0.5 * (left - right)) / denominator;
       if (Number.isFinite(offset)) {
         refinedLag += Math.max(-0.5, Math.min(0.5, offset));
       }

@@ -5,7 +5,9 @@ import selectorParser from "postcss-selector-parser";
 
 const root = process.cwd();
 const sourceRoot = resolve(root, "src");
-const requestedFile = process.argv.find((argument) => argument.startsWith("--file="));
+const requestedFile = process.argv.find((argument) =>
+  argument.startsWith("--file=")
+);
 const targetFile = requestedFile
   ? resolve(root, requestedFile.slice("--file=".length))
   : null;
@@ -110,6 +112,8 @@ console.log(`Unused CSS classes: ${unusedClasses.size}`);
 console.log(`Removed selectors: ${removedSelectors}`);
 console.log(`Removed rules: ${removedRules}`);
 console.log(`Mode: ${dryRun ? "dry-run" : "write"}`);
-for (const file of cssFiles.filter((file) => !targetFile || resolve(file) === targetFile)) {
+for (const file of cssFiles.filter(
+  (file) => !targetFile || resolve(file) === targetFile
+)) {
   console.log(`Checked ${relative(root, file)}`);
 }

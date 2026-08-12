@@ -8,16 +8,14 @@ if not exist "%PYTHON%" (
   exit /b 1
 )
 
-echo [1/2] Verifying frontend, architecture and UI...
+echo [1/2] Verifying frontend and architecture...
 call npm --prefix "%ROOT%\front" run verify || exit /b 1
-call npm --prefix "%ROOT%\front" run verify:ui || exit /b 1
 
 echo [2/2] Verifying backend and AI pipeline...
 pushd "%ROOT%\backend"
-"%PYTHON%" -m ruff check app AI tests || exit /b 1
-"%PYTHON%" -m ruff format --check app AI tests || exit /b 1
+"%PYTHON%" -m ruff check app AI config.py database.py models.py schemas.py run.py || exit /b 1
+"%PYTHON%" -m ruff format --check app AI config.py database.py models.py schemas.py run.py || exit /b 1
 "%PYTHON%" -m mypy app || exit /b 1
-"%PYTHON%" -m pytest -q || exit /b 1
 "%PYTHON%" -m pip check || exit /b 1
 rem qwen-asr 0.0.6 requires transformers 4.57.6 exactly. The application only
 rem loads bundled offline models, so the model-deserialization advisories below

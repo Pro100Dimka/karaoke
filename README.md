@@ -18,8 +18,8 @@ start-dev.bat
 scripts\check.bat
 ```
 
-Проверка включает frontend-тесты, lint, форматирование, архитектурные аудиты, production
-build, Ruff, mypy, pytest и аудит Python-зависимостей.
+Проверка включает frontend lint, форматирование, архитектурные аудиты, production
+build, Ruff, mypy и аудит Python-зависимостей.
 
 ## Сборка установщика
 

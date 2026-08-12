@@ -9,7 +9,11 @@ export default function Diagnostics() {
   const checks = [
     ["backend", "Backend сервер", Boolean(health)],
     ...(pipeline
-      ? PIPELINE_CHECKS.map(([key, label]) => [key, label, Boolean(pipeline[key])])
+      ? PIPELINE_CHECKS.map(([key, label]) => [
+          key,
+          label,
+          Boolean(pipeline[key])
+        ])
       : [])
   ];
 
@@ -18,7 +22,11 @@ export default function Diagnostics() {
       <Stack gap={0.65} className="settings-screen-section">
         <Typography variant="h3">Диагностика</Typography>
 
-        <Grid columns={2} gap="var(--space-2)" className="settings-diagnostics-grid">
+        <Grid
+          columns={2}
+          gap="var(--space-2)"
+          className="settings-diagnostics-grid"
+        >
           {checks.map(([key, label, ok]) => (
             <DiagnosticCheck key={key} label={label} ok={ok} />
           ))}

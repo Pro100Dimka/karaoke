@@ -55,12 +55,11 @@ export default function useKaraokeTransport({
 
       // A route/song change must never leave a backend recording session alive.
       // Try to finish it; if the backend cannot save it, at least pause it.
-      api.stopRecording(sessionId).catch(() =>
-        api.pauseRecording(sessionId).catch(() => {})
-      );
+      api
+        .stopRecording(sessionId)
+        .catch(() => api.pauseRecording(sessionId).catch(() => {}));
     };
   }, [song?.id]);
-
 
   const settleSupersededRecording = async (sessionId) => {
     if (!sessionId) return;
@@ -70,9 +69,9 @@ export default function useKaraokeTransport({
       return;
     }
 
-    await api.stopRecording(sessionId).catch(() =>
-      api.pauseRecording(sessionId).catch(() => {})
-    );
+    await api
+      .stopRecording(sessionId)
+      .catch(() => api.pauseRecording(sessionId).catch(() => {}));
 
     if (recordingSessionRef.current === sessionId) {
       recordingSessionRef.current = null;

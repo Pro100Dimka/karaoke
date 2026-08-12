@@ -7,11 +7,10 @@ import {
   Stack,
   Typography
 } from "../../../../theme/ui";
-import { getSongCardTilt } from "../../card-tilt";
 import { getSongCardState } from "../../utils";
 import ProcessingSignal from "./processing-signal";
 import SongCardArtwork from "./song-card-artwork";
-import { applyCardTilt, formatSongKey, getSongActions } from "./utils";
+import { formatSongKey, getSongActions } from "./utils";
 
 const INTERACTIVE_SELECTOR = "button, a, input, select, textarea";
 const ACTIVATION_KEYS = ["Enter", " "];
@@ -24,10 +23,6 @@ const STATUS = {
   done: ["Готово", "badge-done"],
   error: ["Ошибка", "badge-error"]
 };
-const clearCardTilt = ({ currentTarget }) =>
-  ["--tilt-x", "--tilt-y", "--glow-x", "--glow-y"].forEach(
-    currentTarget.style.removeProperty.bind(currentTarget.style)
-  );
 const TextItems = ({ items }) =>
   items.map((value, key) => value && <span key={key}>{value}</span>);
 const SongStatusBadge = ({ status }) => {
@@ -67,11 +62,6 @@ function LibrarySongCard({
     tempo && `${tempo} BPM`,
     difficulty
   ];
-  const handlePointerMove = ({ clientX, clientY, currentTarget }) =>
-    applyCardTilt(
-      currentTarget,
-      getSongCardTilt(clientX, clientY, currentTarget.getBoundingClientRect())
-    );
   const handleClick = ({ target }) =>
     !target.closest(INTERACTIVE_SELECTOR) && isReady && onOpenKaraoke(song);
   const handleKeyDown = (event) => {

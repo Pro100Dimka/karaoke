@@ -1,7 +1,7 @@
 import { HashRouter } from "react-router-dom";
 import { OnlineRoomDock } from "./components/OnlineRoomDock";
-import BackendBootLoader from "./components/backend-boot-loader";
 import RoomRadioSync from "./components/RoomRadioSync";
+import BackendBootLoader from "./components/backend-boot-loader";
 import AppLayout from "./components/layout";
 import { ErrorBoundary } from "./components/ui";
 import ContextProviders from "./contexts";
@@ -15,13 +15,13 @@ export default function App() {
   return (
     <ErrorBoundary>
       <BackendBootLoader>
-      <ContextProviders>
-        <HashRouter future={routerFutureConfig}>
-          <AppLayout />
-          <OnlineRoomDock />
-          <RoomRadioSync />
-        </HashRouter>
-      </ContextProviders>
+        <ContextProviders>
+          <HashRouter future={routerFutureConfig}>
+            <AppLayout />
+            <OnlineRoomDock />
+            <RoomRadioSync />
+          </HashRouter>
+        </ContextProviders>
       </BackendBootLoader>
     </ErrorBoundary>
   );

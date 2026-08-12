@@ -15,6 +15,7 @@ import re
 import threading
 import time
 import traceback
+from collections.abc import Callable
 from pathlib import Path
 from typing import TextIO, cast
 
@@ -91,12 +92,8 @@ def _apply_source_metadata(song: models.Song) -> None:
         tags = None
 
     tagged_title = _first_audio_tag(tags, "title") if tags is not None else None
-    tagged_artist = (
-        _first_audio_tag(tags, "artist", "albumartist") if tags is not None else None
-    )
-    filename_artist, filename_title = song_service.parse_filename_identity(
-        song.original_filename
-    )
+    tagged_artist = _first_audio_tag(tags, "artist", "albumartist") if tags is not None else None
+    filename_artist, filename_title = song_service.parse_filename_identity(song.original_filename)
 
     if tagged_title:
         song.title = tagged_title
@@ -312,9 +309,7 @@ def get_processing_telemetry(song_id: str) -> dict:
         )
         elapsed = max(0.0, now - float(runtime.get("stage_started_at", now)))
         completed = runtime.get("completed_stage_seconds", {})
-        expected_done = sum(
-            _AI_STAGE_PLAN[name][1] for name in completed if name in _AI_STAGE_PLAN
-        )
+        expected_done = sum(_AI_STAGE_PLAN[name][1] for name in completed if name in _AI_STAGE_PLAN)
         actual_done = sum(float(value) for value in completed.values())
         speed_factor = (
             min(3.0, max(0.35, actual_done / expected_done))
@@ -330,8 +325,7 @@ def get_processing_telemetry(song_id: str) -> dict:
             stage_index = len(stage_names) - 1
         remaining = max(0.0, expected * speed_factor - elapsed)
         remaining += sum(
-            _AI_STAGE_PLAN[name][1] * speed_factor
-            for name in stage_names[stage_index + 1 :]
+            _AI_STAGE_PLAN[name][1] * speed_factor for name in stage_names[stage_index + 1 :]
         )
         return {
             "step": float(runtime.get("step", 0.0)),
@@ -490,7 +484,6 @@ def _load_job_paths(song_id: str) -> tuple[str, Path] | None:
         db.close()
 
 
-
 def _load_ai_inputs(song_id: str, out_dir: Path) -> tuple[Path | None, float | None, str | None]:
     """Return user-authored lyrics and authoritative musical overrides for AI Core.
 
@@ -504,11 +497,13 @@ def _load_ai_inputs(song_id: str, out_dir: Path) -> tuple[Path | None, float | N
         if song is None:
             return None, None, None
 
-        lyrics_path = out_dir / config.TRUSTED_LYRICS_FILENAME
-        if not lyrics_path.is_file() or not lyrics_path.read_text(
-            encoding="utf-8-sig", errors="ignore"
-        ).strip():
-            lyrics_path = None
+        candidate_lyrics_path = out_dir / config.TRUSTED_LYRICS_FILENAME
+        lyrics_path: Path | None = (
+            candidate_lyrics_path
+            if candidate_lyrics_path.is_file()
+            and candidate_lyrics_path.read_text(encoding="utf-8-sig", errors="ignore").strip()
+            else None
+        )
 
         tempo_value = getattr(song, "tempo_override", None)
         key_value = getattr(song, "key_override", None)
@@ -520,6 +515,7 @@ def _load_ai_inputs(song_id: str, out_dir: Path) -> tuple[Path | None, float | N
         return lyrics_path, bpm_override, key_override
     finally:
         db.close()
+
 
 def _load_searchable_title(song_id: str) -> str | None:
     """Build a clean lyrics query from source identity.
@@ -586,9 +582,37 @@ def _write_pipeline_error(capture: _ProgressCapture | None, exc: Exception) -> N
         return
     with contextlib.suppress(OSError, ValueError):
         capture.write(
-            f"\n[backend] ОШИБКА: {_format_processing_error(exc)}\n"
-            f"{traceback.format_exc()}\n"
+            f"\n[backend] ОШИБКА: {_format_processing_error(exc)}\n{traceback.format_exc()}\n"
         )
+
+
+def _create_ai_progress_callback(
+    song_id: str, capture: _ProgressCapture
+) -> Callable[[str, float, str], None]:
+    def on_ai_progress(stage: str, percent: float, detail: str) -> None:
+        if _is_cancelled(song_id):
+            raise ProcessingCancelled("Processing cancelled by user")
+        bounded_percent = max(0.0, min(99.7, float(percent)))
+        friendly = _AI_STAGE_PLAN.get(stage, (0, 0, "Обрабатываем песню"))[2]
+        with _progress_runtime_lock:
+            runtime = _progress_runtime.get(song_id)
+            if runtime is not None:
+                now = time.monotonic()
+                previous_stage = runtime.get("stage")
+                if previous_stage and previous_stage != stage:
+                    completed = runtime.setdefault("completed_stage_seconds", {})
+                    completed[previous_stage] = max(
+                        0.0, now - float(runtime.get("stage_started_at", now))
+                    )
+                if previous_stage != stage:
+                    runtime["stage_started_at"] = now
+                runtime["stage"] = stage
+                runtime["direct_percent"] = bounded_percent
+                runtime["detail"] = friendly
+        _update_progress(song_id, step_label=friendly, percent=bounded_percent)
+        capture.write(f"[AI] {bounded_percent:5.1f}% {stage} · {detail}\n")
+
+    return on_ai_progress
 
 
 def _run_job(song_id: str) -> None:
@@ -621,28 +645,7 @@ def _run_job(song_id: str) -> None:
         capture.write(f"[backend] AI module={Path(__file__).resolve()}\n")
         capture.write(f"[backend] AI runtime: device={device}\n")
 
-        def on_ai_progress(stage: str, percent: float, detail: str) -> None:
-            if _is_cancelled(song_id):
-                raise ProcessingCancelled("Processing cancelled by user")
-            percent = max(0.0, min(99.7, float(percent)))
-            friendly = _AI_STAGE_PLAN.get(stage, (0, 0, "Обрабатываем песню"))[2]
-            with _progress_runtime_lock:
-                runtime = _progress_runtime.get(song_id)
-                if runtime is not None:
-                    now = time.monotonic()
-                    previous_stage = runtime.get("stage")
-                    if previous_stage and previous_stage != stage:
-                        completed = runtime.setdefault("completed_stage_seconds", {})
-                        completed[previous_stage] = max(
-                            0.0, now - float(runtime.get("stage_started_at", now))
-                        )
-                    if previous_stage != stage:
-                        runtime["stage_started_at"] = now
-                    runtime["stage"] = stage
-                    runtime["direct_percent"] = percent
-                    runtime["detail"] = friendly
-            _update_progress(song_id, step_label=friendly, percent=percent)
-            capture.write(f"[AI] {percent:5.1f}% {stage} · {detail}\n")
+        on_ai_progress = _create_ai_progress_callback(song_id, capture)
 
         with (
             contextlib.redirect_stdout(cast(TextIO, capture)),
@@ -687,8 +690,7 @@ def _run_job(song_id: str) -> None:
                 song_id,
                 status=models.SongStatus.ERROR,
                 error_message=(
-                    "Could not finalize processing results: "
-                    f"{_format_processing_error(exc)}"
+                    f"Could not finalize processing results: {_format_processing_error(exc)}"
                 ),
             )
 

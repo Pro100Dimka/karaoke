@@ -26,7 +26,16 @@ export default function RoomRadioSync() {
     queueMicrotask(() => {
       applyingRemoteRef.current = false;
     });
-  }, [isPlaying, room, roomUi?.__eventId, roomUi?.radio, setStation, stationId, turnOff, turnOn]);
+  }, [
+    isPlaying,
+    room,
+    roomUi?.__eventId,
+    roomUi?.radio,
+    setStation,
+    stationId,
+    turnOff,
+    turnOn
+  ]);
 
   return null;
 }

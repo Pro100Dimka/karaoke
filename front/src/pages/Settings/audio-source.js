@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api } from "../../api/client";
+import { POLLING_INTERVALS } from "../../config/runtime";
 
 import { useAppDialog } from "../../contexts/AppDialog";
 import useSpeakingLevels from "../../contexts/hooks/useSpeakingLevels";
@@ -46,31 +47,31 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
 
   const { data: settings, refresh } = usePolling(
     () => (enabled ? api.getAudioSettings() : Promise.resolve(null)),
-    enabled ? 15000 : 0,
+    enabled ? POLLING_INTERVALS.settings : 0,
     [enabled]
   );
 
   const { data: devices } = usePolling(
     () => (enabled ? api.listAudioDevices() : Promise.resolve([])),
-    enabled ? 30000 : 0,
+    enabled ? POLLING_INTERVALS.devices : 0,
     [enabled]
   );
 
   const { data: outputs } = usePolling(
     () => (enabled ? api.listAudioOutputDevices() : Promise.resolve([])),
-    enabled ? 30000 : 0,
+    enabled ? POLLING_INTERVALS.devices : 0,
     [enabled]
   );
 
   const { data: asioDrivers } = usePolling(
     () => (enabled ? api.listAsioDrivers() : Promise.resolve([])),
-    enabled ? 30000 : 0,
+    enabled ? POLLING_INTERVALS.devices : 0,
     [enabled]
   );
 
   const { data: signal } = usePolling(
     () => (enabled ? api.getSignalQuality() : Promise.resolve(null)),
-    enabled ? 80 : 0,
+    enabled ? POLLING_INTERVALS.realtimeSignal : 0,
     [enabled]
   );
 
@@ -106,9 +107,10 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
 
   const { audioDriver, monitoringEnabled, volume } = runtime;
 
-  const targetLevel = enabled && monitoringEnabled
-    ? Math.max(localSpeakingLevel * 100, getSignalLevel(signal))
-    : 0;
+  const targetLevel =
+    enabled && monitoringEnabled
+      ? Math.max(localSpeakingLevel * 100, getSignalLevel(signal))
+      : 0;
 
   const resetSpeakerState = useCallback(() => {
     clearTimeout(speakerTimer.current);

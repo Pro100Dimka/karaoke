@@ -37,7 +37,6 @@ def path_settings() -> dict[str, str]:
     }
 
 
-
 PATH_SETTING_KEYS = ("songs_folder", "ai_folder", "cache_folder")
 
 

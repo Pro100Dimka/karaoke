@@ -25,6 +25,16 @@ const {
 } = require("electron");
 
 const {
+  BACKEND_HOST,
+  BACKEND_PORT,
+  BACKEND_REQUEST_TIMEOUT_MS,
+  BACKEND_RESTART_BASE_DELAY_MS,
+  BACKEND_RESTART_MAX_DELAY_MS,
+  BACKEND_STOP_GRACE_MS,
+  BACKEND_URL,
+  DEV_RENDERER_ORIGIN
+} = require("./runtime-config.cjs");
+const {
   getPackagedRendererUrl,
   isAllowedPermissionRequest,
   isAllowedRendererUrl,
@@ -47,9 +57,6 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 const isDev = !app.isPackaged;
-const BACKEND_URL = "http://127.0.0.1:8000";
-const DEV_RENDERER_ORIGIN = "http://127.0.0.1:5173";
-
 // Keep the development profile self-contained. It avoids Windows profile
 // permission/cache corruption from making `start-dev.bat` look like a broken
 // app launch. Packaged builds continue to use the normal per-user profile.
@@ -67,7 +74,6 @@ let isQuitting = false;
 let backendRestartTimer = null;
 let backendStopRequested = false;
 let backendRestartAttempts = 0;
-const MAX_BACKEND_RESTART_DELAY_MS = 30_000;
 
 function resolveBackendDir() {
   // В dev-режиме backend лежит рядом с проектом (../backend при обычной
@@ -112,7 +118,7 @@ function registerMediaProtocol() {
   });
 }
 
-function requestBackendJson(pathname, timeoutMs = 1200) {
+function requestBackendJson(pathname, timeoutMs = BACKEND_REQUEST_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     const request = http.get(`${BACKEND_URL}${pathname}`, (response) => {
       let body = "";
@@ -147,6 +153,7 @@ async function resolveSongOutputDir() {
       return path.resolve(configuredPath.trim());
     }
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.warn(
       "Не удалось получить папку библиотеки от backend, используется путь по умолчанию:",
       error?.message || error
@@ -178,8 +185,8 @@ function scheduleBackendRestart() {
 
   clearTimeout(backendRestartTimer);
   const delay = Math.min(
-    MAX_BACKEND_RESTART_DELAY_MS,
-    1200 * 2 ** Math.min(backendRestartAttempts, 5)
+    BACKEND_RESTART_MAX_DELAY_MS,
+    BACKEND_RESTART_BASE_DELAY_MS * 2 ** Math.min(backendRestartAttempts, 5)
   );
   backendRestartAttempts += 1;
   backendRestartTimer = setTimeout(startBackend, delay);
@@ -229,13 +236,13 @@ function startBackend() {
       cwd: backendDir,
       // In development inherit the terminal. In the installed application keep
       // stdout/stderr in a persistent file instead of discarding the traceback.
-      stdio: isDev
-        ? "inherit"
-        : ["ignore", backendLogFd, backendLogFd],
+      stdio: isDev ? "inherit" : ["ignore", backendLogFd, backendLogFd],
       windowsHide: true,
       env: {
         ...process.env,
         ...(backendDataDir ? { SONGAPP_DATA_DIR: backendDataDir } : {}),
+        SONGAPP_HOST: BACKEND_HOST,
+        SONGAPP_PORT: String(BACKEND_PORT),
         SONGAPP_LOG_DIR: backendLogDir,
         // Packaged ffmpeg.exe is placed next to KaraokeBackend.exe.
         PATH: `${backendDir}${path.delimiter}${process.env.PATH || ""}`
@@ -319,7 +326,7 @@ function stopBackend() {
     finish();
   });
   request.end();
-  setTimeout(finish, 550);
+  setTimeout(finish, BACKEND_STOP_GRACE_MS);
 }
 const THEME_ICONS = {
   app: "app.ico",

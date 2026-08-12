@@ -14,15 +14,6 @@ export function formatSongKey(value) {
     .replace(/\s+minor$/i, "m")
     .replace(/\s+major$/i, "maj");
 }
-export const applyCardTilt = (element, tilt) =>
-  tilt &&
-  Object.entries({
-    "--tilt-x": tilt.tiltX,
-    "--tilt-y": tilt.tiltY,
-    "--glow-x": tilt.glowX,
-    "--glow-y": tilt.glowY
-  }).forEach(([property, value]) => element.style.setProperty(property, value));
-
 export function getSongActions({
   canManageLibrary,
   isReady,

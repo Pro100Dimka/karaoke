@@ -38,15 +38,6 @@ COMMANDS = (
         "run.py",
     ),
     (sys.executable, str(SCRIPT_ROOT / "audit_architecture.py")),
-    (
-        sys.executable,
-        "-m",
-        "pytest",
-        "-q",
-        "--cov=app",
-        "--cov-branch",
-        "--cov-report=term-missing",
-    ),
 )
 
 

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { IconButton } from "../../components/ui";
+import { POLLING_INTERVALS } from "../../config/runtime";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import { useRadio } from "../../contexts/radio";
 import { usePolling } from "../../hooks/usePolling";
@@ -55,7 +56,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   const navigate = useNavigate();
   const { data: songs, error: songsError } = usePolling(
     api.listSongs,
-    15000,
+    POLLING_INTERVALS.settings,
     []
   );
   const songId = location.state?.songId || null;
@@ -63,7 +64,11 @@ export default function Karaoke({ onOpenAppSettings }) {
     ? (songs || []).find((s) => s.id === songId)
     : (songs || []).find((s) => s.status === "done");
 
-  const { result, loading: resultLoading, error: resultError } = useKaraokeResult(song);
+  const {
+    result,
+    loading: resultLoading,
+    error: resultError
+  } = useKaraokeResult(song);
   const instrumentalRef = useRef(null);
   const vocalsRef = useRef(null);
   const videoRef = useRef(null);
@@ -173,17 +178,17 @@ export default function Karaoke({ onOpenAppSettings }) {
   durationRef.current = duration;
   const { data: directOutputDevices } = usePolling(
     () => (microphoneOpen ? api.listAudioOutputDevices() : Promise.resolve([])),
-    30000,
+    POLLING_INTERVALS.devices,
     [microphoneOpen]
   );
   const { data: audioSettings } = usePolling(
     () => api.getAudioSettings(),
-    30000,
+    POLLING_INTERVALS.devices,
     []
   );
   const { data: signal } = usePolling(
     () => (microphoneOpen ? api.getSignalQuality() : Promise.resolve(null)),
-    1200,
+    POLLING_INTERVALS.karaokeSignal,
     [microphoneOpen]
   );
 
@@ -243,7 +248,7 @@ export default function Karaoke({ onOpenAppSettings }) {
       normalizeNotes(
         Array.isArray(songMap?.display_notes)
           ? songMap.display_notes
-          : result?.game_notes ?? result?.reference_notes
+          : (result?.game_notes ?? result?.reference_notes)
       ),
     [songMap, result]
   );
@@ -569,7 +574,8 @@ export default function Karaoke({ onOpenAppSettings }) {
     return (
       <div className="panel">
         <p className="field-error">
-          Не удалось загрузить библиотеку: {songsError.message || "ошибка соединения"}.
+          Не удалось загрузить библиотеку:{" "}
+          {songsError.message || "ошибка соединения"}.
         </p>
       </div>
     );
@@ -616,7 +622,8 @@ export default function Karaoke({ onOpenAppSettings }) {
     return (
       <div className="panel">
         <p className="field-error">
-          Не удалось загрузить данные караоке: {resultError?.message || "результат обработки отсутствует"}.
+          Не удалось загрузить данные караоке:{" "}
+          {resultError?.message || "результат обработки отсутствует"}.
         </p>
       </div>
     );

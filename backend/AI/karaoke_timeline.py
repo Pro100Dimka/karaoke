@@ -39,9 +39,7 @@ def _merge_display_notes(notes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     millisecond threshold.
     """
     clean = [
-        dict(note)
-        for note in notes
-        if _midi(note) is not None and _positive_duration(note) > 0.0
+        dict(note) for note in notes if _midi(note) is not None and _positive_duration(note) > 0.0
     ]
     if not clean:
         return []
@@ -67,7 +65,7 @@ def _merge_display_notes(notes: list[dict[str, Any]]) -> list[dict[str, Any]]:
         by_syllable[syllable_index].append(note)
 
     result: list[dict[str, Any]] = []
-    for syllable_index, group in by_syllable.items():
+    for group in by_syllable.values():
         group.sort(key=lambda item: (float(item["start"]), float(item["end"])))
         merged: list[dict[str, Any]] = []
         for note in group:
@@ -199,7 +197,7 @@ def build_karaoke_song_map(
     line_counts = [len(tokenize(line)) for line in line_texts]
     lines: list[dict[str, Any]] = []
     cursor = 0
-    for line_index, (line_text, count) in enumerate(zip(line_texts, line_counts)):
+    for line_index, (line_text, count) in enumerate(zip(line_texts, line_counts, strict=True)):
         if line_index == len(line_texts) - 1:
             line_words = prepared_words[cursor:]
         else:

@@ -23,7 +23,11 @@ export function MemoryStats({ size, free }) {
   ];
 
   return (
-    <Grid minItemWidth="min(100%, 13rem)" gap="var(--space-2)" className="settings-metric-grid">
+    <Grid
+      minItemWidth="min(100%, 13rem)"
+      gap="var(--space-2)"
+      className="settings-metric-grid"
+    >
       {items.map(([label, value]) => (
         <Stack key={label} gap={0.2} className="settings-metric-item">
           <Typography variant="caption" tone="muted">
@@ -61,7 +65,10 @@ export function MemoryActions({ actions, notify }) {
 
 export function OptimizeSong({ value, options, onChange, onOptimize }) {
   return (
-    <Stack gap={0.65} className="settings-screen-section settings-optimize-section">
+    <Stack
+      gap={0.65}
+      className="settings-screen-section settings-optimize-section"
+    >
       <Typography variant="body2">Оптимизация песни</Typography>
 
       <Grid columns={2} gap="var(--space-3)" sx={{ alignItems: "end" }}>

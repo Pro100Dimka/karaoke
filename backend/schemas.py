@@ -122,8 +122,6 @@ class ProcessingStatusOut(BaseModel):
     error_message: str | None = None
 
 
-
-
 class SongEditorUpdate(BaseModel):
     notes: list[dict[str, Any]] = Field(default_factory=list, max_length=20_000)
 
@@ -131,6 +129,7 @@ class SongEditorUpdate(BaseModel):
 class SongEditorOut(BaseModel):
     song_map: dict[str, Any]
     ai_backup_exists: bool = False
+
 
 class SongResultOut(BaseModel):
     """Агрегированные результаты AI-пайплайна по одной песне (содержимое Song/<slug>/*.json)."""

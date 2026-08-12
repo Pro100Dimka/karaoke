@@ -2,15 +2,11 @@ import { Headphones, Volume2 } from "lucide-react";
 import { Button, Progress, Stack, Typography } from "../../theme/ui";
 
 const buttonProps = (props = {}) => {
-  const {
-    label: _label,
-    tooltip: _tooltip,
-    startIcon: _startIcon,
-    fieldSx: _fieldSx,
-    ...rest
-  } = props;
-
-  return rest;
+  const clean = { ...props };
+  ["label", "tooltip", "startIcon", "fieldSx"].forEach(
+    (key) => delete clean[key]
+  );
+  return clean;
 };
 
 export const SETTINGS_RENDERERS = {

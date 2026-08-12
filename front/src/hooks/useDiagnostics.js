@@ -1,10 +1,27 @@
 import { api } from "../api/client";
+import { POLLING_INTERVALS } from "../config/runtime";
 import { usePolling } from "./usePolling";
 
 export default function useDiagnostics() {
-  const { data: health } = usePolling(api.getHealth, 5000, []);
-  const { data: pipeline } = usePolling(api.getPipelineHealth, 5000, []);
-  const { data: versions } = usePolling(api.getVersions, 15000, []);
-  const { data: errors } = usePolling(api.getErrors, 8000, []);
+  const { data: health } = usePolling(
+    api.getHealth,
+    POLLING_INTERVALS.health,
+    []
+  );
+  const { data: pipeline } = usePolling(
+    api.getPipelineHealth,
+    POLLING_INTERVALS.health,
+    []
+  );
+  const { data: versions } = usePolling(
+    api.getVersions,
+    POLLING_INTERVALS.versions,
+    []
+  );
+  const { data: errors } = usePolling(
+    api.getErrors,
+    POLLING_INTERVALS.errors,
+    []
+  );
   return { health, pipeline, versions, errors };
 }

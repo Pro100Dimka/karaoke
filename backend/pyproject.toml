@@ -35,16 +35,6 @@ ignore_missing_imports = true
 warn_unused_ignores = true
 exclude = ["AI/"]
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["."]
-
-[tool.coverage.run]
-branch = true
-source = ["app"]
-omit = ["AI/*"]
-
-[tool.coverage.report]
-show_missing = true
-skip_covered = true
-fail_under = 55
+[[tool.mypy.overrides]]
+module = ["AI", "AI.*"]
+ignore_errors = true

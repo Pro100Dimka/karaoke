@@ -32,13 +32,6 @@ function findSong(id) {
   return store.songs.find((song) => song.id === id) || null;
 }
 
-export function resetMockApi() {
-  store.songs = clone(mockSongs);
-  store.settings = clone(mockAppSettings);
-  store.audioSettings = clone(mockAudioSettings);
-  store.recordings = [];
-}
-
 export async function mockRequest(path, options = {}) {
   const method = String(options.method || "GET").toUpperCase();
   const url = new URL(path, "http://mock.local");

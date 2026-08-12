@@ -35,7 +35,10 @@ function getSafeLyrics(lyrics) {
   return (Array.isArray(lyrics) ? lyrics : [])
     .map(normalizeLine)
     .filter(Boolean)
-    .sort((a, b) => a.start - b.start || a.end - b.end || a.__sourceIndex - b.__sourceIndex);
+    .sort(
+      (a, b) =>
+        a.start - b.start || a.end - b.end || a.__sourceIndex - b.__sourceIndex
+    );
 }
 
 export function getLyricDisplayState(lyrics, currentTime) {
@@ -65,7 +68,11 @@ export function getLyricFill(currentTime, start, end) {
   const safeStart = Number(start);
   const safeEnd = Number(end);
 
-  if (!Number.isFinite(safeCurrent) || !Number.isFinite(safeStart) || !Number.isFinite(safeEnd)) {
+  if (
+    !Number.isFinite(safeCurrent) ||
+    !Number.isFinite(safeStart) ||
+    !Number.isFinite(safeEnd)
+  ) {
     return 0;
   }
 

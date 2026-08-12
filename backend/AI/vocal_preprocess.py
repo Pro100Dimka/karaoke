@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from statistics import median
 
-import soundfile as sf
 import numpy as np
+import soundfile as sf
 
 from .errors import AICoreError
 from .models import PitchFrame
@@ -40,9 +40,21 @@ def _render_analysis_variant(source: Path, target: Path, filter_graph: str) -> P
     os.close(descriptor)
     temporary = Path(temporary_name)
     command = [
-        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-        "-i", str(source), "-vn", "-af", filter_graph,
-        "-c:a", "pcm_s24le", "-f", "wav", str(temporary),
+        "ffmpeg",
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        str(source),
+        "-vn",
+        "-af",
+        filter_graph,
+        "-c:a",
+        "pcm_s24le",
+        "-f",
+        "wav",
+        str(temporary),
     ]
     try:
         subprocess.run(command, check=True, capture_output=True, timeout=30 * 60)
@@ -54,9 +66,7 @@ def _render_analysis_variant(source: Path, target: Path, filter_graph: str) -> P
             raise AICoreError("Vocal preprocessing changed the sample rate")
         duration_delta = abs(float(target_info.duration) - float(source_info.duration))
         if duration_delta > max(0.002, 1.5 / max(1, source_info.samplerate)):
-            raise AICoreError(
-                f"Vocal preprocessing changed duration by {duration_delta:.6f}s"
-            )
+            raise AICoreError(f"Vocal preprocessing changed duration by {duration_delta:.6f}s")
         os.replace(temporary, target)
     except FileNotFoundError as exc:
         raise AICoreError("FFmpeg is required for MIDI vocal preprocessing") from exc
@@ -68,7 +78,6 @@ def _render_analysis_variant(source: Path, target: Path, filter_graph: str) -> P
     finally:
         temporary.unlink(missing_ok=True)
     return target
-
 
 
 def _adaptive_gate_threshold(source: Path) -> float:
@@ -173,11 +182,26 @@ def score_pitch_track(frames: list[PitchFrame]) -> PitchTrackQuality:
             run = 0
     if run:
         run_lengths.append(run)
-    typical_hop = median(
-        [frames[i].time - frames[i - 1].time for i in range(1, len(frames)) if frames[i].time > frames[i - 1].time]
-    ) if len(frames) > 1 else 0.01
+    typical_hop = (
+        median(
+            [
+                frames[i].time - frames[i - 1].time
+                for i in range(1, len(frames))
+                if frames[i].time > frames[i - 1].time
+            ]
+        )
+        if len(frames) > 1
+        else 0.01
+    )
     typical_run = median(run_lengths) if run_lengths else 1
-    micro_limit = max(1, int(round(max(typical_hop * 2.0, typical_run * typical_hop * 0.22) / max(0.001, typical_hop))))
+    micro_limit = max(
+        1,
+        int(
+            round(
+                max(typical_hop * 2.0, typical_run * typical_hop * 0.22) / max(0.001, typical_hop)
+            )
+        ),
+    )
     micro_runs = sum(1 for length in run_lengths if length <= micro_limit)
     micro_run_rate = micro_runs / max(1, len(run_lengths))
 
@@ -213,8 +237,11 @@ def _quality_vector(value: PitchTrackQuality) -> tuple[float, float, float, floa
 
 
 def _relative_wins(candidate: PitchTrackQuality, reference: PitchTrackQuality) -> int:
-    left=_quality_vector(candidate); right=_quality_vector(reference)
-    return sum(a>b+1e-9 for a,b in zip(left,right)) - sum(a+1e-9<b for a,b in zip(left,right))
+    left = _quality_vector(candidate)
+    right = _quality_vector(reference)
+    return sum(a > b + 1e-9 for a, b in zip(left, right, strict=True)) - sum(
+        a + 1e-9 < b for a, b in zip(left, right, strict=True)
+    )
 
 
 def prefer_cleaned_pitch(original: PitchTrackQuality, cleaned: PitchTrackQuality) -> bool:
@@ -226,20 +253,29 @@ def prefer_cleaned_pitch(original: PitchTrackQuality, cleaned: PitchTrackQuality
     return _relative_wins(cleaned, original) >= 2
 
 
-def choose_best_pitch_track(qualities: dict[str, PitchTrackQuality], *, original_key: str = "original") -> str:
+def choose_best_pitch_track(
+    qualities: dict[str, PitchTrackQuality], *, original_key: str = "original"
+) -> str:
     if original_key not in qualities:
         raise ValueError("original pitch quality is required")
-    original=qualities[original_key]
-    viable={original_key: original}
-    for name,candidate in qualities.items():
-        if name==original_key: continue
-        if candidate.voiced_ratio < original.voiced_ratio*0.70: continue
-        if candidate.mean_confidence < original.mean_confidence*0.92: continue
-        if _relative_wins(candidate,original)>=2:
-            viable[name]=candidate
+    original = qualities[original_key]
+    viable = {original_key: original}
+    for name, candidate in qualities.items():
+        if name == original_key:
+            continue
+        if candidate.voiced_ratio < original.voiced_ratio * 0.70:
+            continue
+        if candidate.mean_confidence < original.mean_confidence * 0.92:
+            continue
+        if _relative_wins(candidate, original) >= 2:
+            viable[name] = candidate
+
     def rank(name: str):
-        c=viable[name]
-        wins=sum(_relative_wins(c, other) for other_name,other in viable.items() if other_name!=name)
+        c = viable[name]
+        wins = sum(
+            _relative_wins(c, other) for other_name, other in viable.items() if other_name != name
+        )
         # score remains a deterministic tie-breaker/diagnostic, not the gate.
-        return (wins,c.score,name==original_key)
-    return max(viable,key=rank)
+        return (wins, c.score, name == original_key)
+
+    return max(viable, key=rank)

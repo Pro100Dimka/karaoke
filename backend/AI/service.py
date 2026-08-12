@@ -61,9 +61,15 @@ class AICoreService:
             "pitch": engines.pitch.name,
             "transcriber": engines.transcriber.name,
             "aligner": engines.aligner.name,
-            "ctc_alignment_models": dict(getattr(getattr(engines.aligner, "_ctc", None), "models", {}) or {}),
-            "ctc_ru_configured": bool(getattr(getattr(engines.aligner, "_ctc", None), "models", {}).get("ru")),
-            "ctc_uk_configured": bool(getattr(getattr(engines.aligner, "_ctc", None), "models", {}).get("uk")),
+            "ctc_alignment_models": dict(
+                getattr(getattr(engines.aligner, "_ctc", None), "models", {}) or {}
+            ),
+            "ctc_ru_configured": bool(
+                getattr(getattr(engines.aligner, "_ctc", None), "models", {}).get("ru")
+            ),
+            "ctc_uk_configured": bool(
+                getattr(getattr(engines.aligner, "_ctc", None), "models", {}).get("uk")
+            ),
             "separation_configured": bool(getattr(engines.separator, "available", lambda: True)()),
             "fallback_enabled": self.config.allow_fallback,
         }
