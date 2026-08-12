@@ -12,6 +12,7 @@ import argparse
 import json
 import signal
 import sys
+import threading
 import time
 
 import numpy as np
@@ -39,6 +40,14 @@ def _stream_candidates(options: dict) -> list[dict]:
                     sd.WasapiSettings(exclusive=True),
                     sd.WasapiSettings(exclusive=True),
                 )
+            elif options.get("wasapi_exclusive"):
+                # Shared WASAPI can transparently reconcile endpoint formats;
+                # this is the reliable fallback for Bluetooth and mixed-rate
+                # microphone/headphone pairs.
+                candidate["extra_settings"] = (
+                    sd.WasapiSettings(auto_convert=True),
+                    sd.WasapiSettings(auto_convert=True),
+                )
             if candidate not in candidates:
                 candidates.append(candidate)
     return candidates
@@ -59,7 +68,17 @@ def main() -> int:
     options = json.loads(parser.parse_args().config)
     gain = float(options["gain"])
 
-    def callback(indata, outdata, _frames, _time_info, _status):
+    restart_requested = threading.Event()
+    glitches: list[float] = []
+
+    def callback(indata, outdata, _frames, _time_info, status):
+        if status:
+            now = time.monotonic()
+            glitches.append(now)
+            while glitches and glitches[0] < now - 2.0:
+                glitches.pop(0)
+            if len(glitches) >= 3:
+                restart_requested.set()
         processed = np.clip(indata[:, 0] * gain, -1.0, 1.0)
         outdata.fill(0)
         for channel in range(outdata.shape[1]):
@@ -77,28 +96,47 @@ def main() -> int:
     stream = None
     try:
         failures: list[str] = []
-        for candidate in _stream_candidates(options):
+        candidates = _stream_candidates(options)
+        for candidate_index, candidate in enumerate(candidates):
             try:
                 stream = sd.Stream(**candidate, callback=callback)
-                if failures:
+                stream.start()
+                if failures or candidate_index:
                     _emit(
                         {
                             "event": "fallback",
-                            "message": failures[-1],
+                            "message": failures[-1] if failures else "Audio glitches detected",
                             "blocksize": candidate["blocksize"],
                             "exclusive": "extra_settings" in candidate,
                         }
                     )
-                break
+                _emit(
+                    {
+                        "event": "started",
+                        "blocksize": candidate["blocksize"],
+                        "exclusive": "extra_settings" in candidate,
+                    }
+                )
+                restart_requested.clear()
+                glitches.clear()
+                while _running and not restart_requested.wait(0.1):
+                    _emit({"event": "level", **_level})
+                stream.abort()
+                stream.close()
+                stream = None
+                if not _running:
+                    break
             except Exception as error:
                 failures.append(str(error))
-        if stream is None:
+                if stream is not None:
+                    try:
+                        stream.abort()
+                        stream.close()
+                    except Exception:
+                        pass
+                    stream = None
+        if _running:
             raise RuntimeError(failures[-1] if failures else "No audio stream candidate")
-        stream.start()
-        _emit({"event": "started"})
-        while _running:
-            _emit({"event": "level", **_level})
-            time.sleep(0.1)
     except Exception as exc:  # The parent converts this into a friendly API error.
         _emit({"event": "error", "message": str(exc)})
         return 1

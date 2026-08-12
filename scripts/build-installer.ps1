@@ -78,6 +78,7 @@ $AppExe = "A&D Voice.exe"
 
 $ModelCheck = Join-Path $Backend "AI\install_models.py"
 $InnoTemplate = Join-Path $Root "scripts\karaoke-studio.iss"
+$InstallerBackground = Join-Path $Root "scripts\installer-assets\dark-nebula.png"
 $SignScript = Join-Path $Root "scripts\sign-windows.ps1"
 $SetupIcon = Join-Path $Frontend "assets\icons\app.ico"
 
@@ -616,6 +617,7 @@ function Get-InnoInputFingerprint {
     return Get-CombinedFingerprint @(
         (Get-SmallFileFingerprint @(
             $InnoTemplate,
+            $InstallerBackground,
             $SetupIcon,
             $SignScript,
             $ChecksumScript
@@ -2106,6 +2108,7 @@ function Build-Installer {
         "/DMyAppVersion=$AppVersion" `
         "/DMyAppExeName=$AppExe" `
         "/DSetupIcon=$SetupIcon" `
+        "/DInstallerBackground=$InstallerBackground" `
         "/DOutputDir=$runDir" `
         $InnoTemplate
 

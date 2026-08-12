@@ -10,6 +10,9 @@
 #ifndef OutputDir
   #error OutputDir is required
 #endif
+#ifndef InstallerBackground
+  #error InstallerBackground is required
+#endif
 
 [Setup]
 AppId={{E734496E-2622-5565-89D3-45451D9DE7EE}
@@ -46,6 +49,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Создать ярлык на рабочем столе"; GroupDescription: "Дополнительные ярлыки:"
 
 [Files]
+Source: "{#InstallerBackground}"; Flags: dontcopy
 ; Runtime is already compressed once. Inno only copies the archive from ISO.
 Source: "{src}\app-runtime.zip"; DestDir: "{tmp}"; Flags: external ignoreversion deleteafterinstall
 Source: "{src}\msst\*"; DestDir: "{app}\resources\backend\_internal\engines\msst"; Flags: external ignoreversion recursesubdirs createallsubdirs
@@ -80,10 +84,14 @@ Type: files; Name: "{app}\v8_context_snapshot.bin"
 Type: files; Name: "{app}\vk_swiftshader.dll"
 Type: files; Name: "{app}\vk_swiftshader_icd.json"
 Type: files; Name: "{app}\vulkan-1.dll"
+; Remove any generated logs, update remnants or files created after setup.
+; {app} is the dedicated application directory selected by the user.
+Type: filesandordirs; Name: "{app}"
 
 [Code]
 var
   ThemePage: TInputOptionWizardPage;
+  InstallingBackground: TBitmapImage;
   RemoveUserData: Boolean;
 
 function InitializeUninstall: Boolean;
@@ -107,27 +115,46 @@ begin
 end;
 
 procedure ApplyInstallerTheme;
+var
+  BackgroundColor: TColor;
+  PanelColor: TColor;
+  TextColor: TColor;
 begin
   if ThemePage.SelectedValueIndex = 1 then
   begin
-    WizardForm.Color := $F4F4F4;
-    WizardForm.MainPanel.Color := $FFFFFF;
+    BackgroundColor := $F4F4F4;
+    PanelColor := $FFFFFF;
+    TextColor := $202020;
   end
   else if ThemePage.SelectedValueIndex = 2 then
   begin
-    WizardForm.Color := $18301D;
-    WizardForm.MainPanel.Color := $24482C;
+    BackgroundColor := $18301D;
+    PanelColor := $24482C;
+    TextColor := $F2FFF4;
   end
   else if ThemePage.SelectedValueIndex = 3 then
   begin
-    WizardForm.Color := $2E1838;
-    WizardForm.MainPanel.Color := $452253;
+    BackgroundColor := $2E1838;
+    PanelColor := $452253;
+    TextColor := $FFF3FF;
   end
   else
   begin
-    WizardForm.Color := $1C1A24;
-    WizardForm.MainPanel.Color := $282433;
+    BackgroundColor := $08090D;
+    PanelColor := $241018;
+    TextColor := $FFFFFF;
   end;
+  WizardForm.Color := BackgroundColor;
+  WizardForm.MainPanel.Color := PanelColor;
+  WizardForm.WelcomePage.Color := BackgroundColor;
+  WizardForm.FinishedPage.Color := BackgroundColor;
+  ThemePage.Surface.Color := BackgroundColor;
+  ThemePage.CheckListBox.Color := PanelColor;
+  ThemePage.CheckListBox.Font.Color := TextColor;
+  WizardForm.PageNameLabel.Font.Color := TextColor;
+  WizardForm.PageDescriptionLabel.Font.Color := TextColor;
+  WizardForm.StatusLabel.Font.Color := TextColor;
+  InstallingBackground.Visible := ThemePage.SelectedValueIndex = 0;
 end;
 
 procedure ThemeChanged(Sender: TObject);
@@ -137,6 +164,21 @@ end;
 
 procedure InitializeWizard;
 begin
+  ExtractTemporaryFile(ExtractFileName('{#InstallerBackground}'));
+  InstallingBackground := TBitmapImage.Create(WizardForm.InstallingPage);
+  InstallingBackground.Parent := WizardForm.InstallingPage;
+  InstallingBackground.SetBounds(
+    0,
+    0,
+    WizardForm.InstallingPage.ClientWidth,
+    WizardForm.InstallingPage.ClientHeight
+  );
+  InstallingBackground.Stretch := True;
+  InstallingBackground.PngImage.LoadFromFile(
+    ExpandConstant('{tmp}\') + ExtractFileName('{#InstallerBackground}')
+  );
+  InstallingBackground.SendToBack;
+
   ThemePage := CreateInputOptionPage(
     wpSelectDir,
     'Оформление A&D Voice',
@@ -185,6 +227,19 @@ begin
     RaiseException('Не удалось сохранить начальные настройки программы.');
 end;
 
+procedure ShowPendingInstallStep(const Status: String);
+begin
+  WizardForm.StatusLabel.Caption := Status;
+  WizardForm.ProgressGauge.Position := 0;
+  WizardForm.ProgressGauge.Style := npbstMarquee;
+end;
+
+procedure CompleteInstallProgress;
+begin
+  WizardForm.ProgressGauge.Style := npbstNormal;
+  WizardForm.ProgressGauge.Position := WizardForm.ProgressGauge.Max;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
@@ -199,6 +254,10 @@ begin
     WriteInitialPreferences;
     TarExe := ExpandConstant('{sys}\tar.exe');
     ArchivePath := ExpandConstant('{tmp}\app-runtime.zip');
+
+    ShowPendingInstallStep(
+      'Этап 2 из 3: распаковка программы. Установка ещё не завершена...'
+    );
 
     if not FileExists(TarExe) then
       RaiseException('Windows tar.exe was not found. Windows 10/11 is required.');
@@ -223,8 +282,9 @@ begin
     ModelsDir := ExpandConstant('{app}\resources\backend\_internal\models');
     ModelCacheDir := ExpandConstant('{tmp}\huggingface-cache');
     ForceDirectories(ModelsDir);
-    WizardForm.StatusLabel.Caption :=
-      'Загрузка AI-моделей. Файлы сохраняются локально и повторно не скачиваются...';
+    ShowPendingInstallStep(
+      'Этап 3 из 3: загрузка AI-моделей. Полоса движется до полного завершения...'
+    );
     if not Exec(
       BackendExe,
       '--install-ai-models --models-root "' + ModelsDir +
@@ -240,5 +300,7 @@ begin
         'Не удалось загрузить AI-модели. Проверьте подключение к интернету и повторите установку. Код: ' +
         IntToStr(ResultCode)
       );
+    CompleteInstallProgress;
+    WizardForm.StatusLabel.Caption := 'Установка A&D Voice завершена.';
   end;
 end;

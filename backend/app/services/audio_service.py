@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 import subprocess
 import sys
 import threading
@@ -76,12 +77,75 @@ def list_asio_drivers() -> list[str]:
         return []
 
 
-def _preferred_device_index(device_id: int | None, kind: str) -> int | None:
-    """Keep the device explicitly selected by the user.
+def _device_tokens(name: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[\w]+", name.casefold())
+        if len(token) > 2 and token not in {"audio", "device", "микрофон", "наушники"}
+    }
 
-    ``None`` intentionally means the operating system's current default device.
-    """
-    return device_id
+
+def _device_latency(device: dict, kind: str) -> float:
+    value = device.get(f"default_low_{kind}_latency", 1.0)
+    try:
+        return max(0.0, float(value))
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def _low_latency_equivalent(device_id: int | None, kind: str) -> int:
+    """Prefer the WASAPI endpoint matching the selected/default Windows device."""
+    source_id = _resolved_device_index(device_id, kind)
+    devices = sd.query_devices()
+    source = devices[source_id]
+    capability = f"max_{kind}_channels"
+    source_tokens = _device_tokens(str(source.get("name", "")))
+    best: tuple[float, int] | None = None
+    for index, candidate in enumerate(devices):
+        if int(candidate.get(capability, 0)) < 1:
+            continue
+        host = _host_api_name(candidate).casefold()
+        host_score = 300 if "wasapi" in host else 180 if "wdm-ks" in host else 0
+        if host_score == 0:
+            continue
+        overlap = len(source_tokens & _device_tokens(str(candidate.get("name", ""))))
+        # An explicit selection must map to the same physical endpoint. For an
+        # OS default, Windows' low-latency host default remains a valid choice.
+        if device_id is not None and overlap == 0 and index != source_id:
+            continue
+        score = host_score + overlap * 30 - _device_latency(candidate, kind) * 1000
+        if index == source_id:
+            score += 20
+        if best is None or score > best[0]:
+            best = (score, index)
+    return best[1] if best else source_id
+
+
+def _matching_output_for_input(input_id: int, output_id: int | None) -> int:
+    """Choose a low-latency output, favoring the microphone's physical device."""
+    selected_output = _low_latency_equivalent(output_id, "output")
+    if output_id is not None:
+        return selected_output
+    devices = sd.query_devices()
+    input_info = devices[input_id]
+    input_tokens = _device_tokens(str(input_info.get("name", "")))
+    input_rate = float(input_info.get("default_samplerate", 0) or 0)
+    candidates: list[tuple[float, int]] = []
+    for index, candidate in enumerate(devices):
+        if int(candidate.get("max_output_channels", 0)) < 1:
+            continue
+        host = _host_api_name(candidate).casefold()
+        if "wasapi" not in host and "wdm-ks" not in host:
+            continue
+        overlap = len(input_tokens & _device_tokens(str(candidate.get("name", ""))))
+        rate = float(candidate.get("default_samplerate", 0) or 0)
+        score = float((300 if "wasapi" in host else 180) + overlap * 35)
+        score -= abs(rate - input_rate) / 1000
+        score -= _device_latency(candidate, "output") * 1000
+        if index == selected_output:
+            score += 45
+        candidates.append((score, index))
+    return max(candidates)[1] if candidates else selected_output
 
 
 def _asio_device_hint(driver_name: str | None) -> str:
@@ -126,11 +190,15 @@ def preferred_input_device(
     driver: str = "auto",
     asio_driver_name: str | None = None,
 ) -> int | None:
-    if device_id is not None:
-        return _preferred_device_index(device_id, "input")
     if driver == "asio":
-        return _matching_asio_device_index(asio_driver_name, "input")
-    return None
+        return (
+            device_id
+            if device_id is not None
+            else _matching_asio_device_index(asio_driver_name, "input")
+        )
+    if not _AUDIO_BACKEND_AVAILABLE:
+        return device_id
+    return _low_latency_equivalent(device_id, "input")
 
 
 def _host_api_name(device: dict) -> str:
@@ -158,18 +226,22 @@ def preferred_output_device(
     output_device_id: int | None = None,
     asio_driver_name: str | None = None,
 ) -> int | None:
-    if output_device_id is not None:
+    if not _AUDIO_BACKEND_AVAILABLE:
         return output_device_id
-    if not _AUDIO_BACKEND_AVAILABLE or driver != "asio" or input_device_id is None:
-        return None
-    device = sd.query_devices(input_device_id)
-    if _is_asio_device(device) and int(device.get("max_output_channels", 0)) > 0:
-        return input_device_id
-    return _matching_asio_device_index(asio_driver_name, "output")
+    if driver == "asio":
+        if output_device_id is not None:
+            return output_device_id
+        if input_device_id is not None:
+            device = sd.query_devices(input_device_id)
+            if _is_asio_device(device) and int(device.get("max_output_channels", 0)) > 0:
+                return input_device_id
+        return _matching_asio_device_index(asio_driver_name, "output")
+    resolved_input = _low_latency_equivalent(input_device_id, "input")
+    return _matching_output_for_input(resolved_input, output_device_id)
 
 
 def preferred_sample_rate(input_device_id: int | None = None, driver: str = "auto") -> int:
-    if _AUDIO_BACKEND_AVAILABLE and driver == "asio" and input_device_id is not None:
+    if _AUDIO_BACKEND_AVAILABLE and input_device_id is not None:
         device = sd.query_devices(input_device_id)
         return int(round(float(device["default_samplerate"])))
     return config.RECORDING_SAMPLE_RATE
@@ -358,11 +430,14 @@ def configure_monitoring(settings: models.AudioSettings) -> None:
     if not _AUDIO_BACKEND_AVAILABLE:
         raise RuntimeError("Audio backend is unavailable")
 
-    input_device_id = _preferred_device_index(settings.input_device_id, "input")
+    input_device_id = preferred_input_device(
+        settings.input_device_id, settings.audio_driver, settings.asio_driver_name
+    )
     output_device_id = preferred_output_device(
         input_device_id,
         settings.audio_driver,
         settings.output_device_id,
+        settings.asio_driver_name,
     )
     if settings.audio_driver == "asio" and output_device_id is None:
         raise RuntimeError("The selected ASIO device has no output channels")
@@ -379,7 +454,7 @@ def configure_monitoring(settings: models.AudioSettings) -> None:
     worker_options = {
         "input_device_id": resolved_input_id,
         "output_device_id": resolved_output_id,
-        "sample_rate": float(output_info["default_samplerate"]),
+        "sample_rate": float(input_info["default_samplerate"]),
         "output_channels": output_channels,
         "blocksize": settings.buffer_size,
         "gain": gain,
