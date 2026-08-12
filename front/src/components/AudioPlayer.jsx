@@ -1,5 +1,6 @@
 import { Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useI18n } from "../i18n";
 import {
   formatAudioTime,
   normalizeAudioDuration,
@@ -11,6 +12,7 @@ import { RangeInput } from "./fields";
 import { IconButton } from "./ui";
 
 export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
+  const { t } = useI18n();
   const audioRef = useRef(null);
   const previousVolumeRef = useRef(1);
   const [playing, setPlaying] = useState(false);
@@ -103,12 +105,12 @@ export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
         className="performance-player-play"
         icon={playing ? Pause : Play}
         size={18}
-        label={playing ? "Пауза" : "Воспроизвести запись"}
+        label={t(playing ? "audio.pause" : "audio.playRecording")}
         onClick={toggle}
       />
       <div className="performance-player-track u-muted-xs">
         <RangeInput
-          aria-label="Позиция записи"
+          aria-label={t("audio.recordingPosition")}
           min="0"
           max={duration || 0}
           step="0.01"
@@ -124,11 +126,11 @@ export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
           unstyled
           icon={volume ? Volume2 : VolumeX}
           size={16}
-          label={volume ? "Выключить звук" : "Включить звук"}
+          label={t(volume ? "audio.mute" : "audio.unmute")}
           onClick={toggleMuted}
         />
         <RangeInput
-          aria-label="Громкость записи"
+          aria-label={t("audio.recordingVolume")}
           min="0"
           max="1"
           step="0.05"

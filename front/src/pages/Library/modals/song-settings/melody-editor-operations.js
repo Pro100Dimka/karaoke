@@ -25,7 +25,27 @@ const sourceIndices = (note) => {
 const glue = (leftText, rightText, sameWord) => {
   if (!leftText) return rightText || "";
   if (!rightText) return leftText;
-  return sameWord ? `${leftText}${rightText}` : `${leftText} ${rightText}`;
+  if (!sameWord) return `${leftText} ${rightText}`;
+
+  const left = String(leftText);
+  const right = String(rightText);
+  const normalizedLeft = left.toLocaleLowerCase();
+  const normalizedRight = right.toLocaleLowerCase();
+
+  // A note may already contain the complete edited word. In that case simply
+  // concatenating both labels produced values such as "БолБольшой".
+  if (normalizedRight.startsWith(normalizedLeft)) return right;
+  if (normalizedLeft.endsWith(normalizedRight)) return left;
+
+  for (
+    let overlap = Math.min(left.length, right.length);
+    overlap > 0;
+    overlap--
+  )
+    if (normalizedLeft.slice(-overlap) === normalizedRight.slice(0, overlap))
+      return `${left}${right.slice(overlap)}`;
+
+  return `${left}${right}`;
 };
 
 export function displayTextForNote(

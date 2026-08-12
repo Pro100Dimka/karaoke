@@ -7,6 +7,7 @@ import {
   useRef,
   useState
 } from "react";
+import { api } from "../api/client";
 import { readJsonStorage, writeJsonStorage } from "../utils/storage";
 
 export const RADIO_STATIONS = [
@@ -110,6 +111,7 @@ export function RadioProvider({ children }) {
   const persist = useCallback((patch) => {
     const next = { ...loadRadioSettings(), ...patch };
     writeJsonStorage(STORAGE_KEY, next);
+    api.updateUiPreferences("radio", next).catch(() => {});
   }, []);
 
   const cancelVolumeFade = useCallback(() => {

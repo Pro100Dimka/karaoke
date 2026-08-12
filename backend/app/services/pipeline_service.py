@@ -8,10 +8,12 @@ run_all.py уже печатает прогресс по шагам в духе 
 """
 
 import contextlib
+import gc
 import io
 import logging
 import os
 import re
+import sys
 import threading
 import time
 import traceback
@@ -421,6 +423,13 @@ def _job_entrypoint(song_id: str, target) -> None:
         with _active_jobs_lock:
             _cancelled_jobs.discard(song_id)
         _release_active_job(song_id)
+        # Release temporary tensors/arrays while intentionally retaining loaded
+        # model weights for the next song. No worker process survives a job.
+        gc.collect()
+        torch = sys.modules.get("torch")
+        with contextlib.suppress(AttributeError, RuntimeError):
+            if torch is not None and torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
 
 def _start_background_job(song_id: str, target) -> bool:

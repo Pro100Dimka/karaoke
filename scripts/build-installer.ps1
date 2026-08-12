@@ -2718,6 +2718,9 @@ try {
 
     Stop-BuildProcesses
     Check-Environment
+    # Installer-only builds still calculate component fingerprints to reuse the
+    # existing cache, so optional tool paths must be initialized in every mode.
+    Initialize-WorkerCommands
     Prepare-Output
 
     # Fast dependency graph. Builder source changes by themselves do NOT

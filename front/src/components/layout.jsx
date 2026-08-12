@@ -4,6 +4,7 @@ import { useLocation } from "react-router-dom";
 import { useRadio } from "../contexts/radio";
 import { useOnlineRoomNavigation } from "../hooks/useOnlineRoomNavigation";
 import { useRequireOnlineName } from "../hooks/useRequireOnlineName";
+import { useI18n } from "../i18n";
 import SongSettings from "../pages/Library/modals/song-settings";
 import Settings from "../pages/Settings";
 import TitleBar from "./TitleBar";
@@ -13,6 +14,7 @@ import { IconButton } from "./ui";
 const ROUTES = { karaoke: "/karaoke" };
 
 function AppFloatingControls({ onOpenSettings }) {
+  const { t } = useI18n();
   const { error, isLoading, isPlaying, station, toggle, volume, setVolume } =
     useRadio();
 
@@ -33,13 +35,13 @@ function AppFloatingControls({ onOpenSettings }) {
           size={28}
           label={
             error ||
-            (isPlaying
-              ? `Выключить ${station.name}`
-              : `Включить ${station.name}`)
+            t(isPlaying ? "radio.disable" : "radio.enable", {
+              station: station.name
+            })
           }
           onClick={toggle}
         />
-        <div className="app-radio-volume" aria-label="Громкость радио">
+        <div className="app-radio-volume" aria-label={t("radio.volume")}>
           <Volume2 size={15} />
           <input
             type="range"
@@ -58,7 +60,7 @@ function AppFloatingControls({ onOpenSettings }) {
         className="app-settings-fab"
         icon={Cog}
         size={28}
-        label="Настройки приложения"
+        label={t("settings.open")}
         onClick={onOpenSettings}
       />
     </div>

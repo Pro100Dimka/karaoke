@@ -4,8 +4,9 @@ import {
   ChevronUp,
   SlidersHorizontal
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { api } from "../../api/client";
 import { useRadio } from "../../contexts/radio";
 import {
   Button,
@@ -15,6 +16,8 @@ import {
   Stack,
   Typography
 } from "../../theme/ui";
+import { readJsonStorage } from "../../utils/storage";
+import { persistUiPreferences } from "../../utils/ui-preferences";
 
 import useAudioSettingsSource from "./audio-source";
 import { SCREEN_BY_ID, SERVICE_SCREENS, SETTINGS } from "./config";
@@ -103,7 +106,13 @@ export default function SettingsContent({
   onOpenService,
   onCloseService
 }) {
-  const [showAdvancedAudio, setShowAdvancedAudio] = useState(false);
+  const [showAdvancedAudio, setShowAdvancedAudio] = useState(
+    () => readJsonStorage("karaoke-settings-view").showAdvancedAudio ?? false
+  );
+
+  useEffect(() => {
+    persistUiPreferences(api, "settings", { showAdvancedAudio });
+  }, [showAdvancedAudio]);
 
   const radio = useRadio();
   const audio = useAudioSettingsSource({ enabled: tab === "audio" });

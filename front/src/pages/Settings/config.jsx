@@ -31,6 +31,7 @@ export const MONITOR_MODE_OPTIONS = MONITORING_MODES.map(({ id, title }) => ({
 }));
 
 const LANGUAGE_OPTIONS = opts([
+  ["uk", "Українська"],
   ["ru", "Русский"],
   ["en", "English"]
 ]);

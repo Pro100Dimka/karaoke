@@ -19,6 +19,8 @@ import { api } from "../../../../api/client";
 import { IconButton } from "../../../../components/ui";
 import { useAppDialog } from "../../../../contexts/AppDialog";
 import { getErrorMessage } from "../../../../utils/errors";
+import { readJsonStorage } from "../../../../utils/storage";
+import { persistUiPreferences } from "../../../../utils/ui-preferences";
 import EffectDial from "../../../Karaoke/components/console/effect-dial";
 import SongStrip from "../../../Karaoke/components/console/song-strip";
 import {
@@ -59,6 +61,8 @@ const noteName = (midi) => {
   return `${names[((value % 12) + 12) % 12]}${Math.floor(value / 12) - 1}`;
 };
 const cloneNotes = (notes) => notes.map((note) => ({ ...note }));
+const EDITOR_STORAGE_KEY = "karaoke-melody-editor";
+const editorPreferences = () => readJsonStorage(EDITOR_STORAGE_KEY);
 const normalizeNotes = (notes = []) =>
   notes
     .map((note, index) => ({
@@ -154,14 +158,20 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
   const [selected, setSelected] = useState([]);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
-  const [zoom, setZoom] = useState(68);
-  const [verticalZoom, setVerticalZoom] = useState(14);
-  const [autoScroll, setAutoScroll] = useState(true);
-  const [volumes, setVolumes] = useState({
-    vocals: 0.7,
-    melody: 0.9,
-    instrumental: 0.45
-  });
+  const [zoom, setZoom] = useState(
+    () => Number(editorPreferences().zoom) || 68
+  );
+  const [verticalZoom, setVerticalZoom] = useState(
+    () => Number(editorPreferences().verticalZoom) || 14
+  );
+  const [autoScroll, setAutoScroll] = useState(
+    () => editorPreferences().autoScroll ?? true
+  );
+  const [volumes, setVolumes] = useState(() => ({
+    vocals: Number(editorPreferences().volumes?.vocals ?? 0.7),
+    melody: Number(editorPreferences().volumes?.melody ?? 0.9),
+    instrumental: Number(editorPreferences().volumes?.instrumental ?? 0.45)
+  }));
   const { notes, replace, reset, remember, undo, redo } = useEditorHistory([]);
   const vocalsRef = useRef(null);
   const instrumentalRef = useRef(null);
@@ -191,6 +201,15 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
   });
   const saveRef = useRef(null);
   const [selectionBox, setSelectionBox] = useState(null);
+
+  useEffect(() => {
+    persistUiPreferences(api, "melody_editor", {
+      zoom,
+      verticalZoom,
+      autoScroll,
+      volumes
+    });
+  }, [autoScroll, verticalZoom, volumes, zoom]);
 
   const songMap = payload?.song_map || {};
   const duration =

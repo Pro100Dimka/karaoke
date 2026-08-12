@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { api } from "../../../api/client";
 import {
   loadKaraokePreferences,
   saveKaraokePreferences
@@ -31,7 +32,7 @@ export default function useKaraokePreferences() {
   );
 
   useEffect(() => {
-    saveKaraokePreferences({
+    const saved = saveKaraokePreferences({
       musicVolume,
       vocalVolume,
       melodyVolume,
@@ -42,6 +43,21 @@ export default function useKaraokePreferences() {
       autoHideConsole,
       effectPreset
     });
+    if (saved) {
+      api
+        .updateUiPreferences("karaoke", {
+          musicVolume,
+          vocalVolume,
+          melodyVolume,
+          speed,
+          keyShift,
+          showLyrics,
+          showNotes,
+          autoHideConsole,
+          effectPreset
+        })
+        .catch(() => {});
+    }
   }, [
     musicVolume,
     vocalVolume,

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +17,7 @@ PATH_SETTINGS_FILE = config.PATH_SETTINGS_FILE
 _settings_lock = threading.RLock()
 
 DEFAULT_SETTINGS: dict[str, Any] = {
-    "language": "ru",
+    "language": "uk",
     "theme": "dark",
     "whisper_model": config.DEFAULT_WHISPER_MODEL,
     "thread_count": min(4, max(1, (os.cpu_count() or 2) // 2)),
@@ -26,6 +27,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "autoupdate": False,
     "online_name": "",
 }
+
+UI_PREFERENCES_FILE = config.DATA_DIR / "ui-preferences.json"
+UI_PREFERENCE_NAMESPACES = frozenset({"audio", "karaoke", "melody_editor", "radio", "settings"})
 
 
 def path_settings() -> dict[str, str]:
@@ -99,3 +103,32 @@ def update_settings(patch: dict[str, Any]) -> dict[str, Any]:
             config.apply_storage_paths(**path_values)
 
         return read_settings()
+
+
+def read_ui_preferences() -> dict[str, dict[str, Any]]:
+    with _settings_lock:
+        try:
+            raw: Any = read_json(UI_PREFERENCES_FILE, default={})
+        except (json.JSONDecodeError, OSError):
+            raw = {}
+        if not isinstance(raw, dict):
+            return {}
+        return {
+            namespace: deepcopy(value)
+            for namespace, value in raw.items()
+            if namespace in UI_PREFERENCE_NAMESPACES and isinstance(value, dict)
+        }
+
+
+def update_ui_preferences(namespace: str, patch: dict[str, Any]) -> dict[str, Any]:
+    if namespace not in UI_PREFERENCE_NAMESPACES:
+        raise ValueError(f"Unknown preference namespace: {namespace}")
+    encoded = json.dumps(patch, ensure_ascii=False)
+    if len(encoded.encode("utf-8")) > 32_768:
+        raise ValueError("Preference payload is too large")
+    with _settings_lock:
+        stored = read_ui_preferences()
+        current = stored.get(namespace, {})
+        stored[namespace] = {**current, **deepcopy(patch)}
+        write_json(UI_PREFERENCES_FILE, stored)
+        return deepcopy(stored[namespace])

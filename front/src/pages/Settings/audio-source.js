@@ -343,11 +343,11 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
     );
 
   const updatePreference = (name, value) =>
-    setPreferences(
-      saveAudioPreferences({
-        [name]: value
-      })
-    );
+    setPreferences(() => {
+      const next = saveAudioPreferences({ [name]: value });
+      api.updateUiPreferences("audio", next).catch(() => {});
+      return next;
+    });
 
   const toggleMonitoring = () =>
     runMonitoring(async () => {

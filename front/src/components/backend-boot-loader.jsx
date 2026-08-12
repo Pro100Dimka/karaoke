@@ -8,6 +8,7 @@ import lightIcon from "../assets/icons/light.png";
 import violetIcon from "../assets/icons/violet.png";
 import { BACKEND_BOOT_RETRY_MS } from "../config/runtime";
 import { getSavedTheme } from "../utils/theme";
+import { hydrateUiPreferences } from "../utils/ui-preferences";
 
 const ICONS = {
   dark: darkIcon,
@@ -43,6 +44,7 @@ export default function BackendBootLoader({ children }) {
       while (!cancelled) {
         try {
           await api.getHealth();
+          await hydrateUiPreferences(api).catch(() => {});
           if (!cancelled) setReady(true);
           return;
         } catch {

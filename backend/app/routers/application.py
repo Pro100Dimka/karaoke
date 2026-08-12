@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
@@ -17,8 +17,8 @@ router = APIRouter(tags=["application"])
 
 
 class AppSettingsPatch(BaseModel):
-    language: Literal["ru", "en"] | None = None
-    theme: Literal["dark", "light"] | None = None
+    language: Literal["uk", "ru", "en"] | None = None
+    theme: Literal["dark", "light", "green", "violet"] | None = None
     whisper_model: (
         Literal["tiny", "base", "small", "medium", "large", "turbo", "large-v3-turbo"] | None
     ) = None
@@ -48,6 +48,19 @@ def get_settings() -> dict:
 def update_settings(patch: AppSettingsPatch) -> dict:
     try:
         return app_settings_service.update_settings(patch.model_dump(exclude_none=True))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/preferences")
+def get_ui_preferences() -> dict[str, dict[str, Any]]:
+    return app_settings_service.read_ui_preferences()
+
+
+@router.patch("/preferences/{namespace}")
+def update_ui_preferences(namespace: str, patch: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return app_settings_service.update_ui_preferences(namespace, patch)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

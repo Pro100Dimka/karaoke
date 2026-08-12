@@ -2,13 +2,10 @@ import { getSavedTheme, saveTheme } from "../../utils/theme";
 import { request } from "../core";
 
 export const settingsApi = {
-  getAppSettings: async () => ({
-    ...(await request("/settings")),
-    // Frontend supports extra visual themes that older backend versions
-    // validate as only "dark" | "light". Keep the selected visual theme
-    // local so green/violet survive restarts without causing a 422 response.
-    theme: getSavedTheme()
-  }),
+  getAppSettings: async () => {
+    const settings = await request("/settings");
+    return { ...settings, theme: settings.theme || getSavedTheme() };
+  },
 
   updateAppSettings: async (patch) => {
     const { theme, ...backendPatch } = patch ?? {};
@@ -16,9 +13,8 @@ export const settingsApi = {
 
     if (theme !== undefined) {
       localPatch.theme = saveTheme(theme);
+      backendPatch.theme = localPatch.theme;
     }
-
-    if (!Object.keys(backendPatch).length) return localPatch;
 
     return {
       ...(await request("/settings", {
@@ -27,5 +23,11 @@ export const settingsApi = {
       })),
       ...localPatch
     };
-  }
+  },
+  getUiPreferences: () => request("/preferences"),
+  updateUiPreferences: (namespace, patch) =>
+    request(`/preferences/${encodeURIComponent(namespace)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch)
+    })
 };
