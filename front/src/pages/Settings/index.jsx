@@ -4,6 +4,7 @@ import Modal from "../../components/modal";
 import { useAppDialog } from "../../contexts/AppDialog";
 import useSettingsForm from "../../hooks/useSettingsForm";
 import useSettingsNavigation from "../../hooks/useSettingsNavigation";
+import { useI18n } from "../../i18n";
 import Tabs from "../../theme/ui/Tabs";
 import { SETTINGS_TABS } from "./config";
 import SettingsContent from "./settings-content";
@@ -14,11 +15,12 @@ export default function Settings({
   initialTab = "appearance"
 }) {
   const { alert } = useAppDialog();
+  const { t } = useI18n();
   const settings = useSettingsForm(alert);
   const navigation = useSettingsNavigation(initialTab);
   const tabs = SETTINGS_TABS.map(({ id, label, icon: Icon }) => ({
     value: id,
-    label,
+    label: t(`settings.tab.${id}`, {}, label),
     icon: <Icon size={17} />,
     content: settings.form ? (
       <SettingsContent
@@ -31,7 +33,7 @@ export default function Settings({
         onCloseService={navigation.closeService}
       />
     ) : (
-      <p className="text-muted">Загружаем настройки…</p>
+      <p className="text-muted">{t("settings.loading")}</p>
     )
   }));
 
@@ -40,19 +42,19 @@ export default function Settings({
       isOpen={isOpen}
       onClose={onClose}
       maxWidth="100vw"
-      ariaLabel="Настройки приложения"
+      ariaLabel={t("settings.title")}
       titleProps={{
         className: "settings-header",
         icon: Settings2,
-        eyebrow: "НАСТРОЙКИ",
-        title: "Настройки приложения",
-        description: "Настройте звук, внешний вид и обработку песен под себя."
+        eyebrow: t("settings.eyebrow"),
+        title: t("settings.title"),
+        description: t("settings.description")
       }}
     >
       <Tabs
         value={navigation.tab}
         onChange={navigation.selectTab}
-        aria-label="Разделы настроек"
+        aria-label={t("settings.sections")}
         items={tabs}
       />
     </Modal>

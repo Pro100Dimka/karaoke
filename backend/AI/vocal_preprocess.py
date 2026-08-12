@@ -14,7 +14,7 @@ import soundfile as sf
 from .errors import AICoreError
 from .models import PitchFrame
 
-VOCAL_ANALYSIS_PREPROCESS_VERSION = "v3-adaptive-gate-relative-ranking-20260811"
+VOCAL_ANALYSIS_PREPROCESS_VERSION = "v4-tail-gate-lyric-phrase-filter-20260812"
 
 
 @dataclass(frozen=True, slots=True)

@@ -7,6 +7,7 @@ import { POLLING_INTERVALS } from "../../config/runtime";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import { useRadio } from "../../contexts/radio";
 import { usePolling } from "../../hooks/usePolling";
+import { getErrorMessage } from "../../utils/errors";
 import KaraokeConsole from "./components/console";
 import KaraokeMedia from "./components/karaoke-media";
 import KaraokePerformanceStage from "./components/karaoke-performance-stage";
@@ -306,7 +307,6 @@ export default function Karaoke({ onOpenAppSettings }) {
 
   const { preparePlayback, returnToLibrary, seekTo, skip, stop, togglePlay } =
     useKaraokeTransport({
-      browserMonitorRef,
       currentTime,
       duration,
       durationRef,
@@ -322,7 +322,6 @@ export default function Karaoke({ onOpenAppSettings }) {
       setAnalysisRecordingId: updateAnalysisRecordingId,
       setCurrentTime,
       setIsPlaying,
-      setMonitoringEnabled,
       setRecordingError,
       setRecordingSessionId,
       silenceMelodyGuide,
@@ -403,9 +402,8 @@ export default function Karaoke({ onOpenAppSettings }) {
         }
 
         setSceneBlackout(false);
-        // The reveal is deliberately cinematic. Playback begins only after the
-        // scene is fully visible, never while the screen is still fading out.
-        await waitForScene(2400);
+        // Match the CSS transition and start on the first fully revealed frame.
+        await waitForScene(520);
 
         if (actionAfterReveal) {
           await Promise.resolve(action());
@@ -561,6 +559,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   playbackEndedRef.current = () => handleStop();
 
   useKaraokeHotkeys({
+    scopeRef: containerRef,
     currentTime,
     duration,
     onTogglePlay: handleTogglePlay,
@@ -648,6 +647,11 @@ export default function Karaoke({ onOpenAppSettings }) {
       echo: preset.echo,
       delay: preset.delay
     }));
+    updateMicrophone({
+      reverb: preset.reverb,
+      echo: preset.echo,
+      delay: preset.delay
+    });
   };
 
   return (
@@ -806,6 +810,7 @@ export default function Karaoke({ onOpenAppSettings }) {
         onEffectChange={(key, value) => {
           setEffectPreset("custom");
           setMicrophoneEffects((effects) => ({ ...effects, [key]: value }));
+          updateMicrophone({ [key]: value });
         }}
         isPlaying={isPlaying}
         onSkip={skip}
@@ -828,6 +833,23 @@ export default function Karaoke({ onOpenAppSettings }) {
         onClose={hideControls}
         effectPreset={effectPreset}
         onApplyEffectPreset={applyEffectPreset}
+        monitoringEnabled={monitoringEnabled}
+        onMonitoringChange={async (enabled) => {
+          const action = enabled
+            ? api.startDirectMonitoring
+            : api.stopDirectMonitoring;
+          try {
+            const updated = await action();
+            setMonitoringEnabled(Boolean(updated?.monitoring_enabled));
+            globalThis.dispatchEvent?.(
+              new CustomEvent("audio-settings-changed", { detail: updated })
+            );
+          } catch (error) {
+            setRecordingError(
+              `Не удалось изменить прослушивание микрофона: ${getErrorMessage(error)}`
+            );
+          }
+        }}
         onSeek={seekTo}
       />
     </div>

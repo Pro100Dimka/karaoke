@@ -1343,12 +1343,17 @@ def build_vocal_notes(
         max_gap=max_gap,
         min_confidence=min_confidence,
     )
-    # MIDI melody must NEVER be cut or created from lyric timestamps.
-    # Forced alignment can be locally wrong even when the lyric text itself is
-    # perfect (e.g. a short phrase may be stretched over many seconds).  Using
-    # those intervals as an acoustic gate corrupts an otherwise valid pitch
-    # contour.  Lyrics are metadata only: they may label already-existing notes,
-    # but cannot change note start/end/pitch or suppress notes.
+    # Reverb, echo and backing-vocal leakage can remain pitched after source
+    # separation. Keep complete acoustic notes around aligned word phrases, but
+    # discard isolated pitch islands in instrumental gaps. The soft mask never
+    # cuts a note or invents timing/pitch, and its adaptive padding preserves
+    # pickups and releases around imperfect forced-alignment boundaries.
+    notes = _filter_to_lyric_phrases(
+        notes,
+        ordered_syllables,
+        min_note=min_note,
+        words=words,
+    )
     if ordered_syllables:
         notes = _attach_soft_lyric_labels(notes, ordered_syllables)
     notes = _make_monophonic(notes, min_note)

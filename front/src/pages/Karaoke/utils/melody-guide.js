@@ -43,6 +43,6 @@ export function getMelodyGuideState({
     active: true,
     note,
     frequency,
-    gain: 0.12 * safeVolume ** 2
+    gain: 0.3 * safeVolume ** 1.65
   };
 }

@@ -5639,6 +5639,12 @@ body {
   object-position: center;
   background: #000;
   pointer-events: none;
+  opacity: 1;
+  transition: opacity 180ms ease;
+}
+
+.karaoke-scene-video.is-switching {
+  opacity: 0;
 }
 
 /* Song/YouTube clips may still exist as synchronized media internally, but
@@ -5877,10 +5883,9 @@ body {
   color: color-mix(in srgb, var(--color-primary) 74%, white);
 }
 
-/* Blackout enters quickly, but reveals the video slowly. This asymmetry gives
-   the song-start scene time to breathe without making every blackout sluggish. */
+/* Blackout enters quickly and reveals the ready video with a short, smooth fade. */
 .karaoke-scene-blackout {
-  transition: opacity 2.4s cubic-bezier(0.22, 1, 0.36, 1) !important;
+  transition: opacity 520ms cubic-bezier(0.22, 1, 0.36, 1) !important;
 }
 
 .karaoke-scene-blackout.is-visible {
@@ -7780,10 +7785,22 @@ body {
   overflow: hidden;
 }
 .app-modal-body {
+  min-inline-size: 0;
   min-height: 0;
   flex: 1 1 auto;
   overflow: auto;
+  overflow-wrap: anywhere;
   overscroll-behavior: contain;
+}
+
+.settings-modal
+  :is(.ui-stack, .ui-grid, .ui-config-form, .ui-config-form-field) {
+  min-inline-size: 0;
+}
+
+.settings-modal :is(p, span, small, strong, .ui-typography) {
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 900px) {

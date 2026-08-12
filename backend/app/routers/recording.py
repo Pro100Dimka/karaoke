@@ -36,6 +36,10 @@ def _configure_recording_monitor(settings, body: schemas.RecordingStartRequest) 
         audio_service.stop_monitoring()
         return False
 
+    if not settings.monitoring_enabled:
+        audio_service.stop_monitoring()
+        return True
+
     transient_values = {
         name: getattr(settings, name)
         for name in ("monitoring_enabled", "volume", "reverb", "echo", "delay")
@@ -85,7 +89,7 @@ def start_recording(body: schemas.RecordingStartRequest, db: DatabaseSession):
                 settings.audio_driver,
             ),
             gain=body.microphone_volume,
-            monitoring_enabled=not keep_native_monitor,
+            monitoring_enabled=settings.monitoring_enabled and not keep_native_monitor,
             playback_offset_sec=body.position_sec,
             blocksize=settings.buffer_size,
             music_gain=body.music_volume,

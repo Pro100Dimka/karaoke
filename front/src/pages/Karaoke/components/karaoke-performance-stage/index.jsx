@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import useKaraokePanorama from "../../hooks/useKaraokePanorama";
 import AuroraWorld from "./aurora-world";
 import KaraokeLyricLine from "./karaoke-lyric-line";
@@ -61,6 +61,8 @@ export default function KaraokePerformanceStage(props) {
   } = props;
   const { activeTheme, panoramaRef } = useKaraokePanorama(songId, isPlaying);
   const sceneVideoRef = useRef(null);
+  const sceneVideoTimerRef = useRef(null);
+  const [sceneVideoFading, setSceneVideoFading] = useState(false);
   const sceneVideoUrl = globalThis.electronAPI?.getSceneVideoUrl?.() || "";
   const sceneSeed = String(songId || "karaoke")
     .split("")
@@ -69,26 +71,31 @@ export default function KaraokePerformanceStage(props) {
       17
     );
 
-  useEffect(() => {
-    const video = sceneVideoRef.current;
-    if (!video) return;
-    if (!isPlaying) {
-      video.pause();
-      return;
-    }
-    video.play().catch(() => {});
-  }, [isPlaying, sceneVideoUrl]);
-
-  const prepareSceneVideo = () => {
+  const changeSceneVideoPosition = useCallback(() => {
     const video = sceneVideoRef.current;
     if (!video) return;
     const videoDuration = Number(video.duration);
     if (Number.isFinite(videoDuration) && videoDuration > 1) {
-      video.currentTime =
-        (sceneSeed * 37.17) % Math.max(0.1, videoDuration - 0.5);
+      video.currentTime = Math.random() * Math.max(0.1, videoDuration - 0.5);
     }
-    if (isPlaying) video.play().catch(() => {});
-  };
+    video.play().catch(() => {});
+  }, []);
+
+  const transitionSceneVideo = useCallback(() => {
+    if (!sceneVideoRef.current?.duration) return;
+    setSceneVideoFading(true);
+    window.clearTimeout(sceneVideoTimerRef.current);
+    sceneVideoTimerRef.current = window.setTimeout(() => {
+      changeSceneVideoPosition();
+      setSceneVideoFading(false);
+    }, 180);
+  }, [changeSceneVideoPosition]);
+
+  useEffect(() => {
+    transitionSceneVideo();
+  }, [isPlaying, sceneVideoUrl, transitionSceneVideo]);
+
+  useEffect(() => () => window.clearTimeout(sceneVideoTimerRef.current), []);
 
   return (
     <div
@@ -97,13 +104,13 @@ export default function KaraokePerformanceStage(props) {
       {sceneVideoUrl ? (
         <video
           ref={sceneVideoRef}
-          className="karaoke-scene-video"
+          className={`karaoke-scene-video ${sceneVideoFading ? "is-switching" : ""}`}
           src={sceneVideoUrl}
           muted
           loop
           playsInline
           preload="metadata"
-          onLoadedMetadata={prepareSceneVideo}
+          onLoadedMetadata={transitionSceneVideo}
           aria-hidden="true"
         />
       ) : (

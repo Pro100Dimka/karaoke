@@ -54,9 +54,7 @@ _progress_runtime_lock = threading.RLock()
 def _configure_ai_runtime() -> str:
     """Apply persisted compute preferences before lazy AI imports load a runtime."""
     settings = app_settings_service.read_settings()
-    use_gpu = bool(settings["use_gpu"])
-    use_cpu = bool(settings["use_cpu"])
-    device = "auto" if use_gpu and use_cpu else "cuda" if use_gpu else "cpu"
+    device = str(settings["compute_mode"])
     thread_count = int(settings["thread_count"])
     os.environ["SONGAPP_DEVICE"] = device
     # NumPy/BLAS honor these on their next initialization; PyTorch is also

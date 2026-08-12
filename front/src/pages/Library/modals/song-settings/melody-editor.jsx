@@ -19,6 +19,10 @@ import { api } from "../../../../api/client";
 import { IconButton } from "../../../../components/ui";
 import { useAppDialog } from "../../../../contexts/AppDialog";
 import { getErrorMessage } from "../../../../utils/errors";
+import {
+  isEditableHotkeyTarget,
+  isHotkeyScopeActive
+} from "../../../../utils/hotkeys";
 import { readJsonStorage } from "../../../../utils/storage";
 import { persistUiPreferences } from "../../../../utils/ui-preferences";
 import EffectDial from "../../../Karaoke/components/console/effect-dial";
@@ -184,6 +188,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
   const selectionRef = useRef(null);
   const clipboardRef = useRef([]);
   const rollShellRef = useRef(null);
+  const workspaceRef = useRef(null);
   const rollCanvasRef = useRef(null);
   const playheadDragRef = useRef(null);
   const auditionRef = useRef(null);
@@ -799,7 +804,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
   const setHorizontalZoomAnchored = useCallback(
     (nextZoom) => {
       const shell = rollShellRef.current;
-      const next = clamp(Number(nextZoom) || zoom, 36, 220);
+      const next = clamp(Number(nextZoom) || zoom, 36, 600);
       if (!shell || next === zoom) {
         setZoom(next);
         return;
@@ -1247,9 +1252,14 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
   useEffect(() => {
     const onKeyDown = (event) => {
       const { target } = event;
-      const tag = target?.tagName?.toLowerCase?.();
-      const editable =
-        target?.isContentEditable || tag === "input" || tag === "textarea";
+      if (
+        event.defaultPrevented ||
+        event.isComposing ||
+        event.repeat ||
+        !isHotkeyScopeActive(workspaceRef.current)
+      )
+        return;
+      const editable = isEditableHotkeyTarget(target);
       const mod = event.ctrlKey || event.metaKey;
       const { code } = event;
 
@@ -1306,15 +1316,17 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
         return;
       }
 
-      if (editable || tag === "select") return;
+      if (editable) return;
       if (event.key === "Delete" || event.key === "Backspace") {
         consume();
         deleteSelected();
         return;
       }
       if (event.key === "Escape") {
-        consume();
-        clearSelection();
+        if (selected.length) {
+          consume();
+          clearSelection();
+        }
         return;
       }
       if (event.code === "Space") {
@@ -1424,6 +1436,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
 
   return (
     <section
+      ref={workspaceRef}
       className="melody-editor-workspace"
       aria-label={`Редактор мелодии ${song?.title || ""}`}
     >
@@ -1839,7 +1852,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
                   id="melody-editor-horizontal-zoom"
                   type="range"
                   min="36"
-                  max="220"
+                  max="600"
                   step="1"
                   value={zoom}
                   onChange={(event) =>

@@ -15,7 +15,6 @@ export default function useKaraokeTransport({
   instrumentalRef,
   vocalsRef,
   videoRef,
-  browserMonitorRef,
   durationRef,
   currentTime,
   duration,
@@ -31,7 +30,6 @@ export default function useKaraokeTransport({
   syncSecondaryMedia,
   setCurrentTime,
   setIsPlaying,
-  setMonitoringEnabled,
   setRecordingError,
   setRecordingSessionId,
   setAnalysisRecordingId
@@ -308,13 +306,8 @@ export default function useKaraokeTransport({
       }
     }
 
-    const monitor = browserMonitorRef.current;
-    monitor?.stream?.getTracks?.().forEach((track) => track.stop());
-    const closeResult = monitor?.context?.close?.();
-    await closeResult?.catch?.(() => {});
-    browserMonitorRef.current = null;
-    setMonitoringEnabled(false);
-    await api.stopDirectMonitoring().catch(() => {});
+    // Monitoring belongs to the explicit "Слышу себя" switch and survives
+    // Stop/Pause. Recording is stopped independently above.
     return true;
   };
 

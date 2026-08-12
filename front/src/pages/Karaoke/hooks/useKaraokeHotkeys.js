@@ -3,6 +3,7 @@ import useLatestRef from "../../../hooks/useLatestRef";
 import { getKaraokeHotkeyAction } from "../utils/hotkeys";
 
 export default function useKaraokeHotkeys({
+  scopeRef,
   currentTime,
   duration,
   onTogglePlay,
@@ -17,7 +18,7 @@ export default function useKaraokeHotkeys({
 
   useEffect(() => {
     const onKeyDown = (event) => {
-      const action = getKaraokeHotkeyAction(event);
+      const action = getKaraokeHotkeyAction(event, scopeRef.current);
       if (!action) return;
 
       if (action !== "stop") event.preventDefault();
@@ -37,5 +38,5 @@ export default function useKaraokeHotkeys({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [currentTimeRef, durationRef, seekRef, stopRef, togglePlayRef]);
+  }, [currentTimeRef, durationRef, scopeRef, seekRef, stopRef, togglePlayRef]);
 }

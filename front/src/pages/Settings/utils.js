@@ -82,20 +82,24 @@ const preferenceField = createField({
       audio.updatePreference(name, value)
 });
 
-const formSelect = fieldType(formField, "select");
-const formToggle = fieldType(formField, "toggle");
-const formNumber = fieldType(formField, "number");
+const savedFormField =
+  (type, save) =>
+  (name, config = {}) =>
+    fieldType(formField, type)(name, { save, ...config });
+const formSelect = savedFormField("select", "change");
+const formToggle = savedFormField("toggle", "change");
+const formNumber = savedFormField("number", "blur");
 export const formReadonly = fieldType(formField, "readonly");
 
 export const audioSlider = fieldType(audioField, "slider");
 
 export const FORM_FIELDS = {
   select: formSelect,
-  text: fieldType(formField, "text"),
+  text: savedFormField("text", "blur"),
   number: formNumber,
   toggle: formToggle,
   readonly: formReadonly,
-  folder: fieldType(formField, "folder")
+  folder: savedFormField("folder", "change")
 };
 
 const audioOption =
@@ -122,6 +126,9 @@ export const monitorDisabled = ({ audio }) =>
 
 export const audioDriverVisible = ({ audio }) =>
   audio.values?.audio_driver === "asio";
+
+export const multipleAudioDriversAvailable = ({ audio }) =>
+  (audio.options?.audioDrivers?.length ?? 0) > 1;
 
 export const speakerPlaying = ({ audio }) =>
   audio.states?.speakerTestState === "playing";

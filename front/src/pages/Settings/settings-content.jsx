@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { api } from "../../api/client";
 import { useRadio } from "../../contexts/radio";
+import { useI18n } from "../../i18n";
 import {
   Button,
   Card,
@@ -24,6 +25,7 @@ import { SCREEN_BY_ID, SERVICE_SCREENS, SETTINGS } from "./config";
 import { SETTINGS_RENDERERS } from "./renderers";
 
 function ServiceContent({ service, onOpen, onClose }) {
+  const { t } = useI18n();
   const ServiceScreen = SCREEN_BY_ID[service]?.component;
 
   if (ServiceScreen) {
@@ -40,7 +42,7 @@ function ServiceContent({ service, onOpen, onClose }) {
         >
           <Stack direction="row" align="center" gap={0.5}>
             <ArrowLeft size={16} />
-            <span>Назад</span>
+            <span>{t("settings.back")}</span>
           </Stack>
         </Button>
 
@@ -88,7 +90,7 @@ function ServiceContent({ service, onOpen, onClose }) {
               variant="caption"
               sx={{ color: "var(--ui-primary-hover)" }}
             >
-              Открыть →
+              {t("settings.openAction")}
             </Typography>
           </Stack>
         </Card>
@@ -106,6 +108,7 @@ export default function SettingsContent({
   onOpenService,
   onCloseService
 }) {
+  const { t } = useI18n();
   const [showAdvancedAudio, setShowAdvancedAudio] = useState(
     () => readJsonStorage("karaoke-settings-view").showAdvancedAudio ?? false
   );
@@ -123,12 +126,40 @@ export default function SettingsContent({
   const fields = useMemo(() => {
     if (!section?.fields) return [];
 
-    if (tab !== "audio") return section.fields;
-
-    return section.fields.filter(
-      (field) => showAdvancedAudio || !field.advanced
-    );
-  }, [section, showAdvancedAudio, tab]);
+    const visible =
+      tab !== "audio"
+        ? section.fields
+        : section.fields.filter(
+            (field) => showAdvancedAudio || !field.advanced
+          );
+    return visible.map((field) => {
+      const label = t(`settings.${tab}.${field.name}.label`, {}, field.label);
+      return {
+        ...field,
+        label,
+        tooltip: t(`settings.${tab}.${field.name}.tooltip`, {}, field.tooltip),
+        getLabel: field.getLabel
+          ? (context) => {
+              const original = field.getLabel(context);
+              const suffix = String(original)
+                .split("·")
+                .slice(1)
+                .join("·")
+                .trim();
+              return suffix ? `${label} · ${suffix}` : label;
+            }
+          : undefined,
+        options: field.options?.map((option) => ({
+          ...option,
+          label: t(
+            `settings.option.${field.name}.${option.value}`,
+            {},
+            option.label
+          )
+        }))
+      };
+    });
+  }, [section, showAdvancedAudio, t, tab]);
 
   if (ServiceScreen) {
     return (
@@ -167,8 +198,8 @@ export default function SettingsContent({
               <SlidersHorizontal size={15} />
               <span>
                 {showAdvancedAudio
-                  ? "Скрыть дополнительные настройки"
-                  : "Дополнительные настройки"}
+                  ? t("settings.advanced.hide")
+                  : t("settings.advanced.show")}
               </span>
               {showAdvancedAudio ? (
                 <ChevronUp size={15} />

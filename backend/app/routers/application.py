@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 import models
@@ -19,24 +19,12 @@ router = APIRouter(tags=["application"])
 class AppSettingsPatch(BaseModel):
     language: Literal["uk", "ru", "en"] | None = None
     theme: Literal["dark", "light", "green", "violet"] | None = None
-    whisper_model: (
-        Literal["tiny", "base", "small", "medium", "large", "turbo", "large-v3-turbo"] | None
-    ) = None
     thread_count: int | None = Field(default=None, ge=1, le=64)
-    use_gpu: bool | None = None
-    use_cpu: bool | None = None
-    autosave: bool | None = None
-    autoupdate: bool | None = None
+    compute_mode: Literal["auto", "cuda", "cpu"] | None = None
     online_name: str | None = Field(default=None, max_length=40)
     songs_folder: str | None = Field(default=None, max_length=4096)
     ai_folder: str | None = Field(default=None, max_length=4096)
     cache_folder: str | None = Field(default=None, max_length=4096)
-
-    @model_validator(mode="after")
-    def validate_compute_target(self) -> AppSettingsPatch:
-        if self.use_gpu is False and self.use_cpu is False:
-            raise ValueError("At least one AI compute target must remain enabled")
-        return self
 
 
 @router.get("/settings")

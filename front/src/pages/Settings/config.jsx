@@ -10,6 +10,7 @@ import {
   FORM_FIELDS,
   HALF,
   monitorDisabled,
+  multipleAudioDriversAvailable,
   opts,
   percent,
   preferenceSelect,
@@ -43,14 +44,10 @@ const THEME_OPTIONS = opts([
   ["violet", "Фиолетовая"]
 ]);
 
-const WHISPER_OPTIONS = opts([
-  ["tiny", "Очень быстро"],
-  ["base", "Быстро"],
-  ["small", "Сбалансировано"],
-  ["medium", "Точно"],
-  ["large", "Максимальная точность"],
-  ["turbo", "Быстро и точно"],
-  ["large-v3-turbo", "Рекомендуется"]
+const COMPUTE_OPTIONS = opts([
+  ["auto", "Автоматически · рекомендуется"],
+  ["cuda", "NVIDIA CUDA"],
+  ["cpu", "Только процессор"]
 ]);
 
 /* =========================================================
@@ -200,7 +197,8 @@ const AUDIO_SELECT_FIELDS = [
     "Режим звука",
     "Автоматический режим подходит большинству пользователей",
     {
-      advanced: true
+      advanced: true,
+      isVisible: multipleAudioDriversAvailable
     }
   ],
   [
@@ -334,11 +332,11 @@ const AUDIO_FIELDS = [
 const AI_SETTINGS_FIELDS = [
   [
     "select",
-    "whisper_model",
-    "Распознавание текста",
-    "Выберите баланс скорости и точности",
+    "compute_mode",
+    "Устройство обработки",
+    "Автоматический режим использует NVIDIA CUDA при наличии и CPU на остальных компьютерах",
     {
-      options: WHISPER_OPTIONS
+      options: COMPUTE_OPTIONS
     }
   ],
   [
@@ -351,13 +349,6 @@ const AI_SETTINGS_FIELDS = [
       max: 64,
       parse: "number"
     }
-  ],
-  ["toggle", "use_gpu", "Использовать видеокарту", "Ускоряет обработку"],
-  [
-    "toggle",
-    "use_cpu",
-    "Использовать процессор",
-    "Используется, если видеокарта недоступна"
   ]
 ].map(([type, name, label, tooltip, extra = {}]) =>
   FORM_FIELDS[type](name, {

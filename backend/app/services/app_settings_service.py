@@ -19,12 +19,8 @@ _settings_lock = threading.RLock()
 DEFAULT_SETTINGS: dict[str, Any] = {
     "language": "uk",
     "theme": "dark",
-    "whisper_model": config.DEFAULT_WHISPER_MODEL,
     "thread_count": min(4, max(1, (os.cpu_count() or 2) // 2)),
-    "use_gpu": True,
-    "use_cpu": True,
-    "autosave": True,
-    "autoupdate": False,
+    "compute_mode": "auto",
     "online_name": "",
 }
 
@@ -69,6 +65,12 @@ def _read_settings_unlocked() -> dict[str, Any]:
         raw = {}
     stored = raw if isinstance(raw, dict) else {}
     known_values = {key: stored[key] for key in DEFAULT_SETTINGS if key in stored}
+    if "compute_mode" not in known_values:
+        use_gpu = bool(stored.get("use_gpu", True))
+        use_cpu = bool(stored.get("use_cpu", True))
+        known_values["compute_mode"] = (
+            "auto" if use_gpu and use_cpu else "cuda" if use_gpu else "cpu"
+        )
     return {**DEFAULT_SETTINGS, **known_values, **path_settings()}
 
 
@@ -81,8 +83,8 @@ def update_settings(patch: dict[str, Any]) -> dict[str, Any]:
     """Merge preferences and immediately apply user-selected storage paths."""
     with _settings_lock:
         data = {**read_settings(), **patch}
-        if not data["use_gpu"] and not data["use_cpu"]:
-            raise ValueError("At least one AI compute target must remain enabled")
+        if data["compute_mode"] not in {"auto", "cuda", "cpu"}:
+            raise ValueError("Unsupported AI compute mode")
 
         persisted = {key: data[key] for key in DEFAULT_SETTINGS if key in data}
         write_json(SETTINGS_FILE, persisted)

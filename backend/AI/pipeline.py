@@ -1055,7 +1055,10 @@ class KaraokePipeline:
                 max_gap=self.config.max_gap_sec,
                 min_confidence=self.config.min_voiced_confidence,
                 words=words,
-                audio=vocals,
+                # Register verification must use the tail-suppressed analysis
+                # copy; using the wet separated stem here reintroduced echo and
+                # reverb harmonics after the cleaned pitch track was selected.
+                audio=midi_tail_vocal,
                 activity_segments=supplied_segments,
                 fmin_hz=self.config.fmin_hz,
                 fmax_hz=self.config.fmax_hz,

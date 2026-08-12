@@ -1,4 +1,4 @@
-import { AudioLines, Cog, MousePointer2, Type } from "lucide-react";
+import { AudioLines, Cog, Ear, MousePointer2, Type } from "lucide-react";
 
 import { Button, Grid, Stack, Typography } from "../../../../theme/ui";
 
@@ -191,6 +191,8 @@ function ToolTabs({
   onToggleNotes,
   onToggleLyrics,
   onOpenAppSettings,
+  monitoringEnabled,
+  onMonitoringChange,
   autoHideEnabled,
   onAutoHideChange
 }) {
@@ -198,6 +200,15 @@ function ToolTabs({
     ["notes", AudioLines, "Ноты", showNotes, onToggleNotes],
 
     ["lyrics", Type, "Текст", showLyrics, onToggleLyrics],
+
+    [
+      "monitor",
+      Ear,
+      "Слышу себя",
+      monitoringEnabled,
+      () => onMonitoringChange?.(!monitoringEnabled),
+      "Независимое прослушивание микрофона с выбранными эффектами"
+    ],
 
     [
       "auto",
