@@ -16,6 +16,7 @@ pushd "%ROOT%\backend"
 "%PYTHON%" -m ruff check app AI config.py database.py models.py schemas.py run.py || exit /b 1
 "%PYTHON%" -m ruff format --check app AI config.py database.py models.py schemas.py run.py || exit /b 1
 "%PYTHON%" -m mypy app || exit /b 1
+"%PYTHON%" -m pytest -q || exit /b 1
 "%PYTHON%" -m pip check || exit /b 1
 rem qwen-asr 0.0.6 requires transformers 4.57.6 exactly. The application only
 rem loads bundled offline models, so the model-deserialization advisories below

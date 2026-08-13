@@ -28,7 +28,7 @@ def _encode_mp3(wav_path: Path, mp3_path: Path) -> None:
     ffmpeg с libmp3lame."""
     subprocess.run(
         [
-            "ffmpeg",
+            config.FFMPEG_EXE,
             "-y",
             "-i",
             str(wav_path),
@@ -48,7 +48,7 @@ def _encode_flac(wav_path: Path, flac_path: Path) -> None:
     """Compress AI stems losslessly so they remain a reusable processing cache."""
     subprocess.run(
         [
-            "ffmpeg",
+            config.FFMPEG_EXE,
             "-y",
             "-i",
             str(wav_path),

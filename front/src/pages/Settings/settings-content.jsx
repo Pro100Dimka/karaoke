@@ -22,6 +22,7 @@ import { persistUiPreferences } from "../../utils/ui-preferences";
 
 import useAudioSettingsSource from "./audio-source";
 import { SCREEN_BY_ID, SERVICE_SCREENS, SETTINGS } from "./config";
+import ModelRecovery from "./model-recovery";
 import { SETTINGS_RENDERERS } from "./renderers";
 
 function ServiceContent({ service, onOpen, onClose }) {
@@ -182,6 +183,8 @@ export default function SettingsContent({
         renderers={SETTINGS_RENDERERS}
         sx={{ padding: "0 1rem" }}
       />
+
+      {tab === "ai" && <ModelRecovery />}
 
       {tab === "audio" && (
         <Stack

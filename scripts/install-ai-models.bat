@@ -126,7 +126,7 @@ echo [5/7] AI models...
 set "OLD_PYTHONPATH=%PYTHONPATH%"
 set "PYTHONPATH=%BACK%;%PYTHONPATH%"
 
-"%PY%" "%INSTALLER%" --downloads "%DL%" --msst "%MSST%" --env "%ENV%" --workers %WORKERS%
+"%PY%" -m AI.install_models --downloads "%DL%" --msst "%MSST%" --env "%ENV%" --workers %WORKERS%
 set "RC=%ERRORLEVEL%"
 
 set "PYTHONPATH=%OLD_PYTHONPATH%"
@@ -157,7 +157,7 @@ if errorlevel 1 goto :fail
 set "OLD_PYTHONPATH=%PYTHONPATH%"
 set "PYTHONPATH=%BACK%;%PYTHONPATH%"
 
-"%PY%" "%INSTALLER%" --downloads "%DL%" --msst "%MSST%" --env "%ENV%" --check
+"%PY%" -m AI.install_models --downloads "%DL%" --msst "%MSST%" --env "%ENV%" --check
 set "RC=%ERRORLEVEL%"
 
 set "PYTHONPATH=%OLD_PYTHONPATH%"

@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import importlib.metadata
 import platform
-import shutil
 import subprocess
+
+import config
 
 BACKEND_VERSION = "0.2.4"
 
 
 def _ffmpeg_available() -> bool:
-    return shutil.which("ffmpeg") is not None
+    return config.FFMPEG_EXE != "ffmpeg"
 
 
 def _package_available(distribution: str) -> bool:
@@ -78,7 +79,7 @@ def versions() -> dict:
 
     try:
         result = subprocess.run(
-            ["ffmpeg", "-version"],
+            [config.FFMPEG_EXE, "-version"],
             capture_output=True,
             text=True,
             timeout=5,

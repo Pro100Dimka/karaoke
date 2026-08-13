@@ -579,6 +579,11 @@ def get_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
         and isinstance(payload.get("lines"), list)
         and isinstance(payload.get("display_notes"), list)
     ):
+        # Old editor versions could publish overlapping syllable intervals.
+        # Normalize in memory so existing libraries are repaired immediately.
+        from app.services.song_editor_service import normalize_editor_timeline
+
+        normalize_editor_timeline(payload)
         return payload
     return _build_legacy_karaoke_timeline(output_dir)
 

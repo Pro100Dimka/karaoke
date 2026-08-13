@@ -9,6 +9,8 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
+import config
+
 from .errors import AICoreError
 from .models import VocalNote
 
@@ -79,7 +81,7 @@ def write_diagnostic_audio(
         sf.write(wav, stereo, sample_rate, subtype="PCM_16")
         subprocess.run(
             [
-                "ffmpeg",
+                config.FFMPEG_EXE,
                 "-y",
                 "-hide_banner",
                 "-loglevel",

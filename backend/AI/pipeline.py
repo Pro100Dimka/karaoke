@@ -68,6 +68,7 @@ from .validators import (
 from .version import AI_BUILD_ID
 from .vocal_preprocess import (
     VOCAL_ANALYSIS_PREPROCESS_VERSION,
+    analyze_vocal_residuals,
     choose_best_pitch_track,
     prepare_midi_analysis_variants,
     score_pitch_track,
@@ -1187,6 +1188,13 @@ class KaraokePipeline:
             if pitch_raw_path.exists()
             else None
         )
+        try:
+            vocal_effect_diagnostics = analyze_vocal_residuals(
+                vocals, instrumental, midi_analysis_vocal, midi_tail_vocal
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            vocal_effect_diagnostics = {"available": False, "reason": str(exc)}
+            warnings.append(f"Vocal residual diagnostics unavailable: {exc}")
         alignment_debug = build_alignment_debug(
             lyrics_text=lyrics_txt.read_text(encoding="utf-8") if lyrics_txt.exists() else "",
             words=words,
@@ -1210,6 +1218,7 @@ class KaraokePipeline:
                 "denoise": to_dict(cleaned_quality) if cleaned_quality is not None else None,
                 "tail_suppressed": to_dict(tail_quality) if tail_quality is not None else None,
             },
+            vocal_effect_diagnostics=vocal_effect_diagnostics,
         )
         write_json_atomic(alignment_debug_path, alignment_debug)
 
@@ -1229,6 +1238,10 @@ class KaraokePipeline:
                 "health": alignment_debug.get("health", {}),
                 "alignment_summary": alignment_debug.get("summary", {}),
                 "alignment_suspicious_regions": alignment_debug.get("suspicious_regions", []),
+                "timeline_integrity": alignment_debug.get("timeline_integrity", {}),
+                "root_cause_analysis": alignment_debug.get("root_cause_analysis", {}),
+                "pitch_source_analysis": alignment_debug.get("pitch_source_analysis", {}),
+                "vocal_effect_analysis": alignment_debug.get("vocal_effect_analysis", {}),
                 "performance": alignment_debug.get("performance", {}),
                 "data_flow": {
                     "source_sha256": source_hash,

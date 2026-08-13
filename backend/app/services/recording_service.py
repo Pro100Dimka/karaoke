@@ -79,7 +79,15 @@ class RecordingSession:
         self._temporary_path: Path | None = None
         self._frames_written = 0
         self._closed = False
-        if monitoring_enabled:
+        self._monitoring_enabled = monitoring_enabled
+        input_info = (
+            sd.query_devices(device_id, kind="input")
+            if device_id is not None
+            else sd.query_devices(kind="input")
+        )
+        host_api = sd.query_hostapis(input_info["hostapi"])["name"].casefold()
+        requires_duplex_capture = "wdm-ks" in host_api and output_device_id is not None
+        if monitoring_enabled or requires_duplex_capture:
             # Use the selected output, not Windows' default device. With an
             # audio interface those can be different endpoints.
             output_info = (
@@ -115,8 +123,9 @@ class RecordingSession:
         processed = (indata * self.gain).clip(-1.0, 1.0)
         self._queue.put(processed.copy())
         outdata.fill(0)
-        for channel in range(outdata.shape[1]):
-            outdata[:, channel] = processed[:, 0]
+        if self._monitoring_enabled:
+            for channel in range(outdata.shape[1]):
+                outdata[:, channel] = processed[:, 0]
 
     def _write_audio(self) -> None:
         assert self._temporary_path is not None
@@ -223,7 +232,13 @@ class RecordingSession:
             raise RuntimeError("Recording file was not initialized")
 
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        self._temporary_path.replace(out_path)
+        publish_path = out_path.with_name(f".{out_path.name}.{uuid.uuid4().hex}.tmp")
+        try:
+            shutil.copyfile(self._temporary_path, publish_path)
+            os.replace(publish_path, out_path)
+        finally:
+            publish_path.unlink(missing_ok=True)
+        self._temporary_path.unlink(missing_ok=True)
         self._temporary_path = None
         duration_sec = self._frames_written / float(self.sample_rate) if self.sample_rate else 0.0
         return duration_sec, self.sample_rate
@@ -485,8 +500,8 @@ def _create_performance_mix(
     effects: dict[str, float] | None = None,
 ) -> None:
     """Create a high-quality MP3 take from backing track and microphone only."""
-    ffmpeg = shutil.which("ffmpeg")
-    if ffmpeg is None or not song.output_dir:
+    ffmpeg = config.FFMPEG_EXE
+    if (ffmpeg == "ffmpeg" and not Path(ffmpeg).is_file()) or not song.output_dir:
         return
     instrumental = _find_instrumental(song_service.resolve_output_dir(song))
     if instrumental is None:

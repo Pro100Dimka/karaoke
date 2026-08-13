@@ -342,11 +342,70 @@ function getThemeIcon(theme = "app") {
   return path.join(__dirname, "..", "assets", "icons", icon);
 }
 
+function getThemeShortcutIcon(theme) {
+  return isDev
+    ? getThemeIcon(theme)
+    : path.join(
+        path.dirname(process.execPath),
+        "theme-icons",
+        THEME_ICONS[theme]
+      );
+}
+
+function updateThemeShortcuts(iconPath) {
+  if (process.platform !== "win32" || isDev) return;
+  const shortcutName = "A&D Voice.lnk";
+  const candidates = [
+    path.join(app.getPath("desktop"), shortcutName),
+    path.join(
+      app.getPath("appData"),
+      "Microsoft",
+      "Windows",
+      "Start Menu",
+      "Programs",
+      shortcutName
+    ),
+    process.env.PUBLIC &&
+      path.join(process.env.PUBLIC, "Desktop", shortcutName),
+    process.env.ProgramData &&
+      path.join(
+        process.env.ProgramData,
+        "Microsoft",
+        "Windows",
+        "Start Menu",
+        "Programs",
+        shortcutName
+      )
+  ].filter(Boolean);
+
+  for (const shortcutPath of new Set(candidates)) {
+    if (!fs.existsSync(shortcutPath)) continue;
+    try {
+      const details = shell.readShortcutLink(shortcutPath);
+      shell.writeShortcutLink(shortcutPath, "replace", {
+        ...details,
+        icon: iconPath,
+        iconIndex: 0
+      });
+    } catch (error) {
+      // A system-wide shortcut may require elevation; the window icon still updates.
+      // eslint-disable-next-line no-console
+      console.warn(
+        "Could not update themed shortcut icon:",
+        shortcutPath,
+        error
+      );
+    }
+  }
+}
+
 handleTrustedIpc("window:setIconTheme", (theme) => {
   if (!mainWindow) return false;
   if (!THEME_ICONS[theme] || theme === "app") return false;
 
-  mainWindow.setIcon(getThemeIcon(theme));
+  const iconPath = getThemeIcon(theme);
+  mainWindow.setIcon(iconPath);
+  updateThemeShortcuts(getThemeShortcutIcon(theme));
 
   return true;
 });

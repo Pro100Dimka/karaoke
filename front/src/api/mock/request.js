@@ -128,6 +128,28 @@ export async function mockRequest(path, options = {}) {
   }
 
   if (pathname === "/models/whisper") return [];
+  if (pathname === "/diagnostics/ai-models")
+    return {
+      state: "ready",
+      ready: true,
+      ready_count: 5,
+      total: 5,
+      current_model: null,
+      error: null,
+      models_dir: "mock/models",
+      models: []
+    };
+  if (pathname === "/diagnostics/ai-models/download")
+    return {
+      state: "downloading",
+      ready: false,
+      ready_count: 0,
+      total: 5,
+      current_model: null,
+      error: null,
+      models_dir: "mock/models",
+      models: []
+    };
   if (pathname.startsWith("/models/whisper/")) return { ok: true };
   if (pathname === "/cache/size") return { bytes: 0 };
   if (pathname === "/cache/free-space") return { bytes: 1024 ** 3 };

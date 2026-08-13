@@ -7838,6 +7838,86 @@ body {
     0 0 0.7rem color-mix(in srgb, var(--color-primary) 22%, transparent);
 }
 
+/* Melody editor theme bridge: the roll and notes follow the active app theme. */
+.melody-editor-workspace {
+  background: var(--color-background) !important;
+  color: var(--color-text) !important;
+}
+.melody-editor-header,
+.melody-editor-topdeck,
+.melody-editor-inline-selection {
+  background: color-mix(
+    in srgb,
+    var(--color-surface-strong) 88%,
+    var(--color-background)
+  ) !important;
+}
+.melody-editor-roll-shell,
+.melody-editor-roll-canvas {
+  background-color: color-mix(
+    in srgb,
+    var(--color-background) 94%,
+    var(--color-primary)
+  ) !important;
+}
+.melody-editor-roll-canvas {
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-primary) 9%, transparent) 1px,
+    transparent 1px
+  ) !important;
+}
+.melody-editor-pitch-row.is-white {
+  background: color-mix(
+    in srgb,
+    var(--color-surface) 12%,
+    transparent
+  ) !important;
+}
+.melody-editor-pitch-row.is-black {
+  background: color-mix(
+    in srgb,
+    var(--color-primary) 7%,
+    transparent
+  ) !important;
+}
+.melody-editor-note {
+  border-color: color-mix(
+    in srgb,
+    var(--color-primary-hover) 70%,
+    white 12%
+  ) !important;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-primary-hover) 86%, white 14%),
+    var(--color-primary) 58%,
+    var(--color-primary-strong)
+  ) !important;
+}
+.melody-editor-speed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--color-text-soft);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+.melody-editor-speed select {
+  min-width: 4.5rem;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 38%, transparent);
+  border-radius: 0.4rem;
+  padding: 0.28rem 0.38rem;
+  color: var(--color-text);
+  background: var(--color-surface-strong);
+}
+
+/* Skip paint/layout work for library cards outside the viewport. */
+.library-song-card {
+  content-visibility: auto;
+  contain: layout paint style;
+  contain-intrinsic-size: auto 11.75rem;
+}
+
 /* ==================== BACKEND BOOT LOADER ==================== */
 .backend-boot-loader {
   position: fixed;

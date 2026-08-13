@@ -38,3 +38,7 @@ exclude = ["AI/"]
 [[tool.mypy.overrides]]
 module = ["AI", "AI.*"]
 ignore_errors = true
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

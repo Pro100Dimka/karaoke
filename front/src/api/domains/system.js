@@ -9,6 +9,9 @@ export const systemApi = {
     request(`/cache/optimize/${encodePathSegment(songId)}`, { method: "POST" }),
   getHealth: () => request("/diagnostics/health"),
   getPipelineHealth: () => request("/diagnostics/pipeline"),
+  getAiModelsStatus: () => request("/diagnostics/ai-models"),
+  downloadAiModels: () =>
+    request("/diagnostics/ai-models/download", { method: "POST" }),
   getVersions: () => request("/diagnostics/versions"),
   getErrors: () => request("/diagnostics/errors"),
   getHistory: () => request("/history"),

@@ -52,7 +52,16 @@ try {
     }
 
     $root = Invoke-RestMethod "http://127.0.0.1:$Port/" -TimeoutSec 3
+    $pipeline = Invoke-RestMethod "http://127.0.0.1:$Port/diagnostics/pipeline" -TimeoutSec 10
+    if (-not $pipeline.ffmpeg_available) {
+        throw "Packaged backend cannot resolve its bundled FFmpeg executable."
+    }
+    $versions = Invoke-RestMethod "http://127.0.0.1:$Port/diagnostics/versions" -TimeoutSec 10
+    if (-not $versions.components.ffmpeg) {
+        throw "Packaged FFmpeg did not execute successfully."
+    }
     Write-Host "Health: $($health | ConvertTo-Json -Compress)"
+    Write-Host "FFmpeg: $($versions.components.ffmpeg)"
     Write-Host "Root: $($root | ConvertTo-Json -Compress)"
     Write-Host "Packaged backend smoke test passed."
 }

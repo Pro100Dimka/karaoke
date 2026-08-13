@@ -10,6 +10,7 @@
 
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -51,6 +52,22 @@ RUNTIME_DIR = Path(getattr(sys, "_MEIPASS", BASE_DIR))
 PROJECT_ROOT = BASE_DIR.parent
 
 
+def resolve_runtime_executable(name: str) -> str:
+    """Resolve a bundled executable before falling back to the system PATH."""
+    executable = f"{name}.exe" if os.name == "nt" and not name.lower().endswith(".exe") else name
+    for candidate in (
+        Path(sys.executable).resolve().parent / executable,
+        RUNTIME_DIR / executable,
+        BASE_DIR / executable,
+    ):
+        if candidate.is_file():
+            return str(candidate)
+    return shutil.which(name) or name
+
+
+FFMPEG_EXE = resolve_runtime_executable("ffmpeg")
+
+
 def _default_data_dir() -> Path:
     if not IS_FROZEN:
         return PROJECT_ROOT / "data"
@@ -78,7 +95,9 @@ def _saved_path(name: str, default: Path) -> Path:
 
 AI_DIR = _env_path("SONGAPP_AI_DIR", RUNTIME_DIR / "AI")
 DOWNLOADS_DIR = _env_path("SONGAPP_DOWNLOADS_DIR", PROJECT_ROOT / "downloads")
-_DEFAULT_MODELS_DIR = RUNTIME_DIR / "models" if IS_FROZEN else DOWNLOADS_DIR / "models"
+# Keep downloaded models outside the immutable application runtime. Interrupted
+# installations can then resume instead of discarding several downloaded GB.
+_DEFAULT_MODELS_DIR = DATA_DIR / "models" if IS_FROZEN else DOWNLOADS_DIR / "models"
 MODELS_DIR = _env_path("SONGAPP_MODELS_DIR", _saved_path("ai_folder", _DEFAULT_MODELS_DIR))
 EXTERNAL_ENGINES_DIR = _env_path(
     "SONGAPP_ENGINES_DIR", RUNTIME_DIR / "engines" if IS_FROZEN else DOWNLOADS_DIR / "engines"

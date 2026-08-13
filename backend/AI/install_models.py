@@ -2,14 +2,33 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
+import logging
 import os
 import shutil
+import time
+import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from huggingface_hub import hf_hub_download, snapshot_download
 
 from AI.model_registry import MODELS, ModelSpec, model_directory, model_path
+
+LOGGER = logging.getLogger("ai-model-installer")
+
+
+def configure_logging(log_file: Path | None) -> None:
+    handlers: list[logging.Handler] = [logging.StreamHandler()]
+    if log_file:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        handlers.append(logging.FileHandler(log_file, encoding="utf-8", mode="a"))
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+        handlers=handlers,
+        force=True,
+    )
 
 
 def _sha256(path: Path) -> str:
@@ -20,8 +39,21 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest().lower()
 
 
-def _has_weights(path: Path) -> bool:
-    return any(path.rglob("*.safetensors")) or any(path.rglob("pytorch_model.bin"))
+def _has_complete_weights(path: Path) -> bool:
+    indexes = list(path.glob("*.safetensors.index.json")) + list(
+        path.glob("pytorch_model.bin.index.json")
+    )
+    for index in indexes:
+        try:
+            manifest = json.loads(index.read_text(encoding="utf-8"))
+            shards = set(manifest["weight_map"].values())
+        except (OSError, KeyError, TypeError, json.JSONDecodeError):
+            return False
+        if not shards or not all((path / shard).is_file() for shard in shards):
+            return False
+    if indexes:
+        return True
+    return any(path.glob("*.safetensors")) or (path / "pytorch_model.bin").is_file()
 
 
 def is_valid(models_root: Path, model: ModelSpec) -> bool:
@@ -32,7 +64,7 @@ def is_valid(models_root: Path, model: ModelSpec) -> bool:
         return not model.sha256 or _sha256(path) == model.sha256.lower()
 
     directory = model_directory(models_root, model)
-    return (directory / "config.json").is_file() and _has_weights(directory)
+    return (directory / "config.json").is_file() and _has_complete_weights(directory)
 
 
 def prune_unused_artifacts(models_root: Path, model: ModelSpec) -> int:
@@ -48,7 +80,32 @@ def prune_unused_artifacts(models_root: Path, model: ModelSpec) -> int:
     return removed
 
 
-def install_one(models_root: Path, model: ModelSpec) -> tuple[str, str]:
+def _download(models_root: Path, cache_dir: Path, model: ModelSpec) -> None:
+    directory = model_directory(models_root, model)
+    common = {
+        "repo_id": model.repo_id,
+        "revision": model.revision,
+        "local_dir": str(directory),
+        "cache_dir": str(cache_dir),
+    }
+    if model.kind == "file":
+        if not model.filename:
+            raise RuntimeError(f"{model.name}: filename is missing in model registry")
+        hf_hub_download(filename=model.filename, **common)
+    else:
+        snapshot_download(
+            ignore_patterns=list(model.ignore_patterns) or None,
+            max_workers=4,
+            **common,
+        )
+
+
+def install_one(
+    models_root: Path,
+    cache_dir: Path,
+    model: ModelSpec,
+    retries: int,
+) -> tuple[str, str]:
     prune_unused_artifacts(models_root, model)
     if is_valid(models_root, model):
         return model.name, "ready"
@@ -56,24 +113,22 @@ def install_one(models_root: Path, model: ModelSpec) -> tuple[str, str]:
     directory = model_directory(models_root, model)
     directory.mkdir(parents=True, exist_ok=True)
 
-    print(f"[DOWNLOAD] {model.name}: {model.repo_id}", flush=True)
-
-    if model.kind == "file":
-        if not model.filename:
-            raise RuntimeError(f"{model.name}: filename is missing in model registry")
-        hf_hub_download(
-            repo_id=model.repo_id,
-            revision=model.revision,
-            filename=model.filename,
-            local_dir=str(directory),
+    for attempt in range(1, retries + 1):
+        LOGGER.info(
+            "[DOWNLOAD] %s (%s), attempt %d/%d",
+            model.name,
+            model.repo_id,
+            attempt,
+            retries,
         )
-    else:
-        snapshot_download(
-            repo_id=model.repo_id,
-            revision=model.revision,
-            local_dir=str(directory),
-            ignore_patterns=list(model.ignore_patterns) or None,
-        )
+        try:
+            _download(models_root, cache_dir, model)
+            break
+        except Exception:
+            LOGGER.error("Download attempt failed for %s:\n%s", model.name, traceback.format_exc())
+            if attempt == retries:
+                raise
+            time.sleep(min(2**attempt, 10))
 
     if not is_valid(models_root, model):
         raise RuntimeError(f"{model.name}: verification failed after download")
@@ -108,9 +163,9 @@ def verify_all(models_root: Path) -> bool:
     for model in MODELS:
         removed = prune_unused_artifacts(models_root, model)
         if removed:
-            print(f"[PRUNE] {model.name}: removed {removed} unused artifacts")
+            LOGGER.info("[PRUNE] %s: removed %d unused artifacts", model.name, removed)
         valid = is_valid(models_root, model)
-        print(f"[{'OK' if valid else 'MISSING'}] {model.name}")
+        LOGGER.info("[%s] %s", "OK" if valid else "MISSING", model.name)
         ok = ok and valid
     return ok
 
@@ -122,7 +177,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--msst", type=Path)
     parser.add_argument("--env", type=Path)
     parser.add_argument("--cache-dir", type=Path)
-    parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--workers", type=int, default=2)
+    parser.add_argument("--retries", type=int, default=3)
+    parser.add_argument("--log-file", type=Path)
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args(argv)
 
@@ -136,6 +193,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("one of --downloads or --models-root is required")
 
     models_root.mkdir(parents=True, exist_ok=True)
+    configure_logging(args.log_file.resolve() if args.log_file else None)
 
     cache_dir = (args.cache_dir or downloads / "cache" / "huggingface").resolve()
     os.environ.setdefault("HF_HOME", str(cache_dir))
@@ -149,26 +207,35 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if ok else 1
 
     workers = max(1, min(args.workers, len(MODELS)))
-    print(f"Installing {len(MODELS)} model resources with {workers} parallel workers...")
+    retries = max(1, args.retries)
+    LOGGER.info(
+        "Installing %d model resources with %d parallel workers and %d attempts per model",
+        len(MODELS),
+        workers,
+        retries,
+    )
 
     failed = False
     with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="ai-model") as pool:
-        futures = {pool.submit(install_one, models_root, model): model for model in MODELS}
+        futures = {
+            pool.submit(install_one, models_root, cache_dir, model, retries): model
+            for model in MODELS
+        }
         for future in as_completed(futures):
             model = futures[future]
             try:
                 name, status = future.result()
-                print(f"[{'SKIP' if status == 'ready' else 'DONE'}] {name}", flush=True)
+                LOGGER.info("[%s] %s", "SKIP" if status == "ready" else "DONE", name)
             except Exception as exc:
                 failed = True
-                print(f"[ERROR] {model.name}: {exc}", flush=True)
+                LOGGER.error("[ERROR] %s: %s", model.name, exc)
 
     if failed or not verify_all(models_root):
         return 1
 
     if args.msst and args.env:
         write_environment(downloads, models_root, args.msst.resolve(), args.env.resolve())
-    print("All registered AI models are ready.")
+    LOGGER.info("All registered AI models are ready.")
     return 0
 
 

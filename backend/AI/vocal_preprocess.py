@@ -11,6 +11,8 @@ from statistics import median
 import numpy as np
 import soundfile as sf
 
+import config
+
 from .errors import AICoreError
 from .models import PitchFrame
 
@@ -40,7 +42,7 @@ def _render_analysis_variant(source: Path, target: Path, filter_graph: str) -> P
     os.close(descriptor)
     temporary = Path(temporary_name)
     command = [
-        "ffmpeg",
+        config.FFMPEG_EXE,
         "-y",
         "-hide_banner",
         "-loglevel",
@@ -279,3 +281,110 @@ def choose_best_pitch_track(
         return (wins, c.score, name == original_key)
 
     return max(viable, key=rank)
+
+
+def _rms_envelope(
+    path: Path, *, frame_ms: int = 40, hop_ms: int = 20
+) -> tuple[np.ndarray, dict[str, float]]:
+    audio, sample_rate = sf.read(path, dtype="float32", always_2d=True)
+    mono = np.mean(np.asarray(audio, dtype=np.float32), axis=1)
+    frame = max(1, int(sample_rate * frame_ms / 1000))
+    hop = max(1, int(sample_rate * hop_ms / 1000))
+    values = np.asarray(
+        [
+            float(np.sqrt(np.mean(mono[position : position + frame] ** 2) + 1e-12))
+            for position in range(0, max(1, len(mono) - frame + 1), hop)
+        ],
+        dtype=np.float64,
+    )
+    rms = float(np.sqrt(np.mean(mono * mono) + 1e-12))
+    peak = float(np.max(np.abs(mono))) if mono.size else 0.0
+    return values, {
+        "rms": rms,
+        "peak": peak,
+        "crest_factor": peak / max(1e-9, rms),
+        "dc_offset": float(np.mean(mono)) if mono.size else 0.0,
+        "clipped_sample_ratio": float(np.mean(np.abs(mono) >= 0.999)) if mono.size else 0.0,
+    }
+
+
+def analyze_vocal_residuals(
+    vocals: Path,
+    instrumental: Path,
+    denoised: Path,
+    tail_suppressed: Path,
+) -> dict[str, object]:
+    """Return bounded signal proxies for effects/leakage; no ground truth is assumed."""
+    vocal_env, levels = _rms_envelope(vocals)
+    instrumental_env, _ = _rms_envelope(instrumental)
+    denoise_env, _ = _rms_envelope(denoised)
+    tail_env, _ = _rms_envelope(tail_suppressed)
+    size = min(len(vocal_env), len(instrumental_env), len(denoise_env), len(tail_env))
+    if size < 32:
+        return {"available": False, "reason": "audio_too_short"}
+    vocal_env = vocal_env[:size]
+    instrumental_env = instrumental_env[:size]
+    denoise_env = denoise_env[:size]
+    tail_env = tail_env[:size]
+
+    def _ratio(left: np.ndarray, right: np.ndarray) -> float:
+        return float(np.mean(left) / max(1e-9, float(np.mean(right))))
+
+    # Use envelope *changes*, not the smooth envelope itself. The latter has a
+    # large trivial autocorrelation at 40-100 ms and falsely labels every held
+    # vowel as slapback delay.
+    centered = np.diff(vocal_env)
+    centered -= np.mean(centered)
+    denominator = float(np.dot(centered, centered))
+    echo_candidates: list[tuple[float, int]] = []
+    for lag in range(5, min(31, len(centered) // 4)):
+        correlation = float(np.dot(centered[:-lag], centered[lag:]) / max(1e-9, denominator))
+        echo_candidates.append((max(0.0, correlation), lag))
+    echo_peak, echo_lag = max(echo_candidates, default=(0.0, 0))
+
+    low = float(np.percentile(vocal_env, 30))
+    high = float(np.percentile(vocal_env, 70))
+    threshold = low + 0.35 * max(0.0, high - low)
+    decay_ratios: list[float] = []
+    for index in range(1, size - 12):
+        if vocal_env[index - 1] > threshold >= vocal_env[index]:
+            before = float(np.mean(vocal_env[max(0, index - 4) : index]))
+            after = float(np.mean(vocal_env[index + 3 : index + 12]))
+            decay_ratios.append(after / max(1e-9, before))
+    decay_persistence = float(np.median(decay_ratios)) if decay_ratios else 0.0
+
+    envelope_correlation = float(np.corrcoef(vocal_env, instrumental_env)[0, 1])
+    if not math.isfinite(envelope_correlation):
+        envelope_correlation = 0.0
+    denoise_attenuation = max(0.0, 1.0 - _ratio(denoise_env, vocal_env))
+    tail_attenuation = max(0.0, 1.0 - _ratio(tail_env, vocal_env))
+    echo_score = max(0.0, min(1.0, (echo_peak - 0.08) / 0.35))
+    reverb_score = max(0.0, min(1.0, 0.65 * decay_persistence + 0.35 * tail_attenuation))
+    leakage_score = max(0.0, min(1.0, (envelope_correlation - 0.15) / 0.70))
+    noise_score = max(0.0, min(1.0, denoise_attenuation / 0.25))
+    clipping_score = max(0.0, min(1.0, levels["clipped_sample_ratio"] / 0.002))
+    return {
+        "available": True,
+        "levels": levels,
+        "cleanup": {
+            "denoise_mean_rms_attenuation_ratio": denoise_attenuation,
+            "tail_gate_mean_rms_attenuation_ratio": tail_attenuation,
+        },
+        "proxies": {
+            "envelope_echo_peak": echo_peak,
+            "envelope_echo_lag_ms": echo_lag * 20,
+            "post_phrase_decay_persistence": decay_persistence,
+            "vocal_instrumental_envelope_correlation": envelope_correlation,
+        },
+        "possible_causes_percent": {
+            "delay_or_echo": round(100.0 * echo_score, 1),
+            "reverb_or_long_release": round(100.0 * reverb_score, 1),
+            "accompaniment_leakage": round(100.0 * leakage_score, 1),
+            "stationary_noise": round(100.0 * noise_score, 1),
+            "clipping_or_hard_distortion": round(100.0 * clipping_score, 1),
+        },
+        "interpretation": (
+            "Signal-only likelihood proxies. They locate suspicious residual behaviour but "
+            "cannot name a studio effect with certainty without a dry vocal reference."
+        ),
+    }

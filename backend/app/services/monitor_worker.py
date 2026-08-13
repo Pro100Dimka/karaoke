@@ -32,15 +32,16 @@ def _stream_candidates(options: dict) -> list[dict]:
     }
     blocks = dict.fromkeys((int(options["blocksize"]), 128, 256, 0))
     candidates = []
-    for exclusive in (bool(options.get("wasapi_exclusive")), False):
+    modes = ("exclusive", "shared", "plain") if options.get("wasapi_exclusive") else ("plain",)
+    for mode in modes:
         for blocksize in blocks:
             candidate = {**base, "blocksize": blocksize}
-            if exclusive:
+            if mode == "exclusive":
                 candidate["extra_settings"] = (
                     sd.WasapiSettings(exclusive=True),
                     sd.WasapiSettings(exclusive=True),
                 )
-            elif options.get("wasapi_exclusive"):
+            elif mode == "shared":
                 # Shared WASAPI can transparently reconcile endpoint formats;
                 # this is the reliable fallback for Bluetooth and mixed-rate
                 # microphone/headphone pairs.

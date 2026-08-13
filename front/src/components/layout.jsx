@@ -120,7 +120,7 @@ export default function AppLayout() {
         .filter(Boolean)
         .join(" ")}
     >
-      <TitleBar />
+      <TitleBar hideActions={isEditor} />
       <div className="app-body">
         <main className="app-main">
           <AppRoutes

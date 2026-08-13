@@ -10,6 +10,8 @@ import numpy as np
 import soundfile as sf
 from scipy.signal import resample_poly
 
+import config
+
 from .errors import AICoreError
 
 DEFAULT_FFMPEG_TIMEOUT_SEC = 30 * 60
@@ -36,7 +38,7 @@ def decode_audio(
     os.close(descriptor)
     temporary = Path(temporary_name)
     command = [
-        "ffmpeg",
+        config.FFMPEG_EXE,
         "-y",
         "-hide_banner",
         "-loglevel",

@@ -171,6 +171,9 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
   const [autoScroll, setAutoScroll] = useState(
     () => editorPreferences().autoScroll ?? true
   );
+  const [playbackRate, setPlaybackRate] = useState(
+    () => Number(editorPreferences().playbackRate) || 1
+  );
   const [volumes, setVolumes] = useState(() => ({
     vocals: Number(editorPreferences().volumes?.vocals ?? 0.7),
     melody: Number(editorPreferences().volumes?.melody ?? 0.9),
@@ -212,9 +215,10 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       zoom,
       verticalZoom,
       autoScroll,
+      playbackRate,
       volumes
     });
-  }, [autoScroll, verticalZoom, volumes, zoom]);
+  }, [autoScroll, playbackRate, verticalZoom, volumes, zoom]);
 
   const songMap = payload?.song_map || {};
   const duration =
@@ -311,6 +315,12 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     if (melodyGainRef.current)
       melodyGainRef.current.gain.value = Math.max(0.05, volumes.melody * 0.56);
   }, [volumes]);
+
+  useEffect(() => {
+    if (vocalsRef.current) vocalsRef.current.playbackRate = playbackRate;
+    if (instrumentalRef.current)
+      instrumentalRef.current.playbackRate = playbackRate;
+  }, [playbackRate]);
 
   const stopOscillator = useCallback(() => {
     try {
@@ -563,10 +573,15 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
             const drift = (vocal.currentTime || 0) - mediaTime;
             if (Math.abs(drift) > 0.13) {
               vocal.currentTime = mediaTime;
-              vocal.playbackRate = 1;
+              vocal.playbackRate = playbackRate;
             } else if (Math.abs(drift) > 0.02)
-              vocal.playbackRate = clamp(1 - drift * 0.16, 0.99, 1.01);
-            else if (vocal.playbackRate !== 1) vocal.playbackRate = 1;
+              vocal.playbackRate = clamp(
+                playbackRate - drift * 0.16,
+                playbackRate * 0.97,
+                playbackRate * 1.03
+              );
+            else if (vocal.playbackRate !== playbackRate)
+              vocal.playbackRate = playbackRate;
           }
           const shell = rollShellRef.current;
           if (autoScroll && shell) {
@@ -593,7 +608,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     frame = requestAnimationFrame(sync);
     rafRef.current = frame;
     return () => cancelAnimationFrame(frame);
-  }, [autoScroll, duration, keyboardWidth, updateSynth, zoom]);
+  }, [autoScroll, duration, keyboardWidth, playbackRate, updateSynth, zoom]);
 
   const pause = useCallback(() => {
     const master = instrumentalRef.current;
@@ -626,8 +641,15 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     setPlaying(false);
     stopOscillator();
     playbackOriginRef.current = null;
-    if (vocal) vocal.playbackRate = 1;
-  }, [autoScroll, keyboardWidth, stopOscillator, syncScrollState, zoom]);
+    if (vocal) vocal.playbackRate = playbackRate;
+  }, [
+    autoScroll,
+    keyboardWidth,
+    playbackRate,
+    stopOscillator,
+    syncScrollState,
+    zoom
+  ]);
 
   const play = useCallback(async () => {
     const master = instrumentalRef.current;
@@ -643,7 +665,8 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
           }
         : null;
       vocal.currentTime = master.currentTime;
-      vocal.playbackRate = 1;
+      master.playbackRate = playbackRate;
+      vocal.playbackRate = playbackRate;
       transportClockRef.current = {
         media: master.currentTime || 0,
         perf: performance.now(),
@@ -658,7 +681,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
         `Не удалось начать воспроизведение: ${getErrorMessage(error)}`
       );
     }
-  }, [autoScroll, notify, updateSynth]);
+  }, [autoScroll, notify, playbackRate, updateSynth]);
 
   const toggleAutoScroll = useCallback(() => {
     setAutoScroll((value) => {
@@ -703,7 +726,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       if (instrumentalRef.current) instrumentalRef.current.currentTime = value;
       if (vocalsRef.current) {
         vocalsRef.current.currentTime = value;
-        vocalsRef.current.playbackRate = 1;
+        vocalsRef.current.playbackRate = playbackRate;
       }
       if (running) updateSynth(value);
       else {
@@ -717,6 +740,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       duration,
       keyboardWidth,
       noteAtTime,
+      playbackRate,
       stopOscillator,
       updateSynth,
       zoom
@@ -1316,6 +1340,11 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
         return;
       }
 
+      if (event.code === "Space") {
+        consume();
+        playing ? pause() : play();
+        return;
+      }
       if (editable) return;
       if (event.key === "Delete" || event.key === "Backspace") {
         consume();
@@ -1327,11 +1356,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
           consume();
           clearSelection();
         }
-        return;
-      }
-      if (event.code === "Space") {
-        consume();
-        playing ? pause() : play();
         return;
       }
       if (event.key === "Home") {
@@ -1531,6 +1555,25 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
                     active={playing}
                     onClick={playing ? pause : play}
                   />
+                  <label
+                    className="melody-editor-speed"
+                    htmlFor="melody-editor-playback-rate"
+                  >
+                    <span>Скорость</span>
+                    <select
+                      id="melody-editor-playback-rate"
+                      value={playbackRate}
+                      onChange={(event) =>
+                        setPlaybackRate(Number(event.target.value) || 1)
+                      }
+                    >
+                      <option value="0.5">50%</option>
+                      <option value="0.65">65%</option>
+                      <option value="0.75">75%</option>
+                      <option value="0.85">85%</option>
+                      <option value="1">100%</option>
+                    </select>
+                  </label>
                 </div>
                 <div className="melody-editor-tool-group is-edit">
                   <ToolbarButton
@@ -1709,7 +1752,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
                     .filter((midi) => BLACK_KEYS.has(((midi % 12) + 12) % 12))
                     .map((midi) => {
                       const center = (maxMidi - midi + 0.5) * rowHeight;
-                      const height = rowHeight * 0.62;
+                      const height = rowHeight * 0.68;
                       return (
                         <div
                           key={`black-${midi}`}

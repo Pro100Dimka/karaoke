@@ -105,15 +105,14 @@ def _low_latency_equivalent(device_id: int | None, kind: str) -> int:
         if int(candidate.get(capability, 0)) < 1:
             continue
         host = _host_api_name(candidate).casefold()
-        host_score = 300 if "wasapi" in host else 180 if "wdm-ks" in host else 0
-        if host_score == 0:
+        if "wasapi" not in host:
             continue
         overlap = len(source_tokens & _device_tokens(str(candidate.get("name", ""))))
         # An explicit selection must map to the same physical endpoint. For an
         # OS default, Windows' low-latency host default remains a valid choice.
         if device_id is not None and overlap == 0 and index != source_id:
             continue
-        score = host_score + overlap * 30 - _device_latency(candidate, kind) * 1000
+        score = 300 + overlap * 30 - _device_latency(candidate, kind) * 1000
         if index == source_id:
             score += 20
         if best is None or score > best[0]:
@@ -124,22 +123,29 @@ def _low_latency_equivalent(device_id: int | None, kind: str) -> int:
 def _matching_output_for_input(input_id: int, output_id: int | None) -> int:
     """Choose a low-latency output, favoring the microphone's physical device."""
     selected_output = _low_latency_equivalent(output_id, "output")
-    if output_id is not None:
-        return selected_output
     devices = sd.query_devices()
     input_info = devices[input_id]
+    input_host_api = int(input_info["hostapi"])
+    if output_id is not None:
+        output_info = devices[selected_output]
+        if int(output_info["hostapi"]) == input_host_api:
+            return selected_output
+        # A PortAudio duplex stream cannot combine different host APIs.
+        selected_output = _resolved_device_index(output_id, "output")
+        if int(devices[selected_output]["hostapi"]) == input_host_api:
+            return selected_output
     input_tokens = _device_tokens(str(input_info.get("name", "")))
     input_rate = float(input_info.get("default_samplerate", 0) or 0)
     candidates: list[tuple[float, int]] = []
     for index, candidate in enumerate(devices):
         if int(candidate.get("max_output_channels", 0)) < 1:
             continue
-        host = _host_api_name(candidate).casefold()
-        if "wasapi" not in host and "wdm-ks" not in host:
+        if int(candidate["hostapi"]) != input_host_api:
             continue
+        host = _host_api_name(candidate).casefold()
         overlap = len(input_tokens & _device_tokens(str(candidate.get("name", ""))))
         rate = float(candidate.get("default_samplerate", 0) or 0)
-        score = float((300 if "wasapi" in host else 180) + overlap * 35)
+        score = float((300 if "wasapi" in host else 100) + overlap * 35)
         score -= abs(rate - input_rate) / 1000
         score -= _device_latency(candidate, "output") * 1000
         if index == selected_output:
@@ -213,7 +219,26 @@ def _resolved_device_index(device_id: int | None, kind: str) -> int:
     if device_id is not None:
         return device_id
     default_input, default_output = sd.default.device
-    return int(default_input if kind == "input" else default_output)
+    default_id = int(default_input if kind == "input" else default_output)
+    if default_id >= 0:
+        return default_id
+    capability = f"max_{kind}_channels"
+    candidates = [
+        (index, device)
+        for index, device in enumerate(sd.query_devices())
+        if int(device.get(capability, 0)) > 0
+    ]
+    if not candidates:
+        raise RuntimeError(f"No {kind} audio device is available")
+    host_priority = {"wasapi": 0, "mme": 1, "directsound": 2, "wdm-ks": 3}
+
+    def rank(item: tuple[int, dict]) -> tuple[int, float]:
+        _index, device = item
+        host = _host_api_name(device).casefold().replace("windows ", "")
+        priority = next((value for name, value in host_priority.items() if name in host), 4)
+        return priority, _device_latency(device, kind)
+
+    return min(candidates, key=rank)[0]
 
 
 def _is_wasapi_device(device: dict) -> bool:
@@ -400,6 +425,7 @@ def stop_monitoring() -> None:
     global _monitor_process, _monitor_reader
     with _monitor_lock:
         process = _monitor_process
+        reader = _monitor_reader
         _monitor_process = None
         _monitor_reader = None
         _monitor_signal.update(_EMPTY_MONITOR_SIGNAL)
@@ -412,8 +438,14 @@ def stop_monitoring() -> None:
         process.wait(timeout=1.5)
     except subprocess.TimeoutExpired:
         process.kill()
+        process.wait(timeout=1.5)
     except OSError as exc:
         logger.warning("Could not stop direct monitoring worker: %s", exc)
+    finally:
+        if process.stdout is not None:
+            process.stdout.close()
+        if reader is not None and reader is not threading.current_thread():
+            reader.join(timeout=0.5)
 
 
 def configure_monitoring(settings: models.AudioSettings) -> None:

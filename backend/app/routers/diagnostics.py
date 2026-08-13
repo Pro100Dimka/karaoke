@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 
 import schemas
-from app.services import diagnostics_service
+from app.services import diagnostics_service, model_install_service
 
 router = APIRouter(prefix="/diagnostics", tags=["diagnostics"])
 
@@ -24,6 +24,16 @@ def models_health():
     # эндпоинтом по ТЗ ("проверить доступность моделей AI" отдельно от
     # общего состояния пайплайна), при необходимости можно детализировать.
     return diagnostics_service.pipeline_health()
+
+
+@router.get("/ai-models", response_model=schemas.AIModelsStatusOut)
+def ai_models_status():
+    return model_install_service.status()
+
+
+@router.post("/ai-models/download", response_model=schemas.AIModelsStatusOut, status_code=202)
+def download_ai_models():
+    return model_install_service.start_download()
 
 
 @router.get("/versions", response_model=schemas.VersionsOut)

@@ -116,11 +116,24 @@ def _refresh_lines(song_map: JsonObject, notes: list[JsonObject]) -> None:
         if not isinstance(indices, list) or not indices:
             idx = note.get("syllable_index")
             indices = [] if idx is None else [idx]
+        normalized_indices = []
         for idx in indices:
             try:
-                note_by_syllable[int(idx)].append(note)
+                normalized_indices.append(int(idx))
             except (TypeError, ValueError):
                 continue
+        normalized_indices = sorted(set(normalized_indices))
+        count = len(normalized_indices)
+        for position, idx in enumerate(normalized_indices):
+            projected = dict(note)
+            if count > 1:
+                start = float(note["start"])
+                step = (float(note["end"]) - start) / count
+                projected["start"] = round(start + position * step, 6)
+                projected["end"] = round(start + (position + 1) * step, 6)
+            projected["syllable_index"] = idx
+            projected["syllable_indices"] = [idx]
+            note_by_syllable[idx].append(projected)
 
     syllable_lookup: dict[int, JsonObject] = {
         _safe_int(item.get("index"), i): dict(item)
@@ -145,6 +158,42 @@ def _refresh_lines(song_map: JsonObject, notes: list[JsonObject]) -> None:
         linked_word = word_lookup.get(word_index)
         if linked_word is not None:
             linked_word.setdefault("syllables", []).append(syllable)
+
+    # A note group may span several syllables and may itself contain several
+    # adjacent notes. Projecting every note independently can then make the
+    # same instant belong to two written syllables. Karaoke text has a stricter
+    # invariant than MIDI: only one syllable may own a point in time. Split
+    # every connected overlap cluster into stable, ordered presentation slots.
+    ordered_syllables = sorted(
+        syllable_lookup.values(),
+        key=lambda item: (
+            float(item.get("start") or 0.0),
+            _safe_int(item.get("index"), 0),
+        ),
+    )
+    cursor = 0
+    while cursor < len(ordered_syllables):
+        cluster_end = float(ordered_syllables[cursor].get("end") or 0.0)
+        stop = cursor + 1
+        while stop < len(ordered_syllables):
+            candidate_start = float(ordered_syllables[stop].get("start") or 0.0)
+            if candidate_start >= cluster_end - 1e-6:
+                break
+            cluster_end = max(
+                cluster_end,
+                float(ordered_syllables[stop].get("end") or candidate_start),
+            )
+            stop += 1
+        if stop - cursor > 1:
+            cluster = ordered_syllables[cursor:stop]
+            cluster_start = min(float(item.get("start") or 0.0) for item in cluster)
+            cluster_end = max(float(item.get("end") or cluster_start) for item in cluster)
+            step = max(0.0, cluster_end - cluster_start) / len(cluster)
+            for position, item in enumerate(cluster):
+                item["start"] = round(cluster_start + position * step, 6)
+                item["end"] = round(cluster_start + (position + 1) * step, 6)
+                item["timing_source"] = "editor_notes_disjoint"
+        cursor = stop
 
     for word_payload in words:
         linked = word_payload.get("syllables") or []
@@ -181,7 +230,16 @@ def load_editor(output_dir: Path) -> tuple[JsonObject, bool]:
     song_map: Any = read_json(output_dir / "songMap.json", default={})
     if not isinstance(song_map, dict) or not isinstance(song_map.get("notes"), list):
         raise ValueError("songMap.json is not available")
+    if isinstance(song_map.get("editor"), dict):
+        _refresh_lines(song_map, list(song_map["notes"]))
     return song_map, (output_dir / "songMap.ai.json").exists()
+
+
+def normalize_editor_timeline(song_map: JsonObject) -> JsonObject:
+    """Repair presentation timing in an edited SongMap without writing it."""
+    if isinstance(song_map.get("editor"), dict) and isinstance(song_map.get("notes"), list):
+        _refresh_lines(song_map, list(song_map["notes"]))
+    return song_map
 
 
 def save_editor(output_dir: Path, raw_notes: list[JsonObject]) -> JsonObject:

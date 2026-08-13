@@ -260,6 +260,23 @@ class PipelineHealthOut(BaseModel):
     ai_dir_found: bool
 
 
+class AIModelResourceOut(BaseModel):
+    key: str
+    name: str
+    ready: bool
+
+
+class AIModelsStatusOut(BaseModel):
+    state: str
+    ready: bool
+    ready_count: int
+    total: int
+    current_model: str | None = None
+    error: str | None = None
+    models_dir: str
+    models: list[AIModelResourceOut]
+
+
 class VersionsOut(BaseModel):
     backend_version: str
     python_version: str

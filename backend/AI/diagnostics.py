@@ -61,6 +61,37 @@ def _nearest_ms(value: float, points: list[float]) -> float | None:
     return min(abs(value - point) for point in points) * 1000.0
 
 
+def _timeline_metrics(items: list[Any]) -> dict[str, Any]:
+    """Measure overlaps/gaps without assuming a particular timeline model."""
+    intervals = sorted(
+        (
+            float(item.get("start", 0.0) if isinstance(item, dict) else item.start),
+            float(item.get("end", 0.0) if isinstance(item, dict) else item.end),
+        )
+        for item in items
+    )
+    overlaps: list[float] = []
+    gaps: list[float] = []
+    previous_end = None
+    for start, end in intervals:
+        if previous_end is not None:
+            if start < previous_end:
+                overlaps.append(previous_end - start)
+            elif start > previous_end:
+                gaps.append(start - previous_end)
+        previous_end = max(end, previous_end or end)
+    return {
+        "count": len(intervals),
+        "overlap_count": len(overlaps),
+        "overlap_total_sec": sum(overlaps),
+        "max_overlap_sec": max(overlaps, default=0.0),
+        "gap_count": len(gaps),
+        "max_gap_sec": max(gaps, default=0.0),
+        "micro_interval_count": sum(1 for start, end in intervals if end - start < 0.04),
+        "non_positive_interval_count": sum(1 for start, end in intervals if end <= start),
+    }
+
+
 def _candidate_for(candidate: dict[str, Any], kind: str) -> dict[str, float] | None:
     raw = candidate.get(kind)
     if not isinstance(raw, dict):
@@ -90,6 +121,7 @@ def build_alignment_debug(
     note_diagnostics: dict[str, Any] | None = None,
     music_diagnostics: dict[str, Any] | None = None,
     pitch_source_diagnostics: dict[str, Any] | None = None,
+    vocal_effect_diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     diag = dict(alignment_diagnostics or {})
     sources = list(diag.get("word_sources") or [])
@@ -303,6 +335,40 @@ def build_alignment_debug(
         pitch_changes["large_pitch_changes"] = large_changes
         pitch_changes["mean_abs_semitone_delta"] = sum(deltas) / max(1, len(deltas))
 
+    pitch_source_analysis = dict(pitch_source_diagnostics or {})
+    original_source = pitch_source_analysis.get("original")
+    tail_source = pitch_source_analysis.get("tail_suppressed")
+    if isinstance(original_source, dict) and isinstance(tail_source, dict):
+        original_voiced = max(1e-9, float(original_source.get("voiced_ratio") or 0.0))
+        tail_removed = _clamp(
+            (original_voiced - float(tail_source.get("voiced_ratio") or 0.0)) / original_voiced
+        )
+        micro_reduction = _clamp(
+            float(original_source.get("micro_run_rate") or 0.0)
+            - float(tail_source.get("micro_run_rate") or 0.0)
+        )
+        jump_reduction = _clamp(
+            float(original_source.get("jump_rate") or 0.0)
+            - float(tail_source.get("jump_rate") or 0.0)
+        )
+        octave_reduction = _clamp(
+            float(original_source.get("octave_flip_rate") or 0.0)
+            - float(tail_source.get("octave_flip_rate") or 0.0)
+        )
+        pitch_source_analysis["effect_residual_indicators"] = {
+            "tail_energy_removed_ratio": tail_removed,
+            "short_pitched_tail_reduction": micro_reduction,
+            "large_jump_reduction": jump_reduction,
+            "octave_flip_reduction": octave_reduction,
+            "reverb_echo_likelihood": round(
+                100.0 * _clamp(0.55 * tail_removed + 0.45 * micro_reduction), 1
+            ),
+            "harmonic_leakage_likelihood": round(
+                100.0 * _clamp(0.55 * octave_reduction + 0.45 * jump_reduction), 1
+            ),
+            "interpretation": ("comparative signal indicators; not a definitive effect classifier"),
+        }
+
     game = list(game_notes or notes)
     syllable_split_events = max(0, len(game) - len(notes))
     syllable_ids = {int(item.index) for item in syllables}
@@ -335,6 +401,98 @@ def build_alignment_debug(
         }
     else:
         game_duration_quantiles = {key: 0.0 for key in ("p05", "p25", "p50", "p75", "p95")}
+
+    timeline_integrity = {
+        "words": _timeline_metrics(words),
+        "syllables": _timeline_metrics(syllables),
+        "acoustic_notes": _timeline_metrics(notes),
+        "game_notes": _timeline_metrics(game),
+        "lines": _timeline_metrics(lines),
+    }
+    direct_disagreements = [
+        float(row["agreement"]["ctc_qwen_delta_ms"])
+        for row in word_rows
+        if row["agreement"]["ctc_qwen_delta_ms"] is not None
+    ]
+    disagreement_ratio = sum(value > 180.0 for value in direct_disagreements) / max(
+        1, len(direct_disagreements)
+    )
+    effect_indicators = pitch_source_analysis.get("effect_residual_indicators") or {}
+    audio_effects = dict(vocal_effect_diagnostics or {})
+    audio_cause_scores = audio_effects.get("possible_causes_percent") or {}
+    effect_presence_score = _clamp(
+        max(
+            float(effect_indicators.get("reverb_echo_likelihood") or 0.0),
+            float(effect_indicators.get("harmonic_leakage_likelihood") or 0.0),
+            *(float(value or 0.0) for value in audio_cause_scores.values()),
+        )
+        / 100.0
+    )
+    cleanup_metrics = audio_effects.get("cleanup") or {}
+    cleanup_impact = _clamp(
+        max(
+            float(cleanup_metrics.get("denoise_mean_rms_attenuation_ratio") or 0.0),
+            float(cleanup_metrics.get("tail_gate_mean_rms_attenuation_ratio") or 0.0),
+        )
+    )
+    pitch_effect_impact = _clamp(
+        max(
+            float(effect_indicators.get("reverb_echo_likelihood") or 0.0),
+            float(effect_indicators.get("harmonic_leakage_likelihood") or 0.0),
+        )
+        / 100.0
+    )
+    effect_score = _clamp(
+        effect_presence_score * (0.15 + 0.45 * cleanup_impact + 0.40 * pitch_effect_impact)
+    )
+    alignment_score = _clamp(
+        0.38 * suspicious_ratio
+        + 0.27 * (1.0 - mean_conf)
+        + 0.20 * (1.0 - acoustic_ratio)
+        + 0.15 * disagreement_ratio
+    )
+    pitch_score = _clamp(
+        0.55 * (1.0 - pitch_mean_conf)
+        + 0.25
+        * float(pitch_changes["large_pitch_changes"])
+        / max(1, int(pitch_changes["compared_frames"]))
+        + 0.20 * effect_score
+    )
+    text_overlap_count = int(timeline_integrity["words"]["overlap_count"]) + int(
+        timeline_integrity["syllables"]["overlap_count"]
+    )
+    timeline_score = _clamp(
+        0.75 * min(1.0, text_overlap_count / max(1, len(words) * 0.02))
+        + 0.25 * float(timeline_integrity["game_notes"]["micro_interval_count"]) / max(1, len(game))
+    )
+    cause_scores = {
+        "text_alignment": round(100.0 * alignment_score, 1),
+        "edited_timeline_overlap": round(100.0 * timeline_score, 1),
+        "pitch_or_note_detection": round(100.0 * pitch_score, 1),
+        "residual_reverb_echo_or_leakage": round(100.0 * effect_score, 1),
+    }
+    primary_cause = max(cause_scores, key=cause_scores.get)
+    root_cause_analysis = {
+        "primary_cause": primary_cause,
+        "scores_percent": cause_scores,
+        "evidence": {
+            "mean_word_confidence": mean_conf,
+            "acoustic_word_ratio": acoustic_ratio,
+            "suspicious_word_ratio": suspicious_ratio,
+            "interpolated_words": source_counts.get("interpolated", 0),
+            "ctc_qwen_disagreement_ratio": disagreement_ratio,
+            "mean_pitch_confidence": pitch_mean_conf,
+            "text_timeline_overlap_count": text_overlap_count,
+            "effect_indicators": effect_indicators,
+            "audio_effect_proxies": audio_effects,
+            "effect_presence_score_percent": round(100.0 * effect_presence_score, 1),
+            "effect_measured_pipeline_impact_percent": round(100.0 * effect_score, 1),
+        },
+        "interpretation": (
+            "Scores rank observable failure symptoms; effect labels are signal proxies, "
+            "not proof of a specific studio plugin."
+        ),
+    }
 
     return {
         "version": 1,
@@ -377,7 +535,10 @@ def build_alignment_debug(
         },
         "note_analysis": dict(note_diagnostics or {}),
         "music_analysis": dict(music_diagnostics or {}),
-        "pitch_source_analysis": dict(pitch_source_diagnostics or {}),
+        "pitch_source_analysis": pitch_source_analysis,
+        "vocal_effect_analysis": audio_effects,
+        "timeline_integrity": timeline_integrity,
+        "root_cause_analysis": root_cause_analysis,
         "notes": {
             "count": len(notes),
             "median_duration": _median([note.end - note.start for note in notes], 0.0),

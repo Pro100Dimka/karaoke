@@ -10,8 +10,11 @@
 #ifndef OutputDir
   #error OutputDir is required
 #endif
-#ifndef InstallerBackground
-  #error InstallerBackground is required
+#ifndef ThemeIconsDir
+  #error ThemeIconsDir is required
+#endif
+#ifndef ThemeIconPreviewsDir
+  #error ThemeIconPreviewsDir is required
 #endif
 
 [Setup]
@@ -30,6 +33,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=dialog
 WizardStyle=modern
+ShowLanguageDialog=no
 SetupIconFile={#SetupIcon}
 Compression=none
 SolidCompression=no
@@ -49,14 +53,21 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Создать ярлык на рабочем столе"; GroupDescription: "Дополнительные ярлыки:"
 
 [Files]
-Source: "{#InstallerBackground}"; Flags: dontcopy
+Source: "{#ThemeIconsDir}\dark.ico"; DestDir: "{app}\theme-icons"; Flags: ignoreversion
+Source: "{#ThemeIconsDir}\light.ico"; DestDir: "{app}\theme-icons"; Flags: ignoreversion
+Source: "{#ThemeIconsDir}\green.ico"; DestDir: "{app}\theme-icons"; Flags: ignoreversion
+Source: "{#ThemeIconsDir}\violet.ico"; DestDir: "{app}\theme-icons"; Flags: ignoreversion
+Source: "{#ThemeIconPreviewsDir}\dark.png"; Flags: dontcopy
+Source: "{#ThemeIconPreviewsDir}\light.png"; Flags: dontcopy
+Source: "{#ThemeIconPreviewsDir}\green.png"; Flags: dontcopy
+Source: "{#ThemeIconPreviewsDir}\violet.png"; Flags: dontcopy
 ; Runtime is already compressed once. Inno only copies the archive from ISO.
 Source: "{src}\app-runtime.zip"; DestDir: "{tmp}"; Flags: external ignoreversion deleteafterinstall
 Source: "{src}\msst\*"; DestDir: "{app}\resources\backend\_internal\engines\msst"; Flags: external ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{code:SelectedIconPath}"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{code:SelectedIconPath}"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Запустить {#MyAppName}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
@@ -87,11 +98,17 @@ Type: files; Name: "{app}\vulkan-1.dll"
 ; Remove any generated logs, update remnants or files created after setup.
 ; {app} is the dedicated application directory selected by the user.
 Type: filesandordirs; Name: "{app}"
+; AI weights are reusable while the app is installed, but are not user-created
+; content and must never leave ~10 GB behind after uninstall.
+Type: filesandordirs; Name: "{localappdata}\A&D Voice\models"
+Type: filesandordirs; Name: "{localappdata}\A&D Voice\model-cache"
 
 [Code]
 var
-  ThemePage: TInputOptionWizardPage;
-  InstallingBackground: TBitmapImage;
+  PreferencesPage: TWizardPage;
+  LanguageCombo: TNewComboBox;
+  ThemeCombo: TNewComboBox;
+  ThemePreview: TBitmapImage;
   RemoveUserData: Boolean;
 
 function InitializeUninstall: Boolean;
@@ -114,97 +131,91 @@ begin
   end;
 end;
 
-procedure ApplyInstallerTheme;
-var
-  BackgroundColor: TColor;
-  PanelColor: TColor;
-  TextColor: TColor;
-begin
-  if ThemePage.SelectedValueIndex = 1 then
-  begin
-    BackgroundColor := $F4F4F4;
-    PanelColor := $FFFFFF;
-    TextColor := $202020;
-  end
-  else if ThemePage.SelectedValueIndex = 2 then
-  begin
-    BackgroundColor := $18301D;
-    PanelColor := $24482C;
-    TextColor := $F2FFF4;
-  end
-  else if ThemePage.SelectedValueIndex = 3 then
-  begin
-    BackgroundColor := $2E1838;
-    PanelColor := $452253;
-    TextColor := $FFF3FF;
-  end
-  else
-  begin
-    BackgroundColor := $08090D;
-    PanelColor := $241018;
-    TextColor := $FFFFFF;
-  end;
-  WizardForm.Color := BackgroundColor;
-  WizardForm.MainPanel.Color := PanelColor;
-  WizardForm.WelcomePage.Color := BackgroundColor;
-  WizardForm.FinishedPage.Color := BackgroundColor;
-  ThemePage.Surface.Color := BackgroundColor;
-  ThemePage.CheckListBox.Color := PanelColor;
-  ThemePage.CheckListBox.Font.Color := TextColor;
-  WizardForm.PageNameLabel.Font.Color := TextColor;
-  WizardForm.PageDescriptionLabel.Font.Color := TextColor;
-  WizardForm.StatusLabel.Font.Color := TextColor;
-  InstallingBackground.Visible := ThemePage.SelectedValueIndex = 0;
-end;
+function SelectedTheme: String; forward;
 
 procedure ThemeChanged(Sender: TObject);
+var
+  PreviewPath: String;
 begin
-  ApplyInstallerTheme;
+  PreviewPath := ExpandConstant('{tmp}\') + SelectedTheme + '.png';
+  ThemePreview.PngImage.LoadFromFile(PreviewPath);
 end;
 
 procedure InitializeWizard;
+var
+  LanguageLabel: TNewStaticText;
+  ThemeLabel: TNewStaticText;
 begin
-  ExtractTemporaryFile(ExtractFileName('{#InstallerBackground}'));
-  InstallingBackground := TBitmapImage.Create(WizardForm.InstallingPage);
-  InstallingBackground.Parent := WizardForm.InstallingPage;
-  InstallingBackground.SetBounds(
-    0,
-    0,
-    WizardForm.InstallingPage.ClientWidth,
-    WizardForm.InstallingPage.ClientHeight
-  );
-  InstallingBackground.Stretch := True;
-  InstallingBackground.PngImage.LoadFromFile(
-    ExpandConstant('{tmp}\') + ExtractFileName('{#InstallerBackground}')
-  );
-  InstallingBackground.SendToBack;
+  ExtractTemporaryFile('dark.png');
+  ExtractTemporaryFile('light.png');
+  ExtractTemporaryFile('green.png');
+  ExtractTemporaryFile('violet.png');
 
-  ThemePage := CreateInputOptionPage(
+  PreferencesPage := CreateCustomPage(
     wpSelectDir,
-    'Оформление A&D Voice',
-    'Выберите начальную тему программы',
-    'Позже тему можно изменить в настройках.',
-    True,
-    False
+    'Язык и тема A&D Voice',
+    'Выберите язык программы и начальную тему. Позже их можно изменить в настройках.'
   );
-  ThemePage.Add('Тёмная');
-  ThemePage.Add('Светлая');
-  ThemePage.Add('Зелёная');
-  ThemePage.Add('Фиолетовая');
-  ThemePage.SelectedValueIndex := 0;
-  ThemePage.CheckListBox.OnClickCheck := @ThemeChanged;
-  ApplyInstallerTheme;
+
+  LanguageLabel := TNewStaticText.Create(PreferencesPage);
+  LanguageLabel.Parent := PreferencesPage.Surface;
+  LanguageLabel.Caption := 'Язык программы';
+  LanguageLabel.SetBounds(0, 12, ScaleX(220), ScaleY(20));
+  LanguageCombo := TNewComboBox.Create(PreferencesPage);
+  LanguageCombo.Parent := PreferencesPage.Surface;
+  LanguageCombo.Style := csDropDownList;
+  LanguageCombo.SetBounds(0, 36, ScaleX(260), ScaleY(24));
+  LanguageCombo.Items.Add('Українська');
+  LanguageCombo.Items.Add('Русский');
+  LanguageCombo.Items.Add('English');
+  LanguageCombo.ItemIndex := 0;
+
+  ThemeLabel := TNewStaticText.Create(PreferencesPage);
+  ThemeLabel.Parent := PreferencesPage.Surface;
+  ThemeLabel.Caption := 'Тема и иконка';
+  ThemeLabel.SetBounds(0, 84, ScaleX(220), ScaleY(20));
+  ThemeCombo := TNewComboBox.Create(PreferencesPage);
+  ThemeCombo.Parent := PreferencesPage.Surface;
+  ThemeCombo.Style := csDropDownList;
+  ThemeCombo.SetBounds(0, 108, ScaleX(260), ScaleY(24));
+  ThemeCombo.Items.Add('Тёмная');
+  ThemeCombo.Items.Add('Светлая');
+  ThemeCombo.Items.Add('Зелёная');
+  ThemeCombo.Items.Add('Фиолетовая');
+  ThemeCombo.ItemIndex := 0;
+  ThemeCombo.OnChange := @ThemeChanged;
+
+  ThemePreview := TBitmapImage.Create(PreferencesPage);
+  ThemePreview.Parent := PreferencesPage.Surface;
+  ThemePreview.SetBounds(ScaleX(290), ScaleY(82), ScaleX(96), ScaleY(96));
+  ThemePreview.Stretch := True;
+  ThemeChanged(nil);
 end;
 
 function SelectedTheme: String;
 begin
-  case ThemePage.SelectedValueIndex of
+  case ThemeCombo.ItemIndex of
     1: Result := 'light';
     2: Result := 'green';
     3: Result := 'violet';
   else
     Result := 'dark';
   end;
+end;
+
+function SelectedLanguage: String;
+begin
+  case LanguageCombo.ItemIndex of
+    1: Result := 'ru';
+    2: Result := 'en';
+  else
+    Result := 'uk';
+  end;
+end;
+
+function SelectedIconPath(Param: String): String;
+begin
+  Result := ExpandConstant('{app}\theme-icons\') + SelectedTheme + '.ico';
 end;
 
 procedure WriteInitialPreferences;
@@ -219,7 +230,7 @@ begin
     Exit;
   ForceDirectories(SettingsDir);
   Payload := '{' + #13#10 +
-    '  "language": "uk",' + #13#10 +
+    '  "language": "' + SelectedLanguage + '",' + #13#10 +
     '  "theme": "' + SelectedTheme + '",' + #13#10 +
     '  "compute_mode": "auto"' + #13#10 +
     '}' + #13#10;
@@ -248,6 +259,7 @@ var
   BackendExe: String;
   ModelsDir: String;
   ModelCacheDir: String;
+  ModelLogPath: String;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -279,16 +291,20 @@ begin
       RaiseException('Runtime extraction completed, but the application executable is missing.');
 
     BackendExe := ExpandConstant('{app}\resources\backend\KaraokeBackend.exe');
-    ModelsDir := ExpandConstant('{app}\resources\backend\_internal\models');
-    ModelCacheDir := ExpandConstant('{tmp}\huggingface-cache');
+    { Store downloads outside {app}: Inno rollback must not erase completed }
+    { multi-gigabyte files after a transient network failure. }
+    ModelsDir := ExpandConstant('{localappdata}\A&D Voice\models');
+    ModelCacheDir := ExpandConstant('{localappdata}\A&D Voice\model-cache');
+    ModelLogPath := ExpandConstant('{localappdata}\A&D Voice\logs\model-install.log');
     ForceDirectories(ModelsDir);
     ShowPendingInstallStep(
-      'Этап 3 из 3: загрузка AI-моделей. Полоса движется до полного завершения...'
+      'Этап 3 из 3: загрузка AI-моделей. Это индикатор активности, а не проценты...'
     );
     if not Exec(
       BackendExe,
       '--install-ai-models --models-root "' + ModelsDir +
-        '" --cache-dir "' + ModelCacheDir + '" --workers 4',
+        '" --cache-dir "' + ModelCacheDir + '" --workers 2 --retries 3' +
+        ' --log-file "' + ModelLogPath + '"',
       ExpandConstant('{app}\resources\backend'),
       SW_HIDE,
       ewWaitUntilTerminated,
@@ -297,8 +313,10 @@ begin
       RaiseException('Не удалось запустить загрузку AI-моделей.');
     if ResultCode <> 0 then
       RaiseException(
-        'Не удалось загрузить AI-модели. Проверьте подключение к интернету и повторите установку. Код: ' +
-        IntToStr(ResultCode)
+        'Не удалось загрузить одну из AI-моделей. Уже загруженные файлы сохранены,' + #13#10 +
+        'поэтому повторная установка продолжит загрузку, а не начнёт её заново.' + #13#10#13#10 +
+        'Код: ' + IntToStr(ResultCode) + #13#10 +
+        'Подробный лог: ' + ModelLogPath
       );
     CompleteInstallProgress;
     WizardForm.StatusLabel.Caption := 'Установка A&D Voice завершена.';

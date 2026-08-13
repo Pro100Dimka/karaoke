@@ -78,7 +78,8 @@ $AppExe = "A&D Voice.exe"
 
 $ModelCheck = Join-Path $Backend "AI\install_models.py"
 $InnoTemplate = Join-Path $Root "scripts\karaoke-studio.iss"
-$InstallerBackground = Join-Path $Root "scripts\installer-assets\dark-nebula.png"
+$ThemeIconsDir = Join-Path $Frontend "assets\icons"
+$ThemeIconPreviewsDir = Join-Path $Frontend "src\assets\icons"
 $SignScript = Join-Path $Root "scripts\sign-windows.ps1"
 $SetupIcon = Join-Path $Frontend "assets\icons\app.ico"
 
@@ -503,8 +504,8 @@ function Get-IsoEngineFingerprint {
 
 function Get-BackendInputFingerprint {
     $source = Get-ContentFingerprint @($Backend) `
-        @("venv","data","Song","full_songs","recordings","__pycache__",".pytest_cache",".cache","dist","build") `
-        @("*.pyc","*.pyo","*.log","*.db","*.sqlite","*.sqlite3")
+        @("venv","data","Song","full_songs","recordings","tests","__pycache__",".pytest_cache",".cache","coverage","htmlcov","dist","build") `
+        @("*.pyc","*.pyo","*.log","*.db","*.sqlite","*.sqlite3",".coverage","requirements-dev.txt")
 
     $ffmpegFp = if ($script:Ffmpeg) {
         Get-ToolFileFingerprint @($script:Ffmpeg)
@@ -529,7 +530,7 @@ function Get-BackendFingerprint {
 
 function Get-FrontendInputFingerprint {
     return Get-ContentFingerprint @($Frontend) `
-        @("node_modules","dist","build",".git",".cache",".vite","coverage","playwright-report","test-results") `
+        @("node_modules","dist","build","tests","reports",".git",".cache",".vite","coverage","playwright-report","test-results") `
         @("*.log")
 }
 
@@ -617,7 +618,8 @@ function Get-InnoInputFingerprint {
     return Get-CombinedFingerprint @(
         (Get-SmallFileFingerprint @(
             $InnoTemplate,
-            $InstallerBackground,
+            $ThemeIconsDir,
+            $ThemeIconPreviewsDir,
             $SetupIcon,
             $SignScript,
             $ChecksumScript
@@ -2108,7 +2110,8 @@ function Build-Installer {
         "/DMyAppVersion=$AppVersion" `
         "/DMyAppExeName=$AppExe" `
         "/DSetupIcon=$SetupIcon" `
-        "/DInstallerBackground=$InstallerBackground" `
+        "/DThemeIconsDir=$ThemeIconsDir" `
+        "/DThemeIconPreviewsDir=$ThemeIconPreviewsDir" `
         "/DOutputDir=$runDir" `
         $InnoTemplate
 
@@ -2356,6 +2359,13 @@ function Create-DistributionIso {
     New-Item -ItemType Directory -Path $Release -Force | Out-Null
 
     if (Test-Path -LiteralPath $IsoFile -PathType Leaf) {
+        # Explorer may keep the previous release mounted as a virtual CD-ROM.
+        # Unmount only this exact release image before replacing it.
+        $mountedImage = Get-DiskImage -ImagePath $IsoFile -ErrorAction SilentlyContinue
+        if ($mountedImage -and $mountedImage.Attached) {
+            Write-Host "Dismounting previous release ISO..."
+            Dismount-DiskImage -ImagePath $IsoFile -ErrorAction Stop | Out-Null
+        }
         Remove-Item -LiteralPath $IsoFile -Force
     }
 

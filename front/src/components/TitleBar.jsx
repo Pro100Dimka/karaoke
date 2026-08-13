@@ -19,14 +19,15 @@ function invokeWindowAction(electronAPI, action) {
   });
 }
 
-export default function TitleBar({ title = "A&D Voice" }) {
+export default function TitleBar({ title = "A&D Voice", hideActions = false }) {
   const { electronAPI } = window;
   const { t } = useI18n();
 
   return (
     <header className="title-bar" aria-label={title}>
       <div className="title-bar__actions">
-        {electronAPI &&
+        {!hideActions &&
+          electronAPI &&
           WINDOW_ACTIONS.map(({ id, labelKey, Icon, size, danger }) => (
             <IconButton
               key={id}

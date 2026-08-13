@@ -19,6 +19,7 @@ export const BACKEND_BOOT_RETRY_MS = positiveNumber(
 export const POLLING_INTERVALS = Object.freeze({
   realtimeSignal: interval(80),
   processing: interval(1000),
+  modelDownload: interval(1500),
   karaokeSignal: interval(1200),
   health: interval(5000),
   history: interval(5000),
