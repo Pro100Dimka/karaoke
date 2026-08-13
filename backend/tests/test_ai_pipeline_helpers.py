@@ -13,13 +13,16 @@ from AI.models import PitchFrame, Word
 
 
 def words(*items):
-    return [Word(start, end, text, confidence, index) for index, (start, end, text, confidence) in enumerate(items)]
+    return [
+        Word(start, end, text, confidence, index)
+        for index, (start, end, text, confidence) in enumerate(items)
+    ]
 
 
 def test_bound_and_trim_canonical_words():
-    source = words((0, 10, "x", .8), (10, 20, "verylongtoken", .8))
+    source = words((0, 10, "x", 0.8), (10, 20, "verylongtoken", 0.8))
     bounded = pipeline._bound_word_durations(source)
-    assert bounded[0].end == .7 and bounded[1].end <= 13.2
+    assert bounded[0].end == 0.7 and bounded[1].end <= 13.2
     assert pipeline._trim_supplied_text_to_aligned_words("a\nb c\nd", []) == ""
     assert pipeline._trim_supplied_text_to_aligned_words(" plain ", [source[0]]) == "plain"
     aligned = words((0, 1, "a", 1), (1, 2, "b", 1), (2, 3, "c", 1))
@@ -37,9 +40,9 @@ def test_canonical_identity_and_publishability():
     invalid = [
         [SimpleNamespace(start=float("nan"), end=1)],
         [SimpleNamespace(start=-1, end=1)],
-        [SimpleNamespace(start=0, end=.001)],
+        [SimpleNamespace(start=0, end=0.001)],
         [SimpleNamespace(start=0, end=3)],
-        [SimpleNamespace(start=1, end=2), SimpleNamespace(start=.5, end=1)],
+        [SimpleNamespace(start=1, end=2), SimpleNamespace(start=0.5, end=1)],
     ]
     for values in invalid:
         assert not pipeline._canonical_timeline_is_publishable(values, 2)
@@ -47,9 +50,9 @@ def test_canonical_identity_and_publishability():
 
 def test_local_timeline_repair_success_and_rejections():
     assert pipeline._repair_canonical_timeline_locally([], 1) is None
-    overlap = words((0, 1, "a", 1), (.9, 1.5, "b", 1))
+    overlap = words((0, 1, "a", 1), (0.9, 1.5, "b", 1))
     repaired = pipeline._repair_canonical_timeline_locally(overlap, 3)
-    assert repaired and repaired[1].start == repaired[0].end and repaired[1].confidence == .25
+    assert repaired and repaired[1].start == repaired[0].end and repaired[1].confidence == 0.25
     assert pipeline._repair_canonical_timeline_locally(overlap, 1.2) is None
     huge = words((0, 2, "a", 1), (0, 1, "b", 1))
     assert pipeline._repair_canonical_timeline_locally(huge, 10) is None
@@ -57,23 +60,23 @@ def test_local_timeline_repair_success_and_rejections():
 
 def test_preserve_complete_timeline_repairs_bounds_and_suffix():
     assert pipeline._preserve_complete_canonical_timeline([], 1) is None
-    overlap = words((-.1, 1, "a", 2), (.8, 2, "b", -.1), (1.99, 3.5, "c", .5))
+    overlap = words((-0.1, 1, "a", 2), (0.8, 2, "b", -0.1), (1.99, 3.5, "c", 0.5))
     repaired = pipeline._preserve_complete_canonical_timeline(overlap, 3)
     assert repaired and repaired[0].start == 0 and repaired[-1].end == 3
     assert all(0 <= word.confidence <= 1 for word in repaired)
     impossible = words((0, 1, "a", 1), (0, 1, "b", 1), (0, 1, "c", 1))
-    assert pipeline._preserve_complete_canonical_timeline(impossible, .02) is None
+    assert pipeline._preserve_complete_canonical_timeline(impossible, 0.02) is None
 
 
 def test_lossless_canonical_words_preserve_or_retime():
-    aligned = words((0, 1, "a", .8), (1, 2, "b", .9))
+    aligned = words((0, 1, "a", 0.8), (1, 2, "b", 0.9))
     assert pipeline._pipeline_lossless_canonical_words("", aligned, 2) is aligned
-    assert pipeline._pipeline_lossless_canonical_words("a b", aligned, 2)[0].confidence == .8
-    retimed = pipeline._pipeline_lossless_canonical_words("long x", aligned[:1], .1)
+    assert pipeline._pipeline_lossless_canonical_words("a b", aligned, 2)[0].confidence == 0.8
+    retimed = pipeline._pipeline_lossless_canonical_words("long x", aligned[:1], 0.1)
     assert [word.text for word in retimed] == ["long", "x"]
-    assert all(word.confidence == .004 for word in retimed)
+    assert all(word.confidence == 0.004 for word in retimed)
     with pytest.raises(InvalidArtifactError, match="could not be locally"):
-        pipeline._pipeline_lossless_canonical_words("a b", aligned, .5)
+        pipeline._pipeline_lossless_canonical_words("a b", aligned, 0.5)
 
 
 class Console(StringIO):
@@ -110,7 +113,7 @@ def config(**changes):
         "validate_cached_artifacts": True,
         "allow_fallback": False,
         "pitch_sample_rate": 100,
-        "hop_seconds": .01,
+        "hop_seconds": 0.01,
         "fmin_hz": 50,
         "fmax_hz": 500,
     }
@@ -129,10 +132,12 @@ def test_pipeline_init_remove_cache_and_notify(monkeypatch, tmp_path):
     cfg = config()
     engines = object()
     assert pipeline.KaraokePipeline(cfg, engines).engines is engines
-    stale = tmp_path / "stale"; stale.touch()
+    stale = tmp_path / "stale"
+    stale.touch()
     pipeline.KaraokePipeline._remove_stale(stale, tmp_path / "missing")
     assert not stale.exists()
-    cache = Mock(); cache.hit.return_value = True
+    cache = Mock()
+    cache.hit.return_value = True
     instance = make_pipeline(validate_cached_artifacts=False)
     assert instance._cache_hit(cache, "s", "k", [], {tmp_path: Mock()})
     assert cache.hit.call_args.kwargs["validators"] is None
@@ -154,17 +159,21 @@ def test_pipeline_run_stage_primary_fallback_and_disabled(monkeypatch):
     fallback = SimpleNamespace(name="fallback")
     monkeypatch.setattr(pipeline, "PyinFallbackPitchEstimator", lambda *_: fallback)
     calls = 0
+
     def operation(selected):
         nonlocal calls
         calls += 1
         if calls == 1:
             raise EngineUnavailableError("missing")
         return selected.name
+
     assert instance._run("pitch", engine, operation, reports := [], warnings := []) == "fallback"
     assert warnings == ["missing"] and reports[0].engine == "fallback"
     instance = make_pipeline(allow_fallback=False)
     with pytest.raises(EngineUnavailableError):
-        instance._run("pitch", engine, lambda _: (_ for _ in ()).throw(EngineUnavailableError("x")), [], [])
+        instance._run(
+            "pitch", engine, lambda _: (_ for _ in ()).throw(EngineUnavailableError("x")), [], []
+        )
 
 
 def test_publish_alignment_midi_and_run_lock(monkeypatch, tmp_path):
