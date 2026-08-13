@@ -116,7 +116,7 @@ def validate_derivation_json(path: str | Path, kind: str):
         else:
             validate_timeline(values, kind)
         return values
-    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
         raise InvalidArtifactError(f"Invalid {kind} JSON {source}: {exc}") from exc
 
 

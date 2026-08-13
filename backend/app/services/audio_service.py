@@ -471,8 +471,6 @@ def configure_monitoring(settings: models.AudioSettings) -> None:
         settings.output_device_id,
         settings.asio_driver_name,
     )
-    if settings.audio_driver == "asio" and output_device_id is None:
-        raise RuntimeError("The selected ASIO device has no output channels")
     resolved_input_id = _resolved_device_index(input_device_id, "input")
     resolved_output_id = _resolved_device_index(output_device_id, "output")
     input_info = sd.query_devices(resolved_input_id)

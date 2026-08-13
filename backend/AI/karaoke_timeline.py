@@ -14,6 +14,13 @@ def _dict(item: Any) -> dict[str, Any]:
     return dict(item) if isinstance(item, dict) else dict(to_dict(item))
 
 
+def _integer(value: Any, default: int | None = None) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _midi(note: dict[str, Any]) -> int | None:
     raw = note.get("midi_note", note.get("midi"))
     try:
@@ -57,11 +64,7 @@ def _merge_display_notes(notes: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     by_syllable: dict[int | None, list[dict[str, Any]]] = defaultdict(list)
     for note in clean:
-        raw_index = note.get("syllable_index")
-        try:
-            syllable_index: int | None = int(raw_index)
-        except (TypeError, ValueError):
-            syllable_index = None
+        syllable_index = _integer(note.get("syllable_index"))
         by_syllable[syllable_index].append(note)
 
     result: list[dict[str, Any]] = []
@@ -84,7 +87,7 @@ def _merge_display_notes(notes: list[dict[str, Any]]) -> list[dict[str, Any]]:
             candidates = [
                 (_positive_duration(note), index)
                 for index, note in enumerate(merged)
-                if _positive_duration(note) <= merge_floor
+                if _positive_duration(note) <= merge_floor + 1e-9
             ]
             if not candidates:
                 break
@@ -111,8 +114,6 @@ def _merge_display_notes(notes: list[dict[str, Any]]) -> list[dict[str, Any]]:
                         following,
                     )
                 )
-            if not neighbours:
-                break
             neighbours.sort(key=lambda item: (item[0], item[1]))
             _, _, side, target = neighbours[0]
             if side == "previous":
@@ -148,33 +149,32 @@ def build_karaoke_song_map(
 
     syllables_by_word: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for item in syllable_payload:
-        try:
-            syllables_by_word[int(item.get("word_index"))].append(item)
-        except (TypeError, ValueError):
+        word_index = _integer(item.get("word_index"))
+        if word_index is None:
             continue
+        syllables_by_word[word_index].append(item)
     display_by_syllable: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for item in display_notes:
-        try:
-            display_by_syllable[int(item.get("syllable_index"))].append(item)
-        except (TypeError, ValueError):
+        syllable_index = _integer(item.get("syllable_index"))
+        if syllable_index is None:
             continue
+        display_by_syllable[syllable_index].append(item)
 
     for values in syllables_by_word.values():
-        values.sort(key=lambda item: (float(item.get("start", 0.0)), int(item.get("index", 0))))
+        values.sort(
+            key=lambda item: (float(item.get("start", 0.0)), _integer(item.get("index"), 0))
+        )
     for values in display_by_syllable.values():
         values.sort(key=lambda item: (float(item.get("start", 0.0)), float(item.get("end", 0.0))))
 
     prepared_words: list[dict[str, Any]] = []
     for index, source in enumerate(word_payload):
         word = dict(source)
-        word_index = int(word.get("index", index))
+        word_index = _integer(word.get("index"), index)
         linked_syllables: list[dict[str, Any]] = []
         for source_syllable in syllables_by_word.get(word_index, []):
             syllable = dict(source_syllable)
-            try:
-                syllable_index = int(syllable.get("index"))
-            except (TypeError, ValueError):
-                syllable_index = -1
+            syllable_index = _integer(syllable.get("index"), -1)
             linked_notes = [dict(note) for note in display_by_syllable.get(syllable_index, [])]
             if linked_notes:
                 syllable["start"] = min(float(note["start"]) for note in linked_notes)

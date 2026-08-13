@@ -67,8 +67,6 @@ def _rms_activity(
         ],
         dtype=np.float32,
     )
-    if values.size == 0:
-        return {"rms": rms, "peak": peak, "active_ratio": 0.0}
     p10 = float(np.percentile(values, 10))
     p90 = float(np.percentile(values, 90))
     threshold = max(p10 * 1.25, p10 + (p90 - p10) * 0.20)
@@ -344,5 +342,5 @@ def _main() -> int:
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover - exercised through _main()
     raise SystemExit(_main())

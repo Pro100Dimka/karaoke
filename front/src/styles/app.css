@@ -485,7 +485,6 @@ svg {
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .modal-title__actions {

@@ -47,13 +47,9 @@ def _adaptive_key_windows(chroma, frames_per_second: float):
     for start in range(0, max(1, frames - window + 1), stride):
         end = min(frames, start + window)
         block = chroma[:, start:end]
-        if block.shape[1] < 8:
-            continue
         energy = float(np.mean(np.sum(block, axis=0)))
         contrast = float(np.std(np.mean(block, axis=1)))
         candidates.append((energy * (1.0 + contrast), block))
-    if not candidates:
-        return [chroma]
     candidates.sort(key=lambda x: x[0], reverse=True)
     # Diverse high-evidence regions: enough to cover verse/chorus without one
     # fixed location dictating the key.

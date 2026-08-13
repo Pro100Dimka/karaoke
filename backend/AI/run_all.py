@@ -33,5 +33,5 @@ def main(argv=None):
     )
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover - exercised through main(argv)
     main()

@@ -1,0 +1,171 @@
+from __future__ import annotations
+
+import builtins
+from types import SimpleNamespace
+
+import pytest
+
+from AI import config, profiler
+from AI.errors import ConfigurationError
+from AI.models import PitchFrame, Syllable, VocalNote, Word
+from AI.quality import evaluate_quality
+
+
+@pytest.mark.parametrize("value", ["1", "true", "YES", "on"])
+def test_env_bool_true(monkeypatch, value):
+    monkeypatch.setenv("FLAG", value)
+    assert config._env_bool("FLAG", False)
+
+
+@pytest.mark.parametrize("value", ["0", "false", "NO", "off"])
+def test_env_bool_false(monkeypatch, value):
+    monkeypatch.setenv("FLAG", value)
+    assert not config._env_bool("FLAG", True)
+
+
+def test_environment_parsers_defaults_and_errors(monkeypatch):
+    monkeypatch.delenv("FLAG", raising=False)
+    assert config._env_bool("FLAG", True)
+    assert config._env_int("NUMBER", 2) == 2
+    assert config._env_float("FLOAT", 0.5) == 0.5
+    monkeypatch.setenv("FLAG", "maybe")
+    monkeypatch.setenv("NUMBER", "x")
+    monkeypatch.setenv("FLOAT", "x")
+    with pytest.raises(ConfigurationError):
+        config._env_bool("FLAG", True)
+    with pytest.raises(ConfigurationError):
+        config._env_int("NUMBER", 2)
+    with pytest.raises(ConfigurationError):
+        config._env_float("FLOAT", 0.5)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"hop_seconds": float("nan")},
+        {"sample_rate": 0},
+        {"hop_seconds": 1},
+        {"fmin_hz": 1500},
+        {"min_voiced_confidence": 2},
+        {"min_note_sec": 0},
+        {"split_note_semitones": 20},
+        {"midi_bend_range": 0},
+        {"asr_model": " "},
+        {"separation_engine": "other"},
+        {"pitch_engine": "other"},
+        {"transcription_engine": "other"},
+        {"alignment_engine": "other"},
+    ],
+)
+def test_core_config_rejects_invalid_values(changes):
+    with pytest.raises(ConfigurationError):
+        config.CoreConfig(**changes)
+
+
+def test_core_config_from_env_and_fingerprint(monkeypatch):
+    monkeypatch.setenv("KARAOKE_AI_SAMPLE_RATE", "48000")
+    monkeypatch.setenv("KARAOKE_AI_PITCH_SR", "22050")
+    monkeypatch.setenv("KARAOKE_AI_HOP_SECONDS", ".02")
+    monkeypatch.setenv("KARAOKE_AI_ALLOW_FALLBACK", "yes")
+    value = config.CoreConfig.from_env()
+    assert value.sample_rate == 48000 and value.pitch_sample_rate == 22050
+    assert value.hop_seconds == 0.02 and value.allow_fallback
+    assert value.fingerprint()["sample_rate"] == 48000
+
+
+def test_quality_reports_good_and_bad_analysis():
+    empty = evaluate_quality(0, [], [], [], [])
+    assert empty.overall == 0
+    assert "No timed words were produced" in empty.warnings
+    pitch = [PitchFrame(0, 440, 0.9, True), PitchFrame(0.1, 0, 0, False)]
+    words = [Word(0, 1, "hello", confidence=0.9)]
+    syllables = [Syllable(0, 1, "hel", 0, 0, confidence=0.9)]
+    notes = [VocalNote(0, 1, 69)]
+    good = evaluate_quality(1, pitch, words, syllables, notes)
+    assert good.overall > 0.8 and not good.warnings
+    bad = evaluate_quality(
+        10,
+        [PitchFrame(0, 440, 0.1, True)],
+        [Word(0, 1, "hello", confidence=0.1)],
+        [Syllable(0, 1, "hel", 0, 0, confidence=0.1)],
+        [],
+    )
+    assert len(bad.warnings) == 4
+
+
+def import_override(real_import, replacements):
+    def fake(name, *args, **kwargs):
+        value = replacements.get(name)
+        if isinstance(value, BaseException):
+            raise value
+        return value if name in replacements else real_import(name, *args, **kwargs)
+
+    return fake
+
+
+def test_profiler_snapshot_and_environment_success(monkeypatch):
+    process = SimpleNamespace(memory_info=lambda: SimpleNamespace(rss=10 * 1024 * 1024))
+    psutil = SimpleNamespace(Process=lambda _: process)
+    cuda = SimpleNamespace(
+        is_available=lambda: True,
+        memory_allocated=lambda: 2 * 1024 * 1024,
+        memory_reserved=lambda: 3 * 1024 * 1024,
+        get_device_name=lambda _: "GPU",
+        get_device_properties=lambda _: SimpleNamespace(total_memory=8 * 1024 * 1024),
+    )
+    torch = SimpleNamespace(__version__="1", cuda=cuda, version=SimpleNamespace(cuda="12"))
+    monkeypatch.setattr(
+        builtins,
+        "__import__",
+        import_override(builtins.__import__, {"psutil": psutil, "torch": torch}),
+    )
+    snap = profiler.snapshot()
+    assert snap.rss_mb == 10 and snap.cuda_allocated_mb == 2 and snap.cuda_reserved_mb == 3
+    info = profiler.environment_info()
+    assert info["gpu"] == "GPU" and info["vram_mb"] == 8
+
+
+@pytest.mark.parametrize("error", [ImportError("missing"), OSError("blocked")])
+def test_profiler_process_failures(monkeypatch, error):
+    monkeypatch.setattr(
+        builtins,
+        "__import__",
+        import_override(builtins.__import__, {"psutil": error, "torch": ImportError("missing")}),
+    )
+    snap = profiler.snapshot()
+    assert snap.rss_mb is None and snap.cuda_allocated_mb is None
+    assert snap.warnings
+
+
+def test_profiler_cuda_runtime_failures_and_delta(monkeypatch):
+    psutil = SimpleNamespace(Process=lambda _: (_ for _ in ()).throw(OSError("memory")))
+    torch = SimpleNamespace(
+        __version__="1",
+        cuda=SimpleNamespace(is_available=lambda: (_ for _ in ()).throw(RuntimeError("cuda"))),
+        version=SimpleNamespace(cuda=None),
+    )
+    monkeypatch.setattr(
+        builtins,
+        "__import__",
+        import_override(builtins.__import__, {"psutil": psutil, "torch": torch}),
+    )
+    snap = profiler.snapshot()
+    assert any("CUDA" in warning for warning in snap.warnings)
+    info = profiler.environment_info()
+    assert info["cuda_available"] is False and "cuda" in info["torch_error"]
+    start = profiler.ResourceSnapshot(2, None, None, None, ("a",))
+    end = profiler.ResourceSnapshot(1, 3, 4, 5, ("a", "b"))
+    assert profiler.delta(start, end) == {
+        "elapsed_sec": 0,
+        "rss_mb": 3,
+        "cuda_allocated_mb": 4,
+        "cuda_reserved_mb": 5,
+        "warnings": ["a", "b"],
+    }
+
+
+def test_profiler_environment_without_torch(monkeypatch):
+    monkeypatch.setattr(
+        builtins, "__import__", import_override(builtins.__import__, {"torch": ImportError("none")})
+    )
+    assert profiler.environment_info()["cuda_available"] is False

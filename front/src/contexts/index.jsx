@@ -6,14 +6,14 @@ import { RadioProvider } from "./radio";
 
 export default function ContextProviders({ children }) {
   return (
-    <AppDialogProvider>
-      <AppSettingsProvider>
-        <I18nProvider>
+    <AppSettingsProvider>
+      <I18nProvider>
+        <AppDialogProvider>
           <RadioProvider>
             <OnlineRoomProvider>{children}</OnlineRoomProvider>
           </RadioProvider>
-        </I18nProvider>
-      </AppSettingsProvider>
-    </AppDialogProvider>
+        </AppDialogProvider>
+      </I18nProvider>
+    </AppSettingsProvider>
   );
 }

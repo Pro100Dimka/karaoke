@@ -62,7 +62,6 @@ def _local_step(frames: list[PitchFrame], span: float, count: int) -> float:
         if compact:
             compact.sort()
             return max(compact[len(compact) // 2], 1e-4)
-        return max(median, 1e-4)
     return max(span / max(6, count * 6), 1e-4)
 
 
@@ -122,7 +121,8 @@ def _boundary_scores(word: Word, frames: list[PitchFrame], count: int) -> list[f
             + energy_drop / energy_scale
             + voicing_change
         )
-        ranked.append((score, timestamp))
+        if score > 1e-9:
+            ranked.append((score, timestamp))
 
     ranked.sort(reverse=True)
     selected: list[float] = []
@@ -186,8 +186,6 @@ def align_syllables(words: list[Word], pitch: list[PitchFrame]) -> list[Syllable
     syllable_index = 0
     for word in words:
         parts = split_written(word.text)
-        if not parts:
-            continue
         frames = _frame_slice(ordered_pitch, pitch_times, word.start, word.end)
         expected_bounds = _proportional_bounds(word, parts)
         bounds = _refine_proportional_bounds(word, frames, expected_bounds)

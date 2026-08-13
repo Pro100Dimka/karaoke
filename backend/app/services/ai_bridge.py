@@ -322,11 +322,7 @@ def _snap_lines_to_regions(
             key=lambda index: (
                 abs(regions[index][0] - old_start) + (0.85 if index == previous_region else 0.0)
             ),
-            default=previous_region,
         )
-        if region_index < 0:
-            result.append(line)
-            continue
         region_start, region_end = regions[region_index]
         if region_end <= region_start:
             result.append(line)

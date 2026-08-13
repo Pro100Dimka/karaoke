@@ -242,26 +242,23 @@ def fuse_pitch_with_yin(
                 current_back.append(best_index)
             costs = current_costs
             back.append(current_back)
-        if costs:
-            state = min(range(len(costs)), key=costs.__getitem__)
-            chosen: list[int] = []
-            for k in range(j - 1, i - 1, -1):
-                chosen.append(state)
-                state = back[k - i][state]
-                if state < 0 and k > i:
-                    state = 0
-            chosen.reverse()
-            for offset, state in enumerate(chosen):
-                k = i + offset
-                midi_value, obs, hz_value = rows[k][state]
-                confidence = max(0.0, min(1.0, obs))
-                result[k] = PitchFrame(
-                    frames[k].time,
-                    float(hz_value),
-                    confidence,
-                    confidence >= 0.17,
-                    frames[k].energy,
-                )
+        state = min(range(len(costs)), key=costs.__getitem__)
+        chosen: list[int] = []
+        for k in range(j - 1, i - 1, -1):
+            chosen.append(state)
+            state = back[k - i][state]
+        chosen.reverse()
+        for offset, state in enumerate(chosen):
+            k = i + offset
+            midi_value, obs, hz_value = rows[k][state]
+            confidence = max(0.0, min(1.0, obs))
+            result[k] = PitchFrame(
+                frames[k].time,
+                float(hz_value),
+                confidence,
+                confidence >= 0.17,
+                frames[k].energy,
+            )
         i = max(i + 1, j)
     return result
 
@@ -295,8 +292,6 @@ def _attack_strength(run: list[PitchFrame], index: int) -> float:
     current = max(0.0, run[index].energy)
     lo = max(0, index - 5)
     history = [max(0.0, run[i].energy) for i in range(lo, index)]
-    if not history:
-        return 0.0
     baseline = statistics.median(history)
     if baseline <= 1e-8:
         return 1.0 if current > 1e-5 else 0.0
@@ -407,8 +402,6 @@ def _repair_single_frame_holes(frames: list[PitchFrame]) -> list[PitchFrame]:
         prev, cur, nxt = out[index - 1], out[index], out[index + 1]
         if cur.voiced or not prev.voiced or not nxt.voiced:
             continue
-        if prev.frequency <= 0 or nxt.frequency <= 0:
-            continue
         if nxt.time - prev.time > step * 2.8:
             continue
         if abs(_midi(prev.frequency) - _midi(nxt.frequency)) > 0.55:
@@ -430,6 +423,7 @@ def stabilize_pitch(frames: list[PitchFrame], max_octave_jump=10.5) -> list[Pitc
     absolute harmonic candidates and uses energy re-attacks to relax continuity
     exactly where a genuine new sung note is most plausible.
     """
+    del max_octave_jump
     if len(frames) < 3:
         return list(frames)
     return _repair_single_frame_holes(_stabilize_harmonics(frames))

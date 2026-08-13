@@ -184,17 +184,12 @@ def score_pitch_track(frames: list[PitchFrame]) -> PitchTrackQuality:
             run = 0
     if run:
         run_lengths.append(run)
-    typical_hop = (
-        median(
-            [
-                frames[i].time - frames[i - 1].time
-                for i in range(1, len(frames))
-                if frames[i].time > frames[i - 1].time
-            ]
-        )
-        if len(frames) > 1
-        else 0.01
-    )
+    positive_hops = [
+        frames[i].time - frames[i - 1].time
+        for i in range(1, len(frames))
+        if frames[i].time > frames[i - 1].time
+    ]
+    typical_hop = median(positive_hops) if positive_hops else 0.01
     typical_run = median(run_lengths) if run_lengths else 1
     micro_limit = max(
         1,
@@ -290,14 +285,18 @@ def _rms_envelope(
     mono = np.mean(np.asarray(audio, dtype=np.float32), axis=1)
     frame = max(1, int(sample_rate * frame_ms / 1000))
     hop = max(1, int(sample_rate * hop_ms / 1000))
-    values = np.asarray(
-        [
-            float(np.sqrt(np.mean(mono[position : position + frame] ** 2) + 1e-12))
-            for position in range(0, max(1, len(mono) - frame + 1), hop)
-        ],
-        dtype=np.float64,
+    values = (
+        np.asarray(
+            [
+                float(np.sqrt(np.mean(mono[position : position + frame] ** 2) + 1e-12))
+                for position in range(0, max(1, len(mono) - frame + 1), hop)
+            ],
+            dtype=np.float64,
+        )
+        if mono.size
+        else np.asarray([], dtype=np.float64)
     )
-    rms = float(np.sqrt(np.mean(mono * mono) + 1e-12))
+    rms = float(np.sqrt(np.mean(mono * mono) + 1e-12)) if mono.size else 0.0
     peak = float(np.max(np.abs(mono))) if mono.size else 0.0
     return values, {
         "rms": rms,
@@ -353,9 +352,16 @@ def analyze_vocal_residuals(
             decay_ratios.append(after / max(1e-9, before))
     decay_persistence = float(np.median(decay_ratios)) if decay_ratios else 0.0
 
-    envelope_correlation = float(np.corrcoef(vocal_env, instrumental_env)[0, 1])
-    if not math.isfinite(envelope_correlation):
-        envelope_correlation = 0.0
+    vocal_centered = vocal_env - np.mean(vocal_env)
+    instrumental_centered = instrumental_env - np.mean(instrumental_env)
+    correlation_scale = float(
+        np.linalg.norm(vocal_centered) * np.linalg.norm(instrumental_centered)
+    )
+    envelope_correlation = (
+        float(np.dot(vocal_centered, instrumental_centered) / correlation_scale)
+        if correlation_scale > 1e-12
+        else 0.0
+    )
     denoise_attenuation = max(0.0, 1.0 - _ratio(denoise_env, vocal_env))
     tail_attenuation = max(0.0, 1.0 - _ratio(tail_env, vocal_env))
     echo_score = max(0.0, min(1.0, (echo_peak - 0.08) / 0.35))
