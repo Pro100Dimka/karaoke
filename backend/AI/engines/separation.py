@@ -21,6 +21,14 @@ from .base import Separator
 
 def _run_msst_worker(engine_dir: str, arguments: dict[str, object], result_queue) -> None:
     """Run third-party MSST in an isolated process without a duplicate Python env."""
+    original_stdout, original_stderr = sys.stdout, sys.stderr
+    owned_streams = []
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")
+        owned_streams.append(sys.stdout)
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w", encoding="utf-8")
+        owned_streams.append(sys.stderr)
     # Consumer NVIDIA cards gain a substantial speed-up from TF32 for the large
     # RoFormer matrix multiplications, while inference quality remains stable.
     with suppress(ImportError, RuntimeError):
@@ -49,7 +57,9 @@ def _run_msst_worker(engine_dir: str, arguments: dict[str, object], result_queue
     sys.modules["models"] = model_package
     sys.path.insert(0, str(engine_path))
     try:
-        spec = importlib.util.spec_from_file_location("advoice_msst_inference", engine_path / "inference.py")
+        spec = importlib.util.spec_from_file_location(
+            "advoice_msst_inference", engine_path / "inference.py"
+        )
         if spec is None or spec.loader is None:
             raise RuntimeError("Could not load MSST inference module")
         module = importlib.util.module_from_spec(spec)
@@ -65,6 +75,9 @@ def _run_msst_worker(engine_dir: str, arguments: dict[str, object], result_queue
         sys.modules.update(previous_models)
         with suppress(ValueError):
             sys.path.remove(str(engine_path))
+        sys.stdout, sys.stderr = original_stdout, original_stderr
+        for stream in owned_streams:
+            stream.close()
 
 
 def _fit_channels_and_length(audio: np.ndarray, channels: int, frames: int) -> np.ndarray:
@@ -95,16 +108,21 @@ class MSSTMelRoformerSeparator(Separator):
         self.checkpoint = checkpoint or os.getenv("MSST_CHECKPOINT")
 
     def available(self) -> bool:
-        if not (self.engine_dir and self.config and self.checkpoint):
-            return False
-        return all(
-            path.is_file()
-            for path in (
-                Path(self.engine_dir) / "inference.py",
-                Path(self.config),
-                Path(self.checkpoint),
-            )
-        )
+        return not self.missing_resources()
+
+    def missing_resources(self) -> list[str]:
+        resources = {
+            "MSST_ENGINE_DIR/inference.py": (
+                Path(self.engine_dir) / "inference.py" if self.engine_dir else None
+            ),
+            "MSST_CONFIG": Path(self.config) if self.config else None,
+            "MSST_CHECKPOINT": Path(self.checkpoint) if self.checkpoint else None,
+        }
+        return [
+            f"{name}={path if path is not None else '<not configured>'}"
+            for name, path in resources.items()
+            if path is None or not path.is_file()
+        ]
 
     def _run_engine(self, input_dir: Path, output_dir: Path) -> None:
         if not self.engine_dir or not self.config or not self.checkpoint:
@@ -139,8 +157,7 @@ class MSSTMelRoformerSeparator(Separator):
     def separate(self, mix, vocals, instrumental):
         if not self.available():
             raise EngineUnavailableError(
-                "Mel-Band RoFormer is not configured. Set MSST_ENGINE_DIR, MSST_CONFIG "
-                "and MSST_CHECKPOINT to existing files."
+                "Mel-Band RoFormer resources are missing: " + "; ".join(self.missing_resources())
             )
 
         with tempfile.TemporaryDirectory(prefix="karaoke-msst-") as temporary:

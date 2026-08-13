@@ -295,7 +295,7 @@ def _online(title: str | None, duration_sec: float | None) -> LyricsDiscovery:
     query = urllib.parse.urlencode(query_params)
     request = urllib.request.Request(
         f"https://lrclib.net/api/search?{query}",
-        headers={"User-Agent": "KaraokeStudio/2026.35 (desktop karaoke application)"},
+        headers={"User-Agent": "AAndDVoice/2026.35 (desktop karaoke application)"},
     )
     try:
         with urllib.request.urlopen(request, timeout=8.0) as response:  # noqa: S310
@@ -443,7 +443,7 @@ def _web_search(title: str) -> list[tuple[str, str]]:
         "https://html.duckduckgo.com/html/",
         data=urllib.parse.urlencode({"q": query}).encode("utf-8"),
         headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) KaraokeStudio/2026.35",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AAndDVoice/2026.35",
             "Content-Type": "application/x-www-form-urlencoded",
         },
     )
@@ -471,7 +471,7 @@ def _fetch_web_lyrics(url: str) -> str:
     request = urllib.request.Request(
         url,
         headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) KaraokeStudio/2026.35",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AAndDVoice/2026.35",
             "Accept-Language": "ru,en;q=0.8",
         },
     )

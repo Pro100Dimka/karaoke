@@ -1,7 +1,7 @@
 [project]
-name = "karaoke-ai-backend"
+name = "a-and-d-voice-backend"
 version = "0.3.5"
-description = "Локальный FastAPI backend поверх AI-пайплайна (Karaoke AI)."
+description = "Локальный FastAPI backend приложения A&D Voice."
 requires-python = ">=3.11,<3.13"
 readme = "README.md"
 

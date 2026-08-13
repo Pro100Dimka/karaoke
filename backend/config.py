@@ -95,9 +95,18 @@ def _saved_path(name: str, default: Path) -> Path:
 
 AI_DIR = _env_path("SONGAPP_AI_DIR", RUNTIME_DIR / "AI")
 DOWNLOADS_DIR = _env_path("SONGAPP_DOWNLOADS_DIR", PROJECT_ROOT / "downloads")
+
+
 # Keep downloaded models outside the immutable application runtime. Interrupted
 # installations can then resume instead of discarding several downloaded GB.
-_DEFAULT_MODELS_DIR = DATA_DIR / "models" if IS_FROZEN else DOWNLOADS_DIR / "models"
+def _default_models_dir() -> Path:
+    if not IS_FROZEN:
+        return DOWNLOADS_DIR / "models"
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    return Path(local_app_data) / "A&D Voice" / "models" if local_app_data else DATA_DIR / "models"
+
+
+_DEFAULT_MODELS_DIR = _default_models_dir()
 MODELS_DIR = _env_path("SONGAPP_MODELS_DIR", _saved_path("ai_folder", _DEFAULT_MODELS_DIR))
 EXTERNAL_ENGINES_DIR = _env_path(
     "SONGAPP_ENGINES_DIR", RUNTIME_DIR / "engines" if IS_FROZEN else DOWNLOADS_DIR / "engines"

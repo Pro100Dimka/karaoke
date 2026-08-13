@@ -26,6 +26,17 @@ export default function ModelRecovery() {
   const readyCount = data?.ready_count ?? 0;
   const visibleError =
     actionError || data?.error || (error && getErrorMessage(error));
+  const downloadedBytes = Number(data?.downloaded_bytes) || 0;
+  const totalBytes = Number(data?.total_bytes) || 0;
+  const remainingSeconds = Number(data?.remaining_seconds);
+  const downloadDetail =
+    downloading && totalBytes > 0
+      ? `${(downloadedBytes / 1024 ** 3).toFixed(1)} / ${(totalBytes / 1024 ** 3).toFixed(1)} ГБ${
+          remainingSeconds >= 0
+            ? ` · ~${Math.max(1, Math.ceil(remainingSeconds / 60))} мин`
+            : ""
+        }`
+      : "";
 
   const startDownload = async () => {
     setStarting(true);
@@ -73,12 +84,15 @@ export default function ModelRecovery() {
               : t("settings.ai.models.missing", {
                   count: missing.length || Math.max(0, total - readyCount)
                 })}
+          {downloadDetail ? ` · ${downloadDetail}` : ""}
         </Typography>
 
         {(downloading || (!ready && total > 0)) && (
           <Progress
-            value={downloading && total === 0 ? null : readyCount}
-            max={Math.max(1, total)}
+            value={
+              totalBytes > 0 ? downloadedBytes : downloading ? null : readyCount
+            }
+            max={totalBytes > 0 ? totalBytes : Math.max(1, total)}
             aria-label={t("settings.ai.models.progress")}
           />
         )}

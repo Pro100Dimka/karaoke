@@ -62,7 +62,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(
-    title="Karaoke AI Backend",
+    title="A&D Voice Backend",
     description="Локальный backend поверх AI-пайплайна: управление песнями, плеер, запись, анализ голоса.",
     version="0.1.0",
     lifespan=lifespan,
@@ -90,4 +90,4 @@ app.include_router(application.router)
 
 @app.get("/")
 def root():
-    return {"name": "Karaoke AI Backend", "docs": "/docs"}
+    return {"name": "A&D Voice Backend", "docs": "/docs"}

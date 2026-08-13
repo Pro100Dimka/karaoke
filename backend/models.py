@@ -1,4 +1,4 @@
-"""Typed SQLAlchemy models for the local Karaoke Studio database."""
+"""Typed SQLAlchemy models for the local A&D Voice database."""
 
 from __future__ import annotations
 

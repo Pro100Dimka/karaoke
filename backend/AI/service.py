@@ -95,11 +95,16 @@ def get_ai_service(config: CoreConfig | None = None) -> AICoreService:
         return _service
 
 
-def reset_ai_service_for_tests() -> None:
+def reset_ai_service() -> None:
+    """Discard cached engines after resource paths or model files change."""
     global _service, _service_config
     with _service_lock:
         _service = None
         _service_config = None
+
+
+def reset_ai_service_for_tests() -> None:
+    reset_ai_service()
 
 
 def process_song(*args, **kwargs) -> PipelineResult:

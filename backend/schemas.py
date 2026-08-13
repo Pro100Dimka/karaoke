@@ -275,6 +275,9 @@ class AIModelsStatusOut(BaseModel):
     error: str | None = None
     models_dir: str
     models: list[AIModelResourceOut]
+    downloaded_bytes: int | None = None
+    total_bytes: int | None = None
+    remaining_seconds: int | None = None
 
 
 class VersionsOut(BaseModel):

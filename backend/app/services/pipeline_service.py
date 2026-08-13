@@ -53,6 +53,7 @@ _progress_runtime_lock = threading.RLock()
 
 def _configure_ai_runtime() -> str:
     """Apply persisted compute preferences before lazy AI imports load a runtime."""
+    config.configure_ai_resource_environment(force=True)
     settings = app_settings_service.read_settings()
     device = str(settings["compute_mode"])
     thread_count = int(settings["thread_count"])

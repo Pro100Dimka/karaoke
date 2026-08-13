@@ -19,6 +19,7 @@ class ModelSpec:
     filename: str | None = None
     sha256: str | None = None
     ignore_patterns: tuple[str, ...] = ()
+    expected_bytes: int = 0
 
     @property
     def local_name(self) -> str:
@@ -33,6 +34,7 @@ MODELS: tuple[ModelSpec, ...] = (
         revision="7278e1e70fe206f11671096ffdd38061171dd6e5",
         relative_path="qwen/Qwen3-ASR-1.7B",
         env_var="KARAOKE_AI_ASR_MODEL",
+        expected_bytes=4_703_114_308,
     ),
     ModelSpec(
         key="aligner",
@@ -41,6 +43,7 @@ MODELS: tuple[ModelSpec, ...] = (
         revision="c7cbfc2048c462b0d63a45797104fc9db3ad62b7",
         relative_path="qwen/Qwen3-ForcedAligner-0.6B",
         env_var="KARAOKE_AI_ALIGNER_MODEL",
+        expected_bytes=1_840_072_459,
     ),
     ModelSpec(
         key="ctc_ru",
@@ -52,6 +55,7 @@ MODELS: tuple[ModelSpec, ...] = (
         # Forced alignment consumes acoustic logits directly. Decoder language
         # models and alternate framework weights are never loaded.
         ignore_patterns=("language_model/**", "flax_model.msgpack"),
+        expected_bytes=1_265_908_849,
     ),
     ModelSpec(
         key="ctc_uk",
@@ -61,6 +65,7 @@ MODELS: tuple[ModelSpec, ...] = (
         relative_path="ctc/wav2vec2-xls-r-300m-uk",
         env_var="KARAOKE_AI_CTC_UK_MODEL",
         ignore_patterns=("language_model/**", "flax_model.msgpack"),
+        expected_bytes=1_261_978_306,
     ),
     ModelSpec(
         key="roformer",
@@ -72,6 +77,7 @@ MODELS: tuple[ModelSpec, ...] = (
         kind="file",
         filename="MelBandRoformer.ckpt",
         sha256="87201f4d31afb5bc79993230fc49446918425574db48c01c405e44f365c7559e",
+        expected_bytes=913_106_900,
     ),
 )
 

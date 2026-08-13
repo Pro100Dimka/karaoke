@@ -87,7 +87,7 @@ def get_history(db: Session = Depends(get_db)) -> list[dict]:
 @router.get("/about")
 def about() -> dict[str, str]:
     return {
-        "name": "Karaoke Studio",
+        "name": "A&D Voice",
         "version": diagnostics_service.BACKEND_VERSION,
         "backend_version": diagnostics_service.BACKEND_VERSION,
         "generated_at": datetime.now().astimezone().isoformat(),

@@ -63,7 +63,6 @@ Source: "{#ThemeIconPreviewsDir}\green.png"; Flags: dontcopy
 Source: "{#ThemeIconPreviewsDir}\violet.png"; Flags: dontcopy
 ; Runtime is already compressed once. Inno only copies the archive from ISO.
 Source: "{src}\app-runtime.zip"; DestDir: "{tmp}"; Flags: external ignoreversion deleteafterinstall
-Source: "{src}\msst\*"; DestDir: "{app}\resources\backend\_internal\engines\msst"; Flags: external ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{code:SelectedIconPath}"
@@ -110,6 +109,14 @@ var
   ThemeCombo: TNewComboBox;
   ThemePreview: TBitmapImage;
   RemoveUserData: Boolean;
+  ModelProgressTimerID: Integer;
+  ModelProgressPath: String;
+
+function SetTimer(hWnd, nIDEvent, uElapse, lpTimerFunc: Longword): Longword;
+external 'SetTimer@user32.dll stdcall';
+
+function KillTimer(hWnd, nIDEvent: Longword): Boolean;
+external 'KillTimer@user32.dll stdcall';
 
 function InitializeUninstall: Boolean;
 begin
@@ -190,6 +197,7 @@ begin
   ThemePreview.SetBounds(ScaleX(290), ScaleY(82), ScaleX(96), ScaleY(96));
   ThemePreview.Stretch := True;
   ThemeChanged(nil);
+
 end;
 
 function SelectedTheme: String;
@@ -251,6 +259,92 @@ begin
   WizardForm.ProgressGauge.Position := WizardForm.ProgressGauge.Max;
 end;
 
+function ProgressValue(const Key: String): String;
+var
+  Lines: TArrayOfString;
+  I: Integer;
+  Prefix: String;
+begin
+  Result := '';
+  if (ModelProgressPath = '') or
+     (not LoadStringsFromFile(ModelProgressPath, Lines)) then
+    Exit;
+  Prefix := Key + '=';
+  for I := 0 to GetArrayLength(Lines) - 1 do
+    if Pos(Prefix, Lines[I]) = 1 then
+    begin
+      Result := Copy(Lines[I], Length(Prefix) + 1, MaxInt);
+      Exit;
+    end;
+end;
+
+function ApproximateTime(RemainingSeconds: Integer): String;
+var
+  Minutes: Integer;
+begin
+  Minutes := (RemainingSeconds + 59) div 60;
+  if Minutes < 1 then
+    Result := 'меньше минуты'
+  else if Minutes < 60 then
+    Result := IntToStr(Minutes) + ' мин'
+  else
+    Result := IntToStr(Minutes div 60) + ' ч ' + IntToStr(Minutes mod 60) + ' мин';
+end;
+
+function FormatGigabytes(Megabytes: Integer): String;
+begin
+  Result := IntToStr(Megabytes div 1024) + '.' +
+    IntToStr(((Megabytes mod 1024) * 10) div 1024);
+end;
+
+procedure UpdateModelProgress(Sender: TObject);
+var
+  DownloadedMB: Integer;
+  TotalMB: Integer;
+  RemainingSeconds: Integer;
+  ActiveModel: String;
+  Status: String;
+begin
+  DownloadedMB := StrToIntDef(ProgressValue('downloaded_mb'), 0);
+  TotalMB := StrToIntDef(ProgressValue('total_mb'), 0);
+  if TotalMB <= 0 then
+    Exit;
+
+  WizardForm.ProgressGauge.Style := npbstNormal;
+  WizardForm.ProgressGauge.Max := 1000;
+  WizardForm.ProgressGauge.Position := DownloadedMB * 1000 div TotalMB;
+  Status := 'Этап 3 из 3: загружено ' +
+    FormatGigabytes(DownloadedMB) + ' из ' +
+    FormatGigabytes(TotalMB) + ' ГБ';
+
+  RemainingSeconds := StrToIntDef(ProgressValue('remaining_seconds'), -1);
+  if RemainingSeconds >= 0 then
+    Status := Status + ' · осталось примерно ' + ApproximateTime(RemainingSeconds);
+  ActiveModel := ProgressValue('active');
+  if ActiveModel <> '' then
+    Status := Status + ' · ' + ActiveModel;
+  WizardForm.StatusLabel.Caption := Status;
+end;
+
+procedure ModelProgressTimerProc(Arg1, Arg2, Arg3, Arg4: Longword);
+begin
+  UpdateModelProgress(nil);
+end;
+
+procedure StopModelProgressTimer;
+begin
+  if ModelProgressTimerID <> 0 then
+  begin
+    KillTimer(0, ModelProgressTimerID);
+    ModelProgressTimerID := 0;
+  end;
+end;
+
+procedure DeinitializeSetup;
+begin
+  StopModelProgressTimer;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
@@ -291,26 +385,35 @@ begin
       RaiseException('Runtime extraction completed, but the application executable is missing.');
 
     BackendExe := ExpandConstant('{app}\resources\backend\KaraokeBackend.exe');
-    { Store downloads outside {app}: Inno rollback must not erase completed }
-    { multi-gigabyte files after a transient network failure. }
+    // Store downloads outside the application directory so an Inno rollback
+    // does not erase completed multi-gigabyte files after a network failure.
     ModelsDir := ExpandConstant('{localappdata}\A&D Voice\models');
     ModelCacheDir := ExpandConstant('{localappdata}\A&D Voice\model-cache');
     ModelLogPath := ExpandConstant('{localappdata}\A&D Voice\logs\model-install.log');
+    ModelProgressPath := ExpandConstant('{localappdata}\A&D Voice\logs\model-progress.txt');
+    DeleteFile(ModelProgressPath);
     ForceDirectories(ModelsDir);
     ShowPendingInstallStep(
-      'Этап 3 из 3: загрузка AI-моделей. Это индикатор активности, а не проценты...'
+      'Этап 3 из 3: подготовка загрузки AI-моделей...'
     );
+    ModelProgressTimerID := SetTimer(0, 0, 1000, CreateCallback(@ModelProgressTimerProc));
     if not Exec(
       BackendExe,
       '--install-ai-models --models-root "' + ModelsDir +
         '" --cache-dir "' + ModelCacheDir + '" --workers 2 --retries 3' +
-        ' --log-file "' + ModelLogPath + '"',
+        ' --log-file "' + ModelLogPath + '"' +
+        ' --progress-file "' + ModelProgressPath + '"',
       ExpandConstant('{app}\resources\backend'),
       SW_HIDE,
       ewWaitUntilTerminated,
       ResultCode
     ) then
+    begin
+      StopModelProgressTimer;
       RaiseException('Не удалось запустить загрузку AI-моделей.');
+    end;
+    StopModelProgressTimer;
+    UpdateModelProgress(nil);
     if ResultCode <> 0 then
       RaiseException(
         'Не удалось загрузить одну из AI-моделей. Уже загруженные файлы сохранены,' + #13#10 +

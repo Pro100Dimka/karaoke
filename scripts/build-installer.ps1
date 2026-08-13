@@ -112,10 +112,10 @@ $AsioSchemaVersion      = "asio-v1"
 $FrontendSchemaVersion  = "frontend-v1"
 $ModelsSchemaVersion    = "models-7z-v2"
 $FinalizeSchemaVersion  = "finalize-v1"
-$ElectronSchemaVersion  = "electron-v2-nosign-nosmoke"
+$ElectronSchemaVersion  = "electron-v3-bundled-msst"
 $RuntimeSchemaVersion   = "runtime-zip-v1"
 $InstallerSchemaVersion = "installer-bootstrap-v1"
-$IsoSchemaVersion       = "iso-download-models-v6"
+$IsoSchemaVersion       = "iso-download-models-v7-runtime-msst"
 $IsoViewSchemaVersion   = "iso-view-hardlinks-v1"
 $ElectronSignSchemaVersion  = "electron-sign-v1"
 $ElectronSmokeSchemaVersion = "electron-smoke-v1"
@@ -600,6 +600,7 @@ function Get-ElectronConfigFingerprint {
         (Join-Path $Frontend "package.json"),
         (Join-Path $Frontend "package-lock.json"),
         (Join-Path $Frontend "electron"),
+        $MsstEngine,
         $SceneVideoSource
     )) {
         if (Test-Path -LiteralPath $candidate) {
@@ -1525,11 +1526,17 @@ function Check-Models {
             $env:PYTHONPATH = $Backend
         }
 
-        & $Python $ModelCheck `
-            --downloads $Downloads `
-            --msst $MsstEngine `
-            --env (Join-Path $Downloads "ai-environment.bat") `
-            --check
+        Push-Location $Backend
+        try {
+            & $Python -m AI.install_models `
+                --downloads $Downloads `
+                --msst $MsstEngine `
+                --env (Join-Path $Downloads "ai-environment.bat") `
+                --check
+        }
+        finally {
+            Pop-Location
+        }
 
         if ($LASTEXITCODE -ne 0) {
             throw "Offline model verification failed."
@@ -1809,9 +1816,12 @@ function Verify-Unpacked {
         throw "Electron package unexpectedly contains AI models."
     }
 
-    if (Test-Path -LiteralPath (Join-Path $PackagedBackend "_internal\engines\msst")) {
-        throw "Electron package unexpectedly contains MSST."
-    }
+    Require-File `
+        (Join-Path $PackagedBackend "_internal\engines\msst\inference.py") `
+        "Packaged MSST engine"
+    Require-File `
+        (Join-Path $PackagedBackend "_internal\engines\msst\configs\KimberleyJensen\config_vocals_mel_band_roformer_kj.yaml") `
+        "Packaged MSST configuration"
 }
 
 function Remove-LegacyEmbeddedAI {
@@ -1841,10 +1851,14 @@ function Add-SmokeTestJunctions {
     & cmd.exe /D /C "mklink /J `"$modelsLink`" `"$Models`"" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Could not create model junction for smoke test." }
 
-    & cmd.exe /D /C "mklink /J `"$msstLink`" `"$MsstEngine`"" | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Could not create MSST junction for smoke test." }
+    $created = @($modelsLink)
+    if (-not (Test-Path -LiteralPath $msstLink -PathType Container)) {
+        & cmd.exe /D /C "mklink /J `"$msstLink`" `"$MsstEngine`"" | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Could not create MSST junction for smoke test." }
+        $created += $msstLink
+    }
 
-    return @($modelsLink,$msstLink)
+    return $created
 }
 
 function Remove-SmokeTestJunctions([string[]]$Links) {
@@ -2251,11 +2265,10 @@ function Build-IsoView {
     Require-File $InstallerExe "Installer executable"
     Require-File $ChecksumFile "SHA-256 checksum file"
     Require-File $RuntimeArchive "Application runtime archive"
-    Require-Directory $MsstEngine "MSST inference engine"
 
     Write-Host ""
     Write-Host "Preparing zero-copy ISO view..."
-    Write-Host "  No models, MSST or runtime data is copied."
+    Write-Host "  No models or runtime data is copied."
     Write-Host "  NTFS hardlinks reference the original files directly."
     Write-Host ""
 
@@ -2275,11 +2288,6 @@ function Build-IsoView {
         $RuntimeArchive `
         (Join-Path $IsoView "app-runtime.zip") `
         "Application runtime archive"
-
-    Add-TreeToIsoView `
-        $MsstEngine `
-        (Join-Path $IsoView "msst") `
-        "ISO MSST engine"
 
     $legacyBins = @(
         Get-ChildItem -LiteralPath $IsoView -File -Filter "A&D Voice Setup *.bin" -ErrorAction SilentlyContinue
@@ -2337,7 +2345,7 @@ function Create-DistributionIso {
     Write-Host ("  Payload: {0} files, {1:N2} GB" -f $viewStats.Files,($viewStats.Bytes / 1GB))
     Write-Host "  Runtime: hardlink -> build\\packages\\app-runtime.zip"
     Write-Host "  Models:  downloaded once from official public repositories during installation"
-    Write-Host "  MSST:    hardlinks -> downloads\\engines\\msst"
+    Write-Host "  MSST:    bundled inside the application runtime"
     Write-Host ""
 
     $isoSw = [Diagnostics.Stopwatch]::StartNew()
@@ -3045,7 +3053,7 @@ try {
     Write-Host "Single-file compact distribution:"
     Write-Host "  $IsoFile"
     Write-Host ""
-    Write-Host "The ISO is built from a zero-copy hardlink view; models/MSST stay only in downloads."
+    Write-Host "The ISO is built from a zero-copy hardlink view; AI weights stay outside the runtime."
     Write-Host "Only artifacts whose real inputs changed are rebuilt."
     Write-Host ""
 

@@ -1,4 +1,4 @@
-const DEFAULT_SIGNALING_URL =
+export const DEFAULT_SIGNALING_URL =
   "wss://karaoke-studio-online.pro100dimka-and.workers.dev";
 
 const CONNECTION_TIMEOUT_MS = 10_000;
@@ -155,13 +155,26 @@ export class OnlineRoomClient {
           // A malformed packet must not interrupt the room connection.
         }
       };
-      socket.onerror = () => fail("Не удалось подключиться к комнате.");
-      socket.onclose = () => {
+      socket.onerror = () => {
+        // Browsers intentionally hide network details here. onclose normally
+        // follows with the WebSocket status, which is more useful to the user.
+      };
+      socket.onclose = (event) => {
         const wasCurrent = isCurrent();
         if (wasCurrent) this.socket = null;
         globalThis.clearTimeout(timeout);
         if (!settled) {
-          settle(reject, new Error("Соединение с комнатой закрыто."));
+          const detail = event?.reason?.trim()
+            ? `: ${event.reason.trim()}`
+            : event?.code && event.code !== 1006
+              ? ` (код ${event.code})`
+              : "";
+          settle(
+            reject,
+            new Error(
+              `Не удалось подключиться к серверу комнат${detail}. Проверьте интернет, VPN, прокси или брандмауэр.`
+            )
+          );
         }
         if (wasCurrent) this.emit({ type: "connection-closed" });
       };

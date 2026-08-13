@@ -1,5 +1,5 @@
 {
-  "name": "karaoke-studio",
+  "name": "a-and-d-voice",
   "version": "0.0.1",
   "description": "A&D Voice — десктопное приложение (AI-караоке-тренажёр)",
   "author": "A&D Voice",
@@ -85,6 +85,10 @@
       {
         "from": "../build/backend/dist/KaraokeBackend",
         "to": "backend"
+      },
+      {
+        "from": "../downloads/engines/msst",
+        "to": "backend/_internal/engines/msst"
       },
       {
         "from": "../downloads/media/videoplayback.webm",
