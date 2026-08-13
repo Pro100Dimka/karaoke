@@ -23,6 +23,8 @@ def test_grouping_activity_quantiles_and_long_segments(monkeypatch):
     assert text._activity_quantile_times(np.ones(2), 10) == [0, 0.2]
     signal = np.r_[np.zeros(20), np.ones(60), np.zeros(20)]
     assert len(text._activity_quantile_times(signal, 100)) >= 2
+    assert text._activity_quantile_times(np.ones(8), 100) == [0, 0.08]
+    assert text._activity_quantile_times(np.array([]), 0) == [0, 0]
     monkeypatch.setattr(text, "load_mono", lambda *_: (signal, 100))
     assert text._long_text_segments("audio", "") == []
     segments = text._long_text_segments("audio", "one\ntwo")
@@ -54,6 +56,10 @@ def test_proportional_and_vocal_regions():
     regions = text._vocal_activity_regions(signal, 100, join_gap=0.1)
     assert len(regions) >= 1
 
+    # Flush a still-open region at EOF.
+    tail = np.r_[np.zeros(80), np.ones(120)]
+    assert text._vocal_activity_regions(tail, 100)
+
 
 def test_activity_fallback_modes(monkeypatch):
     tokens = ["one", "two"]
@@ -67,9 +73,29 @@ def test_activity_fallback_modes(monkeypatch):
     hint = words((0.3, 0.4, "one", 1))
     assert len(text._activity_fallback_words(["one"], audio, 100, hint)) == 1
     assert len(text._activity_fallback_words(tokens, audio, 100, hint)) == 2
+    far_hint = words((3.1, 3.2, "one", 1), (3.2, 3.3, "two", 1))
+    assert (
+        text._activity_fallback_words(["one", "two", "three", "four"], audio, 100, far_hint)[
+            0
+        ].start
+        >= 3
+    )
     assert len(text._activity_fallback_words(tokens, audio, 100)) == 2
     monkeypatch.setattr(text, "_vocal_activity_regions", lambda *_a, **_k: [(1, 1.01)])
     assert text._activity_fallback_words(tokens, audio, 100)[0].start == 1
+
+    # Floating-point exhaustion reaches the defensive tail of the active-time map.
+    monkeypatch.setattr(text, "_vocal_activity_regions", lambda *_a, **_k: [(0, 0.1)])
+    assert text._activity_fallback_words(["a", "b"], audio, 100)[-1].end >= 0.1
+
+    connected = [(0, 0.2), (1.5, 1.7), (3.0, 3.2)]
+    monkeypatch.setattr(text, "_vocal_activity_regions", lambda *_a, **_k: connected)
+    clipped = text._activity_fallback_words(["one"], audio, 100, words((0.1, 0.2, "one", 1)))
+    assert clipped[-1].end <= 1.2
+
+    monkeypatch.setattr(text, "_vocal_activity_regions", lambda *_a, **_k: [(0, 1), (2, 3)])
+    after = text._activity_fallback_words(tokens, audio, 100, minimum_start=2.5)
+    assert after[0].start >= 2.5
 
 
 def test_segment_alignment_validation():
@@ -81,6 +107,14 @@ def test_segment_alignment_validation():
     assert not text._segment_alignment_is_usable(words((0, 1, "one two", 1)), ["one"], 1)
     assert not text._segment_alignment_is_usable(valid, ["other", "two"], 1)
     assert not text._segment_alignment_is_usable(words((0, 1.1, "one", 1)), ["one"], 1)
+    assert not text._segment_alignment_is_usable(
+        words((0.5, 0.8, "one", 1), (0.1, 0.4, "two", 1)), ["one", "two"], 1
+    )
+    assert not text._segment_alignment_is_usable(
+        words((0, 0.3, "one", 1), (0.5, 0.8, "two", 1), (0.3, 1.2, "three", 1)),
+        ["one", "two", "three"],
+        1.2,
+    )
 
 
 def test_duration_and_timing_profiles():
@@ -108,6 +142,8 @@ def test_segmented_timing_safety_valid_rebuild_and_tail():
     assert len(partial) == 2
     mismatch = text.enforce_segmented_timing_safety(original[:1], [(0, 1, "one two")], 2)
     assert mismatch
+    clipped = text.enforce_segmented_timing_safety(words((0.49, 1, "one", 1)), [(0, 1, "one")], 0.5)
+    assert clipped[0].confidence == 0.03
 
 
 def test_line_fallbacks_and_speech_focus(monkeypatch):
@@ -129,6 +165,7 @@ def test_transcript_scoring_selection_and_cleanup():
     assert text._script_ratio("123", "en") == 0
     assert text._script_ratio("hello", "en") == 1
     assert text._script_ratio("hello", None) == 1
+    assert text._script_ratio("привет", "ru") == 1
     assert text._transcript_quality("", 1, "en") == 0
     assert text._transcript_quality("one", 100, "en") < 1
     assert text._transcript_quality(" ".join(["x"] * 30), 1, "en") < 1
@@ -136,6 +173,7 @@ def test_transcript_scoring_selection_and_cleanup():
     assert text._transcript_quality("a a a a", 2, "en") < 1
     assert text._candidate_agreement("", ["a"]) == 0
     assert text._candidate_agreement("one", ["one"]) == 0
+    assert text._candidate_agreement("one two", ["one two", ""]) == 0
     assert text._candidate_agreement("one two", ["one two", "one too"]) > 0
     assert text._select_candidate([], 1, "en") == ""
     assert text._select_candidate(["one", "one two"], 1, "en")
@@ -146,6 +184,8 @@ def test_transcript_scoring_selection_and_cleanup():
 
 def test_overlap_merge_and_language_consensus():
     assert text._trim_transcript_overlaps(["one two", "two three", ""])[1] == "three"
+    assert text._trim_transcript_overlaps(["one two", "one two"])[1] == ""
+    assert text._trim_transcript_overlaps(["hello world", "hallo world"])[1] == ""
     assert text._merge_transcript_parts(["one two", "two three"]) == "one two three"
     assert text._majority_language([], "ru") == "Russian"
     assert text._majority_language(["en", "en", "ru"], None) == "English"

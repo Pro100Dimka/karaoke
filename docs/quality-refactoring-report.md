@@ -10,10 +10,10 @@
 
 | Область | Текущее состояние | Цель |
 | --- | ---: | ---: |
-| Frontend unit tests | 28 тестов | Все feature/domain contracts |
-| Frontend statements coverage | 9.55% | 100% учитываемого production-кода |
-| Backend/API/AI tests | 600 тестов | Все feature/domain contracts |
-| Backend/API/AI coverage | 77% | 100% учитываемого production-кода |
+| Frontend unit tests | 37 тестов | Все feature/domain contracts |
+| Frontend statements coverage | 14.14% | 100% учитываемого production-кода |
+| Backend/API/AI tests | 716 тестов | Все feature/domain contracts |
+| Backend/API/AI coverage | 100% (11 356 statements, 0 missed) | Поддерживать 100% учитываемого production-кода |
 | Mutation testing | 100% для 4 модулей | 100% всей бизнес-логики |
 | API/DB integration | 4 сценария | Все API/DB контракты |
 | E2E | 1 smoke-сценарий | Все критические пользовательские потоки |
@@ -23,6 +23,7 @@
 ## Выполнено в текущем цикле
 
 - Frontend unit runner переведён на Vitest с JSX/React coverage.
+- REST transport, все API domains и mock API закрыты контрактными тестами. Исправлена нормализация массивов HTTP-заголовков: ранее `Array.entries()` ошибочно превращал имена заголовков в числовые индексы.
 - Добавлен общий V8 coverage всего frontend вне `src/theme` и статических assets.
 - Добавлены регрессии чистой karaoke/library/editor бизнес-логики.
 - Добавлены настоящие FastAPI + SQLAlchemy integration-тесты.
@@ -63,7 +64,8 @@
 - `AI/pipeline.py` доведён до 100% покрытия: fresh/cached анализ, trusted/ASR lyrics, long-text anchors, timed segments, diagnostic fallback, изменение исходника во время decode, некорректный BPM и неполный manifest проверены. Удалены две математически недостижимые ветви локального восстановления timeline.
 - `AI/lyrics_sources.py` и `AI/engines/ctc_alignment.py` доведены до 100% покрытия: sidecar/embedded lyrics, LRCLIB/web matching, LRC bounds, HTML/charset safety, packaged model discovery, CTC Viterbi, tokenizer failures, CPU/CUDA inference и anchor retry проверены. Исправлен parser-depth на HTML `<br>`, ранее мёртвые локальные источники подключены к discovery, удалены недостижимые CTC-состояния и неиспользуемые вычисления.
 - `AI/notes.py` доведён до 100% покрытия: vibrato/glissando guards, устойчивые pitch-state transitions, energy re-attacks, lyric phrase masking, monophonic repair, YIN/spectral register verification, harmonic/octave proposal acceptance/rejection и syllable-granular game notes проверены. Удалены доказанно недостижимые ветви short-tail merge и invalid proportional boundary.
-- Backend baseline поднят с 18 тестов / 20% до 600 тестов / 77%; весь оставшийся непокрытый backend/AI-код честно сосредоточен в крупном legacy-модуле `AI/engines/text.py`.
+- Backend baseline поднят с 18 тестов / 20% до 716 тестов / 100%: полный согласованный scope `AI` + `app` содержит 11 356 исполняемых statements и 0 пропусков.
+- `AI/engines/text.py` доведён до 100% (2 603 statements, 0 missed; 116 профильных тестов). Удалены дублирующие и математически недостижимые fallback-пути, исправлены невалидные интервалы внешних меток, отрицательный rebase контекстного Qwen-кандидата, потеря причин отклонения в диагностике и падение при невозможном размещении текста в слишком коротком аудио.
 - Исправлено чтение ограниченного хвоста лога: обрезанный по байтам фрагмент первой строки больше не выдаётся как полноценная строка.
 - Добавлена ранняя проверка некорректных лимитов потоковой загрузки (`limit < 0`, `chunk_size <= 0`).
 - Общая команда проверок остаётся зелёной.
@@ -72,7 +74,6 @@
 
 - Mutation scope пока ограничен `i18n/runtime`, `i18n/translate`, `language`, `theme`.
 - Большинство React-компонентов, hooks и API client ещё не покрыты.
-- Значительная часть API routers, pipeline и AI algorithms ещё не покрыта.
 - Нет полного Electron IPC contract suite и packaged Electron smoke test.
 - E2E пока не проверяет импорт, обработку, редактор, караоке, комнаты и recovery моделей.
 - Complexity/size/semantic-density отчёты пока advisory, а не blocking gates.

@@ -9,10 +9,10 @@ export const MOCK_API_ENABLED = import.meta.env?.VITE_USE_MOCK_API === "true";
 export const BASE_URL = API_BASE_URL;
 function normalizeHeaders(headers) {
   if (!headers) return undefined;
+  if (Array.isArray(headers)) return Object.fromEntries(headers);
   if (typeof headers.entries === "function") {
     return Object.fromEntries(headers.entries());
   }
-  if (Array.isArray(headers)) return Object.fromEntries(headers);
   return {
     ...headers
   };
