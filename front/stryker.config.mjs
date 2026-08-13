@@ -5,11 +5,9 @@ export default {
     "src/utils/language.js",
     "src/utils/theme.js"
   ],
-  testRunner: "tap",
-  tap: {
-    testFiles: ["tests/i18n.test.mjs", "tests/theme.test.mjs"],
-    nodeArgs: ["--experimental-default-type=module"],
-    forceBail: true
+  testRunner: "vitest",
+  vitest: {
+    configFile: "vitest.config.mjs"
   },
   coverageAnalysis: "perTest",
   reporters: ["clear-text", "progress", "json"],

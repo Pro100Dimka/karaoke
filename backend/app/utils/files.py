@@ -11,8 +11,16 @@ def read_text_tail(
     encoding: str = "utf-8",
 ) -> list[str]:
     """Return a bounded tail without loading an arbitrarily large file."""
+    if max_lines <= 0 or max_bytes <= 0:
+        return []
     with path.open("rb") as stream:
         stream.seek(0, 2)
-        stream.seek(max(0, stream.tell() - max_bytes))
+        start = max(0, stream.tell() - max_bytes)
+        previous = b""
+        if start:
+            stream.seek(start - 1)
+            previous = stream.read(1)
+        stream.seek(start)
         content = stream.read()
-    return content.decode(encoding, errors="replace").splitlines()[-max_lines:]
+    lines = content.decode(encoding, errors="replace").splitlines()
+    return lines[start > 0 and previous not in {b"\n", b"\r"} :][-max_lines:]

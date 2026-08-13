@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "vitest";
 
 import { translateSaved } from "../src/i18n/runtime.js";
 import sourceMessages from "../src/i18n/source-messages.json" with { type: "json" };

@@ -8,6 +8,11 @@ from pathlib import Path
 from fastapi import HTTPException, UploadFile
 
 
+def _validate_limits(limit: int, chunk_size: int) -> None:
+    if limit < 0 or chunk_size <= 0:
+        raise ValueError("Upload limit must be non-negative and chunk size must be positive")
+
+
 async def read_upload_limited(
     upload: UploadFile,
     *,
@@ -16,6 +21,7 @@ async def read_upload_limited(
     too_large_message: str = "Uploaded file is too large",
 ) -> bytes:
     """Read an upload incrementally and reject payloads above *limit*."""
+    _validate_limits(limit, chunk_size)
     payload = bytearray()
     while chunk := await upload.read(chunk_size):
         if len(payload) + len(chunk) > limit:
@@ -33,6 +39,7 @@ async def save_upload_limited(
     too_large_message: str = "Uploaded file is too large",
 ) -> int:
     """Stream an upload to disk and remove a partial file on failure."""
+    _validate_limits(limit, chunk_size)
     destination.parent.mkdir(parents=True, exist_ok=True)
     received = 0
     try:
