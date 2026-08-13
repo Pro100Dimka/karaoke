@@ -7,7 +7,7 @@ function walk(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const file = path.join(directory, entry.name);
     if (entry.isDirectory()) return walk(file);
-    return /\.(?:js|jsx)$/.test(entry.name) ? [file] : [];
+    return /\.(?:js|jsx|mjs)$/.test(entry.name) ? [file] : [];
   });
 }
 const files = [src, path.join(root, "tests")]

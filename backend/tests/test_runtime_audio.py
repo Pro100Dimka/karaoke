@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import config
-from app.services import audio_service, monitor_worker
+from app.services import audio_service, monitor_worker, recording_service
 from app.services.song_editor_service import _refresh_lines, normalize_editor_timeline
 
 
@@ -83,6 +83,20 @@ def test_wasapi_candidates_end_with_host_neutral_fallback():
     assert "extra_settings" in candidates[0]
     assert "extra_settings" not in candidates[-1]
     assert Path(config.FFMPEG_EXE).name.casefold() in {"ffmpeg", "ffmpeg.exe"}
+
+
+def test_recording_falls_back_from_duplex_to_plain_microphone(monkeypatch):
+    monkeypatch.setattr(
+        recording_service.sd,
+        "query_devices",
+        lambda *_args, **_kwargs: {"default_samplerate": 48_000},
+    )
+    attempts = recording_service._capture_attempts(7, 9, 44_100, 64, True)
+
+    assert attempts[0] == (7, 9, 44_100, 64, True, "low")
+    assert attempts[1] == (7, None, 44_100, 0, False, "high")
+    assert (7, None, 48_000, 0, False, "high") in attempts
+    assert attempts[-1][0] is None
 
 
 def test_merged_note_projects_distinct_syllable_windows():

@@ -5,19 +5,25 @@ export async function openKaraokeInRoom({
   roomApi,
   isCurrentConnection,
   pendingSongCommandRef,
-  setVoiceError
+  setTransferStatus
 }) {
-  const command = { type: "open-karaoke", songId };
-
+  const command = {
+    type: "open-karaoke",
+    songId
+  };
   if (!room || room.host) {
-    if (isCurrentConnection()) client?.send("sync", { state: command });
+    if (isCurrentConnection())
+      client?.send("sync", {
+        state: command
+      });
     return true;
   }
-
   try {
     await roomApi.getSong(songId);
     if (!isCurrentConnection()) return false;
-    client.send("sync", { state: command });
+    client.send("sync", {
+      state: command
+    });
     return true;
   } catch {
     if (!isCurrentConnection()) return false;
@@ -25,7 +31,7 @@ export async function openKaraokeInRoom({
       ...command,
       __originatedHere: true
     };
-    setVoiceError("Получаем песню от ведущего…");
+    setTransferStatus({ stage: "waiting", percent: 0 });
     client.send("sync", {
       state: {
         type: "song-request",

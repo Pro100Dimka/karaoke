@@ -9,7 +9,7 @@ import {
   SkipForward,
   Square
 } from "lucide-react";
-
+import { translateSaved } from "../../../../i18n/runtime";
 import {
   Button,
   Card,
@@ -17,7 +17,6 @@ import {
   Stack,
   Typography
 } from "../../../../theme/ui";
-
 import { clamp } from "./utils";
 
 const CONTROL_ACCENTS = {
@@ -25,29 +24,21 @@ const CONTROL_ACCENTS = {
   key: "var(--color-success)",
   range: "var(--color-warning)"
 };
-
 const TRANSPORT_BUTTON_SX = {
   inlineSize: 42,
   blockSize: 42,
   minInlineSize: 42,
   padding: 0,
-
   borderRadius: "50%",
-
   color: "var(--color-text-soft)",
-
   border:
     "1px solid color-mix(in srgb, var(--color-primary) 44%, var(--color-border))",
-
   background: "color-mix(in srgb, var(--color-bg-deep) 88%, transparent)",
-
   boxShadow:
     "inset 0 1px 0 color-mix(in srgb, var(--color-highlight) 6%, transparent)",
-
   transition:
     "transform 140ms ease, color 140ms ease, border-color 140ms ease, background 140ms ease, box-shadow 140ms ease"
 };
-
 function StepButton({ icon: Icon, label, onClick, accent }) {
   return (
     <IconButton
@@ -61,29 +52,20 @@ function StepButton({ icon: Icon, label, onClick, accent }) {
         inlineSize: 32,
         blockSize: 32,
         minInlineSize: 32,
-
         padding: 0,
-
         flex: "0 0 auto",
-
         borderRadius: "var(--shape-md)",
-
         color: accent,
-
         border: "1px solid color-mix(in srgb, currentColor 58%, transparent)",
-
         background: "color-mix(in srgb, var(--color-bg-deep) 90%, transparent)",
-
         boxShadow:
           "inset 0 1px 0 color-mix(in srgb, var(--color-highlight) 5%, transparent)",
-
         transition:
           "transform 140ms ease, background 140ms ease, box-shadow 140ms ease, border-color 140ms ease"
       }}
     />
   );
 }
-
 function PerformanceCard({
   label,
   value,
@@ -111,7 +93,9 @@ function PerformanceCard({
         boxShadow:
           "0 0 0.85rem color-mix(in srgb, var(--control-accent) 9%, transparent)"
       }}
-      style={{ "--control-accent": accent }}
+      style={{
+        "--control-accent": accent
+      }}
     >
       <Stack
         gap={0.75}
@@ -152,7 +136,11 @@ function PerformanceCard({
               accent={accent}
             />
           ) : (
-            <span style={{ width: 32 }} />
+            <span
+              style={{
+                width: 32
+              }}
+            />
           )}
 
           <Typography
@@ -178,14 +166,17 @@ function PerformanceCard({
               accent={accent}
             />
           ) : (
-            <span style={{ width: 32 }} />
+            <span
+              style={{
+                width: 32
+              }}
+            />
           )}
         </Stack>
       </Stack>
     </Card>
   );
 }
-
 function PerformanceControls({
   song,
   currentTempo,
@@ -194,10 +185,7 @@ function PerformanceControls({
   onTempoChange,
   onKeyShiftChange
 }) {
-  const noteRange = `${song.note_range_min || "C2"} – ${
-    song.note_range_max || "C5"
-  }`;
-
+  const noteRange = `${song.note_range_min || "C2"} – ${song.note_range_max || "C5"}`;
   return (
     <Stack
       direction="row"
@@ -208,34 +196,33 @@ function PerformanceControls({
       }}
     >
       <PerformanceCard
-        label="Темп"
+        label={translateSaved("Темп")}
         value={`${currentTempo} BPM`}
         accent={CONTROL_ACCENTS.tempo}
         onDecrease={() => onTempoChange(-1)}
         onIncrease={() => onTempoChange(1)}
-        decreaseLabel="Уменьшить темп на 1 BPM"
-        increaseLabel="Увеличить темп на 1 BPM"
+        decreaseLabel={translateSaved("Уменьшить темп на 1 BPM")}
+        increaseLabel={translateSaved("Увеличить темп на 1 BPM")}
       />
       <PerformanceCard
-        label="Тональность"
+        label={translateSaved("Тональность")}
         value={compactKey}
         accent={CONTROL_ACCENTS.key}
         leftIcon={ChevronLeft}
         rightIcon={ChevronRight}
         onDecrease={() => onKeyShiftChange(clamp(keyShift - 1, -12, 12))}
         onIncrease={() => onKeyShiftChange(clamp(keyShift + 1, -12, 12))}
-        decreaseLabel="Понизить тональность"
-        increaseLabel="Повысить тональность"
+        decreaseLabel={translateSaved("Понизить тональность")}
+        increaseLabel={translateSaved("Повысить тональность")}
       />
       <PerformanceCard
-        label="Диапазон"
+        label={translateSaved("Диапазон")}
         value={noteRange}
         accent={CONTROL_ACCENTS.range}
       />
     </Stack>
   );
 }
-
 function TransportButton({ icon, label, onClick }) {
   return (
     <IconButton
@@ -249,37 +236,32 @@ function TransportButton({ icon, label, onClick }) {
     />
   );
 }
-
 function PlayButton({ isPlaying, onClick }) {
   return (
     <Button
       variant="primary"
-      aria-label={isPlaying ? "Пауза" : "Воспроизвести"}
-      title={isPlaying ? "Пауза" : "Воспроизвести"}
+      aria-label={
+        isPlaying ? translateSaved("Пауза") : translateSaved("Воспроизвести")
+      }
+      title={
+        isPlaying ? translateSaved("Пауза") : translateSaved("Воспроизвести")
+      }
       onClick={onClick}
       sx={{
         inlineSize: 58,
         blockSize: 58,
         minInlineSize: 58,
-
         padding: 0,
-
         display: "grid",
         placeItems: "center",
-
         borderRadius: "50%",
-
         color: "var(--color-text)",
-
         background:
           "linear-gradient(145deg, var(--color-primary-hover), var(--color-primary-strong))",
-
         border:
           "1px solid color-mix(in srgb, var(--color-highlight) 54%, var(--color-primary))",
-
         boxShadow:
           "0 0 0.85rem color-mix(in srgb, var(--color-primary) 52%, transparent), 0 0 1.9rem color-mix(in srgb, var(--color-primary-strong) 22%, transparent), inset 0 1px 0 color-mix(in srgb, var(--color-highlight) 48%, transparent)",
-
         transition:
           "transform 150ms ease, filter 150ms ease, box-shadow 150ms ease"
       }}
@@ -298,7 +280,6 @@ function PlayButton({ isPlaying, onClick }) {
     </Button>
   );
 }
-
 function TransportButtons({ isPlaying, onSkip, onTogglePlay, onStop }) {
   return (
     <Stack
@@ -306,27 +287,30 @@ function TransportButtons({ isPlaying, onSkip, onTogglePlay, onStop }) {
       align="center"
       justify="center"
       gap={0.75}
-      aria-label="Управление воспроизведением"
+      aria-label={translateSaved("Управление воспроизведением")}
     >
       <TransportButton
         icon={SkipBack}
-        label="Назад на 5 секунд"
+        label={translateSaved("Назад на 5 секунд")}
         onClick={() => onSkip(-5)}
       />
 
       <PlayButton isPlaying={isPlaying} onClick={onTogglePlay} />
 
-      <TransportButton icon={Square} label="Остановить" onClick={onStop} />
+      <TransportButton
+        icon={Square}
+        label={translateSaved("Остановить")}
+        onClick={onStop}
+      />
 
       <TransportButton
         icon={SkipForward}
-        label="Вперёд на 5 секунд"
+        label={translateSaved("Вперёд на 5 секунд")}
         onClick={() => onSkip(5)}
       />
     </Stack>
   );
 }
-
 export default function ConsoleCenter(props) {
   return (
     <Stack gap={1.15} align="center" justify="flex-end">

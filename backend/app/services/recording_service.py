@@ -60,6 +60,7 @@ class RecordingSession:
         blocksize: int = 64,
         music_gain: float = 1.0,
         effects: dict[str, float] | None = None,
+        latency: str | float = "low",
     ):
         self.session_id = session_id
         self.song_id = song_id
@@ -80,14 +81,7 @@ class RecordingSession:
         self._frames_written = 0
         self._closed = False
         self._monitoring_enabled = monitoring_enabled
-        input_info = (
-            sd.query_devices(device_id, kind="input")
-            if device_id is not None
-            else sd.query_devices(kind="input")
-        )
-        host_api = sd.query_hostapis(input_info["hostapi"])["name"].casefold()
-        requires_duplex_capture = "wdm-ks" in host_api and output_device_id is not None
-        if monitoring_enabled or requires_duplex_capture:
+        if monitoring_enabled:
             # Use the selected output, not Windows' default device. With an
             # audio interface those can be different endpoints.
             output_info = (
@@ -103,7 +97,7 @@ class RecordingSession:
                 channels=(channels, output_channels),
                 device=(device_id, output_device_id),
                 blocksize=blocksize,
-                latency="low",
+                latency=latency,
                 callback=self._monitoring_callback,
             )
         else:
@@ -112,7 +106,7 @@ class RecordingSession:
                 channels=channels,
                 device=device_id,
                 blocksize=blocksize,
-                latency="low",
+                latency=latency,
                 callback=self._callback,
             )
 
@@ -248,6 +242,37 @@ _sessions: dict[str, RecordingSession] = {}
 _sessions_lock = threading.Lock()
 
 
+def _capture_attempts(
+    device_id: int | None,
+    output_device_id: int | None,
+    sample_rate: int,
+    blocksize: int,
+    monitoring_enabled: bool,
+) -> list[tuple[int | None, int | None, int, int, bool, str]]:
+    """Build conservative fallbacks for Windows drivers with incomplete PortAudio support."""
+    attempts = [
+        (device_id, output_device_id, sample_rate, blocksize, monitoring_enabled, "low"),
+        (device_id, None, sample_rate, 0, False, "high"),
+    ]
+    with contextlib.suppress(Exception):
+        info = sd.query_devices(device_id, kind="input") if device_id is not None else None
+        if info:
+            attempts.append(
+                (device_id, None, int(round(float(info["default_samplerate"]))), 0, False, "high")
+            )
+    with contextlib.suppress(Exception):
+        default_info = sd.query_devices(kind="input")
+        attempts.append(
+            (None, None, int(round(float(default_info["default_samplerate"]))), 0, False, "high")
+        )
+    attempts.append((None, None, sample_rate, 0, False, "high"))
+    unique: list[tuple[int | None, int | None, int, int, bool, str]] = []
+    for attempt in attempts:
+        if attempt not in unique:
+            unique.append(attempt)
+    return unique
+
+
 def backend_available() -> tuple[bool, str | None]:
     return _AUDIO_BACKEND_AVAILABLE, _AUDIO_BACKEND_ERROR
 
@@ -270,27 +295,41 @@ def start_recording(
 
     session_id = uuid.uuid4().hex
     session: RecordingSession | None = None
-    try:
-        session = RecordingSession(
-            session_id,
-            song_id,
-            device_id,
-            output_device_id,
-            sample_rate,
-            channels,
-            gain,
-            monitoring_enabled,
-            playback_offset_sec,
-            blocksize,
-            music_gain,
-            effects,
-        )
-        session.start()
-    except Exception as exc:  # Audio drivers raise implementation-specific errors.
-        if session is not None:
-            with contextlib.suppress(Exception):
-                session.close()
-        raise RuntimeError(f"Could not start recording stream: {exc}") from exc
+    errors: list[str] = []
+    for input_id, output_id, rate, frames, monitor, latency in _capture_attempts(
+        device_id, output_device_id, sample_rate, blocksize, monitoring_enabled
+    ):
+        try:
+            session = RecordingSession(
+                session_id,
+                song_id,
+                input_id,
+                output_id,
+                rate,
+                channels,
+                gain,
+                monitor,
+                playback_offset_sec,
+                frames,
+                music_gain,
+                effects,
+                latency,
+            )
+            session.start()
+            if errors:
+                logger.warning(
+                    "Recording started with a compatibility fallback after: %s", errors[-1]
+                )
+            break
+        except Exception as exc:  # Audio drivers raise implementation-specific errors.
+            errors.append(str(exc))
+            if session is not None:
+                with contextlib.suppress(Exception):
+                    session.close()
+            session = None
+    if session is None:
+        detail = errors[-1] if errors else "no compatible capture mode"
+        raise RuntimeError(f"Could not start recording stream: {detail}")
     with _sessions_lock:
         _sessions[session_id] = session
     return session_id

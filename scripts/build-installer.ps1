@@ -79,7 +79,6 @@ $AppExe = "A&D Voice.exe"
 $ModelCheck = Join-Path $Backend "AI\install_models.py"
 $InnoTemplate = Join-Path $Root "scripts\karaoke-studio.iss"
 $ThemeIconsDir = Join-Path $Frontend "assets\icons"
-$ThemeIconPreviewsDir = Join-Path $Frontend "src\assets\icons"
 $SignScript = Join-Path $Root "scripts\sign-windows.ps1"
 $SetupIcon = Join-Path $Frontend "assets\icons\app.ico"
 
@@ -114,8 +113,8 @@ $ModelsSchemaVersion    = "models-7z-v2"
 $FinalizeSchemaVersion  = "finalize-v1"
 $ElectronSchemaVersion  = "electron-v3-bundled-msst"
 $RuntimeSchemaVersion   = "runtime-zip-v1"
-$InstallerSchemaVersion = "installer-bootstrap-v1"
-$IsoSchemaVersion       = "iso-download-models-v7-runtime-msst"
+$InstallerSchemaVersion = "installer-bootstrap-v2-theme-model-choice"
+$IsoSchemaVersion       = "iso-optional-models-v8-runtime-msst"
 $IsoViewSchemaVersion   = "iso-view-hardlinks-v1"
 $ElectronSignSchemaVersion  = "electron-sign-v1"
 $ElectronSmokeSchemaVersion = "electron-smoke-v1"
@@ -620,7 +619,6 @@ function Get-InnoInputFingerprint {
         (Get-SmallFileFingerprint @(
             $InnoTemplate,
             $ThemeIconsDir,
-            $ThemeIconPreviewsDir,
             $SetupIcon,
             $SignScript,
             $ChecksumScript
@@ -2115,7 +2113,7 @@ function Build-Installer {
     Write-Host ""
 
     Write-Host "Bootstrap-only installer: application runtime stays external."
-    Write-Host "AI models are downloaded once from pinned public repositories during installation."
+    Write-Host "AI models are optionally downloaded from pinned public repositories during installation."
     Write-Host "Inno does not recompress Electron/backend/Torch/CUDA."
     Write-Host ""
 
@@ -2125,7 +2123,6 @@ function Build-Installer {
         "/DMyAppExeName=$AppExe" `
         "/DSetupIcon=$SetupIcon" `
         "/DThemeIconsDir=$ThemeIconsDir" `
-        "/DThemeIconPreviewsDir=$ThemeIconPreviewsDir" `
         "/DOutputDir=$runDir" `
         $InnoTemplate
 
@@ -2344,7 +2341,7 @@ function Create-DistributionIso {
     Write-Host "  $IsoView"
     Write-Host ("  Payload: {0} files, {1:N2} GB" -f $viewStats.Files,($viewStats.Bytes / 1GB))
     Write-Host "  Runtime: hardlink -> build\\packages\\app-runtime.zip"
-    Write-Host "  Models:  downloaded once from official public repositories during installation"
+    Write-Host "  Models:  optional download during installation or later from application settings"
     Write-Host "  MSST:    bundled inside the application runtime"
     Write-Host ""
 

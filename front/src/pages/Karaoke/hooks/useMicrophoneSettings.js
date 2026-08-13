@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../../api/client";
 import useAsyncQueue from "../../../hooks/useAsyncQueue";
 import useMountedRef from "../../../hooks/useMountedRef";
+import { translateSaved } from "../../../i18n/runtime";
 import { getAudioPreferences } from "../../../utils/audio-preferences";
 import { getErrorMessage } from "../../../utils/errors";
 import {
@@ -9,8 +10,11 @@ import {
   normalizeAudioRuntimeSettings
 } from "../utils/audio-settings";
 
-const DEFAULT_EFFECTS = Object.freeze({ reverb: 0, echo: 0, delay: 0 });
-
+const DEFAULT_EFFECTS = Object.freeze({
+  reverb: 0,
+  echo: 0,
+  delay: 0
+});
 export default function useMicrophoneSettings({ audioSettings, onError }) {
   const [microphoneVolume, setMicrophoneVolume] = useState(1);
   const [microphoneEffects, setMicrophoneEffects] = useState(DEFAULT_EFFECTS);
@@ -23,7 +27,6 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
   const effectsInitializedRef = useRef(false);
   const mountedRef = useMountedRef();
   const { run: enqueueUpdate } = useAsyncQueue();
-
   useEffect(() => {
     const syncAudioPreferences = (event) => {
       const next = event.detail || getAudioPreferences();
@@ -36,7 +39,6 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
         syncAudioPreferences
       );
   }, []);
-
   useEffect(() => {
     if (!audioSettings) return;
     const nextVolume = normalizeAudioRuntimeSettings(audioSettings).volume;
@@ -44,7 +46,6 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
       Math.abs(current - nextVolume) < 0.0001 ? current : nextVolume
     );
   }, [audioSettings]);
-
   useEffect(() => {
     const syncAudioSettings = (event) => {
       if (!event.detail) return;
@@ -54,7 +55,6 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
       setMonitoringEnabled(normalized.monitoringEnabled);
       setDirectOutputDeviceId(normalized.outputDeviceId);
     };
-
     globalThis.addEventListener?.("audio-settings-changed", syncAudioSettings);
     return () =>
       globalThis.removeEventListener?.(
@@ -62,13 +62,11 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
         syncAudioSettings
       );
   }, []);
-
   useEffect(() => {
     if (!audioSettings || effectsInitializedRef.current) return;
     effectsInitializedRef.current = true;
     setMicrophoneEffects(normalizeAudioEffects(audioSettings));
   }, [audioSettings]);
-
   useEffect(() => {
     if (!audioSettings) return;
     const normalized = normalizeAudioRuntimeSettings(audioSettings);
@@ -76,7 +74,6 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
     setMonitoringEnabled(normalized.monitoringEnabled);
     setDirectOutputDeviceId(normalized.outputDeviceId);
   }, [audioSettings]);
-
   const updateMicrophone = useCallback(
     (patch) =>
       enqueueUpdate(async () => {
@@ -91,7 +88,9 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
           }
           try {
             globalThis.dispatchEvent?.(
-              new CustomEvent("audio-settings-changed", { detail: updated })
+              new CustomEvent("audio-settings-changed", {
+                detail: updated
+              })
             );
           } catch {
             // CustomEvent is unavailable in a few non-browser test runtimes.
@@ -100,7 +99,9 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
         } catch (error) {
           if (mountedRef.current) {
             onError(
-              `Не удалось сохранить настройки микрофона: ${getErrorMessage(error, "неизвестная ошибка")}`
+              translateSaved("Не удалось сохранить настройки микрофона: {0}", {
+                0: getErrorMessage(error, translateSaved("неизвестная ошибка"))
+              })
             );
           }
           return null;
@@ -108,7 +109,6 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
       }),
     [enqueueUpdate, mountedRef, onError]
   );
-
   return {
     microphoneVolume,
     setMicrophoneVolume,

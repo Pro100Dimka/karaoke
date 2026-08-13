@@ -1,5 +1,5 @@
 import { Trash2 } from "lucide-react";
-
+import { translateSaved } from "../../../../i18n/runtime";
 import { Button, Grid, Select, Stack, Typography } from "../../../../theme/ui";
 import { getErrorMessage } from "../../../../utils/errors";
 
@@ -9,19 +9,27 @@ export async function runMemoryAction({ request, getMessage, notify }) {
     await notify(getMessage(result));
     return true;
   } catch (error) {
-    await notify(getErrorMessage(error, "Не удалось выполнить действие"));
+    await notify(
+      getErrorMessage(error, translateSaved("Не удалось выполнить действие"))
+    );
     return false;
   }
 }
-
 export function MemoryStats({ size, free }) {
   const items = [
-    ["Всего занято", size?.total_human ?? "—"],
+    [translateSaved("Всего занято"), size?.total_human ?? "—"],
     ...(free
-      ? [["Свободно на диске", `${free.free_human} из ${free.total_human}`]]
+      ? [
+          [
+            translateSaved("Свободно на диске"),
+            translateSaved("{0} из {1}", {
+              0: free.free_human,
+              1: free.total_human
+            })
+          ]
+        ]
       : [])
   ];
-
   return (
     <Grid
       minItemWidth="min(100%, 13rem)"
@@ -40,19 +48,23 @@ export function MemoryStats({ size, free }) {
     </Grid>
   );
 }
-
 export function MemoryActions({ actions, notify }) {
   return (
     <Stack direction="row" gap={0.75} wrap className="settings-memory-actions">
       {actions.map(([id, label, icon, variant, request, getMessage]) => {
         const Icon = icon;
-
         return (
           <Button
             key={id}
             variant={variant === "ghost" ? "outline" : "solid"}
             tone="primary"
-            onClick={() => runMemoryAction({ request, getMessage, notify })}
+            onClick={() =>
+              runMemoryAction({
+                request,
+                getMessage,
+                notify
+              })
+            }
           >
             {Icon && <Icon size={15} />}
             {label}
@@ -62,18 +74,25 @@ export function MemoryActions({ actions, notify }) {
     </Stack>
   );
 }
-
 export function OptimizeSong({ value, options, onChange, onOptimize }) {
   return (
     <Stack
       gap={0.65}
       className="settings-screen-section settings-optimize-section"
     >
-      <Typography variant="body2">Оптимизация песни</Typography>
+      <Typography variant="body2">
+        {translateSaved("Оптимизация песни")}
+      </Typography>
 
-      <Grid columns={2} gap="var(--space-3)" sx={{ alignItems: "end" }}>
+      <Grid
+        columns={2}
+        gap="var(--space-3)"
+        sx={{
+          alignItems: "end"
+        }}
+      >
         <Select
-          label="Песня"
+          label={translateSaved("Песня")}
           value={value}
           options={options}
           onChange={onChange}
@@ -81,7 +100,7 @@ export function OptimizeSong({ value, options, onChange, onOptimize }) {
 
         <Button variant="outline" disabled={!value} onClick={onOptimize}>
           <Trash2 size={15} />
-          Оптимизировать
+          {translateSaved("Оптимизировать")}
         </Button>
       </Grid>
     </Stack>

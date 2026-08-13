@@ -54,7 +54,7 @@ function ServiceContent({ service, onOpen, onClose }) {
 
   return (
     <Grid columns={2} gap="var(--space-3)" sx={{ padding: "1rem" }}>
-      {SERVICE_SCREENS.map(({ id, title, text }) => (
+      {SERVICE_SCREENS.map(({ id }) => (
         <Card
           key={id}
           as="button"
@@ -82,10 +82,10 @@ function ServiceContent({ service, onOpen, onClose }) {
             sx={{ height: "100%" }}
           >
             <Typography variant="body1" sx={{ fontWeight: 800 }}>
-              {title}
+              {t(`settings.service.${id}.title`)}
             </Typography>
             <Typography variant="body2" tone="muted">
-              {text}
+              {t(`settings.service.${id}.text`)}
             </Typography>
             <Typography
               variant="caption"
@@ -179,7 +179,7 @@ export default function SettingsContent({
       <ConfigForm
         fields={fields}
         className={section.className}
-        context={{ form, radio, audio, onChange, onFieldBlur }}
+        context={{ form, radio, audio, onChange, onFieldBlur, t }}
         renderers={SETTINGS_RENDERERS}
         sx={{ padding: "0 1rem" }}
       />

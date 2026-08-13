@@ -1,5 +1,6 @@
 import { Plus, Search, UsersRound } from "lucide-react";
 import { Card } from "../../../../components/ui";
+import { translateSaved } from "../../../../i18n/runtime";
 import { Stack } from "../../../../theme/ui";
 
 export default function LibraryActions({
@@ -15,20 +16,34 @@ export default function LibraryActions({
   setQuery
 }) {
   const actions = [
-    !roomActive && [UsersRound, "Петь вместе", "btn-ghost", onOpenRoom],
-    canManageLibrary && [Plus, "Добавить песню", "btn-primary", onAdd]
+    !roomActive && [
+      UsersRound,
+      translateSaved("Петь вместе"),
+      "btn-ghost",
+      onOpenRoom
+    ],
+    canManageLibrary && [
+      Plus,
+      translateSaved("Добавить песню"),
+      "btn-primary",
+      onAdd
+    ]
   ].filter(Boolean);
   return (
     <Stack direction="row" justify="space-between">
       <Card
         className="library-search"
         variant="neon"
-        cardPanel={{ style: { background: "unset" } }}
+        cardPanel={{
+          style: {
+            background: "unset"
+          }
+        }}
       >
         <Search className="library-search-icon" size={14} />
         <input
           className="input library-search-input"
-          placeholder="Поиск..."
+          placeholder={translateSaved("Поиск...")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -41,7 +56,7 @@ export default function LibraryActions({
             variant="glass"
             className={`btn ${className} library-action-card`}
             onClick={onClick}
-            disabled={importing && text === "Добавить песню"}
+            disabled={importing && text === translateSaved("Добавить песню")}
           >
             <Icon size={15} />
             {text}

@@ -1,3 +1,4 @@
+import { translateSaved } from "../../../../i18n/runtime";
 import { midiToWesternNote } from "../../utils/format";
 import {
   getMelodyCue,
@@ -12,10 +13,8 @@ const VIEW = {
   keyboardWidth: 48,
   seconds: 10
 };
-
 const BLACK_KEY_CLASSES = new Set([1, 3, 6, 8, 10]);
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-
 export default function MelodyRoll({
   notes,
   currentTime,
@@ -62,7 +61,9 @@ export default function MelodyRoll({
   const rowHeight = height / pitchRange;
   const noteHeight = Math.min(15, Math.max(5, rowHeight * 0.72));
   const lanes = Array.from(
-    { length: pitchRange },
+    {
+      length: pitchRange
+    },
     (_, index) => minMidi + index
   );
   const x = (time) =>
@@ -70,7 +71,6 @@ export default function MelodyRoll({
     ((time - viewStart) / windowSeconds) * (width - noteLaneStart);
   const y = (midi) => height - (midi - minMidi + 1) * rowHeight;
   const playheadX = x(currentTime);
-
   return (
     <div className="melody-roll">
       <svg
@@ -78,7 +78,7 @@ export default function MelodyRoll({
         width="100%"
         height="100%"
         preserveAspectRatio="none"
-        aria-label="Ноты мелодии"
+        aria-label={translateSaved("Ноты мелодии")}
       >
         <defs>
           <linearGradient id="piano-roll-bg" x1="0" x2="1" y1="0" y2="0">
@@ -127,12 +127,10 @@ export default function MelodyRoll({
             (midi) => !BLACK_KEY_CLASSES.has(((midi % 12) + 12) % 12)
           );
           const naturalHeight = height / naturals.length;
-
           return naturals.map((midi, index) => {
             const keyTop = height - (index + 1) * naturalHeight + 0.3;
             const keyHeight = Math.max(2, naturalHeight - 0.6);
             const isActive = activeMidi === midi;
-
             return (
               <g key={`white-key-${midi}`}>
                 <rect
@@ -169,7 +167,6 @@ export default function MelodyRoll({
           const naturalIndex = new Map(
             naturals.map((midi, index) => [midi, index])
           );
-
           return lanes
             .filter((midi) => BLACK_KEY_CLASSES.has(((midi % 12) + 12) % 12))
             .map((midi) => {
@@ -178,13 +175,11 @@ export default function MelodyRoll({
                 .find((value) => value < midi);
               const index = naturalIndex.get(lowerNatural);
               if (index == null) return null;
-
               const boundaryY = height - (index + 1) * naturalHeight;
               const blackHeight = naturalHeight * 0.62;
               const keyY = boundaryY - blackHeight / 2;
               const keyWidth = keyboardWidth * 0.64;
               const isActive = activeMidi === midi;
-
               return (
                 <g key={`black-key-${midi}`}>
                   <rect

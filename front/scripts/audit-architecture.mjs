@@ -34,6 +34,7 @@ forbid(
   /(?:window\.|globalThis\.)?localStorage/,
   new Set([
     "src/utils/theme.js",
+    "src/utils/language.js",
     "src/utils/storage.js",
     "src/pages/Karaoke/utils/preferences.js"
   ])

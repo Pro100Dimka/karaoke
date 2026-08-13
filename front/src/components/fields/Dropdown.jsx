@@ -1,6 +1,7 @@
 import { Check, ChevronDown } from "lucide-react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { translateSaved } from "../../i18n/runtime";
 import Button from "./button";
 
 export default function Dropdown({
@@ -8,7 +9,7 @@ export default function Dropdown({
   value,
   onChange,
   options = [],
-  placeholder = "Выберите…",
+  placeholder = translateSaved("Выберите…"),
   disabled = false,
   className = "",
   onBlur,
@@ -27,10 +28,8 @@ export default function Dropdown({
     (option) => String(option.value) === String(value)
   );
   const selected = selectedIndex >= 0 ? options[selectedIndex] : null;
-
   useEffect(() => {
     if (!open) return undefined;
-
     const close = (event) => {
       if (
         !ref.current?.contains(event.target) &&
@@ -53,11 +52,9 @@ export default function Dropdown({
       document.removeEventListener("keydown", closeOnEscape, true);
     };
   }, [open]);
-
   useEffect(() => {
     if (disabled) setOpen(false);
   }, [disabled]);
-
   useEffect(() => {
     const closeWhenAnotherOpens = (event) => {
       if (event.detail !== eventIdRef.current) setOpen(false);
@@ -69,17 +66,14 @@ export default function Dropdown({
         closeWhenAnotherOpens
       );
   }, []);
-
   useLayoutEffect(() => {
     if (!open || !ref.current) return undefined;
-
     const updatePosition = () => {
       const rect = ref.current.getBoundingClientRect();
       const viewportGap = 12;
       const estimatedHeight = Math.min(320, options.length * 48 + 16);
       const spaceBelow = window.innerHeight - rect.bottom - viewportGap;
       const openUp = spaceBelow < estimatedHeight && rect.top > spaceBelow;
-
       setMenuStyle({
         position: "fixed",
         zIndex: 2000,
@@ -90,7 +84,6 @@ export default function Dropdown({
         maxHeight: `${Math.max(120, Math.min(320, openUp ? rect.top - viewportGap : spaceBelow))}px`
       });
     };
-
     updatePosition();
     window.addEventListener("resize", updatePosition);
     window.addEventListener("scroll", updatePosition, true);
@@ -99,7 +92,6 @@ export default function Dropdown({
       window.removeEventListener("scroll", updatePosition, true);
     };
   }, [open, options.length]);
-
   const handleBlur = (event) => {
     if (!onBlur) return;
     const blurEvent = event;
@@ -114,11 +106,9 @@ export default function Dropdown({
       onBlur(blurEvent);
     });
   };
-
   const handleTriggerKeyDown = (event) => {
     onKeyDown?.(event);
     if (event.defaultPrevented || disabled) return;
-
     if (["ArrowDown", "Enter", " "].includes(event.key)) {
       event.preventDefault();
       if (!open) {
@@ -134,15 +124,15 @@ export default function Dropdown({
       setOpen(false);
     }
   };
-
   const toggle = () => {
     if (!open)
       window.dispatchEvent(
-        new CustomEvent("karaoke-dropdown-open", { detail: eventIdRef.current })
+        new CustomEvent("karaoke-dropdown-open", {
+          detail: eventIdRef.current
+        })
       );
     setOpen((current) => !current);
   };
-
   return (
     <div className={`app-dropdown ${className}`} ref={ref}>
       <Button

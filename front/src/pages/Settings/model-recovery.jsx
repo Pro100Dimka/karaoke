@@ -1,10 +1,10 @@
 import { AlertTriangle, CheckCircle2, Download } from "lucide-react";
 import { useState } from "react";
-
 import { api } from "../../api/client";
 import { POLLING_INTERVALS } from "../../config/runtime";
 import { usePolling } from "../../hooks/usePolling";
 import { useI18n } from "../../i18n";
+import { translateSaved } from "../../i18n/runtime";
 import { Button, Card, Progress, Stack, Typography } from "../../theme/ui";
 import { getErrorMessage } from "../../utils/errors";
 
@@ -16,9 +16,10 @@ export default function ModelRecovery() {
     api.getAiModelsStatus,
     POLLING_INTERVALS.modelDownload,
     [],
-    { shouldContinue: (status) => status?.state === "downloading" }
+    {
+      shouldContinue: (status) => status?.state === "downloading"
+    }
   );
-
   const downloading = starting || data?.state === "downloading";
   const ready = data?.ready === true;
   const missing = data?.models?.filter((model) => !model.ready) ?? [];
@@ -31,13 +32,17 @@ export default function ModelRecovery() {
   const remainingSeconds = Number(data?.remaining_seconds);
   const downloadDetail =
     downloading && totalBytes > 0
-      ? `${(downloadedBytes / 1024 ** 3).toFixed(1)} / ${(totalBytes / 1024 ** 3).toFixed(1)} ГБ${
-          remainingSeconds >= 0
-            ? ` · ~${Math.max(1, Math.ceil(remainingSeconds / 60))} мин`
-            : ""
-        }`
+      ? translateSaved("{0} / {1} ГБ{2}", {
+          0: (downloadedBytes / 1024 ** 3).toFixed(1),
+          1: (totalBytes / 1024 ** 3).toFixed(1),
+          2:
+            remainingSeconds >= 0
+              ? translateSaved("· ~{0} мин", {
+                  0: Math.max(1, Math.ceil(remainingSeconds / 60))
+                })
+              : ""
+        })
       : "";
-
   const startDownload = async () => {
     setStarting(true);
     setActionError("");
@@ -50,21 +55,37 @@ export default function ModelRecovery() {
       setStarting(false);
     }
   };
-
   return (
     <Card
       className="settings-neon-card"
-      sx={{ margin: "0 1rem 1rem", minWidth: 0 }}
-      cardContent={{ style: { padding: "1rem 1.1rem" } }}
+      sx={{
+        margin: "0 1rem 1rem",
+        minWidth: 0
+      }}
+      cardContent={{
+        style: {
+          padding: "1rem 1.1rem"
+        }
+      }}
     >
-      <Stack gap={0.65} sx={{ minWidth: 0 }}>
+      <Stack
+        gap={0.65}
+        sx={{
+          minWidth: 0
+        }}
+      >
         <Stack direction="row" align="center" gap={0.55}>
           {ready ? (
             <CheckCircle2 size={18} aria-hidden="true" />
           ) : (
             <AlertTriangle size={18} aria-hidden="true" />
           )}
-          <Typography variant="body1" sx={{ fontWeight: 800 }}>
+          <Typography
+            variant="body1"
+            sx={{
+              fontWeight: 800
+            }}
+          >
             {t("settings.ai.models.title")}
           </Typography>
         </Stack>
@@ -72,7 +93,9 @@ export default function ModelRecovery() {
         <Typography
           variant="body2"
           tone="muted"
-          sx={{ overflowWrap: "anywhere" }}
+          sx={{
+            overflowWrap: "anywhere"
+          }}
         >
           {ready
             ? t("settings.ai.models.ready")
@@ -101,7 +124,9 @@ export default function ModelRecovery() {
           <Typography
             tone="danger"
             variant="caption"
-            sx={{ overflowWrap: "anywhere" }}
+            sx={{
+              overflowWrap: "anywhere"
+            }}
           >
             {visibleError}
           </Typography>
@@ -112,7 +137,9 @@ export default function ModelRecovery() {
             variant="solid"
             onClick={startDownload}
             disabled={downloading}
-            sx={{ alignSelf: "start" }}
+            sx={{
+              alignSelf: "start"
+            }}
           >
             <Stack direction="row" align="center" gap={0.5}>
               <Download size={17} aria-hidden="true" />

@@ -8,6 +8,7 @@ import {
   useRef
 } from "react";
 import { api } from "../api/client";
+import { getSavedLanguage, saveLanguage } from "../utils/language";
 import { applyTheme, getSavedTheme } from "../utils/theme";
 
 export const AppSettingsContext = createContext(null);
@@ -68,6 +69,12 @@ export default function AppSettingsProvider({ children }) {
   useLayoutEffect(() => {
     applyTheme(state.settings?.theme ?? getSavedTheme());
   }, [state.settings?.theme]);
+  useLayoutEffect(() => {
+    if (!state.settings?.language) return;
+    const previous = getSavedLanguage();
+    const current = saveLanguage(state.settings.language);
+    if (previous !== current) globalThis.location?.reload();
+  }, [state.settings?.language]);
   useEffect(() => {
     isMounted.current = true;
     loadSettings().catch(() => {});

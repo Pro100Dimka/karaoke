@@ -2,11 +2,13 @@ import { api } from "../../../../api/client";
 import Table from "../../../../components/table";
 import { POLLING_INTERVALS } from "../../../../config/runtime";
 import { usePolling } from "../../../../hooks/usePolling";
+import { useI18n } from "../../../../i18n";
 import { Chip, Stack, Typography } from "../../../../theme/ui";
 import { getErrorMessage } from "../../../../utils/errors";
 import { HISTORY_ACTIONS, HISTORY_COLUMNS, RECORDING_STATUSES } from "./config";
 
 export default function History() {
+  const { language, t } = useI18n();
   const { data: history, error } = usePolling(
     api.getHistory,
     POLLING_INTERVALS.history,
@@ -15,7 +17,7 @@ export default function History() {
 
   return (
     <Stack gap={1} className="settings-table-screen">
-      <Typography variant="h3">История</Typography>
+      <Typography variant="h3">{t("settings.history.title")}</Typography>
 
       {error && (
         <Typography variant="body2" sx={{ color: "var(--ui-danger)" }}>
@@ -25,64 +27,70 @@ export default function History() {
 
       <div className="settings-table-wrap">
         <Table
-          columns={HISTORY_COLUMNS}
+          columns={HISTORY_COLUMNS.map((key) => [
+            key,
+            t(`settings.history.${key}`)
+          ])}
           data={history ?? []}
           getRowKey={(item, index) =>
             item.id ??
             `${item.song_title}-${item.kind}-${item.timestamp ?? index}`
           }
-          renderRow={getHistoryRow}
-          emptyText="История пуста"
+          renderRow={(item) => getHistoryRow(item, t, language)}
+          emptyText={t("settings.history.empty")}
         />
       </div>
     </Stack>
   );
 }
 
-const formatDuration = (value) => {
+const formatDuration = (value, t) => {
   if (value == null) return "—";
   const seconds = Number(value);
   return Number.isFinite(seconds) && seconds >= 0
-    ? `${Math.round(seconds)} с`
+    ? t("settings.history.seconds", { count: Math.round(seconds) })
     : "—";
 };
 
-const formatTimestamp = (value) => {
+const formatTimestamp = (value, language) => {
   if (!value) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("ru-RU");
+  return Number.isNaN(date.getTime())
+    ? "—"
+    : date.toLocaleString({ uk: "uk-UA", ru: "ru-RU", en: "en-US" }[language]);
 };
 
-const getHistoryRow = ({
-  song_title,
-  kind,
-  status,
-  duration_seconds,
-  timestamp
-}) => [
+const getHistoryRow = (
+  { song_title, kind, status, duration_seconds, timestamp },
+  t,
+  language
+) => [
   [song_title ?? "—", "history-song"],
-  [HISTORY_ACTIONS[kind] ?? kind ?? "—", "text-secondary"],
-  [renderStatus(kind, status)],
-  [formatDuration(duration_seconds), "mono text-muted"],
-  [formatTimestamp(timestamp), "text-muted"]
+  [
+    HISTORY_ACTIONS.has(kind) ? t(`settings.history.${kind}`) : (kind ?? "—"),
+    "text-secondary"
+  ],
+  [renderStatus(kind, status, t)],
+  [formatDuration(duration_seconds, t), "mono text-muted"],
+  [formatTimestamp(timestamp, language), "text-muted"]
 ];
 
 const PROCESSING_STATUSES = {
-  pending: ["Ожидание", "default"],
-  queued: ["В очереди", "default"],
-  processing: ["Обрабатывается", "primary"],
-  cancelling: ["Отмена...", "primary"],
-  cancelled: ["Отменено", "danger"],
-  done: ["Готово", "success"],
-  error: ["Ошибка", "danger"]
+  pending: "default",
+  queued: "default",
+  processing: "primary",
+  cancelling: "primary",
+  cancelled: "danger",
+  done: "success",
+  error: "danger"
 };
 
-const renderStatus = (kind, status) => {
+const renderStatus = (kind, status, t) => {
   if (kind === "processing") {
-    const [label, tone] = PROCESSING_STATUSES[status] ?? [
-      status || "Неизвестно",
-      "default"
-    ];
+    const tone = PROCESSING_STATUSES[status] ?? "default";
+    const label = status
+      ? t(`status.${status}`, {}, status)
+      : t("status.unknown");
 
     return (
       <Chip size="sm" tone={tone}>
@@ -93,7 +101,9 @@ const renderStatus = (kind, status) => {
 
   return (
     <Typography as="span" variant="body2" tone="muted">
-      {RECORDING_STATUSES[status] ?? status ?? "—"}
+      {RECORDING_STATUSES.has(status)
+        ? t(`settings.history.${status}`)
+        : (status ?? "—")}
     </Typography>
   );
 };

@@ -10,6 +10,7 @@ import {
 } from "react";
 import { Button } from "../components/fields";
 import Modal from "../components/modal";
+import { translateSaved } from "../i18n/runtime";
 import {
   createDialogConfig,
   getDialogCloseResult,
@@ -17,12 +18,10 @@ import {
 } from "./dialog-utils";
 
 const DialogContext = createContext(null);
-
 function DialogModal({ dialog, onClose }) {
   const isConfirmation = dialog.kind === "confirm";
   const closeResult = getDialogCloseResult(dialog.kind);
   const Icon = isConfirmation ? AlertTriangle : Info;
-
   return (
     <Modal
       isOpen
@@ -62,72 +61,56 @@ function DialogModal({ dialog, onClose }) {
     </Modal>
   );
 }
-
 export function AppDialogProvider({ children }) {
   const [dialog, setDialog] = useState(null);
   const activeDialogRef = useRef(null);
-
   const closeDialog = useCallback((result) => {
     const activeDialog = activeDialogRef.current;
-
     if (!activeDialog) {
       return;
     }
-
     activeDialogRef.current = null;
     setDialog(null);
     activeDialog.resolve(result);
   }, []);
-
   const openDialog = useCallback((kind, message, options = {}) => {
     return new Promise((resolve) => {
       const previousDialog = activeDialogRef.current;
-
       if (previousDialog) {
         previousDialog.resolve(getDialogCloseResult(previousDialog.kind));
       }
-
       const nextDialog = {
         ...createDialogConfig(kind, message, options),
         resolve
       };
-
       activeDialogRef.current = nextDialog;
       setDialog(nextDialog);
     });
   }, []);
-
   const confirm = useCallback(
     (message, titleOrOptions) => {
       const options = normalizeDialogOptions(titleOrOptions);
-
       return openDialog("confirm", message, options);
     },
     [openDialog]
   );
-
   const alert = useCallback(
     (message, titleOrOptions) => {
       const options = normalizeDialogOptions(titleOrOptions);
-
       return openDialog("alert", message, options);
     },
     [openDialog]
   );
-
   useEffect(() => {
     return () => {
       const activeDialog = activeDialogRef.current;
-
       if (!activeDialog) {
         return;
       }
-
       activeDialogRef.current = null;
       activeDialog.resolve(getDialogCloseResult(activeDialog.kind));
     };
   }, []);
-
   const contextValue = useMemo(
     () => ({
       alert,
@@ -135,7 +118,6 @@ export function AppDialogProvider({ children }) {
     }),
     [alert, confirm]
   );
-
   return (
     <DialogContext.Provider value={contextValue}>
       {children}
@@ -144,15 +126,16 @@ export function AppDialogProvider({ children }) {
     </DialogContext.Provider>
   );
 }
-
 export function useAppDialog() {
   const context = useContext(DialogContext);
-
   if (!context) {
     throw new Error(
-      "useAppDialog должен использоваться внутри AppDialogProvider"
+      translateSaved(
+        translateSaved(
+          "useAppDialog должен использоваться внутри AppDialogProvider"
+        )
+      )
     );
   }
-
   return context;
 }

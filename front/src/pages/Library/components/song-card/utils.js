@@ -6,9 +6,10 @@ import {
   Settings2,
   Trash2
 } from "lucide-react";
+import { translateSaved } from "../../../../i18n/runtime";
 
 export function formatSongKey(value) {
-  if (!value) return "Тональность определяется";
+  if (!value) return translateSaved("Тональность определяется");
   return String(value)
     .trim()
     .replace(/\s+minor$/i, "m")
@@ -29,7 +30,7 @@ export function getSongActions({
   const primaryAction = isReady
     ? [
         Headphones,
-        "Прослушать записи",
+        translateSaved("Прослушать записи"),
         "ghost",
         () => onOpenRecordings(song),
         15
@@ -37,7 +38,7 @@ export function getSongActions({
     : canManageLibrary
       ? [
           AudioWaveform,
-          "Обработать песню",
+          translateSaved("Обработать песню"),
           "primary",
           () => onProcess(song),
           16,
@@ -51,20 +52,32 @@ export function getSongActions({
     ? [
         [
           Settings2,
-          "Настройки песни",
+          translateSaved("Настройки песни"),
           "ghost",
           () => onOpenSettings(song.id),
           14
         ],
-        [FolderOpen, "Открыть папку", "ghost", () => onOpenFolder(song), 14],
+        [
+          FolderOpen,
+          translateSaved("Открыть папку"),
+          "ghost",
+          () => onOpenFolder(song),
+          14
+        ],
         isReady && [
           RotateCcw,
-          "Переобработать MIDI",
+          translateSaved("Переобработать MIDI"),
           "ghost",
           () => onReprocess(song),
           14
         ],
-        [Trash2, "Удалить песню", "danger", () => onDelete(song), 15]
+        [
+          Trash2,
+          translateSaved("Удалить песню"),
+          "danger",
+          () => onDelete(song),
+          15
+        ]
       ].filter(Boolean)
     : [];
   return [primaryAction, ...managementActions].filter(Boolean);

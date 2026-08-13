@@ -7,14 +7,19 @@ import Modal from "../../../components/modal";
 import { useAppDialog } from "../../../contexts/AppDialog";
 import useExclusiveAsyncAction from "../../../hooks/useExclusiveAsyncAction";
 import useMountedRef from "../../../hooks/useMountedRef";
+import { translateSaved } from "../../../i18n/runtime";
 import { getErrorMessage } from "../../../utils/errors";
 import {
   getAnalysisFeedback,
   normalizeAnalysisResult
 } from "../utils/analysis";
 
-const CONFETTI = Array.from({ length: 26 }, (_, index) => index);
-
+const CONFETTI = Array.from(
+  {
+    length: 26
+  },
+  (_, index) => index
+);
 function VictoryScene() {
   return (
     <div className="analysis-victory-scene" aria-hidden="true">
@@ -24,13 +29,17 @@ function VictoryScene() {
       <div className="analysis-crystal" />
       <div className="analysis-confetti">
         {CONFETTI.map((index) => (
-          <i key={index} style={{ "--j": index }} />
+          <i
+            key={index}
+            style={{
+              "--j": index
+            }}
+          />
         ))}
       </div>
     </div>
   );
 }
-
 function AnalysisSummary({ result }) {
   const feedback = getAnalysisFeedback(result);
   const {
@@ -42,20 +51,25 @@ function AnalysisSummary({ result }) {
     advice,
     mean_deviation_semitones: meanDeviation
   } = feedback;
-
   const metrics = [
     [
-      "Среднее отклонение",
-      meanDeviation != null ? `±${meanDeviation} п/т` : "—"
+      translateSaved("Среднее отклонение"),
+      meanDeviation != null
+        ? translateSaved("±{0} п/т", {
+            0: meanDeviation
+          })
+        : "—"
     ],
-    ["Проверено фрагментов", scoredSections.length || 0],
-    ["Лучший фрагмент", bestSection ? `${bestSection.accuracy_percent}%` : "—"],
+    [translateSaved("Проверено фрагментов"), scoredSections.length || 0],
     [
-      "Нуждается в работе",
+      translateSaved("Лучший фрагмент"),
+      bestSection ? `${bestSection.accuracy_percent}%` : "—"
+    ],
+    [
+      translateSaved("Нуждается в работе"),
       needsPractice ? `${needsPractice.accuracy_percent}%` : "—"
     ]
   ];
-
   return (
     <>
       <div className="performance-analysis-grade">{grade}</div>
@@ -63,7 +77,7 @@ function AnalysisSummary({ result }) {
         {accuracy ?? "—"}
         <small>%</small>
       </div>
-      <div className="text-muted">Попадание в ноты</div>
+      <div className="text-muted">{translateSaved("Попадание в ноты")}</div>
       <div className="performance-analysis-metrics performance-analysis-metrics-expanded">
         {metrics.map(([label, value]) => (
           <div key={label}>
@@ -73,13 +87,12 @@ function AnalysisSummary({ result }) {
         ))}
       </div>
       <div className="performance-analysis-advice">
-        <strong>Рекомендация</strong>
+        <strong>{translateSaved("Рекомендация")}</strong>
         <span>{advice}</span>
       </div>
     </>
   );
 }
-
 export default function PerformanceAnalysisModal({
   recordingId,
   onClose,
@@ -88,79 +101,90 @@ export default function PerformanceAnalysisModal({
 }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const analysisRequestRef = useRef({ recordingId: null, promise: null });
+  const analysisRequestRef = useRef({
+    recordingId: null,
+    promise: null
+  });
   const mountedRef = useMountedRef();
   const { confirm: confirmDialog } = useAppDialog();
   const { pending: deleting, run: runDelete } = useExclusiveAsyncAction();
-
   useEffect(() => {
     let active = true;
     setResult(null);
     setError(null);
-
     if (analysisRequestRef.current.recordingId !== recordingId) {
       analysisRequestRef.current = {
         recordingId,
         promise: api.runAnalysis(recordingId)
       };
     }
-
     analysisRequestRef.current.promise
       .then((analysis) => {
         if (active) setResult(normalizeAnalysisResult(analysis));
       })
       .catch((analysisError) => {
         if (analysisRequestRef.current.recordingId === recordingId) {
-          analysisRequestRef.current = { recordingId: null, promise: null };
+          analysisRequestRef.current = {
+            recordingId: null,
+            promise: null
+          };
         }
         if (active) {
           setError(
-            getErrorMessage(analysisError, "Неизвестная ошибка анализа")
+            getErrorMessage(
+              analysisError,
+              translateSaved("Неизвестная ошибка анализа")
+            )
           );
         }
       });
-
     return () => {
       active = false;
     };
   }, [recordingId]);
-
   const deleteRecording = () =>
     runDelete(async () => {
-      if (!(await confirmDialog("Удалить это записанное исполнение?"))) return;
+      if (
+        !(await confirmDialog(
+          translateSaved("Удалить это записанное исполнение?")
+        ))
+      )
+        return;
       if (!mountedRef.current) return;
-
       try {
         await api.deleteRecording(recordingId);
         if (mountedRef.current) onDeleted?.();
       } catch (deleteError) {
         if (!mountedRef.current) return;
         setError(
-          `Не удалось удалить запись: ${getErrorMessage(
-            deleteError,
-            "неизвестная ошибка"
-          )}`
+          translateSaved("Не удалось удалить запись: {0}", {
+            0: getErrorMessage(
+              deleteError,
+              translateSaved("неизвестная ошибка")
+            )
+          })
         );
       }
     });
-
   return (
     <Modal
       isOpen
       onClose={onClose}
-      ariaLabel="Анализ выступления"
+      ariaLabel={translateSaved("Анализ выступления")}
       backdropClassName="app-modal-backdrop performance-analysis-backdrop"
       modalClassName="app-modal modal-card performance-analysis-modal"
       closeClassName="app-modal-close performance-analysis-close"
-      closeAriaLabel="Закрыть анализ"
+      closeAriaLabel={translateSaved("Закрыть анализ")}
       closeIconSize={18}
       cardVariant="neon"
       portal
       titleProps={{
         icon: BarChart3,
-        eyebrow: "РЕЗУЛЬТАТ ИСПОЛНЕНИЯ",
-        title: "Анализ выступления",
-        description: "Точность нот, ритм и рекомендации по исполнению.",
+        eyebrow: translateSaved("РЕЗУЛЬТАТ ИСПОЛНЕНИЯ"),
+        title: translateSaved("Анализ выступления"),
+        description: translateSaved(
+          "Точность нот, ритм и рекомендации по исполнению."
+        ),
         actions:
           result || error ? (
             <Button
@@ -168,7 +192,7 @@ export default function PerformanceAnalysisModal({
               onClick={result ? (onDone ?? onClose) : onClose}
               className="modal-title-action"
             >
-              {result ? "Готово" : "Закрыть"}
+              {result ? translateSaved("Готово") : translateSaved("Закрыть")}
             </Button>
           ) : null
       }}
@@ -176,12 +200,15 @@ export default function PerformanceAnalysisModal({
       <VictoryScene />
       <div className="performance-analysis-body modal-scroll">
         {!result && !error && (
-          <p className="text-muted">Анализируем ноты и ритм исполнения…</p>
+          <p className="text-muted">
+            {translateSaved("Анализируем ноты и ритм исполнения…")}
+          </p>
         )}
 
         {error && (
           <p className="song-lyrics-error">
-            Не удалось выполнить анализ: {error}
+            {translateSaved("Не удалось выполнить анализ:")}
+            {error}
           </p>
         )}
 
@@ -197,7 +224,9 @@ export default function PerformanceAnalysisModal({
                 onClick={deleteRecording}
                 disabled={deleting}
               >
-                {deleting ? "Удаляем…" : "Удалить запись"}
+                {deleting
+                  ? translateSaved("Удаляем…")
+                  : translateSaved("Удалить запись")}
               </Button>
             </div>
           </>

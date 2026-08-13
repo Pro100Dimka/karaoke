@@ -1,15 +1,8 @@
-import { LogOut, Mic, MicOff, Volume2, VolumeX } from "lucide-react";
+import { LogOut, Mic, MicOff, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { useI18n } from "../i18n";
 import { IconButton } from "./ui";
 
 const SPEAKING_THRESHOLDS = [0.18, 0.38, 0.6, 0.82];
-
-function getMicrophoneLabel(isMuted) {
-  return isMuted ? "Включить микрофон" : "Выключить микрофон";
-}
-
-function getApplicationSoundLabel(isMuted) {
-  return isMuted ? "Включить звук приложения" : "Выключить звук приложения";
-}
 
 export default function OnlineRoomParticipant({
   person,
@@ -19,11 +12,14 @@ export default function OnlineRoomParticipant({
   microphoneMuted,
   roomSoundMuted,
   isLocallyMuted,
+  effectsEnabled,
   onLeave,
   onSetMicrophoneMuted,
   onSetRoomSoundMuted,
-  onTogglePersonMuted
+  onTogglePersonMuted,
+  onTogglePersonEffects
 }) {
+  const { t } = useI18n();
   const isSelf = person.id === room.selfId;
   const rawLevel = isSelf ? localSpeakingLevel : speakingLevel;
   const microphoneInactive = isSelf
@@ -31,11 +27,15 @@ export default function OnlineRoomParticipant({
     : person.micMuted;
   const activeSpeakingLevel = microphoneInactive ? 0 : rawLevel;
   const isSpeaking = activeSpeakingLevel > 0.08;
-  const microphoneLabel = getMicrophoneLabel(microphoneMuted);
-  const applicationSoundLabel = getApplicationSoundLabel(roomSoundMuted);
+  const microphoneLabel = t(
+    microphoneMuted ? "room.microphone.enable" : "room.microphone.disable"
+  );
+  const applicationSoundLabel = t(
+    roomSoundMuted ? "room.sound.enable" : "room.sound.disable"
+  );
   const participantSoundLabel = isLocallyMuted
-    ? `Включить ${person.name}`
-    : `Не слышать ${person.name}`;
+    ? t("room.person.enable", { name: person.name })
+    : t("room.person.disable", { name: person.name });
 
   return (
     <div
@@ -45,14 +45,19 @@ export default function OnlineRoomParticipant({
       <span className="online-room-person-name">
         <span className="online-room-person-identity">
           <b>{person.name}</b>
-          {person.role === "host" && <small>ведущий</small>}
+          {person.role === "host" && <small>{t("room.role.host")}</small>}
         </span>
         <span
           className="online-room-speaking-meter"
-          aria-label={
-            isSpeaking ? `${person.name} говорит` : `${person.name} молчит`
-          }
-          title={isSpeaking ? "Сейчас говорит" : "Нет голосового сигнала"}
+          aria-label={t(
+            isSpeaking ? "room.person.speaking" : "room.person.silent",
+            {
+              name: person.name
+            }
+          )}
+          title={t(
+            isSpeaking ? "room.person.speakingNow" : "room.person.noSignal"
+          )}
         >
           {SPEAKING_THRESHOLDS.map((threshold) => (
             <i
@@ -86,20 +91,36 @@ export default function OnlineRoomParticipant({
               unstyled
               icon={LogOut}
               size={16}
-              label="Выйти из комнаты"
+              label={t("room.leave")}
               className="online-room-icon-button is-leave"
               onClick={onLeave}
             />
           </>
         ) : (
-          <IconButton
-            unstyled
-            icon={isLocallyMuted ? VolumeX : Volume2}
-            size={16}
-            label={participantSoundLabel}
-            className={`online-room-icon-button ${isLocallyMuted ? "is-off" : ""}`}
-            onClick={() => onTogglePersonMuted(person.id)}
-          />
+          <>
+            <IconButton
+              unstyled
+              icon={Sparkles}
+              size={16}
+              label={t(
+                effectsEnabled
+                  ? "room.person.effects.disable"
+                  : "room.person.effects.enable",
+                { name: person.name }
+              )}
+              aria-pressed={effectsEnabled}
+              className={`online-room-icon-button ${effectsEnabled ? "is-active" : ""}`}
+              onClick={() => onTogglePersonEffects(person.id)}
+            />
+            <IconButton
+              unstyled
+              icon={isLocallyMuted ? VolumeX : Volume2}
+              size={16}
+              label={participantSoundLabel}
+              className={`online-room-icon-button ${isLocallyMuted ? "is-off" : ""}`}
+              onClick={() => onTogglePersonMuted(person.id)}
+            />
+          </>
         )}
       </div>
     </div>

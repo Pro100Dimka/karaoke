@@ -8,13 +8,14 @@ import {
   useState
 } from "react";
 import { api } from "../api/client";
+import { translateSaved } from "../i18n/runtime";
 import { readJsonStorage, writeJsonStorage } from "../utils/storage";
 
 export const RADIO_STATIONS = [
   {
     id: "poptron",
     name: "SomaFM PopTron",
-    description: "Весёлый электропоп и танцевальные хиты",
+    description: translateSaved("Весёлый электропоп и танцевальные хиты"),
     streams: [
       "https://ice5.somafm.com/poptron-128-mp3",
       "https://ice2.somafm.com/poptron-128-mp3"
@@ -23,7 +24,7 @@ export const RADIO_STATIONS = [
   {
     id: "indiepop",
     name: "SomaFM Indie Pop Rocks",
-    description: "Яркий инди-поп и знакомые припевы",
+    description: translateSaved("Яркий инди-поп и знакомые припевы"),
     streams: [
       "https://ice5.somafm.com/indiepop-128-mp3",
       "https://ice2.somafm.com/indiepop-128-mp3"
@@ -32,7 +33,7 @@ export const RADIO_STATIONS = [
   {
     id: "beatblender",
     name: "SomaFM Beat Blender",
-    description: "Энергичная электроника и ровный бит",
+    description: translateSaved("Энергичная электроника и ровный бит"),
     streams: [
       "https://ice5.somafm.com/beatblender-128-mp3",
       "https://ice2.somafm.com/beatblender-128-mp3"
@@ -41,25 +42,26 @@ export const RADIO_STATIONS = [
   {
     id: "groovesalad",
     name: "SomaFM Groove Salad",
-    description: "Спокойный фон и мягкий бас",
+    description: translateSaved("Спокойный фон и мягкий бас"),
     streams: [
       "https://ice5.somafm.com/groovesalad-128-mp3",
       "https://ice2.somafm.com/groovesalad-128-mp3"
     ]
   }
 ];
-
 const STORAGE_KEY = "karaoke-radio";
-const DEFAULT_SETTINGS = { stationId: "poptron", volume: 0.45, enabled: true };
+const DEFAULT_SETTINGS = {
+  stationId: "poptron",
+  volume: 0.45,
+  enabled: true
+};
 const STARTUP_FADE_MS = 2000;
 const RadioContext = createContext(null);
-
 const isAutoplayBlocked = (reason) =>
   reason?.name === "NotAllowedError" ||
   /user didn't interact|user gesture|not allowed/i.test(
     String(reason?.message ?? reason ?? "")
   );
-
 function loadRadioSettings() {
   const stored = readJsonStorage(STORAGE_KEY);
   const stationId = RADIO_STATIONS.some(({ id }) => id === stored.stationId)
@@ -69,7 +71,6 @@ function loadRadioSettings() {
   const volume = Number.isFinite(storedVolume)
     ? Math.max(0, Math.min(1, storedVolume))
     : DEFAULT_SETTINGS.volume;
-
   return {
     stationId,
     volume,
@@ -79,7 +80,6 @@ function loadRadioSettings() {
         : DEFAULT_SETTINGS.enabled
   };
 }
-
 export function RadioProvider({ children }) {
   const initial = useMemo(loadRadioSettings, []);
   const audioRef = useRef(null);
@@ -104,52 +104,45 @@ export function RadioProvider({ children }) {
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const volumeRef = useRef(initial.volume);
-
   const station =
     RADIO_STATIONS.find(({ id }) => id === stationId) || RADIO_STATIONS[0];
-
   const persist = useCallback((patch) => {
-    const next = { ...loadRadioSettings(), ...patch };
+    const next = {
+      ...loadRadioSettings(),
+      ...patch
+    };
     writeJsonStorage(STORAGE_KEY, next);
     api.updateUiPreferences("radio", next).catch(() => {});
   }, []);
-
   const cancelVolumeFade = useCallback(() => {
     cancelAnimationFrame(volumeFadeRef.current);
     volumeFadeRef.current = 0;
   }, []);
-
   const fadeVolumeIn = useCallback(
     (targetVolume, duration = STARTUP_FADE_MS) => {
       const audio = audioRef.current;
       if (!audio) return;
-
       cancelVolumeFade();
       const target = Math.max(0, Math.min(1, Number(targetVolume) || 0));
       audio.volume = 0;
       if (target === 0) return;
-
       const startedAt = performance.now();
       const step = (now) => {
         if (audioRef.current !== audio || audio.paused) {
           volumeFadeRef.current = 0;
           return;
         }
-
         const progress = Math.min(1, (now - startedAt) / duration);
         // Smoothstep: мягкий старт и мягкое достижение сохранённой громкости.
         const eased = progress * progress * (3 - 2 * progress);
         audio.volume = target * eased;
-
         if (progress < 1) volumeFadeRef.current = requestAnimationFrame(step);
         else volumeFadeRef.current = 0;
       };
-
       volumeFadeRef.current = requestAnimationFrame(step);
     },
     [cancelVolumeFade]
   );
-
   const stopAnalysis = useCallback(() => {
     analysisVersionRef.current += 1;
     cancelAnimationFrame(animationRef.current);
@@ -162,13 +155,11 @@ export function RadioProvider({ children }) {
       rootStyle.setProperty(`--radio-band-${index}`, "0");
     });
   }, []);
-
   const startAnalysis = useCallback(() => {
     const analyser = analyserRef.current;
     const data = frequencyDataRef.current;
     const audioContext = audioContextRef.current;
     if (!analyser || !data || !audioContext) return;
-
     const analysisVersion = analysisVersionRef.current + 1;
     analysisVersionRef.current = analysisVersion;
     const readBass = () => {
@@ -192,7 +183,6 @@ export function RadioProvider({ children }) {
         for (let index = first; index <= last; index += 1) sum += data[index];
         return sum / Math.max(1, last - first + 1) / 255;
       };
-
       const rawBass = averageRange(35, 180);
       bassRef.current +=
         (rawBass - bassRef.current) * (rawBass > bassRef.current ? 0.46 : 0.12);
@@ -216,7 +206,6 @@ export function RadioProvider({ children }) {
         const response = boosted > bands[band] ? 0.58 : 0.16;
         bands[band] += (boosted - bands[band]) * response;
       }
-
       const rootStyle = document.documentElement.style;
       rootStyle.setProperty("--radio-bass", bassRef.current.toFixed(3));
       rootStyle.setProperty("--radio-analysis-active", "1");
@@ -225,21 +214,16 @@ export function RadioProvider({ children }) {
       });
       animationRef.current = requestAnimationFrame(readBass);
     };
-
     cancelAnimationFrame(animationRef.current);
     readBass();
   }, [stopAnalysis]);
-
   const prepareAudioGraph = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return null;
-
     const existing = audioContextRef.current;
     if (existing && existing.state !== "closed") return existing;
-
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return null;
-
     const context = new AudioContext();
     const analyser = context.createAnalyser();
     const source = context.createMediaElementSource(audio);
@@ -247,13 +231,11 @@ export function RadioProvider({ children }) {
     analyser.smoothingTimeConstant = 0.72;
     source.connect(analyser);
     analyser.connect(context.destination);
-
     audioContextRef.current = context;
     analyserRef.current = analyser;
     frequencyDataRef.current = new Uint8Array(analyser.frequencyBinCount);
     return context;
   }, []);
-
   const unlockAudioAnalysis = useCallback(async () => {
     try {
       const context = prepareAudioGraph();
@@ -265,7 +247,6 @@ export function RadioProvider({ children }) {
       // после следующего пользовательского жеста.
     }
   }, [prepareAudioGraph, startAnalysis]);
-
   const loadStream = useCallback(
     (index = 0, nextStation = station) => {
       const audio = audioRef.current;
@@ -276,7 +257,6 @@ export function RadioProvider({ children }) {
     },
     [station]
   );
-
   const turnOn = useCallback(
     async ({
       remember = true,
@@ -287,18 +267,14 @@ export function RadioProvider({ children }) {
     } = {}) => {
       const audio = audioRef.current;
       if (!audio || suspendedRef.current) return false;
-
       const playbackVersion = playbackVersionRef.current + 1;
       playbackVersionRef.current = playbackVersion;
-
       if (mountedRef.current) {
         setError("");
         setLoading(true);
       }
-
       let lastError = null;
       streamAttemptRef.current = true;
-
       try {
         // Try every mirror sequentially. Previously onError switched the stream
         // while the original audio.play() promise was still pending, so that
@@ -317,12 +293,10 @@ export function RadioProvider({ children }) {
               audio.pause();
               return false;
             }
-
             try {
               loadStream(index, targetStation);
               if (fadeIn) audio.volume = 0;
               await audio.play();
-
               if (
                 !mountedRef.current ||
                 playbackVersion !== playbackVersionRef.current ||
@@ -332,13 +306,15 @@ export function RadioProvider({ children }) {
                 audio.pause();
                 return false;
               }
-
               pendingStartupPlaybackRef.current = false;
               setPlaying(true);
               setError("");
               if (fadeIn) fadeVolumeIn(volumeRef.current);
               else audio.volume = volumeRef.current;
-              if (remember) persist({ enabled: true });
+              if (remember)
+                persist({
+                  enabled: true
+                });
               if (analyse) await unlockAudioAnalysis();
               return true;
             } catch (reason) {
@@ -370,7 +346,6 @@ export function RadioProvider({ children }) {
             });
           }
         }
-
         throw lastError || new Error("No radio stream could be played");
       } catch (reason) {
         if (
@@ -380,8 +355,10 @@ export function RadioProvider({ children }) {
           setPlaying(false);
           setError(
             reason?.message
-              ? `Не удалось запустить радио: ${reason.message}`
-              : "Не удалось запустить радио"
+              ? translateSaved("Не удалось запустить радио: {0}", {
+                  0: reason.message
+                })
+              : translateSaved("Не удалось запустить радио")
           );
         }
         return false;
@@ -397,7 +374,6 @@ export function RadioProvider({ children }) {
     },
     [fadeVolumeIn, loadStream, persist, station, unlockAudioAnalysis]
   );
-
   const turnOff = useCallback(
     ({ remember = true } = {}) => {
       playbackVersionRef.current += 1;
@@ -405,17 +381,18 @@ export function RadioProvider({ children }) {
       audioRef.current?.pause();
       setPlaying(false);
       setLoading(false);
-      if (remember) persist({ enabled: false });
+      if (remember)
+        persist({
+          enabled: false
+        });
       stopAnalysis();
     },
     [cancelVolumeFade, persist, stopAnalysis]
   );
-
   const toggle = useCallback(() => {
     if (isPlaying) turnOff();
     else turnOn();
   }, [isPlaying, turnOff, turnOn]);
-
   const setVolume = useCallback(
     (value) => {
       const numericValue = Number(value);
@@ -426,11 +403,12 @@ export function RadioProvider({ children }) {
       setVolumeState(next);
       cancelVolumeFade();
       if (audioRef.current) audioRef.current.volume = next;
-      persist({ volume: next });
+      persist({
+        volume: next
+      });
     },
     [cancelVolumeFade, persist]
   );
-
   const setStation = useCallback(
     (nextId) => {
       const next = RADIO_STATIONS.find(({ id }) => id === nextId);
@@ -443,62 +421,78 @@ export function RadioProvider({ children }) {
       setLoading(false);
       setError("");
       setStationIdState(next.id);
-      persist({ stationId: next.id });
+      persist({
+        stationId: next.id
+      });
       streamIndexRef.current = 0;
       loadStream(0, next);
       if (shouldResume && !suspendedRef.current) {
-        turnOn({ remember: false, targetStation: next }).catch(() => {});
+        turnOn({
+          remember: false,
+          targetStation: next
+        }).catch(() => {});
       }
     },
     [isLoading, isPlaying, loadStream, persist, stationId, stopAnalysis, turnOn]
   );
-
   const setRecordingActive = useCallback(
     (active) => {
       if (active && !suspendedRef.current) {
         suspendedRef.current = true;
         resumeAfterRecordingRef.current = isPlaying;
-        if (isPlaying) turnOff({ remember: false });
+        if (isPlaying)
+          turnOff({
+            remember: false
+          });
         return;
       }
       if (!active && suspendedRef.current) {
         suspendedRef.current = false;
         const shouldResume = resumeAfterRecordingRef.current;
         resumeAfterRecordingRef.current = false;
-        if (shouldResume) turnOn({ remember: false });
+        if (shouldResume)
+          turnOn({
+            remember: false
+          });
       }
     },
     [isPlaying, turnOff, turnOn]
   );
-
   const handleStreamError = useCallback(() => {
     // Initial/fallback playback is handled by turnOn() itself so onError must
     // not race with its pending play() promise.
     if (streamAttemptRef.current) return;
-
     const nextIndex = streamIndexRef.current + 1;
     if (nextIndex < station.streams.length && isPlaying) {
-      turnOn({ remember: false, startIndex: nextIndex }).catch(() => {});
+      turnOn({
+        remember: false,
+        startIndex: nextIndex
+      }).catch(() => {});
       return;
     }
-
     setPlaying(false);
     setLoading(false);
-    setError(`${station.name} временно недоступна`);
+    setError(
+      translateSaved("{0} временно недоступна", {
+        0: station.name
+      })
+    );
     stopAnalysis();
   }, [isPlaying, station, stopAnalysis, turnOn]);
-
   useEffect(() => {
     volumeRef.current = volume;
     if (audioRef.current && !volumeFadeRef.current)
       audioRef.current.volume = volume;
   }, [volume]);
-
   useEffect(() => {
     const audio = audioRef.current;
     mountedRef.current = true;
     if (initial.enabled)
-      turnOn({ remember: false, analyse: true, fadeIn: true });
+      turnOn({
+        remember: false,
+        analyse: true,
+        fadeIn: true
+      });
     return () => {
       mountedRef.current = false;
       playbackVersionRef.current += 1;
@@ -516,7 +510,6 @@ export function RadioProvider({ children }) {
       context?.close?.().catch(() => {});
     };
   }, [cancelVolumeFade, initial.enabled, stopAnalysis, turnOn]);
-
   useEffect(() => {
     const unlock = () => {
       // A genuine gesture is the only universally reliable way to satisfy
@@ -528,14 +521,15 @@ export function RadioProvider({ children }) {
         !suspendedRef.current
       ) {
         pendingStartupPlaybackRef.current = false;
-        turnOn({ remember: false, analyse: true, fadeIn: true }).catch(
-          () => {}
-        );
+        turnOn({
+          remember: false,
+          analyse: true,
+          fadeIn: true
+        }).catch(() => {});
       } else {
         unlockAudioAnalysis();
       }
     };
-
     window.addEventListener("pointerdown", unlock, true);
     window.addEventListener("keydown", unlock, true);
     return () => {
@@ -543,7 +537,6 @@ export function RadioProvider({ children }) {
       window.removeEventListener("keydown", unlock, true);
     };
   }, [initial.enabled, turnOn, unlockAudioAnalysis]);
-
   const value = useMemo(
     () => ({
       error,
@@ -577,7 +570,6 @@ export function RadioProvider({ children }) {
       volume
     ]
   );
-
   return (
     <RadioContext.Provider value={value}>
       {children}
@@ -590,7 +582,6 @@ export function RadioProvider({ children }) {
     </RadioContext.Provider>
   );
 }
-
 export function useRadio() {
   const context = useContext(RadioContext);
   if (!context) throw new Error("useRadio must be used inside RadioProvider");

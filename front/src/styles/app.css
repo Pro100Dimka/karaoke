@@ -2886,6 +2886,20 @@ select:focus,
   background: color-mix(in srgb, var(--color-warning) 8%, transparent);
 }
 
+.online-room-transfer {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.online-room-transfer p {
+  margin: 0;
+}
+
+.online-room-transfer progress {
+  width: 100%;
+  accent-color: var(--accent, currentColor);
+}
+
 .online-room-voice-warning .online-room-voice-error {
   margin: 0;
 }
@@ -7836,6 +7850,15 @@ body {
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.08),
     0 0 0.7rem color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
+/* Automatic compatibility profile keeps the same static layout on low-end PCs. */
+html[data-performance="reduced"] *,
+html[data-performance="reduced"] *::before,
+html[data-performance="reduced"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 80ms !important;
 }
 
 /* Melody editor theme bridge: the roll and notes follow the active app theme. */

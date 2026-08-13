@@ -9,12 +9,14 @@ import { useEffect, useRef, useState } from "react";
 import { useOnlineRoom } from "../contexts/OnlineRoomContext";
 import useExclusiveAsyncAction from "../hooks/useExclusiveAsyncAction";
 import useMountedRef from "../hooks/useMountedRef";
+import { useI18n } from "../i18n";
 import { copyText } from "../utils/clipboard";
 import OnlineRoomParticipant from "./OnlineRoomParticipant";
 import Button from "./fields/button";
 import { Card, IconButton } from "./ui";
 
 export function OnlineRoomDock() {
+  const { t } = useI18n();
   const onlineRoom = useOnlineRoom();
   const [copied, setCopied] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -48,6 +50,16 @@ export function OnlineRoomDock() {
       if (mountedRef.current) setCopied(false);
     }, 1600);
   };
+  const transferText = onlineRoom.transferStatus
+    ? onlineRoom.transferStatus.stage === "error"
+      ? t("room.transfer.error", {
+          error:
+            onlineRoom.transferStatus.error || t("room.transfer.unknownError")
+        })
+      : t(`room.transfer.${onlineRoom.transferStatus.stage}`, {
+          percent: onlineRoom.transferStatus.percent
+        })
+    : "";
 
   return (
     <>
@@ -58,16 +70,24 @@ export function OnlineRoomDock() {
         inert={collapsed ? true : undefined}
         variant="neon"
         tilt={false}
-        aria-label="Участники комнаты"
+        aria-label={t("room.participants")}
       >
         <div className="online-room-dock-heading">
-          <span>Комната · {onlineRoom.room.host ? "ведущий" : "участник"}</span>
+          <span>
+            {t("room.heading", {
+              role: t(
+                onlineRoom.room.host
+                  ? "room.role.host"
+                  : "room.role.participant"
+              )
+            })}
+          </span>
           <div className="online-room-dock-code">
             <IconButton
               unstyled
               icon={PanelLeftClose}
               size={16}
-              label="Скрыть панель комнаты"
+              label={t("room.hidePanel")}
               className="online-room-icon-button"
               onClick={() => setCollapsed(true)}
             />
@@ -76,7 +96,7 @@ export function OnlineRoomDock() {
               unstyled
               icon={copied ? Check : Copy}
               size={16}
-              label="Копировать код комнаты"
+              label={t("room.copyCode")}
               className="online-room-icon-button"
               onClick={handleCopy}
             />
@@ -94,10 +114,12 @@ export function OnlineRoomDock() {
               microphoneMuted={onlineRoom.microphoneMuted}
               roomSoundMuted={onlineRoom.roomSoundMuted}
               isLocallyMuted={onlineRoom.mutedPeople.has(person.id)}
+              effectsEnabled={onlineRoom.effectPeople.has(person.id)}
               onLeave={onlineRoom.leaveRoom}
               onSetMicrophoneMuted={onlineRoom.setMicrophoneMuted}
               onSetRoomSoundMuted={onlineRoom.setRoomSoundMuted}
               onTogglePersonMuted={onlineRoom.togglePersonMuted}
+              onTogglePersonEffects={onlineRoom.togglePersonEffects}
             />
           ))}
         </div>
@@ -112,8 +134,28 @@ export function OnlineRoomDock() {
               onClick={handleRequestMicrophone}
               disabled={requestingMicrophone}
             >
-              {requestingMicrophone ? "Запрашиваем…" : "Разрешить микрофон"}
+              {t(
+                requestingMicrophone
+                  ? "room.requestingMicrophone"
+                  : "room.allowMicrophone"
+              )}
             </Button>
+          </div>
+        )}
+        {onlineRoom.transferStatus && (
+          <div
+            className="online-room-transfer"
+            role="status"
+            aria-live="polite"
+          >
+            <p>{transferText}</p>
+            {onlineRoom.transferStatus.stage !== "error" && (
+              <progress
+                max="100"
+                value={onlineRoom.transferStatus.percent}
+                aria-label={transferText}
+              />
+            )}
           </div>
         )}
       </Card>
@@ -125,8 +167,8 @@ export function OnlineRoomDock() {
           iconSize={18}
           className="online-room-restore-button"
           onClick={() => setCollapsed(false)}
-          title="Показать панель комнаты"
-          aria-label="Показать панель комнаты"
+          title={t("room.showPanel")}
+          aria-label={t("room.showPanel")}
         >
           <span>{onlineRoom.room.id}</span>
         </Button>

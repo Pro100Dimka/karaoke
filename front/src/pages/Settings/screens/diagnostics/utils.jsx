@@ -1,3 +1,4 @@
+import { useI18n } from "../../../../i18n";
 import { Stack, Typography } from "../../../../theme/ui";
 import { STATUS_ICONS } from "./config";
 
@@ -20,12 +21,13 @@ export function DiagnosticCheck({ label, ok }) {
 }
 
 export function VersionList({ components }) {
+  const { t } = useI18n();
   const entries = Object.entries(components ?? {});
   if (!entries.length) return null;
 
   return (
     <Stack gap={0.5} className="settings-screen-section">
-      <Typography variant="h3">Версии</Typography>
+      <Typography variant="h3">{t("settings.diagnostics.versions")}</Typography>
 
       <Stack className="settings-version-list">
         {entries.map(([name, version]) => (
@@ -55,8 +57,9 @@ export function VersionList({ components }) {
   );
 }
 
-export const ErrorList = ({ errors = [] }) =>
-  errors.length ? (
+export const ErrorList = ({ errors = [] }) => {
+  const { t } = useI18n();
+  return errors.length ? (
     <Stack className="settings-error-list">
       {errors.map((error) => (
         <ErrorItem key={getErrorKey(error)} error={error} />
@@ -64,9 +67,10 @@ export const ErrorList = ({ errors = [] }) =>
     </Stack>
   ) : (
     <Typography variant="body2" tone="muted" className="settings-empty-line">
-      Ошибок не найдено
+      {t("settings.diagnostics.noErrors")}
     </Typography>
   );
+};
 
 function ErrorItem({ error }) {
   const { title, updated_at: updatedAt, error_message: message } = error;

@@ -1,10 +1,13 @@
+import { useI18n } from "../../i18n";
+
 export default function Table({
   columns,
   data,
   renderRow,
   getRowKey,
-  emptyText = "Нет данных"
+  emptyText
 }) {
+  const { t } = useI18n();
   const rows = data ?? [];
   return (
     <table className="data-table">
@@ -36,7 +39,7 @@ export default function Table({
               colSpan={columns.length}
               className="table-empty text-muted u-empty-state"
             >
-              {emptyText}
+              {emptyText || t("common.noData")}
             </td>
           </tr>
         )}

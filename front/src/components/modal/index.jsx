@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { useEffect, useId, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useI18n } from "../../i18n";
 import { FOCUSABLE_SELECTOR } from "../modal-focus";
 import { IconButton } from "../ui";
 import Card from "../ui/Card";
@@ -30,7 +31,7 @@ export default function Modal({
   children,
   isOpen,
   onClose,
-  ariaLabel = "Диалог",
+  ariaLabel,
   portal = false,
   closeIconSize = 20,
   tilt = true,
@@ -38,10 +39,13 @@ export default function Modal({
   backdropClassName = "",
   modalClassName = "",
   closeClassName = "",
-  closeAriaLabel = "Закрыть",
+  closeAriaLabel,
   cardVariant = "neon",
   maxWidth
 }) {
+  const { t } = useI18n();
+  const resolvedAriaLabel = ariaLabel || t("common.dialog");
+  const resolvedCloseAriaLabel = closeAriaLabel || t("common.close");
   const dialogRef = useRef(null);
   const onCloseRef = useRef(onClose);
   const modalTokenRef = useRef(Symbol("modal"));
@@ -161,7 +165,7 @@ export default function Modal({
             size={closeIconSize}
             className={closeClasses}
             onClick={() => onCloseRef.current?.()}
-            label={closeAriaLabel}
+            label={resolvedCloseAriaLabel}
             style={{
               background: "var(--color-bg-elevated)",
               opacity: 1,
@@ -172,7 +176,7 @@ export default function Modal({
         }
       >
         <span id={titleId} className="sr-only">
-          {ariaLabel}
+          {resolvedAriaLabel}
         </span>
         {titleProps && <ModalTitle {...titleProps} />}
         <div className="app-modal-body">{children}</div>

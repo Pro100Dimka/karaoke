@@ -1,14 +1,14 @@
+import { translateSaved } from "../../../i18n/runtime";
+
 function finiteOrNull(value) {
   if (value == null || value === "") return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
-
 function clampPercent(value) {
   const number = finiteOrNull(value);
   return number == null ? null : Math.max(0, Math.min(100, number));
 }
-
 export function normalizeAnalysisSection(section, index = 0) {
   const source = section && typeof section === "object" ? section : {};
   const start = finiteOrNull(source.start);
@@ -26,7 +26,6 @@ export function normalizeAnalysisSection(section, index = 0) {
     index
   };
 }
-
 export function normalizeAnalysisResult(result) {
   const source = result && typeof result === "object" ? result : {};
   return {
@@ -38,7 +37,6 @@ export function normalizeAnalysisResult(result) {
       .map(normalizeAnalysisSection)
   };
 }
-
 export function getAnalysisFeedback(result) {
   const normalized = normalizeAnalysisResult(result);
   const accuracy = normalized.pitch_accuracy_percent;
@@ -59,28 +57,33 @@ export function getAnalysisFeedback(result) {
         : worst,
     null
   );
-
   const grade =
     accuracy == null
-      ? "Нет данных"
+      ? translateSaved("Нет данных")
       : accuracy >= 85
-        ? "Отличное исполнение"
+        ? translateSaved("Отличное исполнение")
         : accuracy >= 70
-          ? "Хороший результат"
+          ? translateSaved("Хороший результат")
           : accuracy >= 50
-            ? "Есть потенциал"
-            : "Нужно потренироваться";
-
+            ? translateSaved("Есть потенциал")
+            : translateSaved("Нужно потренироваться");
   const advice =
     accuracy == null
-      ? "Не удалось определить достаточно пропетых нот. Попробуйте петь ближе к микрофону."
+      ? translateSaved(
+          "Не удалось определить достаточно пропетых нот. Попробуйте петь ближе к микрофону."
+        )
       : normalized.mean_deviation_semitones != null &&
           normalized.mean_deviation_semitones > 1
-        ? "Сфокусируйтесь на точном начале каждой фразы и удержании высоты ноты."
+        ? translateSaved(
+            "Сфокусируйтесь на точном начале каждой фразы и удержании высоты ноты."
+          )
         : accuracy >= 70
-          ? "Хорошая точность. Попробуйте сделать фразы ровнее по громкости и дыханию."
-          : "Повторите сложные фразы медленнее, ориентируясь на ноты на экране.";
-
+          ? translateSaved(
+              "Хорошая точность. Попробуйте сделать фразы ровнее по громкости и дыханию."
+            )
+          : translateSaved(
+              "Повторите сложные фразы медленнее, ориентируясь на ноты на экране."
+            );
   return {
     ...normalized,
     accuracy,

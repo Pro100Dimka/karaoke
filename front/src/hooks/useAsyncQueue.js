@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { translateSaved } from "../i18n/runtime";
 import useMountedRef from "./useMountedRef";
 
 /**
@@ -11,22 +12,23 @@ export default function useAsyncQueue() {
   const mountedRef = useMountedRef();
   const pendingCountRef = useRef(0);
   const [pending, setPending] = useState(false);
-
   const run = useCallback(
     (action) => {
       if (typeof action !== "function") {
         return Promise.reject(
-          new TypeError("Операция очереди должна быть функцией")
+          new TypeError(
+            translateSaved(
+              translateSaved("Операция очереди должна быть функцией")
+            )
+          )
         );
       }
       pendingCountRef.current += 1;
       if (mountedRef.current) setPending(true);
-
       const result = tailRef.current
         .catch(() => {})
         .then(() => Promise.resolve().then(action));
       tailRef.current = result.catch(() => {});
-
       return result.finally(() => {
         pendingCountRef.current = Math.max(0, pendingCountRef.current - 1);
         if (mountedRef.current && pendingCountRef.current === 0) {
@@ -36,6 +38,8 @@ export default function useAsyncQueue() {
     },
     [mountedRef]
   );
-
-  return { pending, run };
+  return {
+    pending,
+    run
+  };
 }

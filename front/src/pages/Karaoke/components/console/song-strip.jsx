@@ -1,4 +1,5 @@
 import { Mic } from "lucide-react";
+import { translateSaved } from "../../../../i18n/runtime";
 import { formatTime } from "../../utils/format";
 import WaveformTimeline from "../waveform-timeline";
 
@@ -12,7 +13,7 @@ export default function SongStrip({ song, currentTime, duration, onSeek }) {
       </div>
       <div className="karaoke-player-meta">
         <strong>{title}</strong>
-        <span>{artist || performer || "Караоке"}</span>
+        <span>{artist || performer || translateSaved("Караоке")}</span>
       </div>
       <span className="mono karaoke-timecode">{timecodes[0]}</span>
       <WaveformTimeline

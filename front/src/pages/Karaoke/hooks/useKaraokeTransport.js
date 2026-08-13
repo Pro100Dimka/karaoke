@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { api } from "../../../api/client";
 import useLatestRef from "../../../hooks/useLatestRef";
+import { translateSaved } from "../../../i18n/runtime";
 import { getErrorMessage } from "../../../utils/errors";
 import { playbackGain } from "../utils/data";
 import {
@@ -38,14 +39,11 @@ export default function useKaraokeTransport({
   const latestOperationTypeRef = useRef("idle");
   const recordingSessionRef = useRef(recordingSessionId);
   const recordingStartPromiseRef = useRef(null);
-
   recordingSessionRef.current = recordingSessionId;
-
   useEffect(() => {
     operationRef.current += 1;
     latestOperationTypeRef.current = "song-change";
     recordingStartPromiseRef.current = null;
-
     return () => {
       const sessionId = recordingSessionRef.current;
       recordingSessionRef.current = null;
@@ -58,30 +56,24 @@ export default function useKaraokeTransport({
         .catch(() => api.pauseRecording(sessionId).catch(() => {}));
     };
   }, [song?.id]);
-
   const settleSupersededRecording = async (sessionId) => {
     if (!sessionId) return;
-
     if (latestOperationTypeRef.current === "pause") {
       await api.pauseRecording(sessionId).catch(() => {});
       return;
     }
-
     await api
       .stopRecording(sessionId)
       .catch(() => api.pauseRecording(sessionId).catch(() => {}));
-
     if (recordingSessionRef.current === sessionId) {
       recordingSessionRef.current = null;
       setRecordingSessionId(null);
     }
   };
-
   const broadcastCommand = (action, position) => {
     if (!onlineRoom?.room || !song?.id) return;
     onlineRoom.syncCommand(createPlayerSyncCommand(action, song.id, position));
   };
-
   const pausePlaybackResources = () => {
     instrumentalRef.current?.pause();
     vocalsRef.current?.pause();
@@ -89,7 +81,6 @@ export default function useKaraokeTransport({
     sendYouTubeCommand("pauseVideo");
     silenceMelodyGuide();
   };
-
   const preparePlayback = async () => {
     const instr = instrumentalRef.current;
     if (!instr || !song?.id || recordingSessionRef.current) return true;
@@ -110,41 +101,40 @@ export default function useKaraokeTransport({
         microphoneEffects.delay
       );
       const sessionId = session?.recording_session_id;
-      if (!sessionId) throw new Error("Backend не вернул идентификатор записи");
-
+      if (!sessionId)
+        throw new Error(
+          translateSaved("Backend не вернул идентификатор записи")
+        );
       try {
         await api.pauseRecording(sessionId);
       } catch (pauseError) {
         await api.stopRecording(sessionId).catch(() => {});
         throw pauseError;
       }
-
       if (operationId !== operationRef.current) {
         await settleSupersededRecording(sessionId);
         return false;
       }
-
       recordingSessionRef.current = sessionId;
       setRecordingSessionId(sessionId);
       setRecordingError(null);
       return true;
     } catch (error) {
       setRecordingError(
-        `Не удалось подготовить запись: ${getErrorMessage(error, "неизвестная ошибка")}`
+        translateSaved("Не удалось подготовить запись: {0}", {
+          0: getErrorMessage(error, translateSaved("неизвестная ошибка"))
+        })
       );
       return false;
     }
   };
-
   const togglePlay = async ({ broadcast = true, forcePlaying = null } = {}) => {
     const instr = instrumentalRef.current;
     const voc = vocalsRef.current;
     if (!instr || !song?.id) return undefined;
-
     const operationId = ++operationRef.current;
     const shouldPlay = forcePlaying == null ? !isPlaying : forcePlaying;
     latestOperationTypeRef.current = shouldPlay ? "play" : "pause";
-
     if (!shouldPlay) {
       pausePlaybackResources();
       setIsPlaying(false);
@@ -162,7 +152,6 @@ export default function useKaraokeTransport({
     const melodyStart = startMelodyGuide().catch(() => {});
     let activeRecordingId = recordingSessionRef.current;
     let recordingResume = Promise.resolve();
-
     try {
       if (activeRecordingId) {
         const resumedSessionId = activeRecordingId;
@@ -170,7 +159,15 @@ export default function useKaraokeTransport({
           .resumeRecording(resumedSessionId)
           .catch(async (error) => {
             setRecordingError(
-              `Не удалось возобновить запись, караоке продолжит работу без неё: ${getErrorMessage(error, "неизвестная ошибка")}`
+              translateSaved(
+                "Не удалось возобновить запись, караоке продолжит работу без неё: {0}",
+                {
+                  0: getErrorMessage(
+                    error,
+                    translateSaved("неизвестная ошибка")
+                  )
+                }
+              )
             );
             await api.stopRecording(resumedSessionId).catch(() => {});
             if (recordingSessionRef.current === resumedSessionId) {
@@ -204,7 +201,9 @@ export default function useKaraokeTransport({
         const session = await recordingStartPromiseRef.current;
         activeRecordingId = session.recording_session_id;
         if (!activeRecordingId) {
-          throw new Error("Backend не вернул идентификатор записи");
+          throw new Error(
+            translateSaved("Backend не вернул идентификатор записи")
+          );
         }
         recordingSessionRef.current = activeRecordingId;
         setRecordingSessionId(activeRecordingId);
@@ -217,21 +216,23 @@ export default function useKaraokeTransport({
       recordingSessionRef.current = null;
       setRecordingSessionId(null);
       setRecordingError(
-        `Запись недоступна, караоке продолжит работу без неё: ${getErrorMessage(error, "неизвестная ошибка")}`
+        translateSaved(
+          "Запись недоступна, караоке продолжит работу без неё: {0}",
+          {
+            0: getErrorMessage(error, translateSaved("неизвестная ошибка"))
+          }
+        )
       );
     }
-
     if (operationId !== operationRef.current) {
       await settleSupersededRecording(activeRecordingId);
       silenceMelodyGuide();
       return false;
     }
-
     syncSecondaryMedia(instr.currentTime, true);
     instr.volume = playbackGain(musicVolume);
     if (voc) voc.volume = playbackGain(vocalVolume);
     sendYouTubeCommand("playVideo");
-
     try {
       // Start the master and secondary HTML media in the same task. Waiting for
       // instrumental.play() before calling vocals.play() creates an avoidable
@@ -262,25 +263,21 @@ export default function useKaraokeTransport({
         await api.pauseRecording(activeRecordingId).catch(() => {});
       }
       setIsPlaying(false);
-      setRecordingError("Не удалось запустить воспроизведение");
+      setRecordingError(translateSaved("Не удалось запустить воспроизведение"));
       return false;
     }
-
     if (operationId !== operationRef.current) {
       pausePlaybackResources();
       await settleSupersededRecording(activeRecordingId);
       return false;
     }
-
     setIsPlaying(true);
     if (broadcast) broadcastCommand("play", instr.currentTime);
     return true;
   };
-
   const stop = async ({ broadcast = true } = {}) => {
     const instr = instrumentalRef.current;
     if (!instr || !song?.id) return undefined;
-
     operationRef.current += 1;
     latestOperationTypeRef.current = "stop";
     pausePlaybackResources();
@@ -289,7 +286,6 @@ export default function useKaraokeTransport({
     setIsPlaying(false);
     setCurrentTime(0);
     if (broadcast) broadcastCommand("stop", 0);
-
     const activeRecordingId = recordingSessionRef.current;
     if (activeRecordingId) {
       try {
@@ -298,7 +294,9 @@ export default function useKaraokeTransport({
       } catch (error) {
         await api.pauseRecording(activeRecordingId).catch(() => {});
         setRecordingError(
-          `Не удалось сохранить запись: ${getErrorMessage(error, "неизвестная ошибка")}`
+          translateSaved("Не удалось сохранить запись: {0}", {
+            0: getErrorMessage(error, translateSaved("неизвестная ошибка"))
+          })
         );
       } finally {
         recordingSessionRef.current = null;
@@ -310,32 +308,31 @@ export default function useKaraokeTransport({
     // Stop/Pause. Recording is stopped independently above.
     return true;
   };
-
   const seekTo = (time, { broadcast = true } = {}) => {
     const instr = instrumentalRef.current;
     if (!instr || !song?.id) return;
-
     const position = clampPlaybackPosition(time, durationRef.current);
     instr.currentTime = position;
     syncSecondaryMedia(position, true);
     setCurrentTime(position);
     if (broadcast) broadcastCommand("seek", position);
   };
-
   const skip = (delta) =>
     seekTo(clampPlaybackPosition(currentTime + delta, duration));
-
   const returnToLibrary = async () => {
-    await stop({ broadcast: false });
-    if (onlineRoom?.room) onlineRoom.syncCommand({ type: "open-library" });
+    await stop({
+      broadcast: false
+    });
+    if (onlineRoom?.room)
+      onlineRoom.syncCommand({
+        type: "open-library"
+      });
     navigate("/");
   };
-
   const togglePlayRef = useLatestRef(togglePlay);
   const seekToRef = useLatestRef(seekTo);
   const stopRef = useLatestRef(stop);
   const roomCommand = onlineRoom?.roomCommand;
-
   useEffect(() => {
     if (
       roomCommand?.type !== "karaoke-player" ||
@@ -345,26 +342,33 @@ export default function useKaraokeTransport({
     ) {
       return;
     }
-
     const position = Number(roomCommand.position);
     if (Number.isFinite(position)) {
-      seekToRef.current(position, { broadcast: false });
+      seekToRef.current(position, {
+        broadcast: false
+      });
     }
-
     const roomActions = {
       play: () =>
-        togglePlayRef.current({ broadcast: false, forcePlaying: true }),
+        togglePlayRef.current({
+          broadcast: false,
+          forcePlaying: true
+        }),
       pause: () =>
-        togglePlayRef.current({ broadcast: false, forcePlaying: false }),
-      stop: () => stopRef.current({ broadcast: false })
+        togglePlayRef.current({
+          broadcast: false,
+          forcePlaying: false
+        }),
+      stop: () =>
+        stopRef.current({
+          broadcast: false
+        })
     };
-
     Promise.resolve(roomActions[roomCommand.action]?.()).catch((error) => {
       setRecordingError(
-        `Не удалось выполнить команду комнаты: ${getErrorMessage(
-          error,
-          "неизвестная ошибка"
-        )}`
+        translateSaved("Не удалось выполнить команду комнаты: {0}", {
+          0: getErrorMessage(error, translateSaved("неизвестная ошибка"))
+        })
       );
     });
   }, [
@@ -376,6 +380,12 @@ export default function useKaraokeTransport({
     stopRef,
     togglePlayRef
   ]);
-
-  return { preparePlayback, returnToLibrary, seekTo, skip, stop, togglePlay };
+  return {
+    preparePlayback,
+    returnToLibrary,
+    seekTo,
+    skip,
+    stop,
+    togglePlay
+  };
 }

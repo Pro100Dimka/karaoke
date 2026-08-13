@@ -1,3 +1,4 @@
+import { translateSaved } from "../../../i18n/runtime";
 // Node test runner requires the explicit extension for this ESM import.
 // eslint-disable-next-line import/extensions
 import { normalizeNoteList } from "./note-normalization.js";
@@ -21,7 +22,6 @@ const KEY_PITCHES = {
   Bb: 10,
   B: 11
 };
-
 const SHARP_KEYS = [
   "C",
   "C#",
@@ -36,25 +36,27 @@ const SHARP_KEYS = [
   "A#",
   "B"
 ];
-
 export function noteNameToMidi(noteName) {
   if (typeof noteName !== "string") return null;
-
   const match = /^([A-Ga-g])([#b]?)(-?\d+)$/.exec(noteName.trim());
   if (!match) return null;
-
-  const semitones = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  const semitones = {
+    C: 0,
+    D: 2,
+    E: 4,
+    F: 5,
+    G: 7,
+    A: 9,
+    B: 11
+  };
   const [, letter, accidental, octaveText] = match;
   const base = semitones[letter.toUpperCase()];
   const offset = accidental === "#" ? 1 : accidental === "b" ? -1 : 0;
-
   const midi = (Number(octaveText) + 1) * 12 + base + offset;
   return Number.isInteger(midi) && midi >= 0 && midi <= 127 ? midi : null;
 }
-
 export function normalizeLyrics(raw) {
   if (!raw) return [];
-
   const source = Array.isArray(raw) ? raw : raw.lines || raw.segments || [];
   const list = Array.isArray(source) ? source : [];
   const toText = (value) =>
@@ -74,7 +76,6 @@ export function normalizeLyrics(raw) {
   };
   const startKeys = ["start", "start_sec", "start_time", "begin", "from"];
   const endKeys = ["end", "end_sec", "end_time", "finish", "to"];
-
   return list
     .filter((line) => line && typeof line === "object")
     .map((line, sourceIndex) => {
@@ -96,7 +97,6 @@ export function normalizeLyrics(raw) {
             // changing the textual order.
             .filter((word) => word.text)
         : [];
-
       const timedWords = words.filter(
         (word) => Number.isFinite(word.start) || Number.isFinite(word.end)
       );
@@ -125,10 +125,8 @@ export function normalizeLyrics(raw) {
       // coerce a missing start to zero: that makes an arbitrary line appear at
       // the beginning of every song.
       if (!text || startTime === null) return null;
-
       const safeEnd =
         endTime !== null && endTime >= startTime ? endTime : startTime;
-
       return {
         ...line,
         start: startTime,
@@ -159,46 +157,36 @@ export function normalizeLyrics(raw) {
       return cleanLine;
     });
 }
-
 export const normalizeNotes = (raw) => normalizeNoteList(raw, noteNameToMidi);
-
 export function transposeKey(key, semitones) {
-  if (!key) return "Тональность не определена";
-
+  if (!key) return translateSaved("Тональность не определена");
   const match = /^([A-G](?:#|b)?)(.*)$/i.exec(key.trim());
   if (!match) return key;
-
   const [, rootText, suffix] = match;
   const root = rootText[0].toUpperCase() + rootText.slice(1);
   const pitch = KEY_PITCHES[root];
   if (pitch == null) return key;
-
   const shift = Number.isFinite(Number(semitones))
     ? Math.round(Number(semitones))
     : 0;
   const normalizedPitch = (((pitch + shift) % 12) + 12) % 12;
   return `${SHARP_KEYS[normalizedPitch]}${suffix}`;
 }
-
 export function playbackGain(value) {
   const normalized = Math.max(0, Math.min(1, Number(value) || 0));
   return normalized ** 2;
 }
-
 export function getYouTubeVideoId(url) {
   if (!url) return null;
-
   try {
     const parsed = new URL(url);
     if (!["http:", "https:"].includes(parsed.protocol)) return null;
     const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
     let id = null;
-
     if (host === "youtu.be") {
       const [, pathnameId] = parsed.pathname.split("/");
       id = pathnameId;
     }
-
     if (
       host === "youtube.com" ||
       host.endsWith(".youtube.com") ||
@@ -209,19 +197,16 @@ export function getYouTubeVideoId(url) {
         parsed.searchParams.get("v") ||
         parsed.pathname.match(/^\/(?:embed|shorts|live)\/([^/?]+)/)?.[1];
     }
-
     return /^[\w-]{11}$/.test(id || "") ? id : null;
   } catch {
     return null;
   }
 }
-
 export function youTubeEmbedUrl(videoId) {
   const id = typeof videoId === "string" ? videoId.trim() : "";
   if (!/^[\w-]{11}$/.test(id)) return null;
   return `https://www.youtube.com/embed/${id}?enablejsapi=1&playsinline=1&controls=0&disablekb=1&fs=0&iv_load_policy=3&cc_load_policy=0&rel=0&modestbranding=1&mute=1`;
 }
-
 export function createPanoramaPath(random = Math.random) {
   return {
     xPhaseA: random() * Math.PI * 2,

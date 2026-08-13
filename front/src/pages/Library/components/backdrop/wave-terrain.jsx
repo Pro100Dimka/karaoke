@@ -286,7 +286,9 @@ export default function LibraryWaveTerrain() {
     };
 
     const render = (timestamp = 0) => {
-      const paused = reducedMotion.matches;
+      const paused =
+        reducedMotion.matches ||
+        document.documentElement.dataset.performance === "reduced";
 
       if (!paused && timestamp - lastFrame < TARGET_FRAME_TIME) {
         frameId = requestAnimationFrame(render);

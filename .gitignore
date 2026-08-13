@@ -38,6 +38,7 @@ front/node_modules/
 /logs/
 front/.vite/
 front/.runtime/
+front/reports/mutation/
 *.tsbuildinfo
 
 # Application runtime data and user media

@@ -1,12 +1,15 @@
+import { translateSaved } from "../../i18n/runtime";
+
 function clampPercent(value) {
   const percent = Number(value);
   if (!Number.isFinite(percent)) return 0;
   return Math.max(0, Math.min(100, percent));
 }
-
-export default function ProgressBar({ percent = 0, label = "Прогресс" }) {
+export default function ProgressBar({
+  percent = 0,
+  label = translateSaved("Прогресс")
+}) {
   const normalizedPercent = clampPercent(percent);
-
   return (
     <div
       className="progress-track"
@@ -18,7 +21,9 @@ export default function ProgressBar({ percent = 0, label = "Прогресс" })
     >
       <div
         className="progress-fill"
-        style={{ width: `${normalizedPercent}%` }}
+        style={{
+          width: `${normalizedPercent}%`
+        }}
       />
     </div>
   );

@@ -1,14 +1,19 @@
 import { useId } from "react";
 import { RangeInput } from "../../../components/fields";
+import { translateSaved } from "../../../i18n/runtime";
 import { getSeekTime, getTimelineProgress } from "../utils/timeline";
 
 const BAR_COUNT = 220;
 const SVG_WIDTH = BAR_COUNT * 3;
-const WAVEFORM_BARS = Array.from({ length: BAR_COUNT }, (_, index) => [
-  index,
-  8 + Math.abs(Math.sin(index * 1.71) + Math.sin(index * 0.37)) * 11
-]);
-
+const WAVEFORM_BARS = Array.from(
+  {
+    length: BAR_COUNT
+  },
+  (_, index) => [
+    index,
+    8 + Math.abs(Math.sin(index * 1.71) + Math.sin(index * 0.37)) * 11
+  ]
+);
 const GRADIENT_STOPS = [
   ["0%", "var(--color-primary)"],
   ["24%", "var(--color-accent)"],
@@ -16,19 +21,16 @@ const GRADIENT_STOPS = [
   ["74%", "var(--color-secondary)"],
   ["100%", "var(--color-primary-hover)"]
 ];
-
 export default function WaveformTimeline({ value, duration, onChange }) {
   const progress = getTimelineProgress(value, duration);
   const gradientId = `waveform-gradient-${useId().replace(/:/g, "")}`;
   const playheadX = progress * SVG_WIDTH;
-
   const seekFromPointer = (event) => {
     if (!duration) return;
     const { left, width } = event.currentTarget.getBoundingClientRect();
     const nextValue = getSeekTime(event.clientX, left, width, duration);
     if (nextValue != null) onChange(nextValue);
   };
-
   const pointerHandlers = {
     onPointerDown(event) {
       event.preventDefault();
@@ -38,7 +40,6 @@ export default function WaveformTimeline({ value, duration, onChange }) {
       if (event.buttons === 1) seekFromPointer(event);
     }
   };
-
   return (
     <div className="waveform-timeline" {...pointerHandlers}>
       <svg
@@ -88,7 +89,7 @@ export default function WaveformTimeline({ value, duration, onChange }) {
       </svg>
 
       <RangeInput
-        aria-label="Позиция песни"
+        aria-label={translateSaved("Позиция песни")}
         min="0"
         max={duration || 0}
         step="0.01"

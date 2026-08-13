@@ -335,6 +335,41 @@ const THEME_ICONS = {
   green: "green.ico",
   violet: "violet.ico"
 };
+const THEME_NAMES = new Set(
+  Object.keys(THEME_ICONS).filter((name) => name !== "app")
+);
+
+function getStoredIconTheme() {
+  try {
+    const theme = fs
+      .readFileSync(
+        path.join(app.getPath("userData"), "selected-theme.txt"),
+        "utf8"
+      )
+      .trim();
+    return THEME_NAMES.has(theme) ? theme : "dark";
+  } catch {
+    return "dark";
+  }
+}
+
+function storeIconTheme(theme) {
+  if (!THEME_NAMES.has(theme)) return false;
+  try {
+    const userData = app.getPath("userData");
+    fs.mkdirSync(userData, { recursive: true });
+    fs.writeFileSync(path.join(userData, "selected-theme.txt"), theme, "utf8");
+    fs.copyFileSync(
+      getThemeIcon(theme),
+      path.join(userData, "selected-theme.ico")
+    );
+    return true;
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.warn("Could not persist themed application icon:", error);
+    return false;
+  }
+}
 
 function getThemeIcon(theme = "app") {
   const icon = THEME_ICONS[theme] ?? THEME_ICONS.app;
@@ -404,12 +439,14 @@ handleTrustedIpc("window:setIconTheme", (theme) => {
   if (!THEME_ICONS[theme] || theme === "app") return false;
 
   const iconPath = getThemeIcon(theme);
+  storeIconTheme(theme);
   mainWindow.setIcon(iconPath);
   updateThemeShortcuts(getThemeShortcutIcon(theme));
 
   return true;
 });
 function createWindow() {
+  const initialTheme = getStoredIconTheme();
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -417,7 +454,7 @@ function createWindow() {
     minHeight: 700,
     frame: false,
 
-    icon: getThemeIcon("app"),
+    icon: getThemeIcon(initialTheme),
 
     backgroundColor: "#0d0a1a",
     show: false,
@@ -426,9 +463,11 @@ function createWindow() {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: true,
+      additionalArguments: [`--advoice-theme=${initialTheme}`]
     }
   });
+  updateThemeShortcuts(getThemeShortcutIcon(initialTheme));
 
   const packagedIndexPath = path.join(__dirname, "..", "dist", "index.html");
   const packagedIndexUrl = getPackagedRendererUrl(packagedIndexPath);
@@ -561,6 +600,8 @@ if (!hasSingleInstanceLock) {
 
 app.whenReady().then(() => {
   if (!hasSingleInstanceLock) return;
+  if (process.platform === "win32")
+    app.setAppUserModelId("com.karaokestudio.app");
   registerMediaProtocol();
   const packagedIndexUrl = getPackagedRendererUrl(
     path.join(__dirname, "..", "dist", "index.html")

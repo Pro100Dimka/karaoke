@@ -1,7 +1,6 @@
 import { Mic } from "lucide-react";
-
+import { translateSaved } from "../../../../i18n/runtime";
 import { Stack, Typography } from "../../../../theme/ui";
-
 import { EFFECT_FIELDS, MIXER_FIELDS } from "./config";
 import EffectDial from "./effect-dial";
 import { clamp } from "./utils";
@@ -12,12 +11,16 @@ const MIXER_COLORS = {
   vocal: "var(--color-warning)",
   melody: "var(--color-secondary)"
 };
-
 function VerticalSlider({ label, value, color, onChange, onCommit }) {
   const percent = Math.round((value ?? 0) * 100);
-
   return (
-    <Stack gap={0.45} sx={{ userSelect: "none", width: "auto" }}>
+    <Stack
+      gap={0.45}
+      sx={{
+        userSelect: "none",
+        width: "auto"
+      }}
+    >
       <Typography
         variant="caption"
         sx={{
@@ -122,7 +125,6 @@ function VerticalSlider({ label, value, color, onChange, onCommit }) {
     </Stack>
   );
 }
-
 export default function MixerPanel({
   microphoneLevel,
   volumes,
@@ -132,9 +134,13 @@ export default function MixerPanel({
   onEffectChange
 }) {
   const level = clamp(microphoneLevel, 0, 1);
-
   return (
-    <Stack gap="1rem" style={{ "--microphone-level": level }}>
+    <Stack
+      gap="1rem"
+      style={{
+        "--microphone-level": level
+      }}
+    >
       <Stack direction="row" align="center" gap={0.4}>
         <Mic size={15} strokeWidth={2.2} />
         <Typography
@@ -146,7 +152,7 @@ export default function MixerPanel({
             lineHeight: 1
           }}
         >
-          Микшер
+          {translateSaved("Микшер")}
         </Typography>
       </Stack>
       <Stack direction="row" align="center" justify="space-between">
@@ -163,10 +169,8 @@ export default function MixerPanel({
               onCommit={key === "microphone" ? onMicrophoneCommit : undefined}
             />
           ];
-
           if (effect) {
             const [effectKey, effectLabel, accent] = effect;
-
             items.push(
               <EffectDial
                 key={`effect-${effectKey}`}
@@ -177,7 +181,6 @@ export default function MixerPanel({
               />
             );
           }
-
           return items;
         })}
       </Stack>

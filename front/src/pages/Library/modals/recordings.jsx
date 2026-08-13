@@ -3,20 +3,33 @@ import { api } from "../../../api/client";
 import { AudioPlayer } from "../../../components/AudioPlayer";
 import Modal from "../../../components/modal";
 import { Card, IconButton } from "../../../components/ui";
+import { translateSaved } from "../../../i18n/runtime";
 import { getErrorMessage } from "../../../utils/errors";
 import { formatLibraryDate } from "../utils";
 
 const TITLE = {
   icon: Music2,
-  eyebrow: "ИСПОЛНЕНИЯ ПЕСНИ",
-  description:
+  eyebrow: translateSaved("ИСПОЛНЕНИЯ ПЕСНИ"),
+  description: translateSaved(
     "Прослушивайте исполнения, запускайте анализ и управляйте записями."
+  )
 };
-
 function RecordingCard({ recording, onAnalyze, onDelete }) {
   const actions = [
-    [BarChart3, 15, "Анализировать запись", "btn-ghost", onAnalyze],
-    [Trash2, 14, "Удалить запись", "btn-danger song-recording-delete", onDelete]
+    [
+      BarChart3,
+      15,
+      translateSaved("Анализировать запись"),
+      "btn-ghost",
+      onAnalyze
+    ],
+    [
+      Trash2,
+      14,
+      translateSaved("Удалить запись"),
+      "btn-danger song-recording-delete",
+      onDelete
+    ]
   ];
   return (
     <Card className="song-recording-item" variant="glass">
@@ -44,7 +57,6 @@ function RecordingCard({ recording, onAnalyze, onDelete }) {
     </Card>
   );
 }
-
 export default function RecordingsModal({
   song,
   recordings = [],
@@ -58,13 +70,19 @@ export default function RecordingsModal({
     <Modal
       isOpen
       onClose={onClose}
-      ariaLabel={`Исполнения песни ${song.title}`}
-      titleProps={{ ...TITLE, title: song.title }}
+      ariaLabel={translateSaved("Исполнения песни {0}", {
+        0: song.title
+      })}
+      titleProps={{
+        ...TITLE,
+        title: song.title
+      }}
     >
       <div className="song-recordings-body modal-scroll">
         {error && (
           <p className="field-error">
-            Не удалось загрузить записи: {getErrorMessage(error)}
+            {translateSaved("Не удалось загрузить записи:")}
+            {getErrorMessage(error)}
           </p>
         )}
         <div className="song-recordings-list">
@@ -79,7 +97,7 @@ export default function RecordingsModal({
         </div>
         {!recordings.length && !error && (
           <div className="song-recordings-empty u-empty-state">
-            Для этой песни пока нет записанных исполнений.
+            {translateSaved("Для этой песни пока нет записанных исполнений.")}
           </div>
         )}
       </div>

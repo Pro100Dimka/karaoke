@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { translateSaved } from "../../../i18n/runtime";
 import { detectMidiFromAnalyser } from "../utils/pitch";
 
 export default function usePitchDetection({
@@ -11,7 +12,6 @@ export default function usePitchDetection({
   const [isPitchDetected, setIsPitchDetected] = useState(false);
   const [isPitchAttacking, setIsPitchAttacking] = useState(false);
   const [pitchRestProgress, setPitchRestProgress] = useState(1);
-
   useEffect(() => {
     if (
       !isPlaying ||
@@ -24,7 +24,6 @@ export default function usePitchDetection({
       setPitchRestProgress(1);
       return undefined;
     }
-
     let cancelled = false;
     let animationFrameId = 0;
     let ownsStream = false;
@@ -41,16 +40,13 @@ export default function usePitchDetection({
     let restStartedAt = 0;
     let attackUntil = 0;
     const recentMidi = [];
-
     const resetPitch = () => {
       setSungMidi(null);
       setIsPitchDetected(false);
       setIsPitchAttacking(false);
       setPitchRestProgress(1);
     };
-
     resetPitch();
-
     const start = async () => {
       try {
         const monitor = browserMonitorRef.current;
@@ -70,15 +66,21 @@ export default function usePitchDetection({
           const candidates =
             monitorInputDeviceId && monitorInputDeviceId !== "default"
               ? [
-                  { ...baseAudio, deviceId: { exact: monitorInputDeviceId } },
+                  {
+                    ...baseAudio,
+                    deviceId: {
+                      exact: monitorInputDeviceId
+                    }
+                  },
                   baseAudio
                 ]
               : [baseAudio];
-
           let lastError = null;
           for (const audio of candidates) {
             try {
-              stream = await navigator.mediaDevices.getUserMedia({ audio });
+              stream = await navigator.mediaDevices.getUserMedia({
+                audio
+              });
               ownsStream = true;
               lastError = null;
               break;
@@ -86,13 +88,17 @@ export default function usePitchDetection({
               lastError = error;
             }
           }
-          if (!stream) throw lastError || new Error("Микрофон недоступен");
+          if (!stream)
+            throw lastError || new Error(translateSaved("Микрофон недоступен"));
         }
         if (!context || context.state === "closed") {
           const AudioContextClass =
             window.AudioContext || window.webkitAudioContext;
-          if (!AudioContextClass) throw new Error("Web Audio API недоступен");
-          context = new AudioContextClass({ latencyHint: "interactive" });
+          if (!AudioContextClass)
+            throw new Error(translateSaved("Web Audio API недоступен"));
+          context = new AudioContextClass({
+            latencyHint: "interactive"
+          });
           ownsContext = true;
         }
         if (cancelled) {
@@ -104,7 +110,9 @@ export default function usePitchDetection({
           try {
             await context.resume();
           } catch {
-            throw new Error("Не удалось активировать Web Audio API");
+            throw new Error(
+              translateSaved("Не удалось активировать Web Audio API")
+            );
           }
         }
         if (cancelled) return;
@@ -195,7 +203,6 @@ export default function usePitchDetection({
         if (!cancelled) resetPitch();
       }
     };
-
     start();
     return () => {
       cancelled = true;
@@ -209,7 +216,6 @@ export default function usePitchDetection({
       if (ownsContext) context?.close?.().catch(() => {});
     };
   }, [browserMonitorRef, isPlaying, monitorInputDeviceId, monitoringEnabled]);
-
   return {
     sungMidi,
     isPitchDetected,

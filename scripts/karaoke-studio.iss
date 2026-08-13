@@ -13,9 +13,6 @@
 #ifndef ThemeIconsDir
   #error ThemeIconsDir is required
 #endif
-#ifndef ThemeIconPreviewsDir
-  #error ThemeIconPreviewsDir is required
-#endif
 
 [Setup]
 AppId={{E734496E-2622-5565-89D3-45451D9DE7EE}
@@ -42,7 +39,7 @@ SetupLogging=yes
 CloseApplications=yes
 RestartApplications=no
 UninstallDisplayName={#MyAppName}
-UninstallDisplayIcon={app}\{#MyAppExeName}
+UninstallDisplayIcon={userappdata}\A&D Voice\selected-theme.ico
 
 [Languages]
 Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
@@ -57,10 +54,6 @@ Source: "{#ThemeIconsDir}\dark.ico"; DestDir: "{app}\theme-icons"; Flags: ignore
 Source: "{#ThemeIconsDir}\light.ico"; DestDir: "{app}\theme-icons"; Flags: ignoreversion
 Source: "{#ThemeIconsDir}\green.ico"; DestDir: "{app}\theme-icons"; Flags: ignoreversion
 Source: "{#ThemeIconsDir}\violet.ico"; DestDir: "{app}\theme-icons"; Flags: ignoreversion
-Source: "{#ThemeIconPreviewsDir}\dark.png"; Flags: dontcopy
-Source: "{#ThemeIconPreviewsDir}\light.png"; Flags: dontcopy
-Source: "{#ThemeIconPreviewsDir}\green.png"; Flags: dontcopy
-Source: "{#ThemeIconPreviewsDir}\violet.png"; Flags: dontcopy
 ; Runtime is already compressed once. Inno only copies the archive from ISO.
 Source: "{src}\app-runtime.zip"; DestDir: "{tmp}"; Flags: external ignoreversion deleteafterinstall
 
@@ -107,7 +100,8 @@ var
   PreferencesPage: TWizardPage;
   LanguageCombo: TNewComboBox;
   ThemeCombo: TNewComboBox;
-  ThemePreview: TBitmapImage;
+  ThemeCard: TNewStaticText;
+  InstallModelsCheck: TNewCheckBox;
   RemoveUserData: Boolean;
   ModelProgressTimerID: Integer;
   ModelProgressPath: String;
@@ -141,23 +135,38 @@ end;
 function SelectedTheme: String; forward;
 
 procedure ThemeChanged(Sender: TObject);
-var
-  PreviewPath: String;
 begin
-  PreviewPath := ExpandConstant('{tmp}\') + SelectedTheme + '.png';
-  ThemePreview.PngImage.LoadFromFile(PreviewPath);
+  ThemeCard.Caption := 'A&D Voice  ·  ' + ThemeCombo.Text;
+  case ThemeCombo.ItemIndex of
+    1:
+      begin
+        ThemeCard.Color := $00F4F1EF;
+        ThemeCard.Font.Color := $0031211B;
+      end;
+    2:
+      begin
+        ThemeCard.Color := $00234317;
+        ThemeCard.Font.Color := $00E9FFE1;
+      end;
+    3:
+      begin
+        ThemeCard.Color := $00421F35;
+        ThemeCard.Font.Color := $00F8E8FF;
+      end;
+  else
+    begin
+      ThemeCard.Color := $00170D14;
+      ThemeCard.Font.Color := $00F4EAF1;
+    end;
+  end;
 end;
 
 procedure InitializeWizard;
 var
   LanguageLabel: TNewStaticText;
   ThemeLabel: TNewStaticText;
+  ModelsHint: TNewStaticText;
 begin
-  ExtractTemporaryFile('dark.png');
-  ExtractTemporaryFile('light.png');
-  ExtractTemporaryFile('green.png');
-  ExtractTemporaryFile('violet.png');
-
   PreferencesPage := CreateCustomPage(
     wpSelectDir,
     'Язык и тема A&D Voice',
@@ -179,7 +188,7 @@ begin
 
   ThemeLabel := TNewStaticText.Create(PreferencesPage);
   ThemeLabel.Parent := PreferencesPage.Surface;
-  ThemeLabel.Caption := 'Тема и иконка';
+  ThemeLabel.Caption := 'Тема оформления';
   ThemeLabel.SetBounds(0, 84, ScaleX(220), ScaleY(20));
   ThemeCombo := TNewComboBox.Create(PreferencesPage);
   ThemeCombo.Parent := PreferencesPage.Surface;
@@ -192,16 +201,38 @@ begin
   ThemeCombo.ItemIndex := 0;
   ThemeCombo.OnChange := @ThemeChanged;
 
-  ThemePreview := TBitmapImage.Create(PreferencesPage);
-  ThemePreview.Parent := PreferencesPage.Surface;
-  ThemePreview.SetBounds(ScaleX(290), ScaleY(82), ScaleX(96), ScaleY(96));
-  ThemePreview.Stretch := True;
+  ThemeCard := TNewStaticText.Create(PreferencesPage);
+  ThemeCard.Parent := PreferencesPage.Surface;
+  ThemeCard.AutoSize := False;
+  ThemeCard.Font.Style := [fsBold];
+  ThemeCard.SetBounds(ScaleX(290), ScaleY(104), ScaleX(170), ScaleY(30));
   ThemeChanged(nil);
 
+  InstallModelsCheck := TNewCheckBox.Create(PreferencesPage);
+  InstallModelsCheck.Parent := PreferencesPage.Surface;
+  InstallModelsCheck.Caption := 'Загрузить AI-модели во время установки';
+  InstallModelsCheck.Checked := True;
+  InstallModelsCheck.SetBounds(0, ScaleY(158), ScaleX(420), ScaleY(24));
+
+  ModelsHint := TNewStaticText.Create(PreferencesPage);
+  ModelsHint.Parent := PreferencesPage.Surface;
+  ModelsHint.AutoSize := False;
+  ModelsHint.WordWrap := True;
+  ModelsHint.Font.Color := clGray;
+  ModelsHint.Caption :=
+    'Для загрузки нужен интернет, потребуется несколько гигабайт. ' +
+    'Если отключить этот пункт, программа установится без моделей — ' +
+    'их можно будет скачать позже в настройках A&D Voice.';
+  ModelsHint.SetBounds(ScaleX(20), ScaleY(184), ScaleX(440), ScaleY(52));
 end;
 
 function SelectedTheme: String;
 begin
+  if ThemeCombo = nil then
+  begin
+    Result := 'dark';
+    Exit;
+  end;
   case ThemeCombo.ItemIndex of
     1: Result := 'light';
     2: Result := 'green';
@@ -228,22 +259,41 @@ end;
 
 procedure WriteInitialPreferences;
 var
+  AppDataDir: String;
   SettingsDir: String;
   SettingsPath: String;
+  InstallPreferencesPath: String;
+  ThemePath: String;
+  ThemeIconPath: String;
   Payload: String;
 begin
-  SettingsDir := ExpandConstant('{userappdata}\A&D Voice\backend-data');
+  AppDataDir := ExpandConstant('{userappdata}\A&D Voice');
+  SettingsDir := AppDataDir + '\backend-data';
   SettingsPath := SettingsDir + '\settings.json';
-  if FileExists(SettingsPath) then
-    Exit;
   ForceDirectories(SettingsDir);
   Payload := '{' + #13#10 +
     '  "language": "' + SelectedLanguage + '",' + #13#10 +
     '  "theme": "' + SelectedTheme + '",' + #13#10 +
     '  "compute_mode": "auto"' + #13#10 +
     '}' + #13#10;
-  if not SaveStringToFile(SettingsPath, Payload, False) then
+  if (not FileExists(SettingsPath)) and
+     (not SaveStringToFile(SettingsPath, Payload, False)) then
     RaiseException('Не удалось сохранить начальные настройки программы.');
+
+  InstallPreferencesPath := AppDataDir + '\install-preferences.json';
+  Payload := '{' + #13#10 +
+    '  "language": "' + SelectedLanguage + '",' + #13#10 +
+    '  "theme": "' + SelectedTheme + '"' + #13#10 +
+    '}' + #13#10;
+  if not SaveStringToFile(InstallPreferencesPath, Payload, False) then
+    RaiseException('Не удалось передать выбранную тему программе.');
+
+  ThemePath := AppDataDir + '\selected-theme.txt';
+  if not SaveStringToFile(ThemePath, SelectedTheme, False) then
+    RaiseException('Не удалось сохранить иконку выбранной темы.');
+  ThemeIconPath := AppDataDir + '\selected-theme.ico';
+  if not FileCopy(SelectedIconPath(''), ThemeIconPath, False) then
+    RaiseException('Не удалось подготовить системную иконку выбранной темы.');
 end;
 
 procedure ShowPendingInstallStep(const Status: String);
@@ -361,9 +411,14 @@ begin
     TarExe := ExpandConstant('{sys}\tar.exe');
     ArchivePath := ExpandConstant('{tmp}\app-runtime.zip');
 
-    ShowPendingInstallStep(
-      'Этап 2 из 3: распаковка программы. Установка ещё не завершена...'
-    );
+    if InstallModelsCheck.Checked then
+      ShowPendingInstallStep(
+        'Этап 2 из 3: распаковка программы. Установка ещё не завершена...'
+      )
+    else
+      ShowPendingInstallStep(
+        'Этап 2 из 2: распаковка программы. Установка ещё не завершена...'
+      );
 
     if not FileExists(TarExe) then
       RaiseException('Windows tar.exe was not found. Windows 10/11 is required.');
@@ -383,6 +438,14 @@ begin
 
     if not FileExists(ExpandConstant('{app}\{#MyAppExeName}')) then
       RaiseException('Runtime extraction completed, but the application executable is missing.');
+
+    if not InstallModelsCheck.Checked then
+    begin
+      CompleteInstallProgress;
+      WizardForm.StatusLabel.Caption :=
+        'Установка A&D Voice завершена. AI-модели можно скачать позже в настройках.';
+      Exit;
+    end;
 
     BackendExe := ExpandConstant('{app}\resources\backend\KaraokeBackend.exe');
     // Store downloads outside the application directory so an Inno rollback

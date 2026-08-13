@@ -1,4 +1,5 @@
 import { api } from "../../../api/client";
+import { translateSaved } from "../../../i18n/runtime";
 import { playbackGain, youTubeEmbedUrl } from "../utils/data";
 
 function AudioTrack({ track, audioRef, songId, volume }) {
@@ -13,7 +14,6 @@ function AudioTrack({ track, audioRef, songId, volume }) {
     />
   );
 }
-
 export default function KaraokeMedia({
   instrumentalRef,
   isPlaying,
@@ -54,7 +54,9 @@ export default function KaraokeMedia({
           ref={youTubeClipRef}
           className="karaoke-video karaoke-youtube-video"
           src={youTubeEmbedUrl(youTubeVideoId)}
-          title={`Клип: ${song.title}`}
+          title={translateSaved("Клип: {0}", {
+            0: song.title
+          })}
           allow="autoplay; encrypted-media; picture-in-picture"
           onLoad={handleYouTubeLoad}
         />

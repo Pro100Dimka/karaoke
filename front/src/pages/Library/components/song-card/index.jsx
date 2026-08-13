@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { translateSaved } from "../../../../i18n/runtime";
 import {
   Badge,
   Button,
@@ -15,19 +16,19 @@ import { formatSongKey, getSongActions } from "./utils";
 const INTERACTIVE_SELECTOR = "button, a, input, select, textarea";
 const ACTIVATION_KEYS = ["Enter", " "];
 const STATUS = {
-  pending: ["Ожидание", "badge-pending"],
-  queued: ["В очереди", "badge-pending"],
-  processing: ["Обрабатывается", "badge-processing"],
-  cancelling: ["Отмена...", "badge-processing"],
-  cancelled: ["Отменено", "badge-cancelled"],
-  done: ["Готово", "badge-done"],
-  error: ["Ошибка", "badge-error"]
+  pending: [translateSaved("Ожидание"), "badge-pending"],
+  queued: [translateSaved("В очереди"), "badge-pending"],
+  processing: [translateSaved("Обрабатывается"), "badge-processing"],
+  cancelling: [translateSaved("Отмена..."), "badge-processing"],
+  cancelled: [translateSaved("Отменено"), "badge-cancelled"],
+  done: [translateSaved("Готово"), "badge-done"],
+  error: [translateSaved("Ошибка"), "badge-error"]
 };
 const TextItems = ({ items }) =>
   items.map((value, key) => value && <span key={key}>{value}</span>);
 const SongStatusBadge = ({ status }) => {
   const [label, className] = STATUS[status] ?? [
-    status || "Неизвестно",
+    status || translateSaved("Неизвестно"),
     "badge-pending"
   ];
   return (
@@ -37,7 +38,6 @@ const SongStatusBadge = ({ status }) => {
     </Badge>
   );
 };
-
 function LibrarySongCard({
   cardIndex,
   onOpenKaraoke,
@@ -55,7 +55,12 @@ function LibrarySongCard({
     title
   } = song;
   const { isWorking, isReady } = getSongCardState(song);
-  const actions = getSongActions({ ...props, isReady, isWorking, song });
+  const actions = getSongActions({
+    ...props,
+    isReady,
+    isWorking,
+    song
+  });
   const titleDetails = [title, artist];
   const metadata = [
     formatSongKey(songKey),
@@ -84,10 +89,21 @@ function LibrarySongCard({
       onKeyDown={handleKeyDown}
       role={isReady ? "button" : undefined}
       tabIndex={isReady ? 0 : undefined}
-      aria-label={isReady ? `Открыть ${title} в караоке` : undefined}
+      aria-label={
+        isReady
+          ? translateSaved("Открыть {0} в караоке", {
+              0: title
+            })
+          : undefined
+      }
     >
       <SongCardArtwork cardIndex={cardIndex} />
-      <Stack className="library-song-card-main" sx={{ flex: "1 1 0" }}>
+      <Stack
+        className="library-song-card-main"
+        sx={{
+          flex: "1 1 0"
+        }}
+      >
         <Stack
           className="library-song-card-heading"
           direction="row"
@@ -103,7 +119,9 @@ function LibrarySongCard({
           <Button
             type="button"
             variant="ghost"
-            style={{ width: "100%" }}
+            style={{
+              width: "100%"
+            }}
             className="library-song-card-progress"
             onClick={() => onOpenProcessing(song)}
           >
@@ -115,8 +133,17 @@ function LibrarySongCard({
           direction="row"
           justify="space-between"
         >
-          <div style={{ width: "100%" }}>
-            <Typography className="library-song-card-meta" sx={{ padding: 0 }}>
+          <div
+            style={{
+              width: "100%"
+            }}
+          >
+            <Typography
+              className="library-song-card-meta"
+              sx={{
+                padding: 0
+              }}
+            >
               <TextItems items={metadata} />
             </Typography>
           </div>
@@ -155,5 +182,4 @@ function LibrarySongCard({
     </Card>
   );
 }
-
 export default memo(LibrarySongCard);

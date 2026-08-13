@@ -1,5 +1,5 @@
 import { Cpu, Mic2, Palette, Radio, SlidersHorizontal } from "lucide-react";
-
+import { translateSaved } from "../../i18n/runtime";
 import { MONITORING_MODES } from "../Karaoke/config";
 import screens from "./screens";
 import {
@@ -19,35 +19,30 @@ import {
 } from "./utils";
 
 export const FULL = 12;
-
 export const LATENCY_OPTIONS = opts([
-  ["interactive", "Низкая задержка"],
-  ["balanced", "Автоматический"],
-  ["playback", "Стабильное воспроизведение"]
+  ["interactive", translateSaved("Низкая задержка")],
+  ["balanced", translateSaved("Автоматический")],
+  ["playback", translateSaved("Стабильное воспроизведение")]
 ]);
-
 export const MONITOR_MODE_OPTIONS = MONITORING_MODES.map(({ id, title }) => ({
   value: id,
   label: title
 }));
-
 const LANGUAGE_OPTIONS = opts([
-  ["uk", "Українська"],
-  ["ru", "Русский"],
+  ["uk", translateSaved("Українська")],
+  ["ru", translateSaved("Русский")],
   ["en", "English"]
 ]);
-
 const THEME_OPTIONS = opts([
-  ["dark", "Тёмная"],
-  ["light", "Светлая"],
-  ["green", "Зелёная"],
-  ["violet", "Фиолетовая"]
+  ["dark", translateSaved("Тёмная")],
+  ["light", translateSaved("Светлая")],
+  ["green", translateSaved("Зелёная")],
+  ["violet", translateSaved("Фиолетовая")]
 ]);
-
 const COMPUTE_OPTIONS = opts([
-  ["auto", "Автоматически · рекомендуется"],
+  ["auto", translateSaved("Автоматически · рекомендуется")],
   ["cuda", "NVIDIA CUDA"],
-  ["cpu", "Только процессор"]
+  ["cpu", translateSaved("Только процессор")]
 ]);
 
 /* =========================================================
@@ -58,11 +53,11 @@ const GENERAL_FORM_FIELDS = [
   [
     "text",
     "online_name",
-    "Имя в сети",
-    "Это имя увидят другие участники комнаты",
+    translateSaved("Имя в сети"),
+    translateSaved("Это имя увидят другие участники комнаты"),
     {
       span: 4,
-      placeholder: "Например, Дима",
+      placeholder: translateSaved("Например, Дима"),
       maxLength: 40,
       save: "blur"
     }
@@ -70,8 +65,8 @@ const GENERAL_FORM_FIELDS = [
   [
     "select",
     "language",
-    "Язык",
-    "Язык интерфейса приложения",
+    translateSaved("Язык"),
+    translateSaved("Язык интерфейса приложения"),
     {
       span: 4,
       options: LANGUAGE_OPTIONS
@@ -80,8 +75,8 @@ const GENERAL_FORM_FIELDS = [
   [
     "select",
     "theme",
-    "Тема",
-    "Цветовое оформление приложения",
+    translateSaved("Тема"),
+    translateSaved("Цветовое оформление приложения"),
     {
       span: 4,
       options: THEME_OPTIONS,
@@ -95,13 +90,12 @@ const GENERAL_FORM_FIELDS = [
     ...extra
   })
 );
-
 const RADIO_FIELDS = [
   [
     "select",
     "stationId",
-    "Радиостанция",
-    "Выберите фоновую музыку",
+    translateSaved("Радиостанция"),
+    translateSaved("Выберите фоновую музыку"),
     {
       span: HALF,
       startIcon: Radio,
@@ -116,14 +110,14 @@ const RADIO_FIELDS = [
   [
     "slider",
     "volume",
-    "Громкость",
-    "Громкость фоновой музыки",
+    translateSaved("Громкость"),
+    translateSaved("Громкость фоновой музыки"),
     {
       span: HALF,
       min: 0,
       max: 1,
       step: 0.01,
-      getLabel: percent("Громкость")
+      getLabel: percent(translateSaved("Громкость"))
     }
   ]
 ].map(([type, name, label, tooltip, extra = {}]) =>
@@ -133,7 +127,6 @@ const RADIO_FIELDS = [
     ...extra
   })
 );
-
 const GENERAL_FIELDS = [...GENERAL_FORM_FIELDS, ...RADIO_FIELDS];
 
 /* =========================================================
@@ -145,11 +138,22 @@ const pickFolder = async (_context, currentPath) => {
   if (typeof selectFolder !== "function") return null;
   return selectFolder(currentPath || undefined);
 };
-
 const STORAGE_FIELDS = [
-  ["songs_folder", "Песни", "Папка с библиотекой песен"],
-  ["ai_folder", "AI-модели", "Папка с локальными AI-моделями"],
-  ["cache_folder", "Кэш", "Папка временных файлов"]
+  [
+    "songs_folder",
+    translateSaved("Песни"),
+    translateSaved("Папка с библиотекой песен")
+  ],
+  [
+    "ai_folder",
+    translateSaved("AI-модели"),
+    translateSaved("Папка с локальными AI-моделями")
+  ],
+  [
+    "cache_folder",
+    translateSaved("Кэш"),
+    translateSaved("Папка временных файлов")
+  ]
 ].map(([name, label, tooltip]) =>
   FORM_FIELDS.folder(name, {
     label,
@@ -157,7 +161,9 @@ const STORAGE_FIELDS = [
     span: 4,
     save: "change",
     pick: pickFolder,
-    browseLabel: `Выбрать папку: ${label}`
+    browseLabel: translateSaved("Выбрать папку: {0}", {
+      0: label
+    })
   })
 );
 
@@ -173,8 +179,8 @@ const AUDIO_SELECT_FIELDS = [
   [
     "input_device_id",
     "inputDevices",
-    "Микрофон",
-    "Устройство для записи голоса",
+    translateSaved("Микрофон"),
+    translateSaved("Устройство для записи голоса"),
     {
       span: 4,
       startIcon: Mic2,
@@ -184,8 +190,8 @@ const AUDIO_SELECT_FIELDS = [
   [
     "output_device_id",
     "outputDevices",
-    "Динамики или наушники",
-    "Куда выводить звук приложения",
+    translateSaved("Динамики или наушники"),
+    translateSaved("Куда выводить звук приложения"),
     {
       span: 8,
       parse: "nullable-number"
@@ -194,8 +200,8 @@ const AUDIO_SELECT_FIELDS = [
   [
     "audio_driver",
     "audioDrivers",
-    "Режим звука",
-    "Автоматический режим подходит большинству пользователей",
+    translateSaved("Режим звука"),
+    translateSaved("Автоматический режим подходит большинству пользователей"),
     {
       advanced: true,
       isVisible: multipleAudioDriversAvailable
@@ -204,8 +210,8 @@ const AUDIO_SELECT_FIELDS = [
   [
     "asio_driver_name",
     "asioDrivers",
-    "ASIO-драйвер",
-    "Нужен только при ручном использовании ASIO",
+    translateSaved("ASIO-драйвер"),
+    translateSaved("Нужен только при ручном использовании ASIO"),
     {
       advanced: true,
       isVisible: audioDriverVisible
@@ -214,8 +220,8 @@ const AUDIO_SELECT_FIELDS = [
   [
     "buffer_size",
     "bufferSizes",
-    "Буфер аудио",
-    "Меньше — ниже задержка, но выше нагрузка и риск щелчков",
+    translateSaved("Буфер аудио"),
+    translateSaved("Меньше — ниже задержка, но выше нагрузка и риск щелчков"),
     {
       advanced: true,
       parse: "number"
@@ -229,31 +235,32 @@ const AUDIO_SELECT_FIELDS = [
     ...extra
   })
 );
-
 const PREFERENCE_FIELDS = [
   [
     "monitorInputDeviceId",
     "browserInputs",
-    "Микрофон для проверки",
-    "Отдельный микрофон только для браузерного индикатора уровня"
+    translateSaved("Микрофон для проверки"),
+    translateSaved(
+      "Отдельный микрофон только для браузерного индикатора уровня"
+    )
   ],
   [
     "monitorOutputDeviceId",
     "browserOutputs",
-    "Выход для проверки",
-    "Отдельное устройство только для тестового сигнала"
+    translateSaved("Выход для проверки"),
+    translateSaved("Отдельное устройство только для тестового сигнала")
   ],
   [
     "monitorLatencyHint",
     LATENCY_OPTIONS,
-    "Режим задержки",
-    "Автоматического режима достаточно в большинстве случаев"
+    translateSaved("Режим задержки"),
+    translateSaved("Автоматического режима достаточно в большинстве случаев")
   ],
   [
     "monitorMode",
     MONITOR_MODE_OPTIONS,
-    "Режим прослушивания",
-    "Способ возврата голоса в наушники"
+    translateSaved("Режим прослушивания"),
+    translateSaved("Способ возврата голоса в наушники")
   ]
 ].map(([name, source, label, tooltip]) =>
   preferenceSelect(name, source, {
@@ -263,17 +270,16 @@ const PREFERENCE_FIELDS = [
     isDisabled: monitorDisabled
   })
 );
-
 const AUDIO_SPECIAL_FIELDS = [
   [
     "action",
     "speakerTest",
     4,
-    "Проверить звук",
-    "Воспроизвести короткий тестовый сигнал",
+    translateSaved("Проверить звук"),
+    translateSaved("Воспроизвести короткий тестовый сигнал"),
     {
-      idleText: "Проверить звук",
-      pendingText: "Проверяем…",
+      idleText: translateSaved("Проверить звук"),
+      pendingText: translateSaved("Проверяем…"),
       isPending: speakerPlaying,
       isDisabled: speakerPlaying,
       run: ({ audio }) => audio.actions?.testSpeakers?.()
@@ -283,8 +289,8 @@ const AUDIO_SPECIAL_FIELDS = [
     "monitor",
     "monitoringEnabled",
     3,
-    "Слышать свой голос",
-    "Включить прямое прослушивание микрофона",
+    translateSaved("Слышать свой голос"),
+    translateSaved("Включить прямое прослушивание микрофона"),
     {
       getValue: ({ audio }) => audio.states?.monitoringEnabled,
       getLevel: ({ audio }) => audio.states?.monitorLevel ?? 0,
@@ -301,20 +307,17 @@ const AUDIO_SPECIAL_FIELDS = [
   tooltip,
   ...extra
 }));
-
 const [MICROPHONE_FIELD, OUTPUT_FIELD, ...ADVANCED_AUDIO_FIELDS] =
   AUDIO_SELECT_FIELDS;
-
 const VOICE_VOLUME_FIELD = audioSlider("volume", {
   span: 5,
-  label: "Громкость голоса",
-  tooltip: "Громкость вашего голоса при прослушивании",
+  label: translateSaved("Громкость голоса"),
+  tooltip: translateSaved("Громкость вашего голоса при прослушивании"),
   min: 0,
   max: 1,
   step: 0.05,
-  getLabel: percent("Громкость голоса")
+  getLabel: percent(translateSaved("Громкость голоса"))
 });
-
 const AUDIO_FIELDS = [
   OUTPUT_FIELD,
   AUDIO_SPECIAL_FIELDS[0],
@@ -333,8 +336,10 @@ const AI_SETTINGS_FIELDS = [
   [
     "select",
     "compute_mode",
-    "Устройство обработки",
-    "Автоматический режим использует NVIDIA CUDA при наличии и CPU на остальных компьютерах",
+    translateSaved("Устройство обработки"),
+    translateSaved(
+      "Автоматический режим использует NVIDIA CUDA при наличии и CPU на остальных компьютерах"
+    ),
     {
       options: COMPUTE_OPTIONS
     }
@@ -342,8 +347,8 @@ const AI_SETTINGS_FIELDS = [
   [
     "number",
     "thread_count",
-    "Потоки процессора",
-    "Больше потоков обычно ускоряет обработку",
+    translateSaved("Потоки процессора"),
+    translateSaved("Больше потоков обычно ускоряет обработку"),
     {
       min: 1,
       max: 64,
@@ -357,7 +362,6 @@ const AI_SETTINGS_FIELDS = [
     ...extra
   })
 );
-
 const AI_FIELDS = [...AI_SETTINGS_FIELDS, ...STORAGE_FIELDS];
 
 /* =========================================================
@@ -366,9 +370,9 @@ const AI_FIELDS = [...AI_SETTINGS_FIELDS, ...STORAGE_FIELDS];
 
 export const SETTINGS = Object.fromEntries(
   [
-    ["appearance", "Общее", Palette, GENERAL_FIELDS],
-    ["audio", "Звук", SlidersHorizontal, AUDIO_FIELDS],
-    ["ai", "Обработка", Cpu, AI_FIELDS]
+    ["appearance", translateSaved("Общее"), Palette, GENERAL_FIELDS],
+    ["audio", translateSaved("Звук"), SlidersHorizontal, AUDIO_FIELDS],
+    ["ai", translateSaved("Обработка"), Cpu, AI_FIELDS]
   ].map(([id, label, icon, fields]) => [
     id,
     {
@@ -378,9 +382,7 @@ export const SETTINGS = Object.fromEntries(
     }
   ])
 );
-
 export const SERVICE_SCREENS = screens;
-
 export const SETTINGS_TABS = Object.entries(SETTINGS).map(
   ([id, { label, icon }]) => ({
     id,
@@ -388,11 +390,9 @@ export const SETTINGS_TABS = Object.entries(SETTINGS).map(
     icon
   })
 );
-
 export const SCREEN_BY_ID = Object.fromEntries(
   screens.map((screen) => [screen.id, screen])
 );
-
 export const EMPTY_BROWSER_DEVICES = Object.freeze({
   inputs: [],
   outputs: []

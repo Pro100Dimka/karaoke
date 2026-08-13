@@ -1,3 +1,5 @@
+import { translateSaved } from "../../i18n/runtime";
+
 export const EFFECT_PRESETS = [
   {
     id: "hall",
@@ -33,7 +35,7 @@ export const EFFECT_PRESETS = [
   },
   {
     id: "classic",
-    label: "Классика",
+    label: translateSaved("Классика"),
     symbol: "♬",
     reverb: 0.64,
     echo: 0.18,
@@ -41,7 +43,7 @@ export const EFFECT_PRESETS = [
   },
   {
     id: "pop",
-    label: "Поп",
+    label: translateSaved("Поп"),
     symbol: "☆",
     reverb: 0.36,
     echo: 0.24,
@@ -49,7 +51,7 @@ export const EFFECT_PRESETS = [
   },
   {
     id: "rock",
-    label: "Рок",
+    label: translateSaved("Рок"),
     symbol: "ϟ",
     reverb: 0.3,
     echo: 0.12,
@@ -57,12 +59,11 @@ export const EFFECT_PRESETS = [
   },
   {
     id: "club",
-    label: "Клуб",
+    label: translateSaved("Клуб"),
     symbol: "◎",
     reverb: 0.5,
     echo: 0.38,
     delay: 0.22
   }
 ];
-
 export const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5];

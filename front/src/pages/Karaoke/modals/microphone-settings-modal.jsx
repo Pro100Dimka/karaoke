@@ -1,6 +1,7 @@
 import { AudioLines, Settings2 } from "lucide-react";
 import Button from "../../../components/fields/button";
 import Modal from "../../../components/modal";
+import { translateSaved } from "../../../i18n/runtime";
 import SliderField from "../components/slider-field";
 import { PLAYBACK_SPEEDS } from "../constants";
 
@@ -9,12 +10,10 @@ const EFFECT_FIELDS = [
   ["echo", "Echo"],
   ["delay", "Delay"]
 ];
-
 const VIEW_TITLES = {
-  effects: [AudioLines, "Эффекты микрофона"],
-  settings: [Settings2, "Настройки караоке"]
+  effects: [AudioLines, translateSaved("Эффекты микрофона")],
+  settings: [Settings2, translateSaved("Настройки караоке")]
 };
-
 function EffectsView({ effects, onEffectsChange, onEffectCommit }) {
   return (
     <div className="microphone-effects karaoke-effects-panel u-stack-4">
@@ -34,7 +33,6 @@ function EffectsView({ effects, onEffectsChange, onEffectCommit }) {
     </div>
   );
 }
-
 function KaraokeSettings({
   keyShift,
   speed,
@@ -45,19 +43,18 @@ function KaraokeSettings({
   onOpenAudioSettings
 }) {
   const keyButtons = [
-    ["−", "Понизить тональность", keyShift <= -12, -1],
-    ["+", "Повысить тональность", keyShift >= 12, 1]
+    ["−", translateSaved("Понизить тональность"), keyShift <= -12, -1],
+    ["+", translateSaved("Повысить тональность"), keyShift >= 12, 1]
   ];
-
   return (
     <>
       <div className="karaoke-settings-section u-stack-4">
         <div className="karaoke-settings-section-title">
-          Отображение и воспроизведение
+          {translateSaved("Отображение и воспроизведение")}
         </div>
         <div className="karaoke-settings-toggles karaoke-settings-toggles--playback u-stack-4">
           <div className="karaoke-setting-choice">
-            <span>Тональность</span>
+            <span>{translateSaved("Тональность")}</span>
             <div className="karaoke-key-stepper">
               <Button
                 unstyled
@@ -79,18 +76,21 @@ function KaraokeSettings({
             </div>
             <small>
               {keyShift === 0
-                ? "Оригинальная"
-                : `${keyShift > 0 ? "+" : ""}${keyShift} полутонов`}
+                ? translateSaved("Оригинальная")
+                : translateSaved("{0}{1} полутонов", {
+                    0: keyShift > 0 ? "+" : "",
+                    1: keyShift
+                  })}
             </small>
           </div>
         </div>
         <div className="karaoke-settings-sliders karaoke-settings-sliders--single u-grid-2">
           <div className="karaoke-setting-choice">
-            <span>Скорость</span>
+            <span>{translateSaved("Скорость")}</span>
             <div
               className="karaoke-speed-switch"
               role="group"
-              aria-label="Скорость"
+              aria-label={translateSaved("Скорость")}
             >
               {PLAYBACK_SPEEDS.map((value) => (
                 <Button
@@ -116,21 +116,18 @@ function KaraokeSettings({
               onOpenAudioSettings("audio");
             }}
           >
-            Аудио и запись
+            {translateSaved("Аудио и запись")}
           </Button>
         </div>
       )}
     </>
   );
 }
-
 export default function MicrophoneSettingsModal(props) {
   const { view, onClose } = props;
   const isEffectsView = view === "effects";
-
   const [TitleIcon, title] =
     VIEW_TITLES[isEffectsView ? "effects" : "settings"];
-
   return (
     <Modal
       isOpen
@@ -138,16 +135,18 @@ export default function MicrophoneSettingsModal(props) {
       ariaLabel={title}
       modalClassName="microphone-panel karaoke-settings-modal"
       closeClassName="karaoke-settings-close"
-      closeAriaLabel="Закрыть настройки"
+      closeAriaLabel={translateSaved("Закрыть настройки")}
       closeIconSize={16}
       tilt={false}
       titleProps={{
         icon: TitleIcon,
-        eyebrow: isEffectsView ? "МИКРОФОН" : "КАРАОКЕ",
+        eyebrow: isEffectsView
+          ? translateSaved("МИКРОФОН")
+          : translateSaved("КАРАОКЕ"),
         title,
         description: isEffectsView
-          ? "Настройте обработку микрофона."
-          : "Настройте тональность и скорость воспроизведения."
+          ? translateSaved("Настройте обработку микрофона.")
+          : translateSaved("Настройте тональность и скорость воспроизведения.")
       }}
     >
       {isEffectsView ? (

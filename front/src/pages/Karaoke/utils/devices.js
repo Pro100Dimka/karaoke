@@ -1,3 +1,5 @@
+import { translateSaved } from "../../../i18n/runtime";
+
 function mapDeviceOptions(devices, getValue, fallbackLabel) {
   const seen = new Set();
   return (Array.isArray(devices) ? devices : [])
@@ -18,28 +20,35 @@ function mapDeviceOptions(devices, getValue, fallbackLabel) {
       return true;
     });
 }
-
 export function createIndexedDeviceOptions(
   devices,
-  defaultLabel = "По умолчанию"
+  defaultLabel = translateSaved("По умолчанию")
 ) {
   return [
-    { value: "", label: defaultLabel },
-    ...mapDeviceOptions(devices, (device) => device?.index, "Устройство")
+    {
+      value: "",
+      label: defaultLabel
+    },
+    ...mapDeviceOptions(
+      devices,
+      (device) => device?.index,
+      translateSaved("Устройство")
+    )
   ];
 }
-
 export function createBrowserDeviceOptions(
   devices,
   fallbackLabel,
-  defaultLabel = "Системное по умолчанию"
+  defaultLabel = translateSaved("Системное по умолчанию")
 ) {
   return [
-    { value: "default", label: defaultLabel },
+    {
+      value: "default",
+      label: defaultLabel
+    },
     ...mapDeviceOptions(devices, (device) => device?.deviceId, fallbackLabel)
   ];
 }
-
 export function createBufferSizeOptions(values = [32, 64, 128, 256, 512]) {
   return [...new Set((Array.isArray(values) ? values : []).map(Number))]
     .filter((value) => Number.isInteger(value) && value > 0)

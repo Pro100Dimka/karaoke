@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { translateSaved } from "../../../../i18n/runtime";
 import useKaraokePanorama from "../../hooks/useKaraokePanorama";
 import AuroraWorld from "./aurora-world";
 import KaraokeLyricLine from "./karaoke-lyric-line";
@@ -12,11 +13,12 @@ function Lyrics({ lyrics, currentLine, upcomingLine, nextLine, currentTime }) {
   ]
     .filter(Boolean)
     .join(" ");
-
   return (
     <div className="karaoke-lyrics">
       {!lyrics.length && (
-        <p className="text-muted">Синхронизированный текст недоступен</p>
+        <p className="text-muted">
+          {translateSaved("Синхронизированный текст недоступен")}
+        </p>
       )}
 
       {activeLine ? (
@@ -29,7 +31,7 @@ function Lyrics({ lyrics, currentLine, upcomingLine, nextLine, currentTime }) {
       ) : (
         lyrics.length > 0 && (
           <div className="karaoke-lyric karaoke-lyric-current">
-            Песня завершена
+            {translateSaved("Песня завершена")}
           </div>
         )
       )}
@@ -44,7 +46,6 @@ function Lyrics({ lyrics, currentLine, upcomingLine, nextLine, currentTime }) {
     </div>
   );
 }
-
 export default function KaraokePerformanceStage(props) {
   const {
     currentTime,
@@ -70,7 +71,6 @@ export default function KaraokePerformanceStage(props) {
       (seed, character) => (seed * 31 + character.charCodeAt(0)) % 997,
       17
     );
-
   const changeSceneVideoPosition = useCallback(() => {
     const video = sceneVideoRef.current;
     if (!video) return;
@@ -80,7 +80,6 @@ export default function KaraokePerformanceStage(props) {
     }
     video.play().catch(() => {});
   }, []);
-
   const transitionSceneVideo = useCallback(() => {
     if (!sceneVideoRef.current?.duration) return;
     setSceneVideoFading(true);
@@ -90,13 +89,10 @@ export default function KaraokePerformanceStage(props) {
       setSceneVideoFading(false);
     }, 180);
   }, [changeSceneVideoPosition]);
-
   useEffect(() => {
     transitionSceneVideo();
   }, [isPlaying, sceneVideoUrl, transitionSceneVideo]);
-
   useEffect(() => () => window.clearTimeout(sceneVideoTimerRef.current), []);
-
   return (
     <div
       className={`karaoke-performance-stage karaoke-video-stage ${isPlaying ? "is-playing" : "is-paused"}`}
@@ -118,7 +114,9 @@ export default function KaraokePerformanceStage(props) {
           <div
             ref={panoramaRef}
             className="karaoke-panoramic-sky"
-            style={{ "--panorama-image": `url("${activeTheme.image}")` }}
+            style={{
+              "--panorama-image": `url("${activeTheme.image}")`
+            }}
             aria-hidden="true"
           />
           <AuroraWorld seed={sceneSeed} />
@@ -135,8 +133,10 @@ export default function KaraokePerformanceStage(props) {
         aria-hidden={!sceneIntroVisible}
       >
         <div className="karaoke-song-intro-card">
-          <span className="karaoke-song-intro-kicker">Сейчас прозвучит</span>
-          <strong>{sceneIntro?.title || "Караоке"}</strong>
+          <span className="karaoke-song-intro-kicker">
+            {translateSaved("Сейчас прозвучит")}
+          </span>
+          <strong>{sceneIntro?.title || translateSaved("Караоке")}</strong>
           {sceneIntro?.artist && (
             <span className="karaoke-song-intro-artist">
               {sceneIntro.artist}

@@ -1,17 +1,19 @@
 import useDiagnostics from "../../../../hooks/useDiagnostics";
+import { useI18n } from "../../../../i18n";
 import { Grid, Stack, Typography } from "../../../../theme/ui";
 import { PIPELINE_CHECKS } from "./config";
 import { DiagnosticCheck, ErrorList, VersionList } from "./utils";
 
 export default function Diagnostics() {
+  const { t } = useI18n();
   const { health, pipeline, versions, errors } = useDiagnostics();
 
   const checks = [
-    ["backend", "Backend сервер", Boolean(health)],
+    ["backend", t("settings.diagnostics.backend"), Boolean(health)],
     ...(pipeline
-      ? PIPELINE_CHECKS.map(([key, label]) => [
+      ? PIPELINE_CHECKS.map((key) => [
           key,
-          label,
+          t(`settings.diagnostics.${key}`),
           Boolean(pipeline[key])
         ])
       : [])
@@ -20,7 +22,7 @@ export default function Diagnostics() {
   return (
     <Stack gap={1.5} className="settings-diagnostics-screen">
       <Stack gap={0.65} className="settings-screen-section">
-        <Typography variant="h3">Диагностика</Typography>
+        <Typography variant="h3">{t("settings.diagnostics.title")}</Typography>
 
         <Grid
           columns={2}
@@ -36,7 +38,7 @@ export default function Diagnostics() {
       <VersionList components={versions?.components} />
 
       <Stack gap={0.5} className="settings-screen-section">
-        <Typography variant="h3">Журнал ошибок</Typography>
+        <Typography variant="h3">{t("settings.diagnostics.errors")}</Typography>
         <ErrorList errors={errors?.errors} />
       </Stack>
     </Stack>

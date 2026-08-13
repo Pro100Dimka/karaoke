@@ -30,6 +30,7 @@ function MusicObject({ type, parts }) {
 export default function LibraryBackdrop() {
   useEffect(() => {
     const root = document.documentElement;
+    if (root.dataset.performance === "reduced") return undefined;
     let frame = 0;
     let targetX = 0;
     let targetY = 0;

@@ -1,3 +1,5 @@
+import { useI18n } from "../../i18n";
+
 export default function PageState({
   loading,
   error,
@@ -5,10 +7,11 @@ export default function PageState({
   emptyTitle,
   children
 }) {
+  const { t } = useI18n();
   if (loading) {
     return (
       <div className="page-state" role="status">
-        Загрузка…
+        {t("common.loading")}
       </div>
     );
   }
@@ -22,7 +25,7 @@ export default function PageState({
   }
 
   if (empty) {
-    return <div className="page-state">{emptyTitle || "Нет данных"}</div>;
+    return <div className="page-state">{emptyTitle || t("common.noData")}</div>;
   }
 
   return children;

@@ -7,6 +7,7 @@ import { POLLING_INTERVALS } from "../../config/runtime";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import { useRadio } from "../../contexts/radio";
 import { usePolling } from "../../hooks/usePolling";
+import { translateSaved } from "../../i18n/runtime";
 import { getErrorMessage } from "../../utils/errors";
 import KaraokeConsole from "./components/console";
 import KaraokeMedia from "./components/karaoke-media";
@@ -40,12 +41,17 @@ import { getMicrophoneLevel } from "./utils/transport";
 
 const setGlobalRouteBlackout = (visible) => {
   window.dispatchEvent(
-    new CustomEvent("app:route-blackout", { detail: { visible } })
+    new CustomEvent("app:route-blackout", {
+      detail: {
+        visible
+      }
+    })
   );
 };
-
 export default function Karaoke({ onOpenAppSettings }) {
   const onlineRoom = useOnlineRoom();
+  const { room: onlineRoomState, syncUi: syncRoomUi } = onlineRoom;
+  const onlineParticipantCount = onlineRoom.participants.length;
   const {
     isPlaying: isRadioPlaying,
     setRecordingActive,
@@ -64,7 +70,6 @@ export default function Karaoke({ onOpenAppSettings }) {
   const song = songId
     ? (songs || []).find((s) => s.id === songId)
     : (songs || []).find((s) => s.status === "done");
-
   const {
     result,
     loading: resultLoading,
@@ -79,7 +84,6 @@ export default function Karaoke({ onOpenAppSettings }) {
   const hasStartedPlaybackRef = useRef(false);
   const stageActionTimerRef = useRef(null);
   const containerRef = useRef(null);
-
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -126,7 +130,6 @@ export default function Karaoke({ onOpenAppSettings }) {
   const [microphoneOpen, setMicrophoneOpen] = useState(false);
   const [microphoneSettingsView] = useState("music");
   const [recordingError, setRecordingError] = useState(null);
-
   useEffect(() => {
     // A paused recording session must not block the background radio. Only
     // suspend radio output while karaoke playback is actually running.
@@ -141,8 +144,9 @@ export default function Karaoke({ onOpenAppSettings }) {
     useState(autoStartRequested);
   const autoStartedSongRef = useRef(null);
   const { controlsVisible, hideControls, revealControls, showControls } =
-    useKaraokeControls({ autoHideEnabled: autoHideConsole });
-
+    useKaraokeControls({
+      autoHideEnabled: autoHideConsole
+    });
   useEffect(() => {
     if (!autoStartRequested) return undefined;
 
@@ -152,7 +156,6 @@ export default function Karaoke({ onOpenAppSettings }) {
     const timer = window.setTimeout(() => setGlobalRouteBlackout(false), 80);
     return () => window.clearTimeout(timer);
   }, [autoStartRequested]);
-
   const revealStageActions = useCallback(() => {
     setStageActionsVisible(true);
     if (stageActionTimerRef.current) {
@@ -162,7 +165,6 @@ export default function Karaoke({ onOpenAppSettings }) {
       setStageActionsVisible(false);
     }, 1800);
   }, []);
-
   useEffect(() => {
     revealStageActions();
     return () => {
@@ -192,7 +194,6 @@ export default function Karaoke({ onOpenAppSettings }) {
     POLLING_INTERVALS.karaokeSignal,
     [microphoneOpen]
   );
-
   const microphoneLevel = getMicrophoneLevel(signal);
   const microphoneSettings = useMicrophoneSettings({
     audioSettings,
@@ -204,6 +205,10 @@ export default function Karaoke({ onOpenAppSettings }) {
     microphoneEffects,
     setMicrophoneEffects
   } = microphoneSettings;
+  useEffect(() => {
+    if (!onlineRoomState) return;
+    syncRoomUi({ participantEffects: microphoneEffects });
+  }, [microphoneEffects, onlineParticipantCount, onlineRoomState, syncRoomUi]);
   const {
     audioDriver,
     directOutputDeviceId,
@@ -212,7 +217,6 @@ export default function Karaoke({ onOpenAppSettings }) {
     setMonitoringEnabled
   } = microphoneSettings;
   const { monitorInputDeviceId, updateMicrophone } = microphoneSettings;
-
   useAudioOutputRouting({
     audioDriver,
     audioSettings,
@@ -226,7 +230,6 @@ export default function Karaoke({ onOpenAppSettings }) {
     videoRef,
     vocalsRef
   });
-
   useEffect(() => {
     setIsPlaying(false);
     setCurrentTime(0);
@@ -266,12 +269,10 @@ export default function Karaoke({ onOpenAppSettings }) {
   // "anchor" delay shifted every word by up to half a second even when the
   // word-level alignment was already correct for the current song.
   const lyricTime = currentTime;
-
   const { currentLine, upcomingLine, nextLine } = getLyricDisplayState(
     lyrics,
     lyricTime
   );
-
   const { sendYouTubeCommand, syncSecondaryMedia } = useKaraokeMediaSync({
     browserMonitorRef,
     currentTimeRef,
@@ -296,7 +297,6 @@ export default function Karaoke({ onOpenAppSettings }) {
     vocalsRef,
     youTubeClipRef
   });
-
   const { sungMidi, isPitchDetected, isPitchAttacking, pitchRestProgress } =
     usePitchDetection({
       browserMonitorRef,
@@ -304,7 +304,6 @@ export default function Karaoke({ onOpenAppSettings }) {
       monitorInputDeviceId,
       monitoringEnabled
     });
-
   const { preparePlayback, returnToLibrary, seekTo, skip, stop, togglePlay } =
     useKaraokeTransport({
       currentTime,
@@ -332,7 +331,6 @@ export default function Karaoke({ onOpenAppSettings }) {
       vocalVolume,
       vocalsRef
     });
-
   const waitForScene = useCallback(
     (milliseconds) =>
       new Promise((resolve) => {
@@ -340,7 +338,6 @@ export default function Karaoke({ onOpenAppSettings }) {
       }),
     []
   );
-
   const preloadSongMedia = useCallback(async () => {
     const media = [instrumentalRef.current, vocalsRef.current].filter(Boolean);
     await Promise.all(
@@ -356,14 +353,17 @@ export default function Karaoke({ onOpenAppSettings }) {
             element.removeEventListener("error", finish);
             resolve();
           };
-          element.addEventListener("canplay", finish, { once: true });
-          element.addEventListener("error", finish, { once: true });
+          element.addEventListener("canplay", finish, {
+            once: true
+          });
+          element.addEventListener("error", finish, {
+            once: true
+          });
           window.setTimeout(finish, 2200);
         });
       })
     );
   }, []);
-
   const runSceneTransition = useCallback(
     async (
       action,
@@ -385,7 +385,6 @@ export default function Karaoke({ onOpenAppSettings }) {
             .then(prepareAction)
             .catch(() => false)
         : Promise.resolve(true);
-
       try {
         await waitForScene(420);
         if (showIntro) {
@@ -394,17 +393,13 @@ export default function Karaoke({ onOpenAppSettings }) {
           setSceneIntroVisible(false);
           await waitForScene(180);
         }
-
         await preparation;
-
         if (!actionAfterReveal) {
           await Promise.resolve(action());
         }
-
         setSceneBlackout(false);
         // Match the CSS transition and start on the first fully revealed frame.
         await waitForScene(520);
-
         if (actionAfterReveal) {
           await Promise.resolve(action());
         }
@@ -419,13 +414,16 @@ export default function Karaoke({ onOpenAppSettings }) {
     },
     [hideControls, waitForScene]
   );
-
   const startSongWithIntro = useCallback(() => {
     resumeRadioOnPauseRef.current = isRadioPlaying;
-    turnOffRadio({ remember: false });
+    turnOffRadio({
+      remember: false
+    });
     return runSceneTransition(
       async () => {
-        const started = await togglePlay({ forcePlaying: true });
+        const started = await togglePlay({
+          forcePlaying: true
+        });
         if (started) hasStartedPlaybackRef.current = true;
         return started;
       },
@@ -444,25 +442,32 @@ export default function Karaoke({ onOpenAppSettings }) {
     togglePlay,
     turnOffRadio
   ]);
-
   const handleTogglePlay = useCallback(async () => {
     if (isPlaying) {
-      const paused = await togglePlay({ forcePlaying: false });
+      const paused = await togglePlay({
+        forcePlaying: false
+      });
       if (paused && resumeRadioOnPauseRef.current) {
         // Release the radio synchronously instead of waiting for the React
         // effect that follows setIsPlaying(false).
         setRecordingActive(false);
-        turnOnRadio({ remember: false, fadeIn: true }).catch(() => {});
+        turnOnRadio({
+          remember: false,
+          fadeIn: true
+        }).catch(() => {});
       }
       return paused;
     }
 
     // Resume is immediate: no cinematic blackout is repeated after Pause.
     if (hasStartedPlaybackRef.current) {
-      turnOffRadio({ remember: false });
-      return togglePlay({ forcePlaying: true });
+      turnOffRadio({
+        remember: false
+      });
+      return togglePlay({
+        forcePlaying: true
+      });
     }
-
     return startSongWithIntro();
   }, [
     isPlaying,
@@ -472,7 +477,6 @@ export default function Karaoke({ onOpenAppSettings }) {
     turnOffRadio,
     turnOnRadio
   ]);
-
   const navigateToLibraryFromBlackout = useCallback(
     (analysisId = null) => {
       navigate("/", {
@@ -485,10 +489,8 @@ export default function Karaoke({ onOpenAppSettings }) {
     },
     [navigate]
   );
-
   const handleStop = useCallback(async () => {
     if (sceneTransitionRef.current) return false;
-
     sceneTransitionRef.current = true;
     setSceneTransitioning(true);
     hideControls();
@@ -500,10 +502,8 @@ export default function Karaoke({ onOpenAppSettings }) {
     // happens while the screen is already black, so the end of a performance
     // feels like one continuous transition instead of a hard UI change.
     await waitForScene(430);
-
     const stopped = await stop();
     if (stopped) hasStartedPlaybackRef.current = false;
-
     const analysisId = analysisRecordingIdRef.current;
 
     // Keep one blackout mounted outside the routed pages themselves. This
@@ -519,7 +519,6 @@ export default function Karaoke({ onOpenAppSettings }) {
     navigateToLibraryFromBlackout(analysisId);
     return stopped;
   }, [hideControls, navigateToLibraryFromBlackout, stop, waitForScene]);
-
   useEffect(() => {
     if (
       !autoStartRequested ||
@@ -528,11 +527,9 @@ export default function Karaoke({ onOpenAppSettings }) {
     ) {
       return undefined;
     }
-
     let cancelled = false;
     let attempts = 0;
     let timerId = null;
-
     const tryAutoStart = () => {
       if (cancelled) return;
       if (instrumentalRef.current && vocalsRef.current) {
@@ -548,16 +545,13 @@ export default function Karaoke({ onOpenAppSettings }) {
         setSceneTransitioning(false);
       }
     };
-
     timerId = window.setTimeout(tryAutoStart, 80);
     return () => {
       cancelled = true;
       if (timerId) window.clearTimeout(timerId);
     };
   }, [autoStartRequested, song?.id, startSongWithIntro]);
-
   playbackEndedRef.current = () => handleStop();
-
   useKaraokeHotkeys({
     scopeRef: containerRef,
     currentTime,
@@ -566,35 +560,35 @@ export default function Karaoke({ onOpenAppSettings }) {
     onSeek: seekTo,
     onStop: handleStop
   });
-
   useKaraokeStageLayout(containerRef);
-
   if (songsError) {
     return (
       <div className="panel">
         <p className="field-error">
-          Не удалось загрузить библиотеку:{" "}
-          {songsError.message || "ошибка соединения"}.
+          {translateSaved("Не удалось загрузить библиотеку:")}{" "}
+          {songsError.message || translateSaved("ошибка соединения")}.
         </p>
       </div>
     );
   }
-
   if (!songs) {
     return (
       <div className="panel">
-        <p className="text-muted">Загружаем песню…</p>
+        <p className="text-muted">{translateSaved("Загружаем песню…")}</p>
       </div>
     );
   }
-
   if (!song) {
     return (
       <div className="panel">
         <p className="text-muted">
           {songId
-            ? "Выбранная песня не найдена. Вернитесь в Библиотеку и откройте её снова."
-            : "Нет готовой песни для воспроизведения. Сначала обработайте песню в Библиотеке."}
+            ? translateSaved(
+                "Выбранная песня не найдена. Вернитесь в Библиотеку и откройте её снова."
+              )
+            : translateSaved(
+                "Нет готовой песни для воспроизведения. Сначала обработайте песню в Библиотеке."
+              )}
         </p>
       </div>
     );
@@ -603,31 +597,34 @@ export default function Karaoke({ onOpenAppSettings }) {
     return (
       <div className="panel">
         <p className="text-muted">
-          «{song.title}» ещё не обработана — статус: {song.status}.
+          «{song.title}
+          {translateSaved("» ещё не обработана — статус:")}
+          {song.status}.
         </p>
       </div>
     );
   }
-
   if (resultLoading) {
     return (
       <div className="panel">
-        <p className="text-muted">Загружаем данные караоке…</p>
+        <p className="text-muted">
+          {translateSaved("Загружаем данные караоке…")}
+        </p>
       </div>
     );
   }
-
   if (resultError || !result) {
     return (
       <div className="panel">
         <p className="field-error">
-          Не удалось загрузить данные караоке:{" "}
-          {resultError?.message || "результат обработки отсутствует"}.
+          {translateSaved("Не удалось загрузить данные караоке:")}{" "}
+          {resultError?.message ||
+            translateSaved("результат обработки отсутствует")}
+          .
         </p>
       </div>
     );
   }
-
   const rawBaseTempo = Number(result?.music?.tempo ?? song.tempo_override);
   const baseTempo =
     Number.isFinite(rawBaseTempo) && rawBaseTempo > 0 ? rawBaseTempo : 120;
@@ -653,7 +650,6 @@ export default function Karaoke({ onOpenAppSettings }) {
       delay: preset.delay
     });
   };
-
   return (
     <div
       ref={containerRef}
@@ -691,9 +687,16 @@ export default function Karaoke({ onOpenAppSettings }) {
           )}
           onClose={() => setMicrophoneOpen(false)}
           onEffectsChange={(key, value) =>
-            setMicrophoneEffects((effects) => ({ ...effects, [key]: value }))
+            setMicrophoneEffects((effects) => ({
+              ...effects,
+              [key]: value
+            }))
           }
-          onEffectCommit={(key, value) => updateMicrophone({ [key]: value })}
+          onEffectCommit={(key, value) =>
+            updateMicrophone({
+              [key]: value
+            })
+          }
           onKeyShiftChange={setKeyShift}
           onSpeedChange={setSpeed}
           onOpenAudioSettings={onOpenAppSettings}
@@ -723,14 +726,14 @@ export default function Karaoke({ onOpenAppSettings }) {
 
       <div
         className={`karaoke-stage-actions ${stageActionsVisible && !sceneTransitioning ? "is-visible" : ""}`}
-        aria-label="Навигация караоке"
+        aria-label={translateSaved("Навигация караоке")}
       >
         <IconButton
           unstyled
           className="karaoke-stage-action"
           icon={ArrowLeft}
           size={25}
-          label="Назад в библиотеку"
+          label={translateSaved("Назад в библиотеку")}
           onClick={returnToLibrary}
         />
         {!autoHideConsole && (
@@ -739,7 +742,11 @@ export default function Karaoke({ onOpenAppSettings }) {
             className={`karaoke-stage-action ${controlsVisible ? "is-active" : ""}`}
             icon={SlidersHorizontal}
             size={25}
-            label={controlsVisible ? "Скрыть консоль" : "Показать консоль"}
+            label={
+              controlsVisible
+                ? translateSaved("Скрыть консоль")
+                : translateSaved("Показать консоль")
+            }
             aria-pressed={controlsVisible}
             onClick={controlsVisible ? hideControls : showControls}
           />
@@ -750,7 +757,11 @@ export default function Karaoke({ onOpenAppSettings }) {
             className={`karaoke-stage-action karaoke-stage-radio ${isRadioPlaying ? "is-active" : ""}`}
             icon={Radio}
             size={24}
-            label={isRadioPlaying ? "Выключить радио" : "Включить радио"}
+            label={
+              isRadioPlaying
+                ? translateSaved("Выключить радио")
+                : translateSaved("Включить радио")
+            }
             aria-pressed={isRadioPlaying}
             onClick={toggleRadio}
           />
@@ -805,12 +816,21 @@ export default function Karaoke({ onOpenAppSettings }) {
           vocal: setVocalVolume,
           melody: setMelodyVolume
         }}
-        onMicrophoneCommit={(value) => updateMicrophone({ volume: value })}
+        onMicrophoneCommit={(value) =>
+          updateMicrophone({
+            volume: value
+          })
+        }
         microphoneEffects={microphoneEffects}
         onEffectChange={(key, value) => {
           setEffectPreset("custom");
-          setMicrophoneEffects((effects) => ({ ...effects, [key]: value }));
-          updateMicrophone({ [key]: value });
+          setMicrophoneEffects((effects) => ({
+            ...effects,
+            [key]: value
+          }));
+          updateMicrophone({
+            [key]: value
+          });
         }}
         isPlaying={isPlaying}
         onSkip={skip}
@@ -842,11 +862,18 @@ export default function Karaoke({ onOpenAppSettings }) {
             const updated = await action();
             setMonitoringEnabled(Boolean(updated?.monitoring_enabled));
             globalThis.dispatchEvent?.(
-              new CustomEvent("audio-settings-changed", { detail: updated })
+              new CustomEvent("audio-settings-changed", {
+                detail: updated
+              })
             );
           } catch (error) {
             setRecordingError(
-              `Не удалось изменить прослушивание микрофона: ${getErrorMessage(error)}`
+              translateSaved(
+                "Не удалось изменить прослушивание микрофона: {0}",
+                {
+                  0: getErrorMessage(error)
+                }
+              )
             );
           }
         }}

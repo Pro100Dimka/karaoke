@@ -3,17 +3,19 @@ import { Mic } from "lucide-react";
 import { api } from "../../../api/client";
 import { POLLING_INTERVALS } from "../../../config/runtime";
 import { usePolling } from "../../../hooks/usePolling";
+import { useI18n } from "../../../i18n";
 import { Grid, Stack, Typography } from "../../../theme/ui";
 import { APP_INFO } from "../../../utils/config";
 
 const INFO_FIELDS = [
-  ["backend_version", "Версия Backend"],
-  ["frontend_version", "Версия React"],
-  ["ai_version", "Версия AI"],
-  ["data_dir", "Путь к данным"]
+  ["backend_version", "backendVersion"],
+  ["frontend_version", "frontendVersion"],
+  ["ai_version", "aiVersion"],
+  ["data_dir", "dataPath"]
 ];
 
 export default function About() {
+  const { t } = useI18n();
   const { data } = usePolling(api.getAbout, POLLING_INTERVALS.about, []);
   const about = data ?? {};
 
@@ -29,7 +31,7 @@ export default function About() {
         </Typography>
 
         <Typography variant="body2" tone="muted" align="center">
-          {APP_INFO.description}
+          {t("settings.about.description")}
         </Typography>
       </Stack>
 
@@ -42,7 +44,7 @@ export default function About() {
         {INFO_FIELDS.map(([key, label]) => (
           <Stack key={key} gap={0.25} className="settings-about-info-item">
             <Typography variant="caption" tone="muted">
-              {label}
+              {t(`settings.about.${label}`)}
             </Typography>
 
             <Typography

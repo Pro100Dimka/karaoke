@@ -1,51 +1,43 @@
 import { AudioLines, Cog, Ear, MousePointer2, Type } from "lucide-react";
-
+import { translateSaved } from "../../../../i18n/runtime";
 import { Button, Grid, Stack, Typography } from "../../../../theme/ui";
-
 import { EFFECT_PRESETS } from "../../constants";
 import { normalizePreset } from "./utils";
 
 const PRESET_ACCENTS = {
-  Hall: "var(--color-primary)",
-  Room: "var(--color-success)",
-  Plate: "var(--color-warning)",
-  Studio: "var(--color-secondary)",
-  Классика: "var(--color-primary)",
-  Поп: "var(--color-success)",
-  Рок: "var(--color-warning)",
-  Клуб: "var(--color-secondary)"
+  hall: "var(--color-primary)",
+  room: "var(--color-success)",
+  plate: "var(--color-warning)",
+  studio: "var(--color-secondary)",
+  classic: "var(--color-primary)",
+  pop: "var(--color-success)",
+  rock: "var(--color-warning)",
+  club: "var(--color-secondary)"
 };
-
 const TOOL_BUTTON_SX = {
   minHeight: 38,
   padding: "0.45rem 0.75rem",
-
   borderRadius: "var(--shape-md)",
-
   color: "var(--color-text-soft)",
-
   border:
     "1px solid color-mix(in srgb, var(--color-primary) 38%, var(--color-border))",
-
   background: "color-mix(in srgb, var(--color-bg-deep) 88%, transparent)",
-
   boxShadow:
     "inset 0 1px 0 color-mix(in srgb, var(--color-highlight) 5%, transparent)",
-
   transition:
     "transform 140ms ease, color 140ms ease, border-color 140ms ease, background 140ms ease, box-shadow 140ms ease"
 };
-
-function EffectPreset({ label, symbol, echo, reverb, active, onClick }) {
-  const accent = PRESET_ACCENTS[label] ?? "var(--color-primary)";
-
+function EffectPreset({ id, label, symbol, echo, reverb, active, onClick }) {
+  const accent = PRESET_ACCENTS[id] ?? "var(--color-primary)";
   return (
     <Button
       variant="ghost"
       aria-pressed={active}
-      title={`${label}: эхо ${Math.round(
-        echo * 100
-      )}%, реверб ${Math.round(reverb * 100)}%`}
+      title={translateSaved("{0}: эхо {1}%, реверб {2}%", {
+        0: label,
+        1: Math.round(echo * 100),
+        2: Math.round(reverb * 100)
+      })}
       onClick={onClick}
       sx={{
         minWidth: 0,
@@ -65,7 +57,9 @@ function EffectPreset({ label, symbol, echo, reverb, active, onClick }) {
           ? "0 0 1rem color-mix(in srgb, var(--preset-accent) 24%, transparent), inset 0 1px 0 color-mix(in srgb, var(--color-highlight) 7%, transparent)"
           : "inset 0 1px 0 color-mix(in srgb, var(--color-highlight) 4%, transparent)"
       }}
-      style={{ "--preset-accent": accent }}
+      style={{
+        "--preset-accent": accent
+      }}
     >
       <Stack align="center">
         <span
@@ -73,15 +67,11 @@ function EffectPreset({ label, symbol, echo, reverb, active, onClick }) {
           style={{
             display: "grid",
             placeItems: "center",
-
             minWidth: 30,
             minHeight: 30,
-
             color: accent,
-
             fontSize: 24,
             lineHeight: 1,
-
             filter: active
               ? `drop-shadow(
                   0 0 0.45rem
@@ -101,10 +91,8 @@ function EffectPreset({ label, symbol, echo, reverb, active, onClick }) {
           variant="caption"
           sx={{
             color: active ? accent : "var(--color-text-soft)",
-
             fontSize: 11,
             fontWeight: 800,
-
             lineHeight: 1,
             whiteSpace: "nowrap"
           }}
@@ -115,16 +103,29 @@ function EffectPreset({ label, symbol, echo, reverb, active, onClick }) {
     </Button>
   );
 }
-
 function EffectPresets({ effectPreset, onApplyEffectPreset }) {
   return (
-    <Grid columns={4} gap="0.5rem" sx={{ width: "100%" }}>
+    <Grid
+      columns={4}
+      gap="0.5rem"
+      sx={{
+        width: "100%"
+      }}
+    >
       {EFFECT_PRESETS.map(normalizePreset).map(
         ([id, label, symbol, echo, reverb, delay]) => {
-          const preset = { id, label, symbol, echo, reverb, delay };
+          const preset = {
+            id,
+            label,
+            symbol,
+            echo,
+            reverb,
+            delay
+          };
           return (
             <EffectPreset
               key={id}
+              id={id}
               label={label}
               symbol={symbol}
               echo={echo}
@@ -138,7 +139,6 @@ function EffectPresets({ effectPreset, onApplyEffectPreset }) {
     </Grid>
   );
 }
-
 function ToolButton({ icon: Icon, label, active, title, onClick }) {
   return (
     <Button
@@ -148,19 +148,14 @@ function ToolButton({ icon: Icon, label, active, title, onClick }) {
       onClick={onClick}
       sx={{
         ...TOOL_BUTTON_SX,
-
         flex: "1 1 0",
-
         color: active ? "var(--color-success)" : "var(--color-text-soft)",
-
         borderColor: active
           ? "color-mix(in srgb, var(--color-success) 70%, var(--color-border))"
           : "color-mix(in srgb, var(--color-primary) 38%, var(--color-border))",
-
         background: active
           ? "linear-gradient(180deg, color-mix(in srgb, var(--color-success) 10%, var(--color-bg-deep)), var(--color-bg-deep))"
           : "color-mix(in srgb, var(--color-bg-deep) 90%, transparent)",
-
         boxShadow: active
           ? "0 0 0.9rem color-mix(in srgb, var(--color-success) 25%, transparent), inset 0 1px 0 color-mix(in srgb, var(--color-highlight) 7%, transparent)"
           : "inset 0 1px 0 color-mix(in srgb, var(--color-highlight) 4%, transparent)"
@@ -184,7 +179,6 @@ function ToolButton({ icon: Icon, label, active, title, onClick }) {
     </Button>
   );
 }
-
 function ToolTabs({
   showNotes,
   showLyrics,
@@ -197,31 +191,30 @@ function ToolTabs({
   onAutoHideChange
 }) {
   const tools = [
-    ["notes", AudioLines, "Ноты", showNotes, onToggleNotes],
-
-    ["lyrics", Type, "Текст", showLyrics, onToggleLyrics],
-
+    ["notes", AudioLines, translateSaved("Ноты"), showNotes, onToggleNotes],
+    ["lyrics", Type, translateSaved("Текст"), showLyrics, onToggleLyrics],
     [
       "monitor",
       Ear,
-      "Слышу себя",
+      translateSaved("Слышу себя"),
       monitoringEnabled,
       () => onMonitoringChange?.(!monitoringEnabled),
-      "Независимое прослушивание микрофона с выбранными эффектами"
+      translateSaved(
+        "Независимое прослушивание микрофона с выбранными эффектами"
+      )
     ],
-
     [
       "auto",
       MousePointer2,
-      "Автоскрытие",
+      translateSaved("Автоскрытие"),
       autoHideEnabled,
       () => onAutoHideChange?.(!autoHideEnabled),
-      "Автоматически показывать и скрывать консоль при движении мыши"
+      translateSaved(
+        "Автоматически показывать и скрывать консоль при движении мыши"
+      )
     ],
-
-    ["settings", Cog, "Настройки", null, onOpenAppSettings]
+    ["settings", Cog, translateSaved("Настройки"), null, onOpenAppSettings]
   ].filter(([, , , , onClick]) => onClick);
-
   return (
     <Stack
       direction="row"
@@ -243,7 +236,6 @@ function ToolTabs({
     </Stack>
   );
 }
-
 export default function ToolsPanel(props) {
   return (
     <Stack gap={0.75} justify="flex-end">

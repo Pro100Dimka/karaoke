@@ -1,3 +1,5 @@
+// eslint-disable-next-line import/extensions
+import { translateSaved } from "../i18n/runtime.js";
 // Audio is transferred directly between participants. The Worker is used only
 // for signalling, therefore microphone data is never stored in the cloud.
 
@@ -5,19 +7,19 @@ const wait = (delayMs) =>
   new Promise((resolve) => {
     globalThis.setTimeout(resolve, delayMs);
   });
-
 const getBinaryChunk = (data) => {
   if (data instanceof ArrayBuffer) return data;
   if (!ArrayBuffer.isView(data)) return null;
   return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
 };
-
 const MAX_INCOMING_FILE_BYTES = 512 * 1024 * 1024;
 const MAX_TRANSFER_ID_LENGTH = 128;
 const MAX_FILENAME_LENGTH = 512;
 const MAX_PENDING_ICE_CANDIDATES = 256;
 const MAX_INCOMING_CHUNKS = 32_768;
 const MAX_DATA_MESSAGE_LENGTH = 16 * 1024;
+const TRANSFER_STALL_TIMEOUT_MS = 30_000;
+const TRANSFER_CONFIRM_TIMEOUT_MS = 5 * 60_000;
 const isValidTransferSize = (size) =>
   Number.isSafeInteger(size) && size >= 0 && size <= MAX_INCOMING_FILE_BYTES;
 export default class OnlineVoiceMesh {
@@ -31,12 +33,14 @@ export default class OnlineVoiceMesh {
     this.peerVersions = new Map();
     this.channels = new Map();
     this.incomingFiles = new Map();
+    this.pendingTransferConfirmations = new Map();
     this.stream = null;
     this.startPromise = null;
     this.lifecycleVersion = 0;
     this.onRemoteStream = null;
     this.onPeerClosed = null;
     this.onFile = null;
+    this.onTransferProgress = null;
     this.disconnectTimers = new Map();
   }
 
@@ -45,9 +49,10 @@ export default class OnlineVoiceMesh {
       typeof navigator === "undefined" ||
       !navigator.mediaDevices?.getUserMedia
     ) {
-      throw new Error("Захват микрофона не поддерживается в этом окружении");
+      throw new Error(
+        translateSaved("Захват микрофона не поддерживается в этом окружении")
+      );
     }
-
     const liveStream = this.stream
       ?.getAudioTracks?.()
       .some((track) => track.readyState === "live");
@@ -57,7 +62,6 @@ export default class OnlineVoiceMesh {
       this.stream = null;
     }
     if (this.startPromise) return this.startPromise;
-
     const { lifecycleVersion } = this;
     const startPromise = navigator.mediaDevices
       .getUserMedia({
@@ -65,16 +69,20 @@ export default class OnlineVoiceMesh {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          channelCount: 1
+          channelCount: 1,
+          sampleRate: { ideal: 48_000 },
+          sampleSize: { ideal: 24 }
         }
       })
       .then(async (stream) => {
         if (lifecycleVersion !== this.lifecycleVersion) {
           stream.getTracks().forEach((track) => track.stop());
-          throw new Error("Запуск микрофона отменён");
+          throw new Error(translateSaved("Запуск микрофона отменён"));
         }
-
         this.stream = stream;
+        stream.getAudioTracks().forEach((track) => {
+          track.contentHint = "music";
+        });
         for (const [participantId, peer] of this.peers) {
           const existingTrackIds = new Set(
             peer
@@ -85,6 +93,7 @@ export default class OnlineVoiceMesh {
           stream.getTracks().forEach((track) => {
             if (!existingTrackIds.has(track.id)) peer.addTrack(track, stream);
           });
+          await this.optimizeAudioSenders(peer);
           this.pendingInvites.add(participantId);
         }
         const pending = [...this.pendingInvites];
@@ -97,7 +106,6 @@ export default class OnlineVoiceMesh {
       .finally(() => {
         if (this.startPromise === startPromise) this.startPromise = null;
       });
-
     this.startPromise = startPromise;
     return startPromise;
   }
@@ -108,17 +116,23 @@ export default class OnlineVoiceMesh {
       !participantId ||
       participantId.length > 128
     ) {
-      throw new TypeError("Некорректный идентификатор участника");
+      throw new TypeError(
+        translateSaved("Некорректный идентификатор участника")
+      );
     }
     if (typeof globalThis.RTCPeerConnection !== "function") {
-      throw new Error("WebRTC не поддерживается в этом окружении");
+      throw new Error(
+        translateSaved("WebRTC не поддерживается в этом окружении")
+      );
     }
-
     const current = this.peers.get(participantId);
     if (current) return current;
-
     const peer = new globalThis.RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }]
+      iceServers: [
+        {
+          urls: "stun:stun.cloudflare.com:3478"
+        }
+      ]
     });
     this.stream?.getTracks().forEach((track) => {
       peer.addTrack(track, this.stream);
@@ -128,7 +142,9 @@ export default class OnlineVoiceMesh {
       if (!candidate || !isCurrentPeer()) return;
       this.roomClient.send("signal", {
         targetId: participantId,
-        signal: { candidate }
+        signal: {
+          candidate
+        }
       });
     };
     peer.ontrack = ({ streams }) => {
@@ -172,37 +188,58 @@ export default class OnlineVoiceMesh {
     return peer;
   }
 
+  async optimizeAudioSenders(peer) {
+    await Promise.allSettled(
+      peer
+        .getSenders()
+        .filter(
+          (sender) => sender.track?.kind === "audio" && sender.setParameters
+        )
+        .map(async (sender) => {
+          const parameters = sender.getParameters();
+          const encodings = parameters.encodings?.length
+            ? parameters.encodings
+            : [{}];
+          parameters.encodings = encodings.map((encoding) => ({
+            ...encoding,
+            maxBitrate: 160_000,
+            networkPriority: "high"
+          }));
+          parameters.degradationPreference = "maintain-framerate";
+          await sender.setParameters(parameters);
+        })
+    );
+  }
+
   async invite(participantId) {
     if (!participantId) return false;
-
     const pendingInvite = this.invitePromises.get(participantId);
     if (pendingInvite) return pendingInvite;
-
     const { lifecycleVersion } = this;
     const peer = this.createPeer(participantId);
     const isCurrentPeer = () =>
       lifecycleVersion === this.lifecycleVersion &&
       this.peers.get(participantId) === peer &&
       peer.connectionState !== "closed";
-
     const invitePromise = (async () => {
       if (!this.channels.has(participantId)) {
         this.setupDataChannel(
           participantId,
-          peer.createDataChannel("karaoke-library", { ordered: true })
+          peer.createDataChannel("karaoke-library", {
+            ordered: true
+          })
         );
       }
-
       try {
         const offer = await peer.createOffer();
         if (!isCurrentPeer()) return false;
-
         await peer.setLocalDescription(offer);
         if (!isCurrentPeer() || !peer.localDescription) return false;
-
         return this.roomClient.send("signal", {
           targetId: participantId,
-          signal: { description: peer.localDescription }
+          signal: {
+            description: peer.localDescription
+          }
         });
       } catch (error) {
         if (!isCurrentPeer()) return false;
@@ -213,7 +250,6 @@ export default class OnlineVoiceMesh {
         this.invitePromises.delete(participantId);
       }
     });
-
     this.invitePromises.set(participantId, invitePromise);
     return invitePromise;
   }
@@ -229,7 +265,6 @@ export default class OnlineVoiceMesh {
     ) {
       return false;
     }
-
     const peerVersion = this.peerVersions.get(fromId) || 0;
     const previousSignal = this.signalPromises.get(fromId) || Promise.resolve();
     const signalPromise = previousSignal
@@ -243,7 +278,6 @@ export default class OnlineVoiceMesh {
           (this.peerVersions.get(fromId) || 0) === peerVersion &&
           this.peers.get(fromId) === peer &&
           peer.connectionState !== "closed";
-
         if (signal.candidate) {
           if (!isCurrentPeer()) return false;
           if (peer.remoteDescription) {
@@ -253,17 +287,17 @@ export default class OnlineVoiceMesh {
           const queue = this.pendingCandidates.get(fromId) || [];
           if (queue.length >= MAX_PENDING_ICE_CANDIDATES) {
             this.removePeer(fromId);
-            throw new Error("Получено слишком много ICE-кандидатов");
+            throw new Error(
+              translateSaved("Получено слишком много ICE-кандидатов")
+            );
           }
           queue.push(signal.candidate);
           this.pendingCandidates.set(fromId, queue);
           return true;
         }
         if (!signal.description) return false;
-
         await peer.setRemoteDescription(signal.description);
         if (!isCurrentPeer()) return false;
-
         const candidates = this.pendingCandidates.get(fromId) || [];
         this.pendingCandidates.delete(fromId);
         // ICE candidates must be applied in arrival order.
@@ -273,17 +307,16 @@ export default class OnlineVoiceMesh {
           // eslint-disable-next-line no-await-in-loop
           await peer.addIceCandidate(candidate);
         }
-
         if (signal.description.type !== "offer") return true;
-
         const answer = await peer.createAnswer();
         if (!isCurrentPeer()) return false;
         await peer.setLocalDescription(answer);
         if (!isCurrentPeer() || !peer.localDescription) return false;
-
         return this.roomClient.send("signal", {
           targetId: fromId,
-          signal: { description: peer.localDescription }
+          signal: {
+            description: peer.localDescription
+          }
         });
       })
       .finally(() => {
@@ -291,7 +324,6 @@ export default class OnlineVoiceMesh {
           this.signalPromises.delete(fromId);
         }
       });
-
     this.signalPromises.set(fromId, signalPromise);
     return signalPromise;
   }
@@ -305,10 +337,11 @@ export default class OnlineVoiceMesh {
   setupDataChannel(participantId, channel) {
     const previousChannel = this.channels.get(participantId);
     if (previousChannel && previousChannel !== channel) {
+      const incoming = this.incomingFiles.get(participantId);
+      if (incoming?.timer) globalThis.clearTimeout(incoming.timer);
       this.incomingFiles.delete(participantId);
       if (previousChannel.readyState !== "closed") previousChannel.close?.();
     }
-
     channel.binaryType = "arraybuffer";
     channel.bufferedAmountLowThreshold = 256 * 1024;
     channel.onmessage = ({ data }) => {
@@ -323,7 +356,24 @@ export default class OnlineVoiceMesh {
         if (!message || typeof message !== "object" || Array.isArray(message)) {
           return;
         }
-        if (message.type === "file-start") {
+        if (message.type === "file-complete" || message.type === "file-error") {
+          const pending = this.pendingTransferConfirmations.get(
+            message.transferId
+          );
+          if (!pending || pending.participantId !== participantId) return;
+          this.pendingTransferConfirmations.delete(message.transferId);
+          globalThis.clearTimeout(pending.timer);
+          if (message.type === "file-complete") pending.resolve();
+          else {
+            pending.reject(
+              new Error(
+                typeof message.error === "string" && message.error
+                  ? message.error.slice(0, 500)
+                  : translateSaved("Получатель не смог импортировать песню")
+              )
+            );
+          }
+        } else if (message.type === "file-start") {
           if (this.incomingFiles.has(participantId)) return;
           const transferId =
             typeof message.transferId === "string" ? message.transferId : "";
@@ -359,16 +409,29 @@ export default class OnlineVoiceMesh {
           this.incomingFiles.set(participantId, {
             metadata,
             chunks: [],
-            received: 0
+            received: 0,
+            lastPercent: -1,
+            timer: this.createIncomingTransferTimer(participantId, transferId)
           });
+          this.emitTransferProgress(participantId, "receiving", 0, metadata);
         } else if (message.type === "file-end") {
           const transfer = this.incomingFiles.get(participantId);
           this.incomingFiles.delete(participantId);
+          if (transfer?.timer) globalThis.clearTimeout(transfer.timer);
           if (
             !transfer ||
             transfer.metadata.transferId !== message.transferId ||
             transfer.received !== transfer.metadata.size
           ) {
+            if (channel.readyState === "open") {
+              channel.send(
+                JSON.stringify({
+                  type: "file-error",
+                  transferId: message.transferId,
+                  error: translateSaved("Получен неполный файл песни")
+                })
+              );
+            }
             return;
           }
           const BlobClass = globalThis.Blob;
@@ -376,9 +439,47 @@ export default class OnlineVoiceMesh {
           const blob = new BlobClass(transfer.chunks, {
             type: transfer.metadata.mimeType
           });
-          Promise.resolve(
-            this.onFile?.(participantId, blob, transfer.metadata)
-          ).catch(() => {});
+          this.emitTransferProgress(
+            participantId,
+            "importing",
+            100,
+            transfer.metadata
+          );
+          Promise.resolve(this.onFile?.(participantId, blob, transfer.metadata))
+            .then(() => {
+              if (channel.readyState === "open") {
+                channel.send(
+                  JSON.stringify({
+                    type: "file-complete",
+                    transferId: message.transferId
+                  })
+                );
+              }
+              this.emitTransferProgress(
+                participantId,
+                "complete",
+                100,
+                transfer.metadata
+              );
+            })
+            .catch((error) => {
+              if (channel.readyState === "open") {
+                channel.send(
+                  JSON.stringify({
+                    type: "file-error",
+                    transferId: message.transferId,
+                    error:
+                      error instanceof Error ? error.message : String(error)
+                  })
+                );
+              }
+              this.emitTransferProgress(
+                participantId,
+                "error",
+                100,
+                transfer.metadata
+              );
+            });
         }
         return;
       }
@@ -395,15 +496,60 @@ export default class OnlineVoiceMesh {
         return;
       }
       transfer.chunks.push(chunk);
+      globalThis.clearTimeout(transfer.timer);
+      transfer.timer = this.createIncomingTransferTimer(
+        participantId,
+        transfer.metadata.transferId
+      );
+      const percent = transfer.metadata.size
+        ? Math.min(
+            99,
+            Math.floor((transfer.received / transfer.metadata.size) * 100)
+          )
+        : 99;
+      if (percent !== transfer.lastPercent) {
+        transfer.lastPercent = percent;
+        this.emitTransferProgress(
+          participantId,
+          "receiving",
+          percent,
+          transfer.metadata
+        );
+      }
     };
     const clearChannel = () => {
       if (this.channels.get(participantId) !== channel) return;
       this.channels.delete(participantId);
+      const incoming = this.incomingFiles.get(participantId);
+      if (incoming?.timer) globalThis.clearTimeout(incoming.timer);
       this.incomingFiles.delete(participantId);
     };
     channel.onclose = clearChannel;
     channel.onerror = clearChannel;
     this.channels.set(participantId, channel);
+  }
+
+  emitTransferProgress(participantId, stage, percent, metadata = {}) {
+    this.onTransferProgress?.({ participantId, stage, percent, metadata });
+  }
+
+  createIncomingTransferTimer(participantId, transferId) {
+    return globalThis.setTimeout(() => {
+      const transfer = this.incomingFiles.get(participantId);
+      if (transfer?.metadata.transferId !== transferId) return;
+      this.incomingFiles.delete(participantId);
+      const channel = this.channels.get(participantId);
+      if (channel?.readyState === "open") {
+        channel.send(
+          JSON.stringify({
+            type: "file-error",
+            transferId,
+            error: translateSaved("Передача песни остановилась")
+          })
+        );
+      }
+      this.emitTransferProgress(participantId, "error", 0, transfer.metadata);
+    }, TRANSFER_STALL_TIMEOUT_MS);
   }
 
   async waitForDataChannel(
@@ -417,7 +563,7 @@ export default class OnlineVoiceMesh {
     const startedAt = Date.now();
     while (Date.now() - startedAt < safeTimeout) {
       if (lifecycleVersion !== this.lifecycleVersion) {
-        throw new Error("Передача файла отменена");
+        throw new Error(translateSaved("Передача файла отменена"));
       }
       const channel = this.channels.get(participantId);
       if (channel?.readyState === "open") return channel;
@@ -425,13 +571,13 @@ export default class OnlineVoiceMesh {
         channel?.readyState === "closing" ||
         channel?.readyState === "closed"
       ) {
-        throw new Error("Канал передачи песни закрыт");
+        throw new Error(translateSaved("Канал передачи песни закрыт"));
       }
       // Polling is intentionally sequential.
       // eslint-disable-next-line no-await-in-loop
       await wait(50);
     }
-    throw new Error("Канал передачи песни не готов");
+    throw new Error(translateSaved("Канал передачи песни не готов"));
   }
 
   async sendFile(participantId, blob, metadata = {}) {
@@ -443,10 +589,12 @@ export default class OnlineVoiceMesh {
       typeof BlobClass !== "function" ||
       !(blob instanceof BlobClass)
     ) {
-      throw new TypeError("Для передачи нужны участник и файл");
+      throw new TypeError(translateSaved("Для передачи нужны участник и файл"));
     }
     if (blob.size > MAX_INCOMING_FILE_BYTES) {
-      throw new RangeError("Файл слишком большой для передачи через комнату");
+      throw new RangeError(
+        translateSaved("Файл слишком большой для передачи через комнату")
+      );
     }
     const { lifecycleVersion } = this;
     const channel = await this.waitForDataChannel(
@@ -459,7 +607,7 @@ export default class OnlineVoiceMesh {
         ? globalThis.crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     if (channel.readyState !== "open") {
-      throw new Error("Канал передачи песни закрыт");
+      throw new Error(translateSaved("Канал передачи песни закрыт"));
     }
     channel.send(
       JSON.stringify({
@@ -481,14 +629,23 @@ export default class OnlineVoiceMesh {
         mimeType: (blob.type || "application/octet-stream").slice(0, 255)
       })
     );
+    this.emitTransferProgress(participantId, "sending", 0, metadata);
     const chunkSize = 32 * 1024;
+    let lastProgressAt = Date.now();
     for (let offset = 0; offset < blob.size; offset += chunkSize) {
       while (channel.bufferedAmount > 512 * 1024) {
         if (
           lifecycleVersion !== this.lifecycleVersion ||
           channel.readyState !== "open"
         ) {
-          throw new Error("Передача файла отменена");
+          throw new Error(translateSaved("Передача файла отменена"));
+        }
+        if (Date.now() - lastProgressAt > TRANSFER_STALL_TIMEOUT_MS) {
+          throw new Error(
+            translateSaved(
+              "Передача песни остановилась: нет ответа от участника"
+            )
+          );
         }
         // Backpressure must be checked before each ordered chunk.
         // eslint-disable-next-line no-await-in-loop
@@ -498,7 +655,7 @@ export default class OnlineVoiceMesh {
         lifecycleVersion !== this.lifecycleVersion ||
         channel.readyState !== "open"
       ) {
-        throw new Error("Передача файла отменена");
+        throw new Error(translateSaved("Передача файла отменена"));
       }
       // Preserve chunk order on the RTC data channel.
       // eslint-disable-next-line no-await-in-loop
@@ -507,17 +664,51 @@ export default class OnlineVoiceMesh {
         lifecycleVersion !== this.lifecycleVersion ||
         channel.readyState !== "open"
       ) {
-        throw new Error("Передача файла отменена");
+        throw new Error(translateSaved("Передача файла отменена"));
       }
       channel.send(chunk);
+      lastProgressAt = Date.now();
+      this.emitTransferProgress(
+        participantId,
+        "sending",
+        blob.size
+          ? Math.min(
+              99,
+              Math.floor(
+                (Math.min(offset + chunkSize, blob.size) / blob.size) * 100
+              )
+            )
+          : 99,
+        metadata
+      );
     }
     if (
       lifecycleVersion !== this.lifecycleVersion ||
       channel.readyState !== "open"
     ) {
-      throw new Error("Передача файла отменена");
+      throw new Error(translateSaved("Передача файла отменена"));
     }
-    channel.send(JSON.stringify({ type: "file-end", transferId }));
+    await new Promise((resolve, reject) => {
+      const timer = globalThis.setTimeout(() => {
+        this.pendingTransferConfirmations.delete(transferId);
+        reject(
+          new Error(translateSaved("Участник не подтвердил получение песни"))
+        );
+      }, TRANSFER_CONFIRM_TIMEOUT_MS);
+      this.pendingTransferConfirmations.set(transferId, {
+        participantId,
+        resolve,
+        reject,
+        timer
+      });
+      channel.send(
+        JSON.stringify({
+          type: "file-end",
+          transferId
+        })
+      );
+    });
+    this.emitTransferProgress(participantId, "complete", 100, metadata);
   }
 
   removePeer(participantId) {
@@ -538,7 +729,17 @@ export default class OnlineVoiceMesh {
     this.signalPromises.delete(participantId);
     this.channels.get(participantId)?.close();
     this.channels.delete(participantId);
+    const incoming = this.incomingFiles.get(participantId);
+    if (incoming?.timer) globalThis.clearTimeout(incoming.timer);
     this.incomingFiles.delete(participantId);
+    for (const [transferId, pending] of this.pendingTransferConfirmations) {
+      if (pending.participantId !== participantId) continue;
+      globalThis.clearTimeout(pending.timer);
+      pending.reject(
+        new Error(translateSaved("Участник отключился во время передачи"))
+      );
+      this.pendingTransferConfirmations.delete(transferId);
+    }
     if (existed) this.onPeerClosed?.(participantId);
   }
 

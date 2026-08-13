@@ -7,6 +7,7 @@ import { useAppDialog } from "../../contexts/AppDialog";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import useAppSettings from "../../hooks/useAppSettings";
 import { usePolling } from "../../hooks/usePolling";
+import { translateSaved } from "../../i18n/runtime";
 import { Grid, Stack } from "../../theme/ui";
 import { getErrorMessage } from "../../utils/errors";
 import PerformanceAnalysisModal from "../Karaoke/modals/performance-analysis-modal";
@@ -30,10 +31,13 @@ import {
 
 const setGlobalRouteBlackout = (visible) => {
   window.dispatchEvent(
-    new CustomEvent("app:route-blackout", { detail: { visible } })
+    new CustomEvent("app:route-blackout", {
+      detail: {
+        visible
+      }
+    })
   );
 };
-
 export default function Library({ onOpenSongSettings }) {
   const location = useLocation();
   const [query, setQuery] = useState("");
@@ -55,13 +59,11 @@ export default function Library({ onOpenSongSettings }) {
   const activeRoom = sharedRoom?.room;
   const openKaraokeInRoom = sharedRoom?.openKaraoke;
   const { reloadSettings, settings } = useAppSettings();
-
   useEffect(() => {
     if (location.state?.analysisRecordingId) {
       setAnalysisRecordingId(location.state.analysisRecordingId);
     }
   }, [location.state?.analysisRecordingId]);
-
   useEffect(() => {
     if (!returningFromKaraoke) return undefined;
 
@@ -75,14 +77,12 @@ export default function Library({ onOpenSongSettings }) {
     }, 120);
     return () => window.clearTimeout(timer);
   }, [returningFromKaraoke]);
-
   const canManageLibrary = !sharedRoom?.room || sharedRoom.room.host;
   const {
     data: songs,
     error,
     refresh: refreshSongs
   } = usePolling(api.listSongs, 0, []);
-
   const trackProcessingSong = useCallback((song) => {
     setProcessingSong(song);
     setTrackedSongId(song?.id || null);
@@ -93,13 +93,17 @@ export default function Library({ onOpenSongSettings }) {
       settings = await reloadSettings();
     } catch (error) {
       await notify(
-        `Не удалось проверить настройки онлайн-режима: ${getErrorMessage(error)}`
+        translateSaved("Не удалось проверить настройки онлайн-режима: {0}", {
+          0: getErrorMessage(error)
+        })
       );
       return;
     }
     if (!settings?.online_name?.trim()) {
       await notify(
-        "Сначала укажите имя в настройках приложения — оно нужно другим участникам комнаты."
+        translateSaved(
+          "Сначала укажите имя в настройках приложения — оно нужно другим участникам комнаты."
+        )
       );
       return;
     }
@@ -127,18 +131,15 @@ export default function Library({ onOpenSongSettings }) {
       shouldRetryError: (requestError) => requestError?.status !== 404
     }
   );
-
   useEffect(() => {
     if (processingStatusError?.status !== 404) return;
     setTrackedSongId(null);
   }, [processingStatusError]);
-
   useEffect(() => {
     if (trackedSongId || !hasActiveSongProcessing(songs)) return;
     const activeSong = songs.find((song) => isProcessingActive(song?.status));
     setTrackedSongId(activeSong?.id || null);
   }, [songs, trackedSongId]);
-
   useEffect(() => {
     if (
       !trackedSongId ||
@@ -161,7 +162,6 @@ export default function Library({ onOpenSongSettings }) {
           }
         : current
     );
-
     let cancelled = false;
     Promise.resolve(refreshSongs()).finally(() => {
       if (!cancelled) setTrackedSongId(null);
@@ -170,7 +170,6 @@ export default function Library({ onOpenSongSettings }) {
       cancelled = true;
     };
   }, [processingStatus, refreshSongs, trackedSongId]);
-
   const {
     importing,
     importFile: handleFileChosen,
@@ -183,7 +182,6 @@ export default function Library({ onOpenSongSettings }) {
       refreshSongs();
     }
   });
-
   const {
     deleteSong: handleDelete,
     openSongFolder: handleOpenFolder,
@@ -199,34 +197,44 @@ export default function Library({ onOpenSongSettings }) {
     setProcessingSong: trackProcessingSong,
     setRecordingsSong
   });
-
   const handleDeleteRecording = useCallback(
     async (recording) => {
-      if (!(await confirmDialog("Удалить это записанное исполнение?"))) return;
+      if (
+        !(await confirmDialog(
+          translateSaved("Удалить это записанное исполнение?")
+        ))
+      )
+        return;
       try {
         await api.deleteRecording(recording.id);
         refreshRecordings();
       } catch (err) {
-        await notify(`Не удалось удалить запись: ${getErrorMessage(err)}`);
+        await notify(
+          translateSaved("Не удалось удалить запись: {0}", {
+            0: getErrorMessage(err)
+          })
+        );
       }
     },
     [confirmDialog, notify, refreshRecordings]
   );
-
   const cancelProcessing = useCallback(async () => {
     if (
       !processingSong ||
-      !(await confirmDialog("Отменить обработку этой песни?"))
+      !(await confirmDialog(translateSaved("Отменить обработку этой песни?")))
     )
       return;
     try {
       await api.cancelProcessing(processingSong.id);
       refreshSongs();
     } catch (err) {
-      await notify(`Не удалось отменить обработку: ${getErrorMessage(err)}`);
+      await notify(
+        translateSaved("Не удалось отменить обработку: {0}", {
+          0: getErrorMessage(err)
+        })
+      );
     }
   }, [confirmDialog, notify, processingSong, refreshSongs]);
-
   const currentSongs = mergeSongProcessingStatus(songs, processingStatus);
   const localVisibleSongs = getLocalVisibleSongs(currentSongs, hiddenSongIds);
   const visibleSongs = resolveVisibleSongs({
@@ -244,7 +252,6 @@ export default function Library({ onOpenSongSettings }) {
     setQuery,
     syncUi: sharedRoom.syncUi
   });
-
   const filtered = filterSongs(visibleSongs, query);
   const readyCount = countReadySongs(visibleSongs);
   const openSongSettings = useCallback(
@@ -254,35 +261,49 @@ export default function Library({ onOpenSongSettings }) {
   const openSongInKaraoke = useCallback(
     async (selectedSong) => {
       if (karaokeTransitioning) return;
-
       try {
         if (activeRoom) {
           const readyLocally = await openKaraokeInRoom(selectedSong.id);
           if (!readyLocally) return;
         }
-
         setGlobalRouteBlackout(true);
         setKaraokeTransitioning(true);
         await new Promise((resolve) => {
           window.setTimeout(resolve, 920);
         });
         navigate("/karaoke", {
-          state: { songId: selectedSong.id, autoPlay: true }
+          state: {
+            songId: selectedSong.id,
+            autoPlay: true
+          }
         });
       } catch (openError) {
         setKaraokeTransitioning(false);
         setGlobalRouteBlackout(false);
-        await notify(`Не удалось открыть песню: ${getErrorMessage(openError)}`);
+        await notify(
+          translateSaved("Не удалось открыть песню: {0}", {
+            0: getErrorMessage(openError)
+          })
+        );
       }
     },
     [karaokeTransitioning, navigate, notify, activeRoom, openKaraokeInRoom]
   );
   return (
-    <Stack align="center" sx={{ height: "100vh" }}>
+    <Stack
+      align="center"
+      sx={{
+        height: "100vh"
+      }}
+    >
       <LibraryBackdrop />
       <Stack
         align="center"
-        sx={{ width: "90%", height: "100vh", overflow: "visible" }}
+        sx={{
+          width: "90%",
+          height: "100vh",
+          overflow: "visible"
+        }}
       >
         <LibraryHero
           songCount={visibleSongs.length}
@@ -300,11 +321,12 @@ export default function Library({ onOpenSongSettings }) {
         />
         {error ? (
           <p className="field-error">
-            Не удалось загрузить список: {getErrorMessage(error)}
+            {translateSaved("Не удалось загрузить список:")}
+            {getErrorMessage(error)}
           </p>
         ) : filtered.length === 0 ? (
           <div className="library-card-empty text-muted">
-            Пока нет ни одной песни — добавьте первую
+            {translateSaved("Пока нет ни одной песни — добавьте первую")}
           </div>
         ) : (
           <Stack
@@ -318,7 +340,10 @@ export default function Library({ onOpenSongSettings }) {
             <Grid
               columns={3}
               gap={20}
-              sx={{ margin: "1rem 0", marginBottom: "7rem" }}
+              sx={{
+                margin: "1rem 0",
+                marginBottom: "7rem"
+              }}
               // minItemWidth="30rem"
               // sx={{
               //   width: "100%",
@@ -382,7 +407,13 @@ export default function Library({ onOpenSongSettings }) {
         status={processingStatus}
         onClose={() => setProcessingSong(null)}
         onCancel={cancelProcessing}
-        onOpenKaraoke={(songId) => navigate("/karaoke", { state: { songId } })}
+        onOpenKaraoke={(songId) =>
+          navigate("/karaoke", {
+            state: {
+              songId
+            }
+          })
+        }
       />
     </Stack>
   );

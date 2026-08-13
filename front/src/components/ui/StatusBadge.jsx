@@ -1,23 +1,26 @@
-const STATUS = {
-  pending: { label: "Ожидание", className: "badge-pending" },
-  queued: { label: "В очереди", className: "badge-pending" },
-  processing: { label: "Обрабатывается", className: "badge-processing" },
-  cancelling: { label: "Отмена...", className: "badge-processing" },
-  cancelled: { label: "Отменено", className: "badge-cancelled" },
-  done: { label: "Готово", className: "badge-done" },
-  error: { label: "Ошибка", className: "badge-error" }
+import { useI18n } from "../../i18n";
+
+const STATUS_CLASS = {
+  pending: "badge-pending",
+  queued: "badge-pending",
+  processing: "badge-processing",
+  cancelling: "badge-processing",
+  cancelled: "badge-cancelled",
+  done: "badge-done",
+  error: "badge-error"
 };
 
 export default function StatusBadge({ status }) {
-  const current = STATUS[status] ?? {
-    label: status || "Неизвестно",
-    className: "badge-pending"
-  };
+  const { t } = useI18n();
+  const className = STATUS_CLASS[status] ?? "badge-pending";
+  const label = status
+    ? t(`status.${status}`, {}, status)
+    : t("status.unknown");
 
   return (
-    <span className={`badge ${current.className}`}>
+    <span className={`badge ${className}`}>
       <span className="badge-dot" aria-hidden="true" />
-      {current.label}
+      {label}
     </span>
   );
 }

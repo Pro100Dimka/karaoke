@@ -1,41 +1,44 @@
+import { translateSaved } from "../../i18n/runtime";
+
 export function formatLibraryDate(value, locale = "ru-RU") {
   if (!value) return "—";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString(locale);
 }
-
 export function formatEta(seconds) {
   const value = Number(seconds);
-  if (!Number.isFinite(value) || value <= 0) return "рассчитываем…";
+  if (!Number.isFinite(value) || value <= 0)
+    return translateSaved("рассчитываем…");
   const rounded = Math.max(0, Math.round(value));
-  if (!rounded) return "рассчитываем…";
+  if (!rounded) return translateSaved("рассчитываем…");
   const minutes = Math.floor(rounded / 60);
   const remainingSeconds = rounded % 60;
   return minutes
-    ? `~${minutes} мин ${remainingSeconds} сек`
-    : `~${remainingSeconds} сек`;
+    ? translateSaved("~{0} мин {1} сек", {
+        0: minutes,
+        1: remainingSeconds
+      })
+    : translateSaved("~{0} сек", {
+        0: remainingSeconds
+      });
 }
-
 export function getProcessingProgress(status, song) {
   const raw = status?.progress_percent ?? song?.progress_percent ?? 0;
   const value = Number(raw);
   if (!Number.isFinite(value)) return 0;
   return Math.min(100, Math.max(0, value));
 }
-
 export function isProcessingActive(status) {
   return (
     status === "processing" || status === "queued" || status === "cancelling"
   );
 }
-
 export function hasActiveSongProcessing(songs) {
   return (
     Array.isArray(songs) &&
     songs.some((song) => isProcessingActive(String(song?.status || "")))
   );
 }
-
 export function mergeSongProcessingStatus(songs, status) {
   if (!Array.isArray(songs) || !status?.song_id) return songs ?? [];
   const songId = String(status.song_id);
@@ -51,7 +54,6 @@ export function mergeSongProcessingStatus(songs, status) {
       : song
   );
 }
-
 export function getLocalVisibleSongs(songs, hiddenSongIds) {
   const hidden = hiddenSongIds instanceof Set ? hiddenSongIds : new Set();
   return Array.isArray(songs)
@@ -60,22 +62,17 @@ export function getLocalVisibleSongs(songs, hiddenSongIds) {
       )
     : [];
 }
-
 export function resolveVisibleSongs({ localSongs, room, roomSongs }) {
   if (room && !room.host && Array.isArray(roomSongs)) {
     return roomSongs.filter((song) => song && typeof song === "object");
   }
-
   return Array.isArray(localSongs) ? localSongs : [];
 }
-
 export function filterSongs(songs, query) {
   const normalizedQuery =
     typeof query === "string" ? query.trim().toLowerCase() : "";
   const source = Array.isArray(songs) ? songs : [];
-
   if (!normalizedQuery) return source;
-
   return source.filter((song) =>
     [song?.title, song?.artist, song?.genre]
       .filter((value) => typeof value === "string" && value.trim())
@@ -84,13 +81,11 @@ export function filterSongs(songs, query) {
       .includes(normalizedQuery)
   );
 }
-
 export function countReadySongs(songs) {
   return Array.isArray(songs)
     ? songs.filter((song) => song?.status === "done").length
     : 0;
 }
-
 export function getSongCardState(song) {
   const status = typeof song?.status === "string" ? song.status : "pending";
   return {

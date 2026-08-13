@@ -33,10 +33,20 @@ export default function useKaraokePanorama(songId, isPlaying) {
     if (!panorama || !isPlaying) return undefined;
 
     let frameId;
+    let lastFrame = 0;
+    const frameInterval =
+      document.documentElement.dataset.performance === "reduced"
+        ? 1000 / 15
+        : 0;
     const startedAt = performance.now() - clockRef.current;
     const path = pathRef.current;
 
     const move = (now) => {
+      if (now - lastFrame < frameInterval) {
+        frameId = requestAnimationFrame(move);
+        return;
+      }
+      lastFrame = now;
       const elapsed = now - startedAt;
       const { x, y } = getPanoramaPosition(elapsed, PANORAMA_CYCLE_MS, path);
       panorama.style.setProperty("--panorama-x", `-${x.toFixed(3)}cqh`);

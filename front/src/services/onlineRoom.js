@@ -1,10 +1,12 @@
+// Node's native ESM runner used by contract tests requires the extension.
+// eslint-disable-next-line import/extensions
+import { translateSaved } from "../i18n/runtime.js";
+
 export const DEFAULT_SIGNALING_URL =
   "wss://karaoke-studio-online.pro100dimka-and.workers.dev";
-
 const CONNECTION_TIMEOUT_MS = 10_000;
 const MAX_SIGNAL_MESSAGE_LENGTH = 256 * 1024;
 const MAX_PARTICIPANT_NAME_LENGTH = 64;
-
 export function createRoomId(
   cryptoApi = globalThis.crypto,
   random = Math.random
@@ -12,7 +14,6 @@ export function createRoomId(
   if (typeof cryptoApi?.randomUUID === "function") {
     return cryptoApi.randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase();
   }
-
   if (typeof cryptoApi?.getRandomValues === "function") {
     const bytes = cryptoApi.getRandomValues(new Uint8Array(4));
     return [...bytes]
@@ -20,14 +21,12 @@ export function createRoomId(
       .join("")
       .toUpperCase();
   }
-
   return Math.floor(random() * 0x1_0000_0000)
     .toString(16)
     .padStart(8, "0")
     .slice(-8)
     .toUpperCase();
 }
-
 export function normalizeRoomId(value) {
   return String(value || "")
     .trim()
@@ -35,14 +34,13 @@ export function normalizeRoomId(value) {
     .replace(/[^A-Z0-9_-]/g, "")
     .slice(0, 32);
 }
-
 export class OnlineRoomClient {
   constructor(url = DEFAULT_SIGNALING_URL) {
     const parsedUrl = new URL(String(url), DEFAULT_SIGNALING_URL);
     if (parsedUrl.protocol === "http:") parsedUrl.protocol = "ws:";
     if (parsedUrl.protocol === "https:") parsedUrl.protocol = "wss:";
     if (!["ws:", "wss:"].includes(parsedUrl.protocol)) {
-      throw new TypeError("Некорректный адрес сервера комнат");
+      throw new TypeError(translateSaved("Некорректный адрес сервера комнат"));
     }
     parsedUrl.username = "";
     parsedUrl.password = "";
@@ -54,7 +52,9 @@ export class OnlineRoomClient {
 
   onMessage(listener) {
     if (typeof listener !== "function") {
-      throw new TypeError("Обработчик сообщений комнаты должен быть функцией");
+      throw new TypeError(
+        translateSaved("Обработчик сообщений комнаты должен быть функцией")
+      );
     }
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -74,10 +74,11 @@ export class OnlineRoomClient {
     const normalizedId = normalizeRoomId(id);
     if (normalizedId.length < 4) {
       return Promise.reject(
-        new Error("Код комнаты должен содержать минимум 4 символа.")
+        new Error(
+          translateSaved("Код комнаты должен содержать минимум 4 символа.")
+        )
       );
     }
-
     this.disconnect();
     const { connectionVersion } = this;
     const participantName =
@@ -88,14 +89,16 @@ export class OnlineRoomClient {
         })
         .join("")
         .trim()
-        .slice(0, MAX_PARTICIPANT_NAME_LENGTH) || "Гость";
+        .slice(0, MAX_PARTICIPANT_NAME_LENGTH) || translateSaved("Гость");
     const query = new URLSearchParams({
       name: participantName,
       role: host ? "host" : "guest"
     });
     if (typeof globalThis.WebSocket !== "function") {
       return Promise.reject(
-        new Error("WebSocket не поддерживается в этом окружении.")
+        new Error(
+          translateSaved("WebSocket не поддерживается в этом окружении.")
+        )
       );
     }
     let socket;
@@ -107,11 +110,12 @@ export class OnlineRoomClient {
       return Promise.reject(
         error instanceof Error
           ? error
-          : new Error("Не удалось создать WebSocket-соединение.")
+          : new Error(
+              translateSaved("Не удалось создать WebSocket-соединение.")
+            )
       );
     }
     this.socket = socket;
-
     return new Promise((resolve, reject) => {
       let settled = false;
       const isCurrent = () =>
@@ -129,10 +133,9 @@ export class OnlineRoomClient {
         if (socket.readyState < globalThis.WebSocket.CLOSING) socket.close();
       };
       const timeout = globalThis.setTimeout(
-        () => fail("Сервер комнат не ответил."),
+        () => fail(translateSaved("Сервер комнат не ответил.")),
         CONNECTION_TIMEOUT_MS
       );
-
       socket.onopen = () => {
         if (!isCurrent()) {
           socket.close(1000, "Stale connection");
@@ -167,16 +170,26 @@ export class OnlineRoomClient {
           const detail = event?.reason?.trim()
             ? `: ${event.reason.trim()}`
             : event?.code && event.code !== 1006
-              ? ` (код ${event.code})`
+              ? translateSaved("(код {0})", {
+                  0: event.code
+                })
               : "";
           settle(
             reject,
             new Error(
-              `Не удалось подключиться к серверу комнат${detail}. Проверьте интернет, VPN, прокси или брандмауэр.`
+              translateSaved(
+                "Не удалось подключиться к серверу комнат{0}. Проверьте интернет, VPN, прокси или брандмауэр.",
+                {
+                  0: detail
+                }
+              )
             )
           );
         }
-        if (wasCurrent) this.emit({ type: "connection-closed" });
+        if (wasCurrent)
+          this.emit({
+            type: "connection-closed"
+          });
       };
     });
   }
@@ -189,7 +202,10 @@ export class OnlineRoomClient {
       return false;
     }
     try {
-      const serialized = JSON.stringify({ ...payload, type: type.trim() });
+      const serialized = JSON.stringify({
+        ...payload,
+        type: type.trim()
+      });
       if (serialized.length > MAX_SIGNAL_MESSAGE_LENGTH) return false;
       socket.send(serialized);
       return true;

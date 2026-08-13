@@ -1,7 +1,6 @@
 import { Music2, Piano, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
 import { api } from "../../../../api/client";
 import Button from "../../../../components/fields/button";
 import Modal from "../../../../components/modal";
@@ -9,9 +8,9 @@ import { POLLING_INTERVALS } from "../../../../config/runtime";
 import { useAppDialog } from "../../../../contexts/AppDialog";
 import useExclusiveAsyncAction from "../../../../hooks/useExclusiveAsyncAction";
 import { usePolling } from "../../../../hooks/usePolling";
+import { translateSaved } from "../../../../i18n/runtime";
 import { ConfigForm, NumberField, Stack } from "../../../../theme/ui";
 import { getErrorMessage } from "../../../../utils/errors";
-
 import { SONG_FIELDS } from "./config";
 import {
   createSongPayload,
@@ -20,11 +19,12 @@ import {
 } from "./utils";
 
 const setField = (setter, name, value) =>
-  setter((current) => ({ ...current, [name]: value }));
-
+  setter((current) => ({
+    ...current,
+    [name]: value
+  }));
 const parseNumber = (value) =>
   value === "" || value == null ? null : Number(value);
-
 const SONG_RENDERERS = {
   noteRange: ({ field, context }) => (
     <Stack gap={1}>
@@ -32,7 +32,7 @@ const SONG_RENDERERS = {
 
       <Stack direction="row" gap={2}>
         <NumberField
-          placeholder="Мин."
+          placeholder={translateSaved("Мин.")}
           value={context.form?.note_range_min ?? ""}
           onChange={(value) =>
             context.onChange("note_range_min", parseNumber(value))
@@ -40,7 +40,7 @@ const SONG_RENDERERS = {
         />
 
         <NumberField
-          placeholder="Макс."
+          placeholder={translateSaved("Макс.")}
           value={context.form?.note_range_max ?? ""}
           onChange={(value) =>
             context.onChange("note_range_max", parseNumber(value))
@@ -50,7 +50,6 @@ const SONG_RENDERERS = {
     </Stack>
   )
 };
-
 export default function SongSettings({ songId, onClose }) {
   const { alert: notify } = useAppDialog();
   const {
@@ -59,54 +58,60 @@ export default function SongSettings({ songId, onClose }) {
     refresh: refreshSongs
   } = usePolling(api.listSongs, POLLING_INTERVALS.health, []);
   const { pending: saving, run: runSave } = useExclusiveAsyncAction();
-
   const song = getSelectedSong(songs, songId);
   const [form, setForm] = useState(null);
   const navigate = useNavigate();
-
   useEffect(() => {
-    setForm(song ? { ...song } : null);
+    setForm(
+      song
+        ? {
+            ...song
+          }
+        : null
+    );
   }, [song]);
-
   const updateField = (name, value) => setField(setForm, name, value);
-
   const save = () =>
     runSave(async () => {
       if (!song || !form) return;
-
       const validationError = validateSongSettings(form);
       if (validationError) {
         await notify(validationError);
         return;
       }
-
       try {
         const updated = await api.updateSong(
           song.id,
           createSongPayload(form, song)
         );
-
         if (updated && typeof updated === "object") {
-          setForm((current) => ({ ...current, ...updated }));
+          setForm((current) => ({
+            ...current,
+            ...updated
+          }));
         }
-
         await refreshSongs?.();
       } catch (error) {
-        await notify(`Не удалось сохранить: ${getErrorMessage(error)}`);
+        await notify(
+          translateSaved("Не удалось сохранить: {0}", {
+            0: getErrorMessage(error)
+          })
+        );
       }
     });
-
   return (
     <Modal
       isOpen
       portal
       onClose={onClose}
-      ariaLabel={`Настройки песни ${song?.title || ""}`.trim()}
+      ariaLabel={translateSaved("Настройки песни {0}", {
+        0: song?.title || ""
+      }).trim()}
       titleProps={{
         icon: Music2,
-        eyebrow: "КАРАОКЕ · РЕДАКТОР",
-        title: "Настройки песни",
-        description: song?.title || "Загружаем данные песни…",
+        eyebrow: translateSaved("КАРАОКЕ · РЕДАКТОР"),
+        title: translateSaved("Настройки песни"),
+        description: song?.title || translateSaved("Загружаем данные песни…"),
         actions:
           song && form ? (
             <Button
@@ -116,46 +121,78 @@ export default function SongSettings({ songId, onClose }) {
               onClick={save}
               className="modal-title-action"
             >
-              {saving ? "Сохранение…" : "Сохранить"}
+              {saving
+                ? translateSaved("Сохранение…")
+                : translateSaved("Сохранить")}
             </Button>
           ) : null
       }}
     >
       {songsError ? (
-        <Stack gap={1} sx={{ padding: "1rem" }}>
+        <Stack
+          gap={1}
+          sx={{
+            padding: "1rem"
+          }}
+        >
           <p className="field-error">
-            Не удалось загрузить песню: {getErrorMessage(songsError)}
+            {translateSaved("Не удалось загрузить песню:")}
+            {getErrorMessage(songsError)}
           </p>
           <Button variant="ghost" onClick={() => refreshSongs?.()}>
-            Повторить
+            {translateSaved("Повторить")}
           </Button>
         </Stack>
       ) : !songs ? (
-        <p className="text-muted" style={{ padding: "1rem" }}>
-          Загружаем настройки песни…
+        <p
+          className="text-muted"
+          style={{
+            padding: "1rem"
+          }}
+        >
+          {translateSaved("Загружаем настройки песни…")}
         </p>
       ) : !song ? (
-        <p className="field-error" style={{ padding: "1rem" }}>
-          Песня не найдена. Возможно, она была удалена.
+        <p
+          className="field-error"
+          style={{
+            padding: "1rem"
+          }}
+        >
+          {translateSaved("Песня не найдена. Возможно, она была удалена.")}
         </p>
       ) : !form ? (
-        <p className="text-muted" style={{ padding: "1rem" }}>
-          Подготавливаем настройки…
+        <p
+          className="text-muted"
+          style={{
+            padding: "1rem"
+          }}
+        >
+          {translateSaved("Подготавливаем настройки…")}
         </p>
       ) : (
-        <Stack gap={2} sx={{ padding: "1rem" }}>
+        <Stack
+          gap={2}
+          sx={{
+            padding: "1rem"
+          }}
+        >
           <ConfigForm
             fields={SONG_FIELDS}
-            context={{ form, onChange: updateField }}
+            context={{
+              form,
+              onChange: updateField
+            }}
             renderers={SONG_RENDERERS}
             columns={12}
           />
           {song.status === "done" && (
             <Stack gap={0.6}>
-              <strong>Мелодия и текст</strong>
+              <strong>{translateSaved("Мелодия и текст")}</strong>
               <span className="text-muted">
-                Откройте piano-roll редактор, чтобы на слух и визуально
-                исправить ноты, длительность и привязку текста.
+                {translateSaved(
+                  "Откройте piano-roll редактор, чтобы на слух и визуально исправить ноты, длительность и привязку текста."
+                )}
               </span>
               <Button
                 icon={Piano}
@@ -165,7 +202,7 @@ export default function SongSettings({ songId, onClose }) {
                   navigate(`/editor/${song.id}`);
                 }}
               >
-                Открыть редактор
+                {translateSaved("Открыть редактор")}
               </Button>
             </Stack>
           )}

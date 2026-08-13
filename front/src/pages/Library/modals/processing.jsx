@@ -2,6 +2,7 @@ import { CircleDot, Library, OctagonX, Play } from "lucide-react";
 import Button from "../../../components/fields/button";
 import Modal from "../../../components/modal";
 import { StatusBadge } from "../../../components/ui";
+import { translateSaved } from "../../../i18n/runtime";
 import ProcessingSignal from "../components/song-card/processing-signal";
 import { formatEta, getProcessingProgress, isProcessingActive } from "../utils";
 
@@ -23,16 +24,18 @@ export default function ProcessingModal({
       ? Math.max(1, progress)
       : progress;
   const actions = [
-    active && [OctagonX, "Отменить", "danger", onCancel],
+    active && [OctagonX, translateSaved("Отменить"), "danger", onCancel],
     ...(isDone
       ? [
-          [Library, "В библиотеку", "ghost", onClose],
+          [Library, translateSaved("В библиотеку"), "ghost", onClose],
           [
             Play,
-            "Открыть",
+            translateSaved("Открыть"),
             "primary",
             () => onOpenKaraoke(song.id),
-            { fill: "currentColor" }
+            {
+              fill: "currentColor"
+            }
           ]
         ]
       : [])
@@ -41,14 +44,17 @@ export default function ProcessingModal({
     <Modal
       isOpen
       onClose={onClose}
-      ariaLabel={`Обработка песни ${song.title}`}
+      ariaLabel={translateSaved("Обработка песни {0}", {
+        0: song.title
+      })}
       modalClassName="processing-modal"
       titleProps={{
         icon: CircleDot,
-        eyebrow: "ОБРАБОТКА ПЕСНИ",
+        eyebrow: translateSaved("ОБРАБОТКА ПЕСНИ"),
         title: song.title,
-        description:
-          "Следите за этапами подготовки и управляйте обработкой песни.",
+        description: translateSaved(
+          "Следите за этапами подготовки и управляйте обработкой песни."
+        ),
         actions: actions.map(([Icon, text, variant, onClick, iconProps]) => (
           <Button
             key={text}
@@ -72,20 +78,27 @@ export default function ProcessingModal({
         <div className="processing-modal-stage u-between-3">
           <span>
             {isDone
-              ? "Песня готова к караоке"
+              ? translateSaved("Песня готова к караоке")
               : (status?.progress_detail ??
                 status?.progress_step ??
-                "Подготавливаем обработку песни")}
+                translateSaved("Подготавливаем обработку песни"))}
           </span>
           {active && (
-            <strong style={{ textAlign: "right", width: "100%" }}>
-              Осталось: {formatEta(status?.eta_seconds)}
+            <strong
+              style={{
+                textAlign: "right",
+                width: "100%"
+              }}
+            >
+              {translateSaved("Осталось:")}
+              {formatEta(status?.eta_seconds)}
             </strong>
           )}
         </div>
         {status?.error_message && (
           <p className="field-error">
-            Ошибка обработки: {status.error_message}
+            {translateSaved("Ошибка обработки:")}
+            {status.error_message}
           </p>
         )}
       </div>

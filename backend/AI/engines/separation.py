@@ -6,6 +6,7 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 import traceback
 from contextlib import suppress
 from pathlib import Path
@@ -24,10 +25,10 @@ def _run_msst_worker(engine_dir: str, arguments: dict[str, object], result_queue
     original_stdout, original_stderr = sys.stdout, sys.stderr
     owned_streams = []
     if sys.stdout is None:
-        sys.stdout = open(os.devnull, "w", encoding="utf-8")
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
         owned_streams.append(sys.stdout)
     if sys.stderr is None:
-        sys.stderr = open(os.devnull, "w", encoding="utf-8")
+        sys.stderr = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
         owned_streams.append(sys.stderr)
     # Consumer NVIDIA cards gain a substantial speed-up from TF32 for the large
     # RoFormer matrix multiplications, while inference quality remains stable.
@@ -142,7 +143,12 @@ class MSSTMelRoformerSeparator(Separator):
             daemon=False,
         )
         process.start()
-        process.join(timeout=60 * 30)
+        started_at = time.monotonic()
+        while process.is_alive() and time.monotonic() - started_at < 60 * 30:
+            process.join(timeout=10)
+            if process.is_alive():
+                elapsed = int(time.monotonic() - started_at)
+                print(f"[MSST] separation is active · {elapsed}s elapsed", flush=True)
         if process.is_alive():
             process.terminate()
             process.join(timeout=10)

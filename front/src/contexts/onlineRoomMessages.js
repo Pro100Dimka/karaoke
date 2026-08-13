@@ -1,3 +1,4 @@
+import { translateSaved } from "../i18n/runtime";
 // Node's direct ESM tests require explicit extensions for these source imports.
 // eslint-disable-next-line import/extensions
 import { normalizeRoomId } from "../services/onlineRoom.js";
@@ -6,18 +7,17 @@ import { getErrorMessage } from "../utils/errors.js";
 
 const createEventId = (prefix = "room") =>
   `${prefix}-${Date.now()}-${Math.random()}`;
-
 export function upsertParticipant(items, participant) {
   if (!participant?.id) return items;
-
   const index = items.findIndex((item) => item.id === participant.id);
   if (index < 0) return [...items, participant];
-
   const next = [...items];
-  next[index] = { ...next[index], ...participant };
+  next[index] = {
+    ...next[index],
+    ...participant
+  };
   return next;
 }
-
 export function createOnlineRoomMessageHandler(options) {
   const {
     id,
@@ -33,11 +33,11 @@ export function createOnlineRoomMessageHandler(options) {
     setParticipants,
     setRoomUi,
     setRoomCommand,
-    setVoiceError
+    setVoiceError,
+    setTransferStatus
   } = options;
   return (message) => {
     if (!isCurrentConnection()) return;
-
     if (message.type === "room-state") {
       const { self } = message;
       if (self) {
@@ -51,7 +51,6 @@ export function createOnlineRoomMessageHandler(options) {
       setParticipants(message.participants || []);
       return;
     }
-
     if (message.type === "participant-joined") {
       setParticipants((items) => upsertParticipant(items, message.participant));
       if (message.participant?.id) {
@@ -59,12 +58,10 @@ export function createOnlineRoomMessageHandler(options) {
       }
       return;
     }
-
     if (message.type === "participant-updated") {
       setParticipants((items) => upsertParticipant(items, message.participant));
       return;
     }
-
     if (message.type === "self-updated" && message.self) {
       setRoom({
         ...(activeRoomRef.current || {}),
@@ -74,7 +71,6 @@ export function createOnlineRoomMessageHandler(options) {
       });
       return;
     }
-
     if (message.type === "participant-left") {
       setParticipants((items) =>
         items.filter((item) => item.id !== message.participantId)
@@ -82,24 +78,32 @@ export function createOnlineRoomMessageHandler(options) {
       voice.removePeer(message.participantId);
       return;
     }
-
     if (message.type === "signal") {
       voice.accept(message.fromId, message.signal).catch(() => {});
       return;
     }
-
     if (message.type === "ui") {
-      setRoomUi((current) => ({
-        ...current,
-        ...(message.state || {}),
-        __eventId: createEventId("ui")
-      }));
+      setRoomUi((current) => {
+        const state = message.state || {};
+        const { participantEffects } = state;
+        return {
+          ...current,
+          ...state,
+          ...(message.fromId && participantEffects
+            ? {
+                effectsByParticipant: {
+                  ...(current.effectsByParticipant || {}),
+                  [message.fromId]: participantEffects
+                }
+              }
+            : {}),
+          __eventId: createEventId("ui")
+        };
+      });
       return;
     }
-
     if (message.type === "sync") {
       const command = message.state || {};
-
       if (
         command.type === "song-request" &&
         activeRoomRef.current?.host &&
@@ -110,7 +114,7 @@ export function createOnlineRoomMessageHandler(options) {
           .exportSongPackage(command.songId)
           .then((blob) => {
             if (!isCurrentConnection()) return null;
-            setVoiceError("Передаём песню участнику…");
+            setTransferStatus({ stage: "sending", percent: 0 });
             return voice.sendFile(command.requesterId, blob, {
               kind: "song-package",
               songId: command.songId,
@@ -118,17 +122,39 @@ export function createOnlineRoomMessageHandler(options) {
             });
           })
           .then(() => {
-            if (isCurrentConnection()) setVoiceError("");
+            if (isCurrentConnection()) setTransferStatus(null);
           })
           .catch((error) => {
             if (!isCurrentConnection()) return;
-            setVoiceError(
-              `Не удалось передать песню: ${getErrorMessage(error)}`
-            );
+            client.send("sync", {
+              state: {
+                type: "song-transfer-error",
+                requesterId: command.requesterId,
+                songId: command.songId,
+                error: getErrorMessage(error)
+              }
+            });
+            setTransferStatus({
+              stage: "error",
+              error: getErrorMessage(error),
+              percent: 0
+            });
           });
         return;
       }
-
+      if (
+        command.type === "song-transfer-error" &&
+        command.requesterId === activeRoomRef.current?.selfId
+      ) {
+        pendingCommandRef.current = null;
+        setTransferStatus({
+          stage: "error",
+          error:
+            command.error || translateSaved("Ведущий не смог передать песню"),
+          percent: 0
+        });
+        return;
+      }
       if (command.type === "open-karaoke" && !activeRoomRef.current?.host) {
         roomApi
           .getSong(command.songId)
@@ -142,7 +168,7 @@ export function createOnlineRoomMessageHandler(options) {
           .catch(() => {
             if (!isCurrentConnection()) return;
             pendingCommandRef.current = command;
-            setVoiceError("Получаем песню от ведущего…");
+            setTransferStatus({ stage: "waiting", percent: 0 });
             client.send("sync", {
               state: {
                 type: "song-request",
@@ -153,16 +179,14 @@ export function createOnlineRoomMessageHandler(options) {
           });
         return;
       }
-
       setRoomCommand({
         ...command,
         __eventId: createEventId(message.sentAt || "sync")
       });
       return;
     }
-
     if (message.type === "connection-closed" && !disconnectIntentRef.current) {
-      setVoiceError("Соединение с комнатой потеряно.");
+      setVoiceError(translateSaved("Соединение с комнатой потеряно."));
       cleanupConnection();
       setRoom(null);
       setParticipants([]);

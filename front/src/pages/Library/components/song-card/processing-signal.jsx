@@ -1,28 +1,33 @@
 import { useId } from "react";
+import { translateSaved } from "../../../../i18n/runtime";
 
 const WAVE_CONFIG = {
-  length: 96, // количество точек
-  start: 65, // стартовая высота
-  min: 36, // минимальная высота
-  max: 70, // максимальная высота
+  length: 96,
+  // количество точек
+  start: 65,
+  // стартовая высота
+  min: 36,
+  // минимальная высота
+  max: 70,
+  // максимальная высота
   variation: 30 // насколько сильно может прыгать соседняя точка
 };
-
 const POINTS = (() => {
   const { length, start, min, max, variation } = WAVE_CONFIG;
-
   let value = start;
-
-  return Array.from({ length }, () => {
-    value += Math.floor(Math.random() * (variation * 2 + 1)) - variation;
-    value = Math.max(min, Math.min(max, value));
-
-    return value;
-  });
+  return Array.from(
+    {
+      length
+    },
+    () => {
+      value += Math.floor(Math.random() * (variation * 2 + 1)) - variation;
+      value = Math.max(min, Math.min(max, value));
+      return value;
+    }
+  );
 })();
 const WIDTH = 960;
 const clamp = (value) => Math.max(0, Math.min(100, Number(value) || 0));
-
 function createPolygon(height, compact) {
   const center = height / 2;
   const step = WIDTH / (POINTS.length - 1);
@@ -36,7 +41,6 @@ function createPolygon(height, compact) {
       .join(" ");
   return `${line(POINTS, -1)} ${line([...POINTS].reverse(), 1)}`;
 }
-
 export default function ProcessingSignal({ progress = 0, compact = false }) {
   const id = useId().replaceAll(":", "");
   const normalized = clamp(progress);
@@ -48,14 +52,14 @@ export default function ProcessingSignal({ progress = 0, compact = false }) {
   const clipId = `${id}-clip`;
   return (
     <div
-      className={`processing-signal${
-        compact ? " processing-signal--compact" : ""
-      }`}
+      className={`processing-signal${compact ? " processing-signal--compact" : ""}`}
       style={{
         width: "100%",
         "--processing-progress": `${normalized}%`
       }}
-      aria-label={`Обработка: ${rounded}%`}
+      aria-label={translateSaved("Обработка: {0}%", {
+        0: rounded
+      })}
       role="progressbar"
       aria-valuemin={0}
       aria-valuemax={100}

@@ -14,10 +14,10 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-
 import { api } from "../../../../api/client";
 import { IconButton } from "../../../../components/ui";
 import { useAppDialog } from "../../../../contexts/AppDialog";
+import { translateSaved } from "../../../../i18n/runtime";
 import { getErrorMessage } from "../../../../utils/errors";
 import {
   isEditableHotkeyTarget,
@@ -64,7 +64,10 @@ const noteName = (midi) => {
   const value = Number(midi) || 0;
   return `${names[((value % 12) + 12) % 12]}${Math.floor(value / 12) - 1}`;
 };
-const cloneNotes = (notes) => notes.map((note) => ({ ...note }));
+const cloneNotes = (notes) =>
+  notes.map((note) => ({
+    ...note
+  }));
 const EDITOR_STORAGE_KEY = "karaoke-melody-editor";
 const editorPreferences = () => readJsonStorage(EDITOR_STORAGE_KEY);
 const normalizeNotes = (notes = []) =>
@@ -81,7 +84,6 @@ const normalizeNotes = (notes = []) =>
     }))
     .filter((note) => note.end > note.start)
     .sort((a, b) => a.start - b.start || a.midi_note - b.midi_note);
-
 function useEditorHistory(initial = []) {
   const [notes, setNotesState] = useState(initial);
   const undoRef = useRef([]);
@@ -123,9 +125,15 @@ function useEditorHistory(initial = []) {
       return next;
     });
   }, []);
-  return { notes, replace, reset, remember, undo, redo };
+  return {
+    notes,
+    replace,
+    reset,
+    remember,
+    undo,
+    redo
+  };
 }
-
 function ToolbarButton({
   icon,
   label,
@@ -153,7 +161,6 @@ function ToolbarButton({
     />
   );
 }
-
 export default function MelodyEditor({ song, onClose, onSaved }) {
   const { alert: notify, confirm: confirmDialog } = useAppDialog();
   const [payload, setPayload] = useState(null);
@@ -186,7 +193,11 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
   const oscillatorRef = useRef(null);
   const melodyGainRef = useRef(null);
   const rafRef = useRef(null);
-  const transportClockRef = useRef({ media: 0, perf: 0, running: false });
+  const transportClockRef = useRef({
+    media: 0,
+    perf: 0,
+    running: false
+  });
   const dragRef = useRef(null);
   const selectionRef = useRef(null);
   const clipboardRef = useRef([]);
@@ -209,7 +220,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
   });
   const saveRef = useRef(null);
   const [selectionBox, setSelectionBox] = useState(null);
-
   useEffect(() => {
     persistUiPreferences(api, "melody_editor", {
       zoom,
@@ -219,7 +229,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       volumes
     });
   }, [autoScroll, playbackRate, verticalZoom, volumes, zoom]);
-
   const songMap = payload?.song_map || {};
   const duration =
     Number(songMap.duration) || Math.max(1, ...notes.map((note) => note.end));
@@ -271,7 +280,9 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
   const laneWidth = Math.max(1180, duration * zoom) + keyboardWidth;
   const whiteKeyGeometry = useMemo(() => {
     const white = Array.from(
-      { length: maxMidi - minMidi + 1 },
+      {
+        length: maxMidi - minMidi + 1
+      },
       (_, index) => maxMidi - index
     ).filter((midi) => !BLACK_KEYS.has(((midi % 12) + 12) % 12));
     const centers = white.map((midi) => (maxMidi - midi + 0.5) * rowHeight);
@@ -286,10 +297,13 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       const top = index === 0 ? 0 : (previous + center) / 2;
       const bottom =
         index === centers.length - 1 ? laneHeight : (center + next) / 2;
-      return { midi, top, height: Math.max(1, bottom - top) };
+      return {
+        midi,
+        top,
+        height: Math.max(1, bottom - top)
+      };
     });
   }, [laneHeight, maxMidi, minMidi, rowHeight]);
-
   const load = useCallback(async () => {
     if (!song?.id) return;
     setLoading(true);
@@ -299,12 +313,15 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       reset(result?.song_map?.notes || result?.song_map?.display_notes || []);
       setSelected([]);
     } catch (error) {
-      await notify(`Не удалось открыть редактор: ${getErrorMessage(error)}`);
+      await notify(
+        translateSaved("Не удалось открыть редактор: {0}", {
+          0: getErrorMessage(error)
+        })
+      );
     } finally {
       setLoading(false);
     }
   }, [notify, reset, song?.id]);
-
   useEffect(() => {
     load();
   }, [load]);
@@ -315,13 +332,11 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     if (melodyGainRef.current)
       melodyGainRef.current.gain.value = Math.max(0.05, volumes.melody * 0.56);
   }, [volumes]);
-
   useEffect(() => {
     if (vocalsRef.current) vocalsRef.current.playbackRate = playbackRate;
     if (instrumentalRef.current)
       instrumentalRef.current.playbackRate = playbackRate;
   }, [playbackRate]);
-
   const stopOscillator = useCallback(() => {
     try {
       oscillatorRef.current?.stop();
@@ -330,7 +345,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     }
     oscillatorRef.current = null;
   }, []);
-
   const auditionNote = useCallback(
     (midi, durationMs = 360) => {
       let context = audioContextRef.current;
@@ -339,7 +353,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
         audioContextRef.current = context;
       }
       context.resume?.();
-
       const nowMs = performance.now();
       if (
         nowMs - auditionTimerRef.current < 42 &&
@@ -347,7 +360,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       )
         return;
       auditionTimerRef.current = nowMs;
-
       const previous = auditionRef.current;
       if (previous?.gain) {
         try {
@@ -365,7 +377,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
           /* stale audio node */
         }
       }
-
       const frequency = 440 * 2 ** ((Number(midi) - 69) / 12);
       const gain = context.createGain();
       const filter = context.createBiquadFilter();
@@ -387,7 +398,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
         now + 0.11
       );
       gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-
       const oscillators = [
         ["sine", frequency, 1],
         ["triangle", frequency * 2, 0.16],
@@ -404,11 +414,14 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
         return oscillator;
       });
       filter.connect(gain).connect(context.destination);
-      auditionRef.current = { oscillators, gain, midi: Number(midi) };
+      auditionRef.current = {
+        oscillators,
+        gain,
+        midi: Number(midi)
+      };
     },
     [volumes.melody]
   );
-
   const syncScrollState = useCallback(() => {
     const shell = rollShellRef.current;
     if (!shell) return;
@@ -421,7 +434,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       scrollHeight: shell.scrollHeight || 1
     });
   }, []);
-
   const startScrollThumbDrag = useCallback((event, axis) => {
     const shell = rollShellRef.current;
     if (!shell) return;
@@ -447,7 +459,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     };
     event.currentTarget.setPointerCapture?.(event.pointerId);
   }, []);
-
   const moveScrollThumbDrag = useCallback(
     (event) => {
       const state = scrollDragRef.current;
@@ -471,13 +482,11 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     },
     [syncScrollState]
   );
-
   const endScrollThumbDrag = useCallback((event) => {
     if (!scrollDragRef.current) return;
     scrollDragRef.current = null;
     event.currentTarget.releasePointerCapture?.(event.pointerId);
   }, []);
-
   useEffect(() => {
     requestAnimationFrame(syncScrollState);
   }, [laneHeight, laneWidth, syncScrollState]);
@@ -488,7 +497,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
         `${keyboardWidth + time * zoom}px`
       );
   }, [keyboardWidth, playing, time, zoom]);
-
   const updateSynth = useCallback(
     (currentTime) => {
       const active = notes.find(
@@ -523,7 +531,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     },
     [notes, stopOscillator, volumes.melody]
   );
-
   useEffect(() => {
     let frame = 0;
     let lastStateAt = 0;
@@ -559,13 +566,11 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
           clock.media = current;
           clock.perf = stamp;
         }
-
         const playheadX = keyboardWidth + current * zoom;
         rollCanvasRef.current?.style.setProperty(
           "--editor-playhead-x",
           `${playheadX}px`
         );
-
         if (!master.paused && !master.ended) {
           const vocal = vocalsRef.current;
           if (vocal) {
@@ -609,7 +614,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     rafRef.current = frame;
     return () => cancelAnimationFrame(frame);
   }, [autoScroll, duration, keyboardWidth, playbackRate, updateSynth, zoom]);
-
   const pause = useCallback(() => {
     const master = instrumentalRef.current;
     const vocal = vocalsRef.current;
@@ -650,7 +654,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     syncScrollState,
     zoom
   ]);
-
   const play = useCallback(async () => {
     const master = instrumentalRef.current;
     const vocal = vocalsRef.current;
@@ -678,11 +681,12 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       updateSynth(master.currentTime || 0);
     } catch (error) {
       await notify(
-        `Не удалось начать воспроизведение: ${getErrorMessage(error)}`
+        translateSaved("Не удалось начать воспроизведение: {0}", {
+          0: getErrorMessage(error)
+        })
       );
     }
   }, [autoScroll, notify, playbackRate, updateSynth]);
-
   const toggleAutoScroll = useCallback(() => {
     setAutoScroll((value) => {
       const next = !value;
@@ -690,7 +694,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       return next;
     });
   }, []);
-
   useEffect(
     () => () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -706,7 +709,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     },
     [stopOscillator]
   );
-
   const seek = useCallback(
     (next, auditionWhenStopped = true) => {
       const value = clamp(Number(next) || 0, 0, duration);
@@ -746,7 +748,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       zoom
     ]
   );
-
   const pointerTime = useCallback(
     (clientX) => {
       const canvas = rollCanvasRef.current;
@@ -756,7 +757,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     },
     [duration, keyboardWidth, zoom]
   );
-
   const previewPlayhead = useCallback(
     (value) => {
       const next = clamp(Number(value) || 0, 0, duration);
@@ -776,7 +776,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     },
     [auditionNote, duration, keyboardWidth, noteAtTime, stopOscillator, zoom]
   );
-
   const startPlayheadDrag = useCallback(
     (event) => {
       event.preventDefault();
@@ -801,7 +800,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     },
     [pointerTime, previewPlayhead, stopOscillator, time]
   );
-
   const movePlayheadDrag = useCallback(
     (event) => {
       if (!playheadDragRef.current) return;
@@ -811,7 +809,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     },
     [pointerTime, previewPlayhead]
   );
-
   const endPlayheadDrag = useCallback(
     async (event) => {
       const state = playheadDragRef.current;
@@ -824,7 +821,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     },
     [play, seek]
   );
-
   const setHorizontalZoomAnchored = useCallback(
     (nextZoom) => {
       const shell = rollShellRef.current;
@@ -833,7 +829,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
         setZoom(next);
         return;
       }
-
       const anchorTime = instrumentalRef.current?.currentTime ?? time;
       const nextScrollWidth = Math.max(
         shell.clientWidth,
@@ -860,7 +855,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     },
     [duration, keyboardWidth, syncScrollState, time, zoom]
   );
-
   const setVerticalZoomAnchored = useCallback(
     (nextZoom) => {
       const shell = rollShellRef.current;
@@ -869,18 +863,19 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
         setVerticalZoom(next);
         return;
       }
-
       const viewportCenterY = shell.scrollTop + shell.clientHeight / 2;
       const anchorNote = notes.length
         ? notes.reduce((best, note) => {
             const y = (maxMidi - note.midi_note + 0.5) * verticalZoom;
             const distance = Math.abs(y - viewportCenterY);
             return !best || distance < best.distance
-              ? { note, distance }
+              ? {
+                  note,
+                  distance
+                }
               : best;
           }, null)
         : null;
-
       const nextTop = anchorNote
         ? anchoredVerticalScrollToNote({
             noteMidi: anchorNote.note.midi_note,
@@ -906,7 +901,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     },
     [maxMidi, minMidi, notes, syncScrollState, verticalZoom]
   );
-
   const handleRollWheel = useCallback(
     (event) => {
       if (!event.ctrlKey) return;
@@ -922,7 +916,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     },
     [setHorizontalZoomAnchored, setVerticalZoomAnchored, verticalZoom, zoom]
   );
-
   useEffect(() => {
     const onWheel = (event) => {
       const shell = rollShellRef.current;
@@ -934,9 +927,10 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       capture: true
     });
     return () =>
-      window.removeEventListener("wheel", onWheel, { capture: true });
+      window.removeEventListener("wheel", onWheel, {
+        capture: true
+      });
   }, [handleRollWheel]);
-
   const commit = useCallback((updater) => replace(updater, true), [replace]);
   const selectAll = useCallback(
     () => setSelected(notes.map((note) => note._id)),
@@ -1050,7 +1044,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     },
     [commit, selected, syllableByIndex]
   );
-
   const startDrag = useCallback(
     (event, note, mode) => {
       event.preventDefault();
@@ -1065,7 +1058,12 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       const originals = new Map(
         notes
           .filter((item) => movingSelection.includes(item._id))
-          .map((item) => [item._id, { ...item }])
+          .map((item) => [
+            item._id,
+            {
+              ...item
+            }
+          ])
       );
       auditionNote(note.midi_note, 150);
       dragRef.current = {
@@ -1094,7 +1092,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       )
         state.moved = true;
       const dy = event.shiftKey ? 0 : rawDy;
-
       if (state.mode === "move") {
         const safeDx = constrainedMoveDelta(
           state.snapshot,
@@ -1127,12 +1124,10 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
         );
         return;
       }
-
       const original = state.originals.get(state.id);
       if (!original) return;
       const bounds = resizeBounds(state.snapshot, state.id, duration);
       if (!bounds) return;
-
       let { start } = original;
       let { end } = original;
       if (state.mode === "left") {
@@ -1142,7 +1137,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
         // The right handle stops at the next note, so notes never overlap.
         end = clamp(original.end + dx, bounds.minEnd, bounds.maxEnd);
       }
-
       if (
         !state.lastResizePreview ||
         performance.now() - state.lastResizePreview > 90
@@ -1154,7 +1148,11 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
         (current) =>
           current.map((note) =>
             note._id === state.id
-              ? { ...note, start: roundTime(start), end: roundTime(end) }
+              ? {
+                  ...note,
+                  start: roundTime(start),
+                  end: roundTime(end)
+                }
               : note
           ),
         false
@@ -1172,7 +1170,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       if (current) auditionNote(current.midi_note, 170);
     }
   }, [auditionNote, notes, remember]);
-
   const marqueeSelection = useCallback(
     (state) => {
       const hit = marqueeHitIds({
@@ -1190,7 +1187,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     },
     [keyboardWidth, maxMidi, notes, rowHeight, zoom]
   );
-
   const startMarquee = useCallback(
     (event) => {
       if (
@@ -1217,13 +1213,17 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
         base: additive ? [...selected] : []
       };
       selectionRef.current = state;
-      setSelectionBox({ x1: x, y1: y, x2: x, y2: y });
+      setSelectionBox({
+        x1: x,
+        y1: y,
+        x2: x,
+        y2: y
+      });
       if (!additive) setSelected([]);
       event.currentTarget.setPointerCapture?.(event.pointerId);
     },
     [selected]
   );
-
   const updateMarquee = useCallback(
     (event) => {
       const state = selectionRef.current;
@@ -1250,7 +1250,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     },
     [marqueeSelection]
   );
-
   const endMarquee = useCallback(
     (event) => {
       const state = selectionRef.current;
@@ -1272,7 +1271,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     },
     [marqueeSelection]
   );
-
   useEffect(() => {
     const onKeyDown = (event) => {
       const { target } = event;
@@ -1286,13 +1284,11 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       const editable = isEditableHotkeyTarget(target);
       const mod = event.ctrlKey || event.metaKey;
       const { code } = event;
-
       const consume = () => {
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation?.();
       };
-
       if (mod && code === "KeyZ" && event.shiftKey) {
         consume();
         redo();
@@ -1339,7 +1335,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
         duplicateSelected();
         return;
       }
-
       if (event.code === "Space") {
         consume();
         playing ? pause() : play();
@@ -1410,7 +1405,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     selected.length,
     undo
   ]);
-
   const save = useCallback(async () => {
     if (!song?.id) return;
     setSaving(true);
@@ -1422,19 +1416,23 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       setSelected([]);
       await onSaved?.();
     } catch (error) {
-      await notify(`Не удалось сохранить редактор: ${getErrorMessage(error)}`);
+      await notify(
+        translateSaved("Не удалось сохранить редактор: {0}", {
+          0: getErrorMessage(error)
+        })
+      );
     } finally {
       setSaving(false);
     }
   }, [notes, notify, onSaved, reset, song?.id]);
-
   saveRef.current = save;
-
   const restoreAi = useCallback(async () => {
     if (
       !payload?.ai_backup_exists ||
       !(await confirmDialog(
-        "Вернуть исходный результат AI? Ручные изменения будут потеряны."
+        translateSaved(
+          "Вернуть исходный результат AI? Ручные изменения будут потеряны."
+        )
       ))
     )
       return;
@@ -1445,7 +1443,11 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       setSelected([]);
       await onSaved?.();
     } catch (error) {
-      await notify(`Не удалось восстановить AI: ${getErrorMessage(error)}`);
+      await notify(
+        translateSaved("Не удалось восстановить AI: {0}", {
+          0: getErrorMessage(error)
+        })
+      );
     }
   }, [
     confirmDialog,
@@ -1455,35 +1457,40 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     reset,
     song?.id
   ]);
-
   const selectedNote = notes.find((note) => note._id === selected[0]);
-
   return (
     <section
       ref={workspaceRef}
       className="melody-editor-workspace"
-      aria-label={`Редактор мелодии ${song?.title || ""}`}
+      aria-label={translateSaved("Редактор мелодии {0}", {
+        0: song?.title || ""
+      })}
     >
       <header className="melody-editor-header">
         <div className="melody-editor-title-block">
           <span className="melody-editor-eyebrow">
-            {song?.title || "Песня"} · VOCAL MELODY EDITOR
+            {song?.title || translateSaved("Песня")} · VOCAL MELODY EDITOR
           </span>
         </div>
         <div className="melody-editor-statusline">
           <span className="melody-editor-status-pill">
             {selected.length
-              ? `Выбрано ${selected.length}`
-              : "Готов к редактированию"}
+              ? translateSaved("Выбрано {0}", {
+                  0: selected.length
+                })
+              : translateSaved("Готов к редактированию")}
           </span>
           <span className="melody-editor-timecode">
-            {time.toFixed(2)} / {duration.toFixed(2)} сек
+            {time.toFixed(2)} / {duration.toFixed(2)}
+            {translateSaved("сек")}
           </span>
         </div>
       </header>
 
       {loading ? (
-        <div className="melody-editor-loading">Загружаем SongMap…</div>
+        <div className="melody-editor-loading">
+          {translateSaved("Загружаем SongMap…")}
+        </div>
       ) : (
         <div className="melody-editor-layout">
           <div className="melody-editor-stage">
@@ -1491,12 +1498,12 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
               <div
                 className="melody-editor-action-groups"
                 role="toolbar"
-                aria-label="Инструменты редактора"
+                aria-label={translateSaved("Инструменты редактора")}
               >
                 <div className="melody-editor-tool-group is-nav">
                   <ToolbarButton
                     icon={ArrowLeft}
-                    label="Назад"
+                    label={translateSaved("Назад")}
                     tone="neutral"
                     onClick={() => {
                       pause();
@@ -1505,7 +1512,11 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
                   />
                   <ToolbarButton
                     icon={Save}
-                    label={saving ? "Сохранение…" : "Сохранить"}
+                    label={
+                      saving
+                        ? translateSaved("Сохранение…")
+                        : translateSaved("Сохранить")
+                    }
                     disabled={saving}
                     tone="pink"
                     active
@@ -1515,13 +1526,13 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
                 <div className="melody-editor-tool-group is-history">
                   <ToolbarButton
                     icon={Undo2}
-                    label="Отменить"
+                    label={translateSaved("Отменить")}
                     tone="blue"
                     onClick={undo}
                   />
                   <ToolbarButton
                     icon={Redo2}
-                    label="Вернуть отменённое"
+                    label={translateSaved("Вернуть отменённое")}
                     tone="blue"
                     onClick={redo}
                   />
@@ -1530,7 +1541,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
                   {payload?.ai_backup_exists && (
                     <ToolbarButton
                       icon={RotateCcw}
-                      label="Вернуть результат AI"
+                      label={translateSaved("Вернуть результат AI")}
                       tone="amber"
                       onClick={restoreAi}
                     />
@@ -1539,8 +1550,8 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
                     icon={Crosshair}
                     label={
                       autoScroll
-                        ? "Автопрокрутка включена"
-                        : "Автопрокрутка выключена"
+                        ? translateSaved("Автопрокрутка включена")
+                        : translateSaved("Автопрокрутка выключена")
                     }
                     tone="cyan"
                     active={autoScroll}
@@ -1550,7 +1561,11 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
                 <div className="melody-editor-tool-group is-transport">
                   <ToolbarButton
                     icon={playing ? Pause : Play}
-                    label={playing ? "Стоп" : "Воспроизвести"}
+                    label={
+                      playing
+                        ? translateSaved("Стоп")
+                        : translateSaved("Воспроизвести")
+                    }
                     tone="green"
                     active={playing}
                     onClick={playing ? pause : play}
@@ -1559,7 +1574,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
                     className="melody-editor-speed"
                     htmlFor="melody-editor-playback-rate"
                   >
-                    <span>Скорость</span>
+                    <span>{translateSaved("Скорость")}</span>
                     <select
                       id="melody-editor-playback-rate"
                       value={playbackRate}
@@ -1578,14 +1593,14 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
                 <div className="melody-editor-tool-group is-edit">
                   <ToolbarButton
                     icon={Merge}
-                    label="Соединить выбранные"
+                    label={translateSaved("Соединить выбранные")}
                     disabled={selected.length < 2}
                     tone="amber"
                     onClick={mergeSelected}
                   />
                   <ToolbarButton
                     icon={Trash2}
-                    label="Удалить выбранные"
+                    label={translateSaved("Удалить выбранные")}
                     disabled={!selected.length}
                     danger
                     tone="red"
@@ -1596,25 +1611,34 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
 
               <div className="melody-editor-compact-dials">
                 <EffectDial
-                  label="Вокал"
+                  label={translateSaved("Вокал")}
                   value={volumes.vocals}
                   onChange={(value) =>
-                    setVolumes((v) => ({ ...v, vocals: Number(value) }))
+                    setVolumes((v) => ({
+                      ...v,
+                      vocals: Number(value)
+                    }))
                   }
                 />
                 <EffectDial
-                  label="Мелодия"
+                  label={translateSaved("Мелодия")}
                   value={volumes.melody}
                   accent="secondary"
                   onChange={(value) =>
-                    setVolumes((v) => ({ ...v, melody: Number(value) }))
+                    setVolumes((v) => ({
+                      ...v,
+                      melody: Number(value)
+                    }))
                   }
                 />
                 <EffectDial
-                  label="Минус"
+                  label={translateSaved("Минус")}
                   value={volumes.instrumental}
                   onChange={(value) =>
-                    setVolumes((v) => ({ ...v, instrumental: Number(value) }))
+                    setVolumes((v) => ({
+                      ...v,
+                      instrumental: Number(value)
+                    }))
                   }
                 />
               </div>
@@ -1636,15 +1660,20 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
                     <strong>{noteName(selectedNote.midi_note)}</strong>
                     <span>
                       {selected.length > 1
-                        ? `${selected.length} нот`
-                        : `${selectedNote.start.toFixed(2)}–${selectedNote.end.toFixed(2)}с`}
+                        ? translateSaved("{0} нот", {
+                            0: selected.length
+                          })
+                        : translateSaved("{0}–{1}с", {
+                            0: selectedNote.start.toFixed(2),
+                            1: selectedNote.end.toFixed(2)
+                          })}
                     </span>
                     <select
-                      aria-label="Текст / слог"
+                      aria-label={translateSaved("Текст / слог")}
                       value={selectedNote?.syllable_index ?? ""}
                       onChange={(event) => assignSyllable(event.target.value)}
                     >
-                      <option value="">Без текста</option>
+                      <option value="">{translateSaved("Без текста")}</option>
                       {syllables.map((item) => (
                         <option key={item.index} value={item.index}>
                           {item.text} · #{item.index}
@@ -1653,7 +1682,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
                     </select>
                   </>
                 ) : (
-                  <span>Выберите ноту</span>
+                  <span>{translateSaved("Выберите ноту")}</span>
                 )}
               </div>
             </div>
@@ -1693,7 +1722,10 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
               <div
                 ref={rollCanvasRef}
                 className="melody-editor-roll-canvas"
-                style={{ width: laneWidth, height: laneHeight }}
+                style={{
+                  width: laneWidth,
+                  height: laneHeight
+                }}
                 onPointerDown={startMarquee}
                 onPointerMove={(event) => {
                   drag(event);
@@ -1712,31 +1744,43 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
                   seek((event.clientX - rect.left - keyboardWidth) / zoom);
                 }}
               >
-                {Array.from({ length: maxMidi - minMidi + 1 }, (_, idx) => {
-                  const midi = maxMidi - idx;
-                  const black = BLACK_KEYS.has(((midi % 12) + 12) % 12);
-                  return (
-                    <div
-                      key={`row-${midi}`}
-                      className={`melody-editor-pitch-row ${black ? "is-black" : "is-white"}`}
-                      style={{
-                        left: keyboardWidth,
-                        top: idx * rowHeight,
-                        height: rowHeight
-                      }}
-                    />
-                  );
-                })}
+                {Array.from(
+                  {
+                    length: maxMidi - minMidi + 1
+                  },
+                  (_, idx) => {
+                    const midi = maxMidi - idx;
+                    const black = BLACK_KEYS.has(((midi % 12) + 12) % 12);
+                    return (
+                      <div
+                        key={`row-${midi}`}
+                        className={`melody-editor-pitch-row ${black ? "is-black" : "is-white"}`}
+                        style={{
+                          left: keyboardWidth,
+                          top: idx * rowHeight,
+                          height: rowHeight
+                        }}
+                      />
+                    );
+                  }
+                )}
 
                 <div
                   className="melody-editor-keyboard"
-                  style={{ width: keyboardWidth, height: laneHeight }}
+                  style={{
+                    width: keyboardWidth,
+                    height: laneHeight
+                  }}
                 >
                   {whiteKeyGeometry.map(({ midi, top, height }) => (
                     <div
                       key={`white-${midi}`}
                       className="melody-editor-piano-key is-white"
-                      style={{ top, width: keyboardWidth, height }}
+                      style={{
+                        top,
+                        width: keyboardWidth,
+                        height
+                      }}
                       onPointerDown={(event) => {
                         event.stopPropagation();
                         auditionNote(midi, 220);
@@ -1746,7 +1790,9 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
                     </div>
                   ))}
                   {Array.from(
-                    { length: maxMidi - minMidi + 1 },
+                    {
+                      length: maxMidi - minMidi + 1
+                    },
                     (_, idx) => maxMidi - idx
                   )
                     .filter((midi) => BLACK_KEYS.has(((midi % 12) + 12) % 12))
@@ -1774,7 +1820,9 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
                 </div>
                 <div
                   className="melody-editor-zero-time"
-                  style={{ left: keyboardWidth }}
+                  style={{
+                    left: keyboardWidth
+                  }}
                 >
                   0:00
                 </div>
@@ -1836,7 +1884,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
                 <div
                   className="melody-editor-playhead"
                   role="slider"
-                  aria-label="Позиция воспроизведения"
+                  aria-label={translateSaved("Позиция воспроизведения")}
                   aria-valuemin="0"
                   aria-valuemax={duration}
                   aria-valuenow={time}
@@ -1853,7 +1901,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
 
             <div
               className="melody-editor-cubase-scrollbar is-horizontal"
-              aria-label="Горизонтальная прокрутка"
+              aria-label={translateSaved("Горизонтальная прокрутка")}
             >
               <div
                 className="melody-editor-scroll-track"
@@ -1888,7 +1936,9 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
               <label
                 htmlFor="melody-editor-horizontal-zoom"
                 className="melody-editor-inline-zoom"
-                title="Горизонтальный масштаб · Ctrl+Shift+колесо"
+                title={translateSaved(
+                  "Горизонтальный масштаб · Ctrl+Shift+колесо"
+                )}
               >
                 <MoveHorizontal size={12} />
                 <input
@@ -1906,7 +1956,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
             </div>
             <div
               className="melody-editor-cubase-scrollbar is-vertical"
-              aria-label="Вертикальная прокрутка"
+              aria-label={translateSaved("Вертикальная прокрутка")}
             >
               <div
                 className="melody-editor-scroll-track"
@@ -1941,7 +1991,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
               <label
                 htmlFor="melody-editor-vertical-zoom"
                 className="melody-editor-inline-zoom is-vertical"
-                title="Вертикальный масштаб · Ctrl+колесо"
+                title={translateSaved("Вертикальный масштаб · Ctrl+колесо")}
               >
                 <MoveVertical size={12} />
                 <input

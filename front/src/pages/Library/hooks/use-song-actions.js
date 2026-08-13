@@ -1,5 +1,6 @@
 import { useCallback, useRef } from "react";
 import { api } from "../../../api/client";
+import { translateSaved } from "../../../i18n/runtime";
 import { getErrorMessage } from "../../../utils/errors";
 
 const getFolderPayload = ({ output_dir, slug, title, id }) => ({
@@ -8,7 +9,6 @@ const getFolderPayload = ({ output_dir, slug, title, id }) => ({
   title: title ?? "",
   id: id ?? ""
 });
-
 export default function useLibrarySongActions(props) {
   const {
     confirmDialog,
@@ -22,7 +22,6 @@ export default function useLibrarySongActions(props) {
   } = props;
   const deletingSongIdsRef = useRef(new Set());
   const processingSongIdsRef = useRef(new Set());
-
   const runProcessingAction = useCallback(
     async (song, action, errorMessage) => {
       if (!song?.id || processingSongIdsRef.current.has(song.id)) return;
@@ -45,11 +44,12 @@ export default function useLibrarySongActions(props) {
       deletingSongIdsRef.current.add(song.id);
       try {
         const confirmed = await confirmDialog(
-          `Удалить «${song.title}»? Это удалит все файлы песни.`,
-          "Удалить песню?"
+          translateSaved("Удалить «{0}»? Это удалит все файлы песни.", {
+            0: song.title
+          }),
+          translateSaved("Удалить песню?")
         );
         if (!confirmed) return;
-
         setHiddenSongIds((ids) => new Set(ids).add(song.id));
         if (recordingsSongId === song.id) setRecordingsSong(null);
         if (processingSongId === song.id) setProcessingSong(null);
@@ -62,11 +62,17 @@ export default function useLibrarySongActions(props) {
             next.delete(song.id);
             return next;
           });
-          await notify(`Не удалось удалить: ${getErrorMessage(error)}`);
+          await notify(
+            translateSaved("Не удалось удалить: {0}", {
+              0: getErrorMessage(error)
+            })
+          );
         }
       } catch (error) {
         await notify(
-          `Не удалось подтвердить удаление: ${getErrorMessage(error)}`
+          translateSaved("Не удалось подтвердить удаление: {0}", {
+            0: getErrorMessage(error)
+          })
         );
       } finally {
         deletingSongIdsRef.current.delete(song.id);
@@ -87,19 +93,22 @@ export default function useLibrarySongActions(props) {
     async (song) => {
       const status = String(song?.status || "pending").toLowerCase();
       const isFirstProcessing = status === "pending";
-
       if (!isFirstProcessing) {
         const confirmed = await confirmDialog(
-          `Вы точно хотите обработать заново песню «${song?.title || "Без названия"}»? Ранее созданные результаты обработки будут обновлены.`,
-          "Обработать песню заново?"
+          translateSaved(
+            "Вы точно хотите обработать заново песню «{0}»? Ранее созданные результаты обработки будут обновлены.",
+            {
+              0: song?.title || translateSaved("Без названия")
+            }
+          ),
+          translateSaved("Обработать песню заново?")
         );
         if (!confirmed) return;
       }
-
       await runProcessingAction(
         song,
         api.processSong,
-        "Не удалось запустить обработку"
+        translateSaved("Не удалось запустить обработку")
       );
     },
     [confirmDialog, runProcessingAction]
@@ -107,15 +116,19 @@ export default function useLibrarySongActions(props) {
   const reprocessSong = useCallback(
     async (song) => {
       const confirmed = await confirmDialog(
-        `Вы точно хотите обработать заново песню «${song?.title || "Без названия"}»? Текущие данные мелодии будут пересозданы.`,
-        "Обработать песню заново?"
+        translateSaved(
+          "Вы точно хотите обработать заново песню «{0}»? Текущие данные мелодии будут пересозданы.",
+          {
+            0: song?.title || translateSaved("Без названия")
+          }
+        ),
+        translateSaved("Обработать песню заново?")
       );
       if (!confirmed) return;
-
       await runProcessingAction(
         song,
         api.reprocessMelody,
-        "Не удалось переобработать MIDI"
+        translateSaved("Не удалось переобработать MIDI")
       );
     },
     [confirmDialog, runProcessingAction]
@@ -125,23 +138,34 @@ export default function useLibrarySongActions(props) {
       const openFolder = window.electronAPI?.openSongFolder;
       if (!openFolder) {
         await notify(
-          "Открытие папки доступно только в установленном приложении."
+          translateSaved(
+            "Открытие папки доступно только в установленном приложении."
+          )
         );
         return;
       }
-
       try {
         const errorMessage = await openFolder(getFolderPayload(song));
         if (errorMessage)
-          await notify(errorMessage, "Не удалось открыть папку");
+          await notify(
+            errorMessage,
+            translateSaved("Не удалось открыть папку")
+          );
       } catch (error) {
         await notify(
-          `Не удалось открыть папку: ${getErrorMessage(error)}`,
-          "Не удалось открыть папку"
+          translateSaved("Не удалось открыть папку: {0}", {
+            0: getErrorMessage(error)
+          }),
+          translateSaved("Не удалось открыть папку")
         );
       }
     },
     [notify]
   );
-  return { deleteSong, openSongFolder, processSong, reprocessSong };
+  return {
+    deleteSong,
+    openSongFolder,
+    processSong,
+    reprocessSong
+  };
 }

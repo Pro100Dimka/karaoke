@@ -1,17 +1,40 @@
 @echo off
 setlocal
 for %%I in ("%~dp0..") do set "ROOT=%%~fI"
-set "PYTHON=%ROOT%\backend\venv\Scripts\python.exe"
+set "PYTHON="
 
-if not exist "%PYTHON%" (
-  echo Backend virtual environment was not found: %PYTHON%
+if exist "%ROOT%\backend\venv\Scripts\python.exe" (
+  set "PYTHON=%ROOT%\backend\venv\Scripts\python.exe"
+)
+
+if not defined PYTHON (
+  for /f "delims=" %%P in ('py -3.12 -c "import sys; print(sys.executable)" 2^>nul') do set "PYTHON=%%P"
+)
+if defined PYTHON if not exist "%PYTHON%" set "PYTHON="
+
+if not defined PYTHON (
+  for /f "delims=" %%P in ('py -3.11 -c "import sys; print(sys.executable)" 2^>nul') do set "PYTHON=%%P"
+)
+
+if not defined PYTHON (
+  echo Python 3.11 or 3.12 was not found.
   exit /b 1
 )
 
-echo [1/2] Verifying frontend and architecture...
+echo [1/5] Verifying frontend and architecture...
 call npm --prefix "%ROOT%\front" run verify || exit /b 1
 
-echo [2/2] Verifying backend and AI pipeline...
+echo [2/5] Verifying frontend coverage and mutations...
+call npm --prefix "%ROOT%\front" run test:unit:core:coverage || exit /b 1
+call npm --prefix "%ROOT%\front" run test:mutation || exit /b 1
+
+echo [3/5] Verifying frontend end-to-end flow...
+call npm --prefix "%ROOT%\front" run test:e2e || exit /b 1
+
+echo [4/5] Auditing frontend dependencies...
+call npm --prefix "%ROOT%\front" audit || exit /b 1
+
+echo [5/5] Verifying backend and AI pipeline...
 pushd "%ROOT%\backend"
 "%PYTHON%" -m ruff check app AI config.py database.py models.py schemas.py run.py || exit /b 1
 "%PYTHON%" -m ruff format --check app AI config.py database.py models.py schemas.py run.py || exit /b 1

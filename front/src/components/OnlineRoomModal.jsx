@@ -2,12 +2,14 @@ import { ArrowLeft, UsersRound } from "lucide-react";
 import { useRef, useState } from "react";
 import { useOnlineRoom } from "../contexts/OnlineRoomContext";
 import useMountedRef from "../hooks/useMountedRef";
+import { useI18n } from "../i18n";
 import { normalizeRoomId } from "../services/onlineRoom";
 import { getErrorMessage } from "../utils/errors";
 import { Button, FieldInput } from "./fields";
 import Modal from "./modal";
 
 export function OnlineRoomModal({ onlineName, onClose }) {
+  const { t } = useI18n();
   const room = useOnlineRoom();
   const [joinMode, setJoinMode] = useState(false);
   const [roomId, setRoomId] = useState("");
@@ -21,7 +23,7 @@ export function OnlineRoomModal({ onlineName, onClose }) {
 
     const normalizedRoomId = normalizeRoomId(roomId);
     if (!host && normalizedRoomId.length < 4) {
-      setError("Введите корректный код комнаты.");
+      setError(t("room.join.invalidCode"));
       return;
     }
 
@@ -34,9 +36,7 @@ export function OnlineRoomModal({ onlineName, onClose }) {
       if (mountedRef.current) onClose();
     } catch (connectError) {
       if (mountedRef.current) {
-        setError(
-          getErrorMessage(connectError, "Не удалось подключиться к комнате.")
-        );
+        setError(getErrorMessage(connectError, t("room.join.failed")));
       }
     } finally {
       connectionPendingRef.current = false;
@@ -48,7 +48,7 @@ export function OnlineRoomModal({ onlineName, onClose }) {
     <Modal
       isOpen
       onClose={onClose}
-      ariaLabel="Совместное исполнение"
+      ariaLabel={t("room.performance")}
       portal
       backdropClassName="app-modal-backdrop"
       modalClassName="app-modal modal-card online-room-modal"
@@ -58,9 +58,9 @@ export function OnlineRoomModal({ onlineName, onClose }) {
       tilt
       titleProps={{
         icon: UsersRound,
-        eyebrow: "ОНЛАЙН-КОМНАТА",
-        title: "Совместное исполнение",
-        description: "Создайте комнату или подключитесь по коду ведущего.",
+        eyebrow: t("room.eyebrow"),
+        title: t("room.performance"),
+        description: t("room.description"),
         actions: (
           <Button
             variant="primary"
@@ -68,7 +68,9 @@ export function OnlineRoomModal({ onlineName, onClose }) {
             onClick={() => connect(!joinMode)}
             className="modal-title-action"
           >
-            {busy ? "Подключение…" : joinMode ? "Войти" : "Создать комнату"}
+            {t(
+              busy ? "room.connecting" : joinMode ? "room.join" : "room.create"
+            )}
           </Button>
         )
       }}
@@ -76,10 +78,7 @@ export function OnlineRoomModal({ onlineName, onClose }) {
       <div className="modal-scroll online-room-modal__content">
         {!joinMode ? (
           <div className="online-room-form u-stack-4">
-            <p>
-              Создайте комнату и отправьте другу автоматически созданный код или
-              войдите по коду ведущего.
-            </p>
+            <p>{t("room.instructions")}</p>
             {error && <p className="karaoke-recording-error">{error}</p>}
             <div className="online-room-actions u-actions-end">
               <Button
@@ -87,7 +86,7 @@ export function OnlineRoomModal({ onlineName, onClose }) {
                 disabled={busy}
                 onClick={() => setJoinMode(true)}
               >
-                Войти по коду
+                {t("room.joinByCode")}
               </Button>
             </div>
           </div>
@@ -97,8 +96,8 @@ export function OnlineRoomModal({ onlineName, onClose }) {
               id="online-room-code"
               field={{
                 name: "roomId",
-                label: "Код комнаты",
-                placeholder: "Например, E15235FE",
+                label: t("room.code"),
+                placeholder: t("room.codeExample"),
                 maxLength: 32
               }}
               value={roomId}
@@ -121,7 +120,7 @@ export function OnlineRoomModal({ onlineName, onClose }) {
                   setError("");
                 }}
               >
-                Назад
+                {t("room.back")}
               </Button>
             </div>
           </div>

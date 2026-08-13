@@ -14,6 +14,7 @@ from app.utils.json_files import read_json, write_json
 
 SETTINGS_FILE = config.DATA_DIR / "settings.json"
 PATH_SETTINGS_FILE = config.PATH_SETTINGS_FILE
+INSTALL_PREFERENCES_FILE = config.DATA_DIR.parent / "install-preferences.json"
 _settings_lock = threading.RLock()
 
 DEFAULT_SETTINGS: dict[str, Any] = {
@@ -26,6 +27,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 
 UI_PREFERENCES_FILE = config.DATA_DIR / "ui-preferences.json"
 UI_PREFERENCE_NAMESPACES = frozenset({"audio", "karaoke", "melody_editor", "radio", "settings"})
+INSTALL_PREFERENCE_VALUES = {
+    "language": frozenset({"uk", "ru", "en"}),
+    "theme": frozenset({"dark", "light", "green", "violet"}),
+}
 
 
 def path_settings() -> dict[str, str]:
@@ -64,6 +69,24 @@ def _read_settings_unlocked() -> dict[str, Any]:
     except (json.JSONDecodeError, OSError):
         raw = {}
     stored = raw if isinstance(raw, dict) else {}
+    try:
+        install_preferences: Any = read_json(INSTALL_PREFERENCES_FILE, default={})
+    except (json.JSONDecodeError, OSError):
+        install_preferences = {}
+    selected = (
+        {
+            key: value
+            for key, value in install_preferences.items()
+            if key in INSTALL_PREFERENCE_VALUES and value in INSTALL_PREFERENCE_VALUES[key]
+        }
+        if isinstance(install_preferences, dict)
+        else {}
+    )
+    if selected:
+        stored = {**stored, **selected}
+        write_json(SETTINGS_FILE, stored)
+    if INSTALL_PREFERENCES_FILE.exists():
+        INSTALL_PREFERENCES_FILE.unlink(missing_ok=True)
     known_values = {key: stored[key] for key in DEFAULT_SETTINGS if key in stored}
     if "compute_mode" not in known_values:
         use_gpu = bool(stored.get("use_gpu", True))

@@ -20,13 +20,14 @@
     "audit:css": "node scripts/audit-css-full.mjs --strict",
     "audit:exports": "node scripts/audit-exports.mjs",
     "check:sizes": "node scripts/check-file-sizes.mjs",
-    "audit": "npm run check:syntax && npm run audit:css && npm run audit:exports && npm run audit:reachability && npm run audit:react && npm run audit:cycles && npm run audit:complexity && npm run check:sizes && npm run audit:duplicates && npm run audit:architecture",
+    "audit": "npm run check:syntax && npm run audit:css && npm run audit:exports && npm run audit:reachability && npm run audit:react && npm run audit:cycles && npm run audit:complexity && npm run check:sizes && npm run audit:duplicates && npm run audit:architecture && npm run audit:localization",
     "audit:react": "node scripts/audit-react.mjs",
     "audit:cycles": "node scripts/audit-cycles.mjs",
     "audit:complexity": "node scripts/audit-complexity.mjs",
     "release:check": "node scripts/check-release.mjs",
     "audit:duplicates": "node scripts/audit-duplicates.mjs",
     "audit:architecture": "node scripts/audit-architecture.mjs",
+    "audit:localization": "node scripts/audit-localization.mjs",
     "dev:mock": "cross-env VITE_USE_MOCK_API=true vite --mode mock",
     "build:mock": "cross-env VITE_USE_MOCK_API=true vite build --mode mock",
     "preview:mock": "vite preview --mode mock --host 127.0.0.1 --port 4173",
@@ -36,6 +37,9 @@
     "audit:reachability": "node scripts/audit-reachability.mjs",
     "check:syntax": "node scripts/check-syntax.mjs",
     "test:unit": "node --experimental-default-type=module --test tests/**/*.test.mjs",
+    "test:unit:i18n:coverage": "node --experimental-default-type=module --test --experimental-test-coverage tests/i18n.test.mjs",
+    "test:unit:core:coverage": "node --experimental-default-type=module --test --experimental-test-coverage tests/i18n.test.mjs tests/theme.test.mjs",
+    "test:mutation": "stryker run",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -45,10 +49,14 @@
     "react-router-dom": "^7.18.2"
   },
   "devDependencies": {
+    "@babel/parser": "^8.0.4",
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
     "@babel/preset-env": "^7.29.7",
     "@babel/preset-react": "^7.29.7",
+    "@babel/traverse": "^8.0.4",
     "@playwright/test": "^1.62.1",
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/tap-runner": "^9.6.1",
     "@vitejs/plugin-react": "^6.0.5",
     "concurrently": "^8.2.2",
     "cross-env": "^10.0.0",
@@ -115,5 +123,8 @@
     "linux": {
       "target": "AppImage"
     }
+  },
+  "overrides": {
+    "qs": "6.15.3"
   }
 }

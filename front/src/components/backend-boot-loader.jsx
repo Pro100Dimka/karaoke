@@ -7,6 +7,8 @@ import greenIcon from "../assets/icons/green.png";
 import lightIcon from "../assets/icons/light.png";
 import violetIcon from "../assets/icons/violet.png";
 import { BACKEND_BOOT_RETRY_MS } from "../config/runtime";
+import { translateMessage } from "../i18n";
+import { getSavedLanguage } from "../utils/language";
 import { getSavedTheme } from "../utils/theme";
 import { hydrateUiPreferences } from "../utils/ui-preferences";
 
@@ -135,7 +137,7 @@ export default function BackendBootLoader({ children }) {
       </svg>
       <div className="backend-boot-loader__copy">
         <strong>A&amp;D Voice</strong>
-        <span>Запускаем локальный сервер…</span>
+        <span>{translateMessage(getSavedLanguage(), "backend.starting")}</span>
       </div>
       <div className="backend-boot-loader__dots" aria-hidden="true">
         <i />

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
+import { translateSaved } from "../i18n/runtime";
 import { getErrorMessage } from "../utils/errors";
 import { applyTheme } from "../utils/theme";
 import {
@@ -15,7 +16,6 @@ const SAVE_STATUS = {
   SAVING: "saving",
   SAVED: "saved"
 };
-
 export default function useSettingsForm(notify) {
   const [form, setForm] = useState(null);
   const [saveStatus, setSaveStatus] = useState(SAVE_STATUS.IDLE);
@@ -26,12 +26,10 @@ export default function useSettingsForm(notify) {
   const saveFailedRef = useRef(false);
   const { run: queueSave } = useAsyncQueue();
   const { updateSettings: updateAppSettings } = useAppSettings();
-
   const beginSave = () => {
     pendingSaveCountRef.current += 1;
     setSaveStatus(SAVE_STATUS.SAVING);
   };
-
   const finishSave = (failed = false) => {
     if (failed) saveFailedRef.current = true;
     pendingSaveCountRef.current = Math.max(0, pendingSaveCountRef.current - 1);
@@ -39,7 +37,6 @@ export default function useSettingsForm(notify) {
     setSaveStatus(saveFailedRef.current ? SAVE_STATUS.IDLE : SAVE_STATUS.SAVED);
     saveFailedRef.current = false;
   };
-
   useEffect(() => {
     // React Strict Mode mounts, cleans up and mounts effects again in
     // development. Reset the flag in setup so the second mount can still
@@ -55,10 +52,8 @@ export default function useSettingsForm(notify) {
       saveFailedRef.current = false;
     };
   }, []);
-
   useEffect(() => {
     let active = true;
-
     api
       .getAppSettings()
       .then((settings) => {
@@ -66,78 +61,83 @@ export default function useSettingsForm(notify) {
       })
       .catch((error) => {
         if (active) {
-          notify(`Не удалось загрузить настройки: ${getErrorMessage(error)}`);
+          notify(
+            translateSaved("Не удалось загрузить настройки: {0}", {
+              0: getErrorMessage(error)
+            })
+          );
         }
       });
-
     return () => {
       active = false;
     };
   }, [notify]);
-
   useEffect(() => {
     if (form?.theme) {
       applyTheme(form.theme);
     }
   }, [form?.theme]);
-
   const updateField = (name, value) => {
     setSaveStatus(SAVE_STATUS.IDLE);
-    setForm((current) => ({ ...current, [name]: value }));
+    setForm((current) => ({
+      ...current,
+      [name]: value
+    }));
 
     // Keep the global settings context in sync with fields that affect the
     // whole application immediately. LibraryHero and other screens read the
     // theme from AppSettingsContext, not from this page-local form.
     if (name === "theme") {
       applyTheme(value);
-      updateAppSettings((current) => ({ ...current, theme: value }));
+      updateAppSettings((current) => ({
+        ...current,
+        theme: value
+      }));
     }
   };
-
   const save = () => {
     if (!form) return Promise.resolve();
-
     const payload = form;
     const requestId = saveRequestRef.current + 1;
     saveRequestRef.current = requestId;
     beginSave();
-
     return queueSave(async () => {
       let failed = false;
       try {
         const updated = await api.updateAppSettings(payload);
         if (!mountedRef.current || requestId !== saveRequestRef.current) return;
-
         setForm((current) => mergeSettings(current, updated));
         updateAppSettings((current) => mergeSettings(current, updated));
       } catch (error) {
         if (!mountedRef.current || requestId !== saveRequestRef.current) return;
-
         failed = true;
-        await notify(`Не удалось сохранить: ${getErrorMessage(error)}`);
+        await notify(
+          translateSaved("Не удалось сохранить: {0}", {
+            0: getErrorMessage(error)
+          })
+        );
       } finally {
         finishSave(failed);
       }
     });
   };
-
   const saveField = (name, value) => {
     const preparedValue = prepareSettingValue(value);
     beginSave();
     const requestId = (fieldRequestRef.current.get(name) ?? 0) + 1;
     fieldRequestRef.current.set(name, requestId);
-
     return queueSave(async () => {
       let failed = false;
       try {
-        const updated = await api.updateAppSettings({ [name]: preparedValue });
+        const updated = await api.updateAppSettings({
+          [name]: preparedValue
+        });
         if (
           !mountedRef.current ||
           fieldRequestRef.current.get(name) !== requestId
         ) {
           return;
         }
-
         const savedValue = resolveSavedSetting(updated, name, preparedValue);
         setForm((current) => ({
           ...current,
@@ -154,17 +154,17 @@ export default function useSettingsForm(notify) {
         ) {
           return;
         }
-
         failed = true;
         await notify(
-          `Не удалось сохранить настройку: ${getErrorMessage(error)}`
+          translateSaved("Не удалось сохранить настройку: {0}", {
+            0: getErrorMessage(error)
+          })
         );
       } finally {
         finishSave(failed);
       }
     });
   };
-
   return {
     form,
     saveStatus,
