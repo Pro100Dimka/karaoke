@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 import os
 import re
 import sys
@@ -11,8 +10,8 @@ import numpy as np
 
 from ..audio import load_mono
 from ..errors import EngineUnavailableError, InvalidArtifactError
-from ..models import Word
 from ..model_registry import get_model
+from ..models import Word
 from .device import select_torch_device
 
 _CLEAN = re.compile(r"[^\w]+", re.UNICODE)
@@ -76,7 +75,9 @@ def _ctc_viterbi_states(log_probs, target_ids: list[int], blank_id: int):
         raise ValueError("CTC alignment requires non-empty targets and emissions")
 
     target = torch.tensor(target_ids, dtype=torch.long, device=log_probs.device)
-    states = torch.full((2 * len(target_ids) + 1,), int(blank_id), dtype=torch.long, device=log_probs.device)
+    states = torch.full(
+        (2 * len(target_ids) + 1,), int(blank_id), dtype=torch.long, device=log_probs.device
+    )
     states[1::2] = target
     count = int(states.numel())
     neg = torch.finfo(log_probs.dtype).min
@@ -105,19 +106,14 @@ def _ctc_viterbi_states(log_probs, target_ids: list[int], blank_id: int):
         back[frame] = transition.to("cpu", dtype=torch.int8)
         previous = current
 
-    if count == 1:
-        state = 0
-    else:
-        last_states = torch.tensor([count - 1, count - 2], device=log_probs.device)
-        state = int(last_states[torch.argmax(previous[last_states])].item())
+    last_states = torch.tensor([count - 1, count - 2], device=log_probs.device)
+    state = int(last_states[torch.argmax(previous[last_states])].item())
 
     path = [0] * frames
     path[-1] = state
     for frame in range(frames - 1, 0, -1):
         transition = int(back[frame, state].item())
         state -= transition
-        if state < 0:
-            raise InvalidArtifactError("CTC Viterbi backtrack left the state graph")
         path[frame - 1] = state
     return path, states.detach().cpu().tolist()
 
@@ -132,9 +128,9 @@ def _word_spans_from_ctc(
 ) -> tuple[list[Word], float]:
     import torch
 
-    path, state_labels = _ctc_viterbi_states(log_probs, target_ids, blank_id)
+    path, _state_labels = _ctc_viterbi_states(log_probs, target_ids, blank_id)
     frame_count = len(path)
-    if frame_count <= 0 or duration_sec <= 0:
+    if duration_sec <= 0:
         return [], 0.0
 
     frames_for_target: list[list[int]] = [[] for _ in target_ids]
@@ -146,12 +142,16 @@ def _word_spans_from_ctc(
         if 0 <= target_pos < len(target_ids):
             frames_for_target[target_pos].append(frame)
             label = target_ids[target_pos]
-            token_scores[target_pos].append(float(torch.exp(log_probs[frame, label]).clamp(0, 1).item()))
+            token_scores[target_pos].append(
+                float(torch.exp(log_probs[frame, label]).clamp(0, 1).item())
+            )
 
     result: list[Word] = []
     all_scores: list[float] = []
     previous_end = 0.0
-    for index, (word, target_positions) in enumerate(zip(words, word_target_positions, strict=True)):
+    for index, (word, target_positions) in enumerate(
+        zip(words, word_target_positions, strict=True)
+    ):
         frame_ids = [frame for pos in target_positions for frame in frames_for_target[pos]]
         scores = [score for pos in target_positions for score in token_scores[pos]]
         if not frame_ids:
@@ -221,10 +221,7 @@ class CTCWordAligner:
         meipass = getattr(sys, "_MEIPASS", None)
         if meipass:
             roots.append(Path(meipass))
-        try:
-            roots.append(Path(sys.executable).resolve().parent)
-        except Exception:
-            pass
+        roots.append(Path(sys.executable).resolve().parent)
         here = Path(__file__).resolve()
         roots.extend([here.parents[2], here.parents[3], Path.cwd()])
 
@@ -260,7 +257,7 @@ class CTCWordAligner:
         return deduped
 
     @classmethod
-    def from_environment(cls) -> "CTCWordAligner":
+    def from_environment(cls) -> CTCWordAligner:
         configured = {
             "ru": os.getenv("KARAOKE_AI_CTC_RU_MODEL", "").strip(),
             "uk": os.getenv("KARAOKE_AI_CTC_UK_MODEL", "").strip(),
@@ -283,12 +280,18 @@ class CTCWordAligner:
                 resolved = str(candidate.resolve())
                 self.models[code] = resolved
                 self.last_resource_diagnostics[code] = {
-                    "available": True, "path": resolved, "reason": "ok", "checked": checked
+                    "available": True,
+                    "path": resolved,
+                    "reason": "ok",
+                    "checked": checked,
                 }
                 return resolved
         reason = checked[0]["reason"] if configured and checked else "no valid local model found"
         self.last_resource_diagnostics[code] = {
-            "available": False, "path": configured, "reason": reason, "checked": checked
+            "available": False,
+            "path": configured,
+            "reason": reason,
+            "checked": checked,
         }
         return ""
 
@@ -296,7 +299,10 @@ class CTCWordAligner:
         code = _language_code(language, text)
         if not code:
             self.last_resource_diagnostics["unknown"] = {
-                "available": False, "path": "", "reason": "language could not be determined", "checked": []
+                "available": False,
+                "path": "",
+                "reason": "language could not be determined",
+                "checked": [],
             }
             return False
         return bool(self._resolve_model(code))
@@ -310,7 +316,11 @@ class CTCWordAligner:
                 f"No usable local CTC alignment model for {code or 'language'}: "
                 f"{details.get('reason', 'not found')}"
             )
-        if self._loaded_key == model_path and self._model is not None and self._processor is not None:
+        if (
+            self._loaded_key == model_path
+            and self._model is not None
+            and self._processor is not None
+        ):
             return self._processor, self._model
         try:
             import torch
@@ -322,7 +332,9 @@ class CTCWordAligner:
                 Wav2Vec2Processor,
             )
         except ImportError as exc:
-            raise EngineUnavailableError("transformers + torch are required for CTC alignment") from exc
+            raise EngineUnavailableError(
+                "transformers + torch are required for CTC alignment"
+            ) from exc
 
         self.release()
         self._device = select_torch_device(torch)
@@ -335,9 +347,7 @@ class CTCWordAligner:
         # back to a plain feature-extractor + tokenizer processor when the LM
         # wrapper dependency is unavailable.
         try:
-            self._processor = AutoProcessor.from_pretrained(
-                model_path, local_files_only=True
-            )
+            self._processor = AutoProcessor.from_pretrained(model_path, local_files_only=True)
         except ImportError as exc:
             message = str(exc).lower()
             if "pyctcdecode" not in message and "processorwithlm" not in message:
@@ -345,9 +355,7 @@ class CTCWordAligner:
             feature_extractor = AutoFeatureExtractor.from_pretrained(
                 model_path, local_files_only=True
             )
-            tokenizer = AutoTokenizer.from_pretrained(
-                model_path, local_files_only=True
-            )
+            tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
             self._processor = Wav2Vec2Processor(
                 feature_extractor=feature_extractor,
                 tokenizer=tokenizer,
@@ -364,7 +372,9 @@ class CTCWordAligner:
         self._loaded_key = ""
         try:
             import gc
+
             import torch
+
             gc.collect()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -388,13 +398,19 @@ class CTCWordAligner:
             encoded = tokenizer(normalized, add_special_tokens=False).input_ids
             encoded = [int(value) for value in encoded if int(value) != int(blank_id)]
             if unk_id is not None and any(value == int(unk_id) for value in encoded):
-                raise InvalidArtifactError(f"CTC vocabulary cannot represent lyric token {raw_word!r}")
+                raise InvalidArtifactError(
+                    f"CTC vocabulary cannot represent lyric token {raw_word!r}"
+                )
             if not encoded:
                 raise InvalidArtifactError(f"CTC tokenizer produced no labels for {raw_word!r}")
             positions = list(range(len(target_ids), len(target_ids) + len(encoded)))
             target_ids.extend(encoded)
             word_positions.append(positions)
-            if word_index != len(words) - 1 and delimiter_id is not None and int(delimiter_id) != int(blank_id):
+            if (
+                word_index != len(words) - 1
+                and delimiter_id is not None
+                and int(delimiter_id) != int(blank_id)
+            ):
                 target_ids.append(int(delimiter_id))
         return target_ids, word_positions, int(blank_id)
 
@@ -433,7 +449,9 @@ class CTCWordAligner:
         log_probs, processor = self._infer(audio, sample_rate, language, transcript)
         target_ids, positions, blank_id = self._target_ids(processor, words)
         # CTC requires enough frames for labels plus repeated-label separation.
-        repeats = sum(1 for left, right in zip(target_ids, target_ids[1:], strict=False) if left == right)
+        repeats = sum(
+            1 for left, right in zip(target_ids, target_ids[1:], strict=False) if left == right
+        )
         if log_probs.shape[0] < len(target_ids) + repeats:
             return None
         local_words, confidence = _word_spans_from_ctc(
@@ -463,18 +481,25 @@ class CTCWordAligner:
         output: list[CTCLineResult | None] = [None] * len(groups)
         cursor = 0.0
         attempted = retried = recovered = 0
-        group_tokens = [[token for token in re.findall(r"\w+(?:[’'-]\w+)*", group, re.UNICODE) if token] for group in groups]
+        group_tokens = [
+            [token for token in re.findall(r"\w+(?:[’'-]\w+)*", group, re.UNICODE) if token]
+            for group in groups
+        ]
         expected_values = [_expected_duration(tokens) for tokens in group_tokens if tokens]
         typical_expected = float(np.median(expected_values)) if expected_values else 1.0
         # Bounds follow this song's line-density distribution instead of assuming
         # every lyric line must live inside a universal 0.75-10 second window.
-        expected_floor = max(0.18, float(np.percentile(expected_values, 10))*0.55) if expected_values else 0.25
-        expected_ceiling = max(typical_expected*2.5, float(np.percentile(expected_values, 90))*1.8) if expected_values else 8.0
+        expected_floor = (
+            max(0.18, float(np.percentile(expected_values, 10)) * 0.55) if expected_values else 0.25
+        )
+        expected_ceiling = (
+            max(typical_expected * 2.5, float(np.percentile(expected_values, 90)) * 1.8)
+            if expected_values
+            else 8.0
+        )
 
         def run_window(start: float, end: float, words: list[str]):
             nonlocal attempted
-            if end <= start:
-                return None
             attempted += 1
             left = max(0, int(start * sample_rate))
             right = min(len(source), max(left + 1, int(end * sample_rate)))
@@ -500,7 +525,6 @@ class CTCWordAligner:
             anchor = anchors.get(line_index)
 
             # Bound an unanchored line by neighboring acoustic/ASR line anchors.
-            prev_bound = cursor
             next_bound = total
             for j in range(line_index + 1, len(groups)):
                 if j in anchors:
@@ -527,7 +551,7 @@ class CTCWordAligner:
 
             result = run_window(start, end, words)
 
-            def usable(item) -> bool:
+            def usable(item, minimum=minimum, expected=expected, cursor=cursor) -> bool:
                 if item is None:
                     return False
                 local, absolute_words = item
@@ -547,8 +571,8 @@ class CTCWordAligner:
             if not usable(result) and anchor is not None:
                 retried += 1
                 astart, aend, score = map(float, anchor)
-                narrow_lead = expected * (0.08 + 0.12 * max(0.0, 1.0-score))
-                narrow_tail = expected * (0.20 + 0.30 * max(0.0, 1.0-score))
+                narrow_lead = expected * (0.08 + 0.12 * max(0.0, 1.0 - score))
+                narrow_tail = expected * (0.20 + 0.30 * max(0.0, 1.0 - score))
                 retry_start = max(0.0, astart - narrow_lead, cursor - expected * 0.05)
                 retry_end = min(total, max(aend + narrow_tail, retry_start + expected * 1.25))
                 retry = run_window(retry_start, retry_end, words)

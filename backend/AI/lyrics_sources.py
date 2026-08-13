@@ -81,10 +81,13 @@ class _LyricsHTMLParser(HTMLParser):
             return
         if self.mode is None:
             return
+        if tag == "br":
+            self.buffer.append("\n")
+            return
         self.depth += 1
         if "b-accord__symbol" in classes:
             self.skip_depth = self.depth
-        if tag == "br" or "pline" in classes or "single-line" in classes:
+        if "pline" in classes or "single-line" in classes:
             self.buffer.append("\n")
 
     def handle_endtag(self, tag: str) -> None:
@@ -205,7 +208,7 @@ def _parse_lrc(
     return tuple(result)
 
 
-def _local_file(path: Path) -> LyricsDiscovery:
+def _local_file(path: Path, duration_sec: float | None = None) -> LyricsDiscovery:
     for suffix in (".lrc", ".txt"):
         candidate = path.with_suffix(suffix)
         if not candidate.is_file():
@@ -216,7 +219,7 @@ def _local_file(path: Path) -> LyricsDiscovery:
             continue
         value = _clean(raw)
         if len(value.split()) >= 3:
-            return LyricsDiscovery(value, "sidecar", _parse_lrc(raw))
+            return LyricsDiscovery(value, "sidecar", _parse_lrc(raw, duration_sec))
     return LyricsDiscovery()
 
 
@@ -630,8 +633,6 @@ def _metadata_search_candidates(
     def add_identity(artist: str, title: str) -> None:
         artist = str(artist or "").strip()
         title = _strip_filename_copy_suffix(str(title or "").strip())
-        if not title:
-            return
         add_query(f"{artist} {title}" if artist else title)
         add_query(title)
 
@@ -680,7 +681,14 @@ def discover_lyrics(
     title: str | None = None,
     duration_sec: float | None = None,
 ) -> LyricsDiscovery:
-    """Search metadata -> title only -> filename, then let caller use ASR."""
+    """Search sidecar, embedded metadata and exact online identities, then use ASR."""
+    source = Path(source)
+    local = _local_file(source, duration_sec)
+    if local.text:
+        return local
+    embedded = _embedded(source)
+    if embedded:
+        return LyricsDiscovery(embedded, "metadata")
     queries = _metadata_search_candidates(source, title)
     _lyrics_debug(f"[lyrics] exact search plan ({len(queries)} queries): {queries!r}")
 

@@ -12,8 +12,8 @@
 | --- | ---: | ---: |
 | Frontend unit tests | 28 тестов | Все feature/domain contracts |
 | Frontend statements coverage | 9.55% | 100% учитываемого production-кода |
-| Backend/API/AI tests | 510 тестов | Все feature/domain contracts |
-| Backend/API/AI coverage | 59% | 100% учитываемого production-кода |
+| Backend/API/AI tests | 600 тестов | Все feature/domain contracts |
+| Backend/API/AI coverage | 77% | 100% учитываемого production-кода |
 | Mutation testing | 100% для 4 модулей | 100% всей бизнес-логики |
 | API/DB integration | 4 сценария | Все API/DB контракты |
 | E2E | 1 smoke-сценарий | Все критические пользовательские потоки |
@@ -60,7 +60,10 @@
 - `AI/vocal_preprocess.py` доведён до 100% покрытия: time-preserving FFmpeg variants, adaptive tail gate, ghost-note pitch quality, cleaned-track dominance и signal-only echo/reverb/leakage/noise/clipping proxies проверены. Исправлено падение median-hop на одинаковых timestamps, пустой RMS теперь не создаёт `NaN`, корреляция огибающих вычисляется без предупреждений на постоянном сигнале.
 - `AI/diagnostics.py` доведён до 100% покрытия: CTC/Qwen/consensus/interpolated sources, vocal overlap, suspicious regions, pitch postprocess delta, effect impact, timeline integrity, game-note/syllable quantiles и root-cause ranking проверены. Диагностика теперь доказанно переносит метрики остаточного echo/reverb/leakage до итогового отчёта песни.
 - `AI/alignment_debug.py`, `AI/pitch_post.py` и `AI/install_models.py` доведены до 100% покрытия: первая точка lyric drift, waveform confidence, FCPE/YIN phrase decode, harmonic stabilization, resumable progress/ETA, shard/checksum verification, retries/pruning и environment publication проверены. Удалены недостижимые RMS/Viterbi/PitchFrame-guard ветви.
-- Backend baseline поднят с 18 тестов / 20% до 510 тестов / 59%; низкий общий процент обусловлен четырьмя крупными пока непокрытыми AI-модулями, которые не исключаются из честного измерения.
+- `AI/pipeline.py` доведён до 100% покрытия: fresh/cached анализ, trusted/ASR lyrics, long-text anchors, timed segments, diagnostic fallback, изменение исходника во время decode, некорректный BPM и неполный manifest проверены. Удалены две математически недостижимые ветви локального восстановления timeline.
+- `AI/lyrics_sources.py` и `AI/engines/ctc_alignment.py` доведены до 100% покрытия: sidecar/embedded lyrics, LRCLIB/web matching, LRC bounds, HTML/charset safety, packaged model discovery, CTC Viterbi, tokenizer failures, CPU/CUDA inference и anchor retry проверены. Исправлен parser-depth на HTML `<br>`, ранее мёртвые локальные источники подключены к discovery, удалены недостижимые CTC-состояния и неиспользуемые вычисления.
+- `AI/notes.py` доведён до 100% покрытия: vibrato/glissando guards, устойчивые pitch-state transitions, energy re-attacks, lyric phrase masking, monophonic repair, YIN/spectral register verification, harmonic/octave proposal acceptance/rejection и syllable-granular game notes проверены. Удалены доказанно недостижимые ветви short-tail merge и invalid proportional boundary.
+- Backend baseline поднят с 18 тестов / 20% до 600 тестов / 77%; весь оставшийся непокрытый backend/AI-код честно сосредоточен в крупном legacy-модуле `AI/engines/text.py`.
 - Исправлено чтение ограниченного хвоста лога: обрезанный по байтам фрагмент первой строки больше не выдаётся как полноценная строка.
 - Добавлена ранняя проверка некорректных лимитов потоковой загрузки (`limit < 0`, `chunk_size <= 0`).
 - Общая команда проверок остаётся зелёной.

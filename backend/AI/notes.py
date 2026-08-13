@@ -47,7 +47,6 @@ def _weighted_median(values: list[float], weights: list[float]) -> float:
         cursor += max(0.0, weight)
         if cursor >= midpoint:
             return float(value)
-    return float(pairs[-1][0])
 
 
 def _robust_pitch_center(values: list[float], weights: list[float]) -> float:
@@ -212,9 +211,6 @@ def _sustained_pitch_segments(
     i = min_frames
     while i < len(run):
         history = observed[segment_start:i]
-        if len(history) < min_frames:
-            i += 1
-            continue
         center = statistics.median(history)
         delta_now = observed[i] - center
 
@@ -296,12 +292,6 @@ def _sustained_pitch_segments(
             i += 1
             continue
 
-        # Avoid leaving an unusably short previous event unless this is a clear
-        # acoustic re-attack.
-        if i - segment_start < min_frames and attack < 0.70:
-            i += 1
-            continue
-
         boundaries.append(i)
         segment_start = i
         i += needed
@@ -313,20 +303,7 @@ def _sustained_pitch_segments(
         if right > left
     ]
 
-    # Merge any residual too-short piece into its closest-pitch neighbour.
-    output: list[list[PitchFrame]] = []
-    for segment in segments:
-        duration = segment[-1].time - segment[0].time + step
-        if duration >= min_note or not output:
-            output.append(segment)
-            continue
-        output[-1].extend(segment)
-    if len(output) >= 2:
-        last = output[-1]
-        duration = last[-1].time - last[0].time + step
-        if duration < min_note:
-            output[-2].extend(output.pop())
-    return output
+    return segments
 
 
 def _local_frame_attack_strength(run: list[PitchFrame], index: int) -> float:
@@ -335,8 +312,6 @@ def _local_frame_attack_strength(run: list[PitchFrame], index: int) -> float:
         return 0.0
     before = [max(0.0, run[i].energy) for i in range(max(0, index - 6), index)]
     after = [max(0.0, run[i].energy) for i in range(index, min(len(run), index + 4))]
-    if not before or not after:
-        return 0.0
     baseline = statistics.median(before)
     current = max(after)
     if baseline <= 1e-8:
@@ -841,8 +816,6 @@ def _audio_harmonic_salience(
         center = int(round(target * n_fft / sample_rate))
         lo = max(1, center - 2)
         hi = min(len(column), center + 3)
-        if hi <= lo:
-            continue
         peak = float(np.max(column[lo:hi]))
         ratio = peak / noise
         if harmonic == 1:
@@ -1018,8 +991,6 @@ def _audio_verify_note_register(
 
     selected_states = [0] * len(notes)
     for group_lo, group_hi in groups:
-        if group_hi <= group_lo:
-            continue
         local_scores: list[list[float]] = [list(emission_rows[group_lo])]
         local_back: list[list[int]] = [[-1] * len(candidate_rows[group_lo])]
         for index in range(group_lo + 1, group_hi):
@@ -1692,10 +1663,6 @@ def build_game_notes(
 
         # One segment per participating syllable, same detected pitch.
         for owner, left, right in zip(overlaps, boundaries[:-1], boundaries[1:], strict=True):
-            if right <= left:
-                # Numerical last resort: proportional boundaries above should
-                # make this unreachable, but never create an invalid event.
-                continue
             result.append(
                 VocalNote(
                     left,

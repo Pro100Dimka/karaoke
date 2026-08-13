@@ -226,9 +226,6 @@ def _preserve_complete_canonical_timeline(
                     previous.start, boundary, previous.text, previous.confidence, previous.index
                 )
                 start = boundary
-            else:
-                start = previous.end
-                end = max(end, start + 0.01)
 
         if end > total_duration:
             end = total_duration
@@ -252,9 +249,6 @@ def _preserve_complete_canonical_timeline(
             if end <= start + 0.009:
                 return None
             repaired[index] = Word(start, end, word.text, word.confidence, word.index)
-        elif end != word.end:
-            repaired[index] = Word(word.start, end, word.text, word.confidence, word.index)
-
     return repaired if _canonical_timeline_is_publishable(repaired, total_duration) else None
 
 
