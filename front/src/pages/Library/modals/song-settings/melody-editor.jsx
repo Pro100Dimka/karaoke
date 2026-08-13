@@ -1335,12 +1335,12 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
         duplicateSelected();
         return;
       }
+      if (editable) return;
       if (event.code === "Space") {
         consume();
         playing ? pause() : play();
         return;
       }
-      if (editable) return;
       if (event.key === "Delete" || event.key === "Backspace") {
         consume();
         deleteSelected();

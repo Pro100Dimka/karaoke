@@ -13,7 +13,6 @@ export default function useAudioOutputRouting(options) {
     directOutputDeviceId,
     directOutputDevices,
     instrumentalRef,
-    microphoneOpen,
     setDirectOutputDeviceId,
     updateMicrophone,
     videoRef,
@@ -21,7 +20,6 @@ export default function useAudioOutputRouting(options) {
   } = options;
   useEffect(() => {
     if (
-      !microphoneOpen ||
       audioDriver !== "asio" ||
       audioSettings?.output_device_id != null
     )
@@ -42,14 +40,12 @@ export default function useAudioOutputRouting(options) {
     audioSettings?.output_device_id,
     directOutputDeviceId,
     directOutputDevices,
-    microphoneOpen,
     setDirectOutputDeviceId,
     updateMicrophone
   ]);
 
   useEffect(() => {
     if (
-      !microphoneOpen ||
       directOutputDeviceId == null ||
       directOutputDeviceId === "" ||
       typeof globalThis.navigator?.mediaDevices?.enumerateDevices !== "function"
@@ -82,7 +78,6 @@ export default function useAudioOutputRouting(options) {
     directOutputDeviceId,
     directOutputDevices,
     instrumentalRef,
-    microphoneOpen,
     videoRef,
     vocalsRef
   ]);

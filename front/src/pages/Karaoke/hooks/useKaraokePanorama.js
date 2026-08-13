@@ -8,8 +8,10 @@ const PANORAMA_CYCLE_MS = 240_000;
 export default function useKaraokePanorama(songId, isPlaying) {
   const panoramaRef = useRef(null);
   const clockRef = useRef(0);
-  const pathRef = useRef(createPanoramaPath());
-  const themeQueueRef = useRef(shuffleThemes());
+  const pathRef = useRef(null);
+  const themeQueueRef = useRef(null);
+  pathRef.current ??= createPanoramaPath();
+  themeQueueRef.current ??= shuffleThemes();
   const appliedSongRef = useRef(songId);
   const [activeTheme, setActiveTheme] = useState(
     () => themeQueueRef.current.pop() || KARAOKE_THEMES[0]

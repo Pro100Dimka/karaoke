@@ -496,7 +496,7 @@ export function OnlineRoomProvider({ children }) {
         const enabled = !next.has(id);
         if (enabled) next.add(id);
         else next.delete(id);
-        queueMicrotask(() => applyParticipantEffects(id, enabled));
+        if (!enabled) queueMicrotask(() => applyParticipantEffects(id, false));
         return next;
       });
     },

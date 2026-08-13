@@ -487,11 +487,13 @@ export default class OnlineVoiceMesh {
       const chunk = getBinaryChunk(data);
       if (!transfer || !chunk || chunk.byteLength === 0) return;
       if (transfer.chunks.length >= MAX_INCOMING_CHUNKS) {
+        globalThis.clearTimeout(transfer.timer);
         this.incomingFiles.delete(participantId);
         return;
       }
       transfer.received += chunk.byteLength;
       if (transfer.received > transfer.metadata.size) {
+        globalThis.clearTimeout(transfer.timer);
         this.incomingFiles.delete(participantId);
         return;
       }
@@ -701,12 +703,18 @@ export default class OnlineVoiceMesh {
         reject,
         timer
       });
-      channel.send(
-        JSON.stringify({
-          type: "file-end",
-          transferId
-        })
-      );
+      try {
+        channel.send(
+          JSON.stringify({
+            type: "file-end",
+            transferId
+          })
+        );
+      } catch (error) {
+        globalThis.clearTimeout(timer);
+        this.pendingTransferConfirmations.delete(transferId);
+        reject(error);
+      }
     });
     this.emitTransferProgress(participantId, "complete", 100, metadata);
   }
@@ -745,7 +753,9 @@ export default class OnlineVoiceMesh {
 
   stop() {
     this.lifecycleVersion += 1;
-    [...this.peers.keys()].forEach((id) => this.removePeer(id));
+    new Set([...this.peers.keys(), ...this.channels.keys()]).forEach((id) =>
+      this.removePeer(id)
+    );
     this.stream?.getTracks().forEach((track) => track.stop());
     this.stream = null;
     this.startPromise = null;
@@ -756,6 +766,9 @@ export default class OnlineVoiceMesh {
       globalThis.clearTimeout(timer);
     }
     this.disconnectTimers.clear();
+    for (const transfer of this.incomingFiles.values()) {
+      if (transfer.timer) globalThis.clearTimeout(transfer.timer);
+    }
     this.incomingFiles.clear();
     this.channels.clear();
   }

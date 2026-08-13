@@ -344,13 +344,6 @@ export default function Library({ onOpenSongSettings }) {
                 margin: "1rem 0",
                 marginBottom: "7rem"
               }}
-              // minItemWidth="30rem"
-              // sx={{
-              //   width: "100%",
-              //   alignItems: "stretch",
-              //   alignContent: "start",
-              //   overflow: "visible"
-              // }}
             >
               {filtered.map((song, cardIndex) => (
                 <LibrarySongCard

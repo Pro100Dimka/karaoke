@@ -23,7 +23,6 @@ import useKaraokeTransport from "./hooks/useKaraokeTransport";
 import useMelodyGuide from "./hooks/useMelodyGuide";
 import useMicrophoneSettings from "./hooks/useMicrophoneSettings";
 import usePitchDetection from "./hooks/usePitchDetection";
-import MicrophoneSettingsModal from "./modals/microphone-settings-modal";
 import PerformanceAnalysisModal from "./modals/performance-analysis-modal";
 import {
   getYouTubeVideoId,
@@ -127,8 +126,6 @@ export default function Karaoke({ onOpenAppSettings }) {
     analysisRecordingIdRef.current = value;
     setAnalysisRecordingId(value);
   }, []);
-  const [microphoneOpen, setMicrophoneOpen] = useState(false);
-  const [microphoneSettingsView] = useState("music");
   const [recordingError, setRecordingError] = useState(null);
   useEffect(() => {
     // A paused recording session must not block the background radio. Only
@@ -180,9 +177,9 @@ export default function Karaoke({ onOpenAppSettings }) {
   currentTimeRef.current = currentTime;
   durationRef.current = duration;
   const { data: directOutputDevices } = usePolling(
-    () => (microphoneOpen ? api.listAudioOutputDevices() : Promise.resolve([])),
+    () => api.listAudioOutputDevices(),
     POLLING_INTERVALS.devices,
-    [microphoneOpen]
+    []
   );
   const { data: audioSettings } = usePolling(
     () => api.getAudioSettings(),
@@ -190,9 +187,9 @@ export default function Karaoke({ onOpenAppSettings }) {
     []
   );
   const { data: signal } = usePolling(
-    () => (microphoneOpen ? api.getSignalQuality() : Promise.resolve(null)),
+    () => api.getSignalQuality(),
     POLLING_INTERVALS.karaokeSignal,
-    [microphoneOpen]
+    []
   );
   const microphoneLevel = getMicrophoneLevel(signal);
   const microphoneSettings = useMicrophoneSettings({
@@ -224,7 +221,6 @@ export default function Karaoke({ onOpenAppSettings }) {
     directOutputDeviceId,
     directOutputDevices,
     instrumentalRef,
-    microphoneOpen,
     setDirectOutputDeviceId,
     updateMicrophone,
     videoRef,
@@ -364,15 +360,8 @@ export default function Karaoke({ onOpenAppSettings }) {
       })
     );
   }, []);
-  const runSceneTransition = useCallback(
-    async (
-      action,
-      {
-        showIntro = false,
-        actionAfterReveal = false,
-        prepareAction = null
-      } = {}
-    ) => {
+  const runIntroTransition = useCallback(
+    async (action, prepareAction) => {
       if (sceneTransitionRef.current) return false;
       sceneTransitionRef.current = true;
       setSceneTransitioning(true);
@@ -380,29 +369,20 @@ export default function Karaoke({ onOpenAppSettings }) {
       setStageActionsVisible(false);
       setSceneIntroVisible(false);
       setSceneBlackout(true);
-      const preparation = prepareAction
-        ? Promise.resolve()
-            .then(prepareAction)
-            .catch(() => false)
-        : Promise.resolve(true);
+      const preparation = Promise.resolve()
+        .then(prepareAction)
+        .catch(() => false);
       try {
         await waitForScene(420);
-        if (showIntro) {
-          setSceneIntroVisible(true);
-          await waitForScene(1350);
-          setSceneIntroVisible(false);
-          await waitForScene(180);
-        }
+        setSceneIntroVisible(true);
+        await waitForScene(1350);
+        setSceneIntroVisible(false);
+        await waitForScene(180);
         await preparation;
-        if (!actionAfterReveal) {
-          await Promise.resolve(action());
-        }
         setSceneBlackout(false);
         // Match the CSS transition and start on the first fully revealed frame.
         await waitForScene(520);
-        if (actionAfterReveal) {
-          await Promise.resolve(action());
-        }
+        await Promise.resolve(action());
       } finally {
         setSceneIntroVisible(false);
         setSceneBlackout(false);
@@ -419,7 +399,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     turnOffRadio({
       remember: false
     });
-    return runSceneTransition(
+    return runIntroTransition(
       async () => {
         const started = await togglePlay({
           forcePlaying: true
@@ -427,18 +407,13 @@ export default function Karaoke({ onOpenAppSettings }) {
         if (started) hasStartedPlaybackRef.current = true;
         return started;
       },
-      {
-        showIntro: true,
-        actionAfterReveal: true,
-        prepareAction: () =>
-          Promise.all([preloadSongMedia(), preparePlayback()])
-      }
+      () => Promise.all([preloadSongMedia(), preparePlayback()])
     );
   }, [
     isRadioPlaying,
     preloadSongMedia,
     preparePlayback,
-    runSceneTransition,
+    runIntroTransition,
     togglePlay,
     turnOffRadio
   ]);
@@ -675,34 +650,6 @@ export default function Karaoke({ onOpenAppSettings }) {
         youTubeVideoId={youTubeVideoId}
       />
 
-      {microphoneOpen && (
-        <MicrophoneSettingsModal
-          view={microphoneSettingsView}
-          effects={microphoneEffects}
-          keyShift={keyShift}
-          speed={speed}
-          songKey={transposeKey(
-            song?.key_override || result?.music?.key || "C",
-            keyShift
-          )}
-          onClose={() => setMicrophoneOpen(false)}
-          onEffectsChange={(key, value) =>
-            setMicrophoneEffects((effects) => ({
-              ...effects,
-              [key]: value
-            }))
-          }
-          onEffectCommit={(key, value) =>
-            updateMicrophone({
-              [key]: value
-            })
-          }
-          onKeyShiftChange={setKeyShift}
-          onSpeedChange={setSpeed}
-          onOpenAudioSettings={onOpenAppSettings}
-        />
-      )}
-
       {recordingError && (
         <p className="karaoke-recording-error">{recordingError}</p>
       )}
@@ -841,8 +788,6 @@ export default function Karaoke({ onOpenAppSettings }) {
         compactKey={compactKey}
         keyShift={keyShift}
         onKeyShiftChange={setKeyShift}
-        microphoneOpen={microphoneOpen}
-        microphoneSettingsView={microphoneSettingsView}
         showNotes={showNotes}
         onToggleNotes={() => setShowNotes((value) => !value)}
         showLyrics={showLyrics}

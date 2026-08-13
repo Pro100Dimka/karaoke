@@ -28,7 +28,6 @@ const formField = (name, config = {}) => ({
   ...config
 });
 export const SONG_FIELDS = [
-  /* Исполнитель + название */
   ...[
     ["artist", translateSaved("Исполнитель"), "Muse"],
     [
@@ -43,7 +42,7 @@ export const SONG_FIELDS = [
       placeholder,
       span: HALF
     })
-  ) /* Темп + тональность + жанр */,
+  ),
   ...[
     [
       "tempo_override",
@@ -77,7 +76,7 @@ export const SONG_FIELDS = [
       span: THIRD,
       ...extra
     })
-  ) /* Сложность + диапазон нот */,
+  ),
   formField("difficulty_override", {
     type: "select",
     label: translateSaved("Сложность"),
@@ -131,7 +130,7 @@ export const SONG_FIELDS = [
         )}
       </Field>
     )
-  } /* Видео */,
+  },
   formField("video_url", {
     type: "text",
     label: translateSaved("Ссылка на клип"),

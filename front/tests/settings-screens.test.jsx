@@ -1,0 +1,259 @@
+/* @vitest-environment jsdom */
+import React from "react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  polling: [],
+  pollingIndex: 0,
+  diagnostics: {},
+  notify: vi.fn(),
+  optimizeSong: vi.fn(),
+  getAbout: vi.fn(),
+  getHistory: vi.fn(),
+  getCacheSize: vi.fn(),
+  getFreeSpace: vi.fn(),
+  listSongs: vi.fn(),
+  clearCache: vi.fn(),
+  clearRecordings: vi.fn()
+}));
+vi.mock("../src/hooks/usePolling", () => ({
+  usePolling: () => {
+    if (!mocks.polling.length) return { data: null };
+    return mocks.polling[mocks.pollingIndex++ % mocks.polling.length];
+  }
+}));
+vi.mock("../src/hooks/useDiagnostics", () => ({
+  default: () => mocks.diagnostics
+}));
+vi.mock("../src/contexts/AppDialog", () => ({
+  useAppDialog: () => ({ alert: mocks.notify })
+}));
+vi.mock("../src/api/client", () => ({
+  api: {
+    getAbout: mocks.getAbout,
+    getHistory: mocks.getHistory,
+    getCacheSize: mocks.getCacheSize,
+    getFreeSpace: mocks.getFreeSpace,
+    listSongs: mocks.listSongs,
+    optimizeSong: mocks.optimizeSong,
+    clearCache: mocks.clearCache,
+    clearRecordings: mocks.clearRecordings
+  }
+}));
+vi.mock("../src/i18n", async (importOriginal) => ({
+  ...(await importOriginal()),
+  useI18n: () => ({
+    language: "en",
+    t: (key, values, fallback) =>
+      fallback || (values ? `${key}:${Object.values(values).join(",")}` : key)
+  })
+}));
+
+import About from "../src/pages/Settings/screens/about.jsx";
+import Diagnostics from "../src/pages/Settings/screens/diagnostics/index.jsx";
+import {
+  DiagnosticCheck,
+  ErrorList,
+  VersionList
+} from "../src/pages/Settings/screens/diagnostics/utils.jsx";
+import History from "../src/pages/Settings/screens/history/index.jsx";
+import MemoryManager from "../src/pages/Settings/screens/memory/index.jsx";
+import MemoryBreakdown from "../src/pages/Settings/screens/memory/memory-breakdown.jsx";
+import {
+  MemoryActions,
+  MemoryStats,
+  OptimizeSong,
+  runMemoryAction
+} from "../src/pages/Settings/screens/memory/utils.jsx";
+
+beforeEach(() => {
+  mocks.polling = [];
+  mocks.pollingIndex = 0;
+  mocks.diagnostics = {};
+  Object.values(mocks).forEach((mock) => mock?.mockReset?.());
+  mocks.notify.mockResolvedValue(undefined);
+  mocks.optimizeSong.mockResolvedValue({ freed_human: "1 GB" });
+  mocks.clearCache.mockResolvedValue({});
+  mocks.clearRecordings.mockResolvedValue({});
+});
+afterEach(cleanup);
+
+describe("settings information screens", () => {
+  test("renders about data and missing placeholders", () => {
+    mocks.polling = [
+      {
+        data: {
+          backend_version: "1.0",
+          frontend_version: "2.0",
+          ai_version: null,
+          data_dir: "D:/Data"
+        }
+      }
+    ];
+    render(<About />);
+    expect(screen.getByText("A&D Voice")).not.toBeNull();
+    expect(screen.getByText("1.0")).not.toBeNull();
+    expect(screen.getByText("D:/Data")).not.toBeNull();
+  });
+
+  test("renders diagnostic checks, versions and errors", () => {
+    mocks.diagnostics = {
+      health: { ok: true },
+      pipeline: { separation: true, pitch: false },
+      versions: { components: { backend: "1", ai: null } },
+      errors: {
+        errors: [
+          {
+            id: 1,
+            title: "Pipeline",
+            updated_at: "today",
+            error_message: "failed"
+          }
+        ]
+      }
+    };
+    render(<Diagnostics />);
+    expect(screen.getByText("backend")).not.toBeNull();
+    expect(screen.getByText("failed")).not.toBeNull();
+    expect(
+      document.querySelectorAll(".diagnostics-icon").length
+    ).toBeGreaterThan(1);
+  });
+
+  test("covers standalone diagnostic empty and fallback states", () => {
+    const view = render(
+      <>
+        <DiagnosticCheck label="Broken" ok={false} />
+        <VersionList components={{}} />
+        <ErrorList />
+      </>
+    );
+    expect(screen.getByText("settings.diagnostics.noErrors")).not.toBeNull();
+    view.rerender(
+      <ErrorList
+        errors={[
+          { title: "No id", updated_at: "now", error_message: "message" }
+        ]}
+      />
+    );
+    expect(screen.getByText("message")).not.toBeNull();
+  });
+
+  test("renders history rows, statuses and polling errors", () => {
+    mocks.polling = [
+      {
+        data: [
+          {
+            id: 1,
+            song_title: "Song",
+            kind: "processing",
+            status: "done",
+            duration_seconds: 61.2,
+            timestamp: "2026-01-01T00:00:00Z"
+          },
+          {
+            song_title: null,
+            kind: "recording",
+            status: "saved",
+            duration_seconds: "bad",
+            timestamp: "bad"
+          }
+        ],
+        error: new Error("history offline")
+      }
+    ];
+    render(<History />);
+    expect(screen.getByText("history offline")).not.toBeNull();
+    expect(screen.getByText("Song")).not.toBeNull();
+    expect(screen.getByText(/settings.history.seconds/)).not.toBeNull();
+    expect(screen.getByText("done")).not.toBeNull();
+  });
+});
+
+describe("memory management", () => {
+  test("runs memory actions with success and failure notifications", async () => {
+    const notify = vi.fn().mockResolvedValue(undefined);
+    await expect(
+      runMemoryAction({
+        request: vi.fn().mockResolvedValue({ freed: 1 }),
+        getMessage: () => "Freed",
+        notify
+      })
+    ).resolves.toBe(true);
+    await expect(
+      runMemoryAction({
+        request: vi.fn().mockRejectedValue(new Error("locked")),
+        getMessage: vi.fn(),
+        notify
+      })
+    ).resolves.toBe(false);
+    expect(notify).toHaveBeenLastCalledWith("locked");
+  });
+
+  test("renders breakdown, stats, actions and optimizer controls", () => {
+    const action = vi.fn().mockResolvedValue({});
+    const optimize = vi.fn();
+    const change = vi.fn();
+    const view = render(
+      <>
+        <MemoryBreakdown breakdown={{ models: 1024 ** 2 }} />
+        <MemoryStats
+          size={{ total_human: "10 GB" }}
+          free={{ free_human: "5 GB", total_human: "20 GB" }}
+        />
+        <MemoryActions
+          actions={[["clear", "Clear", null, "ghost", action, () => "Done"]]}
+          notify={mocks.notify}
+        />
+        <OptimizeSong
+          value="song"
+          options={[{ value: "song", label: "Song" }]}
+          onChange={change}
+          onOptimize={optimize}
+        />
+      </>
+    );
+    expect(screen.getByText(/1\.0/)).not.toBeNull();
+    fireEvent.click(screen.getByText("Clear"));
+    fireEvent.click(
+      screen.getByText(/Оптимізувати|РћРїС‚РёРјРёР·РёСЂРѕРІР°С‚СЊ/)
+    );
+    expect(action).toHaveBeenCalled();
+    expect(optimize).toHaveBeenCalled();
+    view.rerender(<MemoryBreakdown />);
+    expect(view.container.textContent).toBe("");
+  });
+
+  test("loads memory data and optimizes a selected song", async () => {
+    mocks.polling = [
+      {
+        data: {
+          total_human: "10 GB",
+          breakdown: { models: 1024 ** 2 }
+        },
+        error: new Error("size stale")
+      },
+      { data: { free_human: "5 GB", total_human: "20 GB" } },
+      { data: [{ id: "song", title: "Song", status: "done" }] }
+    ];
+    render(<MemoryManager />);
+    expect(screen.getByText("size stale")).not.toBeNull();
+    const select = screen.getByRole("button", { name: /Пісня|РџРµСЃРЅСЏ/ });
+    fireEvent.click(select);
+    const option = await screen.findByRole("option", { name: "Song" });
+    fireEvent.click(option);
+    const optimize = screen.getByText(
+      /Оптимізувати|РћРїС‚РёРјРёР·РёСЂРѕРІР°С‚СЊ/
+    );
+    fireEvent.click(optimize);
+    await act(async () => Promise.resolve());
+    expect(mocks.optimizeSong).toHaveBeenCalledWith("song");
+  });
+});

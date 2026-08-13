@@ -1,0 +1,192 @@
+/* @vitest-environment jsdom */
+import React, { createRef } from "react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
+import { afterEach, expect, test, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({ isPlaying: false, theme: "dark" }));
+vi.mock("../src/contexts/radio", () => ({
+  useRadio: () => ({ isPlaying: mocks.isPlaying })
+}));
+vi.mock("../src/hooks/useAppSettings", () => ({
+  default: () => ({ settings: { theme: mocks.theme } })
+}));
+vi.mock("../src/theme/ui", () => ({
+  Box: ({ children, ...props }) => <div {...props}>{children}</div>,
+  Stack: ({ children, ...props }) => <div {...props}>{children}</div>,
+  Typography: ({ children, ...props }) => <span {...props}>{children}</span>,
+  Badge: ({ children, ...props }) => <span {...props}>{children}</span>,
+  Card: ({
+    as: Comp = "div",
+    children,
+    cardPanel: _panel,
+    cardContent: _content,
+    ...props
+  }) => <Comp {...props}>{children}</Comp>,
+  Button: ({ children, ...props }) => <button {...props}>{children}</button>,
+  IconButton: ({ children, ...props }) => <button {...props}>{children}</button>
+}));
+vi.mock("../src/components/ui", () => ({
+  Card: ({ as: Comp = "div", children, cardPanel: _panel, ...props }) => (
+    <Comp {...props}>{children}</Comp>
+  ),
+  IconButton: ({ icon: _icon, label, onClick, ...props }) => (
+    <button aria-label={label} onClick={onClick} {...props} />
+  ),
+  StatusBadge: ({ status }) => <span data-testid="status">{status}</span>
+}));
+vi.mock("../src/components/modal", () => ({
+  default: ({ children, titleProps }) => (
+    <section>
+      <h1>{titleProps?.title}</h1>
+      {titleProps?.actions}
+      {children}
+    </section>
+  )
+}));
+vi.mock("../src/components/fields/button", () => ({
+  default: ({ children, icon: _icon, iconProps: _iconProps, ...props }) => (
+    <button {...props}>{children}</button>
+  )
+}));
+vi.mock("../src/components/AudioPlayer", () => ({
+  AudioPlayer: ({ src }) => <audio data-testid="player" src={src} />
+}));
+vi.mock("../src/api/client", () => ({
+  api: { getPerformanceFileUrl: (id) => `recording/${id}` }
+}));
+
+import LibraryActions from "../src/pages/Library/components/hero/actions.jsx";
+import LibraryHero from "../src/pages/Library/components/hero/hero.jsx";
+import ProcessingSignal from "../src/pages/Library/components/song-card/processing-signal.jsx";
+import SongCardArtwork from "../src/pages/Library/components/song-card/song-card-artwork.jsx";
+import ProcessingModal from "../src/pages/Library/modals/processing.jsx";
+import RecordingsModal from "../src/pages/Library/modals/recordings.jsx";
+
+afterEach(cleanup);
+
+test("library actions cover search, room, adding and file selection", () => {
+  const setQuery = vi.fn();
+  const onRoom = vi.fn();
+  const onAdd = vi.fn();
+  const onFile = vi.fn();
+  const { container } = render(
+    <LibraryActions
+      canManageLibrary
+      fileInputRef={createRef()}
+      includeFileInput
+      onFileChosen={onFile}
+      onAdd={onAdd}
+      onOpenRoom={onRoom}
+      roomActive={false}
+      query="q"
+      setQuery={setQuery}
+    />
+  );
+  fireEvent.change(container.querySelector(".library-search-input"), {
+    target: { value: "song" }
+  });
+  const buttons = container.querySelectorAll("button");
+  fireEvent.click(buttons[0]);
+  fireEvent.click(buttons[1]);
+  fireEvent.change(container.querySelector("input[type=file]"));
+  expect(setQuery).toHaveBeenCalledWith("song");
+  expect(onRoom).toHaveBeenCalled();
+  expect(onAdd).toHaveBeenCalled();
+  expect(onFile).toHaveBeenCalled();
+});
+
+test("hero and artwork reflect saved theme, counts and radio activity", () => {
+  mocks.theme = "unknown";
+  mocks.isPlaying = true;
+  const { container, getByText } = render(
+    <>
+      <LibraryHero songCount={3} readyCount={2} />
+      <SongCardArtwork cardIndex={2} />
+    </>
+  );
+  expect(getByText("3")).not.toBeNull();
+  expect(getByText("2")).not.toBeNull();
+  expect(
+    container
+      .querySelector(".library-song-card-art")
+      .classList.contains("is-radio-reactive")
+  ).toBe(true);
+  expect(container.querySelectorAll(".library-song-card-wave i")).toHaveLength(
+    18
+  );
+});
+
+test("processing signal clamps progress and exposes an accessible value", () => {
+  const { getByRole, rerender } = render(<ProcessingSignal progress={140} />);
+  expect(getByRole("progressbar").getAttribute("aria-valuenow")).toBe("100");
+  rerender(<ProcessingSignal progress="bad" compact />);
+  expect(getByRole("progressbar").getAttribute("aria-valuenow")).toBe("0");
+});
+
+test("processing modal covers active, complete, error and absent songs", () => {
+  const cancel = vi.fn();
+  const close = vi.fn();
+  const open = vi.fn();
+  const active = render(
+    <ProcessingModal
+      song={{ id: "song", title: "Song", status: "processing" }}
+      status={{ status: "processing", progress_percent: 20, eta_seconds: 5 }}
+      onCancel={cancel}
+      onClose={close}
+      onOpenKaraoke={open}
+    />
+  );
+  fireEvent.click(active.container.querySelector("button"));
+  expect(cancel).toHaveBeenCalled();
+  active.rerender(
+    <ProcessingModal
+      song={{ id: "song", title: "Song", status: "done" }}
+      status={{ status: "done", error_message: "problem" }}
+      onCancel={cancel}
+      onClose={close}
+      onOpenKaraoke={open}
+    />
+  );
+  const buttons = active.container.querySelectorAll("button");
+  fireEvent.click(buttons[0]);
+  fireEvent.click(buttons[1]);
+  expect(close).toHaveBeenCalled();
+  expect(open).toHaveBeenCalledWith("song");
+  active.rerender(<ProcessingModal song={null} />);
+  expect(active.container.firstChild).toBeNull();
+});
+
+test("recordings modal renders empty, error and recording actions", () => {
+  const analyze = vi.fn();
+  const remove = vi.fn();
+  const result = render(
+    <RecordingsModal song={{ title: "Song" }} recordings={[]} />
+  );
+  expect(
+    result.container.querySelector(".song-recordings-empty")
+  ).not.toBeNull();
+  result.rerender(
+    <RecordingsModal song={{ title: "Song" }} error={new Error("offline")} />
+  );
+  expect(result.container.querySelector(".field-error").textContent).toContain(
+    "offline"
+  );
+  result.rerender(
+    <RecordingsModal
+      song={{ title: "Song" }}
+      recordings={[{ id: "rec", created_at: "2026-01-01", duration_sec: 3 }]}
+      onAnalyze={analyze}
+      onDelete={remove}
+    />
+  );
+  const buttons = result.container.querySelectorAll("button");
+  fireEvent.click(buttons[0]);
+  fireEvent.click(buttons[1]);
+  expect(analyze.mock.calls[0][0].id).toBe("rec");
+  expect(remove.mock.calls[0][0].id).toBe("rec");
+  expect(result.getByTestId("player").getAttribute("src")).toBe(
+    "recording/rec"
+  );
+  result.rerender(<RecordingsModal song={null} />);
+  expect(result.container.firstChild).toBeNull();
+});

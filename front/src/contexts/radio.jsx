@@ -479,6 +479,8 @@ export function RadioProvider({ children }) {
     );
     stopAnalysis();
   }, [isPlaying, station, stopAnalysis, turnOn]);
+  const turnOnRef = useRef(turnOn);
+  turnOnRef.current = turnOn;
   useEffect(() => {
     volumeRef.current = volume;
     if (audioRef.current && !volumeFadeRef.current)
@@ -488,7 +490,7 @@ export function RadioProvider({ children }) {
     const audio = audioRef.current;
     mountedRef.current = true;
     if (initial.enabled)
-      turnOn({
+      turnOnRef.current({
         remember: false,
         analyse: true,
         fadeIn: true
@@ -509,7 +511,7 @@ export function RadioProvider({ children }) {
       frequencyDataRef.current = null;
       context?.close?.().catch(() => {});
     };
-  }, [cancelVolumeFade, initial.enabled, stopAnalysis, turnOn]);
+  }, [cancelVolumeFade, initial.enabled, stopAnalysis]);
   useEffect(() => {
     const unlock = () => {
       // A genuine gesture is the only universally reliable way to satisfy

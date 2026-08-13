@@ -83,8 +83,6 @@ function LibrarySongCard({
     <Card
       variant="neon"
       className={`library-song-card library-song-card--${songStatus}`}
-      // onPointerMove={handlePointerMove}
-      // onPointerLeave={clearCardTilt}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       role={isReady ? "button" : undefined}

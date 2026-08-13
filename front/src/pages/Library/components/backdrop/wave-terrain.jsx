@@ -149,7 +149,6 @@ export default function LibraryWaveTerrain() {
       width = canvas.clientWidth;
       height = canvas.clientHeight;
 
-      // Высокий DPR здесь почти незаметен, но резко увеличивает нагрузку GPU.
       const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
       canvas.width = Math.max(1, Math.round(width * dpr));
       canvas.height = Math.max(1, Math.round(height * dpr));
@@ -177,10 +176,6 @@ export default function LibraryWaveTerrain() {
             (0.004 + particle.depth * 0.006);
 
           point.x = width * 0.5 + (x + drift) * width * 0.57 * perspective;
-          // Keep the complete terrain inside the half-screen canvas.
-          // The previous full-screen projection could move strong peaks above
-          // the canvas after its height was reduced to 50vh, visually cutting
-          // off the upper part of the wave.
           const horizon = 0.96 - particle.depth * 0.28 + cameraFlow * 0.55;
           const amplitude = 0.3 + particle.depth * 0.1;
 
@@ -277,7 +272,6 @@ export default function LibraryWaveTerrain() {
           );
 
           context.fillStyle = `rgba(${column % 7 < 2 ? terrainAccentRgb : terrainRgb},${alpha})`;
-          // Для субпиксельных частиц fillRect значительно дешевле тысяч arc().
           context.fillRect(point.x, point.y, size, size);
         }
       }

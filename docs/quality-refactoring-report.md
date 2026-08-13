@@ -1,6 +1,6 @@
 # A&D Voice — quality and refactoring report
 
-Обновлено: 2026-08-13
+Обновлено: 2026-08-14
 
 ## Цель
 
@@ -10,8 +10,8 @@
 
 | Область | Текущее состояние | Цель |
 | --- | ---: | ---: |
-| Frontend unit tests | 37 тестов | Все feature/domain contracts |
-| Frontend statements coverage | 14.14% | 100% учитываемого production-кода |
+| Frontend unit tests | 323 теста (53 файла) | Все feature/domain contracts |
+| Frontend statements coverage | 94.92% statements / 84.07% branches / 95.16% functions / 96.90% lines | 100% учитываемого production-кода |
 | Backend/API/AI tests | 716 тестов | Все feature/domain contracts |
 | Backend/API/AI coverage | 100% (11 356 statements, 0 missed) | Поддерживать 100% учитываемого production-кода |
 | Mutation testing | 100% для 4 модулей | 100% всей бизнес-логики |
@@ -24,6 +24,8 @@
 
 - Frontend unit runner переведён на Vitest с JSX/React coverage.
 - REST transport, все API domains и mock API закрыты контрактными тестами. Исправлена нормализация массивов HTTP-заголовков: ранее `Array.entries()` ошибочно превращал имена заголовков в числовые индексы.
+- Добавлены поведенческие jsdom-тесты UI primitives, полей, таблиц, AudioPlayer и базовых async/karaoke hooks. Исправлен контракт `useExclusiveAsyncAction`: параллельные вызовы теперь действительно получают один и тот же Promise, как обещает публичный API hook.
+- Контракты комнат покрывают обновление участников, signaling, синхронизацию UI/эффектов, запрос/передачу пакета песни, ошибки передачи и intentional disconnect. Покрытие `onlineRoomMessages` поднято до 94.25% statements / 98.66% lines.
 - Добавлен общий V8 coverage всего frontend вне `src/theme` и статических assets.
 - Добавлены регрессии чистой karaoke/library/editor бизнес-логики.
 - Добавлены настоящие FastAPI + SQLAlchemy integration-тесты.
@@ -69,11 +71,19 @@
 - Исправлено чтение ограниченного хвоста лога: обрезанный по байтам фрагмент первой строки больше не выдаётся как полноценная строка.
 - Добавлена ранняя проверка некорректных лимитов потоковой загрузки (`limit < 0`, `chunk_size <= 0`).
 - Общая команда проверок остаётся зелёной.
+- Центральная karaoke-консоль доведена до 100% unit coverage по statements, branches, functions и lines.
+- Основной редактор мелодии доведён до 100% lines/functions; тесты проверяют историю, clipboard, hotkeys, ноты, marquee, playhead, прокрутку, media clock, synth и recovery. Устранён перехват `Space` из полей ввода и списков редактора.
+- I18n provider доведён до 100% unit coverage, включая fallback на украинский язык и защиту hook вне provider.
+- Главная karaoke-страница доведена до 100% lines/functions: проверены intro/blackout, auto-start и его recovery, pause/resume/stop, radio handoff, media-ended, анализ исполнения, monitoring и все console mutations.
+- Удалён недостижимый microphone modal. Его вечный `microphoneOpen=false` блокировал polling уровня микрофона и ASIO/output routing; теперь сигнал и маршрутизация активны в karaoke-сессии без визуального изменения UI.
+- Library доведена до 100% lines/functions: проверены terminal/404 processing recovery, ошибки комнат, отмена и ошибки destructive actions, recordings/analysis callbacks и настройки песни.
+- `onlineVoiceMesh` доведён до 100% functions: добавлены проверки stale peers, disconnect expiry, signal queue recovery, transfer stall/timeout, channel cleanup и остановки локального stream.
+- Settings config и композиционные providers/hero/console доведены до 100% unit coverage; упрощён лишний динамический рендер hero без изменения DOM-порядка.
 
 ## Известные пробелы
 
 - Mutation scope пока ограничен `i18n/runtime`, `i18n/translate`, `language`, `theme`.
-- Большинство React-компонентов, hooks и API client ещё не покрыты.
+- Крупные React-потоки уже покрыты, но остаются непокрытые ветви центральной karaoke-консоли, редактора мелодии, online voice mesh и инфраструктурных barrel-компонентов.
 - Нет полного Electron IPC contract suite и packaged Electron smoke test.
 - E2E пока не проверяет импорт, обработку, редактор, караоке, комнаты и recovery моделей.
 - Complexity/size/semantic-density отчёты пока advisory, а не blocking gates.

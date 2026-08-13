@@ -281,7 +281,7 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
       }
       if (enabling) {
         prepareSpeakingMeter();
-        await startLocalMeter().catch(() => false);
+        await startLocalMeter();
       } else {
         stopLocalMeter();
       }

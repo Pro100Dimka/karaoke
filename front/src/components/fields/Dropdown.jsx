@@ -119,9 +119,6 @@ export default function Dropdown({
         );
         setOpen(true);
       }
-    } else if (event.key === "Escape" && open) {
-      event.preventDefault();
-      setOpen(false);
     }
   };
   const toggle = () => {

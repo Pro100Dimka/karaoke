@@ -1,0 +1,206 @@
+/* @vitest-environment jsdom */
+import React, { useEffect } from "react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+
+vi.mock("../src/i18n", async (importOriginal) => ({
+  ...(await importOriginal()),
+  useI18n: () => ({ t: (key) => key })
+}));
+
+import Modal from "../src/components/modal/index.jsx";
+import { AppDialogProvider, useAppDialog } from "../src/contexts/AppDialog.jsx";
+
+const Icon = (props) => <svg data-testid="title-icon" {...props} />;
+
+beforeEach(() => {
+  vi.stubGlobal("requestAnimationFrame", (callback) => {
+    callback();
+    return 1;
+  });
+  vi.stubGlobal("cancelAnimationFrame", vi.fn());
+  document.body.style.overflow = "auto";
+});
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  document.body.replaceChildren();
+  document.body.style.overflow = "";
+});
+
+describe("modal", () => {
+  test("renders nothing while closed", () => {
+    const { container } = render(<Modal isOpen={false}>Hidden</Modal>);
+    expect(container.textContent).toBe("");
+    expect(document.body.style.overflow).toBe("auto");
+  });
+
+  test("renders title options, locks scrolling and closes from every control", () => {
+    const close = vi.fn();
+    const previous = document.createElement("button");
+    document.body.append(previous);
+    previous.focus();
+    const { unmount } = render(
+      <Modal
+        isOpen
+        onClose={close}
+        ariaLabel="Settings dialog"
+        closeAriaLabel="Dismiss"
+        backdropClassName="custom custom"
+        modalClassName="dialog-extra"
+        closeClassName="close-extra"
+        maxWidth="30rem"
+        titleProps={{
+          icon: Icon,
+          eyebrow: "Section",
+          title: "Settings",
+          description: "Description",
+          actions: <button>Action</button>
+        }}
+      >
+        <button>First</button>
+        <button>Last</button>
+      </Modal>
+    );
+    const dialog = screen.getByRole("dialog");
+    expect(document.body.style.overflow).toBe("hidden");
+    expect(dialog.style.maxWidth).toBe("30rem");
+    expect(document.querySelectorAll(".custom")).toHaveLength(1);
+    expect(screen.getByTestId("title-icon")).not.toBeNull();
+    expect(screen.getByText("Description")).not.toBeNull();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.click(screen.getByLabelText("Dismiss"));
+    const backdrop = document.querySelector(".app-modal-backdrop");
+    fireEvent.mouseDown(backdrop);
+    fireEvent.mouseDown(dialog);
+    expect(close).toHaveBeenCalledTimes(3);
+
+    unmount();
+    expect(document.body.style.overflow).toBe("auto");
+    expect(document.activeElement).toBe(previous);
+  });
+
+  test("traps focus and only lets the top modal handle Escape", () => {
+    const bottomClose = vi.fn();
+    const topClose = vi.fn();
+    render(
+      <>
+        <Modal isOpen onClose={bottomClose} ariaLabel="Bottom">
+          <button>Bottom button</button>
+        </Modal>
+        <Modal isOpen onClose={topClose} ariaLabel="Top" portal>
+          <button>Top first</button>
+          <button>Top last</button>
+        </Modal>
+      </>
+    );
+    const first = screen.getByText("Top first");
+    const topDialog = screen.getByRole("dialog", { name: "Top" });
+    const last = topDialog.querySelector(".app-modal-close");
+    first.focus();
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(last);
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(document.activeElement).toBe(first);
+    fireEvent.keyDown(document, { key: "A" });
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(topClose).toHaveBeenCalledOnce();
+    expect(bottomClose).not.toHaveBeenCalled();
+  });
+
+  test("keeps focus in a dialog without controls", () => {
+    render(
+      <Modal isOpen ariaLabel="Empty">
+        Content
+      </Modal>
+    );
+    const dialog = screen.getByRole("dialog");
+    dialog.querySelector(".app-modal-close").remove();
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(document.activeElement).toBe(dialog);
+  });
+});
+
+function DialogDriver({ run, onValue }) {
+  const dialog = useAppDialog();
+  useEffect(() => {
+    run(dialog).then(onValue);
+  }, [dialog, onValue, run]);
+  return null;
+}
+
+describe("application dialog provider", () => {
+  test("resolves alert confirmation", async () => {
+    const onValue = vi.fn();
+    const run = vi.fn(({ alert }) => alert("Saved", { title: "Notice" }));
+    render(
+      <AppDialogProvider>
+        <DialogDriver run={run} onValue={onValue} />
+      </AppDialogProvider>
+    );
+    expect(screen.getByText("Saved")).not.toBeNull();
+    fireEvent.click(document.querySelector(".modal-title-action"));
+    await act(async () => Promise.resolve());
+    expect(onValue).toHaveBeenCalledWith(true);
+  });
+
+  test("resolves confirmation cancellation and replacement", async () => {
+    let controls;
+    const values = [];
+    function Consumer() {
+      controls = useAppDialog();
+      return null;
+    }
+    render(
+      <AppDialogProvider>
+        <Consumer />
+      </AppDialogProvider>
+    );
+    await act(async () => {
+      controls
+        .confirm("First", "Custom title")
+        .then((value) => values.push(value));
+    });
+    await act(async () => {
+      controls.alert("Replacement").then((value) => values.push(value));
+    });
+    expect(values).toEqual([false]);
+    fireEvent.mouseDown(document.querySelector(".app-modal-backdrop"));
+    await act(async () => Promise.resolve());
+    expect(values).toEqual([false, true]);
+
+    await act(async () => {
+      controls.confirm("Cancel me").then((value) => values.push(value));
+    });
+    fireEvent.click(document.querySelector(".app-dialog-actions button"));
+    await act(async () => Promise.resolve());
+    expect(values.at(-1)).toBe(false);
+  });
+
+  test("resolves an active dialog when its provider unmounts", async () => {
+    let controls;
+    const value = vi.fn();
+    function Consumer() {
+      controls = useAppDialog();
+      return null;
+    }
+    const view = render(
+      <AppDialogProvider>
+        <Consumer />
+      </AppDialogProvider>
+    );
+    act(() => {
+      controls.confirm("Pending").then(value);
+    });
+    view.unmount();
+    await act(async () => Promise.resolve());
+    expect(value).toHaveBeenCalledWith(false);
+  });
+});
