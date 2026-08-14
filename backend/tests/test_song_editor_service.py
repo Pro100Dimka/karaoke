@@ -111,6 +111,30 @@ def test_refresh_lines_ignores_invalid_links_and_line_entries():
     assert song_map["lines"][0]["words"][0]["index"] == 0
 
 
+def test_load_editor_repairs_generated_boundary_syllable_associations(tmp_path):
+    payload = base_song_map()
+    payload["notes"] = [
+        {
+            "start": 7.12,
+            "end": 7.52,
+            "midi_note": 55,
+            "syllable_index": 6,
+            "syllable_indices": [3, 4, 5, 6],
+        }
+    ]
+    payload["display_notes"] = [dict(payload["notes"][0])]
+    payload["syllables"] = [
+        {"index": 2, "word_index": 1, "start": 7.048, "end": 7.12, "text": "ши"},
+        {"index": 3, "word_index": 1, "start": 7.12, "end": 7.16, "text": "ро"},
+    ]
+    write_json(tmp_path / "songMap.json", payload)
+
+    song_map, _ = song_editor_service.load_editor(tmp_path)
+
+    assert song_map["notes"][0]["syllable_indices"] == [2, 3]
+    assert song_map["display_notes"][0]["syllable_indices"] == [2, 3]
+
+
 def base_song_map():
     return {
         "duration": 5,

@@ -11,7 +11,7 @@ import numpy as np
 from .audio import load_mono
 from .models import PitchFrame, Syllable, VocalNote, Word
 
-NOTE_DECODER_VERSION = "acoustic-notes-v32-many-to-many-lyrics"
+NOTE_DECODER_VERSION = "acoustic-notes-v33-boundary-lyrics-association"
 _NOTE_DIAGNOSTICS: ContextVar[dict | None] = ContextVar("note_diagnostics", default=None)
 
 

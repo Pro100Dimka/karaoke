@@ -190,12 +190,32 @@ def _refresh_lines(song_map: JsonObject, notes: list[JsonObject]) -> None:
     song_map["lines"] = updated_lines
 
 
+def _refresh_generated_note_associations(song_map: JsonObject) -> None:
+    syllables = [item for item in song_map.get("syllables") or [] if isinstance(item, dict)]
+    for field in ("notes", "display_notes"):
+        for note in song_map.get(field) or []:
+            if not isinstance(note, dict):
+                continue
+            start = float(note.get("start") or 0.0)
+            end = float(note.get("end") or start)
+            note["syllable_indices"] = [
+                _safe_int(syllable.get("index"), index)
+                for index, syllable in enumerate(syllables)
+                if min(end, float(syllable.get("end") or 0.0))
+                - max(start, float(syllable.get("start") or 0.0))
+                > 1e-9
+                or abs(start - float(syllable.get("end") or 0.0)) <= 1e-9
+            ]
+
+
 def load_editor(output_dir: Path) -> tuple[JsonObject, bool]:
     song_map: Any = read_json(output_dir / "songMap.json", default={})
     if not isinstance(song_map, dict) or not isinstance(song_map.get("notes"), list):
         raise ValueError("songMap.json is not available")
     if isinstance(song_map.get("editor"), dict):
         _refresh_lines(song_map, list(song_map["notes"]))
+    else:
+        _refresh_generated_note_associations(song_map)
     return song_map, (output_dir / "songMap.ai.json").exists()
 
 
