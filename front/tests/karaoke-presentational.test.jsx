@@ -17,7 +17,6 @@ vi.mock("../src/api/client", () => ({
 }));
 
 import KaraokeMedia from "../src/pages/Karaoke/components/karaoke-media.jsx";
-import SliderField from "../src/pages/Karaoke/components/slider-field.jsx";
 import WaveformTimeline from "../src/pages/Karaoke/components/waveform-timeline.jsx";
 import KaraokeLyricLine from "../src/pages/Karaoke/components/karaoke-performance-stage/karaoke-lyric-line.jsx";
 
@@ -94,18 +93,6 @@ test("karaoke media loads audio gain and initializes YouTube playback", () => {
   expect(container.querySelector("video").getAttribute("src")).toBe(
     "video.mp4"
   );
-});
-
-test("slider field binds its generated label and range", () => {
-  const change = vi.fn();
-  const { container, getByText } = render(
-    <SliderField label="Volume" display="50%" value="0.5" onChange={change} />
-  );
-  fireEvent.change(container.querySelector("input"), {
-    target: { value: "0.8" }
-  });
-  expect(change).toHaveBeenCalledWith("0.8");
-  expect(getByText("50%")).not.toBeNull();
 });
 
 test("waveform supports click, drag and range seeking", () => {

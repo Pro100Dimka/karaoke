@@ -120,11 +120,7 @@ describe("online room participants", () => {
     expect(props.onSetRoomSoundMuted).toHaveBeenCalledWith(true);
     expect(props.onLeave).toHaveBeenCalledOnce();
     view.rerender(
-      <OnlineRoomParticipant
-        {...props}
-        microphoneMuted
-        roomSoundMuted
-      />
+      <OnlineRoomParticipant {...props} microphoneMuted roomSoundMuted />
     );
     expect(screen.getByLabelText("room.microphone.enable")).not.toBeNull();
     expect(screen.getByLabelText("room.sound.enable")).not.toBeNull();
@@ -169,9 +165,11 @@ describe("online room dock", () => {
     await act(async () => Promise.resolve());
     expect(mocks.copyText).toHaveBeenCalledWith("ABCD");
     fireEvent.click(screen.getByLabelText("room.hidePanel"));
-    expect(document.querySelector("aside").className).toContain("is-collapsed");
+    expect(document.querySelector(".online-room-dock").className).toContain(
+      "is-collapsed"
+    );
     fireEvent.click(screen.getByLabelText("room.showPanel"));
-    expect(document.querySelector("aside").className).not.toContain(
+    expect(document.querySelector(".online-room-dock").className).not.toContain(
       "is-collapsed"
     );
     act(() => vi.advanceTimersByTime(1600));

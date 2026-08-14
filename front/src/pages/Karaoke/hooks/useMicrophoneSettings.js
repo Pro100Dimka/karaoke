@@ -42,7 +42,7 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
           syncAudioPreferences
         );
     },
-    // Stryker disable next-line ArrayDeclaration: the effect uses only stable globals and a React setter.
+    // Stryker disable next-line ArrayDeclaration: globals and setter are stable.
     []
   );
   useEffect(
@@ -62,7 +62,7 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
           syncAudioSettings
         );
     },
-    // Stryker disable next-line ArrayDeclaration: the effect uses only stable globals and React setters.
+    // Stryker disable next-line ArrayDeclaration: globals and setters are stable.
     []
   );
   useEffect(() => {

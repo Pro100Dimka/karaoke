@@ -9,7 +9,12 @@ vi.mock("../src/hooks/useAppSettings", () => ({
   default: () => ({ settings: state.settings })
 }));
 
-import { I18nProvider, translateMessage, useI18n } from "../src/i18n/index.jsx";
+import {
+  I18nProvider,
+  messages,
+  translateMessage,
+  useI18n
+} from "../src/i18n/index.jsx";
 
 function Consumer() {
   const { language, t } = useI18n();
@@ -44,6 +49,29 @@ test("provider falls back to Ukrainian for unsupported settings", () => {
   );
   expect(screen.getByText("uk:Скасовано")).toBeTruthy();
   expect(document.documentElement.lang).toBe("uk");
+});
+
+test("provider handles absent settings and reacts to a language change", () => {
+  state.settings = null;
+  const view = render(
+    <I18nProvider>
+      <Consumer />
+    </I18nProvider>
+  );
+  expect(
+    screen.getByText(`uk:${messages.uk["status.cancelled"]}`)
+  ).toBeTruthy();
+
+  state.settings = { language: "ru" };
+  view.rerender(
+    <I18nProvider>
+      <Consumer />
+    </I18nProvider>
+  );
+  expect(
+    screen.getByText(`ru:${messages.ru["status.cancelled"]}`)
+  ).toBeTruthy();
+  expect(document.documentElement.lang).toBe("ru");
 });
 
 test("hook rejects usage outside its provider", () => {

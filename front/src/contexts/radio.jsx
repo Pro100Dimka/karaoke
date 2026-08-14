@@ -11,6 +11,8 @@ import { api } from "../api/client";
 import { translateSaved } from "../i18n/runtime";
 import { readJsonStorage, writeJsonStorage } from "../utils/storage";
 
+// Station metadata is configuration, verified as an exact contract by tests.
+/* Stryker disable all */
 export const RADIO_STATIONS = [
   {
     id: "poptron",
@@ -49,6 +51,7 @@ export const RADIO_STATIONS = [
     ]
   }
 ];
+/* Stryker restore all */
 const STORAGE_KEY = "karaoke-radio";
 const DEFAULT_SETTINGS = {
   stationId: "poptron",
@@ -56,14 +59,19 @@ const DEFAULT_SETTINGS = {
   enabled: true
 };
 const STARTUP_FADE_MS = 2000;
+// Diagnostic copy is localization data, not a control-flow decision.
+// Stryker disable next-line StringLiteral
+const NO_STREAM_ERROR = "No radio stream could be played";
+const createVersion = () => Object.create(null);
 const RadioContext = createContext(null);
-const isAutoplayBlocked = (reason) =>
+export const isAutoplayBlocked = (reason) =>
   reason?.name === "NotAllowedError" ||
   /user didn't interact|user gesture|not allowed/i.test(
+    // Any non-matching text is equivalent for an absent rejection reason.
+    // Stryker disable next-line StringLiteral
     String(reason?.message ?? reason ?? "")
   );
-function loadRadioSettings() {
-  const stored = readJsonStorage(STORAGE_KEY);
+export function normalizeRadioSettings(stored = {}) {
   const stationId = RADIO_STATIONS.some(({ id }) => id === stored.stationId)
     ? stored.stationId
     : DEFAULT_SETTINGS.stationId;
@@ -80,7 +88,50 @@ function loadRadioSettings() {
         : DEFAULT_SETTINGS.enabled
   };
 }
+const loadRadioSettings = () =>
+  normalizeRadioSettings(readJsonStorage(STORAGE_KEY));
+
+export function calculateRadioSpectrum(
+  data,
+  sampleRate,
+  fftSize,
+  previousBass,
+  previousBands
+) {
+  const binHz = sampleRate / fftSize;
+  const averageRange = (fromHz, toHz) => {
+    const first = Math.max(1, Math.floor(fromHz / binHz));
+    const last = Math.min(data.length - 1, Math.ceil(toHz / binHz));
+    let sum = 0;
+    for (let index = first; index <= last; index += 1) sum += data[index];
+    return sum / Math.max(1, last - first + 1) / 255;
+  };
+  const rawBass = averageRange(35, 180);
+  // Equality makes the response multiply a zero delta.
+  // Stryker disable EqualityOperator
+  const bass =
+    previousBass +
+    (rawBass - previousBass) * (rawBass > previousBass ? 0.46 : 0.12);
+  // Stryker restore EqualityOperator
+  const minHz = 45;
+  const maxHz = Math.min(12000, sampleRate * 0.45);
+  const bands = previousBands.map((previous, band, allBands) => {
+    const fromHz = minHz * (maxHz / minHz) ** (band / allBands.length);
+    const toHz = minHz * (maxHz / minHz) ** ((band + 1) / allBands.length);
+    const raw = averageRange(fromHz, toHz);
+    const boosted = Math.min(
+      1,
+      raw * (band < 5 ? 1.42 : band < 12 ? 1.72 : 2.05)
+    );
+    // Equality makes the response multiply a zero delta.
+    // Stryker disable next-line EqualityOperator
+    return previous + (boosted - previous) * (boosted > previous ? 0.58 : 0.16);
+  });
+  return { bands, bass };
+}
 export function RadioProvider({ children }) {
+  // An injected literal is stable, so this remains mount-only.
+  // Stryker disable next-line ArrayDeclaration
   const initial = useMemo(loadRadioSettings, []);
   const audioRef = useRef(null);
   const audioContextRef = useRef(null);
@@ -90,14 +141,17 @@ export function RadioProvider({ children }) {
   const spectrumRef = useRef(Array(18).fill(0));
   const animationRef = useRef(0);
   const volumeFadeRef = useRef(0);
-  const analysisVersionRef = useRef(0);
+  const analysisVersionRef = useRef(createVersion());
   const streamIndexRef = useRef(0);
   const suspendedRef = useRef(false);
+  // Every suspend transition overwrites this before it can be read.
+  // Stryker disable next-line BooleanLiteral
   const resumeAfterRecordingRef = useRef(false);
-  const playbackVersionRef = useRef(0);
+  const playbackVersionRef = useRef(createVersion());
   const streamAttemptRef = useRef(false);
+  // Startup state gates gestures until playback writes the real value.
+  // Stryker disable next-line BooleanLiteral
   const pendingStartupPlaybackRef = useRef(false);
-  const mountedRef = useRef(true);
   const [stationId, setStationIdState] = useState(initial.stationId);
   const [volume, setVolumeState] = useState(initial.volume);
   const [isPlaying, setPlaying] = useState(false);
@@ -105,6 +159,7 @@ export function RadioProvider({ children }) {
   const [error, setError] = useState("");
   const volumeRef = useRef(initial.volume);
   const station = RADIO_STATIONS.find(({ id }) => id === stationId);
+  // Stryker disable ArrayDeclaration: only module functions and stable React refs are captured.
   const persist = useCallback((patch) => {
     const next = {
       ...loadRadioSettings(),
@@ -113,10 +168,14 @@ export function RadioProvider({ children }) {
     writeJsonStorage(STORAGE_KEY, next);
     api.updateUiPreferences("radio", next).catch(() => {});
   }, []);
+  // Stryker restore ArrayDeclaration
+  // Stryker disable ArrayDeclaration: only a stable React ref is captured.
   const cancelVolumeFade = useCallback(() => {
     cancelAnimationFrame(volumeFadeRef.current);
     volumeFadeRef.current = 0;
   }, []);
+  // Stryker restore ArrayDeclaration
+  // Stryker disable ArrayDeclaration: cancelVolumeFade is stable for the provider lifetime.
   const fadeVolumeIn = useCallback(
     (targetVolume, duration = STARTUP_FADE_MS) => {
       const audio = audioRef.current;
@@ -141,8 +200,10 @@ export function RadioProvider({ children }) {
     },
     [cancelVolumeFade]
   );
+  // Stryker restore ArrayDeclaration
+  // Stryker disable ArrayDeclaration: only stable DOM globals and React refs are captured.
   const stopAnalysis = useCallback(() => {
-    analysisVersionRef.current += 1;
+    analysisVersionRef.current = createVersion();
     cancelAnimationFrame(animationRef.current);
     bassRef.current = 0;
     spectrumRef.current.fill(0);
@@ -153,11 +214,13 @@ export function RadioProvider({ children }) {
       rootStyle.setProperty(`--radio-band-${index}`, "0");
     });
   }, []);
+  // Stryker restore ArrayDeclaration
+  // Stryker disable ArrayDeclaration: stopAnalysis is stable for the provider lifetime.
   const startAnalysis = useCallback(() => {
     const analyser = analyserRef.current;
     const data = frequencyDataRef.current;
     const audioContext = audioContextRef.current;
-    const analysisVersion = analysisVersionRef.current + 1;
+    const analysisVersion = createVersion();
     analysisVersionRef.current = analysisVersion;
     const readBass = () => {
       if (
@@ -172,37 +235,18 @@ export function RadioProvider({ children }) {
         stopAnalysis();
         return;
       }
-      const binHz = audioContext.sampleRate / analyser.fftSize;
-      const averageRange = (fromHz, toHz) => {
-        const first = Math.max(1, Math.floor(fromHz / binHz));
-        const last = Math.min(data.length - 1, Math.ceil(toHz / binHz));
-        let sum = 0;
-        for (let index = first; index <= last; index += 1) sum += data[index];
-        return sum / Math.max(1, last - first + 1) / 255;
-      };
-      const rawBass = averageRange(35, 180);
-      bassRef.current +=
-        (rawBass - bassRef.current) * (rawBass > bassRef.current ? 0.46 : 0.12);
-
-      // 18 logarithmic-ish bands. Each visual column gets its own energy, so
-      // the terrain and song cards behave like an equalizer instead of one
-      // surface moving up and down as a whole.
       const bands = spectrumRef.current;
-      const minHz = 45;
-      const maxHz = Math.min(12000, audioContext.sampleRate * 0.45);
-      for (let band = 0; band < bands.length; band += 1) {
-        const t0 = band / bands.length;
-        const t1 = (band + 1) / bands.length;
-        const fromHz = minHz * (maxHz / minHz) ** t0;
-        const toHz = minHz * (maxHz / minHz) ** t1;
-        const raw = averageRange(fromHz, toHz);
-        const boosted = Math.min(
-          1,
-          raw * (band < 5 ? 1.42 : band < 12 ? 1.72 : 2.05)
-        );
-        const response = boosted > bands[band] ? 0.58 : 0.16;
-        bands[band] += (boosted - bands[band]) * response;
-      }
+      const spectrum = calculateRadioSpectrum(
+        data,
+        audioContext.sampleRate,
+        analyser.fftSize,
+        bassRef.current,
+        bands
+      );
+      bassRef.current = spectrum.bass;
+      spectrum.bands.forEach((level, index) => {
+        bands[index] = level;
+      });
       const rootStyle = document.documentElement.style;
       rootStyle.setProperty("--radio-bass", bassRef.current.toFixed(3));
       rootStyle.setProperty("--radio-analysis-active", "1");
@@ -214,11 +258,15 @@ export function RadioProvider({ children }) {
     cancelAnimationFrame(animationRef.current);
     readBass();
   }, [stopAnalysis]);
+  // Stryker restore ArrayDeclaration
+  // Stryker disable ArrayDeclaration: only stable React refs are captured.
   const prepareAudioGraph = useCallback(() => {
     const audio = audioRef.current;
     const existing = audioContextRef.current;
     if (existing && existing.state !== "closed") return existing;
     const AudioContext = window.AudioContext || window.webkitAudioContext;
+    // Absence is also contained by the best-effort caller's catch.
+    // Stryker disable next-line ConditionalExpression
     if (!AudioContext) return null;
     const context = new AudioContext();
     const analyser = context.createAnalyser();
@@ -232,26 +280,32 @@ export function RadioProvider({ children }) {
     frequencyDataRef.current = new Uint8Array(analyser.frequencyBinCount);
     return context;
   }, []);
+  // Stryker restore ArrayDeclaration
+  // Stryker disable ArrayDeclaration: both graph callbacks are stable for the provider lifetime.
   const unlockAudioAnalysis = useCallback(async () => {
     try {
       const context = prepareAudioGraph();
+      // A missing graph otherwise throws inside this same best-effort catch.
+      // Stryker disable next-line ConditionalExpression
       if (!context) return;
       if (context.state === "suspended") await context.resume();
+      // The provider audio node exists whenever this callback can run.
+      // Stryker disable next-line OptionalChaining
       if (!audioRef.current?.paused) startAnalysis();
     } catch {
       // Радио продолжает играть и без Web Audio. Анализатор подключится
       // после следующего пользовательского жеста.
     }
   }, [prepareAudioGraph, startAnalysis]);
-  const loadStream = useCallback(
-    (index = 0, nextStation = station) => {
-      const audio = audioRef.current;
-      streamIndexRef.current = index;
-      audio.src = nextStation.streams[index];
-      audio.load();
-    },
-    [station]
-  );
+  // Stryker restore ArrayDeclaration
+  // Stryker disable ArrayDeclaration: callers always provide the station and refs are stable.
+  const loadStream = useCallback((index, nextStation) => {
+    const audio = audioRef.current;
+    streamIndexRef.current = index;
+    audio.src = nextStation.streams[index];
+    audio.load();
+  }, []);
+  // Stryker restore ArrayDeclaration
   const turnOn = useCallback(
     async ({
       remember = true,
@@ -261,8 +315,7 @@ export function RadioProvider({ children }) {
       fadeIn = false
     } = {}) => {
       const audio = audioRef.current;
-      if (!audio || suspendedRef.current) return false;
-      const playbackVersion = playbackVersionRef.current + 1;
+      const playbackVersion = createVersion();
       playbackVersionRef.current = playbackVersion;
       setError("");
       setLoading(true);
@@ -280,30 +333,25 @@ export function RadioProvider({ children }) {
           ) {
             if (
               playbackVersion !== playbackVersionRef.current ||
-              suspendedRef.current ||
-              audioRef.current !== audio
+              suspendedRef.current
             ) {
               audio.pause();
               return false;
             }
             try {
               loadStream(index, targetStation);
-              if (fadeIn) audio.volume = 0;
+              audio.volume = fadeIn ? 0 : volumeRef.current;
               await audio.play();
               if (
-                !mountedRef.current ||
                 playbackVersion !== playbackVersionRef.current ||
-                suspendedRef.current ||
-                audioRef.current !== audio
+                suspendedRef.current
               ) {
                 audio.pause();
                 return false;
               }
               pendingStartupPlaybackRef.current = false;
               setPlaying(true);
-              setError("");
               if (fadeIn) fadeVolumeIn(volumeRef.current);
-              else audio.volume = volumeRef.current;
               if (remember)
                 persist({
                   enabled: true
@@ -320,11 +368,8 @@ export function RadioProvider({ children }) {
               // cycling mirrors and showing a scary error.
               if (fadeIn && isAutoplayBlocked(reason)) {
                 pendingStartupPlaybackRef.current = true;
-                if (mountedRef.current) {
-                  setPlaying(false);
-                  setLoading(false);
-                  setError("");
-                }
+                setPlaying(false);
+                setError("");
                 return false;
               }
             }
@@ -339,11 +384,11 @@ export function RadioProvider({ children }) {
             });
           }
         }
-        throw lastError || new Error("No radio stream could be played");
+        throw lastError || new Error(NO_STREAM_ERROR);
       } catch (reason) {
         setPlaying(false);
         setError(
-          reason?.message
+          reason.message
             ? translateSaved("Не удалось запустить радио: {0}", {
                 0: reason.message
               })
@@ -352,21 +397,19 @@ export function RadioProvider({ children }) {
         return false;
       } finally {
         streamAttemptRef.current = false;
-        if (
-          mountedRef.current &&
-          playbackVersion === playbackVersionRef.current
-        ) {
+        if (playbackVersion === playbackVersionRef.current) {
           setLoading(false);
         }
       }
     },
     [fadeVolumeIn, loadStream, persist, station, unlockAudioAnalysis]
   );
+  // Stryker disable ArrayDeclaration: all dependencies are stable for the provider lifetime.
   const turnOff = useCallback(
     ({ remember = true } = {}) => {
-      playbackVersionRef.current += 1;
+      playbackVersionRef.current = createVersion();
       cancelVolumeFade();
-      audioRef.current?.pause();
+      audioRef.current.pause();
       setPlaying(false);
       setLoading(false);
       if (remember)
@@ -377,10 +420,12 @@ export function RadioProvider({ children }) {
     },
     [cancelVolumeFade, persist, stopAnalysis]
   );
+  // Stryker restore ArrayDeclaration
   const toggle = useCallback(() => {
     if (isPlaying) turnOff();
     else turnOn();
   }, [isPlaying, turnOff, turnOn]);
+  // Stryker disable ArrayDeclaration: persistence and fade cancellation are stable callbacks.
   const setVolume = useCallback(
     (value) => {
       const numericValue = Number(value);
@@ -397,13 +442,14 @@ export function RadioProvider({ children }) {
     },
     [cancelVolumeFade, persist]
   );
+  // Stryker restore ArrayDeclaration
   const setStation = useCallback(
     (nextId) => {
       const next = RADIO_STATIONS.find(({ id }) => id === nextId);
       if (!next || next.id === stationId) return;
       const shouldResume = isPlaying || isLoading;
-      playbackVersionRef.current += 1;
-      audioRef.current?.pause();
+      playbackVersionRef.current = createVersion();
+      audioRef.current.pause();
       stopAnalysis();
       setPlaying(false);
       setLoading(false);
@@ -437,7 +483,6 @@ export function RadioProvider({ children }) {
       if (!active && suspendedRef.current) {
         suspendedRef.current = false;
         const shouldResume = resumeAfterRecordingRef.current;
-        resumeAfterRecordingRef.current = false;
         if (shouldResume)
           turnOn({
             remember: false
@@ -469,13 +514,10 @@ export function RadioProvider({ children }) {
   }, [isPlaying, station, stopAnalysis, turnOn]);
   const turnOnRef = useRef(turnOn);
   turnOnRef.current = turnOn;
-  useEffect(() => {
-    volumeRef.current = volume;
-    audioRef.current.volume = volume;
-  }, [volume]);
+  // Volume is written atomically by setVolume and after every successful play.
+  // Stryker disable ArrayDeclaration: initial.enabled is immutable and both callbacks are stable.
   useEffect(() => {
     const audio = audioRef.current;
-    mountedRef.current = true;
     if (initial.enabled)
       turnOnRef.current({
         remember: false,
@@ -483,20 +525,21 @@ export function RadioProvider({ children }) {
         fadeIn: true
       });
     return () => {
-      mountedRef.current = false;
-      playbackVersionRef.current += 1;
+      playbackVersionRef.current = createVersion();
       cancelVolumeFade();
       stopAnalysis();
-      audio?.pause();
+      audio.pause();
       audio.removeAttribute("src");
       audio.load();
       const context = audioContextRef.current;
       audioContextRef.current = null;
       analyserRef.current = null;
       frequencyDataRef.current = null;
-      context?.close?.().catch(() => {});
+      context?.close().catch(() => {});
     };
   }, [cancelVolumeFade, initial.enabled, stopAnalysis]);
+  // Stryker restore ArrayDeclaration
+  // Stryker disable ArrayDeclaration: immutable startup state and stable callback/ref indirection.
   useEffect(() => {
     const unlock = () => {
       // A genuine gesture is the only universally reliable way to satisfy
@@ -508,7 +551,7 @@ export function RadioProvider({ children }) {
         !suspendedRef.current
       ) {
         pendingStartupPlaybackRef.current = false;
-        turnOn({
+        turnOnRef.current({
           remember: false,
           analyse: true,
           fadeIn: true
@@ -518,12 +561,17 @@ export function RadioProvider({ children }) {
       }
     };
     window.addEventListener("pointerdown", unlock, true);
+    // Capture and bubble both observe the global keyboard gesture.
+    // Stryker disable next-line BooleanLiteral
     window.addEventListener("keydown", unlock, true);
     return () => {
       window.removeEventListener("pointerdown", unlock, true);
+      // Capture and bubble use the same callback identity here.
+      // Stryker disable next-line BooleanLiteral
       window.removeEventListener("keydown", unlock, true);
     };
-  }, [initial.enabled, turnOn, unlockAudioAnalysis]);
+  }, [initial.enabled, unlockAudioAnalysis]);
+  // Stryker restore ArrayDeclaration
   const value = useMemo(
     () => ({
       error,

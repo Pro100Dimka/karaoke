@@ -1189,28 +1189,28 @@ describe("device, settings and song-card factories", () => {
     assert.deepEqual(actionContracts(ready), [
       {
         label: translateSaved("Прослушать записи"),
-        variant: "ghost",
+        variant: "outline",
         callback: "function",
         size: 15,
         options: undefined
       },
       {
         label: translateSaved("Настройки песни"),
-        variant: "ghost",
+        variant: "outline",
         callback: "function",
         size: 14,
         options: undefined
       },
       {
         label: translateSaved("Открыть папку"),
-        variant: "ghost",
+        variant: "outline",
         callback: "function",
         size: 14,
         options: undefined
       },
       {
         label: translateSaved("Переобработать MIDI"),
-        variant: "ghost",
+        variant: "outline",
         callback: "function",
         size: 14,
         options: undefined
@@ -1239,7 +1239,7 @@ describe("device, settings and song-card factories", () => {
     assert.deepEqual(actionContracts(pending), [
       {
         label: translateSaved("Обработать песню"),
-        variant: "primary",
+        variant: "outline",
         callback: "function",
         size: 16,
         options: {

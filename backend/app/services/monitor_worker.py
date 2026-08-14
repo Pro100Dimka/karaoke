@@ -63,15 +63,7 @@ def _stop(_signum: int, _frame: object) -> None:
     _running = False
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", required=True)
-    options = json.loads(parser.parse_args().config)
-    gain = float(options["gain"])
-
-    restart_requested = threading.Event()
-    glitches: list[float] = []
-
+def _audio_callback(gain: float, restart_requested: threading.Event, glitches: list[float]):
     def callback(indata, outdata, _frames, _time_info, status):
         if status:
             now = time.monotonic()
@@ -93,6 +85,19 @@ def main() -> int:
                 "silent": rms < 10 ** (-50 / 20),
             }
         )
+
+    return callback
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", required=True)
+    options = json.loads(parser.parse_args().config)
+    gain = float(options["gain"])
+
+    restart_requested = threading.Event()
+    glitches: list[float] = []
+    callback = _audio_callback(gain, restart_requested, glitches)
 
     stream = None
     try:

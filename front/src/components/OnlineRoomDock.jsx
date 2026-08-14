@@ -66,7 +66,7 @@ export function OnlineRoomDock() {
       <Card
         className={`online-room-dock ${collapsed ? "is-collapsed" : ""}`}
         aria-hidden={collapsed}
-        inert={collapsed ? true : undefined}
+        inert={collapsed ? "" : undefined}
         variant="neon"
         tilt={false}
         aria-label={t("room.participants")}

@@ -1,7 +1,8 @@
 /* @vitest-environment jsdom */
-import React from "react";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import React from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { translateSaved } from "../src/i18n/runtime";
 
 const mocks = vi.hoisted(() => ({
   getAppSettings: vi.fn(),
@@ -27,10 +28,10 @@ vi.mock("../src/utils/language", () => ({
   saveLanguage: mocks.saveLanguage
 }));
 
-import { translateSaved } from "../src/i18n/runtime.js";
-
 let AppSettingsProvider;
 let AppSettingsContext;
+let INITIAL_APP_SETTINGS_STATE;
+let appSettingsReducer;
 let useAppSettings;
 let useSettingsForm;
 
@@ -81,8 +82,12 @@ afterEach(() => {
 });
 beforeEach(async () => {
   vi.resetModules();
-  ({ default: AppSettingsProvider, AppSettingsContext } =
-    await import("../src/contexts/app-settings"));
+  ({
+    default: AppSettingsProvider,
+    AppSettingsContext,
+    INITIAL_APP_SETTINGS_STATE,
+    appSettingsReducer
+  } = await import("../src/contexts/app-settings"));
   ({ default: useAppSettings } = await import("../src/hooks/useAppSettings"));
   ({ default: useSettingsForm } = await import("../src/hooks/useSettingsForm"));
   Object.values(mocks).forEach((mock) => mock.mockReset());
@@ -95,6 +100,19 @@ beforeEach(async () => {
 });
 
 describe("application settings context", () => {
+  test("defines exact initial state and preserves unknown reducer actions", () => {
+    expect(INITIAL_APP_SETTINGS_STATE).toEqual({
+      settings: null,
+      isLoading: true,
+      error: null
+    });
+    const state = {
+      settings: { theme: "dark" },
+      isLoading: false,
+      error: null
+    };
+    expect(appSettingsReducer(state, { type: "UNKNOWN" })).toBe(state);
+  });
   test("requires its provider", () => {
     const consoleError = vi
       .spyOn(console, "error")
@@ -136,6 +154,7 @@ describe("application settings context", () => {
       language: "uk"
     });
     expect(mocks.applyTheme).toHaveBeenLastCalledWith("green");
+    expect(reload).not.toHaveBeenCalled();
 
     act(() => result.current.updateSettings((value) => ({ ...value, x: 1 })));
     expect(result.current.settings.x).toBe(1);
@@ -202,13 +221,42 @@ describe("application settings context", () => {
     );
     const hook = renderHook(() => useAppSettings(), { wrapper });
     await act(async () => initial.resolve({ version: 1 }));
-    const stalePromise = hook.result.current.reloadSettings();
+    const stalePromise = hook.result.current
+      .reloadSettings()
+      .catch((error) => error);
     const latestPromise = hook.result.current.reloadSettings();
     await act(async () => latest.resolve({ version: 3 }));
     expect(hook.result.current.settings).toEqual({ version: 3 });
     await act(async () => stale.resolve({ version: 2 }));
     await Promise.all([stalePromise, latestPromise]);
     expect(hook.result.current.settings).toEqual({ version: 3 });
+  });
+
+  test("ignores an error from a superseded reload", async () => {
+    const initial = deferred();
+    const stale = deferred();
+    const latest = deferred();
+    mocks.getAppSettings
+      .mockReturnValueOnce(initial.promise)
+      .mockReturnValueOnce(stale.promise)
+      .mockReturnValueOnce(latest.promise);
+    const wrapper = ({ children }) => (
+      <AppSettingsProvider>{children}</AppSettingsProvider>
+    );
+    const hook = renderHook(() => useAppSettings(), { wrapper });
+    await act(async () => initial.resolve({ version: 1 }));
+    const stalePromise = hook.result.current
+      .reloadSettings()
+      .catch((error) => error);
+    const latestPromise = hook.result.current.reloadSettings();
+    await act(async () => latest.resolve({ version: 3 }));
+    await act(async () => stale.reject(new Error("stale")));
+    await Promise.all([stalePromise, latestPromise]);
+    expect(hook.result.current).toMatchObject({
+      settings: { version: 3 },
+      isLoading: false,
+      error: null
+    });
   });
 });
 
@@ -556,5 +604,39 @@ describe("settings form", () => {
 
     expect(global.updateSettings).not.toHaveBeenCalled();
     expect(notify).not.toHaveBeenCalled();
+  });
+
+  test("ignores successful save completions after unmount", async () => {
+    mocks.getAppSettings.mockResolvedValue({ theme: "dark" });
+    const fullSave = deferred();
+    const fieldSave = deferred();
+    mocks.updateAppSettings
+      .mockReturnValueOnce(fullSave.promise)
+      .mockReturnValueOnce(fieldSave.promise);
+    const global = trackedSettings();
+
+    const full = renderHook(() => useSettingsForm(vi.fn()), {
+      wrapper: contextWrapper(contextValue(global.updateSettings))
+    });
+    await waitFor(() => expect(full.result.current.form).not.toBeNull());
+    const fullPromise = full.result.current.save();
+    await waitFor(() => expect(mocks.updateAppSettings).toHaveBeenCalledOnce());
+    full.unmount();
+    fullSave.resolve({ theme: "late" });
+    await act(() => fullPromise);
+
+    const field = renderHook(() => useSettingsForm(vi.fn()), {
+      wrapper: contextWrapper(contextValue(global.updateSettings))
+    });
+    await waitFor(() => expect(field.result.current.form).not.toBeNull());
+    const fieldPromise = field.result.current.saveField("theme", "late");
+    await waitFor(() =>
+      expect(mocks.updateAppSettings).toHaveBeenCalledTimes(2)
+    );
+    field.unmount();
+    fieldSave.resolve({ theme: "late" });
+    await act(() => fieldPromise);
+
+    expect(global.updateSettings).not.toHaveBeenCalled();
   });
 });

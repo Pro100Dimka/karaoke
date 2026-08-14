@@ -10,19 +10,17 @@ import {
   mockSongs
 } from "./fixtures.js";
 
-const clone = (value) =>
-  value == null ? value : JSON.parse(JSON.stringify(value));
+const clone = globalThis.structuredClone;
 
 const store = {
   songs: clone(mockSongs),
   settings: clone(mockAppSettings),
   audioSettings: clone(mockAudioSettings),
-  editors: { [MOCK_SONG_ID]: clone(mockSongEditor) },
+  editors: {},
   recordings: []
 };
 
 function parseBody(body) {
-  if (body == null || typeof body !== "string") return {};
   try {
     return JSON.parse(body);
   } catch {
@@ -83,9 +81,7 @@ export async function mockRequest(path, options = {}) {
     }
     return clone(store.editors[id] || mockSongEditor);
   }
-  const editorResetMatch = pathname.match(
-    /^\/songs\/([^/]+)\/editor\/reset$/
-  );
+  const editorResetMatch = pathname.match(/^\/songs\/([^/]+)\/editor\/reset$/);
   if (editorResetMatch) {
     store.editors[editorResetMatch[1]] = clone(mockSongEditor);
     return clone(mockSongEditor);
@@ -99,13 +95,11 @@ export async function mockRequest(path, options = {}) {
   if (/^\/songs\/[^/]+\/log$/.test(pathname)) return ["Mock pipeline ready"];
 
   if (pathname === "/settings") {
-    if (method === "GET") return clone(store.settings);
     Object.assign(store.settings, body);
     return clone(store.settings);
   }
 
   if (pathname === "/audio/settings") {
-    if (method === "GET") return clone(store.audioSettings);
     Object.assign(store.audioSettings, body);
     return clone(store.audioSettings);
   }
@@ -118,9 +112,9 @@ export async function mockRequest(path, options = {}) {
   if (pathname === "/recording/start") {
     return { recording_session_id: "mock-session-1" };
   }
-  if (pathname.startsWith("/recording/pause")) return { ok: true };
-  if (pathname.startsWith("/recording/resume")) return { ok: true };
-  if (pathname.startsWith("/recording/stop")) {
+  if (pathname === "/recording/pause") return { ok: true };
+  if (pathname === "/recording/resume") return { ok: true };
+  if (pathname === "/recording/stop") {
     const recording = {
       id: `mock-recording-${store.recordings.length + 1}`,
       song_id: MOCK_SONG_ID,

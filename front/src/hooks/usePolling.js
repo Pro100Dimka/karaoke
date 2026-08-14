@@ -21,7 +21,7 @@ export function shouldSchedulePoll({
   return typeof shouldContinue !== "function" || shouldContinue(result);
 }
 
-// Stryker disable next-line ArrayDeclaration: the injected primitive dependency is also stable when callers omit deps.
+// Stryker disable next-line ArrayDeclaration: omitted dependencies are stable.
 export function usePolling(fetchFn, intervalMs, deps = [], options = {}) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -76,14 +76,14 @@ export function usePolling(fetchFn, intervalMs, deps = [], options = {}) {
       let requestError = null;
       try {
         result = await fetchRef.current();
-        // Stryker disable next-line ConditionalExpression: React discards state updates after unmount.
+        // Stryker disable next-line ConditionalExpression: inert after unmount.
         if (active) {
           setData(result);
           setError(null);
         }
       } catch (error) {
         requestError = error;
-        // Stryker disable next-line ConditionalExpression: React discards state updates after unmount.
+        // Stryker disable next-line ConditionalExpression: inert after unmount.
         if (active) setError(error);
       } finally {
         inFlight = false;

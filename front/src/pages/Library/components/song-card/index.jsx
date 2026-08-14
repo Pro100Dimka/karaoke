@@ -161,7 +161,7 @@ function LibrarySongCard({
               ]) => (
                 <IconButton
                   key={label}
-                  variant={variant || "ghost"}
+                  variant={variant}
                   size="sm"
                   aria-label={label}
                   title={label}

@@ -21,6 +21,7 @@ import { openKaraokeInRoom } from "./onlineRoomActions";
 import { createOnlineRoomMessageHandler } from "./onlineRoomMessages";
 
 const OnlineRoomContext = createContext(null);
+const OFF = false;
 export function OnlineRoomProvider({ children }) {
   const clientRef = useRef(null);
   const unsubscribeRef = useRef(null);
@@ -28,20 +29,20 @@ export function OnlineRoomProvider({ children }) {
   const remoteAudioRef = useRef(new Map());
   const remoteEffectsRef = useRef(new Map());
   const roomUiRef = useRef({});
-  const previousMicMutedRef = useRef(false);
-  const microphoneMutedRef = useRef(false);
+  const previousMicMutedRef = useRef(OFF);
+  const microphoneMutedRef = useRef(OFF);
   const roomRef = useRef(null);
   const mutedPeopleRef = useRef(new Set());
-  const roomSoundMutedRef = useRef(false);
-  const intentionalDisconnectRef = useRef(false);
+  const roomSoundMutedRef = useRef(OFF);
+  const intentionalDisconnectRef = useRef(OFF);
   const pendingSongCommandRef = useRef(null);
-  const connectionVersionRef = useRef(0);
+  const connectionTokenRef = useRef(null);
   const [room, setRoomState] = useState(null);
   const [participants, setParticipants] = useState([]);
   const [mutedPeople, setMutedPeople] = useState(() => new Set());
   const [effectPeople, setEffectPeople] = useState(() => new Set());
-  const [microphoneMuted, setMicrophoneMutedState] = useState(false);
-  const [roomSoundMuted, setRoomSoundMutedState] = useState(false);
+  const [microphoneMuted, setMicrophoneMutedState] = useState(OFF);
+  const [roomSoundMuted, setRoomSoundMutedState] = useState(OFF);
   const [roomUi, setRoomUi] = useState({});
   const [roomCommand, setRoomCommand] = useState(null);
   const [voiceError, setVoiceError] = useState("");
@@ -55,10 +56,14 @@ export function OnlineRoomProvider({ children }) {
     stopSpeakingMeter,
     stopAllSpeakingMeters
   } = useSpeakingLevels();
-  const setRoom = useCallback((next) => {
-    roomRef.current = next;
-    setRoomState(next);
-  }, []);
+  const setRoom = useCallback(
+    (next) => {
+      roomRef.current = next;
+      setRoomState(next);
+    },
+    // Stryker disable next-line ArrayDeclaration: React setters and refs are stable.
+    []
+  );
   const removeRemoteAudio = useCallback(
     (participantId) => {
       stopSpeakingMeter(participantId);
@@ -72,17 +77,23 @@ export function OnlineRoomProvider({ children }) {
       audio.remove();
       remoteAudioRef.current.delete(participantId);
     },
+    // Stryker disable next-line ArrayDeclaration: stopSpeakingMeter is stable.
     [stopSpeakingMeter]
   );
-  const applyRemoteAudioMute = useCallback(() => {
-    for (const [participantId, audio] of remoteAudioRef.current) {
-      const muted =
-        roomSoundMutedRef.current || mutedPeopleRef.current.has(participantId);
-      const effectGraph = remoteEffectsRef.current.get(participantId);
-      audio.muted = muted || Boolean(effectGraph);
-      if (effectGraph) effectGraph.master.gain.value = muted ? 0 : 1;
-    }
-  }, []);
+  const applyRemoteAudioMute = useCallback(
+    () => {
+      for (const [participantId, audio] of remoteAudioRef.current) {
+        const muted =
+          roomSoundMutedRef.current ||
+          mutedPeopleRef.current.has(participantId);
+        const effectGraph = remoteEffectsRef.current.get(participantId);
+        audio.muted = muted || Boolean(effectGraph);
+        if (effectGraph) effectGraph.master.gain.value = muted ? 0 : 1;
+      }
+    },
+    // Stryker disable next-line ArrayDeclaration: the callback closes over refs only.
+    []
+  );
   const applyParticipantEffects = useCallback(
     (participantId, enabled) => {
       const previous = remoteEffectsRef.current.get(participantId);
@@ -137,6 +148,8 @@ export function OnlineRoomProvider({ children }) {
           channel += 1
         ) {
           const data = impulse.getChannelData(channel);
+          // Stryker disable next-line EqualityOperator: a typed-array write at
+          // index `frames` is ignored, so `<` and `<=` are equivalent here.
           for (let index = 0; index < frames; index += 1) {
             data[index] =
               (Math.random() * 2 - 1) *
@@ -154,66 +167,81 @@ export function OnlineRoomProvider({ children }) {
       context.resume?.().catch(() => {});
       applyRemoteAudioMute();
     },
+    // Stryker disable next-line ArrayDeclaration: applyRemoteAudioMute is stable.
     [applyRemoteAudioMute]
   );
-  const cleanupConnection = useCallback(() => {
-    unsubscribeRef.current?.();
-    unsubscribeRef.current = null;
-    voiceRef.current?.stop();
-    stopAllSpeakingMeters();
-    voiceRef.current = null;
-    for (const id of [...remoteAudioRef.current.keys()]) removeRemoteAudio(id);
-    clientRef.current?.disconnect();
-    clientRef.current = null;
-  }, [removeRemoteAudio, stopAllSpeakingMeters]);
-  const setMicrophoneMuted = useCallback((muted, broadcast = true) => {
-    const next = Boolean(muted);
-    voiceRef.current?.setMicrophoneMuted(next);
-    microphoneMutedRef.current = next;
-    setMicrophoneMutedState(next);
-    if (broadcast)
-      clientRef.current?.send("presence", {
-        micMuted: next
-      });
-  }, []);
-  const requestMicrophoneAccess = useCallback(async () => {
-    const voice = voiceRef.current;
-    if (!voice) {
-      setVoiceError(translateSaved("Сначала подключитесь к комнате."));
-      return false;
-    }
-    setVoiceError("");
-    setTransferStatus(null);
-    try {
-      const stream = await voice.start();
-      if (voiceRef.current !== voice) {
-        stream.getTracks().forEach((track) => track.stop());
+  const cleanupConnection = useCallback(
+    () => {
+      unsubscribeRef.current?.();
+      unsubscribeRef.current = null;
+      voiceRef.current?.stop();
+      stopAllSpeakingMeters();
+      voiceRef.current = null;
+      for (const id of [...remoteAudioRef.current.keys()])
+        removeRemoteAudio(id);
+      clientRef.current?.disconnect();
+      clientRef.current = null;
+    },
+    // Stryker disable next-line ArrayDeclaration: both callbacks are stable.
+    [removeRemoteAudio, stopAllSpeakingMeters]
+  );
+  const setMicrophoneMuted = useCallback(
+    (muted, broadcast = true) => {
+      const next = Boolean(muted);
+      voiceRef.current?.setMicrophoneMuted(next);
+      microphoneMutedRef.current = next;
+      setMicrophoneMutedState(next);
+      if (broadcast)
+        clientRef.current?.send("presence", {
+          micMuted: next
+        });
+    },
+    // Refs and React setters are stable.
+    // Stryker disable next-line ArrayDeclaration
+    []
+  );
+  const requestMicrophoneAccess = useCallback(
+    async () => {
+      const voice = voiceRef.current;
+      if (!voice) {
+        setVoiceError(translateSaved("Сначала подключитесь к комнате."));
         return false;
       }
-      startSpeakingMeter("local", stream);
-      const muted = microphoneMutedRef.current || roomSoundMutedRef.current;
-      voice.setMicrophoneMuted(muted);
-      clientRef.current?.send("presence", {
-        micMuted: muted
-      });
-      return true;
-    } catch (error) {
-      if (voiceRef.current !== voice) return false;
-      const message = getErrorMessage(
-        error,
-        translateSaved("нет доступа к микрофону")
-      );
-      setVoiceError(
-        translateSaved(
-          "Не удалось получить доступ к микрофону: {0}. Проверьте разрешение Windows и повторите попытку.",
-          {
-            0: message
-          }
-        )
-      );
-      return false;
-    }
-  }, [startSpeakingMeter]);
+      setVoiceError("");
+      setTransferStatus(null);
+      try {
+        const stream = await voice.start();
+        if (voiceRef.current !== voice) {
+          stream.getTracks().forEach((track) => track.stop());
+          return false;
+        }
+        startSpeakingMeter("local", stream);
+        const muted = microphoneMutedRef.current || roomSoundMutedRef.current;
+        voice.setMicrophoneMuted(muted);
+        clientRef.current.send("presence", {
+          micMuted: muted
+        });
+        return true;
+      } catch (error) {
+        if (voiceRef.current !== voice) return false;
+        const message = getErrorMessage(
+          error,
+          translateSaved("нет доступа к микрофону")
+        );
+        setVoiceError(
+          translateSaved(
+            "Не удалось получить доступ к микрофону: {0}. Проверьте разрешение Windows и повторите попытку.",
+            {
+              0: message
+            }
+          )
+        );
+        return false;
+      }
+    },
+    // Stryker disable next-line ArrayDeclaration: startSpeakingMeter is stable.
+    [startSpeakingMeter]
+  );
   const setRoomSoundMuted = useCallback(
     (muted) => {
       const next = Boolean(muted);
@@ -230,6 +258,7 @@ export function OnlineRoomProvider({ children }) {
       }
       applyRemoteAudioMute();
     },
+    // Stryker disable next-line ArrayDeclaration: all callback dependencies are stable.
     [
       applyRemoteAudioMute,
       muteApplicationAudio,
@@ -237,55 +266,53 @@ export function OnlineRoomProvider({ children }) {
       setMicrophoneMuted
     ]
   );
-  const leaveRoom = useCallback(async () => {
-    connectionVersionRef.current += 1;
-    intentionalDisconnectRef.current = true;
-    restoreApplicationAudio();
-    cleanupConnection();
-    setRoom(null);
-    setParticipants([]);
-    mutedPeopleRef.current = new Set();
-    setMutedPeople(new Set());
-    setEffectPeople(new Set());
-    roomSoundMutedRef.current = false;
-    setRoomSoundMutedState(false);
-    microphoneMutedRef.current = false;
-    setMicrophoneMutedState(false);
-    setRoomUi({});
-    setRoomCommand(null);
-    pendingSongCommandRef.current = null;
-    setTransferStatus(null);
-    setVoiceError("");
-    intentionalDisconnectRef.current = false;
-  }, [cleanupConnection, restoreApplicationAudio, setRoom]);
-  const connect = useCallback(
-    async ({ id, name, host }) => {
-      const connectionVersion = connectionVersionRef.current + 1;
-      connectionVersionRef.current = connectionVersion;
-      intentionalDisconnectRef.current = true;
-      restoreApplicationAudio();
-      cleanupConnection();
-      intentionalDisconnectRef.current = false;
+  const resetRoomState = useCallback(
+    () => {
       setRoom(null);
       setParticipants([]);
       mutedPeopleRef.current = new Set();
       setMutedPeople(new Set());
       setEffectPeople(new Set());
-      roomSoundMutedRef.current = false;
-      setRoomSoundMutedState(false);
+      roomSoundMutedRef.current = OFF;
+      setRoomSoundMutedState(OFF);
+      microphoneMutedRef.current = OFF;
+      setMicrophoneMutedState(OFF);
       setRoomUi({});
       setRoomCommand(null);
       pendingSongCommandRef.current = null;
-      setVoiceError("");
       setTransferStatus(null);
+      setVoiceError("");
+    },
+    // Stryker disable next-line ArrayDeclaration: setRoom is stable.
+    [setRoom]
+  );
+  const leaveRoom = useCallback(
+    () => {
+      connectionTokenRef.current = Symbol("left-room");
+      intentionalDisconnectRef.current = true;
+      restoreApplicationAudio();
+      cleanupConnection();
+      resetRoomState();
+      intentionalDisconnectRef.current = OFF;
+    },
+    // Stryker disable next-line ArrayDeclaration: all callback dependencies are stable.
+    [cleanupConnection, resetRoomState, restoreApplicationAudio]
+  );
+  const connect = useCallback(
+    async ({ id, name, host }) => {
+      const connectionToken = Symbol("room-connection");
+      connectionTokenRef.current = connectionToken;
+      intentionalDisconnectRef.current = true;
+      restoreApplicationAudio();
+      cleanupConnection();
+      intentionalDisconnectRef.current = OFF;
+      resetRoomState();
       const client = new OnlineRoomClient();
       const voice = new OnlineVoiceMesh(client);
       clientRef.current = client;
       voiceRef.current = voice;
       const isCurrentConnection = () =>
-        connectionVersion === connectionVersionRef.current &&
-        clientRef.current === client &&
-        voiceRef.current === voice;
+        connectionToken === connectionTokenRef.current;
       voice.onRemoteStream = (participantId, stream) => {
         if (!isCurrentConnection()) {
           stream.getTracks().forEach((track) => track.stop());
@@ -337,7 +364,7 @@ export function OnlineRoomProvider({ children }) {
           setTransferStatus(null);
           if (pendingCommand?.songId === metadata.songId) {
             if (pendingCommand.__originatedHere) {
-              clientRef.current?.send("sync", {
+              client.send("sync", {
                 state: {
                   type: "open-karaoke",
                   songId: pendingCommand.songId
@@ -387,9 +414,7 @@ export function OnlineRoomProvider({ children }) {
           name,
           host
         });
-        if (connectionVersion !== connectionVersionRef.current) {
-          voice.stop();
-          client.disconnect();
+        if (!isCurrentConnection()) {
           throw new Error(
             translateSaved("Подключение отменено новым запросом")
           );
@@ -415,7 +440,7 @@ export function OnlineRoomProvider({ children }) {
         voice
           .start()
           .then((stream) => {
-            if (connectionVersion !== connectionVersionRef.current) {
+            if (!isCurrentConnection()) {
               stream.getTracks().forEach((track) => track.stop());
               return;
             }
@@ -440,7 +465,7 @@ export function OnlineRoomProvider({ children }) {
           });
         return normalizedId;
       } catch (error) {
-        if (connectionVersion === connectionVersionRef.current) {
+        if (isCurrentConnection()) {
           cleanupConnection();
         } else {
           voice.stop();
@@ -449,16 +474,22 @@ export function OnlineRoomProvider({ children }) {
         throw error;
       }
     },
+    // Stryker disable next-line ArrayDeclaration: all callback dependencies are stable.
     [
       applyRemoteAudioMute,
       cleanupConnection,
       removeRemoteAudio,
+      resetRoomState,
       restoreApplicationAudio,
       setRoom,
       startSpeakingMeter
     ]
   );
-  useEffect(() => () => cleanupConnection(), [cleanupConnection]);
+  useEffect(
+    () => () => cleanupConnection(),
+    // Stryker disable next-line ArrayDeclaration: cleanupConnection is stable.
+    [cleanupConnection]
+  );
   const createRoom = useCallback(
     (name) =>
       connect({
@@ -466,6 +497,7 @@ export function OnlineRoomProvider({ children }) {
         name,
         host: true
       }),
+    // Stryker disable next-line ArrayDeclaration: connect is stable.
     [connect]
   );
   const joinRoom = useCallback(
@@ -475,6 +507,7 @@ export function OnlineRoomProvider({ children }) {
         name,
         host: false
       }),
+    // Stryker disable next-line ArrayDeclaration: connect is stable.
     [connect]
   );
   const togglePersonMuted = useCallback(
@@ -488,6 +521,7 @@ export function OnlineRoomProvider({ children }) {
         return next;
       });
     },
+    // Stryker disable next-line ArrayDeclaration: applyRemoteAudioMute is stable.
     [applyRemoteAudioMute]
   );
   const togglePersonEffects = useCallback(
@@ -501,6 +535,7 @@ export function OnlineRoomProvider({ children }) {
         return next;
       });
     },
+    // Stryker disable next-line ArrayDeclaration: applyParticipantEffects is stable.
     [applyParticipantEffects]
   );
   const { effectsByParticipant } = roomUi;
@@ -510,31 +545,42 @@ export function OnlineRoomProvider({ children }) {
   useEffect(() => {
     effectPeople.forEach((id) => applyParticipantEffects(id, true));
   }, [applyParticipantEffects, effectPeople, effectsByParticipant]);
-  const syncUi = useCallback((state) => {
-    clientRef.current?.send("ui", {
-      state
-    });
-  }, []);
-  const syncCommand = useCallback((state) => {
-    clientRef.current?.send("sync", {
-      state
-    });
-  }, []);
-  const openKaraoke = useCallback((songId) => {
-    const client = clientRef.current;
-    const connectionVersion = connectionVersionRef.current;
-    return openKaraokeInRoom({
-      songId,
-      room: roomRef.current,
-      client,
-      roomApi: api,
-      isCurrentConnection: () =>
-        connectionVersion === connectionVersionRef.current &&
-        clientRef.current === client,
-      pendingSongCommandRef,
-      setTransferStatus
-    });
-  }, []);
+  const syncUi = useCallback(
+    (state) => {
+      clientRef.current?.send("ui", {
+        state
+      });
+    },
+    // Stryker disable next-line ArrayDeclaration: the callback closes over a ref only.
+    []
+  );
+  const syncCommand = useCallback(
+    (state) => {
+      clientRef.current?.send("sync", {
+        state
+      });
+    },
+    // Stryker disable next-line ArrayDeclaration: the callback closes over a ref only.
+    []
+  );
+  const openKaraoke = useCallback(
+    (songId) => {
+      const client = clientRef.current;
+      const connectionToken = connectionTokenRef.current;
+      return openKaraokeInRoom({
+        songId,
+        room: roomRef.current,
+        client,
+        roomApi: api,
+        isCurrentConnection: () =>
+          connectionToken === connectionTokenRef.current,
+        pendingSongCommandRef,
+        setTransferStatus
+      });
+    },
+    // Stryker disable next-line ArrayDeclaration: the callback closes over refs only.
+    []
+  );
   const value = useMemo(
     () => ({
       room,

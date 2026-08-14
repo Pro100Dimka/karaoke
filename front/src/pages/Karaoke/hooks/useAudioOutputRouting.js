@@ -60,7 +60,7 @@ export default function useAudioOutputRouting(options) {
       .then((entries) => {
         if (!active) return;
         const output = findMatchingBrowserOutput(entries, selected);
-        // Stryker disable next-line ConditionalExpression: the promise catch has the same no-route fallback; this guard avoids a needless TypeError.
+        // Stryker disable next-line ConditionalExpression: equivalent catch fallback.
         if (!output) return;
         [instrumentalRef.current, vocalsRef.current, videoRef.current]
           .filter(Boolean)
@@ -103,7 +103,7 @@ export default function useAudioOutputRouting(options) {
       return () =>
         window.removeEventListener("pagehide", releaseMonitorOnClose);
     },
-    // Stryker disable next-line ArrayDeclaration: the effect uses only stable browser and API globals.
+    // Stryker disable next-line ArrayDeclaration: browser/API globals are stable.
     []
   );
 }

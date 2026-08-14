@@ -55,9 +55,19 @@ function isTrustedIpcEvent(event, expectedWebContents) {
   );
 }
 
+function registerTrustedIpc(ipcMain, channel, getExpectedWebContents, handler) {
+  ipcMain.handle(channel, (event, ...args) => {
+    if (!isTrustedIpcEvent(event, getExpectedWebContents())) {
+      throw new Error(`Rejected IPC request: ${channel}`);
+    }
+    return handler(...args);
+  });
+}
+
 module.exports = {
   isAllowedPermissionRequest,
   getPackagedRendererUrl,
   isAllowedRendererUrl,
-  isTrustedIpcEvent
+  isTrustedIpcEvent,
+  registerTrustedIpc
 };

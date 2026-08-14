@@ -47,7 +47,7 @@ export default function useKaraokeTransport({
   const recordingSessionRef = useRef(recordingSessionId);
   const recordingStartPromiseRef = useRef(null);
   const beginOperation = (pauseSupersededSession) => {
-    const operation = Symbol();
+    const operation = Symbol(); // eslint-disable-line symbol-description
     operationRef.current = operation;
     pauseSupersededSessionRef.current = pauseSupersededSession;
     return operation;

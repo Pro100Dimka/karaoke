@@ -20,20 +20,20 @@ export default function useAsyncQueue() {
         );
       }
       pendingCountRef.current += 1;
-      // Stryker disable next-line ConditionalExpression: React discards post-unmount state updates; the guard is lifecycle hygiene.
+      // Stryker disable next-line ConditionalExpression: inert after unmount.
       if (mountedRef.current) setPending(true);
       const result = tailRef.current.then(() => Promise.resolve().then(action));
       tailRef.current = result.catch(() => {});
       return result.finally(() => {
         pendingCountRef.current = Math.max(0, pendingCountRef.current - 1);
-        // Stryker disable next-line ConditionalExpression: React discards post-unmount state updates; the guard is lifecycle hygiene.
+        // Stryker disable next-line ConditionalExpression: inert after unmount.
         if (!mountedRef.current) return;
         if (pendingCountRef.current === 0) {
           setPending(false);
         }
       });
     },
-    // Stryker disable next-line ArrayDeclaration: mountedRef has stable identity for the hook lifetime.
+    // Stryker disable next-line ArrayDeclaration: stable hook-lifetime ref.
     [mountedRef]
   );
   return {

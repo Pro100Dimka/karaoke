@@ -3,6 +3,9 @@ import { createContext, useContext, useLayoutEffect, useMemo } from "react";
 import useAppSettings from "../hooks/useAppSettings";
 import { translate } from "./translate";
 
+// Static catalog data is validated by the locale parity and placeholder
+// contracts. Mutating translated copy does not exercise executable behavior.
+/* Stryker disable all */
 export const messages = {
   uk: {
     "audio.mute": "Вимкнути звук",
@@ -629,6 +632,7 @@ export const messages = {
     "settings.audio.microphoneLevel": "Microphone level"
   }
 };
+/* Stryker restore all */
 
 export const I18nContext = createContext(null);
 

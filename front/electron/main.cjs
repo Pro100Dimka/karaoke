@@ -38,7 +38,7 @@ const {
   getPackagedRendererUrl,
   isAllowedPermissionRequest,
   isAllowedRendererUrl,
-  isTrustedIpcEvent
+  registerTrustedIpc
 } = require("./security.cjs");
 const { findMatchingSongFolder } = require("./song-folders.cjs");
 
@@ -501,12 +501,7 @@ function createWindow() {
 }
 
 function handleTrustedIpc(channel, handler) {
-  ipcMain.handle(channel, (event, ...args) => {
-    if (!isTrustedIpcEvent(event, mainWindow?.webContents)) {
-      throw new Error(`Rejected IPC request: ${channel}`);
-    }
-    return handler(...args);
-  });
+  registerTrustedIpc(ipcMain, channel, () => mainWindow?.webContents, handler);
 }
 
 handleTrustedIpc("window:minimize", () => mainWindow?.minimize());

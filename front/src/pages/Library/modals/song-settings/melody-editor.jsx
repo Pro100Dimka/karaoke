@@ -549,8 +549,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
             clock.running = true;
           }
           current = clamp(
-            clock.media +
-              ((stamp - clock.perf) / 1000) * master.playbackRate,
+            clock.media + ((stamp - clock.perf) / 1000) * master.playbackRate,
             0,
             duration
           );

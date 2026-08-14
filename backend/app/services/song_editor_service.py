@@ -109,7 +109,9 @@ def _syllables(song_map: JsonObject) -> list[Syllable]:
     return result
 
 
-def _refresh_lines(song_map: JsonObject, notes: list[JsonObject]) -> None:
+def _project_notes_by_syllable(
+    notes: list[JsonObject],
+) -> dict[int, list[JsonObject]]:
     note_by_syllable: dict[int, list[JsonObject]] = defaultdict(list)
     for note in notes:
         indices = note.get("syllable_indices")
@@ -134,6 +136,38 @@ def _refresh_lines(song_map: JsonObject, notes: list[JsonObject]) -> None:
             projected["syllable_index"] = idx
             projected["syllable_indices"] = [idx]
             note_by_syllable[idx].append(projected)
+    return note_by_syllable
+
+
+def _disjoin_syllable_overlaps(syllables: list[JsonObject]) -> None:
+    """Assign each instant in an overlap cluster to one written syllable."""
+    cursor = 0
+    while cursor < len(syllables):
+        cluster_end = float(syllables[cursor].get("end") or 0.0)
+        stop = cursor + 1
+        while stop < len(syllables):
+            candidate_start = float(syllables[stop].get("start") or 0.0)
+            if candidate_start >= cluster_end - 1e-6:
+                break
+            cluster_end = max(
+                cluster_end,
+                float(syllables[stop].get("end") or candidate_start),
+            )
+            stop += 1
+        if stop - cursor > 1:
+            cluster = syllables[cursor:stop]
+            cluster_start = min(float(item.get("start") or 0.0) for item in cluster)
+            cluster_end = max(float(item.get("end") or cluster_start) for item in cluster)
+            step = max(0.0, cluster_end - cluster_start) / len(cluster)
+            for position, item in enumerate(cluster):
+                item["start"] = round(cluster_start + position * step, 6)
+                item["end"] = round(cluster_start + (position + 1) * step, 6)
+                item["timing_source"] = "editor_notes_disjoint"
+        cursor = stop
+
+
+def _refresh_lines(song_map: JsonObject, notes: list[JsonObject]) -> None:
+    note_by_syllable = _project_notes_by_syllable(notes)
 
     syllable_lookup: dict[int, JsonObject] = {
         _safe_int(item.get("index"), i): dict(item)
@@ -159,11 +193,6 @@ def _refresh_lines(song_map: JsonObject, notes: list[JsonObject]) -> None:
         if linked_word is not None:
             linked_word.setdefault("syllables", []).append(syllable)
 
-    # A note group may span several syllables and may itself contain several
-    # adjacent notes. Projecting every note independently can then make the
-    # same instant belong to two written syllables. Karaoke text has a stricter
-    # invariant than MIDI: only one syllable may own a point in time. Split
-    # every connected overlap cluster into stable, ordered presentation slots.
     ordered_syllables = sorted(
         syllable_lookup.values(),
         key=lambda item: (
@@ -171,29 +200,7 @@ def _refresh_lines(song_map: JsonObject, notes: list[JsonObject]) -> None:
             _safe_int(item.get("index"), 0),
         ),
     )
-    cursor = 0
-    while cursor < len(ordered_syllables):
-        cluster_end = float(ordered_syllables[cursor].get("end") or 0.0)
-        stop = cursor + 1
-        while stop < len(ordered_syllables):
-            candidate_start = float(ordered_syllables[stop].get("start") or 0.0)
-            if candidate_start >= cluster_end - 1e-6:
-                break
-            cluster_end = max(
-                cluster_end,
-                float(ordered_syllables[stop].get("end") or candidate_start),
-            )
-            stop += 1
-        if stop - cursor > 1:
-            cluster = ordered_syllables[cursor:stop]
-            cluster_start = min(float(item.get("start") or 0.0) for item in cluster)
-            cluster_end = max(float(item.get("end") or cluster_start) for item in cluster)
-            step = max(0.0, cluster_end - cluster_start) / len(cluster)
-            for position, item in enumerate(cluster):
-                item["start"] = round(cluster_start + position * step, 6)
-                item["end"] = round(cluster_start + (position + 1) * step, 6)
-                item["timing_source"] = "editor_notes_disjoint"
-        cursor = stop
+    _disjoin_syllable_overlaps(ordered_syllables)
 
     for word_payload in words:
         linked = word_payload.get("syllables") or []

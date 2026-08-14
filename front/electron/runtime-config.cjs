@@ -2,6 +2,10 @@ const DEFAULT_BACKEND_URL = "http://127.0.0.1:8000";
 const DEFAULT_RENDERER_ORIGIN = "http://127.0.0.1:5173";
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 
+function hostname(url) {
+  return url.hostname.replace(/^\[|\]$/g, "");
+}
+
 function loopbackHttpUrl(value, fallback, label) {
   const raw = String(value || fallback).trim();
   let parsed;
@@ -10,7 +14,7 @@ function loopbackHttpUrl(value, fallback, label) {
   } catch {
     throw new Error(`${label} must be a valid URL`);
   }
-  if (parsed.protocol !== "http:" || !LOOPBACK_HOSTS.has(parsed.hostname)) {
+  if (parsed.protocol !== "http:" || !LOOPBACK_HOSTS.has(hostname(parsed))) {
     throw new Error(`${label} must use HTTP on a loopback host`);
   }
   return parsed.origin;
@@ -39,7 +43,7 @@ const DEV_RENDERER_ORIGIN = loopbackHttpUrl(
 module.exports = Object.freeze({
   BACKEND_URL,
   DEV_RENDERER_ORIGIN,
-  BACKEND_HOST: new URL(BACKEND_URL).hostname,
+  BACKEND_HOST: hostname(new URL(BACKEND_URL)),
   BACKEND_PORT: Number(new URL(BACKEND_URL).port || 80),
   BACKEND_REQUEST_TIMEOUT_MS: positiveInteger(
     process.env.KARAOKE_BACKEND_REQUEST_TIMEOUT_MS,

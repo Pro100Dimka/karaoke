@@ -120,7 +120,7 @@ export default function useSpeakingLevels() {
       if (!stream?.getAudioTracks?.().length) return;
 
       const audioContext = getAudioContext();
-      // Stryker disable next-line ConditionalExpression: graph creation has the same catch fallback, while this guard avoids a needless TypeError.
+      // Stryker disable next-line ConditionalExpression: equivalent catch fallback.
       if (!audioContext) return;
 
       let source;

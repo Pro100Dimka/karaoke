@@ -107,7 +107,7 @@ export default function useMelodyGuide({
       guide.context.close().catch(() => {});
       guideRef.current = null;
     },
-    // Stryker disable next-line ArrayDeclaration: guideRef has stable identity for the hook lifetime.
+    // Stryker disable next-line ArrayDeclaration: stable hook-lifetime ref.
     []
   );
 
