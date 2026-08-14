@@ -16,7 +16,9 @@ test("library boots and remains interactive", async ({ page }) => {
   await expect(page.locator(".library-song-card")).toHaveCount(2);
   await expect(page.locator(".title-bar")).toBeVisible();
 
-  const search = page.locator('input[type="search"], input[placeholder]').first();
+  const search = page
+    .locator('input[type="search"], input[placeholder]')
+    .first();
   await search.fill("A&D Voice");
   await expect(page.locator(".library-song-card")).toHaveCount(1);
   await search.fill("");
@@ -47,7 +49,9 @@ test("room creation reaches a usable dock even without microphone access", async
   await expect(page.locator(".online-room-dock-code")).not.toBeEmpty();
 });
 
-test("settings load persisted values and remain navigable", async ({ page }) => {
+test("settings load persisted values and remain navigable", async ({
+  page
+}) => {
   await page.goto("/");
   await page.locator(".app-floating-controls > .app-settings-fab").click();
   const dialog = page.locator('[role="dialog"]');
@@ -72,7 +76,50 @@ test("melody editor loads notes and supports selection", async ({ page }) => {
   await expect(editor).toBeVisible();
   await expect(editor.locator(".melody-editor-note")).toHaveCount(2);
   await editor.locator(".melody-editor-note").first().click();
-  await expect(editor.locator(".melody-editor-note.is-selected")).toHaveCount(1);
+  await expect(editor.locator(".melody-editor-note.is-selected")).toHaveCount(
+    1
+  );
   await page.keyboard.press("Control+s");
   await expect(editor).toBeVisible();
+});
+
+test("melody editor persists a merged note across reopening", async ({
+  page
+}) => {
+  const editorUrl = "/#/editor/e2e-merge-persistence";
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto(editorUrl);
+  const editor = page.locator(".melody-editor-workspace");
+  const notes = editor.locator(".melody-editor-note");
+  await expect(notes).toHaveCount(2);
+
+  await notes.first().click();
+  await notes.last().click({ modifiers: ["Control"] });
+  await expect(editor.locator(".melody-editor-note.is-selected")).toHaveCount(
+    2
+  );
+
+  const merge = editor
+    .locator(".melody-editor-tool-group.is-edit button")
+    .first();
+  await expect(merge).toBeEnabled();
+  await merge.click();
+  await expect(notes).toHaveCount(1);
+
+  await editor
+    .locator(".melody-editor-tool-group.is-nav button")
+    .nth(1)
+    .click();
+  await expect(editor.locator(".melody-editor-note.is-selected")).toHaveCount(
+    0
+  );
+  await editor
+    .locator(".melody-editor-tool-group.is-nav button")
+    .first()
+    .click();
+  await expect(page.locator(".app-shell")).toBeVisible();
+  await page.evaluate(() => {
+    window.location.hash = "/editor/e2e-merge-persistence";
+  });
+  await expect(page.locator(".melody-editor-note")).toHaveCount(1);
 });

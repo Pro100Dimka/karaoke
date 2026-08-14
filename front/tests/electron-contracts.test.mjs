@@ -5,6 +5,8 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 const require = createRequire(import.meta.url);
 const runtimeConfigPath = require.resolve("../electron/runtime-config.cjs");
 const preloadPath = require.resolve("../electron/preload.cjs");
+const securityPath = require.resolve("../electron/security.cjs");
+const songFoldersPath = require.resolve("../electron/song-folders.cjs");
 const nodeModule = require("node:module");
 const security = require("../electron/security.cjs");
 const songFolders = require("../electron/song-folders.cjs");
@@ -71,16 +73,55 @@ describe("Electron runtime configuration", () => {
     });
   });
 
+  test("accepts localhost and preserves the setting name in validation errors", () => {
+    expect(
+      loadRuntimeConfig({ KARAOKE_BACKEND_URL: "http://localhost:9000" })
+    ).toMatchObject({
+      BACKEND_URL: "http://localhost:9000",
+      BACKEND_HOST: "localhost",
+      BACKEND_PORT: 9000
+    });
+    expect(() =>
+      loadRuntimeConfig({ KARAOKE_BACKEND_STOP_GRACE_MS: "invalid" })
+    ).toThrow("KARAOKE_BACKEND_STOP_GRACE_MS must be a positive integer");
+  });
+
+  test("trims Unicode whitespace around configured URLs", () => {
+    expect(
+      loadRuntimeConfig({
+        KARAOKE_BACKEND_URL: "\u00a0http://localhost:9001\u00a0"
+      }).BACKEND_URL
+    ).toBe("http://localhost:9001");
+  });
+
   test.each([
     ["KARAOKE_BACKEND_URL", "not a URL", "must be a valid URL"],
-    ["KARAOKE_BACKEND_URL", "https://127.0.0.1", "must use HTTP"],
-    ["KARAOKE_RENDERER_ORIGIN", "http://example.test", "must use HTTP"],
-    ["KARAOKE_BACKEND_REQUEST_TIMEOUT_MS", "0", "positive integer"],
-    ["KARAOKE_BACKEND_RESTART_BASE_DELAY_MS", "-1", "positive integer"],
-    ["KARAOKE_BACKEND_RESTART_MAX_DELAY_MS", "1.5", "positive integer"],
-    ["KARAOKE_BACKEND_STOP_GRACE_MS", "Infinity", "positive integer"]
-  ])("rejects invalid %s", (name, value, message) => {
-    expect(() => loadRuntimeConfig({ [name]: value })).toThrow(message);
+    [
+      "KARAOKE_BACKEND_URL",
+      "https://127.0.0.1",
+      "must use HTTP on a loopback host"
+    ],
+    [
+      "KARAOKE_RENDERER_ORIGIN",
+      "http://example.test",
+      "must use HTTP on a loopback host"
+    ],
+    ["KARAOKE_BACKEND_REQUEST_TIMEOUT_MS", "0", "must be a positive integer"],
+    [
+      "KARAOKE_BACKEND_RESTART_BASE_DELAY_MS",
+      "-1",
+      "must be a positive integer"
+    ],
+    [
+      "KARAOKE_BACKEND_RESTART_MAX_DELAY_MS",
+      "1.5",
+      "must be a positive integer"
+    ],
+    ["KARAOKE_BACKEND_STOP_GRACE_MS", "Infinity", "must be a positive integer"]
+  ])("rejects invalid %s", (name, value, suffix) => {
+    expect(() => loadRuntimeConfig({ [name]: value })).toThrow(
+      `${name} ${suffix}`
+    );
   });
 
   test("uses defaults for empty numeric overrides", () => {
@@ -102,6 +143,18 @@ describe("renderer and permission security", () => {
     packagedIndexUrl
   };
 
+  test("exports only the audited security boundary", () => {
+    delete require.cache[securityPath];
+    // eslint-disable-next-line import/no-dynamic-require
+    expect(Object.keys(require(securityPath)).sort()).toEqual([
+      "getPackagedRendererUrl",
+      "isAllowedPermissionRequest",
+      "isAllowedRendererUrl",
+      "isTrustedIpcEvent",
+      "registerTrustedIpc"
+    ]);
+  });
+
   test("allows only the configured development origin", () => {
     expect(
       security.isAllowedRendererUrl("http://127.0.0.1:5173/room#x", development)
@@ -113,6 +166,9 @@ describe("renderer and permission security", () => {
   });
 
   test("allows only the packaged index and its hash routes", () => {
+    expect(
+      security.getPackagedRendererUrl(path.resolve("another/index.html"))
+    ).toBe(new URL(`file:///${path.resolve("another/index.html")}`).href);
     expect(security.isAllowedRendererUrl(packagedIndexUrl, packaged)).toBe(
       true
     );
@@ -124,6 +180,12 @@ describe("renderer and permission security", () => {
     ).toBe(false);
     expect(
       security.isAllowedRendererUrl("https://example.test", packaged)
+    ).toBe(false);
+    expect(
+      security.isAllowedRendererUrl("https://example.test", {
+        isDev: false,
+        packagedIndexUrl: "https://example.test/"
+      })
     ).toBe(false);
   });
 
@@ -177,6 +239,23 @@ describe("renderer and permission security", () => {
     expect(
       security.isAllowedPermissionRequest({
         ...base,
+        expectedWebContents: undefined
+      })
+    ).toBe(false);
+    expect(
+      security.isAllowedPermissionRequest({
+        ...base,
+        mediaTypes: ["video"],
+        webContents: undefined,
+        expectedWebContents: undefined
+      })
+    ).toBe(false);
+    expect(security.isTrustedIpcEvent(undefined, expectedWebContents)).toBe(
+      false
+    );
+    expect(
+      security.isAllowedPermissionRequest({
+        ...base,
         requestUrl: "file:///elsewhere/index.html"
       })
     ).toBe(false);
@@ -215,6 +294,15 @@ describe("renderer and permission security", () => {
 });
 
 describe("song folder matching", () => {
+  test("exports only normalization and safe matching", () => {
+    delete require.cache[songFoldersPath];
+    // eslint-disable-next-line import/no-dynamic-require
+    expect(Object.keys(require(songFoldersPath)).sort()).toEqual([
+      "findMatchingSongFolder",
+      "normalizeFolderName"
+    ]);
+  });
+
   test.each([
     [" 31-я весна ", "31явесна"],
     ["БОЛЬШОЙ!", "большой"],
@@ -249,13 +337,24 @@ describe("song folder matching", () => {
       songFolders.findMatchingSongFolder([directory("весна")], ["весна live"])
         .name
     ).toBe("весна");
+    expect(
+      songFolders.findMatchingSongFolder(
+        [directory("весна live"), directory("другая песня")],
+        ["нет совпадения", "весна"]
+      ).name
+    ).toBe("весна live");
+    expect(
+      songFolders.findMatchingSongFolder([directory("unrelated")], ["missing"])
+    ).toBeNull();
   });
 
   test("ignores invalid requests, files, and empty directory names", () => {
-    expect(songFolders.findMatchingSongFolder([], [null, "---"])).toBeNull();
+    expect(
+      songFolders.findMatchingSongFolder([directory("real")], [null, "---"])
+    ).toBeNull();
     expect(
       songFolders.findMatchingSongFolder(
-        [directory("song", false), directory("---")],
+        [null, {}, directory("song", false), directory("---")],
         ["song"]
       )
     ).toBeNull();

@@ -349,9 +349,9 @@ export default class OnlineVoiceMesh {
       if (typeof data === "string") {
         if (data.length > MAX_DATA_MESSAGE_LENGTH) return;
         let message;
+        // Stryker disable BlockStatement: guard rejects undefined after parse failure.
         try {
           message = JSON.parse(data);
-          // Stryker disable BlockStatement: guard rejects undefined after parse failure.
         } catch {
           return;
         }
