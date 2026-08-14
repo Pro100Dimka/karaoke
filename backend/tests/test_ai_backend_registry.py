@@ -124,6 +124,23 @@ def test_default_ctc_registry_contract():
         )
 
 
+def test_vendor_neutral_fcpe_registry_contract():
+    candidates = registry.AI_BACKEND_REGISTRY.candidates("fcpe")
+    assert [item.key for item in candidates] == [
+        "onnxruntime:cuda:fp16",
+        "pytorch:cuda:fp32",
+        "pytorch:cpu:fp32",
+    ]
+    assert candidates[0].vendor == "nvidia"
+    assert candidates[0].quality_status == "disabled"
+    assert candidates[0].benchmark_status == "corpus"
+    assert candidates[-1].vendor == "any"
+    assert candidates[0].runtime_requirements[0].name == "onnxruntime-gpu"
+    assert registry.AI_BACKEND_REGISTRY.fallback_chain("fcpe", candidates[0].key) == tuple(
+        candidates
+    )
+
+
 def test_shadow_policy_environment_and_stable_selection(monkeypatch):
     monkeypatch.setenv("KARAOKE_AI_CTC_SHADOW", "true")
     monkeypatch.setenv("KARAOKE_AI_CTC_SHADOW_RATE", "2")

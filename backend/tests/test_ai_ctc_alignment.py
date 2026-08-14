@@ -178,7 +178,7 @@ def test_load_standard_lm_fallback_and_unrelated_error(monkeypatch):
         Wav2Vec2Processor=lambda **kwargs: SimpleNamespace(**kwargs),
     )
     monkeypatch.setitem(sys.modules, "transformers", transformers)
-    monkeypatch.setattr(ctc, "select_torch_device", lambda _: "cpu")
+    monkeypatch.setattr(ctc, "select_torch_device", lambda *_: "cpu")
     aligner = ctc.CTCWordAligner()
     monkeypatch.setattr(aligner, "_resolve_model", lambda _: "model")
     assert aligner._load("ru")[0] is processor

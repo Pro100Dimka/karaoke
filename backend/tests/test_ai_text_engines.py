@@ -39,10 +39,29 @@ def test_transcriber_load_cpu_cuda_and_import_error(monkeypatch):
     fake_torch = SimpleNamespace(float16="f16", float32="f32")
     monkeypatch.setitem(sys.modules, "torch", fake_torch)
     monkeypatch.setitem(sys.modules, "qwen_asr", SimpleNamespace(Qwen3ASRModel=loader))
-    monkeypatch.setattr(text, "select_torch_device", lambda _: "cuda:0")
+    monkeypatch.setattr(text, "select_torch_device", lambda *_: "cuda:0")
     assert transcriber._load() is loaded
     assert transcriber._call_batch_size == 2 and generation.pad_token_id == 2
     assert transcriber._load() is loaded
+
+
+def test_transcriber_load_retries_cpu_after_cuda_failure(monkeypatch):
+    transcriber = text.Qwen3Transcriber("model")
+    loaded = SimpleNamespace(model=SimpleNamespace(generation_config=None))
+    loader = SimpleNamespace(from_pretrained=Mock(side_effect=[RuntimeError("CUDA OOM"), loaded]))
+    fake_torch = SimpleNamespace(float16="f16", float32="f32")
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "qwen_asr", SimpleNamespace(Qwen3ASRModel=loader))
+    monkeypatch.setattr(text, "select_torch_device", lambda *_: "cuda:0")
+    monkeypatch.setattr(text, "fallback_torch_device", lambda *_: "cpu")
+    assert transcriber._load() is loaded
+    assert loader.from_pretrained.call_args_list[-1].kwargs == {
+        "device_map": "cpu",
+        "dtype": "f32",
+        "max_inference_batch_size": 1,
+        "max_new_tokens": 256,
+    }
+    assert transcriber._device == "cpu" and transcriber._call_batch_size == 1
 
 
 def test_transcribe_batch_falls_back_to_individual_calls():
@@ -191,7 +210,7 @@ def test_forced_aligner_setup_load_and_direct_align(monkeypatch, tmp_path):
     fake_torch = SimpleNamespace(float16="f16", float32="f32")
     monkeypatch.setitem(sys.modules, "torch", fake_torch)
     monkeypatch.setitem(sys.modules, "qwen_asr", SimpleNamespace(Qwen3ForcedAligner=loader))
-    monkeypatch.setattr(text, "select_torch_device", lambda _: "cpu")
+    monkeypatch.setattr(text, "select_torch_device", lambda *_: "cpu")
     loaded = aligner._load()
     assert aligner._load() is loaded
     assert loader.from_pretrained.call_args.kwargs["dtype"] == "f32"

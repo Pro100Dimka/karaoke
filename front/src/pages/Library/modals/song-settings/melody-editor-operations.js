@@ -1,24 +1,35 @@
-const textOf = (note, syllablesByIndex) => {
-  if (typeof note.editor_text === "string" && note.editor_text.length)
-    return note.editor_text;
-  const idx = Number(note.syllable_index);
-  return Number.isFinite(idx)
-    ? String(syllablesByIndex.get(idx)?.text || "")
-    : "";
-};
-const wordOf = (note, syllablesByIndex) => {
-  if (note.word_index != null && note.word_index !== "")
-    return Number(note.word_index);
-  const idx = Number(note.syllable_index);
-  return Number.isFinite(idx)
-    ? Number(syllablesByIndex.get(idx)?.word_index)
-    : null;
-};
-const sourceIndices = (note) => {
+export const syllableIndicesForNote = (note) => {
   const raw = Array.isArray(note.syllable_indices)
     ? note.syllable_indices
     : [note.syllable_index];
   return [...new Set(raw.map(Number).filter(Number.isFinite))];
+};
+const linkedText = (note, syllablesByIndex, include = () => true) => {
+  let text = "";
+  let previousWord;
+  for (const index of syllableIndicesForNote(note)) {
+    if (!include(index)) continue;
+    const syllable = syllablesByIndex.get(index);
+    const fragment = String(syllable?.text || "");
+    if (!fragment) continue;
+    const word = Number(syllable?.word_index);
+    if (text && Number.isFinite(word) && word !== previousWord) text += " ";
+    text += fragment;
+    previousWord = word;
+  }
+  return text;
+};
+const textOf = (note, syllablesByIndex) =>
+  typeof note.editor_text === "string" && note.editor_text.length
+    ? note.editor_text
+    : linkedText(note, syllablesByIndex);
+const wordOf = (note, syllablesByIndex) => {
+  if (note.word_index != null && note.word_index !== "")
+    return Number(note.word_index);
+  const idx = syllableIndicesForNote(note)[0];
+  return Number.isFinite(idx)
+    ? Number(syllablesByIndex.get(idx)?.word_index)
+    : null;
 };
 const byStartEnd = (a, b) => a.start - b.start || a.end - b.end;
 const byStartPitch = (a, b) => a.start - b.start || a.midi_note - b.midi_note;
@@ -56,7 +67,9 @@ const combinedContent = (notes, syllablesByIndex) => {
   }
   return {
     editor_text: editorText,
-    syllable_indices: [...new Set(notes.flatMap(sourceIndices))].sort(ascending)
+    syllable_indices: [...new Set(notes.flatMap(syllableIndicesForNote))].sort(
+      ascending
+    )
   };
 };
 
@@ -67,10 +80,11 @@ export function displayTextForNote(
 ) {
   if (typeof note.editor_text === "string" && note.editor_text.length)
     return note.editor_text;
-  const idx = Number(note.syllable_index);
-  if (!Number.isFinite(idx) || labelOwnerBySyllable.get(idx) !== note._id)
-    return "";
-  return String(syllablesByIndex.get(idx)?.text || "");
+  return linkedText(
+    note,
+    syllablesByIndex,
+    (index) => labelOwnerBySyllable.get(index) === note._id
+  );
 }
 
 export function mergeSelectedNotes(notes, selectedIds, syllablesByIndex) {

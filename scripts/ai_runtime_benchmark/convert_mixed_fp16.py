@@ -10,7 +10,9 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-DEPS = Path(os.getenv("KARAOKE_BENCHMARK_DEPS", ROOT.parent / ".karaoke-ai-benchmark-deps"))
+DEPS = Path(
+    os.getenv("KARAOKE_BENCHMARK_DEPS", ROOT.parent / ".karaoke-ai-benchmark-deps")
+)
 sys.path.append(str(DEPS / "ort-gpu"))
 
 import onnx

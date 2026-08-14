@@ -8,11 +8,13 @@ import os
 import shutil
 import sys
 import time
+from difflib import SequenceMatcher
 from pathlib import Path
 
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
+BUILD = ROOT / "build/fcpe-shadow-corpus"
 DEPS = Path(
     os.getenv("KARAOKE_BENCHMARK_DEPS", ROOT.parent / ".karaoke-ai-benchmark-deps")
 )
@@ -60,7 +62,6 @@ def _reset(source: Path, target: Path) -> None:
 
 def _install_ort_estimator(estimator):
     import torch
-
     from AI.audio import load_mono
     from AI.engines.fcpe_backends import OrtCudaFCPEBackend
     from AI.models import PitchFrame
@@ -88,7 +89,7 @@ def _install_ort_estimator(estimator):
         output = []
         for index, value in enumerate(result.f0):
             hz = min(float(value), estimator.fmax)
-            start = min(len(y), int(round(index * estimator.hop)))
+            start = min(len(y), round(index * estimator.hop))
             end = min(len(y), start + energy_window)
             energy = (
                 float(np.sqrt(np.mean(np.square(y[start:end])) + 1e-12))
@@ -152,9 +153,30 @@ def _note_comparison(left: Path, right: Path, key: str) -> dict[str, object]:
     production = left_data[key] if isinstance(left_data, dict) else left_data
     candidate = right_data[key] if isinstance(right_data, dict) else right_data
     pitch, cents, onset, offset = [], [], [], []
-    for a, b in zip(production, candidate):
-        if "midi" in a and "midi" in b:
-            pitch.append(abs(float(a["midi"]) - float(b["midi"])))
+    left_keys = [
+        (item.get("word_index"), item.get("syllable_index"), item.get("midi_note"))
+        for item in production
+    ]
+    right_keys = [
+        (item.get("word_index"), item.get("syllable_index"), item.get("midi_note"))
+        for item in candidate
+    ]
+    pairs = []
+    if not any(
+        any(value is not None for value in key) for key in left_keys + right_keys
+    ):
+        pairs = list(zip(production, candidate))
+    else:
+        for block in SequenceMatcher(
+            None, left_keys, right_keys, autojunk=False
+        ).get_matching_blocks():
+            pairs.extend(
+                (production[block.a + index], candidate[block.b + index])
+                for index in range(block.size)
+            )
+    for a, b in pairs:
+        if "midi_note" in a and "midi_note" in b:
+            pitch.append(abs(float(a["midi_note"]) - float(b["midi_note"])))
         if float(a.get("frequency", 0)) > 0 and float(b.get("frequency", 0)) > 0:
             cents.append(
                 abs(1200 * np.log2(float(a["frequency"]) / float(b["frequency"])))
@@ -175,6 +197,9 @@ def _note_comparison(left: Path, right: Path, key: str) -> dict[str, object]:
         "production_count": len(production),
         "candidate_count": len(candidate),
         "count_delta": len(candidate) - len(production),
+        "matched_items": len(pairs),
+        "unmatched_production": len(production) - len(pairs),
+        "unmatched_candidate": len(candidate) - len(pairs),
         "pitch_max_semitones": max(pitch, default=0.0),
         "frequency_max_cents": max(cents, default=0.0),
         "onset_max_ms": max(onset, default=0.0) * 1000,

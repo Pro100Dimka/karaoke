@@ -107,6 +107,7 @@ class VocalNote(TimeSpan):
     word_index: int | None = None
     syllable_index: int | None = None
     cents: tuple[tuple[float, float], ...] = ()
+    syllable_indices: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         super(VocalNote, self).__post_init__()
@@ -142,6 +143,12 @@ class VocalNote(TimeSpan):
             None if self.syllable_index is None else int(self.syllable_index),
         )
         object.__setattr__(self, "cents", tuple(normalized))
+        linked = tuple(dict.fromkeys(int(value) for value in self.syllable_indices))
+        if any(value < 0 for value in linked):
+            raise ValueError("syllable_indices cannot contain negative values")
+        if self.syllable_index is not None and int(self.syllable_index) not in linked:
+            linked = (int(self.syllable_index), *linked)
+        object.__setattr__(self, "syllable_indices", linked)
 
 
 @dataclass(slots=True)

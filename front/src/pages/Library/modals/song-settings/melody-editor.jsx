@@ -40,7 +40,8 @@ import {
   deleteNotesAndTransferText,
   displayTextForNote,
   mergeSelectedNotes,
-  resizeBounds
+  resizeBounds,
+  syllableIndicesForNote
 } from "./melody-editor-operations";
 
 const BLACK_KEYS = new Set([1, 3, 6, 8, 10]);
@@ -247,16 +248,15 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
   const labelOwnerBySyllable = useMemo(() => {
     const owners = new Map();
     notes.forEach((note) => {
-      if (note.syllable_index == null || note.syllable_index === "") return;
-      const index = Number(note.syllable_index);
-      if (!Number.isFinite(index)) return;
-      const current = owners.get(index);
-      if (
-        !current ||
-        note.start < current.start ||
-        (note.start === current.start && note.end < current.end)
-      ) {
-        owners.set(index, note);
+      for (const index of syllableIndicesForNote(note)) {
+        const current = owners.get(index);
+        if (
+          !current ||
+          note.start < current.start ||
+          (note.start === current.start && note.end < current.end)
+        ) {
+          owners.set(index, note);
+        }
       }
     });
     return new Map([...owners].map(([index, note]) => [index, note._id]));

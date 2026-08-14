@@ -89,7 +89,7 @@ def test_positive_duration_handles_invalid_values():
     assert timeline._positive_duration({"start": "bad", "end": 1}) == 0
 
 
-def test_merge_display_notes_filters_merges_and_keeps_groups():
+def test_display_notes_filter_invalid_events_without_merging_musical_notes():
     notes = [
         {"start": 0, "end": 0.1, "midi": 60, "syllable_index": 0},
         {"start": 0.1, "end": 0.2, "midi": 60, "syllable_index": 0},
@@ -100,8 +100,12 @@ def test_merge_display_notes_filters_merges_and_keeps_groups():
         {"start": 3, "end": 4, "midi": "bad"},
     ]
     merged = timeline._merge_display_notes(notes)
-    assert len(merged) == 3
-    assert all(item["display_source"] == "syllable_game_notes" for item in merged)
+    assert len(merged) == 5
+    assert [(item["start"], item["end"], item["midi_note"]) for item in merged[:2]] == [
+        (0, 0.1, 60),
+        (0.1, 0.2, 60),
+    ]
+    assert all(item["display_source"] == "acoustic_game_note" for item in merged)
     assert timeline._merge_display_notes([]) == []
     leading_fragment = timeline._merge_display_notes(
         [
@@ -110,7 +114,7 @@ def test_merge_display_notes_filters_merges_and_keeps_groups():
             {"start": 1.1, "end": 2.1, "midi": 70, "syllable_index": 1},
         ]
     )
-    assert leading_fragment[0]["start"] == 0
+    assert len(leading_fragment) == 3
 
 
 def test_build_karaoke_song_map_links_authoritative_timing():
@@ -120,7 +124,7 @@ def test_build_karaoke_song_map_links_authoritative_timing():
         Syllable(0.5, 1, "lo", 0, 1),
         Syllable(2, 3, "world", 1, 2),
     ]
-    notes = [VocalNote(0.1, 0.4, 60, syllable_index=0), VocalNote(0.6, 0.9, 62, syllable_index=1)]
+    notes = [VocalNote(0.1, 0.9, 60, syllable_index=0, syllable_indices=(0, 1))]
     result = timeline.build_karaoke_song_map(
         lyrics_text="hello\nworld\nunused",
         words=words,
@@ -132,12 +136,21 @@ def test_build_karaoke_song_map_links_authoritative_timing():
         ai_build_id="build",
         note_decoder_version="decoder",
     )
-    assert result["lines"][0]["words"][0]["timing_source"] == "syllables_display_notes"
+    first_word = result["lines"][0]["words"][0]
+    assert (first_word["start"], first_word["end"]) == (0, 1)
+    assert [(item["start"], item["end"]) for item in first_word["syllables"]] == [
+        (0, 0.5),
+        (0.5, 1),
+    ]
+    assert [len(item["display_notes"]) for item in first_word["syllables"]] == [1, 1]
+    assert first_word["syllables"][0]["display_notes"][0]["syllable_indices"] == (0, 1)
+    assert first_word["timing_source"] == "word_alignment"
+    assert first_word["syllables"][0]["timing_source"] == "syllable_alignment"
     assert result["lines"][1]["words"][0]["syllables"][0]["timing_source"] == "syllable_alignment"
     assert len(result["lines"]) == 2
     assert result["display_stats"] == {
-        "game_note_count": 2,
-        "display_note_count": 2,
+        "game_note_count": 1,
+        "display_note_count": 1,
         "syllable_count": 3,
     }
 

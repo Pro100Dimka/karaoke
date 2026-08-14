@@ -293,6 +293,7 @@ def main() -> int:
         "--output", type=Path, default=BUILD / "fcpe-corpus-results.json"
     )
     parser.add_argument("--unload", action="store_true")
+    parser.add_argument("--cases", nargs="*")
     args = parser.parse_args()
     os.environ["KARAOKE_AI_FCPE_ONNX"] = str(
         ROOT / "build/ai-runtime-benchmark/artifacts/fcpe-fp16.onnx"
@@ -301,8 +302,12 @@ def main() -> int:
 
     estimator = FCPEPitchEstimator()
     backend = OrtCudaFCPEBackend()
+    selected = set(args.cases or ())
+    corpus = tuple(
+        case for case in prepare_cases() if not selected or case.name in selected
+    )
     cases = []
-    for case in prepare_cases():
+    for case in corpus:
         cases.append(run_case(case, estimator, backend, torch))
         if args.unload:
             backend.release()
@@ -312,9 +317,7 @@ def main() -> int:
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "resident": not args.unload,
         "cases": cases,
-        "sources": [
-            asdict(case) | {"source": str(case.source)} for case in prepare_cases()
-        ],
+        "sources": [asdict(case) | {"source": str(case.source)} for case in corpus],
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(

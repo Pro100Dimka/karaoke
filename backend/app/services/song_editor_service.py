@@ -139,33 +139,6 @@ def _project_notes_by_syllable(
     return note_by_syllable
 
 
-def _disjoin_syllable_overlaps(syllables: list[JsonObject]) -> None:
-    """Assign each instant in an overlap cluster to one written syllable."""
-    cursor = 0
-    while cursor < len(syllables):
-        cluster_end = float(syllables[cursor].get("end") or 0.0)
-        stop = cursor + 1
-        while stop < len(syllables):
-            candidate_start = float(syllables[stop].get("start") or 0.0)
-            if candidate_start >= cluster_end - 1e-6:
-                break
-            cluster_end = max(
-                cluster_end,
-                float(syllables[stop].get("end") or candidate_start),
-            )
-            stop += 1
-        if stop - cursor > 1:
-            cluster = syllables[cursor:stop]
-            cluster_start = min(float(item.get("start") or 0.0) for item in cluster)
-            cluster_end = max(float(item.get("end") or cluster_start) for item in cluster)
-            step = max(0.0, cluster_end - cluster_start) / len(cluster)
-            for position, item in enumerate(cluster):
-                item["start"] = round(cluster_start + position * step, 6)
-                item["end"] = round(cluster_start + (position + 1) * step, 6)
-                item["timing_source"] = "editor_notes_disjoint"
-        cursor = stop
-
-
 def _refresh_lines(song_map: JsonObject, notes: list[JsonObject]) -> None:
     note_by_syllable = _project_notes_by_syllable(notes)
 
@@ -184,30 +157,14 @@ def _refresh_lines(song_map: JsonObject, notes: list[JsonObject]) -> None:
     for sid, syllable in syllable_lookup.items():
         linked = sorted(note_by_syllable.get(sid, []), key=lambda n: (n["start"], n["end"]))
         syllable["display_notes"] = [dict(n) for n in linked]
-        if linked:
-            syllable["start"] = min(n["start"] for n in linked)
-            syllable["end"] = max(n["end"] for n in linked)
-            syllable["timing_source"] = "editor_notes"
+        syllable["timing_source"] = "syllable_alignment"
         word_index = _safe_int(syllable.get("word_index"), -1)
         linked_word = word_lookup.get(word_index)
         if linked_word is not None:
             linked_word.setdefault("syllables", []).append(syllable)
 
-    ordered_syllables = sorted(
-        syllable_lookup.values(),
-        key=lambda item: (
-            float(item.get("start") or 0.0),
-            _safe_int(item.get("index"), 0),
-        ),
-    )
-    _disjoin_syllable_overlaps(ordered_syllables)
-
     for word_payload in words:
-        linked = word_payload.get("syllables") or []
-        if linked:
-            word_payload["start"] = min(float(s["start"]) for s in linked)
-            word_payload["end"] = max(float(s["end"]) for s in linked)
-            word_payload["timing_source"] = "editor_syllables"
+        word_payload["timing_source"] = "word_alignment"
 
     song_map["syllables"] = [syllable_lookup[key] for key in sorted(syllable_lookup)]
     song_map["words"] = words

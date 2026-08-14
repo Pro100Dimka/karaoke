@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import config
 from AI import service as ai_service
 from app.routers import analysis, application, audio, cache, diagnostics, player, recording, songs
-from app.services import audio_service, recording_service, storage_migration
+from app.services import audio_service, pipeline_service, recording_service, storage_migration
 from database import init_db
 
 _BENIGN_WINDOWS_DISCONNECTS = {64, 109, 232, 10053, 10054}
@@ -51,6 +51,8 @@ async def lifespan(_app: FastAPI):
     loop.set_exception_handler(handle_loop_exception)
     init_db()
     storage_migration.migrate_legacy_song_storage()
+    for line in pipeline_service.format_runtime_plan(pipeline_service._configure_ai_runtime()):
+        print(f"[backend] AI runtime: {line}", flush=True)
     try:
         yield
     finally:

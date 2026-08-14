@@ -52,7 +52,14 @@ def test_pipeline_health_combines_runtime_components(monkeypatch):
     monkeypatch.setattr(
         ai_bridge,
         "get_service",
-        Mock(return_value=SimpleNamespace(health=lambda: {"separation_configured": True})),
+        Mock(
+            return_value=SimpleNamespace(
+                health=lambda: {
+                    "separation_configured": True,
+                    "runtime": {"selected": {"pitch": "cpu"}},
+                }
+            )
+        ),
     )
     assert diagnostics_service.pipeline_health() == {
         "ffmpeg_available": True,
@@ -61,9 +68,11 @@ def test_pipeline_health_combines_runtime_components(monkeypatch):
         "torch_available": True,
         "cuda_available": False,
         "ai_dir_found": True,
+        "runtime": {"selected": {"pitch": "cpu"}},
     }
     ai_bridge.get_service.side_effect = RuntimeError("AI unavailable")
-    assert diagnostics_service.pipeline_health()["demucs_available"] is False
+    unavailable = diagnostics_service.pipeline_health()
+    assert unavailable["demucs_available"] is False and unavailable["runtime"] is None
 
 
 def test_versions_reports_components_and_missing_packages(monkeypatch):

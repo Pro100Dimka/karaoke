@@ -94,6 +94,55 @@ def test_fuse_pitch_builds_phrase_local_path(monkeypatch):
     assert result[1].frequency in {220, 440}
 
 
+def _run_synthetic_fusion(monkeypatch, frames, yin, periodicity):
+    fake = SimpleNamespace(yin=lambda *_args, **_kwargs: np.asarray(yin, dtype=float))
+    monkeypatch.setitem(sys.modules, "librosa", fake)
+    monkeypatch.setattr(post, "load_mono", lambda *_: (np.ones(20_000), 8_000))
+    monkeypatch.setattr(post, "_normalized_periodicity", lambda _window, lag: periodicity(lag))
+    return post.fuse_pitch_with_yin(
+        frames,
+        "x",
+        sample_rate=8_000,
+        fmin_hz=55,
+        fmax_hz=1_400,
+    )
+
+
+def test_fusion_keeps_stable_fcpe_e4_over_yin_e2(monkeypatch):
+    frames = [frame(i * 0.01, 329.63, confidence=0.7) for i in range(30)]
+    result = _run_synthetic_fusion(
+        monkeypatch,
+        frames,
+        [82.41] * len(frames),
+        lambda lag: 0.68 if lag >= 90 else 0.62 if lag <= 30 else 0.1,
+    )
+    assert all(item.frequency == pytest.approx(329.63) for item in result)
+
+
+def test_brief_yin_subharmonics_do_not_capture_stable_fcpe_run(monkeypatch):
+    frames = [frame(i * 0.01, 155.56, confidence=0.65) for i in range(30)]
+    yin = [155.56] * len(frames)
+    yin[10:15] = [77.78] * 5
+    result = _run_synthetic_fusion(
+        monkeypatch,
+        frames,
+        yin,
+        lambda lag: 0.69 if lag >= 95 else 0.64 if 45 <= lag <= 55 else 0.1,
+    )
+    assert all(item.frequency == pytest.approx(155.56) for item in result)
+
+
+def test_strong_yin_can_correct_unstable_low_confidence_fcpe(monkeypatch):
+    frames = [frame(i * 0.01, 220 if i % 2 else 330, confidence=0.1) for i in range(30)]
+    result = _run_synthetic_fusion(
+        monkeypatch,
+        frames,
+        [110] * len(frames),
+        lambda lag: 0.9 if lag >= 70 else 0.25,
+    )
+    assert sum(item.frequency == pytest.approx(110) for item in result) >= 25
+
+
 def test_pitch_math_and_frame_step():
     assert post._hz(post._midi(440)) == pytest.approx(440)
     assert post._frame_step([]) == 0.01

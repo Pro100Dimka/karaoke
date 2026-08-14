@@ -20,7 +20,7 @@ from .ctc_backends import (
     PyTorchCTCBackend,
     describe_inference,
 )
-from .device import select_torch_device
+from .device import fallback_torch_device, select_torch_device
 
 _CLEAN = re.compile(r"[^\w]+", re.UNICODE)
 
@@ -358,7 +358,8 @@ class CTCWordAligner:
             ) from exc
 
         self.release()
-        self._device = select_torch_device(torch)
+        model_key = f"ctc_{code}"
+        self._device = select_torch_device(torch, model_key)
 
         # Some local CTC checkpoints (notably *-with-small-lm models) advertise
         # Wav2Vec2ProcessorWithLM in their metadata. AutoProcessor then requires
@@ -386,7 +387,14 @@ class CTCWordAligner:
 
         with profile_operation("model.load.ctc"):
             self._model = AutoModelForCTC.from_pretrained(model_path, local_files_only=True)
-            self._model.eval().to(self._device)
+            try:
+                self._model.eval().to(self._device)
+            except Exception as exc:
+                fallback = fallback_torch_device(model_key, self._device, exc)
+                if fallback is None:
+                    raise
+                self._device = fallback
+                self._model.eval().to(fallback)
         self._loaded_key = model_path
         return self._processor, self._model
 
@@ -482,12 +490,20 @@ class CTCWordAligner:
                 shadow_values = inputs.input_values.detach().cpu().numpy()
             except Exception as exc:  # noqa: BLE001 - shadow must never affect production
                 self._record_shadow_failure(exc)
-        with profile_operation("transfer.cpu_to_gpu.ctc", byte_count=audio.nbytes):
-            input_values = inputs.input_values.to(self._device)
-        attention_mask = getattr(inputs, "attention_mask", None)
-        if attention_mask is not None:
-            attention_mask = attention_mask.to(self._device)
-        logits = PyTorchCTCBackend(model, self._device).infer(input_values, attention_mask)
+        try:
+            with profile_operation("transfer.cpu_to_gpu.ctc", byte_count=audio.nbytes):
+                input_values = inputs.input_values.to(self._device)
+            attention_mask = getattr(inputs, "attention_mask", None)
+            if attention_mask is not None:
+                attention_mask = attention_mask.to(self._device)
+            logits = PyTorchCTCBackend(model, self._device).infer(input_values, attention_mask)
+        except Exception as exc:
+            code = _language_code(language, text)
+            fallback = fallback_torch_device(f"ctc_{code}", self._device, exc)
+            if fallback is None:
+                raise
+            self.release()
+            return self._infer(audio, sample_rate, language, text)
         if shadow_values is not None:
             code = _language_code(language, text)
             try:

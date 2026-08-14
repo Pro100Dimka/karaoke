@@ -44,11 +44,13 @@ def _ai_package_available() -> bool:
 
 def pipeline_health() -> dict:
     torch_available, cuda_available, _ = _torch_info()
+    runtime = None
     try:
         from app.services import ai_bridge
 
         health = ai_bridge.get_service().health()
         separator_available = bool(health.get("separation_configured"))
+        runtime = health.get("runtime")
     except Exception:
         separator_available = False
 
@@ -61,6 +63,7 @@ def pipeline_health() -> dict:
         "torch_available": torch_available,
         "cuda_available": cuda_available,
         "ai_dir_found": _ai_package_available(),
+        "runtime": runtime,
     }
 
 

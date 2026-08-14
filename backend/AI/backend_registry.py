@@ -275,10 +275,10 @@ def _fcpe_specs() -> tuple[BackendSpec, ...]:
             300,
             MemoryRequirements(1_800_000_000, 1_900_000_000),
             (ArtifactRequirement("onnx", "KARAOKE_AI_FCPE_ONNX"),),
-            common | {"optional-runtime", "shadow-only"},
+            common | {"optional-runtime", "shadow-only", "corpus-quality-rejected"},
             shapes,
-            "shadow",
-            "isolated",
+            "disabled",
+            "corpus",
             (cuda_key,),
             "nvidia",
             (RuntimeRequirement("onnxruntime-gpu", "1.22"),),
@@ -320,7 +320,91 @@ def _fcpe_specs() -> tuple[BackendSpec, ...]:
     )
 
 
+def _pytorch_specs(
+    model: str,
+    *,
+    cuda_precision: str,
+    artifact: ArtifactRequirement,
+    capabilities: frozenset[str],
+    cuda_memory: MemoryRequirements,
+    cpu_memory: MemoryRequirements,
+) -> tuple[BackendSpec, ...]:
+    """Describe an existing quality-equivalent PyTorch CUDA/CPU pair."""
+    shapes = SupportedShapes(("batch", "time"), min_samples=1)
+    cpu_key = "pytorch:cpu:fp32"
+    return (
+        BackendSpec(
+            model,
+            "pytorch",
+            "cuda",
+            cuda_precision,
+            lambda: _pytorch_availability(True),
+            200,
+            cuda_memory,
+            (artifact,),
+            capabilities | {"production"},
+            shapes,
+            "baseline",
+            "baseline",
+            (cpu_key,),
+            "nvidia",
+            (RuntimeRequirement("pytorch", "2.8"),),
+        ),
+        BackendSpec(
+            model,
+            "pytorch",
+            "cpu",
+            "fp32",
+            lambda: _pytorch_availability(False),
+            100,
+            cpu_memory,
+            (artifact,),
+            capabilities | {"universal-fallback", "production"},
+            shapes,
+            "baseline",
+            "baseline",
+            (),
+            "any",
+            (RuntimeRequirement("pytorch", "2.8"),),
+        ),
+    )
+
+
+def _production_specs() -> tuple[BackendSpec, ...]:
+    return (
+        *_pytorch_specs(
+            "separation",
+            cuda_precision="fp32",
+            artifact=ArtifactRequirement("pytorch-checkpoint", get_model("roformer").relative_path),
+            capabilities=frozenset({"source-separation", "dynamic-time", "batch-1"}),
+            cuda_memory=MemoryRequirements(2_000_000_000, 4_000_000_000),
+            cpu_memory=MemoryRequirements(5_000_000_000, 0),
+        ),
+        *_pytorch_specs(
+            "asr",
+            cuda_precision="fp16",
+            artifact=ArtifactRequirement("pytorch-snapshot", get_model("asr").relative_path),
+            capabilities=frozenset({"speech-recognition", "dynamic-time", "batch-1-2"}),
+            cuda_memory=MemoryRequirements(3_500_000_000, 5_500_000_000),
+            cpu_memory=MemoryRequirements(7_000_000_000, 0),
+        ),
+        *_pytorch_specs(
+            "aligner",
+            cuda_precision="fp16",
+            artifact=ArtifactRequirement("pytorch-snapshot", get_model("aligner").relative_path),
+            capabilities=frozenset({"forced-alignment", "dynamic-time", "batch-1"}),
+            cuda_memory=MemoryRequirements(2_500_000_000, 3_500_000_000),
+            cpu_memory=MemoryRequirements(5_000_000_000, 0),
+        ),
+    )
+
+
 AI_BACKEND_REGISTRY = BackendRegistry(
-    (*_fcpe_specs(), *_ctc_specs("ctc_ru"), *_ctc_specs("ctc_uk"))
+    (
+        *_production_specs(),
+        *_fcpe_specs(),
+        *_ctc_specs("ctc_ru"),
+        *_ctc_specs("ctc_uk"),
+    )
 )
 CTC_BACKEND_REGISTRY = AI_BACKEND_REGISTRY

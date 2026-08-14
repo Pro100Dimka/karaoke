@@ -176,6 +176,38 @@ test("editor note labels use exact ownership and edited-text precedence", () => 
   ).toBe("");
 });
 
+test("editor note labels expand ordered many-to-many syllable associations", () => {
+  const syllables = new Map([
+    [2, { text: "ши", word_index: 1 }],
+    [3, { text: "ро", word_index: 1 }],
+    [4, { text: "кий", word_index: 1 }],
+    [5, { text: "го", word_index: 2 }],
+    [6, { text: "род", word_index: 2 }],
+    [7, { text: "ма", word_index: 3 }],
+    [8, { text: "гис", word_index: 3 }]
+  ]);
+  const note = {
+    _id: "phrase",
+    start: 7.12,
+    end: 7.52,
+    midi_note: 55,
+    syllable_index: 6,
+    syllable_indices: [2, 3, 4, 5, 6, 7, 8]
+  };
+  const musicalFields = [note.start, note.end, note.midi_note];
+  const owners = new Map(
+    note.syllable_indices.map((index) => [index, note._id])
+  );
+
+  expect(operations.syllableIndicesForNote(note)).toEqual([
+    2, 3, 4, 5, 6, 7, 8
+  ]);
+  expect(operations.displayTextForNote(note, syllables, owners)).toBe(
+    "широкий город магис"
+  );
+  expect([note.start, note.end, note.midi_note]).toEqual(musicalFields);
+});
+
 test("merging notes preserves timing, pitch, sources, ordering and text", () => {
   const notes = [
     editorNote("right", 3, 5, {

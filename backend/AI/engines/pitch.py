@@ -10,7 +10,7 @@ from ..errors import EngineUnavailableError
 from ..models import PitchFrame
 from ..profiler import profile_operation
 from .base import PitchEstimator
-from .device import select_torch_device
+from .device import fallback_torch_device, select_torch_device
 from .fcpe_backends import OrtCudaFCPEBackend, describe_fcpe_inference
 
 
@@ -58,10 +58,30 @@ class FCPEPitchEstimator(PitchEstimator):
         except ImportError as exc:
             raise EngineUnavailableError("Install torch and torchfcpe for FCPE") from exc
         if self._model is None:
-            self._device = select_torch_device(torch)
+            self._device = select_torch_device(torch, "fcpe")
             with profile_operation("model.load.fcpe"):
-                self._model = torchfcpe.spawn_bundled_infer_model(device=self._device)
+                try:
+                    self._model = torchfcpe.spawn_bundled_infer_model(device=self._device)
+                except Exception as exc:
+                    fallback = fallback_torch_device("fcpe", self._device, exc)
+                    if fallback is None:
+                        raise
+                    self._device = fallback
+                    self._model = torchfcpe.spawn_bundled_infer_model(device=fallback)
         return torch, self._model
+
+    @staticmethod
+    def _infer(model, tensor, kwargs):
+        try:
+            return model.infer(tensor, **kwargs)
+        except TypeError:
+            # Compatibility with older torchfcpe releases.
+            compatible = {
+                key: value
+                for key, value in kwargs.items()
+                if key in {"sr", "decoder_mode", "threshold"}
+            }
+            return model.infer(tensor, **compatible)
 
     def estimate(self, audio):
         torch, model = self._load_model()
@@ -93,15 +113,21 @@ class FCPEPitchEstimator(PitchEstimator):
         }
         with torch.inference_mode(), profile_operation("inference.fcpe"):
             try:
-                result = model.infer(tensor, **kwargs)
-            except TypeError:
-                # Compatibility with older torchfcpe releases.
-                compatible = {
-                    key: value
-                    for key, value in kwargs.items()
-                    if key in {"sr", "decoder_mode", "threshold"}
-                }
-                result = model.infer(tensor, **compatible)
+                result = self._infer(model, tensor, kwargs)
+            except Exception as exc:
+                fallback = fallback_torch_device("fcpe", self._device, exc)
+                if fallback is None:
+                    raise
+                self._model = None
+                torch, model = self._load_model()
+                with profile_operation("transfer.cpu_to_gpu.fcpe", byte_count=y.nbytes):
+                    tensor = (
+                        torch.from_numpy(np.asarray(y, dtype=np.float32))
+                        .unsqueeze(0)
+                        .unsqueeze(-1)
+                        .to(fallback)
+                    )
+                result = self._infer(model, tensor, kwargs)
 
         if isinstance(result, (tuple, list)):
             f0_tensor = result[0]

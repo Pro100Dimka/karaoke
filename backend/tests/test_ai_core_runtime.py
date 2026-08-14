@@ -9,8 +9,9 @@ import pytest
 
 import AI
 from AI import artifacts, run_all, service
+from AI import runtime as ai_runtime
 from AI.engines import device, registry
-from AI.errors import ConfigurationError, EngineUnavailableError
+from AI.errors import ConfigurationError
 from AI.utils import io
 
 
@@ -31,19 +32,20 @@ def test_lazy_ai_exports_and_unknown_attribute():
     ],
 )
 def test_device_selection(monkeypatch, preference, cuda, expected):
+    ai_runtime.reset_runtime_for_tests()
     monkeypatch.setenv("SONGAPP_DEVICE", preference)
     torch = SimpleNamespace(cuda=SimpleNamespace(is_available=lambda: cuda))
     assert device.select_torch_device(torch) == expected
 
 
-def test_device_selection_rejects_unavailable_or_unknown(monkeypatch):
+def test_device_selection_safely_falls_back_for_unavailable_or_unknown(monkeypatch):
     torch = SimpleNamespace(cuda=SimpleNamespace(is_available=lambda: False))
     monkeypatch.setenv("SONGAPP_DEVICE", "cuda")
-    with pytest.raises(EngineUnavailableError, match="cannot access"):
-        device.select_torch_device(torch)
+    ai_runtime.reset_runtime_for_tests()
+    assert device.select_torch_device(torch) == "cpu"
     monkeypatch.setenv("SONGAPP_DEVICE", "metal")
-    with pytest.raises(EngineUnavailableError, match="Unsupported"):
-        device.select_torch_device(torch)
+    ai_runtime.reset_runtime_for_tests()
+    assert device.select_torch_device(torch) == "cpu"
 
 
 def test_default_engine_registry_uses_config(monkeypatch):

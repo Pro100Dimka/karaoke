@@ -14,6 +14,7 @@ from .models import PitchFrame
 # folding unsupported octave/harmonic detours back onto the lead trajectory.
 PITCH_STABILIZER_VERSION = "fcpe-yin-consensus-v8-adaptive-analysis-audit"
 _HARMONIC_SHIFTS = (0.0, -12.0, 12.0, -19.01955, 19.01955, -24.0, 24.0)
+_SUBHARMONIC_INTERVALS = (12.0, 19.01955, 24.0)
 
 
 def _normalized_periodicity(signal: np.ndarray, lag: int) -> float:
@@ -156,6 +157,36 @@ def fuse_pitch_with_yin(
 
     half_window = max(256, int(round(sr * 0.025)))
 
+    def fcpe_run_strength(index: int) -> float:
+        frame = frames[index]
+        if not frame.voiced or frame.frequency <= 0:
+            return 0.0
+        center_midi = _midi(frame.frequency)
+        neighbourhood = frames[max(0, index - 6) : min(len(frames), index + 7)]
+        voiced = [item for item in neighbourhood if item.voiced and item.frequency > 0]
+        if len(voiced) < 4:
+            return 0.0
+        stable = [item for item in voiced if abs(_midi(item.frequency) - center_midi) <= 0.75]
+        continuity = len(stable) / len(voiced)
+        confidence = statistics.median(float(item.confidence) for item in stable) if stable else 0.0
+        return continuity * max(0.0, min(1.0, confidence))
+
+    def protected_subharmonic(index: int, candidate_midi: float, evidence: float) -> bool:
+        frame = frames[index]
+        if not frame.voiced or frame.frequency <= 0:
+            return False
+        interval = _midi(frame.frequency) - candidate_midi
+        if not any(abs(interval - harmonic) <= 0.65 for harmonic in _SUBHARMONIC_INTERVALS):
+            return False
+        run_strength = fcpe_run_strength(index)
+        if run_strength < 0.32:
+            return False
+        fcpe_evidence = support(index, float(frame.frequency)) + 0.06
+        # A stable FCPE trajectory is only displaced by an octave-related YIN
+        # candidate when the waveform support wins decisively. Real octave
+        # transitions emitted by FCPE have interval=0 and are unaffected.
+        return evidence < fcpe_evidence + 0.16 + 0.10 * run_strength
+
     def support(index: int, hz: float) -> float:
         if not np.isfinite(hz) or hz < float(fmin_hz) or hz > float(fmax_hz):
             return 0.0
@@ -188,13 +219,18 @@ def fuse_pitch_with_yin(
             base_support = support(i, hz)
             if base_support >= 0.17:
                 m = _midi(hz)
-                candidates.append((m, base_support + source_bonus, hz))
+                evidence = base_support + source_bonus
+                if not protected_subharmonic(i, m, evidence):
+                    candidates.append((m, evidence, hz))
             # The most common dense-vocal failure is selecting the 2nd harmonic.
             lower = hz / 2.0
             if lower >= float(fmin_hz):
                 lower_support = support(i, lower)
                 if lower_support >= max(0.22, base_support + 0.055):
-                    candidates.append((_midi(lower), lower_support - 0.01, lower))
+                    lower_midi = _midi(lower)
+                    evidence = lower_support - 0.01
+                    if not protected_subharmonic(i, lower_midi, evidence):
+                        candidates.append((lower_midi, evidence, lower))
         # Deduplicate nearly identical FCPE/YIN candidates.
         candidates.sort(key=lambda item: item[1], reverse=True)
         unique: list[tuple[float, float, float]] = []

@@ -274,14 +274,18 @@ def test_timeline_prefers_song_map_and_builds_legacy(monkeypatch, tmp_path):
         bridge,
         "get_game_notes",
         lambda _: [
-            {"syllable_index": 5, "start": 0.3, "end": 0.7},
+            {"syllable_index": 5, "syllable_indices": [5, 6], "start": 0.3, "end": 0.7},
             {"syllable_index": -1, "start": 9, "end": 10},
         ],
     )
     dump(tmp_path / "songMap.json", {"duration": "bad"})
     timeline = bridge._build_legacy_karaoke_timeline(tmp_path)
     first, second = timeline["lines"][0]["words"]
-    assert first["syllables"][0]["timing_source"] == "game_notes"
+    assert (first["start"], first["end"]) == (0, 1)
+    assert (first["syllables"][0]["start"], first["syllables"][0]["end"]) == (0.2, 0.8)
+    assert first["syllables"][0]["timing_source"] == "syllable_alignment"
+    assert first["syllables"][0]["notes"]
+    assert first["syllables"][1]["notes"]
     assert first["syllables"][1]["timing_source"] == "syllable_alignment"
     assert second["timing_source"] == "word_alignment"
     assert timeline["duration"] == 10

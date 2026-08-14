@@ -27,6 +27,7 @@ from AI.cache import StageCache
 from AI.notes import NOTE_DECODER_VERSION
 from AI.pipeline import KaraokePipeline
 from AI.pitch_post import PITCH_STABILIZER_VERSION
+from AI.runtime import RuntimePlan, configure_runtime, format_runtime_plan
 from AI.version import AI_BUILD_ID
 from app import repositories
 from app.services import ai_bridge, app_settings_service, cache_service, song_service
@@ -51,7 +52,7 @@ _progress_runtime: dict[str, dict] = {}
 _progress_runtime_lock = threading.RLock()
 
 
-def _configure_ai_runtime() -> str:
+def _configure_ai_runtime() -> RuntimePlan:
     """Apply persisted compute preferences before lazy AI imports load a runtime."""
     config.configure_ai_resource_environment(force=True)
     settings = app_settings_service.read_settings()
@@ -66,7 +67,7 @@ def _configure_ai_runtime() -> str:
         import torch
 
         torch.set_num_threads(thread_count)
-    return device
+    return configure_runtime(device, force=True)
 
 
 def _first_audio_tag(tags: object, *names: str) -> str | None:
@@ -645,13 +646,14 @@ def _run_job(song_id: str) -> None:
         heartbeat_stop, heartbeat_thread = _start_progress_heartbeat(song_id)
         capture = _create_progress_capture(song_id, out_dir)
 
-        device = _configure_ai_runtime()
+        runtime_plan = _configure_ai_runtime()
         capture.write(
             f"[backend] AI build={AI_BUILD_ID} pipeline={KaraokePipeline.VERSION} "
             f"decoder={NOTE_DECODER_VERSION} pitch={PITCH_STABILIZER_VERSION}\n"
         )
         capture.write(f"[backend] AI module={Path(__file__).resolve()}\n")
-        capture.write(f"[backend] AI runtime: device={device}\n")
+        for line in format_runtime_plan(runtime_plan):
+            capture.write(f"[backend] AI runtime: {line}\n")
 
         on_ai_progress = _create_ai_progress_callback(song_id, capture)
 

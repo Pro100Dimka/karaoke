@@ -19,7 +19,7 @@ from ..models import Word
 from ..profiler import profile_operation
 from .base import Aligner, Transcriber
 from .ctc_alignment import CTC_ALIGNMENT_VERSION, CTCWordAligner, _language_code
-from .device import select_torch_device
+from .device import fallback_torch_device, select_torch_device
 
 _TOKEN = re.compile(r"\w+(?:[’'-]\w+)*", re.UNICODE)
 _LANGUAGE_NAMES = {
@@ -3342,6 +3342,7 @@ class Qwen3Transcriber(Transcriber):
     def __init__(self, model=get_model("asr").repo_id):
         self.model_name = model
         self._model = None
+        self._device = "cpu"
         self._call_batch_size = 1
         self.last_language: str | None = None
         self.last_segments: list[tuple[float, float, str]] = []
@@ -3372,7 +3373,7 @@ class Qwen3Transcriber(Transcriber):
         except ImportError as exc:
             raise EngineUnavailableError("Install the official qwen-asr package") from exc
         if self._model is None:
-            device = select_torch_device(torch)
+            device = select_torch_device(torch, "asr")
             use_cuda = device.startswith("cuda")
             self._call_batch_size = 2 if use_cuda else 1
             kwargs = {
@@ -3386,7 +3387,21 @@ class Qwen3Transcriber(Transcriber):
                 "max_new_tokens": 256,
             }
             with profile_operation("model.load.qwen_asr"):
-                self._model = Qwen3ASRModel.from_pretrained(self.model_name, **kwargs)
+                try:
+                    self._model = Qwen3ASRModel.from_pretrained(self.model_name, **kwargs)
+                except Exception as exc:
+                    fallback = fallback_torch_device("asr", device, exc)
+                    if fallback is None:
+                        raise
+                    device = fallback
+                    self._call_batch_size = 1
+                    kwargs.update(
+                        device_map="cpu",
+                        dtype=torch.float32,
+                        max_inference_batch_size=1,
+                    )
+                    self._model = Qwen3ASRModel.from_pretrained(self.model_name, **kwargs)
+            self._device = device
             generation_config = getattr(
                 getattr(self._model, "model", self._model), "generation_config", None
             )
@@ -3410,9 +3425,7 @@ class Qwen3Transcriber(Transcriber):
             _unwrap_single_result(value) if value is not None else {} for value in values[:count]
         ]
 
-    def _transcribe_batch(self, model, audios, language):
-        if not audios:
-            return []
+    def _transcribe_batch_once(self, model, audios, language):
         kwargs = {"audio": audios if len(audios) > 1 else audios[0]}
         if len(audios) > 1:
             kwargs["language"] = [language] * len(audios) if language else [None] * len(audios)
@@ -3434,6 +3447,18 @@ class Qwen3Transcriber(Transcriber):
                 with profile_operation("postprocess.qwen_asr"):
                     output.append(_unwrap_single_result(result))
             return output
+
+    def _transcribe_batch(self, model, audios, language):
+        if not audios:
+            return []
+        try:
+            return self._transcribe_batch_once(model, audios, language)
+        except Exception as exc:
+            fallback = fallback_torch_device("asr", self._device, exc)
+            if fallback is None:
+                raise
+            self._model = None
+            return self._transcribe_batch_once(self._load(), audios, language)
 
     def transcribe(self, audio, language):
         model = self._load()
@@ -3644,6 +3669,7 @@ class Qwen3ForcedAligner(Aligner):
     def __init__(self, model=get_model("aligner").repo_id):
         self.model_name = model
         self._model = None
+        self._device = "cpu"
         self._global_asr_segments: list[tuple[float, float, str]] = []
         self._ctc = CTCWordAligner.from_environment()
         self.last_alignment_diagnostics: dict[str, object] = {}
@@ -3664,20 +3690,42 @@ class Qwen3ForcedAligner(Aligner):
                 "Install the official qwen-asr package with forced aligner support"
             ) from exc
         if self._model is None:
-            device = select_torch_device(torch)
+            device = select_torch_device(torch, "aligner")
             use_cuda = device.startswith("cuda")
             with profile_operation("model.load.qwen_aligner"):
-                self._model = Qwen3ForcedAligner.from_pretrained(
-                    self.model_name,
-                    device_map=device,
-                    dtype=torch.float16 if use_cuda else torch.float32,
-                )
+                try:
+                    self._model = Qwen3ForcedAligner.from_pretrained(
+                        self.model_name,
+                        device_map=device,
+                        dtype=torch.float16 if use_cuda else torch.float32,
+                    )
+                except Exception as exc:
+                    fallback = fallback_torch_device("aligner", device, exc)
+                    if fallback is None:
+                        raise
+                    device = fallback
+                    self._model = Qwen3ForcedAligner.from_pretrained(
+                        self.model_name,
+                        device_map="cpu",
+                        dtype=torch.float32,
+                    )
+            self._device = device
         return self._model
+
+    def _run_alignment(self, **kwargs):
+        try:
+            return self._load().align(**kwargs)
+        except Exception as exc:
+            fallback = fallback_torch_device("aligner", self._device, exc)
+            if fallback is None:
+                raise
+            self._model = None
+            return self._load().align(**kwargs)
 
     def align(self, audio, text, language):
         resolved_language = resolve_alignment_language(text, language)
         with profile_operation("inference.qwen_aligner"):
-            result = self._load().align(
+            result = self._run_alignment(
                 audio=str(audio),
                 text=text,
                 language=resolved_language,
@@ -3730,7 +3778,7 @@ class Qwen3ForcedAligner(Aligner):
         resolved_language = resolve_alignment_language(" ".join(texts), language)
         try:
             with profile_operation("inference.qwen_aligner"):
-                raw_results = self._load().align(
+                raw_results = self._run_alignment(
                     audio=[str(item) for item in audios],
                     text=list(texts),
                     language=[resolved_language] * len(audios),

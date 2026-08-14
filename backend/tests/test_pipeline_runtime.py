@@ -19,7 +19,7 @@ def test_runtime_configuration_applies_device_threads_and_torch(monkeypatch):
     torch = ModuleType("torch")
     torch.set_num_threads = Mock()
     monkeypatch.setitem(sys.modules, "torch", torch)
-    assert pipeline_service._configure_ai_runtime() == "cpu"
+    assert pipeline_service._configure_ai_runtime().preference == "cpu"
     configure.assert_called_once_with(force=True)
     assert pipeline_service.os.environ["OMP_NUM_THREADS"] == "3"
     torch.set_num_threads.assert_called_once_with(3)

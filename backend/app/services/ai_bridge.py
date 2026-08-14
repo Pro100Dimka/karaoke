@@ -32,6 +32,12 @@ def _int_or_default(value: Any, default: int = -1) -> int:
         return default
 
 
+def _note_syllable_indices(note: dict[str, Any]) -> tuple[int, ...]:
+    raw = note.get("syllable_indices")
+    values = raw if isinstance(raw, (list, tuple, set)) else (note.get("syllable_index"),)
+    return tuple(dict.fromkeys(index for value in values if (index := _int_or_default(value)) >= 0))
+
+
 def get_service() -> AICoreService:
     """Return the single long-lived AI service used by the backend process."""
     return get_ai_service()
@@ -589,8 +595,7 @@ def _build_legacy_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
 
     The frontend must not re-align words, syllables, or notes.  This payload
     pre-links canonical forced-aligned words to syllables and syllable-aware
-    game notes, and exposes presentation start/end values derived from the
-    exact game-note intervals whenever a syllable has note evidence.
+    game notes while preserving the forced-alignment lyric timeline.
     """
     output_dir = Path(output_dir)
     lines = get_karaoke_lyrics(output_dir)
@@ -607,10 +612,8 @@ def _build_legacy_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
 
     notes_by_syllable: dict[int, list[dict[str, Any]]] = {}
     for note in notes:
-        syllable_index = _int_or_default(note.get("syllable_index"))
-        if syllable_index < 0:
-            continue
-        notes_by_syllable.setdefault(syllable_index, []).append(dict(note))
+        for syllable_index in _note_syllable_indices(note):
+            notes_by_syllable.setdefault(syllable_index, []).append(dict(note))
 
     for values in syllables_by_word.values():
         values.sort(key=lambda item: (float(item.get("start") or 0.0), int(item.get("index") or 0)))
@@ -631,48 +634,18 @@ def _build_legacy_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
                 syllable = dict(source_syllable)
                 syllable_index = _int_or_default(syllable.get("index"))
                 linked_notes = notes_by_syllable.get(syllable_index, [])
-                if linked_notes:
-                    presentation_start = min(
-                        float(note.get("start") or 0.0) for note in linked_notes
-                    )
-                    presentation_end = max(
-                        float(note.get("end") or presentation_start) for note in linked_notes
-                    )
-                    timing_source = "game_notes"
-                else:
-                    presentation_start = float(syllable.get("start") or word.get("start") or 0.0)
-                    presentation_end = max(
-                        presentation_start,
-                        float(syllable.get("end") or word.get("end") or presentation_start),
-                    )
-                    timing_source = "syllable_alignment"
                 linked_syllables.append(
                     {
                         **syllable,
-                        "start": presentation_start,
-                        "end": presentation_end,
-                        "timing_source": timing_source,
+                        "timing_source": "syllable_alignment",
                         "notes": linked_notes,
                     }
                 )
 
-            if linked_syllables:
-                presentation_start = min(float(item["start"]) for item in linked_syllables)
-                presentation_end = max(float(item["end"]) for item in linked_syllables)
-                timing_source = "syllables_game_notes"
-            else:
-                presentation_start = float(word.get("start") or 0.0)
-                presentation_end = max(
-                    presentation_start, float(word.get("end") or presentation_start)
-                )
-                timing_source = "word_alignment"
-
             timeline_words.append(
                 {
                     **word,
-                    "start": presentation_start,
-                    "end": presentation_end,
-                    "timing_source": timing_source,
+                    "timing_source": "word_alignment",
                     "syllables": linked_syllables,
                 }
             )

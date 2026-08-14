@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from statistics import median, quantiles
 from typing import Any
 
 from .engines.text import tokenize
@@ -38,96 +37,21 @@ def _positive_duration(note: dict[str, Any]) -> float:
 
 
 def _merge_display_notes(notes: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Create a visually stable note lane without changing scoring/game notes.
-
-    The full game-note sequence remains untouched for scoring and MIDI.  For the
-    renderer we merge zero/micro fragments only inside the same syllable.  The
-    cutoff is derived from this song's duration distribution rather than a fixed
-    millisecond threshold.
-    """
+    """Expose acoustic/game events without merging genuine repeated notes."""
     clean = [
         dict(note) for note in notes if _midi(note) is not None and _positive_duration(note) > 0.0
     ]
-    if not clean:
-        return []
-
-    durations = sorted(_positive_duration(note) for note in clean)
-    if len(durations) >= 4:
-        lower_quartile = quantiles(durations, n=4, method="inclusive")[0]
-    else:
-        lower_quartile = min(durations)
-    global_median = median(durations)
-    # This is dimensionless and adapts to the current song: fragments in the
-    # shortest quartile are eligible for visual merging, while normal/long
-    # melisma notes are preserved.
-    merge_floor = min(lower_quartile, global_median)
-
-    by_syllable: dict[int | None, list[dict[str, Any]]] = defaultdict(list)
     for note in clean:
-        syllable_index = _integer(note.get("syllable_index"))
-        by_syllable[syllable_index].append(note)
+        note["midi_note"] = _midi(note)
+        note["display_source"] = "acoustic_game_note"
+    clean.sort(key=lambda item: (float(item["start"]), float(item["end"]), int(item["midi_note"])))
+    return clean
 
-    result: list[dict[str, Any]] = []
-    for group in by_syllable.values():
-        group.sort(key=lambda item: (float(item["start"]), float(item["end"])))
-        merged: list[dict[str, Any]] = []
-        for note in group:
-            note = dict(note)
-            note["midi_note"] = _midi(note)
-            if (
-                merged
-                and merged[-1]["midi_note"] == note["midi_note"]
-                and float(note["start"]) <= float(merged[-1]["end"]) + 1e-9
-            ):
-                merged[-1]["end"] = max(float(merged[-1]["end"]), float(note["end"]))
-                continue
-            merged.append(note)
 
-        while len(merged) > 1:
-            candidates = [
-                (_positive_duration(note), index)
-                for index, note in enumerate(merged)
-                if _positive_duration(note) <= merge_floor + 1e-9
-            ]
-            if not candidates:
-                break
-            _, index = min(candidates)
-            note = merged[index]
-            neighbours: list[tuple[float, float, str, dict[str, Any]]] = []
-            if index > 0:
-                previous = merged[index - 1]
-                neighbours.append(
-                    (
-                        abs(int(previous["midi_note"]) - int(note["midi_note"])),
-                        -_positive_duration(previous),
-                        "previous",
-                        previous,
-                    )
-                )
-            if index + 1 < len(merged):
-                following = merged[index + 1]
-                neighbours.append(
-                    (
-                        abs(int(following["midi_note"]) - int(note["midi_note"])),
-                        -_positive_duration(following),
-                        "following",
-                        following,
-                    )
-                )
-            neighbours.sort(key=lambda item: (item[0], item[1]))
-            _, _, side, target = neighbours[0]
-            if side == "previous":
-                target["end"] = max(float(target["end"]), float(note["end"]))
-            else:
-                target["start"] = min(float(target["start"]), float(note["start"]))
-            merged.pop(index)
-
-        for note in merged:
-            note["display_source"] = "syllable_game_notes"
-            result.append(note)
-
-    result.sort(key=lambda item: (float(item["start"]), float(item["end"]), int(item["midi_note"])))
-    return result
+def _syllable_indices(note: dict[str, Any]) -> tuple[int, ...]:
+    raw = note.get("syllable_indices")
+    values = raw if isinstance(raw, (list, tuple, set)) else (note.get("syllable_index"),)
+    return tuple(dict.fromkeys(index for value in values if (index := _integer(value)) is not None))
 
 
 def build_karaoke_song_map(
@@ -155,10 +79,8 @@ def build_karaoke_song_map(
         syllables_by_word[word_index].append(item)
     display_by_syllable: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for item in display_notes:
-        syllable_index = _integer(item.get("syllable_index"))
-        if syllable_index is None:
-            continue
-        display_by_syllable[syllable_index].append(item)
+        for syllable_index in _syllable_indices(item):
+            display_by_syllable[syllable_index].append(item)
 
     for values in syllables_by_word.values():
         values.sort(
@@ -176,20 +98,10 @@ def build_karaoke_song_map(
             syllable = dict(source_syllable)
             syllable_index = _integer(syllable.get("index"), -1)
             linked_notes = [dict(note) for note in display_by_syllable.get(syllable_index, [])]
-            if linked_notes:
-                syllable["start"] = min(float(note["start"]) for note in linked_notes)
-                syllable["end"] = max(float(note["end"]) for note in linked_notes)
-                syllable["timing_source"] = "display_notes"
-            else:
-                syllable["timing_source"] = "syllable_alignment"
+            syllable["timing_source"] = "syllable_alignment"
             syllable["display_notes"] = linked_notes
             linked_syllables.append(syllable)
-        if linked_syllables:
-            word["start"] = min(float(item["start"]) for item in linked_syllables)
-            word["end"] = max(float(item["end"]) for item in linked_syllables)
-            word["timing_source"] = "syllables_display_notes"
-        else:
-            word["timing_source"] = "word_alignment"
+        word["timing_source"] = "word_alignment"
         word["syllables"] = linked_syllables
         prepared_words.append(word)
 

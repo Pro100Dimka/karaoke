@@ -19,7 +19,9 @@ import soundfile as sf
 
 from ..errors import AICoreError, EngineUnavailableError
 from ..profiler import profile_operation, record_operation
+from ..runtime import selected_backend
 from .base import Separator
+from .device import accelerator_failure
 
 
 def _park_model(model, device: str, torch):
@@ -34,7 +36,12 @@ def _park_model(model, device: str, torch):
 
 
 def _run_persistent_msst_worker(
-    engine_dir, base_arguments, requests, results, idle_timeout_sec=120.0
+    engine_dir,
+    base_arguments,
+    requests,
+    results,
+    idle_timeout_sec=120.0,
+    preferred_device="auto",
 ) -> None:
     """Load RoFormer once and keep CPU weights alive between isolated jobs."""
     original_stdout, original_stderr = sys.stdout, sys.stderr
@@ -68,7 +75,9 @@ def _run_persistent_msst_worker(
         torch = module.torch
         args = module.parse_args_inference(base_arguments)
         device = "cpu"
-        if not args.force_cpu and torch.cuda.is_available():
+        allow_cuda = preferred_device in {"auto", "cuda"}
+        allow_mps = preferred_device == "auto"
+        if allow_cuda and not args.force_cpu and torch.cuda.is_available():
             device = (
                 f"cuda:{args.device_ids[0]}"
                 if isinstance(args.device_ids, list)
@@ -78,7 +87,7 @@ def _run_persistent_msst_worker(
             torch.backends.cudnn.allow_tf32 = True
             torch.backends.cudnn.benchmark = True
             torch.set_float32_matmul_precision("high")
-        elif not args.force_cpu and torch.backends.mps.is_available():
+        elif allow_mps and not args.force_cpu and torch.backends.mps.is_available():
             device = "mps"
         started = time.perf_counter()
         model, config = module.get_model_from_config(args.model_type, args.config_path)
@@ -100,8 +109,31 @@ def _run_persistent_msst_worker(
             started = time.perf_counter()
             try:
                 if device != "cpu":
-                    model = model.to(device)
-                module.run_folder(model, args, config, device, verbose=True)
+                    try:
+                        model = model.to(device)
+                    except Exception as exc:
+                        if not device.startswith("cuda") or not accelerator_failure(exc):
+                            raise
+                        print(
+                            "[AI runtime] separation: CUDA model load failed; using CPU",
+                            flush=True,
+                        )
+                        device = "cpu"
+                try:
+                    module.run_folder(model, args, config, device, verbose=True)
+                except Exception as exc:
+                    if not device.startswith("cuda") or not accelerator_failure(exc):
+                        raise
+                    print(
+                        "[AI runtime] separation: PyTorch CUDA failed; retrying with CPU",
+                        flush=True,
+                    )
+                    model = _park_model(model, device, torch)
+                    device = "cpu"
+                    output_dir = Path(args.store_dir)
+                    shutil.rmtree(output_dir, ignore_errors=True)
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    module.run_folder(model, args, config, device, verbose=True)
                 model = _park_model(model, device, torch)
                 results.put((job_id, time.perf_counter() - started, None))
             except BaseException:
@@ -216,6 +248,8 @@ class MSSTMelRoformerSeparator(Separator):
         context = multiprocessing.get_context("spawn")
         self._request_queue = context.Queue(maxsize=1)
         self._result_queue = context.Queue(maxsize=1)
+        backend = selected_backend("separation")
+        preferred_device = backend.device if backend is not None else "cpu"
         self._process = context.Process(
             target=_run_persistent_msst_worker,
             args=(
@@ -224,6 +258,7 @@ class MSSTMelRoformerSeparator(Separator):
                 self._request_queue,
                 self._result_queue,
                 self.idle_timeout_sec,
+                preferred_device,
             ),
             daemon=True,
         )

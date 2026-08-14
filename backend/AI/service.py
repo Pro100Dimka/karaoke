@@ -6,6 +6,7 @@ from .config import CoreConfig
 from .errors import ConfigurationError
 from .pipeline import KaraokePipeline, PipelineRequest, PipelineResult
 from .pitch_post import stabilize_pitch
+from .runtime import get_runtime_plan
 
 
 class AICoreService:
@@ -76,6 +77,7 @@ class AICoreService:
             ),
             "separation_configured": bool(getattr(engines.separator, "available", lambda: True)()),
             "fallback_enabled": self.config.allow_fallback,
+            "runtime": get_runtime_plan().describe(),
         }
 
 

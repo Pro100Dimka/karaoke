@@ -32,7 +32,9 @@ def medfilt2d_exact(magnitude: np.ndarray, axis: int) -> np.ndarray:
     return filtered[:, RADIUS:-RADIUS] if axis == 1 else filtered[RADIUS:-RADIUS, :]
 
 
-def torch_cuda_median(magnitude: np.ndarray, axis: int, chunk_rows: int = 256) -> np.ndarray:
+def torch_cuda_median(
+    magnitude: np.ndarray, axis: int, chunk_rows: int = 256
+) -> np.ndarray:
     import torch
 
     oriented = magnitude if axis == 1 else magnitude.T
@@ -61,7 +63,9 @@ def main() -> None:
         audio = np.mean(audio, axis=1, dtype=np.float32)
     if sample_rate != 22_050:
         audio = librosa.resample(audio, orig_sr=sample_rate, target_sr=22_050)
-    spectrum, stft_sec = measured(lambda: librosa.stft(audio, n_fft=2048, hop_length=512))
+    spectrum, stft_sec = measured(
+        lambda: librosa.stft(audio, n_fft=2048, hop_length=512)
+    )
     magnitude = np.abs(spectrum).astype(np.float32, copy=False)
     (harmonic, percussive), scipy_sec = measured(
         lambda: (
@@ -87,8 +91,12 @@ def main() -> None:
     }
     (_, _), rank_sec = measured(
         lambda: (
-            ndimage.rank_filter(magnitude, KERNEL // 2, size=(1, KERNEL), mode="reflect"),
-            ndimage.rank_filter(magnitude, KERNEL // 2, size=(KERNEL, 1), mode="reflect"),
+            ndimage.rank_filter(
+                magnitude, KERNEL // 2, size=(1, KERNEL), mode="reflect"
+            ),
+            ndimage.rank_filter(
+                magnitude, KERNEL // 2, size=(KERNEL, 1), mode="reflect"
+            ),
         )
     )
     candidates["scipy_ndimage_rank_filter"] = {

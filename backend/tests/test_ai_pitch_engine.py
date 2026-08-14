@@ -55,9 +55,26 @@ def test_fcpe_configuration_and_model_loading(monkeypatch):
     fcpe = SimpleNamespace(spawn_bundled_infer_model=lambda **_: model)
     monkeypatch.setitem(sys.modules, "torch", torch)
     monkeypatch.setitem(sys.modules, "torchfcpe", fcpe)
-    monkeypatch.setattr(pitch, "select_torch_device", lambda _: "cpu")
+    monkeypatch.setattr(pitch, "select_torch_device", lambda *_: "cpu")
     assert estimator._load_model() == (torch, model)
     assert estimator._load_model() == (torch, model)
+
+
+def test_fcpe_model_load_retries_registered_cpu_fallback(monkeypatch):
+    estimator = pitch.FCPEPitchEstimator()
+    torch = torch_stub()
+    model = object()
+    spawn = Mock(side_effect=[RuntimeError("CUDA driver failed"), model])
+    monkeypatch.setitem(sys.modules, "torch", torch)
+    monkeypatch.setitem(
+        sys.modules,
+        "torchfcpe",
+        SimpleNamespace(spawn_bundled_infer_model=spawn),
+    )
+    monkeypatch.setattr(pitch, "select_torch_device", lambda *_: "cuda:0")
+    monkeypatch.setattr(pitch, "fallback_torch_device", lambda *_: "cpu")
+    assert estimator._load_model() == (torch, model)
+    assert [call.kwargs["device"] for call in spawn.call_args_list] == ["cuda:0", "cpu"]
 
 
 def test_fcpe_missing_dependencies(monkeypatch):
@@ -150,9 +167,7 @@ def test_fcpe_shadow_is_diagnostic_and_cleanup_safe():
 
 
 def test_fcpe_shadow_failure_and_resident_policy_are_isolated():
-    failing = SimpleNamespace(
-        infer=Mock(side_effect=RuntimeError("shadow failed")), release=Mock()
-    )
+    failing = SimpleNamespace(infer=Mock(side_effect=RuntimeError("shadow failed")), release=Mock())
     estimator = pitch.FCPEPitchEstimator(
         shadow_policy=ShadowPolicy(True, 1, True),
         shadow_backend_factory=lambda: failing,

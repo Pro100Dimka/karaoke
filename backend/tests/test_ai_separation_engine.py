@@ -88,6 +88,62 @@ def test_persistent_worker_loads_once_and_moves_model_off_gpu(monkeypatch, tmp_p
     assert runs == [("in", "out")] and moves == ["cuda:0", "cpu", "empty"]
 
 
+def test_persistent_worker_retries_cuda_inference_once_on_cpu(monkeypatch, tmp_path):
+    engine = tmp_path / "engine"
+    (engine / "models").mkdir(parents=True)
+    moves, devices, results = [], [], []
+    model = SimpleNamespace(eval=lambda: model, to=lambda value: moves.append(value) or model)
+    torch = SimpleNamespace(
+        cuda=SimpleNamespace(is_available=lambda: True, empty_cache=lambda: moves.append("empty")),
+        backends=SimpleNamespace(
+            cuda=SimpleNamespace(matmul=SimpleNamespace(allow_tf32=False)),
+            cudnn=SimpleNamespace(allow_tf32=False, benchmark=False),
+            mps=SimpleNamespace(is_available=lambda: False),
+        ),
+        set_float32_matmul_precision=lambda _: None,
+        load=lambda *_args, **_kwargs: object(),
+    )
+
+    def run(_model, _args, _config, device, **_kwargs):
+        devices.append(device)
+        if device.startswith("cuda"):
+            raise RuntimeError("CUDA out of memory")
+
+    values = {
+        "torch": torch,
+        "parse_args_inference": lambda data: SimpleNamespace(**data, force_cpu=False, device_ids=0),
+        "get_model_from_config": lambda *_: (
+            model,
+            SimpleNamespace(training={"instruments": ["vocals"]}),
+        ),
+        "load_start_checkpoint": lambda *_args, **_kwargs: None,
+        "run_folder": run,
+    }
+
+    def load(module):
+        for name, value in values.items():
+            setattr(module, name, value)
+
+    monkeypatch.setattr(
+        separation.importlib.util,
+        "spec_from_file_location",
+        lambda *_: SimpleNamespace(loader=SimpleNamespace(exec_module=load)),
+    )
+    monkeypatch.setattr(
+        separation.importlib.util, "module_from_spec", lambda _: ModuleType("worker")
+    )
+    requests = SimpleNamespace(get=Mock(side_effect=[("job", "in", str(tmp_path / "out")), None]))
+    separation._run_persistent_msst_worker(
+        str(engine),
+        {"model_type": "mel_band_roformer", "config_path": "c", "start_check_point": "p"},
+        requests,
+        SimpleNamespace(put=results.append),
+        preferred_device="cuda",
+    )
+    assert devices == ["cuda:0", "cpu"]
+    assert results[1][2] is None
+
+
 def test_persistent_worker_mps_model_override_failure_and_idle(monkeypatch, tmp_path):
     engine = tmp_path / "engine"
     (engine / "models").mkdir(parents=True)

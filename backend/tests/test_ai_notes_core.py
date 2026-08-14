@@ -271,12 +271,43 @@ def test_game_notes_preserve_syllable_granularity():
     assert notes.build_game_notes(vocal, min_note=2) == []
     aligned = [syllable(0, 0.5), syllable(0.5, 1, 1)]
     result = notes.build_game_notes(vocal[:1], aligned)
-    assert len(result) == 2 and result[0].end == result[1].start
+    assert len(result) == 1
+    assert result[0].syllable_indices == (0, 1)
     collapsed = [syllable(0, 0.8), syllable(0, 1, 1)]
     result = notes.build_game_notes(vocal[:1], collapsed)
-    assert len(result) == 2 and result[-1].end == 1
+    assert len(result) == 1 and result[0].end == 1
+    assert result[0].syllable_indices == (0, 1)
     duplicates = [syllable(0, 0.5), syllable(0, 0.5)]
     assert len(notes.build_game_notes(vocal[:1], duplicates)) == 1
+
+    rounding_edge = note(114.46, 114.97000000000001, 63)
+    aligned_edge = [
+        syllable(114.325024, 114.478816, 199),
+        syllable(114.478816, 114.683872, 200),
+        syllable(114.683872, 114.87, 201),
+        syllable(114.87, 114.97, 202),
+        syllable(114.97, 115.14, 203),
+    ]
+    result = notes.build_game_notes([rounding_edge], aligned_edge)
+    assert len(result) == 1
+    assert result[0].syllable_indices == (199, 200, 201, 202)
+    assert all(item.end > item.start for item in result)
+
+    boundary_note = note(7.12, 7.52, 55)
+    boundary_syllables = [syllable(7.048732824, 7.12, 2), syllable(7.12, 7.16, 3)]
+    result = notes.build_game_notes([boundary_note], boundary_syllables)
+    assert result[0].syllable_indices == (2, 3)
+
+
+def test_game_notes_preserve_real_repeated_notes_and_melisma():
+    repeated = [note(0, 0.4, 64), note(0.5, 0.9, 64)]
+    assert len(notes.build_game_notes(repeated, [syllable(0, 1)])) == 2
+
+    melisma = [note(0, 0.4, 60), note(0.4, 0.8, 62), note(0.8, 1.0, 64)]
+    result = notes.build_game_notes(melisma, [syllable(0, 1)])
+    assert len(result) == 3
+    assert all(item.syllable_indices == (0,) for item in result)
+    assert all(item.end > item.start for item in result)
 
 
 def test_harmonic_salience_bounds_and_signal():

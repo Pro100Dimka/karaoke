@@ -11,7 +11,7 @@ import numpy as np
 from .audio import load_mono
 from .models import PitchFrame, Syllable, VocalNote, Word
 
-NOTE_DECODER_VERSION = "acoustic-notes-v31-conservative-register-verifier"
+NOTE_DECODER_VERSION = "acoustic-notes-v32-many-to-many-lyrics"
 _NOTE_DIAGNOSTICS: ContextVar[dict | None] = ContextVar("note_diagnostics", default=None)
 
 
@@ -1570,16 +1570,7 @@ def build_game_notes(
     syllables: list[Syllable] | None = None,
     min_note: float = 0.0,
 ) -> list[VocalNote]:
-    """Build karaoke/scoring events from acoustic notes and aligned syllables.
-
-    Acoustic notes remain the musical truth.  The game/reference layer is more
-    granular: if one sustained pitch spans N aligned syllables, it emits N
-    consecutive events at the same MIDI pitch.  A syllable boundary is never
-    discarded merely because two lyric events are close in time; when raw
-    boundaries collapse, the acoustic note is partitioned proportionally across
-    the participating syllables instead.  This preserves lyric granularity
-    without inventing pitch changes.
-    """
+    """Keep one game event per acoustic note and attach every overlapping syllable."""
     ordered_syllables = sorted(
         syllables or [],
         key=lambda item: (item.start, item.end, item.index),
@@ -1595,7 +1586,8 @@ def build_game_notes(
         overlaps = [
             syllable
             for syllable in ordered_syllables
-            if min(note.end, syllable.end) - max(note.start, syllable.start) > 0.0
+            if min(note.end, syllable.end) - max(note.start, syllable.start) > 1e-9
+            or abs(float(note.start) - float(syllable.end)) <= 1e-9
         ]
         # A syllable can be encountered through overlapping artifacts more than
         # once in defensive callers.  Keep one canonical owner per syllable id.
@@ -1609,69 +1601,25 @@ def build_game_notes(
             unique.append(syllable)
         overlaps = unique
 
-        if len(overlaps) <= 1:
-            owner = overlaps[0] if overlaps else None
-            result.append(
-                VocalNote(
-                    note.start,
-                    note.end,
-                    int(note.midi_note),
-                    note.velocity,
-                    owner.word_index if owner else note.word_index,
-                    owner.index if owner else note.syllable_index,
-                    (),
-                )
-            )
-            continue
-
-        # Preferred cuts follow the aligned start of each following syllable.
-        raw_cuts = (
-            [float(note.start)]
-            + [
-                max(float(note.start), min(float(note.end), float(syllable.start)))
-                for syllable in overlaps[1:]
-            ]
-            + [float(note.end)]
+        owner = max(
+            overlaps,
+            key=lambda syllable: min(note.end, syllable.end) - max(note.start, syllable.start),
+            default=None,
         )
-
-        # If every cut is strictly increasing, retain the acoustic/lyric
-        # boundaries exactly.  Otherwise (e.g. several aligned syllables share a
-        # near-identical timestamp), partition the *same acoustic note* using
-        # relative lyric overlap weights.  This guarantees one game event per
-        # overlapping syllable without any fixed millisecond floor.
-        strictly_increasing = all(
-            right > left for left, right in zip(raw_cuts, raw_cuts[1:], strict=False)
-        )
-        if strictly_increasing:
-            boundaries = raw_cuts
-        else:
-            weights = [
-                max(
-                    1e-9,
-                    min(float(note.end), float(syllable.end))
-                    - max(float(note.start), float(syllable.start)),
-                )
-                for syllable in overlaps
-            ]
-            total = max(1e-9, sum(weights))
-            boundaries = [float(note.start)]
-            accumulated = 0.0
-            for weight in weights[:-1]:
-                accumulated += weight
-                boundaries.append(float(note.start) + duration * (accumulated / total))
-            boundaries.append(float(note.end))
-
-        # One segment per participating syllable, same detected pitch.
-        for owner, left, right in zip(overlaps, boundaries[:-1], boundaries[1:], strict=True):
-            result.append(
-                VocalNote(
-                    left,
-                    right,
-                    int(note.midi_note),
-                    note.velocity,
-                    owner.word_index,
-                    owner.index,
-                    (),
-                )
+        linked_indices = tuple(syllable.index for syllable in overlaps)
+        primary_index = note.syllable_index
+        if primary_index not in linked_indices and owner:
+            primary_index = owner.index
+        result.append(
+            VocalNote(
+                note.start,
+                note.end,
+                int(note.midi_note),
+                note.velocity,
+                owner.word_index if owner else note.word_index,
+                primary_index,
+                (),
+                linked_indices,
             )
+        )
     return result

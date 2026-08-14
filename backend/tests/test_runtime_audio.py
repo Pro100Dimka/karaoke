@@ -99,13 +99,13 @@ def test_recording_falls_back_from_duplex_to_plain_microphone(monkeypatch):
     assert attempts[-1][0] is None
 
 
-def test_merged_note_projects_distinct_syllable_windows():
+def test_merged_note_projection_preserves_aligned_syllable_windows():
     song_map = {
         "syllables": [
-            {"index": 0, "word_index": 0, "text": "бо"},
-            {"index": 1, "word_index": 0, "text": "льшой"},
+            {"index": 0, "word_index": 0, "start": 0.0, "end": 0.4, "text": "бо"},
+            {"index": 1, "word_index": 0, "start": 0.4, "end": 1.0, "text": "льшой"},
         ],
-        "words": [{"index": 0, "text": "большой"}],
+        "words": [{"index": 0, "start": 0.0, "end": 1.0, "text": "большой"}],
         "lines": [{"words": [{"index": 0}]}],
     }
     notes = [
@@ -121,21 +121,24 @@ def test_merged_note_projects_distinct_syllable_windows():
     _refresh_lines(song_map, notes)
 
     first, second = song_map["syllables"]
-    assert (first["start"], first["end"]) == (2.0, 3.0)
-    assert (second["start"], second["end"]) == (3.0, 4.0)
+    assert (first["start"], first["end"]) == (0.0, 0.4)
+    assert (second["start"], second["end"]) == (0.4, 1.0)
+    assert [(note["start"], note["end"]) for note in first["display_notes"]] == [(2.0, 3.0)]
+    assert [(note["start"], note["end"]) for note in second["display_notes"]] == [(3.0, 4.0)]
+    assert (song_map["words"][0]["start"], song_map["words"][0]["end"]) == (0.0, 1.0)
 
 
-def test_multiple_merged_notes_cannot_create_simultaneous_lyrics():
+def test_editor_notes_do_not_retime_overlapping_aligned_lyrics():
     song_map = {
         "editor": {"edited": True},
         "syllables": [
-            {"index": 0, "word_index": 0, "text": "и"},
-            {"index": 1, "word_index": 1, "text": "до"},
-            {"index": 2, "word_index": 1, "text": "ма"},
+            {"index": 0, "word_index": 0, "start": 1.0, "end": 2.0, "text": "и"},
+            {"index": 1, "word_index": 1, "start": 1.8, "end": 2.4, "text": "до"},
+            {"index": 2, "word_index": 1, "start": 2.4, "end": 3.0, "text": "ма"},
         ],
         "words": [
-            {"index": 0, "text": "и"},
-            {"index": 1, "text": "дома"},
+            {"index": 0, "start": 1.0, "end": 2.0, "text": "и"},
+            {"index": 1, "start": 1.8, "end": 3.0, "text": "дома"},
         ],
         "lines": [{"words": [{"index": 0}, {"index": 1}]}],
         "notes": [
@@ -157,8 +160,10 @@ def test_multiple_merged_notes_cannot_create_simultaneous_lyrics():
     normalize_editor_timeline(song_map)
 
     syllables = song_map["syllables"]
-    assert all(
-        left["end"] <= right["start"] for left, right in zip(syllables, syllables[1:], strict=False)
-    )
+    assert [(item["start"], item["end"]) for item in syllables] == [
+        (1.0, 2.0),
+        (1.8, 2.4),
+        (2.4, 3.0),
+    ]
     words = song_map["words"]
-    assert words[0]["end"] <= words[1]["start"]
+    assert [(item["start"], item["end"]) for item in words] == [(1.0, 2.0), (1.8, 3.0)]

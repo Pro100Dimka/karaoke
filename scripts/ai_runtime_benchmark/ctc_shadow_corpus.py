@@ -458,13 +458,17 @@ def main() -> int:
     parser.add_argument("--cases", nargs="*")
     parser.add_argument("--hybrid", action="store_true")
     parser.add_argument("--precision", choices=("fp16", "fp32"), default="fp16")
+    parser.add_argument("--ru-artifact", type=Path)
+    parser.add_argument("--uk-artifact", type=Path)
     args = parser.parse_args()
     suffix = "-fp16" if args.precision == "fp16" else ""
     os.environ["KARAOKE_AI_CTC_RU_ONNX"] = str(
-        ROOT / f"build/ai-runtime-benchmark/artifacts/ctc_ru{suffix}.onnx"
+        args.ru_artifact
+        or ROOT / f"build/ai-runtime-benchmark/artifacts/ctc_ru{suffix}.onnx"
     )
     os.environ["KARAOKE_AI_CTC_UK_ONNX"] = str(
-        ROOT / f"build/ai-runtime-benchmark/artifacts/ctc_uk{suffix}.onnx"
+        args.uk_artifact
+        or ROOT / f"build/ai-runtime-benchmark/artifacts/ctc_uk{suffix}.onnx"
     )
     os.environ["KARAOKE_AI_CTC_SHADOW"] = "1"
     os.environ["KARAOKE_AI_CTC_SHADOW_RATE"] = "1"

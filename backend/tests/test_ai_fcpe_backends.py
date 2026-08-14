@@ -81,7 +81,9 @@ def test_ort_fcpe_failures_are_explicit(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "onnxruntime", None)
     with pytest.raises(EngineUnavailableError, match="unavailable"):
         adapter._load()
-    monkeypatch.setitem(sys.modules, "onnxruntime", _fake_ort(FakeSession(("CPUExecutionProvider",))))
+    monkeypatch.setitem(
+        sys.modules, "onnxruntime", _fake_ort(FakeSession(("CPUExecutionProvider",)))
+    )
     with pytest.raises(EngineUnavailableError, match="did not activate"):
         adapter._load()
     adapter.artifact = None
