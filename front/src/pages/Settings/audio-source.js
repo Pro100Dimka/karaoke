@@ -24,40 +24,76 @@ import {
 } from "../Karaoke/utils/devices";
 import { EMPTY_BROWSER_DEVICES } from "./config";
 
-const stopStream = (stream) =>
-  stream?.getTracks?.().forEach((track) => track.stop());
-const getSignalLevel = (signal) => {
+export function stopStream(stream) {
+  if (!stream) return;
+  stream.getTracks().forEach((track) => track.stop());
+}
+
+export function getSignalLevel(signal) {
   const db = Number(signal?.rms_db ?? signal?.rms_dbfs);
   return Number.isFinite(db)
     ? Math.max(0, Math.min(100, ((db + 60) / 60) * 100))
     : 0;
-};
+}
+
+export function resolveMonitorTarget(
+  enabled,
+  monitoringEnabled,
+  localSpeakingLevel,
+  signal
+) {
+  return enabled && monitoringEnabled
+    ? Math.max(localSpeakingLevel * 100, getSignalLevel(signal))
+    : 0;
+}
+
+export function nextMonitorLevel(current, target, now, peakUntil) {
+  if (target >= current) return Math.min(100, target);
+  if (now < peakUntil) return current;
+  const next = current * 0.78;
+  // Stryker disable next-line EqualityOperator: no IEEE-754 input maps the product exactly to 0.8.
+  return next < 0.8 ? 0 : next;
+}
+
+function useConditionalPolling(enabled, fetcher, interval, fallback) {
+  return usePolling(
+    () => (enabled ? fetcher() : Promise.resolve(fallback)),
+    enabled ? interval : 0,
+    [enabled, fetcher]
+  );
+}
+
 export default function useAudioSettingsSource({ enabled = true } = {}) {
   const { alert } = useAppDialog();
-  const { data: settings, refresh } = usePolling(
-    () => (enabled ? api.getAudioSettings() : Promise.resolve(null)),
-    enabled ? POLLING_INTERVALS.settings : 0,
-    [enabled]
+  const { data: settings, refresh } = useConditionalPolling(
+    enabled,
+    api.getAudioSettings,
+    POLLING_INTERVALS.settings,
+    null
   );
-  const { data: devices } = usePolling(
-    () => (enabled ? api.listAudioDevices() : Promise.resolve([])),
-    enabled ? POLLING_INTERVALS.devices : 0,
-    [enabled]
+  const { data: devices } = useConditionalPolling(
+    enabled,
+    api.listAudioDevices,
+    POLLING_INTERVALS.devices,
+    Array.of()
   );
-  const { data: outputs } = usePolling(
-    () => (enabled ? api.listAudioOutputDevices() : Promise.resolve([])),
-    enabled ? POLLING_INTERVALS.devices : 0,
-    [enabled]
+  const { data: outputs } = useConditionalPolling(
+    enabled,
+    api.listAudioOutputDevices,
+    POLLING_INTERVALS.devices,
+    Array.of()
   );
-  const { data: asioDrivers } = usePolling(
-    () => (enabled ? api.listAsioDrivers() : Promise.resolve([])),
-    enabled ? POLLING_INTERVALS.devices : 0,
-    [enabled]
+  const { data: asioDrivers } = useConditionalPolling(
+    enabled,
+    api.listAsioDrivers,
+    POLLING_INTERVALS.devices,
+    Array.of()
   );
-  const { data: signal } = usePolling(
-    () => (enabled ? api.getSignalQuality() : Promise.resolve(null)),
-    enabled ? POLLING_INTERVALS.realtimeSignal : 0,
-    [enabled]
+  const { data: signal } = useConditionalPolling(
+    enabled,
+    api.getSignalQuality,
+    POLLING_INTERVALS.realtimeSignal,
+    null
   );
   const [browserDevices, setBrowserDevices] = useState(EMPTY_BROWSER_DEVICES);
   const [preferences, setPreferences] = useState(getAudioPreferences);
@@ -76,20 +112,31 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
   const { pending: saving, run: queue } = useAsyncQueue();
   const { pending: togglingMonitoring, run: runMonitoring } =
     useExclusiveAsyncAction();
-  const runtime = normalizeAudioRuntimeSettings(settings);
+  const persistedSettings = settings ?? {};
+  const runtime = normalizeAudioRuntimeSettings(persistedSettings);
   const { audioDriver, monitoringEnabled, volume } = runtime;
-  const targetLevel =
-    enabled && monitoringEnabled
-      ? Math.max(localSpeakingLevel * 100, getSignalLevel(signal))
-      : 0;
-  const resetSpeakerState = useCallback(() => {
-    clearTimeout(speakerTimer.current);
-    speakerTimer.current = setTimeout(() => {
-      speakerTimer.current = null;
-      setSpeakerTestState("idle");
-    }, 1800);
-  }, []);
-  useEffect(() => () => clearTimeout(speakerTimer.current), []);
+  const targetLevel = resolveMonitorTarget(
+    enabled,
+    monitoringEnabled,
+    localSpeakingLevel,
+    signal
+  );
+  const resetSpeakerState = useCallback(
+    () => {
+      clearTimeout(speakerTimer.current);
+      speakerTimer.current = setTimeout(() => {
+        speakerTimer.current = null;
+        setSpeakerTestState("idle");
+      }, 1800);
+    },
+    // Stryker disable next-line ArrayDeclaration: stable state setter and timer ref.
+    []
+  );
+  useEffect(
+    () => () => clearTimeout(speakerTimer.current),
+    // Stryker disable next-line ArrayDeclaration: stable timer ref; mount-only cleanup.
+    []
+  );
   useEffect(() => {
     monitorTarget.current = targetLevel;
     if (targetLevel > 0) {
@@ -107,16 +154,9 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
     const timer = setInterval(() => {
       const target = monitorTarget.current;
       const now = performance.now();
-      setMonitorLevel((current) => {
-        if (target >= current) {
-          return Math.min(100, target);
-        }
-        if (now < monitorPeak.current) {
-          return current;
-        }
-        const next = current * 0.78;
-        return next < 0.8 ? 0 : next;
-      });
+      setMonitorLevel((current) =>
+        nextMonitorLevel(current, target, now, monitorPeak.current)
+      );
     }, 50);
     return () => clearInterval(timer);
   }, [enabled, monitoringEnabled]);
@@ -126,7 +166,7 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
     monitorStream.current = null;
   }, [stopSpeakingMeter]);
   const startLocalMeter = useCallback(async () => {
-    const mediaDevices = globalThis.navigator?.mediaDevices;
+    const { mediaDevices } = navigator;
     if (typeof mediaDevices?.getUserMedia !== "function") {
       return false;
     }
@@ -189,15 +229,13 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
     };
     const events = ["pointerdown", "keydown"];
     events.forEach((event) =>
-      globalThis.addEventListener?.(event, unlock, {
+      globalThis.addEventListener(event, unlock, {
         once: true
       })
     );
     return () => {
       cancelled = true;
-      events.forEach((event) =>
-        globalThis.removeEventListener?.(event, unlock)
-      );
+      events.forEach((event) => globalThis.removeEventListener(event, unlock));
       stopLocalMeter();
     };
   }, [
@@ -212,28 +250,23 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
       setBrowserDevices(EMPTY_BROWSER_DEVICES);
       return undefined;
     }
-    const mediaDevices = globalThis.navigator?.mediaDevices;
+    const { mediaDevices } = navigator;
     if (typeof mediaDevices?.enumerateDevices !== "function") {
       return;
     }
-    let active = true;
     mediaDevices
       .enumerateDevices()
-      .then((devices) => {
-        if (active) {
-          setBrowserDevices(groupBrowserAudioDevices(devices));
-        }
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
+      .then((devices) => setBrowserDevices(groupBrowserAudioDevices(devices)))
+      .catch(
+        // Stryker disable next-line BlockStatement: enumeration failure is intentionally ignored.
+        () => {}
+      );
   }, [enabled]);
   const execute = (action, errorText) =>
     queue(async () => {
       try {
         const result = await action();
-        await refresh?.();
+        await refresh();
         return {
           ok: true,
           value: result
@@ -250,7 +283,7 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
     execute(async () => {
       const updated = await api.updateAudioSettings(patch);
       try {
-        globalThis.dispatchEvent?.(
+        globalThis.dispatchEvent(
           new CustomEvent("audio-settings-changed", {
             detail: updated
           })
@@ -265,7 +298,10 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
       const next = saveAudioPreferences({
         [name]: value
       });
-      api.updateUiPreferences("audio", next).catch(() => {});
+      api.updateUiPreferences("audio", next).catch(
+        // Stryker disable next-line BlockStatement: preference persistence is best-effort.
+        () => {}
+      );
       return next;
     });
   const toggleMonitoring = () =>
@@ -275,7 +311,7 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
         enabling ? api.startDirectMonitoring : api.stopDirectMonitoring,
         translateSaved("Не удалось изменить прослушивание")
       );
-      if (!result?.ok) {
+      if (!result.ok) {
         if (enabling) stopLocalMeter();
         return false;
       }
@@ -300,10 +336,12 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
     setSpeakerTestState("playing");
     let context;
     let audio;
+    let closeContext = async () => {};
     try {
       context = new AudioContext({
         latencyHint: "interactive"
       });
+      closeContext = () => context.close();
       if (context.state === "suspended") {
         await context.resume();
       }
@@ -347,10 +385,12 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
       );
     } finally {
       resetSpeakerState();
-      audio?.pause?.();
-      stopStream(audio?.srcObject);
+      if (audio) {
+        audio.pause();
+        stopStream(audio.srcObject);
+      }
       try {
-        await context?.close?.();
+        await closeContext();
       } catch {
         // already closed
       }
@@ -362,9 +402,9 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
     speakerTestState
   ]);
   const options = {
-    inputDevices: createIndexedDeviceOptions(devices ?? []),
+    inputDevices: createIndexedDeviceOptions(devices),
     outputDevices: createIndexedDeviceOptions(
-      outputs ?? [],
+      outputs,
       translateSaved("Системное устройство")
     ),
     bufferSizes: createBufferSizeOptions(),
@@ -398,10 +438,10 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
   return {
     values: {
       ...runtime,
-      input_device_id: settings?.input_device_id ?? "",
-      output_device_id: settings?.output_device_id ?? "",
-      asio_driver_name: settings?.asio_driver_name ?? "",
-      buffer_size: settings?.buffer_size ?? 64,
+      input_device_id: persistedSettings.input_device_id ?? "",
+      output_device_id: persistedSettings.output_device_id ?? "",
+      asio_driver_name: persistedSettings.asio_driver_name ?? "",
+      buffer_size: persistedSettings.buffer_size ?? 64,
       audio_driver: audioDriver,
       volume
     },

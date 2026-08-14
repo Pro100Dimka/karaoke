@@ -1,4 +1,4 @@
-export function normalizeNoteList(raw, resolveNamedNote = () => NaN) {
+export function normalizeNoteList(raw, resolveNamedNote) {
   if (!Array.isArray(raw)) return [];
 
   return raw
@@ -12,7 +12,7 @@ export function normalizeNoteList(raw, resolveNamedNote = () => NaN) {
           note.midi_note ??
           note.midiNote ??
           note.pitch ??
-          resolveNamedNote(note.note)
+          resolveNamedNote?.(note.note)
       ),
       wordIndex: Number.isInteger(Number(note.word_index ?? note.wordIndex))
         ? Number(note.word_index ?? note.wordIndex)

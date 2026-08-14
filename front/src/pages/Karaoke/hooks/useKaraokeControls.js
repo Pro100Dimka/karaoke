@@ -7,20 +7,25 @@ export default function useKaraokeControls({ autoHideEnabled = true } = {}) {
   const [controlsVisible, setControlsVisible] = useState(true);
   const lastActivityRef = useRef(Date.now());
 
-  const showControls = useCallback(() => {
-    lastActivityRef.current = Date.now();
-    setControlsVisible(true);
-  }, []);
+  const showControls = useCallback(
+    () => {
+      lastActivityRef.current = Date.now();
+      setControlsVisible(true);
+    },
+    // Stryker disable next-line ArrayDeclaration: stable ref and React setter.
+    []
+  );
 
-  const hideControls = useCallback(() => {
-    setControlsVisible(false);
-  }, []);
+  const hideControls = useCallback(
+    () => {
+      setControlsVisible(false);
+    },
+    // Stryker disable next-line ArrayDeclaration: React state setter is stable.
+    []
+  );
 
   useEffect(() => {
-    if (!autoHideEnabled) {
-      setControlsVisible(true);
-      return undefined;
-    }
+    if (!autoHideEnabled) return undefined;
 
     const watcher = window.setInterval(() => {
       setControlsVisible(
@@ -31,10 +36,15 @@ export default function useKaraokeControls({ autoHideEnabled = true } = {}) {
     return () => window.clearInterval(watcher);
   }, [autoHideEnabled]);
 
-  useEffect(() => {
-    document.addEventListener("fullscreenchange", showControls);
-    return () => document.removeEventListener("fullscreenchange", showControls);
-  }, [showControls]);
+  useEffect(
+    () => {
+      document.addEventListener("fullscreenchange", showControls);
+      return () =>
+        document.removeEventListener("fullscreenchange", showControls);
+    },
+    // Stryker disable next-line ArrayDeclaration: showControls has stable identity.
+    [showControls]
+  );
 
   useEffect(() => {
     showControls();

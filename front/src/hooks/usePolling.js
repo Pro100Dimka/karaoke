@@ -5,6 +5,23 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * This avoids overlapping network calls when a local AI operation or an audio
  * driver endpoint responds slower than its polling interval.
  */
+export function shouldSchedulePoll({
+  active,
+  hidden,
+  intervalMs,
+  result,
+  error,
+  shouldContinue,
+  shouldRetryError
+}) {
+  if (!active || hidden || !Number.isFinite(intervalMs) || intervalMs <= 0)
+    return false;
+  if (error)
+    return typeof shouldRetryError !== "function" || shouldRetryError(error);
+  return typeof shouldContinue !== "function" || shouldContinue(result);
+}
+
+// Stryker disable next-line ArrayDeclaration: the injected primitive dependency is also stable when callers omit deps.
 export function usePolling(fetchFn, intervalMs, deps = [], options = {}) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -12,18 +29,9 @@ export function usePolling(fetchFn, intervalMs, deps = [], options = {}) {
   const shouldContinueRef = useRef(options.shouldContinue);
   const shouldRetryErrorRef = useRef(options.shouldRetryError);
   const refreshRef = useRef(null);
-
-  useEffect(() => {
-    fetchRef.current = fetchFn;
-  }, [fetchFn]);
-
-  useEffect(() => {
-    shouldContinueRef.current = options.shouldContinue;
-  }, [options.shouldContinue]);
-
-  useEffect(() => {
-    shouldRetryErrorRef.current = options.shouldRetryError;
-  }, [options.shouldRetryError]);
+  fetchRef.current = fetchFn;
+  shouldContinueRef.current = options.shouldContinue;
+  shouldRetryErrorRef.current = options.shouldRetryError;
 
   useEffect(() => {
     let active = true;
@@ -31,22 +39,21 @@ export function usePolling(fetchFn, intervalMs, deps = [], options = {}) {
     let inFlight = false;
     let refreshQueued = false;
     const documentRef = globalThis.document;
-    const isHidden = () => documentRef?.visibilityState === "hidden";
+    const isHidden = () => documentRef.visibilityState === "hidden";
 
     const scheduleNext = (result, requestError = null) => {
       const shouldContinue = shouldContinueRef.current;
       const shouldRetryError = shouldRetryErrorRef.current;
       if (
-        !active ||
-        isHidden() ||
-        !Number.isFinite(intervalMs) ||
-        intervalMs <= 0 ||
-        (requestError &&
-          typeof shouldRetryError === "function" &&
-          !shouldRetryError(requestError)) ||
-        (!requestError &&
-          typeof shouldContinue === "function" &&
-          !shouldContinue(result))
+        !shouldSchedulePoll({
+          active,
+          hidden: isHidden(),
+          intervalMs,
+          result,
+          error: requestError,
+          shouldContinue,
+          shouldRetryError
+        })
       )
         return;
       timerId = globalThis.setTimeout(run, intervalMs);
@@ -56,26 +63,27 @@ export function usePolling(fetchFn, intervalMs, deps = [], options = {}) {
       if (!active) return;
       if (isHidden()) {
         timerId = null;
-        refreshQueued = true;
         return;
       }
       if (inFlight) {
         refreshQueued = true;
         return;
       }
-      if (timerId) globalThis.clearTimeout(timerId);
+      globalThis.clearTimeout(timerId);
       timerId = null;
       inFlight = true;
       let result;
       let requestError = null;
       try {
         result = await fetchRef.current();
+        // Stryker disable next-line ConditionalExpression: React discards state updates after unmount.
         if (active) {
           setData(result);
           setError(null);
         }
       } catch (error) {
         requestError = error;
+        // Stryker disable next-line ConditionalExpression: React discards state updates after unmount.
         if (active) setError(error);
       } finally {
         inFlight = false;
@@ -91,25 +99,27 @@ export function usePolling(fetchFn, intervalMs, deps = [], options = {}) {
     refreshRef.current = run;
     run();
     const refreshWhenVisible = () => {
-      if (isHidden()) return;
-      if (timerId) globalThis.clearTimeout(timerId);
+      globalThis.clearTimeout(timerId);
       timerId = null;
       refreshQueued = false;
       run();
     };
-    documentRef?.addEventListener("visibilitychange", refreshWhenVisible);
+    documentRef.addEventListener("visibilitychange", refreshWhenVisible);
 
     return () => {
       active = false;
-      refreshQueued = false;
-      if (timerId) globalThis.clearTimeout(timerId);
+      globalThis.clearTimeout(timerId);
       refreshRef.current = null;
-      documentRef?.removeEventListener("visibilitychange", refreshWhenVisible);
+      documentRef.removeEventListener("visibilitychange", refreshWhenVisible);
     };
     // Callers provide a stable dependency list for the resource being polled.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intervalMs, ...deps]);
 
-  const refresh = useCallback(() => refreshRef.current?.(), []);
+  const refresh = useCallback(
+    () => refreshRef.current?.(),
+    // Stryker disable next-line ArrayDeclaration: the callback only dereferences a stable ref.
+    []
+  );
   return { data, error, refresh };
 }

@@ -5,8 +5,9 @@ import { normalizeRoomId } from "../services/onlineRoom.js";
 // eslint-disable-next-line import/extensions
 import { getErrorMessage } from "../utils/errors.js";
 
-const createEventId = (prefix = "room") =>
-  `${prefix}-${Date.now()}-${Math.random()}`;
+function createEventId(prefix) {
+  return `${prefix}-${Date.now()}-${Math.random()}`;
+}
 export function upsertParticipant(items, participant) {
   if (!participant?.id) return items;
   const index = items.findIndex((item) => item.id === participant.id);

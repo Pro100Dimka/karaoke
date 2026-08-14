@@ -7,10 +7,9 @@ export function formatLibraryDate(value, locale = "ru-RU") {
 }
 export function formatEta(seconds) {
   const value = Number(seconds);
-  if (!Number.isFinite(value) || value <= 0)
-    return translateSaved("рассчитываем…");
-  const rounded = Math.max(0, Math.round(value));
-  if (!rounded) return translateSaved("рассчитываем…");
+  if (!Number.isFinite(value)) return translateSaved("рассчитываем…");
+  const rounded = Math.round(value);
+  if (rounded <= 0) return translateSaved("рассчитываем…");
   const minutes = Math.floor(rounded / 60);
   const remainingSeconds = rounded % 60;
   return minutes
@@ -36,7 +35,7 @@ export function isProcessingActive(status) {
 export function hasActiveSongProcessing(songs) {
   return (
     Array.isArray(songs) &&
-    songs.some((song) => isProcessingActive(String(song?.status || "")))
+    songs.some((song) => isProcessingActive(String(song?.status)))
   );
 }
 export function mergeSongProcessingStatus(songs, status) {

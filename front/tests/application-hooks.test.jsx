@@ -35,6 +35,7 @@ vi.mock("../src/api/client", () => ({
 }));
 
 import { POLLING_INTERVALS } from "../src/config/runtime.js";
+import { translateSaved } from "../src/i18n/runtime.js";
 import useDiagnostics from "../src/hooks/useDiagnostics.js";
 import { useOnlineRoomNavigation } from "../src/hooks/useOnlineRoomNavigation.js";
 import { useRequireOnlineName } from "../src/hooks/useRequireOnlineName.js";
@@ -96,8 +97,13 @@ describe("application hooks", () => {
 
   test("ignores an absent room command", () => {
     mocks.useOnlineRoom.mockReturnValue({ roomCommand: null });
-    renderHook(() => useOnlineRoomNavigation());
+    const hook = renderHook(() => useOnlineRoomNavigation());
     expect(mocks.navigate).not.toHaveBeenCalled();
+    mocks.useOnlineRoom.mockReturnValue({
+      roomCommand: { type: "open-library" }
+    });
+    hook.rerender();
+    expect(mocks.navigate).toHaveBeenCalledWith("/");
   });
 
   test("shows the missing-name explanation once", async () => {
@@ -113,14 +119,28 @@ describe("application hooks", () => {
     });
     const hook = renderHook(() => useRequireOnlineName({ onMissingName }));
     await act(async () => Promise.resolve());
+    expect(alert).toHaveBeenCalledWith(
+      translateSaved(
+        "Укажите своё имя в настройках приложения. Оно нужно для совместного исполнения и будет видно участникам комнаты."
+      )
+    );
+    mocks.useAppSettings.mockReturnValue({
+      settings: { online_name: " " },
+      isLoading: false,
+      error: null
+    });
     hook.rerender();
     expect(onMissingName).toHaveBeenCalledOnce();
     expect(alert).toHaveBeenCalledOnce();
   });
 
   test.each([
-    { settings: null, isLoading: true, error: null },
-    { settings: null, isLoading: false, error: new Error("offline") },
+    { settings: { online_name: "" }, isLoading: true, error: null },
+    {
+      settings: { online_name: "" },
+      isLoading: false,
+      error: new Error("offline")
+    },
     { settings: null, isLoading: false, error: null },
     { settings: { online_name: "Singer" }, isLoading: false, error: null }
   ])("does not warn while a usable name cannot be required %#", (state) => {
@@ -129,5 +149,25 @@ describe("application hooks", () => {
     mocks.useAppSettings.mockReturnValue(state);
     renderHook(() => useRequireOnlineName({ onMissingName: vi.fn() }));
     expect(alert).not.toHaveBeenCalled();
+  });
+
+  test("warns after loading and tolerates an absent callback and name field", async () => {
+    const alert = vi.fn().mockResolvedValue(undefined);
+    mocks.useAppDialog.mockReturnValue({ alert });
+    mocks.useAppSettings.mockReturnValue({
+      settings: {},
+      isLoading: true,
+      error: null
+    });
+    const hook = renderHook(() => useRequireOnlineName({}));
+    expect(alert).not.toHaveBeenCalled();
+    mocks.useAppSettings.mockReturnValue({
+      settings: {},
+      isLoading: false,
+      error: null
+    });
+    hook.rerender();
+    await act(async () => Promise.resolve());
+    expect(alert).toHaveBeenCalledOnce();
   });
 });

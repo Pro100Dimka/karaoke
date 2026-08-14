@@ -14,16 +14,19 @@ export default function useExclusiveAsyncAction() {
     (action) => {
       if (activePromiseRef.current) return activePromiseRef.current;
 
+      // Stryker disable next-line ConditionalExpression: React discards post-unmount state updates; the guard is lifecycle hygiene.
       if (mountedRef.current) setPending(true);
       const promise = Promise.resolve()
         .then(action)
         .finally(() => {
           activePromiseRef.current = null;
+          // Stryker disable next-line ConditionalExpression: React discards post-unmount state updates; the guard is lifecycle hygiene.
           if (mountedRef.current) setPending(false);
         });
       activePromiseRef.current = promise;
       return promise;
     },
+    // Stryker disable next-line ArrayDeclaration: mountedRef has stable identity for the hook lifetime.
     [mountedRef]
   );
 

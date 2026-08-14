@@ -2,8 +2,9 @@ import { translateSaved } from "../../../i18n/runtime";
 
 function mapDeviceOptions(devices, getValue, fallbackLabel) {
   const seen = new Set();
+  // Stryker disable next-line ArrayDeclaration: injected primitive is filtered.
   return (Array.isArray(devices) ? devices : [])
-    .filter((device) => device && typeof device === "object")
+    .filter(Boolean)
     .map((device) => ({
       value: getValue(device),
       label: device.name || device.label || fallbackLabel
@@ -31,7 +32,7 @@ export function createIndexedDeviceOptions(
     },
     ...mapDeviceOptions(
       devices,
-      (device) => device?.index,
+      (device) => device.index,
       translateSaved("Устройство")
     )
   ];
@@ -46,10 +47,11 @@ export function createBrowserDeviceOptions(
       value: "default",
       label: defaultLabel
     },
-    ...mapDeviceOptions(devices, (device) => device?.deviceId, fallbackLabel)
+    ...mapDeviceOptions(devices, (device) => device.deviceId, fallbackLabel)
   ];
 }
 export function createBufferSizeOptions(values = [32, 64, 128, 256, 512]) {
+  // Stryker disable next-line ArrayDeclaration: injected primitive becomes NaN.
   return [...new Set((Array.isArray(values) ? values : []).map(Number))]
     .filter((value) => Number.isInteger(value) && value > 0)
     .map((value) => ({

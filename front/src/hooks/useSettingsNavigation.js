@@ -1,14 +1,9 @@
 import { useState } from "react";
 
-const DEFAULT_NAVIGATION = {
-  tab: "audio",
-  service: null
-};
-
 export default function useSettingsNavigation(initialTab = "audio") {
   const [navigation, setNavigation] = useState({
-    ...DEFAULT_NAVIGATION,
-    tab: initialTab
+    tab: initialTab,
+    service: null
   });
 
   const selectTab = (tab) => {

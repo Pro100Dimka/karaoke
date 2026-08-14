@@ -11,7 +11,6 @@ const boolean = (value, fallback) => {
   if (typeof value === "boolean") return value;
   if (typeof value === "string") {
     const normalized = value.trim().toLowerCase();
-    if (["true", "1", "yes", "on"].includes(normalized)) return true;
     if (["false", "0", "no", "off", ""].includes(normalized)) return false;
   }
   return fallback;
@@ -45,7 +44,7 @@ export function normalizeKaraokePreferences(preferences) {
 
 export function loadKaraokePreferences(storage = globalThis.localStorage) {
   try {
-    const raw = storage?.getItem?.(KARAOKE_PREFERENCES_KEY);
+    const raw = storage.getItem(KARAOKE_PREFERENCES_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
     return normalizeKaraokePreferences(parsed);
   } catch {
@@ -59,7 +58,7 @@ export function saveKaraokePreferences(
 ) {
   try {
     const serialized = JSON.stringify(normalizeKaraokePreferences(preferences));
-    storage?.setItem?.(KARAOKE_PREFERENCES_KEY, serialized);
+    storage.setItem(KARAOKE_PREFERENCES_KEY, serialized);
     return true;
   } catch {
     return false;

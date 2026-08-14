@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import useLatestRef from "../../../hooks/useLatestRef";
 
 export default function useLibraryRoomSync({
@@ -14,11 +14,6 @@ export default function useLibraryRoomSync({
   const applyingRemoteUiRef = useRef(false);
   const queryRef = useLatestRef(query);
   const roomQueryRef = useLatestRef(roomQuery);
-  const localSongsRef = useLatestRef(localSongs);
-  const songsSignature = useMemo(
-    () => JSON.stringify(localSongs),
-    [localSongs]
-  );
   useEffect(() => {
     const remoteQuery = roomQueryRef.current;
     if (typeof remoteQuery !== "string") return;
@@ -31,14 +26,11 @@ export default function useLibraryRoomSync({
   }, [queryRef, roomEventId, roomQueryRef, setQuery]);
   useEffect(() => {
     if (!room) return;
-    if (applyingRemoteUiRef.current) {
-      applyingRemoteUiRef.current = false;
-      return;
-    }
+    if (applyingRemoteUiRef.current) return;
     syncUi({ query });
   }, [query, room, syncUi]);
   useEffect(() => {
     if (!room?.host) return;
-    syncUi({ songs: localSongsRef.current });
-  }, [localSongsRef, participantCount, room?.host, songsSignature, syncUi]);
+    syncUi({ songs: localSongs });
+  }, [localSongs, participantCount, room?.host, syncUi]);
 }

@@ -1,31 +1,33 @@
 import { translateSaved } from "../../../../i18n/runtime";
 
-export const getSelectedSong = (songs, songId) => {
+export function getSelectedSong(songs, songId) {
   const list = Array.isArray(songs) ? songs.filter(Boolean) : [];
-  return songId ? list.find((song) => song?.id === songId) : list[0];
-};
-export const normalizeText = (value) =>
-  typeof value === "string" && value.trim() ? value.trim() : null;
-const normalizeNullableNumber = (value) => {
-  if (value === "" || value == null) return null;
+  return songId ? list.find((song) => song.id === songId) : list[0];
+}
+export function normalizeText(value) {
+  if (typeof value !== "string") return null;
+  return value.trim() || null;
+}
+function normalizeNullableNumber(value) {
+  if (value == null || value === "") return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
-};
-const normalizeMidiNote = (value) => {
+}
+function normalizeMidiNote(value) {
   const number = normalizeNullableNumber(value);
   if (number == null) return null;
   return Math.max(0, Math.min(127, Math.round(number)));
-};
+}
 export function validateSongSettings(form) {
   const title = normalizeText(form?.title);
   if (!title) return translateSaved("Укажите название песни.");
-  const tempo = normalizeNullableNumber(form?.tempo_override);
+  const tempo = normalizeNullableNumber(form.tempo_override);
   if (tempo != null && tempo <= 0) {
     return translateSaved("Темп должен быть больше 0 BPM.");
   }
-  const minNote = normalizeMidiNote(form?.note_range_min);
-  const maxNote = normalizeMidiNote(form?.note_range_max);
-  if (minNote != null && maxNote != null && minNote > maxNote) {
+  const minNote = normalizeMidiNote(form.note_range_min);
+  const maxNote = normalizeMidiNote(form.note_range_max);
+  if (maxNote != null && minNote > maxNote) {
     return translateSaved("Нижняя нота диапазона не может быть выше верхней.");
   }
   return null;

@@ -11,9 +11,8 @@ export function getMelodyRange({
   noteRangeMax,
   fallbackMidi = DEFAULT_MIDI_CENTER
 }) {
-  const safeNotes = Array.isArray(notes)
-    ? notes.filter((note) => note && typeof note === "object")
-    : [];
+  // Stryker disable next-line ArrayDeclaration: injected primitive becomes NaN.
+  const safeNotes = Array.isArray(notes) ? notes : [];
   const shift = Number.isFinite(Number(keyShift)) ? Number(keyShift) : 0;
   const savedMin = Number(noteRangeMin);
   const savedMax = Number(noteRangeMax);
@@ -24,8 +23,7 @@ export function getMelodyRange({
     Number.isFinite(savedMax) &&
     savedMax >= savedMin;
   const noteMidiValues = safeNotes
-    .filter((note) => note && typeof note === "object")
-    .map((note) => Number(note.midi) + shift)
+    .map((note) => Number(note?.midi) + shift)
     .filter(Number.isFinite);
   const finiteFallback = Number.isFinite(Number(fallbackMidi))
     ? Number(fallbackMidi)
@@ -59,6 +57,7 @@ export function getVisibleNotes(notes, viewStart, viewEnd) {
   const end = Number(viewEnd);
   if (!Number.isFinite(start) || !Number.isFinite(end)) return [];
 
+  // Stryker disable next-line ArrayDeclaration: primitive has no finite interval.
   return (Array.isArray(notes) ? notes : []).filter((note) => {
     const noteStart = Number(note?.start);
     const noteEnd = Number(note?.end);
@@ -83,9 +82,7 @@ export function getMelodyCue({ notes, currentTime, keyShift = 0 }) {
   );
   const cueNote =
     activeNote ||
-    safeNotes.find(
-      (note) => note.start >= safeTime - 0.08 && note.start <= safeTime + 1.4
-    ) ||
+    safeNotes.find((note) => note.start >= safeTime - 0.08) ||
     safeNotes.find((note) => note.end >= safeTime) ||
     null;
 

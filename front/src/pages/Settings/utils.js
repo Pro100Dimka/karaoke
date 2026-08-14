@@ -18,8 +18,8 @@ const createField =
   (name, config = {}) => ({
     name,
     span: HALF,
-    getValue: get?.(name),
-    setValue: set?.(name),
+    getValue: get(name),
+    setValue: set(name),
     saveValue: save?.(name),
     ...config
   });

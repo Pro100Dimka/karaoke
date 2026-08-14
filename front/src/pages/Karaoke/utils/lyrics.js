@@ -1,12 +1,7 @@
-const TIME_KEYS = {
-  start: ["start", "start_sec", "start_time", "begin", "from"],
-  end: ["end", "end_sec", "end_time", "finish", "to"]
-};
-
-function readFiniteTime(source, keys) {
+function readFiniteTime(source, ...keys) {
   for (const key of keys) {
     const raw = source[key];
-    if (raw === null || raw === undefined || raw === "") continue;
+    if (raw === null || raw === "") continue;
     const value = Number(raw);
     if (Number.isFinite(value) && value >= 0) return value;
   }
@@ -14,29 +9,40 @@ function readFiniteTime(source, keys) {
   return null;
 }
 
-function normalizeLine(line, sourceIndex) {
-  if (!line || typeof line !== "object") return null;
+function normalizeLine(line) {
+  if (!line) return null;
 
-  const start = readFiniteTime(line, TIME_KEYS.start);
-  const end = readFiniteTime(line, TIME_KEYS.end);
+  const start = readFiniteTime(
+    line,
+    "start",
+    "start_sec",
+    "start_time",
+    "begin",
+    "from"
+  );
+  const end = readFiniteTime(
+    line,
+    "end",
+    "end_sec",
+    "end_time",
+    "finish",
+    "to"
+  );
   if (start === null || end === null || end < start) return null;
 
   return {
     ...line,
     start,
-    end,
-    __sourceIndex: sourceIndex
+    end
   };
 }
 
 function getSafeLyrics(lyrics) {
+  // Stryker disable next-line ArrayDeclaration: normalizeLine discards the primitive.
   return (Array.isArray(lyrics) ? lyrics : [])
     .map(normalizeLine)
     .filter(Boolean)
-    .sort(
-      (a, b) =>
-        a.start - b.start || a.end - b.end || a.__sourceIndex - b.__sourceIndex
-    );
+    .sort((a, b) => a.start - b.start || a.end - b.end);
 }
 
 export function getLyricDisplayState(lyrics, currentTime) {

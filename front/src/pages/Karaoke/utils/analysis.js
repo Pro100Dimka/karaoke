@@ -1,5 +1,8 @@
 import { translateSaved } from "../../../i18n/runtime";
 
+// Stryker disable next-line ArrayDeclaration: Array() and Array([]) are the same empty array.
+const EMPTY_SECTIONS = Object.freeze(Array()); // eslint-disable-line no-array-constructor
+
 function finiteOrNull(value) {
   if (value == null || value === "") return null;
   const number = Number(value);
@@ -20,7 +23,7 @@ export function normalizeAnalysisSection(section, index = 0) {
         ? source.label.trim()
         : null,
     start,
-    end: end != null && (start == null || end >= start) ? end : null,
+    end: start == null || end >= start ? end : null,
     accuracy_percent: clampPercent(source.accuracy_percent),
     mean_deviation_semitones: finiteOrNull(source.mean_deviation_semitones),
     index
@@ -28,13 +31,16 @@ export function normalizeAnalysisSection(section, index = 0) {
 }
 export function normalizeAnalysisResult(result) {
   const source = result && typeof result === "object" ? result : {};
+  const sections = Array.isArray(source.sections) ? source.sections : null;
   return {
     ...source,
     pitch_accuracy_percent: clampPercent(source.pitch_accuracy_percent),
     mean_deviation_semitones: finiteOrNull(source.mean_deviation_semitones),
-    sections: (Array.isArray(source.sections) ? source.sections : [])
-      .filter((section) => section && typeof section === "object")
-      .map(normalizeAnalysisSection)
+    sections: sections
+      ? sections
+          .filter((section) => section && typeof section === "object")
+          .map(normalizeAnalysisSection)
+      : EMPTY_SECTIONS
   };
 }
 export function getAnalysisFeedback(result) {
@@ -72,8 +78,7 @@ export function getAnalysisFeedback(result) {
       ? translateSaved(
           "Не удалось определить достаточно пропетых нот. Попробуйте петь ближе к микрофону."
         )
-      : normalized.mean_deviation_semitones != null &&
-          normalized.mean_deviation_semitones > 1
+      : normalized.mean_deviation_semitones > 1
         ? translateSaved(
             "Сфокусируйтесь на точном начале каждой фразы и удержании высоты ноты."
           )

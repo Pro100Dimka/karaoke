@@ -32,6 +32,31 @@ import AppSettingsProvider, {
 } from "../src/contexts/app-settings.jsx";
 import useAppSettings from "../src/hooks/useAppSettings.js";
 import useSettingsForm from "../src/hooks/useSettingsForm.js";
+import { translateSaved } from "../src/i18n/runtime.js";
+
+const deferred = () => {
+  let resolve;
+  let reject;
+  const promise = new Promise((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
+};
+
+const trackedSettings = (initial = {}) => {
+  let settings = initial;
+  const updateSettings = vi.fn((update) => {
+    settings = typeof update === "function" ? update(settings) : update;
+    return settings;
+  });
+  return {
+    get settings() {
+      return settings;
+    },
+    updateSettings
+  };
+};
 
 const contextValue = (updateSettings = vi.fn()) => ({
   settings: {},
@@ -134,35 +159,75 @@ describe("application settings context", () => {
 
 describe("settings form", () => {
   test("loads, edits and saves the complete form", async () => {
-    const updateSettings = vi.fn((update) => update({ persisted: true }));
+    const global = trackedSettings({ persisted: true });
     const notify = vi.fn();
     mocks.getAppSettings.mockResolvedValueOnce({
       theme: "dark",
       online_name: "Singer"
     });
-    mocks.updateAppSettings.mockResolvedValueOnce({ language: "en" });
+    const saving = deferred();
+    mocks.updateAppSettings.mockReturnValueOnce(saving.promise);
     const { result } = renderHook(() => useSettingsForm(notify), {
-      wrapper: contextWrapper(contextValue(updateSettings))
+      wrapper: contextWrapper(contextValue(global.updateSettings))
     });
 
+    expect(result.current).toMatchObject({
+      form: null,
+      saveStatus: "idle",
+      saving: false,
+      saved: false
+    });
     await waitFor(() => expect(result.current.form?.theme).toBe("dark"));
+    expect(mocks.applyTheme).toHaveBeenCalledTimes(1);
+    expect(mocks.applyTheme).toHaveBeenLastCalledWith("dark");
     act(() => result.current.updateField("online_name", "New name"));
     expect(result.current.form.online_name).toBe("New name");
+    expect(global.updateSettings).not.toHaveBeenCalled();
     act(() => result.current.updateField("theme", "green"));
-    expect(mocks.applyTheme).toHaveBeenLastCalledWith("green");
-    expect(updateSettings).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(mocks.applyTheme).toHaveBeenLastCalledWith("green")
+    );
+    expect(mocks.applyTheme).toHaveBeenCalledTimes(2);
+    expect(global.settings).toEqual({ persisted: true, theme: "green" });
 
-    await act(() => result.current.save());
+    let savePromise;
+    act(() => {
+      savePromise = result.current.save();
+    });
+    expect(result.current).toMatchObject({
+      saveStatus: "saving",
+      saving: true,
+      saved: false
+    });
+    await waitFor(() => expect(mocks.updateAppSettings).toHaveBeenCalledOnce());
     expect(mocks.updateAppSettings).toHaveBeenCalledWith({
       theme: "green",
       online_name: "New name"
     });
+    saving.resolve({ language: "en" });
+    await act(() => savePromise);
     expect(result.current.form).toMatchObject({
       theme: "green",
       language: "en"
     });
-    expect(result.current.saved).toBe(true);
+    expect(result.current).toMatchObject({
+      saveStatus: "saved",
+      saving: false,
+      saved: true
+    });
+    expect(global.settings).toEqual({
+      persisted: true,
+      theme: "green",
+      language: "en"
+    });
     expect(notify).not.toHaveBeenCalled();
+
+    act(() => result.current.updateField("online_name", "Edited again"));
+    expect(result.current).toMatchObject({
+      saveStatus: "idle",
+      saving: false,
+      saved: false
+    });
   });
 
   test("trims fields and uses either returned or submitted values", async () => {
@@ -192,15 +257,71 @@ describe("settings form", () => {
     expect(result.current.saved).toBe(true);
   });
 
+  test("stays saving until every queued write settles", async () => {
+    const notify = vi.fn().mockResolvedValue(undefined);
+    mocks.getAppSettings.mockResolvedValueOnce({ language: "uk" });
+    const first = deferred();
+    const second = deferred();
+    mocks.updateAppSettings
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const hook = renderHook(() => useSettingsForm(notify), {
+      wrapper: contextWrapper(contextValue())
+    });
+    await waitFor(() => expect(hook.result.current.form).not.toBeNull());
+
+    let firstSave;
+    let secondSave;
+    act(() => {
+      firstSave = hook.result.current.saveField("language", "en");
+      secondSave = hook.result.current.saveField("online_name", "Singer");
+    });
+    expect(hook.result.current).toMatchObject({
+      saveStatus: "saving",
+      saving: true,
+      saved: false
+    });
+    await waitFor(() =>
+      expect(mocks.updateAppSettings).toHaveBeenCalledTimes(1)
+    );
+
+    first.resolve({ language: "en" });
+    await act(() => firstSave);
+    await waitFor(() =>
+      expect(mocks.updateAppSettings).toHaveBeenCalledTimes(2)
+    );
+    expect(hook.result.current.saveStatus).toBe("saving");
+
+    second.reject(new Error("second failed"));
+    await act(() => secondSave);
+    expect(hook.result.current).toMatchObject({
+      saveStatus: "idle",
+      saving: false,
+      saved: false
+    });
+    expect(notify).toHaveBeenCalledWith(
+      translateSaved("Не удалось сохранить настройку: {0}", {
+        0: "second failed"
+      })
+    );
+  });
+
   test("reports load, form-save and field-save failures", async () => {
     const notify = vi.fn().mockResolvedValue(undefined);
     mocks.getAppSettings.mockRejectedValueOnce(new Error("load failed"));
     const load = renderHook(() => useSettingsForm(notify), {
       wrapper: contextWrapper(contextValue())
     });
-    await waitFor(() => expect(notify).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith(
+        translateSaved("Не удалось загрузить настройки: {0}", {
+          0: "load failed"
+        })
+      )
+    );
     expect(load.result.current.form).toBeNull();
     await act(() => load.result.current.save());
+    expect(mocks.updateAppSettings).not.toHaveBeenCalled();
     load.unmount();
 
     notify.mockClear();
@@ -213,15 +334,34 @@ describe("settings form", () => {
     });
     await waitFor(() => expect(failed.result.current.form).not.toBeNull());
     await act(() => failed.result.current.save());
-    expect(failed.result.current.saveStatus).toBe("idle");
+    expect(failed.result.current).toMatchObject({
+      saveStatus: "idle",
+      saving: false,
+      saved: false
+    });
     await act(() => failed.result.current.saveField("theme", "light"));
-    expect(notify).toHaveBeenCalledTimes(2);
-    expect(failed.result.current.saved).toBe(false);
+    expect(notify.mock.calls).toEqual([
+      [
+        translateSaved("Не удалось сохранить: {0}", {
+          0: "save failed"
+        })
+      ],
+      [
+        translateSaved("Не удалось сохранить настройку: {0}", {
+          0: "field failed"
+        })
+      ]
+    ]);
+    expect(failed.result.current).toMatchObject({
+      saveStatus: "idle",
+      saving: false,
+      saved: false
+    });
   });
 
   test("ignores superseded whole-form and field responses", async () => {
     const notify = vi.fn();
-    const updateSettings = vi.fn((update) => update({}));
+    const global = trackedSettings();
     mocks.getAppSettings.mockResolvedValueOnce({ theme: "dark" });
     let releaseFirstSave;
     mocks.updateAppSettings
@@ -234,7 +374,7 @@ describe("settings form", () => {
       .mockRejectedValueOnce(new Error("stale field"))
       .mockResolvedValueOnce({ language: "uk" });
     const hook = renderHook(() => useSettingsForm(notify), {
-      wrapper: contextWrapper(contextValue(updateSettings))
+      wrapper: contextWrapper(contextValue(global.updateSettings))
     });
     await waitFor(() => expect(hook.result.current.form).not.toBeNull());
     const firstSave = hook.result.current.save();
@@ -245,6 +385,8 @@ describe("settings form", () => {
       await secondSave;
     });
     expect(hook.result.current.form.theme).toBe("new");
+    expect(global.updateSettings).toHaveBeenCalledTimes(1);
+    expect(global.settings).toEqual({ theme: "new" });
 
     const staleField = hook.result.current.saveField("language", "en");
     const currentField = hook.result.current.saveField("language", "uk");
@@ -253,6 +395,8 @@ describe("settings form", () => {
       await currentField;
     });
     expect(hook.result.current.form.language).toBe("uk");
+    expect(global.updateSettings).toHaveBeenCalledTimes(2);
+    expect(global.settings).toEqual({ theme: "new", language: "uk" });
     expect(notify).not.toHaveBeenCalled();
 
     mocks.updateAppSettings
@@ -268,6 +412,12 @@ describe("settings form", () => {
       await currentSuccess;
     });
     expect(hook.result.current.form.online_name).toBe("current");
+    expect(global.updateSettings).toHaveBeenCalledTimes(3);
+    expect(global.settings).toEqual({
+      theme: "new",
+      language: "uk",
+      online_name: "current"
+    });
 
     mocks.updateAppSettings
       .mockRejectedValueOnce(new Error("stale save"))
@@ -279,6 +429,12 @@ describe("settings form", () => {
       await currentSave;
     });
     expect(hook.result.current.form.theme).toBe("final");
+    expect(global.updateSettings).toHaveBeenCalledTimes(4);
+    expect(global.settings).toEqual({
+      theme: "final",
+      language: "uk",
+      online_name: "current"
+    });
     expect(notify).not.toHaveBeenCalled();
   });
 
@@ -309,6 +465,41 @@ describe("settings form", () => {
     rejected.unmount();
     rejectLoad(new Error("late"));
     await act(async () => Promise.resolve());
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  test("ignores save completions after unmount", async () => {
+    mocks.getAppSettings.mockResolvedValue({ theme: "dark" });
+    const fullSave = deferred();
+    const fieldSave = deferred();
+    mocks.updateAppSettings
+      .mockReturnValueOnce(fullSave.promise)
+      .mockReturnValueOnce(fieldSave.promise);
+    const notify = vi.fn();
+    const global = trackedSettings();
+    const full = renderHook(() => useSettingsForm(notify), {
+      wrapper: contextWrapper(contextValue(global.updateSettings))
+    });
+    await waitFor(() => expect(full.result.current.form).not.toBeNull());
+    const fullPromise = full.result.current.save();
+    await waitFor(() => expect(mocks.updateAppSettings).toHaveBeenCalledOnce());
+    full.unmount();
+    fullSave.reject(new Error("late full failure"));
+    await act(() => fullPromise);
+
+    const field = renderHook(() => useSettingsForm(notify), {
+      wrapper: contextWrapper(contextValue(global.updateSettings))
+    });
+    await waitFor(() => expect(field.result.current.form).not.toBeNull());
+    const fieldPromise = field.result.current.saveField("theme", "late");
+    await waitFor(() =>
+      expect(mocks.updateAppSettings).toHaveBeenCalledTimes(2)
+    );
+    field.unmount();
+    fieldSave.reject(new Error("late failure"));
+    await act(() => fieldPromise);
+
+    expect(global.updateSettings).not.toHaveBeenCalled();
     expect(notify).not.toHaveBeenCalled();
   });
 });

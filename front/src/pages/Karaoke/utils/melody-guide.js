@@ -11,13 +11,11 @@ export function findActiveMelodyNote(notes, position) {
   const time = Number(position);
   if (!Array.isArray(notes) || !Number.isFinite(time)) return null;
   return (
-    notes.find(
-      (note) =>
-        Number.isFinite(Number(note?.start)) &&
-        Number.isFinite(Number(note?.end)) &&
-        time >= Number(note.start) &&
-        time < Number(note.end)
-    ) || null
+    notes.find((note) => {
+      const start = Number(note?.start);
+      const end = Number(note?.end);
+      return time >= start && time < end;
+    }) || null
   );
 }
 

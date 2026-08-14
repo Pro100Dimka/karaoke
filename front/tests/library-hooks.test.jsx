@@ -17,6 +17,7 @@ vi.mock("../src/hooks/useExclusiveAsyncAction", () => ({
 import useLibraryFileImport from "../src/pages/Library/hooks/use-file-import.js";
 import useLibraryRoomSync from "../src/pages/Library/hooks/use-room-sync.js";
 import useLibrarySongActions from "../src/pages/Library/hooks/use-song-actions.js";
+import { translateSaved } from "../src/i18n/runtime.js";
 
 beforeEach(() => {
   Object.values(api).forEach((mock) => mock.mockReset());
@@ -56,6 +57,37 @@ describe("library file import", () => {
     expect(notify).not.toHaveBeenCalled();
   });
 
+  test("tracks changing picker state, callbacks and compound extensions", async () => {
+    const click = vi.fn();
+    const firstStarted = vi.fn();
+    const secondStarted = vi.fn();
+    const props = {
+      fileInputRef: { current: { click } },
+      notify: vi.fn(),
+      onStarted: firstStarted
+    };
+    api.addSong.mockResolvedValue({ id: "song" });
+    api.processSong.mockResolvedValue({});
+    const hook = renderHook((value) => useLibraryFileImport(value), {
+      initialProps: props
+    });
+    exclusive.pending = true;
+    hook.rerender({ ...props, onStarted: secondStarted });
+    act(() => hook.result.current.openFilePicker());
+    expect(click).not.toHaveBeenCalled();
+    exclusive.pending = false;
+    hook.rerender({ ...props, onStarted: secondStarted });
+    const file = new File(["audio"], "archive.tar.mp3");
+    await act(() =>
+      hook.result.current.importFile({
+        currentTarget: { files: [file], value: "path" }
+      })
+    );
+    expect(api.addSong).toHaveBeenCalledWith(file, "archive.tar");
+    expect(firstStarted).not.toHaveBeenCalled();
+    expect(secondStarted).toHaveBeenCalledWith({ id: "song" });
+  });
+
   test("ignores empty and concurrent selection and reports failures", async () => {
     const click = vi.fn();
     const notify = vi.fn().mockResolvedValue(undefined);
@@ -75,6 +107,22 @@ describe("library file import", () => {
       })
     );
     expect(exclusive.run).not.toHaveBeenCalled();
+    await act(() =>
+      hook.result.current.importFile({
+        currentTarget: { files: undefined, value: "x" }
+      })
+    );
+    expect(exclusive.run).not.toHaveBeenCalled();
+
+    exclusive.pending = false;
+    const missingPicker = renderHook(() =>
+      useLibraryFileImport({
+        fileInputRef: { current: null },
+        notify,
+        onStarted: vi.fn()
+      })
+    );
+    expect(() => missingPicker.result.current.openFilePicker()).not.toThrow();
 
     api.addSong.mockRejectedValue(new Error("invalid file"));
     await act(() =>
@@ -140,7 +188,26 @@ describe("library room synchronization", () => {
     expect(syncUi).not.toHaveBeenCalled();
     hook.rerender({ ...base, query: "remote", roomEventId: 2 });
     expect(syncUi).toHaveBeenCalledWith({ query: "remote" });
-    hook.rerender({ ...base, room: null, roomQuery: null });
+    setQuery.mockClear();
+    hook.rerender({
+      ...base,
+      query: "remote",
+      roomEventId: 3,
+      roomQuery: "second-remote"
+    });
+    expect(setQuery).toHaveBeenCalledWith("second-remote");
+    hook.rerender({
+      ...base,
+      query: "second-remote",
+      roomEventId: 4,
+      roomQuery: "second-remote"
+    });
+    syncUi.mockClear();
+    hook.rerender({ ...base, query: "next-local", roomQuery: undefined });
+    expect(syncUi).toHaveBeenCalledWith({ query: "next-local" });
+    syncUi.mockClear();
+    hook.rerender({ ...base, query: "offline", room: null, roomQuery: null });
+    expect(syncUi).not.toHaveBeenCalled();
   });
 });
 
@@ -171,6 +238,20 @@ describe("library song actions", () => {
     await act(() => result.current.processSong({ ...song, status: "done" }));
     await act(() => result.current.reprocessSong(song));
     expect(props.confirmDialog).toHaveBeenCalledTimes(2);
+    expect(props.confirmDialog.mock.calls[0]).toEqual([
+      translateSaved(
+        "Вы точно хотите обработать заново песню «{0}»? Ранее созданные результаты обработки будут обновлены.",
+        { 0: "Track" }
+      ),
+      translateSaved("Обработать песню заново?")
+    ]);
+    expect(props.confirmDialog.mock.calls[1]).toEqual([
+      translateSaved(
+        "Вы точно хотите обработать заново песню «{0}»? Текущие данные мелодии будут пересозданы.",
+        { 0: "Track" }
+      ),
+      translateSaved("Обработать песню заново?")
+    ]);
     expect(api.reprocessMelody).toHaveBeenCalledWith("song");
     expect(props.onChanged).toHaveBeenCalledTimes(3);
   });
@@ -185,7 +266,17 @@ describe("library song actions", () => {
     );
     await act(() => hook.result.current.reprocessSong({ id: "x" }));
     await act(() => hook.result.current.processSong(null));
+    await act(() => hook.result.current.reprocessSong(null));
     expect(api.processSong).not.toHaveBeenCalled();
+    expect(api.reprocessMelody).not.toHaveBeenCalled();
+    expect(props.confirmDialog).toHaveBeenCalledTimes(3);
+    expect(props.confirmDialog).toHaveBeenLastCalledWith(
+      translateSaved(
+        "Вы точно хотите обработать заново песню «{0}»? Текущие данные мелодии будут пересозданы.",
+        { 0: translateSaved("Без названия") }
+      ),
+      translateSaved("Обработать песню заново?")
+    );
 
     props.confirmDialog.mockResolvedValue(true);
     api.processSong.mockRejectedValue(new Error("pipeline busy"));
@@ -193,30 +284,104 @@ describe("library song actions", () => {
       hook.result.current.processSong({ id: "x", status: "pending" })
     );
     expect(props.notify).toHaveBeenCalledWith(
-      expect.stringContaining("pipeline busy")
+      `${translateSaved("Не удалось запустить обработку")}: pipeline busy`
+    );
+
+    props.confirmDialog.mockResolvedValue(false);
+    await act(() =>
+      hook.result.current.processSong({ id: "untitled", status: "done" })
+    );
+    expect(props.confirmDialog).toHaveBeenLastCalledWith(
+      translateSaved(
+        "Вы точно хотите обработать заново песню «{0}»? Ранее созданные результаты обработки будут обновлены.",
+        { 0: translateSaved("Без названия") }
+      ),
+      translateSaved("Обработать песню заново?")
+    );
+
+    props.confirmDialog.mockResolvedValue(true);
+    api.reprocessMelody.mockRejectedValueOnce(new Error("midi busy"));
+    await act(() =>
+      hook.result.current.reprocessSong({ id: "midi", title: "Midi" })
+    );
+    expect(props.notify).toHaveBeenLastCalledWith(
+      `${translateSaved("Не удалось переобработать MIDI")}: midi busy`
     );
   });
 
+  test("processing is exclusive, retryable and supports no change callback", async () => {
+    let resolveProcessing;
+    api.processSong.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveProcessing = resolve;
+      })
+    );
+    const props = actionProps({ onChanged: undefined });
+    const hook = renderHook(() => useLibrarySongActions(props));
+    const song = { id: "same", status: "pending" };
+    let first;
+    await act(async () => {
+      first = hook.result.current.processSong(song);
+      await hook.result.current.processSong(song);
+    });
+    expect(api.processSong).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveProcessing({});
+      await first;
+    });
+    expect(props.notify).not.toHaveBeenCalled();
+    api.processSong.mockResolvedValueOnce({});
+    await act(() => hook.result.current.processSong(song));
+    expect(api.processSong).toHaveBeenCalledTimes(2);
+  });
+
   test("deletes a song and closes matching library modals", async () => {
-    const props = actionProps();
+    let hidden = new Set(["keep"]);
+    const setHiddenSongIds = vi.fn((update) => {
+      hidden = update(hidden);
+    });
+    const props = actionProps({ setHiddenSongIds });
     api.deleteSong.mockResolvedValue({});
     const { result } = renderHook(() => useLibrarySongActions(props));
     await act(() => result.current.deleteSong({ id: "song", title: "Track" }));
     expect(api.deleteSong).toHaveBeenCalledWith("song");
     expect(props.setRecordingsSong).toHaveBeenCalledWith(null);
     expect(props.setProcessingSong).toHaveBeenCalledWith(null);
-    expect(props.setHiddenSongIds).toHaveBeenCalled();
+    expect(hidden).toEqual(new Set(["keep", "song"]));
+    expect(props.confirmDialog).toHaveBeenCalledWith(
+      translateSaved("Удалить «{0}»? Это удалит все файлы песни.", {
+        0: "Track"
+      }),
+      translateSaved("Удалить песню?")
+    );
+
+    const unrelated = actionProps({
+      processingSongId: "other",
+      recordingsSongId: "other"
+    });
+    const unrelatedHook = renderHook(() => useLibrarySongActions(unrelated));
+    await act(() =>
+      unrelatedHook.result.current.deleteSong({ id: "second", title: "Second" })
+    );
+    expect(unrelated.setRecordingsSong).not.toHaveBeenCalled();
+    expect(unrelated.setProcessingSong).not.toHaveBeenCalled();
   });
 
   test("rolls back failed deletion and handles confirmation errors", async () => {
-    const props = actionProps();
+    let hidden = new Set(["keep"]);
+    const props = actionProps({
+      setHiddenSongIds: vi.fn((update) => {
+        hidden = update(hidden);
+      })
+    });
     api.deleteSong.mockRejectedValueOnce(new Error("locked"));
     const hook = renderHook(() => useLibrarySongActions(props));
     await act(() =>
       hook.result.current.deleteSong({ id: "x", title: "Track" })
     );
+    expect(hidden).toEqual(new Set(["keep"]));
     expect(props.notify).toHaveBeenCalledWith(
-      expect.stringContaining("locked")
+      translateSaved("Не удалось удалить: {0}", { 0: "locked" })
     );
 
     props.confirmDialog.mockRejectedValueOnce(new Error("dialog failed"));
@@ -224,20 +389,90 @@ describe("library song actions", () => {
       hook.result.current.deleteSong({ id: "y", title: "Track" })
     );
     expect(props.notify).toHaveBeenCalledWith(
-      expect.stringContaining("dialog failed")
+      translateSaved("Не удалось подтвердить удаление: {0}", {
+        0: "dialog failed"
+      })
     );
-    props.confirmDialog.mockResolvedValueOnce(false);
+    props.confirmDialog
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false);
     await act(() =>
       hook.result.current.deleteSong({ id: "z", title: "Track" })
     );
+    await act(() =>
+      hook.result.current.deleteSong({ id: "z", title: "Track" })
+    );
+    expect(props.confirmDialog).toHaveBeenCalledTimes(4);
+    expect(api.deleteSong).toHaveBeenCalledTimes(1);
     await act(() => hook.result.current.deleteSong(null));
+  });
+
+  test("actions use the latest callbacks after rerender", async () => {
+    const firstNotify = vi.fn();
+    const secondNotify = vi.fn().mockResolvedValue(undefined);
+    const firstConfirm = vi.fn().mockResolvedValue(false);
+    const secondConfirm = vi.fn().mockResolvedValue(true);
+    const initial = actionProps({
+      confirmDialog: firstConfirm,
+      notify: firstNotify,
+      onChanged: undefined
+    });
+    const hook = renderHook((value) => useLibrarySongActions(value), {
+      initialProps: initial
+    });
+    const latest = {
+      ...initial,
+      confirmDialog: secondConfirm,
+      notify: secondNotify
+    };
+    hook.rerender(latest);
+    api.processSong.mockRejectedValueOnce(new Error("latest processing"));
+    await act(() =>
+      hook.result.current.processSong({ id: "p", status: "pending" })
+    );
+    expect(firstNotify).not.toHaveBeenCalled();
+    expect(secondNotify).toHaveBeenCalledWith(
+      `${translateSaved("Не удалось запустить обработку")}: latest processing`
+    );
+
+    secondNotify.mockClear();
+    api.reprocessMelody.mockRejectedValueOnce(new Error("latest midi"));
+    await act(() =>
+      hook.result.current.reprocessSong({ id: "m", title: "Midi" })
+    );
+    expect(firstNotify).not.toHaveBeenCalled();
+    expect(secondNotify).toHaveBeenCalledWith(
+      `${translateSaved("Не удалось переобработать MIDI")}: latest midi`
+    );
+
+    secondNotify.mockClear();
+    api.deleteSong.mockResolvedValueOnce({});
+    await act(() =>
+      hook.result.current.deleteSong({ id: "d", title: "Delete" })
+    );
+    expect(firstConfirm).not.toHaveBeenCalled();
+    expect(secondConfirm).toHaveBeenCalled();
+    expect(secondNotify).not.toHaveBeenCalled();
+
+    delete window.electronAPI;
+    await act(() => hook.result.current.openSongFolder({ id: "d" }));
+    expect(secondNotify).toHaveBeenCalledWith(
+      translateSaved(
+        "Открытие папки доступно только в установленном приложении."
+      )
+    );
   });
 
   test("opens song folders through Electron and reports all fallback errors", async () => {
     const props = actionProps();
     const hook = renderHook(() => useLibrarySongActions(props));
     await act(() => hook.result.current.openSongFolder({ id: "song" }));
-    expect(props.notify).toHaveBeenCalledOnce();
+    expect(props.notify).toHaveBeenCalledWith(
+      translateSaved(
+        "Открытие папки доступно только в установленном приложении."
+      )
+    );
+    props.notify.mockClear();
 
     const openSongFolder = vi
       .fn()
@@ -247,8 +482,17 @@ describe("library song actions", () => {
     window.electronAPI = { openSongFolder };
     const song = { output_dir: "path", slug: "slug", title: "Title", id: "id" };
     await act(() => hook.result.current.openSongFolder(song));
+    expect(props.notify).toHaveBeenLastCalledWith(
+      "Windows error",
+      translateSaved("Не удалось открыть папку")
+    );
     await act(() => hook.result.current.openSongFolder(song));
+    expect(props.notify).toHaveBeenCalledTimes(1);
     await act(() => hook.result.current.openSongFolder(song));
+    expect(props.notify).toHaveBeenLastCalledWith(
+      translateSaved("Не удалось открыть папку: {0}", { 0: "ipc failed" }),
+      translateSaved("Не удалось открыть папку")
+    );
     expect(openSongFolder).toHaveBeenCalledWith({
       path: "path",
       slug: "slug",
@@ -262,6 +506,6 @@ describe("library song actions", () => {
       title: "",
       id: ""
     });
-    expect(props.notify).toHaveBeenCalledTimes(3);
+    expect(props.notify).toHaveBeenCalledTimes(2);
   });
 });

@@ -50,6 +50,39 @@ test("space does not escape a modal outside karaoke", () => {
   );
 });
 
+test("karaoke action mapping is exact and rejects cancelled events", () => {
+  installDocument();
+  const scope = { isConnected: true };
+  const base = {
+    target: { closest: () => null },
+    defaultPrevented: false,
+    isComposing: false,
+    repeat: false
+  };
+  for (const [code, action] of [
+    ["Space", "toggle-playback"],
+    ["ArrowLeft", "seek-backward"],
+    ["ArrowRight", "seek-forward"],
+    ["Escape", "stop"]
+  ])
+    assert.equal(getKaraokeHotkeyAction({ ...base, code }, scope), action);
+  assert.equal(getKaraokeHotkeyAction({ ...base, code: "KeyA" }, scope), null);
+  assert.equal(getKaraokeHotkeyAction(null, scope), null);
+
+  for (const property of ["defaultPrevented", "isComposing", "repeat"])
+    assert.equal(
+      getKaraokeHotkeyAction(
+        { ...base, code: "Space", [property]: true },
+        scope
+      ),
+      null
+    );
+  assert.equal(
+    getKaraokeHotkeyAction({ ...base, code: "Space" }, { isConnected: false }),
+    null
+  );
+});
+
 test("editable targets use the complete protected selector", async () => {
   const { isEditableHotkeyTarget } = await loadHotkeys();
   const expected = [

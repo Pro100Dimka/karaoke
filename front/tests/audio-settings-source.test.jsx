@@ -61,7 +61,14 @@ vi.mock("../src/utils/audio-preferences", () => ({
   saveAudioPreferences: mocks.saveAudioPreferences
 }));
 
+import {
+  getSignalLevel,
+  nextMonitorLevel,
+  resolveMonitorTarget,
+  stopStream
+} from "../src/pages/Settings/audio-source.js";
 import useAudioSettingsSource from "../src/pages/Settings/audio-source.js";
+import { translateSaved } from "../src/i18n/runtime.js";
 
 let pollingData;
 let pollingIndex;
@@ -113,6 +120,37 @@ afterEach(() => {
 });
 
 describe("audio settings source", () => {
+  test("normalizes signal levels and monitor decay at exact boundaries", () => {
+    expect(getSignalLevel({ rms_db: -30, rms_dbfs: -60 })).toBe(50);
+    expect(getSignalLevel({ rms_db: 0, rms_dbfs: -60 })).toBe(100);
+    expect(getSignalLevel({ rms_dbfs: -60 })).toBe(0);
+    expect(getSignalLevel({ rms_db: -90 })).toBe(0);
+    expect(getSignalLevel({ rms_db: 12 })).toBe(100);
+    expect(getSignalLevel({ rms_db: "invalid" })).toBe(0);
+    expect(getSignalLevel(null)).toBe(0);
+
+    expect(resolveMonitorTarget(false, true, 0.8, { rms_db: 0 })).toBe(0);
+    expect(resolveMonitorTarget(true, false, 0.8, { rms_db: 0 })).toBe(0);
+    expect(resolveMonitorTarget(true, true, 0.25, { rms_db: -30 })).toBe(50);
+    expect(resolveMonitorTarget(true, true, 0.8, { rms_db: -30 })).toBe(80);
+
+    expect(nextMonitorLevel(50, 50, 100, 200)).toBe(50);
+    expect(nextMonitorLevel(50, 50, 200, 100)).toBe(50);
+    expect(nextMonitorLevel(50, 120, 100, 200)).toBe(100);
+    expect(nextMonitorLevel(50, 40, 100, 200)).toBe(50);
+    expect(nextMonitorLevel(50, 40, 200, 200)).toBe(39);
+    expect(nextMonitorLevel(1, 0, 200, 100)).toBe(0);
+    expect(nextMonitorLevel(0.8 / 0.78, 0, 200, 100)).toBeCloseTo(0.8);
+    expect(nextMonitorLevel(2, 0, 200, 100)).toBe(1.56);
+  });
+
+  test("stops every track of an existing media stream", () => {
+    stopStream(null);
+    const tracks = [{ stop: vi.fn() }, { stop: vi.fn() }];
+    stopStream({ getTracks: () => tracks });
+    tracks.forEach(({ stop }) => expect(stop).toHaveBeenCalledOnce());
+  });
+
   test("maps runtime values and available device options", async () => {
     const { result } = renderHook(() => useAudioSettingsSource());
     expect(result.current.values).toMatchObject({
@@ -125,12 +163,22 @@ describe("audio settings source", () => {
     });
     expect(result.current.options.inputDevices).toHaveLength(2);
     expect(result.current.options.outputDevices).toHaveLength(2);
+    expect(result.current.options.outputDevices[0].label).toBe(
+      translateSaved("Системное устройство")
+    );
     expect(result.current.options.asioDrivers).toEqual([
       { value: "Driver", label: "Driver" }
     ]);
-    expect(
-      result.current.options.audioDrivers.map(({ value }) => value)
-    ).toEqual(["auto", "asio"]);
+    expect(result.current.options.audioDrivers).toEqual([
+      {
+        value: "auto",
+        label: translateSaved("Автоматически · рекомендуется")
+      },
+      {
+        value: "asio",
+        label: translateSaved("ASIO · для аудиоинтерфейсов")
+      }
+    ]);
     for (const [fetcher] of mocks.usePolling.mock.calls.slice(0, 5)) {
       await fetcher();
     }
@@ -146,6 +194,16 @@ describe("audio settings source", () => {
       useAudioSettingsSource({ enabled: false })
     );
     const fetchers = mocks.usePolling.mock.calls.map(([fetcher]) => fetcher);
+    expect(mocks.usePolling.mock.calls.map(([, interval]) => interval)).toEqual(
+      [0, 0, 0, 0, 0]
+    );
+    expect(mocks.usePolling.mock.calls.map(([, , deps]) => deps)).toEqual([
+      [false, mocks.getAudioSettings],
+      [false, mocks.listAudioDevices],
+      [false, mocks.listAudioOutputDevices],
+      [false, mocks.listAsioDrivers],
+      [false, mocks.getSignalQuality]
+    ]);
     await expect(fetchers[0]()).resolves.toBeNull();
     await expect(fetchers[1]()).resolves.toEqual([]);
     await expect(fetchers[2]()).resolves.toEqual([]);
@@ -167,14 +225,20 @@ describe("audio settings source", () => {
       value: { volume: 0.5 }
     });
     expect(changed).toHaveBeenCalledOnce();
-    expect(mocks.refresh).toHaveBeenCalled();
+    expect(changed.mock.calls[0][0]).toMatchObject({
+      type: "audio-settings-changed",
+      detail: { volume: 0.5 }
+    });
+    expect(mocks.refresh).toHaveBeenCalledOnce();
 
-    mocks.updateAudioSettings.mockRejectedValueOnce(new Error("offline"));
+    const error = new Error("offline");
+    mocks.updateAudioSettings.mockRejectedValueOnce(error);
     const failed = await result.current.updateBackend({ volume: 0.4 });
-    expect(failed.ok).toBe(false);
+    expect(failed).toEqual({ ok: false, error });
     expect(mocks.alert).toHaveBeenCalledWith(
-      expect.stringContaining("offline")
+      `${translateSaved("Не удалось сохранить аудионастройки")}: offline`
     );
+    expect(mocks.refresh).toHaveBeenCalledOnce();
     mocks.updateAudioSettings.mockResolvedValueOnce({ volume: 0.3 });
     const dispatch = vi
       .spyOn(globalThis, "dispatchEvent")
@@ -187,6 +251,7 @@ describe("audio settings source", () => {
       ok: true,
       value: { volume: 0.3 }
     });
+    expect(mocks.refresh).toHaveBeenCalledTimes(2);
     dispatch.mockRestore();
     window.removeEventListener("audio-settings-changed", changed);
   });
@@ -195,11 +260,17 @@ describe("audio settings source", () => {
     mocks.updateUiPreferences.mockRejectedValueOnce(new Error("optional"));
     const { result } = renderHook(() => useAudioSettingsSource());
     act(() => result.current.updatePreference("monitorInputDeviceId", "mic"));
-    expect(result.current.preferences.monitorInputDeviceId).toBe("mic");
-    expect(mocks.updateUiPreferences).toHaveBeenCalledWith(
-      "audio",
-      expect.objectContaining({ monitorInputDeviceId: "mic" })
-    );
+    expect(mocks.saveAudioPreferences).toHaveBeenCalledWith({
+      monitorInputDeviceId: "mic"
+    });
+    expect(result.current.preferences).toEqual({
+      monitorInputDeviceId: "mic",
+      monitorOutputDeviceId: "default"
+    });
+    expect(mocks.updateUiPreferences).toHaveBeenCalledWith("audio", {
+      monitorInputDeviceId: "mic",
+      monitorOutputDeviceId: "default"
+    });
     await act(async () => Promise.resolve());
   });
 
@@ -215,7 +286,9 @@ describe("audio settings source", () => {
       value: {
         enumerateDevices: vi.fn().mockResolvedValue([
           { kind: "audioinput", deviceId: "mic", label: "Mic" },
-          { kind: "audiooutput", deviceId: "speaker", label: "Speaker" }
+          { kind: "audioinput", deviceId: "unnamed-mic", label: "" },
+          { kind: "audiooutput", deviceId: "speaker", label: "Speaker" },
+          { kind: "audiooutput", deviceId: "unnamed-output", label: "" }
         ]),
         getUserMedia
       }
@@ -225,15 +298,75 @@ describe("audio settings source", () => {
       monitorOutputDeviceId: "default"
     });
     pollingData[0] = { monitoring_enabled: true };
+    const addEvent = vi.spyOn(globalThis, "addEventListener");
+    const removeEvent = vi.spyOn(globalThis, "removeEventListener");
     const { result, unmount } = renderHook(() => useAudioSettingsSource());
     await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
+    expect(getUserMedia.mock.calls).toEqual([
+      [
+        {
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: 1,
+            deviceId: { exact: "mic" }
+          }
+        }
+      ],
+      [
+        {
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: 1
+          }
+        }
+      ]
+    ]);
     expect(mocks.prepareSpeakingMeter).toHaveBeenCalled();
     expect(mocks.startSpeakingMeter).toHaveBeenCalledWith("local", stream);
-    expect(result.current.options.browserInputs.at(-1).value).toBe("mic");
+    expect(result.current.options.browserInputs).toContainEqual({
+      value: "mic",
+      label: "Mic"
+    });
+    expect(
+      result.current.options.browserInputs.find(
+        ({ value }) => value === "unnamed-mic"
+      ).label
+    ).toBe(translateSaved("Микрофон"));
+    expect(
+      result.current.options.browserOutputs.find(
+        ({ value }) => value === "unnamed-output"
+      ).label
+    ).toBe(translateSaved("Аудиоустройство"));
+    const unlockRegistrations = addEvent.mock.calls.filter(([event]) =>
+      ["pointerdown", "keydown"].includes(event)
+    );
+    expect(unlockRegistrations).toHaveLength(2);
+    expect(unlockRegistrations.map(([event]) => event)).toEqual([
+      "pointerdown",
+      "keydown"
+    ]);
+    unlockRegistrations.forEach(([, , options]) =>
+      expect(options).toEqual({ once: true })
+    );
     window.dispatchEvent(new Event("keydown"));
     expect(getUserMedia).toHaveBeenCalledTimes(2);
     unmount();
     expect(track.stop).toHaveBeenCalled();
+    const unlockRemovals = removeEvent.mock.calls.filter(([event]) =>
+      ["pointerdown", "keydown"].includes(event)
+    );
+    expect(unlockRemovals).toHaveLength(2);
+    expect(unlockRemovals.map(([event]) => event)).toEqual([
+      "pointerdown",
+      "keydown"
+    ]);
+    unlockRemovals.forEach(([, listener]) =>
+      expect(listener).toBe(unlockRegistrations[0][1])
+    );
   });
 
   test("ignores optional browser-device enumeration failures", async () => {
@@ -267,6 +400,35 @@ describe("audio settings source", () => {
     await act(async () => resolveDevices([]));
   });
 
+  test("starts and clears browser discovery when enabled changes", async () => {
+    const enumerateDevices = vi
+      .fn()
+      .mockResolvedValue([
+        { kind: "audioinput", deviceId: "late-mic", label: "Late mic" }
+      ]);
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { enumerateDevices }
+    });
+    const hook = renderHook(
+      ({ enabled }) => useAudioSettingsSource({ enabled }),
+      { initialProps: { enabled: false } }
+    );
+    expect(enumerateDevices).not.toHaveBeenCalled();
+
+    hook.rerender({ enabled: true });
+    await waitFor(() => expect(enumerateDevices).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(hook.result.current.options.browserInputs).toContainEqual({
+        value: "late-mic",
+        label: "Late mic"
+      })
+    );
+
+    hook.rerender({ enabled: false });
+    expect(hook.result.current.options.browserInputs).toHaveLength(1);
+  });
+
   test("handles unavailable and late microphone streams", async () => {
     pollingData[0] = { monitoring_enabled: true };
     const failedMedia = vi.fn().mockRejectedValue(new Error("denied"));
@@ -275,7 +437,19 @@ describe("audio settings source", () => {
       value: { getUserMedia: failedMedia }
     });
     const failed = renderHook(() => useAudioSettingsSource());
-    await waitFor(() => expect(failedMedia).toHaveBeenCalled());
+    await waitFor(() => expect(failedMedia).toHaveBeenCalledOnce());
+    expect(failedMedia.mock.calls).toEqual([
+      [
+        {
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: 1
+          }
+        }
+      ]
+    ]);
     window.dispatchEvent(new Event("pointerdown"));
     await waitFor(() =>
       expect(failedMedia.mock.calls.length).toBeGreaterThan(1)
@@ -303,76 +477,221 @@ describe("audio settings source", () => {
     expect(stop).toHaveBeenCalled();
   });
 
+  test("does not report a microphone start after immediate unmount", async () => {
+    pollingData[0] = { monitoring_enabled: true };
+    const hook = renderHook(() => useAudioSettingsSource());
+    mocks.stopSpeakingMeter.mockClear();
+    hook.unmount();
+    expect(mocks.stopSpeakingMeter).toHaveBeenCalledOnce();
+    await act(async () => Promise.resolve());
+    expect(mocks.stopSpeakingMeter).toHaveBeenCalledOnce();
+  });
+
+  test("does not treat a late microphone rejection as a started stream", async () => {
+    pollingData[0] = { monitoring_enabled: true };
+    let rejectMedia;
+    const getUserMedia = vi.fn(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectMedia = reject;
+        })
+    );
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia }
+    });
+    const hook = renderHook(() => useAudioSettingsSource());
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledOnce());
+    mocks.stopSpeakingMeter.mockClear();
+    hook.unmount();
+    expect(mocks.stopSpeakingMeter).toHaveBeenCalledOnce();
+
+    await act(async () => rejectMedia(new Error("late denial")));
+    expect(mocks.stopSpeakingMeter).toHaveBeenCalledOnce();
+  });
+
+  test("restarts monitoring with a newly selected browser microphone", async () => {
+    pollingData[0] = { monitoring_enabled: true };
+    const firstTrack = { stop: vi.fn() };
+    const secondTrack = { stop: vi.fn() };
+    const getUserMedia = vi
+      .fn()
+      .mockResolvedValueOnce({ getTracks: () => [firstTrack] })
+      .mockResolvedValueOnce({ getTracks: () => [secondTrack] });
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia }
+    });
+    const hook = renderHook(() => useAudioSettingsSource());
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledOnce());
+
+    act(() =>
+      hook.result.current.updatePreference("monitorInputDeviceId", "new-mic")
+    );
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
+    expect(getUserMedia).toHaveBeenLastCalledWith({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1,
+        deviceId: { exact: "new-mic" }
+      }
+    });
+    expect(firstTrack.stop).toHaveBeenCalled();
+    hook.unmount();
+    expect(secondTrack.stop).toHaveBeenCalled();
+  });
+
+  test("uses the latest speaking-meter stop callback", () => {
+    const firstStop = mocks.stopSpeakingMeter;
+    const hook = renderHook(() => useAudioSettingsSource({ enabled: false }));
+    expect(firstStop).toHaveBeenCalledWith("local");
+
+    const latestStop = vi.fn();
+    mocks.stopSpeakingMeter = latestStop;
+    hook.rerender();
+    expect(latestStop).toHaveBeenCalledWith("local");
+  });
+
+  test("does not start local monitoring while the source is disabled", async () => {
+    pollingData[0] = { monitoring_enabled: true };
+    const getUserMedia = vi.fn();
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia }
+    });
+    const addEvent = vi.spyOn(globalThis, "addEventListener");
+    renderHook(() => useAudioSettingsSource({ enabled: false }));
+    await act(async () => Promise.resolve());
+    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(
+      addEvent.mock.calls.filter(([event]) =>
+        ["pointerdown", "keydown"].includes(event)
+      )
+    ).toEqual([]);
+  });
+
   test("toggles direct monitoring in both directions", async () => {
     mocks.startDirectMonitoring.mockResolvedValue({ enabled: true });
     const off = renderHook(() => useAudioSettingsSource());
+    mocks.prepareSpeakingMeter.mockClear();
+    mocks.stopSpeakingMeter.mockClear();
     await expect(off.result.current.actions.toggleMonitoring()).resolves.toBe(
       true
     );
     expect(mocks.startDirectMonitoring).toHaveBeenCalledOnce();
+    expect(mocks.prepareSpeakingMeter).toHaveBeenCalledOnce();
+    expect(mocks.stopSpeakingMeter).not.toHaveBeenCalled();
     off.unmount();
 
     pollingData[0] = { monitoring_enabled: true };
     pollingIndex = 0;
     mocks.stopDirectMonitoring.mockResolvedValue({ enabled: false });
     const on = renderHook(() => useAudioSettingsSource());
+    mocks.prepareSpeakingMeter.mockClear();
+    mocks.stopSpeakingMeter.mockClear();
     await expect(on.result.current.actions.toggleMonitoring()).resolves.toBe(
       true
     );
     expect(mocks.stopDirectMonitoring).toHaveBeenCalledOnce();
+    expect(mocks.prepareSpeakingMeter).not.toHaveBeenCalled();
+    expect(mocks.stopSpeakingMeter).toHaveBeenCalledOnce();
     expect(mocks.stopSpeakingMeter).toHaveBeenCalledWith("local");
   });
 
   test("stops local monitoring when the backend toggle fails", async () => {
     mocks.startDirectMonitoring.mockRejectedValue(new Error("busy"));
     const { result } = renderHook(() => useAudioSettingsSource());
+    mocks.stopSpeakingMeter.mockClear();
     await expect(result.current.actions.toggleMonitoring()).resolves.toBe(
       false
     );
+    expect(mocks.stopSpeakingMeter).toHaveBeenCalledOnce();
     expect(mocks.stopSpeakingMeter).toHaveBeenCalledWith("local");
-    expect(mocks.alert).toHaveBeenCalledWith(expect.stringContaining("busy"));
+    expect(mocks.alert).toHaveBeenCalledWith(
+      `${translateSaved("Не удалось изменить прослушивание")}: busy`
+    );
 
     pollingData[0] = { monitoring_enabled: true };
     pollingIndex = 0;
     mocks.stopDirectMonitoring.mockRejectedValue(new Error("stop busy"));
     const enabled = renderHook(() => useAudioSettingsSource());
+    mocks.stopSpeakingMeter.mockClear();
     await expect(
       enabled.result.current.actions.toggleMonitoring()
     ).resolves.toBe(false);
+    expect(mocks.stopSpeakingMeter).not.toHaveBeenCalled();
+    expect(mocks.alert).toHaveBeenLastCalledWith(
+      `${translateSaved("Не удалось изменить прослушивание")}: stop busy`
+    );
     enabled.unmount();
   });
 
-  test("animates the monitoring meter", () => {
+  test("holds, decays and resets the monitoring meter", () => {
     vi.useFakeTimers();
     pollingData[0] = { monitoring_enabled: true };
-    const hook = renderHook(() => useAudioSettingsSource());
+    pollingData[4] = { rms_db: -30 };
+    const setInterval = vi.spyOn(globalThis, "setInterval");
+    const clearInterval = vi.spyOn(globalThis, "clearInterval");
+    const hook = renderHook(
+      ({ enabled }) => useAudioSettingsSource({ enabled }),
+      { initialProps: { enabled: true } }
+    );
+    expect(setInterval).toHaveBeenCalledTimes(1);
+    expect(setInterval.mock.calls[0][1]).toBe(50);
+    expect(hook.result.current.states.monitorLevel).toBe(0);
     act(() => vi.advanceTimersByTime(50));
     expect(hook.result.current.states.monitorLevel).toBe(50);
 
     mocks.speakingLevel = 0;
-    pollingData[4] = null;
-    hook.rerender();
-    act(() => vi.advanceTimersByTime(2000));
+    pollingData[4] = { rms_db: -60 };
+    hook.rerender({ enabled: true });
+    act(() => vi.advanceTimersByTime(150));
+    expect(hook.result.current.states.monitorLevel).toBe(50);
+    act(() => vi.advanceTimersByTime(50));
+    expect(hook.result.current.states.monitorLevel).toBe(39);
+
+    pollingData[0] = { monitoring_enabled: false };
+    hook.rerender({ enabled: true });
     expect(hook.result.current.states.monitorLevel).toBe(0);
+    expect(clearInterval).toHaveBeenCalled();
+    expect(setInterval).toHaveBeenCalledTimes(1);
+
+    pollingData[0] = { monitoring_enabled: true };
+    hook.rerender({ enabled: false });
+    act(() => vi.advanceTimersByTime(500));
+    expect(hook.result.current.states.monitorLevel).toBe(0);
+    expect(setInterval).toHaveBeenCalledTimes(1);
   });
 
   test("uses empty option lists when backend discovery returns null", () => {
+    pollingData[0] = null;
     pollingData[1] = null;
     pollingData[2] = null;
     pollingData[3] = null;
     const { result } = renderHook(() => useAudioSettingsSource());
+    expect(result.current.values).toMatchObject({
+      input_device_id: "",
+      output_device_id: "",
+      asio_driver_name: "",
+      buffer_size: 64
+    });
     expect(result.current.options.inputDevices).toHaveLength(1);
     expect(result.current.options.outputDevices).toHaveLength(1);
     expect(result.current.options.asioDrivers).toEqual([]);
-    expect(result.current.options.audioDrivers.map(({ value }) => value)).toEqual([
-      "auto"
-    ]);
+    expect(
+      result.current.options.audioDrivers.map(({ value }) => value)
+    ).toEqual(["auto"]);
   });
 
   test("plays a routed speaker test and releases all resources", async () => {
+    vi.useFakeTimers();
+    const clearTimeout = vi.spyOn(globalThis, "clearTimeout");
     const stop = vi.fn();
     const close = vi.fn();
     const resume = vi.fn();
+    let contextOptions;
     const gain = {
       gain: {
         setValueAtTime: vi.fn(),
@@ -387,6 +706,10 @@ describe("audio settings source", () => {
       stop: vi.fn()
     };
     globalThis.AudioContext = class {
+      constructor(options) {
+        contextOptions = options;
+      }
+
       state = "suspended";
       currentTime = 1;
       resume = resume;
@@ -412,22 +735,57 @@ describe("audio settings source", () => {
       monitorInputDeviceId: "default",
       monitorOutputDeviceId: "speakers"
     });
-    const immediateTimeout = vi
-      .spyOn(globalThis, "setTimeout")
-      .mockImplementation((callback) => {
-        callback();
-        return 1;
-      });
-    const { result } = renderHook(() => useAudioSettingsSource());
-    await act(() => result.current.actions.testSpeakers());
+    const createElement = document.createElement.bind(document);
+    let audio;
+    vi.spyOn(document, "createElement").mockImplementation((tag, options) => {
+      const element = createElement(tag, options);
+      if (tag === "audio") audio = element;
+      return element;
+    });
+    const { result, unmount } = renderHook(() => useAudioSettingsSource());
+    let testPromise;
+    act(() => {
+      testPromise = result.current.actions.testSpeakers();
+    });
+    expect(result.current.states.speakerTestState).toBe("playing");
+    await act(async () => vi.advanceTimersByTimeAsync(1050));
+    await act(() => testPromise);
+
+    expect(contextOptions).toEqual({ latencyHint: "interactive" });
     expect(resume).toHaveBeenCalledOnce();
     expect(sink).toHaveBeenCalledWith("speakers");
-    expect(play).toHaveBeenCalled();
+    expect(play).toHaveBeenCalledOnce();
+    expect(audio.volume).toBe(1);
+    expect(gain.gain.setValueAtTime.mock.calls).toEqual([
+      [0.0001, 1],
+      [0.14, 1.55]
+    ]);
+    expect(gain.gain.exponentialRampToValueAtTime.mock.calls).toEqual([
+      [0.14, 1.04],
+      [0.0001, 1.85]
+    ]);
+    expect(oscillator.type).toBe("sine");
+    expect(oscillator.frequency.setValueAtTime.mock.calls).toEqual([
+      [523.25, 1],
+      [659.25, 1.42]
+    ]);
+    expect(oscillator.connect).toHaveBeenCalledWith(gain);
+    expect(gain.connect).toHaveBeenCalledOnce();
     expect(oscillator.start).toHaveBeenCalledOnce();
-    expect(pause).toHaveBeenCalled();
+    expect(oscillator.stop).toHaveBeenCalledWith(1.9);
+    expect(result.current.states.speakerTestState).toBe("success");
+    expect(pause).toHaveBeenCalledOnce();
     expect(stop).toHaveBeenCalledOnce();
     expect(close).toHaveBeenCalledOnce();
-    immediateTimeout.mockRestore();
+
+    act(() => vi.advanceTimersByTime(1799));
+    expect(result.current.states.speakerTestState).toBe("success");
+    act(() => vi.advanceTimersByTime(1));
+    expect(result.current.states.speakerTestState).toBe("idle");
+    const clearCalls = clearTimeout.mock.calls.length;
+    unmount();
+    expect(clearTimeout).toHaveBeenCalledTimes(clearCalls + 1);
+    expect(clearTimeout).toHaveBeenLastCalledWith(null);
   });
 
   test("does not start a second speaker test while one is playing", async () => {
@@ -480,30 +838,117 @@ describe("audio settings source", () => {
     immediateTimeout.mockRestore();
   });
 
+  test("uses the Web Audio fallback without routing the default output", async () => {
+    vi.useFakeTimers();
+    const close = vi.fn();
+    const sink = vi.fn();
+    const oscillator = {
+      frequency: { setValueAtTime: vi.fn() },
+      connect: vi.fn(),
+      start: vi.fn(),
+      stop: vi.fn()
+    };
+    globalThis.webkitAudioContext = class {
+      state = "running";
+      currentTime = 0;
+      close = close;
+      createMediaStreamDestination = () => ({
+        stream: { getTracks: () => [] }
+      });
+      createGain = () => ({
+        gain: {
+          setValueAtTime: vi.fn(),
+          exponentialRampToValueAtTime: vi.fn()
+        },
+        connect: vi.fn()
+      });
+      createOscillator = () => oscillator;
+    };
+    Object.defineProperty(HTMLMediaElement.prototype, "setSinkId", {
+      configurable: true,
+      value: sink
+    });
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+    const hook = renderHook(() => useAudioSettingsSource());
+    let promise;
+    act(() => {
+      promise = hook.result.current.actions.testSpeakers();
+    });
+    await act(async () => vi.advanceTimersByTimeAsync(1050));
+    await act(() => promise);
+    expect(sink).not.toHaveBeenCalled();
+    expect(oscillator.stop).toHaveBeenCalledWith(0.9);
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  test("keeps speaker testing available when output routing is unsupported", async () => {
+    vi.useFakeTimers();
+    mocks.getAudioPreferences.mockReturnValue({
+      monitorInputDeviceId: "default",
+      monitorOutputDeviceId: "speakers"
+    });
+    globalThis.AudioContext = class {
+      state = "running";
+      currentTime = 0;
+      close = vi.fn();
+      createMediaStreamDestination = () => ({
+        stream: { getTracks: () => [] }
+      });
+      createGain = () => ({
+        gain: {
+          setValueAtTime: vi.fn(),
+          exponentialRampToValueAtTime: vi.fn()
+        },
+        connect: vi.fn()
+      });
+      createOscillator = () => ({
+        frequency: { setValueAtTime: vi.fn() },
+        connect: vi.fn(),
+        start: vi.fn(),
+        stop: vi.fn()
+      });
+    };
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+    const hook = renderHook(() => useAudioSettingsSource());
+    let promise;
+    act(() => {
+      promise = hook.result.current.actions.testSpeakers();
+    });
+    await act(async () => vi.advanceTimersByTimeAsync(1050));
+    await act(() => promise);
+    expect(hook.result.current.states.speakerTestState).toBe("success");
+    expect(mocks.alert).not.toHaveBeenCalled();
+  });
+
   test("reports speaker-test runtime failures", async () => {
+    vi.useFakeTimers();
     globalThis.AudioContext = class {
       constructor() {
         throw new Error("audio context failed");
       }
     };
-    const immediateTimeout = vi
-      .spyOn(globalThis, "setTimeout")
-      .mockImplementation((callback) => {
-        callback();
-        return 1;
-      });
     const { result } = renderHook(() => useAudioSettingsSource());
     await act(() => result.current.actions.testSpeakers());
     expect(mocks.alert).toHaveBeenCalledWith(
-      expect.stringContaining("audio context failed")
+      translateSaved("Не удалось проверить динамики: {0}", {
+        0: "audio context failed"
+      })
     );
-    immediateTimeout.mockRestore();
+    expect(result.current.states.speakerTestState).toBe("error");
+    act(() => vi.advanceTimersByTime(1799));
+    expect(result.current.states.speakerTestState).toBe("error");
+    act(() => vi.advanceTimersByTime(1));
+    expect(result.current.states.speakerTestState).toBe("idle");
   });
 
   test("reports unavailable speaker testing", async () => {
     const { result } = renderHook(() => useAudioSettingsSource());
     await act(() => result.current.actions.testSpeakers());
-    expect(mocks.alert).toHaveBeenCalledOnce();
+    expect(mocks.alert).toHaveBeenCalledWith(
+      translateSaved("Не удалось запустить проверку звука.")
+    );
     expect(result.current.states.speakerTestState).toBe("idle");
   });
 });

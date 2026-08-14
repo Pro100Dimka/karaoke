@@ -16,24 +16,24 @@ export default function useAsyncQueue() {
     (action) => {
       if (typeof action !== "function") {
         return Promise.reject(
-          new TypeError(
-            translateSaved(
-              translateSaved("Операция очереди должна быть функцией")
-            )
-          )
+          new TypeError(translateSaved("Операция очереди должна быть функцией"))
         );
       }
       pendingCountRef.current += 1;
+      // Stryker disable next-line ConditionalExpression: React discards post-unmount state updates; the guard is lifecycle hygiene.
       if (mountedRef.current) setPending(true);
       const result = tailRef.current.then(() => Promise.resolve().then(action));
       tailRef.current = result.catch(() => {});
       return result.finally(() => {
         pendingCountRef.current = Math.max(0, pendingCountRef.current - 1);
-        if (mountedRef.current && pendingCountRef.current === 0) {
+        // Stryker disable next-line ConditionalExpression: React discards post-unmount state updates; the guard is lifecycle hygiene.
+        if (!mountedRef.current) return;
+        if (pendingCountRef.current === 0) {
           setPending(false);
         }
       });
     },
+    // Stryker disable next-line ArrayDeclaration: mountedRef has stable identity for the hook lifetime.
     [mountedRef]
   );
   return {

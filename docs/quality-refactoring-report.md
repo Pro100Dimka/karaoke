@@ -10,11 +10,11 @@
 
 | Область | Текущее состояние | Цель |
 | --- | ---: | ---: |
-| Frontend unit tests | 443 теста (54 файла) | Все feature/domain contracts |
+| Frontend unit tests | 463 теста (54 файла) | Все feature/domain contracts |
 | Frontend coverage | 100% statements / 100% branches / 100% functions / 100% lines | Поддерживать 100% учитываемого production-кода |
 | Backend/API/AI tests | 716 тестов | Все feature/domain contracts |
 | Backend/API/AI coverage | 100% (11 356 statements, 0 missed) | Поддерживать 100% учитываемого production-кода |
-| Mutation testing | Полный baseline: 59.81% из 9 212; подтверждённые shards: 1 069/1 069 (100%) | 100% всей бизнес-логики |
+| Mutation testing | Полный baseline: 59.81% из 9 212; подтверждённые shards: 3 001/3 001 (100%) | 100% всей бизнес-логики |
 | API/DB integration | 4 сценария | Все API/DB контракты |
 | E2E | 6 сценариев | Все критические пользовательские потоки |
 
@@ -25,7 +25,7 @@
 - Frontend unit runner переведён на Vitest с JSX/React coverage.
 - REST transport, все API domains и mock API закрыты контрактными тестами. Исправлена нормализация массивов HTTP-заголовков: ранее `Array.entries()` ошибочно превращал имена заголовков в числовые индексы.
 - Mutation-runner поддерживает быстрые изолированные шарды, отдельные JSON-отчёты, выбор тестовых файлов, настраиваемую конкуренцию и видимый прогресс. API transport, normalizers и семь API domains подтверждены на 478/478 мутантах; время повторного API-прогона сокращено с десятков секунд на каждый файл до 5–11 секунд на шард.
-- Общие utilities и базовая karaoke-логика подтверждены отдельными mutation-отчётами: runtime config, storage/errors, audio/UI preferences, clipboard, hardware performance profile, hotkeys/language/theme, audio settings, display/format/layout/panorama/result. Совокупно текущие изолированные отчёты содержат 1 069 killed и 0 survived/no-coverage/error/timeout.
+- Общие utilities и базовая karaoke/library/online-room/settings-логика подтверждены отдельными mutation-отчётами: API, runtime config, storage/errors, audio/UI preferences, clipboard, hardware performance profile, hotkeys/language/theme, audio settings source/catalog/factories, diagnostics/history/memory screen configs и helpers, display/format/layout/panorama/result, melody guide, note normalization, karaoke controls/hotkeys/result/stage layout, preferences/transport/timeline, analysis, devices, lyrics, melody, pitch, karaoke data, library filtering/processing state, file import, song actions и room sync, online-room actions, navigation/name gate, diagnostics polling, message synchronization и WebSocket transport, mounted/latest refs, async queue, exclusive action, polling, console presets, memory formatting, dialog contracts, settings-form normalization/state/navigation, application settings, song settings и song-card actions. Совокупно проверено 4 325 mutants: 4 314 killed и 11 loop/async-mutants обнаружены timeout; survived/no-coverage/error отсутствуют, mutation score — 100%. Доказанно эквивалентные lifecycle/dependency/fallback mutations помечены ignored с локальным объяснением.
 - Добавлены поведенческие jsdom-тесты UI primitives, полей, таблиц, AudioPlayer и базовых async/karaoke hooks. Исправлен контракт `useExclusiveAsyncAction`: параллельные вызовы теперь действительно получают один и тот же Promise, как обещает публичный API hook.
 - Контракты комнат покрывают обновление участников, signaling, синхронизацию UI/эффектов, запрос/передачу пакета песни, ошибки передачи и intentional disconnect. Покрытие `onlineRoomMessages` поднято до 94.25% statements / 98.66% lines.
 - Добавлен общий V8 coverage всего frontend вне `src/theme` и статических assets.

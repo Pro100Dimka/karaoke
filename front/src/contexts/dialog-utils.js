@@ -1,20 +1,21 @@
 import { translateSaved } from "../i18n/runtime";
 
-export const DIALOG_DEFAULTS = Object.freeze({
-  confirm: Object.freeze({
-    title: translateSaved("Подтвердите действие"),
-    label: translateSaved("Требуется подтверждение"),
-    confirmText: translateSaved("Подтвердить"),
-    cancelText: translateSaved("Отмена"),
-    confirmClassName: "btn btn-primary"
-  }),
-  alert: Object.freeze({
+function getDialogDefaults(kind) {
+  if (kind === "confirm")
+    return {
+      title: translateSaved("Подтвердите действие"),
+      label: translateSaved("Требуется подтверждение"),
+      confirmText: translateSaved("Подтвердить"),
+      cancelText: translateSaved("Отмена"),
+      confirmClassName: "btn btn-primary"
+    };
+  return {
     title: translateSaved("Уведомление"),
     label: "A&D Voice",
     confirmText: translateSaved("Понятно"),
     confirmClassName: "btn btn-primary"
-  })
-});
+  };
+}
 export function getDialogCloseResult(kind) {
   return kind !== "confirm";
 }
@@ -29,12 +30,12 @@ export function normalizeDialogOptions(value) {
 }
 export function createDialogConfig(kind, message, options = {}) {
   const safeKind = kind === "confirm" ? "confirm" : "alert";
-  const defaults = DIALOG_DEFAULTS[safeKind];
+  const defaults = getDialogDefaults(safeKind);
   const safeOptions = normalizeDialogOptions(options);
   return {
     ...defaults,
     ...safeOptions,
     kind: safeKind,
-    message: typeof message === "string" ? message : String(message ?? "")
+    message: String(message ?? "")
   };
 }

@@ -36,6 +36,15 @@ export default {
   },
   ...(selectedTests?.length ? { testFiles: selectedTests } : {}),
   coverageAnalysis: "perTest",
+  ignorePatterns: [
+    ".runtime/**",
+    ".stryker-tmp/**",
+    "coverage/**",
+    "dist/**",
+    "release/**",
+    "reports/**",
+    "test-results/**"
+  ],
   concurrency:
     Number.isInteger(concurrency) && concurrency > 0
       ? concurrency

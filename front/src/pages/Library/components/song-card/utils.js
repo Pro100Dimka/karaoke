@@ -9,11 +9,9 @@ import {
 import { translateSaved } from "../../../../i18n/runtime";
 
 export function formatSongKey(value) {
-  if (!value) return translateSaved("Тональность определяется");
-  return String(value)
-    .trim()
-    .replace(/\s+minor$/i, "m")
-    .replace(/\s+major$/i, "maj");
+  const key = value ? String(value).trim() : "";
+  if (!key) return translateSaved("Тональность определяется");
+  return key.replace(/\s+minor$/i, "m").replace(/\s+major$/i, "maj");
 }
 export function getSongActions({
   canManageLibrary,
@@ -78,7 +76,7 @@ export function getSongActions({
           () => onDelete(song),
           15
         ]
-      ].filter(Boolean)
+      ]
     : [];
   return [primaryAction, ...managementActions].filter(Boolean);
 }

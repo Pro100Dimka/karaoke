@@ -91,5 +91,6 @@ function ErrorItem({ error }) {
   );
 }
 
-const getErrorKey = ({ id, updated_at: updatedAt, title }) =>
-  id ?? `${updatedAt}-${title}`;
+export function getErrorKey({ id, updated_at: updatedAt, title }) {
+  return id ?? `${updatedAt}-${title}`;
+}

@@ -35,12 +35,14 @@ export const MEMORY_ACTIONS = [
       })
   ]
 ];
-export const buildOptimizeOptions = (songs = []) => [
-  DEFAULT_OPTIMIZE_OPTION,
-  ...songs
-    .filter(({ status, optimized }) => status === "done" && !optimized)
-    .map(({ id: value, title: label }) => ({
-      value,
-      label
-    }))
-];
+export function buildOptimizeOptions(songs = Array.of()) {
+  return [
+    DEFAULT_OPTIMIZE_OPTION,
+    ...songs
+      .filter(({ status, optimized }) => status === "done" && !optimized)
+      .map(({ id: value, title: label }) => ({
+        value,
+        label
+      }))
+  ];
+}

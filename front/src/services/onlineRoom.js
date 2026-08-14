@@ -5,16 +5,18 @@ import { translateSaved } from "../i18n/runtime.js";
 export const DEFAULT_SIGNALING_URL =
   "wss://karaoke-studio-online.pro100dimka-and.workers.dev";
 const CONNECTION_TIMEOUT_MS = 10_000;
-const MAX_SIGNAL_MESSAGE_LENGTH = 256 * 1024;
+function getMaxSignalMessageLength() {
+  return 256 * 1024;
+}
 const MAX_PARTICIPANT_NAME_LENGTH = 64;
 export function createRoomId(
   cryptoApi = globalThis.crypto,
   random = Math.random
 ) {
-  if (typeof cryptoApi?.randomUUID === "function") {
+  if (cryptoApi && typeof cryptoApi.randomUUID === "function") {
     return cryptoApi.randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase();
   }
-  if (typeof cryptoApi?.getRandomValues === "function") {
+  if (cryptoApi && typeof cryptoApi.getRandomValues === "function") {
     const bytes = cryptoApi.getRandomValues(new Uint8Array(4));
     return [...bytes]
       .map((byte) => byte.toString(16).padStart(2, "0"))
@@ -24,12 +26,10 @@ export function createRoomId(
   return Math.floor(random() * 0x1_0000_0000)
     .toString(16)
     .padStart(8, "0")
-    .slice(-8)
     .toUpperCase();
 }
 export function normalizeRoomId(value) {
   return String(value || "")
-    .trim()
     .toUpperCase()
     .replace(/[^A-Z0-9_-]/g, "")
     .slice(0, 32);
@@ -47,7 +47,6 @@ export class OnlineRoomClient {
     this.url = parsedUrl.toString().replace(/\/$/, "");
     this.listeners = new Set();
     this.socket = null;
-    this.connectionVersion = 0;
   }
 
   onMessage(listener) {
@@ -80,7 +79,6 @@ export class OnlineRoomClient {
       );
     }
     this.disconnect();
-    const { connectionVersion } = this;
     const participantName =
       [...String(name ?? "")]
         .map((character) => {
@@ -117,12 +115,8 @@ export class OnlineRoomClient {
     }
     this.socket = socket;
     return new Promise((resolve, reject) => {
-      let settled = false;
-      const isCurrent = () =>
-        this.socket === socket && this.connectionVersion === connectionVersion;
+      const isCurrent = () => this.socket === socket;
       const settle = (callback, value) => {
-        if (settled) return;
-        settled = true;
         globalThis.clearTimeout(timeout);
         callback(value);
       };
@@ -145,13 +139,17 @@ export class OnlineRoomClient {
       };
       socket.onmessage = (event) => {
         if (!isCurrent() || typeof event.data !== "string") return;
-        if (event.data.length > MAX_SIGNAL_MESSAGE_LENGTH) {
+        if (event.data.length > getMaxSignalMessageLength()) {
           socket.close(1009, "Message too large");
           return;
         }
         try {
           const message = JSON.parse(event.data);
-          if (!message || typeof message !== "object" || Array.isArray(message))
+          if (
+            typeof message !== "object" ||
+            message === null ||
+            Array.isArray(message)
+          )
             return;
           this.emit(message);
         } catch {
@@ -166,26 +164,24 @@ export class OnlineRoomClient {
         const wasCurrent = isCurrent();
         if (wasCurrent) this.socket = null;
         globalThis.clearTimeout(timeout);
-        if (!settled) {
-          const detail = event?.reason?.trim()
-            ? `: ${event.reason.trim()}`
-            : event?.code && event.code !== 1006
-              ? translateSaved("(код {0})", {
-                  0: event.code
-                })
-              : "";
-          settle(
-            reject,
-            new Error(
-              translateSaved(
-                "Не удалось подключиться к серверу комнат{0}. Проверьте интернет, VPN, прокси или брандмауэр.",
-                {
-                  0: detail
-                }
-              )
+        const detail = event?.reason?.trim()
+          ? `: ${event.reason.trim()}`
+          : event?.code && event.code !== 1006
+            ? translateSaved("(код {0})", {
+                0: event.code
+              })
+            : "";
+        settle(
+          reject,
+          new Error(
+            translateSaved(
+              "Не удалось подключиться к серверу комнат{0}. Проверьте интернет, VPN, прокси или брандмауэр.",
+              {
+                0: detail
+              }
             )
-          );
-        }
+          )
+        );
         if (wasCurrent)
           this.emit({
             type: "connection-closed"
@@ -206,7 +202,7 @@ export class OnlineRoomClient {
         ...payload,
         type: type.trim()
       });
-      if (serialized.length > MAX_SIGNAL_MESSAGE_LENGTH) return false;
+      if (serialized.length > getMaxSignalMessageLength()) return false;
       socket.send(serialized);
       return true;
     } catch {
@@ -215,7 +211,6 @@ export class OnlineRoomClient {
   }
 
   disconnect() {
-    this.connectionVersion += 1;
     const { socket } = this;
     this.socket = null;
     if (socket && socket.readyState < 2) {

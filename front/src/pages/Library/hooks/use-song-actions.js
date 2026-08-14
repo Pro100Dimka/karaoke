@@ -3,12 +3,14 @@ import { api } from "../../../api/client";
 import { translateSaved } from "../../../i18n/runtime";
 import { getErrorMessage } from "../../../utils/errors";
 
-const getFolderPayload = ({ output_dir, slug, title, id }) => ({
-  path: output_dir ?? "",
-  slug: slug ?? "",
-  title: title ?? "",
-  id: id ?? ""
-});
+function getFolderPayload({ output_dir, slug, title, id }) {
+  return {
+    path: output_dir ?? "",
+    slug: slug ?? "",
+    title: title ?? "",
+    id: id ?? ""
+  };
+}
 export default function useLibrarySongActions(props) {
   const {
     confirmDialog,
@@ -98,7 +100,7 @@ export default function useLibrarySongActions(props) {
           translateSaved(
             "Вы точно хотите обработать заново песню «{0}»? Ранее созданные результаты обработки будут обновлены.",
             {
-              0: song?.title || translateSaved("Без названия")
+              0: song.title || translateSaved("Без названия")
             }
           ),
           translateSaved("Обработать песню заново?")

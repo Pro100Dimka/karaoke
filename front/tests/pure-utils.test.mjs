@@ -34,11 +34,6 @@ import {
 } from "../src/pages/Karaoke/utils/melody-guide.js";
 import { normalizeNoteList } from "../src/pages/Karaoke/utils/note-normalization.js";
 import { getPanoramaPosition } from "../src/pages/Karaoke/utils/panorama.js";
-import {
-  loadKaraokePreferences,
-  normalizeKaraokePreferences,
-  saveKaraokePreferences
-} from "../src/pages/Karaoke/utils/preferences.js";
 import { shouldLoadKaraokeResult } from "../src/pages/Karaoke/utils/result.js";
 import {
   getSeekTime,
@@ -80,12 +75,19 @@ import {
   mergeSongProcessingStatus,
   resolveVisibleSongs
 } from "../src/pages/Library/utils.js";
+import { translateSaved } from "../src/i18n/runtime.js";
 import { getErrorMessage } from "../src/utils/errors.js";
 import {
   getBrowserStorage,
   readJsonStorage,
   writeJsonStorage
 } from "../src/utils/storage.js";
+
+let utilityImportId = 0;
+const loadKaraokePreferencesUtility = () =>
+  import(
+    /* @vite-ignore */ `../src/pages/Karaoke/utils/preferences.js?contract=${utilityImportId++}`
+  );
 
 describe("generic normalization utilities", () => {
   test("audio helpers normalize every input class", async () => {
@@ -120,11 +122,21 @@ describe("generic normalization utilities", () => {
 
   test("settings and errors handle malformed values", () => {
     assert.equal(prepareSettingValue(" x "), "x");
+    assert.equal(prepareSettingValue("   "), "");
     assert.equal(prepareSettingValue(2), 2);
     assert.deepEqual(mergeSettings({ a: 1 }, { b: 2 }), { a: 1, b: 2 });
-    assert.deepEqual(mergeSettings([], null), {});
+    assert.deepEqual(mergeSettings({ a: 1 }, { a: 2 }), { a: 2 });
+    for (const invalid of [null, undefined, [], "bad", 7, false, () => {}]) {
+      assert.deepEqual(mergeSettings(invalid, { b: 2 }), { b: 2 });
+      assert.deepEqual(mergeSettings({ a: 1 }, invalid), { a: 1 });
+    }
     assert.equal(resolveSavedSetting({ x: 0 }, "x", 5), 0);
-    assert.equal(resolveSavedSetting([], "x", 5), 5);
+    assert.equal(resolveSavedSetting({ x: false }, "x", 5), false);
+    assert.equal(resolveSavedSetting({ x: undefined }, "x", 5), undefined);
+    const inherited = Object.create({ x: 1 });
+    assert.equal(resolveSavedSetting(inherited, "x", 5), 5);
+    for (const invalid of [null, undefined, [], "bad", 7, false, () => {}])
+      assert.equal(resolveSavedSetting(invalid, "x", 5), 5);
     assert.equal(getErrorMessage(" x "), "x");
     assert.equal(getErrorMessage("   ", "fallback"), "fallback");
     assert.equal(getErrorMessage(new Error(" bad ")), "bad");
@@ -140,13 +152,31 @@ describe("generic normalization utilities", () => {
   });
 
   test("library dates and estimates cover unavailable and rounded values", () => {
-    assert.ok(formatLibraryDate(null));
-    assert.ok(formatLibraryDate("bad"));
-    assert.ok(formatLibraryDate("2026-01-02", "en-US"));
-    assert.ok(formatEta("bad"));
-    assert.ok(formatEta(0.1));
-    assert.ok(formatEta(1));
-    assert.ok(formatEta(61));
+    assert.equal(formatLibraryDate(null), "—");
+    assert.equal(formatLibraryDate("bad"), "—");
+    const date = new Date("2026-01-02T12:00:00Z");
+    assert.equal(formatLibraryDate(date), date.toLocaleDateString("ru-RU"));
+    assert.equal(
+      formatLibraryDate(date, "en-US"),
+      date.toLocaleDateString("en-US")
+    );
+    for (const value of ["bad", NaN, Infinity, -1, 0, 0.1])
+      assert.equal(formatEta(value), translateSaved("рассчитываем…"));
+    assert.equal(formatEta(1), translateSaved("~{0} сек", { 0: 1 }));
+    assert.equal(
+      formatEta(59.6),
+      translateSaved("~{0} мин {1} сек", {
+        0: 1,
+        1: 0
+      })
+    );
+    assert.equal(
+      formatEta(61),
+      translateSaved("~{0} мин {1} сек", {
+        0: 1,
+        1: 1
+      })
+    );
   });
 
   test("JSON storage is defensive", () => {
@@ -240,9 +270,16 @@ describe("karaoke domain utilities", () => {
     assert.equal(clampPlaybackPosition(12, 10), 10);
     assert.equal(clampPlaybackPosition(2, 0), 2);
     assert.equal(shouldSyncMedia(1, 1.2), true);
+    assert.equal(shouldSyncMedia(1, 1.04), false);
+    assert.equal(shouldSyncMedia(1, 1.09), true);
+    assert.equal(shouldSyncMedia(1, 1.01, -1), true);
+    assert.equal(shouldSyncMedia(1, "bad"), false);
     assert.equal(shouldSyncMedia(1, 1, 0), false);
     assert.equal(shouldSyncMedia("x", 1), false);
     assert.equal(getSecondaryMediaPosition(12, 10), 10);
+    assert.equal(getSecondaryMediaPosition(8, 0), 8);
+    assert.equal(getSecondaryMediaPosition(8, -1), 8);
+    assert.equal(getSecondaryMediaPosition(8, NaN), 8);
     assert.equal(getSecondaryMediaPosition(-2, 0), 0);
     assert.deepEqual(createPlayerSyncCommand("play", "s", "x"), {
       type: "karaoke-player",
@@ -621,14 +658,29 @@ describe("karaoke domain utilities", () => {
 
   test("melody guide and note normalization reject corrupt analysis", () => {
     assert.equal(Math.round(midiToFrequency(69)), 440);
+    assert.equal(Math.round(midiToFrequency(81)), 880);
+    assert.equal(Math.round(midiToFrequency(57)), 220);
     assert.equal(midiToFrequency("x"), null);
     const notes = [{ start: 1, end: 2, midi: 69 }];
     assert.equal(findActiveMelodyNote(notes, 1.5), notes[0]);
+    assert.equal(findActiveMelodyNote(notes, 1), notes[0]);
+    assert.equal(findActiveMelodyNote(notes, 2), null);
+    assert.equal(findActiveMelodyNote([null], 1), null);
+    assert.equal(findActiveMelodyNote([{ start: 1, end: "bad" }], 1), null);
+    assert.equal(findActiveMelodyNote([{ start: "bad", end: 2 }], 1), null);
     assert.equal(findActiveMelodyNote({}, 1), null);
     assert.equal(
       getMelodyGuideState({ notes, position: 1.5, volume: 1 }).active,
       true
     );
+    const shiftedGuide = getMelodyGuideState({
+      notes,
+      position: 1.5,
+      keyShift: 12,
+      volume: 0.5
+    });
+    assert.equal(Math.round(shiftedGuide.frequency), 880);
+    assert.equal(shiftedGuide.gain, 0.3 * 0.5 ** 1.65);
     assert.equal(
       getMelodyGuideState({ notes, position: 0, volume: 1 }).active,
       false
@@ -660,6 +712,23 @@ describe("karaoke domain utilities", () => {
         { start: 2, midi: 60 }
       ]
     );
+    const callableNote = () => {};
+    Object.assign(callableNote, { start: 0, end: 1, midi: 60 });
+    assert.deepEqual(normalizeNoteList([callableNote]), []);
+    assert.deepEqual(
+      normalizeNoteList([
+        { start: 0, end: 1, midi: 0 },
+        { start: 1, end: 2, midi: 127 },
+        { start: -1, end: 1, midi: 60 },
+        { start: 2, end: 1, midi: 60 },
+        { start: 0, end: "bad", midi: 60 },
+        { start: 0, end: 1, midi: -1 },
+        { start: 0, end: 1, midi: 128 },
+        { start: undefined, end: 1, midi: 60 }
+      ]).map(({ midi }) => midi),
+      [0, 127]
+    );
+    assert.deepEqual(normalizeNoteList([{ start: 0, end: 1, note: "A" }]), []);
     assert.deepEqual(normalizeNoteList(null), []);
     assert.deepEqual(
       normalizeNoteList([{ start: 0, end: 1, note: "unknown" }]),
@@ -717,7 +786,14 @@ describe("karaoke domain utilities", () => {
     );
   });
 
-  test("karaoke preferences persist only normalized values", () => {
+  test("karaoke preferences persist only normalized values", async () => {
+    const {
+      KARAOKE_PREFERENCES_KEY,
+      loadKaraokePreferences,
+      normalizeKaraokePreferences,
+      saveKaraokePreferences
+    } = await loadKaraokePreferencesUtility();
+    assert.equal(KARAOKE_PREFERENCES_KEY, "karaoke-player-preferences");
     const normalized = normalizeKaraokePreferences({
       musicVolume: 2,
       vocalVolume: -1,
@@ -755,13 +831,20 @@ describe("karaoke domain utilities", () => {
       normalizeKaraokePreferences({ showLyrics: "unknown" }).showLyrics,
       true
     );
+    for (const value of ["false", "0", "no", "off", "", "  false  "])
+      assert.equal(
+        normalizeKaraokePreferences({ showLyrics: value }).showLyrics,
+        false
+      );
     assert.equal(normalizeKaraokePreferences([]).effectPreset, "studio");
     const storage = {
       value: "",
-      getItem() {
+      getItem(key) {
+        assert.equal(key, "karaoke-player-preferences");
         return this.value;
       },
-      setItem(_key, value) {
+      setItem(key, value) {
+        assert.equal(key, "karaoke-player-preferences");
         this.value = value;
       }
     };
@@ -774,6 +857,21 @@ describe("karaoke domain utilities", () => {
     assert.deepEqual(
       loadKaraokePreferences({ getItem: () => "[" }),
       normalizeKaraokePreferences({})
+    );
+    assert.deepEqual(
+      loadKaraokePreferences(null),
+      normalizeKaraokePreferences({})
+    );
+    assert.equal(saveKaraokePreferences({}, null), false);
+    const callablePreferences = () => {};
+    callablePreferences.effectPreset = "hall";
+    assert.equal(
+      normalizeKaraokePreferences(callablePreferences).effectPreset,
+      "studio"
+    );
+    assert.equal(
+      normalizeKaraokePreferences({ effectPreset: "   " }).effectPreset,
+      "studio"
     );
     assert.equal(
       saveKaraokePreferences(
@@ -799,8 +897,10 @@ describe("library and melody editor domain utilities", () => {
     assert.equal(getProcessingProgress({}, { progress_percent: "x" }), 0);
     assert.equal(getProcessingProgress(null, { progress_percent: 25 }), 25);
     assert.equal(getProcessingProgress(null, null), 0);
-    assert.equal(isProcessingActive("cancelling"), true);
-    assert.equal(isProcessingActive("done"), false);
+    for (const status of ["processing", "queued", "cancelling"])
+      assert.equal(isProcessingActive(status), true);
+    for (const status of ["done", "pending", "", null])
+      assert.equal(isProcessingActive(status), false);
     assert.equal(hasActiveSongProcessing(songs), true);
     assert.equal(
       mergeSongProcessingStatus(songs, {
@@ -828,7 +928,30 @@ describe("library and melody editor domain utilities", () => {
       isReady: true
     });
     assert.equal(hasActiveSongProcessing([{ status: null }]), false);
+    assert.equal(hasActiveSongProcessing([null, { status: "done" }]), false);
+    assert.equal(hasActiveSongProcessing(null), false);
     assert.deepEqual(mergeSongProcessingStatus(null, null), []);
+    assert.equal(mergeSongProcessingStatus("bad", { song_id: "1" }), "bad");
+    assert.equal(mergeSongProcessingStatus(songs, null), songs);
+    assert.equal(mergeSongProcessingStatus(songs, {}), songs);
+    const mixedSongs = [null, songs[1], songs[0]];
+    assert.deepEqual(
+      mergeSongProcessingStatus(mixedSongs, {
+        song_id: "1",
+        status: "processing"
+      }),
+      [
+        null,
+        songs[1],
+        {
+          ...songs[0],
+          status: "processing",
+          progress_step: undefined,
+          progress_percent: undefined,
+          error_message: undefined
+        }
+      ]
+    );
     assert.deepEqual(
       mergeSongProcessingStatus(
         [
@@ -851,6 +974,10 @@ describe("library and melody editor domain utilities", () => {
       }
     );
     assert.equal(getLocalVisibleSongs(songs, null).length, 2);
+    assert.deepEqual(
+      getLocalVisibleSongs([null, "bad", songs[0], songs[1]], new Set(["2"])),
+      [songs[0]]
+    );
     assert.deepEqual(getLocalVisibleSongs(null, null), []);
     assert.deepEqual(
       resolveVisibleSongs({ localSongs: null, room: null, roomSongs: null }),
@@ -864,9 +991,54 @@ describe("library and melody editor domain utilities", () => {
       }),
       songs
     );
+    assert.deepEqual(
+      resolveVisibleSongs({
+        localSongs: songs,
+        room: { host: false },
+        roomSongs: [null, "bad", songs[1]]
+      }),
+      [songs[1]]
+    );
+    assert.equal(
+      resolveVisibleSongs({
+        localSongs: songs,
+        room: { host: false },
+        roomSongs: null
+      }),
+      songs
+    );
     assert.deepEqual(filterSongs(null, null), []);
+    assert.equal(filterSongs(songs, ""), songs);
+    assert.equal(filterSongs(songs, "   "), songs);
+    assert.equal(filterSongs(songs, "  WORLD  ")[0], songs[0]);
+    assert.equal(filterSongs(songs, "rock")[0], songs[1]);
+    assert.deepEqual(filterSongs([null, {}, songs[0]], "hello"), [songs[0]]);
+    const joinedSongs = [
+      { title: "alpha", artist: "beta" },
+      { title: "alpha", artist: " ", genre: "beta" },
+      { title: {} }
+    ];
+    assert.deepEqual(
+      filterSongs(joinedSongs, "alpha beta"),
+      joinedSongs.slice(0, 2)
+    );
+    assert.deepEqual(
+      filterSongs([{ title: "alpha", artist: " " }], "alpha  "),
+      [{ title: "alpha", artist: " " }]
+    );
+    assert.deepEqual(filterSongs([joinedSongs[2]], "object"), []);
+    assert.deepEqual(filterSongs(songs, 7), songs);
     assert.equal(countReadySongs(null), 0);
+    assert.equal(countReadySongs([null, { status: "pending" }, songs[1]]), 1);
     assert.equal(getSongCardState(null).status, "pending");
+    for (const [status, expected] of [
+      ["processing", { isWorking: true, isReady: false }],
+      ["queued", { isWorking: true, isReady: false }],
+      ["cancelling", { isWorking: true, isReady: false }],
+      ["done", { isWorking: false, isReady: true }],
+      ["pending", { isWorking: false, isReady: false }]
+    ])
+      assert.deepEqual(getSongCardState({ status }), { status, ...expected });
   });
 
   test("editor geometry remains bounded", () => {

@@ -2,6 +2,21 @@ import { useEffect } from "react";
 import useLatestRef from "../../../hooks/useLatestRef";
 import { getKaraokeHotkeyAction } from "../utils/hotkeys";
 
+export function dispatchKaraokeHotkey(
+  action,
+  { currentTime, duration, onTogglePlay, onSeek, onStop }
+) {
+  if (action === "toggle-playback") {
+    onTogglePlay?.();
+  } else if (action === "seek-backward") {
+    onSeek?.(Math.max(0, currentTime - 5));
+  } else if (action === "seek-forward") {
+    onSeek?.(Math.min(duration, currentTime + 5));
+  } else {
+    onStop?.();
+  }
+}
+
 export default function useKaraokeHotkeys({
   scopeRef,
   currentTime,
@@ -23,17 +38,13 @@ export default function useKaraokeHotkeys({
 
       if (action !== "stop") event.preventDefault();
 
-      if (action === "toggle-playback") {
-        togglePlayRef.current?.();
-      } else if (action === "seek-backward") {
-        seekRef.current?.(Math.max(0, currentTimeRef.current - 5));
-      } else if (action === "seek-forward") {
-        seekRef.current?.(
-          Math.min(durationRef.current, currentTimeRef.current + 5)
-        );
-      } else {
-        stopRef.current?.();
-      }
+      dispatchKaraokeHotkey(action, {
+        currentTime: currentTimeRef.current,
+        duration: durationRef.current,
+        onTogglePlay: togglePlayRef.current,
+        onSeek: seekRef.current,
+        onStop: stopRef.current
+      });
     };
 
     window.addEventListener("keydown", onKeyDown);

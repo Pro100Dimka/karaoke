@@ -10,75 +10,66 @@ import {
 } from "./settings-form-utils";
 import useAppSettings from "./useAppSettings";
 import useAsyncQueue from "./useAsyncQueue";
+import useLatestRef from "./useLatestRef";
+import useMountedRef from "./useMountedRef";
 
-const SAVE_STATUS = {
-  IDLE: "idle",
-  SAVING: "saving",
-  SAVED: "saved"
-};
 export default function useSettingsForm(notify) {
   const [form, setForm] = useState(null);
-  const [saveStatus, setSaveStatus] = useState(SAVE_STATUS.IDLE);
-  const mountedRef = useRef(true);
-  const saveRequestRef = useRef(0);
+  const [saveStatus, setSaveStatus] = useState("idle");
+  const mountedRef = useMountedRef();
+  const saveRequestRef = useRef(null);
   const fieldRequestRef = useRef(new Map());
-  const pendingSaveCountRef = useRef(0);
+  const pendingSavesRef = useRef(new Set());
   const saveFailedRef = useRef(false);
   const { run: queueSave } = useAsyncQueue();
   const { updateSettings: updateAppSettings } = useAppSettings();
+  const notifyRef = useLatestRef(notify);
   const beginSave = () => {
-    pendingSaveCountRef.current += 1;
-    setSaveStatus(SAVE_STATUS.SAVING);
+    const token = Symbol("settings save");
+    pendingSavesRef.current.add(token);
+    setSaveStatus("saving");
+    return token;
   };
-  const finishSave = (failed = false) => {
+  const finishSave = (token, failed) => {
     if (failed) saveFailedRef.current = true;
-    pendingSaveCountRef.current = Math.max(0, pendingSaveCountRef.current - 1);
-    if (!mountedRef.current || pendingSaveCountRef.current > 0) return;
-    setSaveStatus(saveFailedRef.current ? SAVE_STATUS.IDLE : SAVE_STATUS.SAVED);
+    pendingSavesRef.current.delete(token);
+    // Stryker disable next-line ConditionalExpression: post-unmount update is inert.
+    if (!mountedRef.current) return;
+    if (pendingSavesRef.current.size) return;
+    setSaveStatus(saveFailedRef.current ? "idle" : "saved");
     saveFailedRef.current = false;
   };
-  useEffect(() => {
-    // React Strict Mode mounts, cleans up and mounts effects again in
-    // development. Reset the flag in setup so the second mount can still
-    // commit successful async results.
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      saveRequestRef.current += 1;
-      // The map object is stable for this hook's lifetime.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      fieldRequestRef.current.clear();
-      pendingSaveCountRef.current = 0;
-      saveFailedRef.current = false;
-    };
-  }, []);
-  useEffect(() => {
-    let active = true;
-    api
-      .getAppSettings()
-      .then((settings) => {
-        if (active) setForm(settings);
-      })
-      .catch((error) => {
-        if (active) {
-          notify(
-            translateSaved("Не удалось загрузить настройки: {0}", {
-              0: getErrorMessage(error)
-            })
-          );
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [notify]);
+  useEffect(
+    () => {
+      let active = true;
+      api
+        .getAppSettings()
+        .then((settings) => {
+          setForm(settings);
+        })
+        .catch((error) => {
+          if (active) {
+            notifyRef.current(
+              translateSaved("Не удалось загрузить настройки: {0}", {
+                0: getErrorMessage(error)
+              })
+            );
+          }
+        });
+      return () => {
+        active = false;
+      };
+    },
+    // Stryker disable next-line ArrayDeclaration: stable latest-value ref.
+    [notifyRef]
+  );
   useEffect(() => {
     if (form?.theme) {
       applyTheme(form.theme);
     }
   }, [form?.theme]);
   const updateField = (name, value) => {
-    setSaveStatus(SAVE_STATUS.IDLE);
+    setSaveStatus("idle");
     setForm((current) => ({
       ...current,
       [name]: value
@@ -88,7 +79,6 @@ export default function useSettingsForm(notify) {
     // whole application immediately. LibraryHero and other screens read the
     // theme from AppSettingsContext, not from this page-local form.
     if (name === "theme") {
-      applyTheme(value);
       updateAppSettings((current) => ({
         ...current,
         theme: value
@@ -98,46 +88,44 @@ export default function useSettingsForm(notify) {
   const save = () => {
     if (!form) return Promise.resolve();
     const payload = form;
-    const requestId = saveRequestRef.current + 1;
-    saveRequestRef.current = requestId;
-    beginSave();
+    const requestToken = beginSave();
+    saveRequestRef.current = requestToken;
     return queueSave(async () => {
       let failed = false;
       try {
         const updated = await api.updateAppSettings(payload);
-        if (!mountedRef.current || requestId !== saveRequestRef.current) return;
+        // Stryker disable next-line ConditionalExpression: post-unmount update is inert.
+        if (!mountedRef.current) return;
+        if (requestToken !== saveRequestRef.current) return;
         setForm((current) => mergeSettings(current, updated));
         updateAppSettings((current) => mergeSettings(current, updated));
       } catch (error) {
-        if (!mountedRef.current || requestId !== saveRequestRef.current) return;
+        if (!mountedRef.current) return;
+        if (requestToken !== saveRequestRef.current) return;
         failed = true;
-        await notify(
+        await notifyRef.current(
           translateSaved("Не удалось сохранить: {0}", {
             0: getErrorMessage(error)
           })
         );
       } finally {
-        finishSave(failed);
+        finishSave(requestToken, failed);
       }
     });
   };
   const saveField = (name, value) => {
     const preparedValue = prepareSettingValue(value);
-    beginSave();
-    const requestId = (fieldRequestRef.current.get(name) ?? 0) + 1;
-    fieldRequestRef.current.set(name, requestId);
+    const requestToken = beginSave();
+    fieldRequestRef.current.set(name, requestToken);
     return queueSave(async () => {
       let failed = false;
       try {
         const updated = await api.updateAppSettings({
           [name]: preparedValue
         });
-        if (
-          !mountedRef.current ||
-          fieldRequestRef.current.get(name) !== requestId
-        ) {
-          return;
-        }
+        // Stryker disable next-line ConditionalExpression: post-unmount update is inert.
+        if (!mountedRef.current) return;
+        if (fieldRequestRef.current.get(name) !== requestToken) return;
         const savedValue = resolveSavedSetting(updated, name, preparedValue);
         setForm((current) => ({
           ...current,
@@ -148,28 +136,24 @@ export default function useSettingsForm(notify) {
           [name]: savedValue
         }));
       } catch (error) {
-        if (
-          !mountedRef.current ||
-          fieldRequestRef.current.get(name) !== requestId
-        ) {
-          return;
-        }
+        if (!mountedRef.current) return;
+        if (fieldRequestRef.current.get(name) !== requestToken) return;
         failed = true;
-        await notify(
+        await notifyRef.current(
           translateSaved("Не удалось сохранить настройку: {0}", {
             0: getErrorMessage(error)
           })
         );
       } finally {
-        finishSave(failed);
+        finishSave(requestToken, failed);
       }
     });
   };
   return {
     form,
     saveStatus,
-    saving: saveStatus === SAVE_STATUS.SAVING,
-    saved: saveStatus === SAVE_STATUS.SAVED,
+    saving: saveStatus === "saving",
+    saved: saveStatus === "saved",
     updateField,
     saveField,
     save

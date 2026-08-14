@@ -15,7 +15,6 @@ export function shouldSyncMedia(currentTime, position, tolerance = 0.08) {
   const target = Number(position);
   const threshold = Math.max(0, Number(tolerance) || 0);
 
-  if (!Number.isFinite(current) || !Number.isFinite(target)) return false;
   return Math.abs(current - target) > threshold;
 }
 

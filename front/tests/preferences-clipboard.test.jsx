@@ -246,6 +246,7 @@ describe("small formatting contracts", () => {
         copyright: "© 2026 A&D Voice"
       });
       expect(formatBytes(1024 ** 2)).toContain("1.0");
+      expect(formatBytes(0)).toContain("0.0");
       expect(formatBytes(-1)).toContain("0.0");
       expect(formatBytes("invalid")).toContain("0.0");
     });
