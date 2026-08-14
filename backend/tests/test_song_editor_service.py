@@ -131,8 +131,11 @@ def test_load_editor_repairs_generated_boundary_syllable_associations(tmp_path):
 
     song_map, _ = song_editor_service.load_editor(tmp_path)
 
-    assert song_map["notes"][0]["syllable_indices"] == [2, 3]
-    assert song_map["display_notes"][0]["syllable_indices"] == [2, 3]
+    assert song_map["notes"][0]["syllable_indices"] == [3]
+    assert song_map["display_notes"][0]["syllable_indices"] == [3]
+
+    normalized = song_editor_service.normalize_editor_timeline(payload)
+    assert normalized["notes"][0]["syllable_indices"] == [3]
 
 
 def base_song_map():

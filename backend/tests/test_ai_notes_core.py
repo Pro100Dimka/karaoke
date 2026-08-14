@@ -21,8 +21,8 @@ def note(start, end, midi=60, cents=(), word=None, syllable_index=None):
     return VocalNote(start, end, midi, 90, word, syllable_index, cents)
 
 
-def syllable(start, end, index=0):
-    return Syllable(start, end, f"s{index}", index, index)
+def syllable(start, end, index=0, word=None):
+    return Syllable(start, end, f"s{index}", index if word is None else word, index)
 
 
 def test_statistical_pitch_helpers():
@@ -269,11 +269,11 @@ def test_game_notes_preserve_syllable_granularity():
     vocal = [note(0, 1, 60), note(2, 2, 61)]
     assert len(notes.build_game_notes(vocal)) == 1
     assert notes.build_game_notes(vocal, min_note=2) == []
-    aligned = [syllable(0, 0.5), syllable(0.5, 1, 1)]
+    aligned = [syllable(0, 0.5, word=0), syllable(0.5, 1, 1, word=0)]
     result = notes.build_game_notes(vocal[:1], aligned)
     assert len(result) == 1
     assert result[0].syllable_indices == (0, 1)
-    collapsed = [syllable(0, 0.8), syllable(0, 1, 1)]
+    collapsed = [syllable(0, 0.8, word=0), syllable(0, 1, 1, word=0)]
     result = notes.build_game_notes(vocal[:1], collapsed)
     assert len(result) == 1 and result[0].end == 1
     assert result[0].syllable_indices == (0, 1)
@@ -282,10 +282,10 @@ def test_game_notes_preserve_syllable_granularity():
 
     rounding_edge = note(114.46, 114.97000000000001, 63)
     aligned_edge = [
-        syllable(114.325024, 114.478816, 199),
-        syllable(114.478816, 114.683872, 200),
-        syllable(114.683872, 114.87, 201),
-        syllable(114.87, 114.97, 202),
+        syllable(114.325024, 114.478816, 199, word=10),
+        syllable(114.478816, 114.683872, 200, word=10),
+        syllable(114.683872, 114.87, 201, word=10),
+        syllable(114.87, 114.97, 202, word=10),
         syllable(114.97, 115.14, 203),
     ]
     result = notes.build_game_notes([rounding_edge], aligned_edge)
@@ -294,9 +294,21 @@ def test_game_notes_preserve_syllable_granularity():
     assert all(item.end > item.start for item in result)
 
     boundary_note = note(7.12, 7.52, 55)
-    boundary_syllables = [syllable(7.048732824, 7.12, 2), syllable(7.12, 7.16, 3)]
+    boundary_syllables = [
+        syllable(7.048732824, 7.12, 2, word=1),
+        syllable(7.12, 7.16, 3, word=1),
+    ]
     result = notes.build_game_notes([boundary_note], boundary_syllables)
-    assert result[0].syllable_indices == (2, 3)
+    assert result[0].syllable_indices == (3,)
+
+    future = notes.build_game_notes([note(6.22, 6.48, 52)], [syllable(6.48, 6.86, 23)])
+    assert future[0].syllable_indices == ()
+
+    cross_word = notes.build_game_notes(
+        [note(6.92, 7.18, 59)],
+        [syllable(6.864, 7.12, 24), syllable(7.14, 7.52, 25)],
+    )
+    assert cross_word[0].syllable_indices == (24,)
 
 
 def test_game_notes_preserve_real_repeated_notes_and_melisma():

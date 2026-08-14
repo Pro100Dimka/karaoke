@@ -611,42 +611,20 @@ def _decode_pitch_only(
 
 
 def _attach_soft_lyric_labels(notes: list[VocalNote], syllables: list[Syllable]) -> list[VocalNote]:
-    """Attach the best lyric label without changing note timing or pitch.
-
-    The proximity tolerance is derived from the local note/syllable timing
-    instead of a fixed millisecond allowance, so fast and slow songs are treated
-    proportionally.
-    """
+    """Attach overlapping lyric ownership without changing note timing or pitch."""
     if not syllables:
         return notes
-    note_durations = sorted(note.end - note.start for note in notes if note.end > note.start)
-    syllable_durations = sorted(
-        syllable.end - syllable.start for syllable in syllables if syllable.end > syllable.start
-    )
-    note_scale = statistics.median(note_durations) if note_durations else 0.0
-    syllable_scale = statistics.median(syllable_durations) if syllable_durations else note_scale
-    proximity = (
-        max(1e-4, min(value for value in (note_scale * 0.35, syllable_scale * 0.30) if value > 0.0))
-        if (note_scale > 0.0 or syllable_scale > 0.0)
-        else 1e-4
-    )
 
     result: list[VocalNote] = []
     for note in notes:
-        midpoint = (note.start + note.end) / 2.0
-        overlaps = [
-            (
-                max(0.0, min(note.end, syllable.end) - max(note.start, syllable.start)),
-                -abs(midpoint - (syllable.start + syllable.end) / 2.0),
-                syllable,
-            )
-            for syllable in syllables
-        ]
-        overlap, _, owner = max(overlaps, key=lambda item: (item[0], item[1]))
-        distance = min(abs(note.end - owner.start), abs(note.start - owner.end))
-        if overlap <= 0 and distance > proximity:
+        linked = _overlapping_owner_syllables(note, syllables)
+        if not linked:
             result.append(note)
             continue
+        owner = max(
+            linked,
+            key=lambda syllable: min(note.end, syllable.end) - max(note.start, syllable.start),
+        )
         result.append(
             VocalNote(
                 note.start,
@@ -656,9 +634,28 @@ def _attach_soft_lyric_labels(notes: list[VocalNote], syllables: list[Syllable])
                 owner.word_index,
                 owner.index,
                 note.cents,
+                tuple(syllable.index for syllable in linked),
             )
         )
     return result
+
+
+def _overlapping_owner_syllables(note: VocalNote, syllables: list[Syllable]) -> list[Syllable]:
+    """Return positive-overlap syllables from the note's dominant lyric word."""
+    overlaps = [
+        (syllable, min(note.end, syllable.end) - max(note.start, syllable.start))
+        for syllable in syllables
+        if min(note.end, syllable.end) - max(note.start, syllable.start) > 1e-9
+    ]
+    if not overlaps:
+        return []
+    overlap_by_word: dict[int, float] = {}
+    for syllable, overlap in overlaps:
+        overlap_by_word[syllable.word_index] = (
+            overlap_by_word.get(syllable.word_index, 0.0) + overlap
+        )
+    owner_word = max(overlap_by_word, key=overlap_by_word.get)
+    return [syllable for syllable, _overlap in overlaps if syllable.word_index == owner_word]
 
 
 def _word_activity_intervals(
@@ -1583,12 +1580,7 @@ def build_game_notes(
         if duration <= 0 or duration < threshold:
             continue
 
-        overlaps = [
-            syllable
-            for syllable in ordered_syllables
-            if min(note.end, syllable.end) - max(note.start, syllable.start) > 1e-9
-            or abs(float(note.start) - float(syllable.end)) <= 1e-9
-        ]
+        overlaps = _overlapping_owner_syllables(note, ordered_syllables)
         # A syllable can be encountered through overlapping artifacts more than
         # once in defensive callers.  Keep one canonical owner per syllable id.
         unique: list[Syllable] = []
@@ -1607,16 +1599,14 @@ def build_game_notes(
             default=None,
         )
         linked_indices = tuple(syllable.index for syllable in overlaps)
-        primary_index = note.syllable_index
-        if primary_index not in linked_indices and owner:
-            primary_index = owner.index
+        primary_index = owner.index if owner else None
         result.append(
             VocalNote(
                 note.start,
                 note.end,
                 int(note.midi_note),
                 note.velocity,
-                owner.word_index if owner else note.word_index,
+                owner.word_index if owner else None,
                 primary_index,
                 (),
                 linked_indices,

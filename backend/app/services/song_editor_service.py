@@ -198,14 +198,30 @@ def _refresh_generated_note_associations(song_map: JsonObject) -> None:
                 continue
             start = float(note.get("start") or 0.0)
             end = float(note.get("end") or start)
-            note["syllable_indices"] = [
-                _safe_int(syllable.get("index"), index)
-                for index, syllable in enumerate(syllables)
+            overlaps = [
+                (
+                    syllable,
+                    min(end, float(syllable.get("end") or 0.0))
+                    - max(start, float(syllable.get("start") or 0.0)),
+                )
+                for syllable in syllables
                 if min(end, float(syllable.get("end") or 0.0))
                 - max(start, float(syllable.get("start") or 0.0))
                 > 1e-9
-                or abs(start - float(syllable.get("end") or 0.0)) <= 1e-9
             ]
+            overlap_by_word: dict[int, float] = defaultdict(float)
+            for syllable, overlap in overlaps:
+                overlap_by_word[_safe_int(syllable.get("word_index"), -1)] += overlap
+            owner_word = max(overlap_by_word, key=overlap_by_word.get) if overlaps else None
+            note["syllable_indices"] = [
+                _safe_int(syllable.get("index"), index)
+                for index, (syllable, _overlap) in enumerate(overlaps)
+                if _safe_int(syllable.get("word_index"), -1) == owner_word
+            ]
+            note["syllable_index"] = (
+                note["syllable_indices"][0] if note["syllable_indices"] else None
+            )
+            note["word_index"] = owner_word
 
 
 def load_editor(output_dir: Path) -> tuple[JsonObject, bool]:
@@ -223,6 +239,8 @@ def normalize_editor_timeline(song_map: JsonObject) -> JsonObject:
     """Repair presentation timing in an edited SongMap without writing it."""
     if isinstance(song_map.get("editor"), dict) and isinstance(song_map.get("notes"), list):
         _refresh_lines(song_map, list(song_map["notes"]))
+    else:
+        _refresh_generated_note_associations(song_map)
     return song_map
 
 
