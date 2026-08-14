@@ -12,6 +12,7 @@ from ..audio import load_mono
 from ..errors import EngineUnavailableError, InvalidArtifactError
 from ..model_registry import get_model
 from ..models import Word
+from ..profiler import profile_operation
 from .device import select_torch_device
 
 _CLEAN = re.compile(r"[^\w]+", re.UNICODE)
@@ -347,22 +348,25 @@ class CTCWordAligner:
         # back to a plain feature-extractor + tokenizer processor when the LM
         # wrapper dependency is unavailable.
         try:
-            self._processor = AutoProcessor.from_pretrained(model_path, local_files_only=True)
+            with profile_operation("model.load.ctc_processor"):
+                self._processor = AutoProcessor.from_pretrained(model_path, local_files_only=True)
         except ImportError as exc:
             message = str(exc).lower()
             if "pyctcdecode" not in message and "processorwithlm" not in message:
                 raise
-            feature_extractor = AutoFeatureExtractor.from_pretrained(
-                model_path, local_files_only=True
-            )
-            tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
-            self._processor = Wav2Vec2Processor(
-                feature_extractor=feature_extractor,
-                tokenizer=tokenizer,
-            )
+            with profile_operation("model.load.ctc_processor"):
+                feature_extractor = AutoFeatureExtractor.from_pretrained(
+                    model_path, local_files_only=True
+                )
+                tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
+                self._processor = Wav2Vec2Processor(
+                    feature_extractor=feature_extractor,
+                    tokenizer=tokenizer,
+                )
 
-        self._model = AutoModelForCTC.from_pretrained(model_path, local_files_only=True)
-        self._model.eval().to(self._device)
+        with profile_operation("model.load.ctc"):
+            self._model = AutoModelForCTC.from_pretrained(model_path, local_files_only=True)
+            self._model.eval().to(self._device)
         self._loaded_key = model_path
         return self._processor, self._model
 
@@ -421,14 +425,15 @@ class CTCWordAligner:
         except ImportError as exc:
             raise EngineUnavailableError("torch is required for CTC alignment") from exc
         inputs = processor(audio, sampling_rate=sample_rate, return_tensors="pt", padding=False)
-        input_values = inputs.input_values.to(self._device)
+        with profile_operation("transfer.cpu_to_gpu.ctc", byte_count=audio.nbytes):
+            input_values = inputs.input_values.to(self._device)
         attention_mask = getattr(inputs, "attention_mask", None)
         if attention_mask is not None:
             attention_mask = attention_mask.to(self._device)
         kwargs = {"input_values": input_values}
         if attention_mask is not None:
             kwargs["attention_mask"] = attention_mask
-        with torch.inference_mode():
+        with torch.inference_mode(), profile_operation("inference.ctc"):
             if str(self._device).startswith("cuda"):
                 with torch.autocast(device_type="cuda", dtype=torch.float16):
                     logits = model(**kwargs).logits[0].float()

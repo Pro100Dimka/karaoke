@@ -1,9 +1,7 @@
-import queue
-import sys
 from unittest.mock import Mock
 
 import config
-from AI.engines.separation import MSSTMelRoformerSeparator, _run_msst_worker
+from AI.engines.separation import MSSTMelRoformerSeparator
 from AI.model_registry import ModelSpec, model_directory
 from app.services import model_install_service
 
@@ -39,22 +37,6 @@ def test_separator_reports_each_missing_resource(monkeypatch, tmp_path):
     assert any("MSST_ENGINE_DIR/inference.py" in item for item in missing)
     assert any("MSST_CONFIG" in item for item in missing)
     assert any("MSST_CHECKPOINT=<not configured>" in item for item in missing)
-
-
-def test_msst_worker_supports_frozen_gui_without_console_streams(monkeypatch, tmp_path):
-    (tmp_path / "inference.py").write_text(
-        "from tqdm import tqdm\n"
-        "def proc_folder(arguments):\n"
-        "    list(tqdm(range(1), leave=False))\n",
-        encoding="utf-8",
-    )
-    result_queue = queue.Queue()
-    monkeypatch.setattr(sys, "stdout", None)
-    monkeypatch.setattr(sys, "stderr", None)
-
-    _run_msst_worker(str(tmp_path), {}, result_queue)
-
-    assert result_queue.get_nowait() is None
 
 
 def test_model_status_reports_missing_resources(monkeypatch, tmp_path):

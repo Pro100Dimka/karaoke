@@ -53,6 +53,10 @@ class AICoreService:
             frames = self.pipeline.engines.pitch.estimate(audio_path)
             return stabilize_pitch(frames)
 
+    def close(self) -> None:
+        with self._inference_lock:
+            self.pipeline.close()
+
     def health(self) -> dict:
         engines = self.pipeline.engines
         return {
@@ -99,6 +103,8 @@ def reset_ai_service() -> None:
     """Discard cached engines after resource paths or model files change."""
     global _service, _service_config
     with _service_lock:
+        if _service is not None:
+            _service.close()
         _service = None
         _service_config = None
 

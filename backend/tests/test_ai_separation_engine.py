@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import builtins
 import queue
-import sys
 from types import ModuleType, SimpleNamespace
+from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -21,54 +20,145 @@ class ResultQueue:
     def put(self, value):
         self.value = value
 
+    put_nowait = put
+
     def get(self, timeout=None):
         if self.empty:
             raise queue.Empty
         return self.value
 
 
-def test_msst_worker_success_restores_import_state(monkeypatch, tmp_path):
+def test_persistent_worker_loads_once_and_moves_model_off_gpu(monkeypatch, tmp_path):
     engine = tmp_path / "engine"
     (engine / "models").mkdir(parents=True)
-    previous = ModuleType("models")
-    monkeypatch.setitem(sys.modules, "models", previous)
-    loader = SimpleNamespace(
-        exec_module=lambda module: setattr(module, "proc_folder", lambda args: None)
+    moves, runs, results = [], [], []
+    model = SimpleNamespace(
+        eval=lambda: model,
+        to=lambda device: moves.append(device) or model,
     )
-    spec = SimpleNamespace(loader=loader)
-    monkeypatch.setattr(separation.importlib.util, "spec_from_file_location", lambda *_: spec)
+    torch = SimpleNamespace(
+        cuda=SimpleNamespace(
+            is_available=lambda: True,
+            empty_cache=lambda: moves.append("empty"),
+        ),
+        backends=SimpleNamespace(
+            cuda=SimpleNamespace(matmul=SimpleNamespace(allow_tf32=False)),
+            cudnn=SimpleNamespace(allow_tf32=False, benchmark=False),
+            mps=SimpleNamespace(is_available=lambda: False),
+        ),
+        set_float32_matmul_precision=lambda _: None,
+        load=lambda *_args, **_kwargs: object(),
+    )
+    module_values = {
+        "torch": torch,
+        "parse_args_inference": lambda values: SimpleNamespace(
+            **values, force_cpu=False, device_ids=0
+        ),
+        "get_model_from_config": lambda *_: (
+            model,
+            SimpleNamespace(training={"instruments": ["vocals"]}),
+        ),
+        "load_start_checkpoint": lambda *_args, **_kwargs: None,
+        "run_folder": lambda _model, args, *_args, **_kwargs: runs.append(
+            (args.input_folder, args.store_dir)
+        ),
+    }
+
+    def load(module):
+        for name, value in module_values.items():
+            setattr(module, name, value)
+
+    monkeypatch.setattr(
+        separation.importlib.util,
+        "spec_from_file_location",
+        lambda *_: SimpleNamespace(loader=SimpleNamespace(exec_module=load)),
+    )
     monkeypatch.setattr(
         separation.importlib.util, "module_from_spec", lambda _: ModuleType("worker")
     )
-    result = ResultQueue("unset")
-    separation._run_msst_worker(str(engine), {"a": 1}, result)
-    assert result.value is None
-    assert sys.modules["models"] is previous
-    assert str(engine.resolve()) not in sys.path
+    requests = SimpleNamespace(get=Mock(side_effect=[("job", "in", "out"), None]))
+    output = SimpleNamespace(put=results.append)
+    separation._run_persistent_msst_worker(
+        str(engine),
+        {"model_type": "mel_band_roformer", "config_path": "c", "start_check_point": "p"},
+        requests,
+        output,
+    )
+    assert results[0][0] == "ready" and results[1][0] == "job"
+    assert runs == [("in", "out")] and moves == ["cuda:0", "cpu", "empty"]
 
 
-def test_msst_worker_reports_all_failures_and_handles_null_streams(monkeypatch, tmp_path):
-    real_import = builtins.__import__
+def test_persistent_worker_mps_model_override_failure_and_idle(monkeypatch, tmp_path):
+    engine = tmp_path / "engine"
+    (engine / "models").mkdir(parents=True)
+    moves, results = [], []
 
-    def imports(name, *args, **kwargs):
-        if name == "torch":
-            return SimpleNamespace(
-                cuda=SimpleNamespace(is_available=lambda: True),
-                backends=SimpleNamespace(
-                    cuda=SimpleNamespace(matmul=SimpleNamespace(allow_tf32=False)),
-                    cudnn=SimpleNamespace(allow_tf32=False, benchmark=False),
-                ),
-                set_float32_matmul_precision=lambda _: None,
-            )
-        return real_import(name, *args, **kwargs)
+    class Training(dict):
+        __getattr__ = dict.__getitem__
 
-    monkeypatch.setattr(builtins, "__import__", imports)
+    model = SimpleNamespace(eval=lambda: model, to=lambda device: moves.append(device) or model)
+    torch = SimpleNamespace(
+        cuda=SimpleNamespace(is_available=lambda: False, empty_cache=lambda: None),
+        mps=SimpleNamespace(empty_cache=lambda: moves.append("mps-empty")),
+        backends=SimpleNamespace(mps=SimpleNamespace(is_available=lambda: True)),
+        load=lambda *_args, **_kwargs: object(),
+    )
+    values = {
+        "torch": torch,
+        "parse_args_inference": lambda data: SimpleNamespace(**data, force_cpu=False, device_ids=0),
+        "get_model_from_config": lambda *_: (
+            model,
+            SimpleNamespace(training=Training(model_type="alternate")),
+        ),
+        "load_start_checkpoint": lambda *_args, **_kwargs: None,
+        "run_folder": Mock(side_effect=RuntimeError("inference failed")),
+    }
+
+    def load(module):
+        for name, value in values.items():
+            setattr(module, name, value)
+
+    monkeypatch.setattr(
+        separation.importlib.util,
+        "spec_from_file_location",
+        lambda *_: SimpleNamespace(loader=SimpleNamespace(exec_module=load)),
+    )
+    monkeypatch.setattr(
+        separation.importlib.util, "module_from_spec", lambda _: ModuleType("worker")
+    )
+    requests = SimpleNamespace(get=Mock(side_effect=[("job", "in", "out"), queue.Empty()]))
+    separation._run_persistent_msst_worker(
+        str(engine),
+        {"model_type": "mel_band_roformer", "config_path": "c", "start_check_point": "p"},
+        requests,
+        SimpleNamespace(put=results.append),
+    )
+    assert results[1][0] == "job" and "inference failed" in results[1][2]
+    assert moves == ["mps", "cpu", "mps-empty"]
+
+
+def test_park_model_cpu_cuda_and_mps():
+    moves = []
+    model = SimpleNamespace(to=lambda device: moves.append(device) or model)
+    torch = SimpleNamespace(
+        cuda=SimpleNamespace(empty_cache=lambda: moves.append("cuda-empty")),
+        mps=SimpleNamespace(empty_cache=lambda: moves.append("mps-empty")),
+    )
+    assert separation._park_model(model, "cpu", torch) is model
+    separation._park_model(model, "cuda:0", torch)
+    separation._park_model(model, "mps", torch)
+    assert moves == ["cpu", "cuda-empty", "cpu", "mps-empty"]
+
+
+def test_persistent_worker_reports_boot_failure_without_console(monkeypatch, tmp_path):
     monkeypatch.setattr(separation.importlib.util, "spec_from_file_location", lambda *_: None)
-    monkeypatch.setattr(sys, "stdout", None)
-    monkeypatch.setattr(sys, "stderr", None)
-    result = ResultQueue()
-    separation._run_msst_worker(str(tmp_path), {}, result)
-    assert "Could not load" in result.value
+    monkeypatch.setattr(separation.sys, "stdout", None)
+    monkeypatch.setattr(separation.sys, "stderr", None)
+    results = []
+    separation._run_persistent_msst_worker(
+        str(tmp_path), {}, SimpleNamespace(), SimpleNamespace(put=results.append)
+    )
+    assert results[0][0] == "ready" and "Could not load" in results[0][2]
 
 
 @pytest.mark.parametrize(
@@ -138,43 +228,103 @@ def context(process, result_queue):
 def test_run_engine_success_empty_queue_and_errors(monkeypatch, tmp_path):
     engine, config, checkpoint = resources(tmp_path)
     separator = separation.MSSTMelRoformerSeparator(str(engine), str(config), str(checkpoint))
-    process = Process(exitcode=0)
+    monkeypatch.setattr(separation.uuid, "uuid4", lambda: SimpleNamespace(hex="job"))
+    process = Process([True], exitcode=0)
+    separator._process = process
+    separator._request_queue = ResultQueue()
+    separator._result_queue = ResultQueue(("job", 2.0, None))
+    monkeypatch.setattr(separator, "_ensure_worker", lambda _: None)
+    separator._run_engine(tmp_path, tmp_path)
+    process = Process(exitcode=2)
+    separator._process = process
+    with pytest.raises(AICoreError, match="code 2"):
+        separator._run_engine(tmp_path, tmp_path)
+    process = Process([True], exitcode=0)
+    separator._process = process
+    separator._request_queue = ResultQueue()
+    separator._result_queue = ResultQueue(("job", 1.0, "trace"))
+    with pytest.raises(AICoreError, match="trace"):
+        separator._run_engine(tmp_path, tmp_path)
+
+    process = Process([True, True], exitcode=0)
+    separator._process = process
+    separator._request_queue = ResultQueue()
+    separator._result_queue = SimpleNamespace(
+        get=Mock(side_effect=[("other", 0.0, None), ("job", 1.0, None)])
+    )
+    separator._run_engine(tmp_path, tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("ready", "message"),
+    [
+        (None, "initialization exceeded"),
+        (("invalid", 0.0, None), "invalid ready"),
+        (("ready", 0.0, "boot failed"), "boot failed"),
+    ],
+)
+def test_ensure_worker_initialization_failures(monkeypatch, tmp_path, ready, message):
+    engine, config, checkpoint = resources(tmp_path)
+    separator = separation.MSSTMelRoformerSeparator(str(engine), str(config), str(checkpoint))
+    requests = ResultQueue()
+    results = ResultQueue(empty=ready is None, value=ready)
+    queues = iter([requests, results])
+    process = Process()
+    context = SimpleNamespace(
+        Queue=lambda **_: next(queues),
+        Process=lambda **_: process,
+    )
+    monkeypatch.setattr(separation.multiprocessing, "get_context", lambda _: context)
+    with pytest.raises(AICoreError, match=message):
+        separator._ensure_worker({})
+
+
+def test_ensure_worker_reuses_live_process_and_close_is_idempotent(monkeypatch, tmp_path):
+    engine, config, checkpoint = resources(tmp_path)
+    separator = separation.MSSTMelRoformerSeparator(str(engine), str(config), str(checkpoint))
+    separator.close()
+    separator._process = Process([True])
     monkeypatch.setattr(
         separation.multiprocessing,
         "get_context",
-        lambda _: context(process, ResultQueue(empty=True)),
+        Mock(side_effect=AssertionError("must reuse worker")),
     )
-    separator._run_engine(tmp_path, tmp_path)
-    process = Process(exitcode=2)
-    monkeypatch.setattr(
-        separation.multiprocessing, "get_context", lambda _: context(process, ResultQueue())
+    separator._ensure_worker({})
+
+
+def test_ensure_worker_starts_session(monkeypatch, tmp_path):
+    engine, config, checkpoint = resources(tmp_path)
+    separator = separation.MSSTMelRoformerSeparator(str(engine), str(config), str(checkpoint))
+    queues = iter([ResultQueue(), ResultQueue(("ready", 1.5, None))])
+    process = Process([True, False])
+    context = SimpleNamespace(
+        Queue=lambda **_: next(queues),
+        Process=lambda **_: process,
     )
-    with pytest.raises(AICoreError, match="code 2"):
-        separator._run_engine(tmp_path, tmp_path)
-    process = Process(exitcode=0)
-    monkeypatch.setattr(
-        separation.multiprocessing, "get_context", lambda _: context(process, ResultQueue("trace"))
-    )
-    with pytest.raises(AICoreError, match="trace"):
-        separator._run_engine(tmp_path, tmp_path)
+    monkeypatch.setattr(separation.multiprocessing, "get_context", lambda _: context)
+    separator._ensure_worker({"model_type": "mel_band_roformer"})
+    assert separator._process is process
+    separator.close()
 
 
 def test_run_engine_heartbeat_and_timeout(monkeypatch, tmp_path, capsys):
     engine, config, checkpoint = resources(tmp_path)
     separator = separation.MSSTMelRoformerSeparator(str(engine), str(config), str(checkpoint))
     process = Process([True, True, False])
-    monkeypatch.setattr(
-        separation.multiprocessing, "get_context", lambda _: context(process, ResultQueue())
-    )
+    separator._process = process
+    separator._request_queue = ResultQueue()
+    separator._result_queue = ResultQueue(empty=True)
+    monkeypatch.setattr(separator, "_ensure_worker", lambda _: None)
     times = iter([0, 1, 2, 3])
     monkeypatch.setattr(separation.time, "monotonic", lambda: next(times, 3))
-    separator._run_engine(tmp_path, tmp_path)
+    with pytest.raises(AICoreError, match="code 0"):
+        separator._run_engine(tmp_path, tmp_path)
     assert "separation is active" in capsys.readouterr().out
 
     process = Process([True, True, True])
-    monkeypatch.setattr(
-        separation.multiprocessing, "get_context", lambda _: context(process, ResultQueue())
-    )
+    separator._process = process
+    separator._request_queue = ResultQueue()
+    separator._result_queue = ResultQueue(empty=True)
     times = iter([0, 1801, 1801])
     monkeypatch.setattr(separation.time, "monotonic", lambda: next(times, 1801))
     with pytest.raises(AICoreError, match="30-minute"):
@@ -198,7 +348,12 @@ def test_separate_with_and_without_instrumental(monkeypatch, tmp_path):
 
     monkeypatch.setattr(separator, "_run_engine", run)
     vocals, instrumental = tmp_path / "out" / "v.wav", tmp_path / "out" / "i.wav"
+    real_copy = separation.shutil.copy2
+    monkeypatch.setattr(separation.os, "link", Mock(side_effect=OSError("cross-volume")))
+    copy = Mock(wraps=real_copy)
+    monkeypatch.setattr(separation.shutil, "copy2", copy)
     separator.separate(mix, vocals, instrumental)
+    copy.assert_called_once()
     assert sf.info(vocals).channels == 2 and sf.info(vocals).frames == 10
     assert sf.info(instrumental).frames == 10
 

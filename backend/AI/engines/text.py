@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import re
-import os
 import math
+import os
+import re
 import tempfile
 from bisect import bisect_right
 from collections import Counter
@@ -14,11 +14,12 @@ import numpy as np
 
 from ..audio import duration, load_mono
 from ..errors import EngineUnavailableError, InvalidArtifactError
-from ..models import Word
 from ..model_registry import get_model
+from ..models import Word
+from ..profiler import profile_operation
 from .base import Aligner, Transcriber
-from .device import select_torch_device
 from .ctc_alignment import CTC_ALIGNMENT_VERSION, CTCWordAligner, _language_code
+from .device import select_torch_device
 
 _TOKEN = re.compile(r"\w+(?:[’'-]\w+)*", re.UNICODE)
 _LANGUAGE_NAMES = {
@@ -3384,7 +3385,8 @@ class Qwen3Transcriber(Transcriber):
                 "max_inference_batch_size": 2 if use_cuda else 1,
                 "max_new_tokens": 256,
             }
-            self._model = Qwen3ASRModel.from_pretrained(self.model_name, **kwargs)
+            with profile_operation("model.load.qwen_asr"):
+                self._model = Qwen3ASRModel.from_pretrained(self.model_name, **kwargs)
             generation_config = getattr(
                 getattr(self._model, "model", self._model), "generation_config", None
             )
@@ -3417,14 +3419,20 @@ class Qwen3Transcriber(Transcriber):
         elif language:
             kwargs["language"] = language
         try:
-            return self._parse_batch(model.transcribe(**kwargs), len(audios))
+            with profile_operation("inference.qwen_asr"):
+                result = model.transcribe(**kwargs)
+            with profile_operation("postprocess.qwen_asr"):
+                return self._parse_batch(result, len(audios))
         except (TypeError, ValueError):
             output = []
             for item_audio in audios:
                 item_kwargs = {"audio": item_audio}
                 if language:
                     item_kwargs["language"] = language
-                output.append(_unwrap_single_result(model.transcribe(**item_kwargs)))
+                with profile_operation("inference.qwen_asr"):
+                    result = model.transcribe(**item_kwargs)
+                with profile_operation("postprocess.qwen_asr"):
+                    output.append(_unwrap_single_result(result))
             return output
 
     def transcribe(self, audio, language):
@@ -3439,8 +3447,10 @@ class Qwen3Transcriber(Transcriber):
             kwargs = {"audio": str(audio)}
             if requested_language:
                 kwargs["language"] = requested_language
-            result = model.transcribe(**kwargs)
-            item = _unwrap_single_result(result)
+            with profile_operation("inference.qwen_asr"):
+                result = model.transcribe(**kwargs)
+            with profile_operation("postprocess.qwen_asr"):
+                item = _unwrap_single_result(result)
             text = _clean_transcript_part(str(_first(item, ("text", "transcription"), "") or ""))
             self.last_language = (
                 _language_name(_first(item, ("language", "lang"), None)) or requested_language
@@ -3656,20 +3666,22 @@ class Qwen3ForcedAligner(Aligner):
         if self._model is None:
             device = select_torch_device(torch)
             use_cuda = device.startswith("cuda")
-            self._model = Qwen3ForcedAligner.from_pretrained(
-                self.model_name,
-                device_map=device,
-                dtype=torch.float16 if use_cuda else torch.float32,
-            )
+            with profile_operation("model.load.qwen_aligner"):
+                self._model = Qwen3ForcedAligner.from_pretrained(
+                    self.model_name,
+                    device_map=device,
+                    dtype=torch.float16 if use_cuda else torch.float32,
+                )
         return self._model
 
     def align(self, audio, text, language):
         resolved_language = resolve_alignment_language(text, language)
-        result = self._load().align(
-            audio=str(audio),
-            text=text,
-            language=resolved_language,
-        )
+        with profile_operation("inference.qwen_aligner"):
+            result = self._load().align(
+                audio=str(audio),
+                text=text,
+                language=resolved_language,
+            )
         item = _unwrap_single_result(result)
         words = _words_from_items(item if isinstance(item, (list, tuple)) else _unwrap_items(item))
         if not words:
@@ -3717,11 +3729,12 @@ class Qwen3ForcedAligner(Aligner):
 
         resolved_language = resolve_alignment_language(" ".join(texts), language)
         try:
-            raw_results = self._load().align(
-                audio=[str(item) for item in audios],
-                text=list(texts),
-                language=[resolved_language] * len(audios),
-            )
+            with profile_operation("inference.qwen_aligner"):
+                raw_results = self._load().align(
+                    audio=[str(item) for item in audios],
+                    text=list(texts),
+                    language=[resolved_language] * len(audios),
+                )
         except (EngineUnavailableError, TypeError, ValueError):
             # Older qwen-asr builds or test doubles may not expose batch alignment.  Preserve
             # compatibility without changing alignment semantics.

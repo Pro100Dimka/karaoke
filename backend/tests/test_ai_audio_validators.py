@@ -30,6 +30,28 @@ def test_load_mono_resamples_and_reports_duration(tmp_path):
         audio.load_mono(path, 0)
 
 
+def test_audio_buffer_cache_reuses_io_but_returns_independent_arrays(monkeypatch, tmp_path):
+    path = tmp_path / "audio.wav"
+    sf.write(path, np.linspace(-0.5, 0.5, 32, dtype=np.float32), 8000)
+    real_read = audio.sf.read
+    reads = []
+
+    def counted_read(*args, **kwargs):
+        reads.append(args[0])
+        return real_read(*args, **kwargs)
+
+    monkeypatch.setattr(audio.sf, "read", counted_read)
+    with audio.audio_buffer_cache():
+        first, rate = audio.load_mono(path, 16000)
+        second, second_rate = audio.load_mono(path, 16000)
+        first[0] = 99
+        third, _ = audio.load_mono(path, 16000)
+    assert rate == second_rate == 16000 and len(reads) == 1
+    assert np.array_equal(second, third) and third[0] != 99
+    audio.load_mono(path, 16000)
+    assert len(reads) == 2
+
+
 def test_decode_audio_validates_inputs(tmp_path):
     with pytest.raises(FileNotFoundError):
         audio.decode_audio(tmp_path / "missing", tmp_path / "out")

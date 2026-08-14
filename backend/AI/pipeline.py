@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .artifacts import publish_files_atomically
-from .audio import decode_audio, duration
+from .audio import audio_buffer_cache, decode_audio, duration
 from .cache import StageCache
 from .config import CoreConfig
 from .diagnostics import build_alignment_debug
@@ -49,7 +49,7 @@ from .pitch_post import (
     refine_pitch_confidence,
     stabilize_pitch,
 )
-from .profiler import environment_info
+from .profiler import RuntimeTelemetry, environment_info
 from .quality import evaluate_quality
 from .syllables import SYLLABLE_ALIGNER_VERSION, align_syllables
 from .utils.io import read_json, write_json_atomic, write_text_atomic
@@ -371,6 +371,11 @@ class KaraokePipeline:
         self.config = config or CoreConfig.from_env()
         self.engines = engines or EngineRegistry.create_default(self.config)
 
+    def close(self) -> None:
+        close = getattr(self.engines.separator, "close", None)
+        if close is not None:
+            close()
+
     @staticmethod
     def _remove_stale(*paths: Path) -> None:
         for path in paths:
@@ -466,6 +471,13 @@ class KaraokePipeline:
             return self._run_unlocked(request)
 
     def _run_unlocked(self, request: PipelineRequest) -> PipelineResult:
+        telemetry = RuntimeTelemetry()
+        with telemetry, audio_buffer_cache():
+            return self._run_profiled(request, telemetry)
+
+    def _run_profiled(
+        self, request: PipelineRequest, telemetry: RuntimeTelemetry
+    ) -> PipelineResult:
         source = Path(request.source_path).resolve()
         output = Path(request.output_dir).resolve()
         output.mkdir(parents=True, exist_ok=True)
@@ -1216,6 +1228,9 @@ class KaraokePipeline:
         )
         write_json_atomic(alignment_debug_path, alignment_debug)
 
+        runtime_performance = telemetry.result(reports)
+        performance_path = output / "performance.json"
+        write_json_atomic(performance_path, runtime_performance)
         diagnostics_path = output / "diagnostics.json"
         write_json_atomic(
             diagnostics_path,
@@ -1236,7 +1251,10 @@ class KaraokePipeline:
                 "root_cause_analysis": alignment_debug.get("root_cause_analysis", {}),
                 "pitch_source_analysis": alignment_debug.get("pitch_source_analysis", {}),
                 "vocal_effect_analysis": alignment_debug.get("vocal_effect_analysis", {}),
-                "performance": alignment_debug.get("performance", {}),
+                "performance": {
+                    **dict(alignment_debug.get("performance", {})),
+                    "runtime": runtime_performance,
+                },
                 "data_flow": {
                     "source_sha256": source_hash,
                     "song_sha256": cache.file_hash(song_wav),
@@ -1288,6 +1306,7 @@ class KaraokePipeline:
             "songMap": "songMap.json",
             "diagnostics": "diagnostics.json",
             "alignmentDebug": "alignmentDebug.json",
+            "performance": "performance.json",
         }
         if self.config.preserve_raw_pitch and pitch_raw_path.exists():
             outputs["pitchRaw"] = "pitchRaw.json"

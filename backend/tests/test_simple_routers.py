@@ -159,10 +159,12 @@ def test_lifespan_installs_handler_initializes_and_always_cleans(monkeypatch):
     migrate = Mock()
     close = Mock(side_effect=RuntimeError("close failed"))
     stop = Mock()
+    reset_ai = Mock()
     monkeypatch.setattr(main, "init_db", initialize)
     monkeypatch.setattr(main.storage_migration, "migrate_legacy_song_storage", migrate)
     monkeypatch.setattr(main.recording_service, "close_all_sessions", close)
     monkeypatch.setattr(main.audio_service, "stop_monitoring", stop)
+    monkeypatch.setattr(main.ai_service, "reset_ai_service", reset_ai)
 
     async def exercise():
         with pytest.raises(RuntimeError, match="close failed"):
@@ -173,6 +175,7 @@ def test_lifespan_installs_handler_initializes_and_always_cleans(monkeypatch):
     initialize.assert_called_once_with()
     migrate.assert_called_once_with()
     stop.assert_called_once_with()
+    reset_ai.assert_called_once_with()
     assert loop.set_exception_handler.call_args_list[-1].args == (previous,)
 
     handler = loop.set_exception_handler.call_args_list[0].args[0]
@@ -192,6 +195,7 @@ def test_lifespan_handler_uses_loop_default_without_previous(monkeypatch):
     monkeypatch.setattr(main.storage_migration, "migrate_legacy_song_storage", Mock())
     monkeypatch.setattr(main.recording_service, "close_all_sessions", Mock())
     monkeypatch.setattr(main.audio_service, "stop_monitoring", Mock())
+    monkeypatch.setattr(main.ai_service, "reset_ai_service", Mock())
 
     async def exercise():
         async with main.lifespan(main.app):

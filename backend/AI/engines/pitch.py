@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import numpy as np
 
-from .base import PitchEstimator
-from .device import select_torch_device
 from ..audio import load_mono
 from ..errors import EngineUnavailableError
 from ..models import PitchFrame
+from ..profiler import profile_operation
+from .base import PitchEstimator
+from .device import select_torch_device
 
 
 class FCPEPitchEstimator(PitchEstimator):
@@ -40,7 +41,8 @@ class FCPEPitchEstimator(PitchEstimator):
             raise EngineUnavailableError("Install torch and torchfcpe for FCPE") from exc
         if self._model is None:
             self._device = select_torch_device(torch)
-            self._model = torchfcpe.spawn_bundled_infer_model(device=self._device)
+            with profile_operation("model.load.fcpe"):
+                self._model = torchfcpe.spawn_bundled_infer_model(device=self._device)
         return torch, self._model
 
     def estimate(self, audio):
@@ -58,12 +60,9 @@ class FCPEPitchEstimator(PitchEstimator):
             y = np.ascontiguousarray(y * (0.999 / peak), dtype=np.float32)
 
         # Official TorchFCPE input shape is [batch, samples, channel].
-        tensor = (
-            torch.from_numpy(np.asarray(y, dtype=np.float32))
-            .unsqueeze(0)
-            .unsqueeze(-1)
-            .to(self._device)
-        )
+        tensor = torch.from_numpy(np.asarray(y, dtype=np.float32)).unsqueeze(0).unsqueeze(-1)
+        with profile_operation("transfer.cpu_to_gpu.fcpe", byte_count=y.nbytes):
+            tensor = tensor.to(self._device)
         target_length = (len(y) // self.hop) + 1
         kwargs = {
             "sr": self.sr,
@@ -74,7 +73,7 @@ class FCPEPitchEstimator(PitchEstimator):
             "interp_uv": False,
             "output_interp_target_length": target_length,
         }
-        with torch.inference_mode():
+        with torch.inference_mode(), profile_operation("inference.fcpe"):
             try:
                 result = model.infer(tensor, **kwargs)
             except TypeError:
@@ -93,7 +92,8 @@ class FCPEPitchEstimator(PitchEstimator):
             f0_tensor = result
             confidence_tensor = None
 
-        f0 = np.asarray(f0_tensor.squeeze().detach().cpu(), dtype=np.float32).reshape(-1)
+        with profile_operation("postprocess.fcpe"):
+            f0 = np.asarray(f0_tensor.squeeze().detach().cpu(), dtype=np.float32).reshape(-1)
         confidence = None
         if confidence_tensor is not None:
             candidate = np.asarray(

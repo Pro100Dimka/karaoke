@@ -158,6 +158,9 @@ def test_ai_service_facade(monkeypatch):
     assert health["ctc_ru_configured"] is True
     assert health["ctc_uk_configured"] is False
     assert health["separation_configured"] is False
+    pipeline.close = Mock()
+    core.close()
+    pipeline.close.assert_called_once_with()
 
 
 def test_ai_service_singleton_and_reset(monkeypatch):
@@ -173,6 +176,7 @@ def test_ai_service_singleton_and_reset(monkeypatch):
     instance.process_song.return_value = "ok"
     assert service.process_song(1, value=2) == "ok"
     service.reset_ai_service_for_tests()
+    instance.close.assert_called_once_with()
     assert service._service is None and service._service_config is None
 
 

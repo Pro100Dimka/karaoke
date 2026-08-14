@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 import config
+from AI import service as ai_service
 from app.routers import analysis, application, audio, cache, diagnostics, player, recording, songs
 from app.services import audio_service, recording_service, storage_migration
 from database import init_db
@@ -58,7 +59,10 @@ async def lifespan(_app: FastAPI):
         try:
             recording_service.close_all_sessions()
         finally:
-            audio_service.stop_monitoring()
+            try:
+                audio_service.stop_monitoring()
+            finally:
+                ai_service.reset_ai_service()
 
 
 app = FastAPI(

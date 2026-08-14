@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import builtins
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
 from AI import config, profiler
 from AI.errors import ConfigurationError
-from AI.models import PitchFrame, Syllable, VocalNote, Word
+from AI.models import PitchFrame, StageReport, Syllable, VocalNote, Word
 from AI.quality import evaluate_quality
 
 
@@ -112,6 +113,7 @@ def test_profiler_snapshot_and_environment_success(monkeypatch):
         memory_reserved=lambda: 3 * 1024 * 1024,
         get_device_name=lambda _: "GPU",
         get_device_properties=lambda _: SimpleNamespace(total_memory=8 * 1024 * 1024),
+        get_device_capability=lambda _: (8, 6),
     )
     torch = SimpleNamespace(__version__="1", cuda=cuda, version=SimpleNamespace(cuda="12"))
     monkeypatch.setattr(
@@ -123,6 +125,7 @@ def test_profiler_snapshot_and_environment_success(monkeypatch):
     assert snap.rss_mb == 10 and snap.cuda_allocated_mb == 2 and snap.cuda_reserved_mb == 3
     info = profiler.environment_info()
     assert info["gpu"] == "GPU" and info["vram_mb"] == 8
+    assert info["gpu_compute_capability"] == [8, 6]
 
 
 @pytest.mark.parametrize("error", [ImportError("missing"), OSError("blocked")])
@@ -169,3 +172,69 @@ def test_profiler_environment_without_torch(monkeypatch):
         builtins, "__import__", import_override(builtins.__import__, {"torch": ImportError("none")})
     )
     assert profiler.environment_info()["cuda_available"] is False
+
+
+def test_runtime_telemetry_records_operations_and_resources(monkeypatch):
+    samples = iter(
+        [
+            (100, 2.0, (10, 20, 1, 2)),
+            (150, 3.5, (40, 70, 4, 7)),
+        ]
+    )
+    process = SimpleNamespace(pid=7)
+    telemetry = profiler.RuntimeTelemetry(sample_interval=60)
+    monkeypatch.setattr(telemetry, "_process_family", lambda: [process])
+    monkeypatch.setattr(telemetry, "_process_sample", lambda _process: next(samples))
+    monkeypatch.setattr(profiler, "_torch_memory", lambda: (4.0, 6.0, []))
+
+    with telemetry:
+        assert profiler.current_telemetry() is telemetry
+        profiler.record_operation("decode", byte_count=12)
+        with profiler.profile_operation("read", byte_count=8):
+            pass
+
+    assert profiler.current_telemetry() is None
+    result = telemetry.result([StageReport("stage", 1, False, "x")])
+    assert result["operations"]["decode"]["count"] == 1
+    assert result["operations"]["read"]["bytes"] == 8
+    assert result["resources"]["peak_rss_mb"] == pytest.approx(150 / 1024 / 1024)
+    assert result["resources"]["io_read_bytes"] == 30
+    assert result["resources"]["peak_cuda_reserved_mb"] == 6
+    assert result["stages"][0]["stage"] == "stage"
+
+
+def test_runtime_telemetry_helpers_without_active_session():
+    profiler.record_operation("ignored")
+    with profiler.profile_operation("ignored"):
+        pass
+
+
+def test_runtime_telemetry_sampling_failures_loop_and_idempotency(monkeypatch):
+    telemetry = profiler.RuntimeTelemetry(sample_interval=60)
+    monkeypatch.setattr(telemetry, "_process_family", lambda: [SimpleNamespace(pid=1)])
+    monkeypatch.setattr(
+        telemetry, "_process_sample", Mock(side_effect=RuntimeError("process disappeared"))
+    )
+    monkeypatch.setattr(profiler, "_torch_memory", lambda: (None, None, []))
+    telemetry._sample()
+    sample = Mock()
+    monkeypatch.setattr(telemetry, "_sample", sample)
+    telemetry._stop = SimpleNamespace(wait=Mock(side_effect=[False, True]), set=Mock())
+    telemetry._sample_loop()
+    sample.assert_called_once_with()
+
+    telemetry = profiler.RuntimeTelemetry(sample_interval=60)
+    monkeypatch.setattr(telemetry, "_sample", Mock())
+    with telemetry:
+        assert telemetry.start() is telemetry
+    telemetry.stop()
+
+
+def test_runtime_telemetry_process_family_failure(monkeypatch):
+    real_import = builtins.__import__
+    monkeypatch.setattr(
+        builtins,
+        "__import__",
+        import_override(real_import, {"psutil": OSError("unavailable")}),
+    )
+    assert profiler.RuntimeTelemetry()._process_family() == []

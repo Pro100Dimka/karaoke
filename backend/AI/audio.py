@@ -4,6 +4,9 @@ import math
 import os
 import subprocess
 import tempfile
+import time
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 
 import numpy as np
@@ -13,8 +16,22 @@ from scipy.signal import resample_poly
 import config
 
 from .errors import AICoreError
+from .profiler import profile_operation, record_operation
 
 DEFAULT_FFMPEG_TIMEOUT_SEC = 30 * 60
+_AUDIO_CACHE: ContextVar[dict[tuple[str, int, int, int | None], tuple[np.ndarray, int]] | None] = (
+    ContextVar("ai_audio_cache", default=None)
+)
+
+
+@contextmanager
+def audio_buffer_cache():
+    """Reuse decoded/resampled PCM inside one pipeline run without sharing mutable arrays."""
+    token = _AUDIO_CACHE.set({})
+    try:
+        yield
+    finally:
+        _AUDIO_CACHE.reset(token)
 
 
 def decode_audio(
@@ -56,8 +73,10 @@ def decode_audio(
         "wav",
         str(temporary),
     ]
+    started = time.perf_counter()
     try:
-        subprocess.run(command, check=True, capture_output=True, timeout=timeout_sec)
+        with profile_operation("decode.ffmpeg", byte_count=source_path.stat().st_size):
+            subprocess.run(command, check=True, capture_output=True, timeout=timeout_sec)
         if not temporary.is_file() or temporary.stat().st_size < 44:
             raise AICoreError("FFmpeg finished but did not create a valid WAV file")
         # Verify readability before publishing the artifact.
@@ -78,6 +97,11 @@ def decode_audio(
         raise AICoreError(f"Could not validate decoded WAV: {exc}") from exc
     finally:
         temporary.unlink(missing_ok=True)
+    record_operation(
+        "decode.output",
+        elapsed_sec=time.perf_counter() - started,
+        byte_count=target_path.stat().st_size,
+    )
     return target_path
 
 
@@ -85,7 +109,17 @@ def load_mono(
     path: str | Path,
     target_sample_rate: int | None = None,
 ) -> tuple[np.ndarray, int]:
-    audio, sample_rate = sf.read(path, dtype="float32", always_2d=True)
+    source = Path(path).resolve()
+    stat = source.stat()
+    key = (str(source), stat.st_size, stat.st_mtime_ns, target_sample_rate)
+    cache = _AUDIO_CACHE.get()
+    if cache is not None and key in cache:
+        audio, sample_rate = cache[key]
+        record_operation("audio.cache_hit", byte_count=audio.nbytes)
+        return audio.copy(), sample_rate
+
+    with profile_operation("audio.read", byte_count=stat.st_size):
+        audio, sample_rate = sf.read(source, dtype="float32", always_2d=True)
     mono = np.mean(audio, axis=1, dtype=np.float32)
 
     if target_sample_rate is not None:
@@ -93,14 +127,20 @@ def load_mono(
             raise ValueError("target_sample_rate must be positive")
         if sample_rate != target_sample_rate:
             divisor = math.gcd(sample_rate, target_sample_rate)
-            mono = resample_poly(
-                mono,
-                target_sample_rate // divisor,
-                sample_rate // divisor,
-            ).astype(np.float32, copy=False)
+            with profile_operation("audio.resample", byte_count=mono.nbytes):
+                mono = resample_poly(
+                    mono,
+                    target_sample_rate // divisor,
+                    sample_rate // divisor,
+                ).astype(np.float32, copy=False)
             sample_rate = target_sample_rate
 
-    return np.ascontiguousarray(mono, dtype=np.float32), int(sample_rate)
+    result = np.ascontiguousarray(mono, dtype=np.float32)
+    rate = int(sample_rate)
+    if cache is not None:
+        cache[key] = (result, rate)
+    record_operation("audio.load_mono", byte_count=stat.st_size)
+    return result.copy() if cache is not None else result, rate
 
 
 def duration(path: str | Path) -> float:

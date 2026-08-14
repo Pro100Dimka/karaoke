@@ -568,4 +568,7 @@ def test_full_pipeline_fresh_supplied_lyrics_flow(monkeypatch, tmp_path, mode):
     assert "quality warning" in result.warnings
     assert (output / "songMap.json").exists()
     assert (output / "diagnostics.json").exists()
+    performance = pipeline.read_json(output / "performance.json")
+    assert performance["elapsed_sec"] >= 0 and performance["stages"]
+    assert pipeline.read_json(result.manifest_path)["outputs"]["performance"] == "performance.json"
     assert progress.call_args.args[:2] == ("complete", 100)
