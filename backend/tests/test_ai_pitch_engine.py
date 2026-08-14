@@ -4,12 +4,16 @@ import builtins
 import contextlib
 import sys
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import numpy as np
 import pytest
 
+from AI.backend_shadow import ShadowPolicy
 from AI.engines import pitch
+from AI.engines.fcpe_backends import FCPEInference
 from AI.errors import EngineUnavailableError
+from AI.models import PitchFrame
 
 
 class Tensor:
@@ -113,6 +117,56 @@ def test_fcpe_ignores_mismatched_confidence(monkeypatch):
     monkeypatch.setattr(estimator, "_load_model", lambda: (torch_stub(), model))
     monkeypatch.setattr(pitch, "load_mono", lambda *_: (np.ones(10, dtype=np.float32), 100))
     assert all(frame.confidence == 1 for frame in estimator.estimate("audio"))
+
+
+def test_fcpe_shadow_is_diagnostic_and_cleanup_safe():
+    candidate = FCPEInference(
+        np.asarray([100, 0], dtype=np.float32),
+        np.asarray([0.9, 0.1], dtype=np.float32),
+        0.2,
+        0.1,
+        16,
+        32,
+        ("CUDAExecutionProvider",),
+    )
+    backend = SimpleNamespace(infer=Mock(return_value=candidate), release=Mock())
+    estimator = pitch.FCPEPitchEstimator(
+        sr=100,
+        hop=10,
+        fmin=50,
+        fmax=500,
+        shadow_policy=ShadowPolicy(True, 1),
+        shadow_backend_factory=lambda: backend,
+    )
+    model = SimpleNamespace(
+        wav2mel=lambda *_: Tensor(np.ones((1, 2, 3))),
+        model=SimpleNamespace(cent_table=Tensor(np.arange(4))),
+    )
+    production = [PitchFrame(0, 100, 1, True, 0.2), PitchFrame(0.1, 0, 0, False, 0.1)]
+    estimator._run_shadow("song.wav", model, Tensor([0]), np.ones(10), 2, production)
+    assert estimator.last_shadow_diagnostics["status"] == "compared"
+    assert estimator.last_shadow_frames == production
+    assert backend.release.called and estimator._shadow_backend is None
+
+
+def test_fcpe_shadow_failure_and_resident_policy_are_isolated():
+    failing = SimpleNamespace(
+        infer=Mock(side_effect=RuntimeError("shadow failed")), release=Mock()
+    )
+    estimator = pitch.FCPEPitchEstimator(
+        shadow_policy=ShadowPolicy(True, 1, True),
+        shadow_backend_factory=lambda: failing,
+    )
+    model = SimpleNamespace(
+        wav2mel=lambda *_: Tensor(np.ones((1, 2, 3))),
+        model=SimpleNamespace(cent_table=Tensor(np.arange(4))),
+    )
+    estimator._run_shadow("song.wav", model, Tensor([0]), np.ones(10), 2, [])
+    assert "shadow failed" in estimator.last_shadow_diagnostics["error"]
+    assert not failing.release.called
+    failing.release.side_effect = RuntimeError("cleanup")
+    estimator.release_shadow()
+    assert estimator._shadow_backend is None
 
 
 def test_pyin_fallback(monkeypatch):

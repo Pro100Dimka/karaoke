@@ -1,25 +1,43 @@
 from __future__ import annotations
 
+from contextlib import suppress
+
 import numpy as np
 
 from ..audio import load_mono
+from ..backend_shadow import ShadowPolicy
 from ..errors import EngineUnavailableError
 from ..models import PitchFrame
 from ..profiler import profile_operation
 from .base import PitchEstimator
 from .device import select_torch_device
+from .fcpe_backends import OrtCudaFCPEBackend, describe_fcpe_inference
 
 
 class FCPEPitchEstimator(PitchEstimator):
     name = "fcpe"
 
-    def __init__(self, sr=16000, hop=160, fmin=55.0, fmax=1400.0):
+    def __init__(
+        self,
+        sr=16000,
+        hop=160,
+        fmin=55.0,
+        fmax=1400.0,
+        *,
+        shadow_policy: ShadowPolicy | None = None,
+        shadow_backend_factory=OrtCudaFCPEBackend,
+    ):
         self.sr = int(sr)
         self.hop = max(1, int(hop))
         self.fmin = float(fmin)
         self.fmax = float(fmax)
         self._model = None
         self._device = None
+        self._shadow_policy = shadow_policy or ShadowPolicy.from_env("KARAOKE_AI_FCPE_SHADOW")
+        self._shadow_backend_factory = shadow_backend_factory
+        self._shadow_backend = None
+        self.last_shadow_diagnostics: dict[str, object] = {"selected": False}
+        self.last_shadow_frames: list[PitchFrame] = []
 
     def fingerprint(self) -> dict[str, object]:
         return {
@@ -134,7 +152,69 @@ class FCPEPitchEstimator(PitchEstimator):
                     energy=energy,
                 )
             )
+        self._run_shadow(audio, model, tensor, y, target_length, output)
         return output
+
+    def _run_shadow(self, audio, model, tensor, y, target_length, production) -> None:
+        selected = self._shadow_policy.selects(str(audio))
+        self.last_shadow_frames = []
+        self.last_shadow_diagnostics = {
+            "selected": selected,
+            "production": "pytorch:auto:fp32",
+            "shadow": "onnxruntime:cuda:fp16",
+            "resident": self._shadow_policy.keep_session_resident,
+        }
+        if not selected:
+            return
+        try:
+            if self._shadow_backend is None:
+                self._shadow_backend = self._shadow_backend_factory()
+            mel = np.asarray(model.wav2mel(tensor, self.sr).detach().cpu(), dtype=np.float32)
+            cent_table = np.asarray(model.model.cent_table.detach().cpu(), dtype=np.float32)
+            candidate = self._shadow_backend.infer(
+                mel,
+                cent_table,
+                target_length=target_length,
+            )
+            step = self.hop / self.sr
+            frames = []
+            for index, value in enumerate(candidate.f0):
+                hz = min(float(value), self.fmax)
+                valid = np.isfinite(hz) and self.fmin <= hz <= self.fmax
+                frames.append(
+                    PitchFrame(
+                        index * step,
+                        hz if valid else 0.0,
+                        1.0 if valid else 0.0,
+                        bool(valid),
+                        production[index].energy if index < len(production) else 0.0,
+                    )
+                )
+            self.last_shadow_frames = frames
+            size = min(len(production), len(frames))
+            voiced_equal = sum(
+                production[index].voiced == frames[index].voiced for index in range(size)
+            )
+            self.last_shadow_diagnostics.update(
+                status="compared",
+                **describe_fcpe_inference(candidate),
+                production_frames=len(production),
+                shadow_frames=len(frames),
+                voiced_agreement=voiced_equal / size if size else 1.0,
+            )
+        except Exception as exc:  # noqa: BLE001 - shadow cannot affect production
+            self.last_shadow_diagnostics.update(
+                status="failed", error=f"{type(exc).__name__}: {exc}"
+            )
+        finally:
+            if not self._shadow_policy.keep_session_resident:
+                self.release_shadow()
+
+    def release_shadow(self) -> None:
+        if self._shadow_backend is not None:
+            with suppress(Exception):
+                self._shadow_backend.release()
+        self._shadow_backend = None
 
 
 class PyinFallbackPitchEstimator(PitchEstimator):

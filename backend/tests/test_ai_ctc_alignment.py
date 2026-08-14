@@ -8,7 +8,9 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 
+from AI.backend_shadow import ShadowPolicy
 from AI.engines import ctc_alignment as ctc
+from AI.engines.ctc_backends import ShadowInference
 from AI.errors import EngineUnavailableError, InvalidArtifactError
 from AI.models import Word
 
@@ -292,3 +294,157 @@ def test_align_lines_swallows_window_errors_and_rejects_bad_results(monkeypatch)
     monkeypatch.setattr(aligner, "align_window", successful)
     result = aligner.align_lines("x", ["one", "two"], "en", {1: (0.8, 0.9, 0.8)})
     assert result[0] and calls
+
+
+class ShadowBackend:
+    def __init__(self, _model, *, logits=None, error=None):
+        self.logits = logits
+        self.error = error
+        self.release = Mock()
+
+    def infer(self, _values):
+        if self.error:
+            raise self.error
+        return ShadowInference(
+            np.asarray(self.logits, dtype=np.float32),
+            0.2,
+            0.1,
+            16,
+            int(np.asarray(self.logits).nbytes),
+            ("CUDAExecutionProvider", "CPUExecutionProvider"),
+        )
+
+
+def test_shadow_inference_compares_without_changing_production(monkeypatch):
+    torch = pytest.importorskip("torch")
+    production = torch.tensor([[[4.0, 1.0], [1.0, 4.0]]])
+    processor = Mock(
+        return_value=SimpleNamespace(input_values=torch.zeros((1, 16)), attention_mask=None)
+    )
+    model = Mock(return_value=SimpleNamespace(logits=production))
+    backend = ShadowBackend("ctc_ru", logits=production[0].numpy())
+    aligner = ctc.CTCWordAligner(
+        shadow_policy=ShadowPolicy(True, 1),
+        shadow_backend_factory=lambda _: backend,
+    )
+    monkeypatch.setattr(aligner, "_load", lambda *_: (processor, model))
+    aligner._device = "cpu"
+    aligner._begin_shadow("song.wav", "ru", "слово")
+    result, returned = aligner._infer(np.zeros(16), 16000, "ru", "слово")
+    assert returned is processor
+    assert torch.equal(result, torch.log_softmax(production[0], dim=-1))
+    record = aligner.last_shadow_diagnostics["windows"][0]
+    assert record["status"] == "compared"
+    assert record["argmax_agreement"] == 1
+    assert record["argmax_changed_frames"] == 0
+
+
+def test_shadow_failure_and_shape_mismatch_are_diagnostic_only(monkeypatch):
+    torch = pytest.importorskip("torch")
+    production = torch.ones((1, 2, 3))
+    processor = Mock(
+        return_value=SimpleNamespace(input_values=torch.zeros((1, 16)), attention_mask=None)
+    )
+    model = Mock(return_value=SimpleNamespace(logits=production))
+    backends = iter(
+        (
+            ShadowBackend("ctc_ru", error=RuntimeError("shadow failed")),
+            ShadowBackend("ctc_ru", logits=np.ones((1, 3))),
+        )
+    )
+    aligner = ctc.CTCWordAligner(
+        shadow_policy=ShadowPolicy(True, 1), shadow_backend_factory=lambda _: next(backends)
+    )
+    monkeypatch.setattr(aligner, "_load", lambda *_: (processor, model))
+    aligner._device = "cpu"
+    for expected in ("shadow failed", "shape mismatch"):
+        aligner._shadow_backends.clear()
+        aligner._begin_shadow("song.wav", "ru", "слово")
+        output, _ = aligner._infer(np.zeros(16), 16000, "ru", "слово")
+        assert output.shape == (2, 3)
+        assert expected in aligner.last_shadow_diagnostics["windows"][0]["error"]
+        assert aligner.last_shadow_diagnostics["failures"] == 1
+
+
+def test_shadow_input_and_cleanup_failures_never_change_production(monkeypatch):
+    torch = pytest.importorskip("torch")
+
+    class InputValues:
+        def detach(self):
+            raise RuntimeError("shadow copy failed")
+
+        def to(self, _device):
+            return torch.zeros((1, 16))
+
+    processor = Mock(return_value=SimpleNamespace(input_values=InputValues(), attention_mask=None))
+    model = Mock(return_value=SimpleNamespace(logits=torch.ones((1, 2, 3))))
+    aligner = ctc.CTCWordAligner(shadow_policy=ShadowPolicy(True, 1))
+    monkeypatch.setattr(aligner, "_load", lambda *_: (processor, model))
+    aligner._device = "cpu"
+    aligner._begin_shadow("song.wav", "ru", "слово")
+    output, _ = aligner._infer(np.zeros(16), 16000, "ru", "слово")
+    assert output.shape == (2, 3)
+    assert "shadow copy failed" in aligner.last_shadow_diagnostics["windows"][0]["error"]
+
+    backend = ShadowBackend("ctc_ru")
+    backend.release.side_effect = RuntimeError("cleanup failed")
+    aligner._shadow_backends["ru"] = backend
+    aligner.release_shadow()
+    assert not aligner._shadow_backends
+
+
+def test_shadow_word_timing_comparison_and_release_policy(monkeypatch):
+    torch = pytest.importorskip("torch")
+    emissions = torch.log_softmax(torch.tensor([[5.0, 1.0], [1.0, 5.0], [5.0, 1.0]]), dim=-1)
+    backend = ShadowBackend("ctc_ru", logits=np.ones((3, 2)))
+    aligner = ctc.CTCWordAligner(
+        shadow_policy=ShadowPolicy(True, 1), shadow_backend_factory=lambda _: backend
+    )
+    aligner._shadow_backends["ru"] = backend
+    aligner._shadow_pending = emissions.clone()
+    aligner._shadow_windows.append({"status": "compared"})
+    production = [Word(1 / 3, 2 / 3, "one", 0.9, 0)]
+    aligner._compare_shadow_words(production, [1], [[0]], 0, ["one"], 1)
+    record = aligner._shadow_windows[0]
+    assert record["word_timing_status"] == "compared"
+    assert record["word_timing_mae_ms"] == 0
+    aligner.release_shadow()
+    assert backend.release.called and not aligner._shadow_backends
+
+    resident_backend = ShadowBackend("ctc_ru", logits=np.ones((3, 2)))
+    resident = ctc.CTCWordAligner(
+        shadow_policy=ShadowPolicy(True, 1, True),
+        shadow_backend_factory=lambda _: resident_backend,
+    )
+    resident._shadow_backends["ru"] = resident_backend
+    resident.release()
+    assert not resident_backend.release.called
+
+
+def test_shadow_word_mismatch_and_failure_are_recorded(monkeypatch):
+    torch = pytest.importorskip("torch")
+    aligner = ctc.CTCWordAligner(shadow_policy=ShadowPolicy(True, 1))
+    aligner._shadow_pending = torch.log_softmax(torch.ones((2, 2)), dim=-1)
+    aligner._shadow_windows.append({"status": "compared"})
+    monkeypatch.setattr(ctc, "_word_spans_from_ctc", lambda *_: ([], 0.0))
+    aligner._compare_shadow_words([Word(0, 1, "one", 1, 0)], [1], [[0]], 0, ["one"], 1)
+    assert aligner._shadow_windows[-1]["word_timing_status"] == "count-mismatch"
+
+    aligner._shadow_pending = torch.ones((2, 2))
+    aligner._shadow_windows.append({"status": "compared"})
+    monkeypatch.setattr(ctc, "_word_spans_from_ctc", Mock(side_effect=ValueError("bad")))
+    aligner._compare_shadow_words([], [1], [[0]], 0, ["one"], 1)
+    assert aligner._shadow_windows[-1]["word_timing_status"] == "failed"
+
+
+def test_align_lines_exposes_shadow_diagnostics(monkeypatch):
+    aligner = ctc.CTCWordAligner(shadow_policy=ShadowPolicy(False, 0))
+    monkeypatch.setattr(aligner, "available_for", lambda *_: True)
+    monkeypatch.setattr(ctc, "load_mono", lambda *_: (np.zeros(800), 100))
+    monkeypatch.setattr(
+        aligner,
+        "align_window",
+        lambda *_: ctc.CTCLineResult((Word(0, 1, "one", 0.8, 0),), 0.8, 0, 1),
+    )
+    assert aligner.align_lines("song.wav", ["one"], "ru")[0]
+    assert aligner.last_alignment_diagnostics["shadow"]["selected"] is False

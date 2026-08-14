@@ -3,16 +3,23 @@ from __future__ import annotations
 import os
 import re
 import sys
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 
 from ..audio import load_mono
+from ..backend_shadow import ShadowPolicy
 from ..errors import EngineUnavailableError, InvalidArtifactError
 from ..model_registry import get_model
 from ..models import Word
 from ..profiler import profile_operation
+from .ctc_backends import (
+    OrtCudaCTCBackend,
+    PyTorchCTCBackend,
+    describe_inference,
+)
 from .device import select_torch_device
 
 _CLEAN = re.compile(r"[^\w]+", re.UNICODE)
@@ -181,7 +188,13 @@ class CTCWordAligner:
         "uk": get_model("ctc_uk").local_name,
     }
 
-    def __init__(self, models: dict[str, str] | None = None):
+    def __init__(
+        self,
+        models: dict[str, str] | None = None,
+        *,
+        shadow_policy: ShadowPolicy | None = None,
+        shadow_backend_factory=OrtCudaCTCBackend,
+    ):
         self.models = dict(models or {})
         self._processor = None
         self._model = None
@@ -189,6 +202,13 @@ class CTCWordAligner:
         self._device = "cpu"
         self.last_resource_diagnostics: dict[str, object] = {}
         self.last_alignment_diagnostics: dict[str, object] = {}
+        self.last_shadow_diagnostics: dict[str, object] = {"selected": False}
+        self._shadow_policy = shadow_policy or ShadowPolicy.from_env()
+        self._shadow_backend_factory = shadow_backend_factory
+        self._shadow_backends: dict[str, object] = {}
+        self._shadow_selected = False
+        self._shadow_pending = None
+        self._shadow_windows: list[dict[str, object]] = []
 
     @staticmethod
     def _valid_model_dir(path: Path) -> tuple[bool, str]:
@@ -384,6 +404,37 @@ class CTCWordAligner:
                 torch.cuda.empty_cache()
         except ImportError:
             pass
+        if not self._shadow_policy.keep_session_resident:
+            self.release_shadow()
+
+    def release_shadow(self) -> None:
+        for backend in self._shadow_backends.values():
+            with suppress(Exception):  # optional cleanup cannot fail production
+                backend.release()
+        self._shadow_backends.clear()
+
+    def _begin_shadow(self, audio_path: str | Path, language: str | None, text: str) -> None:
+        code = _language_code(language, text)
+        identity = f"{Path(audio_path)}|{code}"
+        self._shadow_selected = code in {"ru", "uk"} and self._shadow_policy.selects(identity)
+        self._shadow_pending = None
+        self._shadow_windows = []
+        self.last_shadow_diagnostics = {
+            "selected": self._shadow_selected,
+            "model": f"ctc_{code}" if code else "",
+            "production": "pytorch:cuda:fp16-or-cpu:fp32",
+            "shadow": "onnxruntime:cuda:fp16",
+            "resident": self._shadow_policy.keep_session_resident,
+            "windows": self._shadow_windows,
+            "failures": 0,
+        }
+
+    def _record_shadow_failure(self, exc: Exception) -> None:
+        self._shadow_pending = None
+        self.last_shadow_diagnostics["failures"] = (
+            int(self.last_shadow_diagnostics.get("failures", 0)) + 1
+        )
+        self._shadow_windows.append({"status": "failed", "error": f"{type(exc).__name__}: {exc}"})
 
     def _target_ids(self, processor, words: list[str]):
         tokenizer = processor.tokenizer
@@ -425,21 +476,111 @@ class CTCWordAligner:
         except ImportError as exc:
             raise EngineUnavailableError("torch is required for CTC alignment") from exc
         inputs = processor(audio, sampling_rate=sample_rate, return_tensors="pt", padding=False)
+        shadow_values = None
+        if self._shadow_selected:
+            try:
+                shadow_values = inputs.input_values.detach().cpu().numpy()
+            except Exception as exc:  # noqa: BLE001 - shadow must never affect production
+                self._record_shadow_failure(exc)
         with profile_operation("transfer.cpu_to_gpu.ctc", byte_count=audio.nbytes):
             input_values = inputs.input_values.to(self._device)
         attention_mask = getattr(inputs, "attention_mask", None)
         if attention_mask is not None:
             attention_mask = attention_mask.to(self._device)
-        kwargs = {"input_values": input_values}
-        if attention_mask is not None:
-            kwargs["attention_mask"] = attention_mask
-        with torch.inference_mode(), profile_operation("inference.ctc"):
-            if str(self._device).startswith("cuda"):
-                with torch.autocast(device_type="cuda", dtype=torch.float16):
-                    logits = model(**kwargs).logits[0].float()
-            else:
-                logits = model(**kwargs).logits[0].float()
+        logits = PyTorchCTCBackend(model, self._device).infer(input_values, attention_mask)
+        if shadow_values is not None:
+            code = _language_code(language, text)
+            try:
+                backend = self._shadow_backends.get(code)
+                if backend is None:
+                    backend = self._shadow_backend_factory(f"ctc_{code}")
+                    self._shadow_backends[code] = backend
+                shadow = backend.infer(shadow_values)
+                shadow_logits = torch.from_numpy(shadow.logits).float()
+                if shadow_logits.shape != logits.shape:
+                    raise ValueError(
+                        f"CTC shadow shape mismatch: {tuple(logits.shape)} != "
+                        f"{tuple(shadow_logits.shape)}"
+                    )
+                production_cpu = logits.detach().cpu()
+                difference = (production_cpu - shadow_logits).abs()
+                production_argmax = production_cpu.argmax(dim=-1)
+                shadow_argmax = shadow_logits.argmax(dim=-1)
+                changed = (production_argmax != shadow_argmax).nonzero().flatten()
+                self._shadow_pending = torch.log_softmax(shadow_logits, dim=-1)
+                self._shadow_windows.append(
+                    {
+                        "status": "compared",
+                        **describe_inference(shadow),
+                        "frames": int(logits.shape[0]),
+                        "labels": int(logits.shape[1]),
+                        "logit_mae": float(difference.mean().item()),
+                        "logit_max_abs": float(difference.max().item()),
+                        "argmax_agreement": float(
+                            (production_argmax == shadow_argmax).float().mean().item()
+                        ),
+                        "argmax_changed_frames": int(changed.numel()),
+                        "argmax_changed_indices": changed[:32].tolist(),
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001 - shadow must never affect production
+                self._record_shadow_failure(exc)
         return torch.log_softmax(logits, dim=-1), processor
+
+    def _compare_shadow_words(
+        self,
+        production: list[Word],
+        target_ids: list[int],
+        positions: list[list[int]],
+        blank_id: int,
+        words: list[str],
+        duration: float,
+    ) -> None:
+        shadow_log_probs, self._shadow_pending = self._shadow_pending, None
+        if shadow_log_probs is None or not self._shadow_windows:
+            return
+        record = self._shadow_windows[-1]
+        try:
+            shadow_words, confidence = _word_spans_from_ctc(
+                shadow_log_probs, target_ids, positions, blank_id, words, duration
+            )
+            record["shadow_confidence"] = confidence
+            record["production_words"] = len(production)
+            record["shadow_words"] = len(shadow_words)
+            record["production_word_values"] = [
+                {
+                    "text": word.text,
+                    "start": word.start,
+                    "end": word.end,
+                    "confidence": word.confidence,
+                }
+                for word in production
+            ]
+            record["shadow_word_values"] = [
+                {
+                    "text": word.text,
+                    "start": word.start,
+                    "end": word.end,
+                    "confidence": word.confidence,
+                }
+                for word in shadow_words
+            ]
+            if len(production) != len(shadow_words):
+                record["word_timing_status"] = "count-mismatch"
+                return
+            deltas = [
+                abs(left.start - right.start) * 1000
+                for left, right in zip(production, shadow_words, strict=True)
+            ] + [
+                abs(left.end - right.end) * 1000
+                for left, right in zip(production, shadow_words, strict=True)
+            ]
+            record["word_timing_status"] = "compared"
+            record["word_timing_mae_ms"] = float(np.mean(deltas)) if deltas else 0.0
+            record["word_timing_max_ms"] = max(deltas, default=0.0)
+        except Exception as exc:  # noqa: BLE001 - diagnostic comparison is isolated
+            record["word_timing_status"] = "failed"
+            record["word_timing_error"] = f"{type(exc).__name__}: {exc}"
 
     def align_window(
         self,
@@ -467,6 +608,14 @@ class CTCWordAligner:
             words,
             len(audio) / sample_rate,
         )
+        self._compare_shadow_words(
+            local_words,
+            target_ids,
+            positions,
+            blank_id,
+            words,
+            len(audio) / sample_rate,
+        )
         if not local_words:
             return None
         return CTCLineResult(tuple(local_words), confidence, 0.0, len(audio) / sample_rate)
@@ -478,6 +627,7 @@ class CTCWordAligner:
         language: str | None,
         anchor_windows: dict[int, tuple[float, float, float]] | None = None,
     ) -> list[CTCLineResult | None]:
+        self._begin_shadow(audio_path, language, "\n".join(groups))
         if not self.available_for(language, "\n".join(groups)):
             return [None] * len(groups)
         source, sample_rate = load_mono(audio_path, 16000)
@@ -512,6 +662,12 @@ class CTCWordAligner:
                 local = self.align_window(source[left:right], sample_rate, words, language)
             except (EngineUnavailableError, InvalidArtifactError, RuntimeError, ValueError):
                 return None
+            if self._shadow_selected and self._shadow_windows:
+                self._shadow_windows[-1].update(
+                    line_start=start,
+                    line_end=end,
+                    line_words=list(words),
+                )
             if local is None:
                 return None
             absolute = tuple(
@@ -597,5 +753,6 @@ class CTCWordAligner:
             "retry_recovered_lines": recovered,
             "accepted_lines": sum(item is not None for item in output),
             "total_lines": len(groups),
+            "shadow": self.last_shadow_diagnostics,
         }
         return output
