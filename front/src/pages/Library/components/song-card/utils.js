@@ -29,7 +29,7 @@ export function getSongActions({
     ? [
         Headphones,
         translateSaved("Прослушать записи"),
-        "ghost",
+        "outline",
         () => onOpenRecordings(song),
         15
       ]
@@ -37,7 +37,7 @@ export function getSongActions({
       ? [
           AudioWaveform,
           translateSaved("Обработать песню"),
-          "primary",
+          "outline",
           () => onProcess(song),
           16,
           {
@@ -51,21 +51,21 @@ export function getSongActions({
         [
           Settings2,
           translateSaved("Настройки песни"),
-          "ghost",
+          "outline",
           () => onOpenSettings(song.id),
           14
         ],
         [
           FolderOpen,
           translateSaved("Открыть папку"),
-          "ghost",
+          "outline",
           () => onOpenFolder(song),
           14
         ],
         isReady && [
           RotateCcw,
           translateSaved("Переобработать MIDI"),
-          "ghost",
+          "outline",
           () => onReprocess(song),
           14
         ],

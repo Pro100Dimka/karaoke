@@ -9,7 +9,8 @@
     min-block-size: var(--control-size, var(--control-md));
     padding-inline: calc(var(--control-pad, var(--control-pad-md)) + .25rem);
     border: 0;
-    border-radius: var(--shape-md);
+    border-radius: 50%;
+    /* border-radius: var(--shape-md); */
     overflow: hidden;
     isolation: isolate;
     background: var(--_button-bg);
@@ -63,6 +64,11 @@
   }
 
   .ui-button[data-variant="outline"] {
+    --_button-bg: var(--color-surface);
+    --_button-fg: var(--ui-text);
+    box-shadow: inset 0 0 0 1px var(--ui-border);
+  }
+    .ui-button[data-variant="outline"]:hover {
     --_button-bg: transparent;
     --_button-fg: var(--ui-text);
     box-shadow: inset 0 0 0 1px var(--ui-border);

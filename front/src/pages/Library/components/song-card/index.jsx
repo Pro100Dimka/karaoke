@@ -161,14 +161,13 @@ function LibrarySongCard({
               ]) => (
                 <IconButton
                   key={label}
-                  variant={variant === "primary" ? "solid" : "ghost"}
-                  tone={variant === "danger" ? "danger" : "primary"}
+                  variant={variant || "ghost"}
                   size="sm"
                   aria-label={label}
                   title={label}
                   onClick={onClick}
                   disabled={disabled}
-                  className={`btn btn-${variant} btn-sm library-song-card-icon ${className}`.trim()}
+                  className={className}
                 >
                   <Icon size={size} aria-hidden="true" />
                 </IconButton>

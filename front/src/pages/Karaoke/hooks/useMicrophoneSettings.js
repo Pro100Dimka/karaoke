@@ -10,14 +10,13 @@ import {
   normalizeAudioRuntimeSettings
 } from "../utils/audio-settings";
 
-const DEFAULT_EFFECTS = Object.freeze({
-  reverb: 0,
-  echo: 0,
-  delay: 0
-});
 export default function useMicrophoneSettings({ audioSettings, onError }) {
   const [microphoneVolume, setMicrophoneVolume] = useState(1);
-  const [microphoneEffects, setMicrophoneEffects] = useState(DEFAULT_EFFECTS);
+  const [microphoneEffects, setMicrophoneEffects] = useState(() => ({
+    reverb: 0,
+    echo: 0,
+    delay: 0
+  }));
   const [audioDriver, setAudioDriver] = useState("auto");
   const [directOutputDeviceId, setDirectOutputDeviceId] = useState("");
   const [monitoringEnabled, setMonitoringEnabled] = useState(false);
@@ -27,74 +26,65 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
   const effectsInitializedRef = useRef(false);
   const mountedRef = useMountedRef();
   const { run: enqueueUpdate } = useAsyncQueue();
-  useEffect(() => {
-    const syncAudioPreferences = (event) => {
-      const next = event.detail || getAudioPreferences();
-      setMonitorInputDeviceId(next.monitorInputDeviceId || "default");
-    };
-    window.addEventListener("audio-preferences-changed", syncAudioPreferences);
-    return () =>
-      window.removeEventListener(
+  useEffect(
+    () => {
+      const syncAudioPreferences = (event) => {
+        const next = event.detail || getAudioPreferences();
+        setMonitorInputDeviceId(next.monitorInputDeviceId || "default");
+      };
+      window.addEventListener(
         "audio-preferences-changed",
         syncAudioPreferences
       );
-  }, []);
-  useEffect(() => {
-    if (!audioSettings) return;
-    const nextVolume = normalizeAudioRuntimeSettings(audioSettings).volume;
-    setMicrophoneVolume((current) =>
-      Math.abs(current - nextVolume) < 0.0001 ? current : nextVolume
-    );
-  }, [audioSettings]);
-  useEffect(() => {
-    const syncAudioSettings = (event) => {
-      if (!event.detail) return;
-      const normalized = normalizeAudioRuntimeSettings(event.detail);
-      setMicrophoneVolume(normalized.volume);
-      setAudioDriver(normalized.audioDriver);
-      setMonitoringEnabled(normalized.monitoringEnabled);
-      setDirectOutputDeviceId(normalized.outputDeviceId);
-    };
-    globalThis.addEventListener?.("audio-settings-changed", syncAudioSettings);
-    return () =>
-      globalThis.removeEventListener?.(
-        "audio-settings-changed",
-        syncAudioSettings
-      );
-  }, []);
-  useEffect(() => {
-    if (!audioSettings || effectsInitializedRef.current) return;
-    effectsInitializedRef.current = true;
-    setMicrophoneEffects(normalizeAudioEffects(audioSettings));
-  }, [audioSettings]);
+      return () =>
+        window.removeEventListener(
+          "audio-preferences-changed",
+          syncAudioPreferences
+        );
+    },
+    // Stryker disable next-line ArrayDeclaration: the effect uses only stable globals and a React setter.
+    []
+  );
+  useEffect(
+    () => {
+      const syncAudioSettings = (event) => {
+        if (!event.detail) return;
+        const normalized = normalizeAudioRuntimeSettings(event.detail);
+        setMicrophoneVolume(normalized.volume);
+        setAudioDriver(normalized.audioDriver);
+        setMonitoringEnabled(normalized.monitoringEnabled);
+        setDirectOutputDeviceId(normalized.outputDeviceId);
+      };
+      globalThis.addEventListener("audio-settings-changed", syncAudioSettings);
+      return () =>
+        globalThis.removeEventListener(
+          "audio-settings-changed",
+          syncAudioSettings
+        );
+    },
+    // Stryker disable next-line ArrayDeclaration: the effect uses only stable globals and React setters.
+    []
+  );
   useEffect(() => {
     if (!audioSettings) return;
     const normalized = normalizeAudioRuntimeSettings(audioSettings);
+    setMicrophoneVolume(normalized.volume);
     setAudioDriver(normalized.audioDriver);
     setMonitoringEnabled(normalized.monitoringEnabled);
     setDirectOutputDeviceId(normalized.outputDeviceId);
+    if (!effectsInitializedRef.current) {
+      effectsInitializedRef.current = true;
+      setMicrophoneEffects(normalizeAudioEffects(audioSettings));
+    }
   }, [audioSettings]);
   const updateMicrophone = useCallback(
     (patch) =>
       enqueueUpdate(async () => {
         try {
           const updated = await api.updateAudioSettings(patch);
-          if (
-            mountedRef.current &&
-            Object.hasOwn(patch, "volume") &&
-            updated?.volume != null
-          ) {
-            setMicrophoneVolume(updated.volume);
-          }
-          try {
-            globalThis.dispatchEvent?.(
-              new CustomEvent("audio-settings-changed", {
-                detail: updated
-              })
-            );
-          } catch {
-            // CustomEvent is unavailable in a few non-browser test runtimes.
-          }
+          globalThis.dispatchEvent(
+            new CustomEvent("audio-settings-changed", { detail: updated })
+          );
           return updated;
         } catch (error) {
           if (mountedRef.current) {

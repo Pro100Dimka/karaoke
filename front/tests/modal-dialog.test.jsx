@@ -1,5 +1,4 @@
 /* @vitest-environment jsdom */
-import React, { useEffect } from "react";
 import {
   act,
   cleanup,
@@ -8,15 +7,19 @@ import {
   renderHook,
   screen
 } from "@testing-library/react";
+import React, { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import Modal from "../src/components/modal";
+import {
+  AppDialogProvider,
+  resolveDialog,
+  useAppDialog
+} from "../src/contexts/AppDialog";
 
 vi.mock("../src/i18n", async (importOriginal) => ({
   ...(await importOriginal()),
   useI18n: () => ({ t: (key) => key })
 }));
-
-import Modal from "../src/components/modal/index.jsx";
-import { AppDialogProvider, useAppDialog } from "../src/contexts/AppDialog.jsx";
 
 const Icon = (props) => <svg data-testid="title-icon" {...props} />;
 
@@ -160,9 +163,17 @@ function DialogDriver({ run, onValue }) {
 }
 
 describe("application dialog provider", () => {
+  test("resolves optional dialog handles safely", () => {
+    const resolve = vi.fn();
+    expect(() => resolveDialog(null, true)).not.toThrow();
+    resolveDialog({ resolve }, false);
+    expect(resolve).toHaveBeenCalledWith(false);
+  });
   test("resolves alert confirmation", async () => {
     const onValue = vi.fn();
-    const run = vi.fn(({ alert }) => alert("Saved", { title: "Notice" }));
+    const run = vi.fn(({ alert }) =>
+      alert("Saved", { title: "Notice", confirmClassName: "" })
+    );
     render(
       <AppDialogProvider>
         <DialogDriver run={run} onValue={onValue} />
@@ -170,6 +181,8 @@ describe("application dialog provider", () => {
     );
     expect(screen.getByText("Saved")).not.toBeNull();
     const closeButton = document.querySelector(".modal-title-action");
+    expect(closeButton.className).toBe("modal-title-action");
+    expect(document.querySelector(".app-dialog-body")).toBeNull();
     act(() => {
       closeButton.click();
       closeButton.click();
@@ -182,7 +195,9 @@ describe("application dialog provider", () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     const suppress = (event) => event.preventDefault();
     window.addEventListener("error", suppress);
-    expect(() => renderHook(() => useAppDialog())).toThrow(Error);
+    expect(() => renderHook(() => useAppDialog())).toThrow(
+      "useAppDialog повинен використовуватися всередині AppDialogProvider"
+    );
     window.removeEventListener("error", suppress);
     log.mockRestore();
   });

@@ -41,12 +41,9 @@ export function autoFollowScrollLeft({
 }) {
   const editableWidth = Math.max(1, clientWidth - keyboardWidth);
   const triggerX = keyboardWidth + editableWidth * 0.5;
-  const screenX = playheadX - scrollLeft;
-  if (screenX <= triggerX) return scrollLeft;
-  return clampEditor(
-    playheadX - triggerX,
-    0,
-    Math.max(0, scrollWidth - clientWidth)
+  return Math.max(
+    scrollLeft,
+    clampEditor(playheadX - triggerX, 0, Math.max(0, scrollWidth - clientWidth))
   );
 }
 

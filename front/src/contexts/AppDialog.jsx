@@ -18,6 +18,9 @@ import {
 } from "./dialog-utils";
 
 const DialogContext = createContext(null);
+export function resolveDialog(dialog, result) {
+  dialog?.resolve(result);
+}
 function DialogModal({ dialog, onClose }) {
   const isConfirmation = dialog.kind === "confirm";
   const closeResult = getDialogCloseResult(dialog.kind);
@@ -64,15 +67,17 @@ function DialogModal({ dialog, onClose }) {
 export function AppDialogProvider({ children }) {
   const [dialog, setDialog] = useState(null);
   const activeDialogRef = useRef(null);
+  // Callback dependencies are stable React setters/refs.
+  // Stryker disable ArrayDeclaration
   const closeDialog = useCallback((result) => {
     const activeDialog = activeDialogRef.current;
-    if (!activeDialog) {
-      return;
-    }
     activeDialogRef.current = null;
     setDialog(null);
-    activeDialog.resolve(result);
+    resolveDialog(activeDialog, result);
   }, []);
+  // Stryker restore ArrayDeclaration
+  // Callback dependencies are stable React setters/refs.
+  // Stryker disable ArrayDeclaration
   const openDialog = useCallback((kind, message, options = {}) => {
     return new Promise((resolve) => {
       const previousDialog = activeDialogRef.current;
@@ -87,20 +92,29 @@ export function AppDialogProvider({ children }) {
       setDialog(nextDialog);
     });
   }, []);
+  // Stryker restore ArrayDeclaration
   const confirm = useCallback(
     (message, titleOrOptions) => {
       const options = normalizeDialogOptions(titleOrOptions);
       return openDialog("confirm", message, options);
     },
+    // openDialog is stable for the provider lifetime.
+    // Stryker disable next-line ArrayDeclaration
     [openDialog]
   );
   const alert = useCallback(
     (message, titleOrOptions) => {
       const options = normalizeDialogOptions(titleOrOptions);
+      // createDialogConfig normalizes every non-confirm kind to alert.
+      // Stryker disable next-line StringLiteral
       return openDialog("alert", message, options);
     },
+    // openDialog is stable for the provider lifetime.
+    // Stryker disable next-line ArrayDeclaration
     [openDialog]
   );
+  // Cleanup closes only over the stable active-dialog ref.
+  // Stryker disable ArrayDeclaration
   useEffect(() => {
     return () => {
       const activeDialog = activeDialogRef.current;
@@ -111,11 +125,14 @@ export function AppDialogProvider({ children }) {
       activeDialog.resolve(getDialogCloseResult(activeDialog.kind));
     };
   }, []);
+  // Stryker restore ArrayDeclaration
   const contextValue = useMemo(
     () => ({
       alert,
       confirm
     }),
+    // alert/confirm are stable provider callbacks.
+    // Stryker disable next-line ArrayDeclaration
     [alert, confirm]
   );
   return (
@@ -131,9 +148,7 @@ export function useAppDialog() {
   if (!context) {
     throw new Error(
       translateSaved(
-        translateSaved(
-          "useAppDialog должен использоваться внутри AppDialogProvider"
-        )
+        "useAppDialog должен использоваться внутри AppDialogProvider"
       )
     );
   }

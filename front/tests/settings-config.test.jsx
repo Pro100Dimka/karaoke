@@ -221,7 +221,9 @@ test("settings field factories preserve their complete runtime contract", () => 
   expect(onFieldBlur).toHaveBeenCalledExactlyOnceWith("setting", "after");
 
   const factory = vi.fn((name, fieldConfig) => ({ name, ...fieldConfig }));
-  expect(settingsUtils.fieldType(factory, "custom")("field", { extra: 1 })).toEqual({
+  expect(
+    settingsUtils.fieldType(factory, "custom")("field", { extra: 1 })
+  ).toEqual({
     name: "field",
     type: "custom",
     extra: 1
@@ -289,7 +291,9 @@ test("settings predicates distinguish every controller state", () => {
     })
   ).toBe(true);
   expect(settingsUtils.audioDriverVisible({ audio: {} })).toBe(false);
-  expect(settingsUtils.audioDriverVisible({ audio: { values: {} } })).toBe(false);
+  expect(settingsUtils.audioDriverVisible({ audio: { values: {} } })).toBe(
+    false
+  );
   expect(
     settingsUtils.audioDriverVisible({
       audio: { values: { audio_driver: "asio" } }
@@ -300,9 +304,9 @@ test("settings predicates distinguish every controller state", () => {
       audio: { values: { audio_driver: "wasapi" } }
     })
   ).toBe(false);
-  expect(
-    settingsUtils.multipleAudioDriversAvailable({ audio: {} })
-  ).toBe(false);
+  expect(settingsUtils.multipleAudioDriversAvailable({ audio: {} })).toBe(
+    false
+  );
   expect(
     settingsUtils.multipleAudioDriversAvailable({ audio: { options: {} } })
   ).toBe(false);

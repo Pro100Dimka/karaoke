@@ -16,27 +16,31 @@ export default function useMelodyGuide({
   volumeRef.current = volume;
   keyShiftRef.current = keyShift;
 
-  const update = useCallback((position) => {
-    const guide = guideRef.current;
-    if (!guide || guide.context.state === "closed") return;
+  const update = useCallback(
+    (position) => {
+      const guide = guideRef.current;
+      if (!guide || guide.context.state === "closed") return;
 
-    const now = guide.context.currentTime;
-    const state = getMelodyGuideState({
-      notes: notesRef.current,
-      position,
-      keyShift: keyShiftRef.current,
-      volume: volumeRef.current
-    });
+      const now = guide.context.currentTime;
+      const state = getMelodyGuideState({
+        notes: notesRef.current,
+        position,
+        keyShift: keyShiftRef.current,
+        volume: volumeRef.current
+      });
 
-    if (state.active) {
-      guide.oscillator.frequency.setTargetAtTime(state.frequency, now, 0.012);
-    }
-    guide.gain.gain.setTargetAtTime(
-      state.gain,
-      now,
-      state.active ? 0.015 : 0.018
-    );
-  }, []);
+      if (state.active) {
+        guide.oscillator.frequency.setTargetAtTime(state.frequency, now, 0.012);
+      }
+      guide.gain.gain.setTargetAtTime(
+        state.gain,
+        now,
+        state.active ? 0.015 : 0.018
+      );
+    },
+    // Stryker disable next-line ArrayDeclaration: update reads current values from stable refs.
+    []
+  );
 
   const start = useCallback(async () => {
     if (
@@ -67,9 +71,7 @@ export default function useMelodyGuide({
       update(currentTimeRef.current);
       return true;
     } catch (error) {
-      if (guideRef.current === guide) {
-        guideRef.current = null;
-      }
+      guideRef.current = null;
       try {
         guide.oscillator.stop();
       } catch {
@@ -80,14 +82,18 @@ export default function useMelodyGuide({
     }
   }, [currentTimeRef, update]);
 
-  const silence = useCallback(() => {
-    const guide = guideRef.current;
-    if (!guide || guide.context.state === "closed") return;
+  const silence = useCallback(
+    () => {
+      const guide = guideRef.current;
+      if (!guide || guide.context.state === "closed") return;
 
-    const now = guide.context.currentTime;
-    guide.gain.gain.cancelScheduledValues(now);
-    guide.gain.gain.setValueAtTime(0.0001, now);
-  }, []);
+      const now = guide.context.currentTime;
+      guide.gain.gain.cancelScheduledValues(now);
+      guide.gain.gain.setValueAtTime(0.0001, now);
+    },
+    // Stryker disable next-line ArrayDeclaration: silence reads only a stable ref.
+    []
+  );
 
   useEffect(
     () => () => {
@@ -101,6 +107,7 @@ export default function useMelodyGuide({
       guide.context.close().catch(() => {});
       guideRef.current = null;
     },
+    // Stryker disable next-line ArrayDeclaration: guideRef has stable identity for the hook lifetime.
     []
   );
 

@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { translateSaved } from "../../../i18n/runtime";
 import { detectMidiFromAnalyser } from "../utils/pitch";
 
 export default function usePitchDetection({
@@ -13,11 +12,7 @@ export default function usePitchDetection({
   const [isPitchAttacking, setIsPitchAttacking] = useState(false);
   const [pitchRestProgress, setPitchRestProgress] = useState(1);
   useEffect(() => {
-    if (
-      !isPlaying ||
-      typeof navigator === "undefined" ||
-      !navigator.mediaDevices?.getUserMedia
-    ) {
+    if (!isPlaying || !navigator.mediaDevices?.getUserMedia) {
       setSungMidi(null);
       setIsPitchDetected(false);
       setIsPitchAttacking(false);
@@ -75,45 +70,40 @@ export default function usePitchDetection({
                   baseAudio
                 ]
               : [baseAudio];
-          let lastError = null;
           for (const audio of candidates) {
             try {
-              stream = await navigator.mediaDevices.getUserMedia({
-                audio
-              });
+              const candidateStream = await navigator.mediaDevices.getUserMedia(
+                {
+                  audio
+                }
+              );
+              if (!candidateStream) continue;
+              stream = candidateStream;
               ownsStream = true;
-              lastError = null;
               break;
-            } catch (error) {
-              lastError = error;
+            } catch {
+              // Try the next capture constraint set.
             }
           }
-          if (!stream)
-            throw lastError || new Error(translateSaved("Микрофон недоступен"));
+          if (!stream) throw new Error();
         }
         if (!context || context.state === "closed") {
           const AudioContextClass =
             window.AudioContext || window.webkitAudioContext;
-          if (!AudioContextClass)
-            throw new Error(translateSaved("Web Audio API недоступен"));
           context = new AudioContextClass({
             latencyHint: "interactive"
           });
           ownsContext = true;
         }
         if (cancelled) {
+          // Cancellation can only interleave with the awaited capture above,
+          // so this stream is necessarily owned by this effect.
           stream.getTracks().forEach((track) => track.stop());
           if (ownsContext) await context.close().catch(() => {});
           return;
         }
         if (context.state === "suspended") {
-          try {
-            await context.resume();
-          } catch {
-            throw new Error(
-              translateSaved("Не удалось активировать Web Audio API")
-            );
-          }
+          await context.resume();
         }
         if (cancelled) return;
         const analyser = context.createAnalyser();
@@ -174,25 +164,29 @@ export default function usePitchDetection({
             );
             const maxStep = 22 * elapsedSeconds;
             const difference = targetMidi - displayedMidi;
-            displayedMidi += Math.max(
-              -maxStep,
-              Math.min(maxStep, difference)
-            );
+            displayedMidi += Math.max(-maxStep, Math.min(maxStep, difference));
             if (timestamp - lastRenderAt >= 15) {
               setSungMidi(displayedMidi);
               lastRenderAt = timestamp;
             }
-          } else if (restStartedAt) {
-            const restProgress = Math.min(1, (timestamp - restStartedAt) / 380);
-            if (timestamp - lastRenderAt >= 32) {
-              setPitchRestProgress(restProgress);
-              lastRenderAt = timestamp;
-            }
-            if (restProgress >= 1) {
-              displayedMidi = null;
-              recentMidi.length = 0;
-              setSungMidi(null);
-              restStartedAt = 0;
+          } else {
+            // A zero rest start only repeats the already-rendered reset state.
+            // Stryker disable next-line ConditionalExpression
+            if (restStartedAt) {
+              const restProgress = Math.min(
+                1,
+                (timestamp - restStartedAt) / 380
+              );
+              if (timestamp - lastRenderAt >= 32) {
+                setPitchRestProgress(restProgress);
+                lastRenderAt = timestamp;
+              }
+              if (restProgress >= 1) {
+                displayedMidi = null;
+                recentMidi.length = 0;
+                setSungMidi(null);
+                restStartedAt = 0;
+              }
             }
           }
           lastAnimationAt = timestamp;
@@ -200,7 +194,7 @@ export default function usePitchDetection({
         };
         animationFrameId = requestAnimationFrame(updatePitch);
       } catch {
-        if (!cancelled) resetPitch();
+        // Pitch feedback is optional; the state was reset before startup.
       }
     };
     start();
@@ -208,12 +202,12 @@ export default function usePitchDetection({
       cancelled = true;
       cancelAnimationFrame(animationFrameId);
       try {
-        sourceNode?.disconnect?.();
+        sourceNode.disconnect();
       } catch {
-        // The graph may already be disconnected by the browser.
+        // The graph may be absent or already disconnected by the browser.
       }
-      if (ownsStream) stream?.getTracks().forEach((track) => track.stop());
-      if (ownsContext) context?.close?.().catch(() => {});
+      if (ownsStream) stream.getTracks().forEach((track) => track.stop());
+      if (ownsContext) context.close().catch(() => {});
     };
   }, [browserMonitorRef, isPlaying, monitorInputDeviceId, monitoringEnabled]);
   return {

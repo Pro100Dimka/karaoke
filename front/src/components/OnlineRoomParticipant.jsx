@@ -1,6 +1,6 @@
 import { LogOut, Mic, MicOff, Sparkles, Volume2, VolumeX } from "lucide-react";
 import { useI18n } from "../i18n";
-import { IconButton } from "./ui";
+import { IconButton } from "../theme/ui";
 
 const SPEAKING_THRESHOLDS = [0.18, 0.38, 0.6, 0.82];
 
@@ -71,37 +71,33 @@ export default function OnlineRoomParticipant({
         {isSelf ? (
           <>
             <IconButton
-              unstyled
               icon={microphoneMuted ? MicOff : Mic}
-              size={16}
+              variant="outline"
               label={microphoneLabel}
-              className={`online-room-icon-button ${microphoneMuted ? "is-off" : ""}`}
+              className={microphoneMuted ? "is-off" : ""}
               disabled={roomSoundMuted}
               onClick={() => onSetMicrophoneMuted(!microphoneMuted)}
             />
             <IconButton
-              unstyled
               icon={roomSoundMuted ? VolumeX : Volume2}
-              size={16}
+              variant="outline"
               label={applicationSoundLabel}
-              className={`online-room-icon-button ${roomSoundMuted ? "is-off" : ""}`}
+              className={roomSoundMuted ? "is-off" : ""}
               onClick={() => onSetRoomSoundMuted(!roomSoundMuted)}
             />
             <IconButton
-              unstyled
               icon={LogOut}
-              size={16}
+              variant="outline"
               label={t("room.leave")}
-              className="online-room-icon-button is-leave"
+              className="is-leave"
               onClick={onLeave}
             />
           </>
         ) : (
           <>
             <IconButton
-              unstyled
+              variant="outline"
               icon={Sparkles}
-              size={16}
               label={t(
                 effectsEnabled
                   ? "room.person.effects.disable"
@@ -109,15 +105,14 @@ export default function OnlineRoomParticipant({
                 { name: person.name }
               )}
               aria-pressed={effectsEnabled}
-              className={`online-room-icon-button ${effectsEnabled ? "is-active" : ""}`}
+              className={effectsEnabled ? "is-active" : ""}
               onClick={() => onTogglePersonEffects(person.id)}
             />
             <IconButton
-              unstyled
+              variant="outline"
               icon={isLocallyMuted ? VolumeX : Volume2}
-              size={16}
               label={participantSoundLabel}
-              className={`online-room-icon-button ${isLocallyMuted ? "is-off" : ""}`}
+              className={isLocallyMuted ? "is-off" : ""}
               onClick={() => onTogglePersonMuted(person.id)}
             />
           </>

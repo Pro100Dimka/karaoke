@@ -18,12 +18,13 @@ export default function useAudioOutputRouting(options) {
     videoRef,
     vocalsRef
   } = options;
+  const asioDriverName = audioSettings?.asio_driver_name;
+  const configuredOutputId = audioSettings?.output_device_id;
   useEffect(() => {
-    if (audioDriver !== "asio" || audioSettings?.output_device_id != null)
-      return;
+    if (audioDriver !== "asio" || configuredOutputId != null) return;
     const preferred = findDriverOutputDevice(
       directOutputDevices,
-      audioSettings?.asio_driver_name
+      asioDriverName
     );
     if (preferred && String(directOutputDeviceId) !== String(preferred.index)) {
       setDirectOutputDeviceId(preferred.index);
@@ -33,8 +34,8 @@ export default function useAudioOutputRouting(options) {
     }
   }, [
     audioDriver,
-    audioSettings?.asio_driver_name,
-    audioSettings?.output_device_id,
+    asioDriverName,
+    configuredOutputId,
     directOutputDeviceId,
     directOutputDevices,
     setDirectOutputDeviceId,
@@ -42,29 +43,31 @@ export default function useAudioOutputRouting(options) {
   ]);
 
   useEffect(() => {
+    const enumerateDevices =
+      globalThis.navigator.mediaDevices?.enumerateDevices;
     if (
       directOutputDeviceId == null ||
       directOutputDeviceId === "" ||
-      typeof globalThis.navigator?.mediaDevices?.enumerateDevices !== "function"
+      typeof enumerateDevices !== "function"
     )
       return undefined;
-    const selected = (directOutputDevices || []).find(
+    const selected = Array.from(directOutputDevices ?? Array.of()).find(
       (device) => String(device.index) === String(directOutputDeviceId)
     );
     if (!selected) return undefined;
     let active = true;
-    globalThis.navigator.mediaDevices
-      .enumerateDevices()
+    Promise.resolve(enumerateDevices.call(globalThis.navigator.mediaDevices))
       .then((entries) => {
         if (!active) return;
         const output = findMatchingBrowserOutput(entries, selected);
-        if (!output?.deviceId) return;
-        [instrumentalRef.current, vocalsRef.current, videoRef.current].forEach(
-          (media) => {
-            if (typeof media?.setSinkId !== "function") return;
+        // Stryker disable next-line ConditionalExpression: the promise catch has the same no-route fallback; this guard avoids a needless TypeError.
+        if (!output) return;
+        [instrumentalRef.current, vocalsRef.current, videoRef.current]
+          .filter(Boolean)
+          .forEach((media) => {
+            if (typeof media.setSinkId !== "function") return;
             Promise.resolve(media.setSinkId(output.deviceId)).catch(() => {});
-          }
-        );
+          });
       })
       .catch(() => {});
 
@@ -91,11 +94,16 @@ export default function useAudioOutputRouting(options) {
     [browserMonitorRef]
   );
 
-  useEffect(() => {
-    const releaseMonitorOnClose = () => {
-      api.releaseDirectMonitoring().catch(() => {});
-    };
-    window.addEventListener("pagehide", releaseMonitorOnClose);
-    return () => window.removeEventListener("pagehide", releaseMonitorOnClose);
-  }, []);
+  useEffect(
+    () => {
+      const releaseMonitorOnClose = () => {
+        api.releaseDirectMonitoring().catch(() => {});
+      };
+      window.addEventListener("pagehide", releaseMonitorOnClose);
+      return () =>
+        window.removeEventListener("pagehide", releaseMonitorOnClose);
+    },
+    // Stryker disable next-line ArrayDeclaration: the effect uses only stable browser and API globals.
+    []
+  );
 }

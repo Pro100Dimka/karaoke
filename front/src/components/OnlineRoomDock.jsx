@@ -10,10 +10,10 @@ import { useOnlineRoom } from "../contexts/OnlineRoomContext";
 import useExclusiveAsyncAction from "../hooks/useExclusiveAsyncAction";
 import useMountedRef from "../hooks/useMountedRef";
 import { useI18n } from "../i18n";
+import { Card, IconButton } from "../theme/ui";
 import { copyText } from "../utils/clipboard";
 import OnlineRoomParticipant from "./OnlineRoomParticipant";
 import Button from "./fields/button";
-import { Card, IconButton } from "./ui";
 
 export function OnlineRoomDock() {
   const { t } = useI18n();
@@ -64,7 +64,6 @@ export function OnlineRoomDock() {
   return (
     <>
       <Card
-        as="aside"
         className={`online-room-dock ${collapsed ? "is-collapsed" : ""}`}
         aria-hidden={collapsed}
         inert={collapsed ? true : undefined}
@@ -84,20 +83,18 @@ export function OnlineRoomDock() {
           </span>
           <div className="online-room-dock-code">
             <IconButton
-              unstyled
               icon={PanelLeftClose}
-              size={16}
               label={t("room.hidePanel")}
-              className="online-room-icon-button"
+              variant="outline"
+              size="sm"
               onClick={() => setCollapsed(true)}
             />
             <strong>{onlineRoom.room.id}</strong>
             <IconButton
-              unstyled
               icon={copied ? Check : Copy}
-              size={16}
+              variant="outline"
+              size="sm"
               label={t("room.copyCode")}
-              className="online-room-icon-button"
               onClick={handleCopy}
             />
           </div>

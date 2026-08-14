@@ -27,12 +27,12 @@ vi.mock("../src/utils/language", () => ({
   saveLanguage: mocks.saveLanguage
 }));
 
-import AppSettingsProvider, {
-  AppSettingsContext
-} from "../src/contexts/app-settings.jsx";
-import useAppSettings from "../src/hooks/useAppSettings.js";
-import useSettingsForm from "../src/hooks/useSettingsForm.js";
 import { translateSaved } from "../src/i18n/runtime.js";
+
+let AppSettingsProvider;
+let AppSettingsContext;
+let useAppSettings;
+let useSettingsForm;
 
 const deferred = () => {
   let resolve;
@@ -75,8 +75,16 @@ const contextWrapper = (value) =>
     );
   };
 
-afterEach(cleanup);
-beforeEach(() => {
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+beforeEach(async () => {
+  vi.resetModules();
+  ({ default: AppSettingsProvider, AppSettingsContext } =
+    await import("../src/contexts/app-settings"));
+  ({ default: useAppSettings } = await import("../src/hooks/useAppSettings"));
+  ({ default: useSettingsForm } = await import("../src/hooks/useSettingsForm"));
   Object.values(mocks).forEach((mock) => mock.mockReset());
   mocks.getAppSettings.mockResolvedValue({});
   mocks.updateAppSettings.mockResolvedValue({});
@@ -101,15 +109,27 @@ describe("application settings context", () => {
   });
 
   test("loads, updates and reloads settings", async () => {
+    const reload = vi.fn();
+    vi.stubGlobal("location", { reload });
     mocks.getSavedLanguage.mockReturnValue("uk");
+    const initialLoad = deferred();
+    const nextLoad = deferred();
     mocks.getAppSettings
-      .mockResolvedValueOnce({ theme: "green", language: "uk" })
-      .mockResolvedValueOnce({ theme: "violet", language: "en" });
+      .mockReturnValueOnce(initialLoad.promise)
+      .mockReturnValueOnce(nextLoad.promise);
     const wrapper = ({ children }) => (
       <AppSettingsProvider>{children}</AppSettingsProvider>
     );
     const { result } = renderHook(() => useAppSettings(), { wrapper });
 
+    expect(result.current).toMatchObject({
+      settings: null,
+      isLoading: true,
+      error: null
+    });
+    await act(async () =>
+      initialLoad.resolve({ theme: "green", language: "uk" })
+    );
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.settings).toEqual({
       theme: "green",
@@ -119,10 +139,22 @@ describe("application settings context", () => {
 
     act(() => result.current.updateSettings((value) => ({ ...value, x: 1 })));
     expect(result.current.settings.x).toBe(1);
+    act(() => result.current.updateSettings({ theme: "direct" }));
+    expect(result.current.settings).toEqual({ theme: "direct" });
 
-    await act(() => result.current.reloadSettings());
+    let reloadPromise;
+    act(() => {
+      reloadPromise = result.current.reloadSettings();
+    });
+    expect(result.current.isLoading).toBe(true);
+    expect(result.current.error).toBeNull();
+    await act(async () => {
+      nextLoad.resolve({ theme: "violet", language: "en" });
+      await reloadPromise;
+    });
     expect(result.current.settings.theme).toBe("violet");
     expect(mocks.saveLanguage).toHaveBeenLastCalledWith("en");
+    expect(reload).toHaveBeenCalledOnce();
   });
 
   test("exposes load errors and ignores a response after unmount", async () => {
@@ -133,6 +165,7 @@ describe("application settings context", () => {
     );
     const failed = renderHook(() => useAppSettings(), { wrapper });
     await waitFor(() => expect(failed.result.current.error).toBe(failure));
+    expect(failed.result.current.isLoading).toBe(false);
     failed.unmount();
 
     let resolve;
@@ -154,6 +187,28 @@ describe("application settings context", () => {
     const rejected = renderHook(() => useAppSettings(), { wrapper });
     rejected.unmount();
     await act(async () => reject(new Error("obsolete")));
+  });
+
+  test("only the latest overlapping reload may update context state", async () => {
+    const initial = deferred();
+    const stale = deferred();
+    const latest = deferred();
+    mocks.getAppSettings
+      .mockReturnValueOnce(initial.promise)
+      .mockReturnValueOnce(stale.promise)
+      .mockReturnValueOnce(latest.promise);
+    const wrapper = ({ children }) => (
+      <AppSettingsProvider>{children}</AppSettingsProvider>
+    );
+    const hook = renderHook(() => useAppSettings(), { wrapper });
+    await act(async () => initial.resolve({ version: 1 }));
+    const stalePromise = hook.result.current.reloadSettings();
+    const latestPromise = hook.result.current.reloadSettings();
+    await act(async () => latest.resolve({ version: 3 }));
+    expect(hook.result.current.settings).toEqual({ version: 3 });
+    await act(async () => stale.resolve({ version: 2 }));
+    await Promise.all([stalePromise, latestPromise]);
+    expect(hook.result.current.settings).toEqual({ version: 3 });
   });
 });
 

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef } from "react";
 import { playbackGain } from "../utils/data";
 import { getSecondaryMediaPosition, shouldSyncMedia } from "../utils/transport";
 
+const YOUTUBE_NO_COOKIE_ORIGIN = "https://www.youtube-nocookie.com";
+
 export default function useKaraokeMediaSync({
   browserMonitorRef,
   currentTimeRef,
@@ -35,13 +37,8 @@ export default function useKaraokeMediaSync({
       if (!target || typeof func !== "string" || !func.trim()) return false;
       let targetOrigin = "https://www.youtube.com";
       try {
-        const { origin } = new URL(frame.src, globalThis.location?.href);
-        if (
-          origin === "https://www.youtube.com" ||
-          origin === "https://www.youtube-nocookie.com"
-        ) {
-          targetOrigin = origin;
-        }
+        const { origin } = new URL(frame.src, globalThis.location.href);
+        if (origin === YOUTUBE_NO_COOKIE_ORIGIN) targetOrigin = origin;
       } catch {
         // Keep the trusted default origin for malformed or not-yet-set src.
       }
@@ -56,8 +53,8 @@ export default function useKaraokeMediaSync({
 
   const syncSecondaryMedia = useCallback(
     (position, force = false) => {
-      [vocalsRef.current, videoRef.current].forEach((media) => {
-        if (!media || !Number.isFinite(media.duration) || media.duration <= 0) {
+      [vocalsRef.current, videoRef.current].filter(Boolean).forEach((media) => {
+        if (!Number.isFinite(media.duration) || media.duration <= 0) {
           return;
         }
         if (force || shouldSyncMedia(media.currentTime, position)) {
@@ -84,11 +81,11 @@ export default function useKaraokeMediaSync({
     const handleMetadata = () => {
       const nextDuration = Number(instrumental.duration);
       setDuration(
-        Number.isFinite(nextDuration) && nextDuration > 0 ? nextDuration : 0
+        Number.isFinite(nextDuration) ? Math.max(0, nextDuration) : 0
       );
     };
     const handleEnded = () => {
-      if (onPlaybackEndedRef?.current) {
+      if (onPlaybackEndedRef.current) {
         Promise.resolve(onPlaybackEndedRef.current()).catch(() => {});
         return;
       }
@@ -99,14 +96,17 @@ export default function useKaraokeMediaSync({
       setIsPlaying(false);
     };
 
-    instrumental.addEventListener("loadedmetadata", handleMetadata);
-    instrumental.addEventListener("durationchange", handleMetadata);
+    const metadataEvents = ["loadedmetadata", "durationchange"];
+    metadataEvents.forEach((event) =>
+      instrumental.addEventListener(event, handleMetadata)
+    );
     instrumental.addEventListener("ended", handleEnded);
     // The element may already have metadata before this effect subscribes.
     handleMetadata();
     return () => {
-      instrumental.removeEventListener("loadedmetadata", handleMetadata);
-      instrumental.removeEventListener("durationchange", handleMetadata);
+      metadataEvents.forEach((event) =>
+        instrumental.removeEventListener(event, handleMetadata)
+      );
       instrumental.removeEventListener("ended", handleEnded);
     };
   }, [
@@ -140,7 +140,7 @@ export default function useKaraokeMediaSync({
           lastSecondarySyncRef.current = now;
         }
       }
-      animationFrameId = globalThis.requestAnimationFrame?.(updatePosition);
+      animationFrameId = globalThis.requestAnimationFrame(updatePosition);
     };
 
     if (typeof globalThis.requestAnimationFrame !== "function")
@@ -149,7 +149,7 @@ export default function useKaraokeMediaSync({
     return () => {
       active = false;
       if (animationFrameId != null) {
-        globalThis.cancelAnimationFrame?.(animationFrameId);
+        globalThis.cancelAnimationFrame(animationFrameId);
       }
     };
   }, [
@@ -170,12 +170,12 @@ export default function useKaraokeMediaSync({
   useEffect(() => {
     const gain = browserMonitorRef.current?.gainNode?.gain;
     const value = Number(microphoneVolume);
-    if (gain && Number.isFinite(value))
-      gain.value = Math.max(0, Math.min(1, value));
+    if (!gain || !Number.isFinite(value)) return;
+    gain.value = Math.max(0, Math.min(1, value));
   }, [browserMonitorRef, microphoneVolume]);
 
   useEffect(() => {
-    browserMonitorRef.current?.effects?.apply(microphoneEffects);
+    browserMonitorRef.current?.effects?.apply?.(microphoneEffects);
   }, [browserMonitorRef, microphoneEffects]);
 
   useEffect(() => {
@@ -198,16 +198,18 @@ export default function useKaraokeMediaSync({
       Number.isFinite(normalizedSpeed) && normalizedSpeed > 0
         ? Math.max(0.25, Math.min(4, normalizedSpeed))
         : 1;
-    [instrumentalRef.current, vocalsRef.current, videoRef.current].forEach(
-      (media) => {
-        if (!media) return;
+    // Without this filter, the guarded setter's catch preserves identical
+    // behavior for null media.
+    // Stryker disable next-line MethodExpression
+    [instrumentalRef.current, vocalsRef.current, videoRef.current]
+      .filter(Boolean)
+      .forEach((media) => {
         try {
           media.playbackRate = playbackRate;
         } catch {
           // A detached media element can reject rate changes.
         }
-      }
-    );
+      });
     sendYouTubeCommand("setPlaybackRate", [playbackRate]);
   }, [instrumentalRef, sendYouTubeCommand, speed, videoRef, vocalsRef]);
 

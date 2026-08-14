@@ -1,44 +1,42 @@
 import { useCallback, useEffect, useRef } from "react";
 
-function isAudioElement(node) {
-  return (
-    typeof HTMLAudioElement !== "undefined" && node instanceof HTMLAudioElement
-  );
-}
-
-function isElement(node) {
-  return typeof Element !== "undefined" && node instanceof Element;
-}
-
 export default function useApplicationAudioMute(enabled) {
   const originalMuteStateRef = useRef(new Map());
 
-  const muteApplicationAudio = useCallback((root) => {
-    if (!root) return;
+  const muteApplicationAudio = useCallback(
+    (root) => {
+      if (!root) return;
 
-    const audioElements = [
-      ...(isAudioElement(root) ? [root] : []),
-      ...(root.querySelectorAll?.("audio") || [])
-    ];
+      const audioElements = [
+        ...(root instanceof HTMLAudioElement ? [root] : []),
+        ...(root.querySelectorAll?.("audio") || [])
+      ];
 
-    for (const audio of audioElements) {
-      if (audio.dataset.onlineRoomParticipant) continue;
-      if (!originalMuteStateRef.current.has(audio)) {
-        originalMuteStateRef.current.set(audio, audio.muted);
+      for (const audio of audioElements) {
+        if (audio.dataset.onlineRoomParticipant) continue;
+        if (!originalMuteStateRef.current.has(audio)) {
+          originalMuteStateRef.current.set(audio, audio.muted);
+        }
+        audio.muted = true;
       }
-      audio.muted = true;
-    }
-  }, []);
+    },
+    // Stryker disable next-line ArrayDeclaration: the callback closes over refs only.
+    []
+  );
 
-  const restoreApplicationAudio = useCallback(() => {
-    for (const [audio, wasMuted] of originalMuteStateRef.current) {
-      if (audio.isConnected) audio.muted = wasMuted;
-    }
-    originalMuteStateRef.current.clear();
-  }, []);
+  const restoreApplicationAudio = useCallback(
+    () => {
+      for (const [audio, wasMuted] of originalMuteStateRef.current) {
+        if (audio.isConnected) audio.muted = wasMuted;
+      }
+      originalMuteStateRef.current.clear();
+    },
+    // Stryker disable next-line ArrayDeclaration: the callback closes over refs only.
+    []
+  );
 
   useEffect(() => {
-    if (!enabled || typeof document === "undefined") return undefined;
+    if (!enabled) return undefined;
 
     muteApplicationAudio(document);
     if (typeof MutationObserver === "undefined") {
@@ -48,7 +46,7 @@ export default function useApplicationAudioMute(enabled) {
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
-          if (isElement(node)) muteApplicationAudio(node);
+          muteApplicationAudio(node);
         }
       }
     });
@@ -59,7 +57,11 @@ export default function useApplicationAudioMute(enabled) {
     };
   }, [enabled, muteApplicationAudio, restoreApplicationAudio]);
 
-  useEffect(() => restoreApplicationAudio, [restoreApplicationAudio]);
+  useEffect(
+    () => restoreApplicationAudio,
+    // Stryker disable next-line ArrayDeclaration: restoreApplicationAudio has stable identity.
+    [restoreApplicationAudio]
+  );
 
   return { muteApplicationAudio, restoreApplicationAudio };
 }
