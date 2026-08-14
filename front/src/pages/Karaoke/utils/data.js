@@ -64,7 +64,6 @@ export function normalizeLyrics(raw) {
       ? String(value).trim()
       : "";
   const readTime = (value, keys) => {
-    if (!value || typeof value !== "object") return null;
     for (const key of keys) {
       const rawValue = value[key];
       if (rawValue === null || rawValue === undefined || rawValue === "")

@@ -40,6 +40,7 @@ describe("dropdown", () => {
     expect(trigger.getAttribute("aria-describedby")).toBe("hint");
     fireEvent.click(trigger);
     expect(screen.getByRole("listbox")).not.toBeNull();
+    fireEvent.pointerDown(trigger);
     expect(screen.getByRole("option", { name: /Alpha/ }).className).toContain(
       "is-selected"
     );
@@ -61,8 +62,10 @@ describe("dropdown", () => {
       />
     );
     const trigger = screen.getByRole("button", { name: /Choose/ });
+    fireEvent.keyDown(trigger, { key: "A" });
     fireEvent.keyDown(trigger, { key: "ArrowDown" });
     expect(screen.getByRole("listbox")).not.toBeNull();
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
     fireEvent.keyDown(document, { key: "A" });
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("listbox")).toBeNull();
@@ -71,12 +74,13 @@ describe("dropdown", () => {
     fireEvent.keyDown(trigger, { key: "Enter" });
     fireEvent.pointerDown(document.body);
     expect(screen.queryByRole("listbox")).toBeNull();
-    expect(keyDown).toHaveBeenCalledTimes(2);
+    expect(keyDown).toHaveBeenCalledTimes(4);
   });
 
   test("supports option Escape and trigger toggle", () => {
     render(<Dropdown value="a" options={options} onChange={vi.fn()} />);
     const trigger = screen.getByRole("button", { name: /Alpha/ });
+    fireEvent.blur(trigger);
     fireEvent.click(trigger);
     const option = screen.getByRole("option", { name: /Beta/ });
     fireEvent.keyDown(option, { key: "A" });
@@ -122,8 +126,8 @@ describe("dropdown", () => {
 
     const outside = document.createElement("button");
     document.body.append(outside);
-    trigger.focus();
     outside.focus();
+    fireEvent.blur(trigger);
     await act(async () => Promise.resolve());
     expect(blur).toHaveBeenCalledOnce();
   });

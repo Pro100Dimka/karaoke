@@ -255,6 +255,13 @@ describe("library song actions", () => {
       title: "Title",
       id: "id"
     });
+    await act(() => hook.result.current.openSongFolder({}));
+    expect(openSongFolder).toHaveBeenLastCalledWith({
+      path: "",
+      slug: "",
+      title: "",
+      id: ""
+    });
     expect(props.notify).toHaveBeenCalledTimes(3);
   });
 });

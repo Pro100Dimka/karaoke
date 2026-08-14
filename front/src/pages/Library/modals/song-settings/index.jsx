@@ -33,7 +33,7 @@ const SONG_RENDERERS = {
       <Stack direction="row" gap={2}>
         <NumberField
           placeholder={translateSaved("Мин.")}
-          value={context.form?.note_range_min ?? ""}
+          value={context.form.note_range_min ?? ""}
           onChange={(value) =>
             context.onChange("note_range_min", parseNumber(value))
           }
@@ -41,7 +41,7 @@ const SONG_RENDERERS = {
 
         <NumberField
           placeholder={translateSaved("Макс.")}
-          value={context.form?.note_range_max ?? ""}
+          value={context.form.note_range_max ?? ""}
           onChange={(value) =>
             context.onChange("note_range_max", parseNumber(value))
           }
@@ -73,7 +73,6 @@ export default function SongSettings({ songId, onClose }) {
   const updateField = (name, value) => setField(setForm, name, value);
   const save = () =>
     runSave(async () => {
-      if (!song || !form) return;
       const validationError = validateSongSettings(form);
       if (validationError) {
         await notify(validationError);

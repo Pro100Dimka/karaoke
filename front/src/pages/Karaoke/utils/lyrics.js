@@ -4,8 +4,6 @@ const TIME_KEYS = {
 };
 
 function readFiniteTime(source, keys) {
-  if (!source || typeof source !== "object") return null;
-
   for (const key of keys) {
     const raw = source[key];
     if (raw === null || raw === undefined || raw === "") continue;

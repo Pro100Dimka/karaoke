@@ -52,6 +52,7 @@ export default function Library({ onOpenSongSettings }) {
   const returningFromKaraoke = Boolean(location.state?.fromKaraokeFade);
   const [karaokeTransitioning, setKaraokeTransitioning] =
     useState(returningFromKaraoke);
+  const karaokeTransitioningRef = useRef(returningFromKaraoke);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const { alert: notify, confirm: confirmDialog } = useAppDialog();
@@ -70,6 +71,7 @@ export default function Library({ onOpenSongSettings }) {
     // Library is mounted behind a black overlay. Let the analysis modal and
     // page render under that blackout, then reveal everything together.
     const timer = window.setTimeout(() => {
+      karaokeTransitioningRef.current = false;
       setKaraokeTransitioning(false);
       // The app-level blackout survives the route swap and is released only
       // after Library has mounted, so the themed body can never flash through.
@@ -260,11 +262,15 @@ export default function Library({ onOpenSongSettings }) {
   );
   const openSongInKaraoke = useCallback(
     async (selectedSong) => {
-      if (karaokeTransitioning) return;
+      if (karaokeTransitioningRef.current) return;
+      karaokeTransitioningRef.current = true;
       try {
         if (activeRoom) {
           const readyLocally = await openKaraokeInRoom(selectedSong.id);
-          if (!readyLocally) return;
+          if (!readyLocally) {
+            karaokeTransitioningRef.current = false;
+            return;
+          }
         }
         setGlobalRouteBlackout(true);
         setKaraokeTransitioning(true);
@@ -278,6 +284,7 @@ export default function Library({ onOpenSongSettings }) {
           }
         });
       } catch (openError) {
+        karaokeTransitioningRef.current = false;
         setKaraokeTransitioning(false);
         setGlobalRouteBlackout(false);
         await notify(
@@ -287,7 +294,7 @@ export default function Library({ onOpenSongSettings }) {
         );
       }
     },
-    [karaokeTransitioning, navigate, notify, activeRoom, openKaraokeInRoom]
+    [navigate, notify, activeRoom, openKaraokeInRoom]
   );
   return (
     <Stack

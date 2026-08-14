@@ -17,6 +17,7 @@ import useExclusiveAsyncAction from "../src/hooks/useExclusiveAsyncAction.js";
 import useLatestRef from "../src/hooks/useLatestRef.js";
 import useMountedRef from "../src/hooks/useMountedRef.js";
 import { usePolling } from "../src/hooks/usePolling.js";
+import { isHotkeyScopeActive } from "../src/utils/hotkeys.js";
 import useSettingsNavigation from "../src/hooks/useSettingsNavigation.js";
 import useKaraokeControls from "../src/pages/Karaoke/hooks/useKaraokeControls.js";
 import useKaraokeHotkeys from "../src/pages/Karaoke/hooks/useKaraokeHotkeys.js";
@@ -104,6 +105,47 @@ describe("async state hooks", () => {
     unmount();
   });
 
+  test("settles queued and exclusive work safely after unmount", async () => {
+    let releaseQueue;
+    const queued = renderHook(() => useAsyncQueue());
+    const queuedPromise = queued.result.current.run(
+      () =>
+        new Promise((resolve) => {
+          releaseQueue = resolve;
+        })
+    );
+    await act(async () => Promise.resolve());
+    queued.unmount();
+    releaseQueue("queued");
+    await expect(queuedPromise).resolves.toBe("queued");
+    await expect(queued.result.current.run(() => "after")).resolves.toBe(
+      "after"
+    );
+
+    const exclusive = renderHook(() => useExclusiveAsyncAction());
+    exclusive.unmount();
+    await expect(exclusive.result.current.run(() => "done")).resolves.toBe(
+      "done"
+    );
+  });
+
+  test("ignores a polling rejection after unmount", async () => {
+    let rejectFetch;
+    const hook = renderHook(() =>
+      usePolling(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectFetch = reject;
+          }),
+        100
+      )
+    );
+    await act(async () => Promise.resolve());
+    hook.unmount();
+    rejectFetch(new Error("obsolete"));
+    await act(async () => Promise.resolve());
+  });
+
   test("polls without overlap, refreshes, stops and reports errors", async () => {
     vi.useFakeTimers();
     const fetcher = vi
@@ -167,6 +209,58 @@ describe("async state hooks", () => {
     await waitFor(() => expect(polling.result.current.data).toBe("second"));
     polling.unmount();
   });
+
+  test("ignores late results and replaces a scheduled poll on visibility", async () => {
+    vi.useFakeTimers();
+    let release;
+    const pending = new Promise((resolve) => {
+      release = resolve;
+    });
+    const late = renderHook(() => usePolling(() => pending, 100));
+    act(() => {
+      late.result.current.refresh();
+    });
+    late.unmount();
+    await act(async () => {
+      release("late");
+      await pending;
+    });
+
+    const fetcher = vi.fn().mockResolvedValue("ready");
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible"
+    });
+    const visible = renderHook(() => usePolling(fetcher, 100));
+    await act(async () => Promise.resolve());
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden"
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible"
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+    await act(async () => Promise.resolve());
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    visible.unmount();
+  });
+
+  test("rejects a detached hotkey scope and ignores a stale poll timer", async () => {
+    expect(isHotkeyScopeActive(document.createElement("div"))).toBe(false);
+    let scheduled;
+    vi.stubGlobal("setTimeout", vi.fn((callback) => {
+      scheduled = callback;
+      return 1;
+    }));
+    const polling = renderHook(() => usePolling(() => Promise.resolve("ok"), 10));
+    await act(async () => Promise.resolve());
+    polling.unmount();
+    await act(async () => scheduled());
+    vi.unstubAllGlobals();
+  });
 });
 
 describe("navigation and karaoke hooks", () => {
@@ -229,6 +323,22 @@ describe("navigation and karaoke hooks", () => {
     expect(toggle).toHaveBeenCalledOnce();
     expect(seek.mock.calls).toEqual([[0], [6]]);
     expect(stop).toHaveBeenCalledOnce();
+    renderHook(() =>
+      useKaraokeHotkeys({
+        scopeRef: { current: scope },
+        currentTime: 0,
+        duration: 0
+      })
+    );
+    expect(() =>
+      scope.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          code: "Escape",
+          bubbles: true,
+          cancelable: true
+        })
+      )
+    ).not.toThrow();
   });
 
   test("loads, rejects and resets karaoke results safely", async () => {
@@ -251,6 +361,35 @@ describe("navigation and karaoke hooks", () => {
       error: null
     });
     unmount();
+  });
+
+  test("ignores karaoke result completion after cancellation", async () => {
+    let resolveResult;
+    apiMocks.getResult.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveResult = resolve;
+      })
+    );
+    const resolved = renderHook(({ song }) => useKaraokeResult(song), {
+      initialProps: { song: { id: "late", status: "done" } }
+    });
+    resolved.rerender({ song: null });
+    resolveResult({ notes: [1] });
+    await act(async () => Promise.resolve());
+    expect(resolved.result.current.result).toBeNull();
+
+    let rejectResult;
+    apiMocks.getResult.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectResult = reject;
+      })
+    );
+    const rejected = renderHook(() =>
+      useKaraokeResult({ id: "late-error", status: "done" })
+    );
+    rejected.unmount();
+    rejectResult(new Error("obsolete"));
+    await act(async () => Promise.resolve());
   });
 
   test("synchronizes stage CSS and cleans observer", () => {

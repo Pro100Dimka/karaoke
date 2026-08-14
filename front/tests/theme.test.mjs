@@ -1,24 +1,23 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 
-import {
-  applyTheme,
-  getSavedTheme,
-  readStoredTheme,
-  resolveTheme,
-  saveTheme,
-  writeStoredTheme
-} from "../src/utils/theme.js";
+let importId = 0;
+const loadTheme = () =>
+  import(/* @vite-ignore */ `../src/utils/theme.js?contract=${importId++}`);
 
-test("theme normalization accepts only supported themes", () => {
+test("theme normalization accepts only supported themes", async () => {
+  const { resolveTheme } = await loadTheme();
   assert.equal(resolveTheme("dark"), "dark");
+  assert.equal(resolveTheme("light"), "light");
+  assert.equal(resolveTheme("green"), "green");
   assert.equal(resolveTheme(" violet "), "violet");
   assert.equal(resolveTheme("unknown"), "dark");
   assert.equal(resolveTheme(null), "dark");
   assert.equal(resolveTheme({}), "dark");
 });
 
-test("theme storage is resilient and normalized", () => {
+test("theme storage is resilient and normalized", async () => {
+  const { readStoredTheme, writeStoredTheme } = await loadTheme();
   const values = new Map([["karaoke-theme", "green"]]);
   const storage = {
     getItem: (key) => values.get(key),
@@ -54,6 +53,7 @@ test("theme storage is resilient and normalized", () => {
 });
 
 test("applying a theme synchronizes DOM, storage and Electron icon", async () => {
+  const { applyTheme, getSavedTheme, saveTheme } = await loadTheme();
   const originalWindow = globalThis.window;
   const originalDocument = globalThis.document;
   const values = new Map();

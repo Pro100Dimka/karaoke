@@ -61,7 +61,7 @@ const noteName = (midi) => {
     "A#",
     "B"
   ];
-  const value = Number(midi) || 0;
+  const value = Number(midi);
   return `${names[((value % 12) + 12) % 12]}${Math.floor(value / 12) - 1}`;
 };
 const cloneNotes = (notes) =>
@@ -436,7 +436,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
   }, []);
   const startScrollThumbDrag = useCallback((event, axis) => {
     const shell = rollShellRef.current;
-    if (!shell) return;
     event.preventDefault();
     event.stopPropagation();
     scrollDragRef.current = {
@@ -537,9 +536,12 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     let lastReconcileAt = 0;
     const sync = (stamp = performance.now()) => {
       const master = instrumentalRef.current;
-      if (master && !playheadDragRef.current) {
+      const vocal = vocalsRef.current;
+      const shell = rollShellRef.current;
+      if (![master, vocal, shell].every(Boolean)) return;
+      if (!playheadDragRef.current) {
         const clock = transportClockRef.current;
-        let current = master.currentTime || 0;
+        let current = master.currentTime;
         if (!master.paused && !master.ended) {
           if (!clock.running) {
             clock.media = current;
@@ -548,13 +550,13 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
           }
           current = clamp(
             clock.media +
-              ((stamp - clock.perf) / 1000) * (master.playbackRate || 1),
+              ((stamp - clock.perf) / 1000) * master.playbackRate,
             0,
             duration
           );
           if (stamp - lastReconcileAt >= 400) {
             lastReconcileAt = stamp;
-            const mediaCurrent = master.currentTime || current;
+            const mediaCurrent = master.currentTime;
             if (Math.abs(mediaCurrent - current) > 0.12) {
               clock.media = mediaCurrent;
               clock.perf = stamp;
@@ -572,24 +574,20 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
           `${playheadX}px`
         );
         if (!master.paused && !master.ended) {
-          const vocal = vocalsRef.current;
-          if (vocal) {
-            const mediaTime = master.currentTime || current;
-            const drift = (vocal.currentTime || 0) - mediaTime;
-            if (Math.abs(drift) > 0.13) {
-              vocal.currentTime = mediaTime;
-              vocal.playbackRate = playbackRate;
-            } else if (Math.abs(drift) > 0.02)
-              vocal.playbackRate = clamp(
-                playbackRate - drift * 0.16,
-                playbackRate * 0.97,
-                playbackRate * 1.03
-              );
-            else if (vocal.playbackRate !== playbackRate)
-              vocal.playbackRate = playbackRate;
-          }
-          const shell = rollShellRef.current;
-          if (autoScroll && shell) {
+          const mediaTime = master.currentTime;
+          const drift = vocal.currentTime - mediaTime;
+          if (Math.abs(drift) > 0.13) {
+            vocal.currentTime = mediaTime;
+            vocal.playbackRate = playbackRate;
+          } else if (Math.abs(drift) > 0.02)
+            vocal.playbackRate = clamp(
+              playbackRate - drift * 0.16,
+              playbackRate * 0.97,
+              playbackRate * 1.03
+            );
+          else if (vocal.playbackRate !== playbackRate)
+            vocal.playbackRate = playbackRate;
+          if (autoScroll) {
             const nextLeft = autoFollowScrollLeft({
               playheadX,
               scrollLeft: shell.scrollLeft,
@@ -617,20 +615,18 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
   const pause = useCallback(() => {
     const master = instrumentalRef.current;
     const vocal = vocalsRef.current;
-    master?.pause();
-    vocal?.pause();
-    let current = master?.currentTime || 0;
+    master.pause();
+    vocal.pause();
+    let current = master.currentTime;
     const origin = autoScroll ? playbackOriginRef.current : null;
-    if (origin && master) {
+    if (origin) {
       current = origin.time;
       master.currentTime = current;
-      if (vocal) vocal.currentTime = current;
+      vocal.currentTime = current;
       const shell = rollShellRef.current;
-      if (shell) {
-        shell.scrollLeft = origin.scrollLeft;
-        shell.scrollTop = origin.scrollTop;
-        syncScrollState();
-      }
+      shell.scrollLeft = origin.scrollLeft;
+      shell.scrollTop = origin.scrollTop;
+      syncScrollState();
     }
     transportClockRef.current = {
       media: current,
@@ -645,7 +641,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     setPlaying(false);
     stopOscillator();
     playbackOriginRef.current = null;
-    if (vocal) vocal.playbackRate = playbackRate;
+    vocal.playbackRate = playbackRate;
   }, [
     autoScroll,
     keyboardWidth,
@@ -657,28 +653,27 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
   const play = useCallback(async () => {
     const master = instrumentalRef.current;
     const vocal = vocalsRef.current;
-    if (!master || !vocal) return;
     try {
       const shell = rollShellRef.current;
       playbackOriginRef.current = autoScroll
         ? {
-            time: master.currentTime || 0,
-            scrollLeft: shell?.scrollLeft || 0,
-            scrollTop: shell?.scrollTop || 0
+            time: master.currentTime,
+            scrollLeft: shell.scrollLeft,
+            scrollTop: shell.scrollTop
           }
         : null;
       vocal.currentTime = master.currentTime;
       master.playbackRate = playbackRate;
       vocal.playbackRate = playbackRate;
       transportClockRef.current = {
-        media: master.currentTime || 0,
+        media: master.currentTime,
         perf: performance.now(),
         running: true
       };
       await Promise.allSettled([master.play(), vocal.play()]);
-      setTime(master.currentTime || 0);
+      setTime(master.currentTime);
       setPlaying(true);
-      updateSynth(master.currentTime || 0);
+      updateSynth(master.currentTime);
     } catch (error) {
       await notify(
         translateSaved("Не удалось начать воспроизведение: {0}", {
@@ -696,7 +691,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
   }, []);
   useEffect(
     () => () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      cancelAnimationFrame(rafRef.current);
       stopOscillator();
       auditionRef.current?.oscillators?.forEach((oscillator) => {
         try {
@@ -725,11 +720,9 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
         "--editor-playhead-x",
         `${keyboardWidth + value * zoom}px`
       );
-      if (instrumentalRef.current) instrumentalRef.current.currentTime = value;
-      if (vocalsRef.current) {
-        vocalsRef.current.currentTime = value;
-        vocalsRef.current.playbackRate = playbackRate;
-      }
+      instrumentalRef.current.currentTime = value;
+      vocalsRef.current.currentTime = value;
+      vocalsRef.current.playbackRate = playbackRate;
       if (running) updateSynth(value);
       else {
         stopOscillator();
@@ -751,7 +744,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
   const pointerTime = useCallback(
     (clientX) => {
       const canvas = rollCanvasRef.current;
-      if (!canvas) return 0;
       const rect = canvas.getBoundingClientRect();
       return clamp((clientX - rect.left - keyboardWidth) / zoom, 0, duration);
     },
@@ -765,7 +757,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
         "--editor-playhead-x",
         `${keyboardWidth + next * zoom}px`
       );
-      if (playheadDragRef.current) playheadDragRef.current.value = next;
+      playheadDragRef.current.value = next;
       const active = noteAtTime(next);
       const midi = active?.midi_note ?? null;
       if (midi !== playheadPreviewMidiRef.current) {
@@ -824,12 +816,12 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
   const setHorizontalZoomAnchored = useCallback(
     (nextZoom) => {
       const shell = rollShellRef.current;
-      const next = clamp(Number(nextZoom) || zoom, 36, 600);
+      const next = clamp(Number(nextZoom), 36, 600);
       if (!shell || next === zoom) {
         setZoom(next);
         return;
       }
-      const anchorTime = instrumentalRef.current?.currentTime ?? time;
+      const anchorTime = instrumentalRef.current.currentTime;
       const nextScrollWidth = Math.max(
         shell.clientWidth,
         Math.max(1180, duration * next) + keyboardWidth
@@ -853,12 +845,12 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       );
       syncScrollState();
     },
-    [duration, keyboardWidth, syncScrollState, time, zoom]
+    [duration, keyboardWidth, syncScrollState, zoom]
   );
   const setVerticalZoomAnchored = useCallback(
     (nextZoom) => {
       const shell = rollShellRef.current;
-      const next = clamp(Number(nextZoom) || verticalZoom, 10, 36);
+      const next = clamp(Number(nextZoom), 10, 36);
       if (!shell || next === verticalZoom) {
         setVerticalZoom(next);
         return;
@@ -903,7 +895,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
   );
   const handleRollWheel = useCallback(
     (event) => {
-      if (!event.ctrlKey) return;
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation?.();
@@ -942,7 +933,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       const id = adjacentNoteId(notes, selected, direction);
       if (!id) return;
       const note = notes.find((item) => item._id === id);
-      if (!note) return;
       setSelected([id]);
       seek(note.start);
       auditionNote(note.midi_note, 180);
@@ -960,7 +950,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     (timeDelta = 0, midiDelta = 0) => {
       if (!selected.length) return;
       const chosen = notes.filter((note) => selected.includes(note._id));
-      if (!chosen.length) return;
       const minStart = Math.min(...chosen.map((note) => note.start));
       const maxEnd = Math.max(...chosen.map((note) => note.end));
       const safeTimeDelta = clamp(timeDelta, -minStart, duration - maxEnd);
@@ -1020,7 +1009,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
   }, [commit, duration, notes, selected]);
   const mergeSelected = useCallback(() => {
     const result = mergeSelectedNotes(notes, selected, syllableByIndex);
-    if (!result.selectedId || selected.length < 2) return;
     commit(result.notes);
     setSelected([result.selectedId]);
   }, [commit, notes, selected, syllableByIndex]);
@@ -1100,7 +1088,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
           duration
         );
         const previewMidi = clamp(
-          (state.originals.get(state.id)?.midi_note ?? 60) + dy,
+          state.originals.get(state.id).midi_note + dy,
           0,
           127
         );
@@ -1125,9 +1113,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
         return;
       }
       const original = state.originals.get(state.id);
-      if (!original) return;
       const bounds = resizeBounds(state.snapshot, state.id, duration);
-      if (!bounds) return;
       let { start } = original;
       let { end } = original;
       if (state.mode === "left") {
@@ -1167,7 +1153,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     if (state.moved) {
       remember(state.snapshot);
       const current = notes.find((note) => note._id === state.id);
-      if (current) auditionNote(current.midi_note, 170);
+      auditionNote(current.midi_note, 170);
     }
   }, [auditionNote, notes, remember]);
   const marqueeSelection = useCallback(
@@ -1183,7 +1169,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
         rowHeight,
         maxMidi
       });
-      return [...new Set([...(state.base || []), ...hit])];
+      return [...new Set([...state.base, ...hit])];
     },
     [keyboardWidth, maxMidi, notes, rowHeight, zoom]
   );
@@ -1198,7 +1184,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
         return;
       event.preventDefault();
       const canvas = rollCanvasRef.current;
-      if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
       const x = event.clientX - rect.left;
       const y = event.clientY - rect.top;
@@ -1229,7 +1214,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       const state = selectionRef.current;
       if (!state || state.pointerId !== event.pointerId) return;
       const canvas = rollCanvasRef.current;
-      if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
       state.x2 = event.clientX - rect.left;
       state.y2 = event.clientY - rect.top;
@@ -1406,7 +1390,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     undo
   ]);
   const save = useCallback(async () => {
-    if (!song?.id) return;
     setSaving(true);
     try {
       const serializable = notes.map(({ _id: _, ...note }) => note);
@@ -1579,7 +1562,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
                       id="melody-editor-playback-rate"
                       value={playbackRate}
                       onChange={(event) =>
-                        setPlaybackRate(Number(event.target.value) || 1)
+                        setPlaybackRate(Number(event.target.value))
                       }
                     >
                       <option value="0.5">50%</option>
@@ -1670,7 +1653,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
                     </span>
                     <select
                       aria-label={translateSaved("Текст / слог")}
-                      value={selectedNote?.syllable_index ?? ""}
+                      value={selectedNote.syllable_index ?? ""}
                       onChange={(event) => assignSyllable(event.target.value)}
                     >
                       <option value="">{translateSaved("Без текста")}</option>
@@ -1700,7 +1683,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
               onTimeUpdate={(event) => {
                 if (playheadDragRef.current || !event.currentTarget.paused)
                   return;
-                const current = event.currentTarget.currentTime || 0;
+                const current = event.currentTarget.currentTime;
                 transportClockRef.current = {
                   media: current,
                   perf: performance.now(),
@@ -1907,7 +1890,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
                 className="melody-editor-scroll-track"
                 onPointerDown={(event) => {
                   const shell = rollShellRef.current;
-                  if (!shell) return;
                   const rect = event.currentTarget.getBoundingClientRect();
                   const max = Math.max(
                     1,
@@ -1962,7 +1944,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
                 className="melody-editor-scroll-track"
                 onPointerDown={(event) => {
                   const shell = rollShellRef.current;
-                  if (!shell) return;
                   const rect = event.currentTarget.getBoundingClientRect();
                   const max = Math.max(
                     1,

@@ -140,9 +140,7 @@ export default function useKaraokeMediaSync({
           lastSecondarySyncRef.current = now;
         }
       }
-      if (active) {
-        animationFrameId = globalThis.requestAnimationFrame?.(updatePosition);
-      }
+      animationFrameId = globalThis.requestAnimationFrame?.(updatePosition);
     };
 
     if (typeof globalThis.requestAnimationFrame !== "function")

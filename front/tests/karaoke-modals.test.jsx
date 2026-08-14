@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -51,9 +51,9 @@ afterEach(cleanup);
 
 test("analysis modal renders normalized result and deletes recording", async () => {
   mocks.runAnalysis.mockResolvedValue({
-    accuracy_percent: 88,
+    pitch_accuracy_percent: 88,
     mean_deviation_semitones: 0.4,
-    scored_sections: [{ accuracy_percent: 90 }, { accuracy_percent: 60 }]
+    sections: [{ accuracy_percent: 90 }, { accuracy_percent: 60 }]
   });
   const done = vi.fn();
   const deleted = vi.fn();
@@ -110,4 +110,111 @@ test("analysis modal reports analysis and deletion failures", async () => {
       deletion.container.querySelector(".song-lyrics-error").textContent
     ).toContain("delete failed")
   );
+});
+
+test("analysis deletion respects cancellation and stale modal lifetimes", async () => {
+  mocks.runAnalysis.mockResolvedValue({ accuracy_percent: 50 });
+  mocks.confirm.mockResolvedValueOnce(false);
+  const cancelled = render(
+    <PerformanceAnalysisModal recordingId="cancel" onClose={vi.fn()} />
+  );
+  await waitFor(() => expect(cancelled.getByTestId("audio")).not.toBeNull());
+  fireEvent.click(
+    cancelled.container.querySelector(".performance-analysis-actions button")
+  );
+  await act(async () => Promise.resolve());
+  expect(mocks.deleteRecording).not.toHaveBeenCalled();
+  cancelled.unmount();
+
+  let resolveConfirm;
+  mocks.confirm.mockReturnValueOnce(
+    new Promise((resolve) => {
+      resolveConfirm = resolve;
+    })
+  );
+  const staleConfirm = render(
+    <PerformanceAnalysisModal recordingId="stale" onClose={vi.fn()} />
+  );
+  await waitFor(() => expect(staleConfirm.getByTestId("audio")).not.toBeNull());
+  fireEvent.click(
+    staleConfirm.container.querySelector(
+      ".performance-analysis-actions button"
+    )
+  );
+  staleConfirm.unmount();
+  await act(async () => resolveConfirm(true));
+
+  let rejectDelete;
+  mocks.confirm.mockResolvedValueOnce(true);
+  mocks.deleteRecording.mockReturnValueOnce(
+    new Promise((_resolve, reject) => {
+      rejectDelete = reject;
+    })
+  );
+  const staleDelete = render(
+    <PerformanceAnalysisModal recordingId="stale-delete" onClose={vi.fn()} />
+  );
+  await waitFor(() => expect(staleDelete.getByTestId("audio")).not.toBeNull());
+  fireEvent.click(
+    staleDelete.container.querySelector(".performance-analysis-actions button")
+  );
+  await act(async () => Promise.resolve());
+  staleDelete.unmount();
+  await act(async () => rejectDelete(new Error("late")));
+});
+
+test("analysis ignores stale requests and completed deletion after unmount", async () => {
+  let resolveStrict;
+  mocks.runAnalysis.mockReturnValueOnce(
+    new Promise((resolve) => {
+      resolveStrict = resolve;
+    })
+  );
+  const strict = render(
+    <React.StrictMode>
+      <PerformanceAnalysisModal recordingId="strict" onClose={vi.fn()} />
+    </React.StrictMode>
+  );
+  await act(async () => resolveStrict({ pitch_accuracy_percent: 50 }));
+  strict.unmount();
+
+  let rejectOld;
+  mocks.runAnalysis
+    .mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectOld = reject;
+      })
+    )
+    .mockResolvedValueOnce({ pitch_accuracy_percent: 60 });
+  const changed = render(
+    <PerformanceAnalysisModal recordingId="old" onClose={vi.fn()} />
+  );
+  changed.rerender(
+    <PerformanceAnalysisModal recordingId="new" onClose={vi.fn()} />
+  );
+  await act(async () => rejectOld(new Error("stale")));
+  await waitFor(() => expect(changed.getByTestId("audio")).not.toBeNull());
+  changed.unmount();
+
+  let resolveDelete;
+  mocks.runAnalysis.mockResolvedValueOnce({ pitch_accuracy_percent: 70 });
+  mocks.deleteRecording.mockReturnValueOnce(
+    new Promise((resolve) => {
+      resolveDelete = resolve;
+    })
+  );
+  const deleting = render(
+    <PerformanceAnalysisModal
+      recordingId="late-success"
+      onClose={vi.fn()}
+      onDeleted={vi.fn()}
+    />
+  );
+  await waitFor(() => expect(deleting.getByTestId("audio")).not.toBeNull());
+  fireEvent.click(
+    deleting.container.querySelector(".performance-analysis-actions button")
+  );
+  await act(async () => Promise.resolve());
+  deleting.unmount();
+  await act(async () => resolveDelete());
 });

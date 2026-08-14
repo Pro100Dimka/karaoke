@@ -101,6 +101,9 @@ describe("settings information screens", () => {
     expect(screen.getByText("A&D Voice")).not.toBeNull();
     expect(screen.getByText("1.0")).not.toBeNull();
     expect(screen.getByText("D:/Data")).not.toBeNull();
+    cleanup();
+    mocks.polling = [{ data: null }];
+    expect(() => render(<About />)).not.toThrow();
   });
 
   test("renders diagnostic checks, versions and errors", () => {
@@ -131,7 +134,7 @@ describe("settings information screens", () => {
     const view = render(
       <>
         <DiagnosticCheck label="Broken" ok={false} />
-        <VersionList components={{}} />
+        <VersionList />
         <ErrorList />
       </>
     );
@@ -144,6 +147,14 @@ describe("settings information screens", () => {
       />
     );
     expect(screen.getByText("message")).not.toBeNull();
+    cleanup();
+    mocks.diagnostics = {
+      health: null,
+      pipeline: null,
+      versions: null,
+      errors: null
+    };
+    expect(() => render(<Diagnostics />)).not.toThrow();
   });
 
   test("renders history rows, statuses and polling errors", () => {
@@ -164,6 +175,13 @@ describe("settings information screens", () => {
             status: "saved",
             duration_seconds: "bad",
             timestamp: "bad"
+          },
+          {
+            song_title: "Unknown time",
+            kind: "recording",
+            status: "saved",
+            duration_seconds: null,
+            timestamp: null
           }
         ],
         error: new Error("history offline")
@@ -174,6 +192,45 @@ describe("settings information screens", () => {
     expect(screen.getByText("Song")).not.toBeNull();
     expect(screen.getByText(/settings.history.seconds/)).not.toBeNull();
     expect(screen.getByText("done")).not.toBeNull();
+  });
+
+  test("renders empty and unknown history values defensively", () => {
+    mocks.polling = [{ data: null }];
+    const empty = render(<History />);
+    expect(screen.getByText("settings.history.empty")).not.toBeNull();
+    empty.unmount();
+
+    mocks.pollingIndex = 0;
+    mocks.polling = [
+      {
+        data: [
+          {
+            song_title: "Unknown action",
+            kind: "custom",
+            status: null
+          },
+          {
+            song_title: "Missing action",
+            kind: null,
+            status: "recorded"
+          },
+          {
+            song_title: "Unknown processing",
+            kind: "processing",
+            status: "custom-status"
+          },
+          {
+            song_title: "Missing processing",
+            kind: "processing",
+            status: null
+          }
+        ]
+      }
+    ];
+    render(<History />);
+    expect(screen.getByText("custom")).not.toBeNull();
+    expect(screen.getByText("custom-status")).not.toBeNull();
+    expect(screen.getByText("status.unknown")).not.toBeNull();
   });
 });
 
@@ -229,6 +286,7 @@ describe("memory management", () => {
     expect(optimize).toHaveBeenCalled();
     view.rerender(<MemoryBreakdown />);
     expect(view.container.textContent).toBe("");
+    view.rerender(<MemoryStats size={null} free={null} />);
   });
 
   test("loads memory data and optimizes a selected song", async () => {
@@ -252,8 +310,36 @@ describe("memory management", () => {
     const optimize = screen.getByText(
       /Оптимізувати|РћРїС‚РёРјРёР·РёСЂРѕРІР°С‚СЊ/
     );
+    mocks.optimizeSong.mockResolvedValueOnce({});
     fireEvent.click(optimize);
     await act(async () => Promise.resolve());
     expect(mocks.optimizeSong).toHaveBeenCalledWith("song");
+  });
+
+  test("handles missing songs and a failed memory optimization", async () => {
+    mocks.polling = [
+      { data: { total_human: "1 GB", breakdown: {} }, error: null },
+      { data: null },
+      { data: null }
+    ];
+    mocks.optimizeSong.mockRejectedValueOnce(new Error("locked"));
+    render(<MemoryManager />);
+    expect(screen.getByRole("button", { name: "Оптимізувати" }).disabled).toBe(
+      true
+    );
+    cleanup();
+    mocks.pollingIndex = 0;
+    mocks.polling = [
+      { data: { total_human: "1 GB", breakdown: {} }, error: null },
+      { data: null },
+      { data: [{ id: "song", title: "Song", status: "done" }] }
+    ];
+    render(<MemoryManager />);
+    fireEvent.click(screen.getByRole("button", { name: /Пісня/ }));
+    fireEvent.click(await screen.findByRole("option", { name: "Song" }));
+    const optimize = screen.getByRole("button", { name: "Оптимізувати" });
+    fireEvent.click(optimize);
+    await act(async () => Promise.resolve());
+    expect(mocks.notify).toHaveBeenCalledWith("locked");
   });
 });

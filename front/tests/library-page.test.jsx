@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   notify: vi.fn(),
   confirm: vi.fn(),
   reloadSettings: vi.fn(),
+  settings: { online_name: "Singer" },
   sharedRoom: {
     room: null,
     roomUi: {},
@@ -46,7 +47,7 @@ vi.mock("../src/contexts/OnlineRoomContext", () => ({
 vi.mock("../src/hooks/useAppSettings", () => ({
   default: () => ({
     reloadSettings: mocks.reloadSettings,
-    settings: { online_name: "Singer" }
+    settings: mocks.settings
   })
 }));
 vi.mock("../src/hooks/usePolling", () => ({
@@ -198,6 +199,7 @@ beforeEach(() => {
   mocks.notify.mockReset().mockResolvedValue(undefined);
   mocks.confirm.mockReset().mockResolvedValue(true);
   mocks.reloadSettings.mockReset().mockResolvedValue({ online_name: "Singer" });
+  mocks.settings = { online_name: "Singer" };
   mocks.sharedRoom.room = null;
   mocks.sharedRoom.roomUi = {};
   mocks.sharedRoom.participants = [];
@@ -235,7 +237,9 @@ describe("library page", () => {
   test("navigates to karaoke after transition and handles room refusal", async () => {
     vi.useFakeTimers();
     const result = render(<Library />);
-    fireEvent.click(result.getAllByTestId("karaoke")[0]);
+    const open = result.getAllByTestId("karaoke")[0];
+    fireEvent.click(open);
+    fireEvent.click(open);
     await vi.advanceTimersByTimeAsync(920);
     expect(mocks.navigate).toHaveBeenCalledWith("/karaoke", {
       state: { songId: "one", autoPlay: true }
@@ -248,6 +252,13 @@ describe("library page", () => {
     fireEvent.click(room.getAllByTestId("karaoke")[0]);
     await Promise.resolve();
     expect(mocks.navigate).not.toHaveBeenCalledTimes(2);
+    room.unmount();
+    mocks.sharedRoom.openKaraoke.mockResolvedValueOnce(true);
+    mocks.pollIndex = 0;
+    const accepted = render(<Library />);
+    fireEvent.click(accepted.getAllByTestId("karaoke")[0]);
+    await vi.advanceTimersByTimeAsync(920);
+    expect(mocks.navigate).toHaveBeenCalledTimes(2);
   });
 
   test("tracks processing, cancels work and opens completed song", async () => {
@@ -407,5 +418,53 @@ describe("library page", () => {
     ];
     render(<Library />);
     await act(async () => Promise.resolve());
+  });
+
+  test("covers missing processing ids, recordings and stale refresh completion", async () => {
+    let resolveRefresh;
+    const refresh = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveRefresh = resolve;
+        })
+    );
+    mocks.settings = null;
+    mocks.polls = [
+      { data: [{ title: "Working", status: "processing" }], refresh },
+      { data: null },
+      { data: null }
+    ];
+    const result = render(<Library />);
+    act(() => mocks.importOptions.onStarted(null));
+    fireEvent.click(result.getByTestId("open-room"));
+    await waitFor(() => expect(result.getByTestId("room-modal")).not.toBeNull());
+    result.unmount();
+    if (resolveRefresh) await act(async () => resolveRefresh());
+
+    let resolveTerminalRefresh;
+    const terminalRefreshPromise = new Promise((resolve) => {
+      resolveTerminalRefresh = resolve;
+    });
+    const terminalRefresh = vi.fn(() => terminalRefreshPromise);
+    mocks.pollIndex = 0;
+    mocks.polls = [
+      {
+        data: [{ ...songs[1], status: "processing" }],
+        refresh: terminalRefresh
+      },
+      { data: null },
+      {
+        data: {
+          song_id: "two",
+          status: "done",
+          progress_percent: 100
+        }
+      }
+    ];
+    const terminal = render(<Library />);
+    act(() => mocks.importOptions.onStarted({ ...songs[1], status: "processing" }));
+    await waitFor(() => expect(terminalRefresh).toHaveBeenCalledTimes(2));
+    terminal.unmount();
+    await act(async () => resolveTerminalRefresh());
   });
 });

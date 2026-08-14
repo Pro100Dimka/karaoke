@@ -11,7 +11,7 @@ import SettingsContent from "./settings-content";
 
 export default function Settings({
   isOpen = true,
-  onClose = () => {},
+  onClose,
   initialTab = "appearance"
 }) {
   const { alert } = useAppDialog();

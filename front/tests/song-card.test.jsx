@@ -91,4 +91,12 @@ test("unknown song status uses safe badge fallback", () => {
     />
   );
   expect(container.querySelector(".badge").textContent).toContain("custom");
+  const empty = render(
+    <LibrarySongCard
+      cardIndex={0}
+      song={{ id: "empty", title: "Title", status: "" }}
+      {...actions}
+    />
+  );
+  expect(empty.container.querySelector(".badge").textContent).not.toBe("");
 });

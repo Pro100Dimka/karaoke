@@ -18,10 +18,8 @@ export default function useExclusiveAsyncAction() {
       const promise = Promise.resolve()
         .then(action)
         .finally(() => {
-          if (activePromiseRef.current === promise) {
-            activePromiseRef.current = null;
-            if (mountedRef.current) setPending(false);
-          }
+          activePromiseRef.current = null;
+          if (mountedRef.current) setPending(false);
         });
       activePromiseRef.current = promise;
       return promise;

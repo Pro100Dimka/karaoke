@@ -8,11 +8,11 @@ import {
   missingTranslationKeys,
   translate
 } from "../src/i18n/translate.js";
-import {
-  getSavedLanguage,
-  normalizeLanguage,
-  saveLanguage
-} from "../src/utils/language.js";
+let languageImportId = 0;
+const loadLanguage = () =>
+  import(
+    /* @vite-ignore */ `../src/utils/language.js?contract=${languageImportId++}`
+  );
 
 const catalogs = {
   uk: {
@@ -24,11 +24,13 @@ const catalogs = {
   en: { greeting: "Hello, {name}!", complete: "English" }
 };
 
-test("Ukrainian is the safe default locale", () => {
+test("Ukrainian is the safe default locale", async () => {
+  const { normalizeLanguage } = await loadLanguage();
   assert.equal(normalizeLanguage(), "uk");
   assert.equal(normalizeLanguage("uk"), "uk");
   assert.equal(normalizeLanguage("de"), "uk");
   assert.equal(normalizeLanguage("en"), "en");
+  assert.equal(normalizeLanguage("ru"), "ru");
 });
 
 test("translation resolves locale, interpolation and fallbacks", () => {
@@ -69,7 +71,8 @@ test("catalog parity reports every missing locale key", () => {
   assert.deepEqual(missingTranslationKeys({}), {});
 });
 
-test("saved locale handles available, absent and blocked storage", () => {
+test("saved locale handles available, absent and blocked storage", async () => {
+  const { getSavedLanguage, saveLanguage } = await loadLanguage();
   const original = globalThis.localStorage;
   const values = new Map();
   const accessedKeys = [];

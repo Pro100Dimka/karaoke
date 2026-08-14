@@ -6,6 +6,7 @@ import {
   mockAppSettings,
   mockAudioSettings,
   mockKaraokeResult,
+  mockSongEditor,
   mockSongs
 } from "./fixtures.js";
 
@@ -16,6 +17,7 @@ const store = {
   songs: clone(mockSongs),
   settings: clone(mockAppSettings),
   audioSettings: clone(mockAudioSettings),
+  editors: { [MOCK_SONG_ID]: clone(mockSongEditor) },
   recordings: []
 };
 
@@ -69,6 +71,25 @@ export async function mockRequest(path, options = {}) {
 
   const resultMatch = pathname.match(/^\/songs\/([^/]+)\/result$/);
   if (resultMatch) return clone(mockKaraokeResult);
+  const editorMatch = pathname.match(/^\/songs\/([^/]+)\/editor$/);
+  if (editorMatch) {
+    const id = editorMatch[1];
+    if (method === "PUT") {
+      const current = store.editors[id] || clone(mockSongEditor);
+      store.editors[id] = {
+        ...current,
+        song_map: { ...current.song_map, notes: clone(body.notes || []) }
+      };
+    }
+    return clone(store.editors[id] || mockSongEditor);
+  }
+  const editorResetMatch = pathname.match(
+    /^\/songs\/([^/]+)\/editor\/reset$/
+  );
+  if (editorResetMatch) {
+    store.editors[editorResetMatch[1]] = clone(mockSongEditor);
+    return clone(mockSongEditor);
+  }
   const statusMatch = pathname.match(/^\/songs\/([^/]+)\/status$/);
   if (statusMatch) return clone(findSong(statusMatch[1]));
   if (/^\/songs\/[^/]+\/(process|reprocess|cancel)$/.test(pathname)) {

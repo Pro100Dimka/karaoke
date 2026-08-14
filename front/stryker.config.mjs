@@ -1,17 +1,52 @@
+const businessLogic = [
+  "src/api/**/*.js",
+  "src/config/**/*.js",
+  "src/contexts/**/*.{js,jsx}",
+  "src/hooks/**/*.js",
+  "src/i18n/**/*.{js,jsx}",
+  "src/pages/**/hooks/**/*.js",
+  "src/pages/**/utils.{js,jsx}",
+  "src/pages/**/utils/**/*.{js,jsx}",
+  "src/pages/Library/components/song-card/utils.js",
+  "src/pages/Library/modals/song-settings/config.jsx",
+  "src/pages/Library/modals/song-settings/melody-editor-*.js",
+  "src/pages/Library/modals/song-settings/utils.js",
+  "src/pages/Settings/audio-source.js",
+  "src/pages/Settings/config.jsx",
+  "src/pages/Settings/screens/**/config.js",
+  "src/pages/Settings/screens/**/format.js",
+  "src/services/**/*.js",
+  "src/utils/**/*.js"
+];
+const csv = (value) =>
+  value
+    ?.split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+const selectedFiles = csv(process.env.MUTATION_FILES);
+const selectedTests = csv(process.env.MUTATION_TEST_FILES);
+const concurrency = Number(process.env.MUTATION_CONCURRENCY);
+
 export default {
-  mutate: [
-    "src/i18n/runtime.js",
-    "src/i18n/translate.js",
-    "src/utils/language.js",
-    "src/utils/theme.js"
-  ],
+  mutate: selectedFiles?.length ? selectedFiles : businessLogic,
   testRunner: "vitest",
   vitest: {
-    configFile: "vitest.config.mjs"
+    configFile: "vitest.config.mjs",
+    related: !selectedTests?.length
   },
+  ...(selectedTests?.length ? { testFiles: selectedTests } : {}),
   coverageAnalysis: "perTest",
-  reporters: ["clear-text", "progress", "json"],
-  jsonReporter: { fileName: "reports/mutation/i18n.json" },
+  concurrency:
+    Number.isInteger(concurrency) && concurrency > 0
+      ? concurrency
+      : selectedFiles?.length
+        ? 4
+        : 12,
+  reporters: ["progress", "clear-text", "json"],
+  jsonReporter: {
+    fileName:
+      process.env.MUTATION_REPORT || "reports/mutation/business-logic.json"
+  },
   thresholds: { high: 100, low: 100, break: 100 },
   cleanTempDir: true
 };

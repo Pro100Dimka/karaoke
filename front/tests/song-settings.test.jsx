@@ -97,6 +97,8 @@ describe("song settings", () => {
     fireEvent.change(numericFields[1], {
       target: { value: "72" }
     });
+    fireEvent.change(numericFields[0], { target: { value: "" } });
+    fireEvent.change(numericFields[0], { target: { value: "48" } });
     const save = result.container.querySelector(".modal-title-action");
     fireEvent.click(save);
     await waitFor(() => expect(mocks.updateSong).toHaveBeenCalled());
@@ -152,6 +154,18 @@ describe("song settings", () => {
     await waitFor(() =>
       expect(mocks.notify.mock.calls.at(-1)[0]).toContain("save failed")
     );
+  });
+
+  test("accepts a successful save without a response payload", async () => {
+    mocks.poll = {
+      data: [{ ...song, note_range_max: null }],
+      error: null
+    };
+    mocks.updateSong.mockResolvedValueOnce(null);
+    const result = render(<SongSettings songId="song" />);
+    await waitFor(() => expect(result.getByTestId("form")).not.toBeNull());
+    fireEvent.click(result.container.querySelector(".modal-title-action"));
+    await waitFor(() => expect(mocks.refresh).toHaveBeenCalled());
   });
 
   test("tracks a song appearing after the polling result changes", async () => {

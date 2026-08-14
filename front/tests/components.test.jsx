@@ -1,6 +1,12 @@
 /* @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen
+} from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
 vi.mock("../src/i18n", async (importOriginal) => {
@@ -48,6 +54,7 @@ describe("primitive UI components", () => {
         <Button unstyled className="raw">
           Raw
         </Button>
+        <Button unstyled>Bare</Button>
         <IconButton icon={Icon} label="Icon action" title="Custom" />
         <IconButton icon={Icon} label="Raw icon" unstyled />
         <Field
@@ -64,12 +71,16 @@ describe("primitive UI components", () => {
         </Field>
         <FieldRow className="extra">Row</FieldRow>
         <Panel>Panel</Panel>
+        <Panel title="Title" actions={<button>Action</button>}>
+          Content
+        </Panel>
       </>
     );
     fireEvent.click(screen.getByText("Save"));
     expect(clicked).toHaveBeenCalledOnce();
     expect(screen.getByText("Save").className).toContain("btn-primary");
     expect(screen.getByText("Raw").className).toBe("raw");
+    expect(screen.getByText("Bare").getAttribute("class")).toBeNull();
     expect(screen.getByLabelText("Icon action").title).toBe("Custom");
     expect(screen.getByLabelText("Raw icon").getAttribute("class")).toBeNull();
     expect(screen.getByText("Error").className).toBe("field-error");
@@ -113,6 +124,9 @@ describe("primitive UI components", () => {
         getRowKey={() => "x"}
       />
     );
+    rerender(
+      <Table columns={[]} data={null} renderRow={() => []} getRowKey={() => 0} />
+    );
     expect(screen.getByText("common.noData")).not.toBeNull();
     rerender(
       <Table
@@ -123,6 +137,23 @@ describe("primitive UI components", () => {
       />
     );
     expect(screen.getByText("One").className).toBe("cell");
+    rerender(
+      <Table
+        columns={[["name", "Name"]]}
+        data={[{ id: 2, name: "Two" }]}
+        getRowKey={(row) => row.id}
+        renderRow={(row) => [[row.name]]}
+      />
+    );
+    expect(screen.getByText("Two").className).toBe("");
+    rerender(
+      <Table
+        columns={[]}
+        data={[{ id: 3 }]}
+        renderRow={() => [["Fallback key"]]}
+        getRowKey={() => "none"}
+      />
+    );
   });
 
   test("applies neon card pointer effects and delegates handlers", () => {
@@ -169,6 +200,8 @@ describe("primitive UI components", () => {
         Plain
       </Card>
     );
+    fireEvent.pointerMove(document.querySelector(".ui-card"));
+    fireEvent.pointerLeave(document.querySelector(".ui-card"));
     expect(screen.getByText("Plain")).not.toBeNull();
   });
 });
@@ -197,7 +230,7 @@ describe("field controls", () => {
     expect(control.getAttribute("aria-invalid")).toBe("true");
   });
 
-  test("supports numeric, toggle, readonly, select, bare and invalid controls", () => {
+  test("supports numeric, toggle, readonly, select, bare and invalid controls", async () => {
     const change = vi.fn();
     const blur = vi.fn();
     const { rerender } = render(
@@ -214,6 +247,10 @@ describe("field controls", () => {
     fireEvent.blur(number, { target: { value: "bad" } });
     expect(change).toHaveBeenCalledWith(null);
     expect(blur).toHaveBeenCalledWith(null);
+    fireEvent.change(number, { target: { value: "2.5" } });
+    fireEvent.blur(number, { target: { value: "3" } });
+    expect(change).toHaveBeenLastCalledWith(2.5);
+    expect(blur).toHaveBeenLastCalledWith(3);
     rerender(
       <FieldInput
         field={{ name: "flag", type: "toggle", label: "Flag" }}
@@ -246,11 +283,25 @@ describe("field controls", () => {
         onBlur={blur}
       />
     );
-    expect(screen.getByRole("button")).not.toBeNull();
+    const select = screen.getByRole("button");
+    fireEvent.blur(select);
+    await act(async () => Promise.resolve());
+    expect(blur).toHaveBeenLastCalledWith("a");
     rerender(
       <FieldInput field={{ name: "bad", type: "missing" }} onChange={change} />
     );
     expect(document.body.textContent).toBe("");
+  });
+
+  test("accepts the default blur handler", () => {
+    render(
+      <FieldInput
+        field={{ name: "text", type: "text", label: "Text" }}
+        value="value"
+        onChange={vi.fn()}
+      />
+    );
+    expect(() => fireEvent.blur(screen.getByLabelText("Text"))).not.toThrow();
   });
 
   test("maps field lists and range commit semantics", () => {
@@ -273,6 +324,14 @@ describe("field controls", () => {
       "a",
       expect.objectContaining({ name: "x" })
     );
+    rerender(
+      <FieldList
+        fields={[{ name: "y", label: "Y" }]}
+        values={{ y: "c" }}
+        onChange={change}
+      />
+    );
+    expect(() => fireEvent.blur(screen.getByLabelText("Y"))).not.toThrow();
     const commit = vi.fn();
     rerender(
       <RangeInput
@@ -326,6 +385,44 @@ describe("AudioPlayer and error boundary", () => {
     );
   });
 
+  test("ignores browser media property assignment failures", () => {
+    render(<AudioPlayer src="one.wav" initialDuration={10} />);
+    const audio = document.querySelector("audio");
+    const sliders = screen.getAllByRole("slider");
+    Object.defineProperty(audio, "currentTime", {
+      configurable: true,
+      set: () => {
+        throw new Error("seek blocked");
+      }
+    });
+    expect(() =>
+      fireEvent.change(sliders[0], { target: { value: "5" } })
+    ).not.toThrow();
+    Object.defineProperty(audio, "volume", {
+      configurable: true,
+      set: () => {
+        throw new Error("volume blocked");
+      }
+    });
+    expect(() =>
+      fireEvent.change(sliders[1], { target: { value: "0.5" } })
+    ).not.toThrow();
+  });
+
+  test("keeps zero duration when media metadata is invalid", () => {
+    render(<AudioPlayer src="empty.wav" />);
+    const audio = document.querySelector("audio");
+    Object.defineProperties(audio, {
+      duration: { configurable: true, value: Number.NaN },
+      currentTime: { configurable: true, writable: true, value: 0 }
+    });
+    fireEvent.loadedMetadata(audio);
+    fireEvent.timeUpdate(audio);
+    const position = screen.getByLabelText("audio.recordingPosition");
+    expect(position.max).toBe("0");
+    expect(position.value).toBe("0");
+  });
+
   test("renders the fallback after a descendant throws", () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     const suppress = (event) => event.preventDefault();
@@ -342,5 +439,6 @@ describe("AudioPlayer and error boundary", () => {
     expect(screen.getByRole("alert")).not.toBeNull();
     expect(screen.getByText("boom")).not.toBeNull();
     expect(log).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button"));
   });
 });

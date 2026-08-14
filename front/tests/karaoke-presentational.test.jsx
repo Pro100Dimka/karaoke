@@ -68,6 +68,23 @@ test("karaoke media loads audio gain and initializes YouTube playback", () => {
       musicVolume={0.5}
       vocalVolume={0.4}
       speed={1}
+      song={{ id: "song", title: "Title" }}
+      youTubeVideoId="video-id"
+      sendYouTubeCommand={send}
+      syncSecondaryMedia={sync}
+    />
+  );
+  fireEvent.load(container.querySelector("iframe"));
+  rerender(
+    <KaraokeMedia
+      instrumentalRef={instrumentalRef}
+      vocalsRef={createRef()}
+      videoRef={createRef()}
+      youTubeClipRef={createRef()}
+      isPlaying={false}
+      musicVolume={0.5}
+      vocalVolume={0.4}
+      speed={1}
       song={{ id: "song", title: "Title", video_url: "video.mp4" }}
       youTubeVideoId=""
       sendYouTubeCommand={send}
@@ -93,7 +110,7 @@ test("slider field binds its generated label and range", () => {
 
 test("waveform supports click, drag and range seeking", () => {
   const change = vi.fn();
-  const { container } = render(
+  const { container, rerender } = render(
     <WaveformTimeline value={2} duration={10} onChange={change} />
   );
   const timeline = container.querySelector(".waveform-timeline");
@@ -104,6 +121,16 @@ test("waveform supports click, drag and range seeking", () => {
   fireEvent.change(container.querySelector("input"), {
     target: { value: "7" }
   });
+  expect(change).toHaveBeenCalledTimes(3);
+  rerender(<WaveformTimeline value={0} duration={0} onChange={change} />);
+  fireEvent.pointerDown(container.querySelector(".waveform-timeline"), {
+    clientX: 10
+  });
+  expect(change).toHaveBeenCalledTimes(3);
+  rerender(<WaveformTimeline value={0} duration={10} onChange={change} />);
+  const zeroWidth = container.querySelector(".waveform-timeline");
+  zeroWidth.getBoundingClientRect = () => ({ left: 0, width: 0 });
+  fireEvent.pointerDown(zeroWidth, { clientX: 0 });
   expect(change).toHaveBeenCalledTimes(3);
 });
 
@@ -138,4 +165,27 @@ test("lyrics render words, syllables, suffixes and untimed fallback text", () =>
     />
   );
   expect(container.textContent).toBe("Plain");
+  rerender(
+    <KaraokeLyricLine
+      currentTime={0}
+      line={{
+        text: "",
+        words: [
+          { word: "Word", start: 0, end: 1 },
+          {},
+          {
+            word: "XY",
+            syllables: [
+              { start: 0, end: 0.5 },
+              { text: "Z", start: 0.5, end: 1 }
+            ]
+          },
+          { syllables: [{}] }
+        ]
+      }}
+    />
+  );
+  expect(container.textContent).toBe("WordZ");
+  rerender(<KaraokeLyricLine currentTime={0} line={null} />);
+  expect(container.textContent).toBe("");
 });

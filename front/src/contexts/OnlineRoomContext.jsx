@@ -254,6 +254,7 @@ export function OnlineRoomProvider({ children }) {
     setRoomUi({});
     setRoomCommand(null);
     pendingSongCommandRef.current = null;
+    setTransferStatus(null);
     setVoiceError("");
     intentionalDisconnectRef.current = false;
   }, [cleanupConnection, restoreApplicationAudio, setRoom]);

@@ -47,7 +47,7 @@ export function OnlineRoomDock() {
     }
     copiedTimerRef.current = globalThis.setTimeout(() => {
       copiedTimerRef.current = null;
-      if (mountedRef.current) setCopied(false);
+      setCopied(false);
     }, 1600);
   };
   const transferText = onlineRoom.transferStatus

@@ -142,6 +142,14 @@ describe("karaoke media synchronization", () => {
     act(() =>
       props.instrumentalRef.current.dispatchEvent(new Event("durationchange"))
     );
+    Object.defineProperty(props.instrumentalRef.current, "duration", {
+      configurable: true,
+      value: Number.NaN
+    });
+    act(() =>
+      props.instrumentalRef.current.dispatchEvent(new Event("durationchange"))
+    );
+    expect(props.setDuration).toHaveBeenLastCalledWith(0);
     act(() => props.instrumentalRef.current.dispatchEvent(new Event("ended")));
     expect(props.vocalsRef.current.pause).toHaveBeenCalled();
     expect(props.videoRef.current.pause).toHaveBeenCalled();
@@ -176,17 +184,43 @@ describe("karaoke media synchronization", () => {
     expect(props.setCurrentTime).toHaveBeenCalledWith(5);
     hook.unmount();
     expect(cancelAnimationFrame).toHaveBeenCalledWith(7);
+    act(() => frame());
   });
 
-  test("falls back to safe rates and tolerates missing monitor/media nodes", () => {
+  test("tolerates missing instrumental media and animation scheduling", () => {
+    const props = createProps({ isPlaying: true });
+    props.instrumentalRef.current = null;
+    vi.stubGlobal("requestAnimationFrame", undefined);
+    expect(() => renderHook(() => useKaraokeMediaSync(props))).not.toThrow();
+  });
+
+  test("falls back to wall-clock time and tolerates an unscheduled frame", () => {
+    let frame;
+    vi.stubGlobal("performance", undefined);
+    requestAnimationFrame.mockImplementation((callback) => {
+      frame = callback;
+      return undefined;
+    });
+    const props = createProps({ isPlaying: true });
+    const hook = renderHook(() => useKaraokeMediaSync(props));
+    hook.unmount();
+    act(() => frame());
+    expect(cancelAnimationFrame).not.toHaveBeenCalled();
+  });
+
+  test("falls back to safe rates and tolerates missing monitor/media nodes", async () => {
     const props = createProps({
       speed: "bad",
       microphoneVolume: "bad",
       browserMonitorRef: { current: null },
       vocalsRef: { current: null },
-      videoRef: { current: null }
+      videoRef: { current: null },
+      isPlaying: true,
+      melodyVolume: 1,
+      startMelodyGuide: vi.fn().mockRejectedValue(new Error("blocked"))
     });
     renderHook(() => useKaraokeMediaSync(props));
+    await act(async () => Promise.resolve());
     expect(props.instrumentalRef.current.playbackRate).toBe(1);
   });
 });

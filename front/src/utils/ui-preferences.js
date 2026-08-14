@@ -29,8 +29,7 @@ export async function hydrateUiPreferences(api) {
 }
 
 export function persistUiPreferences(api, namespace, value) {
-  const key = UI_PREFERENCE_STORAGE[namespace];
-  if (key) writeJsonStorage(key, value);
+  writeJsonStorage(UI_PREFERENCE_STORAGE[namespace], value);
   api.updateUiPreferences(namespace, value).catch(() => {});
   return value;
 }

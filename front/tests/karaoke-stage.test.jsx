@@ -38,7 +38,7 @@ const notes = [
 test("melody roll renders keyboard, visible notes, current and sung pitch", () => {
   const { container, rerender } = render(
     <MelodyRoll
-      notes={notes}
+      notes={[...notes, { start: 0.2, end: 0.8, midi: 200 }]}
       currentTime={0.5}
       sungMidi={60.2}
       isPitchDetected
@@ -50,6 +50,22 @@ test("melody roll renders keyboard, visible notes, current and sung pitch", () =
   expect(container.querySelectorAll(".melody-note-past")).toHaveLength(0);
   expect(container.querySelector(".melody-pitch-indicator")).not.toBeNull();
   expect(container.querySelectorAll("svg rect").length).toBeGreaterThan(2);
+  rerender(
+    <MelodyRoll
+      notes={notes}
+      currentTime={1.5}
+      sungMidi={61}
+      isPitchDetected
+      keyShift={0}
+      noteRangeMin={58}
+      noteRangeMax={74}
+    />
+  );
+  expect(
+    [...container.querySelectorAll("svg rect")].some(
+      (node) => node.getAttribute("fill") === "#f3234c"
+    )
+  ).toBe(true);
   rerender(
     <MelodyRoll
       notes={notes}
@@ -109,6 +125,21 @@ test("stage displays panorama, intro, lyrics and melody", () => {
   expect(container.textContent).toContain("Artist");
   rerender(
     <KaraokePerformanceStage
+      songId=""
+      isPlaying
+      currentTime={0}
+      lyrics={[{ text: "Soon", start: 1, end: 2 }]}
+      currentLine={null}
+      upcomingLine={{ text: "Soon", start: 1, end: 2 }}
+      nextLine={null}
+      notes={[]}
+      showLyrics
+      showNotes={false}
+    />
+  );
+  expect(container.querySelector(".karaoke-lyric-upcoming")).not.toBeNull();
+  rerender(
+    <KaraokePerformanceStage
       songId="song"
       isPlaying={false}
       currentTime={5}
@@ -155,4 +186,54 @@ test("stage randomizes local scene video with a short fade", () => {
   expect(video.currentTime).toBeGreaterThan(0);
   expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
   vi.useRealTimers();
+});
+
+test("stage ignores a rejected background-video play request", async () => {
+  vi.useFakeTimers();
+  HTMLMediaElement.prototype.play.mockRejectedValueOnce(new Error("blocked"));
+  globalThis.electronAPI = { getSceneVideoUrl: () => "scene.mp4" };
+  const { container } = render(
+    <KaraokePerformanceStage
+      songId="song"
+      isPlaying
+      currentTime={0}
+      lyrics={[]}
+      notes={[]}
+      showLyrics={false}
+      showNotes={false}
+    />
+  );
+  const video = container.querySelector("video");
+  Object.defineProperty(video, "duration", { configurable: true, value: 0.5 });
+  fireEvent.loadedMetadata(video);
+  vi.advanceTimersByTime(180);
+  await Promise.resolve();
+  expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
+  vi.useRealTimers();
+});
+
+test("ignores a delayed video switch after stage removal", () => {
+  let delayed;
+  const originalSetTimeout = window.setTimeout;
+  vi.spyOn(window, "setTimeout").mockImplementation((callback, timeout) => {
+    delayed = callback;
+    return originalSetTimeout(callback, timeout);
+  });
+  globalThis.electronAPI = { getSceneVideoUrl: () => "scene.mp4" };
+  const view = render(
+    <KaraokePerformanceStage
+      songId="song"
+      isPlaying
+      currentTime={0}
+      lyrics={[]}
+      notes={[]}
+      showLyrics={false}
+      showNotes={false}
+    />
+  );
+  const video = view.container.querySelector("video");
+  Object.defineProperty(video, "duration", { configurable: true, value: 2 });
+  fireEvent.loadedMetadata(video);
+  view.unmount();
+  expect(() => delayed()).not.toThrow();
 });

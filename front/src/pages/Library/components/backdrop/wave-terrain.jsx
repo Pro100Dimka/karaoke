@@ -202,11 +202,6 @@ export default function LibraryWaveTerrain() {
 
         for (let column = 0; column < COLUMNS; column += 1) {
           const point = POINTS[row][column];
-          if (point.terrain < -0.08) {
-            started = false;
-            continue;
-          }
-
           if (started) context.lineTo(point.x, point.y);
           else {
             context.moveTo(point.x, point.y);
@@ -229,11 +224,6 @@ export default function LibraryWaveTerrain() {
 
         for (let row = 0; row < ROWS; row += 1) {
           const point = POINTS[row][column];
-          if (point.terrain < -0.06) {
-            started = false;
-            continue;
-          }
-
           if (started) context.lineTo(point.x, point.y);
           else {
             context.moveTo(point.x, point.y);

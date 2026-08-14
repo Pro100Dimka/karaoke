@@ -6,8 +6,7 @@ const identity = () => {};
 
 function toNumber(value) {
   if (value === "") return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
+  return Number(value);
 }
 
 export default function FieldInput({

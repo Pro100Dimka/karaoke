@@ -52,6 +52,37 @@ export const mockKaraokeResult = {
   ]
 };
 
+export const mockSongEditor = {
+  ai_backup_exists: true,
+  song_map: {
+    duration: 10,
+    syllables: [
+      { index: 0, text: "A&D", word_index: 0 },
+      { index: 1, text: "Voice", word_index: 1 }
+    ],
+    notes: [
+      {
+        _id: "mock-note-1",
+        start: 0.5,
+        end: 1.5,
+        midi_note: 60,
+        velocity: 96,
+        syllable_index: 0,
+        word_index: 0
+      },
+      {
+        _id: "mock-note-2",
+        start: 1.5,
+        end: 2.5,
+        midi_note: 64,
+        velocity: 96,
+        syllable_index: 1,
+        word_index: 1
+      }
+    ]
+  }
+};
+
 export const mockAppSettings = {
   online_name: "Тестовый пользователь",
   theme: "dark",

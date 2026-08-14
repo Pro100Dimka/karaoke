@@ -159,6 +159,7 @@ export default function Karaoke({ onOpenAppSettings }) {
       window.clearTimeout(stageActionTimerRef.current);
     }
     stageActionTimerRef.current = window.setTimeout(() => {
+      stageActionTimerRef.current = null;
       setStageActionsVisible(false);
     }, 1800);
   }, []);
@@ -508,6 +509,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     const tryAutoStart = () => {
       if (cancelled) return;
       if (instrumentalRef.current && vocalsRef.current) {
+        timerId = null;
         autoStartedSongRef.current = song.id;
         startSongWithIntro();
         return;
@@ -516,6 +518,7 @@ export default function Karaoke({ onOpenAppSettings }) {
       if (attempts < 40) {
         timerId = window.setTimeout(tryAutoStart, 120);
       } else {
+        timerId = null;
         setSceneBlackout(false);
         setSceneTransitioning(false);
       }

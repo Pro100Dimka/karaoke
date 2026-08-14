@@ -36,7 +36,7 @@ export default function RoomRadioSync() {
         fadeIn: true,
         targetStation:
           stations.find(({ id }) => id === nextStationId) || stations[0]
-      }).catch(() => {});
+      });
     } else if (!remote.isPlaying && isPlaying) {
       turnOff({ remember: false });
     }

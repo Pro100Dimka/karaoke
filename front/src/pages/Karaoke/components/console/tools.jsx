@@ -28,7 +28,7 @@ const TOOL_BUTTON_SX = {
     "transform 140ms ease, color 140ms ease, border-color 140ms ease, background 140ms ease, box-shadow 140ms ease"
 };
 function EffectPreset({ id, label, symbol, echo, reverb, active, onClick }) {
-  const accent = PRESET_ACCENTS[id] ?? "var(--color-primary)";
+  const accent = PRESET_ACCENTS[id];
   return (
     <Button
       variant="ghost"

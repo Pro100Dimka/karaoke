@@ -1,7 +1,6 @@
 import { translateSaved } from "../i18n/runtime";
 
 const SONG_STATUSES = new Set([
-  "pending",
   "queued",
   "processing",
   "cancelling",
@@ -36,7 +35,7 @@ export function normalizeNonNegativeNumber(value, fallback = 0) {
 }
 export function normalizeSong(song) {
   const source = song && typeof song === "object" ? song : {};
-  const rawStatus = normalizeString(source.status, "pending").toLowerCase();
+  const rawStatus = normalizeString(source.status).toLowerCase();
   return {
     ...source,
     id: normalizeString(source.id),

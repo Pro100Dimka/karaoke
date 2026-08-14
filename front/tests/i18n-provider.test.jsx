@@ -9,11 +9,7 @@ vi.mock("../src/hooks/useAppSettings", () => ({
   default: () => ({ settings: state.settings })
 }));
 
-import {
-  I18nProvider,
-  translateMessage,
-  useI18n
-} from "../src/i18n/index.jsx";
+import { I18nProvider, translateMessage, useI18n } from "../src/i18n/index.jsx";
 
 function Consumer() {
   const { language, t } = useI18n();

@@ -12,7 +12,7 @@ const MIXER_COLORS = {
   melody: "var(--color-secondary)"
 };
 function VerticalSlider({ label, value, color, onChange, onCommit }) {
-  const percent = Math.round((value ?? 0) * 100);
+  const percent = Math.round(value * 100);
   return (
     <Stack
       gap={0.45}
@@ -164,7 +164,7 @@ export default function MixerPanel({
               key={`mixer-${key}`}
               label={label}
               value={value}
-              color={MIXER_COLORS[key] ?? "var(--color-primary)"}
+              color={MIXER_COLORS[key]}
               onChange={onVolumeChange[key]}
               onCommit={key === "microphone" ? onMicrophoneCommit : undefined}
             />

@@ -5,6 +5,7 @@ import {
   cleanup,
   fireEvent,
   render,
+  renderHook,
   screen
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -109,10 +110,32 @@ describe("modal", () => {
     expect(document.activeElement).toBe(last);
     fireEvent.keyDown(document, { key: "Tab" });
     expect(document.activeElement).toBe(first);
+    first.focus();
+    fireEvent.keyDown(document, { key: "Tab" });
     fireEvent.keyDown(document, { key: "A" });
     fireEvent.keyDown(document, { key: "Escape" });
     expect(topClose).toHaveBeenCalledOnce();
     expect(bottomClose).not.toHaveBeenCalled();
+  });
+
+  test("does not move focus from a modal covered before its animation frame", () => {
+    const frames = [];
+    vi.stubGlobal("requestAnimationFrame", (callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    render(
+      <>
+        <Modal isOpen ariaLabel="Bottom delayed" />
+        <Modal isOpen ariaLabel="Top delayed" />
+      </>
+    );
+    act(() => frames.forEach((callback) => callback()));
+    expect(
+      screen
+        .getByRole("dialog", { name: "Top delayed" })
+        .contains(document.activeElement)
+    ).toBe(true);
   });
 
   test("keeps focus in a dialog without controls", () => {
@@ -146,9 +169,22 @@ describe("application dialog provider", () => {
       </AppDialogProvider>
     );
     expect(screen.getByText("Saved")).not.toBeNull();
-    fireEvent.click(document.querySelector(".modal-title-action"));
+    const closeButton = document.querySelector(".modal-title-action");
+    act(() => {
+      closeButton.click();
+      closeButton.click();
+    });
     await act(async () => Promise.resolve());
     expect(onValue).toHaveBeenCalledWith(true);
+  });
+
+  test("requires the application dialog provider", () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const suppress = (event) => event.preventDefault();
+    window.addEventListener("error", suppress);
+    expect(() => renderHook(() => useAppDialog())).toThrow(Error);
+    window.removeEventListener("error", suppress);
+    log.mockRestore();
   });
 
   test("resolves confirmation cancellation and replacement", async () => {

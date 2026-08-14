@@ -109,7 +109,7 @@ describe("online room participants", () => {
       onTogglePersonMuted: vi.fn(),
       onTogglePersonEffects: vi.fn()
     };
-    render(<OnlineRoomParticipant {...props} />);
+    const view = render(<OnlineRoomParticipant {...props} />);
     expect(
       document.querySelectorAll(".online-room-speaking-meter i.is-active")
     ).toHaveLength(3);
@@ -119,6 +119,15 @@ describe("online room participants", () => {
     expect(props.onSetMicrophoneMuted).toHaveBeenCalledWith(true);
     expect(props.onSetRoomSoundMuted).toHaveBeenCalledWith(true);
     expect(props.onLeave).toHaveBeenCalledOnce();
+    view.rerender(
+      <OnlineRoomParticipant
+        {...props}
+        microphoneMuted
+        roomSoundMuted
+      />
+    );
+    expect(screen.getByLabelText("room.microphone.enable")).not.toBeNull();
+    expect(screen.getByLabelText("room.sound.enable")).not.toBeNull();
   });
 
   test("renders remote mute and effects controls", () => {
@@ -154,6 +163,7 @@ describe("online room dock", () => {
   });
 
   test("copies code, collapses and restores the panel", async () => {
+    vi.useFakeTimers();
     render(<OnlineRoomDock />);
     fireEvent.click(screen.getByLabelText("room.copyCode"));
     await act(async () => Promise.resolve());
@@ -164,6 +174,28 @@ describe("online room dock", () => {
     expect(document.querySelector("aside").className).not.toContain(
       "is-collapsed"
     );
+    act(() => vi.advanceTimersByTime(1600));
+    expect(screen.getByLabelText("room.copyCode").textContent).not.toContain(
+      "room.copied"
+    );
+    vi.useRealTimers();
+  });
+
+  test("ignores failed copy and clears a pending copy timer on unmount", async () => {
+    mocks.copyText.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const view = render(<OnlineRoomDock />);
+    fireEvent.click(screen.getByLabelText("room.copyCode"));
+    await act(async () => Promise.resolve());
+    expect(screen.getByLabelText("room.copyCode").textContent).not.toContain(
+      "room.copied"
+    );
+    fireEvent.click(screen.getByLabelText("room.copyCode"));
+    await act(async () => Promise.resolve());
+    fireEvent.click(screen.getByLabelText("room.copyCode"));
+    await act(async () => Promise.resolve());
+    const clear = vi.spyOn(globalThis, "clearTimeout");
+    view.unmount();
+    expect(clear).toHaveBeenCalled();
   });
 
   test("shows microphone recovery and transfer states", async () => {
@@ -182,6 +214,15 @@ describe("online room dock", () => {
     view.rerender(<OnlineRoomDock />);
     expect(screen.queryByRole("progressbar")).toBeNull();
     expect(screen.getByText(/Network/)).not.toBeNull();
+    mocks.pending = true;
+    mocks.roomValue = roomValue({
+      room: { id: "ABCD", selfId: "self", host: false },
+      voiceError: "Permission denied",
+      transferStatus: { stage: "error", error: "" }
+    });
+    view.rerender(<OnlineRoomDock />);
+    expect(screen.getByText("room.requestingMicrophone")).not.toBeNull();
+    expect(screen.getByText(/room.transfer.unknownError/)).not.toBeNull();
   });
 });
 
@@ -213,6 +254,69 @@ describe("online room modal", () => {
     fireEvent.click(screen.getByText("room.create"));
     await act(async () => Promise.resolve());
     expect(screen.getByText("socket refused")).not.toBeNull();
+  });
+
+  test("shows join failures and ignores connection completion after unmount", async () => {
+    mocks.roomValue.joinRoom.mockRejectedValueOnce(new Error("join refused"));
+    const failed = render(
+      <OnlineRoomModal onlineName="Alice" onClose={vi.fn()} />
+    );
+    fireEvent.click(screen.getByText("room.joinByCode"));
+    const input = screen.getByLabelText("room.code");
+    fireEvent.change(input, { target: { value: "ABCD" } });
+    fireEvent.click(screen.getByText("room.join"));
+    await act(async () => Promise.resolve());
+    expect(screen.getByText("join refused")).not.toBeNull();
+    failed.unmount();
+
+    let resolveCreate;
+    mocks.roomValue.createRoom.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveCreate = resolve;
+      })
+    );
+    const staleSuccess = render(
+      <OnlineRoomModal onlineName="Alice" onClose={vi.fn()} />
+    );
+    fireEvent.click(screen.getByText("room.create"));
+    staleSuccess.unmount();
+    await act(async () => resolveCreate());
+
+    let rejectCreate;
+    mocks.roomValue.createRoom.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectCreate = reject;
+      })
+    );
+    const staleFailure = render(
+      <OnlineRoomModal onlineName="Alice" onClose={vi.fn()} />
+    );
+    fireEvent.click(screen.getByText("room.create"));
+    staleFailure.unmount();
+    await act(async () => rejectCreate(new Error("late")));
+  });
+
+  test("blocks short codes and repeated pending connections", async () => {
+    let release;
+    mocks.roomValue.createRoom.mockReturnValueOnce(
+      new Promise((resolve) => {
+        release = resolve;
+      })
+    );
+    const close = vi.fn();
+    render(<OnlineRoomModal onlineName="Alice" onClose={close} />);
+    fireEvent.click(screen.getByText("room.joinByCode"));
+    const join = screen.getByText("room.join");
+    expect(join.disabled).toBe(true);
+    fireEvent.keyDown(screen.getByLabelText("room.code"), { key: "Enter" });
+    expect(mocks.roomValue.joinRoom).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("room.back"));
+    const create = screen.getByText("room.create");
+    fireEvent.click(create);
+    fireEvent.click(create);
+    expect(mocks.roomValue.createRoom).toHaveBeenCalledTimes(1);
+    release();
+    await act(async () => Promise.resolve());
   });
 });
 
@@ -246,5 +350,42 @@ describe("room radio synchronization", () => {
     });
     view.rerender(<RoomRadioSync />);
     expect(mocks.radioValue.turnOff).toHaveBeenCalledWith({ remember: false });
+  });
+
+  test("ignores missing rooms and already-applied remote radio state", () => {
+    mocks.roomValue = roomValue({ room: null });
+    const view = render(<RoomRadioSync />);
+    expect(mocks.roomValue.syncUi).not.toHaveBeenCalled();
+    mocks.roomValue = roomValue({
+      roomUi: { radio: { stationId: "one", isPlaying: false } }
+    });
+    view.rerender(<RoomRadioSync />);
+    expect(mocks.radioValue.turnOn).not.toHaveBeenCalled();
+    expect(mocks.radioValue.turnOff).not.toHaveBeenCalled();
+  });
+
+  test("uses station fallbacks without changing stopped playback", async () => {
+    mocks.roomValue.roomUi = {
+      __eventId: 3,
+      radio: { stationId: "missing", isPlaying: true }
+    };
+    const view = render(<RoomRadioSync />);
+    expect(mocks.radioValue.turnOn).toHaveBeenCalledWith(
+      expect.objectContaining({ targetStation: mocks.radioValue.stations[0] })
+    );
+    await act(async () => Promise.resolve());
+
+    mocks.radioValue = { ...mocks.radioValue, isPlaying: false };
+    mocks.roomValue = roomValue({
+      roomUi: { __eventId: 4, radio: { stationId: "two", isPlaying: false } }
+    });
+    view.rerender(<RoomRadioSync />);
+    expect(mocks.radioValue.setStation).toHaveBeenCalledWith("two");
+
+    mocks.roomValue = roomValue({
+      roomUi: { __eventId: 5, radio: { isPlaying: true } }
+    });
+    view.rerender(<RoomRadioSync />);
+    expect(mocks.radioValue.turnOn).toHaveBeenCalled();
   });
 });

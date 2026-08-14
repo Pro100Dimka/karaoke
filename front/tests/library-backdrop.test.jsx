@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -108,4 +108,58 @@ test("reduced performance skips parallax registration", () => {
 test("terrain tolerates unavailable canvas context", () => {
   HTMLCanvasElement.prototype.getContext = vi.fn(() => null);
   expect(() => render(<LibraryBackdrop />)).not.toThrow();
+});
+
+test("runs queued parallax and reacts to theme changes", async () => {
+  const frames = [];
+  globalThis.requestAnimationFrame = vi.fn((callback) => {
+    frames.push(callback);
+    return frames.length;
+  });
+  render(<LibraryBackdrop />);
+  fireEvent.pointerMove(window, { clientX: 120, clientY: 80 });
+  let timestamp = 40;
+  while (frames.length && timestamp < 20_000) {
+    frames.shift()(timestamp);
+    timestamp += 40;
+  }
+  document.documentElement.dataset.theme = "changed";
+  await act(async () => Promise.resolve());
+  expect(
+    document.documentElement.style.getPropertyValue("--library-parallax-x")
+  ).not.toBe("");
+});
+
+test("terrain traverses hidden mesh gaps across animation phases", () => {
+  const frames = [];
+  globalThis.requestAnimationFrame = vi.fn((callback) => {
+    frames.push(callback);
+    return frames.length;
+  });
+  render(<LibraryBackdrop />);
+  for (let timestamp = 0; timestamp <= 120_000; timestamp += 1000) {
+    const callback = frames.shift();
+    if (!callback) break;
+    callback(timestamp);
+  }
+  expect(context.stroke).toHaveBeenCalled();
+});
+
+test("terrain uses theme colors and silent fallbacks", () => {
+  mocks.playing = false;
+  const descriptor = Object.getOwnPropertyDescriptor(window, "devicePixelRatio");
+  Object.defineProperty(window, "devicePixelRatio", {
+    configurable: true,
+    value: 0
+  });
+  const style = vi.spyOn(globalThis, "getComputedStyle").mockReturnValue({
+    getPropertyValue: (name) =>
+      name === "--wave-terrain-rgb" ? "1,2,3" : "4,5,6"
+  });
+  render(<LibraryBackdrop />);
+  expect(mocks.bass).not.toHaveBeenCalled();
+  expect(mocks.spectrum).not.toHaveBeenCalled();
+  style.mockRestore();
+  if (descriptor)
+    Object.defineProperty(window, "devicePixelRatio", descriptor);
 });

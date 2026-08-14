@@ -35,7 +35,6 @@ export default function MemoryManager() {
   const [optimizeTarget, setOptimizeTarget] = useState("");
   const optimizeOptions = buildOptimizeOptions(songs ?? []);
   const handleOptimize = async () => {
-    if (!optimizeTarget) return;
     const success = await runMemoryAction({
       request: () => api.optimizeSong(optimizeTarget),
       getMessage: ({ freed_human: freedHuman }) =>

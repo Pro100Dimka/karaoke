@@ -94,6 +94,12 @@ describe("application hooks", () => {
     expect(mocks.navigate).not.toHaveBeenCalled();
   });
 
+  test("ignores an absent room command", () => {
+    mocks.useOnlineRoom.mockReturnValue({ roomCommand: null });
+    renderHook(() => useOnlineRoomNavigation());
+    expect(mocks.navigate).not.toHaveBeenCalled();
+  });
+
   test("shows the missing-name explanation once", async () => {
     const alert = vi.fn().mockRejectedValue(new Error("dialog closed"));
     const onMissingName = vi.fn(() => {

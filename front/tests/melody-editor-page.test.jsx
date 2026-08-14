@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -44,7 +44,7 @@ test("loads the selected song and closes back to the library", async () => {
 });
 
 test("uses a safe editor fallback for missing and failed song lists", async () => {
-  mocks.listSongs.mockResolvedValueOnce([]);
+  mocks.listSongs.mockResolvedValueOnce(null);
   const missing = render(<MelodyEditorPage />);
   await waitFor(() =>
     expect(missing.getByTestId("editor").textContent).toContain("song:")
@@ -55,4 +55,16 @@ test("uses a safe editor fallback for missing and failed song lists", async () =
   await waitFor(() =>
     expect(failed.getByTestId("editor").textContent).toContain("song:")
   );
+});
+
+test("ignores a song list returned after the route unmounts", async () => {
+  let resolve;
+  mocks.listSongs.mockReturnValue(
+    new Promise((done) => {
+      resolve = done;
+    })
+  );
+  const view = render(<MelodyEditorPage />);
+  view.unmount();
+  await act(async () => resolve([{ id: "song", title: "Late" }]));
 });

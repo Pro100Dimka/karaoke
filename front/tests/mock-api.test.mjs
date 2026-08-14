@@ -32,11 +32,48 @@ test("mock API implements the complete development contract", async () => {
     null
   );
   assert.equal(await mockRequest("/songs/missing"), null);
+  assert.equal(
+    await mockRequest("/songs/missing", { method: "DELETE" }),
+    null
+  );
+  await assert.rejects(
+    mockRequest("/songs/missing", { method: "PUT" }),
+    /Mock API route is not implemented/
+  );
   assert.deepEqual(
     await mockRequest("/songs/package/import", { method: "POST" }),
     { imported: true }
   );
   assert.ok((await mockRequest(`/songs/${MOCK_SONG_ID}/result`)).lyrics_sync);
+  const editorPath = `/songs/${MOCK_SONG_ID}/editor`;
+  assert.equal((await mockRequest(editorPath)).song_map.notes.length, 2);
+  assert.equal((await mockRequest("/songs/unknown/editor")).song_map.notes.length, 2);
+  assert.deepEqual(
+    (
+      await mockRequest(editorPath, {
+        method: "PUT",
+        body: '{"notes":[{"_id":"edited"}]}'
+      })
+    ).song_map.notes,
+    [{ _id: "edited" }]
+  );
+  assert.deepEqual(
+    (
+      await mockRequest("/songs/new/editor", {
+        method: "PUT",
+        body: "{}"
+      })
+    ).song_map.notes,
+    []
+  );
+  assert.equal(
+    (
+      await mockRequest(`/songs/${MOCK_SONG_ID}/editor/reset`, {
+        method: "POST"
+      })
+    ).song_map.notes.length,
+    2
+  );
   assert.equal(
     (await mockRequest(`/songs/${MOCK_SONG_ID}/status`)).id,
     MOCK_SONG_ID

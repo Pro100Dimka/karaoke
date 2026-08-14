@@ -47,7 +47,7 @@ export function saveAudioPreferences(patch) {
   writeJsonStorage(STORAGE_KEY, next);
 
   try {
-    globalThis.dispatchEvent?.(
+    globalThis.dispatchEvent(
       new CustomEvent("audio-preferences-changed", { detail: next })
     );
   } catch {

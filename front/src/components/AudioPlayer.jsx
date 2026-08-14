@@ -23,14 +23,12 @@ export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
 
   useEffect(() => {
     const audio = audioRef.current;
-    audio?.pause();
-    if (audio) {
-      try {
-        audio.currentTime = 0;
-        audio.load();
-      } catch {
-        // The previous media resource may already be detached.
-      }
+    audio.pause();
+    try {
+      audio.currentTime = 0;
+      audio.load();
+    } catch {
+      // The previous media resource may already be detached.
     }
     setPlaying(false);
     setPosition(0);
@@ -42,30 +40,26 @@ export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
   };
   const seek = (value) => {
     const positionValue = normalizeAudioPosition(value, duration);
-    if (audioRef.current) {
-      try {
-        audioRef.current.currentTime = positionValue;
-      } catch {
-        return;
-      }
+    try {
+      audioRef.current.currentTime = positionValue;
+    } catch {
+      return;
     }
     setPosition(positionValue);
   };
   const changeVolume = (value) => {
     const volumeValue = normalizeAudioVolume(value);
     if (volumeValue > 0) previousVolumeRef.current = volumeValue;
-    if (audioRef.current) {
-      try {
-        audioRef.current.volume = volumeValue;
-      } catch {
-        return;
-      }
+    try {
+      audioRef.current.volume = volumeValue;
+    } catch {
+      return;
     }
     setVolume(volumeValue);
   };
 
   const toggleMuted = () => {
-    changeVolume(volume > 0 ? 0 : previousVolumeRef.current || 1);
+    changeVolume(volume > 0 ? 0 : previousVolumeRef.current);
   };
 
   return (

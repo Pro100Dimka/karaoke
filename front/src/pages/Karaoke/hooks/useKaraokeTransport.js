@@ -174,9 +174,7 @@ export default function useKaraokeTransport({
               recordingSessionRef.current = null;
               setRecordingSessionId(null);
             }
-            if (activeRecordingId === resumedSessionId) {
-              activeRecordingId = null;
-            }
+            activeRecordingId = null;
             return null;
           });
       } else {

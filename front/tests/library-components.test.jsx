@@ -3,12 +3,17 @@ import React, { createRef } from "react";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ isPlaying: false, theme: "dark" }));
+const mocks = vi.hoisted(() => ({
+  isPlaying: false,
+  theme: "dark",
+  noSettings: false
+}));
 vi.mock("../src/contexts/radio", () => ({
   useRadio: () => ({ isPlaying: mocks.isPlaying })
 }));
 vi.mock("../src/hooks/useAppSettings", () => ({
-  default: () => ({ settings: { theme: mocks.theme } })
+  default: () =>
+    mocks.noSettings ? null : { settings: { theme: mocks.theme } }
 }));
 vi.mock("../src/theme/ui", () => ({
   Box: ({ children, ...props }) => <div {...props}>{children}</div>,
@@ -62,14 +67,17 @@ import SongCardArtwork from "../src/pages/Library/components/song-card/song-card
 import ProcessingModal from "../src/pages/Library/modals/processing.jsx";
 import RecordingsModal from "../src/pages/Library/modals/recordings.jsx";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mocks.noSettings = false;
+});
 
 test("library actions cover search, room, adding and file selection", () => {
   const setQuery = vi.fn();
   const onRoom = vi.fn();
   const onAdd = vi.fn();
   const onFile = vi.fn();
-  const { container } = render(
+  const view = render(
     <LibraryActions
       canManageLibrary
       fileInputRef={createRef()}
@@ -82,6 +90,7 @@ test("library actions cover search, room, adding and file selection", () => {
       setQuery={setQuery}
     />
   );
+  const { container } = view;
   fireEvent.change(container.querySelector(".library-search-input"), {
     target: { value: "song" }
   });
@@ -93,6 +102,16 @@ test("library actions cover search, room, adding and file selection", () => {
   expect(onRoom).toHaveBeenCalled();
   expect(onAdd).toHaveBeenCalled();
   expect(onFile).toHaveBeenCalled();
+  view.rerender(
+    <LibraryActions
+      canManageLibrary
+      importing
+      onAdd={onAdd}
+      onOpenRoom={onRoom}
+      query=""
+      setQuery={setQuery}
+    />
+  );
 });
 
 test("hero and artwork reflect saved theme, counts and radio activity", () => {
@@ -114,6 +133,10 @@ test("hero and artwork reflect saved theme, counts and radio activity", () => {
   expect(container.querySelectorAll(".library-song-card-wave i")).toHaveLength(
     18
   );
+  mocks.noSettings = true;
+  expect(() =>
+    render(<LibraryHero songCount={0} readyCount={0} />)
+  ).not.toThrow();
 });
 
 test("processing signal clamps progress and exposes an accessible value", () => {
@@ -154,6 +177,14 @@ test("processing modal covers active, complete, error and absent songs", () => {
   expect(open).toHaveBeenCalledWith("song");
   active.rerender(<ProcessingModal song={null} />);
   expect(active.container.firstChild).toBeNull();
+  active.rerender(
+    <ProcessingModal
+      song={{ id: "song", status: "error" }}
+      onCancel={cancel}
+      onClose={close}
+      onOpenKaraoke={open}
+    />
+  );
 });
 
 test("recordings modal renders empty, error and recording actions", () => {

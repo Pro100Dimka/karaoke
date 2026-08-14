@@ -102,7 +102,7 @@ export default function usePitchDetection({
           ownsContext = true;
         }
         if (cancelled) {
-          if (ownsStream) stream.getTracks().forEach((track) => track.stop());
+          stream.getTracks().forEach((track) => track.stop());
           if (ownsContext) await context.close().catch(() => {});
           return;
         }
@@ -174,10 +174,10 @@ export default function usePitchDetection({
             );
             const maxStep = 22 * elapsedSeconds;
             const difference = targetMidi - displayedMidi;
-            displayedMidi = Number.isFinite(displayedMidi)
-              ? displayedMidi +
-                Math.max(-maxStep, Math.min(maxStep, difference))
-              : targetMidi;
+            displayedMidi += Math.max(
+              -maxStep,
+              Math.min(maxStep, difference)
+            );
             if (timestamp - lastRenderAt >= 15) {
               setSungMidi(displayedMidi);
               lastRenderAt = timestamp;

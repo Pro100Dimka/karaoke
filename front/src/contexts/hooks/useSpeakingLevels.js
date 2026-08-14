@@ -24,9 +24,7 @@ export default function useSpeakingLevels() {
       return;
     }
 
-    setSpeakingLevels((levels) =>
-      levels[key] === level ? levels : { ...levels, [key]: level }
-    );
+    setSpeakingLevels((levels) => ({ ...levels, [key]: level }));
   }, []);
 
   const removePublishedLevel = useCallback((key) => {
@@ -180,7 +178,7 @@ export default function useSpeakingLevels() {
     for (const key of [...metersRef.current.keys()]) stopSpeakingMeter(key);
     const context = audioContextRef.current;
     audioContextRef.current = null;
-    if (context?.state !== "closed") {
+    if (context && context.state !== "closed") {
       try {
         Promise.resolve(context.close()).catch(() => {});
       } catch {

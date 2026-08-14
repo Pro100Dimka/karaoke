@@ -79,6 +79,14 @@ describe("microphone settings", () => {
       directOutputDeviceId: 4,
       monitoringEnabled: false
     });
+    hook.rerender({
+      settings: {
+        volume: 0.2,
+        audio_driver: "auto",
+        output_device_id: 4,
+        monitoring_enabled: false
+      }
+    });
     act(() =>
       window.dispatchEvent(
         new CustomEvent("audio-preferences-changed", {
@@ -87,6 +95,12 @@ describe("microphone settings", () => {
       )
     );
     expect(hook.result.current.monitorInputDeviceId).toBe("mic");
+    act(() =>
+      window.dispatchEvent(
+        new CustomEvent("audio-preferences-changed", { detail: {} })
+      )
+    );
+    expect(hook.result.current.monitorInputDeviceId).toBe("default");
     act(() => window.dispatchEvent(new CustomEvent("audio-settings-changed")));
   });
 
@@ -105,6 +119,40 @@ describe("microphone settings", () => {
     expect(onError).toHaveBeenCalledWith(
       expect.stringContaining("device busy")
     );
+    mocks.updateAudioSettings.mockResolvedValueOnce({ echo: 0.2 });
+    await act(() => result.current.updateMicrophone({ echo: 0.2 }));
+  });
+
+  test("ignores microphone updates that settle after unmount", async () => {
+    let resolveUpdate;
+    mocks.updateAudioSettings.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveUpdate = resolve;
+      })
+    );
+    const resolved = renderHook(() =>
+      useMicrophoneSettings({ audioSettings: null, onError: vi.fn() })
+    );
+    const success = resolved.result.current.updateMicrophone({ volume: 0.2 });
+    resolved.unmount();
+    resolveUpdate({ volume: 0.3 });
+    await expect(success).resolves.toEqual({ volume: 0.3 });
+
+    let rejectUpdate;
+    const onError = vi.fn();
+    mocks.updateAudioSettings.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectUpdate = reject;
+      })
+    );
+    const rejected = renderHook(() =>
+      useMicrophoneSettings({ audioSettings: null, onError })
+    );
+    const failure = rejected.result.current.updateMicrophone({ volume: 0.2 });
+    rejected.unmount();
+    rejectUpdate(new Error("obsolete"));
+    await expect(failure).resolves.toBeNull();
+    expect(onError).not.toHaveBeenCalled();
   });
 
   test("uses stored input preference when an event omits details", () => {
@@ -128,8 +176,10 @@ const mediaRef = (setSinkId = vi.fn().mockResolvedValue(undefined)) => ({
 describe("audio output routing", () => {
   test("selects an ASIO output and routes browser media to the matching sink", async () => {
     const setDirectOutputDeviceId = vi.fn();
-    const updateMicrophone = vi.fn().mockResolvedValue({});
-    const instrumentalRef = mediaRef();
+    const updateMicrophone = vi.fn().mockRejectedValue(new Error("backend"));
+    const instrumentalRef = mediaRef(
+      vi.fn().mockRejectedValue(new Error("sink"))
+    );
     const vocalsRef = mediaRef();
     const videoRef = mediaRef();
     Object.defineProperty(navigator, "mediaDevices", {
@@ -175,7 +225,8 @@ describe("audio output routing", () => {
 
   test("releases browser and backend monitoring on shutdown", async () => {
     const stop = vi.fn();
-    const close = vi.fn().mockResolvedValue(undefined);
+    const close = vi.fn().mockRejectedValue(new Error("close"));
+    mocks.releaseDirectMonitoring.mockRejectedValueOnce(new Error("release"));
     const browserMonitorRef = {
       current: {
         stream: { getTracks: () => [{ stop }] },
@@ -204,5 +255,90 @@ describe("audio output routing", () => {
     expect(close).toHaveBeenCalledOnce();
     expect(browserMonitorRef.current).toBeNull();
     await act(async () => Promise.resolve());
+  });
+
+  test("isolates browser device enumeration failures", async () => {
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        enumerateDevices: vi.fn().mockRejectedValue(new Error("devices"))
+      }
+    });
+    renderHook(() =>
+      useAudioOutputRouting({
+        audioDriver: "auto",
+        audioSettings: {},
+        browserMonitorRef: { current: null },
+        directOutputDeviceId: 2,
+        directOutputDevices: [{ index: 2, name: "Output" }],
+        instrumentalRef: { current: null },
+        setDirectOutputDeviceId: vi.fn(),
+        updateMicrophone: vi.fn(),
+        videoRef: { current: null },
+        vocalsRef: { current: null }
+      })
+    );
+    await act(async () => Promise.resolve());
+    expect(navigator.mediaDevices.enumerateDevices).toHaveBeenCalled();
+  });
+
+  test("ignores missing outputs, unmatched sinks and late enumeration", async () => {
+    let resolveDevices;
+    const enumerateDevices = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveDevices = resolve;
+        })
+    );
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { enumerateDevices }
+    });
+    const base = {
+      audioDriver: "auto",
+      audioSettings: {},
+      browserMonitorRef: { current: null },
+      directOutputDevices: [{ index: 2, name: "Output" }],
+      instrumentalRef: { current: {} },
+      setDirectOutputDeviceId: vi.fn(),
+      updateMicrophone: vi.fn(),
+      videoRef: { current: null },
+      vocalsRef: { current: null }
+    };
+    const missing = renderHook(() =>
+      useAudioOutputRouting({ ...base, directOutputDeviceId: 3 })
+    );
+    expect(enumerateDevices).not.toHaveBeenCalled();
+    missing.unmount();
+    const noDevices = renderHook(() =>
+      useAudioOutputRouting({
+        ...base,
+        directOutputDeviceId: 2,
+        directOutputDevices: undefined
+      })
+    );
+    noDevices.unmount();
+
+    const late = renderHook(() =>
+      useAudioOutputRouting({ ...base, directOutputDeviceId: 2 })
+    );
+    late.unmount();
+    resolveDevices([]);
+    await act(async () => Promise.resolve());
+
+    enumerateDevices.mockResolvedValueOnce([]);
+    renderHook(() =>
+      useAudioOutputRouting({ ...base, directOutputDeviceId: 2 })
+    );
+    await act(async () => Promise.resolve());
+
+    enumerateDevices.mockResolvedValueOnce([
+      { kind: "audiooutput", deviceId: "sink", label: "Output" }
+    ]);
+    renderHook(() =>
+      useAudioOutputRouting({ ...base, directOutputDeviceId: 2 })
+    );
+    await act(async () => Promise.resolve());
+    expect(enumerateDevices).toHaveBeenCalled();
   });
 });

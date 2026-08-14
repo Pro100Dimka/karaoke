@@ -503,12 +503,10 @@ export default class OnlineVoiceMesh {
         participantId,
         transfer.metadata.transferId
       );
-      const percent = transfer.metadata.size
-        ? Math.min(
-            99,
-            Math.floor((transfer.received / transfer.metadata.size) * 100)
-          )
-        : 99;
+      const percent = Math.min(
+        99,
+        Math.floor((transfer.received / transfer.metadata.size) * 100)
+      );
       if (percent !== transfer.lastPercent) {
         transfer.lastPercent = percent;
         this.emitTransferProgress(
@@ -673,14 +671,12 @@ export default class OnlineVoiceMesh {
       this.emitTransferProgress(
         participantId,
         "sending",
-        blob.size
-          ? Math.min(
-              99,
-              Math.floor(
-                (Math.min(offset + chunkSize, blob.size) / blob.size) * 100
-              )
-            )
-          : 99,
+        Math.min(
+          99,
+          Math.floor(
+            (Math.min(offset + chunkSize, blob.size) / blob.size) * 100
+          )
+        ),
         metadata
       );
     }

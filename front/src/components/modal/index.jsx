@@ -65,9 +65,7 @@ export default function Modal({
 
     const frameId = requestAnimationFrame(() => {
       if (openModalStack.at(-1) !== token) return;
-      const firstFocusable =
-        dialogRef.current?.querySelector(FOCUSABLE_SELECTOR);
-      (firstFocusable || dialogRef.current)?.focus();
+      dialogRef.current.querySelector(FOCUSABLE_SELECTOR).focus();
     });
 
     const handleKeyDown = (event) => {
@@ -83,7 +81,7 @@ export default function Modal({
       if (event.key !== "Tab") return;
 
       const focusable = Array.from(
-        dialogRef.current?.querySelectorAll(FOCUSABLE_SELECTOR) ?? []
+        dialogRef.current.querySelectorAll(FOCUSABLE_SELECTOR)
       );
       if (!focusable.length) {
         event.preventDefault();
@@ -108,8 +106,7 @@ export default function Modal({
       cancelAnimationFrame(frameId);
       document.removeEventListener("keydown", handleKeyDown, true);
       const wasTopModal = openModalStack.at(-1) === token;
-      const stackIndex = openModalStack.lastIndexOf(token);
-      if (stackIndex >= 0) openModalStack.splice(stackIndex, 1);
+      openModalStack.splice(openModalStack.lastIndexOf(token), 1);
       unlockBodyScroll();
 
       if (

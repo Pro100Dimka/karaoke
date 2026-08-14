@@ -26,7 +26,15 @@ vi.mock("../src/pages/Settings/config", () => {
     SERVICE_SCREENS: [{ id: "diagnostics" }, { id: "history" }],
     SETTINGS: {
       general: {
-        fields: [{ name: "language", label: "Language" }]
+        fields: [
+          {
+            name: "language",
+            label: "Language",
+            tooltip: "Choose language",
+            getLabel: ({ suffix }) => `Language В· ${suffix || ""}`,
+            options: [{ value: "uk", label: "Ukrainian" }]
+          }
+        ]
       },
       audio: {
         className: "audio-form",
@@ -103,6 +111,13 @@ describe("settings content", () => {
     const view = render(<SettingsContent {...props()} />);
     expect(screen.getByText("language")).not.toBeNull();
     expect(mocks.configFormProps.context.form).toEqual({});
+    expect(
+      mocks.configFormProps.fields[0].getLabel({ suffix: "UK" })
+    ).toContain("UK");
+    expect(mocks.configFormProps.fields[0].getLabel({ suffix: "" })).toBe(
+      "Language"
+    );
+    expect(mocks.configFormProps.fields[0].options[0].label).toBe("Ukrainian");
     view.rerender(<SettingsContent {...props({ tab: "missing" })} />);
     expect(view.container.textContent).toBe("");
   });
@@ -178,5 +193,24 @@ describe("settings custom renderers", () => {
     fireEvent.click(screen.getByText("settings.audio.hearVoice"));
     expect(run).toHaveBeenCalledWith(context);
     expect(screen.getByRole("progressbar").value).toBe(44);
+  });
+
+  test("renders optional action and active-monitor fallbacks", () => {
+    const context = { t: (key) => key };
+    const action = render(
+      SETTINGS_RENDERERS.action({ field: { label: "Fallback" }, context })
+    );
+    fireEvent.click(screen.getByText("Fallback"));
+    action.unmount();
+
+    render(
+      SETTINGS_RENDERERS.monitor({
+        field: { label: "Monitor" },
+        context,
+        value: true
+      })
+    );
+    fireEvent.click(screen.getByText("settings.audio.monitorOff"));
+    expect(screen.getByRole("progressbar").value).toBe(0);
   });
 });

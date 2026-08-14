@@ -19,10 +19,7 @@ export default function useAudioOutputRouting(options) {
     vocalsRef
   } = options;
   useEffect(() => {
-    if (
-      audioDriver !== "asio" ||
-      audioSettings?.output_device_id != null
-    )
+    if (audioDriver !== "asio" || audioSettings?.output_device_id != null)
       return;
     const preferred = findDriverOutputDevice(
       directOutputDevices,
@@ -95,13 +92,10 @@ export default function useAudioOutputRouting(options) {
   );
 
   useEffect(() => {
-    const windowRef = globalThis.window;
-    if (!windowRef?.addEventListener) return undefined;
     const releaseMonitorOnClose = () => {
       api.releaseDirectMonitoring().catch(() => {});
     };
-    windowRef.addEventListener("pagehide", releaseMonitorOnClose);
-    return () =>
-      windowRef.removeEventListener("pagehide", releaseMonitorOnClose);
+    window.addEventListener("pagehide", releaseMonitorOnClose);
+    return () => window.removeEventListener("pagehide", releaseMonitorOnClose);
   }, []);
 }

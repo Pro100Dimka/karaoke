@@ -5,7 +5,7 @@ import { translateSaved } from "../i18n/runtime";
 import { mockBlobRequest, mockRequest } from "./mock/request.js";
 
 // Общая транспортная часть локального REST API.
-export const MOCK_API_ENABLED = import.meta.env?.VITE_USE_MOCK_API === "true";
+export const MOCK_API_ENABLED = import.meta.env.VITE_USE_MOCK_API === "true";
 export const BASE_URL = API_BASE_URL;
 function normalizeHeaders(headers) {
   if (!headers) return undefined;
@@ -18,7 +18,7 @@ function normalizeHeaders(headers) {
   };
 }
 function hasContentType(headers) {
-  return Object.keys(headers || {}).some(
+  return Object.keys(headers).some(
     (name) => name.toLowerCase() === "content-type"
   );
 }

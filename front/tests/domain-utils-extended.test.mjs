@@ -56,6 +56,10 @@ import {
   radioField,
   speakerPlaying
 } from "../src/pages/Settings/utils.js";
+import {
+  MEMORY_ACTIONS,
+  buildOptimizeOptions
+} from "../src/pages/Settings/screens/memory/config.js";
 
 describe("analysis normalization and feedback", () => {
   test("normalizes corrupt sections and all feedback grades", () => {
@@ -67,6 +71,12 @@ describe("analysis normalization and feedback", () => {
       mean_deviation_semitones: null,
       index: 2
     });
+    assert.equal(
+      normalizeAnalysisSection({ start: null, end: 2, accuracy_percent: "bad" })
+        .end,
+      2
+    );
+    assert.deepEqual(normalizeAnalysisResult(null).sections, []);
     const normalized = normalizeAnalysisResult({
       pitch_accuracy_percent: 120,
       mean_deviation_semitones: "2",
@@ -83,7 +93,11 @@ describe("analysis normalization and feedback", () => {
       const feedback = getAnalysisFeedback({
         pitch_accuracy_percent: accuracy,
         mean_deviation_semitones: accuracy === 90 ? 0.5 : 2,
-        sections: [{ accuracy_percent: 20 }, { accuracy_percent: 80 }]
+        sections: [
+          { accuracy_percent: 20 },
+          { accuracy_percent: 80 },
+          { accuracy_percent: 50 }
+        ]
       });
       assert.ok(feedback.grade && feedback.advice);
       assert.equal(feedback.bestSection.accuracy_percent, 80);
@@ -91,21 +105,30 @@ describe("analysis normalization and feedback", () => {
     }
     const empty = getAnalysisFeedback({ sections: [] });
     assert.equal(empty.bestSection, null);
+    assert.ok(
+      getAnalysisFeedback({
+        pitch_accuracy_percent: 55,
+        mean_deviation_semitones: 0
+      }).advice
+    );
   });
 });
 
 describe("karaoke data contracts", () => {
   test("parses notes, keys, gain and YouTube URLs", () => {
     assert.equal(noteNameToMidi("C4"), 60);
+    assert.equal(noteNameToMidi("C#4"), 61);
     assert.equal(noteNameToMidi("Db4"), 61);
     for (const value of [null, "bad", "C20"])
       assert.equal(noteNameToMidi(value), null);
     assert.equal(transposeKey("Db minor", 2), "D# minor");
     assert.equal(transposeKey("H", 1), "H");
+    assert.equal(transposeKey("Cb", 1), "Cb");
     assert.equal(transposeKey("", 1).length > 0, true);
     assert.equal(transposeKey("C", "bad"), "C");
     assert.equal(playbackGain(0.5), 0.25);
     assert.equal(playbackGain(-2), 0);
+    assert.equal(playbackGain("bad"), 0);
     for (const url of [
       "https://youtu.be/abcdefghijk",
       "https://www.youtube.com/watch?v=abcdefghijk",
@@ -142,6 +165,9 @@ describe("karaoke data contracts", () => {
   test("normalizes lyric aliases without changing source word order", () => {
     assert.deepEqual(normalizeLyrics(null), []);
     assert.deepEqual(normalizeLyrics({ lines: "bad" }), []);
+    assert.deepEqual(normalizeLyrics({ lines: ["bad"] }), []);
+    assert.deepEqual(normalizeLyrics({}), []);
+    assert.deepEqual(normalizeLyrics([{ text: "bad", start: -1 }]), []);
     const result = normalizeLyrics({
       segments: [
         { line: "later", begin: 3, finish: 2 },
@@ -165,6 +191,24 @@ describe("karaoke data contracts", () => {
       result[0].words.map((word) => word.text),
       ["first", "second"]
     );
+    assert.deepEqual(
+      normalizeLyrics([
+        { text: "first", start: 1, end: 1 },
+        { text: "second", start: 2, end: 3 }
+      ]).map(({ text, start, end }) => ({ text, start, end })),
+      [
+        { text: "first", start: 1, end: 2 },
+        { text: "second", start: 2, end: 3 }
+      ]
+    );
+    assert.deepEqual(
+      normalizeLyrics([
+        { text: "later", start: 1, end: 3 },
+        { text: "shorter", start: 1, end: 2 },
+        { text: "same", start: 1, end: 2 }
+      ]).map(({ text }) => text),
+      ["shorter", "same", "later"]
+    );
   });
 });
 
@@ -183,6 +227,18 @@ describe("lyrics, melody and pitch", () => {
     assert.equal(getLyricFill("bad", 0, 2), 0);
     assert.equal(getLyricFill(2, 1, 1), 1);
     assert.equal(getLyricFill(0, 1, 1), 0);
+    assert.equal(getLyricDisplayState(null, 0).currentLine, null);
+    assert.equal(
+      getLyricDisplayState(
+        [
+          { start: 0, end: 2, text: "long" },
+          { start: 0, end: 1, text: "short-first" },
+          { start: 0, end: 1, text: "short-second" }
+        ],
+        0.5
+      ).currentLine.text,
+      "long"
+    );
   });
 
   test("computes melody bounds, visibility and cues", () => {
@@ -212,13 +268,42 @@ describe("lyrics, melody and pitch", () => {
       getMelodyRange({ notes: [], noteRangeMin: 70, noteRangeMax: 60 }).minMidi,
       58
     );
+    assert.deepEqual(
+      getMelodyRange({
+        notes: null,
+        keyShift: "bad",
+        noteRangeMin: 50,
+        noteRangeMax: 70
+      }),
+      { minMidi: 48, maxMidi: 72, pitchRange: 25 }
+    );
     assert.deepEqual(getVisibleNotes(notes, "bad", 4), []);
+    assert.deepEqual(getVisibleNotes(null, 0, 4), []);
+    assert.deepEqual(
+      getVisibleNotes(
+        [
+          null,
+          { start: "bad", end: 1 },
+          { start: 1, end: "bad" },
+          { start: 2, end: 1 },
+          { start: -2, end: -1 },
+          { start: 5, end: 6 }
+        ],
+        0,
+        4
+      ),
+      []
+    );
     assert.equal(getVisibleNotes(notes, 2, 3).length, 2);
     assert.equal(
       getMelodyCue({ notes, currentTime: 1.5, keyShift: 2 }).activeMidi,
       64
     );
     assert.equal(getMelodyCue({ notes, currentTime: 2.5 }).targetMidi, 70);
+    assert.equal(
+      getMelodyCue({ notes, currentTime: "bad", keyShift: "bad" }).targetMidi,
+      62
+    );
     assert.equal(getMelodyCue({ notes, currentTime: 10 }).cueNote, null);
   });
 
@@ -257,7 +342,33 @@ describe("lyrics, melody and pitch", () => {
       null
     );
     assert.equal(
-      detectMidiFromAnalyser(analyser, new Float32Array(3), rate),
+      detectMidiFromAnalyser(
+        { getFloatTimeDomainData: (buffer) => buffer.fill(0.5) },
+        new Float32Array(3),
+        rate
+      ),
+      null
+    );
+    const impulse = new Float32Array(2048);
+    impulse[0] = 1;
+    assert.equal(
+      detectMidiFromAnalyser(
+        { getFloatTimeDomainData: (buffer) => buffer.set(impulse) },
+        new Float32Array(2048),
+        rate
+      ),
+      null
+    );
+    const edgeRate = 8001;
+    const edgeTone = new Float32Array(2048);
+    for (let index = 0; index < edgeTone.length; index += 1)
+      edgeTone[index] = Math.sin((2 * Math.PI * index) / 146);
+    assert.equal(
+      detectMidiFromAnalyser(
+        { getFloatTimeDomainData: (buffer) => buffer.set(edgeTone) },
+        new Float32Array(2048),
+        edgeRate
+      ),
       null
     );
   });
@@ -285,11 +396,13 @@ describe("device, settings and song-card factories", () => {
       { value: 64, label: "64 samples" }
     ]);
     assert.deepEqual(createBufferSizeOptions(null), []);
+    assert.equal(createIndexedDeviceOptions(null).length, 1);
   });
 
   test("builds field contracts and predicates", () => {
     assert.deepEqual(opts([[1, "One"]]), [{ value: 1, label: "One" }]);
     assert.match(percent("Volume")({ value: 0.125 }), /13%/);
+    assert.match(percent("Volume")({ value: null }), /0%/);
     const onChange = vi.fn();
     const onFieldBlur = vi.fn();
     const field = FORM_FIELDS.text("name");
@@ -315,6 +428,7 @@ describe("device, settings and song-card factories", () => {
       updatePreference: vi.fn()
     };
     audioSlider("volume").setValue({ audio }, 0.5);
+    assert.equal(audioSlider("volume").getValue({ audio }), 1);
     assert.equal(
       audioSelect("device", "devices").getOptions({ audio }).length,
       1
@@ -322,10 +436,26 @@ describe("device, settings and song-card factories", () => {
     assert.deepEqual(preferenceSelect("input", [{ value: "x" }]).options, [
       { value: "x" }
     ]);
+    assert.equal(preferenceSelect("input").getValue({ audio }), "x");
+    preferenceSelect("input").setValue({ audio }, "y");
     assert.equal(monitorDisabled({ audio }), true);
     assert.equal(audioDriverVisible({ audio }), true);
     assert.equal(multipleAudioDriversAvailable({ audio }), true);
+    assert.deepEqual(
+      audioSelect("device", "devices").getOptions({ audio: {} }),
+      []
+    );
+    assert.equal(multipleAudioDriversAvailable({ audio: {} }), false);
     assert.equal(speakerPlaying({ audio }), true);
+    assert.ok(MEMORY_ACTIONS[0][5]({ freed_bytes: 1024 }));
+    assert.ok(MEMORY_ACTIONS[1][5]({ freed_bytes: 2048 }));
+    assert.equal(
+      buildOptimizeOptions([
+        { id: "a", title: "A", status: "done", optimized: false },
+        { id: "b", title: "B", status: "pending", optimized: false }
+      ]).length,
+      2
+    );
   });
 
   test("validates song settings and dispatches card actions", () => {
@@ -348,6 +478,10 @@ describe("device, settings and song-card factories", () => {
     );
     assert.equal(
       validateSongSettings({ title: "x", tempo_override: 120 }),
+      null
+    );
+    assert.equal(
+      validateSongSettings({ title: "x", tempo_override: "bad" }),
       null
     );
     assert.deepEqual(
@@ -394,6 +528,8 @@ describe("device, settings and song-card factories", () => {
       song: songs[0]
     });
     assert.equal(pending[0][5].disabled, true);
+    pending[0][3]();
+    assert.equal(callbacks.onProcess.mock.calls.length, 1);
     assert.deepEqual(
       getSongActions({
         ...callbacks,

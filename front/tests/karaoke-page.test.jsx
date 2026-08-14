@@ -211,7 +211,8 @@ const result = {
 
 beforeEach(() => {
   Object.defineProperties(HTMLMediaElement.prototype, {
-    load: { configurable: true, value: vi.fn() }
+    load: { configurable: true, value: vi.fn() },
+    readyState: { configurable: true, get: () => 0 }
   });
   mocks.location = { state: { songId: "song" } };
   mocks.navigate.mockReset();
@@ -310,6 +311,7 @@ describe("karaoke page", () => {
         mocks.result,
         "field-error"
       ],
+      [{ data: null, error: {} }, mocks.result, "field-error"],
       [{ data: null, error: null }, mocks.result, "text-muted"],
       [{ data: [], error: null }, mocks.result, "text-muted"],
       [
@@ -325,6 +327,11 @@ describe("karaoke page", () => {
       [
         { data: [song], error: null },
         { result: null, loading: false, error: new Error("bad") },
+        "field-error"
+      ],
+      [
+        { data: [song], error: null },
+        { result: null, loading: false, error: null },
         "field-error"
       ]
     ];
@@ -347,15 +354,33 @@ describe("karaoke page", () => {
     expect(mocks.stageProps.songId).toBe("song");
   });
 
+  test("renders the no-ready-song message without route state", () => {
+    mocks.location = { state: null };
+    mocks.songsPoll = { data: null, error: null };
+    const loading = render(<Karaoke />);
+    expect(loading.container.querySelector(".text-muted")).not.toBeNull();
+    loading.unmount();
+    mocks.songsPoll = { data: [], error: null };
+    const empty = render(<Karaoke />);
+    expect(empty.container.querySelector(".text-muted")).not.toBeNull();
+  });
+
   test("starts playback with intro and stops through blackout transition", async () => {
     vi.useFakeTimers();
     const page = render(<Karaoke />);
     fireEvent.click(page.getByTestId("play"));
+    fireEvent.mouseMove(page.container.querySelector(".karaoke-stage"));
+    fireEvent.click(page.getByTestId("play"));
+    await act(async () => Promise.resolve());
+    page.container
+      .querySelectorAll("audio")
+      .forEach((audio) => fireEvent.canPlay(audio));
     await vi.runAllTimersAsync();
     expect(mocks.transport.preparePlayback).toHaveBeenCalled();
     expect(mocks.transport.togglePlay).toHaveBeenCalledWith({
       forcePlaying: true
     });
+    fireEvent.click(page.getByTestId("stop"));
     fireEvent.click(page.getByTestId("stop"));
     await vi.runAllTimersAsync();
     expect(mocks.transport.stop).toHaveBeenCalled();
@@ -372,6 +397,16 @@ describe("karaoke page", () => {
     expect(mocks.room.syncUi).toHaveBeenCalledWith({
       participantEffects: mocks.microphone.microphoneEffects
     });
+  });
+
+  test("suspends radio only for an active recording during playback", async () => {
+    render(<Karaoke />);
+    await act(async () => mocks.transportOptions.setRecordingSessionId("rec"));
+    expect(mocks.radio.setRecordingActive).toHaveBeenLastCalledWith(false);
+    await act(async () => mocks.transportOptions.setIsPlaying(true));
+    expect(mocks.radio.setRecordingActive).toHaveBeenLastCalledWith(true);
+    await act(async () => mocks.transportOptions.setRecordingSessionId(null));
+    expect(mocks.radio.setRecordingActive).toHaveBeenLastCalledWith(false);
   });
 
   test("reports direct monitoring failure", async () => {
@@ -506,5 +541,80 @@ describe("karaoke page", () => {
     await vi.runAllTimersAsync();
     await ended;
     expect(mocks.transport.stop).toHaveBeenCalled();
+  });
+
+  test("starts immediately when song media is already ready", async () => {
+    vi.useFakeTimers();
+    Object.defineProperty(HTMLMediaElement.prototype, "readyState", {
+      configurable: true,
+      get: () => 4
+    });
+    const page = render(<Karaoke />);
+    fireEvent.click(page.getByTestId("play"));
+    await vi.runAllTimersAsync();
+    expect(mocks.transport.togglePlay).toHaveBeenCalledWith({
+      forcePlaying: true
+    });
+  });
+
+  test("handles declined playback, pause and stop transitions", async () => {
+    vi.useFakeTimers();
+    mocks.radio.isPlaying = true;
+    mocks.transport.togglePlay.mockResolvedValue(false);
+    mocks.transport.stop.mockResolvedValue(false);
+    const page = render(<Karaoke />);
+    fireEvent.click(page.getByTestId("play"));
+    await vi.runAllTimersAsync();
+    await act(async () => mocks.transportOptions.setIsPlaying(true));
+    fireEvent.click(page.getByTestId("play"));
+    await act(async () => Promise.resolve());
+    fireEvent.click(page.getByTestId("stop"));
+    await vi.runAllTimersAsync();
+    expect(mocks.transport.stop).toHaveBeenCalled();
+  });
+
+  test("uses tempo, key and hidden-control fallbacks", () => {
+    mocks.songsPoll = {
+      data: [{ ...song, key_override: "", tempo_override: "bad" }],
+      error: null
+    };
+    mocks.result = {
+      result: { ...result, music: { tempo: "bad", key: "D" } },
+      loading: false,
+      error: null
+    };
+    mocks.controls.controlsVisible = false;
+    const page = render(<Karaoke />);
+    expect(mocks.consoleProps.currentTempo).toBe(120);
+    expect(mocks.consoleProps.compactKey).toContain("D");
+    const consoleToggle = page.container.querySelectorAll(
+      ".karaoke-stage-action"
+    )[1];
+    fireEvent.click(consoleToggle);
+    expect(mocks.controls.showControls).toHaveBeenCalled();
+    page.unmount();
+
+    mocks.result = {
+      result: { ...result, music: { tempo: null, key: "" } },
+      loading: false,
+      error: null
+    };
+    render(<Karaoke />);
+    expect(mocks.consoleProps.compactKey).toContain("C");
+  });
+
+  test("ignores an auto-start callback retained after unmount", () => {
+    mocks.location = { state: { songId: "song", autoPlay: true } };
+    let autoStart;
+    const nativeSetTimeout = window.setTimeout;
+    vi.spyOn(window, "setTimeout").mockImplementation(
+      (callback, timeout, ...args) => {
+        if (timeout === 80) autoStart = callback;
+        return nativeSetTimeout(callback, timeout, ...args);
+      }
+    );
+    const page = render(<Karaoke />);
+    page.unmount();
+    expect(() => autoStart()).not.toThrow();
   });
 });

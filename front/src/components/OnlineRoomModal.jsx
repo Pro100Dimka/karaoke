@@ -1,5 +1,5 @@
 import { ArrowLeft, UsersRound } from "lucide-react";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useOnlineRoom } from "../contexts/OnlineRoomContext";
 import useMountedRef from "../hooks/useMountedRef";
 import { useI18n } from "../i18n";
@@ -15,19 +15,10 @@ export function OnlineRoomModal({ onlineName, onClose }) {
   const [roomId, setRoomId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const connectionPendingRef = useRef(false);
   const mountedRef = useMountedRef();
 
   const connect = async (host) => {
-    if (connectionPendingRef.current) return;
-
     const normalizedRoomId = normalizeRoomId(roomId);
-    if (!host && normalizedRoomId.length < 4) {
-      setError(t("room.join.invalidCode"));
-      return;
-    }
-
-    connectionPendingRef.current = true;
     setBusy(true);
     setError("");
     try {
@@ -39,7 +30,6 @@ export function OnlineRoomModal({ onlineName, onClose }) {
         setError(getErrorMessage(connectError, t("room.join.failed")));
       }
     } finally {
-      connectionPendingRef.current = false;
       if (mountedRef.current) setBusy(false);
     }
   };

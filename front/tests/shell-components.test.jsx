@@ -78,6 +78,11 @@ vi.mock("../src/components/routes", () => ({
         data-testid="route-song"
         onClick={() => onOpenSongSettings("song")}
       />
+      <button
+        type="button"
+        data-testid="route-empty-song"
+        onClick={() => onOpenSongSettings("")}
+      />
     </>
   )
 }));
@@ -161,6 +166,27 @@ describe("application shell", () => {
         .querySelector(".app-route-blackout")
         .classList.contains("is-visible")
     ).toBe(true);
+    fireEvent(window, new CustomEvent("app:route-blackout"));
+    expect(
+      container
+        .querySelector(".app-route-blackout")
+        .classList.contains("is-visible")
+    ).toBe(false);
+    fireEvent.click(getByTestId("route-empty-song"));
+    expect(queryByTestId("song-settings")).toBeNull();
+  });
+
+  test("layout exposes active and failed radio states", () => {
+    mocks.radio.error = "radio failed";
+    mocks.radio.isLoading = true;
+    mocks.radio.isPlaying = true;
+    const view = render(<AppLayout />);
+    const radio = view.getByLabelText("radio failed");
+    expect(radio.className).toContain("is-playing");
+    expect(radio.className).toContain("is-loading");
+    mocks.radio.error = "";
+    view.rerender(<AppLayout />);
+    expect(view.getByLabelText("radio.disable:Radio")).not.toBeNull();
   });
 
   test("layout applies route-specific shells and suppresses floating controls", () => {
@@ -211,5 +237,26 @@ describe("application shell", () => {
     await vi.advanceTimersByTimeAsync(5);
     await Promise.resolve();
     expect(mocks.getHealth).toHaveBeenCalledTimes(2);
+  });
+
+  test("backend loader falls back for unknown themes and ignores late health", async () => {
+    mocks.getTheme.mockReturnValue("unknown");
+    let resolveHealth;
+    mocks.getHealth.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveHealth = resolve;
+      })
+    );
+    const view = render(
+      <BackendBootLoader>
+        <div>too late</div>
+      </BackendBootLoader>
+    );
+    document.documentElement.removeAttribute("data-theme");
+    document.documentElement.setAttribute("data-probe", "changed");
+    await act(async () => Promise.resolve());
+    view.unmount();
+    resolveHealth({ ok: true });
+    await act(async () => Promise.resolve());
   });
 });

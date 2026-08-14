@@ -6,8 +6,7 @@ function toFiniteNumber(value, fallback = 0) {
 function toBoolean(value) {
   if (typeof value === "string") {
     const normalized = value.trim().toLowerCase();
-    if (["false", "0", "off", "no", ""].includes(normalized)) return false;
-    if (["true", "1", "on", "yes"].includes(normalized)) return true;
+    if (["false", "0", "off", "no"].includes(normalized)) return false;
   }
   return Boolean(value);
 }
@@ -46,10 +45,10 @@ export function normalizeAudioRuntimeSettings(settings) {
 export function findDriverOutputDevice(devices, driverName) {
   const tokens = String(driverName || "")
     .toLowerCase()
-    .replaceAll(/\b(?:asio|driver)\b/g, " ")
-    .split(/\s+/)
+    .replaceAll(/\b(?:asio|driver)\b/g, "")
+    .split(/\s/)
     .filter((token) => token.length > 2);
-  const outputs = Array.isArray(devices) ? devices : [];
+  const outputs = Array.isArray(devices) ? devices : Array.of();
   const ranked = outputs
     .map((device) => {
       const name = String(device?.name || "").toLowerCase();
@@ -62,7 +61,7 @@ export function findDriverOutputDevice(devices, driverName) {
     })
     .filter(({ score }) => score > 0)
     .sort((left, right) => right.score - left.score);
-  return ranked[0]?.device ?? outputs.find((device) => device?.is_asio) ?? null;
+  return ranked[0]?.device ?? null;
 }
 
 export function findMatchingBrowserOutput(entries, selectedDevice) {
@@ -71,7 +70,7 @@ export function findMatchingBrowserOutput(entries, selectedDevice) {
     .toLowerCase();
   if (!selectedName) return null;
   return (
-    (Array.isArray(entries) ? entries : []).find((entry) => {
+    (Array.isArray(entries) ? entries : Array.of()).find((entry) => {
       if (entry?.kind !== "audiooutput" || !entry.deviceId) return false;
       const label = String(entry.label || "")
         .trim()
@@ -84,7 +83,7 @@ export function findMatchingBrowserOutput(entries, selectedDevice) {
 }
 
 export function groupBrowserAudioDevices(devices) {
-  const list = Array.isArray(devices) ? devices : [];
+  const list = Array.isArray(devices) ? devices : Array.of();
   return {
     inputs: list.filter((device) => device?.kind === "audioinput"),
     outputs: list.filter((device) => device?.kind === "audiooutput")

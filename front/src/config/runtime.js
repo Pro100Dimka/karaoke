@@ -3,16 +3,16 @@ const positiveNumber = (value, fallback) => {
   return Number.isFinite(number) && number > 0 ? number : fallback;
 };
 
-const pollingScale = positiveNumber(import.meta.env?.VITE_POLLING_SCALE, 1);
+const pollingScale = positiveNumber(import.meta.env.VITE_POLLING_SCALE, 1);
 const interval = (milliseconds) =>
   Math.max(16, Math.round(milliseconds * pollingScale));
 
 export const API_BASE_URL = String(
-  import.meta.env?.VITE_API_BASE_URL || "http://127.0.0.1:8000"
+  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000"
 ).replace(/\/+$/, "");
 
 export const BACKEND_BOOT_RETRY_MS = positiveNumber(
-  import.meta.env?.VITE_BACKEND_RETRY_MS,
+  import.meta.env.VITE_BACKEND_RETRY_MS,
   450
 );
 

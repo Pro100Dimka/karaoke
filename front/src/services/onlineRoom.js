@@ -128,7 +128,7 @@ export class OnlineRoomClient {
       };
       const fail = (message) => {
         if (!isCurrent()) return;
-        if (this.socket === socket) this.socket = null;
+        this.socket = null;
         settle(reject, new Error(message));
         if (socket.readyState < globalThis.WebSocket.CLOSING) socket.close();
       };

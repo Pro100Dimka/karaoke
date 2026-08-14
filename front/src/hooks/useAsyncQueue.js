@@ -25,9 +25,7 @@ export default function useAsyncQueue() {
       }
       pendingCountRef.current += 1;
       if (mountedRef.current) setPending(true);
-      const result = tailRef.current
-        .catch(() => {})
-        .then(() => Promise.resolve().then(action));
+      const result = tailRef.current.then(() => Promise.resolve().then(action));
       tailRef.current = result.catch(() => {});
       return result.finally(() => {
         pendingCountRef.current = Math.max(0, pendingCountRef.current - 1);

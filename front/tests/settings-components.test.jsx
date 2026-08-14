@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   polling: { data: null, error: null, refresh: vi.fn() },
   downloadAiModels: vi.fn(),
+  pollingOptions: null,
   settingsForm: null,
   navigation: null
 }));
@@ -22,7 +23,10 @@ vi.mock("../src/api/client", () => ({
   }
 }));
 vi.mock("../src/hooks/usePolling", () => ({
-  usePolling: () => mocks.polling
+  usePolling: (_fetcher, _interval, _dependencies, options) => {
+    mocks.pollingOptions = options;
+    return mocks.polling;
+  }
 }));
 vi.mock("../src/i18n", async (importOriginal) => ({
   ...(await importOriginal()),
@@ -50,6 +54,7 @@ import Settings from "../src/pages/Settings/index.jsx";
 beforeEach(() => {
   mocks.polling = { data: null, error: null, refresh: vi.fn() };
   mocks.downloadAiModels.mockReset().mockResolvedValue({});
+  mocks.pollingOptions = null;
   mocks.settingsForm = {
     form: { theme: "dark" },
     updateField: vi.fn(),
@@ -83,6 +88,10 @@ describe("AI model recovery", () => {
       ready_count: 2
     };
     render(<ModelRecovery />);
+    expect(mocks.pollingOptions.shouldContinue({ state: "downloading" })).toBe(
+      true
+    );
+    expect(mocks.pollingOptions.shouldContinue({ state: "ready" })).toBe(false);
     expect(screen.getByText("settings.ai.models.ready")).not.toBeNull();
     expect(screen.queryByRole("button")).toBeNull();
   });
@@ -121,6 +130,19 @@ describe("AI model recovery", () => {
     ).toBe(1024 ** 3);
     expect(screen.getByText(/1\.0.*2\.0/)).not.toBeNull();
     expect(screen.getByRole("button").disabled).toBe(true);
+
+    mocks.polling = {
+      data: {
+        ready: false,
+        state: "downloading",
+        downloaded_bytes: 1,
+        total_bytes: 2,
+        remaining_seconds: -1
+      },
+      error: null,
+      refresh: vi.fn()
+    };
+    view.rerender(<ModelRecovery />);
 
     mocks.polling = {
       data: { ready: false, state: "missing", models: [] },

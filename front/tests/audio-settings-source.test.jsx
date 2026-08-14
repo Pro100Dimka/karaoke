@@ -230,8 +230,41 @@ describe("audio settings source", () => {
     expect(mocks.prepareSpeakingMeter).toHaveBeenCalled();
     expect(mocks.startSpeakingMeter).toHaveBeenCalledWith("local", stream);
     expect(result.current.options.browserInputs.at(-1).value).toBe("mic");
+    window.dispatchEvent(new Event("keydown"));
+    expect(getUserMedia).toHaveBeenCalledTimes(2);
     unmount();
     expect(track.stop).toHaveBeenCalled();
+  });
+
+  test("ignores optional browser-device enumeration failures", async () => {
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        enumerateDevices: vi.fn().mockRejectedValue(new Error("blocked"))
+      }
+    });
+    renderHook(() => useAudioSettingsSource());
+    await act(async () => Promise.resolve());
+    expect(navigator.mediaDevices.enumerateDevices).toHaveBeenCalled();
+  });
+
+  test("ignores device enumeration completed after unmount", async () => {
+    let resolveDevices;
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        enumerateDevices: vi.fn(
+          () =>
+            new Promise((resolve) => {
+              resolveDevices = resolve;
+            })
+        )
+      }
+    });
+    const hook = renderHook(() => useAudioSettingsSource());
+    await waitFor(() => expect(resolveDevices).toBeTypeOf("function"));
+    hook.unmount();
+    await act(async () => resolveDevices([]));
   });
 
   test("handles unavailable and late microphone streams", async () => {
@@ -298,6 +331,15 @@ describe("audio settings source", () => {
     );
     expect(mocks.stopSpeakingMeter).toHaveBeenCalledWith("local");
     expect(mocks.alert).toHaveBeenCalledWith(expect.stringContaining("busy"));
+
+    pollingData[0] = { monitoring_enabled: true };
+    pollingIndex = 0;
+    mocks.stopDirectMonitoring.mockRejectedValue(new Error("stop busy"));
+    const enabled = renderHook(() => useAudioSettingsSource());
+    await expect(
+      enabled.result.current.actions.toggleMonitoring()
+    ).resolves.toBe(false);
+    enabled.unmount();
   });
 
   test("animates the monitoring meter", () => {
@@ -310,8 +352,21 @@ describe("audio settings source", () => {
     mocks.speakingLevel = 0;
     pollingData[4] = null;
     hook.rerender();
-    act(() => vi.advanceTimersByTime(500));
-    expect(hook.result.current.states.monitorLevel).toBeLessThan(50);
+    act(() => vi.advanceTimersByTime(2000));
+    expect(hook.result.current.states.monitorLevel).toBe(0);
+  });
+
+  test("uses empty option lists when backend discovery returns null", () => {
+    pollingData[1] = null;
+    pollingData[2] = null;
+    pollingData[3] = null;
+    const { result } = renderHook(() => useAudioSettingsSource());
+    expect(result.current.options.inputDevices).toHaveLength(1);
+    expect(result.current.options.outputDevices).toHaveLength(1);
+    expect(result.current.options.asioDrivers).toEqual([]);
+    expect(result.current.options.audioDrivers.map(({ value }) => value)).toEqual([
+      "auto"
+    ]);
   });
 
   test("plays a routed speaker test and releases all resources", async () => {

@@ -56,8 +56,19 @@ test("note range renderer normalizes empty and numeric input", () => {
   const inputs = container.querySelectorAll("input");
   fireEvent.change(inputs[0], { target: { value: "" } });
   fireEvent.change(inputs[1], { target: { value: "90" } });
+  fireEvent.change(inputs[0], { target: { value: "41" } });
+  fireEvent.change(inputs[1], { target: { value: "" } });
   expect(change.mock.calls).toEqual([
     ["note_range_min", null],
-    ["note_range_max", 90]
+    ["note_range_max", 90],
+    ["note_range_min", 41],
+    ["note_range_max", null]
   ]);
+
+  const empty = render(
+    range.render({ context: { form: null, onChange: change } })
+  );
+  const emptyInputs = empty.container.querySelectorAll("input");
+  expect(emptyInputs[0].value).toBe("");
+  expect(emptyInputs[1].value).toBe("");
 });

@@ -38,10 +38,12 @@ afterEach(cleanup);
 
 test("effect dial supports range, wheel and pointer dragging with clamping", () => {
   const change = vi.fn();
-  const { container, getByLabelText } = render(
+  const result = render(
     <EffectDial label="Echo" value={0.5} onChange={change} />
   );
+  const { container, getByLabelText } = result;
   const dial = container.querySelector("label");
+  fireEvent.pointerMove(dial, { clientY: 50, pointerId: 1 });
   fireEvent.wheel(dial, { deltaY: -1 });
   fireEvent.wheel(dial, { deltaY: 1 });
   fireEvent.pointerDown(dial, { button: 1, clientY: 100, pointerId: 1 });
@@ -51,6 +53,8 @@ test("effect dial supports range, wheel and pointer dragging with clamping", () 
   fireEvent.change(getByLabelText("Echo"), { target: { value: "0.3" } });
   expect(change.mock.calls.length).toBeGreaterThanOrEqual(4);
   expect(change.mock.calls[2][0]).toBe(1);
+  result.unmount();
+  render(<EffectDial label="Empty" onChange={vi.fn()} />);
 });
 
 test("song strip formats metadata and delegates seeking", () => {
@@ -67,13 +71,21 @@ test("song strip formats metadata and delegates seeking", () => {
   expect(result.container.textContent).toContain("1:05");
   fireEvent.click(result.getByTestId("timeline"));
   expect(seek).toHaveBeenCalledWith(3);
+  result.rerender(
+    <SongStrip
+      song={{ title: "Unknown" }}
+      currentTime={0}
+      duration={0}
+      onSeek={seek}
+    />
+  );
 });
 
 test("mixer changes and commits volumes and effects", () => {
   const microphone = vi.fn();
   const commit = vi.fn();
   const effect = vi.fn();
-  const { container } = render(
+  const view = render(
     <MixerPanel
       microphoneLevel={2}
       volumes={{ microphone: 0.4, music: 0.5, vocal: 0.6, melody: 0.7 }}
@@ -88,6 +100,7 @@ test("mixer changes and commits volumes and effects", () => {
       onEffectChange={effect}
     />
   );
+  const { container } = view;
   const slider = container.querySelector('input[type="range"]');
   fireEvent.change(slider, { target: { value: "0.8" } });
   fireEvent.pointerUp(slider, { currentTarget: { value: "0.8" } });
@@ -98,6 +111,20 @@ test("mixer changes and commits volumes and effects", () => {
   expect(microphone).toHaveBeenCalledWith(0.8);
   expect(commit).toHaveBeenCalled();
   expect(effect).toHaveBeenCalled();
+  view.rerender(
+    <MixerPanel
+      microphoneLevel={0}
+      volumes={{}}
+      onVolumeChange={{
+        microphone: vi.fn(),
+        music: vi.fn(),
+        vocal: vi.fn(),
+        melody: vi.fn()
+      }}
+      microphoneEffects={{}}
+      onEffectChange={vi.fn()}
+    />
+  );
 });
 
 test("tools toggle visibility, monitoring, auto-hide, settings and presets", () => {

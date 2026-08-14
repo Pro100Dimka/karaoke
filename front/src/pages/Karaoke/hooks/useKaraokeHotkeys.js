@@ -31,7 +31,7 @@ export default function useKaraokeHotkeys({
         seekRef.current?.(
           Math.min(durationRef.current, currentTimeRef.current + 5)
         );
-      } else if (action === "stop") {
+      } else {
         stopRef.current?.();
       }
     };

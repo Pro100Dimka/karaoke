@@ -98,11 +98,14 @@ describe("online room service", () => {
     socket.readyState = FakeSocket.OPEN;
     socket.onopen();
     await expect(connection).resolves.toBe("ROOM-1");
+    socket.onopen();
+    expect(() => socket.onerror(new Event("error"))).not.toThrow();
     socket.onmessage({ data: JSON.stringify({ type: "state" }) });
     socket.onmessage({ data: "[1]" });
     socket.onmessage({ data: "bad" });
     socket.onmessage({ data: new ArrayBuffer(1) });
     expect(listener).toHaveBeenCalledTimes(1);
+    socket.onclose({ code: 1000 });
   });
 
   test("uses the guest fallback, sends bounded objects and disconnects", async () => {
@@ -132,6 +135,14 @@ describe("online room service", () => {
     const client = new OnlineRoomClient();
     await expect(client.connect({ id: "a" })).rejects.toThrow(Error);
     await expect(client.connect({ id: "ABCD" })).rejects.toThrow(/WebSocket/);
+    globalThis.WebSocket = class {
+      constructor() {
+        throw new Error("constructor failed");
+      }
+    };
+    await expect(client.connect({ id: "ABCD" })).rejects.toThrow(
+      "constructor failed"
+    );
     globalThis.WebSocket = class {
       static CLOSING = 2;
       constructor() {
@@ -170,5 +181,23 @@ describe("online room service", () => {
     const rejection = expect(connection).rejects.toThrow(Error);
     await vi.advanceTimersByTimeAsync(10_000);
     await rejection;
+    expect(socket.close).toHaveBeenCalled();
+  });
+
+  test("ignores an obsolete connection timeout", async () => {
+    vi.useFakeTimers();
+    installSocket();
+    const client = new OnlineRoomClient();
+    const firstConnection = client.connect({ id: "ABCD" });
+    const first = FakeSocket.instances[0];
+    const secondConnection = client.connect({ id: "EFGH" });
+    const second = FakeSocket.instances[1];
+    const secondRejection = expect(secondConnection).rejects.toThrow(Error);
+    await vi.advanceTimersByTimeAsync(10_000);
+    await secondRejection;
+    expect(second.close).toHaveBeenCalled();
+    const firstRejection = expect(firstConnection).rejects.toThrow(Error);
+    first.onclose({ code: 1000 });
+    await firstRejection;
   });
 });

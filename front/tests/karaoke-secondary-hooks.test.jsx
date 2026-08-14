@@ -111,6 +111,14 @@ describe("karaoke preferences", () => {
     expect(result.current.effectPreset).toBe("dry");
     expect(mocks.updateUiPreferences).not.toHaveBeenCalled();
   });
+
+  test("ignores optional remote preference persistence failures", async () => {
+    mocks.updateUiPreferences.mockRejectedValue(new Error("offline"));
+    const { result } = renderHook(() => useKaraokePreferences());
+    act(() => result.current.setSpeed(1.1));
+    await act(async () => Promise.resolve());
+    expect(mocks.updateUiPreferences).toHaveBeenCalled();
+  });
 });
 
 describe("karaoke panorama", () => {
@@ -171,7 +179,7 @@ describe("karaoke panorama", () => {
   });
 });
 
-function installGuideContext({ resumeError } = {}) {
+function installGuideContext({ resumeError, closeError } = {}) {
   const oscillator = {
     type: "",
     frequency: { setTargetAtTime: vi.fn() },
@@ -199,7 +207,9 @@ function installGuideContext({ resumeError } = {}) {
     resume: vi.fn(() =>
       resumeError ? Promise.reject(resumeError) : Promise.resolve()
     ),
-    close: vi.fn().mockResolvedValue(undefined)
+    close: vi.fn(() =>
+      closeError ? Promise.reject(closeError) : Promise.resolve()
+    )
   };
   globalThis.AudioContext = class {
     constructor() {
@@ -222,6 +232,7 @@ describe("melody guide", () => {
       }
     });
     await expect(hook.result.current.startMelodyGuide()).resolves.toBe(true);
+    await expect(hook.result.current.startMelodyGuide()).resolves.toBe(true);
     expect(audio.oscillator.start).toHaveBeenCalledOnce();
     expect(audio.oscillator.frequency.setTargetAtTime).toHaveBeenCalled();
     act(() => hook.result.current.updateMelodyGuide(5));
@@ -233,19 +244,35 @@ describe("melody guide", () => {
   });
 
   test("rejects missing inputs and cleans a guide whose resume fails", async () => {
-    const empty = renderHook(() =>
+      const empty = renderHook(() =>
       useMelodyGuide({
         notes: [],
         volume: 1,
         keyShift: 0,
         currentTimeRef: { current: 0 }
       })
-    );
-    expect(await empty.result.current.startMelodyGuide()).toBe(false);
-    empty.unmount();
+      );
+      act(() => empty.result.current.updateMelodyGuide(0));
+      act(() => empty.result.current.silenceMelodyGuide());
+      expect(await empty.result.current.startMelodyGuide()).toBe(false);
+      empty.unmount();
 
-    const failure = new Error("resume failed");
-    const audio = installGuideContext({ resumeError: failure });
+      const unavailable = renderHook(() =>
+        useMelodyGuide({
+          notes: [{ start: 0, end: 1, midi: 60 }],
+          volume: 1,
+          keyShift: 0,
+          currentTimeRef: { current: 0 }
+        })
+      );
+      expect(await unavailable.result.current.startMelodyGuide()).toBe(false);
+      unavailable.unmount();
+
+      const failure = new Error("resume failed");
+    const audio = installGuideContext({
+      resumeError: failure,
+      closeError: new Error("already closed")
+    });
     const failed = renderHook(() =>
       useMelodyGuide({
         notes: [{ start: 0, end: 1, midi: 60 }],
@@ -259,5 +286,45 @@ describe("melody guide", () => {
     );
     expect(audio.oscillator.stop).toHaveBeenCalled();
     expect(audio.context.close).toHaveBeenCalled();
+  });
+
+  test("ignores an asynchronous close failure during disposal", async () => {
+    const audio = installGuideContext({
+      closeError: new Error("already closed")
+    });
+    const hook = renderHook(() =>
+      useMelodyGuide({
+        notes: [{ start: 0, end: 1, midi: 60 }],
+        volume: 1,
+        keyShift: 0,
+        currentTimeRef: { current: 0 }
+      })
+    );
+    await hook.result.current.startMelodyGuide();
+    hook.unmount();
+    await act(async () => Promise.resolve());
+    expect(audio.context.close).toHaveBeenCalled();
+  });
+
+  test("does not restore a guide disposed during a failed resume", async () => {
+    let rejectResume;
+    const audio = installGuideContext();
+    audio.context.resume.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectResume = reject;
+      })
+    );
+    const hook = renderHook(() =>
+      useMelodyGuide({
+        notes: [{ start: 0, end: 1, midi: 60 }],
+        volume: 1,
+        keyShift: 0,
+        currentTimeRef: { current: 0 }
+      })
+    );
+    const start = hook.result.current.startMelodyGuide();
+    hook.unmount();
+    rejectResume(new Error("disposed"));
+    await expect(start).rejects.toThrow("disposed");
   });
 });

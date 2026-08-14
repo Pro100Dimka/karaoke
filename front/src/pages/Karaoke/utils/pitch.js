@@ -92,12 +92,8 @@ export function detectMidiFromAnalyser(analyser, buffer, sampleRate) {
     const center = scores[bestLag];
     const right = scores[bestLag + 1];
     const denominator = left - 2 * center + right;
-    if (Number.isFinite(denominator) && Math.abs(denominator) > 1e-9) {
-      const offset = (0.5 * (left - right)) / denominator;
-      if (Number.isFinite(offset)) {
-        refinedLag += Math.max(-0.5, Math.min(0.5, offset));
-      }
-    }
+    const offset = (0.5 * (left - right)) / denominator;
+    refinedLag += Math.max(-0.5, Math.min(0.5, offset));
   }
 
   const frequency = rate / refinedLag;
@@ -110,5 +106,5 @@ export function detectMidiFromAnalyser(analyser, buffer, sampleRate) {
   }
 
   const midi = 69 + 12 * Math.log2(frequency / 440);
-  return Number.isFinite(midi) ? midi : null;
+  return midi;
 }
