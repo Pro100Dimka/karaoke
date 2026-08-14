@@ -170,7 +170,7 @@ def configure_ai_resource_environment(*, force: bool = False) -> None:
 
     for model in MODELS:
         path = model_path(MODELS_DIR, model)
-        set_resource(model.env_var, path, directory=model.kind == "snapshot")
+        set_resource(model.env_var, path, directory=model.kind in {"snapshot", "bundle"})
 
     os.environ.setdefault("KARAOKE_AI_REQUIRE_CTC", "1")
     set_resource("MSST_ENGINE_DIR", msst, directory=True)

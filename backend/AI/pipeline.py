@@ -717,18 +717,25 @@ class KaraokePipeline:
         else:
             reports.append(StageReport("midi-vocal-cleanup", 0, True, "cached"))
 
+        primary_melody = getattr(self.engines, "melody", None)
         pitch_key = cache.key(
             "pitch",
             {
+                "song": cache.file_hash(song_wav),
                 "vocals": cache.file_hash(vocal_fingerprint),
-                "midi_analysis_vocals": [cache.file_hash(path) for path in cleanup_outputs],
                 "cleanup": VOCAL_ANALYSIS_PREPROCESS_VERSION,
-                "engine": self.engines.pitch.name,
-                "engine_config": getattr(self.engines.pitch, "fingerprint", lambda: {})(),
+                "primary_engine": getattr(primary_melody, "name", None),
+                "primary_config": getattr(primary_melody, "fingerprint", lambda: {})(),
+                "primary_postprocess": "native-contour-v1",
+                "fallback_engine": self.engines.pitch.name,
+                "fallback_config": getattr(self.engines.pitch, "fingerprint", lambda: {})(),
                 "hop": self.config.hop_seconds,
                 "fmin": self.config.fmin_hz,
                 "fmax": self.config.fmax_hz,
                 "postprocessor": PITCH_STABILIZER_VERSION,
+                "primary_code": cache.optional_file_hash(
+                    Path(__file__).parent / "engines" / "omnizart_pitch.py"
+                ),
                 "pitch_post_code": cache.optional_file_hash(
                     Path(__file__).with_name("pitch_post.py")
                 ),
@@ -746,69 +753,104 @@ class KaraokePipeline:
             pitch = [PitchFrame(**item) for item in read_json(pitch_path, [])]
             reports.append(StageReport("pitch", 0, True, "cached"))
         else:
-            pitch_candidates = {
-                "original": self._run(
-                    "pitch-original",
-                    self.engines.pitch,
-                    lambda engine: engine.estimate(vocals),
-                    reports,
-                    warnings,
-                ),
-                "denoise": self._run(
-                    "pitch-denoise",
-                    self.engines.pitch,
-                    lambda engine: engine.estimate(midi_analysis_vocal),
-                    reports,
-                    warnings,
-                ),
-                "tail-suppressed": self._run(
-                    "pitch-tail-suppressed",
-                    self.engines.pitch,
-                    lambda engine: engine.estimate(midi_tail_vocal),
-                    reports,
-                    warnings,
-                ),
-            }
-            for candidate in pitch_candidates.values():
-                validate_pitch(candidate)
-            qualities = {
-                name: score_pitch_track(list(value)) for name, value in pitch_candidates.items()
-            }
-            original_quality = qualities["original"]
-            cleaned_quality = qualities["denoise"]
-            tail_quality = qualities["tail-suppressed"]
-            pitch_analysis_source = choose_best_pitch_track(qualities)
-            pitch_audio_by_source = {
-                "original": vocals,
-                "denoise": midi_analysis_vocal,
-                "tail-suppressed": midi_tail_vocal,
-            }
-            pitch_analysis_audio = pitch_audio_by_source[pitch_analysis_source]
-            pitch = pitch_candidates[pitch_analysis_source]
-            reports.append(
-                StageReport(
-                    "pitch-source-selection",
-                    0.0,
-                    False,
-                    " ".join(f"{name}={quality.score:.4f}" for name, quality in qualities.items())
-                    + f" selected={pitch_analysis_source}",
+            raw_pitch = None
+            stabilization_input = None
+            if primary_melody is not None:
+                started_primary = time.perf_counter()
+                try:
+                    candidate = primary_melody.estimate(song_wav)
+                    validate_pitch(candidate)
+                    if not any(frame.voiced for frame in candidate):
+                        raise EngineUnavailableError("Omnizart Patch-CNN returned no voiced frames")
+                    raw_pitch = list(candidate)
+                    stabilization_input = raw_pitch
+                    pitch_analysis_source = "omnizart-full-mix"
+                    reports.append(
+                        StageReport(
+                            "pitch-primary",
+                            time.perf_counter() - started_primary,
+                            False,
+                            primary_melody.name,
+                        )
+                    )
+                except EngineUnavailableError as exc:
+                    warnings.append(f"{exc}; using the existing FCPE/YIN fallback")
+
+            if raw_pitch is None:
+                pitch_candidates = {
+                    "original": self._run(
+                        "pitch-original",
+                        self.engines.pitch,
+                        lambda engine: engine.estimate(vocals),
+                        reports,
+                        warnings,
+                    ),
+                    "denoise": self._run(
+                        "pitch-denoise",
+                        self.engines.pitch,
+                        lambda engine: engine.estimate(midi_analysis_vocal),
+                        reports,
+                        warnings,
+                    ),
+                    "tail-suppressed": self._run(
+                        "pitch-tail-suppressed",
+                        self.engines.pitch,
+                        lambda engine: engine.estimate(midi_tail_vocal),
+                        reports,
+                        warnings,
+                    ),
+                }
+                for candidate in pitch_candidates.values():
+                    validate_pitch(candidate)
+                qualities = {
+                    name: score_pitch_track(list(value)) for name, value in pitch_candidates.items()
+                }
+                original_quality = qualities["original"]
+                cleaned_quality = qualities["denoise"]
+                tail_quality = qualities["tail-suppressed"]
+                pitch_analysis_source = choose_best_pitch_track(qualities)
+                pitch_audio_by_source = {
+                    "original": vocals,
+                    "denoise": midi_analysis_vocal,
+                    "tail-suppressed": midi_tail_vocal,
+                }
+                pitch_analysis_audio = pitch_audio_by_source[pitch_analysis_source]
+                raw_pitch = list(pitch_candidates[pitch_analysis_source])
+                reports.append(
+                    StageReport(
+                        "pitch-source-selection",
+                        0.0,
+                        False,
+                        " ".join(
+                            f"{name}={quality.score:.4f}" for name, quality in qualities.items()
+                        )
+                        + f" selected={pitch_analysis_source}",
+                    )
                 )
-            )
-            raw_pitch = list(pitch)
+                confidence_pitch = refine_pitch_confidence(
+                    raw_pitch, pitch_analysis_audio, sample_rate=self.config.pitch_sample_rate
+                )
+                validate_pitch(confidence_pitch)
+                stabilization_input = fuse_pitch_with_yin(
+                    confidence_pitch,
+                    pitch_analysis_audio,
+                    sample_rate=self.config.pitch_sample_rate,
+                    fmin_hz=self.config.fmin_hz,
+                    fmax_hz=self.config.fmax_hz,
+                )
+                validate_pitch(stabilization_input)
+
             validate_pitch(raw_pitch)
-            confidence_pitch = refine_pitch_confidence(
-                raw_pitch, pitch_analysis_audio, sample_rate=self.config.pitch_sample_rate
+            # Patch-CNN is already a predominant-vocal contour model. The old
+            # harmonic continuity decoder was designed for FCPE/YIN candidates
+            # and can rewrite valid Patch-CNN notes by an octave or flatten them
+            # back onto the dominant accompaniment line. Preserve its native
+            # contour; the acoustic note decoder still performs segmentation.
+            pitch = (
+                list(raw_pitch)
+                if pitch_analysis_source == "omnizart-full-mix"
+                else stabilize_pitch(stabilization_input or raw_pitch)
             )
-            validate_pitch(confidence_pitch)
-            consensus_pitch = fuse_pitch_with_yin(
-                confidence_pitch,
-                pitch_analysis_audio,
-                sample_rate=self.config.pitch_sample_rate,
-                fmin_hz=self.config.fmin_hz,
-                fmax_hz=self.config.fmax_hz,
-            )
-            validate_pitch(consensus_pitch)
-            pitch = stabilize_pitch(consensus_pitch)
             validate_pitch(pitch)
             pitch_outputs = [pitch_path]
             if self.config.preserve_raw_pitch:

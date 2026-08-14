@@ -1,0 +1,277 @@
+{
+  "inference_seconds": 14.843,
+  "old_raw_bins": [
+    {
+      "start": 5.5,
+      "end": 5.75,
+      "midi": 50.99,
+      "voiced": 15
+    },
+    {
+      "start": 5.75,
+      "end": 6.0,
+      "midi": 53.17,
+      "voiced": 16
+    },
+    {
+      "start": 6.0,
+      "end": 6.25,
+      "midi": 54.97,
+      "voiced": 25
+    },
+    {
+      "start": 6.25,
+      "end": 6.5,
+      "midi": 55.06,
+      "voiced": 25
+    },
+    {
+      "start": 6.5,
+      "end": 6.75,
+      "midi": 54.91,
+      "voiced": 25
+    },
+    {
+      "start": 6.75,
+      "end": 7.0,
+      "midi": 54.93,
+      "voiced": 25
+    },
+    {
+      "start": 7.0,
+      "end": 7.25,
+      "midi": 54.78,
+      "voiced": 20
+    },
+    {
+      "start": 7.25,
+      "end": 7.5,
+      "midi": 54.64,
+      "voiced": 25
+    },
+    {
+      "start": 7.5,
+      "end": 7.75,
+      "midi": 53.71,
+      "voiced": 23
+    },
+    {
+      "start": 7.75,
+      "end": 8.0,
+      "midi": 54.79,
+      "voiced": 25
+    },
+    {
+      "start": 8.0,
+      "end": 8.2,
+      "midi": 54.29,
+      "voiced": 20
+    }
+  ],
+  "new_raw_bins": [
+    {
+      "start": 5.5,
+      "end": 5.75,
+      "midi": 62.31,
+      "voiced": 13
+    },
+    {
+      "start": 5.75,
+      "end": 6.0,
+      "midi": 53.63,
+      "voiced": 9
+    },
+    {
+      "start": 6.0,
+      "end": 6.25,
+      "midi": 55.06,
+      "voiced": 13
+    },
+    {
+      "start": 6.25,
+      "end": 6.5,
+      "midi": 55.13,
+      "voiced": 12
+    },
+    {
+      "start": 6.5,
+      "end": 6.75,
+      "midi": 59.69,
+      "voiced": 10
+    },
+    {
+      "start": 6.75,
+      "end": 7.0,
+      "midi": null,
+      "voiced": 0
+    },
+    {
+      "start": 7.0,
+      "end": 7.25,
+      "midi": 60.06,
+      "voiced": 11
+    },
+    {
+      "start": 7.25,
+      "end": 7.5,
+      "midi": 54.88,
+      "voiced": 12
+    },
+    {
+      "start": 7.5,
+      "end": 7.75,
+      "midi": 59.07,
+      "voiced": 12
+    },
+    {
+      "start": 7.75,
+      "end": 8.0,
+      "midi": 54.97,
+      "voiced": 12
+    },
+    {
+      "start": 8.0,
+      "end": 8.2,
+      "midi": 54.96,
+      "voiced": 10
+    }
+  ],
+  "new_stabilized_bins": [
+    {
+      "start": 5.5,
+      "end": 5.75,
+      "midi": 68.78,
+      "voiced": 13
+    },
+    {
+      "start": 5.75,
+      "end": 6.0,
+      "midi": 53.63,
+      "voiced": 9
+    },
+    {
+      "start": 6.0,
+      "end": 6.25,
+      "midi": 55.06,
+      "voiced": 13
+    },
+    {
+      "start": 6.25,
+      "end": 6.5,
+      "midi": 55.13,
+      "voiced": 12
+    },
+    {
+      "start": 6.5,
+      "end": 6.75,
+      "midi": 55.88,
+      "voiced": 10
+    },
+    {
+      "start": 6.75,
+      "end": 7.0,
+      "midi": null,
+      "voiced": 0
+    },
+    {
+      "start": 7.0,
+      "end": 7.25,
+      "midi": 54.87,
+      "voiced": 11
+    },
+    {
+      "start": 7.25,
+      "end": 7.5,
+      "midi": 54.88,
+      "voiced": 12
+    },
+    {
+      "start": 7.5,
+      "end": 7.75,
+      "midi": 55.08,
+      "voiced": 13
+    },
+    {
+      "start": 7.75,
+      "end": 8.0,
+      "midi": 54.97,
+      "voiced": 12
+    },
+    {
+      "start": 8.0,
+      "end": 8.2,
+      "midi": 54.96,
+      "voiced": 10
+    }
+  ],
+  "old_acoustic_region": [
+    {
+      "start": 5.57,
+      "end": 5.68,
+      "midi": 51
+    },
+    {
+      "start": 5.68,
+      "end": 5.85,
+      "midi": 53
+    },
+    {
+      "start": 5.97,
+      "end": 7.01,
+      "midi": 55
+    },
+    {
+      "start": 7.12,
+      "end": 7.52,
+      "midi": 55
+    },
+    {
+      "start": 7.55,
+      "end": 8.11,
+      "midi": 55
+    },
+    {
+      "start": 8.11,
+      "end": 8.44,
+      "midi": 55
+    }
+  ],
+  "new_acoustic_region": [
+    {
+      "start": 4.68,
+      "end": 5.699999999999999,
+      "midi": 75
+    },
+    {
+      "start": 5.7,
+      "end": 5.880000000000001,
+      "midi": 53
+    },
+    {
+      "start": 5.94,
+      "end": 6.699999999999999,
+      "midi": 55
+    },
+    {
+      "start": 7.04,
+      "end": 8.44,
+      "midi": 55
+    }
+  ],
+  "counts": {
+    "old_acoustic": 359,
+    "new_acoustic": 206,
+    "old_game": 359,
+    "new_game": 206,
+    "new_nonpositive_acoustic": 0,
+    "new_nonpositive_game": 0
+  },
+  "lyrics": {
+    "old_count": 186,
+    "current_count": 186,
+    "changed_starts": 0,
+    "changed_ends": 0,
+    "max_start_shift": 0.0,
+    "max_end_shift": 0.0
+  }
+}

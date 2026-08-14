@@ -4,7 +4,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-ModelKind = Literal["snapshot", "file"]
+ModelKind = Literal["snapshot", "file", "bundle"]
+
+
+@dataclass(frozen=True, slots=True)
+class ModelFile:
+    relative_path: str
+    url: str
+    sha256: str
+    expected_bytes: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,6 +28,7 @@ class ModelSpec:
     sha256: str | None = None
     ignore_patterns: tuple[str, ...] = ()
     expected_bytes: int = 0
+    files: tuple[ModelFile, ...] = ()
 
     @property
     def local_name(self) -> str:
@@ -78,6 +87,42 @@ MODELS: tuple[ModelSpec, ...] = (
         filename="MelBandRoformer.ckpt",
         sha256="87201f4d31afb5bc79993230fc49446918425574db48c01c405e44f365c7559e",
         expected_bytes=913_106_900,
+    ),
+    ModelSpec(
+        key="omnizart_patch_cnn",
+        name="Omnizart Patch-CNN Vocal Melody",
+        repo_id="Music-and-Culture-Technology-Lab/omnizart",
+        revision="bcd8cb44d4da66ce87df10b6abee5c35a8cc2886",
+        relative_path="omnizart/patch_cnn_melody",
+        env_var="KARAOKE_AI_OMNIZART_MODEL",
+        kind="bundle",
+        expected_bytes=868_365,
+        files=(
+            ModelFile(
+                "configurations.yaml",
+                "https://raw.githubusercontent.com/Music-and-Culture-Technology-Lab/omnizart/bcd8cb44d4da66ce87df10b6abee5c35a8cc2886/omnizart/checkpoints/patch_cnn/patch_cnn_melody/configurations.yaml",
+                "fe22d8c706657420280803480b931a5cf30f91008b3f2da9c44e8deb8744a7ab",
+                4_387,
+            ),
+            ModelFile(
+                "saved_model.pb",
+                "https://raw.githubusercontent.com/Music-and-Culture-Technology-Lab/omnizart/bcd8cb44d4da66ce87df10b6abee5c35a8cc2886/omnizart/checkpoints/patch_cnn/patch_cnn_melody/saved_model.pb",
+                "78a90299f4b24484dbf4638df16f4bc25af3f2f2b36d37b5197f7de72525f720",
+                155_120,
+            ),
+            ModelFile(
+                "variables/variables.index",
+                "https://raw.githubusercontent.com/Music-and-Culture-Technology-Lab/omnizart/bcd8cb44d4da66ce87df10b6abee5c35a8cc2886/omnizart/checkpoints/patch_cnn/patch_cnn_melody/variables/variables.index",
+                "8d8eb8b6726e36c530917a5daaa771d42a8efe378b6fa84f6f048fdd986a0ac7",
+                760,
+            ),
+            ModelFile(
+                "variables/variables.data-00000-of-00001",
+                "https://github.com/Music-and-Culture-Technology-Lab/omnizart/releases/download/checkpoints-20211001/patch_cnn_melody@variables.data-00000-of-00001",
+                "bbbd11fc0b60a5f3986c39f7bb3985205d719031f70f916edc560f8b4d01b51a",
+                708_098,
+            ),
+        ),
     ),
 )
 

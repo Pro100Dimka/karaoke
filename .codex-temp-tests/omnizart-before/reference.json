@@ -1,0 +1,4548 @@
+{
+  "notes": [
+    {
+      "cents": [],
+      "end": 5.68,
+      "midi_note": 51,
+      "start": 5.57,
+      "syllable_index": 0,
+      "syllable_indices": [
+        0
+      ],
+      "velocity": 100,
+      "word_index": 0
+    },
+    {
+      "cents": [],
+      "end": 5.85,
+      "midi_note": 53,
+      "start": 5.68,
+      "syllable_index": 0,
+      "syllable_indices": [
+        0
+      ],
+      "velocity": 93,
+      "word_index": 0
+    },
+    {
+      "cents": [],
+      "end": 7.01,
+      "midi_note": 55,
+      "start": 5.97,
+      "syllable_index": 1,
+      "syllable_indices": [
+        1
+      ],
+      "velocity": 106,
+      "word_index": 0
+    },
+    {
+      "cents": [],
+      "end": 7.52,
+      "midi_note": 55,
+      "start": 7.12,
+      "syllable_index": 6,
+      "syllable_indices": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "velocity": 107,
+      "word_index": 2
+    },
+    {
+      "cents": [],
+      "end": 8.11,
+      "midi_note": 55,
+      "start": 7.55,
+      "syllable_index": 16,
+      "syllable_indices": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ],
+      "velocity": 106,
+      "word_index": 6
+    },
+    {
+      "cents": [],
+      "end": 8.44,
+      "midi_note": 55,
+      "start": 8.11,
+      "syllable_index": 18,
+      "syllable_indices": [
+        17,
+        18
+      ],
+      "velocity": 105,
+      "word_index": 8
+    },
+    {
+      "cents": [],
+      "end": 8.62,
+      "midi_note": 54,
+      "start": 8.55,
+      "syllable_index": 18,
+      "syllable_indices": [
+        18,
+        19
+      ],
+      "velocity": 102,
+      "word_index": 8
+    },
+    {
+      "cents": [],
+      "end": 9.17,
+      "midi_note": 55,
+      "start": 8.620000000000001,
+      "syllable_index": 19,
+      "syllable_indices": [
+        19,
+        20
+      ],
+      "velocity": 110,
+      "word_index": 8
+    },
+    {
+      "cents": [],
+      "end": 9.66,
+      "midi_note": 55,
+      "start": 9.17,
+      "syllable_index": 20,
+      "syllable_indices": [
+        20,
+        21
+      ],
+      "velocity": 109,
+      "word_index": 9
+    },
+    {
+      "cents": [],
+      "end": 10.13,
+      "midi_note": 56,
+      "start": 9.66,
+      "syllable_index": 22,
+      "syllable_indices": [
+        21,
+        22
+      ],
+      "velocity": 105,
+      "word_index": 9
+    },
+    {
+      "cents": [],
+      "end": 10.5,
+      "midi_note": 55,
+      "start": 10.24,
+      "syllable_index": 23,
+      "syllable_indices": [
+        22,
+        23
+      ],
+      "velocity": 100,
+      "word_index": 9
+    },
+    {
+      "cents": [],
+      "end": 12.45,
+      "midi_note": 56,
+      "start": 10.59,
+      "syllable_index": 27,
+      "syllable_indices": [
+        23,
+        24,
+        25,
+        26,
+        27
+      ],
+      "velocity": 107,
+      "word_index": 11
+    },
+    {
+      "cents": [],
+      "end": 13.47,
+      "midi_note": 56,
+      "start": 12.47,
+      "syllable_index": 28,
+      "syllable_indices": [
+        28
+      ],
+      "velocity": 103,
+      "word_index": 11
+    },
+    {
+      "cents": [],
+      "end": 13.66,
+      "midi_note": 55,
+      "start": 13.57,
+      "syllable_index": 29,
+      "syllable_indices": [
+        29
+      ],
+      "velocity": 98,
+      "word_index": 11
+    },
+    {
+      "cents": [],
+      "end": 13.92,
+      "midi_note": 52,
+      "start": 13.71,
+      "syllable_index": 29,
+      "syllable_indices": [
+        29
+      ],
+      "velocity": 103,
+      "word_index": 11
+    },
+    {
+      "cents": [],
+      "end": 14.72,
+      "midi_note": 56,
+      "start": 13.92,
+      "syllable_index": 31,
+      "syllable_indices": [
+        29,
+        30,
+        31,
+        32
+      ],
+      "velocity": 109,
+      "word_index": 12
+    },
+    {
+      "cents": [],
+      "end": 15.74,
+      "midi_note": 56,
+      "start": 14.74,
+      "syllable_index": 34,
+      "syllable_indices": [
+        32,
+        33,
+        34,
+        35,
+        36
+      ],
+      "velocity": 106,
+      "word_index": 13
+    },
+    {
+      "cents": [],
+      "end": 16.090000000000003,
+      "midi_note": 56,
+      "start": 15.76,
+      "syllable_index": 37,
+      "syllable_indices": [
+        36,
+        37
+      ],
+      "velocity": 109,
+      "word_index": 14
+    },
+    {
+      "cents": [],
+      "end": 16.500000000000004,
+      "midi_note": 55,
+      "start": 16.090000000000003,
+      "syllable_index": 38,
+      "syllable_indices": [
+        37,
+        38
+      ],
+      "velocity": 109,
+      "word_index": 14
+    },
+    {
+      "cents": [],
+      "end": 16.94,
+      "midi_note": 55,
+      "start": 16.88,
+      "syllable_index": 39,
+      "syllable_indices": [
+        39
+      ],
+      "velocity": 98,
+      "word_index": 15
+    },
+    {
+      "cents": [],
+      "end": 17.08,
+      "midi_note": 55,
+      "start": 16.990000000000002,
+      "syllable_index": 39,
+      "syllable_indices": [
+        39
+      ],
+      "velocity": 97,
+      "word_index": 15
+    },
+    {
+      "cents": [],
+      "end": 17.48,
+      "midi_note": 55,
+      "start": 17.19,
+      "syllable_index": 41,
+      "syllable_indices": [
+        40,
+        41
+      ],
+      "velocity": 106,
+      "word_index": 16
+    },
+    {
+      "cents": [],
+      "end": 17.94,
+      "midi_note": 53,
+      "start": 17.59,
+      "syllable_index": 42,
+      "syllable_indices": [
+        42
+      ],
+      "velocity": 108,
+      "word_index": 17
+    },
+    {
+      "cents": [],
+      "end": 18.630000000000003,
+      "midi_note": 55,
+      "start": 18.2,
+      "syllable_index": 44,
+      "syllable_indices": [
+        44
+      ],
+      "velocity": 105,
+      "word_index": 18
+    },
+    {
+      "cents": [],
+      "end": 18.900000000000002,
+      "midi_note": 76,
+      "start": 18.67,
+      "syllable_index": 44,
+      "syllable_indices": [
+        44
+      ],
+      "velocity": 91,
+      "word_index": 18
+    },
+    {
+      "cents": [],
+      "end": 19.060000000000002,
+      "midi_note": 53,
+      "start": 18.900000000000002,
+      "syllable_index": 44,
+      "syllable_indices": [
+        44
+      ],
+      "velocity": 105,
+      "word_index": 18
+    },
+    {
+      "cents": [],
+      "end": 19.54,
+      "midi_note": 55,
+      "start": 19.060000000000002,
+      "syllable_index": 45,
+      "syllable_indices": [
+        45
+      ],
+      "velocity": 110,
+      "word_index": 19
+    },
+    {
+      "cents": [],
+      "end": 19.750000000000004,
+      "midi_note": 53,
+      "start": 19.54,
+      "syllable_index": 45,
+      "syllable_indices": [
+        45
+      ],
+      "velocity": 102,
+      "word_index": 19
+    },
+    {
+      "cents": [],
+      "end": 19.880000000000003,
+      "midi_note": 55,
+      "start": 19.78,
+      "syllable_index": 45,
+      "syllable_indices": [
+        45
+      ],
+      "velocity": 98,
+      "word_index": 19
+    },
+    {
+      "cents": [],
+      "end": 19.970000000000002,
+      "midi_note": 55,
+      "start": 19.880000000000003,
+      "syllable_index": 45,
+      "syllable_indices": [
+        45
+      ],
+      "velocity": 95,
+      "word_index": 19
+    },
+    {
+      "cents": [],
+      "end": 21.200000000000003,
+      "midi_note": 55,
+      "start": 20.12,
+      "syllable_index": 47,
+      "syllable_indices": [
+        46,
+        47,
+        48,
+        49
+      ],
+      "velocity": 106,
+      "word_index": 20
+    },
+    {
+      "cents": [],
+      "end": 21.680000000000003,
+      "midi_note": 55,
+      "start": 21.31,
+      "syllable_index": 52,
+      "syllable_indices": [
+        50,
+        51,
+        52,
+        53
+      ],
+      "velocity": 108,
+      "word_index": 24
+    },
+    {
+      "cents": [],
+      "end": 21.880000000000003,
+      "midi_note": 55,
+      "start": 21.7,
+      "syllable_index": 53,
+      "syllable_indices": [
+        53,
+        54
+      ],
+      "velocity": 105,
+      "word_index": 24
+    },
+    {
+      "cents": [],
+      "end": 22.05,
+      "midi_note": 55,
+      "start": 21.93,
+      "syllable_index": 54,
+      "syllable_indices": [
+        54
+      ],
+      "velocity": 102,
+      "word_index": 24
+    },
+    {
+      "cents": [],
+      "end": 22.560000000000002,
+      "midi_note": 55,
+      "start": 22.12,
+      "syllable_index": 55,
+      "syllable_indices": [
+        55,
+        56
+      ],
+      "velocity": 109,
+      "word_index": 25
+    },
+    {
+      "cents": [],
+      "end": 23.020000000000003,
+      "midi_note": 56,
+      "start": 22.560000000000002,
+      "syllable_index": 57,
+      "syllable_indices": [
+        56,
+        57
+      ],
+      "velocity": 108,
+      "word_index": 25
+    },
+    {
+      "cents": [],
+      "end": 23.750000000000004,
+      "midi_note": 56,
+      "start": 23.39,
+      "syllable_index": 58,
+      "syllable_indices": [
+        58,
+        59
+      ],
+      "velocity": 103,
+      "word_index": 26
+    },
+    {
+      "cents": [],
+      "end": 24.750000000000004,
+      "midi_note": 56,
+      "start": 23.78,
+      "syllable_index": 59,
+      "syllable_indices": [
+        59,
+        60,
+        61,
+        62
+      ],
+      "velocity": 107,
+      "word_index": 26
+    },
+    {
+      "cents": [],
+      "end": 25.180000000000003,
+      "midi_note": 56,
+      "start": 24.86,
+      "syllable_index": 63,
+      "syllable_indices": [
+        63,
+        64,
+        65
+      ],
+      "velocity": 108,
+      "word_index": 28
+    },
+    {
+      "cents": [],
+      "end": 25.630000000000003,
+      "midi_note": 56,
+      "start": 25.28,
+      "syllable_index": 66,
+      "syllable_indices": [
+        65,
+        66
+      ],
+      "velocity": 108,
+      "word_index": 28
+    },
+    {
+      "cents": [],
+      "end": 28.03,
+      "midi_note": 56,
+      "start": 27.29,
+      "syllable_index": 68,
+      "syllable_indices": [
+        67,
+        68,
+        69,
+        70
+      ],
+      "velocity": 108,
+      "word_index": 30
+    },
+    {
+      "cents": [],
+      "end": 28.29,
+      "midi_note": 54,
+      "start": 28.080000000000002,
+      "syllable_index": 71,
+      "syllable_indices": [
+        70,
+        71,
+        72
+      ],
+      "velocity": 105,
+      "word_index": 32
+    },
+    {
+      "cents": [],
+      "end": 28.860000000000003,
+      "midi_note": 56,
+      "start": 28.29,
+      "syllable_index": 73,
+      "syllable_indices": [
+        72,
+        73,
+        74
+      ],
+      "velocity": 108,
+      "word_index": 32
+    },
+    {
+      "cents": [],
+      "end": 29.5,
+      "midi_note": 55,
+      "start": 28.91,
+      "syllable_index": 76,
+      "syllable_indices": [
+        75,
+        76,
+        77
+      ],
+      "velocity": 109,
+      "word_index": 34
+    },
+    {
+      "cents": [],
+      "end": 29.630000000000003,
+      "midi_note": 54,
+      "start": 29.5,
+      "syllable_index": 77,
+      "syllable_indices": [
+        77
+      ],
+      "velocity": 110,
+      "word_index": 34
+    },
+    {
+      "cents": [],
+      "end": 29.85,
+      "midi_note": 53,
+      "start": 29.630000000000003,
+      "syllable_index": 77,
+      "syllable_indices": [
+        77
+      ],
+      "velocity": 103,
+      "word_index": 34
+    },
+    {
+      "cents": [],
+      "end": 30.520000000000003,
+      "midi_note": 55,
+      "start": 29.97,
+      "syllable_index": 79,
+      "syllable_indices": [
+        78,
+        79
+      ],
+      "velocity": 103,
+      "word_index": 34
+    },
+    {
+      "cents": [],
+      "end": 30.750000000000004,
+      "midi_note": 55,
+      "start": 30.54,
+      "syllable_index": 80,
+      "syllable_indices": [
+        80,
+        81
+      ],
+      "velocity": 106,
+      "word_index": 35
+    },
+    {
+      "cents": [],
+      "end": 31.17,
+      "midi_note": 53,
+      "start": 30.78,
+      "syllable_index": 81,
+      "syllable_indices": [
+        81
+      ],
+      "velocity": 104,
+      "word_index": 35
+    },
+    {
+      "cents": [],
+      "end": 31.330000000000002,
+      "midi_note": 52,
+      "start": 31.17,
+      "syllable_index": null,
+      "syllable_indices": [],
+      "velocity": 98,
+      "word_index": null
+    },
+    {
+      "cents": [],
+      "end": 31.810000000000002,
+      "midi_note": 55,
+      "start": 31.35,
+      "syllable_index": 82,
+      "syllable_indices": [
+        82
+      ],
+      "velocity": 107,
+      "word_index": 36
+    },
+    {
+      "cents": [],
+      "end": 31.930000000000003,
+      "midi_note": 64,
+      "start": 31.87,
+      "syllable_index": 82,
+      "syllable_indices": [
+        82
+      ],
+      "velocity": 84,
+      "word_index": 36
+    },
+    {
+      "cents": [],
+      "end": 32.19,
+      "midi_note": 62,
+      "start": 31.970000000000002,
+      "syllable_index": 82,
+      "syllable_indices": [
+        82
+      ],
+      "velocity": 98,
+      "word_index": 36
+    },
+    {
+      "cents": [],
+      "end": 32.629999999999995,
+      "midi_note": 63,
+      "start": 32.2,
+      "syllable_index": 83,
+      "syllable_indices": [
+        83
+      ],
+      "velocity": 108,
+      "word_index": 36
+    },
+    {
+      "cents": [],
+      "end": 32.9,
+      "midi_note": 50,
+      "start": 32.63,
+      "syllable_index": 83,
+      "syllable_indices": [
+        83,
+        84
+      ],
+      "velocity": 98,
+      "word_index": 36
+    },
+    {
+      "cents": [],
+      "end": 33.36,
+      "midi_note": 75,
+      "start": 32.980000000000004,
+      "syllable_index": 84,
+      "syllable_indices": [
+        84
+      ],
+      "velocity": 102,
+      "word_index": 36
+    },
+    {
+      "cents": [],
+      "end": 33.47,
+      "midi_note": 64,
+      "start": 33.4,
+      "syllable_index": 85,
+      "syllable_indices": [
+        85
+      ],
+      "velocity": 101,
+      "word_index": 36
+    },
+    {
+      "cents": [],
+      "end": 33.82,
+      "midi_note": 63,
+      "start": 33.47,
+      "syllable_index": 85,
+      "syllable_indices": [
+        85
+      ],
+      "velocity": 103,
+      "word_index": 36
+    },
+    {
+      "cents": [],
+      "end": 34.01,
+      "midi_note": 63,
+      "start": 33.82,
+      "syllable_index": 86,
+      "syllable_indices": [
+        85,
+        86
+      ],
+      "velocity": 95,
+      "word_index": 36
+    },
+    {
+      "cents": [],
+      "end": 34.22,
+      "midi_note": 65,
+      "start": 34.01,
+      "syllable_index": 86,
+      "syllable_indices": [
+        86
+      ],
+      "velocity": 100,
+      "word_index": 36
+    },
+    {
+      "cents": [],
+      "end": 34.4,
+      "midi_note": 63,
+      "start": 34.28,
+      "syllable_index": 86,
+      "syllable_indices": [
+        86
+      ],
+      "velocity": 98,
+      "word_index": 36
+    },
+    {
+      "cents": [],
+      "end": 34.62,
+      "midi_note": 65,
+      "start": 34.410000000000004,
+      "syllable_index": 86,
+      "syllable_indices": [
+        86
+      ],
+      "velocity": 100,
+      "word_index": 36
+    },
+    {
+      "cents": [],
+      "end": 37.04,
+      "midi_note": 63,
+      "start": 36.24,
+      "syllable_index": 87,
+      "syllable_indices": [
+        87
+      ],
+      "velocity": 98,
+      "word_index": 37
+    },
+    {
+      "cents": [],
+      "end": 37.35,
+      "midi_note": 63,
+      "start": 37.1,
+      "syllable_index": 87,
+      "syllable_indices": [
+        87
+      ],
+      "velocity": 105,
+      "word_index": 37
+    },
+    {
+      "cents": [],
+      "end": 37.89,
+      "midi_note": 65,
+      "start": 37.74,
+      "syllable_index": null,
+      "syllable_indices": [],
+      "velocity": 108,
+      "word_index": null
+    },
+    {
+      "cents": [],
+      "end": 38.14,
+      "midi_note": 63,
+      "start": 37.89,
+      "syllable_index": 90,
+      "syllable_indices": [
+        88,
+        89,
+        90
+      ],
+      "velocity": 101,
+      "word_index": 39
+    },
+    {
+      "cents": [],
+      "end": 38.48,
+      "midi_note": 53,
+      "start": 38.14,
+      "syllable_index": 91,
+      "syllable_indices": [
+        90,
+        91,
+        92
+      ],
+      "velocity": 104,
+      "word_index": 39
+    },
+    {
+      "cents": [],
+      "end": 38.68,
+      "midi_note": 62,
+      "start": 38.54,
+      "syllable_index": 93,
+      "syllable_indices": [
+        93
+      ],
+      "velocity": 98,
+      "word_index": 40
+    },
+    {
+      "cents": [],
+      "end": 38.94,
+      "midi_note": 51,
+      "start": 38.76,
+      "syllable_index": 94,
+      "syllable_indices": [
+        94
+      ],
+      "velocity": 98,
+      "word_index": 40
+    },
+    {
+      "cents": [],
+      "end": 40.35,
+      "midi_note": 68,
+      "start": 39.54,
+      "syllable_index": 95,
+      "syllable_indices": [
+        95
+      ],
+      "velocity": 95,
+      "word_index": 41
+    },
+    {
+      "cents": [],
+      "end": 40.64,
+      "midi_note": 67,
+      "start": 40.39,
+      "syllable_index": 96,
+      "syllable_indices": [
+        96
+      ],
+      "velocity": 104,
+      "word_index": 41
+    },
+    {
+      "cents": [],
+      "end": 40.83,
+      "midi_note": 68,
+      "start": 40.64,
+      "syllable_index": 96,
+      "syllable_indices": [
+        96,
+        97
+      ],
+      "velocity": 104,
+      "word_index": 41
+    },
+    {
+      "cents": [],
+      "end": 41.019999999999996,
+      "midi_note": 67,
+      "start": 40.83,
+      "syllable_index": 97,
+      "syllable_indices": [
+        97
+      ],
+      "velocity": 106,
+      "word_index": 42
+    },
+    {
+      "cents": [],
+      "end": 41.41,
+      "midi_note": 55,
+      "start": 41.02,
+      "syllable_index": 98,
+      "syllable_indices": [
+        97,
+        98
+      ],
+      "velocity": 103,
+      "word_index": 42
+    },
+    {
+      "cents": [],
+      "end": 41.81,
+      "midi_note": 56,
+      "start": 41.410000000000004,
+      "syllable_index": 99,
+      "syllable_indices": [
+        98,
+        99
+      ],
+      "velocity": 101,
+      "word_index": 42
+    },
+    {
+      "cents": [],
+      "end": 41.99,
+      "midi_note": 68,
+      "start": 41.81,
+      "syllable_index": 100,
+      "syllable_indices": [
+        100,
+        101
+      ],
+      "velocity": 96,
+      "word_index": 43
+    },
+    {
+      "cents": [],
+      "end": 42.269999999999996,
+      "midi_note": 67,
+      "start": 42.050000000000004,
+      "syllable_index": 102,
+      "syllable_indices": [
+        101,
+        102
+      ],
+      "velocity": 103,
+      "word_index": 44
+    },
+    {
+      "cents": [],
+      "end": 43.26,
+      "midi_note": 72,
+      "start": 42.61,
+      "syllable_index": null,
+      "syllable_indices": [],
+      "velocity": 95,
+      "word_index": null
+    },
+    {
+      "cents": [],
+      "end": 43.37,
+      "midi_note": 60,
+      "start": 43.26,
+      "syllable_index": 103,
+      "syllable_indices": [
+        103
+      ],
+      "velocity": 99,
+      "word_index": 45
+    },
+    {
+      "cents": [],
+      "end": 43.69,
+      "midi_note": 62,
+      "start": 43.37,
+      "syllable_index": 103,
+      "syllable_indices": [
+        103
+      ],
+      "velocity": 96,
+      "word_index": 45
+    },
+    {
+      "cents": [],
+      "end": 43.98,
+      "midi_note": 53,
+      "start": 43.9,
+      "syllable_index": 104,
+      "syllable_indices": [
+        104
+      ],
+      "velocity": 87,
+      "word_index": 46
+    },
+    {
+      "cents": [],
+      "end": 44.449999999999996,
+      "midi_note": 62,
+      "start": 43.980000000000004,
+      "syllable_index": 104,
+      "syllable_indices": [
+        104,
+        105,
+        106
+      ],
+      "velocity": 98,
+      "word_index": 46
+    },
+    {
+      "cents": [],
+      "end": 44.61,
+      "midi_note": 64,
+      "start": 44.45,
+      "syllable_index": 106,
+      "syllable_indices": [
+        106
+      ],
+      "velocity": 92,
+      "word_index": 46
+    },
+    {
+      "cents": [],
+      "end": 44.98,
+      "midi_note": 65,
+      "start": 44.61,
+      "syllable_index": 107,
+      "syllable_indices": [
+        106,
+        107
+      ],
+      "velocity": 101,
+      "word_index": 46
+    },
+    {
+      "cents": [],
+      "end": 45.089999999999996,
+      "midi_note": 69,
+      "start": 44.980000000000004,
+      "syllable_index": 108,
+      "syllable_indices": [
+        108
+      ],
+      "velocity": 97,
+      "word_index": 47
+    },
+    {
+      "cents": [],
+      "end": 45.65,
+      "midi_note": 63,
+      "start": 45.09,
+      "syllable_index": 110,
+      "syllable_indices": [
+        108,
+        109,
+        110
+      ],
+      "velocity": 107,
+      "word_index": 47
+    },
+    {
+      "cents": [],
+      "end": 46.56,
+      "midi_note": 53,
+      "start": 46.46,
+      "syllable_index": 111,
+      "syllable_indices": [
+        111
+      ],
+      "velocity": 96,
+      "word_index": 48
+    },
+    {
+      "cents": [],
+      "end": 46.72,
+      "midi_note": 52,
+      "start": 46.56,
+      "syllable_index": 112,
+      "syllable_indices": [
+        111,
+        112
+      ],
+      "velocity": 95,
+      "word_index": 49
+    },
+    {
+      "cents": [],
+      "end": 47.07,
+      "midi_note": 51,
+      "start": 46.800000000000004,
+      "syllable_index": 114,
+      "syllable_indices": [
+        113,
+        114,
+        115
+      ],
+      "velocity": 102,
+      "word_index": 50
+    },
+    {
+      "cents": [],
+      "end": 47.199999999999996,
+      "midi_note": 58,
+      "start": 47.12,
+      "syllable_index": 116,
+      "syllable_indices": [
+        116
+      ],
+      "velocity": 85,
+      "word_index": 52
+    },
+    {
+      "cents": [],
+      "end": 47.36,
+      "midi_note": 65,
+      "start": 47.2,
+      "syllable_index": 116,
+      "syllable_indices": [
+        116
+      ],
+      "velocity": 106,
+      "word_index": 52
+    },
+    {
+      "cents": [],
+      "end": 47.519999999999996,
+      "midi_note": 63,
+      "start": 47.37,
+      "syllable_index": 117,
+      "syllable_indices": [
+        116,
+        117
+      ],
+      "velocity": 103,
+      "word_index": 52
+    },
+    {
+      "cents": [],
+      "end": 47.589999999999996,
+      "midi_note": 60,
+      "start": 47.52,
+      "syllable_index": 117,
+      "syllable_indices": [
+        117
+      ],
+      "velocity": 100,
+      "word_index": 52
+    },
+    {
+      "cents": [],
+      "end": 47.75,
+      "midi_note": 65,
+      "start": 47.6,
+      "syllable_index": 118,
+      "syllable_indices": [
+        118
+      ],
+      "velocity": 98,
+      "word_index": 52
+    },
+    {
+      "cents": [],
+      "end": 47.93,
+      "midi_note": 63,
+      "start": 47.75,
+      "syllable_index": 119,
+      "syllable_indices": [
+        118,
+        119
+      ],
+      "velocity": 97,
+      "word_index": 52
+    },
+    {
+      "cents": [],
+      "end": 48.07,
+      "midi_note": 67,
+      "start": 48.0,
+      "syllable_index": 119,
+      "syllable_indices": [
+        119
+      ],
+      "velocity": 101,
+      "word_index": 52
+    },
+    {
+      "cents": [],
+      "end": 48.22,
+      "midi_note": 65,
+      "start": 48.07,
+      "syllable_index": 120,
+      "syllable_indices": [
+        120
+      ],
+      "velocity": 105,
+      "word_index": 53
+    },
+    {
+      "cents": [],
+      "end": 48.65,
+      "midi_note": 62,
+      "start": 48.22,
+      "syllable_index": 121,
+      "syllable_indices": [
+        120,
+        121,
+        122
+      ],
+      "velocity": 103,
+      "word_index": 53
+    },
+    {
+      "cents": [],
+      "end": 48.82,
+      "midi_note": 55,
+      "start": 48.65,
+      "syllable_index": 123,
+      "syllable_indices": [
+        123
+      ],
+      "velocity": 106,
+      "word_index": 54
+    },
+    {
+      "cents": [],
+      "end": 48.97,
+      "midi_note": 62,
+      "start": 48.86,
+      "syllable_index": 123,
+      "syllable_indices": [
+        123
+      ],
+      "velocity": 100,
+      "word_index": 54
+    },
+    {
+      "cents": [],
+      "end": 50.06,
+      "midi_note": 63,
+      "start": 49.39,
+      "syllable_index": 124,
+      "syllable_indices": [
+        124,
+        125
+      ],
+      "velocity": 98,
+      "word_index": 55
+    },
+    {
+      "cents": [],
+      "end": 50.47,
+      "midi_note": 63,
+      "start": 50.06,
+      "syllable_index": 126,
+      "syllable_indices": [
+        125,
+        126
+      ],
+      "velocity": 101,
+      "word_index": 56
+    },
+    {
+      "cents": [],
+      "end": 50.68,
+      "midi_note": 65,
+      "start": 50.47,
+      "syllable_index": 126,
+      "syllable_indices": [
+        126
+      ],
+      "velocity": 94,
+      "word_index": 56
+    },
+    {
+      "cents": [],
+      "end": 51.199999999999996,
+      "midi_note": 63,
+      "start": 50.68,
+      "syllable_index": 126,
+      "syllable_indices": [
+        126
+      ],
+      "velocity": 101,
+      "word_index": 56
+    },
+    {
+      "cents": [],
+      "end": 51.37,
+      "midi_note": 67,
+      "start": 51.27,
+      "syllable_index": 127,
+      "syllable_indices": [
+        127
+      ],
+      "velocity": 99,
+      "word_index": 57
+    },
+    {
+      "cents": [],
+      "end": 51.47,
+      "midi_note": 65,
+      "start": 51.370000000000005,
+      "syllable_index": 127,
+      "syllable_indices": [
+        127
+      ],
+      "velocity": 97,
+      "word_index": 57
+    },
+    {
+      "cents": [],
+      "end": 51.62,
+      "midi_note": 63,
+      "start": 51.480000000000004,
+      "syllable_index": 127,
+      "syllable_indices": [
+        127
+      ],
+      "velocity": 95,
+      "word_index": 57
+    },
+    {
+      "cents": [],
+      "end": 52.03,
+      "midi_note": 63,
+      "start": 51.68,
+      "syllable_index": 128,
+      "syllable_indices": [
+        128
+      ],
+      "velocity": 98,
+      "word_index": 57
+    },
+    {
+      "cents": [],
+      "end": 52.26,
+      "midi_note": 66,
+      "start": 52.1,
+      "syllable_index": 129,
+      "syllable_indices": [
+        129
+      ],
+      "velocity": 91,
+      "word_index": 58
+    },
+    {
+      "cents": [],
+      "end": 53.10000000000001,
+      "midi_note": 64,
+      "start": 53.04,
+      "syllable_index": null,
+      "syllable_indices": [],
+      "velocity": 88,
+      "word_index": null
+    },
+    {
+      "cents": [],
+      "end": 53.36,
+      "midi_note": 67,
+      "start": 53.17,
+      "syllable_index": 131,
+      "syllable_indices": [
+        130,
+        131
+      ],
+      "velocity": 99,
+      "word_index": 60
+    },
+    {
+      "cents": [],
+      "end": 53.51,
+      "midi_note": 68,
+      "start": 53.36,
+      "syllable_index": 131,
+      "syllable_indices": [
+        131,
+        132
+      ],
+      "velocity": 95,
+      "word_index": 60
+    },
+    {
+      "cents": [],
+      "end": 53.699999999999996,
+      "midi_note": 67,
+      "start": 53.550000000000004,
+      "syllable_index": 133,
+      "syllable_indices": [
+        133
+      ],
+      "velocity": 94,
+      "word_index": 60
+    },
+    {
+      "cents": [],
+      "end": 53.93,
+      "midi_note": 68,
+      "start": 53.76,
+      "syllable_index": 134,
+      "syllable_indices": [
+        134
+      ],
+      "velocity": 91,
+      "word_index": 61
+    },
+    {
+      "cents": [],
+      "end": 54.089999999999996,
+      "midi_note": 67,
+      "start": 53.980000000000004,
+      "syllable_index": 135,
+      "syllable_indices": [
+        135
+      ],
+      "velocity": 91,
+      "word_index": 62
+    },
+    {
+      "cents": [],
+      "end": 54.32,
+      "midi_note": 68,
+      "start": 54.160000000000004,
+      "syllable_index": 137,
+      "syllable_indices": [
+        136,
+        137
+      ],
+      "velocity": 94,
+      "word_index": 62
+    },
+    {
+      "cents": [],
+      "end": 54.62,
+      "midi_note": 55,
+      "start": 54.36,
+      "syllable_index": 138,
+      "syllable_indices": [
+        138
+      ],
+      "velocity": 92,
+      "word_index": 63
+    },
+    {
+      "cents": [],
+      "end": 54.769999999999996,
+      "midi_note": 67,
+      "start": 54.67,
+      "syllable_index": 139,
+      "syllable_indices": [
+        138,
+        139
+      ],
+      "velocity": 93,
+      "word_index": 63
+    },
+    {
+      "cents": [],
+      "end": 54.97,
+      "midi_note": 67,
+      "start": 54.79,
+      "syllable_index": 140,
+      "syllable_indices": [
+        139,
+        140
+      ],
+      "velocity": 96,
+      "word_index": 63
+    },
+    {
+      "cents": [],
+      "end": 55.17,
+      "midi_note": 68,
+      "start": 54.97,
+      "syllable_index": 141,
+      "syllable_indices": [
+        140,
+        141
+      ],
+      "velocity": 97,
+      "word_index": 63
+    },
+    {
+      "cents": [],
+      "end": 55.67,
+      "midi_note": 67,
+      "start": 55.17,
+      "syllable_index": 141,
+      "syllable_indices": [
+        141
+      ],
+      "velocity": 101,
+      "word_index": 63
+    },
+    {
+      "cents": [],
+      "end": 56.61,
+      "midi_note": 61,
+      "start": 56.42,
+      "syllable_index": 142,
+      "syllable_indices": [
+        142
+      ],
+      "velocity": 104,
+      "word_index": 64
+    },
+    {
+      "cents": [],
+      "end": 57.67,
+      "midi_note": 62,
+      "start": 56.61,
+      "syllable_index": 143,
+      "syllable_indices": [
+        142,
+        143,
+        144,
+        145
+      ],
+      "velocity": 105,
+      "word_index": 64
+    },
+    {
+      "cents": [],
+      "end": 57.79,
+      "midi_note": 63,
+      "start": 57.67,
+      "syllable_index": 145,
+      "syllable_indices": [
+        145
+      ],
+      "velocity": 99,
+      "word_index": 66
+    },
+    {
+      "cents": [],
+      "end": 57.94,
+      "midi_note": 65,
+      "start": 57.79,
+      "syllable_index": 145,
+      "syllable_indices": [
+        145
+      ],
+      "velocity": 102,
+      "word_index": 66
+    },
+    {
+      "cents": [],
+      "end": 58.32,
+      "midi_note": 53,
+      "start": 57.94,
+      "syllable_index": 146,
+      "syllable_indices": [
+        145,
+        146,
+        147
+      ],
+      "velocity": 98,
+      "word_index": 66
+    },
+    {
+      "cents": [],
+      "end": 58.53,
+      "midi_note": 53,
+      "start": 58.47,
+      "syllable_index": 147,
+      "syllable_indices": [
+        147
+      ],
+      "velocity": 106,
+      "word_index": 66
+    },
+    {
+      "cents": [],
+      "end": 59.0,
+      "midi_note": 55,
+      "start": 58.53,
+      "syllable_index": 147,
+      "syllable_indices": [
+        147
+      ],
+      "velocity": 108,
+      "word_index": 66
+    },
+    {
+      "cents": [],
+      "end": 59.589999999999996,
+      "midi_note": 55,
+      "start": 59.31,
+      "syllable_index": 148,
+      "syllable_indices": [
+        148
+      ],
+      "velocity": 93,
+      "word_index": 67
+    },
+    {
+      "cents": [],
+      "end": 60.269999999999996,
+      "midi_note": 55,
+      "start": 59.7,
+      "syllable_index": 150,
+      "syllable_indices": [
+        149,
+        150,
+        151,
+        152,
+        153,
+        154
+      ],
+      "velocity": 108,
+      "word_index": 68
+    },
+    {
+      "cents": [],
+      "end": 60.74,
+      "midi_note": 55,
+      "start": 60.31,
+      "syllable_index": 156,
+      "syllable_indices": [
+        154,
+        155,
+        156,
+        157,
+        158
+      ],
+      "velocity": 107,
+      "word_index": 70
+    },
+    {
+      "cents": [],
+      "end": 61.08,
+      "midi_note": 55,
+      "start": 60.74,
+      "syllable_index": 158,
+      "syllable_indices": [
+        158,
+        159
+      ],
+      "velocity": 106,
+      "word_index": 72
+    },
+    {
+      "cents": [],
+      "end": 61.53,
+      "midi_note": 55,
+      "start": 61.15,
+      "syllable_index": 160,
+      "syllable_indices": [
+        159,
+        160,
+        161
+      ],
+      "velocity": 106,
+      "word_index": 73
+    },
+    {
+      "cents": [],
+      "end": 61.91,
+      "midi_note": 55,
+      "start": 61.54,
+      "syllable_index": 162,
+      "syllable_indices": [
+        161,
+        162
+      ],
+      "velocity": 109,
+      "word_index": 74
+    },
+    {
+      "cents": [],
+      "end": 62.0,
+      "midi_note": 52,
+      "start": 61.910000000000004,
+      "syllable_index": 162,
+      "syllable_indices": [
+        162
+      ],
+      "velocity": 108,
+      "word_index": 74
+    },
+    {
+      "cents": [],
+      "end": 62.29,
+      "midi_note": 56,
+      "start": 62.0,
+      "syllable_index": 162,
+      "syllable_indices": [
+        162
+      ],
+      "velocity": 108,
+      "word_index": 74
+    },
+    {
+      "cents": [],
+      "end": 62.41,
+      "midi_note": 55,
+      "start": 62.29,
+      "syllable_index": 162,
+      "syllable_indices": [
+        162
+      ],
+      "velocity": 110,
+      "word_index": 74
+    },
+    {
+      "cents": [],
+      "end": 62.6,
+      "midi_note": 52,
+      "start": 62.410000000000004,
+      "syllable_index": 162,
+      "syllable_indices": [
+        162
+      ],
+      "velocity": 95,
+      "word_index": 74
+    },
+    {
+      "cents": [],
+      "end": 62.93,
+      "midi_note": 55,
+      "start": 62.620000000000005,
+      "syllable_index": 162,
+      "syllable_indices": [
+        162
+      ],
+      "velocity": 99,
+      "word_index": 74
+    },
+    {
+      "cents": [],
+      "end": 63.15,
+      "midi_note": 49,
+      "start": 63.03,
+      "syllable_index": 163,
+      "syllable_indices": [
+        163
+      ],
+      "velocity": 92,
+      "word_index": 75
+    },
+    {
+      "cents": [],
+      "end": 63.37,
+      "midi_note": 56,
+      "start": 63.15,
+      "syllable_index": 163,
+      "syllable_indices": [
+        163,
+        164
+      ],
+      "velocity": 104,
+      "word_index": 75
+    },
+    {
+      "cents": [],
+      "end": 63.6,
+      "midi_note": 56,
+      "start": 63.440000000000005,
+      "syllable_index": 165,
+      "syllable_indices": [
+        164,
+        165
+      ],
+      "velocity": 106,
+      "word_index": 75
+    },
+    {
+      "cents": [],
+      "end": 63.98,
+      "midi_note": 56,
+      "start": 63.620000000000005,
+      "syllable_index": 166,
+      "syllable_indices": [
+        165,
+        166
+      ],
+      "velocity": 105,
+      "word_index": 75
+    },
+    {
+      "cents": [],
+      "end": 64.62,
+      "midi_note": 56,
+      "start": 64.06,
+      "syllable_index": 167,
+      "syllable_indices": [
+        167,
+        168
+      ],
+      "velocity": 105,
+      "word_index": 76
+    },
+    {
+      "cents": [],
+      "end": 65.07000000000001,
+      "midi_note": 56,
+      "start": 64.67,
+      "syllable_index": 170,
+      "syllable_indices": [
+        169,
+        170,
+        171
+      ],
+      "velocity": 106,
+      "word_index": 77
+    },
+    {
+      "cents": [],
+      "end": 65.18,
+      "midi_note": 50,
+      "start": 65.12,
+      "syllable_index": 172,
+      "syllable_indices": [
+        172,
+        173
+      ],
+      "velocity": 86,
+      "word_index": 78
+    },
+    {
+      "cents": [],
+      "end": 65.36,
+      "midi_note": 53,
+      "start": 65.23,
+      "syllable_index": 173,
+      "syllable_indices": [
+        173,
+        174
+      ],
+      "velocity": 97,
+      "word_index": 78
+    },
+    {
+      "cents": [],
+      "end": 66.23,
+      "midi_note": 56,
+      "start": 65.36,
+      "syllable_index": 174,
+      "syllable_indices": [
+        174
+      ],
+      "velocity": 108,
+      "word_index": 79
+    },
+    {
+      "cents": [],
+      "end": 67.10000000000001,
+      "midi_note": 56,
+      "start": 66.34,
+      "syllable_index": 175,
+      "syllable_indices": [
+        175,
+        176
+      ],
+      "velocity": 105,
+      "word_index": 80
+    },
+    {
+      "cents": [],
+      "end": 68.06,
+      "midi_note": 56,
+      "start": 67.2,
+      "syllable_index": 178,
+      "syllable_indices": [
+        177,
+        178,
+        179,
+        180
+      ],
+      "velocity": 107,
+      "word_index": 81
+    },
+    {
+      "cents": [],
+      "end": 68.99000000000001,
+      "midi_note": 55,
+      "start": 68.19,
+      "syllable_index": 183,
+      "syllable_indices": [
+        181,
+        182,
+        183
+      ],
+      "velocity": 108,
+      "word_index": 82
+    },
+    {
+      "cents": [],
+      "end": 69.73,
+      "midi_note": 55,
+      "start": 69.29,
+      "syllable_index": 184,
+      "syllable_indices": [
+        184
+      ],
+      "velocity": 98,
+      "word_index": 83
+    },
+    {
+      "cents": [],
+      "end": 70.13000000000001,
+      "midi_note": 55,
+      "start": 69.8,
+      "syllable_index": 184,
+      "syllable_indices": [
+        184
+      ],
+      "velocity": 106,
+      "word_index": 83
+    },
+    {
+      "cents": [],
+      "end": 70.80000000000001,
+      "midi_note": 53,
+      "start": 70.24,
+      "syllable_index": 186,
+      "syllable_indices": [
+        185,
+        186,
+        187
+      ],
+      "velocity": 109,
+      "word_index": 83
+    },
+    {
+      "cents": [],
+      "end": 71.13,
+      "midi_note": 55,
+      "start": 70.80000000000001,
+      "syllable_index": 187,
+      "syllable_indices": [
+        187
+      ],
+      "velocity": 110,
+      "word_index": 84
+    },
+    {
+      "cents": [],
+      "end": 71.37,
+      "midi_note": 53,
+      "start": 71.13,
+      "syllable_index": null,
+      "syllable_indices": [],
+      "velocity": 100,
+      "word_index": null
+    },
+    {
+      "cents": [],
+      "end": 71.55000000000001,
+      "midi_note": 62,
+      "start": 71.46000000000001,
+      "syllable_index": 188,
+      "syllable_indices": [
+        188
+      ],
+      "velocity": 90,
+      "word_index": 85
+    },
+    {
+      "cents": [],
+      "end": 72.09,
+      "midi_note": 63,
+      "start": 71.55000000000001,
+      "syllable_index": 188,
+      "syllable_indices": [
+        188
+      ],
+      "velocity": 98,
+      "word_index": 85
+    },
+    {
+      "cents": [],
+      "end": 72.34,
+      "midi_note": 68,
+      "start": 72.19,
+      "syllable_index": 189,
+      "syllable_indices": [
+        189
+      ],
+      "velocity": 87,
+      "word_index": 85
+    },
+    {
+      "cents": [],
+      "end": 72.53,
+      "midi_note": 64,
+      "start": 72.36,
+      "syllable_index": 189,
+      "syllable_indices": [
+        189
+      ],
+      "velocity": 84,
+      "word_index": 85
+    },
+    {
+      "cents": [],
+      "end": 72.77000000000001,
+      "midi_note": 63,
+      "start": 72.53,
+      "syllable_index": 189,
+      "syllable_indices": [
+        189
+      ],
+      "velocity": 100,
+      "word_index": 85
+    },
+    {
+      "cents": [],
+      "end": 72.95,
+      "midi_note": 65,
+      "start": 72.82000000000001,
+      "syllable_index": 190,
+      "syllable_indices": [
+        190
+      ],
+      "velocity": 92,
+      "word_index": 86
+    },
+    {
+      "cents": [],
+      "end": 73.05000000000001,
+      "midi_note": 58,
+      "start": 72.96000000000001,
+      "syllable_index": 190,
+      "syllable_indices": [
+        190
+      ],
+      "velocity": 101,
+      "word_index": 86
+    },
+    {
+      "cents": [],
+      "end": 73.2,
+      "midi_note": 63,
+      "start": 73.06,
+      "syllable_index": 191,
+      "syllable_indices": [
+        191
+      ],
+      "velocity": 89,
+      "word_index": 86
+    },
+    {
+      "cents": [],
+      "end": 73.35000000000001,
+      "midi_note": 65,
+      "start": 73.28,
+      "syllable_index": 192,
+      "syllable_indices": [
+        192,
+        193
+      ],
+      "velocity": 101,
+      "word_index": 87
+    },
+    {
+      "cents": [],
+      "end": 73.65,
+      "midi_note": 63,
+      "start": 73.35000000000001,
+      "syllable_index": 193,
+      "syllable_indices": [
+        193,
+        194
+      ],
+      "velocity": 101,
+      "word_index": 87
+    },
+    {
+      "cents": [],
+      "end": 75.65,
+      "midi_note": 63,
+      "start": 73.73,
+      "syllable_index": 198,
+      "syllable_indices": [
+        195,
+        196,
+        197,
+        198,
+        199,
+        200
+      ],
+      "velocity": 97,
+      "word_index": 90
+    },
+    {
+      "cents": [],
+      "end": 76.31,
+      "midi_note": 63,
+      "start": 75.92,
+      "syllable_index": 201,
+      "syllable_indices": [
+        201
+      ],
+      "velocity": 100,
+      "word_index": 92
+    },
+    {
+      "cents": [],
+      "end": 76.5,
+      "midi_note": 63,
+      "start": 76.31,
+      "syllable_index": 202,
+      "syllable_indices": [
+        201,
+        202,
+        203
+      ],
+      "velocity": 96,
+      "word_index": 92
+    },
+    {
+      "cents": [],
+      "end": 76.99000000000001,
+      "midi_note": 63,
+      "start": 76.51,
+      "syllable_index": 205,
+      "syllable_indices": [
+        203,
+        204,
+        205
+      ],
+      "velocity": 100,
+      "word_index": 92
+    },
+    {
+      "cents": [],
+      "end": 77.29,
+      "midi_note": 64,
+      "start": 77.04,
+      "syllable_index": 207,
+      "syllable_indices": [
+        206,
+        207
+      ],
+      "velocity": 97,
+      "word_index": 94
+    },
+    {
+      "cents": [],
+      "end": 77.55000000000001,
+      "midi_note": 64,
+      "start": 77.33,
+      "syllable_index": 208,
+      "syllable_indices": [
+        208
+      ],
+      "velocity": 103,
+      "word_index": 94
+    },
+    {
+      "cents": [],
+      "end": 77.77000000000001,
+      "midi_note": 65,
+      "start": 77.55000000000001,
+      "syllable_index": 208,
+      "syllable_indices": [
+        208
+      ],
+      "velocity": 95,
+      "word_index": 94
+    },
+    {
+      "cents": [],
+      "end": 78.08000000000001,
+      "midi_note": 63,
+      "start": 77.86,
+      "syllable_index": 210,
+      "syllable_indices": [
+        209,
+        210
+      ],
+      "velocity": 96,
+      "word_index": 95
+    },
+    {
+      "cents": [],
+      "end": 78.38000000000001,
+      "midi_note": 63,
+      "start": 78.27,
+      "syllable_index": 211,
+      "syllable_indices": [
+        211
+      ],
+      "velocity": 98,
+      "word_index": 95
+    },
+    {
+      "cents": [],
+      "end": 79.37,
+      "midi_note": 63,
+      "start": 79.11,
+      "syllable_index": 212,
+      "syllable_indices": [
+        212
+      ],
+      "velocity": 92,
+      "word_index": 96
+    },
+    {
+      "cents": [],
+      "end": 79.45,
+      "midi_note": 67,
+      "start": 79.37,
+      "syllable_index": 212,
+      "syllable_indices": [
+        212
+      ],
+      "velocity": 83,
+      "word_index": 96
+    },
+    {
+      "cents": [],
+      "end": 79.82000000000001,
+      "midi_note": 63,
+      "start": 79.61,
+      "syllable_index": 213,
+      "syllable_indices": [
+        213
+      ],
+      "velocity": 101,
+      "word_index": 96
+    },
+    {
+      "cents": [],
+      "end": 80.24000000000001,
+      "midi_note": 63,
+      "start": 79.83,
+      "syllable_index": 214,
+      "syllable_indices": [
+        214,
+        215
+      ],
+      "velocity": 98,
+      "word_index": 96
+    },
+    {
+      "cents": [],
+      "end": 80.63000000000001,
+      "midi_note": 63,
+      "start": 80.35000000000001,
+      "syllable_index": 216,
+      "syllable_indices": [
+        215,
+        216
+      ],
+      "velocity": 93,
+      "word_index": 96
+    },
+    {
+      "cents": [],
+      "end": 80.82000000000001,
+      "midi_note": 63,
+      "start": 80.64,
+      "syllable_index": 216,
+      "syllable_indices": [
+        216
+      ],
+      "velocity": 94,
+      "word_index": 96
+    },
+    {
+      "cents": [],
+      "end": 80.97,
+      "midi_note": 64,
+      "start": 80.9,
+      "syllable_index": 218,
+      "syllable_indices": [
+        217,
+        218
+      ],
+      "velocity": 96,
+      "word_index": 98
+    },
+    {
+      "cents": [],
+      "end": 81.2,
+      "midi_note": 63,
+      "start": 80.97,
+      "syllable_index": 218,
+      "syllable_indices": [
+        218
+      ],
+      "velocity": 97,
+      "word_index": 98
+    },
+    {
+      "cents": [],
+      "end": 81.37,
+      "midi_note": 65,
+      "start": 81.25,
+      "syllable_index": 218,
+      "syllable_indices": [
+        218,
+        219
+      ],
+      "velocity": 92,
+      "word_index": 98
+    },
+    {
+      "cents": [],
+      "end": 81.64,
+      "midi_note": 63,
+      "start": 81.4,
+      "syllable_index": 220,
+      "syllable_indices": [
+        220
+      ],
+      "velocity": 96,
+      "word_index": 100
+    },
+    {
+      "cents": [],
+      "end": 82.06,
+      "midi_note": 63,
+      "start": 81.65,
+      "syllable_index": 221,
+      "syllable_indices": [
+        221
+      ],
+      "velocity": 100,
+      "word_index": 100
+    },
+    {
+      "cents": [],
+      "end": 83.12,
+      "midi_note": 63,
+      "start": 82.61,
+      "syllable_index": 223,
+      "syllable_indices": [
+        222,
+        223
+      ],
+      "velocity": 102,
+      "word_index": 101
+    },
+    {
+      "cents": [],
+      "end": 83.71000000000001,
+      "midi_note": 62,
+      "start": 83.14,
+      "syllable_index": 225,
+      "syllable_indices": [
+        223,
+        224,
+        225,
+        226,
+        227,
+        228
+      ],
+      "velocity": 99,
+      "word_index": 103
+    },
+    {
+      "cents": [],
+      "end": 84.64,
+      "midi_note": 59,
+      "start": 83.71000000000001,
+      "syllable_index": 230,
+      "syllable_indices": [
+        228,
+        229,
+        230
+      ],
+      "velocity": 102,
+      "word_index": 105
+    },
+    {
+      "cents": [],
+      "end": 84.82000000000001,
+      "midi_note": 67,
+      "start": 84.64,
+      "syllable_index": 230,
+      "syllable_indices": [
+        230,
+        231
+      ],
+      "velocity": 110,
+      "word_index": 105
+    },
+    {
+      "cents": [],
+      "end": 85.06,
+      "midi_note": 79,
+      "start": 84.82000000000001,
+      "syllable_index": 231,
+      "syllable_indices": [
+        231
+      ],
+      "velocity": 107,
+      "word_index": 105
+    },
+    {
+      "cents": [],
+      "end": 85.17,
+      "midi_note": 80,
+      "start": 85.06,
+      "syllable_index": 231,
+      "syllable_indices": [
+        231
+      ],
+      "velocity": 101,
+      "word_index": 105
+    },
+    {
+      "cents": [],
+      "end": 85.98,
+      "midi_note": 55,
+      "start": 85.17,
+      "syllable_index": 231,
+      "syllable_indices": [
+        231
+      ],
+      "velocity": 109,
+      "word_index": 105
+    },
+    {
+      "cents": [],
+      "end": 86.13000000000001,
+      "midi_note": 67,
+      "start": 86.01,
+      "syllable_index": 232,
+      "syllable_indices": [
+        232
+      ],
+      "velocity": 95,
+      "word_index": 106
+    },
+    {
+      "cents": [],
+      "end": 86.44,
+      "midi_note": 62,
+      "start": 86.22,
+      "syllable_index": 233,
+      "syllable_indices": [
+        233
+      ],
+      "velocity": 101,
+      "word_index": 107
+    },
+    {
+      "cents": [],
+      "end": 86.86000000000001,
+      "midi_note": 63,
+      "start": 86.44,
+      "syllable_index": 233,
+      "syllable_indices": [
+        233
+      ],
+      "velocity": 108,
+      "word_index": 107
+    },
+    {
+      "cents": [],
+      "end": 87.59,
+      "midi_note": 71,
+      "start": 87.48,
+      "syllable_index": null,
+      "syllable_indices": [],
+      "velocity": 91,
+      "word_index": null
+    },
+    {
+      "cents": [],
+      "end": 87.73,
+      "midi_note": 64,
+      "start": 87.64,
+      "syllable_index": 234,
+      "syllable_indices": [
+        234
+      ],
+      "velocity": 99,
+      "word_index": 108
+    },
+    {
+      "cents": [],
+      "end": 88.07000000000001,
+      "midi_note": 63,
+      "start": 87.73,
+      "syllable_index": 235,
+      "syllable_indices": [
+        234,
+        235
+      ],
+      "velocity": 104,
+      "word_index": 108
+    },
+    {
+      "cents": [],
+      "end": 88.26,
+      "midi_note": 63,
+      "start": 88.07000000000001,
+      "syllable_index": 235,
+      "syllable_indices": [
+        235
+      ],
+      "velocity": 94,
+      "word_index": 108
+    },
+    {
+      "cents": [],
+      "end": 88.46000000000001,
+      "midi_note": 65,
+      "start": 88.26,
+      "syllable_index": 236,
+      "syllable_indices": [
+        236
+      ],
+      "velocity": 106,
+      "word_index": 109
+    },
+    {
+      "cents": [],
+      "end": 88.67,
+      "midi_note": 63,
+      "start": 88.52,
+      "syllable_index": 237,
+      "syllable_indices": [
+        236,
+        237
+      ],
+      "velocity": 101,
+      "word_index": 109
+    },
+    {
+      "cents": [],
+      "end": 88.87,
+      "midi_note": 65,
+      "start": 88.68,
+      "syllable_index": 237,
+      "syllable_indices": [
+        237
+      ],
+      "velocity": 102,
+      "word_index": 109
+    },
+    {
+      "cents": [],
+      "end": 89.08000000000001,
+      "midi_note": 63,
+      "start": 88.87,
+      "syllable_index": 238,
+      "syllable_indices": [
+        238
+      ],
+      "velocity": 102,
+      "word_index": 110
+    },
+    {
+      "cents": [],
+      "end": 89.23,
+      "midi_note": 66,
+      "start": 89.13,
+      "syllable_index": 239,
+      "syllable_indices": [
+        239
+      ],
+      "velocity": 88,
+      "word_index": 111
+    },
+    {
+      "cents": [],
+      "end": 89.45,
+      "midi_note": 63,
+      "start": 89.28,
+      "syllable_index": 240,
+      "syllable_indices": [
+        239,
+        240
+      ],
+      "velocity": 102,
+      "word_index": 111
+    },
+    {
+      "cents": [],
+      "end": 89.80000000000001,
+      "midi_note": 62,
+      "start": 89.45,
+      "syllable_index": 240,
+      "syllable_indices": [
+        240,
+        241,
+        242
+      ],
+      "velocity": 104,
+      "word_index": 111
+    },
+    {
+      "cents": [],
+      "end": 90.05000000000001,
+      "midi_note": 62,
+      "start": 89.89,
+      "syllable_index": 243,
+      "syllable_indices": [
+        243
+      ],
+      "velocity": 100,
+      "word_index": 113
+    },
+    {
+      "cents": [],
+      "end": 90.27000000000001,
+      "midi_note": 63,
+      "start": 90.05000000000001,
+      "syllable_index": 243,
+      "syllable_indices": [
+        243
+      ],
+      "velocity": 103,
+      "word_index": 113
+    },
+    {
+      "cents": [],
+      "end": 90.88,
+      "midi_note": 68,
+      "start": 90.27000000000001,
+      "syllable_index": 244,
+      "syllable_indices": [
+        243,
+        244
+      ],
+      "velocity": 102,
+      "word_index": 113
+    },
+    {
+      "cents": [],
+      "end": 91.14,
+      "midi_note": 62,
+      "start": 90.88,
+      "syllable_index": 245,
+      "syllable_indices": [
+        244,
+        245
+      ],
+      "velocity": 96,
+      "word_index": 113
+    },
+    {
+      "cents": [],
+      "end": 91.29,
+      "midi_note": 63,
+      "start": 91.17,
+      "syllable_index": 246,
+      "syllable_indices": [
+        246
+      ],
+      "velocity": 95,
+      "word_index": 114
+    },
+    {
+      "cents": [],
+      "end": 91.54,
+      "midi_note": 63,
+      "start": 91.35000000000001,
+      "syllable_index": 248,
+      "syllable_indices": [
+        247,
+        248
+      ],
+      "velocity": 102,
+      "word_index": 115
+    },
+    {
+      "cents": [],
+      "end": 91.76,
+      "midi_note": 65,
+      "start": 91.54,
+      "syllable_index": 249,
+      "syllable_indices": [
+        248,
+        249
+      ],
+      "velocity": 107,
+      "word_index": 115
+    },
+    {
+      "cents": [],
+      "end": 91.96000000000001,
+      "midi_note": 63,
+      "start": 91.76,
+      "syllable_index": 251,
+      "syllable_indices": [
+        249,
+        250,
+        251
+      ],
+      "velocity": 104,
+      "word_index": 115
+    },
+    {
+      "cents": [],
+      "end": 92.19,
+      "midi_note": 65,
+      "start": 91.96000000000001,
+      "syllable_index": 252,
+      "syllable_indices": [
+        252
+      ],
+      "velocity": 104,
+      "word_index": 116
+    },
+    {
+      "cents": [],
+      "end": 92.37,
+      "midi_note": 63,
+      "start": 92.19,
+      "syllable_index": 252,
+      "syllable_indices": [
+        252,
+        253
+      ],
+      "velocity": 101,
+      "word_index": 116
+    },
+    {
+      "cents": [],
+      "end": 92.74000000000001,
+      "midi_note": 65,
+      "start": 92.37,
+      "syllable_index": 254,
+      "syllable_indices": [
+        253,
+        254
+      ],
+      "velocity": 104,
+      "word_index": 116
+    },
+    {
+      "cents": [],
+      "end": 92.92,
+      "midi_note": 62,
+      "start": 92.79,
+      "syllable_index": 255,
+      "syllable_indices": [
+        255
+      ],
+      "velocity": 99,
+      "word_index": 117
+    },
+    {
+      "cents": [],
+      "end": 93.22,
+      "midi_note": 63,
+      "start": 93.0,
+      "syllable_index": 255,
+      "syllable_indices": [
+        255
+      ],
+      "velocity": 96,
+      "word_index": 117
+    },
+    {
+      "cents": [],
+      "end": 93.32000000000001,
+      "midi_note": 53,
+      "start": 93.22,
+      "syllable_index": 256,
+      "syllable_indices": [
+        255,
+        256
+      ],
+      "velocity": 101,
+      "word_index": 117
+    },
+    {
+      "cents": [],
+      "end": 93.64,
+      "midi_note": 55,
+      "start": 93.32000000000001,
+      "syllable_index": 256,
+      "syllable_indices": [
+        256,
+        257
+      ],
+      "velocity": 106,
+      "word_index": 117
+    },
+    {
+      "cents": [],
+      "end": 93.78,
+      "midi_note": 71,
+      "start": 93.64,
+      "syllable_index": 257,
+      "syllable_indices": [
+        257
+      ],
+      "velocity": 100,
+      "word_index": 117
+    },
+    {
+      "cents": [],
+      "end": 94.59,
+      "midi_note": 67,
+      "start": 93.78,
+      "syllable_index": 258,
+      "syllable_indices": [
+        257,
+        258,
+        259
+      ],
+      "velocity": 94,
+      "word_index": 118
+    },
+    {
+      "cents": [],
+      "end": 94.89,
+      "midi_note": 67,
+      "start": 94.62,
+      "syllable_index": 260,
+      "syllable_indices": [
+        259,
+        260
+      ],
+      "velocity": 104,
+      "word_index": 118
+    },
+    {
+      "cents": [],
+      "end": 95.06,
+      "midi_note": 56,
+      "start": 94.89,
+      "syllable_index": 260,
+      "syllable_indices": [
+        260,
+        261
+      ],
+      "velocity": 107,
+      "word_index": 118
+    },
+    {
+      "cents": [],
+      "end": 95.66000000000001,
+      "midi_note": 55,
+      "start": 95.06,
+      "syllable_index": 261,
+      "syllable_indices": [
+        261,
+        262,
+        263
+      ],
+      "velocity": 104,
+      "word_index": 118
+    },
+    {
+      "cents": [],
+      "end": 95.88,
+      "midi_note": 68,
+      "start": 95.67,
+      "syllable_index": 263,
+      "syllable_indices": [
+        263
+      ],
+      "velocity": 105,
+      "word_index": 119
+    },
+    {
+      "cents": [],
+      "end": 96.03,
+      "midi_note": 67,
+      "start": 95.88,
+      "syllable_index": 264,
+      "syllable_indices": [
+        264
+      ],
+      "velocity": 96,
+      "word_index": 120
+    },
+    {
+      "cents": [],
+      "end": 96.23,
+      "midi_note": 68,
+      "start": 96.08,
+      "syllable_index": 264,
+      "syllable_indices": [
+        264
+      ],
+      "velocity": 98,
+      "word_index": 120
+    },
+    {
+      "cents": [],
+      "end": 96.83000000000001,
+      "midi_note": 55,
+      "start": 96.3,
+      "syllable_index": 264,
+      "syllable_indices": [
+        264,
+        265
+      ],
+      "velocity": 104,
+      "word_index": 120
+    },
+    {
+      "cents": [],
+      "end": 97.13000000000001,
+      "midi_note": 54,
+      "start": 96.83000000000001,
+      "syllable_index": 265,
+      "syllable_indices": [
+        265
+      ],
+      "velocity": 93,
+      "word_index": 120
+    },
+    {
+      "cents": [],
+      "end": 97.25,
+      "midi_note": 66,
+      "start": 97.18,
+      "syllable_index": 265,
+      "syllable_indices": [
+        265
+      ],
+      "velocity": 87,
+      "word_index": 120
+    },
+    {
+      "cents": [],
+      "end": 97.4,
+      "midi_note": 72,
+      "start": 97.25,
+      "syllable_index": 265,
+      "syllable_indices": [
+        265
+      ],
+      "velocity": 95,
+      "word_index": 120
+    },
+    {
+      "cents": [],
+      "end": 97.51,
+      "midi_note": 48,
+      "start": 97.4,
+      "syllable_index": 265,
+      "syllable_indices": [
+        265
+      ],
+      "velocity": 97,
+      "word_index": 120
+    },
+    {
+      "cents": [],
+      "end": 97.63,
+      "midi_note": 60,
+      "start": 97.51,
+      "syllable_index": 266,
+      "syllable_indices": [
+        265,
+        266
+      ],
+      "velocity": 100,
+      "word_index": 121
+    },
+    {
+      "cents": [],
+      "end": 97.94000000000001,
+      "midi_note": 62,
+      "start": 97.63,
+      "syllable_index": 267,
+      "syllable_indices": [
+        266,
+        267,
+        268
+      ],
+      "velocity": 98,
+      "word_index": 121
+    },
+    {
+      "cents": [],
+      "end": 98.23,
+      "midi_note": 53,
+      "start": 98.14,
+      "syllable_index": 268,
+      "syllable_indices": [
+        268
+      ],
+      "velocity": 90,
+      "word_index": 121
+    },
+    {
+      "cents": [],
+      "end": 98.62,
+      "midi_note": 50,
+      "start": 98.23,
+      "syllable_index": null,
+      "syllable_indices": [],
+      "velocity": 97,
+      "word_index": null
+    },
+    {
+      "cents": [],
+      "end": 99.19,
+      "midi_note": 53,
+      "start": 98.64,
+      "syllable_index": 269,
+      "syllable_indices": [
+        269
+      ],
+      "velocity": 99,
+      "word_index": 122
+    },
+    {
+      "cents": [],
+      "end": 99.26,
+      "midi_note": 70,
+      "start": 99.19,
+      "syllable_index": 269,
+      "syllable_indices": [
+        269
+      ],
+      "velocity": 96,
+      "word_index": 122
+    },
+    {
+      "cents": [],
+      "end": 99.38,
+      "midi_note": 68,
+      "start": 99.26,
+      "syllable_index": 269,
+      "syllable_indices": [
+        269,
+        270
+      ],
+      "velocity": 94,
+      "word_index": 122
+    },
+    {
+      "cents": [],
+      "end": 99.56,
+      "midi_note": 62,
+      "start": 99.38,
+      "syllable_index": 270,
+      "syllable_indices": [
+        270
+      ],
+      "velocity": 102,
+      "word_index": 122
+    },
+    {
+      "cents": [],
+      "end": 99.88000000000001,
+      "midi_note": 63,
+      "start": 99.56,
+      "syllable_index": 270,
+      "syllable_indices": [
+        270
+      ],
+      "velocity": 100,
+      "word_index": 122
+    },
+    {
+      "cents": [],
+      "end": 100.75,
+      "midi_note": 82,
+      "start": 100.48,
+      "syllable_index": null,
+      "syllable_indices": [],
+      "velocity": 102,
+      "word_index": null
+    },
+    {
+      "cents": [],
+      "end": 100.94000000000001,
+      "midi_note": 65,
+      "start": 100.75,
+      "syllable_index": 271,
+      "syllable_indices": [
+        271
+      ],
+      "velocity": 96,
+      "word_index": 123
+    },
+    {
+      "cents": [],
+      "end": 101.11000000000001,
+      "midi_note": 64,
+      "start": 101.04,
+      "syllable_index": 272,
+      "syllable_indices": [
+        272
+      ],
+      "velocity": 94,
+      "word_index": 123
+    },
+    {
+      "cents": [],
+      "end": 101.32000000000001,
+      "midi_note": 63,
+      "start": 101.11000000000001,
+      "syllable_index": 272,
+      "syllable_indices": [
+        272
+      ],
+      "velocity": 103,
+      "word_index": 123
+    },
+    {
+      "cents": [],
+      "end": 101.41000000000001,
+      "midi_note": 60,
+      "start": 101.34,
+      "syllable_index": 273,
+      "syllable_indices": [
+        273
+      ],
+      "velocity": 84,
+      "word_index": 124
+    },
+    {
+      "cents": [],
+      "end": 101.65,
+      "midi_note": 65,
+      "start": 101.43,
+      "syllable_index": 273,
+      "syllable_indices": [
+        273,
+        274
+      ],
+      "velocity": 105,
+      "word_index": 124
+    },
+    {
+      "cents": [],
+      "end": 101.83000000000001,
+      "midi_note": 63,
+      "start": 101.65,
+      "syllable_index": 274,
+      "syllable_indices": [
+        274
+      ],
+      "velocity": 102,
+      "word_index": 124
+    },
+    {
+      "cents": [],
+      "end": 102.01,
+      "midi_note": 65,
+      "start": 101.84,
+      "syllable_index": 275,
+      "syllable_indices": [
+        275,
+        276
+      ],
+      "velocity": 102,
+      "word_index": 124
+    },
+    {
+      "cents": [],
+      "end": 102.18,
+      "midi_note": 63,
+      "start": 102.01,
+      "syllable_index": 277,
+      "syllable_indices": [
+        276,
+        277
+      ],
+      "velocity": 97,
+      "word_index": 125
+    },
+    {
+      "cents": [],
+      "end": 102.48,
+      "midi_note": 65,
+      "start": 102.32000000000001,
+      "syllable_index": 278,
+      "syllable_indices": [
+        278
+      ],
+      "velocity": 102,
+      "word_index": 126
+    },
+    {
+      "cents": [],
+      "end": 102.63,
+      "midi_note": 63,
+      "start": 102.48,
+      "syllable_index": 278,
+      "syllable_indices": [
+        278
+      ],
+      "velocity": 106,
+      "word_index": 126
+    },
+    {
+      "cents": [],
+      "end": 102.86000000000001,
+      "midi_note": 62,
+      "start": 102.63,
+      "syllable_index": 279,
+      "syllable_indices": [
+        279
+      ],
+      "velocity": 102,
+      "word_index": 127
+    },
+    {
+      "cents": [],
+      "end": 102.99000000000001,
+      "midi_note": 56,
+      "start": 102.88,
+      "syllable_index": 279,
+      "syllable_indices": [
+        279
+      ],
+      "velocity": 105,
+      "word_index": 127
+    },
+    {
+      "cents": [],
+      "end": 103.07000000000001,
+      "midi_note": 54,
+      "start": 102.99000000000001,
+      "syllable_index": 279,
+      "syllable_indices": [
+        279
+      ],
+      "velocity": 107,
+      "word_index": 127
+    },
+    {
+      "cents": [],
+      "end": 103.21000000000001,
+      "midi_note": 62,
+      "start": 103.09,
+      "syllable_index": 279,
+      "syllable_indices": [
+        279
+      ],
+      "velocity": 104,
+      "word_index": 127
+    },
+    {
+      "cents": [],
+      "end": 104.72,
+      "midi_note": 63,
+      "start": 103.21000000000001,
+      "syllable_index": 280,
+      "syllable_indices": [
+        280,
+        281,
+        282,
+        283
+      ],
+      "velocity": 100,
+      "word_index": 128
+    },
+    {
+      "cents": [],
+      "end": 104.94,
+      "midi_note": 65,
+      "start": 104.72,
+      "syllable_index": 284,
+      "syllable_indices": [
+        284
+      ],
+      "velocity": 96,
+      "word_index": 129
+    },
+    {
+      "cents": [],
+      "end": 105.12,
+      "midi_note": 63,
+      "start": 104.94,
+      "syllable_index": 285,
+      "syllable_indices": [
+        284,
+        285,
+        286
+      ],
+      "velocity": 105,
+      "word_index": 129
+    },
+    {
+      "cents": [],
+      "end": 105.31,
+      "midi_note": 65,
+      "start": 105.12,
+      "syllable_index": 286,
+      "syllable_indices": [
+        286
+      ],
+      "velocity": 98,
+      "word_index": 129
+    },
+    {
+      "cents": [],
+      "end": 105.44000000000001,
+      "midi_note": 63,
+      "start": 105.31,
+      "syllable_index": 287,
+      "syllable_indices": [
+        286,
+        287
+      ],
+      "velocity": 96,
+      "word_index": 130
+    },
+    {
+      "cents": [],
+      "end": 105.60000000000001,
+      "midi_note": 67,
+      "start": 105.52,
+      "syllable_index": 288,
+      "syllable_indices": [
+        288
+      ],
+      "velocity": 97,
+      "word_index": 131
+    },
+    {
+      "cents": [],
+      "end": 105.73,
+      "midi_note": 65,
+      "start": 105.60000000000001,
+      "syllable_index": 289,
+      "syllable_indices": [
+        288,
+        289
+      ],
+      "velocity": 92,
+      "word_index": 131
+    },
+    {
+      "cents": [],
+      "end": 105.86000000000001,
+      "midi_note": 63,
+      "start": 105.73,
+      "syllable_index": 290,
+      "syllable_indices": [
+        289,
+        290
+      ],
+      "velocity": 94,
+      "word_index": 132
+    },
+    {
+      "cents": [],
+      "end": 106.26,
+      "midi_note": 63,
+      "start": 105.94,
+      "syllable_index": 291,
+      "syllable_indices": [
+        291
+      ],
+      "velocity": 96,
+      "word_index": 133
+    },
+    {
+      "cents": [],
+      "end": 106.39,
+      "midi_note": 68,
+      "start": 106.26,
+      "syllable_index": 292,
+      "syllable_indices": [
+        291,
+        292
+      ],
+      "velocity": 95,
+      "word_index": 134
+    },
+    {
+      "cents": [],
+      "end": 106.52000000000001,
+      "midi_note": 66,
+      "start": 106.39,
+      "syllable_index": 292,
+      "syllable_indices": [
+        292
+      ],
+      "velocity": 90,
+      "word_index": 134
+    },
+    {
+      "cents": [],
+      "end": 106.88,
+      "midi_note": 55,
+      "start": 106.56,
+      "syllable_index": 293,
+      "syllable_indices": [
+        292,
+        293
+      ],
+      "velocity": 95,
+      "word_index": 134
+    },
+    {
+      "cents": [],
+      "end": 107.04,
+      "midi_note": 75,
+      "start": 106.88,
+      "syllable_index": 293,
+      "syllable_indices": [
+        293
+      ],
+      "velocity": 90,
+      "word_index": 134
+    },
+    {
+      "cents": [],
+      "end": 107.34,
+      "midi_note": 66,
+      "start": 107.09,
+      "syllable_index": 294,
+      "syllable_indices": [
+        294,
+        295
+      ],
+      "velocity": 89,
+      "word_index": 134
+    },
+    {
+      "cents": [],
+      "end": 107.56,
+      "midi_note": 67,
+      "start": 107.34,
+      "syllable_index": 295,
+      "syllable_indices": [
+        295
+      ],
+      "velocity": 95,
+      "word_index": 134
+    },
+    {
+      "cents": [],
+      "end": 107.78,
+      "midi_note": 68,
+      "start": 107.59,
+      "syllable_index": 296,
+      "syllable_indices": [
+        296,
+        297
+      ],
+      "velocity": 93,
+      "word_index": 135
+    },
+    {
+      "cents": [],
+      "end": 107.95,
+      "midi_note": 67,
+      "start": 107.78,
+      "syllable_index": 298,
+      "syllable_indices": [
+        297,
+        298
+      ],
+      "velocity": 92,
+      "word_index": 135
+    },
+    {
+      "cents": [],
+      "end": 108.17,
+      "midi_note": 68,
+      "start": 108.01,
+      "syllable_index": null,
+      "syllable_indices": [],
+      "velocity": 91,
+      "word_index": null
+    },
+    {
+      "cents": [],
+      "end": 108.56,
+      "midi_note": 68,
+      "start": 108.4,
+      "syllable_index": 300,
+      "syllable_indices": [
+        300,
+        301
+      ],
+      "velocity": 93,
+      "word_index": 137
+    },
+    {
+      "cents": [],
+      "end": 108.80000000000001,
+      "midi_note": 67,
+      "start": 108.60000000000001,
+      "syllable_index": 302,
+      "syllable_indices": [
+        302
+      ],
+      "velocity": 92,
+      "word_index": 138
+    },
+    {
+      "cents": [],
+      "end": 108.95,
+      "midi_note": 69,
+      "start": 108.86,
+      "syllable_index": 302,
+      "syllable_indices": [
+        302
+      ],
+      "velocity": 86,
+      "word_index": 138
+    },
+    {
+      "cents": [],
+      "end": 109.22000000000001,
+      "midi_note": 67,
+      "start": 108.95,
+      "syllable_index": 302,
+      "syllable_indices": [
+        302,
+        303
+      ],
+      "velocity": 99,
+      "word_index": 138
+    },
+    {
+      "cents": [],
+      "end": 109.42,
+      "midi_note": 68,
+      "start": 109.23,
+      "syllable_index": 303,
+      "syllable_indices": [
+        303,
+        304
+      ],
+      "velocity": 96,
+      "word_index": 139
+    },
+    {
+      "cents": [],
+      "end": 109.98,
+      "midi_note": 67,
+      "start": 109.45,
+      "syllable_index": 307,
+      "syllable_indices": [
+        304,
+        305,
+        306,
+        307
+      ],
+      "velocity": 101,
+      "word_index": 142
+    },
+    {
+      "cents": [],
+      "end": 110.12,
+      "midi_note": 65,
+      "start": 109.98,
+      "syllable_index": 307,
+      "syllable_indices": [
+        307
+      ],
+      "velocity": 100,
+      "word_index": 142
+    },
+    {
+      "cents": [],
+      "end": 110.31,
+      "midi_note": 73,
+      "start": 110.12,
+      "syllable_index": 308,
+      "syllable_indices": [
+        307,
+        308
+      ],
+      "velocity": 95,
+      "word_index": 142
+    },
+    {
+      "cents": [],
+      "end": 110.67,
+      "midi_note": 65,
+      "start": 110.37,
+      "syllable_index": 309,
+      "syllable_indices": [
+        309
+      ],
+      "velocity": 96,
+      "word_index": 142
+    },
+    {
+      "cents": [],
+      "end": 110.85000000000001,
+      "midi_note": 61,
+      "start": 110.67,
+      "syllable_index": 310,
+      "syllable_indices": [
+        309,
+        310,
+        311
+      ],
+      "velocity": 104,
+      "word_index": 143
+    },
+    {
+      "cents": [],
+      "end": 111.98,
+      "midi_note": 62,
+      "start": 110.85000000000001,
+      "syllable_index": 314,
+      "syllable_indices": [
+        311,
+        312,
+        313,
+        314,
+        315,
+        316
+      ],
+      "velocity": 108,
+      "word_index": 145
+    },
+    {
+      "cents": [],
+      "end": 112.56,
+      "midi_note": 53,
+      "start": 112.01,
+      "syllable_index": 317,
+      "syllable_indices": [
+        316,
+        317
+      ],
+      "velocity": 99,
+      "word_index": 145
+    },
+    {
+      "cents": [],
+      "end": 112.69,
+      "midi_note": 50,
+      "start": 112.56,
+      "syllable_index": 318,
+      "syllable_indices": [
+        317,
+        318
+      ],
+      "velocity": 91,
+      "word_index": 146
+    },
+    {
+      "cents": [],
+      "end": 113.06,
+      "midi_note": 51,
+      "start": 112.69,
+      "syllable_index": 318,
+      "syllable_indices": [
+        318,
+        319
+      ],
+      "velocity": 91,
+      "word_index": 146
+    },
+    {
+      "cents": [],
+      "end": 113.25000000000001,
+      "midi_note": 62,
+      "start": 113.06,
+      "syllable_index": 320,
+      "syllable_indices": [
+        319,
+        320
+      ],
+      "velocity": 100,
+      "word_index": 147
+    },
+    {
+      "cents": [],
+      "end": 113.46000000000001,
+      "midi_note": 63,
+      "start": 113.35000000000001,
+      "syllable_index": 321,
+      "syllable_indices": [
+        321
+      ],
+      "velocity": 86,
+      "word_index": 148
+    },
+    {
+      "cents": [],
+      "end": 114.09,
+      "midi_note": 41,
+      "start": 113.46000000000001,
+      "syllable_index": 322,
+      "syllable_indices": [
+        321,
+        322,
+        323,
+        324
+      ],
+      "velocity": 98,
+      "word_index": 148
+    },
+    {
+      "cents": [],
+      "end": 114.25,
+      "midi_note": 44,
+      "start": 114.09,
+      "syllable_index": 324,
+      "syllable_indices": [
+        324
+      ],
+      "velocity": 98,
+      "word_index": 149
+    },
+    {
+      "cents": [],
+      "end": 114.35000000000001,
+      "midi_note": 74,
+      "start": 114.25,
+      "syllable_index": 324,
+      "syllable_indices": [
+        324
+      ],
+      "velocity": 102,
+      "word_index": 149
+    },
+    {
+      "cents": [],
+      "end": 114.71000000000001,
+      "midi_note": 72,
+      "start": 114.35000000000001,
+      "syllable_index": 325,
+      "syllable_indices": [
+        324,
+        325,
+        326
+      ],
+      "velocity": 94,
+      "word_index": 149
+    },
+    {
+      "cents": [],
+      "end": 115.27000000000001,
+      "midi_note": 44,
+      "start": 114.71000000000001,
+      "syllable_index": 327,
+      "syllable_indices": [
+        326,
+        327
+      ],
+      "velocity": 107,
+      "word_index": 151
+    },
+    {
+      "cents": [],
+      "end": 115.52000000000001,
+      "midi_note": 75,
+      "start": 115.27000000000001,
+      "syllable_index": 328,
+      "syllable_indices": [
+        327,
+        328,
+        329
+      ],
+      "velocity": 99,
+      "word_index": 151
+    },
+    {
+      "cents": [],
+      "end": 115.64,
+      "midi_note": 34,
+      "start": 115.52000000000001,
+      "syllable_index": 329,
+      "syllable_indices": [
+        329
+      ],
+      "velocity": 102,
+      "word_index": 151
+    },
+    {
+      "cents": [],
+      "end": 115.81,
+      "midi_note": 46,
+      "start": 115.64,
+      "syllable_index": 329,
+      "syllable_indices": [
+        329,
+        330
+      ],
+      "velocity": 105,
+      "word_index": 151
+    },
+    {
+      "cents": [],
+      "end": 116.2,
+      "midi_note": 77,
+      "start": 115.87,
+      "syllable_index": 330,
+      "syllable_indices": [
+        330,
+        331
+      ],
+      "velocity": 88,
+      "word_index": 152
+    },
+    {
+      "cents": [],
+      "end": 116.53,
+      "midi_note": 81,
+      "start": 116.28,
+      "syllable_index": 331,
+      "syllable_indices": [
+        331
+      ],
+      "velocity": 93,
+      "word_index": 152
+    },
+    {
+      "cents": [],
+      "end": 117.06,
+      "midi_note": 55,
+      "start": 116.53,
+      "syllable_index": 331,
+      "syllable_indices": [
+        331,
+        332
+      ],
+      "velocity": 88,
+      "word_index": 152
+    },
+    {
+      "cents": [],
+      "end": 118.65,
+      "midi_note": 51,
+      "start": 117.06,
+      "syllable_index": 338,
+      "syllable_indices": [
+        332,
+        333,
+        334,
+        335,
+        336,
+        337,
+        338,
+        339,
+        340,
+        341,
+        342,
+        343,
+        344
+      ],
+      "velocity": 108,
+      "word_index": 156
+    },
+    {
+      "cents": [],
+      "end": 118.84,
+      "midi_note": 79,
+      "start": 118.65,
+      "syllable_index": 345,
+      "syllable_indices": [
+        344,
+        345,
+        346
+      ],
+      "velocity": 103,
+      "word_index": 159
+    },
+    {
+      "cents": [],
+      "end": 119.0,
+      "midi_note": 65,
+      "start": 118.84,
+      "syllable_index": 347,
+      "syllable_indices": [
+        346,
+        347
+      ],
+      "velocity": 105,
+      "word_index": 159
+    },
+    {
+      "cents": [],
+      "end": 119.15,
+      "midi_note": 68,
+      "start": 119.0,
+      "syllable_index": 348,
+      "syllable_indices": [
+        347,
+        348
+      ],
+      "velocity": 92,
+      "word_index": 160
+    },
+    {
+      "cents": [],
+      "end": 119.31,
+      "midi_note": 62,
+      "start": 119.15,
+      "syllable_index": 349,
+      "syllable_indices": [
+        349
+      ],
+      "velocity": 86,
+      "word_index": 161
+    },
+    {
+      "cents": [],
+      "end": 119.41,
+      "midi_note": 63,
+      "start": 119.31,
+      "syllable_index": 349,
+      "syllable_indices": [
+        349
+      ],
+      "velocity": 90,
+      "word_index": 161
+    },
+    {
+      "cents": [],
+      "end": 120.69000000000001,
+      "midi_note": 82,
+      "start": 119.41,
+      "syllable_index": 350,
+      "syllable_indices": [
+        350,
+        351,
+        352,
+        353
+      ],
+      "velocity": 94,
+      "word_index": 162
+    },
+    {
+      "cents": [],
+      "end": 125.56,
+      "midi_note": 71,
+      "start": 124.53,
+      "syllable_index": null,
+      "syllable_indices": [],
+      "velocity": 98,
+      "word_index": null
+    },
+    {
+      "cents": [],
+      "end": 125.67,
+      "midi_note": 68,
+      "start": 125.56,
+      "syllable_index": 354,
+      "syllable_indices": [
+        354
+      ],
+      "velocity": 98,
+      "word_index": 166
+    },
+    {
+      "cents": [],
+      "end": 125.92,
+      "midi_note": 62,
+      "start": 125.69,
+      "syllable_index": 355,
+      "syllable_indices": [
+        355
+      ],
+      "velocity": 102,
+      "word_index": 167
+    },
+    {
+      "cents": [],
+      "end": 126.47000000000001,
+      "midi_note": 51,
+      "start": 125.92,
+      "syllable_index": 355,
+      "syllable_indices": [
+        355
+      ],
+      "velocity": 99,
+      "word_index": 167
+    },
+    {
+      "cents": [],
+      "end": 126.96000000000001,
+      "midi_note": 44,
+      "start": 126.78,
+      "syllable_index": null,
+      "syllable_indices": [],
+      "velocity": 100,
+      "word_index": null
+    },
+    {
+      "cents": [],
+      "end": 127.04,
+      "midi_note": 41,
+      "start": 126.96000000000001,
+      "syllable_index": 356,
+      "syllable_indices": [
+        356
+      ],
+      "velocity": 100,
+      "word_index": 168
+    },
+    {
+      "cents": [],
+      "end": 127.11000000000001,
+      "midi_note": 53,
+      "start": 127.04,
+      "syllable_index": 356,
+      "syllable_indices": [
+        356
+      ],
+      "velocity": 88,
+      "word_index": 168
+    },
+    {
+      "cents": [],
+      "end": 127.29,
+      "midi_note": 64,
+      "start": 127.11000000000001,
+      "syllable_index": 356,
+      "syllable_indices": [
+        356,
+        357
+      ],
+      "velocity": 92,
+      "word_index": 168
+    },
+    {
+      "cents": [],
+      "end": 127.65,
+      "midi_note": 63,
+      "start": 127.35000000000001,
+      "syllable_index": 358,
+      "syllable_indices": [
+        358
+      ],
+      "velocity": 97,
+      "word_index": 168
+    },
+    {
+      "cents": [],
+      "end": 127.74000000000001,
+      "midi_note": 41,
+      "start": 127.65,
+      "syllable_index": 359,
+      "syllable_indices": [
+        359,
+        360
+      ],
+      "velocity": 90,
+      "word_index": 169
+    },
+    {
+      "cents": [],
+      "end": 127.94,
+      "midi_note": 53,
+      "start": 127.74000000000001,
+      "syllable_index": 360,
+      "syllable_indices": [
+        360,
+        361
+      ],
+      "velocity": 100,
+      "word_index": 170
+    },
+    {
+      "cents": [],
+      "end": 128.13,
+      "midi_note": 51,
+      "start": 127.94,
+      "syllable_index": 361,
+      "syllable_indices": [
+        361,
+        362
+      ],
+      "velocity": 98,
+      "word_index": 170
+    },
+    {
+      "cents": [],
+      "end": 128.34,
+      "midi_note": 53,
+      "start": 128.18,
+      "syllable_index": 362,
+      "syllable_indices": [
+        362,
+        363
+      ],
+      "velocity": 96,
+      "word_index": 170
+    },
+    {
+      "cents": [],
+      "end": 128.53,
+      "midi_note": 63,
+      "start": 128.37,
+      "syllable_index": 363,
+      "syllable_indices": [
+        363
+      ],
+      "velocity": 96,
+      "word_index": 171
+    },
+    {
+      "cents": [],
+      "end": 128.64,
+      "midi_note": 66,
+      "start": 128.55,
+      "syllable_index": 364,
+      "syllable_indices": [
+        364,
+        365
+      ],
+      "velocity": 99,
+      "word_index": 171
+    },
+    {
+      "cents": [],
+      "end": 128.76999999999998,
+      "midi_note": 65,
+      "start": 128.64000000000001,
+      "syllable_index": 365,
+      "syllable_indices": [
+        365
+      ],
+      "velocity": 96,
+      "word_index": 171
+    },
+    {
+      "cents": [],
+      "end": 129.04999999999998,
+      "midi_note": 63,
+      "start": 128.77,
+      "syllable_index": 366,
+      "syllable_indices": [
+        365,
+        366
+      ],
+      "velocity": 95,
+      "word_index": 171
+    },
+    {
+      "cents": [],
+      "end": 129.12,
+      "midi_note": 61,
+      "start": 129.05,
+      "syllable_index": 366,
+      "syllable_indices": [
+        366
+      ],
+      "velocity": 101,
+      "word_index": 171
+    },
+    {
+      "cents": [],
+      "end": 129.20999999999998,
+      "midi_note": 58,
+      "start": 129.12,
+      "syllable_index": 366,
+      "syllable_indices": [
+        366
+      ],
+      "velocity": 102,
+      "word_index": 171
+    },
+    {
+      "cents": [],
+      "end": 130.32,
+      "midi_note": 51,
+      "start": 130.1,
+      "syllable_index": null,
+      "syllable_indices": [],
+      "velocity": 95,
+      "word_index": null
+    },
+    {
+      "cents": [],
+      "end": 131.76999999999998,
+      "midi_note": 63,
+      "start": 130.33,
+      "syllable_index": 368,
+      "syllable_indices": [
+        367,
+        368
+      ],
+      "velocity": 96,
+      "word_index": 172
+    },
+    {
+      "cents": [],
+      "end": 131.91,
+      "midi_note": 67,
+      "start": 131.77,
+      "syllable_index": null,
+      "syllable_indices": [],
+      "velocity": 94,
+      "word_index": null
+    },
+    {
+      "cents": [],
+      "end": 132.62,
+      "midi_note": 63,
+      "start": 132.19,
+      "syllable_index": null,
+      "syllable_indices": [],
+      "velocity": 90,
+      "word_index": null
+    },
+    {
+      "cents": [],
+      "end": 132.79,
+      "midi_note": 66,
+      "start": 132.65,
+      "syllable_index": 369,
+      "syllable_indices": [
+        369
+      ],
+      "velocity": 94,
+      "word_index": 173
+    },
+    {
+      "cents": [],
+      "end": 133.6,
+      "midi_note": 66,
+      "start": 133.44,
+      "syllable_index": null,
+      "syllable_indices": [],
+      "velocity": 93,
+      "word_index": null
+    },
+    {
+      "cents": [],
+      "end": 133.85,
+      "midi_note": 67,
+      "start": 133.72,
+      "syllable_index": 370,
+      "syllable_indices": [
+        370
+      ],
+      "velocity": 100,
+      "word_index": 174
+    },
+    {
+      "cents": [],
+      "end": 134.09,
+      "midi_note": 68,
+      "start": 133.9,
+      "syllable_index": 371,
+      "syllable_indices": [
+        371,
+        372
+      ],
+      "velocity": 95,
+      "word_index": 174
+    },
+    {
+      "cents": [],
+      "end": 134.26,
+      "midi_note": 67,
+      "start": 134.1,
+      "syllable_index": 372,
+      "syllable_indices": [
+        372,
+        373
+      ],
+      "velocity": 94,
+      "word_index": 174
+    },
+    {
+      "cents": [],
+      "end": 134.47,
+      "midi_note": 68,
+      "start": 134.3,
+      "syllable_index": 373,
+      "syllable_indices": [
+        373
+      ],
+      "velocity": 93,
+      "word_index": 175
+    },
+    {
+      "cents": [],
+      "end": 134.69,
+      "midi_note": 67,
+      "start": 134.53,
+      "syllable_index": 374,
+      "syllable_indices": [
+        374
+      ],
+      "velocity": 88,
+      "word_index": 175
+    },
+    {
+      "cents": [],
+      "end": 134.85999999999999,
+      "midi_note": 68,
+      "start": 134.71,
+      "syllable_index": 374,
+      "syllable_indices": [
+        374
+      ],
+      "velocity": 92,
+      "word_index": 175
+    },
+    {
+      "cents": [],
+      "end": 135.1,
+      "midi_note": 55,
+      "start": 134.91,
+      "syllable_index": 375,
+      "syllable_indices": [
+        375,
+        376
+      ],
+      "velocity": 96,
+      "word_index": 176
+    },
+    {
+      "cents": [],
+      "end": 135.23,
+      "midi_note": 56,
+      "start": 135.12,
+      "syllable_index": 376,
+      "syllable_indices": [
+        376
+      ],
+      "velocity": 89,
+      "word_index": 177
+    },
+    {
+      "cents": [],
+      "end": 135.54,
+      "midi_note": 67,
+      "start": 135.23,
+      "syllable_index": 377,
+      "syllable_indices": [
+        376,
+        377
+      ],
+      "velocity": 96,
+      "word_index": 177
+    },
+    {
+      "cents": [],
+      "end": 135.73,
+      "midi_note": 68,
+      "start": 135.54,
+      "syllable_index": 378,
+      "syllable_indices": [
+        377,
+        378
+      ],
+      "velocity": 97,
+      "word_index": 177
+    },
+    {
+      "cents": [],
+      "end": 136.29,
+      "midi_note": 67,
+      "start": 135.73,
+      "syllable_index": 378,
+      "syllable_indices": [
+        378
+      ],
+      "velocity": 101,
+      "word_index": 177
+    },
+    {
+      "cents": [],
+      "end": 137.06,
+      "midi_note": 61,
+      "start": 136.98,
+      "syllable_index": null,
+      "syllable_indices": [],
+      "velocity": 99,
+      "word_index": null
+    },
+    {
+      "cents": [],
+      "end": 137.2,
+      "midi_note": 60,
+      "start": 137.06,
+      "syllable_index": 379,
+      "syllable_indices": [
+        379
+      ],
+      "velocity": 96,
+      "word_index": 178
+    },
+    {
+      "cents": [],
+      "end": 138.22,
+      "midi_note": 62,
+      "start": 137.20000000000002,
+      "syllable_index": 385,
+      "syllable_indices": [
+        379,
+        380,
+        381,
+        382,
+        383,
+        384,
+        385,
+        386,
+        387
+      ],
+      "velocity": 105,
+      "word_index": 181
+    },
+    {
+      "cents": [],
+      "end": 138.32999999999998,
+      "midi_note": 63,
+      "start": 138.22,
+      "syllable_index": 387,
+      "syllable_indices": [
+        387
+      ],
+      "velocity": 97,
+      "word_index": 182
+    },
+    {
+      "cents": [],
+      "end": 138.73999999999998,
+      "midi_note": 65,
+      "start": 138.33,
+      "syllable_index": 388,
+      "syllable_indices": [
+        387,
+        388,
+        389
+      ],
+      "velocity": 105,
+      "word_index": 183
+    },
+    {
+      "cents": [],
+      "end": 138.87,
+      "midi_note": 70,
+      "start": 138.75,
+      "syllable_index": 390,
+      "syllable_indices": [
+        389,
+        390
+      ],
+      "velocity": 100,
+      "word_index": 183
+    },
+    {
+      "cents": [],
+      "end": 139.01999999999998,
+      "midi_note": 69,
+      "start": 138.87,
+      "syllable_index": 390,
+      "syllable_indices": [
+        390,
+        391
+      ],
+      "velocity": 92,
+      "word_index": 183
+    },
+    {
+      "cents": [],
+      "end": 139.12,
+      "midi_note": 68,
+      "start": 139.06,
+      "syllable_index": 391,
+      "syllable_indices": [
+        391
+      ],
+      "velocity": 93,
+      "word_index": 183
+    },
+    {
+      "cents": [],
+      "end": 139.29999999999998,
+      "midi_note": 70,
+      "start": 139.12,
+      "syllable_index": 391,
+      "syllable_indices": [
+        391,
+        392
+      ],
+      "velocity": 93,
+      "word_index": 183
+    },
+    {
+      "cents": [],
+      "end": 139.82999999999998,
+      "midi_note": 65,
+      "start": 139.31,
+      "syllable_index": 394,
+      "syllable_indices": [
+        392,
+        393,
+        394
+      ],
+      "velocity": 90,
+      "word_index": 185
+    },
+    {
+      "cents": [],
+      "end": 140.42,
+      "midi_note": 53,
+      "start": 139.84,
+      "syllable_index": 396,
+      "syllable_indices": [
+        395,
+        396
+      ],
+      "velocity": 98,
+      "word_index": 185
+    },
+    {
+      "cents": [],
+      "end": 140.63,
+      "midi_note": 46,
+      "start": 140.42000000000002,
+      "syllable_index": null,
+      "syllable_indices": [],
+      "velocity": 93,
+      "word_index": null
+    }
+  ]
+}

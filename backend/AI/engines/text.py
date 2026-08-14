@@ -1785,6 +1785,42 @@ def _line_aware_canonical_alignment(
     return output, stats
 
 
+def _weaker_selected_anchor(
+    selected: dict[int, tuple[Word, str, float]],
+    left_idx: int,
+    right_idx: int,
+) -> int | None:
+    """Choose a removable real anchor from a possibly synthetic conflict."""
+    present = [index for index in (left_idx, right_idx) if index in selected]
+    if len(present) == 1:
+        return present[0]
+    if not present:
+        # Reacquired/interpolated words live only in the current build and are
+        # therefore absent from ``selected``. Prune the nearest real anchor so
+        # the next build has enough room; never index the transient word id.
+        return (
+            min(
+                selected,
+                key=lambda index: min(abs(index - left_idx), abs(index - right_idx)),
+            )
+            if selected
+            else None
+        )
+
+    _left_word, left_kind, left_priority = selected[left_idx]
+    _right_word, right_kind, right_priority = selected[right_idx]
+    source_strength = {"qwen": 1, "ctc": 2, "consensus": 3}
+    if left_kind != right_kind:
+        return (
+            left_idx
+            if source_strength.get(left_kind, 0) < source_strength.get(right_kind, 0)
+            else right_idx
+        )
+    if abs(left_priority - right_priority) > 1e-9:
+        return left_idx if left_priority < right_priority else right_idx
+    return right_idx
+
+
 def _anchor_preserving_canonical_alignment(
     groups: list[str],
     ctc_lines,
@@ -2373,26 +2409,6 @@ def _anchor_preserving_canonical_alignment(
 
         return changed
 
-    def weaker_anchor(left_idx: int, right_idx: int) -> int:
-        """Return the weaker conflicting anchor index.
-
-        Consensus is stronger than CTC, and CTC is stronger than Qwen. Between
-        equal sources, lower priority (confidence) loses. Ties prefer dropping
-        the later anchor because that preserves established chronology.
-        """
-        left_word, left_kind, left_priority = selected[left_idx]
-        right_word, right_kind, right_priority = selected[right_idx]
-        source_strength = {"qwen": 1, "ctc": 2, "consensus": 3}
-        if left_kind != right_kind:
-            return (
-                left_idx
-                if source_strength.get(left_kind, 0) < source_strength.get(right_kind, 0)
-                else right_idx
-            )
-        if abs(left_priority - right_priority) > 1e-9:
-            return left_idx if left_priority < right_priority else right_idx
-        return right_idx
-
     last_built_sources: list[str] = []
 
     def try_build() -> tuple[list[Word] | None, tuple[int, int] | None]:
@@ -2584,7 +2600,9 @@ def _anchor_preserving_canonical_alignment(
             if left_idx == right_idx:
                 drop_idx = left_idx
             else:
-                drop_idx = weaker_anchor(left_idx, right_idx)
+                drop_idx = _weaker_selected_anchor(selected, left_idx, right_idx)
+                if drop_idx is None:
+                    return [], {"ctc": 0, "qwen": 0, "interpolated": 0}
         if conflict[0] == conflict[1]:
             rejection_reasons["edge_capacity_conflict"] += 1
         else:

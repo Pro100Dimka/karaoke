@@ -8,7 +8,7 @@ from unittest.mock import Mock
 import pytest
 
 from AI import install_models as install
-from AI.model_registry import ModelSpec
+from AI.model_registry import ModelFile, ModelSpec
 
 
 def specs():
@@ -128,6 +128,27 @@ def test_model_validation_file_and_snapshot(monkeypatch, tmp_path):
     (directory / "model.safetensors").touch()
     assert install.is_valid(tmp_path, snapshot)
 
+    data = b"bundle"
+    bundle = ModelSpec(
+        "bundle",
+        "Bundle",
+        "upstream",
+        "rev",
+        "bundle",
+        "BUNDLE",
+        kind="bundle",
+        files=(
+            ModelFile(
+                "nested/model.bin", "https://invalid", hashlib.sha256(data).hexdigest(), len(data)
+            ),
+        ),
+    )
+    assert not install.is_valid(tmp_path, bundle)
+    bundled = tmp_path / "bundle" / "nested" / "model.bin"
+    bundled.parent.mkdir(parents=True)
+    bundled.write_bytes(data)
+    assert install.is_valid(tmp_path, bundle)
+
 
 def test_prune_unused_files_and_directories(tmp_path):
     model = ModelSpec("x", "x", "r", "v", "m", "X", ignore_patterns=("unused*",))
@@ -154,6 +175,38 @@ def test_download_file_snapshot_and_missing_filename(monkeypatch, tmp_path):
     missing = ModelSpec("x", "x", "r", "v", "m", "X", kind="file")
     with pytest.raises(RuntimeError, match="filename"):
         install._download(tmp_path, tmp_path / "cache", missing)
+
+
+def test_download_verified_bundle(monkeypatch, tmp_path):
+    data = b"bundle-data"
+    item = ModelFile(
+        "nested/model.bin", "https://model", hashlib.sha256(data).hexdigest(), len(data)
+    )
+    model = ModelSpec(
+        "b", "Bundle", "repo", "rev", "bundle", "BUNDLE", kind="bundle", files=(item,)
+    )
+    response = Mock()
+    response.__enter__ = Mock(return_value=response)
+    response.__exit__ = Mock(return_value=False)
+    response.read = Mock(side_effect=[data, b""])
+    monkeypatch.setattr(install.urllib.request, "urlopen", Mock(return_value=response))
+    install._download(tmp_path, tmp_path / "cache", model)
+    assert (tmp_path / "bundle" / "nested" / "model.bin").read_bytes() == data
+
+    broken = ModelSpec(
+        "b",
+        "Bundle",
+        "repo",
+        "rev",
+        "broken",
+        "BUNDLE",
+        kind="bundle",
+        files=(ModelFile("model.bin", "https://model", "0" * 64, len(data)),),
+    )
+    response.read = Mock(side_effect=[data, b""])
+    with pytest.raises(RuntimeError, match="invalid download"):
+        install._download(tmp_path, tmp_path / "cache", broken)
+    assert not (tmp_path / "broken" / "model.bin.part").exists()
 
 
 def test_install_one_ready_retry_download_and_verification(monkeypatch, tmp_path):

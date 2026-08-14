@@ -50,12 +50,14 @@ def test_device_selection_safely_falls_back_for_unavailable_or_unknown(monkeypat
 
 def test_default_engine_registry_uses_config(monkeypatch):
     constructors = {
-        name: Mock(return_value=name) for name in ("separator", "pitch", "transcriber", "aligner")
+        name: Mock(return_value=name)
+        for name in ("separator", "pitch", "transcriber", "aligner", "melody")
     }
     monkeypatch.setattr(registry, "MSSTMelRoformerSeparator", constructors["separator"])
     monkeypatch.setattr(registry, "FCPEPitchEstimator", constructors["pitch"])
     monkeypatch.setattr(registry, "Qwen3Transcriber", constructors["transcriber"])
     monkeypatch.setattr(registry, "Qwen3ForcedAligner", constructors["aligner"])
+    monkeypatch.setattr(registry, "OmnizartPatchCNNPitchEstimator", constructors["melody"])
     config = SimpleNamespace(
         pitch_sample_rate=100,
         hop_seconds=0,
@@ -65,11 +67,18 @@ def test_default_engine_registry_uses_config(monkeypatch):
         aligner_model="align",
     )
     engines = registry.EngineRegistry.create_default(config)
-    assert (engines.separator, engines.pitch, engines.transcriber, engines.aligner) == (
+    assert (
+        engines.separator,
+        engines.pitch,
+        engines.transcriber,
+        engines.aligner,
+        engines.melody,
+    ) == (
         "separator",
         "pitch",
         "transcriber",
         "aligner",
+        "melody",
     )
     constructors["pitch"].assert_called_once_with(sr=100, hop=1, fmin=50, fmax=500)
 

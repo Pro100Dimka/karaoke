@@ -690,6 +690,15 @@ def test_anchor_merger_reacquires_complete_missing_line(monkeypatch):
     assert [word.confidence for word in output[1:3]] == [pytest.approx(0.24)] * 2
 
 
+def test_anchor_conflict_with_reacquired_word_153_drops_real_anchor():
+    selected = {
+        152: (Word(10, 10.2, "before", 0.8, 152), "ctc", 0.8),
+        154: (Word(10.3, 10.5, "after", 0.7, 154), "ctc", 0.7),
+    }
+    assert text._weaker_selected_anchor(selected, 153, 154) == 154
+    assert text._weaker_selected_anchor(selected, 152, 153) == 152
+
+
 @pytest.mark.parametrize("mode", ["missing-window", "empty-audio", "wrong-count", "micro"])
 def test_anchor_merger_reacquisition_rejects_invalid_windows(monkeypatch, mode):
     sample_rate = 1 if mode == "empty-audio" else 100

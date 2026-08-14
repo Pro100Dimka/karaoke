@@ -63,6 +63,10 @@ class AICoreService:
         return {
             "version": self.pipeline.VERSION,
             "separator": engines.separator.name,
+            "melody": getattr(getattr(engines, "melody", None), "name", None),
+            "melody_configured": bool(
+                getattr(getattr(engines, "melody", None), "available", lambda: False)()
+            ),
             "pitch": engines.pitch.name,
             "transcriber": engines.transcriber.name,
             "aligner": engines.aligner.name,

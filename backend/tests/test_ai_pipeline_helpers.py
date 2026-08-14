@@ -239,6 +239,8 @@ def test_pipeline_rejects_missing_and_generated_sources(tmp_path):
         "invalid-bpm",
         "source-change",
         "missing-artifact",
+        "omnizart",
+        "omnizart-fail",
     ],
 )
 def test_full_pipeline_fresh_supplied_lyrics_flow(monkeypatch, tmp_path, mode):
@@ -448,8 +450,25 @@ def test_full_pipeline_fresh_supplied_lyrics_flow(monkeypatch, tmp_path, mode):
         ),
         release=Mock(),
     )
+    melody = None
+    if mode == "omnizart":
+        melody = SimpleNamespace(
+            name="omnizart-patch-cnn",
+            fingerprint=lambda: {"version": "test"},
+            estimate=lambda path: raw_pitch if Path(path).name == "song.wav" else [],
+        )
+    elif mode == "omnizart-fail":
+        melody = SimpleNamespace(
+            name="omnizart-patch-cnn",
+            fingerprint=lambda: {"version": "test"},
+            estimate=lambda _path: (_ for _ in ()).throw(EngineUnavailableError("broken")),
+        )
     engines = SimpleNamespace(
-        separator=separator, pitch=pitch_engine, aligner=aligner, transcriber=transcriber
+        separator=separator,
+        pitch=pitch_engine,
+        aligner=aligner,
+        transcriber=transcriber,
+        melody=melody,
     )
     cfg = SimpleNamespace(
         sample_rate=44100,
@@ -489,7 +508,8 @@ def test_full_pipeline_fresh_supplied_lyrics_flow(monkeypatch, tmp_path, mode):
         pipeline, "refine_pitch_confidence", lambda frames, *_args, **_kwargs: frames
     )
     monkeypatch.setattr(pipeline, "fuse_pitch_with_yin", lambda frames, *_args, **_kwargs: frames)
-    monkeypatch.setattr(pipeline, "stabilize_pitch", lambda frames: frames)
+    stabilizer = Mock(side_effect=lambda frames: frames)
+    monkeypatch.setattr(pipeline, "stabilize_pitch", stabilizer)
     syllables = [Syllable(0, 1, "hello", 0, 0), Syllable(1, 2, "world", 1, 1)]
     vocal_notes = [VocalNote(0, 1, 60, word_index=0, syllable_index=0)]
     monkeypatch.setattr(pipeline, "align_syllables", lambda *_: syllables)
@@ -572,3 +592,10 @@ def test_full_pipeline_fresh_supplied_lyrics_flow(monkeypatch, tmp_path, mode):
     assert performance["elapsed_sec"] >= 0 and performance["stages"]
     assert pipeline.read_json(result.manifest_path)["outputs"]["performance"] == "performance.json"
     assert progress.call_args.args[:2] == ("complete", 100)
+    if mode == "omnizart":
+        assert any(report.stage == "pitch-primary" for report in result.reports)
+        assert not any(report.stage == "pitch-original" for report in result.reports)
+        stabilizer.assert_not_called()
+    elif mode == "omnizart-fail":
+        assert any("FCPE/YIN fallback" in warning for warning in result.warnings)
+        assert (output / "separated" / "vocals.midi-analysis.wav").exists()

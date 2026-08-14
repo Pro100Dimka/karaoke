@@ -9,6 +9,7 @@ import shutil
 import threading
 import time
 import traceback
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -157,6 +158,15 @@ def is_valid(models_root: Path, model: ModelSpec) -> bool:
             return False
         return not model.sha256 or _sha256(path) == model.sha256.lower()
 
+    if model.kind == "bundle":
+        directory = model_directory(models_root, model)
+        return bool(model.files) and all(
+            (path := directory / item.relative_path).is_file()
+            and path.stat().st_size == item.expected_bytes
+            and _sha256(path) == item.sha256.lower()
+            for item in model.files
+        )
+
     directory = model_directory(models_root, model)
     return (directory / "config.json").is_file() and _has_complete_weights(directory)
 
@@ -176,6 +186,26 @@ def prune_unused_artifacts(models_root: Path, model: ModelSpec) -> int:
 
 def _download(models_root: Path, cache_dir: Path, model: ModelSpec) -> None:
     directory = model_directory(models_root, model)
+    if model.kind == "bundle":
+        for item in model.files:
+            target = directory / item.relative_path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            temporary = target.with_suffix(target.suffix + ".part")
+            try:
+                with (
+                    urllib.request.urlopen(item.url, timeout=120) as source,
+                    temporary.open("wb") as destination,
+                ):
+                    shutil.copyfileobj(source, destination, 1024 * 1024)
+                if (
+                    temporary.stat().st_size != item.expected_bytes
+                    or _sha256(temporary) != item.sha256.lower()
+                ):
+                    raise RuntimeError(f"{model.name}: invalid download {item.relative_path}")
+                os.replace(temporary, target)
+            finally:
+                temporary.unlink(missing_ok=True)
+        return
     common = {
         "repo_id": model.repo_id,
         "revision": model.revision,
