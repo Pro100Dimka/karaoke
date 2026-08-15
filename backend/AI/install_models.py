@@ -135,21 +135,36 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest().lower()
 
 
-def _has_complete_weights(path: Path) -> bool:
+def _indexed_weight_files(path: Path) -> tuple[set[str], bool]:
     indexes = list(path.glob("*.safetensors.index.json")) + list(
         path.glob("pytorch_model.bin.index.json")
     )
+    shards: set[str] = set()
     for index in indexes:
         try:
             manifest = json.loads(index.read_text(encoding="utf-8"))
-            shards = set(manifest["weight_map"].values())
+            weight_map = manifest["weight_map"]
+            if not isinstance(weight_map, dict):
+                return set(), False
+            shards.update(str(value) for value in weight_map.values() if value)
         except (OSError, KeyError, TypeError, json.JSONDecodeError):
-            return False
-        if not shards or not all((path / shard).is_file() for shard in shards):
-            return False
-    if indexes:
-        return True
+            return set(), False
+    return shards, bool(indexes)
+
+
+def _has_complete_weights(path: Path) -> bool:
+    shards, indexed = _indexed_weight_files(path)
+    if indexed:
+        return bool(shards) and all((path / shard).is_file() for shard in shards)
     return any(path.glob("*.safetensors")) or (path / "pytorch_model.bin").is_file()
+
+
+def missing_snapshot_files(path: Path) -> list[str]:
+    """Return indexed weight shards that are missing from a local HF snapshot."""
+    shards, indexed = _indexed_weight_files(path)
+    if not indexed:
+        return []
+    return sorted(shard for shard in shards if not (path / shard).is_file())
 
 
 def is_valid(models_root: Path, model: ModelSpec) -> bool:
@@ -253,6 +268,17 @@ def _download(models_root: Path, cache_dir: Path, model: ModelSpec) -> None:
             max_workers=4,
             **common,
         )
+        # A partially preserved local_dir/cache can contain the index/config but
+        # miss one or more multi-GB weight shards.  Hugging Face's snapshot
+        # metadata may still look reusable, so explicitly heal indexed shards
+        # before declaring the model ready.
+        for shard in missing_snapshot_files(directory):
+            LOGGER.warning("[REPAIR] %s: restoring missing shard %s", model.name, shard)
+            hf_hub_download(
+                filename=shard,
+                force_download=True,
+                **common,
+            )
 
 
 def install_one(
@@ -330,6 +356,9 @@ def verify_all(models_root: Path) -> bool:
         if removed:
             LOGGER.info("[PRUNE] %s: removed %d unused artifacts", model.name, removed)
         valid = is_valid(models_root, model)
+        if not valid and model.kind == "snapshot":
+            for missing in missing_snapshot_files(model_directory(models_root, model)):
+                LOGGER.error("[MISSING SHARD] %s: %s", model.name, missing)
         LOGGER.info("[%s] %s", "OK" if valid else "MISSING", model.name)
         ok = ok and valid
     return ok

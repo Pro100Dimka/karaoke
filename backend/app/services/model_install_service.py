@@ -110,6 +110,56 @@ def _download_worker(models_root: Path, cache_dir: Path) -> None:
         _set_state(state="error", current_model=None, error=str(exc)[:2000])
 
 
+
+def ensure_ready_sync() -> dict[str, object]:
+    """Repair incomplete installed-model snapshots before a processing job starts.
+
+    Installer downloads are intentionally resumable and live outside Program Files.
+    If a shard disappears or a previous install was interrupted, recover only the
+    missing resources instead of letting Transformers fail halfway through a song.
+    """
+    models_root = config.MODELS_DIR.resolve()
+    if all(is_valid(models_root, model) for model in MODELS):
+        return status()
+
+    with _lock:
+        if _state["state"] == "downloading":
+            # Another recovery worker is already active.  Processing must not race
+            # it and observe a half-written snapshot.
+            raise RuntimeError("AI models are still being restored; please retry when recovery finishes")
+        _state.update(state="downloading", current_model=None, error=None)
+
+    reporter = ProgressReporter(models_root, config.APP_LOG_DIR / "model-recovery-progress.txt")
+    reporter.start()
+    cache_dir = (config.CACHE_DIR / "model-downloads").resolve()
+    try:
+        models_root.mkdir(parents=True, exist_ok=True)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        for model in MODELS:
+            if is_valid(models_root, model):
+                reporter.model_finished(model.name)
+                continue
+            logger.warning("Repairing incomplete AI model before processing: %s", model.name)
+            _set_state(current_model=model.name)
+            reporter.model_started(model.name)
+            install_one(models_root, cache_dir, model, retries=3)
+            reporter.model_finished(model.name)
+
+        if not all(is_valid(models_root, model) for model in MODELS):
+            raise RuntimeError("Model verification failed after recovery")
+        config.configure_ai_resource_environment(force=True)
+        from AI.service import reset_ai_service
+
+        reset_ai_service()
+        reporter.finish(True)
+        _set_state(state="ready", current_model=None, error=None)
+        return status()
+    except Exception as exc:
+        reporter.finish(False)
+        logger.exception("Synchronous AI model recovery failed")
+        _set_state(state="error", current_model=None, error=str(exc)[:2000])
+        raise
+
 def start_download() -> dict[str, object]:
     with _lock:
         if _state["state"] == "downloading":

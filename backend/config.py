@@ -195,9 +195,27 @@ def configure_ai_resource_environment(*, force: bool = False) -> None:
         if (force or not configured_exists) and (path.is_dir() if directory else path.is_file()):
             os.environ[name] = str(path)
 
+    # A model directory existing is not enough: interrupted/resumable installs can
+    # leave config/index files without one of the weight shards. Never point the
+    # AI core at an incomplete local snapshot.
+    from AI.install_models import is_valid
+
     for model in MODELS:
         path = model_path(MODELS_DIR, model)
-        set_resource(model.env_var, path, directory=model.kind in {"snapshot", "bundle"})
+        # Production registry entries carry relative_path and can be validated
+        # deeply. Lightweight test/dynamic resource descriptors keep the legacy
+        # existence semantics.
+        valid = (
+            is_valid(MODELS_DIR, model)
+            if hasattr(model, "relative_path")
+            else (path.is_dir() if model.kind in {"snapshot", "bundle"} else path.is_file())
+        )
+        if valid:
+            set_resource(model.env_var, path, directory=model.kind in {"snapshot", "bundle"})
+        elif force:
+            configured = os.environ.get(model.env_var)
+            if configured and Path(configured).expanduser().resolve() == path.resolve():
+                os.environ.pop(model.env_var, None)
 
     os.environ.setdefault("KARAOKE_AI_REQUIRE_CTC", "1")
     set_resource("MSST_ENGINE_DIR", msst, directory=True)

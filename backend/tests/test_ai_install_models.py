@@ -315,3 +315,40 @@ def test_main_check_install_success_and_failure(monkeypatch, tmp_path):
     assert install.main(["--models-root", str(root)]) == 1
     with pytest.raises(SystemExit):
         install.main([])
+
+
+def test_missing_indexed_shards_are_reported(tmp_path):
+    (tmp_path / "config.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "model.safetensors.index.json").write_text(
+        '{"weight_map":{"a":"model-00001-of-00002.safetensors","b":"model-00002-of-00002.safetensors"}}',
+        encoding="utf-8",
+    )
+    (tmp_path / "model-00002-of-00002.safetensors").write_bytes(b"ok")
+    assert install.missing_snapshot_files(tmp_path) == ["model-00001-of-00002.safetensors"]
+    assert not install._has_complete_weights(tmp_path)
+
+
+def test_snapshot_download_explicitly_repairs_missing_indexed_shard(monkeypatch, tmp_path):
+    model = ModelSpec("asr", "ASR", "owner/repo", "rev", "qwen/asr", "ASR")
+    directory = tmp_path / model.relative_path
+    directory.mkdir(parents=True)
+
+    def snapshot_download(**_kwargs):
+        (directory / "config.json").write_text("{}", encoding="utf-8")
+        (directory / "model.safetensors.index.json").write_text(
+            '{"weight_map":{"a":"model-00001-of-00002.safetensors","b":"model-00002-of-00002.safetensors"}}',
+            encoding="utf-8",
+        )
+        (directory / "model-00002-of-00002.safetensors").write_bytes(b"two")
+
+    repaired = []
+
+    def hf_download(*, filename, **kwargs):
+        repaired.append((filename, kwargs.get("force_download")))
+        (directory / filename).write_bytes(b"one")
+
+    monkeypatch.setattr(install, "snapshot_download", snapshot_download)
+    monkeypatch.setattr(install, "hf_hub_download", hf_download)
+    install._download(tmp_path, tmp_path / "cache", model)
+    assert repaired == [("model-00001-of-00002.safetensors", True)]
+    assert install.is_valid(tmp_path, model)

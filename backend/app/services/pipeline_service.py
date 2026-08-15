@@ -31,7 +31,13 @@ from AI.pitch_post import PITCH_STABILIZER_VERSION
 from AI.runtime import RuntimePlan, configure_runtime, format_runtime_plan
 from AI.version import AI_BUILD_ID
 from app import repositories
-from app.services import ai_bridge, app_settings_service, cache_service, song_service
+from app.services import (
+    ai_bridge,
+    app_settings_service,
+    cache_service,
+    model_install_service,
+    song_service,
+)
 from app.services.db_utils import commit
 from app.utils.json_files import read_json
 from database import SessionLocal
@@ -674,6 +680,12 @@ def _run_job(song_id: str) -> None:
         _begin_runtime_progress(song_id)
         heartbeat_stop, heartbeat_thread = _start_progress_heartbeat(song_id)
         capture = _create_progress_capture(song_id, out_dir)
+
+        # Installed models live in LocalAppData and survive installer retries.
+        # Validate them before expensive processing starts; a missing HF shard is
+        # repaired here instead of crashing later at the ASR/alignment stage.
+        _update_progress(song_id, step_label="Проверка AI-моделей", percent=1.0)
+        model_install_service.ensure_ready_sync()
 
         runtime_plan = _configure_ai_runtime()
         capture.write(

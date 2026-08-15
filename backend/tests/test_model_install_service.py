@@ -185,3 +185,30 @@ def test_start_download_is_idempotent_and_spawns_daemon(monkeypatch, tmp_path):
         "current_model": None,
         "error": None,
     }
+
+
+def test_sync_recovery_repairs_before_processing(monkeypatch, tmp_path):
+    model = _model()
+    models_root = tmp_path / "models"
+    monkeypatch.setattr(model_install_service, "MODELS", (model,))
+    monkeypatch.setattr(model_install_service.config, "MODELS_DIR", models_root)
+    monkeypatch.setattr(model_install_service.config, "CACHE_DIR", tmp_path / "cache-root")
+    monkeypatch.setattr(model_install_service.config, "APP_LOG_DIR", tmp_path / "logs")
+    configured = Mock()
+    monkeypatch.setattr(model_install_service.config, "configure_ai_resource_environment", configured)
+    monkeypatch.setattr("AI.service.reset_ai_service", Mock())
+
+    def install(root, _cache, resource, retries):
+        assert retries == 3
+        directory = model_directory(root, resource)
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "config.json").write_text("{}", encoding="utf-8")
+        (directory / "model.safetensors").write_bytes(b"weights")
+
+    monkeypatch.setattr(model_install_service, "install_one", install)
+    model_install_service._set_state(state="idle", current_model=None, error=None)
+
+    result = model_install_service.ensure_ready_sync()
+
+    assert result["ready"] is True
+    configured.assert_called_once_with(force=True)
