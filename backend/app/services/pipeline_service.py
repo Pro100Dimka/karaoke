@@ -56,7 +56,9 @@ def _configure_ai_runtime() -> RuntimePlan:
     """Apply persisted compute preferences before lazy AI imports load a runtime."""
     config.configure_ai_resource_environment(force=True)
     settings = app_settings_service.read_settings()
-    device = str(settings["compute_mode"])
+    configured_device = str(settings["compute_mode"])
+    override = os.getenv("KARAOKE_AI_RUNTIME_OVERRIDE", "").strip().lower()
+    device = override if override in {"auto", "cuda", "cpu"} else configured_device
     thread_count = int(settings["thread_count"])
     os.environ["SONGAPP_DEVICE"] = device
     # NumPy/BLAS honor these on their next initialization; PyTorch is also

@@ -214,3 +214,10 @@ def test_pyin_requires_librosa(monkeypatch):
     monkeypatch.setattr(builtins, "__import__", missing)
     with pytest.raises(EngineUnavailableError, match="librosa"):
         pitch.PyinFallbackPitchEstimator().estimate("audio")
+
+
+def test_fcpe_shadow_backend_can_select_directml_from_env(monkeypatch):
+    monkeypatch.setenv("KARAOKE_AI_FCPE_SHADOW_BACKEND", "directml")
+    estimator = pitch.FCPEPitchEstimator(shadow_policy=ShadowPolicy(False, 0))
+    assert estimator._configured_shadow_class() is pitch.OrtDirectMLFCPEBackend
+    assert estimator._shadow_key() == "onnxruntime:directml:fp32"

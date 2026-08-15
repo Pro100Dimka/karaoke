@@ -90,3 +90,43 @@ def test_ort_fcpe_failures_are_explicit(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "onnxruntime", _fake_ort(FakeSession()))
     with pytest.raises(EngineUnavailableError, match="not configured"):
         adapter._load()
+
+
+def test_directml_fcpe_uses_required_session_options(monkeypatch, tmp_path):
+    artifact = tmp_path / "fcpe.onnx"
+    artifact.touch()
+    adapter = fcpe_backends.OrtDirectMLFCPEBackend(artifact)
+    monkeypatch.setattr(adapter, "availability", lambda: BackendAvailability(True, "ok"))
+    session = FakeSession(("DmlExecutionProvider", "CPUExecutionProvider"))
+    options = SimpleNamespace(
+        graph_optimization_level=None,
+        enable_mem_pattern=True,
+        execution_mode=None,
+    )
+    fake = _fake_ort(session)
+    fake.SessionOptions = lambda: options
+    fake.ExecutionMode = SimpleNamespace(ORT_SEQUENTIAL="sequential")
+    monkeypatch.setitem(sys.modules, "onnxruntime", fake)
+
+    result = adapter.infer(
+        np.zeros((1, 2, 128), dtype=np.float32),
+        np.arange(12, dtype=np.float32) * 100,
+        target_length=2,
+    )
+
+    assert result.providers[0] == "DmlExecutionProvider"
+    assert options.enable_mem_pattern is False
+    assert options.execution_mode == "sequential"
+    assert session.disable_fallback.called
+
+
+def test_directml_fcpe_rejects_provider_fallback(monkeypatch, tmp_path):
+    artifact = tmp_path / "fcpe.onnx"
+    artifact.touch()
+    adapter = fcpe_backends.OrtDirectMLFCPEBackend(artifact)
+    monkeypatch.setattr(adapter, "availability", lambda: BackendAvailability(True, "ok"))
+    fake = _fake_ort(FakeSession(("CPUExecutionProvider",)))
+    fake.ExecutionMode = SimpleNamespace(ORT_SEQUENTIAL="sequential")
+    monkeypatch.setitem(sys.modules, "onnxruntime", fake)
+    with pytest.raises(EngineUnavailableError, match="DmlExecutionProvider"):
+        adapter._load()

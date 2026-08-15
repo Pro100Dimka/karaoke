@@ -128,16 +128,28 @@ def test_vendor_neutral_fcpe_registry_contract():
     candidates = registry.AI_BACKEND_REGISTRY.candidates("fcpe")
     assert [item.key for item in candidates] == [
         "onnxruntime:cuda:fp16",
+        "onnxruntime:directml:fp32",
         "pytorch:cuda:fp32",
         "pytorch:cpu:fp32",
     ]
-    assert candidates[0].vendor == "nvidia"
-    assert candidates[0].quality_status == "disabled"
-    assert candidates[0].benchmark_status == "corpus"
-    assert candidates[-1].vendor == "any"
-    assert candidates[0].runtime_requirements[0].name == "onnxruntime-gpu"
-    assert registry.AI_BACKEND_REGISTRY.fallback_chain("fcpe", candidates[0].key) == tuple(
-        candidates
+    cuda, directml, _torch_cuda, cpu = candidates
+    assert cuda.vendor == "nvidia"
+    assert cuda.quality_status == "disabled"
+    assert cuda.benchmark_status == "corpus"
+    assert directml.vendor == "amd,intel"
+    assert directml.quality_status == "shadow"
+    assert directml.benchmark_status == "isolated"
+    assert directml.runtime_requirements[0].name == "onnxruntime-directml"
+    assert cpu.vendor == "any"
+    assert cuda.runtime_requirements[0].name == "onnxruntime-gpu"
+    assert registry.AI_BACKEND_REGISTRY.fallback_chain("fcpe", cuda.key) == (
+        cuda,
+        _torch_cuda,
+        cpu,
+    )
+    assert registry.AI_BACKEND_REGISTRY.fallback_chain("fcpe", directml.key) == (
+        directml,
+        cpu,
     )
 
 

@@ -247,6 +247,17 @@ def test_write_environment_and_verify_all(monkeypatch, tmp_path):
     install.write_environment(tmp_path, tmp_path / "models", tmp_path / "msst", env)
     text = env.read_text()
     assert "KARAOKE_AI_REQUIRE_CTC=1" in text and "FILE_MODEL=" in text
+    assert "KARAOKE_AI_FCPE_ONNX=" not in text
+
+    optimized = tmp_path / "models" / "optimized" / "fcpe" / "fcpe-core.onnx"
+    optimized.parent.mkdir(parents=True)
+    optimized.touch()
+    directml = tmp_path / "runtimes" / "onnxruntime-directml" / "onnxruntime"
+    directml.mkdir(parents=True)
+    install.write_environment(tmp_path, tmp_path / "models", tmp_path / "msst", env)
+    text = env.read_text()
+    assert f"KARAOKE_AI_FCPE_ONNX={optimized}" in text
+    assert f"KARAOKE_AI_ORT_DIRECTML_PATH={directml.parent}" in text
     monkeypatch.setattr(install, "prune_unused_artifacts", Mock(return_value=1))
     values = iter([True, False])
     monkeypatch.setattr(install, "is_valid", lambda *_: next(values))

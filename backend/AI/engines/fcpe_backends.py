@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import asdict, dataclass
 
@@ -48,17 +49,26 @@ class FCPEInference:
     providers: tuple[str, ...]
 
 
-class OrtCudaFCPEBackend:
-    """Lazy ORT CUDA adapter for an exported FCPE neural core."""
+class _OrtFCPEBackend:
+    """Lazy ONNX Runtime adapter for an exported FCPE neural core."""
+
+    key = ""
+    provider = ""
+    load_metric = "model.load.fcpe.shadow_ort"
+    inference_metric = "inference.fcpe.shadow_ort"
 
     def __init__(self, artifact=None):
         self.artifact = artifact or fcpe_onnx_path()
         self._session = None
         self._providers: tuple[str, ...] = ()
+        self._run_lock = threading.Lock()
         self.last_initialization_sec = 0.0
 
     def availability(self):
-        return AI_BACKEND_REGISTRY.get("fcpe", "onnxruntime:cuda:fp16").availability()
+        return AI_BACKEND_REGISTRY.get("fcpe", self.key).availability()
+
+    def _configure_options(self, ort, options) -> None:
+        return None
 
     def _load(self):
         if self._session is not None:
@@ -70,23 +80,24 @@ class OrtCudaFCPEBackend:
         try:
             import onnxruntime as ort
         except (ImportError, OSError) as exc:
-            raise EngineUnavailableError("ONNX Runtime CUDA is unavailable") from exc
+            raise EngineUnavailableError("ONNX Runtime is unavailable") from exc
         if self.artifact is None:
             raise EngineUnavailableError("FCPE ONNX artifact is not configured")
         options = ort.SessionOptions()
         options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        self._configure_options(ort, options)
         started = time.perf_counter()
-        with profile_operation("model.load.fcpe.shadow_ort"):
+        with profile_operation(self.load_metric):
             session = ort.InferenceSession(
                 str(self.artifact),
                 sess_options=options,
-                providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
+                providers=[self.provider, "CPUExecutionProvider"],
             )
         self.last_initialization_sec = time.perf_counter() - started
         self._providers = tuple(session.get_providers())
-        if not self._providers or self._providers[0] != "CUDAExecutionProvider":
+        if not self._providers or self._providers[0] != self.provider:
             raise EngineUnavailableError(
-                f"ORT FCPE session did not activate CUDAExecutionProvider: {self._providers}"
+                f"ORT FCPE session did not activate {self.provider}: {self._providers}"
             )
         disable_fallback = getattr(session, "disable_fallback", None)
         if disable_fallback is not None:
@@ -104,7 +115,9 @@ class OrtCudaFCPEBackend:
         session = self._load()
         values = np.ascontiguousarray(mel, dtype=np.float32)
         started = time.perf_counter()
-        with profile_operation("inference.fcpe.shadow_ort", byte_count=int(values.nbytes)):
+        # DirectML does not support concurrent Run calls on one session. The lock
+        # is harmless for CUDA and lets both adapters share the same safe contract.
+        with self._run_lock, profile_operation(self.inference_metric, byte_count=int(values.nbytes)):
             latent = np.asarray(session.run(None, {session.get_inputs()[0].name: values})[0])
         elapsed = time.perf_counter() - started
         f0, confidence = decode_fcpe_latent(latent, cent_table)
@@ -124,6 +137,28 @@ class OrtCudaFCPEBackend:
         self._session = None
         self._providers = ()
         self.last_initialization_sec = 0.0
+
+
+class OrtCudaFCPEBackend(_OrtFCPEBackend):
+    """Lazy ORT CUDA adapter for the rejected FP16 FCPE shadow candidate."""
+
+    key = "onnxruntime:cuda:fp16"
+    provider = "CUDAExecutionProvider"
+
+
+class OrtDirectMLFCPEBackend(_OrtFCPEBackend):
+    """Lazy DirectML FP32 adapter for AMD/Intel shadow validation on Windows."""
+
+    key = "onnxruntime:directml:fp32"
+    provider = "DmlExecutionProvider"
+    load_metric = "model.load.fcpe.shadow_directml"
+    inference_metric = "inference.fcpe.shadow_directml"
+
+    def _configure_options(self, ort, options) -> None:
+        # Required by the DirectML EP: no memory-pattern optimization and no
+        # parallel graph execution. Keep this local so CUDA behavior is unchanged.
+        options.enable_mem_pattern = False
+        options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
 
 
 def describe_fcpe_inference(result: FCPEInference) -> dict[str, object]:

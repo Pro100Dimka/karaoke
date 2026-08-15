@@ -25,6 +25,25 @@ def test_runtime_configuration_applies_device_threads_and_torch(monkeypatch):
     torch.set_num_threads.assert_called_once_with(3)
 
 
+
+def test_runtime_test_override_wins_over_persisted_compute_mode(monkeypatch):
+    monkeypatch.setattr(pipeline_service.config, "configure_ai_resource_environment", Mock())
+    monkeypatch.setattr(
+        pipeline_service.app_settings_service,
+        "read_settings",
+        Mock(return_value={"compute_mode": "auto", "thread_count": 2}),
+    )
+    monkeypatch.setenv("KARAOKE_AI_RUNTIME_OVERRIDE", "cpu")
+    torch = ModuleType("torch")
+    torch.set_num_threads = Mock()
+    monkeypatch.setitem(sys.modules, "torch", torch)
+
+    plan = pipeline_service._configure_ai_runtime()
+
+    assert plan.preference == "cpu"
+    assert pipeline_service.os.environ["SONGAPP_DEVICE"] == "cpu"
+
+
 def test_audio_tags_and_source_metadata_fallbacks(monkeypatch):
     assert pipeline_service._first_audio_tag(object(), "title") is None
     assert pipeline_service._first_audio_tag({"title": [None, " Song "]}, "title") == "Song"

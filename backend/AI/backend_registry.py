@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import sys
 from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -176,7 +177,27 @@ def fcpe_onnx_path() -> Path | None:
     return Path(value).expanduser() if value else None
 
 
-def _ort_cuda_availability(model: str) -> BackendAvailability:
+def _add_optional_runtime_path(env_var: str) -> None:
+    value = os.getenv(env_var, "").strip()
+    if not value:
+        return
+    path = Path(value).expanduser()
+    if path.is_dir() and str(path) not in sys.path:
+        sys.path.insert(0, str(path))
+
+
+def _ort_provider_availability(
+    model: str,
+    provider: str,
+    label: str,
+    *,
+    windows_only: bool = False,
+    runtime_path_env: str = "",
+) -> BackendAvailability:
+    if windows_only and os.name != "nt":
+        return BackendAvailability(False, f"{label} is available only on Windows")
+    if runtime_path_env:
+        _add_optional_runtime_path(runtime_path_env)
     artifact = fcpe_onnx_path() if model == "fcpe" else ctc_onnx_path(model)
     if artifact is None:
         env_var = "KARAOKE_AI_FCPE_ONNX" if model == "fcpe" else f"KARAOKE_AI_{model.upper()}_ONNX"
@@ -191,10 +212,24 @@ def _ort_cuda_availability(model: str) -> BackendAvailability:
         providers = ort.get_available_providers()
     except (ImportError, OSError, RuntimeError) as exc:
         return BackendAvailability(False, f"ONNX Runtime probe failed: {exc}")
-    available = "CUDAExecutionProvider" in providers
+    available = provider in providers
     return BackendAvailability(
         available,
-        "ORT CUDA is available" if available else "CUDAExecutionProvider is unavailable",
+        f"{label} is available" if available else f"{provider} is unavailable",
+    )
+
+
+def _ort_cuda_availability(model: str) -> BackendAvailability:
+    return _ort_provider_availability(model, "CUDAExecutionProvider", "ORT CUDA")
+
+
+def _ort_directml_availability(model: str) -> BackendAvailability:
+    return _ort_provider_availability(
+        model,
+        "DmlExecutionProvider",
+        "ORT DirectML",
+        windows_only=True,
+        runtime_path_env="KARAOKE_AI_ORT_DIRECTML_PATH",
     )
 
 
@@ -282,6 +317,23 @@ def _fcpe_specs() -> tuple[BackendSpec, ...]:
             (cuda_key,),
             "nvidia",
             (RuntimeRequirement("onnxruntime-gpu", "1.22"),),
+        ),
+        BackendSpec(
+            "fcpe",
+            "onnxruntime",
+            "directml",
+            "fp32",
+            lambda: _ort_directml_availability("fcpe"),
+            250,
+            MemoryRequirements(1_300_000_000, 1_700_000_000),
+            (ArtifactRequirement("onnx", "KARAOKE_AI_FCPE_ONNX"),),
+            common | {"optional-runtime", "shadow-only", "broad-windows-gpu-candidate"},
+            shapes,
+            "shadow",
+            "isolated",
+            (cpu_key,),
+            "amd,intel",
+            (RuntimeRequirement("onnxruntime-directml"),),
         ),
         BackendSpec(
             "fcpe",

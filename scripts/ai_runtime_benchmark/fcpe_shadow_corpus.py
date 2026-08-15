@@ -21,13 +21,13 @@ BUILD = ROOT / "build/fcpe-shadow-corpus"
 DEPS = Path(
     os.getenv("KARAOKE_BENCHMARK_DEPS", ROOT.parent / ".karaoke-ai-benchmark-deps")
 )
-sys.path.insert(0, str(DEPS / "ort-gpu"))
 sys.path.insert(0, str(ROOT / "backend"))
 sys.path.insert(0, str(Path(__file__).parent))
 
 from AI.audio import load_mono
 from AI.engines.fcpe_backends import (
     OrtCudaFCPEBackend,
+    OrtDirectMLFCPEBackend,
     decode_fcpe_latent,
     nearest_resize,
 )
@@ -294,14 +294,21 @@ def main() -> int:
     )
     parser.add_argument("--unload", action="store_true")
     parser.add_argument("--cases", nargs="*")
+    parser.add_argument("--backend", choices=("cuda", "directml"), default="cuda")
     args = parser.parse_args()
-    os.environ["KARAOKE_AI_FCPE_ONNX"] = str(
+    runtime_path = DEPS / ("directml" if args.backend == "directml" else "ort-gpu")
+    if runtime_path.is_dir():
+        sys.path.insert(0, str(runtime_path))
+    artifact = (
         ROOT / "build/ai-runtime-benchmark/artifacts/fcpe-fp16.onnx"
+        if args.backend == "cuda"
+        else ROOT / "downloads/models/optimized/fcpe/fcpe-core.onnx"
     )
+    os.environ["KARAOKE_AI_FCPE_ONNX"] = str(artifact)
     import torch
 
     estimator = FCPEPitchEstimator()
-    backend = OrtCudaFCPEBackend()
+    backend = OrtCudaFCPEBackend() if args.backend == "cuda" else OrtDirectMLFCPEBackend()
     selected = set(args.cases or ())
     corpus = tuple(
         case for case in prepare_cases() if not selected or case.name in selected
@@ -316,6 +323,7 @@ def main() -> int:
         "schema": 1,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "resident": not args.unload,
+        "backend": args.backend,
         "cases": cases,
         "sources": [asdict(case) | {"source": str(case.source)} for case in corpus],
     }

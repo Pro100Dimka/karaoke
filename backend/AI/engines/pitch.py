@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import suppress
+import os
 
 import numpy as np
 
@@ -11,7 +12,11 @@ from ..models import PitchFrame
 from ..profiler import profile_operation
 from .base import PitchEstimator
 from .device import fallback_torch_device, select_torch_device
-from .fcpe_backends import OrtCudaFCPEBackend, describe_fcpe_inference
+from .fcpe_backends import (
+    OrtCudaFCPEBackend,
+    OrtDirectMLFCPEBackend,
+    describe_fcpe_inference,
+)
 
 
 class FCPEPitchEstimator(PitchEstimator):
@@ -25,7 +30,7 @@ class FCPEPitchEstimator(PitchEstimator):
         fmax=1400.0,
         *,
         shadow_policy: ShadowPolicy | None = None,
-        shadow_backend_factory=OrtCudaFCPEBackend,
+        shadow_backend_factory=None,
     ):
         self.sr = int(sr)
         self.hop = max(1, int(hop))
@@ -181,20 +186,44 @@ class FCPEPitchEstimator(PitchEstimator):
         self._run_shadow(audio, model, tensor, y, target_length, output)
         return output
 
+    def _configured_shadow_class(self):
+        backend = os.getenv("KARAOKE_AI_FCPE_SHADOW_BACKEND", "cuda").strip().casefold()
+        if backend in {"directml", "dml"}:
+            return OrtDirectMLFCPEBackend
+        if backend in {"cuda", "ort-cuda", "onnxruntime-cuda"}:
+            return OrtCudaFCPEBackend
+        raise EngineUnavailableError(f"Unknown FCPE shadow backend: {backend}")
+
+    def _create_shadow_backend(self):
+        if self._shadow_backend_factory is not None:
+            return self._shadow_backend_factory()
+        return self._configured_shadow_class()()
+
+    def _shadow_key(self) -> str:
+        if self._shadow_backend is not None:
+            return str(getattr(self._shadow_backend, "key", "custom"))
+        if self._shadow_backend_factory is not None:
+            return str(getattr(self._shadow_backend_factory, "key", "custom"))
+        try:
+            return str(getattr(self._configured_shadow_class(), "key", "custom"))
+        except EngineUnavailableError as exc:
+            return f"invalid:{exc}"
+
     def _run_shadow(self, audio, model, tensor, y, target_length, production) -> None:
         selected = self._shadow_policy.selects(str(audio))
         self.last_shadow_frames = []
         self.last_shadow_diagnostics = {
             "selected": selected,
             "production": "pytorch:auto:fp32",
-            "shadow": "onnxruntime:cuda:fp16",
+            "shadow": self._shadow_key(),
             "resident": self._shadow_policy.keep_session_resident,
         }
         if not selected:
             return
         try:
             if self._shadow_backend is None:
-                self._shadow_backend = self._shadow_backend_factory()
+                self._shadow_backend = self._create_shadow_backend()
+                self.last_shadow_diagnostics["shadow"] = self._shadow_key()
             mel = np.asarray(model.wav2mel(tensor, self.sr).detach().cpu(), dtype=np.float32)
             cent_table = np.asarray(model.model.cent_table.detach().cpu(), dtype=np.float32)
             candidate = self._shadow_backend.infer(

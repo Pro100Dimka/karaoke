@@ -94,3 +94,53 @@ def test_non_accelerator_error_is_not_masked(monkeypatch):
     runtime.configure_runtime("auto", force=True)
     assert device.fallback_torch_device("asr", "cuda:0", ValueError("bad input")) is None
     assert runtime.selected_backend("asr").device == "cuda"
+
+@pytest.mark.parametrize(
+    ("gpu_info", "expected_device"),
+    [
+        (runtime.GPUInfo("AMD Radeon RX 7800 XT", "amd", 16 * 1024**3), "cpu"),
+        (runtime.GPUInfo("Intel Arc A770", "intel", 16 * 1024**3), "cpu"),
+        (runtime.GPUInfo("Intel(R) Arc(TM) Graphics", "intel", 2 * 1024**3), "cpu"),
+    ],
+)
+def test_non_nvidia_profiles_use_safe_cpu_until_gpu_backend_is_validated(
+    monkeypatch, gpu_info, expected_device
+):
+    monkeypatch.setattr(
+        runtime,
+        "detect_hardware",
+        lambda _torch=None: profile(cuda=False, gpus=(gpu_info,)),
+    )
+    plan = runtime.configure_runtime("auto", force=True)
+    assert all(spec.device == expected_device for spec in plan.selected.values())
+
+
+def test_directml_fcpe_is_shadow_only_and_never_auto_selected(monkeypatch):
+    directml = runtime.AI_BACKEND_REGISTRY.get("fcpe", "onnxruntime:directml:fp32")
+    assert directml.quality_status == "shadow"
+    assert "shadow-only" in directml.capabilities
+    assert directml.vendor == "amd,intel"
+
+    monkeypatch.setattr(
+        runtime,
+        "detect_hardware",
+        lambda _torch=None: profile(
+            cuda=False,
+            gpus=(runtime.GPUInfo("AMD Radeon RX 7800 XT", "amd", 16 * 1024**3),),
+        ),
+    )
+    plan = runtime.configure_runtime("auto", force=True)
+    assert plan.selected["fcpe"].key == "pytorch:cpu:fp32"
+
+
+def test_forced_cpu_profile_keeps_all_stages_on_cpu_even_with_nvidia(monkeypatch):
+    monkeypatch.setattr(
+        runtime,
+        "detect_hardware",
+        lambda _torch=None: profile(
+            cuda=True,
+            gpus=(runtime.GPUInfo("NVIDIA GeForce RTX 3060", "nvidia", 8 * 1024**3),),
+        ),
+    )
+    plan = runtime.configure_runtime("cpu", force=True)
+    assert all(spec.key == "pytorch:cpu:fp32" for spec in plan.selected.values())

@@ -306,6 +306,16 @@ def write_environment(downloads: Path, models_root: Path, msst: Path, env_file: 
     for model in MODELS:
         values[model.env_var] = model_path(models_root, model)
 
+    # Optional optimized artifacts are discovered, never required. This keeps the
+    # baseline runtime universal while allowing validated/shadow backends to plug
+    # in without hand-editing ai-environment.bat.
+    fcpe_onnx = models_root / "optimized" / "fcpe" / "fcpe-core.onnx"
+    if fcpe_onnx.is_file():
+        values["KARAOKE_AI_FCPE_ONNX"] = fcpe_onnx
+    directml_runtime = downloads / "runtimes" / "onnxruntime-directml"
+    if (directml_runtime / "onnxruntime").is_dir():
+        values["KARAOKE_AI_ORT_DIRECTML_PATH"] = directml_runtime
+
     env_file.parent.mkdir(parents=True, exist_ok=True)
     with env_file.open("w", encoding="utf-8", newline="\r\n") as handle:
         handle.write("@echo off\r\n")
