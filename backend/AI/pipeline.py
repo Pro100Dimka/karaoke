@@ -78,7 +78,7 @@ from .vocal_preprocess import (
 ProgressCallback = Callable[[str, float, str], None]
 CancelCallback = Callable[[], bool]
 PIPELINE_LOCK_TIMEOUT_SECONDS = 180.0
-CANONICAL_NORMALIZATION_VERSION = "v2-confidence-aware-local-anchors"
+CANONICAL_NORMALIZATION_VERSION = "v3-confidence-aware-idempotent-local-anchors"
 
 
 def _bound_word_durations(words: list[Word]) -> list[Word]:
@@ -304,13 +304,6 @@ def _preserve_complete_canonical_timeline(
             if not isinstance(entry, dict):
                 return None
             options: list[tuple[float, int, Word]] = []
-            current = words[index]
-            if (
-                sources[index] == "reacquired"
-                and 0.0 <= current.start < current.end <= total_duration
-                and current.end - current.start >= 0.01
-            ):
-                options.append((float(current.confidence), 0, current))
             for rank, kind in enumerate(("ctc", "qwen", "consensus"), start=1):
                 value = entry.get(kind)
                 if not isinstance(value, dict):
@@ -325,7 +318,16 @@ def _preserve_complete_canonical_timeline(
                     options.append(
                         (confidence, rank, Word(start, end, words[index].text, confidence, index))
                     )
-            return max(options, default=(0.0, 0, None), key=lambda item: item[:2])[2]
+            if options:
+                return max(options, key=lambda item: item[:2])[2]
+            current = words[index]
+            if (
+                sources[index] in {"interpolated", "reacquired"}
+                and 0.0 <= current.start < current.end <= total_duration
+                and current.end - current.start >= 0.01
+            ):
+                return current
+            return None
 
         def interpolate(indices: list[int], start: float, end: float) -> bool:
             if not indices:
@@ -360,7 +362,7 @@ def _preserve_complete_canonical_timeline(
                     if not interpolate(pending, cursor, candidate.start):
                         return False
                     local[index] = candidate
-                    if sources[index] not in acoustic:
+                    if sources[index] not in acoustic and candidate is not words[index]:
                         sources[index] = "reacquired"
                     cursor = candidate.end
                     pending.clear()
@@ -369,7 +371,8 @@ def _preserve_complete_canonical_timeline(
                 if candidate.end >= cursor + len(block) * 0.01:
                     if not interpolate(block, cursor, candidate.end):
                         return False
-                    sources[index] = "reacquired"
+                    if candidate is not words[index]:
+                        sources[index] = "reacquired"
                     cursor = candidate.end
                     pending.clear()
                 else:

@@ -125,26 +125,28 @@ def _candidate(start, end, confidence=0.5, kind="ctc"):
 
 def test_confidence_aware_repair_preserves_candidate_before_weak_anchor():
     original = words(
-        (0.5, 1.0, "left", 0.9),
-        (1.0, 1.18, "love", 0.012),
-        (1.18, 1.20, "weak", 0.000001),
-        (1.55, 1.85, "next", 0.8),
+        (4.630521255, 4.790885628, "после", 0.2000004),
+        (4.790885628, 4.834750000, "любви", 0.012),
+        (4.834750000, 4.854835776, "Я", 0.0000041),
+        (4.874921552, 5.055693534, "хочу", 0.0000627),
+        (5.115950862, 6.923670690, "наслаждаться", 0.3046425),
     )
-    sources = ["ctc", "interpolated", "ctc", "ctc"]
+    sources = ["ctc", "interpolated", "ctc", "ctc", "ctc"]
     repaired = pipeline._pipeline_lossless_canonical_words(
-        "left love weak next",
+        "после любви Я хочу наслаждаться",
         original,
-        3.0,
+        195.549138322,
         sources,
         [
-            _candidate(0.5, 1.0, 0.9),
-            _candidate(1.02, 1.42, 0.08),
-            _candidate(1.19, 1.21, 0.000001),
-            _candidate(1.55, 1.85, 0.8),
+            _candidate(4.630521255, 4.790885628, 0.2000004),
+            _candidate(4.830976721, 4.951250000, 0.0000661),
+            _candidate(4.834750000, 4.854835776, 0.0000041),
+            _candidate(4.874921552, 5.055693534, 0.0000627),
+            _candidate(5.115950862, 6.923670690, 0.3046425),
         ],
     )
-    assert (repaired[1].start, repaired[1].end) == (1.02, 1.42)
-    assert repaired[3] == original[3]
+    assert (repaired[1].start, repaired[1].end) == (4.830976721, 4.951250000)
+    assert repaired[0] == original[0] and repaired[4] == original[4]
     assert sources[1] == "reacquired" and sources[2] == "interpolated"
 
 
