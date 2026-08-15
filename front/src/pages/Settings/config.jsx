@@ -1,6 +1,5 @@
 import { Cpu, Mic2, Palette, Radio, SlidersHorizontal } from "lucide-react";
 import { translateSaved } from "../../i18n/runtime";
-import { MONITORING_MODES } from "../Karaoke/config";
 import screens from "./screens";
 import {
   audioDriverVisible,
@@ -19,15 +18,6 @@ import {
 } from "./utils";
 
 export const FULL = 12;
-export const LATENCY_OPTIONS = opts([
-  ["interactive", translateSaved("Низкая задержка")],
-  ["balanced", translateSaved("Автоматический")],
-  ["playback", translateSaved("Стабильное воспроизведение")]
-]);
-export const MONITOR_MODE_OPTIONS = MONITORING_MODES.map(({ id, title }) => ({
-  value: id,
-  label: title
-}));
 const LANGUAGE_OPTIONS = opts([
   ["uk", translateSaved("Українська")],
   ["ru", translateSaved("Русский")],
@@ -249,18 +239,6 @@ const PREFERENCE_FIELDS = [
     "browserOutputs",
     translateSaved("Выход для проверки"),
     translateSaved("Отдельное устройство только для тестового сигнала")
-  ],
-  [
-    "monitorLatencyHint",
-    LATENCY_OPTIONS,
-    translateSaved("Режим задержки"),
-    translateSaved("Автоматического режима достаточно в большинстве случаев")
-  ],
-  [
-    "monitorMode",
-    MONITOR_MODE_OPTIONS,
-    translateSaved("Режим прослушивания"),
-    translateSaved("Способ возврата голоса в наушники")
   ]
 ].map(([name, source, label, tooltip]) =>
   preferenceSelect(name, source, {
@@ -368,20 +346,11 @@ const AI_FIELDS = [...AI_SETTINGS_FIELDS, ...STORAGE_FIELDS];
    SETTINGS
    ========================================================= */
 
-export const SETTINGS = Object.fromEntries(
-  [
-    ["appearance", translateSaved("Общее"), Palette, GENERAL_FIELDS],
-    ["audio", translateSaved("Звук"), SlidersHorizontal, AUDIO_FIELDS],
-    ["ai", translateSaved("Обработка"), Cpu, AI_FIELDS]
-  ].map(([id, label, icon, fields]) => [
-    id,
-    {
-      label,
-      icon,
-      fields
-    }
-  ])
-);
+export const SETTINGS = {
+  appearance: { label: translateSaved("Общее"), icon: Palette, fields: GENERAL_FIELDS },
+  audio: { label: translateSaved("Звук"), icon: SlidersHorizontal, fields: AUDIO_FIELDS },
+  ai: { label: translateSaved("Обработка"), icon: Cpu, fields: AI_FIELDS }
+};
 export const SERVICE_SCREENS = screens;
 export const SETTINGS_TABS = Object.entries(SETTINGS).map(
   ([id, { label, icon }]) => ({

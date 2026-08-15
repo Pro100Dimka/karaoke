@@ -9,7 +9,7 @@
     "dev": "vite",
     "dev:electron": "concurrently -k \"vite\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "build": "vite build",
-    "build:electron": "npm run build && electron-builder",
+    "build:electron": "npm run release:check && electron-builder",
     "preview": "vite preview",
     "lint": "eslint src electron --ext .js,.jsx,.cjs --ignore-pattern src/theme --max-warnings 0",
     "lint:fix": "npm run lint -- --fix",
@@ -129,5 +129,8 @@
   },
   "overrides": {
     "qs": "6.15.3"
+  },
+  "engines": {
+    "node": ">=22.18.0 <23 || >=24.11.0"
   }
 }

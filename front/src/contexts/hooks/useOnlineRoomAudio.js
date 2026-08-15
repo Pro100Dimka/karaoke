@@ -20,6 +20,7 @@ export default function useOnlineRoomAudio({
 }) {
   const remoteAudioRef = useRef(new Map());
   const remoteEffectsRef = useRef(new Map());
+  const remoteEffectVersionsRef = useRef(new Map());
   const localMonitorRef = useRef(null);
 
   const applyRemoteAudioMute = useCallback(() => {
@@ -34,6 +35,10 @@ export default function useOnlineRoomAudio({
 
   const removeRemoteAudio = useCallback(
     (participantId) => {
+      remoteEffectVersionsRef.current.set(
+        participantId,
+        (remoteEffectVersionsRef.current.get(participantId) || 0) + 1
+      );
       stopSpeakingMeter(participantId);
       const effectGraph = remoteEffectsRef.current.get(participantId);
       remoteEffectsRef.current.delete(participantId);
@@ -73,6 +78,8 @@ export default function useOnlineRoomAudio({
 
   const applyParticipantEffects = useCallback(
     (participantId, enabled) => {
+      const effectVersion = (remoteEffectVersionsRef.current.get(participantId) || 0) + 1;
+      remoteEffectVersionsRef.current.set(participantId, effectVersion);
       const previous = remoteEffectsRef.current.get(participantId);
       remoteEffectsRef.current.delete(participantId);
       closeContext(previous?.context);
@@ -131,9 +138,25 @@ export default function useOnlineRoomAudio({
         wet.connect(master);
       }
       master.connect(context.destination);
-      remoteEffectsRef.current.set(participantId, { context, master });
-      context.resume?.().catch(() => {});
-      applyRemoteAudioMute();
+      const activate = () => {
+        if (
+          remoteEffectVersionsRef.current.get(participantId) !== effectVersion ||
+          remoteAudioRef.current.get(participantId)?.srcObject !== stream
+        ) {
+          closeContext(context);
+          return;
+        }
+        remoteEffectsRef.current.set(participantId, { context, master });
+        applyRemoteAudioMute();
+      };
+      if (context.state === "suspended") {
+        Promise.resolve(context.resume()).then(activate).catch(() => {
+          closeContext(context);
+          applyRemoteAudioMute();
+        });
+      } else {
+        activate();
+      }
     },
     [applyRemoteAudioMute, roomUiRef]
   );
@@ -168,19 +191,25 @@ export default function useOnlineRoomAudio({
       const AudioContextClass =
         globalThis.AudioContext || globalThis.webkitAudioContext;
       if (!AudioContextClass) return false;
-      const context = new AudioContextClass({ latencyHint: "interactive" });
-      const source = context.createMediaStreamSource(stream);
-      const gain = context.createGain();
-      gain.gain.value = 1;
-      source.connect(gain);
-      gain.connect(context.destination);
-      await context.resume?.();
-      if (voiceRef.current !== voice) {
+      let context;
+      try {
+        context = new AudioContextClass({ latencyHint: "interactive" });
+        const source = context.createMediaStreamSource(stream);
+        const gain = context.createGain();
+        gain.gain.value = 1;
+        source.connect(gain);
+        gain.connect(context.destination);
+        await context.resume?.();
+        if (voiceRef.current !== voice) {
+          closeContext(context);
+          return false;
+        }
+        localMonitorRef.current = { context, source, gain };
+        return true;
+      } catch {
         closeContext(context);
         return false;
       }
-      localMonitorRef.current = { context, source, gain };
-      return true;
     },
     [stopLocalMonitoring, voiceRef]
   );

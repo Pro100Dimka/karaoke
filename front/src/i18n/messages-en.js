@@ -17,6 +17,8 @@ export const enMessages = {
     "error.screen.title": "Could not open the screen",
     "error.screen.restart": "Restart interface",
     "backend.starting": "Starting local server…",
+    "backend.failed": "Local server did not start.",
+    "backend.retry": "Retry",
     "room.participants": "Room participants",
     "room.heading": "Room · {role}",
     "room.role.host": "host",
@@ -112,12 +114,6 @@ export const enMessages = {
     "settings.audio.monitorOutputDeviceId.label": "Test output",
     "settings.audio.monitorOutputDeviceId.tooltip":
       "Device used for the test signal",
-    "settings.audio.monitorLatencyHint.label": "Latency mode",
-    "settings.audio.monitorLatencyHint.tooltip":
-      "Automatic mode is sufficient in most cases",
-    "settings.audio.monitorMode.label": "Monitoring mode",
-    "settings.audio.monitorMode.tooltip":
-      "How your voice is returned to the headphones",
     "settings.audio.speakerTest.label": "Test audio",
     "settings.audio.speakerTest.tooltip": "Play a short test signal",
     "settings.audio.monitoringEnabled.label": "Hear my voice",

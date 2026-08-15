@@ -67,7 +67,7 @@ if (failures.length) {
 }
 
 const command = process.platform === "win32" ? "npm.cmd" : "npm";
-const result = spawnSync(command, ["run", "check"], {
+const result = spawnSync(command, ["run", "verify"], {
   cwd: root,
   stdio: "inherit",
   shell: false

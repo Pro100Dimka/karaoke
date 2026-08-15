@@ -20,21 +20,17 @@ export default function useLibraryFileImport({
       input.value = "";
       if (!file) return;
       await run(async () => {
+        let song;
         try {
-          const song = await api.addSong(
-            file,
-            file.name.replace(/\.[^.]+$/, "")
-          );
+          song = await api.addSong(file, file.name.replace(/\.[^.]+$/, ""));
           await api.processSong(song.id);
           onStarted(song);
         } catch (error) {
+          if (song?.id) await api.deleteSong(song.id).catch(() => {});
           await notify(
-            translateSaved(
-              "Не удалось добавить и запустить обработку песни: {0}",
-              {
-                0: getErrorMessage(error)
-              }
-            )
+            translateSaved("Не удалось добавить и запустить обработку песни: {0}", {
+              0: getErrorMessage(error)
+            })
           );
         }
       });

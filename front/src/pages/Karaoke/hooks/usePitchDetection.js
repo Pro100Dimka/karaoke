@@ -195,6 +195,10 @@ export default function usePitchDetection({
         };
         animationFrameId = requestAnimationFrame(updatePitch);
       } catch {
+        if (ownsStream) stream?.getTracks?.().forEach((track) => track.stop());
+        if (ownsContext) closeAudioContextQuietly(context);
+        ownsStream = false;
+        ownsContext = false;
         // Pitch feedback is optional; the state was reset before startup.
       }
     };

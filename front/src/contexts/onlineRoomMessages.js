@@ -36,7 +36,8 @@ export function createOnlineRoomMessageHandler(options) {
     setRoomCommand,
     setVoiceError,
     setTransferStatus,
-    onParticipantJoined = () => {}
+    onParticipantJoined = () => {},
+    onConnectionClosed
   } = options;
 
   const publishRoomCommand = (command, eventPrefix) => {
@@ -190,10 +191,14 @@ export function createOnlineRoomMessageHandler(options) {
     },
     "connection-closed": () => {
       if (disconnectIntentRef.current) return;
-      setVoiceError(translateSaved("Соединение с комнатой потеряно."));
+      if (onConnectionClosed) {
+        onConnectionClosed();
+        return;
+      }
       cleanupConnection();
       setRoom(null);
       setParticipants([]);
+      setVoiceError(translateSaved("Соединение с комнатой потеряно."));
     }
   };
 

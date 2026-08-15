@@ -14,7 +14,7 @@ export const songsApi = {
     const form = new FormData();
     form.append("file", file);
     if (title) form.append("title", title);
-    return request("/songs", { method: "POST", body: form });
+    return request("/songs", { method: "POST", body: form, timeoutMs: 5 * 60_000 });
   },
   updateSong: (id, patch) =>
     request(`/songs/${encodePathSegment(id)}`, {
@@ -53,11 +53,15 @@ export const songsApi = {
     ),
   exportSongPackage: (rawId) => {
     const id = encodePathSegment(rawId);
-    return requestBlob(`/songs/${id}/package`);
+    return requestBlob(`/songs/${id}/package`, { timeoutMs: 5 * 60_000 });
   },
   importSongPackage: (blob, filename = "song.karaoke.zip") => {
     const form = new FormData();
     form.append("file", blob, filename);
-    return request("/songs/package/import", { method: "POST", body: form });
+    return request("/songs/package/import", {
+      method: "POST",
+      body: form,
+      timeoutMs: 5 * 60_000
+    });
   }
 };

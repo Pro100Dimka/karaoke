@@ -191,16 +191,16 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
           ]
         : [base];
     for (const audio of candidates) {
+      let stream;
       try {
-        const stream = await mediaDevices.getUserMedia({
-          audio
-        });
+        stream = await mediaDevices.getUserMedia({ audio });
         monitorStream.current = stream;
         prepareSpeakingMeter();
         startSpeakingMeter("local", stream);
         return true;
       } catch {
-        // next device
+        stopStream(stream);
+        if (monitorStream.current === stream) monitorStream.current = null;
       }
     }
     return false;

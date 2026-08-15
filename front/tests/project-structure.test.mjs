@@ -53,3 +53,14 @@ test("keeps leaf source directories meaningful instead of wrapping one file", ()
   expect(exists("src/pages/Karaoke/performance-analysis-modal.jsx")).toBe(true);
   expect(exists("src/pages/MelodyEditor.jsx")).toBe(true);
 });
+
+
+test("release gate executes unit verification and pins a supported Node runtime", () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+  const releaseCheck = fs.readFileSync(path.join(root, "scripts/check-release.mjs"), "utf8");
+  expect(releaseCheck).toContain('["run", "verify"]');
+  expect(pkg.scripts["build:electron"]).toContain("release:check");
+  expect(pkg.engines?.node).toContain("22.18.0");
+  expect(fs.readFileSync(path.join(root, ".nvmrc"), "utf8").trim()).toBe("22.18.0");
+  expect(fs.readFileSync(path.join(root, ".node-version"), "utf8").trim()).toBe("22.18.0");
+});

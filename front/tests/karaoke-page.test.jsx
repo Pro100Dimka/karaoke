@@ -266,7 +266,6 @@ beforeEach(() => {
     updateMicrophone: vi.fn()
   };
   mocks.transport = {
-    preparePlayback: vi.fn().mockResolvedValue(true),
     returnToLibrary: vi.fn(),
     seekTo: vi.fn(),
     skip: vi.fn(),
@@ -376,7 +375,6 @@ describe("karaoke page", () => {
       .querySelectorAll("audio")
       .forEach((audio) => fireEvent.canPlay(audio));
     await vi.runAllTimersAsync();
-    expect(mocks.transport.preparePlayback).toHaveBeenCalled();
     expect(mocks.transport.togglePlay).toHaveBeenCalledWith({
       forcePlaying: true
     });
@@ -525,11 +523,8 @@ describe("karaoke page", () => {
     page.unmount();
   });
 
-  test("continues intro after preload failure and handles media-ended callback", async () => {
+  test("continues intro after media readiness timeout and handles media-ended callback", async () => {
     vi.useFakeTimers();
-    mocks.transport.preparePlayback.mockRejectedValueOnce(
-      new Error("preload failed")
-    );
     const page = render(<Karaoke />);
     fireEvent.click(page.getByTestId("play"));
     await vi.runAllTimersAsync();

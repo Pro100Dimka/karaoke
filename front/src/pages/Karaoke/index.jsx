@@ -251,7 +251,7 @@ export default function Karaoke({ onOpenAppSettings }) {
       monitorInputDeviceId,
       monitoringEnabled
     });
-  const { preparePlayback, returnToLibrary, seekTo, skip, stop, togglePlay } =
+  const { returnToLibrary, seekTo, skip, stop, togglePlay } =
     useKaraokeTransport({
       currentTime,
       duration,
@@ -295,7 +295,6 @@ export default function Karaoke({ onOpenAppSettings }) {
     isPlaying,
     isRadioPlaying,
     navigate,
-    preparePlayback,
     setRecordingActive,
     songId: song?.id,
     stop,

@@ -333,6 +333,21 @@ test("room messages update participants, UI, voice and connection state", async 
   handler({ type: "connection-closed" });
   assert.equal(setters.cleanupConnection.mock.calls.length, 1);
 
+  intentionalDisconnectRef.current = false;
+  const onConnectionClosed = vi.fn();
+  createOnlineRoomMessageHandler({
+    id: "room",
+    client,
+    voice,
+    roomApi,
+    roomRef,
+    intentionalDisconnectRef,
+    pendingSongCommandRef,
+    onConnectionClosed,
+    ...setters
+  })({ type: "connection-closed" });
+  assert.equal(onConnectionClosed.mock.calls.length, 1);
+
   const rejectedVoice = {
     ...voice,
     invite: vi.fn().mockRejectedValue(new Error("invite failed")),

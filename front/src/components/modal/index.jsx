@@ -2,10 +2,19 @@ import { X } from "lucide-react";
 import { useEffect, useId, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../../i18n";
-import { FOCUSABLE_SELECTOR } from "../modal-focus";
 import { IconButton } from "../ui";
 import Card from "../ui/Card";
 import ModalTitle from "./title";
+
+const FOCUSABLE_SELECTOR = [
+  "button:not([disabled])",
+  "[href]",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  '[tabindex]:not([tabindex="-1"])'
+].join(", ");
+const joinClasses = (...values) => values.filter(Boolean).join(" ");
 
 const openModalStack = [];
 let bodyLockCount = 0;
@@ -120,15 +129,6 @@ export default function Modal({
   }, [isOpen]);
 
   if (!isOpen) return null;
-
-  const joinClasses = (...values) =>
-    [
-      ...new Set(
-        values
-          .flatMap((value) => String(value || "").split(/\s+/))
-          .filter(Boolean)
-      )
-    ].join(" ");
 
   const backdropClasses = joinClasses("app-modal-backdrop", backdropClassName);
   const modalClasses = joinClasses("app-modal modal-card", modalClassName);

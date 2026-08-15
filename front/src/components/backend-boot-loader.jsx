@@ -25,6 +25,8 @@ const sleep = (ms) =>
 
 export default function BackendBootLoader({ children }) {
   const [ready, setReady] = useState(MOCK_API_ENABLED);
+  const [failed, setFailed] = useState(false);
+  const [retryToken, setRetryToken] = useState(0);
   const [theme, setTheme] = useState(() => getSavedTheme());
   const icon = useMemo(() => ICONS[theme] || ICONS.dark, [theme]);
 
@@ -43,7 +45,7 @@ export default function BackendBootLoader({ children }) {
     if (ready) return undefined;
     let cancelled = false;
     const waitForBackend = async () => {
-      while (!cancelled) {
+      for (let attempt = 0; !cancelled && attempt < 40; attempt += 1) {
         try {
           await api.getHealth();
           await hydrateUiPreferences(api).catch(() => {});
@@ -53,12 +55,13 @@ export default function BackendBootLoader({ children }) {
           await sleep(BACKEND_BOOT_RETRY_MS);
         }
       }
+      if (!cancelled) setFailed(true);
     };
     waitForBackend();
     return () => {
       cancelled = true;
     };
-  }, [ready]);
+  }, [ready, retryToken]);
 
   if (ready) return children;
 
@@ -137,7 +140,22 @@ export default function BackendBootLoader({ children }) {
       </svg>
       <div className="backend-boot-loader__copy">
         <strong>A&amp;D Voice</strong>
-        <span>{translateMessage(getSavedLanguage(), "backend.starting")}</span>
+        <span>
+          {failed
+            ? translateMessage(getSavedLanguage(), "backend.failed")
+            : translateMessage(getSavedLanguage(), "backend.starting")}
+        </span>
+        {failed ? (
+          <button
+            type="button"
+            onClick={() => {
+              setFailed(false);
+              setRetryToken((value) => value + 1);
+            }}
+          >
+            {translateMessage(getSavedLanguage(), "backend.retry")}
+          </button>
+        ) : null}
       </div>
       <div className="backend-boot-loader__dots" aria-hidden="true">
         <i />

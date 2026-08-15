@@ -61,6 +61,7 @@ export default class OnlineVoiceMesh {
     }
     if (this.startPromise) return this.startPromise;
     const { lifecycleVersion } = this;
+    let capturedStream;
     const startPromise = navigator.mediaDevices
       .getUserMedia({
         audio: {
@@ -73,6 +74,7 @@ export default class OnlineVoiceMesh {
         }
       })
       .then(async (stream) => {
+        capturedStream = stream;
         if (lifecycleVersion !== this.lifecycleVersion) {
           stream.getTracks().forEach((track) => track.stop());
           throw new Error(translateSaved("Запуск микрофона отменён"));
@@ -103,6 +105,16 @@ export default class OnlineVoiceMesh {
           pending.map((participantId) => this.invite(participantId))
         );
         return outgoingStream;
+      })
+      .catch(async (error) => {
+        if (this.microphoneGraph?.rawStream === capturedStream) {
+          await closeAudioContext(this.microphoneGraph);
+          this.microphoneGraph = null;
+          this.stream = null;
+        } else {
+          capturedStream?.getTracks?.().forEach((track) => track.stop());
+        }
+        throw error;
       })
       .finally(() => {
         if (this.startPromise === startPromise) this.startPromise = null;

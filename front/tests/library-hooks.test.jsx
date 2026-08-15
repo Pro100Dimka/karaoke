@@ -137,6 +137,27 @@ describe("library file import", () => {
       expect.stringContaining("invalid file")
     );
   });
+
+  test("rolls back a created song when processing cannot start", async () => {
+    const notify = vi.fn().mockResolvedValue(undefined);
+    api.addSong.mockResolvedValue({ id: "rollback" });
+    api.processSong.mockRejectedValue(new Error("pipeline busy"));
+    api.deleteSong.mockResolvedValue(null);
+    const { result } = renderHook(() =>
+      useLibraryFileImport({
+        fileInputRef: { current: null },
+        notify,
+        onStarted: vi.fn()
+      })
+    );
+    await act(() =>
+      result.current.importFile({
+        currentTarget: { files: [new File(["x"], "track.mp3")], value: "x" }
+      })
+    );
+    expect(api.deleteSong).toHaveBeenCalledWith("rollback");
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining("pipeline busy"));
+  });
 });
 
 describe("library room synchronization", () => {
@@ -186,20 +207,18 @@ describe("library room synchronization", () => {
     });
     expect(setQuery).toHaveBeenCalledWith("remote");
     expect(syncUi).not.toHaveBeenCalled();
-    hook.rerender({ ...base, query: "remote", roomEventId: 2 });
-    expect(syncUi).toHaveBeenCalledWith({ query: "remote" });
+    hook.rerender({ ...base, query: "remote" });
+    expect(syncUi).not.toHaveBeenCalled();
     setQuery.mockClear();
     hook.rerender({
       ...base,
       query: "remote",
-      roomEventId: 3,
       roomQuery: "second-remote"
     });
     expect(setQuery).toHaveBeenCalledWith("second-remote");
     hook.rerender({
       ...base,
       query: "second-remote",
-      roomEventId: 4,
       roomQuery: "second-remote"
     });
     syncUi.mockClear();

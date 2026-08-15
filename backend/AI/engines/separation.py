@@ -79,98 +79,9 @@ def _apply_torch_cpu_worker_tuning(torch, settings: tuple[int, int] | None) -> N
             pass
     print(
         f"[AI runtime] separation CPU tuning: intraop={intra}, interop={inter}, "
-        f"inference_mode={'on' if _truthy_env('KARAOKE_CPU_INFERENCE_MODE') else 'off'}, "
-        f"compile={'on' if _truthy_env('KARAOKE_CPU_COMPILE') else 'off'}",
+        f"inference_mode={'on' if _truthy_env('KARAOKE_CPU_INFERENCE_MODE') else 'off'}",
         flush=True,
     )
-
-
-def _ensure_openvino_torch_backend() -> tuple[bool, str | None]:
-    runtime_dir = os.getenv("KARAOKE_OPENVINO_RUNTIME_DIR", "").strip()
-    if runtime_dir:
-        path = str(Path(runtime_dir).resolve())
-        if path not in sys.path:
-            sys.path.insert(0, path)
-    try:
-        import openvino.torch  # noqa: F401
-    except Exception as exc:
-        return False, f"{type(exc).__name__}: {exc}"
-    return True, None
-
-
-def _compile_cpu_model(model, torch):
-    """Wrap the CPU model with a validated compile backend; failures stay eager."""
-    if not _truthy_env("KARAOKE_CPU_COMPILE") or not hasattr(torch, "compile"):
-        return model, False
-    backend = os.getenv("KARAOKE_CPU_COMPILE_BACKEND", "inductor").strip() or "inductor"
-    dynamic = os.getenv("KARAOKE_CPU_COMPILE_DYNAMIC", "1").strip().lower() not in {
-        "0",
-        "false",
-        "off",
-        "no",
-    }
-
-    if backend == "openvino":
-        available, error = _ensure_openvino_torch_backend()
-        if not available:
-            message = f"separation OpenVINO unavailable ({error})"
-            if _truthy_env("KARAOKE_CPU_COMPILE_REQUIRED"):
-                raise RuntimeError(message)
-            print(f"[AI runtime] {message}; using eager", flush=True)
-            return model, False
-        cache_dir = os.getenv("KARAOKE_OPENVINO_CACHE_DIR", "").strip()
-        options: dict[str, object] = {
-            "device": "CPU",
-            "aot_autograd": True,
-            "model_caching": bool(cache_dir),
-            "config": {"PERFORMANCE_HINT": "LATENCY"},
-        }
-        if cache_dir:
-            Path(cache_dir).mkdir(parents=True, exist_ok=True)
-            options["cache_dir"] = str(Path(cache_dir).resolve())
-        try:
-            compiled = torch.compile(
-                model, backend="openvino", dynamic=dynamic, options=options
-            )
-        except Exception as exc:
-            message = (
-                "separation OpenVINO compile unavailable "
-                f"({type(exc).__name__}: {exc})"
-            )
-            if _truthy_env("KARAOKE_CPU_COMPILE_REQUIRED"):
-                raise RuntimeError(message) from exc
-            print(f"[AI runtime] {message}; using eager", flush=True)
-            return model, False
-        print(
-            f"[AI runtime] separation CPU compile enabled: backend=openvino, "
-            f"dynamic={'on' if dynamic else 'off'}, cache={'on' if cache_dir else 'off'}",
-            flush=True,
-        )
-        return compiled, compiled is not model
-
-    if os.name == "nt" and backend == "inductor" and shutil.which("cl.exe") is None:
-        print(
-            "[AI runtime] separation CPU compile skipped: MSVC cl.exe not found; using eager",
-            flush=True,
-        )
-        return model, False
-    mode = os.getenv("KARAOKE_CPU_COMPILE_MODE", "default").strip() or "default"
-    try:
-        compiled = torch.compile(model, backend=backend, mode=mode, dynamic=dynamic)
-    except Exception as exc:
-        print(
-            f"[AI runtime] separation CPU compile unavailable ({type(exc).__name__}: {exc}); "
-            "using eager",
-            flush=True,
-        )
-        return model, False
-    print(
-        f"[AI runtime] separation CPU compile enabled: backend={backend}, mode={mode}, "
-        f"dynamic={'on' if dynamic else 'off'}",
-        flush=True,
-    )
-    return compiled, compiled is not model
-
 
 def _park_model(model, device: str, torch):
     if device == "cpu":
@@ -249,10 +160,6 @@ def _run_persistent_msst_worker(
         module.load_start_checkpoint(args, model, checkpoint, type_="inference")
         del checkpoint
         model.eval()
-        eager_model = model
-        cpu_compiled = False
-        if device == "cpu" and cpu_settings is not None:
-            model, cpu_compiled = _compile_cpu_model(model, torch)
         results.put(("ready", time.perf_counter() - started, None))
         while True:
             try:
@@ -285,51 +192,28 @@ def _run_persistent_msst_worker(
                         else nullcontext()
                     )
                     with context:
-                        module.run_folder(model, args, config, device, verbose=False)
+                        module.run_folder(model, args, config, device, verbose=True)
                 except Exception as exc:
-                    if device == "cpu" and cpu_compiled:
-                        print(
-                            f"[AI runtime] separation CPU compiled graph failed "
-                            f"({type(exc).__name__}: {exc}); retrying eager",
-                            flush=True,
-                        )
-                        model = eager_model
-                        cpu_compiled = False
-                        output_dir = Path(args.store_dir)
-                        shutil.rmtree(output_dir, ignore_errors=True)
-                        output_dir.mkdir(parents=True, exist_ok=True)
-                        context = (
-                            torch.inference_mode()
-                            if cpu_settings is not None
-                            and _truthy_env("KARAOKE_CPU_INFERENCE_MODE")
-                            and hasattr(torch, "inference_mode")
-                            else nullcontext()
-                        )
-                        with context:
-                            module.run_folder(model, args, config, device, verbose=False)
-                    else:
-                        if not device.startswith("cuda") or not accelerator_failure(exc):
-                            raise
-                        print(
-                            "[AI runtime] separation: PyTorch CUDA failed; retrying with CPU",
-                            flush=True,
-                        )
-                        model = _park_model(model, device, torch)
-                        device = "cpu"
-                        eager_model = model
-                        cpu_compiled = False
-                        output_dir = Path(args.store_dir)
-                        shutil.rmtree(output_dir, ignore_errors=True)
-                        output_dir.mkdir(parents=True, exist_ok=True)
-                        context = (
-                            torch.inference_mode()
-                            if cpu_settings is not None
-                            and _truthy_env("KARAOKE_CPU_INFERENCE_MODE")
-                            and hasattr(torch, "inference_mode")
-                            else nullcontext()
-                        )
-                        with context:
-                            module.run_folder(model, args, config, device, verbose=False)
+                    if not device.startswith("cuda") or not accelerator_failure(exc):
+                        raise
+                    print(
+                        "[AI runtime] separation: PyTorch CUDA failed; retrying with CPU",
+                        flush=True,
+                    )
+                    model = _park_model(model, device, torch)
+                    device = "cpu"
+                    output_dir = Path(args.store_dir)
+                    shutil.rmtree(output_dir, ignore_errors=True)
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    context = (
+                        torch.inference_mode()
+                        if cpu_settings is not None
+                        and _truthy_env("KARAOKE_CPU_INFERENCE_MODE")
+                        and hasattr(torch, "inference_mode")
+                        else nullcontext()
+                    )
+                    with context:
+                        module.run_folder(model, args, config, device, verbose=True)
                 model = _park_model(model, device, torch)
                 results.put((job_id, time.perf_counter() - started, None))
             except BaseException:

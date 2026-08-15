@@ -336,8 +336,7 @@ def format_runtime_plan(plan: RuntimePlan | None = None) -> tuple[str, ...]:
         *(
             (
                 f"CPU tuning: intraop={tuning[0]}, interop={tuning[1]}, "
-                f"separation_inference_mode={'on' if _truthy_env('KARAOKE_CPU_INFERENCE_MODE') else 'off'}, "
-                f"separation_compile={'on' if _truthy_env('KARAOKE_CPU_COMPILE') else 'off'}",
+                f"separation_inference_mode={'on' if _truthy_env('KARAOKE_CPU_INFERENCE_MODE') else 'off'}",
             )
             if tuning is not None
             else ()

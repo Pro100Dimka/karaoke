@@ -75,6 +75,8 @@ let isQuitting = false;
 let backendRestartTimer = null;
 let backendStopRequested = false;
 let backendRestartAttempts = 0;
+let backendStableTimer = null;
+const BACKEND_STABLE_RESET_MS = 30_000;
 
 function resolveBackendDir() {
   // В dev-режиме backend лежит рядом с проектом (../backend при обычной
@@ -251,18 +253,25 @@ function startBackend() {
     });
     backendProcess = childProcess;
     childProcess.once("spawn", () => {
-      backendRestartAttempts = 0;
+      clearTimeout(backendStableTimer);
+      backendStableTimer = setTimeout(() => {
+        if (backendProcess === childProcess) backendRestartAttempts = 0;
+      }, BACKEND_STABLE_RESET_MS);
       if (backendLogFd !== null) {
         fs.closeSync(backendLogFd);
         backendLogFd = null;
       }
     });
     childProcess.on("error", (err) => {
+      clearTimeout(backendStableTimer);
+      backendStableTimer = null;
       console.error("Не удалось запустить backend:", err);
       if (backendProcess === childProcess) backendProcess = null;
       scheduleBackendRestart();
     });
     childProcess.on("exit", (code, signal) => {
+      clearTimeout(backendStableTimer);
+      backendStableTimer = null;
       if (backendProcess === childProcess) backendProcess = null;
       if (code === 23) {
         // backend/run.py found a healthy instance already bound to our port.
@@ -302,6 +311,8 @@ function stopBackend() {
   if (backendStopRequested) return;
   backendStopRequested = true;
   clearTimeout(backendRestartTimer);
+  clearTimeout(backendStableTimer);
+  backendStableTimer = null;
 
   const terminateBackend = () => {
     if (backendProcess && !backendProcess.killed) {

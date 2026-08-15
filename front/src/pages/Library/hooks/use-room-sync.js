@@ -11,26 +11,26 @@ export default function useLibraryRoomSync({
   setQuery,
   syncUi
 }) {
-  const applyingRemoteUiRef = useRef(false);
-  const queryRef = useLatestRef(query);
+  const pendingRemoteQueryRef = useRef(null);
   const roomQueryRef = useLatestRef(roomQuery);
+
   useEffect(() => {
     const remoteQuery = roomQueryRef.current;
-    if (typeof remoteQuery !== "string") return;
-    if (remoteQuery === queryRef.current) {
-      applyingRemoteUiRef.current = false;
-      return;
-    }
-    applyingRemoteUiRef.current = true;
+    if (typeof remoteQuery !== "string" || remoteQuery === query) return;
+    pendingRemoteQueryRef.current = remoteQuery;
     setQuery(remoteQuery);
-  }, [queryRef, roomEventId, roomQueryRef, setQuery]);
+  }, [query, roomEventId, roomQueryRef, setQuery]);
+
   useEffect(() => {
     if (!room) return;
-    if (applyingRemoteUiRef.current) return;
+    if (pendingRemoteQueryRef.current === query) {
+      pendingRemoteQueryRef.current = null;
+      return;
+    }
     syncUi({ query });
   }, [query, room, syncUi]);
+
   useEffect(() => {
-    if (!room?.host) return;
-    syncUi({ songs: localSongs });
+    if (room?.host) syncUi({ songs: localSongs });
   }, [localSongs, participantCount, room?.host, syncUi]);
 }

@@ -7,6 +7,33 @@ import { mockBlobRequest, mockRequest } from "./mock/request.js";
 // Общая транспортная часть локального REST API.
 export const MOCK_API_ENABLED = import.meta.env.VITE_USE_MOCK_API === "true";
 export const BASE_URL = API_BASE_URL;
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+function createDeadlineSignal(signal, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS) {
+  if (typeof globalThis.AbortController !== "function") {
+    return { signal, cleanup: () => {}, timedOut: () => false };
+  }
+  const controller = new globalThis.AbortController();
+  let didTimeout = false;
+  const abort = () => controller.abort(signal?.reason);
+  if (signal?.aborted) abort();
+  else signal?.addEventListener?.("abort", abort, { once: true });
+  const safeTimeout = Number.isFinite(Number(timeoutMs))
+    ? Math.max(1, Number(timeoutMs))
+    : DEFAULT_REQUEST_TIMEOUT_MS;
+  const timer = globalThis.setTimeout(() => {
+    didTimeout = true;
+    controller.abort();
+  }, safeTimeout);
+  return {
+    signal: controller.signal,
+    timedOut: () => didTimeout,
+    cleanup: () => {
+      globalThis.clearTimeout(timer);
+      signal?.removeEventListener?.("abort", abort);
+    }
+  };
+}
 function normalizeHeaders(headers) {
   if (!headers) return undefined;
   if (Array.isArray(headers)) return Object.fromEntries(headers);
@@ -23,7 +50,7 @@ function hasContentType(headers) {
   );
 }
 function buildRequestOptions(options = {}) {
-  const { headers, body, ...requestOptions } = options;
+  const { headers, body, timeoutMs, ...requestOptions } = options;
   const FormDataCtor = globalThis.FormData;
   const isFormData =
     typeof FormDataCtor === "function" && body instanceof FormDataCtor;
@@ -70,10 +97,25 @@ async function fetchSuccessfulResponse(path, options) {
   const requestPath = normalizedPath.startsWith("/")
     ? normalizedPath
     : `/${normalizedPath}`;
-  const response = await globalThis.fetch(
-    `${BASE_URL}${requestPath}`,
-    buildRequestOptions(options)
-  );
+  const deadline = createDeadlineSignal(options?.signal, options?.timeoutMs);
+  let response;
+  try {
+    response = await globalThis.fetch(`${BASE_URL}${requestPath}`, {
+      ...buildRequestOptions(options),
+      signal: deadline.signal
+    });
+  } catch (error) {
+    if (deadline.timedOut()) {
+      const timeoutError = new Error(
+        translateSaved("Превышено время ожидания ответа backend")
+      );
+      timeoutError.name = "TimeoutError";
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    deadline.cleanup();
+  }
   if (!response.ok) {
     const error = new Error(await readErrorDetail(response));
     error.status = response.status;

@@ -10,17 +10,16 @@ const waitForMediaReady = (element) => {
   if (!element || element.readyState >= 3) return Promise.resolve();
   element.load?.();
   return new Promise((resolve) => {
-    let settled = false;
+    let timer;
     const finish = () => {
-      if (settled) return;
-      settled = true;
+      window.clearTimeout(timer);
       element.removeEventListener("canplay", finish);
       element.removeEventListener("error", finish);
       resolve();
     };
     element.addEventListener("canplay", finish, { once: true });
     element.addEventListener("error", finish, { once: true });
-    window.setTimeout(finish, 2200);
+    timer = window.setTimeout(finish, 2200);
   });
 };
 
@@ -32,7 +31,6 @@ export default function useKaraokeSceneFlow({
   isPlaying,
   isRadioPlaying,
   navigate,
-  preparePlayback,
   setRecordingActive,
   songId,
   stop,
@@ -92,7 +90,7 @@ export default function useKaraokeSceneFlow({
   );
 
   const runIntroTransition = useCallback(
-    async (action, prepareAction) => {
+    async (action) => {
       if (sceneTransitionRef.current) return false;
       sceneTransitionRef.current = true;
       setSceneTransitioning(true);
@@ -100,9 +98,7 @@ export default function useKaraokeSceneFlow({
       setStageActionsVisible(false);
       setSceneIntroVisible(false);
       setSceneBlackout(true);
-      const preparation = Promise.resolve()
-        .then(prepareAction)
-        .catch(() => false);
+      const preparation = preloadSongMedia().catch(() => false);
       try {
         await waitForScene(420);
         setSceneIntroVisible(true);
@@ -122,24 +118,19 @@ export default function useKaraokeSceneFlow({
       }
       return true;
     },
-    [hideControls]
+    [hideControls, preloadSongMedia]
   );
 
   const startSongWithIntro = useCallback(() => {
     resumeRadioOnPauseRef.current = isRadioPlaying;
     turnOffRadio({ remember: false });
-    return runIntroTransition(
-      async () => {
-        const started = await togglePlay({ forcePlaying: true });
-        if (started) hasStartedPlaybackRef.current = true;
-        return started;
-      },
-      () => Promise.all([preloadSongMedia(), preparePlayback()])
-    );
+    return runIntroTransition(async () => {
+      const started = await togglePlay({ forcePlaying: true });
+      if (started) hasStartedPlaybackRef.current = true;
+      return started;
+    });
   }, [
     isRadioPlaying,
-    preloadSongMedia,
-    preparePlayback,
     runIntroTransition,
     togglePlay,
     turnOffRadio
@@ -211,7 +202,7 @@ export default function useKaraokeSceneFlow({
     let timerId = null;
     const tryAutoStart = () => {
       if (cancelled) return;
-      if (instrumentalRef.current && vocalsRef.current) {
+      if (instrumentalRef.current) {
         timerId = null;
         autoStartedSongRef.current = songId;
         void startSongWithIntro();
@@ -230,7 +221,7 @@ export default function useKaraokeSceneFlow({
       cancelled = true;
       if (timerId) window.clearTimeout(timerId);
     };
-  }, [autoStartRequested, instrumentalRef, songId, startSongWithIntro, vocalsRef]);
+  }, [autoStartRequested, instrumentalRef, songId, startSongWithIntro]);
 
   return {
     handleStop,

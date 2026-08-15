@@ -28,80 +28,42 @@ describe("audio and UI preferences", () => {
       ({ DEFAULT_AUDIO_PREFERENCES, getAudioPreferences }) => {
         expect(DEFAULT_AUDIO_PREFERENCES).toEqual({
           monitorInputDeviceId: "default",
-          monitorOutputDeviceId: "default",
-          monitorLatencyHint: "interactive",
-          monitorMode: "direct"
+          monitorOutputDeviceId: "default"
         });
         expect(getAudioPreferences()).toEqual(DEFAULT_AUDIO_PREFERENCES);
         localStorage.setItem(
           "karaoke-audio-preferences",
           JSON.stringify({
             monitorInputDeviceId: "mic",
-            monitorOutputDeviceId: "",
-            monitorLatencyHint: "playback",
-            monitorMode: "browser"
+            monitorOutputDeviceId: ""
           })
         );
         expect(getAudioPreferences()).toEqual({
           monitorInputDeviceId: "mic",
-          monitorOutputDeviceId: "default",
-          monitorLatencyHint: "playback",
-          monitorMode: "browser"
-        });
-        localStorage.setItem(
-          "karaoke-audio-preferences",
-          JSON.stringify({
-            monitorInputDeviceId: "   ",
-            monitorOutputDeviceId: 42,
-            monitorLatencyHint: "balanced",
-            monitorMode: "direct"
-          })
-        );
-        expect(getAudioPreferences()).toEqual({
-          monitorInputDeviceId: "default",
-          monitorOutputDeviceId: "default",
-          monitorLatencyHint: "balanced",
-          monitorMode: "direct"
+          monitorOutputDeviceId: "default"
         });
       }
     );
   });
 
-  test("saves validated audio preferences and emits a change event", async () => {
+  test("saves device preferences and ignores obsolete controls", async () => {
     const { DEFAULT_AUDIO_PREFERENCES, saveAudioPreferences } =
       await importUtility("audio-preferences");
     const changed = vi.fn();
     window.addEventListener("audio-preferences-changed", changed);
     const saved = saveAudioPreferences({
       monitorInputDeviceId: "usb",
-      monitorLatencyHint: "invalid",
-      monitorMode: "invalid"
+      monitorOutputDeviceId: "speaker",
+      monitorMode: "browser",
+      monitorLatencyHint: "playback"
     });
     expect(saved).toEqual({
       ...DEFAULT_AUDIO_PREFERENCES,
-      monitorInputDeviceId: "usb"
+      monitorInputDeviceId: "usb",
+      monitorOutputDeviceId: "speaker"
     });
     expect(changed.mock.calls[0][0].detail).toEqual(saved);
-    expect(
-      JSON.parse(localStorage.getItem("karaoke-audio-preferences"))
-    ).toEqual(saved);
-    expect(saveAudioPreferences(null)).toEqual(saved);
-    localStorage.setItem(
-      "karaoke-audio-preferences",
-      JSON.stringify({ monitorLatencyHint: "playback", monitorMode: "browser" })
-    );
-    expect(
-      saveAudioPreferences({
-        monitorLatencyHint: "interactive",
-        monitorMode: "direct"
-      })
-    ).toMatchObject({
-      monitorLatencyHint: "interactive",
-      monitorMode: "direct"
-    });
-    const callablePatch = () => {};
-    callablePatch.monitorMode = "browser";
-    expect(saveAudioPreferences(callablePatch).monitorMode).toBe("direct");
+    expect(JSON.parse(localStorage.getItem("karaoke-audio-preferences"))).toEqual(saved);
     window.removeEventListener("audio-preferences-changed", changed);
   });
 
@@ -121,7 +83,7 @@ describe("audio and UI preferences", () => {
     );
     const api = {
       getUiPreferences: vi.fn().mockResolvedValue({
-        audio: { monitorMode: "browser" },
+        audio: { monitorInputDeviceId: "remote-mic" },
         karaoke: null,
         radio: []
       }),
@@ -130,7 +92,7 @@ describe("audio and UI preferences", () => {
     await hydrateUiPreferences(api);
     expect(
       JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.audio))
-    ).toEqual({ monitorMode: "browser" });
+    ).toEqual({ monitorInputDeviceId: "remote-mic" });
     expect(api.updateUiPreferences).toHaveBeenCalledWith("karaoke", {
       volume: 0.7
     });
@@ -145,13 +107,37 @@ describe("audio and UI preferences", () => {
     expect(
       JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.audio))
     ).toEqual({
-      monitorMode: "browser"
+      monitorInputDeviceId: "remote-mic"
     });
     api.getUiPreferences.mockResolvedValueOnce({ audio: "x" });
     await hydrateUiPreferences(api);
     expect(
       JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.audio))
-    ).toEqual({ monitorMode: "browser" });
+    ).toEqual({ monitorInputDeviceId: "remote-mic" });
+  });
+
+  test("serializes writes per namespace so an older request cannot win", async () => {
+    const { persistUiPreferences } = await importUtility("ui-preferences");
+    let releaseFirst;
+    const api = {
+      updateUiPreferences: vi
+        .fn()
+        .mockReturnValueOnce(new Promise((resolve) => {
+          releaseFirst = resolve;
+        }))
+        .mockResolvedValueOnce({})
+    };
+    persistUiPreferences(api, "settings", { tab: "audio" });
+    persistUiPreferences(api, "settings", { tab: "ai" });
+    await Promise.resolve();
+    expect(api.updateUiPreferences).toHaveBeenCalledTimes(1);
+    releaseFirst({});
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(api.updateUiPreferences.mock.calls).toEqual([
+      ["settings", { tab: "audio" }],
+      ["settings", { tab: "ai" }]
+    ]);
   });
 
   test("persists known namespaces and still sends unknown ones", async () => {

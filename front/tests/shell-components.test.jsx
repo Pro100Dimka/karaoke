@@ -239,6 +239,24 @@ describe("application shell", () => {
     expect(mocks.getHealth).toHaveBeenCalledTimes(2);
   });
 
+  test("backend loader exposes a terminal error and can retry", async () => {
+    vi.useFakeTimers();
+    mocks.getHealth.mockRejectedValue(new Error("offline"));
+    const view = render(
+      <BackendBootLoader>
+        <div>ready-after-manual-retry</div>
+      </BackendBootLoader>
+    );
+    await vi.advanceTimersByTimeAsync(40 * 5);
+    expect(view.getByText("backend.failed")).not.toBeNull();
+    expect(mocks.getHealth).toHaveBeenCalledTimes(40);
+    mocks.getHealth.mockResolvedValue({ ok: true });
+    fireEvent.click(view.getByText("backend.retry"));
+    await act(async () => Promise.resolve());
+    expect(mocks.getHealth).toHaveBeenCalledTimes(41);
+    expect(view.getByText("ready-after-manual-retry")).not.toBeNull();
+  });
+
   test("backend loader falls back for unknown themes and ignores late health", async () => {
     mocks.getTheme.mockReturnValue("unknown");
     let resolveHealth;

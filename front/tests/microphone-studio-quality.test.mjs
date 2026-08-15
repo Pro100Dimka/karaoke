@@ -49,8 +49,24 @@ describe("studio microphone quality", () => {
     expect(processedTrack.stop).toHaveBeenCalledOnce();
   });
 
-  test("degrades to the raw stream when WebAudio is unavailable", () => {
-    const rawStream = {};
-    expect(createStudioMicrophoneGraph(rawStream).stream).toBe(rawStream);
+  test("degrades to the raw stream without leaking capture when WebAudio is unavailable", async () => {
+    const track = { stop: vi.fn() };
+    const rawStream = { getTracks: () => [track] };
+    const graph = createStudioMicrophoneGraph(rawStream);
+    expect(graph.stream).toBe(rawStream);
+    await graph.close();
+    expect(track.stop).toHaveBeenCalledOnce();
+  });
+
+  test("rolls back the raw stream when graph construction fails", () => {
+    const track = { stop: vi.fn() };
+    const rawStream = { getTracks: () => [track] };
+    globalThis.AudioContext = class {
+      constructor() { this.state = "running"; }
+      createMediaStreamSource() { throw new Error("audio graph failed"); }
+      close() { this.state = "closed"; return Promise.resolve(); }
+    };
+    expect(() => createStudioMicrophoneGraph(rawStream)).toThrow("audio graph failed");
+    expect(track.stop).toHaveBeenCalledOnce();
   });
 });

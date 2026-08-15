@@ -23,6 +23,50 @@ const isValidTransferSize = (size) =>
 const isTransferCancelled = (mesh, channel, lifecycleVersion) =>
   lifecycleVersion !== mesh.lifecycleVersion || channel.readyState !== "open";
 
+const createTransferSink = async (participantId, metadata) => {
+  const getDirectory = globalThis.navigator?.storage?.getDirectory;
+  if (typeof getDirectory === "function") {
+    const root = await getDirectory.call(globalThis.navigator.storage);
+    const safeId = `${participantId}-${metadata.transferId}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const name = `advoice-transfer-${safeId}.part`;
+    const handle = await root.getFileHandle(name, { create: true });
+    const writable = await handle.createWritable();
+    let closed = false;
+    return {
+      write: (chunk) => writable.write(chunk),
+      finish: async () => {
+        if (!closed) {
+          closed = true;
+          await writable.close();
+        }
+        return handle.getFile();
+      },
+      cleanup: async () => {
+        if (!closed) {
+          closed = true;
+          await writable.abort?.().catch?.(() => {});
+        }
+        await root.removeEntry(name).catch(() => {});
+      }
+    };
+  }
+
+  const chunks = [];
+  return {
+    write: (chunk) => chunks.push(chunk),
+    finish: () => new globalThis.Blob(chunks, { type: metadata.mimeType }),
+    cleanup: async () => {
+      chunks.length = 0;
+    }
+  };
+};
+
+const cleanupIncomingTransfer = (transfer) => {
+  if (!transfer) return;
+  if (transfer.timer) globalThis.clearTimeout(transfer.timer);
+  Promise.resolve(transfer.sink).then((sink) => sink.cleanup()).catch(() => {});
+};
+
 function parseDataMessage(data) {
   if (data.length > MAX_DATA_MESSAGE_LENGTH) return null;
   try {
@@ -86,15 +130,14 @@ function normalizeTransferMetadata(message) {
 function handleFileStart(mesh, participantId, _channel, message) {
   if (mesh.incomingFiles.has(participantId)) return;
   const metadata = normalizeTransferMetadata(message);
-  if (!metadata) {
-    mesh.incomingFiles.delete(participantId);
-    return;
-  }
+  if (!metadata) return;
   mesh.incomingFiles.set(participantId, {
     metadata,
     chunks: [],
     received: 0,
     lastPercent: -1,
+    sink: createTransferSink(participantId, metadata),
+    writes: Promise.resolve(),
     timer: mesh.createIncomingTransferTimer(participantId, metadata.transferId)
   });
   mesh.emitTransferProgress(participantId, "receiving", 0, metadata);
@@ -113,6 +156,7 @@ function handleFileEnd(mesh, participantId, channel, message) {
     transfer.metadata.transferId !== message.transferId ||
     transfer.received !== transfer.metadata.size
   ) {
+    cleanupIncomingTransfer(transfer);
     sendTransferStatus(channel, {
       type: "file-error",
       transferId: message.transferId,
@@ -121,19 +165,16 @@ function handleFileEnd(mesh, participantId, channel, message) {
     return;
   }
 
-  const BlobClass = globalThis.Blob;
-  if (typeof BlobClass !== "function") return;
-  const blob = new BlobClass(transfer.chunks, {
-    type: transfer.metadata.mimeType
-  });
-  mesh.emitTransferProgress(participantId, "importing", 100, transfer.metadata);
-  Promise.resolve()
-    .then(() => mesh.onFile?.(participantId, blob, transfer.metadata))
+  Promise.resolve(transfer.writes)
+    .then(async () => {
+      if (transfer.writeError) throw transfer.writeError;
+      const sink = await transfer.sink;
+      const file = await sink.finish();
+      mesh.emitTransferProgress(participantId, "importing", 100, transfer.metadata);
+      await mesh.onFile?.(participantId, file, transfer.metadata);
+    })
     .then(() => {
-      sendTransferStatus(channel, {
-        type: "file-complete",
-        transferId: message.transferId
-      });
+      sendTransferStatus(channel, { type: "file-complete", transferId: message.transferId });
       mesh.emitTransferProgress(participantId, "complete", 100, transfer.metadata);
     })
     .catch((error) => {
@@ -143,7 +184,8 @@ function handleFileEnd(mesh, participantId, channel, message) {
         error: error instanceof Error ? error.message : String(error)
       });
       mesh.emitTransferProgress(participantId, "error", 100, transfer.metadata);
-    });
+    })
+    .finally(() => cleanupIncomingTransfer(transfer));
 }
 
 const DATA_MESSAGE_HANDLERS = {
@@ -168,13 +210,18 @@ function handleBinaryChunk(mesh, participantId, data) {
     transfer.chunks.length >= MAX_INCOMING_CHUNKS ||
     transfer.received + chunk.byteLength > transfer.metadata.size
   ) {
-    globalThis.clearTimeout(transfer.timer);
+    cleanupIncomingTransfer(transfer);
     mesh.incomingFiles.delete(participantId);
     return;
   }
 
   transfer.received += chunk.byteLength;
-  transfer.chunks.push(chunk);
+  transfer.chunks.push(null);
+  transfer.writes = transfer.writes
+    .then(async () => (await transfer.sink).write(chunk))
+    .catch((error) => {
+      transfer.writeError ||= error;
+    });
   globalThis.clearTimeout(transfer.timer);
   transfer.timer = mesh.createIncomingTransferTimer(
     participantId,
@@ -193,7 +240,7 @@ export function setupDataChannel(mesh, participantId, channel) {
   const previousChannel = mesh.channels.get(participantId);
   if (previousChannel && previousChannel !== channel) {
     const incoming = mesh.incomingFiles.get(participantId);
-    if (incoming?.timer) globalThis.clearTimeout(incoming.timer);
+    cleanupIncomingTransfer(incoming);
     mesh.incomingFiles.delete(participantId);
     if (previousChannel.readyState !== "closed") previousChannel.close?.();
   }
@@ -212,8 +259,14 @@ export function setupDataChannel(mesh, participantId, channel) {
     if (mesh.channels.get(participantId) !== channel) return;
     mesh.channels.delete(participantId);
     const incoming = mesh.incomingFiles.get(participantId);
-    if (incoming?.timer) globalThis.clearTimeout(incoming.timer);
+    cleanupIncomingTransfer(incoming);
     mesh.incomingFiles.delete(participantId);
+    for (const [transferId, pending] of mesh.pendingTransferConfirmations) {
+      if (pending.participantId !== participantId) continue;
+      globalThis.clearTimeout(pending.timer);
+      mesh.pendingTransferConfirmations.delete(transferId);
+      pending.reject(new Error(translateSaved("Канал передачи песни закрыт")));
+    }
   };
   channel.onclose = clearChannel;
   channel.onerror = clearChannel;
@@ -229,6 +282,7 @@ export function createIncomingTransferTimer(mesh, participantId, transferId) {
     const transfer = mesh.incomingFiles.get(participantId);
     if (transfer?.metadata.transferId !== transferId) return;
     mesh.incomingFiles.delete(participantId);
+    cleanupIncomingTransfer(transfer);
     const channel = mesh.channels.get(participantId);
     if (channel?.readyState === "open") {
       channel.send(
@@ -292,7 +346,7 @@ export async function sendFile(mesh, participantId, blob, metadata = {}) {
       translateSaved("Файл слишком большой для передачи через комнату")
     );
   }
-  const { lifecycleVersion } = this;
+  const { lifecycleVersion } = mesh;
   const channel = await mesh.waitForDataChannel(
     participantId,
     15_000,

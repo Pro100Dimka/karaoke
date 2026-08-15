@@ -453,22 +453,6 @@ def test_separate_requires_resources(monkeypatch, tmp_path):
         separation.MSSTMelRoformerSeparator().separate("mix", tmp_path / "v", tmp_path / "i")
 
 
-def test_cpu_compile_skips_windows_inductor_without_msvc(monkeypatch):
-    monkeypatch.setenv("KARAOKE_CPU_COMPILE", "1")
-    monkeypatch.setenv("KARAOKE_CPU_COMPILE_BACKEND", "inductor")
-    monkeypatch.setattr(separation.os, "name", "nt")
-    monkeypatch.setattr(separation.shutil, "which", lambda _name: None)
-
-    class Torch:
-        @staticmethod
-        def compile(*_args, **_kwargs):
-            pytest.fail("torch.compile must not run without cl.exe")
-
-    model = object()
-    result, compiled = separation._compile_cpu_model(model, Torch())
-    assert result is model and compiled is False
-
-
 def test_center_channel_fallback_mono_and_stereo(tmp_path):
     separator = separation.CenterChannelFallbackSeparator()
     mono = tmp_path / "mono.wav"
@@ -498,57 +482,3 @@ def test_cpu_worker_tuning_is_opt_in_and_sets_thread_environment(monkeypatch):
     )
     separation._apply_torch_cpu_worker_tuning(fake_torch, settings)
     assert calls == [("intra", 4), ("inter", 1)]
-
-
-def test_cpu_compile_openvino_does_not_require_msvc(monkeypatch, tmp_path):
-    import sys
-    from types import ModuleType
-
-    monkeypatch.setenv("KARAOKE_CPU_COMPILE", "1")
-    monkeypatch.setenv("KARAOKE_CPU_COMPILE_BACKEND", "openvino")
-    monkeypatch.setenv("KARAOKE_CPU_COMPILE_DYNAMIC", "1")
-    monkeypatch.setenv("KARAOKE_OPENVINO_CACHE_DIR", str(tmp_path / "cache"))
-    monkeypatch.setattr(separation.shutil, "which", lambda _name: None)
-
-    package = ModuleType("openvino")
-    package.__path__ = []
-    torch_module = ModuleType("openvino.torch")
-    monkeypatch.setitem(sys.modules, "openvino", package)
-    monkeypatch.setitem(sys.modules, "openvino.torch", torch_module)
-
-    calls = []
-
-    class Torch:
-        @staticmethod
-        def compile(model, **kwargs):
-            calls.append(kwargs)
-            return ("compiled", model)
-
-    model = object()
-    result, compiled = separation._compile_cpu_model(model, Torch())
-    assert compiled is True
-    assert result == ("compiled", model)
-    assert calls[0]["backend"] == "openvino"
-    assert calls[0]["dynamic"] is True
-    assert calls[0]["options"]["device"] == "CPU"
-    assert calls[0]["options"]["aot_autograd"] is True
-    assert calls[0]["options"]["model_caching"] is True
-
-
-def test_cpu_compile_required_rejects_missing_openvino(monkeypatch):
-    monkeypatch.setenv("KARAOKE_CPU_COMPILE", "1")
-    monkeypatch.setenv("KARAOKE_CPU_COMPILE_BACKEND", "openvino")
-    monkeypatch.setenv("KARAOKE_CPU_COMPILE_REQUIRED", "1")
-    monkeypatch.setattr(
-        separation,
-        "_ensure_openvino_torch_backend",
-        lambda: (False, "not installed"),
-    )
-
-    class Torch:
-        @staticmethod
-        def compile(*_args, **_kwargs):
-            pytest.fail("compile must not run")
-
-    with pytest.raises(RuntimeError, match="OpenVINO unavailable"):
-        separation._compile_cpu_model(object(), Torch())

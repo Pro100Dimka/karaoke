@@ -80,7 +80,10 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   delete globalThis.RTCPeerConnection;
-  if (globalThis.navigator) delete globalThis.navigator.mediaDevices;
+  if (globalThis.navigator) {
+    delete globalThis.navigator.mediaDevices;
+    delete globalThis.navigator.storage;
+  }
 });
 
 describe("online voice mesh", () => {
@@ -205,6 +208,40 @@ describe("online voice mesh", () => {
       filename: "f".repeat(512),
       mimeType: "m".repeat(255)
     });
+  });
+
+  test("streams incoming packages to OPFS instead of buffering payload chunks", async () => {
+    const writes = [];
+    const removeEntry = vi.fn().mockResolvedValue(undefined);
+    const writable = {
+      write: vi.fn(async (chunk) => writes.push(...new Uint8Array(chunk))),
+      close: vi.fn().mockResolvedValue(undefined),
+      abort: vi.fn().mockResolvedValue(undefined)
+    };
+    globalThis.navigator.storage = {
+      getDirectory: vi.fn().mockResolvedValue({
+        getFileHandle: vi.fn().mockResolvedValue({
+          createWritable: vi.fn().mockResolvedValue(writable),
+          getFile: vi.fn().mockResolvedValue(new Blob([[1, 2]]))
+        }),
+        removeEntry
+      })
+    };
+    const mesh = makeMesh();
+    const channel = new FakeChannel();
+    mesh.onFile = vi.fn();
+    mesh.setupDataChannel("host", channel);
+    channel.onmessage({
+      data: JSON.stringify({ type: "file-start", transferId: "disk", size: 2 })
+    });
+    channel.onmessage({ data: new Uint8Array([1, 2]).buffer });
+    channel.onmessage({
+      data: JSON.stringify({ type: "file-end", transferId: "disk" })
+    });
+    await vi.waitFor(() => expect(mesh.onFile).toHaveBeenCalledOnce());
+    expect(writes).toEqual([1, 2]);
+    expect(writable.close).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(removeEntry).toHaveBeenCalledOnce());
   });
 
   test("sends exact bounded metadata, ordered chunks and progress", async () => {
@@ -2360,9 +2397,21 @@ describe("online voice mesh", () => {
       data: JSON.stringify({ type: "file-start", transferId: "one", size: 1 })
     });
     const incomingTimer = mesh.incomingFiles.get("guest").timer;
+    const pendingReject = vi.fn();
+    mesh.pendingTransferConfirmations.set("pending-close", {
+      participantId: "guest",
+      reject: pendingReject,
+      resolve: vi.fn(),
+      timer: 99
+    });
     const clear = vi.spyOn(globalThis, "clearTimeout");
     channel.onclose();
     expect(clear).toHaveBeenCalledWith(incomingTimer);
+    expect(clear).toHaveBeenCalledWith(99);
+    expect(pendingReject).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "Канал передачи песни закрыт" })
+    );
+    expect(mesh.pendingTransferConfirmations.has("pending-close")).toBe(false);
 
     mesh.incomingFiles.set("guest", {
       metadata: { transferId: "new" },

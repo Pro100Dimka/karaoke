@@ -136,6 +136,20 @@ describe("online room provider", () => {
     expect(() => result.current.syncCommand({ type: "pause" })).not.toThrow();
   });
 
+  test("fully restores application audio after an unexpected disconnect", async () => {
+    const { result } = renderHook(() => useOnlineRoom(), { wrapper });
+    await act(() => result.current.createRoom("Alice"));
+    act(() => result.current.setRoomSoundMuted(true));
+    expect(result.current.roomSoundMuted).toBe(true);
+    const { onConnectionClosed } =
+      mocks.createOnlineRoomMessageHandler.mock.calls.at(-1)[0];
+    act(() => onConnectionClosed());
+    expect(mocks.restoreApplicationAudio).toHaveBeenCalled();
+    expect(result.current.room).toBeNull();
+    expect(result.current.roomSoundMuted).toBe(false);
+    expect(result.current.voiceError).toBe("Соединение с комнатой потеряно.");
+  });
+
   test("creates a room, starts voice and exposes synchronization actions", async () => {
     const { result } = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => result.current.createRoom("Alice"));
@@ -759,6 +773,7 @@ describe("online room provider", () => {
     globalThis.AudioContext = class {
       constructor() {
         this.destination = {};
+        this.state = "suspended";
         this.source = { connect: vi.fn() };
         this.master = { gain: { value: 1 }, connect: vi.fn() };
         this.resume = vi.fn().mockRejectedValue(new Error("resume"));
@@ -787,6 +802,7 @@ describe("online room provider", () => {
     );
     act(() => hook.result.current.togglePersonEffects("guest"));
     await act(async () => Promise.resolve());
+    expect(document.querySelector("audio").muted).toBe(false);
     act(() => hook.result.current.togglePersonEffects("guest"));
     await act(async () => Promise.resolve());
     expect(contexts[0].close).toHaveBeenCalled();

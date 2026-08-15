@@ -175,6 +175,24 @@ describe("API transport", () => {
     await assert.rejects(request("bad"), /Fetch API/);
   });
 
+  test("aborts stalled backend requests at the configured deadline", async () => {
+    vi.useFakeTimers();
+    const { request } = await importApi("core");
+    globalThis.fetch.mockImplementationOnce((_url, { signal }) =>
+      new Promise((_resolve, reject) => {
+        signal.addEventListener("abort", () => {
+          const error = new Error("aborted");
+          error.name = "AbortError";
+          reject(error);
+        }, { once: true });
+      })
+    );
+    const pending = request("stalled", { timeoutMs: 25 });
+    await vi.advanceTimersByTimeAsync(25);
+    await assert.rejects(pending, (error) => error.name === "TimeoutError");
+    vi.useRealTimers();
+  });
+
   test("encodes identifiers and confines local file URLs", () => {
     return importApi("core").then(({ createFileUrl, encodePathSegment }) => {
       assert.equal(encodePathSegment(" a/b "), "a%2Fb");

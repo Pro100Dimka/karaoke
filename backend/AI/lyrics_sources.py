@@ -650,8 +650,7 @@ def _mychords_search(title: str) -> list[tuple[str, str]]:
     return []
 
 
-def _web_search(title: str) -> list[tuple[str, str]]:
-    query = f'{title} "текст песни" lyrics'
+def _duckduckgo_search(query: str, title: str) -> list[tuple[str, str]]:
     request = urllib.request.Request(
         "https://html.duckduckgo.com/html/",
         data=urllib.parse.urlencode({"q": query}).encode("utf-8"),
@@ -671,13 +670,36 @@ def _web_search(title: str) -> list[tuple[str, str]]:
         flags=re.I | re.S,
     )
     output: list[tuple[str, str]] = []
+    seen: set[str] = set()
     for raw_url, raw_title in matches:
         result_title = re.sub(r"<[^>]+>", " ", html.unescape(raw_title))
         result_title = " ".join(result_title.split())
         url = _safe_result_url(raw_url)
-        if url and _search_tokens_match(title, result_title):
+        if url and url not in seen and _search_tokens_match(title, result_title):
+            seen.add(url)
             output.append((url, result_title))
     return output[:6]
+
+
+def _web_search(title: str) -> list[tuple[str, str]]:
+    # MyChords often has the exact Russian text while a broad query can rank it
+    # below unrelated pages.  Try a site-scoped lookup first, then the generic
+    # allow-listed lyrics search.  Both use the same strict title-token gate.
+    queries = [
+        f'site:mychords.net/ru {title}',
+        f'{title} "текст песни" lyrics',
+    ]
+    output: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for query in queries:
+        for url, result_title in _duckduckgo_search(query, title):
+            if url not in seen:
+                seen.add(url)
+                output.append((url, result_title))
+        if output:
+            break
+    return output[:6]
+
 
 
 def _fetch_web_lyrics(url: str) -> str:

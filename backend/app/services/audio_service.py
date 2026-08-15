@@ -224,7 +224,11 @@ def _resolved_device_index(device_id: int | None, kind: str) -> int:
     if device_id is not None:
         return device_id
     default_input, default_output = sd.default.device
-    default_id = int(default_input if kind == "input" else default_output)
+    raw_default = default_input if kind == "input" else default_output
+    try:
+        default_id = int(raw_default)
+    except (TypeError, ValueError):
+        default_id = -1
     if default_id >= 0:
         return default_id
     capability = f"max_{kind}_channels"

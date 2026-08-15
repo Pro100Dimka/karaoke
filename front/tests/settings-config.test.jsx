@@ -47,29 +47,15 @@ const digest = (value) =>
     .digest("hex");
 
 test("settings catalog exposes stable tabs, screens and options", () => {
-  expect(
-    digest({
-      emptyBrowserDevices: config.EMPTY_BROWSER_DEVICES,
-      latencyOptions: config.LATENCY_OPTIONS,
-      monitorModeOptions: config.MONITOR_MODE_OPTIONS,
-      screenById: config.SCREEN_BY_ID,
-      serviceScreens: config.SERVICE_SCREENS,
-      settings: config.SETTINGS,
-      tabs: config.SETTINGS_TABS
-    })
-  ).toBe("b9e9cf2055cc86039f0201b16ae8e5265544e05aa990dc001621fcecea686475");
+  expect(Object.keys(config.SETTINGS)).toEqual(["appearance", "audio", "ai"]);
   expect(config.FULL).toBe(12);
   expect(config.SETTINGS_TABS.map(({ id }) => id)).toEqual([
     "appearance",
     "audio",
     "ai"
   ]);
-  expect(config.LATENCY_OPTIONS.map(({ value }) => value)).toEqual([
-    "interactive",
-    "balanced",
-    "playback"
-  ]);
-  expect(config.MONITOR_MODE_OPTIONS.length).toBeGreaterThan(0);
+  expect(field("audio", "monitorLatencyHint")).toBeUndefined();
+  expect(field("audio", "monitorInputDeviceId")).toBeUndefined();
   expect(
     config.SERVICE_SCREENS.every(({ id }) => config.SCREEN_BY_ID[id])
   ).toBe(true);
@@ -254,24 +240,24 @@ test("settings runtime fields handle exact present and absent controller states"
 
   const updatePreference = vi.fn();
   const preference = settingsUtils.preferenceSelect(
-    "monitorMode",
-    [{ value: "direct" }],
+    "monitorInputDeviceId",
+    [{ value: "default" }],
     { span: 12 }
   );
   expect(preference).toMatchObject({
-    name: "monitorMode",
+    name: "monitorInputDeviceId",
     span: 12,
     type: "select",
-    options: [{ value: "direct" }]
+    options: [{ value: "default" }]
   });
   expect(preference.getValue({ audio: {} })).toBeUndefined();
   expect(
-    preference.getValue({ audio: { preferences: { monitorMode: "direct" } } })
-  ).toBe("direct");
-  preference.setValue({ audio: { updatePreference } }, "processed");
+    preference.getValue({ audio: { preferences: { monitorInputDeviceId: "default" } } })
+  ).toBe("default");
+  preference.setValue({ audio: { updatePreference } }, "mic");
   expect(updatePreference).toHaveBeenCalledExactlyOnceWith(
-    "monitorMode",
-    "processed"
+    "monitorInputDeviceId",
+    "mic"
   );
 
   const dynamic = settingsUtils.audioSelect("device", "devices");

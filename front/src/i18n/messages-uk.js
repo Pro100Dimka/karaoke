@@ -17,6 +17,8 @@ export const ukMessages = {
     "error.screen.title": "Не вдалося відкрити екран",
     "error.screen.restart": "Перезапустити інтерфейс",
     "backend.starting": "Запускаємо локальний сервер…",
+    "backend.failed": "Локальний сервер не запустився.",
+    "backend.retry": "Повторити",
     "room.participants": "Учасники кімнати",
     "room.heading": "Кімната · {role}",
     "room.role.host": "ведучий",
@@ -112,11 +114,6 @@ export const ukMessages = {
     "settings.audio.monitorOutputDeviceId.label": "Вихід для перевірки",
     "settings.audio.monitorOutputDeviceId.tooltip":
       "Пристрій тестового сигналу",
-    "settings.audio.monitorLatencyHint.label": "Режим затримки",
-    "settings.audio.monitorLatencyHint.tooltip":
-      "Автоматичного режиму достатньо у більшості випадків",
-    "settings.audio.monitorMode.label": "Режим прослуховування",
-    "settings.audio.monitorMode.tooltip": "Як повертати голос у навушники",
     "settings.audio.speakerTest.label": "Перевірити звук",
     "settings.audio.speakerTest.tooltip": "Відтворити короткий тестовий сигнал",
     "settings.audio.monitoringEnabled.label": "Чути свій голос",

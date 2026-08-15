@@ -300,7 +300,13 @@ export function OnlineRoomProvider({ children }) {
           setRoomCommand,
           setVoiceError,
           setTransferStatus,
-          onParticipantJoined: playParticipantJoinedSound
+          onParticipantJoined: playParticipantJoinedSound,
+          onConnectionClosed: () => {
+            restoreApplicationAudio();
+            cleanupConnection();
+            resetRoomState();
+            setVoiceError(translateSaved("Соединение с комнатой потеряно."));
+          }
         })
       );
       try {
@@ -379,9 +385,11 @@ export function OnlineRoomProvider({ children }) {
     ]
   );
   useEffect(
-    () => () => cleanupConnection(),
-    // Stryker disable next-line ArrayDeclaration: cleanupConnection is stable.
-    [cleanupConnection]
+    () => () => {
+      restoreApplicationAudio();
+      cleanupConnection();
+    },
+    [cleanupConnection, restoreApplicationAudio]
   );
   const createRoom = useCallback(
     (name) =>

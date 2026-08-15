@@ -17,6 +17,8 @@ export const ruMessages = {
     "error.screen.title": "Не удалось открыть экран",
     "error.screen.restart": "Перезапустить интерфейс",
     "backend.starting": "Запускаем локальный сервер…",
+    "backend.failed": "Локальный сервер не запустился.",
+    "backend.retry": "Повторить",
     "room.participants": "Участники комнаты",
     "room.heading": "Комната · {role}",
     "room.role.host": "ведущий",
@@ -113,11 +115,6 @@ export const ruMessages = {
     "settings.audio.monitorOutputDeviceId.label": "Выход для проверки",
     "settings.audio.monitorOutputDeviceId.tooltip":
       "Устройство тестового сигнала",
-    "settings.audio.monitorLatencyHint.label": "Режим задержки",
-    "settings.audio.monitorLatencyHint.tooltip":
-      "Автоматического режима достаточно в большинстве случаев",
-    "settings.audio.monitorMode.label": "Режим прослушивания",
-    "settings.audio.monitorMode.tooltip": "Способ возврата голоса в наушники",
     "settings.audio.speakerTest.label": "Проверить звук",
     "settings.audio.speakerTest.tooltip":
       "Воспроизвести короткий тестовый сигнал",
