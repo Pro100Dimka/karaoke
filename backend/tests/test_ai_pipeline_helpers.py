@@ -119,6 +119,127 @@ def test_lossless_words_repair_only_collapsed_transient_span():
     assert repaired[4].end == pytest.approx(original[5].start)
 
 
+def _candidate(start, end, confidence=0.5, kind="ctc"):
+    return {kind: {"start": start, "end": end, "confidence": confidence}}
+
+
+def test_confidence_aware_repair_preserves_candidate_before_weak_anchor():
+    original = words(
+        (0.5, 1.0, "left", 0.9),
+        (1.0, 1.18, "love", 0.012),
+        (1.18, 1.20, "weak", 0.000001),
+        (1.55, 1.85, "next", 0.8),
+    )
+    sources = ["ctc", "interpolated", "ctc", "ctc"]
+    repaired = pipeline._pipeline_lossless_canonical_words(
+        "left love weak next",
+        original,
+        3.0,
+        sources,
+        [
+            _candidate(0.5, 1.0, 0.9),
+            _candidate(1.02, 1.42, 0.08),
+            _candidate(1.19, 1.21, 0.000001),
+            _candidate(1.55, 1.85, 0.8),
+        ],
+    )
+    assert (repaired[1].start, repaired[1].end) == (1.02, 1.42)
+    assert repaired[3] == original[3]
+    assert sources[1] == "reacquired" and sources[2] == "interpolated"
+
+
+def test_weak_anchor_cannot_pull_following_sequence():
+    original = words(
+        (0.2, 0.8, "left", 0.9),
+        (0.8, 0.82, "weak", 0.000001),
+        (1.10, 1.35, "one", 0.012),
+        (1.40, 1.70, "two", 0.012),
+        (2.0, 2.5, "right", 0.95),
+    )
+    repaired = pipeline._pipeline_lossless_canonical_words(
+        "left weak one two right",
+        original,
+        3.0,
+        ["ctc", "ctc", "interpolated", "interpolated", "qwen"],
+        [
+            _candidate(0.2, 0.8, 0.9),
+            _candidate(0.81, 0.83, 0.000001),
+            _candidate(1.10, 1.35, 0.4),
+            _candidate(1.40, 1.70, 0.4),
+            _candidate(2.0, 2.5, 0.95, "qwen"),
+        ],
+    )
+    assert (repaired[2].start, repaired[2].end) == (1.10, 1.35)
+    assert (repaired[3].start, repaired[3].end) == (1.40, 1.70)
+    assert repaired[4] == original[4]
+
+
+def test_unreliable_span_is_local_and_reliable_anchors_are_exact():
+    original = words(
+        (1.0, 1.4, "a", 0.95),
+        (1.4, 1.42, "b", 0.000001),
+        (1.42, 1.44, "c", 0.012),
+        (2.4, 2.9, "d", 0.9),
+    )
+    repaired = pipeline._pipeline_lossless_canonical_words(
+        "a b c d",
+        original,
+        4.0,
+        ["ctc", "ctc", "interpolated", "qwen"],
+        [
+            _candidate(1.0, 1.4, 0.95),
+            _candidate(1.41, 1.43, 0.000001),
+            {},
+            _candidate(2.4, 2.9, 0.9, "qwen"),
+        ],
+    )
+    assert repaired[0] == original[0]
+    assert repaired[3] == original[3]
+    assert all(left.end <= right.start for left, right in zip(repaired, repaired[1:], strict=False))
+
+
+def test_existing_acoustic_candidate_precedes_synthetic_interpolation():
+    original = words(
+        (0.0, 0.5, "left", 0.9),
+        (0.5, 0.7, "candidate", 0.012),
+        (1.5, 2.0, "right", 0.9),
+    )
+    repaired = pipeline._pipeline_lossless_canonical_words(
+        "left candidate right",
+        original,
+        2.5,
+        ["ctc", "interpolated", "ctc"],
+        [_candidate(0.0, 0.5, 0.9), _candidate(0.72, 1.12, 0.02), _candidate(1.5, 2.0, 0.9)],
+    )
+    assert (repaired[1].start, repaired[1].end) == (0.72, 1.12)
+
+
+def test_former_invalid_artifact_conflict_repairs_only_local_span():
+    original = words(
+        (10.0, 10.5, "anchor", 0.9),
+        (10.5, 10.52, "bad", 0.000001),
+        (10.51, 10.53, "local", 0.012),
+        (20.0, 20.5, "fixed", 0.95),
+        (25.0, 25.5, "later", 0.9),
+    )
+    repaired = pipeline._pipeline_lossless_canonical_words(
+        "anchor bad local fixed later",
+        original,
+        30.0,
+        ["ctc", "ctc", "interpolated", "qwen", "ctc"],
+        [
+            _candidate(10.0, 10.5, 0.9),
+            _candidate(10.51, 10.53, 0.000001),
+            {},
+            _candidate(20.0, 20.5, 0.95, "qwen"),
+            _candidate(25.0, 25.5, 0.9),
+        ],
+    )
+    assert repaired[0] == original[0]
+    assert repaired[3:] == original[3:]
+    assert pipeline._canonical_timeline_is_publishable(repaired, 30.0)
+
+
 class Console(StringIO):
     encoding = "cp1251"
 

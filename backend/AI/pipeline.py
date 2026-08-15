@@ -21,6 +21,7 @@ from .engines.registry import EngineRegistry
 from .engines.separation import CenterChannelFallbackSeparator
 from .engines.text import (
     ASR_PIPELINE_VERSION,
+    FALLBACK_WORD_CONFIDENCE,
     LONG_TEXT_ALIGNMENT_VERSION,
     UniformTextFallback,
     enforce_segmented_timing_safety,
@@ -77,6 +78,7 @@ from .vocal_preprocess import (
 ProgressCallback = Callable[[str, float, str], None]
 CancelCallback = Callable[[], bool]
 PIPELINE_LOCK_TIMEOUT_SECONDS = 180.0
+CANONICAL_NORMALIZATION_VERSION = "v2-confidence-aware-local-anchors"
 
 
 def _bound_word_durations(words: list[Word]) -> list[Word]:
@@ -200,6 +202,7 @@ def _preserve_complete_canonical_timeline(
     words: list[Word],
     total_duration: float,
     sources: list[str] | None = None,
+    candidates: list[dict[str, object]] | None = None,
 ) -> list[Word] | None:
     """Preserve a complete acoustic alignment and heal only timing defects.
 
@@ -211,9 +214,182 @@ def _preserve_complete_canonical_timeline(
     if not words or total_duration <= 0.04:
         return None
 
-    # A long-text merge can collapse a transient/reacquired block between two
-    # valid acoustic anchors. Rebuild only that block; never shift the anchors
-    # or the rest of the song. Source metadata is optional for cached timelines.
+    # A direct acoustic result is a hard boundary only when its evidence is
+    # locally reliable.  Near-zero CTC tokens are still useful soft candidates,
+    # but must not truncate a neighbouring observation or pull the remainder of
+    # the lyric stream.  Source/candidate metadata is optional for old caches.
+    if sources and candidates and len(sources) == len(words) and len(candidates) == len(words):
+        local = list(words)
+        acoustic = {"ctc", "consensus", "qwen"}
+        direct_confidences = [
+            max(0.0, min(1.0, float(word.confidence)))
+            for word, source in zip(words, sources, strict=True)
+            if source in acoustic
+        ]
+        durations = sorted(
+            float(word.end) - float(word.start)
+            for word in words
+            if math.isfinite(float(word.start))
+            and math.isfinite(float(word.end))
+            and float(word.end) > float(word.start)
+        )
+        typical_duration = durations[len(durations) // 2] if durations else 0.25
+
+        def percentile(values: list[float], fraction: float) -> float:
+            ordered = sorted(values)
+            return ordered[min(len(ordered) - 1, int((len(ordered) - 1) * fraction))]
+
+        global_reference = percentile(direct_confidences, 0.75) if direct_confidences else 1.0
+
+        def reliability(index: int) -> float:
+            word = words[index]
+            source = sources[index]
+            if source not in acoustic:
+                return 0.0
+            span = float(word.end) - float(word.start)
+            if not (
+                math.isfinite(float(word.start))
+                and math.isfinite(float(word.end))
+                and 0.0 <= word.start < word.end <= total_duration
+                and span >= max(0.01, typical_duration * 0.10)
+                and span <= max(2.5, typical_duration * 6.0)
+            ):
+                return 0.0
+            start = max(0, index - 4)
+            end = min(len(words), index + 5)
+            local_confidences = [
+                max(0.0, min(1.0, float(words[pos].confidence)))
+                for pos in range(start, end)
+                if sources[pos] in acoustic
+            ]
+            local_reference = (
+                percentile(local_confidences, 0.75) if local_confidences else global_reference
+            )
+            evidence_reference = max(
+                FALLBACK_WORD_CONFIDENCE,
+                min(global_reference, local_reference),
+            )
+            relative_confidence = min(
+                1.0,
+                max(0.0, float(word.confidence)) / max(1e-9, evidence_reference),
+            )
+            # Consensus is independently confirmed. A single-engine anchor
+            # must carry a meaningful fraction of the surrounding evidence.
+            return 1.0 if source == "consensus" else relative_confidence
+
+        scores = [reliability(index) for index in range(len(words))]
+        anchors = {index for index, score in enumerate(scores) if score >= 0.25}
+
+        # Conflicting reliable candidates cannot both be hard boundaries.
+        # Demote only the weaker one until every local gap can contain its words.
+        while True:
+            changed = False
+            ordered = sorted(anchors)
+            for left, right in zip([-1, *ordered], [*ordered, len(words)], strict=True):
+                left_time = words[left].end if left >= 0 else 0.0
+                right_time = words[right].start if right < len(words) else total_duration
+                if right_time - left_time + 1e-9 >= (right - left - 1) * 0.01:
+                    continue
+                removable = [index for index in (left, right) if index in anchors]
+                if not removable:
+                    return None
+                anchors.remove(min(removable, key=lambda index: (scores[index], index)))
+                changed = True
+                break
+            if not changed:
+                break
+
+        def candidate_for(index: int) -> Word | None:
+            entry = candidates[index]
+            if not isinstance(entry, dict):
+                return None
+            options: list[tuple[float, int, Word]] = []
+            current = words[index]
+            if (
+                sources[index] == "reacquired"
+                and 0.0 <= current.start < current.end <= total_duration
+                and current.end - current.start >= 0.01
+            ):
+                options.append((float(current.confidence), 0, current))
+            for rank, kind in enumerate(("ctc", "qwen", "consensus"), start=1):
+                value = entry.get(kind)
+                if not isinstance(value, dict):
+                    continue
+                try:
+                    start = float(value["start"])
+                    end = float(value["end"])
+                    confidence = max(0.0, min(1.0, float(value.get("confidence", 0.0))))
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if 0.0 <= start < end <= total_duration and end - start >= 0.01:
+                    options.append(
+                        (confidence, rank, Word(start, end, words[index].text, confidence, index))
+                    )
+            return max(options, default=(0.0, 0, None), key=lambda item: item[:2])[2]
+
+        def interpolate(indices: list[int], start: float, end: float) -> bool:
+            if not indices:
+                return True
+            if end - start < len(indices) * 0.01:
+                return False
+            weights = [max(1, len(words[index].text)) for index in indices]
+            total_weight = sum(weights)
+            cursor = start
+            for index, weight in zip(indices, weights, strict=True):
+                boundary = (
+                    end if index == indices[-1] else cursor + (end - start) * weight / total_weight
+                )
+                word = words[index]
+                local[index] = Word(cursor, boundary, word.text, word.confidence, word.index)
+                sources[index] = "interpolated"
+                cursor = boundary
+                total_weight -= weight
+                start = cursor
+            return True
+
+        def reconstruct(indices: list[int], left_time: float, right_time: float) -> bool:
+            cursor = left_time
+            pending: list[int] = []
+            for index in indices:
+                candidate = candidate_for(index)
+                if candidate is None or candidate.end > right_time + 1e-9:
+                    pending.append(index)
+                    continue
+                minimum_pending = len(pending) * 0.01
+                if candidate.start >= cursor + minimum_pending:
+                    if not interpolate(pending, cursor, candidate.start):
+                        return False
+                    local[index] = candidate
+                    if sources[index] not in acoustic:
+                        sources[index] = "reacquired"
+                    cursor = candidate.end
+                    pending.clear()
+                    continue
+                block = [*pending, index]
+                if candidate.end >= cursor + len(block) * 0.01:
+                    if not interpolate(block, cursor, candidate.end):
+                        return False
+                    sources[index] = "reacquired"
+                    cursor = candidate.end
+                    pending.clear()
+                else:
+                    pending.append(index)
+            return interpolate(pending, cursor, right_time)
+
+        ordered_anchors = sorted(anchors)
+        for left, right in zip([-1, *ordered_anchors], [*ordered_anchors, len(words)], strict=True):
+            indices = list(range(left + 1, right))
+            if not indices:
+                continue
+            left_time = local[left].end if left >= 0 else 0.0
+            right_time = local[right].start if right < len(local) else total_duration
+            if not reconstruct(indices, left_time, right_time):
+                return None
+        if _canonical_timeline_is_publishable(local, total_duration):
+            return local
+
+    # Older cached timelines have no candidate evidence. Retain the previous
+    # source-aware local repair rather than inventing reliability metadata.
     if sources and len(sources) == len(words):
         local = list(words)
         acoustic = {"ctc", "consensus", "qwen"}
@@ -299,6 +475,7 @@ def _pipeline_lossless_canonical_words(
     words: list[Word],
     total_duration: float,
     sources: list[str] | None = None,
+    candidates: list[dict[str, object]] | None = None,
 ) -> list[Word]:
     """Final invariant guard before publishing lyricsSync.json.
 
@@ -313,7 +490,9 @@ def _pipeline_lossless_canonical_words(
 
     canonical_match = _canonical_alignment_matches(text, words)
     if canonical_match:
-        preserved = _preserve_complete_canonical_timeline(words, total_duration, sources)
+        preserved = _preserve_complete_canonical_timeline(
+            words, total_duration, sources, candidates
+        )
         if preserved is None:
             raise InvalidArtifactError(
                 "Complete canonical acoustic alignment could not be locally normalized; "
@@ -930,6 +1109,7 @@ class KaraokePipeline:
                     "model": getattr(self.engines.aligner, "model_name", None),
                     "long_text_algorithm": LONG_TEXT_ALIGNMENT_VERSION,
                     "ctc_alignment_algorithm": CTC_ALIGNMENT_VERSION,
+                    "canonical_normalization": CANONICAL_NORMALIZATION_VERSION,
                     "ctc_models": getattr(
                         getattr(self.engines.aligner, "_ctc", None), "models", {}
                     ),
@@ -1031,12 +1211,16 @@ class KaraokePipeline:
                 else:
                     # Canonical lyrics are lossless. ASR/forced alignment may
                     # estimate timing, but may never delete or replace words.
+                    word_sources = list(alignment_diagnostics.get("word_sources") or [])
+                    word_candidates = list(alignment_diagnostics.get("word_candidates") or [])
                     words = _pipeline_lossless_canonical_words(
                         supplied,
                         words,
                         song_duration,
-                        list(alignment_diagnostics.get("word_sources") or []),
+                        word_sources,
+                        word_candidates,
                     )
+                    alignment_debug_raw["word_sources"] = word_sources
                     publish_text = supplied
                 validate_timeline(words, "words")
                 self._publish_text_alignment(output, lyrics_txt, words_path, publish_text, words)
