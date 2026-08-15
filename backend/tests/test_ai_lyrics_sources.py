@@ -294,17 +294,50 @@ def test_query_helpers_and_metadata_candidates(monkeypatch, tmp_path):
         tmp_path / "source.wav", "Нервы - Моя Леди"
     ) == ["Нервы Моя Леди", "Моя Леди"]
 
+    plan = lyrics._metadata_search_plan(tmp_path / "source.wav", "Нервы - Моя Леди")
+    assert plan[0] == lyrics.LyricsSearchCandidate(
+        query="Нервы Моя Леди", artist="Нервы", track="Моя Леди"
+    )
+    assert plan[1] == lyrics.LyricsSearchCandidate(
+        query="Моя Леди", artist="", track="Моя Леди"
+    )
+
+
+def test_online_structured_candidate_preserves_artist_and_track(monkeypatch):
+    seen = {}
+
+    def fake_urlopen(request, **_kwargs):
+        seen["url"] = request.full_url
+        return Response("[]")
+
+    monkeypatch.setattr(lyrics.urllib.request, "urlopen", fake_urlopen)
+    candidate = lyrics.LyricsSearchCandidate(
+        query="Нервы Моя Леди", artist="Нервы", track="Моя Леди"
+    )
+    assert not lyrics._online(candidate, None).text
+    parsed = lyrics.urllib.parse.urlparse(seen["url"])
+    params = lyrics.urllib.parse.parse_qs(parsed.query)
+    assert params == {"track_name": ["Моя Леди"], "artist_name": ["Нервы"]}
+    assert "q" not in params
+
 
 def test_discover_lyrics_query_order(monkeypatch, tmp_path):
     monkeypatch.setattr(lyrics, "_local_file", lambda *_: lyrics.LyricsDiscovery())
     monkeypatch.setattr(lyrics, "_embedded", lambda _: "")
-    monkeypatch.setattr(lyrics, "_metadata_search_candidates", lambda *_: ["first", "second"])
+    monkeypatch.setattr(
+        lyrics,
+        "_metadata_search_plan",
+        lambda *_: [
+            lyrics.LyricsSearchCandidate("first", "Artist", "First"),
+            lyrics.LyricsSearchCandidate("second", "Artist", "Second"),
+        ],
+    )
     monkeypatch.setattr(
         lyrics,
         "_online",
-        lambda query, _duration: (
+        lambda candidate, _duration: (
             lyrics.LyricsDiscovery("found", "LRCLIB")
-            if query == "second"
+            if candidate.query == "second"
             else lyrics.LyricsDiscovery()
         ),
     )
@@ -329,13 +362,20 @@ def test_discover_lyrics_query_order(monkeypatch, tmp_path):
 def test_lyrics_logging_is_compact_by_default_and_verbose_on_demand(monkeypatch, tmp_path):
     monkeypatch.setattr(lyrics, "_local_file", lambda *_: lyrics.LyricsDiscovery())
     monkeypatch.setattr(lyrics, "_embedded", lambda _: "")
-    monkeypatch.setattr(lyrics, "_metadata_search_candidates", lambda *_: ["first", "second"])
+    monkeypatch.setattr(
+        lyrics,
+        "_metadata_search_plan",
+        lambda *_: [
+            lyrics.LyricsSearchCandidate("first", "Artist", "First"),
+            lyrics.LyricsSearchCandidate("second", "Artist", "Second"),
+        ],
+    )
     monkeypatch.setattr(
         lyrics,
         "_online",
-        lambda query, _duration: (
+        lambda candidate, _duration: (
             lyrics.LyricsDiscovery("found", "LRCLIB")
-            if query == "second"
+            if candidate.query == "second"
             else lyrics.LyricsDiscovery()
         ),
     )
@@ -369,9 +409,9 @@ def test_discover_lyrics_prefers_sidecar_then_embedded(monkeypatch, tmp_path):
     lyrics._embedded.assert_not_called()
     monkeypatch.setattr(lyrics, "_local_file", lambda *_: lyrics.LyricsDiscovery())
     monkeypatch.setattr(lyrics, "_embedded", lambda _: "one two three")
-    monkeypatch.setattr(lyrics, "_metadata_search_candidates", Mock())
+    monkeypatch.setattr(lyrics, "_metadata_search_plan", Mock())
     assert lyrics.discover_lyrics(source).source == "metadata"
-    lyrics._metadata_search_candidates.assert_not_called()
+    lyrics._metadata_search_plan.assert_not_called()
 
 
 def test_mychords_direct_search_finds_song_without_external_search(monkeypatch):

@@ -1,5 +1,6 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
+set "KARAOKE_LYRICS_LOG_TEXT=1"
 if /i "%~1"=="--job" goto :job
 title A^&D Voice - Development
 

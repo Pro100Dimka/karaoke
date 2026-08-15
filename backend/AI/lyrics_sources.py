@@ -56,6 +56,18 @@ class LyricsDiscovery:
     query: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class LyricsSearchCandidate:
+    """Preserve song identity all the way to the provider request.
+
+    ``query`` is the human-readable/web-search string. ``artist`` and ``track``
+    are kept separately so exact providers such as LRCLIB do not have to guess
+    them back from a flattened string.
+    """
+
+    query: str
+    artist: str = ""
+    track: str = ""
 
 
 class _SearchFormHTMLParser(HTMLParser):
@@ -370,20 +382,33 @@ def _similarity(left: str, right: str) -> float:
     return SequenceMatcher(None, _normalize_name(left), _normalize_name(right)).ratio()
 
 
-def _online(title: str | None, duration_sec: float | None) -> LyricsDiscovery:
+def _online(
+    title: str | LyricsSearchCandidate | None, duration_sec: float | None
+) -> LyricsDiscovery:
     if os.getenv("KARAOKE_ONLINE_LYRICS", "1").strip().lower() in {"0", "false", "off"}:
         _lyrics_debug("[lyrics] LRCLIB disabled")
         return LyricsDiscovery()
 
-    artist, track = _track_signature(title)
+    if isinstance(title, LyricsSearchCandidate):
+        display_query = title.query
+        artist = title.artist.strip()
+        track = (title.track or title.query).strip()
+    else:
+        display_query = str(title or "").strip()
+        artist, track = _track_signature(display_query)
+
     if not track:
-        _lyrics_debug(f"[lyrics] LRCLIB skipped: could not parse query={title!r}")
+        _lyrics_debug(f"[lyrics] LRCLIB skipped: could not parse query={display_query!r}")
         return LyricsDiscovery()
 
     query_params = (
-        {"track_name": track, "artist_name": artist} if artist else {"q": str(title or track)}
+        {"track_name": track, "artist_name": artist}
+        if artist
+        else {"q": display_query or track}
     )
-    _lyrics_debug(f"[lyrics] LRCLIB request: query={title!r} artist={artist!r} track={track!r}")
+    _lyrics_debug(
+        f"[lyrics] LRCLIB request: query={display_query!r} artist={artist!r} track={track!r}"
+    )
 
     query = urllib.parse.urlencode(query_params)
     request = urllib.request.Request(
@@ -446,7 +471,7 @@ def _online(title: str | None, duration_sec: float | None) -> LyricsDiscovery:
                 reason = "accepted" if accepted else "score too low"
         else:
             candidate_full = f"{candidate_artist} {candidate_track}".strip()
-            full_score = _similarity(str(title or track), candidate_full)
+            full_score = _similarity(display_query or track, candidate_full)
             if full_score < 0.86 and track_score < 0.96:
                 reason = "title/full-name mismatch"
             else:
@@ -468,14 +493,14 @@ def _online(title: str | None, duration_sec: float | None) -> LyricsDiscovery:
             ranked.append((score, item))
 
     if not ranked:
-        _lyrics_debug(f"[lyrics] LRCLIB: no acceptable candidate for query={title!r}")
+        _lyrics_debug(f"[lyrics] LRCLIB: no acceptable candidate for query={display_query!r}")
         return LyricsDiscovery()
 
     score, item = max(ranked, key=lambda pair: pair[0])
     candidate_track = str(item.get("trackName") or "")
     candidate_artist = str(item.get("artistName") or "")
     _lyrics_debug(
-        f"[lyrics] LRCLIB SELECTED: query={title!r} "
+        f"[lyrics] LRCLIB SELECTED: query={display_query!r} "
         f"artist={candidate_artist!r} title={candidate_track!r} score={score:.3f}"
     )
 
@@ -802,11 +827,11 @@ def _filename_search_identity(source: Path) -> tuple[str, str]:
     return artist.strip(), _strip_filename_copy_suffix(track).strip()
 
 
-def _metadata_search_candidates(
+def _metadata_search_plan(
     source: str | Path,
     fallback: str | None,
-) -> list[str]:
-    """Build queries from real song identity and reject temp pipeline names."""
+) -> list[LyricsSearchCandidate]:
+    """Build structured identities without flattening artist/title information."""
     source = Path(source)
     tagged_title = ""
     tagged_artist = ""
@@ -833,7 +858,7 @@ def _metadata_search_candidates(
     except Exception:
         pass
 
-    candidates: list[str] = []
+    candidates: list[LyricsSearchCandidate] = []
     technical_names = {
         "source",
         "song",
@@ -850,13 +875,24 @@ def _metadata_search_candidates(
     def add_query(value: str) -> None:
         query = _plain_search_query(value)
         if query and query.casefold() not in technical_names:
-            candidates.append(query)
+            candidates.append(LyricsSearchCandidate(query=query, track=query))
 
     def add_identity(artist: str, title: str) -> None:
-        artist = str(artist or "").strip()
-        title = _strip_filename_copy_suffix(str(title or "").strip())
-        add_query(f"{artist} {title}" if artist else title)
-        add_query(title)
+        clean_artist = _plain_search_query(str(artist or "").strip())
+        clean_title = _plain_search_query(
+            _strip_filename_copy_suffix(str(title or "").strip())
+        )
+        if not clean_title:
+            return
+        if clean_artist:
+            candidates.append(
+                LyricsSearchCandidate(
+                    query=f"{clean_artist} {clean_title}",
+                    artist=clean_artist,
+                    track=clean_title,
+                )
+            )
+        add_query(clean_title)
 
     def strip_leading_artist(title: str, artist: str) -> str:
         clean_title = _plain_search_query(title)
@@ -926,15 +962,24 @@ def _metadata_search_candidates(
     if filename_is_real:
         add_identity(filename_artist or "", filename_title)
 
-    # Stable de-duplication.
-    unique: list[str] = []
+    # Stable de-duplication by visible query. The first occurrence wins, so an
+    # exact structured artist+track candidate is never replaced by a later
+    # title-only/string fallback with the same display text.
+    unique: list[LyricsSearchCandidate] = []
     seen: set[str] = set()
-    for query in candidates:
-        key = query.casefold()
+    for candidate in candidates:
+        key = candidate.query.casefold()
         if key not in seen:
             seen.add(key)
-            unique.append(query)
+            unique.append(candidate)
     return unique
+
+
+def _metadata_search_candidates(
+    source: str | Path, fallback: str | None
+) -> list[str]:
+    """Compatibility view used by diagnostics/tests: only visible query strings."""
+    return [candidate.query for candidate in _metadata_search_plan(source, fallback)]
 
 
 def discover_lyrics(
@@ -951,13 +996,15 @@ def discover_lyrics(
     embedded = _embedded(source)
     if embedded:
         return LyricsDiscovery(embedded, "metadata")
-    queries = _metadata_search_candidates(source, title)
+    plan = _metadata_search_plan(source, title)
+    queries = [candidate.query for candidate in plan]
     _lyrics_log(f"[lyrics] exact search plan ({len(queries)} queries): {queries!r}")
 
-    for index, query in enumerate(queries, 1):
+    for index, candidate in enumerate(plan, 1):
+        query = candidate.query
         _lyrics_debug(f"[lyrics] SEARCH #{index} BEGIN: {query}")
 
-        online = _online(query, duration_sec)
+        online = _online(candidate, duration_sec)
         if online.text:
             _lyrics_log(f"[lyrics] FOUND via {online.source}: {query}")
             return LyricsDiscovery(online.text, online.source, online.segments, query)
