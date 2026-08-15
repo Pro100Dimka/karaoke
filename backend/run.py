@@ -1,4 +1,4 @@
-"""
+﻿"""
 Точка запуска backend'а.
 
 Запускать из корня backend/:
@@ -119,6 +119,30 @@ def main() -> None:
             raise FileNotFoundError(f"Bundled TorchFCPE checkpoint is missing: {checkpoint}")
         model = torchfcpe.spawn_bundled_infer_model(device="cpu")
         print(f"TorchFCPE runtime ready: {type(model).__name__} ({checkpoint})")
+        return
+
+    if "--verify-qwen-runtime" in sys.argv:
+        import importlib
+
+        # Import the exact public runtime path used by production.  qwen_asr
+        # imports Qwen3ForcedAligner, which imports nagisa; on nagisa 0.2.x
+        # that transitively exercises its native prepro/nagisa_utils modules.
+        # Do not require those private extensions to be importable as explicit
+        # build-time top-level modules: the packaged smoke test itself is the
+        # authoritative proof that the frozen application contains them.
+        qwen_asr = importlib.import_module("qwen_asr")
+        asr_model = getattr(qwen_asr, "Qwen3ASRModel")
+        aligner_model = getattr(qwen_asr, "Qwen3ForcedAligner")
+        nagisa = importlib.import_module("nagisa")
+        tagged = nagisa.tagging("テスト")
+        if not getattr(tagged, "words", None):
+            raise RuntimeError("Nagisa tokenizer smoke test returned no tokens")
+        print(
+            "Qwen runtime ready: "
+            f"ASR={asr_model.__name__}, aligner={aligner_model.__name__}, "
+            f"nagisa={getattr(nagisa, '__version__', 'installed')}, "
+            f"tokens={len(tagged.words)}"
+        )
         return
 
     import config

@@ -1,4 +1,4 @@
-import { translateSaved } from "../i18n/runtime";
+import { translateSaved } from "../i18n/runtime.js";
 /**
  * Returns a user-facing message for an unknown thrown value.
  * Keeps error handling consistent without assuming every rejection is Error.

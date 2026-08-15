@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string] $Executable = "build\electron\win-unpacked\resources\backend\KaraokeBackend.exe",
     [int] $Port = 18765,
     [int] $TimeoutSeconds = 180
@@ -25,6 +25,17 @@ if ($fcpe.ExitCode -ne 0) {
     throw "Packaged TorchFCPE runtime check failed (exit code $($fcpe.ExitCode)): $details"
 }
 Write-Host (Get-Content -LiteralPath $fcpeOut -Raw)
+
+$qwenOut = Join-Path $smokeData "qwen-stdout.log"
+$qwenErr = Join-Path $smokeData "qwen-stderr.log"
+$qwen = Start-Process -FilePath $resolvedExecutable -ArgumentList "--verify-qwen-runtime" `
+    -WindowStyle Hidden -Wait -PassThru `
+    -RedirectStandardOutput $qwenOut -RedirectStandardError $qwenErr
+if ($qwen.ExitCode -ne 0) {
+    $details = (Get-Content -LiteralPath $qwenErr -Raw -ErrorAction SilentlyContinue)
+    throw "Packaged Qwen/Nagisa runtime check failed (exit code $($qwen.ExitCode)): $details"
+}
+Write-Host (Get-Content -LiteralPath $qwenOut -Raw)
 
 $process = Start-Process -FilePath $resolvedExecutable -WindowStyle Hidden -PassThru `
     -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath

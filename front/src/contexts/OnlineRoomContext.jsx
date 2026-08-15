@@ -24,6 +24,8 @@ export function OnlineRoomProvider({ children }) {
   const roomSoundMutedRef = useRef(OFF);
   const intentionalDisconnectRef = useRef(OFF);
   const pendingSongCommandRef = useRef(null);
+  const hostSongCommandRef = useRef(null);
+  const songExportsRef = useRef(new Map());
   const connectionTokenRef = useRef(null);
   const [room, setRoomState] = useState(null);
   const participantsRef = useRef([]);
@@ -42,7 +44,22 @@ export function OnlineRoomProvider({ children }) {
   const [roomUi, setRoomUi] = useState({});
   const [roomCommand, setRoomCommand] = useState(null);
   const [voiceError, setVoiceError] = useState("");
-  const [transferStatus, setTransferStatus] = useState(null);
+  const [transferStatuses, setTransferStatuses] = useState(() => new Map());
+  const setTransferStatus = useCallback((status) => {
+    setTransferStatuses((current) => {
+      if (!status) return new Map();
+      const next = new Map(current);
+      const key = status.participantId || "room";
+      if (["complete", "clear"].includes(status.stage)) next.delete(key);
+      else next.set(key, status);
+      return next;
+    });
+  }, []);
+  const activeTransfer = [...transferStatuses.values()].find((item) => item.stage === "error") ||
+    [...transferStatuses.values()].at(-1) || null;
+  const transferStatus = activeTransfer
+    ? Object.fromEntries(Object.entries(activeTransfer).filter(([key]) => !["participantId", "commandId"].includes(key)))
+    : null;
   const { muteApplicationAudio, restoreApplicationAudio } =
     useApplicationAudioMute(roomSoundMuted);
   const {
@@ -170,6 +187,8 @@ export function OnlineRoomProvider({ children }) {
       setRoomUi({});
       setRoomCommand(null);
       pendingSongCommandRef.current = null;
+      hostSongCommandRef.current = null;
+      songExportsRef.current.clear();
       setTransferStatus(null);
       setVoiceError("");
     },
@@ -219,15 +238,20 @@ export function OnlineRoomProvider({ children }) {
       voice.onPeerClosed = (participantId) => {
         if (isCurrentConnection()) removeRemoteAudio(participantId);
       };
-      voice.onTransferProgress = ({ stage, percent }) => {
+      voice.onTransferProgress = ({ participantId, stage, percent, metadata }) => {
         if (!isCurrentConnection()) return;
-        setTransferStatus( stage === "complete" ? null : { stage, percent: Number(percent) || 0 }
-        );
+        const commandId = metadata?.commandId;
+        const currentCommandId = roomRef.current?.host
+          ? hostSongCommandRef.current?.commandId
+          : pendingSongCommandRef.current?.commandId;
+        if (commandId && currentCommandId && commandId !== currentCommandId) return;
+        setTransferStatus({ participantId, commandId, stage, percent: Number(percent) || 0 });
       };
       const canAcceptSongPackage = (participantId, metadata) => {
         const pending = pendingSongCommandRef.current;
         return isCurrentConnection() && metadata?.kind === "song-package" && !!metadata.songId &&
-          pending?.songId === metadata.songId && !pending.__originatedHere &&
+          !!metadata.commandId && pending?.commandId === metadata.commandId &&
+          pending.songId === metadata.songId && !pending.__originatedHere &&
           participantsRef.current.some((participant) => participant.id === participantId && participant.role === "host");
       };
       voice.canAcceptFile = canAcceptSongPackage;
@@ -236,14 +260,14 @@ export function OnlineRoomProvider({ children }) {
         if (!canAcceptSongPackage(participantId, metadata))
           throw new Error(translateSaved("Получение пакета песни больше не разрешено"));
         try {
-          setTransferStatus({ stage: "importing", percent: 100 });
+          setTransferStatus({ participantId, stage: "importing", percent: 100 });
           await api.importSongPackage(blob, metadata.filename);
-          if (!isCurrentConnection()) return;
+          if (!isCurrentConnection() || pendingSongCommandRef.current?.commandId !== metadata.commandId) return false;
           pendingSongCommandRef.current = null;
-          setTransferStatus(null);
-          if (pendingCommand?.songId === metadata.songId) {
+          setTransferStatus({ participantId, stage: "complete", percent: 100 });
+          if (pendingCommand?.commandId === metadata.commandId && pendingCommand.songId === metadata.songId) {
             if (pendingCommand.__originatedHere) {
-              client.send("sync", { state: { type: "open-karaoke", songId: pendingCommand.songId } });
+              client.send("sync", { state: { type: "open-karaoke", songId: pendingCommand.songId, commandId: pendingCommand.commandId } });
             }
             setRoomCommand({
               ...pendingCommand,
@@ -254,6 +278,7 @@ export function OnlineRoomProvider({ children }) {
         } catch (error) {
           if (isCurrentConnection()) {
             setTransferStatus({
+              participantId,
               stage: "error",
               error: translateSaved("Не удалось импортировать песню: {0}", {
                 0: getErrorMessage(error)
@@ -275,6 +300,8 @@ export function OnlineRoomProvider({ children }) {
           participantsRef,
           intentionalDisconnectRef,
           pendingSongCommandRef,
+          hostSongCommandRef,
+          songExportsRef,
           cleanupConnection,
           setRoom,
           setParticipants,
@@ -284,6 +311,7 @@ export function OnlineRoomProvider({ children }) {
           setTransferStatus,
           onParticipantJoined: playParticipantJoinedSound,
           onConnectionClosed: () => {
+            connectionTokenRef.current = Symbol("connection-closed");
             restoreApplicationAudio();
             cleanupConnection();
             resetRoomState();
@@ -404,7 +432,9 @@ export function OnlineRoomProvider({ children }) {
   useEffect(() => {
     effectPeople.forEach((id) => applyParticipantEffects(id, true));
   }, [applyParticipantEffects, effectPeople, effectsByParticipant]);
-  const { openKaraoke, syncCommand, syncUi } = useOnlineRoomCommands({ clientRef, connectionTokenRef, roomRef });
+  const { openKaraoke, syncCommand, syncUi } = useOnlineRoomCommands({
+    clientRef, connectionTokenRef, hostSongCommandRef, roomRef
+  });
   const value = useOnlineRoomValue({
     createRoom,
     effectPeople,

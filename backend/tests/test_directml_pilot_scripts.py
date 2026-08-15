@@ -35,3 +35,15 @@ def test_directml_real_file_gate_forces_pytorch_reference_to_cpu():
     assert 'if estimator._device != "cpu":' in text
     assert 'print("Reference device: cpu")' in text
     assert 'print("DirectML provider: DmlExecutionProvider")' in text
+
+
+def test_directml_real_file_gate_can_auto_select_latest_vocal_and_print_decision():
+    bat = (ROOT / "scripts" / "test-fcpe-directml-file.bat").read_text(encoding="utf-8")
+    gate = (ROOT / "scripts" / "ai_runtime_benchmark" / "directml_fcpe_file_gate.py").read_text(encoding="utf-8")
+    assert 'if "%~1"=="" (' in bat
+    assert 'rglob("vocals.*")' in gate
+    assert '{".wav", ".flac"}' in gate
+    assert 'print(" DECISION")' in gate
+    assert '"quality_pass": quality_pass' in gate
+    assert '"speed_pass": speed_pass' in gate
+    assert '"stage_candidate": provider_pass and quality_pass and speed_pass and target_hardware' in gate

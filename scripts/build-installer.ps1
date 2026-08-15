@@ -106,7 +106,7 @@ $LegacyV23SchemaVersion = "2026.08.11-v23-parallel-safe"
 
 # Increment ONLY the component whose OUTPUT FORMAT/BUILD RULES changed.
 # Never bump all of these just because build-installer.ps1 itself changed.
-$BackendSchemaVersion   = "backend-v1"
+$BackendSchemaVersion   = "backend-v4-qwen-nagisa-wheel-native"
 $AsioSchemaVersion      = "asio-v1"
 $FrontendSchemaVersion  = "frontend-v1"
 $ModelsSchemaVersion    = "models-7z-v2"
@@ -1635,6 +1635,28 @@ function Build-Backend {
             $args += "--clean"
         }
 
+        # nagisa 0.2.x imports its Cython extensions as top-level modules
+        # (for example ``import prepro``), but those extensions are distributed
+        # as files owned by the nagisa wheel and are not guaranteed to be
+        # discoverable via importlib.util.find_spec("prepro") in the build venv.
+        # Resolve the actual wheel files from importlib.metadata instead and
+        # copy them to the frozen application root, where the absolute imports
+        # used by nagisa.train can resolve them.
+        $nagisaNative = @{}
+        foreach ($moduleName in @("prepro", "nagisa_utils")) {
+            $modulePath = (& $Python -c "from importlib.metadata import files; from pathlib import Path; name='$moduleName'; hits=[Path(p.locate()).resolve() for p in (files('nagisa') or []) if Path(str(p)).name.startswith(name) and Path(str(p)).suffix.lower() in ('.pyd','.dll')]; print(hits[0] if hits else '')").Trim()
+            if ($LASTEXITCODE -ne 0) {
+                throw "Could not inspect Nagisa package files while resolving '$moduleName'."
+            }
+            if (-not [string]::IsNullOrWhiteSpace($modulePath) -and (Test-Path -LiteralPath $modulePath -PathType Leaf)) {
+                $nagisaNative[$moduleName] = $modulePath
+                Write-Host "Nagisa native module: $moduleName -> $modulePath"
+            }
+            else {
+                Write-Warning "Nagisa native module '$moduleName' was not listed as a standalone wheel binary. PyInstaller --collect-all nagisa will be used and the packaged Qwen smoke test will verify the result."
+            }
+        }
+
         $args += @(
             "--onedir",
             "--name","KaraokeBackend",
@@ -1650,6 +1672,8 @@ function Build-Backend {
             "--collect-submodules","ml_collections",
             "--collect-submodules","beartype",
             "--collect-submodules","rotary_embedding_torch",
+            "--collect-all","qwen_asr",
+            "--collect-all","nagisa",
             "--collect-data","torchfcpe",
             "--exclude-module","tkinter",
             "--exclude-module","_tkinter",
@@ -1657,6 +1681,12 @@ function Build-Backend {
             "--exclude-module","turtledemo",
             "run.py"
         )
+
+        foreach ($moduleName in @("prepro", "nagisa_utils")) {
+            if ($nagisaNative.ContainsKey($moduleName)) {
+                $args += @("--add-binary", "$($nagisaNative[$moduleName]);.")
+            }
+        }
 
         & $Python @args
 

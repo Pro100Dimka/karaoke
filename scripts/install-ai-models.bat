@@ -172,6 +172,10 @@ if errorlevel 1 goto :fail
 
 "%PY%" "%MSST_INF%" --help >nul 2>&1 || goto :fail
 
+echo   Qwen/Nagisa runtime...
+"%PY%" -c "from qwen_asr import Qwen3ASRModel,Qwen3ForcedAligner;import nagisa;print('Qwen/Nagisa: ready')"
+if errorlevel 1 goto :fail
+
 set "OLD_PYTHONPATH=%PYTHONPATH%"
 set "PYTHONPATH=%BACK%;%PYTHONPATH%"
 
@@ -231,7 +235,7 @@ if not exist "%MSST_CONFIG%" exit /b 1
 if not defined MSST_CHECKPOINT exit /b 1
 if not exist "%MSST_CHECKPOINT%" exit /b 1
 
-"%PY%" -c "import sys,importlib.util;mods=('qwen_asr','omegaconf','beartype','rotary_embedding_torch','huggingface_hub','hf_xet');raise SystemExit(0 if sys.version_info[:2]==(3,12) and all(importlib.util.find_spec(x) for x in mods) else 1)" >nul 2>&1
+"%PY%" -c "import sys,importlib.util;mods=('qwen_asr','nagisa','omegaconf','beartype','rotary_embedding_torch','huggingface_hub','hf_xet');raise SystemExit(0 if sys.version_info[:2]==(3,12) and all(importlib.util.find_spec(x) for x in mods) else 1)" >nul 2>&1
 if errorlevel 1 exit /b 1
 
 set "OLD_PYTHONPATH=%PYTHONPATH%"

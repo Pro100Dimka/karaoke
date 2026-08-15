@@ -80,13 +80,23 @@ def _stabilized(frames: list[PitchFrame], source: Path) -> list[PitchFrame]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("audio", type=Path)
+    parser.add_argument("audio", type=Path, nargs="?")
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--json-output", type=Path)
     args = parser.parse_args()
-    source = args.audio.expanduser().resolve()
-    if not source.is_file():
-        print(f"[FAIL] Audio file not found: {source}", file=sys.stderr)
+    source = args.audio.expanduser().resolve() if args.audio else None
+    if source is None:
+        candidates = [
+            path
+            for path in (ROOT / "karaoke_songs").rglob("vocals.*")
+            if path.is_file() and path.suffix.casefold() in {".wav", ".flac"}
+        ]
+        source = max(candidates, key=lambda path: path.stat().st_mtime, default=None)
+        if source is not None:
+            print(f"Auto-selected latest vocal stem: {source}")
+    if source is None or not source.is_file():
+        shown = source if source is not None else ROOT / "karaoke_songs/**/vocals.(wav|flac)"
+        print(f"[FAIL] Audio file not found: {shown}", file=sys.stderr)
         return 2
 
     directml = ROOT / "downloads/runtimes/onnxruntime-directml"
@@ -192,7 +202,51 @@ def main() -> int:
     print(f"DirectML preprocess+core: {payload['directml_preprocess_plus_core_sec']:.4f}s")
     print("Raw:", json.dumps(payload["raw"], ensure_ascii=False))
     print("Stabilized:", json.dumps(payload["stabilized"], ensure_ascii=False))
-    print("\nNOTE: this is a debug/feasibility gate, not production approval.")
+
+    provider_pass = bool(payload["providers"]) and payload["providers"][0] == "DmlExecutionProvider"
+    raw = payload["raw"]
+    stable = payload["stabilized"]
+    quality_pass = (
+        raw["frame_delta"] == 0
+        and stable["frame_delta"] == 0
+        and raw["voiced_agreement"] >= 0.99999
+        and stable["voiced_agreement"] >= 0.99999
+        and raw["cents_p95"] <= 0.05
+        and stable["cents_p95"] <= 0.05
+        and raw["cents_max"] <= 1.0
+        and stable["cents_max"] <= 1.0
+    )
+    dml_total = float(payload["directml_preprocess_plus_core_sec"])
+    cpu_total = float(payload["pytorch_full_pitch_median_sec"])
+    speed_ratio = cpu_total / max(dml_total, 1e-9)
+    speed_pass = dml_total <= cpu_total * 0.90
+    hardware = runtime.detect_hardware()
+    vendors = {gpu.vendor for gpu in hardware.gpus}
+    target_hardware = bool(vendors & {"amd", "intel"}) and "nvidia" not in vendors
+
+    payload["decision"] = {
+        "provider_pass": provider_pass,
+        "quality_pass": quality_pass,
+        "speed_pass": speed_pass,
+        "speedup": speed_ratio,
+        "hardware_vendors": sorted(vendors),
+        "target_amd_intel_hardware": target_hardware,
+        "stage_candidate": provider_pass and quality_pass and speed_pass and target_hardware,
+    }
+    print("\n============================================================")
+    print(" DECISION")
+    print("============================================================")
+    print("DirectML provider :", "PASS" if provider_pass else "FAIL")
+    print("Quality gate      :", "PASS" if quality_pass else "FAIL")
+    print(f"Speed gate        : {'PASS' if speed_pass else 'FAIL'} ({speed_ratio:.3f}x)")
+    if target_hardware:
+        print("AMD/Intel hardware: YES")
+        print("Stage candidate   :", "YES" if payload["decision"]["stage_candidate"] else "NO")
+    else:
+        print("AMD/Intel hardware: NO (current GPU is not a target performance device)")
+        print("Stage candidate   : NO -- compatibility/quality only on this PC")
+    print("\nNOTE: even Stage candidate=YES is not full production approval; full downstream")
+    print("      pitch/notes/reference/MIDI/songMap validation remains mandatory.")
 
     if args.json_output:
         args.json_output.parent.mkdir(parents=True, exist_ok=True)

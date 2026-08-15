@@ -1,4 +1,4 @@
-import { translateSaved } from "../i18n/runtime";
+import { translateSaved } from "../i18n/runtime.js";
 // Node's direct ESM tests require explicit extensions for these source imports.
 // eslint-disable-next-line import/extensions
 import { normalizeRoomId } from "../services/onlineRoom.js";
@@ -27,6 +27,8 @@ export function createOnlineRoomMessageHandler(options) {
     participantsRef = { current: [] },
     intentionalDisconnectRef: disconnectIntentRef,
     pendingSongCommandRef: pendingCommandRef,
+    hostSongCommandRef = { current: null },
+    songExportsRef = { current: new Map() },
     cleanupConnection,
     setRoom,
     setParticipants,
@@ -43,50 +45,82 @@ export function createOnlineRoomMessageHandler(options) {
   };
   const senderIsHost = (message) =>
     participantsRef.current?.some((participant) => participant.id === message.fromId && participant.role === "host");
+  const isCurrentPending = (command) =>
+    isCurrentConnection() && pendingCommandRef.current?.commandId === command.commandId;
 
   const syncHandlers = {
     "song-request": (command, message) => {
+      const offered = hostSongCommandRef.current;
       if (
         !activeRoomRef.current?.host ||
         !command.requesterId ||
         !command.songId ||
-        (!message.fromId || message.fromId !== command.requesterId)
-      ) {
-        return false;
+        !command.commandId ||
+        message.fromId !== command.requesterId ||
+        offered?.commandId !== command.commandId ||
+        offered.songId !== command.songId
+      ) return false;
+
+      let exportEntry = songExportsRef.current.get(command.commandId);
+      if (!exportEntry) {
+        exportEntry = {
+          promise: roomApi.exportSongPackage(command.songId),
+          requesters: new Set(),
+          users: 0
+        };
+        songExportsRef.current.set(command.commandId, exportEntry);
       }
-      roomApi
-        .exportSongPackage(command.songId)
+      if (exportEntry.requesters.has(command.requesterId)) return true;
+      exportEntry.requesters.add(command.requesterId);
+      exportEntry.users += 1;
+      exportEntry.promise
         .then(async (blob) => {
-          try {
-            if (!isCurrentConnection()) return null;
-            setTransferStatus({ stage: "sending", percent: 0 });
-            return await voice.sendFile(command.requesterId, blob, {
-              kind: "song-package", songId: command.songId, filename: `${command.songId}.karaoke.zip`
-            });
-          } finally {
-            await blob.cleanup?.();
-          }
+          if (!isCurrentConnection() || hostSongCommandRef.current?.commandId !== command.commandId) return null;
+          setTransferStatus({ participantId: command.requesterId, stage: "sending", percent: 0 });
+          return voice.sendFile(command.requesterId, blob, {
+            kind: "song-package",
+            songId: command.songId,
+            commandId: command.commandId,
+            filename: `${command.songId}.karaoke.zip`
+          });
         })
-        .then(() => { if (isCurrentConnection()) setTransferStatus(null); })
+        .then(() => {
+          if (isCurrentConnection() && hostSongCommandRef.current?.commandId === command.commandId)
+            setTransferStatus({ participantId: command.requesterId, stage: "complete", percent: 100 });
+        })
         .catch((error) => {
-          if (!isCurrentConnection()) return;
-          const message = getErrorMessage(error);
+          if (!isCurrentConnection() || hostSongCommandRef.current?.commandId !== command.commandId) return;
+          const errorText = getErrorMessage(error);
           client.send("sync", {
             state: {
               type: "song-transfer-error",
               requesterId: command.requesterId,
               songId: command.songId,
-              error: message
+              commandId: command.commandId,
+              error: errorText
             }
           });
-          setTransferStatus({ stage: "error", error: message, percent: 0 });
+          setTransferStatus({ participantId: command.requesterId, stage: "error", error: errorText, percent: 0 });
+        })
+        .finally(async () => {
+          exportEntry.requesters.delete(command.requesterId);
+          exportEntry.users -= 1;
+          if (exportEntry.users) return;
+          songExportsRef.current.delete(command.commandId);
+          const blob = await exportEntry.promise.catch(() => null);
+          await blob?.cleanup?.();
         });
       return true;
     },
     "song-transfer-error": (command, message) => {
-      if (!senderIsHost(message) || command.requesterId !== activeRoomRef.current?.selfId) return false;
+      if (
+        !senderIsHost(message) ||
+        command.requesterId !== activeRoomRef.current?.selfId ||
+        !isCurrentPending(command)
+      ) return false;
       pendingCommandRef.current = null;
       setTransferStatus({
+        participantId: message.fromId,
         stage: "error",
         error: command.error || translateSaved("Ведущий не смог передать песню"),
         percent: 0
@@ -94,20 +128,22 @@ export function createOnlineRoomMessageHandler(options) {
       return true;
     },
     "open-karaoke": (command, message) => {
-      if (activeRoomRef.current?.host || !senderIsHost(message)) return false;
-      roomApi
-        .getSong(command.songId)
+      if (activeRoomRef.current?.host || !senderIsHost(message) || !command.songId || !command.commandId) return false;
+      pendingCommandRef.current = command;
+      roomApi.getSong(command.songId)
         .then(() => {
-          if (!isCurrentConnection()) return;
+          if (!isCurrentPending(command)) return;
+          pendingCommandRef.current = null;
+          setTransferStatus({ participantId: message.fromId, stage: "complete", percent: 100 });
           publishRoomCommand(command, message.sentAt || "sync");
         })
         .catch(() => {
-          if (!isCurrentConnection()) return;
-          pendingCommandRef.current = command;
-          setTransferStatus({ stage: "waiting", percent: 0 });
+          if (!isCurrentPending(command)) return;
+          setTransferStatus({ participantId: message.fromId, stage: "waiting", percent: 0 });
           client.send("sync", {
             state: {
               type: "song-request",
+              commandId: command.commandId,
               songId: command.songId,
               requesterId: activeRoomRef.current?.selfId
             }
@@ -120,14 +156,7 @@ export function createOnlineRoomMessageHandler(options) {
   const messageHandlers = {
     "room-state": (message) => {
       const { self } = message;
-      if (self) {
-        setRoom({
-          id: normalizeRoomId(id),
-          selfId: self.id,
-          host: self.role === "host",
-          role: self.role
-        });
-      }
+      if (self) setRoom({ id: normalizeRoomId(id), selfId: self.id, host: self.role === "host", role: self.role });
       setParticipants(message.participants || []);
     },
     "participant-joined": (message) => {
@@ -136,9 +165,7 @@ export function createOnlineRoomMessageHandler(options) {
       if (participant?.id !== activeRoomRef.current?.selfId) onParticipantJoined(participant);
       if (participant?.id) voice.invite(participant.id).catch(() => {});
     },
-    "participant-updated": (message) => {
-      setParticipants((items) => upsertParticipant(items, message.participant));
-    },
+    "participant-updated": (message) => setParticipants((items) => upsertParticipant(items, message.participant)),
     "self-updated": (message) => {
       if (!message.self) return;
       setRoom({
@@ -149,13 +176,10 @@ export function createOnlineRoomMessageHandler(options) {
       });
     },
     "participant-left": (message) => {
-      setParticipants((items) => items.filter((item) => item.id !== message.participantId)
-      );
+      setParticipants((items) => items.filter((item) => item.id !== message.participantId));
       voice.removePeer(message.participantId);
     },
-    signal: (message) => {
-      voice.accept(message.fromId, message.signal).catch(() => {});
-    },
+    signal: (message) => voice.accept(message.fromId, message.signal).catch(() => {}),
     ui: (message) => {
       const state = message.state || {};
       const { participantEffects } = state;
@@ -172,16 +196,16 @@ export function createOnlineRoomMessageHandler(options) {
     },
     sync: (message) => {
       const command = message.state || {};
-      if (Object.hasOwn(syncHandlers, command.type) && syncHandlers[command.type](command, message)) return;
+      if (Object.hasOwn(syncHandlers, command.type)) {
+        syncHandlers[command.type](command, message);
+        return;
+      }
       if (!senderIsHost(message)) return;
       publishRoomCommand(command, message.sentAt || "sync");
     },
     "connection-closed": () => {
       if (disconnectIntentRef.current) return;
-      if (onConnectionClosed) {
-        onConnectionClosed();
-        return;
-      }
+      if (onConnectionClosed) return onConnectionClosed();
       cleanupConnection();
       setRoom(null);
       setParticipants([]);

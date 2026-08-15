@@ -6,6 +6,8 @@ import { closeAudioContext, closeAudioContextQuietly } from "../utils/audio-cont
 // for signalling, therefore microphone data is never stored in the cloud.
 
 import {
+  cancelOutboundTransfers,
+  cleanupIncomingTransfer,
   createIncomingTransferTimer,
   emitTransferProgress,
   sendFile,
@@ -25,9 +27,10 @@ export default class OnlineVoiceMesh {
     this.peerVersions = new Map();
     this.channels = new Map();
     this.incomingFiles = new Map();
-    this.incomingFileAdmissions = new Set();
+    this.incomingFileAdmissions = new Map();
     this.pendingTransferConfirmations = new Map();
     this.pendingTransferAdmissions = new Map();
+    this.pendingTransferCredits = new Map();
     this.stream = null;
     this.microphoneGraph = null;
     this.startPromise = null;
@@ -350,25 +353,16 @@ export default class OnlineVoiceMesh {
     this.pendingInvites.delete(participantId);
     this.invitePromises.delete(participantId);
     this.signalPromises.delete(participantId);
-    this.channels.get(participantId)?.close();
-    this.channels.delete(participantId);
-    const incoming = this.incomingFiles.get(participantId);
-    if (incoming?.timer) globalThis.clearTimeout(incoming.timer);
-    this.incomingFiles.delete(participantId);
-    for (const [transferId, pending] of this.pendingTransferConfirmations) {
-      if (pending.participantId !== participantId) continue;
-      globalThis.clearTimeout(pending.timer);
-      pending.reject( new Error(translateSaved("Участник отключился во время передачи"))
-      );
-      this.pendingTransferConfirmations.delete(transferId);
-    }
-    for (const [transferId, pending] of this.pendingTransferAdmissions) {
-      if (pending.participantId !== participantId) continue;
-      globalThis.clearTimeout(pending.timer);
-      pending.reject(new Error(translateSaved("Участник отключился во время передачи")));
-      this.pendingTransferAdmissions.delete(transferId);
-    }
+    const channel = this.channels.get(participantId);
+    cancelOutboundTransfers(this, participantId, null, new Error(translateSaved("Участник отключился во время передачи")));
+    const admission = this.incomingFileAdmissions.get(participantId);
+    if (admission) admission.cancelled = true;
     this.incomingFileAdmissions.delete(participantId);
+    const incoming = this.incomingFiles.get(participantId);
+    cleanupIncomingTransfer(incoming);
+    this.incomingFiles.delete(participantId);
+    channel?.close();
+    this.channels.delete(participantId);
     if (existed) this.onPeerClosed?.(participantId);
   }
 
@@ -389,12 +383,11 @@ export default class OnlineVoiceMesh {
       globalThis.clearTimeout(timer);
     }
     this.disconnectTimers.clear();
-    for (const transfer of this.incomingFiles.values()) {
-      if (transfer.timer) globalThis.clearTimeout(transfer.timer);
-    }
+    for (const transfer of this.incomingFiles.values()) cleanupIncomingTransfer(transfer);
     this.incomingFiles.clear();
+    for (const admission of this.incomingFileAdmissions.values()) admission.cancelled = true;
     this.incomingFileAdmissions.clear();
-    this.pendingTransferAdmissions.clear();
+    cancelOutboundTransfers(this, null, null, new Error(translateSaved("Передача файла отменена")));
     this.channels.clear();
   }
 }

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 from pathlib import Path
@@ -59,3 +59,26 @@ def test_scene_video_is_optional_for_git_clean_build():
     builder = _text("scripts/build-installer.ps1")
     assert "Optional karaoke scene video is absent; building without it." in builder
     assert "Optional karaoke scene video copied into application resources." in builder
+
+
+def test_ai_cached_quick_check_does_not_require_private_nagisa_modules_directly():
+    script = _text("scripts/install-ai-models.bat")
+    quick_line = next(line for line in script.splitlines() if "mods=('qwen_asr','nagisa'" in line)
+    assert "'prepro'" not in quick_line
+    assert "'nagisa_utils'" not in quick_line
+    assert "Qwen/Nagisa runtime" in script
+    assert "from qwen_asr import Qwen3ASRModel,Qwen3ForcedAligner;import nagisa" in script
+
+
+def test_backend_packaging_bundles_nagisa_native_modules_and_smokes_qwen():
+    builder = _text("scripts/build-installer.ps1")
+    assert 'foreach ($moduleName in @("prepro", "nagisa_utils"))' in builder
+    assert "from importlib.metadata import files" in builder
+    assert "files('nagisa')" in builder
+    assert '$args += @("--add-binary", "$($nagisaNative[$moduleName]);.")' in builder
+    assert "Required Nagisa native module" not in builder
+    smoke = _text("scripts/smoke-packaged-backend.ps1")
+    assert 'ArgumentList "--verify-qwen-runtime"' in smoke
+    runner = _text("backend/run.py")
+    assert 'nagisa.tagging("テスト")' in runner
+    assert 'importlib.import_module("prepro")' not in runner

@@ -2,12 +2,39 @@
 
 from __future__ import annotations
 
+import gc
+import os
 import shutil
+import time
 import uuid
 from collections.abc import Iterable
 from pathlib import Path
 
 QuarantineMap = dict[Path, Path]
+
+_WINDOWS_SHARING_ERRORS = {5, 32, 33}
+
+
+def _replace_with_retry(source: Path, destination: Path, *, attempts: int = 10) -> None:
+    """Rename a path, tolerating short-lived Windows file locks.
+
+    Antivirus scanning, MediaFoundation/Chromium audio reads and recently
+    completed worker processes can keep a song file open briefly after the UI
+    requests deletion. Retrying only Windows sharing/access violations keeps
+    genuine filesystem errors visible while avoiding spurious delete failures.
+    """
+    delay = 0.05
+    for attempt in range(attempts):
+        try:
+            source.replace(destination)
+            return
+        except OSError as exc:
+            retryable = os.name == "nt" and getattr(exc, "winerror", None) in _WINDOWS_SHARING_ERRORS
+            if not retryable or attempt + 1 >= attempts:
+                raise
+            gc.collect()
+            time.sleep(delay)
+            delay = min(delay * 1.7, 0.5)
 
 
 def existing_unique_paths(paths: Iterable[Path]) -> tuple[Path, ...]:
@@ -21,7 +48,7 @@ def quarantine_paths(paths: Iterable[Path]) -> QuarantineMap:
     try:
         for path in existing_unique_paths(paths):
             temporary = path.with_name(f".{path.name}.delete-{uuid.uuid4().hex}")
-            path.replace(temporary)
+            _replace_with_retry(path, temporary)
             quarantined[path] = temporary
     except Exception:
         restore_quarantined_paths(quarantined)
@@ -33,7 +60,7 @@ def restore_quarantined_paths(quarantined: QuarantineMap) -> None:
     """Restore quarantined paths in reverse order."""
     for original, temporary in reversed(tuple(quarantined.items())):
         if temporary.exists():
-            temporary.replace(original)
+            _replace_with_retry(temporary, original)
 
 
 def purge_quarantined_paths(quarantined: QuarantineMap) -> None:
