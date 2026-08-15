@@ -43,3 +43,22 @@ def test_cpu_separation_tuner_scripts_are_wired():
     assert "tune_cpu_separation.py" in bat
     assert "cpu-separation-threads.txt" in py
     assert "start-dev-cpu.bat will use this value automatically" in py
+
+
+def test_openvino_cpu_pilot_scripts_are_wired():
+    prepare = _text("prepare-roformer-openvino-cpu-pilot.bat")
+    bench = _text("benchmark-cpu-separation-openvino.bat")
+    start = _text("start-dev-cpu-openvino.bat")
+    py = _text("benchmark_cpu_separation_openvino.py")
+    assert "openvino==%VERSION%" in prepare
+    assert "benchmark_cpu_separation_openvino.py" in bench
+    assert 'set "KARAOKE_CPU_COMPILE_BACKEND=openvino"' in start
+    assert "cpu-separation-backend.txt" in py
+    assert "Stems byte-identical" in py
+
+
+def test_start_dev_cpu_can_use_validated_openvino_backend_cache():
+    text = _text("start-dev-cpu.bat")
+    assert "cpu-separation-backend.txt" in text
+    assert 'if /I "%CPU_BACKEND%"=="openvino"' in text
+    assert 'set "KARAOKE_CPU_COMPILE_BACKEND=openvino"' in text

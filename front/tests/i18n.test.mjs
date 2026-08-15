@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { test } from "vitest";
 
 import { translateSaved } from "../src/i18n/runtime.js";
@@ -23,6 +24,21 @@ const catalogs = {
   ru: { greeting: "Hello from Russia, {name}!", complete: "Russian" },
   en: { greeting: "Hello, {name}!", complete: "English" }
 };
+
+test("UI locale source files do not contain duplicate translation keys", () => {
+  for (const language of ["uk", "ru", "en"]) {
+    const source = fs.readFileSync(
+      new URL(`../src/i18n/messages-${language}.js`, import.meta.url),
+      "utf8"
+    );
+    const keys = [...source.matchAll(/^\s{4}"([^"]+)":/gm)].map(([, key]) => key);
+    assert.equal(
+      new Set(keys).size,
+      keys.length,
+      `Duplicate translation key in messages-${language}.js`
+    );
+  }
+});
 
 test("Ukrainian is the safe default locale", async () => {
   const { normalizeLanguage } = await loadLanguage();

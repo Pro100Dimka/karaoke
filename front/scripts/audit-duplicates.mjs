@@ -22,8 +22,17 @@ for (const file of files) {
   const lines = fs.readFileSync(file, "utf8").split(/\r?\n/);
   for (let index = 0; index <= lines.length - windowSize; index += 1) {
     const raw = lines.slice(index, index + windowSize);
-    const normalized = raw.map((line) => line.trim()).join("\n");
-    if (normalized.length < 100 || !/[A-Za-zА-Яа-я]/.test(normalized)) continue;
+    const trimmed = raw.map((line) => line.trim());
+    const normalized = trimmed.join("\n");
+    const listOnly = trimmed.every((line) =>
+      /^(?:[A-Za-z_$][\w$]*,?|[{}][,;]?|\}[),;]?|\}\s*=\s*[A-Za-z_$][\w$]*;?)$/.test(line)
+    );
+    if (
+      normalized.length < 100 ||
+      !/[A-Za-zА-Яа-я]/.test(normalized) ||
+      listOnly ||
+      normalized.includes('from "react"')
+    ) continue;
     const key = normalized.replace(/\s+/g, " ");
     const item = { file: path.relative(root, file), line: index + 1 };
     if (!occurrences.has(key)) occurrences.set(key, []);

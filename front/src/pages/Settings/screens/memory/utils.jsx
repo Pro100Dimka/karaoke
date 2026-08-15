@@ -1,6 +1,7 @@
 import { Trash2 } from "lucide-react";
 import { translateSaved } from "../../../../i18n/runtime";
 import { Button, Grid, Select, Stack, Typography } from "../../../../theme/ui";
+import SettingsMetricGrid from "../../settings-metric-grid";
 import { getErrorMessage } from "../../../../utils/errors";
 
 export async function runMemoryAction({ request, getMessage, notify }) {
@@ -19,34 +20,16 @@ export function MemoryStats({ size, free }) {
   const items = [
     [translateSaved("Всего занято"), size?.total_human ?? "—"],
     ...(free
-      ? [
-          [
-            translateSaved("Свободно на диске"),
-            translateSaved("{0} из {1}", {
-              0: free.free_human,
-              1: free.total_human
-            })
-          ]
-        ]
+      ? [[
+          translateSaved("Свободно на диске"),
+          translateSaved("{0} из {1}", {
+            0: free.free_human,
+            1: free.total_human
+          })
+        ]]
       : [])
   ];
-  return (
-    <Grid
-      minItemWidth="min(100%, 13rem)"
-      gap="var(--space-2)"
-      className="settings-metric-grid"
-    >
-      {items.map(([label, value]) => (
-        <Stack key={label} gap={0.2} className="settings-metric-item">
-          <Typography variant="caption" tone="muted">
-            {label}
-          </Typography>
-
-          <Typography variant="h3">{value}</Typography>
-        </Stack>
-      ))}
-    </Grid>
-  );
+  return <SettingsMetricGrid items={items} />;
 }
 export function MemoryActions({ actions, notify }) {
   return (

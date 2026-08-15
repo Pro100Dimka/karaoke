@@ -9,126 +9,41 @@ import {
 } from "react";
 import { api } from "../api/client";
 import { translateSaved } from "../i18n/runtime";
+import { DEFAULT_RADIO_SETTINGS, RADIO_STATIONS } from "./radio-config";
+import { calculateRadioSpectrum, isAutoplayBlocked } from "./radio-utils";
+import useRadioLifecycle from "./hooks/useRadioLifecycle";
+import useRadioValue from "./hooks/useRadioValue";
 import { readJsonStorage, writeJsonStorage } from "../utils/storage";
 
-// Station metadata is configuration, verified as an exact contract by tests.
-/* Stryker disable all */
-export const RADIO_STATIONS = [
-  {
-    id: "poptron",
-    name: "SomaFM PopTron",
-    description: translateSaved("Весёлый электропоп и танцевальные хиты"),
-    streams: [
-      "https://ice5.somafm.com/poptron-128-mp3",
-      "https://ice2.somafm.com/poptron-128-mp3"
-    ]
-  },
-  {
-    id: "indiepop",
-    name: "SomaFM Indie Pop Rocks",
-    description: translateSaved("Яркий инди-поп и знакомые припевы"),
-    streams: [
-      "https://ice5.somafm.com/indiepop-128-mp3",
-      "https://ice2.somafm.com/indiepop-128-mp3"
-    ]
-  },
-  {
-    id: "beatblender",
-    name: "SomaFM Beat Blender",
-    description: translateSaved("Энергичная электроника и ровный бит"),
-    streams: [
-      "https://ice5.somafm.com/beatblender-128-mp3",
-      "https://ice2.somafm.com/beatblender-128-mp3"
-    ]
-  },
-  {
-    id: "groovesalad",
-    name: "SomaFM Groove Salad",
-    description: translateSaved("Спокойный фон и мягкий бас"),
-    streams: [
-      "https://ice5.somafm.com/groovesalad-128-mp3",
-      "https://ice2.somafm.com/groovesalad-128-mp3"
-    ]
-  }
-];
-/* Stryker restore all */
+export { RADIO_STATIONS } from "./radio-config";
+export { calculateRadioSpectrum, isAutoplayBlocked } from "./radio-utils";
+
 const STORAGE_KEY = "karaoke-radio";
-const DEFAULT_SETTINGS = {
-  stationId: "poptron",
-  volume: 0.45,
-  enabled: true
-};
 const STARTUP_FADE_MS = 2000;
-// Diagnostic copy is localization data, not a control-flow decision.
-// Stryker disable next-line StringLiteral
 const NO_STREAM_ERROR = "No radio stream could be played";
 const createVersion = () => Object.create(null);
 const RadioContext = createContext(null);
-export const isAutoplayBlocked = (reason) =>
-  reason?.name === "NotAllowedError" ||
-  /user didn't interact|user gesture|not allowed/i.test(
-    // Any non-matching text is equivalent for an absent rejection reason.
-    // Stryker disable next-line StringLiteral
-    String(reason?.message ?? reason ?? "")
-  );
+
 export function normalizeRadioSettings(stored = {}) {
   const stationId = RADIO_STATIONS.some(({ id }) => id === stored.stationId)
     ? stored.stationId
-    : DEFAULT_SETTINGS.stationId;
+    : DEFAULT_RADIO_SETTINGS.stationId;
   const storedVolume = Number(stored.volume);
   const volume = Number.isFinite(storedVolume)
     ? Math.max(0, Math.min(1, storedVolume))
-    : DEFAULT_SETTINGS.volume;
+    : DEFAULT_RADIO_SETTINGS.volume;
   return {
     stationId,
     volume,
     enabled:
       typeof stored.enabled === "boolean"
         ? stored.enabled
-        : DEFAULT_SETTINGS.enabled
+        : DEFAULT_RADIO_SETTINGS.enabled
   };
 }
 const loadRadioSettings = () =>
   normalizeRadioSettings(readJsonStorage(STORAGE_KEY));
 
-export function calculateRadioSpectrum(
-  data,
-  sampleRate,
-  fftSize,
-  previousBass,
-  previousBands
-) {
-  const binHz = sampleRate / fftSize;
-  const averageRange = (fromHz, toHz) => {
-    const first = Math.max(1, Math.floor(fromHz / binHz));
-    const last = Math.min(data.length - 1, Math.ceil(toHz / binHz));
-    let sum = 0;
-    for (let index = first; index <= last; index += 1) sum += data[index];
-    return sum / Math.max(1, last - first + 1) / 255;
-  };
-  const rawBass = averageRange(35, 180);
-  // Equality makes the response multiply a zero delta.
-  // Stryker disable EqualityOperator
-  const bass =
-    previousBass +
-    (rawBass - previousBass) * (rawBass > previousBass ? 0.46 : 0.12);
-  // Stryker restore EqualityOperator
-  const minHz = 45;
-  const maxHz = Math.min(12000, sampleRate * 0.45);
-  const bands = previousBands.map((previous, band, allBands) => {
-    const fromHz = minHz * (maxHz / minHz) ** (band / allBands.length);
-    const toHz = minHz * (maxHz / minHz) ** ((band + 1) / allBands.length);
-    const raw = averageRange(fromHz, toHz);
-    const boosted = Math.min(
-      1,
-      raw * (band < 5 ? 1.42 : band < 12 ? 1.72 : 2.05)
-    );
-    // Equality makes the response multiply a zero delta.
-    // Stryker disable next-line EqualityOperator
-    return previous + (boosted - previous) * (boosted > previous ? 0.58 : 0.16);
-  });
-  return { bands, bass };
-}
 export function RadioProvider({ children }) {
   // An injected literal is stable, so this remains mount-only.
   // Stryker disable next-line ArrayDeclaration
@@ -431,7 +346,7 @@ export function RadioProvider({ children }) {
       const numericValue = Number(value);
       const next = Number.isFinite(numericValue)
         ? Math.max(0, Math.min(1, numericValue))
-        : DEFAULT_SETTINGS.volume;
+        : DEFAULT_RADIO_SETTINGS.volume;
       volumeRef.current = next;
       setVolumeState(next);
       cancelVolumeFade();
@@ -514,97 +429,37 @@ export function RadioProvider({ children }) {
   }, [isPlaying, station, stopAnalysis, turnOn]);
   const turnOnRef = useRef(turnOn);
   turnOnRef.current = turnOn;
-  // Volume is written atomically by setVolume and after every successful play.
-  // Stryker disable ArrayDeclaration: initial.enabled is immutable and both callbacks are stable.
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (initial.enabled)
-      turnOnRef.current({
-        remember: false,
-        analyse: true,
-        fadeIn: true
-      });
-    return () => {
-      playbackVersionRef.current = createVersion();
-      cancelVolumeFade();
-      stopAnalysis();
-      audio.pause();
-      audio.removeAttribute("src");
-      audio.load();
-      const context = audioContextRef.current;
-      audioContextRef.current = null;
-      analyserRef.current = null;
-      frequencyDataRef.current = null;
-      context?.close().catch(() => {});
-    };
-  }, [cancelVolumeFade, initial.enabled, stopAnalysis]);
-  // Stryker restore ArrayDeclaration
-  // Stryker disable ArrayDeclaration: immutable startup state and stable callback/ref indirection.
-  useEffect(() => {
-    const unlock = () => {
-      // A genuine gesture is the only universally reliable way to satisfy
-      // Chromium autoplay restrictions. If startup playback was blocked,
-      // resume it here with the same gentle fade-in.
-      if (
-        pendingStartupPlaybackRef.current &&
-        initial.enabled &&
-        !suspendedRef.current
-      ) {
-        pendingStartupPlaybackRef.current = false;
-        turnOnRef.current({
-          remember: false,
-          analyse: true,
-          fadeIn: true
-        });
-      } else {
-        unlockAudioAnalysis();
-      }
-    };
-    window.addEventListener("pointerdown", unlock, true);
-    // Capture and bubble both observe the global keyboard gesture.
-    // Stryker disable next-line BooleanLiteral
-    window.addEventListener("keydown", unlock, true);
-    return () => {
-      window.removeEventListener("pointerdown", unlock, true);
-      // Capture and bubble use the same callback identity here.
-      // Stryker disable next-line BooleanLiteral
-      window.removeEventListener("keydown", unlock, true);
-    };
-  }, [initial.enabled, unlockAudioAnalysis]);
-  // Stryker restore ArrayDeclaration
-  const value = useMemo(
-    () => ({
-      error,
-      isLoading,
-      isPlaying,
-      station,
-      stationId,
-      stations: RADIO_STATIONS,
-      volume,
-      setRecordingActive,
-      setStation,
-      setVolume,
-      toggle,
-      turnOff,
-      turnOn,
-      getBassLevel: () => bassRef.current,
-      getSpectrumLevels: () => spectrumRef.current
-    }),
-    [
-      error,
-      isLoading,
-      isPlaying,
-      setRecordingActive,
-      setStation,
-      setVolume,
-      station,
-      stationId,
-      toggle,
-      turnOff,
-      turnOn,
-      volume
-    ]
-  );
+  useRadioLifecycle({
+    analyserRef,
+    audioContextRef,
+    audioRef,
+    cancelVolumeFade,
+    createVersion,
+    enabled: initial.enabled,
+    frequencyDataRef,
+    pendingStartupPlaybackRef,
+    playbackVersionRef,
+    stopAnalysis,
+    suspendedRef,
+    turnOnRef,
+    unlockAudioAnalysis
+  });
+  const value = useRadioValue({
+    bassRef,
+    error,
+    isLoading,
+    isPlaying,
+    setRecordingActive,
+    setStation,
+    setVolume,
+    spectrumRef,
+    station,
+    stationId,
+    toggle,
+    turnOff,
+    turnOn,
+    volume
+  });
   return (
     <RadioContext.Provider value={value}>
       {children}

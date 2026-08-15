@@ -1,3 +1,4 @@
+import { closeAudioContext } from "../utils/audio-context.js";
 const connect = (from, to) => {
   from.connect(to);
   return to;
@@ -64,7 +65,7 @@ export function createStudioMicrophoneGraph(rawStream) {
       try { source.disconnect(); } catch {}
       rawStream.getTracks?.().forEach((track) => track.stop());
       destination.stream.getTracks?.().forEach((track) => track.stop());
-      if (context.state !== "closed") await context.close().catch(() => {});
+      if (context.state !== "closed") await closeAudioContext(context);
     }
   };
 }

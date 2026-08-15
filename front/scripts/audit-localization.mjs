@@ -12,6 +12,7 @@ const cyrillic = /[\u0400-\u04ff]/u;
 const excluded = [
   `${path.sep}theme${path.sep}`,
   `${path.sep}i18n${path.sep}index.jsx`,
+  `${path.sep}i18n${path.sep}messages-`,
   `${path.sep}api${path.sep}mock${path.sep}`
 ];
 

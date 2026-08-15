@@ -13,6 +13,7 @@ import useKaraokeHotkeys from "./hooks/useKaraokeHotkeys";
 import useKaraokeMediaSync from "./hooks/useKaraokeMediaSync";
 import useKaraokePreferences from "./hooks/useKaraokePreferences";
 import useKaraokeResult from "./hooks/useKaraokeResult";
+import useKaraokeSceneFlow from "./hooks/useKaraokeSceneFlow";
 import useKaraokeStageLayout from "./hooks/useKaraokeStageLayout";
 import useKaraokeTransport from "./hooks/useKaraokeTransport";
 import useMelodyGuide from "./hooks/useMelodyGuide";
@@ -34,15 +35,6 @@ import { getMicrophoneLevel } from "./utils/transport";
 // songMap.json and advances it with the instrumental playback clock. Legacy
 // normalization remains only as a compatibility fallback for older payloads.
 
-const setGlobalRouteBlackout = (visible) => {
-  window.dispatchEvent(
-    new CustomEvent("app:route-blackout", {
-      detail: {
-        visible
-      }
-    })
-  );
-};
 export default function Karaoke({ onOpenAppSettings }) {
   const onlineRoom = useOnlineRoom();
   const { room: onlineRoomState, syncUi: syncRoomUi } = onlineRoom;
@@ -74,10 +66,6 @@ export default function Karaoke({ onOpenAppSettings }) {
   const vocalsRef = useRef(null);
   const videoRef = useRef(null);
   const youTubeClipRef = useRef(null);
-  const sceneTransitionRef = useRef(false);
-  const resumeRadioOnPauseRef = useRef(false);
-  const hasStartedPlaybackRef = useRef(false);
-  const stageActionTimerRef = useRef(null);
   const containerRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -129,44 +117,11 @@ export default function Karaoke({ onOpenAppSettings }) {
     setRecordingActive(Boolean(recordingSessionId) && isPlaying);
     return () => setRecordingActive(false);
   }, [isPlaying, recordingSessionId, setRecordingActive]);
-  const [stageActionsVisible, setStageActionsVisible] = useState(true);
   const autoStartRequested = Boolean(location.state?.autoPlay);
-  const [sceneBlackout, setSceneBlackout] = useState(autoStartRequested);
-  const [sceneIntroVisible, setSceneIntroVisible] = useState(false);
-  const [sceneTransitioning, setSceneTransitioning] =
-    useState(autoStartRequested);
-  const autoStartedSongRef = useRef(null);
   const { controlsVisible, hideControls, revealControls, showControls } =
     useKaraokeControls({
       autoHideEnabled: autoHideConsole
     });
-  useEffect(() => {
-    if (!autoStartRequested) return undefined;
-
-    // Library keeps an app-level black layer mounted across the route change.
-    // Karaoke already starts with its own blackout, so hand off the cover only
-    // after this route has painted once.
-    const timer = window.setTimeout(() => setGlobalRouteBlackout(false), 80);
-    return () => window.clearTimeout(timer);
-  }, [autoStartRequested]);
-  const revealStageActions = useCallback(() => {
-    setStageActionsVisible(true);
-    if (stageActionTimerRef.current) {
-      window.clearTimeout(stageActionTimerRef.current);
-    }
-    stageActionTimerRef.current = window.setTimeout(() => {
-      stageActionTimerRef.current = null;
-      setStageActionsVisible(false);
-    }, 1800);
-  }, []);
-  useEffect(() => {
-    revealStageActions();
-    return () => {
-      if (stageActionTimerRef.current) {
-        window.clearTimeout(stageActionTimerRef.current);
-      }
-    };
-  }, [revealStageActions]);
   const currentTimeRef = useRef(currentTime);
   const durationRef = useRef(duration);
   const browserMonitorRef = useRef(null);
@@ -227,7 +182,6 @@ export default function Karaoke({ onOpenAppSettings }) {
     setIsPlaying(false);
     setCurrentTime(0);
     setDuration(0);
-    hasStartedPlaybackRef.current = false;
   }, [song?.id]);
 
   // songMap.json is the single ready-to-render karaoke contract produced by
@@ -324,207 +278,32 @@ export default function Karaoke({ onOpenAppSettings }) {
       vocalVolume,
       vocalsRef
     });
-  const waitForScene = useCallback(
-    (milliseconds) =>
-      new Promise((resolve) => {
-        window.setTimeout(resolve, milliseconds);
-      }),
-    []
-  );
-  const preloadSongMedia = useCallback(async () => {
-    const media = [instrumentalRef.current, vocalsRef.current].filter(Boolean);
-    await Promise.all(
-      media.map((element) => {
-        if (element.readyState >= 3) return Promise.resolve();
-        element.load?.();
-        return new Promise((resolve) => {
-          let settled = false;
-          const finish = () => {
-            if (settled) return;
-            settled = true;
-            element.removeEventListener("canplay", finish);
-            element.removeEventListener("error", finish);
-            resolve();
-          };
-          element.addEventListener("canplay", finish, {
-            once: true
-          });
-          element.addEventListener("error", finish, {
-            once: true
-          });
-          window.setTimeout(finish, 2200);
-        });
-      })
-    );
-  }, []);
-  const runIntroTransition = useCallback(
-    async (action, prepareAction) => {
-      if (sceneTransitionRef.current) return false;
-      sceneTransitionRef.current = true;
-      setSceneTransitioning(true);
-      hideControls();
-      setStageActionsVisible(false);
-      setSceneIntroVisible(false);
-      setSceneBlackout(true);
-      const preparation = Promise.resolve()
-        .then(prepareAction)
-        .catch(() => false);
-      try {
-        await waitForScene(420);
-        setSceneIntroVisible(true);
-        await waitForScene(1350);
-        setSceneIntroVisible(false);
-        await waitForScene(180);
-        await preparation;
-        setSceneBlackout(false);
-        // Match the CSS transition and start on the first fully revealed frame.
-        await waitForScene(520);
-        await Promise.resolve(action());
-      } finally {
-        setSceneIntroVisible(false);
-        setSceneBlackout(false);
-        await waitForScene(120);
-        sceneTransitionRef.current = false;
-        setSceneTransitioning(false);
-      }
-      return true;
-    },
-    [hideControls, waitForScene]
-  );
-  const startSongWithIntro = useCallback(() => {
-    resumeRadioOnPauseRef.current = isRadioPlaying;
-    turnOffRadio({
-      remember: false
-    });
-    return runIntroTransition(
-      async () => {
-        const started = await togglePlay({
-          forcePlaying: true
-        });
-        if (started) hasStartedPlaybackRef.current = true;
-        return started;
-      },
-      () => Promise.all([preloadSongMedia(), preparePlayback()])
-    );
-  }, [
-    isRadioPlaying,
-    preloadSongMedia,
-    preparePlayback,
-    runIntroTransition,
-    togglePlay,
-    turnOffRadio
-  ]);
-  const handleTogglePlay = useCallback(async () => {
-    if (isPlaying) {
-      const paused = await togglePlay({
-        forcePlaying: false
-      });
-      if (paused && resumeRadioOnPauseRef.current) {
-        // Release the radio synchronously instead of waiting for the React
-        // effect that follows setIsPlaying(false).
-        setRecordingActive(false);
-        turnOnRadio({
-          remember: false,
-          fadeIn: true
-        }).catch(() => {});
-      }
-      return paused;
-    }
-
-    // Resume is immediate: no cinematic blackout is repeated after Pause.
-    if (hasStartedPlaybackRef.current) {
-      turnOffRadio({
-        remember: false
-      });
-      return togglePlay({
-        forcePlaying: true
-      });
-    }
-    return startSongWithIntro();
-  }, [
+  const {
+    handleStop,
+    handleTogglePlay,
+    navigateToLibraryFromBlackout,
+    revealStageActions,
+    sceneBlackout,
+    sceneIntroVisible,
+    sceneTransitioning,
+    stageActionsVisible
+  } = useKaraokeSceneFlow({
+    analysisRecordingIdRef,
+    autoStartRequested,
+    hideControls,
+    instrumentalRef,
     isPlaying,
+    isRadioPlaying,
+    navigate,
+    preparePlayback,
     setRecordingActive,
-    startSongWithIntro,
+    songId: song?.id,
+    stop,
     togglePlay,
     turnOffRadio,
-    turnOnRadio
-  ]);
-  const navigateToLibraryFromBlackout = useCallback(
-    (analysisId = null) => {
-      navigate("/", {
-        replace: true,
-        state: {
-          fromKaraokeFade: true,
-          analysisRecordingId: analysisId || null
-        }
-      });
-    },
-    [navigate]
-  );
-  const handleStop = useCallback(async () => {
-    if (sceneTransitionRef.current) return false;
-    sceneTransitionRef.current = true;
-    setSceneTransitioning(true);
-    hideControls();
-    setStageActionsVisible(false);
-    setSceneIntroVisible(false);
-    setSceneBlackout(true);
-
-    // Fade the live scene out first. Saving the take and starting analysis then
-    // happens while the screen is already black, so the end of a performance
-    // feels like one continuous transition instead of a hard UI change.
-    await waitForScene(430);
-    const stopped = await stop();
-    if (stopped) hasStartedPlaybackRef.current = false;
-    const analysisId = analysisRecordingIdRef.current;
-
-    // Keep one blackout mounted outside the routed pages themselves. This
-    // survives Karaoke unmounting and prevents the themed body from flashing
-    // for a frame before Library mounts.
-    setGlobalRouteBlackout(true);
-    await waitForScene(40);
-
-    // Switch routes while the stage is fully black. Library receives the
-    // recording id and opens the analysis modal there, so the user is already
-    // back in Library underneath the result instead of being stranded on the
-    // Karaoke route until the modal is closed.
-    navigateToLibraryFromBlackout(analysisId);
-    return stopped;
-  }, [hideControls, navigateToLibraryFromBlackout, stop, waitForScene]);
-  useEffect(() => {
-    if (
-      !autoStartRequested ||
-      !song?.id ||
-      autoStartedSongRef.current === song.id
-    ) {
-      return undefined;
-    }
-    let cancelled = false;
-    let attempts = 0;
-    let timerId = null;
-    const tryAutoStart = () => {
-      if (cancelled) return;
-      if (instrumentalRef.current && vocalsRef.current) {
-        timerId = null;
-        autoStartedSongRef.current = song.id;
-        startSongWithIntro();
-        return;
-      }
-      attempts += 1;
-      if (attempts < 40) {
-        timerId = window.setTimeout(tryAutoStart, 120);
-      } else {
-        timerId = null;
-        setSceneBlackout(false);
-        setSceneTransitioning(false);
-      }
-    };
-    timerId = window.setTimeout(tryAutoStart, 80);
-    return () => {
-      cancelled = true;
-      if (timerId) window.clearTimeout(timerId);
-    };
-  }, [autoStartRequested, song?.id, startSongWithIntro]);
+    turnOnRadio,
+    vocalsRef
+  });
   playbackEndedRef.current = () => handleStop();
   useKaraokeHotkeys({
     scopeRef: containerRef,

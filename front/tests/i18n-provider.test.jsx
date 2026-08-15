@@ -83,3 +83,14 @@ test("hook rejects usage outside its provider", () => {
   );
   window.removeEventListener("error", preventWindowError);
 });
+
+test("all UI locale catalogs expose the same unique keys", () => {
+  const catalogs = Object.values(messages);
+  const expected = Object.keys(messages.uk).sort();
+  expect(expected.length).toBeGreaterThan(150);
+  for (const catalog of catalogs) {
+    const keys = Object.keys(catalog);
+    expect(keys).toHaveLength(new Set(keys).size);
+    expect(keys.sort()).toEqual(expected);
+  }
+});

@@ -1,8 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  isEditableHotkeyTarget,
-  isHotkeyScopeActive
-} from "../../../../utils/hotkeys";
+import { useCallback, useRef, useState } from "react";
 import { marqueeHitIds } from "./melody-editor-geometry";
 import {
   adjacentNoteId,
@@ -12,6 +8,7 @@ import {
   resizeBounds
 } from "./melody-editor-operations";
 import { clamp, cloneNotes, roundTime } from "./melody-editor-state";
+import useMelodyEditorHotkeys from "./useMelodyEditorHotkeys";
 
 export default function useMelodyEditorEditing({
   auditionNote,
@@ -373,123 +370,7 @@ const endMarquee = useCallback(
   },
   [marqueeSelection]
 );
-useEffect(() => {
-  const onKeyDown = (event) => {
-    const { target } = event;
-    if (
-      event.defaultPrevented ||
-      event.isComposing ||
-      event.repeat ||
-      !isHotkeyScopeActive(workspaceRef.current)
-    )
-      return;
-    const editable = isEditableHotkeyTarget(target);
-    const mod = event.ctrlKey || event.metaKey;
-    const { code } = event;
-    const consume = () => {
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation?.();
-    };
-    if (mod && code === "KeyZ" && event.shiftKey) {
-      consume();
-      redo();
-      return;
-    }
-    if (mod && code === "KeyZ") {
-      consume();
-      undo();
-      return;
-    }
-    if (mod && code === "KeyY") {
-      consume();
-      redo();
-      return;
-    }
-    if (mod && code === "KeyS") {
-      consume();
-      saveRef.current?.();
-      return;
-    }
-    if (!editable && mod && code === "KeyA") {
-      consume();
-      selectAll();
-      return;
-    }
-    if (!editable && mod && code === "KeyC") {
-      consume();
-      copySelected();
-      return;
-    }
-    if (!editable && mod && code === "KeyX") {
-      consume();
-      copySelected();
-      deleteSelected();
-      return;
-    }
-    if (!editable && mod && code === "KeyV") {
-      consume();
-      pasteNotes();
-      return;
-    }
-    if (!editable && mod && code === "KeyD") {
-      consume();
-      duplicateSelected();
-      return;
-    }
-    if (editable) return;
-    if (event.code === "Space") {
-      consume();
-      playing ? pause() : play();
-      return;
-    }
-    if (event.key === "Delete" || event.key === "Backspace") {
-      consume();
-      deleteSelected();
-      return;
-    }
-    if (event.key === "Escape") {
-      if (selected.length) {
-        consume();
-        clearSelection();
-      }
-      return;
-    }
-    if (event.key === "Home") {
-      consume();
-      seek(0);
-      return;
-    }
-    if (event.key === "End") {
-      consume();
-      seek(duration);
-      return;
-    }
-    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-      consume();
-      const direction = event.key === "ArrowRight" ? 1 : -1;
-      if (mod) {
-        nudgeSelected(direction * (event.shiftKey ? 0.25 : 0.05), 0);
-        return;
-      }
-      selectAdjacentNote(direction);
-      return;
-    }
-    if (!selected.length) return;
-    if (event.key === "ArrowUp") {
-      consume();
-      nudgeSelected(0, event.shiftKey ? 12 : 1);
-      return;
-    }
-    if (event.key === "ArrowDown") {
-      consume();
-      nudgeSelected(0, event.shiftKey ? -12 : -1);
-      return;
-    }
-  };
-  window.addEventListener("keydown", onKeyDown, true);
-  return () => window.removeEventListener("keydown", onKeyDown, true);
-}, [
+useMelodyEditorHotkeys({
   clearSelection,
   copySelected,
   deleteSelected,
@@ -501,12 +382,14 @@ useEffect(() => {
   play,
   playing,
   redo,
+  saveRef,
   seek,
   selectAdjacentNote,
   selectAll,
-  selected.length,
-  undo
-]);
+  selectedCount: selected.length,
+  undo,
+  workspaceRef
+});
 
   return {
     assignSyllable,

@@ -1,6 +1,7 @@
 // eslint-disable-next-line import/extensions
 import { translateSaved } from "../i18n/runtime.js";
 import { createStudioMicrophoneGraph } from "./microphoneStudioQuality.js";
+import { closeAudioContext, closeAudioContextQuietly } from "../utils/audio-context.js";
 // Audio is transferred directly between participants. The Worker is used only
 // for signalling, therefore microphone data is never stored in the cloud.
 
@@ -51,7 +52,7 @@ export default class OnlineVoiceMesh {
     if (liveStream) return this.stream;
     if (this.stream) {
       if (this.microphoneGraph) {
-        await this.microphoneGraph.close?.().catch?.(() => {});
+        await closeAudioContext(this.microphoneGraph);
         this.microphoneGraph = null;
       } else {
         this.stream.getTracks?.().forEach((track) => track.stop());
@@ -397,7 +398,7 @@ export default class OnlineVoiceMesh {
       this.removePeer(id)
     );
     if (this.microphoneGraph) {
-      this.microphoneGraph.close?.().catch?.(() => {});
+      closeAudioContextQuietly(this.microphoneGraph);
       this.microphoneGraph = null;
     } else {
       this.stream?.getTracks().forEach((track) => track.stop());

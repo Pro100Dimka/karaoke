@@ -728,6 +728,29 @@ describe("online room provider", () => {
     expect(retryTrack.stop).toHaveBeenCalled();
   });
 
+  test("discards a stale local-monitor stream after leaving the room", async () => {
+    let releaseMonitor;
+    const monitorTrack = { stop: vi.fn() };
+    const monitorStream = {
+      getTracks: () => [monitorTrack],
+      getAudioTracks: () => []
+    };
+    const hook = renderHook(() => useOnlineRoom(), { wrapper });
+    await act(() => hook.result.current.createRoom("Alice"));
+    mocks.start.mockReturnValueOnce(
+      new Promise((resolve) => {
+        releaseMonitor = resolve;
+      })
+    );
+    const monitoring = hook.result.current.setLocalMonitoring(true);
+    await act(() => hook.result.current.leaveRoom());
+    releaseMonitor(monitorStream);
+    await act(async () => {
+      expect(await monitoring).toBe(false);
+    });
+    expect(monitorTrack.stop).toHaveBeenCalled();
+  });
+
   test("reports voice playback failures and isolates rejected audio graph promises", async () => {
     HTMLMediaElement.prototype.play.mockRejectedValueOnce(
       new Error("autoplay blocked")

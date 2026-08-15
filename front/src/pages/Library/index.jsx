@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { setGlobalRouteBlackout } from "../../utils/route-blackout";
 import { api } from "../../api/client";
 import { OnlineRoomModal } from "../../components/OnlineRoomModal";
 import { POLLING_INTERVALS } from "../../runtime-config";
@@ -29,15 +30,6 @@ import {
   resolveVisibleSongs
 } from "./utils";
 
-const setGlobalRouteBlackout = (visible) => {
-  window.dispatchEvent(
-    new CustomEvent("app:route-blackout", {
-      detail: {
-        visible
-      }
-    })
-  );
-};
 export default function Library({ onOpenSongSettings }) {
   const location = useLocation();
   const [query, setQuery] = useState("");

@@ -667,9 +667,7 @@ describe("melody editor", () => {
     const master = container.querySelectorAll("audio")[1];
     Object.defineProperty(master, "play", {
       configurable: true,
-      value: () => {
-        throw new Error("play failed");
-      }
+      value: () => Promise.reject(new Error("play failed"))
     });
     fireEvent.click(
       container.querySelector(".is-transport .melody-editor-tool")

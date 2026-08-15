@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { getMelodyGuideState } from "../utils/melody-guide";
+import { closeAudioContext, closeAudioContextQuietly } from "../../../utils/audio-context";
 
 export default function useMelodyGuide({
   notes,
@@ -77,7 +78,7 @@ export default function useMelodyGuide({
       } catch {
         // The oscillator may not have reached the running state.
       }
-      await guide.context.close().catch(() => {});
+      await closeAudioContext(guide.context);
       throw error;
     }
   }, [currentTimeRef, update]);
@@ -104,7 +105,7 @@ export default function useMelodyGuide({
       } catch {
         // Oscillator may already be stopped during shutdown.
       }
-      guide.context.close().catch(() => {});
+      closeAudioContextQuietly(guide.context);
       guideRef.current = null;
     },
     // Stryker disable next-line ArrayDeclaration: stable hook-lifetime ref.

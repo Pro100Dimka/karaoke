@@ -4,6 +4,7 @@ import {
   findDriverOutputDevice,
   findMatchingBrowserOutput
 } from "../utils/audio-settings";
+import { closeAudioContextQuietly } from "../../../utils/audio-context";
 
 export default function useAudioOutputRouting(options) {
   const {
@@ -87,7 +88,7 @@ export default function useAudioOutputRouting(options) {
       const monitor = browserMonitorRef.current;
       monitor?.stream?.getTracks?.().forEach((track) => track.stop());
       if (monitor?.context && monitor.context.state !== "closed") {
-        monitor.context.close().catch(() => {});
+        closeAudioContextQuietly(monitor.context);
       }
       browserMonitorRef.current = null;
     },

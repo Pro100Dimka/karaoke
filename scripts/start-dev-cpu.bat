@@ -26,13 +26,23 @@ set "KARAOKE_LYRICS_LOG_TEXT=1"
 set "TF_CPP_MIN_LOG_LEVEL=2"
 
 set "KARAOKE_CPU_COMPILE="
-where cl.exe >nul 2>nul
-if not errorlevel 1 (
+set "CPU_BACKEND=pytorch"
+set "BACKEND_CACHE=%ROOT%\downloads\cache\ai-runtime\cpu-separation-backend.txt"
+if exist "%BACKEND_CACHE%" set /p CPU_BACKEND=<"%BACKEND_CACHE%"
+if /I "%CPU_BACKEND%"=="openvino" (
   set "KARAOKE_CPU_COMPILE=1"
-  set "KARAOKE_CPU_COMPILE_BACKEND=inductor"
-  set "KARAOKE_CPU_COMPILE_MODE=default"
+  set "KARAOKE_CPU_COMPILE_BACKEND=openvino"
   set "KARAOKE_CPU_COMPILE_DYNAMIC=1"
-  set "TORCHINDUCTOR_CACHE_DIR=%ROOT%\downloads\cache\torchinductor-cpu"
+  set "KARAOKE_OPENVINO_CACHE_DIR=%ROOT%\downloads\cache\openvino-roformer"
+) else (
+  where cl.exe >nul 2>nul
+  if not errorlevel 1 (
+    set "KARAOKE_CPU_COMPILE=1"
+    set "KARAOKE_CPU_COMPILE_BACKEND=inductor"
+    set "KARAOKE_CPU_COMPILE_MODE=default"
+    set "KARAOKE_CPU_COMPILE_DYNAMIC=1"
+    set "TORCHINDUCTOR_CACHE_DIR=%ROOT%\downloads\cache\torchinductor-cpu"
+  )
 )
 
 echo.
@@ -43,10 +53,12 @@ echo.
 echo CPU intra-op threads: %THREADS% ^(%THREAD_SOURCE%^)
 echo CPU inter-op threads: 1
 echo Separation inference_mode: ON
-if defined KARAOKE_CPU_COMPILE (
+if /I "%CPU_BACKEND%"=="openvino" (
+  echo Separation backend: OpenVINO CPU ^(validated autotune cache^)
+) else if defined KARAOKE_CPU_COMPILE (
   echo Separation torch.compile: ON ^(MSVC cl.exe detected^)
 ) else (
-  echo Separation torch.compile: OFF ^(MSVC cl.exe not found; using tuned eager^)
+  echo Separation backend: PyTorch tuned eager
 )
 echo Lyrics log: compact ^(+ temporary found-text output^)
 echo CPU autotune: scripts\tune-cpu-separation.bat "C:\path\song.mp3" 8

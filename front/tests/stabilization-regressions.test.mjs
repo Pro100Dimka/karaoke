@@ -20,9 +20,9 @@ test("room output mute never toggles the outgoing WebRTC microphone", () => {
 });
 
 test("room self-monitor reuses the existing WebRTC stream", () => {
-  const context = read("src/contexts/OnlineRoomContext.jsx");
-  expect(context).toContain("const stream = await voice.start()");
-  expect(context).toContain("context.createMediaStreamSource(stream)");
+  const audio = read("src/contexts/hooks/useOnlineRoomAudio.js");
+  expect(audio).toContain("const stream = await voice.start()");
+  expect(audio).toContain("context.createMediaStreamSource(stream)");
   const karaoke = read("src/pages/Karaoke/index.jsx");
   expect(karaoke).toContain("onlineRoom.setLocalMonitoring(enabled)");
 });

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { detectMidiFromAnalyser } from "../utils/pitch";
+import { closeAudioContext, closeAudioContextQuietly } from "../../../utils/audio-context";
 
 export default function usePitchDetection({
   browserMonitorRef,
@@ -99,7 +100,7 @@ export default function usePitchDetection({
           // Cancellation can only interleave with the awaited capture above,
           // so this stream is necessarily owned by this effect.
           stream.getTracks().forEach((track) => track.stop());
-          if (ownsContext) await context.close().catch(() => {});
+          if (ownsContext) await closeAudioContext(context);
           return;
         }
         if (context.state === "suspended") {
@@ -207,7 +208,7 @@ export default function usePitchDetection({
         // The graph may be absent or already disconnected by the browser.
       }
       if (ownsStream) stream.getTracks().forEach((track) => track.stop());
-      if (ownsContext) context.close().catch(() => {});
+      if (ownsContext) closeAudioContextQuietly(context);
     };
   }, [browserMonitorRef, isPlaying, monitorInputDeviceId, monitoringEnabled]);
   return {
