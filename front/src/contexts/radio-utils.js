@@ -6,16 +6,10 @@ function getBandBoost(band) {
 
 export const isAutoplayBlocked = (reason) =>
   reason?.name === "NotAllowedError" ||
-  /user didn't interact|user gesture|not allowed/i.test(
-    String(reason?.message ?? reason ?? "")
+  /user didn't interact|user gesture|not allowed/i.test( String(reason?.message ?? reason ?? "")
   );
 
-export function calculateRadioSpectrum(
-  data,
-  sampleRate,
-  fftSize,
-  previousBass,
-  previousBands
+export function calculateRadioSpectrum( data, sampleRate, fftSize, previousBass, previousBands
 ) {
   const binHz = sampleRate / fftSize;
   const averageRange = (fromHz, toHz) => {
@@ -35,9 +29,7 @@ export function calculateRadioSpectrum(
     const fromHz = minHz * (maxHz / minHz) ** (band / allBands.length);
     const toHz = minHz * (maxHz / minHz) ** ((band + 1) / allBands.length);
     const raw = averageRange(fromHz, toHz);
-    const boosted = Math.min(
-      1,
-      raw * getBandBoost(band)
+    const boosted = Math.min( 1, raw * getBandBoost(band)
     );
     return previous + (boosted - previous) * (boosted > previous ? 0.58 : 0.16);
   });

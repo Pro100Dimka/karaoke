@@ -61,9 +61,7 @@ export const ErrorList = ({ errors = [] }) => {
   const { t } = useI18n();
   return errors.length ? (
     <Stack className="settings-error-list">
-      {errors.map((error) => (
-        <ErrorItem key={getErrorKey(error)} error={error} />
-      ))}
+      {errors.map((error) => ( <ErrorItem key={getErrorKey(error)} error={error} /> ))}
     </Stack>
   ) : (
     <Typography variant="body2" tone="muted" className="settings-empty-line">

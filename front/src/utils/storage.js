@@ -6,10 +6,7 @@ export function getBrowserStorage() {
   }
 }
 
-export function readJsonStorage(
-  key,
-  fallback = {},
-  storage = getBrowserStorage()
+export function readJsonStorage( key, fallback = {}, storage = getBrowserStorage()
 ) {
   try {
     const normalizedKey = String(key ?? "").trim();

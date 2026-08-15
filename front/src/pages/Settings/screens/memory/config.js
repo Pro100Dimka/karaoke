@@ -19,9 +19,7 @@ export const MEMORY_ACTIONS = [
     "primary",
     api.clearCache,
     ({ freed_bytes: freedBytes }) =>
-      translateSaved("Освобождено: {0}", {
-        0: formatBytes(freedBytes)
-      })
+      translateSaved("Освобождено: {0}", { 0: formatBytes(freedBytes) })
   ],
   [
     "delete-temp",
@@ -30,9 +28,7 @@ export const MEMORY_ACTIONS = [
     "ghost",
     api.deleteTemp,
     ({ freed_bytes: freedBytes }) =>
-      translateSaved("Удалено временных файлов: {0}", {
-        0: formatBytes(freedBytes)
-      })
+      translateSaved("Удалено временных файлов: {0}", { 0: formatBytes(freedBytes) })
   ]
 ];
 export function buildOptimizeOptions(songs = []) {
@@ -40,9 +36,6 @@ export function buildOptimizeOptions(songs = []) {
     DEFAULT_OPTIMIZE_OPTION,
     ...songs
       .filter(({ status, optimized }) => status === "done" && !optimized)
-      .map(({ id: value, title: label }) => ({
-        value,
-        label
-      }))
+      .map(({ id: value, title: label }) => ({ value, label }))
   ];
 }

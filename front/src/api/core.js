@@ -21,10 +21,7 @@ function createDeadlineSignal(signal, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS) {
   const safeTimeout = Number.isFinite(Number(timeoutMs))
     ? Math.max(1, Number(timeoutMs))
     : DEFAULT_REQUEST_TIMEOUT_MS;
-  const timer = globalThis.setTimeout(() => {
-    didTimeout = true;
-    controller.abort();
-  }, safeTimeout);
+  const timer = globalThis.setTimeout(() => { didTimeout = true; controller.abort(); }, safeTimeout);
   return {
     signal: controller.signal,
     timedOut: () => didTimeout,
@@ -37,16 +34,11 @@ function createDeadlineSignal(signal, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS) {
 function normalizeHeaders(headers) {
   if (!headers) return undefined;
   if (Array.isArray(headers)) return Object.fromEntries(headers);
-  if (typeof headers.entries === "function") {
-    return Object.fromEntries(headers.entries());
-  }
-  return {
-    ...headers
-  };
+  if (typeof headers.entries === "function") return Object.fromEntries(headers.entries());
+  return { ...headers };
 }
 function hasContentType(headers) {
-  return Object.keys(headers).some(
-    (name) => name.toLowerCase() === "content-type"
+  return Object.keys(headers).some( (name) => name.toLowerCase() === "content-type"
   );
 }
 function buildRequestOptions(options = {}) {
@@ -56,25 +48,13 @@ function buildRequestOptions(options = {}) {
     typeof FormDataCtor === "function" && body instanceof FormDataCtor;
   const normalizedHeaders = normalizeHeaders(headers);
   if (isFormData || body == null) {
-    return {
-      ...requestOptions,
-      body,
-      ...(normalizedHeaders
-        ? {
-            headers: normalizedHeaders
-          }
-        : {})
-    };
+    return { ...requestOptions, body, ...(normalizedHeaders ? { headers: normalizedHeaders } : {}) };
   }
   const nextHeaders = normalizedHeaders || {};
   if (typeof body === "string" && !hasContentType(nextHeaders)) {
     nextHeaders["Content-Type"] = "application/json";
   }
-  return {
-    ...requestOptions,
-    body,
-    headers: nextHeaders
-  };
+  return { ...requestOptions, body, headers: nextHeaders };
 }
 async function readErrorDetail(response) {
   let detail = response.statusText || `HTTP ${response.status}`;
@@ -106,8 +86,7 @@ async function fetchSuccessfulResponse(path, options) {
     });
   } catch (error) {
     if (deadline.timedOut()) {
-      const timeoutError = new Error(
-        translateSaved("Превышено время ожидания ответа backend")
+      const timeoutError = new Error( translateSaved("Превышено время ожидания ответа backend")
       );
       timeoutError.name = "TimeoutError";
       throw timeoutError;
@@ -139,10 +118,7 @@ export async function request(path, options = {}) {
   try {
     return JSON.parse(text);
   } catch {
-    throw new Error(
-      translateSaved("Некорректный JSON в ответе {0}", {
-        0: response.url || path
-      })
+    throw new Error( translateSaved("Некорректный JSON в ответе {0}", { 0: response.url || path })
     );
   }
 }

@@ -1,12 +1,8 @@
 /* @vitest-environment jsdom */
-import React from "react";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  panoramaRef: { current: null },
-  theme: { image: "scene.jpg" }
-}));
+const mocks = vi.hoisted(() => ({ panoramaRef: { current: null }, theme: { image: "scene.jpg" } }));
 vi.mock("../src/pages/Karaoke/hooks/useKaraokePanorama", () => ({
   default: () => ({ activeTheme: mocks.theme, panoramaRef: mocks.panoramaRef })
 }));
@@ -22,11 +18,7 @@ beforeEach(() => {
     play: { configurable: true, value: vi.fn().mockResolvedValue(undefined) }
   });
 });
-afterEach(() => {
-  cleanup();
-  vi.restoreAllMocks();
-  delete globalThis.electronAPI;
-});
+afterEach(() => { cleanup(); vi.restoreAllMocks(); delete globalThis.electronAPI; });
 
 const notes = [
   { start: 0, end: 1, midi: 60 },
@@ -77,8 +69,7 @@ test("melody roll renders keyboard, visible notes, current and sung pitch", () =
       noteRangeMax={74}
     />
   );
-  expect(
-    container.querySelectorAll(".melody-note-past").length
+  expect( container.querySelectorAll(".melody-note-past").length
   ).toBeGreaterThan(0);
   expect(container.querySelector(".melody-pitch-indicator")).toBeNull();
 });
@@ -87,10 +78,7 @@ test("aurora world produces deterministic decoration, stars and particles", () =
   const { container } = render(<AuroraWorld seed={12} />);
   expect(container.querySelectorAll(".aurora-stars i")).toHaveLength(96);
   expect(container.querySelectorAll(".aurora-particles i")).toHaveLength(112);
-  expect(
-    container
-      .querySelector(".aurora-stars i")
-      .style.getPropertyValue("--aurora-x")
+  expect( container .querySelector(".aurora-stars i") .style.getPropertyValue("--aurora-x")
   ).not.toBe("");
 });
 
@@ -175,11 +163,7 @@ test("stage randomizes local scene video with a short fade", () => {
   );
   const video = result.container.querySelector("video");
   Object.defineProperty(video, "duration", { configurable: true, value: 10 });
-  Object.defineProperty(video, "currentTime", {
-    configurable: true,
-    writable: true,
-    value: 0
-  });
+  Object.defineProperty(video, "currentTime", { configurable: true, writable: true, value: 0 });
   fireEvent.loadedMetadata(video);
   expect(video.classList.contains("is-switching")).toBe(true);
   vi.advanceTimersByTime(180);

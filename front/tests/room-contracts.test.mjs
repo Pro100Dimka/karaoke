@@ -53,42 +53,22 @@ test("room action opens local songs or requests missing packages", async () => {
   const client = { send: vi.fn() };
   const pendingSongCommandRef = { current: null };
   const setTransferStatus = vi.fn();
-  const base = {
-    songId: "song",
-    client,
-    pendingSongCommandRef,
-    setTransferStatus
-  };
+  const base = { songId: "song", client, pendingSongCommandRef, setTransferStatus };
   assert.equal(
-    await openKaraokeInRoom({
-      ...base,
-      room: null,
-      isCurrentConnection: () => true
-    }),
+    await openKaraokeInRoom({ ...base, room: null, isCurrentConnection: () => true }),
     true
   );
   assert.deepEqual(client.send.mock.calls.at(-1), [
     "sync",
-    {
-      state: { type: "open-karaoke", songId: "song" }
-    }
+    { state: { type: "open-karaoke", songId: "song" } }
   ]);
   assert.equal(
-    await openKaraokeInRoom({
-      ...base,
-      client: null,
-      room: null,
-      isCurrentConnection: () => true
-    }),
+    await openKaraokeInRoom({ ...base, client: null, room: null, isCurrentConnection: () => true }),
     true
   );
   client.send.mockClear();
   assert.equal(
-    await openKaraokeInRoom({
-      ...base,
-      room: { host: true },
-      isCurrentConnection: () => false
-    }),
+    await openKaraokeInRoom({ ...base, room: { host: true }, isCurrentConnection: () => false }),
     true
   );
   assert.equal(client.send.mock.calls.length, 0);
@@ -103,9 +83,7 @@ test("room action opens local songs or requests missing packages", async () => {
   );
   assert.deepEqual(client.send.mock.calls.at(-1), [
     "sync",
-    {
-      state: { type: "open-karaoke", songId: "song" }
-    }
+    { state: { type: "open-karaoke", songId: "song" } }
   ]);
   assert.equal(
     await openKaraokeInRoom({
@@ -126,18 +104,10 @@ test("room action opens local songs or requests missing packages", async () => {
     false
   );
   assert.equal(pendingSongCommandRef.current.__originatedHere, true);
-  assert.deepEqual(setTransferStatus.mock.calls.at(-1), [
-    { stage: "waiting", percent: 0 }
-  ]);
+  assert.deepEqual(setTransferStatus.mock.calls.at(-1), [ { stage: "waiting", percent: 0 } ]);
   assert.deepEqual(client.send.mock.calls.at(-1), [
     "sync",
-    {
-      state: {
-        type: "song-request",
-        songId: "song",
-        requesterId: "self"
-      }
-    }
+    { state: { type: "song-request", songId: "song", requesterId: "self" } }
   ]);
   const disconnectedPending = { current: null };
   const disconnectedStatus = vi.fn();
@@ -160,25 +130,17 @@ test("room action opens local songs or requests missing packages", async () => {
 
 test("room messages update participants, UI, voice and connection state", async () => {
   assert.deepEqual(upsertParticipant([], null), []);
-  assert.deepEqual(upsertParticipant([], { id: "a", name: "A" }), [
-    { id: "a", name: "A" }
-  ]);
+  assert.deepEqual(upsertParticipant([], { id: "a", name: "A" }), [ { id: "a", name: "A" } ]);
   assert.deepEqual(
     upsertParticipant([{ id: "a", name: "A" }], { id: "a", speaking: true }),
     [{ id: "a", name: "A", speaking: true }]
   );
   assert.deepEqual(
     upsertParticipant(
-      [
-        { id: "a", name: "A" },
-        { id: "b", name: "B" }
-      ],
+      [ { id: "a", name: "A" }, { id: "b", name: "B" } ],
       { id: "b", speaking: true }
     ),
-    [
-      { id: "a", name: "A" },
-      { id: "b", name: "B", speaking: true }
-    ]
+    [ { id: "a", name: "A" }, { id: "b", name: "B", speaking: true } ]
   );
   let participants = [];
   let room = null;
@@ -199,15 +161,11 @@ test("room messages update participants, UI, voice and connection state", async 
   };
   const setters = {
     cleanupConnection: vi.fn(),
-    setRoom: vi.fn((value) => {
-      room = value;
-    }),
+    setRoom: vi.fn((value) => { room = value; }),
     setParticipants: vi.fn((value) => {
       participants = typeof value === "function" ? value(participants) : value;
     }),
-    setRoomUi: vi.fn((value) => {
-      ui = typeof value === "function" ? value(ui) : value;
-    }),
+    setRoomUi: vi.fn((value) => { ui = typeof value === "function" ? value(ui) : value; }),
     setRoomCommand: vi.fn(),
     setVoiceError: vi.fn(),
     setTransferStatus: vi.fn()
@@ -229,45 +187,19 @@ test("room messages update participants, UI, voice and connection state", async 
   assert.equal(setters.setRoom.mock.calls.length, 0);
   assert.equal(setters.setParticipants.mock.calls.length, 0);
   current = true;
-  handler({
-    type: "room-state",
-    self: { id: "self", role: "host" },
-    participants: [{ id: "a" }]
-  });
-  assert.deepEqual(room, {
-    id: "AB-CD",
-    selfId: "self",
-    host: true,
-    role: "host"
-  });
+  handler({ type: "room-state", self: { id: "self", role: "host" }, participants: [{ id: "a" }] });
+  assert.deepEqual(room, { id: "AB-CD", selfId: "self", host: true, role: "host" });
   handler({ type: "room-state" });
   assert.deepEqual(participants, []);
-  handler({
-    type: "room-state",
-    self: { id: "guest", role: "guest" },
-    participants: []
-  });
+  handler({ type: "room-state", self: { id: "guest", role: "guest" }, participants: [] });
   assert.equal(room.host, false);
   handler({ type: "participant-joined", participant: { id: "b" } });
   handler({ type: "participant-joined", participant: null });
-  handler({
-    type: "participant-updated",
-    participant: { id: "b", speaking: true }
-  });
+  handler({ type: "participant-updated", participant: { id: "b", speaking: true } });
   assert.equal(participants.find((item) => item.id === "b").speaking, true);
-  roomRef.current = {
-    selfId: "self",
-    host: true,
-    role: "host",
-    retained: "value"
-  };
+  roomRef.current = { selfId: "self", host: true, role: "host", retained: "value" };
   handler({ type: "self-updated", self: { id: "self2", role: "guest" } });
-  assert.deepEqual(room, {
-    selfId: "self2",
-    host: false,
-    role: "guest",
-    retained: "value"
-  });
+  assert.deepEqual(room, { selfId: "self2", host: false, role: "guest", retained: "value" });
   const roomUpdates = setters.setRoom.mock.calls.length;
   handler({ type: "unknown", self: { id: "wrong", role: "host" } });
   handler({ type: "self-updated" });
@@ -277,32 +209,18 @@ test("room messages update participants, UI, voice and connection state", async 
   assert.deepEqual(room, { selfId: "self3", host: false, role: "guest" });
   handler({ type: "self-updated", self: { id: "self4", role: "host" } });
   assert.deepEqual(room, { selfId: "self4", host: true, role: "host" });
-  handler({
-    type: "room-state",
-    participants: [{ id: "b" }, { id: "c" }]
-  });
+  handler({ type: "room-state", participants: [{ id: "b" }, { id: "c" }] });
   handler({ type: "participant-left", participantId: "b" });
   assert.deepEqual(participants, [{ id: "c" }]);
   assert.deepEqual(voice.removePeer.mock.calls.at(-1), ["b"]);
   handler({ type: "signal", fromId: "a", signal: {} });
   ui = { effectsByParticipant: { old: { dry: 1 } } };
-  handler({
-    type: "ui",
-    fromId: "a",
-    state: { radio: true, participantEffects: { echo: 1 } }
-  });
+  handler({ type: "ui", fromId: "a", state: { radio: true, participantEffects: { echo: 1 } } });
   assert.equal(ui.__eventId.startsWith("ui-"), true);
   assert.deepEqual(ui.effectsByParticipant.old, { dry: 1 });
-  handler({
-    type: "ui",
-    fromId: "a",
-    state: { participantEffects: { echo: 2 } }
-  });
+  handler({ type: "ui", fromId: "a", state: { participantEffects: { echo: 2 } } });
   const effectsBeforeMissingSender = ui.effectsByParticipant;
-  handler({
-    type: "ui",
-    state: { participantEffects: { echo: 9 } }
-  });
+  handler({ type: "ui", state: { participantEffects: { echo: 9 } } });
   assert.equal(ui.effectsByParticipant, effectsBeforeMissingSender);
   handler({ type: "ui", fromId: "no-effects", state: { radio: false } });
   assert.equal(Object.hasOwn(ui.effectsByParticipant, "no-effects"), false);
@@ -311,14 +229,8 @@ test("room messages update participants, UI, voice and connection state", async 
   assert.equal(ui.radio, false);
   assert.ok(ui.__eventId);
   ui = {};
-  handler({
-    type: "ui",
-    fromId: "first-effects",
-    state: { participantEffects: { dry: 0.5 } }
-  });
-  assert.deepEqual(ui.effectsByParticipant, {
-    "first-effects": { dry: 0.5 }
-  });
+  handler({ type: "ui", fromId: "first-effects", state: { participantEffects: { dry: 0.5 } } });
+  assert.deepEqual(ui.effectsByParticipant, { "first-effects": { dry: 0.5 } });
   await flush();
   assert.equal(voice.invite.mock.calls.length, 1);
   assert.equal(voice.accept.mock.calls.length, 1);
@@ -363,10 +275,7 @@ test("room messages update participants, UI, voice and connection state", async 
     pendingSongCommandRef,
     ...setters
   });
-  defaultConnectionHandler({
-    type: "participant-joined",
-    participant: { id: "late" }
-  });
+  defaultConnectionHandler({ type: "participant-joined", participant: { id: "late" } });
   defaultConnectionHandler({ type: "signal", fromId: "late", signal: {} });
   await flush();
   assert.equal(rejectedVoice.invite.mock.calls.length, 1);
@@ -413,18 +322,9 @@ test("room song synchronization covers send, receive and error recovery", async 
       { selfId: "self", host: false },
       { type: "song-request", requesterId: "guest", songId: "song" }
     ],
-    [
-      { selfId: "self", host: true },
-      { type: "pause", requesterId: "guest", songId: "song" }
-    ],
-    [
-      { selfId: "self", host: true },
-      { type: "song-request", songId: "song" }
-    ],
-    [
-      { selfId: "self", host: true },
-      { type: "song-request", requesterId: "guest" }
-    ],
+    [ { selfId: "self", host: true }, { type: "pause", requesterId: "guest", songId: "song" } ],
+    [ { selfId: "self", host: true }, { type: "song-request", songId: "song" } ],
+    [ { selfId: "self", host: true }, { type: "song-request", requesterId: "guest" } ],
     [null, { type: "song-request", requesterId: "guest", songId: "song" }]
   ]) {
     roomRef.current = activeRoom;
@@ -433,35 +333,18 @@ test("room song synchronization covers send, receive and error recovery", async 
   assert.equal(roomApi.exportSongPackage.mock.calls.length, 0);
   roomRef.current = { selfId: "self", host: true };
   setRoomCommand.mockClear();
-  handler({
-    type: "sync",
-    state: { type: "song-request", requesterId: "guest", songId: "song" }
-  });
+  handler({ type: "sync", state: { type: "song-request", requesterId: "guest", songId: "song" } });
   await flush();
   assert.deepEqual(roomApi.exportSongPackage.mock.calls, [["song"]]);
   assert.deepEqual(voice.sendFile.mock.calls, [
-    [
-      "guest",
-      packageBlob,
-      {
-        kind: "song-package",
-        songId: "song",
-        filename: "song.karaoke.zip"
-      }
-    ]
+    [ "guest", packageBlob, { kind: "song-package", songId: "song", filename: "song.karaoke.zip" } ]
   ]);
-  assert.deepEqual(setTransferStatus.mock.calls, [
-    [{ stage: "sending", percent: 0 }],
-    [null]
-  ]);
+  assert.deepEqual(setTransferStatus.mock.calls, [ [{ stage: "sending", percent: 0 }], [null] ]);
 
   client.send.mockClear();
   setTransferStatus.mockClear();
   roomApi.exportSongPackage.mockRejectedValueOnce(new Error("export failed"));
-  handler({
-    type: "sync",
-    state: { type: "song-request", requesterId: "guest", songId: "song" }
-  });
+  handler({ type: "sync", state: { type: "song-request", requesterId: "guest", songId: "song" } });
   await flush();
   assert.deepEqual(client.send.mock.calls, [
     [
@@ -490,29 +373,14 @@ test("room song synchronization covers send, receive and error recovery", async 
     [{ stage: "error", error: "remote", percent: 0 }]
   ]);
   setTransferStatus.mockClear();
-  handler({
-    type: "sync",
-    state: { type: "song-transfer-error", requesterId: "self" }
-  });
+  handler({ type: "sync", state: { type: "song-transfer-error", requesterId: "self" } });
   assert.deepEqual(setTransferStatus.mock.calls, [
-    [
-      {
-        stage: "error",
-        error: translateSaved("Ведущий не смог передать песню"),
-        percent: 0
-      }
-    ]
+    [ { stage: "error", error: translateSaved("Ведущий не смог передать песню"), percent: 0 } ]
   ]);
   setTransferStatus.mockClear();
   for (const [activeRoom, state] of [
-    [
-      { selfId: "self", host: true },
-      { type: "song-transfer-error", requesterId: "other" }
-    ],
-    [
-      { selfId: "self", host: true },
-      { type: "pause", requesterId: "self" }
-    ],
+    [ { selfId: "self", host: true }, { type: "song-transfer-error", requesterId: "other" } ],
+    [ { selfId: "self", host: true }, { type: "pause", requesterId: "self" } ],
     [null, { type: "song-transfer-error", requesterId: "self" }]
   ]) {
     roomRef.current = activeRoom;
@@ -522,60 +390,31 @@ test("room song synchronization covers send, receive and error recovery", async 
 
   roomRef.current = { selfId: "self", host: false };
   setRoomCommand.mockClear();
-  handler({
-    type: "sync",
-    sentAt: "now",
-    state: { type: "open-karaoke", songId: "song" }
-  });
+  handler({ type: "sync", sentAt: "now", state: { type: "open-karaoke", songId: "song" } });
   await flush();
   assert.equal(setRoomCommand.mock.calls.at(-1)[0].songId, "song");
-  assert.equal(
-    setRoomCommand.mock.calls.at(-1)[0].__eventId.startsWith("now-"),
-    true
+  assert.equal( setRoomCommand.mock.calls.at(-1)[0].__eventId.startsWith("now-"), true
   );
-  handler({
-    type: "sync",
-    state: { type: "open-karaoke", songId: "song-without-stamp" }
-  });
+  handler({ type: "sync", state: { type: "open-karaoke", songId: "song-without-stamp" } });
   await flush();
-  assert.equal(
-    setRoomCommand.mock.calls.at(-1)[0].__eventId.startsWith("sync-"),
-    true
+  assert.equal( setRoomCommand.mock.calls.at(-1)[0].__eventId.startsWith("sync-"), true
   );
   client.send.mockClear();
   setTransferStatus.mockClear();
   roomApi.getSong.mockRejectedValueOnce(new Error("missing"));
   handler({ type: "sync", state: { type: "open-karaoke", songId: "missing" } });
   await flush();
-  assert.deepEqual(pendingSongCommandRef.current, {
-    type: "open-karaoke",
-    songId: "missing"
-  });
-  assert.deepEqual(setTransferStatus.mock.calls, [
-    [{ stage: "waiting", percent: 0 }]
-  ]);
+  assert.deepEqual(pendingSongCommandRef.current, { type: "open-karaoke", songId: "missing" });
+  assert.deepEqual(setTransferStatus.mock.calls, [ [{ stage: "waiting", percent: 0 }] ]);
   assert.deepEqual(client.send.mock.calls, [
-    [
-      "sync",
-      {
-        state: {
-          type: "song-request",
-          songId: "missing",
-          requesterId: "self"
-        }
-      }
-    ]
+    [ "sync", { state: { type: "song-request", songId: "missing", requesterId: "self" } } ]
   ]);
   handler({ type: "sync", sentAt: "pause-stamp", state: { type: "pause" } });
   assert.equal(setRoomCommand.mock.calls.at(-1)[0].type, "pause");
-  assert.equal(
-    setRoomCommand.mock.calls.at(-1)[0].__eventId.startsWith("pause-stamp-"),
-    true
+  assert.equal( setRoomCommand.mock.calls.at(-1)[0].__eventId.startsWith("pause-stamp-"), true
   );
   handler({ type: "sync" });
-  assert.equal(
-    setRoomCommand.mock.calls.at(-1)[0].__eventId.startsWith("sync-"),
-    true
+  assert.equal( setRoomCommand.mock.calls.at(-1)[0].__eventId.startsWith("sync-"), true
   );
 
   let resolveExport;
@@ -584,14 +423,9 @@ test("room song synchronization covers send, receive and error recovery", async 
   const sentFilesBeforeStaleExport = voice.sendFile.mock.calls.length;
   const statusesBeforeStaleExport = setTransferStatus.mock.calls.length;
   roomApi.exportSongPackage.mockReturnValueOnce(
-    new Promise((resolve) => {
-      resolveExport = resolve;
-    })
+    new Promise((resolve) => { resolveExport = resolve; })
   );
-  handler({
-    type: "sync",
-    state: { type: "song-request", requesterId: "late", songId: "late" }
-  });
+  handler({ type: "sync", state: { type: "song-request", requesterId: "late", songId: "late" } });
   current = false;
   resolveExport(new Blob(["late"]));
   await flush();
@@ -602,10 +436,7 @@ test("room song synchronization covers send, receive and error recovery", async 
   const sendsBeforeStaleError = client.send.mock.calls.length;
   const statusesBeforeStaleError = setTransferStatus.mock.calls.length;
   roomApi.exportSongPackage.mockRejectedValueOnce(new Error("stale export"));
-  handler({
-    type: "sync",
-    state: { type: "song-request", requesterId: "late", songId: "late" }
-  });
+  handler({ type: "sync", state: { type: "song-request", requesterId: "late", songId: "late" } });
   current = false;
   await flush();
   assert.equal(client.send.mock.calls.length, sendsBeforeStaleError);
@@ -614,34 +445,21 @@ test("room song synchronization covers send, receive and error recovery", async 
   let resolveSend;
   current = true;
   roomRef.current = { selfId: "self", host: true };
-  voice.sendFile.mockReturnValueOnce(
-    new Promise((resolve) => {
-      resolveSend = resolve;
-    })
+  voice.sendFile.mockReturnValueOnce( new Promise((resolve) => { resolveSend = resolve; })
   );
   setTransferStatus.mockClear();
-  handler({
-    type: "sync",
-    state: { type: "song-request", requesterId: "slow", songId: "slow" }
-  });
+  handler({ type: "sync", state: { type: "song-request", requesterId: "slow", songId: "slow" } });
   await flush();
-  assert.deepEqual(setTransferStatus.mock.calls, [
-    [{ stage: "sending", percent: 0 }]
-  ]);
+  assert.deepEqual(setTransferStatus.mock.calls, [ [{ stage: "sending", percent: 0 }] ]);
   current = false;
   resolveSend();
   await flush();
-  assert.deepEqual(setTransferStatus.mock.calls, [
-    [{ stage: "sending", percent: 0 }]
-  ]);
+  assert.deepEqual(setTransferStatus.mock.calls, [ [{ stage: "sending", percent: 0 }] ]);
 
   let resolveSong;
   current = true;
   roomRef.current = { selfId: "self", host: false };
-  roomApi.getSong.mockReturnValueOnce(
-    new Promise((resolve) => {
-      resolveSong = resolve;
-    })
+  roomApi.getSong.mockReturnValueOnce( new Promise((resolve) => { resolveSong = resolve; })
   );
   handler({ type: "sync", state: { type: "open-karaoke", songId: "late" } });
   const commandsBeforeStaleSong = setRoomCommand.mock.calls.length;
@@ -664,33 +482,18 @@ test("room song synchronization covers send, receive and error recovery", async 
   current = true;
   roomRef.current = null;
   roomApi.getSong.mockResolvedValueOnce({});
-  handler({
-    type: "sync",
-    sentAt: "roomless",
-    state: { type: "open-karaoke", songId: "roomless" }
-  });
+  handler({ type: "sync", sentAt: "roomless", state: { type: "open-karaoke", songId: "roomless" } });
   await flush();
-  assert.equal(
-    setRoomCommand.mock.calls.at(-1)[0].__eventId.startsWith("roomless-"),
-    true
+  assert.equal( setRoomCommand.mock.calls.at(-1)[0].__eventId.startsWith("roomless-"), true
   );
   client.send.mockClear();
   roomApi.getSong.mockRejectedValueOnce(new Error("room disappeared"));
-  handler({
-    type: "sync",
-    state: { type: "open-karaoke", songId: "roomless-missing" }
-  });
+  handler({ type: "sync", state: { type: "open-karaoke", songId: "roomless-missing" } });
   await flush();
   assert.deepEqual(client.send.mock.calls, [
     [
       "sync",
-      {
-        state: {
-          type: "song-request",
-          songId: "roomless-missing",
-          requesterId: undefined
-        }
-      }
+      { state: { type: "song-request", songId: "roomless-missing", requesterId: undefined } }
     ]
   ]);
   handler({ type: "sync", state: { type: "resume" } });

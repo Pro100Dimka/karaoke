@@ -14,9 +14,7 @@ export default function useApplicationAudioMute(enabled) {
 
       for (const audio of audioElements) {
         if (audio.dataset.onlineRoomParticipant) continue;
-        if (!originalMuteStateRef.current.has(audio)) {
-          originalMuteStateRef.current.set(audio, audio.muted);
-        }
+        if (!originalMuteStateRef.current.has(audio)) originalMuteStateRef.current.set(audio, audio.muted);
         audio.muted = true;
       }
     },
@@ -39,9 +37,7 @@ export default function useApplicationAudioMute(enabled) {
     if (!enabled) return undefined;
 
     muteApplicationAudio(document);
-    if (typeof MutationObserver === "undefined") {
-      return restoreApplicationAudio;
-    }
+    if (typeof MutationObserver === "undefined") return restoreApplicationAudio;
 
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {

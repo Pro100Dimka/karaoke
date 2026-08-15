@@ -48,12 +48,7 @@ test("mock fixtures preserve the complete development data contract", async () =
           { text: "Studio", start: 3.8, end: 5 }
         ]
       },
-      {
-        start: 5,
-        end: 10,
-        text: "Интерфейс работает без backend",
-        words: []
-      }
+      { start: 5, end: 10, text: "Интерфейс работает без backend", words: [] }
     ],
     reference_notes: [
       { start: 0.5, end: 1.2, midi: 60 },
@@ -137,19 +132,13 @@ test("mock API implements the complete development contract", async () => {
   assert.equal((await mockRequest(`/songs/${added.id}`)).id, added.id);
   assert.equal(
     (
-      await mockRequest(`/songs/${added.id}`, {
-        method: "PATCH",
-        body: '{"title":"Changed"}'
-      })
+      await mockRequest(`/songs/${added.id}`, { method: "PATCH", body: '{"title":"Changed"}' })
     ).title,
     "Changed"
   );
   assert.equal(
     (
-      await mockRequest(`/songs/${added.id}`, {
-        method: "PATCH",
-        body: "broken"
-      })
+      await mockRequest(`/songs/${added.id}`, { method: "PATCH", body: "broken" })
     ).title,
     "Changed"
   );
@@ -157,9 +146,7 @@ test("mock API implements the complete development contract", async () => {
     await mockRequest(`/songs/${added.id}`, { method: "DELETE" }),
     null
   );
-  assert.equal(
-    (await mockRequest("/songs")).some((song) => song.id === added.id),
-    false
+  assert.equal( (await mockRequest("/songs")).some((song) => song.id === added.id), false
   );
   assert.equal(await mockRequest("/songs/missing"), null);
   assert.equal(await mockRequest("/songs/missing", { method: "DELETE" }), null);
@@ -174,15 +161,10 @@ test("mock API implements the complete development contract", async () => {
   assert.ok((await mockRequest(`/songs/${MOCK_SONG_ID}/result`)).lyrics_sync);
   const editorPath = `/songs/${MOCK_SONG_ID}/editor`;
   assert.equal((await mockRequest(editorPath)).song_map.notes.length, 2);
-  assert.equal(
-    (await mockRequest("/songs/unknown/editor")).song_map.notes.length,
-    2
+  assert.equal( (await mockRequest("/songs/unknown/editor")).song_map.notes.length, 2
   );
   assert.deepEqual(
-    await mockRequest(editorPath, {
-      method: "PUT",
-      body: '{"notes":[{"_id":"edited"}]}'
-    }),
+    await mockRequest(editorPath, { method: "PUT", body: '{"notes":[{"_id":"edited"}]}' }),
     {
       ai_backup_exists: true,
       song_map: {
@@ -197,27 +179,19 @@ test("mock API implements the complete development contract", async () => {
   );
   assert.deepEqual(
     (
-      await mockRequest("/songs/new/editor", {
-        method: "PUT",
-        body: "{}"
-      })
+      await mockRequest("/songs/new/editor", { method: "PUT", body: "{}" })
     ).song_map.notes,
     []
   );
   assert.deepEqual(
     (
-      await mockRequest("/songs/new/editor", {
-        method: "PUT",
-        body: "broken"
-      })
+      await mockRequest("/songs/new/editor", { method: "PUT", body: "broken" })
     ).song_map.notes,
     []
   );
   assert.equal(
     (
-      await mockRequest(`/songs/${MOCK_SONG_ID}/editor/reset`, {
-        method: "POST"
-      })
+      await mockRequest(`/songs/${MOCK_SONG_ID}/editor/reset`, { method: "POST" })
     ).song_map.notes.length,
     2
   );
@@ -226,15 +200,9 @@ test("mock API implements the complete development contract", async () => {
     MOCK_SONG_ID
   );
   for (const action of ["process", "reprocess", "cancel"])
-    assert.deepEqual(await mockRequest(`/songs/${MOCK_SONG_ID}/${action}`), {
-      ok: true
-    });
-  assert.deepEqual(await mockRequest(`/songs/${MOCK_SONG_ID}/lyrics`), {
-    ok: true
-  });
-  assert.deepEqual(await mockRequest(`/songs/${MOCK_SONG_ID}/log`), [
-    "Mock pipeline ready"
-  ]);
+    assert.deepEqual(await mockRequest(`/songs/${MOCK_SONG_ID}/${action}`), { ok: true });
+  assert.deepEqual(await mockRequest(`/songs/${MOCK_SONG_ID}/lyrics`), { ok: true });
+  assert.deepEqual(await mockRequest(`/songs/${MOCK_SONG_ID}/log`), [ "Mock pipeline ready" ]);
 
   const settings = await mockRequest("/settings");
   assert.deepEqual(settings, {
@@ -248,10 +216,7 @@ test("mock API implements the complete development contract", async () => {
   assert.equal((await mockRequest("/settings")).theme, "dark");
   assert.equal(
     (
-      await mockRequest("/settings", {
-        method: "PATCH",
-        body: '{"accent":"red"}'
-      })
+      await mockRequest("/settings", { method: "PATCH", body: '{"accent":"red"}' })
     ).accent,
     "red"
   );
@@ -267,34 +232,19 @@ test("mock API implements the complete development contract", async () => {
   });
   assert.equal(
     (
-      await mockRequest("/audio/settings", {
-        method: "POST",
-        body: '{"buffer_size":128}'
-      })
+      await mockRequest("/audio/settings", { method: "POST", body: '{"buffer_size":128}' })
     ).buffer_size,
     128
   );
-  for (const path of [
-    "/audio/devices",
-    "/audio/output-devices",
-    "/audio/asio-drivers"
-  ])
+  for (const path of [ "/audio/devices", "/audio/output-devices", "/audio/asio-drivers" ])
     assert.deepEqual(await mockRequest(path), []);
   assert.equal((await mockRequest("/audio/signal-quality")).rms_dbfs, -42);
-  assert.deepEqual(await mockRequest("/audio/direct-monitor/start"), {
-    ok: true
-  });
+  assert.deepEqual(await mockRequest("/audio/direct-monitor/start"), { ok: true });
 
-  assert.equal(
-    (await mockRequest("/recording/start")).recording_session_id,
-    "mock-session-1"
+  assert.equal( (await mockRequest("/recording/start")).recording_session_id, "mock-session-1"
   );
-  assert.deepEqual(await mockRequest("/recording/pause?session_id=x"), {
-    ok: true
-  });
-  assert.deepEqual(await mockRequest("/recording/resume?session_id=x"), {
-    ok: true
-  });
+  assert.deepEqual(await mockRequest("/recording/pause?session_id=x"), { ok: true });
+  assert.deepEqual(await mockRequest("/recording/resume?session_id=x"), { ok: true });
   const recording = await mockRequest("/recording/stop?session_id=x");
   assert.deepEqual(recording, {
     id: "mock-recording-1",
@@ -302,12 +252,9 @@ test("mock API implements the complete development contract", async () => {
     duration_sec: 10,
     created_at: "1970-01-01T00:00:00.000Z"
   });
-  const retainedRecording = await mockRequest(
-    "/recording/stop?session_id=retained"
+  const retainedRecording = await mockRequest( "/recording/stop?session_id=retained"
   );
-  assert.equal(
-    (await mockRequest("/recording/library")).at(-1).id,
-    retainedRecording.id
+  assert.equal( (await mockRequest("/recording/library")).at(-1).id, retainedRecording.id
   );
   assert.equal(
     (await mockRequest(`/recording/by-song/${MOCK_SONG_ID}`)).at(-1).id,
@@ -317,9 +264,7 @@ test("mock API implements the complete development contract", async () => {
     await mockRequest(`/recording/${recording.id}`, { method: "DELETE" }),
     null
   );
-  assert.deepEqual(await mockRequest("/recording/library"), [
-    retainedRecording
-  ]);
+  assert.deepEqual(await mockRequest("/recording/library"), [ retainedRecording ]);
   assert.deepEqual(await mockRequest("/analysis/id/run"), { queued: true });
   assert.equal((await mockRequest("/analysis/id")).accuracy_percent, 82);
   assert.deepEqual(await mockRequest("/analysis/id"), {
@@ -370,13 +315,9 @@ test("mock API implements the complete development contract", async () => {
   const blob = await mockBlobRequest(`/songs/${MOCK_SONG_ID}/package`);
   assert.equal(blob.type, "application/zip");
   assert.equal(await blob.text(), "mock karaoke package");
-  await assert.rejects(
-    mockRequest("/missing", { method: "PUT" }),
-    /not implemented/
+  await assert.rejects( mockRequest("/missing", { method: "PUT" }), /not implemented/
   );
-  await assert.rejects(
-    mockBlobRequest("/missing", { method: "POST" }),
-    /not implemented/
+  await assert.rejects( mockBlobRequest("/missing", { method: "POST" }), /not implemented/
   );
   await assert.rejects(
     mockBlobRequest(`/songs/${MOCK_SONG_ID}/package`, { method: "POST" }),

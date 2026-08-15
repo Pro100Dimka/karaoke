@@ -63,11 +63,5 @@ export default function useRadioLifecycle({
       window.removeEventListener("pointerdown", unlock, true);
       window.removeEventListener("keydown", unlock, true);
     };
-  }, [
-    enabled,
-    pendingStartupPlaybackRef,
-    suspendedRef,
-    turnOnRef,
-    unlockAudioAnalysis
-  ]);
+  }, [ enabled, pendingStartupPlaybackRef, suspendedRef, turnOnRef, unlockAudioAnalysis ]);
 }

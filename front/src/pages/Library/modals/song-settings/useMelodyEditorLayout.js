@@ -2,12 +2,7 @@ import { useCallback, useMemo } from "react";
 import { canonicalLyricProjection } from "./melody-editor-operations";
 import { BLACK_KEYS } from "./melody-editor-state";
 
-export default function useMelodyEditorLayout({
-  notes,
-  payload,
-  verticalZoom,
-  zoom
-}) {
+export default function useMelodyEditorLayout({ notes, payload, verticalZoom, zoom }) {
   const songMap = payload?.song_map || {};
   const duration =
     Number(songMap.duration) || Math.max(1, ...notes.map((note) => note.end));
@@ -23,9 +18,7 @@ export default function useMelodyEditorLayout({
     () => new Map(syllables.map((item) => [item.index, item])),
     [syllables]
   );
-  const lyricProjection = useMemo(
-    () => canonicalLyricProjection(syllables),
-    [syllables]
+  const lyricProjection = useMemo( () => canonicalLyricProjection(syllables), [syllables]
   );
   const noteAtTime = useCallback(
     (value) =>
@@ -45,9 +38,7 @@ export default function useMelodyEditorLayout({
   const laneHeight = (maxMidi - minMidi + 1) * rowHeight;
   const laneWidth = Math.max(1180, duration * zoom) + keyboardWidth;
   const whiteKeyGeometry = useMemo(() => {
-    const white = Array.from(
-      { length: maxMidi - minMidi + 1 },
-      (_, index) => maxMidi - index
+    const white = Array.from( { length: maxMidi - minMidi + 1 }, (_, index) => maxMidi - index
     ).filter((midi) => !BLACK_KEYS.includes(((midi % 12) + 12) % 12));
     const centers = white.map((midi) => (maxMidi - midi + 0.5) * rowHeight);
     return white.map((midi, index) => {

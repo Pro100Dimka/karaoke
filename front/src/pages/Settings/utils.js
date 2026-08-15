@@ -1,9 +1,6 @@
 export const HALF = 6;
 
-export const radioActions = {
-  stationId: "setStation",
-  volume: "setVolume"
-};
+export const radioActions = { stationId: "setStation", volume: "setVolume" };
 
 export const opts = (items) =>
   items.map(([value, label]) => ({ value, label }));

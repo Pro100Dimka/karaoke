@@ -29,24 +29,12 @@ test("theme storage is resilient and normalized", async () => {
   assert.equal(readStoredTheme({ getItem: () => "invalid" }), "dark");
   assert.equal(readStoredTheme(), "dark");
   assert.equal(readStoredTheme({}), "dark");
-  assert.equal(
-    readStoredTheme({
-      getItem: () => {
-        throw new Error("blocked");
-      }
-    }),
-    "dark"
+  assert.equal( readStoredTheme({ getItem: () => { throw new Error("blocked"); } }), "dark"
   );
   assert.equal(writeStoredTheme(undefined, "green"), "green");
   assert.equal(writeStoredTheme({}, "green"), "green");
   assert.equal(
-    writeStoredTheme(
-      {
-        setItem: () => {
-          throw new Error("blocked");
-        }
-      },
-      "green"
+    writeStoredTheme( { setItem: () => { throw new Error("blocked"); } }, "green"
     ),
     "green"
   );

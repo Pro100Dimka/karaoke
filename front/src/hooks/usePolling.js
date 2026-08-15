@@ -90,9 +90,7 @@ export function usePolling(fetchFn, intervalMs, deps = [], options = {}) {
         if (refreshQueued) {
           refreshQueued = false;
           run();
-        } else {
-          scheduleNext(result, requestError);
-        }
+        } else scheduleNext(result, requestError);
       }
     };
 

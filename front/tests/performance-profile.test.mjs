@@ -34,28 +34,20 @@ test("performance profile leaves capable hardware fully animated", async () => {
   assert.equal(applyPerformanceProfile(environment), false);
   assert.equal(documentElement.dataset.performance, undefined);
   assert.equal(
-    detectReducedPerformance({
-      navigator: { hardwareConcurrency: 4, deviceMemory: 16 }
-    }),
+    detectReducedPerformance({ navigator: { hardwareConcurrency: 4, deviceMemory: 16 } }),
     true
   );
   assert.equal(
-    detectReducedPerformance({
-      navigator: { hardwareConcurrency: 12, deviceMemory: 4 }
-    }),
+    detectReducedPerformance({ navigator: { hardwareConcurrency: 12, deviceMemory: 4 } }),
     true
   );
   for (const value of [0, -1, 5, Number.NaN, Number.POSITIVE_INFINITY]) {
     assert.equal(
-      detectReducedPerformance({
-        navigator: { hardwareConcurrency: value, deviceMemory: 16 }
-      }),
+      detectReducedPerformance({ navigator: { hardwareConcurrency: value, deviceMemory: 16 } }),
       false
     );
     assert.equal(
-      detectReducedPerformance({
-        navigator: { hardwareConcurrency: 12, deviceMemory: value }
-      }),
+      detectReducedPerformance({ navigator: { hardwareConcurrency: 12, deviceMemory: value } }),
       false
     );
   }

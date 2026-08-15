@@ -4,12 +4,7 @@ import { translateSaved } from "../../../i18n/runtime";
 import { getErrorMessage } from "../../../utils/errors";
 
 function getFolderPayload({ output_dir, slug, title, id }) {
-  return {
-    path: output_dir ?? "",
-    slug: slug ?? "",
-    title: title ?? "",
-    id: id ?? ""
-  };
+  return { path: output_dir ?? "", slug: slug ?? "", title: title ?? "", id: id ?? "" };
 }
 export default function useLibrarySongActions(props) {
   const {
@@ -46,9 +41,7 @@ export default function useLibrarySongActions(props) {
       deletingSongIdsRef.current.add(song.id);
       try {
         const confirmed = await confirmDialog(
-          translateSaved("Удалить «{0}»? Это удалит все файлы песни.", {
-            0: song.title
-          }),
+          translateSaved("Удалить «{0}»? Это удалит все файлы песни.", { 0: song.title }),
           translateSaved("Удалить песню?")
         );
         if (!confirmed) return;
@@ -64,17 +57,12 @@ export default function useLibrarySongActions(props) {
             next.delete(song.id);
             return next;
           });
-          await notify(
-            translateSaved("Не удалось удалить: {0}", {
-              0: getErrorMessage(error)
-            })
+          await notify( translateSaved("Не удалось удалить: {0}", { 0: getErrorMessage(error) })
           );
         }
       } catch (error) {
         await notify(
-          translateSaved("Не удалось подтвердить удаление: {0}", {
-            0: getErrorMessage(error)
-          })
+          translateSaved("Не удалось подтвердить удаление: {0}", { 0: getErrorMessage(error) })
         );
       } finally {
         deletingSongIdsRef.current.delete(song.id);
@@ -99,9 +87,7 @@ export default function useLibrarySongActions(props) {
         const confirmed = await confirmDialog(
           translateSaved(
             "Вы точно хотите обработать заново песню «{0}»? Ранее созданные результаты обработки будут обновлены.",
-            {
-              0: song.title || translateSaved("Без названия")
-            }
+            { 0: song.title || translateSaved("Без названия") }
           ),
           translateSaved("Обработать песню заново?")
         );
@@ -120,9 +106,7 @@ export default function useLibrarySongActions(props) {
       const confirmed = await confirmDialog(
         translateSaved(
           "Вы точно хотите обработать заново песню «{0}»? Текущие данные мелодии будут пересозданы.",
-          {
-            0: song?.title || translateSaved("Без названия")
-          }
+          { 0: song?.title || translateSaved("Без названия") }
         ),
         translateSaved("Обработать песню заново?")
       );
@@ -139,35 +123,23 @@ export default function useLibrarySongActions(props) {
     async (song) => {
       const openFolder = window.electronAPI?.openSongFolder;
       if (!openFolder) {
-        await notify(
-          translateSaved(
-            "Открытие папки доступно только в установленном приложении."
-          )
+        await notify( translateSaved( "Открытие папки доступно только в установленном приложении." )
         );
         return;
       }
       try {
         const errorMessage = await openFolder(getFolderPayload(song));
         if (errorMessage)
-          await notify(
-            errorMessage,
-            translateSaved("Не удалось открыть папку")
+          await notify( errorMessage, translateSaved("Не удалось открыть папку")
           );
       } catch (error) {
         await notify(
-          translateSaved("Не удалось открыть папку: {0}", {
-            0: getErrorMessage(error)
-          }),
+          translateSaved("Не удалось открыть папку: {0}", { 0: getErrorMessage(error) }),
           translateSaved("Не удалось открыть папку")
         );
       }
     },
     [notify]
   );
-  return {
-    deleteSong,
-    openSongFolder,
-    processSong,
-    reprocessSong
-  };
+  return { deleteSong, openSongFolder, processSong, reprocessSong };
 }

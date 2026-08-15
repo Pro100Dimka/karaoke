@@ -63,17 +63,7 @@ export function anchoredVerticalScrollToNote({
   return clampEditor(newY - screenY, 0, Math.max(0, nextHeight - clientHeight));
 }
 
-export function marqueeHitIds({
-  notes,
-  x1,
-  y1,
-  x2,
-  y2,
-  keyboardWidth,
-  zoom,
-  rowHeight,
-  maxMidi
-}) {
+export function marqueeHitIds({ notes, x1, y1, x2, y2, keyboardWidth, zoom, rowHeight, maxMidi }) {
   const left = Math.min(x1, x2);
   const right = Math.max(x1, x2);
   const top = Math.min(y1, y2);

@@ -12,16 +12,9 @@ import { getSavedLanguage } from "../utils/language";
 import { getSavedTheme } from "../utils/theme";
 import { hydrateUiPreferences } from "../utils/ui-preferences";
 
-const ICONS = {
-  dark: darkIcon,
-  green: greenIcon,
-  light: lightIcon,
-  violet: violetIcon
-};
+const ICONS = { dark: darkIcon, green: greenIcon, light: lightIcon, violet: violetIcon };
 const sleep = (ms) =>
-  new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
+  new Promise((resolve) => { setTimeout(resolve, ms); });
 
 export default function BackendBootLoader({ children }) {
   const [ready, setReady] = useState(MOCK_API_ENABLED);
@@ -34,10 +27,7 @@ export default function BackendBootLoader({ children }) {
     const observer = new MutationObserver(() =>
       setTheme(document.documentElement.dataset.theme || getSavedTheme())
     );
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["data-theme"]
-    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     return () => observer.disconnect();
   }, []);
 

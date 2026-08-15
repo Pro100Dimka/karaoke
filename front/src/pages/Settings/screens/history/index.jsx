@@ -9,10 +9,7 @@ import { HISTORY_ACTIONS, HISTORY_COLUMNS, RECORDING_STATUSES } from "./config";
 
 export default function History() {
   const { language, t } = useI18n();
-  const { data: history, error } = usePolling(
-    api.getHistory,
-    POLLING_INTERVALS.history,
-    []
+  const { data: history, error } = usePolling( api.getHistory, POLLING_INTERVALS.history, []
   );
 
   return (
@@ -60,10 +57,7 @@ const formatTimestamp = (value, language) => {
     : date.toLocaleString({ uk: "uk-UA", ru: "ru-RU", en: "en-US" }[language]);
 };
 
-const getHistoryRow = (
-  { song_title, kind, status, duration_seconds, timestamp },
-  t,
-  language
+const getHistoryRow = ( { song_title, kind, status, duration_seconds, timestamp }, t, language
 ) => [
   [song_title ?? "—", "history-song"],
   [

@@ -29,9 +29,7 @@ export default function Diagnostics() {
           gap="var(--space-2)"
           className="settings-diagnostics-grid"
         >
-          {checks.map(([key, label, ok]) => (
-            <DiagnosticCheck key={key} label={label} ok={ok} />
-          ))}
+          {checks.map(([key, label, ok]) => ( <DiagnosticCheck key={key} label={label} ok={ok} /> ))}
         </Grid>
       </Stack>
 

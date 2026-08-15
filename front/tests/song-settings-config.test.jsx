@@ -1,5 +1,4 @@
 /* @vitest-environment jsdom */
-import React from "react";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -18,9 +17,7 @@ vi.mock("../src/theme/ui/_internal/Field", () => ({
     <section aria-label={label}>{children({ id: "range" })}</section>
   )
 }));
-vi.mock("../src/i18n/runtime", () => ({
-  translateSaved: (value) => value
-}));
+vi.mock("../src/i18n/runtime", () => ({ translateSaved: (value) => value }));
 
 let schema;
 
@@ -41,23 +38,10 @@ test("song settings schema describes every persisted field exactly", () => {
     { value: "Сложный", label: "Сложный" },
     { value: "Эксперт", label: "Эксперт" }
   ]);
-  expect(
-    SONG_FIELDS.map(({ getValue, setValue, render, ...field }) => field)
+  expect( SONG_FIELDS.map(({ getValue, setValue, render, ...field }) => field)
   ).toEqual([
-    {
-      name: "artist",
-      span: 6,
-      type: "text",
-      label: "Исполнитель",
-      placeholder: "Muse"
-    },
-    {
-      name: "title",
-      span: 6,
-      type: "text",
-      label: "Название песни",
-      placeholder: "Название песни"
-    },
+    { name: "artist", span: 6, type: "text", label: "Исполнитель", placeholder: "Muse" },
+    { name: "title", span: 6, type: "text", label: "Название песни", placeholder: "Название песни" },
     {
       name: "tempo_override",
       span: 4,
@@ -66,20 +50,8 @@ test("song settings schema describes every persisted field exactly", () => {
       min: 1,
       parse: "nullable-number"
     },
-    {
-      name: "key_override",
-      span: 4,
-      type: "text",
-      label: "Тональность",
-      placeholder: "напр. C#m"
-    },
-    {
-      name: "genre",
-      span: 4,
-      type: "text",
-      label: "Жанр",
-      placeholder: "Alternative rock"
-    },
+    { name: "key_override", span: 4, type: "text", label: "Тональность", placeholder: "напр. C#m" },
+    { name: "genre", span: 4, type: "text", label: "Жанр", placeholder: "Alternative rock" },
     {
       name: "difficulty_override",
       span: 6,
@@ -87,12 +59,7 @@ test("song settings schema describes every persisted field exactly", () => {
       label: "Сложность",
       options: DIFFICULTY_OPTIONS
     },
-    {
-      type: "custom",
-      name: "note_range",
-      label: "Диапазон нот",
-      span: 6
-    },
+    { type: "custom", name: "note_range", label: "Диапазон нот", span: 6 },
     {
       name: "video_url",
       span: 12,
@@ -117,15 +84,9 @@ test("note range renderer preserves its accessible contract and normalizes value
   const range = schema.SONG_FIELDS.find(({ name }) => name === "note_range");
   const change = vi.fn();
   const { container, getByLabelText } = render(
-    range.render({
-      context: {
-        form: { note_range_min: 40, note_range_max: 80 },
-        onChange: change
-      }
-    })
+    range.render({ context: { form: { note_range_min: 40, note_range_max: 80 }, onChange: change } })
   );
-  expect(getByLabelText("Диапазон нот").getAttribute("aria-label")).toBe(
-    "Диапазон нот"
+  expect(getByLabelText("Диапазон нот").getAttribute("aria-label")).toBe( "Диапазон нот"
   );
   const [minimum, maximum] = container.querySelectorAll("input");
   expect(minimum).toMatchObject({
@@ -160,10 +121,8 @@ test("note range renderer preserves its accessible contract and normalizes value
   ]);
 
   cleanup();
-  const empty = render(
-    range.render({ context: { form: null, onChange: change } })
+  const empty = render( range.render({ context: { form: null, onChange: change } })
   );
-  expect(
-    [...empty.container.querySelectorAll("input")].map(({ value }) => value)
+  expect( [...empty.container.querySelectorAll("input")].map(({ value }) => value)
   ).toEqual(["", ""]);
 });

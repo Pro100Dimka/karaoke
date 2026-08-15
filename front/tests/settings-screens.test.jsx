@@ -1,12 +1,5 @@
 /* @vitest-environment jsdom */
-import React from "react";
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  screen
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -29,12 +22,8 @@ vi.mock("../src/hooks/usePolling", () => ({
     return mocks.polling[mocks.pollingIndex++ % mocks.polling.length];
   }
 }));
-vi.mock("../src/hooks/useDiagnostics", () => ({
-  default: () => mocks.diagnostics
-}));
-vi.mock("../src/contexts/AppDialog", () => ({
-  useAppDialog: () => ({ alert: mocks.notify })
-}));
+vi.mock("../src/hooks/useDiagnostics", () => ({ default: () => mocks.diagnostics }));
+vi.mock("../src/contexts/AppDialog", () => ({ useAppDialog: () => ({ alert: mocks.notify }) }));
 vi.mock("../src/api/client", () => ({
   api: {
     getAbout: mocks.getAbout,
@@ -114,21 +103,13 @@ describe("settings information screens", () => {
       pipeline: { separation: true, pitch: false },
       versions: { components: { backend: "1", ai: null } },
       errors: {
-        errors: [
-          {
-            id: 1,
-            title: "Pipeline",
-            updated_at: "today",
-            error_message: "failed"
-          }
-        ]
+        errors: [ { id: 1, title: "Pipeline", updated_at: "today", error_message: "failed" } ]
       }
     };
     render(<Diagnostics />);
     expect(screen.getByText("backend")).not.toBeNull();
     expect(screen.getByText("failed")).not.toBeNull();
-    expect(
-      document.querySelectorAll(".diagnostics-icon").length
+    expect( document.querySelectorAll(".diagnostics-icon").length
     ).toBeGreaterThan(1);
   });
 
@@ -143,19 +124,12 @@ describe("settings information screens", () => {
     expect(screen.getByText("settings.diagnostics.noErrors")).not.toBeNull();
     view.rerender(
       <ErrorList
-        errors={[
-          { title: "No id", updated_at: "now", error_message: "message" }
-        ]}
+        errors={[ { title: "No id", updated_at: "now", error_message: "message" } ]}
       />
     );
     expect(screen.getByText("message")).not.toBeNull();
     cleanup();
-    mocks.diagnostics = {
-      health: null,
-      pipeline: null,
-      versions: null,
-      errors: null
-    };
+    mocks.diagnostics = { health: null, pipeline: null, versions: null, errors: null };
     expect(() => render(<Diagnostics />)).not.toThrow();
   });
 
@@ -164,10 +138,7 @@ describe("settings information screens", () => {
     expect(empty.container.innerHTML).toBe("");
     empty.unmount();
 
-    render(
-      <VersionList
-        components={{ backend: "1.0", zero: 0, empty: "", missing: null }}
-      />
+    render( <VersionList components={{ backend: "1.0", zero: 0, empty: "", missing: null }} />
     );
     expect(screen.getByText("settings.diagnostics.versions")).not.toBeNull();
     expect(screen.getByText("1.0")).not.toBeNull();
@@ -182,8 +153,7 @@ describe("settings information screens", () => {
 
     expect(getErrorKey({ id: 0, updated_at: "now", title: "Zero" })).toBe(0);
     expect(getErrorKey({ id: 7, updated_at: "now", title: "Known" })).toBe(7);
-    expect(getErrorKey({ updated_at: "now", title: "Fallback" })).toBe(
-      "now-Fallback"
+    expect(getErrorKey({ updated_at: "now", title: "Fallback" })).toBe( "now-Fallback"
     );
   });
 
@@ -234,26 +204,10 @@ describe("settings information screens", () => {
     mocks.polling = [
       {
         data: [
-          {
-            song_title: "Unknown action",
-            kind: "custom",
-            status: null
-          },
-          {
-            song_title: "Missing action",
-            kind: null,
-            status: "recorded"
-          },
-          {
-            song_title: "Unknown processing",
-            kind: "processing",
-            status: "custom-status"
-          },
-          {
-            song_title: "Missing processing",
-            kind: "processing",
-            status: null
-          }
+          { song_title: "Unknown action", kind: "custom", status: null },
+          { song_title: "Missing action", kind: null, status: "recorded" },
+          { song_title: "Unknown processing", kind: "processing", status: "custom-status" },
+          { song_title: "Missing processing", kind: "processing", status: null }
         ]
       }
     ];
@@ -284,14 +238,9 @@ describe("memory management", () => {
     expect(notify).toHaveBeenLastCalledWith("locked");
 
     await expect(
-      runMemoryAction({
-        request: vi.fn().mockRejectedValue(null),
-        getMessage: vi.fn(),
-        notify
-      })
+      runMemoryAction({ request: vi.fn().mockRejectedValue(null), getMessage: vi.fn(), notify })
     ).resolves.toBe(false);
-    expect(notify).toHaveBeenLastCalledWith(
-      translateSaved("Не удалось выполнить действие")
+    expect(notify).toHaveBeenLastCalledWith( translateSaved("Не удалось выполнить действие")
     );
   });
 
@@ -304,11 +253,9 @@ describe("memory management", () => {
     );
     expect(screen.getByText(translateSaved("Всего занято"))).not.toBeNull();
     expect(screen.getByText("10 GB")).not.toBeNull();
-    expect(
-      screen.getByText(translateSaved("Свободно на диске"))
+    expect( screen.getByText(translateSaved("Свободно на диске"))
     ).not.toBeNull();
-    expect(
-      screen.getByText(translateSaved("{0} из {1}", { 0: "5 GB", 1: "20 GB" }))
+    expect( screen.getByText(translateSaved("{0} из {1}", { 0: "5 GB", 1: "20 GB" }))
     ).not.toBeNull();
     expect(document.querySelectorAll(".settings-metric-item")).toHaveLength(2);
 
@@ -329,31 +276,20 @@ describe("memory management", () => {
         notify={vi.fn()}
       />
     );
-    expect(
-      screen.getByRole("button", { name: "Ghost" }).getAttribute("data-variant")
+    expect( screen.getByRole("button", { name: "Ghost" }).getAttribute("data-variant")
     ).toBe("outline");
-    expect(
-      screen.getByRole("button", { name: "Solid" }).getAttribute("data-variant")
+    expect( screen.getByRole("button", { name: "Solid" }).getAttribute("data-variant")
     ).toBe("solid");
-    expect(screen.getByTestId("memory-action-icon").getAttribute("size")).toBe(
-      "15"
+    expect(screen.getByTestId("memory-action-icon").getAttribute("size")).toBe( "15"
     );
-    expect(
-      document.querySelectorAll(".settings-memory-actions button")
+    expect( document.querySelectorAll(".settings-memory-actions button")
     ).toHaveLength(2);
   });
 
   test("keeps the optimize-song heading and alignment contract", () => {
-    render(
-      <OptimizeSong
-        value=""
-        options={[]}
-        onChange={vi.fn()}
-        onOptimize={vi.fn()}
-      />
+    render( <OptimizeSong value="" options={[]} onChange={vi.fn()} onOptimize={vi.fn()} />
     );
-    expect(
-      screen.getByText(translateSaved("Оптимизация песни"))
+    expect( screen.getByText(translateSaved("Оптимизация песни"))
     ).not.toBeNull();
     const grid = document.querySelector(".settings-optimize-section .ui-grid");
     expect(grid.style.alignItems).toBe("end");
@@ -384,8 +320,7 @@ describe("memory management", () => {
     );
     expect(screen.getByText(/1\.0/)).not.toBeNull();
     fireEvent.click(screen.getByText("Clear"));
-    fireEvent.click(
-      screen.getByText(/Оптимізувати|РћРїС‚РёРјРёР·РёСЂРѕРІР°С‚СЊ/)
+    fireEvent.click( screen.getByText(/Оптимізувати|РћРїС‚РёРјРёР·РёСЂРѕРІР°С‚СЊ/)
     );
     expect(action).toHaveBeenCalled();
     expect(optimize).toHaveBeenCalled();
@@ -397,10 +332,7 @@ describe("memory management", () => {
   test("loads memory data and optimizes a selected song", async () => {
     mocks.polling = [
       {
-        data: {
-          total_human: "10 GB",
-          breakdown: { models: 1024 ** 2 }
-        },
+        data: { total_human: "10 GB", breakdown: { models: 1024 ** 2 } },
         error: new Error("size stale")
       },
       { data: { free_human: "5 GB", total_human: "20 GB" } },
@@ -412,8 +344,7 @@ describe("memory management", () => {
     fireEvent.click(select);
     const option = await screen.findByRole("option", { name: "Song" });
     fireEvent.click(option);
-    const optimize = screen.getByText(
-      /Оптимізувати|РћРїС‚РёРјРёР·РёСЂРѕРІР°С‚СЊ/
+    const optimize = screen.getByText( /Оптимізувати|РћРїС‚РёРјРёР·РёСЂРѕРІР°С‚СЊ/
     );
     mocks.optimizeSong.mockResolvedValueOnce({});
     fireEvent.click(optimize);
@@ -429,8 +360,7 @@ describe("memory management", () => {
     ];
     mocks.optimizeSong.mockRejectedValueOnce(new Error("locked"));
     render(<MemoryManager />);
-    expect(screen.getByRole("button", { name: "Оптимізувати" }).disabled).toBe(
-      true
+    expect(screen.getByRole("button", { name: "Оптимізувати" }).disabled).toBe( true
     );
     cleanup();
     mocks.pollingIndex = 0;

@@ -8,8 +8,7 @@ export default function useMelodyEditorPreferences() {
   const [verticalZoom, setVerticalZoom] = useState(
     () => Number(editorPreferences().verticalZoom) || 14
   );
-  const [autoScroll, setAutoScroll] = useState(
-    () => editorPreferences().autoScroll ?? true
+  const [autoScroll, setAutoScroll] = useState( () => editorPreferences().autoScroll ?? true
   );
   const [playbackRate, setPlaybackRate] = useState(
     () => Number(editorPreferences().playbackRate) || 1

@@ -1,5 +1,4 @@
 /* @vitest-environment jsdom */
-import React from "react";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -52,13 +51,9 @@ import LibraryHero from "../src/pages/Library/components/hero/index.jsx";
 afterEach(cleanup);
 
 test("context composition preserves provider ownership order", () => {
-  const result = render(
-    <ContextProviders>
-      <span data-testid="child" />
-    </ContextProviders>
+  const result = render( <ContextProviders> <span data-testid="child" /> </ContextProviders>
   );
-  expect(
-    result.getByTestId("child").closest('[data-provider="room"]')
+  expect( result.getByTestId("child").closest('[data-provider="room"]')
   ).toBeTruthy();
   expect(result.container.querySelectorAll("[data-provider]")).toHaveLength(5);
 });

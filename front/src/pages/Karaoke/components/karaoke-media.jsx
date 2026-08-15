@@ -54,9 +54,7 @@ export default function KaraokeMedia({
           ref={youTubeClipRef}
           className="karaoke-video karaoke-youtube-video"
           src={youTubeEmbedUrl(youTubeVideoId)}
-          title={translateSaved("Клип: {0}", {
-            0: song.title
-          })}
+          title={translateSaved("Клип: {0}", { 0: song.title })}
           allow="autoplay; encrypted-media; picture-in-picture"
           onLoad={handleYouTubeLoad}
         />

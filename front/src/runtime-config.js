@@ -11,9 +11,7 @@ export const API_BASE_URL = String(
   import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000"
 ).replace(/\/+$/, "");
 
-export const BACKEND_BOOT_RETRY_MS = positiveNumber(
-  import.meta.env.VITE_BACKEND_RETRY_MS,
-  450
+export const BACKEND_BOOT_RETRY_MS = positiveNumber( import.meta.env.VITE_BACKEND_RETRY_MS, 450
 );
 
 export const POLLING_INTERVALS = Object.freeze({

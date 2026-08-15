@@ -21,13 +21,7 @@ export default function MelodyEditorPage() {
           }
         );
       })
-      .catch(
-        () =>
-          alive &&
-          setSong({
-            id: songId,
-            title: translateSaved("Редактор мелодии")
-          })
+      .catch( () => alive && setSong({ id: songId, title: translateSaved("Редактор мелодии") })
       );
     return () => {
       alive = false;

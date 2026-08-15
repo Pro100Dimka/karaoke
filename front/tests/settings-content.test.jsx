@@ -1,5 +1,4 @@
 /* @vitest-environment jsdom */
-import React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -9,16 +8,10 @@ const mocks = vi.hoisted(() => ({
   audio: {},
   configFormProps: null
 }));
-vi.mock("../src/api/client", () => ({
-  api: { updateUiPreferences: mocks.updateUiPreferences }
-}));
+vi.mock("../src/api/client", () => ({ api: { updateUiPreferences: mocks.updateUiPreferences } }));
 vi.mock("../src/contexts/radio", () => ({ useRadio: () => mocks.radio }));
-vi.mock("../src/pages/Settings/audio-source", () => ({
-  default: () => mocks.audio
-}));
-vi.mock("../src/pages/Settings/model-recovery", () => ({
-  default: () => <div>Model recovery</div>
-}));
+vi.mock("../src/pages/Settings/audio-source", () => ({ default: () => mocks.audio }));
+vi.mock("../src/pages/Settings/model-recovery", () => ({ default: () => <div>Model recovery</div> }));
 vi.mock("../src/pages/Settings/config", () => {
   const Service = () => <div>Diagnostics screen</div>;
   return {
@@ -50,9 +43,7 @@ vi.mock("../src/pages/Settings/config", () => {
 });
 vi.mock("../src/i18n", async (importOriginal) => ({
   ...(await importOriginal()),
-  useI18n: () => ({
-    t: (key, _values, fallback) => fallback || key
-  })
+  useI18n: () => ({ t: (key, _values, fallback) => fallback || key })
 }));
 vi.mock("../src/theme/ui", () => ({
   Button: ({ children, ...props }) => <button {...props}>{children}</button>,
@@ -69,9 +60,7 @@ vi.mock("../src/theme/ui", () => ({
     mocks.configFormProps = props;
     return (
       <div>
-        {props.fields.map(({ name }) => (
-          <span key={name}>{name}</span>
-        ))}
+        {props.fields.map(({ name }) => ( <span key={name}>{name}</span> ))}
       </div>
     );
   },
@@ -111,11 +100,9 @@ describe("settings content", () => {
     const view = render(<SettingsContent {...props()} />);
     expect(screen.getByText("language")).not.toBeNull();
     expect(mocks.configFormProps.context.form).toEqual({});
-    expect(
-      mocks.configFormProps.fields[0].getLabel({ suffix: "UK" })
+    expect( mocks.configFormProps.fields[0].getLabel({ suffix: "UK" })
     ).toContain("UK");
-    expect(mocks.configFormProps.fields[0].getLabel({ suffix: "" })).toBe(
-      "Language"
+    expect(mocks.configFormProps.fields[0].getLabel({ suffix: "" })).toBe( "Language"
     );
     expect(mocks.configFormProps.fields[0].options[0].label).toBe("Ukrainian");
     view.rerender(<SettingsContent {...props({ tab: "missing" })} />);
@@ -137,8 +124,7 @@ describe("settings content", () => {
     const open = vi.fn();
     const view = render(<SettingsContent {...props({ tab: "ai" })} />);
     expect(screen.getByText("Model recovery")).not.toBeNull();
-    view.rerender(
-      <SettingsContent {...props({ tab: "appearance", onOpenService: open })} />
+    view.rerender( <SettingsContent {...props({ tab: "appearance", onOpenService: open })} />
     );
     fireEvent.click(screen.getByText("settings.service.diagnostics.title"));
     expect(open).toHaveBeenCalledWith("diagnostics");
@@ -148,11 +134,7 @@ describe("settings content", () => {
     const close = vi.fn();
     render(
       <SettingsContent
-        {...props({
-          tab: "appearance",
-          service: "diagnostics",
-          onCloseService: close
-        })}
+        {...props({ tab: "appearance", service: "diagnostics", onCloseService: close })}
       />
     );
     expect(screen.getByText("Diagnostics screen")).not.toBeNull();
@@ -172,8 +154,7 @@ describe("settings custom renderers", () => {
       isPending: () => true,
       run
     };
-    render(
-      SETTINGS_RENDERERS.action({ props: { label: "x" }, field, context })
+    render( SETTINGS_RENDERERS.action({ props: { label: "x" }, field, context })
     );
     fireEvent.click(screen.getByText("Playing"));
     expect(run).toHaveBeenCalledWith(context);
@@ -182,13 +163,8 @@ describe("settings custom renderers", () => {
   test("runs monitor renderer and displays current level", () => {
     const run = vi.fn();
     const context = { t: (key) => key };
-    const field = {
-      label: "Monitor",
-      run,
-      getLevel: () => 44
-    };
-    render(
-      SETTINGS_RENDERERS.monitor({ props: {}, field, context, value: false })
+    const field = { label: "Monitor", run, getLevel: () => 44 };
+    render( SETTINGS_RENDERERS.monitor({ props: {}, field, context, value: false })
     );
     fireEvent.click(screen.getByText("settings.audio.hearVoice"));
     expect(run).toHaveBeenCalledWith(context);
@@ -197,18 +173,12 @@ describe("settings custom renderers", () => {
 
   test("renders optional action and active-monitor fallbacks", () => {
     const context = { t: (key) => key };
-    const action = render(
-      SETTINGS_RENDERERS.action({ field: { label: "Fallback" }, context })
+    const action = render( SETTINGS_RENDERERS.action({ field: { label: "Fallback" }, context })
     );
     fireEvent.click(screen.getByText("Fallback"));
     action.unmount();
 
-    render(
-      SETTINGS_RENDERERS.monitor({
-        field: { label: "Monitor" },
-        context,
-        value: true
-      })
+    render( SETTINGS_RENDERERS.monitor({ field: { label: "Monitor" }, context, value: true })
     );
     fireEvent.click(screen.getByText("settings.audio.monitorOff"));
     expect(screen.getByRole("progressbar").value).toBe(0);

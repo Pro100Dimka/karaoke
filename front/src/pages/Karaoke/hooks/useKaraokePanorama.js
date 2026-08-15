@@ -21,9 +21,7 @@ export default function useKaraokePanorama(songId, isPlaying) {
     if (!songId || appliedSongRef.current === songId) return;
     appliedSongRef.current = songId;
 
-    if (!themeQueueRef.current.length) {
-      themeQueueRef.current = shuffleThemes();
-    }
+    if (!themeQueueRef.current.length) themeQueueRef.current = shuffleThemes();
 
     setActiveTheme(themeQueueRef.current.pop());
     clockRef.current = 0;

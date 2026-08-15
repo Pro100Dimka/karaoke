@@ -2,14 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const projectRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  ".."
+const projectRoot = path.resolve( path.dirname(fileURLToPath(import.meta.url)), ".."
 );
 const sourceRoot = path.join(projectRoot, "src");
-const sourceExtensions = new Set([".js", ".jsx", ".ts", ".tsx", ".css"]);
-const entryFiles = ["main.jsx", "index.css"].map((name) =>
-  path.join(sourceRoot, name)
+const sourceExtensions = [".js", ".jsx", ".ts", ".tsx", ".css"];
+const entryFiles = ["main.jsx", "index.css"].map((name) => path.join(sourceRoot, name)
 );
 
 function walk(directory) {
@@ -23,7 +20,7 @@ const sourceFiles = new Set(
   walk(sourceRoot)
     .filter(
       (filePath) =>
-        sourceExtensions.has(path.extname(filePath)) &&
+        sourceExtensions.includes(path.extname(filePath)) &&
         !path.relative(sourceRoot, filePath).startsWith(`theme${path.sep}`)
     )
     .map((filePath) => path.normalize(filePath))
@@ -100,8 +97,4 @@ if (unreachable.length) {
   console.error("Unreachable production source files:");
   unreachable.forEach((filePath) => console.error(`- ${filePath}`));
   process.exitCode = 1;
-} else {
-  console.log(
-    `All ${reachable.size} production source files are reachable from application entries.`
-  );
-}
+} else console.log( `All ${reachable.size} production source files are reachable from application entries.` );

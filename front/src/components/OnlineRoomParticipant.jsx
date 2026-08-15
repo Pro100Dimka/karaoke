@@ -27,11 +27,9 @@ export default function OnlineRoomParticipant({
     : person.micMuted;
   const activeSpeakingLevel = microphoneInactive ? 0 : rawLevel;
   const isSpeaking = activeSpeakingLevel > 0.08;
-  const microphoneLabel = t(
-    microphoneMuted ? "room.microphone.enable" : "room.microphone.disable"
+  const microphoneLabel = t( microphoneMuted ? "room.microphone.enable" : "room.microphone.disable"
   );
-  const applicationSoundLabel = t(
-    roomSoundMuted ? "room.sound.enable" : "room.sound.disable"
+  const applicationSoundLabel = t( roomSoundMuted ? "room.sound.enable" : "room.sound.disable"
   );
   const participantSoundLabel = isLocallyMuted
     ? t("room.person.enable", { name: person.name })
@@ -51,12 +49,9 @@ export default function OnlineRoomParticipant({
           className="online-room-speaking-meter"
           aria-label={t(
             isSpeaking ? "room.person.speaking" : "room.person.silent",
-            {
-              name: person.name
-            }
+            { name: person.name }
           )}
-          title={t(
-            isSpeaking ? "room.person.speakingNow" : "room.person.noSignal"
+          title={t( isSpeaking ? "room.person.speakingNow" : "room.person.noSignal"
           )}
         >
           {SPEAKING_THRESHOLDS.map((threshold) => (

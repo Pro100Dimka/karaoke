@@ -23,9 +23,7 @@ beforeEach(async () => {
   runtimeApi = client.api;
 });
 
-afterEach(() => {
-  delete globalThis.electronAPI;
-});
+afterEach(() => { delete globalThis.electronAPI; });
 
 const field = (section, name) =>
   config.SETTINGS[section].fields.find((item) => item.name === name);
@@ -49,15 +47,10 @@ const digest = (value) =>
 test("settings catalog exposes stable tabs, screens and options", () => {
   expect(Object.keys(config.SETTINGS)).toEqual(["appearance", "audio", "ai"]);
   expect(config.FULL).toBe(12);
-  expect(config.SETTINGS_TABS.map(({ id }) => id)).toEqual([
-    "appearance",
-    "audio",
-    "ai"
-  ]);
+  expect(config.SETTINGS_TABS.map(({ id }) => id)).toEqual([ "appearance", "audio", "ai" ]);
   expect(field("audio", "monitorLatencyHint")).toBeUndefined();
   expect(field("audio", "monitorInputDeviceId")).toBeUndefined();
-  expect(
-    config.SERVICE_SCREENS.every(({ id }) => config.SCREEN_BY_ID[id])
+  expect( config.SERVICE_SCREENS.every(({ id }) => config.SCREEN_BY_ID[id])
   ).toBe(true);
   expect(config.EMPTY_BROWSER_DEVICES).toEqual({ inputs: [], outputs: [] });
   expect(Object.isFrozen(config.EMPTY_BROWSER_DEVICES)).toBe(true);
@@ -67,11 +60,7 @@ test("radio and storage fields resolve runtime choices", async () => {
   const station = field("appearance", "stationId");
   expect(station.getOptions({ radio: null })).toEqual([]);
   expect(
-    station.getOptions({
-      radio: {
-        stations: [{ id: "one", name: "One", description: "Music" }]
-      }
-    })
+    station.getOptions({ radio: { stations: [{ id: "one", name: "One", description: "Music" }] } })
   ).toEqual([{ value: "one", label: "One", description: "Music" }]);
   expect(field("appearance", "volume").getLabel({ value: 0.42 })).toBe(
     `${translateSaved("Громкость")} · 42%`
@@ -128,20 +117,11 @@ test("audio action and monitor fields delegate to the audio controller", async (
   expect(monitor.isDisabled(missing)).toBeUndefined();
   expect(monitor.run(missing)).toBeUndefined();
 
-  expect(
-    monitor.isDisabled({
-      audio: { states: { saving: true, togglingMonitoring: false } }
-    })
+  expect( monitor.isDisabled({ audio: { states: { saving: true, togglingMonitoring: false } } })
   ).toBe(true);
-  expect(
-    monitor.isDisabled({
-      audio: { states: { saving: false, togglingMonitoring: true } }
-    })
+  expect( monitor.isDisabled({ audio: { states: { saving: false, togglingMonitoring: true } } })
   ).toBe(true);
-  expect(
-    monitor.isDisabled({
-      audio: { states: { saving: true, togglingMonitoring: true } }
-    })
+  expect( monitor.isDisabled({ audio: { states: { saving: true, togglingMonitoring: true } } })
   ).toBe(true);
 });
 
@@ -159,9 +139,7 @@ test("audio fields read the exact runtime option sources and labels", () => {
     Object.values(sources).map((source) => [source, [{ value: source }]])
   );
   for (const [name, source] of Object.entries(sources)) {
-    expect(field("audio", name).getOptions({ audio: { options } })).toEqual([
-      { value: source }
-    ]);
+    expect(field("audio", name).getOptions({ audio: { options } })).toEqual([ { value: source } ]);
   }
   expect(field("audio", "volume").getLabel({ value: 0.42 })).toBe(
     `${translateSaved("Громкость голоса")} · 42%`
@@ -169,15 +147,9 @@ test("audio fields read the exact runtime option sources and labels", () => {
 });
 
 test("settings field factories preserve their complete runtime contract", () => {
-  expect(settingsUtils.radioActions).toEqual({
-    stationId: "setStation",
-    volume: "setVolume"
-  });
-  expect(settingsUtils.opts([[1, "One"]])).toEqual([
-    { value: 1, label: "One" }
-  ]);
-  expect(settingsUtils.percent("Volume")({ value: 0.125 })).toBe(
-    "Volume · 13%"
+  expect(settingsUtils.radioActions).toEqual({ stationId: "setStation", volume: "setVolume" });
+  expect(settingsUtils.opts([[1, "One"]])).toEqual([ { value: 1, label: "One" } ]);
+  expect(settingsUtils.percent("Volume")({ value: 0.125 })).toBe( "Volume · 13%"
   );
   expect(settingsUtils.percent("Volume")({})).toBe("Volume · 0%");
 
@@ -207,17 +179,9 @@ test("settings field factories preserve their complete runtime contract", () => 
   expect(onFieldBlur).toHaveBeenCalledExactlyOnceWith("setting", "after");
 
   const factory = vi.fn((name, fieldConfig) => ({ name, ...fieldConfig }));
-  expect(
-    settingsUtils.fieldType(factory, "custom")("field", { extra: 1 })
-  ).toEqual({
-    name: "field",
-    type: "custom",
-    extra: 1
-  });
-  expect(factory).toHaveBeenCalledExactlyOnceWith("field", {
-    type: "custom",
-    extra: 1
-  });
+  expect( settingsUtils.fieldType(factory, "custom")("field", { extra: 1 })
+  ).toEqual({ name: "field", type: "custom", extra: 1 });
+  expect(factory).toHaveBeenCalledExactlyOnceWith("field", { type: "custom", extra: 1 });
 });
 
 test("settings runtime fields handle exact present and absent controller states", () => {
@@ -251,55 +215,37 @@ test("settings runtime fields handle exact present and absent controller states"
     options: [{ value: "default" }]
   });
   expect(preference.getValue({ audio: {} })).toBeUndefined();
-  expect(
-    preference.getValue({ audio: { preferences: { monitorInputDeviceId: "default" } } })
+  expect( preference.getValue({ audio: { preferences: { monitorInputDeviceId: "default" } } })
   ).toBe("default");
   preference.setValue({ audio: { updatePreference } }, "mic");
-  expect(updatePreference).toHaveBeenCalledExactlyOnceWith(
-    "monitorInputDeviceId",
-    "mic"
+  expect(updatePreference).toHaveBeenCalledExactlyOnceWith( "monitorInputDeviceId", "mic"
   );
 
   const dynamic = settingsUtils.audioSelect("device", "devices");
   expect(dynamic.type).toBe("select");
   expect(dynamic.getOptions({ audio: {} })).toEqual([]);
-  expect(
-    dynamic.getOptions({ audio: { options: { devices: [{ value: "mic" }] } } })
+  expect( dynamic.getOptions({ audio: { options: { devices: [{ value: "mic" }] } } })
   ).toEqual([{ value: "mic" }]);
 });
 
 test("settings predicates distinguish every controller state", () => {
   expect(settingsUtils.monitorDisabled({ audio: {} })).toBe(false);
   expect(settingsUtils.monitorDisabled({ audio: { states: {} } })).toBe(false);
-  expect(
-    settingsUtils.monitorDisabled({
-      audio: { states: { monitoringEnabled: true } }
-    })
+  expect( settingsUtils.monitorDisabled({ audio: { states: { monitoringEnabled: true } } })
   ).toBe(true);
   expect(settingsUtils.audioDriverVisible({ audio: {} })).toBe(false);
-  expect(settingsUtils.audioDriverVisible({ audio: { values: {} } })).toBe(
-    false
+  expect(settingsUtils.audioDriverVisible({ audio: { values: {} } })).toBe( false
   );
-  expect(
-    settingsUtils.audioDriverVisible({
-      audio: { values: { audio_driver: "asio" } }
-    })
+  expect( settingsUtils.audioDriverVisible({ audio: { values: { audio_driver: "asio" } } })
   ).toBe(true);
-  expect(
-    settingsUtils.audioDriverVisible({
-      audio: { values: { audio_driver: "wasapi" } }
-    })
+  expect( settingsUtils.audioDriverVisible({ audio: { values: { audio_driver: "wasapi" } } })
   ).toBe(false);
-  expect(settingsUtils.multipleAudioDriversAvailable({ audio: {} })).toBe(
-    false
+  expect(settingsUtils.multipleAudioDriversAvailable({ audio: {} })).toBe( false
   );
-  expect(
-    settingsUtils.multipleAudioDriversAvailable({ audio: { options: {} } })
+  expect( settingsUtils.multipleAudioDriversAvailable({ audio: { options: {} } })
   ).toBe(false);
   expect(
-    settingsUtils.multipleAudioDriversAvailable({
-      audio: { options: { audioDrivers: ["one"] } }
-    })
+    settingsUtils.multipleAudioDriversAvailable({ audio: { options: { audioDrivers: ["one"] } } })
   ).toBe(false);
   expect(
     settingsUtils.multipleAudioDriversAvailable({
@@ -308,15 +254,9 @@ test("settings predicates distinguish every controller state", () => {
   ).toBe(true);
   expect(settingsUtils.speakerPlaying({ audio: {} })).toBe(false);
   expect(settingsUtils.speakerPlaying({ audio: { states: {} } })).toBe(false);
-  expect(
-    settingsUtils.speakerPlaying({
-      audio: { states: { speakerTestState: "playing" } }
-    })
+  expect( settingsUtils.speakerPlaying({ audio: { states: { speakerTestState: "playing" } } })
   ).toBe(true);
-  expect(
-    settingsUtils.speakerPlaying({
-      audio: { states: { speakerTestState: "idle" } }
-    })
+  expect( settingsUtils.speakerPlaying({ audio: { states: { speakerTestState: "idle" } } })
   ).toBe(false);
 });
 
@@ -332,10 +272,7 @@ test("service-screen configuration has an exact static and runtime contract", ()
     "cuda_available",
     "torch_available"
   ]);
-  expect(Object.keys(screenConfigs.diagnostics.STATUS_ICONS)).toEqual([
-    "success",
-    "error"
-  ]);
+  expect(Object.keys(screenConfigs.diagnostics.STATUS_ICONS)).toEqual([ "success", "error" ]);
   expect(screenConfigs.history.HISTORY_COLUMNS).toEqual([
     "song",
     "action",
@@ -343,27 +280,17 @@ test("service-screen configuration has an exact static and runtime contract", ()
     "duration",
     "date"
   ]);
-  expect([...screenConfigs.history.HISTORY_ACTIONS]).toEqual([
-    "processing",
-    "recording"
-  ]);
-  expect([...screenConfigs.history.RECORDING_STATUSES]).toEqual([
-    "analyzed",
-    "recorded"
-  ]);
+  expect([...screenConfigs.history.HISTORY_ACTIONS]).toEqual([ "processing", "recording" ]);
+  expect([...screenConfigs.history.RECORDING_STATUSES]).toEqual([ "analyzed", "recorded" ]);
 
   const { MEMORY_ACTIONS: actions } = screenConfigs.memory;
   expect(actions[0][4]).toBe(runtimeApi.clearCache);
   expect(actions[1][4]).toBe(runtimeApi.deleteTemp);
   expect(actions[0][5]({ freed_bytes: 1024 ** 2 })).toBe(
-    translateSaved("Освобождено: {0}", {
-      0: translateSaved("{0} МБ", { 0: "1.0" })
-    })
+    translateSaved("Освобождено: {0}", { 0: translateSaved("{0} МБ", { 0: "1.0" }) })
   );
   expect(actions[1][5]({ freed_bytes: 2 * 1024 ** 2 })).toBe(
-    translateSaved("Удалено временных файлов: {0}", {
-      0: translateSaved("{0} МБ", { 0: "2.0" })
-    })
+    translateSaved("Удалено временных файлов: {0}", { 0: translateSaved("{0} МБ", { 0: "2.0" }) })
   );
 
   expect(
@@ -372,10 +299,7 @@ test("service-screen configuration has an exact static and runtime contract", ()
       { id: "optimized", title: "Optimized", status: "done", optimized: true },
       { id: "pending", title: "Pending", status: "pending" }
     ])
-  ).toEqual([
-    screenConfigs.memory.DEFAULT_OPTIMIZE_OPTION,
-    { value: "ready", label: "Ready" }
-  ]);
+  ).toEqual([ screenConfigs.memory.DEFAULT_OPTIMIZE_OPTION, { value: "ready", label: "Ready" } ]);
   expect(screenConfigs.memory.buildOptimizeOptions()).toEqual([
     screenConfigs.memory.DEFAULT_OPTIMIZE_OPTION
   ]);

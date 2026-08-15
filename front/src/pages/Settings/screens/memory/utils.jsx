@@ -10,8 +10,7 @@ export async function runMemoryAction({ request, getMessage, notify }) {
     await notify(getMessage(result));
     return true;
   } catch (error) {
-    await notify(
-      getErrorMessage(error, translateSaved("Не удалось выполнить действие"))
+    await notify( getErrorMessage(error, translateSaved("Не удалось выполнить действие"))
     );
     return false;
   }
@@ -22,10 +21,7 @@ export function MemoryStats({ size, free }) {
     ...(free
       ? [[
           translateSaved("Свободно на диске"),
-          translateSaved("{0} из {1}", {
-            0: free.free_human,
-            1: free.total_human
-          })
+          translateSaved("{0} из {1}", { 0: free.free_human, 1: free.total_human })
         ]]
       : [])
   ];
@@ -42,11 +38,7 @@ export function MemoryActions({ actions, notify }) {
             variant={variant === "ghost" ? "outline" : "solid"}
             tone="primary"
             onClick={() =>
-              runMemoryAction({
-                request,
-                getMessage,
-                notify
-              })
+              runMemoryAction({ request, getMessage, notify })
             }
           >
             {Icon && <Icon size={15} />}
@@ -70,9 +62,7 @@ export function OptimizeSong({ value, options, onChange, onOptimize }) {
       <Grid
         columns={2}
         gap="var(--space-3)"
-        sx={{
-          alignItems: "end"
-        }}
+        sx={{ alignItems: "end" }}
       >
         <Select
           label={translateSaved("Песня")}

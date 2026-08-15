@@ -29,9 +29,7 @@ export function OnlineRoomModal({ onlineName, onClose }) {
       else await room.joinRoom(normalizedRoomId, onlineName);
       if (mountedRef.current) onClose();
     } catch (connectError) {
-      if (mountedRef.current) {
-        setError(getErrorMessage(connectError, t("room.join.failed")));
-      }
+      if (mountedRef.current) setError(getErrorMessage(connectError, t("room.join.failed")));
     } finally {
       if (mountedRef.current) setBusy(false);
     }

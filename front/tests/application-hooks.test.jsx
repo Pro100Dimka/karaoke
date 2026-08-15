@@ -15,15 +15,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("react-router-dom", () => ({ useNavigate: () => mocks.navigate }));
-vi.mock("../src/contexts/OnlineRoomContext", () => ({
-  useOnlineRoom: mocks.useOnlineRoom
-}));
-vi.mock("../src/contexts/AppDialog", () => ({
-  useAppDialog: mocks.useAppDialog
-}));
-vi.mock("../src/hooks/useAppSettings", () => ({
-  default: mocks.useAppSettings
-}));
+vi.mock("../src/contexts/OnlineRoomContext", () => ({ useOnlineRoom: mocks.useOnlineRoom }));
+vi.mock("../src/contexts/AppDialog", () => ({ useAppDialog: mocks.useAppDialog }));
+vi.mock("../src/hooks/useAppSettings", () => ({ default: mocks.useAppSettings }));
 vi.mock("../src/hooks/usePolling", () => ({ usePolling: mocks.usePolling }));
 vi.mock("../src/api/client", () => ({
   api: {
@@ -73,10 +67,7 @@ describe("application hooks", () => {
   });
 
   test.each([
-    [
-      { type: "open-karaoke", songId: "song-1" },
-      ["/karaoke", { state: { songId: "song-1" } }]
-    ],
+    [ { type: "open-karaoke", songId: "song-1" }, ["/karaoke", { state: { songId: "song-1" } }] ],
     [{ type: "open-library" }, ["/"]]
   ])("routes room command %#", (roomCommand, expected) => {
     mocks.useOnlineRoom.mockReturnValue({ roomCommand });
@@ -85,9 +76,7 @@ describe("application hooks", () => {
   });
 
   test("ignores unknown or incomplete room commands", () => {
-    mocks.useOnlineRoom.mockReturnValue({
-      roomCommand: { type: "open-karaoke" }
-    });
+    mocks.useOnlineRoom.mockReturnValue({ roomCommand: { type: "open-karaoke" } });
     const hook = renderHook(() => useOnlineRoomNavigation());
     expect(mocks.navigate).not.toHaveBeenCalled();
     mocks.useOnlineRoom.mockReturnValue({ roomCommand: { type: "unknown" } });
@@ -99,18 +88,14 @@ describe("application hooks", () => {
     mocks.useOnlineRoom.mockReturnValue({ roomCommand: null });
     const hook = renderHook(() => useOnlineRoomNavigation());
     expect(mocks.navigate).not.toHaveBeenCalled();
-    mocks.useOnlineRoom.mockReturnValue({
-      roomCommand: { type: "open-library" }
-    });
+    mocks.useOnlineRoom.mockReturnValue({ roomCommand: { type: "open-library" } });
     hook.rerender();
     expect(mocks.navigate).toHaveBeenCalledWith("/");
   });
 
   test("shows the missing-name explanation once", async () => {
     const alert = vi.fn().mockRejectedValue(new Error("dialog closed"));
-    const onMissingName = vi.fn(() => {
-      throw new Error("navigation rejected");
-    });
+    const onMissingName = vi.fn(() => { throw new Error("navigation rejected"); });
     mocks.useAppDialog.mockReturnValue({ alert });
     mocks.useAppSettings.mockReturnValue({
       settings: { online_name: "  " },
@@ -136,11 +121,7 @@ describe("application hooks", () => {
 
   test.each([
     { settings: { online_name: "" }, isLoading: true, error: null },
-    {
-      settings: { online_name: "" },
-      isLoading: false,
-      error: new Error("offline")
-    },
+    { settings: { online_name: "" }, isLoading: false, error: new Error("offline") },
     { settings: null, isLoading: false, error: null },
     { settings: { online_name: "Singer" }, isLoading: false, error: null }
   ])("does not warn while a usable name cannot be required %#", (state) => {
@@ -154,18 +135,10 @@ describe("application hooks", () => {
   test("warns after loading and tolerates an absent callback and name field", async () => {
     const alert = vi.fn().mockResolvedValue(undefined);
     mocks.useAppDialog.mockReturnValue({ alert });
-    mocks.useAppSettings.mockReturnValue({
-      settings: {},
-      isLoading: true,
-      error: null
-    });
+    mocks.useAppSettings.mockReturnValue({ settings: {}, isLoading: true, error: null });
     const hook = renderHook(() => useRequireOnlineName({}));
     expect(alert).not.toHaveBeenCalled();
-    mocks.useAppSettings.mockReturnValue({
-      settings: {},
-      isLoading: false,
-      error: null
-    });
+    mocks.useAppSettings.mockReturnValue({ settings: {}, isLoading: false, error: null });
     hook.rerender();
     await act(async () => Promise.resolve());
     expect(alert).toHaveBeenCalledOnce();

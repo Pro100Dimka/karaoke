@@ -6,9 +6,7 @@ test.beforeEach(async ({ page }, testInfo) => {
   testInfo.errorsInPage = errors;
 });
 
-test.afterEach(async ({}, testInfo) => {
-  expect(testInfo.errorsInPage).toEqual([]);
-});
+test.afterEach(async ({}, testInfo) => { expect(testInfo.errorsInPage).toEqual([]); });
 
 test("library boots and remains interactive", async ({ page }) => {
   await page.goto("/");
@@ -36,9 +34,7 @@ test("song import enters the visible processing flow", async ({ page }) => {
   await expect(page.locator(".library-song-card")).toHaveCount(3);
 });
 
-test("room creation reaches a usable dock even without microphone access", async ({
-  page
-}) => {
+test("room creation reaches a usable dock even without microphone access", async ({ page }) => {
   await page.routeWebSocket(/karaoke-studio-online/, () => {});
   await page.goto("/");
   await page.locator(".library-action-card").first().click();
@@ -49,9 +45,7 @@ test("room creation reaches a usable dock even without microphone access", async
   await expect(page.locator(".online-room-dock-code")).not.toBeEmpty();
 });
 
-test("settings load persisted values and remain navigable", async ({
-  page
-}) => {
+test("settings load persisted values and remain navigable", async ({ page }) => {
   await page.goto("/");
   await page.locator(".app-floating-controls > .app-settings-fab").click();
   const dialog = page.locator('[role="dialog"]');
@@ -76,16 +70,13 @@ test("melody editor loads notes and supports selection", async ({ page }) => {
   await expect(editor).toBeVisible();
   await expect(editor.locator(".melody-editor-note")).toHaveCount(2);
   await editor.locator(".melody-editor-note").first().click();
-  await expect(editor.locator(".melody-editor-note.is-selected")).toHaveCount(
-    1
+  await expect(editor.locator(".melody-editor-note.is-selected")).toHaveCount( 1
   );
   await page.keyboard.press("Control+s");
   await expect(editor).toBeVisible();
 });
 
-test("melody editor persists a merged note across reopening", async ({
-  page
-}) => {
+test("melody editor persists a merged note across reopening", async ({ page }) => {
   const editorUrl = "/#/editor/e2e-merge-persistence";
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto(editorUrl);
@@ -95,8 +86,7 @@ test("melody editor persists a merged note across reopening", async ({
 
   await notes.first().click();
   await notes.last().click({ modifiers: ["Control"] });
-  await expect(editor.locator(".melody-editor-note.is-selected")).toHaveCount(
-    2
+  await expect(editor.locator(".melody-editor-note.is-selected")).toHaveCount( 2
   );
 
   const merge = editor
@@ -110,16 +100,13 @@ test("melody editor persists a merged note across reopening", async ({
     .locator(".melody-editor-tool-group.is-nav button")
     .nth(1)
     .click();
-  await expect(editor.locator(".melody-editor-note.is-selected")).toHaveCount(
-    0
+  await expect(editor.locator(".melody-editor-note.is-selected")).toHaveCount( 0
   );
   await editor
     .locator(".melody-editor-tool-group.is-nav button")
     .first()
     .click();
   await expect(page.locator(".app-shell")).toBeVisible();
-  await page.evaluate(() => {
-    window.location.hash = "/editor/e2e-merge-persistence";
-  });
+  await page.evaluate(() => { window.location.hash = "/editor/e2e-merge-persistence"; });
   await expect(page.locator(".melody-editor-note")).toHaveCount(1);
 });

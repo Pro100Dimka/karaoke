@@ -1,9 +1,7 @@
 export function getPanoramaPosition(elapsed, cycleMs, path) {
   const safeCycle = Number(cycleMs);
   const safeElapsed = Number(elapsed);
-  if (!Number.isFinite(safeCycle) || safeCycle <= 0) {
-    return { x: 0, y: 48 };
-  }
+  if (!Number.isFinite(safeCycle) || safeCycle <= 0) return { x: 0, y: 48 };
 
   const phases = path || {};
   const theta =

@@ -1,10 +1,7 @@
 import { useEffect } from "react";
 import LibraryWaveTerrain from "./wave-terrain";
 
-const MUSIC_DECOR = [
-  ["record", 4],
-  ["notes", 18]
-];
+const MUSIC_DECOR = [ ["record", 4], ["notes", 18] ];
 
 function MusicObject({ type, parts }) {
   return (
@@ -100,9 +97,7 @@ export default function LibraryBackdrop() {
         <i />
       </div>
       <div className="library-music-decor">
-        {MUSIC_DECOR.map(([type, parts]) => (
-          <MusicObject key={type} type={type} parts={parts} />
-        ))}
+        {MUSIC_DECOR.map(([type, parts]) => ( <MusicObject key={type} type={type} parts={parts} /> ))}
       </div>
       <LibraryWaveTerrain />
     </div>

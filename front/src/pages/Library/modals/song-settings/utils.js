@@ -22,9 +22,7 @@ export function validateSongSettings(form) {
   const title = normalizeText(form?.title);
   if (!title) return translateSaved("Укажите название песни.");
   const tempo = normalizeNullableNumber(form.tempo_override);
-  if (tempo != null && tempo <= 0) {
-    return translateSaved("Темп должен быть больше 0 BPM.");
-  }
+  if (tempo != null && tempo <= 0) return translateSaved("Темп должен быть больше 0 BPM.");
   const minNote = normalizeMidiNote(form.note_range_min);
   const maxNote = normalizeMidiNote(form.note_range_max);
   if (maxNote != null && minNote > maxNote) {

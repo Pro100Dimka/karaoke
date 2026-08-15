@@ -21,19 +21,11 @@ function mapDeviceOptions(devices, getValue, fallbackLabel) {
       return true;
     });
 }
-export function createIndexedDeviceOptions(
-  devices,
-  defaultLabel = translateSaved("По умолчанию")
+export function createIndexedDeviceOptions( devices, defaultLabel = translateSaved("По умолчанию")
 ) {
   return [
-    {
-      value: "",
-      label: defaultLabel
-    },
-    ...mapDeviceOptions(
-      devices,
-      (device) => device.index,
-      translateSaved("Устройство")
+    { value: "", label: defaultLabel },
+    ...mapDeviceOptions( devices, (device) => device.index, translateSaved("Устройство")
     )
   ];
 }
@@ -43,10 +35,7 @@ export function createBrowserDeviceOptions(
   defaultLabel = translateSaved("Системное по умолчанию")
 ) {
   return [
-    {
-      value: "default",
-      label: defaultLabel
-    },
+    { value: "default", label: defaultLabel },
     ...mapDeviceOptions(devices, (device) => device.deviceId, fallbackLabel)
   ];
 }

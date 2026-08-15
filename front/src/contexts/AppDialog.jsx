@@ -11,11 +11,7 @@ import {
 import { Button } from "../components/fields";
 import Modal from "../components/modal";
 import { translateSaved } from "../i18n/runtime";
-import {
-  createDialogConfig,
-  getDialogCloseResult,
-  normalizeDialogOptions
-} from "./dialog-utils";
+import { createDialogConfig, getDialogCloseResult, normalizeDialogOptions } from "./dialog-utils";
 
 const DialogContext = createContext(null);
 export function resolveDialog(dialog, result) {
@@ -81,13 +77,8 @@ export function AppDialogProvider({ children }) {
   const openDialog = useCallback((kind, message, options = {}) => {
     return new Promise((resolve) => {
       const previousDialog = activeDialogRef.current;
-      if (previousDialog) {
-        previousDialog.resolve(getDialogCloseResult(previousDialog.kind));
-      }
-      const nextDialog = {
-        ...createDialogConfig(kind, message, options),
-        resolve
-      };
+      if (previousDialog) previousDialog.resolve(getDialogCloseResult(previousDialog.kind));
+      const nextDialog = { ...createDialogConfig(kind, message, options), resolve };
       activeDialogRef.current = nextDialog;
       setDialog(nextDialog);
     });
@@ -118,19 +109,14 @@ export function AppDialogProvider({ children }) {
   useEffect(() => {
     return () => {
       const activeDialog = activeDialogRef.current;
-      if (!activeDialog) {
-        return;
-      }
+      if (!activeDialog) return;
       activeDialogRef.current = null;
       activeDialog.resolve(getDialogCloseResult(activeDialog.kind));
     };
   }, []);
   // Stryker restore ArrayDeclaration
   const contextValue = useMemo(
-    () => ({
-      alert,
-      confirm
-    }),
+    () => ({ alert, confirm }),
     // alert/confirm are stable provider callbacks.
     // Stryker disable next-line ArrayDeclaration
     [alert, confirm]
@@ -146,10 +132,7 @@ export function AppDialogProvider({ children }) {
 export function useAppDialog() {
   const context = useContext(DialogContext);
   if (!context) {
-    throw new Error(
-      translateSaved(
-        "useAppDialog должен использоваться внутри AppDialogProvider"
-      )
+    throw new Error( translateSaved( "useAppDialog должен использоваться внутри AppDialogProvider" )
     );
   }
   return context;

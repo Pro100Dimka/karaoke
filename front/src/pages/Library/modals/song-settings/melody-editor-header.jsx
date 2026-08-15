@@ -1,11 +1,6 @@
 import { translateSaved } from "../../../../i18n/runtime";
 
-export default function MelodyEditorHeader({
-  duration,
-  selectedCount,
-  songTitle,
-  time
-}) {
+export default function MelodyEditorHeader({ duration, selectedCount, songTitle, time }) {
   return (
     <header className="melody-editor-header">
       <div className="melody-editor-title-block">

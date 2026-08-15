@@ -1,5 +1,4 @@
 /* @vitest-environment jsdom */
-import React from "react";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -38,8 +37,7 @@ afterEach(cleanup);
 
 test("effect dial supports range, wheel and pointer dragging with clamping", () => {
   const change = vi.fn();
-  const result = render(
-    <EffectDial label="Echo" value={0.5} onChange={change} />
+  const result = render( <EffectDial label="Echo" value={0.5} onChange={change} />
   );
   const { container, getByLabelText } = result;
   const dial = container.querySelector("label");
@@ -89,12 +87,7 @@ test("mixer changes and commits volumes and effects", () => {
     <MixerPanel
       microphoneLevel={2}
       volumes={{ microphone: 0.4, music: 0.5, vocal: 0.6, melody: 0.7 }}
-      onVolumeChange={{
-        microphone,
-        music: vi.fn(),
-        vocal: vi.fn(),
-        melody: vi.fn()
-      }}
+      onVolumeChange={{ microphone, music: vi.fn(), vocal: vi.fn(), melody: vi.fn() }}
       onMicrophoneCommit={commit}
       microphoneEffects={{ echo: 0.1, reverb: 0.2, delay: 0.3 }}
       onEffectChange={effect}
@@ -115,12 +108,7 @@ test("mixer changes and commits volumes and effects", () => {
     <MixerPanel
       microphoneLevel={0}
       volumes={{}}
-      onVolumeChange={{
-        microphone: vi.fn(),
-        music: vi.fn(),
-        vocal: vi.fn(),
-        melody: vi.fn()
-      }}
+      onVolumeChange={{ microphone: vi.fn(), music: vi.fn(), vocal: vi.fn(), melody: vi.fn() }}
       microphoneEffects={{}}
       onEffectChange={vi.fn()}
     />

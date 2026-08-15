@@ -21,12 +21,7 @@ import useMicrophoneSettings from "./hooks/useMicrophoneSettings";
 import usePitchDetection from "./hooks/usePitchDetection";
 import KaraokeLoadState from "./karaoke-load-state";
 import KaraokeView from "./karaoke-view";
-import {
-  getYouTubeVideoId,
-  normalizeLyrics,
-  normalizeNotes,
-  transposeKey
-} from "./utils/data";
+import { getYouTubeVideoId, normalizeLyrics, normalizeNotes, transposeKey } from "./utils/data";
 import { formatCompactKey } from "./utils/display";
 import { getLyricDisplayState } from "./utils/lyrics";
 import { getMicrophoneLevel } from "./utils/transport";
@@ -57,11 +52,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   const song = songId
     ? (songs || []).find((s) => s.id === songId)
     : (songs || []).find((s) => s.status === "done");
-  const {
-    result,
-    loading: resultLoading,
-    error: resultError
-  } = useKaraokeResult(song);
+  const { result, loading: resultLoading, error: resultError } = useKaraokeResult(song);
   const instrumentalRef = useRef(null);
   const vocalsRef = useRef(null);
   const videoRef = useRef(null);
@@ -119,9 +110,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   }, [isPlaying, recordingSessionId, setRecordingActive]);
   const autoStartRequested = Boolean(location.state?.autoPlay);
   const { controlsVisible, hideControls, revealControls, showControls } =
-    useKaraokeControls({
-      autoHideEnabled: autoHideConsole
-    });
+    useKaraokeControls({ autoHideEnabled: autoHideConsole });
   const currentTimeRef = useRef(currentTime);
   const durationRef = useRef(duration);
   const browserMonitorRef = useRef(null);
@@ -144,16 +133,8 @@ export default function Karaoke({ onOpenAppSettings }) {
     []
   );
   const microphoneLevel = getMicrophoneLevel(signal);
-  const microphoneSettings = useMicrophoneSettings({
-    audioSettings,
-    onError: setRecordingError
-  });
-  const {
-    microphoneVolume,
-    setMicrophoneVolume,
-    microphoneEffects,
-    setMicrophoneEffects
-  } = microphoneSettings;
+  const microphoneSettings = useMicrophoneSettings({ audioSettings, onError: setRecordingError });
+  const { microphoneVolume, setMicrophoneVolume, microphoneEffects, setMicrophoneEffects } = microphoneSettings;
   useEffect(() => {
     if (!onlineRoomState) return;
     syncRoomUi({ participantEffects: microphoneEffects });
@@ -178,11 +159,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     videoRef,
     vocalsRef
   });
-  useEffect(() => {
-    setIsPlaying(false);
-    setCurrentTime(0);
-    setDuration(0);
-  }, [song?.id]);
+  useEffect(() => { setIsPlaying(false); setCurrentTime(0); setDuration(0); }, [song?.id]);
 
   // songMap.json is the single ready-to-render karaoke contract produced by
   // the backend.  Do not rebuild word/syllable/note timing in the browser.
@@ -204,21 +181,14 @@ export default function Karaoke({ onOpenAppSettings }) {
     [songMap, result]
   );
   const { startMelodyGuide, updateMelodyGuide, silenceMelodyGuide } =
-    useMelodyGuide({
-      notes,
-      volume: melodyVolume,
-      keyShift,
-      currentTimeRef
-    });
+    useMelodyGuide({ notes, volume: melodyVolume, keyShift, currentTimeRef });
   const youTubeVideoId = getYouTubeVideoId(song?.video_url);
 
   // Lyrics and melody use the same instrumental clock.  A former global
   // "anchor" delay shifted every word by up to half a second even when the
   // word-level alignment was already correct for the current song.
   const lyricTime = currentTime;
-  const { currentLine, upcomingLine, nextLine } = getLyricDisplayState(
-    lyrics,
-    lyricTime
+  const { currentLine, upcomingLine, nextLine } = getLyricDisplayState( lyrics, lyricTime
   );
   const { sendYouTubeCommand, syncSecondaryMedia } = useKaraokeMediaSync({
     browserMonitorRef,
@@ -245,12 +215,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     youTubeClipRef
   });
   const { sungMidi, isPitchDetected, isPitchAttacking, pitchRestProgress } =
-    usePitchDetection({
-      browserMonitorRef,
-      isPlaying,
-      monitorInputDeviceId,
-      monitoringEnabled
-    });
+    usePitchDetection({ browserMonitorRef, isPlaying, monitorInputDeviceId, monitoringEnabled });
   const { returnToLibrary, seekTo, skip, stop, togglePlay } =
     useKaraokeTransport({
       currentTime,
@@ -353,11 +318,7 @@ export default function Karaoke({ onOpenAppSettings }) {
       echo: preset.echo,
       delay: preset.delay
     }));
-    updateMicrophone({
-      reverb: preset.reverb,
-      echo: preset.echo,
-      delay: preset.delay
-    });
+    updateMicrophone({ reverb: preset.reverb, echo: preset.echo, delay: preset.delay });
   };
   const handleAnalysisClose = () => {
     updateAnalysisRecordingId(null);
@@ -378,8 +339,7 @@ export default function Karaoke({ onOpenAppSettings }) {
       const action = enabled ? api.startDirectMonitoring : api.stopDirectMonitoring;
       const updated = await action();
       setMonitoringEnabled(Boolean(updated?.monitoring_enabled));
-      globalThis.dispatchEvent?.(
-        new CustomEvent("audio-settings-changed", { detail: updated })
+      globalThis.dispatchEvent?.( new CustomEvent("audio-settings-changed", { detail: updated })
       );
     } catch (error) {
       setRecordingError(

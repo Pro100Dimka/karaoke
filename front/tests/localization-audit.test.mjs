@@ -6,8 +6,7 @@ import { violationsFor } from "../scripts/audit-localization.mjs";
 
 const directories = [];
 const inspect = (source) => {
-  const directory = fs.mkdtempSync(
-    path.join(os.tmpdir(), "localization-audit-")
+  const directory = fs.mkdtempSync( path.join(os.tmpdir(), "localization-audit-")
   );
   directories.push(directory);
   const file = path.join(directory, "fixture.jsx");
@@ -18,8 +17,7 @@ const inspect = (source) => {
 afterEach(() => {
   directories
     .splice(0)
-    .forEach((directory) =>
-      fs.rmSync(directory, { force: true, recursive: true })
+    .forEach((directory) => fs.rmSync(directory, { force: true, recursive: true })
     );
 });
 

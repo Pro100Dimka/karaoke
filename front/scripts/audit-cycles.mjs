@@ -22,14 +22,12 @@ function resolveImport(fromFile, specifier) {
     ...extensions.map((extension) => path.join(base, `index${extension}`))
   ];
   return (
-    candidates.find(
-      (candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile()
+    candidates.find( (candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile()
     ) ?? null
   );
 }
 
-const files = walk(srcRoot).filter((file) =>
-  extensions.includes(path.extname(file))
+const files = walk(srcRoot).filter((file) => extensions.includes(path.extname(file))
 );
 const graph = new Map(files.map((file) => [file, []]));
 const importPattern =
@@ -51,13 +49,11 @@ const cycles = new Set();
 function visit(file) {
   if (visiting.has(file)) {
     const start = stack.indexOf(file);
-    const cycle = [...stack.slice(start), file].map((item) =>
-      path.relative(root, item)
+    const cycle = [...stack.slice(start), file].map((item) => path.relative(root, item)
     );
     const rotations = cycle
       .slice(0, -1)
-      .map((_, index, items) =>
-        [...items.slice(index), ...items.slice(0, index)].join(" -> ")
+      .map((_, index, items) => [...items.slice(index), ...items.slice(0, index)].join(" -> ")
       );
     cycles.add(rotations.sort()[0]);
     return;
@@ -78,6 +74,4 @@ if (cycles.size) {
   console.error(`Circular dependencies found: ${cycles.size}`);
   for (const cycle of cycles) console.error(`- ${cycle}`);
   process.exitCode = 1;
-} else {
-  console.log("No circular dependencies found.");
-}
+} else console.log("No circular dependencies found.");

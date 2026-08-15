@@ -10,13 +10,7 @@ import {
   Square
 } from "lucide-react";
 import { translateSaved } from "../../../../i18n/runtime";
-import {
-  Button,
-  Card,
-  IconButton,
-  Stack,
-  Typography
-} from "../../../../theme/ui";
+import { Button, Card, IconButton, Stack, Typography } from "../../../../theme/ui";
 import { clamp } from "./utils";
 
 const CONTROL_ACCENTS = {
@@ -93,18 +87,13 @@ function PerformanceCard({
         boxShadow:
           "0 0 0.85rem color-mix(in srgb, var(--control-accent) 9%, transparent)"
       }}
-      style={{
-        "--control-accent": accent
-      }}
+      style={{ "--control-accent": accent }}
     >
       <Stack
         gap={0.75}
         align="center"
         justify="center"
-        sx={{
-          justifyContent: "space-between",
-          height: "100%"
-        }}
+        sx={{ justifyContent: "space-between", height: "100%" }}
       >
         <Typography
           variant="caption"
@@ -124,9 +113,7 @@ function PerformanceCard({
           align="center"
           justify="space-between"
           gap={0.75}
-          sx={{
-            width: "100%"
-          }}
+          sx={{ width: "100%" }}
         >
           {onDecrease ? (
             <StepButton
@@ -137,9 +124,7 @@ function PerformanceCard({
             />
           ) : (
             <span
-              style={{
-                width: 32
-              }}
+              style={{ width: 32 }}
             />
           )}
 
@@ -167,9 +152,7 @@ function PerformanceCard({
             />
           ) : (
             <span
-              style={{
-                width: 32
-              }}
+              style={{ width: 32 }}
             />
           )}
         </Stack>
@@ -191,9 +174,7 @@ function PerformanceControls({
       direction="row"
       gap={1}
       align="stretch"
-      sx={{
-        width: "100%"
-      }}
+      sx={{ width: "100%" }}
     >
       <PerformanceCard
         label={translateSaved("Темп")}
@@ -272,9 +253,7 @@ function PlayButton({ isPlaying, onClick }) {
         <Play
           size={27}
           strokeWidth={2.1}
-          style={{
-            marginInlineStart: 2
-          }}
+          style={{ marginInlineStart: 2 }}
         />
       )}
     </Button>

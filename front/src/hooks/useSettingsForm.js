@@ -3,11 +3,7 @@ import { api } from "../api/client";
 import { translateSaved } from "../i18n/runtime";
 import { getErrorMessage } from "../utils/errors";
 import { applyTheme } from "../utils/theme";
-import {
-  mergeSettings,
-  prepareSettingValue,
-  resolveSavedSetting
-} from "./settings-form-utils";
+import { mergeSettings, prepareSettingValue, resolveSavedSetting } from "./settings-form-utils";
 import useAppSettings from "./useAppSettings";
 import useAsyncQueue from "./useAsyncQueue";
 import useLatestRef from "./useLatestRef";
@@ -44,15 +40,11 @@ export default function useSettingsForm(notify) {
       let active = true;
       api
         .getAppSettings()
-        .then((settings) => {
-          setForm(settings);
-        })
+        .then((settings) => { setForm(settings); })
         .catch((error) => {
           if (active) {
             notifyRef.current(
-              translateSaved("Не удалось загрузить настройки: {0}", {
-                0: getErrorMessage(error)
-              })
+              translateSaved("Не удалось загрузить настройки: {0}", { 0: getErrorMessage(error) })
             );
           }
         });
@@ -63,27 +55,15 @@ export default function useSettingsForm(notify) {
     // Stryker disable next-line ArrayDeclaration: stable latest-value ref.
     [notifyRef]
   );
-  useEffect(() => {
-    if (form?.theme) {
-      applyTheme(form.theme);
-    }
-  }, [form?.theme]);
+  useEffect(() => { if (form?.theme) applyTheme(form.theme); }, [form?.theme]);
   const updateField = (name, value) => {
     setSaveStatus("idle");
-    setForm((current) => ({
-      ...current,
-      [name]: value
-    }));
+    setForm((current) => ({ ...current, [name]: value }));
 
     // Keep the global settings context in sync with fields that affect the
     // whole application immediately. LibraryHero and other screens read the
     // theme from AppSettingsContext, not from this page-local form.
-    if (name === "theme") {
-      updateAppSettings((current) => ({
-        ...current,
-        theme: value
-      }));
-    }
+    if (name === "theme") updateAppSettings((current) => ({ ...current, theme: value }));
   };
   const save = () => {
     if (!form) return Promise.resolve();
@@ -104,9 +84,7 @@ export default function useSettingsForm(notify) {
         if (requestToken !== saveRequestRef.current) return;
         failed = true;
         await notifyRef.current(
-          translateSaved("Не удалось сохранить: {0}", {
-            0: getErrorMessage(error)
-          })
+          translateSaved("Не удалось сохранить: {0}", { 0: getErrorMessage(error) })
         );
       } finally {
         finishSave(requestToken, failed);
@@ -120,29 +98,19 @@ export default function useSettingsForm(notify) {
     return queueSave(async () => {
       let failed = false;
       try {
-        const updated = await api.updateAppSettings({
-          [name]: preparedValue
-        });
+        const updated = await api.updateAppSettings({ [name]: preparedValue });
         // Stryker disable next-line ConditionalExpression: post-unmount update is inert.
         if (!mountedRef.current) return;
         if (fieldRequestRef.current.get(name) !== requestToken) return;
         const savedValue = resolveSavedSetting(updated, name, preparedValue);
-        setForm((current) => ({
-          ...current,
-          [name]: savedValue
-        }));
-        updateAppSettings((current) => ({
-          ...current,
-          [name]: savedValue
-        }));
+        setForm((current) => ({ ...current, [name]: savedValue }));
+        updateAppSettings((current) => ({ ...current, [name]: savedValue }));
       } catch (error) {
         if (!mountedRef.current) return;
         if (fieldRequestRef.current.get(name) !== requestToken) return;
         failed = true;
         await notifyRef.current(
-          translateSaved("Не удалось сохранить настройку: {0}", {
-            0: getErrorMessage(error)
-          })
+          translateSaved("Не удалось сохранить настройку: {0}", { 0: getErrorMessage(error) })
         );
       } finally {
         finishSave(requestToken, failed);

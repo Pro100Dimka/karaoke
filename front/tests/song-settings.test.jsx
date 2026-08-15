@@ -1,12 +1,5 @@
 /* @vitest-environment jsdom */
-import React from "react";
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  waitFor
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -17,15 +10,11 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn()
 }));
 vi.mock("react-router-dom", () => ({ useNavigate: () => mocks.navigate }));
-vi.mock("../src/contexts/AppDialog", () => ({
-  useAppDialog: () => ({ alert: mocks.notify })
-}));
+vi.mock("../src/contexts/AppDialog", () => ({ useAppDialog: () => ({ alert: mocks.notify }) }));
 vi.mock("../src/hooks/usePolling", () => ({
   usePolling: () => ({ refresh: mocks.refresh, ...mocks.poll })
 }));
-vi.mock("../src/api/client", () => ({
-  api: { listSongs: vi.fn(), updateSong: mocks.updateSong }
-}));
+vi.mock("../src/api/client", () => ({ api: { listSongs: vi.fn(), updateSong: mocks.updateSong } }));
 vi.mock("../src/components/modal", () => ({
   default: ({ children, titleProps }) => (
     <section>
@@ -85,18 +74,12 @@ describe("song settings", () => {
   test("edits, validates and saves song fields", async () => {
     const result = render(<SongSettings songId="song" onClose={vi.fn()} />);
     await waitFor(() => expect(result.getByTestId("form")).not.toBeNull());
-    fireEvent.change(result.getByLabelText("title"), {
-      target: { value: "New title" }
-    });
+    fireEvent.change(result.getByLabelText("title"), { target: { value: "New title" } });
     const numericFields = result.container.querySelectorAll(
       '[data-testid="form"] input:not([aria-label="title"])'
     );
-    fireEvent.change(numericFields[0], {
-      target: { value: "48" }
-    });
-    fireEvent.change(numericFields[1], {
-      target: { value: "72" }
-    });
+    fireEvent.change(numericFields[0], { target: { value: "48" } });
+    fireEvent.change(numericFields[1], { target: { value: "72" } });
     fireEvent.change(numericFields[0], { target: { value: "" } });
     fireEvent.change(numericFields[0], { target: { value: "48" } });
     const save = result.container.querySelector(".modal-title-action");
@@ -147,20 +130,14 @@ describe("song settings", () => {
     fireEvent.click(result.container.querySelector(".modal-title-action"));
     await waitFor(() => expect(mocks.notify).toHaveBeenCalled());
     mocks.updateSong.mockRejectedValueOnce(new Error("save failed"));
-    fireEvent.change(result.getByLabelText("title"), {
-      target: { value: "Valid" }
-    });
+    fireEvent.change(result.getByLabelText("title"), { target: { value: "Valid" } });
     fireEvent.click(result.container.querySelector(".modal-title-action"));
-    await waitFor(() =>
-      expect(mocks.notify.mock.calls.at(-1)[0]).toContain("save failed")
+    await waitFor(() => expect(mocks.notify.mock.calls.at(-1)[0]).toContain("save failed")
     );
   });
 
   test("accepts a successful save without a response payload", async () => {
-    mocks.poll = {
-      data: [{ ...song, note_range_max: null }],
-      error: null
-    };
+    mocks.poll = { data: [{ ...song, note_range_max: null }], error: null };
     mocks.updateSong.mockResolvedValueOnce(null);
     const result = render(<SongSettings songId="song" />);
     await waitFor(() => expect(result.getByTestId("form")).not.toBeNull());

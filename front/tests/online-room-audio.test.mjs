@@ -11,10 +11,7 @@ test("closes the participant notification AudioContext when playback actually en
   const oscillators = [];
   const close = vi.fn().mockResolvedValue(undefined);
   const gain = {
-    gain: {
-      setValueAtTime: vi.fn(),
-      exponentialRampToValueAtTime: vi.fn()
-    },
+    gain: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
     connect: vi.fn()
   };
 

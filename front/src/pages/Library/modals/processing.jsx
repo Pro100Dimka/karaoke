@@ -11,13 +11,7 @@ function getVisibleProgress(progress, active, done) {
   return active ? Math.max(1, progress) : progress;
 }
 
-export default function ProcessingModal({
-  song,
-  status,
-  onCancel,
-  onClose,
-  onOpenKaraoke
-}) {
+export default function ProcessingModal({ song, status, onCancel, onClose, onOpenKaraoke }) {
   if (!song) return null;
   const currentStatus = status?.status ?? song.status;
   const progress = getProcessingProgress(status, song);
@@ -34,9 +28,7 @@ export default function ProcessingModal({
             translateSaved("Открыть"),
             "primary",
             () => onOpenKaraoke(song.id),
-            {
-              fill: "currentColor"
-            }
+            { fill: "currentColor" }
           ]
         ]
       : [])
@@ -45,16 +37,13 @@ export default function ProcessingModal({
     <Modal
       isOpen
       onClose={onClose}
-      ariaLabel={translateSaved("Обработка песни {0}", {
-        0: song.title
-      })}
+      ariaLabel={translateSaved("Обработка песни {0}", { 0: song.title })}
       modalClassName="processing-modal"
       titleProps={{
         icon: CircleDot,
         eyebrow: translateSaved("ОБРАБОТКА ПЕСНИ"),
         title: song.title,
-        description: translateSaved(
-          "Следите за этапами подготовки и управляйте обработкой песни."
+        description: translateSaved( "Следите за этапами подготовки и управляйте обработкой песни."
         ),
         actions: actions.map(([Icon, text, variant, onClick, iconProps]) => (
           <Button
@@ -86,10 +75,7 @@ export default function ProcessingModal({
           </span>
           {active && (
             <strong
-              style={{
-                textAlign: "right",
-                width: "100%"
-              }}
+              style={{ textAlign: "right", width: "100%" }}
             >
               {translateSaved("Осталось:")}
               {formatEta(status?.eta_seconds)}

@@ -16,20 +16,11 @@ function VerticalSlider({ label, value, color, onChange, onCommit }) {
   return (
     <Stack
       gap={0.45}
-      sx={{
-        userSelect: "none",
-        width: "auto"
-      }}
+      sx={{ userSelect: "none", width: "auto" }}
     >
       <Typography
         variant="caption"
-        sx={{
-          color,
-          fontSize: 10.5,
-          fontWeight: 800,
-          lineHeight: 1,
-          whiteSpace: "nowrap"
-        }}
+        sx={{ color, fontSize: 10.5, fontWeight: 800, lineHeight: 1, whiteSpace: "nowrap" }}
       >
         {label}
       </Typography>
@@ -113,12 +104,7 @@ function VerticalSlider({ label, value, color, onChange, onCommit }) {
 
       <Typography
         variant="caption"
-        sx={{
-          color,
-          fontSize: 10,
-          fontWeight: 800,
-          lineHeight: 1
-        }}
+        sx={{ color, fontSize: 10, fontWeight: 800, lineHeight: 1 }}
       >
         {percent}%
       </Typography>
@@ -137,20 +123,13 @@ export default function MixerPanel({
   return (
     <Stack
       gap="1rem"
-      style={{
-        "--microphone-level": level
-      }}
+      style={{ "--microphone-level": level }}
     >
       <Stack direction="row" align="center" gap={0.4}>
         <Mic size={15} strokeWidth={2.2} />
         <Typography
           variant="caption"
-          sx={{
-            color: "var(--color-text)",
-            fontSize: 11.5,
-            fontWeight: 850,
-            lineHeight: 1
-          }}
+          sx={{ color: "var(--color-text)", fontSize: 11.5, fontWeight: 850, lineHeight: 1 }}
         >
           {translateSaved("Микшер")}
         </Typography>

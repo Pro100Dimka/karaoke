@@ -2,9 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { setGlobalRouteBlackout } from "../../../utils/route-blackout";
 
 const waitForScene = (milliseconds) =>
-  new Promise((resolve) => {
-    window.setTimeout(resolve, milliseconds);
-  });
+  new Promise((resolve) => { window.setTimeout(resolve, milliseconds); });
 
 const waitForMediaReady = (element) => {
   if (!element || element.readyState >= 3) return Promise.resolve();
@@ -129,12 +127,7 @@ export default function useKaraokeSceneFlow({
       if (started) hasStartedPlaybackRef.current = true;
       return started;
     });
-  }, [
-    isRadioPlaying,
-    runIntroTransition,
-    togglePlay,
-    turnOffRadio
-  ]);
+  }, [ isRadioPlaying, runIntroTransition, togglePlay, turnOffRadio ]);
 
   const handleTogglePlay = useCallback(async () => {
     if (isPlaying) {
@@ -163,10 +156,7 @@ export default function useKaraokeSceneFlow({
     (analysisId = null) => {
       navigate("/", {
         replace: true,
-        state: {
-          fromKaraokeFade: true,
-          analysisRecordingId: analysisId || null
-        }
+        state: { fromKaraokeFade: true, analysisRecordingId: analysisId || null }
       });
     },
     [navigate]

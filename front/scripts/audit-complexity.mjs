@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const srcRoot = path.join(root, "src");
-const extensions = new Set([".js", ".jsx"]);
+const extensions = [".js", ".jsx"];
 
 function walk(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -18,8 +18,7 @@ function walk(directory) {
 }
 
 const reports = [];
-for (const file of walk(srcRoot).filter((item) =>
-  extensions.has(path.extname(item))
+for (const file of walk(srcRoot).filter((item) => extensions.includes(path.extname(item))
 )) {
   const source = fs.readFileSync(file, "utf8");
   const lines = source.split(/\r?\n/);
@@ -47,9 +46,7 @@ for (const file of walk(srcRoot).filter((item) =>
   }
 }
 
-if (!reports.length) {
-  console.log("No high-complexity files detected by the current thresholds.");
-} else {
+if (!reports.length) console.log("No high-complexity files detected by the current thresholds."); else {
   console.log("Complexity review candidates (informational only):");
   for (const report of reports.sort((a, b) => b.lines - a.lines)) {
     console.log(

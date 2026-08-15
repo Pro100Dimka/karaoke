@@ -4,11 +4,7 @@ import MixerPanel from "./mixer";
 import SongStrip from "./song-strip";
 import ToolsPanel from "./tools";
 
-export default function KaraokeConsole({
-  autoHideEnabled,
-  onAutoHideChange,
-  ...props
-}) {
+export default function KaraokeConsole({ autoHideEnabled, onAutoHideChange, ...props }) {
   return (
     <Stack
       className="karaoke-transport-area"

@@ -57,11 +57,7 @@ export function getMelodyRange({
   const minMidi = Math.floor(sourceMin) - 2;
   const maxMidi = Math.ceil(sourceMax) + 2;
 
-  return {
-    minMidi,
-    maxMidi,
-    pitchRange: Math.max(1, maxMidi - minMidi + 1)
-  };
+  return { minMidi, maxMidi, pitchRange: Math.max(1, maxMidi - minMidi + 1) };
 }
 
 export function getVisibleNotes(notes, viewStart, viewEnd) {
@@ -89,8 +85,7 @@ export function getMelodyCue({ notes, currentTime, keyShift = 0 }) {
   const safeTime = Number.isFinite(time) ? time : 0;
   const safeShift = Number.isFinite(shift) ? shift : 0;
   const safeNotes = normalizeNoteList(notes);
-  const activeNote = safeNotes.find(
-    (note) => safeTime >= note.start && safeTime < note.end
+  const activeNote = safeNotes.find( (note) => safeTime >= note.start && safeTime < note.end
   );
   const cueNote =
     activeNote ||

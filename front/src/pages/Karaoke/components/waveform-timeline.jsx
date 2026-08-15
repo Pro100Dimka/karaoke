@@ -6,13 +6,8 @@ import { getSeekTime, getTimelineProgress } from "../utils/timeline";
 const BAR_COUNT = 220;
 const SVG_WIDTH = BAR_COUNT * 3;
 const WAVEFORM_BARS = Array.from(
-  {
-    length: BAR_COUNT
-  },
-  (_, index) => [
-    index,
-    8 + Math.abs(Math.sin(index * 1.71) + Math.sin(index * 0.37)) * 11
-  ]
+  { length: BAR_COUNT },
+  (_, index) => [ index, 8 + Math.abs(Math.sin(index * 1.71) + Math.sin(index * 0.37)) * 11 ]
 );
 const GRADIENT_STOPS = [
   ["0%", "var(--color-primary)"],

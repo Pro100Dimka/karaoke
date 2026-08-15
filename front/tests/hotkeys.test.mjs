@@ -37,13 +37,7 @@ test("space does not escape a modal outside karaoke", () => {
 
   assert.equal(
     getKaraokeHotkeyAction(
-      {
-        code: "Space",
-        target: null,
-        defaultPrevented: false,
-        isComposing: false,
-        repeat: false
-      },
+      { code: "Space", target: null, defaultPrevented: false, isComposing: false, repeat: false },
       scope
     ),
     null
@@ -67,23 +61,17 @@ test("karaoke action mapping is exact and rejects cancelled events", () => {
   ])
     assert.equal(getKaraokeHotkeyAction({ ...base, code }, scope), action);
   assert.equal(getKaraokeHotkeyAction({ ...base, code: "KeyA" }, scope), null);
-  assert.equal(
-    getKaraokeHotkeyAction({ ...base, code: "toString" }, scope),
-    null
+  assert.equal( getKaraokeHotkeyAction({ ...base, code: "toString" }, scope), null
   );
   assert.equal(getKaraokeHotkeyAction(null, scope), null);
 
   for (const property of ["defaultPrevented", "isComposing", "repeat"])
     assert.equal(
-      getKaraokeHotkeyAction(
-        { ...base, code: "Space", [property]: true },
-        scope
+      getKaraokeHotkeyAction( { ...base, code: "Space", [property]: true }, scope
       ),
       null
     );
-  assert.equal(
-    getKaraokeHotkeyAction({ ...base, code: "Space" }, { isConnected: false }),
-    null
+  assert.equal( getKaraokeHotkeyAction({ ...base, code: "Space" }, { isConnected: false }), null
   );
 });
 
@@ -122,15 +110,9 @@ test("only the top dialog owns an active hotkey scope", async () => {
   assert.equal(isHotkeyScopeActive({ isConnected: false }), false);
   installDocument([]);
   assert.equal(isHotkeyScopeActive(scope), true);
-  installDocument([
-    { contains: (candidate) => candidate === scope },
-    { contains: () => false }
-  ]);
+  installDocument([ { contains: (candidate) => candidate === scope }, { contains: () => false } ]);
   assert.equal(isHotkeyScopeActive(scope), false);
-  installDocument([
-    { contains: () => false },
-    { contains: (candidate) => candidate === scope }
-  ]);
+  installDocument([ { contains: () => false }, { contains: (candidate) => candidate === scope } ]);
   assert.equal(isHotkeyScopeActive(scope), true);
 });
 
@@ -147,13 +129,9 @@ test("every browser cancellation signal suppresses a hotkey", async () => {
   assert.equal(shouldIgnoreHotkey(event, scope), false);
   assert.equal(shouldIgnoreHotkey(null, scope), true);
   for (const property of ["defaultPrevented", "isComposing", "repeat"])
-    assert.equal(
-      shouldIgnoreHotkey({ ...event, [property]: true }, scope),
-      true
+    assert.equal( shouldIgnoreHotkey({ ...event, [property]: true }, scope), true
     );
-  assert.equal(
-    shouldIgnoreHotkey({ ...event, target: { closest: () => ({}) } }, scope),
-    true
+  assert.equal( shouldIgnoreHotkey({ ...event, target: { closest: () => ({}) } }, scope), true
   );
   assert.equal(shouldIgnoreHotkey(event, { isConnected: false }), true);
 });

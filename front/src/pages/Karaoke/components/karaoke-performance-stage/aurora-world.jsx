@@ -41,9 +41,7 @@ function Elements({ items, getStyle }) {
 export default function AuroraWorld({ seed }) {
   return (
     <div className="karaoke-aurora-world" aria-hidden="true">
-      {DECORATIONS.map((className) => (
-        <i key={className} className={className} />
-      ))}
+      {DECORATIONS.map((className) => ( <i key={className} className={className} /> ))}
       <div className="aurora-stars">
         <Elements items={STARS} getStyle={(index) => starStyle(index, seed)} />
       </div>

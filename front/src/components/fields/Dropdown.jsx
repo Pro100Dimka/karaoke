@@ -24,8 +24,7 @@ export default function Dropdown({
   const generatedId = useId();
   const dropdownId = id ?? `dropdown-${generatedId.replace(/:/g, "")}`;
   const eventIdRef = useRef(dropdownId);
-  const selectedIndex = options.findIndex(
-    (option) => String(option.value) === String(value)
+  const selectedIndex = options.findIndex( (option) => String(option.value) === String(value)
   );
   const selected = selectedIndex >= 0 ? options[selectedIndex] : null;
   useEffect(() => {
@@ -52,18 +51,14 @@ export default function Dropdown({
       document.removeEventListener("keydown", closeOnEscape, true);
     };
   }, [open]);
-  useEffect(() => {
-    if (disabled) setOpen(false);
-  }, [disabled]);
+  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
   useEffect(() => {
     const closeWhenAnotherOpens = (event) => {
       if (event.detail !== eventIdRef.current) setOpen(false);
     };
     window.addEventListener("karaoke-dropdown-open", closeWhenAnotherOpens);
     return () =>
-      window.removeEventListener(
-        "karaoke-dropdown-open",
-        closeWhenAnotherOpens
+      window.removeEventListener( "karaoke-dropdown-open", closeWhenAnotherOpens
       );
   }, []);
   useLayoutEffect(() => {
@@ -113,9 +108,7 @@ export default function Dropdown({
       event.preventDefault();
       if (!open) {
         window.dispatchEvent(
-          new CustomEvent("karaoke-dropdown-open", {
-            detail: eventIdRef.current
-          })
+          new CustomEvent("karaoke-dropdown-open", { detail: eventIdRef.current })
         );
         setOpen(true);
       }
@@ -123,10 +116,7 @@ export default function Dropdown({
   };
   const toggle = () => {
     if (!open)
-      window.dispatchEvent(
-        new CustomEvent("karaoke-dropdown-open", {
-          detail: eventIdRef.current
-        })
+      window.dispatchEvent( new CustomEvent("karaoke-dropdown-open", { detail: eventIdRef.current })
       );
     setOpen((current) => !current);
   };

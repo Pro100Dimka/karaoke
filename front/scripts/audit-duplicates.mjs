@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const root = path.resolve("src");
-const extensions = new Set([".js", ".jsx"]);
+const extensions = [".js", ".jsx"];
 const files = [];
 const walk = (dir) => {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -11,7 +11,7 @@ const walk = (dir) => {
       if (full === path.join(root, "theme")) continue;
       walk(full);
     }
-    else if (extensions.has(path.extname(entry.name))) files.push(full);
+    else if (extensions.includes(path.extname(entry.name))) files.push(full);
   }
 };
 walk(root);

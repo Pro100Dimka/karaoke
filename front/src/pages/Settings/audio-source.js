@@ -8,10 +8,7 @@ import useAsyncQueue from "../../hooks/useAsyncQueue";
 import useExclusiveAsyncAction from "../../hooks/useExclusiveAsyncAction";
 import { usePolling } from "../../hooks/usePolling";
 import { translateSaved } from "../../i18n/runtime";
-import {
-  getAudioPreferences,
-  saveAudioPreferences
-} from "../../utils/audio-preferences";
+import { getAudioPreferences, saveAudioPreferences } from "../../utils/audio-preferences";
 import { getErrorMessage } from "../../utils/errors";
 import {
   groupBrowserAudioDevices,
@@ -36,11 +33,7 @@ export function getSignalLevel(signal) {
     : 0;
 }
 
-export function resolveMonitorTarget(
-  enabled,
-  monitoringEnabled,
-  localSpeakingLevel,
-  signal
+export function resolveMonitorTarget( enabled, monitoringEnabled, localSpeakingLevel, signal
 ) {
   return enabled && monitoringEnabled
     ? Math.max(localSpeakingLevel * 100, getSignalLevel(signal))
@@ -103,23 +96,14 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
   const speakerTimer = useRef(null);
   const monitorTarget = useRef(0);
   const monitorPeak = useRef(0);
-  const {
-    localSpeakingLevel,
-    prepareSpeakingMeter,
-    startSpeakingMeter,
-    stopSpeakingMeter
-  } = useSpeakingLevels();
+  const { localSpeakingLevel, prepareSpeakingMeter, startSpeakingMeter, stopSpeakingMeter } = useSpeakingLevels();
   const { pending: saving, run: queue } = useAsyncQueue();
   const { pending: togglingMonitoring, run: runMonitoring } =
     useExclusiveAsyncAction();
   const persistedSettings = settings ?? {};
   const runtime = normalizeAudioRuntimeSettings(persistedSettings);
   const { audioDriver, monitoringEnabled, volume } = runtime;
-  const targetLevel = resolveMonitorTarget(
-    enabled,
-    monitoringEnabled,
-    localSpeakingLevel,
-    signal
+  const targetLevel = resolveMonitorTarget( enabled, monitoringEnabled, localSpeakingLevel, signal
   );
   const resetSpeakerState = useCallback(
     () => {
@@ -139,23 +123,18 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
   );
   useEffect(() => {
     monitorTarget.current = targetLevel;
-    if (targetLevel > 0) {
-      monitorPeak.current = performance.now() + 240;
-    }
+    if (targetLevel > 0) monitorPeak.current = performance.now() + 240;
     if (!monitoringEnabled) {
       monitorPeak.current = 0;
       setMonitorLevel(0);
     }
   }, [targetLevel, monitoringEnabled]);
   useEffect(() => {
-    if (!enabled || !monitoringEnabled) {
-      return;
-    }
+    if (!enabled || !monitoringEnabled) return;
     const timer = setInterval(() => {
       const target = monitorTarget.current;
       const now = performance.now();
-      setMonitorLevel((current) =>
-        nextMonitorLevel(current, target, now, monitorPeak.current)
+      setMonitorLevel((current) => nextMonitorLevel(current, target, now, monitorPeak.current)
       );
     }, 50);
     return () => clearInterval(timer);
@@ -167,9 +146,7 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
   }, [stopSpeakingMeter]);
   const startLocalMeter = useCallback(async () => {
     const { mediaDevices } = navigator;
-    if (typeof mediaDevices?.getUserMedia !== "function") {
-      return false;
-    }
+    if (typeof mediaDevices?.getUserMedia !== "function") return false;
     stopLocalMeter();
     const selected = preferences.monitorInputDeviceId;
     const base = {
@@ -180,15 +157,7 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
     };
     const candidates =
       selected && selected !== "default"
-        ? [
-            {
-              ...base,
-              deviceId: {
-                exact: selected
-              }
-            },
-            base
-          ]
+        ? [ { ...base, deviceId: { exact: selected } }, base ]
         : [base];
     for (const audio of candidates) {
       let stream;
@@ -204,56 +173,34 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
       }
     }
     return false;
-  }, [
-    preferences.monitorInputDeviceId,
-    prepareSpeakingMeter,
-    startSpeakingMeter,
-    stopLocalMeter
-  ]);
+  }, [ preferences.monitorInputDeviceId, prepareSpeakingMeter, startSpeakingMeter, stopLocalMeter ]);
   useEffect(() => {
     if (!enabled || !monitoringEnabled) {
       stopLocalMeter();
       return stopLocalMeter;
     }
     let cancelled = false;
-    startLocalMeter().then((started) => {
-      if (cancelled && started) {
-        stopLocalMeter();
-      }
-    });
+    startLocalMeter().then((started) => { if (cancelled && started) stopLocalMeter(); });
     const unlock = () => {
       prepareSpeakingMeter();
-      if (!monitorStream.current) {
-        startLocalMeter();
-      }
+      if (!monitorStream.current) startLocalMeter();
     };
     const events = ["pointerdown", "keydown"];
-    events.forEach((event) =>
-      globalThis.addEventListener(event, unlock, {
-        once: true
-      })
+    events.forEach((event) => globalThis.addEventListener(event, unlock, { once: true })
     );
     return () => {
       cancelled = true;
       events.forEach((event) => globalThis.removeEventListener(event, unlock));
       stopLocalMeter();
     };
-  }, [
-    enabled,
-    monitoringEnabled,
-    prepareSpeakingMeter,
-    startLocalMeter,
-    stopLocalMeter
-  ]);
+  }, [ enabled, monitoringEnabled, prepareSpeakingMeter, startLocalMeter, stopLocalMeter ]);
   useEffect(() => {
     if (!enabled) {
       setBrowserDevices(EMPTY_BROWSER_DEVICES);
       return undefined;
     }
     const { mediaDevices } = navigator;
-    if (typeof mediaDevices?.enumerateDevices !== "function") {
-      return;
-    }
+    if (typeof mediaDevices?.enumerateDevices !== "function") return;
     mediaDevices
       .enumerateDevices()
       .then((devices) => setBrowserDevices(groupBrowserAudioDevices(devices)))
@@ -267,26 +214,17 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
       try {
         const result = await action();
         await refresh();
-        return {
-          ok: true,
-          value: result
-        };
+        return { ok: true, value: result };
       } catch (error) {
         await alert(`${errorText}: ${getErrorMessage(error)}`);
-        return {
-          ok: false,
-          error
-        };
+        return { ok: false, error };
       }
     });
   const updateBackend = (patch) =>
     execute(async () => {
       const updated = await api.updateAudioSettings(patch);
       try {
-        globalThis.dispatchEvent(
-          new CustomEvent("audio-settings-changed", {
-            detail: updated
-          })
+        globalThis.dispatchEvent( new CustomEvent("audio-settings-changed", { detail: updated })
         );
       } catch {
         // test runtime
@@ -295,9 +233,7 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
     }, translateSaved("Не удалось сохранить аудионастройки"));
   const updatePreference = (name, value) =>
     setPreferences(() => {
-      const next = saveAudioPreferences({
-        [name]: value
-      });
+      const next = saveAudioPreferences({ [name]: value });
       api.updateUiPreferences("audio", next).catch(
         // Stryker disable next-line BlockStatement: preference persistence is best-effort.
         () => {}
@@ -318,15 +254,11 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
       if (enabling) {
         prepareSpeakingMeter();
         await startLocalMeter();
-      } else {
-        stopLocalMeter();
-      }
+      } else stopLocalMeter();
       return true;
     });
   const testSpeakers = useCallback(async () => {
-    if (speakerTestState === "playing") {
-      return;
-    }
+    if (speakerTestState === "playing") return;
     const AudioContext =
       globalThis.AudioContext || globalThis.webkitAudioContext;
     if (!AudioContext) {
@@ -338,13 +270,9 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
     let audio;
     let closeContext = async () => {};
     try {
-      context = new AudioContext({
-        latencyHint: "interactive"
-      });
+      context = new AudioContext({ latencyHint: "interactive" });
       closeContext = () => context.close();
-      if (context.state === "suspended") {
-        await context.resume();
-      }
+      if (context.state === "suspended") await context.resume();
       const destination = context.createMediaStreamDestination();
       const gain = context.createGain();
       const oscillator = context.createOscillator();
@@ -379,9 +307,7 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
     } catch (error) {
       setSpeakerTestState("error");
       await alert(
-        translateSaved("Не удалось проверить динамики: {0}", {
-          0: getErrorMessage(error)
-        })
+        translateSaved("Не удалось проверить динамики: {0}", { 0: getErrorMessage(error) })
       );
     } finally {
       resetSpeakerState();
@@ -395,40 +321,20 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
         // already closed
       }
     }
-  }, [
-    alert,
-    preferences.monitorOutputDeviceId,
-    resetSpeakerState,
-    speakerTestState
-  ]);
+  }, [ alert, preferences.monitorOutputDeviceId, resetSpeakerState, speakerTestState ]);
   const options = {
     inputDevices: createIndexedDeviceOptions(devices),
-    outputDevices: createIndexedDeviceOptions(
-      outputs,
-      translateSaved("Системное устройство")
+    outputDevices: createIndexedDeviceOptions( outputs, translateSaved("Системное устройство")
     ),
     bufferSizes: createBufferSizeOptions(),
-    asioDrivers: (asioDrivers ?? []).map(({ name }) => ({
-      value: name,
-      label: name
-    })),
+    asioDrivers: (asioDrivers ?? []).map(({ name }) => ({ value: name, label: name })),
     audioDrivers: [
-      {
-        value: "auto",
-        label: translateSaved("Автоматически · рекомендуется")
-      },
+      { value: "auto", label: translateSaved("Автоматически · рекомендуется") },
       ...(asioDrivers?.length
-        ? [
-            {
-              value: "asio",
-              label: translateSaved("ASIO · для аудиоинтерфейсов")
-            }
-          ]
+        ? [ { value: "asio", label: translateSaved("ASIO · для аудиоинтерфейсов") } ]
         : [])
     ],
-    browserInputs: createBrowserDeviceOptions(
-      browserDevices.inputs,
-      translateSaved("Микрофон")
+    browserInputs: createBrowserDeviceOptions( browserDevices.inputs, translateSaved("Микрофон")
     ),
     browserOutputs: createBrowserDeviceOptions(
       browserDevices.outputs,
@@ -447,17 +353,8 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
     },
     preferences,
     options,
-    states: {
-      monitoringEnabled,
-      monitorLevel,
-      speakerTestState,
-      saving,
-      togglingMonitoring
-    },
-    actions: {
-      testSpeakers,
-      toggleMonitoring
-    },
+    states: { monitoringEnabled, monitorLevel, speakerTestState, saving, togglingMonitoring },
+    actions: { testSpeakers, toggleMonitoring },
     updateBackend,
     updatePreference
   };

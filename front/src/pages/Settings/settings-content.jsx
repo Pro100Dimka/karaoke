@@ -1,22 +1,10 @@
-import {
-  ArrowLeft,
-  ChevronDown,
-  ChevronUp,
-  SlidersHorizontal
-} from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { api } from "../../api/client";
 import { useRadio } from "../../contexts/radio";
 import { useI18n } from "../../i18n";
-import {
-  Button,
-  Card,
-  ConfigForm,
-  Grid,
-  Stack,
-  Typography
-} from "../../theme/ui";
+import { Button, Card, ConfigForm, Grid, Stack, Typography } from "../../theme/ui";
 import { readJsonStorage } from "../../utils/storage";
 import { persistUiPreferences } from "../../utils/ui-preferences";
 
@@ -64,16 +52,8 @@ function ServiceContent({ service, onOpen, onClose }) {
           interactive
           className="settings-service-link settings-neon-card"
           onClick={() => onOpen(id)}
-          sx={{
-            width: "100%",
-            minWidth: 0,
-            padding: 0,
-            textAlign: "left",
-            cursor: "pointer"
-          }}
-          cardContent={{
-            style: { padding: "1rem 1.1rem", height: "100%" }
-          }}
+          sx={{ width: "100%", minWidth: 0, padding: 0, textAlign: "left", cursor: "pointer" }}
+          cardContent={{ style: { padding: "1rem 1.1rem", height: "100%" } }}
         >
           <Stack
             align="start"
@@ -130,8 +110,7 @@ export default function SettingsContent({
     const visible =
       tab !== "audio"
         ? section.fields
-        : section.fields.filter(
-            (field) => showAdvancedAudio || !field.advanced
+        : section.fields.filter( (field) => showAdvancedAudio || !field.advanced
           );
     return visible.map((field) => {
       const label = t(`settings.${tab}.${field.name}.label`, {}, field.label);

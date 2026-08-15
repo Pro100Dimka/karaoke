@@ -2,9 +2,7 @@
 import { translateSaved } from "../i18n/runtime.js";
 
 const wait = (delayMs) =>
-  new Promise((resolve) => {
-    globalThis.setTimeout(resolve, delayMs);
-  });
+  new Promise((resolve) => { globalThis.setTimeout(resolve, delayMs); });
 const getBinaryChunk = (data) => {
   if (data instanceof ArrayBuffer) return data;
   if (!ArrayBuffer.isView(data)) return null;
@@ -219,17 +217,11 @@ function handleBinaryChunk(mesh, participantId, data) {
   transfer.chunks.push(null);
   transfer.writes = transfer.writes
     .then(async () => (await transfer.sink).write(chunk))
-    .catch((error) => {
-      transfer.writeError ||= error;
-    });
+    .catch((error) => { transfer.writeError ||= error; });
   globalThis.clearTimeout(transfer.timer);
-  transfer.timer = mesh.createIncomingTransferTimer(
-    participantId,
-    transfer.metadata.transferId
+  transfer.timer = mesh.createIncomingTransferTimer( participantId, transfer.metadata.transferId
   );
-  const percent = Math.min(
-    99,
-    Math.floor((transfer.received / transfer.metadata.size) * 100)
+  const percent = Math.min( 99, Math.floor((transfer.received / transfer.metadata.size) * 100)
   );
   if (percent === transfer.lastPercent) return;
   transfer.lastPercent = percent;
@@ -342,23 +334,17 @@ export async function sendFile(mesh, participantId, blob, metadata = {}) {
     throw new TypeError(translateSaved("Для передачи нужны участник и файл"));
   }
   if (blob.size > MAX_INCOMING_FILE_BYTES) {
-    throw new RangeError(
-      translateSaved("Файл слишком большой для передачи через комнату")
+    throw new RangeError( translateSaved("Файл слишком большой для передачи через комнату")
     );
   }
   const { lifecycleVersion } = mesh;
-  const channel = await mesh.waitForDataChannel(
-    participantId,
-    15_000,
-    lifecycleVersion
+  const channel = await mesh.waitForDataChannel( participantId, 15_000, lifecycleVersion
   );
   const transferId =
     typeof globalThis.crypto?.randomUUID === "function"
       ? globalThis.crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  if (channel.readyState !== "open") {
-    throw new Error(translateSaved("Канал передачи песни закрыт"));
-  }
+  if (channel.readyState !== "open") throw new Error(translateSaved("Канал передачи песни закрыт"));
   channel.send(
     JSON.stringify({
       type: "file-start",
@@ -388,10 +374,7 @@ export async function sendFile(mesh, participantId, blob, metadata = {}) {
         throw new Error(translateSaved("Передача файла отменена"));
       }
       if (Date.now() - lastProgressAt > TRANSFER_STALL_TIMEOUT_MS) {
-        throw new Error(
-          translateSaved(
-            "Передача песни остановилась: нет ответа от участника"
-          )
+        throw new Error( translateSaved( "Передача песни остановилась: нет ответа от участника" )
         );
       }
       // Backpressure must be checked before each ordered chunk.
@@ -412,11 +395,7 @@ export async function sendFile(mesh, participantId, blob, metadata = {}) {
     mesh.emitTransferProgress(
       participantId,
       "sending",
-      Math.min(
-        99,
-        Math.floor(
-          (Math.min(offset + chunkSize, blob.size) / blob.size) * 100
-        )
+      Math.min( 99, Math.floor( (Math.min(offset + chunkSize, blob.size) / blob.size) * 100 )
       ),
       metadata
     );
@@ -427,22 +406,12 @@ export async function sendFile(mesh, participantId, blob, metadata = {}) {
   await new Promise((resolve, reject) => {
     const timer = globalThis.setTimeout(() => {
       mesh.pendingTransferConfirmations.delete(transferId);
-      reject(
-        new Error(translateSaved("Участник не подтвердил получение песни"))
+      reject( new Error(translateSaved("Участник не подтвердил получение песни"))
       );
     }, TRANSFER_CONFIRM_TIMEOUT_MS);
-    mesh.pendingTransferConfirmations.set(transferId, {
-      participantId,
-      resolve,
-      reject,
-      timer
-    });
+    mesh.pendingTransferConfirmations.set(transferId, { participantId, resolve, reject, timer });
     try {
-      channel.send(
-        JSON.stringify({
-          type: "file-end",
-          transferId
-        })
+      channel.send( JSON.stringify({ type: "file-end", transferId })
       );
     } catch (error) {
       globalThis.clearTimeout(timer);

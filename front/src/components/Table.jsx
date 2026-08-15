@@ -1,12 +1,6 @@
 import { useI18n } from "../i18n";
 
-export default function Table({
-  columns,
-  data,
-  renderRow,
-  getRowKey,
-  emptyText
-}) {
+export default function Table({ columns, data, renderRow, getRowKey, emptyText }) {
   const { t } = useI18n();
   const rows = data ?? [];
   return (

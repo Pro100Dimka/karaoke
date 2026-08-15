@@ -1,12 +1,5 @@
 /* @vitest-environment jsdom */
-import React from "react";
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  waitFor
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -28,9 +21,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("react-router-dom", () => ({ useLocation: () => mocks.location }));
 vi.mock("../src/contexts/radio", () => ({ useRadio: () => mocks.radio }));
-vi.mock("../src/hooks/useOnlineRoomNavigation", () => ({
-  useOnlineRoomNavigation: vi.fn()
-}));
+vi.mock("../src/hooks/useOnlineRoomNavigation", () => ({ useOnlineRoomNavigation: vi.fn() }));
 vi.mock("../src/hooks/useRequireOnlineName", () => ({
   useRequireOnlineName: ({ onMissingName }) => {
     mocks.missingName = onMissingName;
@@ -91,9 +82,7 @@ vi.mock("../src/api/core", () => ({ MOCK_API_ENABLED: false }));
 vi.mock("../src/runtime-config", () => ({ BACKEND_BOOT_RETRY_MS: 5 }));
 vi.mock("../src/utils/theme", () => ({ getSavedTheme: mocks.getTheme }));
 vi.mock("../src/utils/language", () => ({ getSavedLanguage: () => "uk" }));
-vi.mock("../src/utils/ui-preferences", () => ({
-  hydrateUiPreferences: mocks.hydrate
-}));
+vi.mock("../src/utils/ui-preferences", () => ({ hydrateUiPreferences: mocks.hydrate }));
 
 import TitleBar from "../src/components/TitleBar.jsx";
 import BackendBootLoader from "../src/components/backend-boot-loader.jsx";
@@ -112,11 +101,7 @@ beforeEach(() => {
   window.electronAPI = undefined;
 });
 
-afterEach(() => {
-  cleanup();
-  vi.useRealTimers();
-  delete window.electronAPI;
-});
+afterEach(() => { cleanup(); vi.useRealTimers(); delete window.electronAPI; });
 
 describe("application shell", () => {
   test("title bar invokes desktop actions and isolates rejected actions", async () => {
@@ -136,13 +121,9 @@ describe("application shell", () => {
   });
 
   test("layout opens settings, song editor, radio and blackout state", () => {
-    const { container, getByLabelText, getByTestId, queryByTestId } = render(
-      <AppLayout />
+    const { container, getByLabelText, getByTestId, queryByTestId } = render( <AppLayout />
     );
-    expect(
-      container
-        .querySelector(".app-shell")
-        .classList.contains("karaoke-app-shell")
+    expect( container .querySelector(".app-shell") .classList.contains("karaoke-app-shell")
     ).toBe(false);
     fireEvent.click(getByLabelText("radio.enable:Radio"));
     expect(mocks.radio.toggle).toHaveBeenCalled();
@@ -157,20 +138,12 @@ describe("application shell", () => {
     act(() => mocks.missingName());
     expect(getByTestId("settings")).not.toBeNull();
     fireEvent.click(getByTestId("settings"));
-    fireEvent(
-      window,
-      new CustomEvent("app:route-blackout", { detail: { visible: true } })
+    fireEvent( window, new CustomEvent("app:route-blackout", { detail: { visible: true } })
     );
-    expect(
-      container
-        .querySelector(".app-route-blackout")
-        .classList.contains("is-visible")
+    expect( container .querySelector(".app-route-blackout") .classList.contains("is-visible")
     ).toBe(true);
     fireEvent(window, new CustomEvent("app:route-blackout"));
-    expect(
-      container
-        .querySelector(".app-route-blackout")
-        .classList.contains("is-visible")
+    expect( container .querySelector(".app-route-blackout") .classList.contains("is-visible")
     ).toBe(false);
     fireEvent.click(getByTestId("route-empty-song"));
     expect(queryByTestId("song-settings")).toBeNull();
@@ -192,13 +165,9 @@ describe("application shell", () => {
   test("layout applies route-specific shells and suppresses floating controls", () => {
     mocks.location = { pathname: "/karaoke" };
     const karaoke = render(<AppLayout />);
-    expect(
-      karaoke.container
-        .querySelector(".app-shell")
-        .classList.contains("karaoke-app-shell")
+    expect( karaoke.container .querySelector(".app-shell") .classList.contains("karaoke-app-shell")
     ).toBe(true);
-    expect(
-      karaoke.container.querySelector(".app-floating-controls")
+    expect( karaoke.container.querySelector(".app-floating-controls")
     ).toBeNull();
     cleanup();
     mocks.location = { pathname: "/editor/song" };
@@ -228,10 +197,7 @@ describe("application shell", () => {
   test("backend loader retries health checks", async () => {
     vi.useFakeTimers();
     mocks.getHealth.mockRejectedValueOnce(new Error("offline"));
-    render(
-      <BackendBootLoader>
-        <div>ready-after-retry</div>
-      </BackendBootLoader>
+    render( <BackendBootLoader> <div>ready-after-retry</div> </BackendBootLoader>
     );
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(5);
@@ -260,15 +226,9 @@ describe("application shell", () => {
   test("backend loader falls back for unknown themes and ignores late health", async () => {
     mocks.getTheme.mockReturnValue("unknown");
     let resolveHealth;
-    mocks.getHealth.mockReturnValueOnce(
-      new Promise((resolve) => {
-        resolveHealth = resolve;
-      })
+    mocks.getHealth.mockReturnValueOnce( new Promise((resolve) => { resolveHealth = resolve; })
     );
-    const view = render(
-      <BackendBootLoader>
-        <div>too late</div>
-      </BackendBootLoader>
+    const view = render( <BackendBootLoader> <div>too late</div> </BackendBootLoader>
     );
     document.documentElement.removeAttribute("data-theme");
     document.documentElement.setAttribute("data-probe", "changed");

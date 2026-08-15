@@ -54,9 +54,7 @@ export const recordingsApi = {
   getPerformanceFileUrl: (id) =>
     createFileUrl(`/recording/${encodePathSegment(id)}/performance`),
   runAnalysis: (recordingId) =>
-    request(`/analysis/${encodePathSegment(recordingId)}/run`, {
-      method: "POST"
-    }),
+    request(`/analysis/${encodePathSegment(recordingId)}/run`, { method: "POST" }),
   getAnalysis: (recordingId) =>
     request(`/analysis/${encodePathSegment(recordingId)}`)
 };

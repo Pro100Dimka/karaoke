@@ -16,9 +16,7 @@ function isAllowedRendererUrl(value, { isDev, devOrigin, packagedIndexUrl }) {
   const url = parseUrl(value);
   if (!url) return false;
 
-  if (isDev) {
-    return url.origin === devOrigin;
-  }
+  if (isDev) return url.origin === devOrigin;
 
   if (url.protocol !== "file:") return false;
   return (

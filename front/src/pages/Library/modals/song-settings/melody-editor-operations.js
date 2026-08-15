@@ -67,23 +67,16 @@ const combinedContent = (notes, syllablesByIndex) => {
   }
   return {
     editor_text: editorText,
-    syllable_indices: [...new Set(notes.flatMap(syllableIndicesForNote))].sort(
-      ascending
+    syllable_indices: [...new Set(notes.flatMap(syllableIndicesForNote))].sort( ascending
     )
   };
 };
 
-export function displayTextForNote(
-  note,
-  syllablesByIndex,
-  labelOwnerBySyllable
+export function displayTextForNote( note, syllablesByIndex, labelOwnerBySyllable
 ) {
   if (typeof note.editor_text === "string" && note.editor_text.length)
     return note.editor_text;
-  return linkedText(
-    note,
-    syllablesByIndex,
-    (index) => labelOwnerBySyllable.get(index) === note._id
+  return linkedText( note, syllablesByIndex, (index) => labelOwnerBySyllable.get(index) === note._id
   );
 }
 
@@ -116,22 +109,15 @@ export function mergeSelectedNotes(notes, selectedIds, syllablesByIndex) {
     ...first,
     start: Math.min(...chosen.map((n) => n.start)),
     end: Math.max(...chosen.map((n) => n.end)),
-    midi_note: Math.round(
-      chosen.reduce((sum, n) => sum + n.midi_note, 0) / chosen.length
+    midi_note: Math.round( chosen.reduce((sum, n) => sum + n.midi_note, 0) / chosen.length
     ),
     ...combinedContent(chosen, syllablesByIndex)
   };
-  const result = [
-    ...notes.filter((note) => !selected.has(note._id)),
-    merged
-  ].sort(byStartPitch);
+  const result = [ ...notes.filter((note) => !selected.has(note._id)), merged ].sort(byStartPitch);
   return { notes: result, selectedId: merged._id };
 }
 
-export function deleteNotesAndTransferText(
-  notes,
-  selectedIds,
-  syllablesByIndex
+export function deleteNotesAndTransferText( notes, selectedIds, syllablesByIndex
 ) {
   const selected = new Set(selectedIds);
   const removed = notes.filter((note) => selected.has(note._id));
@@ -146,12 +132,8 @@ export function deleteNotesAndTransferText(
     if (!goneText) continue;
     const goneCenter = center(gone);
     const target = remaining
-      .map((note) => ({
-        note,
-        distance: Math.abs(center(note) - goneCenter)
-      }))
-      .sort(
-        (a, b) => a.distance - b.distance || a.note.start - b.note.start
+      .map((note) => ({ note, distance: Math.abs(center(note) - goneCenter) }))
+      .sort( (a, b) => a.distance - b.distance || a.note.start - b.note.start
       )[0].note;
     const transferred = transfers.get(target);
     if (transferred) transferred.push(gone);
@@ -160,9 +142,7 @@ export function deleteNotesAndTransferText(
   for (const [target, transferred] of transfers) {
     Object.assign(
       target,
-      combinedContent(
-        [...transferred, target].sort(byMidpoint),
-        syllablesByIndex
+      combinedContent( [...transferred, target].sort(byMidpoint), syllablesByIndex
       )
     );
   }
@@ -170,8 +150,7 @@ export function deleteNotesAndTransferText(
 }
 
 export function adjacentNoteId(notes, selectedIds, direction) {
-  const ordered = [...notes].sort(
-    (a, b) => byStartEnd(a, b) || a.midi_note - b.midi_note
+  const ordered = [...notes].sort( (a, b) => byStartEnd(a, b) || a.midi_note - b.midi_note
   );
   if (!ordered.length) return null;
   const selected = new Set(selectedIds);
@@ -185,18 +164,12 @@ export function adjacentNoteId(notes, selectedIds, direction) {
         })();
   if (anchorIndex < 0)
     return direction > 0 ? ordered[0]._id : ordered.at(-1)._id;
-  const next = Math.max(
-    0,
-    Math.min(ordered.length - 1, anchorIndex + (direction > 0 ? 1 : -1))
+  const next = Math.max( 0, Math.min(ordered.length - 1, anchorIndex + (direction > 0 ? 1 : -1))
   );
   return ordered[next]._id;
 }
 
-export function constrainedMoveDelta(
-  notes,
-  movingIds,
-  requestedDelta,
-  duration
+export function constrainedMoveDelta( notes, movingIds, requestedDelta, duration
 ) {
   const moving = new Set(movingIds);
   const chosen = notes.filter((note) => moving.has(note._id));

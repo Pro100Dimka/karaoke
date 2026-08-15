@@ -55,12 +55,7 @@ export function findBestPitchLag(scores, minLag, maxLag) {
   return { lag, score };
 }
 
-export function selectFundamentalLag(
-  scores,
-  minLag,
-  maxLag,
-  fallbackLag,
-  fallbackScore
+export function selectFundamentalLag( scores, minLag, maxLag, fallbackLag, fallbackScore
 ) {
   const threshold = Math.max(MIN_CORRELATION, fallbackScore * 0.9);
   for (let lag = minLag + 1; lag < maxLag; lag += 1) {
@@ -100,9 +95,7 @@ export function pitchFrequencyToMidi(frequency) {
 
 export function detectMidiFromAnalyser(analyser, buffer, sampleRate) {
   const rate = Number(sampleRate);
-  if (!buffer?.length || !Number.isFinite(rate) || rate <= 0) {
-    return null;
-  }
+  if (!buffer?.length || !Number.isFinite(rate) || rate <= 0) return null;
 
   try {
     analyser.getFloatTimeDomainData(buffer);
@@ -133,12 +126,7 @@ export function detectMidiFromAnalyser(analyser, buffer, sampleRate) {
   // multiples of the true period. Picking the global maximum can therefore
   // report an octave (or two) too low. Prefer the first strong local maximum,
   // which corresponds to the fundamental period.
-  const { lag: fundamentalLag } = selectFundamentalLag(
-    scores,
-    minLag,
-    maxLag,
-    best.lag,
-    best.score
+  const { lag: fundamentalLag } = selectFundamentalLag( scores, minLag, maxLag, best.lag, best.score
   );
 
   // Sub-sample lag interpolation removes the coarse semitone jumps caused by

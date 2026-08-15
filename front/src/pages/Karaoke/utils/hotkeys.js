@@ -1,16 +1,9 @@
 /* Node's native ESM test runner requires the explicit extension. */
 /* eslint-disable import/extensions */
-import {
-  isHotkeyScopeActive,
-  shouldIgnoreHotkey
-} from "../../../utils/hotkeys.js";
+import { isHotkeyScopeActive, shouldIgnoreHotkey } from "../../../utils/hotkeys.js";
 /* eslint-enable import/extensions */
 
-const HOTKEY_ACTIONS = {
-  ArrowLeft: "seek-backward",
-  ArrowRight: "seek-forward",
-  Escape: "stop"
-};
+const HOTKEY_ACTIONS = { ArrowLeft: "seek-backward", ArrowRight: "seek-forward", Escape: "stop" };
 
 export function getKaraokeHotkeyAction(event, scope) {
   if (

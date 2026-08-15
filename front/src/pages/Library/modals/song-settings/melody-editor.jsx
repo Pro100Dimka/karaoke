@@ -144,9 +144,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     <section
       ref={workspaceRef}
       className="melody-editor-workspace"
-      aria-label={translateSaved("Редактор мелодии {0}", {
-        0: song?.title || ""
-      })}
+      aria-label={translateSaved("Редактор мелодии {0}", { 0: song?.title || "" })}
     >
       <MelodyEditorHeader
         duration={duration}

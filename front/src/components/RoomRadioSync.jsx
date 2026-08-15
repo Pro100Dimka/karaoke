@@ -29,9 +29,7 @@ export default function RoomRadioSync() {
     }
 
     remoteTargetRef.current = { signature, startedAt: Date.now() };
-    if (remote.stationId && remote.stationId !== current.stationId) {
-      setStation(remote.stationId);
-    }
+    if (remote.stationId && remote.stationId !== current.stationId) setStation(remote.stationId);
     if (remote.isPlaying && !current.isPlaying) {
       Promise.resolve(
         turnOn({
@@ -40,12 +38,8 @@ export default function RoomRadioSync() {
           targetStation:
             stations.find(({ id }) => id === nextStationId) || stations[0]
         })
-      ).catch(() => {
-        remoteTargetRef.current = null;
-      });
-    } else if (!remote.isPlaying && current.isPlaying) {
-      turnOff({ remember: false });
-    }
+      ).catch(() => { remoteTargetRef.current = null; });
+    } else if (!remote.isPlaying && current.isPlaying) turnOff({ remember: false });
   }, [
     room,
     roomUi?.__eventId,

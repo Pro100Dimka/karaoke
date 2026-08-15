@@ -1,20 +1,9 @@
 /* @vitest-environment jsdom */
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  renderHook,
-  screen
-} from "@testing-library/react";
-import React, { useEffect } from "react";
+import { act, cleanup, fireEvent, render, renderHook, screen } from "@testing-library/react";
+import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import Modal from "../src/components/modal";
-import {
-  AppDialogProvider,
-  resolveDialog,
-  useAppDialog
-} from "../src/contexts/AppDialog";
+import { AppDialogProvider, resolveDialog, useAppDialog } from "../src/contexts/AppDialog";
 
 vi.mock("../src/i18n", async (importOriginal) => ({
   ...(await importOriginal()),
@@ -24,10 +13,7 @@ vi.mock("../src/i18n", async (importOriginal) => ({
 const Icon = (props) => <svg data-testid="title-icon" {...props} />;
 
 beforeEach(() => {
-  vi.stubGlobal("requestAnimationFrame", (callback) => {
-    callback();
-    return 1;
-  });
+  vi.stubGlobal("requestAnimationFrame", (callback) => { callback(); return 1; });
   vi.stubGlobal("cancelAnimationFrame", vi.fn());
   document.body.style.overflow = "auto";
 });
@@ -134,18 +120,12 @@ describe("modal", () => {
       </>
     );
     act(() => frames.forEach((callback) => callback()));
-    expect(
-      screen
-        .getByRole("dialog", { name: "Top delayed" })
-        .contains(document.activeElement)
+    expect( screen .getByRole("dialog", { name: "Top delayed" }) .contains(document.activeElement)
     ).toBe(true);
   });
 
   test("keeps focus in a dialog without controls", () => {
-    render(
-      <Modal isOpen ariaLabel="Empty">
-        Content
-      </Modal>
+    render( <Modal isOpen ariaLabel="Empty"> Content </Modal>
     );
     const dialog = screen.getByRole("dialog");
     dialog.querySelector(".app-modal-close").remove();
@@ -156,9 +136,7 @@ describe("modal", () => {
 
 function DialogDriver({ run, onValue }) {
   const dialog = useAppDialog();
-  useEffect(() => {
-    run(dialog).then(onValue);
-  }, [dialog, onValue, run]);
+  useEffect(() => { run(dialog).then(onValue); }, [dialog, onValue, run]);
   return null;
 }
 
@@ -171,22 +149,15 @@ describe("application dialog provider", () => {
   });
   test("resolves alert confirmation", async () => {
     const onValue = vi.fn();
-    const run = vi.fn(({ alert }) =>
-      alert("Saved", { title: "Notice", confirmClassName: "" })
+    const run = vi.fn(({ alert }) => alert("Saved", { title: "Notice", confirmClassName: "" })
     );
-    render(
-      <AppDialogProvider>
-        <DialogDriver run={run} onValue={onValue} />
-      </AppDialogProvider>
+    render( <AppDialogProvider> <DialogDriver run={run} onValue={onValue} /> </AppDialogProvider>
     );
     expect(screen.getByText("Saved")).not.toBeNull();
     const closeButton = document.querySelector(".modal-title-action");
     expect(closeButton.className).toBe("modal-title-action");
     expect(document.querySelector(".app-dialog-body")).toBeNull();
-    act(() => {
-      closeButton.click();
-      closeButton.click();
-    });
+    act(() => { closeButton.click(); closeButton.click(); });
     await act(async () => Promise.resolve());
     expect(onValue).toHaveBeenCalledWith(true);
   });
@@ -209,27 +180,20 @@ describe("application dialog provider", () => {
       controls = useAppDialog();
       return null;
     }
-    render(
-      <AppDialogProvider>
-        <Consumer />
-      </AppDialogProvider>
+    render( <AppDialogProvider> <Consumer /> </AppDialogProvider>
     );
     await act(async () => {
       controls
         .confirm("First", "Custom title")
         .then((value) => values.push(value));
     });
-    await act(async () => {
-      controls.alert("Replacement").then((value) => values.push(value));
-    });
+    await act(async () => { controls.alert("Replacement").then((value) => values.push(value)); });
     expect(values).toEqual([false]);
     fireEvent.mouseDown(document.querySelector(".app-modal-backdrop"));
     await act(async () => Promise.resolve());
     expect(values).toEqual([false, true]);
 
-    await act(async () => {
-      controls.confirm("Cancel me").then((value) => values.push(value));
-    });
+    await act(async () => { controls.confirm("Cancel me").then((value) => values.push(value)); });
     fireEvent.click(document.querySelector(".app-dialog-actions button"));
     await act(async () => Promise.resolve());
     expect(values.at(-1)).toBe(false);
@@ -242,14 +206,9 @@ describe("application dialog provider", () => {
       controls = useAppDialog();
       return null;
     }
-    const view = render(
-      <AppDialogProvider>
-        <Consumer />
-      </AppDialogProvider>
+    const view = render( <AppDialogProvider> <Consumer /> </AppDialogProvider>
     );
-    act(() => {
-      controls.confirm("Pending").then(value);
-    });
+    act(() => { controls.confirm("Pending").then(value); });
     view.unmount();
     await act(async () => Promise.resolve());
     expect(value).toHaveBeenCalledWith(false);

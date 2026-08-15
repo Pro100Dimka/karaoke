@@ -43,9 +43,7 @@ export default function useMelodyEditorEditing({
   const clipboardRef = useRef([]);
   const [selectionBox, setSelectionBox] = useState(null);
 const commit = useCallback((updater) => replace(updater, true), [replace]);
-const selectAll = useCallback(
-  () => setSelected(notes.map((note) => note._id)),
-  [notes]
+const selectAll = useCallback( () => setSelected(notes.map((note) => note._id)), [notes]
 );
 const clearSelection = useCallback(() => setSelected([]), []);
 const selectAdjacentNote = useCallback(
@@ -61,8 +59,7 @@ const selectAdjacentNote = useCallback(
 );
 const deleteSelected = useCallback(() => {
   if (!selected.length) return;
-  commit((current) =>
-    deleteNotesAndTransferText(current, selected, syllableByIndex)
+  commit((current) => deleteNotesAndTransferText(current, selected, syllableByIndex)
   );
   setSelected([]);
 }, [commit, selected, syllableByIndex]);
@@ -162,12 +159,7 @@ const startDrag = useCallback(
     const originals = new Map(
       notes
         .filter((item) => movingSelection.includes(item._id))
-        .map((item) => [
-          item._id,
-          {
-            ...item
-          }
-        ])
+        .map((item) => [ item._id, { ...item } ])
     );
     auditionNote(note.midi_note, 150);
     dragRef.current = {
@@ -197,16 +189,9 @@ const drag = useCallback(
       state.moved = true;
     const dy = event.shiftKey ? 0 : rawDy;
     if (state.mode === "move") {
-      const safeDx = constrainedMoveDelta(
-        state.snapshot,
-        state.ids,
-        dx,
-        duration
+      const safeDx = constrainedMoveDelta( state.snapshot, state.ids, dx, duration
       );
-      const previewMidi = clamp(
-        state.originals.get(state.id).midi_note + dy,
-        0,
-        127
+      const previewMidi = clamp( state.originals.get(state.id).midi_note + dy, 0, 127
       );
       if (state.previewMidi !== previewMidi) {
         state.previewMidi = previewMidi;
@@ -250,11 +235,7 @@ const drag = useCallback(
       (current) =>
         current.map((note) =>
           note._id === state.id
-            ? {
-                ...note,
-                start: roundTime(start),
-                end: roundTime(end)
-              }
+            ? { ...note, start: roundTime(start), end: roundTime(end) }
             : note
         ),
       false
@@ -314,12 +295,7 @@ const startMarquee = useCallback(
       base: additive ? [...selected] : []
     };
     selectionRef.current = state;
-    setSelectionBox({
-      x1: x,
-      y1: y,
-      x2: x,
-      y2: y
-    });
+    setSelectionBox({ x1: x, y1: y, x2: x, y2: y });
     if (!additive) setSelected([]);
     event.currentTarget.setPointerCapture?.(event.pointerId);
   },
@@ -333,12 +309,7 @@ const updateMarquee = useCallback(
     const rect = canvas.getBoundingClientRect();
     state.x2 = event.clientX - rect.left;
     state.y2 = event.clientY - rect.top;
-    setSelectionBox({
-      x1: state.x1,
-      y1: state.y1,
-      x2: state.x2,
-      y2: state.y2
-    });
+    setSelectionBox({ x1: state.x1, y1: state.y1, x2: state.x2, y2: state.y2 });
 
     // Highlight notes while the rectangle is moving, not only after mouse-up.
     if (

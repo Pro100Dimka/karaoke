@@ -19,28 +19,14 @@ export function findActiveMelodyNote(notes, position) {
   );
 }
 
-export function getMelodyGuideState({
-  notes,
-  position,
-  keyShift = 0,
-  volume = 0
-}) {
+export function getMelodyGuideState({ notes, position, keyShift = 0, volume = 0 }) {
   const safeVolume = Math.max(0, Math.min(1, Number(volume) || 0));
   const note = findActiveMelodyNote(notes, position);
-  if (!note || safeVolume <= 0) {
-    return { active: false, note: null, frequency: null, gain: 0.0001 };
-  }
+  if (!note || safeVolume <= 0) return { active: false, note: null, frequency: null, gain: 0.0001 };
 
   const midi = Number(note.midi) + (Number(keyShift) || 0);
   const frequency = midiToFrequency(midi);
-  if (!Number.isFinite(frequency)) {
-    return { active: false, note: null, frequency: null, gain: 0.0001 };
-  }
+  if (!Number.isFinite(frequency)) return { active: false, note: null, frequency: null, gain: 0.0001 };
 
-  return {
-    active: true,
-    note,
-    frequency,
-    gain: 0.3 * safeVolume ** 1.65
-  };
+  return { active: true, note, frequency, gain: 0.3 * safeVolume ** 1.65 };
 }

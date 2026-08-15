@@ -12,17 +12,10 @@ import { translateSaved } from "../../../../i18n/runtime";
 import { ConfigForm, NumberField, Stack } from "../../../../theme/ui";
 import { getErrorMessage } from "../../../../utils/errors";
 import { SONG_FIELDS } from "./config";
-import {
-  createSongPayload,
-  getSelectedSong,
-  validateSongSettings
-} from "./utils";
+import { createSongPayload, getSelectedSong, validateSongSettings } from "./utils";
 
 const setField = (setter, name, value) =>
-  setter((current) => ({
-    ...current,
-    [name]: value
-  }));
+  setter((current) => ({ ...current, [name]: value }));
 const parseNumber = (value) =>
   value === "" || value == null ? null : Number(value);
 const SONG_RENDERERS = {
@@ -52,24 +45,12 @@ const SONG_RENDERERS = {
 };
 export default function SongSettings({ songId, onClose }) {
   const { alert: notify } = useAppDialog();
-  const {
-    data: songs,
-    error: songsError,
-    refresh: refreshSongs
-  } = usePolling(api.listSongs, POLLING_INTERVALS.health, []);
+  const { data: songs, error: songsError, refresh: refreshSongs } = usePolling(api.listSongs, POLLING_INTERVALS.health, []);
   const { pending: saving, run: runSave } = useExclusiveAsyncAction();
   const song = getSelectedSong(songs, songId);
   const [form, setForm] = useState(null);
   const navigate = useNavigate();
-  useEffect(() => {
-    setForm(
-      song
-        ? {
-            ...song
-          }
-        : null
-    );
-  }, [song]);
+  useEffect(() => { setForm( song ? { ...song } : null ); }, [song]);
   const updateField = (name, value) => setField(setForm, name, value);
   const save = () =>
     runSave(async () => {
@@ -79,22 +60,12 @@ export default function SongSettings({ songId, onClose }) {
         return;
       }
       try {
-        const updated = await api.updateSong(
-          song.id,
-          createSongPayload(form, song)
+        const updated = await api.updateSong( song.id, createSongPayload(form, song)
         );
-        if (updated && typeof updated === "object") {
-          setForm((current) => ({
-            ...current,
-            ...updated
-          }));
-        }
+        if (updated && typeof updated === "object") setForm((current) => ({ ...current, ...updated }));
         await refreshSongs?.();
       } catch (error) {
-        await notify(
-          translateSaved("Не удалось сохранить: {0}", {
-            0: getErrorMessage(error)
-          })
+        await notify( translateSaved("Не удалось сохранить: {0}", { 0: getErrorMessage(error) })
         );
       }
     });
@@ -169,9 +140,7 @@ export default function SongSettings({ songId, onClose }) {
       isOpen
       portal
       onClose={onClose}
-      ariaLabel={translateSaved("Настройки песни {0}", {
-        0: song?.title || ""
-      }).trim()}
+      ariaLabel={translateSaved("Настройки песни {0}", { 0: song?.title || "" }).trim()}
       titleProps={{
         icon: Music2,
         eyebrow: translateSaved("КАРАОКЕ · РЕДАКТОР"),

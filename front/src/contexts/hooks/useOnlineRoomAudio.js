@@ -154,9 +154,7 @@ export default function useOnlineRoomAudio({
           closeContext(context);
           applyRemoteAudioMute();
         });
-      } else {
-        activate();
-      }
+      } else activate();
     },
     [applyRemoteAudioMute, roomUiRef]
   );

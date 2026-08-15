@@ -4,13 +4,7 @@ import { IconButton } from "./ui";
 
 const WINDOW_ACTIONS = [
   { id: "minimize", labelKey: "common.minimizeWindow", Icon: Minus, size: 16 },
-  {
-    id: "close",
-    labelKey: "common.closeWindow",
-    Icon: X,
-    size: 16,
-    danger: true
-  }
+  { id: "close", labelKey: "common.closeWindow", Icon: X, size: 16, danger: true }
 ];
 
 function invokeWindowAction(electronAPI, action) {

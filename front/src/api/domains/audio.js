@@ -12,9 +12,6 @@ export const audioApi = {
   stopDirectMonitoring: () =>
     request("/audio/direct-monitor/stop", { method: "POST" }),
   releaseDirectMonitoring: () =>
-    request("/audio/direct-monitor/stop", {
-      method: "POST",
-      keepalive: true
-    }).catch(() => null),
+    request("/audio/direct-monitor/stop", { method: "POST", keepalive: true }).catch(() => null),
   getSignalQuality: () => request("/audio/signal-quality")
 };

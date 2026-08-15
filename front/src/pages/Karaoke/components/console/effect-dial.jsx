@@ -4,12 +4,7 @@ import { RangeInput } from "../../../../components/fields";
 const clamp = (value) => Math.max(0, Math.min(1, value));
 const normalizeId = (id) => id.replace(/:/g, "");
 
-export default function EffectDial({
-  label,
-  value,
-  onChange,
-  accent = "primary"
-}) {
+export default function EffectDial({ label, value, onChange, accent = "primary" }) {
   const inputId = `effect-dial-${normalizeId(useId())}`;
   const dragRef = useRef(null);
   const normalized = clamp(Number(value) || 0);

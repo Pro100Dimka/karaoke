@@ -5,10 +5,7 @@ function clampPercent(value) {
   if (!Number.isFinite(percent)) return 0;
   return Math.max(0, Math.min(100, percent));
 }
-export default function ProgressBar({
-  percent = 0,
-  label = translateSaved("Прогресс")
-}) {
+export default function ProgressBar({ percent = 0, label = translateSaved("Прогресс") }) {
   const normalizedPercent = clampPercent(percent);
   return (
     <div

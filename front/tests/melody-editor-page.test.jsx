@@ -1,5 +1,4 @@
 /* @vitest-environment jsdom */
-import React from "react";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -33,11 +32,9 @@ afterEach(cleanup);
 test("loads the selected song and closes back to the library", async () => {
   mocks.listSongs.mockResolvedValue([{ id: "song", title: "Title" }]);
   const result = render(<MelodyEditorPage />);
-  expect(
-    result.container.querySelector(".melody-editor-route-loading")
+  expect( result.container.querySelector(".melody-editor-route-loading")
   ).not.toBeNull();
-  await waitFor(() =>
-    expect(result.getByTestId("editor").textContent).toBe("song:Title")
+  await waitFor(() => expect(result.getByTestId("editor").textContent).toBe("song:Title")
   );
   fireEvent.click(result.getByTestId("editor"));
   expect(mocks.navigate).toHaveBeenCalledWith("/");
@@ -46,23 +43,18 @@ test("loads the selected song and closes back to the library", async () => {
 test("uses a safe editor fallback for missing and failed song lists", async () => {
   mocks.listSongs.mockResolvedValueOnce(null);
   const missing = render(<MelodyEditorPage />);
-  await waitFor(() =>
-    expect(missing.getByTestId("editor").textContent).toContain("song:")
+  await waitFor(() => expect(missing.getByTestId("editor").textContent).toContain("song:")
   );
   cleanup();
   mocks.listSongs.mockRejectedValueOnce(new Error("offline"));
   const failed = render(<MelodyEditorPage />);
-  await waitFor(() =>
-    expect(failed.getByTestId("editor").textContent).toContain("song:")
+  await waitFor(() => expect(failed.getByTestId("editor").textContent).toContain("song:")
   );
 });
 
 test("ignores a song list returned after the route unmounts", async () => {
   let resolve;
-  mocks.listSongs.mockReturnValue(
-    new Promise((done) => {
-      resolve = done;
-    })
+  mocks.listSongs.mockReturnValue( new Promise((done) => { resolve = done; })
   );
   const view = render(<MelodyEditorPage />);
   view.unmount();

@@ -1,12 +1,5 @@
 /* @vitest-environment jsdom */
-import React from "react";
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  waitFor
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -29,9 +22,7 @@ vi.mock("../src/api/client", () => ({
 vi.mock("../src/contexts/AppDialog", () => ({
   useAppDialog: () => ({ alert: mocks.notify, confirm: mocks.confirm })
 }));
-vi.mock("../src/utils/ui-preferences", () => ({
-  persistUiPreferences: mocks.persist
-}));
+vi.mock("../src/utils/ui-preferences", () => ({ persistUiPreferences: mocks.persist }));
 vi.mock("../src/components/ui", () => ({
   IconButton: ({ label, onClick, disabled, className }) => (
     <button
@@ -146,18 +137,13 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => {
-  cleanup();
-  delete globalThis.AudioContext;
-});
+afterEach(() => { cleanup(); delete globalThis.AudioContext; });
 
 const loadEditor = async (props = {}) => {
-  const result = render(
-    <MelodyEditor song={{ id: "song", title: "Song" }} {...props} />
+  const result = render( <MelodyEditor song={{ id: "song", title: "Song" }} {...props} />
   );
   await waitFor(() =>
-    expect(
-      result.container.querySelectorAll(".melody-editor-note")
+    expect( result.container.querySelectorAll(".melody-editor-note")
     ).toHaveLength(2)
   );
   return result;
@@ -168,31 +154,19 @@ describe("melody editor", () => {
     const onSaved = vi.fn();
     const { container } = await loadEditor({ onSaved });
     const notes = container.querySelectorAll(".melody-editor-note");
-    fireEvent.pointerDown(notes[0], {
-      pointerId: 1,
-      clientX: 100,
-      clientY: 100
-    });
-    fireEvent.pointerDown(notes[1], {
-      pointerId: 2,
-      clientX: 170,
-      clientY: 80,
-      shiftKey: true
-    });
-    const merge = container.querySelector(
-      ".is-edit .melody-editor-tool.tone-amber"
+    fireEvent.pointerDown(notes[0], { pointerId: 1, clientX: 100, clientY: 100 });
+    fireEvent.pointerDown(notes[1], { pointerId: 2, clientX: 170, clientY: 80, shiftKey: true });
+    const merge = container.querySelector( ".is-edit .melody-editor-tool.tone-amber"
     );
     expect(merge.disabled).toBe(false);
     fireEvent.click(merge);
-    await waitFor(() =>
-      expect(container.querySelectorAll(".melody-editor-note")).toHaveLength(1)
+    await waitFor(() => expect(container.querySelectorAll(".melody-editor-note")).toHaveLength(1)
     );
     const save = container.querySelector(".melody-editor-tool.tone-pink");
     fireEvent.click(save);
     await waitFor(() => expect(mocks.saveSongEditor).toHaveBeenCalled());
     expect(onSaved).toHaveBeenCalled();
-    const restore = container.querySelector(
-      ".is-ai .melody-editor-tool.tone-amber"
+    const restore = container.querySelector( ".is-ai .melody-editor-tool.tone-amber"
     );
     fireEvent.click(restore);
     await waitFor(() => expect(mocks.resetSongEditor).toHaveBeenCalled());
@@ -206,22 +180,17 @@ describe("melody editor", () => {
     fireEvent.change(speed, { target: { value: "0.75" } });
     fireEvent.change(
       container.querySelector("#melody-editor-horizontal-zoom"),
-      {
-        target: { value: "120" }
-      }
+      { target: { value: "120" } }
     );
     fireEvent.change(container.querySelector("#melody-editor-vertical-zoom"), {
       target: { value: "20" }
     });
     fireEvent.change(
       container.querySelector(".melody-editor-compact-dials input"),
-      {
-        target: { value: "0.5" }
-      }
+      { target: { value: "0.5" } }
     );
     fireEvent.keyDown(window, { code: "Space" });
-    await waitFor(() =>
-      expect(HTMLMediaElement.prototype.play).toHaveBeenCalled()
+    await waitFor(() => expect(HTMLMediaElement.prototype.play).toHaveBeenCalled()
     );
     fireEvent.keyDown(window, { code: "Space" });
     fireEvent.keyDown(window, { code: "KeyS", ctrlKey: true });
@@ -242,8 +211,7 @@ describe("melody editor", () => {
     mocks.saveSongEditor.mockRejectedValueOnce(new Error("save failed"));
     fireEvent.click(container.querySelector(".melody-editor-tool.tone-pink"));
     await waitFor(() => expect(mocks.notify).toHaveBeenCalled());
-    expect(
-      container.querySelector(".melody-editor-tool.tone-pink").disabled
+    expect( container.querySelector(".melody-editor-tool.tone-pink").disabled
     ).toBe(false);
   });
 
@@ -266,16 +234,13 @@ describe("melody editor", () => {
     key("KeyC", { ctrlKey: true });
     key("Home", { key: "Home" });
     key("KeyV", { ctrlKey: true });
-    await waitFor(() =>
-      expect(container.querySelectorAll(".melody-editor-note")).toHaveLength(3)
+    await waitFor(() => expect(container.querySelectorAll(".melody-editor-note")).toHaveLength(3)
     );
     key("KeyZ", { ctrlKey: true });
-    await waitFor(() =>
-      expect(container.querySelectorAll(".melody-editor-note")).toHaveLength(2)
+    await waitFor(() => expect(container.querySelectorAll(".melody-editor-note")).toHaveLength(2)
     );
     key("KeyZ", { ctrlKey: true, shiftKey: true });
-    await waitFor(() =>
-      expect(container.querySelectorAll(".melody-editor-note")).toHaveLength(3)
+    await waitFor(() => expect(container.querySelectorAll(".melody-editor-note")).toHaveLength(3)
     );
     key("KeyY", { ctrlKey: true });
     key("KeyQ", { repeat: true });
@@ -292,13 +257,11 @@ describe("melody editor", () => {
     key("Escape", { key: "Escape" });
     key("KeyA", { ctrlKey: true });
     key("Delete", { key: "Delete" });
-    await waitFor(() =>
-      expect(container.querySelectorAll(".melody-editor-note")).toHaveLength(0)
+    await waitFor(() => expect(container.querySelectorAll(".melody-editor-note")).toHaveLength(0)
     );
     key("KeyZ", { ctrlKey: true });
     await waitFor(() =>
-      expect(
-        container.querySelectorAll(".melody-editor-note").length
+      expect( container.querySelectorAll(".melody-editor-note").length
       ).toBeGreaterThan(0)
     );
     key("End", { key: "End" });
@@ -314,11 +277,7 @@ describe("melody editor", () => {
     expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
 
     const note = container.querySelector(".melody-editor-note");
-    fireEvent.pointerDown(note, {
-      pointerId: 1,
-      clientX: 100,
-      clientY: 100
-    });
+    fireEvent.pointerDown(note, { pointerId: 1, clientX: 100, clientY: 100 });
     fireEvent.change(
       container.querySelector(".melody-editor-inline-selection select"),
       { target: { value: "1" } }
@@ -343,15 +302,11 @@ describe("melody editor", () => {
 
     fireEvent.change(
       container.querySelector("#melody-editor-horizontal-zoom"),
-      {
-        target: { value: "180" }
-      }
+      { target: { value: "180" } }
     );
     fireEvent.change(
       container.querySelector("#melody-editor-horizontal-zoom"),
-      {
-        target: { value: "180" }
-      }
+      { target: { value: "180" } }
     );
     shell.scrollTop = 361;
     fireEvent.change(container.querySelector("#melody-editor-vertical-zoom"), {
@@ -366,9 +321,7 @@ describe("melody editor", () => {
     fireEvent.wheel(canvas, { ctrlKey: true, shiftKey: true, deltaY: 1 });
     fireEvent.change(
       container.querySelector("#melody-editor-horizontal-zoom"),
-      {
-        target: { value: "600" }
-      }
+      { target: { value: "600" } }
     );
     fireEvent.wheel(canvas, { ctrlKey: true, shiftKey: true, deltaY: -1 });
     fireEvent.change(container.querySelector("#melody-editor-vertical-zoom"), {
@@ -384,64 +337,22 @@ describe("melody editor", () => {
     const thumbs = container.querySelectorAll(".melody-editor-scroll-thumb");
     fireEvent.pointerMove(thumbs[0], { pointerId: 99, clientX: 5 });
     fireEvent.pointerUp(thumbs[0], { pointerId: 99 });
-    fireEvent.pointerDown(thumbs[0], {
-      pointerId: 1,
-      clientX: 10,
-      clientY: 10
-    });
-    fireEvent.pointerMove(thumbs[0], {
-      pointerId: 1,
-      clientX: 50,
-      clientY: 10
-    });
+    fireEvent.pointerDown(thumbs[0], { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(thumbs[0], { pointerId: 1, clientX: 50, clientY: 10 });
     fireEvent.pointerUp(thumbs[0], { pointerId: 1 });
-    fireEvent.pointerDown(thumbs[1], {
-      pointerId: 2,
-      clientX: 10,
-      clientY: 10
-    });
-    fireEvent.pointerMove(thumbs[1], {
-      pointerId: 2,
-      clientX: 10,
-      clientY: 50
-    });
+    fireEvent.pointerDown(thumbs[1], { pointerId: 2, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(thumbs[1], { pointerId: 2, clientX: 10, clientY: 50 });
     fireEvent.pointerCancel(thumbs[1], { pointerId: 2 });
 
     let note = container.querySelector(".melody-editor-note");
-    fireEvent.pointerDown(note, {
-      pointerId: 3,
-      clientX: 100,
-      clientY: 100
-    });
-    fireEvent.pointerMove(canvas, {
-      pointerId: 3,
-      clientX: 100,
-      clientY: 100
-    });
-    fireEvent.pointerMove(canvas, {
-      pointerId: 3,
-      clientX: 100,
-      clientY: 80,
-      shiftKey: true
-    });
-    fireEvent.pointerMove(canvas, {
-      pointerId: 3,
-      clientX: 100,
-      clientY: 80,
-      shiftKey: true
-    });
-    fireEvent.pointerMove(canvas, {
-      pointerId: 3,
-      clientX: 130,
-      clientY: 80
-    });
+    fireEvent.pointerDown(note, { pointerId: 3, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(canvas, { pointerId: 3, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(canvas, { pointerId: 3, clientX: 100, clientY: 80, shiftKey: true });
+    fireEvent.pointerMove(canvas, { pointerId: 3, clientX: 100, clientY: 80, shiftKey: true });
+    fireEvent.pointerMove(canvas, { pointerId: 3, clientX: 130, clientY: 80 });
     fireEvent.pointerUp(canvas, { pointerId: 3 });
     note = container.querySelector(".melody-editor-note");
-    fireEvent.pointerDown(note, {
-      pointerId: 13,
-      clientX: 100,
-      clientY: 100
-    });
+    fireEvent.pointerDown(note, { pointerId: 13, clientX: 100, clientY: 100 });
     fireEvent.pointerUp(canvas, { pointerId: 13 });
     note = container.querySelector(".melody-editor-note");
     fireEvent.pointerDown(note.querySelector(".is-left"), {
@@ -449,16 +360,8 @@ describe("melody editor", () => {
       clientX: 100,
       clientY: 100
     });
-    fireEvent.pointerMove(canvas, {
-      pointerId: 4,
-      clientX: 90,
-      clientY: 100
-    });
-    fireEvent.pointerMove(canvas, {
-      pointerId: 4,
-      clientX: 89,
-      clientY: 100
-    });
+    fireEvent.pointerMove(canvas, { pointerId: 4, clientX: 90, clientY: 100 });
+    fireEvent.pointerMove(canvas, { pointerId: 4, clientX: 89, clientY: 100 });
     fireEvent.pointerUp(canvas, { pointerId: 4 });
     note = container.querySelector(".melody-editor-note");
     fireEvent.pointerDown(note.querySelector(".is-right"), {
@@ -466,49 +369,17 @@ describe("melody editor", () => {
       clientX: 100,
       clientY: 100
     });
-    fireEvent.pointerMove(canvas, {
-      pointerId: 5,
-      clientX: 110,
-      clientY: 100
-    });
+    fireEvent.pointerMove(canvas, { pointerId: 5, clientX: 110, clientY: 100 });
     fireEvent.pointerCancel(canvas, { pointerId: 5 });
 
-    fireEvent.pointerDown(canvas, {
-      pointerId: 6,
-      button: 0,
-      clientX: 80,
-      clientY: 450
-    });
-    fireEvent.pointerMove(canvas, {
-      pointerId: 6,
-      clientX: 220,
-      clientY: 600
-    });
+    fireEvent.pointerDown(canvas, { pointerId: 6, button: 0, clientX: 80, clientY: 450 });
+    fireEvent.pointerMove(canvas, { pointerId: 6, clientX: 220, clientY: 600 });
     fireEvent.pointerUp(canvas, { pointerId: 6 });
-    fireEvent.pointerDown(canvas, {
-      pointerId: 9,
-      button: 1,
-      clientX: 10,
-      clientY: 10
-    });
-    fireEvent.pointerDown(canvas, {
-      pointerId: 10,
-      button: 0,
-      clientX: 10,
-      clientY: 10
-    });
+    fireEvent.pointerDown(canvas, { pointerId: 9, button: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerDown(canvas, { pointerId: 10, button: 0, clientX: 10, clientY: 10 });
     fireEvent.pointerUp(canvas, { pointerId: 10, clientX: 10, clientY: 10 });
-    fireEvent.pointerDown(canvas, {
-      pointerId: 15,
-      button: 0,
-      clientX: 10,
-      clientY: 10
-    });
-    fireEvent.pointerMove(canvas, {
-      pointerId: 15,
-      clientX: 11,
-      clientY: 11
-    });
+    fireEvent.pointerDown(canvas, { pointerId: 15, button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(canvas, { pointerId: 15, clientX: 11, clientY: 11 });
     fireEvent.pointerUp(canvas, { pointerId: 15, clientX: 11, clientY: 11 });
     fireEvent.pointerDown(canvas, {
       pointerId: 16,
@@ -525,16 +396,10 @@ describe("melody editor", () => {
       clientX: 10,
       clientY: 10
     });
-    fireEvent.pointerMove(canvas, {
-      pointerId: 12,
-      clientX: 10,
-      clientY: 30
-    });
+    fireEvent.pointerMove(canvas, { pointerId: 12, clientX: 10, clientY: 30 });
     fireEvent.pointerUp(canvas, { pointerId: 12, clientX: 10, clientY: 30 });
     fireEvent.doubleClick(canvas, { clientX: 200 });
-    fireEvent.pointerDown(container.querySelector(".melody-editor-piano-key"), {
-      pointerId: 7
-    });
+    fireEvent.pointerDown(container.querySelector(".melody-editor-piano-key"), { pointerId: 7 });
     fireEvent.pointerDown(
       container.querySelector(".melody-editor-piano-key.is-black"),
       { pointerId: 11 }
@@ -579,10 +444,7 @@ describe("melody editor", () => {
     const { container } = await loadEditor();
     const [vocals, master] = container.querySelectorAll("audio");
     const shell = container.querySelector(".melody-editor-roll-shell");
-    for (const [name, value] of Object.entries({
-      clientWidth: 300,
-      scrollWidth: 1600
-    })) {
+    for (const [name, value] of Object.entries({ clientWidth: 300, scrollWidth: 1600 })) {
       Object.defineProperty(shell, name, { configurable: true, value });
     }
     Object.defineProperties(master, {
@@ -625,17 +487,12 @@ describe("melody editor", () => {
     fireEvent.pointerDown(playhead, { pointerId: 3, clientX: 150 });
     await act(async () => frames.at(-1)(2100));
     fireEvent.pointerUp(playhead, { pointerId: 3, clientX: 150 });
-    Object.defineProperty(master, "paused", {
-      configurable: true,
-      value: true
-    });
+    Object.defineProperty(master, "paused", { configurable: true, value: true });
     await act(async () => frames.at(-1)(2500));
-    fireEvent.click(
-      container.querySelector(".is-transport .melody-editor-tool")
+    fireEvent.click( container.querySelector(".is-transport .melody-editor-tool")
     );
     await act(async () => Promise.resolve());
-    fireEvent.click(
-      container.querySelector(".is-transport .melody-editor-tool")
+    fireEvent.click( container.querySelector(".is-transport .melody-editor-tool")
     );
     fireEvent.timeUpdate(master);
     fireEvent.pause(master);
@@ -651,15 +508,12 @@ describe("melody editor", () => {
       clientY: 100
     });
     fireEvent.keyDown(window, { code: "KeyD", ctrlKey: true });
-    await waitFor(() =>
-      expect(container.querySelectorAll(".melody-editor-note")).toHaveLength(3)
+    await waitFor(() => expect(container.querySelectorAll(".melody-editor-note")).toHaveLength(3)
     );
     fireEvent.keyDown(window, { code: "KeyX", ctrlKey: true });
-    await waitFor(() =>
-      expect(container.querySelectorAll(".melody-editor-note")).toHaveLength(2)
+    await waitFor(() => expect(container.querySelectorAll(".melody-editor-note")).toHaveLength(2)
     );
-    const dials = container.querySelectorAll(
-      ".melody-editor-compact-dials input"
+    const dials = container.querySelectorAll( ".melody-editor-compact-dials input"
     );
     fireEvent.change(dials[1], { target: { value: "0.4" } });
     fireEvent.change(dials[2], { target: { value: "0.3" } });
@@ -669,8 +523,7 @@ describe("melody editor", () => {
       configurable: true,
       value: () => Promise.reject(new Error("play failed"))
     });
-    fireEvent.click(
-      container.querySelector(".is-transport .melody-editor-tool")
+    fireEvent.click( container.querySelector(".is-transport .melody-editor-tool")
     );
     await waitFor(() => expect(mocks.notify).toHaveBeenCalled());
   });
@@ -681,8 +534,7 @@ describe("melody editor", () => {
       song_map: { ...payload.song_map, duration: 0 }
     });
     const { container } = await loadEditor();
-    expect(
-      container.querySelector(".melody-editor-timecode").textContent
+    expect( container.querySelector(".melody-editor-timecode").textContent
     ).toContain("2.00");
   });
 
@@ -695,11 +547,9 @@ describe("melody editor", () => {
       ...payload,
       song_map: { ...payload.song_map, notes: [] }
     });
-    const empty = render(
-      <MelodyEditor song={{ id: "empty", title: "Empty" }} />
+    const empty = render( <MelodyEditor song={{ id: "empty", title: "Empty" }} />
     );
-    await waitFor(() =>
-      expect(empty.container.querySelector(".melody-editor-loading")).toBeNull()
+    await waitFor(() => expect(empty.container.querySelector(".melody-editor-loading")).toBeNull()
     );
     fireEvent.keyDown(window, { key: "ArrowRight", code: "ArrowRight" });
     fireEvent.change(
@@ -714,29 +564,15 @@ describe("melody editor", () => {
         ...payload.song_map,
         notes: [
           ...payload.song_map.notes,
-          {
-            _id: "none",
-            start: 2,
-            end: 2.5,
-            midi_note: 64,
-            syllable_index: null
-          },
-          {
-            _id: "invalid",
-            start: 2.5,
-            end: 3,
-            midi_note: 65,
-            syllable_index: "invalid"
-          }
+          { _id: "none", start: 2, end: 2.5, midi_note: 64, syllable_index: null },
+          { _id: "invalid", start: 2.5, end: 3, midi_note: 65, syllable_index: "invalid" }
         ]
       }
     });
-    const invalid = render(
-      <MelodyEditor song={{ id: "invalid", title: "Invalid" }} />
+    const invalid = render( <MelodyEditor song={{ id: "invalid", title: "Invalid" }} />
     );
     await waitFor(() =>
-      expect(
-        invalid.container.querySelectorAll(".melody-editor-note")
+      expect( invalid.container.querySelectorAll(".melody-editor-note")
       ).toHaveLength(4)
     );
   });
@@ -747,24 +583,14 @@ describe("melody editor", () => {
       song_map: {
         duration: 0,
         syllables: [{ index: 2, text: "" }, { text: "Raw" }],
-        display_notes: [
-          { start: "bad", end: 1 },
-          { start: 2, end: "bad" }
-        ]
+        display_notes: [ { start: "bad", end: 1 }, { start: 2, end: "bad" } ]
       }
     });
-    mocks.saveSongEditor.mockResolvedValueOnce({
-      ai_backup_exists: true,
-      song_map: {}
-    });
-    mocks.resetSongEditor.mockResolvedValueOnce({
-      ai_backup_exists: true,
-      song_map: {}
-    });
+    mocks.saveSongEditor.mockResolvedValueOnce({ ai_backup_exists: true, song_map: {} });
+    mocks.resetSongEditor.mockResolvedValueOnce({ ai_backup_exists: true, song_map: {} });
     const result = render(<MelodyEditor song={{ id: "sparse", title: "" }} />);
     await waitFor(() =>
-      expect(result.container.querySelectorAll(".melody-editor-note")).toHaveLength(
-        1
+      expect(result.container.querySelectorAll(".melody-editor-note")).toHaveLength( 1
       )
     );
     fireEvent.pointerDown(result.container.querySelector(".melody-editor-note"), {
@@ -785,18 +611,15 @@ describe("melody editor", () => {
     fireEvent.click(result.container.querySelector(".is-ai .tone-amber"));
     await waitFor(() => expect(mocks.resetSongEditor).toHaveBeenCalled());
     await waitFor(() =>
-      expect(result.container.querySelectorAll(".melody-editor-note")).toHaveLength(
-        0
+      expect(result.container.querySelectorAll(".melody-editor-note")).toHaveLength( 0
       )
     );
 
     cleanup();
     mocks.getSongEditor.mockResolvedValueOnce({ song_map: {} });
-    const noNotes = render(
-      <MelodyEditor song={{ id: "no-notes", title: "No notes" }} />
+    const noNotes = render( <MelodyEditor song={{ id: "no-notes", title: "No notes" }} />
     );
-    await waitFor(() =>
-      expect(noNotes.container.querySelector(".melody-editor-loading")).toBeNull()
+    await waitFor(() => expect(noNotes.container.querySelector(".melody-editor-loading")).toBeNull()
     );
   });
 
@@ -813,16 +636,8 @@ describe("melody editor", () => {
 
     const canvas = container.querySelector(".melody-editor-roll-canvas");
     const selected = container.querySelector(".melody-editor-note.is-selected");
-    fireEvent.pointerDown(selected, {
-      pointerId: 90,
-      clientX: 100,
-      clientY: 100
-    });
-    fireEvent.pointerMove(canvas, {
-      pointerId: 90,
-      clientX: 110,
-      clientY: 100
-    });
+    fireEvent.pointerDown(selected, { pointerId: 90, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(canvas, { pointerId: 90, clientX: 110, clientY: 100 });
     fireEvent.pointerUp(canvas, { pointerId: 90 });
 
     fireEvent.keyDown(window, { code: "KeyD", ctrlKey: true });

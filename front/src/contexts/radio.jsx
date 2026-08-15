@@ -1,12 +1,4 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState
-} from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
 import { translateSaved } from "../i18n/runtime";
 import { DEFAULT_RADIO_SETTINGS, RADIO_STATIONS } from "./radio-config";
@@ -77,10 +69,7 @@ export function RadioProvider({ children }) {
   const station = RADIO_STATIONS.find(({ id }) => id === stationId);
   // Stryker disable ArrayDeclaration: only module functions and stable React refs are captured.
   const persist = useCallback((patch) => {
-    const next = {
-      ...loadRadioSettings(),
-      ...patch
-    };
+    const next = { ...loadRadioSettings(), ...patch };
     writeJsonStorage(STORAGE_KEY, next);
     api.updateUiPreferences("radio", next).catch(() => {});
   }, []);
@@ -160,9 +149,7 @@ export function RadioProvider({ children }) {
         bands
       );
       bassRef.current = spectrum.bass;
-      spectrum.bands.forEach((level, index) => {
-        bands[index] = level;
-      });
+      spectrum.bands.forEach((level, index) => { bands[index] = level; });
       const rootStyle = document.documentElement.style;
       rootStyle.setProperty("--radio-bass", bassRef.current.toFixed(3));
       rootStyle.setProperty("--radio-analysis-active", "1");
@@ -269,9 +256,7 @@ export function RadioProvider({ children }) {
               setPlaying(true);
               if (fadeIn) fadeVolumeIn(volumeRef.current);
               if (remember)
-                persist({
-                  enabled: true
-                });
+                persist({ enabled: true });
               if (analyse) await unlockAudioAnalysis();
               return true;
             } catch (reason) {
@@ -295,9 +280,7 @@ export function RadioProvider({ children }) {
           // failures without showing a false error immediately on app launch.
           if (pass === 0) {
             startIndex = 0;
-            await new Promise((resolve) => {
-              setTimeout(resolve, 500);
-            });
+            await new Promise((resolve) => { setTimeout(resolve, 500); });
           }
         }
         throw lastError || new Error(NO_STREAM_ERROR);
@@ -305,17 +288,13 @@ export function RadioProvider({ children }) {
         setPlaying(false);
         setError(
           reason.message
-            ? translateSaved("Не удалось запустить радио: {0}", {
-                0: reason.message
-              })
+            ? translateSaved("Не удалось запустить радио: {0}", { 0: reason.message })
             : translateSaved("Не удалось запустить радио")
         );
         return false;
       } finally {
         streamAttemptRef.current = false;
-        if (playbackVersion === playbackVersionRef.current) {
-          setLoading(false);
-        }
+        if (playbackVersion === playbackVersionRef.current) setLoading(false);
       }
     },
     [fadeVolumeIn, loadStream, persist, station, unlockAudioAnalysis]
@@ -329,9 +308,7 @@ export function RadioProvider({ children }) {
       setPlaying(false);
       setLoading(false);
       if (remember)
-        persist({
-          enabled: false
-        });
+        persist({ enabled: false });
       stopAnalysis();
     },
     [cancelVolumeFade, persist, stopAnalysis]
@@ -352,9 +329,7 @@ export function RadioProvider({ children }) {
       setVolumeState(next);
       cancelVolumeFade();
       audioRef.current.volume = next;
-      persist({
-        volume: next
-      });
+      persist({ volume: next });
     },
     [cancelVolumeFade, persist]
   );
@@ -371,17 +346,10 @@ export function RadioProvider({ children }) {
       setLoading(false);
       setError("");
       setStationIdState(next.id);
-      persist({
-        stationId: next.id
-      });
+      persist({ stationId: next.id });
       streamIndexRef.current = 0;
       loadStream(0, next);
-      if (shouldResume && !suspendedRef.current) {
-        turnOn({
-          remember: false,
-          targetStation: next
-        });
-      }
+      if (shouldResume && !suspendedRef.current) turnOn({ remember: false, targetStation: next });
     },
     [isLoading, isPlaying, loadStream, persist, stationId, stopAnalysis, turnOn]
   );
@@ -391,18 +359,14 @@ export function RadioProvider({ children }) {
         suspendedRef.current = true;
         resumeAfterRecordingRef.current = isPlaying;
         if (isPlaying)
-          turnOff({
-            remember: false
-          });
+          turnOff({ remember: false });
         return;
       }
       if (!active && suspendedRef.current) {
         suspendedRef.current = false;
         const shouldResume = resumeAfterRecordingRef.current;
         if (shouldResume)
-          turnOn({
-            remember: false
-          });
+          turnOn({ remember: false });
       }
     },
     [isPlaying, turnOff, turnOn]
@@ -413,18 +377,12 @@ export function RadioProvider({ children }) {
     if (streamAttemptRef.current) return;
     const nextIndex = streamIndexRef.current + 1;
     if (nextIndex < station.streams.length && isPlaying) {
-      turnOn({
-        remember: false,
-        startIndex: nextIndex
-      });
+      turnOn({ remember: false, startIndex: nextIndex });
       return;
     }
     setPlaying(false);
     setLoading(false);
-    setError(
-      translateSaved("{0} временно недоступна", {
-        0: station.name
-      })
+    setError( translateSaved("{0} временно недоступна", { 0: station.name })
     );
     stopAnalysis();
   }, [isPlaying, station, stopAnalysis, turnOn]);

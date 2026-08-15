@@ -18,10 +18,7 @@ describe("studio microphone quality", () => {
   test("builds an always-on cleanup graph before creative effects", async () => {
     const processedTrack = { kind: "audio", contentHint: "", stop: vi.fn() };
     const destination = {
-      stream: {
-        getAudioTracks: () => [processedTrack],
-        getTracks: () => [processedTrack]
-      }
+      stream: { getAudioTracks: () => [processedTrack], getTracks: () => [processedTrack] }
     };
     const created = { filters: [], compressors: [] };
     globalThis.AudioContext = class {

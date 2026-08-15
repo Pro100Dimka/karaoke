@@ -6,11 +6,7 @@ import { clamp } from "./melody-editor-state";
 import useMelodyEditorAudio from "./useMelodyEditorAudio";
 import useMelodyEditorViewport from "./useMelodyEditorViewport";
 
-const createClock = (media = 0, running = false) => ({
-  media,
-  perf: performance.now(),
-  running
-});
+const createClock = (media = 0, running = false) => ({ media, perf: performance.now(), running });
 
 export default function useMelodyEditorTransport({
   autoScroll,
@@ -38,13 +34,7 @@ export default function useMelodyEditorTransport({
   const playheadDragRef = useRef(null);
   const playbackOriginRef = useRef(null);
   const playheadPreviewMidiRef = useRef(null);
-  const {
-    auditionNote,
-    instrumentalRef,
-    stopOscillator,
-    updateSynth,
-    vocalsRef
-  } = useMelodyEditorAudio({ notes, playbackRate, volumes });
+  const { auditionNote, instrumentalRef, stopOscillator, updateSynth, vocalsRef } = useMelodyEditorAudio({ notes, playbackRate, volumes });
   const viewport = useMelodyEditorViewport({
     duration,
     instrumentalRef,
@@ -105,9 +95,7 @@ export default function useMelodyEditorTransport({
               current = mediaCurrent;
             }
           }
-        } else {
-          Object.assign(clock, createClock(current, false));
-        }
+        } else Object.assign(clock, createClock(current, false));
         const playheadX = keyboardWidth + current * zoom;
         rollCanvasRef.current?.style.setProperty(
           "--editor-playhead-x",
@@ -216,11 +204,7 @@ export default function useMelodyEditorTransport({
       const shell = rollShellRef.current;
       playbackOriginRef.current =
         autoScroll && shell
-          ? {
-              time: master.currentTime,
-              scrollLeft: shell.scrollLeft,
-              scrollTop: shell.scrollTop
-            }
+          ? { time: master.currentTime, scrollLeft: shell.scrollLeft, scrollTop: shell.scrollTop }
           : null;
       vocal.currentTime = master.currentTime;
       master.playbackRate = playbackRate;
@@ -235,9 +219,7 @@ export default function useMelodyEditorTransport({
     } catch (error) {
       setPlaying(false);
       await notify(
-        translateSaved("Не удалось начать воспроизведение: {0}", {
-          0: getErrorMessage(error)
-        })
+        translateSaved("Не удалось начать воспроизведение: {0}", { 0: getErrorMessage(error) })
       );
     }
   }, [
@@ -340,11 +322,7 @@ export default function useMelodyEditorTransport({
         stopOscillator();
       }
       playheadPreviewMidiRef.current = null;
-      playheadDragRef.current = {
-        pointerId: event.pointerId,
-        resume,
-        value: time
-      };
+      playheadDragRef.current = { pointerId: event.pointerId, resume, value: time };
       event.currentTarget.setPointerCapture?.(event.pointerId);
       previewPlayhead(pointerTime(event.clientX));
     },

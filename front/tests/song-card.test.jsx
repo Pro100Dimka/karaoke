@@ -1,5 +1,4 @@
 /* @vitest-environment jsdom */
-import React from "react";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -64,20 +63,14 @@ test("ready song opens from card click and keyboard but not nested actions", () 
 
 test("working song shows progress and opens its processing modal", () => {
   const actions = handlers();
-  const song = {
-    id: "song",
-    title: "Title",
-    status: "processing",
-    progress_percent: 42
-  };
+  const song = { id: "song", title: "Title", status: "processing", progress_percent: 42 };
   const { container, getByTestId } = render(
     <LibrarySongCard cardIndex={0} song={song} canManageLibrary {...actions} />
   );
   expect(getByTestId("progress").textContent).toBe("42");
   fireEvent.click(container.querySelector(".library-song-card-progress"));
   expect(actions.onOpenProcessing).toHaveBeenCalledWith(song);
-  expect(
-    container.querySelector(".library-song-card").getAttribute("role")
+  expect( container.querySelector(".library-song-card").getAttribute("role")
   ).toBeNull();
 });
 

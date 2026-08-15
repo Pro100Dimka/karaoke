@@ -57,9 +57,7 @@ function EffectPreset({ id, label, symbol, echo, reverb, active, onClick }) {
           ? "0 0 1rem color-mix(in srgb, var(--preset-accent) 24%, transparent), inset 0 1px 0 color-mix(in srgb, var(--color-highlight) 7%, transparent)"
           : "inset 0 1px 0 color-mix(in srgb, var(--color-highlight) 4%, transparent)"
       }}
-      style={{
-        "--preset-accent": accent
-      }}
+      style={{ "--preset-accent": accent }}
     >
       <Stack align="center">
         <span
@@ -108,9 +106,7 @@ function EffectPresets({ effectPreset, onApplyEffectPreset }) {
     <Grid
       columns={4}
       gap="0.5rem"
-      sx={{
-        width: "100%"
-      }}
+      sx={{ width: "100%" }}
     >
       {EFFECT_PRESETS.map(normalizePreset).map(
         ([id, label, symbol, echo, reverb, delay]) => {
@@ -166,12 +162,7 @@ function ToolButton({ icon: Icon, label, active, title, onClick }) {
 
         <Typography
           variant="caption"
-          sx={{
-            color: "inherit",
-            fontSize: 11,
-            fontWeight: 800,
-            whiteSpace: "nowrap"
-          }}
+          sx={{ color: "inherit", fontSize: 11, fontWeight: 800, whiteSpace: "nowrap" }}
         >
           {label}
         </Typography>
@@ -199,8 +190,7 @@ function ToolTabs({
       translateSaved("Слышу себя"),
       monitoringEnabled,
       () => onMonitoringChange?.(!monitoringEnabled),
-      translateSaved(
-        "Независимое прослушивание микрофона с выбранными эффектами"
+      translateSaved( "Независимое прослушивание микрофона с выбранными эффектами"
       )
     ],
     [
@@ -209,8 +199,7 @@ function ToolTabs({
       translateSaved("Автоскрытие"),
       autoHideEnabled,
       () => onAutoHideChange?.(!autoHideEnabled),
-      translateSaved(
-        "Автоматически показывать и скрывать консоль при движении мыши"
+      translateSaved( "Автоматически показывать и скрывать консоль при движении мыши"
       )
     ],
     ["settings", Cog, translateSaved("Настройки"), null, onOpenAppSettings]
@@ -219,9 +208,7 @@ function ToolTabs({
     <Stack
       direction="row"
       gap={0.5}
-      sx={{
-        width: "100%"
-      }}
+      sx={{ width: "100%" }}
     >
       {tools.map(([id, Icon, label, active, onClick, title]) => (
         <ToolButton

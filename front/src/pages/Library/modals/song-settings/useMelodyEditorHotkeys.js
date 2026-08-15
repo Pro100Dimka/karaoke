@@ -1,8 +1,5 @@
 import { useEffect } from "react";
-import {
-  isEditableHotkeyTarget,
-  isHotkeyScopeActive
-} from "../../../../utils/hotkeys";
+import { isEditableHotkeyTarget, isHotkeyScopeActive } from "../../../../utils/hotkeys";
 
 const DELETE_KEYS = ["Delete", "Backspace"];
 const HORIZONTAL_ARROW_KEYS = ["ArrowLeft", "ArrowRight"];

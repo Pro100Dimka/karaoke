@@ -12,29 +12,13 @@ function readFiniteTime(source, ...keys) {
 function normalizeLine(line) {
   if (!line) return null;
 
-  const start = readFiniteTime(
-    line,
-    "start",
-    "start_sec",
-    "start_time",
-    "begin",
-    "from"
+  const start = readFiniteTime( line, "start", "start_sec", "start_time", "begin", "from"
   );
-  const end = readFiniteTime(
-    line,
-    "end",
-    "end_sec",
-    "end_time",
-    "finish",
-    "to"
+  const end = readFiniteTime( line, "end", "end_sec", "end_time", "finish", "to"
   );
   if ([start, end].includes(null) || end < start) return null;
 
-  return {
-    ...line,
-    start,
-    end
-  };
+  return { ...line, start, end };
 }
 
 function getSafeLyrics(lyrics) {

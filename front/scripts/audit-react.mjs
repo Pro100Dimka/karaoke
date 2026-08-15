@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const ROOT = path.resolve("src");
-const EXTENSIONS = new Set([".js", ".jsx"]);
+const EXTENSIONS = [".js", ".jsx"];
 const findings = [];
 
 function walk(directory) {
@@ -12,7 +12,7 @@ function walk(directory) {
       if (fullPath === path.join(ROOT, "theme")) return [];
       return walk(fullPath);
     }
-    return EXTENSIONS.has(path.extname(entry.name)) ? [fullPath] : [];
+    return EXTENSIONS.includes(path.extname(entry.name)) ? [fullPath] : [];
   });
 }
 
@@ -51,6 +51,4 @@ for (const filePath of walk(ROOT)) {
 if (findings.length) {
   console.log("Potential React lifecycle findings:");
   findings.forEach((finding) => console.log(`- ${finding}`));
-} else {
-  console.log("No obvious timer or event-listener cleanup issues found.");
-}
+} else console.log("No obvious timer or event-listener cleanup issues found.");

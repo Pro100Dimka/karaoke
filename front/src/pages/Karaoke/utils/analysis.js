@@ -23,16 +23,13 @@ function getAnalysisAdvice(accuracy, meanDeviation) {
     );
   }
   if (meanDeviation > 1) {
-    return translateSaved(
-      "Сфокусируйтесь на точном начале каждой фразы и удержании высоты ноты."
+    return translateSaved( "Сфокусируйтесь на точном начале каждой фразы и удержании высоты ноты."
     );
   }
   return accuracy >= 70
-    ? translateSaved(
-        "Хорошая точность. Попробуйте сделать фразы ровнее по громкости и дыханию."
+    ? translateSaved( "Хорошая точность. Попробуйте сделать фразы ровнее по громкости и дыханию."
       )
-    : translateSaved(
-        "Повторите сложные фразы медленнее, ориентируясь на ноты на экране."
+    : translateSaved( "Повторите сложные фразы медленнее, ориентируясь на ноты на экране."
       );
 }
 
@@ -79,8 +76,7 @@ export function normalizeAnalysisResult(result) {
 export function getAnalysisFeedback(result) {
   const normalized = normalizeAnalysisResult(result);
   const accuracy = normalized.pitch_accuracy_percent;
-  const scoredSections = normalized.sections.filter(
-    (section) => section.accuracy_percent != null
+  const scoredSections = normalized.sections.filter( (section) => section.accuracy_percent != null
   );
   const bestSection = scoredSections.reduce(
     (best, section) =>
@@ -97,9 +93,7 @@ export function getAnalysisFeedback(result) {
     null
   );
   const grade = getAnalysisGrade(accuracy);
-  const advice = getAnalysisAdvice(
-    accuracy,
-    normalized.mean_deviation_semitones
+  const advice = getAnalysisAdvice( accuracy, normalized.mean_deviation_semitones
   );
   return {
     ...normalized,

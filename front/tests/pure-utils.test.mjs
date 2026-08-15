@@ -22,10 +22,7 @@ import {
   groupBrowserAudioDevices
 } from "../src/pages/Karaoke/utils/audio-settings.js";
 import { formatCompactKey } from "../src/pages/Karaoke/utils/display.js";
-import {
-  formatTime,
-  midiToWesternNote
-} from "../src/pages/Karaoke/utils/format.js";
+import { formatTime, midiToWesternNote } from "../src/pages/Karaoke/utils/format.js";
 import { getKaraokeStageLayout } from "../src/pages/Karaoke/utils/layout.js";
 import {
   findActiveMelodyNote,
@@ -35,10 +32,7 @@ import {
 import { normalizeNoteList } from "../src/pages/Karaoke/utils/note-normalization.js";
 import { getPanoramaPosition } from "../src/pages/Karaoke/utils/panorama.js";
 import { shouldLoadKaraokeResult } from "../src/pages/Karaoke/utils/result.js";
-import {
-  getSeekTime,
-  getTimelineProgress
-} from "../src/pages/Karaoke/utils/timeline.js";
+import { getSeekTime, getTimelineProgress } from "../src/pages/Karaoke/utils/timeline.js";
 import {
   clampPlaybackPosition,
   createPlayerSyncCommand,
@@ -77,11 +71,7 @@ import {
 } from "../src/pages/Library/utils.js";
 import { translateSaved } from "../src/i18n/runtime.js";
 import { getErrorMessage } from "../src/utils/errors.js";
-import {
-  getBrowserStorage,
-  readJsonStorage,
-  writeJsonStorage
-} from "../src/utils/storage.js";
+import { getBrowserStorage, readJsonStorage, writeJsonStorage } from "../src/utils/storage.js";
 
 let utilityImportId = 0;
 const loadKaraokePreferencesUtility = () =>
@@ -107,16 +97,9 @@ describe("generic normalization utilities", () => {
     const playing = { paused: false, pause: vi.fn() };
     assert.equal(await toggleAudioPlayback(playing), false);
     assert.equal(playing.pause.mock.calls.length, 1);
-    assert.equal(
-      await toggleAudioPlayback({
-        paused: true,
-        play: () => Promise.resolve()
-      }),
-      true
+    assert.equal( await toggleAudioPlayback({ paused: true, play: () => Promise.resolve() }), true
     );
-    assert.equal(
-      await toggleAudioPlayback({ paused: true, play: () => Promise.reject() }),
-      false
+    assert.equal( await toggleAudioPlayback({ paused: true, play: () => Promise.reject() }), false
     );
   });
 
@@ -156,26 +139,14 @@ describe("generic normalization utilities", () => {
     assert.equal(formatLibraryDate("bad"), "—");
     const date = new Date("2026-01-02T12:00:00Z");
     assert.equal(formatLibraryDate(date), date.toLocaleDateString("ru-RU"));
-    assert.equal(
-      formatLibraryDate(date, "en-US"),
-      date.toLocaleDateString("en-US")
+    assert.equal( formatLibraryDate(date, "en-US"), date.toLocaleDateString("en-US")
     );
     for (const value of ["bad", NaN, Infinity, -1, 0, 0.1])
       assert.equal(formatEta(value), translateSaved("рассчитываем…"));
     assert.equal(formatEta(1), translateSaved("~{0} сек", { 0: 1 }));
-    assert.equal(
-      formatEta(59.6),
-      translateSaved("~{0} мин {1} сек", {
-        0: 1,
-        1: 0
-      })
+    assert.equal( formatEta(59.6), translateSaved("~{0} мин {1} сек", { 0: 1, 1: 0 })
     );
-    assert.equal(
-      formatEta(61),
-      translateSaved("~{0} мин {1} сек", {
-        0: 1,
-        1: 1
-      })
+    assert.equal( formatEta(61), translateSaved("~{0} мин {1} сек", { 0: 1, 1: 1 })
     );
   });
 
@@ -192,38 +163,22 @@ describe("generic normalization utilities", () => {
     assert.equal(writeJsonStorage("", {}), false);
     assert.equal(writeJsonStorage("x", undefined, storage), false);
     assert.equal(storage.setItem.mock.calls.length, 1);
-    assert.deepEqual(readJsonStorage("", { safe: true }, storage), {
-      safe: true
-    });
-    assert.deepEqual(readJsonStorage(null, { safe: true }, storage), {
-      safe: true
-    });
+    assert.deepEqual(readJsonStorage("", { safe: true }, storage), { safe: true });
+    assert.deepEqual(readJsonStorage(null, { safe: true }, storage), { safe: true });
     assert.equal(storage.getItem.mock.calls.length, 0);
-    assert.deepEqual(readJsonStorage("missing", { safe: true }, storage), {
-      safe: true
-    });
+    assert.deepEqual(readJsonStorage("missing", { safe: true }, storage), { safe: true });
     values.set("bad", "[");
-    assert.deepEqual(readJsonStorage("bad", { safe: true }, storage), {
-      safe: true
-    });
+    assert.deepEqual(readJsonStorage("bad", { safe: true }, storage), { safe: true });
     values.set("array", "[]");
-    assert.deepEqual(readJsonStorage("array", { safe: true }, storage), {
-      safe: true
-    });
+    assert.deepEqual(readJsonStorage("array", { safe: true }, storage), { safe: true });
     values.set("null", "null");
-    assert.deepEqual(readJsonStorage("null", { safe: true }, storage), {
-      safe: true
-    });
+    assert.deepEqual(readJsonStorage("null", { safe: true }, storage), { safe: true });
     values.set("primitive", "1");
-    assert.deepEqual(readJsonStorage("primitive", { safe: true }, storage), {
-      safe: true
-    });
+    assert.deepEqual(readJsonStorage("primitive", { safe: true }, storage), { safe: true });
     assert.equal(writeJsonStorage("x", {}, null), false);
     assert.equal(writeJsonStorage("x", {}, {}), false);
     assert.equal(writeJsonStorage(null, {}, storage), false);
-    const descriptor = Object.getOwnPropertyDescriptor(
-      globalThis,
-      "localStorage"
+    const descriptor = Object.getOwnPropertyDescriptor( globalThis, "localStorage"
     );
     Object.defineProperty(globalThis, "localStorage", {
       configurable: true,
@@ -237,26 +192,12 @@ describe("generic normalization utilities", () => {
     else delete globalThis.localStorage;
     assert.equal(writeJsonStorage("x", 1n, { setItem: () => {} }), false);
     assert.equal(
-      writeJsonStorage(
-        "x",
-        {},
-        {
-          setItem: () => {
-            throw new Error("full");
-          }
-        }
+      writeJsonStorage( "x", {}, { setItem: () => { throw new Error("full"); } }
       ),
       false
     );
     assert.deepEqual(
-      readJsonStorage(
-        "x",
-        { safe: true },
-        {
-          getItem: () => {
-            throw new Error("blocked");
-          }
-        }
+      readJsonStorage( "x", { safe: true }, { getItem: () => { throw new Error("blocked"); } }
       ),
       { safe: true }
     );
@@ -334,23 +275,12 @@ describe("karaoke domain utilities", () => {
     assert.equal(formatCompactKey("Am major chord"), "Ammajchord");
     assert.equal(formatCompactKey(null), "—");
     assert.equal(shouldLoadKaraokeResult({ id: "1", status: "done" }), true);
-    assert.equal(
-      shouldLoadKaraokeResult({ id: "1", status: "processing" }),
-      false
+    assert.equal( shouldLoadKaraokeResult({ id: "1", status: "processing" }), false
     );
     assert.equal(shouldLoadKaraokeResult(null), false);
     assert.deepEqual(
-      getKaraokeStageLayout({
-        mainWidth: 1600,
-        mainHeight: 900,
-        stageWidth: 800,
-        stageHeight: 450
-      }),
-      {
-        navExtra: 0,
-        videoWidth: 802,
-        videoHeight: 452
-      }
+      getKaraokeStageLayout({ mainWidth: 1600, mainHeight: 900, stageWidth: 800, stageHeight: 450 }),
+      { navExtra: 0, videoWidth: 802, videoHeight: 452 }
     );
     assert.deepEqual(
       getKaraokeStageLayout({
@@ -408,17 +338,9 @@ describe("karaoke domain utilities", () => {
   test("audio device settings are normalized and matched", () => {
     assert.deepEqual(
       normalizeAudioEffects({ reverb: 2, echo: -1, delay: "0.5" }),
-      {
-        reverb: 1,
-        echo: 0,
-        delay: 0.5
-      }
+      { reverb: 1, echo: 0, delay: 0.5 }
     );
-    assert.deepEqual(normalizeAudioEffects(null), {
-      reverb: 0,
-      echo: 0,
-      delay: 0
-    });
+    assert.deepEqual(normalizeAudioEffects(null), { reverb: 0, echo: 0, delay: 0 });
     assert.deepEqual(
       normalizeAudioRuntimeSettings({
         volume: 2,
@@ -457,15 +379,8 @@ describe("karaoke domain utilities", () => {
           .monitoringEnabled,
         true
       );
-    for (const [value, expected] of [
-      [0, 64],
-      [-1, 64],
-      [1.5, 64],
-      ["128", 128]
-    ])
-      assert.equal(
-        normalizeAudioRuntimeSettings({ buffer_size: value }).bufferSize,
-        expected
+    for (const [value, expected] of [ [0, 64], [-1, 64], [1.5, 64], ["128", 128] ])
+      assert.equal( normalizeAudioRuntimeSettings({ buffer_size: value }).bufferSize, expected
       );
     assert.deepEqual(
       normalizeAudioRuntimeSettings({
@@ -491,53 +406,37 @@ describe("karaoke domain utilities", () => {
       { name: "Other ASIO", is_asio: true },
       { name: "Focusrite USB ASIO", is_asio: true }
     ];
-    assert.equal(
-      findDriverOutputDevice(devices, "Focusrite ASIO Driver"),
-      devices[1]
+    assert.equal( findDriverOutputDevice(devices, "Focusrite ASIO Driver"), devices[1]
     );
     assert.equal(findDriverOutputDevice(devices, ""), devices[0]);
     const tokenMatch = { name: "Focusrite USB", is_asio: false };
     const asioOnly = { name: "Other", is_asio: true };
-    assert.equal(
-      findDriverOutputDevice([asioOnly, tokenMatch], "Focusrite Driver"),
-      tokenMatch
+    assert.equal( findDriverOutputDevice([asioOnly, tokenMatch], "Focusrite Driver"), tokenMatch
     );
     const asioMatch = { name: "Focusrite", is_asio: true };
     const twoTokenMatch = { name: "Focusrite USB", is_asio: false };
     assert.equal(
-      findDriverOutputDevice(
-        [twoTokenMatch, asioMatch],
-        "Focusrite ASIO Driver"
+      findDriverOutputDevice( [twoTokenMatch, asioMatch], "Focusrite ASIO Driver"
       ),
       asioMatch
     );
     assert.equal(
-      findDriverOutputDevice(
-        [{ name: "was here!", is_asio: false }, asioMatch],
-        "Focusrite ASIO"
+      findDriverOutputDevice( [{ name: "was here!", is_asio: false }, asioMatch], "Focusrite ASIO"
       ),
       asioMatch
     );
-    assert.equal(
-      findDriverOutputDevice([{ name: "AB", is_asio: false }], "AB"),
-      null
+    assert.equal( findDriverOutputDevice([{ name: "AB", is_asio: false }], "AB"), null
     );
     assert.equal(findDriverOutputDevice([null], "Focusrite"), null);
     assert.equal(
-      findDriverOutputDevice(
-        [{ name: "Stryker was here", is_asio: false }],
-        null
+      findDriverOutputDevice( [{ name: "Stryker was here", is_asio: false }], null
       ),
       null
     );
-    assert.equal(
-      findDriverOutputDevice([{ id: 1, is_asio: false }], "Stryker was here"),
-      null
+    assert.equal( findDriverOutputDevice([{ id: 1, is_asio: false }], "Stryker was here"), null
     );
     assert.equal(findDriverOutputDevice(null, "anything"), null);
-    assert.equal(
-      findDriverOutputDevice([{ name: null, is_asio: false }], "anything"),
-      null
+    assert.equal( findDriverOutputDevice([{ name: null, is_asio: false }], "anything"), null
     );
     assert.equal(
       findMatchingBrowserOutput(
@@ -548,9 +447,7 @@ describe("karaoke domain utilities", () => {
     );
     assert.equal(findMatchingBrowserOutput([], {}), null);
     assert.equal(
-      findMatchingBrowserOutput(
-        [{ kind: "audiooutput", deviceId: "x", label: "Focusrite" }],
-        null
+      findMatchingBrowserOutput( [{ kind: "audiooutput", deviceId: "x", label: "Focusrite" }], null
       ),
       null
     );
@@ -624,13 +521,7 @@ describe("karaoke domain utilities", () => {
     );
     assert.equal(
       findMatchingBrowserOutput(
-        [
-          {
-            kind: "audiooutput",
-            deviceId: "x",
-            label: "Focusrite USB ASIO Pro"
-          }
-        ],
+        [ { kind: "audiooutput", deviceId: "x", label: "Focusrite USB ASIO Pro" } ],
         { name: "Focusrite USB" }
       ).deviceId,
       "x"
@@ -641,19 +532,10 @@ describe("karaoke domain utilities", () => {
         { kind: "audiooutput", id: 2 },
         { kind: "video", id: 3 }
       ]),
-      {
-        inputs: [{ kind: "audioinput", id: 1 }],
-        outputs: [{ kind: "audiooutput", id: 2 }]
-      }
+      { inputs: [{ kind: "audioinput", id: 1 }], outputs: [{ kind: "audiooutput", id: 2 }] }
     );
-    assert.deepEqual(groupBrowserAudioDevices(null), {
-      inputs: [],
-      outputs: []
-    });
-    assert.deepEqual(groupBrowserAudioDevices([null]), {
-      inputs: [],
-      outputs: []
-    });
+    assert.deepEqual(groupBrowserAudioDevices(null), { inputs: [], outputs: [] });
+    assert.deepEqual(groupBrowserAudioDevices([null]), { inputs: [], outputs: [] });
   });
 
   test("melody guide and note normalization reject corrupt analysis", () => {
@@ -669,32 +551,17 @@ describe("karaoke domain utilities", () => {
     assert.equal(findActiveMelodyNote([{ start: 1, end: "bad" }], 1), null);
     assert.equal(findActiveMelodyNote([{ start: "bad", end: 2 }], 1), null);
     assert.equal(findActiveMelodyNote({}, 1), null);
-    assert.equal(
-      getMelodyGuideState({ notes, position: 1.5, volume: 1 }).active,
-      true
+    assert.equal( getMelodyGuideState({ notes, position: 1.5, volume: 1 }).active, true
     );
-    const shiftedGuide = getMelodyGuideState({
-      notes,
-      position: 1.5,
-      keyShift: 12,
-      volume: 0.5
-    });
+    const shiftedGuide = getMelodyGuideState({ notes, position: 1.5, keyShift: 12, volume: 0.5 });
     assert.equal(Math.round(shiftedGuide.frequency), 880);
     assert.equal(shiftedGuide.gain, 0.3 * 0.5 ** 1.65);
-    assert.equal(
-      getMelodyGuideState({ notes, position: 0, volume: 1 }).active,
-      false
+    assert.equal( getMelodyGuideState({ notes, position: 0, volume: 1 }).active, false
+    );
+    assert.equal( getMelodyGuideState({ notes, position: 1.5, volume: "bad" }).active, false
     );
     assert.equal(
-      getMelodyGuideState({ notes, position: 1.5, volume: "bad" }).active,
-      false
-    );
-    assert.equal(
-      getMelodyGuideState({
-        notes: [{ start: 0, end: 1, midi: "bad" }],
-        position: 0.5,
-        volume: 1
-      }).active,
+      getMelodyGuideState({ notes: [{ start: 0, end: 1, midi: "bad" }], position: 0.5, volume: 1 }).active,
       false
     );
     assert.deepEqual(
@@ -707,10 +574,7 @@ describe("karaoke domain utilities", () => {
         ],
         (name) => (name === "A" ? 69 : NaN)
       ).map(({ start, midi }) => ({ start, midi })),
-      [
-        { start: 0, midi: 69 },
-        { start: 2, midi: 60 }
-      ]
+      [ { start: 0, midi: 69 }, { start: 2, midi: 60 } ]
     );
     const callableNote = () => {};
     Object.assign(callableNote, { start: 0, end: 1, midi: 60 });
@@ -730,20 +594,14 @@ describe("karaoke domain utilities", () => {
     );
     assert.deepEqual(normalizeNoteList([{ start: 0, end: 1, note: "A" }]), []);
     assert.deepEqual(normalizeNoteList(null), []);
-    assert.deepEqual(
-      normalizeNoteList([{ start: 0, end: 1, note: "unknown" }]),
-      []
+    assert.deepEqual( normalizeNoteList([{ start: 0, end: 1, note: "unknown" }]), []
     );
     assert.deepEqual(
       normalizeNoteList([
         { start: 0, end: 2, midi: 61, wordIndex: 2, syllableIndex: 3 },
         { start: 0, end: 1, midi: 62 },
         { start: 0, end: 1, midi: 60 }
-      ]).map(({ midi, wordIndex, syllableIndex }) => ({
-        midi,
-        wordIndex,
-        syllableIndex
-      })),
+      ]).map(({ midi, wordIndex, syllableIndex }) => ({ midi, wordIndex, syllableIndex })),
       [
         { midi: 60, wordIndex: null, syllableIndex: null },
         { midi: 62, wordIndex: null, syllableIndex: null },
@@ -756,14 +614,8 @@ describe("karaoke domain utilities", () => {
     assert.deepEqual(getPanoramaPosition(1, Infinity, {}), { x: 0, y: 48 });
     assert.deepEqual(getPanoramaPosition("bad", 1000, null), { x: 0, y: 48 });
     assert.deepEqual(getPanoramaPosition(250, 1000, {}), { x: 16, y: 49.2 });
-    assert.deepEqual(getPanoramaPosition(1250, 1000, {}), {
-      x: 16,
-      y: 49.2
-    });
-    assert.deepEqual(getPanoramaPosition(-250, 1000, {}), {
-      x: -16,
-      y: 46.8
-    });
+    assert.deepEqual(getPanoramaPosition(1250, 1000, {}), { x: 16, y: 49.2 });
+    assert.deepEqual(getPanoramaPosition(-250, 1000, {}), { x: -16, y: 46.8 });
     assert.deepEqual(
       getPanoramaPosition(250, 1000, {
         xPhaseA: 0.2,
@@ -827,14 +679,10 @@ describe("karaoke domain utilities", () => {
       autoHideConsole: true,
       effectPreset: "studio"
     });
-    assert.equal(
-      normalizeKaraokePreferences({ showLyrics: "unknown" }).showLyrics,
-      true
+    assert.equal( normalizeKaraokePreferences({ showLyrics: "unknown" }).showLyrics, true
     );
     for (const value of ["false", "0", "no", "off", "", "  false  "])
-      assert.equal(
-        normalizeKaraokePreferences({ showLyrics: value }).showLyrics,
-        false
+      assert.equal( normalizeKaraokePreferences({ showLyrics: value }).showLyrics, false
       );
     assert.equal(normalizeKaraokePreferences([]).effectPreset, "studio");
     const storage = {
@@ -850,39 +698,22 @@ describe("karaoke domain utilities", () => {
     };
     assert.equal(saveKaraokePreferences(normalized, storage), true);
     assert.deepEqual(loadKaraokePreferences(storage), normalized);
-    assert.deepEqual(
-      loadKaraokePreferences({ getItem: () => "" }),
-      normalizeKaraokePreferences({})
+    assert.deepEqual( loadKaraokePreferences({ getItem: () => "" }), normalizeKaraokePreferences({})
     );
     assert.deepEqual(
       loadKaraokePreferences({ getItem: () => "[" }),
       normalizeKaraokePreferences({})
     );
-    assert.deepEqual(
-      loadKaraokePreferences(null),
-      normalizeKaraokePreferences({})
+    assert.deepEqual( loadKaraokePreferences(null), normalizeKaraokePreferences({})
     );
     assert.equal(saveKaraokePreferences({}, null), false);
     const callablePreferences = () => {};
     callablePreferences.effectPreset = "hall";
-    assert.equal(
-      normalizeKaraokePreferences(callablePreferences).effectPreset,
-      "studio"
+    assert.equal( normalizeKaraokePreferences(callablePreferences).effectPreset, "studio"
     );
-    assert.equal(
-      normalizeKaraokePreferences({ effectPreset: "   " }).effectPreset,
-      "studio"
+    assert.equal( normalizeKaraokePreferences({ effectPreset: "   " }).effectPreset, "studio"
     );
-    assert.equal(
-      saveKaraokePreferences(
-        {},
-        {
-          setItem: () => {
-            throw new Error();
-          }
-        }
-      ),
-      false
+    assert.equal( saveKaraokePreferences( {}, { setItem: () => { throw new Error(); } } ), false
     );
   });
 });
@@ -903,30 +734,18 @@ describe("library and melody editor domain utilities", () => {
       assert.equal(isProcessingActive(status), false);
     assert.equal(hasActiveSongProcessing(songs), true);
     assert.equal(
-      mergeSongProcessingStatus(songs, {
-        song_id: "1",
-        status: "processing",
-        progress_percent: 20
-      })[0].progress_percent,
+      mergeSongProcessingStatus(songs, { song_id: "1", status: "processing", progress_percent: 20 })[0].progress_percent,
       20
     );
     assert.equal(getLocalVisibleSongs(songs, new Set(["1"])).length, 1);
     assert.equal(
-      resolveVisibleSongs({
-        localSongs: songs,
-        room: { host: false },
-        roomSongs: [songs[1], null]
-      }).length,
+      resolveVisibleSongs({ localSongs: songs, room: { host: false }, roomSongs: [songs[1], null] }).length,
       1
     );
     assert.equal(filterSongs(songs, "world").length, 1);
     assert.equal(filterSongs(songs, "").length, 2);
     assert.equal(countReadySongs(songs), 1);
-    assert.deepEqual(getSongCardState(songs[1]), {
-      status: "done",
-      isWorking: false,
-      isReady: true
-    });
+    assert.deepEqual(getSongCardState(songs[1]), { status: "done", isWorking: false, isReady: true });
     assert.equal(hasActiveSongProcessing([{ status: null }]), false);
     assert.equal(hasActiveSongProcessing([null, { status: "done" }]), false);
     assert.equal(hasActiveSongProcessing(null), false);
@@ -936,10 +755,7 @@ describe("library and melody editor domain utilities", () => {
     assert.equal(mergeSongProcessingStatus(songs, {}), songs);
     const mixedSongs = [null, songs[1], songs[0]];
     assert.deepEqual(
-      mergeSongProcessingStatus(mixedSongs, {
-        song_id: "1",
-        status: "processing"
-      }),
+      mergeSongProcessingStatus(mixedSongs, { song_id: "1", status: "processing" }),
       [
         null,
         songs[1],
@@ -965,13 +781,7 @@ describe("library and melody editor domain utilities", () => {
         ],
         { song_id: "1" }
       )[0],
-      {
-        id: "1",
-        status: "old",
-        progress_step: "step",
-        progress_percent: 5,
-        error_message: "error"
-      }
+      { id: "1", status: "old", progress_step: "step", progress_percent: 5, error_message: "error" }
     );
     assert.equal(getLocalVisibleSongs(songs, null).length, 2);
     assert.deepEqual(
@@ -979,16 +789,10 @@ describe("library and melody editor domain utilities", () => {
       [songs[0]]
     );
     assert.deepEqual(getLocalVisibleSongs(null, null), []);
-    assert.deepEqual(
-      resolveVisibleSongs({ localSongs: null, room: null, roomSongs: null }),
-      []
+    assert.deepEqual( resolveVisibleSongs({ localSongs: null, room: null, roomSongs: null }), []
     );
     assert.equal(
-      resolveVisibleSongs({
-        localSongs: songs,
-        room: { host: true },
-        roomSongs: []
-      }),
+      resolveVisibleSongs({ localSongs: songs, room: { host: true }, roomSongs: [] }),
       songs
     );
     assert.deepEqual(
@@ -1000,11 +804,7 @@ describe("library and melody editor domain utilities", () => {
       [songs[1]]
     );
     assert.equal(
-      resolveVisibleSongs({
-        localSongs: songs,
-        room: { host: false },
-        roomSongs: null
-      }),
+      resolveVisibleSongs({ localSongs: songs, room: { host: false }, roomSongs: null }),
       songs
     );
     assert.deepEqual(filterSongs(null, null), []);
@@ -1018,9 +818,7 @@ describe("library and melody editor domain utilities", () => {
       { title: "alpha", artist: " ", genre: "beta" },
       { title: {} }
     ];
-    assert.deepEqual(
-      filterSongs(joinedSongs, "alpha beta"),
-      joinedSongs.slice(0, 2)
+    assert.deepEqual( filterSongs(joinedSongs, "alpha beta"), joinedSongs.slice(0, 2)
     );
     assert.deepEqual(
       filterSongs([{ title: "alpha", artist: " " }], "alpha  "),
@@ -1176,14 +974,10 @@ describe("library and melody editor domain utilities", () => {
     const merged = mergeSelectedNotes(notes, ["a", "b"], syllables);
     assert.deepEqual(merged.notes[0].syllable_indices, [0, 1, 2]);
     assert.equal(merged.notes[0].editor_text, "Большой");
-    assert.equal(
-      displayTextForNote(notes[0], syllables, new Map([[0, "a"]])),
-      "Бол"
+    assert.equal( displayTextForNote(notes[0], syllables, new Map([[0, "a"]])), "Бол"
     );
     assert.equal(displayTextForNote(notes[0], syllables, new Map()), "");
-    assert.equal(
-      deleteNotesAndTransferText(notes, ["a"], syllables)[0].editor_text,
-      "Большой"
+    assert.equal( deleteNotesAndTransferText(notes, ["a"], syllables)[0].editor_text, "Большой"
     );
     assert.equal(adjacentNoteId(notes, [], 1), "a");
     assert.equal(adjacentNoteId(notes, ["a"], 1), "b");
@@ -1204,13 +998,7 @@ describe("library and melody editor domain utilities", () => {
       [2, { text: "world", word_index: 2 }]
     ]);
     const notes = [
-      {
-        _id: "a",
-        start: 0,
-        end: 1,
-        midi_note: 60,
-        syllable_index: 0
-      },
+      { _id: "a", start: 0, end: 1, midi_note: 60, syllable_index: 0 },
       {
         _id: "b",
         start: 1,
@@ -1219,18 +1007,11 @@ describe("library and melody editor domain utilities", () => {
         syllable_index: 1,
         editor_text: "ello"
       },
-      {
-        _id: "c",
-        start: 2,
-        end: 3,
-        midi_note: 62,
-        syllable_index: 2
-      }
+      { _id: "c", start: 2, end: 3, midi_note: 62, syllable_index: 2 }
     ];
     assert.equal(mergeSelectedNotes(notes, [], syllables).selectedId, null);
     assert.equal(
-      mergeSelectedNotes(notes, ["a", "b"], syllables).notes.find(
-        ({ _id }) => _id === "a"
+      mergeSelectedNotes(notes, ["a", "b"], syllables).notes.find( ({ _id }) => _id === "a"
       ).editor_text,
       "hello"
     );
@@ -1246,8 +1027,7 @@ describe("library and melody editor domain utilities", () => {
       "hello"
     );
     assert.equal(
-      mergeSelectedNotes(notes, ["a", "c"], syllables).notes.find(
-        ({ _id }) => _id === "a"
+      mergeSelectedNotes(notes, ["a", "c"], syllables).notes.find( ({ _id }) => _id === "a"
       ).editor_text,
       "hel world"
     );
@@ -1266,12 +1046,7 @@ describe("library and melody editor domain utilities", () => {
       mergeSelectedNotes(
         [
           { ...notes[0], editor_text: "left", word_index: 1 },
-          {
-            ...notes[1],
-            editor_text: "",
-            syllable_index: 99,
-            word_index: 1
-          }
+          { ...notes[1], editor_text: "", syllable_index: 99, word_index: 1 }
         ],
         ["a", "b"],
         syllables
@@ -1279,10 +1054,7 @@ describe("library and melody editor domain utilities", () => {
       "left"
     );
     assert.equal(
-      displayTextForNote(
-        { ...notes[0], editor_text: "edited" },
-        syllables,
-        new Map()
+      displayTextForNote( { ...notes[0], editor_text: "edited" }, syllables, new Map()
       ),
       "edited"
     );
@@ -1292,10 +1064,7 @@ describe("library and melody editor domain utilities", () => {
       [notes[1]]
     );
     assert.equal(
-      deleteNotesAndTransferText(
-        [notes[1], notes[0], notes[2]],
-        ["b", "a"],
-        syllables
+      deleteNotesAndTransferText( [notes[1], notes[0], notes[2]], ["b", "a"], syllables
       ).length,
       1
     );
@@ -1329,20 +1098,8 @@ describe("library and melody editor domain utilities", () => {
     assert.equal(
       mergeSelectedNotes(
         [
-          {
-            _id: "empty-a",
-            start: 0,
-            end: 1,
-            midi_note: 60,
-            syllable_index: NaN
-          },
-          {
-            _id: "empty-b",
-            start: 0,
-            end: 2,
-            midi_note: 62,
-            syllable_index: NaN
-          }
+          { _id: "empty-a", start: 0, end: 1, midi_note: 60, syllable_index: NaN },
+          { _id: "empty-b", start: 0, end: 2, midi_note: 62, syllable_index: NaN }
         ],
         ["empty-a", "empty-b"],
         new Map()
@@ -1362,20 +1119,12 @@ describe("library and melody editor domain utilities", () => {
       "low"
     );
     assert.equal(deleteNotesAndTransferText(notes, [], syllables).length, 3);
-    assert.deepEqual(
-      deleteNotesAndTransferText(notes, ["a", "b", "c"], syllables),
-      []
+    assert.deepEqual( deleteNotesAndTransferText(notes, ["a", "b", "c"], syllables), []
     );
     const transferredRight = deleteNotesAndTransferText(
       [
         { _id: "right", start: 2, end: 3, midi_note: 62 },
-        {
-          _id: "gone",
-          start: 1,
-          end: 2,
-          midi_note: 61,
-          editor_text: "middle"
-        },
+        { _id: "gone", start: 1, end: 2, midi_note: 61, editor_text: "middle" },
         { _id: "left", start: 0, end: 1, midi_note: 60 }
       ],
       ["gone"],
@@ -1387,13 +1136,7 @@ describe("library and melody editor domain utilities", () => {
         [
           { _id: "same-high", start: 0, end: 1, midi_note: 62 },
           { _id: "same-low", start: 0, end: 1, midi_note: 60 },
-          {
-            _id: "after",
-            start: 2,
-            end: 3,
-            midi_note: 64,
-            editor_text: "after"
-          }
+          { _id: "after", start: 2, end: 3, midi_note: 64, editor_text: "after" }
         ],
         ["after"],
         new Map()

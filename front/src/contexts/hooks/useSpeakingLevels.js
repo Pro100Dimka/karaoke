@@ -37,11 +37,7 @@ export default function useSpeakingLevels() {
         return;
       }
 
-      setSpeakingLevels((levels) => {
-        const next = { ...levels };
-        delete next[key];
-        return next;
-      });
+      setSpeakingLevels((levels) => { const next = { ...levels }; delete next[key]; return next; });
     },
     // Stryker disable next-line ArrayDeclaration: React state setters are stable.
     []
@@ -67,14 +63,10 @@ export default function useSpeakingLevels() {
     () => {
       const AudioContextClass =
         globalThis.AudioContext || globalThis.webkitAudioContext;
-      if (audioContextRef.current?.state === "closed") {
-        audioContextRef.current = null;
-      }
+      if (audioContextRef.current?.state === "closed") audioContextRef.current = null;
       if (!audioContextRef.current) {
         try {
-          audioContextRef.current = new AudioContextClass({
-            latencyHint: "interactive"
-          });
+          audioContextRef.current = new AudioContextClass({ latencyHint: "interactive" });
         } catch {
           return null;
         }

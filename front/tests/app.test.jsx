@@ -1,5 +1,4 @@
 /* @vitest-environment jsdom */
-import React from "react";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -15,15 +14,11 @@ vi.mock("../src/components/backend-boot-loader", () => ({
 vi.mock("../src/contexts", () => ({
   default: ({ children }) => <div data-testid="contexts">{children}</div>
 }));
-vi.mock("../src/components/layout", () => ({
-  default: () => <div data-testid="layout" />
-}));
+vi.mock("../src/components/layout", () => ({ default: () => <div data-testid="layout" /> }));
 vi.mock("../src/components/OnlineRoomDock", () => ({
   OnlineRoomDock: () => <div data-testid="room" />
 }));
-vi.mock("../src/components/RoomRadioSync", () => ({
-  default: () => <div data-testid="radio" />
-}));
+vi.mock("../src/components/RoomRadioSync", () => ({ default: () => <div data-testid="radio" /> }));
 
 import App from "../src/App.jsx";
 

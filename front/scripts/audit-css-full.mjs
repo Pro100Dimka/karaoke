@@ -10,8 +10,8 @@ const REPORTS_ROOT = resolve(PROJECT_ROOT, "reports");
 const REPORT_PATH = resolve(REPORTS_ROOT, "css-audit.json");
 const CONFIG_PATH = resolve(PROJECT_ROOT, "css-audit.config.json");
 
-const SOURCE_EXTENSIONS = new Set([".js", ".jsx", ".ts", ".tsx"]);
-const CSS_EXTENSIONS = new Set([".css"]);
+const SOURCE_EXTENSIONS = [".js", ".jsx", ".ts", ".tsx"];
+const CSS_EXTENSIONS = [".css"];
 
 const DEFAULT_CONFIG = {
   ignoreClasses: [
@@ -34,12 +34,7 @@ const DEFAULT_CONFIG = {
   maxSelectorDepth: 5,
   maxFileLines: 2000,
   repeatedValueMinimum: 4,
-  strictRules: [
-    "invalid-css",
-    "transition-all",
-    "javascript-url",
-    "extreme-z-index"
-  ]
+  strictRules: [ "invalid-css", "transition-all", "javascript-url", "extreme-z-index" ]
 };
 
 const COLOR_PATTERN =
@@ -62,51 +57,6 @@ const GET_BY_CLASS_PATTERN =
 const QUERY_SELECTOR_PATTERN =
   /querySelector(?:All)?\s*\(\s*["'`]([^"'`]+)["'`]/g;
 
-const PROPERTY_GROUPS = {
-  colors: new Set([
-    "color",
-    "background",
-    "background-color",
-    "border-color",
-    "outline-color",
-    "box-shadow",
-    "text-shadow",
-    "fill",
-    "stroke"
-  ]),
-  spacing: new Set([
-    "gap",
-    "row-gap",
-    "column-gap",
-    "margin",
-    "margin-top",
-    "margin-right",
-    "margin-bottom",
-    "margin-left",
-    "padding",
-    "padding-top",
-    "padding-right",
-    "padding-bottom",
-    "padding-left"
-  ]),
-  typography: new Set([
-    "font",
-    "font-family",
-    "font-size",
-    "font-weight",
-    "line-height",
-    "letter-spacing"
-  ]),
-  radius: new Set(["border-radius"]),
-  shadow: new Set(["box-shadow", "text-shadow"]),
-  transition: new Set([
-    "transition",
-    "transition-property",
-    "transition-duration",
-    "transition-timing-function"
-  ]),
-  zIndex: new Set(["z-index"])
-};
 
 function createIssue({
   rule,
@@ -144,9 +94,7 @@ async function pathExists(path) {
 }
 
 async function loadConfig() {
-  if (!(await pathExists(CONFIG_PATH))) {
-    return DEFAULT_CONFIG;
-  }
+  if (!(await pathExists(CONFIG_PATH))) return DEFAULT_CONFIG;
 
   try {
     const source = await readFile(CONFIG_PATH, "utf8");
@@ -155,10 +103,7 @@ async function loadConfig() {
     return {
       ...DEFAULT_CONFIG,
       ...config,
-      ignoreClasses: [
-        ...DEFAULT_CONFIG.ignoreClasses,
-        ...(config.ignoreClasses ?? [])
-      ],
+      ignoreClasses: [ ...DEFAULT_CONFIG.ignoreClasses, ...(config.ignoreClasses ?? []) ],
       ignoreClassPatterns: [
         ...DEFAULT_CONFIG.ignoreClassPatterns,
         ...(config.ignoreClassPatterns ?? [])
@@ -180,9 +125,7 @@ async function walk(directory, extensions) {
   for (const entry of entries) {
     const path = join(directory, entry.name);
 
-    if (entry.isDirectory()) {
-      files.push(...(await walk(path, extensions)));
-    } else if (extensions.has(extname(entry.name).toLowerCase())) {
+    if (entry.isDirectory()) files.push(...(await walk(path, extensions))); else if (extensions.has(extname(entry.name).toLowerCase())) {
       files.push(path);
     }
   }
@@ -195,9 +138,7 @@ function normalizeFile(path) {
 }
 
 function addUsage(map, key, location) {
-  if (!map.has(key)) {
-    map.set(key, []);
-  }
+  if (!map.has(key)) map.set(key, []);
 
   map.get(key).push(location);
 }
@@ -207,12 +148,7 @@ function splitClasses(value) {
     .replace(/\$\{[^}]*\}/g, " ")
     .split(/\s+/)
     .map((item) => item.trim())
-    .filter(
-      (item) =>
-        item &&
-        !item.includes("{") &&
-        !item.includes("}") &&
-        !item.includes("$")
+    .filter( (item) => item && !item.includes("{") && !item.includes("}") && !item.includes("$")
     );
 }
 
@@ -225,9 +161,7 @@ function collectClassesFromSource(source, file, usage, dynamicFragments) {
         addUsage(usage, className, { file });
       }
 
-      if (value.includes("${")) {
-        dynamicFragments.add(value);
-      }
+      if (value.includes("${")) dynamicFragments.add(value);
     }
   };
 
@@ -265,11 +199,7 @@ function getSelectorClasses(selector) {
   const classes = [];
 
   try {
-    selectorParser((root) => {
-      root.walkClasses((node) => {
-        classes.push(node.value);
-      });
-    }).processSync(selector);
+    selectorParser((root) => { root.walkClasses((node) => { classes.push(node.value); }); }).processSync(selector);
   } catch {
     for (const match of selector.matchAll(/\.([a-zA-Z_][\w-]*)/g)) {
       classes.push(match[1]);
@@ -287,22 +217,15 @@ function getSelectorSpecificity(selector) {
   try {
     selectorParser((root) => {
       root.walk((node) => {
-        if (node.type === "id") {
-          ids += 1;
-        } else if (["class", "attribute", "pseudo"].includes(node.type)) {
+        if (node.type === "id") ids += 1; else if (["class", "attribute", "pseudo"].includes(node.type)) {
           if (
             node.type !== "pseudo" ||
-            !["::before", "::after", "::first-letter", "::first-line"].includes(
-              node.value
+            !["::before", "::after", "::first-letter", "::first-line"].includes( node.value
             )
           ) {
             classes += 1;
-          } else {
-            elements += 1;
-          }
-        } else if (node.type === "tag") {
-          elements += 1;
-        }
+          } else elements += 1;
+        } else if (node.type === "tag") elements += 1;
       });
     }).processSync(selector);
   } catch {
@@ -312,12 +235,7 @@ function getSelectorSpecificity(selector) {
     elements = (selector.match(/(?:^|[\s>+~])([a-z][\w-]*)/gi) ?? []).length;
   }
 
-  return {
-    ids,
-    classes,
-    elements,
-    score: ids * 100 + classes * 10 + elements
-  };
+  return { ids, classes, elements, score: ids * 100 + classes * 10 + elements };
 }
 
 function getSelectorDepth(selector) {
@@ -342,22 +260,15 @@ function getAtRuleContext(node) {
 }
 
 function isIgnoredClass(className, config) {
-  if (config.ignoreClasses.includes(className)) {
-    return true;
-  }
+  if (config.ignoreClasses.includes(className)) return true;
 
-  return config.ignoreClassPatterns.some((pattern) =>
-    new RegExp(pattern).test(className)
+  return config.ignoreClassPatterns.some((pattern) => new RegExp(pattern).test(className)
   );
 }
 
 function getDynamicClassBase(className) {
-  if (className.includes("--")) {
-    return className.slice(0, className.indexOf("--") + 2);
-  }
-  if (className.includes("-")) {
-    return className.slice(0, className.lastIndexOf("-") + 1);
-  }
+  if (className.includes("--")) return className.slice(0, className.indexOf("--") + 2);
+  if (className.includes("-")) return className.slice(0, className.lastIndexOf("-") + 1);
   return className;
 }
 
@@ -393,19 +304,11 @@ function normalizeValue(value) {
 function registerRepeatedValue(map, property, value, location) {
   const normalized = normalizeValue(value);
 
-  if (!normalized || normalized.startsWith("var(")) {
-    return;
-  }
+  if (!normalized || normalized.startsWith("var(")) return;
 
   const key = `${property}:${normalized}`;
 
-  if (!map.has(key)) {
-    map.set(key, {
-      property,
-      value: normalized,
-      locations: []
-    });
-  }
+  if (!map.has(key)) map.set(key, { property, value: normalized, locations: [] });
 
   map.get(key).locations.push(location);
 }
@@ -423,27 +326,19 @@ function hasJavaScriptUrl(value) {
 function parseZIndex(value) {
   const normalized = normalizeValue(value);
 
-  if (!/^-?\d+$/.test(normalized)) {
-    return null;
-  }
+  if (!/^-?\d+$/.test(normalized)) return null;
 
   return Number(normalized);
 }
 
 function sortIssues(issues) {
-  const order = {
-    error: 0,
-    warning: 1,
-    info: 2
-  };
+  const order = { error: 0, warning: 1, info: 2 };
 
   return issues.sort((a, b) => {
     const severityDifference =
       (order[a.severity] ?? 99) - (order[b.severity] ?? 99);
 
-    if (severityDifference !== 0) {
-      return severityDifference;
-    }
+    if (severityDifference !== 0) return severityDifference;
 
     return (
       String(a.file).localeCompare(String(b.file)) ||
@@ -466,11 +361,7 @@ async function main() {
   for (const filePath of sourceFiles) {
     const source = await readFile(filePath, "utf8");
 
-    collectClassesFromSource(
-      source,
-      normalizeFile(filePath),
-      sourceClassUsage,
-      dynamicFragments
+    collectClassesFromSource( source, normalizeFile(filePath), sourceClassUsage, dynamicFragments
     );
   }
 
@@ -487,11 +378,7 @@ async function main() {
     const source = await readFile(filePath, "utf8");
     const lines = source.split(/\r?\n/).length;
 
-    fileStats.push({
-      file,
-      lines,
-      bytes: Buffer.byteLength(source, "utf8")
-    });
+    fileStats.push({ file, lines, bytes: Buffer.byteLength(source, "utf8") });
 
     if (lines > config.maxFileLines) {
       issues.push(
@@ -501,9 +388,7 @@ async function main() {
           message: `CSS-файл содержит ${lines} строк.`,
           file,
           line: 1,
-          details: {
-            recommendedMaximum: config.maxFileLines
-          }
+          details: { recommendedMaximum: config.maxFileLines }
         })
       );
     }
@@ -530,14 +415,9 @@ async function main() {
     root.walkAtRules("media", (rule) => {
       const breakpoint = extractBreakpoint(rule.params);
 
-      if (breakpoint == null) {
-        return;
-      }
+      if (breakpoint == null) return;
 
-      addUsage(mediaBreakpoints, breakpoint, {
-        file,
-        line: rule.source?.start?.line
-      });
+      addUsage(mediaBreakpoints, breakpoint, { file, line: rule.source?.start?.line });
 
       if (!config.allowedBreakpoints.includes(breakpoint)) {
         issues.push(
@@ -559,9 +439,7 @@ async function main() {
       for (const selector of selectors) {
         const normalizedSelector = selector.trim();
 
-        if (!normalizedSelector) {
-          continue;
-        }
+        if (!normalizedSelector) continue;
 
         const context = getAtRuleContext(rule);
         const location = {
@@ -578,10 +456,7 @@ async function main() {
         addUsage(selectorDefinitions, selectorKey, location);
 
         for (const className of getSelectorClasses(normalizedSelector)) {
-          addUsage(classDefinitions, className, {
-            ...location,
-            selector: normalizedSelector
-          });
+          addUsage(classDefinitions, className, { ...location, selector: normalizedSelector });
         }
 
         const specificity = getSelectorSpecificity(normalizedSelector);
@@ -641,20 +516,11 @@ async function main() {
           selector: rule.selector
         };
 
-        if (!declarationsByProperty.has(property)) {
-          declarationsByProperty.set(property, []);
-        }
+        if (!declarationsByProperty.has(property)) declarationsByProperty.set(property, []);
 
-        declarationsByProperty.get(property).push({
-          value: normalizedValue,
-          location
-        });
+        declarationsByProperty.get(property).push({ value: normalizedValue, location });
 
-        registerRepeatedValue(
-          repeatedValues,
-          property,
-          normalizedValue,
-          location
+        registerRepeatedValue( repeatedValues, property, normalizedValue, location
         );
 
         const propertyValueKey = `${property}:${normalizedValue}`;
@@ -791,9 +657,7 @@ async function main() {
       });
 
       for (const [property, declarations] of declarationsByProperty) {
-        const uniqueValues = [
-          ...new Set(declarations.map((item) => item.value))
-        ];
+        const uniqueValues = [ ...new Set(declarations.map((item) => item.value)) ];
 
         if (uniqueValues.length > 1) {
           issues.push(
@@ -838,27 +702,17 @@ async function main() {
   const dynamicClassCandidates = [];
 
   for (const [className, locations] of classDefinitions) {
-    if (isIgnoredClass(className, config)) {
-      continue;
-    }
+    if (isIgnoredClass(className, config)) continue;
 
-    if (sourceClassUsage.has(className)) {
-      continue;
-    }
+    if (sourceClassUsage.has(className)) continue;
 
     if (couldBeDynamic(className, dynamicFragments, config)) {
-      dynamicClassCandidates.push({
-        className,
-        locations
-      });
+      dynamicClassCandidates.push({ className, locations });
 
       continue;
     }
 
-    unusedClasses.push({
-      className,
-      locations
-    });
+    unusedClasses.push({ className, locations });
 
     issues.push(
       createIssue({
@@ -916,11 +770,7 @@ async function main() {
     },
     fileStats: fileStats.sort((a, b) => b.lines - a.lines),
     breakpoints: [...mediaBreakpoints.entries()]
-      .map(([value, locations]) => ({
-        value,
-        count: locations.length,
-        locations
-      }))
+      .map(([value, locations]) => ({ value, count: locations.length, locations }))
       .sort((a, b) => a.value - b.value),
     unusedClasses,
     dynamicClassCandidates,

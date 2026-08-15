@@ -26,8 +26,7 @@ test("editor scroll geometry keeps anchors and exact viewport limits", () => {
     scrollWidth: 500
   };
   expect(geometry.anchoredHorizontalScroll(horizontal)).toBe(70);
-  expect(geometry.anchoredHorizontalScroll({ ...horizontal, time: 100 })).toBe(
-    400
+  expect(geometry.anchoredHorizontalScroll({ ...horizontal, time: 100 })).toBe( 400
   );
 
   const vertical = {
@@ -38,20 +37,13 @@ test("editor scroll geometry keeps anchors and exact viewport limits", () => {
     rowCount: 20
   };
   expect(geometry.anchoredVerticalScroll(vertical)).toBe(150);
-  expect(
-    geometry.anchoredVerticalScroll({ ...vertical, scrollTop: 1_000 })
+  expect( geometry.anchoredVerticalScroll({ ...vertical, scrollTop: 1_000 })
   ).toBe(300);
 
-  const follow = {
-    scrollLeft: 20,
-    clientWidth: 100,
-    keyboardWidth: 20,
-    scrollWidth: 500
-  };
+  const follow = { scrollLeft: 20, clientWidth: 100, keyboardWidth: 20, scrollWidth: 500 };
   expect(geometry.autoFollowScrollLeft({ ...follow, playheadX: 70 })).toBe(20);
   expect(geometry.autoFollowScrollLeft({ ...follow, playheadX: 100 })).toBe(40);
-  expect(geometry.autoFollowScrollLeft({ ...follow, playheadX: 1_000 })).toBe(
-    400
+  expect(geometry.autoFollowScrollLeft({ ...follow, playheadX: 1_000 })).toBe( 400
   );
 
   const noteAnchor = {
@@ -64,8 +56,7 @@ test("editor scroll geometry keeps anchors and exact viewport limits", () => {
     rowCount: 20
   };
   expect(geometry.anchoredVerticalScrollToNote(noteAnchor)).toBe(155);
-  expect(
-    geometry.anchoredVerticalScrollToNote({ ...noteAnchor, noteMidi: -100 })
+  expect( geometry.anchoredVerticalScrollToNote({ ...noteAnchor, noteMidi: -100 })
   ).toBe(300);
 });
 
@@ -161,17 +152,11 @@ test("editor note labels use exact ownership and edited-text precedence", () => 
     )
   ).toBe("");
   expect(
-    operations.displayTextForNote(
-      { _id: "a", syllable_index: "invalid" },
-      syllables,
-      new Map()
+    operations.displayTextForNote( { _id: "a", syllable_index: "invalid" }, syllables, new Map()
     )
   ).toBe("");
   expect(
-    operations.displayTextForNote(
-      { _id: "a", syllable_index: 9 },
-      syllables,
-      new Map([[9, "a"]])
+    operations.displayTextForNote( { _id: "a", syllable_index: 9 }, syllables, new Map([[9, "a"]])
     )
   ).toBe("");
 });
@@ -190,8 +175,7 @@ const canonicalSyllables = () => [
 ];
 
 test("canonical lyric projection preserves exact phrase order and timestamps", () => {
-  expect(operations.canonicalLyricProjection(canonicalSyllables())).toEqual(
-    canonicalSyllables()
+  expect(operations.canonicalLyricProjection(canonicalSyllables())).toEqual( canonicalSyllables()
   );
 });
 
@@ -241,15 +225,11 @@ test("editor note labels expand ordered many-to-many syllable associations", () 
     syllable_indices: [2, 3, 4, 5, 6, 7, 8]
   };
   const musicalFields = [note.start, note.end, note.midi_note];
-  const owners = new Map(
-    note.syllable_indices.map((index) => [index, note._id])
+  const owners = new Map( note.syllable_indices.map((index) => [index, note._id])
   );
 
-  expect(operations.syllableIndicesForNote(note)).toEqual([
-    2, 3, 4, 5, 6, 7, 8
-  ]);
-  expect(operations.displayTextForNote(note, syllables, owners)).toBe(
-    "широкий город магис"
+  expect(operations.syllableIndicesForNote(note)).toEqual([ 2, 3, 4, 5, 6, 7, 8 ]);
+  expect(operations.displayTextForNote(note, syllables, owners)).toBe( "широкий город магис"
   );
   expect([note.start, note.end, note.midi_note]).toEqual(musicalFields);
 });
@@ -270,10 +250,7 @@ test("merging notes preserves timing, pitch, sources, ordering and text", () => 
       syllable_indices: [2, 1, "bad", 1]
     })
   ];
-  const result = operations.mergeSelectedNotes(
-    notes,
-    ["right", "left"],
-    new Map()
+  const result = operations.mergeSelectedNotes( notes, ["right", "left"], new Map()
   );
   expect(result.selectedId).toBe("left");
   expect(result.notes.map(({ _id }) => _id)).toEqual(["keep", "left"]);
@@ -288,10 +265,7 @@ test("merging notes preserves timing, pitch, sources, ordering and text", () => 
   const unchanged = operations.mergeSelectedNotes(notes, ["keep"], new Map());
   expect(unchanged).toEqual({ notes, selectedId: "keep" });
   expect(unchanged.notes).toBe(notes);
-  expect(operations.mergeSelectedNotes(notes, [], new Map())).toEqual({
-    notes,
-    selectedId: null
-  });
+  expect(operations.mergeSelectedNotes(notes, [], new Map())).toEqual({ notes, selectedId: null });
 });
 
 test.each([
@@ -306,18 +280,10 @@ test.each([
   "note text glue %#: %s + %s",
   (leftText, rightText, leftWord, rightWord, expected) => {
     const notes = [
-      editorNote("left", 0, 1, {
-        editor_text: leftText,
-        word_index: leftWord
-      }),
-      editorNote("right", 1, 2, {
-        editor_text: rightText,
-        word_index: rightWord
-      })
+      editorNote("left", 0, 1, { editor_text: leftText, word_index: leftWord }),
+      editorNote("right", 1, 2, { editor_text: rightText, word_index: rightWord })
     ];
-    expect(
-      operations.mergeSelectedNotes(notes, ["left", "right"], new Map())
-        .notes[0].editor_text
+    expect( operations.mergeSelectedNotes(notes, ["left", "right"], new Map()) .notes[0].editor_text
     ).toBe(expected);
   }
 );
@@ -333,13 +299,9 @@ test("word and syllable fallbacks participate in note merging", () => {
     editorNote("b", 1, 2, { syllable_index: 1, word_index: null }),
     editorNote("c", 2, 3, { syllable_index: 2, word_index: undefined })
   ];
-  expect(
-    operations.mergeSelectedNotes(notes, ["a", "b"], syllables).notes[0]
-      .editor_text
+  expect( operations.mergeSelectedNotes(notes, ["a", "b"], syllables).notes[0] .editor_text
   ).toBe("onet");
-  expect(
-    operations.mergeSelectedNotes(notes, ["a", "b"], syllables).notes[0]
-      .syllable_indices
+  expect( operations.mergeSelectedNotes(notes, ["a", "b"], syllables).notes[0] .syllable_indices
   ).toEqual([0, 1]);
   expect(
     operations
@@ -349,16 +311,10 @@ test("word and syllable fallbacks participate in note merging", () => {
 
   const explicitWord = [
     editorNote("fallback", 0, 1, { syllable_index: 0, word_index: "" }),
-    editorNote("explicit", 1, 2, {
-      editor_text: "net",
-      word_index: 7
-    })
+    editorNote("explicit", 1, 2, { editor_text: "net", word_index: 7 })
   ];
   expect(
-    operations.mergeSelectedNotes(
-      explicitWord,
-      ["fallback", "explicit"],
-      syllables
+    operations.mergeSelectedNotes( explicitWord, ["fallback", "explicit"], syllables
     ).notes[0].editor_text
   ).toBe("onet");
 
@@ -396,15 +352,8 @@ test("merging equal-time notes uses end, pitch and source tie breakers", () => {
     new Map()
   );
   expect(result.selectedId).toBe("short");
-  expect(result.notes.map(({ _id }) => _id)).toEqual([
-    "outside-low",
-    "short",
-    "outside-high"
-  ]);
-  expect(result.notes[1]).toMatchObject({
-    editor_text: "a b",
-    syllable_indices: [1, 2, 3, 4]
-  });
+  expect(result.notes.map(({ _id }) => _id)).toEqual([ "outside-low", "short", "outside-high" ]);
+  expect(result.notes[1]).toMatchObject({ editor_text: "a b", syllable_indices: [1, 2, 3, 4] });
 });
 
 test("unknown word ownership never glues unrelated note labels", () => {
@@ -412,9 +361,7 @@ test("unknown word ownership never glues unrelated note labels", () => {
     editorNote("a", 0, 1, { editor_text: "a", word_index: null }),
     editorNote("b", 1, 2, { editor_text: "b", word_index: null })
   ];
-  expect(
-    operations.mergeSelectedNotes(unknown, ["a", "b"], new Map()).notes[0]
-      .editor_text
+  expect( operations.mergeSelectedNotes(unknown, ["a", "b"], new Map()).notes[0] .editor_text
   ).toBe("a b");
 
   const interrupted = [
@@ -430,16 +377,8 @@ test("unknown word ownership never glues unrelated note labels", () => {
 
 test("deleting notes transfers text and source ownership to the nearest note", () => {
   const notes = [
-    editorNote("right", 3, 4, {
-      editor_text: "right",
-      word_index: 2,
-      syllable_indices: [3]
-    }),
-    editorNote("gone", 1.5, 2.5, {
-      editor_text: "gone",
-      word_index: 1,
-      syllable_indices: [2, 1]
-    }),
+    editorNote("right", 3, 4, { editor_text: "right", word_index: 2, syllable_indices: [3] }),
+    editorNote("gone", 1.5, 2.5, { editor_text: "gone", word_index: 1, syllable_indices: [2, 1] }),
     editorNote("left", 0, 1, {
       midi_note: 50,
       editor_text: "left",
@@ -447,45 +386,25 @@ test("deleting notes transfers text and source ownership to the nearest note", (
       syllable_indices: [0]
     })
   ];
-  const result = operations.deleteNotesAndTransferText(
-    notes,
-    ["gone"],
-    new Map()
+  const result = operations.deleteNotesAndTransferText( notes, ["gone"], new Map()
   );
   expect(result.map(({ _id }) => _id)).toEqual(["left", "right"]);
-  expect(result[0]).toMatchObject({
-    editor_text: "left gone",
-    syllable_indices: [0, 1, 2]
-  });
+  expect(result[0]).toMatchObject({ editor_text: "left gone", syllable_indices: [0, 1, 2] });
   expect(result[1].editor_text).toBe("right");
 
   const before = operations.deleteNotesAndTransferText(
     [
-      editorNote("gone", 0, 1, {
-        editor_text: "pre",
-        word_index: 4,
-        syllable_indices: [0]
-      }),
-      editorNote("target", 1, 2, {
-        editor_text: "prefix",
-        word_index: 4,
-        syllable_indices: [1]
-      })
+      editorNote("gone", 0, 1, { editor_text: "pre", word_index: 4, syllable_indices: [0] }),
+      editorNote("target", 1, 2, { editor_text: "prefix", word_index: 4, syllable_indices: [1] })
     ],
     ["gone"],
     new Map()
   );
-  expect(before[0]).toMatchObject({
-    editor_text: "prefix",
-    syllable_indices: [0, 1]
-  });
+  expect(before[0]).toMatchObject({ editor_text: "prefix", syllable_indices: [0, 1] });
 
   const centered = operations.deleteNotesAndTransferText(
     [
-      editorNote("target", 0, 4, {
-        editor_text: "target",
-        word_index: 2
-      }),
+      editorNote("target", 0, 4, { editor_text: "target", word_index: 2 }),
       editorNote("gone", 1, 3, { editor_text: "gone", word_index: 1 })
     ],
     ["gone"],
@@ -506,14 +425,8 @@ test("deletion chooses the nearest note, breaks ties left and sorts results", ()
     ["gone"],
     new Map()
   );
-  expect(result.map(({ _id }) => _id)).toEqual([
-    "left-low",
-    "left-high",
-    "right",
-    "far"
-  ]);
-  expect(result.find(({ _id }) => _id === "left-high").editor_text).toBe(
-    "left gone"
+  expect(result.map(({ _id }) => _id)).toEqual([ "left-low", "left-high", "right", "far" ]);
+  expect(result.find(({ _id }) => _id === "left-high").editor_text).toBe( "left gone"
   );
   expect(result.find(({ _id }) => _id === "far").editor_text).toBe("far");
 
@@ -537,11 +450,9 @@ test("deletion chooses the nearest note, breaks ties left and sorts results", ()
     ["gone"],
     new Map()
   );
-  expect(rightIsNearer.find(({ _id }) => _id === "right").editor_text).toBe(
-    "gone right"
+  expect(rightIsNearer.find(({ _id }) => _id === "right").editor_text).toBe( "gone right"
   );
-  expect(rightIsNearer.find(({ _id }) => _id === "left").editor_text).toBe(
-    "left"
+  expect(rightIsNearer.find(({ _id }) => _id === "left").editor_text).toBe( "left"
   );
 
   const firstIsNearer = operations.deleteNotesAndTransferText(
@@ -553,26 +464,20 @@ test("deletion chooses the nearest note, breaks ties left and sorts results", ()
     ["gone"],
     new Map()
   );
-  expect(firstIsNearer.find(({ _id }) => _id === "near").editor_text).toBe(
-    "gone near"
+  expect(firstIsNearer.find(({ _id }) => _id === "near").editor_text).toBe( "gone near"
   );
 });
 
 test("deleting empty, absent or all notes has an exact immutable result", () => {
   const a = editorNote("a", 0, 1);
   const b = editorNote("b", 1, 2, { editor_text: "b" });
-  const untouched = operations.deleteNotesAndTransferText(
-    [a, b],
-    [],
-    new Map()
+  const untouched = operations.deleteNotesAndTransferText( [a, b], [], new Map()
   );
   expect(untouched).toEqual([a, b]);
   expect(untouched[0]).not.toBe(a);
-  expect(
-    operations.deleteNotesAndTransferText([a, b], ["a"], new Map())
+  expect( operations.deleteNotesAndTransferText([a, b], ["a"], new Map())
   ).toEqual([b]);
-  expect(
-    operations.deleteNotesAndTransferText([a, b], ["a", "b"], new Map())
+  expect( operations.deleteNotesAndTransferText([a, b], ["a", "b"], new Map())
   ).toEqual([]);
 });
 
@@ -605,11 +510,9 @@ test("moving notes is clamped by duration and neighboring notes", () => {
     editorNote("after", 4, 5)
   ];
   expect(operations.constrainedMoveDelta(notes, [], 1, 10)).toBe(0);
-  expect(
-    operations.constrainedMoveDelta(notes, ["moving-a", "moving-b"], -5, 10)
+  expect( operations.constrainedMoveDelta(notes, ["moving-a", "moving-b"], -5, 10)
   ).toBe(0);
-  expect(
-    operations.constrainedMoveDelta(notes, ["moving-a", "moving-b"], 5, 10)
+  expect( operations.constrainedMoveDelta(notes, ["moving-a", "moving-b"], 5, 10)
   ).toBe(0);
   expect(
     operations.constrainedMoveDelta(

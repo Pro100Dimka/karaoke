@@ -12,17 +12,7 @@ const fs = require("fs");
 const http = require("http");
 const path = require("path");
 const { pathToFileURL } = require("url");
-const {
-  app,
-  BrowserWindow,
-  clipboard,
-  dialog,
-  ipcMain,
-  net,
-  protocol,
-  session,
-  shell
-} = require("electron");
+const { app, BrowserWindow, clipboard, dialog, ipcMain, net, protocol, session, shell } = require("electron");
 
 const {
   BACKEND_HOST,
@@ -47,12 +37,7 @@ app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 protocol.registerSchemesAsPrivileged([
   {
     scheme: "karaoke-media",
-    privileges: {
-      secure: true,
-      standard: true,
-      stream: true,
-      supportFetchAPI: true
-    }
+    privileges: { secure: true, standard: true, stream: true, supportFetchAPI: true }
   }
 ]);
 
@@ -84,21 +69,13 @@ function resolveBackendDir() {
   // упакован рядом с ресурсами — см. README.md о сборке инсталлятора:
   // это то место, которое нужно донастроить под конкретный способ
   // распространения (PyInstaller-бинарник backend'а и т.п.).
-  if (isDev) {
-    return path.resolve(__dirname, "..", "..", "backend");
-  }
+  if (isDev) return path.resolve(__dirname, "..", "..", "backend");
   return path.join(process.resourcesPath, "backend");
 }
 
 function resolveSceneVideoPath() {
   return isDev
-    ? path.resolve(
-        __dirname,
-        "..",
-        "..",
-        "downloads",
-        "media",
-        "videoplayback.webm"
+    ? path.resolve( __dirname, "..", "..", "downloads", "media", "videoplayback.webm"
       )
     : path.join(process.resourcesPath, "media", "videoplayback.webm");
 }
@@ -111,13 +88,9 @@ function registerMediaProtocol() {
     }
 
     const scenePath = resolveSceneVideoPath();
-    if (!fs.existsSync(scenePath)) {
-      return new Response("Scene video is unavailable", { status: 404 });
-    }
+    if (!fs.existsSync(scenePath)) return new Response("Scene video is unavailable", { status: 404 });
 
-    return net.fetch(pathToFileURL(scenePath).href, {
-      headers: request.headers
-    });
+    return net.fetch(pathToFileURL(scenePath).href, { headers: request.headers });
   });
 }
 
@@ -126,9 +99,7 @@ function requestBackendJson(pathname, timeoutMs = BACKEND_REQUEST_TIMEOUT_MS) {
     const request = http.get(`${BACKEND_URL}${pathname}`, (response) => {
       let body = "";
       response.setEncoding("utf8");
-      response.on("data", (chunk) => {
-        if (body.length < 1024 * 1024) body += chunk;
-      });
+      response.on("data", (chunk) => { if (body.length < 1024 * 1024) body += chunk; });
       response.on("end", () => {
         if (response.statusCode < 200 || response.statusCode >= 300) {
           reject(new Error(`Backend returned HTTP ${response.statusCode}`));
@@ -141,9 +112,7 @@ function requestBackendJson(pathname, timeoutMs = BACKEND_REQUEST_TIMEOUT_MS) {
         }
       });
     });
-    request.setTimeout(timeoutMs, () => {
-      request.destroy(new Error("Backend request timed out"));
-    });
+    request.setTimeout(timeoutMs, () => { request.destroy(new Error("Backend request timed out")); });
     request.on("error", reject);
   });
 }
@@ -163,9 +132,7 @@ async function resolveSongOutputDir() {
     );
   }
 
-  if (isDev) {
-    return path.resolve(resolveBackendDir(), "..", "karaoke_songs");
-  }
+  if (isDev) return path.resolve(resolveBackendDir(), "..", "karaoke_songs");
   return path.join(app.getPath("userData"), "backend-data", "karaoke_songs");
 }
 
@@ -209,9 +176,7 @@ function startBackend() {
   const backendCommand = isDev
     ? process.env.KARAOKE_PYTHON ||
       (IS_WINDOWS ? "python" : "python3")
-    : path.join(
-        backendDir,
-        IS_WINDOWS ? "KaraokeBackend.exe" : "KaraokeBackend"
+    : path.join( backendDir, IS_WINDOWS ? "KaraokeBackend.exe" : "KaraokeBackend"
       );
   const backendArgs = isDev ? ["run.py"] : [];
   const backendDataDir = isDev
@@ -225,9 +190,7 @@ function startBackend() {
   try {
     if (!isDev) {
       fs.mkdirSync(backendLogDir, { recursive: true });
-      backendLogFd = fs.openSync(
-        path.join(backendLogDir, "backend-process.log"),
-        "a"
+      backendLogFd = fs.openSync( path.join(backendLogDir, "backend-process.log"), "a"
       );
       fs.writeSync(
         backendLogFd,
@@ -340,15 +303,9 @@ function stopBackend() {
     method: "POST",
     timeout: 450
   });
-  request.on("response", (response) => {
-    response.resume();
-    response.once("end", finish);
-  });
+  request.on("response", (response) => { response.resume(); response.once("end", finish); });
   request.on("error", finish);
-  request.on("timeout", () => {
-    request.destroy();
-    finish();
-  });
+  request.on("timeout", () => { request.destroy(); finish(); });
   request.end();
   setTimeout(finish, BACKEND_STOP_GRACE_MS);
 }
@@ -364,9 +321,7 @@ const THEME_NAMES = Object.keys(THEME_ICONS).filter((name) => name !== "app");
 function getStoredIconTheme() {
   try {
     const theme = fs
-      .readFileSync(
-        path.join(app.getPath("userData"), "selected-theme.txt"),
-        "utf8"
+      .readFileSync( path.join(app.getPath("userData"), "selected-theme.txt"), "utf8"
       )
       .trim();
     return THEME_NAMES.includes(theme) ? theme : "dark";
@@ -381,9 +336,7 @@ function storeIconTheme(theme) {
     const userData = app.getPath("userData");
     fs.mkdirSync(userData, { recursive: true });
     fs.writeFileSync(path.join(userData, "selected-theme.txt"), theme, "utf8");
-    fs.copyFileSync(
-      getThemeIcon(theme),
-      path.join(userData, "selected-theme.ico")
+    fs.copyFileSync( getThemeIcon(theme), path.join(userData, "selected-theme.ico")
     );
     return true;
   } catch (error) {
@@ -402,10 +355,7 @@ function getThemeIcon(theme = "app") {
 function getThemeShortcutIcon(theme) {
   return isDev
     ? getThemeIcon(theme)
-    : path.join(
-        path.dirname(process.execPath),
-        "theme-icons",
-        THEME_ICONS[theme]
+    : path.join( path.dirname(process.execPath), "theme-icons", THEME_ICONS[theme]
       );
 }
 
@@ -439,18 +389,11 @@ function updateThemeShortcuts(iconPath) {
     if (!fs.existsSync(shortcutPath)) continue;
     try {
       const details = shell.readShortcutLink(shortcutPath);
-      shell.writeShortcutLink(shortcutPath, "replace", {
-        ...details,
-        icon: iconPath,
-        iconIndex: 0
-      });
+      shell.writeShortcutLink(shortcutPath, "replace", { ...details, icon: iconPath, iconIndex: 0 });
     } catch (error) {
       // A system-wide shortcut may require elevation; the window icon still updates.
       // eslint-disable-next-line no-console
-      console.warn(
-        "Could not update themed shortcut icon:",
-        shortcutPath,
-        error
+      console.warn( "Could not update themed shortcut icon:", shortcutPath, error
       );
     }
   }
@@ -503,10 +446,7 @@ function createWindow() {
     if (!allowed) event.preventDefault();
   });
 
-  mainWindow.once("ready-to-show", () => {
-    mainWindow?.setFullScreen(true);
-    mainWindow?.show();
-  });
+  mainWindow.once("ready-to-show", () => { mainWindow?.setFullScreen(true); mainWindow?.show(); });
 
   const loadPromise = isDev
     ? mainWindow.loadURL(DEV_RENDERER_ORIGIN)
@@ -516,9 +456,7 @@ function createWindow() {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
   });
 
-  mainWindow.on("closed", () => {
-    mainWindow = null;
-  });
+  mainWindow.on("closed", () => { mainWindow = null; });
 }
 
 function handleTrustedIpc(channel, handler) {
@@ -567,8 +505,7 @@ handleTrustedIpc("shell:openSongFolder", async (target) => {
     );
 
     if (matchingEntry) {
-      const error = await shell.openPath(
-        path.join(realSongsDir, matchingEntry.name)
+      const error = await shell.openPath( path.join(realSongsDir, matchingEntry.name)
       );
       return error || "";
     }
@@ -619,14 +556,9 @@ app.whenReady().then(() => {
   if (IS_WINDOWS)
     app.setAppUserModelId("com.karaokestudio.app");
   registerMediaProtocol();
-  const packagedIndexUrl = getPackagedRendererUrl(
-    path.join(__dirname, "..", "dist", "index.html")
+  const packagedIndexUrl = getPackagedRendererUrl( path.join(__dirname, "..", "dist", "index.html")
   );
-  const rendererOptions = {
-    isDev,
-    devOrigin: DEV_RENDERER_ORIGIN,
-    packagedIndexUrl
-  };
+  const rendererOptions = { isDev, devOrigin: DEV_RENDERER_ORIGIN, packagedIndexUrl };
   const permissionAllowed = (webContents, permission, requestUrl, details) =>
     isAllowedPermissionRequest({
       permission,
@@ -645,22 +577,14 @@ app.whenReady().then(() => {
     (webContents, permission, callback, details) => {
       // The app uses audio capture only. Never grant camera/media permissions
       // to a navigation, popup, or arbitrary origin sharing the session.
-      callback(
-        permissionAllowed(
-          webContents,
-          permission,
-          details?.requestingUrl,
-          details
-        )
+      callback( permissionAllowed( webContents, permission, details?.requestingUrl, details )
       );
     }
   );
   startBackend();
   createWindow();
 
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+  app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 
 app.on("window-all-closed", () => {
@@ -670,7 +594,4 @@ app.on("window-all-closed", () => {
   app.quit();
 });
 
-app.on("before-quit", () => {
-  isQuitting = true;
-  stopBackend();
-});
+app.on("before-quit", () => { isQuitting = true; stopBackend(); });

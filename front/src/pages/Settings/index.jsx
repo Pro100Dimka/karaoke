@@ -9,11 +9,7 @@ import Tabs from "../../theme/ui/Tabs";
 import { SETTINGS_TABS } from "./config";
 import SettingsContent from "./settings-content";
 
-export default function Settings({
-  isOpen = true,
-  onClose,
-  initialTab = "appearance"
-}) {
+export default function Settings({ isOpen = true, onClose, initialTab = "appearance" }) {
   const { alert } = useAppDialog();
   const { t } = useI18n();
   const settings = useSettingsForm(alert);

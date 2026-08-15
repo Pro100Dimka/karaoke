@@ -22,9 +22,7 @@ for (const file of walk(root)) {
   if (lines > limit)
     warnings.push({ file: path.relative(process.cwd(), file), lines, limit });
 }
-if (!warnings.length) {
-  console.log("All source files are within advisory size limits.");
-} else {
+if (!warnings.length) console.log("All source files are within advisory size limits."); else {
   console.log("Advisory large-file report:");
   for (const warning of warnings) {
     console.log(

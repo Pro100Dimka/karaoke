@@ -11,11 +11,7 @@ const connect = (from, to) => {
 export function createStudioMicrophoneGraph(rawStream) {
   const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
   if (!AudioContextClass?.prototype || !rawStream) {
-    return {
-      stream: rawStream,
-      rawStream,
-      close: async () => stopStream(rawStream)
-    };
+    return { stream: rawStream, rawStream, close: async () => stopStream(rawStream) };
   }
 
   let context;
@@ -65,9 +61,7 @@ export function createStudioMicrophoneGraph(rawStream) {
     connect(connect(connect(connect(connect(connect(source, highpass), mud), presence), air), compressor), makeup);
     makeup.connect(limiter);
     limiter.connect(destination);
-    destination.stream.getAudioTracks?.().forEach((track) => {
-      track.contentHint = "music";
-    });
+    destination.stream.getAudioTracks?.().forEach((track) => { track.contentHint = "music"; });
     context.resume?.().catch(() => {});
 
     return {

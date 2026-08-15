@@ -20,9 +20,7 @@ function PianoKeyboard({
   rowHeight,
   whiteKeyGeometry
 }) {
-  const blackKeys = Array.from(
-    { length: maxMidi - minMidi + 1 },
-    (_, index) => maxMidi - index
+  const blackKeys = Array.from( { length: maxMidi - minMidi + 1 }, (_, index) => maxMidi - index
   ).filter((midi) => BLACK_KEYS.includes(((midi % 12) + 12) % 12));
   const audition = (event, midi) => {
     event.stopPropagation();
@@ -50,11 +48,7 @@ function PianoKeyboard({
           <div
             key={`black-${midi}`}
             className="melody-editor-piano-key is-black"
-            style={{
-              top: center - height / 2,
-              width: keyboardWidth * 0.64,
-              height
-            }}
+            style={{ top: center - height / 2, width: keyboardWidth * 0.64, height }}
             onPointerDown={(event) => audition(event, midi)}
           >
             <span>{noteName(midi)}</span>
@@ -227,8 +221,7 @@ function EditorScrollbar(props) {
   return (
     <div
       className={`melody-editor-cubase-scrollbar is-${horizontal ? "horizontal" : "vertical"}`}
-      aria-label={translateSaved(
-        horizontal ? "Горизонтальная прокрутка" : "Вертикальная прокрутка"
+      aria-label={translateSaved( horizontal ? "Горизонтальная прокрутка" : "Вертикальная прокрутка"
       )}
     >
       <Scrollbar {...props} />
@@ -352,10 +345,7 @@ export default function MelodyEditorRoll({
           </div>
         </div>
       </div>
-      {[
-        ["x", zoom],
-        ["y", verticalZoom]
-      ].map(([axis]) => (
+      {[ ["x", zoom], ["y", verticalZoom] ].map(([axis]) => (
         <EditorScrollbar
           key={axis}
           axis={axis}

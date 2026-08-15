@@ -1,16 +1,10 @@
 /* @vitest-environment jsdom */
-import React, { createRef } from "react";
+import { createRef } from "react";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  isPlaying: false,
-  theme: "dark",
-  noSettings: false
-}));
-vi.mock("../src/contexts/radio", () => ({
-  useRadio: () => ({ isPlaying: mocks.isPlaying })
-}));
+const mocks = vi.hoisted(() => ({ isPlaying: false, theme: "dark", noSettings: false }));
+vi.mock("../src/contexts/radio", () => ({ useRadio: () => ({ isPlaying: mocks.isPlaying }) }));
 vi.mock("../src/hooks/useAppSettings", () => ({
   default: () =>
     mocks.noSettings ? null : { settings: { theme: mocks.theme } }
@@ -20,13 +14,7 @@ vi.mock("../src/theme/ui", () => ({
   Stack: ({ children, ...props }) => <div {...props}>{children}</div>,
   Typography: ({ children, ...props }) => <span {...props}>{children}</span>,
   Badge: ({ children, ...props }) => <span {...props}>{children}</span>,
-  Card: ({
-    as: Comp = "div",
-    children,
-    cardPanel: _panel,
-    cardContent: _content,
-    ...props
-  }) => <Comp {...props}>{children}</Comp>,
+  Card: ({ as: Comp = "div", children, cardPanel: _panel, cardContent: _content, ...props }) => <Comp {...props}>{children}</Comp>,
   Button: ({ children, ...props }) => <button {...props}>{children}</button>,
   IconButton: ({ children, ...props }) => <button {...props}>{children}</button>
 }));
@@ -67,10 +55,7 @@ import SongCardArtwork from "../src/pages/Library/components/song-card/song-card
 import ProcessingModal from "../src/pages/Library/modals/processing.jsx";
 import RecordingsModal from "../src/pages/Library/modals/recordings.jsx";
 
-afterEach(() => {
-  cleanup();
-  mocks.noSettings = false;
-});
+afterEach(() => { cleanup(); mocks.noSettings = false; });
 
 test("library actions cover search, room, adding and file selection", () => {
   const setQuery = vi.fn();
@@ -91,9 +76,7 @@ test("library actions cover search, room, adding and file selection", () => {
     />
   );
   const { container } = view;
-  fireEvent.change(container.querySelector(".library-search-input"), {
-    target: { value: "song" }
-  });
+  fireEvent.change(container.querySelector(".library-search-input"), { target: { value: "song" } });
   const buttons = container.querySelectorAll("button");
   fireEvent.click(buttons[0]);
   fireEvent.click(buttons[1]);
@@ -130,12 +113,10 @@ test("hero and artwork reflect saved theme, counts and radio activity", () => {
       .querySelector(".library-song-card-art")
       .classList.contains("is-radio-reactive")
   ).toBe(true);
-  expect(container.querySelectorAll(".library-song-card-wave i")).toHaveLength(
-    18
+  expect(container.querySelectorAll(".library-song-card-wave i")).toHaveLength( 18
   );
   mocks.noSettings = true;
-  expect(() =>
-    render(<LibraryHero songCount={0} readyCount={0} />)
+  expect(() => render(<LibraryHero songCount={0} readyCount={0} />)
   ).not.toThrow();
 });
 
@@ -190,17 +171,13 @@ test("processing modal covers active, complete, error and absent songs", () => {
 test("recordings modal renders empty, error and recording actions", () => {
   const analyze = vi.fn();
   const remove = vi.fn();
-  const result = render(
-    <RecordingsModal song={{ title: "Song" }} recordings={[]} />
+  const result = render( <RecordingsModal song={{ title: "Song" }} recordings={[]} />
   );
-  expect(
-    result.container.querySelector(".song-recordings-empty")
+  expect( result.container.querySelector(".song-recordings-empty")
   ).not.toBeNull();
-  result.rerender(
-    <RecordingsModal song={{ title: "Song" }} error={new Error("offline")} />
+  result.rerender( <RecordingsModal song={{ title: "Song" }} error={new Error("offline")} />
   );
-  expect(result.container.querySelector(".field-error").textContent).toContain(
-    "offline"
+  expect(result.container.querySelector(".field-error").textContent).toContain( "offline"
   );
   result.rerender(
     <RecordingsModal
@@ -215,8 +192,7 @@ test("recordings modal renders empty, error and recording actions", () => {
   fireEvent.click(buttons[1]);
   expect(analyze.mock.calls[0][0].id).toBe("rec");
   expect(remove.mock.calls[0][0].id).toBe("rec");
-  expect(result.getByTestId("player").getAttribute("src")).toBe(
-    "recording/rec"
+  expect(result.getByTestId("player").getAttribute("src")).toBe( "recording/rec"
   );
   result.rerender(<RecordingsModal song={null} />);
   expect(result.container.firstChild).toBeNull();

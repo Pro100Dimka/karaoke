@@ -1,5 +1,5 @@
 /* @vitest-environment jsdom */
-import React, { createRef } from "react";
+import { createRef } from "react";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -43,11 +43,7 @@ test("karaoke media loads audio gain and initializes YouTube playback", () => {
     />
   );
   const audio = container.querySelector("audio");
-  Object.defineProperty(audio, "volume", {
-    configurable: true,
-    writable: true,
-    value: 0
-  });
+  Object.defineProperty(audio, "volume", { configurable: true, writable: true, value: 0 });
   fireEvent.loadedMetadata(audio);
   expect(audio.volume).toBeGreaterThan(0);
   fireEvent.load(container.querySelector("iframe"));
@@ -90,8 +86,7 @@ test("karaoke media loads audio gain and initializes YouTube playback", () => {
       syncSecondaryMedia={sync}
     />
   );
-  expect(container.querySelector("video").getAttribute("src")).toBe(
-    "video.mp4"
+  expect(container.querySelector("video").getAttribute("src")).toBe( "video.mp4"
   );
 });
 
@@ -105,14 +100,10 @@ test("waveform supports click, drag and range seeking", () => {
   fireEvent.pointerDown(timeline, { clientX: 60 });
   fireEvent.pointerMove(timeline, { clientX: 80, buttons: 1 });
   fireEvent.pointerMove(timeline, { clientX: 90, buttons: 0 });
-  fireEvent.change(container.querySelector("input"), {
-    target: { value: "7" }
-  });
+  fireEvent.change(container.querySelector("input"), { target: { value: "7" } });
   expect(change).toHaveBeenCalledTimes(3);
   rerender(<WaveformTimeline value={0} duration={0} onChange={change} />);
-  fireEvent.pointerDown(container.querySelector(".waveform-timeline"), {
-    clientX: 10
-  });
+  fireEvent.pointerDown(container.querySelector(".waveform-timeline"), { clientX: 10 });
   expect(change).toHaveBeenCalledTimes(3);
   rerender(<WaveformTimeline value={0} duration={10} onChange={change} />);
   const zeroWidth = container.querySelector(".waveform-timeline");
@@ -145,11 +136,7 @@ test("lyrics render words, syllables, suffixes and untimed fallback text", () =>
   );
   expect(container.textContent).toBe("Большоймир");
   expect(container.querySelectorAll(".karaoke-lyric-syllable")).toHaveLength(2);
-  rerender(
-    <KaraokeLyricLine
-      currentTime={0}
-      line={{ text: "Plain", start: 0, end: 1 }}
-    />
+  rerender( <KaraokeLyricLine currentTime={0} line={{ text: "Plain", start: 0, end: 1 }} />
   );
   expect(container.textContent).toBe("Plain");
   rerender(
@@ -160,13 +147,7 @@ test("lyrics render words, syllables, suffixes and untimed fallback text", () =>
         words: [
           { word: "Word", start: 0, end: 1 },
           {},
-          {
-            word: "XY",
-            syllables: [
-              { start: 0, end: 0.5 },
-              { text: "Z", start: 0.5, end: 1 }
-            ]
-          },
+          { word: "XY", syllables: [ { start: 0, end: 0.5 }, { text: "Z", start: 0.5, end: 1 } ] },
           { syllables: [{}] }
         ]
       }}

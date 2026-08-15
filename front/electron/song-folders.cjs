@@ -13,14 +13,10 @@ function findMatchingSongFolder(entries, requestedValues) {
 
   const directories = entries
     .filter((entry) => entry?.isDirectory?.())
-    .map((entry) => ({
-      entry,
-      normalizedName: normalizeFolderName(entry.name)
-    }))
+    .map((entry) => ({ entry, normalizedName: normalizeFolderName(entry.name) }))
     .filter(({ normalizedName }) => normalizedName);
 
-  const exact = directories.find(({ normalizedName }) =>
-    requestedNames.includes(normalizedName)
+  const exact = directories.find(({ normalizedName }) => requestedNames.includes(normalizedName)
   );
   if (exact) return exact.entry;
 

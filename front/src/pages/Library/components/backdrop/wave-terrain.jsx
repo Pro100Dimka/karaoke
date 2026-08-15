@@ -53,12 +53,7 @@ const PARTICLES = Array.from({ length: ROWS }, (_, row) => {
 });
 
 const POINTS = Array.from({ length: ROWS }, () =>
-  Array.from({ length: COLUMNS }, () => ({
-    x: 0,
-    y: 0,
-    terrain: 0,
-    brightness: 0
-  }))
+  Array.from({ length: COLUMNS }, () => ({ x: 0, y: 0, terrain: 0, brightness: 0 }))
 );
 
 function getTerrainHeight(column, particle, time, energy, hit, spectrum) {
@@ -112,10 +107,7 @@ export default function LibraryWaveTerrain() {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    const context = canvas?.getContext("2d", {
-      alpha: true,
-      desynchronized: true
-    });
+    const context = canvas?.getContext("2d", { alpha: true, desynchronized: true });
     if (!canvas || !context) return undefined;
 
     const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
@@ -162,13 +154,7 @@ export default function LibraryWaveTerrain() {
           const point = POINTS[row][column];
           const { x } = COLUMNS_DATA[column];
           const perspective = 0.44 + particle.depth * 0.9;
-          const terrain = getTerrainHeight(
-            column,
-            particle,
-            time,
-            energy,
-            hit,
-            spectrum
+          const terrain = getTerrainHeight( column, particle, time, energy, hit, spectrum
           );
           const drift = Math.sin(time * 0.3 + particle.depth * 2.5) * 0.009;
           const cameraFlow =
@@ -320,10 +306,7 @@ export default function LibraryWaveTerrain() {
 
     readTerrainColor();
     handleResize();
-    const themeObserver = new MutationObserver(() => {
-      readTerrainColor();
-      restart();
-    });
+    const themeObserver = new MutationObserver(() => { readTerrainColor(); restart(); });
     themeObserver.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["data-theme"]

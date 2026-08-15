@@ -1,10 +1,4 @@
-import {
-  Check,
-  Copy,
-  PanelLeftClose,
-  PanelLeftOpen,
-  ShieldCheck
-} from "lucide-react";
+import { Check, Copy, PanelLeftClose, PanelLeftOpen, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useOnlineRoom } from "../contexts/OnlineRoomContext";
 import useExclusiveAsyncAction from "../hooks/useExclusiveAsyncAction";
@@ -18,9 +12,7 @@ import Button from "./fields/button";
 function getTransferText(status, t) {
   if (!status) return "";
   return status.stage === "error"
-    ? t("room.transfer.error", {
-        error: status.error || t("room.transfer.unknownError")
-      })
+    ? t("room.transfer.error", { error: status.error || t("room.transfer.unknownError") })
     : t(`room.transfer.${status.stage}`, { percent: status.percent });
 }
 
@@ -36,9 +28,7 @@ export function OnlineRoomDock() {
 
   useEffect(
     () => () => {
-      if (copiedTimerRef.current) {
-        globalThis.clearTimeout(copiedTimerRef.current);
-      }
+      if (copiedTimerRef.current) globalThis.clearTimeout(copiedTimerRef.current);
     },
     []
   );
@@ -51,9 +41,7 @@ export function OnlineRoomDock() {
   const handleCopy = async () => {
     if (!(await copyText(onlineRoom.room.id)) || !mountedRef.current) return;
     setCopied(true);
-    if (copiedTimerRef.current) {
-      globalThis.clearTimeout(copiedTimerRef.current);
-    }
+    if (copiedTimerRef.current) globalThis.clearTimeout(copiedTimerRef.current);
     copiedTimerRef.current = globalThis.setTimeout(() => {
       copiedTimerRef.current = null;
       setCopied(false);
@@ -74,10 +62,7 @@ export function OnlineRoomDock() {
         <div className="online-room-dock-heading">
           <span>
             {t("room.heading", {
-              role: t(
-                onlineRoom.room.host
-                  ? "room.role.host"
-                  : "room.role.participant"
+              role: t( onlineRoom.room.host ? "room.role.host" : "room.role.participant"
               )
             })}
           </span>
@@ -131,10 +116,7 @@ export function OnlineRoomDock() {
               onClick={handleRequestMicrophone}
               disabled={requestingMicrophone}
             >
-              {t(
-                requestingMicrophone
-                  ? "room.requestingMicrophone"
-                  : "room.allowMicrophone"
+              {t( requestingMicrophone ? "room.requestingMicrophone" : "room.allowMicrophone"
               )}
             </Button>
           </div>

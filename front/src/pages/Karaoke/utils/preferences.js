@@ -52,9 +52,7 @@ export function loadKaraokePreferences(storage = globalThis.localStorage) {
   }
 }
 
-export function saveKaraokePreferences(
-  preferences,
-  storage = globalThis.localStorage
+export function saveKaraokePreferences( preferences, storage = globalThis.localStorage
 ) {
   try {
     const serialized = JSON.stringify(normalizeKaraokePreferences(preferences));

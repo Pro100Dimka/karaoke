@@ -3,8 +3,7 @@ import { Button, Progress, Stack, Typography } from "../../theme/ui";
 
 const buttonProps = (props = {}) => {
   const clean = { ...props };
-  ["label", "tooltip", "startIcon", "fieldSx"].forEach(
-    (key) => delete clean[key]
+  ["label", "tooltip", "startIcon", "fieldSx"].forEach( (key) => delete clean[key]
   );
   return clean;
 };

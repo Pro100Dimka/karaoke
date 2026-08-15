@@ -1,5 +1,4 @@
 /* @vitest-environment jsdom */
-import React from "react";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -52,33 +51,22 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => {
-  cleanup();
-  document.documentElement.dataset.performance = "";
-});
+afterEach(() => { cleanup(); document.documentElement.dataset.performance = ""; });
 
 test("backdrop renders decorations and animated terrain", () => {
   const { container, unmount } = render(<LibraryBackdrop />);
-  expect(
-    container.querySelectorAll(".library-music-object--record span")
+  expect( container.querySelectorAll(".library-music-object--record span")
   ).toHaveLength(4);
-  expect(
-    container.querySelectorAll(".library-music-object--notes span")
+  expect( container.querySelectorAll(".library-music-object--notes span")
   ).toHaveLength(18);
   expect(context.setTransform).toHaveBeenCalled();
   expect(context.clearRect).toHaveBeenCalled();
   expect(context.stroke).toHaveBeenCalled();
   expect(context.fillRect).toHaveBeenCalled();
   fireEvent(window, new Event("resize"));
-  Object.defineProperty(document, "hidden", {
-    configurable: true,
-    value: true
-  });
+  Object.defineProperty(document, "hidden", { configurable: true, value: true });
   fireEvent(document, new Event("visibilitychange"));
-  Object.defineProperty(document, "hidden", {
-    configurable: true,
-    value: false
-  });
+  Object.defineProperty(document, "hidden", { configurable: true, value: false });
   fireEvent(document, new Event("visibilitychange"));
   unmount();
   expect(globalThis.cancelAnimationFrame).toHaveBeenCalled();
@@ -89,12 +77,10 @@ test("parallax follows pointer and cleans root variables", () => {
   const frameCount = globalThis.requestAnimationFrame.mock.calls.length;
   fireEvent.pointerMove(window, { clientX: 100, clientY: 100 });
   fireEvent.mouseLeave(document);
-  expect(globalThis.requestAnimationFrame.mock.calls.length).toBeGreaterThan(
-    frameCount
+  expect(globalThis.requestAnimationFrame.mock.calls.length).toBeGreaterThan( frameCount
   );
   unmount();
-  expect(
-    document.documentElement.style.getPropertyValue("--library-parallax-x")
+  expect( document.documentElement.style.getPropertyValue("--library-parallax-x")
   ).toBe("");
 });
 
@@ -125,8 +111,7 @@ test("runs queued parallax and reacts to theme changes", async () => {
   }
   document.documentElement.dataset.theme = "changed";
   await act(async () => Promise.resolve());
-  expect(
-    document.documentElement.style.getPropertyValue("--library-parallax-x")
+  expect( document.documentElement.style.getPropertyValue("--library-parallax-x")
   ).not.toBe("");
 });
 
@@ -148,10 +133,7 @@ test("terrain traverses hidden mesh gaps across animation phases", () => {
 test("terrain uses theme colors and silent fallbacks", () => {
   mocks.playing = false;
   const descriptor = Object.getOwnPropertyDescriptor(window, "devicePixelRatio");
-  Object.defineProperty(window, "devicePixelRatio", {
-    configurable: true,
-    value: 0
-  });
+  Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 0 });
   const style = vi.spyOn(globalThis, "getComputedStyle").mockReturnValue({
     getPropertyValue: (name) =>
       name === "--wave-terrain-rgb" ? "1,2,3" : "4,5,6"

@@ -1,8 +1,5 @@
 import { expect, test, vi } from "vitest";
-import {
-  closeAudioContext,
-  closeAudioContextQuietly
-} from "../src/utils/audio-context.js";
+import { closeAudioContext, closeAudioContextQuietly } from "../src/utils/audio-context.js";
 
 test("audio context cleanup tolerates every close implementation", async () => {
   const resolved = { close: vi.fn().mockResolvedValue(undefined) };
@@ -15,11 +12,7 @@ test("audio context cleanup tolerates every close implementation", async () => {
   const rejected = { close: vi.fn().mockRejectedValue(new Error("closed")) };
   await expect(closeAudioContext(rejected)).resolves.toBe(false);
 
-  const throwing = {
-    close: vi.fn(() => {
-      throw new Error("already closed");
-    })
-  };
+  const throwing = { close: vi.fn(() => { throw new Error("already closed"); }) };
   await expect(closeAudioContext(throwing)).resolves.toBe(false);
 
   const alreadyClosed = { state: "closed", close: vi.fn() };

@@ -20,17 +20,8 @@ export const INITIAL_APP_SETTINGS_STATE = Object.freeze({
 
 const APP_SETTINGS_HANDLERS = {
   LOAD_START: (state) => ({ ...state, isLoading: true, error: null }),
-  LOAD_SUCCESS: (state, payload) => ({
-    ...state,
-    settings: payload,
-    isLoading: false,
-    error: null
-  }),
-  LOAD_ERROR: (state, payload) => ({
-    ...state,
-    isLoading: false,
-    error: payload
-  }),
+  LOAD_SUCCESS: (state, payload) => ({ ...state, settings: payload, isLoading: false, error: null }),
+  LOAD_ERROR: (state, payload) => ({ ...state, isLoading: false, error: payload }),
   UPDATE_SETTINGS: (state, payload) => ({
     ...state,
     settings: typeof payload === "function" ? payload(state.settings) : payload
@@ -44,9 +35,7 @@ export function appSettingsReducer(state, { type, payload }) {
 }
 
 export default function AppSettingsProvider({ children }) {
-  const [state, dispatch] = useReducer(
-    appSettingsReducer,
-    INITIAL_APP_SETTINGS_STATE
+  const [state, dispatch] = useReducer( appSettingsReducer, INITIAL_APP_SETTINGS_STATE
   );
   const loadRequestRef = useRef();
 
@@ -60,15 +49,11 @@ export default function AppSettingsProvider({ children }) {
     return api
       .getAppSettings()
       .then((payload) => {
-        if (requestId === loadRequestRef.current) {
-          dispatch({ type: "LOAD_SUCCESS", payload });
-        }
+        if (requestId === loadRequestRef.current) dispatch({ type: "LOAD_SUCCESS", payload });
         return payload;
       })
       .catch((payload) => {
-        if (requestId === loadRequestRef.current) {
-          dispatch({ type: "LOAD_ERROR", payload });
-        }
+        if (requestId === loadRequestRef.current) dispatch({ type: "LOAD_ERROR", payload });
         throw payload;
       });
   }, []);
@@ -94,9 +79,7 @@ export default function AppSettingsProvider({ children }) {
   }, [state.settings?.language]);
   // loadSettings is stable for the provider lifetime.
   // Stryker disable ArrayDeclaration
-  useEffect(() => {
-    loadSettings().catch(() => {});
-  }, [loadSettings]);
+  useEffect(() => { loadSettings().catch(() => {}); }, [loadSettings]);
   // Stryker restore ArrayDeclaration
 
   return (

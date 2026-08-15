@@ -34,9 +34,7 @@ export async function hydrateUiPreferences(api) {
         return;
       }
       const local = readJsonStorage(key);
-      if (Object.keys(local).length) {
-        await api.updateUiPreferences(namespace, local);
-      }
+      if (Object.keys(local).length) await api.updateUiPreferences(namespace, local);
     })
   );
 }

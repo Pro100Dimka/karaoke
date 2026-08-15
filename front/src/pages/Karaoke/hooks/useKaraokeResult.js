@@ -3,11 +3,7 @@ import { api } from "../../../api/client";
 import { shouldLoadKaraokeResult } from "../utils/result";
 
 export default function useKaraokeResult(song) {
-  const [state, setState] = useState({
-    result: null,
-    loading: false,
-    error: null
-  });
+  const [state, setState] = useState({ result: null, loading: false, error: null });
   const songId = song?.id;
   const songStatus = song?.status;
   const songUpdatedAt = song?.updated_at;

@@ -17,9 +17,7 @@ export function isEditableHotkeyTarget(target) {
 
 export function isHotkeyScopeActive(scope) {
   if (!scope?.isConnected) return false;
-  const dialogs = [
-    ...document.querySelectorAll('[role="dialog"][aria-modal="true"]')
-  ];
+  const dialogs = [ ...document.querySelectorAll('[role="dialog"][aria-modal="true"]') ];
   const topDialog = dialogs.at(-1);
   return !topDialog || topDialog.contains(scope);
 }

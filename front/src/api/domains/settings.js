@@ -17,10 +17,7 @@ export const settingsApi = {
     }
 
     return {
-      ...(await request("/settings", {
-        method: "PATCH",
-        body: JSON.stringify(backendPatch)
-      })),
+      ...(await request("/settings", { method: "PATCH", body: JSON.stringify(backendPatch) })),
       ...localPatch
     };
   },

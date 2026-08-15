@@ -1,25 +1,12 @@
 /* @vitest-environment jsdom */
-import React from "react";
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  screen
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import Dropdown from "../src/components/fields/Dropdown.jsx";
 
-afterEach(() => {
-  cleanup();
-  document.body.replaceChildren();
-});
+afterEach(() => { cleanup(); document.body.replaceChildren(); });
 
-const options = [
-  { value: "a", label: "Alpha" },
-  { value: "b", label: "Beta" }
-];
+const options = [ { value: "a", label: "Alpha" }, { value: "b", label: "Beta" } ];
 
 describe("dropdown", () => {
   test("selects a value and restores trigger focus", () => {
@@ -41,8 +28,7 @@ describe("dropdown", () => {
     fireEvent.click(trigger);
     expect(screen.getByRole("listbox")).not.toBeNull();
     fireEvent.pointerDown(trigger);
-    expect(screen.getByRole("option", { name: /Alpha/ }).className).toContain(
-      "is-selected"
+    expect(screen.getByRole("option", { name: /Alpha/ }).className).toContain( "is-selected"
     );
     fireEvent.click(screen.getByRole("option", { name: /Beta/ }));
     expect(change).toHaveBeenCalledWith("b");
@@ -104,8 +90,7 @@ describe("dropdown", () => {
     expect(screen.getAllByRole("listbox")).toHaveLength(1);
     expect(screen.getByRole("listbox").id).toBe("two-menu");
 
-    view.rerender(
-      <Dropdown id="two" disabled options={options} onChange={vi.fn()} />
+    view.rerender( <Dropdown id="two" disabled options={options} onChange={vi.fn()} />
     );
     expect(screen.queryByRole("listbox")).toBeNull();
     expect(screen.getByRole("button").disabled).toBe(true);
@@ -144,12 +129,7 @@ describe("dropdown", () => {
       />
     );
     const root = document.querySelector(".app-dropdown");
-    root.getBoundingClientRect = () => ({
-      left: 10,
-      top: 700,
-      bottom: 740,
-      width: 250
-    });
+    root.getBoundingClientRect = () => ({ left: 10, top: 700, bottom: 740, width: 250 });
     fireEvent.click(screen.getByRole("button"));
     const menu = screen.getByRole("listbox");
     expect(menu.style.bottom).not.toBe("auto");

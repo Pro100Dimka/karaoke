@@ -1,9 +1,6 @@
 import { afterEach, expect, test, vi } from "vitest";
 
-afterEach(() => {
-  vi.unstubAllEnvs();
-  vi.resetModules();
-});
+afterEach(() => { vi.unstubAllEnvs(); vi.resetModules(); });
 
 test("accepts positive runtime overrides", async () => {
   vi.stubEnv("VITE_POLLING_SCALE", "2");

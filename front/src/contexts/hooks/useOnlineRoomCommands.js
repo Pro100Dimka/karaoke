@@ -9,9 +9,7 @@ export default function useOnlineRoomCommands({
   roomRef,
   setTransferStatus
 }) {
-  const syncUi = useCallback((state) => {
-    clientRef.current?.send("ui", { state });
-  }, [clientRef]);
+  const syncUi = useCallback((state) => { clientRef.current?.send("ui", { state }); }, [clientRef]);
 
   const syncCommand = useCallback((state) => {
     clientRef.current?.send("sync", { state });

@@ -28,16 +28,11 @@ export default function useAsyncQueue() {
         pendingCountRef.current = Math.max(0, pendingCountRef.current - 1);
         // Stryker disable next-line ConditionalExpression: inert after unmount.
         if (!mountedRef.current) return;
-        if (pendingCountRef.current === 0) {
-          setPending(false);
-        }
+        if (pendingCountRef.current === 0) setPending(false);
       });
     },
     // Stryker disable next-line ArrayDeclaration: stable hook-lifetime ref.
     [mountedRef]
   );
-  return {
-    pending,
-    run
-  };
+  return { pending, run };
 }

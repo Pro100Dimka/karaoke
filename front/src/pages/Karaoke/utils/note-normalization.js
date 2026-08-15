@@ -17,8 +17,7 @@ export function normalizeNoteList(raw, resolveNamedNote) {
       wordIndex: Number.isInteger(Number(note.word_index ?? note.wordIndex))
         ? Number(note.word_index ?? note.wordIndex)
         : null,
-      syllableIndex: Number.isInteger(
-        Number(note.syllable_index ?? note.syllableIndex)
+      syllableIndex: Number.isInteger( Number(note.syllable_index ?? note.syllableIndex)
       )
         ? Number(note.syllable_index ?? note.syllableIndex)
         : null

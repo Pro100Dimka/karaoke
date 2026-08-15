@@ -60,9 +60,7 @@ export default function Modal({
   const modalTokenRef = useRef(Symbol("modal"));
   const titleId = useId();
 
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  }, [onClose]);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
   useLayoutEffect(() => {
     if (!isOpen) return undefined;
@@ -89,8 +87,7 @@ export default function Modal({
 
       if (event.key !== "Tab") return;
 
-      const focusable = Array.from(
-        dialogRef.current.querySelectorAll(FOCUSABLE_SELECTOR)
+      const focusable = Array.from( dialogRef.current.querySelectorAll(FOCUSABLE_SELECTOR)
       );
       if (!focusable.length) {
         event.preventDefault();

@@ -51,9 +51,7 @@ export default function useKaraokeTransport({
     };
   }, [song?.id]);
 
-  useEffect(() => {
-    sessionRef.current = recordingSessionId;
-  }, [recordingSessionId]);
+  useEffect(() => { sessionRef.current = recordingSessionId; }, [recordingSessionId]);
 
   const clearSession = (id) => {
     if (sessionRef.current !== id) return;

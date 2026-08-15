@@ -8,29 +8,15 @@ import { Stack, Typography } from "../../../../theme/ui";
 import { getErrorMessage } from "../../../../utils/errors";
 import { buildOptimizeOptions, MEMORY_ACTIONS } from "./config";
 import MemoryBreakdown from "./memory-breakdown";
-import {
-  MemoryActions,
-  MemoryStats,
-  OptimizeSong,
-  runMemoryAction
-} from "./utils";
+import { MemoryActions, MemoryStats, OptimizeSong, runMemoryAction } from "./utils";
 
 export default function MemoryManager() {
   const { alert: notify } = useAppDialog();
-  const { data: size, error } = usePolling(
-    api.getCacheSize,
-    POLLING_INTERVALS.memory,
-    []
+  const { data: size, error } = usePolling( api.getCacheSize, POLLING_INTERVALS.memory, []
   );
-  const { data: free } = usePolling(
-    api.getFreeSpace,
-    POLLING_INTERVALS.freeSpace,
-    []
+  const { data: free } = usePolling( api.getFreeSpace, POLLING_INTERVALS.freeSpace, []
   );
-  const { data: songs } = usePolling(
-    api.listSongs,
-    POLLING_INTERVALS.songs,
-    []
+  const { data: songs } = usePolling( api.listSongs, POLLING_INTERVALS.songs, []
   );
   const [optimizeTarget, setOptimizeTarget] = useState("");
   const optimizeOptions = buildOptimizeOptions(songs ?? []);
@@ -38,9 +24,7 @@ export default function MemoryManager() {
     const success = await runMemoryAction({
       request: () => api.optimizeSong(optimizeTarget),
       getMessage: ({ freed_human: freedHuman }) =>
-        translateSaved("Освобождено: {0}", {
-          0: freedHuman ?? "—"
-        }),
+        translateSaved("Освобождено: {0}", { 0: freedHuman ?? "—" }),
       notify
     });
     if (success) setOptimizeTarget("");
@@ -54,9 +38,7 @@ export default function MemoryManager() {
       {error && (
         <Typography
           variant="body2"
-          sx={{
-            color: "var(--ui-danger)"
-          }}
+          sx={{ color: "var(--ui-danger)" }}
         >
           {getErrorMessage(error)}
         </Typography>

@@ -10,26 +10,13 @@ import { formatLibraryDate } from "../utils";
 const TITLE = {
   icon: Music2,
   eyebrow: translateSaved("ИСПОЛНЕНИЯ ПЕСНИ"),
-  description: translateSaved(
-    "Прослушивайте исполнения, запускайте анализ и управляйте записями."
+  description: translateSaved( "Прослушивайте исполнения, запускайте анализ и управляйте записями."
   )
 };
 function RecordingCard({ recording, onAnalyze, onDelete }) {
   const actions = [
-    [
-      BarChart3,
-      15,
-      translateSaved("Анализировать запись"),
-      "btn-ghost",
-      onAnalyze
-    ],
-    [
-      Trash2,
-      14,
-      translateSaved("Удалить запись"),
-      "btn-danger song-recording-delete",
-      onDelete
-    ]
+    [ BarChart3, 15, translateSaved("Анализировать запись"), "btn-ghost", onAnalyze ],
+    [ Trash2, 14, translateSaved("Удалить запись"), "btn-danger song-recording-delete", onDelete ]
   ];
   return (
     <Card className="song-recording-item" variant="glass">
@@ -70,13 +57,8 @@ export default function RecordingsModal({
     <Modal
       isOpen
       onClose={onClose}
-      ariaLabel={translateSaved("Исполнения песни {0}", {
-        0: song.title
-      })}
-      titleProps={{
-        ...TITLE,
-        title: song.title
-      }}
+      ariaLabel={translateSaved("Исполнения песни {0}", { 0: song.title })}
+      titleProps={{ ...TITLE, title: song.title }}
     >
       <div className="song-recordings-body modal-scroll">
         {error && (

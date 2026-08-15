@@ -7,13 +7,13 @@ import traverseModule from "@babel/traverse";
 const traverse = traverseModule.default ?? traverseModule;
 const root = path.resolve("src");
 const findings = [];
-const extensions = new Set([".js", ".jsx"]);
+const extensions = [".js", ".jsx"];
 
 function walk(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const file = path.join(directory, entry.name);
     if (entry.isDirectory()) return entry.name === "theme" ? [] : walk(file);
-    return extensions.has(path.extname(file)) ? [file] : [];
+    return extensions.includes(path.extname(file)) ? [file] : [];
   });
 }
 
@@ -27,10 +27,7 @@ const report = (file, node, kind, detail) =>
 
 const flattenLogical = (node, operator) =>
   node?.type === "LogicalExpression" && node.operator === operator
-    ? [
-        ...flattenLogical(node.left, operator),
-        ...flattenLogical(node.right, operator)
-      ]
+    ? [ ...flattenLogical(node.left, operator), ...flattenLogical(node.right, operator) ]
     : [node];
 
 for (const file of walk(root)) {
@@ -70,14 +67,11 @@ for (const file of walk(root)) {
     },
     LogicalExpression(pathRef) {
       if (
-        pathRef.parentPath.isLogicalExpression({
-          operator: pathRef.node.operator
-        })
+        pathRef.parentPath.isLogicalExpression({ operator: pathRef.node.operator })
       )
         return;
       const expressions = flattenLogical(pathRef.node, pathRef.node.operator);
-      const comparisons = expressions.filter(
-        ({ type }) => type === "BinaryExpression"
+      const comparisons = expressions.filter( ({ type }) => type === "BinaryExpression"
       );
       if (pathRef.node.operator === "||" && comparisons.length >= 3)
         report(
@@ -103,11 +97,7 @@ for (const file of walk(root)) {
         body.body[0].type === "ReturnStatement" &&
         body.body[0].argument?.type === "CallExpression"
       )
-        report(
-          file,
-          pathRef.node,
-          "wrapper",
-          "single-call forwarding function"
+        report( file, pathRef.node, "wrapper", "single-call forwarding function"
         );
     }
   });

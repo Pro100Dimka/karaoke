@@ -13,8 +13,7 @@ function walk(directory) {
 const files = [src, path.join(root, "tests")]
   .filter(fs.existsSync)
   .flatMap(walk);
-const contents = new Map(
-  files.map((file) => [file, fs.readFileSync(file, "utf8")])
+const contents = new Map( files.map((file) => [file, fs.readFileSync(file, "utf8")])
 );
 const allSource = [...contents.values()].join("\n");
 const candidates = [];
@@ -30,6 +29,5 @@ for (const [file, content] of contents) {
 }
 console.log(`Potential unused named exports: ${candidates.length}`);
 for (const item of candidates) console.log(`- ${item.name} (${item.file})`);
-console.log(
-  "Review only; dynamic imports and re-exports are not removed automatically."
+console.log( "Review only; dynamic imports and re-exports are not removed automatically."
 );

@@ -16,29 +16,15 @@ export default function LibraryActions({
   setQuery
 }) {
   const actions = [
-    !roomActive && [
-      UsersRound,
-      translateSaved("Петь вместе"),
-      "btn-ghost",
-      onOpenRoom
-    ],
-    canManageLibrary && [
-      Plus,
-      translateSaved("Добавить песню"),
-      "btn-primary",
-      onAdd
-    ]
+    !roomActive && [ UsersRound, translateSaved("Петь вместе"), "btn-ghost", onOpenRoom ],
+    canManageLibrary && [ Plus, translateSaved("Добавить песню"), "btn-primary", onAdd ]
   ].filter(Boolean);
   return (
     <Stack direction="row" justify="space-between">
       <Card
         className="library-search"
         variant="neon"
-        cardPanel={{
-          style: {
-            background: "unset"
-          }
-        }}
+        cardPanel={{ style: { background: "unset" } }}
       >
         <Search className="library-search-icon" size={14} />
         <input

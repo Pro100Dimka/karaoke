@@ -1,12 +1,5 @@
 /* @vitest-environment jsdom */
-import React from "react";
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  waitFor
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -16,13 +9,7 @@ const mocks = vi.hoisted(() => ({
   confirm: vi.fn(),
   reloadSettings: vi.fn(),
   settings: { online_name: "Singer" },
-  sharedRoom: {
-    room: null,
-    roomUi: {},
-    participants: [],
-    syncUi: vi.fn(),
-    openKaraoke: vi.fn()
-  },
+  sharedRoom: { room: null, roomUi: {}, participants: [], syncUi: vi.fn(), openKaraoke: vi.fn() },
   polls: [],
   pollIndex: 0,
   refreshes: [],
@@ -41,14 +28,9 @@ vi.mock("react-router-dom", () => ({
 vi.mock("../src/contexts/AppDialog", () => ({
   useAppDialog: () => ({ alert: mocks.notify, confirm: mocks.confirm })
 }));
-vi.mock("../src/contexts/OnlineRoomContext", () => ({
-  useOnlineRoom: () => mocks.sharedRoom
-}));
+vi.mock("../src/contexts/OnlineRoomContext", () => ({ useOnlineRoom: () => mocks.sharedRoom }));
 vi.mock("../src/hooks/useAppSettings", () => ({
-  default: () => ({
-    reloadSettings: mocks.reloadSettings,
-    settings: mocks.settings
-  })
+  default: () => ({ reloadSettings: mocks.reloadSettings, settings: mocks.settings })
 }));
 vi.mock("../src/hooks/usePolling", () => ({
   usePolling: (request, _interval, _deps, options) => {
@@ -111,13 +93,7 @@ vi.mock("../src/pages/Library/components/hero", () => ({
   )
 }));
 vi.mock("../src/pages/Library/components/song-card", () => ({
-  default: ({
-    song,
-    onOpenKaraoke,
-    onOpenProcessing,
-    onOpenRecordings,
-    onOpenSettings
-  }) => (
+  default: ({ song, onOpenKaraoke, onOpenProcessing, onOpenRecordings, onOpenSettings }) => (
     <div data-testid={`song-${song.id}`}>
       <button
         type="button"
@@ -212,18 +188,14 @@ beforeEach(() => {
   mocks.polls = [{ data: songs }, { data: [] }, { data: null }];
 });
 
-afterEach(() => {
-  cleanup();
-  vi.useRealTimers();
-});
+afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe("library page", () => {
   test("renders songs and opens room only after validating the online name", async () => {
     const result = render(<Library />);
     expect(result.getByTestId("song-one")).not.toBeNull();
     fireEvent.click(result.getByTestId("open-room"));
-    await waitFor(() =>
-      expect(result.getByTestId("room-modal")).not.toBeNull()
+    await waitFor(() => expect(result.getByTestId("room-modal")).not.toBeNull()
     );
     fireEvent.click(result.getByTestId("room-modal"));
     mocks.reloadSettings.mockResolvedValueOnce({ online_name: " " });
@@ -266,13 +238,10 @@ describe("library page", () => {
     fireEvent.click(result.getAllByTestId("processing")[0]);
     expect(result.getByTestId("processing-modal")).not.toBeNull();
     fireEvent.click(result.getByTestId("cancel-processing"));
-    await waitFor(() =>
-      expect(mocks.cancelProcessing).toHaveBeenCalledWith("one")
+    await waitFor(() => expect(mocks.cancelProcessing).toHaveBeenCalledWith("one")
     );
     fireEvent.click(result.getByTestId("open-processed"));
-    expect(mocks.navigate).toHaveBeenCalledWith("/karaoke", {
-      state: { songId: "one" }
-    });
+    expect(mocks.navigate).toHaveBeenCalledWith("/karaoke", { state: { songId: "one" } });
     fireEvent.click(result.getByTestId("close-processing"));
     expect(result.queryByTestId("processing-modal")).toBeNull();
   });
@@ -281,8 +250,7 @@ describe("library page", () => {
     const result = render(<Library />);
     fireEvent.click(result.getAllByTestId("recordings")[0]);
     fireEvent.click(result.getByTestId("delete-recording"));
-    await waitFor(() =>
-      expect(mocks.deleteRecording).toHaveBeenCalledWith("rec")
+    await waitFor(() => expect(mocks.deleteRecording).toHaveBeenCalledWith("rec")
     );
     fireEvent.click(result.getByTestId("analyze"));
     expect(result.getByTestId("analysis")).not.toBeNull();
@@ -292,18 +260,11 @@ describe("library page", () => {
 
   test("shows list errors, empty state and releases return blackout", async () => {
     vi.useFakeTimers();
-    mocks.location = {
-      state: { fromKaraokeFade: true, analysisRecordingId: "rec" }
-    };
-    mocks.polls = [
-      { data: [], error: new Error("offline") },
-      { data: [] },
-      { data: null }
-    ];
+    mocks.location = { state: { fromKaraokeFade: true, analysisRecordingId: "rec" } };
+    mocks.polls = [ { data: [], error: new Error("offline") }, { data: [] }, { data: null } ];
     mocks.pollIndex = 0;
     const result = render(<Library />);
-    expect(
-      result.container.querySelector(".field-error").textContent
+    expect( result.container.querySelector(".field-error").textContent
     ).toContain("offline");
     expect(result.getByTestId("analysis")).not.toBeNull();
     await act(() => vi.advanceTimersByTimeAsync(120));
@@ -329,11 +290,9 @@ describe("library page", () => {
     expect(mocks.roomOptions.localSongs).toHaveLength(2);
     fireEvent.click(result.getAllByTestId("song-settings")[0]);
     expect(openSettings).toHaveBeenCalledWith("one");
-    const processingOptions = mocks.pollOptions.find(
-      (options) => options?.shouldContinue
+    const processingOptions = mocks.pollOptions.find( (options) => options?.shouldContinue
     );
-    expect(processingOptions.shouldContinue({ status: "processing" })).toBe(
-      true
+    expect(processingOptions.shouldContinue({ status: "processing" })).toBe( true
     );
     expect(processingOptions.shouldContinue({ status: "done" })).toBe(false);
     expect(processingOptions.shouldRetryError({ status: 500 })).toBe(true);
@@ -367,8 +326,7 @@ describe("library page", () => {
 
   test("recovers a rejected room open and clears all analysis callbacks", async () => {
     mocks.sharedRoom.room = { host: true };
-    mocks.sharedRoom.openKaraoke.mockRejectedValueOnce(
-      new Error("room failed")
+    mocks.sharedRoom.openKaraoke.mockRejectedValueOnce( new Error("room failed")
     );
     const result = render(<Library />);
     fireEvent.click(result.getAllByTestId("karaoke")[0]);
@@ -422,11 +380,7 @@ describe("library page", () => {
 
   test("covers missing processing ids, recordings and stale refresh completion", async () => {
     let resolveRefresh;
-    const refresh = vi.fn(
-      () =>
-        new Promise((resolve) => {
-          resolveRefresh = resolve;
-        })
+    const refresh = vi.fn( () => new Promise((resolve) => { resolveRefresh = resolve; })
     );
     mocks.settings = null;
     mocks.polls = [
@@ -442,24 +396,13 @@ describe("library page", () => {
     if (resolveRefresh) await act(async () => resolveRefresh());
 
     let resolveTerminalRefresh;
-    const terminalRefreshPromise = new Promise((resolve) => {
-      resolveTerminalRefresh = resolve;
-    });
+    const terminalRefreshPromise = new Promise((resolve) => { resolveTerminalRefresh = resolve; });
     const terminalRefresh = vi.fn(() => terminalRefreshPromise);
     mocks.pollIndex = 0;
     mocks.polls = [
-      {
-        data: [{ ...songs[1], status: "processing" }],
-        refresh: terminalRefresh
-      },
+      { data: [{ ...songs[1], status: "processing" }], refresh: terminalRefresh },
       { data: null },
-      {
-        data: {
-          song_id: "two",
-          status: "done",
-          progress_percent: 100
-        }
-      }
+      { data: { song_id: "two", status: "done", progress_percent: 100 } }
     ];
     const terminal = render(<Library />);
     act(() => mocks.importOptions.onStarted({ ...songs[1], status: "processing" }));

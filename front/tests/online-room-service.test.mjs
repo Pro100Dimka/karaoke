@@ -36,10 +36,7 @@ const loadOnlineRoomService = () =>
     /* @vite-ignore */ `../src/services/onlineRoom.js?contract=${serviceImportId++}`
   );
 
-afterEach(() => {
-  vi.useRealTimers();
-  delete globalThis.WebSocket;
-});
+afterEach(() => { vi.useRealTimers(); delete globalThis.WebSocket; });
 
 describe("online room service", () => {
   test("loads deployment limits from the active module instance", async () => {
@@ -51,8 +48,7 @@ describe("online room service", () => {
     const client = new service.OnlineRoomClient();
     const connection = client.connect({ id: "ABCD" });
     const socket = FakeSocket.instances[0];
-    expect(new URL(socket.url).searchParams.get("name")).toBe(
-      translateSaved("Гость")
+    expect(new URL(socket.url).searchParams.get("name")).toBe( translateSaved("Гость")
     );
     socket.readyState = FakeSocket.OPEN;
     socket.onopen();
@@ -65,20 +61,13 @@ describe("online room service", () => {
     expect(DEFAULT_SIGNALING_URL).toBe(
       "wss://karaoke-studio-online.pro100dimka-and.workers.dev"
     );
-    expect(createRoomId({ randomUUID: () => "ab-cd-ef-gh-12" })).toBe(
-      "ABCDEFGH"
+    expect(createRoomId({ randomUUID: () => "ab-cd-ef-gh-12" })).toBe( "ABCDEFGH"
     );
     expect(
-      createRoomId({
-        getRandomValues: (bytes) => {
-          bytes.set([0, 1, 254, 255]);
-          return bytes;
-        }
-      })
+      createRoomId({ getRandomValues: (bytes) => { bytes.set([0, 1, 254, 255]); return bytes; } })
     ).toBe("0001FEFF");
     expect(createRoomId({}, () => 0)).toBe("00000000");
-    expect(createRoomId(null, () => 0xabcdef12 / 0x1_0000_0000)).toBe(
-      "ABCDEF12"
+    expect(createRoomId(null, () => 0xabcdef12 / 0x1_0000_0000)).toBe( "ABCDEF12"
     );
     expect(normalizeRoomId(" ab!_c-d? ")).toBe("AB_C-D");
     expect(normalizeRoomId(`a${"b".repeat(40)}`)).toBe(`A${"B".repeat(31)}`);
@@ -103,9 +92,7 @@ describe("online room service", () => {
       translateSaved("Обработчик сообщений комнаты должен быть функцией")
     );
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    const bad = vi.fn(() => {
-      throw new Error("listener");
-    });
+    const bad = vi.fn(() => { throw new Error("listener"); });
     const good = vi.fn();
     const unsubscribe = client.onMessage(bad);
     client.onMessage(good);
@@ -126,11 +113,7 @@ describe("online room service", () => {
     const client = new OnlineRoomClient("ws://example.test/");
     const listener = vi.fn();
     client.onMessage(listener);
-    const connection = client.connect({
-      id: " room-1 ",
-      name: " A\u001fB\u007fC ",
-      host: true
-    });
+    const connection = client.connect({ id: " room-1 ", name: " A\u001fB\u007fC ", host: true });
     const socket = FakeSocket.instances[0];
     expect(socket.url).toContain("/rooms/ROOM-1?");
     expect(new URL(socket.url).searchParams.get("name")).toBe("A B C");
@@ -147,12 +130,7 @@ describe("online room service", () => {
     socket.onmessage({ data: "[1]" });
     socket.onmessage({ data: "bad" });
     socket.onmessage({ data: new ArrayBuffer(1) });
-    socket.onmessage({
-      data: {
-        length: 16,
-        toString: () => JSON.stringify({ type: "coerced" })
-      }
-    });
+    socket.onmessage({ data: { length: 16, toString: () => JSON.stringify({ type: "coerced" }) } });
     expect(listener).toHaveBeenCalledTimes(1);
     expect(listener).toHaveBeenCalledWith({ type: "state" });
     socket.onclose({ code: 1000 });
@@ -165,8 +143,7 @@ describe("online room service", () => {
     const connection = client.connect({ id: "ABCD", name: "\u0001" });
     const socket = FakeSocket.instances[0];
     expect(socket.url).toContain("role=guest");
-    expect(new URL(socket.url).searchParams.get("name")).toBe(
-      translateSaved("Гость")
+    expect(new URL(socket.url).searchParams.get("name")).toBe( translateSaved("Гость")
     );
     expect(client.send("x", {})).toBe(false);
     expect(socket.send).not.toHaveBeenCalled();
@@ -174,10 +151,7 @@ describe("online room service", () => {
     socket.onopen();
     await connection;
     expect(client.send(" update ", { value: 1 })).toBe(true);
-    expect(JSON.parse(socket.send.mock.calls[0][0])).toEqual({
-      value: 1,
-      type: "update"
-    });
+    expect(JSON.parse(socket.send.mock.calls[0][0])).toEqual({ value: 1, type: "update" });
     expect(client.send("", {})).toBe(false);
     expect(client.send("   ", {})).toBe(false);
     expect(client.send(null, {})).toBe(false);
@@ -185,15 +159,9 @@ describe("online room service", () => {
     expect(client.send("x", null)).toBe(false);
     expect(client.send("x", "payload")).toBe(false);
     const serializedOverhead = JSON.stringify({ value: "", type: "x" }).length;
-    expect(
-      client.send("x", {
-        value: "x".repeat(256 * 1024 - serializedOverhead)
-      })
+    expect( client.send("x", { value: "x".repeat(256 * 1024 - serializedOverhead) })
     ).toBe(true);
-    expect(
-      client.send("x", {
-        value: "x".repeat(256 * 1024 - serializedOverhead + 1)
-      })
+    expect( client.send("x", { value: "x".repeat(256 * 1024 - serializedOverhead + 1) })
     ).toBe(false);
     expect(client.send("x", { value: "x".repeat(300_000) })).toBe(false);
     expect(client.send("x", { value: 1n })).toBe(false);
@@ -228,8 +196,7 @@ describe("online room service", () => {
         throw new Error("constructor failed");
       }
     };
-    await expect(client.connect({ id: "ABCD" })).rejects.toThrow(
-      "constructor failed"
+    await expect(client.connect({ id: "ABCD" })).rejects.toThrow( "constructor failed"
     );
     globalThis.WebSocket = class {
       static CLOSING = 2;
@@ -320,15 +287,11 @@ describe("online room service", () => {
     const client = new OnlineRoomClient();
     const firstConnection = client.connect({ id: "ABCD" });
     let firstError;
-    const firstHandled = firstConnection.catch((error) => {
-      firstError = error;
-    });
+    const firstHandled = firstConnection.catch((error) => { firstError = error; });
     const first = FakeSocket.instances[0];
     const secondConnection = client.connect({ id: "EFGH" });
     let secondError;
-    const secondHandled = secondConnection.catch((error) => {
-      secondError = error;
-    });
+    const secondHandled = secondConnection.catch((error) => { secondError = error; });
     const second = FakeSocket.instances[1];
     await vi.advanceTimersByTimeAsync(10_000);
     const timeoutState = { firstError, secondError };

@@ -9,9 +9,7 @@ function getMaxSignalMessageLength() {
   return 256 * 1024;
 }
 const MAX_PARTICIPANT_NAME_LENGTH = 64;
-export function createRoomId(
-  cryptoApi = globalThis.crypto,
-  random = Math.random
+export function createRoomId( cryptoApi = globalThis.crypto, random = Math.random
 ) {
   if (cryptoApi && typeof cryptoApi.randomUUID === "function") {
     return cryptoApi.randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase();
@@ -59,8 +57,7 @@ export class OnlineRoomClient {
 
   onMessage(listener) {
     if (typeof listener !== "function") {
-      throw new TypeError(
-        translateSaved("Обработчик сообщений комнаты должен быть функцией")
+      throw new TypeError( translateSaved("Обработчик сообщений комнаты должен быть функцией")
       );
     }
     this.listeners.add(listener);
@@ -81,8 +78,7 @@ export class OnlineRoomClient {
     const normalizedId = normalizeRoomId(id);
     if (normalizedId.length < 4) {
       return Promise.reject(
-        new Error(
-          translateSaved("Код комнаты должен содержать минимум 4 символа.")
+        new Error( translateSaved("Код комнаты должен содержать минимум 4 символа.")
         )
       );
     }
@@ -96,14 +92,10 @@ export class OnlineRoomClient {
         .join("")
         .trim()
         .slice(0, MAX_PARTICIPANT_NAME_LENGTH) || translateSaved("Гость");
-    const query = new URLSearchParams({
-      name: participantName,
-      role: host ? "host" : "guest"
-    });
+    const query = new URLSearchParams({ name: participantName, role: host ? "host" : "guest" });
     if (typeof globalThis.WebSocket !== "function") {
       return Promise.reject(
-        new Error(
-          translateSaved("WebSocket не поддерживается в этом окружении.")
+        new Error( translateSaved("WebSocket не поддерживается в этом окружении.")
         )
       );
     }
@@ -116,8 +108,7 @@ export class OnlineRoomClient {
       return Promise.reject(
         error instanceof Error
           ? error
-          : new Error(
-              translateSaved("Не удалось создать WebSocket-соединение.")
+          : new Error( translateSaved("Не удалось создать WebSocket-соединение.")
             )
       );
     }
@@ -178,16 +169,12 @@ export class OnlineRoomClient {
           new Error(
             translateSaved(
               "Не удалось подключиться к серверу комнат{0}. Проверьте интернет, VPN, прокси или брандмауэр.",
-              {
-                0: detail
-              }
+              { 0: detail }
             )
           )
         );
         if (wasCurrent)
-          this.emit({
-            type: "connection-closed"
-          });
+          this.emit({ type: "connection-closed" });
       };
     });
   }
@@ -205,10 +192,7 @@ export class OnlineRoomClient {
       return false;
     }
     try {
-      const serialized = JSON.stringify({
-        ...payload,
-        type: type.trim()
-      });
+      const serialized = JSON.stringify({ ...payload, type: type.trim() });
       if (serialized.length > getMaxSignalMessageLength()) return false;
       socket.send(serialized);
       return true;
@@ -220,9 +204,7 @@ export class OnlineRoomClient {
   disconnect() {
     const { socket } = this;
     this.socket = null;
-    if (socket && socket.readyState < 2) {
-      socket.close(1000, "Client left room");
-    }
+    if (socket && socket.readyState < 2) socket.close(1000, "Client left room");
   }
 }
 

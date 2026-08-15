@@ -2,12 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { getMelodyGuideState } from "../utils/melody-guide";
 import { closeAudioContext, closeAudioContextQuietly } from "../../../utils/audio-context";
 
-export default function useMelodyGuide({
-  notes,
-  volume,
-  keyShift,
-  currentTimeRef
-}) {
+export default function useMelodyGuide({ notes, volume, keyShift, currentTimeRef }) {
   const guideRef = useRef(null);
   const notesRef = useRef(notes);
   const volumeRef = useRef(volume);
@@ -30,13 +25,8 @@ export default function useMelodyGuide({
         volume: volumeRef.current
       });
 
-      if (state.active) {
-        guide.oscillator.frequency.setTargetAtTime(state.frequency, now, 0.012);
-      }
-      guide.gain.gain.setTargetAtTime(
-        state.gain,
-        now,
-        state.active ? 0.015 : 0.018
+      if (state.active) guide.oscillator.frequency.setTargetAtTime(state.frequency, now, 0.012);
+      guide.gain.gain.setTargetAtTime( state.gain, now, state.active ? 0.015 : 0.018
       );
     },
     // Stryker disable next-line ArrayDeclaration: update reads current values from stable refs.
@@ -112,9 +102,5 @@ export default function useMelodyGuide({
     []
   );
 
-  return {
-    startMelodyGuide: start,
-    updateMelodyGuide: update,
-    silenceMelodyGuide: silence
-  };
+  return { startMelodyGuide: start, updateMelodyGuide: update, silenceMelodyGuide: silence };
 }

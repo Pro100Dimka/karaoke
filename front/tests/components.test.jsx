@@ -1,20 +1,10 @@
 /* @vitest-environment jsdom */
-import React from "react";
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  screen
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
 vi.mock("../src/i18n", async (importOriginal) => {
   const actual = await importOriginal();
-  return {
-    ...actual,
-    useI18n: () => ({ t: (key, _values, fallback) => fallback || key })
-  };
+  return { ...actual, useI18n: () => ({ t: (key, _values, fallback) => fallback || key }) };
 });
 
 import { AudioPlayer } from "../src/components/AudioPlayer.jsx";
@@ -89,12 +79,10 @@ describe("primitive UI components", () => {
 
   test("renders progress, statuses, page states and tables", () => {
     const { rerender } = render(<ProgressBar percent="bad" />);
-    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe(
-      "0"
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe( "0"
     );
     rerender(<ProgressBar percent={150} label="Work" />);
-    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe(
-      "100"
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe( "100"
     );
     rerender(<StatusBadge status="done" />);
     expect(document.querySelector(".badge-done")).not.toBeNull();
@@ -106,10 +94,7 @@ describe("primitive UI components", () => {
     expect(screen.getByRole("status")).not.toBeNull();
     rerender(<PageState error="Broken">Child</PageState>);
     expect(screen.getByRole("alert")).not.toBeNull();
-    rerender(
-      <PageState empty emptyTitle="Empty">
-        Child
-      </PageState>
+    rerender( <PageState empty emptyTitle="Empty"> Child </PageState>
     );
     expect(screen.getByText("Empty")).not.toBeNull();
     rerender(<PageState empty>Child</PageState>);
@@ -124,8 +109,7 @@ describe("primitive UI components", () => {
         getRowKey={() => "x"}
       />
     );
-    rerender(
-      <Table columns={[]} data={null} renderRow={() => []} getRowKey={() => 0} />
+    rerender( <Table columns={[]} data={null} renderRow={() => []} getRowKey={() => 0} />
     );
     expect(screen.getByText("common.noData")).not.toBeNull();
     rerender(
@@ -172,12 +156,7 @@ describe("primitive UI components", () => {
       </Card>
     );
     const card = document.querySelector(".ui-card");
-    card.getBoundingClientRect = () => ({
-      left: 0,
-      top: 0,
-      width: 100,
-      height: 100
-    });
+    card.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100 });
     fireEvent.pointerMove(card, { clientX: 75, clientY: 25 });
     expect(card.style.getPropertyValue("--card-mx")).toBe("75%");
     expect(card.style.getPropertyValue("--tilt-y")).toBe("2.5deg");
@@ -186,19 +165,13 @@ describe("primitive UI components", () => {
     expect(moved).toHaveBeenCalledOnce();
     expect(left).toHaveBeenCalledOnce();
     expect(document.querySelector(".panel .content")).not.toBeNull();
-    rerender(
-      <Card as="article" variant="neon" tilt={false}>
-        Flat
-      </Card>
+    rerender( <Card as="article" variant="neon" tilt={false}> Flat </Card>
     );
     const flat = document.querySelector("article");
     fireEvent.pointerMove(flat, { clientX: 1, clientY: 1 });
     fireEvent.pointerLeave(flat);
     expect(flat.className).toContain("no-tilt");
-    rerender(
-      <Card variant="glass" overlay={<i>Layer</i>}>
-        Plain
-      </Card>
+    rerender( <Card variant="glass" overlay={<i>Layer</i>}> Plain </Card>
     );
     fireEvent.pointerMove(document.querySelector(".ui-card"));
     fireEvent.pointerLeave(document.querySelector(".ui-card"));
@@ -273,11 +246,7 @@ describe("field controls", () => {
     rerender(
       <FieldInput
         bare
-        field={{
-          name: "select",
-          type: "select",
-          options: [{ value: "a", label: "A" }]
-        }}
+        field={{ name: "select", type: "select", options: [{ value: "a", label: "A" }] }}
         value="a"
         onChange={change}
         onBlur={blur}
@@ -287,8 +256,7 @@ describe("field controls", () => {
     fireEvent.blur(select);
     await act(async () => Promise.resolve());
     expect(blur).toHaveBeenLastCalledWith("a");
-    rerender(
-      <FieldInput field={{ name: "bad", type: "missing" }} onChange={change} />
+    rerender( <FieldInput field={{ name: "bad", type: "missing" }} onChange={change} />
     );
     expect(document.body.textContent).toBe("");
   });
@@ -319,10 +287,7 @@ describe("field controls", () => {
     fireEvent.change(screen.getByLabelText("X"), { target: { value: "b" } });
     fireEvent.blur(screen.getByLabelText("X"));
     expect(change).toHaveBeenCalledWith("x", "b");
-    expect(blur).toHaveBeenCalledWith(
-      "x",
-      "a",
-      expect.objectContaining({ name: "x" })
+    expect(blur).toHaveBeenCalledWith( "x", "a", expect.objectContaining({ name: "x" })
     );
     rerender(
       <FieldList
@@ -333,13 +298,7 @@ describe("field controls", () => {
     );
     expect(() => fireEvent.blur(screen.getByLabelText("Y"))).not.toThrow();
     const commit = vi.fn();
-    rerender(
-      <RangeInput
-        aria-label="Range"
-        value={1}
-        onChange={change}
-        onCommit={commit}
-      />
+    rerender( <RangeInput aria-label="Range" value={1} onChange={change} onCommit={commit} />
     );
     const range = screen.getByLabelText("Range");
     fireEvent.change(range, { target: { value: "2" } });
@@ -348,16 +307,13 @@ describe("field controls", () => {
     fireEvent.keyUp(range, { key: "A", target: { value: "2" } });
     expect(commit).toHaveBeenCalledTimes(2);
     rerender(<RangeInput aria-label="Text range" numeric={false} value="2" />);
-    fireEvent.change(screen.getByLabelText("Text range"), {
-      target: { value: "3" }
-    });
+    fireEvent.change(screen.getByLabelText("Text range"), { target: { value: "3" } });
   });
 });
 
 describe("AudioPlayer and error boundary", () => {
   test("handles playback, media events, seeking and volume", async () => {
-    render(
-      <AudioPlayer src="one.wav" initialDuration={10} className="extra" />
+    render( <AudioPlayer src="one.wav" initialDuration={10} className="extra" />
     );
     const audio = document.querySelector("audio");
     const buttons = screen.getAllByRole("button");
@@ -367,11 +323,7 @@ describe("AudioPlayer and error boundary", () => {
     fireEvent.pause(audio);
     Object.defineProperty(audio, "duration", { configurable: true, value: 12 });
     fireEvent.loadedMetadata(audio);
-    Object.defineProperty(audio, "currentTime", {
-      configurable: true,
-      writable: true,
-      value: 4
-    });
+    Object.defineProperty(audio, "currentTime", { configurable: true, writable: true, value: 4 });
     fireEvent.timeUpdate(audio);
     const ranges = screen.getAllByRole("slider");
     fireEvent.change(ranges[0], { target: { value: "6" } });
@@ -380,8 +332,7 @@ describe("AudioPlayer and error boundary", () => {
     fireEvent.click(buttons[1]);
     fireEvent.ended(audio);
     expect(audio.currentTime).toBe(0);
-    expect(document.querySelector(".performance-player").className).toContain(
-      "extra"
+    expect(document.querySelector(".performance-player").className).toContain( "extra"
     );
   });
 
@@ -395,8 +346,7 @@ describe("AudioPlayer and error boundary", () => {
         throw new Error("seek blocked");
       }
     });
-    expect(() =>
-      fireEvent.change(sliders[0], { target: { value: "5" } })
+    expect(() => fireEvent.change(sliders[0], { target: { value: "5" } })
     ).not.toThrow();
     Object.defineProperty(audio, "volume", {
       configurable: true,
@@ -404,8 +354,7 @@ describe("AudioPlayer and error boundary", () => {
         throw new Error("volume blocked");
       }
     });
-    expect(() =>
-      fireEvent.change(sliders[1], { target: { value: "0.5" } })
+    expect(() => fireEvent.change(sliders[1], { target: { value: "0.5" } })
     ).not.toThrow();
   });
 
@@ -430,10 +379,7 @@ describe("AudioPlayer and error boundary", () => {
     const Crash = () => {
       throw new Error("boom");
     };
-    render(
-      <ErrorBoundary>
-        <Crash />
-      </ErrorBoundary>
+    render( <ErrorBoundary> <Crash /> </ErrorBoundary>
     );
     window.removeEventListener("error", suppress);
     expect(screen.getByRole("alert")).not.toBeNull();

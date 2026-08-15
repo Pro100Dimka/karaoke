@@ -20,9 +20,7 @@ function getModelStatusText({ ready, downloading, data, missingCount, total, rea
       model: data?.current_model || t("settings.ai.models.preparing")
     });
   }
-  return t("settings.ai.models.missing", {
-    count: missingCount || Math.max(0, total - readyCount)
-  });
+  return t("settings.ai.models.missing", { count: missingCount || Math.max(0, total - readyCount) });
 }
 
 export default function ModelRecovery() {
@@ -33,9 +31,7 @@ export default function ModelRecovery() {
     api.getAiModelsStatus,
     POLLING_INTERVALS.modelDownload,
     [],
-    {
-      shouldContinue: (status) => status?.state === "downloading"
-    }
+    { shouldContinue: (status) => status?.state === "downloading" }
   );
   const downloading = starting || data?.state === "downloading";
   const ready = data?.ready === true;
@@ -54,9 +50,7 @@ export default function ModelRecovery() {
           1: (totalBytes / 1024 ** 3).toFixed(1),
           2:
             remainingSeconds >= 0
-              ? translateSaved("· ~{0} мин", {
-                  0: Math.max(1, Math.ceil(remainingSeconds / 60))
-                })
+              ? translateSaved("· ~{0} мин", { 0: Math.max(1, Math.ceil(remainingSeconds / 60)) })
               : ""
         })
       : "";
@@ -69,11 +63,7 @@ export default function ModelRecovery() {
     readyCount,
     t
   });
-  const progressValue = getModelProgressValue(
-    totalBytes,
-    downloadedBytes,
-    downloading,
-    readyCount
+  const progressValue = getModelProgressValue( totalBytes, downloadedBytes, downloading, readyCount
   );
   const startDownload = async () => {
     setStarting(true);
@@ -90,21 +80,12 @@ export default function ModelRecovery() {
   return (
     <Card
       className="settings-neon-card"
-      sx={{
-        margin: "0 1rem 1rem",
-        minWidth: 0
-      }}
-      cardContent={{
-        style: {
-          padding: "1rem 1.1rem"
-        }
-      }}
+      sx={{ margin: "0 1rem 1rem", minWidth: 0 }}
+      cardContent={{ style: { padding: "1rem 1.1rem" } }}
     >
       <Stack
         gap={0.65}
-        sx={{
-          minWidth: 0
-        }}
+        sx={{ minWidth: 0 }}
       >
         <Stack direction="row" align="center" gap={0.55}>
           {ready ? (
@@ -114,9 +95,7 @@ export default function ModelRecovery() {
           )}
           <Typography
             variant="body1"
-            sx={{
-              fontWeight: 800
-            }}
+            sx={{ fontWeight: 800 }}
           >
             {t("settings.ai.models.title")}
           </Typography>
@@ -125,9 +104,7 @@ export default function ModelRecovery() {
         <Typography
           variant="body2"
           tone="muted"
-          sx={{
-            overflowWrap: "anywhere"
-          }}
+          sx={{ overflowWrap: "anywhere" }}
         >
           {statusText}
           {downloadDetail ? ` · ${downloadDetail}` : ""}
@@ -145,9 +122,7 @@ export default function ModelRecovery() {
           <Typography
             tone="danger"
             variant="caption"
-            sx={{
-              overflowWrap: "anywhere"
-            }}
+            sx={{ overflowWrap: "anywhere" }}
           >
             {visibleError}
           </Typography>
@@ -158,9 +133,7 @@ export default function ModelRecovery() {
             variant="solid"
             onClick={startDownload}
             disabled={downloading}
-            sx={{
-              alignSelf: "start"
-            }}
+            sx={{ alignSelf: "start" }}
           >
             <Stack direction="row" align="center" gap={0.5}>
               <Download size={17} aria-hidden="true" />

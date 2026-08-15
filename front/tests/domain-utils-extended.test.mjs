@@ -23,10 +23,7 @@ import {
   createBufferSizeOptions,
   createIndexedDeviceOptions
 } from "../src/pages/Karaoke/utils/devices.js";
-import {
-  getLyricDisplayState,
-  getLyricFill
-} from "../src/pages/Karaoke/utils/lyrics.js";
+import { getLyricDisplayState, getLyricFill } from "../src/pages/Karaoke/utils/lyrics.js";
 import {
   getMelodyCue,
   getMelodyRange,
@@ -44,10 +41,7 @@ import {
   rootMeanSquare,
   selectFundamentalLag
 } from "../src/pages/Karaoke/utils/pitch.js";
-import {
-  formatSongKey,
-  getSongActions
-} from "../src/pages/Library/components/song-card/utils.js";
+import { formatSongKey, getSongActions } from "../src/pages/Library/components/song-card/utils.js";
 import {
   createSongPayload,
   getSelectedSong,
@@ -192,10 +186,7 @@ describe("analysis normalization and feedback", () => {
 
   test("uses exact grade and advice boundaries", () => {
     const feedback = (accuracy, deviation) =>
-      getAnalysisFeedback({
-        pitch_accuracy_percent: accuracy,
-        mean_deviation_semitones: deviation
-      });
+      getAnalysisFeedback({ pitch_accuracy_percent: accuracy, mean_deviation_semitones: deviation });
     const noData = feedback(null, 2);
     const poor = feedback(49.99, 0);
     const potential = feedback(50, 0);
@@ -218,21 +209,18 @@ describe("analysis normalization and feedback", () => {
     );
     assert.equal(
       poor.advice,
-      translateSaved(
-        "Повторите сложные фразы медленнее, ориентируясь на ноты на экране."
+      translateSaved( "Повторите сложные фразы медленнее, ориентируясь на ноты на экране."
       )
     );
     assert.equal(
       feedback(70, null).advice,
-      translateSaved(
-        "Хорошая точность. Попробуйте сделать фразы ровнее по громкости и дыханию."
+      translateSaved( "Хорошая точность. Попробуйте сделать фразы ровнее по громкости и дыханию."
       )
     );
     assert.equal(feedback(70, 1).advice, feedback(70, null).advice);
     assert.equal(
       feedback(70, 1.01).advice,
-      translateSaved(
-        "Сфокусируйтесь на точном начале каждой фразы и удержании высоты ноты."
+      translateSaved( "Сфокусируйтесь на точном начале каждой фразы и удержании высоты ноты."
       )
     );
     assert.equal(feedback(69.99, 0).advice, poor.advice);
@@ -263,8 +251,7 @@ describe("karaoke data contracts", () => {
       "A#",
       "B"
     ];
-    sharpKeys.forEach((expected, shift) =>
-      assert.equal(transposeKey(" C ", shift), expected)
+    sharpKeys.forEach((expected, shift) => assert.equal(transposeKey(" C ", shift), expected)
     );
     for (const [root, expected] of [
       ["C", "C"],
@@ -327,13 +314,7 @@ describe("karaoke data contracts", () => {
       assert.equal(youTubeEmbedUrl(id), null);
     assert.deepEqual(
       createPanoramaPath(() => 0),
-      {
-        xPhaseA: 0,
-        xPhaseB: 0,
-        xPhaseC: 0,
-        yPhaseA: 0,
-        yPhaseB: 0
-      }
+      { xPhaseA: 0, xPhaseB: 0, xPhaseC: 0, yPhaseA: 0, yPhaseB: 0 }
     );
     assert.deepEqual(
       createPanoramaPath(() => 0.25),
@@ -345,9 +326,7 @@ describe("karaoke data contracts", () => {
         yPhaseB: Math.PI / 2
       }
     );
-    assert.equal(
-      normalizeNotes([{ start: 0, end: 1, note: "C4" }])[0].midi,
-      60
+    assert.equal( normalizeNotes([{ start: 0, end: 1, note: "C4" }])[0].midi, 60
     );
   });
 
@@ -357,13 +336,7 @@ describe("karaoke data contracts", () => {
     assert.deepEqual(normalizeLyrics({ lines: ["bad"] }), []);
     assert.deepEqual(normalizeLyrics({}), []);
     assert.deepEqual(normalizeLyrics([{ text: "bad", start: -1 }]), []);
-    for (const startKey of [
-      "start",
-      "start_sec",
-      "start_time",
-      "begin",
-      "from"
-    ])
+    for (const startKey of [ "start", "start_sec", "start_time", "begin", "from" ])
       assert.deepEqual(
         normalizeLyrics([{ text: startKey, [startKey]: 1, end: 2 }]).map(
           ({ text, start, end }) => ({ text, start, end })
@@ -414,10 +387,7 @@ describe("karaoke data contracts", () => {
       [{ text: "later earlier untimed", start: 1, end: 4 }]
     );
     assert.deepEqual(
-      normalizeLyrics([
-        { text: "first", start: 1, end: 1 },
-        { text: "second", start: 1, end: 1 }
-      ]).map(({ end }) => end),
+      normalizeLyrics([ { text: "first", start: 1, end: 1 }, { text: "second", start: 1, end: 1 } ]).map(({ end }) => end),
       [3, 3]
     );
     const result = normalizeLyrics({
@@ -439,19 +409,11 @@ describe("karaoke data contracts", () => {
     assert.equal(result[0].text, "first second");
     assert.equal(result[0].end, 2);
     assert.equal(result[1].end, 5);
-    assert.deepEqual(
-      result[0].words.map((word) => word.text),
-      ["first", "second"]
+    assert.deepEqual( result[0].words.map((word) => word.text), ["first", "second"]
     );
     assert.deepEqual(
-      normalizeLyrics([
-        { text: "first", start: 1, end: 1 },
-        { text: "second", start: 2, end: 3 }
-      ]).map(({ text, start, end }) => ({ text, start, end })),
-      [
-        { text: "first", start: 1, end: 2 },
-        { text: "second", start: 2, end: 3 }
-      ]
+      normalizeLyrics([ { text: "first", start: 1, end: 1 }, { text: "second", start: 2, end: 3 } ]).map(({ text, start, end }) => ({ text, start, end })),
+      [ { text: "first", start: 1, end: 2 }, { text: "second", start: 2, end: 3 } ]
     );
     assert.deepEqual(
       normalizeLyrics([
@@ -466,24 +428,14 @@ describe("karaoke data contracts", () => {
 
 describe("lyrics, melody and pitch", () => {
   test("accepts every supported lyric time alias", () => {
-    for (const startKey of [
-      "start",
-      "start_sec",
-      "start_time",
-      "begin",
-      "from"
-    ]) {
-      const state = getLyricDisplayState(
-        [{ [startKey]: 1, end: 2, text: startKey }],
-        1.5
+    for (const startKey of [ "start", "start_sec", "start_time", "begin", "from" ]) {
+      const state = getLyricDisplayState( [{ [startKey]: 1, end: 2, text: startKey }], 1.5
       );
       assert.equal(state.currentLine.text, startKey);
       assert.equal(state.currentLine.start, 1);
     }
     for (const endKey of ["end", "end_sec", "end_time", "finish", "to"]) {
-      const state = getLyricDisplayState(
-        [{ start: 1, [endKey]: 2, text: endKey }],
-        1.5
+      const state = getLyricDisplayState( [{ start: 1, [endKey]: 2, text: endKey }], 1.5
       );
       assert.equal(state.currentLine.text, endKey);
       assert.equal(state.currentLine.end, 2);
@@ -556,10 +508,7 @@ describe("lyrics, melody and pitch", () => {
     assert.equal(boundary.nextLine.text, "three");
 
     const gap = getLyricDisplayState(
-      [
-        { start: 0, end: 1, text: "past" },
-        { start: 2, end: 3, text: "future" }
-      ],
+      [ { start: 0, end: 1, text: "past" }, { start: 2, end: 3, text: "future" } ],
       1.5
     );
     assert.equal(gap.currentLine, null);
@@ -567,28 +516,17 @@ describe("lyrics, melody and pitch", () => {
     assert.equal(gap.nextLine, null);
     assert.equal(getLyricDisplayState(lyrics, "bad").currentLine.text, "one");
 
-    const zeroDuration = getLyricDisplayState(
-      [{ start: 1, end: 1, text: "instant" }],
-      0
+    const zeroDuration = getLyricDisplayState( [{ start: 1, end: 1, text: "instant" }], 0
     );
     assert.equal(zeroDuration.upcomingLine.text, "instant");
     assert.deepEqual(
       getLyricDisplayState([{ start: 1, end: 2, text: "ended" }], 2),
-      {
-        currentLineIndex: -1,
-        currentLine: null,
-        upcomingLine: null,
-        nextLine: null
-      }
+      { currentLineIndex: -1, currentLine: null, upcomingLine: null, nextLine: null }
     );
   });
 
   test("calculates lyric fill for invalid, regular and zero durations", () => {
-    for (const args of [
-      ["bad", 0, 1],
-      [0, "bad", 1],
-      [0, 0, "bad"]
-    ])
+    for (const args of [ ["bad", 0, 1], [0, "bad", 1], [0, 0, "bad"] ])
       assert.equal(getLyricFill(...args), 0);
     assert.equal(getLyricFill(-1, 0, 2), 0);
     assert.equal(getLyricFill(1, 0, 2), 0.5);
@@ -611,12 +549,7 @@ describe("lyrics, melody and pitch", () => {
       { minMidi: 40, maxMidi: 84, pitchRange: 45 }
     );
     assert.deepEqual(
-      getMelodyRange({
-        notes: [],
-        keyShift: 1,
-        noteRangeMin: 60,
-        noteRangeMax: 60
-      }),
+      getMelodyRange({ notes: [], keyShift: 1, noteRangeMin: 60, noteRangeMax: 60 }),
       { minMidi: 59, maxMidi: 63, pitchRange: 5 }
     );
     assert.deepEqual(
@@ -647,20 +580,11 @@ describe("lyrics, melody and pitch", () => {
       pitchRange: 5
     });
     assert.deepEqual(
-      getMelodyRange({
-        notes: [{ midi: 60 }],
-        keyShift: 2,
-        noteRangeMin: 50,
-        noteRangeMax: 70
-      }),
+      getMelodyRange({ notes: [{ midi: 60 }], keyShift: 2, noteRangeMin: 50, noteRangeMax: 70 }),
       { minMidi: 50, maxMidi: 74, pitchRange: 25 }
     );
     assert.deepEqual(
-      getMelodyRange({
-        notes: [],
-        noteRangeMin: -20,
-        noteRangeMax: -10
-      }),
+      getMelodyRange({ notes: [], noteRangeMin: -20, noteRangeMax: -10 }),
       { minMidi: -22, maxMidi: -8, pitchRange: 15 }
     );
   });
@@ -716,31 +640,21 @@ describe("lyrics, melody and pitch", () => {
     assert.equal(ended.activeNote, null);
     assert.equal(ended.cueNote.id, "b");
     assert.equal(getMelodyCue({ notes, currentTime: 4.01 }).cueNote, null);
-    assert.equal(
-      getMelodyCue({ notes, currentTime: "bad", keyShift: "bad" }).targetMidi,
-      62
+    assert.equal( getMelodyCue({ notes, currentTime: "bad", keyShift: "bad" }).targetMidi, 62
     );
 
     assert.equal(
-      getMelodyCue({
-        notes: [{ start: 0.92, end: 0.99, midi: 60 }],
-        currentTime: 1
-      }).targetMidi,
+      getMelodyCue({ notes: [{ start: 0.92, end: 0.99, midi: 60 }], currentTime: 1 }).targetMidi,
       60
     );
     assert.equal(
-      getMelodyCue({
-        notes: [{ start: 0.919, end: 0.99, midi: 60 }],
-        currentTime: 1
-      }).cueNote,
+      getMelodyCue({ notes: [{ start: 0.919, end: 0.99, midi: 60 }], currentTime: 1 }).cueNote,
       null
     );
   });
 
   test("calculates normalized pitch correlation and lag boundaries", () => {
-    assert.equal(
-      normalizedCorrelation(Float32Array.of(1, 2, 3, 4), 1),
-      20 / Math.sqrt(14 * 29)
+    assert.equal( normalizedCorrelation(Float32Array.of(1, 2, 3, 4), 1), 20 / Math.sqrt(14 * 29)
     );
     assert.equal(normalizedCorrelation(Float32Array.of(1, 0, 0), 1), 0);
     assert.equal(rootMeanSquare(Float32Array.of(3, 4)), Math.sqrt(12.5));
@@ -748,48 +662,27 @@ describe("lyrics, melody and pitch", () => {
     assert.equal(hasSufficientPitchEnergy([0.009]), false);
     assert.equal(isConfidentPitchScore(0.62), true);
     assert.equal(isConfidentPitchScore(0.619), false);
-    assert.deepEqual(getPitchLagRange(2048, 48_000), {
-      minLag: 26,
-      maxLag: 874
-    });
+    assert.deepEqual(getPitchLagRange(2048, 48_000), { minLag: 26, maxLag: 874 });
     assert.equal(getPitchLagRange(3, 48_000), null);
-    assert.deepEqual(getPitchLagRange(100, 48_000), {
-      minLag: 26,
-      maxLag: 98
-    });
+    assert.deepEqual(getPitchLagRange(100, 48_000), { minLag: 26, maxLag: 98 });
     assert.equal(getPitchLagRange(28, 48_000), null);
   });
 
   test("selects the earliest strongest pitch lag and first valid peak", () => {
     const scores = Float64Array.of(0, 0, 0.5, 0.8, 0.7, 0.8, 0.6, 0);
-    assert.deepEqual(findBestPitchLag(scores, 2, 6), {
-      lag: 3,
-      score: 0.8
-    });
-    assert.deepEqual(findBestPitchLag(new Float64Array(5), 1, 3), {
-      lag: -1,
-      score: 0
-    });
+    assert.deepEqual(findBestPitchLag(scores, 2, 6), { lag: 3, score: 0.8 });
+    assert.deepEqual(findBestPitchLag(new Float64Array(5), 1, 3), { lag: -1, score: 0 });
     assert.deepEqual(
       findBestPitchLag(Float64Array.of(0, 0, 0.5, 0.6, 0.7, 0.8, 0.9), 2, 6),
       { lag: 6, score: 0.9 }
     );
 
     const weak = Float64Array.of(0, 0, 0.6, 0.7, 0.6, 0, 0.6, 0);
-    assert.deepEqual(selectFundamentalLag(weak, 1, 7, 7, 1), {
-      lag: 7,
-      score: 1
-    });
+    assert.deepEqual(selectFundamentalLag(weak, 1, 7, 7, 1), { lag: 7, score: 1 });
     const exact = Float64Array.of(0, 0.9, 0.9, 0.8, 0, 0, 1, 0);
-    assert.deepEqual(selectFundamentalLag(exact, 1, 7, 6, 1), {
-      lag: 2,
-      score: 0.9
-    });
+    assert.deepEqual(selectFundamentalLag(exact, 1, 7, 6, 1), { lag: 2, score: 0.9 });
     const rightTie = Float64Array.of(0, 0.8, 0.9, 0.9, 0, 0, 1, 0);
-    assert.deepEqual(selectFundamentalLag(rightTie, 1, 7, 6, 1), {
-      lag: 3,
-      score: 0.9
-    });
+    assert.deepEqual(selectFundamentalLag(rightTie, 1, 7, 6, 1), { lag: 3, score: 0.9 });
   });
 
   test("interpolates pitch lag and converts bounded frequencies to MIDI", () => {
@@ -798,14 +691,7 @@ describe("lyrics, melody and pitch", () => {
     assert.equal(refinePitchLag(scores, 2, 2, 8), 2);
     assert.equal(refinePitchLag(scores, 8, 2, 8), 8);
     assert.equal(refinePitchLag(Float64Array.of(0, 0.5, 1, 0.8), 2, 2, 3), 2);
-    assert.equal(
-      refinePitchLag(
-        Float64Array.of(0, 0, 0, 0, 0, 0, 0, 0.8, 1, 0.5),
-        8,
-        2,
-        8
-      ),
-      8
+    assert.equal( refinePitchLag( Float64Array.of(0, 0, 0, 0, 0, 0, 0, 0.8, 1, 0.5), 8, 2, 8 ), 8
     );
     assert.equal(refinePitchLag(Float64Array.of(0, 1, 1, 1, 0), 2, 0, 4), 2);
     for (const [frequency, midi] of [
@@ -862,8 +748,7 @@ describe("lyrics, melody and pitch", () => {
         0.1 * Math.sin((2 * Math.PI * 660 * index) / rate);
     assert.ok(Math.abs(detect(harmonic) - 57) < 0.03);
     assert.ok(
-      Math.abs(
-        detect(sine(261.6256, 0.5, (index) => Math.exp(-index / length))) - 60
+      Math.abs( detect(sine(261.6256, 0.5, (index) => Math.exp(-index / length))) - 60
       ) < 0.03
     );
 
@@ -884,10 +769,7 @@ describe("lyrics, melody and pitch", () => {
       [tone, -1]
     ])
       assert.equal(
-        detectMidiFromAnalyser(
-          { getFloatTimeDomainData: unread },
-          buffer,
-          sampleRate
+        detectMidiFromAnalyser( { getFloatTimeDomainData: unread }, buffer, sampleRate
         ),
         null
       );
@@ -900,11 +782,7 @@ describe("lyrics, melody and pitch", () => {
       assert.equal(detectMidiFromAnalyser(device, buffer, sampleRate), null);
     assert.equal(
       detectMidiFromAnalyser(
-        {
-          getFloatTimeDomainData: () => {
-            throw new Error("device");
-          }
-        },
+        { getFloatTimeDomainData: () => { throw new Error("device"); } },
         tone,
         rate
       ),
@@ -973,12 +851,7 @@ describe("device, settings and song-card factories", () => {
     );
     assert.deepEqual(
       createBrowserDeviceOptions(
-        [
-          "invalid",
-          { deviceId: "x", label: "Mic" },
-          { deviceId: "y" },
-          { deviceId: "" }
-        ],
+        [ "invalid", { deviceId: "x", label: "Mic" }, { deviceId: "y" }, { deviceId: "" } ],
         "Device",
         "Browser default"
       ),
@@ -999,9 +872,7 @@ describe("device, settings and song-card factories", () => {
         label: `${value} samples`
       }))
     );
-    assert.equal(
-      createIndexedDeviceOptions(null)[0].label,
-      translateSaved("По умолчанию")
+    assert.equal( createIndexedDeviceOptions(null)[0].label, translateSaved("По умолчанию")
     );
     assert.equal(
       createBrowserDeviceOptions([], "Device")[0].label,
@@ -1022,9 +893,7 @@ describe("device, settings and song-card factories", () => {
     assert.deepEqual(onChange.mock.calls[0], ["name", "y"]);
     assert.deepEqual(onFieldBlur.mock.calls[0], ["name", "y"]);
     assert.equal(formReadonly("x").type, "readonly");
-    assert.equal(
-      fieldType((name, config) => ({ name, ...config }), "x")("a").type,
-      "x"
+    assert.equal( fieldType((name, config) => ({ name, ...config }), "x")("a").type, "x"
     );
     const radio = { stationId: "a", setStation: vi.fn() };
     assert.equal(radioField("stationId").getValue({ radio }), "a");
@@ -1039,21 +908,15 @@ describe("device, settings and song-card factories", () => {
     };
     audioSlider("volume").setValue({ audio }, 0.5);
     assert.equal(audioSlider("volume").getValue({ audio }), 1);
-    assert.equal(
-      audioSelect("device", "devices").getOptions({ audio }).length,
-      1
+    assert.equal( audioSelect("device", "devices").getOptions({ audio }).length, 1
     );
-    assert.deepEqual(preferenceSelect("input", [{ value: "x" }]).options, [
-      { value: "x" }
-    ]);
+    assert.deepEqual(preferenceSelect("input", [{ value: "x" }]).options, [ { value: "x" } ]);
     assert.equal(preferenceSelect("input").getValue({ audio }), "x");
     preferenceSelect("input").setValue({ audio }, "y");
     assert.equal(monitorDisabled({ audio }), true);
     assert.equal(audioDriverVisible({ audio }), true);
     assert.equal(multipleAudioDriversAvailable({ audio }), true);
-    assert.deepEqual(
-      audioSelect("device", "devices").getOptions({ audio: {} }),
-      []
+    assert.deepEqual( audioSelect("device", "devices").getOptions({ audio: {} }), []
     );
     assert.equal(multipleAudioDriversAvailable({ audio: {} }), false);
     assert.equal(speakerPlaying({ audio }), true);
@@ -1069,10 +932,7 @@ describe("device, settings and song-card factories", () => {
   });
 
   test("validates song settings and dispatches card actions", () => {
-    const songs = [
-      { id: "a", title: "A" },
-      { id: "b", title: "B" }
-    ];
+    const songs = [ { id: "a", title: "A" }, { id: "b", title: "B" } ];
     assert.equal(getSelectedSong(songs, "b").id, "b");
     assert.equal(getSelectedSong(songs).id, "a");
     assert.equal(getSelectedSong([null, songs[0]], "").id, "a");
@@ -1081,24 +941,16 @@ describe("device, settings and song-card factories", () => {
     assert.equal(normalizeText(" x "), "x");
     for (const value of [null, undefined, 7, {}, "   "])
       assert.equal(normalizeText(value), null);
-    assert.equal(
-      validateSongSettings(undefined),
-      translateSaved("Укажите название песни.")
+    assert.equal( validateSongSettings(undefined), translateSaved("Укажите название песни.")
     );
-    assert.equal(
-      validateSongSettings({ title: "" }),
-      translateSaved("Укажите название песни.")
+    assert.equal( validateSongSettings({ title: "" }), translateSaved("Укажите название песни.")
     );
     assert.equal(
       validateSongSettings({ title: "x", tempo_override: 0 }),
       translateSaved("Темп должен быть больше 0 BPM.")
     );
     assert.equal(
-      validateSongSettings({
-        title: "x",
-        note_range_min: 90,
-        note_range_max: 20
-      }),
+      validateSongSettings({ title: "x", note_range_min: 90, note_range_max: 20 }),
       translateSaved("Нижняя нота диапазона не может быть выше верхней.")
     );
     for (const form of [
@@ -1160,9 +1012,7 @@ describe("device, settings and song-card factories", () => {
     assert.equal(formatSongKey("A minor extra"), "A minor extra");
     assert.equal(formatSongKey("C major extra"), "C major extra");
     for (const value of [null, undefined, "", "   ", 0])
-      assert.equal(
-        formatSongKey(value),
-        translateSaved("Тональность определяется")
+      assert.equal( formatSongKey(value), translateSaved("Тональность определяется")
       );
     const callbacks = {
       onDelete: vi.fn(),
@@ -1242,10 +1092,7 @@ describe("device, settings and song-card factories", () => {
         variant: "outline",
         callback: "function",
         size: 16,
-        options: {
-          className: "library-song-card-process",
-          disabled: true
-        }
+        options: { className: "library-song-card-process", disabled: true }
       },
       ...actionContracts(ready.slice(1, 3)),
       actionContracts(ready).at(-1)
@@ -1253,21 +1100,11 @@ describe("device, settings and song-card factories", () => {
     pending.forEach((action) => action[3]());
     assert.deepEqual(callbacks.onProcess.mock.calls.at(-1), [songs[0]]);
     assert.deepEqual(
-      getSongActions({
-        ...callbacks,
-        canManageLibrary: false,
-        isReady: false,
-        song: songs[0]
-      }),
+      getSongActions({ ...callbacks, canManageLibrary: false, isReady: false, song: songs[0] }),
       []
     );
     assert.equal(
-      getSongActions({
-        ...callbacks,
-        canManageLibrary: false,
-        isReady: true,
-        song: songs[0]
-      }).length,
+      getSongActions({ ...callbacks, canManageLibrary: false, isReady: true, song: songs[0] }).length,
       1
     );
   });

@@ -4,11 +4,7 @@ import useExclusiveAsyncAction from "../../../hooks/useExclusiveAsyncAction";
 import { translateSaved } from "../../../i18n/runtime";
 import { getErrorMessage } from "../../../utils/errors";
 
-export default function useLibraryFileImport({
-  fileInputRef,
-  notify,
-  onStarted
-}) {
+export default function useLibraryFileImport({ fileInputRef, notify, onStarted }) {
   const { pending, run } = useExclusiveAsyncAction();
   const openFilePicker = useCallback(() => {
     if (!pending) fileInputRef.current?.click();
@@ -37,9 +33,5 @@ export default function useLibraryFileImport({
     },
     [notify, onStarted, run]
   );
-  return {
-    importing: pending,
-    importFile,
-    openFilePicker
-  };
+  return { importing: pending, importFile, openFilePicker };
 }

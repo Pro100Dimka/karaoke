@@ -1,12 +1,6 @@
 import { Box, Stack } from "../../theme/ui";
 
-export default function ModalTitle({
-  icon: Icon,
-  eyebrow,
-  title,
-  description,
-  actions
-}) {
+export default function ModalTitle({ icon: Icon, eyebrow, title, description, actions }) {
   return (
     <Stack
       direction="row"

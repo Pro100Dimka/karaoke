@@ -6,19 +6,13 @@ export const HALF = 6;
 export const THIRD = 4;
 export const FULL = 12;
 export const DIFFICULTY_OPTIONS = [
-  {
-    value: "",
-    label: translateSaved("Авто (по AI)")
-  },
+  { value: "", label: translateSaved("Авто (по AI)") },
   ...[
     translateSaved("Лёгкий"),
     translateSaved("Средний"),
     translateSaved("Сложный"),
     translateSaved("Эксперт")
-  ].map((value) => ({
-    value,
-    label: value
-  }))
+  ].map((value) => ({ value, label: value }))
 ];
 const formField = (name, config = {}) => ({
   name,
@@ -30,52 +24,20 @@ const formField = (name, config = {}) => ({
 export const SONG_FIELDS = [
   ...[
     ["artist", translateSaved("Исполнитель"), "Muse"],
-    [
-      "title",
-      translateSaved("Название песни"),
-      translateSaved("Название песни")
-    ]
+    [ "title", translateSaved("Название песни"), translateSaved("Название песни") ]
   ].map(([name, label, placeholder]) =>
-    formField(name, {
-      type: "text",
-      label,
-      placeholder,
-      span: HALF
-    })
+    formField(name, { type: "text", label, placeholder, span: HALF })
   ),
   ...[
-    [
-      "tempo_override",
-      translateSaved("Темп"),
-      "number",
-      {
-        min: 1,
-        parse: "nullable-number"
-      }
-    ],
+    [ "tempo_override", translateSaved("Темп"), "number", { min: 1, parse: "nullable-number" } ],
     [
       "key_override",
       translateSaved("Тональность"),
       "text",
-      {
-        placeholder: translateSaved("напр. C#m")
-      }
+      { placeholder: translateSaved("напр. C#m") }
     ],
-    [
-      "genre",
-      translateSaved("Жанр"),
-      "text",
-      {
-        placeholder: "Alternative rock"
-      }
-    ]
-  ].map(([name, label, type, extra]) =>
-    formField(name, {
-      type,
-      label,
-      span: THIRD,
-      ...extra
-    })
+    [ "genre", translateSaved("Жанр"), "text", { placeholder: "Alternative rock" } ]
+  ].map(([name, label, type, extra]) => formField(name, { type, label, span: THIRD, ...extra })
   ),
   formField("difficulty_override", {
     type: "select",
@@ -94,9 +56,7 @@ export const SONG_FIELDS = [
           <Stack
             direction="row"
             gap={1}
-            sx={{
-              width: "100%"
-            }}
+            sx={{ width: "100%" }}
           >
             <NumberField
               id={`${id}-min`}
@@ -106,9 +66,7 @@ export const SONG_FIELDS = [
               placeholder={translateSaved("От")}
               aria-label={translateSaved("Нижняя нота")}
               onChange={(value) =>
-                context.onChange(
-                  "note_range_min",
-                  value === "" ? null : Number(value)
+                context.onChange( "note_range_min", value === "" ? null : Number(value)
                 )
               }
             />
@@ -120,9 +78,7 @@ export const SONG_FIELDS = [
               placeholder={translateSaved("До")}
               aria-label={translateSaved("Верхняя нота")}
               onChange={(value) =>
-                context.onChange(
-                  "note_range_max",
-                  value === "" ? null : Number(value)
+                context.onChange( "note_range_max", value === "" ? null : Number(value)
                 )
               }
             />

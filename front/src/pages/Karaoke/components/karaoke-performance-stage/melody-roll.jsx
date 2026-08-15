@@ -1,18 +1,8 @@
 import { translateSaved } from "../../../../i18n/runtime";
 import { midiToWesternNote } from "../../utils/format";
-import {
-  getMelodyCue,
-  getMelodyRange,
-  getVisibleNotes
-} from "../../utils/melody";
+import { getMelodyCue, getMelodyRange, getVisibleNotes } from "../../utils/melody";
 
-const VIEW = {
-  width: 1200,
-  height: 288,
-  labelWidth: 0,
-  keyboardWidth: 48,
-  seconds: 10
-};
+const VIEW = { width: 1200, height: 288, labelWidth: 0, keyboardWidth: 48, seconds: 10 };
 const BLACK_KEY_CLASSES = [1, 3, 6, 8, 10];
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 export default function MelodyRoll({
@@ -24,13 +14,7 @@ export default function MelodyRoll({
   noteRangeMin,
   noteRangeMax
 }) {
-  const {
-    width,
-    height,
-    labelWidth,
-    keyboardWidth,
-    seconds: windowSeconds
-  } = VIEW;
+  const { width, height, labelWidth, keyboardWidth, seconds: windowSeconds } = VIEW;
   const noteLaneStart = labelWidth + keyboardWidth;
   const viewStart = Math.max(0, currentTime - 2.5);
   const viewEnd = viewStart + windowSeconds;
@@ -42,11 +26,7 @@ export default function MelodyRoll({
     noteRangeMax,
     fallbackMidi: sungMidi
   });
-  const { activeMidi, targetMidi } = getMelodyCue({
-    notes: visibleNotes,
-    currentTime,
-    keyShift
-  });
+  const { activeMidi, targetMidi } = getMelodyCue({ notes: visibleNotes, currentTime, keyShift });
   const indicatorMidi = Number.isFinite(sungMidi) ? sungMidi : targetMidi;
 
   // Keep one stable vertical scale for the whole song and NEVER crop valid
@@ -60,11 +40,7 @@ export default function MelodyRoll({
   const pitchRange = Math.max(1, maxMidi - minMidi + 1);
   const rowHeight = height / pitchRange;
   const noteHeight = Math.min(15, Math.max(5, rowHeight * 0.72));
-  const lanes = Array.from(
-    {
-      length: pitchRange
-    },
-    (_, index) => minMidi + index
+  const lanes = Array.from( { length: pitchRange }, (_, index) => minMidi + index
   );
   const x = (time) =>
     noteLaneStart +
@@ -164,8 +140,7 @@ export default function MelodyRoll({
             (midi) => !BLACK_KEY_CLASSES.includes(((midi % 12) + 12) % 12)
           );
           const naturalHeight = height / naturals.length;
-          const naturalIndex = new Map(
-            naturals.map((midi, index) => [midi, index])
+          const naturalIndex = new Map( naturals.map((midi, index) => [midi, index])
           );
           return lanes
             .filter((midi) => BLACK_KEY_CLASSES.includes(((midi % 12) + 12) % 12))

@@ -81,8 +81,7 @@ describe("Electron runtime configuration", () => {
       BACKEND_HOST: "localhost",
       BACKEND_PORT: 9000
     });
-    expect(() =>
-      loadRuntimeConfig({ KARAOKE_BACKEND_STOP_GRACE_MS: "invalid" })
+    expect(() => loadRuntimeConfig({ KARAOKE_BACKEND_STOP_GRACE_MS: "invalid" })
     ).toThrow("KARAOKE_BACKEND_STOP_GRACE_MS must be a positive integer");
   });
 
@@ -107,16 +106,8 @@ describe("Electron runtime configuration", () => {
       "must use HTTP on a loopback host"
     ],
     ["KARAOKE_BACKEND_REQUEST_TIMEOUT_MS", "0", "must be a positive integer"],
-    [
-      "KARAOKE_BACKEND_RESTART_BASE_DELAY_MS",
-      "-1",
-      "must be a positive integer"
-    ],
-    [
-      "KARAOKE_BACKEND_RESTART_MAX_DELAY_MS",
-      "1.5",
-      "must be a positive integer"
-    ],
+    [ "KARAOKE_BACKEND_RESTART_BASE_DELAY_MS", "-1", "must be a positive integer" ],
+    [ "KARAOKE_BACKEND_RESTART_MAX_DELAY_MS", "1.5", "must be a positive integer" ],
     ["KARAOKE_BACKEND_STOP_GRACE_MS", "Infinity", "must be a positive integer"]
   ])("rejects invalid %s", (name, value, suffix) => {
     expect(() => loadRuntimeConfig({ [name]: value })).toThrow(
@@ -125,16 +116,13 @@ describe("Electron runtime configuration", () => {
   });
 
   test("uses defaults for empty numeric overrides", () => {
-    expect(
-      loadRuntimeConfig({ KARAOKE_BACKEND_STOP_GRACE_MS: "" })
-        .BACKEND_STOP_GRACE_MS
+    expect( loadRuntimeConfig({ KARAOKE_BACKEND_STOP_GRACE_MS: "" }) .BACKEND_STOP_GRACE_MS
     ).toBe(550);
   });
 });
 
 describe("renderer and permission security", () => {
-  const packagedIndexUrl = security.getPackagedRendererUrl(
-    path.resolve("dist/index.html")
+  const packagedIndexUrl = security.getPackagedRendererUrl( path.resolve("dist/index.html")
   );
   const packaged = { isDev: false, packagedIndexUrl };
   const development = {
@@ -166,11 +154,9 @@ describe("renderer and permission security", () => {
   });
 
   test("allows only the packaged index and its hash routes", () => {
-    expect(
-      security.getPackagedRendererUrl(path.resolve("another/index.html"))
+    expect( security.getPackagedRendererUrl(path.resolve("another/index.html"))
     ).toBe(new URL(`file:///${path.resolve("another/index.html")}`).href);
-    expect(security.isAllowedRendererUrl(packagedIndexUrl, packaged)).toBe(
-      true
+    expect(security.isAllowedRendererUrl(packagedIndexUrl, packaged)).toBe( true
     );
     expect(
       security.isAllowedRendererUrl(`${packagedIndexUrl}#/karaoke`, packaged)
@@ -224,11 +210,9 @@ describe("renderer and permission security", () => {
       rendererOptions: packaged
     };
 
-    expect(
-      security.isAllowedPermissionRequest({ ...base, permission: "camera" })
+    expect( security.isAllowedPermissionRequest({ ...base, permission: "camera" })
     ).toBe(false);
-    expect(
-      security.isAllowedPermissionRequest({ ...base, webContents: {} })
+    expect( security.isAllowedPermissionRequest({ ...base, webContents: {} })
     ).toBe(false);
     expect(
       security.isAllowedPermissionRequest({
@@ -236,11 +220,7 @@ describe("renderer and permission security", () => {
         expectedWebContents: { isDestroyed: () => true }
       })
     ).toBe(false);
-    expect(
-      security.isAllowedPermissionRequest({
-        ...base,
-        expectedWebContents: undefined
-      })
+    expect( security.isAllowedPermissionRequest({ ...base, expectedWebContents: undefined })
     ).toBe(false);
     expect(
       security.isAllowedPermissionRequest({
@@ -250,8 +230,7 @@ describe("renderer and permission security", () => {
         expectedWebContents: undefined
       })
     ).toBe(false);
-    expect(security.isTrustedIpcEvent(undefined, expectedWebContents)).toBe(
-      false
+    expect(security.isTrustedIpcEvent(undefined, expectedWebContents)).toBe( false
     );
     expect(
       security.isAllowedPermissionRequest({
@@ -263,32 +242,24 @@ describe("renderer and permission security", () => {
 
   test("registers a dynamic trusted IPC boundary and forwards values", async () => {
     const callbacks = new Map();
-    const ipcMain = {
-      handle: vi.fn((channel, callback) => callbacks.set(channel, callback))
-    };
+    const ipcMain = { handle: vi.fn((channel, callback) => callbacks.set(channel, callback)) };
     const handler = vi.fn((left, right) => left + right);
     let expectedWebContents = { isDestroyed: () => false };
 
-    security.registerTrustedIpc(
-      ipcMain,
-      "test:add",
-      () => expectedWebContents,
-      handler
+    security.registerTrustedIpc( ipcMain, "test:add", () => expectedWebContents, handler
     );
     const callback = callbacks.get("test:add");
 
     expect(callback({ sender: expectedWebContents }, 2, 3)).toBe(5);
     expect(handler).toHaveBeenCalledWith(2, 3);
-    expect(() => callback({ sender: {} }, 1, 1)).toThrow(
-      "Rejected IPC request: test:add"
+    expect(() => callback({ sender: {} }, 1, 1)).toThrow( "Rejected IPC request: test:add"
     );
     expectedWebContents = { isDestroyed: () => true };
     expect(() => callback({ sender: expectedWebContents }, 1, 1)).toThrow(
       "Rejected IPC request: test:add"
     );
     expectedWebContents = null;
-    expect(() => callback({ sender: null }, 1, 1)).toThrow(
-      "Rejected IPC request: test:add"
+    expect(() => callback({ sender: null }, 1, 1)).toThrow( "Rejected IPC request: test:add"
     );
   });
 });
@@ -324,18 +295,13 @@ describe("song folder matching", () => {
 
   test("returns a unique partial match but rejects ambiguity", () => {
     const live = directory("31-я весна live");
-    expect(songFolders.findMatchingSongFolder([live], ["31-я весна"])).toBe(
-      live
+    expect(songFolders.findMatchingSongFolder([live], ["31-я весна"])).toBe( live
     );
     expect(
-      songFolders.findMatchingSongFolder(
-        [live, directory("31-я весна acoustic")],
-        ["31-я весна"]
+      songFolders.findMatchingSongFolder( [live, directory("31-я весна acoustic")], ["31-я весна"]
       )
     ).toBeNull();
-    expect(
-      songFolders.findMatchingSongFolder([directory("весна")], ["весна live"])
-        .name
+    expect( songFolders.findMatchingSongFolder([directory("весна")], ["весна live"]) .name
     ).toBe("весна");
     expect(
       songFolders.findMatchingSongFolder(
@@ -343,14 +309,12 @@ describe("song folder matching", () => {
         ["нет совпадения", "весна"]
       ).name
     ).toBe("весна live");
-    expect(
-      songFolders.findMatchingSongFolder([directory("unrelated")], ["missing"])
+    expect( songFolders.findMatchingSongFolder([directory("unrelated")], ["missing"])
     ).toBeNull();
   });
 
   test("ignores invalid requests, files, and empty directory names", () => {
-    expect(
-      songFolders.findMatchingSongFolder([directory("real")], [null, "---"])
+    expect( songFolders.findMatchingSongFolder([directory("real")], [null, "---"])
     ).toBeNull();
     expect(
       songFolders.findMatchingSongFolder(
@@ -372,12 +336,7 @@ describe("preload bridge", () => {
     const originalLoad = nodeModule._load;
     // eslint-disable-next-line no-underscore-dangle
     nodeModule._load = function load(specifier, parent, isMain) {
-      if (specifier === "electron") {
-        return {
-          contextBridge: { exposeInMainWorld },
-          ipcRenderer: { invoke }
-        };
-      }
+      if (specifier === "electron") return { contextBridge: { exposeInMainWorld }, ipcRenderer: { invoke } };
       return originalLoad.call(this, specifier, parent, isMain);
     };
     process.argv = ["electron", "app", ...arguments_];
@@ -391,17 +350,11 @@ describe("preload bridge", () => {
       // eslint-disable-next-line no-underscore-dangle
       nodeModule._load = originalLoad;
     }
-    return {
-      api: exposeInMainWorld.mock.calls[0][1],
-      exposeInMainWorld,
-      invoke
-    };
+    return { api: exposeInMainWorld.mock.calls[0][1], exposeInMainWorld, invoke };
   }
 
   test("exposes the minimal frozen-channel renderer API", () => {
-    const { api, exposeInMainWorld, invoke } = runPreload([
-      "--advoice-theme=violet"
-    ]);
+    const { api, exposeInMainWorld, invoke } = runPreload([ "--advoice-theme=violet" ]);
 
     expect(exposeInMainWorld).toHaveBeenCalledOnce();
     expect(exposeInMainWorld.mock.calls[0][0]).toBe("electronAPI");
@@ -412,19 +365,10 @@ describe("preload bridge", () => {
     expect(api.minimize()).toEqual(["window:minimize"]);
     expect(api.maximize()).toEqual(["window:maximize"]);
     expect(api.close()).toEqual(["window:close"]);
-    expect(api.openSongFolder({ id: "42" })).toEqual([
-      "shell:openSongFolder",
-      { id: "42" }
-    ]);
-    expect(api.selectFolder("D:/songs")).toEqual([
-      "dialog:selectFolder",
-      "D:/songs"
-    ]);
+    expect(api.openSongFolder({ id: "42" })).toEqual([ "shell:openSongFolder", { id: "42" } ]);
+    expect(api.selectFolder("D:/songs")).toEqual([ "dialog:selectFolder", "D:/songs" ]);
     expect(api.getBackendUrl()).toEqual(["backend:url"]);
-    expect(api.copyText("room-code")).toEqual([
-      "clipboard:writeText",
-      "room-code"
-    ]);
+    expect(api.copyText("room-code")).toEqual([ "clipboard:writeText", "room-code" ]);
     expect(api.setIconTheme("dark")).toEqual(["window:setIconTheme", "dark"]);
     expect(invoke).toHaveBeenCalledTimes(8);
   });

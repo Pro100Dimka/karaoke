@@ -13,10 +13,7 @@ export function upsertParticipant(items, participant) {
   const index = items.findIndex((item) => item.id === participant.id);
   if (index < 0) return [...items, participant];
   const next = [...items];
-  next[index] = {
-    ...next[index],
-    ...participant
-  };
+  next[index] = { ...next[index], ...participant };
   return next;
 }
 export function createOnlineRoomMessageHandler(options) {
@@ -41,10 +38,7 @@ export function createOnlineRoomMessageHandler(options) {
   } = options;
 
   const publishRoomCommand = (command, eventPrefix) => {
-    setRoomCommand({
-      ...command,
-      __eventId: createEventId(eventPrefix)
-    });
+    setRoomCommand({ ...command, __eventId: createEventId(eventPrefix) });
   };
 
   const syncHandlers = {
@@ -67,9 +61,7 @@ export function createOnlineRoomMessageHandler(options) {
             filename: `${command.songId}.karaoke.zip`
           });
         })
-        .then(() => {
-          if (isCurrentConnection()) setTransferStatus(null);
-        })
+        .then(() => { if (isCurrentConnection()) setTransferStatus(null); })
         .catch((error) => {
           if (!isCurrentConnection()) return;
           const message = getErrorMessage(error);
@@ -135,9 +127,7 @@ export function createOnlineRoomMessageHandler(options) {
     "participant-joined": (message) => {
       const { participant } = message;
       setParticipants((items) => upsertParticipant(items, participant));
-      if (participant?.id !== activeRoomRef.current?.selfId) {
-        onParticipantJoined(participant);
-      }
+      if (participant?.id !== activeRoomRef.current?.selfId) onParticipantJoined(participant);
       if (participant?.id) voice.invite(participant.id).catch(() => {});
     },
     "participant-updated": (message) => {
@@ -153,8 +143,7 @@ export function createOnlineRoomMessageHandler(options) {
       });
     },
     "participant-left": (message) => {
-      setParticipants((items) =>
-        items.filter((item) => item.id !== message.participantId)
+      setParticipants((items) => items.filter((item) => item.id !== message.participantId)
       );
       voice.removePeer(message.participantId);
     },
@@ -204,8 +193,6 @@ export function createOnlineRoomMessageHandler(options) {
 
   return (message) => {
     if (!isCurrentConnection()) return;
-    if (Object.hasOwn(messageHandlers, message.type)) {
-      messageHandlers[message.type](message);
-    }
+    if (Object.hasOwn(messageHandlers, message.type)) messageHandlers[message.type](message);
   };
 }

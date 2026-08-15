@@ -37,12 +37,7 @@ export const mockKaraokeResult = {
         { text: "Studio", start: 3.8, end: 5 }
       ]
     },
-    {
-      start: 5,
-      end: 10,
-      text: "Интерфейс работает без backend",
-      words: []
-    }
+    { start: 5, end: 10, text: "Интерфейс работает без backend", words: [] }
   ],
   reference_notes: [
     { start: 0.5, end: 1.2, midi: 60 },

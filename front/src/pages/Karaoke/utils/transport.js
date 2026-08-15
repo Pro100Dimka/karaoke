@@ -5,9 +5,7 @@ export function clampPlaybackPosition(time, duration) {
   const limit = Number(duration);
   const safeValue = Number.isFinite(value) ? value : 0;
 
-  if (!Number.isFinite(limit) || limit <= 0) {
-    return Math.max(0, safeValue);
-  }
+  if (!Number.isFinite(limit) || limit <= 0) return Math.max(0, safeValue);
 
   return clamp(safeValue, 0, limit);
 }

@@ -91,9 +91,7 @@ export async function mockRequest(path, options = {}) {
     store.songs.push(song);
     return clone(song);
   }
-  if (pathname === "/songs/package/import" && method === "POST") {
-    return { imported: true };
-  }
+  if (pathname === "/songs/package/import" && method === "POST") return { imported: true };
 
   const songMatch = pathname.match(/^\/songs\/([^/]+)$/);
   if (songMatch) {
@@ -130,9 +128,7 @@ export async function mockRequest(path, options = {}) {
   }
   const statusMatch = pathname.match(/^\/songs\/([^/]+)\/status$/);
   if (statusMatch) return clone(findSong(statusMatch[1]));
-  if (/^\/songs\/[^/]+\/(process|reprocess|cancel|lyrics)$/.test(pathname)) {
-    return { ok: true };
-  }
+  if (/^\/songs\/[^/]+\/(process|reprocess|cancel|lyrics)$/.test(pathname)) return { ok: true };
   if (/^\/songs\/[^/]+\/log$/.test(pathname)) return ["Mock pipeline ready"];
 
   if (pathname === "/settings") {
@@ -144,14 +140,10 @@ export async function mockRequest(path, options = {}) {
     Object.assign(store.audioSettings, body);
     return clone(store.audioSettings);
   }
-  if (Object.hasOwn(STATIC_RESPONSES, pathname)) {
-    return clone(STATIC_RESPONSES[pathname]);
-  }
+  if (Object.hasOwn(STATIC_RESPONSES, pathname)) return clone(STATIC_RESPONSES[pathname]);
   if (pathname.startsWith("/audio/direct-monitor/")) return { ok: true };
 
-  if (pathname === "/recording/start") {
-    return { recording_session_id: "mock-session-1" };
-  }
+  if (pathname === "/recording/start") return { recording_session_id: "mock-session-1" };
   if (pathname === "/recording/stop") {
     const recording = {
       id: `mock-recording-${store.recordings.length + 1}`,
@@ -177,16 +169,10 @@ export async function mockRequest(path, options = {}) {
 
   if (/^\/analysis\/[^/]+\/run$/.test(pathname)) return { queued: true };
   if (/^\/analysis\/[^/]+$/.test(pathname)) {
-    return {
-      accuracy_percent: 82,
-      average_deviation_cents: 18,
-      sections: []
-    };
+    return { accuracy_percent: 82, average_deviation_cents: 18, sections: [] };
   }
 
-  if (["/models/whisper/", "/cache/"].some((prefix) => pathname.startsWith(prefix))) {
-    return { ok: true };
-  }
+  if (["/models/whisper/", "/cache/"].some((prefix) => pathname.startsWith(prefix))) return { ok: true };
 
   throw new Error(`Mock API route is not implemented: ${method} ${pathname}`);
 }

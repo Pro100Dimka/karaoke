@@ -2,10 +2,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { formatBytes } from "../src/pages/Settings/screens/memory/format.js";
-import {
-  clamp,
-  normalizePreset
-} from "../src/pages/Karaoke/components/console/utils.js";
+import { clamp, normalizePreset } from "../src/pages/Karaoke/components/console/utils.js";
 
 let importId = 0;
 const importUtility = (name) =>
@@ -14,10 +11,7 @@ const importUtility = (name) =>
 beforeEach(() => {
   localStorage.clear();
   delete window.electronAPI;
-  Object.defineProperty(navigator, "clipboard", {
-    configurable: true,
-    value: undefined
-  });
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
   delete document.execCommand;
 });
 afterEach(() => vi.restoreAllMocks());
@@ -33,10 +27,7 @@ describe("audio and UI preferences", () => {
         expect(getAudioPreferences()).toEqual(DEFAULT_AUDIO_PREFERENCES);
         localStorage.setItem(
           "karaoke-audio-preferences",
-          JSON.stringify({
-            monitorInputDeviceId: "mic",
-            monitorOutputDeviceId: ""
-          })
+          JSON.stringify({ monitorInputDeviceId: "mic", monitorOutputDeviceId: "" })
         );
         expect(getAudioPreferences()).toEqual({
           monitorInputDeviceId: "mic",
@@ -77,9 +68,7 @@ describe("audio and UI preferences", () => {
       radio: "karaoke-radio",
       settings: "karaoke-settings-view"
     });
-    localStorage.setItem(
-      UI_PREFERENCE_STORAGE.karaoke,
-      JSON.stringify({ volume: 0.7 })
+    localStorage.setItem( UI_PREFERENCE_STORAGE.karaoke, JSON.stringify({ volume: 0.7 })
     );
     const api = {
       getUiPreferences: vi.fn().mockResolvedValue({
@@ -90,12 +79,9 @@ describe("audio and UI preferences", () => {
       updateUiPreferences: vi.fn().mockResolvedValue({})
     };
     await hydrateUiPreferences(api);
-    expect(
-      JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.audio))
+    expect( JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.audio))
     ).toEqual({ monitorInputDeviceId: "remote-mic" });
-    expect(api.updateUiPreferences).toHaveBeenCalledWith("karaoke", {
-      volume: 0.7
-    });
+    expect(api.updateUiPreferences).toHaveBeenCalledWith("karaoke", { volume: 0.7 });
     expect(api.updateUiPreferences).toHaveBeenCalledTimes(1);
 
     api.getUiPreferences.mockResolvedValueOnce(undefined);
@@ -104,15 +90,11 @@ describe("audio and UI preferences", () => {
     callable.invalid = true;
     api.getUiPreferences.mockResolvedValueOnce({ audio: callable });
     await hydrateUiPreferences(api);
-    expect(
-      JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.audio))
-    ).toEqual({
-      monitorInputDeviceId: "remote-mic"
-    });
+    expect( JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.audio))
+    ).toEqual({ monitorInputDeviceId: "remote-mic" });
     api.getUiPreferences.mockResolvedValueOnce({ audio: "x" });
     await hydrateUiPreferences(api);
-    expect(
-      JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.audio))
+    expect( JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.audio))
     ).toEqual({ monitorInputDeviceId: "remote-mic" });
   });
 
@@ -122,9 +104,7 @@ describe("audio and UI preferences", () => {
     const api = {
       updateUiPreferences: vi
         .fn()
-        .mockReturnValueOnce(new Promise((resolve) => {
-          releaseFirst = resolve;
-        }))
+        .mockReturnValueOnce(new Promise((resolve) => { releaseFirst = resolve; }))
         .mockResolvedValueOnce({})
     };
     persistUiPreferences(api, "settings", { tab: "audio" });
@@ -143,15 +123,10 @@ describe("audio and UI preferences", () => {
   test("persists known namespaces and still sends unknown ones", async () => {
     const { persistUiPreferences, UI_PREFERENCE_STORAGE } =
       await importUtility("ui-preferences");
-    const api = {
-      updateUiPreferences: vi.fn().mockRejectedValue(new Error("optional"))
-    };
+    const api = { updateUiPreferences: vi.fn().mockRejectedValue(new Error("optional")) };
     const setItem = vi.spyOn(Storage.prototype, "setItem");
-    expect(persistUiPreferences(api, "settings", { tab: "audio" })).toEqual({
-      tab: "audio"
-    });
-    expect(
-      JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.settings))
+    expect(persistUiPreferences(api, "settings", { tab: "audio" })).toEqual({ tab: "audio" });
+    expect( JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.settings))
     ).toEqual({ tab: "audio" });
     persistUiPreferences(api, "future", { enabled: true });
     await Promise.resolve();
@@ -173,14 +148,9 @@ describe("clipboard fallbacks", () => {
 
   test("falls back from Electron to the browser clipboard", async () => {
     const { copyText } = await importUtility("clipboard");
-    window.electronAPI = {
-      copyText: vi.fn().mockRejectedValue(new Error("ipc unavailable"))
-    };
+    window.electronAPI = { copyText: vi.fn().mockRejectedValue(new Error("ipc unavailable")) };
     const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: { writeText }
-    });
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     expect(await copyText("text")).toBe(true);
     expect(writeText).toHaveBeenCalledWith("text");
   });
@@ -196,17 +166,14 @@ describe("clipboard fallbacks", () => {
     expect(await copyText("legacy")).toBe(true);
     expect(document.execCommand).toHaveBeenCalledWith("copy");
     expect(document.querySelector("textarea")).toBeNull();
-    const textarea = createElement.mock.results.find(
-      ({ value }) => value?.tagName === "TEXTAREA"
+    const textarea = createElement.mock.results.find( ({ value }) => value?.tagName === "TEXTAREA"
     ).value;
     expect(textarea.readOnly).toBe(true);
     expect(textarea.style.position).toBe("fixed");
     expect(textarea.style.opacity).toBe("0");
     expect(textarea.style.pointerEvents).toBe("none");
 
-    document.execCommand.mockImplementation(() => {
-      throw new Error("blocked");
-    });
+    document.execCommand.mockImplementation(() => { throw new Error("blocked"); });
     expect(await copyText("blocked")).toBe(false);
     expect(document.querySelector("textarea")).toBeNull();
   });
@@ -214,10 +181,7 @@ describe("clipboard fallbacks", () => {
   test("legacy clipboard fallback is unavailable without a document", async () => {
     const { copyText } = await importUtility("clipboard");
     const descriptor = Object.getOwnPropertyDescriptor(globalThis, "document");
-    Object.defineProperty(globalThis, "document", {
-      configurable: true,
-      value: undefined
-    });
+    Object.defineProperty(globalThis, "document", { configurable: true, value: undefined });
     expect(await copyText("text")).toBe(false);
     Object.defineProperty(globalThis, "document", descriptor);
   });
@@ -242,15 +206,7 @@ describe("small formatting contracts", () => {
     expect(clamp(12, 0, 10)).toBe(10);
     expect(clamp(-1, 0, 10)).toBe(0);
     expect(normalizePreset([1, 2, 3, 4, 5])).toEqual([1, 2, 3, 4, 5, 0]);
-    expect(
-      normalizePreset({
-        id: 1,
-        label: 2,
-        symbol: 3,
-        echo: 4,
-        reverb: 5,
-        delay: 6
-      })
+    expect( normalizePreset({ id: 1, label: 2, symbol: 3, echo: 4, reverb: 5, delay: 6 })
     ).toEqual([1, 2, 3, 4, 5, 6]);
     expect(normalizePreset(null)).toEqual([
       undefined,

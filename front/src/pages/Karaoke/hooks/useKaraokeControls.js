@@ -28,8 +28,7 @@ export default function useKaraokeControls({ autoHideEnabled = true } = {}) {
     if (!autoHideEnabled) return undefined;
 
     const watcher = window.setInterval(() => {
-      setControlsVisible(
-        Date.now() - lastActivityRef.current < CONTROLS_VISIBLE_MS
+      setControlsVisible( Date.now() - lastActivityRef.current < CONTROLS_VISIBLE_MS
       );
     }, VISIBILITY_CHECK_MS);
 
@@ -46,19 +45,12 @@ export default function useKaraokeControls({ autoHideEnabled = true } = {}) {
     [showControls]
   );
 
-  useEffect(() => {
-    showControls();
-  }, [autoHideEnabled, showControls]);
+  useEffect(() => { showControls(); }, [autoHideEnabled, showControls]);
 
   const revealControls = useCallback(() => {
     if (!autoHideEnabled) return;
     showControls();
   }, [autoHideEnabled, showControls]);
 
-  return {
-    controlsVisible,
-    hideControls,
-    revealControls,
-    showControls
-  };
+  return { controlsVisible, hideControls, revealControls, showControls };
 }

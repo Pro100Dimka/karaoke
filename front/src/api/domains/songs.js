@@ -1,9 +1,4 @@
-import {
-  createFileUrl,
-  encodePathSegment,
-  request,
-  requestBlob
-} from "../core";
+import { createFileUrl, encodePathSegment, request, requestBlob } from "../core";
 import { normalizeSong, normalizeSongList } from "../normalizers";
 
 export const songsApi = {
@@ -17,10 +12,7 @@ export const songsApi = {
     return request("/songs", { method: "POST", body: form, timeoutMs: 5 * 60_000 });
   },
   updateSong: (id, patch) =>
-    request(`/songs/${encodePathSegment(id)}`, {
-      method: "PATCH",
-      body: JSON.stringify(patch)
-    }),
+    request(`/songs/${encodePathSegment(id)}`, { method: "PATCH", body: JSON.stringify(patch) }),
   deleteSong: (id) =>
     request(`/songs/${encodePathSegment(id)}`, { method: "DELETE" }),
   processSong: (id) =>
@@ -58,10 +50,6 @@ export const songsApi = {
   importSongPackage: (blob, filename = "song.karaoke.zip") => {
     const form = new FormData();
     form.append("file", blob, filename);
-    return request("/songs/package/import", {
-      method: "POST",
-      body: form,
-      timeoutMs: 5 * 60_000
-    });
+    return request("/songs/package/import", { method: "POST", body: form, timeoutMs: 5 * 60_000 });
   }
 };

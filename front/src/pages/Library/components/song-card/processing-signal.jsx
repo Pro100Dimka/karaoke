@@ -16,9 +16,7 @@ const POINTS = (() => {
   const { length, start, min, max, variation } = WAVE_CONFIG;
   let value = start;
   return Array.from(
-    {
-      length
-    },
+    { length },
     () => {
       value += Math.floor(Math.random() * (variation * 2 + 1)) - variation;
       value = Math.max(min, Math.min(max, value));
@@ -57,9 +55,7 @@ export default function ProcessingSignal({ progress = 0, compact = false }) {
         width: "100%",
         "--processing-progress": `${normalized}%`
       }}
-      aria-label={translateSaved("Обработка: {0}%", {
-        0: rounded
-      })}
+      aria-label={translateSaved("Обработка: {0}%", { 0: rounded })}
       role="progressbar"
       aria-valuemin={0}
       aria-valuemax={100}

@@ -35,9 +35,7 @@ function AppFloatingControls({ onOpenSettings }) {
           size={28}
           label={
             error ||
-            t(isPlaying ? "radio.disable" : "radio.enable", {
-              station: station.name
-            })
+            t(isPlaying ? "radio.disable" : "radio.enable", { station: station.name })
           }
           onClick={toggle}
         />
@@ -86,29 +84,20 @@ export default function AppLayout() {
       window.removeEventListener("app:route-blackout", handleRouteBlackout);
   }, []);
 
-  const openSettings = useCallback(() => {
-    setSongSettingsId(null);
-    setSettingsOpen(true);
-  }, []);
+  const openSettings = useCallback(() => { setSongSettingsId(null); setSettingsOpen(true); }, []);
 
-  const closeSettings = useCallback(() => {
-    setSettingsOpen(false);
-  }, []);
+  const closeSettings = useCallback(() => { setSettingsOpen(false); }, []);
 
   const openSongSettings = useCallback((songId) => {
     setSettingsOpen(false);
     setSongSettingsId(songId || null);
   }, []);
 
-  const closeSongSettings = useCallback(() => {
-    setSongSettingsId(null);
-  }, []);
+  const closeSongSettings = useCallback(() => { setSongSettingsId(null); }, []);
 
   useOnlineRoomNavigation();
 
-  useRequireOnlineName({
-    onMissingName: openSettings
-  });
+  useRequireOnlineName({ onMissingName: openSettings });
 
   return (
     <div

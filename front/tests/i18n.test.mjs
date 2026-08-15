@@ -4,11 +4,7 @@ import { test } from "vitest";
 
 import { translateSaved } from "../src/i18n/runtime.js";
 import sourceMessages from "../src/i18n/source-messages.json" with { type: "json" };
-import {
-  interpolate,
-  missingTranslationKeys,
-  translate
-} from "../src/i18n/translate.js";
+import { interpolate, missingTranslationKeys, translate } from "../src/i18n/translate.js";
 let languageImportId = 0;
 const loadLanguage = () =>
   import(
@@ -50,30 +46,18 @@ test("Ukrainian is the safe default locale", async () => {
 });
 
 test("translation resolves locale, interpolation and fallbacks", () => {
-  assert.equal(
-    translate(catalogs, "en", "greeting", { name: "Ada" }),
-    "Hello, Ada!"
+  assert.equal( translate(catalogs, "en", "greeting", { name: "Ada" }), "Hello, Ada!"
   );
-  assert.equal(
-    translate(catalogs, "de", "greeting", { name: "Olia" }),
-    "Hello from Ukraine, Olia!"
+  assert.equal( translate(catalogs, "de", "greeting", { name: "Olia" }), "Hello from Ukraine, Olia!"
   );
   assert.equal(translate(catalogs, "en", "ukFallback"), "Ukrainian fallback");
-  assert.equal(
-    translate(catalogs, "en", "ukFallback", {}, "English source"),
-    "Ukrainian fallback"
+  assert.equal( translate(catalogs, "en", "ukFallback", {}, "English source"), "Ukrainian fallback"
   );
-  assert.equal(
-    translate(catalogs, "ru", "ukFallback", {}, "Russian source"),
-    "Russian source"
+  assert.equal( translate(catalogs, "ru", "ukFallback", {}, "Russian source"), "Russian source"
   );
-  assert.equal(
-    translate(catalogs, "en", "missing", {}, "Fallback"),
-    "Fallback"
+  assert.equal( translate(catalogs, "en", "missing", {}, "Fallback"), "Fallback"
   );
-  assert.equal(
-    translate(catalogs, "ru", "missing", {}, "Russian source"),
-    "Russian source"
+  assert.equal( translate(catalogs, "ru", "missing", {}, "Russian source"), "Russian source"
   );
   assert.equal(translate(catalogs, "en", "missing"), "missing");
   assert.equal(interpolate("{known}/{unknown}", { known: 1 }), "1/{unknown}");
@@ -152,9 +136,7 @@ test("runtime translates Russian sources using the persisted language", () => {
   language = "ru";
   assert.equal(translateSaved(source), source);
   language = "uk";
-  assert.equal(
-    translateSaved("Неизвестно: {name}", { name: "X" }),
-    "Неизвестно: X"
+  assert.equal( translateSaved("Неизвестно: {name}", { name: "X" }), "Неизвестно: X"
   );
   globalThis.localStorage = original;
 });

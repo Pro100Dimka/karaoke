@@ -1,5 +1,4 @@
 /* @vitest-environment jsdom */
-import React from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -31,8 +30,7 @@ test("renders nothing only when all karaoke prerequisites are ready", () => {
 });
 
 test("prioritizes library errors and distinguishes a missing selected song", () => {
-  const { rerender } = render(
-    <KaraokeLoadState {...ready} songsError={new Error("offline")} />
+  const { rerender } = render( <KaraokeLoadState {...ready} songsError={new Error("offline")} />
   );
   expect(screen.getByText(/offline/)).toBeTruthy();
 

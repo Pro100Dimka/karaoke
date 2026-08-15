@@ -24,9 +24,7 @@ export function I18nProvider({ children }) {
     [language]
   );
 
-  useLayoutEffect(() => {
-    document.documentElement.lang = language;
-  }, [language]);
+  useLayoutEffect(() => { document.documentElement.lang = language; }, [language]);
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

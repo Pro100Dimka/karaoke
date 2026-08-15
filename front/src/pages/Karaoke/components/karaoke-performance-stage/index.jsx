@@ -67,9 +67,7 @@ export default function KaraokePerformanceStage(props) {
   const sceneVideoUrl = globalThis.electronAPI?.getSceneVideoUrl?.() || "";
   const sceneSeed = String(songId || "karaoke")
     .split("")
-    .reduce(
-      (seed, character) => (seed * 31 + character.charCodeAt(0)) % 997,
-      17
+    .reduce( (seed, character) => (seed * 31 + character.charCodeAt(0)) % 997, 17
     );
   const changeSceneVideoPosition = useCallback(() => {
     const video = sceneVideoRef.current;
@@ -89,9 +87,7 @@ export default function KaraokePerformanceStage(props) {
       setSceneVideoFading(false);
     }, 180);
   }, [changeSceneVideoPosition]);
-  useEffect(() => {
-    transitionSceneVideo();
-  }, [isPlaying, sceneVideoUrl, transitionSceneVideo]);
+  useEffect(() => { transitionSceneVideo(); }, [isPlaying, sceneVideoUrl, transitionSceneVideo]);
   useEffect(() => () => window.clearTimeout(sceneVideoTimerRef.current), []);
   return (
     <div

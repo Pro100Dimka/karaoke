@@ -1,12 +1,6 @@
 import FieldInput from "./field-input";
 
-export default function FieldList({
-  fields,
-  values,
-  onChange,
-  onBlur,
-  className = ""
-}) {
+export default function FieldList({ fields, values, onChange, onBlur, className = "" }) {
   return (
     <div className={className || undefined}>
       {fields.map((field) => (

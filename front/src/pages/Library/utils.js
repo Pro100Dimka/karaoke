@@ -16,13 +16,8 @@ export function formatEta(seconds) {
   const minutes = Math.floor(rounded / 60);
   const remainingSeconds = rounded % 60;
   return minutes
-    ? translateSaved("~{0} мин {1} сек", {
-        0: minutes,
-        1: remainingSeconds
-      })
-    : translateSaved("~{0} сек", {
-        0: remainingSeconds
-      });
+    ? translateSaved("~{0} мин {1} сек", { 0: minutes, 1: remainingSeconds })
+    : translateSaved("~{0} сек", { 0: remainingSeconds });
 }
 export function getProcessingProgress(status, song) {
   const raw = status?.progress_percent ?? song?.progress_percent ?? 0;
@@ -34,8 +29,7 @@ export function isProcessingActive(status) {
   return ACTIVE_PROCESSING_STATUSES.includes(status);
 }
 export function hasActiveSongProcessing(songs) {
-  return asArray(songs).some((song) =>
-    isProcessingActive(String(song?.status))
+  return asArray(songs).some((song) => isProcessingActive(String(song?.status))
   );
 }
 export function mergeSongProcessingStatus(songs, status) {
@@ -55,8 +49,7 @@ export function mergeSongProcessingStatus(songs, status) {
 }
 export function getLocalVisibleSongs(songs, hiddenSongIds) {
   const hidden = hiddenSongIds instanceof Set ? hiddenSongIds : new Set();
-  return asArray(songs).filter(
-    (song) => song && typeof song === "object" && !hidden.has(song.id)
+  return asArray(songs).filter( (song) => song && typeof song === "object" && !hidden.has(song.id)
   );
 }
 export function resolveVisibleSongs({ localSongs, room, roomSongs }) {
@@ -83,9 +76,5 @@ export function countReadySongs(songs) {
 }
 export function getSongCardState(song) {
   const status = typeof song?.status === "string" ? song.status : "pending";
-  return {
-    status,
-    isWorking: isProcessingActive(status),
-    isReady: status === "done"
-  };
+  return { status, isWorking: isProcessingActive(status), isReady: status === "done" };
 }

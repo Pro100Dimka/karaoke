@@ -61,22 +61,11 @@ export default function usePitchDetection({
           };
           const candidates =
             monitorInputDeviceId && monitorInputDeviceId !== "default"
-              ? [
-                  {
-                    ...baseAudio,
-                    deviceId: {
-                      exact: monitorInputDeviceId
-                    }
-                  },
-                  baseAudio
-                ]
+              ? [ { ...baseAudio, deviceId: { exact: monitorInputDeviceId } }, baseAudio ]
               : [baseAudio];
           for (const audio of candidates) {
             try {
-              const candidateStream = await navigator.mediaDevices.getUserMedia(
-                {
-                  audio
-                }
+              const candidateStream = await navigator.mediaDevices.getUserMedia( { audio }
               );
               if (!candidateStream) continue;
               stream = candidateStream;
@@ -91,9 +80,7 @@ export default function usePitchDetection({
         if (!context || context.state === "closed") {
           const AudioContextClass =
             window.AudioContext || window.webkitAudioContext;
-          context = new AudioContextClass({
-            latencyHint: "interactive"
-          });
+          context = new AudioContextClass({ latencyHint: "interactive" });
           ownsContext = true;
         }
         if (cancelled) {
@@ -103,9 +90,7 @@ export default function usePitchDetection({
           if (ownsContext) await closeAudioContext(context);
           return;
         }
-        if (context.state === "suspended") {
-          await context.resume();
-        }
+        if (context.state === "suspended") await context.resume();
         if (cancelled) return;
         const analyser = context.createAnalyser();
         analyser.fftSize = 2048;
@@ -117,16 +102,12 @@ export default function usePitchDetection({
           if (cancelled) return;
           if (timestamp - lastMeasurementAt >= 35) {
             lastMeasurementAt = timestamp;
-            const detectedMidi = detectMidiFromAnalyser(
-              analyser,
-              buffer,
-              context.sampleRate
+            const detectedMidi = detectMidiFromAnalyser( analyser, buffer, context.sampleRate
             );
             if (Number.isFinite(detectedMidi)) {
               recentMidi.push(detectedMidi);
               if (recentMidi.length > 3) recentMidi.shift();
-              const sortedMidi = [...recentMidi].sort(
-                (left, right) => left - right
+              const sortedMidi = [...recentMidi].sort( (left, right) => left - right
               );
               const medianMidi = sortedMidi[Math.floor(sortedMidi.length / 2)];
               targetMidi = Number.isFinite(targetMidi)
@@ -174,9 +155,7 @@ export default function usePitchDetection({
             // A zero rest start only repeats the already-rendered reset state.
             // Stryker disable next-line ConditionalExpression
             if (restStartedAt) {
-              const restProgress = Math.min(
-                1,
-                (timestamp - restStartedAt) / 380
+              const restProgress = Math.min( 1, (timestamp - restStartedAt) / 380
               );
               if (timestamp - lastRenderAt >= 32) {
                 setPitchRestProgress(restProgress);
@@ -215,10 +194,5 @@ export default function usePitchDetection({
       if (ownsContext) closeAudioContextQuietly(context);
     };
   }, [browserMonitorRef, isPlaying, monitorInputDeviceId, monitoringEnabled]);
-  return {
-    sungMidi,
-    isPitchDetected,
-    isPitchAttacking,
-    pitchRestProgress
-  };
+  return { sungMidi, isPitchDetected, isPitchAttacking, pitchRestProgress };
 }

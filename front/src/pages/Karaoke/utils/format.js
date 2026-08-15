@@ -7,9 +7,7 @@ export function formatTime(seconds) {
 }
 
 export function midiToWesternNote(midi) {
-  if (!Number.isFinite(midi)) {
-    return "—";
-  }
+  if (!Number.isFinite(midi)) return "—";
 
   const names = [
     "C",

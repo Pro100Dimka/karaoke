@@ -1,13 +1,6 @@
 import { memo } from "react";
 import { translateSaved } from "../../../../i18n/runtime";
-import {
-  Badge,
-  Button,
-  Card,
-  IconButton,
-  Stack,
-  Typography
-} from "../../../../theme/ui";
+import { Badge, Button, Card, IconButton, Stack, Typography } from "../../../../theme/ui";
 import { getSongCardState } from "../../utils";
 import ProcessingSignal from "./processing-signal";
 import SongCardArtwork from "./song-card-artwork";
@@ -38,13 +31,7 @@ const SongStatusBadge = ({ status }) => {
     </Badge>
   );
 };
-function LibrarySongCard({
-  cardIndex,
-  onOpenKaraoke,
-  onOpenProcessing,
-  song,
-  ...props
-}) {
+function LibrarySongCard({ cardIndex, onOpenKaraoke, onOpenProcessing, song, ...props }) {
   const {
     artist,
     difficulty_override: difficulty,
@@ -55,12 +42,7 @@ function LibrarySongCard({
     title
   } = song;
   const { isWorking, isReady } = getSongCardState(song);
-  const actions = getSongActions({
-    ...props,
-    isReady,
-    isWorking,
-    song
-  });
+  const actions = getSongActions({ ...props, isReady, isWorking, song });
   const titleDetails = [title, artist];
   const metadata = [
     formatSongKey(songKey),
@@ -89,18 +71,14 @@ function LibrarySongCard({
       tabIndex={isReady ? 0 : undefined}
       aria-label={
         isReady
-          ? translateSaved("Открыть {0} в караоке", {
-              0: title
-            })
+          ? translateSaved("Открыть {0} в караоке", { 0: title })
           : undefined
       }
     >
       <SongCardArtwork cardIndex={cardIndex} song={song} />
       <Stack
         className="library-song-card-main"
-        sx={{
-          flex: "1 1 0"
-        }}
+        sx={{ flex: "1 1 0" }}
       >
         <Stack
           className="library-song-card-heading"
@@ -117,9 +95,7 @@ function LibrarySongCard({
           <Button
             type="button"
             variant="ghost"
-            style={{
-              width: "100%"
-            }}
+            style={{ width: "100%" }}
             className="library-song-card-progress"
             onClick={() => onOpenProcessing(song)}
           >
@@ -132,15 +108,11 @@ function LibrarySongCard({
           justify="space-between"
         >
           <div
-            style={{
-              width: "100%"
-            }}
+            style={{ width: "100%" }}
           >
             <Typography
               className="library-song-card-meta"
-              sx={{
-                padding: 0
-              }}
+              sx={{ padding: 0 }}
             >
               <TextItems items={metadata} />
             </Typography>
@@ -151,14 +123,7 @@ function LibrarySongCard({
             gap="0.5rem"
           >
             {actions.map(
-              ([
-                Icon,
-                label,
-                variant,
-                onClick,
-                size,
-                { className = "", disabled = false } = {}
-              ]) => (
+              ([ Icon, label, variant, onClick, size, { className = "", disabled = false } = {} ]) => (
                 <IconButton
                   key={label}
                   variant={variant}
