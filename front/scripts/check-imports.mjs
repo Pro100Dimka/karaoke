@@ -23,8 +23,7 @@ function resolveImport(sourceFile, specifier) {
 }
 
 const errors = [];
-for (const file of walk(ROOT).filter((path) => SOURCE_EXTENSIONS.includes(extname(path))
-)) {
+for (const file of walk(ROOT).filter((path) => SOURCE_EXTENSIONS.includes(extname(path)))) {
   const source = readFileSync(file, "utf8");
   for (const match of source.matchAll(IMPORT_PATTERN)) {
     if (!resolveImport(file, match[2])) errors.push(`${file}: unresolved import ${match[2]}`);

@@ -63,7 +63,7 @@ export function getSongActions({
           () => onOpenSettings(song.id),
           14
         ],
-        [ FolderOpen, translateSaved("Открыть папку"), "outline", () => onOpenFolder(song), 14 ],
+        [FolderOpen, translateSaved("Открыть папку"), "outline", () => onOpenFolder(song), 14],
         isReady && [
           RotateCcw,
           translateSaved("Переобработать MIDI"),
@@ -71,7 +71,7 @@ export function getSongActions({
           () => onReprocess(song),
           14
         ],
-        [ Trash2, translateSaved("Удалить песню"), "danger", () => onDelete(song), 15 ]
+        [Trash2, translateSaved("Удалить песню"), "danger", () => onDelete(song), 15]
       ]
     : [];
   return [primaryAction, ...managementActions].filter(Boolean);

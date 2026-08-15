@@ -9,9 +9,7 @@ export default function Button({
   unstyled = false,
   ...props
 }) {
-  const buttonClassName = unstyled
-    ? className
-    : `btn btn-${variant} ${className}`.trim();
+  const buttonClassName = unstyled ? className : `btn btn-${variant} ${className}`.trim();
 
   return (
     <button type={type} className={buttonClassName || undefined} {...props}>

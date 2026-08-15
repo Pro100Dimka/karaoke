@@ -22,16 +22,14 @@ function resolveImport(fromFile, specifier) {
     ...extensions.map((extension) => path.join(base, `index${extension}`))
   ];
   return (
-    candidates.find( (candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile()
-    ) ?? null
+    candidates.find((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile()) ??
+    null
   );
 }
 
-const files = walk(srcRoot).filter((file) => extensions.includes(path.extname(file))
-);
+const files = walk(srcRoot).filter((file) => extensions.includes(path.extname(file)));
 const graph = new Map(files.map((file) => [file, []]));
-const importPattern =
-  /(?:import|export)\s+(?:[^"']*?\s+from\s+)?["']([^"']+)["']/g;
+const importPattern = /(?:import|export)\s+(?:[^"']*?\s+from\s+)?["']([^"']+)["']/g;
 
 for (const file of files) {
   const source = fs.readFileSync(file, "utf8");
@@ -49,12 +47,10 @@ const cycles = new Set();
 function visit(file) {
   if (visiting.has(file)) {
     const start = stack.indexOf(file);
-    const cycle = [...stack.slice(start), file].map((item) => path.relative(root, item)
-    );
+    const cycle = [...stack.slice(start), file].map((item) => path.relative(root, item));
     const rotations = cycle
       .slice(0, -1)
-      .map((_, index, items) => [...items.slice(index), ...items.slice(0, index)].join(" -> ")
-      );
+      .map((_, index, items) => [...items.slice(index), ...items.slice(0, index)].join(" -> "));
     cycles.add(rotations.sort()[0]);
     return;
   }

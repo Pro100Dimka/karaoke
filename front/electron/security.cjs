@@ -19,9 +19,7 @@ function isAllowedRendererUrl(value, { isDev, devOrigin, packagedIndexUrl }) {
   if (isDev) return url.origin === devOrigin;
 
   if (url.protocol !== "file:") return false;
-  return (
-    url.href === packagedIndexUrl || url.href.startsWith(`${packagedIndexUrl}#`)
-  );
+  return url.href === packagedIndexUrl || url.href.startsWith(`${packagedIndexUrl}#`);
 }
 
 function isAllowedPermissionRequest({

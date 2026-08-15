@@ -1,13 +1,6 @@
 import { translateSaved } from "../i18n/runtime";
 
-const SONG_STATUSES = [
-  "queued",
-  "processing",
-  "cancelling",
-  "cancelled",
-  "done",
-  "error"
-];
+const SONG_STATUSES = ["queued", "processing", "cancelling", "cancelled", "done", "error"];
 export function clampNumber(value, min, max, fallback = min) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
@@ -20,8 +13,7 @@ export function normalizeString(value, fallback = "") {
 }
 export function normalizeBoolean(value, fallback = false) {
   if (typeof value === "boolean") return value;
-  if (typeof value === "number")
-    return Number.isFinite(value) ? value !== 0 : fallback;
+  if (typeof value === "number") return Number.isFinite(value) ? value !== 0 : fallback;
   if (typeof value === "string") {
     const normalized = value.trim().toLowerCase();
     if (["true", "1", "yes", "on"].includes(normalized)) return true;

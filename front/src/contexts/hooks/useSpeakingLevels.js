@@ -37,7 +37,11 @@ export default function useSpeakingLevels() {
         return;
       }
 
-      setSpeakingLevels((levels) => { const next = { ...levels }; delete next[key]; return next; });
+      setSpeakingLevels((levels) => {
+        const next = { ...levels };
+        delete next[key];
+        return next;
+      });
     },
     // Stryker disable next-line ArrayDeclaration: React state setters are stable.
     []
@@ -61,8 +65,7 @@ export default function useSpeakingLevels() {
 
   const getAudioContext = useCallback(
     () => {
-      const AudioContextClass =
-        globalThis.AudioContext || globalThis.webkitAudioContext;
+      const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
       if (audioContextRef.current?.state === "closed") audioContextRef.current = null;
       if (!audioContextRef.current) {
         try {
@@ -139,10 +142,7 @@ export default function useSpeakingLevels() {
         return;
       }
       const intervalId = globalThis.setInterval(() => {
-        if (
-          liveTrack.readyState !== "live" ||
-          audioContext.state === "closed"
-        ) {
+        if (liveTrack.readyState !== "live" || audioContext.state === "closed") {
           stopSpeakingMeter(key);
           return;
         }
@@ -163,8 +163,7 @@ export default function useSpeakingLevels() {
         smoothed = smoothed * 0.68 + normalizedLevel * 0.32;
         const rounded = Number(smoothed.toFixed(2));
         const published = rounded >= 0.04 ? rounded : 0;
-        if (Math.abs(published - lastPublished) * 100 < MIN_LEVEL_DELTA_PERCENT)
-          return;
+        if (Math.abs(published - lastPublished) * 100 < MIN_LEVEL_DELTA_PERCENT) return;
         lastPublished = published;
         publishLevel(key, published);
       }, METER_INTERVAL_MS);

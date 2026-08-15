@@ -9,8 +9,7 @@ import { HISTORY_ACTIONS, HISTORY_COLUMNS, RECORDING_STATUSES } from "./config";
 
 export default function History() {
   const { language, t } = useI18n();
-  const { data: history, error } = usePolling( api.getHistory, POLLING_INTERVALS.history, []
-  );
+  const { data: history, error } = usePolling(api.getHistory, POLLING_INTERVALS.history, []);
 
   return (
     <Stack gap={1} className="settings-table-screen">
@@ -24,14 +23,10 @@ export default function History() {
 
       <div className="settings-table-wrap">
         <Table
-          columns={HISTORY_COLUMNS.map((key) => [
-            key,
-            t(`settings.history.${key}`)
-          ])}
+          columns={HISTORY_COLUMNS.map((key) => [key, t(`settings.history.${key}`)])}
           data={history ?? []}
           getRowKey={(item, index) =>
-            item.id ??
-            `${item.song_title}-${item.kind}-${item.timestamp ?? index}`
+            item.id ?? `${item.song_title}-${item.kind}-${item.timestamp ?? index}`
           }
           renderRow={(item) => getHistoryRow(item, t, language)}
           emptyText={t("settings.history.empty")}
@@ -57,8 +52,7 @@ const formatTimestamp = (value, language) => {
     : date.toLocaleString({ uk: "uk-UA", ru: "ru-RU", en: "en-US" }[language]);
 };
 
-const getHistoryRow = ( { song_title, kind, status, duration_seconds, timestamp }, t, language
-) => [
+const getHistoryRow = ({ song_title, kind, status, duration_seconds, timestamp }, t, language) => [
   [song_title ?? "—", "history-song"],
   [
     HISTORY_ACTIONS.includes(kind) ? t(`settings.history.${kind}`) : (kind ?? "—"),
@@ -82,9 +76,7 @@ const PROCESSING_STATUSES = {
 const renderStatus = (kind, status, t) => {
   if (kind === "processing") {
     const tone = PROCESSING_STATUSES[status] ?? "default";
-    const label = status
-      ? t(`status.${status}`, {}, status)
-      : t("status.unknown");
+    const label = status ? t(`status.${status}`, {}, status) : t("status.unknown");
 
     return (
       <Chip size="sm" tone={tone}>
@@ -95,9 +87,7 @@ const renderStatus = (kind, status, t) => {
 
   return (
     <Typography as="span" variant="body2" tone="muted">
-      {RECORDING_STATUSES.includes(status)
-        ? t(`settings.history.${status}`)
-        : (status ?? "—")}
+      {RECORDING_STATUSES.includes(status) ? t(`settings.history.${status}`) : (status ?? "—")}
     </Typography>
   );
 };

@@ -1,6 +1,5 @@
 export function playParticipantJoinedSound() {
-  const AudioContextClass =
-    globalThis.AudioContext || globalThis.webkitAudioContext;
+  const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
   if (!AudioContextClass) return;
   try {
     const context = new AudioContextClass({ latencyHint: "interactive" });

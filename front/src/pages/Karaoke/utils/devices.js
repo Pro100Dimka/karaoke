@@ -10,23 +10,17 @@ function mapDeviceOptions(devices, getValue, fallbackLabel) {
       label: device.name || device.label || fallbackLabel
     }))
     .filter((option) => {
-      if (
-        option.value == null ||
-        option.value === "" ||
-        seen.has(option.value)
-      ) {
+      if (option.value == null || option.value === "" || seen.has(option.value)) {
         return false;
       }
       seen.add(option.value);
       return true;
     });
 }
-export function createIndexedDeviceOptions( devices, defaultLabel = translateSaved("По умолчанию")
-) {
+export function createIndexedDeviceOptions(devices, defaultLabel = translateSaved("По умолчанию")) {
   return [
     { value: "", label: defaultLabel },
-    ...mapDeviceOptions( devices, (device) => device.index, translateSaved("Устройство")
-    )
+    ...mapDeviceOptions(devices, (device) => device.index, translateSaved("Устройство"))
   ];
 }
 export function createBrowserDeviceOptions(

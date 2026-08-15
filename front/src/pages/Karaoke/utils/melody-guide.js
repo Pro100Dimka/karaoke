@@ -26,7 +26,8 @@ export function getMelodyGuideState({ notes, position, keyShift = 0, volume = 0 
 
   const midi = Number(note.midi) + (Number(keyShift) || 0);
   const frequency = midiToFrequency(midi);
-  if (!Number.isFinite(frequency)) return { active: false, note: null, frequency: null, gain: 0.0001 };
+  if (!Number.isFinite(frequency))
+    return { active: false, note: null, frequency: null, gain: 0.0001 };
 
   return { active: true, note, frequency, gain: 0.3 * safeVolume ** 1.65 };
 }

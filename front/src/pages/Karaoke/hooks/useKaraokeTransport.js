@@ -12,7 +12,9 @@ const MISSING_RECORDING_ID = "Backend не вернул идентификато
 const PENDING_RECORDING_KEY = "karaoke-pending-recording-session";
 const pendingRecordingId = () => readJsonStorage(PENDING_RECORDING_KEY, {}).id;
 const rememberPending = (id) => writeJsonStorage(PENDING_RECORDING_KEY, { id });
-const forgetPending = (id) => { if (pendingRecordingId() === id) writeJsonStorage(PENDING_RECORDING_KEY, {}); };
+const forgetPending = (id) => {
+  if (pendingRecordingId() === id) writeJsonStorage(PENDING_RECORDING_KEY, {});
+};
 async function finalizeRecording(id) {
   try {
     const recording = await api.stopRecording(id);
@@ -61,16 +63,19 @@ export default function useKaraokeTransport({
   useEffect(() => {
     beginOperation();
     const pending = pendingRecordingId();
-    if (pending) finalizeRecording(pending).then(({ recording }) => {
-      if (recording?.id) setAnalysisRecordingId(recording.id);
-    });
+    if (pending)
+      finalizeRecording(pending).then(({ recording }) => {
+        if (recording?.id) setAnalysisRecordingId(recording.id);
+      });
     return () => {
       const id = sessionRef.current;
       if (id) void finalizeRecording(id);
     };
   }, [song?.id, setAnalysisRecordingId]);
 
-  useEffect(() => { sessionRef.current = recordingSessionId; }, [recordingSessionId]);
+  useEffect(() => {
+    sessionRef.current = recordingSessionId;
+  }, [recordingSessionId]);
 
   const clearSession = (id) => {
     if (sessionRef.current !== id) return;
@@ -149,7 +154,9 @@ export default function useKaraokeTransport({
       return true;
     }
 
-    const melodyStart = Promise.resolve().then(startMelodyGuide).catch(() => {});
+    const melodyStart = Promise.resolve()
+      .then(startMelodyGuide)
+      .catch(() => {});
     syncSecondaryMedia(instrumental.currentTime, true);
     instrumental.volume = playbackGain(musicVolume);
     if (vocals) vocals.volume = playbackGain(vocalVolume);
@@ -253,7 +260,15 @@ export default function useKaraokeTransport({
     Promise.resolve(action && action()).catch((error) =>
       setRecordingError(formatError("Не удалось выполнить команду комнаты: {0}", error))
     );
-  }, [instrumentalRef, roomCommand, seekToRef, setRecordingError, song?.id, stopRef, togglePlayRef]);
+  }, [
+    instrumentalRef,
+    roomCommand,
+    seekToRef,
+    setRecordingError,
+    song?.id,
+    stopRef,
+    togglePlayRef
+  ]);
 
   return { returnToLibrary, seekTo, skip, stop, togglePlay };
 }

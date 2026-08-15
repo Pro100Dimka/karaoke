@@ -2,13 +2,7 @@ import { Box, Stack } from "../../theme/ui";
 
 export default function ModalTitle({ icon: Icon, eyebrow, title, description, actions }) {
   return (
-    <Stack
-      direction="row"
-      align="center"
-      justify="space-between"
-      p="2rem"
-      gap="2rem"
-    >
+    <Stack direction="row" align="center" justify="space-between" p="2rem" gap="2rem">
       {Icon && (
         <Box
           sx={{
@@ -37,9 +31,7 @@ export default function ModalTitle({ icon: Icon, eyebrow, title, description, ac
       <Stack align="start">
         {eyebrow && <span className="modal-title__eyebrow">{eyebrow}</span>}
         <h1 className="modal-title__heading">{title}</h1>
-        {description && (
-          <p className="modal-title__description">{description}</p>
-        )}
+        {description && <p className="modal-title__description">{description}</p>}
       </Stack>
       {actions && <div className="modal-title__actions">{actions}</div>}
     </Stack>

@@ -11,9 +11,7 @@ const ROOM_NAVIGATION = {
 
 export function navigateRoomCommand(command, navigate) {
   const handler = ROOM_NAVIGATION[command?.type];
-  const target = Object.hasOwn(ROOM_NAVIGATION, command?.type)
-    ? handler(command)
-    : null;
+  const target = Object.hasOwn(ROOM_NAVIGATION, command?.type) ? handler(command) : null;
   if (target) navigate(...target);
 }
 
@@ -21,5 +19,7 @@ export function useOnlineRoomNavigation() {
   const navigate = useNavigate();
   const { roomCommand } = useOnlineRoom();
 
-  useEffect(() => { navigateRoomCommand(roomCommand, navigate); }, [navigate, roomCommand]);
+  useEffect(() => {
+    navigateRoomCommand(roomCommand, navigate);
+  }, [navigate, roomCommand]);
 }

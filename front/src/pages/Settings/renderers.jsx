@@ -3,8 +3,7 @@ import { Button, Progress, Stack, Typography } from "../../theme/ui";
 
 const buttonProps = (props = {}) => {
   const clean = { ...props };
-  ["label", "tooltip", "startIcon", "fieldSx"].forEach( (key) => delete clean[key]
-  );
+  ["label", "tooltip", "startIcon", "fieldSx"].forEach((key) => delete clean[key]);
   return clean;
 };
 
@@ -27,9 +26,7 @@ export const SETTINGS_RENDERERS = {
         >
           <Stack direction="row" align="center" justify="center" gap={0.5}>
             <Volume2 size={17} />
-            <span>
-              {pending ? field.pendingText : (field.idleText ?? field.label)}
-            </span>
+            <span>{pending ? field.pendingText : (field.idleText ?? field.label)}</span>
           </Stack>
         </Button>
       </Stack>

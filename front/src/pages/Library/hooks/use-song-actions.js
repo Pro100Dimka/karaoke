@@ -24,15 +24,21 @@ export default function useLibrarySongActions(props) {
       if (!song?.id || processingSongIdsRef.current.has(song.id)) return;
       processingSongIdsRef.current.add(song.id);
       try {
-        try { await action(song.id); }
-        catch (error) {
+        try {
+          await action(song.id);
+        } catch (error) {
           await notify(`${errorMessage}: ${getErrorMessage(error)}`);
           return;
         }
         setProcessingSong(song);
-        try { await onChanged?.(); }
-        catch (error) {
-          await notify(translateSaved("Операция выполнена, но список не обновился: {0}", { 0: getErrorMessage(error) }));
+        try {
+          await onChanged?.();
+        } catch (error) {
+          await notify(
+            translateSaved("Операция выполнена, но список не обновился: {0}", {
+              0: getErrorMessage(error)
+            })
+          );
         }
       } finally {
         processingSongIdsRef.current.delete(song.id);
@@ -52,28 +58,49 @@ export default function useLibrarySongActions(props) {
             translateSaved("Удалить песню?")
           );
         } catch (error) {
-          await notify(translateSaved("Не удалось подтвердить удаление: {0}", { 0: getErrorMessage(error) }));
+          await notify(
+            translateSaved("Не удалось подтвердить удаление: {0}", { 0: getErrorMessage(error) })
+          );
           return;
         }
         if (!confirmed) return;
         setHiddenSongIds((ids) => new Set(ids).add(song.id));
         if (recordingsSongId === song.id) setRecordingsSong(null);
         if (processingSongId === song.id) setProcessingSong(null);
-        try { await api.deleteSong(song.id); }
-        catch (error) {
-          setHiddenSongIds((ids) => { const next = new Set(ids); next.delete(song.id); return next; });
+        try {
+          await api.deleteSong(song.id);
+        } catch (error) {
+          setHiddenSongIds((ids) => {
+            const next = new Set(ids);
+            next.delete(song.id);
+            return next;
+          });
           await notify(translateSaved("Не удалось удалить: {0}", { 0: getErrorMessage(error) }));
           return;
         }
-        try { await onChanged?.(); }
-        catch (error) {
-          await notify(translateSaved("Песня удалена, но список не обновился: {0}", { 0: getErrorMessage(error) }));
+        try {
+          await onChanged?.();
+        } catch (error) {
+          await notify(
+            translateSaved("Песня удалена, но список не обновился: {0}", {
+              0: getErrorMessage(error)
+            })
+          );
         }
       } finally {
         deletingSongIdsRef.current.delete(song.id);
       }
     },
-    [confirmDialog, notify, onChanged, processingSongId, recordingsSongId, setHiddenSongIds, setProcessingSong, setRecordingsSong]
+    [
+      confirmDialog,
+      notify,
+      onChanged,
+      processingSongId,
+      recordingsSongId,
+      setHiddenSongIds,
+      setProcessingSong,
+      setRecordingsSong
+    ]
   );
   const processSong = useCallback(
     async (song) => {
@@ -119,15 +146,12 @@ export default function useLibrarySongActions(props) {
     async (song) => {
       const openFolder = window.electronAPI?.openSongFolder;
       if (!openFolder) {
-        await notify( translateSaved( "Открытие папки доступно только в установленном приложении." )
-        );
+        await notify(translateSaved("Открытие папки доступно только в установленном приложении."));
         return;
       }
       try {
         const errorMessage = await openFolder(getFolderPayload(song));
-        if (errorMessage)
-          await notify( errorMessage, translateSaved("Не удалось открыть папку")
-          );
+        if (errorMessage) await notify(errorMessage, translateSaved("Не удалось открыть папку"));
       } catch (error) {
         await notify(
           translateSaved("Не удалось открыть папку: {0}", { 0: getErrorMessage(error) }),

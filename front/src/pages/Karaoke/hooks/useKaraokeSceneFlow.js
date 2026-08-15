@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { setGlobalRouteBlackout } from "../../../utils/route-blackout";
 
 const waitForScene = (milliseconds) =>
-  new Promise((resolve) => { window.setTimeout(resolve, milliseconds); });
+  new Promise((resolve) => {
+    window.setTimeout(resolve, milliseconds);
+  });
 
 const waitForMediaReady = (element) => {
   if (!element || element.readyState >= 3) return Promise.resolve();
@@ -45,8 +47,7 @@ export default function useKaraokeSceneFlow({
   const [stageActionsVisible, setStageActionsVisible] = useState(true);
   const [sceneBlackout, setSceneBlackout] = useState(autoStartRequested);
   const [sceneIntroVisible, setSceneIntroVisible] = useState(false);
-  const [sceneTransitioning, setSceneTransitioning] =
-    useState(autoStartRequested);
+  const [sceneTransitioning, setSceneTransitioning] = useState(autoStartRequested);
 
   useEffect(() => {
     hasStartedPlaybackRef.current = false;
@@ -61,8 +62,7 @@ export default function useKaraokeSceneFlow({
 
   const revealStageActions = useCallback(() => {
     setStageActionsVisible(true);
-    if (stageActionTimerRef.current)
-      window.clearTimeout(stageActionTimerRef.current);
+    if (stageActionTimerRef.current) window.clearTimeout(stageActionTimerRef.current);
     stageActionTimerRef.current = window.setTimeout(() => {
       stageActionTimerRef.current = null;
       setStageActionsVisible(false);
@@ -72,17 +72,14 @@ export default function useKaraokeSceneFlow({
   useEffect(() => {
     revealStageActions();
     return () => {
-      if (stageActionTimerRef.current)
-        window.clearTimeout(stageActionTimerRef.current);
+      if (stageActionTimerRef.current) window.clearTimeout(stageActionTimerRef.current);
     };
   }, [revealStageActions]);
 
   const preloadSongMedia = useCallback(
     () =>
       Promise.all(
-        [instrumentalRef.current, vocalsRef.current]
-          .filter(Boolean)
-          .map(waitForMediaReady)
+        [instrumentalRef.current, vocalsRef.current].filter(Boolean).map(waitForMediaReady)
       ),
     [instrumentalRef, vocalsRef]
   );
@@ -127,7 +124,7 @@ export default function useKaraokeSceneFlow({
       if (started) hasStartedPlaybackRef.current = true;
       return started;
     });
-  }, [ isRadioPlaying, runIntroTransition, togglePlay, turnOffRadio ]);
+  }, [isRadioPlaying, runIntroTransition, togglePlay, turnOffRadio]);
 
   const handleTogglePlay = useCallback(async () => {
     if (isPlaying) {
@@ -143,14 +140,7 @@ export default function useKaraokeSceneFlow({
       return togglePlay({ forcePlaying: true });
     }
     return startSongWithIntro();
-  }, [
-    isPlaying,
-    setRecordingActive,
-    startSongWithIntro,
-    togglePlay,
-    turnOffRadio,
-    turnOnRadio
-  ]);
+  }, [isPlaying, setRecordingActive, startSongWithIntro, togglePlay, turnOffRadio, turnOnRadio]);
 
   const navigateToLibraryFromBlackout = useCallback(
     (analysisId = null) => {
@@ -188,12 +178,7 @@ export default function useKaraokeSceneFlow({
   }, [analysisRecordingIdRef, hideControls, navigateToLibraryFromBlackout, stop]);
 
   useEffect(() => {
-    if (
-      !autoStartRequested ||
-      !songId ||
-      autoStartedSongRef.current === songId
-    )
-      return undefined;
+    if (!autoStartRequested || !songId || autoStartedSongRef.current === songId) return undefined;
     let cancelled = false;
     let attempts = 0;
     let timerId = null;

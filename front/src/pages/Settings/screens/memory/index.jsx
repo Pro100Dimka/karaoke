@@ -12,12 +12,9 @@ import { MemoryActions, MemoryStats, OptimizeSong, runMemoryAction } from "./uti
 
 export default function MemoryManager() {
   const { alert: notify } = useAppDialog();
-  const { data: size, error } = usePolling( api.getCacheSize, POLLING_INTERVALS.memory, []
-  );
-  const { data: free } = usePolling( api.getFreeSpace, POLLING_INTERVALS.freeSpace, []
-  );
-  const { data: songs } = usePolling( api.listSongs, POLLING_INTERVALS.songs, []
-  );
+  const { data: size, error } = usePolling(api.getCacheSize, POLLING_INTERVALS.memory, []);
+  const { data: free } = usePolling(api.getFreeSpace, POLLING_INTERVALS.freeSpace, []);
+  const { data: songs } = usePolling(api.listSongs, POLLING_INTERVALS.songs, []);
   const [optimizeTarget, setOptimizeTarget] = useState("");
   const optimizeOptions = buildOptimizeOptions(songs ?? []);
   const handleOptimize = async () => {
@@ -31,15 +28,10 @@ export default function MemoryManager() {
   };
   return (
     <Stack gap={1.4} className="settings-memory-screen">
-      <Typography variant="h3">
-        {translateSaved("Управление памятью")}
-      </Typography>
+      <Typography variant="h3">{translateSaved("Управление памятью")}</Typography>
 
       {error && (
-        <Typography
-          variant="body2"
-          sx={{ color: "var(--ui-danger)" }}
-        >
+        <Typography variant="body2" sx={{ color: "var(--ui-danger)" }}>
           {getErrorMessage(error)}
         </Typography>
       )}

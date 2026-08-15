@@ -14,7 +14,9 @@ import { hydrateUiPreferences } from "../utils/ui-preferences";
 
 const ICONS = { dark: darkIcon, green: greenIcon, light: lightIcon, violet: violetIcon };
 const sleep = (ms) =>
-  new Promise((resolve) => { setTimeout(resolve, ms); });
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 export default function BackendBootLoader({ children }) {
   const [ready, setReady] = useState(MOCK_API_ENABLED);
@@ -27,7 +29,10 @@ export default function BackendBootLoader({ children }) {
     const observer = new MutationObserver(() =>
       setTheme(document.documentElement.dataset.theme || getSavedTheme())
     );
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"]
+    });
     return () => observer.disconnect();
   }, []);
 
@@ -58,19 +63,9 @@ export default function BackendBootLoader({ children }) {
   return (
     <div className="backend-boot-loader" role="status" aria-live="polite">
       <div className="backend-boot-loader__aurora" aria-hidden="true" />
-      <svg
-        className="backend-boot-loader__logo"
-        viewBox="0 0 220 220"
-        aria-hidden="true"
-      >
+      <svg className="backend-boot-loader__logo" viewBox="0 0 220 220" aria-hidden="true">
         <defs>
-          <filter
-            id="backend-loader-glow"
-            x="-80%"
-            y="-80%"
-            width="260%"
-            height="260%"
-          >
+          <filter id="backend-loader-glow" x="-80%" y="-80%" width="260%" height="260%">
             <feGaussianBlur stdDeviation="7" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
@@ -78,16 +73,8 @@ export default function BackendBootLoader({ children }) {
             </feMerge>
           </filter>
           <radialGradient id="backend-loader-ring" cx="50%" cy="50%" r="50%">
-            <stop
-              offset="0"
-              stopColor="var(--color-primary-hover)"
-              stopOpacity=".95"
-            />
-            <stop
-              offset=".66"
-              stopColor="var(--color-primary)"
-              stopOpacity=".5"
-            />
+            <stop offset="0" stopColor="var(--color-primary-hover)" stopOpacity=".95" />
+            <stop offset=".66" stopColor="var(--color-primary)" stopOpacity=".5" />
             <stop offset="1" stopColor="var(--color-primary)" stopOpacity="0" />
           </radialGradient>
         </defs>

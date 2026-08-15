@@ -103,9 +103,9 @@ const pickFolder = async (_context, currentPath) => {
   return selectFolder(currentPath || undefined);
 };
 const STORAGE_FIELDS = [
-  [ "songs_folder", translateSaved("Песни"), translateSaved("Папка с библиотекой песен") ],
-  [ "ai_folder", translateSaved("AI-модели"), translateSaved("Папка с локальными AI-моделями") ],
-  [ "cache_folder", translateSaved("Кэш"), translateSaved("Папка временных файлов") ]
+  ["songs_folder", translateSaved("Песни"), translateSaved("Папка с библиотекой песен")],
+  ["ai_folder", translateSaved("AI-модели"), translateSaved("Папка с локальными AI-моделями")],
+  ["cache_folder", translateSaved("Кэш"), translateSaved("Папка временных файлов")]
 ].map(([name, label, tooltip]) =>
   FORM_FIELDS.folder(name, {
     label,
@@ -169,8 +169,7 @@ const PREFERENCE_FIELDS = [
     "monitorInputDeviceId",
     "browserInputs",
     translateSaved("Микрофон для проверки"),
-    translateSaved( "Отдельный микрофон только для браузерного индикатора уровня"
-    )
+    translateSaved("Отдельный микрофон только для браузерного индикатора уровня")
   ],
   [
     "monitorOutputDeviceId",
@@ -205,8 +204,7 @@ const AUDIO_SPECIAL_FIELDS = [
     {
       getValue: ({ audio }) => audio.states?.monitoringEnabled,
       getLevel: ({ audio }) => audio.states?.monitorLevel ?? 0,
-      isDisabled: ({ audio }) =>
-        audio.states?.saving || audio.states?.togglingMonitoring,
+      isDisabled: ({ audio }) => audio.states?.saving || audio.states?.togglingMonitoring,
       run: ({ audio }) => audio.actions?.toggleMonitoring?.()
     }
   ]
@@ -218,8 +216,7 @@ const AUDIO_SPECIAL_FIELDS = [
   tooltip,
   ...extra
 }));
-const [MICROPHONE_FIELD, OUTPUT_FIELD, ...ADVANCED_AUDIO_FIELDS] =
-  AUDIO_SELECT_FIELDS;
+const [MICROPHONE_FIELD, OUTPUT_FIELD, ...ADVANCED_AUDIO_FIELDS] = AUDIO_SELECT_FIELDS;
 const VOICE_VOLUME_FIELD = audioSlider("volume", {
   span: 5,
   label: translateSaved("Громкость голоса"),
@@ -275,9 +272,10 @@ export const SETTINGS = {
   ai: { label: translateSaved("Обработка"), icon: Cpu, fields: AI_FIELDS }
 };
 export const SERVICE_SCREENS = screens;
-export const SETTINGS_TABS = Object.entries(SETTINGS).map(
-  ([id, { label, icon }]) => ({ id, label, icon })
-);
-export const SCREEN_BY_ID = Object.fromEntries( screens.map((screen) => [screen.id, screen])
-);
+export const SETTINGS_TABS = Object.entries(SETTINGS).map(([id, { label, icon }]) => ({
+  id,
+  label,
+  icon
+}));
+export const SCREEN_BY_ID = Object.fromEntries(screens.map((screen) => [screen.id, screen]));
 export const EMPTY_BROWSER_DEVICES = Object.freeze({ inputs: [], outputs: [] });

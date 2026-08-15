@@ -18,8 +18,7 @@ export default function useRadioLifecycle({
 }) {
   useEffect(() => {
     const audio = audioRef.current;
-    if (enabled)
-      turnOnRef.current({ remember: false, analyse: true, fadeIn: true });
+    if (enabled) turnOnRef.current({ remember: false, analyse: true, fadeIn: true });
     return () => {
       playbackVersionRef.current = createVersion();
       cancelVolumeFade();
@@ -48,11 +47,7 @@ export default function useRadioLifecycle({
 
   useEffect(() => {
     const unlock = () => {
-      if (
-        pendingStartupPlaybackRef.current &&
-        enabled &&
-        !suspendedRef.current
-      ) {
+      if (pendingStartupPlaybackRef.current && enabled && !suspendedRef.current) {
         pendingStartupPlaybackRef.current = false;
         turnOnRef.current({ remember: false, analyse: true, fadeIn: true });
       } else unlockAudioAnalysis();
@@ -63,5 +58,5 @@ export default function useRadioLifecycle({
       window.removeEventListener("pointerdown", unlock, true);
       window.removeEventListener("keydown", unlock, true);
     };
-  }, [ enabled, pendingStartupPlaybackRef, suspendedRef, turnOnRef, unlockAudioAnalysis ]);
+  }, [enabled, pendingStartupPlaybackRef, suspendedRef, turnOnRef, unlockAudioAnalysis]);
 }

@@ -66,23 +66,14 @@ const Card = forwardRef(
         {isNeon ? (
           <>
             <span className="ui-card__fx ui-card__glow" aria-hidden="true" />
-            <span
-              className="ui-card__fx ui-card__glow-mid"
-              aria-hidden="true"
-            />
+            <span className="ui-card__fx ui-card__glow-mid" aria-hidden="true" />
             <span className="ui-card__fx ui-card__edge" aria-hidden="true" />
             <span className="ui-card__fx ui-card__glint" aria-hidden="true" />
 
-            <div
-              {...cardPanel}
-              className={`ui-card__panel ${cardPanel?.className || ""}`}
-            >
+            <div {...cardPanel} className={`ui-card__panel ${cardPanel?.className || ""}`}>
               <span className="ui-card__fx ui-card__sheen" aria-hidden="true" />
 
-              <div
-                {...cardContent}
-                className={`ui-card__content ${cardContent?.className || ""}`}
-              >
+              <div {...cardContent} className={`ui-card__content ${cardContent?.className || ""}`}>
                 {children}
               </div>
             </div>

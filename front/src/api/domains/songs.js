@@ -3,8 +3,7 @@ import { normalizeSong, normalizeSongList } from "../normalizers";
 
 export const songsApi = {
   listSongs: () => request("/songs").then(normalizeSongList),
-  getSong: (id) =>
-    request(`/songs/${encodePathSegment(id)}`).then(normalizeSong),
+  getSong: (id) => request(`/songs/${encodePathSegment(id)}`).then(normalizeSong),
   addSong: (file, title) => {
     const form = new FormData();
     form.append("file", file);
@@ -13,14 +12,10 @@ export const songsApi = {
   },
   updateSong: (id, patch) =>
     request(`/songs/${encodePathSegment(id)}`, { method: "PATCH", body: JSON.stringify(patch) }),
-  deleteSong: (id) =>
-    request(`/songs/${encodePathSegment(id)}`, { method: "DELETE" }),
-  processSong: (id) =>
-    request(`/songs/${encodePathSegment(id)}/process`, { method: "POST" }),
-  reprocessMelody: (id) =>
-    request(`/songs/${encodePathSegment(id)}/reprocess`, { method: "POST" }),
-  cancelProcessing: (id) =>
-    request(`/songs/${encodePathSegment(id)}/cancel`, { method: "POST" }),
+  deleteSong: (id) => request(`/songs/${encodePathSegment(id)}`, { method: "DELETE" }),
+  processSong: (id) => request(`/songs/${encodePathSegment(id)}/process`, { method: "POST" }),
+  reprocessMelody: (id) => request(`/songs/${encodePathSegment(id)}/reprocess`, { method: "POST" }),
+  cancelProcessing: (id) => request(`/songs/${encodePathSegment(id)}/cancel`, { method: "POST" }),
   getStatus: (id) => request(`/songs/${encodePathSegment(id)}/status`),
   getLog: (id) => request(`/songs/${encodePathSegment(id)}/log`),
   getResult: (id) => request(`/songs/${encodePathSegment(id)}/result`),
@@ -37,12 +32,9 @@ export const songsApi = {
       method: "PUT",
       body: JSON.stringify({ lyrics })
     }),
-  getSongCoverUrl: (id) =>
-    createFileUrl(`/songs/${encodePathSegment(id)}/cover`),
+  getSongCoverUrl: (id) => createFileUrl(`/songs/${encodePathSegment(id)}/cover`),
   getAudioTrackUrl: (id, track) =>
-    createFileUrl(
-      `/songs/${encodePathSegment(id)}/audio/${encodePathSegment(track)}`
-    ),
+    createFileUrl(`/songs/${encodePathSegment(id)}/audio/${encodePathSegment(track)}`),
   exportSongPackage: (rawId) => {
     const id = encodePathSegment(rawId);
     return requestBlob(`/songs/${id}/package`, { timeoutMs: 5 * 60_000 });

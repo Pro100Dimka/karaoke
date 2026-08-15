@@ -24,16 +24,12 @@ export default function Dropdown({
   const generatedId = useId();
   const dropdownId = id ?? `dropdown-${generatedId.replace(/:/g, "")}`;
   const eventIdRef = useRef(dropdownId);
-  const selectedIndex = options.findIndex( (option) => String(option.value) === String(value)
-  );
+  const selectedIndex = options.findIndex((option) => String(option.value) === String(value));
   const selected = selectedIndex >= 0 ? options[selectedIndex] : null;
   useEffect(() => {
     if (!open) return undefined;
     const close = (event) => {
-      if (
-        !ref.current?.contains(event.target) &&
-        !menuRef.current?.contains(event.target)
-      )
+      if (!ref.current?.contains(event.target) && !menuRef.current?.contains(event.target))
         setOpen(false);
     };
     const closeOnEscape = (event) => {
@@ -51,15 +47,15 @@ export default function Dropdown({
       document.removeEventListener("keydown", closeOnEscape, true);
     };
   }, [open]);
-  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
   useEffect(() => {
     const closeWhenAnotherOpens = (event) => {
       if (event.detail !== eventIdRef.current) setOpen(false);
     };
     window.addEventListener("karaoke-dropdown-open", closeWhenAnotherOpens);
-    return () =>
-      window.removeEventListener( "karaoke-dropdown-open", closeWhenAnotherOpens
-      );
+    return () => window.removeEventListener("karaoke-dropdown-open", closeWhenAnotherOpens);
   }, []);
   useLayoutEffect(() => {
     if (!open || !ref.current) return undefined;
@@ -92,10 +88,7 @@ export default function Dropdown({
     const blurEvent = event;
     queueMicrotask(() => {
       const { activeElement } = document;
-      if (
-        ref.current?.contains(activeElement) ||
-        menuRef.current?.contains(activeElement)
-      ) {
+      if (ref.current?.contains(activeElement) || menuRef.current?.contains(activeElement)) {
         return;
       }
       onBlur(blurEvent);
@@ -116,7 +109,8 @@ export default function Dropdown({
   };
   const toggle = () => {
     if (!open)
-      window.dispatchEvent( new CustomEvent("karaoke-dropdown-open", { detail: eventIdRef.current })
+      window.dispatchEvent(
+        new CustomEvent("karaoke-dropdown-open", { detail: eventIdRef.current })
       );
     setOpen((current) => !current);
   };

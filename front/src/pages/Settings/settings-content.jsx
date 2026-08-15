@@ -19,11 +19,7 @@ function ServiceContent({ service, onOpen, onClose }) {
 
   if (ServiceScreen) {
     return (
-      <Stack
-        className="settings-service-screen"
-        gap={1.25}
-        sx={{ padding: "1rem" }}
-      >
+      <Stack className="settings-service-screen" gap={1.25} sx={{ padding: "1rem" }}>
         <Button
           variant="ghost"
           onClick={onClose}
@@ -55,22 +51,14 @@ function ServiceContent({ service, onOpen, onClose }) {
           sx={{ width: "100%", minWidth: 0, padding: 0, textAlign: "left", cursor: "pointer" }}
           cardContent={{ style: { padding: "1rem 1.1rem", height: "100%" } }}
         >
-          <Stack
-            align="start"
-            gap={0.35}
-            justify="space-between"
-            sx={{ height: "100%" }}
-          >
+          <Stack align="start" gap={0.35} justify="space-between" sx={{ height: "100%" }}>
             <Typography variant="body1" sx={{ fontWeight: 800 }}>
               {t(`settings.service.${id}.title`)}
             </Typography>
             <Typography variant="body2" tone="muted">
               {t(`settings.service.${id}.text`)}
             </Typography>
-            <Typography
-              variant="caption"
-              sx={{ color: "var(--ui-primary-hover)" }}
-            >
+            <Typography variant="caption" sx={{ color: "var(--ui-primary-hover)" }}>
               {t("settings.openAction")}
             </Typography>
           </Stack>
@@ -110,8 +98,7 @@ export default function SettingsContent({
     const visible =
       tab !== "audio"
         ? section.fields
-        : section.fields.filter( (field) => showAdvancedAudio || !field.advanced
-          );
+        : section.fields.filter((field) => showAdvancedAudio || !field.advanced);
     return visible.map((field) => {
       const label = t(`settings.${tab}.${field.name}.label`, {}, field.label);
       return {
@@ -121,34 +108,20 @@ export default function SettingsContent({
         getLabel: field.getLabel
           ? (context) => {
               const original = field.getLabel(context);
-              const suffix = String(original)
-                .split("·")
-                .slice(1)
-                .join("·")
-                .trim();
+              const suffix = String(original).split("·").slice(1).join("·").trim();
               return suffix ? `${label} · ${suffix}` : label;
             }
           : undefined,
         options: field.options?.map((option) => ({
           ...option,
-          label: t(
-            `settings.option.${field.name}.${option.value}`,
-            {},
-            option.label
-          )
+          label: t(`settings.option.${field.name}.${option.value}`, {}, option.label)
         }))
       };
     });
   }, [section, showAdvancedAudio, t, tab]);
 
   if (ServiceScreen) {
-    return (
-      <ServiceContent
-        service={service}
-        onOpen={onOpenService}
-        onClose={onCloseService}
-      />
-    );
+    return <ServiceContent service={service} onOpen={onOpenService} onClose={onCloseService} />;
   }
 
   if (!section) return null;
@@ -166,10 +139,7 @@ export default function SettingsContent({
       {tab === "ai" && <ModelRecovery />}
 
       {tab === "audio" && (
-        <Stack
-          className="settings-audio-advanced-toggle"
-          sx={{ paddingInline: "1rem" }}
-        >
+        <Stack className="settings-audio-advanced-toggle" sx={{ paddingInline: "1rem" }}>
           <Button
             variant="ghost"
             size="sm"
@@ -179,26 +149,16 @@ export default function SettingsContent({
             <Stack direction="row" align="center" gap={0.5}>
               <SlidersHorizontal size={15} />
               <span>
-                {showAdvancedAudio
-                  ? t("settings.advanced.hide")
-                  : t("settings.advanced.show")}
+                {showAdvancedAudio ? t("settings.advanced.hide") : t("settings.advanced.show")}
               </span>
-              {showAdvancedAudio ? (
-                <ChevronUp size={15} />
-              ) : (
-                <ChevronDown size={15} />
-              )}
+              {showAdvancedAudio ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
             </Stack>
           </Button>
         </Stack>
       )}
 
       {tab === "appearance" && (
-        <ServiceContent
-          service={null}
-          onOpen={onOpenService}
-          onClose={onCloseService}
-        />
+        <ServiceContent service={null} onOpen={onOpenService} onClose={onCloseService} />
       )}
     </Stack>
   );

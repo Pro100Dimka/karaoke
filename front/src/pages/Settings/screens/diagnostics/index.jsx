@@ -24,12 +24,10 @@ export default function Diagnostics() {
       <Stack gap={0.65} className="settings-screen-section">
         <Typography variant="h3">{t("settings.diagnostics.title")}</Typography>
 
-        <Grid
-          columns={2}
-          gap="var(--space-2)"
-          className="settings-diagnostics-grid"
-        >
-          {checks.map(([key, label, ok]) => ( <DiagnosticCheck key={key} label={label} ok={ok} /> ))}
+        <Grid columns={2} gap="var(--space-2)" className="settings-diagnostics-grid">
+          {checks.map(([key, label, ok]) => (
+            <DiagnosticCheck key={key} label={label} ok={ok} />
+          ))}
         </Grid>
       </Stack>
 

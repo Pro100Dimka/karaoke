@@ -98,9 +98,7 @@
   white-space: nowrap !important;
   overflow: visible !important;
   text-align: center !important;
-  font-size: calc(
-    clamp(2.35rem, 4.4vw, 5.2rem) * var(--lyric-line-scale, 1)
-  ) !important;
+  font-size: calc(clamp(2.35rem, 4.4vw, 5.2rem) * var(--lyric-line-scale, 1)) !important;
   line-height: 1.02 !important;
   font-weight: 900 !important;
   letter-spacing: 0.006em !important;
@@ -129,9 +127,7 @@
 .karaoke-lyric-next {
   margin-block-start: 0 !important;
   opacity: 0.9 !important;
-  font-size: calc(
-    clamp(1.8rem, 3.15vw, 3.7rem) * var(--lyric-line-scale, 1)
-  ) !important;
+  font-size: calc(clamp(1.8rem, 3.15vw, 3.7rem) * var(--lyric-line-scale, 1)) !important;
 }
 
 .karaoke-lyric-next .karaoke-lyric-character,
@@ -245,8 +241,7 @@
   box-shadow:
     0 0.55rem 1.25rem color-mix(in srgb, var(--color-bg-deep) 34%, transparent),
     0 0 0.7rem color-mix(in srgb, var(--color-primary) 32%, transparent),
-    inset 0 var(--hairline)
-      color-mix(in srgb, var(--color-highlight) 10%, transparent);
+    inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 10%, transparent);
 }
 
 .app-modal-close:hover,
@@ -437,9 +432,7 @@ body {
 .karaoke-lyric {
   font-family: Inter, "Segoe UI", Arial, sans-serif !important;
   font-weight: 800 !important;
-  font-size: calc(
-    clamp(2.15rem, 3.7vw, 4.35rem) * var(--lyric-line-scale, 1)
-  ) !important;
+  font-size: calc(clamp(2.15rem, 3.7vw, 4.35rem) * var(--lyric-line-scale, 1)) !important;
   line-height: 1.08 !important;
   letter-spacing: 0.002em !important;
   -webkit-text-stroke: 1.15px rgba(0, 0, 0, 0.62) !important;
@@ -459,9 +452,7 @@ body {
 .karaoke-lyric-next {
   font-family: Inter, "Segoe UI", Arial, sans-serif !important;
   font-weight: 760 !important;
-  font-size: calc(
-    clamp(1.7rem, 2.7vw, 3.15rem) * var(--lyric-line-scale, 1)
-  ) !important;
+  font-size: calc(clamp(1.7rem, 2.7vw, 3.15rem) * var(--lyric-line-scale, 1)) !important;
   opacity: 0.86 !important;
 }
 
@@ -539,8 +530,8 @@ body {
   --wave-terrain-accent-rgb: 255, 102, 92;
   mix-blend-mode: screen;
   opacity: 0.84;
-  filter: contrast(1.34) brightness(calc(0.96 + var(--radio-bass, 0) * 0.48))
-    saturate(1.12) drop-shadow(0 0 0.35rem rgba(255, 55, 72, 0.22));
+  filter: contrast(1.34) brightness(calc(0.96 + var(--radio-bass, 0) * 0.48)) saturate(1.12)
+    drop-shadow(0 0 0.35rem rgba(255, 55, 72, 0.22));
 }
 
 :root[data-theme="light"] .library-wave-terrain {
@@ -548,24 +539,23 @@ body {
   --wave-terrain-accent-rgb: 222, 95, 109;
   mix-blend-mode: multiply;
   opacity: 0.62;
-  filter: contrast(1.18) brightness(calc(0.96 + var(--radio-bass, 0) * 0.2))
-    saturate(0.92);
+  filter: contrast(1.18) brightness(calc(0.96 + var(--radio-bass, 0) * 0.2)) saturate(0.92);
 }
 
 :root[data-theme="green"] .library-wave-terrain {
   --wave-terrain-rgb: 69, 198, 135;
   --wave-terrain-accent-rgb: 126, 235, 174;
   opacity: 0.78;
-  filter: contrast(1.26) brightness(calc(0.94 + var(--radio-bass, 0) * 0.42))
-    saturate(1.04) drop-shadow(0 0 0.32rem rgba(68, 220, 145, 0.2));
+  filter: contrast(1.26) brightness(calc(0.94 + var(--radio-bass, 0) * 0.42)) saturate(1.04)
+    drop-shadow(0 0 0.32rem rgba(68, 220, 145, 0.2));
 }
 
 :root[data-theme="violet"] .library-wave-terrain {
   --wave-terrain-rgb: 164, 96, 214;
   --wave-terrain-accent-rgb: 213, 132, 239;
   opacity: 0.78;
-  filter: contrast(1.24) brightness(calc(0.95 + var(--radio-bass, 0) * 0.42))
-    saturate(1.02) drop-shadow(0 0 0.32rem rgba(181, 95, 224, 0.2));
+  filter: contrast(1.24) brightness(calc(0.95 + var(--radio-bass, 0) * 0.42)) saturate(1.02)
+    drop-shadow(0 0 0.32rem rgba(181, 95, 224, 0.2));
 }
 
 /* Bars use the full artwork height as their geometry and only their scale is
@@ -711,15 +701,13 @@ body {
   0%,
   100% {
     box-shadow:
-      0 1.75rem 5.625rem
-        color-mix(in srgb, var(--color-bg-deep) 52%, transparent),
+      0 1.75rem 5.625rem color-mix(in srgb, var(--color-bg-deep) 52%, transparent),
       0 0 0.7rem color-mix(in srgb, var(--color-primary) 23%, transparent),
       0 0 1.25rem color-mix(in srgb, var(--color-primary) 10%, transparent);
   }
   50% {
     box-shadow:
-      0 1.75rem 5.625rem
-        color-mix(in srgb, var(--color-bg-deep) 52%, transparent),
+      0 1.75rem 5.625rem color-mix(in srgb, var(--color-bg-deep) 52%, transparent),
       0 0 1rem color-mix(in srgb, var(--color-primary) 42%, transparent),
       0 0 1.9rem color-mix(in srgb, var(--color-primary-hover) 19%, transparent);
   }
@@ -739,11 +727,7 @@ body {
   padding: clamp(0.8rem, 1.4vh, 1.15rem) clamp(1.4rem, 2.5vw, 2.5rem) !important;
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
   border-radius: clamp(1.25rem, 2vw, 2rem) !important;
-  background: linear-gradient(
-    180deg,
-    rgba(5, 7, 12, 0.27),
-    rgba(5, 7, 12, 0.16)
-  ) !important;
+  background: linear-gradient(180deg, rgba(5, 7, 12, 0.27), rgba(5, 7, 12, 0.16)) !important;
   backdrop-filter: blur(13px) saturate(112%) !important;
   -webkit-backdrop-filter: blur(13px) saturate(112%) !important;
   box-shadow:
@@ -759,11 +743,7 @@ body {
   inset: 0;
   pointer-events: none;
   border-radius: inherit;
-  background: radial-gradient(
-    70% 120% at 50% 0%,
-    rgba(255, 255, 255, 0.055),
-    transparent 72%
-  );
+  background: radial-gradient(70% 120% at 50% 0%, rgba(255, 255, 255, 0.055), transparent 72%);
 }
 
 .karaoke-lyric {
@@ -843,8 +823,7 @@ body {
   display: block;
   inline-size: 1.55rem;
   block-size: 1.55rem;
-  border: var(--hairline) solid
-    color-mix(in srgb, var(--color-border-strong) 86%, transparent);
+  border: var(--hairline) solid color-mix(in srgb, var(--color-border-strong) 86%, transparent);
   border-radius: 0.45rem;
   background: color-mix(in srgb, var(--color-surface-strong) 58%, transparent);
   box-shadow:
@@ -875,11 +854,7 @@ body {
 
 .app-checkbox:hover .app-checkbox__box {
   border-color: var(--color-primary-hover);
-  background: color-mix(
-    in srgb,
-    var(--color-primary) 10%,
-    var(--color-surface-strong)
-  );
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface-strong));
   box-shadow:
     0 0 0 0.16rem color-mix(in srgb, var(--color-primary) 8%, transparent),
     0 0 0.8rem color-mix(in srgb, var(--color-primary) 14%, transparent);
@@ -893,11 +868,7 @@ body {
 }
 
 .app-checkbox__input:checked + .app-checkbox__box {
-  border-color: color-mix(
-    in srgb,
-    var(--color-primary-hover) 92%,
-    var(--color-highlight)
-  );
+  border-color: color-mix(in srgb, var(--color-primary-hover) 92%, var(--color-highlight));
   background: linear-gradient(
     145deg,
     color-mix(in srgb, var(--color-primary-hover) 92%, var(--color-primary)),
@@ -1075,9 +1046,7 @@ body {
   max-inline-size: 100% !important;
   overflow: hidden !important;
   white-space: nowrap !important;
-  font-size: calc(
-    clamp(1.85rem, 3.15vw, 3.65rem) * var(--lyric-line-scale, 1)
-  ) !important;
+  font-size: calc(clamp(1.85rem, 3.15vw, 3.65rem) * var(--lyric-line-scale, 1)) !important;
   line-height: 1.05 !important;
   font-weight: 780 !important;
   letter-spacing: -0.018em !important;
@@ -1088,9 +1057,7 @@ body {
 }
 
 .karaoke-lyric-next {
-  font-size: calc(
-    clamp(1.45rem, 2.3vw, 2.65rem) * var(--lyric-line-scale, 1)
-  ) !important;
+  font-size: calc(clamp(1.45rem, 2.3vw, 2.65rem) * var(--lyric-line-scale, 1)) !important;
   font-weight: 650 !important;
   opacity: 0.68 !important;
 }
@@ -1102,15 +1069,11 @@ body {
   }
 
   .karaoke-lyric {
-    font-size: calc(
-      clamp(1.55rem, 3vw, 2.9rem) * var(--lyric-line-scale, 1)
-    ) !important;
+    font-size: calc(clamp(1.55rem, 3vw, 2.9rem) * var(--lyric-line-scale, 1)) !important;
   }
 
   .karaoke-lyric-next {
-    font-size: calc(
-      clamp(1.25rem, 2.2vw, 2.1rem) * var(--lyric-line-scale, 1)
-    ) !important;
+    font-size: calc(clamp(1.25rem, 2.2vw, 2.1rem) * var(--lyric-line-scale, 1)) !important;
   }
 }
 
@@ -1160,8 +1123,7 @@ body {
 .settings-diagnostic-row {
   border-color: color-mix(in srgb, var(--color-border-strong) 72%, transparent);
   background: color-mix(in srgb, var(--color-surface-soft) 92%, transparent);
-  box-shadow: inset 0 var(--hairline)
-    color-mix(in srgb, var(--color-highlight) 6%, transparent);
+  box-shadow: inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 6%, transparent);
 }
 
 /* Settings service screens: compact responsive cards without nested neon shells. */
@@ -1198,14 +1160,12 @@ body {
   filter: blur(clamp(0.12rem, 0.7cqi, 0.26rem));
 }
 
-.settings-compact-neon-card.ui-card--neon:is(:hover, :focus-within)
-  .ui-card__glow {
+.settings-compact-neon-card.ui-card--neon:is(:hover, :focus-within) .ui-card__glow {
   opacity: 0.3;
   filter: blur(clamp(0.28rem, 1.55cqi, 0.62rem)) saturate(112%);
 }
 
-.settings-compact-neon-card.ui-card--neon:is(:hover, :focus-within)
-  .ui-card__glow-mid {
+.settings-compact-neon-card.ui-card--neon:is(:hover, :focus-within) .ui-card__glow-mid {
   opacity: 0.46;
 }
 
@@ -1269,8 +1229,7 @@ body {
 .settings-error-row {
   min-inline-size: 0;
   padding: 0.72rem 0.25rem;
-  border-block-end: var(--hairline) solid
-    color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-block-end: var(--hairline) solid color-mix(in srgb, var(--color-border) 72%, transparent);
 }
 
 .settings-error-row {
@@ -1279,8 +1238,7 @@ body {
 
 .settings-empty-line {
   padding: 0.85rem 0.2rem;
-  border-block: var(--hairline) solid
-    color-mix(in srgb, var(--color-border) 62%, transparent);
+  border-block: var(--hairline) solid color-mix(in srgb, var(--color-border) 62%, transparent);
 }
 
 .settings-metric-grid {
@@ -1291,8 +1249,7 @@ body {
 .settings-metric-item {
   min-inline-size: 0;
   padding: 0.9rem 1rem;
-  border-inline-start: 0.14rem solid
-    color-mix(in srgb, var(--color-primary) 76%, transparent);
+  border-inline-start: 0.14rem solid color-mix(in srgb, var(--color-primary) 76%, transparent);
   background: linear-gradient(
     90deg,
     color-mix(in srgb, var(--color-primary) 8%, transparent),
@@ -1355,8 +1312,7 @@ body {
     color-mix(in srgb, var(--color-surface-strong) 90%, transparent)
   );
   box-shadow:
-    inset 0 var(--hairline)
-      color-mix(in srgb, var(--color-highlight) 10%, transparent),
+    inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 10%, transparent),
     0 0 1.2rem color-mix(in srgb, var(--color-primary) 16%, transparent);
 }
 
@@ -1369,13 +1325,11 @@ body {
 .settings-about-info-item {
   min-inline-size: 0;
   padding: 0.9rem 1rem;
-  border-block-end: var(--hairline) solid
-    color-mix(in srgb, var(--color-border) 58%, transparent);
+  border-block-end: var(--hairline) solid color-mix(in srgb, var(--color-border) 58%, transparent);
 }
 
 .settings-about-info-item:nth-child(odd) {
-  border-inline-end: var(--hairline) solid
-    color-mix(in srgb, var(--color-border) 58%, transparent);
+  border-inline-end: var(--hairline) solid color-mix(in srgb, var(--color-border) 58%, transparent);
 }
 
 @media (max-width: 48rem) {
@@ -1461,4 +1415,3 @@ body {
     block-size: auto;
   }
 }
-

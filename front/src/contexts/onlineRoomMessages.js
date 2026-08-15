@@ -42,7 +42,9 @@ export function createOnlineRoomMessageHandler(options) {
     setRoomCommand({ ...command, __eventId: createEventId(eventPrefix) });
   };
   const senderIsHost = (message) =>
-    participantsRef.current?.some((participant) => participant.id === message.fromId && participant.role === "host");
+    participantsRef.current?.some(
+      (participant) => participant.id === message.fromId && participant.role === "host"
+    );
 
   const syncHandlers = {
     "song-request": (command, message) => {
@@ -50,7 +52,8 @@ export function createOnlineRoomMessageHandler(options) {
         !activeRoomRef.current?.host ||
         !command.requesterId ||
         !command.songId ||
-        (!message.fromId || message.fromId !== command.requesterId)
+        !message.fromId ||
+        message.fromId !== command.requesterId
       ) {
         return false;
       }
@@ -65,7 +68,9 @@ export function createOnlineRoomMessageHandler(options) {
             filename: `${command.songId}.karaoke.zip`
           });
         })
-        .then(() => { if (isCurrentConnection()) setTransferStatus(null); })
+        .then(() => {
+          if (isCurrentConnection()) setTransferStatus(null);
+        })
         .catch((error) => {
           if (!isCurrentConnection()) return;
           const message = getErrorMessage(error);
@@ -82,7 +87,8 @@ export function createOnlineRoomMessageHandler(options) {
       return true;
     },
     "song-transfer-error": (command, message) => {
-      if (!senderIsHost(message) || command.requesterId !== activeRoomRef.current?.selfId) return false;
+      if (!senderIsHost(message) || command.requesterId !== activeRoomRef.current?.selfId)
+        return false;
       pendingCommandRef.current = null;
       setTransferStatus({
         stage: "error",
@@ -147,8 +153,7 @@ export function createOnlineRoomMessageHandler(options) {
       });
     },
     "participant-left": (message) => {
-      setParticipants((items) => items.filter((item) => item.id !== message.participantId)
-      );
+      setParticipants((items) => items.filter((item) => item.id !== message.participantId));
       voice.removePeer(message.participantId);
     },
     signal: (message) => {
@@ -162,15 +167,21 @@ export function createOnlineRoomMessageHandler(options) {
       setRoomUi((current) => ({
         ...current,
         ...(host ? state : {}),
-        ...(message.fromId && participantEffects ? {
-          effectsByParticipant: { ...(current.effectsByParticipant || {}), [message.fromId]: participantEffects }
-        } : {}),
+        ...(message.fromId && participantEffects
+          ? {
+              effectsByParticipant: {
+                ...(current.effectsByParticipant || {}),
+                [message.fromId]: participantEffects
+              }
+            }
+          : {}),
         __eventId: createEventId("ui")
       }));
     },
     sync: (message) => {
       const command = message.state || {};
-      if (Object.hasOwn(syncHandlers, command.type) && syncHandlers[command.type](command, message)) return;
+      if (Object.hasOwn(syncHandlers, command.type) && syncHandlers[command.type](command, message))
+        return;
       if (!senderIsHost(message)) return;
       publishRoomCommand(command, message.sentAt || "sync");
     },

@@ -19,11 +19,9 @@ const TOOL_BUTTON_SX = {
   padding: "0.45rem 0.75rem",
   borderRadius: "var(--shape-md)",
   color: "var(--color-text-soft)",
-  border:
-    "1px solid color-mix(in srgb, var(--color-primary) 38%, var(--color-border))",
+  border: "1px solid color-mix(in srgb, var(--color-primary) 38%, var(--color-border))",
   background: "color-mix(in srgb, var(--color-bg-deep) 88%, transparent)",
-  boxShadow:
-    "inset 0 1px 0 color-mix(in srgb, var(--color-highlight) 5%, transparent)",
+  boxShadow: "inset 0 1px 0 color-mix(in srgb, var(--color-highlight) 5%, transparent)",
   transition:
     "transform 140ms ease, color 140ms ease, border-color 140ms ease, background 140ms ease, box-shadow 140ms ease"
 };
@@ -103,35 +101,29 @@ function EffectPreset({ id, label, symbol, echo, reverb, active, onClick }) {
 }
 function EffectPresets({ effectPreset, onApplyEffectPreset }) {
   return (
-    <Grid
-      columns={4}
-      gap="0.5rem"
-      sx={{ width: "100%" }}
-    >
-      {EFFECT_PRESETS.map(normalizePreset).map(
-        ([id, label, symbol, echo, reverb, delay]) => {
-          const preset = {
-            id,
-            label,
-            symbol,
-            echo,
-            reverb,
-            delay
-          };
-          return (
-            <EffectPreset
-              key={id}
-              id={id}
-              label={label}
-              symbol={symbol}
-              echo={echo}
-              reverb={reverb}
-              active={effectPreset === id}
-              onClick={() => onApplyEffectPreset?.(preset)}
-            />
-          );
-        }
-      )}
+    <Grid columns={4} gap="0.5rem" sx={{ width: "100%" }}>
+      {EFFECT_PRESETS.map(normalizePreset).map(([id, label, symbol, echo, reverb, delay]) => {
+        const preset = {
+          id,
+          label,
+          symbol,
+          echo,
+          reverb,
+          delay
+        };
+        return (
+          <EffectPreset
+            key={id}
+            id={id}
+            label={label}
+            symbol={symbol}
+            echo={echo}
+            reverb={reverb}
+            active={effectPreset === id}
+            onClick={() => onApplyEffectPreset?.(preset)}
+          />
+        );
+      })}
     </Grid>
   );
 }
@@ -190,8 +182,7 @@ function ToolTabs({
       translateSaved("Слышу себя"),
       monitoringEnabled,
       () => onMonitoringChange?.(!monitoringEnabled),
-      translateSaved( "Независимое прослушивание микрофона с выбранными эффектами"
-      )
+      translateSaved("Независимое прослушивание микрофона с выбранными эффектами")
     ],
     [
       "auto",
@@ -199,17 +190,12 @@ function ToolTabs({
       translateSaved("Автоскрытие"),
       autoHideEnabled,
       () => onAutoHideChange?.(!autoHideEnabled),
-      translateSaved( "Автоматически показывать и скрывать консоль при движении мыши"
-      )
+      translateSaved("Автоматически показывать и скрывать консоль при движении мыши")
     ],
     ["settings", Cog, translateSaved("Настройки"), null, onOpenAppSettings]
   ].filter(([, , , , onClick]) => onClick);
   return (
-    <Stack
-      direction="row"
-      gap={0.5}
-      sx={{ width: "100%" }}
-    >
+    <Stack direction="row" gap={0.5} sx={{ width: "100%" }}>
       {tools.map(([id, Icon, label, active, onClick, title]) => (
         <ToolButton
           key={id}

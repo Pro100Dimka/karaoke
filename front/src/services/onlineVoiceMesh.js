@@ -38,16 +38,10 @@ export default class OnlineVoiceMesh {
   }
 
   async start() {
-    if (
-      typeof navigator === "undefined" ||
-      !navigator.mediaDevices?.getUserMedia
-    ) {
-      throw new Error( translateSaved("Захват микрофона не поддерживается в этом окружении")
-      );
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      throw new Error(translateSaved("Захват микрофона не поддерживается в этом окружении"));
     }
-    const liveStream = this.stream
-      ?.getAudioTracks?.()
-      .some((track) => track.readyState === "live");
+    const liveStream = this.stream?.getAudioTracks?.().some((track) => track.readyState === "live");
     if (liveStream) return this.stream;
     if (this.stream) {
       if (this.microphoneGraph) {
@@ -79,7 +73,9 @@ export default class OnlineVoiceMesh {
         this.microphoneGraph = createStudioMicrophoneGraph(stream);
         const outgoingStream = this.microphoneGraph.stream || stream;
         this.stream = outgoingStream;
-        outgoingStream.getAudioTracks().forEach((track) => { track.contentHint = "music"; });
+        outgoingStream.getAudioTracks().forEach((track) => {
+          track.contentHint = "music";
+        });
         for (const [participantId, peer] of this.peers) {
           const existingTrackIds = new Set(
             // Stryker disable next-line MethodExpression: track IDs are non-empty.
@@ -96,8 +92,7 @@ export default class OnlineVoiceMesh {
         }
         const pending = [...this.pendingInvites];
         this.pendingInvites.clear();
-        await Promise.allSettled( pending.map((participantId) => this.invite(participantId))
-        );
+        await Promise.allSettled(pending.map((participantId) => this.invite(participantId)));
         return outgoingStream;
       })
       .catch(async (error) => {
@@ -108,30 +103,28 @@ export default class OnlineVoiceMesh {
         } else capturedStream?.getTracks?.().forEach((track) => track.stop());
         throw error;
       })
-      .finally(() => { if (this.startPromise === startPromise) this.startPromise = null; });
+      .finally(() => {
+        if (this.startPromise === startPromise) this.startPromise = null;
+      });
     this.startPromise = startPromise;
     return startPromise;
   }
 
   createPeer(participantId) {
-    if (
-      typeof participantId !== "string" ||
-      !participantId ||
-      participantId.length > 128
-    ) {
-      throw new TypeError( translateSaved("Некорректный идентификатор участника")
-      );
+    if (typeof participantId !== "string" || !participantId || participantId.length > 128) {
+      throw new TypeError(translateSaved("Некорректный идентификатор участника"));
     }
     if (typeof globalThis.RTCPeerConnection !== "function") {
-      throw new Error( translateSaved("WebRTC не поддерживается в этом окружении")
-      );
+      throw new Error(translateSaved("WebRTC не поддерживается в этом окружении"));
     }
     const current = this.peers.get(participantId);
     if (current) return current;
     const peer = new globalThis.RTCPeerConnection({
-      iceServers: [ { urls: "stun:stun.cloudflare.com:3478" } ]
+      iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }]
     });
-    this.stream?.getTracks().forEach((track) => { peer.addTrack(track, this.stream); });
+    this.stream?.getTracks().forEach((track) => {
+      peer.addTrack(track, this.stream);
+    });
     const isCurrentPeer = () => this.peers.get(participantId) === peer;
     peer.onicecandidate = ({ candidate }) => {
       if (!candidate || !isCurrentPeer()) return;
@@ -167,7 +160,8 @@ export default class OnlineVoiceMesh {
       if (peer.connectionState === "disconnected") {
         const timer = globalThis.setTimeout(() => {
           this.disconnectTimers.delete(participantId);
-          if (isCurrentPeer() && peer.connectionState === "disconnected") this.removePeer(participantId);
+          if (isCurrentPeer() && peer.connectionState === "disconnected")
+            this.removePeer(participantId);
         }, 10_000);
         this.disconnectTimers.set(participantId, timer);
       }
@@ -180,13 +174,10 @@ export default class OnlineVoiceMesh {
     await Promise.allSettled(
       peer
         .getSenders()
-        .filter( (sender) => sender.track?.kind === "audio" && sender.setParameters
-        )
+        .filter((sender) => sender.track?.kind === "audio" && sender.setParameters)
         .map(async (sender) => {
           const parameters = sender.getParameters();
-          const encodings = parameters.encodings?.length
-            ? parameters.encodings
-            : [{}];
+          const encodings = parameters.encodings?.length ? parameters.encodings : [{}];
           parameters.encodings = encodings.map((encoding) => ({
             ...encoding,
             maxBitrate: 256_000,
@@ -229,7 +220,8 @@ export default class OnlineVoiceMesh {
         throw error;
       }
     })().finally(() => {
-      if (this.invitePromises.get(participantId) === invitePromise) this.invitePromises.delete(participantId);
+      if (this.invitePromises.get(participantId) === invitePromise)
+        this.invitePromises.delete(participantId);
     });
     this.invitePromises.set(participantId, invitePromise);
     return invitePromise;
@@ -268,8 +260,7 @@ export default class OnlineVoiceMesh {
           const queue = this.pendingCandidates.get(fromId) || [];
           if (queue.length >= MAX_PENDING_ICE_CANDIDATES) {
             this.removePeer(fromId);
-            throw new Error( translateSaved("Получено слишком много ICE-кандидатов")
-            );
+            throw new Error(translateSaved("Получено слишком много ICE-кандидатов"));
           }
           queue.push(signal.candidate);
           this.pendingCandidates.set(fromId, queue);
@@ -305,7 +296,9 @@ export default class OnlineVoiceMesh {
   }
 
   setMicrophoneMuted(muted) {
-    this.stream?.getAudioTracks?.().forEach((track) => { track.enabled = !muted; });
+    this.stream?.getAudioTracks?.().forEach((track) => {
+      track.enabled = !muted;
+    });
   }
 
   setupDataChannel(participantId, channel) {
@@ -337,10 +330,8 @@ export default class OnlineVoiceMesh {
     const disconnectTimer = this.disconnectTimers.get(participantId);
     if (disconnectTimer) globalThis.clearTimeout(disconnectTimer);
     this.disconnectTimers.delete(participantId);
-    const existed =
-      this.peers.has(participantId) || this.channels.has(participantId);
-    this.peerVersions.set( participantId, (this.peerVersions.get(participantId) || 0) + 1
-    );
+    const existed = this.peers.has(participantId) || this.channels.has(participantId);
+    this.peerVersions.set(participantId, (this.peerVersions.get(participantId) || 0) + 1);
     this.peers.get(participantId)?.close();
     this.peers.delete(participantId);
     this.pendingCandidates.delete(participantId);
@@ -355,8 +346,7 @@ export default class OnlineVoiceMesh {
     for (const [transferId, pending] of this.pendingTransferConfirmations) {
       if (pending.participantId !== participantId) continue;
       globalThis.clearTimeout(pending.timer);
-      pending.reject( new Error(translateSaved("Участник отключился во время передачи"))
-      );
+      pending.reject(new Error(translateSaved("Участник отключился во время передачи")));
       this.pendingTransferConfirmations.delete(transferId);
     }
     if (existed) this.onPeerClosed?.(participantId);
@@ -364,8 +354,7 @@ export default class OnlineVoiceMesh {
 
   stop() {
     this.lifecycleVersion += 1;
-    new Set([...this.peers.keys(), ...this.channels.keys()]).forEach((id) => this.removePeer(id)
-    );
+    new Set([...this.peers.keys(), ...this.channels.keys()]).forEach((id) => this.removePeer(id));
     if (this.microphoneGraph) {
       closeAudioContextQuietly(this.microphoneGraph);
       this.microphoneGraph = null;

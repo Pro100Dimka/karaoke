@@ -47,11 +47,7 @@ export default function About() {
               {t(`settings.about.${label}`)}
             </Typography>
 
-            <Typography
-              variant="body2"
-              className="mono"
-              sx={{ overflowWrap: "anywhere" }}
-            >
+            <Typography variant="body2" className="mono" sx={{ overflowWrap: "anywhere" }}>
               {about[key] ?? "—"}
             </Typography>
           </Stack>

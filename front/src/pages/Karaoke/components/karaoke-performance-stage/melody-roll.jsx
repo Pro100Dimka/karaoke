@@ -40,11 +40,9 @@ export default function MelodyRoll({
   const pitchRange = Math.max(1, maxMidi - minMidi + 1);
   const rowHeight = height / pitchRange;
   const noteHeight = Math.min(15, Math.max(5, rowHeight * 0.72));
-  const lanes = Array.from( { length: pitchRange }, (_, index) => minMidi + index
-  );
+  const lanes = Array.from({ length: pitchRange }, (_, index) => minMidi + index);
   const x = (time) =>
-    noteLaneStart +
-    ((time - viewStart) / windowSeconds) * (width - noteLaneStart);
+    noteLaneStart + ((time - viewStart) / windowSeconds) * (width - noteLaneStart);
   const y = (midi) => height - (midi - minMidi + 1) * rowHeight;
   const playheadX = x(currentTime);
   return (
@@ -68,13 +66,7 @@ export default function MelodyRoll({
             <stop offset=".52" stopColor="#ff536c" />
             <stop offset="1" stopColor="#f3224c" />
           </linearGradient>
-          <linearGradient
-            id="piano-roll-note-current"
-            x1="0"
-            x2="0"
-            y1="0"
-            y2="1"
-          >
+          <linearGradient id="piano-roll-note-current" x1="0" x2="0" y1="0" y2="1">
             <stop offset="0" stopColor="#fff0f3" />
             <stop offset=".16" stopColor="#ff9bab" />
             <stop offset=".52" stopColor="#ff4966" />
@@ -140,14 +132,11 @@ export default function MelodyRoll({
             (midi) => !BLACK_KEY_CLASSES.includes(((midi % 12) + 12) % 12)
           );
           const naturalHeight = height / naturals.length;
-          const naturalIndex = new Map( naturals.map((midi, index) => [midi, index])
-          );
+          const naturalIndex = new Map(naturals.map((midi, index) => [midi, index]));
           return lanes
             .filter((midi) => BLACK_KEY_CLASSES.includes(((midi % 12) + 12) % 12))
             .map((midi) => {
-              const lowerNatural = [...naturals]
-                .reverse()
-                .find((value) => value < midi);
+              const lowerNatural = [...naturals].reverse().find((value) => value < midi);
               const index = naturalIndex.get(lowerNatural);
               if (index == null) return null;
               const boundaryY = height - (index + 1) * naturalHeight;
@@ -196,9 +185,7 @@ export default function MelodyRoll({
           const noteY = y(midi) + (rowHeight - noteHeight) / 2;
           const secondsPast = Math.max(0, currentTime - note.end);
           const isPast = note.end <= currentTime;
-          const pastOpacity = isPast
-            ? clamp(0.56 * (1 - secondsPast / 2.8), 0.035, 0.56)
-            : 1;
+          const pastOpacity = isPast ? clamp(0.56 * (1 - secondsPast / 2.8), 0.035, 0.56) : 1;
           return (
             <g
               key={`note-${index}`}
@@ -211,11 +198,7 @@ export default function MelodyRoll({
                 width={noteWidth}
                 height={noteHeight}
                 rx={Math.min(8, noteHeight / 2)}
-                fill={
-                  isCurrent
-                    ? "url(#piano-roll-note-current)"
-                    : "url(#piano-roll-note)"
-                }
+                fill={isCurrent ? "url(#piano-roll-note-current)" : "url(#piano-roll-note)"}
                 fillOpacity={isPast ? ".34" : "1"}
                 stroke="#ffc0ca"
                 strokeOpacity={isPast ? ".42" : ".94"}

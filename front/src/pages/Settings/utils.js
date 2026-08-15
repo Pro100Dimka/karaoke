@@ -2,8 +2,7 @@ export const HALF = 6;
 
 export const radioActions = { stationId: "setStation", volume: "setVolume" };
 
-export const opts = (items) =>
-  items.map(([value, label]) => ({ value, label }));
+export const opts = (items) => items.map(([value, label]) => ({ value, label }));
 
 export const percent =
   (label) =>
@@ -109,23 +108,18 @@ const selectFrom =
   (name, source, config = {}) =>
     factory(name, {
       type: "select",
-      ...(typeof source === "string"
-        ? { getOptions: audioOption(source) }
-        : { options: source }),
+      ...(typeof source === "string" ? { getOptions: audioOption(source) } : { options: source }),
       ...config
     });
 
 export const audioSelect = selectFrom(audioField);
 export const preferenceSelect = selectFrom(preferenceField);
 
-export const monitorDisabled = ({ audio }) =>
-  Boolean(audio.states?.monitoringEnabled);
+export const monitorDisabled = ({ audio }) => Boolean(audio.states?.monitoringEnabled);
 
-export const audioDriverVisible = ({ audio }) =>
-  audio.values?.audio_driver === "asio";
+export const audioDriverVisible = ({ audio }) => audio.values?.audio_driver === "asio";
 
 export const multipleAudioDriversAvailable = ({ audio }) =>
   (audio.options?.audioDrivers?.length ?? 0) > 1;
 
-export const speakerPlaying = ({ audio }) =>
-  audio.states?.speakerTestState === "playing";
+export const speakerPlaying = ({ audio }) => audio.states?.speakerTestState === "playing";

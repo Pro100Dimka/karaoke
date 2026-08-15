@@ -61,8 +61,7 @@ export default function Library({ onOpenSongSettings }) {
   const [hiddenSongIds, setHiddenSongIds] = useState(() => new Set());
   const [onlineRoomOpen, setOnlineRoomOpen] = useState(false);
   const returningFromKaraoke = Boolean(location.state?.fromKaraokeFade);
-  const [karaokeTransitioning, setKaraokeTransitioning] =
-    useState(returningFromKaraoke);
+  const [karaokeTransitioning, setKaraokeTransitioning] = useState(returningFromKaraoke);
   const karaokeTransitioningRef = useRef(returningFromKaraoke);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
@@ -72,7 +71,8 @@ export default function Library({ onOpenSongSettings }) {
   const openKaraokeInRoom = sharedRoom?.openKaraoke;
   const { reloadSettings, settings } = useAppSettings();
   useEffect(() => {
-    if (location.state?.analysisRecordingId) setAnalysisRecordingId(location.state.analysisRecordingId);
+    if (location.state?.analysisRecordingId)
+      setAnalysisRecordingId(location.state.analysisRecordingId);
   }, [location.state?.analysisRecordingId]);
   useEffect(() => {
     if (!returningFromKaraoke) return undefined;
@@ -116,17 +116,17 @@ export default function Library({ onOpenSongSettings }) {
     }
     setOnlineRoomOpen(true);
   };
-  const { data: songRecordings, error: recordingsError, refresh: refreshRecordings } = usePolling(
-    () =>
-      recordingsSong
-        ? api.listRecordingsForSong(recordingsSong.id)
-        : Promise.resolve([]),
+  const {
+    data: songRecordings,
+    error: recordingsError,
+    refresh: refreshRecordings
+  } = usePolling(
+    () => (recordingsSong ? api.listRecordingsForSong(recordingsSong.id) : Promise.resolve([])),
     0,
     [recordingsSong?.id]
   );
   const { data: processingStatus, error: processingStatusError } = usePolling(
-    () =>
-      trackedSongId ? api.getStatus(trackedSongId) : Promise.resolve(null),
+    () => (trackedSongId ? api.getStatus(trackedSongId) : Promise.resolve(null)),
     trackedSongId ? POLLING_INTERVALS.processing : 0,
     [trackedSongId],
     {
@@ -166,12 +166,18 @@ export default function Library({ onOpenSongSettings }) {
         : current
     );
     let cancelled = false;
-    Promise.resolve(refreshSongs()).finally(() => { if (!cancelled) setTrackedSongId(null); });
+    Promise.resolve(refreshSongs()).finally(() => {
+      if (!cancelled) setTrackedSongId(null);
+    });
     return () => {
       cancelled = true;
     };
   }, [processingStatus, refreshSongs, trackedSongId]);
-  const { importing, importFile: handleFileChosen, openFilePicker: handleAddClick } = useLibraryFileImport({
+  const {
+    importing,
+    importFile: handleFileChosen,
+    openFilePicker: handleAddClick
+  } = useLibraryFileImport({
     fileInputRef,
     notify,
     onStarted: (song) => {
@@ -196,26 +202,18 @@ export default function Library({ onOpenSongSettings }) {
   });
   const handleDeleteRecording = useCallback(
     async (recording) => {
-      if (
-        !(await confirmDialog( translateSaved("Удалить это записанное исполнение?")
-        ))
-      )
-        return;
+      if (!(await confirmDialog(translateSaved("Удалить это записанное исполнение?")))) return;
       try {
         await api.deleteRecording(recording.id);
         refreshRecordings();
       } catch (err) {
-        await notify( translateSaved("Не удалось удалить запись: {0}", { 0: getErrorMessage(err) })
-        );
+        await notify(translateSaved("Не удалось удалить запись: {0}", { 0: getErrorMessage(err) }));
       }
     },
     [confirmDialog, notify, refreshRecordings]
   );
   const cancelProcessing = useCallback(async () => {
-    if (
-      !processingSong ||
-      !(await confirmDialog(translateSaved("Отменить обработку этой песни?")))
-    )
+    if (!processingSong || !(await confirmDialog(translateSaved("Отменить обработку этой песни?"))))
       return;
     try {
       await api.cancelProcessing(processingSong.id);
@@ -263,7 +261,9 @@ export default function Library({ onOpenSongSettings }) {
         }
         setGlobalRouteBlackout(true);
         setKaraokeTransitioning(true);
-        await new Promise((resolve) => { window.setTimeout(resolve, 920); });
+        await new Promise((resolve) => {
+          window.setTimeout(resolve, 920);
+        });
         navigate("/karaoke", { state: { songId: selectedSong.id, autoPlay: true } });
       } catch (openError) {
         karaokeTransitioningRef.current = false;
@@ -277,15 +277,9 @@ export default function Library({ onOpenSongSettings }) {
     [navigate, notify, activeRoom, openKaraokeInRoom]
   );
   return (
-    <Stack
-      align="center"
-      sx={{ height: "100vh" }}
-    >
+    <Stack align="center" sx={{ height: "100vh" }}>
       <LibraryBackdrop />
-      <Stack
-        align="center"
-        sx={{ width: "90%", height: "100vh", overflow: "visible" }}
-      >
+      <Stack align="center" sx={{ width: "90%", height: "100vh", overflow: "visible" }}>
         <LibraryHero
           songCount={visibleSongs.length}
           readyCount={readyCount}
@@ -301,14 +295,8 @@ export default function Library({ onOpenSongSettings }) {
           setQuery={setQuery}
         />
         <LibraryResults error={error} songs={filtered}>
-          <Stack
-            sx={{ width: "110%", overflow: "auto", overflowX: "hidden", padding: "0.5% 5%" }}
-          >
-            <Grid
-              columns={3}
-              gap={20}
-              sx={{ margin: "1rem 0", marginBottom: "7rem" }}
-            >
+          <Stack sx={{ width: "110%", overflow: "auto", overflowX: "hidden", padding: "0.5% 5%" }}>
+            <Grid columns={3} gap={20} sx={{ margin: "1rem 0", marginBottom: "7rem" }}>
               {filtered.map((song, cardIndex) => (
                 <LibrarySongCard
                   key={song.id}
@@ -364,9 +352,7 @@ export default function Library({ onOpenSongSettings }) {
         status={processingStatus}
         onClose={() => setProcessingSong(null)}
         onCancel={cancelProcessing}
-        onOpenKaraoke={(songId) =>
-          navigate("/karaoke", { state: { songId } })
-        }
+        onOpenKaraoke={(songId) => navigate("/karaoke", { state: { songId } })}
       />
     </Stack>
   );

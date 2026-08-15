@@ -40,7 +40,9 @@ export default function useSettingsForm(notify) {
       let active = true;
       api
         .getAppSettings()
-        .then((settings) => { setForm(settings); })
+        .then((settings) => {
+          setForm(settings);
+        })
         .catch((error) => {
           if (active) {
             notifyRef.current(
@@ -55,7 +57,9 @@ export default function useSettingsForm(notify) {
     // Stryker disable next-line ArrayDeclaration: stable latest-value ref.
     [notifyRef]
   );
-  useEffect(() => { if (form?.theme) applyTheme(form.theme); }, [form?.theme]);
+  useEffect(() => {
+    if (form?.theme) applyTheme(form.theme);
+  }, [form?.theme]);
   const updateField = (name, value) => {
     setSaveStatus("idle");
     setForm((current) => ({ ...current, [name]: value }));

@@ -6,7 +6,10 @@ const HORIZONTAL_ARROW_KEYS = ["ArrowLeft", "ArrowRight"];
 
 const MODIFIER_ACTIONS = {
   KeyY: ({ redo }) => redo,
-  KeyS: ({ saveRef }) => () => saveRef.current?.(),
+  KeyS:
+    ({ saveRef }) =>
+    () =>
+      saveRef.current?.(),
   KeyA: ({ editable, selectAll }) => (editable ? null : selectAll),
   KeyC: ({ editable, copySelected }) => (editable ? null : copySelected),
   KeyX: ({ editable, copySelected, deleteSelected }) =>
@@ -17,15 +20,12 @@ const MODIFIER_ACTIONS = {
           deleteSelected();
         },
   KeyV: ({ editable, pasteNotes }) => (editable ? null : pasteNotes),
-  KeyD: ({ editable, duplicateSelected }) =>
-    editable ? null : duplicateSelected
+  KeyD: ({ editable, duplicateSelected }) => (editable ? null : duplicateSelected)
 };
 
 function getModifierAction(code, context) {
   if (code === "KeyZ") return context.shiftKey ? context.redo : context.undo;
-  return Object.hasOwn(MODIFIER_ACTIONS, code)
-    ? MODIFIER_ACTIONS[code](context)
-    : null;
+  return Object.hasOwn(MODIFIER_ACTIONS, code) ? MODIFIER_ACTIONS[code](context) : null;
 }
 
 export default function useMelodyEditorHotkeys({
@@ -113,8 +113,7 @@ export default function useMelodyEditorHotkeys({
       if (HORIZONTAL_ARROW_KEYS.includes(key)) {
         const direction = key === "ArrowRight" ? 1 : -1;
         run(() => {
-          if (mod)
-            nudgeSelected(direction * (event.shiftKey ? 0.25 : 0.05), 0);
+          if (mod) nudgeSelected(direction * (event.shiftKey ? 0.25 : 0.05), 0);
           else selectAdjacentNote(direction);
         });
         return;

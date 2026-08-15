@@ -8,11 +8,7 @@
 .settings-tabs button.is-active {
   color: var(--color-text);
   border-color: var(--color-border-strong);
-  background: color-mix(
-    in srgb,
-    var(--color-primary) 10%,
-    var(--color-surface-glass)
-  );
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface-glass));
   box-shadow:
     0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
     0 0 1.875rem color-mix(in srgb, var(--color-accent) 24%, transparent);
@@ -65,8 +61,7 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-4) calc(var(--space-8) + var(--space-3)) var(--space-4)
-    var(--space-5);
+  padding: var(--space-4) calc(var(--space-8) + var(--space-3)) var(--space-4) var(--space-5);
   border-block-end: var(--hairline) solid var(--color-border);
   background: color-mix(in srgb, var(--color-surface-glass) 28%, transparent);
   min-block-size: 6.25rem;
@@ -100,4 +95,3 @@
 }
 
 /* Audio & recording reuses the shared field/card system. */
-
