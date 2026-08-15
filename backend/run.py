@@ -134,7 +134,23 @@ def main() -> None:
             raise SystemExit(23)
 
         from app.main import app
-        uvicorn.run(app, host=config.HOST, port=config.PORT)
+
+        # Request access lines (GET /songs/... 200 OK) drown out the AI logs in
+        # desktop development.  Keep warnings/errors, and allow temporary
+        # re-enabling with SONGAPP_ACCESS_LOG=1 when HTTP tracing is needed.
+        access_log = os.getenv("SONGAPP_ACCESS_LOG", "0").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        uvicorn.run(
+            app,
+            host=config.HOST,
+            port=config.PORT,
+            access_log=access_log,
+            log_level=os.getenv("SONGAPP_UVICORN_LOG_LEVEL", "warning"),
+        )
     finally:
         lock.release()
 

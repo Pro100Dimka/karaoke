@@ -90,6 +90,27 @@ def test_saved_storage_path_is_validated(monkeypatch, tmp_path):
     assert config._saved_path("songs_folder", default) == selected.resolve()
 
 
+
+def test_saved_storage_path_from_previous_dev_checkout_uses_current_default(monkeypatch, tmp_path):
+    current_root = tmp_path / "D" / "Git" / "karaoke"
+    old_root = tmp_path / "E" / "Git" / "karaoke"
+    current_default = current_root / "karaoke_songs"
+    settings = tmp_path / "paths.json"
+    settings.write_text(
+        '{"songs_folder": "' + (old_root / "karaoke_songs").as_posix() + '"}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(config, "IS_FROZEN", False)
+    monkeypatch.setattr(config, "PROJECT_ROOT", current_root)
+    monkeypatch.setattr(config, "PATH_SETTINGS_FILE", settings)
+    assert config._saved_path("songs_folder", current_default) == current_default
+
+    external = tmp_path / "external-library"
+    settings.write_text(
+        '{"songs_folder": "' + external.as_posix() + '"}', encoding="utf-8"
+    )
+    assert config._saved_path("songs_folder", current_default) == external.resolve()
+
 def test_apply_storage_paths_updates_only_supplied_values(monkeypatch, tmp_path):
     original_models = config.MODELS_DIR
     ensure = Mock()

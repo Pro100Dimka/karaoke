@@ -59,12 +59,16 @@ def test_audio_callbacks_queue_clipped_copies(monkeypatch):
     session, _stream = make_session(monkeypatch, gain=2)
     input_data = np.array([[0.75], [-0.75]], dtype=np.float32)
     session._callback(input_data, 2, None, None)
-    assert session._queue.get_nowait().tolist() == [[1.0], [-1.0]]
+    recorded = session._queue.get_nowait()
+    assert recorded.shape == input_data.shape
+    assert np.max(np.abs(recorded)) <= 0.985
+    assert not np.allclose(recorded, input_data * 2)
 
     output = np.empty((2, 2), dtype=np.float32)
     session._monitoring_enabled = True
     session._monitoring_callback(input_data, output, 2, None, None)
-    assert output.tolist() == [[1.0, 1.0], [-1.0, -1.0]]
+    assert np.max(np.abs(output)) <= 0.985
+    assert np.allclose(output[:, 0], output[:, 1])
     session._monitoring_enabled = False
     output.fill(9)
     session._monitoring_callback(input_data, output, 2, None, None)

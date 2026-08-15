@@ -81,15 +81,42 @@ DB_PATH = DATA_DIR / "app.db"
 PATH_SETTINGS_FILE = DATA_DIR / "path-settings.json"
 
 
+def _looks_like_previous_dev_checkout(path: Path, default: Path) -> bool:
+    """Detect a saved project-relative path from a checkout on another drive.
+
+    Development settings are persistent, so moving ``D:\\Git\\karaoke`` to
+    another drive could otherwise keep writing songs into the old checkout.
+    Deliberately selected external folders are preserved; only paths whose tail
+    exactly matches this checkout's project-relative default are remapped.
+    """
+    if IS_FROZEN:
+        return False
+    try:
+        relative = default.resolve().relative_to(PROJECT_ROOT.resolve())
+    except ValueError:
+        return False
+    tail = tuple(part.casefold() for part in relative.parts)
+    parts = path.resolve().parts
+    if not tail or len(parts) <= len(tail):
+        return False
+    if tuple(part.casefold() for part in parts[-len(tail) :]) != tail:
+        return False
+    old_root = Path(*parts[: -len(tail)]).resolve()
+    current_root = PROJECT_ROOT.resolve()
+    return old_root != current_root and old_root.name.casefold() == current_root.name.casefold()
+
+
 def _saved_path(name: str, default: Path) -> Path:
-    """Read a user-selected storage path without making DATA_DIR movable."""
+    """Read a user-selected path, ignoring stale paths from an old dev checkout."""
     try:
         raw = json.loads(PATH_SETTINGS_FILE.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, TypeError):
         raw = {}
     value = raw.get(name) if isinstance(raw, dict) else None
     if isinstance(value, str) and value.strip():
-        return Path(value).expanduser().resolve()
+        selected = Path(value).expanduser().resolve()
+        if not _looks_like_previous_dev_checkout(selected, default):
+            return selected
     return default
 
 

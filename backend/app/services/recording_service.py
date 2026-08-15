@@ -26,6 +26,7 @@ import config
 import models
 from app import repositories
 from app.services import song_service
+from app.services.microphone_quality import StudioMicrophoneProcessor
 from app.services.db_utils import commit_refresh
 from app.services.resource_deletion import delete_with_files
 from app.utils.quarantine import existing_unique_paths
@@ -88,6 +89,7 @@ class RecordingSession:
         self._closed = False
         self._paused = False
         self._monitoring_enabled = monitoring_enabled
+        self._quality = StudioMicrophoneProcessor(sample_rate, channels)
         if monitoring_enabled:
             # Use the selected output, not Windows' default device. With an
             # audio interface those can be different endpoints.
@@ -119,10 +121,10 @@ class RecordingSession:
 
     def _callback(self, indata, frames, time_info, status):  # noqa: ARG002
         if not self._paused:
-            self._queue.put((indata * self.gain).clip(-1.0, 1.0).copy())
+            self._queue.put(self._quality.process(indata, self.gain).copy())
 
     def _monitoring_callback(self, indata, outdata, frames, time_info, status):  # noqa: ARG002
-        processed = (indata * self.gain).clip(-1.0, 1.0)
+        processed = self._quality.process(indata, self.gain)
         if not self._paused:
             self._queue.put(processed.copy())
         outdata.fill(0)

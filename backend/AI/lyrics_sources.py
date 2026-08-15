@@ -41,6 +41,11 @@ _WEB_LYRICS_HOSTS = {
 }
 
 _HTML_CHARSET = re.compile(rb"charset\s*=\s*['\"]?([a-zA-Z0-9._-]+)", re.I)
+_DOWNLOAD_SOURCE_TAG = re.compile(
+    r"\s*[\[(]\s*(?:https?://)?(?:www\.)?(?:[a-z0-9-]+\.)+(?:com|net|org|ru|ua|io|me|cc)"
+    r"[^\])]*[\])]\s*$",
+    re.I,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,9 +120,12 @@ class _LyricsHTMLParser(HTMLParser):
 
 
 def _lyrics_debug(message: str) -> None:
-    """Write lyrics diagnostics directly to the real backend console."""
+    """Write UTF-8 lyrics diagnostics directly to the real backend console."""
     stream = getattr(sys, "__stdout__", None) or sys.stdout
     with suppress(Exception):
+        encoding = str(getattr(stream, "encoding", "") or "").lower().replace("_", "-")
+        if hasattr(stream, "reconfigure") and encoding not in {"utf-8", "utf8"}:
+            stream.reconfigure(encoding="utf-8", errors="replace")
         print(message, file=stream, flush=True)
 
 
@@ -559,8 +567,12 @@ def _web_online(title: str | None) -> LyricsDiscovery:
 
 
 def _plain_search_query(value: str | None) -> str:
-    """Remove separator dashes/noisy trailing release tags and collapse spaces."""
-    value = str(value or "")
+    """Remove downloader/release noise and collapse an identity into a search query."""
+    value = _TITLE_NOISE.sub(" ", str(value or ""))
+    # Downloaders commonly append their host to the filename, e.g.
+    # ``Нервы-Кофе Мой Друг (zaycev.net)``.  It is not part of the song
+    # identity and substantially hurts LRCLIB/web recall.
+    value = _DOWNLOAD_SOURCE_TAG.sub(" ", value)
     value = re.sub(r"\s*[\[(][^\]\)]*(?:19|20)\d{2}[^\]\)]*[\])]\s*$", " ", value)
     return " ".join(value.replace("-", " ").replace("–", " ").replace("—", " ").split())
 

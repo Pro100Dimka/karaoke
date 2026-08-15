@@ -16,7 +16,13 @@ import threading
 import time
 
 import numpy as np
-import sounddevice as sd
+try:
+    import sounddevice as sd
+except Exception:  # PortAudio may be unavailable in CI/diagnostics.
+    from types import SimpleNamespace
+    sd = SimpleNamespace(Stream=None, WasapiSettings=lambda **kwargs: kwargs)
+
+from app.services.microphone_quality import StudioMicrophoneProcessor
 
 _running = True
 _level = {"rms_db": -120.0, "clipping": False, "silent": True}
@@ -63,7 +69,8 @@ def _stop(_signum: int, _frame: object) -> None:
     _running = False
 
 
-def _audio_callback(gain: float, restart_requested: threading.Event, glitches: list[float]):
+def _audio_callback(gain: float, restart_requested: threading.Event, glitches: list[float], sample_rate: float = 48_000):
+    quality = StudioMicrophoneProcessor(sample_rate, 1)
     def callback(indata, outdata, _frames, _time_info, status):
         if status:
             now = time.monotonic()
@@ -72,7 +79,7 @@ def _audio_callback(gain: float, restart_requested: threading.Event, glitches: l
                 glitches.pop(0)
             if len(glitches) >= 3:
                 restart_requested.set()
-        processed = np.clip(indata[:, 0] * gain, -1.0, 1.0)
+        processed = quality.process(indata[:, :1], gain)[:, 0]
         outdata.fill(0)
         for channel in range(outdata.shape[1]):
             outdata[:, channel] = processed
@@ -97,7 +104,7 @@ def main() -> int:
 
     restart_requested = threading.Event()
     glitches: list[float] = []
-    callback = _audio_callback(gain, restart_requested, glitches)
+    callback = _audio_callback(gain, restart_requested, glitches, float(options["sample_rate"]))
 
     stream = None
     try:

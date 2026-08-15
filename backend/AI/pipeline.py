@@ -776,13 +776,9 @@ class KaraokePipeline:
         if supplied:
             _print_full_lyrics(lyrics_source or "unknown", supplied, lyrics_query)
         else:
-            from .lyrics_sources import _metadata_search_candidates
-
-            attempts = _metadata_search_candidates(source, request.title)
-            for index, query in enumerate(attempts, 1):
-                _lyrics_console(f"[lyrics] search #{index}: {query}")
-                _lyrics_console(f"[lyrics] search #{index}: NOT FOUND")
-            _lyrics_console("[lyrics] all title searches failed -> ASR fallback")
+            # discover_lyrics already emitted the exact attempts.  Do not print the
+            # same search plan a second time through a different console path.
+            _lyrics_console("[lyrics] title search exhausted -> ASR fallback")
             if asr_language:
                 _lyrics_console(f"[lyrics] ASR language forced: {asr_language}")
 

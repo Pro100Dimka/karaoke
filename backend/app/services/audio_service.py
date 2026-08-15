@@ -20,6 +20,11 @@ try:
 
     _AUDIO_BACKEND_AVAILABLE = True
 except Exception:
+    from types import SimpleNamespace
+    sd = SimpleNamespace(
+        query_devices=None, query_hostapis=None, rec=None, wait=None,
+        default=SimpleNamespace(device=(None, None)), WasapiSettings=None
+    )
     _AUDIO_BACKEND_AVAILABLE = False
 
 

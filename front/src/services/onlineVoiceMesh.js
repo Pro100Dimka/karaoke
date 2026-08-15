@@ -1,5 +1,6 @@
 // eslint-disable-next-line import/extensions
 import { translateSaved } from "../i18n/runtime.js";
+import { createStudioMicrophoneGraph } from "./microphoneStudioQuality.js";
 // Audio is transferred directly between participants. The Worker is used only
 // for signalling, therefore microphone data is never stored in the cloud.
 
@@ -35,6 +36,7 @@ export default class OnlineVoiceMesh {
     this.incomingFiles = new Map();
     this.pendingTransferConfirmations = new Map();
     this.stream = null;
+    this.microphoneGraph = null;
     this.startPromise = null;
     this.lifecycleVersion = 0;
     this.onRemoteStream = null;
@@ -58,7 +60,12 @@ export default class OnlineVoiceMesh {
       .some((track) => track.readyState === "live");
     if (liveStream) return this.stream;
     if (this.stream) {
-      this.stream.getTracks?.().forEach((track) => track.stop());
+      if (this.microphoneGraph) {
+        await this.microphoneGraph.close?.().catch?.(() => {});
+        this.microphoneGraph = null;
+      } else {
+        this.stream.getTracks?.().forEach((track) => track.stop());
+      }
       this.stream = null;
     }
     if (this.startPromise) return this.startPromise;
@@ -67,7 +74,7 @@ export default class OnlineVoiceMesh {
       .getUserMedia({
         audio: {
           echoCancellation: false,
-          noiseSuppression: false,
+          noiseSuppression: true,
           autoGainControl: false,
           channelCount: 1,
           sampleRate: { ideal: 48_000 },
@@ -79,8 +86,10 @@ export default class OnlineVoiceMesh {
           stream.getTracks().forEach((track) => track.stop());
           throw new Error(translateSaved("Запуск микрофона отменён"));
         }
-        this.stream = stream;
-        stream.getAudioTracks().forEach((track) => {
+        this.microphoneGraph = createStudioMicrophoneGraph(stream);
+        const outgoingStream = this.microphoneGraph.stream || stream;
+        this.stream = outgoingStream;
+        outgoingStream.getAudioTracks().forEach((track) => {
           track.contentHint = "music";
         });
         for (const [participantId, peer] of this.peers) {
@@ -91,7 +100,7 @@ export default class OnlineVoiceMesh {
               .map((sender) => sender.track?.id)
               .filter(Boolean)
           );
-          stream.getTracks().forEach((track) => {
+          outgoingStream.getTracks().forEach((track) => {
             if (!existingTrackIds.has(track.id)) peer.addTrack(track, stream);
           });
           await this.optimizeAudioSenders(peer);
@@ -102,7 +111,7 @@ export default class OnlineVoiceMesh {
         await Promise.allSettled(
           pending.map((participantId) => this.invite(participantId))
         );
-        return stream;
+        return outgoingStream;
       })
       .finally(() => {
         if (this.startPromise === startPromise) this.startPromise = null;
@@ -763,7 +772,12 @@ export default class OnlineVoiceMesh {
     new Set([...this.peers.keys(), ...this.channels.keys()]).forEach((id) =>
       this.removePeer(id)
     );
-    this.stream?.getTracks().forEach((track) => track.stop());
+    if (this.microphoneGraph) {
+      this.microphoneGraph.close?.().catch?.(() => {});
+      this.microphoneGraph = null;
+    } else {
+      this.stream?.getTracks().forEach((track) => track.stop());
+    }
     this.stream = null;
     this.startPromise = null;
     this.pendingInvites.clear();

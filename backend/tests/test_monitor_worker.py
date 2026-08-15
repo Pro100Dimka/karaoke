@@ -108,12 +108,15 @@ def test_callback_updates_levels_and_requests_restart_after_glitches(monkeypatch
         callback(input_data, output, 2, None, "glitch")
         callback(input_data, output, 2, None, "glitch")
         callback(input_data, output, 2, None, "glitch")
-        assert output.tolist() == [[1.0, 1.0], [-1.0, -1.0]]
+        assert np.max(np.abs(output)) <= 0.985
+        assert np.allclose(output[:, 0], output[:, 1])
 
     stream.start.side_effect = start
     monkeypatch.setattr(monitor_worker.sd, "Stream", Mock(return_value=stream))
     assert monitor_worker.main() == 0
-    assert monitor_worker._level == {"rms_db": 0.0, "clipping": True, "silent": False}
+    assert monitor_worker._level["rms_db"] > -20
+    assert monitor_worker._level["clipping"] is False
+    assert monitor_worker._level["silent"] is False
     capsys.readouterr()
 
 
@@ -164,6 +167,7 @@ def test_script_entrypoint_registers_signals_and_exits(monkeypatch, tmp_path, ca
         return stream
 
     monkeypatch.setattr(monitor_worker.sd, "Stream", create_stream)
+    monkeypatch.setitem(__import__("sys").modules, "sounddevice", monitor_worker.sd)
     register = Mock()
     monkeypatch.setattr(monitor_worker.signal, "signal", register)
     with pytest.raises(SystemExit) as stopped:

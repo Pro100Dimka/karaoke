@@ -11,6 +11,7 @@ import contextlib
 import gc
 import io
 import logging
+import math
 import os
 import re
 import sys
@@ -139,16 +140,18 @@ _STEP_PLAN = {
 # Each entry describes the next observable boundary, a conservative duration
 # and text intended for a person rather than an internal engine log.
 _AI_STAGE_PLAN = {
+    # End percentages mirror the next real Pipeline._notify boundary.  The
+    # heartbeat fills the gap smoothly while a long stage is running.
     "decode": (8.0, 5, "Подготавливаем аудио"),
-    "separation": (35.0, 120, "Отделяем голос исполнителя от музыки"),
-    "tempo": (55.0, 20, "Определяем темп и тональность"),
+    "separation": (48.0, 120, "Отделяем голос исполнителя от музыки"),
+    "tempo": (52.0, 8, "Определяем темп и тональность"),
     "pitch": (70.0, 45, "Определяем мелодию голоса"),
     "transcription": (82.0, 75, "Распознаём слова песни"),
     "alignment": (82.0, 75, "Синхронизируем слова с голосом"),
     "syllables": (90.0, 15, "Уточняем слоги и вокальные ноты"),
-    "midi": (96.0, 10, "Создаём ноты для караоке"),
+    "midi": (98.0, 10, "Создаём ноты для караоке"),
     "manifest": (99.7, 4, "Проверяем результат"),
-    "complete": (99.7, 2, "Завершаем обработку"),
+    "complete": (100.0, 2, "Завершаем обработку"),
 }
 
 
@@ -320,8 +323,13 @@ def get_processing_telemetry(song_id: str) -> dict:
             if expected_done >= 5 and actual_done > 0
             else 1.0
         )
-        fraction = min(0.94, elapsed / max(1.0, expected * speed_factor))
+        # Never freeze at a hard cap while a stage is legitimately taking
+        # longer than its estimate.  Exponential interpolation keeps moving
+        # towards the next real stage boundary without ever crossing it.
+        scale = max(1.0, expected * speed_factor)
+        fraction = 1.0 - math.exp(-2.0 * elapsed / scale)
         percent = base + (next_percent - base) * fraction
+        percent = min(next_percent - 0.05, percent) if next_percent > base else base
         stage_names = list(_AI_STAGE_PLAN)
         try:
             stage_index = stage_names.index(stage)

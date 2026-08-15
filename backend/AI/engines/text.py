@@ -3354,6 +3354,32 @@ def _consensus_language(
     return _majority_language(detected, None)
 
 
+def _normalize_generation_config(model) -> None:
+    """Apply explicit greedy-generation defaults to nested HF models.
+
+    qwen-asr wraps the Transformers model, and different package versions expose
+    ``generation_config`` at different ``.model`` depths.  Setting the values
+    explicitly prevents one warning per ASR chunk without changing greedy output.
+    """
+    current = model
+    seen: set[int] = set()
+    for _ in range(5):
+        if current is None or id(current) in seen:
+            break
+        seen.add(id(current))
+        generation_config = getattr(current, "generation_config", None)
+        if generation_config is not None:
+            if getattr(generation_config, "pad_token_id", None) is None:
+                eos_token_id = getattr(generation_config, "eos_token_id", None)
+                if eos_token_id is not None:
+                    generation_config.pad_token_id = eos_token_id
+            if not bool(getattr(generation_config, "do_sample", False)) and hasattr(
+                generation_config, "temperature"
+            ):
+                generation_config.temperature = None
+        current = getattr(current, "model", None)
+
+
 class Qwen3Transcriber(Transcriber):
     name = "qwen3-asr"
 
@@ -3420,16 +3446,7 @@ class Qwen3Transcriber(Transcriber):
                     )
                     self._model = Qwen3ASRModel.from_pretrained(self.model_name, **kwargs)
             self._device = device
-            generation_config = getattr(
-                getattr(self._model, "model", self._model), "generation_config", None
-            )
-            if (
-                generation_config is not None
-                and getattr(generation_config, "pad_token_id", None) is None
-            ):
-                eos_token_id = getattr(generation_config, "eos_token_id", None)
-                if eos_token_id is not None:
-                    generation_config.pad_token_id = eos_token_id
+            _normalize_generation_config(self._model)
         return self._model
 
     @staticmethod

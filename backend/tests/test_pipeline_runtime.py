@@ -169,6 +169,23 @@ def test_speed_eta_and_telemetry_legacy_and_semantic(monkeypatch):
     assert pipeline_service.get_processing_telemetry("unknown")["eta_seconds"] >= 1
 
 
+
+def test_semantic_progress_keeps_advancing_for_long_separation(monkeypatch):
+    monkeypatch.setattr(pipeline_service, "_progress_runtime", {})
+    pipeline_service._progress_runtime["song"] = {
+        "stage": "separation",
+        "direct_percent": 8.0,
+        "stage_started_at": 0.0,
+        "detail": "separation",
+        "completed_stage_seconds": {},
+    }
+    monkeypatch.setattr(pipeline_service.time, "monotonic", Mock(return_value=140.0))
+    at_140 = pipeline_service.get_processing_telemetry("song")["progress_percent"]
+    monkeypatch.setattr(pipeline_service.time, "monotonic", Mock(return_value=220.0))
+    at_220 = pipeline_service.get_processing_telemetry("song")["progress_percent"]
+    assert 8.0 < at_140 < 48.0
+    assert at_140 < at_220 < 48.0
+
 def test_update_progress_persists_fields_and_closes_database(monkeypatch):
     database = Mock()
     current = SimpleNamespace()
