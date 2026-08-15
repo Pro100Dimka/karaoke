@@ -258,6 +258,7 @@ class PipelineHealthOut(BaseModel):
     torch_available: bool
     cuda_available: bool
     ai_dir_found: bool
+    runtime: dict[str, object] | None = None
 
 
 class AIModelResourceOut(BaseModel):

@@ -102,6 +102,7 @@ def test_diagnostics_router_forwards_all_services(monkeypatch):
         "torch_available": True,
         "cuda_available": False,
         "ai_dir_found": True,
+        "runtime": {"selected": {"pitch": {"backend": "pytorch", "device": "cpu"}}},
     }
     monkeypatch.setattr(
         diagnostics.diagnostics_service, "pipeline_health", Mock(return_value=health)

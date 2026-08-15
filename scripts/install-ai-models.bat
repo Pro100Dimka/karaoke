@@ -24,7 +24,8 @@ set "WORKERS=4"
 set "TORCH=2.8.0"
 set "TV=0.23.0"
 set "TA=2.8.0"
-set "TORCH_URL=https://download.pytorch.org/whl/cu126"
+set "TORCH_CUDA_URL=https://download.pytorch.org/whl/cu126"
+set "TORCH_CPU_URL=https://download.pytorch.org/whl/cpu"
 set "PIP=--quiet --disable-pip-version-check --no-input"
 
 set "PYTHONWARNINGS=ignore::DeprecationWarning"
@@ -96,8 +97,20 @@ rem ============================================================================
 rem TORCH
 rem ============================================================================
 
-echo [2/7] CUDA PyTorch...
-"%PY%" -c "import torch;raise SystemExit(0 if torch.__version__.startswith('%TORCH%') else 1)" >nul 2>&1
+echo [2/7] PyTorch compute runtime...
+call :detect_nvidia
+if errorlevel 1 (
+    set "TORCH_URL=%TORCH_CPU_URL%"
+    set "TORCH_FLAVOR=CPU"
+    set "TORCH_LOCAL=cpu"
+) else (
+    set "TORCH_URL=%TORCH_CUDA_URL%"
+    set "TORCH_FLAVOR=CUDA 12.6"
+    set "TORCH_LOCAL=cu126"
+)
+echo   Selected: %TORCH_FLAVOR%
+
+"%PY%" -c "import torch;v=torch.__version__.lower();raise SystemExit(0 if v.startswith('%TORCH%') and ('+%TORCH_LOCAL%' in v) else 1)" >nul 2>&1
 if errorlevel 1 (
     call :pip --upgrade "torch==%TORCH%" "torchvision==%TV%" "torchaudio==%TA%" --index-url "%TORCH_URL%" || goto :fail
 )
@@ -188,6 +201,13 @@ rem ============================================================================
 :quick
 if not exist "%PY%" exit /b 1
 if not exist "%PYRT%" exit /b 1
+
+rem Keep the cached environment portable when the project is moved between
+rem NVIDIA and non-NVIDIA PCs without importing the heavy torch runtime.
+call :detect_nvidia
+if errorlevel 1 (set "EXPECTED_TORCH_LOCAL=cpu") else set "EXPECTED_TORCH_LOCAL=cu126"
+"%PY%" -c "import importlib.metadata as m;v=m.version('torch').lower();raise SystemExit(0 if v.startswith('%TORCH%') and ('+%EXPECTED_TORCH_LOCAL%' in v) else 1)" >nul 2>&1
+if errorlevel 1 exit /b 1
 if not exist "%ENV%" exit /b 1
 if not exist "%MSST_INF%" exit /b 1
 if not exist "%MSST_CFG%" exit /b 1
@@ -212,6 +232,13 @@ set "PYTHONPATH=%BACK%;%PYTHONPATH%"
 set "RC=%ERRORLEVEL%"
 set "PYTHONPATH=%OLD_PYTHONPATH%"
 exit /b %RC%
+
+:detect_nvidia
+rem nvidia-smi is the most reliable cheap probe when the NVIDIA driver is installed.
+where nvidia-smi.exe >nul 2>&1 && exit /b 0
+rem Fallback for systems where nvidia-smi is not on PATH.
+powershell.exe -NoProfile -Command "$g=Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue ^| Where-Object { $_.Name -match 'NVIDIA' }; if($g){exit 0}else{exit 1}" >nul 2>&1
+exit /b %errorlevel%
 
 :py312
 "%~1" -c "import sys;raise SystemExit(0 if sys.version_info[:2]==(3,12) else 1)"
