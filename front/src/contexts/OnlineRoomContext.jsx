@@ -244,7 +244,7 @@ export function OnlineRoomProvider({ children }) {
         const currentCommandId = roomRef.current?.host
           ? hostSongCommandRef.current?.commandId
           : pendingSongCommandRef.current?.commandId;
-        if (commandId && currentCommandId && commandId !== currentCommandId) return;
+        if (commandId && commandId !== currentCommandId) return;
         setTransferStatus({ participantId, commandId, stage, percent: Number(percent) || 0 });
       };
       const canAcceptSongPackage = (participantId, metadata) => {
@@ -255,16 +255,18 @@ export function OnlineRoomProvider({ children }) {
           participantsRef.current.some((participant) => participant.id === participantId && participant.role === "host");
       };
       voice.canAcceptFile = canAcceptSongPackage;
-      voice.onFile = async (participantId, blob, metadata) => {
+      voice.onFile = async (participantId, blob, metadata, signal) => {
         const pendingCommand = pendingSongCommandRef.current;
         if (!canAcceptSongPackage(participantId, metadata))
           throw new Error(translateSaved("Получение пакета песни больше не разрешено"));
         try {
-          setTransferStatus({ participantId, stage: "importing", percent: 100 });
-          await api.importSongPackage(blob, metadata.filename);
+          setTransferStatus({ participantId, commandId: metadata.commandId, stage: "importing", percent: 100 });
+          await (signal
+            ? api.importSongPackage(blob, metadata.filename, { signal })
+            : api.importSongPackage(blob, metadata.filename));
           if (!isCurrentConnection() || pendingSongCommandRef.current?.commandId !== metadata.commandId) return false;
           pendingSongCommandRef.current = null;
-          setTransferStatus({ participantId, stage: "complete", percent: 100 });
+          setTransferStatus({ participantId, commandId: metadata.commandId, stage: "complete", percent: 100 });
           if (pendingCommand?.commandId === metadata.commandId && pendingCommand.songId === metadata.songId) {
             if (pendingCommand.__originatedHere) {
               client.send("sync", { state: { type: "open-karaoke", songId: pendingCommand.songId, commandId: pendingCommand.commandId } });
@@ -276,9 +278,11 @@ export function OnlineRoomProvider({ children }) {
           }
           return true;
         } catch (error) {
+          if (signal?.aborted) return false;
           if (isCurrentConnection()) {
             setTransferStatus({
               participantId,
+              commandId: metadata.commandId,
               stage: "error",
               error: translateSaved("Не удалось импортировать песню: {0}", {
                 0: getErrorMessage(error)

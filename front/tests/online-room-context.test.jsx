@@ -783,6 +783,9 @@ describe("online room provider", () => {
     expect(hook.result.current.transferStatus).toEqual({ stage: "sending", percent: 30 });
     act(() => voice.onTransferProgress({ participantId: "guest", stage: "error", percent: 0, metadata: { commandId: "cmd-a" } }));
     expect(hook.result.current.transferStatus).toEqual({ stage: "sending", percent: 30 });
+    options.hostSongCommandRef.current = null;
+    act(() => voice.onTransferProgress({ participantId: "guest", stage: "error", percent: 0, metadata: { commandId: "cmd-b" } }));
+    expect(hook.result.current.transferStatus).toEqual({ stage: "sending", percent: 30 });
   });
 
   test("keeps another participant transfer visible when one transfer completes", async () => {

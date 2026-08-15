@@ -1,5 +1,6 @@
 // eslint-disable-next-line import/extensions
 import { translateSaved } from "../i18n/runtime.js";
+import { cleanupIncomingTransfer, createTransferSink } from "./onlineVoiceTransferStorage.js";
 
 const wait = (delayMs) =>
   new Promise((resolve) => { globalThis.setTimeout(resolve, delayMs); });
@@ -9,51 +10,19 @@ const getBinaryChunk = (data) => {
   return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
 };
 const MAX_INCOMING_FILE_BYTES = 512 * 1024 * 1024;
-const MAX_MEMORY_FALLBACK_BYTES = 64 * 1024 * 1024;
 const MAX_TRANSFER_ID_LENGTH = 128;
 const MAX_FILENAME_LENGTH = 512;
 const MAX_INCOMING_CHUNKS = 32_768;
 const MAX_DATA_MESSAGE_LENGTH = 16 * 1024;
 const TRANSFER_STALL_TIMEOUT_MS = 30_000;
 const TRANSFER_CONFIRM_TIMEOUT_MS = 5 * 60_000;
+const TRANSFER_FINALIZE_TIMEOUT_MS = 30_000;
 const MAX_PENDING_WRITE_BYTES = 512 * 1024;
 const CLOSED_CHANNEL_STATES = ["closing", "closed"];
 const isValidTransferSize = (size) =>
   Number.isSafeInteger(size) && size >= 0 && size <= MAX_INCOMING_FILE_BYTES;
 const isTransferCancelled = (mesh, channel, lifecycleVersion) =>
   lifecycleVersion !== mesh.lifecycleVersion || channel.readyState !== "open";
-
-const createTransferSink = (participantId, metadata) => {
-  const getDirectory = globalThis.navigator?.storage?.getDirectory;
-  if (typeof getDirectory === "function") return (async () => {
-    const root = await getDirectory.call(globalThis.navigator.storage);
-    const safeId = `${participantId}-${metadata.transferId}`.replace(/[^a-zA-Z0-9_-]/g, "_");
-    const name = `advoice-transfer-${safeId}.part`;
-    const handle = await root.getFileHandle(name, { create: true });
-    const writable = await handle.createWritable();
-    let closed = false;
-    return {
-      write: (chunk) => writable.write(chunk),
-      finish: async () => {
-        if (!closed) { closed = true; await writable.close(); }
-        return handle.getFile();
-      },
-      cleanup: async () => {
-        if (!closed) { closed = true; await writable.abort?.().catch?.(() => {}); }
-        await root.removeEntry(name).catch(() => {});
-      }
-    };
-  })();
-  if (metadata.size > MAX_MEMORY_FALLBACK_BYTES)
-    throw new Error(translateSaved("Для большого файла требуется дисковое хранилище браузера"));
-  const chunks = [];
-  return {
-    write: (chunk) => chunks.push(chunk),
-    finish: () => new globalThis.Blob(chunks, { type: metadata.mimeType }),
-    cleanup: async () => { chunks.length = 0; }
-  };
-};
-
 
 export function cancelOutboundTransfers(mesh, participantId, channel, error = new Error(translateSaved("Канал передачи песни закрыт"))) {
   const matches = (entry) => (!participantId || entry.participantId === participantId) && (!channel || entry.channel === channel);
@@ -74,12 +43,6 @@ export function cancelOutboundTransfers(mesh, participantId, channel, error = ne
     });
   }
 }
-
-export const cleanupIncomingTransfer = (transfer) => {
-  if (!transfer) return;
-  if (transfer.timer) globalThis.clearTimeout(transfer.timer);
-  Promise.resolve(transfer.sink).then((sink) => sink.cleanup()).catch(() => {});
-};
 
 function parseDataMessage(data) {
   if (data.length > MAX_DATA_MESSAGE_LENGTH) return null;
@@ -191,7 +154,9 @@ function handleFileStart(mesh, participantId, channel, message) {
       throw new Error(translateSaved("Передача файла больше не может быть принята"));
     }
     mesh.incomingFiles.set(participantId, {
-      metadata, channel, chunkCount: 0, received: 0, lastPercent: -1, sink, writes: Promise.resolve(),
+      metadata, channel, phase: "receiving", cancelled: false, cleanupStarted: false,
+      controller: typeof globalThis.AbortController === "function" ? new globalThis.AbortController() : null,
+      chunkCount: 0, received: 0, lastPercent: -1, sink, writes: Promise.resolve(),
       timer: mesh.createIncomingTransferTimer(participantId, metadata.transferId)
     });
     mesh.emitTransferProgress(participantId, "receiving", 0, metadata);
@@ -227,45 +192,89 @@ function sendTransferStatus(channel, payload) {
   if (channel.readyState === "open") channel.send(JSON.stringify(payload));
 }
 
-function handleFileEnd(mesh, participantId, channel, message) {
+const currentIncomingTransfer = (mesh, participantId, channel) => {
   const transfer = mesh.incomingFiles.get(participantId);
-  mesh.incomingFiles.delete(participantId);
-  if (transfer?.timer) globalThis.clearTimeout(transfer.timer);
-  if (
-    !transfer ||
-    transfer.metadata.transferId !== message.transferId ||
-    transfer.received !== transfer.metadata.size
-  ) {
-    cleanupIncomingTransfer(transfer);
+  return transfer?.channel === channel ? transfer : null;
+};
+
+const incomingTransferActive = (mesh, participantId, channel, transfer) =>
+  !transfer.cancelled && mesh.incomingFiles.get(participantId) === transfer && transfer.channel === channel;
+
+function rejectIncomingTransfer(mesh, participantId, channel, transfer, error) {
+  if (mesh.incomingFiles.get(participantId) === transfer) mesh.incomingFiles.delete(participantId);
+  transfer.phase = "failed";
+  cleanupIncomingTransfer(transfer);
+  sendTransferStatus(channel, { type: "file-error", transferId: transfer.metadata.transferId, error });
+  mesh.emitTransferProgress(participantId, "error", transfer.lastPercent, transfer.metadata);
+}
+
+function handleFileEnd(mesh, participantId, channel, message) {
+  const transfer = currentIncomingTransfer(mesh, participantId, channel);
+  if (!transfer || transfer.phase !== "receiving") return;
+  if (transfer.metadata.transferId !== message.transferId) {
     sendTransferStatus(channel, {
-      type: "file-error",
-      transferId: message.transferId,
-      error: translateSaved("Получен неполный файл песни")
+      type: "file-error", transferId: message.transferId,
+      error: translateSaved("Получен неизвестный идентификатор передачи")
     });
     return;
   }
+  if (transfer.received !== transfer.metadata.size) {
+    rejectIncomingTransfer(mesh, participantId, channel, transfer, translateSaved("Получен неполный файл песни"));
+    return;
+  }
 
-  Promise.resolve(transfer.writes)
+  transfer.phase = "flushing";
+  globalThis.clearTimeout(transfer.timer);
+  const cancellation = new Promise((resolve) => { transfer.cancelFinalization = resolve; });
+  const cancelled = () => !incomingTransferActive(mesh, participantId, channel, transfer);
+  const ensureActive = () => {
+    if (cancelled()) throw new Error(translateSaved("Передача файла отменена"));
+  };
+  transfer.timer = globalThis.setTimeout(() => {
+    if (!incomingTransferActive(mesh, participantId, channel, transfer)) return;
+    rejectIncomingTransfer(mesh, participantId, channel, transfer, translateSaved("Завершение передачи песни превысило время ожидания"));
+  }, TRANSFER_FINALIZE_TIMEOUT_MS);
+
+  const step = (promise) => Promise.race([
+    Promise.resolve(promise).then((value) => ({ done: true, value })),
+    cancellation.then(() => ({ done: false }))
+  ]).then((result) => {
+    if (!result.done) throw new Error(translateSaved("Передача файла отменена"));
+    ensureActive();
+    return result.value;
+  });
+
+  step(transfer.writes)
     .then(async () => {
       if (transfer.writeError) throw transfer.writeError;
-      const file = await transfer.sink.finish();
+      transfer.phase = "finalizing";
+      const file = await step(transfer.sink.finish());
+      transfer.phase = "importing";
       mesh.emitTransferProgress(participantId, "importing", 100, transfer.metadata);
-      const accepted = await mesh.onFile?.(participantId, file, transfer.metadata);
+      const accepted = await step(mesh.onFile?.(participantId, file, transfer.metadata, transfer.controller?.signal));
       if (accepted !== true) throw new Error(translateSaved("Полученный файл не был принят"));
     })
     .then(() => {
+      if (!incomingTransferActive(mesh, participantId, channel, transfer)) return;
+      transfer.phase = "complete";
+      mesh.incomingFiles.delete(participantId);
+      globalThis.clearTimeout(transfer.timer);
       sendTransferStatus(channel, { type: "file-complete", transferId: message.transferId });
       mesh.emitTransferProgress(participantId, "complete", 100, transfer.metadata);
     })
     .catch((error) => {
-      sendTransferStatus(channel, {
-        type: "file-error",
-        transferId: message.transferId,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      mesh.emitTransferProgress(participantId, "error", 100, transfer.metadata);
+      if (transfer.cancelled || mesh.incomingFiles.get(participantId) !== transfer) return;
+      rejectIncomingTransfer(
+        mesh, participantId, channel, transfer,
+        error instanceof Error ? error.message : String(error)
+      );
     })
-    .finally(() => cleanupIncomingTransfer(transfer));
+    .finally(() => {
+      transfer.cancelFinalization = null;
+      if (mesh.incomingFiles.get(participantId) === transfer && transfer.phase === "complete")
+        mesh.incomingFiles.delete(participantId);
+      cleanupIncomingTransfer(transfer);
+    });
 }
 
 const DATA_MESSAGE_HANDLERS = {
@@ -285,15 +294,16 @@ function handleStringMessage(mesh, participantId, channel, data) {
 }
 
 function handleBinaryChunk(mesh, participantId, channel, data) {
-  const transfer = mesh.incomingFiles.get(participantId);
+  const transfer = currentIncomingTransfer(mesh, participantId, channel);
   const chunk = getBinaryChunk(data);
-  if (!transfer || !chunk || chunk.byteLength === 0) return;
+  if (!transfer || transfer.phase !== "receiving" || !chunk || chunk.byteLength === 0) return;
   if (
     transfer.chunkCount >= MAX_INCOMING_CHUNKS ||
     transfer.received + chunk.byteLength > transfer.metadata.size
   ) {
-    cleanupIncomingTransfer(transfer);
-    mesh.incomingFiles.delete(participantId);
+    rejectIncomingTransfer(
+      mesh, participantId, channel, transfer, translateSaved("Получен некорректный размер файла песни")
+    );
     return;
   }
 
@@ -301,28 +311,24 @@ function handleBinaryChunk(mesh, participantId, channel, data) {
   transfer.chunkCount += 1;
   transfer.writes = transfer.writes
     .then(async () => {
+      if (!incomingTransferActive(mesh, participantId, channel, transfer)) return;
       await transfer.sink.write(chunk);
+      if (!incomingTransferActive(mesh, participantId, channel, transfer)) return;
       sendTransferStatus(channel, {
         type: "file-credit", transferId: transfer.metadata.transferId, bytes: chunk.byteLength
       });
     })
     .catch((error) => {
-      if (transfer.writeError) return;
+      if (transfer.writeError || transfer.cancelled) return;
       transfer.writeError = error;
-      if (mesh.incomingFiles.get(participantId) === transfer) mesh.incomingFiles.delete(participantId);
-      cleanupIncomingTransfer(transfer);
-      sendTransferStatus(channel, {
-        type: "file-error",
-        transferId: transfer.metadata.transferId,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      mesh.emitTransferProgress(participantId, "error", transfer.lastPercent, transfer.metadata);
+      rejectIncomingTransfer(
+        mesh, participantId, channel, transfer,
+        error instanceof Error ? error.message : String(error)
+      );
     });
   globalThis.clearTimeout(transfer.timer);
-  transfer.timer = mesh.createIncomingTransferTimer( participantId, transfer.metadata.transferId
-  );
-  const percent = Math.min( 99, Math.floor((transfer.received / transfer.metadata.size) * 100)
-  );
+  transfer.timer = mesh.createIncomingTransferTimer(participantId, transfer.metadata.transferId);
+  const percent = Math.min(99, Math.floor((transfer.received / transfer.metadata.size) * 100));
   if (percent === transfer.lastPercent) return;
   transfer.lastPercent = percent;
   mesh.emitTransferProgress(participantId, "receiving", percent, transfer.metadata);
@@ -342,6 +348,7 @@ export function setupDataChannel(mesh, participantId, channel) {
   channel.binaryType = "arraybuffer";
   channel.bufferedAmountLowThreshold = 256 * 1024;
   channel.onmessage = ({ data }) => {
+    if (mesh.channels.get(participantId) !== channel) return;
     if (typeof data === "string") {
       handleStringMessage(mesh, participantId, channel, data);
       return;

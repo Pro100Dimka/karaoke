@@ -7,13 +7,13 @@ import { closeAudioContext, closeAudioContextQuietly } from "../utils/audio-cont
 
 import {
   cancelOutboundTransfers,
-  cleanupIncomingTransfer,
   createIncomingTransferTimer,
   emitTransferProgress,
   sendFile,
   setupDataChannel,
   waitForDataChannel
 } from "./onlineVoiceTransfers.js";
+import { cleanupIncomingTransfer } from "./onlineVoiceTransferStorage.js";
 
 const MAX_PENDING_ICE_CANDIDATES = 256;
 export default class OnlineVoiceMesh {

@@ -47,9 +47,9 @@ export const songsApi = {
     const id = encodePathSegment(rawId);
     return requestBlob(`/songs/${id}/package`, { timeoutMs: 5 * 60_000 });
   },
-  importSongPackage: (blob, filename = "song.karaoke.zip") => {
+  importSongPackage: (blob, filename = "song.karaoke.zip", options = {}) => {
     const form = new FormData();
     form.append("file", blob, filename);
-    return request("/songs/package/import", { method: "POST", body: form, timeoutMs: 5 * 60_000 });
+    return request("/songs/package/import", { ...options, method: "POST", body: form, timeoutMs: 5 * 60_000 });
   }
 };

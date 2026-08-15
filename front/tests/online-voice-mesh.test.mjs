@@ -2426,6 +2426,54 @@ test("stale old-channel close never cancels a transfer owned by its replacement"
   await expect(transfer).resolves.toBeUndefined();
 });
 
+test("stale old-channel binary never mutates the replacement incoming transfer", () => {
+  const mesh = makeMesh();
+  const oldChannel = new FakeChannel();
+  const nextChannel = new FakeChannel();
+  mesh.setupDataChannel("host", oldChannel);
+  oldChannel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "old", size: 1 }) });
+  mesh.setupDataChannel("host", nextChannel);
+  nextChannel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "new", size: 1 }) });
+  const transfer = mesh.incomingFiles.get("host");
+  const write = vi.spyOn(transfer.sink, "write");
+  oldChannel.onmessage({ data: new Uint8Array([7]).buffer });
+  expect(mesh.incomingFiles.get("host")).toBe(transfer);
+  expect(transfer.received).toBe(0);
+  expect(write).not.toHaveBeenCalled();
+  expect(oldChannel.send).not.toHaveBeenCalledWith(expect.stringContaining('"type":"file-credit"'));
+});
+
+test("stale old-channel file-end never destroys the replacement incoming transfer", () => {
+  const mesh = makeMesh();
+  const oldChannel = new FakeChannel();
+  const nextChannel = new FakeChannel();
+  mesh.setupDataChannel("host", oldChannel);
+  oldChannel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "old", size: 1 }) });
+  mesh.setupDataChannel("host", nextChannel);
+  nextChannel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "new", size: 1 }) });
+  const transfer = mesh.incomingFiles.get("host");
+  const cleanup = vi.spyOn(transfer.sink, "cleanup");
+  oldChannel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "old" }) });
+  expect(mesh.incomingFiles.get("host")).toBe(transfer);
+  expect(cleanup).not.toHaveBeenCalled();
+});
+
+test("invalid current-channel chunk rejects immediately and cleans the transfer once", async () => {
+  const mesh = makeMesh();
+  const channel = new FakeChannel();
+  mesh.setupDataChannel("host", channel);
+  channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "oversized", size: 1 }) });
+  const transfer = mesh.incomingFiles.get("host");
+  const cleanup = vi.spyOn(transfer.sink, "cleanup");
+  channel.send.mockClear();
+  channel.onmessage({ data: new Uint8Array([1, 2]).buffer });
+  await Promise.resolve();
+  expect(mesh.incomingFiles.has("host")).toBe(false);
+  expect(cleanup).toHaveBeenCalledOnce();
+  expect(channel.send).toHaveBeenCalledWith(expect.stringContaining('"type":"file-error"'));
+  expect(channel.send).toHaveBeenCalledWith(expect.stringContaining('"transferId":"oversized"'));
+});
+
 test("channel replacement cancels pending incoming admission without blocking the new channel", async () => {
   const mesh = makeMesh();
   let resolveOld;
@@ -2445,4 +2493,124 @@ test("channel replacement cancels pending incoming admission without blocking th
   await Promise.resolve();
   await Promise.resolve();
   expect(mesh.incomingFiles.get("host")?.metadata.transferId).toBe("new");
+});
+
+test("file-end keeps ownership while the final disk write is pending and channel close cancels it", async () => {
+  let resolveWrite;
+  const pendingWrite = new Promise((resolve) => { resolveWrite = resolve; });
+  const removeEntry = vi.fn().mockResolvedValue(undefined);
+  const writable = {
+    write: vi.fn(() => pendingWrite),
+    close: vi.fn().mockResolvedValue(undefined),
+    abort: vi.fn().mockResolvedValue(undefined)
+  };
+  globalThis.navigator.storage = {
+    getDirectory: vi.fn().mockResolvedValue({
+      getFileHandle: vi.fn().mockResolvedValue({
+        createWritable: vi.fn().mockResolvedValue(writable),
+        getFile: vi.fn().mockResolvedValue(new Blob([[1]]))
+      }),
+      removeEntry
+    })
+  };
+  const mesh = makeMesh();
+  const channel = new FakeChannel();
+  mesh.onFile = vi.fn().mockResolvedValue(true);
+  mesh.setupDataChannel("host", channel);
+  channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "pending-write", size: 1 }) });
+  await vi.waitFor(() => expect(mesh.incomingFiles.has("host")).toBe(true));
+  channel.onmessage({ data: new Uint8Array([1]).buffer });
+  await vi.waitFor(() => expect(writable.write).toHaveBeenCalledOnce());
+  channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "pending-write" }) });
+  expect(mesh.incomingFiles.get("host")?.phase).toBe("flushing");
+  channel.readyState = "closed";
+  channel.onclose();
+  expect(mesh.incomingFiles.has("host")).toBe(false);
+  await vi.waitFor(() => expect(writable.abort).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(removeEntry).toHaveBeenCalledOnce());
+  expect(mesh.onFile).not.toHaveBeenCalled();
+  resolveWrite();
+});
+
+test("mesh stop cancels post-file-end finalization before application handoff", async () => {
+  let resolveWrite;
+  const pendingWrite = new Promise((resolve) => { resolveWrite = resolve; });
+  const writable = {
+    write: vi.fn(() => pendingWrite),
+    close: vi.fn().mockResolvedValue(undefined),
+    abort: vi.fn().mockResolvedValue(undefined)
+  };
+  globalThis.navigator.storage = {
+    getDirectory: vi.fn().mockResolvedValue({
+      getFileHandle: vi.fn().mockResolvedValue({
+        createWritable: vi.fn().mockResolvedValue(writable),
+        getFile: vi.fn().mockResolvedValue(new Blob([[1]]))
+      }),
+      removeEntry: vi.fn().mockResolvedValue(undefined)
+    })
+  };
+  const mesh = makeMesh();
+  const channel = new FakeChannel();
+  mesh.onFile = vi.fn().mockResolvedValue(true);
+  mesh.setupDataChannel("host", channel);
+  channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "stop-finalize", size: 1 }) });
+  await vi.waitFor(() => expect(mesh.incomingFiles.has("host")).toBe(true));
+  channel.onmessage({ data: new Uint8Array([1]).buffer });
+  await vi.waitFor(() => expect(writable.write).toHaveBeenCalledOnce());
+  channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "stop-finalize" }) });
+  mesh.stop();
+  await vi.waitFor(() => expect(writable.abort).toHaveBeenCalledOnce());
+  expect(mesh.incomingFiles.size).toBe(0);
+  expect(mesh.onFile).not.toHaveBeenCalled();
+  resolveWrite();
+});
+
+test("receiver stays busy until finalization completes", async () => {
+  let resolveImport;
+  const mesh = makeMesh();
+  const channel = new FakeChannel();
+  mesh.onFile = vi.fn(() => new Promise((resolve) => { resolveImport = resolve; }));
+  mesh.setupDataChannel("host", channel);
+  channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "one", size: 1 }) });
+  channel.onmessage({ data: new Uint8Array([1]).buffer });
+  channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "one" }) });
+  await vi.waitFor(() => expect(mesh.incomingFiles.get("host")?.phase).toBe("importing"));
+  channel.send.mockClear();
+  channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "two", size: 1 }) });
+  expect(channel.send).toHaveBeenCalledWith(expect.stringContaining('"type":"file-error"'));
+  expect(channel.send).toHaveBeenCalledWith(expect.stringContaining('"transferId":"two"'));
+  resolveImport(true);
+  await vi.waitFor(() => expect(mesh.incomingFiles.has("host")).toBe(false));
+});
+
+test("finalization timeout cleans a stalled transfer", async () => {
+  vi.useFakeTimers();
+  const writable = {
+    write: vi.fn(() => new Promise(() => {})),
+    close: vi.fn().mockResolvedValue(undefined),
+    abort: vi.fn().mockResolvedValue(undefined)
+  };
+  globalThis.navigator.storage = {
+    getDirectory: vi.fn().mockResolvedValue({
+      getFileHandle: vi.fn().mockResolvedValue({
+        createWritable: vi.fn().mockResolvedValue(writable),
+        getFile: vi.fn().mockResolvedValue(new Blob([[1]]))
+      }),
+      removeEntry: vi.fn().mockResolvedValue(undefined)
+    })
+  };
+  const mesh = makeMesh();
+  const channel = new FakeChannel();
+  mesh.setupDataChannel("host", channel);
+  channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "timeout-finalize", size: 1 }) });
+  await vi.runAllTicks();
+  await Promise.resolve();
+  channel.onmessage({ data: new Uint8Array([1]).buffer });
+  await Promise.resolve();
+  channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "timeout-finalize" }) });
+  expect(mesh.incomingFiles.has("host")).toBe(true);
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(mesh.incomingFiles.has("host")).toBe(false);
+  expect(writable.abort).toHaveBeenCalledOnce();
+  expect(channel.send).toHaveBeenCalledWith(expect.stringContaining('"type":"file-error"'));
 });
