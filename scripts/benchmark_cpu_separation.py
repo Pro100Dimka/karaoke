@@ -105,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
         description="A/B benchmark of the existing CPU Mel-Band RoFormer path."
     )
     parser.add_argument("input", type=Path)
-    parser.add_argument("--seconds", type=float, default=30.0)
+    parser.add_argument("--seconds", type=float, default=20.0)
     parser.add_argument("--threads", default="auto")
     args = parser.parse_args(argv)
 
@@ -158,6 +158,7 @@ def main(argv: list[str] | None = None) -> int:
             print("\n[STOP] Quality is preserved, but this tuning is not faster on this CPU.")
             return 3
         print("\n[PASS] Same output and faster CPU separation on this machine.")
+        print("       Use scripts\\start-dev-cpu.bat to run the full app with this tuning.")
         return 0
 
 

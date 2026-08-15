@@ -10,8 +10,8 @@ if "%~1"=="" (
     echo   scripts\benchmark-cpu-separation.bat "C:\path\song.mp3" [seconds] [threads]
     echo.
     echo Example:
-    echo   scripts\benchmark-cpu-separation.bat "D:\Music\song.mp3" 30 auto
-    echo   scripts\benchmark-cpu-separation.bat "D:\Music\song.mp3" 30 10
+    echo   scripts\benchmark-cpu-separation.bat "D:\Music\song.mp3" 20 auto
+    echo   scripts\benchmark-cpu-separation.bat "D:\Music\song.mp3" 20 10
     exit /b 2
 )
 if not exist "%PY%" (
@@ -25,7 +25,7 @@ if not exist "%ENV%" (
 call "%ENV%"
 
 set "SECONDS=%~2"
-if not defined SECONDS set "SECONDS=30"
+if not defined SECONDS set "SECONDS=20"
 set "THREADS=%~3"
 if not defined THREADS set "THREADS=auto"
 
