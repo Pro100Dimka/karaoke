@@ -176,7 +176,7 @@ vi.mock("../src/pages/Library/modals/recordings", () => ({
       </div>
     ) : null
 }));
-vi.mock("../src/pages/Karaoke/modals/performance-analysis-modal", () => ({
+vi.mock("../src/pages/Karaoke/performance-analysis-modal", () => ({
   default: ({ onClose, onDone, onDeleted }) => (
     <div data-testid="analysis">
       <button data-testid="analysis-close" onClick={onClose} />

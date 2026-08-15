@@ -265,6 +265,35 @@ def test_query_helpers_and_metadata_candidates(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "mutagen", SimpleNamespace(File=lambda *_a, **_k: blank))
     assert lyrics._metadata_search_candidates(source, None) == ["Artist Song"]
 
+    # Downloader tags can contaminate artist with the album and duplicate the
+    # artist at the start of title.  Album-aware cleanup plus filename fallback
+    # must still produce the canonical Artist + Title query first.
+    noisy = {
+        "title": ["Нервы Моя Леди"],
+        "artist": ["Нервы Всё, Что Вокруг"],
+        "album": ["Всё, Что Вокруг"],
+    }
+    noisy_source = tmp_path / "Нервы-Моя Леди.mp3"
+    noisy_source.touch()
+    monkeypatch.setitem(sys.modules, "mutagen", SimpleNamespace(File=lambda *_a, **_k: noisy))
+    assert lyrics._metadata_search_candidates(noisy_source, None) == [
+        "Нервы Моя Леди",
+        "Моя Леди",
+    ]
+
+    # Some files omit the album tag entirely.  Shared artist/title prefix plus
+    # the clean pipeline fallback must still recover the canonical identity.
+    noisy_without_album = {
+        "title": ["Нервы Моя Леди"],
+        "artist": ["Нервы Всё, Что Вокруг"],
+    }
+    monkeypatch.setitem(
+        sys.modules, "mutagen", SimpleNamespace(File=lambda *_a, **_k: noisy_without_album)
+    )
+    assert lyrics._metadata_search_candidates(
+        tmp_path / "source.wav", "Нервы - Моя Леди"
+    ) == ["Нервы Моя Леди", "Моя Леди"]
+
 
 def test_discover_lyrics_query_order(monkeypatch, tmp_path):
     monkeypatch.setattr(lyrics, "_local_file", lambda *_: lyrics.LyricsDiscovery())
@@ -297,6 +326,37 @@ def test_discover_lyrics_query_order(monkeypatch, tmp_path):
     assert not lyrics.discover_lyrics(tmp_path / "song.mp3").text
 
 
+def test_lyrics_logging_is_compact_by_default_and_verbose_on_demand(monkeypatch, tmp_path):
+    monkeypatch.setattr(lyrics, "_local_file", lambda *_: lyrics.LyricsDiscovery())
+    monkeypatch.setattr(lyrics, "_embedded", lambda _: "")
+    monkeypatch.setattr(lyrics, "_metadata_search_candidates", lambda *_: ["first", "second"])
+    monkeypatch.setattr(
+        lyrics,
+        "_online",
+        lambda query, _duration: (
+            lyrics.LyricsDiscovery("found", "LRCLIB")
+            if query == "second"
+            else lyrics.LyricsDiscovery()
+        ),
+    )
+    monkeypatch.setattr(lyrics, "_web_online", lambda _: lyrics.LyricsDiscovery())
+    concise, verbose = [], []
+    monkeypatch.setattr(lyrics, "_lyrics_log", concise.append)
+    monkeypatch.setattr(lyrics, "_lyrics_debug", verbose.append)
+    result = lyrics.discover_lyrics(tmp_path / "song.mp3")
+    assert result.text == "found"
+    assert concise == [
+        "[lyrics] exact search plan (2 queries): ['first', 'second']",
+        "[lyrics] FOUND via LRCLIB: second",
+    ]
+    assert verbose == [
+        "[lyrics] SEARCH #1 BEGIN: first",
+        "[lyrics] SEARCH #1 LRCLIB NOT FOUND: first",
+        "[lyrics] SEARCH #1 END NOT FOUND: first",
+        "[lyrics] SEARCH #2 BEGIN: second",
+    ]
+
+
 def test_discover_lyrics_prefers_sidecar_then_embedded(monkeypatch, tmp_path):
     source = tmp_path / "song.mp3"
     monkeypatch.setattr(
@@ -312,3 +372,45 @@ def test_discover_lyrics_prefers_sidecar_then_embedded(monkeypatch, tmp_path):
     monkeypatch.setattr(lyrics, "_metadata_search_candidates", Mock())
     assert lyrics.discover_lyrics(source).source == "metadata"
     lyrics._metadata_search_candidates.assert_not_called()
+
+
+def test_mychords_direct_search_finds_song_without_external_search(monkeypatch):
+    search_page = '''
+    <html><body>
+      <form action="/ru/search" method="get">
+        <input type="text" name="query" placeholder="Найти песню или исполнителя">
+        <input type="hidden" name="lang" value="ru">
+      </form>
+    </body></html>
+    '''
+    result_page = '''
+    <html><body>
+      <a href="/ru/nervi/22635-nervy-moya-ledi.html">Нервы - Моя леди</a>
+      <a href="/ru/other/1-other.html">Другая песня</a>
+    </body></html>
+    '''
+    lyrics_page = '''
+    <html><body><div itemprop="lyrics">
+      Первая строка песни<br>Вторая строка песни<br>Третья строка песни<br>
+      Четвертая строка песни<br>Пятая строка песни<br>Шестая строка песни<br>
+      Седьмая строка песни<br>Восьмая строка песни<br>Девятая строка песни<br>
+      Десятая строка песни<br>Одиннадцатая строка песни<br>Двенадцатая строка песни
+    </div></body></html>
+    '''
+
+    def fake_urlopen(request, timeout=8.0):
+        url = request.full_url
+        if url == "https://mychords.net/ru/search":
+            return Response(search_page, "utf-8")
+        if url.startswith("https://mychords.net/ru/search?"):
+            assert "query=" in url and "%D0%9D%D0%B5%D1%80%D0%B2%D1%8B" in url
+            return Response(result_page, "utf-8")
+        if url == "https://mychords.net/ru/nervi/22635-nervy-moya-ledi.html":
+            return Response(lyrics_page, "utf-8")
+        raise AssertionError(url)
+
+    monkeypatch.setattr(lyrics.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(lyrics, "_web_search", lambda _title: pytest.fail("DDG fallback used"))
+    result = lyrics._web_online("Нервы Моя Леди")
+    assert result.source == "web:mychords.net"
+    assert "Первая строка" in result.text

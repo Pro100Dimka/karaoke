@@ -10,7 +10,7 @@ vi.mock("../src/pages/Library", () => ({
 vi.mock("../src/pages/Karaoke", () => ({
   default: () => <div data-testid="karaoke" />
 }));
-vi.mock("../src/pages/MelodyEditor", () => ({
+vi.mock("../src/pages/MelodyEditor.jsx", () => ({
   default: () => <div data-testid="editor" />
 }));
 

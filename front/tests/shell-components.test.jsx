@@ -88,7 +88,7 @@ vi.mock("../src/components/routes", () => ({
 }));
 vi.mock("../src/api/client", () => ({ api: { getHealth: mocks.getHealth } }));
 vi.mock("../src/api/core", () => ({ MOCK_API_ENABLED: false }));
-vi.mock("../src/config/runtime", () => ({ BACKEND_BOOT_RETRY_MS: 5 }));
+vi.mock("../src/runtime-config", () => ({ BACKEND_BOOT_RETRY_MS: 5 }));
 vi.mock("../src/utils/theme", () => ({ getSavedTheme: mocks.getTheme }));
 vi.mock("../src/utils/language", () => ({ getSavedLanguage: () => "uk" }));
 vi.mock("../src/utils/ui-preferences", () => ({

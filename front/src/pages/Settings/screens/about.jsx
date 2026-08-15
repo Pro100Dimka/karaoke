@@ -1,7 +1,7 @@
 import { Mic } from "lucide-react";
 
 import { api } from "../../../api/client";
-import { POLLING_INTERVALS } from "../../../config/runtime";
+import { POLLING_INTERVALS } from "../../../runtime-config";
 import { usePolling } from "../../../hooks/usePolling";
 import { useI18n } from "../../../i18n";
 import { Grid, Stack, Typography } from "../../../theme/ui";

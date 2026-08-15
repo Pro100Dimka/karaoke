@@ -21,7 +21,7 @@ vi.mock("../src/pages/Library/modals/song-settings/melody-editor", () => ({
   )
 }));
 
-import MelodyEditorPage from "../src/pages/MelodyEditor/index.jsx";
+import MelodyEditorPage from "../src/pages/MelodyEditor.jsx.jsx";
 
 beforeEach(() => {
   mocks.navigate.mockReset();

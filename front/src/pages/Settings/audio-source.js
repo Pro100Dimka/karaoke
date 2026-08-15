@@ -1,7 +1,7 @@
 /* eslint-disable no-promise-executor-return */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../api/client";
-import { POLLING_INTERVALS } from "../../config/runtime";
+import { POLLING_INTERVALS } from "../../runtime-config";
 import { useAppDialog } from "../../contexts/AppDialog";
 import useSpeakingLevels from "../../contexts/hooks/useSpeakingLevels";
 import useAsyncQueue from "../../hooks/useAsyncQueue";

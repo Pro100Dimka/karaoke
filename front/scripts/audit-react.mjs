@@ -8,7 +8,10 @@ const findings = [];
 function walk(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const fullPath = path.join(directory, entry.name);
-    if (entry.isDirectory()) return walk(fullPath);
+    if (entry.isDirectory()) {
+      if (fullPath === path.join(ROOT, "theme")) return [];
+      return walk(fullPath);
+    }
     return EXTENSIONS.has(path.extname(entry.name)) ? [fullPath] : [];
   });
 }

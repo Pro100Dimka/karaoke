@@ -1,0 +1,1464 @@
+/* ==========================================================================
+   KARAOKE VIDEO COVER + ANALYSIS ROUTE FIX
+   Keep the video as the only surface beneath lyrics/MelodyRoll. Making the
+   performance stage absolute prevents any parent/theme background strip from
+   showing through around the stage.
+   ========================================================================== */
+.karaoke-stage {
+  background: #000 !important;
+}
+
+.karaoke-performance-stage.karaoke-video-stage {
+  position: absolute !important;
+  inset: 0 !important;
+  inline-size: 100% !important;
+  block-size: 100% !important;
+  min-block-size: 100% !important;
+  z-index: 0;
+}
+
+.karaoke-scene-video {
+  inset: -1px !important;
+  inline-size: calc(100% + 2px) !important;
+  block-size: calc(100% + 2px) !important;
+}
+
+/* ========================================================================== 
+   KARAOKE READABILITY + INLINE PIANO LABELS + MINIMAL WINDOW CHROME
+   ========================================================================== */
+
+/* Window chrome is now overlay-only: no visible top strip, brand, or maximize
+   control. The transparent drag zone remains so the frameless window can still
+   be moved, while only Minimize and Close are visible. */
+.app-shell {
+  padding-block-start: 0 !important;
+}
+
+.app-body,
+.app-main {
+  min-block-size: 100dvh !important;
+  min-height: 100vh !important;
+}
+
+.title-bar {
+  block-size: 2.65rem !important;
+  inline-size: 100% !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  pointer-events: none;
+}
+
+.title-bar__actions {
+  pointer-events: auto;
+  margin-inline-start: auto !important;
+  block-size: 2.65rem;
+  background: rgba(8, 5, 9, 0.22);
+  backdrop-filter: blur(0.45rem);
+  border-end-start-radius: 0.65rem;
+  overflow: hidden;
+}
+
+.title-bar__button {
+  inline-size: 3rem !important;
+  block-size: 2.65rem !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.title-bar__button:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.title-bar__button.is-danger:hover {
+  background: rgba(210, 24, 58, 0.88) !important;
+}
+
+/* Two stable lyric rows. Every lyric line remains on a single visual line;
+   long text scales down instead of wrapping and creating an accidental third
+   row. */
+.karaoke-lyrics {
+  inline-size: min(94rem, 94vw) !important;
+  max-inline-size: 94vw !important;
+  inset-inline: 50% auto !important;
+  transform: translateX(-50%) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: clamp(0.45rem, 1vh, 0.8rem) !important;
+  padding: 0 !important;
+  overflow: visible !important;
+}
+
+.karaoke-lyric {
+  inline-size: 100% !important;
+  max-inline-size: 100% !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+  text-align: center !important;
+  font-size: calc(
+    clamp(2.35rem, 4.4vw, 5.2rem) * var(--lyric-line-scale, 1)
+  ) !important;
+  line-height: 1.02 !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.006em !important;
+  color: rgba(255, 255, 255, 0.88) !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.88) !important;
+  -webkit-text-stroke: 0.045em rgba(0, 0, 0, 0.72) !important;
+  paint-order: stroke fill !important;
+  text-shadow:
+    0 0.08em 0.12em rgba(0, 0, 0, 0.9),
+    0 0.18em 0.42em rgba(0, 0, 0, 0.72),
+    0 0 1.1em rgba(0, 0, 0, 0.42) !important;
+}
+
+.karaoke-lyric-word {
+  white-space: nowrap !important;
+}
+
+.karaoke-lyric-current .karaoke-lyric-character,
+[data-theme="light"] .karaoke-lyric-current .karaoke-lyric-character {
+  text-shadow:
+    0 0.08em 0.12em rgba(0, 0, 0, 0.9),
+    0 0.18em 0.42em rgba(0, 0, 0, 0.72) !important;
+  -webkit-text-stroke: 0.04em rgba(0, 0, 0, 0.72) !important;
+}
+
+.karaoke-lyric-next {
+  margin-block-start: 0 !important;
+  opacity: 0.9 !important;
+  font-size: calc(
+    clamp(1.8rem, 3.15vw, 3.7rem) * var(--lyric-line-scale, 1)
+  ) !important;
+}
+
+.karaoke-lyric-next .karaoke-lyric-character,
+[data-theme="light"] .karaoke-lyric-next .karaoke-lyric-character {
+  color: rgba(255, 255, 255, 0.76) !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.76) !important;
+  -webkit-text-stroke: 0.035em rgba(0, 0, 0, 0.66) !important;
+  text-shadow:
+    0 0.08em 0.12em rgba(0, 0, 0, 0.86),
+    0 0.16em 0.36em rgba(0, 0, 0, 0.64) !important;
+}
+
+/* The piano is one continuous control now: note names are drawn directly on
+   the keys, so there is no separate label gutter beside the keyboard. */
+.melody-roll .piano-roll-keyboard-bed {
+  opacity: 0.12 !important;
+}
+
+/* ==========================================================================
+   KARAOKE VIEWPORT + PIANO/NODE POLISH
+   The window chrome is overlay-only, so Karaoke must consume the whole
+   viewport. Piano keys stay subtle and passed notes fade like glass.
+   ========================================================================== */
+.karaoke-app-shell,
+.karaoke-app-shell .app-body,
+.karaoke-app-shell .app-main,
+.karaoke-stage,
+.karaoke-performance-stage.karaoke-video-stage {
+  inline-size: 100% !important;
+  block-size: 100dvh !important;
+  min-block-size: 100dvh !important;
+  max-block-size: 100dvh !important;
+}
+
+.karaoke-app-shell {
+  overflow: hidden !important;
+}
+
+.karaoke-app-shell .app-body,
+.karaoke-app-shell .app-main {
+  overflow: hidden !important;
+}
+
+.melody-roll .melody-note-past {
+  mix-blend-mode: screen;
+}
+
+/* ==========================================================================
+   GLOBAL ROUTE BLACKOUT + STRONGER LIBRARY MUSIC NOTES
+   ========================================================================== */
+.app-route-blackout {
+  position: fixed;
+  z-index: 2147483000;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 420ms ease,
+    visibility 0s linear 420ms;
+}
+
+.app-route-blackout.is-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    opacity 420ms ease,
+    visibility 0s linear 0s;
+}
+
+/* ========================================================================== 
+   MODAL POLISH · corner close controls + stable performance analysis layout
+   ========================================================================== */
+
+/* The close control sits directly on the modal corner and intentionally hangs
+   half outside the card. Modal scrolling belongs to .modal-scroll, not the shell. */
+.app-modal.modal-card,
+.settings-modal.modal-card,
+.song-settings-modal.modal-card,
+.processing-modal.modal-card,
+.online-room-modal.modal-card,
+.app-dialog.modal-card,
+.performance-analysis-modal.modal-card {
+  overflow: visible;
+}
+
+.app-modal > .ui-card__panel,
+.app-modal > .ui-card__panel > .ui-card__content {
+  overflow: visible;
+}
+
+.app-modal-close,
+.modal-close,
+.performance-analysis-close,
+.app-dialog-close {
+  position: absolute;
+  z-index: 120;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  margin: 0;
+  inline-size: 2.65rem;
+  block-size: 2.65rem;
+  aspect-ratio: 1;
+  transform: translate(30%, -30%);
+  border: var(--hairline) solid var(--color-border-strong);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-surface-strong) 92%, transparent);
+  backdrop-filter: blur(0.75rem) saturate(145%);
+  box-shadow:
+    0 0.55rem 1.25rem color-mix(in srgb, var(--color-bg-deep) 34%, transparent),
+    0 0 0.7rem color-mix(in srgb, var(--color-primary) 32%, transparent),
+    inset 0 var(--hairline)
+      color-mix(in srgb, var(--color-highlight) 10%, transparent);
+}
+
+.app-modal-close:hover,
+.modal-close:hover,
+.performance-analysis-close:hover,
+.app-dialog-close:hover {
+  transform: translate(30%, -30%) scale(1.06);
+}
+
+/* Legacy microphone modal selectors retained for compatibility; the dialog now uses <Modal>. */
+.karaoke-settings-modal {
+  overflow: visible;
+}
+
+.karaoke-settings-close {
+  inset: 0 0 auto auto;
+  margin: 0;
+  inline-size: 2.65rem;
+  block-size: 2.65rem;
+  transform: translate(30%, -30%);
+  border-color: var(--color-border-strong);
+  background: color-mix(in srgb, var(--color-surface-strong) 92%, transparent);
+  backdrop-filter: blur(0.75rem) saturate(145%);
+  box-shadow:
+    0 0.55rem 1.25rem color-mix(in srgb, var(--color-bg-deep) 34%, transparent),
+    0 0 0.7rem color-mix(in srgb, var(--color-primary) 32%, transparent);
+}
+
+.karaoke-settings-close:hover {
+  transform: translate(30%, -30%) scale(1.06);
+}
+
+/* Performance analysis: one predictable flex shell, one scrolling body, and
+   metric cards that cannot overlap or escape their grid. */
+.performance-analysis-modal {
+  inline-size: min(48rem, calc(100vw - 3rem));
+  max-inline-size: min(48rem, calc(100vw - 3rem));
+  max-block-size: min(88dvh, 50rem);
+  padding: 0;
+}
+
+.performance-analysis-modal > .ui-card__panel,
+.performance-analysis-modal > .ui-card__panel > .ui-card__content {
+  min-inline-size: 0;
+  min-block-size: 0;
+  max-block-size: min(88dvh, 50rem);
+  overflow: visible;
+}
+
+.performance-analysis-modal .modal-title {
+  flex: 0 0 auto;
+  padding: var(--space-5) var(--space-6) var(--space-4);
+  border-bottom: var(--hairline) solid var(--color-border);
+}
+
+.performance-analysis-body {
+  display: flex;
+  min-inline-size: 0;
+  min-block-size: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6) var(--space-6);
+  overflow: auto;
+}
+
+.performance-analysis-grade {
+  align-self: center;
+  max-inline-size: 100%;
+  color: var(--color-primary-hover);
+  font: 900 clamp(1rem, 1.8vw, 1.35rem) / 1.15 var(--font-display);
+  text-align: center;
+}
+
+.performance-analysis-score {
+  align-self: center;
+  font: 950 clamp(3rem, 8vw, 5.4rem) / 0.9 var(--font-display);
+  letter-spacing: -0.055em;
+  text-align: center;
+}
+
+.performance-analysis-score small {
+  margin-inline-start: 0.18em;
+  font-size: 0.34em;
+  letter-spacing: 0;
+}
+
+.performance-analysis-body > .text-muted {
+  margin-block-start: calc(var(--space-2) * -1);
+  text-align: center;
+}
+
+.performance-analysis-metrics,
+.performance-analysis-metrics-expanded {
+  display: grid;
+  inline-size: 100%;
+  min-inline-size: 0;
+  grid-column: auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.performance-analysis-metrics > div {
+  display: flex;
+  min-inline-size: 0;
+  min-block-size: 5rem;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: var(--hairline) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-surface-soft) 78%, transparent);
+}
+
+.performance-analysis-metrics > div span {
+  overflow-wrap: anywhere;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.performance-analysis-metrics > div strong {
+  overflow-wrap: anywhere;
+  color: var(--color-text);
+  font-size: clamp(1rem, 2vw, 1.3rem);
+}
+
+.performance-analysis-advice {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--space-2);
+  border: var(--hairline) solid var(--color-border);
+}
+
+.performance-analysis-advice span {
+  overflow-wrap: anywhere;
+  color: var(--color-text-soft);
+  line-height: 1.55;
+}
+
+.performance-analysis-body .audio-player,
+.performance-analysis-body audio {
+  inline-size: 100%;
+  max-inline-size: 100%;
+}
+
+.performance-analysis-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding-block-start: var(--space-1);
+}
+
+@media (max-width: 40rem) {
+  .performance-analysis-modal {
+    inline-size: calc(100vw - 1.5rem);
+    max-inline-size: calc(100vw - 1.5rem);
+  }
+
+  .performance-analysis-modal .modal-title,
+  .performance-analysis-body {
+    padding-inline: var(--space-4);
+  }
+
+  .performance-analysis-metrics,
+  .performance-analysis-metrics-expanded {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Library theme image overscan. Parallax can now move a few pixels without
+   revealing the image boundary or the body background. */
+body {
+  background-size: calc(100% + 3rem) auto;
+  background-color: var(--color-bg-deep);
+}
+
+/* ==========================================================================
+   KARAOKE MICRO-POLISH · immediate playback, clearer lyrics, steadier controls
+   ========================================================================== */
+
+.melody-roll .piano-roll-keyboard-bed {
+  opacity: 0.16 !important;
+}
+
+.karaoke-lyric {
+  font-family: Inter, "Segoe UI", Arial, sans-serif !important;
+  font-weight: 800 !important;
+  font-size: calc(
+    clamp(2.15rem, 3.7vw, 4.35rem) * var(--lyric-line-scale, 1)
+  ) !important;
+  line-height: 1.08 !important;
+  letter-spacing: 0.002em !important;
+  -webkit-text-stroke: 1.15px rgba(0, 0, 0, 0.62) !important;
+  text-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.88),
+    0 5px 18px rgba(0, 0, 0, 0.5) !important;
+}
+
+.karaoke-lyric-current .karaoke-lyric-character,
+[data-theme="light"] .karaoke-lyric-current .karaoke-lyric-character {
+  -webkit-text-stroke: 1.05px rgba(0, 0, 0, 0.62) !important;
+  text-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.88),
+    0 5px 18px rgba(0, 0, 0, 0.5) !important;
+}
+
+.karaoke-lyric-next {
+  font-family: Inter, "Segoe UI", Arial, sans-serif !important;
+  font-weight: 760 !important;
+  font-size: calc(
+    clamp(1.7rem, 2.7vw, 3.15rem) * var(--lyric-line-scale, 1)
+  ) !important;
+  opacity: 0.86 !important;
+}
+
+.karaoke-lyric-next .karaoke-lyric-character,
+[data-theme="light"] .karaoke-lyric-next .karaoke-lyric-character {
+  -webkit-text-stroke: 0.9px rgba(0, 0, 0, 0.58) !important;
+  text-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.84),
+    0 4px 14px rgba(0, 0, 0, 0.45) !important;
+}
+
+/* ==========================================================================
+   MODAL UNIFICATION · one shell, clean corner control, clipped neon artifacts
+   ========================================================================== */
+.modal-card {
+  isolation: isolate;
+}
+
+/* Modal close sits on the border, but only slightly outside it. */
+.modal-card .app-modal-close {
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  inline-size: 2.45rem;
+  block-size: 2.45rem;
+  transform: translate(30%, -30%);
+}
+
+.modal-card .app-modal-close:hover {
+  transform: translate(30%, -30%) scale(1.06);
+}
+
+/* A modal is not an interactive neon card: keep the border, hide decorative
+   layers that can protrude beyond the opposite edge when the shell overflows. */
+.modal-card.ui-card--neon > .ui-card__glow,
+.modal-card.ui-card--neon > .ui-card__glow-mid,
+.modal-card.ui-card--neon > .ui-card__edge,
+.modal-card.ui-card--neon > .ui-card__glint,
+.modal-card.ui-card--neon > .ui-card__panel > .ui-card__sheen {
+  display: none;
+}
+
+.modal-card.ui-card--neon > .ui-card__panel,
+.modal-card.ui-card--neon > .ui-card__panel > .ui-card__content {
+  overflow: visible;
+  border-radius: inherit;
+}
+
+/* Settings and microphone dialogs now use the same Modal shell. */
+
+.karaoke-settings-modal {
+  inline-size: min(34rem, calc(100vw - 2rem));
+  max-block-size: min(86dvh, 42rem);
+}
+
+.karaoke-settings-modal > .ui-card__panel > .ui-card__content {
+  display: flex;
+  min-block-size: 0;
+  flex-direction: column;
+}
+
+.karaoke-settings-modal .microphone-effects,
+.karaoke-settings-modal .karaoke-settings-section {
+  min-block-size: 0;
+  padding: var(--space-5);
+}
+
+/* ========================================================================== 
+   LIBRARY / MELODY VISUAL TUNING · theme-matched terrain + stable piano
+   ========================================================================== */
+
+/* Keep the terrain inside the palette of the active theme instead of using a
+   white/magenta neon mix that fights the artwork behind it. */
+.library-wave-terrain {
+  --wave-terrain-rgb: 210, 48, 68;
+  --wave-terrain-accent-rgb: 255, 102, 92;
+  mix-blend-mode: screen;
+  opacity: 0.84;
+  filter: contrast(1.34) brightness(calc(0.96 + var(--radio-bass, 0) * 0.48))
+    saturate(1.12) drop-shadow(0 0 0.35rem rgba(255, 55, 72, 0.22));
+}
+
+:root[data-theme="light"] .library-wave-terrain {
+  --wave-terrain-rgb: 164, 62, 83;
+  --wave-terrain-accent-rgb: 222, 95, 109;
+  mix-blend-mode: multiply;
+  opacity: 0.62;
+  filter: contrast(1.18) brightness(calc(0.96 + var(--radio-bass, 0) * 0.2))
+    saturate(0.92);
+}
+
+:root[data-theme="green"] .library-wave-terrain {
+  --wave-terrain-rgb: 69, 198, 135;
+  --wave-terrain-accent-rgb: 126, 235, 174;
+  opacity: 0.78;
+  filter: contrast(1.26) brightness(calc(0.94 + var(--radio-bass, 0) * 0.42))
+    saturate(1.04) drop-shadow(0 0 0.32rem rgba(68, 220, 145, 0.2));
+}
+
+:root[data-theme="violet"] .library-wave-terrain {
+  --wave-terrain-rgb: 164, 96, 214;
+  --wave-terrain-accent-rgb: 213, 132, 239;
+  opacity: 0.78;
+  filter: contrast(1.24) brightness(calc(0.95 + var(--radio-bass, 0) * 0.42))
+    saturate(1.02) drop-shadow(0 0 0.32rem rgba(181, 95, 224, 0.2));
+}
+
+/* Bars use the full artwork height as their geometry and only their scale is
+   animated. This prevents tall random bars from looking permanently stuck. */
+.library-song-card-wave i {
+  block-size: 100%;
+  height: 100% !important;
+  transform-origin: 50% 100%;
+}
+
+.library-song-card-art:not(.is-radio-reactive) .library-song-card-wave i {
+  animation-name: library-card-equalizer-balanced;
+}
+
+@keyframes library-card-equalizer-balanced {
+  0% {
+    transform: scaleY(max(0.08, calc(var(--idle-level, 0.35) * 0.38)));
+  }
+  42% {
+    transform: scaleY(min(0.78, calc(var(--idle-level, 0.35) * 0.82)));
+  }
+  100% {
+    transform: scaleY(min(0.96, calc(var(--idle-level, 0.35) + 0.2)));
+  }
+}
+
+.library-song-card-art.is-radio-reactive .library-song-card-wave i {
+  animation: none !important;
+  transform: scaleY(clamp(0.08, calc(0.08 + var(--audio-band, 0) * 0.94), 1));
+  filter: brightness(calc(0.88 + var(--audio-band, 0) * 0.58))
+    drop-shadow(
+      0 0 calc(0.02rem + var(--audio-band, 0) * 0.28rem)
+        color-mix(in srgb, var(--color-primary) 52%, transparent)
+    );
+  transition:
+    transform 62ms linear,
+    filter 62ms linear;
+}
+
+/* Keyboard is intentionally a little more visible than before, but remains a
+   translucent overlay on top of the video. Its width stays compact. */
+.melody-roll .piano-roll-keyboard-bed {
+  opacity: 0.22 !important;
+}
+
+/* ========================================================================== 
+   MODAL VISUAL CONTRACT · one shell for every dialog
+   ========================================================================== */
+
+/* The Card panel is the only outer visual surface. Modal-specific classes may
+   control size/layout, but must not paint a second card around it. */
+.modal-card {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.modal-card > .ui-card__panel {
+  border: var(--hairline) solid var(--color-border-strong);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--color-surface-strong) 96%, transparent),
+    color-mix(in srgb, var(--color-surface-glass) 92%, transparent)
+  );
+  box-shadow:
+    0 1.75rem 5.625rem color-mix(in srgb, var(--color-bg-deep) 52%, transparent),
+    0 0 0.9rem color-mix(in srgb, var(--color-primary) 24%, transparent);
+}
+
+.modal-card > .ui-card__panel > .ui-card__content {
+  border-radius: inherit;
+}
+
+/* Song settings previously painted its own large background outside Card. */
+
+.song-settings-modal > .ui-card__panel,
+.song-settings-modal > .ui-card__panel > .ui-card__content {
+  min-block-size: 0;
+  overflow: hidden;
+}
+
+/* Columns inside song settings are content sections, not nested modal cards. */
+
+.song-settings-workspace > .panel::before,
+.song-settings-workspace > .panel::after {
+  content: none !important;
+  display: none !important;
+}
+
+.song-settings-workspace .panel-header {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Explicit modal variants keep their geometry only; the visual surface stays shared. */
+.settings-modal,
+.processing-modal,
+.online-room-modal,
+.app-dialog,
+.performance-analysis-modal,
+.karaoke-settings-modal {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* ========================================================================== 
+   MODAL NEON BORDER RESTORE + KARAOKE LYRIC GLASS PLACEMENT
+   ========================================================================== */
+
+/* Keep the modal shell clean, but restore the animated border itself. The
+   large Card glow layers remain disabled so nothing protrudes from the far
+   side of the dialog. */
+.modal-card.ui-card--neon > .ui-card__edge,
+.modal-card.ui-card--neon > .ui-card__glint {
+  display: block !important;
+  inset: -0.075rem !important;
+  border-radius: calc(var(--radius-xl) + 0.08rem) !important;
+}
+
+.modal-card.ui-card--neon > .ui-card__edge {
+  opacity: 0.96;
+  filter: brightness(1.12) saturate(125%);
+}
+
+.modal-card.ui-card--neon > .ui-card__glint {
+  opacity: 0.82;
+  filter: brightness(1.22) saturate(125%);
+}
+
+.modal-card.ui-card--neon > .ui-card__glow,
+.modal-card.ui-card--neon > .ui-card__glow-mid,
+.modal-card.ui-card--neon > .ui-card__panel > .ui-card__sheen {
+  display: none !important;
+}
+
+.modal-card.ui-card--neon > .ui-card__panel {
+  animation: modal-neon-breathe 3.8s ease-in-out infinite;
+}
+
+@keyframes modal-neon-breathe {
+  0%,
+  100% {
+    box-shadow:
+      0 1.75rem 5.625rem
+        color-mix(in srgb, var(--color-bg-deep) 52%, transparent),
+      0 0 0.7rem color-mix(in srgb, var(--color-primary) 23%, transparent),
+      0 0 1.25rem color-mix(in srgb, var(--color-primary) 10%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 1.75rem 5.625rem
+        color-mix(in srgb, var(--color-bg-deep) 52%, transparent),
+      0 0 1rem color-mix(in srgb, var(--color-primary) 42%, transparent),
+      0 0 1.9rem color-mix(in srgb, var(--color-primary-hover) 19%, transparent);
+  }
+}
+
+/* Lyrics live in the centre horizontally, but in the lower half of the free
+   video area. MelodyRoll owns the bottom 50vh, so leave a comfortable gap. */
+.karaoke-lyrics {
+  inset-block-start: auto !important;
+  inset-block-end: calc(50vh + clamp(1.5rem, 3vh, 3.25rem)) !important;
+  inset-inline-start: 50% !important;
+  inset-inline-end: auto !important;
+  transform: translateX(-50%) !important;
+  inline-size: min(78rem, 84vw) !important;
+  max-inline-size: 84vw !important;
+  gap: clamp(0.32rem, 0.75vh, 0.6rem) !important;
+  padding: clamp(0.8rem, 1.4vh, 1.15rem) clamp(1.4rem, 2.5vw, 2.5rem) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: clamp(1.25rem, 2vw, 2rem) !important;
+  background: linear-gradient(
+    180deg,
+    rgba(5, 7, 12, 0.27),
+    rgba(5, 7, 12, 0.16)
+  ) !important;
+  backdrop-filter: blur(13px) saturate(112%) !important;
+  -webkit-backdrop-filter: blur(13px) saturate(112%) !important;
+  box-shadow:
+    0 0.75rem 2.6rem rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07) !important;
+  overflow: hidden !important;
+}
+
+.karaoke-lyrics::before {
+  display: block !important;
+  content: "" !important;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(
+    70% 120% at 50% 0%,
+    rgba(255, 255, 255, 0.055),
+    transparent 72%
+  );
+}
+
+.karaoke-lyric {
+  position: relative;
+  z-index: 1;
+  font-family: Inter, "Segoe UI Variable", "Segoe UI", sans-serif !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.015em !important;
+  -webkit-text-stroke: 0 !important;
+  paint-order: normal !important;
+  color: rgba(255, 255, 255, 0.96) !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.96) !important;
+  text-shadow:
+    0 0.12em 0.2em rgba(0, 0, 0, 0.68),
+    0 0.28em 0.75em rgba(0, 0, 0, 0.42) !important;
+}
+
+.karaoke-lyric-current .karaoke-lyric-character,
+[data-theme="light"] .karaoke-lyric-current .karaoke-lyric-character {
+  -webkit-text-stroke: 0 !important;
+  text-shadow:
+    0 0.12em 0.2em rgba(0, 0, 0, 0.68),
+    0 0.28em 0.75em rgba(0, 0, 0, 0.42) !important;
+}
+
+.karaoke-lyric-next {
+  opacity: 0.7 !important;
+  font-weight: 720 !important;
+}
+
+.karaoke-lyric-next .karaoke-lyric-character,
+[data-theme="light"] .karaoke-lyric-next .karaoke-lyric-character {
+  -webkit-text-stroke: 0 !important;
+  color: rgba(255, 255, 255, 0.78) !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.78) !important;
+  text-shadow:
+    0 0.1em 0.18em rgba(0, 0, 0, 0.62),
+    0 0.24em 0.65em rgba(0, 0, 0, 0.35) !important;
+}
+
+@media (max-height: 760px) {
+  .karaoke-lyrics {
+    inset-block-end: calc(50vh + 1rem) !important;
+    padding-block: 0.65rem !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-card.ui-card--neon > .ui-card__panel {
+    animation: none !important;
+  }
+}
+
+/* ========================================================================== 
+   CHECKBOX · compact themed control
+   ========================================================================== */
+.app-checkbox {
+  position: relative;
+  display: inline-grid;
+  inline-size: 1.8rem;
+  block-size: 1.8rem;
+  flex: 0 0 1.8rem;
+  place-items: center;
+  cursor: pointer;
+}
+
+.app-checkbox__input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.app-checkbox__box {
+  position: relative;
+  display: block;
+  inline-size: 1.55rem;
+  block-size: 1.55rem;
+  border: var(--hairline) solid
+    color-mix(in srgb, var(--color-border-strong) 86%, transparent);
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, var(--color-surface-strong) 58%, transparent);
+  box-shadow:
+    inset 0 1px color-mix(in srgb, var(--color-highlight) 8%, transparent),
+    0 0.2rem 0.7rem color-mix(in srgb, var(--color-bg-deep) 20%, transparent);
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.app-checkbox__box::after {
+  content: "";
+  position: absolute;
+  inset-block-start: 46%;
+  inset-inline-start: 50%;
+  inline-size: 0.55rem;
+  block-size: 0.3rem;
+  border-inline-start: 0.14rem solid var(--color-highlight);
+  border-block-end: 0.14rem solid var(--color-highlight);
+  opacity: 0;
+  transform: translate(-50%, -58%) rotate(-45deg) scale(0.72);
+  transition:
+    opacity 120ms ease,
+    transform 170ms cubic-bezier(0.2, 0.85, 0.3, 1.3);
+}
+
+.app-checkbox:hover .app-checkbox__box {
+  border-color: var(--color-primary-hover);
+  background: color-mix(
+    in srgb,
+    var(--color-primary) 10%,
+    var(--color-surface-strong)
+  );
+  box-shadow:
+    0 0 0 0.16rem color-mix(in srgb, var(--color-primary) 8%, transparent),
+    0 0 0.8rem color-mix(in srgb, var(--color-primary) 14%, transparent);
+}
+
+.app-checkbox__input:focus-visible + .app-checkbox__box {
+  border-color: var(--color-primary-hover);
+  box-shadow:
+    0 0 0 0.2rem color-mix(in srgb, var(--color-focus) 18%, transparent),
+    0 0 1rem color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+
+.app-checkbox__input:checked + .app-checkbox__box {
+  border-color: color-mix(
+    in srgb,
+    var(--color-primary-hover) 92%,
+    var(--color-highlight)
+  );
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--color-primary-hover) 92%, var(--color-primary)),
+    var(--color-primary-strong)
+  );
+  box-shadow:
+    inset 0 1px color-mix(in srgb, var(--color-highlight) 28%, transparent),
+    0 0 0.7rem color-mix(in srgb, var(--color-primary) 34%, transparent),
+    0 0 1.35rem color-mix(in srgb, var(--color-primary-strong) 18%, transparent);
+}
+
+.app-checkbox__input:checked + .app-checkbox__box::after {
+  opacity: 1;
+  transform: translate(-50%, -58%) rotate(-45deg) scale(1);
+}
+
+.app-checkbox__input:disabled + .app-checkbox__box {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: saturate(0.55);
+}
+
+/* ========================================================================== 
+   LIBRARY SONG CARD EQUALIZER · keep every bar safely inside the artwork
+   ========================================================================== */
+.library-song-card-wave {
+  inset: auto 14% 17%;
+  block-size: 34%;
+  overflow: hidden;
+  align-items: end;
+  padding-block: 0.12rem;
+}
+
+.library-song-card-wave i {
+  min-block-size: 100%;
+  max-block-size: 100%;
+  block-size: 100% !important;
+  transform-origin: 50% 100%;
+}
+
+.library-song-card-art:not(.is-radio-reactive) .library-song-card-wave i {
+  animation-name: library-card-equalizer-safe;
+  animation-timing-function: cubic-bezier(0.38, 0.04, 0.34, 1);
+}
+
+@keyframes library-card-equalizer-safe {
+  0% {
+    transform: scaleY(clamp(0.12, calc(var(--idle-level, 0.35) * 0.32), 0.34));
+  }
+  36% {
+    transform: scaleY(clamp(0.2, calc(var(--idle-level, 0.35) * 0.7), 0.62));
+  }
+  68% {
+    transform: scaleY(clamp(0.16, calc(var(--idle-level, 0.35) * 0.48), 0.5));
+  }
+  100% {
+    transform: scaleY(clamp(0.3, calc(var(--idle-level, 0.35) * 0.92), 0.88));
+  }
+}
+
+.library-song-card-art.is-radio-reactive .library-song-card-wave i {
+  transform: scaleY(clamp(0.1, calc(0.1 + var(--audio-band, 0) * 0.78), 0.88));
+  transition:
+    transform 72ms cubic-bezier(0.2, 0.7, 0.25, 1),
+    filter 72ms linear;
+}
+
+/* Primary modal actions live in the title bar for a consistent dialog layout. */
+.modal-title__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.modal-title__actions .modal-title-action {
+  min-block-size: 2.55rem;
+  align-self: center;
+}
+
+.performance-analysis-actions--secondary {
+  justify-content: flex-start;
+}
+
+/* ========================================================================== 
+   MODAL CORNER + MONITOR METER FIX
+   ========================================================================== */
+
+/* Keep the animated neon border inside the actual modal bounds. */
+.modal-card.ui-card--neon > .ui-card__edge,
+.modal-card.ui-card--neon > .ui-card__glint {
+  inset: 0 !important;
+  border-radius: inherit !important;
+}
+
+/* Close button stays on the corner, but is fully opaque so the neon border
+   cannot be seen through the control. */
+.app-modal-close,
+.modal-close,
+.performance-analysis-close,
+.app-dialog-close {
+  position: absolute;
+  z-index: 120;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  margin: 0;
+
+  inline-size: 2.65rem;
+  block-size: 2.65rem;
+  aspect-ratio: 1;
+
+  transform: translate(30%, -30%);
+
+  border: var(--hairline) solid var(--color-border-strong);
+  border-radius: 50%;
+
+  background: var(--color-bg-elevated);
+
+  opacity: 1;
+
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+
+  box-shadow:
+    0 0.55rem 1.25rem color-mix(in srgb, var(--color-bg-deep) 34%, transparent),
+    0 0 0.7rem color-mix(in srgb, var(--color-primary) 32%, transparent);
+}
+
+.app-modal-close:hover,
+.modal-close:hover,
+.performance-analysis-close:hover,
+.app-dialog-close:hover {
+  transform: translate(30%, -30%) scale(1.06);
+
+  background: var(--color-bg-elevated);
+}
+
+/* Direct-monitor meter: zero really means zero, and the bar moves smoothly
+   instead of leaving a visible sliver or jumping once per long poll. */
+
+/* ==========================================================================
+   LIBRARY RADIO REACTIVE HERO + DENser NOTES / KARAOKE LYRIC FIT
+   ========================================================================== */
+
+/* The library title keeps the theme palette, but its highlight sweeps and
+   breathes with the live radio analyser. */
+
+@keyframes library-title-shimmer {
+  0% {
+    background-position-x: 10%;
+  }
+  50% {
+    background-position-x: 90%;
+  }
+  100% {
+    background-position-x: 10%;
+  }
+}
+
+/* More floating notes, spread lower through the middle of the scene. */
+
+/* Keep the lyric glass panel compact enough to never clip a long sentence.
+   One current line + one next line still remain visually stable. */
+.karaoke-lyrics {
+  inline-size: min(86rem, 90vw) !important;
+  max-inline-size: 90vw !important;
+  padding: clamp(0.72rem, 1.2vh, 1rem) clamp(1.1rem, 2vw, 2rem) !important;
+  gap: clamp(0.24rem, 0.55vh, 0.45rem) !important;
+}
+
+.karaoke-lyric {
+  box-sizing: border-box !important;
+  inline-size: 100% !important;
+  max-inline-size: 100% !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  font-size: calc(
+    clamp(1.85rem, 3.15vw, 3.65rem) * var(--lyric-line-scale, 1)
+  ) !important;
+  line-height: 1.05 !important;
+  font-weight: 780 !important;
+  letter-spacing: -0.018em !important;
+  text-overflow: clip !important;
+  text-shadow:
+    0 2px 3px rgba(0, 0, 0, 0.72),
+    0 7px 22px rgba(0, 0, 0, 0.38) !important;
+}
+
+.karaoke-lyric-next {
+  font-size: calc(
+    clamp(1.45rem, 2.3vw, 2.65rem) * var(--lyric-line-scale, 1)
+  ) !important;
+  font-weight: 650 !important;
+  opacity: 0.68 !important;
+}
+
+@media (max-width: 1100px) {
+  .karaoke-lyrics {
+    inline-size: 94vw !important;
+    max-inline-size: 94vw !important;
+  }
+
+  .karaoke-lyric {
+    font-size: calc(
+      clamp(1.55rem, 3vw, 2.9rem) * var(--lyric-line-scale, 1)
+    ) !important;
+  }
+
+  .karaoke-lyric-next {
+    font-size: calc(
+      clamp(1.25rem, 2.2vw, 2.1rem) * var(--lyric-line-scale, 1)
+    ) !important;
+  }
+}
+
+/* Modal close overlay: direct child of Card, always above the card edge and fully opaque. */
+.modal-card > .app-modal-close,
+.modal-card > .settings-modal-close,
+.modal-card > .modal-close,
+.modal-card > .performance-analysis-close,
+.modal-card > .app-dialog-close {
+  z-index: 1000 !important;
+  background: var(--color-bg-elevated) !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Settings service screens: keep neon only on meaningful cards and make it compact. */
+.settings-service-screen,
+.settings-service-screen > * {
+  min-inline-size: 0;
+}
+
+.settings-neon-card.ui-card--neon .ui-card__glow {
+  opacity: 0.24;
+  filter: blur(clamp(0.35rem, 2cqi, 0.8rem));
+}
+
+.settings-neon-card.ui-card--neon .ui-card__glow-mid {
+  opacity: 0.42;
+  filter: blur(clamp(0.18rem, 1cqi, 0.38rem));
+}
+
+.settings-neon-card.ui-card--neon:is(:hover, :focus-within) .ui-card__glow {
+  opacity: 0.42;
+  filter: blur(clamp(0.45rem, 2.4cqi, 0.95rem)) saturate(115%);
+}
+
+.settings-neon-card.ui-card--neon:is(:hover, :focus-within) .ui-card__glow-mid {
+  opacity: 0.58;
+  filter: blur(clamp(0.22rem, 1.2cqi, 0.45rem)) saturate(118%);
+}
+
+.settings-diagnostic-row {
+  min-inline-size: 0;
+}
+
+.settings-diagnostic-row {
+  border-color: color-mix(in srgb, var(--color-border-strong) 72%, transparent);
+  background: color-mix(in srgb, var(--color-surface-soft) 92%, transparent);
+  box-shadow: inset 0 var(--hairline)
+    color-mix(in srgb, var(--color-highlight) 6%, transparent);
+}
+
+/* Settings service screens: compact responsive cards without nested neon shells. */
+.settings-service-screen {
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.settings-service-screen > :not(.settings-service-back) {
+  min-inline-size: 0;
+}
+
+.settings-diagnostics-screen {
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.settings-diagnostics-grid {
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.settings-compact-neon-card.ui-card--neon {
+  min-block-size: 0;
+}
+
+.settings-compact-neon-card.ui-card--neon .ui-card__glow {
+  opacity: 0.16;
+  filter: blur(clamp(0.22rem, 1.35cqi, 0.52rem));
+}
+
+.settings-compact-neon-card.ui-card--neon .ui-card__glow-mid {
+  opacity: 0.34;
+  filter: blur(clamp(0.12rem, 0.7cqi, 0.26rem));
+}
+
+.settings-compact-neon-card.ui-card--neon:is(:hover, :focus-within)
+  .ui-card__glow {
+  opacity: 0.3;
+  filter: blur(clamp(0.28rem, 1.55cqi, 0.62rem)) saturate(112%);
+}
+
+.settings-compact-neon-card.ui-card--neon:is(:hover, :focus-within)
+  .ui-card__glow-mid {
+  opacity: 0.46;
+}
+
+.settings-table-card .data-table {
+  margin: 0;
+}
+
+@media (max-width: 48rem) {
+  .settings-diagnostics-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* ========================================================================== 
+   SETTINGS SERVICE SCREENS · flat content inside the modal card
+   ========================================================================== */
+.settings-service-screen {
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.settings-screen-section,
+.settings-memory-screen,
+.settings-table-screen,
+.settings-about-screen,
+.settings-diagnostics-screen {
+  min-inline-size: 0;
+}
+
+.settings-diagnostics-grid {
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.settings-diagnostic-row {
+  min-inline-size: 0;
+  min-block-size: 2.9rem;
+  padding: 0.7rem 0.9rem;
+  border-block-end: var(--hairline) solid
+    color-mix(in srgb, var(--color-border-strong) 70%, transparent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-primary) 5%, transparent),
+    transparent 72%
+  );
+}
+
+.settings-diagnostic-row:first-child {
+  border-block-start: var(--hairline) solid
+    color-mix(in srgb, var(--color-border-strong) 46%, transparent);
+}
+
+.settings-version-list,
+.settings-error-list {
+  min-inline-size: 0;
+  border-block-start: var(--hairline) solid
+    color-mix(in srgb, var(--color-border-strong) 54%, transparent);
+}
+
+.settings-version-row,
+.settings-error-row {
+  min-inline-size: 0;
+  padding: 0.72rem 0.25rem;
+  border-block-end: var(--hairline) solid
+    color-mix(in srgb, var(--color-border) 72%, transparent);
+}
+
+.settings-error-row {
+  padding-inline: 0.2rem;
+}
+
+.settings-empty-line {
+  padding: 0.85rem 0.2rem;
+  border-block: var(--hairline) solid
+    color-mix(in srgb, var(--color-border) 62%, transparent);
+}
+
+.settings-metric-grid {
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.settings-metric-item {
+  min-inline-size: 0;
+  padding: 0.9rem 1rem;
+  border-inline-start: 0.14rem solid
+    color-mix(in srgb, var(--color-primary) 76%, transparent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-primary) 8%, transparent),
+    transparent 80%
+  );
+}
+
+.settings-metric-item .ui-typography[data-variant="h3"] {
+  margin: 0;
+}
+
+.settings-memory-actions {
+  padding-block: 0.15rem;
+}
+
+.settings-optimize-section {
+  padding-block-start: 1rem;
+  border-block-start: var(--hairline) solid
+    color-mix(in srgb, var(--color-border-strong) 60%, transparent);
+}
+
+.settings-table-wrap {
+  min-inline-size: 0;
+  inline-size: 100%;
+  overflow-x: auto;
+  border-block: var(--hairline) solid
+    color-mix(in srgb, var(--color-border-strong) 62%, transparent);
+  scrollbar-width: thin;
+}
+
+.settings-table-wrap .data-table {
+  margin: 0;
+  min-inline-size: 36rem;
+}
+
+.settings-table-wrap .data-table th {
+  color: var(--color-text-soft);
+  background: color-mix(in srgb, var(--color-primary) 5%, transparent);
+}
+
+.settings-table-wrap .data-table tbody tr {
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+
+.settings-table-wrap .data-table tbody tr:hover {
+  background: color-mix(in srgb, var(--color-primary) 7%, transparent);
+}
+
+.settings-about-icon {
+  display: grid;
+  inline-size: 4.5rem;
+  block-size: 4.5rem;
+  place-items: center;
+  border: var(--hairline) solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--color-primary-hover);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--color-primary) 13%, var(--color-surface-soft)),
+    color-mix(in srgb, var(--color-surface-strong) 90%, transparent)
+  );
+  box-shadow:
+    inset 0 var(--hairline)
+      color-mix(in srgb, var(--color-highlight) 10%, transparent),
+    0 0 1.2rem color-mix(in srgb, var(--color-primary) 16%, transparent);
+}
+
+.settings-about-info {
+  min-inline-size: 0;
+  border-block: var(--hairline) solid
+    color-mix(in srgb, var(--color-border-strong) 62%, transparent);
+}
+
+.settings-about-info-item {
+  min-inline-size: 0;
+  padding: 0.9rem 1rem;
+  border-block-end: var(--hairline) solid
+    color-mix(in srgb, var(--color-border) 58%, transparent);
+}
+
+.settings-about-info-item:nth-child(odd) {
+  border-inline-end: var(--hairline) solid
+    color-mix(in srgb, var(--color-border) 58%, transparent);
+}
+
+@media (max-width: 48rem) {
+  .settings-diagnostics-grid,
+  .settings-about-info {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .settings-about-info-item:nth-child(odd) {
+    border-inline-end: 0;
+  }
+
+  .settings-optimize-section .ui-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* ========================================================================== 
+   SETTINGS · AUDIO · compact two-row layout
+   ========================================================================== */
+
+.settings-audio-action,
+.settings-audio-monitor {
+  min-inline-size: 0;
+  block-size: 100%;
+}
+
+.settings-audio-action {
+  justify-content: end;
+}
+
+.settings-audio-test-button,
+.settings-audio-monitor__button {
+  inline-size: 100%;
+  min-block-size: var(--control-md);
+}
+
+.settings-audio-test-button .ui-stack {
+  inline-size: 100%;
+}
+
+.settings-audio-monitor {
+  justify-content: end;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.settings-audio-monitor > .ui-stack:first-child {
+  min-block-size: 1.25rem;
+  color: var(--color-text);
+}
+
+.settings-audio-monitor > .ui-stack:first-child svg {
+  color: var(--color-primary-hover);
+}
+
+.settings-audio-monitor__level {
+  inline-size: 100%;
+  margin-block-start: 0.1rem;
+}
+
+.settings-audio-advanced-toggle {
+  align-items: flex-start;
+  margin-block-start: 0.1rem;
+}
+
+.settings-audio-advanced-toggle .ui-button {
+  min-block-size: 2.25rem;
+  padding-inline: 0.55rem;
+  color: var(--color-text-muted);
+}
+
+.settings-audio-advanced-toggle .ui-button:hover {
+  color: var(--color-text);
+}
+
+@media (max-width: 48rem) {
+  .settings-audio-action,
+  .settings-audio-monitor {
+    block-size: auto;
+  }
+}
+

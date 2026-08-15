@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 import re
 import sys
 import tempfile
@@ -553,10 +554,17 @@ def _lyrics_language_hint(value: str | None) -> str | None:
 
 
 def _print_full_lyrics(source: str, text: str, query: str | None) -> None:
-    _lyrics_console(f"[lyrics] search query: {query or '<empty>'}")
-    _lyrics_console(f"[lyrics] source: {source or 'unknown'}")
     line_count = len([line for line in text.splitlines() if line.strip()])
-    _lyrics_console(f"[lyrics] text received: {line_count} non-empty lines, {len(text)} characters")
+    _lyrics_console(
+        f"[lyrics] result: source={source or 'unknown'} query={query or '<empty>'!r} "
+        f"lines={line_count} chars={len(text)}"
+    )
+    if os.getenv("KARAOKE_LYRICS_LOG_TEXT", "").strip().lower() in {
+        "1", "true", "yes", "on"
+    }:
+        _lyrics_console("[lyrics] FOUND TEXT BEGIN")
+        _lyrics_console(text)
+        _lyrics_console("[lyrics] FOUND TEXT END")
 
 
 class _OutputDirectoryLock(ThreadFileLock):
@@ -776,9 +784,7 @@ class KaraokePipeline:
         if supplied:
             _print_full_lyrics(lyrics_source or "unknown", supplied, lyrics_query)
         else:
-            # discover_lyrics already emitted the exact attempts.  Do not print the
-            # same search plan a second time through a different console path.
-            _lyrics_console("[lyrics] title search exhausted -> ASR fallback")
+            # discover_lyrics already prints the concise NOT FOUND status.
             if asr_language:
                 _lyrics_console(f"[lyrics] ASR language forced: {asr_language}")
 

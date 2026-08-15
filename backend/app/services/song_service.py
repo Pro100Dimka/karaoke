@@ -129,16 +129,48 @@ def _clean_copy_suffix(value: str) -> str:
     return _COPY_SUFFIX_RE.sub("", value).strip()
 
 
-def _clean_artist_tag(artist: str | None, title: str | None) -> str | None:
-    value = str(artist or "").strip()
-    if not value:
-        return None
-    if title:
-        value = re.sub(re.escape(title.strip()), " ", value, flags=re.IGNORECASE)
+def _identity_words(value: str | None) -> list[str]:
+    return [part for part in re.split(r"\s+", str(value or "").strip()) if part]
+
+
+def _normalize_artist_title(
+    artist: str | None, title: str | None, album: str | None = None
+) -> tuple[str | None, str]:
+    """Repair common downloader metadata pollution without guessing song words."""
+    raw_artist = str(artist or "").strip()
+    clean_title = str(title or "").strip()
+    value = raw_artist
+    if album:
+        value = re.sub(re.escape(str(album).strip()), " ", value, flags=re.IGNORECASE)
+    if clean_title:
+        value = re.sub(re.escape(clean_title), " ", value, flags=re.IGNORECASE)
     value = _RELEASE_WORD_RE.sub(" ", value)
     value = _YEAR_RE.sub(" ", value)
     value = " ".join(value.replace("–", " ").replace("—", " ").split())
-    return value or None
+
+    # Some downloaders write e.g. artist="Нервы Всё, Что Вокруг" and
+    # title="Нервы Моя Леди" while the album tag is missing.  In that
+    # specific shape both fields start with the real artist.  Keep only the
+    # shared leading identity rather than treating album words as the artist.
+    artist_words = _identity_words(value)
+    title_words = _identity_words(clean_title)
+    shared: list[str] = []
+    for left, right in zip(artist_words, title_words):
+        if left.casefold() != right.casefold():
+            break
+        shared.append(left)
+    if shared and len(shared) < len(artist_words):
+        value = " ".join(shared)
+
+    if value and clean_title:
+        prefix = value + " "
+        if clean_title.casefold().startswith(prefix.casefold()):
+            clean_title = clean_title[len(prefix):].strip() or clean_title
+    return (value or None), clean_title
+
+
+def _clean_artist_tag(artist: str | None, title: str | None) -> str | None:
+    return _normalize_artist_title(artist, title)[0]
 
 
 def parse_filename_identity(filename: str) -> tuple[str | None, str]:
@@ -175,6 +207,7 @@ def _read_source_identity(
     """Resolve identity in strict order: embedded metadata, then filename."""
     tagged_title: str | None = None
     tagged_artist: str | None = None
+    tagged_album: str | None = None
     try:
         from mutagen import File as MutagenFile
 
@@ -182,13 +215,14 @@ def _read_source_identity(
         if tags is not None:
             tagged_title = _first_audio_tag(tags, "title")
             tagged_artist = _first_audio_tag(tags, "artist", "albumartist")
+            tagged_album = _first_audio_tag(tags, "album")
     except Exception:
         pass
 
     filename_artist, filename_title = parse_filename_identity(original_filename)
     if tagged_title:
-        artist = _clean_artist_tag(tagged_artist, tagged_title) or filename_artist
-        return artist, tagged_title.strip()
+        artist, clean_title = _normalize_artist_title(tagged_artist, tagged_title, tagged_album)
+        return artist or filename_artist, clean_title
 
     if filename_artist:
         return filename_artist, filename_title

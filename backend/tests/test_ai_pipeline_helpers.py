@@ -266,9 +266,21 @@ def test_lyrics_console_language_and_summary(monkeypatch):
     assert pipeline._lyrics_language_hint("Русская песня ё") == "ru"
     assert pipeline._lyrics_language_hint("English") is None
     calls = []
+    monkeypatch.delenv("KARAOKE_LYRICS_LOG_TEXT", raising=False)
     monkeypatch.setattr(pipeline, "_lyrics_console", lambda *parts: calls.append(parts))
     pipeline._print_full_lyrics("source", "a\n\nb", None)
-    assert len(calls) == 3
+    assert len(calls) == 1
+    assert "source=source" in calls[0][0] and "lines=2" in calls[0][0]
+
+    calls.clear()
+    monkeypatch.setenv("KARAOKE_LYRICS_LOG_TEXT", "1")
+    pipeline._print_full_lyrics("source", "a\n\nb", "query")
+    assert calls == [
+        ("[lyrics] result: source=source query='query' lines=2 chars=4",),
+        ("[lyrics] FOUND TEXT BEGIN",),
+        ("a\n\nb",),
+        ("[lyrics] FOUND TEXT END",),
+    ]
 
 
 def config(**changes):

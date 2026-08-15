@@ -7,6 +7,7 @@ Music-and-Culture-Technology-Lab/omnizart (MIT, pinned model revision in
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
@@ -272,7 +273,13 @@ class OmnizartPatchCNNPitchEstimator(PitchEstimator):
                     loader = self._model_loader
                 else:
                     os.environ.setdefault("TF_USE_LEGACY_KERAS", "1")
+                    os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+                    logging.getLogger("tensorflow").setLevel(logging.ERROR)
+                    logging.getLogger("absl").setLevel(logging.ERROR)
                     import tensorflow as tf
+                    tf.get_logger().setLevel("ERROR")
+                    logging.getLogger("tensorflow").setLevel(logging.ERROR)
+                    logging.getLogger("absl").setLevel(logging.ERROR)
 
                     # Native TensorFlow for Windows is CPU-only after 2.10. Keep
                     # this explicit so a future runtime cannot reserve CUDA VRAM.

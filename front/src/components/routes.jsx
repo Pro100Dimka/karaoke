@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import Karaoke from "../pages/Karaoke";
 import Library from "../pages/Library";
-import MelodyEditorPage from "../pages/MelodyEditor";
+import MelodyEditorPage from "../pages/MelodyEditor.jsx";
 
 const routes = [
   { path: "/", Comp: Library },

@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../../../../api/client";
 import Button from "../../../../components/fields/button";
 import Modal from "../../../../components/modal";
-import { POLLING_INTERVALS } from "../../../../config/runtime";
+import { POLLING_INTERVALS } from "../../../../runtime-config";
 import { useAppDialog } from "../../../../contexts/AppDialog";
 import useExclusiveAsyncAction from "../../../../hooks/useExclusiveAsyncAction";
 import { usePolling } from "../../../../hooks/usePolling";

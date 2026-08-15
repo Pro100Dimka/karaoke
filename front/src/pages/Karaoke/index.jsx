@@ -1,17 +1,12 @@
-import { ArrowLeft, Radio, SlidersHorizontal } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
-import { IconButton } from "../../components/ui";
-import { POLLING_INTERVALS } from "../../config/runtime";
+import { POLLING_INTERVALS } from "../../runtime-config";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import { useRadio } from "../../contexts/radio";
 import { usePolling } from "../../hooks/usePolling";
 import { translateSaved } from "../../i18n/runtime";
 import { getErrorMessage } from "../../utils/errors";
-import KaraokeConsole from "./components/console";
-import KaraokeMedia from "./components/karaoke-media";
-import KaraokePerformanceStage from "./components/karaoke-performance-stage";
 import useAudioOutputRouting from "./hooks/useAudioOutputRouting";
 import useKaraokeControls from "./hooks/useKaraokeControls";
 import useKaraokeHotkeys from "./hooks/useKaraokeHotkeys";
@@ -23,7 +18,8 @@ import useKaraokeTransport from "./hooks/useKaraokeTransport";
 import useMelodyGuide from "./hooks/useMelodyGuide";
 import useMicrophoneSettings from "./hooks/useMicrophoneSettings";
 import usePitchDetection from "./hooks/usePitchDetection";
-import PerformanceAnalysisModal from "./modals/performance-analysis-modal";
+import KaraokeLoadState from "./karaoke-load-state";
+import KaraokeView from "./karaoke-view";
 import {
   getYouTubeVideoId,
   normalizeLyrics,
@@ -539,68 +535,25 @@ export default function Karaoke({ onOpenAppSettings }) {
     onStop: handleStop
   });
   useKaraokeStageLayout(containerRef);
-  if (songsError) {
+  const isBlocked =
+    Boolean(songsError) ||
+    !songs ||
+    !song ||
+    song.status !== "done" ||
+    resultLoading ||
+    Boolean(resultError) ||
+    !result;
+  if (isBlocked) {
     return (
-      <div className="panel">
-        <p className="field-error">
-          {translateSaved("Не удалось загрузить библиотеку:")}{" "}
-          {songsError.message || translateSaved("ошибка соединения")}.
-        </p>
-      </div>
-    );
-  }
-  if (!songs) {
-    return (
-      <div className="panel">
-        <p className="text-muted">{translateSaved("Загружаем песню…")}</p>
-      </div>
-    );
-  }
-  if (!song) {
-    return (
-      <div className="panel">
-        <p className="text-muted">
-          {songId
-            ? translateSaved(
-                "Выбранная песня не найдена. Вернитесь в Библиотеку и откройте её снова."
-              )
-            : translateSaved(
-                "Нет готовой песни для воспроизведения. Сначала обработайте песню в Библиотеке."
-              )}
-        </p>
-      </div>
-    );
-  }
-  if (song.status !== "done") {
-    return (
-      <div className="panel">
-        <p className="text-muted">
-          «{song.title}
-          {translateSaved("» ещё не обработана — статус:")}
-          {song.status}.
-        </p>
-      </div>
-    );
-  }
-  if (resultLoading) {
-    return (
-      <div className="panel">
-        <p className="text-muted">
-          {translateSaved("Загружаем данные караоке…")}
-        </p>
-      </div>
-    );
-  }
-  if (resultError || !result) {
-    return (
-      <div className="panel">
-        <p className="field-error">
-          {translateSaved("Не удалось загрузить данные караоке:")}{" "}
-          {resultError?.message ||
-            translateSaved("результат обработки отсутствует")}
-          .
-        </p>
-      </div>
+      <KaraokeLoadState
+        songs={songs}
+        songsError={songsError}
+        song={song}
+        songId={songId}
+        result={result}
+        resultLoading={resultLoading}
+        resultError={resultError}
+      />
     );
   }
   const rawBaseTempo = Number(result?.music?.tempo ?? song.tempo_override);
@@ -628,210 +581,91 @@ export default function Karaoke({ onOpenAppSettings }) {
       delay: preset.delay
     });
   };
+  const handleAnalysisClose = () => {
+    updateAnalysisRecordingId(null);
+    navigateToLibraryFromBlackout();
+  };
+  const handleEffectChange = (key, value) => {
+    setEffectPreset("custom");
+    setMicrophoneEffects((effects) => ({ ...effects, [key]: value }));
+    updateMicrophone({ [key]: value });
+  };
+  const handleMonitoringChange = async (enabled) => {
+    try {
+      if (onlineRoomState) {
+        const active = await onlineRoom.setLocalMonitoring(enabled);
+        setMonitoringEnabled(enabled ? active : false);
+        return;
+      }
+      const action = enabled ? api.startDirectMonitoring : api.stopDirectMonitoring;
+      const updated = await action();
+      setMonitoringEnabled(Boolean(updated?.monitoring_enabled));
+      globalThis.dispatchEvent?.(
+        new CustomEvent("audio-settings-changed", { detail: updated })
+      );
+    } catch (error) {
+      setRecordingError(
+        translateSaved("Не удалось изменить прослушивание микрофона: {0}", {
+          0: getErrorMessage(error)
+        })
+      );
+    }
+  };
   return (
-    <div
-      ref={containerRef}
+    <KaraokeView
+      containerRef={containerRef}
       className={`karaoke-stage ${isPlaying ? "karaoke-is-playing" : ""} ${!controlsVisible || sceneTransitioning ? "karaoke-ui-hidden" : ""}`}
       onMouseMove={() => {
         if (sceneTransitioning) return;
         revealStageActions();
         revealControls();
       }}
-    >
-      <KaraokeMedia
-        instrumentalRef={instrumentalRef}
-        isPlaying={isPlaying}
-        musicVolume={musicVolume}
-        sendYouTubeCommand={sendYouTubeCommand}
-        song={song}
-        speed={speed}
-        syncSecondaryMedia={syncSecondaryMedia}
-        videoRef={videoRef}
-        vocalVolume={vocalVolume}
-        vocalsRef={vocalsRef}
-        youTubeClipRef={youTubeClipRef}
-        youTubeVideoId={youTubeVideoId}
-      />
-
-      {recordingError && (
-        <p className="karaoke-recording-error">{recordingError}</p>
-      )}
-      {analysisRecordingId && (
-        <PerformanceAnalysisModal
-          recordingId={analysisRecordingId}
-          onClose={() => {
-            updateAnalysisRecordingId(null);
-            navigateToLibraryFromBlackout();
-          }}
-          onDone={() => {
-            updateAnalysisRecordingId(null);
-            navigateToLibraryFromBlackout();
-          }}
-          onDeleted={() => {
-            updateAnalysisRecordingId(null);
-            navigateToLibraryFromBlackout();
-          }}
-        />
-      )}
-
-      <div
-        className={`karaoke-stage-actions ${stageActionsVisible && !sceneTransitioning ? "is-visible" : ""}`}
-        aria-label={translateSaved("Навигация караоке")}
-      >
-        <IconButton
-          unstyled
-          className="karaoke-stage-action"
-          icon={ArrowLeft}
-          size={25}
-          label={translateSaved("Назад в библиотеку")}
-          onClick={returnToLibrary}
-        />
-        {!autoHideConsole && (
-          <IconButton
-            unstyled
-            className={`karaoke-stage-action ${controlsVisible ? "is-active" : ""}`}
-            icon={SlidersHorizontal}
-            size={25}
-            label={
-              controlsVisible
-                ? translateSaved("Скрыть консоль")
-                : translateSaved("Показать консоль")
-            }
-            aria-pressed={controlsVisible}
-            onClick={controlsVisible ? hideControls : showControls}
-          />
-        )}
-        {!isPlaying && (
-          <IconButton
-            unstyled
-            className={`karaoke-stage-action karaoke-stage-radio ${isRadioPlaying ? "is-active" : ""}`}
-            icon={Radio}
-            size={24}
-            label={
-              isRadioPlaying
-                ? translateSaved("Выключить радио")
-                : translateSaved("Включить радио")
-            }
-            aria-pressed={isRadioPlaying}
-            onClick={toggleRadio}
-          />
-        )}
-      </div>
-
-      <KaraokePerformanceStage
-        currentLine={currentLine}
-        currentTime={lyricTime}
-        isPitchAttacking={isPitchAttacking}
-        isPitchDetected={isPitchDetected}
-        isPlaying={isPlaying}
-        keyShift={keyShift}
-        lyrics={lyrics}
-        nextLine={nextLine}
-        noteRangeMax={song.note_range_max}
-        noteRangeMin={song.note_range_min}
-        notes={notes}
-        pitchRestProgress={pitchRestProgress}
-        sceneBlackout={sceneBlackout}
-        sceneIntroVisible={sceneIntroVisible}
-        sceneIntro={{
-          title: song.title,
-          artist: song.artist,
-          genre: song.genre,
-          key: compactKey,
-          tempo: currentTempo,
-          difficulty: song.difficulty_override
-        }}
-        songId={song.id}
-        showLyrics={showLyrics}
-        showNotes={showNotes}
-        songTitle={song.title}
-        sungMidi={sungMidi}
-        upcomingLine={upcomingLine}
-      />
-
-      <KaraokeConsole
-        song={song}
-        currentTime={currentTime}
-        duration={duration}
-        microphoneLevel={microphoneLevel}
-        volumes={{
-          microphone: microphoneVolume,
-          music: musicVolume,
-          vocal: vocalVolume,
+      mediaProps={{
+        instrumentalRef, isPlaying, musicVolume, sendYouTubeCommand, song, speed,
+        syncSecondaryMedia, videoRef, vocalVolume, vocalsRef, youTubeClipRef,
+        youTubeVideoId
+      }}
+      recordingError={recordingError}
+      analysisRecordingId={analysisRecordingId}
+      onAnalysisClose={handleAnalysisClose}
+      stageActionProps={{
+        autoHideConsole, controlsVisible, hideControls, isPlaying, isRadioPlaying,
+        returnToLibrary, sceneTransitioning, showControls, stageActionsVisible,
+        toggleRadio
+      }}
+      performanceProps={{
+        currentLine, currentTime: lyricTime, isPitchAttacking, isPitchDetected,
+        isPlaying, keyShift, lyrics, nextLine, noteRangeMax: song.note_range_max,
+        noteRangeMin: song.note_range_min, notes, pitchRestProgress, sceneBlackout,
+        sceneIntroVisible,
+        sceneIntro: {
+          title: song.title, artist: song.artist, genre: song.genre, key: compactKey,
+          tempo: currentTempo, difficulty: song.difficulty_override
+        },
+        songId: song.id, showLyrics, showNotes, songTitle: song.title, sungMidi,
+        upcomingLine
+      }}
+      consoleProps={{
+        song, currentTime, duration, microphoneLevel,
+        volumes: {
+          microphone: microphoneVolume, music: musicVolume, vocal: vocalVolume,
           melody: melodyVolume
-        }}
-        onVolumeChange={{
-          microphone: setMicrophoneVolume,
-          music: setMusicVolume,
-          vocal: setVocalVolume,
-          melody: setMelodyVolume
-        }}
-        onMicrophoneCommit={(value) =>
-          updateMicrophone({
-            volume: value
-          })
-        }
-        microphoneEffects={microphoneEffects}
-        onEffectChange={(key, value) => {
-          setEffectPreset("custom");
-          setMicrophoneEffects((effects) => ({
-            ...effects,
-            [key]: value
-          }));
-          updateMicrophone({
-            [key]: value
-          });
-        }}
-        isPlaying={isPlaying}
-        onSkip={skip}
-        onTogglePlay={handleTogglePlay}
-        onStop={handleStop}
-        currentTempo={currentTempo}
-        onTempoChange={changeTempo}
-        compactKey={compactKey}
-        keyShift={keyShift}
-        onKeyShiftChange={setKeyShift}
-        showNotes={showNotes}
-        onToggleNotes={() => setShowNotes((value) => !value)}
-        showLyrics={showLyrics}
-        onToggleLyrics={() => setShowLyrics((value) => !value)}
-        onOpenAppSettings={onOpenAppSettings}
-        autoHideEnabled={autoHideConsole}
-        onAutoHideChange={setAutoHideConsole}
-        onClose={hideControls}
-        effectPreset={effectPreset}
-        onApplyEffectPreset={applyEffectPreset}
-        monitoringEnabled={monitoringEnabled}
-        onMonitoringChange={async (enabled) => {
-          try {
-            if (onlineRoomState) {
-              const active = await onlineRoom.setLocalMonitoring(enabled);
-              setMonitoringEnabled(enabled ? active : false);
-              return;
-            }
-            const action = enabled
-              ? api.startDirectMonitoring
-              : api.stopDirectMonitoring;
-            const updated = await action();
-            setMonitoringEnabled(Boolean(updated?.monitoring_enabled));
-            globalThis.dispatchEvent?.(
-              new CustomEvent("audio-settings-changed", {
-                detail: updated
-              })
-            );
-          } catch (error) {
-            setRecordingError(
-              translateSaved(
-                "Не удалось изменить прослушивание микрофона: {0}",
-                {
-                  0: getErrorMessage(error)
-                }
-              )
-            );
-          }
-        }}
-        onSeek={seekTo}
-      />
-    </div>
+        },
+        onVolumeChange: {
+          microphone: setMicrophoneVolume, music: setMusicVolume,
+          vocal: setVocalVolume, melody: setMelodyVolume
+        },
+        onMicrophoneCommit: (value) => updateMicrophone({ volume: value }),
+        microphoneEffects, onEffectChange: handleEffectChange, isPlaying,
+        onSkip: skip, onTogglePlay: handleTogglePlay, onStop: handleStop,
+        currentTempo, onTempoChange: changeTempo, compactKey, keyShift,
+        onKeyShiftChange: setKeyShift, showNotes,
+        onToggleNotes: () => setShowNotes((value) => !value), showLyrics,
+        onToggleLyrics: () => setShowLyrics((value) => !value), onOpenAppSettings,
+        autoHideEnabled: autoHideConsole, onAutoHideChange: setAutoHideConsole,
+        onClose: hideControls, effectPreset, onApplyEffectPreset: applyEffectPreset,
+        monitoringEnabled, onMonitoringChange: handleMonitoringChange, onSeek: seekTo
+      }}
+    />
   );
 }

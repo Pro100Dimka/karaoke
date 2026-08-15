@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "../config/runtime";
+import { API_BASE_URL } from "../runtime-config";
 import { translateSaved } from "../i18n/runtime";
 /* eslint-disable import/extensions */
 // eslint-disable-next-line import/extensions

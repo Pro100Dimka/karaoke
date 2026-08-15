@@ -9,7 +9,10 @@ const files = [];
 function walk(directory) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const fullPath = path.join(directory, entry.name);
-    if (entry.isDirectory()) walk(fullPath);
+    if (entry.isDirectory()) {
+      if (fullPath === path.join(sourceRoot, "theme")) continue;
+      walk(fullPath);
+    }
     else if (/\.(?:js|jsx)$/.test(entry.name)) files.push(fullPath);
   }
 }
@@ -19,6 +22,37 @@ const relative = (file) => path.relative(root, file).replaceAll("\\", "/");
 const read = (file) => fs.readFileSync(file, "utf8");
 const violations = [];
 const advisories = [];
+
+function auditSingletonDirectories(directory) {
+  const entries = fs.readdirSync(directory, { withFileTypes: true });
+  const childDirectories = entries.filter((entry) => entry.isDirectory());
+  const childFiles = entries.filter((entry) => entry.isFile());
+  if (directory !== sourceRoot && directory !== path.join(sourceRoot, "theme")) {
+    if (childDirectories.length === 0 && childFiles.length === 1) {
+      violations.push(
+        `single-file source directory must be flattened: ${relative(directory)}`
+      );
+    }
+  }
+  for (const entry of childDirectories) {
+    const child = path.join(directory, entry.name);
+    if (child === path.join(sourceRoot, "theme")) continue;
+    auditSingletonDirectories(child);
+  }
+}
+auditSingletonDirectories(sourceRoot);
+
+for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+  if (entry.isDirectory() && entry.name.startsWith("coverage-"))
+    violations.push(`legacy coverage directory must be consolidated: ${entry.name}`);
+}
+const coverageRoot = path.join(root, "coverage");
+if (fs.existsSync(coverageRoot)) {
+  for (const entry of fs.readdirSync(coverageRoot, { withFileTypes: true })) {
+    if (entry.isFile() && entry.name === "coverage-final.json")
+      violations.push("coverage/coverage-final.json must use a descriptive report name");
+  }
+}
 
 function forbid(label, pattern, allow = new Set()) {
   for (const file of files) {

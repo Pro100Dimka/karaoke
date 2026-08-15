@@ -34,7 +34,7 @@ vi.mock("../src/api/client", () => ({
   }
 }));
 
-import { POLLING_INTERVALS } from "../src/config/runtime.js";
+import { POLLING_INTERVALS } from "../src/runtime-config.js";
 import { translateSaved } from "../src/i18n/runtime.js";
 import useDiagnostics from "../src/hooks/useDiagnostics.js";
 import { useOnlineRoomNavigation } from "../src/hooks/useOnlineRoomNavigation.js";

@@ -23,7 +23,7 @@ import Field, { FieldRow } from "../src/components/fields/field.jsx";
 import FieldInput from "../src/components/fields/field-input.jsx";
 import FieldList from "../src/components/fields/field-list.jsx";
 import RangeInput from "../src/components/fields/range-input.jsx";
-import Table from "../src/components/table/index.jsx";
+import Table from "../src/components/Table.jsx";
 import Card from "../src/components/ui/Card.jsx";
 import ErrorBoundary from "../src/components/ui/ErrorBoundary.jsx";
 import IconButton from "../src/components/ui/IconButton.jsx";

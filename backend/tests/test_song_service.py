@@ -75,6 +75,9 @@ def test_artist_folder_and_slug_normalization():
     assert song_service._clean_copy_suffix("Song (3)") == "Song"
     assert song_service._clean_artist_tag(None, "Song") is None
     assert song_service._clean_artist_tag("Artist Song Single [2024]", "Song") == "Artist"
+    assert song_service._normalize_artist_title(
+        "Нервы Всё, Что Вокруг", "Нервы Моя Леди"
+    ) == ("Нервы", "Моя Леди")
     assert song_service._folder_name("Artist", "Bad:/Title", "fallback") == "Artist Bad Title"
     assert song_service._folder_name(None, "<>", "fallback") == "fallback"
     assert len(song_service._folder_name("A" * 200, "Title", "fallback")) == 180
@@ -89,6 +92,14 @@ def test_source_identity_prefers_tags_then_filename_then_request(monkeypatch, tm
     assert song_service._read_source_identity(tmp_path / "x", "File - Name.mp3", "Request") == (
         "Artist",
         "Tagged",
+    )
+    mutagen.File.return_value = {
+        "title": ["Нервы Моя Леди"],
+        "artist": ["Нервы Всё, Что Вокруг"],
+    }
+    assert song_service._read_source_identity(tmp_path / "x", "Plain.mp3", "Request") == (
+        "Нервы",
+        "Моя Леди",
     )
     mutagen.File.return_value = None
     assert song_service._read_source_identity(tmp_path / "x", "File - Name.mp3", "Request") == (

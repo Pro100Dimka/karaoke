@@ -6,7 +6,7 @@ import darkIcon from "../assets/icons/dark.png";
 import greenIcon from "../assets/icons/green.png";
 import lightIcon from "../assets/icons/light.png";
 import violetIcon from "../assets/icons/violet.png";
-import { BACKEND_BOOT_RETRY_MS } from "../config/runtime";
+import { BACKEND_BOOT_RETRY_MS } from "../runtime-config";
 import { translateMessage } from "../i18n";
 import { getSavedLanguage } from "../utils/language";
 import { getSavedTheme } from "../utils/theme";

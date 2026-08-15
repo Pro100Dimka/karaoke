@@ -98,11 +98,15 @@ def _apply_source_metadata(song: models.Song) -> None:
 
     tagged_title = _first_audio_tag(tags, "title") if tags is not None else None
     tagged_artist = _first_audio_tag(tags, "artist", "albumartist") if tags is not None else None
+    tagged_album = _first_audio_tag(tags, "album") if tags is not None else None
     filename_artist, filename_title = song_service.parse_filename_identity(song.original_filename)
 
     if tagged_title:
-        song.title = tagged_title
-        song.artist = song_service._clean_artist_tag(tagged_artist, tagged_title) or filename_artist
+        artist, clean_title = song_service._normalize_artist_title(
+            tagged_artist, tagged_title, tagged_album
+        )
+        song.title = clean_title
+        song.artist = artist or filename_artist
     else:
         if filename_artist:
             song.artist = filename_artist

@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import { POLLING_INTERVALS } from "../config/runtime";
+import { POLLING_INTERVALS } from "../runtime-config";
 import { usePolling } from "./usePolling";
 
 export default function useDiagnostics() {

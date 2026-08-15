@@ -1,6 +1,6 @@
 import { api } from "../../../../api/client";
-import Table from "../../../../components/table";
-import { POLLING_INTERVALS } from "../../../../config/runtime";
+import Table from "../../../../components/Table";
+import { POLLING_INTERVALS } from "../../../../runtime-config";
 import { usePolling } from "../../../../hooks/usePolling";
 import { useI18n } from "../../../../i18n";
 import { Chip, Stack, Typography } from "../../../../theme/ui";

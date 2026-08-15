@@ -7,7 +7,10 @@ const files = [];
 const walk = (dir) => {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) walk(full);
+    if (entry.isDirectory()) {
+      if (full === path.join(root, "theme")) continue;
+      walk(full);
+    }
     else if (extensions.has(path.extname(entry.name))) files.push(full);
   }
 };

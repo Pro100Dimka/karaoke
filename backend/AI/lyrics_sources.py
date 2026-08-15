@@ -56,6 +56,79 @@ class LyricsDiscovery:
     query: str | None = None
 
 
+
+
+class _SearchFormHTMLParser(HTMLParser):
+    """Discover a simple site-search form without depending on site-specific JS."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.forms: list[dict[str, object]] = []
+        self.current: dict[str, object] | None = None
+
+    @staticmethod
+    def _attrs(attrs) -> dict[str, str]:
+        return {str(key): str(value or "") for key, value in attrs}
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        values = self._attrs(attrs)
+        if tag == "form":
+            self.current = {
+                "action": values.get("action", ""),
+                "method": values.get("method", "get").casefold(),
+                "inputs": [],
+            }
+            return
+        if self.current is None or tag != "input":
+            return
+        name = values.get("name", "").strip()
+        if not name:
+            return
+        inputs = self.current["inputs"]
+        assert isinstance(inputs, list)
+        inputs.append(
+            {
+                "name": name,
+                "type": values.get("type", "text").casefold(),
+                "value": values.get("value", ""),
+                "placeholder": values.get("placeholder", ""),
+            }
+        )
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "form" and self.current is not None:
+            self.forms.append(self.current)
+            self.current = None
+
+
+class _AnchorHTMLParser(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.href = ""
+        self.buffer: list[str] = []
+        self.links: list[tuple[str, str]] = []
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        if tag != "a":
+            return
+        values = {str(key): str(value or "") for key, value in attrs}
+        self.href = values.get("href", "")
+        self.buffer = []
+
+    def handle_data(self, data: str) -> None:
+        if self.href:
+            self.buffer.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag != "a" or not self.href:
+            return
+        title = " ".join("".join(self.buffer).split())
+        if title:
+            self.links.append((self.href, title))
+        self.href = ""
+        self.buffer = []
+
+
 class _LyricsHTMLParser(HTMLParser):
     """Extract lyrics from known semantic containers without script execution."""
 
@@ -119,14 +192,23 @@ class _LyricsHTMLParser(HTMLParser):
         return "\n".join(self.lines)
 
 
-def _lyrics_debug(message: str) -> None:
-    """Write UTF-8 lyrics diagnostics directly to the real backend console."""
+def _lyrics_log(message: str) -> None:
+    """Write concise UTF-8 lyrics status directly to the backend console."""
     stream = getattr(sys, "__stdout__", None) or sys.stdout
     with suppress(Exception):
         encoding = str(getattr(stream, "encoding", "") or "").lower().replace("_", "-")
         if hasattr(stream, "reconfigure") and encoding not in {"utf-8", "utf8"}:
             stream.reconfigure(encoding="utf-8", errors="replace")
         print(message, file=stream, flush=True)
+
+
+def _lyrics_debug(message: str) -> None:
+    """Write provider/candidate diagnostics only when explicitly requested."""
+    if os.getenv("KARAOKE_LYRICS_VERBOSE", "").strip().lower() not in {
+        "1", "true", "yes", "on"
+    }:
+        return
+    _lyrics_log(message)
 
 
 def _clean(text: str) -> str:
@@ -448,6 +530,126 @@ def _safe_result_url(raw: str) -> str | None:
     return value
 
 
+def _decode_html_payload(payload: bytes, header_charset: str | None = None) -> str:
+    declared = _HTML_CHARSET.search(payload[:20_000])
+    declared_charset = declared.group(1).decode("ascii", "ignore") if declared else None
+    # A valid HTTP/meta charset is stronger evidence than a Cyrillic-count
+    # heuristic. UTF-8 bytes decoded as cp1251 can accidentally look "more
+    # Cyrillic" while actually being mojibake.
+    for explicit in (header_charset, declared_charset):
+        if not explicit:
+            continue
+        try:
+            return payload.decode(explicit)
+        except (LookupError, UnicodeDecodeError):
+            pass
+
+    decoded: list[tuple[int, str]] = []
+    for candidate in ("utf-8", "windows-1251"):
+        try:
+            value = payload.decode(candidate)
+        except (LookupError, UnicodeDecodeError):
+            continue
+        cyrillic = len(re.findall(r"[А-Яа-яЁё]", value))
+        replacement = value.count("\ufffd")
+        decoded.append((cyrillic - replacement * 20, value))
+    return max(decoded, key=lambda item: item[0])[1] if decoded else ""
+
+
+def _read_html(request: urllib.request.Request, limit: int = 1_500_000) -> str:
+    try:
+        with urllib.request.urlopen(request, timeout=8.0) as response:  # noqa: S310
+            payload = response.read(limit)
+            headers = getattr(response, "headers", None)
+            get_charset = getattr(headers, "get_content_charset", None)
+            charset = get_charset() if callable(get_charset) else None
+    except (OSError, UnicodeError, urllib.error.URLError):
+        return ""
+    return _decode_html_payload(payload, charset)
+
+
+def _mychords_search(title: str) -> list[tuple[str, str]]:
+    """Use MyChords' own search form before relying on external search engines.
+
+    Search engines can omit a valid page even though MyChords has the song.
+    The form is discovered dynamically so the code does not hard-code its input name.
+    """
+    base = "https://mychords.net/ru/search"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AAndDVoice/2026.35",
+        "Accept-Language": "ru,en;q=0.8",
+    }
+    landing = _read_html(urllib.request.Request(base, headers=headers))
+    if not landing:
+        return []
+    parser = _SearchFormHTMLParser()
+    with suppress(ValueError, UnicodeError):
+        parser.feed(landing)
+
+    forms = sorted(
+        parser.forms,
+        key=lambda form: (
+            "search" not in str(form.get("action", "")).casefold(),
+            not any(
+                str(item.get("type", "")).casefold() in {"text", "search"}
+                for item in form.get("inputs", [])
+                if isinstance(item, dict)
+            ),
+        ),
+    )
+    for form in forms:
+        inputs = [item for item in form.get("inputs", []) if isinstance(item, dict)]
+        text_input = next(
+            (
+                item
+                for item in inputs
+                if str(item.get("type", "")).casefold() in {"text", "search"}
+            ),
+            None,
+        )
+        if not text_input:
+            continue
+        payload = {
+            str(item["name"]): str(item.get("value", ""))
+            for item in inputs
+            if item.get("name") and str(item.get("type", "")).casefold() == "hidden"
+        }
+        payload[str(text_input["name"])] = title
+        action = urllib.parse.urljoin(base, str(form.get("action", "") or base))
+        method = str(form.get("method", "get")).casefold()
+        if method == "post":
+            request = urllib.request.Request(
+                action, data=urllib.parse.urlencode(payload).encode("utf-8"), headers=headers
+            )
+        else:
+            separator = "&" if urllib.parse.urlparse(action).query else "?"
+            request = urllib.request.Request(
+                action + separator + urllib.parse.urlencode(payload), headers=headers
+            )
+        page = _read_html(request)
+        if not page:
+            continue
+        anchors = _AnchorHTMLParser()
+        with suppress(ValueError, UnicodeError):
+            anchors.feed(page)
+        output: list[tuple[str, str]] = []
+        seen: set[str] = set()
+        for raw_url, result_title in anchors.links:
+            url = urllib.parse.urljoin(action, raw_url)
+            parsed = urllib.parse.urlparse(url)
+            host = (parsed.hostname or "").casefold().removeprefix("www.")
+            if host != "mychords.net" or not parsed.path.endswith(".html"):
+                continue
+            if "/search" in parsed.path or not _search_tokens_match(title, result_title):
+                continue
+            if url not in seen:
+                seen.add(url)
+                output.append((url, result_title))
+        if output:
+            return output[:6]
+    return []
+
+
 def _web_search(title: str) -> list[tuple[str, str]]:
     query = f'{title} "текст песни" lyrics'
     request = urllib.request.Request(
@@ -494,27 +696,9 @@ def _fetch_web_lyrics(url: str) -> str:
             header_charset = get_charset() if callable(get_charset) else None
     except (OSError, UnicodeError, urllib.error.URLError):
         return ""
-    declared = _HTML_CHARSET.search(payload[:20_000])
-    encoding = header_charset or (declared.group(1).decode("ascii", "ignore") if declared else None)
-    candidates = []
-    for candidate in (encoding, "utf-8", "windows-1251"):
-        if not candidate or candidate in candidates:
-            continue
-        candidates.append(candidate)
-    decoded = []
-    for candidate in candidates:
-        try:
-            value = payload.decode(candidate)
-        except (LookupError, UnicodeDecodeError):
-            continue
-        # Correctly decoded Russian pages contain substantially more Cyrillic
-        # than mojibake punctuation/control characters.
-        cyrillic = len(re.findall(r"[А-Яа-яЁё]", value))
-        replacement = value.count("\ufffd")
-        decoded.append((cyrillic - replacement * 20, value))
-    if not decoded:
+    page = _decode_html_payload(payload, header_charset)
+    if not page:
         return ""
-    page = max(decoded, key=lambda item: item[0])[1]
 
     host = (urllib.parse.urlparse(url).hostname or "").casefold().removeprefix("www.")
     if host == "tekstipesen.com":
@@ -547,7 +731,9 @@ def _web_online(title: str | None) -> LyricsDiscovery:
         return LyricsDiscovery()
 
     _lyrics_debug(f"[lyrics] WEB request: query={title!r}")
-    results = _web_search(title)
+    results = _mychords_search(title)
+    if not results:
+        results = _web_search(title)
     _lyrics_debug(f"[lyrics] WEB matching search results: {len(results)}")
 
     for number, (url, result_title) in enumerate(results, 1):
@@ -602,6 +788,7 @@ def _metadata_search_candidates(
     source = Path(source)
     tagged_title = ""
     tagged_artist = ""
+    tagged_album = ""
 
     try:
         from mutagen import File as MutagenFile
@@ -620,6 +807,7 @@ def _metadata_search_candidates(
 
             tagged_title = first("title")
             tagged_artist = first("artist", "albumartist")
+            tagged_album = first("album")
     except Exception:
         pass
 
@@ -648,33 +836,73 @@ def _metadata_search_candidates(
         add_query(f"{artist} {title}" if artist else title)
         add_query(title)
 
-    # 1) Embedded metadata has highest priority.
+    def strip_leading_artist(title: str, artist: str) -> str:
+        clean_title = _plain_search_query(title)
+        clean_artist = _plain_search_query(artist)
+        if not clean_title or not clean_artist:
+            return clean_title
+        prefix = clean_artist + " "
+        if clean_title.casefold().startswith(prefix.casefold()):
+            return clean_title[len(prefix) :].strip() or clean_title
+        return clean_title
+
+    filename_artist, filename_title = _filename_search_identity(source)
+    clean_stem = _strip_filename_copy_suffix(source.stem)
+    normalized_stem = _normalize_name(clean_stem)
+    filename_is_real = normalized_stem not in technical_names and bool(filename_title)
+
+    # 1) Embedded metadata has highest priority, but real-world tags are often
+    # polluted by downloader/album text.  Use the explicit album tag to remove
+    # that pollution and avoid duplicated identities such as
+    # ``Нервы Всё, Что Вокруг Нервы Моя Леди``.
     if tagged_title:
         clean_artist = tagged_artist
         if clean_artist:
+            if tagged_album:
+                clean_artist = re.sub(re.escape(tagged_album), " ", clean_artist, flags=re.I)
             clean_artist = re.sub(re.escape(tagged_title), " ", clean_artist, flags=re.I)
             clean_artist = re.sub(r"\b(?:single|album|ep)\b", " ", clean_artist, flags=re.I)
             clean_artist = re.sub(r"[\[(]\s*(?:19|20)\d{2}\s*[\])]", " ", clean_artist)
             clean_artist = _plain_search_query(clean_artist)
-        add_identity(clean_artist, tagged_title)
+
+        clean_title = _plain_search_query(tagged_title)
+        # If the album tag is absent but artist/title share a leading identity
+        # (e.g. artist="Нервы Всё, Что Вокруг", title="Нервы Моя Леди"),
+        # the shared prefix is a safer artist candidate than the polluted tag.
+        artist_words = clean_artist.split() if clean_artist else []
+        title_words = clean_title.split()
+        shared: list[str] = []
+        for left, right in zip(artist_words, title_words):
+            if left.casefold() != right.casefold():
+                break
+            shared.append(left)
+        if shared and len(shared) < len(artist_words):
+            clean_artist = " ".join(shared)
+
+        # Prefer the clean metadata artist, then the filename artist as a
+        # trustworthy fallback for malformed tags.  This removes duplicated
+        # artist prefixes from titles without guessing arbitrary words.
+        for known_artist in (clean_artist, filename_artist or ""):
+            stripped = strip_leading_artist(clean_title, known_artist)
+            if stripped != clean_title:
+                clean_title = stripped
+                break
+        add_identity(clean_artist or (filename_artist or ""), clean_title)
 
     # 2) Backend-provided identity. It may be structured as "Artist - Title".
     fallback_value = str(fallback or "").strip()
-    if not tagged_title and fallback_value:
+    if fallback_value:
         fallback_artist, fallback_title = _track_signature(fallback_value)
         if fallback_artist and fallback_title:
             add_identity(fallback_artist, fallback_title)
-        else:
+        elif not tagged_title:
             add_query(fallback_value)
 
-    # 3) Real filename can refine the identity (especially title-only), but a
-    # temp filename such as source.wav must NEVER become a lyrics query.
-    clean_stem = _strip_filename_copy_suffix(source.stem)
-    normalized_stem = _normalize_name(clean_stem)
-    if not tagged_title and normalized_stem not in technical_names:
-        file_artist, file_title = _filename_search_identity(source)
-        if file_title:
-            add_identity(file_artist, file_title)
+    # 3) The real filename is an independent fallback even when tags exist.
+    # Broken download metadata is common; keeping a clean filename identity
+    # prevents a single bad album/artist tag from forcing an expensive ASR run.
+    if filename_is_real:
+        add_identity(filename_artist or "", filename_title)
 
     # Stable de-duplication.
     unique: list[str] = []
@@ -702,24 +930,24 @@ def discover_lyrics(
     if embedded:
         return LyricsDiscovery(embedded, "metadata")
     queries = _metadata_search_candidates(source, title)
-    _lyrics_debug(f"[lyrics] exact search plan ({len(queries)} queries): {queries!r}")
+    _lyrics_log(f"[lyrics] exact search plan ({len(queries)} queries): {queries!r}")
 
     for index, query in enumerate(queries, 1):
         _lyrics_debug(f"[lyrics] SEARCH #{index} BEGIN: {query}")
 
         online = _online(query, duration_sec)
         if online.text:
-            _lyrics_debug(f"[lyrics] SEARCH #{index} FOUND via {online.source}: {query}")
+            _lyrics_log(f"[lyrics] FOUND via {online.source}: {query}")
             return LyricsDiscovery(online.text, online.source, online.segments, query)
 
         _lyrics_debug(f"[lyrics] SEARCH #{index} LRCLIB NOT FOUND: {query}")
 
         web = _web_online(query)
         if web.text:
-            _lyrics_debug(f"[lyrics] SEARCH #{index} FOUND via {web.source}: {query}")
+            _lyrics_log(f"[lyrics] FOUND via {web.source}: {query}")
             return LyricsDiscovery(web.text, web.source, web.segments, query)
 
         _lyrics_debug(f"[lyrics] SEARCH #{index} END NOT FOUND: {query}")
 
-    _lyrics_debug("[lyrics] ALL SEARCH QUERIES FAILED -> ASR")
+    _lyrics_log("[lyrics] NOT FOUND online -> ASR fallback")
     return LyricsDiscovery()

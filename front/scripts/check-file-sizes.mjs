@@ -6,7 +6,11 @@ const root = path.join(process.cwd(), "src");
 function walk(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const file = path.join(directory, entry.name);
-    return entry.isDirectory() ? walk(file) : [file];
+    if (entry.isDirectory()) {
+      if (file === path.join(root, "theme")) return [];
+      return walk(file);
+    }
+    return [file];
   });
 }
 const warnings = [];

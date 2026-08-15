@@ -18,7 +18,7 @@ export default defineConfig({
         "src/**/*.test.{js,jsx}"
       ],
       reporter: ["text", "json-summary", "html"],
-      reportsDirectory: "reports/coverage"
+      reportsDirectory: "coverage"
     }
   }
 });

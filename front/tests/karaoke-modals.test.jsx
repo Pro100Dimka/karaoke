@@ -40,7 +40,7 @@ vi.mock("../src/components/fields/button", () => ({
     <button {...props}>{children}</button>
   )
 }));
-import PerformanceAnalysisModal from "../src/pages/Karaoke/modals/performance-analysis-modal.jsx";
+import PerformanceAnalysisModal from "../src/pages/Karaoke/performance-analysis-modal.jsx";
 
 beforeEach(() => {
   mocks.runAnalysis.mockReset();

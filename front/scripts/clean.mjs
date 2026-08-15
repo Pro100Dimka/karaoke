@@ -7,6 +7,7 @@ const generated = new Set([
   ".ruff_cache",
   ".runtime",
   ".stryker-tmp",
+  "coverage",
   "dist",
   "reports",
   "test-results",

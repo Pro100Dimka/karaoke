@@ -1,0 +1,103 @@
+/* ==================== SETTINGS ==================== */
+/* Settings uses the same bounded neon Card modal as song settings. */
+
+.settings-modal > .ui-card__panel {
+  overflow: hidden;
+}
+
+.settings-tabs button.is-active {
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+  background: color-mix(
+    in srgb,
+    var(--color-primary) 10%,
+    var(--color-surface-glass)
+  );
+  box-shadow:
+    0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
+    0 0 1.875rem color-mix(in srgb, var(--color-accent) 24%, transparent);
+}
+
+.settings-content-panel .panel-header {
+  flex: none;
+  min-block-size: 4rem;
+  padding: var(--space-4) var(--space-5);
+  border-block-end: var(--hairline) solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface-glass) 22%, transparent);
+}
+
+.settings-content-panel > :not(.panel-header) {
+  min-block-size: 0;
+  overflow: auto;
+  padding: var(--space-5);
+  scrollbar-width: none;
+}
+
+.settings-content-panel > :not(.panel-header)::-webkit-scrollbar {
+  display: none;
+}
+
+.settings-service-link {
+  min-block-size: 7rem;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  text-align: start;
+}
+
+.settings-service-link span {
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.settings-service-link b {
+  color: var(--color-primary-hover);
+}
+
+.settings-service-screen {
+  min-inline-size: 0;
+}
+
+/* Settings title is the shared modal title component. */
+.settings-header {
+  display: grid;
+  flex: none;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) calc(var(--space-8) + var(--space-3)) var(--space-4)
+    var(--space-5);
+  border-block-end: var(--hairline) solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface-glass) 28%, transparent);
+  min-block-size: 6.25rem;
+}
+
+.settings-header .settings-save {
+  white-space: nowrap;
+}
+
+.settings-page > .settings-header + .settings-layout {
+  min-block-size: 0;
+  flex: 1;
+}
+
+/* Keep Settings on the same responsive shared modal geometry. */
+.settings-modal {
+  min-block-size: 0;
+  overflow: visible;
+  inline-size: min(90vw, 43.75rem);
+  max-inline-size: min(90vw, 43.75rem);
+  block-size: auto;
+  max-block-size: 90dvh;
+}
+
+.settings-modal > .ui-card__panel,
+.settings-modal > .ui-card__panel > .ui-card__content {
+  inline-size: 100%;
+  min-block-size: 0;
+  block-size: auto;
+  max-block-size: 90dvh;
+}
+
+/* Audio & recording reuses the shared field/card system. */
+

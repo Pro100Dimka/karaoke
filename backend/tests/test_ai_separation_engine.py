@@ -453,6 +453,22 @@ def test_separate_requires_resources(monkeypatch, tmp_path):
         separation.MSSTMelRoformerSeparator().separate("mix", tmp_path / "v", tmp_path / "i")
 
 
+def test_cpu_compile_skips_windows_inductor_without_msvc(monkeypatch):
+    monkeypatch.setenv("KARAOKE_CPU_COMPILE", "1")
+    monkeypatch.setenv("KARAOKE_CPU_COMPILE_BACKEND", "inductor")
+    monkeypatch.setattr(separation.os, "name", "nt")
+    monkeypatch.setattr(separation.shutil, "which", lambda _name: None)
+
+    class Torch:
+        @staticmethod
+        def compile(*_args, **_kwargs):
+            pytest.fail("torch.compile must not run without cl.exe")
+
+    model = object()
+    result, compiled = separation._compile_cpu_model(model, Torch())
+    assert result is model and compiled is False
+
+
 def test_center_channel_fallback_mono_and_stereo(tmp_path):
     separator = separation.CenterChannelFallbackSeparator()
     mono = tmp_path / "mono.wav"

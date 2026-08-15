@@ -90,6 +90,12 @@ def _compile_cpu_model(model, torch):
     if not _truthy_env("KARAOKE_CPU_COMPILE") or not hasattr(torch, "compile"):
         return model, False
     backend = os.getenv("KARAOKE_CPU_COMPILE_BACKEND", "inductor").strip() or "inductor"
+    if os.name == "nt" and backend == "inductor" and shutil.which("cl.exe") is None:
+        print(
+            "[AI runtime] separation CPU compile skipped: MSVC cl.exe not found; using eager",
+            flush=True,
+        )
+        return model, False
     mode = os.getenv("KARAOKE_CPU_COMPILE_MODE", "default").strip() or "default"
     dynamic = os.getenv("KARAOKE_CPU_COMPILE_DYNAMIC", "1").strip().lower() not in {
         "0",

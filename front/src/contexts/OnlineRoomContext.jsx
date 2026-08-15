@@ -9,6 +9,7 @@ import {
 } from "react";
 import { api } from "../api/client";
 import { translateSaved } from "../i18n/runtime";
+import { playParticipantJoinedSound } from "./onlineRoomAudio";
 import {
   createRoomId,
   OnlineRoomClient,
@@ -56,28 +57,6 @@ export function OnlineRoomProvider({ children }) {
     stopSpeakingMeter,
     stopAllSpeakingMeters
   } = useSpeakingLevels();
-  const playParticipantJoinedSound = useCallback(() => {
-    const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
-    if (!AudioContextClass) return;
-    try {
-      const context = new AudioContextClass({ latencyHint: "interactive" });
-      const gain = context.createGain();
-      gain.gain.setValueAtTime(0.0001, context.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.09, context.currentTime + 0.015);
-      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.22);
-      gain.connect(context.destination);
-      [660, 880].forEach((frequency, index) => {
-        const oscillator = context.createOscillator();
-        oscillator.frequency.value = frequency;
-        oscillator.connect(gain);
-        oscillator.start(context.currentTime + index * 0.045);
-        oscillator.stop(context.currentTime + 0.2);
-      });
-      globalThis.setTimeout(() => context.close().catch(() => {}), 300);
-    } catch {
-      // A notification sound is optional and must never affect room state.
-    }
-  }, []);
   const setRoom = useCallback(
     (next) => {
       roomRef.current = next;
@@ -536,8 +515,7 @@ export function OnlineRoomProvider({ children }) {
       resetRoomState,
       restoreApplicationAudio,
       setRoom,
-      startSpeakingMeter,
-      playParticipantJoinedSound
+      startSpeakingMeter
     ]
   );
   useEffect(

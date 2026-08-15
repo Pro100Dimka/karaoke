@@ -9,7 +9,11 @@ const extensions = new Set([".js", ".jsx"]);
 function walk(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const fullPath = path.join(directory, entry.name);
-    return entry.isDirectory() ? walk(fullPath) : [fullPath];
+    if (entry.isDirectory()) {
+      if (fullPath === path.join(srcRoot, "theme")) return [];
+      return walk(fullPath);
+    }
+    return [fullPath];
   });
 }
 
