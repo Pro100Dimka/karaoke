@@ -52,6 +52,7 @@ def test_openvino_cpu_pilot_scripts_are_wired():
     py = _text("benchmark_cpu_separation_openvino.py")
     assert "openvino==%VERSION%" in prepare
     assert "benchmark_cpu_separation_openvino.py" in bench
+    assert 'call "%ROOT%\\scripts\\prepare-roformer-openvino-cpu-pilot.bat" || exit /b 1' in bench
     assert 'set "KARAOKE_CPU_COMPILE_BACKEND=openvino"' in start
     assert "cpu-separation-backend.txt" in py
     assert "Stems byte-identical" in py

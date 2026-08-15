@@ -16,7 +16,7 @@ if not exist "%PY%" (
 )
 if exist "%ENV%" call "%ENV%"
 
-"%ROOT%\scripts\prepare-roformer-openvino-cpu-pilot.bat" || exit /b 1
+call "%ROOT%\scripts\prepare-roformer-openvino-cpu-pilot.bat" || exit /b 1
 set "SECONDS=%~2"
 if not defined SECONDS set "SECONDS=8"
 set "THREADS=%~3"
