@@ -96,6 +96,8 @@ def main() -> int:
     if str(directml) not in sys.path:
         sys.path.insert(0, str(directml))
 
+    previous_device = os.environ.get("SONGAPP_DEVICE")
+    os.environ["SONGAPP_DEVICE"] = "cpu"
     runtime.reset_runtime_for_tests()
     runtime.configure_runtime("cpu", force=True)
     estimator = FCPEPitchEstimator()
@@ -103,7 +105,28 @@ def main() -> int:
     availability = backend.availability()
     if not availability.available:
         print(f"[FAIL] DirectML unavailable: {availability.reason}", file=sys.stderr)
+        if previous_device is None:
+            os.environ.pop("SONGAPP_DEVICE", None)
+        else:
+            os.environ["SONGAPP_DEVICE"] = previous_device
+        runtime.reset_runtime_for_tests()
         return 3
+
+    # Force the PyTorch reference onto CPU even on a machine with CUDA. The
+    # DirectML gate measures the future AMD/Intel path, so CUDA must not leak
+    # into preprocessing or the reference implementation.
+    estimator._load_model()
+    if estimator._device != "cpu":
+        print(f"[FAIL] Reference FCPE unexpectedly selected {estimator._device}", file=sys.stderr)
+        backend.release()
+        if previous_device is None:
+            os.environ.pop("SONGAPP_DEVICE", None)
+        else:
+            os.environ["SONGAPP_DEVICE"] = previous_device
+        runtime.reset_runtime_for_tests()
+        return 4
+    print("Reference device: cpu")
+    print("DirectML provider: DmlExecutionProvider")
 
     # Warm the production model once so model-load time is not confused with
     # steady-state inference time.
@@ -176,6 +199,11 @@ def main() -> int:
         args.json_output.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"JSON: {args.json_output}")
     backend.release()
+    if previous_device is None:
+        os.environ.pop("SONGAPP_DEVICE", None)
+    else:
+        os.environ["SONGAPP_DEVICE"] = previous_device
+    runtime.reset_runtime_for_tests()
     return 0
 
 

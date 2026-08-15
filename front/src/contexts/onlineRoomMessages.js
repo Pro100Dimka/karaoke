@@ -56,16 +56,16 @@ export function createOnlineRoomMessageHandler(options) {
       }
       roomApi
         .exportSongPackage(command.songId)
-        .then((blob) => {
-          if (!isCurrentConnection()) return null;
-          setTransferStatus({ stage: "sending", percent: 0 });
-          return voice
-            .sendFile(command.requesterId, blob, {
-              kind: "song-package",
-              songId: command.songId,
-              filename: `${command.songId}.karaoke.zip`
-            })
-            .finally(() => blob.cleanup?.());
+        .then(async (blob) => {
+          try {
+            if (!isCurrentConnection()) return null;
+            setTransferStatus({ stage: "sending", percent: 0 });
+            return await voice.sendFile(command.requesterId, blob, {
+              kind: "song-package", songId: command.songId, filename: `${command.songId}.karaoke.zip`
+            });
+          } finally {
+            await blob.cleanup?.();
+          }
         })
         .then(() => { if (isCurrentConnection()) setTransferStatus(null); })
         .catch((error) => {

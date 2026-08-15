@@ -63,6 +63,7 @@ let backendRestartAttempts = 0;
 let backendStableTimer = null;
 let backendDuplicateWatchTimer = null;
 let backendDuplicateDetected = false;
+let backendDuplicateWatchGeneration = 0;
 const BACKEND_STABLE_RESET_MS = 30_000;
 const BACKEND_DUPLICATE_WATCH_MS = 5_000;
 
@@ -167,13 +168,17 @@ function scheduleBackendRestart() {
 
 function watchDuplicateBackend() {
   backendDuplicateDetected = true;
+  const generation = ++backendDuplicateWatchGeneration;
   clearTimeout(backendDuplicateWatchTimer);
+  const active = () => generation === backendDuplicateWatchGeneration &&
+    !isQuitting && !backendStopRequested && backendDuplicateDetected;
   const check = async () => {
-    if (isQuitting || backendStopRequested || !backendDuplicateDetected) return;
+    if (!active()) return;
     try {
       await requestBackendJson("/settings", Math.min(BACKEND_REQUEST_TIMEOUT_MS, 3000));
-      backendDuplicateWatchTimer = setTimeout(check, BACKEND_DUPLICATE_WATCH_MS);
+      if (active()) backendDuplicateWatchTimer = setTimeout(check, BACKEND_DUPLICATE_WATCH_MS);
     } catch {
+      if (!active()) return;
       backendDuplicateDetected = false;
       backendDuplicateWatchTimer = null;
       startBackend();
@@ -184,7 +189,7 @@ function watchDuplicateBackend() {
 
 function startBackend() {
   if (
-    process.env.KARAOKE_BACKEND_EXTERNAL === "1" ||
+    isQuitting || backendStopRequested || process.env.KARAOKE_BACKEND_EXTERNAL === "1" ||
     (backendProcess && !backendProcess.killed)
   ) {
     return;
@@ -299,6 +304,7 @@ function stopBackend() {
   backendStableTimer = null;
   backendDuplicateWatchTimer = null;
   backendDuplicateDetected = false;
+  backendDuplicateWatchGeneration += 1;
 
   const terminateBackend = () => {
     if (backendProcess && !backendProcess.killed) {

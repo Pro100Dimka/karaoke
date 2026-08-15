@@ -17,6 +17,8 @@ set "MSST_INF=%MSST%\inference.py"
 set "MSST_CFG=%MSST%\configs\KimberleyJensen\config_vocals_mel_band_roformer_kj.yaml"
 set "ENV=%DL%\ai-environment.bat"
 set "INSTALLER=%BACK%\AI\install_models.py"
+set "MSST_SETUP=%ROOT%\scripts\install-msst-engine.bat"
+set "DML_SETUP=%ROOT%\scripts\prepare-fcpe-directml-pilot.bat"
 set "STATE=%DL%\state"
 set "STAMP=%STATE%\ai-ready.ok"
 
@@ -41,7 +43,7 @@ echo Project:
 echo   %ROOT%
 echo.
 
-for %%F in ("%PYRT%" "%INSTALLER%") do (
+for %%F in ("%PYRT%" "%INSTALLER%" "%MSST_SETUP%") do (
     if not exist "%%~F" (
         echo [ERROR] Missing: %%~F
         goto :fail
@@ -51,6 +53,9 @@ for %%F in ("%PYRT%" "%INSTALLER%") do (
 for %%D in ("%DL%" "%HF_HOME%" "%DL%\engines" "%STATE%") do (
     if not exist "%%~D\" mkdir "%%~D" >nul 2>&1 || goto :fail
 )
+
+echo Restoring MSST engine if needed...
+call "%MSST_SETUP%" "%ROOT%" || goto :fail
 
 rem ============================================================================
 rem FAST PATH
@@ -62,6 +67,7 @@ rem files still exist, startup is immediate.
 if exist "%STAMP%" (
     call :quick
     if not errorlevel 1 (
+        call :optional_accelerators
         echo AI Core is ready. [cached]
         exit /b 0
     )
@@ -185,6 +191,8 @@ echo [7/7] Final verification...
 call :quick
 if errorlevel 1 goto :fail
 
+call :optional_accelerators
+
 >"%STAMP%" echo ready
 
 echo.
@@ -232,6 +240,27 @@ set "PYTHONPATH=%BACK%;%PYTHONPATH%"
 set "RC=%ERRORLEVEL%"
 set "PYTHONPATH=%OLD_PYTHONPATH%"
 exit /b %RC%
+
+:optional_accelerators
+if /i "%KARAOKE_PREPARE_DIRECTML%"=="0" exit /b 0
+if not exist "%DML_SETUP%" exit /b 0
+
+set "PREP_DML=0"
+if /i "%KARAOKE_PREPARE_DIRECTML%"=="1" set "PREP_DML=1"
+if "%PREP_DML%"=="0" (
+    call :detect_nvidia
+    if errorlevel 1 (
+        powershell.exe -NoProfile -Command "$g=Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'AMD|Radeon|Intel|Arc' }; if($g){exit 0}else{exit 1}" >nul 2>&1
+        if not errorlevel 1 set "PREP_DML=1"
+    )
+)
+if "%PREP_DML%"=="0" exit /b 0
+
+echo.
+echo Optional DirectML accelerator resources...
+call "%DML_SETUP%"
+if errorlevel 1 echo [WARN] Optional DirectML preparation failed; baseline PyTorch runtime remains available.
+exit /b 0
 
 :detect_nvidia
 rem nvidia-smi is the most reliable cheap probe when the NVIDIA driver is installed.

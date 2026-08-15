@@ -20,7 +20,14 @@ class FakeChannel {
   constructor(state = "open") {
     this.readyState = state;
     this.bufferedAmount = 0;
-    this.send = vi.fn();
+    this.send = vi.fn((value) => {
+      if (typeof value !== "string") return;
+      let message;
+      try { message = JSON.parse(value); } catch { return; }
+      if (message.type === "file-start" && this.autoReady !== false)
+        queueMicrotask(() => this.onmessage?.({ data: JSON.stringify({ type: "file-ready", transferId: message.transferId }) }));
+    });
+    this.autoReady = true;
     this.close = vi.fn(() => { this.readyState = "closed"; });
   }
 }
@@ -144,7 +151,7 @@ describe("online voice mesh", () => {
     const mesh = makeMesh();
     const channel = new FakeChannel();
     let received;
-    mesh.onFile = vi.fn((_participantId, blob, metadata) => { received = { blob, metadata }; });
+    mesh.onFile = vi.fn((_participantId, blob, metadata) => { received = { blob, metadata }; return true; });
     mesh.setupDataChannel("host", channel);
     expect(channel.binaryType).toBe("arraybuffer");
     expect(channel.bufferedAmountLowThreshold).toBe(256 * 1024);
@@ -194,7 +201,7 @@ describe("online voice mesh", () => {
     };
     const mesh = makeMesh();
     const channel = new FakeChannel();
-    mesh.onFile = vi.fn();
+    mesh.onFile = vi.fn().mockResolvedValue(true);
     mesh.setupDataChannel("host", channel);
     channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "disk", size: 2 }) });
     channel.onmessage({ data: new Uint8Array([1, 2]).buffer });
@@ -743,7 +750,7 @@ describe("online voice mesh", () => {
     const mesh = makeMesh();
     const channel = new FakeChannel();
     let blob;
-    mesh.onFile = vi.fn((_id, value) => { blob = value; });
+    mesh.onFile = vi.fn((_id, value) => { blob = value; return true; });
     mesh.setupDataChannel("host", channel);
     channel.onmessage({
       data: JSON.stringify({ type: "file-start", transferId: "buffer", size: 2 })
@@ -883,7 +890,7 @@ describe("online voice mesh", () => {
     const channel = new FakeChannel();
     mesh.onTransferProgress = vi.fn();
     let blob;
-    mesh.onFile = vi.fn((_id, value) => { blob = value; });
+    mesh.onFile = vi.fn((_id, value) => { blob = value; return true; });
     mesh.setupDataChannel("host", channel);
     channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "t", size: 100 }) });
     channel.onmessage({ data: new Uint8Array([1]) });
@@ -1550,7 +1557,7 @@ describe("online voice mesh", () => {
     const mesh = makeMesh();
     const channel = new FakeChannel();
     const progress = vi.fn();
-    const received = vi.fn().mockResolvedValue(undefined);
+    const received = vi.fn().mockResolvedValue(true);
     mesh.onTransferProgress = progress;
     mesh.onFile = received;
     mesh.setupDataChannel("host", channel);
@@ -1631,7 +1638,7 @@ describe("online voice mesh", () => {
     const channel = new FakeChannel();
     const progress = vi.fn();
     mesh.onTransferProgress = progress;
-    mesh.onFile = vi.fn().mockResolvedValue(undefined);
+    mesh.onFile = vi.fn().mockResolvedValue(true);
     mesh.setupDataChannel("host", channel);
     channel.onmessage({
       data: JSON.stringify({
@@ -1679,6 +1686,40 @@ describe("online voice mesh", () => {
     channel.onmessage({ data: new Uint8Array([1]) });
   });
 
+
+  test("rejects transfer admission before accepting chunks and never acknowledges a skipped import", async () => {
+    const mesh = makeMesh();
+    const channel = new FakeChannel();
+    mesh.canAcceptFile = vi.fn(() => false);
+    mesh.setupDataChannel("guest", channel);
+    channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "denied", size: 3 }) });
+    expect(mesh.incomingFiles.has("guest")).toBe(false);
+    expect(channel.send).toHaveBeenCalledWith(expect.stringContaining('"type":"file-error"'));
+    channel.onmessage({ data: new Uint8Array([1, 2, 3]) });
+    expect(mesh.incomingFiles.has("guest")).toBe(false);
+
+    mesh.canAcceptFile = vi.fn(() => true);
+    mesh.onFile = vi.fn().mockResolvedValue(undefined);
+    channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "skipped", size: 1 }) });
+    channel.onmessage({ data: new Uint8Array([1]) });
+    channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "skipped" }) });
+    await vi.waitFor(() => expect(channel.send.mock.calls.map(([value]) =>
+      typeof value === "string" ? JSON.parse(value) : null
+    ).some((value) => value?.type === "file-error" && value.transferId === "skipped")).toBe(true));
+    expect(channel.send.mock.calls.map(([value]) => typeof value === "string" ? JSON.parse(value) : null)
+      .some((value) => value?.type === "file-complete" && value.transferId === "skipped")).toBe(false);
+  });
+
+  test("rejects a large no-OPFS transfer at file-start", () => {
+    const mesh = makeMesh();
+    const channel = new FakeChannel();
+    mesh.canAcceptFile = vi.fn(() => true);
+    mesh.setupDataChannel("host", channel);
+    channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "large", size: 65 * 1024 * 1024 }) });
+    expect(mesh.incomingFiles.has("host")).toBe(false);
+    expect(channel.send.mock.calls.map(([value]) => typeof value === "string" ? JSON.parse(value) : null))
+      .toContainEqual(expect.objectContaining({ type: "file-error", transferId: "large" }));
+  });
   test("sends a file and waits for the matching receiver confirmation", async () => {
     const mesh = makeMesh();
     const channel = new FakeChannel();

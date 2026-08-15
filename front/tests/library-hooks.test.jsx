@@ -345,6 +345,23 @@ describe("library song actions", () => {
     expect(props.notify).toHaveBeenCalledWith(expect.stringContaining("список"));
   });
 
+
+  test("keeps an ambiguously deleted song hidden until reconciliation succeeds", async () => {
+    let hidden = new Set();
+    const timeout = new Error("timeout");
+    timeout.name = "TimeoutError";
+    const props = actionProps({
+      onChanged: vi.fn().mockRejectedValue(new Error("refresh failed")),
+      setHiddenSongIds: vi.fn((update) => { hidden = update(hidden); })
+    });
+    api.deleteSong.mockRejectedValueOnce(timeout);
+    const hook = renderHook(() => useLibrarySongActions(props));
+    await act(() => hook.result.current.deleteSong({ id: "maybe-gone", title: "Track" }));
+    expect(hidden.has("maybe-gone")).toBe(true);
+    expect(props.onChanged).toHaveBeenCalledOnce();
+    expect(props.notify).toHaveBeenCalledWith(expect.stringContaining("проверяем состояние"));
+  });
+
   test("rolls back failed deletion and handles confirmation errors", async () => {
     let hidden = new Set(["keep"]);
     const props = actionProps({ setHiddenSongIds: vi.fn((update) => { hidden = update(hidden); }) });

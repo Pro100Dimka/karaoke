@@ -10,19 +10,33 @@ import { clampPlaybackPosition, createPlayerSyncCommand } from "../utils/transpo
 const UNKNOWN_ERROR = "неизвестная ошибка";
 const MISSING_RECORDING_ID = "Backend не вернул идентификатор записи";
 const PENDING_RECORDING_KEY = "karaoke-pending-recording-session";
-const pendingRecordingId = () => readJsonStorage(PENDING_RECORDING_KEY, {}).id;
-const rememberPending = (id) => writeJsonStorage(PENDING_RECORDING_KEY, { id });
-const forgetPending = (id) => { if (pendingRecordingId() === id) writeJsonStorage(PENDING_RECORDING_KEY, {}); };
-async function finalizeRecording(id) {
-  try {
-    const recording = await api.stopRecording(id);
-    forgetPending(id);
-    return { recording };
-  } catch (error) {
-    rememberPending(id);
-    await api.pauseRecording(id).catch(() => {});
-    return { error };
-  }
+const finalizingRecordings = new Map();
+const pendingRecordingIds = () => {
+  const value = readJsonStorage(PENDING_RECORDING_KEY, {});
+  return [...new Set([...(Array.isArray(value.ids) ? value.ids : []), value.id].filter(Boolean))];
+};
+const writePending = (ids) => writeJsonStorage(
+  PENDING_RECORDING_KEY, ids.length > 1 ? { id: ids[0], ids } : ids.length ? { id: ids[0] } : {}
+);
+const rememberPending = (id) => writePending([...new Set([...pendingRecordingIds(), id])]);
+const forgetPending = (id) => writePending(pendingRecordingIds().filter((value) => value !== id));
+function finalizeRecording(id) {
+  if (finalizingRecordings.has(id)) return finalizingRecordings.get(id);
+  const pending = (async () => {
+    try {
+      const recording = await api.stopRecording(id);
+      forgetPending(id);
+      return { recording };
+    } catch (error) {
+      rememberPending(id);
+      await api.pauseRecording(id).catch(() => {});
+      return { error };
+    } finally {
+      finalizingRecordings.delete(id);
+    }
+  })();
+  finalizingRecordings.set(id, pending);
+  return pending;
 }
 const formatError = (message, error) =>
   translateSaved(message, { 0: getErrorMessage(error, translateSaved(UNKNOWN_ERROR)) });
@@ -60,17 +74,21 @@ export default function useKaraokeTransport({
 
   useEffect(() => {
     beginOperation();
-    const pending = pendingRecordingId();
-    if (pending) finalizeRecording(pending).then(({ recording }) => {
-      if (recording?.id) setAnalysisRecordingId(recording.id);
+    pendingRecordingIds().forEach((id) => {
+      finalizeRecording(id).then(({ recording }) => {
+        if (recording?.id) setAnalysisRecordingId(recording.id);
+      });
     });
     return () => {
       const id = sessionRef.current;
-      if (id) void finalizeRecording(id);
+      sessionRef.current = null;
+      if (id) {
+        setRecordingSessionId(null);
+        void finalizeRecording(id);
+      }
     };
   }, [song?.id, setAnalysisRecordingId]);
 
-  useEffect(() => { sessionRef.current = recordingSessionId; }, [recordingSessionId]);
 
   const clearSession = (id) => {
     if (sessionRef.current !== id) return;

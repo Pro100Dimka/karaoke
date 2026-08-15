@@ -222,6 +222,30 @@ test("room messages update participants, UI, voice and connection state", async 
   assert.equal(rejectedVoice.accept.mock.calls.length, 1);
 });
 
+
+test("cleans an exported song package even when the room becomes stale before send", async () => {
+  let resolveExport;
+  let current = true;
+  const cleanup = vi.fn().mockResolvedValue();
+  const roomRef = { current: { selfId: "self", host: true } };
+  const handler = createOnlineRoomMessageHandler({
+    id: "room", client: { send: vi.fn() },
+    voice: { sendFile: vi.fn(), invite: vi.fn(), removePeer: vi.fn(), accept: vi.fn() },
+    roomApi: { exportSongPackage: vi.fn(() => new Promise((resolve) => { resolveExport = resolve; })) },
+    isCurrentConnection: () => current, roomRef, participantsRef: { current: [] },
+    intentionalDisconnectRef: { current: false }, pendingSongCommandRef: { current: null },
+    cleanupConnection: vi.fn(), setRoom: vi.fn(), setParticipants: vi.fn(), setRoomUi: vi.fn(),
+    setRoomCommand: vi.fn(), setVoiceError: vi.fn(), setTransferStatus: vi.fn()
+  });
+  handler({ type: "sync", fromId: "guest", state: { type: "song-request", requesterId: "guest", songId: "song" } });
+  current = false;
+  const blob = new Blob(["x"]);
+  blob.cleanup = cleanup;
+  resolveExport(blob);
+  await flush();
+  assert.equal(cleanup.mock.calls.length, 1);
+});
+
 test("room song synchronization covers send, receive and error recovery", async () => {
   const roomRef = { current: { selfId: "self", host: true } };
   const participantsRef = { current: [{ id: "host", role: "host" }, { id: "guest", role: "guest" }] };

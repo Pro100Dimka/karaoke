@@ -25,13 +25,16 @@ export default class OnlineVoiceMesh {
     this.peerVersions = new Map();
     this.channels = new Map();
     this.incomingFiles = new Map();
+    this.incomingFileAdmissions = new Set();
     this.pendingTransferConfirmations = new Map();
+    this.pendingTransferAdmissions = new Map();
     this.stream = null;
     this.microphoneGraph = null;
     this.startPromise = null;
     this.lifecycleVersion = 0;
     this.onRemoteStream = null;
     this.onPeerClosed = null;
+    this.canAcceptFile = null;
     this.onFile = null;
     this.onTransferProgress = null;
     this.disconnectTimers = new Map();
@@ -359,6 +362,13 @@ export default class OnlineVoiceMesh {
       );
       this.pendingTransferConfirmations.delete(transferId);
     }
+    for (const [transferId, pending] of this.pendingTransferAdmissions) {
+      if (pending.participantId !== participantId) continue;
+      globalThis.clearTimeout(pending.timer);
+      pending.reject(new Error(translateSaved("Участник отключился во время передачи")));
+      this.pendingTransferAdmissions.delete(transferId);
+    }
+    this.incomingFileAdmissions.delete(participantId);
     if (existed) this.onPeerClosed?.(participantId);
   }
 
@@ -383,6 +393,8 @@ export default class OnlineVoiceMesh {
       if (transfer.timer) globalThis.clearTimeout(transfer.timer);
     }
     this.incomingFiles.clear();
+    this.incomingFileAdmissions.clear();
+    this.pendingTransferAdmissions.clear();
     this.channels.clear();
   }
 }

@@ -59,7 +59,7 @@ build-installer.bat
 - `backend/` — только Python/FastAPI-код, AI-пайплайн и нативный ASIO-bridge.
 - `front/` — только React/Electron-код и статические UI-ресурсы.
 - `scripts/` — проверки, загрузка ресурсов, подпись и шаблон установщика.
-- `downloads/` — загруженные runtime, модели, MSST и большое фоновое видео; не хранится в Git.
+- `downloads/` — локальный восстанавливаемый кэш runtime/моделей/движков; не хранится в Git. `start-dev.bat` автоматически восстанавливает обязательные ресурсы, а `build-installer.bat` сначала выполняет тот же bootstrap в режиме `--prepare-only`. DirectML/FCPE ONNX также восстанавливаются автоматически на подходящем железе и принудительно проверяются при build-bootstrap. Большое `downloads/media/videoplayback.webm` считается необязательным локальным медиа-ресурсом: если оно есть — попадает в сборку, если нет — приложение и installer работают без него.
 - `karaoke_songs/` — пользовательская библиотека и записи; не хранится в Git.
 - `data/` — локальная база и настройки режима разработки; не хранится в Git.
 - `build/` — все промежуточные frontend/backend/Electron-артефакты; не хранится в Git.
@@ -68,6 +68,22 @@ build-installer.bat
 После обработки оригинал не дублируется в отдельной `full_songs`: нормализованный файл
 хранится внутри каталога песни. В установленной программе пользовательские данные
 находятся в `%LOCALAPPDATA%\A&D Voice`, поэтому обновление приложения их не удаляет.
+
+### Чистый clone без `downloads/`
+
+Каталог `downloads/` можно полностью удалить. После этого:
+
+```bat
+start-dev.bat
+```
+
+автоматически восстанавливает локальный Python 3.12.10, backend venv, ASIO SDK, MSST engine, зарегистрированные AI-модели и `ai-environment.bat`. На AMD/Intel GPU дополнительно подготавливается изолированный DirectML shadow-runtime и FCPE ONNX artifact.
+
+```bat
+build-installer.bat
+```
+
+перед сборкой сам запускает тот же bootstrap через `start-dev.bat --prepare-only`, поэтому build не должен зависеть от случайно сохранившихся файлов в Git-ignored `downloads/`.
 
 ## Offline AI
 

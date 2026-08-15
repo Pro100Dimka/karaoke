@@ -25,3 +25,13 @@ def test_isolation_test_compares_backend_environment_before_and_after():
     assert 'environment_fingerprint.py" --output "%AFTER%"' in text
     assert 'fc /b "%BEFORE%" "%AFTER%"' in text
     assert "backend\\venv is unchanged" in text
+
+
+def test_directml_real_file_gate_forces_pytorch_reference_to_cpu():
+    text = (ROOT / "scripts" / "ai_runtime_benchmark" / "directml_fcpe_file_gate.py").read_text(
+        encoding="utf-8"
+    )
+    assert 'os.environ["SONGAPP_DEVICE"] = "cpu"' in text
+    assert 'if estimator._device != "cpu":' in text
+    assert 'print("Reference device: cpu")' in text
+    assert 'print("DirectML provider: DmlExecutionProvider")' in text

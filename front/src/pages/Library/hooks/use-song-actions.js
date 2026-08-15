@@ -65,12 +65,15 @@ export default function useLibrarySongActions(props) {
         if (processingSongId === song.id) setProcessingSong(null);
         try { await api.deleteSong(song.id); }
         catch (error) {
-          setHiddenSongIds((ids) => { const next = new Set(ids); next.delete(song.id); return next; });
           if (isAmbiguousTransportError(error)) {
-            await notify(translateSaved("Backend не подтвердил удаление; список будет обновлён: {0}", { 0: getErrorMessage(error) }));
-            try { await onChanged?.(); } catch {}
+            await notify(translateSaved("Backend не подтвердил удаление; проверяем состояние: {0}", { 0: getErrorMessage(error) }));
+            try {
+              await onChanged?.();
+              setHiddenSongIds((ids) => { const next = new Set(ids); next.delete(song.id); return next; });
+            } catch {}
             return;
           }
+          setHiddenSongIds((ids) => { const next = new Set(ids); next.delete(song.id); return next; });
           await notify(translateSaved("Не удалось удалить: {0}", { 0: getErrorMessage(error) }));
           return;
         }

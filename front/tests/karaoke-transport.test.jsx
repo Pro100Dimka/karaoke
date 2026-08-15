@@ -338,6 +338,23 @@ describe("karaoke transport", () => {
     hook.unmount();
   });
 
+
+  test("finalizes a durable previous-song session exactly once and starts a fresh session", async () => {
+    const props = createProps();
+    const hook = renderHook((value) => useKaraokeTransport(value), { initialProps: props });
+    await expect(hook.result.current.togglePlay({ forcePlaying: true })).resolves.toBe(true);
+    await waitFor(() => expect(localStorage.getItem("karaoke-pending-recording-session")).toContain("session"));
+    api.startRecording.mockResolvedValueOnce({ recording_session_id: "session-2" });
+    hook.rerender({ ...props, song: { id: "next" }, recordingSessionId: "session" });
+    await waitFor(() => expect(api.stopRecording).toHaveBeenCalledWith("session"));
+    expect(api.stopRecording).toHaveBeenCalledTimes(1);
+    const nextProps = { ...props, song: { id: "next" }, recordingSessionId: null };
+    hook.rerender(nextProps);
+    await expect(hook.result.current.togglePlay({ forcePlaying: true })).resolves.toBe(true);
+    await waitFor(() => expect(api.startRecording).toHaveBeenCalledTimes(2));
+    expect(api.resumeRecording).not.toHaveBeenCalledWith("session");
+    hook.unmount();
+  });
   test("falls back to pausing when cleanup cannot finish a session", async () => {
     api.stopRecording.mockRejectedValueOnce(new Error("stop failed"));
     api.pauseRecording.mockRejectedValueOnce(new Error("pause failed"));

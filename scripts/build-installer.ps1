@@ -111,7 +111,7 @@ $AsioSchemaVersion      = "asio-v1"
 $FrontendSchemaVersion  = "frontend-v1"
 $ModelsSchemaVersion    = "models-7z-v2"
 $FinalizeSchemaVersion  = "finalize-v1"
-$ElectronSchemaVersion  = "electron-v3-bundled-msst"
+$ElectronSchemaVersion  = "electron-v4-recoverable-downloads-optional-scene"
 $RuntimeSchemaVersion   = "runtime-zip-v1"
 $InstallerSchemaVersion = "installer-bootstrap-v2-theme-model-choice"
 $IsoSchemaVersion       = "iso-optional-models-v8-runtime-msst"
@@ -1805,7 +1805,9 @@ function Build-Frontend {
 
 function Verify-Unpacked {
     Require-File (Join-Path $Unpacked $AppExe) "Electron application"
-    Require-File $PackagedSceneVideo "Karaoke scene video"
+    if (Test-Path -LiteralPath $SceneVideoSource -PathType Leaf) {
+        Require-File $PackagedSceneVideo "Karaoke scene video"
+    }
     Require-File (Join-Path $PackagedBackend "KaraokeBackend.exe") "Electron backend"
     Require-File (Join-Path $PackagedBackend "KaraokeAudioMonitor.exe") "Electron audio monitor"
     Require-File (Join-Path $PackagedBackend "KaraokeAsioBridge.exe") "Electron ASIO bridge"
@@ -1930,7 +1932,12 @@ function Build-RuntimeArchive([string]$SourceDirectory) {
 function Build-ElectronPackage {
     Write-Host ""
     Write-Host "[5/7] Building complete Electron application..."
-    Require-File $SceneVideoSource "Karaoke scene video"
+    if (-not (Test-Path -LiteralPath $SceneVideoSource -PathType Leaf)) {
+        Write-Host "[WARN] Optional karaoke scene video is absent; building without it."
+        Write-Host "       $SceneVideoSource"
+        Write-Host "       The app already handles this resource as optional."
+        Write-Host ""
+    }
 
     Remove-LegacyEmbeddedAI
 
@@ -1973,6 +1980,13 @@ function Build-ElectronPackage {
 
     if (-not (Test-Path -LiteralPath $newUnpacked -PathType Container)) {
         throw "Electron builder completed but win-unpacked was not created: $newUnpacked"
+    }
+
+    if (Test-Path -LiteralPath $SceneVideoSource -PathType Leaf) {
+        $mediaDir = Join-Path $newUnpacked "resources\media"
+        New-Item -ItemType Directory -Path $mediaDir -Force | Out-Null
+        Copy-Item -LiteralPath $SceneVideoSource -Destination (Join-Path $mediaDir "videoplayback.webm") -Force
+        Write-Host "Optional karaoke scene video copied into application resources."
     }
 
     Set-ElectronOutputPath $newUnpacked

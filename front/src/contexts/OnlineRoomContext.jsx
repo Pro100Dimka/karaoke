@@ -224,16 +224,17 @@ export function OnlineRoomProvider({ children }) {
         setTransferStatus( stage === "complete" ? null : { stage, percent: Number(percent) || 0 }
         );
       };
+      const canAcceptSongPackage = (participantId, metadata) => {
+        const pending = pendingSongCommandRef.current;
+        return isCurrentConnection() && metadata?.kind === "song-package" && !!metadata.songId &&
+          pending?.songId === metadata.songId && !pending.__originatedHere &&
+          participantsRef.current.some((participant) => participant.id === participantId && participant.role === "host");
+      };
+      voice.canAcceptFile = canAcceptSongPackage;
       voice.onFile = async (participantId, blob, metadata) => {
         const pendingCommand = pendingSongCommandRef.current;
-        const fromHost = participantsRef.current.some(
-          (participant) => participant.id === participantId && participant.role === "host"
-        );
-        if (
-          !isCurrentConnection() || !fromHost ||
-          metadata?.kind !== "song-package" || !metadata.songId ||
-          pendingCommand?.songId !== metadata.songId || pendingCommand.__originatedHere
-        ) return;
+        if (!canAcceptSongPackage(participantId, metadata))
+          throw new Error(translateSaved("Получение пакета песни больше не разрешено"));
         try {
           setTransferStatus({ stage: "importing", percent: 100 });
           await api.importSongPackage(blob, metadata.filename);
@@ -249,6 +250,7 @@ export function OnlineRoomProvider({ children }) {
               __eventId: `import-${Date.now()}-${Math.random()}`
             });
           }
+          return true;
         } catch (error) {
           if (isCurrentConnection()) {
             setTransferStatus({

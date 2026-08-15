@@ -8,6 +8,9 @@ test("backend child exit 23 cannot create an Electron restart storm", () => {
   expect(main).toContain("if (code === 23)");
   expect(main).toContain("watchDuplicateBackend()");
   expect(main).toContain("backendDuplicateDetected = false");
+  expect(main).toContain("backendDuplicateWatchGeneration");
+  expect(main).toContain("if (!active()) return");
+  expect(main).toMatch(/function startBackend\(\)[\s\S]{0,180}isQuitting \|\| backendStopRequested/);
   expect(main).not.toMatch(/if \(code === 23\)[\s\S]{0,300}backendStopRequested = true/);
   expect(main).toContain('spawn("taskkill", ["/PID", String(pid), "/T", "/F"]');
 });

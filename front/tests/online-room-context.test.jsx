@@ -382,13 +382,17 @@ describe("online room provider", () => {
     act(() => voice.onTransferProgress({ stage: "complete", percent: 100 }));
     expect(hook.result.current.transferStatus).toBeNull();
 
-    await act(() => voice.onFile("host", new Blob(["song"]), {
-      kind: "song-package", songId: "song", filename: "song.zip"
-    }));
+    await act(async () => {
+      await expect(voice.onFile("host", new Blob(["song"]), {
+        kind: "song-package", songId: "song", filename: "song.zip"
+      })).rejects.toThrow("Получение пакета песни больше не разрешено");
+    });
     expect(mocks.importSongPackage).not.toHaveBeenCalled();
     expect(hook.result.current.transferStatus).toBeNull();
     expect(hook.result.current.roomCommand).toBeNull();
-    await act(() => voice.onFile("host", new Blob(), { kind: "other" }));
+    await act(async () => {
+      await expect(voice.onFile("host", new Blob(), { kind: "other" })).rejects.toThrow();
+    });
 
     act(() => voice.onPeerClosed("guest"));
     expect(document.body.contains(audio)).toBe(false);
@@ -402,13 +406,10 @@ describe("online room provider", () => {
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => hook.result.current.createRoom("Alice"));
     const voice = mocks.voices[0];
-    await expect( voice.onFile("host", new Blob(), undefined)
-    ).resolves.toBeUndefined();
-    await expect(voice.onFile("host", new Blob(), {})).resolves.toBeUndefined();
-    await expect( voice.onFile("host", new Blob(), { kind: "other", songId: "song" })
-    ).resolves.toBeUndefined();
-    await expect( voice.onFile("host", new Blob(), { kind: "song-package" })
-    ).resolves.toBeUndefined();
+    await expect(voice.onFile("host", new Blob(), undefined)).rejects.toThrow();
+    await expect(voice.onFile("host", new Blob(), {})).rejects.toThrow();
+    await expect(voice.onFile("host", new Blob(), { kind: "other", songId: "song" })).rejects.toThrow();
+    await expect(voice.onFile("host", new Blob(), { kind: "song-package" })).rejects.toThrow();
     expect(mocks.importSongPackage).not.toHaveBeenCalled();
   });
 
@@ -855,10 +856,13 @@ describe("online room provider", () => {
       options.setParticipants([{ id: "host", role: "host" }, { id: "attacker", role: "guest" }]);
     });
     options.pendingSongCommandRef.current = { type: "open-karaoke", songId: "expected", __originatedHere: false };
-    await act(() => voice.onFile("attacker", new Blob(), { kind: "song-package", songId: "expected" }));
-    await act(() => voice.onFile("host", new Blob(), { kind: "song-package", songId: "wrong" }));
+    expect(voice.canAcceptFile("attacker", { kind: "song-package", songId: "expected" })).toBe(false);
+    expect(voice.canAcceptFile("host", { kind: "song-package", songId: "wrong" })).toBe(false);
+    expect(voice.canAcceptFile("host", { kind: "song-package", songId: "expected" })).toBe(true);
+    await expect(voice.onFile("attacker", new Blob(), { kind: "song-package", songId: "expected" })).rejects.toThrow();
+    await expect(voice.onFile("host", new Blob(), { kind: "song-package", songId: "wrong" })).rejects.toThrow();
     expect(mocks.importSongPackage).not.toHaveBeenCalled();
-    await act(() => voice.onFile("host", new Blob(), { kind: "song-package", songId: "expected", filename: "expected.zip" }));
+    await expect(voice.onFile("host", new Blob(), { kind: "song-package", songId: "expected", filename: "expected.zip" })).resolves.toBe(true);
     expect(mocks.importSongPackage).toHaveBeenCalledExactlyOnceWith(expect.any(Blob), "expected.zip");
   });
 
