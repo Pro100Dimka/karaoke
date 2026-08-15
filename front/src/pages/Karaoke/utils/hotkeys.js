@@ -6,6 +6,12 @@ import {
 } from "../../../utils/hotkeys.js";
 /* eslint-enable import/extensions */
 
+const HOTKEY_ACTIONS = {
+  ArrowLeft: "seek-backward",
+  ArrowRight: "seek-forward",
+  Escape: "stop"
+};
+
 export function getKaraokeHotkeyAction(event, scope) {
   if (
     event?.code === "Space" &&
@@ -16,14 +22,7 @@ export function getKaraokeHotkeyAction(event, scope) {
   )
     return "toggle-playback";
   if (shouldIgnoreHotkey(event, scope)) return null;
-  switch (event.code) {
-    case "ArrowLeft":
-      return "seek-backward";
-    case "ArrowRight":
-      return "seek-forward";
-    case "Escape":
-      return "stop";
-    default:
-      return null;
-  }
+  return Object.hasOwn(HOTKEY_ACTIONS, event.code)
+    ? HOTKEY_ACTIONS[event.code]
+    : null;
 }

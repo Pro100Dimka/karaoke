@@ -350,6 +350,9 @@ test("mock API implements the complete development contract", async () => {
     models_dir: "mock/models",
     models: []
   });
+  const mutableModelStatus = await mockRequest("/diagnostics/ai-models");
+  mutableModelStatus.models.push({ name: "mutated" });
+  assert.deepEqual((await mockRequest("/diagnostics/ai-models")).models, []);
   assert.equal((await mockRequest("/cache/size")).bytes, 0);
   assert.ok((await mockRequest("/cache/free-space")).bytes);
   assert.equal((await mockRequest("/cache/clear")).ok, true);

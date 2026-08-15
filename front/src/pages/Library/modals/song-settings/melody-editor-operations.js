@@ -155,7 +155,7 @@ export function deleteNotesAndTransferText(
       )[0].note;
     const transferred = transfers.get(target);
     if (transferred) transferred.push(gone);
-    else transfers.set(target, Array.of(gone));
+    else transfers.set(target, [gone]);
   }
   for (const [target, transferred] of transfers) {
     Object.assign(

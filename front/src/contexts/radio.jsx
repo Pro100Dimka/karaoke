@@ -22,6 +22,7 @@ const STORAGE_KEY = "karaoke-radio";
 const STARTUP_FADE_MS = 2000;
 const NO_STREAM_ERROR = "No radio stream could be played";
 const createVersion = () => Object.create(null);
+const clampVolume = (value) => Math.max(0, Math.min(1, value));
 const RadioContext = createContext(null);
 
 export function normalizeRadioSettings(stored = {}) {
@@ -30,7 +31,7 @@ export function normalizeRadioSettings(stored = {}) {
     : DEFAULT_RADIO_SETTINGS.stationId;
   const storedVolume = Number(stored.volume);
   const volume = Number.isFinite(storedVolume)
-    ? Math.max(0, Math.min(1, storedVolume))
+    ? clampVolume(storedVolume)
     : DEFAULT_RADIO_SETTINGS.volume;
   return {
     stationId,
@@ -95,7 +96,7 @@ export function RadioProvider({ children }) {
     (targetVolume, duration = STARTUP_FADE_MS) => {
       const audio = audioRef.current;
       cancelVolumeFade();
-      const target = Math.max(0, Math.min(1, Number(targetVolume) || 0));
+      const target = clampVolume(Number(targetVolume) || 0);
       audio.volume = 0;
       if (target === 0) return;
       const startedAt = performance.now();
@@ -108,8 +109,8 @@ export function RadioProvider({ children }) {
         // Smoothstep: мягкий старт и мягкое достижение сохранённой громкости.
         const eased = progress * progress * (3 - 2 * progress);
         audio.volume = target * eased;
-        if (progress < 1) volumeFadeRef.current = requestAnimationFrame(step);
-        else volumeFadeRef.current = 0;
+        volumeFadeRef.current =
+          progress < 1 ? requestAnimationFrame(step) : 0;
       };
       volumeFadeRef.current = requestAnimationFrame(step);
     },
@@ -345,7 +346,7 @@ export function RadioProvider({ children }) {
     (value) => {
       const numericValue = Number(value);
       const next = Number.isFinite(numericValue)
-        ? Math.max(0, Math.min(1, numericValue))
+        ? clampVolume(numericValue)
         : DEFAULT_RADIO_SETTINGS.volume;
       volumeRef.current = next;
       setVolumeState(next);

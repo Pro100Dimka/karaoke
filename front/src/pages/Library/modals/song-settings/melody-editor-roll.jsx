@@ -23,7 +23,7 @@ function PianoKeyboard({
   const blackKeys = Array.from(
     { length: maxMidi - minMidi + 1 },
     (_, index) => maxMidi - index
-  ).filter((midi) => BLACK_KEYS.has(((midi % 12) + 12) % 12));
+  ).filter((midi) => BLACK_KEYS.includes(((midi % 12) + 12) % 12));
   const audition = (event, midi) => {
     event.stopPropagation();
     auditionNote(midi, 220);
@@ -68,7 +68,7 @@ function PianoKeyboard({
 function PitchRows({ keyboardWidth, maxMidi, minMidi, rowHeight }) {
   return Array.from({ length: maxMidi - minMidi + 1 }, (_, index) => {
     const midi = maxMidi - index;
-    const black = BLACK_KEYS.has(((midi % 12) + 12) % 12);
+    const black = BLACK_KEYS.includes(((midi % 12) + 12) % 12);
     return (
       <div
         key={`row-${midi}`}

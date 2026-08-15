@@ -13,7 +13,7 @@ const VIEW = {
   keyboardWidth: 48,
   seconds: 10
 };
-const BLACK_KEY_CLASSES = new Set([1, 3, 6, 8, 10]);
+const BLACK_KEY_CLASSES = [1, 3, 6, 8, 10];
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 export default function MelodyRoll({
   notes,
@@ -124,7 +124,7 @@ export default function MelodyRoll({
             then shorter black keys layered on top at C#, D#, F#, G# and A#. */}
         {(() => {
           const naturals = lanes.filter(
-            (midi) => !BLACK_KEY_CLASSES.has(((midi % 12) + 12) % 12)
+            (midi) => !BLACK_KEY_CLASSES.includes(((midi % 12) + 12) % 12)
           );
           const naturalHeight = height / naturals.length;
           return naturals.map((midi, index) => {
@@ -161,14 +161,14 @@ export default function MelodyRoll({
 
         {(() => {
           const naturals = lanes.filter(
-            (midi) => !BLACK_KEY_CLASSES.has(((midi % 12) + 12) % 12)
+            (midi) => !BLACK_KEY_CLASSES.includes(((midi % 12) + 12) % 12)
           );
           const naturalHeight = height / naturals.length;
           const naturalIndex = new Map(
             naturals.map((midi, index) => [midi, index])
           );
           return lanes
-            .filter((midi) => BLACK_KEY_CLASSES.has(((midi % 12) + 12) % 12))
+            .filter((midi) => BLACK_KEY_CLASSES.includes(((midi % 12) + 12) % 12))
             .map((midi) => {
               const lowerNatural = [...naturals]
                 .reverse()

@@ -4,6 +4,12 @@ import { normalizeNoteList } from "./note-normalization.js";
 
 const DEFAULT_MIDI_CENTER = 60;
 
+function resolveRangeBoundary({ actual, saved, shift, fallback, hasSavedRange, merge }) {
+  if (!hasSavedRange) return actual ?? fallback;
+  const shiftedSaved = saved + shift;
+  return actual == null ? shiftedSaved : merge(shiftedSaved, actual);
+}
+
 export function getMelodyRange({
   notes,
   keyShift = 0,
@@ -32,16 +38,22 @@ export function getMelodyRange({
   // metadata crop notes that are actually present in the current /result.
   const actualMin = noteMidiValues.length ? Math.min(...noteMidiValues) : null;
   const actualMax = noteMidiValues.length ? Math.max(...noteMidiValues) : null;
-  const sourceMin = hasSavedRange
-    ? actualMin == null
-      ? savedMin + shift
-      : Math.min(savedMin + shift, actualMin)
-    : (actualMin ?? finiteFallback);
-  const sourceMax = hasSavedRange
-    ? actualMax == null
-      ? savedMax + shift
-      : Math.max(savedMax + shift, actualMax)
-    : (actualMax ?? finiteFallback);
+  const sourceMin = resolveRangeBoundary({
+    actual: actualMin,
+    saved: savedMin,
+    shift,
+    fallback: finiteFallback,
+    hasSavedRange,
+    merge: Math.min
+  });
+  const sourceMax = resolveRangeBoundary({
+    actual: actualMax,
+    saved: savedMax,
+    shift,
+    fallback: finiteFallback,
+    hasSavedRange,
+    merge: Math.max
+  });
   const minMidi = Math.floor(sourceMin) - 2;
   const maxMidi = Math.ceil(sourceMax) + 2;
 

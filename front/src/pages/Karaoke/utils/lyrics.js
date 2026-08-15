@@ -1,7 +1,7 @@
 function readFiniteTime(source, ...keys) {
   for (const key of keys) {
     const raw = source[key];
-    if (raw === null || raw === "") continue;
+    if ([null, ""].includes(raw)) continue;
     const value = Number(raw);
     if (Number.isFinite(value) && value >= 0) return value;
   }
@@ -28,7 +28,7 @@ function normalizeLine(line) {
     "finish",
     "to"
   );
-  if (start === null || end === null || end < start) return null;
+  if ([start, end].includes(null) || end < start) return null;
 
   return {
     ...line,

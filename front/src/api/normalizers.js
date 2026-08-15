@@ -1,13 +1,13 @@
 import { translateSaved } from "../i18n/runtime";
 
-const SONG_STATUSES = new Set([
+const SONG_STATUSES = [
   "queued",
   "processing",
   "cancelling",
   "cancelled",
   "done",
   "error"
-]);
+];
 export function clampNumber(value, min, max, fallback = min) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
@@ -40,7 +40,7 @@ export function normalizeSong(song) {
     ...source,
     id: normalizeString(source.id),
     title: normalizeString(source.title, translateSaved("Без названия")),
-    status: SONG_STATUSES.has(rawStatus) ? rawStatus : "pending",
+    status: SONG_STATUSES.includes(rawStatus) ? rawStatus : "pending",
     progress_percent: clampNumber(source.progress_percent, 0, 100, 0),
     progress_step: normalizeString(source.progress_step),
     error_message: normalizeString(source.error_message) || null

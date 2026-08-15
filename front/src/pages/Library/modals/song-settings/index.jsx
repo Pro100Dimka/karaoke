@@ -98,6 +98,72 @@ export default function SongSettings({ songId, onClose }) {
         );
       }
     });
+  const renderContent = () => {
+    if (songsError) {
+      return (
+        <Stack gap={1} sx={{ padding: "1rem" }}>
+          <p className="field-error">
+            {translateSaved("Не удалось загрузить песню:")}
+            {getErrorMessage(songsError)}
+          </p>
+          <Button variant="ghost" onClick={() => refreshSongs?.()}>
+            {translateSaved("Повторить")}
+          </Button>
+        </Stack>
+      );
+    }
+    if (!songs) {
+      return (
+        <p className="text-muted" style={{ padding: "1rem" }}>
+          {translateSaved("Загружаем настройки песни…")}
+        </p>
+      );
+    }
+    if (!song) {
+      return (
+        <p className="field-error" style={{ padding: "1rem" }}>
+          {translateSaved("Песня не найдена. Возможно, она была удалена.")}
+        </p>
+      );
+    }
+    if (!form) {
+      return (
+        <p className="text-muted" style={{ padding: "1rem" }}>
+          {translateSaved("Подготавливаем настройки…")}
+        </p>
+      );
+    }
+    return (
+      <Stack gap={2} sx={{ padding: "1rem" }}>
+        <ConfigForm
+          fields={SONG_FIELDS}
+          context={{ form, onChange: updateField }}
+          renderers={SONG_RENDERERS}
+          columns={12}
+        />
+        {song.status === "done" && (
+          <Stack gap={0.6}>
+            <strong>{translateSaved("Мелодия и текст")}</strong>
+            <span className="text-muted">
+              {translateSaved(
+                "Откройте piano-roll редактор, чтобы на слух и визуально исправить ноты, длительность и привязку текста."
+              )}
+            </span>
+            <Button
+              icon={Piano}
+              variant="ghost"
+              onClick={() => {
+                onClose?.();
+                navigate(`/editor/${song.id}`);
+              }}
+            >
+              {translateSaved("Открыть редактор")}
+            </Button>
+          </Stack>
+        )}
+      </Stack>
+    );
+  };
   return (
     <Modal
       isOpen
@@ -127,86 +193,7 @@ export default function SongSettings({ songId, onClose }) {
           ) : null
       }}
     >
-      {songsError ? (
-        <Stack
-          gap={1}
-          sx={{
-            padding: "1rem"
-          }}
-        >
-          <p className="field-error">
-            {translateSaved("Не удалось загрузить песню:")}
-            {getErrorMessage(songsError)}
-          </p>
-          <Button variant="ghost" onClick={() => refreshSongs?.()}>
-            {translateSaved("Повторить")}
-          </Button>
-        </Stack>
-      ) : !songs ? (
-        <p
-          className="text-muted"
-          style={{
-            padding: "1rem"
-          }}
-        >
-          {translateSaved("Загружаем настройки песни…")}
-        </p>
-      ) : !song ? (
-        <p
-          className="field-error"
-          style={{
-            padding: "1rem"
-          }}
-        >
-          {translateSaved("Песня не найдена. Возможно, она была удалена.")}
-        </p>
-      ) : !form ? (
-        <p
-          className="text-muted"
-          style={{
-            padding: "1rem"
-          }}
-        >
-          {translateSaved("Подготавливаем настройки…")}
-        </p>
-      ) : (
-        <Stack
-          gap={2}
-          sx={{
-            padding: "1rem"
-          }}
-        >
-          <ConfigForm
-            fields={SONG_FIELDS}
-            context={{
-              form,
-              onChange: updateField
-            }}
-            renderers={SONG_RENDERERS}
-            columns={12}
-          />
-          {song.status === "done" && (
-            <Stack gap={0.6}>
-              <strong>{translateSaved("Мелодия и текст")}</strong>
-              <span className="text-muted">
-                {translateSaved(
-                  "Откройте piano-roll редактор, чтобы на слух и визуально исправить ноты, длительность и привязку текста."
-                )}
-              </span>
-              <Button
-                icon={Piano}
-                variant="ghost"
-                onClick={() => {
-                  onClose?.();
-                  navigate(`/editor/${song.id}`);
-                }}
-              >
-                {translateSaved("Открыть редактор")}
-              </Button>
-            </Stack>
-          )}
-        </Stack>
-      )}
+      {renderContent()}
     </Modal>
   );
 }

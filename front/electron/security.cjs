@@ -37,12 +37,11 @@ function isAllowedPermissionRequest({
   if (
     permission !== "media" ||
     webContents !== expectedWebContents ||
-    expectedWebContents?.isDestroyed()
+    expectedWebContents?.isDestroyed() ||
+    !isAllowedRendererUrl(requestUrl, rendererOptions)
   ) {
     return false;
   }
-
-  if (!isAllowedRendererUrl(requestUrl, rendererOptions)) return false;
   if (!Array.isArray(mediaTypes) || mediaTypes.length === 0) return true;
   return mediaTypes.every((type) => type === "audio");
 }

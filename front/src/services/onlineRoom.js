@@ -34,6 +34,14 @@ export function normalizeRoomId(value) {
     .replace(/[^A-Z0-9_-]/g, "")
     .slice(0, 32);
 }
+function getCloseDetail(event) {
+  const reason = event?.reason?.trim();
+  if (reason) return `: ${reason}`;
+  return event?.code && event.code !== 1006
+    ? translateSaved("(код {0})", { 0: event.code })
+    : "";
+}
+
 export class OnlineRoomClient {
   constructor(url = DEFAULT_SIGNALING_URL) {
     const parsedUrl = new URL(String(url), DEFAULT_SIGNALING_URL);
@@ -164,13 +172,7 @@ export class OnlineRoomClient {
         const wasCurrent = isCurrent();
         if (wasCurrent) this.socket = null;
         globalThis.clearTimeout(timeout);
-        const detail = event?.reason?.trim()
-          ? `: ${event.reason.trim()}`
-          : event?.code && event.code !== 1006
-            ? translateSaved("(код {0})", {
-                0: event.code
-              })
-            : "";
+        const detail = getCloseDetail(event);
         settle(
           reject,
           new Error(
@@ -192,9 +194,14 @@ export class OnlineRoomClient {
 
   send(type, payload = {}) {
     const { socket } = this;
-    if (socket?.readyState !== 1) return false;
-    if (typeof type !== "string" || !type.trim()) return false;
-    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    if (
+      socket?.readyState !== 1 ||
+      typeof type !== "string" ||
+      !type.trim() ||
+      !payload ||
+      typeof payload !== "object" ||
+      Array.isArray(payload)
+    ) {
       return false;
     }
     try {

@@ -8,6 +8,23 @@ import { translateSaved } from "../../i18n/runtime";
 import { Button, Card, Progress, Stack, Typography } from "../../theme/ui";
 import { getErrorMessage } from "../../utils/errors";
 
+function getModelProgressValue(totalBytes, downloadedBytes, downloading, readyCount) {
+  if (totalBytes > 0) return downloadedBytes;
+  return downloading ? null : readyCount;
+}
+
+function getModelStatusText({ ready, downloading, data, missingCount, total, readyCount, t }) {
+  if (ready) return t("settings.ai.models.ready");
+  if (downloading) {
+    return t("settings.ai.models.downloading", {
+      model: data?.current_model || t("settings.ai.models.preparing")
+    });
+  }
+  return t("settings.ai.models.missing", {
+    count: missingCount || Math.max(0, total - readyCount)
+  });
+}
+
 export default function ModelRecovery() {
   const { t } = useI18n();
   const [starting, setStarting] = useState(false);
@@ -43,6 +60,21 @@ export default function ModelRecovery() {
               : ""
         })
       : "";
+  const statusText = getModelStatusText({
+    ready,
+    downloading,
+    data,
+    missingCount: missing.length,
+    total,
+    readyCount,
+    t
+  });
+  const progressValue = getModelProgressValue(
+    totalBytes,
+    downloadedBytes,
+    downloading,
+    readyCount
+  );
   const startDownload = async () => {
     setStarting(true);
     setActionError("");
@@ -97,24 +129,13 @@ export default function ModelRecovery() {
             overflowWrap: "anywhere"
           }}
         >
-          {ready
-            ? t("settings.ai.models.ready")
-            : downloading
-              ? t("settings.ai.models.downloading", {
-                  model:
-                    data?.current_model || t("settings.ai.models.preparing")
-                })
-              : t("settings.ai.models.missing", {
-                  count: missing.length || Math.max(0, total - readyCount)
-                })}
+          {statusText}
           {downloadDetail ? ` · ${downloadDetail}` : ""}
         </Typography>
 
         {(downloading || (!ready && total > 0)) && (
           <Progress
-            value={
-              totalBytes > 0 ? downloadedBytes : downloading ? null : readyCount
-            }
+            value={progressValue}
             max={totalBytes > 0 ? totalBytes : Math.max(1, total)}
             aria-label={t("settings.ai.models.progress")}
           />

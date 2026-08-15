@@ -3,6 +3,8 @@ function toFiniteNumber(value, fallback = 0) {
   return Number.isFinite(number) ? number : fallback;
 }
 
+const clamp01 = (value) => Math.max(0, Math.min(1, value));
+
 function toBoolean(value) {
   if (typeof value === "string") {
     const normalized = value.trim().toLowerCase();
@@ -12,21 +14,21 @@ function toBoolean(value) {
 }
 
 function normalizeDeviceId(value) {
-  return typeof value === "string" || typeof value === "number" ? value : "";
+  return ["string", "number"].includes(typeof value) ? value : "";
 }
 
 export function normalizeAudioEffects(settings) {
   return {
-    reverb: Math.max(0, Math.min(1, toFiniteNumber(settings?.reverb))),
-    echo: Math.max(0, Math.min(1, toFiniteNumber(settings?.echo))),
-    delay: Math.max(0, Math.min(1, toFiniteNumber(settings?.delay)))
+    reverb: clamp01(toFiniteNumber(settings?.reverb)),
+    echo: clamp01(toFiniteNumber(settings?.echo)),
+    delay: clamp01(toFiniteNumber(settings?.delay))
   };
 }
 
 export function normalizeAudioRuntimeSettings(settings) {
   const bufferSize = Number(settings?.buffer_size);
   return {
-    volume: Math.max(0, Math.min(1, toFiniteNumber(settings?.volume))),
+    volume: clamp01(toFiniteNumber(settings?.volume)),
     audioDriver:
       typeof settings?.audio_driver === "string" && settings.audio_driver
         ? settings.audio_driver
@@ -48,7 +50,7 @@ export function findDriverOutputDevice(devices, driverName) {
     .replaceAll(/\b(?:asio|driver)\b/g, "")
     .split(/\s/)
     .filter((token) => token.length > 2);
-  const outputs = Array.isArray(devices) ? devices : Array.of();
+  const outputs = Array.isArray(devices) ? devices : [];
   const ranked = outputs
     .map((device) => {
       const name = String(device?.name || "").toLowerCase();
@@ -70,7 +72,7 @@ export function findMatchingBrowserOutput(entries, selectedDevice) {
     .toLowerCase();
   if (!selectedName) return null;
   return (
-    (Array.isArray(entries) ? entries : Array.of()).find((entry) => {
+    (Array.isArray(entries) ? entries : []).find((entry) => {
       if (entry?.kind !== "audiooutput" || !entry.deviceId) return false;
       const label = String(entry.label || "")
         .trim()
@@ -83,7 +85,7 @@ export function findMatchingBrowserOutput(entries, selectedDevice) {
 }
 
 export function groupBrowserAudioDevices(devices) {
-  const list = Array.isArray(devices) ? devices : Array.of();
+  const list = Array.isArray(devices) ? devices : [];
   return {
     inputs: list.filter((device) => device?.kind === "audioinput"),
     outputs: list.filter((device) => device?.kind === "audiooutput")

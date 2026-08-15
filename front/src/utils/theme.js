@@ -1,11 +1,11 @@
 const DEFAULT_THEME = "dark";
 const THEME_STORAGE_KEY = "karaoke-theme";
-const THEMES = new Set([DEFAULT_THEME, "light", "green", "violet"]);
+const THEMES = [DEFAULT_THEME, "light", "green", "violet"];
 
 export function resolveTheme(theme) {
   if (typeof theme !== "string") return DEFAULT_THEME;
   const candidate = theme.trim();
-  return THEMES.has(candidate) ? candidate : DEFAULT_THEME;
+  return THEMES.includes(candidate) ? candidate : DEFAULT_THEME;
 }
 
 export function readStoredTheme(storage) {

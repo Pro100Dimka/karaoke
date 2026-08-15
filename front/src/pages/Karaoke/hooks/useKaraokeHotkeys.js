@@ -2,19 +2,20 @@ import { useEffect } from "react";
 import useLatestRef from "../../../hooks/useLatestRef";
 import { getKaraokeHotkeyAction } from "../utils/hotkeys";
 
-export function dispatchKaraokeHotkey(
-  action,
-  { currentTime, duration, onTogglePlay, onSeek, onStop }
-) {
-  if (action === "toggle-playback") {
-    onTogglePlay?.();
-  } else if (action === "seek-backward") {
-    onSeek?.(Math.max(0, currentTime - 5));
-  } else if (action === "seek-forward") {
-    onSeek?.(Math.min(duration, currentTime + 5));
-  } else {
-    onStop?.();
-  }
+const HOTKEY_DISPATCHERS = {
+  "toggle-playback": ({ onTogglePlay }) => onTogglePlay?.(),
+  "seek-backward": ({ currentTime, onSeek }) =>
+    onSeek?.(Math.max(0, currentTime - 5)),
+  "seek-forward": ({ currentTime, duration, onSeek }) =>
+    onSeek?.(Math.min(duration, currentTime + 5)),
+  stop: ({ onStop }) => onStop?.()
+};
+
+export function dispatchKaraokeHotkey(action, context) {
+  const dispatch = Object.hasOwn(HOTKEY_DISPATCHERS, action)
+    ? HOTKEY_DISPATCHERS[action]
+    : HOTKEY_DISPATCHERS.stop;
+  dispatch(context);
 }
 
 export default function useKaraokeHotkeys({

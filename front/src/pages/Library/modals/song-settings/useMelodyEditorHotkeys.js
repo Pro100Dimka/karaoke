@@ -4,6 +4,33 @@ import {
   isHotkeyScopeActive
 } from "../../../../utils/hotkeys";
 
+const DELETE_KEYS = ["Delete", "Backspace"];
+const HORIZONTAL_ARROW_KEYS = ["ArrowLeft", "ArrowRight"];
+
+const MODIFIER_ACTIONS = {
+  KeyY: ({ redo }) => redo,
+  KeyS: ({ saveRef }) => () => saveRef.current?.(),
+  KeyA: ({ editable, selectAll }) => (editable ? null : selectAll),
+  KeyC: ({ editable, copySelected }) => (editable ? null : copySelected),
+  KeyX: ({ editable, copySelected, deleteSelected }) =>
+    editable
+      ? null
+      : () => {
+          copySelected();
+          deleteSelected();
+        },
+  KeyV: ({ editable, pasteNotes }) => (editable ? null : pasteNotes),
+  KeyD: ({ editable, duplicateSelected }) =>
+    editable ? null : duplicateSelected
+};
+
+function getModifierAction(code, context) {
+  if (code === "KeyZ") return context.shiftKey ? context.redo : context.undo;
+  return Object.hasOwn(MODIFIER_ACTIONS, code)
+    ? MODIFIER_ACTIONS[code](context)
+    : null;
+}
+
 export default function useMelodyEditorHotkeys({
   clearSelection,
   copySelected,
@@ -47,47 +74,30 @@ export default function useMelodyEditorHotkeys({
         action();
       };
 
-      if (mod && code === "KeyZ") {
-        run(event.shiftKey ? redo : undo);
-        return;
-      }
-      if (mod && code === "KeyY") {
-        run(redo);
-        return;
-      }
-      if (mod && code === "KeyS") {
-        run(() => saveRef.current?.());
-        return;
-      }
-      if (!editable && mod && code === "KeyA") {
-        run(selectAll);
-        return;
-      }
-      if (!editable && mod && code === "KeyC") {
-        run(copySelected);
-        return;
-      }
-      if (!editable && mod && code === "KeyX") {
-        run(() => {
-          copySelected();
-          deleteSelected();
+      if (mod) {
+        const modifierAction = getModifierAction(code, {
+          editable,
+          shiftKey: event.shiftKey,
+          redo,
+          undo,
+          saveRef,
+          selectAll,
+          copySelected,
+          deleteSelected,
+          pasteNotes,
+          duplicateSelected
         });
-        return;
-      }
-      if (!editable && mod && code === "KeyV") {
-        run(pasteNotes);
-        return;
-      }
-      if (!editable && mod && code === "KeyD") {
-        run(duplicateSelected);
-        return;
+        if (modifierAction) {
+          run(modifierAction);
+          return;
+        }
       }
       if (editable) return;
       if (code === "Space") {
         run(playing ? pause : play);
         return;
       }
-      if (key === "Delete" || key === "Backspace") {
+      if (DELETE_KEYS.includes(key)) {
         run(deleteSelected);
         return;
       }
@@ -103,7 +113,7 @@ export default function useMelodyEditorHotkeys({
         run(() => seek(duration));
         return;
       }
-      if (key === "ArrowLeft" || key === "ArrowRight") {
+      if (HORIZONTAL_ARROW_KEYS.includes(key)) {
         const direction = key === "ArrowRight" ? 1 : -1;
         run(() => {
           if (mod)

@@ -1,3 +1,4 @@
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const MIN_PITCH_HZ = 55;
 const MAX_PITCH_HZ = 1760;
 const MIN_RMS = 0.01;
@@ -82,7 +83,7 @@ export function refinePitchLag(scores, lag, minLag, maxLag) {
   const denominator = left - 2 * center + right;
   if (!denominator) return lag;
   const offset = (0.5 * (left - right)) / denominator;
-  return lag + Math.max(-0.5, Math.min(0.5, offset));
+  return lag + clamp(offset, -0.5, 0.5);
 }
 
 export function pitchFrequencyToMidi(frequency) {
@@ -93,7 +94,7 @@ export function pitchFrequencyToMidi(frequency) {
   ) {
     return null;
   }
-  const bounded = Math.max(MIN_PITCH_HZ, Math.min(MAX_PITCH_HZ, frequency));
+  const bounded = clamp(frequency, MIN_PITCH_HZ, MAX_PITCH_HZ);
   return 69 + 12 * Math.log2(bounded / 440);
 }
 

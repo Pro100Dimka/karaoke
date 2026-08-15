@@ -38,9 +38,88 @@ export function createOnlineRoomMessageHandler(options) {
     setTransferStatus,
     onParticipantJoined = () => {}
   } = options;
-  return (message) => {
-    if (!isCurrentConnection()) return;
-    if (message.type === "room-state") {
+
+  const publishRoomCommand = (command, eventPrefix) => {
+    setRoomCommand({
+      ...command,
+      __eventId: createEventId(eventPrefix)
+    });
+  };
+
+  const syncHandlers = {
+    "song-request": (command) => {
+      if (
+        !activeRoomRef.current?.host ||
+        !command.requesterId ||
+        !command.songId
+      ) {
+        return false;
+      }
+      roomApi
+        .exportSongPackage(command.songId)
+        .then((blob) => {
+          if (!isCurrentConnection()) return null;
+          setTransferStatus({ stage: "sending", percent: 0 });
+          return voice.sendFile(command.requesterId, blob, {
+            kind: "song-package",
+            songId: command.songId,
+            filename: `${command.songId}.karaoke.zip`
+          });
+        })
+        .then(() => {
+          if (isCurrentConnection()) setTransferStatus(null);
+        })
+        .catch((error) => {
+          if (!isCurrentConnection()) return;
+          const message = getErrorMessage(error);
+          client.send("sync", {
+            state: {
+              type: "song-transfer-error",
+              requesterId: command.requesterId,
+              songId: command.songId,
+              error: message
+            }
+          });
+          setTransferStatus({ stage: "error", error: message, percent: 0 });
+        });
+      return true;
+    },
+    "song-transfer-error": (command) => {
+      if (command.requesterId !== activeRoomRef.current?.selfId) return false;
+      pendingCommandRef.current = null;
+      setTransferStatus({
+        stage: "error",
+        error: command.error || translateSaved("Ведущий не смог передать песню"),
+        percent: 0
+      });
+      return true;
+    },
+    "open-karaoke": (command, message) => {
+      if (activeRoomRef.current?.host) return false;
+      roomApi
+        .getSong(command.songId)
+        .then(() => {
+          if (!isCurrentConnection()) return;
+          publishRoomCommand(command, message.sentAt || "sync");
+        })
+        .catch(() => {
+          if (!isCurrentConnection()) return;
+          pendingCommandRef.current = command;
+          setTransferStatus({ stage: "waiting", percent: 0 });
+          client.send("sync", {
+            state: {
+              type: "song-request",
+              songId: command.songId,
+              requesterId: activeRoomRef.current?.selfId
+            }
+          });
+        });
+      return true;
+    }
+  };
+
+  const messageHandlers = {
+    "room-state": (message) => {
       const { self } = message;
       if (self) {
         setRoom({
@@ -51,43 +130,37 @@ export function createOnlineRoomMessageHandler(options) {
         });
       }
       setParticipants(message.participants || []);
-      return;
-    }
-    if (message.type === "participant-joined") {
-      setParticipants((items) => upsertParticipant(items, message.participant));
-      if (message.participant?.id !== activeRoomRef.current?.selfId) {
-        onParticipantJoined(message.participant);
+    },
+    "participant-joined": (message) => {
+      const { participant } = message;
+      setParticipants((items) => upsertParticipant(items, participant));
+      if (participant?.id !== activeRoomRef.current?.selfId) {
+        onParticipantJoined(participant);
       }
-      if (message.participant?.id) {
-        voice.invite(message.participant.id).catch(() => {});
-      }
-      return;
-    }
-    if (message.type === "participant-updated") {
+      if (participant?.id) voice.invite(participant.id).catch(() => {});
+    },
+    "participant-updated": (message) => {
       setParticipants((items) => upsertParticipant(items, message.participant));
-      return;
-    }
-    if (message.type === "self-updated" && message.self) {
+    },
+    "self-updated": (message) => {
+      if (!message.self) return;
       setRoom({
         ...(activeRoomRef.current || {}),
         selfId: message.self.id,
         host: message.self.role === "host",
         role: message.self.role
       });
-      return;
-    }
-    if (message.type === "participant-left") {
+    },
+    "participant-left": (message) => {
       setParticipants((items) =>
         items.filter((item) => item.id !== message.participantId)
       );
       voice.removePeer(message.participantId);
-      return;
-    }
-    if (message.type === "signal") {
+    },
+    signal: (message) => {
       voice.accept(message.fromId, message.signal).catch(() => {});
-      return;
-    }
-    if (message.type === "ui") {
+    },
+    ui: (message) => {
       setRoomUi((current) => {
         const state = message.state || {};
         const { participantEffects } = state;
@@ -105,96 +178,29 @@ export function createOnlineRoomMessageHandler(options) {
           __eventId: createEventId("ui")
         };
       });
-      return;
-    }
-    if (message.type === "sync") {
+    },
+    sync: (message) => {
       const command = message.state || {};
       if (
-        command.type === "song-request" &&
-        activeRoomRef.current?.host &&
-        command.requesterId &&
-        command.songId
-      ) {
-        roomApi
-          .exportSongPackage(command.songId)
-          .then((blob) => {
-            if (!isCurrentConnection()) return null;
-            setTransferStatus({ stage: "sending", percent: 0 });
-            return voice.sendFile(command.requesterId, blob, {
-              kind: "song-package",
-              songId: command.songId,
-              filename: `${command.songId}.karaoke.zip`
-            });
-          })
-          .then(() => {
-            if (isCurrentConnection()) setTransferStatus(null);
-          })
-          .catch((error) => {
-            if (!isCurrentConnection()) return;
-            client.send("sync", {
-              state: {
-                type: "song-transfer-error",
-                requesterId: command.requesterId,
-                songId: command.songId,
-                error: getErrorMessage(error)
-              }
-            });
-            setTransferStatus({
-              stage: "error",
-              error: getErrorMessage(error),
-              percent: 0
-            });
-          });
+        Object.hasOwn(syncHandlers, command.type) &&
+        syncHandlers[command.type](command, message)
+      )
         return;
-      }
-      if (
-        command.type === "song-transfer-error" &&
-        command.requesterId === activeRoomRef.current?.selfId
-      ) {
-        pendingCommandRef.current = null;
-        setTransferStatus({
-          stage: "error",
-          error:
-            command.error || translateSaved("Ведущий не смог передать песню"),
-          percent: 0
-        });
-        return;
-      }
-      if (command.type === "open-karaoke" && !activeRoomRef.current?.host) {
-        roomApi
-          .getSong(command.songId)
-          .then(() => {
-            if (!isCurrentConnection()) return;
-            setRoomCommand({
-              ...command,
-              __eventId: createEventId(message.sentAt || "sync")
-            });
-          })
-          .catch(() => {
-            if (!isCurrentConnection()) return;
-            pendingCommandRef.current = command;
-            setTransferStatus({ stage: "waiting", percent: 0 });
-            client.send("sync", {
-              state: {
-                type: "song-request",
-                songId: command.songId,
-                requesterId: activeRoomRef.current?.selfId
-              }
-            });
-          });
-        return;
-      }
-      setRoomCommand({
-        ...command,
-        __eventId: createEventId(message.sentAt || "sync")
-      });
-      return;
-    }
-    if (message.type === "connection-closed" && !disconnectIntentRef.current) {
+      publishRoomCommand(command, message.sentAt || "sync");
+    },
+    "connection-closed": () => {
+      if (disconnectIntentRef.current) return;
       setVoiceError(translateSaved("Соединение с комнатой потеряно."));
       cleanupConnection();
       setRoom(null);
       setParticipants([]);
+    }
+  };
+
+  return (message) => {
+    if (!isCurrentConnection()) return;
+    if (Object.hasOwn(messageHandlers, message.type)) {
+      messageHandlers[message.type](message);
     }
   };
 }

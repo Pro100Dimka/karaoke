@@ -3,6 +3,39 @@ import { translateSaved } from "../../../i18n/runtime";
 // Stryker disable next-line ArrayDeclaration: Array() and Array([]) are the same empty array.
 const EMPTY_SECTIONS = Object.freeze(Array()); // eslint-disable-line no-array-constructor
 
+const ANALYSIS_GRADES = [
+  [85, "Отличное исполнение"],
+  [70, "Хороший результат"],
+  [50, "Есть потенциал"],
+  [-Infinity, "Нужно потренироваться"]
+];
+
+function getAnalysisGrade(accuracy) {
+  if (accuracy == null) return translateSaved("Нет данных");
+  const [, label] = ANALYSIS_GRADES.find(([minimum]) => accuracy >= minimum);
+  return translateSaved(label);
+}
+
+function getAnalysisAdvice(accuracy, meanDeviation) {
+  if (accuracy == null) {
+    return translateSaved(
+      "Не удалось определить достаточно пропетых нот. Попробуйте петь ближе к микрофону."
+    );
+  }
+  if (meanDeviation > 1) {
+    return translateSaved(
+      "Сфокусируйтесь на точном начале каждой фразы и удержании высоты ноты."
+    );
+  }
+  return accuracy >= 70
+    ? translateSaved(
+        "Хорошая точность. Попробуйте сделать фразы ровнее по громкости и дыханию."
+      )
+    : translateSaved(
+        "Повторите сложные фразы медленнее, ориентируясь на ноты на экране."
+      );
+}
+
 function finiteOrNull(value) {
   if (value == null || value === "") return null;
   const number = Number(value);
@@ -63,32 +96,11 @@ export function getAnalysisFeedback(result) {
         : worst,
     null
   );
-  const grade =
-    accuracy == null
-      ? translateSaved("Нет данных")
-      : accuracy >= 85
-        ? translateSaved("Отличное исполнение")
-        : accuracy >= 70
-          ? translateSaved("Хороший результат")
-          : accuracy >= 50
-            ? translateSaved("Есть потенциал")
-            : translateSaved("Нужно потренироваться");
-  const advice =
-    accuracy == null
-      ? translateSaved(
-          "Не удалось определить достаточно пропетых нот. Попробуйте петь ближе к микрофону."
-        )
-      : normalized.mean_deviation_semitones > 1
-        ? translateSaved(
-            "Сфокусируйтесь на точном начале каждой фразы и удержании высоты ноты."
-          )
-        : accuracy >= 70
-          ? translateSaved(
-              "Хорошая точность. Попробуйте сделать фразы ровнее по громкости и дыханию."
-            )
-          : translateSaved(
-              "Повторите сложные фразы медленнее, ориентируясь на ноты на экране."
-            );
+  const grade = getAnalysisGrade(accuracy);
+  const advice = getAnalysisAdvice(
+    accuracy,
+    normalized.mean_deviation_semitones
+  );
   return {
     ...normalized,
     accuracy,

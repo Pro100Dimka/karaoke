@@ -28,13 +28,13 @@ test("keeps leaf source directories meaningful instead of wrapping one file", ()
   const singletonDirectories = [];
   const sourceRoot = path.join(root, "src");
   const themeRoot = path.join(sourceRoot, "theme");
+  const singletonAuditRoots = new Set([sourceRoot, themeRoot]);
   const walk = (directory) => {
     const entries = fs.readdirSync(directory, { withFileTypes: true });
     const childDirectories = entries.filter((entry) => entry.isDirectory());
     const childFiles = entries.filter((entry) => entry.isFile());
     if (
-      directory !== sourceRoot &&
-      directory !== themeRoot &&
+      !singletonAuditRoots.has(directory) &&
       childDirectories.length === 0 &&
       childFiles.length === 1
     ) {

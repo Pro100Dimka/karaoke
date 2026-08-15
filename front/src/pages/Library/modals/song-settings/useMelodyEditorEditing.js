@@ -10,6 +10,11 @@ import {
 import { clamp, cloneNotes, roundTime } from "./melody-editor-state";
 import useMelodyEditorHotkeys from "./useMelodyEditorHotkeys";
 
+function getMovingSelection(selected, noteId, extend) {
+  if (selected.includes(noteId)) return selected;
+  return extend ? [...selected, noteId] : [noteId];
+}
+
 export default function useMelodyEditorEditing({
   auditionNote,
   duration,
@@ -152,11 +157,7 @@ const startDrag = useCallback(
     event.preventDefault();
     event.stopPropagation();
     const extend = event.shiftKey || event.ctrlKey || event.metaKey;
-    const movingSelection = selected.includes(note._id)
-      ? selected
-      : extend
-        ? [...selected, note._id]
-        : [note._id];
+    const movingSelection = getMovingSelection(selected, note._id, extend);
     setSelected(movingSelection);
     const originals = new Map(
       notes

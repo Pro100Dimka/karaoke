@@ -3,12 +3,18 @@ import { useNavigate } from "react-router-dom";
 
 import { useOnlineRoom } from "../contexts/OnlineRoomContext";
 
+const ROOM_NAVIGATION = {
+  "open-karaoke": (command) =>
+    command.songId ? ["/karaoke", { state: { songId: command.songId } }] : null,
+  "open-library": () => ["/"]
+};
+
 export function navigateRoomCommand(command, navigate) {
-  if (command?.type === "open-karaoke" && command.songId) {
-    navigate("/karaoke", { state: { songId: command.songId } });
-  } else if (command?.type === "open-library") {
-    navigate("/");
-  }
+  const handler = ROOM_NAVIGATION[command?.type];
+  const target = Object.hasOwn(ROOM_NAVIGATION, command?.type)
+    ? handler(command)
+    : null;
+  if (target) navigate(...target);
 }
 
 export function useOnlineRoomNavigation() {

@@ -5,6 +5,7 @@ import process from "node:process";
 const root = process.cwd();
 const sourceRoot = path.join(root, "src");
 const files = [];
+const SINGLETON_AUDIT_EXCLUSIONS = new Set([sourceRoot, path.join(sourceRoot, "theme")]);
 
 function walk(directory) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
@@ -27,7 +28,7 @@ function auditSingletonDirectories(directory) {
   const entries = fs.readdirSync(directory, { withFileTypes: true });
   const childDirectories = entries.filter((entry) => entry.isDirectory());
   const childFiles = entries.filter((entry) => entry.isFile());
-  if (directory !== sourceRoot && directory !== path.join(sourceRoot, "theme")) {
+  if (!SINGLETON_AUDIT_EXCLUSIONS.has(directory)) {
     if (childDirectories.length === 0 && childFiles.length === 1) {
       violations.push(
         `single-file source directory must be flattened: ${relative(directory)}`

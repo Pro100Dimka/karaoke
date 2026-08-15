@@ -9,8 +9,8 @@ export const DEFAULT_AUDIO_PREFERENCES = Object.freeze({
   monitorMode: "direct"
 });
 
-const VALID_LATENCY_HINTS = new Set(["interactive", "balanced", "playback"]);
-const VALID_MONITOR_MODES = new Set(["direct", "browser"]);
+const VALID_LATENCY_HINTS = ["interactive", "balanced", "playback"];
+const VALID_MONITOR_MODES = ["direct", "browser"];
 
 function normalizeDeviceId(value) {
   return typeof value === "string" && value.trim() ? value : "default";
@@ -21,10 +21,10 @@ export function getAudioPreferences() {
   return {
     monitorInputDeviceId: normalizeDeviceId(stored.monitorInputDeviceId),
     monitorOutputDeviceId: normalizeDeviceId(stored.monitorOutputDeviceId),
-    monitorLatencyHint: VALID_LATENCY_HINTS.has(stored.monitorLatencyHint)
+    monitorLatencyHint: VALID_LATENCY_HINTS.includes(stored.monitorLatencyHint)
       ? stored.monitorLatencyHint
       : DEFAULT_AUDIO_PREFERENCES.monitorLatencyHint,
-    monitorMode: VALID_MONITOR_MODES.has(stored.monitorMode)
+    monitorMode: VALID_MONITOR_MODES.includes(stored.monitorMode)
       ? stored.monitorMode
       : DEFAULT_AUDIO_PREFERENCES.monitorMode
   };
@@ -37,10 +37,10 @@ export function saveAudioPreferences(patch) {
   const next = {
     monitorInputDeviceId: normalizeDeviceId(candidate.monitorInputDeviceId),
     monitorOutputDeviceId: normalizeDeviceId(candidate.monitorOutputDeviceId),
-    monitorLatencyHint: VALID_LATENCY_HINTS.has(candidate.monitorLatencyHint)
+    monitorLatencyHint: VALID_LATENCY_HINTS.includes(candidate.monitorLatencyHint)
       ? candidate.monitorLatencyHint
       : current.monitorLatencyHint,
-    monitorMode: VALID_MONITOR_MODES.has(candidate.monitorMode)
+    monitorMode: VALID_MONITOR_MODES.includes(candidate.monitorMode)
       ? candidate.monitorMode
       : current.monitorMode
   };

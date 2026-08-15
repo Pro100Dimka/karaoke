@@ -567,6 +567,8 @@ describe("navigation and karaoke hooks", () => {
     expect(stop).not.toHaveBeenCalled();
     dispatchKaraokeHotkey("stop", context);
     expect(stop).toHaveBeenCalledOnce();
+    dispatchKaraokeHotkey("unknown", context);
+    expect(stop).toHaveBeenCalledTimes(2);
     for (const action of [
       "toggle-playback",
       "seek-backward",

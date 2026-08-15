@@ -3,6 +3,8 @@ import { translateSaved } from "../../../i18n/runtime";
 // eslint-disable-next-line import/extensions
 import { normalizeNoteList } from "./note-normalization.js";
 
+const ACCIDENTAL_OFFSETS = Object.freeze({ "#": 1, b: -1 });
+
 export function noteNameToMidi(noteName) {
   if (typeof noteName !== "string") return null;
   const match = /^([A-Ga-g])([#b]?)(-?\d)$/.exec(noteName.trim());
@@ -18,7 +20,7 @@ export function noteNameToMidi(noteName) {
   };
   const [, letter, accidental, octaveText] = match;
   const base = semitones[letter.toUpperCase()];
-  const offset = accidental === "#" ? 1 : accidental === "b" ? -1 : 0;
+  const offset = ACCIDENTAL_OFFSETS[accidental] ?? 0;
   const midi = (Number(octaveText) + 1) * 12 + base + offset;
   return midi >= 0 && midi <= 127 ? midi : null;
 }
@@ -29,13 +31,13 @@ export function normalizeLyrics(raw) {
   // Stryker disable next-line ArrayDeclaration: injected primitive is filtered.
   const list = Array.isArray(source) ? source : [];
   const toText = (value) =>
-    typeof value === "string" || typeof value === "number"
+    ["string", "number"].includes(typeof value)
       ? String(value).trim()
       : "";
   const readTime = (value, keys) => {
     for (const key of keys) {
       const rawValue = value[key];
-      if (rawValue === null || rawValue === "") continue;
+      if ([null, ""].includes(rawValue)) continue;
       const number = Number(rawValue);
       if (Number.isFinite(number) && number >= 0) return number;
     }

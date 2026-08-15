@@ -289,11 +289,7 @@ function getSelectorSpecificity(selector) {
       root.walk((node) => {
         if (node.type === "id") {
           ids += 1;
-        } else if (
-          node.type === "class" ||
-          node.type === "attribute" ||
-          node.type === "pseudo"
-        ) {
+        } else if (["class", "attribute", "pseudo"].includes(node.type)) {
           if (
             node.type !== "pseudo" ||
             !["::before", "::after", "::first-letter", "::first-line"].includes(
@@ -325,10 +321,7 @@ function getSelectorSpecificity(selector) {
 }
 
 function getSelectorDepth(selector) {
-  return selector
-    .split(/\s+|>|\+|~/)
-    .map((part) => part.trim())
-    .filter(Boolean).length;
+  return selector.split(/\s+|>|\+|~/).filter(Boolean).length;
 }
 
 function getAtRuleContext(node) {
@@ -358,6 +351,16 @@ function isIgnoredClass(className, config) {
   );
 }
 
+function getDynamicClassBase(className) {
+  if (className.includes("--")) {
+    return className.slice(0, className.indexOf("--") + 2);
+  }
+  if (className.includes("-")) {
+    return className.slice(0, className.lastIndexOf("-") + 1);
+  }
+  return className;
+}
+
 function couldBeDynamic(className, dynamicFragments, config) {
   if (
     config.generatedClassPrefixes.some((prefix) => className.startsWith(prefix))
@@ -365,11 +368,7 @@ function couldBeDynamic(className, dynamicFragments, config) {
     return true;
   }
 
-  const base = className.includes("--")
-    ? className.slice(0, className.indexOf("--") + 2)
-    : className.includes("-")
-      ? `${className.slice(0, className.lastIndexOf("-") + 1)}`
-      : className;
+  const base = getDynamicClassBase(className);
 
   return [...dynamicFragments].some((fragment) => {
     const staticParts = fragment
@@ -888,6 +887,14 @@ async function main() {
     }))
     .sort((a, b) => b.count - a.count);
 
+  const issueCounts = issues.reduce(
+    (counts, { severity }) => {
+      if (Object.hasOwn(counts, severity)) counts[severity] += 1;
+      return counts;
+    },
+    { error: 0, warning: 0, info: 0 }
+  );
+
   const report = {
     generatedAt: new Date().toISOString(),
     root: PROJECT_ROOT,
@@ -903,9 +910,9 @@ async function main() {
       repeatedValues: repeatedValueReport.length,
       breakpoints: mediaBreakpoints.size,
       issues: issues.length,
-      errors: issues.filter((issue) => issue.severity === "error").length,
-      warnings: issues.filter((issue) => issue.severity === "warning").length,
-      info: issues.filter((issue) => issue.severity === "info").length
+      errors: issueCounts.error,
+      warnings: issueCounts.warning,
+      info: issueCounts.info
     },
     fileStats: fileStats.sort((a, b) => b.lines - a.lines),
     breakpoints: [...mediaBreakpoints.entries()]

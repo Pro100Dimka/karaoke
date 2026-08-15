@@ -1,10 +1,10 @@
 const LANGUAGE_KEY = "advoice-language";
 // Stryker disable next-line StringLiteral: replacing "uk" is equivalent because
 // normalizeLanguage deliberately falls back to the same "uk" value.
-const SUPPORTED_LANGUAGES = new Set(["uk", "ru", "en"]);
+const SUPPORTED_LANGUAGES = ["uk", "ru", "en"];
 
 export const normalizeLanguage = (language) =>
-  SUPPORTED_LANGUAGES.has(language) ? language : "uk";
+  SUPPORTED_LANGUAGES.includes(language) ? language : "uk";
 
 export const getSavedLanguage = () => {
   try {

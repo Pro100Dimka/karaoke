@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { readJsonStorage } from "../../../../utils/storage";
 
-export const BLACK_KEYS = new Set([1, 3, 6, 8, 10]);
+export const BLACK_KEYS = [1, 3, 6, 8, 10];
 export const EDITOR_STORAGE_KEY = "karaoke-melody-editor";
 export const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 export const roundTime = (value) => Math.round(value * 1000) / 1000;

@@ -15,6 +15,15 @@ import { copyText } from "../utils/clipboard";
 import OnlineRoomParticipant from "./OnlineRoomParticipant";
 import Button from "./fields/button";
 
+function getTransferText(status, t) {
+  if (!status) return "";
+  return status.stage === "error"
+    ? t("room.transfer.error", {
+        error: status.error || t("room.transfer.unknownError")
+      })
+    : t(`room.transfer.${status.stage}`, { percent: status.percent });
+}
+
 export function OnlineRoomDock() {
   const { t } = useI18n();
   const onlineRoom = useOnlineRoom();
@@ -50,16 +59,7 @@ export function OnlineRoomDock() {
       setCopied(false);
     }, 1600);
   };
-  const transferText = onlineRoom.transferStatus
-    ? onlineRoom.transferStatus.stage === "error"
-      ? t("room.transfer.error", {
-          error:
-            onlineRoom.transferStatus.error || t("room.transfer.unknownError")
-        })
-      : t(`room.transfer.${onlineRoom.transferStatus.stage}`, {
-          percent: onlineRoom.transferStatus.percent
-        })
-    : "";
+  const transferText = getTransferText(onlineRoom.transferStatus, t);
 
   return (
     <>

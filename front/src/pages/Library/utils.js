@@ -1,5 +1,8 @@
 import { translateSaved } from "../../i18n/runtime";
 
+const ACTIVE_PROCESSING_STATUSES = ["processing", "queued", "cancelling"];
+const asArray = (value) => (Array.isArray(value) ? value : []);
+
 export function formatLibraryDate(value, locale = "ru-RU") {
   if (!value) return "—";
   const date = new Date(value);
@@ -28,14 +31,11 @@ export function getProcessingProgress(status, song) {
   return Math.min(100, Math.max(0, value));
 }
 export function isProcessingActive(status) {
-  return (
-    status === "processing" || status === "queued" || status === "cancelling"
-  );
+  return ACTIVE_PROCESSING_STATUSES.includes(status);
 }
 export function hasActiveSongProcessing(songs) {
-  return (
-    Array.isArray(songs) &&
-    songs.some((song) => isProcessingActive(String(song?.status)))
+  return asArray(songs).some((song) =>
+    isProcessingActive(String(song?.status))
   );
 }
 export function mergeSongProcessingStatus(songs, status) {
@@ -55,22 +55,20 @@ export function mergeSongProcessingStatus(songs, status) {
 }
 export function getLocalVisibleSongs(songs, hiddenSongIds) {
   const hidden = hiddenSongIds instanceof Set ? hiddenSongIds : new Set();
-  return Array.isArray(songs)
-    ? songs.filter(
-        (song) => song && typeof song === "object" && !hidden.has(song.id)
-      )
-    : [];
+  return asArray(songs).filter(
+    (song) => song && typeof song === "object" && !hidden.has(song.id)
+  );
 }
 export function resolveVisibleSongs({ localSongs, room, roomSongs }) {
   if (room && !room.host && Array.isArray(roomSongs)) {
     return roomSongs.filter((song) => song && typeof song === "object");
   }
-  return Array.isArray(localSongs) ? localSongs : [];
+  return asArray(localSongs);
 }
 export function filterSongs(songs, query) {
   const normalizedQuery =
     typeof query === "string" ? query.trim().toLowerCase() : "";
-  const source = Array.isArray(songs) ? songs : [];
+  const source = asArray(songs);
   if (!normalizedQuery) return source;
   return source.filter((song) =>
     [song?.title, song?.artist, song?.genre]
@@ -81,9 +79,7 @@ export function filterSongs(songs, query) {
   );
 }
 export function countReadySongs(songs) {
-  return Array.isArray(songs)
-    ? songs.filter((song) => song?.status === "done").length
-    : 0;
+  return asArray(songs).filter((song) => song?.status === "done").length;
 }
 export function getSongCardState(song) {
   const status = typeof song?.status === "string" ? song.status : "pending";

@@ -57,6 +57,7 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 const isDev = !app.isPackaged;
+const IS_WINDOWS = process.platform === "win32";
 // Keep the development profile self-contained. It avoids Windows profile
 // permission/cache corruption from making `start-dev.bat` look like a broken
 // app launch. Packaged builds continue to use the normal per-user profile.
@@ -205,10 +206,10 @@ function startBackend() {
   const backendDir = resolveBackendDir();
   const backendCommand = isDev
     ? process.env.KARAOKE_PYTHON ||
-      (process.platform === "win32" ? "python" : "python3")
+      (IS_WINDOWS ? "python" : "python3")
     : path.join(
         backendDir,
-        process.platform === "win32" ? "KaraokeBackend.exe" : "KaraokeBackend"
+        IS_WINDOWS ? "KaraokeBackend.exe" : "KaraokeBackend"
       );
   const backendArgs = isDev ? ["run.py"] : [];
   const backendDataDir = isDev
@@ -306,7 +307,7 @@ function stopBackend() {
     if (backendProcess && !backendProcess.killed) {
       const pid = backendProcess.pid;
       backendProcess.kill();
-      if (process.platform === "win32" && pid) {
+      if (IS_WINDOWS && pid) {
         // PyInstaller/native workers can outlive a soft child kill; terminate
         // the whole process tree on app shutdown.
         spawn("taskkill", ["/PID", String(pid), "/T", "/F"], { windowsHide: true });
@@ -347,9 +348,7 @@ const THEME_ICONS = {
   green: "green.ico",
   violet: "violet.ico"
 };
-const THEME_NAMES = new Set(
-  Object.keys(THEME_ICONS).filter((name) => name !== "app")
-);
+const THEME_NAMES = Object.keys(THEME_ICONS).filter((name) => name !== "app");
 
 function getStoredIconTheme() {
   try {
@@ -359,14 +358,14 @@ function getStoredIconTheme() {
         "utf8"
       )
       .trim();
-    return THEME_NAMES.has(theme) ? theme : "dark";
+    return THEME_NAMES.includes(theme) ? theme : "dark";
   } catch {
     return "dark";
   }
 }
 
 function storeIconTheme(theme) {
-  if (!THEME_NAMES.has(theme)) return false;
+  if (!THEME_NAMES.includes(theme)) return false;
   try {
     const userData = app.getPath("userData");
     fs.mkdirSync(userData, { recursive: true });
@@ -447,8 +446,7 @@ function updateThemeShortcuts(iconPath) {
 }
 
 handleTrustedIpc("window:setIconTheme", (theme) => {
-  if (!mainWindow) return false;
-  if (!THEME_ICONS[theme] || theme === "app") return false;
+  if (!mainWindow || !THEME_ICONS[theme] || theme === "app") return false;
 
   const iconPath = getThemeIcon(theme);
   storeIconTheme(theme);
@@ -607,7 +605,7 @@ if (!hasSingleInstanceLock) {
 
 app.whenReady().then(() => {
   if (!hasSingleInstanceLock) return;
-  if (process.platform === "win32")
+  if (IS_WINDOWS)
     app.setAppUserModelId("com.karaokestudio.app");
   registerMediaProtocol();
   const packagedIndexUrl = getPackagedRendererUrl(

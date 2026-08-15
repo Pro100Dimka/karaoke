@@ -584,7 +584,9 @@ describe("karaoke transport", () => {
         songId: "song",
         action: "unknown",
         position: "not-finite"
-      }
+      },
+      { type: "karaoke-player", songId: "song", action: "toString" },
+      { type: "karaoke-player", songId: "song", action: "__proto__" }
     ];
     for (const roomCommand of commands) {
       hook.rerender({

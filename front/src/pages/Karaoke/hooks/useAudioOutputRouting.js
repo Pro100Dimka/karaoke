@@ -52,7 +52,7 @@ export default function useAudioOutputRouting(options) {
       typeof enumerateDevices !== "function"
     )
       return undefined;
-    const selected = Array.from(directOutputDevices ?? Array.of()).find(
+    const selected = Array.from(directOutputDevices ?? []).find(
       (device) => String(device.index) === String(directOutputDeviceId)
     );
     if (!selected) return undefined;

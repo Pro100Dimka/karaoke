@@ -67,7 +67,7 @@ const getHistoryRow = (
 ) => [
   [song_title ?? "—", "history-song"],
   [
-    HISTORY_ACTIONS.has(kind) ? t(`settings.history.${kind}`) : (kind ?? "—"),
+    HISTORY_ACTIONS.includes(kind) ? t(`settings.history.${kind}`) : (kind ?? "—"),
     "text-secondary"
   ],
   [renderStatus(kind, status, t)],
@@ -101,7 +101,7 @@ const renderStatus = (kind, status, t) => {
 
   return (
     <Typography as="span" variant="body2" tone="muted">
-      {RECORDING_STATUSES.has(status)
+      {RECORDING_STATUSES.includes(status)
         ? t(`settings.history.${status}`)
         : (status ?? "—")}
     </Typography>

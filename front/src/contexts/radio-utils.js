@@ -1,3 +1,9 @@
+function getBandBoost(band) {
+  if (band < 5) return 1.42;
+  if (band < 12) return 1.72;
+  return 2.05;
+}
+
 export const isAutoplayBlocked = (reason) =>
   reason?.name === "NotAllowedError" ||
   /user didn't interact|user gesture|not allowed/i.test(
@@ -31,7 +37,7 @@ export function calculateRadioSpectrum(
     const raw = averageRange(fromHz, toHz);
     const boosted = Math.min(
       1,
-      raw * (band < 5 ? 1.42 : band < 12 ? 1.72 : 2.05)
+      raw * getBandBoost(band)
     );
     return previous + (boosted - previous) * (boosted > previous ? 0.58 : 0.16);
   });

@@ -67,6 +67,10 @@ test("karaoke action mapping is exact and rejects cancelled events", () => {
   ])
     assert.equal(getKaraokeHotkeyAction({ ...base, code }, scope), action);
   assert.equal(getKaraokeHotkeyAction({ ...base, code: "KeyA" }, scope), null);
+  assert.equal(
+    getKaraokeHotkeyAction({ ...base, code: "toString" }, scope),
+    null
+  );
   assert.equal(getKaraokeHotkeyAction(null, scope), null);
 
   for (const property of ["defaultPrevented", "isComposing", "repeat"])

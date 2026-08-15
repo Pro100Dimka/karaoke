@@ -16,6 +16,9 @@ export function OnlineRoomModal({ onlineName, onClose }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const mountedRef = useMountedRef();
+  const actionKey = busy
+    ? "room.connecting"
+    : `room.${joinMode ? "join" : "create"}`;
 
   const connect = async (host) => {
     const normalizedRoomId = normalizeRoomId(roomId);
@@ -58,9 +61,7 @@ export function OnlineRoomModal({ onlineName, onClose }) {
             onClick={() => connect(!joinMode)}
             className="modal-title-action"
           >
-            {t(
-              busy ? "room.connecting" : joinMode ? "room.join" : "room.create"
-            )}
+            {t(actionKey)}
           </Button>
         )
       }}

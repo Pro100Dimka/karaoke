@@ -6,6 +6,11 @@ import { translateSaved } from "../../../i18n/runtime";
 import ProcessingSignal from "../components/song-card/processing-signal";
 import { formatEta, getProcessingProgress, isProcessingActive } from "../utils";
 
+function getVisibleProgress(progress, active, done) {
+  if (done) return 100;
+  return active ? Math.max(1, progress) : progress;
+}
+
 export default function ProcessingModal({
   song,
   status,
@@ -18,11 +23,7 @@ export default function ProcessingModal({
   const progress = getProcessingProgress(status, song);
   const active = isProcessingActive(currentStatus);
   const isDone = currentStatus === "done";
-  const visibleProgress = isDone
-    ? 100
-    : active
-      ? Math.max(1, progress)
-      : progress;
+  const visibleProgress = getVisibleProgress(progress, active, isDone);
   const actions = [
     active && [OctagonX, translateSaved("Отменить"), "danger", onCancel],
     ...(isDone

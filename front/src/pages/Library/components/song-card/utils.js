@@ -13,6 +13,34 @@ export function formatSongKey(value) {
   if (!key) return translateSaved("Тональность определяется");
   return key.replace(/\s+minor$/i, "m").replace(/\s+major$/i, "maj");
 }
+function getPrimaryAction({
+  canManageLibrary,
+  isReady,
+  isWorking,
+  onOpenRecordings,
+  onProcess,
+  song
+}) {
+  if (isReady) {
+    return [
+      Headphones,
+      translateSaved("Прослушать записи"),
+      "outline",
+      () => onOpenRecordings(song),
+      15
+    ];
+  }
+  if (!canManageLibrary) return null;
+  return [
+    AudioWaveform,
+    translateSaved("Обработать песню"),
+    "outline",
+    () => onProcess(song),
+    16,
+    { className: "library-song-card-process", disabled: isWorking }
+  ];
+}
+
 export function getSongActions({
   canManageLibrary,
   isReady,
@@ -25,27 +53,14 @@ export function getSongActions({
   onReprocess,
   song
 }) {
-  const primaryAction = isReady
-    ? [
-        Headphones,
-        translateSaved("Прослушать записи"),
-        "outline",
-        () => onOpenRecordings(song),
-        15
-      ]
-    : canManageLibrary
-      ? [
-          AudioWaveform,
-          translateSaved("Обработать песню"),
-          "outline",
-          () => onProcess(song),
-          16,
-          {
-            className: "library-song-card-process",
-            disabled: isWorking
-          }
-        ]
-      : null;
+  const primaryAction = getPrimaryAction({
+    canManageLibrary,
+    isReady,
+    isWorking,
+    onOpenRecordings,
+    onProcess,
+    song
+  });
   const managementActions = canManageLibrary
     ? [
         [

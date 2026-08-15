@@ -363,7 +363,10 @@ export default function useKaraokeTransport({
           broadcast: false
         })
     };
-    Promise.resolve(roomActions[roomCommand.action]?.()).catch((error) => {
+    const action = Object.hasOwn(roomActions, roomCommand.action)
+      ? roomActions[roomCommand.action]
+      : null;
+    Promise.resolve(action?.()).catch((error) => {
       setRecordingError(
         formatError("Не удалось выполнить команду комнаты: {0}", error)
       );

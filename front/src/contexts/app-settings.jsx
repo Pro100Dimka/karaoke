@@ -18,20 +18,29 @@ export const INITIAL_APP_SETTINGS_STATE = Object.freeze({
   error: null
 });
 
+const APP_SETTINGS_HANDLERS = {
+  LOAD_START: (state) => ({ ...state, isLoading: true, error: null }),
+  LOAD_SUCCESS: (state, payload) => ({
+    ...state,
+    settings: payload,
+    isLoading: false,
+    error: null
+  }),
+  LOAD_ERROR: (state, payload) => ({
+    ...state,
+    isLoading: false,
+    error: payload
+  }),
+  UPDATE_SETTINGS: (state, payload) => ({
+    ...state,
+    settings: typeof payload === "function" ? payload(state.settings) : payload
+  })
+};
+
 export function appSettingsReducer(state, { type, payload }) {
-  if (type === "LOAD_START") return { ...state, isLoading: true, error: null };
-  if (type === "LOAD_SUCCESS")
-    return { ...state, settings: payload, isLoading: false, error: null };
-  if (type === "LOAD_ERROR")
-    return { ...state, isLoading: false, error: payload };
-  if (type === "UPDATE_SETTINGS") {
-    return {
-      ...state,
-      settings:
-        typeof payload === "function" ? payload(state.settings) : payload
-    };
-  }
-  return state;
+  const handler =
+    Object.hasOwn(APP_SETTINGS_HANDLERS, type) && APP_SETTINGS_HANDLERS[type];
+  return handler ? handler(state, payload) : state;
 }
 
 export default function AppSettingsProvider({ children }) {

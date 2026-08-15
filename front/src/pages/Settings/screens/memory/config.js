@@ -35,7 +35,7 @@ export const MEMORY_ACTIONS = [
       })
   ]
 ];
-export function buildOptimizeOptions(songs = Array.of()) {
+export function buildOptimizeOptions(songs = []) {
   return [
     DEFAULT_OPTIMIZE_OPTION,
     ...songs

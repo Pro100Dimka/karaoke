@@ -30,6 +30,25 @@ import {
   resolveVisibleSongs
 } from "./utils";
 
+function LibraryResults({ error, songs, children }) {
+  if (error) {
+    return (
+      <p className="field-error">
+        {translateSaved("Не удалось загрузить список:")}
+        {getErrorMessage(error)}
+      </p>
+    );
+  }
+  if (!songs.length) {
+    return (
+      <div className="library-card-empty text-muted">
+        {translateSaved("Пока нет ни одной песни — добавьте первую")}
+      </div>
+    );
+  }
+  return children;
+}
+
 export default function Library({ onOpenSongSettings }) {
   const location = useLocation();
   const [query, setQuery] = useState("");
@@ -318,16 +337,7 @@ export default function Library({ onOpenSongSettings }) {
           query={query}
           setQuery={setQuery}
         />
-        {error ? (
-          <p className="field-error">
-            {translateSaved("Не удалось загрузить список:")}
-            {getErrorMessage(error)}
-          </p>
-        ) : filtered.length === 0 ? (
-          <div className="library-card-empty text-muted">
-            {translateSaved("Пока нет ни одной песни — добавьте первую")}
-          </div>
-        ) : (
+        <LibraryResults error={error} songs={filtered}>
           <Stack
             sx={{
               width: "110%",
@@ -362,7 +372,7 @@ export default function Library({ onOpenSongSettings }) {
               ))}
             </Grid>
           </Stack>
-        )}
+        </LibraryResults>
       </Stack>
 
       <div

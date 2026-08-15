@@ -75,19 +75,19 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
     enabled,
     api.listAudioDevices,
     POLLING_INTERVALS.devices,
-    Array.of()
+    []
   );
   const { data: outputs } = useConditionalPolling(
     enabled,
     api.listAudioOutputDevices,
     POLLING_INTERVALS.devices,
-    Array.of()
+    []
   );
   const { data: asioDrivers } = useConditionalPolling(
     enabled,
     api.listAsioDrivers,
     POLLING_INTERVALS.devices,
-    Array.of()
+    []
   );
   const { data: signal } = useConditionalPolling(
     enabled,

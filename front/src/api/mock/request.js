@@ -12,6 +12,48 @@ import {
 
 const clone = globalThis.structuredClone;
 
+const STATIC_RESPONSES = Object.freeze({
+  "/audio/devices": [],
+  "/audio/output-devices": [],
+  "/audio/asio-drivers": [],
+  "/audio/signal-quality": { rms_dbfs: -42 },
+  "/recording/pause": { ok: true },
+  "/recording/resume": { ok: true },
+  "/models/whisper": [],
+  "/diagnostics/ai-models": {
+    state: "ready",
+    ready: true,
+    ready_count: 5,
+    total: 5,
+    current_model: null,
+    error: null,
+    models_dir: "mock/models",
+    models: []
+  },
+  "/diagnostics/ai-models/download": {
+    state: "downloading",
+    ready: false,
+    ready_count: 0,
+    total: 5,
+    current_model: null,
+    error: null,
+    models_dir: "mock/models",
+    models: []
+  },
+  "/cache/size": { bytes: 0 },
+  "/cache/free-space": { bytes: 1024 ** 3 },
+  "/diagnostics/health": { status: "ok" },
+  "/diagnostics/pipeline": { status: "ok" },
+  "/diagnostics/versions": {},
+  "/diagnostics/errors": [],
+  "/history": [],
+  "/about": {
+    backend_version: "mock",
+    ai_version: "mock",
+    data_dir: "mock://data"
+  }
+});
+
 const store = {
   songs: clone(mockSongs),
   settings: clone(mockAppSettings),
@@ -88,10 +130,9 @@ export async function mockRequest(path, options = {}) {
   }
   const statusMatch = pathname.match(/^\/songs\/([^/]+)\/status$/);
   if (statusMatch) return clone(findSong(statusMatch[1]));
-  if (/^\/songs\/[^/]+\/(process|reprocess|cancel)$/.test(pathname)) {
+  if (/^\/songs\/[^/]+\/(process|reprocess|cancel|lyrics)$/.test(pathname)) {
     return { ok: true };
   }
-  if (/^\/songs\/[^/]+\/lyrics$/.test(pathname)) return { ok: true };
   if (/^\/songs\/[^/]+\/log$/.test(pathname)) return ["Mock pipeline ready"];
 
   if (pathname === "/settings") {
@@ -103,17 +144,14 @@ export async function mockRequest(path, options = {}) {
     Object.assign(store.audioSettings, body);
     return clone(store.audioSettings);
   }
-  if (pathname === "/audio/devices") return [];
-  if (pathname === "/audio/output-devices") return [];
-  if (pathname === "/audio/asio-drivers") return [];
-  if (pathname === "/audio/signal-quality") return { rms_dbfs: -42 };
+  if (Object.hasOwn(STATIC_RESPONSES, pathname)) {
+    return clone(STATIC_RESPONSES[pathname]);
+  }
   if (pathname.startsWith("/audio/direct-monitor/")) return { ok: true };
 
   if (pathname === "/recording/start") {
     return { recording_session_id: "mock-session-1" };
   }
-  if (pathname === "/recording/pause") return { ok: true };
-  if (pathname === "/recording/resume") return { ok: true };
   if (pathname === "/recording/stop") {
     const recording = {
       id: `mock-recording-${store.recordings.length + 1}`,
@@ -124,8 +162,12 @@ export async function mockRequest(path, options = {}) {
     store.recordings.push(recording);
     return clone(recording);
   }
-  if (pathname === "/recording/library") return clone(store.recordings);
-  if (/^\/recording\/by-song\//.test(pathname)) return clone(store.recordings);
+  if (
+    pathname === "/recording/library" ||
+    /^\/recording\/by-song\//.test(pathname)
+  ) {
+    return clone(store.recordings);
+  }
   if (/^\/recording\/[^/]+$/.test(pathname) && method === "DELETE") {
     store.recordings = store.recordings.filter(
       (recording) => recording.id !== pathname.split("/").pop()
@@ -142,44 +184,8 @@ export async function mockRequest(path, options = {}) {
     };
   }
 
-  if (pathname === "/models/whisper") return [];
-  if (pathname === "/diagnostics/ai-models")
-    return {
-      state: "ready",
-      ready: true,
-      ready_count: 5,
-      total: 5,
-      current_model: null,
-      error: null,
-      models_dir: "mock/models",
-      models: []
-    };
-  if (pathname === "/diagnostics/ai-models/download")
-    return {
-      state: "downloading",
-      ready: false,
-      ready_count: 0,
-      total: 5,
-      current_model: null,
-      error: null,
-      models_dir: "mock/models",
-      models: []
-    };
-  if (pathname.startsWith("/models/whisper/")) return { ok: true };
-  if (pathname === "/cache/size") return { bytes: 0 };
-  if (pathname === "/cache/free-space") return { bytes: 1024 ** 3 };
-  if (pathname.startsWith("/cache/")) return { ok: true };
-  if (pathname === "/diagnostics/health") return { status: "ok" };
-  if (pathname === "/diagnostics/pipeline") return { status: "ok" };
-  if (pathname === "/diagnostics/versions") return {};
-  if (pathname === "/diagnostics/errors") return [];
-  if (pathname === "/history") return [];
-  if (pathname === "/about") {
-    return {
-      backend_version: "mock",
-      ai_version: "mock",
-      data_dir: "mock://data"
-    };
+  if (["/models/whisper/", "/cache/"].some((prefix) => pathname.startsWith(prefix))) {
+    return { ok: true };
   }
 
   throw new Error(`Mock API route is not implemented: ${method} ${pathname}`);

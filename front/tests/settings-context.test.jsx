@@ -112,6 +112,7 @@ describe("application settings context", () => {
       error: null
     };
     expect(appSettingsReducer(state, { type: "UNKNOWN" })).toBe(state);
+    expect(appSettingsReducer(state, { type: "toString" })).toBe(state);
   });
   test("requires its provider", () => {
     const consoleError = vi

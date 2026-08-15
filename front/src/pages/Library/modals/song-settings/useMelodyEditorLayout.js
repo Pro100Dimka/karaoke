@@ -48,7 +48,7 @@ export default function useMelodyEditorLayout({
     const white = Array.from(
       { length: maxMidi - minMidi + 1 },
       (_, index) => maxMidi - index
-    ).filter((midi) => !BLACK_KEYS.has(((midi % 12) + 12) % 12));
+    ).filter((midi) => !BLACK_KEYS.includes(((midi % 12) + 12) % 12));
     const centers = white.map((midi) => (maxMidi - midi + 0.5) * rowHeight);
     return white.map((midi, index) => {
       const center = centers[index];
