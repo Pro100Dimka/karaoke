@@ -61,7 +61,8 @@ test("ready song opens the complete karaoke workspace", async ({ page }) => {
   await expect(page.locator(".karaoke-performance-stage")).toBeVisible();
   await expect(page.locator(".karaoke-transport-area")).toBeVisible();
   await page.keyboard.press("Space");
-  await expect(page.locator(".karaoke-stage")).toBeVisible();
+  await expect(page.locator(".karaoke-stage")).toHaveClass(/karaoke-is-playing/);
+  await expect.poll(() => page.locator("audio").first().evaluate((audio) => audio.paused)).toBe(false);
 });
 
 test("melody editor loads notes and supports selection", async ({ page }) => {

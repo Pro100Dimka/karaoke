@@ -159,6 +159,23 @@ describe("API transport", () => {
     vi.useRealTimers();
   });
 
+  test("keeps the deadline active while the response body is read", async () => {
+    vi.useFakeTimers();
+    const { request } = await importApi("core");
+    globalThis.fetch.mockImplementationOnce(async (_url, { signal }) => ({
+      ...response(),
+      text: () => new Promise((_resolve, reject) => signal.addEventListener("abort", () => {
+        const error = new Error("body aborted");
+        error.name = "AbortError";
+        reject(error);
+      }, { once: true }))
+    }));
+    const pending = request("stalled-body", { timeoutMs: 25 });
+    await vi.advanceTimersByTimeAsync(25);
+    await assert.rejects(pending, (error) => error.name === "TimeoutError");
+    vi.useRealTimers();
+  });
+
   test("encodes identifiers and confines local file URLs", () => {
     return importApi("core").then(({ createFileUrl, encodePathSegment }) => {
       assert.equal(encodePathSegment(" a/b "), "a%2Fb");
@@ -542,5 +559,19 @@ describe("API domains", () => {
       () => settingsApi.updateUiPreferences("karaoke room", { radio: true }),
       { path: "/preferences/karaoke%20room", method: "PATCH", body: { radio: true } }
     );
+
+    let releaseFirst;
+    globalThis.fetch
+      .mockReturnValueOnce(new Promise((resolve) => { releaseFirst = () => resolve(response()); }))
+      .mockResolvedValueOnce(response());
+    const first = settingsApi.updateUiPreferences("audio", { device: "old" });
+    const second = settingsApi.updateUiPreferences("audio", { device: "new" });
+    await Promise.resolve();
+    assert.equal(globalThis.fetch.mock.calls.filter(([url]) => new URL(url).pathname === "/preferences/audio").length, 1);
+    releaseFirst();
+    await first;
+    await second;
+    const audioWrites = globalThis.fetch.mock.calls.filter(([url]) => new URL(url).pathname === "/preferences/audio");
+    assert.deepEqual(audioWrites.map(([, options]) => JSON.parse(options.body)), [{ device: "old" }, { device: "new" }]);
   });
 });

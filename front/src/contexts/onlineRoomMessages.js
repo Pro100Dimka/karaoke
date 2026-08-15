@@ -24,6 +24,7 @@ export function createOnlineRoomMessageHandler(options) {
     roomApi,
     isCurrentConnection = () => true,
     roomRef: activeRoomRef,
+    participantsRef = { current: [] },
     intentionalDisconnectRef: disconnectIntentRef,
     pendingSongCommandRef: pendingCommandRef,
     cleanupConnection,
@@ -40,10 +41,17 @@ export function createOnlineRoomMessageHandler(options) {
   const publishRoomCommand = (command, eventPrefix) => {
     setRoomCommand({ ...command, __eventId: createEventId(eventPrefix) });
   };
+  const senderIsHost = (message) =>
+    participantsRef.current?.some((participant) => participant.id === message.fromId && participant.role === "host");
 
   const syncHandlers = {
-    "song-request": (command) => {
-      if (!activeRoomRef.current?.host || !command.requesterId || !command.songId) {
+    "song-request": (command, message) => {
+      if (
+        !activeRoomRef.current?.host ||
+        !command.requesterId ||
+        !command.songId ||
+        (!message.fromId || message.fromId !== command.requesterId)
+      ) {
         return false;
       }
       roomApi
@@ -57,9 +65,7 @@ export function createOnlineRoomMessageHandler(options) {
             filename: `${command.songId}.karaoke.zip`
           });
         })
-        .then(() => {
-          if (isCurrentConnection()) setTransferStatus(null);
-        })
+        .then(() => { if (isCurrentConnection()) setTransferStatus(null); })
         .catch((error) => {
           if (!isCurrentConnection()) return;
           const message = getErrorMessage(error);
@@ -75,8 +81,8 @@ export function createOnlineRoomMessageHandler(options) {
         });
       return true;
     },
-    "song-transfer-error": (command) => {
-      if (command.requesterId !== activeRoomRef.current?.selfId) return false;
+    "song-transfer-error": (command, message) => {
+      if (!senderIsHost(message) || command.requesterId !== activeRoomRef.current?.selfId) return false;
       pendingCommandRef.current = null;
       setTransferStatus({
         stage: "error",
@@ -86,7 +92,7 @@ export function createOnlineRoomMessageHandler(options) {
       return true;
     },
     "open-karaoke": (command, message) => {
-      if (activeRoomRef.current?.host) return false;
+      if (activeRoomRef.current?.host || !senderIsHost(message)) return false;
       roomApi
         .getSong(command.songId)
         .then(() => {
@@ -141,35 +147,31 @@ export function createOnlineRoomMessageHandler(options) {
       });
     },
     "participant-left": (message) => {
-      setParticipants((items) => items.filter((item) => item.id !== message.participantId));
+      setParticipants((items) => items.filter((item) => item.id !== message.participantId)
+      );
       voice.removePeer(message.participantId);
     },
     signal: (message) => {
       voice.accept(message.fromId, message.signal).catch(() => {});
     },
     ui: (message) => {
-      setRoomUi((current) => {
-        const state = message.state || {};
-        const { participantEffects } = state;
-        return {
-          ...current,
-          ...state,
-          ...(message.fromId && participantEffects
-            ? {
-                effectsByParticipant: {
-                  ...(current.effectsByParticipant || {}),
-                  [message.fromId]: participantEffects
-                }
-              }
-            : {}),
-          __eventId: createEventId("ui")
-        };
-      });
+      const state = message.state || {};
+      const { participantEffects } = state;
+      const host = senderIsHost(message);
+      if (!host && !participantEffects) return;
+      setRoomUi((current) => ({
+        ...current,
+        ...(host ? state : {}),
+        ...(message.fromId && participantEffects ? {
+          effectsByParticipant: { ...(current.effectsByParticipant || {}), [message.fromId]: participantEffects }
+        } : {}),
+        __eventId: createEventId("ui")
+      }));
     },
     sync: (message) => {
       const command = message.state || {};
-      if (Object.hasOwn(syncHandlers, command.type) && syncHandlers[command.type](command, message))
-        return;
+      if (Object.hasOwn(syncHandlers, command.type) && syncHandlers[command.type](command, message)) return;
+      if (!senderIsHost(message)) return;
       publishRoomCommand(command, message.sentAt || "sync");
     },
     "connection-closed": () => {

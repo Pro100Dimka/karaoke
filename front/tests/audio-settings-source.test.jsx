@@ -469,6 +469,27 @@ describe("audio settings source", () => {
     expect(secondTrack.stop).toHaveBeenCalled();
   });
 
+  test("stops a stale microphone when device requests resolve in reverse order", async () => {
+    pollingData[0] = { monitoring_enabled: true };
+    let resolveFirst, resolveSecond;
+    const firstTrack = { stop: vi.fn() };
+    const secondTrack = { stop: vi.fn() };
+    const getUserMedia = vi.fn()
+      .mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveSecond = resolve; }));
+    Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { getUserMedia } });
+    const hook = renderHook(() => useAudioSettingsSource());
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledOnce());
+    act(() => hook.result.current.updatePreference("monitorInputDeviceId", "new-mic"));
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
+    await act(async () => resolveSecond({ getTracks: () => [secondTrack] }));
+    await act(async () => resolveFirst({ getTracks: () => [firstTrack] }));
+    expect(firstTrack.stop).toHaveBeenCalled();
+    expect(secondTrack.stop).not.toHaveBeenCalled();
+    hook.unmount();
+    expect(secondTrack.stop).toHaveBeenCalled();
+  });
+
   test("uses the latest speaking-meter stop callback", () => {
     const firstStop = mocks.stopSpeakingMeter;
     const hook = renderHook(() => useAudioSettingsSource({ enabled: false }));

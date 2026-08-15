@@ -253,7 +253,7 @@ describe("audio output routing", () => {
     hook.rerender({
       ...base,
       audioDriver: "asio",
-      audioSettings: { asio_driver_name: "Focusrite ASIO" }
+      audioSettings: { asio_driver_name: "Focusrite ASIO", output_device_id: "" }
     });
     expect(setDirectOutputDeviceId).toHaveBeenCalledExactlyOnceWith(2);
     expect(updateMicrophone).toHaveBeenCalledExactlyOnceWith({ output_device_id: 2 });

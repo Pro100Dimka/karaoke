@@ -19,7 +19,7 @@ export default function useAudioOutputRouting(options) {
   const asioDriverName = audioSettings?.asio_driver_name;
   const configuredOutputId = audioSettings?.output_device_id;
   useEffect(() => {
-    if (audioDriver !== "asio" || configuredOutputId != null) return;
+    if (audioDriver !== "asio" || String(configuredOutputId ?? "").trim()) return;
     const preferred = findDriverOutputDevice( directOutputDevices, asioDriverName
     );
     if (preferred && String(directOutputDeviceId) !== String(preferred.index)) {

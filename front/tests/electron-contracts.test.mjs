@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -119,6 +120,24 @@ describe("Electron runtime configuration", () => {
     expect( loadRuntimeConfig({ KARAOKE_BACKEND_STOP_GRACE_MS: "" }) .BACKEND_STOP_GRACE_MS
     ).toBe(550);
   });
+});
+
+test("injects one runtime backend URL into renderer and allows loopback CSP ports", () => {
+  const preload = fs.readFileSync(new URL("../electron/preload.cjs", import.meta.url), "utf8");
+  const main = fs.readFileSync(new URL("../electron/main.cjs", import.meta.url), "utf8");
+  const runtime = fs.readFileSync(new URL("../src/runtime-config.js", import.meta.url), "utf8");
+  const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  expect(main).toContain("--advoice-backend-url=${BACKEND_URL}");
+  expect(preload).toContain("backendUrl");
+  expect(runtime).toContain("globalThis.electronAPI?.backendUrl");
+  expect(html).toContain("http://127.0.0.1:*");
+  expect(html).toContain("http://localhost:*");
+});
+
+test("uses the persisted userData icon for packaged shortcuts", () => {
+  const main = fs.readFileSync(new URL("../electron/main.cjs", import.meta.url), "utf8");
+  expect(main).toContain('path.join(app.getPath("userData"), "selected-theme.ico")');
+  expect(main).not.toContain('path.dirname(process.execPath), "theme-icons"');
 });
 
 describe("renderer and permission security", () => {
@@ -354,11 +373,12 @@ describe("preload bridge", () => {
   }
 
   test("exposes the minimal frozen-channel renderer API", () => {
-    const { api, exposeInMainWorld, invoke } = runPreload([ "--advoice-theme=violet" ]);
+    const { api, exposeInMainWorld, invoke } = runPreload([ "--advoice-theme=violet", "--advoice-backend-url=http://127.0.0.1:8123" ]);
 
     expect(exposeInMainWorld).toHaveBeenCalledOnce();
     expect(exposeInMainWorld.mock.calls[0][0]).toBe("electronAPI");
     expect(api.initialTheme).toBe("violet");
+    expect(api.backendUrl).toBe("http://127.0.0.1:8123");
     expect(api.isElectron).toBe(true);
     expect(api.getSceneVideoUrl()).toBe("karaoke-media://scene/main");
 
@@ -367,13 +387,12 @@ describe("preload bridge", () => {
     expect(api.close()).toEqual(["window:close"]);
     expect(api.openSongFolder({ id: "42" })).toEqual([ "shell:openSongFolder", { id: "42" } ]);
     expect(api.selectFolder("D:/songs")).toEqual([ "dialog:selectFolder", "D:/songs" ]);
-    expect(api.getBackendUrl()).toEqual(["backend:url"]);
     expect(api.copyText("room-code")).toEqual([ "clipboard:writeText", "room-code" ]);
     expect(api.setIconTheme("dark")).toEqual(["window:setIconTheme", "dark"]);
-    expect(invoke).toHaveBeenCalledTimes(8);
+    expect(invoke).toHaveBeenCalledTimes(7);
   });
 
-  test("leaves the initial theme undefined without an installer argument", () => {
-    expect(runPreload().api.initialTheme).toBeUndefined();
+  test("leaves runtime arguments undefined when Electron did not inject them", () => {
+    expect(runPreload().api).toMatchObject({ initialTheme: undefined, backendUrl: undefined });
   });
 });

@@ -353,10 +353,9 @@ function getThemeIcon(theme = "app") {
 }
 
 function getThemeShortcutIcon(theme) {
-  return isDev
-    ? getThemeIcon(theme)
-    : path.join( path.dirname(process.execPath), "theme-icons", THEME_ICONS[theme]
-      );
+  if (isDev) return getThemeIcon(theme);
+  const stored = path.join(app.getPath("userData"), "selected-theme.ico");
+  return fs.existsSync(stored) ? stored : getThemeIcon(theme);
 }
 
 function updateThemeShortcuts(iconPath) {
@@ -411,6 +410,7 @@ handleTrustedIpc("window:setIconTheme", (theme) => {
 });
 function createWindow() {
   const initialTheme = getStoredIconTheme();
+  if (!isDev) storeIconTheme(initialTheme);
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -428,7 +428,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      additionalArguments: [`--advoice-theme=${initialTheme}`]
+      additionalArguments: [`--advoice-theme=${initialTheme}`, `--advoice-backend-url=${BACKEND_URL}`]
     }
   });
   updateThemeShortcuts(getThemeShortcutIcon(initialTheme));
@@ -532,7 +532,6 @@ handleTrustedIpc("dialog:selectFolder", async (currentPath) => {
   if (result.canceled || !result.filePaths?.length) return null;
   return result.filePaths[0];
 });
-handleTrustedIpc("backend:url", () => BACKEND_URL);
 handleTrustedIpc("clipboard:writeText", (value) => {
   if (typeof value !== "string" || value.length > 256) return false;
   clipboard.writeText(value);

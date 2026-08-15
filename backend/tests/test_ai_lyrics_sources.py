@@ -230,6 +230,25 @@ def test_fetch_web_lyrics_semantic_special_encoding_and_failures(monkeypatch):
     assert lyrics._fetch_web_lyrics("https://genius.com/x") == ""
 
 
+def test_fetch_mychords_lyrics_drops_chord_header(monkeypatch):
+    body = (
+        '<meta charset="utf-8"><div itemprop="lyrics">'
+        'Песня на: E G A D<br>'
+        + 'строка песни<br>' * 35
+        + '</div>'
+    )
+    monkeypatch.setattr(
+        lyrics.urllib.request,
+        "urlopen",
+        lambda *_args, **_kwargs: Response(body, "utf-8"),
+    )
+    value = lyrics._fetch_web_lyrics(
+        "https://mychords.net/ru/nervi/22635-nervy-moya-ledi.html"
+    )
+    assert "Песня на:" not in value
+    assert len(value.splitlines()) == 35
+
+
 def test_web_online_success_and_failure(monkeypatch):
     monkeypatch.setattr(lyrics, "_web_search", lambda _: [("https://genius.com/x", "Song")])
     monkeypatch.setattr(lyrics, "_fetch_web_lyrics", lambda _: "word " * 30)

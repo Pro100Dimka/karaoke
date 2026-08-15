@@ -98,26 +98,12 @@ describe("audio and UI preferences", () => {
     ).toEqual({ monitorInputDeviceId: "remote-mic" });
   });
 
-  test("serializes writes per namespace so an older request cannot win", async () => {
+  test("delegates persistence through the API transport", async () => {
     const { persistUiPreferences } = await importUtility("ui-preferences");
-    let releaseFirst;
-    const api = {
-      updateUiPreferences: vi
-        .fn()
-        .mockReturnValueOnce(new Promise((resolve) => { releaseFirst = resolve; }))
-        .mockResolvedValueOnce({})
-    };
+    const api = { updateUiPreferences: vi.fn().mockResolvedValue({}) };
     persistUiPreferences(api, "settings", { tab: "audio" });
-    persistUiPreferences(api, "settings", { tab: "ai" });
     await Promise.resolve();
-    expect(api.updateUiPreferences).toHaveBeenCalledTimes(1);
-    releaseFirst({});
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(api.updateUiPreferences.mock.calls).toEqual([
-      ["settings", { tab: "audio" }],
-      ["settings", { tab: "ai" }]
-    ]);
+    expect(api.updateUiPreferences).toHaveBeenCalledWith("settings", { tab: "audio" });
   });
 
   test("persists known namespaces and still sends unknown ones", async () => {

@@ -172,12 +172,19 @@ export default function useKaraokeSceneFlow({
     setSceneBlackout(true);
     await waitForScene(430);
     const stopped = await stop();
-    if (stopped) hasStartedPlaybackRef.current = false;
+    if (!stopped) {
+      sceneTransitionRef.current = false;
+      setSceneTransitioning(false);
+      setSceneBlackout(false);
+      setStageActionsVisible(true);
+      return false;
+    }
+    hasStartedPlaybackRef.current = false;
     const analysisId = analysisRecordingIdRef.current;
     setGlobalRouteBlackout(true);
     await waitForScene(40);
     navigateToLibraryFromBlackout(analysisId);
-    return stopped;
+    return true;
   }, [analysisRecordingIdRef, hideControls, navigateToLibraryFromBlackout, stop]);
 
   useEffect(() => {

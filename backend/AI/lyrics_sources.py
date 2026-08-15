@@ -877,6 +877,15 @@ def _fetch_web_lyrics(url: str) -> str:
     except (ValueError, UnicodeError):
         return ""
     value = _clean(parser.text())
+    if host == "mychords.net":
+        # MyChords includes a chord/header row inside the same semantic lyrics
+        # container, e.g. ``Песня на: E G A D``.  It is page metadata, not a
+        # lyric line, and must never reach lyrics.txt/alignment.
+        value = "\n".join(
+            line
+            for line in value.splitlines()
+            if not re.match(r"^\s*(?:песня|пісня)\s+на\s*:", line, flags=re.I)
+        ).strip()
     words = value.split()
     return value if 30 <= len(words) <= 2500 else ""
 

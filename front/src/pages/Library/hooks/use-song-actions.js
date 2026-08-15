@@ -24,11 +24,16 @@ export default function useLibrarySongActions(props) {
       if (!song?.id || processingSongIdsRef.current.has(song.id)) return;
       processingSongIdsRef.current.add(song.id);
       try {
-        await action(song.id);
+        try { await action(song.id); }
+        catch (error) {
+          await notify(`${errorMessage}: ${getErrorMessage(error)}`);
+          return;
+        }
         setProcessingSong(song);
-        await onChanged?.();
-      } catch (error) {
-        await notify(`${errorMessage}: ${getErrorMessage(error)}`);
+        try { await onChanged?.(); }
+        catch (error) {
+          await notify(translateSaved("Операция выполнена, но список не обновился: {0}", { 0: getErrorMessage(error) }));
+        }
       } finally {
         processingSongIdsRef.current.delete(song.id);
       }
@@ -40,44 +45,35 @@ export default function useLibrarySongActions(props) {
       if (!song?.id || deletingSongIdsRef.current.has(song.id)) return;
       deletingSongIdsRef.current.add(song.id);
       try {
-        const confirmed = await confirmDialog(
-          translateSaved("Удалить «{0}»? Это удалит все файлы песни.", { 0: song.title }),
-          translateSaved("Удалить песню?")
-        );
+        let confirmed;
+        try {
+          confirmed = await confirmDialog(
+            translateSaved("Удалить «{0}»? Это удалит все файлы песни.", { 0: song.title }),
+            translateSaved("Удалить песню?")
+          );
+        } catch (error) {
+          await notify(translateSaved("Не удалось подтвердить удаление: {0}", { 0: getErrorMessage(error) }));
+          return;
+        }
         if (!confirmed) return;
         setHiddenSongIds((ids) => new Set(ids).add(song.id));
         if (recordingsSongId === song.id) setRecordingsSong(null);
         if (processingSongId === song.id) setProcessingSong(null);
-        try {
-          await api.deleteSong(song.id);
-          await onChanged?.();
-        } catch (error) {
-          setHiddenSongIds((ids) => {
-            const next = new Set(ids);
-            next.delete(song.id);
-            return next;
-          });
-          await notify( translateSaved("Не удалось удалить: {0}", { 0: getErrorMessage(error) })
-          );
+        try { await api.deleteSong(song.id); }
+        catch (error) {
+          setHiddenSongIds((ids) => { const next = new Set(ids); next.delete(song.id); return next; });
+          await notify(translateSaved("Не удалось удалить: {0}", { 0: getErrorMessage(error) }));
+          return;
         }
-      } catch (error) {
-        await notify(
-          translateSaved("Не удалось подтвердить удаление: {0}", { 0: getErrorMessage(error) })
-        );
+        try { await onChanged?.(); }
+        catch (error) {
+          await notify(translateSaved("Песня удалена, но список не обновился: {0}", { 0: getErrorMessage(error) }));
+        }
       } finally {
         deletingSongIdsRef.current.delete(song.id);
       }
     },
-    [
-      confirmDialog,
-      notify,
-      onChanged,
-      processingSongId,
-      recordingsSongId,
-      setHiddenSongIds,
-      setProcessingSong,
-      setRecordingsSong
-    ]
+    [confirmDialog, notify, onChanged, processingSongId, recordingsSongId, setHiddenSongIds, setProcessingSong, setRecordingsSong]
   );
   const processSong = useCallback(
     async (song) => {

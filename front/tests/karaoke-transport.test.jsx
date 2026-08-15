@@ -57,6 +57,7 @@ beforeEach(async () => {
   vi.resetModules();
   ({ default: useKaraokeTransport } =
     await import("../src/pages/Karaoke/hooks/useKaraokeTransport"));
+  localStorage.clear();
   Object.values(api).forEach((mock) => mock.mockReset());
   api.startRecording.mockResolvedValue({ recording_session_id: "session" });
   api.pauseRecording.mockResolvedValue({});
@@ -286,8 +287,9 @@ describe("karaoke transport", () => {
     const props = createProps({ recordingSessionId: "existing" });
     api.stopRecording.mockRejectedValueOnce(new Error("disk full"));
     const { result } = renderHook(() => useKaraokeTransport(props));
-    await expect(result.current.stop()).resolves.toBe(true);
+    await expect(result.current.stop()).resolves.toBe(false);
     expect(api.pauseRecording).toHaveBeenCalledWith("existing");
+    expect(JSON.parse(localStorage.getItem("karaoke-pending-recording-session"))).toEqual({ id: "existing" });
     expect(props.setRecordingError).toHaveBeenCalledWith( expect.stringContaining("disk full")
     );
     expect(props.setRecordingSessionId).not.toHaveBeenCalledWith(null);
@@ -459,7 +461,8 @@ describe("karaoke transport", () => {
 
   test("isolates every best-effort recording cleanup failure", async () => {
     const run = async (props, configure, action) => {
-      Object.values(api).forEach((mock) => mock.mockReset());
+      localStorage.clear();
+  Object.values(api).forEach((mock) => mock.mockReset());
       api.startRecording.mockResolvedValue({ recording_session_id: "session" });
       api.resumeRecording.mockResolvedValue({});
       api.stopRecording.mockResolvedValue({ id: "recording" });

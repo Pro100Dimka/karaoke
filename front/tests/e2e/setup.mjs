@@ -2,7 +2,7 @@ import { createServer } from "vite";
 
 export default async function setup() {
   const previousMockApi = process.env.VITE_USE_MOCK_API;
-  process.env.VITE_USE_MOCK_API = "true";
+  if (previousMockApi === undefined) process.env.VITE_USE_MOCK_API = "true";
   const server = await createServer({
     configFile: "vite.config.mjs",
     mode: "mock",

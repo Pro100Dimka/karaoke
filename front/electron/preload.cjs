@@ -1,11 +1,12 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
-const initialTheme = process.argv
-  .find((argument) => argument.startsWith("--advoice-theme="))
-  ?.slice("--advoice-theme=".length);
+const argumentValue = (name) => process.argv.find((argument) => argument.startsWith(`--${name}=`))?.slice(name.length + 3);
+const initialTheme = argumentValue("advoice-theme");
+const backendUrl = argumentValue("advoice-backend-url");
 
 contextBridge.exposeInMainWorld("electronAPI", {
   initialTheme,
+  backendUrl,
   minimize: () => ipcRenderer.invoke("window:minimize"),
   maximize: () => ipcRenderer.invoke("window:maximize"),
   close: () => ipcRenderer.invoke("window:close"),
@@ -15,7 +16,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   selectFolder: (currentPath) =>
     ipcRenderer.invoke("dialog:selectFolder", currentPath),
 
-  getBackendUrl: () => ipcRenderer.invoke("backend:url"),
 
   getSceneVideoUrl: () => "karaoke-media://scene/main",
 

@@ -93,6 +93,8 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
   const [speakerTestState, setSpeakerTestState] = useState("idle");
   const [monitorLevel, setMonitorLevel] = useState(0);
   const monitorStream = useRef(null);
+  const monitorRequest = useRef(0);
+  const monitorPending = useRef(0);
   const speakerTimer = useRef(null);
   const monitorTarget = useRef(0);
   const monitorPeak = useRef(0);
@@ -140,6 +142,8 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
     return () => clearInterval(timer);
   }, [enabled, monitoringEnabled]);
   const stopLocalMeter = useCallback(() => {
+    monitorRequest.current += 1;
+    monitorPending.current = 0;
     stopSpeakingMeter("local");
     stopStream(monitorStream.current);
     monitorStream.current = null;
@@ -147,33 +151,34 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
   const startLocalMeter = useCallback(async () => {
     const { mediaDevices } = navigator;
     if (typeof mediaDevices?.getUserMedia !== "function") return false;
-    stopLocalMeter();
+    const request = ++monitorRequest.current;
+    monitorPending.current = request;
+    stopSpeakingMeter("local");
+    stopStream(monitorStream.current);
+    monitorStream.current = null;
     const selected = preferences.monitorInputDeviceId;
-    const base = {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-      channelCount: 1
-    };
-    const candidates =
-      selected && selected !== "default"
-        ? [ { ...base, deviceId: { exact: selected } }, base ]
-        : [base];
-    for (const audio of candidates) {
-      let stream;
-      try {
-        stream = await mediaDevices.getUserMedia({ audio });
-        monitorStream.current = stream;
-        prepareSpeakingMeter();
-        startSpeakingMeter("local", stream);
-        return true;
-      } catch {
-        stopStream(stream);
-        if (monitorStream.current === stream) monitorStream.current = null;
+    const base = { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 };
+    const candidates = selected && selected !== "default" ? [{ ...base, deviceId: { exact: selected } }, base] : [base];
+    try {
+      for (const audio of candidates) {
+        let stream;
+        try {
+          stream = await mediaDevices.getUserMedia({ audio });
+          if (request !== monitorRequest.current) { stopStream(stream); return false; }
+          monitorStream.current = stream;
+          prepareSpeakingMeter();
+          startSpeakingMeter("local", stream);
+          return true;
+        } catch {
+          stopStream(stream);
+          if (request !== monitorRequest.current) return false;
+        }
       }
+      return false;
+    } finally {
+      if (monitorPending.current === request) monitorPending.current = 0;
     }
-    return false;
-  }, [ preferences.monitorInputDeviceId, prepareSpeakingMeter, startSpeakingMeter, stopLocalMeter ]);
+  }, [preferences.monitorInputDeviceId, prepareSpeakingMeter, startSpeakingMeter, stopSpeakingMeter]);
   useEffect(() => {
     if (!enabled || !monitoringEnabled) {
       stopLocalMeter();
@@ -183,7 +188,7 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
     startLocalMeter().then((started) => { if (cancelled && started) stopLocalMeter(); });
     const unlock = () => {
       prepareSpeakingMeter();
-      if (!monitorStream.current) startLocalMeter();
+      if (!monitorStream.current && !monitorPending.current) startLocalMeter();
     };
     const events = ["pointerdown", "keydown"];
     events.forEach((event) => globalThis.addEventListener(event, unlock, { once: true })
@@ -234,10 +239,7 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
   const updatePreference = (name, value) =>
     setPreferences(() => {
       const next = saveAudioPreferences({ [name]: value });
-      api.updateUiPreferences("audio", next).catch(
-        // Stryker disable next-line BlockStatement: preference persistence is best-effort.
-        () => {}
-      );
+      api.updateUiPreferences("audio", next).catch(() => {});
       return next;
     });
   const toggleMonitoring = () =>

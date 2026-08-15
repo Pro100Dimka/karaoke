@@ -106,7 +106,9 @@ describe("library file import", () => {
   test("rolls back a created song when processing cannot start", async () => {
     const notify = vi.fn().mockResolvedValue(undefined);
     api.addSong.mockResolvedValue({ id: "rollback" });
-    api.processSong.mockRejectedValue(new Error("pipeline busy"));
+    const processingError = new Error("pipeline busy");
+    processingError.status = 409;
+    api.processSong.mockRejectedValue(processingError);
     api.deleteSong.mockResolvedValue(null);
     const { result } = renderHook(() =>
       useLibraryFileImport({ fileInputRef: { current: null }, notify, onStarted: vi.fn() })
@@ -118,6 +120,20 @@ describe("library file import", () => {
     );
     expect(api.deleteSong).toHaveBeenCalledWith("rollback");
     expect(notify).toHaveBeenCalledWith(expect.stringContaining("pipeline busy"));
+  });
+
+  test("keeps a created song after an ambiguous process timeout", async () => {
+    const notify = vi.fn().mockResolvedValue(undefined);
+    const onStarted = vi.fn();
+    api.addSong.mockResolvedValue({ id: "uncertain" });
+    const timeout = new Error("deadline");
+    timeout.name = "TimeoutError";
+    api.processSong.mockRejectedValue(timeout);
+    const { result } = renderHook(() => useLibraryFileImport({ fileInputRef: { current: null }, notify, onStarted }));
+    await act(() => result.current.importFile({ currentTarget: { files: [new File(["x"], "track.mp3")], value: "x" } }));
+    expect(api.deleteSong).not.toHaveBeenCalled();
+    expect(onStarted).toHaveBeenCalledWith({ id: "uncertain" });
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining("deadline"));
   });
 });
 
@@ -309,6 +325,24 @@ describe("library song actions", () => {
     );
     expect(unrelated.setRecordingsSong).not.toHaveBeenCalled();
     expect(unrelated.setProcessingSong).not.toHaveBeenCalled();
+  });
+
+  test("does not report successful backend mutations as failed when refresh breaks", async () => {
+    let hidden = new Set();
+    const props = actionProps({
+      onChanged: vi.fn().mockRejectedValue(new Error("refresh failed")),
+      setHiddenSongIds: vi.fn((update) => { hidden = update(hidden); })
+    });
+    api.deleteSong.mockResolvedValue({});
+    api.processSong.mockResolvedValue({});
+    const hook = renderHook(() => useLibrarySongActions(props));
+    await act(() => hook.result.current.deleteSong({ id: "gone", title: "Gone" }));
+    expect(hidden.has("gone")).toBe(true);
+    expect(props.notify).toHaveBeenCalledWith(expect.stringContaining("список"));
+    props.notify.mockClear();
+    await act(() => hook.result.current.processSong({ id: "processing", status: "pending" }));
+    expect(props.setProcessingSong).toHaveBeenCalledWith({ id: "processing", status: "pending" });
+    expect(props.notify).toHaveBeenCalledWith(expect.stringContaining("список"));
   });
 
   test("rolls back failed deletion and handles confirmation errors", async () => {

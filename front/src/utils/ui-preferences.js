@@ -11,19 +11,6 @@ export const UI_PREFERENCE_STORAGE = Object.freeze({
 const isObject = (value) =>
   value && typeof value === "object" && !Array.isArray(value);
 
-const preferenceWrites = new Map();
-function queuePreferenceWrite(api, namespace, value) {
-  const previous = preferenceWrites.get(namespace) || Promise.resolve();
-  const next = previous
-    .catch(() => {})
-    .then(() => api.updateUiPreferences(namespace, value))
-    .finally(() => {
-      if (preferenceWrites.get(namespace) === next) preferenceWrites.delete(namespace);
-    });
-  preferenceWrites.set(namespace, next);
-  return next;
-}
-
 export async function hydrateUiPreferences(api) {
   const remote = await api.getUiPreferences();
   await Promise.all(
@@ -41,6 +28,6 @@ export async function hydrateUiPreferences(api) {
 
 export function persistUiPreferences(api, namespace, value) {
   writeJsonStorage(UI_PREFERENCE_STORAGE[namespace], value);
-  queuePreferenceWrite(api, namespace, value).catch(() => {});
+  api.updateUiPreferences(namespace, value).catch(() => {});
   return value;
 }

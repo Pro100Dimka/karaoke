@@ -3,11 +3,27 @@ import { api } from "../../../api/client";
 import useLatestRef from "../../../hooks/useLatestRef";
 import { translateSaved } from "../../../i18n/runtime";
 import { getErrorMessage } from "../../../utils/errors";
+import { readJsonStorage, writeJsonStorage } from "../../../utils/storage";
 import { playbackGain } from "../utils/data";
 import { clampPlaybackPosition, createPlayerSyncCommand } from "../utils/transport";
 
 const UNKNOWN_ERROR = "неизвестная ошибка";
 const MISSING_RECORDING_ID = "Backend не вернул идентификатор записи";
+const PENDING_RECORDING_KEY = "karaoke-pending-recording-session";
+const pendingRecordingId = () => readJsonStorage(PENDING_RECORDING_KEY, {}).id;
+const rememberPending = (id) => writeJsonStorage(PENDING_RECORDING_KEY, { id });
+const forgetPending = (id) => { if (pendingRecordingId() === id) writeJsonStorage(PENDING_RECORDING_KEY, {}); };
+async function finalizeRecording(id) {
+  try {
+    const recording = await api.stopRecording(id);
+    forgetPending(id);
+    return { recording };
+  } catch (error) {
+    rememberPending(id);
+    await api.pauseRecording(id).catch(() => {});
+    return { error };
+  }
+}
 const formatError = (message, error) =>
   translateSaved(message, { 0: getErrorMessage(error, translateSaved(UNKNOWN_ERROR)) });
 
@@ -44,25 +60,29 @@ export default function useKaraokeTransport({
 
   useEffect(() => {
     beginOperation();
+    const pending = pendingRecordingId();
+    if (pending) finalizeRecording(pending).then(({ recording }) => {
+      if (recording?.id) setAnalysisRecordingId(recording.id);
+    });
     return () => {
       const id = sessionRef.current;
-      sessionRef.current = null;
-      if (id) api.stopRecording(id).catch(() => api.pauseRecording(id).catch(() => {}));
+      if (id) void finalizeRecording(id);
     };
-  }, [song?.id]);
+  }, [song?.id, setAnalysisRecordingId]);
 
   useEffect(() => { sessionRef.current = recordingSessionId; }, [recordingSessionId]);
 
   const clearSession = (id) => {
     if (sessionRef.current !== id) return;
     sessionRef.current = null;
+    forgetPending(id);
     setRecordingSessionId(null);
   };
 
   const discardSession = async (id) => {
     if (!id) return;
-    await api.stopRecording(id).catch(() => api.pauseRecording(id).catch(() => {}));
-    clearSession(id);
+    const { error } = await finalizeRecording(id);
+    if (!error) clearSession(id);
   };
 
   const broadcast = (action, position) => {
@@ -104,8 +124,10 @@ export default function useKaraokeTransport({
       setRecordingError(null);
     } catch (error) {
       if (operation !== operationRef.current) return;
-      if (id) await api.stopRecording(id).catch(() => {});
-      clearSession(id);
+      if (id) {
+        const { error: finalizeError } = await finalizeRecording(id);
+        if (!finalizeError) clearSession(id);
+      }
       setRecordingError(
         formatError("Запись недоступна, караоке продолжит работу без неё: {0}", error)
       );
@@ -178,14 +200,13 @@ export default function useKaraokeTransport({
 
     const id = sessionRef.current;
     if (id) {
-      try {
-        const recording = await api.stopRecording(id);
-        if (recording?.id) setAnalysisRecordingId(recording.id);
-        clearSession(id);
-      } catch (error) {
-        await api.pauseRecording(id).catch(() => {});
+      const { recording, error } = await finalizeRecording(id);
+      if (error) {
         setRecordingError(formatError("Не удалось сохранить запись: {0}", error));
+        return false;
       }
+      if (recording?.id) setAnalysisRecordingId(recording.id);
+      clearSession(id);
     }
     return true;
   };
@@ -202,9 +223,10 @@ export default function useKaraokeTransport({
 
   const skip = (delta) => seekTo(clampPlaybackPosition(currentTime + delta, duration));
   const returnToLibrary = async () => {
-    await stop({ broadcast: false });
+    if (!(await stop({ broadcast: false }))) return false;
     if (onlineRoom?.room) onlineRoom.syncCommand({ type: "open-library" });
     navigate("/");
+    return true;
   };
 
   const togglePlayRef = useLatestRef(togglePlay);

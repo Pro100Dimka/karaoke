@@ -33,21 +33,7 @@ export default function useKaraokePreferences() {
       autoHideConsole,
       effectPreset
     });
-    if (saved) {
-      api
-        .updateUiPreferences("karaoke", {
-          musicVolume,
-          vocalVolume,
-          melodyVolume,
-          speed,
-          keyShift,
-          showLyrics,
-          showNotes,
-          autoHideConsole,
-          effectPreset
-        })
-        .catch(() => {});
-    }
+    if (saved) api.updateUiPreferences("karaoke", saved).catch(() => {});
   }, [
     musicVolume,
     vocalVolume,

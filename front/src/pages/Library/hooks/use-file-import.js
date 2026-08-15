@@ -19,15 +19,22 @@ export default function useLibraryFileImport({ fileInputRef, notify, onStarted }
         let song;
         try {
           song = await api.addSong(file, file.name.replace(/\.[^.]+$/, ""));
+        } catch (error) {
+          await notify(translateSaved("Не удалось добавить песню: {0}", { 0: getErrorMessage(error) }));
+          return;
+        }
+        try {
           await api.processSong(song.id);
           onStarted(song);
         } catch (error) {
-          if (song?.id) await api.deleteSong(song.id).catch(() => {});
-          await notify(
-            translateSaved("Не удалось добавить и запустить обработку песни: {0}", {
-              0: getErrorMessage(error)
-            })
-          );
+          const ambiguous = !error?.status || error.name === "TimeoutError" || error.name === "AbortError";
+          if (ambiguous) {
+            onStarted(song);
+            await notify(translateSaved("Песня добавлена, но backend не подтвердил запуск обработки: {0}", { 0: getErrorMessage(error) }));
+            return;
+          }
+          await api.deleteSong(song.id).catch(() => {});
+          await notify(translateSaved("Не удалось запустить обработку песни: {0}", { 0: getErrorMessage(error) }));
         }
       });
     },

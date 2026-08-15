@@ -69,39 +69,32 @@ async function readErrorDetail(response) {
   }
   return detail;
 }
-async function fetchSuccessfulResponse(path, options) {
-  if (typeof globalThis.fetch !== "function") {
+async function withSuccessfulResponse(path, options, consume) {
+  if (typeof globalThis.fetch !== "function")
     throw new Error(translateSaved("Fetch API недоступен в текущем окружении"));
-  }
   const normalizedPath = String(path || "");
-  const requestPath = normalizedPath.startsWith("/")
-    ? normalizedPath
-    : `/${normalizedPath}`;
+  const requestPath = normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`;
   const deadline = createDeadlineSignal(options?.signal, options?.timeoutMs);
-  let response;
   try {
-    response = await globalThis.fetch(`${BASE_URL}${requestPath}`, {
+    const response = await globalThis.fetch(`${BASE_URL}${requestPath}`, {
       ...buildRequestOptions(options),
       signal: deadline.signal
     });
-  } catch (error) {
-    if (deadline.timedOut()) {
-      const timeoutError = new Error( translateSaved("Превышено время ожидания ответа backend")
-      );
-      timeoutError.name = "TimeoutError";
-      throw timeoutError;
+    if (!response.ok) {
+      const error = new Error(await readErrorDetail(response));
+      error.status = response.status;
+      error.url = response.url || `${BASE_URL}${requestPath}`;
+      throw error;
     }
-    throw error;
+    return await consume(response);
+  } catch (error) {
+    if (!deadline.timedOut()) throw error;
+    const timeoutError = new Error(translateSaved("Превышено время ожидания ответа backend"));
+    timeoutError.name = "TimeoutError";
+    throw timeoutError;
   } finally {
     deadline.cleanup();
   }
-  if (!response.ok) {
-    const error = new Error(await readErrorDetail(response));
-    error.status = response.status;
-    error.url = response.url || `${BASE_URL}${requestPath}`;
-    throw error;
-  }
-  return response;
 }
 export function encodePathSegment(value) {
   const segment = String(value ?? "").trim();
@@ -111,21 +104,17 @@ export function encodePathSegment(value) {
 }
 export async function request(path, options = {}) {
   if (MOCK_API_ENABLED) return mockRequest(path, options);
-  const response = await fetchSuccessfulResponse(path, options);
-  if (response.status === 204) return null;
-  const text = await response.text();
-  if (!text) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error( translateSaved("Некорректный JSON в ответе {0}", { 0: response.url || path })
-    );
-  }
+  return withSuccessfulResponse(path, options, async (response) => {
+    if (response.status === 204) return null;
+    const text = await response.text();
+    if (!text) return null;
+    try { return JSON.parse(text); }
+    catch { throw new Error(translateSaved("Некорректный JSON в ответе {0}", { 0: response.url || path })); }
+  });
 }
 export async function requestBlob(path, options = {}) {
   if (MOCK_API_ENABLED) return mockBlobRequest(path, options);
-  const response = await fetchSuccessfulResponse(path, options);
-  return response.blob();
+  return withSuccessfulResponse(path, options, (response) => response.blob());
 }
 const MOCK_SILENT_AUDIO_URL =
   "data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQIAAAAAAA==";
