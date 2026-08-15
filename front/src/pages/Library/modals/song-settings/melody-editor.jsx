@@ -30,16 +30,17 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
   const { notes, replace, reset, remember, undo, redo } = useEditorHistory([]);
   const workspaceRef = useRef(null);
   const saveRef = useRef(null);
-  const { loading, payload, restoreAi, save, saving } = useMelodyEditorDocument({
-    confirmDialog,
-    notes,
-    notify,
-    onSaved,
-    reset,
-    saveRef,
-    setSelected,
-    song
-  });
+  const { loading, payload, restoreAi, save, saving } =
+    useMelodyEditorDocument({
+      confirmDialog,
+      notes,
+      notify,
+      onSaved,
+      reset,
+      saveRef,
+      setSelected,
+      song
+    });
   const {
     duration,
     keyboardWidth,
@@ -153,7 +154,9 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       />
 
       {loading ? (
-        <div className="melody-editor-loading">{translateSaved("Загружаем SongMap…")}</div>
+        <div className="melody-editor-loading">
+          {translateSaved("Загружаем SongMap…")}
+        </div>
       ) : (
         <div className="melody-editor-layout">
           <div className="melody-editor-stage">

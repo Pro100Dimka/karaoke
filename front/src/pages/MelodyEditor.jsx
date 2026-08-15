@@ -21,14 +21,17 @@ export default function MelodyEditorPage() {
           }
         );
       })
-      .catch(() => alive && setSong({ id: songId, title: translateSaved("Редактор мелодии") }));
+      .catch( () => alive && setSong({ id: songId, title: translateSaved("Редактор мелодии") })
+      );
     return () => {
       alive = false;
     };
   }, [songId]);
   if (!song)
     return (
-      <div className="melody-editor-route-loading">{translateSaved("Открываем редактор…")}</div>
+      <div className="melody-editor-route-loading">
+        {translateSaved("Открываем редактор…")}
+      </div>
     );
   return <MelodyEditor song={song} onClose={() => navigate("/")} />;
 }

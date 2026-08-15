@@ -6,7 +6,9 @@ const read = (path) => fs.readFileSync(path, "utf8");
 test("backend child exit 23 cannot create an Electron restart storm", () => {
   const main = read("electron/main.cjs");
   expect(main).toContain("if (code === 23)");
-  expect(main).toContain("backendStopRequested = true");
+  expect(main).toContain("watchDuplicateBackend()");
+  expect(main).toContain("backendDuplicateDetected = false");
+  expect(main).not.toMatch(/if \(code === 23\)[\s\S]{0,300}backendStopRequested = true/);
   expect(main).toContain('spawn("taskkill", ["/PID", String(pid), "/T", "/F"]');
 });
 

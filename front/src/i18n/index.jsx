@@ -18,14 +18,13 @@ export function I18nProvider({ children }) {
   const value = useMemo(
     () => ({
       language,
-      t: (key, values = {}, fallback = key) => translateMessage(language, key, values, fallback)
+      t: (key, values = {}, fallback = key) =>
+        translateMessage(language, key, values, fallback)
     }),
     [language]
   );
 
-  useLayoutEffect(() => {
-    document.documentElement.lang = language;
-  }, [language]);
+  useLayoutEffect(() => { document.documentElement.lang = language; }, [language]);
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

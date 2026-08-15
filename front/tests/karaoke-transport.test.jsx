@@ -89,6 +89,9 @@ describe("karaoke transport", () => {
     expect(props.vocalsRef.current.volume).toBeCloseTo(0.49);
     expect(props.sendYouTubeCommand).toHaveBeenCalledWith("playVideo");
     expect(props.setIsPlaying).toHaveBeenCalledWith(true);
+    await waitFor(() =>
+      expect(JSON.parse(localStorage.getItem("karaoke-pending-recording-session"))).toEqual({ id: "session" })
+    );
     expect(props.onlineRoom.syncCommand).toHaveBeenCalledWith(
       expect.objectContaining({ action: "play", songId: "song" })
     );

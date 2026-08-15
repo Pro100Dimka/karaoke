@@ -21,6 +21,7 @@ echo.
 echo [OK] Accelerator debug suite passed.
 echo.
 echo Optional real DirectML tests:
+echo   scripts\test-directml-isolation.bat
 echo   scripts\test-fcpe-directml-smoke.bat
 echo   scripts\test-fcpe-directml-file.bat "D:\path\to\vocals.wav"
 exit /b 0

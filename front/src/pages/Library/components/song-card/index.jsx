@@ -17,7 +17,8 @@ const STATUS = {
   done: [translateSaved("Готово"), "badge-done"],
   error: [translateSaved("Ошибка"), "badge-error"]
 };
-const TextItems = ({ items }) => items.map((value, key) => value && <span key={key}>{value}</span>);
+const TextItems = ({ items }) =>
+  items.map((value, key) => value && <span key={key}>{value}</span>);
 const SongStatusBadge = ({ status }) => {
   const [label, className] = STATUS[status] ?? [
     status || translateSaved("Неизвестно"),
@@ -43,11 +44,19 @@ function LibrarySongCard({ cardIndex, onOpenKaraoke, onOpenProcessing, song, ...
   const { isWorking, isReady } = getSongCardState(song);
   const actions = getSongActions({ ...props, isReady, isWorking, song });
   const titleDetails = [title, artist];
-  const metadata = [formatSongKey(songKey), tempo && `${tempo} BPM`, difficulty];
+  const metadata = [
+    formatSongKey(songKey),
+    tempo && `${tempo} BPM`,
+    difficulty
+  ];
   const handleClick = ({ target }) =>
     !target.closest(INTERACTIVE_SELECTOR) && isReady && onOpenKaraoke(song);
   const handleKeyDown = (event) => {
-    if (event.target !== event.currentTarget || !ACTIVATION_KEYS.includes(event.key) || !isReady)
+    if (
+      event.target !== event.currentTarget ||
+      !ACTIVATION_KEYS.includes(event.key) ||
+      !isReady
+    )
       return;
     event.preventDefault();
     onOpenKaraoke(song);
@@ -60,10 +69,17 @@ function LibrarySongCard({ cardIndex, onOpenKaraoke, onOpenProcessing, song, ...
       onKeyDown={handleKeyDown}
       role={isReady ? "button" : undefined}
       tabIndex={isReady ? 0 : undefined}
-      aria-label={isReady ? translateSaved("Открыть {0} в караоке", { 0: title }) : undefined}
+      aria-label={
+        isReady
+          ? translateSaved("Открыть {0} в караоке", { 0: title })
+          : undefined
+      }
     >
       <SongCardArtwork cardIndex={cardIndex} song={song} />
-      <Stack className="library-song-card-main" sx={{ flex: "1 1 0" }}>
+      <Stack
+        className="library-song-card-main"
+        sx={{ flex: "1 1 0" }}
+      >
         <Stack
           className="library-song-card-heading"
           direction="row"
@@ -86,22 +102,28 @@ function LibrarySongCard({ cardIndex, onOpenKaraoke, onOpenProcessing, song, ...
             <ProcessingSignal progress={progress} compact />
           </Button>
         )}
-        <Stack className="library-song-card-footer" direction="row" justify="space-between">
-          <div style={{ width: "100%" }}>
-            <Typography className="library-song-card-meta" sx={{ padding: 0 }}>
+        <Stack
+          className="library-song-card-footer"
+          direction="row"
+          justify="space-between"
+        >
+          <div
+            style={{ width: "100%" }}
+          >
+            <Typography
+              className="library-song-card-meta"
+              sx={{ padding: 0 }}
+            >
               <TextItems items={metadata} />
             </Typography>
           </div>
-          <Stack className="library-song-card-actions" direction="row" gap="0.5rem">
+          <Stack
+            className="library-song-card-actions"
+            direction="row"
+            gap="0.5rem"
+          >
             {actions.map(
-              ([
-                Icon,
-                label,
-                variant,
-                onClick,
-                size,
-                { className = "", disabled = false } = {}
-              ]) => (
+              ([ Icon, label, variant, onClick, size, { className = "", disabled = false } = {} ]) => (
                 <IconButton
                   key={label}
                   variant={variant}

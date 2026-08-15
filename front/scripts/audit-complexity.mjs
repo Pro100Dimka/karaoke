@@ -18,15 +18,23 @@ function walk(directory) {
 }
 
 const reports = [];
-for (const file of walk(srcRoot).filter((item) => extensions.includes(path.extname(item)))) {
+for (const file of walk(srcRoot).filter((item) => extensions.includes(path.extname(item))
+)) {
   const source = fs.readFileSync(file, "utf8");
   const lines = source.split(/\r?\n/);
   const stateCount = (source.match(/\buseState\s*\(/g) ?? []).length;
   const effectCount = (source.match(/\buseEffect\s*\(/g) ?? []).length;
   const callbackCount = (source.match(/\buseCallback\s*\(/g) ?? []).length;
-  const branchCount = (source.match(/\b(?:if|switch|case|catch)\b|&&|\?\?/g) ?? []).length;
+  const branchCount = (
+    source.match(/\b(?:if|switch|case|catch)\b|&&|\?\?/g) ?? []
+  ).length;
 
-  if (lines.length > 500 || stateCount > 15 || effectCount > 12 || branchCount > 80) {
+  if (
+    lines.length > 500 ||
+    stateCount > 15 ||
+    effectCount > 12 ||
+    branchCount > 80
+  ) {
     reports.push({
       file: path.relative(root, file),
       lines: lines.length,
@@ -38,8 +46,7 @@ for (const file of walk(srcRoot).filter((item) => extensions.includes(path.extna
   }
 }
 
-if (!reports.length) console.log("No high-complexity files detected by the current thresholds.");
-else {
+if (!reports.length) console.log("No high-complexity files detected by the current thresholds."); else {
   console.log("Complexity review candidates (informational only):");
   for (const report of reports.sort((a, b) => b.lines - a.lines)) {
     console.log(

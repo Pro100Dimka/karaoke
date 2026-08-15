@@ -1,10 +1,14 @@
 :root {
   --z-titlebar: 1000;
-  --shadow-sm: 0 0.5rem 1.5rem color-mix(in srgb, var(--color-bg-deep) 28%, transparent);
-  --shadow-md: 0 1.125rem 3.4375rem color-mix(in srgb, var(--color-bg-deep) 38%, transparent);
-  --shadow-lg: 0 1.75rem 5.625rem color-mix(in srgb, var(--color-bg-deep) 52%, transparent);
+  --shadow-sm: 0 0.5rem 1.5rem
+    color-mix(in srgb, var(--color-bg-deep) 28%, transparent);
+  --shadow-md: 0 1.125rem 3.4375rem
+    color-mix(in srgb, var(--color-bg-deep) 38%, transparent);
+  --shadow-lg: 0 1.75rem 5.625rem
+    color-mix(in srgb, var(--color-bg-deep) 52%, transparent);
   --shadow-glass:
-    inset 0 0.0625rem 0 color-mix(in srgb, var(--color-highlight) 12%, transparent),
+    inset 0 0.0625rem 0
+      color-mix(in srgb, var(--color-highlight) 12%, transparent),
     0 1.125rem 3.25rem color-mix(in srgb, var(--color-bg-deep) 42%, transparent);
   --shadow-neon-soft:
     0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
@@ -25,17 +29,41 @@
   --card-edge-3: var(--color-primary);
   --card-edge-4: var(--color-accent-strong);
   --card-glint: color-mix(in srgb, var(--color-highlight) 92%, transparent);
-  --card-panel-top: color-mix(in srgb, var(--color-surface-strong) 94%, transparent);
-  --card-panel-bottom: color-mix(in srgb, var(--color-bg-deep) 88%, transparent);
-  --card-panel-accent: color-mix(in srgb, var(--color-primary) 14%, transparent);
-  --card-panel-accent-deep: color-mix(in srgb, var(--color-secondary) 18%, transparent);
+  --card-panel-top: color-mix(
+    in srgb,
+    var(--color-surface-strong) 94%,
+    transparent
+  );
+  --card-panel-bottom: color-mix(
+    in srgb,
+    var(--color-bg-deep) 88%,
+    transparent
+  );
+  --card-panel-accent: color-mix(
+    in srgb,
+    var(--color-primary) 14%,
+    transparent
+  );
+  --card-panel-accent-deep: color-mix(
+    in srgb,
+    var(--color-secondary) 18%,
+    transparent
+  );
   --card-sheen: color-mix(in srgb, var(--color-highlight) 22%, transparent);
-  --card-sheen-soft: color-mix(in srgb, var(--color-primary-hover) 8%, transparent);
-  --card-panel-shadow: 0 1.875rem 5rem color-mix(in srgb, var(--color-bg-deep) 58%, transparent);
+  --card-sheen-soft: color-mix(
+    in srgb,
+    var(--color-primary-hover) 8%,
+    transparent
+  );
+  --card-panel-shadow: 0 1.875rem 5rem
+    color-mix(in srgb, var(--color-bg-deep) 58%, transparent);
   --color-white: #fff;
   --color-black: #000;
-  --font-sans: "Bahnschrift", "Aptos", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
-  --font-display: "Bahnschrift", "Aptos Display", "Segoe UI Variable Display", sans-serif;
+  --font-sans:
+    "Bahnschrift", "Aptos", "Segoe UI Variable", "Segoe UI", system-ui,
+    sans-serif;
+  --font-display:
+    "Bahnschrift", "Aptos Display", "Segoe UI Variable Display", sans-serif;
   --font-mono: Consolas, "SFMono-Regular", monospace;
   --font-size-xs: 0.75rem;
   --font-size-sm: 0.875rem;

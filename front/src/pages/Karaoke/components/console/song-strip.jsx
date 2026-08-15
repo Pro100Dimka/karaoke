@@ -30,8 +30,14 @@ export default function SongStrip({ song, currentTime, duration, onSeek }) {
         <span>{artist || performer || translateSaved("Караоке")}</span>
       </div>
       <span className="mono karaoke-timecode">{timecodes[0]}</span>
-      <WaveformTimeline value={currentTime} duration={duration} onChange={onSeek} />
-      <span className="mono karaoke-timecode karaoke-timecode-end">{timecodes[1]}</span>
+      <WaveformTimeline
+        value={currentTime}
+        duration={duration}
+        onChange={onSeek}
+      />
+      <span className="mono karaoke-timecode karaoke-timecode-end">
+        {timecodes[1]}
+      </span>
     </div>
   );
 }

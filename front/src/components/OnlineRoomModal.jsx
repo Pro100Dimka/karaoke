@@ -16,7 +16,9 @@ export function OnlineRoomModal({ onlineName, onClose }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const mountedRef = useMountedRef();
-  const actionKey = busy ? "room.connecting" : `room.${joinMode ? "join" : "create"}`;
+  const actionKey = busy
+    ? "room.connecting"
+    : `room.${joinMode ? "join" : "create"}`;
 
   const connect = async (host) => {
     const normalizedRoomId = normalizeRoomId(roomId);
@@ -68,7 +70,11 @@ export function OnlineRoomModal({ onlineName, onClose }) {
             <p>{t("room.instructions")}</p>
             {error && <p className="karaoke-recording-error">{error}</p>}
             <div className="online-room-actions u-actions-end">
-              <Button variant="ghost" disabled={busy} onClick={() => setJoinMode(true)}>
+              <Button
+                variant="ghost"
+                disabled={busy}
+                onClick={() => setJoinMode(true)}
+              >
                 {t("room.joinByCode")}
               </Button>
             </div>

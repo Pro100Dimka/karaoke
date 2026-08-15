@@ -33,8 +33,12 @@ export function normalizeAudioRuntimeSettings(settings) {
       typeof settings?.audio_driver === "string" && settings.audio_driver
         ? settings.audio_driver
         : "auto",
-    asioDriverName: typeof settings?.asio_driver_name === "string" ? settings.asio_driver_name : "",
-    bufferSize: Number.isInteger(bufferSize) && bufferSize > 0 ? bufferSize : 64,
+    asioDriverName:
+      typeof settings?.asio_driver_name === "string"
+        ? settings.asio_driver_name
+        : "",
+    bufferSize:
+      Number.isInteger(bufferSize) && bufferSize > 0 ? bufferSize : 64,
     monitoringEnabled: toBoolean(settings?.monitoring_enabled),
     outputDeviceId: normalizeDeviceId(settings?.output_device_id)
   };
@@ -53,7 +57,8 @@ export function findDriverOutputDevice(devices, driverName) {
       return {
         device,
         score:
-          tokens.filter((token) => name.includes(token)).length * 10 + (device?.is_asio ? 5 : 0)
+          tokens.filter((token) => name.includes(token)).length * 10 +
+          (device?.is_asio ? 5 : 0)
       };
     })
     .filter(({ score }) => score > 0)
@@ -72,7 +77,9 @@ export function findMatchingBrowserOutput(entries, selectedDevice) {
       const label = String(entry.label || "")
         .trim()
         .toLowerCase();
-      return label && (selectedName.includes(label) || label.includes(selectedName));
+      return (
+        label && (selectedName.includes(label) || label.includes(selectedName))
+      );
     }) || null
   );
 }

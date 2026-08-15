@@ -15,5 +15,7 @@ export function getKaraokeHotkeyAction(event, scope) {
   )
     return "toggle-playback";
   if (shouldIgnoreHotkey(event, scope)) return null;
-  return Object.hasOwn(HOTKEY_ACTIONS, event.code) ? HOTKEY_ACTIONS[event.code] : null;
+  return Object.hasOwn(HOTKEY_ACTIONS, event.code)
+    ? HOTKEY_ACTIONS[event.code]
+    : null;
 }

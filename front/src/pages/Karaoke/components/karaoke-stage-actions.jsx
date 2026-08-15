@@ -34,7 +34,9 @@ export default function KaraokeStageActions({
           icon={SlidersHorizontal}
           size={25}
           label={
-            controlsVisible ? translateSaved("Скрыть консоль") : translateSaved("Показать консоль")
+            controlsVisible
+              ? translateSaved("Скрыть консоль")
+              : translateSaved("Показать консоль")
           }
           aria-pressed={controlsVisible}
           onClick={controlsVisible ? hideControls : showControls}
@@ -47,7 +49,9 @@ export default function KaraokeStageActions({
           icon={Radio}
           size={24}
           label={
-            isRadioPlaying ? translateSaved("Выключить радио") : translateSaved("Включить радио")
+            isRadioPlaying
+              ? translateSaved("Выключить радио")
+              : translateSaved("Включить радио")
           }
           aria-pressed={isRadioPlaying}
           onClick={toggleRadio}

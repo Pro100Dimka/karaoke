@@ -17,7 +17,10 @@ export default function AppRoutes({ onOpenAppSettings, onOpenSongSettings }) {
           key={path}
           path={path}
           element={
-            <Comp onOpenAppSettings={onOpenAppSettings} onOpenSongSettings={onOpenSongSettings} />
+            <Comp
+              onOpenAppSettings={onOpenAppSettings}
+              onOpenSongSettings={onOpenSongSettings}
+            />
           }
         />
       ))}

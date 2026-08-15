@@ -72,7 +72,8 @@
 .library-music-object {
   opacity: 0.38;
   filter: drop-shadow(
-    0 0 var(--space-8) color-mix(in srgb, var(--color-border-accent) 24%, transparent)
+    0 0 var(--space-8)
+      color-mix(in srgb, var(--color-border-accent) 24%, transparent)
   );
 }
 
@@ -103,13 +104,15 @@
   block-size: 3rem;
   padding-inline: 2.8rem var(--space-4);
   border-color: color-mix(in srgb, var(--color-primary-hover) 22%, transparent);
-  box-shadow: inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 5%, transparent);
+  box-shadow: inset 0 var(--hairline)
+    color-mix(in srgb, var(--color-highlight) 5%, transparent);
 }
 
 .library-search-input:focus {
   border-color: var(--color-primary);
   background: var(--color-surface);
-  box-shadow: 0 0 0 var(--space-1) color-mix(in srgb, var(--color-primary) 10%, transparent);
+  box-shadow: 0 0 0 var(--space-1)
+    color-mix(in srgb, var(--color-primary) 10%, transparent);
 }
 
 .library-search-input::placeholder {
@@ -124,7 +127,8 @@
 .library-song-card:hover {
   border-color: color-mix(in srgb, var(--color-nude) 56%, transparent);
   box-shadow:
-    0 1.125rem 3.4375rem color-mix(in srgb, var(--color-bg-deep) 38%, transparent),
+    0 1.125rem 3.4375rem
+      color-mix(in srgb, var(--color-bg-deep) 38%, transparent),
     0 0 1.8rem color-mix(in srgb, var(--color-border-accent) 23%, transparent),
     0 0 3.2rem color-mix(in srgb, var(--color-text) 7%, transparent);
 }
@@ -136,7 +140,11 @@
   padding-block-start: var(--space-4);
   overflow: hidden;
   color: var(--color-highlight);
-  background: linear-gradient(160deg, var(--color-secondary), var(--color-bg-elevated));
+  background: linear-gradient(
+    160deg,
+    var(--color-secondary),
+    var(--color-bg-elevated)
+  );
 }
 
 .library-song-card-wave {
@@ -338,7 +346,8 @@
   border: var(--hairline) solid var(--color-border-strong);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--color-surface-strong) 74%, transparent);
-  box-shadow: inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 5%, transparent);
+  box-shadow: inset 0 var(--hairline)
+    color-mix(in srgb, var(--color-highlight) 5%, transparent);
 }
 .app-dropdown-trigger > span {
   flex: 1;
@@ -395,13 +404,22 @@
 
 /* Light library composition: moonlight glass, peach haze and raspberry accents. */
 :root[data-theme="light"] .title-bar {
-  border-block-end-color: color-mix(in srgb, var(--color-border) 16%, transparent);
+  border-block-end-color: color-mix(
+    in srgb,
+    var(--color-border) 16%,
+    transparent
+  );
   background: color-mix(in srgb, var(--color-highlight) 18%, transparent);
-  box-shadow: 0 var(--hairline) 0 color-mix(in srgb, var(--color-highlight) 70%, transparent);
+  box-shadow: 0 var(--hairline) 0
+    color-mix(in srgb, var(--color-highlight) 70%, transparent);
 }
 
 :root[data-theme="light"] .title-bar__button {
-  border-inline-start-color: color-mix(in srgb, var(--color-border) 10%, transparent);
+  border-inline-start-color: color-mix(
+    in srgb,
+    var(--color-border) 10%,
+    transparent
+  );
 }
 
 :root[data-theme="light"] .library-concert-backdrop::before {
@@ -445,9 +463,12 @@
 :root[data-theme="light"] .library-music-object {
   opacity: 0.48;
   filter: drop-shadow(
-      0 0 var(--space-4) color-mix(in srgb, var(--color-raspberry) 28%, transparent)
+      0 0 var(--space-4)
+        color-mix(in srgb, var(--color-raspberry) 28%, transparent)
     )
-    drop-shadow(0 0 var(--space-8) color-mix(in srgb, var(--color-peach) 18%, transparent));
+    drop-shadow(
+      0 0 var(--space-8) color-mix(in srgb, var(--color-peach) 18%, transparent)
+    );
 }
 
 :root[data-theme="light"] .ui-card {
@@ -456,15 +477,18 @@
 
 :root[data-theme="light"] .library-search-input {
   border-color: color-mix(in srgb, var(--color-secondary) 18%, transparent);
-  box-shadow: inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 86%, transparent);
+  box-shadow: inset 0 var(--hairline)
+    color-mix(in srgb, var(--color-highlight) 86%, transparent);
 }
 
 :root[data-theme="light"] .library-search-input:focus {
-  box-shadow: 0 0 0 var(--space-1) color-mix(in srgb, var(--color-primary) 10%, transparent);
+  box-shadow: 0 0 0 var(--space-1)
+    color-mix(in srgb, var(--color-primary) 10%, transparent);
 }
 
 :root[data-theme="light"] .btn-primary {
-  box-shadow: inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 55%, transparent);
+  box-shadow: inset 0 var(--hairline)
+    color-mix(in srgb, var(--color-highlight) 55%, transparent);
 }
 
 :root[data-theme="light"] .btn-danger {
@@ -496,14 +520,19 @@
 :root[data-theme="light"] .library-song-card:hover {
   border-color: color-mix(in srgb, var(--color-raspberry) 42%, transparent);
   box-shadow:
-    0 1.125rem 3.4375rem color-mix(in srgb, var(--color-bg-deep) 38%, transparent),
+    0 1.125rem 3.4375rem
+      color-mix(in srgb, var(--color-bg-deep) 38%, transparent),
     0 0 1.8rem color-mix(in srgb, var(--color-primary) 14%, transparent),
     0 0 3.2rem color-mix(in srgb, var(--color-peach) 8%, transparent);
 }
 
 :root[data-theme="light"] .library-song-card-art {
   color: var(--color-highlight);
-  background: linear-gradient(160deg, var(--color-raspberry), var(--color-peach));
+  background: linear-gradient(
+    160deg,
+    var(--color-raspberry),
+    var(--color-peach)
+  );
 }
 
 :root[data-theme="light"] .progress-track {
@@ -803,12 +832,16 @@
 
 .processing-signal__wave-muted {
   fill: color-mix(in srgb, var(--color-primary) 18%, transparent);
-  filter: drop-shadow(0 0 0.35rem color-mix(in srgb, var(--color-primary) 18%, transparent));
+  filter: drop-shadow(
+    0 0 0.35rem color-mix(in srgb, var(--color-primary) 18%, transparent)
+  );
 }
 
 .processing-signal__wave-active {
   opacity: 0.96;
-  filter: drop-shadow(0 0 0.5rem color-mix(in srgb, var(--color-primary) 58%, transparent));
+  filter: drop-shadow(
+    0 0 0.5rem color-mix(in srgb, var(--color-primary) 58%, transparent)
+  );
 }
 
 .processing-signal--compact {
@@ -871,7 +904,8 @@
     color-mix(in srgb, var(--color-surface-glass) 82%, transparent),
     color-mix(in srgb, var(--color-surface-strong) 72%, transparent)
   );
-  box-shadow: inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 7%, transparent);
+  box-shadow: inset 0 var(--hairline)
+    color-mix(in srgb, var(--color-highlight) 7%, transparent);
 }
 
 .app-dropdown-menu {
@@ -920,8 +954,13 @@
 .app-dropdown-option.is-selected {
   color: var(--color-text);
   border-color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 16%, var(--color-surface-strong));
-  box-shadow: inset 0 0 0.7rem color-mix(in srgb, var(--color-primary) 10%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--color-primary) 16%,
+    var(--color-surface-strong)
+  );
+  box-shadow: inset 0 0 0.7rem
+    color-mix(in srgb, var(--color-primary) 10%, transparent);
 }
 
 /* Recording modal: compact studio cards instead of stretched console rows. */
@@ -1200,7 +1239,8 @@
 
 .online-room-person.is-self {
   border-color: var(--color-border-strong);
-  box-shadow: inset 0 0 1.25rem color-mix(in srgb, var(--color-primary) 10%, transparent);
+  box-shadow: inset 0 0 1.25rem
+    color-mix(in srgb, var(--color-primary) 10%, transparent);
 }
 
 .online-room-person-name b {
@@ -1368,7 +1408,8 @@
   box-shadow:
     0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
     0 0 1.875rem color-mix(in srgb, var(--color-accent) 24%, transparent),
-    0 1.125rem 3.4375rem color-mix(in srgb, var(--color-bg-deep) 38%, transparent);
+    0 1.125rem 3.4375rem
+      color-mix(in srgb, var(--color-bg-deep) 38%, transparent);
   backdrop-filter: blur(var(--blur-md)) saturate(150%);
   cursor: pointer;
   animation: online-room-restore-in var(--motion-normal) ease both;
@@ -1391,7 +1432,8 @@
   box-shadow:
     0 0 0.5625rem color-mix(in srgb, var(--color-primary) 48%, transparent),
     0 0 1.75rem color-mix(in srgb, var(--color-primary-strong) 38%, transparent),
-    0 1.125rem 3.4375rem color-mix(in srgb, var(--color-bg-deep) 38%, transparent);
+    0 1.125rem 3.4375rem
+      color-mix(in srgb, var(--color-bg-deep) 38%, transparent);
 }
 
 @keyframes online-room-restore-in {
@@ -1460,7 +1502,11 @@
   inset: 0;
   background: radial-gradient(
     circle at 12% 50%,
-    color-mix(in srgb, var(--color-primary) calc(var(--voice-level, 0) * 24%), transparent),
+    color-mix(
+      in srgb,
+      var(--color-primary) calc(var(--voice-level, 0) * 24%),
+      transparent
+    ),
     transparent 58%
   );
   content: "";
@@ -1475,8 +1521,16 @@
 
 .online-room-person.is-speaking {
   transform: translateX(0.1rem);
-  border-color: color-mix(in srgb, var(--color-primary) 72%, var(--color-border));
-  background: color-mix(in srgb, var(--color-primary) 9%, var(--color-surface-soft));
+  border-color: color-mix(
+    in srgb,
+    var(--color-primary) 72%,
+    var(--color-border)
+  );
+  background: color-mix(
+    in srgb,
+    var(--color-primary) 9%,
+    var(--color-surface-soft)
+  );
   box-shadow:
     inset 0 0 1.4rem color-mix(in srgb, var(--color-primary) 15%, transparent),
     0 0 1.1rem color-mix(in srgb, var(--color-primary) 18%, transparent);
@@ -1536,7 +1590,8 @@
 .online-room-speaking-meter i.is-active {
   background: var(--color-primary);
   opacity: 1;
-  box-shadow: 0 0 0.45rem color-mix(in srgb, var(--color-primary) 72%, transparent);
+  box-shadow: 0 0 0.45rem
+    color-mix(in srgb, var(--color-primary) 72%, transparent);
   animation: online-room-meter-pulse 360ms ease-in-out infinite alternate;
 }
 
@@ -1656,7 +1711,10 @@
       color-mix(in srgb, var(--color-bg-deep) 10%, transparent) 1px,
       transparent 1px
     ),
-    linear-gradient(color-mix(in srgb, var(--color-bg-deep) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(
+      color-mix(in srgb, var(--color-bg-deep) 8%, transparent) 1px,
+      transparent 1px
+    ),
     color-mix(in srgb, var(--color-bg-deep) 82%, transparent);
   background-size: 28px 28px;
   box-shadow:
@@ -1701,3 +1759,4 @@
     padding-inline: var(--space-4);
   }
 }
+

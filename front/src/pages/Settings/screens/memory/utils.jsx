@@ -10,7 +10,8 @@ export async function runMemoryAction({ request, getMessage, notify }) {
     await notify(getMessage(result));
     return true;
   } catch (error) {
-    await notify(getErrorMessage(error, translateSaved("Не удалось выполнить действие")));
+    await notify( getErrorMessage(error, translateSaved("Не удалось выполнить действие"))
+    );
     return false;
   }
 }
@@ -18,12 +19,10 @@ export function MemoryStats({ size, free }) {
   const items = [
     [translateSaved("Всего занято"), size?.total_human ?? "—"],
     ...(free
-      ? [
-          [
-            translateSaved("Свободно на диске"),
-            translateSaved("{0} из {1}", { 0: free.free_human, 1: free.total_human })
-          ]
-        ]
+      ? [[
+          translateSaved("Свободно на диске"),
+          translateSaved("{0} из {1}", { 0: free.free_human, 1: free.total_human })
+        ]]
       : [])
   ];
   return <SettingsMetricGrid items={items} />;
@@ -38,7 +37,9 @@ export function MemoryActions({ actions, notify }) {
             key={id}
             variant={variant === "ghost" ? "outline" : "solid"}
             tone="primary"
-            onClick={() => runMemoryAction({ request, getMessage, notify })}
+            onClick={() =>
+              runMemoryAction({ request, getMessage, notify })
+            }
           >
             {Icon && <Icon size={15} />}
             {label}
@@ -50,10 +51,19 @@ export function MemoryActions({ actions, notify }) {
 }
 export function OptimizeSong({ value, options, onChange, onOptimize }) {
   return (
-    <Stack gap={0.65} className="settings-screen-section settings-optimize-section">
-      <Typography variant="body2">{translateSaved("Оптимизация песни")}</Typography>
+    <Stack
+      gap={0.65}
+      className="settings-screen-section settings-optimize-section"
+    >
+      <Typography variant="body2">
+        {translateSaved("Оптимизация песни")}
+      </Typography>
 
-      <Grid columns={2} gap="var(--space-3)" sx={{ alignItems: "end" }}>
+      <Grid
+        columns={2}
+        gap="var(--space-3)"
+        sx={{ alignItems: "end" }}
+      >
         <Select
           label={translateSaved("Песня")}
           value={value}

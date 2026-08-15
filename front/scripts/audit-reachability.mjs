@@ -2,10 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const projectRoot = path.resolve( path.dirname(fileURLToPath(import.meta.url)), ".."
+);
 const sourceRoot = path.join(projectRoot, "src");
 const sourceExtensions = [".js", ".jsx", ".ts", ".tsx", ".css"];
-const entryFiles = ["main.jsx", "index.css"].map((name) => path.join(sourceRoot, name));
+const entryFiles = ["main.jsx", "index.css"].map((name) => path.join(sourceRoot, name)
+);
 
 function walk(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -30,13 +32,19 @@ function resolveImport(importerPath, specifier) {
   const basePath = path.resolve(path.dirname(importerPath), specifier);
   const candidates = [
     basePath,
-    ...[".js", ".jsx", ".ts", ".tsx", ".css"].map((extension) => `${basePath}${extension}`),
-    ...["index.js", "index.jsx", "index.ts", "index.tsx", "index.css"].map((name) =>
-      path.join(basePath, name)
+    ...[".js", ".jsx", ".ts", ".tsx", ".css"].map(
+      (extension) => `${basePath}${extension}`
+    ),
+    ...["index.js", "index.jsx", "index.ts", "index.tsx", "index.css"].map(
+      (name) => path.join(basePath, name)
     )
   ];
 
-  return candidates.map(path.normalize).find((candidate) => sourceFiles.has(candidate)) || null;
+  return (
+    candidates
+      .map(path.normalize)
+      .find((candidate) => sourceFiles.has(candidate)) || null
+  );
 }
 
 function collectSpecifiers(source, extension) {
@@ -62,7 +70,11 @@ const pending = entryFiles.map(path.normalize);
 
 while (pending.length) {
   const currentPath = pending.pop();
-  if (!currentPath || reachable.has(currentPath) || !sourceFiles.has(currentPath)) {
+  if (
+    !currentPath ||
+    reachable.has(currentPath) ||
+    !sourceFiles.has(currentPath)
+  ) {
     continue;
   }
 
@@ -85,7 +97,4 @@ if (unreachable.length) {
   console.error("Unreachable production source files:");
   unreachable.forEach((filePath) => console.error(`- ${filePath}`));
   process.exitCode = 1;
-} else
-  console.log(
-    `All ${reachable.size} production source files are reachable from application entries.`
-  );
+} else console.log( `All ${reachable.size} production source files are reachable from application entries.` );

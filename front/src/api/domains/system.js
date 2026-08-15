@@ -10,7 +10,8 @@ export const systemApi = {
   getHealth: () => request("/diagnostics/health"),
   getPipelineHealth: () => request("/diagnostics/pipeline"),
   getAiModelsStatus: () => request("/diagnostics/ai-models"),
-  downloadAiModels: () => request("/diagnostics/ai-models/download", { method: "POST" }),
+  downloadAiModels: () =>
+    request("/diagnostics/ai-models/download", { method: "POST" }),
   getVersions: () => request("/diagnostics/versions"),
   getErrors: () => request("/diagnostics/errors"),
   getHistory: () => request("/history"),

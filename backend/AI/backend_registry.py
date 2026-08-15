@@ -177,13 +177,38 @@ def fcpe_onnx_path() -> Path | None:
     return Path(value).expanduser() if value else None
 
 
-def _add_optional_runtime_path(env_var: str) -> None:
+_OPTIONAL_RUNTIME_FORBIDDEN_TOP_LEVEL = (
+    "numpy",
+    "scipy",
+    "tensorflow",
+    "protobuf",
+    "ml_dtypes",
+)
+
+
+def _optional_runtime_path(env_var: str) -> tuple[Path | None, str]:
     value = os.getenv(env_var, "").strip()
     if not value:
-        return
+        return None, f"{env_var} is not configured"
     path = Path(value).expanduser()
-    if path.is_dir() and str(path) not in sys.path:
+    if not path.is_dir():
+        return None, f"Optional runtime path does not exist: {path}"
+    polluted = [name for name in _OPTIONAL_RUNTIME_FORBIDDEN_TOP_LEVEL if (path / name).exists()]
+    if polluted:
+        return None, (
+            f"Optional runtime path is not isolated ({', '.join(polluted)}); "
+            "rerun the runtime preparation script"
+        )
+    return path, ""
+
+
+def _add_optional_runtime_path(env_var: str) -> tuple[bool, str]:
+    path, reason = _optional_runtime_path(env_var)
+    if path is None:
+        return False, reason
+    if str(path) not in sys.path:
         sys.path.insert(0, str(path))
+    return True, ""
 
 
 def _ort_provider_availability(
@@ -197,7 +222,9 @@ def _ort_provider_availability(
     if windows_only and os.name != "nt":
         return BackendAvailability(False, f"{label} is available only on Windows")
     if runtime_path_env:
-        _add_optional_runtime_path(runtime_path_env)
+        runtime_ok, runtime_reason = _add_optional_runtime_path(runtime_path_env)
+        if not runtime_ok:
+            return BackendAvailability(False, runtime_reason)
     artifact = fcpe_onnx_path() if model == "fcpe" else ctc_onnx_path(model)
     if artifact is None:
         env_var = "KARAOKE_AI_FCPE_ONNX" if model == "fcpe" else f"KARAOKE_AI_{model.upper()}_ONNX"

@@ -12,17 +12,7 @@ const fs = require("fs");
 const http = require("http");
 const path = require("path");
 const { pathToFileURL } = require("url");
-const {
-  app,
-  BrowserWindow,
-  clipboard,
-  dialog,
-  ipcMain,
-  net,
-  protocol,
-  session,
-  shell
-} = require("electron");
+const { app, BrowserWindow, clipboard, dialog, ipcMain, net, protocol, session, shell } = require("electron");
 
 const {
   BACKEND_HOST,
@@ -71,7 +61,10 @@ let backendRestartTimer = null;
 let backendStopRequested = false;
 let backendRestartAttempts = 0;
 let backendStableTimer = null;
+let backendDuplicateWatchTimer = null;
+let backendDuplicateDetected = false;
 const BACKEND_STABLE_RESET_MS = 30_000;
+const BACKEND_DUPLICATE_WATCH_MS = 5_000;
 
 function resolveBackendDir() {
   // В dev-режиме backend лежит рядом с проектом (../backend при обычной
@@ -85,7 +78,8 @@ function resolveBackendDir() {
 
 function resolveSceneVideoPath() {
   return isDev
-    ? path.resolve(__dirname, "..", "..", "downloads", "media", "videoplayback.webm")
+    ? path.resolve( __dirname, "..", "..", "downloads", "media", "videoplayback.webm"
+      )
     : path.join(process.resourcesPath, "media", "videoplayback.webm");
 }
 
@@ -97,8 +91,7 @@ function registerMediaProtocol() {
     }
 
     const scenePath = resolveSceneVideoPath();
-    if (!fs.existsSync(scenePath))
-      return new Response("Scene video is unavailable", { status: 404 });
+    if (!fs.existsSync(scenePath)) return new Response("Scene video is unavailable", { status: 404 });
 
     return net.fetch(pathToFileURL(scenePath).href, { headers: request.headers });
   });
@@ -109,9 +102,7 @@ function requestBackendJson(pathname, timeoutMs = BACKEND_REQUEST_TIMEOUT_MS) {
     const request = http.get(`${BACKEND_URL}${pathname}`, (response) => {
       let body = "";
       response.setEncoding("utf8");
-      response.on("data", (chunk) => {
-        if (body.length < 1024 * 1024) body += chunk;
-      });
+      response.on("data", (chunk) => { if (body.length < 1024 * 1024) body += chunk; });
       response.on("end", () => {
         if (response.statusCode < 200 || response.statusCode >= 300) {
           reject(new Error(`Backend returned HTTP ${response.statusCode}`));
@@ -124,9 +115,7 @@ function requestBackendJson(pathname, timeoutMs = BACKEND_REQUEST_TIMEOUT_MS) {
         }
       });
     });
-    request.setTimeout(timeoutMs, () => {
-      request.destroy(new Error("Backend request timed out"));
-    });
+    request.setTimeout(timeoutMs, () => { request.destroy(new Error("Backend request timed out")); });
     request.on("error", reject);
   });
 }
@@ -152,11 +141,18 @@ async function resolveSongOutputDir() {
 
 function isPathInside(parentPath, candidatePath) {
   const relativePath = path.relative(parentPath, candidatePath);
-  return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
+  return (
+    relativePath === "" ||
+    (!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
+  );
 }
 
 function scheduleBackendRestart() {
-  if (isQuitting || backendStopRequested || process.env.KARAOKE_BACKEND_EXTERNAL === "1") {
+  if (
+    isQuitting ||
+    backendStopRequested || backendDuplicateDetected ||
+    process.env.KARAOKE_BACKEND_EXTERNAL === "1"
+  ) {
     return;
   }
 
@@ -169,8 +165,28 @@ function scheduleBackendRestart() {
   backendRestartTimer = setTimeout(startBackend, delay);
 }
 
+function watchDuplicateBackend() {
+  backendDuplicateDetected = true;
+  clearTimeout(backendDuplicateWatchTimer);
+  const check = async () => {
+    if (isQuitting || backendStopRequested || !backendDuplicateDetected) return;
+    try {
+      await requestBackendJson("/settings", Math.min(BACKEND_REQUEST_TIMEOUT_MS, 3000));
+      backendDuplicateWatchTimer = setTimeout(check, BACKEND_DUPLICATE_WATCH_MS);
+    } catch {
+      backendDuplicateDetected = false;
+      backendDuplicateWatchTimer = null;
+      startBackend();
+    }
+  };
+  backendDuplicateWatchTimer = setTimeout(check, BACKEND_DUPLICATE_WATCH_MS);
+}
+
 function startBackend() {
-  if (process.env.KARAOKE_BACKEND_EXTERNAL === "1" || (backendProcess && !backendProcess.killed)) {
+  if (
+    process.env.KARAOKE_BACKEND_EXTERNAL === "1" ||
+    (backendProcess && !backendProcess.killed)
+  ) {
     return;
   }
   clearTimeout(backendRestartTimer);
@@ -178,10 +194,14 @@ function startBackend() {
   backendStopRequested = false;
   const backendDir = resolveBackendDir();
   const backendCommand = isDev
-    ? process.env.KARAOKE_PYTHON || (IS_WINDOWS ? "python" : "python3")
-    : path.join(backendDir, IS_WINDOWS ? "KaraokeBackend.exe" : "KaraokeBackend");
+    ? process.env.KARAOKE_PYTHON ||
+      (IS_WINDOWS ? "python" : "python3")
+    : path.join( backendDir, IS_WINDOWS ? "KaraokeBackend.exe" : "KaraokeBackend"
+      );
   const backendArgs = isDev ? ["run.py"] : [];
-  const backendDataDir = isDev ? null : path.join(app.getPath("userData"), "backend-data");
+  const backendDataDir = isDev
+    ? null
+    : path.join(app.getPath("userData"), "backend-data");
   const backendLogDir = isDev
     ? path.resolve(__dirname, "..", "..", "logs")
     : path.join(app.getPath("userData"), "logs");
@@ -190,8 +210,12 @@ function startBackend() {
   try {
     if (!isDev) {
       fs.mkdirSync(backendLogDir, { recursive: true });
-      backendLogFd = fs.openSync(path.join(backendLogDir, "backend-process.log"), "a");
-      fs.writeSync(backendLogFd, `\n\n===== backend start ${new Date().toISOString()} =====\n`);
+      backendLogFd = fs.openSync( path.join(backendLogDir, "backend-process.log"), "a"
+      );
+      fs.writeSync(
+        backendLogFd,
+        `\n\n===== backend start ${new Date().toISOString()} =====\n`
+      );
     }
 
     const childProcess = spawn(backendCommand, backendArgs, {
@@ -233,12 +257,16 @@ function startBackend() {
       backendStableTimer = null;
       if (backendProcess === childProcess) backendProcess = null;
       if (code === 23) {
-        // backend/run.py found a healthy instance already bound to our port.
-        // Treat it as authoritative instead of entering a restart storm.
-        backendStopRequested = true;
+        // Another healthy backend owns the port. Watch it instead of either
+        // restart-looping or disabling self-healing for the whole app lifetime.
+        watchDuplicateBackend();
         return;
       }
-      if (isQuitting || backendStopRequested || process.env.KARAOKE_BACKEND_EXTERNAL === "1") {
+      if (
+        isQuitting ||
+        backendStopRequested ||
+        process.env.KARAOKE_BACKEND_EXTERNAL === "1"
+      ) {
         return;
       }
       console.error(
@@ -267,7 +295,10 @@ function stopBackend() {
   backendStopRequested = true;
   clearTimeout(backendRestartTimer);
   clearTimeout(backendStableTimer);
+  clearTimeout(backendDuplicateWatchTimer);
   backendStableTimer = null;
+  backendDuplicateWatchTimer = null;
+  backendDuplicateDetected = false;
 
   const terminateBackend = () => {
     if (backendProcess && !backendProcess.killed) {
@@ -295,15 +326,9 @@ function stopBackend() {
     method: "POST",
     timeout: 450
   });
-  request.on("response", (response) => {
-    response.resume();
-    response.once("end", finish);
-  });
+  request.on("response", (response) => { response.resume(); response.once("end", finish); });
   request.on("error", finish);
-  request.on("timeout", () => {
-    request.destroy();
-    finish();
-  });
+  request.on("timeout", () => { request.destroy(); finish(); });
   request.end();
   setTimeout(finish, BACKEND_STOP_GRACE_MS);
 }
@@ -319,7 +344,8 @@ const THEME_NAMES = Object.keys(THEME_ICONS).filter((name) => name !== "app");
 function getStoredIconTheme() {
   try {
     const theme = fs
-      .readFileSync(path.join(app.getPath("userData"), "selected-theme.txt"), "utf8")
+      .readFileSync( path.join(app.getPath("userData"), "selected-theme.txt"), "utf8"
+      )
       .trim();
     return THEME_NAMES.includes(theme) ? theme : "dark";
   } catch {
@@ -333,7 +359,8 @@ function storeIconTheme(theme) {
     const userData = app.getPath("userData");
     fs.mkdirSync(userData, { recursive: true });
     fs.writeFileSync(path.join(userData, "selected-theme.txt"), theme, "utf8");
-    fs.copyFileSync(getThemeIcon(theme), path.join(userData, "selected-theme.ico"));
+    fs.copyFileSync( getThemeIcon(theme), path.join(userData, "selected-theme.ico")
+    );
     return true;
   } catch (error) {
     // eslint-disable-next-line no-console
@@ -367,7 +394,8 @@ function updateThemeShortcuts(iconPath) {
       "Programs",
       shortcutName
     ),
-    process.env.PUBLIC && path.join(process.env.PUBLIC, "Desktop", shortcutName),
+    process.env.PUBLIC &&
+      path.join(process.env.PUBLIC, "Desktop", shortcutName),
     process.env.ProgramData &&
       path.join(
         process.env.ProgramData,
@@ -383,15 +411,12 @@ function updateThemeShortcuts(iconPath) {
     if (!fs.existsSync(shortcutPath)) continue;
     try {
       const details = shell.readShortcutLink(shortcutPath);
-      shell.writeShortcutLink(shortcutPath, "replace", {
-        ...details,
-        icon: iconPath,
-        iconIndex: 0
-      });
+      shell.writeShortcutLink(shortcutPath, "replace", { ...details, icon: iconPath, iconIndex: 0 });
     } catch (error) {
       // A system-wide shortcut may require elevation; the window icon still updates.
       // eslint-disable-next-line no-console
-      console.warn("Could not update themed shortcut icon:", shortcutPath, error);
+      console.warn( "Could not update themed shortcut icon:", shortcutPath, error
+      );
     }
   }
 }
@@ -426,10 +451,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      additionalArguments: [
-        `--advoice-theme=${initialTheme}`,
-        `--advoice-backend-url=${BACKEND_URL}`
-      ]
+      additionalArguments: [`--advoice-theme=${initialTheme}`, `--advoice-backend-url=${BACKEND_URL}`]
     }
   });
   updateThemeShortcuts(getThemeShortcutIcon(initialTheme));
@@ -447,10 +469,7 @@ function createWindow() {
     if (!allowed) event.preventDefault();
   });
 
-  mainWindow.once("ready-to-show", () => {
-    mainWindow?.setFullScreen(true);
-    mainWindow?.show();
-  });
+  mainWindow.once("ready-to-show", () => { mainWindow?.setFullScreen(true); mainWindow?.show(); });
 
   const loadPromise = isDev
     ? mainWindow.loadURL(DEV_RENDERER_ORIGIN)
@@ -460,9 +479,7 @@ function createWindow() {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
   });
 
-  mainWindow.on("closed", () => {
-    mainWindow = null;
-  });
+  mainWindow.on("closed", () => { mainWindow = null; });
 }
 
 function handleTrustedIpc(channel, handler) {
@@ -511,7 +528,8 @@ handleTrustedIpc("shell:openSongFolder", async (target) => {
     );
 
     if (matchingEntry) {
-      const error = await shell.openPath(path.join(realSongsDir, matchingEntry.name));
+      const error = await shell.openPath( path.join(realSongsDir, matchingEntry.name)
+      );
       return error || "";
     }
   } catch {
@@ -524,7 +542,9 @@ handleTrustedIpc("dialog:selectFolder", async (currentPath) => {
   if (!mainWindow || mainWindow.isDestroyed()) return null;
 
   const defaultPath =
-    typeof currentPath === "string" && currentPath.trim() ? currentPath.trim() : undefined;
+    typeof currentPath === "string" && currentPath.trim()
+      ? currentPath.trim()
+      : undefined;
 
   const result = await dialog.showOpenDialog(mainWindow, {
     title: "Выберите папку",
@@ -555,9 +575,11 @@ if (!hasSingleInstanceLock) {
 
 app.whenReady().then(() => {
   if (!hasSingleInstanceLock) return;
-  if (IS_WINDOWS) app.setAppUserModelId("com.karaokestudio.app");
+  if (IS_WINDOWS)
+    app.setAppUserModelId("com.karaokestudio.app");
   registerMediaProtocol();
-  const packagedIndexUrl = getPackagedRendererUrl(path.join(__dirname, "..", "dist", "index.html"));
+  const packagedIndexUrl = getPackagedRendererUrl( path.join(__dirname, "..", "dist", "index.html")
+  );
   const rendererOptions = { isDev, devOrigin: DEV_RENDERER_ORIGIN, packagedIndexUrl };
   const permissionAllowed = (webContents, permission, requestUrl, details) =>
     isAllowedPermissionRequest({
@@ -577,15 +599,14 @@ app.whenReady().then(() => {
     (webContents, permission, callback, details) => {
       // The app uses audio capture only. Never grant camera/media permissions
       // to a navigation, popup, or arbitrary origin sharing the session.
-      callback(permissionAllowed(webContents, permission, details?.requestingUrl, details));
+      callback( permissionAllowed( webContents, permission, details?.requestingUrl, details )
+      );
     }
   );
   startBackend();
   createWindow();
 
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+  app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 
 app.on("window-all-closed", () => {
@@ -595,7 +616,4 @@ app.on("window-all-closed", () => {
   app.quit();
 });
 
-app.on("before-quit", () => {
-  isQuitting = true;
-  stopBackend();
-});
+app.on("before-quit", () => { isQuitting = true; stopBackend(); });

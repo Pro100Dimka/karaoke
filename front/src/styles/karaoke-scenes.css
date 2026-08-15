@@ -79,7 +79,8 @@
 :root[data-theme="light"] .library-wave-terrain {
   opacity: 0.84;
   mix-blend-mode: multiply;
-  filter: grayscale(0.7) contrast(1.7) brightness(calc(0.84 + var(--radio-bass, 0) * 0.42));
+  filter: grayscale(0.7) contrast(1.7)
+    brightness(calc(0.84 + var(--radio-bass, 0) * 0.42));
 }
 
 /* Animated equalizer on each song artwork. Scale keeps the original random
@@ -120,9 +121,14 @@
   --wave-terrain-rgb: 255, 240, 246;
   opacity: 1;
   mix-blend-mode: screen;
-  filter: contrast(1.48) brightness(calc(1.28 + var(--radio-bass, 0) * 0.9)) saturate(1.3)
-    drop-shadow(0 0 0.32rem color-mix(in srgb, var(--color-primary) 62%, transparent))
-    drop-shadow(0 0 0.8rem color-mix(in srgb, var(--color-primary) 30%, transparent));
+  filter: contrast(1.48) brightness(calc(1.28 + var(--radio-bass, 0) * 0.9))
+    saturate(1.3)
+    drop-shadow(
+      0 0 0.32rem color-mix(in srgb, var(--color-primary) 62%, transparent)
+    )
+    drop-shadow(
+      0 0 0.8rem color-mix(in srgb, var(--color-primary) 30%, transparent)
+    );
 }
 
 :root[data-theme="light"] .library-wave-terrain {
@@ -130,23 +136,31 @@
   opacity: 0.96;
   mix-blend-mode: multiply;
   filter: contrast(1.34) saturate(1.22)
-    drop-shadow(0 0 0.22rem color-mix(in srgb, var(--color-primary) 48%, transparent));
+    drop-shadow(
+      0 0 0.22rem color-mix(in srgb, var(--color-primary) 48%, transparent)
+    );
 }
 
 :root[data-theme="green"] .library-wave-terrain {
   --wave-terrain-rgb: 184, 255, 220;
   opacity: 1;
   mix-blend-mode: screen;
-  filter: contrast(1.5) brightness(calc(1.25 + var(--radio-bass, 0) * 0.88)) saturate(1.4)
-    drop-shadow(0 0 0.38rem color-mix(in srgb, var(--color-primary) 64%, transparent));
+  filter: contrast(1.5) brightness(calc(1.25 + var(--radio-bass, 0) * 0.88))
+    saturate(1.4)
+    drop-shadow(
+      0 0 0.38rem color-mix(in srgb, var(--color-primary) 64%, transparent)
+    );
 }
 
 :root[data-theme="violet"] .library-wave-terrain {
   --wave-terrain-rgb: 244, 214, 255;
   opacity: 1;
   mix-blend-mode: screen;
-  filter: contrast(1.52) brightness(calc(1.28 + var(--radio-bass, 0) * 0.9)) saturate(1.45)
-    drop-shadow(0 0 0.4rem color-mix(in srgb, var(--color-primary) 66%, transparent));
+  filter: contrast(1.52) brightness(calc(1.28 + var(--radio-bass, 0) * 0.9))
+    saturate(1.45)
+    drop-shadow(
+      0 0 0.4rem color-mix(in srgb, var(--color-primary) 66%, transparent)
+    );
 }
 
 /* Library floating actions: radio lives next to Settings and uses the same FAB. */
@@ -180,14 +194,23 @@
 
 .app-radio-fab.is-playing {
   color: var(--color-highlight);
-  border-color: color-mix(in srgb, var(--color-primary) 58%, var(--color-border-strong));
+  border-color: color-mix(
+    in srgb,
+    var(--color-primary) 58%,
+    var(--color-border-strong)
+  );
   background: linear-gradient(
     145deg,
     color-mix(in srgb, var(--color-primary) 20%, var(--color-surface-strong)),
-    color-mix(in srgb, var(--color-primary-strong) 12%, var(--color-surface-soft))
+    color-mix(
+      in srgb,
+      var(--color-primary-strong) 12%,
+      var(--color-surface-soft)
+    )
   );
   box-shadow:
-    inset 0 0.0625rem 0 color-mix(in srgb, var(--color-highlight) 25%, transparent),
+    inset 0 0.0625rem 0
+      color-mix(in srgb, var(--color-highlight) 25%, transparent),
     0 0 calc(0.9rem + var(--radio-bass, 0) * 1.8rem)
       color-mix(in srgb, var(--color-primary) 48%, transparent),
     0 0.875rem 2.2rem color-mix(in srgb, var(--color-bg-deep) 26%, transparent);
@@ -262,9 +285,14 @@
   opacity: 1;
   mix-blend-mode: screen;
   mask-image: linear-gradient(to bottom, transparent 0%, #000 9%, #000 100%);
-  filter: contrast(1.72) brightness(calc(1.38 + var(--radio-bass, 0) * 1.1)) saturate(1.6)
-    drop-shadow(0 0 0.36rem color-mix(in srgb, var(--color-primary) 72%, transparent))
-    drop-shadow(0 0 1rem color-mix(in srgb, var(--color-primary) 42%, transparent));
+  filter: contrast(1.72) brightness(calc(1.38 + var(--radio-bass, 0) * 1.1))
+    saturate(1.6)
+    drop-shadow(
+      0 0 0.36rem color-mix(in srgb, var(--color-primary) 72%, transparent)
+    )
+    drop-shadow(
+      0 0 1rem color-mix(in srgb, var(--color-primary) 42%, transparent)
+    );
 }
 
 :root[data-theme="light"] .library-wave-terrain {
@@ -272,8 +300,11 @@
   --wave-terrain-accent-rgb: 232, 34, 105;
   opacity: 1;
   mix-blend-mode: multiply;
-  filter: contrast(1.62) saturate(1.65) brightness(calc(0.94 + var(--radio-bass, 0) * 0.24))
-    drop-shadow(0 0 0.28rem color-mix(in srgb, var(--color-primary) 64%, transparent));
+  filter: contrast(1.62) saturate(1.65)
+    brightness(calc(0.94 + var(--radio-bass, 0) * 0.24))
+    drop-shadow(
+      0 0 0.28rem color-mix(in srgb, var(--color-primary) 64%, transparent)
+    );
 }
 
 :root[data-theme="green"] .library-wave-terrain {
@@ -281,9 +312,14 @@
   --wave-terrain-accent-rgb: 58, 255, 163;
   opacity: 1;
   mix-blend-mode: screen;
-  filter: contrast(1.72) brightness(calc(1.4 + var(--radio-bass, 0) * 1.08)) saturate(1.7)
-    drop-shadow(0 0 0.42rem color-mix(in srgb, var(--color-primary) 72%, transparent))
-    drop-shadow(0 0 1.05rem color-mix(in srgb, var(--color-primary) 42%, transparent));
+  filter: contrast(1.72) brightness(calc(1.4 + var(--radio-bass, 0) * 1.08))
+    saturate(1.7)
+    drop-shadow(
+      0 0 0.42rem color-mix(in srgb, var(--color-primary) 72%, transparent)
+    )
+    drop-shadow(
+      0 0 1.05rem color-mix(in srgb, var(--color-primary) 42%, transparent)
+    );
 }
 
 :root[data-theme="violet"] .library-wave-terrain {
@@ -291,16 +327,23 @@
   --wave-terrain-accent-rgb: 190, 78, 255;
   opacity: 1;
   mix-blend-mode: screen;
-  filter: contrast(1.76) brightness(calc(1.42 + var(--radio-bass, 0) * 1.1)) saturate(1.75)
-    drop-shadow(0 0 0.44rem color-mix(in srgb, var(--color-primary) 74%, transparent))
-    drop-shadow(0 0 1.08rem color-mix(in srgb, var(--color-primary) 44%, transparent));
+  filter: contrast(1.76) brightness(calc(1.42 + var(--radio-bass, 0) * 1.1))
+    saturate(1.75)
+    drop-shadow(
+      0 0 0.44rem color-mix(in srgb, var(--color-primary) 74%, transparent)
+    )
+    drop-shadow(
+      0 0 1.08rem color-mix(in srgb, var(--color-primary) 44%, transparent)
+    );
 }
 
 /* Song card bars normally keep their decorative idle movement. While radio is
    playing, each one follows its own analyser band in real time. */
 .library-song-card-art.is-radio-reactive .library-song-card-wave i {
   animation: none;
-  transform: scaleY(clamp(var(--wave-min, 0.28), calc(0.24 + var(--audio-band, 0) * 1.18), 1.18));
+  transform: scaleY(
+    clamp(var(--wave-min, 0.28), calc(0.24 + var(--audio-band, 0) * 1.18), 1.18)
+  );
   filter: brightness(calc(0.9 + var(--audio-band, 0) * 0.65))
     drop-shadow(
       0 0 calc(var(--audio-band, 0) * 0.38rem)
@@ -349,12 +392,20 @@
     radial-gradient(
       circle at calc(48% + var(--library-parallax-x) * 3%)
         calc(72% + var(--library-parallax-y) * 2%),
-      color-mix(in srgb, var(--color-primary) calc(8% + var(--radio-bass, 0) * 14%), transparent),
+      color-mix(
+        in srgb,
+        var(--color-primary) calc(8% + var(--radio-bass, 0) * 14%),
+        transparent
+      ),
       transparent 34%
     ),
     radial-gradient(
       circle at calc(78% - var(--library-parallax-x) * 2%) 48%,
-      color-mix(in srgb, var(--color-secondary) calc(5% + var(--radio-bass, 0) * 8%), transparent),
+      color-mix(
+        in srgb,
+        var(--color-secondary) calc(5% + var(--radio-bass, 0) * 8%),
+        transparent
+      ),
       transparent 28%
     );
   opacity: calc(0.46 + var(--radio-bass, 0) * 0.42);
@@ -402,9 +453,14 @@
     #000 6%,
     #000 100%
   );
-  filter: contrast(1.92) brightness(calc(1.46 + var(--radio-bass, 0) * 1.45)) saturate(1.82)
-    drop-shadow(0 0 0.42rem color-mix(in srgb, var(--color-primary) 82%, transparent))
-    drop-shadow(0 0 1.3rem color-mix(in srgb, var(--color-primary) 52%, transparent));
+  filter: contrast(1.92) brightness(calc(1.46 + var(--radio-bass, 0) * 1.45))
+    saturate(1.82)
+    drop-shadow(
+      0 0 0.42rem color-mix(in srgb, var(--color-primary) 82%, transparent)
+    )
+    drop-shadow(
+      0 0 1.3rem color-mix(in srgb, var(--color-primary) 52%, transparent)
+    );
 }
 
 :root[data-theme="light"] .library-wave-terrain {
@@ -412,8 +468,11 @@
   --wave-terrain-accent-rgb: 235, 20, 92;
   opacity: 1;
   mix-blend-mode: multiply;
-  filter: contrast(1.88) saturate(1.78) brightness(calc(0.92 + var(--radio-bass, 0) * 0.3))
-    drop-shadow(0 0 0.32rem color-mix(in srgb, var(--color-primary) 78%, transparent));
+  filter: contrast(1.88) saturate(1.78)
+    brightness(calc(0.92 + var(--radio-bass, 0) * 0.3))
+    drop-shadow(
+      0 0 0.32rem color-mix(in srgb, var(--color-primary) 78%, transparent)
+    );
 }
 
 :root[data-theme="green"] .library-wave-terrain {
@@ -428,7 +487,11 @@
 
 .library-song-card-art {
   box-shadow: inset 0 0 calc(0.6rem + var(--radio-bass, 0) * 1.1rem)
-    color-mix(in srgb, var(--color-highlight) calc(7% + var(--radio-bass, 0) * 14%), transparent);
+    color-mix(
+      in srgb,
+      var(--color-highlight) calc(7% + var(--radio-bass, 0) * 14%),
+      transparent
+    );
 }
 
 .library-song-card-art.is-radio-reactive > svg {
@@ -443,7 +506,9 @@
 }
 
 .library-song-card-art.is-radio-reactive .library-song-card-wave i {
-  transform: scaleY(clamp(var(--wave-min, 0.28), calc(0.16 + var(--audio-band, 0) * 1.48), 1.42));
+  transform: scaleY(
+    clamp(var(--wave-min, 0.28), calc(0.16 + var(--audio-band, 0) * 1.48), 1.42)
+  );
   filter: brightness(calc(0.94 + var(--audio-band, 0) * 0.9))
     drop-shadow(
       0 0 calc(0.06rem + var(--audio-band, 0) * 0.52rem)
@@ -513,11 +578,13 @@
   100% {
     box-shadow:
       0 0 0.55rem color-mix(in srgb, var(--color-primary) 42%, transparent),
-      0 0 1.5rem color-mix(in srgb, var(--color-primary-strong) 30%, transparent);
+      0 0 1.5rem
+        color-mix(in srgb, var(--color-primary-strong) 30%, transparent);
   }
   50% {
     box-shadow:
-      0 0 0.85rem color-mix(in srgb, var(--color-primary-hover) 65%, transparent),
+      0 0 0.85rem
+        color-mix(in srgb, var(--color-primary-hover) 65%, transparent),
       0 0 2.6rem color-mix(in srgb, var(--color-primary) 48%, transparent);
   }
 }
@@ -556,7 +623,8 @@
 
 /* Very small background parallax: only active while LibraryBackdrop is mounted. */
 body {
-  background-position: calc(50% + var(--library-bg-x, 0px)) calc(50% + var(--library-bg-y, 0px));
+  background-position: calc(50% + var(--library-bg-x, 0px))
+    calc(50% + var(--library-bg-y, 0px));
 }
 
 /* ========================================================================== 
@@ -603,7 +671,8 @@ body {
     90deg,
     #fff 0%,
     #fff var(--character-fill),
-    color-mix(in srgb, var(--color-primary) 72%, white 18%) var(--character-fill),
+    color-mix(in srgb, var(--color-primary) 72%, white 18%)
+      var(--character-fill),
     color-mix(in srgb, var(--color-primary) 72%, white 18%) 100%
   ) !important;
   background-clip: text !important;
@@ -671,12 +740,14 @@ body {
   justify-content: center;
   gap: 0.42rem;
   min-block-size: 2.35rem;
-  border: var(--hairline) solid color-mix(in srgb, var(--color-primary) 38%, var(--color-border));
+  border: var(--hairline) solid
+    color-mix(in srgb, var(--color-primary) 38%, var(--color-border));
   color: var(--color-text);
   background: color-mix(in srgb, var(--color-bg-deep) 68%, transparent);
   box-shadow:
     0 0.45rem 1.2rem color-mix(in srgb, var(--color-bg-deep) 30%, transparent),
-    inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 10%, transparent);
+    inset 0 var(--hairline)
+      color-mix(in srgb, var(--color-highlight) 10%, transparent);
   backdrop-filter: blur(0.8rem) saturate(130%);
   cursor: pointer;
   transition:
@@ -696,7 +767,11 @@ body {
 .karaoke-stage-action:hover,
 .karaoke-stage-action.is-active {
   border-color: color-mix(in srgb, var(--color-primary) 76%, white 8%);
-  background: color-mix(in srgb, var(--color-primary) 18%, var(--color-bg-deep) 64%);
+  background: color-mix(
+    in srgb,
+    var(--color-primary) 18%,
+    var(--color-bg-deep) 64%
+  );
   box-shadow:
     0 0.5rem 1.35rem color-mix(in srgb, var(--color-bg-deep) 32%, transparent),
     0 0 1rem color-mix(in srgb, var(--color-primary) 20%, transparent);
@@ -954,7 +1029,8 @@ body {
   min-block-size: 3.25rem;
   padding: 0;
   border-radius: 50%;
-  border: var(--hairline) solid color-mix(in srgb, var(--color-primary) 54%, var(--color-border));
+  border: var(--hairline) solid
+    color-mix(in srgb, var(--color-primary) 54%, var(--color-border));
   color: var(--color-text);
   background:
     radial-gradient(
@@ -966,14 +1042,19 @@ body {
   box-shadow:
     0 0.65rem 1.7rem color-mix(in srgb, var(--color-bg-deep) 34%, transparent),
     0 0 1.15rem color-mix(in srgb, var(--color-primary) 14%, transparent),
-    inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 16%, transparent);
+    inset 0 var(--hairline)
+      color-mix(in srgb, var(--color-highlight) 16%, transparent);
   backdrop-filter: blur(1rem) saturate(145%);
 }
 
 .karaoke-stage-action:hover,
 .karaoke-stage-action.is-active {
   background:
-    radial-gradient(circle at 35% 25%, color-mix(in srgb, white 16%, transparent), transparent 40%),
+    radial-gradient(
+      circle at 35% 25%,
+      color-mix(in srgb, white 16%, transparent),
+      transparent 40%
+    ),
     color-mix(in srgb, var(--color-primary) 22%, var(--color-surface-strong));
   box-shadow:
     0 0.75rem 1.9rem color-mix(in srgb, var(--color-bg-deep) 38%, transparent),
@@ -1101,3 +1182,4 @@ body {
 .karaoke-effect-dial {
   padding-block: 0.24rem !important;
 }
+

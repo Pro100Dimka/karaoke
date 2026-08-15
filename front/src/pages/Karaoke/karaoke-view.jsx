@@ -20,7 +20,9 @@ export default function KaraokeView({
     <div ref={containerRef} className={className} onMouseMove={onMouseMove}>
       <KaraokeMedia {...mediaProps} />
 
-      {recordingError && <p className="karaoke-recording-error">{recordingError}</p>}
+      {recordingError && (
+        <p className="karaoke-recording-error">{recordingError}</p>
+      )}
       {analysisRecordingId && (
         <PerformanceAnalysisModal
           recordingId={analysisRecordingId}

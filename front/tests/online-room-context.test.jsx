@@ -382,15 +382,10 @@ describe("online room provider", () => {
     act(() => voice.onTransferProgress({ stage: "complete", percent: 100 }));
     expect(hook.result.current.transferStatus).toBeNull();
 
-    await act(() =>
-      voice.onFile("host", new Blob(["song"]), {
-        kind: "song-package",
-        songId: "song",
-        filename: "song.zip"
-      })
-    );
-    expect(mocks.importSongPackage).toHaveBeenCalledWith( expect.any(Blob), "song.zip"
-    );
+    await act(() => voice.onFile("host", new Blob(["song"]), {
+      kind: "song-package", songId: "song", filename: "song.zip"
+    }));
+    expect(mocks.importSongPackage).not.toHaveBeenCalled();
     expect(hook.result.current.transferStatus).toBeNull();
     expect(hook.result.current.roomCommand).toBeNull();
     await act(() => voice.onFile("host", new Blob(), { kind: "other" }));
@@ -778,33 +773,29 @@ describe("online room provider", () => {
     vi.spyOn(Date, "now").mockReturnValue(1234);
     vi.spyOn(Math, "random").mockReturnValue(0.25);
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
-    await act(() => hook.result.current.createRoom("Alice"));
+    await act(() => hook.result.current.joinRoom("room", "Guest"));
     const voice = mocks.voices[0];
+    const contextOptions = mocks.createOnlineRoomMessageHandler.mock.calls.at(-1)[0];
+    act(() => {
+      contextOptions.setRoom({ id: "room-id", selfId: "guest", host: false, role: "guest" });
+      contextOptions.setParticipants([
+        { id: "host", name: "Host", role: "host" },
+        { id: "guest", name: "Guest", role: "guest" }
+      ]);
+    });
     await hook.result.current.openKaraoke("missing-song");
     const actionOptions = mocks.openKaraokeInRoom.mock.calls.at(-1)?.[0];
     actionOptions.pendingSongCommandRef.current = {
-      type: "open-karaoke",
-      songId: "song",
-      __originatedHere: true
+      type: "open-karaoke", songId: "song", __originatedHere: false
     };
-    await act(() =>
-      voice.onFile("host", new Blob(), {
-        kind: "song-package",
-        songId: "song",
-        filename: "song.zip"
-      })
-    );
-    expect(mocks.clients[0].send).toHaveBeenCalledWith("sync", {
-      state: { type: "open-karaoke", songId: "song" }
-    });
-    expect(hook.result.current.roomCommand).toEqual({
-      type: "open-karaoke",
-      songId: "song",
-      __originatedHere: true,
-      __eventId: "import-1234-0.25"
-    });
-
     const sentBeforeRemoteImport = mocks.clients[0].send.mock.calls.length;
+    await act(() => voice.onFile("host", new Blob(), {
+      kind: "song-package", songId: "song", filename: "song.zip"
+    }));
+    expect(mocks.clients[0].send).toHaveBeenCalledTimes(sentBeforeRemoteImport);
+    expect(hook.result.current.roomCommand).toEqual({
+      type: "open-karaoke", songId: "song", __originatedHere: false, __eventId: "import-1234-0.25"
+    });
     actionOptions.pendingSongCommandRef.current = {
       type: "open-karaoke",
       songId: "remote-song",
@@ -852,6 +843,23 @@ describe("online room provider", () => {
     rejectImport(new Error("obsolete import"));
     await act(async () => { await expect(staleImport).rejects.toThrow("obsolete import"); });
     expect(hook.result.current.transferStatus).toBeNull();
+  });
+
+  test("imports only the expected song package from the room host", async () => {
+    const hook = renderHook(() => useOnlineRoom(), { wrapper });
+    await act(() => hook.result.current.joinRoom("room", "Guest"));
+    const voice = mocks.voices[0];
+    const options = mocks.createOnlineRoomMessageHandler.mock.calls.at(-1)[0];
+    act(() => {
+      options.setRoom({ id: "room-id", selfId: "guest", host: false, role: "guest" });
+      options.setParticipants([{ id: "host", role: "host" }, { id: "attacker", role: "guest" }]);
+    });
+    options.pendingSongCommandRef.current = { type: "open-karaoke", songId: "expected", __originatedHere: false };
+    await act(() => voice.onFile("attacker", new Blob(), { kind: "song-package", songId: "expected" }));
+    await act(() => voice.onFile("host", new Blob(), { kind: "song-package", songId: "wrong" }));
+    expect(mocks.importSongPackage).not.toHaveBeenCalled();
+    await act(() => voice.onFile("host", new Blob(), { kind: "song-package", songId: "expected", filename: "expected.zip" }));
+    expect(mocks.importSongPackage).toHaveBeenCalledExactlyOnceWith(expect.any(Blob), "expected.zip");
   });
 
   test("cancels an older connection when a newer request wins", async () => {

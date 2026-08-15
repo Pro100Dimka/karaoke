@@ -2,7 +2,9 @@ export const KARAOKE_PREFERENCES_KEY = "karaoke-player-preferences";
 
 const clamp = (value, min, max, fallback) => {
   const number = Number(value);
-  return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback;
+  return Number.isFinite(number)
+    ? Math.max(min, Math.min(max, number))
+    : fallback;
 };
 
 const boolean = (value, fallback) => {
@@ -16,7 +18,9 @@ const boolean = (value, fallback) => {
 
 export function normalizeKaraokePreferences(preferences) {
   const source =
-    preferences && typeof preferences === "object" && !Array.isArray(preferences)
+    preferences &&
+    typeof preferences === "object" &&
+    !Array.isArray(preferences)
       ? preferences
       : {};
 
@@ -48,7 +52,8 @@ export function loadKaraokePreferences(storage = globalThis.localStorage) {
   }
 }
 
-export function saveKaraokePreferences(preferences, storage = globalThis.localStorage) {
+export function saveKaraokePreferences( preferences, storage = globalThis.localStorage
+) {
   try {
     const serialized = JSON.stringify(normalizeKaraokePreferences(preferences));
     storage.setItem(KARAOKE_PREFERENCES_KEY, serialized);

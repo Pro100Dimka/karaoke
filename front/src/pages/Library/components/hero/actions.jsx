@@ -16,8 +16,8 @@ export default function LibraryActions({
   setQuery
 }) {
   const actions = [
-    !roomActive && [UsersRound, translateSaved("Петь вместе"), "btn-ghost", onOpenRoom],
-    canManageLibrary && [Plus, translateSaved("Добавить песню"), "btn-primary", onAdd]
+    !roomActive && [ UsersRound, translateSaved("Петь вместе"), "btn-ghost", onOpenRoom ],
+    canManageLibrary && [ Plus, translateSaved("Добавить песню"), "btn-primary", onAdd ]
   ].filter(Boolean);
   return (
     <Stack direction="row" justify="space-between">

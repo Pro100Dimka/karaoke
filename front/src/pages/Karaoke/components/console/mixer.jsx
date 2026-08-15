@@ -14,7 +14,10 @@ const MIXER_COLORS = {
 function VerticalSlider({ label, value, color, onChange, onCommit }) {
   const percent = Math.round(value * 100);
   return (
-    <Stack gap={0.45} sx={{ userSelect: "none", width: "auto" }}>
+    <Stack
+      gap={0.45}
+      sx={{ userSelect: "none", width: "auto" }}
+    >
       <Typography
         variant="caption"
         sx={{ color, fontSize: 10.5, fontWeight: 800, lineHeight: 1, whiteSpace: "nowrap" }}
@@ -38,9 +41,12 @@ function VerticalSlider({ label, value, color, onChange, onCommit }) {
             width: 6,
             height: "100%",
             borderRadius: 999,
-            background: "color-mix(in srgb, var(--color-surface-strong) 76%, var(--color-bg-deep))",
-            border: "1px solid color-mix(in srgb, var(--color-border-strong) 55%, transparent)",
-            boxShadow: "inset 0 0 0.4rem color-mix(in srgb, var(--color-bg-deep) 72%, transparent)"
+            background:
+              "color-mix(in srgb, var(--color-surface-strong) 76%, var(--color-bg-deep))",
+            border:
+              "1px solid color-mix(in srgb, var(--color-border-strong) 55%, transparent)",
+            boxShadow:
+              "inset 0 0 0.4rem color-mix(in srgb, var(--color-bg-deep) 72%, transparent)"
           }}
         />
 
@@ -96,7 +102,10 @@ function VerticalSlider({ label, value, color, onChange, onCommit }) {
         />
       </div>
 
-      <Typography variant="caption" sx={{ color, fontSize: 10, fontWeight: 800, lineHeight: 1 }}>
+      <Typography
+        variant="caption"
+        sx={{ color, fontSize: 10, fontWeight: 800, lineHeight: 1 }}
+      >
         {percent}%
       </Typography>
     </Stack>
@@ -112,7 +121,10 @@ export default function MixerPanel({
 }) {
   const level = clamp(microphoneLevel, 0, 1);
   return (
-    <Stack gap="1rem" style={{ "--microphone-level": level }}>
+    <Stack
+      gap="1rem"
+      style={{ "--microphone-level": level }}
+    >
       <Stack direction="row" align="center" gap={0.4}>
         <Mic size={15} strokeWidth={2.2} />
         <Typography

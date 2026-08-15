@@ -9,11 +9,7 @@ import { normalizeAudioEffects, normalizeAudioRuntimeSettings } from "../utils/a
 
 export default function useMicrophoneSettings({ audioSettings, onError }) {
   const [microphoneVolume, setMicrophoneVolume] = useState(1);
-  const [microphoneEffects, setMicrophoneEffects] = useState(() => ({
-    reverb: 0,
-    echo: 0,
-    delay: 0
-  }));
+  const [microphoneEffects, setMicrophoneEffects] = useState(() => ({ reverb: 0, echo: 0, delay: 0 }));
   const [audioDriver, setAudioDriver] = useState("auto");
   const [directOutputDeviceId, setDirectOutputDeviceId] = useState("");
   const [monitoringEnabled, setMonitoringEnabled] = useState(false);
@@ -29,8 +25,11 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
         const next = event.detail || getAudioPreferences();
         setMonitorInputDeviceId(next.monitorInputDeviceId || "default");
       };
-      window.addEventListener("audio-preferences-changed", syncAudioPreferences);
-      return () => window.removeEventListener("audio-preferences-changed", syncAudioPreferences);
+      window.addEventListener( "audio-preferences-changed", syncAudioPreferences
+      );
+      return () =>
+        window.removeEventListener( "audio-preferences-changed", syncAudioPreferences
+        );
     },
     // Stryker disable next-line ArrayDeclaration: globals and setter are stable.
     []
@@ -46,7 +45,9 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
         setDirectOutputDeviceId(normalized.outputDeviceId);
       };
       globalThis.addEventListener("audio-settings-changed", syncAudioSettings);
-      return () => globalThis.removeEventListener("audio-settings-changed", syncAudioSettings);
+      return () =>
+        globalThis.removeEventListener( "audio-settings-changed", syncAudioSettings
+        );
     },
     // Stryker disable next-line ArrayDeclaration: globals and setters are stable.
     []
@@ -68,7 +69,8 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
       enqueueUpdate(async () => {
         try {
           const updated = await api.updateAudioSettings(patch);
-          globalThis.dispatchEvent(new CustomEvent("audio-settings-changed", { detail: updated }));
+          globalThis.dispatchEvent( new CustomEvent("audio-settings-changed", { detail: updated })
+          );
           return updated;
         } catch (error) {
           if (mountedRef.current) {

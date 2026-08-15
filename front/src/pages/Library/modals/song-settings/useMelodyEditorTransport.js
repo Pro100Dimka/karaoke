@@ -34,8 +34,7 @@ export default function useMelodyEditorTransport({
   const playheadDragRef = useRef(null);
   const playbackOriginRef = useRef(null);
   const playheadPreviewMidiRef = useRef(null);
-  const { auditionNote, instrumentalRef, stopOscillator, updateSynth, vocalsRef } =
-    useMelodyEditorAudio({ notes, playbackRate, volumes });
+  const { auditionNote, instrumentalRef, stopOscillator, updateSynth, vocalsRef } = useMelodyEditorAudio({ notes, playbackRate, volumes });
   const viewport = useMelodyEditorViewport({
     duration,
     instrumentalRef,
@@ -98,7 +97,10 @@ export default function useMelodyEditorTransport({
           }
         } else Object.assign(clock, createClock(current, false));
         const playheadX = keyboardWidth + current * zoom;
-        rollCanvasRef.current?.style.setProperty("--editor-playhead-x", `${playheadX}px`);
+        rollCanvasRef.current?.style.setProperty(
+          "--editor-playhead-x",
+          `${playheadX}px`
+        );
         if (!master.paused && !master.ended) {
           const mediaTime = master.currentTime;
           const drift = vocal.currentTime - mediaTime;
@@ -111,7 +113,8 @@ export default function useMelodyEditorTransport({
               playbackRate * 0.97,
               playbackRate * 1.03
             );
-          else if (vocal.playbackRate !== playbackRate) vocal.playbackRate = playbackRate;
+          else if (vocal.playbackRate !== playbackRate)
+            vocal.playbackRate = playbackRate;
           if (autoScroll) {
             const nextLeft = autoFollowScrollLeft({
               playheadX,
@@ -120,7 +123,8 @@ export default function useMelodyEditorTransport({
               keyboardWidth,
               scrollWidth: shell.scrollWidth
             });
-            if (Math.abs(nextLeft - shell.scrollLeft) > 0.2) shell.scrollLeft = nextLeft;
+            if (Math.abs(nextLeft - shell.scrollLeft) > 0.2)
+              shell.scrollLeft = nextLeft;
           }
           updateSynth(current);
           if (stamp - lastStateAt >= 50) {
@@ -218,7 +222,15 @@ export default function useMelodyEditorTransport({
         translateSaved("Не удалось начать воспроизведение: {0}", { 0: getErrorMessage(error) })
       );
     }
-  }, [autoScroll, instrumentalRef, notify, playbackRate, rollShellRef, updateSynth, vocalsRef]);
+  }, [
+    autoScroll,
+    instrumentalRef,
+    notify,
+    playbackRate,
+    rollShellRef,
+    updateSynth,
+    vocalsRef
+  ]);
 
   const toggleAutoScroll = useCallback(() => {
     setAutoScroll((value) => {

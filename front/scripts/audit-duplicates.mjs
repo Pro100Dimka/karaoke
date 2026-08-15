@@ -10,7 +10,8 @@ const walk = (dir) => {
     if (entry.isDirectory()) {
       if (full === path.join(root, "theme")) continue;
       walk(full);
-    } else if (extensions.includes(path.extname(entry.name))) files.push(full);
+    }
+    else if (extensions.includes(path.extname(entry.name))) files.push(full);
   }
 };
 walk(root);
@@ -31,8 +32,7 @@ for (const file of files) {
       !/[A-Za-zА-Яа-я]/.test(normalized) ||
       listOnly ||
       normalized.includes('from "react"')
-    )
-      continue;
+    ) continue;
     const key = normalized.replace(/\s+/g, " ");
     const item = { file: path.relative(root, file), line: index + 1 };
     if (!occurrences.has(key)) occurrences.set(key, []);
@@ -51,5 +51,7 @@ if (!duplicates.length) {
 }
 console.log(`Potential repeated code windows: ${duplicates.length}`);
 for (const items of duplicates) {
-  console.log(`- ${items.map(({ file, line }) => `${file}:${line}`).join(", ")}`);
+  console.log(
+    `- ${items.map(({ file, line }) => `${file}:${line}`).join(", ")}`
+  );
 }

@@ -20,8 +20,11 @@ export function getDialogCloseResult(kind) {
   return kind !== "confirm";
 }
 export function normalizeDialogOptions(value) {
-  if (typeof value === "string") return { title: value };
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  if (typeof value === "string")
+    return { title: value };
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : {};
 }
 export function createDialogConfig(kind, message, options = {}) {
   const safeKind = kind === "confirm" ? "confirm" : "alert";

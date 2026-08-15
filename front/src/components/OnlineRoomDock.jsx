@@ -21,7 +21,8 @@ export function OnlineRoomDock() {
   const onlineRoom = useOnlineRoom();
   const [copied, setCopied] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const { pending: requestingMicrophone, run: requestMicrophone } = useExclusiveAsyncAction();
+  const { pending: requestingMicrophone, run: requestMicrophone } =
+    useExclusiveAsyncAction();
   const copiedTimerRef = useRef(null);
   const mountedRef = useMountedRef();
 
@@ -61,7 +62,8 @@ export function OnlineRoomDock() {
         <div className="online-room-dock-heading">
           <span>
             {t("room.heading", {
-              role: t(onlineRoom.room.host ? "room.role.host" : "room.role.participant")
+              role: t( onlineRoom.room.host ? "room.role.host" : "room.role.participant"
+              )
             })}
           </span>
           <div className="online-room-dock-code">
@@ -114,12 +116,17 @@ export function OnlineRoomDock() {
               onClick={handleRequestMicrophone}
               disabled={requestingMicrophone}
             >
-              {t(requestingMicrophone ? "room.requestingMicrophone" : "room.allowMicrophone")}
+              {t( requestingMicrophone ? "room.requestingMicrophone" : "room.allowMicrophone"
+              )}
             </Button>
           </div>
         )}
         {onlineRoom.transferStatus && (
-          <div className="online-room-transfer" role="status" aria-live="polite">
+          <div
+            className="online-room-transfer"
+            role="status"
+            aria-live="polite"
+          >
             <p>{transferText}</p>
             {onlineRoom.transferStatus.stage !== "error" && (
               <progress

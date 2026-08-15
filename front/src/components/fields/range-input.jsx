@@ -9,8 +9,10 @@ export default function RangeInput({
   ...props
 }) {
   const normalize = (nextValue) => (numeric ? Number(nextValue) : nextValue);
-  const change = (event) => onChange(normalize(event.currentTarget.value), event);
-  const commit = (event) => onCommit?.(normalize(event.currentTarget.value), event);
+  const change = (event) =>
+    onChange(normalize(event.currentTarget.value), event);
+  const commit = (event) =>
+    onCommit?.(normalize(event.currentTarget.value), event);
 
   return (
     <input

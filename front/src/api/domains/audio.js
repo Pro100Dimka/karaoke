@@ -7,8 +7,10 @@ export const audioApi = {
   getAudioSettings: () => request("/audio/settings"),
   updateAudioSettings: (patch) =>
     request("/audio/settings", { method: "POST", body: JSON.stringify(patch) }),
-  startDirectMonitoring: () => request("/audio/direct-monitor/start", { method: "POST" }),
-  stopDirectMonitoring: () => request("/audio/direct-monitor/stop", { method: "POST" }),
+  startDirectMonitoring: () =>
+    request("/audio/direct-monitor/start", { method: "POST" }),
+  stopDirectMonitoring: () =>
+    request("/audio/direct-monitor/stop", { method: "POST" }),
   releaseDirectMonitoring: () =>
     request("/audio/direct-monitor/stop", { method: "POST", keepalive: true }).catch(() => null),
   getSignalQuality: () => request("/audio/signal-quality")

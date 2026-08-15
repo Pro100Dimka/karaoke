@@ -29,7 +29,8 @@ export function isProcessingActive(status) {
   return ACTIVE_PROCESSING_STATUSES.includes(status);
 }
 export function hasActiveSongProcessing(songs) {
-  return asArray(songs).some((song) => isProcessingActive(String(song?.status)));
+  return asArray(songs).some((song) => isProcessingActive(String(song?.status))
+  );
 }
 export function mergeSongProcessingStatus(songs, status) {
   if (!Array.isArray(songs) || !status?.song_id) return songs ?? [];
@@ -48,7 +49,8 @@ export function mergeSongProcessingStatus(songs, status) {
 }
 export function getLocalVisibleSongs(songs, hiddenSongIds) {
   const hidden = hiddenSongIds instanceof Set ? hiddenSongIds : new Set();
-  return asArray(songs).filter((song) => song && typeof song === "object" && !hidden.has(song.id));
+  return asArray(songs).filter( (song) => song && typeof song === "object" && !hidden.has(song.id)
+  );
 }
 export function resolveVisibleSongs({ localSongs, room, roomSongs }) {
   if (room && !room.host && Array.isArray(roomSongs)) {
@@ -57,7 +59,8 @@ export function resolveVisibleSongs({ localSongs, room, roomSongs }) {
   return asArray(localSongs);
 }
 export function filterSongs(songs, query) {
-  const normalizedQuery = typeof query === "string" ? query.trim().toLowerCase() : "";
+  const normalizedQuery =
+    typeof query === "string" ? query.trim().toLowerCase() : "";
   const source = asArray(songs);
   if (!normalizedQuery) return source;
   return source.filter((song) =>

@@ -40,7 +40,8 @@
     "test:unit:coverage": "vitest run --coverage",
     "test:mutation": "stryker run",
     "test:e2e": "playwright test",
-    "test:e2e:real": "cross-env VITE_USE_MOCK_API=false playwright test"
+    "test:e2e:real": "npm run test:integration:backend",
+    "test:integration:backend": "cross-env VITE_USE_MOCK_API=false playwright test"
   },
   "dependencies": {
     "lucide-react": "^0.383.0",

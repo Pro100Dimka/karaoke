@@ -67,7 +67,9 @@ export default function useMelodyEditorViewport({
           ? event.currentTarget.parentElement?.clientWidth || 1
           : event.currentTarget.parentElement?.clientHeight || 1,
       thumbSize:
-        axis === "x" ? event.currentTarget.clientWidth || 1 : event.currentTarget.clientHeight || 1
+        axis === "x"
+          ? event.currentTarget.clientWidth || 1
+          : event.currentTarget.clientHeight || 1
     };
     event.currentTarget.setPointerCapture?.(event.pointerId);
   }, []);
@@ -153,7 +155,9 @@ export default function useMelodyEditorViewport({
         ? notes.reduce((best, note) => {
             const y = (maxMidi - note.midi_note + 0.5) * verticalZoom;
             const distance = Math.abs(y - viewportCenterY);
-            return !best || distance < best.distance ? { note, distance } : best;
+            return !best || distance < best.distance
+              ? { note, distance }
+              : best;
           }, null)
         : null;
       const nextTop = anchorNote
@@ -177,7 +181,14 @@ export default function useMelodyEditorViewport({
       shell.scrollTop = nextTop;
       syncScrollState();
     },
-    [maxMidi, minMidi, notes, setVerticalZoom, syncScrollState, verticalZoom]
+    [
+      maxMidi,
+      minMidi,
+      notes,
+      setVerticalZoom,
+      syncScrollState,
+      verticalZoom
+    ]
   );
 
   const handleRollWheel = useCallback(

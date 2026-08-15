@@ -2,13 +2,15 @@
 // eslint-disable-next-line import/extensions
 import { translateSaved } from "../i18n/runtime.js";
 
-export const DEFAULT_SIGNALING_URL = "wss://karaoke-studio-online.pro100dimka-and.workers.dev";
+export const DEFAULT_SIGNALING_URL =
+  "wss://karaoke-studio-online.pro100dimka-and.workers.dev";
 const CONNECTION_TIMEOUT_MS = 10_000;
 function getMaxSignalMessageLength() {
   return 256 * 1024;
 }
 const MAX_PARTICIPANT_NAME_LENGTH = 64;
-export function createRoomId(cryptoApi = globalThis.crypto, random = Math.random) {
+export function createRoomId( cryptoApi = globalThis.crypto, random = Math.random
+) {
   if (cryptoApi && typeof cryptoApi.randomUUID === "function") {
     return cryptoApi.randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase();
   }
@@ -33,7 +35,9 @@ export function normalizeRoomId(value) {
 function getCloseDetail(event) {
   const reason = event?.reason?.trim();
   if (reason) return `: ${reason}`;
-  return event?.code && event.code !== 1006 ? translateSaved("(код {0})", { 0: event.code }) : "";
+  return event?.code && event.code !== 1006
+    ? translateSaved("(код {0})", { 0: event.code })
+    : "";
 }
 
 export class OnlineRoomClient {
@@ -53,7 +57,8 @@ export class OnlineRoomClient {
 
   onMessage(listener) {
     if (typeof listener !== "function") {
-      throw new TypeError(translateSaved("Обработчик сообщений комнаты должен быть функцией"));
+      throw new TypeError( translateSaved("Обработчик сообщений комнаты должен быть функцией")
+      );
     }
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -73,7 +78,8 @@ export class OnlineRoomClient {
     const normalizedId = normalizeRoomId(id);
     if (normalizedId.length < 4) {
       return Promise.reject(
-        new Error(translateSaved("Код комнаты должен содержать минимум 4 символа."))
+        new Error( translateSaved("Код комнаты должен содержать минимум 4 символа.")
+        )
       );
     }
     this.disconnect();
@@ -89,7 +95,8 @@ export class OnlineRoomClient {
     const query = new URLSearchParams({ name: participantName, role: host ? "host" : "guest" });
     if (typeof globalThis.WebSocket !== "function") {
       return Promise.reject(
-        new Error(translateSaved("WebSocket не поддерживается в этом окружении."))
+        new Error( translateSaved("WebSocket не поддерживается в этом окружении.")
+        )
       );
     }
     let socket;
@@ -101,7 +108,8 @@ export class OnlineRoomClient {
       return Promise.reject(
         error instanceof Error
           ? error
-          : new Error(translateSaved("Не удалось создать WebSocket-соединение."))
+          : new Error( translateSaved("Не удалось создать WebSocket-соединение.")
+            )
       );
     }
     this.socket = socket;
@@ -136,7 +144,12 @@ export class OnlineRoomClient {
         }
         try {
           const message = JSON.parse(event.data);
-          if (typeof message !== "object" || message === null || Array.isArray(message)) return;
+          if (
+            typeof message !== "object" ||
+            message === null ||
+            Array.isArray(message)
+          )
+            return;
           this.emit(message);
         } catch {
           // A malformed packet must not interrupt the room connection.
@@ -160,7 +173,8 @@ export class OnlineRoomClient {
             )
           )
         );
-        if (wasCurrent) this.emit({ type: "connection-closed" });
+        if (wasCurrent)
+          this.emit({ type: "connection-closed" });
       };
     });
   }

@@ -64,7 +64,11 @@
       rgba(255, 15, 51, 0.12) 25%,
       transparent 44%
     ),
-    radial-gradient(ellipse at 48% 118%, rgba(229, 0, 42, 0.34) 0%, transparent 48%),
+    radial-gradient(
+      ellipse at 48% 118%,
+      rgba(229, 0, 42, 0.34) 0%,
+      transparent 48%
+    ),
     radial-gradient(
       ellipse at 112% 120%,
       rgba(75, 0, 11, 0.96) 0%,
@@ -108,7 +112,11 @@
       rgba(255, 34, 63, 0.14) 26%,
       transparent 46%
     ),
-    radial-gradient(ellipse at 48% 118%, rgba(244, 15, 62, 0.38) 0%, transparent 50%),
+    radial-gradient(
+      ellipse at 48% 118%,
+      rgba(244, 15, 62, 0.38) 0%,
+      transparent 50%
+    ),
     radial-gradient(
       ellipse at 112% 120%,
       rgba(95, 0, 15, 0.92) 0%,
@@ -149,7 +157,11 @@
       rgba(173, 0, 27, 0.1) 27%,
       transparent 46%
     ),
-    radial-gradient(ellipse at 18% 112%, rgba(255, 65, 41, 0.14) 0%, transparent 41%),
+    radial-gradient(
+      ellipse at 18% 112%,
+      rgba(255, 65, 41, 0.14) 0%,
+      transparent 41%
+    ),
     radial-gradient(
       ellipse at 102% 108%,
       rgba(189, 0, 28, 0.54) 0%,
@@ -180,9 +192,21 @@
       rgba(255, 48, 55, 0.14) 29%,
       transparent 51%
     ),
-    radial-gradient(ellipse at 98% 3%, rgba(255, 26, 56, 0.2) 0%, transparent 43%),
-    radial-gradient(ellipse at 20% 110%, rgba(255, 83, 47, 0.11) 0%, transparent 40%),
-    radial-gradient(ellipse at 104% 108%, rgba(181, 0, 27, 0.48) 0%, transparent 54%),
+    radial-gradient(
+      ellipse at 98% 3%,
+      rgba(255, 26, 56, 0.2) 0%,
+      transparent 43%
+    ),
+    radial-gradient(
+      ellipse at 20% 110%,
+      rgba(255, 83, 47, 0.11) 0%,
+      transparent 40%
+    ),
+    radial-gradient(
+      ellipse at 104% 108%,
+      rgba(181, 0, 27, 0.48) 0%,
+      transparent 54%
+    ),
     linear-gradient(
       145deg,
       rgba(86, 6, 10, 0.94) 0%,
@@ -284,7 +308,11 @@
       rgba(255, 180, 148, 0.28) 36%,
       transparent 53%
     ),
-    radial-gradient(ellipse at 96% 5%, rgba(243, 77, 126, 0.24) 0%, transparent 42%),
+    radial-gradient(
+      ellipse at 96% 5%,
+      rgba(243, 77, 126, 0.24) 0%,
+      transparent 42%
+    ),
     radial-gradient(
       ellipse at 108% 116%,
       rgba(142, 8, 62, 0.42) 0%,
@@ -321,7 +349,11 @@
       rgba(255, 199, 172, 0.36) 38%,
       transparent 55%
     ),
-    radial-gradient(ellipse at 96% 5%, rgba(250, 101, 145, 0.28) 0%, transparent 44%),
+    radial-gradient(
+      ellipse at 96% 5%,
+      rgba(250, 101, 145, 0.28) 0%,
+      transparent 44%
+    ),
     radial-gradient(
       ellipse at 108% 116%,
       rgba(166, 15, 73, 0.38) 0%,
@@ -369,7 +401,11 @@
       rgba(255, 196, 163, 0.13) 31%,
       transparent 47%
     ),
-    radial-gradient(ellipse at 106% 108%, rgba(181, 21, 80, 0.18) 0%, transparent 46%),
+    radial-gradient(
+      ellipse at 106% 108%,
+      rgba(181, 21, 80, 0.18) 0%,
+      transparent 46%
+    ),
     linear-gradient(
       145deg,
       rgba(255, 255, 255, 1) 0%,
@@ -395,8 +431,16 @@
       rgba(255, 219, 193, 0.24) 28%,
       transparent 45%
     ),
-    radial-gradient(ellipse at 99% 2%, rgba(238, 62, 122, 0.13) 0%, transparent 40%),
-    radial-gradient(ellipse at 104% 108%, rgba(201, 25, 88, 0.21) 0%, transparent 48%),
+    radial-gradient(
+      ellipse at 99% 2%,
+      rgba(238, 62, 122, 0.13) 0%,
+      transparent 40%
+    ),
+    radial-gradient(
+      ellipse at 104% 108%,
+      rgba(201, 25, 88, 0.21) 0%,
+      transparent 48%
+    ),
     linear-gradient(
       145deg,
       rgba(255, 255, 255, 0.97) 0%,
@@ -494,8 +538,16 @@
       rgba(86, 255, 168, 0.34) 26%,
       transparent 52%
     ),
-    radial-gradient(ellipse at 100% 0%, rgba(0, 255, 170, 0.28) 0%, transparent 42%),
-    radial-gradient(ellipse at 50% 118%, rgba(0, 170, 90, 0.34) 0%, transparent 46%),
+    radial-gradient(
+      ellipse at 100% 0%,
+      rgba(0, 255, 170, 0.28) 0%,
+      transparent 42%
+    ),
+    radial-gradient(
+      ellipse at 50% 118%,
+      rgba(0, 170, 90, 0.34) 0%,
+      transparent 46%
+    ),
     linear-gradient(
       145deg,
       #ffffff 0%,
@@ -524,8 +576,16 @@
       rgba(100, 255, 181, 0.42) 26%,
       transparent 54%
     ),
-    radial-gradient(ellipse at 100% 0%, rgba(40, 255, 183, 0.34) 0%, transparent 45%),
-    radial-gradient(ellipse at 50% 118%, rgba(20, 210, 110, 0.38) 0%, transparent 48%),
+    radial-gradient(
+      ellipse at 100% 0%,
+      rgba(40, 255, 183, 0.34) 0%,
+      transparent 45%
+    ),
+    radial-gradient(
+      ellipse at 50% 118%,
+      rgba(20, 210, 110, 0.38) 0%,
+      transparent 48%
+    ),
     linear-gradient(
       145deg,
       #ffffff 0%,
@@ -546,8 +606,16 @@
       rgba(255, 255, 255, 0.05) 18%,
       transparent 45%
     ),
-    radial-gradient(ellipse at 0% -12%, rgba(82, 255, 178, 0.25) 0%, transparent 50%),
-    radial-gradient(ellipse at 100% -8%, rgba(0, 255, 170, 0.18) 0%, transparent 48%),
+    radial-gradient(
+      ellipse at 0% -12%,
+      rgba(82, 255, 178, 0.25) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse at 100% -8%,
+      rgba(0, 255, 170, 0.18) 0%,
+      transparent 48%
+    ),
     linear-gradient(
       145deg,
       rgba(17, 43, 28, 0.98) 0%,
@@ -563,8 +631,16 @@
       rgba(255, 255, 255, 0.06) 20%,
       transparent 56%
     ),
-    radial-gradient(ellipse at 0% -10%, rgba(150, 255, 210, 0.22) 0%, transparent 48%),
-    radial-gradient(ellipse at 100% 0%, rgba(0, 255, 170, 0.14) 0%, transparent 40%),
+    radial-gradient(
+      ellipse at 0% -10%,
+      rgba(150, 255, 210, 0.22) 0%,
+      transparent 48%
+    ),
+    radial-gradient(
+      ellipse at 100% 0%,
+      rgba(0, 255, 170, 0.14) 0%,
+      transparent 40%
+    ),
     linear-gradient(
       145deg,
       rgba(12, 34, 21, 0.92) 0%,
@@ -656,8 +732,16 @@
       rgba(214, 140, 255, 0.38) 28%,
       transparent 54%
     ),
-    radial-gradient(ellipse at 100% 0%, rgba(183, 94, 255, 0.34) 0%, transparent 42%),
-    radial-gradient(ellipse at 50% 118%, rgba(108, 42, 215, 0.34) 0%, transparent 48%),
+    radial-gradient(
+      ellipse at 100% 0%,
+      rgba(183, 94, 255, 0.34) 0%,
+      transparent 42%
+    ),
+    radial-gradient(
+      ellipse at 50% 118%,
+      rgba(108, 42, 215, 0.34) 0%,
+      transparent 48%
+    ),
     linear-gradient(
       145deg,
       #ffffff 0%,
@@ -686,8 +770,16 @@
       rgba(225, 168, 255, 0.45) 28%,
       transparent 56%
     ),
-    radial-gradient(ellipse at 100% 0%, rgba(206, 132, 255, 0.36) 0%, transparent 44%),
-    radial-gradient(ellipse at 50% 118%, rgba(130, 60, 235, 0.38) 0%, transparent 50%),
+    radial-gradient(
+      ellipse at 100% 0%,
+      rgba(206, 132, 255, 0.36) 0%,
+      transparent 44%
+    ),
+    radial-gradient(
+      ellipse at 50% 118%,
+      rgba(130, 60, 235, 0.38) 0%,
+      transparent 50%
+    ),
     linear-gradient(
       145deg,
       #ffffff 0%,
@@ -708,8 +800,16 @@
       rgba(255, 255, 255, 0.05) 18%,
       transparent 45%
     ),
-    radial-gradient(ellipse at 0% -12%, rgba(215, 160, 255, 0.25) 0%, transparent 50%),
-    radial-gradient(ellipse at 100% -8%, rgba(168, 88, 255, 0.18) 0%, transparent 48%),
+    radial-gradient(
+      ellipse at 0% -12%,
+      rgba(215, 160, 255, 0.25) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse at 100% -8%,
+      rgba(168, 88, 255, 0.18) 0%,
+      transparent 48%
+    ),
     linear-gradient(
       145deg,
       rgba(35, 20, 58, 0.98) 0%,
@@ -725,8 +825,16 @@
       rgba(255, 255, 255, 0.06) 20%,
       transparent 56%
     ),
-    radial-gradient(ellipse at 0% -10%, rgba(233, 186, 255, 0.22) 0%, transparent 48%),
-    radial-gradient(ellipse at 100% 0%, rgba(183, 92, 255, 0.14) 0%, transparent 40%),
+    radial-gradient(
+      ellipse at 0% -10%,
+      rgba(233, 186, 255, 0.22) 0%,
+      transparent 48%
+    ),
+    radial-gradient(
+      ellipse at 100% 0%,
+      rgba(183, 92, 255, 0.14) 0%,
+      transparent 40%
+    ),
     linear-gradient(
       145deg,
       rgba(25, 15, 42, 0.92) 0%,

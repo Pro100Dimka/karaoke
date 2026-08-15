@@ -14,7 +14,11 @@ const THEME_ICONS = { dark: darkIcon, light: lightIcon, green: greenIcon, violet
 const LIB_INFO = [
   ["body1", translateSaved("Ваша музыкальная коллекция")],
   ["h1", translateSaved("Библиотека песен")],
-  ["body2", translateSaved("Добавляйте треки, управляйте обработкой и открывайте их в караоке.")]
+  [
+    "body2",
+    translateSaved( "Добавляйте треки, управляйте обработкой и открывайте их в караоке."
+    )
+  ]
 ];
 export default function LibraryHero({ songCount, readyCount }) {
   const { theme } = useAppSettings()?.settings || {};
@@ -22,14 +26,20 @@ export default function LibraryHero({ songCount, readyCount }) {
   return (
     <Stack direction="row" align="center" justify="space-between">
       <Stack direction="row" align="center" gap="2rem">
-        <Box sx={{ width: "91px", height: "91px", flex: "0 0 91px" }}>
+        <Box
+          sx={{ width: "91px", height: "91px", flex: "0 0 91px" }}
+        >
           <img
             src={THEME_ICONS[theme] ?? THEME_ICONS.dark}
             alt=""
             style={{ width: "100%", height: "100%", objectFit: "contain" }}
           />
         </Box>
-        <Stack direction="column" align="flex-start" sx={{ textAlign: "left" }}>
+        <Stack
+          direction="column"
+          align="flex-start"
+          sx={{ textAlign: "left" }}
+        >
           {LIB_INFO.map(([variant, text]) => (
             <Typography key={variant} variant={variant}>
               {text}

@@ -8,6 +8,10 @@ import { mockBlobRequest, mockRequest } from "./mock/request.js";
 export const MOCK_API_ENABLED = import.meta.env.VITE_USE_MOCK_API === "true";
 export const BASE_URL = API_BASE_URL;
 
+export const isAmbiguousTransportError = (error) =>
+  error?.name === "TimeoutError" || error?.name === "AbortError" ||
+  (error instanceof TypeError && !error.status);
+
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 function createDeadlineSignal(signal, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS) {
   if (typeof globalThis.AbortController !== "function") {
@@ -21,10 +25,7 @@ function createDeadlineSignal(signal, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS) {
   const safeTimeout = Number.isFinite(Number(timeoutMs))
     ? Math.max(1, Number(timeoutMs))
     : DEFAULT_REQUEST_TIMEOUT_MS;
-  const timer = globalThis.setTimeout(() => {
-    didTimeout = true;
-    controller.abort();
-  }, safeTimeout);
+  const timer = globalThis.setTimeout(() => { didTimeout = true; controller.abort(); }, safeTimeout);
   return {
     signal: controller.signal,
     timedOut: () => didTimeout,
@@ -41,19 +42,17 @@ function normalizeHeaders(headers) {
   return { ...headers };
 }
 function hasContentType(headers) {
-  return Object.keys(headers).some((name) => name.toLowerCase() === "content-type");
+  return Object.keys(headers).some( (name) => name.toLowerCase() === "content-type"
+  );
 }
 function buildRequestOptions(options = {}) {
   const { headers, body, timeoutMs, ...requestOptions } = options;
   const FormDataCtor = globalThis.FormData;
-  const isFormData = typeof FormDataCtor === "function" && body instanceof FormDataCtor;
+  const isFormData =
+    typeof FormDataCtor === "function" && body instanceof FormDataCtor;
   const normalizedHeaders = normalizeHeaders(headers);
   if (isFormData || body == null) {
-    return {
-      ...requestOptions,
-      body,
-      ...(normalizedHeaders ? { headers: normalizedHeaders } : {})
-    };
+    return { ...requestOptions, body, ...(normalizedHeaders ? { headers: normalizedHeaders } : {}) };
   }
   const nextHeaders = normalizedHeaders || {};
   if (typeof body === "string" && !hasContentType(nextHeaders)) {
@@ -65,7 +64,10 @@ async function readErrorDetail(response) {
   let detail = response.statusText || `HTTP ${response.status}`;
   try {
     const data = await response.json();
-    detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail ?? data);
+    detail =
+      typeof data.detail === "string"
+        ? data.detail
+        : JSON.stringify(data.detail ?? data);
   } catch {
     // Ответ может не содержать JSON-тело.
   }
@@ -98,9 +100,55 @@ async function withSuccessfulResponse(path, options, consume) {
     deadline.cleanup();
   }
 }
+
+const MAX_MEMORY_BLOB_BYTES = 64 * 1024 * 1024;
+async function readBlobResponse(response) {
+  const getDirectory = globalThis.navigator?.storage?.getDirectory;
+  if (typeof getDirectory === "function" && response.body?.getReader) {
+    const root = await getDirectory.call(globalThis.navigator.storage);
+    const name = `advoice-http-${Date.now()}-${Math.random().toString(16).slice(2)}.part`;
+    const handle = await root.getFileHandle(name, { create: true });
+    const writable = await handle.createWritable();
+    const reader = response.body.getReader();
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        await writable.write(value);
+      }
+      await writable.close();
+      const file = await handle.getFile();
+      Object.defineProperty(file, "cleanup", { value: () => root.removeEntry(name).catch(() => {}) });
+      return file;
+    } catch (error) {
+      await writable.abort?.().catch?.(() => {});
+      await root.removeEntry(name).catch(() => {});
+      throw error;
+    }
+  }
+  if (response.body?.getReader) {
+    const chunks = [];
+    let size = 0;
+    const reader = response.body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_MEMORY_BLOB_BYTES) {
+        await reader.cancel().catch(() => {});
+        throw new Error(translateSaved("Файл слишком большой для загрузки без дискового хранилища браузера"));
+      }
+      chunks.push(value);
+    }
+    return new Blob(chunks, { type: response.headers?.get?.("content-type") || "application/octet-stream" });
+  }
+  return response.blob();
+}
+
 export function encodePathSegment(value) {
   const segment = String(value ?? "").trim();
-  if (!segment) throw new TypeError(translateSaved("Пустой идентификатор API-ресурса"));
+  if (!segment)
+    throw new TypeError(translateSaved("Пустой идентификатор API-ресурса"));
   return encodeURIComponent(segment);
 }
 export async function request(path, options = {}) {
@@ -109,18 +157,13 @@ export async function request(path, options = {}) {
     if (response.status === 204) return null;
     const text = await response.text();
     if (!text) return null;
-    try {
-      return JSON.parse(text);
-    } catch {
-      throw new Error(
-        translateSaved("Некорректный JSON в ответе {0}", { 0: response.url || path })
-      );
-    }
+    try { return JSON.parse(text); }
+    catch { throw new Error(translateSaved("Некорректный JSON в ответе {0}", { 0: response.url || path })); }
   });
 }
 export async function requestBlob(path, options = {}) {
   if (MOCK_API_ENABLED) return mockBlobRequest(path, options);
-  return withSuccessfulResponse(path, options, (response) => response.blob());
+  return withSuccessfulResponse(path, options, readBlobResponse);
 }
 const MOCK_SILENT_AUDIO_URL =
   "data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQIAAAAAAA==";
@@ -131,6 +174,8 @@ export function createFileUrl(path) {
   if (/^[a-z][a-z\d+.-]*:/i.test(normalizedPath)) {
     throw new TypeError(translateSaved("Ожидался локальный путь к файлу API"));
   }
-  const requestPath = normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`;
+  const requestPath = normalizedPath.startsWith("/")
+    ? normalizedPath
+    : `/${normalizedPath}`;
   return `${BASE_URL}${requestPath}`;
 }

@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from AI import runtime
+from AI import backend_registry, runtime
 from AI.engines import device
 
 
@@ -169,3 +169,29 @@ def test_cpu_tuning_is_opt_in(monkeypatch):
         set_num_interop_threads=lambda _value: pytest.fail("must stay untouched"),
     )
     assert runtime._apply_cpu_tuning(profile(cuda=False), fake_torch) is None
+
+
+def test_optional_runtime_rejects_dependency_shadowing(monkeypatch, tmp_path):
+    runtime_dir = tmp_path / "onnxruntime-directml"
+    runtime_dir.mkdir()
+    (runtime_dir / "onnxruntime").mkdir()
+    (runtime_dir / "numpy").mkdir()
+    monkeypatch.setenv("KARAOKE_AI_ORT_DIRECTML_PATH", str(runtime_dir))
+
+    path, reason = backend_registry._optional_runtime_path("KARAOKE_AI_ORT_DIRECTML_PATH")
+
+    assert path is None
+    assert "not isolated" in reason
+    assert "numpy" in reason
+
+
+def test_optional_runtime_accepts_clean_runtime(monkeypatch, tmp_path):
+    runtime_dir = tmp_path / "onnxruntime-directml"
+    runtime_dir.mkdir()
+    (runtime_dir / "onnxruntime").mkdir()
+    monkeypatch.setenv("KARAOKE_AI_ORT_DIRECTML_PATH", str(runtime_dir))
+
+    path, reason = backend_registry._optional_runtime_path("KARAOKE_AI_ORT_DIRECTML_PATH")
+
+    assert path == runtime_dir
+    assert reason == ""

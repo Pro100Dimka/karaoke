@@ -12,8 +12,10 @@ function readFiniteTime(source, ...keys) {
 function normalizeLine(line) {
   if (!line) return null;
 
-  const start = readFiniteTime(line, "start", "start_sec", "start_time", "begin", "from");
-  const end = readFiniteTime(line, "end", "end_sec", "end_time", "finish", "to");
+  const start = readFiniteTime( line, "start", "start_sec", "start_time", "begin", "from"
+  );
+  const end = readFiniteTime( line, "end", "end_sec", "end_time", "finish", "to"
+  );
   if ([start, end].includes(null) || end < start) return null;
 
   return { ...line, start, end };
@@ -43,7 +45,8 @@ export function getLyricDisplayState(lyrics, currentTime) {
   const upcomingLineIndex = safeLyrics.findIndex((line) => line.start > time);
   const upcomingLine = safeLyrics[upcomingLineIndex] || null;
   const primaryLineIndex = currentLine ? currentLineIndex : upcomingLineIndex;
-  const nextLine = primaryLineIndex >= 0 ? safeLyrics[primaryLineIndex + 1] || null : null;
+  const nextLine =
+    primaryLineIndex >= 0 ? safeLyrics[primaryLineIndex + 1] || null : null;
 
   return { currentLineIndex, currentLine, upcomingLine, nextLine };
 }
@@ -53,7 +56,11 @@ export function getLyricFill(currentTime, start, end) {
   const safeStart = Number(start);
   const safeEnd = Number(end);
 
-  if (!Number.isFinite(safeCurrent) || !Number.isFinite(safeStart) || !Number.isFinite(safeEnd)) {
+  if (
+    !Number.isFinite(safeCurrent) ||
+    !Number.isFinite(safeStart) ||
+    !Number.isFinite(safeEnd)
+  ) {
     return 0;
   }
 

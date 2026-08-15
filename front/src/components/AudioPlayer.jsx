@@ -69,7 +69,8 @@ export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
         preload="metadata"
         src={src}
         onLoadedMetadata={(event) => {
-          const mediaDuration = normalizeAudioDuration(event.currentTarget.duration);
+          const mediaDuration = normalizeAudioDuration( event.currentTarget.duration
+          );
           setDuration(mediaDuration || fallbackDuration);
         }}
         onTimeUpdate={(event) =>

@@ -154,7 +154,10 @@ export async function mockRequest(path, options = {}) {
     store.recordings.push(recording);
     return clone(recording);
   }
-  if (pathname === "/recording/library" || /^\/recording\/by-song\//.test(pathname)) {
+  if (
+    pathname === "/recording/library" ||
+    /^\/recording\/by-song\//.test(pathname)
+  ) {
     return clone(store.recordings);
   }
   if (/^\/recording\/[^/]+$/.test(pathname) && method === "DELETE") {
@@ -169,8 +172,7 @@ export async function mockRequest(path, options = {}) {
     return { accuracy_percent: 82, average_deviation_cents: 18, sections: [] };
   }
 
-  if (["/models/whisper/", "/cache/"].some((prefix) => pathname.startsWith(prefix)))
-    return { ok: true };
+  if (["/models/whisper/", "/cache/"].some((prefix) => pathname.startsWith(prefix))) return { ok: true };
 
   throw new Error(`Mock API route is not implemented: ${method} ${pathname}`);
 }
@@ -180,5 +182,7 @@ export async function mockBlobRequest(path, options = {}) {
   if (method === "GET" && /^\/songs\/[^/]+\/package$/.test(pathname)) {
     return new Blob(["mock karaoke package"], { type: "application/zip" });
   }
-  throw new Error(`Mock blob API route is not implemented: ${method} ${pathname}`);
+  throw new Error(
+    `Mock blob API route is not implemented: ${method} ${pathname}`
+  );
 }

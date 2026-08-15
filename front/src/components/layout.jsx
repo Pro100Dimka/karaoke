@@ -15,7 +15,8 @@ const ROUTES = { karaoke: "/karaoke" };
 
 function AppFloatingControls({ onOpenSettings }) {
   const { t } = useI18n();
-  const { error, isLoading, isPlaying, station, toggle, volume, setVolume } = useRadio();
+  const { error, isLoading, isPlaying, station, toggle, volume, setVolume } =
+    useRadio();
 
   return (
     <div className="app-floating-controls">
@@ -33,7 +34,8 @@ function AppFloatingControls({ onOpenSettings }) {
           icon={Radio}
           size={28}
           label={
-            error || t(isPlaying ? "radio.disable" : "radio.enable", { station: station.name })
+            error ||
+            t(isPlaying ? "radio.disable" : "radio.enable", { station: station.name })
           }
           onClick={toggle}
         />
@@ -78,26 +80,20 @@ export default function AppLayout() {
     };
 
     window.addEventListener("app:route-blackout", handleRouteBlackout);
-    return () => window.removeEventListener("app:route-blackout", handleRouteBlackout);
+    return () =>
+      window.removeEventListener("app:route-blackout", handleRouteBlackout);
   }, []);
 
-  const openSettings = useCallback(() => {
-    setSongSettingsId(null);
-    setSettingsOpen(true);
-  }, []);
+  const openSettings = useCallback(() => { setSongSettingsId(null); setSettingsOpen(true); }, []);
 
-  const closeSettings = useCallback(() => {
-    setSettingsOpen(false);
-  }, []);
+  const closeSettings = useCallback(() => { setSettingsOpen(false); }, []);
 
   const openSongSettings = useCallback((songId) => {
     setSettingsOpen(false);
     setSongSettingsId(songId || null);
   }, []);
 
-  const closeSongSettings = useCallback(() => {
-    setSongSettingsId(null);
-  }, []);
+  const closeSongSettings = useCallback(() => { setSongSettingsId(null); }, []);
 
   useOnlineRoomNavigation();
 
@@ -116,10 +112,17 @@ export default function AppLayout() {
       <TitleBar hideActions={isEditor} />
       <div className="app-body">
         <main className="app-main">
-          <AppRoutes onOpenAppSettings={openSettings} onOpenSongSettings={openSongSettings} />
+          <AppRoutes
+            onOpenAppSettings={openSettings}
+            onOpenSongSettings={openSongSettings}
+          />
         </main>
-        {!isKaraoke && !isEditor && <AppFloatingControls onOpenSettings={openSettings} />}
-        {songSettingsId && <SongSettings songId={songSettingsId} onClose={closeSongSettings} />}
+        {!isKaraoke && !isEditor && (
+          <AppFloatingControls onOpenSettings={openSettings} />
+        )}
+        {songSettingsId && (
+          <SongSettings songId={songSettingsId} onClose={closeSongSettings} />
+        )}
         <div
           className={`app-route-blackout ${routeBlackout ? "is-visible" : ""}`}
           aria-hidden="true"

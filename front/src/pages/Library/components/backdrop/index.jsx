@@ -1,10 +1,7 @@
 import { useEffect } from "react";
 import LibraryWaveTerrain from "./wave-terrain";
 
-const MUSIC_DECOR = [
-  ["record", 4],
-  ["notes", 18]
-];
+const MUSIC_DECOR = [ ["record", 4], ["notes", 18] ];
 
 function MusicObject({ type, parts }) {
   return (
@@ -43,9 +40,17 @@ export default function LibraryBackdrop() {
       currentY += (targetY - currentY) * 0.075;
       root.style.setProperty("--library-parallax-x", currentX.toFixed(3));
       root.style.setProperty("--library-parallax-y", currentY.toFixed(3));
-      root.style.setProperty("--library-bg-x", `${(-currentX * 7).toFixed(2)}px`);
-      root.style.setProperty("--library-bg-y", `${(-currentY * 4).toFixed(2)}px`);
-      const moving = Math.abs(targetX - currentX) > 0.001 || Math.abs(targetY - currentY) > 0.001;
+      root.style.setProperty(
+        "--library-bg-x",
+        `${(-currentX * 7).toFixed(2)}px`
+      );
+      root.style.setProperty(
+        "--library-bg-y",
+        `${(-currentY * 4).toFixed(2)}px`
+      );
+      const moving =
+        Math.abs(targetX - currentX) > 0.001 ||
+        Math.abs(targetY - currentY) > 0.001;
       if (moving) frame = requestAnimationFrame(render);
       else {
         frame = 0;
@@ -92,9 +97,7 @@ export default function LibraryBackdrop() {
         <i />
       </div>
       <div className="library-music-decor">
-        {MUSIC_DECOR.map(([type, parts]) => (
-          <MusicObject key={type} type={type} parts={parts} />
-        ))}
+        {MUSIC_DECOR.map(([type, parts]) => ( <MusicObject key={type} type={type} parts={parts} /> ))}
       </div>
       <LibraryWaveTerrain />
     </div>

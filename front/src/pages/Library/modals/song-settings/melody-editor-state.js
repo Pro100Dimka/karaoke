@@ -7,7 +7,20 @@ export const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 export const roundTime = (value) => Math.round(value * 1000) / 1000;
 
 export const noteName = (midi) => {
-  const names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  const names = [
+    "C",
+    "C#",
+    "D",
+    "D#",
+    "E",
+    "F",
+    "F#",
+    "G",
+    "G#",
+    "A",
+    "A#",
+    "B"
+  ];
   const value = Number(midi);
   return `${names[((value % 12) + 12) % 12]}${Math.floor(value / 12) - 1}`;
 };

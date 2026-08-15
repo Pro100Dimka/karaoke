@@ -31,7 +31,7 @@ import useMelodyGuide from "../src/pages/Karaoke/hooks/useMelodyGuide.js";
 beforeEach(() => {
   Object.values(mocks).forEach((mock) => mock.mockReset());
   mocks.loadKaraokePreferences.mockReturnValue({});
-  mocks.saveKaraokePreferences.mockImplementation((value) => value);
+  mocks.saveKaraokePreferences.mockReturnValue(true);
   mocks.updateUiPreferences.mockResolvedValue({});
   mocks.shuffleThemes.mockImplementation(() => [{ id: "two" }, { id: "one" }]);
   mocks.createPanoramaPath.mockReturnValue([1, 2, 3]);
@@ -83,10 +83,10 @@ describe("karaoke preferences", () => {
       autoHideConsole: false,
       effectPreset: "hall"
     });
-    expect(mocks.updateUiPreferences).toHaveBeenLastCalledWith(
-      "karaoke",
-      expect.objectContaining({ effectPreset: "hall" })
-    );
+    expect(mocks.updateUiPreferences).toHaveBeenLastCalledWith("karaoke", {
+      musicVolume: 0.5, vocalVolume: 0.4, melodyVolume: 0.3, speed: 1.2, keyShift: 2,
+      showLyrics: false, showNotes: false, autoHideConsole: false, effectPreset: "hall"
+    });
   });
 
   test("uses saved values and skips remote persistence when local save fails", () => {
@@ -101,7 +101,7 @@ describe("karaoke preferences", () => {
       autoHideConsole: false,
       effectPreset: "dry"
     });
-    mocks.saveKaraokePreferences.mockReturnValue(null);
+    mocks.saveKaraokePreferences.mockReturnValue(false);
     const { result } = renderHook(() => useKaraokePreferences());
     expect(result.current.musicVolume).toBe(0);
     expect(result.current.effectPreset).toBe("dry");

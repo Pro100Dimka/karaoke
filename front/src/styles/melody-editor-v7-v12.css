@@ -11,7 +11,8 @@
     color-mix(in srgb, var(--color-surface-strong) 36%, #08070b),
     #060509
   );
-  border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 18%, rgba(255, 255, 255, 0.055));
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--color-primary) 18%, rgba(255, 255, 255, 0.055));
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
 }
 .melody-editor-title-block {
@@ -35,7 +36,8 @@
   height: 28px !important;
   min-width: 28px !important;
   border-radius: 9px !important;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 34%, rgba(255, 255, 255, 0.12)) !important;
+  border: 1px solid
+    color-mix(in srgb, var(--color-primary) 34%, rgba(255, 255, 255, 0.12)) !important;
   color: var(--color-text) !important;
   background: linear-gradient(
     180deg,
@@ -52,7 +54,11 @@
 }
 .melody-editor-back:hover {
   transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--color-primary-hover) 68%, white 10%) !important;
+  border-color: color-mix(
+    in srgb,
+    var(--color-primary-hover) 68%,
+    white 10%
+  ) !important;
   box-shadow:
     0 0 16px color-mix(in srgb, var(--color-primary) 24%, transparent),
     inset 0 1px rgba(255, 255, 255, 0.18) !important;
@@ -83,8 +89,13 @@
   height: 58px;
   min-height: 58px;
   border-radius: 13px;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, rgba(255, 255, 255, 0.08));
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.01));
+  border: 1px solid
+    color-mix(in srgb, var(--color-primary) 22%, rgba(255, 255, 255, 0.08));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.025),
+    rgba(255, 255, 255, 0.01)
+  );
   box-shadow:
     inset 0 1px rgba(255, 255, 255, 0.05),
     0 8px 22px rgba(0, 0, 0, 0.18);
@@ -102,8 +113,13 @@
   gap: 0.28rem;
   padding: 0.3rem;
   border-radius: 13px;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 18%, rgba(255, 255, 255, 0.07));
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.012));
+  border: 1px solid
+    color-mix(in srgb, var(--color-primary) 18%, rgba(255, 255, 255, 0.07));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.025),
+    rgba(255, 255, 255, 0.012)
+  );
   box-shadow: inset 0 1px rgba(255, 255, 255, 0.04);
 }
 .melody-editor-compact-tools .melody-editor-tool {
@@ -112,7 +128,8 @@
   min-width: 30px;
   border-radius: 9px;
   color: var(--color-text-soft);
-  border: 1px solid color-mix(in srgb, var(--color-primary) 28%, rgba(255, 255, 255, 0.085));
+  border: 1px solid
+    color-mix(in srgb, var(--color-primary) 28%, rgba(255, 255, 255, 0.085));
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--color-surface-soft) 70%, white 2%),
@@ -146,7 +163,8 @@
     0 0 17px color-mix(in srgb, var(--color-primary) 48%, transparent),
     inset 0 1px rgba(255, 255, 255, 0.28);
 }
-.melody-editor-compact-tools .melody-editor-tool.is-danger:hover:not(:disabled) {
+.melody-editor-compact-tools
+  .melody-editor-tool.is-danger:hover:not(:disabled) {
   background: linear-gradient(180deg, #ff445d, #b90a2a);
 }
 
@@ -167,7 +185,11 @@
   min-height: 52px;
   border-radius: 12px;
   padding: 0.38rem 0.5rem;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.024), rgba(255, 255, 255, 0.01));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.024),
+    rgba(255, 255, 255, 0.01)
+  );
 }
 
 .melody-editor-roll-shell {
@@ -176,7 +198,8 @@
 }
 .melody-editor-roll-canvas {
   background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px) 0 0/68px 100%,
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px) 0
+      0/68px 100%,
     #07060a;
 }
 .melody-editor-pitch-row {
@@ -189,7 +212,11 @@
   background: rgba(0, 0, 0, 0.055);
 }
 .melody-editor-pitch-row:nth-child(12n + 1) {
-  border-bottom-color: color-mix(in srgb, var(--color-primary) 9%, rgba(255, 255, 255, 0.018));
+  border-bottom-color: color-mix(
+    in srgb,
+    var(--color-primary) 9%,
+    rgba(255, 255, 255, 0.018)
+  );
 }
 .melody-editor-keyboard {
   width: var(--editor-keyboard-width) !important;
@@ -206,7 +233,8 @@
 }
 .melody-editor-note {
   border-radius: 4px;
-  border: 1px solid color-mix(in srgb, var(--color-primary-hover) 62%, white 12%);
+  border: 1px solid
+    color-mix(in srgb, var(--color-primary-hover) 62%, white 12%);
   box-shadow:
     inset 0 1px rgba(255, 255, 255, 0.3),
     0 1px 4px color-mix(in srgb, var(--color-primary) 13%, transparent);
@@ -262,7 +290,11 @@
   width: 8px;
 }
 .melody-editor-scroll-track {
-  border-color: color-mix(in srgb, var(--color-primary) 15%, rgba(255, 255, 255, 0.08));
+  border-color: color-mix(
+    in srgb,
+    var(--color-primary) 15%,
+    rgba(255, 255, 255, 0.08)
+  );
   background: rgba(255, 255, 255, 0.045);
 }
 .is-horizontal .melody-editor-scroll-thumb {
@@ -322,7 +354,8 @@
   border: 0;
   border-radius: 999px;
   background: color-mix(in srgb, var(--color-bg-deep) 72%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-border) 55%, transparent);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--color-border) 55%, transparent);
 }
 .melody-editor-tool {
   width: 40px !important;
@@ -330,21 +363,42 @@
   min-width: 40px;
   padding: 0 !important;
   border: 1px solid
-    color-mix(in srgb, var(--editor-tool-accent, var(--color-primary)) 52%, transparent) !important;
+    color-mix(
+      in srgb,
+      var(--editor-tool-accent, var(--color-primary)) 52%,
+      transparent
+    ) !important;
   border-radius: 50% !important;
-  color: color-mix(in srgb, var(--editor-tool-accent, #fff) 84%, white) !important;
+  color: color-mix(
+    in srgb,
+    var(--editor-tool-accent, #fff) 84%,
+    white
+  ) !important;
   background:
-    radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.16), transparent 27%),
+    radial-gradient(
+      circle at 35% 28%,
+      rgba(255, 255, 255, 0.16),
+      transparent 27%
+    ),
     linear-gradient(
       145deg,
-      color-mix(in srgb, var(--editor-tool-accent, var(--color-primary)) 25%, #17131c),
+      color-mix(
+        in srgb,
+        var(--editor-tool-accent, var(--color-primary)) 25%,
+        #17131c
+      ),
       #09080d 68%
     ) !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.14),
     inset 0 -5px 10px rgba(0, 0, 0, 0.28),
     0 0 0 1px rgba(0, 0, 0, 0.4),
-    0 0 10px color-mix(in srgb, var(--editor-tool-accent, var(--color-primary)) 16%, transparent) !important;
+    0 0 10px
+      color-mix(
+        in srgb,
+        var(--editor-tool-accent, var(--color-primary)) 16%,
+        transparent
+      ) !important;
   transition:
     transform 0.12s ease,
     filter 0.12s ease,
@@ -437,7 +491,12 @@
   border-right: 1px solid #929199 !important;
   border-bottom: 1px solid #a9a8ae !important;
   border-radius: 0 3px 3px 0 !important;
-  background: linear-gradient(90deg, #ffffff 0%, #faf9fb 70%, #dedde2 100%) !important;
+  background: linear-gradient(
+    90deg,
+    #ffffff 0%,
+    #faf9fb 70%,
+    #dedde2 100%
+  ) !important;
   box-shadow:
     inset 0 -1px rgba(0, 0, 0, 0.07),
     inset -3px 0 5px rgba(0, 0, 0, 0.08) !important;
@@ -446,14 +505,23 @@
   z-index: 25 !important;
   border: 1px solid #020203 !important;
   border-radius: 0 3px 3px 0 !important;
-  background: linear-gradient(90deg, #050506 0%, #15151a 70%, #303039 100%) !important;
+  background: linear-gradient(
+    90deg,
+    #050506 0%,
+    #15151a 70%,
+    #303039 100%
+  ) !important;
   box-shadow:
     1px 2px 4px rgba(0, 0, 0, 0.55),
     inset -1px 0 rgba(255, 255, 255, 0.07) !important;
 }
 .melody-editor-playhead {
   left: 0 !important;
-  transform: translate3d(var(--editor-playhead-x, var(--editor-keyboard-width)), 0, 0) !important;
+  transform: translate3d(
+    var(--editor-playhead-x, var(--editor-keyboard-width)),
+    0,
+    0
+  ) !important;
   will-change: transform !important;
   transition: none !important;
   contain: paint style !important;
@@ -497,7 +565,12 @@
   border-right: 1px solid #929199 !important;
   border-bottom: 1px solid #a9a8ae !important;
   border-radius: 0 3px 3px 0 !important;
-  background: linear-gradient(90deg, #fff 0%, #faf9fb 70%, #dedde2 100%) !important;
+  background: linear-gradient(
+    90deg,
+    #fff 0%,
+    #faf9fb 70%,
+    #dedde2 100%
+  ) !important;
   box-shadow:
     inset 0 -1px rgba(0, 0, 0, 0.07),
     inset -3px 0 5px rgba(0, 0, 0, 0.08) !important;
@@ -506,14 +579,23 @@
   z-index: 25 !important;
   border: 1px solid #020203 !important;
   border-radius: 0 3px 3px 0 !important;
-  background: linear-gradient(90deg, #050506 0%, #15151a 70%, #303039 100%) !important;
+  background: linear-gradient(
+    90deg,
+    #050506 0%,
+    #15151a 70%,
+    #303039 100%
+  ) !important;
   box-shadow:
     1px 2px 4px rgba(0, 0, 0, 0.55),
     inset -1px 0 rgba(255, 255, 255, 0.07) !important;
 }
 .melody-editor-playhead {
   left: 0 !important;
-  transform: translate3d(var(--editor-playhead-x, var(--editor-keyboard-width)), 0, 0) !important;
+  transform: translate3d(
+    var(--editor-playhead-x, var(--editor-keyboard-width)),
+    0,
+    0
+  ) !important;
   will-change: transform !important;
   transition: none !important;
   contain: paint style !important;
@@ -539,7 +621,11 @@
 }
 .melody-editor-playhead {
   left: 0 !important;
-  transform: translate3d(var(--editor-playhead-x, var(--editor-keyboard-width)), 0, 0) !important;
+  transform: translate3d(
+    var(--editor-playhead-x, var(--editor-keyboard-width)),
+    0,
+    0
+  ) !important;
   will-change: transform !important;
   transition: none !important;
 }
@@ -575,7 +661,10 @@
 }
 .melody-editor-topdeck-v11 {
   display: grid !important;
-  grid-template-columns: max-content max-content minmax(360px, 1fr) minmax(180px, 260px) !important;
+  grid-template-columns: max-content max-content minmax(360px, 1fr) minmax(
+      180px,
+      260px
+    ) !important;
   align-items: center !important;
   gap: 12px !important;
   padding: 7px 10px !important;
@@ -594,13 +683,21 @@
   padding: 4px 6px;
   border: 1px solid color-mix(in srgb, var(--color-border) 68%, transparent);
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.035),
+    rgba(255, 255, 255, 0.012)
+  );
   box-shadow:
     inset 0 1px rgba(255, 255, 255, 0.045),
     0 5px 14px rgba(0, 0, 0, 0.16);
 }
 .melody-editor-tool-group.is-nav {
-  border-color: color-mix(in srgb, var(--color-primary) 24%, var(--color-border));
+  border-color: color-mix(
+    in srgb,
+    var(--color-primary) 24%,
+    var(--color-border)
+  );
 }
 .melody-editor-tool-group.is-history {
   border-color: rgba(85, 168, 255, 0.2);
@@ -702,7 +799,11 @@
 .melody-editor-selection-box {
   z-index: 160 !important;
   border: 1px solid color-mix(in srgb, var(--color-primary-hover) 78%, white) !important;
-  background: color-mix(in srgb, var(--color-primary) 20%, transparent) !important;
+  background: color-mix(
+    in srgb,
+    var(--color-primary) 20%,
+    transparent
+  ) !important;
   box-shadow: 0 0 14px color-mix(in srgb, var(--color-primary) 28%, transparent) !important;
 }
 

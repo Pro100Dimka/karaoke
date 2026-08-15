@@ -11,7 +11,8 @@ import { translateSaved } from "../../i18n/runtime";
 import { getErrorMessage } from "../../utils/errors";
 import { getAnalysisFeedback, normalizeAnalysisResult } from "./utils/analysis";
 
-const CONFETTI = Array.from({ length: 26 }, (_, index) => index);
+const CONFETTI = Array.from( { length: 26 }, (_, index) => index
+);
 function VictoryScene() {
   return (
     <div className="analysis-victory-scene" aria-hidden="true">
@@ -20,9 +21,7 @@ function VictoryScene() {
       </div>
       <div className="analysis-crystal" />
       <div className="analysis-confetti">
-        {CONFETTI.map((index) => (
-          <i key={index} style={{ "--j": index }} />
-        ))}
+        {CONFETTI.map((index) => ( <i key={index} style={{ "--j": index }} /> ))}
       </div>
     </div>
   );
@@ -41,10 +40,15 @@ function AnalysisSummary({ result }) {
   const metrics = [
     [
       translateSaved("Среднее отклонение"),
-      meanDeviation != null ? translateSaved("±{0} п/т", { 0: meanDeviation }) : "—"
+      meanDeviation != null
+        ? translateSaved("±{0} п/т", { 0: meanDeviation })
+        : "—"
     ],
     [translateSaved("Проверено фрагментов"), scoredSections.length || 0],
-    [translateSaved("Лучший фрагмент"), bestSection ? `${bestSection.accuracy_percent}%` : "—"],
+    [
+      translateSaved("Лучший фрагмент"),
+      bestSection ? `${bestSection.accuracy_percent}%` : "—"
+    ],
     [
       translateSaved("Нуждается в работе"),
       needsPractice ? `${needsPractice.accuracy_percent}%` : "—"
@@ -88,15 +92,14 @@ export default function PerformanceAnalysisModal({ recordingId, onClose, onDone,
       analysisRequestRef.current = { recordingId, promise: api.runAnalysis(recordingId) };
     }
     analysisRequestRef.current.promise
-      .then((analysis) => {
-        if (active) setResult(normalizeAnalysisResult(analysis));
-      })
+      .then((analysis) => { if (active) setResult(normalizeAnalysisResult(analysis)); })
       .catch((analysisError) => {
         if (analysisRequestRef.current.recordingId === recordingId) {
           analysisRequestRef.current = { recordingId: null, promise: null };
         }
         if (active) {
-          setError(getErrorMessage(analysisError, translateSaved("Неизвестная ошибка анализа")));
+          setError( getErrorMessage( analysisError, translateSaved("Неизвестная ошибка анализа") )
+          );
         }
       });
     return () => {
@@ -105,7 +108,11 @@ export default function PerformanceAnalysisModal({ recordingId, onClose, onDone,
   }, [recordingId]);
   const deleteRecording = () =>
     runDelete(async () => {
-      if (!(await confirmDialog(translateSaved("Удалить это записанное исполнение?")))) return;
+      if (
+        !(await confirmDialog( translateSaved("Удалить это записанное исполнение?")
+        ))
+      )
+        return;
       if (!mountedRef.current) return;
       try {
         await api.deleteRecording(recordingId);
@@ -114,7 +121,8 @@ export default function PerformanceAnalysisModal({ recordingId, onClose, onDone,
         if (!mountedRef.current) return;
         setError(
           translateSaved("Не удалось удалить запись: {0}", {
-            0: getErrorMessage(deleteError, translateSaved("неизвестная ошибка"))
+            0: getErrorMessage( deleteError, translateSaved("неизвестная ошибка")
+            )
           })
         );
       }
@@ -135,7 +143,8 @@ export default function PerformanceAnalysisModal({ recordingId, onClose, onDone,
         icon: BarChart3,
         eyebrow: translateSaved("РЕЗУЛЬТАТ ИСПОЛНЕНИЯ"),
         title: translateSaved("Анализ выступления"),
-        description: translateSaved("Точность нот, ритм и рекомендации по исполнению."),
+        description: translateSaved( "Точность нот, ритм и рекомендации по исполнению."
+        ),
         actions:
           result || error ? (
             <Button
@@ -151,7 +160,9 @@ export default function PerformanceAnalysisModal({ recordingId, onClose, onDone,
       <VictoryScene />
       <div className="performance-analysis-body modal-scroll">
         {!result && !error && (
-          <p className="text-muted">{translateSaved("Анализируем ноты и ритм исполнения…")}</p>
+          <p className="text-muted">
+            {translateSaved("Анализируем ноты и ритм исполнения…")}
+          </p>
         )}
 
         {error && (
@@ -173,7 +184,9 @@ export default function PerformanceAnalysisModal({ recordingId, onClose, onDone,
                 onClick={deleteRecording}
                 disabled={deleting}
               >
-                {deleting ? translateSaved("Удаляем…") : translateSaved("Удалить запись")}
+                {deleting
+                  ? translateSaved("Удаляем…")
+                  : translateSaved("Удалить запись")}
               </Button>
             </div>
           </>

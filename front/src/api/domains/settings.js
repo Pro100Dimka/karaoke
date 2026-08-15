@@ -4,17 +4,12 @@ import { request } from "../core";
 const preferenceWrites = new Map();
 function updateUiPreferences(namespace, patch) {
   const previous = preferenceWrites.get(namespace) || Promise.resolve();
-  const next = previous
-    .catch(() => {})
-    .then(() =>
-      request(`/preferences/${encodeURIComponent(namespace)}`, {
-        method: "PATCH",
-        body: JSON.stringify(patch)
-      })
-    )
-    .finally(() => {
-      if (preferenceWrites.get(namespace) === next) preferenceWrites.delete(namespace);
-    });
+  const next = previous.catch(() => {}).then(() =>
+    request(`/preferences/${encodeURIComponent(namespace)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch)
+    })
+  ).finally(() => { if (preferenceWrites.get(namespace) === next) preferenceWrites.delete(namespace); });
   preferenceWrites.set(namespace, next);
   return next;
 }

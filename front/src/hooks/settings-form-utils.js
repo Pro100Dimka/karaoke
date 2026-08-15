@@ -3,7 +3,9 @@ export function prepareSettingValue(value) {
 }
 
 function asSettings(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : {};
 }
 
 export function mergeSettings(current, updated) {

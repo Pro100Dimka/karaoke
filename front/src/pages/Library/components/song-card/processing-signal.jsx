@@ -15,11 +15,14 @@ const WAVE_CONFIG = {
 const POINTS = (() => {
   const { length, start, min, max, variation } = WAVE_CONFIG;
   let value = start;
-  return Array.from({ length }, () => {
-    value += Math.floor(Math.random() * (variation * 2 + 1)) - variation;
-    value = Math.max(min, Math.min(max, value));
-    return value;
-  });
+  return Array.from(
+    { length },
+    () => {
+      value += Math.floor(Math.random() * (variation * 2 + 1)) - variation;
+      value = Math.max(min, Math.min(max, value));
+      return value;
+    }
+  );
 })();
 const WIDTH = 960;
 const clamp = (value) => Math.max(0, Math.min(100, Number(value) || 0));
@@ -74,7 +77,13 @@ export default function ProcessingSignal({ progress = 0, compact = false }) {
             <rect width={(WIDTH * normalized) / 100} height={height} />
           </clipPath>
         </defs>
-        <line className="processing-signal__baseline" x1={0} y1={center} x2={WIDTH} y2={center} />
+        <line
+          className="processing-signal__baseline"
+          x1={0}
+          y1={center}
+          x2={WIDTH}
+          y2={center}
+        />
         <polygon className="processing-signal__wave-muted" points={polygon} />
         <polygon
           className="processing-signal__wave-active"

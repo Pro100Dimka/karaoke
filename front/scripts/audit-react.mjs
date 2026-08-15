@@ -23,7 +23,11 @@ for (const filePath of walk(ROOT)) {
 
   lines.forEach((line, index) => {
     const isPromiseDelay = /setTimeout\s*\(resolve\s*,/.test(line);
-    if (/setTimeout\s*\(/.test(line) && !isPromiseDelay && !/clearTimeout/.test(source)) {
+    if (
+      /setTimeout\s*\(/.test(line) &&
+      !isPromiseDelay &&
+      !/clearTimeout/.test(source)
+    ) {
       findings.push(
         `${relative}:${index + 1} uses setTimeout without clearTimeout in the same file`
       );
@@ -33,7 +37,10 @@ for (const filePath of walk(ROOT)) {
         `${relative}:${index + 1} uses setInterval without clearInterval in the same file`
       );
     }
-    if (/addEventListener\s*\(/.test(line) && !/removeEventListener/.test(source)) {
+    if (
+      /addEventListener\s*\(/.test(line) &&
+      !/removeEventListener/.test(source)
+    ) {
       findings.push(
         `${relative}:${index + 1} adds an event listener without removal in the same file`
       );

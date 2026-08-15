@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { api } from "../../../api/client";
+import { isAmbiguousTransportError } from "../../../api/core";
 import useExclusiveAsyncAction from "../../../hooks/useExclusiveAsyncAction";
 import { translateSaved } from "../../../i18n/runtime";
 import { getErrorMessage } from "../../../utils/errors";
@@ -20,32 +21,20 @@ export default function useLibraryFileImport({ fileInputRef, notify, onStarted }
         try {
           song = await api.addSong(file, file.name.replace(/\.[^.]+$/, ""));
         } catch (error) {
-          await notify(
-            translateSaved("Не удалось добавить песню: {0}", { 0: getErrorMessage(error) })
-          );
+          await notify(translateSaved("Не удалось добавить песню: {0}", { 0: getErrorMessage(error) }));
           return;
         }
         try {
           await api.processSong(song.id);
           onStarted(song);
         } catch (error) {
-          const ambiguous =
-            !error?.status || error.name === "TimeoutError" || error.name === "AbortError";
-          if (ambiguous) {
+          if (isAmbiguousTransportError(error)) {
             onStarted(song);
-            await notify(
-              translateSaved("Песня добавлена, но backend не подтвердил запуск обработки: {0}", {
-                0: getErrorMessage(error)
-              })
-            );
+            await notify(translateSaved("Песня добавлена, но backend не подтвердил запуск обработки: {0}", { 0: getErrorMessage(error) }));
             return;
           }
           await api.deleteSong(song.id).catch(() => {});
-          await notify(
-            translateSaved("Не удалось запустить обработку песни: {0}", {
-              0: getErrorMessage(error)
-            })
-          );
+          await notify(translateSaved("Не удалось запустить обработку песни: {0}", { 0: getErrorMessage(error) }));
         }
       });
     },

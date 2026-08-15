@@ -67,13 +67,17 @@ function getTerrainHeight(column, particle, time, energy, hit, spectrum) {
     Math.cos(x * 29 + depth * 18 + particle.phase + time * 0.46) * 0.012;
 
   const bassLift =
-    bassShape * depthCurve ** 1.08 * (energy * 0.2 + hit * 0.38) * (0.86 + particle.random * 0.16);
+    bassShape *
+    depthCurve ** 1.08 *
+    (energy * 0.2 + hit * 0.38) *
+    (0.86 + particle.random * 0.16);
 
   const bandPosition = (column / (COLUMNS - 1)) * (spectrum.length - 1);
   const bandIndex = Math.floor(bandPosition);
   const nextBand = Math.min(spectrum.length - 1, bandIndex + 1);
   const blend = bandPosition - bandIndex;
-  const bandLevel = spectrum[bandIndex] * (1 - blend) + spectrum[nextBand] * blend;
+  const bandLevel =
+    spectrum[bandIndex] * (1 - blend) + spectrum[nextBand] * blend;
   const bandCell = (column / (COLUMNS - 1)) * spectrum.length;
   const bandCenter = Math.abs((bandCell % 1) - 0.5) * 2;
   const bandEnvelope = 0.52 + (1 - bandCenter ** 1.7) * 0.48;
@@ -84,10 +88,16 @@ function getTerrainHeight(column, particle, time, energy, hit, spectrum) {
     (0.38 + particle.depth * 0.3) *
     (0.9 + particle.random * 0.12);
 
-  const transientRipple = Math.sin(x * 22 - time * 4.2 + particle.phase) * hit * 0.052 * depthCurve;
+  const transientRipple =
+    Math.sin(x * 22 - time * 4.2 + particle.phase) * hit * 0.052 * depthCurve;
 
   return (
-    (silhouette * depthCurve ** 0.72 + surface + bassLift + equalizerLift + transientRipple) * edge
+    (silhouette * depthCurve ** 0.72 +
+      surface +
+      bassLift +
+      equalizerLift +
+      transientRipple) *
+    edge
   );
 }
 
@@ -113,10 +123,18 @@ export default function LibraryWaveTerrain() {
     const spectrum = Array(18).fill(0);
 
     const readTerrainColor = () => {
-      const value = getComputedStyle(canvas).getPropertyValue("--wave-terrain-rgb").trim();
-      terrainRgb = /^\d+\s*,\s*\d+\s*,\s*\d+$/.test(value) ? value : "255,255,255";
-      const accent = getComputedStyle(canvas).getPropertyValue("--wave-terrain-accent-rgb").trim();
-      terrainAccentRgb = /^\d+\s*,\s*\d+\s*,\s*\d+$/.test(accent) ? accent : terrainRgb;
+      const value = getComputedStyle(canvas)
+        .getPropertyValue("--wave-terrain-rgb")
+        .trim();
+      terrainRgb = /^\d+\s*,\s*\d+\s*,\s*\d+$/.test(value)
+        ? value
+        : "255,255,255";
+      const accent = getComputedStyle(canvas)
+        .getPropertyValue("--wave-terrain-accent-rgb")
+        .trim();
+      terrainAccentRgb = /^\d+\s*,\s*\d+\s*,\s*\d+$/.test(accent)
+        ? accent
+        : terrainRgb;
     };
 
     const resize = () => {
@@ -136,10 +154,12 @@ export default function LibraryWaveTerrain() {
           const point = POINTS[row][column];
           const { x } = COLUMNS_DATA[column];
           const perspective = 0.44 + particle.depth * 0.9;
-          const terrain = getTerrainHeight(column, particle, time, energy, hit, spectrum);
+          const terrain = getTerrainHeight( column, particle, time, energy, hit, spectrum
+          );
           const drift = Math.sin(time * 0.3 + particle.depth * 2.5) * 0.009;
           const cameraFlow =
-            Math.sin(time * 0.62 + particle.depth * 8.4) * (0.004 + particle.depth * 0.006);
+            Math.sin(time * 0.62 + particle.depth * 8.4) *
+            (0.004 + particle.depth * 0.006);
 
           point.x = width * 0.5 + (x + drift) * width * 0.57 * perspective;
           const horizon = 0.96 - particle.depth * 0.28 + cameraFlow * 0.55;
@@ -148,7 +168,10 @@ export default function LibraryWaveTerrain() {
           point.y = height * horizon - terrain * height * amplitude;
           point.terrain = terrain;
           point.brightness = clamp(
-            0.3 + particle.depth * 0.52 + terrain * 1.12 + particle.random * 0.16
+            0.3 +
+              particle.depth * 0.52 +
+              terrain * 1.12 +
+              particle.random * 0.16
           );
         }
       }
@@ -213,7 +236,9 @@ export default function LibraryWaveTerrain() {
           if (!particle.visible || point.terrain < -0.05) continue;
 
           const size =
-            particle.size * (0.64 + particle.depth * 0.62) * (1 + energy * 0.42 + hit * 0.45);
+            particle.size *
+            (0.64 + particle.depth * 0.62) *
+            (1 + energy * 0.42 + hit * 0.45);
           const alpha = clamp(
             point.brightness *
               (0.68 + particle.random * 0.56) *
@@ -232,7 +257,8 @@ export default function LibraryWaveTerrain() {
 
     const render = (timestamp = 0) => {
       const paused =
-        reducedMotion.matches || document.documentElement.dataset.performance === "reduced";
+        reducedMotion.matches ||
+        document.documentElement.dataset.performance === "reduced";
 
       if (!paused && timestamp - lastFrame < TARGET_FRAME_TIME) {
         frameId = requestAnimationFrame(render);
@@ -245,7 +271,8 @@ export default function LibraryWaveTerrain() {
       const rawSpectrum = isPlaying ? getSpectrumLevels() : null;
       for (let index = 0; index < spectrum.length; index += 1) {
         const target = clamp(rawSpectrum?.[index] ?? 0);
-        spectrum[index] += (target - spectrum[index]) * (target > spectrum[index] ? 0.62 : 0.14);
+        spectrum[index] +=
+          (target - spectrum[index]) * (target > spectrum[index] ? 0.62 : 0.14);
       }
       const attack = rawBass > energy ? 0.72 : 0.2;
 
@@ -279,10 +306,7 @@ export default function LibraryWaveTerrain() {
 
     readTerrainColor();
     handleResize();
-    const themeObserver = new MutationObserver(() => {
-      readTerrainColor();
-      restart();
-    });
+    const themeObserver = new MutationObserver(() => { readTerrainColor(); restart(); });
     themeObserver.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["data-theme"]

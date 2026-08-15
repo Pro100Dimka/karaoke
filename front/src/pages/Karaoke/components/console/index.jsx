@@ -13,7 +13,8 @@ export default function KaraokeConsole({ autoHideEnabled, onAutoHideChange, ...p
         borderRadius: "var(--shape-xl)",
         background:
           "linear-gradient(180deg, color-mix(in srgb, var(--color-bg-deep) 20%, transparent), color-mix(in srgb, var(--color-bg-deep) 42%, transparent))",
-        boxShadow: "inset 0 1px 0 color-mix(in srgb, var(--color-highlight) 4%, transparent)",
+        boxShadow:
+          "inset 0 1px 0 color-mix(in srgb, var(--color-highlight) 4%, transparent)",
         backdropFilter: "blur(0.2rem)",
         WebkitBackdropFilter: "blur(0.2rem)"
       }}

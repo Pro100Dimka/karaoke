@@ -109,9 +109,8 @@ export default function Karaoke({ onOpenAppSettings }) {
     return () => setRecordingActive(false);
   }, [isPlaying, recordingSessionId, setRecordingActive]);
   const autoStartRequested = Boolean(location.state?.autoPlay);
-  const { controlsVisible, hideControls, revealControls, showControls } = useKaraokeControls({
-    autoHideEnabled: autoHideConsole
-  });
+  const { controlsVisible, hideControls, revealControls, showControls } =
+    useKaraokeControls({ autoHideEnabled: autoHideConsole });
   const currentTimeRef = useRef(currentTime);
   const durationRef = useRef(duration);
   const browserMonitorRef = useRef(null);
@@ -135,8 +134,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   );
   const microphoneLevel = getMicrophoneLevel(signal);
   const microphoneSettings = useMicrophoneSettings({ audioSettings, onError: setRecordingError });
-  const { microphoneVolume, setMicrophoneVolume, microphoneEffects, setMicrophoneEffects } =
-    microphoneSettings;
+  const { microphoneVolume, setMicrophoneVolume, microphoneEffects, setMicrophoneEffects } = microphoneSettings;
   useEffect(() => {
     if (!onlineRoomState) return;
     syncRoomUi({ participantEffects: microphoneEffects });
@@ -161,17 +159,16 @@ export default function Karaoke({ onOpenAppSettings }) {
     videoRef,
     vocalsRef
   });
-  useEffect(() => {
-    setIsPlaying(false);
-    setCurrentTime(0);
-    setDuration(0);
-  }, [song?.id]);
+  useEffect(() => { setIsPlaying(false); setCurrentTime(0); setDuration(0); }, [song?.id]);
 
   // songMap.json is the single ready-to-render karaoke contract produced by
   // the backend.  Do not rebuild word/syllable/note timing in the browser.
   const songMap = result?.song_map;
   const lyrics = useMemo(
-    () => (Array.isArray(songMap?.lines) ? songMap.lines : normalizeLyrics(result?.lyrics_sync)),
+    () =>
+      Array.isArray(songMap?.lines)
+        ? songMap.lines
+        : normalizeLyrics(result?.lyrics_sync),
     [songMap, result]
   );
   const notes = useMemo(
@@ -183,19 +180,16 @@ export default function Karaoke({ onOpenAppSettings }) {
       ),
     [songMap, result]
   );
-  const { startMelodyGuide, updateMelodyGuide, silenceMelodyGuide } = useMelodyGuide({
-    notes,
-    volume: melodyVolume,
-    keyShift,
-    currentTimeRef
-  });
+  const { startMelodyGuide, updateMelodyGuide, silenceMelodyGuide } =
+    useMelodyGuide({ notes, volume: melodyVolume, keyShift, currentTimeRef });
   const youTubeVideoId = getYouTubeVideoId(song?.video_url);
 
   // Lyrics and melody use the same instrumental clock.  A former global
   // "anchor" delay shifted every word by up to half a second even when the
   // word-level alignment was already correct for the current song.
   const lyricTime = currentTime;
-  const { currentLine, upcomingLine, nextLine } = getLyricDisplayState(lyrics, lyricTime);
+  const { currentLine, upcomingLine, nextLine } = getLyricDisplayState( lyrics, lyricTime
+  );
   const { sendYouTubeCommand, syncSecondaryMedia } = useKaraokeMediaSync({
     browserMonitorRef,
     currentTimeRef,
@@ -220,38 +214,35 @@ export default function Karaoke({ onOpenAppSettings }) {
     vocalsRef,
     youTubeClipRef
   });
-  const { sungMidi, isPitchDetected, isPitchAttacking, pitchRestProgress } = usePitchDetection({
-    browserMonitorRef,
-    isPlaying,
-    monitorInputDeviceId,
-    monitoringEnabled
-  });
-  const { returnToLibrary, seekTo, skip, stop, togglePlay } = useKaraokeTransport({
-    currentTime,
-    duration,
-    durationRef,
-    instrumentalRef,
-    isPlaying,
-    microphoneEffects,
-    microphoneVolume,
-    musicVolume,
-    navigate,
-    onlineRoom,
-    recordingSessionId,
-    sendYouTubeCommand,
-    setAnalysisRecordingId: updateAnalysisRecordingId,
-    setCurrentTime,
-    setIsPlaying,
-    setRecordingError,
-    setRecordingSessionId,
-    silenceMelodyGuide,
-    song,
-    startMelodyGuide,
-    syncSecondaryMedia,
-    videoRef,
-    vocalVolume,
-    vocalsRef
-  });
+  const { sungMidi, isPitchDetected, isPitchAttacking, pitchRestProgress } =
+    usePitchDetection({ browserMonitorRef, isPlaying, monitorInputDeviceId, monitoringEnabled });
+  const { returnToLibrary, seekTo, skip, stop, togglePlay } =
+    useKaraokeTransport({
+      currentTime,
+      duration,
+      durationRef,
+      instrumentalRef,
+      isPlaying,
+      microphoneEffects,
+      microphoneVolume,
+      musicVolume,
+      navigate,
+      onlineRoom,
+      recordingSessionId,
+      sendYouTubeCommand,
+      setAnalysisRecordingId: updateAnalysisRecordingId,
+      setCurrentTime,
+      setIsPlaying,
+      setRecordingError,
+      setRecordingSessionId,
+      silenceMelodyGuide,
+      song,
+      startMelodyGuide,
+      syncSecondaryMedia,
+      videoRef,
+      vocalVolume,
+      vocalsRef
+    });
   const {
     handleStop,
     handleTogglePlay,
@@ -309,7 +300,8 @@ export default function Karaoke({ onOpenAppSettings }) {
     );
   }
   const rawBaseTempo = Number(result?.music?.tempo ?? song.tempo_override);
-  const baseTempo = Number.isFinite(rawBaseTempo) && rawBaseTempo > 0 ? rawBaseTempo : 120;
+  const baseTempo =
+    Number.isFinite(rawBaseTempo) && rawBaseTempo > 0 ? rawBaseTempo : 120;
   const currentTempo = Math.max(1, Math.round(baseTempo * speed));
   const compactKey = formatCompactKey(
     transposeKey(song.key_override || result?.music?.key || "C", keyShift)
@@ -347,7 +339,8 @@ export default function Karaoke({ onOpenAppSettings }) {
       const action = enabled ? api.startDirectMonitoring : api.stopDirectMonitoring;
       const updated = await action();
       setMonitoringEnabled(Boolean(updated?.monitoring_enabled));
-      globalThis.dispatchEvent?.(new CustomEvent("audio-settings-changed", { detail: updated }));
+      globalThis.dispatchEvent?.( new CustomEvent("audio-settings-changed", { detail: updated })
+      );
     } catch (error) {
       setRecordingError(
         translateSaved("Не удалось изменить прослушивание микрофона: {0}", {
@@ -366,106 +359,50 @@ export default function Karaoke({ onOpenAppSettings }) {
         revealControls();
       }}
       mediaProps={{
-        instrumentalRef,
-        isPlaying,
-        musicVolume,
-        sendYouTubeCommand,
-        song,
-        speed,
-        syncSecondaryMedia,
-        videoRef,
-        vocalVolume,
-        vocalsRef,
-        youTubeClipRef,
+        instrumentalRef, isPlaying, musicVolume, sendYouTubeCommand, song, speed,
+        syncSecondaryMedia, videoRef, vocalVolume, vocalsRef, youTubeClipRef,
         youTubeVideoId
       }}
       recordingError={recordingError}
       analysisRecordingId={analysisRecordingId}
       onAnalysisClose={handleAnalysisClose}
       stageActionProps={{
-        autoHideConsole,
-        controlsVisible,
-        hideControls,
-        isPlaying,
-        isRadioPlaying,
-        returnToLibrary,
-        sceneTransitioning,
-        showControls,
-        stageActionsVisible,
+        autoHideConsole, controlsVisible, hideControls, isPlaying, isRadioPlaying,
+        returnToLibrary, sceneTransitioning, showControls, stageActionsVisible,
         toggleRadio
       }}
       performanceProps={{
-        currentLine,
-        currentTime: lyricTime,
-        isPitchAttacking,
-        isPitchDetected,
-        isPlaying,
-        keyShift,
-        lyrics,
-        nextLine,
-        noteRangeMax: song.note_range_max,
-        noteRangeMin: song.note_range_min,
-        notes,
-        pitchRestProgress,
-        sceneBlackout,
+        currentLine, currentTime: lyricTime, isPitchAttacking, isPitchDetected,
+        isPlaying, keyShift, lyrics, nextLine, noteRangeMax: song.note_range_max,
+        noteRangeMin: song.note_range_min, notes, pitchRestProgress, sceneBlackout,
         sceneIntroVisible,
         sceneIntro: {
-          title: song.title,
-          artist: song.artist,
-          genre: song.genre,
-          key: compactKey,
-          tempo: currentTempo,
-          difficulty: song.difficulty_override
+          title: song.title, artist: song.artist, genre: song.genre, key: compactKey,
+          tempo: currentTempo, difficulty: song.difficulty_override
         },
-        songId: song.id,
-        showLyrics,
-        showNotes,
-        songTitle: song.title,
-        sungMidi,
+        songId: song.id, showLyrics, showNotes, songTitle: song.title, sungMidi,
         upcomingLine
       }}
       consoleProps={{
-        song,
-        currentTime,
-        duration,
-        microphoneLevel,
+        song, currentTime, duration, microphoneLevel,
         volumes: {
-          microphone: microphoneVolume,
-          music: musicVolume,
-          vocal: vocalVolume,
+          microphone: microphoneVolume, music: musicVolume, vocal: vocalVolume,
           melody: melodyVolume
         },
         onVolumeChange: {
-          microphone: setMicrophoneVolume,
-          music: setMusicVolume,
-          vocal: setVocalVolume,
-          melody: setMelodyVolume
+          microphone: setMicrophoneVolume, music: setMusicVolume,
+          vocal: setVocalVolume, melody: setMelodyVolume
         },
         onMicrophoneCommit: (value) => updateMicrophone({ volume: value }),
-        microphoneEffects,
-        onEffectChange: handleEffectChange,
-        isPlaying,
-        onSkip: skip,
-        onTogglePlay: handleTogglePlay,
-        onStop: handleStop,
-        currentTempo,
-        onTempoChange: changeTempo,
-        compactKey,
-        keyShift,
-        onKeyShiftChange: setKeyShift,
-        showNotes,
-        onToggleNotes: () => setShowNotes((value) => !value),
-        showLyrics,
-        onToggleLyrics: () => setShowLyrics((value) => !value),
-        onOpenAppSettings,
-        autoHideEnabled: autoHideConsole,
-        onAutoHideChange: setAutoHideConsole,
-        onClose: hideControls,
-        effectPreset,
-        onApplyEffectPreset: applyEffectPreset,
-        monitoringEnabled,
-        onMonitoringChange: handleMonitoringChange,
-        onSeek: seekTo
+        microphoneEffects, onEffectChange: handleEffectChange, isPlaying,
+        onSkip: skip, onTogglePlay: handleTogglePlay, onStop: handleStop,
+        currentTempo, onTempoChange: changeTempo, compactKey, keyShift,
+        onKeyShiftChange: setKeyShift, showNotes,
+        onToggleNotes: () => setShowNotes((value) => !value), showLyrics,
+        onToggleLyrics: () => setShowLyrics((value) => !value), onOpenAppSettings,
+        autoHideEnabled: autoHideConsole, onAutoHideChange: setAutoHideConsole,
+        onClose: hideControls, effectPreset, onApplyEffectPreset: applyEffectPreset,
+        monitoringEnabled, onMonitoringChange: handleMonitoringChange, onSeek: seekTo
       }}
     />
   );

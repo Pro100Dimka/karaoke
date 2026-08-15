@@ -1,5 +1,7 @@
 export const syllableIndicesForNote = (note) => {
-  const raw = Array.isArray(note.syllable_indices) ? note.syllable_indices : [note.syllable_index];
+  const raw = Array.isArray(note.syllable_indices)
+    ? note.syllable_indices
+    : [note.syllable_index];
   return [...new Set(raw.map(Number).filter(Number.isFinite))];
 };
 const linkedText = (note, syllablesByIndex, include = () => true) => {
@@ -22,9 +24,12 @@ const textOf = (note, syllablesByIndex) =>
     ? note.editor_text
     : linkedText(note, syllablesByIndex);
 const wordOf = (note, syllablesByIndex) => {
-  if (note.word_index != null && note.word_index !== "") return Number(note.word_index);
+  if (note.word_index != null && note.word_index !== "")
+    return Number(note.word_index);
   const idx = syllableIndicesForNote(note)[0];
-  return Number.isFinite(idx) ? Number(syllablesByIndex.get(idx)?.word_index) : null;
+  return Number.isFinite(idx)
+    ? Number(syllablesByIndex.get(idx)?.word_index)
+    : null;
 };
 const byStartEnd = (a, b) => a.start - b.start || a.end - b.end;
 const byStartPitch = (a, b) => a.start - b.start || a.midi_note - b.midi_note;
@@ -44,7 +49,11 @@ const glue = (leftText, rightText, sameWord) => {
   // A note may already contain the complete edited word. In that case simply
   // concatenating both labels produced values such as "БолБольшой".
   let overlap = right.length;
-  while (overlap && normalizedLeft.slice(-overlap) !== normalizedRight.slice(0, overlap)) overlap--;
+  while (
+    overlap &&
+    normalizedLeft.slice(-overlap) !== normalizedRight.slice(0, overlap)
+  )
+    overlap--;
   return `${left}${right.slice(overlap)}`;
 };
 const combinedContent = (notes, syllablesByIndex) => {
@@ -58,16 +67,16 @@ const combinedContent = (notes, syllablesByIndex) => {
   }
   return {
     editor_text: editorText,
-    syllable_indices: [...new Set(notes.flatMap(syllableIndicesForNote))].sort(ascending)
+    syllable_indices: [...new Set(notes.flatMap(syllableIndicesForNote))].sort( ascending
+    )
   };
 };
 
-export function displayTextForNote(note, syllablesByIndex, labelOwnerBySyllable) {
-  if (typeof note.editor_text === "string" && note.editor_text.length) return note.editor_text;
-  return linkedText(
-    note,
-    syllablesByIndex,
-    (index) => labelOwnerBySyllable.get(index) === note._id
+export function displayTextForNote( note, syllablesByIndex, labelOwnerBySyllable
+) {
+  if (typeof note.editor_text === "string" && note.editor_text.length)
+    return note.editor_text;
+  return linkedText( note, syllablesByIndex, (index) => labelOwnerBySyllable.get(index) === note._id
   );
 }
 
@@ -91,24 +100,30 @@ export const canonicalLyricProjection = (syllables) =>
 
 export function mergeSelectedNotes(notes, selectedIds, syllablesByIndex) {
   const selected = new Set(selectedIds);
-  const chosen = notes.filter((note) => selected.has(note._id)).sort(byStartEnd);
+  const chosen = notes
+    .filter((note) => selected.has(note._id))
+    .sort(byStartEnd);
   if (chosen.length < 2) return { notes, selectedId: chosen[0]?._id || null };
   const first = chosen[0];
   const merged = {
     ...first,
     start: Math.min(...chosen.map((n) => n.start)),
     end: Math.max(...chosen.map((n) => n.end)),
-    midi_note: Math.round(chosen.reduce((sum, n) => sum + n.midi_note, 0) / chosen.length),
+    midi_note: Math.round( chosen.reduce((sum, n) => sum + n.midi_note, 0) / chosen.length
+    ),
     ...combinedContent(chosen, syllablesByIndex)
   };
-  const result = [...notes.filter((note) => !selected.has(note._id)), merged].sort(byStartPitch);
+  const result = [ ...notes.filter((note) => !selected.has(note._id)), merged ].sort(byStartPitch);
   return { notes: result, selectedId: merged._id };
 }
 
-export function deleteNotesAndTransferText(notes, selectedIds, syllablesByIndex) {
+export function deleteNotesAndTransferText( notes, selectedIds, syllablesByIndex
+) {
   const selected = new Set(selectedIds);
   const removed = notes.filter((note) => selected.has(note._id));
-  const remaining = notes.filter((note) => !selected.has(note._id)).map((note) => ({ ...note }));
+  const remaining = notes
+    .filter((note) => !selected.has(note._id))
+    .map((note) => ({ ...note }));
   if (!removed.length || !remaining.length) return remaining;
 
   const transfers = new Map();
@@ -118,7 +133,8 @@ export function deleteNotesAndTransferText(notes, selectedIds, syllablesByIndex)
     const goneCenter = center(gone);
     const target = remaining
       .map((note) => ({ note, distance: Math.abs(center(note) - goneCenter) }))
-      .sort((a, b) => a.distance - b.distance || a.note.start - b.note.start)[0].note;
+      .sort( (a, b) => a.distance - b.distance || a.note.start - b.note.start
+      )[0].note;
     const transferred = transfers.get(target);
     if (transferred) transferred.push(gone);
     else transfers.set(target, [gone]);
@@ -126,29 +142,35 @@ export function deleteNotesAndTransferText(notes, selectedIds, syllablesByIndex)
   for (const [target, transferred] of transfers) {
     Object.assign(
       target,
-      combinedContent([...transferred, target].sort(byMidpoint), syllablesByIndex)
+      combinedContent( [...transferred, target].sort(byMidpoint), syllablesByIndex
+      )
     );
   }
   return remaining.sort(byStartPitch);
 }
 
 export function adjacentNoteId(notes, selectedIds, direction) {
-  const ordered = [...notes].sort((a, b) => byStartEnd(a, b) || a.midi_note - b.midi_note);
+  const ordered = [...notes].sort( (a, b) => byStartEnd(a, b) || a.midi_note - b.midi_note
+  );
   if (!ordered.length) return null;
   const selected = new Set(selectedIds);
   const anchorIndex =
     direction > 0
       ? ordered.findIndex((note) => selected.has(note._id))
       : (() => {
-          for (let i = ordered.length - 1; i >= 0; i--) if (selected.has(ordered[i]._id)) return i;
+          for (let i = ordered.length - 1; i >= 0; i--)
+            if (selected.has(ordered[i]._id)) return i;
           return -1;
         })();
-  if (anchorIndex < 0) return direction > 0 ? ordered[0]._id : ordered.at(-1)._id;
-  const next = Math.max(0, Math.min(ordered.length - 1, anchorIndex + (direction > 0 ? 1 : -1)));
+  if (anchorIndex < 0)
+    return direction > 0 ? ordered[0]._id : ordered.at(-1)._id;
+  const next = Math.max( 0, Math.min(ordered.length - 1, anchorIndex + (direction > 0 ? 1 : -1))
+  );
   return ordered[next]._id;
 }
 
-export function constrainedMoveDelta(notes, movingIds, requestedDelta, duration) {
+export function constrainedMoveDelta( notes, movingIds, requestedDelta, duration
+) {
   const moving = new Set(movingIds);
   const chosen = notes.filter((note) => moving.has(note._id));
   if (!chosen.length) return 0;
@@ -158,8 +180,10 @@ export function constrainedMoveDelta(notes, movingIds, requestedDelta, duration)
   let maxDelta = Math.max(0, duration - groupEnd);
 
   for (const note of notes) {
-    if (note.end <= groupStart + 1e-9) minDelta = Math.max(minDelta, note.end - groupStart);
-    if (note.start >= groupEnd - 1e-9) maxDelta = Math.min(maxDelta, note.start - groupEnd);
+    if (note.end <= groupStart + 1e-9)
+      minDelta = Math.max(minDelta, note.end - groupStart);
+    if (note.start >= groupEnd - 1e-9)
+      maxDelta = Math.min(maxDelta, note.start - groupEnd);
   }
   return Math.max(minDelta, Math.min(maxDelta, requestedDelta));
 }
@@ -170,8 +194,10 @@ export function resizeBounds(notes, noteId, duration, minDuration = 0.03) {
   let previousEnd = 0;
   let nextStart = duration;
   for (const note of notes) {
-    if (note.end <= current.start + 1e-9) previousEnd = Math.max(previousEnd, note.end);
-    if (note.start >= current.end - 1e-9) nextStart = Math.min(nextStart, note.start);
+    if (note.end <= current.start + 1e-9)
+      previousEnd = Math.max(previousEnd, note.end);
+    if (note.start >= current.end - 1e-9)
+      nextStart = Math.min(nextStart, note.start);
   }
   return {
     minStart: previousEnd,

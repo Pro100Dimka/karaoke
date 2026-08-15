@@ -2,10 +2,13 @@ import { MoveHorizontal, MoveVertical } from "lucide-react";
 import { translateSaved } from "../../../../i18n/runtime";
 import { BLACK_KEYS, clamp, noteName } from "./melody-editor-state";
 
-const thumbSize = (viewport, content) => Math.max(7, (viewport / Math.max(1, content)) * 100);
+const thumbSize = (viewport, content) =>
+  Math.max(7, (viewport / Math.max(1, content)) * 100);
 const thumbOffset = (position, viewport, content) => {
   const size = thumbSize(viewport, content);
-  return (position / Math.max(1, content - viewport)) * Math.max(0, 100 - size);
+  return (
+    (position / Math.max(1, content - viewport)) * Math.max(0, 100 - size)
+  );
 };
 
 function PianoKeyboard({
@@ -17,16 +20,17 @@ function PianoKeyboard({
   rowHeight,
   whiteKeyGeometry
 }) {
-  const blackKeys = Array.from(
-    { length: maxMidi - minMidi + 1 },
-    (_, index) => maxMidi - index
+  const blackKeys = Array.from( { length: maxMidi - minMidi + 1 }, (_, index) => maxMidi - index
   ).filter((midi) => BLACK_KEYS.includes(((midi % 12) + 12) % 12));
   const audition = (event, midi) => {
     event.stopPropagation();
     auditionNote(midi, 220);
   };
   return (
-    <div className="melody-editor-keyboard" style={{ width: keyboardWidth, height: laneHeight }}>
+    <div
+      className="melody-editor-keyboard"
+      style={{ width: keyboardWidth, height: laneHeight }}
+    >
       {whiteKeyGeometry.map(({ midi, top, height }) => (
         <div
           key={`white-${midi}`}
@@ -156,10 +160,14 @@ function Scrollbar({
     const rect = event.currentTarget.getBoundingClientRect();
     const span = horizontal ? rect.width : rect.height;
     if (!span) return;
-    const pointer = horizontal ? event.clientX - rect.left : event.clientY - rect.top;
+    const pointer = horizontal
+      ? event.clientX - rect.left
+      : event.clientY - rect.top;
     const max = Math.max(
       0,
-      horizontal ? shell.scrollWidth - shell.clientWidth : shell.scrollHeight - shell.clientHeight
+      horizontal
+        ? shell.scrollWidth - shell.clientWidth
+        : shell.scrollHeight - shell.clientHeight
     );
     const next = clamp((pointer / span) * max, 0, max);
     if (horizontal) shell.scrollLeft = next;
@@ -174,11 +182,7 @@ function Scrollbar({
         onPointerMove={moveScrollThumbDrag}
         onPointerUp={endScrollThumbDrag}
         onPointerCancel={endScrollThumbDrag}
-        style={
-          horizontal
-            ? { width: `${size}%`, left: `${offset}%` }
-            : { height: `${size}%`, top: `${offset}%` }
-        }
+        style={horizontal ? { width: `${size}%`, left: `${offset}%` } : { height: `${size}%`, top: `${offset}%` }}
       />
     </div>
   );
@@ -217,8 +221,7 @@ function EditorScrollbar(props) {
   return (
     <div
       className={`melody-editor-cubase-scrollbar is-${horizontal ? "horizontal" : "vertical"}`}
-      aria-label={translateSaved(
-        horizontal ? "Горизонтальная прокрутка" : "Вертикальная прокрутка"
+      aria-label={translateSaved( horizontal ? "Горизонтальная прокрутка" : "Вертикальная прокрутка"
       )}
     >
       <Scrollbar {...props} />
@@ -342,10 +345,7 @@ export default function MelodyEditorRoll({
           </div>
         </div>
       </div>
-      {[
-        ["x", zoom],
-        ["y", verticalZoom]
-      ].map(([axis]) => (
+      {[ ["x", zoom], ["y", verticalZoom] ].map(([axis]) => (
         <EditorScrollbar
           key={axis}
           axis={axis}

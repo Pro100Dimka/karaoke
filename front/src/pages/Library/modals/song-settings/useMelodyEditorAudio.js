@@ -27,14 +27,16 @@ export default function useMelodyEditorAudio({ notes, playbackRate, volumes }) {
 
   useEffect(() => {
     if (vocalsRef.current) vocalsRef.current.volume = volumes.vocals;
-    if (instrumentalRef.current) instrumentalRef.current.volume = volumes.instrumental;
+    if (instrumentalRef.current)
+      instrumentalRef.current.volume = volumes.instrumental;
     if (melodyGainRef.current)
       melodyGainRef.current.gain.value = Math.max(0.05, volumes.melody * 0.56);
   }, [volumes]);
 
   useEffect(() => {
     if (vocalsRef.current) vocalsRef.current.playbackRate = playbackRate;
-    if (instrumentalRef.current) instrumentalRef.current.playbackRate = playbackRate;
+    if (instrumentalRef.current)
+      instrumentalRef.current.playbackRate = playbackRate;
   }, [playbackRate]);
 
   const stopOscillator = useCallback(() => {
@@ -47,7 +49,10 @@ export default function useMelodyEditorAudio({ notes, playbackRate, volumes }) {
       const context = getAudioContext();
       const numericMidi = Number(midi);
       const nowMs = performance.now();
-      if (nowMs - auditionTimerRef.current < 42 && auditionRef.current?.midi === numericMidi)
+      if (
+        nowMs - auditionTimerRef.current < 42 &&
+        auditionRef.current?.midi === numericMidi
+      )
         return;
       auditionTimerRef.current = nowMs;
 
@@ -57,7 +62,8 @@ export default function useMelodyEditorAudio({ notes, playbackRate, volumes }) {
           const now = context.currentTime;
           previous.gain.gain.cancelScheduledValues(now);
           previous.gain.gain.setTargetAtTime(0.0001, now, 0.012);
-          previous.oscillators?.forEach((oscillator) => stopNode(oscillator, now + 0.06));
+          previous.oscillators?.forEach((oscillator) => stopNode(oscillator, now + 0.06)
+          );
         } catch {
           // The browser can invalidate nodes while an AudioContext is closing.
         }
@@ -69,11 +75,14 @@ export default function useMelodyEditorAudio({ notes, playbackRate, volumes }) {
       const now = context.currentTime;
       const duration = Math.max(0.22, durationMs / 1000);
       filter.type = "lowpass";
-      filter.frequency.setValueAtTime(Math.min(5200, Math.max(1600, frequency * 8)), now);
+      filter.frequency.setValueAtTime( Math.min(5200, Math.max(1600, frequency * 8)), now
+      );
       filter.Q.setValueAtTime(0.75, now);
       gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(Math.max(0.04, volumes.melody * 0.22), now + 0.012);
-      gain.gain.exponentialRampToValueAtTime(Math.max(0.02, volumes.melody * 0.11), now + 0.11);
+      gain.gain.exponentialRampToValueAtTime( Math.max(0.04, volumes.melody * 0.22), now + 0.012
+      );
+      gain.gain.exponentialRampToValueAtTime( Math.max(0.02, volumes.melody * 0.11), now + 0.11
+      );
       gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
       const oscillators = [
@@ -99,7 +108,8 @@ export default function useMelodyEditorAudio({ notes, playbackRate, volumes }) {
 
   const updateSynth = useCallback(
     (currentTime) => {
-      const active = notes.find((note) => note.start <= currentTime && note.end > currentTime);
+      const active = notes.find( (note) => note.start <= currentTime && note.end > currentTime
+      );
       if (!active) {
         stopOscillator();
         return;
@@ -127,7 +137,8 @@ export default function useMelodyEditorAudio({ notes, playbackRate, volumes }) {
   useEffect(
     () => () => {
       stopOscillator();
-      auditionRef.current?.oscillators?.forEach((oscillator) => stopNode(oscillator));
+      auditionRef.current?.oscillators?.forEach((oscillator) => stopNode(oscillator)
+      );
       const close = audioContextRef.current?.close?.();
       if (close?.catch) close.catch(() => {});
       audioContextRef.current = null;

@@ -13,7 +13,7 @@ export default function KaraokeLoadState({
     return (
       <div className="panel">
         <p className="field-error">
-          {translateSaved("Не удалось загрузить библиотеку:")}{" "}
+          {translateSaved("Не удалось загрузить библиотеку:")} {" "}
           {songsError.message || translateSaved("ошибка соединения")}.
         </p>
       </div>
@@ -55,7 +55,9 @@ export default function KaraokeLoadState({
   if (resultLoading) {
     return (
       <div className="panel">
-        <p className="text-muted">{translateSaved("Загружаем данные караоке…")}</p>
+        <p className="text-muted">
+          {translateSaved("Загружаем данные караоке…")}
+        </p>
       </div>
     );
   }
@@ -63,8 +65,10 @@ export default function KaraokeLoadState({
     return (
       <div className="panel">
         <p className="field-error">
-          {translateSaved("Не удалось загрузить данные караоке:")}{" "}
-          {resultError?.message || translateSaved("результат обработки отсутствует")}.
+          {translateSaved("Не удалось загрузить данные караоке:")} {" "}
+          {resultError?.message ||
+            translateSaved("результат обработки отсутствует")}
+          .
         </p>
       </div>
     );

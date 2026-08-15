@@ -4,7 +4,11 @@ export function getTimelineProgress(value, duration) {
   const safeDuration = Number(duration);
   const safeValue = Number(value);
 
-  if (!Number.isFinite(safeDuration) || safeDuration <= 0 || !Number.isFinite(safeValue)) {
+  if (
+    !Number.isFinite(safeDuration) ||
+    safeDuration <= 0 ||
+    !Number.isFinite(safeValue)
+  ) {
     return 0;
   }
 

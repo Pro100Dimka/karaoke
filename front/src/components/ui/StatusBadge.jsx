@@ -13,7 +13,9 @@ const STATUS_CLASS = {
 export default function StatusBadge({ status }) {
   const { t } = useI18n();
   const className = STATUS_CLASS[status] ?? "badge-pending";
-  const label = status ? t(`status.${status}`, {}, status) : t("status.unknown");
+  const label = status
+    ? t(`status.${status}`, {}, status)
+    : t("status.unknown");
 
   return (
     <span className={`badge ${className}`}>

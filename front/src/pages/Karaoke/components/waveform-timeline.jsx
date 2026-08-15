@@ -5,10 +5,10 @@ import { getSeekTime, getTimelineProgress } from "../utils/timeline";
 
 const BAR_COUNT = 220;
 const SVG_WIDTH = BAR_COUNT * 3;
-const WAVEFORM_BARS = Array.from({ length: BAR_COUNT }, (_, index) => [
-  index,
-  8 + Math.abs(Math.sin(index * 1.71) + Math.sin(index * 0.37)) * 11
-]);
+const WAVEFORM_BARS = Array.from(
+  { length: BAR_COUNT },
+  (_, index) => [ index, 8 + Math.abs(Math.sin(index * 1.71) + Math.sin(index * 0.37)) * 11 ]
+);
 const GRADIENT_STOPS = [
   ["0%", "var(--color-primary)"],
   ["24%", "var(--color-accent)"],
@@ -37,7 +37,11 @@ export default function WaveformTimeline({ value, duration, onChange }) {
   };
   return (
     <div className="waveform-timeline" {...pointerHandlers}>
-      <svg viewBox={`0 0 ${SVG_WIDTH} 44`} preserveAspectRatio="none" aria-hidden="true">
+      <svg
+        viewBox={`0 0 ${SVG_WIDTH} 44`}
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
         <defs>
           <linearGradient
             id={gradientId}
@@ -58,26 +62,12 @@ export default function WaveformTimeline({ value, duration, onChange }) {
 
         <g fill="var(--waveform-future, rgba(255,255,255,.18))">
           {WAVEFORM_BARS.map(([index, amplitude]) => (
-            <rect
-              key={index}
-              x={index * 3 + 0.75}
-              y={22 - amplitude / 2}
-              width="1.5"
-              height={amplitude}
-              rx=".75"
-            />
+            <rect key={index} x={index * 3 + 0.75} y={22 - amplitude / 2} width="1.5" height={amplitude} rx=".75" />
           ))}
         </g>
         <g fill={`url(#${gradientId})`} clipPath={`url(#${gradientId}-played)`}>
           {WAVEFORM_BARS.map(([index, amplitude]) => (
-            <rect
-              key={index}
-              x={index * 3 + 0.75}
-              y={22 - amplitude / 2}
-              width="1.5"
-              height={amplitude}
-              rx=".75"
-            />
+            <rect key={index} x={index * 3 + 0.75} y={22 - amplitude / 2} width="1.5" height={amplitude} rx=".75" />
           ))}
         </g>
 

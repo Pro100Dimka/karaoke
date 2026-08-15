@@ -10,16 +10,19 @@ import { formatLibraryDate } from "../utils";
 const TITLE = {
   icon: Music2,
   eyebrow: translateSaved("ИСПОЛНЕНИЯ ПЕСНИ"),
-  description: translateSaved("Прослушивайте исполнения, запускайте анализ и управляйте записями.")
+  description: translateSaved( "Прослушивайте исполнения, запускайте анализ и управляйте записями."
+  )
 };
 function RecordingCard({ recording, onAnalyze, onDelete }) {
   const actions = [
-    [BarChart3, 15, translateSaved("Анализировать запись"), "btn-ghost", onAnalyze],
-    [Trash2, 14, translateSaved("Удалить запись"), "btn-danger song-recording-delete", onDelete]
+    [ BarChart3, 15, translateSaved("Анализировать запись"), "btn-ghost", onAnalyze ],
+    [ Trash2, 14, translateSaved("Удалить запись"), "btn-danger song-recording-delete", onDelete ]
   ];
   return (
     <Card className="song-recording-item" variant="glass">
-      <strong className="song-recording-meta">{formatLibraryDate(recording.created_at)}</strong>
+      <strong className="song-recording-meta">
+        {formatLibraryDate(recording.created_at)}
+      </strong>
       <AudioPlayer
         className="song-recording-player"
         src={api.getPerformanceFileUrl(recording.id)}

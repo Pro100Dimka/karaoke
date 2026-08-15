@@ -15,7 +15,7 @@ if not exist "%PY%" (
 )
 
 pushd "%ROOT%\scripts" >nul || exit /b 1
-call prepare-fcpe-directml-pilot.bat
+call test-directml-isolation.bat
 set "PREP_RC=%ERRORLEVEL%"
 popd
 if not "%PREP_RC%"=="0" exit /b %PREP_RC%

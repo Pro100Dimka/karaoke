@@ -14,7 +14,15 @@ const SOURCE_EXTENSIONS = [".js", ".jsx", ".ts", ".tsx"];
 const CSS_EXTENSIONS = [".css"];
 
 const DEFAULT_CONFIG = {
-  ignoreClasses: ["active", "disabled", "error", "loading", "open", "selected", "visible"],
+  ignoreClasses: [
+    "active",
+    "disabled",
+    "error",
+    "loading",
+    "open",
+    "selected",
+    "visible"
+  ],
   ignoreClassPatterns: ["^cosmic-", "^karaoke-atmosphere-", "^cosmic-variant-"],
   ignoreSelectors: [],
   generatedClassPrefixes: [],
@@ -26,22 +34,29 @@ const DEFAULT_CONFIG = {
   maxSelectorDepth: 5,
   maxFileLines: 2000,
   repeatedValueMinimum: 4,
-  strictRules: ["invalid-css", "transition-all", "javascript-url", "extreme-z-index"]
+  strictRules: [ "invalid-css", "transition-all", "javascript-url", "extreme-z-index" ]
 };
 
-const COLOR_PATTERN = /(?:#[\da-f]{3,8}\b|rgba?\([^)]+\)|hsla?\([^)]+\)|color-mix\([^)]+\))/gi;
+const COLOR_PATTERN =
+  /(?:#[\da-f]{3,8}\b|rgba?\([^)]+\)|hsla?\([^)]+\)|color-mix\([^)]+\))/gi;
 
-const SIZE_PATTERN = /(?<![\w-])-?(?:\d*\.)?\d+(?:px|rem|em|vh|vw|vmin|vmax|ch|ex)\b/gi;
+const SIZE_PATTERN =
+  /(?<![\w-])-?(?:\d*\.)?\d+(?:px|rem|em|vh|vw|vmin|vmax|ch|ex)\b/gi;
 
-const CLASS_NAME_ATTRIBUTE_PATTERN = /\bclassName\s*=\s*(?:"([^"]*)"|'([^']*)'|`([^`]*)`)/g;
+const CLASS_NAME_ATTRIBUTE_PATTERN =
+  /\bclassName\s*=\s*(?:"([^"]*)"|'([^']*)'|`([^`]*)`)/g;
 
 const CLASS_ATTRIBUTE_PATTERN = /\bclass\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
 
-const CLASS_LIST_PATTERN = /classList\.(?:add|remove|toggle|contains)\s*\(\s*["'`]([^"'`]+)["'`]/g;
+const CLASS_LIST_PATTERN =
+  /classList\.(?:add|remove|toggle|contains)\s*\(\s*["'`]([^"'`]+)["'`]/g;
 
-const GET_BY_CLASS_PATTERN = /getElementsByClassName\s*\(\s*["'`]([^"'`]+)["'`]/g;
+const GET_BY_CLASS_PATTERN =
+  /getElementsByClassName\s*\(\s*["'`]([^"'`]+)["'`]/g;
 
-const QUERY_SELECTOR_PATTERN = /querySelector(?:All)?\s*\(\s*["'`]([^"'`]+)["'`]/g;
+const QUERY_SELECTOR_PATTERN =
+  /querySelector(?:All)?\s*\(\s*["'`]([^"'`]+)["'`]/g;
+
 
 function createIssue({
   rule,
@@ -88,14 +103,16 @@ async function loadConfig() {
     return {
       ...DEFAULT_CONFIG,
       ...config,
-      ignoreClasses: [...DEFAULT_CONFIG.ignoreClasses, ...(config.ignoreClasses ?? [])],
+      ignoreClasses: [ ...DEFAULT_CONFIG.ignoreClasses, ...(config.ignoreClasses ?? []) ],
       ignoreClassPatterns: [
         ...DEFAULT_CONFIG.ignoreClassPatterns,
         ...(config.ignoreClassPatterns ?? [])
       ]
     };
   } catch (error) {
-    console.warn(`Не удалось прочитать css-audit.config.json: ${error.message}`);
+    console.warn(
+      `Не удалось прочитать css-audit.config.json: ${error.message}`
+    );
 
     return DEFAULT_CONFIG;
   }
@@ -108,8 +125,7 @@ async function walk(directory, extensions) {
   for (const entry of entries) {
     const path = join(directory, entry.name);
 
-    if (entry.isDirectory()) files.push(...(await walk(path, extensions)));
-    else if (extensions.has(extname(entry.name).toLowerCase())) {
+    if (entry.isDirectory()) files.push(...(await walk(path, extensions))); else if (extensions.has(extname(entry.name).toLowerCase())) {
       files.push(path);
     }
   }
@@ -132,7 +148,8 @@ function splitClasses(value) {
     .replace(/\$\{[^}]*\}/g, " ")
     .split(/\s+/)
     .map((item) => item.trim())
-    .filter((item) => item && !item.includes("{") && !item.includes("}") && !item.includes("$"));
+    .filter( (item) => item && !item.includes("{") && !item.includes("}") && !item.includes("$")
+    );
 }
 
 function collectClassesFromSource(source, file, usage, dynamicFragments) {
@@ -171,7 +188,9 @@ function collectClassesFromSource(source, file, usage, dynamicFragments) {
     }
   }
 
-  for (const match of source.matchAll(/["'`]([a-zA-Z_][\w-]*(?:--[a-zA-Z0-9_-]+)+)["'`]/g)) {
+  for (const match of source.matchAll(
+    /["'`]([a-zA-Z_][\w-]*(?:--[a-zA-Z0-9_-]+)+)["'`]/g
+  )) {
     addUsage(usage, match[1], { file });
   }
 }
@@ -180,11 +199,7 @@ function getSelectorClasses(selector) {
   const classes = [];
 
   try {
-    selectorParser((root) => {
-      root.walkClasses((node) => {
-        classes.push(node.value);
-      });
-    }).processSync(selector);
+    selectorParser((root) => { root.walkClasses((node) => { classes.push(node.value); }); }).processSync(selector);
   } catch {
     for (const match of selector.matchAll(/\.([a-zA-Z_][\w-]*)/g)) {
       classes.push(match[1]);
@@ -202,11 +217,11 @@ function getSelectorSpecificity(selector) {
   try {
     selectorParser((root) => {
       root.walk((node) => {
-        if (node.type === "id") ids += 1;
-        else if (["class", "attribute", "pseudo"].includes(node.type)) {
+        if (node.type === "id") ids += 1; else if (["class", "attribute", "pseudo"].includes(node.type)) {
           if (
             node.type !== "pseudo" ||
-            !["::before", "::after", "::first-letter", "::first-line"].includes(node.value)
+            !["::before", "::after", "::first-letter", "::first-line"].includes( node.value
+            )
           ) {
             classes += 1;
           } else elements += 1;
@@ -215,7 +230,8 @@ function getSelectorSpecificity(selector) {
     }).processSync(selector);
   } catch {
     ids = (selector.match(/#[\w-]+/g) ?? []).length;
-    classes = (selector.match(/\.[\w-]+|\[[^\]]+\]|:(?!:)[\w-]+/g) ?? []).length;
+    classes = (selector.match(/\.[\w-]+|\[[^\]]+\]|:(?!:)[\w-]+/g) ?? [])
+      .length;
     elements = (selector.match(/(?:^|[\s>+~])([a-z][\w-]*)/gi) ?? []).length;
   }
 
@@ -232,7 +248,9 @@ function getAtRuleContext(node) {
 
   while (current) {
     if (current.type === "atrule") {
-      context.unshift(`@${current.name}${current.params ? ` ${current.params}` : ""}`);
+      context.unshift(
+        `@${current.name}${current.params ? ` ${current.params}` : ""}`
+      );
     }
 
     current = current.parent;
@@ -244,7 +262,8 @@ function getAtRuleContext(node) {
 function isIgnoredClass(className, config) {
   if (config.ignoreClasses.includes(className)) return true;
 
-  return config.ignoreClassPatterns.some((pattern) => new RegExp(pattern).test(className));
+  return config.ignoreClassPatterns.some((pattern) => new RegExp(pattern).test(className)
+  );
 }
 
 function getDynamicClassBase(className) {
@@ -254,7 +273,9 @@ function getDynamicClassBase(className) {
 }
 
 function couldBeDynamic(className, dynamicFragments, config) {
-  if (config.generatedClassPrefixes.some((prefix) => className.startsWith(prefix))) {
+  if (
+    config.generatedClassPrefixes.some((prefix) => className.startsWith(prefix))
+  ) {
     return true;
   }
 
@@ -314,11 +335,15 @@ function sortIssues(issues) {
   const order = { error: 0, warning: 1, info: 2 };
 
   return issues.sort((a, b) => {
-    const severityDifference = (order[a.severity] ?? 99) - (order[b.severity] ?? 99);
+    const severityDifference =
+      (order[a.severity] ?? 99) - (order[b.severity] ?? 99);
 
     if (severityDifference !== 0) return severityDifference;
 
-    return String(a.file).localeCompare(String(b.file)) || (a.line ?? 0) - (b.line ?? 0);
+    return (
+      String(a.file).localeCompare(String(b.file)) ||
+      (a.line ?? 0) - (b.line ?? 0)
+    );
   });
 }
 
@@ -336,7 +361,8 @@ async function main() {
   for (const filePath of sourceFiles) {
     const source = await readFile(filePath, "utf8");
 
-    collectClassesFromSource(source, normalizeFile(filePath), sourceClassUsage, dynamicFragments);
+    collectClassesFromSource( source, normalizeFile(filePath), sourceClassUsage, dynamicFragments
+    );
   }
 
   const issues = [];
@@ -423,7 +449,9 @@ async function main() {
           context,
           selector: normalizedSelector
         };
-        const selectorKey = context ? `${context} :: ${normalizedSelector}` : normalizedSelector;
+        const selectorKey = context
+          ? `${context} :: ${normalizedSelector}`
+          : normalizedSelector;
 
         addUsage(selectorDefinitions, selectorKey, location);
 
@@ -492,7 +520,8 @@ async function main() {
 
         declarationsByProperty.get(property).push({ value: normalizedValue, location });
 
-        registerRepeatedValue(repeatedValues, property, normalizedValue, location);
+        registerRepeatedValue( repeatedValues, property, normalizedValue, location
+        );
 
         const propertyValueKey = `${property}:${normalizedValue}`;
         propertyValueCounts.set(
@@ -500,7 +529,10 @@ async function main() {
           (propertyValueCounts.get(propertyValueKey) ?? 0) + 1
         );
 
-        if (declaration.important && !config.allowedImportantSelectors.includes(rule.selector)) {
+        if (
+          declaration.important &&
+          !config.allowedImportantSelectors.includes(rule.selector)
+        ) {
           issues.push(
             createIssue({
               rule: "important",
@@ -515,12 +547,16 @@ async function main() {
           );
         }
 
-        if (property === "transition" && /(?:^|\s|,)all(?:\s|,|$)/i.test(normalizedValue)) {
+        if (
+          property === "transition" &&
+          /(?:^|\s|,)all(?:\s|,|$)/i.test(normalizedValue)
+        ) {
           issues.push(
             createIssue({
               rule: "transition-all",
               severity: "error",
-              message: "transition: all может вызывать непредсказуемые анимации.",
+              message:
+                "transition: all может вызывать непредсказуемые анимации.",
               file,
               line: location.line,
               selector: rule.selector,
@@ -551,7 +587,10 @@ async function main() {
           if (zIndex != null && !config.allowedZIndexes.includes(zIndex)) {
             issues.push(
               createIssue({
-                rule: Math.abs(zIndex) >= 10000 ? "extreme-z-index" : "nonstandard-z-index",
+                rule:
+                  Math.abs(zIndex) >= 10000
+                    ? "extreme-z-index"
+                    : "nonstandard-z-index",
                 severity: Math.abs(zIndex) >= 10000 ? "error" : "warning",
                 message: `Нестандартный z-index: ${zIndex}.`,
                 file,
@@ -569,7 +608,8 @@ async function main() {
             createIssue({
               rule: "vertical-writing-mode",
               severity: "warning",
-              message: "Вертикальный writing-mode требует ручной визуальной проверки.",
+              message:
+                "Вертикальный writing-mode требует ручной визуальной проверки.",
               file,
               line: location.line,
               selector: rule.selector,
@@ -617,7 +657,7 @@ async function main() {
       });
 
       for (const [property, declarations] of declarationsByProperty) {
-        const uniqueValues = [...new Set(declarations.map((item) => item.value))];
+        const uniqueValues = [ ...new Set(declarations.map((item) => item.value)) ];
 
         if (uniqueValues.length > 1) {
           issues.push(
@@ -640,7 +680,10 @@ async function main() {
   }
 
   for (const [selector, locations] of selectorDefinitions) {
-    if (locations.length > 1 && !config.allowedDuplicateSelectors.includes(selector)) {
+    if (
+      locations.length > 1 &&
+      !config.allowedDuplicateSelectors.includes(selector)
+    ) {
       issues.push(
         createIssue({
           rule: "duplicate-selector",
@@ -744,8 +787,12 @@ async function main() {
   console.log(`CSS files: ${report.summary.cssFiles}`);
   console.log(`Selectors: ${report.summary.selectors}`);
   console.log(`Classes defined: ${report.summary.classesDefined}`);
-  console.log(`Unused class candidates: ${report.summary.unusedClassCandidates}`);
-  console.log(`Dynamic class candidates: ${report.summary.dynamicClassCandidates}`);
+  console.log(
+    `Unused class candidates: ${report.summary.unusedClassCandidates}`
+  );
+  console.log(
+    `Dynamic class candidates: ${report.summary.dynamicClassCandidates}`
+  );
   console.log(`Duplicate selectors: ${report.summary.duplicateSelectors}`);
   console.log(`Repeated value groups: ${report.summary.repeatedValues}`);
   console.log(`Errors: ${report.summary.errors}`);
@@ -753,7 +800,9 @@ async function main() {
   console.log(`Info: ${report.summary.info}`);
   console.log(`\nReport: ${normalizeFile(REPORT_PATH)}`);
 
-  const topIssues = report.issues.filter((issue) => issue.severity !== "info").slice(0, 30);
+  const topIssues = report.issues
+    .filter((issue) => issue.severity !== "info")
+    .slice(0, 30);
 
   if (topIssues.length > 0) {
     console.log("\nTop issues:");
@@ -772,11 +821,14 @@ async function main() {
 
   if (strict) {
     const strictIssues = report.issues.filter(
-      (issue) => issue.severity === "error" || config.strictRules.includes(issue.rule)
+      (issue) =>
+        issue.severity === "error" || config.strictRules.includes(issue.rule)
     );
 
     if (strictIssues.length > 0) {
-      console.error(`\nStrict CSS audit failed: ${strictIssues.length} issue(s).`);
+      console.error(
+        `\nStrict CSS audit failed: ${strictIssues.length} issue(s).`
+      );
       process.exitCode = 1;
     }
   }

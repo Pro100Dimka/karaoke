@@ -20,9 +20,7 @@ function getModelStatusText({ ready, downloading, data, missingCount, total, rea
       model: data?.current_model || t("settings.ai.models.preparing")
     });
   }
-  return t("settings.ai.models.missing", {
-    count: missingCount || Math.max(0, total - readyCount)
-  });
+  return t("settings.ai.models.missing", { count: missingCount || Math.max(0, total - readyCount) });
 }
 
 export default function ModelRecovery() {
@@ -40,7 +38,8 @@ export default function ModelRecovery() {
   const missing = data?.models?.filter((model) => !model.ready) ?? [];
   const total = data?.total ?? 0;
   const readyCount = data?.ready_count ?? 0;
-  const visibleError = actionError || data?.error || (error && getErrorMessage(error));
+  const visibleError =
+    actionError || data?.error || (error && getErrorMessage(error));
   const downloadedBytes = Number(data?.downloaded_bytes) || 0;
   const totalBytes = Number(data?.total_bytes) || 0;
   const remainingSeconds = Number(data?.remaining_seconds);
@@ -64,7 +63,8 @@ export default function ModelRecovery() {
     readyCount,
     t
   });
-  const progressValue = getModelProgressValue(totalBytes, downloadedBytes, downloading, readyCount);
+  const progressValue = getModelProgressValue( totalBytes, downloadedBytes, downloading, readyCount
+  );
   const startDownload = async () => {
     setStarting(true);
     setActionError("");
@@ -83,19 +83,29 @@ export default function ModelRecovery() {
       sx={{ margin: "0 1rem 1rem", minWidth: 0 }}
       cardContent={{ style: { padding: "1rem 1.1rem" } }}
     >
-      <Stack gap={0.65} sx={{ minWidth: 0 }}>
+      <Stack
+        gap={0.65}
+        sx={{ minWidth: 0 }}
+      >
         <Stack direction="row" align="center" gap={0.55}>
           {ready ? (
             <CheckCircle2 size={18} aria-hidden="true" />
           ) : (
             <AlertTriangle size={18} aria-hidden="true" />
           )}
-          <Typography variant="body1" sx={{ fontWeight: 800 }}>
+          <Typography
+            variant="body1"
+            sx={{ fontWeight: 800 }}
+          >
             {t("settings.ai.models.title")}
           </Typography>
         </Stack>
 
-        <Typography variant="body2" tone="muted" sx={{ overflowWrap: "anywhere" }}>
+        <Typography
+          variant="body2"
+          tone="muted"
+          sx={{ overflowWrap: "anywhere" }}
+        >
           {statusText}
           {downloadDetail ? ` · ${downloadDetail}` : ""}
         </Typography>
@@ -109,7 +119,11 @@ export default function ModelRecovery() {
         )}
 
         {visibleError && (
-          <Typography tone="danger" variant="caption" sx={{ overflowWrap: "anywhere" }}>
+          <Typography
+            tone="danger"
+            variant="caption"
+            sx={{ overflowWrap: "anywhere" }}
+          >
             {visibleError}
           </Typography>
         )}

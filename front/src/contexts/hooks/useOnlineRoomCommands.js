@@ -1,20 +1,18 @@
 import { useCallback } from "react";
 import { openKaraokeInRoom } from "../onlineRoomActions";
 
-export default function useOnlineRoomCommands({ clientRef, connectionTokenRef, roomRef }) {
-  const syncUi = useCallback(
-    (state) => {
-      if (roomRef.current?.host) clientRef.current?.send("ui", { state });
-    },
-    [clientRef, roomRef]
-  );
+export default function useOnlineRoomCommands({
+  clientRef,
+  connectionTokenRef,
+  roomRef
+}) {
+  const syncUi = useCallback((state) => {
+    if (roomRef.current?.host) clientRef.current?.send("ui", { state });
+  }, [clientRef, roomRef]);
 
-  const syncCommand = useCallback(
-    (state) => {
-      if (roomRef.current?.host) clientRef.current?.send("sync", { state });
-    },
-    [clientRef, roomRef]
-  );
+  const syncCommand = useCallback((state) => {
+    if (roomRef.current?.host) clientRef.current?.send("sync", { state });
+  }, [clientRef, roomRef]);
 
   const openKaraoke = useCallback(
     (songId) => {

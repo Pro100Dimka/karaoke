@@ -1,4 +1,5 @@
-export const clampEditor = (value, min, max) => Math.max(min, Math.min(max, value));
+export const clampEditor = (value, min, max) =>
+  Math.max(min, Math.min(max, value));
 
 export function anchoredHorizontalScroll({
   time,
@@ -73,7 +74,12 @@ export function marqueeHitIds({ notes, x1, y1, x2, y2, keyboardWidth, zoom, rowH
       const noteRight = keyboardWidth + Number(note.end || 0) * zoom;
       const noteTop = (maxMidi - Number(note.midi_note || 0)) * rowHeight + 1;
       const noteBottom = noteTop + Math.max(8, rowHeight - 2);
-      return noteRight >= left && noteLeft <= right && noteBottom >= top && noteTop <= bottom;
+      return (
+        noteRight >= left &&
+        noteLeft <= right &&
+        noteBottom >= top &&
+        noteTop <= bottom
+      );
     })
     .map((note) => note._id);
 }

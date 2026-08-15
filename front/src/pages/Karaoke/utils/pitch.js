@@ -24,7 +24,8 @@ export function normalizedCorrelation(buffer, lag) {
 
 export function rootMeanSquare(buffer) {
   let energy = 0;
-  for (let index = 0; index < buffer.length; index += 1) energy += buffer[index] ** 2;
+  for (let index = 0; index < buffer.length; index += 1)
+    energy += buffer[index] ** 2;
   return Math.sqrt(energy / buffer.length);
 }
 
@@ -54,7 +55,8 @@ export function findBestPitchLag(scores, minLag, maxLag) {
   return { lag, score };
 }
 
-export function selectFundamentalLag(scores, minLag, maxLag, fallbackLag, fallbackScore) {
+export function selectFundamentalLag( scores, minLag, maxLag, fallbackLag, fallbackScore
+) {
   const threshold = Math.max(MIN_CORRELATION, fallbackScore * 0.9);
   for (let lag = minLag + 1; lag < maxLag; lag += 1) {
     if (
@@ -124,12 +126,7 @@ export function detectMidiFromAnalyser(analyser, buffer, sampleRate) {
   // multiples of the true period. Picking the global maximum can therefore
   // report an octave (or two) too low. Prefer the first strong local maximum,
   // which corresponds to the fundamental period.
-  const { lag: fundamentalLag } = selectFundamentalLag(
-    scores,
-    minLag,
-    maxLag,
-    best.lag,
-    best.score
+  const { lag: fundamentalLag } = selectFundamentalLag( scores, minLag, maxLag, best.lag, best.score
   );
 
   // Sub-sample lag interpolation removes the coarse semitone jumps caused by

@@ -28,7 +28,8 @@ export default function useKaraokeControls({ autoHideEnabled = true } = {}) {
     if (!autoHideEnabled) return undefined;
 
     const watcher = window.setInterval(() => {
-      setControlsVisible(Date.now() - lastActivityRef.current < CONTROLS_VISIBLE_MS);
+      setControlsVisible( Date.now() - lastActivityRef.current < CONTROLS_VISIBLE_MS
+      );
     }, VISIBILITY_CHECK_MS);
 
     return () => window.clearInterval(watcher);
@@ -37,15 +38,14 @@ export default function useKaraokeControls({ autoHideEnabled = true } = {}) {
   useEffect(
     () => {
       document.addEventListener("fullscreenchange", showControls);
-      return () => document.removeEventListener("fullscreenchange", showControls);
+      return () =>
+        document.removeEventListener("fullscreenchange", showControls);
     },
     // Stryker disable next-line ArrayDeclaration: showControls has stable identity.
     [showControls]
   );
 
-  useEffect(() => {
-    showControls();
-  }, [autoHideEnabled, showControls]);
+  useEffect(() => { showControls(); }, [autoHideEnabled, showControls]);
 
   const revealControls = useCallback(() => {
     if (!autoHideEnabled) return;
