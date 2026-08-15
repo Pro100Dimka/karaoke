@@ -442,6 +442,11 @@ def _online(
         track_score = _similarity(track, candidate_track)
         artist_score = _similarity(artist, candidate_artist) if artist else 0.0
 
+        # Exact/structured searches must never surface another performer as a
+        # plausible candidate.  Filter it before candidate-level diagnostics.
+        if artist and artist_score < 0.82:
+            continue
+
         duration_score = 1.0
         duration_delta = None
         if duration_sec and item.get("duration"):
@@ -593,12 +598,116 @@ def _read_html(request: urllib.request.Request, limit: int = 1_500_000) -> str:
     return _decode_html_payload(payload, charset)
 
 
-def _mychords_search(title: str) -> list[tuple[str, str]]:
-    """Use MyChords' own search form before relying on external search engines.
+def _mychords_song_matches(result_title: str, artist: str, track: str) -> bool:
+    """Match a MyChords song link against the known canonical identity."""
+    result_artist, result_track = _track_signature(result_title)
+    if not result_track:
+        return False
+    if artist and _normalize_name(result_artist) != _normalize_name(artist):
+        return False
+    expected = _normalize_name(track)
+    actual = _normalize_name(result_track)
+    return bool(expected and actual and (actual == expected or _similarity(actual, expected) >= 0.96))
 
-    Search engines can omit a valid page even though MyChords has the song.
-    The form is discovered dynamically so the code does not hard-code its input name.
+
+def _mychords_artist_page(artist: str, headers: dict[str, str]) -> str | None:
+    """Resolve an artist page from MyChords' own alphabetical directory."""
+    normalized = _normalize_name(artist)
+    first = next((char for char in str(artist or '').strip() if char.isalnum()), '')
+    if not normalized or not first:
+        return None
+
+    letter_url = f"https://mychords.net/ru/letter/{urllib.parse.quote(first.upper(), safe='')}/"
+    page = _read_html(urllib.request.Request(letter_url, headers=headers))
+    if not page:
+        return None
+
+    anchors = _AnchorHTMLParser()
+    with suppress(ValueError, UnicodeError):
+        anchors.feed(page)
+    for raw_url, title in anchors.links:
+        if _normalize_name(title) != normalized:
+            continue
+        url = urllib.parse.urljoin(letter_url, raw_url)
+        parsed = urllib.parse.urlparse(url)
+        host = (parsed.hostname or '').casefold().removeprefix('www.')
+        path = parsed.path.casefold()
+        if (
+            host == 'mychords.net'
+            and path.startswith('/ru/')
+            and path.endswith('/')
+            and '/letter/' not in path
+            and '/search' not in path
+            and '/page/' not in path
+        ):
+            return url
+    return None
+
+
+def _mychords_catalog_search(artist: str, track: str) -> list[tuple[str, str]]:
+    """Find a song directly inside a known artist's MyChords catalogue.
+
+    This path does not depend on MyChords' search form or an external search
+    engine. The artist is resolved through MyChords' alphabetical directory,
+    then the artist catalogue is walked until the exact track is found.
     """
+    if not artist or not track:
+        return []
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AAndDVoice/2026.35',
+        'Accept-Language': 'ru,en;q=0.8',
+    }
+    artist_url = _mychords_artist_page(artist, headers)
+    if not artist_url:
+        return []
+
+    def parse_catalog(page_url: str, page: str) -> tuple[list[tuple[str, str]], int]:
+        anchors = _AnchorHTMLParser()
+        with suppress(ValueError, UnicodeError):
+            anchors.feed(page)
+        matches: list[tuple[str, str]] = []
+        max_page = 1
+        artist_path = urllib.parse.urlparse(artist_url).path.rstrip('/') + '/'
+        for raw_url, result_title in anchors.links:
+            url = urllib.parse.urljoin(page_url, raw_url)
+            parsed = urllib.parse.urlparse(url)
+            host = (parsed.hostname or '').casefold().removeprefix('www.')
+            if host != 'mychords.net':
+                continue
+            page_match = re.fullmatch(re.escape(artist_path) + r'page/(\d+)/', parsed.path)
+            if page_match:
+                max_page = max(max_page, int(page_match.group(1)))
+                continue
+            if not parsed.path.startswith(artist_path) or not parsed.path.endswith('.html'):
+                continue
+            if _mychords_song_matches(result_title, artist, track):
+                matches.append((url, result_title))
+        return matches, max_page
+
+    first_page = _read_html(urllib.request.Request(artist_url, headers=headers))
+    if not first_page:
+        return []
+    matches, max_page = parse_catalog(artist_url, first_page)
+    if matches:
+        return matches[:6]
+
+    # Artist pages are alphabetically paginated.  The catalogue itself tells us
+    # how many pages exist; cap it defensively so a malformed page cannot cause
+    # an unbounded crawl.
+    for page_number in range(2, min(max_page, 20) + 1):
+        page_url = urllib.parse.urljoin(artist_url, f'page/{page_number}/')
+        page = _read_html(urllib.request.Request(page_url, headers=headers))
+        if not page:
+            continue
+        page_matches, discovered_max = parse_catalog(page_url, page)
+        max_page = max(max_page, discovered_max)
+        if page_matches:
+            return page_matches[:6]
+    return []
+
+
+def _mychords_search(title: str) -> list[tuple[str, str]]:
+    """Use MyChords' own generic search form as a fallback discovery path."""
     base = "https://mychords.net/ru/search"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AAndDVoice/2026.35",
@@ -673,7 +782,6 @@ def _mychords_search(title: str) -> list[tuple[str, str]]:
         if output:
             return output[:6]
     return []
-
 
 def _duckduckgo_search(query: str, title: str) -> list[tuple[str, str]]:
     request = urllib.request.Request(
@@ -773,14 +881,38 @@ def _fetch_web_lyrics(url: str) -> str:
     return value if 30 <= len(words) <= 2500 else ""
 
 
-def _web_online(title: str | None) -> LyricsDiscovery:
+def _web_online(title: str | LyricsSearchCandidate | None) -> LyricsDiscovery:
     if not title:
         return LyricsDiscovery()
 
-    _lyrics_debug(f"[lyrics] WEB request: query={title!r}")
-    results = _mychords_search(title)
+    if isinstance(title, LyricsSearchCandidate):
+        query = title.query
+        expected_artist = title.artist.strip()
+    else:
+        query = str(title).strip()
+        expected_artist = ""
+
+    _lyrics_debug(
+        f"[lyrics] WEB request: query={query!r} artist={expected_artist!r}"
+    )
+    track = title.track.strip() if isinstance(title, LyricsSearchCandidate) else query
+    results = _mychords_catalog_search(expected_artist, track) if expected_artist else []
     if not results:
-        results = _web_search(title)
+        results = _mychords_search(query)
+    if not results:
+        results = _web_search(query)
+
+    if expected_artist:
+        artist_tokens = {
+            token for token in _normalize_name(expected_artist).split() if len(token) >= 2
+        }
+        if artist_tokens:
+            results = [
+                (url, result_title)
+                for url, result_title in results
+                if artist_tokens.issubset(set(_normalize_name(result_title).split()))
+            ]
+
     _lyrics_debug(f"[lyrics] WEB matching search results: {len(results)}")
 
     for number, (url, result_title) in enumerate(results, 1):
@@ -789,13 +921,13 @@ def _web_online(title: str | None) -> LyricsDiscovery:
         if text:
             host = (urllib.parse.urlparse(url).hostname or "web").removeprefix("www.")
             _lyrics_debug(
-                f"[lyrics] WEB SELECTED: query={title!r} result={result_title!r} source={host!r}"
+                f"[lyrics] WEB SELECTED: query={query!r} result={result_title!r} source={host!r}"
             )
             return LyricsDiscovery(text, f"web:{host}")
 
         _lyrics_debug(f"[lyrics] WEB candidate #{number}: no usable lyrics -> REJECT")
 
-    _lyrics_debug(f"[lyrics] WEB: no acceptable candidate for query={title!r}")
+    _lyrics_debug(f"[lyrics] WEB: no acceptable candidate for query={query!r}")
     return LyricsDiscovery()
 
 
@@ -885,6 +1017,9 @@ def _metadata_search_plan(
         if not clean_title:
             return
         if clean_artist:
+            # Once an artist is known, NEVER drop it on a broader/title-only
+            # fallback.  ``query`` may become shorter for web discovery, but
+            # providers and candidate validation must keep the canonical artist.
             candidates.append(
                 LyricsSearchCandidate(
                     query=f"{clean_artist} {clean_title}",
@@ -892,6 +1027,15 @@ def _metadata_search_plan(
                     track=clean_title,
                 )
             )
+            if clean_title.casefold() not in technical_names:
+                candidates.append(
+                    LyricsSearchCandidate(
+                        query=clean_title,
+                        artist=clean_artist,
+                        track=clean_title,
+                    )
+                )
+            return
         add_query(clean_title)
 
     def strip_leading_artist(title: str, artist: str) -> str:
@@ -966,12 +1110,19 @@ def _metadata_search_plan(
     # exact structured artist+track candidate is never replaced by a later
     # title-only/string fallback with the same display text.
     unique: list[LyricsSearchCandidate] = []
-    seen: set[str] = set()
+    indexes: dict[str, int] = {}
     for candidate in candidates:
         key = candidate.query.casefold()
-        if key not in seen:
-            seen.add(key)
+        index = indexes.get(key)
+        if index is None:
+            indexes[key] = len(unique)
             unique.append(candidate)
+            continue
+        # Prefer the identity that retains an artist.  A title-only fallback
+        # built earlier must never erase artist information recovered later
+        # from filename/metadata.
+        if not unique[index].artist and candidate.artist:
+            unique[index] = candidate
     return unique
 
 
@@ -1011,7 +1162,7 @@ def discover_lyrics(
 
         _lyrics_debug(f"[lyrics] SEARCH #{index} LRCLIB NOT FOUND: {query}")
 
-        web = _web_online(query)
+        web = _web_online(candidate)
         if web.text:
             _lyrics_log(f"[lyrics] FOUND via {web.source}: {query}")
             return LyricsDiscovery(web.text, web.source, web.segments, query)

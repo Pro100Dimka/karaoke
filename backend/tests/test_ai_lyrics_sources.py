@@ -299,7 +299,7 @@ def test_query_helpers_and_metadata_candidates(monkeypatch, tmp_path):
         query="Нервы Моя Леди", artist="Нервы", track="Моя Леди"
     )
     assert plan[1] == lyrics.LyricsSearchCandidate(
-        query="Моя Леди", artist="", track="Моя Леди"
+        query="Моя Леди", artist="Нервы", track="Моя Леди"
     )
 
 
@@ -319,6 +319,52 @@ def test_online_structured_candidate_preserves_artist_and_track(monkeypatch):
     params = lyrics.urllib.parse.parse_qs(parsed.query)
     assert params == {"track_name": ["Моя Леди"], "artist_name": ["Нервы"]}
     assert "q" not in params
+
+
+def test_title_fallback_never_drops_known_artist(monkeypatch, tmp_path):
+    monkeypatch.setattr(lyrics, "_local_file", lambda *_: lyrics.LyricsDiscovery())
+    monkeypatch.setattr(lyrics, "_embedded", lambda _: "")
+    monkeypatch.setattr(
+        lyrics,
+        "_metadata_search_plan",
+        lambda *_: [
+            lyrics.LyricsSearchCandidate("Нервы Моя Леди", "Нервы", "Моя Леди"),
+            lyrics.LyricsSearchCandidate("Моя Леди", "Нервы", "Моя Леди"),
+        ],
+    )
+    seen = []
+
+    def fake_online(candidate, _duration):
+        seen.append((candidate.query, candidate.artist, candidate.track))
+        return lyrics.LyricsDiscovery()
+
+    monkeypatch.setattr(lyrics, "_online", fake_online)
+    monkeypatch.setattr(lyrics, "_web_online", lambda *_: lyrics.LyricsDiscovery())
+    lyrics.discover_lyrics(tmp_path / "song.mp3")
+    assert seen == [
+        ("Нервы Моя Леди", "Нервы", "Моя Леди"),
+        ("Моя Леди", "Нервы", "Моя Леди"),
+    ]
+
+
+def test_lrclib_does_not_log_unrelated_artist(monkeypatch, capsys):
+    monkeypatch.setenv("KARAOKE_LYRICS_VERBOSE", "1")
+    unrelated = lrclib_record(
+        artistName="Stas Piekha",
+        trackName="Моя прекрасная леди",
+        plainLyrics="слово " * 30,
+    )
+    monkeypatch.setattr(
+        lyrics.urllib.request,
+        "urlopen",
+        lambda *_a, **_k: Response(json.dumps([unrelated], ensure_ascii=False)),
+    )
+    candidate = lyrics.LyricsSearchCandidate(
+        query="Моя Леди", artist="Нервы", track="Моя Леди"
+    )
+    assert not lyrics._online(candidate, None).text
+    output = capsys.readouterr().out
+    assert "Stas Piekha" not in output
 
 
 def test_discover_lyrics_query_order(monkeypatch, tmp_path):
@@ -350,7 +396,7 @@ def test_discover_lyrics_query_order(monkeypatch, tmp_path):
         "_web_online",
         lambda query: (
             lyrics.LyricsDiscovery("web", "web:test")
-            if query == "first"
+            if getattr(query, "query", query) == "first"
             else lyrics.LyricsDiscovery()
         ),
     )
@@ -454,3 +500,97 @@ def test_mychords_direct_search_finds_song_without_external_search(monkeypatch):
     result = lyrics._web_online("Нервы Моя Леди")
     assert result.source == "web:mychords.net"
     assert "Первая строка" in result.text
+
+
+def test_web_structured_candidate_keeps_artist_filter(monkeypatch):
+    monkeypatch.setattr(
+        lyrics,
+        "_mychords_search",
+        lambda _query: [
+            ("https://mychords.net/ru/stas/1.html", "Stas Piekha - Моя прекрасная леди"),
+            ("https://mychords.net/ru/nervi/2.html", "Нервы - Моя Леди"),
+        ],
+    )
+    monkeypatch.setattr(lyrics, "_fetch_web_lyrics", lambda url: "слово " * 40 if "nervi" in url else "wrong " * 40)
+    candidate = lyrics.LyricsSearchCandidate("Моя Леди", "Нервы", "Моя Леди")
+    result = lyrics._web_online(candidate)
+    assert result.source == "web:mychords.net"
+    assert result.text.startswith("слово")
+
+
+def test_mychords_artist_catalog_finds_exact_song_on_paginated_artist_page(monkeypatch):
+    letter_page = '''
+    <html><body>
+      <a href="/ru/nervi/">Нервы</a>
+      <a href="/ru/neizvesten/">неизвестен</a>
+    </body></html>
+    '''
+    artist_page = '''
+    <html><body>
+      <a href="/ru/nervi/111-nervy-8-marta.html">Нервы - 8 марта</a>
+      <a href="/ru/nervi/page/2/">2</a>
+      <a href="/ru/nervi/page/3/">3</a>
+      <a href="/ru/nervi/page/7/">7</a>
+    </body></html>
+    '''
+    page2 = '''
+    <html><body>
+      <a href="/ru/nervi/222-nervy-drugaya.html">Нервы - Другая</a>
+    </body></html>
+    '''
+    page3 = '''
+    <html><body>
+      <a href="/ru/nervi/22635-nervy-moya-ledi.html">Нервы - Моя леди (2 варианта)</a>
+    </body></html>
+    '''
+    song_page = '<html><body><div itemprop="lyrics">' + 'слово<br>' * 40 + '</div></body></html>'
+
+    seen = []
+
+    def fake_urlopen(request, timeout=8.0):
+        url = request.full_url
+        seen.append(url)
+        if url == 'https://mychords.net/ru/letter/%D0%9D/':
+            return Response(letter_page, 'utf-8')
+        if url == 'https://mychords.net/ru/nervi/':
+            return Response(artist_page, 'utf-8')
+        if url == 'https://mychords.net/ru/nervi/page/2/':
+            return Response(page2, 'utf-8')
+        if url == 'https://mychords.net/ru/nervi/page/3/':
+            return Response(page3, 'utf-8')
+        if url == 'https://mychords.net/ru/nervi/22635-nervy-moya-ledi.html':
+            return Response(song_page, 'utf-8')
+        raise AssertionError(url)
+
+    monkeypatch.setattr(lyrics.urllib.request, 'urlopen', fake_urlopen)
+    monkeypatch.setattr(lyrics, '_mychords_search', lambda _query: pytest.fail('generic MyChords search used'))
+    monkeypatch.setattr(lyrics, '_web_search', lambda _query: pytest.fail('external search used'))
+    candidate = lyrics.LyricsSearchCandidate('Нервы Моя Леди', 'Нервы', 'Моя Леди')
+    result = lyrics._web_online(candidate)
+    assert result.source == 'web:mychords.net'
+    assert len(result.text.split()) == 40
+    assert 'https://mychords.net/ru/nervi/page/3/' in seen
+    assert all('/page/4/' not in url for url in seen)
+
+
+def test_mychords_catalog_does_not_accept_other_artist_or_similar_title(monkeypatch):
+    letter_page = '<a href="/ru/nervi/">Нервы</a>'
+    artist_page = '''
+      <a href="/ru/nervi/1.html">Нервы - Моя прекрасная леди</a>
+      <a href="/ru/nervi/page/2/">2</a>
+    '''
+    page2 = '<a href="/ru/nervi/2.html">Нервы - Моя Леди</a>'
+
+    def fake_urlopen(request, timeout=8.0):
+        url = request.full_url
+        if '/letter/' in url:
+            return Response(letter_page, 'utf-8')
+        if url.endswith('/ru/nervi/'):
+            return Response(artist_page, 'utf-8')
+        if url.endswith('/ru/nervi/page/2/'):
+            return Response(page2, 'utf-8')
+        raise AssertionError(url)
+
+    monkeypatch.setattr(lyrics.urllib.request, 'urlopen', fake_urlopen)
+    results = lyrics._mychords_catalog_search('Нервы', 'Моя Леди')
+    assert results == [('https://mychords.net/ru/nervi/2.html', 'Нервы - Моя Леди')]

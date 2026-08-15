@@ -9,8 +9,7 @@ export async function openKaraokeInRoom({
 }) {
   const command = { type: "open-karaoke", songId };
   if (!room || room.host) {
-    if (isCurrentConnection())
-      client?.send("sync", { state: command });
+    if (isCurrentConnection()) client?.send("sync", { state: command });
     return true;
   }
   try {

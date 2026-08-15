@@ -7,10 +7,7 @@ export const RADIO_STATIONS = [
     id: "poptron",
     name: "SomaFM PopTron",
     description: translateSaved("Весёлый электропоп и танцевальные хиты"),
-    streams: [
-      "https://ice5.somafm.com/poptron-128-mp3",
-      "https://ice2.somafm.com/poptron-128-mp3"
-    ]
+    streams: ["https://ice5.somafm.com/poptron-128-mp3", "https://ice2.somafm.com/poptron-128-mp3"]
   },
   {
     id: "indiepop",
