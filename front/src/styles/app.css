@@ -9948,3 +9948,15 @@ html[data-performance="reduced"] *::after {
   ) !important;
   box-shadow: 0 0 14px color-mix(in srgb, var(--color-primary) 28%, transparent) !important;
 }
+
+/* Performance: off-screen library cards are skipped by Chromium while keeping
+   their measured scroll footprint. This preserves animations for visible cards. */
+.library-song-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 170px;
+}
+
+.library-song-card-art > img,
+.karaoke-song-cover > img {
+  border-radius: inherit;
+}

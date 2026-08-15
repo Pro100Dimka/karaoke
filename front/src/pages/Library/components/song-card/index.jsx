@@ -95,7 +95,7 @@ function LibrarySongCard({
           : undefined
       }
     >
-      <SongCardArtwork cardIndex={cardIndex} />
+      <SongCardArtwork cardIndex={cardIndex} song={song} />
       <Stack
         className="library-song-card-main"
         sx={{

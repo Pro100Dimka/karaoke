@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import contextlib
+import errno
 import os
+import shutil
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
@@ -54,3 +56,14 @@ def atomic_write_bytes(path: Path, payload: bytes) -> None:
         stream.write(payload)
 
     atomic_write(path, write_payload)
+
+
+def move_path(source: Path, destination: Path) -> None:
+    """Move a file/directory, including across Windows drive boundaries."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        source.replace(destination)
+    except OSError as exc:
+        if exc.errno != errno.EXDEV and getattr(exc, "winerror", None) != 17:
+            raise
+        shutil.move(str(source), str(destination))

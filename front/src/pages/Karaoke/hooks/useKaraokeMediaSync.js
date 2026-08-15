@@ -84,6 +84,12 @@ export default function useKaraokeMediaSync({
         Number.isFinite(nextDuration) ? Math.max(0, nextDuration) : 0
       );
     };
+    const handleTimeUpdate = () => {
+      const position = Number(instrumental.currentTime);
+      if (!Number.isFinite(position) || position < 0) return;
+      currentTimeRef.current = position;
+      setCurrentTime(position);
+    };
     const handleEnded = () => {
       if (onPlaybackEndedRef.current) {
         Promise.resolve(onPlaybackEndedRef.current()).catch(() => {});
@@ -101,6 +107,7 @@ export default function useKaraokeMediaSync({
       instrumental.addEventListener(event, handleMetadata)
     );
     instrumental.addEventListener("ended", handleEnded);
+    instrumental.addEventListener("timeupdate", handleTimeUpdate);
     // The element may already have metadata before this effect subscribes.
     handleMetadata();
     return () => {
@@ -108,8 +115,10 @@ export default function useKaraokeMediaSync({
         instrumental.removeEventListener(event, handleMetadata)
       );
       instrumental.removeEventListener("ended", handleEnded);
+      instrumental.removeEventListener("timeupdate", handleTimeUpdate);
     };
   }, [
+    currentTimeRef,
     instrumentalRef,
     onPlaybackEndedRef,
     sendYouTubeCommand,

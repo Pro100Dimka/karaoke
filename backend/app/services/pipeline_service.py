@@ -422,6 +422,21 @@ def _job_entrypoint(song_id: str, target) -> None:
     try:
         target(song_id)
     finally:
+        # A cancellation is terminal only when the worker actually leaves its
+        # slot. This avoids publishing CANCELLED while delete/retry is still
+        # correctly blocked by a live worker.
+        if _is_cancelled(song_id):
+            try:
+                _update_progress(
+                    song_id,
+                    status=models.SongStatus.CANCELLED,
+                    step_label="Cancelled",
+                    error_message=None,
+                )
+            except Exception:
+                # Cleanup must never mask the worker's real exception. A failed
+                # persistence attempt is still logged for diagnostics.
+                logger.exception("Could not persist terminal cancellation for %s", song_id)
         with _active_jobs_lock:
             _cancelled_jobs.discard(song_id)
         _release_active_job(song_id)
@@ -470,7 +485,7 @@ def cancel_processing(song_id: str) -> bool:
         if not is_processing(song_id):
             return False
         _cancelled_jobs.add(song_id)
-    _update_progress(song_id, status=models.SongStatus.CANCELLED)
+    _update_progress(song_id, status=models.SongStatus.CANCELLING, step_label="Cancelling")
     return True
 
 

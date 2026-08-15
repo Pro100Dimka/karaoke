@@ -9,6 +9,7 @@ from pathlib import Path
 import config
 import models
 from app.services.db_utils import commit
+from app.utils.atomic_files import move_path
 from database import SessionLocal
 
 logger = logging.getLogger(__name__)
@@ -45,7 +46,7 @@ def migrate_legacy_song_storage() -> None:
 
             if previous_output.is_dir() and previous_output != target and not target.exists():
                 target.parent.mkdir(parents=True, exist_ok=True)
-                previous_output.replace(target)
+                move_path(previous_output, target)
 
             target.mkdir(parents=True, exist_ok=True)
             normalized = target / "song.mp3"
@@ -56,7 +57,7 @@ def migrate_legacy_song_storage() -> None:
             elif previous_source.is_file() and target not in previous_source.parents:
                 migrated_source = target / f"source{previous_source.suffix.lower()}"
                 if not migrated_source.exists():
-                    previous_source.replace(migrated_source)
+                    move_path(previous_source, migrated_source)
                 song.source_path = str(migrated_source)
             elif previous_output != target and previous_output in previous_source.parents:
                 song.source_path = str(target / previous_source.relative_to(previous_output))

@@ -803,10 +803,15 @@ export default function Karaoke({ onOpenAppSettings }) {
         onApplyEffectPreset={applyEffectPreset}
         monitoringEnabled={monitoringEnabled}
         onMonitoringChange={async (enabled) => {
-          const action = enabled
-            ? api.startDirectMonitoring
-            : api.stopDirectMonitoring;
           try {
+            if (onlineRoomState) {
+              const active = await onlineRoom.setLocalMonitoring(enabled);
+              setMonitoringEnabled(enabled ? active : false);
+              return;
+            }
+            const action = enabled
+              ? api.startDirectMonitoring
+              : api.stopDirectMonitoring;
             const updated = await action();
             setMonitoringEnabled(Boolean(updated?.monitoring_enabled));
             globalThis.dispatchEvent?.(

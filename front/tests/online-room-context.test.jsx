@@ -228,19 +228,14 @@ describe("online room provider", () => {
     act(() => hook.result.current.setRoomSoundMuted(true));
     expect(mocks.muteApplicationAudio).toHaveBeenCalledWith(document);
     expect(hook.result.current.roomSoundMuted).toBe(true);
-    expect(mocks.voices[0].setMicrophoneMuted).toHaveBeenCalledTimes(
-      muteCalls + 1
-    );
-    expect(mocks.voices[0].setMicrophoneMuted).toHaveBeenLastCalledWith(true);
+    expect(mocks.voices[0].setMicrophoneMuted).toHaveBeenCalledTimes(muteCalls);
     act(() => hook.result.current.setRoomSoundMuted(true));
-    expect(mocks.voices[0].setMicrophoneMuted).toHaveBeenCalledTimes(
-      muteCalls + 1
-    );
+    expect(mocks.voices[0].setMicrophoneMuted).toHaveBeenCalledTimes(muteCalls);
     act(() => hook.result.current.setRoomSoundMuted(false));
     expect(mocks.restoreApplicationAudio).toHaveBeenCalledTimes(
       restoreCalls + 1
     );
-    expect(mocks.voices[0].setMicrophoneMuted).toHaveBeenLastCalledWith(false);
+    expect(mocks.voices[0].setMicrophoneMuted).toHaveBeenCalledTimes(muteCalls);
 
     const controls = mocks.createOnlineRoomMessageHandler.mock.calls[0][0];
     act(() => {
@@ -324,9 +319,9 @@ describe("online room provider", () => {
     });
     mocks.start.mockResolvedValueOnce(stream());
     await act(() => hook.result.current.requestMicrophoneAccess());
-    expect(mocks.voices[0].setMicrophoneMuted).toHaveBeenLastCalledWith(true);
+    expect(mocks.voices[0].setMicrophoneMuted).toHaveBeenLastCalledWith(false);
     expect(mocks.clients[0].send).toHaveBeenLastCalledWith("presence", {
-      micMuted: true
+      micMuted: false
     });
 
     mocks.start.mockRejectedValueOnce(new Error("permission denied"));

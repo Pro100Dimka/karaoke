@@ -9,7 +9,7 @@ import tempfile
 import time
 import traceback
 import uuid
-from contextlib import suppress
+from contextlib import nullcontext, suppress
 from pathlib import Path
 from queue import Empty
 from types import ModuleType
@@ -23,6 +23,65 @@ from ..runtime import selected_backend
 from .base import Separator
 from .device import accelerator_failure
 
+
+
+def _truthy_env(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _cpu_thread_settings() -> tuple[int, int]:
+    logical = max(1, os.cpu_count() or 1)
+    physical = logical
+    try:
+        import psutil
+
+        physical = max(1, int(psutil.cpu_count(logical=False) or logical))
+    except (ImportError, OSError, TypeError, ValueError):
+        pass
+
+    raw_intra = os.getenv("KARAOKE_CPU_INTRAOP_THREADS", "auto").strip().lower()
+    try:
+        intra = physical if raw_intra in {"", "auto"} else int(raw_intra)
+    except ValueError:
+        intra = physical
+    raw_inter = os.getenv("KARAOKE_CPU_INTEROP_THREADS", "1").strip()
+    try:
+        inter = int(raw_inter)
+    except ValueError:
+        inter = 1
+    return max(1, min(intra, logical)), max(1, min(inter, logical))
+
+
+def _prepare_cpu_worker_environment() -> tuple[int, int] | None:
+    if not _truthy_env("KARAOKE_CPU_TUNING"):
+        return None
+    intra, inter = _cpu_thread_settings()
+    # PyTorch/OpenMP read these values during runtime initialization. The worker
+    # is a dedicated process, so constraining its pools cannot starve the UI.
+    os.environ["OMP_NUM_THREADS"] = str(intra)
+    os.environ["MKL_NUM_THREADS"] = str(intra)
+    return intra, inter
+
+
+def _apply_torch_cpu_worker_tuning(torch, settings: tuple[int, int] | None) -> None:
+    if settings is None:
+        return
+    intra, inter = settings
+    setter = getattr(torch, "set_num_threads", None)
+    if setter is not None:
+        setter(intra)
+    setter = getattr(torch, "set_num_interop_threads", None)
+    if setter is not None:
+        try:
+            setter(inter)
+        except RuntimeError:
+            # PyTorch only allows changing the inter-op pool before it has been used.
+            pass
+    print(
+        f"[AI runtime] separation CPU tuning: intraop={intra}, interop={inter}, "
+        f"inference_mode={'on' if _truthy_env('KARAOKE_CPU_INFERENCE_MODE') else 'off'}",
+        flush=True,
+    )
 
 def _park_model(model, device: str, torch):
     if device == "cpu":
@@ -53,6 +112,9 @@ def _run_persistent_msst_worker(
         sys.stderr = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
         owned_streams.append(sys.stderr)
     engine_path = Path(engine_dir).resolve()
+    cpu_settings = (
+        _prepare_cpu_worker_environment() if preferred_device == "cpu" else None
+    )
     previous_models = {
         name: module
         for name, module in tuple(sys.modules.items())
@@ -73,6 +135,7 @@ def _run_persistent_msst_worker(
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         torch = module.torch
+        _apply_torch_cpu_worker_tuning(torch, cpu_settings)
         args = module.parse_args_inference(base_arguments)
         device = "cpu"
         allow_cuda = preferred_device in {"auto", "cuda"}
@@ -120,7 +183,16 @@ def _run_persistent_msst_worker(
                         )
                         device = "cpu"
                 try:
-                    module.run_folder(model, args, config, device, verbose=True)
+                    context = (
+                        torch.inference_mode()
+                        if device == "cpu"
+                        and cpu_settings is not None
+                        and _truthy_env("KARAOKE_CPU_INFERENCE_MODE")
+                        and hasattr(torch, "inference_mode")
+                        else nullcontext()
+                    )
+                    with context:
+                        module.run_folder(model, args, config, device, verbose=True)
                 except Exception as exc:
                     if not device.startswith("cuda") or not accelerator_failure(exc):
                         raise
@@ -133,7 +205,15 @@ def _run_persistent_msst_worker(
                     output_dir = Path(args.store_dir)
                     shutil.rmtree(output_dir, ignore_errors=True)
                     output_dir.mkdir(parents=True, exist_ok=True)
-                    module.run_folder(model, args, config, device, verbose=True)
+                    context = (
+                        torch.inference_mode()
+                        if cpu_settings is not None
+                        and _truthy_env("KARAOKE_CPU_INFERENCE_MODE")
+                        and hasattr(torch, "inference_mode")
+                        else nullcontext()
+                    )
+                    with context:
+                        module.run_folder(model, args, config, device, verbose=True)
                 model = _park_model(model, device, torch)
                 results.put((job_id, time.perf_counter() - started, None))
             except BaseException:

@@ -149,10 +149,14 @@ def test_session_lifecycle_cleans_resources_on_errors(monkeypatch, tmp_path):
     cleanup.assert_called_once_with()
 
     stream.start.side_effect = None
+    stream.start.reset_mock()
     session.pause()
+    assert session._paused is True
+    stream.stop.assert_not_called()
     session.resume()
-    stream.stop.assert_called_once_with()
-    stream.start.assert_called()
+    assert session._paused is False
+    stream.stop.assert_not_called()
+    stream.start.assert_not_called()
 
     session.close()
     session.close()

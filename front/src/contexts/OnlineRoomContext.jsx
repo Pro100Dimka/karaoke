@@ -28,8 +28,8 @@ export function OnlineRoomProvider({ children }) {
   const voiceRef = useRef(null);
   const remoteAudioRef = useRef(new Map());
   const remoteEffectsRef = useRef(new Map());
+  const localMonitorRef = useRef(null);
   const roomUiRef = useRef({});
-  const previousMicMutedRef = useRef(OFF);
   const microphoneMutedRef = useRef(OFF);
   const roomRef = useRef(null);
   const mutedPeopleRef = useRef(new Set());
@@ -56,6 +56,28 @@ export function OnlineRoomProvider({ children }) {
     stopSpeakingMeter,
     stopAllSpeakingMeters
   } = useSpeakingLevels();
+  const playParticipantJoinedSound = useCallback(() => {
+    const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
+    if (!AudioContextClass) return;
+    try {
+      const context = new AudioContextClass({ latencyHint: "interactive" });
+      const gain = context.createGain();
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.09, context.currentTime + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.22);
+      gain.connect(context.destination);
+      [660, 880].forEach((frequency, index) => {
+        const oscillator = context.createOscillator();
+        oscillator.frequency.value = frequency;
+        oscillator.connect(gain);
+        oscillator.start(context.currentTime + index * 0.045);
+        oscillator.stop(context.currentTime + 0.2);
+      });
+      globalThis.setTimeout(() => context.close().catch(() => {}), 300);
+    } catch {
+      // A notification sound is optional and must never affect room state.
+    }
+  }, []);
   const setRoom = useCallback(
     (next) => {
       roomRef.current = next;
@@ -170,10 +192,47 @@ export function OnlineRoomProvider({ children }) {
     // Stryker disable next-line ArrayDeclaration: applyRemoteAudioMute is stable.
     [applyRemoteAudioMute]
   );
+  const stopLocalMonitoring = useCallback(() => {
+    const monitor = localMonitorRef.current;
+    localMonitorRef.current = null;
+    if (!monitor) return;
+    try {
+      monitor.source.disconnect();
+      monitor.gain.disconnect();
+    } catch {
+      // Already disconnected.
+    }
+    monitor.context.close?.().catch(() => {});
+  }, []);
+  const setLocalMonitoring = useCallback(
+    async (enabled) => {
+      if (!enabled) {
+        stopLocalMonitoring();
+        return false;
+      }
+      if (localMonitorRef.current) return true;
+      const voice = voiceRef.current;
+      if (!voice) return false;
+      const stream = await voice.start();
+      const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
+      if (!AudioContextClass) return false;
+      const context = new AudioContextClass({ latencyHint: "interactive" });
+      const source = context.createMediaStreamSource(stream);
+      const gain = context.createGain();
+      gain.gain.value = 1;
+      source.connect(gain);
+      gain.connect(context.destination);
+      await context.resume?.();
+      localMonitorRef.current = { context, source, gain };
+      return true;
+    },
+    [stopLocalMonitoring]
+  );
   const cleanupConnection = useCallback(
     () => {
       unsubscribeRef.current?.();
       unsubscribeRef.current = null;
+      stopLocalMonitoring();
       voiceRef.current?.stop();
       stopAllSpeakingMeters();
       voiceRef.current = null;
@@ -183,7 +242,7 @@ export function OnlineRoomProvider({ children }) {
       clientRef.current = null;
     },
     // Stryker disable next-line ArrayDeclaration: both callbacks are stable.
-    [removeRemoteAudio, stopAllSpeakingMeters]
+    [removeRemoteAudio, stopAllSpeakingMeters, stopLocalMonitoring]
   );
   const setMicrophoneMuted = useCallback(
     (muted, broadcast = true) => {
@@ -216,7 +275,7 @@ export function OnlineRoomProvider({ children }) {
           return false;
         }
         startSpeakingMeter("local", stream);
-        const muted = microphoneMutedRef.current || roomSoundMutedRef.current;
+        const muted = microphoneMutedRef.current;
         voice.setMicrophoneMuted(muted);
         clientRef.current.send("presence", {
           micMuted: muted
@@ -248,22 +307,18 @@ export function OnlineRoomProvider({ children }) {
       if (next === roomSoundMutedRef.current) return;
       roomSoundMutedRef.current = next;
       setRoomSoundMutedState(next);
-      if (next) {
-        previousMicMutedRef.current = microphoneMutedRef.current;
-        setMicrophoneMuted(true);
-        muteApplicationAudio(document);
-      } else {
-        restoreApplicationAudio();
-        setMicrophoneMuted(previousMicMutedRef.current);
-      }
+      if (next) muteApplicationAudio(document);
+      else restoreApplicationAudio();
+      // Room-output mute is local playback state only. Never disable the
+      // outgoing microphone track: otherwise every participant loses this
+      // user's voice and unmuting can race with WebRTC track state.
       applyRemoteAudioMute();
     },
     // Stryker disable next-line ArrayDeclaration: all callback dependencies are stable.
     [
       applyRemoteAudioMute,
       muteApplicationAudio,
-      restoreApplicationAudio,
-      setMicrophoneMuted
+      restoreApplicationAudio
     ]
   );
   const resetRoomState = useCallback(
@@ -405,7 +460,8 @@ export function OnlineRoomProvider({ children }) {
           setRoomUi,
           setRoomCommand,
           setVoiceError,
-          setTransferStatus
+          setTransferStatus,
+          onParticipantJoined: playParticipantJoinedSound
         })
       );
       try {
@@ -445,11 +501,9 @@ export function OnlineRoomProvider({ children }) {
               return;
             }
             startSpeakingMeter("local", stream);
-            voice.setMicrophoneMuted(
-              microphoneMutedRef.current || roomSoundMutedRef.current
-            );
+            voice.setMicrophoneMuted(microphoneMutedRef.current);
             client.send("presence", {
-              micMuted: microphoneMutedRef.current || roomSoundMutedRef.current
+              micMuted: microphoneMutedRef.current
             });
           })
           .catch((error) => {
@@ -482,7 +536,8 @@ export function OnlineRoomProvider({ children }) {
       resetRoomState,
       restoreApplicationAudio,
       setRoom,
-      startSpeakingMeter
+      startSpeakingMeter,
+      playParticipantJoinedSound
     ]
   );
   useEffect(
@@ -601,6 +656,7 @@ export function OnlineRoomProvider({ children }) {
       requestMicrophoneAccess,
       setMicrophoneMuted,
       setRoomSoundMuted,
+      setLocalMonitoring,
       togglePersonMuted,
       togglePersonEffects,
       syncUi,
@@ -622,6 +678,7 @@ export function OnlineRoomProvider({ children }) {
       requestMicrophoneAccess,
       setMicrophoneMuted,
       setRoomSoundMuted,
+      setLocalMonitoring,
       voiceError,
       transferStatus,
       localSpeakingLevel,

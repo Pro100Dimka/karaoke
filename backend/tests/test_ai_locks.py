@@ -52,7 +52,7 @@ def test_pid_alive_windows_states(monkeypatch):
         return True
 
     kernel.GetExitCodeProcess.side_effect = exit_code
-    monkeypatch.setattr(ctypes, "windll", SimpleNamespace(kernel32=kernel))
+    monkeypatch.setattr(ctypes, "windll", SimpleNamespace(kernel32=kernel), raising=False)
     assert locks.FileLock._pid_alive(999)
     kernel.GetExitCodeProcess.side_effect = lambda *_: False
     assert not locks.FileLock._pid_alive(999)
@@ -61,7 +61,7 @@ def test_pid_alive_windows_states(monkeypatch):
     assert locks.FileLock._pid_alive(999)
     kernel.GetLastError.return_value = 2
     assert not locks.FileLock._pid_alive(999)
-    monkeypatch.setattr(ctypes, "windll", SimpleNamespace())
+    monkeypatch.setattr(ctypes, "windll", SimpleNamespace(), raising=False)
     assert locks.FileLock._pid_alive(999)
 
 
@@ -70,7 +70,7 @@ def test_process_birth_windows(monkeypatch):
     assert locks.FileLock._process_birth(1) is None
     monkeypatch.setattr(locks.os, "name", "nt")
     kernel = kernel32(OpenProcess={"return_value": 0})
-    monkeypatch.setattr(ctypes, "windll", SimpleNamespace(kernel32=kernel))
+    monkeypatch.setattr(ctypes, "windll", SimpleNamespace(kernel32=kernel), raising=False)
     assert locks.FileLock._process_birth(1) is None
     kernel.OpenProcess.return_value = 1
     kernel.GetProcessTimes.return_value = False
@@ -85,7 +85,7 @@ def test_process_birth_windows(monkeypatch):
 
     kernel.GetProcessTimes.side_effect = process_times
     assert locks.FileLock._process_birth(1) == 0
-    monkeypatch.setattr(ctypes, "windll", SimpleNamespace())
+    monkeypatch.setattr(ctypes, "windll", SimpleNamespace(), raising=False)
     assert locks.FileLock._process_birth(1) is None
 
 

@@ -35,7 +35,8 @@ export function createOnlineRoomMessageHandler(options) {
     setRoomUi,
     setRoomCommand,
     setVoiceError,
-    setTransferStatus
+    setTransferStatus,
+    onParticipantJoined = () => {}
   } = options;
   return (message) => {
     if (!isCurrentConnection()) return;
@@ -54,6 +55,9 @@ export function createOnlineRoomMessageHandler(options) {
     }
     if (message.type === "participant-joined") {
       setParticipants((items) => upsertParticipant(items, message.participant));
+      if (message.participant?.id !== activeRoomRef.current?.selfId) {
+        onParticipantJoined(message.participant);
+      }
       if (message.participant?.id) {
         voice.invite(message.participant.id).catch(() => {});
       }

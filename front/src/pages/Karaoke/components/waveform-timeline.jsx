@@ -60,23 +60,21 @@ export default function WaveformTimeline({ value, duration, onChange }) {
               <stop key={offset} offset={offset} stopColor={stopColor} />
             ))}
           </linearGradient>
+          <clipPath id={`${gradientId}-played`}>
+            <rect x="0" y="0" width={playheadX} height="44" />
+          </clipPath>
         </defs>
 
-        {WAVEFORM_BARS.map(([index, amplitude]) => (
-          <rect
-            key={index}
-            x={index * 3 + 0.75}
-            y={22 - amplitude / 2}
-            width="1.5"
-            height={amplitude}
-            rx=".75"
-            fill={
-              index / BAR_COUNT <= progress
-                ? `url(#${gradientId})`
-                : "var(--waveform-future, rgba(255,255,255,.18))"
-            }
-          />
-        ))}
+        <g fill="var(--waveform-future, rgba(255,255,255,.18))">
+          {WAVEFORM_BARS.map(([index, amplitude]) => (
+            <rect key={index} x={index * 3 + 0.75} y={22 - amplitude / 2} width="1.5" height={amplitude} rx=".75" />
+          ))}
+        </g>
+        <g fill={`url(#${gradientId})`} clipPath={`url(#${gradientId}-played)`}>
+          {WAVEFORM_BARS.map(([index, amplitude]) => (
+            <rect key={index} x={index * 3 + 0.75} y={22 - amplitude / 2} width="1.5" height={amplitude} rx=".75" />
+          ))}
+        </g>
 
         <line
           x1={playheadX}

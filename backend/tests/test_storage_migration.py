@@ -137,3 +137,26 @@ def test_migration_rolls_back_and_closes_database_on_failure(monkeypatch, tmp_pa
         storage_migration.migrate_legacy_song_storage()
     database.rollback.assert_called_once_with()
     database.close.assert_called_once_with()
+
+
+def test_migration_falls_back_to_cross_device_move(monkeypatch, tmp_path):
+    legacy = tmp_path / "legacy"
+    legacy.mkdir()
+    (legacy / "song.mp3").write_bytes(b"audio")
+    current = song(tmp_path, source_path=str(legacy / "song.mp3"), output_dir=str(legacy))
+    real_replace = Path.replace
+
+    def cross_device_once(self, target):
+        if self == legacy:
+            error = OSError(18, "cross-device link")
+            error.winerror = 17
+            raise error
+        return real_replace(self, target)
+
+    monkeypatch.setattr(Path, "replace", cross_device_once)
+    run_migration(monkeypatch, tmp_path, [current])
+
+    target = tmp_path / "library/song"
+    assert target.is_dir()
+    assert (target / "song.mp3").read_bytes() == b"audio"
+    assert not legacy.exists()

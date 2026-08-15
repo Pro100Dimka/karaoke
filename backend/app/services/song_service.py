@@ -1,5 +1,6 @@
 """Управление песнями: добавление, чтение, изменение, удаление."""
 
+import contextlib
 import re
 import threading
 import unicodedata
@@ -15,7 +16,7 @@ import schemas
 from app import repositories
 from app.services.db_utils import commit_refresh
 from app.services.resource_deletion import delete_with_files
-from app.utils.atomic_files import atomic_write_bytes
+from app.utils.atomic_files import atomic_write_bytes, move_path
 
 _library_write_lock = threading.RLock()
 
@@ -54,6 +55,56 @@ def resolve_output_dir(song: models.Song) -> Path:
     path = Path(song.output_dir) if song.output_dir else config.SONG_OUTPUT_DIR / song.slug
     return _ensure_path_within(path, config.SONG_OUTPUT_DIR)
 
+
+def _cover_extension(payload: bytes) -> str | None:
+    if payload.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if payload.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if payload[:4] in {b"RIFF", b"WEBP"} and b"WEBP" in payload[:16]:
+        return ".webp"
+    return None
+
+
+def extract_embedded_cover(source_path: Path, output_dir: Path) -> Path | None:
+    """Persist the first embedded artwork image next to the song source."""
+    try:
+        from mutagen import File as MutagenFile
+
+        audio = MutagenFile(source_path)
+    except Exception:
+        return None
+    if audio is None:
+        return None
+
+    candidates: list[bytes] = []
+    for picture in getattr(audio, "pictures", ()) or ():
+        data = getattr(picture, "data", None)
+        if isinstance(data, bytes) and data:
+            candidates.append(data)
+
+    tags = getattr(audio, "tags", None)
+    if tags is not None:
+        values = getattr(tags, "values", None)
+        if callable(values):
+            for value in values():
+                data = getattr(value, "data", None)
+                if isinstance(data, bytes) and data:
+                    candidates.append(data)
+        get = getattr(tags, "get", None)
+        if callable(get):
+            covers = get("covr")
+            if isinstance(covers, (list, tuple)):
+                candidates.extend(bytes(item) for item in covers if item)
+
+    for payload in candidates:
+        extension = _cover_extension(payload)
+        if extension is None:
+            continue
+        target = output_dir / f"cover{extension}"
+        atomic_write_bytes(target, payload)
+        return target
+    return None
 
 def _first_audio_tag(tags: object, *names: str) -> str | None:
     get = getattr(tags, "get", None)
@@ -214,6 +265,7 @@ def _persist_song(
         output_dir = _unique_output_dir(folder_base)
         destination = output_dir / f"source{extension}"
         write_source(destination)
+        extract_embedded_cover(destination, output_dir)
         song = models.Song(
             title=title,
             artist=artist,
@@ -228,6 +280,10 @@ def _persist_song(
             return commit_refresh(db, song)
         except Exception:
             destination.unlink(missing_ok=True)
+            for cover in output_dir.glob("cover.*"):
+                cover.unlink(missing_ok=True)
+            with contextlib.suppress(OSError):
+                output_dir.rmdir()
             raise
 
 
@@ -264,7 +320,7 @@ def create_song_from_path(
 
     def move_source(destination: Path) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
-        temporary_source.replace(destination)
+        move_path(temporary_source, destination)
 
     return _persist_song(
         db,

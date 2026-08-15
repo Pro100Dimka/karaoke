@@ -24,6 +24,7 @@ class SongStatus(enum.StrEnum):
     PENDING = "pending"
     QUEUED = "queued"
     PROCESSING = "processing"
+    CANCELLING = "cancelling"
     DONE = "done"
     CANCELLED = "cancelled"
     ERROR = "error"

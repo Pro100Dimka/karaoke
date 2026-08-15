@@ -9,9 +9,14 @@
 SONGAPP_HOST / SONGAPP_PORT — см. config.py).
 """
 
+import json
 import logging
+import os
+import socket
 import sys
+import urllib.request
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 import uvicorn
 
@@ -28,6 +33,74 @@ def configure_logging() -> None:
         force=True,
     )
 
+
+
+
+
+class _SingleInstanceLock:
+    """Cross-process lock acquired before importing the FastAPI application."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        self._file = None
+
+    def acquire(self) -> bool:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        handle = self.path.open("a+b")
+        try:
+            handle.seek(0)
+            if os.name == "nt":
+                import msvcrt
+
+                if handle.tell() == 0 and handle.read(1) == b"":
+                    handle.write(b"0")
+                    handle.flush()
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except (OSError, BlockingIOError):
+            handle.close()
+            return False
+        self._file = handle
+        return True
+
+    def release(self) -> None:
+        handle, self._file = self._file, None
+        if handle is None:
+            return
+        try:
+            handle.seek(0)
+            if os.name == "nt":
+                import msvcrt
+
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        finally:
+            handle.close()
+
+def _existing_backend_is_healthy(host: str, port: int) -> bool:
+    """Detect our already-running backend before importing app/main.
+
+    Importing app.main runs lifespan later; avoiding a duplicate Uvicorn launch
+    also prevents a losing process from marking live jobs as interrupted.
+    """
+    try:
+        with socket.create_connection((host, port), timeout=0.35):
+            pass
+    except OSError:
+        return False
+    try:
+        with urllib.request.urlopen(f"http://{host}:{port}/diagnostics/health", timeout=0.7) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+            return response.status == 200 and bool(payload)
+    except Exception:
+        return False
 
 def main() -> None:
     if "--install-ai-models" in sys.argv:
@@ -49,10 +122,21 @@ def main() -> None:
         return
 
     import config
-    from app.main import app
 
     configure_logging()
-    uvicorn.run(app, host=config.HOST, port=config.PORT)
+    lock = _SingleInstanceLock(config.DATA_DIR / "backend.instance.lock")
+    if not lock.acquire():
+        logging.getLogger(__name__).info("Backend instance lock is already held; duplicate launch skipped")
+        raise SystemExit(23)
+    try:
+        if _existing_backend_is_healthy(config.HOST, config.PORT):
+            logging.getLogger(__name__).info("Backend is already running on %s:%s; duplicate launch skipped", config.HOST, config.PORT)
+            raise SystemExit(23)
+
+        from app.main import app
+        uvicorn.run(app, host=config.HOST, port=config.PORT)
+    finally:
+        lock.release()
 
 
 if __name__ == "__main__":

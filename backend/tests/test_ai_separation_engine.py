@@ -464,3 +464,21 @@ def test_center_channel_fallback_mono_and_stereo(tmp_path):
     write(stereo, [[1, -1], [0.5, 0.5]])
     separator.separate(stereo, vocals, inst)
     assert sf.info(vocals).channels == 2
+
+
+def test_cpu_worker_tuning_is_opt_in_and_sets_thread_environment(monkeypatch):
+    monkeypatch.setenv("KARAOKE_CPU_TUNING", "1")
+    monkeypatch.setenv("KARAOKE_CPU_INTRAOP_THREADS", "4")
+    monkeypatch.setenv("KARAOKE_CPU_INTEROP_THREADS", "1")
+    settings = separation._prepare_cpu_worker_environment()
+    assert settings == (4, 1)
+    assert separation.os.environ["OMP_NUM_THREADS"] == "4"
+    assert separation.os.environ["MKL_NUM_THREADS"] == "4"
+
+    calls = []
+    fake_torch = SimpleNamespace(
+        set_num_threads=lambda value: calls.append(("intra", value)),
+        set_num_interop_threads=lambda value: calls.append(("inter", value)),
+    )
+    separation._apply_torch_cpu_worker_tuning(fake_torch, settings)
+    assert calls == [("intra", 4), ("inter", 1)]

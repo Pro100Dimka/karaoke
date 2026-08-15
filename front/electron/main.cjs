@@ -263,6 +263,12 @@ function startBackend() {
     });
     childProcess.on("exit", (code, signal) => {
       if (backendProcess === childProcess) backendProcess = null;
+      if (code === 23) {
+        // backend/run.py found a healthy instance already bound to our port.
+        // Treat it as authoritative instead of entering a restart storm.
+        backendStopRequested = true;
+        return;
+      }
       if (
         isQuitting ||
         backendStopRequested ||
@@ -298,7 +304,13 @@ function stopBackend() {
 
   const terminateBackend = () => {
     if (backendProcess && !backendProcess.killed) {
+      const pid = backendProcess.pid;
       backendProcess.kill();
+      if (process.platform === "win32" && pid) {
+        // PyInstaller/native workers can outlive a soft child kill; terminate
+        // the whole process tree on app shutdown.
+        spawn("taskkill", ["/PID", String(pid), "/T", "/F"], { windowsHide: true });
+      }
       backendProcess = null;
     }
   };

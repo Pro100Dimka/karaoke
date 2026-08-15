@@ -144,3 +144,28 @@ def test_forced_cpu_profile_keeps_all_stages_on_cpu_even_with_nvidia(monkeypatch
     )
     plan = runtime.configure_runtime("cpu", force=True)
     assert all(spec.key == "pytorch:cpu:fp32" for spec in plan.selected.values())
+
+
+def test_cpu_tuning_applies_bounded_thread_pools(monkeypatch):
+    calls = []
+    fake_torch = SimpleNamespace(
+        set_num_threads=lambda value: calls.append(("intra", value)),
+        set_num_interop_threads=lambda value: calls.append(("inter", value)),
+    )
+    monkeypatch.setenv("KARAOKE_CPU_TUNING", "1")
+    monkeypatch.setenv("KARAOKE_CPU_INTRAOP_THREADS", "6")
+    monkeypatch.setenv("KARAOKE_CPU_INTEROP_THREADS", "2")
+    settings = runtime._apply_cpu_tuning(profile(cuda=False), fake_torch)
+    assert settings == (6, 2)
+    assert calls == [("intra", 6), ("inter", 2)]
+    assert runtime.os.environ["OMP_NUM_THREADS"] == "6"
+    assert runtime.os.environ["MKL_NUM_THREADS"] == "6"
+
+
+def test_cpu_tuning_is_opt_in(monkeypatch):
+    monkeypatch.delenv("KARAOKE_CPU_TUNING", raising=False)
+    fake_torch = SimpleNamespace(
+        set_num_threads=lambda _value: pytest.fail("must stay untouched"),
+        set_num_interop_threads=lambda _value: pytest.fail("must stay untouched"),
+    )
+    assert runtime._apply_cpu_tuning(profile(cuda=False), fake_torch) is None

@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest.mock import Mock
 
@@ -219,3 +220,56 @@ def test_list_get_update_and_delete_song(monkeypatch, tmp_path):
     domain.source_path = str(outside)
     song_service.delete_song(database, domain)
     delete.assert_called_with(database, domain, (output.resolve(), outside.resolve()))
+
+
+def test_create_song_from_streamed_path_supports_cross_device_move(monkeypatch, tmp_path):
+    library = tmp_path / "library"
+    temporary = tmp_path / "upload.flac"
+    temporary.write_bytes(b"audio")
+    monkeypatch.setattr(song_service.config, "SONG_OUTPUT_DIR", library)
+    monkeypatch.setattr(song_service, "_slug_exists", Mock(return_value=False))
+    monkeypatch.setattr(song_service, "_read_source_identity", Mock(return_value=(None, "Song")))
+    monkeypatch.setattr(song_service, "commit_refresh", lambda _db, current: current)
+    real_replace = Path.replace
+
+    def cross_device_upload(self, target):
+        if self == temporary:
+            error = OSError(18, "cross-device link")
+            error.winerror = 17
+            raise error
+        return real_replace(self, target)
+
+    monkeypatch.setattr(Path, "replace", cross_device_upload)
+    current = song_service.create_song_from_path(Mock(), "", "song.flac", temporary)
+    assert Path(current.source_path).read_bytes() == b"audio"
+    assert not temporary.exists()
+
+
+@pytest.mark.parametrize(
+    ("payload", "suffix"),
+    [
+        (b"\xff\xd8\xffimage", ".jpg"),
+        (b"\x89PNG\r\n\x1a\nimage", ".png"),
+        (b"RIFFxxxxWEBPimage", ".webp"),
+    ],
+)
+def test_extract_embedded_cover_persists_supported_artwork(monkeypatch, tmp_path, payload, suffix):
+    mutagen = ModuleType("mutagen")
+    mutagen.File = Mock(return_value=SimpleNamespace(pictures=[SimpleNamespace(data=payload)], tags=None))
+    monkeypatch.setitem(__import__("sys").modules, "mutagen", mutagen)
+    source = tmp_path / "song.flac"
+    source.write_bytes(b"audio")
+    cover = song_service.extract_embedded_cover(source, tmp_path)
+    assert cover == tmp_path / f"cover{suffix}"
+    assert cover.read_bytes() == payload
+
+
+def test_extract_embedded_cover_ignores_invalid_or_unreadable_metadata(monkeypatch, tmp_path):
+    mutagen = ModuleType("mutagen")
+    mutagen.File = Mock(return_value=SimpleNamespace(pictures=[SimpleNamespace(data=b"not-an-image")], tags=None))
+    monkeypatch.setitem(__import__("sys").modules, "mutagen", mutagen)
+    source = tmp_path / "song.mp3"
+    source.write_bytes(b"audio")
+    assert song_service.extract_embedded_cover(source, tmp_path) is None
+    mutagen.File.side_effect = RuntimeError("broken metadata")
+    assert song_service.extract_embedded_cover(source, tmp_path) is None

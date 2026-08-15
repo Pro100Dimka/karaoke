@@ -98,9 +98,9 @@ describe("online voice mesh", () => {
     await mesh.start();
     expect(capture).toHaveBeenCalledWith({
       audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
         channelCount: 1,
         sampleRate: { ideal: 48_000 },
         sampleSize: { ideal: 24 }
@@ -136,7 +136,7 @@ describe("online voice mesh", () => {
       encodings: [
         {
           active: true,
-          maxBitrate: 160_000,
+          maxBitrate: 256_000,
           networkPriority: "high"
         }
       ],
@@ -950,7 +950,7 @@ describe("online voice mesh", () => {
     };
     await mesh.optimizeAudioSenders({ getSenders: () => [sender] });
     expect(sender.setParameters).toHaveBeenCalledWith({
-      encodings: [{ maxBitrate: 160_000, networkPriority: "high" }],
+      encodings: [{ maxBitrate: 256_000, networkPriority: "high" }],
       degradationPreference: "maintain-framerate"
     });
   });
@@ -1734,7 +1734,7 @@ describe("online voice mesh", () => {
     expect(
       configured.setParameters.mock.calls[0][0].encodings[0]
     ).toMatchObject({
-      maxBitrate: 160_000,
+      maxBitrate: 256_000,
       networkPriority: "high"
     });
   });

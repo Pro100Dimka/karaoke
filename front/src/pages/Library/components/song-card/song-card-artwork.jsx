@@ -1,4 +1,6 @@
 import { Music2 } from "lucide-react";
+import { useState } from "react";
+import { api } from "../../../../api/client";
 import { useRadio } from "../../../../contexts/radio";
 
 const WAVE_BARS = Object.freeze(
@@ -8,8 +10,10 @@ const WAVE_BARS = Object.freeze(
   }))
 );
 
-export default function SongCardArtwork({ cardIndex }) {
+export default function SongCardArtwork({ cardIndex, song }) {
   const { isPlaying } = useRadio();
+  const [coverFailed, setCoverFailed] = useState(false);
+  const coverUrl = song?.id ? api.getSongCoverUrl(song.id) : "";
 
   return (
     <div
@@ -18,7 +22,18 @@ export default function SongCardArtwork({ cardIndex }) {
         .join(" ")}
       aria-hidden="true"
     >
-      <Music2 size={26} />
+      {coverUrl && !coverFailed ? (
+        <img
+          src={coverUrl}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onError={() => setCoverFailed(true)}
+          style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }}
+        />
+      ) : (
+        <Music2 size={26} />
+      )}
       <div className="library-song-card-wave">
         {WAVE_BARS.map(({ idle, speed }, i) => (
           <i

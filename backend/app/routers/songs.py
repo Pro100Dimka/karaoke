@@ -273,6 +273,16 @@ def get_processing_log(song: SongDependency):
     return {"lines": read_text_tail(log_path)}
 
 
+@router.get("/{song_id}/cover")
+def get_song_cover(song: SongDependency):
+    output_dir = song_service.resolve_output_dir(song)
+    for filename, media_type in (("cover.jpg", "image/jpeg"), ("cover.png", "image/png"), ("cover.webp", "image/webp")):
+        path = output_dir / filename
+        if path.is_file():
+            return FileResponse(path, media_type=media_type)
+    raise HTTPException(status_code=404, detail="Song cover not found")
+
+
 @router.get("/{song_id}/audio/{track}")
 def get_audio_track(track: str, song: SongDependency):
     if track not in {"instrumental", "vocals", "song", "diagnostic"}:

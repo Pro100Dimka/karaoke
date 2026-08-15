@@ -1,15 +1,29 @@
 import { Mic } from "lucide-react";
+import { useState } from "react";
+import { api } from "../../../../api/client";
 import { translateSaved } from "../../../../i18n/runtime";
 import { formatTime } from "../../utils/format";
 import WaveformTimeline from "../waveform-timeline";
 
 export default function SongStrip({ song, currentTime, duration, onSeek }) {
   const { title, artist, performer } = song;
+  const [coverFailed, setCoverFailed] = useState(false);
+  const coverUrl = song?.id ? api.getSongCoverUrl(song.id) : "";
   const timecodes = [currentTime, duration].map(formatTime);
   return (
     <div className="karaoke-song-strip">
       <div className="karaoke-song-cover" aria-hidden="true">
-        <Mic size={30} />
+        {coverUrl && !coverFailed ? (
+          <img
+            src={coverUrl}
+            alt=""
+            decoding="async"
+            onError={() => setCoverFailed(true)}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
+        ) : (
+          <Mic size={30} />
+        )}
       </div>
       <div className="karaoke-player-meta">
         <strong>{title}</strong>

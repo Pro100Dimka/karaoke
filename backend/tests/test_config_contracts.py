@@ -42,7 +42,8 @@ def test_runtime_executable_prefers_bundled_binary_then_path(monkeypatch, tmp_pa
     monkeypatch.setattr(config, "RUNTIME_DIR", runtime_dir)
     monkeypatch.setattr(config, "BASE_DIR", base_dir)
 
-    bundled = runtime_dir / "tool.exe"
+    bundled_name = "tool.exe" if config.os.name == "nt" else "tool"
+    bundled = runtime_dir / bundled_name
     bundled.write_bytes(b"binary")
     assert config.resolve_runtime_executable("tool") == str(bundled)
     bundled.unlink()

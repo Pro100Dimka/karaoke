@@ -326,6 +326,17 @@ describe("room radio synchronization", () => {
     });
   });
 
+  test("does not overwrite an already-present remote state on mount", () => {
+    mocks.roomValue.roomUi = {
+      __eventId: 10,
+      radio: { stationId: "two", isPlaying: true }
+    };
+    render(<RoomRadioSync />);
+    expect(mocks.roomValue.syncUi).not.toHaveBeenCalled();
+    expect(mocks.radioValue.setStation).toHaveBeenCalledWith("two");
+    expect(mocks.radioValue.turnOn).toHaveBeenCalled();
+  });
+
   test("applies remote station playback and stop", async () => {
     mocks.roomValue.roomUi = {
       __eventId: 1,

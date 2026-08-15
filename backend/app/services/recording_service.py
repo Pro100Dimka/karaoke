@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+from types import SimpleNamespace
 import uuid
 from pathlib import Path
 from typing import Any
@@ -39,6 +40,11 @@ try:
     _AUDIO_BACKEND_AVAILABLE = True
     _AUDIO_BACKEND_ERROR = None
 except Exception as exc:  # noqa: BLE001 — библиотека может быть не установлена или без PortAudio
+    # Keep patchable module attributes for unit tests and diagnostics even when
+    # PortAudio is absent in the current environment. Production entrypoints
+    # still reject recording through _AUDIO_BACKEND_AVAILABLE below.
+    sd = SimpleNamespace(InputStream=None, Stream=None, query_devices=None)
+    sf = SimpleNamespace(SoundFile=None)
     _AUDIO_BACKEND_AVAILABLE = False
     _AUDIO_BACKEND_ERROR = str(exc)
 
@@ -80,6 +86,7 @@ class RecordingSession:
         self._temporary_path: Path | None = None
         self._frames_written = 0
         self._closed = False
+        self._paused = False
         self._monitoring_enabled = monitoring_enabled
         if monitoring_enabled:
             # Use the selected output, not Windows' default device. With an
@@ -111,11 +118,13 @@ class RecordingSession:
             )
 
     def _callback(self, indata, frames, time_info, status):  # noqa: ARG002
-        self._queue.put((indata * self.gain).clip(-1.0, 1.0).copy())
+        if not self._paused:
+            self._queue.put((indata * self.gain).clip(-1.0, 1.0).copy())
 
     def _monitoring_callback(self, indata, outdata, frames, time_info, status):  # noqa: ARG002
         processed = (indata * self.gain).clip(-1.0, 1.0)
-        self._queue.put(processed.copy())
+        if not self._paused:
+            self._queue.put(processed.copy())
         outdata.fill(0)
         if self._monitoring_enabled:
             for channel in range(outdata.shape[1]):
@@ -187,10 +196,12 @@ class RecordingSession:
             raise
 
     def pause(self) -> None:
-        self._stream.stop()
+        # Keep PortAudio/ASIO open. Reopening a stream on resume is unreliable on
+        # several Windows drivers and caused sporadic 500 responses.
+        self._paused = True
 
     def resume(self) -> None:
-        self._stream.start()
+        self._paused = False
 
     def close(self) -> None:
         """Release the device and temporary recording after a failed start."""

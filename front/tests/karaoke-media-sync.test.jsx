@@ -298,6 +298,18 @@ describe("karaoke media synchronization", () => {
     expect(props.setIsPlaying).not.toHaveBeenCalled();
   });
 
+  test("publishes master time from native timeupdate events", () => {
+    const props = createProps();
+    renderHook(() => useKaraokeMediaSync(props));
+    props.setCurrentTime.mockClear();
+    props.instrumentalRef.current.currentTime = 12.5;
+    act(() =>
+      props.instrumentalRef.current.dispatchEvent(new Event("timeupdate"))
+    );
+    expect(props.currentTimeRef.current).toBe(12.5);
+    expect(props.setCurrentTime).toHaveBeenCalledWith(12.5);
+  });
+
   test("publishes master time from animation frames", () => {
     let frame;
     requestAnimationFrame.mockImplementation((callback) => {

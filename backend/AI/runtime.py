@@ -159,6 +159,56 @@ def detect_hardware(torch_module=None) -> HardwareProfile:
     )
 
 
+
+def _truthy_env(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _cpu_thread_settings(logical_cores: int) -> tuple[int, int]:
+    physical = logical_cores
+    try:
+        import psutil
+
+        physical = max(1, int(psutil.cpu_count(logical=False) or logical_cores))
+    except (ImportError, OSError, TypeError, ValueError):
+        pass
+    raw_intra = os.getenv("KARAOKE_CPU_INTRAOP_THREADS", "auto").strip().lower()
+    try:
+        intra = physical if raw_intra in {"", "auto"} else int(raw_intra)
+    except ValueError:
+        intra = physical
+    try:
+        inter = int(os.getenv("KARAOKE_CPU_INTEROP_THREADS", "1").strip())
+    except ValueError:
+        inter = 1
+    logical = max(1, logical_cores)
+    return max(1, min(intra, logical)), max(1, min(inter, logical))
+
+
+def _apply_cpu_tuning(hardware: HardwareProfile, torch_module=None) -> tuple[int, int] | None:
+    if not _truthy_env("KARAOKE_CPU_TUNING"):
+        return None
+    intra, inter = _cpu_thread_settings(hardware.logical_cores)
+    os.environ["OMP_NUM_THREADS"] = str(intra)
+    os.environ["MKL_NUM_THREADS"] = str(intra)
+    try:
+        torch = torch_module
+        if torch is None:
+            import torch
+
+        setter = getattr(torch, "set_num_threads", None)
+        if setter is not None:
+            setter(intra)
+        setter = getattr(torch, "set_num_interop_threads", None)
+        if setter is not None:
+            try:
+                setter(inter)
+            except RuntimeError:
+                pass
+    except (ImportError, RuntimeError):
+        return None
+    return intra, inter
+
 _lock = threading.RLock()
 _plan: RuntimePlan | None = None
 _failed: dict[str, set[str]] = {}
@@ -217,6 +267,8 @@ def configure_runtime(
             fallbacks[model] = tuple(
                 item for item in chain[1:] if item.quality_status in PRODUCTION_QUALITY
             )
+        if selected_preference == "cpu":
+            _apply_cpu_tuning(hardware, torch_module)
         _plan = RuntimePlan(
             selected_preference,
             hardware,
@@ -274,8 +326,21 @@ def reset_runtime_for_tests() -> None:
 def format_runtime_plan(plan: RuntimePlan | None = None) -> tuple[str, ...]:
     plan = plan or get_runtime_plan()
     gpu = ", ".join(item.name for item in plan.hardware.gpus) or "none"
+    tuning = (
+        _cpu_thread_settings(plan.hardware.logical_cores)
+        if plan.preference == "cpu" and _truthy_env("KARAOKE_CPU_TUNING")
+        else None
+    )
     lines = (
         f"CPU: {plan.hardware.cpu} ({plan.hardware.logical_cores} logical cores)",
+        *(
+            (
+                f"CPU tuning: intraop={tuning[0]}, interop={tuning[1]}, "
+                f"separation_inference_mode={'on' if _truthy_env('KARAOKE_CPU_INFERENCE_MODE') else 'off'}",
+            )
+            if tuning is not None
+            else ()
+        ),
         f"GPU: {gpu}",
         f"CUDA: {'available' if plan.hardware.cuda_available else 'unavailable'}"
         + (f" ({plan.hardware.cuda_version})" if plan.hardware.cuda_version else ""),

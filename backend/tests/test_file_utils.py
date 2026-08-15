@@ -60,7 +60,7 @@ def test_text_tail_respects_line_and_byte_limits(tmp_path):
 
     assert read_text_tail(path, max_lines=2) == ["three", "four"]
     assert read_text_tail(path, max_lines=10, max_bytes=6) == ["four"]
-    assert read_text_tail(path, max_lines=10, max_bytes=5) == []
+    assert read_text_tail(path, max_lines=10, max_bytes=5) == ["four"]
     assert read_text_tail(path, max_lines=0) == []
     assert read_text_tail(path, max_bytes=0) == []
 

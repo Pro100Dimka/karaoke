@@ -66,9 +66,9 @@ export default class OnlineVoiceMesh {
     const startPromise = navigator.mediaDevices
       .getUserMedia({
         audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
           channelCount: 1,
           sampleRate: { ideal: 48_000 },
           sampleSize: { ideal: 24 }
@@ -203,7 +203,7 @@ export default class OnlineVoiceMesh {
             : [{}];
           parameters.encodings = encodings.map((encoding) => ({
             ...encoding,
-            maxBitrate: 160_000,
+            maxBitrate: 256_000,
             networkPriority: "high"
           }));
           parameters.degradationPreference = "maintain-framerate";
@@ -575,7 +575,14 @@ export default class OnlineVoiceMesh {
         channel?.readyState === "closing" ||
         channel?.readyState === "closed"
       ) {
-        throw new Error(translateSaved("Канал передачи песни закрыт"));
+        if (this.channels.get(participantId) === channel)
+          this.channels.delete(participantId);
+      }
+      if (!this.channels.get(participantId) && this.peers.has(participantId)) {
+        // Re-negotiate a fresh ordered channel after a transient close instead
+        // of making the user retry the whole room/song transfer manually.
+        // eslint-disable-next-line no-await-in-loop
+        await this.invite(participantId).catch(() => false);
       }
       // Polling is intentionally sequential.
       // eslint-disable-next-line no-await-in-loop
