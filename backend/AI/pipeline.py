@@ -197,7 +197,9 @@ def _repair_canonical_timeline_locally(
 
 
 def _preserve_complete_canonical_timeline(
-    words: list[Word], total_duration: float
+    words: list[Word],
+    total_duration: float,
+    sources: list[str] | None = None,
 ) -> list[Word] | None:
     """Preserve a complete acoustic alignment and heal only timing defects.
 
@@ -208,6 +210,46 @@ def _preserve_complete_canonical_timeline(
     """
     if not words or total_duration <= 0.04:
         return None
+
+    # A long-text merge can collapse a transient/reacquired block between two
+    # valid acoustic anchors. Rebuild only that block; never shift the anchors
+    # or the rest of the song. Source metadata is optional for cached timelines.
+    if sources and len(sources) == len(words):
+        local = list(words)
+        acoustic = {"ctc", "consensus", "qwen"}
+        anchors = [index for index, source in enumerate(sources) if source in acoustic]
+        for left, right in zip([-1, *anchors], [*anchors, len(words)], strict=True):
+            indices = list(range(left + 1, right))
+            if not indices:
+                continue
+            left_time = local[left].end if left >= 0 else 0.0
+            right_time = local[right].start if right < len(local) else total_duration
+            previous_end = left_time
+            valid = right_time > left_time
+            for index in indices:
+                word = local[index]
+                valid = (
+                    valid
+                    and 0.0 <= word.start < word.end <= total_duration
+                    and word.start >= previous_end - 1e-4
+                    and word.end <= right_time + 1e-4
+                )
+                previous_end = word.end
+            if valid:
+                continue
+            weights = [max(1, len(words[index].text)) for index in indices]
+            available = right_time - left_time
+            if available < len(indices) * 0.01:
+                continue
+            cursor = left_time
+            total_weight = sum(weights)
+            for index, weight in zip(indices, weights, strict=True):
+                end = cursor + available * weight / total_weight
+                word = words[index]
+                local[index] = Word(cursor, end, word.text, word.confidence, word.index)
+                cursor = end
+        if _canonical_timeline_is_publishable(local, total_duration):
+            return local
 
     repaired: list[Word] = []
     for index, word in enumerate(words):
@@ -253,7 +295,10 @@ def _preserve_complete_canonical_timeline(
 
 
 def _pipeline_lossless_canonical_words(
-    text: str, words: list[Word], total_duration: float
+    text: str,
+    words: list[Word],
+    total_duration: float,
+    sources: list[str] | None = None,
 ) -> list[Word]:
     """Final invariant guard before publishing lyricsSync.json.
 
@@ -268,7 +313,7 @@ def _pipeline_lossless_canonical_words(
 
     canonical_match = _canonical_alignment_matches(text, words)
     if canonical_match:
-        preserved = _preserve_complete_canonical_timeline(words, total_duration)
+        preserved = _preserve_complete_canonical_timeline(words, total_duration, sources)
         if preserved is None:
             raise InvalidArtifactError(
                 "Complete canonical acoustic alignment could not be locally normalized; "
@@ -986,7 +1031,12 @@ class KaraokePipeline:
                 else:
                     # Canonical lyrics are lossless. ASR/forced alignment may
                     # estimate timing, but may never delete or replace words.
-                    words = _pipeline_lossless_canonical_words(supplied, words, song_duration)
+                    words = _pipeline_lossless_canonical_words(
+                        supplied,
+                        words,
+                        song_duration,
+                        list(alignment_diagnostics.get("word_sources") or []),
+                    )
                     publish_text = supplied
                 validate_timeline(words, "words")
                 self._publish_text_alignment(output, lyrics_txt, words_path, publish_text, words)

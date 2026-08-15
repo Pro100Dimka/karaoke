@@ -641,21 +641,19 @@ def _attach_soft_lyric_labels(notes: list[VocalNote], syllables: list[Syllable])
 
 
 def _overlapping_owner_syllables(note: VocalNote, syllables: list[Syllable]) -> list[Syllable]:
-    """Return positive-overlap syllables from the note's dominant lyric word."""
-    overlaps = [
-        (syllable, min(note.end, syllable.end) - max(note.start, syllable.start))
-        for syllable in syllables
-        if min(note.end, syllable.end) - max(note.start, syllable.start) > 1e-9
-    ]
-    if not overlaps:
-        return []
-    overlap_by_word: dict[int, float] = {}
-    for syllable, overlap in overlaps:
-        overlap_by_word[syllable.word_index] = (
-            overlap_by_word.get(syllable.word_index, 0.0) + overlap
-        )
-    owner_word = max(overlap_by_word, key=overlap_by_word.get)
-    return [syllable for syllable, _overlap in overlaps if syllable.word_index == owner_word]
+    """Return every lyric syllable with positive temporal overlap.
+
+    Association is many-to-many. Label ownership is a separate presentation
+    concern and must never discard overlaps from another word or phrase.
+    """
+    return sorted(
+        (
+            syllable
+            for syllable in syllables
+            if min(note.end, syllable.end) - max(note.start, syllable.start) > 1e-9
+        ),
+        key=lambda syllable: (syllable.start, syllable.end, syllable.index),
+    )
 
 
 def _word_activity_intervals(

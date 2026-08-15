@@ -87,6 +87,24 @@ export function displayTextForNote(
   );
 }
 
+export const canonicalLyricProjection = (syllables) =>
+  syllables
+    .map((syllable, position) => ({
+      index: Number(syllable.index ?? position),
+      word_index: Number(syllable.word_index),
+      text: String(syllable.text || ""),
+      start: Number(syllable.start),
+      end: Number(syllable.end)
+    }))
+    .filter(
+      ({ index, text, start, end }) =>
+        Number.isFinite(index) &&
+        text.length > 0 &&
+        Number.isFinite(start) &&
+        Number.isFinite(end) &&
+        end > start
+    );
+
 export function mergeSelectedNotes(notes, selectedIds, syllablesByIndex) {
   const selected = new Set(selectedIds);
   const chosen = notes

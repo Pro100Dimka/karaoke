@@ -95,6 +95,30 @@ def test_lossless_canonical_words_preserve_or_retime():
     assert tiny[-1].end == 0.1
 
 
+def test_lossless_words_repair_only_collapsed_transient_span():
+    original = words(
+        (55.757884630828, 56.240116035786684, "сердце", 0.3333),
+        (56.240116035786684, 56.26011603578669, "покой", 0.012),
+        (56.24511603578669, 56.26511603578669, "Я", 0.012),
+        (56.2651160357867, 56.2851160357867, "в", 0.012),
+        (56.28011603578668, 56.43011603578668, "Черты", 0.3),
+        (75.76090877868262, 75.82115117411988, "Но", 0.003),
+    )
+    repaired = pipeline._pipeline_lossless_canonical_words(
+        "сердце покой Я в Черты Но",
+        original,
+        195.54913832199546,
+        ["ctc", "interpolated", "interpolated", "reacquired", "reacquired", "qwen"],
+    )
+    assert repaired[0] == original[0] and repaired[5] == original[5]
+    assert [(word.text, word.confidence) for word in repaired] == [
+        (word.text, word.confidence) for word in original
+    ]
+    assert all(left.end <= right.start for left, right in zip(repaired, repaired[1:], strict=False))
+    assert repaired[1].start == original[0].end
+    assert repaired[4].end == pytest.approx(original[5].start)
+
+
 class Console(StringIO):
     encoding = "cp1251"
 

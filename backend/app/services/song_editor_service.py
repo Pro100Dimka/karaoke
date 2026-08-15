@@ -125,16 +125,9 @@ def _project_notes_by_syllable(
             except (TypeError, ValueError):
                 continue
         normalized_indices = sorted(set(normalized_indices))
-        count = len(normalized_indices)
-        for position, idx in enumerate(normalized_indices):
+        for idx in normalized_indices:
             projected = dict(note)
-            if count > 1:
-                start = float(note["start"])
-                step = (float(note["end"]) - start) / count
-                projected["start"] = round(start + position * step, 6)
-                projected["end"] = round(start + (position + 1) * step, 6)
             projected["syllable_index"] = idx
-            projected["syllable_indices"] = [idx]
             note_by_syllable[idx].append(projected)
     return note_by_syllable
 
@@ -216,7 +209,6 @@ def _refresh_generated_note_associations(song_map: JsonObject) -> None:
             note["syllable_indices"] = [
                 _safe_int(syllable.get("index"), index)
                 for index, (syllable, _overlap) in enumerate(overlaps)
-                if _safe_int(syllable.get("word_index"), -1) == owner_word
             ]
             note["syllable_index"] = (
                 note["syllable_indices"][0] if note["syllable_indices"] else None

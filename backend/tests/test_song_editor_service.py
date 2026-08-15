@@ -111,6 +111,28 @@ def test_refresh_lines_ignores_invalid_links_and_line_entries():
     assert song_map["lines"][0]["words"][0]["index"] == 0
 
 
+def test_refresh_lines_projects_association_without_splitting_musical_note():
+    song_map = {
+        "syllables": [
+            {"index": 0, "word_index": 0, "start": 0, "end": 0.5, "text": "a"},
+            {"index": 1, "word_index": 0, "start": 0.5, "end": 1, "text": "b"},
+        ],
+        "words": [{"index": 0, "start": 0, "end": 1, "text": "ab"}],
+        "lines": [{"words": [{"index": 0}]}],
+    }
+    source = {"start": 0, "end": 1, "midi_note": 60, "syllable_indices": [0, 1]}
+
+    song_editor_service._refresh_lines(song_map, [source])
+
+    projected = song_map["words"][0]["syllables"]
+    assert [item["display_notes"][0]["syllable_index"] for item in projected] == [0, 1]
+    assert all(
+        (item["display_notes"][0]["start"], item["display_notes"][0]["end"]) == (0, 1)
+        for item in projected
+    )
+    assert all(item["display_notes"][0]["syllable_indices"] == [0, 1] for item in projected)
+
+
 def test_load_editor_repairs_generated_boundary_syllable_associations(tmp_path):
     payload = base_song_map()
     payload["notes"] = [
@@ -136,6 +158,22 @@ def test_load_editor_repairs_generated_boundary_syllable_associations(tmp_path):
 
     normalized = song_editor_service.normalize_editor_timeline(payload)
     assert normalized["notes"][0]["syllable_indices"] == [3]
+
+
+def test_generated_association_keeps_all_cross_word_overlaps():
+    song_map = {
+        "syllables": [
+            {"index": 0, "word_index": 0, "start": 0, "end": 0.6},
+            {"index": 1, "word_index": 1, "start": 0.6, "end": 1},
+        ],
+        "notes": [{"start": 0.2, "end": 0.9}],
+        "display_notes": [{"start": 0.2, "end": 0.9}],
+    }
+
+    song_editor_service._refresh_generated_note_associations(song_map)
+
+    assert song_map["notes"][0]["syllable_indices"] == [0, 1]
+    assert song_map["display_notes"][0]["syllable_indices"] == [0, 1]
 
 
 def base_song_map():

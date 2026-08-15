@@ -34,8 +34,13 @@ def migrate_legacy_song_storage() -> None:
     try:
         songs = db.query(models.Song).all()
         for song in songs:
-            target = (config.SONG_OUTPUT_DIR / song.slug).resolve()
             previous_output = _legacy_output(song)
+            library_root = config.SONG_OUTPUT_DIR.resolve()
+            target = (
+                previous_output
+                if previous_output.is_relative_to(library_root)
+                else (library_root / song.slug).resolve()
+            )
             previous_source = Path(song.source_path).resolve()
 
             if previous_output.is_dir() and previous_output != target and not target.exists():

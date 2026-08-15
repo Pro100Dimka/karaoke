@@ -176,6 +176,52 @@ test("editor note labels use exact ownership and edited-text precedence", () => 
   ).toBe("");
 });
 
+const canonicalSyllables = () => [
+  { index: 0, word_index: 0, text: "Я", start: 3.888836, end: 3.908882 },
+  { index: 1, word_index: 1, text: "не", start: 4.069246, end: 4.129383 },
+  { index: 2, word_index: 2, text: "хо", start: 4.249656, end: 4.4 },
+  { index: 3, word_index: 2, text: "чу", start: 4.4, end: 4.470157 },
+  { index: 4, word_index: 3, text: "ку", start: 4.490202, end: 4.56 },
+  { index: 5, word_index: 3, text: "рить", start: 4.56, end: 4.610476 },
+  { index: 6, word_index: 4, text: "пос", start: 4.630521, end: 4.7 },
+  { index: 7, word_index: 4, text: "ле", start: 4.7, end: 4.790886 },
+  { index: 8, word_index: 5, text: "люб", start: 4.790886, end: 4.815255 },
+  { index: 9, word_index: 5, text: "ви", start: 4.815255, end: 4.83475 }
+];
+
+test("canonical lyric projection preserves exact phrase order and timestamps", () => {
+  expect(operations.canonicalLyricProjection(canonicalSyllables())).toEqual(
+    canonicalSyllables()
+  );
+});
+
+test.each([0, 1, 4, 40])(
+  "canonical lyric projection is independent from %i musical notes",
+  (noteCount) => {
+    const notes = Array.from({ length: noteCount }, (_, index) =>
+      editorNote(`note-${index}`, 3.8 + index * 0.01, 5.1, {
+        syllable_indices: canonicalSyllables().map(({ index: value }) => value)
+      })
+    );
+    const before = operations.canonicalLyricProjection(canonicalSyllables());
+    notes.reverse().splice(0, Math.floor(noteCount / 2));
+    const after = operations.canonicalLyricProjection(canonicalSyllables());
+    expect(after).toEqual(before);
+  }
+);
+
+test("canonical projection rejects invalid display data without reordering lyrics", () => {
+  expect(
+    operations
+      .canonicalLyricProjection([
+        ...canonicalSyllables(),
+        { index: 10, text: "", start: 5, end: 6 },
+        { index: 11, text: "bad", start: 6, end: 6 }
+      ])
+      .map(({ text }) => text)
+  ).toEqual(["Я", "не", "хо", "чу", "ку", "рить", "пос", "ле", "люб", "ви"]);
+});
+
 test("editor note labels expand ordered many-to-many syllable associations", () => {
   const syllables = new Map([
     [2, { text: "ши", word_index: 1 }],

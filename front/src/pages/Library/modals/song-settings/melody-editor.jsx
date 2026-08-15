@@ -36,12 +36,11 @@ import {
 } from "./melody-editor-geometry";
 import {
   adjacentNoteId,
+  canonicalLyricProjection,
   constrainedMoveDelta,
   deleteNotesAndTransferText,
-  displayTextForNote,
   mergeSelectedNotes,
-  resizeBounds,
-  syllableIndicesForNote
+  resizeBounds
 } from "./melody-editor-operations";
 
 const BLACK_KEYS = new Set([1, 3, 6, 8, 10]);
@@ -245,22 +244,10 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     () => new Map(syllables.map((item) => [item.index, item])),
     [syllables]
   );
-  const labelOwnerBySyllable = useMemo(() => {
-    const owners = new Map();
-    notes.forEach((note) => {
-      for (const index of syllableIndicesForNote(note)) {
-        const current = owners.get(index);
-        if (
-          !current ||
-          note.start < current.start ||
-          (note.start === current.start && note.end < current.end)
-        ) {
-          owners.set(index, note);
-        }
-      }
-    });
-    return new Map([...owners].map(([index, note]) => [index, note._id]));
-  }, [notes]);
+  const lyricProjection = useMemo(
+    () => canonicalLyricProjection(syllables),
+    [syllables]
+  );
   const noteAtTime = useCallback(
     (value) =>
       notes.find((note) => note.start <= value && note.end > value) || null,
@@ -1809,16 +1796,34 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
                   0:00
                 </div>
 
+                <div
+                  className="melody-editor-lyrics-layer"
+                  style={{ top: scrollState.top + 4 }}
+                  aria-label={translateSaved("Слоги песни")}
+                >
+                  {lyricProjection.map((syllable) => (
+                    <span
+                      key={`lyric-${syllable.index}`}
+                      className="melody-editor-lyric-fragment"
+                      style={{
+                        left: keyboardWidth + syllable.start * zoom,
+                        width: Math.max(
+                          1,
+                          (syllable.end - syllable.start) * zoom
+                        )
+                      }}
+                      title={`${syllable.text} · ${syllable.start.toFixed(3)}–${syllable.end.toFixed(3)}`}
+                    >
+                      <span>{syllable.text}</span>
+                    </span>
+                  ))}
+                </div>
+
                 {notes.map((note) => {
                   const top = (maxMidi - note.midi_note) * rowHeight + 1;
                   const left = keyboardWidth + note.start * zoom;
                   const width = Math.max(6, (note.end - note.start) * zoom);
                   const active = selected.includes(note._id);
-                  const displayLabel = displayTextForNote(
-                    note,
-                    syllableByIndex,
-                    labelOwnerBySyllable
-                  );
                   return (
                     <div
                       key={note._id}
@@ -1838,9 +1843,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
                           startDrag(event, note, "left")
                         }
                       />
-                      <span className="melody-editor-note-label">
-                        {displayLabel}
-                      </span>
                       <span
                         className="melody-editor-note-handle is-right"
                         onPointerDown={(event) =>

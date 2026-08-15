@@ -91,6 +91,26 @@ def test_migration_moves_external_source_and_recovers_missing_path(monkeypatch, 
     assert missing.source_path == str((tmp_path / "library/second/source.wav").resolve())
 
 
+def test_migration_keeps_current_human_readable_library_directory(monkeypatch, tmp_path):
+    current_output = tmp_path / "library" / "Artist Song"
+    current_output.mkdir(parents=True)
+    source = current_output / "song.mp3"
+    source.write_bytes(b"audio")
+    current = song(
+        tmp_path,
+        source_path=str(source),
+        output_dir=str(current_output),
+        slug="song",
+    )
+
+    run_migration(monkeypatch, tmp_path, [current])
+
+    assert current.output_dir == str(current_output.resolve())
+    assert current.source_path == str(source)
+    assert current_output.is_dir()
+    assert not (tmp_path / "library" / "song").exists()
+
+
 def test_migration_rewrites_source_inside_already_moved_output(monkeypatch, tmp_path):
     previous = tmp_path / "old/song"
     previous.mkdir(parents=True)

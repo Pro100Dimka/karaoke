@@ -308,7 +308,7 @@ def test_game_notes_preserve_syllable_granularity():
         [note(6.92, 7.18, 59)],
         [syllable(6.864, 7.12, 24), syllable(7.14, 7.52, 25)],
     )
-    assert cross_word[0].syllable_indices == (24,)
+    assert cross_word[0].syllable_indices == (24, 25)
 
 
 def test_game_notes_preserve_real_repeated_notes_and_melisma():
@@ -320,6 +320,41 @@ def test_game_notes_preserve_real_repeated_notes_and_melisma():
     assert len(result) == 3
     assert all(item.syllable_indices == (0,) for item in result)
     assert all(item.end > item.start for item in result)
+
+
+def test_many_to_many_lyric_association_never_consumes_by_note_count():
+    aligned = [
+        syllable(0, 1, 0, word=0),
+        syllable(1, 2, 1, word=1),
+        syllable(2, 2.5, 2, word=2),
+        syllable(2.5, 3, 3, word=3),
+    ]
+    melody = [
+        note(0, 0.3, 60),
+        note(0.3, 0.6, 62),
+        note(0.6, 1, 64),
+        note(1, 2, 65),
+        note(2, 3, 67),
+    ]
+    result = notes.build_game_notes(melody, aligned)
+    assert [(item.start, item.end, item.midi_note) for item in result] == [
+        (item.start, item.end, item.midi_note) for item in melody
+    ]
+    assert [item.syllable_indices for item in result] == [
+        (0,),
+        (0,),
+        (0,),
+        (1,),
+        (2, 3),
+    ]
+
+    with_extra_melisma = notes.build_game_notes(
+        [note(0, 0.15, 59), note(0.15, 0.3, 61), *melody], aligned
+    )
+    assert [item.syllable_indices for item in with_extra_melisma if item.start >= 1] == [
+        (1,),
+        (2, 3),
+    ]
 
 
 def test_harmonic_salience_bounds_and_signal():
