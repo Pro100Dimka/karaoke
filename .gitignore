@@ -29,9 +29,11 @@ coverage.xml
 htmlcov/
 .hypothesis/
 *.egg-info/
+docs/
 build/
 dist/
-
+codex-temp-tests/
+test-results/
 # Node/Electron dependencies and build output
 node_modules/
 front/node_modules/
