@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from huggingface_hub import hf_hub_download, snapshot_download
+from huggingface_hub.utils import disable_progress_bars
 
 from AI.model_registry import MODELS, ModelSpec, model_directory, model_path
 
@@ -161,15 +162,48 @@ def is_valid(models_root: Path, model: ModelSpec) -> bool:
     if model.kind == "bundle":
         directory = model_directory(models_root, model)
         return bool(model.files) and all(
-            (path := directory / item.relative_path).is_file()
-            and path.stat().st_size == item.expected_bytes
-            and _sha256(path) == item.sha256.lower()
-            for item in model.files
+            _valid_bundle_file(directory / item.relative_path, item) for item in model.files
         )
 
     directory = model_directory(models_root, model)
     return (directory / "config.json").is_file() and _has_complete_weights(directory)
 
+
+
+def _valid_bundle_file(path: Path, item, *, verify_hash: bool = True) -> bool:
+    if not path.is_file():
+        return False
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return False
+    if size < item.min_bytes or (item.expected_bytes and size != item.expected_bytes):
+        return False
+    if verify_hash and item.sha256 and _sha256(path) != item.sha256.lower():
+        return False
+    if item.contains:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return False
+        if not all(token in text for token in item.contains):
+            return False
+    return True
+
+
+def quick_is_valid(models_root: Path, model: ModelSpec) -> bool:
+    """Cheap startup check: verify registry shape without hashing multi-GB resources."""
+    if model.kind == "file":
+        path = model_path(models_root, model)
+        return path.is_file() and (not model.expected_bytes or path.stat().st_size == model.expected_bytes)
+    if model.kind == "bundle":
+        directory = model_directory(models_root, model)
+        return bool(model.files) and all(
+            _valid_bundle_file(directory / item.relative_path, item, verify_hash=False)
+            for item in model.files
+        )
+    directory = model_directory(models_root, model)
+    return (directory / "config.json").is_file() and _has_complete_weights(directory)
 
 def prune_unused_artifacts(models_root: Path, model: ModelSpec) -> int:
     directory = model_directory(models_root, model)
@@ -197,10 +231,7 @@ def _download(models_root: Path, cache_dir: Path, model: ModelSpec) -> None:
                     temporary.open("wb") as destination,
                 ):
                     shutil.copyfileobj(source, destination, 1024 * 1024)
-                if (
-                    temporary.stat().st_size != item.expected_bytes
-                    or _sha256(temporary) != item.sha256.lower()
-                ):
+                if not _valid_bundle_file(temporary, item):
                     raise RuntimeError(f"{model.name}: invalid download {item.relative_path}")
                 os.replace(temporary, target)
             finally:
@@ -306,6 +337,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--log-file", type=Path)
     parser.add_argument("--progress-file", type=Path)
     parser.add_argument("--check", action="store_true")
+    parser.add_argument("--quick-check", action="store_true")
     args = parser.parse_args(argv)
 
     if args.models_root:
@@ -325,11 +357,18 @@ def main(argv: list[str] | None = None) -> int:
     os.environ.setdefault("HF_HUB_CACHE", str(cache_dir / "hub"))
     os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 
-    if args.check:
-        ok = verify_all(models_root)
+    if args.check or args.quick_check:
+        if args.quick_check:
+            ok = all(quick_is_valid(models_root, model) for model in MODELS)
+        else:
+            ok = verify_all(models_root)
         if ok and args.msst and args.env:
             write_environment(downloads, models_root, args.msst.resolve(), args.env.resolve())
         return 0 if ok else 1
+
+    # Hugging Face progress bars use global tqdm state and are not thread-safe
+    # under our outer model pool. We publish our own aggregate progress instead.
+    disable_progress_bars()
 
     reporter = ProgressReporter(
         models_root,

@@ -27,3 +27,5 @@ qwen-asr==0.0.6
 transformers==4.57.6
 # Security floor for the image dependency pulled by the ASR/UI stack.
 pillow>=12.3,<13
+# One dependency declaration for dev, recovery and packaged model downloads.
+huggingface_hub[hf_xet]>=0.34,<1.0

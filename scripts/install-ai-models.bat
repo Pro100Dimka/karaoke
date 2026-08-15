@@ -108,7 +108,6 @@ rem ============================================================================
 
 echo [3/7] Dependencies...
 call :pip -r "%BACK%\requirements.txt" -r "%BACK%\AI\requirements.txt" || goto :fail
-call :pip --upgrade "huggingface_hub>=0.34,<1.0" hf_xet || goto :fail
 
 rem ============================================================================
 rem CUDA
@@ -204,8 +203,15 @@ if not exist "%MSST_CONFIG%" exit /b 1
 if not defined MSST_CHECKPOINT exit /b 1
 if not exist "%MSST_CHECKPOINT%" exit /b 1
 
-"%PY%" -c "import sys,importlib.util;mods=('qwen_asr','omegaconf','beartype','rotary_embedding_torch');raise SystemExit(0 if sys.version_info[:2]==(3,12) and all(importlib.util.find_spec(x) for x in mods) else 1)" >nul 2>&1
-exit /b %errorlevel%
+"%PY%" -c "import sys,importlib.util;mods=('qwen_asr','omegaconf','beartype','rotary_embedding_torch','huggingface_hub','hf_xet');raise SystemExit(0 if sys.version_info[:2]==(3,12) and all(importlib.util.find_spec(x) for x in mods) else 1)" >nul 2>&1
+if errorlevel 1 exit /b 1
+
+set "OLD_PYTHONPATH=%PYTHONPATH%"
+set "PYTHONPATH=%BACK%;%PYTHONPATH%"
+"%PY%" -m AI.install_models --downloads "%DL%" --quick-check >nul 2>&1
+set "RC=%ERRORLEVEL%"
+set "PYTHONPATH=%OLD_PYTHONPATH%"
+exit /b %RC%
 
 :py312
 "%~1" -c "import sys;raise SystemExit(0 if sys.version_info[:2]==(3,12) else 1)"

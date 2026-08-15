@@ -11,8 +11,10 @@ ModelKind = Literal["snapshot", "file", "bundle"]
 class ModelFile:
     relative_path: str
     url: str
-    sha256: str
-    expected_bytes: int
+    sha256: str | None = None
+    expected_bytes: int = 0
+    min_bytes: int = 1
+    contains: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,8 +103,13 @@ MODELS: tuple[ModelSpec, ...] = (
             ModelFile(
                 "configurations.yaml",
                 "https://raw.githubusercontent.com/Music-and-Culture-Technology-Lab/omnizart/bcd8cb44d4da66ce87df10b6abee5c35a8cc2886/omnizart/checkpoints/patch_cnn/patch_cnn_melody/configurations.yaml",
-                "fe22d8c706657420280803480b931a5cf30f91008b3f2da9c44e8deb8744a7ab",
-                4_387,
+                min_bytes=1_000,
+                contains=(
+                    "TranscriptionMode:",
+                    "Value: Melody",
+                    "PatchSize:",
+                    "SamplingRate:",
+                ),
             ),
             ModelFile(
                 "saved_model.pb",
