@@ -10,8 +10,8 @@ const REPORTS_ROOT = resolve(PROJECT_ROOT, "reports");
 const REPORT_PATH = resolve(REPORTS_ROOT, "css-audit.json");
 const CONFIG_PATH = resolve(PROJECT_ROOT, "css-audit.config.json");
 
-const SOURCE_EXTENSIONS = [".js", ".jsx", ".ts", ".tsx"];
-const CSS_EXTENSIONS = [".css"];
+const SOURCE_EXTENSIONS = new Set([".js", ".jsx", ".ts", ".tsx"]);
+const CSS_EXTENSIONS = new Set([".css"]);
 
 const DEFAULT_CONFIG = {
   ignoreClasses: ["active", "disabled", "error", "loading", "open", "selected", "visible"],

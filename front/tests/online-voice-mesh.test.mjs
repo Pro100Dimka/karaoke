@@ -1709,13 +1709,20 @@ describe("online voice mesh", () => {
     expect(() =>
       channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "sync-failed" }) })
     ).not.toThrow();
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(JSON.parse(channel.send.mock.calls.at(-1)[0])).toMatchObject({
-      type: "file-error",
-      transferId: "sync-failed",
-      error: "synchronous import failure"
-    });
+    await vi.waitFor(() =>
+      expect(
+        channel.send.mock.calls
+          .map(([value]) => (typeof value === "string" ? JSON.parse(value) : null))
+          .find(
+            (message) =>
+              message?.type === "file-error" && message.transferId === "sync-failed"
+          )
+      ).toMatchObject({
+        type: "file-error",
+        transferId: "sync-failed",
+        error: "synchronous import failure"
+      })
+    );
 
     channel.readyState = "closed";
     channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "missing" }) });
