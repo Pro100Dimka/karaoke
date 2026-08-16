@@ -38,10 +38,15 @@ test("song settings schema describes every persisted field exactly", () => {
     { value: "Сложный", label: "Сложный" },
     { value: "Эксперт", label: "Эксперт" }
   ]);
-  expect( SONG_FIELDS.map(({ getValue, setValue, render, ...field }) => field)
-  ).toEqual([
+  expect(SONG_FIELDS.map(({ getValue, setValue, render, ...field }) => field)).toEqual([
     { name: "artist", span: 6, type: "text", label: "Исполнитель", placeholder: "Muse" },
-    { name: "title", span: 6, type: "text", label: "Название песни", placeholder: "Название песни" },
+    {
+      name: "title",
+      span: 6,
+      type: "text",
+      label: "Название песни",
+      placeholder: "Название песни"
+    },
     {
       name: "tempo_override",
       span: 4,
@@ -84,10 +89,11 @@ test("note range renderer preserves its accessible contract and normalizes value
   const range = schema.SONG_FIELDS.find(({ name }) => name === "note_range");
   const change = vi.fn();
   const { container, getByLabelText } = render(
-    range.render({ context: { form: { note_range_min: 40, note_range_max: 80 }, onChange: change } })
+    range.render({
+      context: { form: { note_range_min: 40, note_range_max: 80 }, onChange: change }
+    })
   );
-  expect(getByLabelText("Диапазон нот").getAttribute("aria-label")).toBe( "Диапазон нот"
-  );
+  expect(getByLabelText("Диапазон нот").getAttribute("aria-label")).toBe("Диапазон нот");
   const [minimum, maximum] = container.querySelectorAll("input");
   expect(minimum).toMatchObject({
     id: "range-min",
@@ -121,8 +127,9 @@ test("note range renderer preserves its accessible contract and normalizes value
   ]);
 
   cleanup();
-  const empty = render( range.render({ context: { form: null, onChange: change } })
-  );
-  expect( [...empty.container.querySelectorAll("input")].map(({ value }) => value)
-  ).toEqual(["", ""]);
+  const empty = render(range.render({ context: { form: null, onChange: change } }));
+  expect([...empty.container.querySelectorAll("input")].map(({ value }) => value)).toEqual([
+    "",
+    ""
+  ]);
 });
