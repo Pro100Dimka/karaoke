@@ -160,8 +160,9 @@ describe("API transport", () => {
         })
     );
     const pending = request("stalled", { timeoutMs: 25 });
+    const rejection = assert.rejects(pending, (error) => error.name === "TimeoutError");
     await vi.advanceTimersByTimeAsync(25);
-    await assert.rejects(pending, (error) => error.name === "TimeoutError");
+    await rejection;
     vi.useRealTimers();
   });
 
@@ -184,8 +185,9 @@ describe("API transport", () => {
         )
     }));
     const pending = request("stalled-body", { timeoutMs: 25 });
+    const rejection = assert.rejects(pending, (error) => error.name === "TimeoutError");
     await vi.advanceTimersByTimeAsync(25);
-    await assert.rejects(pending, (error) => error.name === "TimeoutError");
+    await rejection;
     vi.useRealTimers();
   });
 

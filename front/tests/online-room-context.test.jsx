@@ -79,6 +79,7 @@ const wrapper = ({ children }) => <OnlineRoomProvider>{children}</OnlineRoomProv
 const stream = () => ({ getTracks: () => [{ stop: vi.fn() }] });
 
 beforeEach(async () => {
+  globalThis.localStorage?.setItem("advoice-language", "ru");
   vi.resetModules();
   ({ OnlineRoomProvider, useOnlineRoom } = await import("../src/contexts/OnlineRoomContext"));
   Object.values(mocks).forEach((mock) => mock?.mockReset?.());
@@ -272,7 +273,7 @@ describe("online room provider", () => {
       initialAccess = await hook.result.current.requestMicrophoneAccess();
     });
     expect(initialAccess).toBe(false);
-    expect(hook.result.current.voiceError).toBe("Спочатку підключіться до кімнати.");
+    expect(hook.result.current.voiceError).toBe("Сначала подключитесь к комнате.");
 
     await act(() => hook.result.current.createRoom("Alice"));
     const unmutedStream = stream();
@@ -624,7 +625,7 @@ describe("online room provider", () => {
     expect(importError?.message).toBe("bad package");
     expect(hook.result.current.transferStatus).toEqual({
       stage: "error",
-      error: "Неможливо імпортувати пісню: bad package",
+      error: "Не удалось импортировать песню: bad package",
       percent: 0
     });
   });
@@ -714,7 +715,7 @@ describe("online room provider", () => {
     await act(async () => mocks.voices[0].onRemoteStream("guest", stream()));
     await waitFor(() =>
       expect(hook.result.current.voiceError).toBe(
-        "Натисніть у будь-якому місці програми, щоб дозволити звук кімнати."
+        "Нажмите в любом месте приложения, чтобы разрешить звук комнаты."
       )
     );
     act(() => hook.result.current.togglePersonEffects("guest"));
@@ -740,7 +741,7 @@ describe("online room provider", () => {
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => hook.result.current.createRoom("Alice"));
     await waitFor(() =>
-      expect(hook.result.current.voiceError).toBe("Кімната підключена без голосу: no microphone")
+      expect(hook.result.current.voiceError).toBe("Комната подключена без голоса: no microphone")
     );
     expect(hook.result.current.room.id).toBe("room-id");
   });
@@ -751,7 +752,7 @@ describe("online room provider", () => {
     await act(() => hook.result.current.createRoom("Alice"));
     await waitFor(() =>
       expect(hook.result.current.voiceError).toBe(
-        "Кімната підключена без голосу: немає доступу до мікрофону"
+        "Комната подключена без голоса: нет доступа к микрофону"
       )
     );
     expect(hook.result.current.room.id).toBe("room-id");
@@ -1017,7 +1018,7 @@ describe("online room provider", () => {
   test("uses a guest fallback name and ignores stale import errors", async () => {
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => hook.result.current.joinRoom("room"));
-    expect(hook.result.current.participants[0].name).toBe("Гість");
+    expect(hook.result.current.participants[0].name).toBe("Гость");
     const voice = mocks.voices[0];
     const options = mocks.createOnlineRoomMessageHandler.mock.calls.at(-1)[0];
     const revision = "sha256:" + "a".repeat(64);
@@ -1113,7 +1114,7 @@ describe("online room provider", () => {
     mocks.clients[0].disconnect.mockClear();
     mocks.voices[0].stop.mockClear();
     releaseFirst("old-room");
-    await expect(first).rejects.toThrow("З'єднання скасовано новим запитом");
+    await expect(first).rejects.toThrow("Подключение отменено новым запросом");
     expect(mocks.clients[0].disconnect).toHaveBeenCalledTimes(1);
     expect(mocks.voices[0].stop).toHaveBeenCalledTimes(1);
     expect(hook.result.current.room.id).toBe("new-room");

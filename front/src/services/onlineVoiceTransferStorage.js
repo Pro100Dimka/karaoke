@@ -71,6 +71,7 @@ export const createTransferSink = (participantId, metadata) => {
     throw new Error(translateSaved("Для большого файла требуется дисковое хранилище браузера"));
   const chunks = [];
   return {
+    chunks,
     write: (chunk) => chunks.push(chunk),
     finish: () => new globalThis.Blob(chunks, { type: metadata.mimeType }),
     cleanup: async () => {

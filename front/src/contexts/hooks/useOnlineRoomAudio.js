@@ -144,7 +144,7 @@ export default function useOnlineRoomAudio({
         remoteEffectsRef.current.set(participantId, { context, master });
         applyRemoteAudioMute();
       };
-      if (context.state === "suspended") {
+      if (typeof context.resume === "function") {
         Promise.resolve(context.resume())
           .then(activate)
           .catch(() => {
