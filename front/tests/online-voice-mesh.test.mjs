@@ -23,24 +23,42 @@ class FakeChannel {
     this.send = vi.fn((value) => {
       if (value instanceof ArrayBuffer) {
         if (this.autoCredit !== false && this.transferId)
-          queueMicrotask(() => this.onmessage?.({
-            data: JSON.stringify({ type: "file-credit", transferId: this.transferId, bytes: value.byteLength })
-          }));
+          queueMicrotask(() =>
+            this.onmessage?.({
+              data: JSON.stringify({
+                type: "file-credit",
+                transferId: this.transferId,
+                bytes: value.byteLength
+              })
+            })
+          );
         return;
       }
       if (typeof value !== "string") return;
       let message;
-      try { message = JSON.parse(value); } catch { return; }
+      try {
+        message = JSON.parse(value);
+      } catch {
+        return;
+      }
       if (message.type === "file-start" && this.autoReady !== false) {
         this.transferId = message.transferId;
-        queueMicrotask(() => this.onmessage?.({
-          data: JSON.stringify({ type: "file-ready", transferId: message.transferId, windowBytes: 512 * 1024 })
-        }));
+        queueMicrotask(() =>
+          this.onmessage?.({
+            data: JSON.stringify({
+              type: "file-ready",
+              transferId: message.transferId,
+              windowBytes: 512 * 1024
+            })
+          })
+        );
       }
     });
     this.autoReady = true;
     this.autoCredit = true;
-    this.close = vi.fn(() => { this.readyState = "closed"; });
+    this.close = vi.fn(() => {
+      this.readyState = "closed";
+    });
   }
 }
 
@@ -53,32 +71,32 @@ class FakePeer {
     this.remoteDescription = null;
     this.localDescription = null;
     this.senders = [];
-    this.addTrack = vi.fn((mediaTrack) => { this.senders.push({ track: mediaTrack }); });
+    this.addTrack = vi.fn((mediaTrack) => {
+      this.senders.push({ track: mediaTrack });
+    });
     this.getSenders = () => this.senders;
     this.createDataChannel = vi.fn(() => new FakeChannel());
-    this.createOffer = vi
-      .fn()
-      .mockResolvedValue({ type: "offer", sdp: "offer" });
-    this.createAnswer = vi
-      .fn()
-      .mockResolvedValue({ type: "answer", sdp: "answer" });
-    this.setLocalDescription = vi.fn(async (description) => { this.localDescription = description; });
+    this.createOffer = vi.fn().mockResolvedValue({ type: "offer", sdp: "offer" });
+    this.createAnswer = vi.fn().mockResolvedValue({ type: "answer", sdp: "answer" });
+    this.setLocalDescription = vi.fn(async (description) => {
+      this.localDescription = description;
+    });
     this.setRemoteDescription = vi.fn(async (description) => {
       this.remoteDescription = description;
     });
     this.addIceCandidate = vi.fn().mockResolvedValue(undefined);
-    this.close = vi.fn(() => { this.connectionState = "closed"; });
+    this.close = vi.fn(() => {
+      this.connectionState = "closed";
+    });
     FakePeer.instances.push(this);
   }
 }
 
-const makeMesh = () =>
-  new OnlineVoiceMesh({ send: vi.fn(() => true) });
+const makeMesh = () => new OnlineVoiceMesh({ send: vi.fn(() => true) });
 
 beforeEach(async () => {
   vi.resetModules();
-  ({ default: OnlineVoiceMesh } =
-    await import("../src/services/onlineVoiceMesh.js"));
+  ({ default: OnlineVoiceMesh } = await import("../src/services/onlineVoiceMesh.js"));
   FakePeer.instances = [];
   globalThis.RTCPeerConnection = FakePeer;
 });
@@ -95,7 +113,7 @@ afterEach(() => {
 
 describe("online voice mesh", () => {
   test("uses the exact capture, peer and sender quality contracts", async () => {
-    const media = stream([ track("voice"), { ...track("video"), kind: "video" } ]);
+    const media = stream([track("voice"), { ...track("video"), kind: "video" }]);
     const capture = vi.fn().mockResolvedValue(media);
     Object.defineProperty(globalThis, "navigator", {
       configurable: true,
@@ -118,8 +136,7 @@ describe("online voice mesh", () => {
     const peer = mesh.createPeer("p".repeat(128));
     expect(peer.configuration).toEqual({ iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }] });
     for (const participantId of [null, 1, {}, "", "p".repeat(129)]) {
-      expect(() => mesh.createPeer(participantId)).toThrow( "Некорректный идентификатор участника"
-      );
+      expect(() => mesh.createPeer(participantId)).toThrow("Некорректный идентификатор участника");
     }
 
     const configured = {
@@ -135,7 +152,7 @@ describe("online voice mesh", () => {
     const noSetter = { track: track(), getParameters: vi.fn() };
     await mesh.optimizeAudioSenders({ getSenders: () => [configured, noAudio, noSetter] });
     expect(configured.setParameters).toHaveBeenCalledWith({
-      encodings: [ { active: true, maxBitrate: 256_000, networkPriority: "high" } ],
+      encodings: [{ active: true, maxBitrate: 256_000, networkPriority: "high" }],
       degradationPreference: "maintain-framerate"
     });
     expect(noAudio.getParameters).not.toHaveBeenCalled();
@@ -145,8 +162,7 @@ describe("online voice mesh", () => {
   test("validates exact public error and data-channel creation contracts", async () => {
     const mesh = makeMesh();
     delete globalThis.RTCPeerConnection;
-    expect(() => mesh.createPeer("guest")).toThrow( "WebRTC не поддерживается в этом окружении"
-    );
+    expect(() => mesh.createPeer("guest")).toThrow("WebRTC не поддерживается в этом окружении");
     globalThis.RTCPeerConnection = FakePeer;
     const invitation = mesh.invite("guest");
     const peer = FakePeer.instances.at(-1);
@@ -163,7 +179,10 @@ describe("online voice mesh", () => {
     const mesh = makeMesh();
     const channel = new FakeChannel();
     let received;
-    mesh.onFile = vi.fn((_participantId, blob, metadata) => { received = { blob, metadata }; return true; });
+    mesh.onFile = vi.fn((_participantId, blob, metadata) => {
+      received = { blob, metadata };
+      return true;
+    });
     mesh.setupDataChannel("host", channel);
     expect(channel.binaryType).toBe("arraybuffer");
     expect(channel.bufferedAmountLowThreshold).toBe(256 * 1024);
@@ -182,7 +201,7 @@ describe("online voice mesh", () => {
     channel.onmessage({ data: backing.subarray(1, 3) });
     channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "t".repeat(128) }) });
     await vi.waitFor(() => expect(received).toBeTruthy());
-    expect([...new Uint8Array(await received.blob.arrayBuffer())]).toEqual([ 1, 2 ]);
+    expect([...new Uint8Array(await received.blob.arrayBuffer())]).toEqual([1, 2]);
     expect(received.metadata).toEqual({
       type: "file-start",
       kind: "k".repeat(64),
@@ -215,7 +234,9 @@ describe("online voice mesh", () => {
     const channel = new FakeChannel();
     mesh.onFile = vi.fn().mockResolvedValue(true);
     mesh.setupDataChannel("host", channel);
-    channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "disk", size: 2 }) });
+    channel.onmessage({
+      data: JSON.stringify({ type: "file-start", transferId: "disk", size: 2 })
+    });
     channel.onmessage({ data: new Uint8Array([1, 2]).buffer });
     channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "disk" }) });
     await vi.waitFor(() => expect(mesh.onFile).toHaveBeenCalledOnce());
@@ -232,8 +253,7 @@ describe("online voice mesh", () => {
     const metadata = { kind: "k".repeat(65), songId: "s".repeat(129), filename: "f".repeat(513) };
     const payload = new Blob([new Uint8Array(40_000)], { type: "application/zip" });
     const sending = mesh.sendFile("guest", payload, metadata);
-    await vi.waitFor(() => expect(mesh.pendingTransferConfirmations.size).toBe(1)
-    );
+    await vi.waitFor(() => expect(mesh.pendingTransferConfirmations.size).toBe(1));
     const transferId = [...mesh.pendingTransferConfirmations.keys()][0];
     const sent = channel.send.mock.calls.map(([value]) => value);
     expect(JSON.parse(sent[0])).toEqual({
@@ -274,8 +294,7 @@ describe("online voice mesh", () => {
         "Для передачи нужны участник и файл"
       );
     }
-    await expect(mesh.sendFile("guest", {})).rejects.toThrow( "Для передачи нужны участник и файл"
-    );
+    await expect(mesh.sendFile("guest", {})).rejects.toThrow("Для передачи нужны участник и файл");
     const oversized = Object.create(Blob.prototype);
     Object.defineProperties(oversized, {
       size: { value: 512 * 1024 * 1024 + 1 },
@@ -286,8 +305,7 @@ describe("online voice mesh", () => {
     );
 
     const sending = mesh.sendFile("g".repeat(128), new Blob([]));
-    await vi.waitFor(() => expect(mesh.pendingTransferConfirmations.size).toBe(1)
-    );
+    await vi.waitFor(() => expect(mesh.pendingTransferConfirmations.size).toBe(1));
     const transferId = [...mesh.pendingTransferConfirmations.keys()][0];
     expect(JSON.parse(channel.send.mock.calls[0][0])).toEqual({
       type: "file-start",
@@ -334,7 +352,9 @@ describe("online voice mesh", () => {
       error: "Получен неполный файл песни"
     });
 
-    channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "stall", size: 1 }) });
+    channel.onmessage({
+      data: JSON.stringify({ type: "file-start", transferId: "stall", size: 1 })
+    });
     vi.advanceTimersByTime(29_999);
     expect(mesh.incomingFiles.has("host")).toBe(true);
     vi.advanceTimersByTime(1);
@@ -353,8 +373,7 @@ describe("online voice mesh", () => {
     const mesh = makeMesh();
     for (const value of [undefined, {}, { mediaDevices: {} }]) {
       if (value === undefined) delete globalThis.navigator;
-      else
-        Object.defineProperty(globalThis, "navigator", { configurable: true, value });
+      else Object.defineProperty(globalThis, "navigator", { configurable: true, value });
       await expect(mesh.start()).rejects.toThrow(
         "Захват микрофона не поддерживается в этом окружении"
       );
@@ -439,7 +458,7 @@ describe("online voice mesh", () => {
     expect(peerOnly.close).toHaveBeenCalledOnce();
     expect(channelOnly.close).toHaveBeenCalledOnce();
     expect(local.stop).toHaveBeenCalledOnce();
-    expect(mesh.onPeerClosed.mock.calls.map(([id]) => id).sort()).toEqual([ "channel", "peer" ]);
+    expect(mesh.onPeerClosed.mock.calls.map(([id]) => id).sort()).toEqual(["channel", "peer"]);
     for (const collection of [
       mesh.peers,
       mesh.channels,
@@ -466,7 +485,11 @@ describe("online voice mesh", () => {
       globalThis.RTCPeerConnection = class DeferredOfferPeer extends FakePeer {
         constructor(configuration) {
           super(configuration);
-          this.createOffer = vi.fn( () => new Promise((resolve) => { release = resolve; })
+          this.createOffer = vi.fn(
+            () =>
+              new Promise((resolve) => {
+                release = resolve;
+              })
           );
         }
       };
@@ -494,8 +517,7 @@ describe("online voice mesh", () => {
           this.setLocalDescription = vi.fn(
             (description) =>
               new Promise((resolve) => {
-                this.localDescription =
-                  invariant === "missing-local" ? null : description;
+                this.localDescription = invariant === "missing-local" ? null : description;
                 release = resolve;
               })
           );
@@ -518,14 +540,15 @@ describe("online voice mesh", () => {
     "cancels description processing when only its %s invariant changes",
     async (invariant) => {
       let release;
-      globalThis.RTCPeerConnection = class DeferredDescriptionPeer extends (
-        FakePeer
-      ) {
+      globalThis.RTCPeerConnection = class DeferredDescriptionPeer extends FakePeer {
         constructor(configuration) {
           super(configuration);
           this.setRemoteDescription = vi.fn(
             (description) =>
-              new Promise((resolve) => { this.remoteDescription = description; release = resolve; })
+              new Promise((resolve) => {
+                this.remoteDescription = description;
+                release = resolve;
+              })
           );
         }
       };
@@ -553,8 +576,9 @@ describe("online voice mesh", () => {
     expect(peer.addIceCandidate).not.toHaveBeenCalled();
     expect(peer.setRemoteDescription).not.toHaveBeenCalled();
 
-    expect( await mesh.accept("guest", { description: { type: "answer", sdp: "answer" } })
-    ).toBe(true);
+    expect(await mesh.accept("guest", { description: { type: "answer", sdp: "answer" } })).toBe(
+      true
+    );
     expect(peer.setRemoteDescription).toHaveBeenCalledWith({ type: "answer", sdp: "answer" });
     expect(peer.addIceCandidate).toHaveBeenCalledWith("ice");
     expect(peer.createAnswer).not.toHaveBeenCalled();
@@ -615,8 +639,7 @@ describe("online voice mesh", () => {
     host.onmessage({
       data: JSON.stringify({ type: "file-error", transferId: "error", error: "e".repeat(501) })
     });
-    expect(reject).toHaveBeenLastCalledWith( expect.objectContaining({ message: "e".repeat(500) })
-    );
+    expect(reject).toHaveBeenLastCalledWith(expect.objectContaining({ message: "e".repeat(500) }));
 
     mesh.pendingTransferConfirmations.set("fallback", {
       participantId: "host",
@@ -639,9 +662,10 @@ describe("online voice mesh", () => {
       const channel = new FakeChannel();
       mesh.setupDataChannel("host", channel);
       if (invalid !== "missing") {
-        channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "t", size: 1 }) });
-        if (invalid !== "size")
-          channel.onmessage({ data: new Uint8Array([1]) });
+        channel.onmessage({
+          data: JSON.stringify({ type: "file-start", transferId: "t", size: 1 })
+        });
+        if (invalid !== "size") channel.onmessage({ data: new Uint8Array([1]) });
       }
       channel.onmessage({
         data: JSON.stringify({ type: "file-end", transferId: invalid === "id" ? "wrong" : "t" })
@@ -684,8 +708,7 @@ describe("online voice mesh", () => {
       filename: {},
       ignored: true
     });
-    await vi.waitFor(() => expect(mesh.pendingTransferConfirmations.size).toBe(1)
-    );
+    await vi.waitFor(() => expect(mesh.pendingTransferConfirmations.size).toBe(1));
     expect(mesh.waitForDataChannel).toHaveBeenCalledWith("guest", 15_000, 0, expect.anything());
     const transferId = [...mesh.pendingTransferConfirmations.keys()][0];
     expect(JSON.parse(channel.send.mock.calls[0][0])).toEqual({
@@ -706,7 +729,10 @@ describe("online voice mesh", () => {
       const mesh = makeMesh();
       const channel = new FakeChannel();
       mesh.setupDataChannel("guest", channel);
-      if (phase === "before-read") channel.send.mockImplementationOnce(() => { mesh.lifecycleVersion += 1; });
+      if (phase === "before-read")
+        channel.send.mockImplementationOnce(() => {
+          mesh.lifecycleVersion += 1;
+        });
       class InvalidatingBlob extends Blob {
         slice(...args) {
           const sliced = super.slice(...args);
@@ -723,8 +749,9 @@ describe("online voice mesh", () => {
           if (value instanceof ArrayBuffer) mesh.lifecycleVersion += 1;
         });
       }
-      await expect( mesh.sendFile("guest", new InvalidatingBlob(["x"]))
-      ).rejects.toThrow("Передача файла отменена");
+      await expect(mesh.sendFile("guest", new InvalidatingBlob(["x"]))).rejects.toThrow(
+        "Передача файла отменена"
+      );
     }
   );
 
@@ -762,7 +789,10 @@ describe("online voice mesh", () => {
     const mesh = makeMesh();
     const channel = new FakeChannel();
     let blob;
-    mesh.onFile = vi.fn((_id, value) => { blob = value; return true; });
+    mesh.onFile = vi.fn((_id, value) => {
+      blob = value;
+      return true;
+    });
     mesh.setupDataChannel("host", channel);
     channel.onmessage({
       data: JSON.stringify({ type: "file-start", transferId: "buffer", size: 2 })
@@ -805,7 +835,11 @@ describe("online voice mesh", () => {
       configurable: true,
       value: {
         mediaDevices: {
-          getUserMedia: vi.fn( () => new Promise((resolve) => { releaseCapture = resolve; })
+          getUserMedia: vi.fn(
+            () =>
+              new Promise((resolve) => {
+                releaseCapture = resolve;
+              })
           )
         }
       }
@@ -825,7 +859,11 @@ describe("online voice mesh", () => {
     expect(mesh.invitePromises.get("guest")).toBe(foreignInvite);
 
     let releasePrevious;
-    mesh.signalPromises.set( "signal", new Promise((resolve) => { releasePrevious = resolve; })
+    mesh.signalPromises.set(
+      "signal",
+      new Promise((resolve) => {
+        releasePrevious = resolve;
+      })
     );
     const accepted = mesh.accept("signal", { candidate: "ice" });
     const foreignSignal = Promise.resolve("foreign");
@@ -841,8 +879,7 @@ describe("online voice mesh", () => {
     expect(() => peer.ontrack({ streams: [] })).not.toThrow();
     expect(() => peer.ontrack({ streams: [stream()] })).not.toThrow();
     mesh.removePeer("guest");
-    expect(() => peer.ontrack({ streams: [{ getTracks: undefined }] })
-    ).not.toThrow();
+    expect(() => peer.ontrack({ streams: [{ getTracks: undefined }] })).not.toThrow();
     expect(() => peer.ondatachannel({ channel: {} })).not.toThrow();
     expect(() => peer.onconnectionstatechange()).not.toThrow();
     mesh.stream = { getAudioTracks: undefined };
@@ -902,7 +939,10 @@ describe("online voice mesh", () => {
     const channel = new FakeChannel();
     mesh.onTransferProgress = vi.fn();
     let blob;
-    mesh.onFile = vi.fn((_id, value) => { blob = value; return true; });
+    mesh.onFile = vi.fn((_id, value) => {
+      blob = value;
+      return true;
+    });
     mesh.setupDataChannel("host", channel);
     channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "t", size: 100 }) });
     channel.onmessage({ data: new Uint8Array([1]) });
@@ -931,15 +971,17 @@ describe("online voice mesh", () => {
   test.each([
     { failure: new Error("broken"), sent: "broken" },
     { failure: "plain", sent: "plain" },
-    { failure: () => { throw new Error("sync"); }, sent: "sync" }
+    {
+      failure: () => {
+        throw new Error("sync");
+      },
+      sent: "sync"
+    }
   ])("reports exact import failure %#", async ({ failure, sent }) => {
     const mesh = makeMesh();
     const channel = new FakeChannel();
     mesh.onTransferProgress = vi.fn();
-    mesh.onFile =
-      typeof failure === "function"
-        ? failure
-        : vi.fn().mockRejectedValue(failure);
+    mesh.onFile = typeof failure === "function" ? failure : vi.fn().mockRejectedValue(failure);
     mesh.setupDataChannel("host", channel);
     channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "t", size: 1 }) });
     channel.onmessage({ data: new Uint8Array([1]) });
@@ -978,20 +1020,17 @@ describe("online voice mesh", () => {
     vi.useFakeTimers();
     const mesh = makeMesh();
     mesh.channels.set("closing", new FakeChannel("closing"));
-    await expect(mesh.waitForDataChannel("closing")).rejects.toThrow( "Канал передачи песни закрыт"
-    );
+    await expect(mesh.waitForDataChannel("closing")).rejects.toThrow("Канал передачи песни закрыт");
 
     const numeric = mesh.waitForDataChannel("numeric", "50");
-    const numericResult = expect(numeric).rejects.toThrow( "Канал передачи песни не готов"
-    );
+    const numericResult = expect(numeric).rejects.toThrow("Канал передачи песни не готов");
     await vi.advanceTimersByTimeAsync(49);
     expect(vi.getTimerCount()).toBeGreaterThan(0);
     await vi.advanceTimersByTimeAsync(1);
     await numericResult;
 
     const clamped = mesh.waitForDataChannel("maximum", 60_001);
-    const clampedResult = expect(clamped).rejects.toThrow( "Канал передачи песни не готов"
-    );
+    const clampedResult = expect(clamped).rejects.toThrow("Канал передачи песни не готов");
     await vi.advanceTimersByTimeAsync(59_999);
     expect(vi.getTimerCount()).toBeGreaterThan(0);
     await vi.advanceTimersByTimeAsync(1);
@@ -1006,13 +1045,18 @@ describe("online voice mesh", () => {
     mesh.setupDataChannel("guest", channel);
     const sending = mesh.sendFile("guest", new Blob(["x"]));
     let settled = false;
-    sending.then( () => { settled = true; }, () => { settled = true; }
+    sending.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      }
     );
     await vi.advanceTimersByTimeAsync(30_000);
     expect(settled).toBe(false);
     await vi.advanceTimersByTimeAsync(20);
-    await expect(sending).rejects.toThrow( "Передача песни остановилась: нет ответа от участника"
-    );
+    await expect(sending).rejects.toThrow("Передача песни остановилась: нет ответа от участника");
   });
 
   test("uses the exact receiver-confirmation timeout", async () => {
@@ -1021,8 +1065,7 @@ describe("online voice mesh", () => {
     const channel = new FakeChannel();
     mesh.setupDataChannel("guest", channel);
     const sending = mesh.sendFile("guest", new Blob([]));
-    const result = expect(sending).rejects.toThrow( "Участник не подтвердил получение песни"
-    );
+    const result = expect(sending).rejects.toThrow("Участник не подтвердил получение песни");
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(5 * 60_000 - 1);
     expect(mesh.pendingTransferConfirmations.size).toBe(1);
@@ -1064,7 +1107,11 @@ describe("online voice mesh", () => {
     expect(clear).not.toHaveBeenCalled();
 
     let release;
-    mesh.signalPromises.set( "queued", new Promise((resolve) => { release = resolve; })
+    mesh.signalPromises.set(
+      "queued",
+      new Promise((resolve) => {
+        release = resolve;
+      })
     );
     const queued = mesh.accept("queued", { candidate: "ice" });
     mesh.peerVersions.set("queued", 1);
@@ -1077,8 +1124,9 @@ describe("online voice mesh", () => {
     const mesh = makeMesh();
     expect(await mesh.accept("guest", [])).toBe(false);
     expect(mesh.peers.has("guest")).toBe(false);
-    expect( await mesh.accept("answer", { description: { type: "answer", sdp: "answer" } })
-    ).toBe(true);
+    expect(await mesh.accept("answer", { description: { type: "answer", sdp: "answer" } })).toBe(
+      true
+    );
     expect(FakePeer.instances.at(-1).addIceCandidate).not.toHaveBeenCalled();
   });
 
@@ -1087,7 +1135,11 @@ describe("online voice mesh", () => {
     globalThis.RTCPeerConnection = class DeferredAnswerPeer extends FakePeer {
       constructor(configuration) {
         super(configuration);
-        this.createAnswer = vi.fn( () => new Promise((resolve) => { release = resolve; })
+        this.createAnswer = vi.fn(
+          () =>
+            new Promise((resolve) => {
+              release = resolve;
+            })
         );
       }
     };
@@ -1105,8 +1157,7 @@ describe("online voice mesh", () => {
     vi.useFakeTimers();
     const mesh = makeMesh();
     mesh.channels.set("guest", { readyState: "open" });
-    expect(() => mesh.setupDataChannel("guest", new FakeChannel())
-    ).not.toThrow();
+    expect(() => mesh.setupDataChannel("guest", new FakeChannel())).not.toThrow();
     const timer = mesh.createIncomingTransferTimer("missing", "t");
     expect(() => vi.advanceTimersByTime(30_000)).not.toThrow();
     clearTimeout(timer);
@@ -1117,8 +1168,7 @@ describe("online voice mesh", () => {
   });
 
   test("uses exact generated transfer ids and accepts the maximum file size", async () => {
-    const cryptoDescriptor = Object.getOwnPropertyDescriptor( globalThis, "crypto"
-    );
+    const cryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, "crypto");
     Object.defineProperty(globalThis, "crypto", {
       configurable: true,
       value: { randomUUID: () => "exact-uuid" }
@@ -1127,11 +1177,11 @@ describe("online voice mesh", () => {
     const channel = new FakeChannel();
     mesh.setupDataChannel("guest", channel);
     const sending = mesh.sendFile("guest", new Blob([]), null);
-    await vi.waitFor(() => expect(mesh.pendingTransferConfirmations.size).toBe(1)
-    );
-    expect(JSON.parse(channel.send.mock.calls[0][0]).transferId).toBe( "exact-uuid"
-    );
-    channel.onmessage({ data: JSON.stringify({ type: "file-complete", transferId: "exact-uuid" }) });
+    await vi.waitFor(() => expect(mesh.pendingTransferConfirmations.size).toBe(1));
+    expect(JSON.parse(channel.send.mock.calls[0][0]).transferId).toBe("exact-uuid");
+    channel.onmessage({
+      data: JSON.stringify({ type: "file-complete", transferId: "exact-uuid" })
+    });
     await sending;
 
     Object.defineProperty(globalThis, "crypto", { configurable: true, value: {} });
@@ -1141,18 +1191,15 @@ describe("online voice mesh", () => {
     const fallbackMesh = makeMesh();
     fallbackMesh.setupDataChannel("fallback", fallbackChannel);
     const fallback = fallbackMesh.sendFile("fallback", new Blob([]));
-    await vi.waitFor(() => expect(fallbackMesh.pendingTransferConfirmations.size).toBe(1)
-    );
-    expect(JSON.parse(fallbackChannel.send.mock.calls[0][0]).transferId).toBe( "1000-8"
-    );
+    await vi.waitFor(() => expect(fallbackMesh.pendingTransferConfirmations.size).toBe(1));
+    expect(JSON.parse(fallbackChannel.send.mock.calls[0][0]).transferId).toBe("1000-8");
     fallbackChannel.onmessage({
       data: JSON.stringify({ type: "file-complete", transferId: "1000-8" })
     });
     await fallback;
     date.mockRestore();
     random.mockRestore();
-    if (cryptoDescriptor)
-      Object.defineProperty(globalThis, "crypto", cryptoDescriptor);
+    if (cryptoDescriptor) Object.defineProperty(globalThis, "crypto", cryptoDescriptor);
 
     const maximum = Object.create(Blob.prototype);
     Object.defineProperties(maximum, { size: { value: 512 * 1024 * 1024 }, type: { value: "" } });
@@ -1169,7 +1216,9 @@ describe("online voice mesh", () => {
     const channel = new FakeChannel();
     mesh.onTransferProgress = vi.fn();
     mesh.setupDataChannel("host", channel);
-    channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "t", size: 1_000 }) });
+    channel.onmessage({
+      data: JSON.stringify({ type: "file-start", transferId: "t", size: 1_000 })
+    });
     channel.onmessage({ data: new Uint8Array([1]) });
     const afterFirst = mesh.onTransferProgress.mock.calls.length;
     channel.onmessage({ data: new Uint8Array([1]) });
@@ -1244,12 +1293,12 @@ describe("online voice mesh", () => {
     mesh.setupDataChannel("guest", channel);
     const payload = new Blob([], { type: `x/${"a".repeat(300)}` });
     const sending = mesh.sendFile("guest", payload);
-    await vi.waitFor(() => expect(mesh.pendingTransferConfirmations.size).toBe(1)
-    );
+    await vi.waitFor(() => expect(mesh.pendingTransferConfirmations.size).toBe(1));
     const start = JSON.parse(channel.send.mock.calls[0][0]);
     expect(start.mimeType).toHaveLength(255);
-    expect( channel.send.mock.calls.filter(([value]) => value instanceof ArrayBuffer)
-    ).toHaveLength(0);
+    expect(channel.send.mock.calls.filter(([value]) => value instanceof ArrayBuffer)).toHaveLength(
+      0
+    );
     channel.onmessage({
       data: JSON.stringify({ type: "file-complete", transferId: start.transferId })
     });
@@ -1263,8 +1312,7 @@ describe("online voice mesh", () => {
     const channel = new FakeChannel();
     mesh.setupDataChannel("guest", channel);
     const sending = mesh.sendFile("guest", new Blob([]));
-    await vi.waitFor(() => expect(mesh.pendingTransferConfirmations.size).toBe(1)
-    );
+    await vi.waitFor(() => expect(mesh.pendingTransferConfirmations.size).toBe(1));
     const transferId = [...mesh.pendingTransferConfirmations.keys()][0];
     expect(transferId).toMatch(/^\d+-[\da-f]+$/u);
     channel.onmessage({ data: JSON.stringify({ type: "file-complete", transferId }) });
@@ -1305,10 +1353,10 @@ describe("online voice mesh", () => {
           };
         }
       }
-      await expect( mesh.sendFile("guest", new RestoringBlob(["x"]))
-      ).rejects.toThrow("Передача файла отменена");
-      expect( channel.send.mock.calls.some(([value]) => value instanceof ArrayBuffer)
-      ).toBe(false);
+      await expect(mesh.sendFile("guest", new RestoringBlob(["x"]))).rejects.toThrow(
+        "Передача файла отменена"
+      );
+      expect(channel.send.mock.calls.some(([value]) => value instanceof ArrayBuffer)).toBe(false);
     }
   );
 
@@ -1318,13 +1366,12 @@ describe("online voice mesh", () => {
     const channel = new FakeChannel();
     mesh.setupDataChannel("host", channel);
     channel.onmessage({ data: JSON.stringify({ type: "unknown" }) });
-    expect(() => channel.onmessage({ data: JSON.stringify({ type: "__proto__" }) })
-    ).not.toThrow();
+    expect(() => channel.onmessage({ data: JSON.stringify({ type: "__proto__" }) })).not.toThrow();
     expect(channel.send).not.toHaveBeenCalled();
     expect(mesh.incomingFiles.size).toBe(0);
 
     channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "t", size: 0 }) });
-    const timer = mesh.incomingFiles.get("host").timer;
+    const { timer } = mesh.incomingFiles.get("host");
     const clear = vi.spyOn(globalThis, "clearTimeout");
     channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "t" }) });
     expect(clear).toHaveBeenCalledWith(timer);
@@ -1365,10 +1412,10 @@ describe("online voice mesh", () => {
           };
         }
       }
-      await expect( mesh.sendFile("guest", new InvalidatingBlob(["x"]))
-      ).rejects.toThrow("Передача файла отменена");
-      expect( channel.send.mock.calls.some(([value]) => value instanceof ArrayBuffer)
-      ).toBe(false);
+      await expect(mesh.sendFile("guest", new InvalidatingBlob(["x"]))).rejects.toThrow(
+        "Передача файла отменена"
+      );
+      expect(channel.send.mock.calls.some(([value]) => value instanceof ArrayBuffer)).toBe(false);
     }
   );
 
@@ -1440,7 +1487,11 @@ describe("online voice mesh", () => {
       configurable: true,
       value: {
         mediaDevices: {
-          getUserMedia: vi.fn( () => new Promise((resolve) => { resolveCapture = resolve; })
+          getUserMedia: vi.fn(
+            () =>
+              new Promise((resolve) => {
+                resolveCapture = resolve;
+              })
           )
         }
       }
@@ -1517,10 +1568,13 @@ describe("online voice mesh", () => {
       getParameters: () => ({ encodings: [{}] }),
       setParameters: vi.fn().mockRejectedValue(new Error("unsupported"))
     };
-    await expect( mesh.optimizeAudioSenders({ getSenders: () => [configured, rejected, {}] })
+    await expect(
+      mesh.optimizeAudioSenders({ getSenders: () => [configured, rejected, {}] })
     ).resolves.toBeUndefined();
-    expect( configured.setParameters.mock.calls[0][0].encodings[0]
-    ).toMatchObject({ maxBitrate: 256_000, networkPriority: "high" });
+    expect(configured.setParameters.mock.calls[0][0].encodings[0]).toMatchObject({
+      maxBitrate: 256_000,
+      networkPriority: "high"
+    });
   });
 
   test("invites once and sends the current local description", async () => {
@@ -1551,17 +1605,15 @@ describe("online voice mesh", () => {
     expect(await mesh.accept("guest", [])).toBe(false);
     expect(await mesh.accept("guest", { candidate: "one" })).toBe(true);
     expect(await mesh.accept("guest", { candidate: "two" })).toBe(true);
-    expect( await mesh.accept("guest", { description: { type: "offer", sdp: "x" } })
-    ).toBe(true);
+    expect(await mesh.accept("guest", { description: { type: "offer", sdp: "x" } })).toBe(true);
     const peer = FakePeer.instances[0];
-    expect(peer.addIceCandidate.mock.calls.map(([value]) => value)).toEqual([ "one", "two" ]);
+    expect(peer.addIceCandidate.mock.calls.map(([value]) => value)).toEqual(["one", "two"]);
     expect(peer.createAnswer).toHaveBeenCalled();
     expect(mesh.roomClient.send).toHaveBeenLastCalledWith("signal", {
       targetId: "guest",
       signal: { description: peer.localDescription }
     });
-    expect( await mesh.accept("guest", { description: { type: "answer" } })
-    ).toBe(true);
+    expect(await mesh.accept("guest", { description: { type: "answer" } })).toBe(true);
     expect(await mesh.accept("guest", {})).toBe(false);
   });
 
@@ -1587,8 +1639,7 @@ describe("online voice mesh", () => {
     channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "transfer" }) });
     await vi.waitFor(() => expect(received).toHaveBeenCalled());
     await vi.waitFor(() =>
-      expect( progress.mock.calls.some(([event]) => event.stage === "complete")
-      ).toBe(true)
+      expect(progress.mock.calls.some(([event]) => event.stage === "complete")).toBe(true)
     );
     expect(progress.mock.calls.map(([event]) => event.stage)).toEqual(
       expect.arrayContaining(["receiving", "importing", "complete"])
@@ -1608,11 +1659,12 @@ describe("online voice mesh", () => {
     channel.onmessage({ data: "x".repeat(20_000) });
     channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "", size: -1 }) });
     channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: 1, size: 1 }) });
-    channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "short", size: 2 }) });
+    channel.onmessage({
+      data: JSON.stringify({ type: "file-start", transferId: "short", size: 2 })
+    });
     channel.onmessage({ data: new Uint8Array([1]) });
     channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "short" }) });
-    expect(JSON.parse(channel.send.mock.calls.at(-1)[0]).type).toBe( "file-error"
-    );
+    expect(JSON.parse(channel.send.mock.calls.at(-1)[0]).type).toBe("file-error");
 
     mesh.onFile = vi.fn().mockRejectedValue(new Error("import failed"));
     channel.onmessage({
@@ -1622,10 +1674,11 @@ describe("online voice mesh", () => {
     channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "failed" }) });
     await Promise.resolve();
     await Promise.resolve();
-    expect(JSON.parse(channel.send.mock.calls.at(-1)[0]).type).toBe( "file-error"
-    );
+    expect(JSON.parse(channel.send.mock.calls.at(-1)[0]).type).toBe("file-error");
 
-    mesh.onFile = vi.fn(() => { throw new Error("synchronous import failure"); });
+    mesh.onFile = vi.fn(() => {
+      throw new Error("synchronous import failure");
+    });
     channel.onmessage({
       data: JSON.stringify({ type: "file-start", transferId: "sync-failed", size: 1 })
     });
@@ -1698,13 +1751,14 @@ describe("online voice mesh", () => {
     channel.onmessage({ data: new Uint8Array([1]) });
   });
 
-
   test("rejects transfer admission before accepting chunks and never acknowledges a skipped import", async () => {
     const mesh = makeMesh();
     const channel = new FakeChannel();
     mesh.canAcceptFile = vi.fn(() => false);
     mesh.setupDataChannel("guest", channel);
-    channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "denied", size: 3 }) });
+    channel.onmessage({
+      data: JSON.stringify({ type: "file-start", transferId: "denied", size: 3 })
+    });
     expect(mesh.incomingFiles.has("guest")).toBe(false);
     expect(channel.send).toHaveBeenCalledWith(expect.stringContaining('"type":"file-error"'));
     channel.onmessage({ data: new Uint8Array([1, 2, 3]) });
@@ -1712,14 +1766,23 @@ describe("online voice mesh", () => {
 
     mesh.canAcceptFile = vi.fn(() => true);
     mesh.onFile = vi.fn().mockResolvedValue(undefined);
-    channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "skipped", size: 1 }) });
+    channel.onmessage({
+      data: JSON.stringify({ type: "file-start", transferId: "skipped", size: 1 })
+    });
     channel.onmessage({ data: new Uint8Array([1]) });
     channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "skipped" }) });
-    await vi.waitFor(() => expect(channel.send.mock.calls.map(([value]) =>
-      typeof value === "string" ? JSON.parse(value) : null
-    ).some((value) => value?.type === "file-error" && value.transferId === "skipped")).toBe(true));
-    expect(channel.send.mock.calls.map(([value]) => typeof value === "string" ? JSON.parse(value) : null)
-      .some((value) => value?.type === "file-complete" && value.transferId === "skipped")).toBe(false);
+    await vi.waitFor(() =>
+      expect(
+        channel.send.mock.calls
+          .map(([value]) => (typeof value === "string" ? JSON.parse(value) : null))
+          .some((value) => value?.type === "file-error" && value.transferId === "skipped")
+      ).toBe(true)
+    );
+    expect(
+      channel.send.mock.calls
+        .map(([value]) => (typeof value === "string" ? JSON.parse(value) : null))
+        .some((value) => value?.type === "file-complete" && value.transferId === "skipped")
+    ).toBe(false);
   });
 
   test("rejects a large no-OPFS transfer at file-start", () => {
@@ -1727,10 +1790,15 @@ describe("online voice mesh", () => {
     const channel = new FakeChannel();
     mesh.canAcceptFile = vi.fn(() => true);
     mesh.setupDataChannel("host", channel);
-    channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "large", size: 65 * 1024 * 1024 }) });
+    channel.onmessage({
+      data: JSON.stringify({ type: "file-start", transferId: "large", size: 65 * 1024 * 1024 })
+    });
     expect(mesh.incomingFiles.has("host")).toBe(false);
-    expect(channel.send.mock.calls.map(([value]) => typeof value === "string" ? JSON.parse(value) : null))
-      .toContainEqual(expect.objectContaining({ type: "file-error", transferId: "large" }));
+    expect(
+      channel.send.mock.calls.map(([value]) =>
+        typeof value === "string" ? JSON.parse(value) : null
+      )
+    ).toContainEqual(expect.objectContaining({ type: "file-error", transferId: "large" }));
   });
   test("sends a file and waits for the matching receiver confirmation", async () => {
     const mesh = makeMesh();
@@ -1746,8 +1814,7 @@ describe("online voice mesh", () => {
     await vi.waitFor(() => {
       expect(
         channel.send.mock.calls.some(
-          ([value]) =>
-            typeof value === "string" && JSON.parse(value).type === "file-end"
+          ([value]) => typeof value === "string" && JSON.parse(value).type === "file-end"
         )
       ).toBe(true);
     });
@@ -1764,16 +1831,16 @@ describe("online voice mesh", () => {
       percent: 100
     });
 
-    const cryptoDescriptor = Object.getOwnPropertyDescriptor( globalThis, "crypto"
-    );
+    const cryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, "crypto");
     Object.defineProperty(globalThis, "crypto", { configurable: true, value: {} });
     const fallback = mesh.sendFile("guest", new Blob(["x"]));
-    await vi.waitFor(() => { expect(mesh.pendingTransferConfirmations.size).toBe(1); });
+    await vi.waitFor(() => {
+      expect(mesh.pendingTransferConfirmations.size).toBe(1);
+    });
     const fallbackId = [...mesh.pendingTransferConfirmations.keys()][0];
     channel.onmessage({ data: JSON.stringify({ type: "file-complete", transferId: fallbackId }) });
     await expect(fallback).resolves.toBeUndefined();
-    if (cryptoDescriptor)
-      Object.defineProperty(globalThis, "crypto", cryptoDescriptor);
+    if (cryptoDescriptor) Object.defineProperty(globalThis, "crypto", cryptoDescriptor);
   });
 
   test("validates outbound files and cleans confirmation when final send throws", async () => {
@@ -1786,8 +1853,7 @@ describe("online voice mesh", () => {
       if (sends === 2) throw new Error("send failed");
     });
     mesh.setupDataChannel("guest", channel);
-    await expect(mesh.sendFile("guest", new Blob([]))).rejects.toThrow( "send failed"
-    );
+    await expect(mesh.sendFile("guest", new Blob([]))).rejects.toThrow("send failed");
     expect(mesh.pendingTransferConfirmations.size).toBe(0);
   });
 
@@ -1800,7 +1866,7 @@ describe("online voice mesh", () => {
     first.onmessage({
       data: JSON.stringify({ type: "file-start", transferId: "transfer", size: 10 })
     });
-    const timer = mesh.incomingFiles.get("guest").timer;
+    const { timer } = mesh.incomingFiles.get("guest");
     const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
     mesh.setupDataChannel("guest", second);
     expect(first.close).toHaveBeenCalled();
@@ -1897,8 +1963,7 @@ describe("online voice mesh", () => {
       data: JSON.stringify({ type: "file-start", transferId: "stalled", size: 10 })
     });
     vi.advanceTimersByTime(30_000);
-    expect(JSON.parse(channel.send.mock.calls.at(-1)[0]).type).toBe( "file-error"
-    );
+    expect(JSON.parse(channel.send.mock.calls.at(-1)[0]).type).toBe("file-error");
     channel.onclose();
     expect(mesh.channels.has("guest")).toBe(false);
     channel.onerror();
@@ -1908,24 +1973,20 @@ describe("online voice mesh", () => {
     vi.useFakeTimers();
     const mesh = makeMesh();
     mesh.channels.set("open", new FakeChannel());
-    await expect(mesh.waitForDataChannel("open")).resolves.toBe( mesh.channels.get("open")
-    );
+    await expect(mesh.waitForDataChannel("open")).resolves.toBe(mesh.channels.get("open"));
     mesh.channels.set("closed", new FakeChannel("closed"));
-    await expect(mesh.waitForDataChannel("closed")).rejects.toThrow( "Канал передачи песни закрыт"
-    );
+    await expect(mesh.waitForDataChannel("closed")).rejects.toThrow("Канал передачи песни закрыт");
     await expect(mesh.waitForDataChannel("missing", 0)).rejects.toThrow(
       "Канал передачи песни не готов"
     );
     const cancelled = mesh.waitForDataChannel("missing", 100, -1);
     await expect(cancelled).rejects.toThrow("Передача файла отменена");
     const timeout = mesh.waitForDataChannel("missing", 100);
-    const timeoutResult = expect(timeout).rejects.toThrow( "Канал передачи песни не готов"
-    );
+    const timeoutResult = expect(timeout).rejects.toThrow("Канал передачи песни не готов");
     await vi.advanceTimersByTimeAsync(100);
     await timeoutResult;
     const invalidTimeout = mesh.waitForDataChannel("missing", "bad");
-    const invalidResult = expect(invalidTimeout).rejects.toThrow( "Канал передачи песни не готов"
-    );
+    const invalidResult = expect(invalidTimeout).rejects.toThrow("Канал передачи песни не готов");
     await vi.advanceTimersByTimeAsync(15_000);
     await invalidResult;
   });
@@ -1945,8 +2006,7 @@ describe("online voice mesh", () => {
     const channel = new FakeChannel();
     mesh.setupDataChannel("guest", channel);
     const sending = mesh.sendFile("guest", new Blob([]));
-    const result = expect(sending).rejects.toThrow( "Участник не подтвердил получение песни"
-    );
+    const result = expect(sending).rejects.toThrow("Участник не подтвердил получение песни");
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(5 * 60_000);
     await result;
@@ -1955,8 +2015,7 @@ describe("online voice mesh", () => {
   test("recovers a failed signal queue and stops an active local stream", async () => {
     const mesh = makeMesh();
     mesh.signalPromises.set("guest", Promise.reject(new Error("old signal")));
-    await expect(mesh.accept("guest", { candidate: "next" })).resolves.toBe( true
-    );
+    await expect(mesh.accept("guest", { candidate: "next" })).resolves.toBe(true);
     const localTrack = track("local");
     mesh.stream = stream([localTrack]);
     mesh.stop();
@@ -1969,7 +2028,11 @@ describe("online voice mesh", () => {
     globalThis.RTCPeerConnection = class DeferredPeer extends FakePeer {
       constructor(configuration) {
         super(configuration);
-        this.createOffer = vi.fn( () => new Promise((resolve) => { resolveOffer = resolve; })
+        this.createOffer = vi.fn(
+          () =>
+            new Promise((resolve) => {
+              resolveOffer = resolve;
+            })
         );
       }
     };
@@ -1981,16 +2044,16 @@ describe("online voice mesh", () => {
     globalThis.RTCPeerConnection = FakePeer;
     const current = mesh.createPeer("current");
     current.remoteDescription = { type: "offer" };
-    await expect(mesh.accept("current", { candidate: "ice" })).resolves.toBe( true
-    );
+    await expect(mesh.accept("current", { candidate: "ice" })).resolves.toBe(true);
     expect(current.addIceCandidate).toHaveBeenCalledWith("ice");
   });
 
   test("rejects excessive ICE candidates and invalid transfer messages", async () => {
     const mesh = makeMesh();
     mesh.pendingCandidates.set("guest", Array(256).fill("ice"));
-    await expect( mesh.accept("guest", { candidate: "overflow" })
-    ).rejects.toThrow("Получено слишком много ICE-кандидатов");
+    await expect(mesh.accept("guest", { candidate: "overflow" })).rejects.toThrow(
+      "Получено слишком много ICE-кандидатов"
+    );
     expect(mesh.peers.has("guest")).toBe(false);
 
     const channel = new FakeChannel();
@@ -2095,8 +2158,7 @@ describe("online voice mesh", () => {
     mesh.disconnectTimers.set("guest", 22);
     mesh.createPeer("guest");
     mesh.removePeer("guest");
-    expect(mesh.pendingTransferConfirmations.get("other-transfer")).toBe( pending
-    );
+    expect(mesh.pendingTransferConfirmations.get("other-transfer")).toBe(pending);
   });
 
   test("cancels a file transfer when its channel closes after the last chunk", async () => {
@@ -2106,7 +2168,8 @@ describe("online voice mesh", () => {
       if (payload instanceof ArrayBuffer) channel.readyState = "closed";
     });
     mesh.setupDataChannel("guest", channel);
-    await expect(mesh.sendFile("guest", new Blob(["x"]))).rejects.toThrow( "Передача файла отменена"
+    await expect(mesh.sendFile("guest", new Blob(["x"]))).rejects.toThrow(
+      "Передача файла отменена"
     );
   });
 
@@ -2120,8 +2183,7 @@ describe("online voice mesh", () => {
     await Promise.resolve();
     channel.bufferedAmount = 0;
     channel.readyState = "closed";
-    const pressureResult = expect(pressured).rejects.toThrow( "Передача файла отменена"
-    );
+    const pressureResult = expect(pressured).rejects.toThrow("Передача файла отменена");
     await vi.advanceTimersByTimeAsync(20);
     await pressureResult;
     vi.useRealTimers();
@@ -2139,8 +2201,9 @@ describe("online voice mesh", () => {
         };
       }
     }
-    await expect( nextMesh.sendFile("guest", new ClosingBlob(["x"]))
-    ).rejects.toThrow("Передача файла отменена");
+    await expect(nextMesh.sendFile("guest", new ClosingBlob(["x"]))).rejects.toThrow(
+      "Передача файла отменена"
+    );
   });
 
   test("aborts a transfer whose receiver never drains backpressure", async () => {
@@ -2175,12 +2238,14 @@ describe("online voice mesh", () => {
     await expect(makeMesh().invite("guest")).resolves.toBe(false);
 
     let rejectOffer;
-    globalThis.RTCPeerConnection = class StaleFailingOfferPeer extends (
-      FakePeer
-    ) {
+    globalThis.RTCPeerConnection = class StaleFailingOfferPeer extends FakePeer {
       constructor(configuration) {
         super(configuration);
-        this.createOffer = vi.fn( () => new Promise((_resolve, reject) => { rejectOffer = reject; })
+        this.createOffer = vi.fn(
+          () =>
+            new Promise((_resolve, reject) => {
+              rejectOffer = reject;
+            })
         );
       }
     };
@@ -2195,16 +2260,23 @@ describe("online voice mesh", () => {
     const mesh = makeMesh();
     const channel = new FakeChannel();
     channel.bufferedAmount = 600 * 1024;
-    channel.send.mockImplementationOnce(() => { mesh.lifecycleVersion += 1; });
+    channel.send.mockImplementationOnce(() => {
+      mesh.lifecycleVersion += 1;
+    });
     mesh.setupDataChannel("guest", channel);
-    await expect(mesh.sendFile("guest", new Blob(["x"]))).rejects.toThrow( "Передача файла отменена"
+    await expect(mesh.sendFile("guest", new Blob(["x"]))).rejects.toThrow(
+      "Передача файла отменена"
     );
   });
 
   test("cancels queued and direct ICE signals for replaced peers", async () => {
     const mesh = makeMesh();
     let releasePrevious;
-    mesh.signalPromises.set( "queued", new Promise((resolve) => { releasePrevious = resolve; })
+    mesh.signalPromises.set(
+      "queued",
+      new Promise((resolve) => {
+        releasePrevious = resolve;
+      })
     );
     const queued = mesh.accept("queued", { candidate: "ice" });
     mesh.removePeer("queued");
@@ -2228,7 +2300,9 @@ describe("online voice mesh", () => {
         super(configuration);
         this.setRemoteDescription = vi.fn(
           () =>
-            new Promise((resolve) => { resolveRemote = resolve; })
+            new Promise((resolve) => {
+              resolveRemote = resolve;
+            })
         );
       }
     };
@@ -2244,7 +2318,11 @@ describe("online voice mesh", () => {
     globalThis.RTCPeerConnection = class DeferredIcePeer extends FakePeer {
       constructor(configuration) {
         super(configuration);
-        this.addIceCandidate = vi.fn( () => new Promise((resolve) => { resolveIce = resolve; })
+        this.addIceCandidate = vi.fn(
+          () =>
+            new Promise((resolve) => {
+              resolveIce = resolve;
+            })
         );
       }
     };
@@ -2261,7 +2339,11 @@ describe("online voice mesh", () => {
     globalThis.RTCPeerConnection = class DeferredAnswerPeer extends FakePeer {
       constructor(configuration) {
         super(configuration);
-        this.createAnswer = vi.fn( () => new Promise((resolve) => { resolveAnswer = resolve; })
+        this.createAnswer = vi.fn(
+          () =>
+            new Promise((resolve) => {
+              resolveAnswer = resolve;
+            })
         );
       }
     };
@@ -2272,16 +2354,15 @@ describe("online voice mesh", () => {
     resolveAnswer({ type: "answer" });
     await expect(answer).resolves.toBe(false);
 
-    globalThis.RTCPeerConnection = class MissingLocalAnswerPeer extends (
-      FakePeer
-    ) {
+    globalThis.RTCPeerConnection = class MissingLocalAnswerPeer extends FakePeer {
       constructor(configuration) {
         super(configuration);
         this.setLocalDescription = vi.fn().mockResolvedValue(undefined);
       }
     };
-    await expect( makeMesh().accept("missing", { description: { type: "offer" } })
-    ).resolves.toBe(false);
+    await expect(makeMesh().accept("missing", { description: { type: "offer" } })).resolves.toBe(
+      false
+    );
   });
 });
 
@@ -2312,18 +2393,22 @@ test("receiver write credits bound sender in-flight payload to the advertised wi
     expect(chunks).toHaveLength(16);
   });
   await new Promise((resolve) => setTimeout(resolve, 5));
-  expect(channel.send.mock.calls.filter(([value]) => value instanceof ArrayBuffer)).toHaveLength(16);
+  expect(channel.send.mock.calls.filter(([value]) => value instanceof ArrayBuffer)).toHaveLength(
+    16
+  );
   const start = channel.send.mock.calls
-    .map(([value]) => typeof value === "string" ? JSON.parse(value) : null)
+    .map(([value]) => (typeof value === "string" ? JSON.parse(value) : null))
     .find((value) => value?.type === "file-start");
   for (let i = 0; i < 16; i += 1) {
     channel.onmessage({
       data: JSON.stringify({ type: "file-credit", transferId: start.transferId, bytes: 32 * 1024 })
     });
   }
-  await vi.waitFor(() => expect(
-    channel.send.mock.calls.filter(([value]) => value instanceof ArrayBuffer)
-  ).toHaveLength(32));
+  await vi.waitFor(() =>
+    expect(channel.send.mock.calls.filter(([value]) => value instanceof ArrayBuffer)).toHaveLength(
+      32
+    )
+  );
   for (let i = 0; i < 16; i += 1) {
     channel.onmessage({
       data: JSON.stringify({ type: "file-credit", transferId: start.transferId, bytes: 32 * 1024 })
@@ -2331,11 +2416,13 @@ test("receiver write credits bound sender in-flight payload to the advertised wi
   }
   await vi.waitFor(() => {
     const end = channel.send.mock.calls
-      .map(([value]) => typeof value === "string" ? JSON.parse(value) : null)
+      .map(([value]) => (typeof value === "string" ? JSON.parse(value) : null))
       .find((value) => value?.type === "file-end");
     expect(end).toBeTruthy();
   });
-  channel.onmessage({ data: JSON.stringify({ type: "file-complete", transferId: start.transferId }) });
+  channel.onmessage({
+    data: JSON.stringify({ type: "file-complete", transferId: start.transferId })
+  });
   await expect(transfer).resolves.toBeUndefined();
 });
 
@@ -2347,7 +2434,11 @@ test("channel close cancels a credit waiter immediately", async () => {
   mesh.waitForDataChannel = vi.fn().mockResolvedValue(channel);
   const transfer = mesh.sendFile("guest", new Blob([new Uint8Array(1024 * 1024)]));
   await vi.waitFor(() => expect(mesh.pendingTransferCredits.size).toBe(1));
-  await vi.waitFor(() => expect(channel.send.mock.calls.filter(([value]) => value instanceof ArrayBuffer)).toHaveLength(16));
+  await vi.waitFor(() =>
+    expect(channel.send.mock.calls.filter(([value]) => value instanceof ArrayBuffer)).toHaveLength(
+      16
+    )
+  );
   channel.readyState = "closed";
   channel.onclose();
   await expect(transfer).rejects.toThrow("Канал передачи песни закрыт");
@@ -2365,11 +2456,12 @@ test("channel replacement cancels admission, credit and confirmation owned by th
     mesh.waitForDataChannel = vi.fn().mockResolvedValue(oldChannel);
     const size = phase === "credit" ? 1024 * 1024 : 1;
     const transfer = mesh.sendFile("guest", new Blob([new Uint8Array(size)]));
-    const store = phase === "admission"
-      ? mesh.pendingTransferAdmissions
-      : phase === "credit"
-        ? mesh.pendingTransferCredits
-        : mesh.pendingTransferConfirmations;
+    const store =
+      phase === "admission"
+        ? mesh.pendingTransferAdmissions
+        : phase === "credit"
+          ? mesh.pendingTransferCredits
+          : mesh.pendingTransferConfirmations;
     await vi.waitFor(() => expect(store.size).toBe(1));
     mesh.setupDataChannel("guest", nextChannel);
     await expect(transfer).rejects.toThrow("Канал передачи песни закрыт");
@@ -2386,10 +2478,22 @@ test("stop rejects orphan outbound transfer registries instead of clearing them 
   const rejectConfirmation = vi.fn();
   const rejectCredit = vi.fn();
   const timer = setTimeout(() => {}, 60_000);
-  mesh.pendingTransferAdmissions.set("a", { participantId: "gone", channel: {}, timer, reject: rejectAdmission });
-  mesh.pendingTransferConfirmations.set("b", { participantId: "gone", channel: {}, timer, reject: rejectConfirmation });
+  mesh.pendingTransferAdmissions.set("a", {
+    participantId: "gone",
+    channel: {},
+    timer,
+    reject: rejectAdmission
+  });
+  mesh.pendingTransferConfirmations.set("b", {
+    participantId: "gone",
+    channel: {},
+    timer,
+    reject: rejectConfirmation
+  });
   mesh.pendingTransferCredits.set("c", {
-    participantId: "gone", channel: {}, waiters: [{ timer, reject: rejectCredit }]
+    participantId: "gone",
+    channel: {},
+    waiters: [{ timer, reject: rejectCredit }]
   });
   mesh.stop();
   expect(rejectAdmission).toHaveBeenCalledOnce();
@@ -2431,9 +2535,13 @@ test("stale old-channel binary never mutates the replacement incoming transfer",
   const oldChannel = new FakeChannel();
   const nextChannel = new FakeChannel();
   mesh.setupDataChannel("host", oldChannel);
-  oldChannel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "old", size: 1 }) });
+  oldChannel.onmessage({
+    data: JSON.stringify({ type: "file-start", transferId: "old", size: 1 })
+  });
   mesh.setupDataChannel("host", nextChannel);
-  nextChannel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "new", size: 1 }) });
+  nextChannel.onmessage({
+    data: JSON.stringify({ type: "file-start", transferId: "new", size: 1 })
+  });
   const transfer = mesh.incomingFiles.get("host");
   const write = vi.spyOn(transfer.sink, "write");
   oldChannel.onmessage({ data: new Uint8Array([7]).buffer });
@@ -2448,9 +2556,13 @@ test("stale old-channel file-end never destroys the replacement incoming transfe
   const oldChannel = new FakeChannel();
   const nextChannel = new FakeChannel();
   mesh.setupDataChannel("host", oldChannel);
-  oldChannel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "old", size: 1 }) });
+  oldChannel.onmessage({
+    data: JSON.stringify({ type: "file-start", transferId: "old", size: 1 })
+  });
   mesh.setupDataChannel("host", nextChannel);
-  nextChannel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "new", size: 1 }) });
+  nextChannel.onmessage({
+    data: JSON.stringify({ type: "file-start", transferId: "new", size: 1 })
+  });
   const transfer = mesh.incomingFiles.get("host");
   const cleanup = vi.spyOn(transfer.sink, "cleanup");
   oldChannel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "old" }) });
@@ -2462,7 +2574,9 @@ test("invalid current-channel chunk rejects immediately and cleans the transfer 
   const mesh = makeMesh();
   const channel = new FakeChannel();
   mesh.setupDataChannel("host", channel);
-  channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "oversized", size: 1 }) });
+  channel.onmessage({
+    data: JSON.stringify({ type: "file-start", transferId: "oversized", size: 1 })
+  });
   const transfer = mesh.incomingFiles.get("host");
   const cleanup = vi.spyOn(transfer.sink, "cleanup");
   channel.send.mockClear();
@@ -2477,17 +2591,25 @@ test("invalid current-channel chunk rejects immediately and cleans the transfer 
 test("channel replacement cancels pending incoming admission without blocking the new channel", async () => {
   const mesh = makeMesh();
   let resolveOld;
-  mesh.canAcceptFile = vi.fn((_participantId, metadata) => metadata.transferId === "old"
-    ? new Promise((resolve) => { resolveOld = resolve; })
-    : true);
+  mesh.canAcceptFile = vi.fn((_participantId, metadata) =>
+    metadata.transferId === "old"
+      ? new Promise((resolve) => {
+          resolveOld = resolve;
+        })
+      : true
+  );
   const oldChannel = new FakeChannel();
   const nextChannel = new FakeChannel();
   mesh.setupDataChannel("host", oldChannel);
-  oldChannel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "old", size: 1 }) });
+  oldChannel.onmessage({
+    data: JSON.stringify({ type: "file-start", transferId: "old", size: 1 })
+  });
   await vi.waitFor(() => expect(mesh.incomingFileAdmissions.has("host")).toBe(true));
   mesh.setupDataChannel("host", nextChannel);
   expect(mesh.incomingFileAdmissions.has("host")).toBe(false);
-  nextChannel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "new", size: 1 }) });
+  nextChannel.onmessage({
+    data: JSON.stringify({ type: "file-start", transferId: "new", size: 1 })
+  });
   await vi.waitFor(() => expect(mesh.incomingFiles.get("host")?.metadata.transferId).toBe("new"));
   resolveOld(true);
   await Promise.resolve();
@@ -2497,7 +2619,9 @@ test("channel replacement cancels pending incoming admission without blocking th
 
 test("file-end keeps ownership while the final disk write is pending and channel close cancels it", async () => {
   let resolveWrite;
-  const pendingWrite = new Promise((resolve) => { resolveWrite = resolve; });
+  const pendingWrite = new Promise((resolve) => {
+    resolveWrite = resolve;
+  });
   const removeEntry = vi.fn().mockResolvedValue(undefined);
   const writable = {
     write: vi.fn(() => pendingWrite),
@@ -2517,7 +2641,9 @@ test("file-end keeps ownership while the final disk write is pending and channel
   const channel = new FakeChannel();
   mesh.onFile = vi.fn().mockResolvedValue(true);
   mesh.setupDataChannel("host", channel);
-  channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "pending-write", size: 1 }) });
+  channel.onmessage({
+    data: JSON.stringify({ type: "file-start", transferId: "pending-write", size: 1 })
+  });
   await vi.waitFor(() => expect(mesh.incomingFiles.has("host")).toBe(true));
   channel.onmessage({ data: new Uint8Array([1]).buffer });
   await vi.waitFor(() => expect(writable.write).toHaveBeenCalledOnce());
@@ -2534,7 +2660,9 @@ test("file-end keeps ownership while the final disk write is pending and channel
 
 test("mesh stop cancels post-file-end finalization before application handoff", async () => {
   let resolveWrite;
-  const pendingWrite = new Promise((resolve) => { resolveWrite = resolve; });
+  const pendingWrite = new Promise((resolve) => {
+    resolveWrite = resolve;
+  });
   const writable = {
     write: vi.fn(() => pendingWrite),
     close: vi.fn().mockResolvedValue(undefined),
@@ -2553,7 +2681,9 @@ test("mesh stop cancels post-file-end finalization before application handoff", 
   const channel = new FakeChannel();
   mesh.onFile = vi.fn().mockResolvedValue(true);
   mesh.setupDataChannel("host", channel);
-  channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "stop-finalize", size: 1 }) });
+  channel.onmessage({
+    data: JSON.stringify({ type: "file-start", transferId: "stop-finalize", size: 1 })
+  });
   await vi.waitFor(() => expect(mesh.incomingFiles.has("host")).toBe(true));
   channel.onmessage({ data: new Uint8Array([1]).buffer });
   await vi.waitFor(() => expect(writable.write).toHaveBeenCalledOnce());
@@ -2569,7 +2699,12 @@ test("receiver stays busy until finalization completes", async () => {
   let resolveImport;
   const mesh = makeMesh();
   const channel = new FakeChannel();
-  mesh.onFile = vi.fn(() => new Promise((resolve) => { resolveImport = resolve; }));
+  mesh.onFile = vi.fn(
+    () =>
+      new Promise((resolve) => {
+        resolveImport = resolve;
+      })
+  );
   mesh.setupDataChannel("host", channel);
   channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "one", size: 1 }) });
   channel.onmessage({ data: new Uint8Array([1]).buffer });
@@ -2602,7 +2737,9 @@ test("finalization timeout cleans a stalled transfer", async () => {
   const mesh = makeMesh();
   const channel = new FakeChannel();
   mesh.setupDataChannel("host", channel);
-  channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "timeout-finalize", size: 1 }) });
+  channel.onmessage({
+    data: JSON.stringify({ type: "file-start", transferId: "timeout-finalize", size: 1 })
+  });
   await vi.runAllTicks();
   await Promise.resolve();
   channel.onmessage({ data: new Uint8Array([1]).buffer });

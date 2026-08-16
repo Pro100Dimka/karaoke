@@ -90,7 +90,9 @@ describe("karaoke transport", () => {
     expect(props.sendYouTubeCommand).toHaveBeenCalledWith("playVideo");
     expect(props.setIsPlaying).toHaveBeenCalledWith(true);
     await waitFor(() =>
-      expect(JSON.parse(localStorage.getItem("karaoke-pending-recording-session"))).toEqual({ id: "session" })
+      expect(JSON.parse(localStorage.getItem("karaoke-pending-recording-session"))).toEqual({
+        id: "session"
+      })
     );
     expect(props.onlineRoom.syncCommand).toHaveBeenCalledWith(
       expect.objectContaining({ action: "play", songId: "song" })
@@ -125,13 +127,15 @@ describe("karaoke transport", () => {
   test("obeys explicit local-only playback commands", async () => {
     const props = createProps({ isPlaying: true });
     const hook = renderHook(() => useKaraokeTransport(props));
-    await expect( hook.result.current.togglePlay({ broadcast: false, forcePlaying: false })
+    await expect(
+      hook.result.current.togglePlay({ broadcast: false, forcePlaying: false })
     ).resolves.toBe(true);
     expect(props.setIsPlaying).toHaveBeenCalledWith(false);
     expect(props.onlineRoom.syncCommand).not.toHaveBeenCalled();
 
     props.setIsPlaying.mockClear();
-    await expect( hook.result.current.togglePlay({ broadcast: false, forcePlaying: true })
+    await expect(
+      hook.result.current.togglePlay({ broadcast: false, forcePlaying: true })
     ).resolves.toBe(true);
     expect(props.setIsPlaying).toHaveBeenCalledWith(true);
     expect(props.onlineRoom.syncCommand).not.toHaveBeenCalled();
@@ -140,8 +144,7 @@ describe("karaoke transport", () => {
   test("resumes a prepared recording without starting a replacement", async () => {
     const props = createProps({ recordingSessionId: "prepared" });
     const hook = renderHook(() => useKaraokeTransport(props));
-    await expect( hook.result.current.togglePlay({ forcePlaying: true })
-    ).resolves.toBe(true);
+    await expect(hook.result.current.togglePlay({ forcePlaying: true })).resolves.toBe(true);
     expect(api.resumeRecording).toHaveBeenCalledWith("prepared");
     expect(api.startRecording).not.toHaveBeenCalled();
     expect(props.setRecordingError).toHaveBeenCalledWith(null);
@@ -161,8 +164,7 @@ describe("karaoke transport", () => {
     const resumeProps = createProps({ recordingSessionId: "existing" });
     api.resumeRecording.mockRejectedValueOnce(new Error("resume failed"));
     const resume = renderHook(() => useKaraokeTransport(resumeProps));
-    await expect( resume.result.current.togglePlay({ forcePlaying: true })
-    ).resolves.toBe(true);
+    await expect(resume.result.current.togglePlay({ forcePlaying: true })).resolves.toBe(true);
     expect(api.stopRecording).toHaveBeenCalledWith("existing");
     expect(resumeProps.setRecordingSessionId).toHaveBeenCalledWith(null);
     expect(resumeProps.setRecordingError).toHaveBeenCalledWith(
@@ -174,8 +176,7 @@ describe("karaoke transport", () => {
     api.startRecording.mockResolvedValueOnce(null);
     const props = createProps();
     const hook = renderHook(() => useKaraokeTransport(props));
-    await expect( hook.result.current.togglePlay({ forcePlaying: true })
-    ).resolves.toBe(true);
+    await expect(hook.result.current.togglePlay({ forcePlaying: true })).resolves.toBe(true);
     expect(props.setRecordingError).toHaveBeenCalledWith(
       "Запис недоступний, караоке продовжить роботу без нього: Backend не повернув ідентифікатор запису"
     );
@@ -190,8 +191,7 @@ describe("karaoke transport", () => {
     expect(api.pauseRecording).toHaveBeenCalledWith("session");
     expect(props.syncSecondaryMedia).toHaveBeenNthCalledWith(1, 4, true);
     expect(props.setIsPlaying).toHaveBeenCalledWith(false);
-    expect(props.setRecordingError).toHaveBeenCalledWith( "Не вдалося запустити відтворення"
-    );
+    expect(props.setRecordingError).toHaveBeenCalledWith("Не вдалося запустити відтворення");
   });
 
   test("does not pause a missing recording after media startup fails", async () => {
@@ -199,8 +199,7 @@ describe("karaoke transport", () => {
     const props = createProps();
     props.instrumentalRef.current.play.mockRejectedValue(new Error("codec"));
     const hook = renderHook(() => useKaraokeTransport(props));
-    await expect( hook.result.current.togglePlay({ forcePlaying: true })
-    ).resolves.toBe(false);
+    await expect(hook.result.current.togglePlay({ forcePlaying: true })).resolves.toBe(false);
     expect(api.pauseRecording).not.toHaveBeenCalled();
   });
 
@@ -208,7 +207,9 @@ describe("karaoke transport", () => {
     let rejectPlay;
     const props = createProps();
     props.instrumentalRef.current.play.mockReturnValue(
-      new Promise((_resolve, reject) => { rejectPlay = reject; })
+      new Promise((_resolve, reject) => {
+        rejectPlay = reject;
+      })
     );
     const hook = renderHook(() => useKaraokeTransport(props));
     const playback = hook.result.current.togglePlay({ forcePlaying: true });
@@ -220,13 +221,14 @@ describe("karaoke transport", () => {
 
   test("ignores failures from optional secondary media and melody startup", async () => {
     const props = createProps({
-      startMelodyGuide: vi.fn(() => { throw new Error("closed audio context"); })
+      startMelodyGuide: vi.fn(() => {
+        throw new Error("closed audio context");
+      })
     });
     props.vocalsRef.current.play.mockRejectedValue(new Error("vocals"));
     props.videoRef.current.play.mockRejectedValue(new Error("video"));
     const hook = renderHook(() => useKaraokeTransport(props));
-    await expect( hook.result.current.togglePlay({ forcePlaying: true })
-    ).resolves.toBe(true);
+    await expect(hook.result.current.togglePlay({ forcePlaying: true })).resolves.toBe(true);
     expect(props.instrumentalRef.current.play).toHaveBeenCalledOnce();
     expect(props.setIsPlaying).toHaveBeenCalledWith(true);
   });
@@ -269,8 +271,7 @@ describe("karaoke transport", () => {
     expect(props.instrumentalRef.current.currentTime).toBe(0);
     expect(props.syncSecondaryMedia).toHaveBeenLastCalledWith(0, true);
     expect(props.onlineRoom.syncCommand).not.toHaveBeenCalled();
-    await expect(hook.result.current.stop({ broadcast: false })).resolves.toBe( true
-    );
+    await expect(hook.result.current.stop({ broadcast: false })).resolves.toBe(true);
     expect(props.onlineRoom.syncCommand).not.toHaveBeenCalled();
   });
 
@@ -292,9 +293,10 @@ describe("karaoke transport", () => {
     const { result } = renderHook(() => useKaraokeTransport(props));
     await expect(result.current.stop()).resolves.toBe(false);
     expect(api.pauseRecording).toHaveBeenCalledWith("existing");
-    expect(JSON.parse(localStorage.getItem("karaoke-pending-recording-session"))).toEqual({ id: "existing" });
-    expect(props.setRecordingError).toHaveBeenCalledWith( expect.stringContaining("disk full")
-    );
+    expect(JSON.parse(localStorage.getItem("karaoke-pending-recording-session"))).toEqual({
+      id: "existing"
+    });
+    expect(props.setRecordingError).toHaveBeenCalledWith(expect.stringContaining("disk full"));
     expect(props.setRecordingSessionId).not.toHaveBeenCalledWith(null);
   });
 
@@ -338,12 +340,13 @@ describe("karaoke transport", () => {
     hook.unmount();
   });
 
-
   test("finalizes a durable previous-song session exactly once and starts a fresh session", async () => {
     const props = createProps();
     const hook = renderHook((value) => useKaraokeTransport(value), { initialProps: props });
     await expect(hook.result.current.togglePlay({ forcePlaying: true })).resolves.toBe(true);
-    await waitFor(() => expect(localStorage.getItem("karaoke-pending-recording-session")).toContain("session"));
+    await waitFor(() =>
+      expect(localStorage.getItem("karaoke-pending-recording-session")).toContain("session")
+    );
     api.startRecording.mockResolvedValueOnce({ recording_session_id: "session-2" });
     hook.rerender({ ...props, song: { id: "next" }, recordingSessionId: "session" });
     await waitFor(() => expect(api.stopRecording).toHaveBeenCalledWith("session"));
@@ -359,8 +362,7 @@ describe("karaoke transport", () => {
     api.stopRecording.mockRejectedValueOnce(new Error("stop failed"));
     api.pauseRecording.mockRejectedValueOnce(new Error("pause failed"));
     const hook = renderHook(() =>
-      useKaraokeTransport( createProps({ recordingSessionId: "cleanup-session" })
-      )
+      useKaraokeTransport(createProps({ recordingSessionId: "cleanup-session" }))
     );
     hook.unmount();
     await act(async () => Promise.resolve());
@@ -369,7 +371,10 @@ describe("karaoke transport", () => {
 
   test("settles recording startup superseded by pause and stop operations", async () => {
     let releasePause;
-    api.startRecording.mockReturnValueOnce( new Promise((resolve) => { releasePause = resolve; })
+    api.startRecording.mockReturnValueOnce(
+      new Promise((resolve) => {
+        releasePause = resolve;
+      })
     );
     const pauseProps = createProps();
     api.pauseRecording.mockRejectedValueOnce(new Error("late pause failed"));
@@ -384,7 +389,10 @@ describe("karaoke transport", () => {
     pauseHook.unmount();
 
     let releaseStop;
-    api.startRecording.mockReturnValueOnce( new Promise((resolve) => { releaseStop = resolve; })
+    api.startRecording.mockReturnValueOnce(
+      new Promise((resolve) => {
+        releaseStop = resolve;
+      })
     );
     api.stopRecording.mockRejectedValueOnce(new Error("late stop failed"));
     api.pauseRecording.mockRejectedValueOnce(new Error("late fallback failed"));
@@ -417,7 +425,9 @@ describe("karaoke transport", () => {
     expect(props.instrumentalRef.current.pause).toHaveBeenCalled();
 
     const throwingProps = createProps({
-      startMelodyGuide: vi.fn(() => { throw new Error("guide failed"); })
+      startMelodyGuide: vi.fn(() => {
+        throw new Error("guide failed");
+      })
     });
     renderHook(() =>
       useKaraokeTransport({
@@ -428,8 +438,7 @@ describe("karaoke transport", () => {
         }
       })
     );
-    await waitFor(() => expect(throwingProps.setIsPlaying).toHaveBeenCalledWith(true)
-    );
+    await waitFor(() => expect(throwingProps.setIsPlaying).toHaveBeenCalledWith(true));
   });
 
   test("ignores unrelated, malformed and unknown room commands", async () => {
@@ -467,8 +476,7 @@ describe("karaoke transport", () => {
         })
       );
       await waitFor(() =>
-        expect(props.setCurrentTime).toHaveBeenCalledWith( action === "stop" ? 0 : 7
-        )
+        expect(props.setCurrentTime).toHaveBeenCalledWith(action === "stop" ? 0 : 7)
       );
       expect(props.onlineRoom.syncCommand).not.toHaveBeenCalled();
       if (action === "pause") {
@@ -482,7 +490,7 @@ describe("karaoke transport", () => {
   test("isolates every best-effort recording cleanup failure", async () => {
     const run = async (props, configure, action) => {
       localStorage.clear();
-  Object.values(api).forEach((mock) => mock.mockReset());
+      Object.values(api).forEach((mock) => mock.mockReset());
       api.startRecording.mockResolvedValue({ recording_session_id: "session" });
       api.resumeRecording.mockResolvedValue({});
       api.stopRecording.mockResolvedValue({ id: "recording" });
@@ -512,8 +520,7 @@ describe("karaoke transport", () => {
       ({ togglePlay }) => togglePlay({ forcePlaying: true })
     );
     const failedMaster = createProps();
-    failedMaster.instrumentalRef.current.play.mockRejectedValue( new Error("play")
-    );
+    failedMaster.instrumentalRef.current.play.mockRejectedValue(new Error("play"));
     await run(
       failedMaster,
       () => api.pauseRecording.mockRejectedValueOnce(new Error("pause")),
@@ -543,20 +550,21 @@ describe("karaoke transport", () => {
     api.startRecording.mockResolvedValueOnce({});
     const props = createProps({ onlineRoom: null });
     const hook = renderHook(() => useKaraokeTransport(props));
-    await expect( hook.result.current.togglePlay({ forcePlaying: true })
-    ).resolves.toBe(true);
+    await expect(hook.result.current.togglePlay({ forcePlaying: true })).resolves.toBe(true);
     expect(props.setRecordingError).toHaveBeenCalled();
     expect(props.instrumentalRef.current.play).toHaveBeenCalled();
   });
 
   test("does not block playback on a stalled recording start and settles it after stop", async () => {
     let releaseStart;
-    api.startRecording.mockReturnValueOnce( new Promise((resolve) => { releaseStart = resolve; })
+    api.startRecording.mockReturnValueOnce(
+      new Promise((resolve) => {
+        releaseStart = resolve;
+      })
     );
     const props = createProps();
     const hook = renderHook(() => useKaraokeTransport(props));
-    await expect( hook.result.current.togglePlay({ forcePlaying: true })
-    ).resolves.toBe(true);
+    await expect(hook.result.current.togglePlay({ forcePlaying: true })).resolves.toBe(true);
     expect(props.instrumentalRef.current.play).toHaveBeenCalledOnce();
     await waitFor(() => expect(releaseStart).toBeTypeOf("function"));
     await hook.result.current.stop();
@@ -568,7 +576,9 @@ describe("karaoke transport", () => {
     let releasePlay;
     const playbackProps = createProps();
     playbackProps.instrumentalRef.current.play.mockReturnValueOnce(
-      new Promise((resolve) => { releasePlay = resolve; })
+      new Promise((resolve) => {
+        releasePlay = resolve;
+      })
     );
     const playbackHook = renderHook(() => useKaraokeTransport(playbackProps));
     const playback = playbackHook.result.current.togglePlay({ forcePlaying: true });
@@ -586,8 +596,7 @@ describe("karaoke transport", () => {
       videoRef: { current: null }
     });
     const hook = renderHook(() => useKaraokeTransport(props));
-    await expect( hook.result.current.togglePlay({ forcePlaying: true })
-    ).resolves.toBe(true);
+    await expect(hook.result.current.togglePlay({ forcePlaying: true })).resolves.toBe(true);
     props.setRecordingError.mockClear();
     api.stopRecording.mockResolvedValueOnce(null);
     await expect(hook.result.current.stop()).resolves.toBe(true);
@@ -602,11 +611,9 @@ describe("karaoke transport", () => {
       vocalsRef: { current: null },
       videoRef: { current: null }
     });
-    failedProps.instrumentalRef.current.play.mockRejectedValueOnce( new Error("no media")
-    );
+    failedProps.instrumentalRef.current.play.mockRejectedValueOnce(new Error("no media"));
     const failed = renderHook(() => useKaraokeTransport(failedProps));
-    await expect( failed.result.current.togglePlay({ forcePlaying: true })
-    ).resolves.toBe(false);
+    await expect(failed.result.current.togglePlay({ forcePlaying: true })).resolves.toBe(false);
   });
 
   test("does not publish an analysis id when recording save has no id", async () => {
@@ -620,7 +627,10 @@ describe("karaoke transport", () => {
 
   test("shares pending recording startup and preserves a newer song request", async () => {
     let releaseShared;
-    api.startRecording.mockReturnValueOnce( new Promise((resolve) => { releaseShared = resolve; })
+    api.startRecording.mockReturnValueOnce(
+      new Promise((resolve) => {
+        releaseShared = resolve;
+      })
     );
     const props = createProps();
     const shared = renderHook(() => useKaraokeTransport(props));
@@ -634,7 +644,10 @@ describe("karaoke transport", () => {
     shared.unmount();
 
     let releaseOld;
-    api.startRecording.mockReturnValueOnce( new Promise((resolve) => { releaseOld = resolve; })
+    api.startRecording.mockReturnValueOnce(
+      new Promise((resolve) => {
+        releaseOld = resolve;
+      })
     );
     const changing = renderHook((value) => useKaraokeTransport(value), {
       initialProps: createProps()
@@ -650,9 +663,15 @@ describe("karaoke transport", () => {
     let releaseOld;
     let releaseNew;
     api.startRecording
-      .mockReturnValueOnce( new Promise((resolve) => { releaseOld = resolve; })
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          releaseOld = resolve;
+        })
       )
-      .mockReturnValueOnce( new Promise((resolve) => { releaseNew = resolve; })
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          releaseNew = resolve;
+        })
       );
     const initial = createProps();
     const hook = renderHook((value) => useKaraokeTransport(value), { initialProps: initial });
@@ -671,7 +690,9 @@ describe("karaoke transport", () => {
   test("does not clear a replacement session after stale resume failure", async () => {
     let rejectResume;
     api.resumeRecording.mockReturnValueOnce(
-      new Promise((_resolve, reject) => { rejectResume = reject; })
+      new Promise((_resolve, reject) => {
+        rejectResume = reject;
+      })
     );
     const props = createProps({ recordingSessionId: "existing" });
     const hook = renderHook((value) => useKaraokeTransport(value), { initialProps: props });
@@ -694,7 +715,9 @@ describe("karaoke transport", () => {
 
   test("reports room command promise failures", async () => {
     const props = createProps({
-      sendYouTubeCommand: vi.fn(() => { throw new Error("room transport exploded"); }),
+      sendYouTubeCommand: vi.fn(() => {
+        throw new Error("room transport exploded");
+      }),
       recordingSessionId: "existing"
     });
     renderHook(() =>

@@ -54,7 +54,6 @@ test("keeps leaf source directories meaningful instead of wrapping one file", ()
   expect(exists("src/pages/MelodyEditor.jsx")).toBe(true);
 });
 
-
 test("release gate executes unit verification and pins a supported Node runtime", () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
   const releaseCheck = fs.readFileSync(path.join(root, "scripts/check-release.mjs"), "utf8");

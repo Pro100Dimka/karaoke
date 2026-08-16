@@ -44,6 +44,12 @@
       }
     ],
     "no-continue": 0,
+    "no-regex-spaces": 0,
+    "max-classes-per-file": 0,
+    "no-template-curly-in-string": 0,
+    "prefer-template": 0,
+    "no-promise-executor-return": 0,
+    "import/extensions": 0,
     "consistent-return": 0,
     "newline-per-chained-call": 0,
     "no-await-in-loop": 0,

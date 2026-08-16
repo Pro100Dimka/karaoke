@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { test } from "vitest";
 import { fileURLToPath } from "node:url";
+import { test } from "vitest";
 
 import {
   DEFAULT_SIGNALING_URL,
@@ -22,15 +22,12 @@ test("song transfer reports progress and waits for receiver import", async () =>
   const receiver = new OnlineVoiceMesh({ send: () => true });
   const senderChannel = { readyState: "open", bufferedAmount: 0, send: null };
   const receiverChannel = { readyState: "open", bufferedAmount: 0, send: null };
-  senderChannel.send = (data) =>
-    queueMicrotask(() => receiverChannel.onmessage({ data }));
-  receiverChannel.send = (data) =>
-    queueMicrotask(() => senderChannel.onmessage({ data }));
+  senderChannel.send = (data) => queueMicrotask(() => receiverChannel.onmessage({ data }));
+  receiverChannel.send = (data) => queueMicrotask(() => senderChannel.onmessage({ data }));
   sender.setupDataChannel("receiver", senderChannel);
   receiver.setupDataChannel("sender", receiverChannel);
   const progress = [];
-  sender.onTransferProgress = ({ stage, percent }) =>
-    progress.push([stage, percent]);
+  sender.onTransferProgress = ({ stage, percent }) => progress.push([stage, percent]);
   let imported = "";
   receiver.onFile = async (_id, blob) => {
     imported = await blob.text();

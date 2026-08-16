@@ -1,5 +1,5 @@
-import { createRequire } from "node:module";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -75,15 +75,14 @@ describe("Electron runtime configuration", () => {
   });
 
   test("accepts localhost and preserves the setting name in validation errors", () => {
-    expect(
-      loadRuntimeConfig({ KARAOKE_BACKEND_URL: "http://localhost:9000" })
-    ).toMatchObject({
+    expect(loadRuntimeConfig({ KARAOKE_BACKEND_URL: "http://localhost:9000" })).toMatchObject({
       BACKEND_URL: "http://localhost:9000",
       BACKEND_HOST: "localhost",
       BACKEND_PORT: 9000
     });
-    expect(() => loadRuntimeConfig({ KARAOKE_BACKEND_STOP_GRACE_MS: "invalid" })
-    ).toThrow("KARAOKE_BACKEND_STOP_GRACE_MS must be a positive integer");
+    expect(() => loadRuntimeConfig({ KARAOKE_BACKEND_STOP_GRACE_MS: "invalid" })).toThrow(
+      "KARAOKE_BACKEND_STOP_GRACE_MS must be a positive integer"
+    );
   });
 
   test("trims Unicode whitespace around configured URLs", () => {
@@ -96,29 +95,20 @@ describe("Electron runtime configuration", () => {
 
   test.each([
     ["KARAOKE_BACKEND_URL", "not a URL", "must be a valid URL"],
-    [
-      "KARAOKE_BACKEND_URL",
-      "https://127.0.0.1",
-      "must use HTTP on a loopback host"
-    ],
-    [
-      "KARAOKE_RENDERER_ORIGIN",
-      "http://example.test",
-      "must use HTTP on a loopback host"
-    ],
+    ["KARAOKE_BACKEND_URL", "https://127.0.0.1", "must use HTTP on a loopback host"],
+    ["KARAOKE_RENDERER_ORIGIN", "http://example.test", "must use HTTP on a loopback host"],
     ["KARAOKE_BACKEND_REQUEST_TIMEOUT_MS", "0", "must be a positive integer"],
-    [ "KARAOKE_BACKEND_RESTART_BASE_DELAY_MS", "-1", "must be a positive integer" ],
-    [ "KARAOKE_BACKEND_RESTART_MAX_DELAY_MS", "1.5", "must be a positive integer" ],
+    ["KARAOKE_BACKEND_RESTART_BASE_DELAY_MS", "-1", "must be a positive integer"],
+    ["KARAOKE_BACKEND_RESTART_MAX_DELAY_MS", "1.5", "must be a positive integer"],
     ["KARAOKE_BACKEND_STOP_GRACE_MS", "Infinity", "must be a positive integer"]
   ])("rejects invalid %s", (name, value, suffix) => {
-    expect(() => loadRuntimeConfig({ [name]: value })).toThrow(
-      `${name} ${suffix}`
-    );
+    expect(() => loadRuntimeConfig({ [name]: value })).toThrow(`${name} ${suffix}`);
   });
 
   test("uses defaults for empty numeric overrides", () => {
-    expect( loadRuntimeConfig({ KARAOKE_BACKEND_STOP_GRACE_MS: "" }) .BACKEND_STOP_GRACE_MS
-    ).toBe(550);
+    expect(loadRuntimeConfig({ KARAOKE_BACKEND_STOP_GRACE_MS: "" }).BACKEND_STOP_GRACE_MS).toBe(
+      550
+    );
   });
 });
 
@@ -141,8 +131,7 @@ test("uses the persisted userData icon for packaged shortcuts", () => {
 });
 
 describe("renderer and permission security", () => {
-  const packagedIndexUrl = security.getPackagedRendererUrl( path.resolve("dist/index.html")
-  );
+  const packagedIndexUrl = security.getPackagedRendererUrl(path.resolve("dist/index.html"));
   const packaged = { isDev: false, packagedIndexUrl };
   const development = {
     isDev: true,
@@ -163,29 +152,19 @@ describe("renderer and permission security", () => {
   });
 
   test("allows only the configured development origin", () => {
-    expect(
-      security.isAllowedRendererUrl("http://127.0.0.1:5173/room#x", development)
-    ).toBe(true);
-    expect(
-      security.isAllowedRendererUrl("http://localhost:5173", development)
-    ).toBe(false);
+    expect(security.isAllowedRendererUrl("http://127.0.0.1:5173/room#x", development)).toBe(true);
+    expect(security.isAllowedRendererUrl("http://localhost:5173", development)).toBe(false);
     expect(security.isAllowedRendererUrl("invalid", development)).toBe(false);
   });
 
   test("allows only the packaged index and its hash routes", () => {
-    expect( security.getPackagedRendererUrl(path.resolve("another/index.html"))
-    ).toBe(new URL(`file:///${path.resolve("another/index.html")}`).href);
-    expect(security.isAllowedRendererUrl(packagedIndexUrl, packaged)).toBe( true
+    expect(security.getPackagedRendererUrl(path.resolve("another/index.html"))).toBe(
+      new URL(`file:///${path.resolve("another/index.html")}`).href
     );
-    expect(
-      security.isAllowedRendererUrl(`${packagedIndexUrl}#/karaoke`, packaged)
-    ).toBe(true);
-    expect(
-      security.isAllowedRendererUrl(`${packagedIndexUrl}?unsafe=1`, packaged)
-    ).toBe(false);
-    expect(
-      security.isAllowedRendererUrl("https://example.test", packaged)
-    ).toBe(false);
+    expect(security.isAllowedRendererUrl(packagedIndexUrl, packaged)).toBe(true);
+    expect(security.isAllowedRendererUrl(`${packagedIndexUrl}#/karaoke`, packaged)).toBe(true);
+    expect(security.isAllowedRendererUrl(`${packagedIndexUrl}?unsafe=1`, packaged)).toBe(false);
+    expect(security.isAllowedRendererUrl("https://example.test", packaged)).toBe(false);
     expect(
       security.isAllowedRendererUrl("https://example.test", {
         isDev: false,
@@ -201,22 +180,19 @@ describe("renderer and permission security", () => {
     [["audio", "audio"], true],
     [["video"], false],
     [["audio", "video"], false]
-  ])(
-    "applies the audio-only media permission contract",
-    (mediaTypes, allowed) => {
-      const webContents = { isDestroyed: () => false };
-      expect(
-        security.isAllowedPermissionRequest({
-          permission: "media",
-          requestUrl: `${packagedIndexUrl}#/karaoke`,
-          mediaTypes,
-          webContents,
-          expectedWebContents: webContents,
-          rendererOptions: packaged
-        })
-      ).toBe(allowed);
-    }
-  );
+  ])("applies the audio-only media permission contract", (mediaTypes, allowed) => {
+    const webContents = { isDestroyed: () => false };
+    expect(
+      security.isAllowedPermissionRequest({
+        permission: "media",
+        requestUrl: `${packagedIndexUrl}#/karaoke`,
+        mediaTypes,
+        webContents,
+        expectedWebContents: webContents,
+        rendererOptions: packaged
+      })
+    ).toBe(allowed);
+  });
 
   test("rejects unrelated, destroyed, foreign, and untrusted permission requests", () => {
     const expectedWebContents = { isDestroyed: () => false };
@@ -229,18 +205,17 @@ describe("renderer and permission security", () => {
       rendererOptions: packaged
     };
 
-    expect( security.isAllowedPermissionRequest({ ...base, permission: "camera" })
-    ).toBe(false);
-    expect( security.isAllowedPermissionRequest({ ...base, webContents: {} })
-    ).toBe(false);
+    expect(security.isAllowedPermissionRequest({ ...base, permission: "camera" })).toBe(false);
+    expect(security.isAllowedPermissionRequest({ ...base, webContents: {} })).toBe(false);
     expect(
       security.isAllowedPermissionRequest({
         ...base,
         expectedWebContents: { isDestroyed: () => true }
       })
     ).toBe(false);
-    expect( security.isAllowedPermissionRequest({ ...base, expectedWebContents: undefined })
-    ).toBe(false);
+    expect(security.isAllowedPermissionRequest({ ...base, expectedWebContents: undefined })).toBe(
+      false
+    );
     expect(
       security.isAllowedPermissionRequest({
         ...base,
@@ -249,8 +224,7 @@ describe("renderer and permission security", () => {
         expectedWebContents: undefined
       })
     ).toBe(false);
-    expect(security.isTrustedIpcEvent(undefined, expectedWebContents)).toBe( false
-    );
+    expect(security.isTrustedIpcEvent(undefined, expectedWebContents)).toBe(false);
     expect(
       security.isAllowedPermissionRequest({
         ...base,
@@ -265,21 +239,18 @@ describe("renderer and permission security", () => {
     const handler = vi.fn((left, right) => left + right);
     let expectedWebContents = { isDestroyed: () => false };
 
-    security.registerTrustedIpc( ipcMain, "test:add", () => expectedWebContents, handler
-    );
+    security.registerTrustedIpc(ipcMain, "test:add", () => expectedWebContents, handler);
     const callback = callbacks.get("test:add");
 
     expect(callback({ sender: expectedWebContents }, 2, 3)).toBe(5);
     expect(handler).toHaveBeenCalledWith(2, 3);
-    expect(() => callback({ sender: {} }, 1, 1)).toThrow( "Rejected IPC request: test:add"
-    );
+    expect(() => callback({ sender: {} }, 1, 1)).toThrow("Rejected IPC request: test:add");
     expectedWebContents = { isDestroyed: () => true };
     expect(() => callback({ sender: expectedWebContents }, 1, 1)).toThrow(
       "Rejected IPC request: test:add"
     );
     expectedWebContents = null;
-    expect(() => callback({ sender: null }, 1, 1)).toThrow( "Rejected IPC request: test:add"
-    );
+    expect(() => callback({ sender: null }, 1, 1)).toThrow("Rejected IPC request: test:add");
   });
 });
 
@@ -314,27 +285,24 @@ describe("song folder matching", () => {
 
   test("returns a unique partial match but rejects ambiguity", () => {
     const live = directory("31-я весна live");
-    expect(songFolders.findMatchingSongFolder([live], ["31-я весна"])).toBe( live
-    );
+    expect(songFolders.findMatchingSongFolder([live], ["31-я весна"])).toBe(live);
     expect(
-      songFolders.findMatchingSongFolder( [live, directory("31-я весна acoustic")], ["31-я весна"]
-      )
+      songFolders.findMatchingSongFolder([live, directory("31-я весна acoustic")], ["31-я весна"])
     ).toBeNull();
-    expect( songFolders.findMatchingSongFolder([directory("весна")], ["весна live"]) .name
-    ).toBe("весна");
+    expect(songFolders.findMatchingSongFolder([directory("весна")], ["весна live"]).name).toBe(
+      "весна"
+    );
     expect(
       songFolders.findMatchingSongFolder(
         [directory("весна live"), directory("другая песня")],
         ["нет совпадения", "весна"]
       ).name
     ).toBe("весна live");
-    expect( songFolders.findMatchingSongFolder([directory("unrelated")], ["missing"])
-    ).toBeNull();
+    expect(songFolders.findMatchingSongFolder([directory("unrelated")], ["missing"])).toBeNull();
   });
 
   test("ignores invalid requests, files, and empty directory names", () => {
-    expect( songFolders.findMatchingSongFolder([directory("real")], [null, "---"])
-    ).toBeNull();
+    expect(songFolders.findMatchingSongFolder([directory("real")], [null, "---"])).toBeNull();
     expect(
       songFolders.findMatchingSongFolder(
         [null, {}, directory("song", false), directory("---")],
@@ -355,7 +323,8 @@ describe("preload bridge", () => {
     const originalLoad = nodeModule._load;
     // eslint-disable-next-line no-underscore-dangle
     nodeModule._load = function load(specifier, parent, isMain) {
-      if (specifier === "electron") return { contextBridge: { exposeInMainWorld }, ipcRenderer: { invoke } };
+      if (specifier === "electron")
+        return { contextBridge: { exposeInMainWorld }, ipcRenderer: { invoke } };
       return originalLoad.call(this, specifier, parent, isMain);
     };
     process.argv = ["electron", "app", ...arguments_];
@@ -373,7 +342,10 @@ describe("preload bridge", () => {
   }
 
   test("exposes the minimal frozen-channel renderer API", () => {
-    const { api, exposeInMainWorld, invoke } = runPreload([ "--advoice-theme=violet", "--advoice-backend-url=http://127.0.0.1:8123" ]);
+    const { api, exposeInMainWorld, invoke } = runPreload([
+      "--advoice-theme=violet",
+      "--advoice-backend-url=http://127.0.0.1:8123"
+    ]);
 
     expect(exposeInMainWorld).toHaveBeenCalledOnce();
     expect(exposeInMainWorld.mock.calls[0][0]).toBe("electronAPI");
@@ -385,9 +357,9 @@ describe("preload bridge", () => {
     expect(api.minimize()).toEqual(["window:minimize"]);
     expect(api.maximize()).toEqual(["window:maximize"]);
     expect(api.close()).toEqual(["window:close"]);
-    expect(api.openSongFolder({ id: "42" })).toEqual([ "shell:openSongFolder", { id: "42" } ]);
-    expect(api.selectFolder("D:/songs")).toEqual([ "dialog:selectFolder", "D:/songs" ]);
-    expect(api.copyText("room-code")).toEqual([ "clipboard:writeText", "room-code" ]);
+    expect(api.openSongFolder({ id: "42" })).toEqual(["shell:openSongFolder", { id: "42" }]);
+    expect(api.selectFolder("D:/songs")).toEqual(["dialog:selectFolder", "D:/songs"]);
+    expect(api.copyText("room-code")).toEqual(["clipboard:writeText", "room-code"]);
     expect(api.setIconTheme("dark")).toEqual(["window:setIconTheme", "dark"]);
     expect(invoke).toHaveBeenCalledTimes(7);
   });

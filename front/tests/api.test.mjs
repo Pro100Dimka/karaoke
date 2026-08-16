@@ -5,11 +5,16 @@ let importId = 0;
 const importApi = (name) =>
   import(/* @vite-ignore */ `../src/api/${name}.js?contract=${importId++}`);
 const importDomain = (name) =>
-  import(
-    /* @vite-ignore */ `../src/api/domains/${name}.js?contract=${importId++}`
-  );
+  import(/* @vite-ignore */ `../src/api/domains/${name}.js?contract=${importId++}`);
 
-const response = ({ body = "{}", json, ok = true, status = 200, statusText = "", url = "" } = {}) => ({
+const response = ({
+  body = "{}",
+  json,
+  ok = true,
+  status = 200,
+  statusText = "",
+  url = ""
+} = {}) => ({
   ok,
   status,
   statusText,
@@ -33,18 +38,18 @@ async function assertRequest(invoke, expected) {
   return result;
 }
 
-beforeEach(() => { vi.restoreAllMocks(); globalThis.fetch = vi.fn(async () => response()); });
+beforeEach(() => {
+  vi.restoreAllMocks();
+  globalThis.fetch = vi.fn(async () => response());
+});
 afterEach(() => vi.unstubAllEnvs());
 
 describe("API transport", () => {
   test("normalizes request paths, bodies and successful response kinds", async () => {
     const { request, requestBlob } = await importApi("core");
     globalThis.fetch
-      .mockResolvedValueOnce(
-        response({ body: '{"ok":true}', url: "http://api/value" })
-      )
-      .mockResolvedValueOnce( response({ status: 204, body: '{"ignored":true}' })
-      )
+      .mockResolvedValueOnce(response({ body: '{"ok":true}', url: "http://api/value" }))
+      .mockResolvedValueOnce(response({ status: 204, body: '{"ignored":true}' }))
       .mockResolvedValueOnce(response({ body: "" }))
       .mockResolvedValueOnce(response({ body: "blob" }));
     assert.deepEqual(await request("value", { method: "POST", body: "{}" }), { ok: true });
@@ -60,12 +65,13 @@ describe("API transport", () => {
     await request("headers", { headers, body: null });
     assert.deepEqual(globalThis.fetch.mock.calls.at(-1)[1].headers, { accept: "application/json" });
     await request("array", { headers: [["X-Test", "yes"]], body: new FormData() });
-    assert.equal( globalThis.fetch.mock.calls.at(-1)[1].headers["X-Test"], "yes"
-    );
+    assert.equal(globalThis.fetch.mock.calls.at(-1)[1].headers["X-Test"], "yes");
     await request("form", { body: new FormData() });
     assert.equal(globalThis.fetch.mock.calls.at(-1)[1].headers, undefined);
     await request("object", { headers: { "Content-Type": "text/plain" }, body: "plain" });
-    assert.deepEqual(globalThis.fetch.mock.calls.at(-1)[1].headers, { "Content-Type": "text/plain" });
+    assert.deepEqual(globalThis.fetch.mock.calls.at(-1)[1].headers, {
+      "Content-Type": "text/plain"
+    });
     await request("accept", { headers: { Accept: "application/json" }, body: "{}" });
     assert.deepEqual(globalThis.fetch.mock.calls.at(-1)[1].headers, {
       Accept: "application/json",
@@ -100,10 +106,7 @@ describe("API transport", () => {
     );
     await assert.rejects(
       request("bad"),
-      (error) =>
-        error.message === "bad" &&
-        error.status === 422 &&
-        error.url === "http://api/bad"
+      (error) => error.message === "bad" && error.status === 422 && error.url === "http://api/bad"
     );
     globalThis.fetch.mockResolvedValueOnce(
       response({ ok: false, status: 500, statusText: "Failure", json: { detail: { code: 1 } } })
@@ -117,8 +120,7 @@ describe("API transport", () => {
     });
     await assert.rejects(
       request("bad"),
-      (error) =>
-        error.message === "Offline" && error.url === "http://127.0.0.1:8000/bad"
+      (error) => error.message === "Offline" && error.url === "http://127.0.0.1:8000/bad"
     );
     globalThis.fetch.mockResolvedValueOnce({
       ...response({ ok: false, status: 418 }),
@@ -127,8 +129,7 @@ describe("API transport", () => {
       }
     });
     await assert.rejects(request("teapot"), /HTTP 418/);
-    globalThis.fetch.mockResolvedValueOnce( response({ body: "not-json", url: "bad-json" })
-    );
+    globalThis.fetch.mockResolvedValueOnce(response({ body: "not-json", url: "bad-json" }));
     await assert.rejects(request("bad"), /JSON/);
     globalThis.fetch.mockResolvedValueOnce(
       response({ ok: false, status: 400, json: { message: "plain" } })
@@ -144,14 +145,19 @@ describe("API transport", () => {
   test("aborts stalled backend requests at the configured deadline", async () => {
     vi.useFakeTimers();
     const { request } = await importApi("core");
-    globalThis.fetch.mockImplementationOnce((_url, { signal }) =>
-      new Promise((_resolve, reject) => {
-        signal.addEventListener("abort", () => {
-          const error = new Error("aborted");
-          error.name = "AbortError";
-          reject(error);
-        }, { once: true });
-      })
+    globalThis.fetch.mockImplementationOnce(
+      (_url, { signal }) =>
+        new Promise((_resolve, reject) => {
+          signal.addEventListener(
+            "abort",
+            () => {
+              const error = new Error("aborted");
+              error.name = "AbortError";
+              reject(error);
+            },
+            { once: true }
+          );
+        })
     );
     const pending = request("stalled", { timeoutMs: 25 });
     await vi.advanceTimersByTimeAsync(25);
@@ -164,11 +170,18 @@ describe("API transport", () => {
     const { request } = await importApi("core");
     globalThis.fetch.mockImplementationOnce(async (_url, { signal }) => ({
       ...response(),
-      text: () => new Promise((_resolve, reject) => signal.addEventListener("abort", () => {
-        const error = new Error("body aborted");
-        error.name = "AbortError";
-        reject(error);
-      }, { once: true }))
+      text: () =>
+        new Promise((_resolve, reject) =>
+          signal.addEventListener(
+            "abort",
+            () => {
+              const error = new Error("body aborted");
+              error.name = "AbortError";
+              reject(error);
+            },
+            { once: true }
+          )
+        )
     }));
     const pending = request("stalled-body", { timeoutMs: 25 });
     await vi.advanceTimersByTimeAsync(25);
@@ -185,8 +198,7 @@ describe("API transport", () => {
       );
       assert.throws(() => encodePathSegment(null), TypeError);
       assert.match(createFileUrl("local/file.wav"), /\/local\/file\.wav$/);
-      assert.equal( new URL(createFileUrl(" /local/file.wav ")).pathname, "/local/file.wav"
-      );
+      assert.equal(new URL(createFileUrl(" /local/file.wav ")).pathname, "/local/file.wav");
       assert.equal(createFileUrl(""), "http://127.0.0.1:8000");
       assert.equal(createFileUrl(null), "http://127.0.0.1:8000");
       assert.match(createFileUrl("folder/http:file"), /folder\/http:file$/);
@@ -226,8 +238,7 @@ describe("API normalization", () => {
     assert.equal(clampNumber("x", 0, 2, 1), 1);
     assert.equal(normalizeString(null, "fallback"), "fallback");
     assert.equal(normalizeString("  ", "fallback"), "fallback");
-    for (const value of [true, 1, "YES", "on"])
-      assert.equal(normalizeBoolean(value), true);
+    for (const value of [true, 1, "YES", "on"]) assert.equal(normalizeBoolean(value), true);
     for (const value of [false, 0, "false", "0", "NO", "off", ""])
       assert.equal(normalizeBoolean(value, true), false);
     assert.equal(normalizeBoolean("  true  "), true);
@@ -238,11 +249,11 @@ describe("API normalization", () => {
     assert.equal(normalizeNonNegativeNumber(0, 4), 0);
     assert.equal(normalizeNonNegativeNumber("2"), 2);
     assert.deepEqual(normalizeSongList(null), []);
-    assert.equal( normalizeSong({ status: "UNKNOWN", progress_percent: 999 }).status, "pending"
-    );
-    assert.equal( normalizeSong({ status: "DONE", error_message: " " }).error_message, null
-    );
-    assert.deepEqual( normalizeSongList([null]).map((song) => song.status), ["pending"]
+    assert.equal(normalizeSong({ status: "UNKNOWN", progress_percent: 999 }).status, "pending");
+    assert.equal(normalizeSong({ status: "DONE", error_message: " " }).error_message, null);
+    assert.deepEqual(
+      normalizeSongList([null]).map((song) => song.status),
+      ["pending"]
     );
     for (const status of [
       "pending",
@@ -255,7 +266,12 @@ describe("API normalization", () => {
     ])
       assert.equal(normalizeSong({ status }).status, status);
     assert.equal(Object.hasOwn(normalizeSong("x"), "0"), false);
-    assert.deepEqual(normalizeModel(null), { name: "", downloaded: false, selected: false, size: 0 });
+    assert.deepEqual(normalizeModel(null), {
+      name: "",
+      downloaded: false,
+      selected: false,
+      size: 0
+    });
     assert.equal(Object.hasOwn(normalizeModel("x"), "0"), false);
     assert.equal(normalizeRecording({ duration_sec: -2 }).duration_sec, 0);
     assert.deepEqual(normalizeRecording(null), { id: "", song_id: "", duration_sec: 0 });
@@ -287,7 +303,7 @@ describe("API domains", () => {
       [() => playerApi.getSync("a/b"), "/player/a%2Fb/sync"],
       [() => playerApi.getTimeline("a/b"), "/player/a%2Fb/timeline"],
       [() => playerApi.getPosition("a/b"), "/player/a%2Fb/position"],
-      [ () => playerApi.seek("a/b", 2.5), "/player/a%2Fb/seek", "POST", { position_sec: 2.5 } ],
+      [() => playerApi.seek("a/b", 2.5), "/player/a%2Fb/seek", "POST", { position_sec: 2.5 }],
       [() => playerApi.play("a/b"), "/player/a%2Fb/resume", "POST"],
       [() => playerApi.pause("a/b"), "/player/a%2Fb/pause", "POST"],
       [() => playerApi.stop("a/b"), "/player/a%2Fb/stop", "POST"],
@@ -322,21 +338,18 @@ describe("API domains", () => {
       importDomain("models"),
       importDomain("recordings")
     ]);
-    globalThis.fetch.mockResolvedValueOnce( response({ body: '[{"name":" x ","size":-1}]' })
-    );
+    globalThis.fetch.mockResolvedValueOnce(response({ body: '[{"name":" x ","size":-1}]' }));
     assert.deepEqual(await modelsApi.listWhisperModels(), [
       { name: "x", size: 0, downloaded: false, selected: false }
     ]);
-    assert.equal( new URL(globalThis.fetch.mock.calls.at(-1)[0]).pathname, "/models/whisper"
-    );
+    assert.equal(new URL(globalThis.fetch.mock.calls.at(-1)[0]).pathname, "/models/whisper");
     globalThis.fetch.mockResolvedValueOnce(response({ body: "null" }));
     assert.deepEqual(await modelsApi.listWhisperModels(), []);
-    assert.equal( new URL(globalThis.fetch.mock.calls.at(-1)[0]).pathname, "/models/whisper"
-    );
+    assert.equal(new URL(globalThis.fetch.mock.calls.at(-1)[0]).pathname, "/models/whisper");
     for (const [invoke, path, method] of [
-      [ () => modelsApi.downloadModel("a/b"), "/models/whisper/a%2Fb/download", "POST" ],
+      [() => modelsApi.downloadModel("a/b"), "/models/whisper/a%2Fb/download", "POST"],
       [() => modelsApi.deleteModel("a/b"), "/models/whisper/a%2Fb", "DELETE"],
-      [ () => modelsApi.selectModel("a/b"), "/models/whisper/a%2Fb/select", "POST" ]
+      [() => modelsApi.selectModel("a/b"), "/models/whisper/a%2Fb/select", "POST"]
     ])
       await assertRequest(invoke, { path, method });
 
@@ -353,50 +366,46 @@ describe("API domains", () => {
         delay: 0
       }
     });
-    await assertRequest(
-      () => recordingsApi.startRecording("song", 1, 0.8, 0.7, 0.1, 0.2, 0.3),
-      {
-        path: "/recording/start",
-        method: "POST",
-        body: {
-          song_id: "song",
-          position_sec: 1,
-          music_volume: 0.8,
-          microphone_volume: 0.7,
-          reverb: 0.1,
-          echo: 0.2,
-          delay: 0.3
-        }
+    await assertRequest(() => recordingsApi.startRecording("song", 1, 0.8, 0.7, 0.1, 0.2, 0.3), {
+      path: "/recording/start",
+      method: "POST",
+      body: {
+        song_id: "song",
+        position_sec: 1,
+        music_volume: 0.8,
+        microphone_volume: 0.7,
+        reverb: 0.1,
+        echo: 0.2,
+        delay: 0.3
       }
-    );
+    });
     for (const [invoke, path] of [
-      [ () => recordingsApi.pauseRecording("a/b ?"), "/recording/pause?session_id=a%2Fb%20%3F" ],
-      [ () => recordingsApi.pauseRecording(null), "/recording/pause?session_id=" ],
-      [ () => recordingsApi.resumeRecording("a/b ?"), "/recording/resume?session_id=a%2Fb%20%3F" ],
-      [ () => recordingsApi.resumeRecording(null), "/recording/resume?session_id=" ],
-      [ () => recordingsApi.stopRecording("a/b ?"), "/recording/stop?session_id=a%2Fb%20%3F" ],
+      [() => recordingsApi.pauseRecording("a/b ?"), "/recording/pause?session_id=a%2Fb%20%3F"],
+      [() => recordingsApi.pauseRecording(null), "/recording/pause?session_id="],
+      [() => recordingsApi.resumeRecording("a/b ?"), "/recording/resume?session_id=a%2Fb%20%3F"],
+      [() => recordingsApi.resumeRecording(null), "/recording/resume?session_id="],
+      [() => recordingsApi.stopRecording("a/b ?"), "/recording/stop?session_id=a%2Fb%20%3F"],
       [() => recordingsApi.stopRecording(null), "/recording/stop?session_id="]
     ])
       await assertRequest(invoke, { path, method: "POST" });
-    globalThis.fetch.mockResolvedValueOnce( response({ body: '[{"id":1,"duration_sec":"2"}]' })
-    );
-    assert.equal( (await recordingsApi.listRecordingsForSong("song"))[0].duration_sec, 2
-    );
-    assert.equal( new URL(globalThis.fetch.mock.calls.at(-1)[0]).pathname, "/recording/by-song/song"
+    globalThis.fetch.mockResolvedValueOnce(response({ body: '[{"id":1,"duration_sec":"2"}]' }));
+    assert.equal((await recordingsApi.listRecordingsForSong("song"))[0].duration_sec, 2);
+    assert.equal(
+      new URL(globalThis.fetch.mock.calls.at(-1)[0]).pathname,
+      "/recording/by-song/song"
     );
     globalThis.fetch.mockResolvedValueOnce(response({ body: "null" }));
     assert.deepEqual(await recordingsApi.listRecordingsForSong("song"), []);
-    assert.equal( new URL(globalThis.fetch.mock.calls.at(-1)[0]).pathname, "/recording/by-song/song"
+    assert.equal(
+      new URL(globalThis.fetch.mock.calls.at(-1)[0]).pathname,
+      "/recording/by-song/song"
     );
     globalThis.fetch.mockResolvedValueOnce(response({ body: "null" }));
     assert.deepEqual(await recordingsApi.listRecordingLibrary(), []);
-    assert.equal( new URL(globalThis.fetch.mock.calls.at(-1)[0]).pathname, "/recording/library"
-    );
-    globalThis.fetch.mockResolvedValueOnce( response({ body: '[{"id":"library"}]' })
-    );
+    assert.equal(new URL(globalThis.fetch.mock.calls.at(-1)[0]).pathname, "/recording/library");
+    globalThis.fetch.mockResolvedValueOnce(response({ body: '[{"id":"library"}]' }));
     assert.equal((await recordingsApi.listRecordingLibrary())[0].id, "library");
-    assert.equal( new URL(globalThis.fetch.mock.calls.at(-1)[0]).pathname, "/recording/library"
-    );
+    assert.equal(new URL(globalThis.fetch.mock.calls.at(-1)[0]).pathname, "/recording/library");
     await assertRequest(recordingsApi.getRecordingSettings, { path: "/recording/settings" });
     await assertRequest(() => recordingsApi.deleteRecording("a/b"), {
       path: "/recording/a%2Fb",
@@ -447,15 +456,14 @@ describe("API domains", () => {
       progress_step: "",
       error_message: null
     });
-    assert.equal( new URL(globalThis.fetch.mock.calls[1][0]).pathname, "/songs/a%2Fb"
-    );
+    assert.equal(new URL(globalThis.fetch.mock.calls[1][0]).pathname, "/songs/a%2Fb");
   });
 
   test("routes song mutations with exact methods and JSON contracts", async () => {
     const { songsApi } = await importDomain("songs");
     const id = "a/b";
     const operations = [
-      [ () => songsApi.updateSong(id, { title: "x" }), "PATCH", "/songs/a%2Fb", { title: "x" } ],
+      [() => songsApi.updateSong(id, { title: "x" }), "PATCH", "/songs/a%2Fb", { title: "x" }],
       [() => songsApi.deleteSong(id), "DELETE", "/songs/a%2Fb"],
       [() => songsApi.processSong(id), "POST", "/songs/a%2Fb/process"],
       [() => songsApi.reprocessMelody(id), "POST", "/songs/a%2Fb/reprocess"],
@@ -512,8 +520,7 @@ describe("API domains", () => {
     );
 
     globalThis.fetch.mockResolvedValueOnce(response({ body: "package" }));
-    assert.equal( await (await songsApi.exportSongPackage("a/b", "sha256:abc")).text(), "package"
-    );
+    assert.equal(await (await songsApi.exportSongPackage("a/b", "sha256:abc")).text(), "package");
     [url, options] = globalThis.fetch.mock.calls.at(-1);
     assert.equal(new URL(url).pathname, "/songs/a%2Fb/package");
     assert.equal(new URL(url).searchParams.get("expected_revision"), "sha256:abc");
@@ -539,15 +546,13 @@ describe("API domains", () => {
     globalThis.window = { localStorage: globalThis.localStorage };
     globalThis.fetch.mockResolvedValueOnce(response({ body: "{}" }));
     assert.equal((await settingsApi.getAppSettings()).theme, "dark");
-    assert.equal( new URL(globalThis.fetch.mock.calls.at(-1)[0]).pathname, "/settings"
-    );
+    assert.equal(new URL(globalThis.fetch.mock.calls.at(-1)[0]).pathname, "/settings");
     globalThis.fetch.mockResolvedValue(response({ body: '{"ok":true}' }));
     const updated = await settingsApi.updateAppSettings({ theme: "light", audio: true });
     assert.deepEqual(updated, { ok: true, theme: "light" });
-    assert.equal( globalThis.localStorage.setItem.mock.calls[0][0], "karaoke-theme"
-    );
+    assert.equal(globalThis.localStorage.setItem.mock.calls[0][0], "karaoke-theme");
     assert.equal(globalThis.localStorage.setItem.mock.calls[0][1], "light");
-    let [, options] = globalThis.fetch.mock.calls.at(-1);
+    const [, options] = globalThis.fetch.mock.calls.at(-1);
     assert.equal(options.method, "PATCH");
     assert.deepEqual(JSON.parse(options.body), { audio: true, theme: "light" });
 
@@ -557,23 +562,37 @@ describe("API domains", () => {
       body: {}
     });
     await assertRequest(settingsApi.getUiPreferences, { path: "/preferences" });
-    await assertRequest(
-      () => settingsApi.updateUiPreferences("karaoke room", { radio: true }),
-      { path: "/preferences/karaoke%20room", method: "PATCH", body: { radio: true } }
-    );
+    await assertRequest(() => settingsApi.updateUiPreferences("karaoke room", { radio: true }), {
+      path: "/preferences/karaoke%20room",
+      method: "PATCH",
+      body: { radio: true }
+    });
 
     let releaseFirst;
     globalThis.fetch
-      .mockReturnValueOnce(new Promise((resolve) => { releaseFirst = () => resolve(response()); }))
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          releaseFirst = () => resolve(response());
+        })
+      )
       .mockResolvedValueOnce(response());
     const first = settingsApi.updateUiPreferences("audio", { device: "old" });
     const second = settingsApi.updateUiPreferences("audio", { device: "new" });
     await Promise.resolve();
-    assert.equal(globalThis.fetch.mock.calls.filter(([url]) => new URL(url).pathname === "/preferences/audio").length, 1);
+    assert.equal(
+      globalThis.fetch.mock.calls.filter(([url]) => new URL(url).pathname === "/preferences/audio")
+        .length,
+      1
+    );
     releaseFirst();
     await first;
     await second;
-    const audioWrites = globalThis.fetch.mock.calls.filter(([url]) => new URL(url).pathname === "/preferences/audio");
-    assert.deepEqual(audioWrites.map(([, options]) => JSON.parse(options.body)), [{ device: "old" }, { device: "new" }]);
+    const audioWrites = globalThis.fetch.mock.calls.filter(
+      ([url]) => new URL(url).pathname === "/preferences/audio"
+    );
+    assert.deepEqual(
+      audioWrites.map(([, options]) => JSON.parse(options.body)),
+      [{ device: "old" }, { device: "new" }]
+    );
   });
 });
