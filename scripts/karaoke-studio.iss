@@ -20,15 +20,14 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppName}
-DefaultDirName={autopf}\{#MyAppName}
+DefaultDirName={localappdata}\Programs\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir={#OutputDir}
 OutputBaseFilename={#MyAppName} Setup {#MyAppVersion}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-PrivilegesRequired=admin
-PrivilegesRequiredOverridesAllowed=dialog
+PrivilegesRequired=lowest
 WizardStyle=modern
 ShowLanguageDialog=no
 SetupIconFile={#SetupIcon}
@@ -268,7 +267,7 @@ var
   Payload: String;
 begin
   AppDataDir := ExpandConstant('{userappdata}\A&D Voice');
-  SettingsDir := AppDataDir + '\backend-data';
+  SettingsDir := ExpandConstant('{localappdata}\A&D Voice\backend-data');
   SettingsPath := SettingsDir + '\settings.json';
   ForceDirectories(SettingsDir);
   Payload := '{' + #13#10 +
@@ -280,7 +279,7 @@ begin
      (not SaveStringToFile(SettingsPath, Payload, False)) then
     RaiseException('Не удалось сохранить начальные настройки программы.');
 
-  InstallPreferencesPath := AppDataDir + '\install-preferences.json';
+  InstallPreferencesPath := ExpandConstant('{localappdata}\A&D Voice\install-preferences.json');
   Payload := '{' + #13#10 +
     '  "language": "' + SelectedLanguage + '",' + #13#10 +
     '  "theme": "' + SelectedTheme + '"' + #13#10 +

@@ -21,7 +21,7 @@ function guestHarness() {
     id: "room",
     client,
     voice: { invite: vi.fn(), removePeer: vi.fn(), accept: vi.fn() },
-    roomApi: { getSong: vi.fn((songId) => lookups.get(songId).promise) },
+    roomApi: { getSongRevision: vi.fn((songId) => lookups.get(songId).promise) },
     isCurrentConnection: () => true,
     roomRef,
     participantsRef,
@@ -42,11 +42,11 @@ test("newer open-karaoke command wins when older lookup resolves last", async ()
   const h = guestHarness();
   h.lookups.set("A", deferred());
   h.lookups.set("B", deferred());
-  h.handler({ type: "sync", fromId: "host", state: { type: "open-karaoke", songId: "A", commandId: "cmd-A" } });
-  h.handler({ type: "sync", fromId: "host", state: { type: "open-karaoke", songId: "B", commandId: "cmd-B" } });
-  h.lookups.get("B").resolve({});
+  h.handler({ type: "sync", fromId: "host", state: { type: "open-karaoke", songId: "A", commandId: "cmd-A", revision: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } });
+  h.handler({ type: "sync", fromId: "host", state: { type: "open-karaoke", songId: "B", commandId: "cmd-B", revision: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } });
+  h.lookups.get("B").resolve({ revision: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" });
   await flush();
-  h.lookups.get("A").resolve({});
+  h.lookups.get("A").resolve({ revision: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" });
   await flush();
   expect(h.setRoomCommand).toHaveBeenCalledTimes(1);
   expect(h.setRoomCommand.mock.calls[0][0]).toMatchObject({ songId: "B", commandId: "cmd-B" });
@@ -56,9 +56,9 @@ test("stale lookup failure never requests superseded song", async () => {
   const h = guestHarness();
   h.lookups.set("A", deferred());
   h.lookups.set("B", deferred());
-  h.handler({ type: "sync", fromId: "host", state: { type: "open-karaoke", songId: "A", commandId: "cmd-A" } });
-  h.handler({ type: "sync", fromId: "host", state: { type: "open-karaoke", songId: "B", commandId: "cmd-B" } });
-  h.lookups.get("B").resolve({});
+  h.handler({ type: "sync", fromId: "host", state: { type: "open-karaoke", songId: "A", commandId: "cmd-A", revision: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } });
+  h.handler({ type: "sync", fromId: "host", state: { type: "open-karaoke", songId: "B", commandId: "cmd-B", revision: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } });
+  h.lookups.get("B").resolve({ revision: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" });
   await flush();
   h.lookups.get("A").reject(new Error("missing"));
   await flush();
@@ -81,7 +81,7 @@ test("host exports only a currently offered command and coalesces package creati
   const exportDeferred = deferred();
   const roomApi = { exportSongPackage: vi.fn(() => exportDeferred.promise) };
   const voice = { sendFile: vi.fn().mockResolvedValue(), invite: vi.fn(), removePeer: vi.fn(), accept: vi.fn() };
-  const hostSongCommandRef = { current: { type: "open-karaoke", songId: "A", commandId: "cmd-A" } };
+  const hostSongCommandRef = { current: { type: "open-karaoke", songId: "A", commandId: "cmd-A", revision: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } };
   const handler = createOnlineRoomMessageHandler({
     id: "room",
     client: { send: vi.fn() },
@@ -101,10 +101,10 @@ test("host exports only a currently offered command and coalesces package creati
     setVoiceError: vi.fn(),
     setTransferStatus: vi.fn()
   });
-  handler({ type: "sync", fromId: "g1", state: { type: "song-request", requesterId: "g1", songId: "A", commandId: "cmd-A" } });
-  handler({ type: "sync", fromId: "g2", state: { type: "song-request", requesterId: "g2", songId: "A", commandId: "cmd-A" } });
+  handler({ type: "sync", fromId: "g1", state: { type: "song-request", requesterId: "g1", songId: "A", commandId: "cmd-A", revision: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } });
+  handler({ type: "sync", fromId: "g2", state: { type: "song-request", requesterId: "g2", songId: "A", commandId: "cmd-A", revision: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } });
   handler({ type: "sync", fromId: "g1", state: { type: "song-request", requesterId: "g1", songId: "X", commandId: "bad" } });
-  expect(roomApi.exportSongPackage).toHaveBeenCalledTimes(1);
+  expect(roomApi.exportSongPackage).toHaveBeenCalledExactlyOnceWith("A", "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   const blob = new Blob(["song"]);
   blob.cleanup = vi.fn();
   exportDeferred.resolve(blob);

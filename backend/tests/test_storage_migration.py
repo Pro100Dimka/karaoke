@@ -53,8 +53,8 @@ def run_migration(monkeypatch, tmp_path, songs):
 
 
 def test_migration_moves_legacy_directory_and_removes_duplicate_source(monkeypatch, tmp_path):
-    legacy = tmp_path / "legacy"
-    legacy.mkdir()
+    legacy = tmp_path / "backend" / "Song" / "song"
+    legacy.mkdir(parents=True)
     (legacy / "song.mp3").write_bytes(b"normalized")
     original = tmp_path / "original.wav"
     original.write_bytes(b"duplicate")
@@ -69,7 +69,8 @@ def test_migration_moves_legacy_directory_and_removes_duplicate_source(monkeypat
 
 
 def test_migration_moves_external_source_and_recovers_missing_path(monkeypatch, tmp_path):
-    external = tmp_path / "track.FLAC"
+    external = tmp_path / "backend" / "full_songs" / "track.FLAC"
+    external.parent.mkdir(parents=True)
     external.write_bytes(b"audio")
     first = song(tmp_path, source_path=str(external), slug="first", id="first")
     missing = song(
@@ -77,10 +78,10 @@ def test_migration_moves_external_source_and_recovers_missing_path(monkeypatch, 
         source_path=str(tmp_path / "missing.wav"),
         slug="second",
         id="second",
-        output_dir=str(tmp_path / "existing"),
+        output_dir=str(tmp_path / "backend" / "Song" / "second"),
     )
-    existing = tmp_path / "existing"
-    existing.mkdir()
+    existing = tmp_path / "backend" / "Song" / "second"
+    existing.mkdir(parents=True)
     retained = existing / "source.wav"
     retained.write_bytes(b"retained")
 
@@ -112,7 +113,7 @@ def test_migration_keeps_current_human_readable_library_directory(monkeypatch, t
 
 
 def test_migration_rewrites_source_inside_already_moved_output(monkeypatch, tmp_path):
-    previous = tmp_path / "old/song"
+    previous = tmp_path / "backend" / "Song" / "song"
     previous.mkdir(parents=True)
     nested = previous / "nested/source.wav"
     nested.parent.mkdir()
@@ -140,8 +141,8 @@ def test_migration_rolls_back_and_closes_database_on_failure(monkeypatch, tmp_pa
 
 
 def test_migration_falls_back_to_cross_device_move(monkeypatch, tmp_path):
-    legacy = tmp_path / "legacy"
-    legacy.mkdir()
+    legacy = tmp_path / "backend" / "Song" / "song"
+    legacy.mkdir(parents=True)
     (legacy / "song.mp3").write_bytes(b"audio")
     current = song(tmp_path, source_path=str(legacy / "song.mp3"), output_dir=str(legacy))
     real_replace = Path.replace
@@ -160,3 +161,42 @@ def test_migration_falls_back_to_cross_device_move(monkeypatch, tmp_path):
     assert target.is_dir()
     assert (target / "song.mp3").read_bytes() == b"audio"
     assert not legacy.exists()
+
+
+def test_migration_restores_files_when_commit_fails_after_move(monkeypatch, tmp_path):
+    legacy = tmp_path / "backend" / "Song" / "song"
+    legacy.mkdir(parents=True)
+    source = legacy / "song.mp3"
+    source.write_bytes(b"audio")
+    current = song(tmp_path, source_path=str(source), output_dir=str(legacy))
+    database = Mock()
+    database.query.return_value.all.return_value = [current]
+    monkeypatch.setattr(storage_migration, "SessionLocal", Mock(return_value=database))
+    monkeypatch.setattr(storage_migration.config, "BASE_DIR", tmp_path / "backend")
+    monkeypatch.setattr(storage_migration.config, "SONG_OUTPUT_DIR", tmp_path / "library")
+    monkeypatch.setattr(storage_migration, "commit", Mock(side_effect=RuntimeError("commit failed")))
+
+    with pytest.raises(RuntimeError, match="commit failed"):
+        storage_migration.migrate_legacy_song_storage()
+
+    assert legacy.is_dir()
+    assert (legacy / "song.mp3").read_bytes() == b"audio"
+    assert not (tmp_path / "library" / "song").exists()
+    assert current.output_dir == str(legacy)
+    assert current.source_path == str(source)
+    database.rollback.assert_called_once_with()
+
+
+def test_startup_migration_does_not_move_previous_user_library(monkeypatch, tmp_path):
+    old_root = tmp_path / "old-library"
+    output = old_root / "song"
+    output.mkdir(parents=True)
+    source = output / "song.mp3"
+    source.write_bytes(b"audio")
+    current = song(tmp_path, source_path=str(source), output_dir=str(output))
+
+    run_migration(monkeypatch, tmp_path, [current])
+
+    assert output.is_dir()
+    assert current.output_dir == str(output)
+    assert not (tmp_path / "library" / "song").exists()

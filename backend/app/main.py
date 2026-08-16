@@ -6,15 +6,18 @@
 """
 
 import asyncio
+import hmac
+import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 import config
 from AI import service as ai_service
 from app.routers import analysis, application, audio, cache, diagnostics, player, recording, songs
-from app.services import audio_service, pipeline_service, recording_service, storage_migration
+from app.services import audio_service, cache_service, pipeline_service, recording_service, song_package_service, storage_migration
 from database import init_db
 
 _BENIGN_WINDOWS_DISCONNECTS = {64, 109, 232, 10053, 10054}
@@ -51,6 +54,8 @@ async def lifespan(_app: FastAPI):
     loop.set_exception_handler(handle_loop_exception)
     init_db()
     storage_migration.migrate_legacy_song_storage()
+    song_package_service.recover_import_transactions()
+    cache_service.recover_optimization_transactions()
     for line in pipeline_service.format_runtime_plan(pipeline_service._configure_ai_runtime()):
         print(f"[backend] AI runtime: {line}", flush=True)
     try:
@@ -70,7 +75,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="A&D Voice Backend",
     description="Локальный backend поверх AI-пайплайна: управление песнями, плеер, запись, анализ голоса.",
-    version="0.1.0",
+    version="0.3.5",
     lifespan=lifespan,
 )
 
@@ -81,8 +86,20 @@ app.add_middleware(
     allow_origins=list(config.CORS_ORIGINS),
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Accept", "Authorization", "Content-Type"],
+    allow_headers=["Accept", "Authorization", "Content-Type", "X-ADVoice-Token"],
 )
+
+_API_TOKEN = os.environ.get("SONGAPP_API_TOKEN", "")
+
+
+@app.middleware("http")
+async def require_launch_token(request: Request, call_next):
+    """Authenticate the Electron-to-loopback capability when a launch token is configured."""
+    if _API_TOKEN and request.method != "OPTIONS":
+        supplied = request.headers.get("X-ADVoice-Token", "")
+        if not supplied or not hmac.compare_digest(supplied, _API_TOKEN):
+            return JSONResponse({"detail": "Invalid local API token"}, status_code=403)
+    return await call_next(request)
 
 app.include_router(songs.router)
 app.include_router(player.router)

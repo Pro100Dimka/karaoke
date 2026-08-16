@@ -1,4 +1,4 @@
-﻿param(
+param(
     [ValidateSet("full","fast","installer","setup","clean")]
     [string]$Mode = "full",
 
@@ -73,7 +73,8 @@ $CMake = Join-Path $Vs "Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\c
 $Ninja = Join-Path $Vs "Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe"
 
 $AppName = "A&D Voice"
-$AppVersion = "1.0.0"
+$AppVersion = (Get-Content -LiteralPath (Join-Path $Frontend "package.json") -Raw | ConvertFrom-Json).version
+if (-not $AppVersion) { throw "front/package.json does not define version" }
 $AppExe = "A&D Voice.exe"
 
 $ModelCheck = Join-Path $Backend "AI\install_models.py"
@@ -118,6 +119,18 @@ $IsoSchemaVersion       = "iso-optional-models-v8-runtime-msst"
 $IsoViewSchemaVersion   = "iso-view-hardlinks-v1"
 $ElectronSignSchemaVersion  = "electron-sign-v1"
 $ElectronSmokeSchemaVersion = "electron-smoke-v1"
+
+if (-not $Worker) {
+    Write-Host "Running mandatory release gate..."
+    $ReleaseGate = Join-Path $Root "verify-release.bat"
+    if (-not (Test-Path -LiteralPath $ReleaseGate -PathType Leaf)) {
+        throw "Release gate was not found: $ReleaseGate"
+    }
+    & $ReleaseGate
+    if ($LASTEXITCODE -ne 0) {
+        throw "Release gate failed. Installer build is blocked."
+    }
+}
 
 function Write-Header([string]$Text) {
     Write-Host ""
@@ -1452,7 +1465,11 @@ function Check-Environment {
 
     Write-Host "Checking node.exe:"
     Write-Host "  $script:NodeExe"
-    Write-Host "[OK] node.exe"
+    $nodeVersionText = (& $script:NodeExe -p "process.versions.node").Trim()
+    try { $nodeVersion = [version]$nodeVersionText } catch { throw "Could not parse Node.js version: $nodeVersionText" }
+    $nodeSupported = (($nodeVersion.Major -eq 22 -and $nodeVersion -ge [version]"22.18.0") -or ($nodeVersion.Major -eq 24 -and $nodeVersion -ge [version]"24.11.0") -or $nodeVersion.Major -gt 24)
+    if (-not $nodeSupported) { throw "Unsupported Node.js $nodeVersionText. Required: >=22.18.0 <23 or >=24.11.0." }
+    Write-Host "[OK] node.exe $nodeVersionText"
     Write-Host ""
 
     Write-Host "Checking npm.cmd:"

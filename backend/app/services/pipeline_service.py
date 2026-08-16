@@ -36,6 +36,7 @@ from app.services import (
     app_settings_service,
     cache_service,
     model_install_service,
+    revision_cache,
     song_service,
 )
 from app.services.db_utils import commit
@@ -54,6 +55,7 @@ _NOISY_PROGRESS_RE = re.compile(
 # запускать одну и ту же песню повторно, пока предыдущий запуск не завершился
 _active_jobs: dict[str, threading.Thread] = {}
 _active_jobs_lock = threading.RLock()
+_processing_slot = threading.Lock()
 _cancelled_jobs: set[str] = set()
 _progress_runtime: dict[str, dict] = {}
 _progress_runtime_lock = threading.RLock()
@@ -428,6 +430,11 @@ def is_processing(song_id: str) -> bool:
         return thread is not None and thread.is_alive()
 
 
+def has_active_jobs() -> bool:
+    with _active_jobs_lock:
+        return any(thread.is_alive() for thread in _active_jobs.values())
+
+
 def _release_active_job(song_id: str) -> None:
     """Remove a job only when the calling worker still owns that slot."""
     with _active_jobs_lock:
@@ -659,6 +666,14 @@ def _create_ai_progress_callback(
     return on_ai_progress
 
 
+def _acquire_processing_slot(song_id: str) -> bool:
+    while True:
+        if _processing_slot.acquire(timeout=0.2):
+            return True
+        if _is_cancelled(song_id):
+            return False
+
+
 def _run_job(song_id: str) -> None:
     paths = _load_job_paths(song_id)
     if paths is None or _is_cancelled(song_id):
@@ -670,22 +685,17 @@ def _run_job(song_id: str) -> None:
     capture: _ProgressCapture | None = None
     heartbeat_stop: threading.Event | None = None
     heartbeat_thread: threading.Thread | None = None
+    slot_acquired = False
     try:
-        _update_progress(
-            song_id,
-            status=models.SongStatus.PROCESSING,
-            percent=0.0,
-            step_label="0/13",
-        )
+        slot_acquired = _acquire_processing_slot(song_id)
+        if not slot_acquired:
+            return
+        _update_progress(song_id, status=models.SongStatus.PROCESSING, percent=0.0, step_label="0/13")
         _begin_runtime_progress(song_id)
         heartbeat_stop, heartbeat_thread = _start_progress_heartbeat(song_id)
         capture = _create_progress_capture(song_id, out_dir)
-
-        # Installed models live in LocalAppData and survive installer retries.
-        # Validate them before expensive processing starts; a missing HF shard is
-        # repaired here instead of crashing later at the ASR/alignment stage.
         _update_progress(song_id, step_label="Проверка AI-моделей", percent=1.0)
-        model_install_service.ensure_ready_sync()
+        model_install_service.ensure_ready_sync(cancelled=lambda: _is_cancelled(song_id))
 
         runtime_plan = _configure_ai_runtime()
         capture.write(
@@ -696,23 +706,13 @@ def _run_job(song_id: str) -> None:
         for line in format_runtime_plan(runtime_plan):
             capture.write(f"[backend] AI runtime: {line}\n")
 
-        on_ai_progress = _create_ai_progress_callback(song_id, capture)
-
-        with (
-            contextlib.redirect_stdout(cast(TextIO, capture)),
-            contextlib.redirect_stderr(cast(TextIO, capture)),
-        ):
-            ai_bridge.process_song(
-                source_path,
-                out_dir,
-                language=None if lyrics_path is not None else config.DEFAULT_LANGUAGE,
-                lyrics_path=lyrics_path,
-                title=searchable_title,
-                bpm_override=bpm_override,
-                key_override=key_override,
-                progress=on_ai_progress,
-                cancelled=lambda: _is_cancelled(song_id),
-            )
+        ai_bridge.process_song(
+            source_path, out_dir,
+            language=None if lyrics_path is not None else config.DEFAULT_LANGUAGE,
+            lyrics_path=lyrics_path, title=searchable_title, bpm_override=bpm_override,
+            key_override=key_override, progress=_create_ai_progress_callback(song_id, capture),
+            cancelled=lambda: _is_cancelled(song_id),
+        )
     except ProcessingCancelled:
         _update_progress(song_id, status=models.SongStatus.CANCELLED, step_label="Отменено")
         return
@@ -721,59 +721,38 @@ def _run_job(song_id: str) -> None:
             _update_progress(song_id, status=models.SongStatus.CANCELLED, step_label="Отменено")
             return
         _write_pipeline_error(capture, exc)
-        _update_progress(
-            song_id,
-            status=models.SongStatus.ERROR,
-            error_message=_format_processing_error(exc),
-        )
+        _update_progress(song_id, status=models.SongStatus.ERROR, error_message=_format_processing_error(exc))
         return
     finally:
         if capture is not None:
             capture.close()
         _stop_progress_heartbeat(heartbeat_stop, heartbeat_thread)
         _end_runtime_progress(song_id)
+        if slot_acquired:
+            _processing_slot.release()
 
     if not _is_cancelled(song_id):
         try:
-            _finalize_success(song_id, out_dir)
+            with song_service.library_write_lock():
+                _finalize_success(song_id, out_dir)
         except Exception as exc:  # noqa: BLE001 - finalization is a worker boundary
             _update_progress(
                 song_id,
                 status=models.SongStatus.ERROR,
-                error_message=(
-                    f"Could not finalize processing results: {_format_processing_error(exc)}"
-                ),
+                error_message=f"Could not finalize processing results: {_format_processing_error(exc)}",
             )
 
 
 _MIDI_REBUILD_FILES = (
-    "pitchRaw.json",
-    "pitch.json",
-    "syllables.json",
-    "reference.json",
-    "acousticNotes.json",
-    "melodyContour.json",
-    "vocal.mid",
-    "game.mid",
-    "songMap.json",
-    "songInfo.json",
-    "difficulty.json",
-    "quality.json",
-    "diagnostics.json",
-    "alignmentDebug.json",
-    "manifest.json",
+    "pitchRaw.json", "pitch.json", "syllables.json", "reference.json", "acousticNotes.json",
+    "melodyContour.json", "vocal.mid", "game.mid", "songMap.json", "songInfo.json",
+    "difficulty.json", "quality.json", "diagnostics.json", "alignmentDebug.json",
 )
 
 
 def _force_midi_rebuild(out_dir: Path) -> None:
-    """Remove every downstream melody artefact and its cache entries.
-
-    Reprocessing previously claimed to clear generated melody files but simply
-    called the normal cached pipeline.  That made it possible to keep showing an
-    old reference/MIDI after code changes.  Preserve expensive decode/separation,
-    music analysis and trusted lyric alignment, but force pitch -> notes -> MIDI
-    -> song map to be produced again by the code loaded in this process.
-    """
+    # Keep manifest.json until the new pipeline generation is published: optimized
+    # reprocess needs its outputs/integrity provenance to restore trusted FLAC stems.
     cache = StageCache(out_dir / ".ai-cache")
     cache.invalidate("pitch", "derivation", "midi", "song-map")
     for relative in _MIDI_REBUILD_FILES:
@@ -791,6 +770,7 @@ def _run_reprocessing(song_id: str) -> None:
         if song is None:
             return
         out_dir = song_service.resolve_output_dir(song)
+        optimized = bool(getattr(song, "optimized", False))
     finally:
         db.close()
     output_root = config.SONG_OUTPUT_DIR.resolve()
@@ -802,8 +782,10 @@ def _run_reprocessing(song_id: str) -> None:
             error_message="Недопустимый путь к результатам песни",
         )
         return
-    _force_midi_rebuild(out_dir)
-    _run_job(song_id)
+    with song_service.song_content_lock(song_id):
+        cache_service.recover_optimization_state(out_dir, committed=optimized)
+        _force_midi_rebuild(out_dir)
+        _run_job(song_id)
 
 
 def _read_optional_generated_json(path: Path, default):
@@ -867,10 +849,14 @@ def _finalize_success(song_id: str, out_dir: Path) -> None:
         # song editor do not need to infer them from generated files again.
         _apply_generated_metadata(song, out_dir)
         song.status = models.SongStatus.DONE
+        # A successful pipeline/reprocess publishes a fresh unoptimized generation.
+        # Only optimize_song_files() may mark that exact generation optimized=True.
+        song.optimized = False
         song.progress_percent = 100.0
         song.progress_step = "13/13"
         song.error_message = None
         commit(db)
+        revision_cache.invalidate(song)
     finally:
         db.close()
 

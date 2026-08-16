@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   connect: vi.fn(),
   start: vi.fn(),
   importSongPackage: vi.fn(),
+  getSongRevision: vi.fn(),
   openKaraokeInRoom: vi.fn(),
   messageHandler: vi.fn(),
   createOnlineRoomMessageHandler: vi.fn(),
@@ -41,7 +42,7 @@ vi.mock("../src/services/onlineRoom", () => {
   }
   return { createRoomId: () => "created-room", OnlineRoomClient, OnlineVoiceMesh };
 });
-vi.mock("../src/api/client", () => ({ api: { importSongPackage: mocks.importSongPackage } }));
+vi.mock("../src/api/client", () => ({ api: { importSongPackage: mocks.importSongPackage, getSongRevision: mocks.getSongRevision } }));
 vi.mock("../src/contexts/hooks/useApplicationAudioMute", () => ({
   default: () => ({
     muteApplicationAudio: mocks.muteApplicationAudio,
@@ -80,6 +81,7 @@ beforeEach(async () => {
   mocks.connect.mockResolvedValue("room-id");
   mocks.start.mockResolvedValue(stream());
   mocks.importSongPackage.mockResolvedValue({ id: "song" });
+  mocks.getSongRevision.mockImplementation(async () => ({ revision: "sha256:" + "a".repeat(64) }));
   mocks.openKaraokeInRoom.mockResolvedValue(true);
   mocks.createOnlineRoomMessageHandler.mockReturnValue(mocks.messageHandler);
   vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
@@ -912,10 +914,11 @@ describe("online room provider", () => {
       options.setRoom({ id: "room-id", selfId: "guest", host: false, role: "guest" });
       options.setParticipants([{ id: "host", role: "host" }, { id: "attacker", role: "guest" }]);
     });
+    const revision = "sha256:" + "a".repeat(64);
     options.pendingSongCommandRef.current = {
-      type: "open-karaoke", songId: "expected", commandId: "cmd-expected", __originatedHere: false
+      type: "open-karaoke", songId: "expected", commandId: "cmd-expected", revision, __originatedHere: false
     };
-    const expected = { kind: "song-package", songId: "expected", commandId: "cmd-expected" };
+    const expected = { kind: "song-package", songId: "expected", commandId: "cmd-expected", revision };
     expect(voice.canAcceptFile("attacker", expected)).toBe(false);
     expect(voice.canAcceptFile("host", { ...expected, songId: "wrong" })).toBe(false);
     expect(voice.canAcceptFile("host", { ...expected, commandId: "wrong" })).toBe(false);
@@ -924,7 +927,7 @@ describe("online room provider", () => {
     await expect(voice.onFile("host", new Blob(), { ...expected, songId: "wrong" })).rejects.toThrow();
     expect(mocks.importSongPackage).not.toHaveBeenCalled();
     await expect(voice.onFile("host", new Blob(), { ...expected, filename: "expected.zip" })).resolves.toBe(true);
-    expect(mocks.importSongPackage).toHaveBeenCalledExactlyOnceWith(expect.any(Blob), "expected.zip");
+    expect(mocks.importSongPackage).toHaveBeenCalledExactlyOnceWith(expect.any(Blob), "expected.zip", { expectedRevision: revision });
   });
 
   test("cancels an older connection when a newer request wins", async () => {

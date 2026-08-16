@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { api } from "../api/client";
 import { translateSaved } from "../i18n/runtime";
 import { playParticipantJoinedSound } from "./onlineRoomAudio";
-import { createRoomId, OnlineRoomClient, OnlineVoiceMesh } from "../services/onlineRoom";
+import { createHostToken, createRoomId, OnlineRoomClient, OnlineVoiceMesh } from "../services/onlineRoom";
 import { getErrorMessage } from "../utils/errors";
 import useApplicationAudioMute from "./hooks/useApplicationAudioMute";
 import useOnlineRoomAudio from "./hooks/useOnlineRoomAudio";
@@ -208,7 +208,7 @@ export function OnlineRoomProvider({ children }) {
     [cleanupConnection, resetRoomState, restoreApplicationAudio]
   );
   const connect = useCallback(
-    async ({ id, name, host }) => {
+    async ({ id, name, host, hostToken }) => {
       const connectionToken = Symbol("room-connection");
       connectionTokenRef.current = connectionToken;
       intentionalDisconnectRef.current = true;
@@ -251,7 +251,7 @@ export function OnlineRoomProvider({ children }) {
         const pending = pendingSongCommandRef.current;
         return isCurrentConnection() && metadata?.kind === "song-package" && !!metadata.songId &&
           !!metadata.commandId && pending?.commandId === metadata.commandId &&
-          pending.songId === metadata.songId && !pending.__originatedHere &&
+          pending.songId === metadata.songId && pending.revision === metadata.revision && !pending.__originatedHere &&
           participantsRef.current.some((participant) => participant.id === participantId && participant.role === "host");
       };
       voice.canAcceptFile = canAcceptSongPackage;
@@ -261,15 +261,19 @@ export function OnlineRoomProvider({ children }) {
           throw new Error(translateSaved("Получение пакета песни больше не разрешено"));
         try {
           setTransferStatus({ participantId, commandId: metadata.commandId, stage: "importing", percent: 100 });
-          await (signal
-            ? api.importSongPackage(blob, metadata.filename, { signal })
-            : api.importSongPackage(blob, metadata.filename));
+          await api.importSongPackage(blob, metadata.filename, {
+            ...(signal ? { signal } : {}),
+            expectedRevision: metadata.revision
+          });
+          const imported = await api.getSongRevision(metadata.songId);
+          if (imported?.revision !== metadata.revision)
+            throw new Error(translateSaved("Импортированная версия песни не совпадает с версией комнаты"));
           if (!isCurrentConnection() || pendingSongCommandRef.current?.commandId !== metadata.commandId) return false;
           pendingSongCommandRef.current = null;
           setTransferStatus({ participantId, commandId: metadata.commandId, stage: "complete", percent: 100 });
           if (pendingCommand?.commandId === metadata.commandId && pendingCommand.songId === metadata.songId) {
             if (pendingCommand.__originatedHere) {
-              client.send("sync", { state: { type: "open-karaoke", songId: pendingCommand.songId, commandId: pendingCommand.commandId } });
+              client.send("sync", { state: { type: "open-karaoke", songId: pendingCommand.songId, commandId: pendingCommand.commandId, revision: pendingCommand.revision } });
             }
             setRoomCommand({
               ...pendingCommand,
@@ -324,7 +328,7 @@ export function OnlineRoomProvider({ children }) {
         })
       );
       try {
-        const normalizedId = await client.connect({ id, name, host });
+        const normalizedId = await client.connect({ id, name, host, hostToken });
         if (!isCurrentConnection()) throw new Error( translateSaved("Подключение отменено новым запросом") );
 
         // Show the room UI as soon as the WebSocket is connected. The server
@@ -393,7 +397,7 @@ export function OnlineRoomProvider({ children }) {
   );
   const createRoom = useCallback(
     (name) =>
-      connect({ id: createRoomId(), name, host: true }),
+      connect({ id: createRoomId(), name, host: true, hostToken: createHostToken() }),
     // Stryker disable next-line ArrayDeclaration: connect is stable.
     [connect]
   );
@@ -437,7 +441,7 @@ export function OnlineRoomProvider({ children }) {
     effectPeople.forEach((id) => applyParticipantEffects(id, true));
   }, [applyParticipantEffects, effectPeople, effectsByParticipant]);
   const { openKaraoke, syncCommand, syncUi } = useOnlineRoomCommands({
-    clientRef, connectionTokenRef, hostSongCommandRef, roomRef
+    api, clientRef, connectionTokenRef, hostSongCommandRef, roomRef, voiceRef
   });
   const value = useOnlineRoomValue({
     createRoom,

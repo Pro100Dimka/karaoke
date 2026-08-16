@@ -52,12 +52,13 @@ test("dialog contracts normalize kinds, messages and close results", () => {
 test("only the host can publish the room karaoke selection", async () => {
   const client = { send: vi.fn() };
   const hostSongCommandRef = { current: null };
-  const base = { songId: "song", client, hostSongCommandRef };
+  const base = { songId: "song", client, hostSongCommandRef, roomApi: { getSongRevision: vi.fn().mockResolvedValue({ revision: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }) } };
   assert.equal(await openKaraokeInRoom({ ...base, room: null, isCurrentConnection: () => true }), true);
   const first = client.send.mock.calls.at(-1)[1].state;
   assert.equal(first.type, "open-karaoke");
   assert.equal(first.songId, "song");
   assert.equal(typeof first.commandId, "string");
+  assert.equal(first.revision.startsWith("sha256:"), true);
   assert.equal(hostSongCommandRef.current.commandId, first.commandId);
   client.send.mockClear();
   assert.equal(await openKaraokeInRoom({ ...base, room: { host: true }, isCurrentConnection: () => true }), true);
@@ -99,7 +100,7 @@ test("room messages update participants, UI, voice and connection state", async 
   };
   const roomApi = {
     exportSongPackage: vi.fn().mockResolvedValue(new Blob(["x"])),
-    getSong: vi.fn().mockResolvedValue({})
+    getSongRevision: vi.fn().mockResolvedValue({ revision: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" })
   };
   const setters = {
     cleanupConnection: vi.fn(),
@@ -232,7 +233,7 @@ test("cleans a coalesced exported package even if the room becomes stale", async
   let resolveExport;
   let current = true;
   const cleanup = vi.fn().mockResolvedValue();
-  const hostSongCommandRef = { current: { type: "open-karaoke", songId: "song", commandId: "cmd" } };
+  const hostSongCommandRef = { current: { type: "open-karaoke", songId: "song", commandId: "cmd", revision: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } };
   const handler = createOnlineRoomMessageHandler({
     id: "room",
     client: { send: vi.fn() },
@@ -256,7 +257,7 @@ test("cleans a coalesced exported package even if the room becomes stale", async
   handler({
     type: "sync",
     fromId: "guest",
-    state: { type: "song-request", requesterId: "guest", songId: "song", commandId: "cmd" }
+    state: { type: "song-request", requesterId: "guest", songId: "song", commandId: "cmd", revision: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
   });
   current = false;
   const blob = new Blob(["x"]);

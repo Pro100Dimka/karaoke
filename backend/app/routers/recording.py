@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 import schemas
 from app import repositories
 from app.api.dependencies import DatabaseSession, RecordingDependency, SongDependency
-from app.services import audio_service, recording_service
+from app.services import audio_service, pipeline_service, recording_service
 from database import get_db
 
 router = APIRouter(prefix="/recording", tags=["recording"])
@@ -67,6 +67,8 @@ def start_recording(body: schemas.RecordingStartRequest, db: DatabaseSession):
     song = repositories.get_song(db, body.song_id)
     if song is None:
         raise HTTPException(status_code=404, detail="Песня не найдена")
+    if pipeline_service.is_processing(song.id):
+        raise HTTPException(status_code=409, detail="Нельзя начать запись во время обработки песни")
     settings = audio_service.get_settings(db)
     try:
         keep_native_monitor = _configure_recording_monitor(settings, body)

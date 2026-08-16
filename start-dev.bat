@@ -168,6 +168,9 @@ echo ============================================================
 echo.
 
 cd /d "%FRONT%" || goto :err
+where node >nul 2>nul || (echo [ERROR] Node.js is required. & goto :err)
+for /f %%V in ('node -p "process.versions.node"') do set "NODE_VER=%%V"
+node -e "const [a,b,c]=process.versions.node.split('.').map(Number);const ok=(a===22&&(b>18||b===18&&c>=0))||(a===24&&(b>11||b===11&&c>=0))||a>24;process.exit(ok?0:1)" || (echo [ERROR] Node.js 22.18+ ^(or 24.11+^) is required. Found !NODE_VER! & goto :err)
 call npm run dev:electron
 exit /b %errorlevel%
 

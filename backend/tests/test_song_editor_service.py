@@ -1,3 +1,4 @@
+from pathlib import Path
 import json
 from unittest.mock import Mock
 
@@ -111,7 +112,7 @@ def test_refresh_lines_ignores_invalid_links_and_line_entries():
     assert song_map["lines"][0]["words"][0]["index"] == 0
 
 
-def test_refresh_lines_projects_association_without_splitting_musical_note():
+def test_refresh_lines_projects_merged_note_into_disjoint_syllable_windows():
     song_map = {
         "syllables": [
             {"index": 0, "word_index": 0, "start": 0, "end": 0.5, "text": "a"},
@@ -126,11 +127,11 @@ def test_refresh_lines_projects_association_without_splitting_musical_note():
 
     projected = song_map["words"][0]["syllables"]
     assert [item["display_notes"][0]["syllable_index"] for item in projected] == [0, 1]
-    assert all(
-        (item["display_notes"][0]["start"], item["display_notes"][0]["end"]) == (0, 1)
+    assert [
+        (item["display_notes"][0]["start"], item["display_notes"][0]["end"])
         for item in projected
-    )
-    assert all(item["display_notes"][0]["syllable_indices"] == [0, 1] for item in projected)
+    ] == [(0, 0.5), (0.5, 1)]
+    assert [item["display_notes"][0]["syllable_indices"] for item in projected] == [[0], [1]]
 
 
 def test_load_editor_repairs_generated_boundary_syllable_associations(tmp_path):
@@ -206,7 +207,7 @@ def test_load_and_normalize_editor_validate_contract(tmp_path):
 def test_save_editor_creates_backup_json_midi_manifest_and_empty_cleanup(monkeypatch, tmp_path):
     write_json(tmp_path / "songMap.json", base_song_map())
     write_json(tmp_path / "manifest.json", {"existing": True})
-    midi = Mock()
+    midi = Mock(side_effect=lambda path, *_args, **_kwargs: Path(path).write_bytes(b"MThd"))
     monkeypatch.setattr(song_editor_service, "write_midi", midi)
     notes = [
         {
@@ -267,7 +268,7 @@ def test_reset_editor_validates_backup_and_rebuilds_outputs(monkeypatch, tmp_pat
     ]
     write_json(backup, payload)
     write_json(tmp_path / "manifest.json", {})
-    midi = Mock()
+    midi = Mock(side_effect=lambda path, *_args, **_kwargs: Path(path).write_bytes(b"MThd"))
     monkeypatch.setattr(song_editor_service, "write_midi", midi)
     restored = song_editor_service.reset_editor(tmp_path)
     assert restored["notes"] == payload["notes"]

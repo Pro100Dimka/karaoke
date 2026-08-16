@@ -58,13 +58,14 @@ export function createOnlineRoomMessageHandler(options) {
         !command.commandId ||
         message.fromId !== command.requesterId ||
         offered?.commandId !== command.commandId ||
-        offered.songId !== command.songId
+        offered.songId !== command.songId ||
+        offered.revision !== command.revision
       ) return false;
 
       let exportEntry = songExportsRef.current.get(command.commandId);
       if (!exportEntry) {
         exportEntry = {
-          promise: roomApi.exportSongPackage(command.songId),
+          promise: roomApi.exportSongPackage(command.songId, command.revision),
           requesters: new Set(),
           users: 0
         };
@@ -81,6 +82,7 @@ export function createOnlineRoomMessageHandler(options) {
             kind: "song-package",
             songId: command.songId,
             commandId: command.commandId,
+            revision: command.revision,
             filename: `${command.songId}.karaoke.zip`
           });
         })
@@ -128,11 +130,14 @@ export function createOnlineRoomMessageHandler(options) {
       return true;
     },
     "open-karaoke": (command, message) => {
-      if (activeRoomRef.current?.host || !senderIsHost(message) || !command.songId || !command.commandId) return false;
+      if (activeRoomRef.current?.host || !senderIsHost(message) || !command.songId || !command.commandId || !command.revision) return false;
+      const previousCommandId = pendingCommandRef.current?.commandId;
+      if (previousCommandId && previousCommandId !== command.commandId) voice.cancelTransfersByCommandId?.(previousCommandId);
       pendingCommandRef.current = command;
-      roomApi.getSong(command.songId)
-        .then(() => {
+      roomApi.getSongRevision(command.songId)
+        .then((local) => {
           if (!isCurrentPending(command)) return;
+          if (local?.revision !== command.revision) throw new Error("Song revision differs");
           pendingCommandRef.current = null;
           setTransferStatus({ participantId: message.fromId, stage: "complete", percent: 100 });
           publishRoomCommand(command, message.sentAt || "sync");
@@ -145,6 +150,7 @@ export function createOnlineRoomMessageHandler(options) {
               type: "song-request",
               commandId: command.commandId,
               songId: command.songId,
+              revision: command.revision,
               requesterId: activeRoomRef.current?.selfId
             }
           });

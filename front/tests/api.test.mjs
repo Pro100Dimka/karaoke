@@ -512,10 +512,11 @@ describe("API domains", () => {
     );
 
     globalThis.fetch.mockResolvedValueOnce(response({ body: "package" }));
-    assert.equal( await (await songsApi.exportSongPackage("a/b")).text(), "package"
+    assert.equal( await (await songsApi.exportSongPackage("a/b", "sha256:abc")).text(), "package"
     );
     [url, options] = globalThis.fetch.mock.calls.at(-1);
     assert.equal(new URL(url).pathname, "/songs/a%2Fb/package");
+    assert.equal(new URL(url).searchParams.get("expected_revision"), "sha256:abc");
     assert.equal(options.method, undefined);
 
     const archive = new Blob(["zip"]);
@@ -526,9 +527,10 @@ describe("API domains", () => {
     assert.equal(options.body.get("file").name, "song.karaoke.zip");
     assert.equal(await options.body.get("file").text(), "zip");
 
-    await songsApi.importSongPackage(archive, "custom.zip");
-    [, options] = globalThis.fetch.mock.calls.at(-1);
+    await songsApi.importSongPackage(archive, "custom.zip", { expectedRevision: "sha256:def" });
+    [url, options] = globalThis.fetch.mock.calls.at(-1);
     assert.equal(options.body.get("file").name, "custom.zip");
+    assert.equal(new URL(url).searchParams.get("expected_revision"), "sha256:def");
   });
 
   test("persists backend settings and UI preferences", async () => {

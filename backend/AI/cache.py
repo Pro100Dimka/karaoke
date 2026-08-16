@@ -81,6 +81,13 @@ class StageCache:
         )
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
+    def key_matches(self, stage: str, key: str) -> bool:
+        """Return whether the persisted stage provenance matches ``key``."""
+        with self._lock:
+            self.index = self._load_index()
+            entry = self.index.get("stages", {}).get(stage)
+        return isinstance(entry, dict) and entry.get("key") == key
+
     def hit(
         self,
         stage: str,

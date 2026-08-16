@@ -243,3 +243,15 @@ def test_performance_file_prefers_mp3_then_wav_then_voice(monkeypatch, tmp_path)
     with pytest.raises(HTTPException) as missing:
         recording.get_performance_file(current)
     assert missing.value.status_code == 404
+
+
+def test_recording_start_is_blocked_while_song_is_processing(monkeypatch):
+    database = Mock()
+    body = start_body()
+    monkeypatch.setattr(recording.repositories, "get_song", Mock(return_value=SimpleNamespace(id="song")))
+    monkeypatch.setattr(recording.pipeline_service, "is_processing", Mock(return_value=True))
+
+    with pytest.raises(HTTPException) as blocked:
+        recording.start_recording(body, database)
+
+    assert blocked.value.status_code == 409

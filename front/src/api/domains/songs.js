@@ -5,6 +5,8 @@ export const songsApi = {
   listSongs: () => request("/songs").then(normalizeSongList),
   getSong: (id) =>
     request(`/songs/${encodePathSegment(id)}`).then(normalizeSong),
+  getSongRevision: (id) =>
+    request(`/songs/${encodePathSegment(id)}/revision`),
   addSong: (file, title) => {
     const form = new FormData();
     form.append("file", file);
@@ -43,13 +45,16 @@ export const songsApi = {
     createFileUrl(
       `/songs/${encodePathSegment(id)}/audio/${encodePathSegment(track)}`
     ),
-  exportSongPackage: (rawId) => {
+  exportSongPackage: (rawId, expectedRevision) => {
     const id = encodePathSegment(rawId);
-    return requestBlob(`/songs/${id}/package`, { timeoutMs: 5 * 60_000 });
+    const query = expectedRevision ? `?expected_revision=${encodeURIComponent(expectedRevision)}` : "";
+    return requestBlob(`/songs/${id}/package${query}`, { timeoutMs: 5 * 60_000 });
   },
   importSongPackage: (blob, filename = "song.karaoke.zip", options = {}) => {
+    const { expectedRevision, ...requestOptions } = options;
     const form = new FormData();
+    const query = expectedRevision ? `?expected_revision=${encodeURIComponent(expectedRevision)}` : "";
     form.append("file", blob, filename);
-    return request("/songs/package/import", { ...options, method: "POST", body: form, timeoutMs: 5 * 60_000 });
+    return request(`/songs/package/import${query}`, { ...requestOptions, method: "POST", body: form, timeoutMs: 5 * 60_000 });
   }
 };

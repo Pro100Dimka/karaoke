@@ -13,6 +13,7 @@ from AI.model_registry import MODELS
 logger = logging.getLogger(__name__)
 
 _lock = threading.RLock()
+_condition = threading.Condition(_lock)
 _state: dict[str, str | None] = {
     "state": "idle",
     "current_model": None,
@@ -111,7 +112,7 @@ def _download_worker(models_root: Path, cache_dir: Path) -> None:
 
 
 
-def ensure_ready_sync() -> dict[str, object]:
+def ensure_ready_sync(cancelled=None) -> dict[str, object]:
     """Repair incomplete installed-model snapshots before a processing job starts.
 
     Installer downloads are intentionally resumable and live outside Program Files.
@@ -122,11 +123,14 @@ def ensure_ready_sync() -> dict[str, object]:
     if all(is_valid(models_root, model) for model in MODELS):
         return status()
 
-    with _lock:
-        if _state["state"] == "downloading":
-            # Another recovery worker is already active.  Processing must not race
-            # it and observe a half-written snapshot.
-            raise RuntimeError("AI models are still being restored; please retry when recovery finishes")
+    with _condition:
+        while _state["state"] == "downloading":
+            if cancelled is not None and cancelled():
+                from AI.errors import ProcessingCancelled
+                raise ProcessingCancelled("Cancelled while waiting for AI models")
+            _condition.wait(timeout=0.2)
+            if all(is_valid(models_root, model) for model in MODELS):
+                return status()
         _state.update(state="downloading", current_model=None, error=None)
 
     reporter = ProgressReporter(models_root, config.APP_LOG_DIR / "model-recovery-progress.txt")

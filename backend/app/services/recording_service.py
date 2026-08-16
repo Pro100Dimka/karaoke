@@ -25,7 +25,7 @@ from typing import Any
 import config
 import models
 from app import repositories
-from app.services import song_service
+from app.services import song_artifacts, song_service
 from app.services.microphone_quality import StudioMicrophoneProcessor
 from app.services.db_utils import commit_refresh
 from app.services.resource_deletion import delete_with_files
@@ -356,6 +356,13 @@ def _require_session(session_id: str) -> RecordingSession:
     return session
 
 
+def has_active_recording(song_id: object) -> bool:
+    """Return whether a live capture session currently owns this song lifecycle."""
+    key = str(song_id)
+    with _sessions_lock:
+        return any(str(session.song_id) == key for session in _sessions.values())
+
+
 def close_all_sessions() -> None:
     """Release all active recording devices during application shutdown."""
     with _sessions_lock:
@@ -424,12 +431,11 @@ def stop_recording(session_id: str) -> models.Recording:
 
 
 def resolve_recording_path(recording: models.Recording) -> Path:
-    """Resolve a persisted take path and reject paths outside the song library."""
-    path = Path(recording.path).resolve()
-    root = config.SONG_OUTPUT_DIR.resolve()
-    if root not in path.parents:
-        raise ValueError("Recording path is outside the application library")
-    return path
+    """Resolve a persisted take path against every trusted song-library root."""
+    try:
+        return song_service.resolve_library_path(Path(recording.path))
+    except ValueError as exc:
+        raise ValueError("Recording path is outside the application library") from exc
 
 
 def _existing_recording_files(recording: models.Recording) -> tuple[Path, ...]:
@@ -456,14 +462,7 @@ def performance_mix_paths(recording: models.Recording) -> tuple[Path, Path]:
 
 
 def _find_instrumental(song_dir: Path) -> Path | None:
-    return next(
-        (
-            song_dir / f"instrumental{extension}"
-            for extension in (".mp3", ".wav")
-            if (song_dir / f"instrumental{extension}").is_file()
-        ),
-        None,
-    )
+    return song_artifacts.resolve_audio_artifact(song_dir, "instrumental")
 
 
 def _effect_filter(name: str, amount: float, source: str, target: str) -> str | None:

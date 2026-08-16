@@ -22,10 +22,12 @@ from sqlalchemy.orm import Session
 import config
 import models
 import schemas
+from app.services import song_artifacts
 from app.api.dependencies import SongDependency
 from app.services import (
     ai_bridge,
     pipeline_service,
+    recording_service,
     song_editor_service,
     song_package_service,
     song_service,
@@ -145,19 +147,35 @@ def get_song(song: SongDependency):
     return song
 
 
-@router.get("/{song_id}/package")
-def export_song_package(song: SongDependency, background_tasks: BackgroundTasks):
-    if song.status != models.SongStatus.DONE:
-        raise HTTPException(status_code=409, detail="Song processing is not complete")
+@router.get("/{song_id}/revision")
+def get_song_revision(song_id: str, db: Session = Depends(get_db)):
     try:
-        package_path = song_package_service.build_package(song)
+        revision = song_package_service.content_revision_for_song(db, song_id)
     except (OSError, ValueError) as exc:
-        raise HTTPException(status_code=409, detail=f"Could not package song: {exc}") from exc
+        detail = str(exc)
+        status = 404 if detail == "Song not found" else 409
+        raise HTTPException(status_code=status, detail=f"Could not fingerprint song: {detail}") from exc
+    return {"song_id": song_id, "revision": revision}
+
+
+@router.get("/{song_id}/package")
+def export_song_package(
+    song_id: str, background_tasks: BackgroundTasks, expected_revision: str | None = None,
+    db: Session = Depends(get_db),
+):
+    try:
+        package_path, slug = song_package_service.build_package_for_song(
+            db, song_id, expected_revision=expected_revision,
+        )
+    except (OSError, ValueError) as exc:
+        detail = str(exc)
+        status = 404 if detail == "Song not found" else 409
+        raise HTTPException(status_code=status, detail=f"Could not package song: {detail}") from exc
     background_tasks.add_task(package_path.unlink, missing_ok=True)
     return FileResponse(
         package_path,
         media_type="application/zip",
-        filename=f"{song.slug}.karaoke.zip",
+        filename=f"{slug}.karaoke.zip",
         background=background_tasks,
     )
 
@@ -166,6 +184,7 @@ def export_song_package(song: SongDependency, background_tasks: BackgroundTasks)
 async def import_song_package(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    expected_revision: str | None = None,
 ):
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
@@ -183,7 +202,7 @@ async def import_song_package(
             chunk_size=1024 * 1024,
             too_large_message="Song package is too large",
         )
-        return song_package_service.import_package(db, temporary_path)
+        return song_package_service.import_package(db, temporary_path, expected_revision=expected_revision)
     except HTTPException:
         raise
     except (OSError, ValueError, zipfile.BadZipFile) as exc:
@@ -204,6 +223,8 @@ def patch_song(song: SongDependency, patch: schemas.SongUpdate, db: Session = De
 
 @router.delete("/{song_id}", status_code=204)
 def remove_song(song: SongDependency, db: Session = Depends(get_db)):
+    if recording_service.has_active_recording(song.id):
+        raise HTTPException(status_code=409, detail="Нельзя удалить песню во время записи")
     if pipeline_service.is_processing(song.id):
         raise HTTPException(
             status_code=409, detail="Песня сейчас обрабатывается, дождитесь завершения"
@@ -216,6 +237,8 @@ def remove_song(song: SongDependency, db: Session = Depends(get_db)):
 
 @router.post("/{song_id}/process", response_model=schemas.ProcessingStatusOut, status_code=202)
 def process_song(song: SongDependency, db: Session = Depends(get_db)):
+    if recording_service.has_active_recording(song.id):
+        raise HTTPException(status_code=409, detail="Нельзя обрабатывать песню во время записи")
     if pipeline_service.is_processing(song.id):
         raise HTTPException(status_code=409, detail="Обработка уже запущена")
 
@@ -233,6 +256,8 @@ def process_song(song: SongDependency, db: Session = Depends(get_db)):
 @router.post("/{song_id}/reprocess", response_model=schemas.ProcessingStatusOut, status_code=202)
 def reprocess_melody(song: SongDependency, db: Session = Depends(get_db)):
     """Clear prior generated files and rebuild the song with the current MIDI algorithm."""
+    if recording_service.has_active_recording(song.id):
+        raise HTTPException(status_code=409, detail="Нельзя переобрабатывать песню во время записи")
     if not song.output_dir or song.status != models.SongStatus.DONE:
         raise HTTPException(status_code=409, detail="Сначала завершите полную обработку песни")
     if pipeline_service.is_processing(song.id):
@@ -288,25 +313,17 @@ def get_audio_track(track: str, song: SongDependency):
     if track not in {"instrumental", "vocals", "song", "diagnostic"}:
         raise HTTPException(status_code=404, detail="Unknown audio track")
     output_dir = song_service.resolve_output_dir(song)
-    search_dirs = [output_dir]
-    if track in {"instrumental", "vocals"}:
-        # AI Core v2 stores production stems in separated/. Keep the root
-        # directory as a legacy fallback for songs created by older versions.
-        search_dirs.insert(0, output_dir / "separated")
-    for directory in search_dirs:
-        for extension, media_type in (
-            (".flac", "audio/flac"),
-            (".mp3", "audio/mpeg"),
-            (".wav", "audio/wav"),
-        ):
-            candidate = directory / f"{track}{extension}"
-            if candidate.is_file():
-                return FileResponse(
-                    candidate,
-                    media_type=media_type,
-                    filename=candidate.name,
-                    content_disposition_type="inline",
-                )
+    candidate = song_artifacts.resolve_audio_artifact(output_dir, track)
+    if candidate is not None:
+        media_type = {".flac": "audio/flac", ".mp3": "audio/mpeg", ".wav": "audio/wav"}.get(
+            candidate.suffix.lower(), "application/octet-stream"
+        )
+        return FileResponse(
+            candidate,
+            media_type=media_type,
+            filename=candidate.name,
+            content_disposition_type="inline",
+        )
     raise HTTPException(status_code=404, detail="Audio track is not available")
 
 
@@ -330,9 +347,11 @@ def save_song_editor(
     if song.status != models.SongStatus.DONE:
         raise HTTPException(status_code=409, detail="Песня ещё не обработана")
     try:
-        song_map = song_editor_service.save_editor(
-            song_service.resolve_output_dir(song), payload.notes
-        )
+        with song_service.song_content_lock(song.id), song_service.library_write_lock():
+            song_map = song_editor_service.save_editor(
+                song_service.resolve_output_dir(song), payload.notes
+            )
+            song_package_service.invalidate_content_revision(song)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     song.updated_at = datetime.now(UTC)
@@ -347,7 +366,9 @@ def reset_song_editor(song: SongDependency, db: Session = Depends(get_db)):
     if song.status != models.SongStatus.DONE:
         raise HTTPException(status_code=409, detail="Песня ещё не обработана")
     try:
-        song_map = song_editor_service.reset_editor(song_service.resolve_output_dir(song))
+        with song_service.song_content_lock(song.id), song_service.library_write_lock():
+            song_map = song_editor_service.reset_editor(song_service.resolve_output_dir(song))
+            song_package_service.invalidate_content_revision(song)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     song.updated_at = datetime.now(UTC)

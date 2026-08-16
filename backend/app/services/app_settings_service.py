@@ -59,8 +59,17 @@ def _normalize_writable_directory(value: Any, label: str) -> str:
     return str(path)
 
 
-def _persist_path_settings(values: dict[str, str]) -> None:
-    write_json(PATH_SETTINGS_FILE, values)
+def _persist_path_settings(values: dict[str, str]) -> dict[str, Any]:
+    try:
+        existing = read_json(PATH_SETTINGS_FILE, default={})
+    except (json.JSONDecodeError, OSError):
+        existing = {}
+    roots = set(existing.get("song_library_roots", [])) if isinstance(existing, dict) else set()
+    roots.update(str(path) for path in config.SONG_LIBRARY_ROOTS)
+    roots.add(str(Path(values["songs_folder"]).expanduser().resolve()))
+    payload = {**values, "song_library_roots": sorted(roots, key=str.casefold)}
+    write_json(PATH_SETTINGS_FILE, payload)
+    return payload
 
 
 def _read_settings_unlocked() -> dict[str, Any]:
@@ -103,31 +112,47 @@ def read_settings() -> dict[str, Any]:
 
 
 def update_settings(patch: dict[str, Any]) -> dict[str, Any]:
-    """Merge preferences and immediately apply user-selected storage paths."""
+    """Validate the complete patch before publishing any persistent/runtime state."""
     with _settings_lock:
-        data = {**read_settings(), **patch}
+        current = _read_settings_unlocked()
+        data = {**current, **patch}
         if data["compute_mode"] not in {"auto", "cuda", "cpu"}:
             raise ValueError("Unsupported AI compute mode")
 
-        persisted = {key: data[key] for key in DEFAULT_SETTINGS if key in data}
-        write_json(SETTINGS_FILE, persisted)
-
-        current_paths = path_settings()
-        path_values = dict(current_paths)
-        labels = {
-            "songs_folder": "Песни",
-            "ai_folder": "AI-модели",
-            "cache_folder": "Кэш",
-        }
+        path_values = path_settings()
+        labels = {"songs_folder": "Песни", "ai_folder": "AI-модели", "cache_folder": "Кэш"}
         for key in PATH_SETTING_KEYS:
             if key in patch:
                 path_values[key] = _normalize_writable_directory(patch[key], labels[key])
 
-        if any(key in patch for key in PATH_SETTING_KEYS):
-            _persist_path_settings(path_values)
-            config.apply_storage_paths(**path_values)
-
-        return read_settings()
+        persisted = {key: data[key] for key in DEFAULT_SETTINGS if key in data}
+        old_settings = read_json(SETTINGS_FILE, default={})
+        old_paths = read_json(PATH_SETTINGS_FILE, default=path_settings())
+        paths_changed = any(key in patch for key in PATH_SETTING_KEYS)
+        ai_runtime_changed = "compute_mode" in patch or "thread_count" in patch or "ai_folder" in patch
+        if ai_runtime_changed or paths_changed:
+            from app.services import pipeline_service
+            if pipeline_service.has_active_jobs():
+                raise ValueError("Нельзя менять AI/хранилище, пока песни стоят в очереди или обрабатываются")
+        try:
+            persisted_paths = _persist_path_settings(path_values) if paths_changed else None
+            write_json(SETTINGS_FILE, persisted)
+            if persisted_paths is not None:
+                config.apply_storage_paths(**persisted_paths)
+            if ai_runtime_changed:
+                from AI.service import reset_ai_service
+                reset_ai_service()
+            return _read_settings_unlocked()
+        except Exception:
+            write_json(SETTINGS_FILE, old_settings if isinstance(old_settings, dict) else {})
+            if paths_changed:
+                write_json(PATH_SETTINGS_FILE, old_paths if isinstance(old_paths, dict) else path_settings())
+                if isinstance(old_paths, dict):
+                    restored = {key: old_paths.get(key, path_settings()[key]) for key in PATH_SETTING_KEYS}
+                    roots = old_paths.get("song_library_roots")
+                    if isinstance(roots, list): restored["song_library_roots"] = roots
+                    config.apply_storage_paths(**restored)
+            raise
 
 
 def read_ui_preferences() -> dict[str, dict[str, Any]]:

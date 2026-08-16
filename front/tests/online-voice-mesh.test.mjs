@@ -686,7 +686,7 @@ describe("online voice mesh", () => {
     });
     await vi.waitFor(() => expect(mesh.pendingTransferConfirmations.size).toBe(1)
     );
-    expect(mesh.waitForDataChannel).toHaveBeenCalledWith("guest", 15_000, 0);
+    expect(mesh.waitForDataChannel).toHaveBeenCalledWith("guest", 15_000, 0, expect.anything());
     const transferId = [...mesh.pendingTransferConfirmations.keys()][0];
     expect(JSON.parse(channel.send.mock.calls[0][0])).toEqual({
       type: "file-start",

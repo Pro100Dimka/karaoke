@@ -4,6 +4,7 @@ import contextlib
 import re
 import threading
 import unicodedata
+import weakref
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -14,17 +15,30 @@ import config
 import models
 import schemas
 from app import repositories
+from app.services import revision_cache
 from app.services.db_utils import commit_refresh
 from app.services.resource_deletion import delete_with_files
 from app.utils.atomic_files import atomic_write_bytes, move_path
 
 _library_write_lock = threading.RLock()
+_content_locks_guard = threading.Lock()
+_content_locks: weakref.WeakValueDictionary[str, threading.RLock] = weakref.WeakValueDictionary()
 
 
 @contextmanager
 def library_write_lock():
     """Serialize library mutations that allocate filesystem names."""
     with _library_write_lock:
+        yield
+
+
+@contextmanager
+def song_content_lock(song_id: object):
+    """Serialize canonical artifact snapshots/mutations for one song only."""
+    key = str(song_id)
+    with _content_locks_guard:
+        lock = _content_locks.setdefault(key, threading.RLock())
+    with lock:
         yield
 
 
@@ -45,15 +59,26 @@ def _ensure_path_within(path: Path, root: Path) -> Path:
     raise ValueError("Song file path is outside the application library")
 
 
+def resolve_library_path(path: Path) -> Path:
+    errors = []
+    roots = {config.SONG_OUTPUT_DIR.resolve(), *(Path(root).resolve() for root in config.SONG_LIBRARY_ROOTS)}
+    for root in roots:
+        try:
+            return _ensure_path_within(path, root)
+        except ValueError as exc:
+            errors.append(exc)
+    raise ValueError("Song file path is outside the application library") from (errors[-1] if errors else None)
+
+
 def resolve_source_path(song: models.Song) -> Path:
     """Return the validated path to a song's original audio file."""
-    return _ensure_path_within(Path(song.source_path), config.SONG_OUTPUT_DIR)
+    return resolve_library_path(Path(song.source_path))
 
 
 def resolve_output_dir(song: models.Song) -> Path:
     """Return the validated directory that belongs to a song's generated data."""
     path = Path(song.output_dir) if song.output_dir else config.SONG_OUTPUT_DIR / song.slug
-    return _ensure_path_within(path, config.SONG_OUTPUT_DIR)
+    return resolve_library_path(path)
 
 
 def _cover_extension(payload: bytes) -> str | None:
@@ -230,11 +255,21 @@ def _read_source_identity(
     return None, requested_title.strip() or filename_title
 
 
+
+_WINDOWS_RESERVED_NAMES = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
+
+def _windows_safe_component(value: str, fallback: str) -> str:
+    value = unicodedata.normalize("NFC", value).rstrip(" .")
+    stem = value.split(".", 1)[0].rstrip(" .").upper()
+    if stem in _WINDOWS_RESERVED_NAMES:
+        value = f"_{value}"
+    return value or fallback
+
 def _folder_name(artist: str | None, title: str, fallback: str) -> str:
     identity = " ".join(part for part in (artist, title) if part and part.strip()).strip()
     value = _WINDOWS_FORBIDDEN_RE.sub(" ", identity)
     value = " ".join(value.split()).rstrip(" .")
-    return value[:180].rstrip(" .") or fallback
+    return _windows_safe_component(value[:180], fallback)
 
 
 def _unique_output_dir(base_name: str) -> Path:
@@ -311,7 +346,9 @@ def _persist_song(
         )
         db.add(song)
         try:
-            return commit_refresh(db, song)
+            saved = commit_refresh(db, song)
+            revision_cache.invalidate(saved)
+            return saved
         except Exception:
             destination.unlink(missing_ok=True)
             for cover in output_dir.glob("cover.*"):
@@ -376,33 +413,36 @@ def get_song(db: Session, song_id: str) -> models.Song | None:
 
 
 def update_song(db: Session, song: models.Song, patch: schemas.SongUpdate) -> models.Song:
-    """Apply a partial update and restore the in-memory object if commit fails."""
+    """Apply a partial update under the same lock used by room package snapshots."""
     changes = patch.model_dump(exclude_unset=True)
     note_min = changes.get("note_range_min", getattr(song, "note_range_min", None))
     note_max = changes.get("note_range_max", getattr(song, "note_range_max", None))
     if note_min is not None and note_max is not None and note_min > note_max:
         raise ValueError("note_range_min must not exceed note_range_max")
-    previous = {field: getattr(song, field) for field in changes}
-    previous_edit_flags = (
-        getattr(song, "key_user_edited", False),
-        getattr(song, "tempo_user_edited", False),
-    )
-    for field, value in changes.items():
-        setattr(song, field, value)
-    if "key_override" in changes:
-        song.key_user_edited = changes["key_override"] is not None
-    if "tempo_override" in changes:
-        song.tempo_user_edited = changes["tempo_override"] is not None
-    try:
-        return commit_refresh(db, song)
-    except Exception:
-        for field, value in previous.items():
+    with library_write_lock():
+        previous = {field: getattr(song, field) for field in changes}
+        previous_edit_flags = (
+            getattr(song, "key_user_edited", False),
+            getattr(song, "tempo_user_edited", False),
+        )
+        for field, value in changes.items():
             setattr(song, field, value)
-        if hasattr(song, "key_user_edited"):
-            song.key_user_edited = previous_edit_flags[0]
-        if hasattr(song, "tempo_user_edited"):
-            song.tempo_user_edited = previous_edit_flags[1]
-        raise
+        if "key_override" in changes:
+            song.key_user_edited = changes["key_override"] is not None
+        if "tempo_override" in changes:
+            song.tempo_user_edited = changes["tempo_override"] is not None
+        try:
+            saved = commit_refresh(db, song)
+            revision_cache.invalidate(saved)
+            return saved
+        except Exception:
+            for field, value in previous.items():
+                setattr(song, field, value)
+            if hasattr(song, "key_user_edited"):
+                song.key_user_edited = previous_edit_flags[0]
+            if hasattr(song, "tempo_user_edited"):
+                song.tempo_user_edited = previous_edit_flags[1]
+            raise
 
 
 def delete_song(db: Session, song: models.Song) -> None:

@@ -9,6 +9,7 @@
 //  3) IPC-мостик для управления окном и открытия папки песни в проводнике.
 const { spawn } = require("child_process");
 const fs = require("fs");
+const crypto = require("crypto");
 const http = require("http");
 const path = require("path");
 const { pathToFileURL } = require("url");
@@ -31,6 +32,8 @@ const {
   registerTrustedIpc
 } = require("./security.cjs");
 const { findMatchingSongFolder } = require("./song-folders.cjs");
+const { installBackendFileAuthentication } = require("./backend-media-auth.cjs");
+const { chooseRuntimeBackendEndpoint } = require("./backend-endpoint.cjs");
 
 // Background radio is an intentional desktop feature.
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
@@ -66,6 +69,65 @@ let backendDuplicateDetected = false;
 let backendDuplicateWatchGeneration = 0;
 const BACKEND_STABLE_RESET_MS = 30_000;
 const BACKEND_DUPLICATE_WATCH_MS = 5_000;
+const BACKEND_API_TOKEN = crypto.randomBytes(32).toString("base64url");
+let runtimeBackendUrl = BACKEND_URL;
+let runtimeBackendHost = BACKEND_HOST;
+let runtimeBackendPort = BACKEND_PORT;
+
+async function configureRuntimeBackendEndpoint() {
+  const endpoint = await chooseRuntimeBackendEndpoint({
+    isDev,
+    explicitUrl: process.env.KARAOKE_BACKEND_URL,
+    defaultUrl: BACKEND_URL
+  });
+  runtimeBackendUrl = endpoint.url;
+  runtimeBackendHost = endpoint.host;
+  runtimeBackendPort = endpoint.port;
+}
+
+function packagedBackendDataDir() {
+  if (isDev) return null;
+  if (IS_WINDOWS && process.env.LOCALAPPDATA) {
+    return path.join(process.env.LOCALAPPDATA, "A&D Voice", "backend-data");
+  }
+  return path.join(app.getPath("userData"), "backend-data");
+}
+
+function backendDataHasPersistentState(directory) {
+  if (!directory || !fs.existsSync(directory)) return false;
+  return fs.existsSync(path.join(directory, "app.db")) ||
+    fs.existsSync(path.join(directory, "karaoke_songs")) ||
+    fs.existsSync(path.join(directory, "path-settings.json"));
+}
+
+function resolvePackagedBackendDataDir() {
+  const preferred = packagedBackendDataDir();
+  if (!preferred || isDev) return preferred;
+  const legacy = path.join(app.getPath("userData"), "backend-data");
+  if (path.resolve(preferred) === path.resolve(legacy) || !backendDataHasPersistentState(legacy)) {
+    return preferred;
+  }
+  // A previous installer may already have seeded only settings.json in the new
+  // LocalAppData directory. That must not hide a real legacy DB/library.
+  if (backendDataHasPersistentState(preferred)) return preferred;
+  try {
+    if (fs.existsSync(preferred)) {
+      const entries = fs.readdirSync(preferred);
+      const seedOnly = entries.every((name) => name === "settings.json");
+      if (!seedOnly) return legacy;
+      fs.rmSync(preferred, { recursive: true, force: true });
+    }
+    fs.mkdirSync(path.dirname(preferred), { recursive: true });
+    fs.renameSync(legacy, preferred);
+    return preferred;
+  } catch (error) {
+    // Existing installs may already contain a large library. Never copy it
+    // synchronously during startup; keep using the legacy location rather than
+    // making the user's songs disappear if a policy/volume blocks the move.
+    console.warn("Could not migrate backend data from Roaming to LocalAppData; using legacy location:", error?.message || error);
+    return legacy;
+  }
+}
 
 function resolveBackendDir() {
   // В dev-режиме backend лежит рядом с проектом (../backend при обычной
@@ -100,7 +162,7 @@ function registerMediaProtocol() {
 
 function requestBackendJson(pathname, timeoutMs = BACKEND_REQUEST_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
-    const request = http.get(`${BACKEND_URL}${pathname}`, (response) => {
+    const request = http.get(`${runtimeBackendUrl}${pathname}`, { headers: { "X-ADVoice-Token": BACKEND_API_TOKEN } }, (response) => {
       let body = "";
       response.setEncoding("utf8");
       response.on("data", (chunk) => { if (body.length < 1024 * 1024) body += chunk; });
@@ -137,7 +199,7 @@ async function resolveSongOutputDir() {
   }
 
   if (isDev) return path.resolve(resolveBackendDir(), "..", "karaoke_songs");
-  return path.join(app.getPath("userData"), "backend-data", "karaoke_songs");
+  return path.join(resolvePackagedBackendDataDir(), "karaoke_songs");
 }
 
 function isPathInside(parentPath, candidatePath) {
@@ -204,9 +266,7 @@ function startBackend() {
     : path.join( backendDir, IS_WINDOWS ? "KaraokeBackend.exe" : "KaraokeBackend"
       );
   const backendArgs = isDev ? ["run.py"] : [];
-  const backendDataDir = isDev
-    ? null
-    : path.join(app.getPath("userData"), "backend-data");
+  const backendDataDir = isDev ? null : resolvePackagedBackendDataDir();
   const backendLogDir = isDev
     ? path.resolve(__dirname, "..", "..", "logs")
     : path.join(app.getPath("userData"), "logs");
@@ -232,9 +292,11 @@ function startBackend() {
       env: {
         ...process.env,
         ...(backendDataDir ? { SONGAPP_DATA_DIR: backendDataDir } : {}),
-        SONGAPP_HOST: BACKEND_HOST,
-        SONGAPP_PORT: String(BACKEND_PORT),
+        SONGAPP_HOST: runtimeBackendHost,
+        SONGAPP_PORT: String(runtimeBackendPort),
         SONGAPP_LOG_DIR: backendLogDir,
+        SONGAPP_API_TOKEN: BACKEND_API_TOKEN,
+        ...(isDev ? {} : { SONGAPP_CORS_ORIGINS: "null" }),
         // Packaged ffmpeg.exe is placed next to KaraokeBackend.exe.
         PATH: `${backendDir}${path.delimiter}${process.env.PATH || ""}`
       }
@@ -328,9 +390,10 @@ function stopBackend() {
     finished = true;
     terminateBackend();
   };
-  const request = http.request(`${BACKEND_URL}/audio/direct-monitor/stop`, {
+  const request = http.request(`${runtimeBackendUrl}/audio/direct-monitor/stop`, {
     method: "POST",
-    timeout: 450
+    timeout: 450,
+    headers: { "X-ADVoice-Token": BACKEND_API_TOKEN }
   });
   request.on("response", (response) => { response.resume(); response.once("end", finish); });
   request.on("error", finish);
@@ -457,7 +520,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      additionalArguments: [`--advoice-theme=${initialTheme}`, `--advoice-backend-url=${BACKEND_URL}`]
+      additionalArguments: [`--advoice-theme=${initialTheme}`, `--advoice-backend-url=${runtimeBackendUrl}`, `--advoice-api-token=${BACKEND_API_TOKEN}`]
     }
   });
   updateThemeShortcuts(getThemeShortcutIcon(initialTheme));
@@ -579,11 +642,13 @@ if (!hasSingleInstanceLock) {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return;
   if (IS_WINDOWS)
     app.setAppUserModelId("com.karaokestudio.app");
+  await configureRuntimeBackendEndpoint();
   registerMediaProtocol();
+  installBackendFileAuthentication(session.defaultSession.webRequest, runtimeBackendUrl, BACKEND_API_TOKEN);
   const packagedIndexUrl = getPackagedRendererUrl( path.join(__dirname, "..", "dist", "index.html")
   );
   const rendererOptions = { isDev, devOrigin: DEV_RENDERER_ORIGIN, packagedIndexUrl };

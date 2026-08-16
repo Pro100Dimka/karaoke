@@ -664,6 +664,52 @@ class KaraokePipeline:
             validators = None
         return cache.hit(stage, key, outputs, validators=validators)
 
+    def _restore_optimized_separation_cache(
+        self,
+        cache: StageCache,
+        key: str,
+        output: Path,
+        vocals: Path,
+        instrumental: Path,
+    ) -> bool:
+        """Restore canonical WAV stems from trusted optimized FLAC artifacts."""
+        key_matches = getattr(cache, "key_matches", None)
+        if key_matches is None or not key_matches("separation", key):
+            return False
+        manifest = read_json(output / "manifest.json", {}) or {}
+        outputs = manifest.get("outputs") if isinstance(manifest, dict) else None
+        integrity = manifest.get("integrity") if isinstance(manifest, dict) else None
+        if not isinstance(outputs, dict) or not isinstance(integrity, dict):
+            return False
+        sources: list[tuple[Path, Path]] = []
+        for logical, target in (("vocals", vocals), ("instrumental", instrumental)):
+            relative = outputs.get(logical)
+            expected = integrity.get(logical)
+            if not isinstance(relative, str) or not isinstance(expected, dict):
+                return False
+            source = output / relative
+            if source.suffix.lower() != ".flac" or not source.is_file():
+                return False
+            if source.stat().st_size != expected.get("size"):
+                return False
+            if cache.file_hash(source) != expected.get("sha256"):
+                return False
+            sources.append((source, target))
+        try:
+            with tempfile.TemporaryDirectory(prefix="karaoke-stem-restore-", dir=output) as temp_dir:
+                root = Path(temp_dir)
+                publications = []
+                for source, target in sources:
+                    temporary = root / target.name
+                    decode_audio(source, temporary, self.config.sample_rate)
+                    validate_audio(temporary)
+                    publications.append((temporary, target))
+                publish_files_atomically(publications)
+            cache.commit("separation", key, [vocals, instrumental])
+            return True
+        except (OSError, RuntimeError, ValueError):
+            return False
+
     def _notify(self, request: PipelineRequest, stage: str, progress: float, message: str):
         if request.cancelled and request.cancelled():
             raise ProcessingCancelledError("AI processing was cancelled")
@@ -806,13 +852,18 @@ class KaraokePipeline:
                 ),
             },
         )
-        if self._cache_hit(
+        separation_cached = self._cache_hit(
             cache,
             "separation",
             separation_key,
             [vocals, instrumental],
             {vocals: validate_audio, instrumental: validate_audio},
-        ):
+        )
+        if not separation_cached:
+            separation_cached = self._restore_optimized_separation_cache(
+                cache, separation_key, output, vocals, instrumental
+            )
+        if separation_cached:
             reports.append(StageReport("separation", 0, True, "cached"))
         else:
             with tempfile.TemporaryDirectory(prefix="karaoke-stems-", dir=output) as temp_dir:

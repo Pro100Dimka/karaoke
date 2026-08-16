@@ -51,10 +51,14 @@ function buildRequestOptions(options = {}) {
   const isFormData =
     typeof FormDataCtor === "function" && body instanceof FormDataCtor;
   const normalizedHeaders = normalizeHeaders(headers);
+  const apiToken = globalThis.electronAPI?.apiToken;
   if (isFormData || body == null) {
-    return { ...requestOptions, body, ...(normalizedHeaders ? { headers: normalizedHeaders } : {}) };
+    const nextHeaders = normalizedHeaders || {};
+    if (apiToken) nextHeaders["X-ADVoice-Token"] = apiToken;
+    return { ...requestOptions, body, ...(Object.keys(nextHeaders).length ? { headers: nextHeaders } : {}) };
   }
   const nextHeaders = normalizedHeaders || {};
+  if (apiToken) nextHeaders["X-ADVoice-Token"] = apiToken;
   if (typeof body === "string" && !hasContentType(nextHeaders)) {
     nextHeaders["Content-Type"] = "application/json";
   }

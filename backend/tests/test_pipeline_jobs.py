@@ -120,14 +120,16 @@ def test_ai_progress_callback_updates_semantic_runtime_and_cancels(monkeypatch):
         callback("pitch", 50, "raw")
 
 
-def test_force_midi_rebuild_invalidates_cache_and_files(monkeypatch, tmp_path):
+def test_force_midi_rebuild_invalidates_cache_and_files_but_preserves_manifest(monkeypatch, tmp_path):
     cache = Mock()
     monkeypatch.setattr(pipeline_service, "StageCache", Mock(return_value=cache))
     for name in pipeline_service._MIDI_REBUILD_FILES:
         (tmp_path / name).write_text("x", encoding="utf-8")
+    (tmp_path / "manifest.json").write_text('{"outputs":{}}', encoding="utf-8")
     pipeline_service._force_midi_rebuild(tmp_path)
     cache.invalidate.assert_called_once_with("pitch", "derivation", "midi", "song-map")
     assert not any((tmp_path / name).exists() for name in pipeline_service._MIDI_REBUILD_FILES)
+    assert (tmp_path / "manifest.json").is_file()
 
 
 def test_reprocessing_validates_owned_direct_child_and_runs_job(monkeypatch, tmp_path):
@@ -322,3 +324,26 @@ def test_run_job_maps_finalization_failure(monkeypatch, tmp_path):
     )
     pipeline_service._run_job("song")
     assert pipeline_service._update_progress.call_args.kwargs["status"] == models.SongStatus.ERROR
+
+
+def test_finalize_success_marks_new_generation_unoptimized_before_best_effort_optimization(monkeypatch, tmp_path):
+    song = SimpleNamespace(
+        id="song", output_dir=str(tmp_path), source_path=str(tmp_path / "source.wav"),
+        optimized=True, status=models.SongStatus.PROCESSING, progress_percent=50.0,
+        progress_step="processing", error_message=None, key_override=None,
+        tempo_override=None, note_range_min=None, note_range_max=None,
+    )
+    database = Mock()
+    monkeypatch.setattr(pipeline_service, "SessionLocal", Mock(return_value=database))
+    monkeypatch.setattr(pipeline_service.repositories, "get_song", Mock(return_value=song))
+    monkeypatch.setattr(pipeline_service, "_apply_source_metadata", Mock())
+    monkeypatch.setattr(pipeline_service, "_apply_generated_metadata", Mock())
+    commit = Mock()
+    monkeypatch.setattr(pipeline_service, "commit", commit)
+    monkeypatch.setattr(pipeline_service.revision_cache, "invalidate", Mock())
+
+    pipeline_service._finalize_success("song", tmp_path)
+
+    assert song.status == models.SongStatus.DONE
+    assert song.optimized is False
+    commit.assert_called_once_with(database)

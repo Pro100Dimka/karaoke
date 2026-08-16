@@ -1,5 +1,11 @@
 const MAX_ROOM_ID_LENGTH = 32;
 const MAX_NAME_LENGTH = 40;
+const MAX_MESSAGE_BYTES = 256 * 1024;
+const MAX_PARTICIPANTS = 12;
+const RATE_WINDOW_MS = 10_000;
+const RATE_LIMIT = 80;
+const MAX_SIGNAL_BYTES = 64 * 1024;
+const MAX_STATE_BYTES = 128 * 1024;
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -28,6 +34,20 @@ function participantFromSocket(socket) {
 export class KaraokeRoom {
   constructor(ctx) {
     this.ctx = ctx;
+    this.rate = new Map();
+  }
+
+  reject(socket, message = "Некорректное сообщение комнаты.") {
+    this.send(socket, "error", { message });
+    socket.close(1008, message.slice(0, 120));
+  }
+
+  withinRate(id) {
+    const now = Date.now();
+    const entry = this.rate.get(id) || { startedAt: now, count: 0 };
+    if (now - entry.startedAt >= RATE_WINDOW_MS) { entry.startedAt = now; entry.count = 0; }
+    entry.count += 1; this.rate.set(id, entry);
+    return entry.count <= RATE_LIMIT;
   }
 
   participants() {
@@ -62,14 +82,23 @@ export class KaraokeRoom {
     const url = new URL(request.url);
     const requestedRole = url.searchParams.get("role") === "host" ? "host" : "guest";
     const currentParticipants = this.participants();
-    const hasHost = currentParticipants.some((participant) => participant.role === "host");
+    if (currentParticipants.length >= MAX_PARTICIPANTS) return json({ error: "Room is full" }, 429);
+    let role = "guest";
+    if (requestedRole === "host") {
+      const suppliedToken = url.searchParams.get("hostToken") || "";
+      let ownerToken = await this.ctx.storage.get("hostToken");
+      if (!ownerToken && url.searchParams.get("create") === "1" && currentParticipants.length === 0 && suppliedToken.length >= 32) {
+        ownerToken = suppliedToken;
+        await this.ctx.storage.put("hostToken", ownerToken);
+      }
+      if (!ownerToken || suppliedToken !== ownerToken) return json({ error: "Invalid room host capability" }, 403);
+      if (currentParticipants.some((participant) => participant.role === "host")) return json({ error: "Host is already connected" }, 409);
+      role = "host";
+    }
     const participant = {
       id: crypto.randomUUID(),
       name: normalizeName(url.searchParams.get("name")),
-      role:
-        currentParticipants.length === 0 || (requestedRole === "host" && !hasHost)
-          ? "host"
-          : "guest",
+      role,
       micMuted: false,
     };
     const pair = new WebSocketPair();
@@ -82,17 +111,17 @@ export class KaraokeRoom {
   }
 
   async webSocketMessage(socket, rawMessage) {
+    const text = typeof rawMessage === "string" ? rawMessage : new TextDecoder().decode(rawMessage);
+    if (new TextEncoder().encode(text).byteLength > MAX_MESSAGE_BYTES) { this.reject(socket, "Message too large"); return; }
     let message;
-    try {
-      message = JSON.parse(typeof rawMessage === "string" ? rawMessage : new TextDecoder().decode(rawMessage));
-    } catch {
-      this.send(socket, "error", { message: "Некорректное сообщение комнаты." });
-      return;
-    }
+    try { message = JSON.parse(text); }
+    catch { this.reject(socket); return; }
     const sender = participantFromSocket(socket);
     if (!sender || typeof message?.type !== "string") return;
+    if (!this.withinRate(sender.id)) { this.reject(socket, "Rate limit exceeded"); return; }
 
     if (message.type === "signal" && typeof message.targetId === "string") {
+      if (JSON.stringify(message.signal ?? null).length > MAX_SIGNAL_BYTES) { this.reject(socket, "Signal too large"); return; }
       const target = this.ctx
         .getWebSockets()
         .find((candidate) => participantFromSocket(candidate)?.id === message.targetId);
@@ -107,12 +136,44 @@ export class KaraokeRoom {
     }
 
     if (message.type === "ui" && message.state && typeof message.state === "object") {
-      this.broadcast("ui", { fromId: sender.id, state: message.state }, sender.id);
+      if (JSON.stringify(message.state).length > MAX_STATE_BYTES) { this.reject(socket); return; }
+      if (sender.role === "host") {
+        this.broadcast("ui", { fromId: sender.id, state: message.state }, sender.id);
+        return;
+      }
+      const participantEffects = message.state.participantEffects;
+      if (!participantEffects || typeof participantEffects !== "object" || Array.isArray(participantEffects)) { this.reject(socket); return; }
+      this.broadcast("ui", { fromId: sender.id, state: { participantEffects } }, sender.id);
       return;
     }
 
     if (message.type === "sync") {
-      this.broadcast("sync", { state: message.state, sentAt: Date.now() }, sender.id);
+      const state = message.state;
+      if (!state || typeof state !== "object" || Array.isArray(state) || JSON.stringify(state).length > MAX_STATE_BYTES) { this.reject(socket); return; }
+      if (sender.role === "host") {
+        this.broadcast("sync", { state, sentAt: Date.now(), fromId: sender.id }, sender.id);
+        return;
+      }
+      if (
+        state.type === "song-request" &&
+        typeof state.songId === "string" && state.songId.length <= 128 &&
+        typeof state.commandId === "string" && state.commandId.length <= 128 &&
+        typeof state.revision === "string" && /^sha256:[0-9a-f]{64}$/.test(state.revision)
+      ) {
+        this.broadcast("sync", {
+          fromId: sender.id,
+          sentAt: Date.now(),
+          state: {
+            type: "song-request",
+            songId: state.songId,
+            commandId: state.commandId,
+            revision: state.revision,
+            requesterId: sender.id
+          }
+        }, sender.id);
+        return;
+      }
+      this.reject(socket);
       return;
     }
 
@@ -130,32 +191,17 @@ export class KaraokeRoom {
       return;
     }
 
-    if (message.type === "claim-host" && !this.participants().some((participant) => participant.role === "host")) {
-      sender.role = "host";
-      socket.serializeAttachment(sender);
-      this.broadcast("room-state", { self: null, participants: this.participants() });
-    }
+
   }
 
   async webSocketClose(socket, code, reason) {
     const participant = participantFromSocket(socket);
-    if (participant) this.broadcast("participant-left", { participantId: participant.id });
+    if (participant) { this.rate.delete(participant.id); this.broadcast("participant-left", { participantId: participant.id }); }
+    if (this.ctx.getWebSockets().length === 0) await this.ctx.storage.delete("hostToken");
     // The edge already closes this endpoint before invoking the callback.
     // Calling close() again can prevent the remaining sockets from receiving
     // the participant-left event.
-    if (participant?.role === "host") {
-      const successorSocket = this.ctx.getWebSockets().find((candidate) => {
-        const candidateParticipant = participantFromSocket(candidate);
-        return candidateParticipant && candidateParticipant.id !== participant.id;
-      });
-      if (successorSocket) {
-        const successor = participantFromSocket(successorSocket);
-        successor.role = "host";
-        successorSocket.serializeAttachment(successor);
-        this.send(successorSocket, "self-updated", { self: successor });
-        this.broadcast("participant-updated", { participant: successor });
-      }
-    }
+
   }
 }
 

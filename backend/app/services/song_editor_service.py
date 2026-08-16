@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import os
 import shutil
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 from AI.midi import write_midi
 from AI.models import Syllable, VocalNote, Word
+from app.services.artifact_integrity import refresh_manifest_integrity
 from app.utils.json_files import read_json, write_json
 
 JsonObject = dict[str, Any]
@@ -109,31 +112,35 @@ def _syllables(song_map: JsonObject) -> list[Syllable]:
     return result
 
 
-def _project_notes_by_syllable(
-    notes: list[JsonObject],
-) -> dict[int, list[JsonObject]]:
+def _project_notes_by_syllable(notes: list[JsonObject], syllables: list[JsonObject]) -> dict[int, list[JsonObject]]:
+    """Project one acoustic/game note into non-overlapping display windows per linked syllable."""
+    timings = {_safe_int(item.get("index"), i): item for i, item in enumerate(syllables) if isinstance(item, dict)}
     note_by_syllable: dict[int, list[JsonObject]] = defaultdict(list)
     for note in notes:
         indices = note.get("syllable_indices")
         if not isinstance(indices, list) or not indices:
             idx = note.get("syllable_index")
             indices = [] if idx is None else [idx]
-        normalized_indices = []
-        for idx in indices:
-            try:
-                normalized_indices.append(int(idx))
-            except (TypeError, ValueError):
-                continue
-        normalized_indices = sorted(set(normalized_indices))
-        for idx in normalized_indices:
+        normalized = sorted({_safe_int(idx, -1) for idx in indices if _safe_int(idx, -1) >= 0})
+        if not normalized:
+            continue
+        start, end = float(note["start"]), float(note["end"])
+        cursor = start
+        span = (end - start) / len(normalized)
+        for pos, idx in enumerate(normalized):
             projected = dict(note)
+            projected_end = end if pos == len(normalized) - 1 else start + span * (pos + 1)
+            projected["start"] = round(cursor, 6)
+            projected["end"] = round(max(cursor, projected_end), 6)
             projected["syllable_index"] = idx
+            projected["syllable_indices"] = [idx]
             note_by_syllable[idx].append(projected)
+            cursor = projected_end
     return note_by_syllable
 
-
 def _refresh_lines(song_map: JsonObject, notes: list[JsonObject]) -> None:
-    note_by_syllable = _project_notes_by_syllable(notes)
+    raw_syllables = [item for item in song_map.get("syllables") or [] if isinstance(item, dict)]
+    note_by_syllable = _project_notes_by_syllable(notes, raw_syllables)
 
     syllable_lookup: dict[int, JsonObject] = {
         _safe_int(item.get("index"), i): dict(item)
@@ -236,102 +243,87 @@ def normalize_editor_timeline(song_map: JsonObject) -> JsonObject:
     return song_map
 
 
+def _write_editor_generation(staging: Path, song_map: JsonObject, notes: list[JsonObject], manifest: Any) -> None:
+    write_json(staging / "songMap.json", song_map)
+    write_json(staging / "reference.json", {"notes": notes})
+    midi_notes = [
+        VocalNote(float(note["start"]), float(note["end"]), _safe_int(note.get("midi_note", note.get("midi")), -1), _safe_int(note.get("velocity"), 96), _int_or_none(note.get("word_index")), _int_or_none(note.get("syllable_index")), ())
+        for note in notes if isinstance(note, dict)
+    ]
+    if midi_notes:
+        midi_path = staging / "game.mid"
+        write_midi(midi_path, midi_notes, _words(song_map), _syllables(song_map), float(song_map.get("bpm") or 120.0), False)
+        if not midi_path.is_file():
+            raise OSError("MIDI writer did not produce game.mid")
+    if isinstance(manifest, dict):
+        refresh_manifest_integrity(
+            staging, manifest, {"songMap.json", "reference.json", "game.mid"}, remove_missing=True
+        )
+        write_json(staging / "manifest.json", manifest)
+
+
+def _publish_editor_generation(output_dir: Path, staging: Path, *, has_midi: bool, has_manifest: bool) -> None:
+    names = ["songMap.json", "reference.json"] + (["game.mid"] if has_midi else []) + (["manifest.json"] if has_manifest else [])
+    delete_names = [] if has_midi else ["game.mid"]
+    rollback = Path(tempfile.mkdtemp(prefix="editor-rollback-", dir=output_dir))
+    existed: dict[str, bool] = {}
+    try:
+        for name in names + delete_names:
+            target = output_dir / name
+            existed[name] = target.exists()
+            if target.exists(): shutil.copy2(target, rollback / name)
+        for name in names:
+            os.replace(staging / name, output_dir / name)
+        for name in delete_names:
+            (output_dir / name).unlink(missing_ok=True)
+    except Exception:
+        for name in names + delete_names:
+            target = output_dir / name
+            if existed.get(name): os.replace(rollback / name, target)
+            else: target.unlink(missing_ok=True)
+        raise
+    finally:
+        shutil.rmtree(rollback, ignore_errors=True)
+
+
 def save_editor(output_dir: Path, raw_notes: list[JsonObject]) -> JsonObject:
     output_dir = Path(output_dir)
     song_map, _ = load_editor(output_dir)
     backup = output_dir / "songMap.ai.json"
-    if not backup.exists():
-        shutil.copy2(output_dir / "songMap.json", backup)
-
+    if not backup.exists(): shutil.copy2(output_dir / "songMap.json", backup)
     duration = float(song_map.get("duration") or 0.0)
-    notes: list[JsonObject] = [_normalize_note(item, duration) for item in raw_notes]
-    notes.sort(key=lambda n: (n["start"], n["end"], n["midi_note"]))
+    notes = sorted((_normalize_note(item, duration) for item in raw_notes), key=lambda n: (n["start"], n["end"], n["midi_note"]))
     song_map["notes"] = notes
     song_map["display_notes"] = [dict(note, display_source="editor") for note in notes]
     song_map["editor"] = {"edited": True, "source": "manual"}
     stats = dict(song_map.get("display_stats") or {})
-    stats["game_note_count"] = len(notes)
-    stats["display_note_count"] = len(notes)
-    song_map["display_stats"] = stats
+    stats.update(game_note_count=len(notes), display_note_count=len(notes)); song_map["display_stats"] = stats
     _refresh_lines(song_map, notes)
-
-    write_json(output_dir / "songMap.json", song_map)
-    write_json(output_dir / "reference.json", {"notes": notes})
-
-    midi_notes = [
-        VocalNote(
-            note["start"],
-            note["end"],
-            note["midi_note"],
-            note["velocity"],
-            note.get("word_index"),
-            note.get("syllable_index"),
-            (),
-        )
-        for note in notes
-    ]
-    if midi_notes:
-        write_midi(
-            output_dir / "game.mid",
-            midi_notes,
-            _words(song_map),
-            _syllables(song_map),
-            float(song_map.get("bpm") or 120.0),
-            False,
-        )
-    else:
-        (output_dir / "game.mid").unlink(missing_ok=True)
-
     manifest: Any = read_json(output_dir / "manifest.json", default={})
-    if isinstance(manifest, dict):
-        manifest["manual_editor"] = {"edited": True, "note_count": len(notes)}
-        write_json(output_dir / "manifest.json", manifest)
+    if isinstance(manifest, dict): manifest["manual_editor"] = {"edited": True, "note_count": len(notes)}
+    staging = Path(tempfile.mkdtemp(prefix="editor-stage-", dir=output_dir))
+    try:
+        _write_editor_generation(staging, song_map, notes, manifest)
+        _publish_editor_generation(output_dir, staging, has_midi=bool(notes), has_manifest=isinstance(manifest, dict))
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
     return song_map
-
 
 def reset_editor(output_dir: Path) -> JsonObject:
     output_dir = Path(output_dir)
     backup = output_dir / "songMap.ai.json"
-    if not backup.exists():
-        raise ValueError("AI backup is not available")
-    shutil.copy2(backup, output_dir / "songMap.json")
-    song_map: Any = read_json(output_dir / "songMap.json", default={})
-    if not isinstance(song_map, dict):
-        raise ValueError("AI backup is invalid")
+    if not backup.exists(): raise ValueError("AI backup is not available")
+    song_map: Any = read_json(backup, default={})
+    if not isinstance(song_map, dict): raise ValueError("AI backup is invalid")
     notes = song_map.get("notes") or []
-    if not isinstance(notes, list):
-        raise ValueError("AI backup notes are invalid")
-    write_json(output_dir / "reference.json", {"notes": notes})
-    midi_notes = [
-        VocalNote(
-            float(n["start"]),
-            float(n["end"]),
-            _safe_int(n.get("midi_note", n.get("midi")), -1),
-            _safe_int(n.get("velocity"), 96),
-            _int_or_none(n.get("word_index")),
-            _int_or_none(n.get("syllable_index")),
-            (),
-        )
-        for n in notes
-        if isinstance(n, dict)
-    ]
-    if midi_notes:
-        write_midi(
-            output_dir / "game.mid",
-            midi_notes,
-            _words(song_map),
-            _syllables(song_map),
-            float(song_map.get("bpm") or 120.0),
-            False,
-        )
-    else:
-        (output_dir / "game.mid").unlink(missing_ok=True)
+    if not isinstance(notes, list): raise ValueError("AI backup notes are invalid")
     manifest: Any = read_json(output_dir / "manifest.json", default={})
-    if isinstance(manifest, dict):
-        manifest["manual_editor"] = {
-            "edited": False,
-            "restored_ai": True,
-            "note_count": len(midi_notes),
-        }
-        write_json(output_dir / "manifest.json", manifest)
+    if isinstance(manifest, dict): manifest["manual_editor"] = {"edited": False, "restored_ai": True, "note_count": len(notes)}
+    staging = Path(tempfile.mkdtemp(prefix="editor-stage-", dir=output_dir))
+    try:
+        _write_editor_generation(staging, song_map, notes, manifest)
+        _publish_editor_generation(output_dir, staging, has_midi=bool(notes), has_manifest=isinstance(manifest, dict))
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
     return song_map
+

@@ -143,18 +143,22 @@ def test_listing_get_patch_remove_and_package(monkeypatch, tmp_path):
         songs.remove_song(current, database)
     assert locked.value.status_code == 409
 
-    current.status = models.SongStatus.PROCESSING
+    monkeypatch.setattr(
+        songs.song_package_service,
+        "build_package_for_song",
+        Mock(side_effect=ValueError("Song processing is not complete")),
+    )
     with pytest.raises(HTTPException):
-        songs.export_song_package(current, BackgroundTasks())
-    current.status = models.SongStatus.DONE
+        songs.export_song_package(current.id, BackgroundTasks(), db=database)
     package = tmp_path / "song.zip"
     package.write_bytes(b"zip")
-    monkeypatch.setattr(songs.song_package_service, "build_package", Mock(return_value=package))
-    response = songs.export_song_package(current, BackgroundTasks())
+    songs.song_package_service.build_package_for_song.side_effect = None
+    songs.song_package_service.build_package_for_song.return_value = (package, current.slug)
+    response = songs.export_song_package(current.id, BackgroundTasks(), db=database)
     assert response.path == package
-    songs.song_package_service.build_package.side_effect = ValueError("incomplete")
+    songs.song_package_service.build_package_for_song.side_effect = ValueError("incomplete")
     with pytest.raises(HTTPException) as incomplete:
-        songs.export_song_package(current, BackgroundTasks())
+        songs.export_song_package(current.id, BackgroundTasks(), db=database)
     assert incomplete.value.status_code == 409
 
 
@@ -303,3 +307,20 @@ def test_result_and_lyrics_contracts(monkeypatch, tmp_path):
     with pytest.raises(HTTPException) as invalid:
         songs.update_lyrics(body, current)
     assert invalid.value.status_code == 400
+
+
+def test_song_mutations_are_blocked_while_recording_is_active(monkeypatch):
+    database = Mock()
+    pending = domain_song(status=models.SongStatus.PENDING, output_dir=None)
+    done = domain_song(status=models.SongStatus.DONE, output_dir="output")
+    monkeypatch.setattr(songs.recording_service, "has_active_recording", Mock(return_value=True))
+    monkeypatch.setattr(songs.pipeline_service, "is_processing", Mock(return_value=False))
+
+    for action, song in (
+        (songs.remove_song, done),
+        (songs.process_song, pending),
+        (songs.reprocess_melody, done),
+    ):
+        with pytest.raises(HTTPException) as blocked:
+            action(song, database)
+        assert blocked.value.status_code == 409

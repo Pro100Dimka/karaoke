@@ -1,6 +1,6 @@
 {
   "name": "a-and-d-voice",
-  "version": "0.0.1",
+  "version": "0.3.5",
   "description": "A&D Voice — десктопное приложение (AI-караоке-тренажёр)",
   "author": "A&D Voice",
   "private": true,
@@ -20,7 +20,7 @@
     "audit:css": "node scripts/audit-css-full.mjs --strict",
     "audit:exports": "node scripts/audit-exports.mjs",
     "check:sizes": "node scripts/check-file-sizes.mjs",
-    "audit": "npm run check:syntax && npm run audit:css && npm run audit:exports && npm run audit:reachability && npm run audit:react && npm run audit:cycles && npm run audit:complexity && npm run audit:semantic-density && npm run check:sizes && npm run audit:duplicates && npm run audit:architecture && npm run audit:localization",
+    "audit": "npm run check:syntax && npm run audit:css && npm run audit:exports && npm run audit:reachability && npm run audit:react && npm run audit:cycles && npm run audit:complexity && npm run audit:semantic-density && npm run check:sizes && npm run audit:duplicates && npm run audit:media-auth && npm run audit:release-gate && npm run audit:portability && npm run audit:architecture && npm run audit:localization",
     "audit:react": "node scripts/audit-react.mjs",
     "audit:cycles": "node scripts/audit-cycles.mjs",
     "audit:complexity": "node scripts/audit-complexity.mjs",
@@ -41,7 +41,12 @@
     "test:mutation": "stryker run",
     "test:e2e": "playwright test",
     "test:e2e:real": "npm run test:integration:backend",
-    "test:integration:backend": "cross-env VITE_USE_MOCK_API=false playwright test"
+    "test:integration:backend": "cross-env VITE_USE_MOCK_API=false playwright test",
+    "audit:media-auth": "node scripts/audit-media-auth.mjs",
+    "test:e2e:electron-release": "playwright test -c playwright.release.config.mjs",
+    "verify:release": "python ../scripts/release_gate.py",
+    "audit:release-gate": "node scripts/audit-release-gate.mjs",
+    "audit:portability": "node scripts/audit-portability.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.383.0",
@@ -102,10 +107,6 @@
       {
         "from": "../downloads/engines/msst",
         "to": "backend/_internal/engines/msst"
-      },
-      {
-        "from": "../downloads/media/videoplayback.webm",
-        "to": "media/videoplayback.webm"
       }
     ],
     "directories": {

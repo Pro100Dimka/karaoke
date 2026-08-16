@@ -53,15 +53,13 @@ PROJECT_ROOT = BASE_DIR.parent
 
 
 def resolve_runtime_executable(name: str) -> str:
-    """Resolve a bundled executable before falling back to the system PATH."""
-    executable = f"{name}.exe" if os.name == "nt" and not name.lower().endswith(".exe") else name
-    for candidate in (
-        Path(sys.executable).resolve().parent / executable,
-        RUNTIME_DIR / executable,
-        BASE_DIR / executable,
-    ):
-        if candidate.is_file():
-            return str(candidate)
+    """Resolve packaged siblings deterministically before consulting the host PATH."""
+    names = [name] if name.lower().endswith(".exe") else ([f"{name}.exe", name] if IS_FROZEN else ([name, f"{name}.exe"] if os.name != "nt" else [f"{name}.exe", name]))
+    roots = (Path(sys.executable).resolve().parent, RUNTIME_DIR, BASE_DIR)
+    for root in roots:
+        for executable in names:
+            candidate = root / executable
+            if candidate.is_file(): return str(candidate)
     return shutil.which(name) or name
 
 
@@ -152,6 +150,23 @@ _DEFAULT_SONGS_DIR = DATA_DIR / "karaoke_songs" if IS_FROZEN else PROJECT_ROOT /
 SONG_OUTPUT_DIR = _env_path(
     "SONGAPP_SONG_OUTPUT_DIR", _saved_path("songs_folder", _DEFAULT_SONGS_DIR)
 )
+
+
+def _saved_song_library_roots(current: Path) -> set[Path]:
+    try:
+        raw = json.loads(PATH_SETTINGS_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError):
+        raw = {}
+    values = raw.get("song_library_roots", []) if isinstance(raw, dict) else []
+    roots = {current.resolve()}
+    if isinstance(values, list):
+        for value in values:
+            if isinstance(value, str) and value.strip():
+                roots.add(Path(value).expanduser().resolve())
+    return roots
+
+
+SONG_LIBRARY_ROOTS = _saved_song_library_roots(SONG_OUTPUT_DIR)
 _DEFAULT_CACHE_DIR = DATA_DIR / "cache"
 CACHE_DIR = _env_path("SONGAPP_CACHE_DIR", _saved_path("cache_folder", _DEFAULT_CACHE_DIR))
 UPLOAD_TEMP_DIR = CACHE_DIR / "uploads"
@@ -162,12 +177,22 @@ def apply_storage_paths(
     songs_folder: str | None = None,
     ai_folder: str | None = None,
     cache_folder: str | None = None,
+    song_library_roots: list[str] | None = None,
 ) -> None:
     """Apply persisted user storage paths to the running backend process."""
-    global SONG_OUTPUT_DIR, MODELS_DIR, CACHE_DIR, UPLOAD_TEMP_DIR
+    global SONG_OUTPUT_DIR, SONG_LIBRARY_ROOTS, MODELS_DIR, CACHE_DIR, UPLOAD_TEMP_DIR
 
     if songs_folder is not None:
+        previous = SONG_OUTPUT_DIR.resolve()
         SONG_OUTPUT_DIR = Path(songs_folder).expanduser().resolve()
+        SONG_LIBRARY_ROOTS.update({previous, SONG_OUTPUT_DIR.resolve()})
+    if song_library_roots is not None:
+        SONG_LIBRARY_ROOTS.update(
+            Path(value).expanduser().resolve()
+            for value in song_library_roots
+            if isinstance(value, str) and value.strip()
+        )
+        SONG_LIBRARY_ROOTS.add(SONG_OUTPUT_DIR.resolve())
     if ai_folder is not None:
         MODELS_DIR = Path(ai_folder).expanduser().resolve()
     if cache_folder is not None:

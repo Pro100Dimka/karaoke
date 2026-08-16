@@ -7,6 +7,7 @@ import { closeAudioContext, closeAudioContextQuietly } from "../utils/audio-cont
 
 import {
   cancelOutboundTransfers,
+  cancelTransfersByCommandId,
   createIncomingTransferTimer,
   emitTransferProgress,
   sendFile,
@@ -31,6 +32,7 @@ export default class OnlineVoiceMesh {
     this.pendingTransferConfirmations = new Map();
     this.pendingTransferAdmissions = new Map();
     this.pendingTransferCredits = new Map();
+    this.outboundTransfers = new Map();
     this.stream = null;
     this.microphoneGraph = null;
     this.startPromise = null;
@@ -326,17 +328,22 @@ export default class OnlineVoiceMesh {
     return createIncomingTransferTimer(this, participantId, transferId);
   }
 
-  waitForDataChannel(participantId, timeoutMs = 15_000, lifecycleVersion) {
+  waitForDataChannel(participantId, timeoutMs = 15_000, lifecycleVersion, signal) {
     return waitForDataChannel(
       this,
       participantId,
       timeoutMs,
-      lifecycleVersion ?? this.lifecycleVersion
+      lifecycleVersion ?? this.lifecycleVersion,
+      signal
     );
   }
 
-  sendFile(participantId, blob, metadata = {}) {
-    return sendFile(this, participantId, blob, metadata);
+  sendFile(participantId, blob, metadata = {}, options = {}) {
+    return sendFile(this, participantId, blob, metadata, options);
+  }
+
+  cancelTransfersByCommandId(commandId, error) {
+    return cancelTransfersByCommandId(this, commandId, error);
   }
 
   removePeer(participantId) {
@@ -388,6 +395,7 @@ export default class OnlineVoiceMesh {
     for (const admission of this.incomingFileAdmissions.values()) admission.cancelled = true;
     this.incomingFileAdmissions.clear();
     cancelOutboundTransfers(this, null, null, new Error(translateSaved("Передача файла отменена")));
+    this.outboundTransfers.clear();
     this.channels.clear();
   }
 }

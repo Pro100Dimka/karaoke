@@ -12,20 +12,29 @@ const MAX_PARTICIPANT_NAME_LENGTH = 64;
 export function createRoomId( cryptoApi = globalThis.crypto, random = Math.random
 ) {
   if (cryptoApi && typeof cryptoApi.randomUUID === "function") {
-    return cryptoApi.randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase();
+    return cryptoApi.randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase();
   }
   if (cryptoApi && typeof cryptoApi.getRandomValues === "function") {
-    const bytes = cryptoApi.getRandomValues(new Uint8Array(4));
+    const bytes = cryptoApi.getRandomValues(new Uint8Array(6));
     return [...bytes]
       .map((byte) => byte.toString(16).padStart(2, "0"))
       .join("")
       .toUpperCase();
   }
-  return Math.floor(random() * 0x1_0000_0000)
-    .toString(16)
-    .padStart(8, "0")
-    .toUpperCase();
+  const high = Math.floor(random() * 0x1_0000);
+  const low = Math.floor(random() * 0x1_0000_0000);
+  return `${high.toString(16).padStart(4, "0")}${low.toString(16).padStart(8, "0")}`.toUpperCase();
 }
+export function createHostToken(cryptoApi = globalThis.crypto) {
+  if (cryptoApi && typeof cryptoApi.randomUUID === "function")
+    return `${cryptoApi.randomUUID()}${cryptoApi.randomUUID()}`.replaceAll("-", "");
+  if (cryptoApi && typeof cryptoApi.getRandomValues === "function") {
+    const bytes = cryptoApi.getRandomValues(new Uint8Array(32));
+    return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+  throw new Error(translateSaved("Безопасный генератор случайных чисел недоступен"));
+}
+
 export function normalizeRoomId(value) {
   return String(value || "")
     .toUpperCase()
@@ -74,7 +83,7 @@ export class OnlineRoomClient {
     }
   }
 
-  connect({ id, name, host = false }) {
+  connect({ id, name, host = false, hostToken = "" }) {
     const normalizedId = normalizeRoomId(id);
     if (normalizedId.length < 4) {
       return Promise.reject(
@@ -93,6 +102,7 @@ export class OnlineRoomClient {
         .trim()
         .slice(0, MAX_PARTICIPANT_NAME_LENGTH) || translateSaved("Гость");
     const query = new URLSearchParams({ name: participantName, role: host ? "host" : "guest" });
+    if (host) { query.set("create", "1"); query.set("hostToken", String(hostToken)); }
     if (typeof globalThis.WebSocket !== "function") {
       return Promise.reject(
         new Error( translateSaved("WebSocket не поддерживается в этом окружении.")
