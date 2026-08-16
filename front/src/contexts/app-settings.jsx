@@ -20,7 +20,12 @@ export const INITIAL_APP_SETTINGS_STATE = Object.freeze({
 
 const APP_SETTINGS_HANDLERS = {
   LOAD_START: (state) => ({ ...state, isLoading: true, error: null }),
-  LOAD_SUCCESS: (state, payload) => ({ ...state, settings: payload, isLoading: false, error: null }),
+  LOAD_SUCCESS: (state, payload) => ({
+    ...state,
+    settings: payload,
+    isLoading: false,
+    error: null
+  }),
   LOAD_ERROR: (state, payload) => ({ ...state, isLoading: false, error: payload }),
   UPDATE_SETTINGS: (state, payload) => ({
     ...state,
@@ -29,14 +34,12 @@ const APP_SETTINGS_HANDLERS = {
 };
 
 export function appSettingsReducer(state, { type, payload }) {
-  const handler =
-    Object.hasOwn(APP_SETTINGS_HANDLERS, type) && APP_SETTINGS_HANDLERS[type];
+  const handler = Object.hasOwn(APP_SETTINGS_HANDLERS, type) && APP_SETTINGS_HANDLERS[type];
   return handler ? handler(state, payload) : state;
 }
 
 export default function AppSettingsProvider({ children }) {
-  const [state, dispatch] = useReducer( appSettingsReducer, INITIAL_APP_SETTINGS_STATE
-  );
+  const [state, dispatch] = useReducer(appSettingsReducer, INITIAL_APP_SETTINGS_STATE);
   const loadRequestRef = useRef();
 
   // The callback closes only over stable React dispatch/refs.
@@ -61,8 +64,7 @@ export default function AppSettingsProvider({ children }) {
   const value = useMemo(
     () => ({
       ...state,
-      updateSettings: (payload) =>
-        dispatch({ type: "UPDATE_SETTINGS", payload }),
+      updateSettings: (payload) => dispatch({ type: "UPDATE_SETTINGS", payload }),
       reloadSettings: loadSettings
     }),
     [state, loadSettings]
@@ -79,12 +81,10 @@ export default function AppSettingsProvider({ children }) {
   }, [state.settings?.language]);
   // loadSettings is stable for the provider lifetime.
   // Stryker disable ArrayDeclaration
-  useEffect(() => { loadSettings().catch(() => {}); }, [loadSettings]);
+  useEffect(() => {
+    loadSettings().catch(() => {});
+  }, [loadSettings]);
   // Stryker restore ArrayDeclaration
 
-  return (
-    <AppSettingsContext.Provider value={value}>
-      {children}
-    </AppSettingsContext.Provider>
-  );
+  return <AppSettingsContext.Provider value={value}>{children}</AppSettingsContext.Provider>;
 }

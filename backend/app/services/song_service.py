@@ -180,7 +180,7 @@ def _normalize_artist_title(
     artist_words = _identity_words(value)
     title_words = _identity_words(clean_title)
     shared: list[str] = []
-    for left, right in zip(artist_words, title_words):
+    for left, right in zip(artist_words, title_words, strict=False):
         if left.casefold() != right.casefold():
             break
         shared.append(left)

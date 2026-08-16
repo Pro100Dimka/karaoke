@@ -20,17 +20,14 @@ function shouldAuthenticateBackendFileRequest(details, backendUrl) {
 
 function installBackendFileAuthentication(webRequest, backendUrl, apiToken) {
   if (!webRequest?.onBeforeSendHeaders || !apiToken) return;
-  const origin = new URL(backendUrl).origin;
-  webRequest.onBeforeSendHeaders(
-    { urls: [`${origin}/*`] },
-    (details, callback) => {
-      const requestHeaders = { ...(details.requestHeaders || {}) };
-      if (shouldAuthenticateBackendFileRequest(details, backendUrl)) {
-        requestHeaders["X-ADVoice-Token"] = apiToken;
-      }
-      callback({ requestHeaders });
+  const { origin } = new URL(backendUrl);
+  webRequest.onBeforeSendHeaders({ urls: [`${origin}/*`] }, (details, callback) => {
+    const requestHeaders = { ...(details.requestHeaders || {}) };
+    if (shouldAuthenticateBackendFileRequest(details, backendUrl)) {
+      requestHeaders["X-ADVoice-Token"] = apiToken;
     }
-  );
+    callback({ requestHeaders });
+  });
 }
 
 module.exports = {

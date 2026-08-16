@@ -4,20 +4,18 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../../../../api/client";
 import Button from "../../../../components/fields/button";
 import Modal from "../../../../components/modal";
-import { POLLING_INTERVALS } from "../../../../runtime-config";
 import { useAppDialog } from "../../../../contexts/AppDialog";
 import useExclusiveAsyncAction from "../../../../hooks/useExclusiveAsyncAction";
 import { usePolling } from "../../../../hooks/usePolling";
 import { translateSaved } from "../../../../i18n/runtime";
+import { POLLING_INTERVALS } from "../../../../runtime-config";
 import { ConfigForm, NumberField, Stack } from "../../../../theme/ui";
 import { getErrorMessage } from "../../../../utils/errors";
 import { SONG_FIELDS } from "./config";
 import { createSongPayload, getSelectedSong, validateSongSettings } from "./utils";
 
-const setField = (setter, name, value) =>
-  setter((current) => ({ ...current, [name]: value }));
-const parseNumber = (value) =>
-  value === "" || value == null ? null : Number(value);
+const setField = (setter, name, value) => setter((current) => ({ ...current, [name]: value }));
+const parseNumber = (value) => (value === "" || value == null ? null : Number(value));
 const SONG_RENDERERS = {
   noteRange: ({ field, context }) => (
     <Stack gap={1}>
@@ -27,17 +25,13 @@ const SONG_RENDERERS = {
         <NumberField
           placeholder={translateSaved("Мин.")}
           value={context.form.note_range_min ?? ""}
-          onChange={(value) =>
-            context.onChange("note_range_min", parseNumber(value))
-          }
+          onChange={(value) => context.onChange("note_range_min", parseNumber(value))}
         />
 
         <NumberField
           placeholder={translateSaved("Макс.")}
           value={context.form.note_range_max ?? ""}
-          onChange={(value) =>
-            context.onChange("note_range_max", parseNumber(value))
-          }
+          onChange={(value) => context.onChange("note_range_max", parseNumber(value))}
         />
       </Stack>
     </Stack>
@@ -45,12 +39,18 @@ const SONG_RENDERERS = {
 };
 export default function SongSettings({ songId, onClose }) {
   const { alert: notify } = useAppDialog();
-  const { data: songs, error: songsError, refresh: refreshSongs } = usePolling(api.listSongs, POLLING_INTERVALS.health, []);
+  const {
+    data: songs,
+    error: songsError,
+    refresh: refreshSongs
+  } = usePolling(api.listSongs, POLLING_INTERVALS.health, []);
   const { pending: saving, run: runSave } = useExclusiveAsyncAction();
   const song = getSelectedSong(songs, songId);
   const [form, setForm] = useState(null);
   const navigate = useNavigate();
-  useEffect(() => { setForm( song ? { ...song } : null ); }, [song]);
+  useEffect(() => {
+    setForm(song ? { ...song } : null);
+  }, [song]);
   const updateField = (name, value) => setField(setForm, name, value);
   const save = () =>
     runSave(async () => {
@@ -60,13 +60,12 @@ export default function SongSettings({ songId, onClose }) {
         return;
       }
       try {
-        const updated = await api.updateSong( song.id, createSongPayload(form, song)
-        );
-        if (updated && typeof updated === "object") setForm((current) => ({ ...current, ...updated }));
+        const updated = await api.updateSong(song.id, createSongPayload(form, song));
+        if (updated && typeof updated === "object")
+          setForm((current) => ({ ...current, ...updated }));
         await refreshSongs?.();
       } catch (error) {
-        await notify( translateSaved("Не удалось сохранить: {0}", { 0: getErrorMessage(error) })
-        );
+        await notify(translateSaved("Не удалось сохранить: {0}", { 0: getErrorMessage(error) }));
       }
     });
   const renderContent = () => {
@@ -155,9 +154,7 @@ export default function SongSettings({ songId, onClose }) {
               onClick={save}
               className="modal-title-action"
             >
-              {saving
-                ? translateSaved("Сохранение…")
-                : translateSaved("Сохранить")}
+              {saving ? translateSaved("Сохранение…") : translateSaved("Сохранить")}
             </Button>
           ) : null
       }}

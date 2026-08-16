@@ -8,8 +8,7 @@ export const UI_PREFERENCE_STORAGE = Object.freeze({
   settings: "karaoke-settings-view"
 });
 
-const isObject = (value) =>
-  value && typeof value === "object" && !Array.isArray(value);
+const isObject = (value) => value && typeof value === "object" && !Array.isArray(value);
 
 export async function hydrateUiPreferences(api) {
   const remote = await api.getUiPreferences();

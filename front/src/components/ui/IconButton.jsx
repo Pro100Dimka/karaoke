@@ -7,9 +7,7 @@ export default function IconButton({
   unstyled = false,
   ...props
 }) {
-  const buttonClassName = unstyled
-    ? className
-    : `icon-button ${className}`.trim();
+  const buttonClassName = unstyled ? className : `icon-button ${className}`.trim();
 
   return (
     <button

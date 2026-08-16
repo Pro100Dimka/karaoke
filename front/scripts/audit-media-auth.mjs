@@ -44,7 +44,11 @@ assert.equal(
 
 let listener;
 installBackendFileAuthentication(
-  { onBeforeSendHeaders(_filter, callback) { listener = callback; } },
+  {
+    onBeforeSendHeaders(_filter, callback) {
+      listener = callback;
+    }
+  },
   backend,
   "launch-secret"
 );

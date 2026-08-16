@@ -9,6 +9,7 @@
 SONGAPP_HOST / SONGAPP_PORT — см. config.py).
 """
 
+import importlib
 import json
 import logging
 import os
@@ -17,6 +18,7 @@ import sys
 import urllib.request
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Any, BinaryIO
 
 import uvicorn
 
@@ -42,7 +44,7 @@ class _SingleInstanceLock:
 
     def __init__(self, path: Path):
         self.path = path
-        self._file = None
+        self._file: BinaryIO | None = None
 
     def acquire(self) -> bool:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -58,8 +60,7 @@ class _SingleInstanceLock:
                 handle.seek(0)
                 msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
             else:
-                import fcntl
-
+                fcntl: Any = importlib.import_module("fcntl")
                 fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except (OSError, BlockingIOError):
             handle.close()
@@ -78,8 +79,7 @@ class _SingleInstanceLock:
 
                 msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
             else:
-                import fcntl
-
+                fcntl: Any = importlib.import_module("fcntl")
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
         finally:
             handle.close()
@@ -131,8 +131,8 @@ def main() -> None:
         # build-time top-level modules: the packaged smoke test itself is the
         # authoritative proof that the frozen application contains them.
         qwen_asr = importlib.import_module("qwen_asr")
-        asr_model = getattr(qwen_asr, "Qwen3ASRModel")
-        aligner_model = getattr(qwen_asr, "Qwen3ForcedAligner")
+        asr_model = qwen_asr.Qwen3ASRModel
+        aligner_model = qwen_asr.Qwen3ForcedAligner
         nagisa = importlib.import_module("nagisa")
         tagged = nagisa.tagging("テスト")
         if not getattr(tagged, "words", None):

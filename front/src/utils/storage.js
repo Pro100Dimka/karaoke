@@ -6,15 +6,12 @@ export function getBrowserStorage() {
   }
 }
 
-export function readJsonStorage( key, fallback = {}, storage = getBrowserStorage()
-) {
+export function readJsonStorage(key, fallback = {}, storage = getBrowserStorage()) {
   try {
     const normalizedKey = String(key ?? "").trim();
     if (!normalizedKey) return fallback;
     const parsed = JSON.parse(storage.getItem(normalizedKey));
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? parsed
-      : fallback;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : fallback;
   } catch {
     return fallback;
   }

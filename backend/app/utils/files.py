@@ -15,7 +15,12 @@ def read_text_tail(
         return []
     with path.open("rb") as stream:
         stream.seek(0, 2)
-        start = max(0, stream.tell() - max_bytes)
+        # Read one extra byte so a Windows CRLF delimiter does not consume one
+        # byte of the requested tail budget and make the final complete line
+        # look truncated (for example ``four\r\n`` with ``max_bytes=5``).
+        # The helper remains strictly bounded: at most max_bytes + 2 bytes are
+        # inspected including the one-byte boundary look-behind below.
+        start = max(0, stream.tell() - (max_bytes + 1))
         previous = b""
         if start:
             stream.seek(start - 1)
@@ -23,4 +28,12 @@ def read_text_tail(
         stream.seek(start)
         content = stream.read()
     lines = content.decode(encoding, errors="replace").splitlines()
-    return lines[start > 0 and previous not in {b"\n", b"\r"} :][-max_lines:]
+    if start > 0 and content[:1] in {b"\n", b"\r"} and lines and lines[0] == "":
+        # A delimiter at the beginning of the bounded window terminates the
+        # preceding line; it is not itself an empty tail line.
+        lines = lines[1:]
+    elif start > 0 and previous not in {b"\n", b"\r"}:
+        # The first decoded line is only a suffix of a line that began before
+        # the bounded window, so never expose it as a complete log line.
+        lines = lines[1:]
+    return lines[-max_lines:]

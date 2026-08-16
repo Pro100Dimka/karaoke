@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
-import { getMelodyGuideState } from "../utils/melody-guide";
 import { closeAudioContext, closeAudioContextQuietly } from "../../../utils/audio-context";
+import { getMelodyGuideState } from "../utils/melody-guide";
 
 export default function useMelodyGuide({ notes, volume, keyShift, currentTimeRef }) {
   const guideRef = useRef(null);
@@ -26,25 +26,19 @@ export default function useMelodyGuide({ notes, volume, keyShift, currentTimeRef
       });
 
       if (state.active) guide.oscillator.frequency.setTargetAtTime(state.frequency, now, 0.012);
-      guide.gain.gain.setTargetAtTime( state.gain, now, state.active ? 0.015 : 0.018
-      );
+      guide.gain.gain.setTargetAtTime(state.gain, now, state.active ? 0.015 : 0.018);
     },
     // Stryker disable next-line ArrayDeclaration: update reads current values from stable refs.
     []
   );
 
   const start = useCallback(async () => {
-    if (
-      volumeRef.current <= 0 ||
-      !Array.isArray(notesRef.current) ||
-      notesRef.current.length === 0
-    )
+    if (volumeRef.current <= 0 || !Array.isArray(notesRef.current) || notesRef.current.length === 0)
       return false;
 
     let guide = guideRef.current;
     if (!guide || guide.context.state === "closed") {
-      const AudioContextClass =
-        globalThis.AudioContext || globalThis.webkitAudioContext;
+      const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
       if (!AudioContextClass) return false;
       const context = new AudioContextClass({ latencyHint: "interactive" });
       const oscillator = context.createOscillator();

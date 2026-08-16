@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import Karaoke from "../pages/Karaoke";
 import Library from "../pages/Library";
-import MelodyEditorPage from "../pages/MelodyEditor.jsx";
+import MelodyEditorPage from "../pages/MelodyEditor";
 
 const routes = [
   { path: "/", Comp: Library },
@@ -17,10 +17,7 @@ export default function AppRoutes({ onOpenAppSettings, onOpenSongSettings }) {
           key={path}
           path={path}
           element={
-            <Comp
-              onOpenAppSettings={onOpenAppSettings}
-              onOpenSongSettings={onOpenSongSettings}
-            />
+            <Comp onOpenAppSettings={onOpenAppSettings} onOpenSongSettings={onOpenSongSettings} />
           }
         />
       ))}

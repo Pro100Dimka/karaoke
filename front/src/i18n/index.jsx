@@ -1,8 +1,8 @@
 import { createContext, useContext, useLayoutEffect, useMemo } from "react";
 
 import useAppSettings from "../hooks/useAppSettings";
-import { translate } from "./translate";
 import { messages } from "./messages";
+import { translate } from "./translate";
 
 export { messages } from "./messages";
 
@@ -18,13 +18,14 @@ export function I18nProvider({ children }) {
   const value = useMemo(
     () => ({
       language,
-      t: (key, values = {}, fallback = key) =>
-        translateMessage(language, key, values, fallback)
+      t: (key, values = {}, fallback = key) => translateMessage(language, key, values, fallback)
     }),
     [language]
   );
 
-  useLayoutEffect(() => { document.documentElement.lang = language; }, [language]);
+  useLayoutEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

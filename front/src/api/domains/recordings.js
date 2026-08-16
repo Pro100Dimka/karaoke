@@ -25,20 +25,17 @@ export const recordingsApi = {
       })
     }),
   pauseRecording: (sessionId) =>
-    request(
-      `/recording/pause?session_id=${encodeURIComponent(String(sessionId ?? ""))}`,
-      { method: "POST" }
-    ),
+    request(`/recording/pause?session_id=${encodeURIComponent(String(sessionId ?? ""))}`, {
+      method: "POST"
+    }),
   resumeRecording: (sessionId) =>
-    request(
-      `/recording/resume?session_id=${encodeURIComponent(String(sessionId ?? ""))}`,
-      { method: "POST" }
-    ),
+    request(`/recording/resume?session_id=${encodeURIComponent(String(sessionId ?? ""))}`, {
+      method: "POST"
+    }),
   stopRecording: (sessionId) =>
-    request(
-      `/recording/stop?session_id=${encodeURIComponent(String(sessionId ?? ""))}`,
-      { method: "POST" }
-    ),
+    request(`/recording/stop?session_id=${encodeURIComponent(String(sessionId ?? ""))}`, {
+      method: "POST"
+    }),
   listRecordingsForSong: (songId) =>
     request(`/recording/by-song/${encodePathSegment(songId)}`).then((items) =>
       Array.isArray(items) ? items.map(normalizeRecording) : []
@@ -47,14 +44,10 @@ export const recordingsApi = {
     request("/recording/library").then((items) =>
       Array.isArray(items) ? items.map(normalizeRecording) : []
     ),
-  deleteRecording: (id) =>
-    request(`/recording/${encodePathSegment(id)}`, { method: "DELETE" }),
-  getRecordingFileUrl: (id) =>
-    createFileUrl(`/recording/${encodePathSegment(id)}/file`),
-  getPerformanceFileUrl: (id) =>
-    createFileUrl(`/recording/${encodePathSegment(id)}/performance`),
+  deleteRecording: (id) => request(`/recording/${encodePathSegment(id)}`, { method: "DELETE" }),
+  getRecordingFileUrl: (id) => createFileUrl(`/recording/${encodePathSegment(id)}/file`),
+  getPerformanceFileUrl: (id) => createFileUrl(`/recording/${encodePathSegment(id)}/performance`),
   runAnalysis: (recordingId) =>
     request(`/analysis/${encodePathSegment(recordingId)}/run`, { method: "POST" }),
-  getAnalysis: (recordingId) =>
-    request(`/analysis/${encodePathSegment(recordingId)}`)
+  getAnalysis: (recordingId) => request(`/analysis/${encodePathSegment(recordingId)}`)
 };

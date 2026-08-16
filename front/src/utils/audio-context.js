@@ -9,5 +9,5 @@ export async function closeAudioContext(context) {
 }
 
 export function closeAudioContextQuietly(context) {
-  void closeAudioContext(context);
+  closeAudioContext(context);
 }

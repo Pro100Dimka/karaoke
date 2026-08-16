@@ -16,6 +16,7 @@ import threading
 import time
 
 import numpy as np
+
 try:
     import sounddevice as sd
 except Exception:  # PortAudio may be unavailable in CI/diagnostics.

@@ -4,7 +4,15 @@ function createCommandId() {
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-export async function openKaraokeInRoom({ songId, room, client, roomApi, isCurrentConnection, hostSongCommandRef, voice }) {
+export async function openKaraokeInRoom({
+  songId,
+  room,
+  client,
+  roomApi,
+  isCurrentConnection,
+  hostSongCommandRef,
+  voice
+}) {
   if (room && !room.host) return false;
   if (!isCurrentConnection()) return true;
   const revisionPayload = await roomApi?.getSongRevision?.(songId);

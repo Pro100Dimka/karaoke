@@ -50,9 +50,7 @@ function EditorActions({
         />
         <MelodyEditorToolbarButton
           icon={Save}
-          label={
-            saving ? translateSaved("Сохранение…") : translateSaved("Сохранить")
-          }
+          label={saving ? translateSaved("Сохранение…") : translateSaved("Сохранить")}
           disabled={saving}
           tone="pink"
           active
@@ -97,9 +95,7 @@ function EditorActions({
       <div className="melody-editor-tool-group is-transport">
         <MelodyEditorToolbarButton
           icon={playing ? Pause : Play}
-          label={
-            playing ? translateSaved("Стоп") : translateSaved("Воспроизвести")
-          }
+          label={playing ? translateSaved("Стоп") : translateSaved("Воспроизвести")}
           tone="green"
           active={playing}
           onClick={playing ? pause : play}
@@ -172,9 +168,7 @@ function VolumeDials({ setVolumes, volumes }) {
 
 function SelectionSummary({ assignSyllable, selected, selectedNote, syllables }) {
   return (
-    <div
-      className={`melody-editor-inline-selection ${selected.length ? "is-active" : ""}`}
-    >
+    <div className={`melody-editor-inline-selection ${selected.length ? "is-active" : ""}`}>
       {selectedNote ? (
         <>
           <strong>{noteName(selectedNote.midi_note)}</strong>
@@ -253,18 +247,10 @@ export default function MelodyEditorControls({
         toggleAutoScroll={toggleAutoScroll}
         undo={undo}
       />
-      <PlaybackRate
-        playbackRate={playbackRate}
-        setPlaybackRate={setPlaybackRate}
-      />
+      <PlaybackRate playbackRate={playbackRate} setPlaybackRate={setPlaybackRate} />
       <VolumeDials setVolumes={setVolumes} volumes={volumes} />
       <div className="melody-editor-transport melody-editor-waveform-only">
-        <SongStrip
-          song={song}
-          currentTime={time}
-          duration={duration}
-          onSeek={seek}
-        />
+        <SongStrip song={song} currentTime={time} duration={duration} onSeek={seek} />
       </div>
       <SelectionSummary
         assignSyllable={assignSyllable}

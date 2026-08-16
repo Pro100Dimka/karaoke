@@ -15,9 +15,11 @@ const pendingRecordingIds = () => {
   const value = readJsonStorage(PENDING_RECORDING_KEY, {});
   return [...new Set([...(Array.isArray(value.ids) ? value.ids : []), value.id].filter(Boolean))];
 };
-const writePending = (ids) => writeJsonStorage(
-  PENDING_RECORDING_KEY, ids.length > 1 ? { id: ids[0], ids } : ids.length ? { id: ids[0] } : {}
-);
+const writePending = (ids) =>
+  writeJsonStorage(
+    PENDING_RECORDING_KEY,
+    ids.length > 1 ? { id: ids[0], ids } : ids.length ? { id: ids[0] } : {}
+  );
 const rememberPending = (id) => writePending([...new Set([...pendingRecordingIds(), id])]);
 const forgetPending = (id) => writePending(pendingRecordingIds().filter((value) => value !== id));
 function finalizeRecording(id) {
@@ -67,10 +69,10 @@ export default function useKaraokeTransport({
   setRecordingSessionId,
   setAnalysisRecordingId
 }) {
-  const operationRef = useRef(Symbol());
+  const operationRef = useRef(Symbol("karaoke-operation"));
   const sessionRef = useRef(recordingSessionId);
 
-  const beginOperation = () => (operationRef.current = Symbol());
+  const beginOperation = () => (operationRef.current = Symbol("karaoke-operation"));
 
   useEffect(() => {
     beginOperation();
@@ -84,11 +86,10 @@ export default function useKaraokeTransport({
       sessionRef.current = null;
       if (id) {
         setRecordingSessionId(null);
-        void finalizeRecording(id);
+        finalizeRecording(id);
       }
     };
-  }, [song?.id, setAnalysisRecordingId]);
-
+  }, [setAnalysisRecordingId, setRecordingSessionId, song?.id]);
 
   const clearSession = (id) => {
     if (sessionRef.current !== id) return;
@@ -139,7 +140,7 @@ export default function useKaraokeTransport({
         rememberPending(id);
         await api.resumeRecording(id);
       } else id = await startRecording();
-      if (operation !== operationRef.current) return void (await discardSession(id));
+      if (operation !== operationRef.current) return await discardSession(id);
       sessionRef.current = id;
       setRecordingSessionId(id);
       setRecordingError(null);
@@ -170,7 +171,9 @@ export default function useKaraokeTransport({
       return true;
     }
 
-    const melodyStart = Promise.resolve().then(startMelodyGuide).catch(() => {});
+    const melodyStart = Promise.resolve()
+      .then(startMelodyGuide)
+      .catch(() => {});
     syncSecondaryMedia(instrumental.currentTime, true);
     instrumental.volume = playbackGain(musicVolume);
     if (vocals) vocals.volume = playbackGain(vocalVolume);
@@ -203,7 +206,7 @@ export default function useKaraokeTransport({
       return false;
     }
     setIsPlaying(true);
-    void runRecording(operation);
+    runRecording(operation);
     if (shouldBroadcast) broadcast("play", instrumental.currentTime);
     return true;
   };
@@ -274,7 +277,15 @@ export default function useKaraokeTransport({
     Promise.resolve(action && action()).catch((error) =>
       setRecordingError(formatError("Не удалось выполнить команду комнаты: {0}", error))
     );
-  }, [instrumentalRef, roomCommand, seekToRef, setRecordingError, song?.id, stopRef, togglePlayRef]);
+  }, [
+    instrumentalRef,
+    roomCommand,
+    seekToRef,
+    setRecordingError,
+    song?.id,
+    stopRef,
+    togglePlayRef
+  ]);
 
   return { returnToLibrary, seekTo, skip, stop, togglePlay };
 }

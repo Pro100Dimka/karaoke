@@ -34,7 +34,9 @@ export default function useMelodyEditorDocument({
     }
   }, [notify, reset, setSelected, song?.id]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const save = useCallback(async () => {
     setSaving(true);
@@ -59,8 +61,7 @@ export default function useMelodyEditorDocument({
     if (
       !payload?.ai_backup_exists ||
       !(await confirmDialog(
-        translateSaved( "Вернуть исходный результат AI? Ручные изменения будут потеряны."
-        )
+        translateSaved("Вернуть исходный результат AI? Ручные изменения будут потеряны.")
       ))
     )
       return;
@@ -71,18 +72,11 @@ export default function useMelodyEditorDocument({
       setSelected([]);
       await onSaved?.();
     } catch (error) {
-      await notify( translateSaved("Не удалось восстановить AI: {0}", { 0: getErrorMessage(error) })
+      await notify(
+        translateSaved("Не удалось восстановить AI: {0}", { 0: getErrorMessage(error) })
       );
     }
-  }, [
-    confirmDialog,
-    notify,
-    onSaved,
-    payload?.ai_backup_exists,
-    reset,
-    setSelected,
-    song?.id
-  ]);
+  }, [confirmDialog, notify, onSaved, payload?.ai_backup_exists, reset, setSelected, song?.id]);
 
   return { loading, payload, restoreAi, save, saving };
 }

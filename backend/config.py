@@ -59,7 +59,8 @@ def resolve_runtime_executable(name: str) -> str:
     for root in roots:
         for executable in names:
             candidate = root / executable
-            if candidate.is_file(): return str(candidate)
+            if candidate.is_file():
+                return str(candidate)
     return shutil.which(name) or name
 
 

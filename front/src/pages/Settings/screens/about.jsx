@@ -1,9 +1,9 @@
 import { Mic } from "lucide-react";
 
 import { api } from "../../../api/client";
-import { POLLING_INTERVALS } from "../../../runtime-config";
 import { usePolling } from "../../../hooks/usePolling";
 import { useI18n } from "../../../i18n";
+import { POLLING_INTERVALS } from "../../../runtime-config";
 import { Grid, Stack, Typography } from "../../../theme/ui";
 import { APP_INFO } from "../../../utils/config";
 
@@ -47,11 +47,7 @@ export default function About() {
               {t(`settings.about.${label}`)}
             </Typography>
 
-            <Typography
-              variant="body2"
-              className="mono"
-              sx={{ overflowWrap: "anywhere" }}
-            >
+            <Typography variant="body2" className="mono" sx={{ overflowWrap: "anywhere" }}>
               {about[key] ?? "—"}
             </Typography>
           </Stack>

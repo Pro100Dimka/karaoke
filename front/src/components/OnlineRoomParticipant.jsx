@@ -22,15 +22,11 @@ export default function OnlineRoomParticipant({
   const { t } = useI18n();
   const isSelf = person.id === room.selfId;
   const rawLevel = isSelf ? localSpeakingLevel : speakingLevel;
-  const microphoneInactive = isSelf
-    ? microphoneMuted || roomSoundMuted
-    : person.micMuted;
+  const microphoneInactive = isSelf ? microphoneMuted || roomSoundMuted : person.micMuted;
   const activeSpeakingLevel = microphoneInactive ? 0 : rawLevel;
   const isSpeaking = activeSpeakingLevel > 0.08;
-  const microphoneLabel = t( microphoneMuted ? "room.microphone.enable" : "room.microphone.disable"
-  );
-  const applicationSoundLabel = t( roomSoundMuted ? "room.sound.enable" : "room.sound.disable"
-  );
+  const microphoneLabel = t(microphoneMuted ? "room.microphone.enable" : "room.microphone.disable");
+  const applicationSoundLabel = t(roomSoundMuted ? "room.sound.enable" : "room.sound.disable");
   const participantSoundLabel = isLocallyMuted
     ? t("room.person.enable", { name: person.name })
     : t("room.person.disable", { name: person.name });
@@ -47,18 +43,13 @@ export default function OnlineRoomParticipant({
         </span>
         <span
           className="online-room-speaking-meter"
-          aria-label={t(
-            isSpeaking ? "room.person.speaking" : "room.person.silent",
-            { name: person.name }
-          )}
-          title={t( isSpeaking ? "room.person.speakingNow" : "room.person.noSignal"
-          )}
+          aria-label={t(isSpeaking ? "room.person.speaking" : "room.person.silent", {
+            name: person.name
+          })}
+          title={t(isSpeaking ? "room.person.speakingNow" : "room.person.noSignal")}
         >
           {SPEAKING_THRESHOLDS.map((threshold) => (
-            <i
-              key={threshold}
-              className={activeSpeakingLevel >= threshold ? "is-active" : ""}
-            />
+            <i key={threshold} className={activeSpeakingLevel >= threshold ? "is-active" : ""} />
           ))}
         </span>
       </span>
@@ -94,9 +85,7 @@ export default function OnlineRoomParticipant({
               variant="outline"
               icon={Sparkles}
               label={t(
-                effectsEnabled
-                  ? "room.person.effects.disable"
-                  : "room.person.effects.enable",
+                effectsEnabled ? "room.person.effects.disable" : "room.person.effects.enable",
                 { name: person.name }
               )}
               aria-pressed={effectsEnabled}

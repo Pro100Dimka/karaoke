@@ -41,7 +41,9 @@ def is_internal_output_path(value: object) -> bool:
 def is_portable_output_path(value: object) -> bool:
     """Single package-boundary policy for generated portable song content."""
     parts = _parts(value)
-    return bool(parts) and not is_internal_output_path(value) and not any(
+    if not parts:
+        return False
+    return not is_internal_output_path(value) and not any(
         part in _LOCAL_ONLY_OUTPUT_DIRS for part in parts
     )
 

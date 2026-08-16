@@ -9,7 +9,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const projectRoot = path.resolve(root, "..");
 const { chooseRuntimeBackendEndpoint } = require("../electron/backend-endpoint.cjs");
 
-const fail = (message) => { throw new Error(`[portability] ${message}`); };
+const fail = (message) => {
+  throw new Error(`[portability] ${message}`);
+};
 const read = (relative) => fs.readFileSync(path.join(projectRoot, relative), "utf8");
 
 // A packaged app must not depend on port 8000 being free on somebody else's PC.
@@ -32,7 +34,7 @@ try {
 }
 
 const main = read("front/electron/main.cjs");
-if (!main.includes('process.env.LOCALAPPDATA') || !main.includes('"backend-data"')) {
+if (!main.includes("process.env.LOCALAPPDATA") || !main.includes('"backend-data"')) {
   fail("packaged backend data is not rooted in LOCALAPPDATA");
 }
 if (!main.includes("chooseRuntimeBackendEndpoint")) {
@@ -50,4 +52,6 @@ if (!installer.includes("{localappdata}\\A&D Voice\\backend-data")) {
   fail("installer/backend disagree about the packaged backend data root");
 }
 
-console.log("Portability audit passed: occupied-port, per-user installer, and LocalAppData contracts are enforced.");
+console.log(
+  "Portability audit passed: occupied-port, per-user installer, and LocalAppData contracts are enforced."
+);

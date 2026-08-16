@@ -35,9 +35,7 @@ export default function useKaraokePanorama(songId, isPlaying) {
     let frameId;
     let lastFrame = 0;
     const frameInterval =
-      document.documentElement.dataset.performance === "reduced"
-        ? 1000 / 15
-        : 0;
+      document.documentElement.dataset.performance === "reduced" ? 1000 / 15 : 0;
     const startedAt = performance.now() - clockRef.current;
     const path = pathRef.current;
 

@@ -6,8 +6,7 @@ const REMOTE_SETTLE_TIMEOUT_MS = 5000;
 
 export default function RoomRadioSync() {
   const { room, roomUi, syncUi } = useOnlineRoom();
-  const { isPlaying, stationId, stations, setStation, turnOff, turnOn } =
-    useRadio();
+  const { isPlaying, stationId, stations, setStation, turnOff, turnOn } = useRadio();
   const remoteTargetRef = useRef(null);
   const lastSentRef = useRef("");
   const radioStateRef = useRef({ isPlaying, stationId });
@@ -17,7 +16,7 @@ export default function RoomRadioSync() {
   // mount and cannot be overwritten by stale local radio state.
   useEffect(() => {
     if (!room || !roomUi?.radio) return;
-    const current = radioStateRef.current;
+    const { current } = radioStateRef;
     const remote = roomUi.radio;
     const nextStationId = remote.stationId || current.stationId;
     const signature = `${nextStationId}:${Boolean(remote.isPlaying)}`;
@@ -35,20 +34,13 @@ export default function RoomRadioSync() {
         turnOn({
           remember: false,
           fadeIn: true,
-          targetStation:
-            stations.find(({ id }) => id === nextStationId) || stations[0]
+          targetStation: stations.find(({ id }) => id === nextStationId) || stations[0]
         })
-      ).catch(() => { remoteTargetRef.current = null; });
+      ).catch(() => {
+        remoteTargetRef.current = null;
+      });
     } else if (!remote.isPlaying && current.isPlaying) turnOff({ remember: false });
-  }, [
-    room,
-    roomUi?.__eventId,
-    roomUi?.radio,
-    setStation,
-    stations,
-    turnOff,
-    turnOn
-  ]);
+  }, [room, roomUi?.__eventId, roomUi?.radio, setStation, stations, turnOff, turnOn]);
 
   useEffect(() => {
     if (!room) return;

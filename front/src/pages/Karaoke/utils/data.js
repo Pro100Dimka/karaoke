@@ -1,7 +1,7 @@
 import { translateSaved } from "../../../i18n/runtime";
 // Node test runner requires the explicit extension for this ESM import.
 // eslint-disable-next-line import/extensions
-import { normalizeNoteList } from "./note-normalization.js";
+import { normalizeNoteList } from "./note-normalization";
 
 const ACCIDENTAL_OFFSETS = Object.freeze({ "#": 1, b: -1 });
 
@@ -31,9 +31,7 @@ export function normalizeLyrics(raw) {
   // Stryker disable next-line ArrayDeclaration: injected primitive is filtered.
   const list = Array.isArray(source) ? source : [];
   const toText = (value) =>
-    ["string", "number"].includes(typeof value)
-      ? String(value).trim()
-      : "";
+    ["string", "number"].includes(typeof value) ? String(value).trim() : "";
   const readTime = (value, keys) => {
     for (const key of keys) {
       const rawValue = value[key];
@@ -66,19 +64,13 @@ export function normalizeLyrics(raw) {
             // changing the textual order.
             .filter((word) => word.text)
         : [];
-      const finiteWordStarts = words
-        .map((word) => word.start)
-        .filter(Number.isFinite);
+      const finiteWordStarts = words.map((word) => word.start).filter(Number.isFinite);
       const wordEnds = words.map((word) => word.end);
-      const wordStart = finiteWordStarts.length
-        ? Math.min(...finiteWordStarts)
-        : null;
+      const wordStart = finiteWordStarts.length ? Math.min(...finiteWordStarts) : null;
       const wordEnd = wordEnds.length ? Math.max(...wordEnds) : null;
       const startTime = declaredStart ?? wordStart ?? null;
       const endTime = declaredEnd ?? wordEnd ?? null;
-      const text =
-        toText(line.text ?? line.line) ||
-        words.map((word) => word.text).join(" ");
+      const text = toText(line.text ?? line.line) || words.map((word) => word.text).join(" ");
 
       // Untimed lines are unsafe for real-time karaoke. In particular, never
       // coerce a missing start to zero: that makes an arbitrary line appear at
@@ -100,8 +92,7 @@ export function normalizeLyrics(raw) {
       // rather than creating a zero-length line that can never become current.
       if (cleanLine.end <= cleanLine.start) {
         const nextStart = lines[index + 1]?.start;
-        cleanLine.end =
-          nextStart > cleanLine.start ? nextStart : cleanLine.start + 2;
+        cleanLine.end = nextStart > cleanLine.start ? nextStart : cleanLine.start + 2;
       }
       return cleanLine;
     });
@@ -135,14 +126,10 @@ export function transposeKey(key, semitones) {
     B: 11
   }[root];
   if (pitch == null) return key;
-  const shift = Number.isFinite(Number(semitones))
-    ? Math.round(Number(semitones))
-    : 0;
+  const shift = Number.isFinite(Number(semitones)) ? Math.round(Number(semitones)) : 0;
   const normalizedPitch = (((pitch + shift) % 12) + 12) % 12;
   return `${
-    ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][
-      normalizedPitch
-    ]
+    ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][normalizedPitch]
   }${suffix}`;
 }
 export function playbackGain(value) {

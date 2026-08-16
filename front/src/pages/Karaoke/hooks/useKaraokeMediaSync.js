@@ -57,8 +57,7 @@ export default function useKaraokeMediaSync({
         if (!Number.isFinite(media.duration) || media.duration <= 0) return;
         if (force || shouldSyncMedia(media.currentTime, position)) {
           try {
-            media.currentTime = getSecondaryMediaPosition( position, media.duration
-            );
+            media.currentTime = getSecondaryMediaPosition(position, media.duration);
           } catch {
             // Media may become unavailable while sources are being replaced.
           }
@@ -76,8 +75,7 @@ export default function useKaraokeMediaSync({
 
     const handleMetadata = () => {
       const nextDuration = Number(instrumental.duration);
-      setDuration( Number.isFinite(nextDuration) ? Math.max(0, nextDuration) : 0
-      );
+      setDuration(Number.isFinite(nextDuration) ? Math.max(0, nextDuration) : 0);
     };
     const handleTimeUpdate = () => {
       const position = Number(instrumental.currentTime);
@@ -98,15 +96,13 @@ export default function useKaraokeMediaSync({
     };
 
     const metadataEvents = ["loadedmetadata", "durationchange"];
-    metadataEvents.forEach((event) => instrumental.addEventListener(event, handleMetadata)
-    );
+    metadataEvents.forEach((event) => instrumental.addEventListener(event, handleMetadata));
     instrumental.addEventListener("ended", handleEnded);
     instrumental.addEventListener("timeupdate", handleTimeUpdate);
     // The element may already have metadata before this effect subscribes.
     handleMetadata();
     return () => {
-      metadataEvents.forEach((event) => instrumental.removeEventListener(event, handleMetadata)
-      );
+      metadataEvents.forEach((event) => instrumental.removeEventListener(event, handleMetadata));
       instrumental.removeEventListener("ended", handleEnded);
       instrumental.removeEventListener("timeupdate", handleTimeUpdate);
     };
@@ -115,6 +111,7 @@ export default function useKaraokeMediaSync({
     instrumentalRef,
     onPlaybackEndedRef,
     sendYouTubeCommand,
+    setCurrentTime,
     setDuration,
     setIsPlaying,
     silenceMelodyGuide,
@@ -145,8 +142,7 @@ export default function useKaraokeMediaSync({
       animationFrameId = globalThis.requestAnimationFrame(updatePosition);
     };
 
-    if (typeof globalThis.requestAnimationFrame !== "function")
-      return undefined;
+    if (typeof globalThis.requestAnimationFrame !== "function") return undefined;
     updatePosition();
     return () => {
       active = false;
@@ -181,7 +177,8 @@ export default function useKaraokeMediaSync({
   }, [vocalVolume, vocalsRef]);
 
   useEffect(() => {
-    if (isPlaying && melodyVolume > 0) startMelodyGuide().catch(() => {}); else silenceMelodyGuide();
+    if (isPlaying && melodyVolume > 0) startMelodyGuide().catch(() => {});
+    else silenceMelodyGuide();
   }, [isPlaying, keyShift, melodyVolume, silenceMelodyGuide, startMelodyGuide]);
 
   useEffect(() => {

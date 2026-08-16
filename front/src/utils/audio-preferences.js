@@ -29,8 +29,9 @@ export function saveAudioPreferences(patch) {
   };
   writeJsonStorage(STORAGE_KEY, next);
   try {
-    globalThis.dispatchEvent( new CustomEvent("audio-preferences-changed", { detail: next })
-    );
-  } catch {}
+    globalThis.dispatchEvent(new CustomEvent("audio-preferences-changed", { detail: next }));
+  } catch {
+    /* storage can be unavailable */
+  }
   return next;
 }

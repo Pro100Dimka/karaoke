@@ -43,8 +43,7 @@ export default function ProcessingModal({ song, status, onCancel, onClose, onOpe
         icon: CircleDot,
         eyebrow: translateSaved("ОБРАБОТКА ПЕСНИ"),
         title: song.title,
-        description: translateSaved( "Следите за этапами подготовки и управляйте обработкой песни."
-        ),
+        description: translateSaved("Следите за этапами подготовки и управляйте обработкой песни."),
         actions: actions.map(([Icon, text, variant, onClick, iconProps]) => (
           <Button
             key={text}
@@ -74,9 +73,7 @@ export default function ProcessingModal({ song, status, onCancel, onClose, onOpe
                 translateSaved("Подготавливаем обработку песни"))}
           </span>
           {active && (
-            <strong
-              style={{ textAlign: "right", width: "100%" }}
-            >
+            <strong style={{ textAlign: "right", width: "100%" }}>
               {translateSaved("Осталось:")}
               {formatEta(status?.eta_seconds)}
             </strong>

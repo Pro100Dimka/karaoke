@@ -7,6 +7,7 @@ import threading
 from pathlib import Path
 
 import config
+from AI.errors import ProcessingCancelledError
 from AI.install_models import ProgressReporter, install_one, is_valid
 from AI.model_registry import MODELS
 
@@ -126,8 +127,7 @@ def ensure_ready_sync(cancelled=None) -> dict[str, object]:
     with _condition:
         while _state["state"] == "downloading":
             if cancelled is not None and cancelled():
-                from AI.errors import ProcessingCancelled
-                raise ProcessingCancelled("Cancelled while waiting for AI models")
+                raise ProcessingCancelledError("Cancelled while waiting for AI models")
             _condition.wait(timeout=0.2)
             if all(is_valid(models_root, model) for model in MODELS):
                 return status()

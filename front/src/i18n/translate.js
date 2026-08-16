@@ -1,8 +1,7 @@
 export const interpolate = (message, values = {}) =>
   message.replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? `{${key}}`));
 
-export function translate( messages, language, key, values = {}, fallback = key
-) {
+export function translate(messages, language, key, values = {}, fallback = key) {
   const normalizedLanguage = messages[language] ? language : "uk";
   const localized = messages[normalizedLanguage][key];
   if (localized != null) return interpolate(localized, values);

@@ -1,6 +1,6 @@
 // Node test runner requires the explicit extension for this ESM import.
 // eslint-disable-next-line import/extensions
-import { normalizeNoteList } from "./note-normalization.js";
+import { normalizeNoteList } from "./note-normalization";
 
 const DEFAULT_MIDI_CENTER = 60;
 
@@ -85,8 +85,7 @@ export function getMelodyCue({ notes, currentTime, keyShift = 0 }) {
   const safeTime = Number.isFinite(time) ? time : 0;
   const safeShift = Number.isFinite(shift) ? shift : 0;
   const safeNotes = normalizeNoteList(notes);
-  const activeNote = safeNotes.find( (note) => safeTime >= note.start && safeTime < note.end
-  );
+  const activeNote = safeNotes.find((note) => safeTime >= note.start && safeTime < note.end);
   const cueNote =
     activeNote ||
     safeNotes.find((note) => note.start >= safeTime - 0.08) ||

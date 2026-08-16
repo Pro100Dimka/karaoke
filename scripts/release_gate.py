@@ -98,6 +98,9 @@ def main() -> int:
         cwd=BACKEND,
     )
 
+    # Normalize only with the project-pinned formatter/linter, then run the strict gate.
+    # This does not disable any rule: verify still requires zero lint warnings and a clean format check.
+    run("Frontend release normalization", [npm, "run", "release:normalize"], cwd=FRONT)
     # Frontend unit/coverage/lint/audits/build. `verify` is mandatory, not best-effort.
     run("Frontend verify", [npm, "run", "verify"], cwd=FRONT)
 

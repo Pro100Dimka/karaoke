@@ -14,10 +14,8 @@ export function shouldSchedulePoll({
   shouldContinue,
   shouldRetryError
 }) {
-  if (!active || hidden || !Number.isFinite(intervalMs) || intervalMs <= 0)
-    return false;
-  if (error)
-    return typeof shouldRetryError !== "function" || shouldRetryError(error);
+  if (!active || hidden || !Number.isFinite(intervalMs) || intervalMs <= 0) return false;
+  if (error) return typeof shouldRetryError !== "function" || shouldRetryError(error);
   return typeof shouldContinue !== "function" || shouldContinue(result);
 }
 

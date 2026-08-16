@@ -21,14 +21,8 @@ export default function useKaraokeStageLayout(stageRef) {
       });
 
       shell.style.setProperty("--karaoke-nav-extra", `${layout.navExtra}px`);
-      stage.style.setProperty(
-        "--karaoke-video-width",
-        `${layout.videoWidth}px`
-      );
-      stage.style.setProperty(
-        "--karaoke-video-height",
-        `${layout.videoHeight}px`
-      );
+      stage.style.setProperty("--karaoke-video-width", `${layout.videoWidth}px`);
+      stage.style.setProperty("--karaoke-video-height", `${layout.videoHeight}px`);
     };
 
     const observer = new ResizeObserver(syncStageAspect);

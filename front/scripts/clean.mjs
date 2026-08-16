@@ -13,12 +13,10 @@ const generated = new Set([
   "test-results",
   "debug.log"
 ]);
-for (const name of await readdir(root))
-  if (name.startsWith("coverage-")) generated.add(name);
+for (const name of await readdir(root)) if (name.startsWith("coverage-")) generated.add(name);
 
 await Promise.all(
-  [...generated].map((target) => rm(resolve(root, target), { recursive: true, force: true })
-  )
+  [...generated].map((target) => rm(resolve(root, target), { recursive: true, force: true }))
 );
 
 console.log(`Removed ${generated.size} generated paths.`);

@@ -5,12 +5,12 @@ import { translateSaved } from "../../../../i18n/runtime";
 import MelodyEditorControls from "./melody-editor-controls";
 import MelodyEditorHeader from "./melody-editor-header";
 import MelodyEditorRoll from "./melody-editor-roll";
+import { useEditorHistory } from "./melody-editor-state";
 import useMelodyEditorDocument from "./useMelodyEditorDocument";
 import useMelodyEditorEditing from "./useMelodyEditorEditing";
 import useMelodyEditorLayout from "./useMelodyEditorLayout";
 import useMelodyEditorPreferences from "./useMelodyEditorPreferences";
 import useMelodyEditorTransport from "./useMelodyEditorTransport";
-import { useEditorHistory } from "./melody-editor-state";
 
 export default function MelodyEditor({ song, onClose, onSaved }) {
   const { alert: notify, confirm: confirmDialog } = useAppDialog();
@@ -30,17 +30,16 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
   const { notes, replace, reset, remember, undo, redo } = useEditorHistory([]);
   const workspaceRef = useRef(null);
   const saveRef = useRef(null);
-  const { loading, payload, restoreAi, save, saving } =
-    useMelodyEditorDocument({
-      confirmDialog,
-      notes,
-      notify,
-      onSaved,
-      reset,
-      saveRef,
-      setSelected,
-      song
-    });
+  const { loading, payload, restoreAi, save, saving } = useMelodyEditorDocument({
+    confirmDialog,
+    notes,
+    notify,
+    onSaved,
+    reset,
+    saveRef,
+    setSelected,
+    song
+  });
   const {
     duration,
     keyboardWidth,
@@ -118,6 +117,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     selected,
     setSelected,
     syllableByIndex,
+    time,
     undo,
     workspaceRef,
     zoom
@@ -154,9 +154,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       />
 
       {loading ? (
-        <div className="melody-editor-loading">
-          {translateSaved("Загружаем SongMap…")}
-        </div>
+        <div className="melody-editor-loading">{translateSaved("Загружаем SongMap…")}</div>
       ) : (
         <div className="melody-editor-layout">
           <div className="melody-editor-stage">

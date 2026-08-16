@@ -1,14 +1,19 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import { translateSaved } from "../i18n/runtime";
-import { playParticipantJoinedSound } from "./onlineRoomAudio";
-import { createHostToken, createRoomId, OnlineRoomClient, OnlineVoiceMesh } from "../services/onlineRoom";
+import {
+  createHostToken,
+  createRoomId,
+  OnlineRoomClient,
+  OnlineVoiceMesh
+} from "../services/onlineRoom";
 import { getErrorMessage } from "../utils/errors";
 import useApplicationAudioMute from "./hooks/useApplicationAudioMute";
 import useOnlineRoomAudio from "./hooks/useOnlineRoomAudio";
 import useOnlineRoomCommands from "./hooks/useOnlineRoomCommands";
 import useOnlineRoomValue from "./hooks/useOnlineRoomValue";
 import useSpeakingLevels from "./hooks/useSpeakingLevels";
+import { playParticipantJoinedSound } from "./onlineRoomAudio";
 import { createOnlineRoomMessageHandler } from "./onlineRoomMessages";
 
 const OnlineRoomContext = createContext(null);
@@ -55,13 +60,18 @@ export function OnlineRoomProvider({ children }) {
       return next;
     });
   }, []);
-  const activeTransfer = [...transferStatuses.values()].find((item) => item.stage === "error") ||
-    [...transferStatuses.values()].at(-1) || null;
+  const activeTransfer =
+    [...transferStatuses.values()].find((item) => item.stage === "error") ||
+    [...transferStatuses.values()].at(-1) ||
+    null;
   const transferStatus = activeTransfer
-    ? Object.fromEntries(Object.entries(activeTransfer).filter(([key]) => !["participantId", "commandId"].includes(key)))
+    ? Object.fromEntries(
+        Object.entries(activeTransfer).filter(
+          ([key]) => !["participantId", "commandId"].includes(key)
+        )
+      )
     : null;
-  const { muteApplicationAudio, restoreApplicationAudio } =
-    useApplicationAudioMute(roomSoundMuted);
+  const { muteApplicationAudio, restoreApplicationAudio } = useApplicationAudioMute(roomSoundMuted);
   const {
     localSpeakingLevel,
     speakingLevels,
@@ -114,8 +124,7 @@ export function OnlineRoomProvider({ children }) {
       voiceRef.current?.setMicrophoneMuted(next);
       microphoneMutedRef.current = next;
       setMicrophoneMutedState(next);
-      if (broadcast)
-        clientRef.current?.send("presence", { micMuted: next });
+      if (broadcast) clientRef.current?.send("presence", { micMuted: next });
     },
     // Refs and React setters are stable.
     // Stryker disable next-line ArrayDeclaration
@@ -143,8 +152,7 @@ export function OnlineRoomProvider({ children }) {
         return true;
       } catch (error) {
         if (voiceRef.current !== voice) return false;
-        const message = getErrorMessage( error, translateSaved("нет доступа к микрофону")
-        );
+        const message = getErrorMessage(error, translateSaved("нет доступа к микрофону"));
         setVoiceError(
           translateSaved(
             "Не удалось получить доступ к микрофону: {0}. Проверьте разрешение Windows и повторите попытку.",
@@ -155,7 +163,7 @@ export function OnlineRoomProvider({ children }) {
       }
     },
     // Stryker disable next-line ArrayDeclaration: startSpeakingMeter is stable.
-    [startSpeakingMeter]
+    [setTransferStatus, startSpeakingMeter]
   );
   const setRoomSoundMuted = useCallback(
     (muted) => {
@@ -171,7 +179,7 @@ export function OnlineRoomProvider({ children }) {
       applyRemoteAudioMute();
     },
     // Stryker disable next-line ArrayDeclaration: all callback dependencies are stable.
-    [ applyRemoteAudioMute, muteApplicationAudio, restoreApplicationAudio ]
+    [applyRemoteAudioMute, muteApplicationAudio, restoreApplicationAudio]
   );
   const resetRoomState = useCallback(
     () => {
@@ -193,7 +201,7 @@ export function OnlineRoomProvider({ children }) {
       setVoiceError("");
     },
     // Stryker disable next-line ArrayDeclaration: setRoom is stable.
-    [setRoom]
+    [setParticipants, setRoom, setTransferStatus]
   );
   const leaveRoom = useCallback(
     () => {
@@ -220,8 +228,7 @@ export function OnlineRoomProvider({ children }) {
       const voice = new OnlineVoiceMesh(client);
       clientRef.current = client;
       voiceRef.current = voice;
-      const isCurrentConnection = () =>
-        connectionToken === connectionTokenRef.current;
+      const isCurrentConnection = () => connectionToken === connectionTokenRef.current;
       voice.onRemoteStream = (participantId, stream) => {
         if (!isCurrentConnection()) {
           stream.getTracks().forEach((track) => track.stop());
@@ -230,8 +237,7 @@ export function OnlineRoomProvider({ children }) {
         attachRemoteStream(participantId, stream, () => {
           if (!isCurrentConnection()) return;
           setVoiceError(
-            translateSaved( "Нажмите в любом месте приложения, чтобы разрешить звук комнаты."
-            )
+            translateSaved("Нажмите в любом месте приложения, чтобы разрешить звук комнаты.")
           );
         });
       };
@@ -249,10 +255,19 @@ export function OnlineRoomProvider({ children }) {
       };
       const canAcceptSongPackage = (participantId, metadata) => {
         const pending = pendingSongCommandRef.current;
-        return isCurrentConnection() && metadata?.kind === "song-package" && !!metadata.songId &&
-          !!metadata.commandId && pending?.commandId === metadata.commandId &&
-          pending.songId === metadata.songId && pending.revision === metadata.revision && !pending.__originatedHere &&
-          participantsRef.current.some((participant) => participant.id === participantId && participant.role === "host");
+        return (
+          isCurrentConnection() &&
+          metadata?.kind === "song-package" &&
+          !!metadata.songId &&
+          !!metadata.commandId &&
+          pending?.commandId === metadata.commandId &&
+          pending.songId === metadata.songId &&
+          pending.revision === metadata.revision &&
+          !pending.__originatedHere &&
+          participantsRef.current.some(
+            (participant) => participant.id === participantId && participant.role === "host"
+          )
+        );
       };
       voice.canAcceptFile = canAcceptSongPackage;
       voice.onFile = async (participantId, blob, metadata, signal) => {
@@ -260,20 +275,46 @@ export function OnlineRoomProvider({ children }) {
         if (!canAcceptSongPackage(participantId, metadata))
           throw new Error(translateSaved("Получение пакета песни больше не разрешено"));
         try {
-          setTransferStatus({ participantId, commandId: metadata.commandId, stage: "importing", percent: 100 });
+          setTransferStatus({
+            participantId,
+            commandId: metadata.commandId,
+            stage: "importing",
+            percent: 100
+          });
           await api.importSongPackage(blob, metadata.filename, {
             ...(signal ? { signal } : {}),
             expectedRevision: metadata.revision
           });
           const imported = await api.getSongRevision(metadata.songId);
           if (imported?.revision !== metadata.revision)
-            throw new Error(translateSaved("Импортированная версия песни не совпадает с версией комнаты"));
-          if (!isCurrentConnection() || pendingSongCommandRef.current?.commandId !== metadata.commandId) return false;
+            throw new Error(
+              translateSaved("Импортированная версия песни не совпадает с версией комнаты")
+            );
+          if (
+            !isCurrentConnection() ||
+            pendingSongCommandRef.current?.commandId !== metadata.commandId
+          )
+            return false;
           pendingSongCommandRef.current = null;
-          setTransferStatus({ participantId, commandId: metadata.commandId, stage: "complete", percent: 100 });
-          if (pendingCommand?.commandId === metadata.commandId && pendingCommand.songId === metadata.songId) {
+          setTransferStatus({
+            participantId,
+            commandId: metadata.commandId,
+            stage: "complete",
+            percent: 100
+          });
+          if (
+            pendingCommand?.commandId === metadata.commandId &&
+            pendingCommand.songId === metadata.songId
+          ) {
             if (pendingCommand.__originatedHere) {
-              client.send("sync", { state: { type: "open-karaoke", songId: pendingCommand.songId, commandId: pendingCommand.commandId, revision: pendingCommand.revision } });
+              client.send("sync", {
+                state: {
+                  type: "open-karaoke",
+                  songId: pendingCommand.songId,
+                  commandId: pendingCommand.commandId,
+                  revision: pendingCommand.revision
+                }
+              });
             }
             setRoomCommand({
               ...pendingCommand,
@@ -329,7 +370,8 @@ export function OnlineRoomProvider({ children }) {
       );
       try {
         const normalizedId = await client.connect({ id, name, host, hostToken });
-        if (!isCurrentConnection()) throw new Error( translateSaved("Подключение отменено новым запросом") );
+        if (!isCurrentConnection())
+          throw new Error(translateSaved("Подключение отменено новым запросом"));
 
         // Show the room UI as soon as the WebSocket is connected. The server
         // room-state packet will replace the temporary self id a moment later.
@@ -363,14 +405,14 @@ export function OnlineRoomProvider({ children }) {
             if (!isCurrentConnection()) return;
             setVoiceError(
               translateSaved("Комната подключена без голоса: {0}", {
-                0: getErrorMessage( error, translateSaved("нет доступа к микрофону")
-                )
+                0: getErrorMessage(error, translateSaved("нет доступа к микрофону"))
               })
             );
           });
         return normalizedId;
       } catch (error) {
-        if (isCurrentConnection()) cleanupConnection(); else {
+        if (isCurrentConnection()) cleanupConnection();
+        else {
           voice.stop();
           client.disconnect();
         }
@@ -384,7 +426,9 @@ export function OnlineRoomProvider({ children }) {
       removeRemoteAudio,
       resetRoomState,
       restoreApplicationAudio,
+      setParticipants,
       setRoom,
+      setTransferStatus,
       startSpeakingMeter
     ]
   );
@@ -396,14 +440,12 @@ export function OnlineRoomProvider({ children }) {
     [cleanupConnection, restoreApplicationAudio]
   );
   const createRoom = useCallback(
-    (name) =>
-      connect({ id: createRoomId(), name, host: true, hostToken: createHostToken() }),
+    (name) => connect({ id: createRoomId(), name, host: true, hostToken: createHostToken() }),
     // Stryker disable next-line ArrayDeclaration: connect is stable.
     [connect]
   );
   const joinRoom = useCallback(
-    (id, name) =>
-      connect({ id, name, host: false }),
+    (id, name) => connect({ id, name, host: false }),
     // Stryker disable next-line ArrayDeclaration: connect is stable.
     [connect]
   );
@@ -436,12 +478,19 @@ export function OnlineRoomProvider({ children }) {
     [applyParticipantEffects]
   );
   const { effectsByParticipant } = roomUi;
-  useEffect(() => { roomUiRef.current = roomUi; }, [roomUi]);
+  useEffect(() => {
+    roomUiRef.current = roomUi;
+  }, [roomUi]);
   useEffect(() => {
     effectPeople.forEach((id) => applyParticipantEffects(id, true));
   }, [applyParticipantEffects, effectPeople, effectsByParticipant]);
   const { openKaraoke, syncCommand, syncUi } = useOnlineRoomCommands({
-    api, clientRef, connectionTokenRef, hostSongCommandRef, roomRef, voiceRef
+    api,
+    clientRef,
+    connectionTokenRef,
+    hostSongCommandRef,
+    roomRef,
+    voiceRef
   });
   const value = useOnlineRoomValue({
     createRoom,
@@ -469,11 +518,7 @@ export function OnlineRoomProvider({ children }) {
     transferStatus,
     voiceError
   });
-  return (
-    <OnlineRoomContext.Provider value={value}>
-      {children}
-    </OnlineRoomContext.Provider>
-  );
+  return <OnlineRoomContext.Provider value={value}>{children}</OnlineRoomContext.Provider>;
 }
 export function useOnlineRoom() {
   return useContext(OnlineRoomContext);

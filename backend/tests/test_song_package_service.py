@@ -6,6 +6,7 @@ import stat
 import wave
 import zipfile
 from datetime import UTC, datetime
+from pathlib import Path, PurePosixPath
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -14,9 +15,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 import models
-from app.services import cache_service, song_package_service
+from app.services import cache_service, song_artifacts, song_package_service
 from database import Base
-
 
 
 def wav_bytes(frames=800, rate=8000):
@@ -421,9 +421,12 @@ def test_non_wav_source_requires_successful_media_probe(monkeypatch, tmp_path):
             archive.writestr(f"output/{relative}", payload)
     monkeypatch.setattr(song_package_service.config, "CACHE_DIR", tmp_path)
     monkeypatch.setattr(song_package_service.subprocess, "run", Mock(return_value=SimpleNamespace(returncode=1, stdout="", stderr="bad")))
-    with zipfile.ZipFile(package) as archive:
-        with pytest.raises(ValueError, match="cannot be decoded"):
-            song_package_service._validate_semantic_package(archive, song_package_service._safe_members(archive), song_package_service._read_manifest(archive))
+    with zipfile.ZipFile(package) as archive, pytest.raises(ValueError, match="cannot be decoded"):
+        song_package_service._validate_semantic_package(
+            archive,
+            song_package_service._safe_members(archive),
+            song_package_service._read_manifest(archive),
+        )
 
 
 def test_revision_cache_avoids_rehash_until_semantic_state_changes(monkeypatch, tmp_path):
@@ -480,7 +483,8 @@ def test_non_wav_source_probe_accepts_decodable_audio(monkeypatch, tmp_path):
 def test_revision_round_trip_is_stable_for_every_karaoke_mode(monkeypatch, tmp_path, mode):
     library = tmp_path / "library"
     cache = tmp_path / "cache"
-    library.mkdir(); cache.mkdir()
+    library.mkdir()
+    cache.mkdir()
     host_output = library / "host"
     host_output.mkdir()
     source = host_output / "source.wav"
@@ -672,9 +676,6 @@ def test_revision_and_package_refresh_stale_orm_inside_snapshot_lock(monkeypatch
 
 
 def test_internal_output_namespace_recognizes_control_files_and_cache_dirs():
-    from pathlib import Path, PurePosixPath
-    from app.services import song_artifacts
-
     assert song_artifacts.is_internal_output_path(Path(".optimization-journal.json"))
     assert song_artifacts.is_internal_output_path(PurePosixPath(".ai-cache/separation.json"))
     assert song_artifacts.is_internal_output_path("nested/.optimization-recovery.json")

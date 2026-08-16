@@ -1,9 +1,9 @@
-import { translateSaved } from "../i18n/runtime.js";
+import { translateSaved } from "../i18n/runtime";
 // Node's direct ESM tests require explicit extensions for these source imports.
 // eslint-disable-next-line import/extensions
-import { normalizeRoomId } from "../services/onlineRoom.js";
+import { normalizeRoomId } from "../services/onlineRoom";
 // eslint-disable-next-line import/extensions
-import { getErrorMessage } from "../utils/errors.js";
+import { getErrorMessage } from "../utils/errors";
 
 function createEventId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random()}`;
@@ -44,7 +44,9 @@ export function createOnlineRoomMessageHandler(options) {
     setRoomCommand({ ...command, __eventId: createEventId(eventPrefix) });
   };
   const senderIsHost = (message) =>
-    participantsRef.current?.some((participant) => participant.id === message.fromId && participant.role === "host");
+    participantsRef.current?.some(
+      (participant) => participant.id === message.fromId && participant.role === "host"
+    );
   const isCurrentPending = (command) =>
     isCurrentConnection() && pendingCommandRef.current?.commandId === command.commandId;
 
@@ -60,7 +62,8 @@ export function createOnlineRoomMessageHandler(options) {
         offered?.commandId !== command.commandId ||
         offered.songId !== command.songId ||
         offered.revision !== command.revision
-      ) return false;
+      )
+        return false;
 
       let exportEntry = songExportsRef.current.get(command.commandId);
       if (!exportEntry) {
@@ -76,7 +79,8 @@ export function createOnlineRoomMessageHandler(options) {
       exportEntry.users += 1;
       exportEntry.promise
         .then(async (blob) => {
-          if (!isCurrentConnection() || hostSongCommandRef.current?.commandId !== command.commandId) return null;
+          if (!isCurrentConnection() || hostSongCommandRef.current?.commandId !== command.commandId)
+            return null;
           setTransferStatus({ participantId: command.requesterId, stage: "sending", percent: 0 });
           return voice.sendFile(command.requesterId, blob, {
             kind: "song-package",
@@ -88,10 +92,15 @@ export function createOnlineRoomMessageHandler(options) {
         })
         .then(() => {
           if (isCurrentConnection() && hostSongCommandRef.current?.commandId === command.commandId)
-            setTransferStatus({ participantId: command.requesterId, stage: "complete", percent: 100 });
+            setTransferStatus({
+              participantId: command.requesterId,
+              stage: "complete",
+              percent: 100
+            });
         })
         .catch((error) => {
-          if (!isCurrentConnection() || hostSongCommandRef.current?.commandId !== command.commandId) return;
+          if (!isCurrentConnection() || hostSongCommandRef.current?.commandId !== command.commandId)
+            return;
           const errorText = getErrorMessage(error);
           client.send("sync", {
             state: {
@@ -102,7 +111,12 @@ export function createOnlineRoomMessageHandler(options) {
               error: errorText
             }
           });
-          setTransferStatus({ participantId: command.requesterId, stage: "error", error: errorText, percent: 0 });
+          setTransferStatus({
+            participantId: command.requesterId,
+            stage: "error",
+            error: errorText,
+            percent: 0
+          });
         })
         .finally(async () => {
           exportEntry.requesters.delete(command.requesterId);
@@ -119,7 +133,8 @@ export function createOnlineRoomMessageHandler(options) {
         !senderIsHost(message) ||
         command.requesterId !== activeRoomRef.current?.selfId ||
         !isCurrentPending(command)
-      ) return false;
+      )
+        return false;
       pendingCommandRef.current = null;
       setTransferStatus({
         participantId: message.fromId,
@@ -130,11 +145,20 @@ export function createOnlineRoomMessageHandler(options) {
       return true;
     },
     "open-karaoke": (command, message) => {
-      if (activeRoomRef.current?.host || !senderIsHost(message) || !command.songId || !command.commandId || !command.revision) return false;
+      if (
+        activeRoomRef.current?.host ||
+        !senderIsHost(message) ||
+        !command.songId ||
+        !command.commandId ||
+        !command.revision
+      )
+        return false;
       const previousCommandId = pendingCommandRef.current?.commandId;
-      if (previousCommandId && previousCommandId !== command.commandId) voice.cancelTransfersByCommandId?.(previousCommandId);
+      if (previousCommandId && previousCommandId !== command.commandId)
+        voice.cancelTransfersByCommandId?.(previousCommandId);
       pendingCommandRef.current = command;
-      roomApi.getSongRevision(command.songId)
+      roomApi
+        .getSongRevision(command.songId)
         .then((local) => {
           if (!isCurrentPending(command)) return;
           if (local?.revision !== command.revision) throw new Error("Song revision differs");
@@ -162,7 +186,13 @@ export function createOnlineRoomMessageHandler(options) {
   const messageHandlers = {
     "room-state": (message) => {
       const { self } = message;
-      if (self) setRoom({ id: normalizeRoomId(id), selfId: self.id, host: self.role === "host", role: self.role });
+      if (self)
+        setRoom({
+          id: normalizeRoomId(id),
+          selfId: self.id,
+          host: self.role === "host",
+          role: self.role
+        });
       setParticipants(message.participants || []);
     },
     "participant-joined": (message) => {
@@ -171,7 +201,8 @@ export function createOnlineRoomMessageHandler(options) {
       if (participant?.id !== activeRoomRef.current?.selfId) onParticipantJoined(participant);
       if (participant?.id) voice.invite(participant.id).catch(() => {});
     },
-    "participant-updated": (message) => setParticipants((items) => upsertParticipant(items, message.participant)),
+    "participant-updated": (message) =>
+      setParticipants((items) => upsertParticipant(items, message.participant)),
     "self-updated": (message) => {
       if (!message.self) return;
       setRoom({
@@ -194,9 +225,14 @@ export function createOnlineRoomMessageHandler(options) {
       setRoomUi((current) => ({
         ...current,
         ...(host ? state : {}),
-        ...(message.fromId && participantEffects ? {
-          effectsByParticipant: { ...(current.effectsByParticipant || {}), [message.fromId]: participantEffects }
-        } : {}),
+        ...(message.fromId && participantEffects
+          ? {
+              effectsByParticipant: {
+                ...(current.effectsByParticipant || {}),
+                [message.fromId]: participantEffects
+              }
+            }
+          : {}),
         __eventId: createEventId("ui")
       }));
     },

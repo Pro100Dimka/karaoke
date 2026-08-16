@@ -18,10 +18,7 @@ export default function Table({ columns, data, renderRow, getRowKey, emptyText }
         {rows.map((item, index) => (
           <tr key={getRowKey(item, index)}>
             {renderRow(item).map(([content, className = ""], cellIndex) => (
-              <td
-                key={columns[cellIndex]?.[0] ?? cellIndex}
-                className={className}
-              >
+              <td key={columns[cellIndex]?.[0] ?? cellIndex} className={className}>
                 {content}
               </td>
             ))}
@@ -29,10 +26,7 @@ export default function Table({ columns, data, renderRow, getRowKey, emptyText }
         ))}
         {!rows.length && (
           <tr>
-            <td
-              colSpan={columns.length}
-              className="table-empty text-muted u-empty-state"
-            >
+            <td colSpan={columns.length} className="table-empty text-muted u-empty-state">
               {emptyText || t("common.noData")}
             </td>
           </tr>

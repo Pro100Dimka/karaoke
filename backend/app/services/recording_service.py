@@ -17,17 +17,17 @@ import shutil
 import subprocess
 import tempfile
 import threading
-from types import SimpleNamespace
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import config
 import models
 from app import repositories
 from app.services import song_artifacts, song_service
-from app.services.microphone_quality import StudioMicrophoneProcessor
 from app.services.db_utils import commit_refresh
+from app.services.microphone_quality import StudioMicrophoneProcessor
 from app.services.resource_deletion import delete_with_files
 from app.utils.quarantine import existing_unique_paths
 from database import SessionLocal

@@ -88,7 +88,9 @@ def test_optimized_flac_restore_rejects_bad_integrity(monkeypatch, tmp_path):
             },
         },
     )
-    decode = lambda *_args: (_ for _ in ()).throw(AssertionError("must not decode"))
+    def decode(*_args):
+        raise AssertionError("must not decode")
+
     monkeypatch.setattr(pipeline, "decode_audio", decode)
     core = pipeline.KaraokePipeline(SimpleNamespace(sample_rate=44100), SimpleNamespace())
     assert not core._restore_optimized_separation_cache(

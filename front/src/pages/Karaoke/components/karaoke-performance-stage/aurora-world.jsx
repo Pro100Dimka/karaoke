@@ -10,9 +10,7 @@ const DECORATIONS = [
   "aurora-horizon-city",
   "aurora-grid-floor",
   ...["floor-pulse", "ring", "ribbon", "arc-pulse", "comet"].flatMap((type) =>
-    ["one", "two", "three"].map(
-      (variant) => `aurora-${type} aurora-${type}--${variant}`
-    )
+    ["one", "two", "three"].map((variant) => `aurora-${type} aurora-${type}--${variant}`)
   )
 ];
 
@@ -41,15 +39,14 @@ function Elements({ items, getStyle }) {
 export default function AuroraWorld({ seed }) {
   return (
     <div className="karaoke-aurora-world" aria-hidden="true">
-      {DECORATIONS.map((className) => ( <i key={className} className={className} /> ))}
+      {DECORATIONS.map((className) => (
+        <i key={className} className={className} />
+      ))}
       <div className="aurora-stars">
         <Elements items={STARS} getStyle={(index) => starStyle(index, seed)} />
       </div>
       <div className="aurora-particles">
-        <Elements
-          items={PARTICLES}
-          getStyle={(index) => particleStyle(index, seed)}
-        />
+        <Elements items={PARTICLES} getStyle={(index) => particleStyle(index, seed)} />
       </div>
     </div>
   );

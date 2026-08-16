@@ -1083,7 +1083,7 @@ def _metadata_search_plan(
         artist_words = clean_artist.split() if clean_artist else []
         title_words = clean_title.split()
         shared: list[str] = []
-        for left, right in zip(artist_words, title_words):
+        for left, right in zip(artist_words, title_words, strict=False):
             if left.casefold() != right.casefold():
                 break
             shared.append(left)

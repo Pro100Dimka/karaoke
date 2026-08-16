@@ -10,7 +10,10 @@ const releaseGate = fs.readFileSync(path.join(root, "scripts", "release_gate.py"
 const installer = fs.readFileSync(path.join(root, "scripts", "build-installer.ps1"), "utf8");
 const batch = fs.readFileSync(path.join(root, "verify-release.bat"), "utf8");
 
-assert.equal(pkg.scripts["test:e2e:electron-release"], "playwright test -c playwright.release.config.mjs");
+assert.equal(
+  pkg.scripts["test:e2e:electron-release"],
+  "playwright test -c playwright.release.config.mjs"
+);
 assert.equal(pkg.scripts["verify:release"], "python ../scripts/release_gate.py");
 for (const required of [
   "Backend full suite + coverage",
@@ -20,7 +23,11 @@ for (const required of [
   "Electron release-critical E2E",
   "front/node_modules is missing",
   "Tests were NOT run"
-]) assert.ok(releaseGate.includes(required), `release_gate.py lost mandatory step: ${required}`);
-assert.match(installer, /if \(-not \$Worker\)[\s\S]*verify-release\.bat[\s\S]*Release gate failed\. Installer build is blocked\./);
+])
+  assert.ok(releaseGate.includes(required), `release_gate.py lost mandatory step: ${required}`);
+assert.match(
+  installer,
+  /if \(-not \$Worker\)[\s\S]*verify-release\.bat[\s\S]*Release gate failed\. Installer build is blocked\./
+);
 assert.match(batch, /scripts\\release_gate\.py/);
 console.log("Release gate wiring audit passed.");

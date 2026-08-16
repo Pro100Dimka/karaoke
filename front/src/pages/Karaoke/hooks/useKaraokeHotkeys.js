@@ -4,8 +4,7 @@ import { getKaraokeHotkeyAction } from "../utils/hotkeys";
 
 const HOTKEY_DISPATCHERS = {
   "toggle-playback": ({ onTogglePlay }) => onTogglePlay?.(),
-  "seek-backward": ({ currentTime, onSeek }) =>
-    onSeek?.(Math.max(0, currentTime - 5)),
+  "seek-backward": ({ currentTime, onSeek }) => onSeek?.(Math.max(0, currentTime - 5)),
   "seek-forward": ({ currentTime, duration, onSeek }) =>
     onSeek?.(Math.min(duration, currentTime + 5)),
   stop: ({ onStop }) => onStop?.()

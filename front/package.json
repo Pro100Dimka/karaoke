@@ -46,7 +46,8 @@
     "test:e2e:electron-release": "playwright test -c playwright.release.config.mjs",
     "verify:release": "python ../scripts/release_gate.py",
     "audit:release-gate": "node scripts/audit-release-gate.mjs",
-    "audit:portability": "node scripts/audit-portability.mjs"
+    "audit:portability": "node scripts/audit-portability.mjs",
+    "release:normalize": "prettier --write \"src/**/*.{js,jsx,css}\" \"electron/**/*.cjs\" \"scripts/**/*.mjs\" && eslint src electron --ext .js,.jsx,.cjs --ignore-pattern src/theme --fix"
   },
   "dependencies": {
     "lucide-react": "^0.383.0",

@@ -16,9 +16,7 @@ function Lyrics({ lyrics, currentLine, upcomingLine, nextLine, currentTime }) {
   return (
     <div className="karaoke-lyrics">
       {!lyrics.length && (
-        <p className="text-muted">
-          {translateSaved("Синхронизированный текст недоступен")}
-        </p>
+        <p className="text-muted">{translateSaved("Синхронизированный текст недоступен")}</p>
       )}
 
       {activeLine ? (
@@ -67,8 +65,7 @@ export default function KaraokePerformanceStage(props) {
   const sceneVideoUrl = globalThis.electronAPI?.getSceneVideoUrl?.() || "";
   const sceneSeed = String(songId || "karaoke")
     .split("")
-    .reduce( (seed, character) => (seed * 31 + character.charCodeAt(0)) % 997, 17
-    );
+    .reduce((seed, character) => (seed * 31 + character.charCodeAt(0)) % 997, 17);
   const changeSceneVideoPosition = useCallback(() => {
     const video = sceneVideoRef.current;
     if (!video) return;
@@ -87,7 +84,9 @@ export default function KaraokePerformanceStage(props) {
       setSceneVideoFading(false);
     }, 180);
   }, [changeSceneVideoPosition]);
-  useEffect(() => { transitionSceneVideo(); }, [isPlaying, sceneVideoUrl, transitionSceneVideo]);
+  useEffect(() => {
+    transitionSceneVideo();
+  }, [isPlaying, sceneVideoUrl, transitionSceneVideo]);
   useEffect(() => () => window.clearTimeout(sceneVideoTimerRef.current), []);
   return (
     <div
@@ -129,14 +128,10 @@ export default function KaraokePerformanceStage(props) {
         aria-hidden={!sceneIntroVisible}
       >
         <div className="karaoke-song-intro-card">
-          <span className="karaoke-song-intro-kicker">
-            {translateSaved("Сейчас прозвучит")}
-          </span>
+          <span className="karaoke-song-intro-kicker">{translateSaved("Сейчас прозвучит")}</span>
           <strong>{sceneIntro?.title || translateSaved("Караоке")}</strong>
           {sceneIntro?.artist && (
-            <span className="karaoke-song-intro-artist">
-              {sceneIntro.artist}
-            </span>
+            <span className="karaoke-song-intro-artist">{sceneIntro.artist}</span>
           )}
           <div className="karaoke-song-intro-meta">
             {sceneIntro?.genre && <span>{sceneIntro.genre}</span>}
@@ -149,12 +144,7 @@ export default function KaraokePerformanceStage(props) {
 
       {showNotes && notes.length > 0 && <MelodyRoll {...props} />}
       {showLyrics && (
-        <Lyrics
-          {...props}
-          lyrics={lyrics}
-          currentTime={currentTime}
-          nextLine={nextLine}
-        />
+        <Lyrics {...props} lyrics={lyrics} currentTime={currentTime} nextLine={nextLine} />
       )}
     </div>
   );

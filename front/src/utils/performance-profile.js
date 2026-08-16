@@ -2,8 +2,7 @@ export function detectReducedPerformance(environment = globalThis) {
   const navigatorInfo = environment.navigator || {};
   const cores = Number(navigatorInfo.hardwareConcurrency);
   const memory = Number(navigatorInfo.deviceMemory);
-  const requested = environment.matchMedia?.( "(prefers-reduced-motion: reduce)"
-  )?.matches;
+  const requested = environment.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
   return Boolean(
     requested ||
     (Number.isFinite(cores) && cores > 0 && cores <= 4) ||

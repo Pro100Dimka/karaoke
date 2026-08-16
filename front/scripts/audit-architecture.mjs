@@ -13,8 +13,7 @@ function walk(directory) {
     if (entry.isDirectory()) {
       if (fullPath === path.join(sourceRoot, "theme")) continue;
       walk(fullPath);
-    }
-    else if (/\.(?:js|jsx)$/.test(entry.name)) files.push(fullPath);
+    } else if (/\.(?:js|jsx)$/.test(entry.name)) files.push(fullPath);
   }
 }
 walk(sourceRoot);
@@ -30,9 +29,7 @@ function auditSingletonDirectories(directory) {
   const childFiles = entries.filter((entry) => entry.isFile());
   if (!SINGLETON_AUDIT_EXCLUSIONS.includes(directory)) {
     if (childDirectories.length === 0 && childFiles.length === 1) {
-      violations.push(
-        `single-file source directory must be flattened: ${relative(directory)}`
-      );
+      violations.push(`single-file source directory must be flattened: ${relative(directory)}`);
     }
   }
   for (const entry of childDirectories) {
@@ -64,18 +61,13 @@ function forbid(label, pattern, allow = []) {
 }
 
 forbid("destructured catch parameter", /catch\s*\(\s*\{/);
-forbid(
-  "direct localStorage access",
-  /(?:window\.|globalThis\.)?localStorage/,
-  [
-    "src/utils/theme.js",
-    "src/utils/language.js",
-    "src/utils/storage.js",
-    "src/pages/Karaoke/utils/preferences.js"
-  ]
-);
-forbid( "direct interpolation of unknown error.message", /\$\{\s*(?:err|error)\.message\s*\}/
-);
+forbid("direct localStorage access", /(?:window\.|globalThis\.)?localStorage/, [
+  "src/utils/theme.js",
+  "src/utils/language.js",
+  "src/utils/storage.js",
+  "src/pages/Karaoke/utils/preferences.js"
+]);
+forbid("direct interpolation of unknown error.message", /\$\{\s*(?:err|error)\.message\s*\}/);
 forbid("javascript URL", /(?:href|src)\s*=\s*["']javascript:/i);
 forbid("placeholder hash link", /href\s*=\s*["']#["']/i);
 

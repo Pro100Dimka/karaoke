@@ -27,7 +27,7 @@ const report = (file, node, kind, detail) =>
 
 const flattenLogical = (node, operator) =>
   node?.type === "LogicalExpression" && node.operator === operator
-    ? [ ...flattenLogical(node.left, operator), ...flattenLogical(node.right, operator) ]
+    ? [...flattenLogical(node.left, operator), ...flattenLogical(node.right, operator)]
     : [node];
 
 for (const file of walk(root)) {
@@ -45,41 +45,20 @@ for (const file of walk(root)) {
   traverse(ast, {
     SwitchStatement(pathRef) {
       const count = pathRef.node.cases.length;
-      if (count >= 4)
-        report(
-          file,
-          pathRef.node,
-          "dispatch-table",
-          `${count} switch branches`
-        );
+      if (count >= 4) report(file, pathRef.node, "dispatch-table", `${count} switch branches`);
     },
     IfStatement(pathRef) {
       let depth = 0;
       for (let parent = pathRef.parentPath; parent; parent = parent.parentPath)
         if (parent.isIfStatement()) depth += 1;
-      if (depth >= 2)
-        report(
-          file,
-          pathRef.node,
-          "guard-clause",
-          `nested if depth ${depth + 1}`
-        );
+      if (depth >= 2) report(file, pathRef.node, "guard-clause", `nested if depth ${depth + 1}`);
     },
     LogicalExpression(pathRef) {
-      if (
-        pathRef.parentPath.isLogicalExpression({ operator: pathRef.node.operator })
-      )
-        return;
+      if (pathRef.parentPath.isLogicalExpression({ operator: pathRef.node.operator })) return;
       const expressions = flattenLogical(pathRef.node, pathRef.node.operator);
-      const comparisons = expressions.filter( ({ type }) => type === "BinaryExpression"
-      );
+      const comparisons = expressions.filter(({ type }) => type === "BinaryExpression");
       if (pathRef.node.operator === "||" && comparisons.length >= 3)
-        report(
-          file,
-          pathRef.node,
-          "membership",
-          `${comparisons.length} OR comparisons`
-        );
+        report(file, pathRef.node, "membership", `${comparisons.length} OR comparisons`);
     },
     CallExpression(pathRef) {
       if (
@@ -97,8 +76,7 @@ for (const file of walk(root)) {
         body.body[0].type === "ReturnStatement" &&
         body.body[0].argument?.type === "CallExpression"
       )
-        report( file, pathRef.node, "wrapper", "single-call forwarding function"
-        );
+        report(file, pathRef.node, "wrapper", "single-call forwarding function");
     }
   });
 }
@@ -106,12 +84,8 @@ for (const file of walk(root)) {
 const groups = Object.groupBy(findings, ({ kind }) => kind);
 console.log("Semantic simplification audit (advisory):");
 console.log(`Candidates: ${findings.length}`);
-Object.entries(groups).forEach(([kind, items]) =>
-  console.log(`- ${kind}: ${items.length}`)
-);
+Object.entries(groups).forEach(([kind, items]) => console.log(`- ${kind}: ${items.length}`));
 findings
   .slice(0, 40)
-  .forEach(({ file, line, kind, detail }) =>
-    console.log(`  ${file}:${line} [${kind}] ${detail}`)
-  );
+  .forEach(({ file, line, kind, detail }) => console.log(`  ${file}:${line} [${kind}] ${detail}`));
 if (findings.length > 40) console.log(`  ...and ${findings.length - 40} more`);

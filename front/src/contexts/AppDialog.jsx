@@ -132,8 +132,7 @@ export function AppDialogProvider({ children }) {
 export function useAppDialog() {
   const context = useContext(DialogContext);
   if (!context) {
-    throw new Error( translateSaved( "useAppDialog должен использоваться внутри AppDialogProvider" )
-    );
+    throw new Error(translateSaved("useAppDialog должен использоваться внутри AppDialogProvider"));
   }
   return context;
 }

@@ -21,7 +21,9 @@ export default function useLibraryFileImport({ fileInputRef, notify, onStarted }
         try {
           song = await api.addSong(file, file.name.replace(/\.[^.]+$/, ""));
         } catch (error) {
-          await notify(translateSaved("Не удалось добавить песню: {0}", { 0: getErrorMessage(error) }));
+          await notify(
+            translateSaved("Не удалось добавить песню: {0}", { 0: getErrorMessage(error) })
+          );
           return;
         }
         try {
@@ -30,11 +32,19 @@ export default function useLibraryFileImport({ fileInputRef, notify, onStarted }
         } catch (error) {
           if (isAmbiguousTransportError(error)) {
             onStarted(song);
-            await notify(translateSaved("Песня добавлена, но backend не подтвердил запуск обработки: {0}", { 0: getErrorMessage(error) }));
+            await notify(
+              translateSaved("Песня добавлена, но backend не подтвердил запуск обработки: {0}", {
+                0: getErrorMessage(error)
+              })
+            );
             return;
           }
           await api.deleteSong(song.id).catch(() => {});
-          await notify(translateSaved("Не удалось запустить обработку песни: {0}", { 0: getErrorMessage(error) }));
+          await notify(
+            translateSaved("Не удалось запустить обработку песни: {0}", {
+              0: getErrorMessage(error)
+            })
+          );
         }
       });
     },

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { api } from "../../../api/client";
-import { findDriverOutputDevice, findMatchingBrowserOutput } from "../utils/audio-settings";
 import { closeAudioContextQuietly } from "../../../utils/audio-context";
+import { findDriverOutputDevice, findMatchingBrowserOutput } from "../utils/audio-settings";
 
 export default function useAudioOutputRouting(options) {
   const {
@@ -20,12 +20,10 @@ export default function useAudioOutputRouting(options) {
   const configuredOutputId = audioSettings?.output_device_id;
   useEffect(() => {
     if (audioDriver !== "asio" || String(configuredOutputId ?? "").trim()) return;
-    const preferred = findDriverOutputDevice( directOutputDevices, asioDriverName
-    );
+    const preferred = findDriverOutputDevice(directOutputDevices, asioDriverName);
     if (preferred && String(directOutputDeviceId) !== String(preferred.index)) {
       setDirectOutputDeviceId(preferred.index);
-      Promise.resolve( updateMicrophone({ output_device_id: preferred.index })
-      ).catch(() => {});
+      Promise.resolve(updateMicrophone({ output_device_id: preferred.index })).catch(() => {});
     }
   }, [
     audioDriver,
@@ -38,8 +36,7 @@ export default function useAudioOutputRouting(options) {
   ]);
 
   useEffect(() => {
-    const enumerateDevices =
-      globalThis.navigator.mediaDevices?.enumerateDevices;
+    const enumerateDevices = globalThis.navigator.mediaDevices?.enumerateDevices;
     if (
       directOutputDeviceId == null ||
       directOutputDeviceId === "" ||
@@ -69,13 +66,14 @@ export default function useAudioOutputRouting(options) {
     return () => {
       active = false;
     };
-  }, [ directOutputDeviceId, directOutputDevices, instrumentalRef, videoRef, vocalsRef ]);
+  }, [directOutputDeviceId, directOutputDevices, instrumentalRef, videoRef, vocalsRef]);
 
   useEffect(
     () => () => {
       const monitor = browserMonitorRef.current;
       monitor?.stream?.getTracks?.().forEach((track) => track.stop());
-      if (monitor?.context && monitor.context.state !== "closed") closeAudioContextQuietly(monitor.context);
+      if (monitor?.context && monitor.context.state !== "closed")
+        closeAudioContextQuietly(monitor.context);
       browserMonitorRef.current = null;
     },
     [browserMonitorRef]
@@ -87,8 +85,7 @@ export default function useAudioOutputRouting(options) {
         api.releaseDirectMonitoring().catch(() => {});
       };
       window.addEventListener("pagehide", releaseMonitorOnClose);
-      return () =>
-        window.removeEventListener("pagehide", releaseMonitorOnClose);
+      return () => window.removeEventListener("pagehide", releaseMonitorOnClose);
     },
     // Stryker disable next-line ArrayDeclaration: browser/API globals are stable.
     []

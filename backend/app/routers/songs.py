@@ -22,12 +22,12 @@ from sqlalchemy.orm import Session
 import config
 import models
 import schemas
-from app.services import song_artifacts
 from app.api.dependencies import SongDependency
 from app.services import (
     ai_bridge,
     pipeline_service,
     recording_service,
+    song_artifacts,
     song_editor_service,
     song_package_service,
     song_service,

@@ -61,7 +61,7 @@ def _normalize_writable_directory(value: Any, label: str) -> str:
 
 def _persist_path_settings(values: dict[str, str]) -> dict[str, Any]:
     try:
-        existing = read_json(PATH_SETTINGS_FILE, default={})
+        existing: Any = read_json(PATH_SETTINGS_FILE, default={})
     except (json.JSONDecodeError, OSError):
         existing = {}
     roots = set(existing.get("song_library_roots", [])) if isinstance(existing, dict) else set()
@@ -126,8 +126,8 @@ def update_settings(patch: dict[str, Any]) -> dict[str, Any]:
                 path_values[key] = _normalize_writable_directory(patch[key], labels[key])
 
         persisted = {key: data[key] for key in DEFAULT_SETTINGS if key in data}
-        old_settings = read_json(SETTINGS_FILE, default={})
-        old_paths = read_json(PATH_SETTINGS_FILE, default=path_settings())
+        old_settings: Any = read_json(SETTINGS_FILE, default={})
+        old_paths: Any = read_json(PATH_SETTINGS_FILE, default=path_settings())
         paths_changed = any(key in patch for key in PATH_SETTING_KEYS)
         ai_runtime_changed = "compute_mode" in patch or "thread_count" in patch or "ai_folder" in patch
         if ai_runtime_changed or paths_changed:
@@ -148,10 +148,19 @@ def update_settings(patch: dict[str, Any]) -> dict[str, Any]:
             if paths_changed:
                 write_json(PATH_SETTINGS_FILE, old_paths if isinstance(old_paths, dict) else path_settings())
                 if isinstance(old_paths, dict):
-                    restored = {key: old_paths.get(key, path_settings()[key]) for key in PATH_SETTING_KEYS}
-                    roots = old_paths.get("song_library_roots")
-                    if isinstance(roots, list): restored["song_library_roots"] = roots
-                    config.apply_storage_paths(**restored)
+                    defaults = path_settings()
+                    roots_value = old_paths.get("song_library_roots")
+                    roots = (
+                        [value for value in roots_value if isinstance(value, str)]
+                        if isinstance(roots_value, list)
+                        else None
+                    )
+                    config.apply_storage_paths(
+                        songs_folder=str(old_paths.get("songs_folder", defaults["songs_folder"])),
+                        ai_folder=str(old_paths.get("ai_folder", defaults["ai_folder"])),
+                        cache_folder=str(old_paths.get("cache_folder", defaults["cache_folder"])),
+                        song_library_roots=roots,
+                    )
             raise
 
 

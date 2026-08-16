@@ -23,14 +23,11 @@ function getAnalysisAdvice(accuracy, meanDeviation) {
     );
   }
   if (meanDeviation > 1) {
-    return translateSaved( "Сфокусируйтесь на точном начале каждой фразы и удержании высоты ноты."
-    );
+    return translateSaved("Сфокусируйтесь на точном начале каждой фразы и удержании высоты ноты.");
   }
   return accuracy >= 70
-    ? translateSaved( "Хорошая точность. Попробуйте сделать фразы ровнее по громкости и дыханию."
-      )
-    : translateSaved( "Повторите сложные фразы медленнее, ориентируясь на ноты на экране."
-      );
+    ? translateSaved("Хорошая точность. Попробуйте сделать фразы ровнее по громкости и дыханию.")
+    : translateSaved("Повторите сложные фразы медленнее, ориентируясь на ноты на экране.");
 }
 
 function finiteOrNull(value) {
@@ -48,10 +45,7 @@ export function normalizeAnalysisSection(section, index = 0) {
   const end = finiteOrNull(source.end);
   return {
     ...source,
-    label:
-      typeof source.label === "string" && source.label.trim()
-        ? source.label.trim()
-        : null,
+    label: typeof source.label === "string" && source.label.trim() ? source.label.trim() : null,
     start,
     end: start == null || end >= start ? end : null,
     accuracy_percent: clampPercent(source.accuracy_percent),
@@ -76,25 +70,18 @@ export function normalizeAnalysisResult(result) {
 export function getAnalysisFeedback(result) {
   const normalized = normalizeAnalysisResult(result);
   const accuracy = normalized.pitch_accuracy_percent;
-  const scoredSections = normalized.sections.filter( (section) => section.accuracy_percent != null
-  );
+  const scoredSections = normalized.sections.filter((section) => section.accuracy_percent != null);
   const bestSection = scoredSections.reduce(
-    (best, section) =>
-      !best || section.accuracy_percent > best.accuracy_percent
-        ? section
-        : best,
+    (best, section) => (!best || section.accuracy_percent > best.accuracy_percent ? section : best),
     null
   );
   const needsPractice = scoredSections.reduce(
     (worst, section) =>
-      !worst || section.accuracy_percent < worst.accuracy_percent
-        ? section
-        : worst,
+      !worst || section.accuracy_percent < worst.accuracy_percent ? section : worst,
     null
   );
   const grade = getAnalysisGrade(accuracy);
-  const advice = getAnalysisAdvice( accuracy, normalized.mean_deviation_semitones
-  );
+  const advice = getAnalysisAdvice(accuracy, normalized.mean_deviation_semitones);
   return {
     ...normalized,
     accuracy,

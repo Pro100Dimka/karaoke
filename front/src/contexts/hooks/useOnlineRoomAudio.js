@@ -25,8 +25,7 @@ export default function useOnlineRoomAudio({
 
   const applyRemoteAudioMute = useCallback(() => {
     for (const [participantId, audio] of remoteAudioRef.current) {
-      const muted =
-        roomSoundMutedRef.current || mutedPeopleRef.current.has(participantId);
+      const muted = roomSoundMutedRef.current || mutedPeopleRef.current.has(participantId);
       const effectGraph = remoteEffectsRef.current.get(participantId);
       audio.muted = muted || Boolean(effectGraph);
       if (effectGraph) effectGraph.master.gain.value = muted ? 0 : 1;
@@ -89,14 +88,12 @@ export default function useOnlineRoomAudio({
         applyRemoteAudioMute();
         return;
       }
-      const AudioContextClass =
-        globalThis.AudioContext || globalThis.webkitAudioContext;
+      const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
       if (!AudioContextClass) {
         applyRemoteAudioMute();
         return;
       }
-      const effects =
-        roomUiRef.current.effectsByParticipant?.[participantId] || {};
+      const effects = roomUiRef.current.effectsByParticipant?.[participantId] || {};
       const context = new AudioContextClass({ latencyHint: "interactive" });
       const source = context.createMediaStreamSource(stream);
       const master = context.createGain();
@@ -127,9 +124,7 @@ export default function useOnlineRoomAudio({
         for (let channel = 0; channel < impulse.numberOfChannels; channel += 1) {
           const data = impulse.getChannelData(channel);
           for (let index = 0; index < frames; index += 1)
-            data[index] =
-              (Math.random() * 2 - 1) *
-              (1 - index / frames) ** (1.5 + reverb * 2);
+            data[index] = (Math.random() * 2 - 1) * (1 - index / frames) ** (1.5 + reverb * 2);
         }
         convolver.buffer = impulse;
         wet.gain.value = Math.min(0.58, reverb * 0.48);
@@ -150,10 +145,12 @@ export default function useOnlineRoomAudio({
         applyRemoteAudioMute();
       };
       if (context.state === "suspended") {
-        Promise.resolve(context.resume()).then(activate).catch(() => {
-          closeContext(context);
-          applyRemoteAudioMute();
-        });
+        Promise.resolve(context.resume())
+          .then(activate)
+          .catch(() => {
+            closeContext(context);
+            applyRemoteAudioMute();
+          });
       } else activate();
     },
     [applyRemoteAudioMute, roomUiRef]
@@ -186,8 +183,7 @@ export default function useOnlineRoomAudio({
         stream.getTracks().forEach((track) => track.stop());
         return false;
       }
-      const AudioContextClass =
-        globalThis.AudioContext || globalThis.webkitAudioContext;
+      const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
       if (!AudioContextClass) return false;
       let context;
       try {

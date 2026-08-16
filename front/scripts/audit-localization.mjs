@@ -42,8 +42,7 @@ export const violationsFor = (file) => {
       if (!name) return;
       functionPath.node.params.forEach((parameter, index) => {
         if (parameter.type !== "Identifier") return;
-        const references = functionPath.scope.getBinding( parameter.name
-        )?.referencePaths;
+        const references = functionPath.scope.getBinding(parameter.name)?.referencePaths;
         if (references?.length && references.every(directlyTranslated))
           translatedParameters.set(name, index);
       });
@@ -60,26 +59,18 @@ export const violationsFor = (file) => {
     const { arguments: callArguments } = callPath.node;
     const index = callArguments.indexOf(nodePath.node);
     const callee = callPath.node.callee;
-    return (
-      callee.type === "Identifier" &&
-      translatedParameters.get(callee.name) === index
-    );
+    return callee.type === "Identifier" && translatedParameters.get(callee.name) === index;
   };
   const translatedConstant = (literalPath) => {
     const declaration = literalPath.parentPath;
-    if (
-      !declaration.isVariableDeclarator() ||
-      declaration.node.id.type !== "Identifier"
-    )
+    if (!declaration.isVariableDeclarator() || declaration.node.id.type !== "Identifier")
       return false;
-    const references = declaration.scope.getBinding( declaration.node.id.name
-    )?.referencePaths;
+    const references = declaration.scope.getBinding(declaration.node.id.name)?.referencePaths;
     return Boolean(references?.length && references.every(translatedArgument));
   };
   traverse(ast, {
     StringLiteral(literalPath) {
-      if (translatedArgument(literalPath) || translatedConstant(literalPath))
-        return;
+      if (translatedArgument(literalPath) || translatedConstant(literalPath)) return;
       record(literalPath.node, literalPath.node.value);
     },
     TemplateElement: ({ node }) => record(node, node.value.raw),
@@ -92,7 +83,7 @@ export const runLocalizationAudit = () => {
   const current = Object.fromEntries(
     sourceFiles(sourceRoot)
       .filter((file) => !excluded.some((fragment) => file.includes(fragment)))
-      .map((file) => [ path.relative(root, file).replaceAll("\\", "/"), violationsFor(file) ])
+      .map((file) => [path.relative(root, file).replaceAll("\\", "/"), violationsFor(file)])
       .filter(([, lines]) => lines.length)
       .map(([file, lines]) => [file, lines.length])
   );
@@ -105,8 +96,7 @@ export const runLocalizationAudit = () => {
   const regressions = Object.entries(current).filter(
     ([file, count]) => count > (baseline[file] ?? 0)
   );
-  const remaining = Object.values(current).reduce( (sum, count) => sum + count, 0
-  );
+  const remaining = Object.values(current).reduce((sum, count) => sum + count, 0);
   console.log(
     `Localization audit: ${remaining} legacy literals in ${Object.keys(current).length} files.`
   );
@@ -120,8 +110,5 @@ export const runLocalizationAudit = () => {
   console.log("No new unlocalized production strings.");
 };
 
-if (
-  process.argv[1] &&
-  pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url
-)
+if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url)
   runLocalizationAudit();

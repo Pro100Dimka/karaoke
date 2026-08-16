@@ -1,7 +1,6 @@
-import { closeAudioContext, closeAudioContextQuietly } from "../utils/audio-context.js";
+import { closeAudioContext, closeAudioContextQuietly } from "../utils/audio-context";
 
-const stopStream = (stream) =>
-  stream?.getTracks?.().forEach((track) => track.stop());
+const stopStream = (stream) => stream?.getTracks?.().forEach((track) => track.stop());
 const connect = (from, to) => {
   from.connect(to);
   return to;
@@ -58,10 +57,15 @@ export function createStudioMicrophoneGraph(rawStream) {
     limiter.release.value = 0.08;
 
     const destination = context.createMediaStreamDestination();
-    connect(connect(connect(connect(connect(connect(source, highpass), mud), presence), air), compressor), makeup);
+    connect(
+      connect(connect(connect(connect(connect(source, highpass), mud), presence), air), compressor),
+      makeup
+    );
     makeup.connect(limiter);
     limiter.connect(destination);
-    destination.stream.getAudioTracks?.().forEach((track) => { track.contentHint = "music"; });
+    destination.stream.getAudioTracks?.().forEach((track) => {
+      track.contentHint = "music";
+    });
     context.resume?.().catch(() => {});
 
     return {
@@ -69,7 +73,11 @@ export function createStudioMicrophoneGraph(rawStream) {
       rawStream,
       context,
       close: async () => {
-        try { source.disconnect(); } catch {}
+        try {
+          source.disconnect();
+        } catch {
+          /* already disconnected */
+        }
         stopStream(rawStream);
         stopStream(destination.stream);
         if (context.state !== "closed") await closeAudioContext(context);

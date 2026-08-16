@@ -20,7 +20,6 @@ import time
 import traceback
 from collections.abc import Callable
 from pathlib import Path
-from typing import TextIO, cast
 
 import config
 import models

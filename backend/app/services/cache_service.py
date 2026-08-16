@@ -124,7 +124,7 @@ def _restore_precommit_optimization(out_dir: Path, journal: dict) -> None:
 
 def _recover_optimization(out_dir: Path, *, committed: bool) -> None:
     journal_path = out_dir / _OPTIMIZATION_JOURNAL
-    journal = read_json(journal_path, default={})
+    journal: object = read_json(journal_path, default={})
     if not isinstance(journal, dict) or not journal:
         return
     # Journal is local transient state. Invalid recovery metadata fails closed;
@@ -141,7 +141,7 @@ def _recover_optimization(out_dir: Path, *, committed: bool) -> None:
     if not isinstance(published_outputs, dict) or not isinstance(published_integrity, dict):
         journal_path.unlink(missing_ok=True)
         return
-    current_manifest = read_json(out_dir / "manifest.json", default={})
+    current_manifest: object = read_json(out_dir / "manifest.json", default={})
     current_outputs = current_manifest.get("outputs") if isinstance(current_manifest, dict) else None
     current_integrity = current_manifest.get("integrity") if isinstance(current_manifest, dict) else None
     if not isinstance(current_outputs, dict) or not isinstance(current_integrity, dict):

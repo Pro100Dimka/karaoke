@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import shutil
@@ -11,19 +12,18 @@ import tempfile
 import unicodedata
 import wave
 import zipfile
-from uuid import uuid4
 from pathlib import Path, PurePosixPath
+from uuid import uuid4
 
 from sqlalchemy.orm import Session
-
 
 import config
 import models
 from app.services import revision_cache, song_artifacts, song_service
 from app.services.db_utils import commit_refresh
-from database import SessionLocal
 from app.utils.atomic_files import atomic_write
 from app.utils.json_files import read_json, write_json
+from database import SessionLocal
 
 MAX_PACKAGE_BYTES = 2 * 1024 * 1024 * 1024
 MAX_PACKAGE_FILES = 500
@@ -462,9 +462,11 @@ def _archive_revision(archive: zipfile.ZipFile, manifest: dict[str, object]) -> 
     })
 
 def _number(value: object) -> float | None:
+    if not isinstance(value, (int, float, str)):
+        return None
     try:
         number = float(value)
-    except (TypeError, ValueError):
+    except ValueError:
         return None
     return number if number == number else None
 
@@ -851,7 +853,7 @@ def _write_import_journal(path: Path, payload: dict[str, object], phase: str) ->
 
 
 def _recover_import_journal(db: Session, journal_path: Path) -> None:
-    journal = read_json(journal_path, default={})
+    journal: object = read_json(journal_path, default={})
     if not isinstance(journal, dict):
         raise ValueError("Room import recovery journal is invalid")
     phase = journal.get("phase")
@@ -949,6 +951,8 @@ def _publish_imported_package(
         publish = _prepare_publish_tree(archive, members, source_member, staging_root, final_source_name)
         _write_import_journal(journal_path, journal, "prepared")
         if existing is not None:
+            if backup_dir is None:
+                raise RuntimeError("Room import backup path was not created")
             output_dir.replace(backup_dir)
             _write_import_journal(journal_path, journal, "backup-created")
         publish.replace(output_dir)
@@ -972,10 +976,8 @@ def _publish_imported_package(
         db_committed = True
         # If this phase write itself fails, the durable "published" journal is
         # still sufficient: startup recovery verifies DB revision and completes cleanup.
-        try:
+        with contextlib.suppress(OSError):
             _write_import_journal(journal_path, journal, "db-committed")
-        except OSError:
-            pass
 
         # Local user/device state is merged only after the DB transition is durable.
         # Recovery can therefore finish this step safely after a hard crash.

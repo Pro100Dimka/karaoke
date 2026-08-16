@@ -23,7 +23,8 @@ function loopbackHttpUrl(value, fallback, label) {
 function positiveInteger(value, fallback, label) {
   if (value == null || value === "") return fallback;
   const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error(`${label} must be a positive integer`);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0)
+    throw new Error(`${label} must be a positive integer`);
   return parsed;
 }
 

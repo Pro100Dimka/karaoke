@@ -2,7 +2,14 @@
 from __future__ import annotations
 
 import math
+
 import numpy as np
+
+# Largest float32 value that is guaranteed not to exceed the documented 0.985
+# limiter ceiling when compared in Python/float64. ``np.float32(0.985)`` itself
+# is slightly larger (0.985000014...), which made exact limiter hits violate
+# the public bound on some tests/platforms.
+_LIMITER_CEILING = np.nextafter(np.float32(0.985), np.float32(0.0))
 
 
 class StudioMicrophoneProcessor:
@@ -70,4 +77,4 @@ class StudioMicrophoneProcessor:
 
         # Smooth soft limiter; unlike hard clipping it avoids brittle digital distortion.
         y = np.tanh(y * 1.12) / np.tanh(1.12)
-        return np.clip(y, -0.985, 0.985).astype(np.float32, copy=False)
+        return np.clip(y, -_LIMITER_CEILING, _LIMITER_CEILING).astype(np.float32, copy=False)

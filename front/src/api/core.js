@@ -1,15 +1,16 @@
-import { API_BASE_URL } from "../runtime-config";
 import { translateSaved } from "../i18n/runtime";
+import { API_BASE_URL } from "../runtime-config";
 /* eslint-disable import/extensions */
 // eslint-disable-next-line import/extensions
-import { mockBlobRequest, mockRequest } from "./mock/request.js";
+import { mockBlobRequest, mockRequest } from "./mock/request";
 
 // Общая транспортная часть локального REST API.
 export const MOCK_API_ENABLED = import.meta.env.VITE_USE_MOCK_API === "true";
 export const BASE_URL = API_BASE_URL;
 
 export const isAmbiguousTransportError = (error) =>
-  error?.name === "TimeoutError" || error?.name === "AbortError" ||
+  error?.name === "TimeoutError" ||
+  error?.name === "AbortError" ||
   (error instanceof TypeError && !error.status);
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
@@ -25,7 +26,10 @@ function createDeadlineSignal(signal, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS) {
   const safeTimeout = Number.isFinite(Number(timeoutMs))
     ? Math.max(1, Number(timeoutMs))
     : DEFAULT_REQUEST_TIMEOUT_MS;
-  const timer = globalThis.setTimeout(() => { didTimeout = true; controller.abort(); }, safeTimeout);
+  const timer = globalThis.setTimeout(() => {
+    didTimeout = true;
+    controller.abort();
+  }, safeTimeout);
   return {
     signal: controller.signal,
     timedOut: () => didTimeout,
@@ -42,20 +46,22 @@ function normalizeHeaders(headers) {
   return { ...headers };
 }
 function hasContentType(headers) {
-  return Object.keys(headers).some( (name) => name.toLowerCase() === "content-type"
-  );
+  return Object.keys(headers).some((name) => name.toLowerCase() === "content-type");
 }
 function buildRequestOptions(options = {}) {
-  const { headers, body, timeoutMs, ...requestOptions } = options;
+  const { headers, body, timeoutMs: _, ...requestOptions } = options;
   const FormDataCtor = globalThis.FormData;
-  const isFormData =
-    typeof FormDataCtor === "function" && body instanceof FormDataCtor;
+  const isFormData = typeof FormDataCtor === "function" && body instanceof FormDataCtor;
   const normalizedHeaders = normalizeHeaders(headers);
   const apiToken = globalThis.electronAPI?.apiToken;
   if (isFormData || body == null) {
     const nextHeaders = normalizedHeaders || {};
     if (apiToken) nextHeaders["X-ADVoice-Token"] = apiToken;
-    return { ...requestOptions, body, ...(Object.keys(nextHeaders).length ? { headers: nextHeaders } : {}) };
+    return {
+      ...requestOptions,
+      body,
+      ...(Object.keys(nextHeaders).length ? { headers: nextHeaders } : {})
+    };
   }
   const nextHeaders = normalizedHeaders || {};
   if (apiToken) nextHeaders["X-ADVoice-Token"] = apiToken;
@@ -68,10 +74,7 @@ async function readErrorDetail(response) {
   let detail = response.statusText || `HTTP ${response.status}`;
   try {
     const data = await response.json();
-    detail =
-      typeof data.detail === "string"
-        ? data.detail
-        : JSON.stringify(data.detail ?? data);
+    detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail ?? data);
   } catch {
     // Ответ может не содержать JSON-тело.
   }
@@ -122,7 +125,9 @@ async function readBlobResponse(response) {
       }
       await writable.close();
       const file = await handle.getFile();
-      Object.defineProperty(file, "cleanup", { value: () => root.removeEntry(name).catch(() => {}) });
+      Object.defineProperty(file, "cleanup", {
+        value: () => root.removeEntry(name).catch(() => {})
+      });
       return file;
     } catch (error) {
       await writable.abort?.().catch?.(() => {});
@@ -140,19 +145,22 @@ async function readBlobResponse(response) {
       size += value.byteLength;
       if (size > MAX_MEMORY_BLOB_BYTES) {
         await reader.cancel().catch(() => {});
-        throw new Error(translateSaved("Файл слишком большой для загрузки без дискового хранилища браузера"));
+        throw new Error(
+          translateSaved("Файл слишком большой для загрузки без дискового хранилища браузера")
+        );
       }
       chunks.push(value);
     }
-    return new Blob(chunks, { type: response.headers?.get?.("content-type") || "application/octet-stream" });
+    return new Blob(chunks, {
+      type: response.headers?.get?.("content-type") || "application/octet-stream"
+    });
   }
   return response.blob();
 }
 
 export function encodePathSegment(value) {
   const segment = String(value ?? "").trim();
-  if (!segment)
-    throw new TypeError(translateSaved("Пустой идентификатор API-ресурса"));
+  if (!segment) throw new TypeError(translateSaved("Пустой идентификатор API-ресурса"));
   return encodeURIComponent(segment);
 }
 export async function request(path, options = {}) {
@@ -161,8 +169,13 @@ export async function request(path, options = {}) {
     if (response.status === 204) return null;
     const text = await response.text();
     if (!text) return null;
-    try { return JSON.parse(text); }
-    catch { throw new Error(translateSaved("Некорректный JSON в ответе {0}", { 0: response.url || path })); }
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(
+        translateSaved("Некорректный JSON в ответе {0}", { 0: response.url || path })
+      );
+    }
   });
 }
 export async function requestBlob(path, options = {}) {
@@ -178,8 +191,6 @@ export function createFileUrl(path) {
   if (/^[a-z][a-z\d+.-]*:/i.test(normalizedPath)) {
     throw new TypeError(translateSaved("Ожидался локальный путь к файлу API"));
   }
-  const requestPath = normalizedPath.startsWith("/")
-    ? normalizedPath
-    : `/${normalizedPath}`;
+  const requestPath = normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`;
   return `${BASE_URL}${requestPath}`;
 }

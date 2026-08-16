@@ -114,7 +114,6 @@ def _syllables(song_map: JsonObject) -> list[Syllable]:
 
 def _project_notes_by_syllable(notes: list[JsonObject], syllables: list[JsonObject]) -> dict[int, list[JsonObject]]:
     """Project one acoustic/game note into non-overlapping display windows per linked syllable."""
-    timings = {_safe_int(item.get("index"), i): item for i, item in enumerate(syllables) if isinstance(item, dict)}
     note_by_syllable: dict[int, list[JsonObject]] = defaultdict(list)
     for note in notes:
         indices = note.get("syllable_indices")
@@ -212,7 +211,7 @@ def _refresh_generated_note_associations(song_map: JsonObject) -> None:
             overlap_by_word: dict[int, float] = defaultdict(float)
             for syllable, overlap in overlaps:
                 overlap_by_word[_safe_int(syllable.get("word_index"), -1)] += overlap
-            owner_word = max(overlap_by_word, key=overlap_by_word.get) if overlaps else None
+            owner_word = max(overlap_by_word, key=lambda word: overlap_by_word[word]) if overlaps else None
             note["syllable_indices"] = [
                 _safe_int(syllable.get("index"), index)
                 for index, (syllable, _overlap) in enumerate(overlaps)
@@ -271,7 +270,8 @@ def _publish_editor_generation(output_dir: Path, staging: Path, *, has_midi: boo
         for name in names + delete_names:
             target = output_dir / name
             existed[name] = target.exists()
-            if target.exists(): shutil.copy2(target, rollback / name)
+            if target.exists():
+                shutil.copy2(target, rollback / name)
         for name in names:
             os.replace(staging / name, output_dir / name)
         for name in delete_names:
@@ -279,8 +279,10 @@ def _publish_editor_generation(output_dir: Path, staging: Path, *, has_midi: boo
     except Exception:
         for name in names + delete_names:
             target = output_dir / name
-            if existed.get(name): os.replace(rollback / name, target)
-            else: target.unlink(missing_ok=True)
+            if existed.get(name):
+                os.replace(rollback / name, target)
+            else:
+                target.unlink(missing_ok=True)
         raise
     finally:
         shutil.rmtree(rollback, ignore_errors=True)
@@ -290,17 +292,20 @@ def save_editor(output_dir: Path, raw_notes: list[JsonObject]) -> JsonObject:
     output_dir = Path(output_dir)
     song_map, _ = load_editor(output_dir)
     backup = output_dir / "songMap.ai.json"
-    if not backup.exists(): shutil.copy2(output_dir / "songMap.json", backup)
+    if not backup.exists():
+        shutil.copy2(output_dir / "songMap.json", backup)
     duration = float(song_map.get("duration") or 0.0)
     notes = sorted((_normalize_note(item, duration) for item in raw_notes), key=lambda n: (n["start"], n["end"], n["midi_note"]))
     song_map["notes"] = notes
     song_map["display_notes"] = [dict(note, display_source="editor") for note in notes]
     song_map["editor"] = {"edited": True, "source": "manual"}
     stats = dict(song_map.get("display_stats") or {})
-    stats.update(game_note_count=len(notes), display_note_count=len(notes)); song_map["display_stats"] = stats
+    stats.update(game_note_count=len(notes), display_note_count=len(notes))
+    song_map["display_stats"] = stats
     _refresh_lines(song_map, notes)
     manifest: Any = read_json(output_dir / "manifest.json", default={})
-    if isinstance(manifest, dict): manifest["manual_editor"] = {"edited": True, "note_count": len(notes)}
+    if isinstance(manifest, dict):
+        manifest["manual_editor"] = {"edited": True, "note_count": len(notes)}
     staging = Path(tempfile.mkdtemp(prefix="editor-stage-", dir=output_dir))
     try:
         _write_editor_generation(staging, song_map, notes, manifest)
@@ -312,13 +317,17 @@ def save_editor(output_dir: Path, raw_notes: list[JsonObject]) -> JsonObject:
 def reset_editor(output_dir: Path) -> JsonObject:
     output_dir = Path(output_dir)
     backup = output_dir / "songMap.ai.json"
-    if not backup.exists(): raise ValueError("AI backup is not available")
+    if not backup.exists():
+        raise ValueError("AI backup is not available")
     song_map: Any = read_json(backup, default={})
-    if not isinstance(song_map, dict): raise ValueError("AI backup is invalid")
+    if not isinstance(song_map, dict):
+        raise ValueError("AI backup is invalid")
     notes = song_map.get("notes") or []
-    if not isinstance(notes, list): raise ValueError("AI backup notes are invalid")
+    if not isinstance(notes, list):
+        raise ValueError("AI backup notes are invalid")
     manifest: Any = read_json(output_dir / "manifest.json", default={})
-    if isinstance(manifest, dict): manifest["manual_editor"] = {"edited": False, "restored_ai": True, "note_count": len(notes)}
+    if isinstance(manifest, dict):
+        manifest["manual_editor"] = {"edited": False, "restored_ai": True, "note_count": len(notes)}
     staging = Path(tempfile.mkdtemp(prefix="editor-stage-", dir=output_dir))
     try:
         _write_editor_generation(staging, song_map, notes, manifest)

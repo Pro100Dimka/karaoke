@@ -7,6 +7,7 @@ future adapters plug into BackendRegistry without changing engine call sites.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import platform
 import threading
@@ -201,10 +202,8 @@ def _apply_cpu_tuning(hardware: HardwareProfile, torch_module=None) -> tuple[int
             setter(intra)
         setter = getattr(torch, "set_num_interop_threads", None)
         if setter is not None:
-            try:
+            with contextlib.suppress(RuntimeError):
                 setter(inter)
-            except RuntimeError:
-                pass
     except (ImportError, RuntimeError):
         return None
     return intra, inter
