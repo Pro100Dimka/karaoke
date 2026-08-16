@@ -71,6 +71,7 @@ export const createTransferSink = (participantId, metadata) => {
     throw new Error(translateSaved("Для большого файла требуется дисковое хранилище браузера"));
   const chunks = [];
   return {
+    chunks,
     write: (chunk) => chunks.push(chunk),
     finish: () => new globalThis.Blob(chunks, { type: metadata.mimeType }),
     cleanup: async () => {
@@ -87,7 +88,7 @@ export const cleanupIncomingTransfer = (transfer) => {
   transfer.cancelFinalization?.();
   if (transfer.timer) globalThis.clearTimeout(transfer.timer);
   Promise.resolve(transfer.sink)
-    .then((sink) => sink.cleanup())
+    .then((sink) => sink?.cleanup?.())
     .catch((error) => {
       console.error?.("Could not cleanup incoming song transfer", error);
     });

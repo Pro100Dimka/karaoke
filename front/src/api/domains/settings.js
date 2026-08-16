@@ -3,18 +3,16 @@ import { request } from "../core";
 
 const preferenceWrites = new Map();
 function updateUiPreferences(namespace, patch) {
-  const previous = preferenceWrites.get(namespace) || Promise.resolve();
-  const next = previous
-    .catch(() => {})
-    .then(() =>
-      request(`/preferences/${encodeURIComponent(namespace)}`, {
-        method: "PATCH",
-        body: JSON.stringify(patch)
-      })
-    )
-    .finally(() => {
-      if (preferenceWrites.get(namespace) === next) preferenceWrites.delete(namespace);
+  const write = () =>
+    request(`/preferences/${encodeURIComponent(namespace)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch)
     });
+  const previous = preferenceWrites.get(namespace);
+  const pending = previous ? previous.catch(() => {}).then(write) : write();
+  const next = pending.finally(() => {
+    if (preferenceWrites.get(namespace) === next) preferenceWrites.delete(namespace);
+  });
   preferenceWrites.set(namespace, next);
   return next;
 }

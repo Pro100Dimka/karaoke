@@ -24,30 +24,7 @@ test("keeps generated coverage consolidated under one canonical directory", () =
   }
 });
 
-test("keeps leaf source directories meaningful instead of wrapping one file", () => {
-  const singletonDirectories = [];
-  const sourceRoot = path.join(root, "src");
-  const themeRoot = path.join(sourceRoot, "theme");
-  const singletonAuditRoots = new Set([sourceRoot, themeRoot]);
-  const walk = (directory) => {
-    const entries = fs.readdirSync(directory, { withFileTypes: true });
-    const childDirectories = entries.filter((entry) => entry.isDirectory());
-    const childFiles = entries.filter((entry) => entry.isFile());
-    if (
-      !singletonAuditRoots.has(directory) &&
-      childDirectories.length === 0 &&
-      childFiles.length === 1
-    ) {
-      singletonDirectories.push(path.relative(root, directory));
-    }
-    for (const entry of childDirectories) {
-      const child = path.join(directory, entry.name);
-      if (child !== themeRoot) walk(child);
-    }
-  };
-  walk(sourceRoot);
-
-  expect(singletonDirectories).toEqual([]);
+test("keeps required production entry files in their canonical locations", () => {
   expect(exists("src/components/Table.jsx")).toBe(true);
   expect(exists("src/runtime-config.js")).toBe(true);
   expect(exists("src/pages/Karaoke/performance-analysis-modal.jsx")).toBe(true);

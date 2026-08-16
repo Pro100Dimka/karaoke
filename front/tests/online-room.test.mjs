@@ -31,6 +31,7 @@ test("song transfer reports progress and waits for receiver import", async () =>
   let imported = "";
   receiver.onFile = async (_id, blob) => {
     imported = await blob.text();
+    return true;
   };
 
   await sender.sendFile("receiver", new Blob(["song-package"]), {

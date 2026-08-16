@@ -190,7 +190,8 @@ describe("karaoke media synchronization", () => {
     expect(add.mock.calls.map(([event]) => event)).toEqual([
       "loadedmetadata",
       "durationchange",
-      "ended"
+      "ended",
+      "timeupdate"
     ]);
     expect(props.setDuration).toHaveBeenCalledWith(120);
     act(() => props.instrumentalRef.current.dispatchEvent(new Event("durationchange")));
@@ -226,7 +227,8 @@ describe("karaoke media synchronization", () => {
     expect(remove.mock.calls.map(([event]) => event)).toEqual([
       "loadedmetadata",
       "durationchange",
-      "ended"
+      "ended",
+      "timeupdate"
     ]);
   });
 

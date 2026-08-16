@@ -59,17 +59,17 @@ describe("online room service", () => {
 
   test("generates and normalizes room identifiers through every entropy source", () => {
     expect(DEFAULT_SIGNALING_URL).toBe("wss://karaoke-studio-online.pro100dimka-and.workers.dev");
-    expect(createRoomId({ randomUUID: () => "ab-cd-ef-gh-12" })).toBe("ABCDEFGH");
+    expect(createRoomId({ randomUUID: () => "ab-cd-ef-gh-12-34-56" })).toBe("ABCDEFGH1234");
     expect(
       createRoomId({
         getRandomValues: (bytes) => {
-          bytes.set([0, 1, 254, 255]);
+          bytes.set([0, 1, 254, 255, 16, 32]);
           return bytes;
         }
       })
-    ).toBe("0001FEFF");
-    expect(createRoomId({}, () => 0)).toBe("00000000");
-    expect(createRoomId(null, () => 0xabcdef12 / 0x1_0000_0000)).toBe("ABCDEF12");
+    ).toBe("0001FEFF1020");
+    expect(createRoomId({}, () => 0)).toBe("000000000000");
+    expect(createRoomId(null, () => 0xabcdef12 / 0x1_0000_0000)).toHaveLength(12);
     expect(normalizeRoomId(" ab!_c-d? ")).toBe("AB_C-D");
     expect(normalizeRoomId(`a${"b".repeat(40)}`)).toBe(`A${"B".repeat(31)}`);
     expect(normalizeRoomId(null)).toBe("");

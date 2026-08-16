@@ -117,7 +117,7 @@ test("injects one runtime backend URL into renderer and allows loopback CSP port
   const main = fs.readFileSync(new URL("../electron/main.cjs", import.meta.url), "utf8");
   const runtime = fs.readFileSync(new URL("../src/runtime-config.js", import.meta.url), "utf8");
   const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  expect(main).toContain("--advoice-backend-url=${BACKEND_URL}");
+  expect(main).toContain("--advoice-backend-url=${runtimeBackendUrl}");
   expect(preload).toContain("backendUrl");
   expect(runtime).toContain("globalThis.electronAPI?.backendUrl");
   expect(html).toContain("http://127.0.0.1:*");

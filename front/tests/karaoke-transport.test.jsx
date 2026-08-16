@@ -188,7 +188,7 @@ describe("karaoke transport", () => {
     const { result } = renderHook(() => useKaraokeTransport(props));
     await expect(result.current.togglePlay()).resolves.toBe(false);
     expect(props.instrumentalRef.current.pause).toHaveBeenCalled();
-    expect(api.pauseRecording).toHaveBeenCalledWith("session");
+    expect(api.pauseRecording).not.toHaveBeenCalled();
     expect(props.syncSecondaryMedia).toHaveBeenNthCalledWith(1, 4, true);
     expect(props.setIsPlaying).toHaveBeenCalledWith(false);
     expect(props.setRecordingError).toHaveBeenCalledWith("Не вдалося запустити відтворення");
@@ -407,6 +407,20 @@ describe("karaoke transport", () => {
     expect(api.pauseRecording).toHaveBeenCalledWith("late-stop");
     expect(stopProps.setRecordingSessionId).toHaveBeenCalledWith(null);
     stopHook.unmount();
+  });
+
+  test("finalizes a recording start that resolves after unmount", async () => {
+    let releaseStart;
+    api.startRecording.mockReturnValueOnce(
+      new Promise((resolve) => {
+        releaseStart = resolve;
+      })
+    );
+    const hook = renderHook(() => useKaraokeTransport(createProps()));
+    await expect(hook.result.current.togglePlay({ forcePlaying: true })).resolves.toBe(true);
+    hook.unmount();
+    releaseStart({ recording_session_id: "late-unmount" });
+    await waitFor(() => expect(api.stopRecording).toHaveBeenCalledWith("late-unmount"));
   });
 
   test("applies room pause and stop commands and reports rejected room play", async () => {

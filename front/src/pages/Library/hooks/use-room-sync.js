@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import useLatestRef from "../../../hooks/useLatestRef";
 
 export default function useLibraryRoomSync({
   localSongs,
@@ -12,19 +11,17 @@ export default function useLibraryRoomSync({
   syncUi
 }) {
   const pendingRemoteQueryRef = useRef(null);
-  const roomQueryRef = useLatestRef(roomQuery);
-
   useEffect(() => {
-    const remoteQuery = roomQueryRef.current;
+    const remoteQuery = roomQuery;
     if (typeof remoteQuery !== "string" || remoteQuery === query) return;
     pendingRemoteQueryRef.current = remoteQuery;
     setQuery(remoteQuery);
-  }, [query, roomEventId, roomQueryRef, setQuery]);
+  }, [query, roomEventId, roomQuery, setQuery]);
 
   useEffect(() => {
     if (!room) return;
-    if (pendingRemoteQueryRef.current === query) {
-      pendingRemoteQueryRef.current = null;
+    if (pendingRemoteQueryRef.current !== null) {
+      if (pendingRemoteQueryRef.current === query) pendingRemoteQueryRef.current = null;
       return;
     }
     syncUi({ query });

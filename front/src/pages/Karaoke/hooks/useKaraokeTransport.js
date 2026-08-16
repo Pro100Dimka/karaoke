@@ -71,8 +71,13 @@ export default function useKaraokeTransport({
 }) {
   const operationRef = useRef(Symbol("karaoke-operation"));
   const sessionRef = useRef(recordingSessionId);
+  const pendingRecordingStartRef = useRef(null);
 
   const beginOperation = () => (operationRef.current = Symbol("karaoke-operation"));
+
+  useEffect(() => {
+    sessionRef.current = recordingSessionId;
+  }, [recordingSessionId]);
 
   useEffect(() => {
     beginOperation();
@@ -82,6 +87,9 @@ export default function useKaraokeTransport({
       });
     });
     return () => {
+      beginOperation();
+      const pendingStart = pendingRecordingStartRef.current;
+      if (pendingStart && pendingStart.songId === song?.id) pendingStart.settle = "stop";
       const id = sessionRef.current;
       sessionRef.current = null;
       if (id) {
@@ -133,14 +141,49 @@ export default function useKaraokeTransport({
     return id;
   };
 
+  const getPendingRecordingStart = (operation) => {
+    const { current } = pendingRecordingStartRef;
+    if (current?.songId === song.id) {
+      current.latestOperation = operation;
+      current.settle = null;
+      return current;
+    }
+    const entry = {
+      songId: song.id,
+      latestOperation: operation,
+      settle: null,
+      promise: null
+    };
+    entry.promise = startRecording().finally(() => {
+      if (pendingRecordingStartRef.current === entry) pendingRecordingStartRef.current = null;
+    });
+    pendingRecordingStartRef.current = entry;
+    return entry;
+  };
+
   const runRecording = async (operation) => {
     let id = sessionRef.current;
+    let pendingStart = null;
     try {
       if (id) {
         rememberPending(id);
         await api.resumeRecording(id);
-      } else id = await startRecording();
-      if (operation !== operationRef.current) return await discardSession(id);
+      } else {
+        pendingStart = getPendingRecordingStart(operation);
+        id = await pendingStart.promise;
+      }
+      if (operation !== operationRef.current) {
+        if (pendingStart && pendingStart.latestOperation !== operation) return;
+        if (pendingStart?.settle === "pause") {
+          await api.pauseRecording(id).catch(() => {});
+          sessionRef.current = id;
+          setRecordingSessionId(id);
+          return;
+        }
+        await discardSession(id);
+        if (pendingStart?.settle === "stop") setRecordingSessionId(null);
+        return;
+      }
       sessionRef.current = id;
       setRecordingSessionId(id);
       setRecordingError(null);
@@ -164,6 +207,8 @@ export default function useKaraokeTransport({
     const operation = beginOperation();
 
     if (!shouldPlay) {
+      const pendingStart = pendingRecordingStartRef.current;
+      if (!sessionRef.current && pendingStart?.songId === song.id) pendingStart.settle = "pause";
       pauseMedia();
       setIsPlaying(false);
       if (sessionRef.current) await api.pauseRecording(sessionRef.current).catch(() => {});
@@ -179,6 +224,7 @@ export default function useKaraokeTransport({
     if (vocals) vocals.volume = playbackGain(vocalVolume);
     sendYouTubeCommand("playVideo");
 
+    runRecording(operation);
     try {
       const master = Promise.resolve(instrumental.play());
       const secondary = [
@@ -206,7 +252,6 @@ export default function useKaraokeTransport({
       return false;
     }
     setIsPlaying(true);
-    runRecording(operation);
     if (shouldBroadcast) broadcast("play", instrumental.currentTime);
     return true;
   };
@@ -215,6 +260,8 @@ export default function useKaraokeTransport({
     const instrumental = instrumentalRef.current;
     if (!instrumental || !song?.id) return undefined;
     beginOperation();
+    const pendingStart = pendingRecordingStartRef.current;
+    if (!sessionRef.current && pendingStart?.songId === song.id) pendingStart.settle = "stop";
     pauseMedia();
     instrumental.currentTime = 0;
     syncSecondaryMedia(0, true);

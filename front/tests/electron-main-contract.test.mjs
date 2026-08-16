@@ -22,8 +22,9 @@ test("backend restart attempts reset only after a stable run", () => {
     main.match(/childProcess\.once\("spawn", \(\) => \{([\s\S]*?)\n    \}\);/s)?.[1] || "";
   expect(main).toContain("BACKEND_STABLE_RESET_MS");
   expect(spawnHandler).toContain("setTimeout");
-  expect(spawnHandler).not.toMatch(/backendRestartAttempts\s*=\s*0\s*;/);
+  const beforeStableTimer = spawnHandler.split("setTimeout", 1)[0];
+  expect(beforeStableTimer).not.toMatch(/backendRestartAttempts\s*=\s*0\s*;/);
   expect(main).toMatch(
-    /setTimeout\(\(\) => \{\s*if \(backendProcess === childProcess\) backendRestartAttempts = 0;/s
+    /setTimeout\(\(\) => \{[\s\S]*?backendProcess === childProcess[\s\S]*?backendRestartAttempts = 0;/s
   );
 });

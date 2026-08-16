@@ -2,6 +2,16 @@ export const syllableIndicesForNote = (note) => {
   const raw = Array.isArray(note.syllable_indices) ? note.syllable_indices : [note.syllable_index];
   return [...new Set(raw.map(Number).filter(Number.isFinite))];
 };
+const appendLyricFragment = (text, fragment, sameWord) => {
+  if (!text) return fragment;
+  if (!fragment) return text;
+  if (!sameWord) return `${text} ${fragment}`;
+  const left = text.toLocaleLowerCase();
+  const right = fragment.toLocaleLowerCase();
+  let overlap = Math.min(fragment.length, text.length);
+  while (overlap && left.slice(-overlap) !== right.slice(0, overlap)) overlap -= 1;
+  return `${text}${fragment.slice(overlap)}`;
+};
 const linkedText = (note, syllablesByIndex, include = () => true) => {
   let text = "";
   let previousWord;
@@ -11,8 +21,11 @@ const linkedText = (note, syllablesByIndex, include = () => true) => {
     const fragment = String(syllable?.text || "");
     if (!fragment) continue;
     const word = Number(syllable?.word_index);
-    if (text && Number.isFinite(word) && word !== previousWord) text += " ";
-    text += fragment;
+    text = appendLyricFragment(
+      text,
+      fragment,
+      Number.isFinite(word) && Number.isFinite(previousWord) && word === previousWord
+    );
     previousWord = word;
   }
   return text;

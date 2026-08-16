@@ -279,6 +279,7 @@ function handleFileStart(mesh, participantId, channel, message) {
       chunkCount: 0,
       received: 0,
       lastPercent: -1,
+      chunks: Array.isArray(sink?.chunks) ? sink.chunks : [],
       sink,
       writes: Promise.resolve(),
       timer: mesh.createIncomingTransferTimer(participantId, metadata.transferId)
@@ -290,15 +291,26 @@ function handleFileStart(mesh, participantId, channel, message) {
       windowBytes: MAX_PENDING_WRITE_BYTES
     });
   };
+  const failAdmission = (error) => {
+    if (!admission.cancelled) reject(error);
+    finishAdmission();
+  };
+  const createAndAcceptSink = () => {
+    if (admission.cancelled)
+      throw new Error(translateSaved("Передача файла больше не может быть принята"));
+    const sink = createTransferSink(participantId, metadata);
+    if (sink && typeof sink.then === "function") {
+      Promise.resolve(sink).then(accept).catch(failAdmission);
+      return;
+    }
+    accept(sink);
+  };
   const admitAsync = async (accepted) => {
     try {
       if ((await accepted) !== true) throw new Error(translateSaved("Получение файла отклонено"));
-      if (admission.cancelled)
-        throw new Error(translateSaved("Передача файла больше не может быть принята"));
-      accept(await createTransferSink(participantId, metadata));
+      createAndAcceptSink();
     } catch (error) {
-      if (!admission.cancelled) reject(error);
-      finishAdmission();
+      failAdmission(error);
     }
   };
   try {
@@ -310,15 +322,22 @@ function handleFileStart(mesh, participantId, channel, message) {
       mesh.incomingFileAdmissions.delete(participantId);
       reject(new Error(translateSaved("Подготовка хранилища для песни превысила время ожидания")));
     }, TRANSFER_ADMISSION_TIMEOUT_MS);
-    admitAsync(accepted);
+    if (accepted && typeof accepted.then === "function") admitAsync(accepted);
+    else if (accepted === true) createAndAcceptSink();
+    else failAdmission(new Error(translateSaved("Получение файла отклонено")));
   } catch (error) {
-    finishAdmission();
-    reject(error);
+    failAdmission(error);
   }
 }
 
 function sendTransferStatus(channel, payload) {
-  if (channel.readyState === "open") channel.send(JSON.stringify(payload));
+  if (channel.readyState !== "open") return false;
+  try {
+    channel.send(JSON.stringify(payload));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 const currentIncomingTransfer = (mesh, participantId, channel) => {
@@ -345,7 +364,16 @@ function rejectIncomingTransfer(mesh, participantId, channel, transfer, error) {
 
 function handleFileEnd(mesh, participantId, channel, message) {
   const transfer = currentIncomingTransfer(mesh, participantId, channel);
-  if (!transfer || transfer.phase !== "receiving") return;
+  if (!transfer) {
+    if (typeof message.transferId === "string")
+      sendTransferStatus(channel, {
+        type: "file-error",
+        transferId: message.transferId,
+        error: translateSaved("Получен неполный файл песни")
+      });
+    return;
+  }
+  if (transfer.phase !== "receiving") return;
   if (transfer.metadata.transferId !== message.transferId) {
     sendTransferStatus(channel, {
       type: "file-error",
@@ -600,6 +628,7 @@ export async function waitForDataChannel(mesh, participantId, timeoutMs, lifecyc
     if (channel?.readyState === "open") return channel;
     if (CLOSED_CHANNEL_STATES.includes(channel?.readyState)) {
       if (mesh.channels.get(participantId) === channel) mesh.channels.delete(participantId);
+      throw new Error(translateSaved("Канал передачи песни закрыт"));
     }
     if (!mesh.channels.get(participantId) && mesh.peers.has(participantId)) {
       // Re-negotiate a fresh ordered channel after a transient close instead
