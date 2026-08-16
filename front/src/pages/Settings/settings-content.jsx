@@ -48,7 +48,13 @@ function ServiceContent({ service, onOpen, onClose }) {
           interactive
           className="settings-service-link settings-neon-card"
           onClick={() => onOpen(id)}
-          sx={{ width: "100%", minWidth: 0, padding: 0, textAlign: "left", cursor: "pointer" }}
+          sx={{
+            width: "100%",
+            minWidth: 0,
+            padding: 0,
+            textAlign: "left",
+            cursor: "pointer"
+          }}
           cardContent={{ style: { padding: "1rem 1.1rem", height: "100%" } }}
         >
           <Stack align="start" gap={0.35} justify="space-between" sx={{ height: "100%" }}>
@@ -108,8 +114,7 @@ export default function SettingsContent({
         getLabel: field.getLabel
           ? (context) => {
               const original = field.getLabel(context);
-              const suffix = String(original).split("·").slice(1).join("·")
-.trim();
+              const suffix = String(original).split("·").slice(1).join("·").trim();
               return suffix ? `${label} · ${suffix}` : label;
             }
           : undefined,

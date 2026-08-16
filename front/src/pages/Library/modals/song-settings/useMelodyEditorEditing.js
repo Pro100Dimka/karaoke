@@ -290,7 +290,7 @@ export default function useMelodyEditorEditing({
       if (!additive) setSelected([]);
       event.currentTarget.setPointerCapture?.(event.pointerId);
     },
-    [selected, setSelected]
+    [rollCanvasRef, selected, setSelected]
   );
   const updateMarquee = useCallback(
     (event) => {

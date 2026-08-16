@@ -98,10 +98,8 @@ def main() -> int:
         cwd=BACKEND,
     )
 
-    # Normalize only with the project-pinned formatter/linter, then run the strict gate.
-    # This does not disable any rule: verify still requires zero lint warnings and a clean format check.
-    run("Frontend release normalization", [npm, "run", "release:normalize"], cwd=FRONT)
-    # Frontend unit/coverage/lint/audits/build. `verify` is mandatory, not best-effort.
+    # `verify` owns normalization itself so every caller gets identical behavior:
+    # project-pinned Prettier/ESLint autofix first, then strict zero-warning/check gates.
     run("Frontend verify", [npm, "run", "verify"], cwd=FRONT)
 
     # Mutation testing proves that the unit suite detects behavioral changes, not just executed lines.

@@ -33,7 +33,7 @@
     "build:mock": "cross-env VITE_USE_MOCK_API=true vite build --mode mock",
     "preview:mock": "vite preview --mode mock --host 127.0.0.1 --port 4173",
     "clean": "node scripts/clean.mjs",
-    "verify": "npm run check:imports && npm run lint && npm run format:check && npm run test:unit:coverage && npm run audit && npm run build",
+    "verify": "npm run release:normalize && npm run check:imports && npm run lint && npm run format:check && npm run test:unit:coverage && npm run audit && npm run build",
     "audit:reachability": "node scripts/audit-reachability.mjs",
     "check:syntax": "node scripts/check-syntax.mjs",
     "test:unit": "vitest run",
