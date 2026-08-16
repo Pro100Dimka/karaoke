@@ -89,7 +89,7 @@ export default function useKaraokeTransport({
     return () => {
       beginOperation();
       const pendingStart = pendingRecordingStartRef.current;
-      if (pendingStart && pendingStart.songId === song?.id) pendingStart.settle = "stop";
+      if (pendingStart?.songId === song?.id) pendingStart.settle = "stop";
       const id = sessionRef.current;
       sessionRef.current = null;
       if (id) {
