@@ -352,6 +352,7 @@ describe("online voice mesh", () => {
       transferId: "wrong",
       error: "Получен неизвестный идентификатор передачи"
     });
+    channel.onmessage({ data: JSON.stringify({ type: "file-cancel", transferId: "t" }) });
 
     channel.onmessage({
       data: JSON.stringify({ type: "file-start", transferId: "stall", size: 1 })
@@ -1252,6 +1253,7 @@ describe("online voice mesh", () => {
     mesh.onTransferProgress = vi.fn();
     mesh.setupDataChannel("host", channel);
     channel.onmessage({ data: JSON.stringify({ type: "file-start", transferId: "t", size: 0 }) });
+    const sendsBeforeClose = channel.send.mock.calls.length;
     channel.readyState = "closed";
     channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "t" }) });
     await vi.waitFor(() =>
@@ -1259,7 +1261,7 @@ describe("online voice mesh", () => {
         expect.objectContaining({ stage: "error", percent: 100 })
       )
     );
-    expect(channel.send).not.toHaveBeenCalled();
+    expect(channel.send).toHaveBeenCalledTimes(sendsBeforeClose);
   });
 
   test("does not clear absent transfer timers while stopping", () => {
@@ -1687,9 +1689,15 @@ describe("online voice mesh", () => {
     });
     channel.onmessage({ data: new Uint8Array([1]) });
     channel.onmessage({ data: JSON.stringify({ type: "file-end", transferId: "failed" }) });
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(JSON.parse(channel.send.mock.calls.at(-1)[0]).type).toBe("file-error");
+    await vi.waitFor(() =>
+      expect(
+        channel.send.mock.calls.some(([value]) => {
+          if (typeof value !== "string") return false;
+          const message = JSON.parse(value);
+          return message.type === "file-error" && message.transferId === "failed";
+        })
+      ).toBe(true)
+    );
 
     mesh.onFile = vi.fn(() => {
       throw new Error("synchronous import failure");

@@ -307,15 +307,15 @@ describe("online room provider", () => {
       expect(await hook.result.current.requestMicrophoneAccess()).toBe(false);
     });
     expect(hook.result.current.voiceError).toBe(
-      "Не вдалося отримати доступ до мікрофону: permission denied. " +
-        "Перевірте роздільну здатність Windows і повторіть спробу."
+      "Не удалось получить доступ к микрофону: permission denied. " +
+        "Проверьте разрешение Windows и повторите попытку."
     );
 
     mocks.start.mockRejectedValueOnce(null);
     await act(() => hook.result.current.requestMicrophoneAccess());
     expect(hook.result.current.voiceError).toBe(
-      "Не вдалося отримати доступ до мікрофону: немає доступу до мікрофону. " +
-        "Перевірте роздільну здатність Windows і повторіть спробу."
+      "Не удалось получить доступ к микрофону: нет доступа к микрофону. " +
+        "Проверьте разрешение Windows и повторите попытку."
     );
   });
 
