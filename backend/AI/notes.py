@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import statistics
+from collections.abc import Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
@@ -499,6 +500,23 @@ def _best_syllable_for_segment(
     return min(syllables, key=lambda item: abs((item.start + item.end) / 2 - midpoint))
 
 
+def _merge_padded_intervals(
+    items: Sequence[Syllable | Word], *, pad: float, merge_gap: float
+) -> list[tuple[float, float]]:
+    """Pad each item's [start, end] span and merge intervals closer than merge_gap."""
+    raw = [
+        (max(0.0, item.start - pad), item.end + pad)
+        for item in sorted(items, key=lambda item: (item.start, item.end))
+    ]
+    merged: list[tuple[float, float]] = []
+    for start, end in raw:
+        if not merged or start - merged[-1][1] > merge_gap:
+            merged.append((start, end))
+        else:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+    return merged
+
+
 def _lyric_activity_intervals(
     syllables: list[Syllable],
     *,
@@ -512,18 +530,7 @@ def _lyric_activity_intervals(
     """
     if not syllables:
         return []
-
-    raw = [
-        (max(0.0, syllable.start - pad), syllable.end + pad)
-        for syllable in sorted(syllables, key=lambda item: (item.start, item.end))
-    ]
-    merged: list[tuple[float, float]] = []
-    for start, end in raw:
-        if not merged or start - merged[-1][1] > merge_gap:
-            merged.append((start, end))
-        else:
-            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
-    return merged
+    return _merge_padded_intervals(syllables, pad=pad, merge_gap=merge_gap)
 
 
 def _clip_note_to_lyric_activity(
@@ -665,17 +672,7 @@ def _word_activity_intervals(
     """Build phrase activity from forced-aligned WORDS, not synthetic syllables."""
     if not words:
         return []
-    raw = [
-        (max(0.0, word.start - pad), word.end + pad)
-        for word in sorted(words, key=lambda item: (item.start, item.end))
-    ]
-    merged: list[tuple[float, float]] = []
-    for start, end in raw:
-        if not merged or start - merged[-1][1] > merge_gap:
-            merged.append((start, end))
-        else:
-            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
-    return merged
+    return _merge_padded_intervals(words, pad=pad, merge_gap=merge_gap)
 
 
 def _adaptive_lyric_timing(

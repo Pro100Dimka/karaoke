@@ -19,6 +19,7 @@ from AI.engines.text import _vocal_activity_regions, tokenize
 from AI.models import PitchFrame
 from AI.notes import hz_to_midi
 from AI.service import AICoreService, get_ai_service
+
 from app.utils.json_files import read_json, write_json
 
 ProgressCallback = Callable[[str, float, str], None]
@@ -239,6 +240,18 @@ def _source_line_boundaries(text: str, words: list[dict[str, Any]]) -> list[int]
     return boundaries
 
 
+def _normalize_word(word: object) -> dict[str, Any] | None:
+    """Return a word dict with a trimmed token and clamped start/end, or None if empty."""
+    if not isinstance(word, dict):
+        return None
+    token = str(word.get("text") or word.get("word") or "").strip()
+    if not token:
+        return None
+    start = float(word.get("start") or 0.0)
+    end = max(start, float(word.get("end") or start))
+    return {**word, "word": token, "text": token, "start": start, "end": end}
+
+
 def _group_words_into_lines(
     words: list[dict[str, Any]], source_text: str = ""
 ) -> list[dict[str, Any]]:
@@ -248,14 +261,9 @@ def _group_words_into_lines(
 
     normalized_words: list[dict[str, Any]] = []
     for word in words:
-        if not isinstance(word, dict):
-            continue
-        token = str(word.get("text") or word.get("word") or "").strip()
-        if not token:
-            continue
-        start = float(word.get("start") or 0.0)
-        end = max(start, float(word.get("end") or start))
-        normalized_words.append({**word, "word": token, "text": token, "start": start, "end": end})
+        normalized = _normalize_word(word)
+        if normalized is not None:
+            normalized_words.append(normalized)
 
     boundaries = _source_line_boundaries(source_text, normalized_words)
     if boundaries:
@@ -272,14 +280,10 @@ def _group_words_into_lines(
     sentence_end = re.compile(r"[.!?…]+$")
 
     for word in words:
-        if not isinstance(word, dict):
+        item = _normalize_word(word)
+        if item is None:
             continue
-        token = str(word.get("text") or word.get("word") or "").strip()
-        if not token:
-            continue
-        start = float(word.get("start") or 0.0)
-        end = max(start, float(word.get("end") or start))
-        item = {**word, "word": token, "text": token, "start": start, "end": end}
+        token, start, end = item["word"], item["start"], item["end"]
 
         if current:
             gap = start - current[-1]["end"]
@@ -364,8 +368,8 @@ def _snap_lines_to_regions(
     return result
 
 
-def _snap_lines_to_vocals(lines: list[dict[str, Any]], output_dir: Path) -> list[dict[str, Any]]:
-    vocals = next(
+def _resolve_vocals_path(output_dir: Path) -> Path | None:
+    return next(
         (
             path
             for path in (
@@ -376,6 +380,10 @@ def _snap_lines_to_vocals(lines: list[dict[str, Any]], output_dir: Path) -> list
         ),
         None,
     )
+
+
+def _snap_lines_to_vocals(lines: list[dict[str, Any]], output_dir: Path) -> list[dict[str, Any]]:
+    vocals = _resolve_vocals_path(output_dir)
     if vocals is None:
         return lines
     try:
@@ -410,17 +418,7 @@ def _repair_impossible_alignment_chunks(
     lines: list[dict[str, Any]], output_dir: Path, maximum_words: int = 38
 ) -> list[dict[str, Any]]:
     """Repair only consecutive impossible lines, preserving valid neighbours."""
-    vocals = next(
-        (
-            path
-            for path in (
-                output_dir / "separated" / "vocals.flac",
-                output_dir / "separated" / "vocals.wav",
-            )
-            if path.is_file()
-        ),
-        None,
-    )
+    vocals = _resolve_vocals_path(output_dir)
     if vocals is None or not lines:
         return lines
     try:

@@ -18,17 +18,19 @@ import sys
 import threading
 import time
 import traceback
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
-import config
-import models
 from AI.cache import StageCache
 from AI.notes import NOTE_DECODER_VERSION
 from AI.pipeline import KaraokePipeline
 from AI.pitch_post import PITCH_STABILIZER_VERSION
 from AI.runtime import RuntimePlan, configure_runtime, format_runtime_plan
 from AI.version import AI_BUILD_ID
+from sqlalchemy.orm import Session
+
+import config
+import models
 from app import repositories
 from app.services import (
     ai_bridge,
@@ -398,6 +400,20 @@ def _progress_heartbeat(song_id: str, stop_event: threading.Event) -> None:
             )
 
 
+@contextlib.contextmanager
+def _song_session(song_id: str) -> Iterator[tuple[Session, models.Song | None]]:
+    """Open a short-lived DB session scoped to one song lookup.
+
+    Yields ``(db, song)`` where ``song`` is ``None`` when it no longer exists;
+    the session is always closed on exit, however the caller returns.
+    """
+    db = SessionLocal()
+    try:
+        yield db, repositories.get_song(db, song_id)
+    finally:
+        db.close()
+
+
 def _update_progress(
     song_id: str,
     step_label: str | None = None,
@@ -405,9 +421,7 @@ def _update_progress(
     status: models.SongStatus | None = None,
     error_message: str | None = None,
 ) -> None:
-    db = SessionLocal()
-    try:
-        song = repositories.get_song(db, song_id)
+    with _song_session(song_id) as (db, song):
         if song is None:
             return
         if step_label is not None:
@@ -419,8 +433,6 @@ def _update_progress(
         if error_message is not None:
             song.error_message = error_message
         commit(db)
-    finally:
-        db.close()
 
 
 def is_processing(song_id: str) -> bool:
@@ -519,9 +531,7 @@ def _is_cancelled(song_id: str) -> bool:
 
 
 def _load_job_paths(song_id: str) -> tuple[str, Path] | None:
-    db = SessionLocal()
-    try:
-        song = repositories.get_song(db, song_id)
+    with _song_session(song_id) as (_db, song):
         if song is None:
             return None
         stored_output = getattr(song, "output_dir", None)
@@ -530,8 +540,6 @@ def _load_job_paths(song_id: str) -> tuple[str, Path] | None:
         else:
             out_dir = config.SONG_OUTPUT_DIR / song.slug
         return song.source_path, out_dir
-    finally:
-        db.close()
 
 
 def _load_ai_inputs(song_id: str, out_dir: Path) -> tuple[Path | None, float | None, str | None]:
@@ -541,9 +549,7 @@ def _load_ai_inputs(song_id: str, out_dir: Path) -> tuple[Path | None, float | N
     re-detected BPM/key and rediscovered lyrics, so the note decoder could work
     from different inputs than the user had already corrected.
     """
-    db = SessionLocal()
-    try:
-        song = repositories.get_song(db, song_id)
+    with _song_session(song_id) as (_db, song):
         if song is None:
             return None, None, None
 
@@ -563,8 +569,6 @@ def _load_ai_inputs(song_id: str, out_dir: Path) -> tuple[Path | None, float | N
         bpm_override = float(tempo_value) if tempo_edited and tempo_value is not None else None
         key_override = str(key_value).strip() if key_edited and key_value else None
         return lyrics_path, bpm_override, key_override
-    finally:
-        db.close()
 
 
 def _load_searchable_title(song_id: str) -> str | None:
@@ -574,9 +578,7 @@ def _load_searchable_title(song_id: str) -> str | None:
     ``artist + title`` first, so a filename containing artist, title and a
     duplicate suffix becomes a clean artist/title query instead of one opaque filename.
     """
-    db = SessionLocal()
-    try:
-        song = repositories.get_song(db, song_id)
+    with _song_session(song_id) as (_db, song):
         if song is None:
             return None
         artist, title = song_service._read_source_identity(
@@ -585,8 +587,6 @@ def _load_searchable_title(song_id: str) -> str | None:
         if artist and title:
             return f"{artist} - {title}"
         return (title or artist or "").strip() or None
-    finally:
-        db.close()
 
 
 def _start_progress_heartbeat(song_id: str) -> tuple[threading.Event, threading.Thread]:
@@ -763,15 +763,11 @@ def _force_midi_rebuild(out_dir: Path) -> None:
 
 def _run_reprocessing(song_id: str) -> None:
     """Incrementally rebuild stale AI artefacts while retaining expensive stems."""
-    db = SessionLocal()
-    try:
-        song = repositories.get_song(db, song_id)
+    with _song_session(song_id) as (_db, song):
         if song is None:
             return
         out_dir = song_service.resolve_output_dir(song)
         optimized = bool(getattr(song, "optimized", False))
-    finally:
-        db.close()
     output_root = config.SONG_OUTPUT_DIR.resolve()
     target_dir = out_dir.resolve()
     if target_dir.parent != output_root:
@@ -837,9 +833,7 @@ def _apply_generated_metadata(song: models.Song, out_dir: Path) -> None:
 
 
 def _finalize_success(song_id: str, out_dir: Path) -> None:
-    db = SessionLocal()
-    try:
-        song = repositories.get_song(db, song_id)
+    with _song_session(song_id) as (db, song):
         if song is None:
             return
         song.output_dir = str(out_dir)
@@ -856,8 +850,6 @@ def _finalize_success(song_id: str, out_dir: Path) -> None:
         song.error_message = None
         commit(db)
         revision_cache.invalidate(song)
-    finally:
-        db.close()
 
     # Пост-обработка: перевод тяжёлых wav в mp3 + чистка временных файлов.
     # Не должна валить успешно завершённый пайплайн, если что-то пойдёт не так.

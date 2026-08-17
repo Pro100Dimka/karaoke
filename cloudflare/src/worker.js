@@ -190,8 +190,6 @@ export class KaraokeRoom {
       });
       return;
     }
-
-
   }
 
   async webSocketClose(socket, code, reason) {

@@ -169,18 +169,23 @@ def _estimate_tempo(librosa, percussive, sample_rate: int) -> tuple[float, float
     )
 
 
+def _default_music_analysis() -> dict[str, float | str | None | list]:
+    """Neutral result when librosa is unavailable or analysis fails outright."""
+    return {
+        "bpm": 120.0,
+        "raw_bpm": None,
+        "tempo_candidates": [],
+        "tempo_confidence": 0.0,
+        "key": None,
+        "key_confidence": 0.0,
+    }
+
+
 def analyze_music(path: str | Path) -> dict[str, float | str | None | list]:
     try:
         import librosa
     except ImportError:
-        return {
-            "bpm": 120.0,
-            "raw_bpm": None,
-            "tempo_candidates": [],
-            "tempo_confidence": 0.0,
-            "key": None,
-            "key_confidence": 0.0,
-        }
+        return _default_music_analysis()
     try:
         audio, sample_rate = load_mono(path, 22_050)
         if len(audio) < sample_rate:
@@ -189,14 +194,7 @@ def analyze_music(path: str | Path) -> dict[str, float | str | None | list]:
         bpm, tempo_confidence, tempo_diag = _estimate_tempo(librosa, percussive, sample_rate)
         key, key_confidence, key_diag = _estimate_key(librosa, harmonic, sample_rate)
     except (OSError, RuntimeError, ValueError, TypeError, FloatingPointError):
-        return {
-            "bpm": 120.0,
-            "raw_bpm": None,
-            "tempo_candidates": [],
-            "tempo_confidence": 0.0,
-            "key": None,
-            "key_confidence": 0.0,
-        }
+        return _default_music_analysis()
     value = int(round(min(300.0, max(30.0, bpm))))
     return {
         "bpm": value,

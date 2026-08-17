@@ -438,9 +438,9 @@ def test_revision_cache_avoids_rehash_until_semantic_state_changes(monkeypatch, 
     monkeypatch.setattr(song_package_service.config, "SONG_OUTPUT_DIR", tmp_path)
     current = song(source, output)
     song_package_service.invalidate_content_revision(current)
-    original = song_package_service._sha256_file
+    original = song_package_service.sha256_file
     hashed = Mock(side_effect=original)
-    monkeypatch.setattr(song_package_service, "_sha256_file", hashed)
+    monkeypatch.setattr(song_package_service, "sha256_file", hashed)
     first = song_package_service.content_revision(current)
     first_count = hashed.call_count
     assert song_package_service.content_revision(current) == first

@@ -9,6 +9,7 @@ from typing import Any
 
 from AI.midi import write_midi
 from AI.models import Syllable, VocalNote, Word
+
 from app.services.artifact_integrity import refresh_manifest_integrity
 from app.utils.json_files import read_json, write_json
 
@@ -288,6 +289,21 @@ def _publish_editor_generation(output_dir: Path, staging: Path, *, has_midi: boo
         shutil.rmtree(rollback, ignore_errors=True)
 
 
+def _stage_and_publish(
+    output_dir: Path, song_map: JsonObject, notes: list[JsonObject], manifest: Any
+) -> JsonObject:
+    """Write a new editor generation to a scratch dir, then publish it atomically."""
+    staging = Path(tempfile.mkdtemp(prefix="editor-stage-", dir=output_dir))
+    try:
+        _write_editor_generation(staging, song_map, notes, manifest)
+        _publish_editor_generation(
+            output_dir, staging, has_midi=bool(notes), has_manifest=isinstance(manifest, dict)
+        )
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+    return song_map
+
+
 def save_editor(output_dir: Path, raw_notes: list[JsonObject]) -> JsonObject:
     output_dir = Path(output_dir)
     song_map, _ = load_editor(output_dir)
@@ -306,13 +322,8 @@ def save_editor(output_dir: Path, raw_notes: list[JsonObject]) -> JsonObject:
     manifest: Any = read_json(output_dir / "manifest.json", default={})
     if isinstance(manifest, dict):
         manifest["manual_editor"] = {"edited": True, "note_count": len(notes)}
-    staging = Path(tempfile.mkdtemp(prefix="editor-stage-", dir=output_dir))
-    try:
-        _write_editor_generation(staging, song_map, notes, manifest)
-        _publish_editor_generation(output_dir, staging, has_midi=bool(notes), has_manifest=isinstance(manifest, dict))
-    finally:
-        shutil.rmtree(staging, ignore_errors=True)
-    return song_map
+    return _stage_and_publish(output_dir, song_map, notes, manifest)
+
 
 def reset_editor(output_dir: Path) -> JsonObject:
     output_dir = Path(output_dir)
@@ -328,11 +339,5 @@ def reset_editor(output_dir: Path) -> JsonObject:
     manifest: Any = read_json(output_dir / "manifest.json", default={})
     if isinstance(manifest, dict):
         manifest["manual_editor"] = {"edited": False, "restored_ai": True, "note_count": len(notes)}
-    staging = Path(tempfile.mkdtemp(prefix="editor-stage-", dir=output_dir))
-    try:
-        _write_editor_generation(staging, song_map, notes, manifest)
-        _publish_editor_generation(output_dir, staging, has_midi=bool(notes), has_manifest=isinstance(manifest, dict))
-    finally:
-        shutil.rmtree(staging, ignore_errors=True)
-    return song_map
+    return _stage_and_publish(output_dir, song_map, notes, manifest)
 

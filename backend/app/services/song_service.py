@@ -314,6 +314,13 @@ def _song_input(title: str, original_filename: str) -> tuple[str, str, str]:
     return clean_title, safe_original_name, extension
 
 
+def _commit_song(db: Session, song: models.Song) -> models.Song:
+    """Commit, refresh, and invalidate the cached content revision."""
+    saved = commit_refresh(db, song)
+    revision_cache.invalidate(saved)
+    return saved
+
+
 def _persist_song(
     db: Session,
     *,
@@ -346,9 +353,7 @@ def _persist_song(
         )
         db.add(song)
         try:
-            saved = commit_refresh(db, song)
-            revision_cache.invalidate(saved)
-            return saved
+            return _commit_song(db, song)
         except Exception:
             destination.unlink(missing_ok=True)
             for cover in output_dir.glob("cover.*"):
@@ -432,9 +437,7 @@ def update_song(db: Session, song: models.Song, patch: schemas.SongUpdate) -> mo
         if "tempo_override" in changes:
             song.tempo_user_edited = changes["tempo_override"] is not None
         try:
-            saved = commit_refresh(db, song)
-            revision_cache.invalidate(saved)
-            return saved
+            return _commit_song(db, song)
         except Exception:
             for field, value in previous.items():
                 setattr(song, field, value)

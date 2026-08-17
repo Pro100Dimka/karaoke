@@ -12,6 +12,7 @@ import tempfile
 import unicodedata
 import wave
 import zipfile
+from collections.abc import Iterator
 from pathlib import Path, PurePosixPath
 from uuid import uuid4
 
@@ -22,6 +23,7 @@ import models
 from app.services import revision_cache, song_artifacts, song_service
 from app.services.db_utils import commit_refresh
 from app.utils.atomic_files import atomic_write
+from app.utils.hashing import sha256_file, sha256_stream
 from app.utils.json_files import read_json, write_json
 from database import SessionLocal
 
@@ -42,14 +44,6 @@ REVISION_SCHEMA_VERSION = 3
 _WINDOWS_RESERVED_NAMES = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 _SKIPPED_DIRS = {config.LOGS_DIRNAME, config.RECORDINGS_DIRNAME}
 _IMPORT_JOURNAL_PREFIX = ".room-import-journal-"
-
-
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        while chunk := stream.read(1024 * 1024):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _processing_manifest(root: Path) -> dict[str, object]:
@@ -138,14 +132,14 @@ def _revision_payload(song: models.Song) -> dict[str, object]:
         path = root / relative
         if not path.is_file():
             raise ValueError(f"Song artifact is missing: {relative}")
-        artifacts[relative] = _sha256_file(path)
+        artifacts[relative] = sha256_file(path)
     if not source.is_file():
         raise ValueError("Song source is missing")
     mode = _song_mode_from_files(root)
     return {
         "revision_schema": REVISION_SCHEMA_VERSION,
         "artifacts": artifacts,
-        "source_sha256": _sha256_file(source),
+        "source_sha256": sha256_file(source),
         "runtime": _runtime_revision_state(song, mode=mode),
         "entity": _entity_revision_state(song),
         "processing_build": _processing_build_identity(root),
@@ -208,12 +202,19 @@ def _fresh_song(db: Session, song_id: str) -> models.Song:
     return song
 
 
-def content_revision_for_song(db: Session, song_id: str) -> str:
-    """Fingerprint the latest committed DB/runtime state under the snapshot locks."""
+@contextlib.contextmanager
+def _locked_done_song(db: Session, song_id: str) -> Iterator[models.Song]:
+    """Hold the per-song snapshot locks while yielding a fresh, fully-processed song."""
     with song_service.song_content_lock(song_id), song_service.library_write_lock():
         song = _fresh_song(db, song_id)
         if song.status != models.SongStatus.DONE:
             raise ValueError("Song processing is not complete")
+        yield song
+
+
+def content_revision_for_song(db: Session, song_id: str) -> str:
+    """Fingerprint the latest committed DB/runtime state under the snapshot locks."""
+    with _locked_done_song(db, song_id) as song:
         return content_revision(song)
 
 
@@ -221,10 +222,7 @@ def build_package_for_song(
     db: Session, song_id: str, *, expected_revision: str | None = None,
 ) -> tuple[Path, str]:
     """Export only from a fresh ORM snapshot loaded after acquiring the content locks."""
-    with song_service.song_content_lock(song_id), song_service.library_write_lock():
-        song = _fresh_song(db, song_id)
-        if song.status != models.SongStatus.DONE:
-            raise ValueError("Song processing is not complete")
+    with _locked_done_song(db, song_id) as song:
         return build_package(song, expected_revision=expected_revision), song.slug
 
 def invalidate_content_revision(song: models.Song) -> None:
@@ -414,10 +412,15 @@ def _archive_json(archive: zipfile.ZipFile, name: str, *, max_bytes: int = MAX_M
         raise ValueError(f"Song package artifact is invalid JSON: {name}") from exc
 
 
-def _archive_processing_build_identity(archive: zipfile.ZipFile) -> str:
+def _archive_processing_manifest(archive: zipfile.ZipFile, *, require_outputs: bool = False) -> dict:
     payload = _archive_json(archive, "output/manifest.json")
-    if not isinstance(payload, dict):
+    if not isinstance(payload, dict) or (require_outputs and not isinstance(payload.get("outputs"), dict)):
         raise ValueError("Song package processing manifest is invalid")
+    return payload
+
+
+def _archive_processing_build_identity(archive: zipfile.ZipFile) -> str:
+    payload = _archive_processing_manifest(archive)
     build = payload.get("build") or payload.get("version")
     if not isinstance(build, str) or not build.strip():
         raise ValueError("Song package processing build identifier is invalid")
@@ -425,9 +428,7 @@ def _archive_processing_build_identity(archive: zipfile.ZipFile) -> str:
 
 
 def _archive_revision(archive: zipfile.ZipFile, manifest: dict[str, object]) -> str:
-    processing = _archive_json(archive, "output/manifest.json")
-    if not isinstance(processing, dict) or not isinstance(processing.get("outputs"), dict):
-        raise ValueError("Song package processing manifest is invalid")
+    processing = _archive_processing_manifest(archive, require_outputs=True)
     instrumental = _safe_output_relative(processing["outputs"].get("instrumental"), key="instrumental")
     artifacts: dict[str, str] = {}
     for relative in (*REVISION_ARTIFACTS, instrumental):
@@ -436,18 +437,13 @@ def _archive_revision(archive: zipfile.ZipFile, manifest: dict[str, object]) -> 
             info = archive.getinfo(name)
         except KeyError as exc:
             raise ValueError(f"Song package is missing revision artifact: {name}") from exc
-        digest = hashlib.sha256()
         with archive.open(info) as stream:
-            while chunk := stream.read(1024 * 1024):
-                digest.update(chunk)
-        artifacts[relative] = digest.hexdigest()
+            artifacts[relative] = sha256_stream(stream)
     mode = str(manifest.get("karaoke_mode") or "")
     runtime = _canonical_runtime_state({field: manifest.get(field) for field in REVISION_RUNTIME_FIELDS}, mode)
     source = _source_member(archive.infolist())
-    source_digest = hashlib.sha256()
     with archive.open(source) as stream:
-        while chunk := stream.read(1024 * 1024):
-            source_digest.update(chunk)
+        source_sha256 = sha256_stream(stream)
     entity = _canonical_entity_state(
         {field: manifest.get(field) for field in REVISION_ENTITY_FIELDS},
         source_name=_member_path(source).name,
@@ -455,7 +451,7 @@ def _archive_revision(archive: zipfile.ZipFile, manifest: dict[str, object]) -> 
     return _hash_revision_payload({
         "revision_schema": REVISION_SCHEMA_VERSION,
         "artifacts": artifacts,
-        "source_sha256": source_digest.hexdigest(),
+        "source_sha256": source_sha256,
         "runtime": runtime,
         "entity": entity,
         "processing_build": _archive_processing_build_identity(archive),
@@ -563,9 +559,7 @@ def _validate_source_audio(archive: zipfile.ZipFile, member: zipfile.ZipInfo) ->
 
 
 def _instrumental_member(archive: zipfile.ZipFile) -> zipfile.ZipInfo:
-    processing = _archive_json(archive, "output/manifest.json")
-    if not isinstance(processing, dict) or not isinstance(processing.get("outputs"), dict):
-        raise ValueError("Song package processing manifest is invalid")
+    processing = _archive_processing_manifest(archive, require_outputs=True)
     relative = _safe_output_relative(processing["outputs"].get("instrumental"), key="instrumental")
     try:
         return archive.getinfo(f"output/{relative}")
@@ -574,9 +568,7 @@ def _instrumental_member(archive: zipfile.ZipFile) -> zipfile.ZipInfo:
 
 
 def _validate_processing_manifest(archive: zipfile.ZipFile, files: set[str]) -> None:
-    pipeline_manifest = _archive_json(archive, "output/manifest.json")
-    if not isinstance(pipeline_manifest, dict) or not isinstance(pipeline_manifest.get("outputs"), dict):
-        raise ValueError("Song package processing manifest is invalid")
+    pipeline_manifest = _archive_processing_manifest(archive, require_outputs=True)
     outputs = pipeline_manifest["outputs"]
     if not REQUIRED_OUTPUT_KEYS.issubset(outputs):
         raise ValueError("Song package processing manifest is incomplete")
@@ -591,12 +583,9 @@ def _validate_processing_manifest(archive: zipfile.ZipFile, files: set[str]) -> 
         expected = integrity.get(key) if isinstance(integrity, dict) else None
         if not (isinstance(expected, dict) and isinstance(expected.get("sha256"), str)):
             continue
-        digest = hashlib.sha256()
         with archive.open(f"output/{relative}") as stream:
-            while chunk := stream.read(1024 * 1024):
-                digest.update(chunk)
-        if digest.hexdigest() != expected["sha256"]:
-            raise ValueError(f"Song package artifact checksum mismatch: {key}")
+            if sha256_stream(stream) != expected["sha256"]:
+                raise ValueError(f"Song package artifact checksum mismatch: {key}")
 
 
 def _validate_timeline_artifacts(archive: zipfile.ZipFile, mode: object) -> None:

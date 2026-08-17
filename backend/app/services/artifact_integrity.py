@@ -2,18 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        while chunk := stream.read(1024 * 1024):
-            digest.update(chunk)
-    return digest.hexdigest()
+from app.utils.hashing import sha256_file
 
 
 def refresh_manifest_integrity(
@@ -46,4 +39,4 @@ def refresh_manifest_integrity(
                 outputs.pop(key, None)
                 integrity.pop(key, None)
             continue
-        integrity[key] = {"size": artifact.stat().st_size, "sha256": _sha256(artifact)}
+        integrity[key] = {"size": artifact.stat().st_size, "sha256": sha256_file(artifact)}

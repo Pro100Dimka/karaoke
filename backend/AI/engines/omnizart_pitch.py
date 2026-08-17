@@ -65,6 +65,15 @@ def _centers(lowest, highest, bins_per_octave):
     ]
 
 
+def _triangular_weight(frequency, centers, index):
+    """Triangular filter weight of one source bin against filter ``index``."""
+    if centers[index - 1] < frequency < centers[index]:
+        return (frequency - centers[index - 1]) / (centers[index] - centers[index - 1])
+    if centers[index] < frequency < centers[index + 1]:
+        return (centers[index + 1] - frequency) / (centers[index + 1] - centers[index])
+    return 0.0
+
+
 def _frequency_mapping(values, frequencies, resolution, centers):
     transform = np.zeros((len(centers) - 1, len(frequencies)), dtype=float)
     for index in range(1, len(centers) - 1):
@@ -74,15 +83,7 @@ def _frequency_mapping(values, frequencies, resolution, centers):
             transform[index, left] = 1
             continue
         for source in range(left, right):
-            frequency = frequencies[source]
-            if centers[index - 1] < frequency < centers[index]:
-                transform[index, source] = (frequency - centers[index - 1]) / (
-                    centers[index] - centers[index - 1]
-                )
-            elif centers[index] < frequency < centers[index + 1]:
-                transform[index, source] = (centers[index + 1] - frequency) / (
-                    centers[index + 1] - centers[index]
-                )
+            transform[index, source] = _triangular_weight(frequencies[source], centers, index)
     return transform @ values
 
 
@@ -94,15 +95,7 @@ def _quefrency_mapping(values, sample_rate, centers):
         left = int(round(sample_rate / centers[index + 1]))
         right = int(round(sample_rate / centers[index - 1]) + 1)
         for source in range(left, min(right, len(frequencies))):
-            frequency = frequencies[source]
-            if centers[index - 1] < frequency < centers[index]:
-                transform[index, source] = (frequency - centers[index - 1]) / (
-                    centers[index] - centers[index - 1]
-                )
-            elif centers[index] < frequency < centers[index + 1]:
-                transform[index, source] = (centers[index + 1] - frequency) / (
-                    centers[index + 1] - centers[index]
-                )
+            transform[index, source] = _triangular_weight(frequencies[source], centers, index)
     return transform @ values
 
 

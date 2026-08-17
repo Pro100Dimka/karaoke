@@ -70,6 +70,11 @@ class LyricsSearchCandidate:
     track: str = ""
 
 
+def _attrs(attrs) -> dict[str, str]:
+    """Normalize an HTMLParser attribute list into a plain str->str dict."""
+    return {str(key): str(value or "") for key, value in attrs}
+
+
 class _SearchFormHTMLParser(HTMLParser):
     """Discover a simple site-search form without depending on site-specific JS."""
 
@@ -78,12 +83,8 @@ class _SearchFormHTMLParser(HTMLParser):
         self.forms: list[dict[str, object]] = []
         self.current: dict[str, object] | None = None
 
-    @staticmethod
-    def _attrs(attrs) -> dict[str, str]:
-        return {str(key): str(value or "") for key, value in attrs}
-
     def handle_starttag(self, tag: str, attrs) -> None:
-        values = self._attrs(attrs)
+        values = _attrs(attrs)
         if tag == "form":
             self.current = {
                 "action": values.get("action", ""),
@@ -123,7 +124,7 @@ class _AnchorHTMLParser(HTMLParser):
     def handle_starttag(self, tag: str, attrs) -> None:
         if tag != "a":
             return
-        values = {str(key): str(value or "") for key, value in attrs}
+        values = _attrs(attrs)
         self.href = values.get("href", "")
         self.buffer = []
 
@@ -152,12 +153,10 @@ class _LyricsHTMLParser(HTMLParser):
         self.lines: list[str] = []
         self.buffer: list[str] = []
 
-    @staticmethod
-    def _attrs(attrs) -> dict[str, str]:
-        return {str(key): str(value or "") for key, value in attrs}
+    _attrs = staticmethod(_attrs)
 
     def handle_starttag(self, tag: str, attrs) -> None:
-        values = self._attrs(attrs)
+        values = _attrs(attrs)
         classes = set(values.get("class", "").split())
         if self.mode is None and tag == "td" and "lyrics-cell" in classes:
             self.mode = "cell"

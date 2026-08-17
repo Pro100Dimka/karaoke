@@ -175,6 +175,14 @@ def _word_spans_from_ctc(
     return result, float(sum(all_scores) / max(1, len(all_scores)))
 
 
+def _word_values(words: list[Word]) -> list[dict[str, float | str]]:
+    """Serialize aligned words for shadow-comparison diagnostics."""
+    return [
+        {"text": word.text, "start": word.start, "end": word.end, "confidence": word.confidence}
+        for word in words
+    ]
+
+
 class CTCWordAligner:
     """Multilingual acoustic word aligner for trusted lyrics.
 
@@ -563,24 +571,8 @@ class CTCWordAligner:
             record["shadow_confidence"] = confidence
             record["production_words"] = len(production)
             record["shadow_words"] = len(shadow_words)
-            record["production_word_values"] = [
-                {
-                    "text": word.text,
-                    "start": word.start,
-                    "end": word.end,
-                    "confidence": word.confidence,
-                }
-                for word in production
-            ]
-            record["shadow_word_values"] = [
-                {
-                    "text": word.text,
-                    "start": word.start,
-                    "end": word.end,
-                    "confidence": word.confidence,
-                }
-                for word in shadow_words
-            ]
+            record["production_word_values"] = _word_values(production)
+            record["shadow_word_values"] = _word_values(shadow_words)
             if len(production) != len(shadow_words):
                 record["word_timing_status"] = "count-mismatch"
                 return

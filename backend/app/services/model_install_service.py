@@ -6,10 +6,11 @@ import logging
 import threading
 from pathlib import Path
 
-import config
 from AI.errors import ProcessingCancelledError
 from AI.install_models import ProgressReporter, install_one, is_valid
 from AI.model_registry import MODELS
+
+import config
 
 logger = logging.getLogger(__name__)
 
@@ -83,34 +84,57 @@ def _set_state(**changes: str | None) -> None:
         _state.update(changes)
 
 
+def _install_missing_models(
+    models_root: Path,
+    cache_dir: Path,
+    reporter: ProgressReporter,
+    *,
+    verification_failure_message: str,
+    log_repairs: bool,
+) -> None:
+    """Install every model that fails verification, then activate the runtime.
+
+    Shared by the background download worker and the synchronous pre-processing
+    repair path; only logging and the verification-failure message differ.
+    """
+    for model in MODELS:
+        if is_valid(models_root, model):
+            reporter.model_finished(model.name)
+            continue
+        if log_repairs:
+            logger.warning("Repairing incomplete AI model before processing: %s", model.name)
+        _set_state(current_model=model.name)
+        reporter.model_started(model.name)
+        install_one(models_root, cache_dir, model, retries=3)
+        reporter.model_finished(model.name)
+
+    if not all(is_valid(models_root, model) for model in MODELS):
+        raise RuntimeError(verification_failure_message)
+    config.configure_ai_resource_environment(force=True)
+    from AI.service import reset_ai_service
+
+    reset_ai_service()
+
+
 def _download_worker(models_root: Path, cache_dir: Path) -> None:
     reporter = ProgressReporter(models_root, config.APP_LOG_DIR / "model-recovery-progress.txt")
     reporter.start()
     try:
         models_root.mkdir(parents=True, exist_ok=True)
         cache_dir.mkdir(parents=True, exist_ok=True)
-        for model in MODELS:
-            if is_valid(models_root, model):
-                reporter.model_finished(model.name)
-                continue
-            _set_state(current_model=model.name)
-            reporter.model_started(model.name)
-            install_one(models_root, cache_dir, model, retries=3)
-            reporter.model_finished(model.name)
-
-        if not all(is_valid(models_root, model) for model in MODELS):
-            raise RuntimeError("Model verification failed after download")
-        config.configure_ai_resource_environment(force=True)
-        from AI.service import reset_ai_service
-
-        reset_ai_service()
+        _install_missing_models(
+            models_root,
+            cache_dir,
+            reporter,
+            verification_failure_message="Model verification failed after download",
+            log_repairs=False,
+        )
         reporter.finish(True)
         _set_state(state="ready", current_model=None, error=None)
     except Exception as exc:
         reporter.finish(False)
         logger.exception("AI model recovery failed")
         _set_state(state="error", current_model=None, error=str(exc)[:2000])
-
 
 
 def ensure_ready_sync(cancelled=None) -> dict[str, object]:
@@ -139,22 +163,13 @@ def ensure_ready_sync(cancelled=None) -> dict[str, object]:
     try:
         models_root.mkdir(parents=True, exist_ok=True)
         cache_dir.mkdir(parents=True, exist_ok=True)
-        for model in MODELS:
-            if is_valid(models_root, model):
-                reporter.model_finished(model.name)
-                continue
-            logger.warning("Repairing incomplete AI model before processing: %s", model.name)
-            _set_state(current_model=model.name)
-            reporter.model_started(model.name)
-            install_one(models_root, cache_dir, model, retries=3)
-            reporter.model_finished(model.name)
-
-        if not all(is_valid(models_root, model) for model in MODELS):
-            raise RuntimeError("Model verification failed after recovery")
-        config.configure_ai_resource_environment(force=True)
-        from AI.service import reset_ai_service
-
-        reset_ai_service()
+        _install_missing_models(
+            models_root,
+            cache_dir,
+            reporter,
+            verification_failure_message="Model verification failed after recovery",
+            log_repairs=True,
+        )
         reporter.finish(True)
         _set_state(state="ready", current_model=None, error=None)
         return status()

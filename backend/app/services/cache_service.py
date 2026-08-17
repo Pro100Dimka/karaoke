@@ -23,47 +23,26 @@ _HEAVY_KEEP_AS_MP3 = ("song.wav",)
 _LOSSLESS_STEMS = ("separated/vocals.wav", "separated/instrumental.wav")
 
 
+def _run_ffmpeg_transcode(wav_path: Path, output_path: Path, *codec_args: str) -> None:
+    subprocess.run(
+        [config.FFMPEG_EXE, "-y", "-i", str(wav_path), *codec_args, str(output_path)],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+
+
 def _encode_mp3(wav_path: Path, mp3_path: Path) -> None:
     """AI/src/build/convert.py умеет писать только PCM (wav) — его convert()
     жёстко ставит pcm_s16le/pcm_s24le кодек независимо от расширения
     выходного файла, так что для сжатия в mp3 здесь отдельный, прямой вызов
     ffmpeg с libmp3lame."""
-    subprocess.run(
-        [
-            config.FFMPEG_EXE,
-            "-y",
-            "-i",
-            str(wav_path),
-            "-codec:a",
-            "libmp3lame",
-            "-b:a",
-            "320k",
-            str(mp3_path),
-        ],
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
-    )
+    _run_ffmpeg_transcode(wav_path, mp3_path, "-codec:a", "libmp3lame", "-b:a", "320k")
 
 
 def _encode_flac(wav_path: Path, flac_path: Path) -> None:
     """Compress AI stems losslessly so they remain a reusable processing cache."""
-    subprocess.run(
-        [
-            config.FFMPEG_EXE,
-            "-y",
-            "-i",
-            str(wav_path),
-            "-codec:a",
-            "flac",
-            "-compression_level",
-            "5",
-            str(flac_path),
-        ],
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
-    )
+    _run_ffmpeg_transcode(wav_path, flac_path, "-codec:a", "flac", "-compression_level", "5")
 
 
 
