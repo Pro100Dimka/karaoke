@@ -67,3 +67,4 @@ backend/*.spec
 .DS_Store
 Thumbs.db
 Desktop.ini
+*zip
