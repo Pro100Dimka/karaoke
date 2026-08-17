@@ -48,8 +48,11 @@ test("newer open-karaoke command wins when older lookup resolves last", async ()
   await flush();
   h.lookups.get("A").resolve({ revision: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" });
   await flush();
-  expect(h.setRoomCommand).toHaveBeenCalledTimes(1);
-  expect(h.setRoomCommand.mock.calls[0][0]).toMatchObject({ songId: "B", commandId: "cmd-B" });
+  expect(h.setRoomCommand).not.toHaveBeenCalled();
+  expect(h.client.send).toHaveBeenCalledTimes(1);
+  expect(h.client.send).toHaveBeenCalledWith("sync", {
+    state: expect.objectContaining({ type: "song-ready", songId: "B", commandId: "cmd-B" })
+  });
 });
 
 test("stale lookup failure never requests superseded song", async () => {
@@ -62,7 +65,10 @@ test("stale lookup failure never requests superseded song", async () => {
   await flush();
   h.lookups.get("A").reject(new Error("missing"));
   await flush();
-  expect(h.client.send).not.toHaveBeenCalled();
+  expect(h.client.send).toHaveBeenCalledTimes(1);
+  expect(h.client.send).toHaveBeenCalledWith("sync", {
+    state: expect.objectContaining({ type: "song-ready", songId: "B", commandId: "cmd-B" })
+  });
 });
 
 test("stale song-transfer-error cannot clear newer pending command", () => {

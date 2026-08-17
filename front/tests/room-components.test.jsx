@@ -61,7 +61,9 @@ beforeEach(() => {
     isPlaying: false,
     stationId: "one",
     stations: [{ id: "one" }, { id: "two" }],
+    volume: 0.1,
     setStation: vi.fn(),
+    setVolume: vi.fn(),
     turnOff: vi.fn(),
     turnOn: vi.fn().mockResolvedValue(true)
   };
@@ -290,7 +292,7 @@ describe("room radio synchronization", () => {
   test("broadcasts local radio state", () => {
     render(<RoomRadioSync />);
     expect(mocks.roomValue.syncUi).toHaveBeenCalledWith({
-      radio: { isPlaying: false, stationId: "one" }
+      radio: { isPlaying: false, stationId: "one", volume: 0.1 }
     });
   });
 

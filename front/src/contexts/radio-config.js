@@ -41,6 +41,6 @@ export const RADIO_STATIONS = [
 
 export const DEFAULT_RADIO_SETTINGS = Object.freeze({
   stationId: "poptron",
-  volume: 0.45,
+  volume: 0.1,
   enabled: true
 });

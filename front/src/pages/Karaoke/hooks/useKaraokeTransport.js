@@ -118,6 +118,15 @@ export default function useKaraokeTransport({
       onlineRoom.syncCommand(createPlayerSyncCommand(action, song.id, position));
   };
 
+  useEffect(() => {
+    if (!onlineRoom?.room?.host || !isPlaying || !song?.id) return undefined;
+    const timer = globalThis.setInterval(() => {
+      const position = instrumentalRef.current?.currentTime;
+      if (Number.isFinite(position)) broadcast("sync", position);
+    }, 1000);
+    return () => globalThis.clearInterval(timer);
+  }, [instrumentalRef, isPlaying, onlineRoom?.room?.host, song?.id]);
+
   const pauseMedia = () => {
     instrumentalRef.current?.pause();
     vocalsRef.current?.pause();

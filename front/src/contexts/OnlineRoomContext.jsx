@@ -27,6 +27,7 @@ export function OnlineRoomProvider({ children }) {
   const roomRef = useRef(null);
   const mutedPeopleRef = useRef(new Set());
   const roomSoundMutedRef = useRef(OFF);
+  const participantVolumesRef = useRef({});
   const intentionalDisconnectRef = useRef(OFF);
   const pendingSongCommandRef = useRef(null);
   const hostSongCommandRef = useRef(null);
@@ -44,6 +45,7 @@ export function OnlineRoomProvider({ children }) {
   }, []);
   const [mutedPeople, setMutedPeople] = useState(() => new Set());
   const [effectPeople, setEffectPeople] = useState(() => new Set());
+  const [participantVolumes, setParticipantVolumes] = useState({});
   const [microphoneMuted, setMicrophoneMutedState] = useState(OFF);
   const [roomSoundMuted, setRoomSoundMutedState] = useState(OFF);
   const [roomUi, setRoomUi] = useState({});
@@ -93,12 +95,14 @@ export function OnlineRoomProvider({ children }) {
     attachRemoteStream,
     removeAllRemoteAudio,
     removeRemoteAudio,
+    setParticipantVolume: applyParticipantVolume,
     setLocalMonitoring,
     stopLocalMonitoring
   } = useOnlineRoomAudio({
     mutedPeopleRef,
     roomSoundMutedRef,
     roomUiRef,
+    participantVolumesRef,
     startSpeakingMeter,
     stopSpeakingMeter,
     voiceRef
@@ -188,6 +192,8 @@ export function OnlineRoomProvider({ children }) {
       mutedPeopleRef.current = new Set();
       setMutedPeople(new Set());
       setEffectPeople(new Set());
+      participantVolumesRef.current = {};
+      setParticipantVolumes({});
       roomSoundMutedRef.current = OFF;
       setRoomSoundMutedState(OFF);
       microphoneMutedRef.current = OFF;
@@ -295,7 +301,6 @@ export function OnlineRoomProvider({ children }) {
             pendingSongCommandRef.current?.commandId !== metadata.commandId
           )
             return false;
-          pendingSongCommandRef.current = null;
           setTransferStatus({
             participantId,
             commandId: metadata.commandId,
@@ -306,19 +311,14 @@ export function OnlineRoomProvider({ children }) {
             pendingCommand?.commandId === metadata.commandId &&
             pendingCommand.songId === metadata.songId
           ) {
-            if (pendingCommand.__originatedHere) {
-              client.send("sync", {
-                state: {
-                  type: "open-karaoke",
-                  songId: pendingCommand.songId,
-                  commandId: pendingCommand.commandId,
-                  revision: pendingCommand.revision
-                }
-              });
-            }
-            setRoomCommand({
-              ...pendingCommand,
-              __eventId: `import-${Date.now()}-${Math.random()}`
+            client.send("sync", {
+              state: {
+                type: "song-ready",
+                commandId: pendingCommand.commandId,
+                songId: pendingCommand.songId,
+                revision: pendingCommand.revision,
+                requesterId: roomRef.current?.selfId
+              }
             });
           }
           return true;
@@ -463,6 +463,17 @@ export function OnlineRoomProvider({ children }) {
     // Stryker disable next-line ArrayDeclaration: applyRemoteAudioMute is stable.
     [applyRemoteAudioMute]
   );
+
+  const setParticipantVolume = useCallback(
+    (id, value) => {
+      const nextValue = Math.max(0, Math.min(1, Number(value) || 0));
+      participantVolumesRef.current = { ...participantVolumesRef.current, [id]: nextValue };
+      setParticipantVolumes((current) => ({ ...current, [id]: nextValue }));
+      applyParticipantVolume(id, nextValue);
+    },
+    [applyParticipantVolume]
+  );
+
   const togglePersonEffects = useCallback(
     (id) => {
       setEffectPeople((items) => {
@@ -489,6 +500,7 @@ export function OnlineRoomProvider({ children }) {
     clientRef,
     connectionTokenRef,
     hostSongCommandRef,
+    participantsRef,
     roomRef,
     voiceRef
   });
@@ -502,6 +514,7 @@ export function OnlineRoomProvider({ children }) {
     mutedPeople,
     openKaraoke,
     participants,
+    participantVolumes,
     requestMicrophoneAccess,
     room,
     roomCommand,
@@ -509,6 +522,7 @@ export function OnlineRoomProvider({ children }) {
     roomUi,
     setLocalMonitoring,
     setMicrophoneMuted,
+    setParticipantVolume,
     setRoomSoundMuted,
     speakingLevels,
     syncCommand,

@@ -86,7 +86,7 @@ describe("radio context", () => {
   });
 
   test("normalizes settings and classifies autoplay failures", () => {
-    expect(normalizeRadioSettings()).toEqual({ enabled: true, stationId: "poptron", volume: 0.45 });
+    expect(normalizeRadioSettings()).toEqual({ enabled: true, stationId: "poptron", volume: 0.1 });
     expect( normalizeRadioSettings({ stationId: "indiepop", volume: -1, enabled: false })
     ).toEqual({ enabled: false, stationId: "indiepop", volume: 0 });
     expect(isAutoplayBlocked({ name: "NotAllowedError" })).toBe(true);
@@ -162,7 +162,7 @@ describe("radio context", () => {
     cleanup();
     store({ stationId: "poptron", volume: "bad", enabled: false });
     const fallback = renderHook(() => useRadio(), { wrapper });
-    expect(fallback.result.current.volume).toBe(0.45);
+    expect(fallback.result.current.volume).toBe(0.1);
     expect(fallback.result.current.isPlaying).toBe(false);
     expect(fallback.result.current.isLoading).toBe(false);
     expect(fallback.result.current.error).toBe("");
@@ -224,7 +224,7 @@ describe("radio context", () => {
     act(() => { pending = hook.result.current.turnOn({ remember: false }); });
     expect(hook.result.current.error).toBe("");
     expect(hook.result.current.isLoading).toBe(true);
-    expect(document.querySelector("audio").volume).toBe(0.45);
+    expect(document.querySelector("audio").volume).toBe(0.1);
     resolvePlay();
     await act(async () => expect(await pending).toBe(true));
     expect(analyser.getByteFrequencyData).toHaveBeenCalledTimes(1);
@@ -296,7 +296,7 @@ describe("radio context", () => {
       expect.objectContaining({ volume: 1 })
     );
     act(() => hook.result.current.setVolume("bad"));
-    expect(hook.result.current.volume).toBe(0.45);
+    expect(hook.result.current.volume).toBe(0.1);
     act(() => hook.result.current.setStation("unknown"));
     expect(hook.result.current.stationId).toBe("poptron");
     mocks.updateUiPreferences.mockClear();

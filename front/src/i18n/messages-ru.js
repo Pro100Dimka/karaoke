@@ -59,6 +59,7 @@ export const ruMessages = {
   "room.person.speakingNow": "Сейчас говорит",
   "room.person.noSignal": "Нет голосового сигнала",
   "room.person.effects.enable": "Слушать эффекты {name}",
+  "room.person.volume": "Громкость {name}",
   "room.person.effects.disable": "Не применять эффекты {name}",
   "room.leave": "Выйти из комнаты",
   "status.pending": "Ожидание",

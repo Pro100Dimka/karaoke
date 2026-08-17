@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   getSongEditor: vi.fn(),
   saveSongEditor: vi.fn(),
   resetSongEditor: vi.fn(),
+  getAudioTrackBlob: vi.fn(),
   persist: vi.fn(),
   notify: vi.fn(),
   confirm: vi.fn()
@@ -16,7 +17,7 @@ vi.mock("../src/api/client", () => ({
     getSongEditor: mocks.getSongEditor,
     saveSongEditor: mocks.saveSongEditor,
     resetSongEditor: mocks.resetSongEditor,
-    getAudioTrackUrl: (id, kind) => `${id}-${kind}`
+    getAudioTrackBlob: mocks.getAudioTrackBlob
   }
 }));
 vi.mock("../src/contexts/AppDialog", () => ({
@@ -122,6 +123,7 @@ class FakeAudioContext {
 }
 
 beforeEach(() => {
+  mocks.getAudioTrackBlob.mockReset().mockResolvedValue(new Blob(["audio"], { type: "audio/wav" }));
   mocks.getSongEditor.mockReset().mockResolvedValue(payload);
   mocks.saveSongEditor.mockReset().mockResolvedValue(payload);
   mocks.resetSongEditor.mockReset().mockResolvedValue(payload);

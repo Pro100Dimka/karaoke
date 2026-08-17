@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../../../api/client";
 import { useAppDialog } from "../../../../contexts/AppDialog";
 import { translateSaved } from "../../../../i18n/runtime";
@@ -15,6 +15,32 @@ import useMelodyEditorTransport from "./useMelodyEditorTransport";
 export default function MelodyEditor({ song, onClose, onSaved }) {
   const { alert: notify, confirm: confirmDialog } = useAppDialog();
   const [selected, setSelected] = useState([]);
+  const [audioUrls, setAudioUrls] = useState({ vocals: "", instrumental: "" });
+  useEffect(() => {
+    let alive = true;
+    const urls = [];
+    const blobs = [];
+    Promise.all([
+      api.getAudioTrackBlob(song.id, "vocals"),
+      api.getAudioTrackBlob(song.id, "instrumental")
+    ])
+      .then(([vocals, instrumental]) => {
+        if (!alive) return;
+        blobs.push(vocals, instrumental);
+        const next = {
+          vocals: URL.createObjectURL(vocals),
+          instrumental: URL.createObjectURL(instrumental)
+        };
+        urls.push(next.vocals, next.instrumental);
+        setAudioUrls(next);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+      urls.forEach((url) => URL.revokeObjectURL(url));
+      blobs.forEach((blob) => blob?.cleanup?.());
+    };
+  }, [song.id]);
   const {
     autoScroll,
     playbackRate,
@@ -186,15 +212,11 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
               undo={undo}
               volumes={volumes}
             />
-            <audio
-              ref={vocalsRef}
-              preload="metadata"
-              src={api.getAudioTrackUrl(song.id, "vocals")}
-            />
+            <audio ref={vocalsRef} preload="metadata" src={audioUrls.vocals || undefined} />
             <audio
               ref={instrumentalRef}
               preload="metadata"
-              src={api.getAudioTrackUrl(song.id, "instrumental")}
+              src={audioUrls.instrumental || undefined}
               onEnded={pause}
               onPause={handleInstrumentalPause}
               onTimeUpdate={handleInstrumentalTimeUpdate}

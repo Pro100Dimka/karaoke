@@ -54,15 +54,16 @@ test("only the host can publish the room karaoke selection", async () => {
   const hostSongCommandRef = { current: null };
   const base = { songId: "song", client, hostSongCommandRef, roomApi: { getSongRevision: vi.fn().mockResolvedValue({ revision: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }) } };
   assert.equal(await openKaraokeInRoom({ ...base, room: null, isCurrentConnection: () => true }), true);
-  const first = client.send.mock.calls.at(-1)[1].state;
+  const first = client.send.mock.calls[0][1].state;
   assert.equal(first.type, "open-karaoke");
   assert.equal(first.songId, "song");
   assert.equal(typeof first.commandId, "string");
   assert.equal(first.revision.startsWith("sha256:"), true);
   assert.equal(hostSongCommandRef.current.commandId, first.commandId);
+  assert.equal(client.send.mock.calls.at(-1)[1].state.type, "start-karaoke");
   client.send.mockClear();
   assert.equal(await openKaraokeInRoom({ ...base, room: { host: true }, isCurrentConnection: () => true }), true);
-  assert.equal(client.send.mock.calls.length, 1);
+  assert.equal(client.send.mock.calls.length, 2);
   client.send.mockClear();
   assert.equal(await openKaraokeInRoom({ ...base, room: { host: false }, isCurrentConnection: () => true }), false);
   assert.equal(client.send.mock.calls.length, 0);

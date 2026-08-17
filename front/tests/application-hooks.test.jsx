@@ -67,7 +67,7 @@ describe("application hooks", () => {
   });
 
   test.each([
-    [ { type: "open-karaoke", songId: "song-1" }, ["/karaoke", { state: { songId: "song-1" } }] ],
+    [ { type: "start-karaoke", songId: "song-1" }, ["/karaoke", { state: { songId: "song-1", autoPlay: false, roomPrepared: true } }] ],
     [{ type: "open-library" }, ["/"]]
   ])("routes room command %#", (roomCommand, expected) => {
     mocks.useOnlineRoom.mockReturnValue({ roomCommand });
@@ -76,7 +76,7 @@ describe("application hooks", () => {
   });
 
   test("ignores unknown or incomplete room commands", () => {
-    mocks.useOnlineRoom.mockReturnValue({ roomCommand: { type: "open-karaoke" } });
+    mocks.useOnlineRoom.mockReturnValue({ roomCommand: { type: "start-karaoke" } });
     const hook = renderHook(() => useOnlineRoomNavigation());
     expect(mocks.navigate).not.toHaveBeenCalled();
     mocks.useOnlineRoom.mockReturnValue({ roomCommand: { type: "unknown" } });

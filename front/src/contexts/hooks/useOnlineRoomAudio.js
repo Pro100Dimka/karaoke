@@ -14,6 +14,7 @@ export default function useOnlineRoomAudio({
   mutedPeopleRef,
   roomSoundMutedRef,
   roomUiRef,
+  participantVolumesRef,
   startSpeakingMeter,
   stopSpeakingMeter,
   voiceRef
@@ -27,10 +28,26 @@ export default function useOnlineRoomAudio({
     for (const [participantId, audio] of remoteAudioRef.current) {
       const muted = roomSoundMutedRef.current || mutedPeopleRef.current.has(participantId);
       const effectGraph = remoteEffectsRef.current.get(participantId);
+      const volume = Math.max(
+        0,
+        Math.min(1, Number(participantVolumesRef.current?.[participantId] ?? 1))
+      );
       audio.muted = muted || Boolean(effectGraph);
-      if (effectGraph) effectGraph.master.gain.value = muted ? 0 : 1;
+      audio.volume = effectGraph ? 1 : Math.min(1, volume);
+      if (effectGraph) effectGraph.master.gain.value = muted ? 0 : volume;
     }
-  }, [mutedPeopleRef, roomSoundMutedRef]);
+  }, [mutedPeopleRef, participantVolumesRef, roomSoundMutedRef]);
+
+  const setParticipantVolume = useCallback(
+    (participantId, value) => {
+      participantVolumesRef.current = {
+        ...(participantVolumesRef.current || {}),
+        [participantId]: Math.max(0, Math.min(1, Number(value) || 0))
+      };
+      applyRemoteAudioMute();
+    },
+    [applyRemoteAudioMute, participantVolumesRef]
+  );
 
   const removeRemoteAudio = useCallback(
     (participantId) => {
@@ -214,6 +231,7 @@ export default function useOnlineRoomAudio({
     attachRemoteStream,
     removeAllRemoteAudio,
     removeRemoteAudio,
+    setParticipantVolume,
     setLocalMonitoring,
     stopLocalMonitoring
   };

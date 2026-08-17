@@ -59,6 +59,7 @@ export const ukMessages = {
   "room.person.speakingNow": "Зараз говорить",
   "room.person.noSignal": "Немає голосового сигналу",
   "room.person.effects.enable": "Слухати ефекти {name}",
+  "room.person.volume": "Гучність {name}",
   "room.person.effects.disable": "Не застосовувати ефекти {name}",
   "room.leave": "Вийти з кімнати",
   "status.pending": "Очікування",

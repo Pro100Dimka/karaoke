@@ -95,9 +95,11 @@ export function OnlineRoomDock() {
               roomSoundMuted={onlineRoom.roomSoundMuted}
               isLocallyMuted={onlineRoom.mutedPeople.has(person.id)}
               effectsEnabled={onlineRoom.effectPeople.has(person.id)}
+              participantVolume={onlineRoom.participantVolumes?.[person.id] ?? 1}
               onLeave={onlineRoom.leaveRoom}
               onSetMicrophoneMuted={onlineRoom.setMicrophoneMuted}
               onSetRoomSoundMuted={onlineRoom.setRoomSoundMuted}
+              onSetParticipantVolume={onlineRoom.setParticipantVolume}
               onTogglePersonMuted={onlineRoom.togglePersonMuted}
               onTogglePersonEffects={onlineRoom.togglePersonEffects}
             />

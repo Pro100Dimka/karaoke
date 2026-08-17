@@ -128,6 +128,28 @@ export function createOnlineRoomMessageHandler(options) {
         });
       return true;
     },
+    "song-ready": (command, message) => {
+      const offered = hostSongCommandRef.current;
+      if (
+        !activeRoomRef.current?.host ||
+        !command.requesterId ||
+        message.fromId !== command.requesterId ||
+        offered?.commandId !== command.commandId ||
+        offered.songId !== command.songId ||
+        offered.revision !== command.revision ||
+        !offered.expectedIds?.has(command.requesterId)
+      )
+        return false;
+      offered.markReady?.(command.requesterId);
+      return true;
+    },
+    "start-karaoke": (command, message) => {
+      if (activeRoomRef.current?.host || !senderIsHost(message) || !isCurrentPending(command))
+        return false;
+      pendingCommandRef.current = null;
+      publishRoomCommand(command, message.sentAt || "start");
+      return true;
+    },
     "song-transfer-error": (command, message) => {
       if (
         !senderIsHost(message) ||
@@ -162,9 +184,16 @@ export function createOnlineRoomMessageHandler(options) {
         .then((local) => {
           if (!isCurrentPending(command)) return;
           if (local?.revision !== command.revision) throw new Error("Song revision differs");
-          pendingCommandRef.current = null;
           setTransferStatus({ participantId: message.fromId, stage: "complete", percent: 100 });
-          publishRoomCommand(command, message.sentAt || "sync");
+          client.send("sync", {
+            state: {
+              type: "song-ready",
+              commandId: command.commandId,
+              songId: command.songId,
+              revision: command.revision,
+              requesterId: activeRoomRef.current?.selfId
+            }
+          });
         })
         .catch(() => {
           if (!isCurrentPending(command)) return;
@@ -214,6 +243,11 @@ export function createOnlineRoomMessageHandler(options) {
     },
     "participant-left": (message) => {
       setParticipants((items) => items.filter((item) => item.id !== message.participantId));
+      const offered = hostSongCommandRef.current;
+      if (activeRoomRef.current?.host && offered?.expectedIds?.has(message.participantId)) {
+        offered.expectedIds.delete(message.participantId);
+        offered.markReady?.(message.participantId);
+      }
       voice.removePeer(message.participantId);
     },
     signal: (message) => voice.accept(message.fromId, message.signal).catch(() => {}),

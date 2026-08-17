@@ -4,6 +4,7 @@ function toFiniteNumber(value, fallback = 0) {
 }
 
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
+const clamp02 = (value) => Math.max(0, Math.min(2, value));
 
 function toBoolean(value) {
   if (typeof value === "string") {
@@ -28,7 +29,7 @@ export function normalizeAudioEffects(settings) {
 export function normalizeAudioRuntimeSettings(settings) {
   const bufferSize = Number(settings?.buffer_size);
   return {
-    volume: clamp01(toFiniteNumber(settings?.volume)),
+    volume: clamp02(toFiniteNumber(settings?.volume)),
     audioDriver:
       typeof settings?.audio_driver === "string" && settings.audio_driver
         ? settings.audio_driver

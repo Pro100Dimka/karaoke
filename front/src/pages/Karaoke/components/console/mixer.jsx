@@ -11,8 +11,9 @@ const MIXER_COLORS = {
   vocal: "var(--color-warning)",
   melody: "var(--color-secondary)"
 };
-function VerticalSlider({ label, value, color, onChange, onCommit }) {
+function VerticalSlider({ label, value, color, onChange, onCommit, max = 1 }) {
   const percent = Math.round(value * 100);
+  const fillPercent = Math.max(0, Math.min(100, (value / max) * 100));
   return (
     <Stack gap={0.45} sx={{ userSelect: "none", width: "auto" }}>
       <Typography
@@ -50,7 +51,7 @@ function VerticalSlider({ label, value, color, onChange, onCommit }) {
             position: "absolute",
             bottom: 0,
             width: 6,
-            height: `${percent}%`,
+            height: `${fillPercent}%`,
             borderRadius: 999,
             background: color,
             boxShadow: `0 0 0.7rem ${color}`
@@ -60,7 +61,7 @@ function VerticalSlider({ label, value, color, onChange, onCommit }) {
         <input
           type="range"
           min={0}
-          max={1}
+          max={max}
           step={0.05}
           value={value}
           aria-label={label}
@@ -84,7 +85,7 @@ function VerticalSlider({ label, value, color, onChange, onCommit }) {
           aria-hidden="true"
           style={{
             position: "absolute",
-            bottom: `clamp(0px, calc(${percent}% - 7px), calc(100% - 14px))`,
+            bottom: `clamp(0px, calc(${fillPercent}% - 7px), calc(100% - 14px))`,
             width: 14,
             height: 14,
             border: `1px solid color-mix(in srgb, ${color} 78%, white)`,
@@ -134,6 +135,7 @@ export default function MixerPanel({
               color={MIXER_COLORS[key]}
               onChange={onVolumeChange[key]}
               onCommit={key === "microphone" ? onMicrophoneCommit : undefined}
+              max={key === "microphone" ? 2 : 1}
             />
           ];
           if (effect) {

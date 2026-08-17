@@ -64,6 +64,15 @@ const GENERAL_FORM_FIELDS = [
 ].map(([type, name, label, tooltip, extra = {}]) =>
   FORM_FIELDS[type](name, { label, tooltip, ...extra })
 );
+const RADIO_TOGGLE_FIELD = {
+  type: "toggle",
+  name: "enabled",
+  span: HALF,
+  label: translateSaved("Включить радио"),
+  tooltip: translateSaved("Включить или выключить фоновое радио"),
+  getValue: ({ radio }) => Boolean(radio?.isPlaying),
+  setValue: ({ radio }, value) => (value ? radio?.turnOn?.() : radio?.turnOff?.())
+};
 const RADIO_FIELDS = [
   [
     "select",
@@ -91,7 +100,7 @@ const RADIO_FIELDS = [
 ].map(([type, name, label, tooltip, extra = {}]) =>
   fieldType(radioField, type)(name, { label, tooltip, ...extra })
 );
-const GENERAL_FIELDS = [...GENERAL_FORM_FIELDS, ...RADIO_FIELDS];
+const GENERAL_FIELDS = [...GENERAL_FORM_FIELDS, RADIO_TOGGLE_FIELD, ...RADIO_FIELDS];
 
 /* =========================================================
    STORAGE
@@ -222,7 +231,7 @@ const VOICE_VOLUME_FIELD = audioSlider("volume", {
   label: translateSaved("Громкость голоса"),
   tooltip: translateSaved("Громкость вашего голоса при прослушивании"),
   min: 0,
-  max: 1,
+  max: 2,
   step: 0.05,
   getLabel: percent(translateSaved("Громкость голоса"))
 });

@@ -4,8 +4,11 @@ import { useNavigate } from "react-router-dom";
 import { useOnlineRoom } from "../contexts/OnlineRoomContext";
 
 const ROOM_NAVIGATION = {
-  "open-karaoke": (command) =>
-    command.songId ? ["/karaoke", { state: { songId: command.songId } }] : null,
+  "open-karaoke": () => null,
+  "start-karaoke": (command) =>
+    command.songId
+      ? ["/karaoke", { state: { songId: command.songId, autoPlay: false, roomPrepared: true } }]
+      : null,
   "open-library": () => ["/"]
 };
 

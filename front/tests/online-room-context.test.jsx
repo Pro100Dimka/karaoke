@@ -126,7 +126,7 @@ describe("online room provider", () => {
     });
     expect(
       Object.values(result.current).filter((value) => typeof value === "function")
-    ).toHaveLength(12);
+    ).toHaveLength(13);
     expect(() => result.current.setMicrophoneMuted(true)).not.toThrow();
     expect(() => result.current.syncUi({ radio: true })).not.toThrow();
     expect(() => result.current.syncCommand({ type: "pause" })).not.toThrow();
@@ -903,15 +903,17 @@ describe("online room provider", () => {
         filename: "song.zip"
       })
     );
-    expect(mocks.clients[0].send).toHaveBeenCalledTimes(sentBeforeRemoteImport);
-    expect(hook.result.current.roomCommand).toEqual({
-      type: "open-karaoke",
-      songId: "song",
-      commandId: "cmd-song",
-      revision,
-      __originatedHere: false,
-      __eventId: "import-1234-0.25"
+    expect(mocks.clients[0].send).toHaveBeenCalledTimes(sentBeforeRemoteImport + 1);
+    expect(mocks.clients[0].send).toHaveBeenLastCalledWith("sync", {
+      state: {
+        type: "song-ready",
+        commandId: "cmd-song",
+        songId: "song",
+        revision,
+        requesterId: "guest"
+      }
     });
+    expect(hook.result.current.roomCommand).toBeNull();
     actionOptions.pendingSongCommandRef.current = {
       type: "open-karaoke",
       songId: "remote-song",

@@ -346,7 +346,7 @@ describe("karaoke domain utilities", () => {
         output_device_id: 7
       }),
       {
-        volume: 1,
+        volume: 2,
         audioDriver: "asio",
         asioDriverName: "X",
         bufferSize: 128,

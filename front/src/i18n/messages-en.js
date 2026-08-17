@@ -59,6 +59,7 @@ export const enMessages = {
   "room.person.speakingNow": "Speaking now",
   "room.person.noSignal": "No voice signal",
   "room.person.effects.enable": "Hear {name}'s effects",
+  "room.person.volume": "{name} volume",
   "room.person.effects.disable": "Disable {name}'s effects",
   "room.leave": "Leave room",
   "status.pending": "Pending",

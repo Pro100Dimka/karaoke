@@ -157,7 +157,7 @@
   display: flex;
   align-items: center;
   gap: 0.7rem;
-  z-index: 80;
+  z-index: 10050;
 }
 
 .app-floating-controls .app-settings-fab {

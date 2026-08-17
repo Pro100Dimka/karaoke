@@ -1701,3 +1701,21 @@
     padding-inline: var(--space-4);
   }
 }
+
+.online-room-person-volume {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 8.5rem;
+  color: var(--color-text-soft);
+  font-size: 0.72rem;
+}
+.online-room-person-volume input {
+  width: 5rem;
+  accent-color: var(--color-primary);
+}
+.online-room-person-volume span {
+  min-width: 2.5rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
