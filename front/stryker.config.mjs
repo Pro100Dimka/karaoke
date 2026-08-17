@@ -34,6 +34,8 @@ export default {
   },
   ...(selectedTests?.length ? { testFiles: selectedTests } : {}),
   coverageAnalysis: "perTest",
+  incremental: true,
+  incrementalFile: "reports/mutation/incremental.json",
   ignorePatterns: [
     ".runtime/**",
     ".stryker-tmp/**",

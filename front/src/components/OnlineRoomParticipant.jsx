@@ -14,6 +14,7 @@ export default function OnlineRoomParticipant({
   isLocallyMuted,
   effectsEnabled,
   participantVolume = 1,
+  transferStatus,
   onLeave,
   onSetMicrophoneMuted,
   onSetRoomSoundMuted,
@@ -43,6 +44,11 @@ export default function OnlineRoomParticipant({
           <b>{person.name}</b>
           {person.role === "host" && <small>{t("room.role.host")}</small>}
         </span>
+        {transferStatus && transferStatus.stage !== "error" && (
+          <small className="online-room-person-transfer">
+            {Math.round(transferStatus.percent || 0)}%
+          </small>
+        )}
         <span
           className="online-room-speaking-meter"
           aria-label={t(isSpeaking ? "room.person.speaking" : "room.person.silent", {
@@ -94,29 +100,30 @@ export default function OnlineRoomParticipant({
               className={effectsEnabled ? "is-active" : ""}
               onClick={() => onTogglePersonEffects(person.id)}
             />
-            <div
-              className="online-room-person-volume"
-              title={t("room.person.volume", { name: person.name })}
-            >
-              <Volume2 size={15} />
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={participantVolume}
-                aria-label={t("room.person.volume", { name: person.name })}
-                onChange={(event) => onSetParticipantVolume(person.id, event.target.value)}
+            <div className="online-room-person-volume-control">
+              <div
+                className="online-room-person-volume"
+                title={t("room.person.volume", { name: person.name })}
+              >
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={participantVolume}
+                  aria-label={t("room.person.volume", { name: person.name })}
+                  onChange={(event) => onSetParticipantVolume(person.id, event.target.value)}
+                />
+                <span>{Math.round(participantVolume * 100)}%</span>
+              </div>
+              <IconButton
+                variant="outline"
+                icon={isLocallyMuted ? VolumeX : Volume2}
+                label={participantSoundLabel}
+                className={isLocallyMuted ? "is-off" : ""}
+                onClick={() => onTogglePersonMuted(person.id)}
               />
-              <span>{Math.round(participantVolume * 100)}%</span>
             </div>
-            <IconButton
-              variant="outline"
-              icon={isLocallyMuted ? VolumeX : Volume2}
-              label={participantSoundLabel}
-              className={isLocallyMuted ? "is-off" : ""}
-              onClick={() => onTogglePersonMuted(person.id)}
-            />
           </>
         )}
       </div>

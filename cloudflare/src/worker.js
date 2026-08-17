@@ -145,8 +145,17 @@ export class KaraokeRoom {
         return;
       }
       const participantEffects = message.state.participantEffects;
-      if (!participantEffects || typeof participantEffects !== "object" || Array.isArray(participantEffects)) { this.reject(socket); return; }
-      this.broadcast("ui", { fromId: sender.id, state: { participantEffects } }, sender.id);
+      const participantSongs = message.state.participantSongs;
+      const hasEffects = participantEffects && typeof participantEffects === "object" && !Array.isArray(participantEffects);
+      const hasSongs = Array.isArray(participantSongs) && participantSongs.length <= 500 && participantSongs.every((song) => song && typeof song === "object" && !Array.isArray(song));
+      if (!hasEffects && !hasSongs) { this.reject(socket); return; }
+      this.broadcast("ui", {
+        fromId: sender.id,
+        state: {
+          ...(hasEffects ? { participantEffects } : {}),
+          ...(hasSongs ? { participantSongs } : {}),
+        },
+      }, sender.id);
       return;
     }
 
@@ -161,7 +170,8 @@ export class KaraokeRoom {
         state.type === "song-request" &&
         typeof state.songId === "string" && state.songId.length <= 128 &&
         typeof state.commandId === "string" && state.commandId.length <= 128 &&
-        typeof state.revision === "string" && /^sha256:[0-9a-f]{64}$/.test(state.revision)
+        typeof state.revision === "string" && /^sha256:[0-9a-f]{64}$/.test(state.revision) &&
+        (state.ownerId === undefined || (typeof state.ownerId === "string" && state.ownerId.length <= 128))
       ) {
         this.broadcast("sync", {
           fromId: sender.id,
@@ -171,7 +181,48 @@ export class KaraokeRoom {
             songId: state.songId,
             commandId: state.commandId,
             revision: state.revision,
+            ...(state.ownerId ? { ownerId: state.ownerId } : {}),
             requesterId: sender.id
+          }
+        }, sender.id);
+        return;
+      }
+      if (
+        state.type === "song-ready" &&
+        typeof state.songId === "string" && state.songId.length <= 128 &&
+        typeof state.commandId === "string" && state.commandId.length <= 128 &&
+        typeof state.revision === "string" && /^sha256:[0-9a-f]{64}$/.test(state.revision)
+      ) {
+        this.broadcast("sync", {
+          fromId: sender.id,
+          sentAt: Date.now(),
+          state: {
+            type: "song-ready",
+            songId: state.songId,
+            commandId: state.commandId,
+            revision: state.revision,
+            requesterId: sender.id
+          }
+        }, sender.id);
+        return;
+      }
+      if (
+        state.type === "song-transfer-error" &&
+        typeof state.requesterId === "string" && state.requesterId.length <= 128 &&
+        typeof state.songId === "string" && state.songId.length <= 128 &&
+        typeof state.commandId === "string" && state.commandId.length <= 128 &&
+        typeof state.error === "string" && state.error.length <= 500
+      ) {
+        this.broadcast("sync", {
+          fromId: sender.id,
+          sentAt: Date.now(),
+          state: {
+            type: "song-transfer-error",
+            requesterId: state.requesterId,
+            ownerId: sender.id,
+            songId: state.songId,
+            commandId: state.commandId,
+            error: state.error
           }
         }, sender.id);
         return;

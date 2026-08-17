@@ -3,7 +3,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useRadio } from "../contexts/radio";
 import { useOnlineRoomNavigation } from "../hooks/useOnlineRoomNavigation";
-import { useRequireOnlineName } from "../hooks/useRequireOnlineName";
 import { useI18n } from "../i18n";
 import SongSettings from "../pages/Library/modals/song-settings";
 import Settings from "../pages/Settings";
@@ -100,8 +99,6 @@ export default function AppLayout() {
   }, []);
 
   useOnlineRoomNavigation();
-
-  useRequireOnlineName({ onMissingName: openSettings });
 
   return (
     <div

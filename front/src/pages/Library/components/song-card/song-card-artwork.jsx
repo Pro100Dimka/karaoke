@@ -1,5 +1,5 @@
 import { Music2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../../../api/client";
 import { useRadio } from "../../../../contexts/radio";
 
@@ -14,6 +14,7 @@ export default function SongCardArtwork({ cardIndex, song }) {
   const { isPlaying } = useRadio();
   const [coverFailed, setCoverFailed] = useState(false);
   const coverUrl = song?.id ? api.getSongCoverUrl(song.id) : "";
+  useEffect(() => setCoverFailed(false), [coverUrl, song?.__roomLocal]);
 
   return (
     <div

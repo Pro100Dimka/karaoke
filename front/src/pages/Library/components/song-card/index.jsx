@@ -30,7 +30,14 @@ const SongStatusBadge = ({ status }) => {
     </Badge>
   );
 };
-function LibrarySongCard({ cardIndex, onOpenKaraoke, onOpenProcessing, song, ...props }) {
+function LibrarySongCard({
+  cardIndex,
+  onOpenKaraoke,
+  onOpenProcessing,
+  song,
+  transferStatus,
+  ...props
+}) {
   const {
     artist,
     difficulty_override: difficulty,
@@ -75,15 +82,15 @@ function LibrarySongCard({ cardIndex, onOpenKaraoke, onOpenProcessing, song, ...
           </div>
           <SongStatusBadge status={songStatus} />
         </Stack>
-        {isWorking && (
+        {(isWorking || transferStatus) && (
           <Button
             type="button"
             variant="ghost"
             style={{ width: "100%" }}
             className="library-song-card-progress"
-            onClick={() => onOpenProcessing(song)}
+            onClick={isWorking ? () => onOpenProcessing(song) : undefined}
           >
-            <ProcessingSignal progress={progress} compact />
+            <ProcessingSignal progress={transferStatus?.percent ?? progress} compact />
           </Button>
         )}
         <Stack className="library-song-card-footer" direction="row" justify="space-between">

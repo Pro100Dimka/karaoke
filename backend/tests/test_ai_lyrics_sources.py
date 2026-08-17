@@ -318,7 +318,7 @@ def test_query_helpers_and_metadata_candidates(monkeypatch, tmp_path):
         query="Нервы Моя Леди", artist="Нервы", track="Моя Леди"
     )
     assert plan[1] == lyrics.LyricsSearchCandidate(
-        query="Моя Леди", artist="Нервы", track="Моя Леди"
+        query="Моя Леди", track="Моя Леди"
     )
 
 

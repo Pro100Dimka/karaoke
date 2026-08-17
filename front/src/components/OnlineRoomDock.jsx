@@ -9,13 +9,6 @@ import { copyText } from "../utils/clipboard";
 import OnlineRoomParticipant from "./OnlineRoomParticipant";
 import Button from "./fields/button";
 
-function getTransferText(status, t) {
-  if (!status) return "";
-  return status.stage === "error"
-    ? t("room.transfer.error", { error: status.error || t("room.transfer.unknownError") })
-    : t(`room.transfer.${status.stage}`, { percent: status.percent });
-}
-
 export function OnlineRoomDock() {
   const { t } = useI18n();
   const onlineRoom = useOnlineRoom();
@@ -46,8 +39,6 @@ export function OnlineRoomDock() {
       setCopied(false);
     }, 1600);
   };
-  const transferText = getTransferText(onlineRoom.transferStatus, t);
-
   return (
     <>
       <Card
@@ -96,6 +87,7 @@ export function OnlineRoomDock() {
               isLocallyMuted={onlineRoom.mutedPeople.has(person.id)}
               effectsEnabled={onlineRoom.effectPeople.has(person.id)}
               participantVolume={onlineRoom.participantVolumes?.[person.id] ?? 1}
+              transferStatus={onlineRoom.transferStatuses?.get(person.id)}
               onLeave={onlineRoom.leaveRoom}
               onSetMicrophoneMuted={onlineRoom.setMicrophoneMuted}
               onSetRoomSoundMuted={onlineRoom.setRoomSoundMuted}
@@ -118,18 +110,6 @@ export function OnlineRoomDock() {
             >
               {t(requestingMicrophone ? "room.requestingMicrophone" : "room.allowMicrophone")}
             </Button>
-          </div>
-        )}
-        {onlineRoom.transferStatus && (
-          <div className="online-room-transfer" role="status" aria-live="polite">
-            <p>{transferText}</p>
-            {onlineRoom.transferStatus.stage !== "error" && (
-              <progress
-                max="100"
-                value={onlineRoom.transferStatus.percent}
-                aria-label={transferText}
-              />
-            )}
           </div>
         )}
       </Card>

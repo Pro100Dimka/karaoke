@@ -22,11 +22,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock("react-router-dom", () => ({ useLocation: () => mocks.location }));
 vi.mock("../src/contexts/radio", () => ({ useRadio: () => mocks.radio }));
 vi.mock("../src/hooks/useOnlineRoomNavigation", () => ({ useOnlineRoomNavigation: vi.fn() }));
-vi.mock("../src/hooks/useRequireOnlineName", () => ({
-  useRequireOnlineName: ({ onMissingName }) => {
-    mocks.missingName = onMissingName;
-  }
-}));
 vi.mock("../src/i18n", () => ({
   useI18n: () => ({
     t: (key, values) => `${key}${values?.station ? `:${values.station}` : ""}`
@@ -108,13 +103,16 @@ describe("application shell", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     window.electronAPI = {
       minimize: vi.fn().mockResolvedValue(undefined),
+      maximize: vi.fn().mockResolvedValue(undefined),
       close: vi.fn().mockRejectedValue(new Error("close failed"))
     };
     const { getByLabelText, rerender } = render(<TitleBar title="Voice" />);
     fireEvent.click(getByLabelText("common.minimizeWindow"));
+    fireEvent.click(getByLabelText("common.maximizeWindow"));
     fireEvent.click(getByLabelText("common.closeWindow"));
     await waitFor(() => expect(error).toHaveBeenCalled());
     expect(window.electronAPI.minimize).toHaveBeenCalled();
+    expect(window.electronAPI.maximize).toHaveBeenCalled();
     rerender(<TitleBar hideActions />);
     expect(document.querySelectorAll(".title-bar__button")).toHaveLength(0);
     error.mockRestore();
@@ -135,7 +133,7 @@ describe("application shell", () => {
     expect(getByTestId("song-settings").textContent).toContain("song");
     fireEvent.click(getByTestId("song-settings"));
     expect(queryByTestId("song-settings")).toBeNull();
-    act(() => mocks.missingName());
+    fireEvent.click(getByTestId("route-settings"));
     expect(getByTestId("settings")).not.toBeNull();
     fireEvent.click(getByTestId("settings"));
     fireEvent( window, new CustomEvent("app:route-blackout", { detail: { visible: true } })

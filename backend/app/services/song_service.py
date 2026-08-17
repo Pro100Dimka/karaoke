@@ -1,5 +1,6 @@
 """Управление песнями: добавление, чтение, изменение, удаление."""
 
+import base64
 import contextlib
 import re
 import threading
@@ -90,7 +91,7 @@ def _cover_extension(payload: bytes) -> str | None:
         return ".jpg"
     if payload.startswith(b"\x89PNG\r\n\x1a\n"):
         return ".png"
-    if payload[:4] in {b"RIFF", b"WEBP"} and b"WEBP" in payload[:16]:
+    if payload.startswith(b"RIFF") and payload[8:12] == b"WEBP":
         return ".webp"
     return None
 
@@ -119,12 +120,35 @@ def extract_embedded_cover(source_path: Path, output_dir: Path) -> Path | None:
             if isinstance(data := getattr(value, "data", None), bytes) and data:
                 candidates.append(data)
 
-    if (
-        tags is not None
-        and callable(get := getattr(tags, "get", None))
-        and isinstance(covers := get("covr"), (list, tuple))
-    ):
-        candidates.extend(bytes(item) for item in covers if item)
+    if tags is not None and callable(get := getattr(tags, "get", None)):
+        if isinstance(covers := get("covr"), (list, tuple)):
+            candidates.extend(bytes(item) for item in covers if item)
+
+        # Vorbis/Opus commonly store artwork as base64 metadata instead of a
+        # Mutagen picture object. Recover both the raw COVERART payload and the
+        # FLAC METADATA_BLOCK_PICTURE wrapper.
+        for key in ("coverart", "COVERART"):
+            values = get(key)
+            if not isinstance(values, (list, tuple)):
+                values = [values] if values else []
+            for value in values:
+                if isinstance(value, str):
+                    with contextlib.suppress(ValueError):
+                        candidates.append(base64.b64decode(value, validate=True))
+
+        for key in ("metadata_block_picture", "METADATA_BLOCK_PICTURE"):
+            values = get(key)
+            if not isinstance(values, (list, tuple)):
+                values = [values] if values else []
+            for value in values:
+                if not isinstance(value, str):
+                    continue
+                with contextlib.suppress(ValueError, TypeError, ImportError):
+                    from mutagen.flac import Picture
+
+                    picture = Picture(base64.b64decode(value, validate=True))
+                    if picture.data:
+                        candidates.append(picture.data)
 
     for payload in candidates:
         extension = _cover_extension(payload)

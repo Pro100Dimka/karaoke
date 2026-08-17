@@ -1057,12 +1057,12 @@ def _metadata_search_plan(
                 )
             )
             if clean_title.casefold() not in technical_names:
+                # Last-resort title-only lookup for malformed downloader tags.
+                # Keep the exact track identity but deliberately drop only the
+                # artist constraint; candidate acceptance still requires a very
+                # strong title match and duration agreement when duration exists.
                 candidates.append(
-                    LyricsSearchCandidate(
-                        query=clean_title,
-                        artist=clean_artist,
-                        track=clean_title,
-                    )
+                    LyricsSearchCandidate(query=clean_title, track=clean_title)
                 )
             return
         add_query(clean_title)

@@ -253,11 +253,21 @@ export function OnlineRoomProvider({ children }) {
       voice.onTransferProgress = ({ participantId, stage, percent, metadata }) => {
         if (!isCurrentConnection()) return;
         const commandId = metadata?.commandId;
-        const currentCommandId = roomRef.current?.host
-          ? hostSongCommandRef.current?.commandId
-          : pendingSongCommandRef.current?.commandId;
-        if (commandId && commandId !== currentCommandId) return;
-        setTransferStatus({ participantId, commandId, stage, percent: Number(percent) || 0 });
+        const activeCommandIds = new Set(
+          [hostSongCommandRef.current?.commandId, pendingSongCommandRef.current?.commandId].filter(
+            Boolean
+          )
+        );
+        for (const activeCommandId of songExportsRef.current.keys())
+          activeCommandIds.add(activeCommandId);
+        if (commandId && !activeCommandIds.has(commandId)) return;
+        setTransferStatus({
+          participantId,
+          commandId,
+          songId: metadata?.songId,
+          stage,
+          percent: Number(percent) || 0
+        });
       };
       const canAcceptSongPackage = (participantId, metadata) => {
         const pending = pendingSongCommandRef.current;
@@ -270,9 +280,11 @@ export function OnlineRoomProvider({ children }) {
           pending.songId === metadata.songId &&
           pending.revision === metadata.revision &&
           !pending.__originatedHere &&
-          participantsRef.current.some(
-            (participant) => participant.id === participantId && participant.role === "host"
-          )
+          (pending.ownerId
+            ? participantId === pending.ownerId
+            : participantsRef.current.some(
+                (participant) => participant.id === participantId && participant.role === "host"
+              ))
         );
       };
       voice.canAcceptFile = canAcceptSongPackage;
@@ -311,29 +323,40 @@ export function OnlineRoomProvider({ children }) {
             pendingCommand?.commandId === metadata.commandId &&
             pendingCommand.songId === metadata.songId
           ) {
-            client.send("sync", {
-              state: {
-                type: "song-ready",
-                commandId: pendingCommand.commandId,
-                songId: pendingCommand.songId,
-                revision: pendingCommand.revision,
-                requesterId: roomRef.current?.selfId
-              }
-            });
+            if (pendingCommand.__manual) {
+              pendingSongCommandRef.current = null;
+              pendingCommand.resolve?.(true);
+            } else {
+              client.send("sync", {
+                state: {
+                  type: "song-ready",
+                  commandId: pendingCommand.commandId,
+                  songId: pendingCommand.songId,
+                  revision: pendingCommand.revision,
+                  requesterId: roomRef.current?.selfId
+                }
+              });
+            }
           }
           return true;
         } catch (error) {
           if (signal?.aborted) return false;
           if (isCurrentConnection()) {
+            const errorText = translateSaved("Не удалось импортировать песню: {0}", {
+              0: getErrorMessage(error)
+            });
             setTransferStatus({
               participantId,
               commandId: metadata.commandId,
+              songId: metadata.songId,
               stage: "error",
-              error: translateSaved("Не удалось импортировать песню: {0}", {
-                0: getErrorMessage(error)
-              }),
+              error: errorText,
               percent: 0
             });
+            if (pendingCommand?.__manual && pendingCommand.commandId === metadata.commandId) {
+              pendingSongCommandRef.current = null;
+              pendingCommand.reject?.(new Error(errorText));
+            }
           }
           throw error;
         }
@@ -449,6 +472,75 @@ export function OnlineRoomProvider({ children }) {
     // Stryker disable next-line ArrayDeclaration: connect is stable.
     [connect]
   );
+  const syncSong = useCallback(
+    async (song) => {
+      if (!roomRef.current || !song?.id) return false;
+      try {
+        const local = await api.getSongRevision(song.id);
+        if (local?.revision && local.revision === song.__roomRevision) return true;
+      } catch {
+        // Missing locally: request the processed package from its room owner.
+      }
+      const ownerId = song.__roomOwnerId;
+      const revision = song.__roomRevision;
+      if (!ownerId || ownerId === roomRef.current.selfId || !revision)
+        throw new Error(
+          translateSaved("Не удалось определить владельца или версию песни в комнате")
+        );
+      const previous = pendingSongCommandRef.current;
+      previous?.reject?.(new Error(translateSaved("Передача песни заменена новым запросом")));
+      if (previous?.commandId) voiceRef.current?.cancelTransfersByCommandId?.(previous.commandId);
+      const commandId =
+        typeof globalThis.crypto?.randomUUID === "function"
+          ? globalThis.crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      return new Promise((resolve, reject) => {
+        const timer = globalThis.setTimeout(() => {
+          if (pendingSongCommandRef.current?.commandId !== commandId) return;
+          pendingSongCommandRef.current = null;
+          reject(new Error(translateSaved("Передача песни остановилась: нет ответа от участника")));
+        }, 5 * 60_000);
+        const finish = (callback) => (value) => {
+          globalThis.clearTimeout(timer);
+          callback(value);
+        };
+        pendingSongCommandRef.current = {
+          type: "sync-song",
+          songId: song.id,
+          commandId,
+          revision,
+          ownerId,
+          __manual: true,
+          resolve: finish(resolve),
+          reject: finish(reject)
+        };
+        setTransferStatus({
+          participantId: ownerId,
+          commandId,
+          songId: song.id,
+          stage: "waiting",
+          percent: 0
+        });
+        const sent = clientRef.current?.send("sync", {
+          state: {
+            type: "song-request",
+            songId: song.id,
+            commandId,
+            revision,
+            ownerId,
+            requesterId: roomRef.current.selfId
+          }
+        });
+        if (!sent) {
+          pendingSongCommandRef.current = null;
+          globalThis.clearTimeout(timer);
+          reject(new Error(translateSaved("Не удалось отправить запрос на синхронизацию песни")));
+        }
+      });
+    },
+    [setTransferStatus]
+  );
+
   const togglePersonMuted = useCallback(
     (id) => {
       setMutedPeople((items) => {
@@ -481,7 +573,7 @@ export function OnlineRoomProvider({ children }) {
         const enabled = !next.has(id);
         if (enabled) next.add(id);
         else next.delete(id);
-        if (!enabled) queueMicrotask(() => applyParticipantEffects(id, false));
+        queueMicrotask(() => applyParticipantEffects(id, enabled));
         return next;
       });
     },
@@ -526,10 +618,12 @@ export function OnlineRoomProvider({ children }) {
     setRoomSoundMuted,
     speakingLevels,
     syncCommand,
+    syncSong,
     syncUi,
     togglePersonEffects,
     togglePersonMuted,
     transferStatus,
+    transferStatuses,
     voiceError
   });
   return <OnlineRoomContext.Provider value={value}>{children}</OnlineRoomContext.Provider>;

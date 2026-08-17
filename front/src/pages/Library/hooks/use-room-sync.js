@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { api } from "../../../api/client";
 
 export default function useLibraryRoomSync({
   localSongs,
@@ -28,6 +29,23 @@ export default function useLibraryRoomSync({
   }, [query, room, syncUi]);
 
   useEffect(() => {
-    if (room?.host) syncUi({ songs: localSongs });
-  }, [localSongs, participantCount, room?.host, syncUi]);
+    if (!room?.selfId) return undefined;
+    let cancelled = false;
+    Promise.all(
+      localSongs.map(async (song) => {
+        if (song?.status !== "done") return { ...song, __roomOwnerId: room.selfId };
+        try {
+          const revision = await api.getSongRevision(song.id);
+          return { ...song, __roomOwnerId: room.selfId, __roomRevision: revision?.revision };
+        } catch {
+          return { ...song, __roomOwnerId: room.selfId };
+        }
+      })
+    ).then((songs) => {
+      if (!cancelled) syncUi({ participantSongs: songs });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [localSongs, participantCount, room?.selfId, syncUi]);
 }

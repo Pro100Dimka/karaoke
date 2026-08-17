@@ -1,9 +1,10 @@
-import { Minus, X } from "lucide-react";
+import { Maximize2, Minus, X } from "lucide-react";
 import { useI18n } from "../i18n";
 import { IconButton } from "./ui";
 
 const WINDOW_ACTIONS = [
   { id: "minimize", labelKey: "common.minimizeWindow", Icon: Minus, size: 16 },
+  { id: "maximize", labelKey: "common.maximizeWindow", Icon: Maximize2, size: 14 },
   { id: "close", labelKey: "common.closeWindow", Icon: X, size: 16, danger: true }
 ];
 

@@ -1,5 +1,6 @@
 import { ArrowLeft, UsersRound } from "lucide-react";
 import { useState } from "react";
+import { api } from "../api/client";
 import { useOnlineRoom } from "../contexts/OnlineRoomContext";
 import useMountedRef from "../hooks/useMountedRef";
 import { useI18n } from "../i18n";
@@ -8,10 +9,11 @@ import { getErrorMessage } from "../utils/errors";
 import { Button, FieldInput } from "./fields";
 import Modal from "./modal";
 
-export function OnlineRoomModal({ onlineName, onClose }) {
+export function OnlineRoomModal({ onlineName, onOnlineNameChange, onClose }) {
   const { t } = useI18n();
   const room = useOnlineRoom();
   const [joinMode, setJoinMode] = useState(false);
+  const [name, setName] = useState(onlineName || "");
   const [roomId, setRoomId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -20,11 +22,20 @@ export function OnlineRoomModal({ onlineName, onClose }) {
 
   const connect = async (host) => {
     const normalizedRoomId = normalizeRoomId(roomId);
+    const onlineNameValue = name.trim();
+    if (!onlineNameValue) {
+      setError(t("room.nameRequired"));
+      return;
+    }
     setBusy(true);
     setError("");
     try {
-      if (host) await room.createRoom(onlineName);
-      else await room.joinRoom(normalizedRoomId, onlineName);
+      if (onlineNameValue !== onlineName) {
+        const saved = await api.updateAppSettings({ online_name: onlineNameValue });
+        onOnlineNameChange?.(saved?.online_name || onlineNameValue);
+      }
+      if (host) await room.createRoom(onlineNameValue);
+      else await room.joinRoom(normalizedRoomId, onlineNameValue);
       if (mountedRef.current) onClose();
     } catch (connectError) {
       if (mountedRef.current) setError(getErrorMessage(connectError, t("room.join.failed")));
@@ -63,6 +74,17 @@ export function OnlineRoomModal({ onlineName, onClose }) {
       }}
     >
       <div className="modal-scroll online-room-modal__content">
+        <FieldInput
+          id="online-room-name"
+          field={{
+            name: "onlineName",
+            label: t("room.name"),
+            placeholder: t("room.namePlaceholder"),
+            maxLength: 80
+          }}
+          value={name}
+          onChange={setName}
+        />
         {!joinMode ? (
           <div className="online-room-form u-stack-4">
             <p>{t("room.instructions")}</p>

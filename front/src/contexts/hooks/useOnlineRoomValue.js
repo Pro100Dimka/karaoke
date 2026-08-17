@@ -23,10 +23,12 @@ export default function useOnlineRoomValue(state) {
     setRoomSoundMuted,
     speakingLevels,
     syncCommand,
+    syncSong,
     syncUi,
     togglePersonEffects,
     togglePersonMuted,
     transferStatus,
+    transferStatuses,
     voiceError
   } = state;
   return useMemo(
@@ -42,6 +44,7 @@ export default function useOnlineRoomValue(state) {
       roomCommand,
       voiceError,
       transferStatus,
+      transferStatuses,
       localSpeakingLevel,
       speakingLevels,
       createRoom,
@@ -56,6 +59,7 @@ export default function useOnlineRoomValue(state) {
       togglePersonEffects,
       syncUi,
       syncCommand,
+      syncSong,
       openKaraoke
     }),
     [
@@ -80,10 +84,12 @@ export default function useOnlineRoomValue(state) {
       setRoomSoundMuted,
       speakingLevels,
       syncCommand,
+      syncSong,
       syncUi,
       togglePersonEffects,
       togglePersonMuted,
       transferStatus,
+      transferStatuses,
       voiceError
     ]
   );

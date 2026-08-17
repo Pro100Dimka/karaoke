@@ -12,7 +12,7 @@ export default function useOnlineRoomCommands({
 }) {
   const syncUi = useCallback(
     (state) => {
-      if (roomRef.current?.host || state?.participantEffects)
+      if (roomRef.current?.host || state?.participantEffects || state?.participantSongs)
         clientRef.current?.send("ui", { state });
     },
     [clientRef, roomRef]

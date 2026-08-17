@@ -40,14 +40,14 @@ export function createStudioMicrophoneGraph(rawStream) {
     air.gain.value = 1.4;
 
     const compressor = context.createDynamicsCompressor();
-    compressor.threshold.value = -20;
-    compressor.knee.value = 18;
-    compressor.ratio.value = 2.6;
+    compressor.threshold.value = -28;
+    compressor.knee.value = 20;
+    compressor.ratio.value = 3.2;
     compressor.attack.value = 0.004;
     compressor.release.value = 0.18;
 
     const makeup = context.createGain();
-    makeup.gain.value = 1.08;
+    makeup.gain.value = 1.35;
 
     const limiter = context.createDynamicsCompressor();
     limiter.threshold.value = -3;

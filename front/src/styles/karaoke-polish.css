@@ -1415,3 +1415,17 @@ body {
     block-size: auto;
   }
 }
+
+/* Long lyric phrases must wrap instead of being shrunk/clipped into one visual row. */
+.karaoke-lyric {
+  white-space: normal !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+  overflow: visible !important;
+  font-size: clamp(1.65rem, 2.75vw, 3.2rem) !important;
+  line-height: 1.08 !important;
+}
+
+.karaoke-lyric-next {
+  font-size: clamp(1.35rem, 2.15vw, 2.5rem) !important;
+}

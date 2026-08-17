@@ -301,10 +301,20 @@ def get_processing_log(song: SongDependency):
 @router.get("/{song_id}/cover")
 def get_song_cover(song: SongDependency):
     output_dir = song_service.resolve_output_dir(song)
-    for filename, media_type in (("cover.jpg", "image/jpeg"), ("cover.png", "image/png"), ("cover.webp", "image/webp")):
+    covers = (("cover.jpg", "image/jpeg"), ("cover.png", "image/png"), ("cover.webp", "image/webp"))
+    for filename, media_type in covers:
         path = output_dir / filename
         if path.is_file():
             return FileResponse(path, media_type=media_type)
+
+    # Existing libraries may have been imported before artwork extraction was
+    # supported (or with a metadata layout the old extractor missed). Recover
+    # lazily from the canonical source instead of permanently caching a 404.
+    source = song_service.resolve_source_path(song)
+    recovered = song_service.extract_embedded_cover(source, output_dir) if source.is_file() else None
+    if recovered is not None:
+        media_type = {".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}[recovered.suffix.lower()]
+        return FileResponse(recovered, media_type=media_type)
     raise HTTPException(status_code=404, detail="Song cover not found")
 
 

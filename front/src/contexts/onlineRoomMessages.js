@@ -53,15 +53,20 @@ export function createOnlineRoomMessageHandler(options) {
   const syncHandlers = {
     "song-request": (command, message) => {
       const offered = hostSongCommandRef.current;
+      const manualTransfer = Boolean(command.ownerId);
+      const ownsManualSong = manualTransfer && command.ownerId === activeRoomRef.current?.selfId;
+      const ownsHostOffer =
+        activeRoomRef.current?.host &&
+        offered?.commandId === command.commandId &&
+        offered.songId === command.songId &&
+        offered.revision === command.revision;
       if (
-        !activeRoomRef.current?.host ||
         !command.requesterId ||
         !command.songId ||
         !command.commandId ||
+        !command.revision ||
         message.fromId !== command.requesterId ||
-        offered?.commandId !== command.commandId ||
-        offered.songId !== command.songId ||
-        offered.revision !== command.revision
+        (!ownsManualSong && !ownsHostOffer)
       )
         return false;
 
@@ -79,9 +84,18 @@ export function createOnlineRoomMessageHandler(options) {
       exportEntry.users += 1;
       exportEntry.promise
         .then(async (blob) => {
-          if (!isCurrentConnection() || hostSongCommandRef.current?.commandId !== command.commandId)
+          if (
+            !isCurrentConnection() ||
+            (!manualTransfer && hostSongCommandRef.current?.commandId !== command.commandId)
+          )
             return null;
-          setTransferStatus({ participantId: command.requesterId, stage: "sending", percent: 0 });
+          setTransferStatus({
+            participantId: command.requesterId,
+            songId: command.songId,
+            commandId: command.commandId,
+            stage: "sending",
+            percent: 0
+          });
           return voice.sendFile(command.requesterId, blob, {
             kind: "song-package",
             songId: command.songId,
@@ -91,21 +105,30 @@ export function createOnlineRoomMessageHandler(options) {
           });
         })
         .then(() => {
-          if (isCurrentConnection() && hostSongCommandRef.current?.commandId === command.commandId)
+          if (
+            isCurrentConnection() &&
+            (manualTransfer || hostSongCommandRef.current?.commandId === command.commandId)
+          )
             setTransferStatus({
               participantId: command.requesterId,
+              songId: command.songId,
+              commandId: command.commandId,
               stage: "complete",
               percent: 100
             });
         })
         .catch((error) => {
-          if (!isCurrentConnection() || hostSongCommandRef.current?.commandId !== command.commandId)
+          if (
+            !isCurrentConnection() ||
+            (!manualTransfer && hostSongCommandRef.current?.commandId !== command.commandId)
+          )
             return;
           const errorText = getErrorMessage(error);
           client.send("sync", {
             state: {
               type: "song-transfer-error",
               requesterId: command.requesterId,
+              ownerId: command.ownerId,
               songId: command.songId,
               commandId: command.commandId,
               error: errorText
@@ -151,19 +174,27 @@ export function createOnlineRoomMessageHandler(options) {
       return true;
     },
     "song-transfer-error": (command, message) => {
+      const pending = pendingCommandRef.current;
+      const validSender = pending?.ownerId
+        ? message.fromId === pending.ownerId
+        : senderIsHost(message);
       if (
-        !senderIsHost(message) ||
+        !validSender ||
         command.requesterId !== activeRoomRef.current?.selfId ||
         !isCurrentPending(command)
       )
         return false;
       pendingCommandRef.current = null;
+      const errorText = command.error || translateSaved("Не удалось передать песню");
       setTransferStatus({
         participantId: message.fromId,
+        songId: command.songId,
+        commandId: command.commandId,
         stage: "error",
-        error: command.error || translateSaved("Ведущий не смог передать песню"),
+        error: errorText,
         percent: 0
       });
+      pending.reject?.(new Error(errorText));
       return true;
     },
     "open-karaoke": (command, message) => {
@@ -243,6 +274,12 @@ export function createOnlineRoomMessageHandler(options) {
     },
     "participant-left": (message) => {
       setParticipants((items) => items.filter((item) => item.id !== message.participantId));
+      setRoomUi((current) => {
+        if (!current.songsByParticipant?.[message.participantId]) return current;
+        const songsByParticipant = { ...current.songsByParticipant };
+        delete songsByParticipant[message.participantId];
+        return { ...current, songsByParticipant, __eventId: createEventId("ui") };
+      });
       const offered = hostSongCommandRef.current;
       if (activeRoomRef.current?.host && offered?.expectedIds?.has(message.participantId)) {
         offered.expectedIds.delete(message.participantId);
@@ -253,17 +290,30 @@ export function createOnlineRoomMessageHandler(options) {
     signal: (message) => voice.accept(message.fromId, message.signal).catch(() => {}),
     ui: (message) => {
       const state = message.state || {};
-      const { participantEffects } = state;
+      const { participantEffects, participantSongs } = state;
       const host = senderIsHost(message);
-      if (!host && !participantEffects) return;
+      if (!host && !participantEffects && !participantSongs) return;
       setRoomUi((current) => ({
         ...current,
-        ...(host ? state : {}),
+        ...(host
+          ? Object.fromEntries(Object.entries(state).filter(([key]) => key !== "participantSongs"))
+          : {}),
         ...(message.fromId && participantEffects
           ? {
               effectsByParticipant: {
                 ...(current.effectsByParticipant || {}),
                 [message.fromId]: participantEffects
+              }
+            }
+          : {}),
+        ...(message.fromId && Array.isArray(participantSongs)
+          ? {
+              songsByParticipant: {
+                ...(current.songsByParticipant || {}),
+                [message.fromId]: participantSongs.map((song) => ({
+                  ...song,
+                  __roomOwnerId: message.fromId
+                }))
               }
             }
           : {}),

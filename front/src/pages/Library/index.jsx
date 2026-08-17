@@ -63,13 +63,15 @@ export default function Library({ onOpenSongSettings }) {
   const returningFromKaraoke = Boolean(location.state?.fromKaraokeFade);
   const [karaokeTransitioning, setKaraokeTransitioning] = useState(returningFromKaraoke);
   const karaokeTransitioningRef = useRef(returningFromKaraoke);
+  const remoteSongStatusesRef = useRef(new Map());
+  const roomSyncQueueRef = useRef(Promise.resolve());
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const { alert: notify, confirm: confirmDialog } = useAppDialog();
   const sharedRoom = useOnlineRoom();
   const activeRoom = sharedRoom?.room;
   const openKaraokeInRoom = sharedRoom?.openKaraoke;
-  const { reloadSettings, settings } = useAppSettings();
+  const { reloadSettings, settings, updateSettings } = useAppSettings();
   useEffect(() => {
     if (location.state?.analysisRecordingId)
       setAnalysisRecordingId(location.state.analysisRecordingId);
@@ -95,22 +97,13 @@ export default function Library({ onOpenSongSettings }) {
     setTrackedSongId(song?.id || null);
   }, []);
   const openOnlineRoom = async () => {
-    let settings;
     try {
-      settings = await reloadSettings();
+      await reloadSettings();
     } catch (error) {
       await notify(
         translateSaved("Не удалось проверить настройки онлайн-режима: {0}", {
           0: getErrorMessage(error)
         })
-      );
-      return;
-    }
-    if (!settings?.online_name?.trim()) {
-      await notify(
-        translateSaved(
-          "Сначала укажите имя в настройках приложения — оно нужно другим участникам комнаты."
-        )
       );
       return;
     }
@@ -229,8 +222,36 @@ export default function Library({ onOpenSongSettings }) {
   const visibleSongs = resolveVisibleSongs({
     localSongs: localVisibleSongs,
     room: sharedRoom?.room,
-    roomSongs: sharedRoom?.roomUi?.songs
+    roomSongs: sharedRoom?.roomUi?.songs,
+    roomSongsByParticipant: sharedRoom?.roomUi?.songsByParticipant
   });
+  useEffect(() => {
+    if (!activeRoom) {
+      remoteSongStatusesRef.current.clear();
+      return;
+    }
+    const localIds = new Set(localVisibleSongs.map((song) => song.id));
+    const nextStatuses = new Map();
+    for (const song of visibleSongs) {
+      if (!song?.id || song.__roomOwnerId === activeRoom.selfId) continue;
+      const previousStatus = remoteSongStatusesRef.current.get(song.id);
+      nextStatuses.set(song.id, song.status);
+      if (
+        previousStatus &&
+        isProcessingActive(previousStatus) &&
+        song.status === "done" &&
+        !localIds.has(song.id) &&
+        song.__roomRevision
+      ) {
+        roomSyncQueueRef.current = roomSyncQueueRef.current
+          .catch(() => {})
+          .then(() => sharedRoom.syncSong(song))
+          .then(() => refreshSongs());
+      }
+    }
+    remoteSongStatusesRef.current = nextStatuses;
+  }, [activeRoom, localVisibleSongs, refreshSongs, sharedRoom, visibleSongs]);
+
   useLibraryRoomSync({
     localSongs: localVisibleSongs,
     participantCount: sharedRoom?.participants?.length,
@@ -252,6 +273,14 @@ export default function Library({ onOpenSongSettings }) {
       if (karaokeTransitioningRef.current) return;
       karaokeTransitioningRef.current = true;
       try {
+        if (activeRoom && !localVisibleSongs.some((song) => song.id === selectedSong.id)) {
+          await sharedRoom.syncSong(selectedSong);
+          await refreshSongs();
+          if (!activeRoom.host) {
+            karaokeTransitioningRef.current = false;
+            return;
+          }
+        }
         if (activeRoom) {
           const readyLocally = await openKaraokeInRoom(selectedSong.id);
           if (!readyLocally) {
@@ -274,7 +303,7 @@ export default function Library({ onOpenSongSettings }) {
         );
       }
     },
-    [navigate, notify, activeRoom, openKaraokeInRoom]
+    [navigate, notify, activeRoom, localVisibleSongs, openKaraokeInRoom, refreshSongs, sharedRoom]
   );
   return (
     <Stack align="center" sx={{ height: "100vh" }}>
@@ -303,6 +332,9 @@ export default function Library({ onOpenSongSettings }) {
                   canManageLibrary={canManageLibrary}
                   cardIndex={cardIndex}
                   song={song}
+                  transferStatus={[...sharedRoom.transferStatuses.values()].find(
+                    (status) => status.songId === song.id
+                  )}
                   onDelete={handleDelete}
                   onOpenFolder={handleOpenFolder}
                   onOpenKaraoke={openSongInKaraoke}
@@ -325,6 +357,9 @@ export default function Library({ onOpenSongSettings }) {
       {onlineRoomOpen && (
         <OnlineRoomModal
           onlineName={settings?.online_name?.trim() || ""}
+          onOnlineNameChange={(onlineName) =>
+            updateSettings((current) => ({ ...current, online_name: onlineName }))
+          }
           onClose={() => setOnlineRoomOpen(false)}
         />
       )}

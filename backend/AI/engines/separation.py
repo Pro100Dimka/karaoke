@@ -182,12 +182,7 @@ def _run_persistent_msst_worker(
                         device = "cpu"
                 try:
                     context = (
-                        torch.inference_mode()
-                        if device == "cpu"
-                        and cpu_settings is not None
-                        and _truthy_env("KARAOKE_CPU_INFERENCE_MODE")
-                        and hasattr(torch, "inference_mode")
-                        else nullcontext()
+                        torch.inference_mode() if hasattr(torch, "inference_mode") else nullcontext()
                     )
                     with context:
                         module.run_folder(model, args, config, device, verbose=True)
