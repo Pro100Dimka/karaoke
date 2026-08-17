@@ -124,10 +124,12 @@ test("injects one runtime backend URL into renderer and allows loopback CSP port
   expect(html).toContain("http://localhost:*");
 });
 
-test("uses the persisted userData icon for packaged shortcuts", () => {
+test("keeps packaged writable Electron state beside the installed executable", () => {
   const main = fs.readFileSync(new URL("../electron/main.cjs", import.meta.url), "utf8");
+  expect(main).toContain('path.dirname(process.execPath)');
+  expect(main).toContain('path.join(INSTALL_DATA_ROOT, "electron-profile")');
+  expect(main).toContain('app.setPath("temp", INSTALL_TEMP_DIR)');
   expect(main).toContain('path.join(app.getPath("userData"), "selected-theme.ico")');
-  expect(main).not.toContain('path.dirname(process.execPath), "theme-icons"');
 });
 
 describe("renderer and permission security", () => {

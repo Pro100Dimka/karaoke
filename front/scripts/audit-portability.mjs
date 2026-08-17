@@ -34,8 +34,11 @@ try {
 }
 
 const main = read("front/electron/main.cjs");
-if (!main.includes("process.env.LOCALAPPDATA") || !main.includes('"backend-data"')) {
-  fail("packaged backend data is not rooted in LOCALAPPDATA");
+if (!main.includes("path.dirname(process.execPath)") || !main.includes('"data"')) {
+  fail("packaged writable data is not rooted beside the installed executable");
+}
+if (!/app\.setPath\(\s*\"userData\"/.test(main) || !main.includes('app.setPath("temp"')) {
+  fail("Electron profile/temp paths are not redirected into the installation root");
 }
 if (!main.includes("chooseRuntimeBackendEndpoint")) {
   fail("Electron main is not using the dynamic packaged backend endpoint");
@@ -43,15 +46,24 @@ if (!main.includes("chooseRuntimeBackendEndpoint")) {
 
 const installer = read("scripts/karaoke-studio.iss");
 if (!/^PrivilegesRequired=lowest$/m.test(installer)) {
-  fail("installer still requires elevation and can write per-user data under another account");
+  fail("installer still requires elevation");
 }
-if (!/^DefaultDirName=\{localappdata\}\\Programs\\\{#MyAppName\}$/m.test(installer)) {
-  fail("fresh installer is not per-user under LOCALAPPDATA\\Programs");
+if (!/^DefaultDirName=\{userdocs\}\\\{#MyAppName\}$/m.test(installer)) {
+  fail("fresh installer is not rooted in a normal user-selected writable folder");
 }
-if (!installer.includes("{localappdata}\\A&D Voice\\backend-data")) {
-  fail("installer/backend disagree about the packaged backend data root");
+for (const expected of [
+  "{app}\\data\\backend",
+  "{app}\\data\\models",
+  "{app}\\data\\cache",
+  "{app}\\data\\logs",
+  "{app}\\.install\\app-runtime.zip"
+]) {
+  if (!installer.includes(expected)) fail(`installer is missing self-contained path: ${expected}`);
+}
+if (/\{localappdata\}\\A&D Voice|\{userappdata\}\\A&D Voice/.test(installer)) {
+  fail("installer still writes A&D Voice runtime data outside {app}");
 }
 
 console.log(
-  "Portability audit passed: occupied-port, per-user installer, and LocalAppData contracts are enforced."
+  "Portability audit passed: occupied-port and self-contained install-root storage contracts are enforced."
 );

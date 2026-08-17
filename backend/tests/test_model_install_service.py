@@ -19,9 +19,9 @@ def _model() -> ModelSpec:
 
 def test_frozen_default_model_path_matches_installer(monkeypatch, tmp_path):
     monkeypatch.setattr(config, "IS_FROZEN", True)
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("SONGAPP_INSTALL_ROOT", str(tmp_path / "A&D Voice"))
 
-    assert config._default_models_dir() == tmp_path / "A&D Voice" / "models"
+    assert config._default_models_dir() == tmp_path / "A&D Voice" / "data" / "models"
 
 
 def test_separator_reports_each_missing_resource(monkeypatch, tmp_path):

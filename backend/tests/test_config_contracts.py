@@ -1,4 +1,3 @@
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -62,15 +61,15 @@ def test_default_data_and_models_directories_cover_runtime_modes(monkeypatch, tm
     assert config._default_models_dir() == tmp_path / "downloads" / "models"
 
     monkeypatch.setattr(config, "IS_FROZEN", True)
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
-    assert config._default_data_dir() == tmp_path / "local" / "A&D Voice"
-    assert config._default_models_dir() == tmp_path / "local" / "A&D Voice" / "models"
+    monkeypatch.setenv("SONGAPP_INSTALL_ROOT", str(tmp_path / "installed"))
+    assert config._default_data_dir() == tmp_path / "installed" / "data" / "backend"
+    assert config._default_models_dir() == tmp_path / "installed" / "data" / "models"
 
-    monkeypatch.delenv("LOCALAPPDATA")
-    monkeypatch.setattr(Path, "home", classmethod(lambda _cls: tmp_path / "home"))
-    monkeypatch.setattr(config, "DATA_DIR", tmp_path / "data")
-    assert config._default_data_dir() == tmp_path / "home" / "AppData" / "Local" / "A&D Voice"
-    assert config._default_models_dir() == tmp_path / "data" / "models"
+    monkeypatch.delenv("SONGAPP_INSTALL_ROOT")
+    executable = tmp_path / "portable" / "resources" / "backend" / "KaraokeBackend.exe"
+    monkeypatch.setattr(config.sys, "executable", str(executable))
+    assert config._default_data_dir() == tmp_path / "portable" / "data" / "backend"
+    assert config._default_models_dir() == tmp_path / "portable" / "data" / "models"
 
 
 def test_saved_storage_path_is_validated(monkeypatch, tmp_path):

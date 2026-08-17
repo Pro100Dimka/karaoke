@@ -939,7 +939,7 @@ describe("online room provider", () => {
         requesterId: "guest"
       }
     });
-    expect(hook.result.current.roomCommand).toMatchObject({ songId: "remote-song" });
+    expect(hook.result.current.roomCommand).toBeNull();
 
     let releaseImport;
     mocks.importSongPackage.mockReturnValueOnce(

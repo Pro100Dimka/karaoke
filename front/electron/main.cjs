@@ -56,16 +56,35 @@ protocol.registerSchemesAsPrivileged([
 
 const isDev = !app.isPackaged;
 const IS_WINDOWS = process.platform === "win32";
-// Keep the development profile self-contained. It avoids Windows profile
-// permission/cache corruption from making `start-dev.bat` look like a broken
-// app launch. Packaged builds continue to use the normal per-user profile.
-if (isDev) {
-  app.setPath(
-    "userData",
-    process.env.KARAOKE_ELECTRON_PROFILE ||
-      path.resolve(__dirname, "..", ".runtime", "electron-profile")
-  );
+const INSTALL_ROOT = isDev ? path.resolve(__dirname, "..", "..") : path.dirname(process.execPath);
+const INSTALL_DATA_ROOT = isDev
+  ? path.resolve(__dirname, "..", ".runtime")
+  : path.join(INSTALL_ROOT, "data");
+const ELECTRON_PROFILE_DIR = path.join(INSTALL_DATA_ROOT, "electron-profile");
+const INSTALL_TEMP_DIR = path.join(INSTALL_DATA_ROOT, "temp");
+const INSTALL_LOG_DIR = path.join(INSTALL_DATA_ROOT, "logs");
+const INSTALL_SESSION_DIR = path.join(ELECTRON_PROFILE_DIR, "session");
+const INSTALL_CRASH_DIR = path.join(INSTALL_DATA_ROOT, "crash-dumps");
+
+// Keep every writable runtime artefact next to the installed application.
+// This includes Chromium profile/session data, crash dumps and process temp files.
+for (const directory of [
+  ELECTRON_PROFILE_DIR,
+  INSTALL_SESSION_DIR,
+  INSTALL_TEMP_DIR,
+  INSTALL_LOG_DIR,
+  INSTALL_CRASH_DIR
+]) {
+  fs.mkdirSync(directory, { recursive: true });
 }
+app.setPath("userData", process.env.KARAOKE_ELECTRON_PROFILE || ELECTRON_PROFILE_DIR);
+app.setPath("sessionData", INSTALL_SESSION_DIR);
+app.setPath("temp", INSTALL_TEMP_DIR);
+app.setPath("logs", INSTALL_LOG_DIR);
+app.setPath("crashDumps", INSTALL_CRASH_DIR);
+process.env.TEMP = INSTALL_TEMP_DIR;
+process.env.TMP = INSTALL_TEMP_DIR;
+process.env.TMPDIR = INSTALL_TEMP_DIR;
 
 let mainWindow = null;
 let backendProcess = null;
@@ -96,52 +115,11 @@ async function configureRuntimeBackendEndpoint() {
 }
 
 function packagedBackendDataDir() {
-  if (isDev) return null;
-  if (IS_WINDOWS && process.env.LOCALAPPDATA) {
-    return path.join(process.env.LOCALAPPDATA, "A&D Voice", "backend-data");
-  }
-  return path.join(app.getPath("userData"), "backend-data");
-}
-
-function backendDataHasPersistentState(directory) {
-  if (!directory || !fs.existsSync(directory)) return false;
-  return (
-    fs.existsSync(path.join(directory, "app.db")) ||
-    fs.existsSync(path.join(directory, "karaoke_songs")) ||
-    fs.existsSync(path.join(directory, "path-settings.json"))
-  );
+  return isDev ? null : path.join(INSTALL_DATA_ROOT, "backend");
 }
 
 function resolvePackagedBackendDataDir() {
-  const preferred = packagedBackendDataDir();
-  if (!preferred || isDev) return preferred;
-  const legacy = path.join(app.getPath("userData"), "backend-data");
-  if (path.resolve(preferred) === path.resolve(legacy) || !backendDataHasPersistentState(legacy)) {
-    return preferred;
-  }
-  // A previous installer may already have seeded only settings.json in the new
-  // LocalAppData directory. That must not hide a real legacy DB/library.
-  if (backendDataHasPersistentState(preferred)) return preferred;
-  try {
-    if (fs.existsSync(preferred)) {
-      const entries = fs.readdirSync(preferred);
-      const seedOnly = entries.every((name) => name === "settings.json");
-      if (!seedOnly) return legacy;
-      fs.rmSync(preferred, { recursive: true, force: true });
-    }
-    fs.mkdirSync(path.dirname(preferred), { recursive: true });
-    fs.renameSync(legacy, preferred);
-    return preferred;
-  } catch (error) {
-    // Existing installs may already contain a large library. Never copy it
-    // synchronously during startup; keep using the legacy location rather than
-    // making the user's songs disappear if a policy/volume blocks the move.
-    console.error(
-      "Could not migrate backend data from Roaming to LocalAppData; using legacy location:",
-      error?.message || error
-    );
-    return legacy;
-  }
+  return packagedBackendDataDir();
 }
 
 function resolveBackendDir() {
@@ -291,9 +269,10 @@ function startBackend() {
     : path.join(backendDir, IS_WINDOWS ? "KaraokeBackend.exe" : "KaraokeBackend");
   const backendArgs = isDev ? ["run.py"] : [];
   const backendDataDir = isDev ? null : resolvePackagedBackendDataDir();
-  const backendLogDir = isDev
-    ? path.resolve(__dirname, "..", "..", "logs")
-    : path.join(app.getPath("userData"), "logs");
+  const backendLogDir = isDev ? path.resolve(__dirname, "..", "..", "logs") : INSTALL_LOG_DIR;
+  const packagedModelsDir = isDev ? null : path.join(INSTALL_DATA_ROOT, "models");
+  const packagedCacheDir = isDev ? null : path.join(INSTALL_DATA_ROOT, "cache");
+  const packagedDownloadsDir = isDev ? null : path.join(INSTALL_DATA_ROOT, "downloads");
 
   let backendLogFd = null;
   try {
@@ -311,7 +290,20 @@ function startBackend() {
       windowsHide: true,
       env: {
         ...process.env,
-        ...(backendDataDir ? { SONGAPP_DATA_DIR: backendDataDir } : {}),
+        ...(backendDataDir
+          ? {
+              SONGAPP_INSTALL_ROOT: INSTALL_ROOT,
+              SONGAPP_DATA_DIR: backendDataDir,
+              SONGAPP_MODELS_DIR: packagedModelsDir,
+              SONGAPP_CACHE_DIR: packagedCacheDir,
+              SONGAPP_DOWNLOADS_DIR: packagedDownloadsDir,
+              HF_HOME: path.join(packagedCacheDir, "huggingface"),
+              HF_HUB_CACHE: path.join(packagedCacheDir, "huggingface", "hub"),
+              TORCH_HOME: path.join(packagedCacheDir, "torch"),
+              NUMBA_CACHE_DIR: path.join(packagedCacheDir, "numba"),
+              MPLCONFIGDIR: path.join(packagedCacheDir, "matplotlib")
+            }
+          : {}),
         SONGAPP_HOST: runtimeBackendHost,
         SONGAPP_PORT: String(runtimeBackendPort),
         SONGAPP_LOG_DIR: backendLogDir,

@@ -67,12 +67,24 @@ def resolve_runtime_executable(name: str) -> str:
 FFMPEG_EXE = resolve_runtime_executable("ffmpeg")
 
 
+def _install_root() -> Path:
+    """Resolve the writable installation root for packaged builds."""
+    configured = os.environ.get("SONGAPP_INSTALL_ROOT")
+    if configured:
+        return Path(configured).expanduser().resolve()
+    if IS_FROZEN:
+        executable = Path(sys.executable).resolve()
+        # Installed layout: <app>/resources/backend/KaraokeBackend.exe
+        if executable.parent.name.casefold() == "backend" and executable.parent.parent.name.casefold() == "resources":
+            return executable.parent.parent.parent
+        return executable.parent
+    return PROJECT_ROOT
+
+
 def _default_data_dir() -> Path:
     if not IS_FROZEN:
         return PROJECT_ROOT / "data"
-    local_app_data = os.environ.get("LOCALAPPDATA")
-    base = Path(local_app_data) if local_app_data else Path.home() / "AppData" / "Local"
-    return base / "A&D Voice"
+    return _install_root() / "data" / "backend"
 
 
 DATA_DIR = _env_path("SONGAPP_DATA_DIR", _default_data_dir())
@@ -120,16 +132,17 @@ def _saved_path(name: str, default: Path) -> Path:
 
 
 AI_DIR = _env_path("SONGAPP_AI_DIR", RUNTIME_DIR / "AI")
-DOWNLOADS_DIR = _env_path("SONGAPP_DOWNLOADS_DIR", PROJECT_ROOT / "downloads")
+DOWNLOADS_DIR = _env_path(
+    "SONGAPP_DOWNLOADS_DIR",
+    _install_root() / "data" / "downloads" if IS_FROZEN else PROJECT_ROOT / "downloads",
+)
 
 
-# Keep downloaded models outside the immutable application runtime. Interrupted
-# installations can then resume instead of discarding several downloaded GB.
+# Packaged models stay under the selected installation root together with the app.
 def _default_models_dir() -> Path:
     if not IS_FROZEN:
         return DOWNLOADS_DIR / "models"
-    local_app_data = os.environ.get("LOCALAPPDATA")
-    return Path(local_app_data) / "A&D Voice" / "models" if local_app_data else DATA_DIR / "models"
+    return _install_root() / "data" / "models"
 
 
 _DEFAULT_MODELS_DIR = _default_models_dir()

@@ -20,8 +20,9 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppName}
-DefaultDirName={localappdata}\Programs\{#MyAppName}
+DefaultDirName={userdocs}\{#MyAppName}
 DefaultGroupName={#MyAppName}
+DisableDirPage=no
 DisableProgramGroupPage=yes
 OutputDir={#OutputDir}
 OutputBaseFilename={#MyAppName} Setup {#MyAppVersion}
@@ -38,7 +39,7 @@ SetupLogging=yes
 CloseApplications=yes
 RestartApplications=no
 UninstallDisplayName={#MyAppName}
-UninstallDisplayIcon={userappdata}\A&D Voice\selected-theme.ico
+UninstallDisplayIcon={app}\data\electron-profile\selected-theme.ico
 
 [Languages]
 Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
@@ -54,18 +55,18 @@ Source: "{#ThemeIconsDir}\light.ico"; DestDir: "{app}\theme-icons"; Flags: ignor
 Source: "{#ThemeIconsDir}\green.ico"; DestDir: "{app}\theme-icons"; Flags: ignoreversion
 Source: "{#ThemeIconsDir}\violet.ico"; DestDir: "{app}\theme-icons"; Flags: ignoreversion
 ; Runtime is already compressed once. Inno only copies the archive from ISO.
-Source: "{src}\app-runtime.zip"; DestDir: "{tmp}"; Flags: external ignoreversion deleteafterinstall
+Source: "{src}\app-runtime.zip"; DestDir: "{app}\.install"; Flags: external ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{code:SelectedIconPath}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{code:SelectedIconPath}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "Запустить {#MyAppName}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "Запустить {#MyAppName}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent skipifdoesntexist; Check: EnsureApplicationExecutable
 
 [UninstallDelete]
 ; app-runtime.zip is extracted by tar, so register every installer-owned root
-; explicitly. User songs/settings are outside {app} and are handled separately.
+; explicitly. Writable application data stays under {app}\data and is preserved unless requested.
 Type: filesandordirs; Name: "{app}\locales"
 Type: filesandordirs; Name: "{app}\resources"
 Type: files; Name: "{app}\{#MyAppExeName}"
@@ -88,11 +89,7 @@ Type: files; Name: "{app}\vk_swiftshader_icd.json"
 Type: files; Name: "{app}\vulkan-1.dll"
 ; Remove any generated logs, update remnants or files created after setup.
 ; {app} is the dedicated application directory selected by the user.
-Type: filesandordirs; Name: "{app}"
-; AI weights are reusable while the app is installed, but are not user-created
-; content and must never leave ~10 GB behind after uninstall.
-Type: filesandordirs; Name: "{localappdata}\A&D Voice\models"
-Type: filesandordirs; Name: "{localappdata}\A&D Voice\model-cache"
+Type: filesandordirs; Name: "{app}\.install"
 
 [Code]
 var
@@ -126,8 +123,7 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if (CurUninstallStep = usPostUninstall) and RemoveUserData then
   begin
-    DelTree(ExpandConstant('{localappdata}\A&D Voice'), True, True, True);
-    DelTree(ExpandConstant('{userappdata}\A&D Voice'), True, True, True);
+    DelTree(ExpandConstant('{app}\data'), True, True, True);
   end;
 end;
 
@@ -258,7 +254,7 @@ end;
 
 procedure WriteInitialPreferences;
 var
-  AppDataDir: String;
+  ProfileDir: String;
   SettingsDir: String;
   SettingsPath: String;
   InstallPreferencesPath: String;
@@ -266,8 +262,8 @@ var
   ThemeIconPath: String;
   Payload: String;
 begin
-  AppDataDir := ExpandConstant('{userappdata}\A&D Voice');
-  SettingsDir := ExpandConstant('{localappdata}\A&D Voice\backend-data');
+  ProfileDir := ExpandConstant('{app}\data\electron-profile');
+  SettingsDir := ExpandConstant('{app}\data\backend');
   SettingsPath := SettingsDir + '\settings.json';
   ForceDirectories(SettingsDir);
   Payload := '{' + #13#10 +
@@ -279,7 +275,7 @@ begin
      (not SaveStringToFile(SettingsPath, Payload, False)) then
     RaiseException('Не удалось сохранить начальные настройки программы.');
 
-  InstallPreferencesPath := ExpandConstant('{localappdata}\A&D Voice\install-preferences.json');
+  InstallPreferencesPath := ExpandConstant('{app}\data\install-preferences.json');
   Payload := '{' + #13#10 +
     '  "language": "' + SelectedLanguage + '",' + #13#10 +
     '  "theme": "' + SelectedTheme + '"' + #13#10 +
@@ -287,10 +283,11 @@ begin
   if not SaveStringToFile(InstallPreferencesPath, Payload, False) then
     RaiseException('Не удалось передать выбранную тему программе.');
 
-  ThemePath := AppDataDir + '\selected-theme.txt';
+  ForceDirectories(ProfileDir);
+  ThemePath := ProfileDir + '\selected-theme.txt';
   if not SaveStringToFile(ThemePath, SelectedTheme, False) then
     RaiseException('Не удалось сохранить иконку выбранной темы.');
-  ThemeIconPath := AppDataDir + '\selected-theme.ico';
+  ThemeIconPath := ProfileDir + '\selected-theme.ico';
   if not FileCopy(SelectedIconPath(''), ThemeIconPath, False) then
     RaiseException('Не удалось подготовить системную иконку выбранной темы.');
 end;
@@ -394,6 +391,48 @@ begin
   StopModelProgressTimer;
 end;
 
+function EnsureApplicationExecutable: Boolean;
+var
+  ResultCode: Integer;
+  TarExe: String;
+  ArchivePath: String;
+  AppExePath: String;
+begin
+  AppExePath := ExpandConstant('{app}\{#MyAppExeName}');
+  if FileExists(AppExePath) then
+  begin
+    Result := True;
+    Exit;
+  end;
+
+  TarExe := ExpandConstant('{sys}\tar.exe');
+  ArchivePath := ExpandConstant('{app}\.install\app-runtime.zip');
+  if FileExists(TarExe) and FileExists(ArchivePath) then
+  begin
+    if Exec(
+      TarExe,
+      '-xf "' + ArchivePath + '" -C "' + ExpandConstant('{app}') + '"',
+      '',
+      SW_HIDE,
+      ewWaitUntilTerminated,
+      ResultCode
+    ) and (ResultCode = 0) and FileExists(AppExePath) then
+    begin
+      Result := True;
+      Exit;
+    end;
+  end;
+
+  MsgBox(
+    'A&D Voice установлен, но файл приложения отсутствует:' + #13#10 +
+      AppExePath + #13#10#13#10 +
+      'Установщик попытался восстановить программу из локального архива установки, но файл всё ещё недоступен.',
+    mbError,
+    MB_OK
+  );
+  Result := False;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
@@ -408,7 +447,7 @@ begin
   begin
     WriteInitialPreferences;
     TarExe := ExpandConstant('{sys}\tar.exe');
-    ArchivePath := ExpandConstant('{tmp}\app-runtime.zip');
+    ArchivePath := ExpandConstant('{app}\.install\app-runtime.zip');
 
     if InstallModelsCheck.Checked then
       ShowPendingInstallStep(
@@ -447,14 +486,16 @@ begin
     end;
 
     BackendExe := ExpandConstant('{app}\resources\backend\KaraokeBackend.exe');
-    // Store downloads outside the application directory so an Inno rollback
-    // does not erase completed multi-gigabyte files after a network failure.
-    ModelsDir := ExpandConstant('{localappdata}\A&D Voice\models');
-    ModelCacheDir := ExpandConstant('{localappdata}\A&D Voice\model-cache');
-    ModelLogPath := ExpandConstant('{localappdata}\A&D Voice\logs\model-install.log');
-    ModelProgressPath := ExpandConstant('{localappdata}\A&D Voice\logs\model-progress.txt');
+    // Keep models, resumable download cache and logs inside the selected install folder.
+    ModelsDir := ExpandConstant('{app}\data\models');
+    ModelCacheDir := ExpandConstant('{app}\data\cache\model-downloads');
+    ModelLogPath := ExpandConstant('{app}\data\logs\model-install.log');
+    ModelProgressPath := ExpandConstant('{app}\data\logs\model-progress.txt');
     DeleteFile(ModelProgressPath);
     ForceDirectories(ModelsDir);
+    ForceDirectories(ModelCacheDir);
+    ForceDirectories(ExpandConstant('{app}\data\logs'));
+    ForceDirectories(ExpandConstant('{app}\data\temp'));
     ShowPendingInstallStep(
       'Этап 3 из 3: подготовка загрузки AI-моделей...'
     );
