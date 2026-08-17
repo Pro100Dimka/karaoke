@@ -1,3 +1,5 @@
+import os from "node:os";
+
 const businessLogic = [
   "src/api/**/*.js",
   "src/contexts/**/*.{js,jsx}",
@@ -50,7 +52,7 @@ export default {
       ? concurrency
       : selectedFiles?.length
         ? 4
-        : 12,
+        : Math.max(4, os.cpus().length - 2),
   reporters: ["progress", "clear-text", "json"],
   jsonReporter: {
     fileName:

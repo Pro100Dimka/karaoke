@@ -204,9 +204,17 @@ export function createOnlineRoomMessageHandler(options) {
         !command.revision
       )
         return false;
-      const previousCommandId = pendingCommandRef.current?.commandId;
-      if (previousCommandId && previousCommandId !== command.commandId)
-        voice.cancelTransfersByCommandId?.(previousCommandId);
+      const previousPending = pendingCommandRef.current;
+      if (previousPending?.commandId && previousPending.commandId !== command.commandId) {
+        voice.cancelTransfersByCommandId?.(previousPending.commandId);
+        // A manual syncSong() request (pendingCommandRef holds its resolve/reject) must not
+        // be left hanging: without this it never settles until its own 5-minute timeout,
+        // because that timer only fires for the commandId it was created for, and by then
+        // pendingCommandRef.current already points at this new open-karaoke command.
+        previousPending.reject?.(
+          new Error(translateSaved("Передача песни заменена новым запросом от ведущего"))
+        );
+      }
       pendingCommandRef.current = command;
       roomApi
         .getSongRevision(command.songId)

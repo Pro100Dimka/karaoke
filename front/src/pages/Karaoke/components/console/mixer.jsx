@@ -77,7 +77,14 @@ function VerticalSlider({ label, value, color, onChange, onCommit, max = 1 }) {
             transform: "rotate(-90deg)",
             transformOrigin: "center",
             opacity: 0,
-            cursor: "pointer"
+            cursor: "pointer",
+            // The input's own drag axis is horizontal (rotation is a paint-only
+            // transform); browsers compute touch/pen gesture routing from the
+            // pre-rotation layout, so the default "auto" touch-action lets a
+            // vertical drag on this rotated thumb be claimed as a page pan
+            // instead of a slider drag. Claim the gesture exclusively so only
+            // the value changes, never the surrounding interface.
+            touchAction: "none"
           }}
         />
 

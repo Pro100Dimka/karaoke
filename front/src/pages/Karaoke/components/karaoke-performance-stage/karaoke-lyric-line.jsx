@@ -40,10 +40,40 @@ function KaraokeWord({ word, currentTime }) {
 
   const wordText = String(word?.text || word?.word || "");
   const joined = syllables.map((item) => String(item?.text || "")).join("");
-  const suffix = wordText.startsWith(joined) ? wordText.slice(joined.length) : "";
+  const matchIndex = wordText.indexOf(joined);
+
+  // Syllables are expected to reconstruct the word exactly. When they don't
+  // (e.g. leading punctuation such as an em dash/quote stripped only on the
+  // backend's syllable splitter, or a genuinely mismatched split), never drop
+  // the mismatched characters from the screen: a word that is actively being
+  // sung must not silently vanish. Fall back to word-level highlighting,
+  // which stays correct even though it loses per-syllable granularity.
+  if (matchIndex === -1) {
+    return (
+      <TimedText
+        text={wordText}
+        start={word?.start}
+        end={word?.end}
+        currentTime={currentTime}
+        className="karaoke-lyric-word"
+      />
+    );
+  }
+
+  const prefix = wordText.slice(0, matchIndex);
+  const suffix = wordText.slice(matchIndex + joined.length);
 
   return (
     <span className="karaoke-lyric-word">
+      {prefix && (
+        <TimedText
+          text={prefix}
+          start={word?.start}
+          end={syllables[0]?.start ?? word?.start}
+          currentTime={currentTime}
+          className="karaoke-lyric-syllable"
+        />
+      )}
       {syllables.map((syllable, index) => (
         <TimedText
           key={`syllable-${syllable.index ?? index}`}

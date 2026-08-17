@@ -63,6 +63,16 @@ def test_core_config_rejects_invalid_values(changes):
         config.CoreConfig(**changes)
 
 
+def test_core_config_default_min_note_filters_transient_blips():
+    # A sung note shorter than ~70ms is essentially never a real, perceivable
+    # pitch (see AI/config.py for the reasoning); regression-lock the default
+    # so a future change cannot silently reopen the "many strange short
+    # notes" symptom by reverting to the old, too-permissive 55ms floor.
+    default = config.CoreConfig()
+    assert default.min_note_sec == pytest.approx(0.07)
+    assert config.CoreConfig.from_env().min_note_sec == pytest.approx(0.07)
+
+
 def test_core_config_from_env_and_fingerprint(monkeypatch):
     monkeypatch.setenv("KARAOKE_AI_SAMPLE_RATE", "48000")
     monkeypatch.setenv("KARAOKE_AI_PITCH_SR", "22050")

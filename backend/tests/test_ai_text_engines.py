@@ -111,7 +111,10 @@ def test_transcriber_virtual_and_real_audio(monkeypatch, tmp_path):
         ][: len(audios)],
     )
     result, timed = transcriber.transcribe(audio, "en")
-    assert result == "one two three" and timed == [] and len(transcriber.last_segments) == 2
+    # Chunks are joined with a newline (not a space) so a lyrics-search miss
+    # still produces a karaoke display with more than one advancing line
+    # (see AI/karaoke_timeline.py, which splits display lines on "\n").
+    assert result == "one two\nthree" and timed == [] and len(transcriber.last_segments) == 2
 
 
 def test_transcriber_selective_retries(monkeypatch, tmp_path):

@@ -2197,6 +2197,22 @@ describe("online voice mesh", () => {
     expect(mesh.pendingTransferConfirmations.get("other-transfer")).toBe(pending);
   });
 
+  test("clears a pending incoming-file admission timer when its peer disconnects", () => {
+    vi.useFakeTimers();
+    const mesh = makeMesh();
+    mesh.createPeer("guest");
+    const admissionTimer = globalThis.setTimeout(() => {}, 15_000);
+    mesh.incomingFileAdmissions.set("guest", {
+      channel: new FakeChannel(),
+      cancelled: false,
+      timer: admissionTimer
+    });
+    const clear = vi.spyOn(globalThis, "clearTimeout");
+    mesh.removePeer("guest");
+    expect(clear).toHaveBeenCalledWith(admissionTimer);
+    expect(mesh.incomingFileAdmissions.has("guest")).toBe(false);
+  });
+
   test("cancels a file transfer when its channel closes after the last chunk", async () => {
     const mesh = makeMesh();
     const channel = new FakeChannel();

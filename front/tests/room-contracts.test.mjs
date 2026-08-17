@@ -71,6 +71,59 @@ test("only the host can publish the room karaoke selection", async () => {
   assert.equal(client.send.mock.calls.length, 0);
 });
 
+test("a newer open-karaoke command rejects an earlier one still waiting on participant readiness", async () => {
+  const client = { send: vi.fn() };
+  const hostSongCommandRef = { current: null };
+  const cancelTransfersByCommandId = vi.fn();
+  const voice = { cancelTransfersByCommandId };
+  const participantsRef = { current: [{ id: "guest-1" }] };
+  const roomApi = {
+    getSongRevision: vi.fn().mockResolvedValue({
+      revision: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    })
+  };
+  const isCurrentConnection = () => true;
+  const room = { host: true, selfId: "host" };
+
+  const firstCall = openKaraokeInRoom({
+    songId: "song-a",
+    room,
+    client,
+    roomApi,
+    isCurrentConnection,
+    hostSongCommandRef,
+    participantsRef,
+    voice
+  });
+  // Observed immediately so Node doesn't flag it as unhandled the instant the second call
+  // supersedes it below; the real assertion still happens via assert.rejects(firstCall).
+  firstCall.catch(() => {});
+  await flush();
+  const firstCommandId = hostSongCommandRef.current.commandId;
+
+  // Host picks a second song before every participant caught up on the first one. Without
+  // rejecting the first call's readyPromise here, it would only settle after its own 5-minute
+  // timeout, surfacing a stale "no response" error long after the host moved on.
+  const secondCall = openKaraokeInRoom({
+    songId: "song-b",
+    room,
+    client,
+    roomApi,
+    isCurrentConnection,
+    hostSongCommandRef,
+    participantsRef,
+    voice
+  });
+  await flush();
+
+  await assert.rejects(firstCall);
+  assert.equal(cancelTransfersByCommandId.mock.calls[0][0], firstCommandId);
+  assert.equal(hostSongCommandRef.current.songId, "song-b");
+
+  hostSongCommandRef.current.markReady("guest-1");
+  assert.equal(await secondCall, true);
+});
+
 test("room messages update participants, UI, voice and connection state", async () => {
   assert.deepEqual(upsertParticipant([], null), []);
   assert.deepEqual(upsertParticipant([], { id: "a", name: "A" }), [ { id: "a", name: "A" } ]);

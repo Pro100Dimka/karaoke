@@ -147,13 +147,43 @@ test("lyrics render words, syllables, suffixes and untimed fallback text", () =>
         words: [
           { word: "Word", start: 0, end: 1 },
           {},
+          // Syllables that do not reconstruct "XY" must not delete the word
+          // from the screen: it falls back to word-level highlighting instead
+          // of silently dropping the mismatched characters.
           { word: "XY", syllables: [ { start: 0, end: 0.5 }, { text: "Z", start: 0.5, end: 1 } ] },
           { syllables: [{}] }
         ]
       }}
     />
   );
-  expect(container.textContent).toBe("WordZ");
+  expect(container.textContent).toBe("WordXY");
   rerender(<KaraokeLyricLine currentTime={0} line={null} />);
   expect(container.textContent).toBe("");
+});
+
+test("lyrics preserve punctuation the backend's syllable split strips from the word edge", () => {
+  // split_written() in AI/syllables.py strips leading/trailing punctuation
+  // before splitting a word into syllables (see AI/syllables.py _WORD_EDGE).
+  // A leading em dash/quote is common in dialogue-style lyric lines, e.g.
+  // "— Пришла", and must still be rendered/highlighted, not disappear.
+  const { container } = render(
+    <KaraokeLyricLine
+      currentTime={0.5}
+      line={{
+        text: "— Пришла",
+        words: [
+          {
+            text: "—Пришла",
+            start: 0,
+            end: 1,
+            syllables: [
+              { index: 0, text: "При", start: 0, end: 0.5 },
+              { index: 1, text: "шла", start: 0.5, end: 1 }
+            ]
+          }
+        ]
+      }}
+    />
+  );
+  expect(container.textContent).toBe("—Пришла");
 });

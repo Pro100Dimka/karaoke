@@ -1314,12 +1314,15 @@
   block-size: 2rem;
 }
 
-/* The room stays connected while its panel is moved outside the viewport. */
+/* The room stays connected while its panel is moved outside the viewport.
+   Position with logical properties only: this used to also set the physical
+   `left`/`bottom`/`width` with different values than the logical ones below
+   (e.g. 16px vs. a 12-20px clamp for the same edge). Both pairs resolve the
+   same underlying box edge, so whichever was later in the cascade silently
+   won; keeping two conflicting sources of truth for one panel's position is
+   exactly how it ends up drawn from the wrong numbers. */
 .online-room-dock {
   position: fixed;
-  left: var(--space-4);
-  bottom: var(--space-4);
-  width: min(360px, calc(100vw - 2rem));
   border-radius: var(--radius-lg);
   background: var(--color-surface-strong);
   box-shadow:

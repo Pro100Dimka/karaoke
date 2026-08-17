@@ -47,7 +47,15 @@ class CoreConfig:
     hop_seconds: float = 0.01
     fmin_hz: float = 55.0
     fmax_hz: float = 1400.0
-    min_note_sec: float = 0.055
+    # A sung pitch this short is almost never a real, perceivable note: even a
+    # fast 16th-note melisma near 200 BPM is ~75ms, and vocal cords cannot
+    # articulate a distinct pitch much faster than that. The previous 55ms
+    # floor let plosive/sibilant transients and single vibrato lobes that
+    # escaped _sustained_pitch_segments()'s hysteresis register as full MIDI
+    # notes, which is exactly the "many strange short notes" symptom on the
+    # karaoke note guide. 70ms trims that noise while staying below genuine
+    # fast passages.
+    min_note_sec: float = 0.07
     min_voiced_confidence: float = 0.38
     split_note_semitones: float = 0.78
     max_gap_sec: float = 0.05
@@ -113,7 +121,7 @@ class CoreConfig:
             hop_seconds=_env_float("KARAOKE_AI_HOP_SECONDS", 0.01),
             fmin_hz=_env_float("KARAOKE_AI_FMIN_HZ", 55.0),
             fmax_hz=_env_float("KARAOKE_AI_FMAX_HZ", 1400.0),
-            min_note_sec=_env_float("KARAOKE_AI_MIN_NOTE_SEC", 0.055),
+            min_note_sec=_env_float("KARAOKE_AI_MIN_NOTE_SEC", 0.07),
             min_voiced_confidence=_env_float("KARAOKE_AI_MIN_CONFIDENCE", 0.38),
             split_note_semitones=_env_float("KARAOKE_AI_SPLIT_SEMITONES", 0.78),
             max_gap_sec=_env_float("KARAOKE_AI_MAX_GAP_SEC", 0.05),

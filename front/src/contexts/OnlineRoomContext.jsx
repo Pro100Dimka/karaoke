@@ -261,6 +261,24 @@ export function OnlineRoomProvider({ children }) {
         for (const activeCommandId of songExportsRef.current.keys())
           activeCommandIds.add(activeCommandId);
         if (commandId && !activeCommandIds.has(commandId)) return;
+        // A song owner disconnecting mid-transfer (or a stalled transfer timing out) only
+        // reaches us as a mesh-level "error"/"cancelled" progress event, not a sync message.
+        // Without settling pendingSongCommandRef here, syncSong()'s caller (e.g. Library's
+        // "open in karaoke" flow) would hang for the full 5-minute request timeout instead of
+        // failing promptly.
+        if (
+          ["error", "cancelled"].includes(stage) &&
+          commandId &&
+          pendingSongCommandRef.current?.commandId === commandId
+        ) {
+          const pending = pendingSongCommandRef.current;
+          pendingSongCommandRef.current = null;
+          pending.reject?.(
+            new Error(
+              translateSaved("Передача песни прервана: участник отключился или канал закрылся")
+            )
+          );
+        }
         setTransferStatus({
           participantId,
           commandId,

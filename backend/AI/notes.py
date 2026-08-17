@@ -1263,7 +1263,7 @@ def _merge_verified_fragments(
 def build_vocal_notes(
     pitch: list[PitchFrame],
     syllables: list[Syllable],
-    min_note: float = 0.055,
+    min_note: float = 0.07,
     split_semitones: float = 0.78,
     max_gap: float = 0.05,
     min_confidence: float = 0.42,

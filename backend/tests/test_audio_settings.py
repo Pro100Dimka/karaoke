@@ -189,6 +189,9 @@ def test_configure_monitoring_routes_auto_and_asio(monkeypatch):
     monkeypatch.setattr(audio_service, "_is_wasapi_device", Mock(return_value=True))
     worker.reset_mock()
     audio_service.configure_monitoring(settings(monitoring_enabled=True, volume=8, buffer_size=128))
+    # Even when both endpoints are WASAPI, direct monitoring must never request
+    # exclusive mode: it would silence the karaoke song (and everything else)
+    # for as long as monitoring is on, with no automatic recovery afterwards.
     assert worker.call_args.args[0] == {
         "input_device_id": 1,
         "output_device_id": 2,
@@ -196,7 +199,7 @@ def test_configure_monitoring_routes_auto_and_asio(monkeypatch):
         "output_channels": 2,
         "blocksize": 128,
         "gain": 4,
-        "wasapi_exclusive": True,
+        "wasapi_exclusive": False,
     }
 
     devices[2]["max_output_channels"] = 0

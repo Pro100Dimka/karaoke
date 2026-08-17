@@ -870,6 +870,41 @@ describe("online room provider", () => {
     expect(hook.result.current.transferStatus).toEqual({ stage: "sending", percent: 60 });
   });
 
+  test("rejects a pending manual song sync when its transfer errors or the owner disconnects", async () => {
+    const hook = renderHook(() => useOnlineRoom(), { wrapper });
+    await act(() => hook.result.current.createRoom("Host"));
+    const voice = mocks.voices[0];
+    const client = mocks.clients[0];
+    client.send.mockReturnValue(true);
+    mocks.getSongRevision.mockRejectedValueOnce(new Error("not found locally"));
+
+    const song = { id: "song-1", __roomOwnerId: "owner-1", __roomRevision: `sha256:${"b".repeat(64)}` };
+    let syncPromise;
+    await act(async () => {
+      syncPromise = hook.result.current.syncSong(song);
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+    });
+
+    const sentState = client.send.mock.calls.find(
+      (call) => call[0] === "sync" && call[1]?.state?.type === "song-request"
+    )?.[1]?.state;
+    expect(sentState).toMatchObject({ songId: "song-1", ownerId: "owner-1" });
+    expect(hook.result.current.transferStatus).toMatchObject({ stage: "waiting" });
+
+    act(() =>
+      voice.onTransferProgress({
+        participantId: "owner-1",
+        stage: "error",
+        percent: 0,
+        metadata: { commandId: sentState.commandId }
+      })
+    );
+
+    await expect(syncPromise).rejects.toThrow();
+  });
+
   test("publishes an imported pending song and ignores a stale import result", async () => {
     vi.spyOn(Date, "now").mockReturnValue(1234);
     vi.spyOn(Math, "random").mockReturnValue(0.25);

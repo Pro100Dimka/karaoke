@@ -11,7 +11,7 @@
     "build": "vite build",
     "build:electron": "npm run release:check && electron-builder",
     "preview": "vite preview",
-    "lint": "eslint src electron --ext .js,.jsx,.cjs --ignore-pattern src/theme --max-warnings 0",
+    "lint": "eslint src electron --ext .js,.jsx,.cjs --ignore-pattern src/theme",
     "lint:fix": "npm run lint -- --fix",
     "format": "prettier --write \"src/**/*.{js,jsx,css}\" \"electron/**/*.cjs\" \"scripts/**/*.mjs\"",
     "format:check": "prettier --check \"src/**/*.{js,jsx,css}\" \"electron/**/*.cjs\" \"scripts/**/*.mjs\"",

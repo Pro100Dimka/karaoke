@@ -27,9 +27,17 @@ export async function openKaraokeInRoom({
   if (!isCurrentConnection()) return false;
 
   const command = { type: "open-karaoke", songId, commandId: createCommandId(), revision };
-  const previousCommandId = hostSongCommandRef?.current?.commandId;
-  if (previousCommandId && previousCommandId !== command.commandId)
-    voice?.cancelTransfersByCommandId?.(previousCommandId);
+  const previous = hostSongCommandRef?.current;
+  if (previous?.commandId && previous.commandId !== command.commandId) {
+    voice?.cancelTransfersByCommandId?.(previous.commandId);
+    // Without this, an earlier still-pending openKaraokeInRoom() call (host picked a
+    // different song before everyone caught up on the first one) would just sit on its own
+    // readyPromise until its 5-minute timeout fires, surfacing a confusing stale error long
+    // after the host has moved on to the next song.
+    previous.rejectReady?.(
+      new Error(translateSaved("Ведущий выбрал другую песню до готовности этой"))
+    );
+  }
 
   const expectedIds = new Set(
     (participantsRef?.current || [])
@@ -37,23 +45,28 @@ export async function openKaraokeInRoom({
       .map((participant) => participant.id)
   );
   let resolveReady;
-  let rejectReady;
+  let rejectReadyRaw;
   const readyPromise = new Promise((resolve, reject) => {
     resolveReady = resolve;
-    rejectReady = reject;
+    rejectReadyRaw = reject;
   });
   const timer = globalThis.setTimeout(
     () =>
-      rejectReady(
+      rejectReadyRaw(
         new Error(translateSaved("Передача песни остановилась: нет ответа от участника"))
       ),
     SONG_READY_TIMEOUT_MS
   );
+  const rejectReady = (error) => {
+    globalThis.clearTimeout(timer);
+    rejectReadyRaw(error);
+  };
   if (hostSongCommandRef) {
     hostSongCommandRef.current = {
       ...command,
       expectedIds,
       readyIds: new Set(),
+      rejectReady,
       markReady(participantId) {
         this.readyIds.add(participantId);
         if ([...this.expectedIds].every((id) => this.readyIds.has(id))) resolveReady(true);

@@ -168,7 +168,7 @@ def _words_from_items(items) -> list[Word]:
     return words
 
 
-ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v14-duration-guard"
+ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v15-newline-phrase-join"
 LONG_TEXT_ALIGNMENT_VERSION = "v52-pure-evidence-consensus-quality-ranking"
 FALLBACK_WORD_CONFIDENCE = 0.012
 
@@ -3649,7 +3649,17 @@ class Qwen3Transcriber(Transcriber):
             )
 
         owned_parts = _trim_transcript_overlaps(chosen_parts)
-        text = " ".join(part for part in owned_parts if part).strip()
+        # Join phrase chunks with a newline, not a space. This text becomes
+        # lyrics.txt/canonical_lyrics_text whenever discover_lyrics() cannot find
+        # an authored lyric (see AI/lyrics_sources.py + AI/karaoke_timeline.py),
+        # and build_karaoke_song_map() splits display lines by "\n" alone. A
+        # space-joined transcript collapsed the whole song into a single
+        # karaoke_timeline line (one "line" from 0s to the end of the song), so
+        # the karaoke display could never advance past the first line even
+        # though word-level timing underneath was fine. Each ASR chunk already
+        # corresponds to one sung phrase (see _singing_chunk_windows), which is
+        # a reasonable proxy for a lyric line when no authored line breaks exist.
+        text = "\n".join(part for part in owned_parts if part).strip()
         self.last_segments = [
             (start, end, part)
             for (_chunk, start, end), part in zip(windows, owned_parts, strict=False)

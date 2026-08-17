@@ -95,6 +95,10 @@ test("mixer changes and commits volumes and effects", () => {
   );
   const { container } = view;
   const slider = container.querySelector('input[type="range"]');
+  // Rotated vertical sliders must claim touch/pen gestures exclusively, or a
+  // drag on them can be handed to the page as a pan instead of changing the
+  // value (the whole interface appears to drag along with the pointer).
+  expect(slider.style.touchAction).toBe("none");
   fireEvent.change(slider, { target: { value: "0.8" } });
   fireEvent.pointerUp(slider, { currentTarget: { value: "0.8" } });
   fireEvent.keyUp(slider, { currentTarget: { value: "0.8" } });

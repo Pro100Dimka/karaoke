@@ -359,7 +359,10 @@ export default class OnlineVoiceMesh {
       new Error(translateSaved("Участник отключился во время передачи"))
     );
     const admission = this.incomingFileAdmissions.get(participantId);
-    if (admission) admission.cancelled = true;
+    if (admission) {
+      admission.cancelled = true;
+      globalThis.clearTimeout(admission.timer);
+    }
     this.incomingFileAdmissions.delete(participantId);
     const incoming = this.incomingFiles.get(participantId);
     cleanupIncomingTransfer(incoming);

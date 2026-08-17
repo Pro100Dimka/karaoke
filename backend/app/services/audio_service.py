@@ -507,7 +507,16 @@ def configure_monitoring(settings: models.AudioSettings) -> None:
         raise RuntimeError("No output device is available for microphone monitoring")
     gain = max(0.0, min(4.0, settings.volume))
 
-    use_wasapi_exclusive = _is_wasapi_device(input_info) and _is_wasapi_device(output_info)
+    # WASAPI exclusive mode seizes the output device system-wide: while direct
+    # monitoring is on, nothing else -- including the karaoke song itself --
+    # can produce sound through it, and once monitoring stops the shared
+    # stream that got preempted does not resume on its own (confirmed with a
+    # live WASAPI loopback capture: a steady tone was silenced the instant an
+    # exclusive monitor stream opened and never returned after it closed).
+    # Direct monitoring exists so the singer can hear themselves *while* the
+    # song plays, so it must never request exclusive access even when both
+    # endpoints support it.
+    use_wasapi_exclusive = False
     worker_options = {
         "input_device_id": resolved_input_id,
         "output_device_id": resolved_output_id,

@@ -252,7 +252,10 @@ export default function Library({ onOpenSongSettings }) {
         roomSyncQueueRef.current = roomSyncQueueRef.current
           .catch(() => {})
           .then(() => sharedRoom.syncSong(song))
-          .then(() => refreshSongs());
+          .then(() => refreshSongs())
+          // This automatic background sync has no caller to report to; syncSong() already
+          // surfaces failures via transferStatus, so just prevent an unhandled rejection here.
+          .catch(() => {});
       }
     }
     remoteSongStatusesRef.current = nextStatuses;
