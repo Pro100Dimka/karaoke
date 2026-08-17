@@ -14,5 +14,7 @@ export const systemApi = {
   getVersions: () => request("/diagnostics/versions"),
   getErrors: () => request("/diagnostics/errors"),
   getHistory: () => request("/history"),
-  getAbout: () => request("/about")
+  getAbout: () => request("/about"),
+  reportClientLog: (entry) =>
+    request("/diagnostics/client-log", { method: "POST", body: JSON.stringify(entry) })
 };

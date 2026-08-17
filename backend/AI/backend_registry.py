@@ -193,8 +193,9 @@ def _optional_runtime_path(env_var: str) -> tuple[Path | None, str]:
     path = Path(value).expanduser()
     if not path.is_dir():
         return None, f"Optional runtime path does not exist: {path}"
-    polluted = [name for name in _OPTIONAL_RUNTIME_FORBIDDEN_TOP_LEVEL if (path / name).exists()]
-    if polluted:
+    if polluted := [
+        name for name in _OPTIONAL_RUNTIME_FORBIDDEN_TOP_LEVEL if (path / name).exists()
+    ]:
         return None, (
             f"Optional runtime path is not isolated ({', '.join(polluted)}); "
             "rerun the runtime preparation script"

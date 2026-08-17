@@ -197,11 +197,9 @@ def _apply_cpu_tuning(hardware: HardwareProfile, torch_module=None) -> tuple[int
         if torch is None:
             import torch
 
-        setter = getattr(torch, "set_num_threads", None)
-        if setter is not None:
+        if (setter := getattr(torch, "set_num_threads", None)) is not None:
             setter(intra)
-        setter = getattr(torch, "set_num_interop_threads", None)
-        if setter is not None:
+        if (setter := getattr(torch, "set_num_interop_threads", None)) is not None:
             with contextlib.suppress(RuntimeError):
                 setter(inter)
     except (ImportError, RuntimeError):

@@ -104,22 +104,16 @@ def extract_embedded_cover(source_path: Path, output_dir: Path) -> Path | None:
 
     candidates: list[bytes] = []
     for picture in getattr(audio, "pictures", ()) or ():
-        data = getattr(picture, "data", None)
-        if isinstance(data, bytes) and data:
+        if isinstance(data := getattr(picture, "data", None), bytes) and data:
             candidates.append(data)
 
-    tags = getattr(audio, "tags", None)
-    if tags is not None:
-        values = getattr(tags, "values", None)
-        if callable(values):
+    if (tags := getattr(audio, "tags", None)) is not None:
+        if callable(values := getattr(tags, "values", None)):
             for value in values():
-                data = getattr(value, "data", None)
-                if isinstance(data, bytes) and data:
+                if isinstance(data := getattr(value, "data", None), bytes) and data:
                     candidates.append(data)
-        get = getattr(tags, "get", None)
-        if callable(get):
-            covers = get("covr")
-            if isinstance(covers, (list, tuple)):
+        if callable(get := getattr(tags, "get", None)):
+            if isinstance(covers := get("covr"), (list, tuple)):
                 candidates.extend(bytes(item) for item in covers if item)
 
     for payload in candidates:
@@ -132,8 +126,7 @@ def extract_embedded_cover(source_path: Path, output_dir: Path) -> Path | None:
     return None
 
 def _first_audio_tag(tags: object, *names: str) -> str | None:
-    get = getattr(tags, "get", None)
-    if not callable(get):
+    if not callable(get := getattr(tags, "get", None)):
         return None
     for name in names:
         value = get(name)
@@ -216,8 +209,7 @@ def parse_filename_identity(filename: str) -> tuple[str | None, str]:
 
     # Metadata-less libraries often use Artist-Title without spaces. Split
     # only the first separator so punctuation inside the title survives.
-    compact = re.match(r"^(.+?)[–—-](.+)$", stem)
-    if compact:
+    if compact := re.match(r"^(.+?)[–—-](.+)$", stem):
         artist = compact.group(1).strip()
         title = compact.group(2).strip()
         if artist and title and any(ch.isalpha() for ch in artist):
@@ -314,13 +306,6 @@ def _song_input(title: str, original_filename: str) -> tuple[str, str, str]:
     return clean_title, safe_original_name, extension
 
 
-def _commit_song(db: Session, song: models.Song) -> models.Song:
-    """Commit, refresh, and invalidate the cached content revision."""
-    saved = commit_refresh(db, song)
-    revision_cache.invalidate(saved)
-    return saved
-
-
 def _persist_song(
     db: Session,
     *,
@@ -353,7 +338,9 @@ def _persist_song(
         )
         db.add(song)
         try:
-            return _commit_song(db, song)
+            saved = commit_refresh(db, song)
+            revision_cache.invalidate(saved)
+            return saved
         except Exception:
             destination.unlink(missing_ok=True)
             for cover in output_dir.glob("cover.*"):
@@ -437,7 +424,9 @@ def update_song(db: Session, song: models.Song, patch: schemas.SongUpdate) -> mo
         if "tempo_override" in changes:
             song.tempo_user_edited = changes["tempo_override"] is not None
         try:
-            return _commit_song(db, song)
+            saved = commit_refresh(db, song)
+            revision_cache.invalidate(saved)
+            return saved
         except Exception:
             for field, value in previous.items():
                 setattr(song, field, value)

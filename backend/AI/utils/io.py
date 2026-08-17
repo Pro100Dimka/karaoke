@@ -18,8 +18,7 @@ def write_bytes_atomic(path: str | Path, data: bytes) -> None:
             os.fsync(stream.fileno())
         os.replace(temporary, target)
     finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
+        Path(temporary).unlink(missing_ok=True)
 
 
 def write_text_atomic(path: str | Path, text: str) -> None:

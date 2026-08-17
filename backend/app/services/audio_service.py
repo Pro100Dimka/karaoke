@@ -312,8 +312,7 @@ def list_output_devices() -> list[dict]:
 
 
 def _get_or_create_settings(db: Session) -> models.AudioSettings:
-    settings = db.get(models.AudioSettings, 1)
-    if settings is not None:
+    if (settings := db.get(models.AudioSettings, 1)) is not None:
         return settings
     settings = models.AudioSettings(id=1)
     db.add(settings)
@@ -484,6 +483,25 @@ def configure_monitoring(settings: models.AudioSettings) -> None:
     resolved_output_id = _resolved_device_index(output_device_id, "output")
     input_info = sd.query_devices(resolved_input_id)
     output_info = sd.query_devices(resolved_output_id)
+
+    if int(input_info["hostapi"]) != int(output_info["hostapi"]):
+        # preferred_input_device()/preferred_output_device() resolve independently
+        # and can each fall back to a different audio driver -- e.g. an
+        # ASIO-only interface for the microphone paired with a stored output
+        # selection that only matches over WASAPI.  PortAudio refuses to open
+        # one duplex stream spanning two host APIs (PaErrorCode -9993), so
+        # force the output onto the microphone's own host API before ever
+        # reaching the native stream, instead of surfacing that opaque error.
+        matched_output_id = _matching_output_for_input(resolved_input_id, None)
+        matched_info = sd.query_devices(matched_output_id)
+        if int(matched_info["hostapi"]) == int(input_info["hostapi"]):
+            resolved_output_id, output_info = matched_output_id, matched_info
+        else:
+            raise RuntimeError(
+                "Microphone and speakers use incompatible audio drivers "
+                f"({_host_api_name(input_info)} vs {_host_api_name(output_info)}); "
+                "select matching devices in audio settings."
+            )
     output_channels = min(2, int(output_info["max_output_channels"]))
     if output_channels < 1:
         raise RuntimeError("No output device is available for microphone monitoring")

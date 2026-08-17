@@ -23,17 +23,58 @@ from typing import Any, BinaryIO
 import uvicorn
 
 
+class _StreamToLogFile:
+    """Mirror a raw text stream into the backend's rotating log file.
+
+    Progress/diagnostic lines throughout the AI pipeline (``print(f"[AI] ...")``)
+    never went through ``logging``, so they only ever reached the terminal --
+    or, in the packaged app, a second, separate ``backend-process.log`` that
+    Electron captured on its own. Emitting straight to the same file handler
+    (bypassing the logger dispatch chain, so nothing is printed twice) keeps
+    every backend line, log calls and plain prints alike, in one place.
+    """
+
+    def __init__(self, file_handler: RotatingFileHandler, level: int, original):
+        self._file_handler = file_handler
+        self._level = level
+        self._original = original
+
+    def write(self, message: str) -> int:
+        self._original.write(message)
+        for line in message.splitlines():
+            if line.strip():
+                record = logging.LogRecord("stdout", self._level, "", 0, line, (), None)
+                self._file_handler.emit(record)
+        return len(message)
+
+    def flush(self) -> None:
+        self._original.flush()
+
+    def isatty(self) -> bool:
+        return False
+
+
 def configure_logging() -> None:
     import config
+    from app.services.remote_log_service import RemoteErrorLogHandler
 
     log_path = config.APP_LOG_DIR / "backend.log"
-    handler = RotatingFileHandler(log_path, maxBytes=2_000_000, backupCount=3, encoding="utf-8")
+    file_handler = RotatingFileHandler(
+        log_path, maxBytes=2_000_000, backupCount=3, encoding="utf-8"
+    )
+    # ERROR+ records (from the backend itself, and forwarded here from the
+    # frontend/Electron via /diagnostics/client-log) also ship to the
+    # developer's remote collector, so every user's failures are visible in
+    # one place regardless of whether that user is in an online room.
+    remote_handler = RemoteErrorLogHandler()
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        handlers=[handler, logging.StreamHandler(sys.stdout)],
+        handlers=[file_handler, logging.StreamHandler(sys.stdout), remote_handler],
         force=True,
     )
+    sys.stdout = _StreamToLogFile(file_handler, logging.INFO, sys.stdout)
+    sys.stderr = _StreamToLogFile(file_handler, logging.ERROR, sys.stderr)
 
 
 

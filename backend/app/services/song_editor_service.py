@@ -159,8 +159,7 @@ def _refresh_lines(song_map: JsonObject, notes: list[JsonObject]) -> None:
         syllable["display_notes"] = [dict(n) for n in linked]
         syllable["timing_source"] = "syllable_alignment"
         word_index = _safe_int(syllable.get("word_index"), -1)
-        linked_word = word_lookup.get(word_index)
-        if linked_word is not None:
+        if (linked_word := word_lookup.get(word_index)) is not None:
             linked_word.setdefault("syllables", []).append(syllable)
 
     for word_payload in words:

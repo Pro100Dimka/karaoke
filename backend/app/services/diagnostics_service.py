@@ -3,12 +3,20 @@
 from __future__ import annotations
 
 import importlib.metadata
+import logging
 import platform
 import subprocess
 
 import config
 
 BACKEND_VERSION = "0.3.5"
+_CLIENT_LOG_LEVELS = {
+    "debug": logging.DEBUG,
+    "info": logging.INFO,
+    "warning": logging.WARNING,
+    "error": logging.ERROR,
+    "fatal": logging.CRITICAL,
+}
 
 
 def _ffmpeg_available() -> bool:
@@ -135,3 +143,26 @@ def recent_errors(limit: int = 20) -> list[dict]:
         ]
     finally:
         db.close()
+
+
+def record_client_log(entry) -> None:
+    """Fold a frontend/Electron log line into the backend's own log file.
+
+    Keeps the "one file for everything" goal working for non-Python surfaces
+    too: the browser/renderer and the Electron main process have no rotating
+    file handler of their own, so they forward here and this simply logs
+    through the same handler `run.configure_logging()` already set up.
+    """
+    level = _CLIENT_LOG_LEVELS.get(str(entry.level or "info").casefold(), logging.INFO)
+    context = " ".join(
+        part
+        for part in (
+            f"user={entry.user}" if entry.user else "",
+            f"at={entry.url}" if entry.url else "",
+        )
+        if part
+    )
+    message = f"{context}: {entry.message}" if context else entry.message
+    if entry.stack:
+        message = f"{message}\n{entry.stack}"
+    logging.getLogger(f"client.{entry.source or 'unknown'}").log(level, message)

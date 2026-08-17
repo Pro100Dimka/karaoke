@@ -291,6 +291,15 @@ class SystemErrorsOut(BaseModel):
     errors: list[dict[str, Any]]
 
 
+class ClientLogIn(BaseModel):
+    source: str = "renderer"
+    level: str = "info"
+    message: str
+    stack: str | None = None
+    url: str | None = None
+    user: str | None = None
+
+
 # --------------------------------------------------------------------
 # Аудио-устройства
 # --------------------------------------------------------------------

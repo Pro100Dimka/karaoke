@@ -102,8 +102,7 @@ def migrate_legacy_song_storage() -> None:
                 song.source_path = str(target / previous_source.relative_to(previous_output))
 
             if not Path(song.source_path).is_file():
-                retained_source = _existing_source(target)
-                if retained_source is not None:
+                if (retained_source := _existing_source(target)) is not None:
                     song.source_path = str(retained_source)
 
             song.output_dir = str(target)

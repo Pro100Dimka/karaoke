@@ -492,8 +492,7 @@ def _pipeline_lossless_canonical_words(
     if not tokens or total_duration <= 0.04:
         return words
 
-    canonical_match = _canonical_alignment_matches(text, words)
-    if canonical_match:
+    if canonical_match := _canonical_alignment_matches(text, words):
         preserved = _preserve_complete_canonical_timeline(
             words, total_duration, sources, candidates
         )
@@ -607,8 +606,7 @@ class KaraokePipeline:
         self.engines = engines or EngineRegistry.create_default(self.config)
 
     def close(self) -> None:
-        close = getattr(self.engines.separator, "close", None)
-        if close is not None:
+        if (close := getattr(self.engines.separator, "close", None)) is not None:
             close()
 
     @staticmethod

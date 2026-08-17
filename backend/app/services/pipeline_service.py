@@ -191,8 +191,7 @@ class _ProgressCapture(io.TextIOBase):
                 raise ProcessingCancelled("Processing cancelled by user")
             self._log_file.write(text)
             self._log_file.flush()
-            match = _STEP_RE.search(text)
-            if match:
+            if match := _STEP_RE.search(text):
                 step = match.group("step")
                 _set_runtime_step(self._song_id, float(step), text)
                 _update_progress(
@@ -261,8 +260,7 @@ def _set_runtime_detail(song_id: str, log_text: str) -> None:
     if not detail or len(detail) > 160 or _NOISY_PROGRESS_RE.search(detail):
         return
     with _progress_runtime_lock:
-        runtime = _progress_runtime.get(song_id)
-        if runtime:
+        if runtime := _progress_runtime.get(song_id):
             # Semantic callbacks already supplied a translated stage label.
             # Do not replace it with captured internal log output.
             if "direct_percent" in runtime:
@@ -384,8 +382,7 @@ def get_processing_telemetry(song_id: str) -> dict:
 def _progress_heartbeat(song_id: str, stop_event: threading.Event) -> None:
     while not stop_event.wait(1.0):
         try:
-            telemetry = get_processing_telemetry(song_id)
-            if telemetry:
+            if telemetry := get_processing_telemetry(song_id):
                 step = telemetry["step"]
                 detail = telemetry.get("progress_detail") or "Обработка AI"
                 label = detail if telemetry.get("semantic") else f"{step:g}/13 · {detail}"
@@ -535,10 +532,11 @@ def _load_job_paths(song_id: str) -> tuple[str, Path] | None:
         if song is None:
             return None
         stored_output = getattr(song, "output_dir", None)
-        if isinstance(stored_output, (str, os.PathLike)) and str(stored_output):
-            out_dir = song_service.resolve_output_dir(song)
-        else:
-            out_dir = config.SONG_OUTPUT_DIR / song.slug
+        out_dir = (
+            song_service.resolve_output_dir(song)
+            if isinstance(stored_output, (str, os.PathLike)) and str(stored_output)
+            else config.SONG_OUTPUT_DIR / song.slug
+        )
         return song.source_path, out_dir
 
 
@@ -626,9 +624,15 @@ def _format_processing_error(exc: BaseException) -> str:
 
 
 def _write_pipeline_error(capture: _ProgressCapture | None, exc: Exception) -> None:
-    """Persist a worker traceback when its log stream was created successfully."""
+    """Persist a worker traceback to the per-song log and the shared backend log.
+
+    Routing through ``logger`` (instead of only the per-song capture file) is
+    what makes these failures also land in backend.log and reach the remote
+    error collector -- previously a processing crash was visible only in that
+    one song's own log file.
+    """
+    logger.error("Song processing failed: %s", _format_processing_error(exc), exc_info=exc)
     if capture is None:
-        logger.exception("Song processing failed before pipeline.log was available")
         return
     with contextlib.suppress(OSError, ValueError):
         capture.write(
@@ -645,8 +649,7 @@ def _create_ai_progress_callback(
         bounded_percent = max(0.0, min(99.7, float(percent)))
         friendly = _AI_STAGE_PLAN.get(stage, (0, 0, "Обрабатываем песню"))[2]
         with _progress_runtime_lock:
-            runtime = _progress_runtime.get(song_id)
-            if runtime is not None:
+            if (runtime := _progress_runtime.get(song_id)) is not None:
                 now = time.monotonic()
                 previous_stage = runtime.get("stage")
                 if previous_stage and previous_stage != stage:
@@ -816,8 +819,7 @@ def _apply_generated_metadata(song: models.Song, out_dir: Path) -> None:
         for note in reference:
             if not isinstance(note, dict):
                 continue
-            value = note.get("midi_note", note.get("midi"))
-            if value is not None:
+            if (value := note.get("midi_note", note.get("midi"))) is not None:
                 midi.append(int(value))
     except (TypeError, ValueError):
         return

@@ -247,8 +247,7 @@ class CTCWordAligner:
             return paths
 
         roots: list[Path] = []
-        meipass = getattr(sys, "_MEIPASS", None)
-        if meipass:
+        if meipass := getattr(sys, "_MEIPASS", None):
             roots.append(Path(meipass))
         roots.append(Path(sys.executable).resolve().parent)
         here = Path(__file__).resolve()
@@ -501,8 +500,7 @@ class CTCWordAligner:
         try:
             with profile_operation("transfer.cpu_to_gpu.ctc", byte_count=audio.nbytes):
                 input_values = inputs.input_values.to(self._device)
-            attention_mask = getattr(inputs, "attention_mask", None)
-            if attention_mask is not None:
+            if (attention_mask := getattr(inputs, "attention_mask", None)) is not None:
                 attention_mask = attention_mask.to(self._device)
             logits = PyTorchCTCBackend(model, self._device).infer(input_values, attention_mask)
         except Exception as exc:

@@ -300,8 +300,7 @@ def record_operation(
     elapsed_sec: float = 0.0,
     byte_count: int = 0,
 ) -> None:
-    telemetry = current_telemetry()
-    if telemetry is not None:
+    if (telemetry := current_telemetry()) is not None:
         telemetry.record(
             name,
             count=count,

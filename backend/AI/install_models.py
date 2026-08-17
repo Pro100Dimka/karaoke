@@ -352,8 +352,7 @@ def write_environment(downloads: Path, models_root: Path, msst: Path, env_file: 
 def verify_all(models_root: Path) -> bool:
     ok = True
     for model in MODELS:
-        removed = prune_unused_artifacts(models_root, model)
-        if removed:
+        if removed := prune_unused_artifacts(models_root, model):
             LOGGER.info("[PRUNE] %s: removed %d unused artifacts", model.name, removed)
         valid = is_valid(models_root, model)
         if not valid and model.kind == "snapshot":
@@ -397,10 +396,11 @@ def main(argv: list[str] | None = None) -> int:
     os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 
     if args.check or args.quick_check:
-        if args.quick_check:
-            ok = all(quick_is_valid(models_root, model) for model in MODELS)
-        else:
-            ok = verify_all(models_root)
+        ok = (
+            all(quick_is_valid(models_root, model) for model in MODELS)
+            if args.quick_check
+            else verify_all(models_root)
+        )
         if ok and args.msst and args.env:
             write_environment(downloads, models_root, args.msst.resolve(), args.env.resolve())
         return 0 if ok else 1

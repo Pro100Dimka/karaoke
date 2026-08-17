@@ -1,5 +1,6 @@
 import { Component } from "react";
 import { translateMessage } from "../../i18n";
+import { reportClientError } from "../../utils/error-reporter";
 import { getErrorMessage } from "../../utils/errors";
 import { getSavedLanguage } from "../../utils/language";
 import { Button } from "../fields";
@@ -16,6 +17,10 @@ export default class ErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     console.error("Unhandled application error", error, info);
+    reportClientError(error?.message || String(error), {
+      source: "renderer.error-boundary",
+      stack: error?.stack || info?.componentStack
+    });
   }
 
   render() {

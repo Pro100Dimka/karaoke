@@ -76,7 +76,11 @@ def test_transcribe_batch_falls_back_to_individual_calls():
     model = Mock()
     model.transcribe.return_value = {"text": "single"}
     assert transcriber._transcribe_batch(model, [1], "en")[0]["text"] == "single"
-    assert model.transcribe.call_args.kwargs["language"] == "en"
+    # Qwen3-ASR's transcribe() only recognizes full language names (its
+    # SUPPORTED_LANGUAGES allowlist has "English", not "en"); a raw ISO code
+    # reaching it unnormalized is exactly the class of bug that crashed on
+    # Ukrainian, so _transcribe_batch_once narrows/normalizes it first.
+    assert model.transcribe.call_args.kwargs["language"] == "English"
 
 
 def test_transcriber_virtual_and_real_audio(monkeypatch, tmp_path):

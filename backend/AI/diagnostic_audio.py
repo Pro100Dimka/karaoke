@@ -32,8 +32,7 @@ def _render_notes(notes: list[VocalNote], frames: int, sample_rate: int) -> np.n
         tone = np.sin(2.0 * math.pi * frequency * t)
         tone += 0.16 * np.sin(4.0 * math.pi * frequency * t)
         envelope = np.ones(count, dtype=np.float64)
-        fade = min(round(0.008 * sample_rate), count // 3)
-        if fade:
+        if fade := min(round(0.008 * sample_rate), count // 3):
             envelope[:fade] = np.linspace(0.0, 1.0, fade, endpoint=False)
             envelope[-fade:] = np.linspace(1.0, 0.0, fade, endpoint=False)
         audio[start:end] += (tone * envelope * 0.42).astype(np.float32)

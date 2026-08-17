@@ -100,8 +100,7 @@ class OrtCudaCTCBackend:
         # CPU. That silently turns a CUDA shadow benchmark into a CPU result and
         # can retain a second large runtime unexpectedly. A CUDA adapter must
         # fail explicitly; the caller owns the backend fallback chain.
-        disable_fallback = getattr(session, "disable_fallback", None)
-        if disable_fallback is not None:
+        if (disable_fallback := getattr(session, "disable_fallback", None)) is not None:
             disable_fallback()
         self._session = session
         return session

@@ -110,10 +110,10 @@ def build_karaoke_song_map(
     lines: list[dict[str, Any]] = []
     cursor = 0
     for line_index, (line_text, count) in enumerate(zip(line_texts, line_counts, strict=True)):
-        if line_index == len(line_texts) - 1:
-            line_words = prepared_words[cursor:]
-        else:
-            line_words = prepared_words[cursor : cursor + count]
+        is_last_line = line_index == len(line_texts) - 1
+        line_words = (
+            prepared_words[cursor:] if is_last_line else prepared_words[cursor : cursor + count]
+        )
         cursor += count
         if not line_words:
             continue

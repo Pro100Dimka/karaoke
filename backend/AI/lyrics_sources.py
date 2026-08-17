@@ -14,7 +14,8 @@ from difflib import SequenceMatcher
 from html.parser import HTMLParser
 from pathlib import Path
 
-_LRC_TIME = re.compile(r"\[(?P<minutes>\d{1,3}):(?P<seconds>\d{1,2}(?:[.:]\d+)?)\]")
+_LRC_TIME = re.compile(
+    r"\[(?P<minutes>\d{1,3}):(?P<seconds>\d{1,2}(?:[.:]\d+)?)\]")
 _META = re.compile(r"^\[(?:ar|ti|al|by|offset|re|ve):.*?\]\s*$", re.I)
 _SECTION_LABEL = re.compile(
     r"^(?:(?:припев|куплет|бридж|проигрыш|вступление|финал|chorus|verse|bridge|intro|outro)"
@@ -42,7 +43,8 @@ _WEB_LYRICS_HOSTS = {
 
 _HTML_CHARSET = re.compile(rb"charset\s*=\s*['\"]?([a-zA-Z0-9._-]+)", re.I)
 _DOWNLOAD_SOURCE_TAG = re.compile(
-    r"\s*[\[(]\s*(?:https?://)?(?:www\.)?(?:[a-z0-9-]+\.)+(?:com|net|org|ru|ua|io|me|cc)"
+    r"\s*[\[(]\s*(?:https?://)?(?:www\.)?(?:[a-z0-9-]+\.)+"
+    r"(?:com|net|org|ru|ua|io|me|cc|pro)"
     r"[^\])]*[\])]\s*$",
     re.I,
 )
@@ -135,8 +137,7 @@ class _AnchorHTMLParser(HTMLParser):
     def handle_endtag(self, tag: str) -> None:
         if tag != "a" or not self.href:
             return
-        title = " ".join("".join(self.buffer).split())
-        if title:
+        if title := " ".join("".join(self.buffer).split()):
             self.links.append((self.href, title))
         self.href = ""
         self.buffer = []
@@ -207,7 +208,8 @@ def _lyrics_log(message: str) -> None:
     """Write concise UTF-8 lyrics status directly to the backend console."""
     stream = getattr(sys, "__stdout__", None) or sys.stdout
     with suppress(Exception):
-        encoding = str(getattr(stream, "encoding", "") or "").lower().replace("_", "-")
+        encoding = str(getattr(stream, "encoding", "")
+                       or "").lower().replace("_", "-")
         if hasattr(stream, "reconfigure") and encoding not in {"utf-8", "utf8"}:
             stream.reconfigure(encoding="utf-8", errors="replace")
         print(message, file=stream, flush=True)
@@ -244,7 +246,8 @@ def _parse_lrc(
         value = _LRC_TIME.sub("", raw).strip()
         if not value:
             continue
-        start = int(match.group("minutes")) * 60 + float(match.group("seconds").replace(":", "."))
+        start = int(match.group("minutes")) * 60 + \
+            float(match.group("seconds").replace(":", "."))
         timed.append((start, value))
     timed.sort(key=lambda item: item[0])
 
@@ -256,7 +259,8 @@ def _parse_lrc(
     # anchors outside the actual audio so canonical text and timing stay complete.
     if duration_sec is not None and duration_sec > 0:
         limit = max(0.0, float(duration_sec) - 0.05)
-        timed = [(start, value) for start, value in timed if 0.0 <= start < limit]
+        timed = [(start, value)
+                 for start, value in timed if 0.0 <= start < limit]
 
     raw_gaps = [
         right[0] - left[0]
@@ -279,7 +283,8 @@ def _parse_lrc(
         else:
             word_counts = [max(1, len(value.split())) for _, value in timed]
             typical_gap = (
-                (sum(word_counts) / max(1, len(word_counts))) * 0.55 if word_counts else 1.0
+                (sum(word_counts) / max(1, len(word_counts))) *
+                0.55 if word_counts else 1.0
             )
 
     result: list[tuple[float, float, str]] = []
@@ -299,7 +304,8 @@ def _parse_lrc(
         boundary_pad = max(1e-4, span * 0.005)
         word_count = max(1, len(value.split()))
         minimum_span = min(
-            span, max(1e-3, min(typical_gap * 0.10, span / max(2.0, word_count * 1.5)))
+            span, max(1e-3, min(typical_gap * 0.10,
+                      span / max(2.0, word_count * 1.5)))
         )
         end = max(start + minimum_span, next_start - boundary_pad)
         if duration_sec is not None and duration_sec > 0:
@@ -397,7 +403,8 @@ def _online(
         artist, track = _track_signature(display_query)
 
     if not track:
-        _lyrics_debug(f"[lyrics] LRCLIB skipped: could not parse query={display_query!r}")
+        _lyrics_debug(
+            f"[lyrics] LRCLIB skipped: could not parse query={display_query!r}")
         return LyricsDiscovery()
 
     query_params = (
@@ -412,7 +419,8 @@ def _online(
     query = urllib.parse.urlencode(query_params)
     request = urllib.request.Request(
         f"https://lrclib.net/api/search?{query}",
-        headers={"User-Agent": "AAndDVoice/2026.35 (desktop karaoke application)"},
+        headers={
+            "User-Agent": "AAndDVoice/2026.35 (desktop karaoke application)"},
     )
     try:
         with urllib.request.urlopen(request, timeout=8.0) as response:  # noqa: S310
@@ -432,7 +440,8 @@ def _online(
         if not isinstance(item, dict) or item.get("instrumental"):
             continue
 
-        plain = _clean(str(item.get("plainLyrics") or item.get("syncedLyrics") or ""))
+        plain = _clean(str(item.get("plainLyrics")
+                       or item.get("syncedLyrics") or ""))
         if len(plain.split()) < 15:
             continue
 
@@ -497,7 +506,8 @@ def _online(
             ranked.append((score, item))
 
     if not ranked:
-        _lyrics_debug(f"[lyrics] LRCLIB: no acceptable candidate for query={display_query!r}")
+        _lyrics_debug(
+            f"[lyrics] LRCLIB: no acceptable candidate for query={display_query!r}")
         return LyricsDiscovery()
 
     score, item = max(ranked, key=lambda pair: pair[0])
@@ -530,7 +540,8 @@ def _search_tokens_match(query: str, result_title: str) -> bool:
     the actual query tokens. This intentionally prefers ASR over accepting a
     different song with vaguely similar search-engine text.
     """
-    query_tokens = [token for token in _normalize_name(query).split() if len(token) >= 2]
+    query_tokens = [token for token in _normalize_name(
+        query).split() if len(token) >= 2]
     title_tokens = set(_normalize_name(result_title).split())
     if not query_tokens:
         return False
@@ -561,7 +572,8 @@ def _safe_result_url(raw: str) -> str | None:
 
 def _decode_html_payload(payload: bytes, header_charset: str | None = None) -> str:
     declared = _HTML_CHARSET.search(payload[:20_000])
-    declared_charset = declared.group(1).decode("ascii", "ignore") if declared else None
+    declared_charset = declared.group(1).decode(
+        "ascii", "ignore") if declared else None
     # A valid HTTP/meta charset is stronger evidence than a Cyrillic-count
     # heuristic. UTF-8 bytes decoded as cp1251 can accidentally look "more
     # Cyrillic" while actually being mojibake.
@@ -612,7 +624,8 @@ def _mychords_song_matches(result_title: str, artist: str, track: str) -> bool:
 def _mychords_artist_page(artist: str, headers: dict[str, str]) -> str | None:
     """Resolve an artist page from MyChords' own alphabetical directory."""
     normalized = _normalize_name(artist)
-    first = next((char for char in str(artist or '').strip() if char.isalnum()), '')
+    first = next((char for char in str(
+        artist or '').strip() if char.isalnum()), '')
     if not normalized or not first:
         return None
 
@@ -673,8 +686,7 @@ def _mychords_catalog_search(artist: str, track: str) -> list[tuple[str, str]]:
             host = (parsed.hostname or '').casefold().removeprefix('www.')
             if host != 'mychords.net':
                 continue
-            page_match = re.fullmatch(re.escape(artist_path) + r'page/(\d+)/', parsed.path)
-            if page_match:
+            if page_match := re.fullmatch(re.escape(artist_path) + r'page/(\d+)/', parsed.path):
                 max_page = max(max_page, int(page_match.group(1)))
                 continue
             if not parsed.path.startswith(artist_path) or not parsed.path.endswith('.html'):
@@ -683,7 +695,8 @@ def _mychords_catalog_search(artist: str, track: str) -> list[tuple[str, str]]:
                 matches.append((url, result_title))
         return matches, max_page
 
-    first_page = _read_html(urllib.request.Request(artist_url, headers=headers))
+    first_page = _read_html(
+        urllib.request.Request(artist_url, headers=headers))
     if not first_page:
         return []
     matches, max_page = parse_catalog(artist_url, first_page)
@@ -731,7 +744,8 @@ def _mychords_search(title: str) -> list[tuple[str, str]]:
         ),
     )
     for form in forms:
-        inputs = [item for item in form.get("inputs", []) if isinstance(item, dict)]
+        inputs = [item for item in form.get(
+            "inputs", []) if isinstance(item, dict)]
         text_input = next(
             (
                 item
@@ -748,7 +762,8 @@ def _mychords_search(title: str) -> list[tuple[str, str]]:
             if item.get("name") and str(item.get("type", "")).casefold() == "hidden"
         }
         payload[str(text_input["name"])] = title
-        action = urllib.parse.urljoin(base, str(form.get("action", "") or base))
+        action = urllib.parse.urljoin(
+            base, str(form.get("action", "") or base))
         method = str(form.get("method", "get")).casefold()
         if method == "post":
             request = urllib.request.Request(
@@ -781,6 +796,7 @@ def _mychords_search(title: str) -> list[tuple[str, str]]:
         if output:
             return output[:6]
     return []
+
 
 def _duckduckgo_search(query: str, title: str) -> list[tuple[str, str]]:
     request = urllib.request.Request(
@@ -833,7 +849,6 @@ def _web_search(title: str) -> list[tuple[str, str]]:
     return output[:6]
 
 
-
 def _fetch_web_lyrics(url: str) -> str:
     request = urllib.request.Request(
         url,
@@ -854,7 +869,8 @@ def _fetch_web_lyrics(url: str) -> str:
     if not page:
         return ""
 
-    host = (urllib.parse.urlparse(url).hostname or "").casefold().removeprefix("www.")
+    host = (urllib.parse.urlparse(
+        url).hostname or "").casefold().removeprefix("www.")
     if host == "tekstipesen.com":
         # This site exposes no semantic lyrics attribute.  Its song body is the
         # first plain div after the advertising placeholder and ends before the
@@ -903,8 +919,10 @@ def _web_online(title: str | LyricsSearchCandidate | None) -> LyricsDiscovery:
     _lyrics_debug(
         f"[lyrics] WEB request: query={query!r} artist={expected_artist!r}"
     )
-    track = title.track.strip() if isinstance(title, LyricsSearchCandidate) else query
-    results = _mychords_catalog_search(expected_artist, track) if expected_artist else []
+    track = title.track.strip() if isinstance(
+        title, LyricsSearchCandidate) else query
+    results = _mychords_catalog_search(
+        expected_artist, track) if expected_artist else []
     if not results:
         results = _mychords_search(query)
     if not results:
@@ -924,16 +942,18 @@ def _web_online(title: str | LyricsSearchCandidate | None) -> LyricsDiscovery:
     _lyrics_debug(f"[lyrics] WEB matching search results: {len(results)}")
 
     for number, (url, result_title) in enumerate(results, 1):
-        _lyrics_debug(f"[lyrics] WEB candidate #{number}: title={result_title!r} url={url!r}")
-        text = _fetch_web_lyrics(url)
-        if text:
-            host = (urllib.parse.urlparse(url).hostname or "web").removeprefix("www.")
+        _lyrics_debug(
+            f"[lyrics] WEB candidate #{number}: title={result_title!r} url={url!r}")
+        if text := _fetch_web_lyrics(url):
+            host = (urllib.parse.urlparse(
+                url).hostname or "web").removeprefix("www.")
             _lyrics_debug(
                 f"[lyrics] WEB SELECTED: query={query!r} result={result_title!r} source={host!r}"
             )
             return LyricsDiscovery(text, f"web:{host}")
 
-        _lyrics_debug(f"[lyrics] WEB candidate #{number}: no usable lyrics -> REJECT")
+        _lyrics_debug(
+            f"[lyrics] WEB candidate #{number}: no usable lyrics -> REJECT")
 
     _lyrics_debug(f"[lyrics] WEB: no acceptable candidate for query={query!r}")
     return LyricsDiscovery()
@@ -946,7 +966,8 @@ def _plain_search_query(value: str | None) -> str:
     # ``Нервы-Кофе Мой Друг (zaycev.net)``.  It is not part of the song
     # identity and substantially hurts LRCLIB/web recall.
     value = _DOWNLOAD_SOURCE_TAG.sub(" ", value)
-    value = re.sub(r"\s*[\[(][^\]\)]*(?:19|20)\d{2}[^\]\)]*[\])]\s*$", " ", value)
+    value = re.sub(
+        r"\s*[\[(][^\]\)]*(?:19|20)\d{2}[^\]\)]*[\])]\s*$", " ", value)
     return " ".join(value.replace("-", " ").replace("–", " ").replace("—", " ").split())
 
 
@@ -1053,26 +1074,30 @@ def _metadata_search_plan(
             return clean_title
         prefix = clean_artist + " "
         if clean_title.casefold().startswith(prefix.casefold()):
-            return clean_title[len(prefix) :].strip() or clean_title
+            return clean_title[len(prefix):].strip() or clean_title
         return clean_title
 
     filename_artist, filename_title = _filename_search_identity(source)
     clean_stem = _strip_filename_copy_suffix(source.stem)
     normalized_stem = _normalize_name(clean_stem)
-    filename_is_real = normalized_stem not in technical_names and bool(filename_title)
+    filename_is_real = normalized_stem not in technical_names and bool(
+        filename_title)
 
     # 1) Embedded metadata has highest priority, but real-world tags are often
     # polluted by downloader/album text.  Use the explicit album tag to remove
     # that pollution and avoid duplicated identities such as
     # ``Нервы Всё, Что Вокруг Нервы Моя Леди``.
     if tagged_title:
-        clean_artist = tagged_artist
-        if clean_artist:
+        if clean_artist := tagged_artist:
             if tagged_album:
-                clean_artist = re.sub(re.escape(tagged_album), " ", clean_artist, flags=re.I)
-            clean_artist = re.sub(re.escape(tagged_title), " ", clean_artist, flags=re.I)
-            clean_artist = re.sub(r"\b(?:single|album|ep)\b", " ", clean_artist, flags=re.I)
-            clean_artist = re.sub(r"[\[(]\s*(?:19|20)\d{2}\s*[\])]", " ", clean_artist)
+                clean_artist = re.sub(
+                    re.escape(tagged_album), " ", clean_artist, flags=re.I)
+            clean_artist = re.sub(re.escape(tagged_title),
+                                  " ", clean_artist, flags=re.I)
+            clean_artist = re.sub(r"\b(?:single|album|ep)\b",
+                                  " ", clean_artist, flags=re.I)
+            clean_artist = re.sub(
+                r"[\[(]\s*(?:19|20)\d{2}\s*[\])]", " ", clean_artist)
             clean_artist = _plain_search_query(clean_artist)
 
         clean_title = _plain_search_query(tagged_title)
@@ -1100,8 +1125,7 @@ def _metadata_search_plan(
         add_identity(clean_artist or (filename_artist or ""), clean_title)
 
     # 2) Backend-provided identity. It may be structured as "Artist - Title".
-    fallback_value = str(fallback or "").strip()
-    if fallback_value:
+    if fallback_value := str(fallback or "").strip():
         fallback_artist, fallback_title = _track_signature(fallback_value)
         if fallback_artist and fallback_title:
             add_identity(fallback_artist, fallback_title)
@@ -1152,12 +1176,12 @@ def discover_lyrics(
     local = _local_file(source, duration_sec)
     if local.text:
         return local
-    embedded = _embedded(source)
-    if embedded:
+    if embedded := _embedded(source):
         return LyricsDiscovery(embedded, "metadata")
     plan = _metadata_search_plan(source, title)
     queries = [candidate.query for candidate in plan]
-    _lyrics_log(f"[lyrics] exact search plan ({len(queries)} queries): {queries!r}")
+    _lyrics_log(
+        f"[lyrics] exact search plan ({len(queries)} queries): {queries!r}")
 
     for index, candidate in enumerate(plan, 1):
         query = candidate.query

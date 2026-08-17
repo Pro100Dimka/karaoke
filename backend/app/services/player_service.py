@@ -40,8 +40,7 @@ def get_timeline(song: models.Song) -> dict:
 
 
 def _get_or_create_state(db: Session, song_id: str) -> models.PlaybackState:
-    state = repositories.get_playback_state(db, song_id)
-    if state is not None:
+    if (state := repositories.get_playback_state(db, song_id)) is not None:
         return state
 
     state = models.PlaybackState(song_id=song_id, position_sec=0.0, is_playing=False)

@@ -51,6 +51,29 @@ def _language_name(language: str | None) -> str | None:
     return _LANGUAGE_NAMES.get(value.lower(), value)
 
 
+# Qwen3-ASR's transcribe() validates `language` against this fixed allowlist and
+# raises ValueError for anything outside it -- Ukrainian is one such gap, even
+# though the separate Forced Aligner (resolve_alignment_language below) does
+# target Ukrainian explicitly. None asks Qwen to auto-detect instead, which it
+# explicitly supports, so an unsupported name is narrowed to None rather than
+# crashing the whole transcription job.
+_QWEN_TRANSCRIBE_LANGUAGES = frozenset(
+    {
+        "Chinese", "English", "Cantonese", "Arabic", "German", "French", "Spanish",
+        "Portuguese", "Indonesian", "Italian", "Korean", "Russian", "Thai",
+        "Vietnamese", "Japanese", "Turkish", "Hindi", "Malay", "Dutch", "Swedish",
+        "Danish", "Finnish", "Polish", "Czech", "Filipino", "Persian", "Greek",
+        "Romanian", "Hungarian", "Macedonian",
+    }
+)
+
+
+def _qwen_transcribe_language(language: str | None) -> str | None:
+    """Narrow a resolved language name to one Qwen3-ASR's transcribe() accepts."""
+    name = _language_name(language)
+    return name if name in _QWEN_TRANSCRIBE_LANGUAGES else None
+
+
 def resolve_alignment_language(text: str, language: str | None = None) -> str:
     """Return a non-empty language name suitable for Qwen Forced Aligner.
 
@@ -3461,6 +3484,7 @@ class Qwen3Transcriber(Transcriber):
         ]
 
     def _transcribe_batch_once(self, model, audios, language):
+        language = _qwen_transcribe_language(language)
         kwargs = {"audio": audios if len(audios) > 1 else audios[0]}
         if len(audios) > 1:
             kwargs["language"] = [language] * len(audios) if language else [None] * len(audios)
@@ -3505,8 +3529,9 @@ class Qwen3Transcriber(Transcriber):
             # references accepted by qwen-asr. Real pipeline files take the
             # singing-specific segmented path below.
             kwargs = {"audio": str(audio)}
-            if requested_language:
-                kwargs["language"] = requested_language
+            qwen_language = _qwen_transcribe_language(requested_language)
+            if qwen_language:
+                kwargs["language"] = qwen_language
             with profile_operation("inference.qwen_asr"):
                 result = model.transcribe(**kwargs)
             with profile_operation("postprocess.qwen_asr"):

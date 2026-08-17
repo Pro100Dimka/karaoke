@@ -34,8 +34,7 @@ def run_analysis(recording: RecordingDependency, db: DatabaseSession):
     if song is None:
         raise HTTPException(status_code=404, detail="Песня для этой записи не найдена")
 
-    existing = repositories.get_analysis_by_recording(db, recording.id)
-    if existing is not None:
+    if (existing := repositories.get_analysis_by_recording(db, recording.id)) is not None:
         return _to_out(existing)
 
     try:

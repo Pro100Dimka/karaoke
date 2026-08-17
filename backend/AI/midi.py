@@ -127,8 +127,7 @@ def write_midi(
         validate_midi(temporary)
         os.replace(temporary, target)
     finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
+        Path(temporary).unlink(missing_ok=True)
     return target
 
 

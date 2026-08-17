@@ -5,7 +5,6 @@ import zipfile
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import NoReturn
 
 from fastapi import (
     APIRouter,
@@ -61,13 +60,6 @@ def _processing_status(
         eta_seconds=eta_seconds if isinstance(eta_seconds, int) else None,
         error_message=song.error_message,
     )
-
-
-def _raise_song_package_error(exc: OSError | ValueError, action: str) -> NoReturn:
-    """Map a song-package domain error to the HTTP status its message implies."""
-    detail = str(exc)
-    status = 404 if detail == "Song not found" else 409
-    raise HTTPException(status_code=status, detail=f"Could not {action} song: {detail}") from exc
 
 
 def _queue_song_job(
@@ -160,7 +152,9 @@ def get_song_revision(song_id: str, db: Session = Depends(get_db)):
     try:
         revision = song_package_service.content_revision_for_song(db, song_id)
     except (OSError, ValueError) as exc:
-        _raise_song_package_error(exc, "fingerprint")
+        detail = str(exc)
+        status = 404 if detail == "Song not found" else 409
+        raise HTTPException(status_code=status, detail=f"Could not fingerprint song: {detail}") from exc
     return {"song_id": song_id, "revision": revision}
 
 
@@ -174,7 +168,9 @@ def export_song_package(
             db, song_id, expected_revision=expected_revision,
         )
     except (OSError, ValueError) as exc:
-        _raise_song_package_error(exc, "package")
+        detail = str(exc)
+        status = 404 if detail == "Song not found" else 409
+        raise HTTPException(status_code=status, detail=f"Could not package song: {detail}") from exc
     background_tasks.add_task(package_path.unlink, missing_ok=True)
     return FileResponse(
         package_path,
@@ -317,8 +313,7 @@ def get_audio_track(track: str, song: SongDependency):
     if track not in {"instrumental", "vocals", "song", "diagnostic"}:
         raise HTTPException(status_code=404, detail="Unknown audio track")
     output_dir = song_service.resolve_output_dir(song)
-    candidate = song_artifacts.resolve_audio_artifact(output_dir, track)
-    if candidate is not None:
+    if (candidate := song_artifacts.resolve_audio_artifact(output_dir, track)) is not None:
         media_type = {".flac": "audio/flac", ".mp3": "audio/mpeg", ".wav": "audio/wav"}.get(
             candidate.suffix.lower(), "application/octet-stream"
         )

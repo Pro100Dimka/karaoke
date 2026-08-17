@@ -67,11 +67,9 @@ def _apply_torch_cpu_worker_tuning(torch, settings: tuple[int, int] | None) -> N
     if settings is None:
         return
     intra, inter = settings
-    setter = getattr(torch, "set_num_threads", None)
-    if setter is not None:
+    if (setter := getattr(torch, "set_num_threads", None)) is not None:
         setter(intra)
-    setter = getattr(torch, "set_num_interop_threads", None)
-    if setter is not None:
+    if (setter := getattr(torch, "set_num_interop_threads", None)) is not None:
         try:
             setter(inter)
         except RuntimeError:
@@ -257,6 +255,7 @@ class MSSTMelRoformerSeparator(Separator):
         config: str | None = None,
         checkpoint: str | None = None,
         idle_timeout_sec: float | None = None,
+        total_timeout_sec: float | None = None,
     ):
         self.engine_dir = engine_dir or os.getenv("MSST_ENGINE_DIR")
         self.config = config or os.getenv("MSST_CONFIG")
@@ -265,9 +264,27 @@ class MSSTMelRoformerSeparator(Separator):
             30.0,
             float(idle_timeout_sec or os.getenv("KARAOKE_MSST_IDLE_TIMEOUT_SEC", "120")),
         )
+        self._total_timeout_sec_override = total_timeout_sec
         self._process = None
         self._request_queue = None
         self._result_queue = None
+
+    def _total_timeout_sec(self) -> float:
+        """Total safety timeout for one separation run.
+
+        CPU-only separation is dramatically slower than CUDA, so a fixed
+        30-minute ceiling sized for a GPU run can abort a healthy CPU-only run
+        that is simply still working. Scale the default with the selected
+        device unless an operator pins an explicit value.
+        """
+        if self._total_timeout_sec_override is not None:
+            return max(60.0, float(self._total_timeout_sec_override))
+        configured = os.getenv("KARAOKE_MSST_TOTAL_TIMEOUT_SEC")
+        if configured:
+            return max(60.0, float(configured))
+        backend = selected_backend("separation")
+        device = str(backend.device if backend is not None else "cpu") or "cpu"
+        return 60.0 * (30.0 if device.startswith("cuda") else 90.0)
 
     def available(self) -> bool:
         return not self.missing_resources()
@@ -301,7 +318,8 @@ class MSSTMelRoformerSeparator(Separator):
         job_id = uuid.uuid4().hex
         self._request_queue.put((job_id, str(input_dir), str(output_dir)))
         started_at = time.monotonic()
-        while process.is_alive() and time.monotonic() - started_at < 60 * 30:
+        total_timeout_sec = self._total_timeout_sec()
+        while process.is_alive() and time.monotonic() - started_at < total_timeout_sec:
             try:
                 response_id, elapsed_sec, error = self._result_queue.get(timeout=10)
             except Empty:
@@ -315,10 +333,11 @@ class MSSTMelRoformerSeparator(Separator):
                 raise AICoreError(error)
             return
         exitcode = process.exitcode
-        timed_out = time.monotonic() - started_at >= 60 * 30
+        timed_out = time.monotonic() - started_at >= total_timeout_sec
         self.close()
         if timed_out:
-            raise AICoreError("MSST exceeded the 30-minute safety timeout")
+            minutes = int(total_timeout_sec // 60)
+            raise AICoreError(f"MSST exceeded the {minutes}-minute safety timeout")
         raise AICoreError(f"MSST process exited with code {exitcode}")
 
     def _ensure_worker(self, arguments: dict[str, object]) -> None:

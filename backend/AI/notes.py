@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import statistics
+from collections import Counter
 from collections.abc import Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -25,14 +26,11 @@ def hz_to_midi(hz: float) -> float:
 
 
 def _median_filter(values: list[float], radius: int = 2) -> list[float]:
-    if not values:
-        return []
-    output: list[float] = []
-    for index in range(len(values)):
-        lo = max(0, index - radius)
-        hi = min(len(values), index + radius + 1)
-        output.append(float(statistics.median(values[lo:hi])))
-    return output
+    # Slicing already clamps the upper bound, so only the lower bound needs max(0, ...).
+    return [
+        float(statistics.median(values[max(0, i - radius) : i + radius + 1]))
+        for i in range(len(values))
+    ]
 
 
 def _weighted_median(values: list[float], weights: list[float]) -> float:
@@ -488,13 +486,15 @@ def _best_syllable_for_segment(
     start = segment[0].time
     end = segment[-1].time + 0.01
     midpoint = (start + end) / 2
-    overlaps = []
-    for syllable in syllables:
-        overlap = max(0.0, min(end, syllable.end) - max(start, syllable.start))
-        if overlap > 0:
-            overlaps.append(
-                (overlap, -abs((syllable.start + syllable.end) / 2 - midpoint), syllable)
-            )
+    overlaps = [
+        (
+            min(end, syllable.end) - max(start, syllable.start),
+            -abs((syllable.start + syllable.end) / 2 - midpoint),
+            syllable,
+        )
+        for syllable in syllables
+        if min(end, syllable.end) - max(start, syllable.start) > 0
+    ]
     if overlaps:
         return max(overlaps, key=lambda item: (item[0], item[1]))[2]
     return min(syllables, key=lambda item: abs((item.start + item.end) / 2 - midpoint))
@@ -528,9 +528,7 @@ def _lyric_activity_intervals(
     Nearby syllables are merged, so lyric segmentation can never manufacture
     extra musical notes. Only real phrase-sized gaps remain as cut points.
     """
-    if not syllables:
-        return []
-    return _merge_padded_intervals(syllables, pad=pad, merge_gap=merge_gap)
+    return _merge_padded_intervals(syllables, pad=pad, merge_gap=merge_gap) if syllables else []
 
 
 def _clip_note_to_lyric_activity(
@@ -670,9 +668,7 @@ def _word_activity_intervals(
     merge_gap: float = 0.18,
 ) -> list[tuple[float, float]]:
     """Build phrase activity from forced-aligned WORDS, not synthetic syllables."""
-    if not words:
-        return []
-    return _merge_padded_intervals(words, pad=pad, merge_gap=merge_gap)
+    return _merge_padded_intervals(words, pad=pad, merge_gap=merge_gap) if words else []
 
 
 def _adaptive_lyric_timing(
@@ -989,8 +985,7 @@ def _audio_verify_note_register(
             previous_note = notes[index - 1]
             current_note = notes[index]
             gap = current_note.start - previous_note.end
-            strong_attack = _is_strong_attack(index)
-            if strong_attack:
+            if strong_attack := _is_strong_attack(index):
                 transition_scale = 0.18
             elif gap > max(profile.merge_gap, profile.gap_scale * 1.2):
                 transition_scale = 0.48
@@ -1149,14 +1144,8 @@ def _audio_verify_note_register(
             return "medium_3_6"
         return "small_1_2"
 
-    accepted_buckets: dict[str, int] = {}
-    rejected_buckets: dict[str, int] = {}
-    for item in accepted_changes:
-        key = _bucket(int(item["semitone_delta"]))
-        accepted_buckets[key] = accepted_buckets.get(key, 0) + 1
-    for item in rejected_changes:
-        key = _bucket(int(item["semitone_delta"]))
-        rejected_buckets[key] = rejected_buckets.get(key, 0) + 1
+    accepted_buckets = Counter(_bucket(int(item["semitone_delta"])) for item in accepted_changes)
+    rejected_buckets = Counter(_bucket(int(item["semitone_delta"])) for item in rejected_changes)
 
     diag = dict(_NOTE_DIAGNOSTICS.get() or {})
     diag["register_verification"] = {
@@ -1578,15 +1567,12 @@ def build_game_notes(
         overlaps = _overlapping_owner_syllables(note, ordered_syllables)
         # A syllable can be encountered through overlapping artifacts more than
         # once in defensive callers.  Keep one canonical owner per syllable id.
-        unique: list[Syllable] = []
         seen: set[int] = set()
-        for syllable in overlaps:
-            key = int(syllable.index)
-            if key in seen:
-                continue
-            seen.add(key)
-            unique.append(syllable)
-        overlaps = unique
+        overlaps = [
+            syllable
+            for syllable in overlaps
+            if (key := int(syllable.index)) not in seen and not seen.add(key)
+        ]
 
         owner = max(
             overlaps,

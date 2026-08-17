@@ -184,6 +184,35 @@ function requestBackendJson(pathname, timeoutMs = BACKEND_REQUEST_TIMEOUT_MS) {
   });
 }
 
+// Folds Electron main-process errors into the same backend.log file the
+// Python backend and renderer already report to, instead of leaving them
+// only in this process's own stdout. Best-effort: the backend is not always
+// reachable when these fire (e.g. the backend itself failed to start), so
+// failures here are swallowed rather than compounding the original error.
+function reportBackendError(message, stack) {
+  try {
+    const body = JSON.stringify({ source: "electron-main", level: "error", message, stack });
+    const request = http.request(
+      `${runtimeBackendUrl}/diagnostics/client-log`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-ADVoice-Token": BACKEND_API_TOKEN,
+          "Content-Length": Buffer.byteLength(body)
+        },
+        timeout: 2000
+      },
+      (response) => response.resume()
+    );
+    request.on("error", () => {});
+    request.on("timeout", () => request.destroy());
+    request.end(body);
+  } catch {
+    // Never let error reporting itself throw.
+  }
+}
+
 async function resolveSongOutputDir() {
   try {
     const settings = await requestBackendJson("/settings");
@@ -328,6 +357,10 @@ function startBackend() {
       clearTimeout(backendStableTimer);
       backendStableTimer = null;
       console.error("Не удалось запустить backend:", err);
+      reportBackendError(
+        "Не удалось запустить backend",
+        err?.stack || String(err)
+      );
       if (backendProcess === childProcess) backendProcess = null;
       scheduleBackendRestart();
     });
@@ -344,9 +377,10 @@ function startBackend() {
       if (isQuitting || backendStopRequested || process.env.KARAOKE_BACKEND_EXTERNAL === "1") {
         return;
       }
-      console.error(
-        `Backend stopped (${code ?? "unknown"}, ${signal ?? "no signal"}); restarting…`
-      );
+      const message =
+        `Backend stopped (${code ?? "unknown"}, ${signal ?? "no signal"}); restarting…`;
+      console.error(message);
+      reportBackendError(message);
       scheduleBackendRestart();
     });
   } catch (err) {

@@ -99,8 +99,7 @@ class _OrtFCPEBackend:
             raise EngineUnavailableError(
                 f"ORT FCPE session did not activate {self.provider}: {self._providers}"
             )
-        disable_fallback = getattr(session, "disable_fallback", None)
-        if disable_fallback is not None:
+        if (disable_fallback := getattr(session, "disable_fallback", None)) is not None:
             disable_fallback()
         self._session = session
         return session

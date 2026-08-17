@@ -6,6 +6,9 @@ const RATE_WINDOW_MS = 10_000;
 const RATE_LIMIT = 80;
 const MAX_SIGNAL_BYTES = 64 * 1024;
 const MAX_STATE_BYTES = 128 * 1024;
+const MAX_LOG_BYTES = 32 * 1024;
+const LOG_RATE_WINDOW_MS = 60_000;
+const LOG_RATE_LIMIT = 30;
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -203,10 +206,61 @@ export class KaraokeRoom {
   }
 }
 
+function sanitizeLogUser(value) {
+  const raw = String(value || "anonymous").trim().slice(0, 64);
+  const cleaned = raw.replace(/[^\p{L}\p{N} _.-]/gu, "_").trim();
+  return cleaned || "anonymous";
+}
+
+// Module-scope state survives only while this isolate stays warm, so this is
+// a best-effort spam guard, not a hard distributed limit -- the real backstop
+// is the per-request size cap below.
+const logRate = new Map();
+function withinLogRate(id) {
+  const now = Date.now();
+  const entry = logRate.get(id) || { startedAt: now, count: 0 };
+  if (now - entry.startedAt >= LOG_RATE_WINDOW_MS) {
+    entry.startedAt = now;
+    entry.count = 0;
+  }
+  entry.count += 1;
+  logRate.set(id, entry);
+  return entry.count <= LOG_RATE_LIMIT;
+}
+
+async function handleLogUpload(request, env) {
+  if (!env.LOGS) return json({ error: "Log storage is not configured" }, 503);
+  const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
+  if (!withinLogRate(clientIp)) return json({ error: "Rate limit exceeded" }, 429);
+
+  const body = await request.text().catch(() => null);
+  if (body === null || new TextEncoder().encode(body).byteLength > MAX_LOG_BYTES) {
+    return json({ error: "Invalid or oversized log payload" }, 413);
+  }
+  let payload;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    return json({ error: "Invalid JSON" }, 400);
+  }
+  const message = String(payload?.message || "").trim();
+  if (!message) return json({ error: "Empty log message" }, 400);
+  const user = sanitizeLogUser(payload?.user);
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const key = `logs/${user}/${timestamp}-${crypto.randomUUID().slice(0, 8)}.log`;
+  await env.LOGS.put(key, message.slice(0, MAX_LOG_BYTES), {
+    httpMetadata: { contentType: "text/plain; charset=utf-8" },
+  });
+  return json({ ok: true });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/health") return json({ ok: true, service: "A&D Voice Online" });
+    if (url.pathname === "/logs" && request.method === "POST") {
+      return handleLogUpload(request, env);
+    }
     const roomMatch = /^\/rooms\/([^/]+)$/.exec(url.pathname);
     const roomId = roomMatch && normalizeRoomId(roomMatch[1]);
     if (!roomId) return json({ error: "Room not found" }, 404);

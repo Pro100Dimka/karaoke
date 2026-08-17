@@ -179,8 +179,7 @@ def content_revision(song: models.Song) -> str:
     """Return a cached canonical revision while detecting semantic state changes cheaply."""
     with song_service.song_content_lock(song.id), song_service.library_write_lock():
         signature = _revision_signature(song)
-        cached = revision_cache.get(song.id, signature)
-        if cached is not None:
+        if (cached := revision_cache.get(song.id, signature)) is not None:
             return cached
         revision = compute_content_revision(song)
         revision_cache.put(song.id, signature, revision)
@@ -189,8 +188,7 @@ def content_revision(song: models.Song) -> str:
 
 
 def _fresh_song_or_none(db: Session, song_id: str) -> models.Song | None:
-    song = song_service.get_song(db, song_id)
-    if song is not None:
+    if (song := song_service.get_song(db, song_id)) is not None:
         db.refresh(song)
     return song
 
@@ -636,8 +634,7 @@ def _validate_semantic_package(archive: zipfile.ZipFile, members: list[zipfile.Z
         raise ValueError("Song package content revision does not match its artifacts")
 
     files = {member.filename for member in members if not member.is_dir()}
-    missing = {f"output/{name}" for name in REQUIRED_OUTPUT_PATHS} - files
-    if missing:
+    if missing := {f"output/{name}" for name in REQUIRED_OUTPUT_PATHS} - files:
         raise ValueError(f"Song package is incomplete; missing: {', '.join(sorted(missing))}")
     _validate_archive_audio(archive, _instrumental_member(archive), label="instrumental")
     source = _source_member(members)

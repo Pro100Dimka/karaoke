@@ -36,12 +36,10 @@ def split_written(word: str) -> list[str]:
     parts: list[str] = []
     start = 0
     for cut in cuts:
-        part = "".join(chars[start:cut])
-        if part:
+        if part := "".join(chars[start:cut]):
             parts.append(part)
         start = cut
-    tail = "".join(chars[start:])
-    if tail:
+    if tail := "".join(chars[start:]):
         parts.append(tail)
     return parts or [cleaned]
 

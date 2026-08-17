@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import statistics
+from collections import Counter
 from typing import Any
 
 from .engines.text import tokenize
@@ -131,8 +132,8 @@ def build_alignment_debug(
     typical_duration = max(0.02, _median(durations, 0.25))
 
     word_rows: list[dict[str, Any]] = []
-    source_counts: dict[str, int] = {}
-    rejected_reasons: dict[str, int] = {}
+    source_counts: Counter[str] = Counter()
+    rejected_reasons: Counter[str] = Counter()
     for index, word in enumerate(words):
         source = str(sources[index]) if index < len(sources) else "unknown"
         candidate = (
@@ -159,7 +160,7 @@ def build_alignment_debug(
                 source = "qwen"
             elif word.confidence <= 0.02:
                 source = "interpolated"
-        source_counts[source] = source_counts.get(source, 0) + 1
+        source_counts[source] += 1
 
         span = max(0.0, word.end - word.start)
         overlap = _overlap_ratio(word.start, word.end, regions)
@@ -190,7 +191,7 @@ def build_alignment_debug(
             reasons.append("timeline_overlap")
 
         for reason in reasons:
-            rejected_reasons[reason] = rejected_reasons.get(reason, 0) + 1
+            rejected_reasons[reason] += 1
 
         word_rows.append(
             {
@@ -225,10 +226,7 @@ def build_alignment_debug(
         cursor += count
         if not row:
             continue
-        sources_here: dict[str, int] = {}
-        for item in row:
-            kind = item["final"]["source"]
-            sources_here[kind] = sources_here.get(kind, 0) + 1
+        sources_here: Counter[str] = Counter(item["final"]["source"] for item in row)
         direct = sum(
             value for key, value in sources_here.items() if key in {"consensus", "ctc", "qwen"}
         )
@@ -263,8 +261,7 @@ def build_alignment_debug(
     suspicious_regions: list[dict[str, Any]] = []
     current: list[dict[str, Any]] = []
     for item in word_rows:
-        suspicious = bool(item["reasons"])
-        if suspicious:
+        if item["reasons"]:
             if current and item["final"]["start"] - current[-1]["final"]["end"] > max(
                 0.8, typical_duration * 3.0
             ):
@@ -376,12 +373,9 @@ def build_alignment_debug(
         int(note.syllable_index) for note in game if note.syllable_index is not None
     ]
     game_syllable_set = set(game_syllable_ids)
-    events_per_syllable: dict[int, int] = {}
-    for syllable_id in game_syllable_ids:
-        events_per_syllable[syllable_id] = events_per_syllable.get(syllable_id, 0) + 1
+    events_per_syllable: Counter[int] = Counter(game_syllable_ids)
     game_durations = [max(0.0, float(note.end) - float(note.start)) for note in game]
-    sorted_game_durations = sorted(value for value in game_durations if value > 0.0)
-    if sorted_game_durations:
+    if sorted_game_durations := sorted(value for value in game_durations if value > 0.0):
 
         def _quantile(frac: float) -> float:
             pos = (len(sorted_game_durations) - 1) * frac
@@ -402,6 +396,9 @@ def build_alignment_debug(
     else:
         game_duration_quantiles = {key: 0.0 for key in ("p05", "p25", "p50", "p75", "p95")}
 
+    syllable_durations = sorted(
+        max(0.0, float(item.end) - float(item.start)) for item in syllables
+    )
     timeline_integrity = {
         "words": _timeline_metrics(words),
         "syllables": _timeline_metrics(syllables),
@@ -569,17 +566,11 @@ def build_alignment_debug(
             ),
             "duration_quantiles": (
                 {
-                    "p05": sorted(
-                        [max(0.0, float(item.end) - float(item.start)) for item in syllables]
-                    )[max(0, int((len(syllables) - 1) * 0.05))],
-                    "p50": _median(
-                        [max(0.0, float(item.end) - float(item.start)) for item in syllables], 0.0
-                    ),
-                    "p95": sorted(
-                        [max(0.0, float(item.end) - float(item.start)) for item in syllables]
-                    )[max(0, int((len(syllables) - 1) * 0.95))],
+                    "p05": syllable_durations[max(0, int((len(syllable_durations) - 1) * 0.05))],
+                    "p50": _median(syllable_durations, 0.0),
+                    "p95": syllable_durations[max(0, int((len(syllable_durations) - 1) * 0.95))],
                 }
-                if syllables
+                if syllable_durations
                 else {"p05": 0.0, "p50": 0.0, "p95": 0.0}
             ),
         },
@@ -587,10 +578,7 @@ def build_alignment_debug(
 
 
 def _region(items: list[dict[str, Any]]) -> dict[str, Any]:
-    reasons: dict[str, int] = {}
-    for item in items:
-        for reason in item["reasons"]:
-            reasons[reason] = reasons.get(reason, 0) + 1
+    reasons: Counter[str] = Counter(reason for item in items for reason in item["reasons"])
     return {
         "start": items[0]["final"]["start"],
         "end": items[-1]["final"]["end"],

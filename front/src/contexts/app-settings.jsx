@@ -8,6 +8,7 @@ import {
   useRef
 } from "react";
 import { api } from "../api/client";
+import { setErrorReporterUser } from "../utils/error-reporter";
 import { getSavedLanguage, saveLanguage } from "../utils/language";
 import { applyTheme, getSavedTheme } from "../utils/theme";
 
@@ -73,6 +74,9 @@ export default function AppSettingsProvider({ children }) {
   useLayoutEffect(() => {
     applyTheme(state.settings?.theme ?? getSavedTheme());
   }, [state.settings?.theme]);
+  useEffect(() => {
+    setErrorReporterUser(state.settings?.online_name);
+  }, [state.settings?.online_name]);
   useLayoutEffect(() => {
     if (!state.settings?.language) return;
     const previous = getSavedLanguage();

@@ -114,8 +114,7 @@ class StageCache:
                     return False
                 if self.file_hash(path) != metadata.get("sha256"):
                     return False
-                validator = validators.get(path) if validators else None
-                if validator is not None:
+                if (validator := validators.get(path) if validators else None) is not None:
                     validator(path)
         except (OSError, ValueError, RuntimeError, TypeError):
             return False

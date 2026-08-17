@@ -16,8 +16,7 @@ def publish_files_atomically(pairs: list[tuple[Path, Path]]) -> None:
     if not pairs:
         return
     normalized = [(Path(source), Path(target)) for source, target in pairs]
-    missing = [str(source) for source, _ in normalized if not source.is_file()]
-    if missing:
+    if missing := [str(source) for source, _ in normalized if not source.is_file()]:
         raise FileNotFoundError(f"Missing transaction source(s): {', '.join(missing)}")
     targets = [target.resolve() for _, target in normalized]
     if len(set(targets)) != len(targets):
