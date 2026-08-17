@@ -224,7 +224,7 @@ describe("radio context", () => {
     act(() => { pending = hook.result.current.turnOn({ remember: false }); });
     expect(hook.result.current.error).toBe("");
     expect(hook.result.current.isLoading).toBe(true);
-    expect(document.querySelector("audio").volume).toBe(0.1);
+    expect(document.querySelector("audio").volume).toBe(0.45);
     resolvePlay();
     await act(async () => expect(await pending).toBe(true));
     expect(analyser.getByteFrequencyData).toHaveBeenCalledTimes(1);

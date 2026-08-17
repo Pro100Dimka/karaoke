@@ -122,7 +122,8 @@ export default function useKaraokeTransport({
     if (!onlineRoom?.room?.host || !isPlaying || !song?.id) return undefined;
     const timer = globalThis.setInterval(() => {
       const position = instrumentalRef.current?.currentTime;
-      if (Number.isFinite(position)) broadcast("sync", position);
+      if (Number.isFinite(position))
+        onlineRoom.syncCommand(createPlayerSyncCommand("sync", song.id, position));
     }, 1000);
     return () => globalThis.clearInterval(timer);
   }, [instrumentalRef, isPlaying, onlineRoom?.room?.host, song?.id]);

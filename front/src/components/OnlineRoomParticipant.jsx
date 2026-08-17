@@ -94,7 +94,7 @@ export default function OnlineRoomParticipant({
               className={effectsEnabled ? "is-active" : ""}
               onClick={() => onTogglePersonEffects(person.id)}
             />
-            <label
+            <div
               className="online-room-person-volume"
               title={t("room.person.volume", { name: person.name })}
             >
@@ -109,7 +109,7 @@ export default function OnlineRoomParticipant({
                 onChange={(event) => onSetParticipantVolume(person.id, event.target.value)}
               />
               <span>{Math.round(participantVolume * 100)}%</span>
-            </label>
+            </div>
             <IconButton
               variant="outline"
               icon={isLocallyMuted ? VolumeX : Volume2}

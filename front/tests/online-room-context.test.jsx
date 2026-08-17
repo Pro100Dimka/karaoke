@@ -929,7 +929,16 @@ describe("online room provider", () => {
         revision
       })
     );
-    expect(mocks.clients[0].send).toHaveBeenCalledTimes(sentBeforeRemoteImport);
+    expect(mocks.clients[0].send).toHaveBeenCalledTimes(sentBeforeRemoteImport + 2);
+    expect(mocks.clients[0].send).toHaveBeenLastCalledWith("sync", {
+      state: {
+        type: "song-ready",
+        commandId: "cmd-remote",
+        songId: "remote-song",
+        revision,
+        requesterId: "guest"
+      }
+    });
     expect(hook.result.current.roomCommand).toMatchObject({ songId: "remote-song" });
 
     let releaseImport;
