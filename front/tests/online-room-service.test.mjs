@@ -30,9 +30,10 @@ const installSocket = () => {
   FakeSocket.instances = [];
   globalThis.WebSocket = FakeSocket;
 };
-let serviceImportId = 0;
-const loadOnlineRoomService = () =>
-  import(/* @vite-ignore */ `../src/services/onlineRoom.js?contract=${serviceImportId++}`);
+const loadOnlineRoomService = async () => {
+  vi.resetModules();
+  return import("../src/services/onlineRoom.js");
+};
 
 afterEach(() => {
   vi.useRealTimers();

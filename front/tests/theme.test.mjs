@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { test } from "vitest";
+import { test, vi } from "vitest";
 
-let importId = 0;
-const loadTheme = () =>
-  import(/* @vite-ignore */ `../src/utils/theme.js?contract=${importId++}`);
+const loadTheme = async () => {
+  vi.resetModules();
+  return import("../src/utils/theme.js");
+};
 
 test("theme normalization accepts only supported themes", async () => {
   const { resolveTheme } = await loadTheme();

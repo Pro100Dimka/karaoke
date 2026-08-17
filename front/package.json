@@ -38,7 +38,7 @@
     "check:syntax": "node scripts/check-syntax.mjs",
     "test:unit": "vitest run",
     "test:unit:coverage": "vitest run --coverage",
-    "test:mutation": "stryker run",
+    "test:mutation": "stryker run && node scripts/check-mutation-quality.mjs",
     "test:e2e": "playwright test",
     "test:e2e:real": "npm run test:integration:backend",
     "test:integration:backend": "cross-env VITE_USE_MOCK_API=false playwright test",

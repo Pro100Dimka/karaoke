@@ -1,11 +1,32 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, test, vi } from "vitest";
 
-let importId = 0;
-const importApi = (name) =>
-  import(/* @vite-ignore */ `../src/api/${name}.js?contract=${importId++}`);
-const importDomain = (name) =>
-  import(/* @vite-ignore */ `../src/api/domains/${name}.js?contract=${importId++}`);
+const importApi = async (name) => {
+  vi.resetModules();
+  if (name === "core") return import("../src/api/core.js");
+  if (name === "normalizers") return import("../src/api/normalizers.js");
+  throw new Error(`Unknown API module: ${name}`);
+};
+const importDomain = async (name) => {
+  switch (name) {
+    case "audio":
+      return import("../src/api/domains/audio.js");
+    case "models":
+      return import("../src/api/domains/models.js");
+    case "player":
+      return import("../src/api/domains/player.js");
+    case "recordings":
+      return import("../src/api/domains/recordings.js");
+    case "settings":
+      return import("../src/api/domains/settings.js");
+    case "songs":
+      return import("../src/api/domains/songs.js");
+    case "system":
+      return import("../src/api/domains/system.js");
+    default:
+      throw new Error(`Unknown API domain: ${name}`);
+  }
+};
 
 const response = ({
   body = "{}",
@@ -219,7 +240,9 @@ describe("API transport", () => {
     globalThis.fetch.mockClear();
     assert.ok(Array.isArray(await mockCore.request("/songs")));
     assert.ok((await mockCore.requestBlob("/songs/demo/package")).size > 0);
-    assert.match(mockCore.createFileUrl("/audio/file"), /^data:audio\/wav/);
+    const mockAudioUrl = mockCore.createFileUrl("/audio/file");
+    assert.match(mockAudioUrl, /^data:audio\/ogg;base64,/);
+    assert.ok(mockAudioUrl.length > 5_000, "mock audio must be long enough for playback E2E");
     assert.equal(globalThis.fetch.mock.calls.length, 0);
   });
 });

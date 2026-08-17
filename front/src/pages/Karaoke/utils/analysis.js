@@ -4,16 +4,16 @@ import { translateSaved } from "../../../i18n/runtime";
 const EMPTY_SECTIONS = Object.freeze(Array()); // eslint-disable-line no-array-constructor
 
 const ANALYSIS_GRADES = [
-  [85, "Отличное исполнение"],
-  [70, "Хороший результат"],
-  [50, "Есть потенциал"],
-  [-Infinity, "Нужно потренироваться"]
+  [85, () => translateSaved("Отличное исполнение")],
+  [70, () => translateSaved("Хороший результат")],
+  [50, () => translateSaved("Есть потенциал")],
+  [-Infinity, () => translateSaved("Нужно потренироваться")]
 ];
 
 function getAnalysisGrade(accuracy) {
   if (accuracy == null) return translateSaved("Нет данных");
-  const [, label] = ANALYSIS_GRADES.find(([minimum]) => accuracy >= minimum);
-  return translateSaved(label);
+  const [, getLabel] = ANALYSIS_GRADES.find(([minimum]) => accuracy >= minimum);
+  return getLabel();
 }
 
 function getAnalysisAdvice(accuracy, meanDeviation) {

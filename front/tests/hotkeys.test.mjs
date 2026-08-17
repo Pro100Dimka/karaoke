@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "vitest";
+import { test, vi } from "vitest";
 
 import { getKaraokeHotkeyAction } from "../src/pages/Karaoke/utils/hotkeys.js";
 
-let importId = 0;
-const loadHotkeys = () =>
-  import(/* @vite-ignore */ `../src/utils/hotkeys.js?contract=${importId++}`);
+const loadHotkeys = async () => {
+  vi.resetModules();
+  return import("../src/utils/hotkeys.js");
+};
 
 function installDocument(dialogs = []) {
   globalThis.document = {

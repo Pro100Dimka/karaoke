@@ -1,15 +1,14 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { test } from "vitest";
+import { test, vi } from "vitest";
 
 import { translateSaved } from "../src/i18n/runtime.js";
 import sourceMessages from "../src/i18n/source-messages.json" with { type: "json" };
 import { interpolate, missingTranslationKeys, translate } from "../src/i18n/translate.js";
-let languageImportId = 0;
-const loadLanguage = () =>
-  import(
-    /* @vite-ignore */ `../src/utils/language.js?contract=${languageImportId++}`
-  );
+const loadLanguage = async () => {
+  vi.resetModules();
+  return import("../src/utils/language.js");
+};
 
 const catalogs = {
   uk: {

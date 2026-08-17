@@ -2,6 +2,7 @@ import { translateSaved } from "../i18n/runtime";
 import { API_BASE_URL } from "../runtime-config";
 /* eslint-disable import/extensions */
 // eslint-disable-next-line import/extensions
+import { MOCK_SILENT_AUDIO_URL } from "./mock/media";
 import { mockBlobRequest, mockRequest } from "./mock/request";
 
 // Общая транспортная часть локального REST API.
@@ -182,8 +183,6 @@ export async function requestBlob(path, options = {}) {
   if (MOCK_API_ENABLED) return mockBlobRequest(path, options);
   return withSuccessfulResponse(path, options, readBlobResponse);
 }
-const MOCK_SILENT_AUDIO_URL =
-  "data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQIAAAAAAA==";
 export function createFileUrl(path) {
   if (MOCK_API_ENABLED) return MOCK_SILENT_AUDIO_URL;
   const normalizedPath = String(path || "").trim();

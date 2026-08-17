@@ -4,9 +4,21 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { formatBytes } from "../src/pages/Settings/screens/memory/format.js";
 import { clamp, normalizePreset } from "../src/pages/Karaoke/components/console/utils.js";
 
-let importId = 0;
-const importUtility = (name) =>
-  import(/* @vite-ignore */ `../src/utils/${name}.js?contract=${importId++}`);
+const importUtility = async (name) => {
+  vi.resetModules();
+  switch (name) {
+    case "audio-preferences":
+      return import("../src/utils/audio-preferences.js");
+    case "clipboard":
+      return import("../src/utils/clipboard.js");
+    case "config":
+      return import("../src/utils/config.js");
+    case "ui-preferences":
+      return import("../src/utils/ui-preferences.js");
+    default:
+      throw new Error(`Unknown utility module: ${name}`);
+  }
+};
 
 beforeEach(() => {
   localStorage.clear();
@@ -35,6 +47,23 @@ describe("audio and UI preferences", () => {
         });
       }
     );
+  });
+
+  test("audio preferences reject malformed device ids and preserve omitted values", async () => {
+    const { getAudioPreferences, saveAudioPreferences } = await importUtility("audio-preferences");
+    localStorage.setItem(
+      "karaoke-audio-preferences",
+      JSON.stringify({ monitorInputDeviceId: "mic-a", monitorOutputDeviceId: "out-a" })
+    );
+    expect(saveAudioPreferences({ monitorInputDeviceId: "   " })).toEqual({
+      monitorInputDeviceId: "default",
+      monitorOutputDeviceId: "out-a"
+    });
+    expect(saveAudioPreferences(null)).toEqual(getAudioPreferences());
+    expect(saveAudioPreferences({ monitorInputDeviceId: 123, monitorOutputDeviceId: [] })).toEqual({
+      monitorInputDeviceId: "default",
+      monitorOutputDeviceId: "default"
+    });
   });
 
   test("saves device preferences and ignores obsolete controls", async () => {
@@ -98,6 +127,29 @@ describe("audio and UI preferences", () => {
     ).toEqual({ monitorInputDeviceId: "remote-mic" });
   });
 
+  test("hydrates every namespace independently and ignores arrays as remote objects", async () => {
+    const { hydrateUiPreferences, UI_PREFERENCE_STORAGE } = await importUtility("ui-preferences");
+    localStorage.setItem(UI_PREFERENCE_STORAGE.audio, JSON.stringify({ local: "audio" }));
+    localStorage.setItem(UI_PREFERENCE_STORAGE.radio, JSON.stringify({ local: "radio" }));
+    const api = {
+      getUiPreferences: vi.fn().mockResolvedValue({
+        audio: [],
+        karaoke: { volume: 0.4 },
+        melody_editor: { zoom: 12 },
+        radio: null,
+        settings: { tab: "ai" }
+      }),
+      updateUiPreferences: vi.fn().mockResolvedValue({})
+    };
+    await hydrateUiPreferences(api);
+    expect(api.updateUiPreferences).toHaveBeenCalledWith("audio", { local: "audio" });
+    expect(api.updateUiPreferences).toHaveBeenCalledWith("radio", { local: "radio" });
+    expect(JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.karaoke))).toEqual({ volume: 0.4 });
+    expect(JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.melody_editor))).toEqual({ zoom: 12 });
+    expect(JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.settings))).toEqual({ tab: "ai" });
+    expect(api.updateUiPreferences).toHaveBeenCalledTimes(2);
+  });
+
   test("delegates persistence through the API transport", async () => {
     const { persistUiPreferences } = await importUtility("ui-preferences");
     const api = { updateUiPreferences: vi.fn().mockResolvedValue({}) };
@@ -130,6 +182,18 @@ describe("clipboard fallbacks", () => {
     window.electronAPI = { copyText: vi.fn().mockResolvedValue(1) };
     expect(await copyText(42)).toBe(true);
     expect(window.electronAPI.copyText).toHaveBeenCalledWith("42");
+  });
+
+  test("Electron false is authoritative and does not fall through to browser strategies", async () => {
+    const { copyText } = await importUtility("clipboard");
+    window.electronAPI = { copyText: vi.fn().mockResolvedValue(false) };
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    document.execCommand = vi.fn(() => true);
+    expect(await copyText("text")).toBe(false);
+    expect(window.electronAPI.copyText).toHaveBeenCalledWith("text");
+    expect(writeText).not.toHaveBeenCalled();
+    expect(document.execCommand).not.toHaveBeenCalled();
   });
 
   test("falls back from Electron to the browser clipboard", async () => {

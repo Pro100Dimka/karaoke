@@ -73,11 +73,10 @@ import {
 import { getErrorMessage } from "../src/utils/errors.js";
 import { getBrowserStorage, readJsonStorage, writeJsonStorage } from "../src/utils/storage.js";
 
-let utilityImportId = 0;
-const loadKaraokePreferencesUtility = () =>
-  import(
-    /* @vite-ignore */ `../src/pages/Karaoke/utils/preferences.js?contract=${utilityImportId++}`
-  );
+const loadKaraokePreferencesUtility = async () => {
+  vi.resetModules();
+  return import("../src/pages/Karaoke/utils/preferences.js");
+};
 
 describe("generic normalization utilities", () => {
   test("audio helpers normalize every input class", async () => {

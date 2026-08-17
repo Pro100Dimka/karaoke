@@ -191,11 +191,11 @@ function ZoomControl({ axis, setZoom, value }) {
     <label
       htmlFor={id}
       className={`melody-editor-inline-zoom${horizontal ? "" : " is-vertical"}`}
-      title={translateSaved(
+      title={
         horizontal
-          ? "Горизонтальный масштаб · Ctrl+Shift+колесо"
-          : "Вертикальный масштаб · Ctrl+колесо"
-      )}
+          ? translateSaved("Горизонтальный масштаб · Ctrl+Shift+колесо")
+          : translateSaved("Вертикальный масштаб · Ctrl+колесо")
+      }
     >
       {horizontal ? <MoveHorizontal size={12} /> : <MoveVertical size={12} />}
       <input
@@ -217,9 +217,11 @@ function EditorScrollbar(props) {
   return (
     <div
       className={`melody-editor-cubase-scrollbar is-${horizontal ? "horizontal" : "vertical"}`}
-      aria-label={translateSaved(
-        horizontal ? "Горизонтальная прокрутка" : "Вертикальная прокрутка"
-      )}
+      aria-label={
+        horizontal
+          ? translateSaved("Горизонтальная прокрутка")
+          : translateSaved("Вертикальная прокрутка")
+      }
     >
       <Scrollbar {...props} />
       <ZoomControl

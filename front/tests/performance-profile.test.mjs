@@ -1,11 +1,10 @@
 import assert from "node:assert/strict";
-import { test } from "vitest";
+import { test, vi } from "vitest";
 
-let importId = 0;
-const loadProfile = () =>
-  import(
-    /* @vite-ignore */ `../src/utils/performance-profile.js?contract=${importId++}`
-  );
+const loadProfile = async () => {
+  vi.resetModules();
+  return import("../src/utils/performance-profile.js");
+};
 
 test("performance profile detects weak hardware and updates the root", async () => {
   const { applyPerformanceProfile, detectReducedPerformance } =

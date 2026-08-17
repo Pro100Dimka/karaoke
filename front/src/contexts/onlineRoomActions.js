@@ -1,3 +1,5 @@
+import { translateSaved } from "../i18n/runtime";
+
 function createCommandId() {
   return typeof globalThis.crypto?.randomUUID === "function"
     ? globalThis.crypto.randomUUID()
@@ -18,7 +20,7 @@ export async function openKaraokeInRoom({
   const revisionPayload = await roomApi?.getSongRevision?.(songId);
   const revision = revisionPayload?.revision;
   if (typeof revision !== "string" || !revision.startsWith("sha256:"))
-    throw new Error("Не удалось определить версию содержимого песни");
+    throw new Error(translateSaved("Не удалось определить версию содержимого песни"));
   if (!isCurrentConnection()) return false;
   const command = { type: "open-karaoke", songId, commandId: createCommandId(), revision };
   const previousCommandId = hostSongCommandRef?.current?.commandId;

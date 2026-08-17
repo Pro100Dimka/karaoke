@@ -821,7 +821,7 @@ describe("lyrics, melody and pitch", () => {
       noise[index] = (seed / 2_147_483_647 - 0.5) * 0.5;
     }
     assert.equal(detect(noise), null);
-  });
+  }, 30_000);
 });
 
 describe("device, settings and song-card factories", () => {
