@@ -544,48 +544,79 @@ function handleBinaryChunk(mesh, participantId, channel, data) {
 
 export function setupDataChannel(mesh, participantId, channel) {
   const previousChannel = mesh.channels.get(participantId);
+
   if (previousChannel && previousChannel !== channel) {
     cancelOutboundTransfers(mesh, participantId, previousChannel);
+
     const admission = mesh.incomingFileAdmissions.get(participantId);
     if (admission?.channel === previousChannel) {
       admission.cancelled = true;
+      globalThis.clearTimeout(admission.timer);
       mesh.incomingFileAdmissions.delete(participantId);
     }
+
     const incoming = mesh.incomingFiles.get(participantId);
     if (incoming?.channel === previousChannel) {
+      incoming.cancelled = true;
+      incoming.cancelFinalization?.();
       cleanupIncomingTransfer(incoming);
       mesh.incomingFiles.delete(participantId);
     }
-    if (previousChannel.readyState !== "closed") previousChannel.close?.();
+
+    if (previousChannel.readyState !== "closed") {
+      previousChannel.close?.();
+    }
   }
 
   channel.binaryType = "arraybuffer";
   channel.bufferedAmountLowThreshold = 256 * 1024;
+
   channel.onmessage = ({ data }) => {
     if (mesh.channels.get(participantId) !== channel) return;
+
     if (typeof data === "string") {
       handleStringMessage(mesh, participantId, channel, data);
       return;
     }
+
     handleBinaryChunk(mesh, participantId, channel, data);
   };
 
   const clearChannel = () => {
+    if (mesh.channels.get(participantId) !== channel) return;
+
     cancelOutboundTransfers(mesh, participantId, channel);
+
     const admission = mesh.incomingFileAdmissions.get(participantId);
     if (admission?.channel === channel) {
       admission.cancelled = true;
+      globalThis.clearTimeout(admission.timer);
       mesh.incomingFileAdmissions.delete(participantId);
     }
+
     const incoming = mesh.incomingFiles.get(participantId);
     if (incoming?.channel === channel) {
+      incoming.cancelled = true;
+      incoming.cancelFinalization?.();
       cleanupIncomingTransfer(incoming);
       mesh.incomingFiles.delete(participantId);
     }
-    if (mesh.channels.get(participantId) === channel) mesh.channels.delete(participantId);
+
+    mesh.channels.delete(participantId);
   };
+
   channel.onclose = clearChannel;
-  channel.onerror = clearChannel;
+
+  channel.onerror = () => {
+    // RTCDataChannel error сам по себе не означает,
+    // что участник покинул комнату.
+    //
+    // Ждём реального `close`.
+    if (channel.readyState === "closed") {
+      clearChannel();
+    }
+  };
+
   mesh.channels.set(participantId, channel);
 }
 
