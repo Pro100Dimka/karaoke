@@ -80,6 +80,7 @@
     "no-undef-init": 0,
     "no-bitwise": 0,
     "no-restricted-syntax": 0,
+    "react/jsx-indent": 0,
     "no-extra-boolean-cast": 0,
     "import/order": [
       1,

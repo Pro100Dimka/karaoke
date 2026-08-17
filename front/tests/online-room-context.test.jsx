@@ -126,7 +126,7 @@ describe("online room provider", () => {
     });
     expect(
       Object.values(result.current).filter((value) => typeof value === "function")
-    ).toHaveLength(13);
+    ).toHaveLength(14);
     expect(() => result.current.setMicrophoneMuted(true)).not.toThrow();
     expect(() => result.current.syncUi({ radio: true })).not.toThrow();
     expect(() => result.current.syncCommand({ type: "pause" })).not.toThrow();
@@ -570,9 +570,10 @@ describe("online room provider", () => {
     await act(async () => mocks.voices[0].onRemoteStream("guest", stream()));
     act(() => hook.result.current.togglePersonEffects("guest"));
     await act(async () => Promise.resolve());
-    expect(contexts).toHaveLength(1);
-    expect(contexts[0].options).toEqual({ latencyHint: "interactive" });
-    expect(contexts[0].master.gain.value).toBe(1);
+    const effectContexts = () => contexts.filter((context) => context.master);
+    expect(effectContexts()).toHaveLength(1);
+    expect(effectContexts()[0].options).toEqual({ latencyHint: "interactive" });
+    expect(effectContexts()[0].master.gain.value).toBe(1);
     expect(document.querySelector("audio").muted).toBe(true);
     act(() => hook.result.current.togglePersonEffects("guest"));
     await act(async () => Promise.resolve());
@@ -580,7 +581,7 @@ describe("online room provider", () => {
     await act(async () => mocks.voices[0].onRemoteStream("guest-2", stream()));
     act(() => hook.result.current.togglePersonEffects("guest-2"));
     await act(async () => Promise.resolve());
-    expect(contexts).toHaveLength(2);
+    expect(effectContexts()).toHaveLength(2);
     expect(() => mocks.voices[0].onPeerClosed("guest-2")).not.toThrow();
   });
 

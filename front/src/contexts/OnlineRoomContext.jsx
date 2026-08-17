@@ -69,7 +69,7 @@ export function OnlineRoomProvider({ children }) {
   const transferStatus = activeTransfer
     ? Object.fromEntries(
         Object.entries(activeTransfer).filter(
-          ([key]) => !["participantId", "commandId"].includes(key)
+          ([key]) => !["participantId", "commandId", "songId"].includes(key)
         )
       )
     : null;
@@ -347,8 +347,6 @@ export function OnlineRoomProvider({ children }) {
             });
             setTransferStatus({
               participantId,
-              commandId: metadata.commandId,
-              songId: metadata.songId,
               stage: "error",
               error: errorText,
               percent: 0
@@ -581,12 +579,20 @@ export function OnlineRoomProvider({ children }) {
     [applyParticipantEffects]
   );
   const { effectsByParticipant } = roomUi;
+  const effectPeopleRef = useRef(effectPeople);
+  useEffect(() => {
+    effectPeopleRef.current = effectPeople;
+  }, [effectPeople]);
   useEffect(() => {
     roomUiRef.current = roomUi;
   }, [roomUi]);
+  // Rebuilds graphs for already-enabled listeners when remote effect settings
+  // change. Toggling a participant on/off is applied directly by
+  // togglePersonEffects, so effectPeople is read from a ref here to avoid
+  // re-applying (and leaking a duplicate AudioContext) on every toggle.
   useEffect(() => {
-    effectPeople.forEach((id) => applyParticipantEffects(id, true));
-  }, [applyParticipantEffects, effectPeople, effectsByParticipant]);
+    effectPeopleRef.current.forEach((id) => applyParticipantEffects(id, true));
+  }, [applyParticipantEffects, effectsByParticipant]);
   const { openKaraoke, syncCommand, syncUi } = useOnlineRoomCommands({
     api,
     clientRef,

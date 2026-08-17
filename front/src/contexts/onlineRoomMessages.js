@@ -188,8 +188,6 @@ export function createOnlineRoomMessageHandler(options) {
       const errorText = command.error || translateSaved("Не удалось передать песню");
       setTransferStatus({
         participantId: message.fromId,
-        songId: command.songId,
-        commandId: command.commandId,
         stage: "error",
         error: errorText,
         percent: 0

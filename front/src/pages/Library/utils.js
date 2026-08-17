@@ -51,7 +51,7 @@ export function getLocalVisibleSongs(songs, hiddenSongIds) {
   return asArray(songs).filter((song) => song && typeof song === "object" && !hidden.has(song.id));
 }
 export function resolveVisibleSongs({ localSongs, room, roomSongs, roomSongsByParticipant }) {
-  if (!room) return asArray(localSongs);
+  if (!room || room.host) return asArray(localSongs);
   const merged = new Map();
   for (const song of Object.values(roomSongsByParticipant || {}).flatMap(asArray)) {
     if (song && typeof song === "object" && song.id) merged.set(song.id, song);
@@ -60,10 +60,7 @@ export function resolveVisibleSongs({ localSongs, room, roomSongs, roomSongsByPa
     if (song && typeof song === "object" && song.id && !merged.has(song.id))
       merged.set(song.id, song);
   }
-  for (const song of asArray(localSongs)) {
-    if (song && typeof song === "object" && song.id)
-      merged.set(song.id, { ...song, __roomOwnerId: room.selfId, __roomLocal: true });
-  }
+  if (merged.size === 0) return asArray(localSongs);
   return [...merged.values()];
 }
 export function filterSongs(songs, query) {

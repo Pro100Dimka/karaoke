@@ -65,8 +65,8 @@ export default class OnlineVoiceMesh {
       .getUserMedia({
         audio: {
           echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: true,
+          noiseSuppression: true,
+          autoGainControl: false,
           channelCount: 1,
           sampleRate: { ideal: 48_000 },
           sampleSize: { ideal: 24 }

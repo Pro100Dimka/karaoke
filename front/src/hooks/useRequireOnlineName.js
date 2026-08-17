@@ -3,7 +3,7 @@ import { useAppDialog } from "../contexts/AppDialog";
 import { translateSaved } from "../i18n/runtime";
 import useAppSettings from "./useAppSettings";
 
-function getOnlineNameMessage() {
+export function getOnlineNameMessage() {
   return translateSaved(
     "Укажите своё имя в настройках приложения. Оно нужно для совместного исполнения и будет видно участникам комнаты."
   );

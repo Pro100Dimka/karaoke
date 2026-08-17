@@ -114,6 +114,7 @@ export default function useOnlineRoomAudio({
       const context = new AudioContextClass({ latencyHint: "interactive" });
       const source = context.createMediaStreamSource(stream);
       const master = context.createGain();
+      master.gain.value = 1;
       source.connect(master);
 
       const echo = clamp01(effects.echo);

@@ -6,6 +6,7 @@ import { useAppDialog } from "../../contexts/AppDialog";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import useAppSettings from "../../hooks/useAppSettings";
 import { usePolling } from "../../hooks/usePolling";
+import { getOnlineNameMessage } from "../../hooks/useRequireOnlineName";
 import { translateSaved } from "../../i18n/runtime";
 import { POLLING_INTERVALS } from "../../runtime-config";
 import { Grid, Stack } from "../../theme/ui";
@@ -97,14 +98,19 @@ export default function Library({ onOpenSongSettings }) {
     setTrackedSongId(song?.id || null);
   }, []);
   const openOnlineRoom = async () => {
+    let latestSettings;
     try {
-      await reloadSettings();
+      latestSettings = await reloadSettings();
     } catch (error) {
       await notify(
         translateSaved("Не удалось проверить настройки онлайн-режима: {0}", {
           0: getErrorMessage(error)
         })
       );
+      return;
+    }
+    if (!String(latestSettings?.online_name ?? "").trim()) {
+      await notify(getOnlineNameMessage());
       return;
     }
     setOnlineRoomOpen(true);
@@ -332,7 +338,7 @@ export default function Library({ onOpenSongSettings }) {
                   canManageLibrary={canManageLibrary}
                   cardIndex={cardIndex}
                   song={song}
-                  transferStatus={[...sharedRoom.transferStatuses.values()].find(
+                  transferStatus={[...(sharedRoom?.transferStatuses?.values?.() || [])].find(
                     (status) => status.songId === song.id
                   )}
                   onDelete={handleDelete}

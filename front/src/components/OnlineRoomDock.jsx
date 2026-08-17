@@ -98,6 +98,21 @@ export function OnlineRoomDock() {
           ))}
         </div>
 
+        {onlineRoom.transferStatus?.stage === "error" ? (
+          <p className="online-room-transfer-error">
+            {onlineRoom.transferStatus.error || t("room.transfer.unknownError")}
+          </p>
+        ) : onlineRoom.transferStatus &&
+          ["waiting", "sending", "receiving", "importing"].includes(
+            onlineRoom.transferStatus.stage
+          ) ? (
+          <progress
+            className="online-room-transfer-progress"
+            max="100"
+            value={Math.max(0, Math.min(100, Number(onlineRoom.transferStatus.percent) || 0))}
+          />
+        ) : null}
+
         {onlineRoom.voiceError && (
           <div className="online-room-voice-warning">
             <p className="online-room-voice-error">{onlineRoom.voiceError}</p>

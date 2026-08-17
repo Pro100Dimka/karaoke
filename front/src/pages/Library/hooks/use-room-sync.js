@@ -29,6 +29,10 @@ export default function useLibraryRoomSync({
   }, [query, room, syncUi]);
 
   useEffect(() => {
+    if (room?.host) syncUi({ songs: localSongs });
+  }, [localSongs, room?.host, syncUi]);
+
+  useEffect(() => {
     if (!room?.selfId) return undefined;
     let cancelled = false;
     Promise.all(
