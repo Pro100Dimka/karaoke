@@ -22,7 +22,8 @@ from app.utils.atomic_files import atomic_write_bytes, move_path
 
 _library_write_lock = threading.RLock()
 _content_locks_guard = threading.Lock()
-_content_locks: weakref.WeakValueDictionary[str, threading.RLock] = weakref.WeakValueDictionary()
+_content_locks: weakref.WeakValueDictionary[str,
+                                            threading.RLock] = weakref.WeakValueDictionary()
 
 
 @contextmanager
@@ -61,13 +62,15 @@ def _ensure_path_within(path: Path, root: Path) -> Path:
 
 def resolve_library_path(path: Path) -> Path:
     errors = []
-    roots = {config.SONG_OUTPUT_DIR.resolve(), *(Path(root).resolve() for root in config.SONG_LIBRARY_ROOTS)}
+    roots = {config.SONG_OUTPUT_DIR.resolve(), *(Path(root).resolve()
+                                                 for root in config.SONG_LIBRARY_ROOTS)}
     for root in roots:
         try:
             return _ensure_path_within(path, root)
         except ValueError as exc:
             errors.append(exc)
-    raise ValueError("Song file path is outside the application library") from (errors[-1] if errors else None)
+    raise ValueError("Song file path is outside the application library") from (
+        errors[-1] if errors else None)
 
 
 def resolve_source_path(song: models.Song) -> Path:
@@ -77,7 +80,8 @@ def resolve_source_path(song: models.Song) -> Path:
 
 def resolve_output_dir(song: models.Song) -> Path:
     """Return the validated directory that belongs to a song's generated data."""
-    path = Path(song.output_dir) if song.output_dir else config.SONG_OUTPUT_DIR / song.slug
+    path = Path(
+        song.output_dir) if song.output_dir else config.SONG_OUTPUT_DIR / song.slug
     return resolve_library_path(path)
 
 
@@ -107,14 +111,20 @@ def extract_embedded_cover(source_path: Path, output_dir: Path) -> Path | None:
         if isinstance(data := getattr(picture, "data", None), bytes) and data:
             candidates.append(data)
 
-    if (tags := getattr(audio, "tags", None)) is not None:
-        if callable(values := getattr(tags, "values", None)):
-            for value in values():
-                if isinstance(data := getattr(value, "data", None), bytes) and data:
-                    candidates.append(data)
-        if callable(get := getattr(tags, "get", None)):
-            if isinstance(covers := get("covr"), (list, tuple)):
-                candidates.extend(bytes(item) for item in covers if item)
+    if (
+        (tags := getattr(audio, "tags", None)) is not None
+        and callable(values := getattr(tags, "values", None))
+    ):
+        for value in values():
+            if isinstance(data := getattr(value, "data", None), bytes) and data:
+                candidates.append(data)
+
+    if (
+        tags is not None
+        and callable(get := getattr(tags, "get", None))
+        and isinstance(covers := get("covr"), (list, tuple))
+    ):
+        candidates.extend(bytes(item) for item in covers if item)
 
     for payload in candidates:
         extension = _cover_extension(payload)
@@ -125,13 +135,15 @@ def extract_embedded_cover(source_path: Path, output_dir: Path) -> Path | None:
         return target
     return None
 
+
 def _first_audio_tag(tags: object, *names: str) -> str | None:
     if not callable(get := getattr(tags, "get", None)):
         return None
     for name in names:
         value = get(name)
         if isinstance(value, (list, tuple)):
-            value = next((item for item in value if isinstance(item, str) and item.strip()), None)
+            value = next((item for item in value if isinstance(
+                item, str) and item.strip()), None)
         if isinstance(value, str) and value.strip():
             return value.strip()
     return None
@@ -159,7 +171,8 @@ def _normalize_artist_title(
     clean_title = str(title or "").strip()
     value = raw_artist
     if album:
-        value = re.sub(re.escape(str(album).strip()), " ", value, flags=re.IGNORECASE)
+        value = re.sub(re.escape(str(album).strip()),
+                       " ", value, flags=re.IGNORECASE)
     if clean_title:
         value = re.sub(re.escape(clean_title), " ", value, flags=re.IGNORECASE)
     value = _RELEASE_WORD_RE.sub(" ", value)
@@ -236,9 +249,11 @@ def _read_source_identity(
     except Exception:
         pass
 
-    filename_artist, filename_title = parse_filename_identity(original_filename)
+    filename_artist, filename_title = parse_filename_identity(
+        original_filename)
     if tagged_title:
-        artist, clean_title = _normalize_artist_title(tagged_artist, tagged_title, tagged_album)
+        artist, clean_title = _normalize_artist_title(
+            tagged_artist, tagged_title, tagged_album)
         return artist or filename_artist, clean_title
 
     if filename_artist:
@@ -247,8 +262,9 @@ def _read_source_identity(
     return None, requested_title.strip() or filename_title
 
 
+_WINDOWS_RESERVED_NAMES = {"CON", "PRN", "AUX", "NUL", *
+                           (f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 
-_WINDOWS_RESERVED_NAMES = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 
 def _windows_safe_component(value: str, fallback: str) -> str:
     value = unicodedata.normalize("NFC", value).rstrip(" .")
@@ -257,8 +273,10 @@ def _windows_safe_component(value: str, fallback: str) -> str:
         value = f"_{value}"
     return value or fallback
 
+
 def _folder_name(artist: str | None, title: str, fallback: str) -> str:
-    identity = " ".join(part for part in (artist, title) if part and part.strip()).strip()
+    identity = " ".join(part for part in (artist, title)
+                        if part and part.strip()).strip()
     value = _WINDOWS_FORBIDDEN_RE.sub(" ", identity)
     value = " ".join(value.split()).rstrip(" .")
     return _windows_safe_component(value[:180], fallback)
@@ -316,7 +334,8 @@ def _persist_song(
     write_source,
 ) -> models.Song:
     """Allocate a library name, store its source, and commit the database row."""
-    identity = " ".join(part for part in (artist, title) if part).strip() or title
+    identity = " ".join(part for part in (
+        artist, title) if part).strip() or title
     base_slug = slugify(identity, fallback="song")
     with library_write_lock():
         slug = make_unique_slug(db, base_slug)
@@ -364,7 +383,8 @@ def create_song(db: Session, title: str, original_filename: str, file_bytes: byt
         artist=parsed_artist,
         original_filename=safe_name,
         extension=extension,
-        write_source=lambda destination: atomic_write_bytes(destination, file_bytes),
+        write_source=lambda destination: atomic_write_bytes(
+            destination, file_bytes),
     )
 
 
@@ -379,7 +399,8 @@ def create_song_from_path(
     if not temporary_source.is_file() or temporary_source.stat().st_size == 0:
         raise ValueError("Audio file is empty")
 
-    artist, resolved_title = _read_source_identity(temporary_source, safe_name, clean_title)
+    artist, resolved_title = _read_source_identity(
+        temporary_source, safe_name, clean_title)
 
     def move_source(destination: Path) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -407,8 +428,10 @@ def get_song(db: Session, song_id: str) -> models.Song | None:
 def update_song(db: Session, song: models.Song, patch: schemas.SongUpdate) -> models.Song:
     """Apply a partial update under the same lock used by room package snapshots."""
     changes = patch.model_dump(exclude_unset=True)
-    note_min = changes.get("note_range_min", getattr(song, "note_range_min", None))
-    note_max = changes.get("note_range_max", getattr(song, "note_range_max", None))
+    note_min = changes.get("note_range_min", getattr(
+        song, "note_range_min", None))
+    note_max = changes.get("note_range_max", getattr(
+        song, "note_range_max", None))
     if note_min is not None and note_max is not None and note_min > note_max:
         raise ValueError("note_range_min must not exceed note_range_max")
     with library_write_lock():

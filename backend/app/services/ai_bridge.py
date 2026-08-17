@@ -19,7 +19,6 @@ from AI.engines.text import _vocal_activity_regions, tokenize
 from AI.models import PitchFrame
 from AI.notes import hz_to_midi
 from AI.service import AICoreService, get_ai_service
-
 from app.utils.json_files import read_json, write_json
 
 ProgressCallback = Callable[[str, float, str], None]
@@ -35,7 +34,8 @@ def _int_or_default(value: Any, default: int = -1) -> int:
 
 def _note_syllable_indices(note: dict[str, Any]) -> tuple[int, ...]:
     raw = note.get("syllable_indices")
-    values = raw if isinstance(raw, (list, tuple, set)) else (note.get("syllable_index"),)
+    values = raw if isinstance(raw, (list, tuple, set)) else (
+        note.get("syllable_index"),)
     return tuple(dict.fromkeys(index for value in values if (index := _int_or_default(value)) >= 0))
 
 
@@ -88,8 +88,10 @@ def get_run_all_pipeline():
 
 
 def _pitch_frame_to_legacy(frame: PitchFrame) -> dict[str, Any]:
-    midi = hz_to_midi(frame.frequency) if frame.voiced and frame.frequency > 0 else None
-    rounded = int(round(midi)) if midi is not None and math.isfinite(midi) else None
+    midi = hz_to_midi(
+        frame.frequency) if frame.voiced and frame.frequency > 0 else None
+    rounded = int(round(midi)) if midi is not None and math.isfinite(
+        midi) else None
     return {
         "time": frame.time,
         "freq": frame.frequency,
@@ -118,7 +120,8 @@ def _normalize_line_words(line: dict[str, Any]) -> dict[str, Any]:
     start = max(0.0, float(line.get("start") or 0.0))
     end = max(start, float(line.get("end") or start))
     candidate_words = line.get("words")
-    raw_words: list[Any] = candidate_words if isinstance(candidate_words, list) else []
+    raw_words: list[Any] = candidate_words if isinstance(
+        candidate_words, list) else []
 
     words: list[dict[str, Any]] = []
     for raw in raw_words:
@@ -129,7 +132,8 @@ def _normalize_line_words(line: dict[str, Any]) -> dict[str, Any]:
             continue
         raw_start = raw.get("start")
         raw_end = raw.get("end")
-        word_start = max(start, float(start if raw_start is None else raw_start))
+        word_start = max(start, float(
+            start if raw_start is None else raw_start))
         word_end = min(
             end,
             max(word_start, float(word_start if raw_end is None else raw_end)),
@@ -141,7 +145,8 @@ def _normalize_line_words(line: dict[str, Any]) -> dict[str, Any]:
     if tokens != old_tokens:
         if words and len(tokens) == len(words):
             # A spelling-only correction must retain the accurate AI timing.
-            words = [{**word, "word": token} for token, word in zip(tokens, words, strict=True)]
+            words = [{**word, "word": token}
+                     for token, word in zip(tokens, words, strict=True)]
         else:
             # Inserted/deleted words have no trustworthy individual timestamps.
             # Rebuild only this line instead of leaving stale word labels that
@@ -156,14 +161,16 @@ def _normalize_line_words(line: dict[str, Any]) -> dict[str, Any]:
                     word_start = start + span * cursor / total
                     cursor += weight
                     word_end = start + span * cursor / total
-                    words.append({"word": token, "start": word_start, "end": word_end})
+                    words.append(
+                        {"word": token, "start": word_start, "end": word_end})
 
     return {"text": text, "start": start, "end": end, "words": words}
 
 
 def reconcile_lyric_words(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Normalize manually edited lyric lines without depending on old AI modules."""
-    normalized = [_normalize_line_words(line) for line in lines if isinstance(line, dict)]
+    normalized = [_normalize_line_words(line)
+                  for line in lines if isinstance(line, dict)]
     normalized.sort(key=lambda line: (line["start"], line["end"]))
     return normalized
 
@@ -210,7 +217,8 @@ def _source_line_boundaries(text: str, words: list[dict[str, Any]]) -> list[int]
     if len(source_lines) < 2:
         return []
 
-    source_tokens = [token for line in source_lines for token in tokenize(line)]
+    source_tokens = [
+        token for line in source_lines for token in tokenize(line)]
     aligned_tokens = [item["word"] for item in words]
     matcher = SequenceMatcher(
         None,
@@ -235,7 +243,8 @@ def _source_line_boundaries(text: str, words: list[dict[str, Any]]) -> list[int]
     cursor = 0
     for line in source_lines[:-1]:
         cursor += len(tokenize(line))
-        boundary = max(boundaries[-1] if boundaries else 0, map_boundary(cursor))
+        boundary = max(
+            boundaries[-1] if boundaries else 0, map_boundary(cursor))
         boundaries.append(min(len(aligned_tokens), boundary))
     return boundaries
 
@@ -256,7 +265,8 @@ def _group_words_into_lines(
             continue
         start = float(word.get("start") or 0.0)
         end = max(start, float(word.get("end") or start))
-        normalized_words.append({**word, "word": token, "text": token, "start": start, "end": end})
+        normalized_words.append(
+            {**word, "word": token, "text": token, "start": start, "end": end})
 
     if boundaries := _source_line_boundaries(source_text, normalized_words):
         lines: list[list[dict[str, Any]]] = []
@@ -279,7 +289,8 @@ def _group_words_into_lines(
             continue
         start = float(word.get("start") or 0.0)
         end = max(start, float(word.get("end") or start))
-        item = {**word, "word": token, "text": token, "start": start, "end": end}
+        item = {**word, "word": token, "text": token,
+                "start": start, "end": end}
 
         if current:
             gap = start - current[-1]["end"]
@@ -326,7 +337,8 @@ def _snap_lines_to_regions(
         region_index = min(
             candidates,
             key=lambda index: (
-                abs(regions[index][0] - old_start) + (0.85 if index == previous_region else 0.0)
+                abs(regions[index][0] - old_start) +
+                (0.85 if index == previous_region else 0.0)
             ),
         )
         region_start, region_end = regions[region_index]
@@ -340,7 +352,8 @@ def _snap_lines_to_regions(
         region_span = region_end - region_start
         timed_words = []
         for word in words:
-            relative_start = max(0.0, min(1.0, (float(word["start"]) - old_start) / old_span))
+            relative_start = max(
+                0.0, min(1.0, (float(word["start"]) - old_start) / old_span))
             relative_end = max(
                 relative_start,
                 min(1.0, (float(word["end"]) - old_start) / old_span),
@@ -390,7 +403,8 @@ def _line_timing_is_impossible(line: dict[str, Any]) -> bool:
     words = list(line.get("words") or [])
     if not words:
         return True
-    span = max(0.0, float(line.get("end") or 0.0) - float(line.get("start") or 0.0))
+    span = max(0.0, float(line.get("end") or 0.0) -
+               float(line.get("start") or 0.0))
     return span < max(0.18, len(words) * 0.115)
 
 
@@ -440,7 +454,8 @@ def _repair_impossible_alignment_chunks(
             end_index += 1
         boundary_start = float(lines[index - 1]["end"]) if index > 0 else 0.0
         while end_index < len(lines):
-            word_count = sum(len(line.get("words") or []) for line in lines[index:end_index])
+            word_count = sum(len(line.get("words") or [])
+                             for line in lines[index:end_index])
             available = float(lines[end_index]["start"]) - boundary_start
             if available >= max(0.18, word_count * 0.115):
                 break
@@ -467,14 +482,16 @@ def _repair_impossible_alignment_chunks(
         if not regions:
             regions = [(start, end)]
         active_duration = sum(max(0.0, b - a) for a, b in regions)
-        words = [word for line in group for word in list(line.get("words") or [])]
+        words = [word for line in group for word in list(
+            line.get("words") or [])]
         if active_duration < len(words) * 0.115:
             # A locally adaptive energy threshold can miss breathy or heavily
             # processed vocals.  Never compress the text to the few surviving
             # peaks; retain the bounded chunk's wall-clock span instead.
             regions = [(start, end)]
             active_duration = end - start
-        weights = [max(2, len(str(word.get("word") or word.get("text") or ""))) for word in words]
+        weights = [max(2, len(str(word.get("word") or word.get("text") or "")))
+                   for word in words]
         total_weight = max(1, sum(weights))
 
         repaired_words: list[dict[str, Any]] = []
@@ -488,13 +505,14 @@ def _repair_impossible_alignment_chunks(
                 regions, active_duration, active_duration * consumed / total_weight
             )
             repaired_words.append(
-                {**word, "start": word_start, "end": max(word_start + 0.02, word_end)}
+                {**word, "start": word_start,
+                    "end": max(word_start + 0.02, word_end)}
             )
 
         cursor = 0
         for line_index, line in enumerate(group, first):
             size = len(line.get("words") or [])
-            line_words = repaired_words[cursor : cursor + size]
+            line_words = repaired_words[cursor: cursor + size]
             cursor += size
             result[line_index] = {
                 **line,
@@ -515,7 +533,8 @@ def _bound_legacy_word_durations(lines: list[dict[str, Any]]) -> list[dict[str, 
             end = max(start + 0.02, float(word.get("end") or start))
             token = str(word.get("word") or word.get("text") or "").strip()
             maximum = min(3.2, max(0.7, 0.42 + len(token) * 0.22))
-            words.append({**word, "start": start, "end": min(end, start + maximum)})
+            words.append(
+                {**word, "start": start, "end": min(end, start + maximum)})
         output.append(
             {
                 **line,
@@ -565,7 +584,8 @@ def get_syllables(output_dir: str | Path) -> list[dict[str, Any]]:
     payload: Any = read_json(output_dir / "songMap.json", default={})
     if not (isinstance(payload, dict) and isinstance(payload.get("syllables"), list)):
         payload = read_json(output_dir / "syllables.json", default={})
-    syllables = payload.get("syllables", []) if isinstance(payload, dict) else []
+    syllables = payload.get("syllables", []) if isinstance(
+        payload, dict) else []
     return (
         [item for item in syllables if isinstance(item, dict)]
         if isinstance(syllables, list)
@@ -616,10 +636,12 @@ def _build_legacy_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
             notes_by_syllable.setdefault(syllable_index, []).append(dict(note))
 
     for values in syllables_by_word.values():
-        values.sort(key=lambda item: (float(item.get("start") or 0.0), int(item.get("index") or 0)))
+        values.sort(key=lambda item: (
+            float(item.get("start") or 0.0), int(item.get("index") or 0)))
     for values in notes_by_syllable.values():
         values.sort(
-            key=lambda item: (float(item.get("start") or 0.0), float(item.get("end") or 0.0))
+            key=lambda item: (float(item.get("start") or 0.0),
+                              float(item.get("end") or 0.0))
         )
 
     timeline_lines: list[dict[str, Any]] = []
@@ -698,7 +720,8 @@ def _reference_notes(output_dir: Path) -> list[dict[str, Any]]:
         raw = read_json(legacy_cache, default={})
     else:
         raw = read_json(output_dir / "reference.json", default={})
-    notes = raw.get("notes", []) if isinstance(raw, dict) else raw if isinstance(raw, list) else []
+    notes = raw.get("notes", []) if isinstance(
+        raw, dict) else raw if isinstance(raw, list) else []
     result: list[dict[str, Any]] = []
     for note in notes:
         if not isinstance(note, dict):
@@ -726,8 +749,10 @@ def ensure_legacy_artifacts(output_dir: Path, *, title: str | None = None) -> No
     """
     output_dir = Path(output_dir)
     word_payload: Any = read_json(output_dir / "lyricsSync.json", default={})
-    words = word_payload.get("words", []) if isinstance(word_payload, dict) else []
-    source_text = word_payload.get("text", "") if isinstance(word_payload, dict) else ""
+    words = word_payload.get("words", []) if isinstance(
+        word_payload, dict) else []
+    source_text = word_payload.get(
+        "text", "") if isinstance(word_payload, dict) else ""
     lines = _group_words_into_lines(words, source_text)
     # The canonical forced-alignment timeline is the single source of truth.
     # Never run a second timing redistribution while creating the legacy payload:
@@ -747,7 +772,8 @@ def ensure_legacy_artifacts(output_dir: Path, *, title: str | None = None) -> No
 
     notes = _reference_notes(output_dir)
     duration = float(song_map.get("duration") or 0.0)
-    midi_values = [int(note["midi"]) for note in notes if note.get("midi") is not None]
+    midi_values = [int(note["midi"])
+                   for note in notes if note.get("midi") is not None]
     note_range = max(midi_values) - min(midi_values) if midi_values else 0
     density = len(notes) / duration if duration > 0 else 0.0
     score = min(100, round(note_range * 2.2 + density * 16))
@@ -765,6 +791,7 @@ def ensure_legacy_artifacts(output_dir: Path, *, title: str | None = None) -> No
 
     structure = []
     if duration > 0:
-        structure = [{"label": "Песня", "name": "song", "start": 0.0, "end": duration}]
+        structure = [{"label": "Песня", "name": "song",
+                      "start": 0.0, "end": duration}]
     write_json(output_dir / "structure.json", structure)
     write_json(output_dir / "breaths.json", [])

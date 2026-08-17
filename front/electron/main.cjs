@@ -357,10 +357,7 @@ function startBackend() {
       clearTimeout(backendStableTimer);
       backendStableTimer = null;
       console.error("Не удалось запустить backend:", err);
-      reportBackendError(
-        "Не удалось запустить backend",
-        err?.stack || String(err)
-      );
+      reportBackendError("Не удалось запустить backend", err?.stack || String(err));
       if (backendProcess === childProcess) backendProcess = null;
       scheduleBackendRestart();
     });
@@ -377,8 +374,7 @@ function startBackend() {
       if (isQuitting || backendStopRequested || process.env.KARAOKE_BACKEND_EXTERNAL === "1") {
         return;
       }
-      const message =
-        `Backend stopped (${code ?? "unknown"}, ${signal ?? "no signal"}); restarting…`;
+      const message = `Backend stopped (${code ?? "unknown"}, ${signal ?? "no signal"}); restarting…`;
       console.error(message);
       reportBackendError(message);
       scheduleBackendRestart();

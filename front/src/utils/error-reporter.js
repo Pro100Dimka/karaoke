@@ -44,7 +44,7 @@ export function installGlobalErrorReporting() {
   });
 
   window.addEventListener("unhandledrejection", (event) => {
-    const reason = event.reason;
+    const { reason } = event;
     reportClientError(reason?.message || String(reason ?? "unhandled rejection"), {
       stack: reason?.stack
     });

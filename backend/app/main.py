@@ -10,12 +10,12 @@ import hmac
 import os
 from contextlib import asynccontextmanager
 
-from AI import service as ai_service
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 import config
+from AI import service as ai_service
 from app.routers import analysis, application, audio, cache, diagnostics, player, recording, songs
 from app.services import (
     audio_service,

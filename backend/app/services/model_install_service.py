@@ -6,11 +6,10 @@ import logging
 import threading
 from pathlib import Path
 
+import config
 from AI.errors import ProcessingCancelledError
 from AI.install_models import ProgressReporter, install_one, is_valid
 from AI.model_registry import MODELS
-
-import config
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +101,8 @@ def _install_missing_models(
             reporter.model_finished(model.name)
             continue
         if log_repairs:
-            logger.warning("Repairing incomplete AI model before processing: %s", model.name)
+            logger.warning(
+                "Repairing incomplete AI model before processing: %s", model.name)
         _set_state(current_model=model.name)
         reporter.model_started(model.name)
         install_one(models_root, cache_dir, model, retries=3)
@@ -117,7 +117,8 @@ def _install_missing_models(
 
 
 def _download_worker(models_root: Path, cache_dir: Path) -> None:
-    reporter = ProgressReporter(models_root, config.APP_LOG_DIR / "model-recovery-progress.txt")
+    reporter = ProgressReporter(
+        models_root, config.APP_LOG_DIR / "model-recovery-progress.txt")
     reporter.start()
     try:
         models_root.mkdir(parents=True, exist_ok=True)
@@ -151,13 +152,15 @@ def ensure_ready_sync(cancelled=None) -> dict[str, object]:
     with _condition:
         while _state["state"] == "downloading":
             if cancelled is not None and cancelled():
-                raise ProcessingCancelledError("Cancelled while waiting for AI models")
+                raise ProcessingCancelledError(
+                    "Cancelled while waiting for AI models")
             _condition.wait(timeout=0.2)
             if all(is_valid(models_root, model) for model in MODELS):
                 return status()
         _state.update(state="downloading", current_model=None, error=None)
 
-    reporter = ProgressReporter(models_root, config.APP_LOG_DIR / "model-recovery-progress.txt")
+    reporter = ProgressReporter(
+        models_root, config.APP_LOG_DIR / "model-recovery-progress.txt")
     reporter.start()
     cache_dir = (config.CACHE_DIR / "model-downloads").resolve()
     try:
@@ -178,6 +181,7 @@ def ensure_ready_sync(cancelled=None) -> dict[str, object]:
         logger.exception("Synchronous AI model recovery failed")
         _set_state(state="error", current_model=None, error=str(exc)[:2000])
         raise
+
 
 def start_download() -> dict[str, object]:
     with _lock:

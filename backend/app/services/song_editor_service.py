@@ -9,7 +9,6 @@ from typing import Any
 
 from AI.midi import write_midi
 from AI.models import Syllable, VocalNote, Word
-
 from app.services.artifact_integrity import refresh_manifest_integrity
 from app.utils.json_files import read_json, write_json
 
