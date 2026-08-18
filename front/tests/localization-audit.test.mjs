@@ -3,7 +3,6 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { violationsFor } from "../scripts/audit-localization.mjs";
-
 const directories = [];
 const inspect = (source) => {
   const directory = fs.mkdtempSync( path.join(os.tmpdir(), "localization-audit-")
@@ -13,14 +12,12 @@ const inspect = (source) => {
   fs.writeFileSync(file, source);
   return violationsFor(file);
 };
-
 afterEach(() => {
   directories
     .splice(0)
     .forEach((directory) => fs.rmSync(directory, { force: true, recursive: true })
     );
 });
-
 describe("localization audit", () => {
   it("accepts direct, wrapped and exclusively translated messages", () => {
     expect(
@@ -33,7 +30,6 @@ describe("localization audit", () => {
       `)
     ).toEqual([]);
   });
-
   it("rejects raw literals and translation helpers that leak their message", () => {
     expect(
       inspect(`

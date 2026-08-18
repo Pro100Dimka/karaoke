@@ -1,22 +1,19 @@
 import assert from "node:assert/strict";
 import { test, vi } from "vitest";
-
 import { getKaraokeHotkeyAction } from "../src/pages/Karaoke/utils/hotkeys.js";
-
+import { equal } from "./helpers/assertions.mjs";
 const loadHotkeys = async () => {
   vi.resetModules();
   return import("../src/utils/hotkeys.js");
 };
-
 function installDocument(dialogs = []) {
   globalThis.document = {
     querySelectorAll: (selector) => {
-      assert.equal(selector, '[role="dialog"][aria-modal="true"]');
+      equal([selector, '[role="dialog"][aria-modal="true"]']);
       return dialogs;
     }
   };
 }
-
 test("space always controls karaoke inside the active scope", () => {
   installDocument();
   const scope = { isConnected: true };
@@ -28,23 +25,13 @@ test("space always controls karaoke inside the active scope", () => {
     isComposing: false,
     repeat: false
   };
-
-  assert.equal(getKaraokeHotkeyAction(event, scope), "toggle-playback");
+  equal([getKaraokeHotkeyAction(event, scope), "toggle-playback"]);
 });
-
 test("space does not escape a modal outside karaoke", () => {
   const scope = { isConnected: true };
   installDocument([{ contains: () => false }]);
-
-  assert.equal(
-    getKaraokeHotkeyAction(
-      { code: "Space", target: null, defaultPrevented: false, isComposing: false, repeat: false },
-      scope
-    ),
-    null
-  );
+  equal([getKaraokeHotkeyAction( { code: "Space", target: null, defaultPrevented: false, isComposing: false, repeat: false }, scope ), null]);
 });
-
 test("karaoke action mapping is exact and rejects cancelled events", () => {
   installDocument();
   const scope = { isConnected: true };
@@ -60,22 +47,12 @@ test("karaoke action mapping is exact and rejects cancelled events", () => {
     ["ArrowRight", "seek-forward"],
     ["Escape", "stop"]
   ])
-    assert.equal(getKaraokeHotkeyAction({ ...base, code }, scope), action);
-  assert.equal(getKaraokeHotkeyAction({ ...base, code: "KeyA" }, scope), null);
-  assert.equal( getKaraokeHotkeyAction({ ...base, code: "toString" }, scope), null
-  );
-  assert.equal(getKaraokeHotkeyAction(null, scope), null);
-
+    equal([getKaraokeHotkeyAction({ ...base, code }, scope), action]);
+  equal([getKaraokeHotkeyAction({ ...base, code: "KeyA" }, scope), null], [getKaraokeHotkeyAction({ ...base, code: "toString" }, scope), null], [getKaraokeHotkeyAction(null, scope), null]);
   for (const property of ["defaultPrevented", "isComposing", "repeat"])
-    assert.equal(
-      getKaraokeHotkeyAction( { ...base, code: "Space", [property]: true }, scope
-      ),
-      null
-    );
-  assert.equal( getKaraokeHotkeyAction({ ...base, code: "Space" }, { isConnected: false }), null
-  );
+    equal([getKaraokeHotkeyAction( { ...base, code: "Space", [property]: true }, scope ), null]);
+  equal([getKaraokeHotkeyAction({ ...base, code: "Space" }, { isConnected: false }), null]);
 });
-
 test("editable targets use the complete protected selector", async () => {
   const { isEditableHotkeyTarget } = await loadHotkeys();
   const expected = [
@@ -90,33 +67,19 @@ test("editable targets use the complete protected selector", async () => {
     '[role="slider"]',
     '[data-hotkeys="off"]'
   ].join(", ");
-  assert.equal(
-    isEditableHotkeyTarget({
-      closest: (selector) => {
-        assert.equal(selector, expected);
-        return {};
-      }
-    }),
-    true
-  );
-  assert.equal(isEditableHotkeyTarget({ closest: () => null }), false);
-  assert.equal(isEditableHotkeyTarget({}), false);
-  assert.equal(isEditableHotkeyTarget(null), false);
+  equal([isEditableHotkeyTarget({ closest: (selector) => { assert.equal(selector, expected); return {}; } }), true], [isEditableHotkeyTarget({ closest: () => null }), false], [isEditableHotkeyTarget({}), false], [isEditableHotkeyTarget(null), false]);
 });
-
 test("only the top dialog owns an active hotkey scope", async () => {
   const { isHotkeyScopeActive } = await loadHotkeys();
   const scope = { isConnected: true };
-  assert.equal(isHotkeyScopeActive(null), false);
-  assert.equal(isHotkeyScopeActive({ isConnected: false }), false);
+  equal([isHotkeyScopeActive(null), false], [isHotkeyScopeActive({ isConnected: false }), false]);
   installDocument([]);
-  assert.equal(isHotkeyScopeActive(scope), true);
+  equal([isHotkeyScopeActive(scope), true]);
   installDocument([ { contains: (candidate) => candidate === scope }, { contains: () => false } ]);
-  assert.equal(isHotkeyScopeActive(scope), false);
+  equal([isHotkeyScopeActive(scope), false]);
   installDocument([ { contains: () => false }, { contains: (candidate) => candidate === scope } ]);
-  assert.equal(isHotkeyScopeActive(scope), true);
+  equal([isHotkeyScopeActive(scope), true]);
 });
-
 test("every browser cancellation signal suppresses a hotkey", async () => {
   const { shouldIgnoreHotkey } = await loadHotkeys();
   const scope = { isConnected: true };
@@ -127,12 +90,8 @@ test("every browser cancellation signal suppresses a hotkey", async () => {
     target: { closest: () => null }
   };
   installDocument();
-  assert.equal(shouldIgnoreHotkey(event, scope), false);
-  assert.equal(shouldIgnoreHotkey(null, scope), true);
+  equal([shouldIgnoreHotkey(event, scope), false], [shouldIgnoreHotkey(null, scope), true]);
   for (const property of ["defaultPrevented", "isComposing", "repeat"])
-    assert.equal( shouldIgnoreHotkey({ ...event, [property]: true }, scope), true
-    );
-  assert.equal( shouldIgnoreHotkey({ ...event, target: { closest: () => ({}) } }, scope), true
-  );
-  assert.equal(shouldIgnoreHotkey(event, { isConnected: false }), true);
+    equal([shouldIgnoreHotkey({ ...event, [property]: true }, scope), true]);
+  equal([shouldIgnoreHotkey({ ...event, target: { closest: () => ({}) } }, scope), true], [shouldIgnoreHotkey(event, { isConnected: false }), true]);
 });

@@ -1,9 +1,8 @@
 /* @vitest-environment jsdom */
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-
 import { formatBytes } from "../src/pages/Settings/screens/memory/format.js";
 import { clamp, normalizePreset } from "../src/pages/Karaoke/components/console/utils.js";
-
+import { same, sameDeep, notCalled, calledTimes, calledWith, verify } from "./helpers/assertions.mjs";
 const importUtility = async (name) => {
   vi.resetModules();
   switch (name) {
@@ -19,7 +18,6 @@ const importUtility = async (name) => {
       throw new Error(`Unknown utility module: ${name}`);
   }
 };
-
 beforeEach(() => {
   localStorage.clear();
   delete window.electronAPI;
@@ -27,45 +25,30 @@ beforeEach(() => {
   delete document.execCommand;
 });
 afterEach(() => vi.restoreAllMocks());
-
 describe("audio and UI preferences", () => {
   test("normalizes persisted audio preferences", () => {
     return importUtility("audio-preferences").then(
       ({ DEFAULT_AUDIO_PREFERENCES, getAudioPreferences }) => {
-        expect(DEFAULT_AUDIO_PREFERENCES).toEqual({
-          monitorInputDeviceId: "default",
-          monitorOutputDeviceId: "default"
-        });
+        verify([DEFAULT_AUDIO_PREFERENCES, 'toEqual', { monitorInputDeviceId: "default", monitorOutputDeviceId: "default" }]);
         expect(getAudioPreferences()).toEqual(DEFAULT_AUDIO_PREFERENCES);
         localStorage.setItem(
           "karaoke-audio-preferences",
           JSON.stringify({ monitorInputDeviceId: "mic", monitorOutputDeviceId: "" })
         );
-        expect(getAudioPreferences()).toEqual({
-          monitorInputDeviceId: "mic",
-          monitorOutputDeviceId: "default"
-        });
+        verify([getAudioPreferences(), 'toEqual', { monitorInputDeviceId: "mic", monitorOutputDeviceId: "default" }]);
       }
     );
   });
-
   test("audio preferences reject malformed device ids and preserve omitted values", async () => {
     const { getAudioPreferences, saveAudioPreferences } = await importUtility("audio-preferences");
     localStorage.setItem(
       "karaoke-audio-preferences",
       JSON.stringify({ monitorInputDeviceId: "mic-a", monitorOutputDeviceId: "out-a" })
     );
-    expect(saveAudioPreferences({ monitorInputDeviceId: "   " })).toEqual({
-      monitorInputDeviceId: "default",
-      monitorOutputDeviceId: "out-a"
-    });
+    verify([saveAudioPreferences({ monitorInputDeviceId: "   " }), 'toEqual', { monitorInputDeviceId: "default", monitorOutputDeviceId: "out-a" }]);
     expect(saveAudioPreferences(null)).toEqual(getAudioPreferences());
-    expect(saveAudioPreferences({ monitorInputDeviceId: 123, monitorOutputDeviceId: [] })).toEqual({
-      monitorInputDeviceId: "default",
-      monitorOutputDeviceId: "default"
-    });
+    verify([saveAudioPreferences({ monitorInputDeviceId: 123, monitorOutputDeviceId: [] }), 'toEqual', { monitorInputDeviceId: "default", monitorOutputDeviceId: "default" }]);
   });
-
   test("saves device preferences and ignores obsolete controls", async () => {
     const { DEFAULT_AUDIO_PREFERENCES, saveAudioPreferences } =
       await importUtility("audio-preferences");
@@ -77,26 +60,14 @@ describe("audio and UI preferences", () => {
       monitorMode: "browser",
       monitorLatencyHint: "playback"
     });
-    expect(saved).toEqual({
-      ...DEFAULT_AUDIO_PREFERENCES,
-      monitorInputDeviceId: "usb",
-      monitorOutputDeviceId: "speaker"
-    });
-    expect(changed.mock.calls[0][0].detail).toEqual(saved);
-    expect(JSON.parse(localStorage.getItem("karaoke-audio-preferences"))).toEqual(saved);
+    verify([saved, 'toEqual', { ...DEFAULT_AUDIO_PREFERENCES, monitorInputDeviceId: "usb", monitorOutputDeviceId: "speaker" }]);
+    sameDeep([changed.mock.calls[0][0].detail, saved], [JSON.parse(localStorage.getItem("karaoke-audio-preferences")), saved]);
     window.removeEventListener("audio-preferences-changed", changed);
   });
-
   test("hydrates remote values and uploads local-only values", async () => {
     const { hydrateUiPreferences, UI_PREFERENCE_STORAGE } =
       await importUtility("ui-preferences");
-    expect(UI_PREFERENCE_STORAGE).toEqual({
-      audio: "karaoke-audio-preferences",
-      karaoke: "karaoke-player-preferences",
-      melody_editor: "karaoke-melody-editor",
-      radio: "karaoke-radio",
-      settings: "karaoke-settings-view"
-    });
+    verify([UI_PREFERENCE_STORAGE, 'toEqual', { audio: "karaoke-audio-preferences", karaoke: "karaoke-player-preferences", melody_editor: "karaoke-melody-editor", radio: "karaoke-radio", settings: "karaoke-settings-view" }]);
     localStorage.setItem( UI_PREFERENCE_STORAGE.karaoke, JSON.stringify({ volume: 0.7 })
     );
     const api = {
@@ -108,25 +79,19 @@ describe("audio and UI preferences", () => {
       updateUiPreferences: vi.fn().mockResolvedValue({})
     };
     await hydrateUiPreferences(api);
-    expect( JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.audio))
-    ).toEqual({ monitorInputDeviceId: "remote-mic" });
-    expect(api.updateUiPreferences).toHaveBeenCalledWith("karaoke", { volume: 0.7 });
-    expect(api.updateUiPreferences).toHaveBeenCalledTimes(1);
-
+    verify([JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.audio)), 'toEqual', { monitorInputDeviceId: "remote-mic" }]);
+    verify([api.updateUiPreferences, 'toHaveBeenCalledWith', "karaoke", { volume: 0.7 }], [api.updateUiPreferences, 'toHaveBeenCalledTimes', 1]);
     api.getUiPreferences.mockResolvedValueOnce(undefined);
     await expect(hydrateUiPreferences(api)).resolves.toBeUndefined();
     const callable = () => {};
     callable.invalid = true;
     api.getUiPreferences.mockResolvedValueOnce({ audio: callable });
     await hydrateUiPreferences(api);
-    expect( JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.audio))
-    ).toEqual({ monitorInputDeviceId: "remote-mic" });
+    verify([JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.audio)), 'toEqual', { monitorInputDeviceId: "remote-mic" }]);
     api.getUiPreferences.mockResolvedValueOnce({ audio: "x" });
     await hydrateUiPreferences(api);
-    expect( JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.audio))
-    ).toEqual({ monitorInputDeviceId: "remote-mic" });
+    verify([JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.audio)), 'toEqual', { monitorInputDeviceId: "remote-mic" }]);
   });
-
   test("hydrates every namespace independently and ignores arrays as remote objects", async () => {
     const { hydrateUiPreferences, UI_PREFERENCE_STORAGE } = await importUtility("ui-preferences");
     localStorage.setItem(UI_PREFERENCE_STORAGE.audio, JSON.stringify({ local: "audio" }));
@@ -142,14 +107,10 @@ describe("audio and UI preferences", () => {
       updateUiPreferences: vi.fn().mockResolvedValue({})
     };
     await hydrateUiPreferences(api);
-    expect(api.updateUiPreferences).toHaveBeenCalledWith("audio", { local: "audio" });
-    expect(api.updateUiPreferences).toHaveBeenCalledWith("radio", { local: "radio" });
-    expect(JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.karaoke))).toEqual({ volume: 0.4 });
-    expect(JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.melody_editor))).toEqual({ zoom: 12 });
-    expect(JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.settings))).toEqual({ tab: "ai" });
+    calledWith([api.updateUiPreferences, ["audio", { local: "audio" }]], [api.updateUiPreferences, ["radio", { local: "radio" }]]);
+    sameDeep([JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.karaoke)), { volume: 0.4 }], [JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.melody_editor)), { zoom: 12 }], [JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.settings)), { tab: "ai" }]);
     expect(api.updateUiPreferences).toHaveBeenCalledTimes(2);
   });
-
   test("delegates persistence through the API transport", async () => {
     const { persistUiPreferences } = await importUtility("ui-preferences");
     const api = { updateUiPreferences: vi.fn().mockResolvedValue({}) };
@@ -157,54 +118,42 @@ describe("audio and UI preferences", () => {
     await Promise.resolve();
     expect(api.updateUiPreferences).toHaveBeenCalledWith("settings", { tab: "audio" });
   });
-
   test("persists known namespaces and still sends unknown ones", async () => {
     const { persistUiPreferences, UI_PREFERENCE_STORAGE } =
       await importUtility("ui-preferences");
     const api = { updateUiPreferences: vi.fn().mockRejectedValue(new Error("optional")) };
     const setItem = vi.spyOn(Storage.prototype, "setItem");
     expect(persistUiPreferences(api, "settings", { tab: "audio" })).toEqual({ tab: "audio" });
-    expect( JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.settings))
-    ).toEqual({ tab: "audio" });
+    verify([JSON.parse(localStorage.getItem(UI_PREFERENCE_STORAGE.settings)), 'toEqual', { tab: "audio" }]);
     persistUiPreferences(api, "future", { enabled: true });
     await Promise.resolve();
-    expect(api.updateUiPreferences).toHaveBeenCalledTimes(2);
-    expect(setItem).toHaveBeenCalledTimes(1);
+    calledTimes([api.updateUiPreferences, 2], [setItem, 1]);
   });
 });
-
 describe("clipboard fallbacks", () => {
   test("rejects empty values and prefers Electron", async () => {
     const { copyText } = await importUtility("clipboard");
     document.execCommand = vi.fn(() => true);
-    expect(await copyText(null)).toBe(false);
-    expect(document.execCommand).not.toHaveBeenCalled();
+    verify([await copyText(null), 'toBe', false], [document.execCommand, 'not.toHaveBeenCalled']);
     window.electronAPI = { copyText: vi.fn().mockResolvedValue(1) };
-    expect(await copyText(42)).toBe(true);
-    expect(window.electronAPI.copyText).toHaveBeenCalledWith("42");
+    verify([await copyText(42), 'toBe', true], [window.electronAPI.copyText, 'toHaveBeenCalledWith', "42"]);
   });
-
   test("Electron false is authoritative and does not fall through to browser strategies", async () => {
     const { copyText } = await importUtility("clipboard");
     window.electronAPI = { copyText: vi.fn().mockResolvedValue(false) };
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     document.execCommand = vi.fn(() => true);
-    expect(await copyText("text")).toBe(false);
-    expect(window.electronAPI.copyText).toHaveBeenCalledWith("text");
-    expect(writeText).not.toHaveBeenCalled();
-    expect(document.execCommand).not.toHaveBeenCalled();
+    verify([await copyText("text"), 'toBe', false], [window.electronAPI.copyText, 'toHaveBeenCalledWith', "text"]);
+    notCalled(writeText, document.execCommand);
   });
-
   test("falls back from Electron to the browser clipboard", async () => {
     const { copyText } = await importUtility("clipboard");
     window.electronAPI = { copyText: vi.fn().mockRejectedValue(new Error("ipc unavailable")) };
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
-    expect(await copyText("text")).toBe(true);
-    expect(writeText).toHaveBeenCalledWith("text");
+    verify([await copyText("text"), 'toBe', true], [writeText, 'toHaveBeenCalledWith', "text"]);
   });
-
   test("uses and cleans up the legacy textarea fallback", async () => {
     const { copyText } = await importUtility("clipboard");
     Object.defineProperty(navigator, "clipboard", {
@@ -213,21 +162,13 @@ describe("clipboard fallbacks", () => {
     });
     const createElement = vi.spyOn(document, "createElement");
     document.execCommand = vi.fn(() => true);
-    expect(await copyText("legacy")).toBe(true);
-    expect(document.execCommand).toHaveBeenCalledWith("copy");
-    expect(document.querySelector("textarea")).toBeNull();
+    verify([await copyText("legacy"), 'toBe', true], [document.execCommand, 'toHaveBeenCalledWith', "copy"], [document.querySelector("textarea"), 'toBeNull']);
     const textarea = createElement.mock.results.find( ({ value }) => value?.tagName === "TEXTAREA"
     ).value;
-    expect(textarea.readOnly).toBe(true);
-    expect(textarea.style.position).toBe("fixed");
-    expect(textarea.style.opacity).toBe("0");
-    expect(textarea.style.pointerEvents).toBe("none");
-
+    same([textarea.readOnly, true], [textarea.style.position, "fixed"], [textarea.style.opacity, "0"], [textarea.style.pointerEvents, "none"]);
     document.execCommand.mockImplementation(() => { throw new Error("blocked"); });
-    expect(await copyText("blocked")).toBe(false);
-    expect(document.querySelector("textarea")).toBeNull();
+    verify([await copyText("blocked"), 'toBe', false], [document.querySelector("textarea"), 'toBeNull']);
   });
-
   test("legacy clipboard fallback is unavailable without a document", async () => {
     const { copyText } = await importUtility("clipboard");
     const descriptor = Object.getOwnPropertyDescriptor(globalThis, "document");
@@ -236,35 +177,17 @@ describe("clipboard fallbacks", () => {
     Object.defineProperty(globalThis, "document", descriptor);
   });
 });
-
 describe("small formatting contracts", () => {
   test("keeps application identity and formats memory", () => {
     return importUtility("config").then(({ APP_INFO }) => {
-      expect(APP_INFO).toEqual({
-        title: "A&D Voice",
-        description: expect.stringContaining("AI"),
-        copyright: "© 2026 A&D Voice"
-      });
-      expect(formatBytes(1024 ** 2)).toContain("1.0");
-      expect(formatBytes(0)).toContain("0.0");
-      expect(formatBytes(-1)).toContain("0.0");
-      expect(formatBytes("invalid")).toContain("0.0");
+      verify([APP_INFO, 'toEqual', { title: "A&D Voice", description: expect.stringContaining("AI"), copyright: "© 2026 A&D Voice" }]);
+      verify([formatBytes(1024 ** 2), 'toContain', "1.0"], [formatBytes(0), 'toContain', "0.0"], [formatBytes(-1), 'toContain', "0.0"], [formatBytes("invalid"), 'toContain', "0.0"]);
     });
   });
-
   test("normalizes console presets and clamps values", () => {
-    expect(clamp(12, 0, 10)).toBe(10);
-    expect(clamp(-1, 0, 10)).toBe(0);
+    same([clamp(12, 0, 10), 10], [clamp(-1, 0, 10), 0]);
     expect(normalizePreset([1, 2, 3, 4, 5])).toEqual([1, 2, 3, 4, 5, 0]);
-    expect( normalizePreset({ id: 1, label: 2, symbol: 3, echo: 4, reverb: 5, delay: 6 })
-    ).toEqual([1, 2, 3, 4, 5, 6]);
-    expect(normalizePreset(null)).toEqual([
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      0
-    ]);
+    verify([normalizePreset({ id: 1, label: 2, symbol: 3, echo: 4, reverb: 5, delay: 6 }), 'toEqual', [1, 2, 3, 4, 5, 6]]);
+    verify([normalizePreset(null), 'toEqual', [ undefined, undefined, undefined, undefined, undefined, 0 ]]);
   });
 });

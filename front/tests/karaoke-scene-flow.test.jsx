@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import useKaraokeSceneFlow from "../src/pages/Karaoke/hooks/useKaraokeSceneFlow";
-
+import { same, notCalled, calledTimes, calledWith, verify } from "./helpers/assertions.mjs";
 const media = (overrides = {}) => ({ readyState: 4, load: vi.fn(), ...overrides });
 const props = (overrides = {}) => ({
   analysisRecordingIdRef: { current: null },
@@ -21,20 +21,17 @@ const props = (overrides = {}) => ({
   turnOnRadio: vi.fn().mockResolvedValue(true),
   ...overrides
 });
-
 const runTimersFor = async (milliseconds) => {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(milliseconds);
   });
 };
-
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
-
 describe("karaoke scene flow", () => {
   test("propagates failed playback and restores radio after intro", async () => {
     const input = props();
@@ -47,15 +44,9 @@ describe("karaoke scene flow", () => {
     });
     expect(result).toBe(false);
     expect(input.hideControls).toHaveBeenCalledOnce();
-    expect(input.togglePlay).toHaveBeenCalledWith({ forcePlaying: true });
-    expect(input.turnOffRadio).toHaveBeenCalledWith({ remember: false });
-    expect(input.turnOnRadio).toHaveBeenCalledWith({ remember: false, fadeIn: true });
-    expect(hook.result.current.sceneBlackout).toBe(false);
-    expect(hook.result.current.sceneIntroVisible).toBe(false);
-    expect(hook.result.current.sceneTransitioning).toBe(false);
+    calledWith([input.togglePlay, [{ forcePlaying: true }]], [input.turnOffRadio, [{ remember: false }]], [input.turnOnRadio, [{ remember: false, fadeIn: true }]]);
+    same([hook.result.current.sceneBlackout, false], [hook.result.current.sceneIntroVisible, false], [hook.result.current.sceneTransitioning, false]);
   });
-
-
   test("transition guard rejects overlapping play and stop commands", async () => {
     const input = props({ togglePlay: vi.fn().mockResolvedValue(true) });
     const hook = renderHook(() => useKaraokeSceneFlow(input));
@@ -71,14 +62,11 @@ describe("karaoke scene flow", () => {
     await expect(first).resolves.toBe(true);
     await expect(second).resolves.toBe(false);
     await expect(stopResult).resolves.toBe(false);
-    expect(input.togglePlay).toHaveBeenCalledTimes(1);
-    expect(input.stop).not.toHaveBeenCalled();
+    verify([input.togglePlay, 'toHaveBeenCalledTimes', 1], [input.stop, 'not.toHaveBeenCalled']);
   });
-
   test("successful first start uses intro once, then resume skips the intro", async () => {
     let input = props({ togglePlay: vi.fn().mockResolvedValue(true) });
     const hook = renderHook(() => useKaraokeSceneFlow(input));
-
     let started;
     await act(async () => {
       const pending = hook.result.current.handleTogglePlay();
@@ -86,17 +74,13 @@ describe("karaoke scene flow", () => {
       started = await pending;
     });
     expect(started).toBe(true);
-    expect(input.hideControls).toHaveBeenCalledTimes(1);
-    expect(input.togglePlay).toHaveBeenCalledTimes(1);
-
+    calledTimes([input.hideControls, 1], [input.togglePlay, 1]);
     input = { ...input, isPlaying: false };
     hook.rerender();
     await expect(hook.result.current.handleTogglePlay()).resolves.toBe(true);
     expect(input.togglePlay).toHaveBeenNthCalledWith(2, { forcePlaying: true });
-    expect(input.hideControls).toHaveBeenCalledTimes(1);
-    expect(input.turnOffRadio).toHaveBeenCalledTimes(2);
+    calledTimes([input.hideControls, 1], [input.turnOffRadio, 2]);
   });
-
   test("pausing after a radio-backed start restores radio and recording state", async () => {
     let input = props({ togglePlay: vi.fn().mockResolvedValue(true) });
     const hook = renderHook(() => useKaraokeSceneFlow(input));
@@ -105,30 +89,24 @@ describe("karaoke scene flow", () => {
       await vi.runAllTimersAsync();
       await pending;
     });
-
     input = { ...input, isPlaying: true };
     hook.rerender();
     await expect(hook.result.current.handleTogglePlay()).resolves.toBe(true);
     expect(input.togglePlay).toHaveBeenLastCalledWith({ forcePlaying: false });
-    expect(input.setRecordingActive).toHaveBeenCalledWith(false);
-    expect(input.turnOnRadio).toHaveBeenCalledWith({ remember: false, fadeIn: true });
+    calledWith([input.setRecordingActive, [false]], [input.turnOnRadio, [{ remember: false, fadeIn: true }]]);
   });
-
   test("failed pause does not restore radio or change recording state", async () => {
     const input = props({ isPlaying: true, togglePlay: vi.fn().mockResolvedValue(false) });
     const hook = renderHook(() => useKaraokeSceneFlow(input));
     await expect(hook.result.current.handleTogglePlay()).resolves.toBe(false);
     expect(input.togglePlay).toHaveBeenCalledWith({ forcePlaying: false });
-    expect(input.setRecordingActive).not.toHaveBeenCalled();
-    expect(input.turnOnRadio).not.toHaveBeenCalled();
+    notCalled(input.setRecordingActive, input.turnOnRadio);
   });
-
   test("stage actions auto-hide and reveal restarts the exact hide timer", async () => {
     const hook = renderHook(() => useKaraokeSceneFlow(props()));
     expect(hook.result.current.stageActionsVisible).toBe(true);
     await runTimersFor(1800);
     expect(hook.result.current.stageActionsVisible).toBe(false);
-
     act(() => hook.result.current.revealStageActions());
     expect(hook.result.current.stageActionsVisible).toBe(true);
     await runTimersFor(1000);
@@ -138,7 +116,6 @@ describe("karaoke scene flow", () => {
     await runTimersFor(1);
     expect(hook.result.current.stageActionsVisible).toBe(false);
   });
-
   test("media preloading calls load and resolves the intro on readiness timeout", async () => {
     const listeners = new Map();
     const slowMedia = media({
@@ -160,17 +137,11 @@ describe("karaoke scene flow", () => {
     });
     expect(result).toBe(true);
     expect(slowMedia.load).toHaveBeenCalledOnce();
-    expect(slowMedia.addEventListener).toHaveBeenCalledWith("canplay", expect.any(Function), {
-      once: true
-    });
-    expect(slowMedia.addEventListener).toHaveBeenCalledWith("error", expect.any(Function), {
-      once: true
-    });
-    expect(slowMedia.removeEventListener).toHaveBeenCalledWith("canplay", expect.any(Function));
-    expect(slowMedia.removeEventListener).toHaveBeenCalledWith("error", expect.any(Function));
+    verify([slowMedia.addEventListener, 'toHaveBeenCalledWith', "canplay", expect.any(Function), { once: true }]);
+    verify([slowMedia.addEventListener, 'toHaveBeenCalledWith', "error", expect.any(Function), { once: true }]);
+    calledWith([slowMedia.removeEventListener, ["canplay", expect.any(Function)]], [slowMedia.removeEventListener, ["error", expect.any(Function)]]);
     expect(listeners.size).toBe(0);
   });
-
   test("stop failure restores stage state without navigating", async () => {
     const input = props({ stop: vi.fn().mockResolvedValue(false) });
     const hook = renderHook(() => useKaraokeSceneFlow(input));
@@ -183,11 +154,8 @@ describe("karaoke scene flow", () => {
     expect(result).toBe(false);
     expect(input.stop).toHaveBeenCalledOnce();
     expect(input.navigate).not.toHaveBeenCalled();
-    expect(hook.result.current.sceneBlackout).toBe(false);
-    expect(hook.result.current.sceneTransitioning).toBe(false);
-    expect(hook.result.current.stageActionsVisible).toBe(true);
+    same([hook.result.current.sceneBlackout, false], [hook.result.current.sceneTransitioning, false], [hook.result.current.stageActionsVisible, true]);
   });
-
   test("successful stop blackouts the route and carries the analysis id to library", async () => {
     const routeEvents = [];
     const listener = (event) => routeEvents.push(event.detail);
@@ -201,24 +169,16 @@ describe("karaoke scene flow", () => {
       result = await pending;
     });
     expect(result).toBe(true);
-    expect(input.navigate).toHaveBeenCalledWith("/", {
-      replace: true,
-      state: { fromKaraokeFade: true, analysisRecordingId: "recording-7" }
-    });
+    verify([input.navigate, 'toHaveBeenCalledWith', "/", { replace: true, state: { fromKaraokeFade: true, analysisRecordingId: "recording-7" } }]);
     expect(routeEvents).toContainEqual({ visible: true });
     window.removeEventListener("app:route-blackout", listener);
   });
-
   test("direct blackout navigation normalizes an absent analysis id", () => {
     const input = props();
     const hook = renderHook(() => useKaraokeSceneFlow(input));
     act(() => hook.result.current.navigateToLibraryFromBlackout(""));
-    expect(input.navigate).toHaveBeenCalledWith("/", {
-      replace: true,
-      state: { fromKaraokeFade: true, analysisRecordingId: null }
-    });
+    verify([input.navigate, 'toHaveBeenCalledWith', "/", { replace: true, state: { fromKaraokeFade: true, analysisRecordingId: null } }]);
   });
-
   test("autostart starts once when media exists and releases initial route blackout", async () => {
     const routeEvents = [];
     const listener = (event) => routeEvents.push(event.detail.visible);
@@ -226,14 +186,10 @@ describe("karaoke scene flow", () => {
     const input = props({ autoStartRequested: true, togglePlay: vi.fn().mockResolvedValue(true) });
     const hook = renderHook(() => useKaraokeSceneFlow(input));
     await act(async () => vi.runAllTimersAsync());
-    expect(input.togglePlay).toHaveBeenCalledTimes(1);
-    expect(input.togglePlay).toHaveBeenCalledWith({ forcePlaying: true });
-    expect(routeEvents).toContain(false);
-    expect(hook.result.current.sceneBlackout).toBe(false);
-    expect(hook.result.current.sceneTransitioning).toBe(false);
+    verify([input.togglePlay, 'toHaveBeenCalledTimes', 1], [input.togglePlay, 'toHaveBeenCalledWith', { forcePlaying: true }], [routeEvents, 'toContain', false]);
+    same([hook.result.current.sceneBlackout, false], [hook.result.current.sceneTransitioning, false]);
     window.removeEventListener("app:route-blackout", listener);
   });
-
   test("autostart gives up deterministically when media never becomes available", async () => {
     const input = props({
       autoStartRequested: true,
@@ -243,7 +199,6 @@ describe("karaoke scene flow", () => {
     const hook = renderHook(() => useKaraokeSceneFlow(input));
     await act(async () => vi.runAllTimersAsync());
     expect(input.togglePlay).not.toHaveBeenCalled();
-    expect(hook.result.current.sceneBlackout).toBe(false);
-    expect(hook.result.current.sceneTransitioning).toBe(false);
+    same([hook.result.current.sceneBlackout, false], [hook.result.current.sceneTransitioning, false]);
   });
 });

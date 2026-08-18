@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-
+import { same, verify } from "./helpers/assertions.mjs";
 const mocks = vi.hoisted(() => ({
   location: { state: null },
   navigate: vi.fn(),
@@ -21,7 +21,6 @@ const mocks = vi.hoisted(() => ({
   cancelProcessing: vi.fn(),
   setProcessingLoadActive: vi.fn()
 }));
-
 vi.mock("react-router-dom", () => ({
   useLocation: () => mocks.location,
   useNavigate: () => mocks.navigate
@@ -165,14 +164,11 @@ vi.mock("../src/pages/Karaoke/performance-analysis-modal", () => ({
     </div>
   )
 }));
-
 import Library from "../src/pages/Library/index.jsx";
-
 const songs = [
   { id: "one", title: "One", artist: "Artist", status: "done" },
   { id: "two", title: "Two", status: "pending" }
 ];
-
 beforeEach(() => {
   mocks.location = { state: null };
   mocks.navigate.mockReset();
@@ -192,9 +188,7 @@ beforeEach(() => {
   mocks.refreshes = [];
   mocks.polls = [{ data: songs }, { data: [] }, { data: null }];
 });
-
 afterEach(() => { cleanup(); vi.useRealTimers(); });
-
 describe("library page", () => {
   test("renders songs and opens room only after validating the online name", async () => {
     const result = render(<Library />);
@@ -210,7 +204,6 @@ describe("library page", () => {
     fireEvent.click(result.getByTestId("open-room"));
     await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(2));
   });
-
   test("flags the reduced-performance profile while any song is processing or queued", async () => {
     // Vocal separation already saturates the GPU on its own; the always-on
     // background animations were competing with it for the same GPU and
@@ -224,7 +217,6 @@ describe("library page", () => {
     ];
     const result = render(<Library />);
     await waitFor(() => expect(mocks.setProcessingLoadActive).toHaveBeenCalledWith(true));
-
     cleanup();
     mocks.setProcessingLoadActive.mockClear();
     mocks.pollIndex = 0;
@@ -232,7 +224,6 @@ describe("library page", () => {
     render(<Library />);
     await waitFor(() => expect(mocks.setProcessingLoadActive).toHaveBeenCalledWith(false));
   });
-
   test("navigates to karaoke after transition and handles room refusal", async () => {
     vi.useFakeTimers();
     const result = render(<Library />);
@@ -240,9 +231,7 @@ describe("library page", () => {
     fireEvent.click(open);
     fireEvent.click(open);
     await vi.advanceTimersByTimeAsync(920);
-    expect(mocks.navigate).toHaveBeenCalledWith("/karaoke", {
-      state: { songId: "one", autoPlay: true }
-    });
+    verify([mocks.navigate, 'toHaveBeenCalledWith', "/karaoke", { state: { songId: "one", autoPlay: true } }]);
     cleanup();
     mocks.sharedRoom.room = { host: false };
     mocks.sharedRoom.openKaraoke.mockResolvedValueOnce(false);
@@ -259,7 +248,6 @@ describe("library page", () => {
     await vi.advanceTimersByTimeAsync(920);
     expect(mocks.navigate).toHaveBeenCalledTimes(2);
   });
-
   test("tracks processing, cancels work and opens completed song", async () => {
     const result = render(<Library />);
     fireEvent.click(result.getAllByTestId("processing")[0]);
@@ -272,7 +260,6 @@ describe("library page", () => {
     fireEvent.click(result.getByTestId("close-processing"));
     expect(result.queryByTestId("processing-modal")).toBeNull();
   });
-
   test("opens recordings, deletes with confirmation and enters analysis", async () => {
     const result = render(<Library />);
     fireEvent.click(result.getAllByTestId("recordings")[0]);
@@ -284,22 +271,16 @@ describe("library page", () => {
     fireEvent.click(result.getByTestId("analysis-close"));
     expect(result.queryByTestId("analysis")).toBeNull();
   });
-
   test("shows list errors, empty state and releases return blackout", async () => {
     vi.useFakeTimers();
     mocks.location = { state: { fromKaraokeFade: true, analysisRecordingId: "rec" } };
     mocks.polls = [ { data: [], error: new Error("offline") }, { data: [] }, { data: null } ];
     mocks.pollIndex = 0;
     const result = render(<Library />);
-    expect( result.container.querySelector(".field-error").textContent
-    ).toContain("offline");
+    verify([result.container.querySelector(".field-error").textContent, 'toContain', "offline"]);
     expect(result.getByTestId("analysis")).not.toBeNull();
     await act(() => vi.advanceTimersByTimeAsync(120));
-    expect(
-      result.container
-        .querySelector(".library-route-blackout")
-        .classList.contains("is-visible")
-    ).toBe(false);
+    verify([result.container .querySelector(".library-route-blackout") .classList.contains("is-visible"), 'toBe', false]);
     cleanup();
     vi.useRealTimers();
     mocks.location = { state: null };
@@ -308,24 +289,18 @@ describe("library page", () => {
     const empty = render(<Library />);
     expect(empty.container.querySelector(".library-card-empty")).not.toBeNull();
   });
-
   test("connects import and action hooks to page state", () => {
     const openSettings = vi.fn();
     const result = render(<Library onOpenSongSettings={openSettings} />);
     act(() => mocks.importOptions.onStarted(songs[1]));
-    expect(mocks.actionOptions.processingSongId).toBe("two");
-    expect(mocks.roomOptions.localSongs).toHaveLength(2);
+    verify([mocks.actionOptions.processingSongId, 'toBe', "two"], [mocks.roomOptions.localSongs, 'toHaveLength', 2]);
     fireEvent.click(result.getAllByTestId("song-settings")[0]);
     expect(openSettings).toHaveBeenCalledWith("one");
     const processingOptions = mocks.pollOptions.find( (options) => options?.shouldContinue
     );
-    expect(processingOptions.shouldContinue({ status: "processing" })).toBe( true
-    );
-    expect(processingOptions.shouldContinue({ status: "done" })).toBe(false);
-    expect(processingOptions.shouldRetryError({ status: 500 })).toBe(true);
-    expect(processingOptions.shouldRetryError({ status: 404 })).toBe(false);
+    verify([processingOptions.shouldContinue({ status: "processing" }), 'toBe', true]);
+    same([processingOptions.shouldContinue({ status: "done" }), false], [processingOptions.shouldRetryError({ status: 500 }), true], [processingOptions.shouldRetryError({ status: 404 }), false]);
   });
-
   test("handles declined and failed destructive actions", async () => {
     const result = render(<Library />);
     fireEvent.click(result.getAllByTestId("recordings")[0]);
@@ -333,13 +308,11 @@ describe("library page", () => {
     fireEvent.click(result.getByTestId("delete-recording"));
     await act(async () => Promise.resolve());
     expect(mocks.deleteRecording).not.toHaveBeenCalled();
-
     mocks.confirm.mockResolvedValueOnce(true);
     mocks.deleteRecording.mockRejectedValueOnce(new Error("delete failed"));
     fireEvent.click(result.getByTestId("delete-recording"));
     await waitFor(() => expect(mocks.notify).toHaveBeenCalled());
     fireEvent.click(result.getByTestId("close-recordings"));
-
     fireEvent.click(result.getAllByTestId("processing")[0]);
     mocks.confirm.mockResolvedValueOnce(false);
     fireEvent.click(result.getByTestId("cancel-processing"));
@@ -350,7 +323,6 @@ describe("library page", () => {
     fireEvent.click(result.getByTestId("cancel-processing"));
     await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(2));
   });
-
   test("recovers a rejected room open and clears all analysis callbacks", async () => {
     mocks.sharedRoom.room = { host: true };
     mocks.sharedRoom.openKaraoke.mockRejectedValueOnce( new Error("room failed")
@@ -358,12 +330,7 @@ describe("library page", () => {
     const result = render(<Library />);
     fireEvent.click(result.getAllByTestId("karaoke")[0]);
     await waitFor(() => expect(mocks.notify).toHaveBeenCalled());
-    expect(
-      result.container
-        .querySelector(".library-route-blackout")
-        .classList.contains("is-visible")
-    ).toBe(false);
-
+    verify([result.container .querySelector(".library-route-blackout") .classList.contains("is-visible"), 'toBe', false]);
     fireEvent.click(result.getAllByTestId("recordings")[0]);
     fireEvent.click(result.getByTestId("analyze"));
     fireEvent.click(result.getByTestId("analysis-done"));
@@ -372,7 +339,6 @@ describe("library page", () => {
     fireEvent.click(result.getByTestId("analysis-deleted"));
     expect(result.queryByTestId("analysis")).toBeNull();
   });
-
   test("tracks terminal processing status and clears missing backend jobs", async () => {
     const processingSong = { ...songs[1], status: "processing" };
     const refresh = vi.fn().mockResolvedValue(undefined);
@@ -394,7 +360,6 @@ describe("library page", () => {
     await waitFor(() => expect(refresh).toHaveBeenCalled());
     expect(result.getByTestId("processing-modal")).toBeTruthy();
     cleanup();
-
     mocks.pollIndex = 0;
     mocks.polls = [
       { data: [songs[0], processingSong] },
@@ -404,7 +369,6 @@ describe("library page", () => {
     render(<Library />);
     await act(async () => Promise.resolve());
   });
-
   test("covers missing processing ids, recordings and stale refresh completion", async () => {
     let resolveRefresh;
     const refresh = vi.fn( () => new Promise((resolve) => { resolveRefresh = resolve; })
@@ -421,7 +385,6 @@ describe("library page", () => {
     await waitFor(() => expect(result.getByTestId("room-modal")).not.toBeNull());
     result.unmount();
     if (resolveRefresh) await act(async () => resolveRefresh());
-
     let resolveTerminalRefresh;
     const terminalRefreshPromise = new Promise((resolve) => { resolveTerminalRefresh = resolve; });
     const terminalRefresh = vi.fn(() => terminalRefreshPromise);

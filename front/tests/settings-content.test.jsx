@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-
+import { verify } from "./helpers/assertions.mjs";
 const mocks = vi.hoisted(() => ({
   updateUiPreferences: vi.fn(),
   radio: {},
@@ -71,10 +71,8 @@ vi.mock("../src/theme/ui", () => ({
   Stack: ({ children, ...props }) => <div {...props}>{children}</div>,
   Typography: ({ children }) => <span>{children}</span>
 }));
-
 import SettingsContent from "../src/pages/Settings/settings-content.jsx";
 import { SETTINGS_RENDERERS } from "../src/pages/Settings/renderers.jsx";
-
 beforeEach(() => {
   localStorage.clear();
   mocks.updateUiPreferences.mockReset().mockResolvedValue({});
@@ -83,7 +81,6 @@ beforeEach(() => {
   mocks.audio = { states: { monitorLevel: 20 } };
 });
 afterEach(cleanup);
-
 const props = (overrides = {}) => ({
   tab: "general",
   service: null,
@@ -94,32 +91,23 @@ const props = (overrides = {}) => ({
   onCloseService: vi.fn(),
   ...overrides
 });
-
 describe("settings content", () => {
   test("renders translated form fields and returns null for unknown tabs", () => {
     const view = render(<SettingsContent {...props()} />);
-    expect(screen.getByText("language")).not.toBeNull();
-    expect(mocks.configFormProps.context.form).toEqual({});
-    expect( mocks.configFormProps.fields[0].getLabel({ suffix: "UK" })
-    ).toContain("UK");
-    expect(mocks.configFormProps.fields[0].getLabel({ suffix: "" })).toBe( "Language"
-    );
+    verify([screen.getByText("language"), 'not.toBeNull'], [mocks.configFormProps.context.form, 'toEqual', {}]);
+    verify([mocks.configFormProps.fields[0].getLabel({ suffix: "UK" }), 'toContain', "UK"]);
+    verify([mocks.configFormProps.fields[0].getLabel({ suffix: "" }), 'toBe', "Language"]);
     expect(mocks.configFormProps.fields[0].options[0].label).toBe("Ukrainian");
     view.rerender(<SettingsContent {...props({ tab: "missing" })} />);
     expect(view.container.textContent).toBe("");
   });
-
   test("reveals advanced audio settings and persists the view choice", () => {
     render(<SettingsContent {...props({ tab: "audio" })} />);
-    expect(screen.getByText("volume")).not.toBeNull();
-    expect(screen.queryByText("buffer")).toBeNull();
+    verify([screen.getByText("volume"), 'not.toBeNull'], [screen.queryByText("buffer"), 'toBeNull']);
     fireEvent.click(screen.getByText("settings.advanced.show"));
     expect(screen.getByText("buffer")).not.toBeNull();
-    expect(mocks.updateUiPreferences).toHaveBeenLastCalledWith("settings", {
-      showAdvancedAudio: true
-    });
+    verify([mocks.updateUiPreferences, 'toHaveBeenLastCalledWith', "settings", { showAdvancedAudio: true }]);
   });
-
   test("shows model recovery and appearance service links", () => {
     const open = vi.fn();
     const view = render(<SettingsContent {...props({ tab: "ai" })} />);
@@ -129,7 +117,6 @@ describe("settings content", () => {
     fireEvent.click(screen.getByText("settings.service.diagnostics.title"));
     expect(open).toHaveBeenCalledWith("diagnostics");
   });
-
   test("opens a service screen and navigates back", () => {
     const close = vi.fn();
     render(
@@ -142,7 +129,6 @@ describe("settings content", () => {
     expect(close).toHaveBeenCalledOnce();
   });
 });
-
 describe("settings custom renderers", () => {
   test("runs action renderer and reflects its pending state", () => {
     const run = vi.fn();
@@ -159,7 +145,6 @@ describe("settings custom renderers", () => {
     fireEvent.click(screen.getByText("Playing"));
     expect(run).toHaveBeenCalledWith(context);
   });
-
   test("runs monitor renderer and displays current level", () => {
     const run = vi.fn();
     const context = { t: (key) => key };
@@ -167,17 +152,14 @@ describe("settings custom renderers", () => {
     render( SETTINGS_RENDERERS.monitor({ props: {}, field, context, value: false })
     );
     fireEvent.click(screen.getByText("settings.audio.hearVoice"));
-    expect(run).toHaveBeenCalledWith(context);
-    expect(screen.getByRole("progressbar").value).toBe(44);
+    verify([run, 'toHaveBeenCalledWith', context], [screen.getByRole("progressbar").value, 'toBe', 44]);
   });
-
   test("renders optional action and active-monitor fallbacks", () => {
     const context = { t: (key) => key };
     const action = render( SETTINGS_RENDERERS.action({ field: { label: "Fallback" }, context })
     );
     fireEvent.click(screen.getByText("Fallback"));
     action.unmount();
-
     render( SETTINGS_RENDERERS.monitor({ field: { label: "Monitor" }, context, value: true })
     );
     fireEvent.click(screen.getByText("settings.audio.monitorOff"));

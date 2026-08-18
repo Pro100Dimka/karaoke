@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
-
+import { same, sameDeep, verify } from "./helpers/assertions.mjs";
 const require = createRequire(import.meta.url);
 const runtimeConfigPath = require.resolve("../electron/runtime-config.cjs");
 const preloadPath = require.resolve("../electron/preload.cjs");
@@ -11,9 +11,7 @@ const songFoldersPath = require.resolve("../electron/song-folders.cjs");
 const nodeModule = require("node:module");
 const security = require("../electron/security.cjs");
 const songFolders = require("../electron/song-folders.cjs");
-
 const originalEnvironment = { ...process.env };
-
 function loadRuntimeConfig(environment = {}) {
   for (const name of Object.keys(process.env)) {
     if (name.startsWith("KARAOKE_")) delete process.env[name];
@@ -24,34 +22,20 @@ function loadRuntimeConfig(environment = {}) {
   // eslint-disable-next-line import/no-dynamic-require
   return require(runtimeConfigPath);
 }
-
 function directory(name, isDirectory = true) {
   return { name, isDirectory: () => isDirectory };
 }
-
 afterEach(() => {
   for (const name of Object.keys(process.env)) delete process.env[name];
   Object.assign(process.env, originalEnvironment);
   delete require.cache[runtimeConfigPath];
 });
-
 describe("Electron runtime configuration", () => {
   test("uses immutable loopback defaults", () => {
     const config = loadRuntimeConfig();
-
-    expect(config).toEqual({
-      BACKEND_URL: "http://127.0.0.1:8000",
-      DEV_RENDERER_ORIGIN: "http://127.0.0.1:5173",
-      BACKEND_HOST: "127.0.0.1",
-      BACKEND_PORT: 8000,
-      BACKEND_REQUEST_TIMEOUT_MS: 1200,
-      BACKEND_RESTART_BASE_DELAY_MS: 1200,
-      BACKEND_RESTART_MAX_DELAY_MS: 30000,
-      BACKEND_STOP_GRACE_MS: 550
-    });
+    verify([config, 'toEqual', { BACKEND_URL: "http://127.0.0.1:8000", DEV_RENDERER_ORIGIN: "http://127.0.0.1:5173", BACKEND_HOST: "127.0.0.1", BACKEND_PORT: 8000, BACKEND_REQUEST_TIMEOUT_MS: 1200, BACKEND_RESTART_BASE_DELAY_MS: 1200, BACKEND_RESTART_MAX_DELAY_MS: 30000, BACKEND_STOP_GRACE_MS: 550 }]);
     expect(Object.isFrozen(config)).toBe(true);
   });
-
   test("normalizes supported loopback URLs and positive integer overrides", () => {
     const config = loadRuntimeConfig({
       KARAOKE_BACKEND_URL: " http://[::1]:8001/api?ignored=yes ",
@@ -61,38 +45,15 @@ describe("Electron runtime configuration", () => {
       KARAOKE_BACKEND_RESTART_MAX_DELAY_MS: "3",
       KARAOKE_BACKEND_STOP_GRACE_MS: "4"
     });
-
-    expect(config).toMatchObject({
-      BACKEND_URL: "http://[::1]:8001",
-      DEV_RENDERER_ORIGIN: "http://[::1]:6000",
-      BACKEND_HOST: "::1",
-      BACKEND_PORT: 8001,
-      BACKEND_REQUEST_TIMEOUT_MS: 1,
-      BACKEND_RESTART_BASE_DELAY_MS: 2,
-      BACKEND_RESTART_MAX_DELAY_MS: 3,
-      BACKEND_STOP_GRACE_MS: 4
-    });
+    verify([config, 'toMatchObject', { BACKEND_URL: "http://[::1]:8001", DEV_RENDERER_ORIGIN: "http://[::1]:6000", BACKEND_HOST: "::1", BACKEND_PORT: 8001, BACKEND_REQUEST_TIMEOUT_MS: 1, BACKEND_RESTART_BASE_DELAY_MS: 2, BACKEND_RESTART_MAX_DELAY_MS: 3, BACKEND_STOP_GRACE_MS: 4 }]);
   });
-
   test("accepts localhost and preserves the setting name in validation errors", () => {
-    expect(loadRuntimeConfig({ KARAOKE_BACKEND_URL: "http://localhost:9000" })).toMatchObject({
-      BACKEND_URL: "http://localhost:9000",
-      BACKEND_HOST: "localhost",
-      BACKEND_PORT: 9000
-    });
-    expect(() => loadRuntimeConfig({ KARAOKE_BACKEND_STOP_GRACE_MS: "invalid" })).toThrow(
-      "KARAOKE_BACKEND_STOP_GRACE_MS must be a positive integer"
-    );
+    verify([loadRuntimeConfig({ KARAOKE_BACKEND_URL: "http://localhost:9000" }), 'toMatchObject', { BACKEND_URL: "http://localhost:9000", BACKEND_HOST: "localhost", BACKEND_PORT: 9000 }]);
+    verify([() => loadRuntimeConfig({ KARAOKE_BACKEND_STOP_GRACE_MS: "invalid" }), 'toThrow', "KARAOKE_BACKEND_STOP_GRACE_MS must be a positive integer"]);
   });
-
   test("trims Unicode whitespace around configured URLs", () => {
-    expect(
-      loadRuntimeConfig({
-        KARAOKE_BACKEND_URL: "\u00a0http://localhost:9001\u00a0"
-      }).BACKEND_URL
-    ).toBe("http://localhost:9001");
+    verify([loadRuntimeConfig({ KARAOKE_BACKEND_URL: "\u00a0http://localhost:9001\u00a0" }).BACKEND_URL, 'toBe', "http://localhost:9001"]);
   });
-
   test.each([
     ["KARAOKE_BACKEND_URL", "not a URL", "must be a valid URL"],
     ["KARAOKE_BACKEND_URL", "https://127.0.0.1", "must use HTTP on a loopback host"],
@@ -104,34 +65,21 @@ describe("Electron runtime configuration", () => {
   ])("rejects invalid %s", (name, value, suffix) => {
     expect(() => loadRuntimeConfig({ [name]: value })).toThrow(`${name} ${suffix}`);
   });
-
   test("uses defaults for empty numeric overrides", () => {
-    expect(loadRuntimeConfig({ KARAOKE_BACKEND_STOP_GRACE_MS: "" }).BACKEND_STOP_GRACE_MS).toBe(
-      550
-    );
+    verify([loadRuntimeConfig({ KARAOKE_BACKEND_STOP_GRACE_MS: "" }).BACKEND_STOP_GRACE_MS, 'toBe', 550]);
   });
 });
-
 test("injects one runtime backend URL into renderer and allows loopback CSP ports", () => {
   const preload = fs.readFileSync(new URL("../electron/preload.cjs", import.meta.url), "utf8");
   const main = fs.readFileSync(new URL("../electron/main.cjs", import.meta.url), "utf8");
   const runtime = fs.readFileSync(new URL("../src/runtime-config.js", import.meta.url), "utf8");
   const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  expect(main).toContain("--advoice-backend-url=${runtimeBackendUrl}");
-  expect(preload).toContain("backendUrl");
-  expect(runtime).toContain("globalThis.electronAPI?.backendUrl");
-  expect(html).toContain("http://127.0.0.1:*");
-  expect(html).toContain("http://localhost:*");
+  verify([main, 'toContain', "--advoice-backend-url=${runtimeBackendUrl}"], [preload, 'toContain', "backendUrl"], [runtime, 'toContain', "globalThis.electronAPI?.backendUrl"], [html, 'toContain', "http://127.0.0.1:*"], [html, 'toContain', "http://localhost:*"]);
 });
-
 test("keeps packaged writable Electron state beside the installed executable", () => {
   const main = fs.readFileSync(new URL("../electron/main.cjs", import.meta.url), "utf8");
-  expect(main).toContain('path.dirname(process.execPath)');
-  expect(main).toContain('path.join(INSTALL_DATA_ROOT, "electron-profile")');
-  expect(main).toContain('app.setPath("temp", INSTALL_TEMP_DIR)');
-  expect(main).toContain('path.join(app.getPath("userData"), "selected-theme.ico")');
+  verify([main, 'toContain', 'path.dirname(process.execPath)'], [main, 'toContain', 'path.join(INSTALL_DATA_ROOT, "electron-profile")'], [main, 'toContain', 'app.setPath("temp", INSTALL_TEMP_DIR)'], [main, 'toContain', 'path.join(app.getPath("userData"), "selected-theme.ico")']);
 });
-
 describe("renderer and permission security", () => {
   const packagedIndexUrl = security.getPackagedRendererUrl(path.resolve("dist/index.html"));
   const packaged = { isDev: false, packagedIndexUrl };
@@ -140,41 +88,21 @@ describe("renderer and permission security", () => {
     devOrigin: "http://127.0.0.1:5173",
     packagedIndexUrl
   };
-
   test("exports only the audited security boundary", () => {
     delete require.cache[securityPath];
     // eslint-disable-next-line import/no-dynamic-require
-    expect(Object.keys(require(securityPath)).sort()).toEqual([
-      "getPackagedRendererUrl",
-      "isAllowedPermissionRequest",
-      "isAllowedRendererUrl",
-      "isTrustedIpcEvent",
-      "registerTrustedIpc"
-    ]);
+    verify([Object.keys(require(securityPath)).sort(), 'toEqual', [ "getPackagedRendererUrl", "isAllowedPermissionRequest", "isAllowedRendererUrl", "isTrustedIpcEvent", "registerTrustedIpc" ]]);
   });
-
   test("allows only the configured development origin", () => {
-    expect(security.isAllowedRendererUrl("http://127.0.0.1:5173/room#x", development)).toBe(true);
-    expect(security.isAllowedRendererUrl("http://localhost:5173", development)).toBe(false);
-    expect(security.isAllowedRendererUrl("invalid", development)).toBe(false);
+    same([security.isAllowedRendererUrl("http://127.0.0.1:5173/room#x", development), true], [security.isAllowedRendererUrl("http://localhost:5173", development), false], [security.isAllowedRendererUrl("invalid", development), false]);
   });
-
   test("allows only the packaged index and its hash routes", () => {
     expect(security.getPackagedRendererUrl(path.resolve("another/index.html"))).toBe(
       new URL(`file:///${path.resolve("another/index.html")}`).href
     );
-    expect(security.isAllowedRendererUrl(packagedIndexUrl, packaged)).toBe(true);
-    expect(security.isAllowedRendererUrl(`${packagedIndexUrl}#/karaoke`, packaged)).toBe(true);
-    expect(security.isAllowedRendererUrl(`${packagedIndexUrl}?unsafe=1`, packaged)).toBe(false);
-    expect(security.isAllowedRendererUrl("https://example.test", packaged)).toBe(false);
-    expect(
-      security.isAllowedRendererUrl("https://example.test", {
-        isDev: false,
-        packagedIndexUrl: "https://example.test/"
-      })
-    ).toBe(false);
+    same([security.isAllowedRendererUrl(packagedIndexUrl, packaged), true], [security.isAllowedRendererUrl(`${packagedIndexUrl}#/karaoke`, packaged), true], [security.isAllowedRendererUrl(`${packagedIndexUrl}?unsafe=1`, packaged), false], [security.isAllowedRendererUrl("https://example.test", packaged), false]);
+    verify([security.isAllowedRendererUrl("https://example.test", { isDev: false, packagedIndexUrl: "https://example.test/" }), 'toBe', false]);
   });
-
   test.each([
     [undefined, true],
     [[], true],
@@ -195,7 +123,6 @@ describe("renderer and permission security", () => {
       })
     ).toBe(allowed);
   });
-
   test("rejects unrelated, destroyed, foreign, and untrusted permission requests", () => {
     const expectedWebContents = { isDestroyed: () => false };
     const base = {
@@ -206,66 +133,34 @@ describe("renderer and permission security", () => {
       expectedWebContents,
       rendererOptions: packaged
     };
-
-    expect(security.isAllowedPermissionRequest({ ...base, permission: "camera" })).toBe(false);
-    expect(security.isAllowedPermissionRequest({ ...base, webContents: {} })).toBe(false);
-    expect(
-      security.isAllowedPermissionRequest({
-        ...base,
-        expectedWebContents: { isDestroyed: () => true }
-      })
-    ).toBe(false);
-    expect(security.isAllowedPermissionRequest({ ...base, expectedWebContents: undefined })).toBe(
-      false
-    );
-    expect(
-      security.isAllowedPermissionRequest({
-        ...base,
-        mediaTypes: ["video"],
-        webContents: undefined,
-        expectedWebContents: undefined
-      })
-    ).toBe(false);
+    same([security.isAllowedPermissionRequest({ ...base, permission: "camera" }), false], [security.isAllowedPermissionRequest({ ...base, webContents: {} }), false]);
+    verify([security.isAllowedPermissionRequest({ ...base, expectedWebContents: { isDestroyed: () => true } }), 'toBe', false]);
+    verify([security.isAllowedPermissionRequest({ ...base, expectedWebContents: undefined }), 'toBe', false]);
+    verify([security.isAllowedPermissionRequest({ ...base, mediaTypes: ["video"], webContents: undefined, expectedWebContents: undefined }), 'toBe', false]);
     expect(security.isTrustedIpcEvent(undefined, expectedWebContents)).toBe(false);
-    expect(
-      security.isAllowedPermissionRequest({
-        ...base,
-        requestUrl: "file:///elsewhere/index.html"
-      })
-    ).toBe(false);
+    verify([security.isAllowedPermissionRequest({ ...base, requestUrl: "file:///elsewhere/index.html" }), 'toBe', false]);
   });
-
   test("registers a dynamic trusted IPC boundary and forwards values", async () => {
     const callbacks = new Map();
     const ipcMain = { handle: vi.fn((channel, callback) => callbacks.set(channel, callback)) };
     const handler = vi.fn((left, right) => left + right);
     let expectedWebContents = { isDestroyed: () => false };
-
     security.registerTrustedIpc(ipcMain, "test:add", () => expectedWebContents, handler);
     const callback = callbacks.get("test:add");
-
-    expect(callback({ sender: expectedWebContents }, 2, 3)).toBe(5);
-    expect(handler).toHaveBeenCalledWith(2, 3);
+    verify([callback({ sender: expectedWebContents }, 2, 3), 'toBe', 5], [handler, 'toHaveBeenCalledWith', 2, 3]);
     expect(() => callback({ sender: {} }, 1, 1)).toThrow("Rejected IPC request: test:add");
     expectedWebContents = { isDestroyed: () => true };
-    expect(() => callback({ sender: expectedWebContents }, 1, 1)).toThrow(
-      "Rejected IPC request: test:add"
-    );
+    verify([() => callback({ sender: expectedWebContents }, 1, 1), 'toThrow', "Rejected IPC request: test:add"]);
     expectedWebContents = null;
     expect(() => callback({ sender: null }, 1, 1)).toThrow("Rejected IPC request: test:add");
   });
 });
-
 describe("song folder matching", () => {
   test("exports only normalization and safe matching", () => {
     delete require.cache[songFoldersPath];
     // eslint-disable-next-line import/no-dynamic-require
-    expect(Object.keys(require(songFoldersPath)).sort()).toEqual([
-      "findMatchingSongFolder",
-      "normalizeFolderName"
-    ]);
+    verify([Object.keys(require(songFoldersPath)).sort(), 'toEqual', [ "findMatchingSongFolder", "normalizeFolderName" ]]);
   });
-
   test.each([
     [" 31-я весна ", "31явесна"],
     ["БОЛЬШОЙ!", "большой"],
@@ -274,46 +169,23 @@ describe("song folder matching", () => {
   ])("normalizes %j", (input, output) => {
     expect(songFolders.normalizeFolderName(input)).toBe(output);
   });
-
   test("prefers an exact normalized directory match", () => {
     const expected = directory("31-я весна");
-    expect(
-      songFolders.findMatchingSongFolder(
-        [directory("31-я весна (live)"), expected, directory("file", false)],
-        [null, "31 Я ВЕСНА"]
-      )
-    ).toBe(expected);
+    verify([songFolders.findMatchingSongFolder( [directory("31-я весна (live)"), expected, directory("file", false)], [null, "31 Я ВЕСНА"] ), 'toBe', expected]);
   });
-
   test("returns a unique partial match but rejects ambiguity", () => {
     const live = directory("31-я весна live");
     expect(songFolders.findMatchingSongFolder([live], ["31-я весна"])).toBe(live);
-    expect(
-      songFolders.findMatchingSongFolder([live, directory("31-я весна acoustic")], ["31-я весна"])
-    ).toBeNull();
-    expect(songFolders.findMatchingSongFolder([directory("весна")], ["весна live"]).name).toBe(
-      "весна"
-    );
-    expect(
-      songFolders.findMatchingSongFolder(
-        [directory("весна live"), directory("другая песня")],
-        ["нет совпадения", "весна"]
-      ).name
-    ).toBe("весна live");
+    verify([songFolders.findMatchingSongFolder([live, directory("31-я весна acoustic")], ["31-я весна"]), 'toBeNull']);
+    verify([songFolders.findMatchingSongFolder([directory("весна")], ["весна live"]).name, 'toBe', "весна"]);
+    verify([songFolders.findMatchingSongFolder( [directory("весна live"), directory("другая песня")], ["нет совпадения", "весна"] ).name, 'toBe', "весна live"]);
     expect(songFolders.findMatchingSongFolder([directory("unrelated")], ["missing"])).toBeNull();
   });
-
   test("ignores invalid requests, files, and empty directory names", () => {
     expect(songFolders.findMatchingSongFolder([directory("real")], [null, "---"])).toBeNull();
-    expect(
-      songFolders.findMatchingSongFolder(
-        [null, {}, directory("song", false), directory("---")],
-        ["song"]
-      )
-    ).toBeNull();
+    verify([songFolders.findMatchingSongFolder( [null, {}, directory("song", false), directory("---")], ["song"] ), 'toBeNull']);
   });
 });
-
 describe("preload bridge", () => {
   function runPreload(arguments_ = []) {
     const invoke = vi.fn((...values) => values);
@@ -342,30 +214,16 @@ describe("preload bridge", () => {
     }
     return { api: exposeInMainWorld.mock.calls[0][1], exposeInMainWorld, invoke };
   }
-
   test("exposes the minimal frozen-channel renderer API", () => {
     const { api, exposeInMainWorld, invoke } = runPreload([
       "--advoice-theme=violet",
       "--advoice-backend-url=http://127.0.0.1:8123"
     ]);
-
     expect(exposeInMainWorld).toHaveBeenCalledOnce();
-    expect(exposeInMainWorld.mock.calls[0][0]).toBe("electronAPI");
-    expect(api.initialTheme).toBe("violet");
-    expect(api.backendUrl).toBe("http://127.0.0.1:8123");
-    expect(api.isElectron).toBe(true);
-    expect(api.getSceneVideoUrl()).toBe("karaoke-media://scene/main");
-
-    expect(api.minimize()).toEqual(["window:minimize"]);
-    expect(api.maximize()).toEqual(["window:maximize"]);
-    expect(api.close()).toEqual(["window:close"]);
-    expect(api.openSongFolder({ id: "42" })).toEqual(["shell:openSongFolder", { id: "42" }]);
-    expect(api.selectFolder("D:/songs")).toEqual(["dialog:selectFolder", "D:/songs"]);
-    expect(api.copyText("room-code")).toEqual(["clipboard:writeText", "room-code"]);
-    expect(api.setIconTheme("dark")).toEqual(["window:setIconTheme", "dark"]);
+    same([exposeInMainWorld.mock.calls[0][0], "electronAPI"], [api.initialTheme, "violet"], [api.backendUrl, "http://127.0.0.1:8123"], [api.isElectron, true], [api.getSceneVideoUrl(), "karaoke-media://scene/main"]);
+    sameDeep([api.minimize(), ["window:minimize"]], [api.maximize(), ["window:maximize"]], [api.close(), ["window:close"]], [api.openSongFolder({ id: "42" }), ["shell:openSongFolder", { id: "42" }]], [api.selectFolder("D:/songs"), ["dialog:selectFolder", "D:/songs"]], [api.copyText("room-code"), ["clipboard:writeText", "room-code"]], [api.setIconTheme("dark"), ["window:setIconTheme", "dark"]]);
     expect(invoke).toHaveBeenCalledTimes(7);
   });
-
   test("leaves runtime arguments undefined when Electron did not inject them", () => {
     expect(runPreload().api).toMatchObject({ initialTheme: undefined, backendUrl: undefined });
   });

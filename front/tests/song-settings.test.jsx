@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-
+import { verify } from "./helpers/assertions.mjs";
 const mocks = vi.hoisted(() => ({
   poll: {},
   notify: vi.fn(),
@@ -49,9 +49,7 @@ vi.mock("../src/theme/ui", () => ({
     </div>
   )
 }));
-
 import SongSettings from "../src/pages/Library/modals/song-settings/index.jsx";
-
 const song = {
   id: "song",
   title: "Title",
@@ -60,7 +58,6 @@ const song = {
   note_range_min: 50,
   note_range_max: 70
 };
-
 beforeEach(() => {
   mocks.poll = { data: [song], error: null };
   mocks.notify.mockReset().mockResolvedValue(undefined);
@@ -69,7 +66,6 @@ beforeEach(() => {
   mocks.updateSong.mockReset().mockResolvedValue({ title: "Updated" });
 });
 afterEach(cleanup);
-
 describe("song settings", () => {
   test("edits, validates and saves song fields", async () => {
     const result = render(<SongSettings songId="song" onClose={vi.fn()} />);
@@ -86,14 +82,9 @@ describe("song settings", () => {
     fireEvent.click(save);
     await waitFor(() => expect(mocks.updateSong).toHaveBeenCalled());
     expect(mocks.updateSong.mock.calls[0][0]).toBe("song");
-    expect(mocks.updateSong.mock.calls[0][1]).toMatchObject({
-      title: "New title",
-      note_range_min: 48,
-      note_range_max: 72
-    });
+    verify([mocks.updateSong.mock.calls[0][1], 'toMatchObject', { title: "New title", note_range_min: 48, note_range_max: 72 }]);
     expect(mocks.refresh).toHaveBeenCalled();
   });
-
   test("opens melody editor after closing settings", async () => {
     const close = vi.fn();
     const result = render(<SongSettings songId="song" onClose={close} />);
@@ -103,10 +94,8 @@ describe("song settings", () => {
         button !== result.container.querySelector(".modal-title-action")
     );
     fireEvent.click(editor);
-    expect(close).toHaveBeenCalled();
-    expect(mocks.navigate).toHaveBeenCalledWith("/editor/song");
+    verify([close, 'toHaveBeenCalled'], [mocks.navigate, 'toHaveBeenCalledWith', "/editor/song"]);
   });
-
   test("renders loading, missing and request-error states", () => {
     mocks.poll = { data: null, error: null };
     const loading = render(<SongSettings songId="song" />);
@@ -122,7 +111,6 @@ describe("song settings", () => {
     fireEvent.click(failed.container.querySelector("button"));
     expect(mocks.refresh).toHaveBeenCalled();
   });
-
   test("reports validation and backend save errors", async () => {
     const result = render(<SongSettings songId="song" />);
     await waitFor(() => expect(result.getByTestId("form")).not.toBeNull());
@@ -135,7 +123,6 @@ describe("song settings", () => {
     await waitFor(() => expect(mocks.notify.mock.calls.at(-1)[0]).toContain("save failed")
     );
   });
-
   test("accepts a successful save without a response payload", async () => {
     mocks.poll = { data: [{ ...song, note_range_max: null }], error: null };
     mocks.updateSong.mockResolvedValueOnce(null);
@@ -144,7 +131,6 @@ describe("song settings", () => {
     fireEvent.click(result.container.querySelector(".modal-title-action"));
     await waitFor(() => expect(mocks.refresh).toHaveBeenCalled());
   });
-
   test("tracks a song appearing after the polling result changes", async () => {
     mocks.poll = { data: [], error: null };
     const result = render(<SongSettings songId="song" />);

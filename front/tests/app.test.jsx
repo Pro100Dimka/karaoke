@@ -1,6 +1,7 @@
 /* @vitest-environment jsdom */
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
+import App from "../src/App.jsx";
 
 vi.mock("react-router-dom", () => ({
   HashRouter: ({ children }) => <div data-testid="router">{children}</div>
@@ -19,22 +20,10 @@ vi.mock("../src/components/OnlineRoomDock", () => ({
   OnlineRoomDock: () => <div data-testid="room" />
 }));
 vi.mock("../src/components/RoomRadioSync", () => ({ default: () => <div data-testid="radio" /> }));
-
-import App from "../src/App.jsx";
-
 afterEach(cleanup);
-
 test("composes the application providers and global room controls", () => {
   const result = render(<App />);
-  for (const id of [
-    "boundary",
-    "loader",
-    "contexts",
-    "router",
-    "layout",
-    "room",
-    "radio"
-  ]) {
+  for (const id of ["boundary", "loader", "contexts", "router", "layout", "room", "radio"]) {
     expect(result.getByTestId(id)).not.toBeNull();
   }
 });

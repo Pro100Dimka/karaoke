@@ -3,20 +3,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "vitest";
-
 import {
   DEFAULT_SIGNALING_URL,
   OnlineRoomClient,
   OnlineVoiceMesh
 } from "../src/services/onlineRoom.js";
-
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-
 test("production CSP allows the online room WebSocket", () => {
   const index = fs.readFileSync(path.join(root, "index.html"), "utf8");
   assert.ok(index.includes(DEFAULT_SIGNALING_URL));
 });
-
 test("song transfer reports progress and waits for receiver import", async () => {
   const sender = new OnlineVoiceMesh({ send: () => true });
   const receiver = new OnlineVoiceMesh({ send: () => true });
@@ -33,22 +29,18 @@ test("song transfer reports progress and waits for receiver import", async () =>
     imported = await blob.text();
     return true;
   };
-
   await sender.sendFile("receiver", new Blob(["song-package"]), {
     kind: "song-package",
     songId: "song-1"
   });
-
   assert.equal(imported, "song-package");
   assert.deepEqual(progress.at(-1), ["complete", 100]);
   assert.ok(progress.some(([stage]) => stage === "sending"));
 });
-
 test("room connection reports a useful close reason", async () => {
   const originalWebSocket = globalThis.WebSocket;
   class ClosedSocket {
     static CLOSING = 2;
-
     constructor() {
       this.readyState = ClosedSocket.CLOSING;
       queueMicrotask(() => this.onclose?.({ code: 1006, reason: "" }));

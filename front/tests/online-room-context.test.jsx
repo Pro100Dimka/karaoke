@@ -2,7 +2,7 @@
 /* eslint-disable max-classes-per-file, lines-between-class-members */
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-
+import { same, called, notCalled, calledTimes, calledWith, verify } from "./helpers/assertions.mjs";
 const mocks = vi.hoisted(() => ({
   clients: [],
   voices: [],
@@ -19,7 +19,6 @@ const mocks = vi.hoisted(() => ({
   stopSpeakingMeter: vi.fn(),
   stopAllSpeakingMeters: vi.fn()
 }));
-
 vi.mock("../src/services/onlineRoom", () => {
   class OnlineRoomClient {
     constructor() {
@@ -71,13 +70,15 @@ vi.mock("../src/contexts/onlineRoomActions", () => ({
 vi.mock("../src/contexts/onlineRoomMessages", () => ({
   createOnlineRoomMessageHandler: mocks.createOnlineRoomMessageHandler
 }));
-
 let OnlineRoomProvider;
 let useOnlineRoom;
-
 const wrapper = ({ children }) => <OnlineRoomProvider>{children}</OnlineRoomProvider>;
 const stream = () => ({ getTracks: () => [{ stop: vi.fn() }] });
-
+const disconnectedState = (extra = {}) => ({
+  room: null, participants: [], mutedPeople: new Set(), effectPeople: new Set(),
+  microphoneMuted: false, roomSoundMuted: false, roomUi: {}, roomCommand: null,
+  voiceError: "", transferStatus: null, ...extra
+});
 beforeEach(async () => {
   globalThis.localStorage?.setItem("advoice-language", "ru");
   vi.resetModules();
@@ -101,37 +102,19 @@ afterEach(() => {
   delete globalThis.AudioContext;
   delete globalThis.webkitAudioContext;
 });
-
 describe("online room provider", () => {
   test("returns no room outside the provider", () => {
     const { result } = renderHook(() => useOnlineRoom());
     expect(result.current).toBeNull();
   });
-
   test("exposes the exact disconnected-room state", () => {
     const { result } = renderHook(() => useOnlineRoom(), { wrapper });
-    expect(result.current).toMatchObject({
-      room: null,
-      participants: [],
-      mutedPeople: new Set(),
-      effectPeople: new Set(),
-      microphoneMuted: false,
-      roomSoundMuted: false,
-      roomUi: {},
-      roomCommand: null,
-      voiceError: "",
-      transferStatus: null,
-      localSpeakingLevel: 0.4,
-      speakingLevels: { guest: 0.2 }
-    });
-    expect(
-      Object.values(result.current).filter((value) => typeof value === "function")
-    ).toHaveLength(14);
+    verify([result.current, 'toMatchObject', { room: null, participants: [], mutedPeople: new Set(), effectPeople: new Set(), microphoneMuted: false, roomSoundMuted: false, roomUi: {}, roomCommand: null, voiceError: "", transferStatus: null, localSpeakingLevel: 0.4, speakingLevels: { guest: 0.2 } }]);
+    verify([Object.values(result.current).filter((value) => typeof value === "function"), 'toHaveLength', 14]);
     expect(() => result.current.setMicrophoneMuted(true)).not.toThrow();
     expect(() => result.current.syncUi({ radio: true })).not.toThrow();
     expect(() => result.current.syncCommand({ type: "pause" })).not.toThrow();
   });
-
   test("fully restores application audio after an unexpected disconnect", async () => {
     const { result } = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => result.current.createRoom("Alice"));
@@ -141,93 +124,52 @@ describe("online room provider", () => {
       mocks.createOnlineRoomMessageHandler.mock.calls.at(-1)[0];
     expect(isCurrentConnection()).toBe(true);
     await act(async () => onConnectionClosed());
-    expect(isCurrentConnection()).toBe(false);
-    expect(mocks.restoreApplicationAudio).toHaveBeenCalled();
+    verify([isCurrentConnection(), 'toBe', false], [mocks.restoreApplicationAudio, 'toHaveBeenCalled']);
     await waitFor(() => {
       expect(result.current.room).toBeNull();
-      expect(result.current.roomSoundMuted).toBe(false);
-      expect(result.current.voiceError).toBe("Соединение с комнатой потеряно.");
+      same([result.current.roomSoundMuted, false], [result.current.voiceError, "Соединение с комнатой потеряно."]);
     });
   });
-
   test("creates a room, starts voice and exposes synchronization actions", async () => {
     const { result } = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => result.current.createRoom("Alice"));
     await waitFor(() => expect(mocks.start).toHaveBeenCalled());
-    expect(mocks.connect).toHaveBeenCalledWith({
-      id: "created-room",
-      name: "Alice",
-      host: true,
-      hostToken: "host-token"
-    });
-    expect(result.current.room).toMatchObject({
-      id: "room-id",
-      selfId: "pending-room-id",
-      host: true,
-      role: "host"
-    });
-    expect(result.current.participants).toEqual([
-      { id: "pending-room-id", name: "Alice", role: "host", pending: true }
-    ]);
-    expect(mocks.startSpeakingMeter).toHaveBeenCalledWith("local", expect.any(Object));
-    expect(mocks.voices[0].setMicrophoneMuted).toHaveBeenCalledWith(false);
-    expect(mocks.clients[0].send).toHaveBeenCalledWith("presence", { micMuted: false });
-    expect(mocks.clients[0].onMessage).toHaveBeenCalledWith(mocks.messageHandler);
-    expect(mocks.createOnlineRoomMessageHandler).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: "created-room",
-        client: mocks.clients[0],
-        voice: mocks.voices[0]
-      })
-    );
-
+    verify([mocks.connect, 'toHaveBeenCalledWith', { id: "created-room", name: "Alice", host: true, hostToken: "host-token" }]);
+    verify([result.current.room, 'toMatchObject', { id: "room-id", selfId: "pending-room-id", host: true, role: "host" }]);
+    verify([result.current.participants, 'toEqual', [ { id: "pending-room-id", name: "Alice", role: "host", pending: true } ]]);
+    calledWith([mocks.startSpeakingMeter, ["local", expect.any(Object)]], [mocks.voices[0].setMicrophoneMuted, [false]], [mocks.clients[0].send, ["presence", { micMuted: false }]], [mocks.clients[0].onMessage, [mocks.messageHandler]]);
+    verify([mocks.createOnlineRoomMessageHandler, 'toHaveBeenCalledWith', expect.objectContaining({ id: "created-room", client: mocks.clients[0], voice: mocks.voices[0] })]);
     act(() => result.current.syncUi({ radio: true }));
     act(() => result.current.syncCommand({ type: "pause" }));
-    expect(mocks.clients[0].send).toHaveBeenCalledWith("ui", { state: { radio: true } });
-    expect(mocks.clients[0].send).toHaveBeenCalledWith("sync", { state: { type: "pause" } });
-
+    calledWith([mocks.clients[0].send, ["ui", { state: { radio: true } }]], [mocks.clients[0].send, ["sync", { state: { type: "pause" } }]]);
     await act(() => result.current.openKaraoke("song-1"));
-    expect(mocks.openKaraokeInRoom).toHaveBeenCalledWith(
-      expect.objectContaining({
-        songId: "song-1",
-        room: result.current.room,
-        client: mocks.clients[0]
-      })
-    );
+    verify([mocks.openKaraokeInRoom, 'toHaveBeenCalledWith', expect.objectContaining({ songId: "song-1", room: result.current.room, client: mocks.clients[0] })]);
     expect(mocks.openKaraokeInRoom.mock.calls.at(-1)[0].isCurrentConnection()).toBe(true);
   });
-
   test("joins, mutes participants and fully leaves the room", async () => {
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => hook.result.current.joinRoom("shared", "Bob"));
     expect(hook.result.current.room.role).toBe("guest");
-
     act(() => hook.result.current.togglePersonMuted("guest"));
     await act(async () => Promise.resolve());
     expect(hook.result.current.mutedPeople.has("guest")).toBe(true);
     act(() => hook.result.current.togglePersonMuted("guest"));
     expect(hook.result.current.mutedPeople.has("guest")).toBe(false);
-
     act(() => hook.result.current.setMicrophoneMuted(true));
     expect(mocks.voices[0].setMicrophoneMuted).toHaveBeenLastCalledWith(true);
     expect(mocks.clients[0].send).toHaveBeenCalledWith("presence", { micMuted: true });
     act(() => hook.result.current.setMicrophoneMuted(false, false));
     expect(mocks.clients[0].send).not.toHaveBeenLastCalledWith("presence", { micMuted: false });
-
     const muteCalls = mocks.voices[0].setMicrophoneMuted.mock.calls.length;
     const restoreCalls = mocks.restoreApplicationAudio.mock.calls.length;
     act(() => hook.result.current.setRoomSoundMuted(false));
     expect(mocks.restoreApplicationAudio).toHaveBeenCalledTimes(restoreCalls);
     act(() => hook.result.current.setRoomSoundMuted(true));
-    expect(mocks.muteApplicationAudio).toHaveBeenCalledWith(document);
-    expect(hook.result.current.roomSoundMuted).toBe(true);
-    expect(mocks.voices[0].setMicrophoneMuted).toHaveBeenCalledTimes(muteCalls);
+    verify([mocks.muteApplicationAudio, 'toHaveBeenCalledWith', document], [hook.result.current.roomSoundMuted, 'toBe', true], [mocks.voices[0].setMicrophoneMuted, 'toHaveBeenCalledTimes', muteCalls]);
     act(() => hook.result.current.setRoomSoundMuted(true));
     expect(mocks.voices[0].setMicrophoneMuted).toHaveBeenCalledTimes(muteCalls);
     act(() => hook.result.current.setRoomSoundMuted(false));
-    expect(mocks.restoreApplicationAudio).toHaveBeenCalledTimes(restoreCalls + 1);
-    expect(mocks.voices[0].setMicrophoneMuted).toHaveBeenCalledTimes(muteCalls);
-
+    calledTimes([mocks.restoreApplicationAudio, restoreCalls + 1], [mocks.voices[0].setMicrophoneMuted, muteCalls]);
     const controls = mocks.createOnlineRoomMessageHandler.mock.calls[0][0];
     act(() => {
       hook.result.current.togglePersonMuted("guest");
@@ -243,38 +185,18 @@ describe("online room provider", () => {
     mocks.clients[0].disconnect.mockImplementation(() => {
       disconnectStates.push(controls.intentionalDisconnectRef.current);
     });
-
     await act(() => hook.result.current.leaveRoom());
-    expect(hook.result.current).toMatchObject({
-      room: null,
-      participants: [],
-      mutedPeople: new Set(),
-      effectPeople: new Set(),
-      microphoneMuted: false,
-      roomSoundMuted: false,
-      roomUi: {},
-      roomCommand: null,
-      voiceError: "",
-      transferStatus: null
-    });
-    expect(mocks.voices[0].stop).toHaveBeenCalled();
-    expect(mocks.clients[0].disconnect).toHaveBeenCalled();
-    expect(mocks.clients[0].unsubscribe).toHaveBeenCalledTimes(1);
-    expect(mocks.stopAllSpeakingMeters).toHaveBeenCalled();
-    expect(controls.pendingSongCommandRef.current).toBeNull();
-    expect(controls.intentionalDisconnectRef.current).toBe(false);
-    expect(disconnectStates).toEqual([true]);
+    verify([hook.result.current, 'toMatchObject', { room: null, participants: [], mutedPeople: new Set(), effectPeople: new Set(), microphoneMuted: false, roomSoundMuted: false, roomUi: {}, roomCommand: null, voiceError: "", transferStatus: null }]);
+    called(mocks.voices[0].stop, mocks.clients[0].disconnect);
+    verify([mocks.clients[0].unsubscribe, 'toHaveBeenCalledTimes', 1], [mocks.stopAllSpeakingMeters, 'toHaveBeenCalled'], [controls.pendingSongCommandRef.current, 'toBeNull'], [controls.intentionalDisconnectRef.current, 'toBe', false], [disconnectStates, 'toEqual', [true]]);
   });
-
   test("can retry microphone access and reports its failures", async () => {
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
     let initialAccess;
     await act(async () => {
       initialAccess = await hook.result.current.requestMicrophoneAccess();
     });
-    expect(initialAccess).toBe(false);
-    expect(hook.result.current.voiceError).toBe("Сначала подключитесь к комнате.");
-
+    same([initialAccess, false], [hook.result.current.voiceError, "Сначала подключитесь к комнате."]);
     await act(() => hook.result.current.createRoom("Alice"));
     const unmutedStream = stream();
     mocks.start.mockResolvedValueOnce(unmutedStream);
@@ -288,11 +210,9 @@ describe("online room provider", () => {
     await act(async () => {
       expect(await hook.result.current.requestMicrophoneAccess()).toBe(true);
     });
-    expect(hook.result.current.voiceError).toBe("");
-    expect(hook.result.current.transferStatus).toBeNull();
+    verify([hook.result.current.voiceError, 'toBe', ""], [hook.result.current.transferStatus, 'toBeNull']);
     expect(mocks.voices[0].setMicrophoneMuted).toHaveBeenLastCalledWith(true);
     expect(mocks.clients[0].send).toHaveBeenLastCalledWith("presence", { micMuted: true });
-
     act(() => {
       hook.result.current.setRoomSoundMuted(true);
       hook.result.current.setMicrophoneMuted(false, false);
@@ -301,24 +221,15 @@ describe("online room provider", () => {
     await act(() => hook.result.current.requestMicrophoneAccess());
     expect(mocks.voices[0].setMicrophoneMuted).toHaveBeenLastCalledWith(false);
     expect(mocks.clients[0].send).toHaveBeenLastCalledWith("presence", { micMuted: false });
-
     mocks.start.mockRejectedValueOnce(new Error("permission denied"));
     await act(async () => {
       expect(await hook.result.current.requestMicrophoneAccess()).toBe(false);
     });
-    expect(hook.result.current.voiceError).toBe(
-      "Не удалось получить доступ к микрофону: permission denied. " +
-        "Проверьте разрешение Windows и повторите попытку."
-    );
-
+    verify([hook.result.current.voiceError, 'toBe', "Не удалось получить доступ к микрофону: permission denied. " + "Проверьте разрешение Windows и повторите попытку."]);
     mocks.start.mockRejectedValueOnce(null);
     await act(() => hook.result.current.requestMicrophoneAccess());
-    expect(hook.result.current.voiceError).toBe(
-      "Не удалось получить доступ к микрофону: нет доступа к микрофону. " +
-        "Проверьте разрешение Windows и повторите попытку."
-    );
+    verify([hook.result.current.voiceError, 'toBe', "Не удалось получить доступ к микрофону: нет доступа к микрофону. " + "Проверьте разрешение Windows и повторите попытку."]);
   });
-
   test("resets every per-room value before reconnecting", async () => {
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => hook.result.current.createRoom("Alice"));
@@ -340,33 +251,14 @@ describe("online room provider", () => {
     oldClient.disconnect.mockImplementation(() => {
       disconnectStates.push(controls.intentionalDisconnectRef.current);
     });
-
     mocks.connect.mockResolvedValueOnce("replacement");
     await act(() => hook.result.current.joinRoom("next", " Bob "));
     await waitFor(() => expect(mocks.start).toHaveBeenCalledTimes(2));
-
-    expect(oldClient.unsubscribe).toHaveBeenCalledTimes(1);
-    expect(oldClient.disconnect).toHaveBeenCalledTimes(1);
-    expect(oldVoice.stop).toHaveBeenCalledTimes(1);
-    expect(controls.pendingSongCommandRef.current).toBeNull();
-    expect(controls.intentionalDisconnectRef.current).toBe(false);
-    expect(disconnectStates).toEqual([true]);
-    expect(hook.result.current).toMatchObject({
-      room: { id: "replacement", selfId: "pending-replacement", host: false, role: "guest" },
-      participants: [{ id: "pending-replacement", name: "Bob", role: "guest", pending: true }],
-      mutedPeople: new Set(),
-      effectPeople: new Set(),
-      microphoneMuted: false,
-      roomSoundMuted: false,
-      roomUi: {},
-      roomCommand: null,
-      voiceError: "",
-      transferStatus: null
-    });
-    expect(mocks.voices[1].setMicrophoneMuted).toHaveBeenCalledWith(false);
-    expect(mocks.clients[1].send).toHaveBeenCalledWith("presence", { micMuted: false });
+    calledTimes([oldClient.unsubscribe, 1], [oldClient.disconnect, 1], [oldVoice.stop, 1]);
+    verify([controls.pendingSongCommandRef.current, 'toBeNull'], [controls.intentionalDisconnectRef.current, 'toBe', false], [disconnectStates, 'toEqual', [true]]);
+    verify([hook.result.current, 'toMatchObject', { room: { id: "replacement", selfId: "pending-replacement", host: false, role: "guest" }, participants: [{ id: "pending-replacement", name: "Bob", role: "guest", pending: true }], mutedPeople: new Set(), effectPeople: new Set(), microphoneMuted: false, roomSoundMuted: false, roomUi: {}, roomCommand: null, voiceError: "", transferStatus: null }]);
+    calledWith([mocks.voices[1].setMicrophoneMuted, [false]], [mocks.clients[1].send, ["presence", { micMuted: false }]]);
   });
-
   test("manages remote streams, transfer progress and song imports", async () => {
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => hook.result.current.createRoom("Alice"));
@@ -374,26 +266,20 @@ describe("online room provider", () => {
     const remoteStream = stream();
     await act(async () => voice.onRemoteStream("guest", remoteStream));
     const audio = document.querySelector('audio[data-online-room-participant="guest"]');
-    expect(audio.srcObject).toBe(remoteStream);
-    expect(audio.autoplay).toBe(true);
-    expect(audio.playsInline).toBe(true);
-    expect(audio.style.display).toBe("none");
-    expect(mocks.startSpeakingMeter).toHaveBeenCalledWith("guest", remoteStream);
-    expect(audio.muted).toBe(false);
+    same([audio.srcObject, remoteStream], [audio.autoplay, true], [audio.playsInline, true], [audio.style.display, "none"]);
+    verify([mocks.startSpeakingMeter, 'toHaveBeenCalledWith', "guest", remoteStream], [audio.muted, 'toBe', false]);
     act(() => hook.result.current.togglePersonMuted("guest"));
     await act(async () => Promise.resolve());
     expect(audio.muted).toBe(true);
     act(() => hook.result.current.togglePersonMuted("guest"));
     await act(async () => Promise.resolve());
     expect(audio.muted).toBe(false);
-
     act(() => voice.onTransferProgress({ stage: "sending", percent: "42" }));
     expect(hook.result.current.transferStatus).toEqual({ stage: "sending", percent: 42 });
     act(() => voice.onTransferProgress({ stage: "sending", percent: "bad" }));
     expect(hook.result.current.transferStatus.percent).toBe(0);
     act(() => voice.onTransferProgress({ stage: "complete", percent: 100 }));
     expect(hook.result.current.transferStatus).toBeNull();
-
     await act(async () => {
       await expect(
         voice.onFile("host", new Blob(["song"]), {
@@ -403,21 +289,14 @@ describe("online room provider", () => {
         })
       ).rejects.toThrow("Получение пакета песни больше не разрешено");
     });
-    expect(mocks.importSongPackage).not.toHaveBeenCalled();
-    expect(hook.result.current.transferStatus).toBeNull();
-    expect(hook.result.current.roomCommand).toBeNull();
+    verify([mocks.importSongPackage, 'not.toHaveBeenCalled'], [hook.result.current.transferStatus, 'toBeNull'], [hook.result.current.roomCommand, 'toBeNull']);
     await act(async () => {
       await expect(voice.onFile("host", new Blob(), { kind: "other" })).rejects.toThrow();
     });
-
     act(() => voice.onPeerClosed("guest"));
-    expect(document.body.contains(audio)).toBe(false);
-    expect(audio.srcObject).toBeNull();
-    expect(audio.pause).toHaveBeenCalledTimes(1);
-    expect(mocks.stopSpeakingMeter).toHaveBeenCalledWith("guest");
+    verify([document.body.contains(audio), 'toBe', false], [audio.srcObject, 'toBeNull'], [audio.pause, 'toHaveBeenCalledTimes', 1], [mocks.stopSpeakingMeter, 'toHaveBeenCalledWith', "guest"]);
     expect(() => voice.onPeerClosed("missing")).not.toThrow();
   });
-
   test("rejects incomplete song-transfer metadata without importing", async () => {
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => hook.result.current.createRoom("Alice"));
@@ -430,7 +309,6 @@ describe("online room provider", () => {
     await expect(voice.onFile("host", new Blob(), { kind: "song-package" })).rejects.toThrow();
     expect(mocks.importSongPackage).not.toHaveBeenCalled();
   });
-
   test("can render and remove participant effects without leaking audio graphs", async () => {
     vi.spyOn(Math, "random").mockReturnValue(0.75);
     const contexts = [];
@@ -492,53 +370,27 @@ describe("online room provider", () => {
     await waitFor(() => expect(contexts).toHaveLength(1));
     expect(hook.result.current.effectPeople.has("guest")).toBe(true);
     const [context] = contexts;
-    expect(context.options).toEqual({ latencyHint: "interactive" });
-    expect(context.resume).toHaveBeenCalledTimes(1);
-    expect(context.gains).toHaveLength(4);
-    expect(context.delays).toHaveLength(1);
-    expect(context.delays[0].maximum).toBe(1);
-    expect(context.delays[0].delayTime.value).toBeCloseTo(0.196);
-    expect(context.gains[1].gain.value).toBeCloseTo(0.395);
-    expect(context.gains[2].gain.value).toBeCloseTo(0.326);
-    expect(context.gains[3].gain.value).toBeCloseTo(0.288);
+    verify([context.options, 'toEqual', { latencyHint: "interactive" }], [context.resume, 'toHaveBeenCalledTimes', 1], [context.gains, 'toHaveLength', 4], [context.delays, 'toHaveLength', 1], [context.delays[0].maximum, 'toBe', 1], [context.delays[0].delayTime.value, 'toBeCloseTo', 0.196], [context.gains[1].gain.value, 'toBeCloseTo', 0.395], [context.gains[2].gain.value, 'toBeCloseTo', 0.326], [context.gains[3].gain.value, 'toBeCloseTo', 0.288]);
     expect(context.buffers[0]).toMatchObject({ channels: 2, frames: 104, sampleRate: 100 });
-    expect(context.buffers[0].data[0][0]).toBeCloseTo(0.5);
-    expect(context.buffers[0].data[0][52]).toBeCloseTo(0.5 * 0.5 ** 2.7);
-    expect(context.buffers[0].data[1][103]).toBeCloseTo(0.5 * (1 - 103 / 104) ** 2.7);
-    expect(context.convolvers[0].buffer).toBe(context.buffers[0]);
-    expect(context.source.connect).toHaveBeenCalledWith(context.gains[0]);
-    expect(context.source.connect).toHaveBeenCalledWith(context.delays[0]);
-    expect(context.source.connect).toHaveBeenCalledWith(context.convolvers[0]);
-    expect(context.delays[0].connect).toHaveBeenCalledWith(context.gains[1]);
-    expect(context.delays[0].connect).toHaveBeenCalledWith(context.gains[2]);
-    expect(context.gains[1].connect).toHaveBeenCalledWith(context.delays[0]);
-    expect(context.convolvers[0].connect).toHaveBeenCalledWith(context.gains[3]);
-    expect(context.gains[0].connect).toHaveBeenCalledWith(context.destination);
+    verify([context.buffers[0].data[0][0], 'toBeCloseTo', 0.5], [context.buffers[0].data[0][52], 'toBeCloseTo', 0.5 * 0.5 ** 2.7], [context.buffers[0].data[1][103], 'toBeCloseTo', 0.5 * (1 - 103 / 104) ** 2.7], [context.convolvers[0].buffer, 'toBe', context.buffers[0]]);
+    calledWith([context.source.connect, [context.gains[0]]], [context.source.connect, [context.delays[0]]], [context.source.connect, [context.convolvers[0]]], [context.delays[0].connect, [context.gains[1]]], [context.delays[0].connect, [context.gains[2]]], [context.gains[1].connect, [context.delays[0]]], [context.convolvers[0].connect, [context.gains[3]]], [context.gains[0].connect, [context.destination]]);
     expect(context.gains[0].gain.value).toBe(1);
     const audio = document.querySelector("audio");
     expect(audio.muted).toBe(true);
     act(() => hook.result.current.setRoomSoundMuted(true));
     expect(context.gains[0].gain.value).toBe(0);
     act(() => hook.result.current.setRoomSoundMuted(false));
-
     act(() =>
       providerControls.setRoomUi({
         effectsByParticipant: { guest: { echo: 2, delay: -1, reverb: "invalid" } }
       })
     );
     await waitFor(() => expect(contexts).toHaveLength(2));
-    expect(context.close).toHaveBeenCalledTimes(1);
-    expect(contexts[1].delays[0].delayTime.value).toBeCloseTo(0.06);
-    expect(contexts[1].gains[1].gain.value).toBeCloseTo(0.55);
-    expect(contexts[1].gains[2].gain.value).toBeCloseTo(0.46);
-    expect(contexts[1].convolvers).toHaveLength(0);
-
+    verify([context.close, 'toHaveBeenCalledTimes', 1], [contexts[1].delays[0].delayTime.value, 'toBeCloseTo', 0.06], [contexts[1].gains[1].gain.value, 'toBeCloseTo', 0.55], [contexts[1].gains[2].gain.value, 'toBeCloseTo', 0.46], [contexts[1].convolvers, 'toHaveLength', 0]);
     act(() => hook.result.current.togglePersonEffects("guest"));
     await waitFor(() => expect(contexts[1].close).toHaveBeenCalledTimes(1));
-    expect(hook.result.current.effectPeople.has("guest")).toBe(false);
-    expect(audio.muted).toBe(false);
+    same([hook.result.current.effectPeople.has("guest"), false], [audio.muted, false]);
   });
-
   test("falls back cleanly when participant effects are unsupported", async () => {
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => hook.result.current.createRoom("Alice"));
@@ -548,10 +400,8 @@ describe("online room provider", () => {
     await act(async () => mocks.voices[0].onRemoteStream("guest", stream()));
     act(() => hook.result.current.togglePersonEffects("guest"));
     await act(async () => Promise.resolve());
-    expect(hook.result.current.effectPeople.has("guest")).toBe(true);
-    expect(document.querySelector("audio").muted).toBe(false);
+    same([hook.result.current.effectPeople.has("guest"), true], [document.querySelector("audio").muted, false]);
   });
-
   test("supports the webkit audio fallback and optional graph methods", async () => {
     const contexts = [];
     globalThis.webkitAudioContext = class {
@@ -571,10 +421,8 @@ describe("online room provider", () => {
     act(() => hook.result.current.togglePersonEffects("guest"));
     await act(async () => Promise.resolve());
     const effectContexts = () => contexts.filter((context) => context.master);
-    expect(effectContexts()).toHaveLength(1);
-    expect(effectContexts()[0].options).toEqual({ latencyHint: "interactive" });
-    expect(effectContexts()[0].master.gain.value).toBe(1);
-    expect(document.querySelector("audio").muted).toBe(true);
+    verify([effectContexts(), 'toHaveLength', 1], [effectContexts()[0].options, 'toEqual', { latencyHint: "interactive" }]);
+    same([effectContexts()[0].master.gain.value, 1], [document.querySelector("audio").muted, true]);
     act(() => hook.result.current.togglePersonEffects("guest"));
     await act(async () => Promise.resolve());
     expect(document.querySelector("audio").muted).toBe(false);
@@ -584,16 +432,11 @@ describe("online room provider", () => {
     expect(effectContexts()).toHaveLength(2);
     expect(() => mocks.voices[0].onPeerClosed("guest-2")).not.toThrow();
   });
-
   test("cleans up and rethrows connection and import failures", async () => {
     mocks.connect.mockRejectedValueOnce(new Error("socket failed"));
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
     await expect(hook.result.current.joinRoom("room", "Bob")).rejects.toThrow("socket failed");
-    expect(mocks.clients[0].unsubscribe).toHaveBeenCalledTimes(1);
-    expect(mocks.clients[0].disconnect).toHaveBeenCalledTimes(1);
-    expect(mocks.voices[0].stop).toHaveBeenCalledTimes(1);
-    expect(mocks.stopAllSpeakingMeters).toHaveBeenCalledTimes(2);
-
+    calledTimes([mocks.clients[0].unsubscribe, 1], [mocks.clients[0].disconnect, 1], [mocks.voices[0].stop, 1], [mocks.stopAllSpeakingMeters, 2]);
     mocks.connect.mockResolvedValueOnce("room");
     await act(() => hook.result.current.joinRoom("room", "Bob"));
     mocks.importSongPackage.mockRejectedValueOnce(new Error("bad package"));
@@ -624,13 +467,8 @@ describe("online room provider", () => {
       }
     });
     expect(importError?.message).toBe("bad package");
-    expect(hook.result.current.transferStatus).toEqual({
-      stage: "error",
-      error: "Не удалось импортировать песню: bad package",
-      percent: 0
-    });
+    verify([hook.result.current.transferStatus, 'toEqual', { stage: "error", error: "Не удалось импортировать песню: bad package", percent: 0 }]);
   });
-
   test("cancels stale microphone and remote-stream work", async () => {
     let releaseVoice;
     const lateTrack = { stop: vi.fn() };
@@ -646,11 +484,9 @@ describe("online room provider", () => {
     releaseVoice({ getTracks: () => [lateTrack], getAudioTracks: () => [] });
     await act(async () => Promise.resolve());
     expect(lateTrack.stop).toHaveBeenCalled();
-
     const remoteTrack = { stop: vi.fn() };
     await act(async () => oldVoice.onRemoteStream("stale", { getTracks: () => [remoteTrack] }));
     expect(remoteTrack.stop).toHaveBeenCalled();
-
     let releaseRetry;
     const retry = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => retry.result.current.createRoom("Retry"));
@@ -668,7 +504,6 @@ describe("online room provider", () => {
     });
     expect(retryTrack.stop).toHaveBeenCalled();
   });
-
   test("discards a stale local-monitor stream after leaving the room", async () => {
     let releaseMonitor;
     const monitorTrack = { stop: vi.fn() };
@@ -688,7 +523,6 @@ describe("online room provider", () => {
     });
     expect(monitorTrack.stop).toHaveBeenCalled();
   });
-
   test("hear-yourself monitoring runs the mic through the studio channel strip, not a raw passthrough", async () => {
     const gains = [];
     const filters = [];
@@ -736,44 +570,26 @@ describe("online room provider", () => {
     await act(async () => {
       expect(await hook.result.current.setLocalMonitoring(true)).toBe(true);
     });
-
     const [finalGain, makeup] = gains;
     const [highpass, presence] = filters;
     const { source } = contexts[0];
-
     // Rumble/mud removal and a touch of presence/air, matching the same
     // character as backend/app/services/microphone_quality.py's
     // StudioMicrophoneProcessor used for recording and direct monitoring.
-    expect(highpass.type).toBe("highpass");
-    expect(highpass.frequency.value).toBe(70);
-    expect(presence.type).toBe("highshelf");
-    expect(presence.frequency.value).toBe(2200);
+    same([highpass.type, "highpass"], [highpass.frequency.value, 70], [presence.type, "highshelf"], [presence.frequency.value, 2200]);
     expect(presence.gain.value).toBeGreaterThan(0);
-
-    expect(compressor.threshold.value).toBe(-16);
-    expect(compressor.ratio.value).toBe(3);
+    same([compressor.threshold.value, -16], [compressor.ratio.value, 3]);
     expect(makeup.gain.value).toBeCloseTo(1.08);
-
     // Soft-knee limiter curve: silence maps to silence, and the extremes stay
     // within [-1, 1] instead of hard-clipping.
-    expect(limiter.curve).toHaveLength(1024);
-    expect(limiter.curve[512]).toBeCloseTo(0, 1);
-    expect(limiter.curve[1023]).toBeCloseTo(1, 5);
-    expect(limiter.curve[0]).toBeCloseTo(-1, 5);
-
+    verify([limiter.curve, 'toHaveLength', 1024], [limiter.curve[512], 'toBeCloseTo', 0, 1], [limiter.curve[1023], 'toBeCloseTo', 1, 5], [limiter.curve[0], 'toBeCloseTo', -1, 5]);
     // Wiring: source -> highpass -> presence -> compressor -> makeup -> limiter
     // -> the pre-existing mute/volume gain -> destination. The final gain is
     // what setRoomSoundMuted/applyRemoteAudioMute-style controls would act on,
     // so it must still sit last in the chain, unaffected by the new nodes.
-    expect(source.connect).toHaveBeenCalledWith(highpass);
-    expect(highpass.connect).toHaveBeenCalledWith(presence);
-    expect(presence.connect).toHaveBeenCalledWith(compressor);
-    expect(compressor.connect).toHaveBeenCalledWith(makeup);
-    expect(makeup.connect).toHaveBeenCalledWith(limiter);
-    expect(limiter.connect).toHaveBeenCalledWith(finalGain);
+    calledWith([source.connect, [highpass]], [highpass.connect, [presence]], [presence.connect, [compressor]], [compressor.connect, [makeup]], [makeup.connect, [limiter]], [limiter.connect, [finalGain]]);
     expect(finalGain.gain.value).toBe(1);
   });
-
   test("reports voice playback failures and isolates rejected audio graph promises", async () => {
     HTMLMediaElement.prototype.play.mockRejectedValueOnce(new Error("autoplay blocked"));
     const contexts = [];
@@ -814,14 +630,12 @@ describe("online room provider", () => {
     await act(async () => Promise.resolve());
     act(() => mocks.voices[0].onPeerClosed("guest"));
     await act(async () => Promise.resolve());
-
     mocks.openKaraokeInRoom.mockImplementationOnce((options) => options.isCurrentConnection());
     expect(hook.result.current.openKaraoke("song")).toBe(true);
     const karaokeOptions = mocks.openKaraokeInRoom.mock.calls.at(-1)[0];
     await act(() => hook.result.current.leaveRoom());
     expect(karaokeOptions.isCurrentConnection()).toBe(false);
   });
-
   test("keeps a room connected when initial microphone startup fails", async () => {
     mocks.start.mockRejectedValueOnce(new Error("no microphone"));
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
@@ -831,7 +645,6 @@ describe("online room provider", () => {
     );
     expect(hook.result.current.room.id).toBe("room-id");
   });
-
   test("uses the microphone fallback for a message-less startup error", async () => {
     mocks.start.mockRejectedValueOnce(null);
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
@@ -843,7 +656,6 @@ describe("online room provider", () => {
     );
     expect(hook.result.current.room.id).toBe("room-id");
   });
-
   test("applies a mute selected while microphone startup is pending", async () => {
     let releaseVoice;
     mocks.start.mockReturnValueOnce(
@@ -861,12 +673,10 @@ describe("online room provider", () => {
     expect(mocks.voices[0].setMicrophoneMuted).toHaveBeenLastCalledWith(true);
     expect(mocks.clients[0].send).toHaveBeenLastCalledWith("presence", { micMuted: true });
   });
-
   test("ignores stale microphone, playback, transfer and import failures", async () => {
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => hook.result.current.createRoom("Alice"));
     const voice = mocks.voices[0];
-
     let rejectRetry;
     mocks.start.mockReturnValueOnce(
       new Promise((_resolve, reject) => {
@@ -880,13 +690,11 @@ describe("online room provider", () => {
       await expect(retry).resolves.toBe(false);
     });
     expect(hook.result.current.voiceError).toBe("");
-
     act(() => voice.onTransferProgress({ stage: "sending", percent: 10 }));
     expect(hook.result.current.transferStatus).toBeNull();
     mocks.stopSpeakingMeter.mockClear();
     act(() => voice.onPeerClosed("stale"));
     expect(mocks.stopSpeakingMeter).not.toHaveBeenCalled();
-
     await act(() => hook.result.current.createRoom("Alice"));
     const currentVoice = mocks.voices.at(-1);
     let rejectPlay;
@@ -901,7 +709,6 @@ describe("online room provider", () => {
     await act(async () => Promise.resolve());
     expect(hook.result.current.voiceError).toBe("");
   });
-
   test("ignores stale transfer progress from an older song command", async () => {
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => hook.result.current.createRoom("Host"));
@@ -937,7 +744,6 @@ describe("online room provider", () => {
     );
     expect(hook.result.current.transferStatus).toEqual({ stage: "sending", percent: 30 });
   });
-
   test("keeps another participant transfer visible when one transfer completes", async () => {
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => hook.result.current.createRoom("Host"));
@@ -954,7 +760,6 @@ describe("online room provider", () => {
     );
     expect(hook.result.current.transferStatus).toEqual({ stage: "sending", percent: 60 });
   });
-
   test("rejects a pending manual song sync when its transfer errors or the owner disconnects", async () => {
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => hook.result.current.createRoom("Host"));
@@ -962,7 +767,6 @@ describe("online room provider", () => {
     const client = mocks.clients[0];
     client.send.mockReturnValue(true);
     mocks.getSongRevision.mockRejectedValueOnce(new Error("not found locally"));
-
     const song = { id: "song-1", __roomOwnerId: "owner-1", __roomRevision: `sha256:${"b".repeat(64)}` };
     let syncPromise;
     await act(async () => {
@@ -971,13 +775,11 @@ describe("online room provider", () => {
         setTimeout(resolve, 0);
       });
     });
-
     const sentState = client.send.mock.calls.find(
       (call) => call[0] === "sync" && call[1]?.state?.type === "song-request"
     )?.[1]?.state;
     expect(sentState).toMatchObject({ songId: "song-1", ownerId: "owner-1" });
     expect(hook.result.current.transferStatus).toMatchObject({ stage: "waiting" });
-
     act(() =>
       voice.onTransferProgress({
         participantId: "owner-1",
@@ -986,10 +788,8 @@ describe("online room provider", () => {
         metadata: { commandId: sentState.commandId }
       })
     );
-
     await expect(syncPromise).rejects.toThrow();
   });
-
   test("publishes an imported pending song and ignores a stale import result", async () => {
     vi.spyOn(Date, "now").mockReturnValue(1234);
     vi.spyOn(Math, "random").mockReturnValue(0.25);
@@ -1025,15 +825,7 @@ describe("online room provider", () => {
       })
     );
     expect(mocks.clients[0].send).toHaveBeenCalledTimes(sentBeforeRemoteImport + 1);
-    expect(mocks.clients[0].send).toHaveBeenLastCalledWith("sync", {
-      state: {
-        type: "song-ready",
-        commandId: "cmd-song",
-        songId: "song",
-        revision,
-        requesterId: "guest"
-      }
-    });
+    verify([mocks.clients[0].send, 'toHaveBeenLastCalledWith', "sync", { state: { type: "song-ready", commandId: "cmd-song", songId: "song", revision, requesterId: "guest" } }]);
     expect(hook.result.current.roomCommand).toBeNull();
     actionOptions.pendingSongCommandRef.current = {
       type: "open-karaoke",
@@ -1051,17 +843,8 @@ describe("online room provider", () => {
       })
     );
     expect(mocks.clients[0].send).toHaveBeenCalledTimes(sentBeforeRemoteImport + 2);
-    expect(mocks.clients[0].send).toHaveBeenLastCalledWith("sync", {
-      state: {
-        type: "song-ready",
-        commandId: "cmd-remote",
-        songId: "remote-song",
-        revision,
-        requesterId: "guest"
-      }
-    });
+    verify([mocks.clients[0].send, 'toHaveBeenLastCalledWith', "sync", { state: { type: "song-ready", commandId: "cmd-remote", songId: "remote-song", revision, requesterId: "guest" } }]);
     expect(hook.result.current.roomCommand).toBeNull();
-
     let releaseImport;
     mocks.importSongPackage.mockReturnValueOnce(
       new Promise((resolve) => {
@@ -1094,11 +877,8 @@ describe("online room provider", () => {
     actionOptions.pendingSongCommandRef.current = postLeaveCommand;
     releaseImport({ id: "late" });
     await act(async () => staleImport);
-    expect(hook.result.current.room).toBeNull();
-    expect(hook.result.current.roomCommand).toBeNull();
-    expect(actionOptions.pendingSongCommandRef.current).toBe(postLeaveCommand);
+    verify([hook.result.current.room, 'toBeNull'], [hook.result.current.roomCommand, 'toBeNull'], [actionOptions.pendingSongCommandRef.current, 'toBe', postLeaveCommand]);
   });
-
   test("does not let a stale same-room import override a newer song command", async () => {
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => hook.result.current.joinRoom("room", "Guest"));
@@ -1143,10 +923,8 @@ describe("online room provider", () => {
     await act(async () => {
       await importingA;
     });
-    expect(options.pendingSongCommandRef.current).toBe(commandB);
-    expect(hook.result.current.roomCommand).toBeNull();
+    verify([options.pendingSongCommandRef.current, 'toBe', commandB], [hook.result.current.roomCommand, 'toBeNull']);
   });
-
   test("uses a guest fallback name and ignores stale import errors", async () => {
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => hook.result.current.joinRoom("room"));
@@ -1184,7 +962,6 @@ describe("online room provider", () => {
     });
     expect(hook.result.current.transferStatus).toBeNull();
   });
-
   test("imports only the expected song package from the room host", async () => {
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => hook.result.current.joinRoom("room", "Guest"));
@@ -1211,10 +988,7 @@ describe("online room provider", () => {
       commandId: "cmd-expected",
       revision
     };
-    expect(voice.canAcceptFile("attacker", expected)).toBe(false);
-    expect(voice.canAcceptFile("host", { ...expected, songId: "wrong" })).toBe(false);
-    expect(voice.canAcceptFile("host", { ...expected, commandId: "wrong" })).toBe(false);
-    expect(voice.canAcceptFile("host", expected)).toBe(true);
+    same([voice.canAcceptFile("attacker", expected), false], [voice.canAcceptFile("host", { ...expected, songId: "wrong" }), false], [voice.canAcceptFile("host", { ...expected, commandId: "wrong" }), false], [voice.canAcceptFile("host", expected), true]);
     await expect(voice.onFile("attacker", new Blob(), expected)).rejects.toThrow();
     await expect(
       voice.onFile("host", new Blob(), { ...expected, songId: "wrong" })
@@ -1229,7 +1003,6 @@ describe("online room provider", () => {
       { expectedRevision: revision }
     );
   });
-
   test("cancels an older connection when a newer request wins", async () => {
     let releaseFirst;
     mocks.connect
@@ -1247,31 +1020,19 @@ describe("online room provider", () => {
     mocks.voices[0].stop.mockClear();
     releaseFirst("old-room");
     await expect(first).rejects.toThrow("Подключение отменено новым запросом");
-    expect(mocks.clients[0].disconnect).toHaveBeenCalledTimes(1);
-    expect(mocks.voices[0].stop).toHaveBeenCalledTimes(1);
+    calledTimes([mocks.clients[0].disconnect, 1], [mocks.voices[0].stop, 1]);
     expect(hook.result.current.room.id).toBe("new-room");
-    expect(mocks.clients[1].disconnect).not.toHaveBeenCalled();
-    expect(mocks.voices[1].stop).not.toHaveBeenCalled();
+    notCalled(mocks.clients[1].disconnect, mocks.voices[1].stop);
   });
-
   test("releases the room connection and remote media on unmount", async () => {
     const hook = renderHook(() => useOnlineRoom(), { wrapper });
     await act(() => hook.result.current.createRoom("Alice"));
     await act(async () => mocks.voices[0].onRemoteStream("guest", stream()));
     const audio = document.querySelector("audio");
-
     hook.unmount();
-
-    expect(mocks.clients[0].unsubscribe).toHaveBeenCalledTimes(1);
-    expect(mocks.clients[0].disconnect).toHaveBeenCalledTimes(1);
-    expect(mocks.voices[0].stop).toHaveBeenCalledTimes(1);
-    expect(mocks.stopAllSpeakingMeters).toHaveBeenCalledTimes(2);
-    expect(mocks.stopSpeakingMeter).toHaveBeenCalledWith("guest");
-    expect(audio.pause).toHaveBeenCalledTimes(1);
-    expect(audio.srcObject).toBeNull();
-    expect(document.body.contains(audio)).toBe(false);
+    calledTimes([mocks.clients[0].unsubscribe, 1], [mocks.clients[0].disconnect, 1], [mocks.voices[0].stop, 1], [mocks.stopAllSpeakingMeters, 2]);
+    verify([mocks.stopSpeakingMeter, 'toHaveBeenCalledWith', "guest"], [audio.pause, 'toHaveBeenCalledTimes', 1], [audio.srcObject, 'toBeNull'], [document.body.contains(audio), 'toBe', false]);
   });
-
   test("ignores an initial microphone failure from an obsolete connection", async () => {
     let rejectOldVoice;
     mocks.start.mockReturnValueOnce(
@@ -1284,7 +1045,6 @@ describe("online room provider", () => {
     await act(() => hook.result.current.joinRoom("new", "Alice"));
     rejectOldVoice(new Error("obsolete microphone"));
     await act(async () => Promise.resolve());
-    expect(hook.result.current.room.id).toBe("room-id");
-    expect(hook.result.current.voiceError).not.toContain("obsolete");
+    verify([hook.result.current.room.id, 'toBe', "room-id"], [hook.result.current.voiceError, 'not.toContain', "obsolete"]);
   });
 });

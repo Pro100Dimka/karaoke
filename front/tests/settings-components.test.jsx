@@ -1,7 +1,8 @@
 /* @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-
+import { stubImmediateAnimationFrame } from "./helpers/browser.mjs";
+import { verify } from "./helpers/assertions.mjs";
 const mocks = vi.hoisted(() => ({
   polling: { data: null, error: null, refresh: vi.fn() },
   downloadAiModels: vi.fn(),
@@ -31,10 +32,8 @@ vi.mock("../src/contexts/AppDialog", () => ({ useAppDialog: () => ({ alert: vi.f
 vi.mock("../src/pages/Settings/settings-content", () => ({
   default: ({ tab }) => <div data-testid={`settings-${tab}`}>{tab}</div>
 }));
-
 import ModelRecovery from "../src/pages/Settings/model-recovery.jsx";
 import Settings from "../src/pages/Settings/index.jsx";
-
 beforeEach(() => {
   mocks.polling = { data: null, error: null, refresh: vi.fn() };
   mocks.downloadAiModels.mockReset().mockResolvedValue({});
@@ -47,22 +46,16 @@ beforeEach(() => {
     openService: vi.fn(),
     closeService: vi.fn()
   };
-  vi.stubGlobal("requestAnimationFrame", (callback) => { callback(); return 1; });
-  vi.stubGlobal("cancelAnimationFrame", vi.fn());
+  stubImmediateAnimationFrame();
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
-
 describe("AI model recovery", () => {
   test("shows ready state without a download button", () => {
     mocks.polling.data = { ready: true, state: "ready", models: [], total: 2, ready_count: 2 };
     render(<ModelRecovery />);
-    expect(mocks.pollingOptions.shouldContinue({ state: "downloading" })).toBe( true
-    );
-    expect(mocks.pollingOptions.shouldContinue({ state: "ready" })).toBe(false);
-    expect(screen.getByText("settings.ai.models.ready")).not.toBeNull();
-    expect(screen.queryByRole("button")).toBeNull();
+    verify([mocks.pollingOptions.shouldContinue({ state: "downloading" }), 'toBe', true]);
+    verify([mocks.pollingOptions.shouldContinue({ state: "ready" }), 'toBe', false], [screen.getByText("settings.ai.models.ready"), 'not.toBeNull'], [screen.queryByRole("button"), 'toBeNull']);
   });
-
   test("offers retry and refreshes after a successful download request", async () => {
     mocks.polling.data = {
       ready: false,
@@ -78,7 +71,6 @@ describe("AI model recovery", () => {
     expect(mocks.downloadAiModels).toHaveBeenCalledOnce();
     expect(mocks.polling.refresh).toHaveBeenCalledOnce();
   });
-
   test("shows real byte progress, ETA and download failures", async () => {
     mocks.polling.data = {
       ready: false,
@@ -92,11 +84,8 @@ describe("AI model recovery", () => {
       remaining_seconds: 90
     };
     const view = render(<ModelRecovery />);
-    expect( Number(screen.getByRole("progressbar").getAttribute("aria-valuenow"))
-    ).toBe(1024 ** 3);
-    expect(screen.getByText(/1\.0.*2\.0/)).not.toBeNull();
-    expect(screen.getByRole("button").disabled).toBe(true);
-
+    verify([Number(screen.getByRole("progressbar").getAttribute("aria-valuenow")), 'toBe', 1024 ** 3]);
+    verify([screen.getByText(/1\.0.*2\.0/), 'not.toBeNull'], [screen.getByRole("button").disabled, 'toBe', true]);
     mocks.polling = {
       data: {
         ready: false,
@@ -109,7 +98,6 @@ describe("AI model recovery", () => {
       refresh: vi.fn()
     };
     view.rerender(<ModelRecovery />);
-
     mocks.polling = {
       data: { ready: false, state: "missing", models: [] },
       error: new Error("status offline"),
@@ -123,18 +111,14 @@ describe("AI model recovery", () => {
     expect(screen.getByText("download failed")).not.toBeNull();
   });
 });
-
 describe("settings modal", () => {
   test("renders translated tabs and delegates tab selection", () => {
     render(<Settings />);
-    expect(screen.getByRole("dialog")).not.toBeNull();
-    expect(screen.getByTestId("settings-appearance")).not.toBeNull();
+    verify([screen.getByRole("dialog"), 'not.toBeNull'], [screen.getByTestId("settings-appearance"), 'not.toBeNull']);
     const audio = screen.getByRole("tab", { name: /settings.tab.audio/ });
     fireEvent.click(audio);
-    expect(mocks.navigation.selectTab).toHaveBeenCalledWith( "audio", expect.any(Object)
-    );
+    verify([mocks.navigation.selectTab, 'toHaveBeenCalledWith', "audio", expect.any(Object)]);
   });
-
   test("shows a loading state until settings arrive and can stay closed", () => {
     mocks.settingsForm = { ...mocks.settingsForm, form: null };
     const view = render(<Settings initialTab="audio" />);

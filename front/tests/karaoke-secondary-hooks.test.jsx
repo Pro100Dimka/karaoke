@@ -1,7 +1,8 @@
 /* @vitest-environment jsdom */
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-
+import { stubFrameQueue } from "./helpers/browser.mjs";
+import { same, called, calledWith, verify } from "./helpers/assertions.mjs";
 const mocks = vi.hoisted(() => ({
   updateUiPreferences: vi.fn(),
   loadKaraokePreferences: vi.fn(),
@@ -23,11 +24,9 @@ vi.mock("../src/pages/Karaoke/utils/data", () => ({ createPanoramaPath: mocks.cr
 vi.mock("../src/pages/Karaoke/utils/panorama", () => ({
   getPanoramaPosition: mocks.getPanoramaPosition
 }));
-
 import useKaraokePanorama from "../src/pages/Karaoke/hooks/useKaraokePanorama.js";
 import useKaraokePreferences from "../src/pages/Karaoke/hooks/useKaraokePreferences.js";
 import useMelodyGuide from "../src/pages/Karaoke/hooks/useMelodyGuide.js";
-
 beforeEach(() => {
   Object.values(mocks).forEach((mock) => mock.mockReset());
   mocks.loadKaraokePreferences.mockReturnValue({});
@@ -45,21 +44,10 @@ afterEach(() => {
   delete globalThis.webkitAudioContext;
   delete document.documentElement.dataset.performance;
 });
-
 describe("karaoke preferences", () => {
   test("loads defaults and persists every preference change", async () => {
     const { result } = renderHook(() => useKaraokePreferences());
-    expect(result.current).toMatchObject({
-      musicVolume: 1,
-      vocalVolume: 1,
-      melodyVolume: 0,
-      speed: 1,
-      keyShift: 0,
-      showLyrics: true,
-      showNotes: true,
-      autoHideConsole: true,
-      effectPreset: "studio"
-    });
+    verify([result.current, 'toMatchObject', { musicVolume: 1, vocalVolume: 1, melodyVolume: 0, speed: 1, keyShift: 0, showLyrics: true, showNotes: true, autoHideConsole: true, effectPreset: "studio" }]);
     act(() => {
       result.current.setMusicVolume(0.5);
       result.current.setVocalVolume(0.4);
@@ -72,23 +60,9 @@ describe("karaoke preferences", () => {
       result.current.setEffectPreset("hall");
     });
     await act(async () => Promise.resolve());
-    expect(mocks.saveKaraokePreferences).toHaveBeenLastCalledWith({
-      musicVolume: 0.5,
-      vocalVolume: 0.4,
-      melodyVolume: 0.3,
-      speed: 1.2,
-      keyShift: 2,
-      showLyrics: false,
-      showNotes: false,
-      autoHideConsole: false,
-      effectPreset: "hall"
-    });
-    expect(mocks.updateUiPreferences).toHaveBeenLastCalledWith("karaoke", {
-      musicVolume: 0.5, vocalVolume: 0.4, melodyVolume: 0.3, speed: 1.2, keyShift: 2,
-      showLyrics: false, showNotes: false, autoHideConsole: false, effectPreset: "hall"
-    });
+    verify([mocks.saveKaraokePreferences, 'toHaveBeenLastCalledWith', { musicVolume: 0.5, vocalVolume: 0.4, melodyVolume: 0.3, speed: 1.2, keyShift: 2, showLyrics: false, showNotes: false, autoHideConsole: false, effectPreset: "hall" }]);
+    verify([mocks.updateUiPreferences, 'toHaveBeenLastCalledWith', "karaoke", { musicVolume: 0.5, vocalVolume: 0.4, melodyVolume: 0.3, speed: 1.2, keyShift: 2, showLyrics: false, showNotes: false, autoHideConsole: false, effectPreset: "hall" }]);
   });
-
   test("uses saved values and skips remote persistence when local save fails", () => {
     mocks.loadKaraokePreferences.mockReturnValue({
       musicVolume: 0,
@@ -103,11 +77,9 @@ describe("karaoke preferences", () => {
     });
     mocks.saveKaraokePreferences.mockReturnValue(false);
     const { result } = renderHook(() => useKaraokePreferences());
-    expect(result.current.musicVolume).toBe(0);
-    expect(result.current.effectPreset).toBe("dry");
+    same([result.current.musicVolume, 0], [result.current.effectPreset, "dry"]);
     expect(mocks.updateUiPreferences).not.toHaveBeenCalled();
   });
-
   test("ignores optional remote preference persistence failures", async () => {
     mocks.updateUiPreferences.mockRejectedValue(new Error("offline"));
     const { result } = renderHook(() => useKaraokePreferences());
@@ -116,15 +88,9 @@ describe("karaoke preferences", () => {
     expect(mocks.updateUiPreferences).toHaveBeenCalled();
   });
 });
-
 describe("karaoke panorama", () => {
   test("cycles themes for songs and animates the panorama", () => {
-    const frames = [];
-    vi.stubGlobal(
-      "requestAnimationFrame",
-      vi.fn((callback) => { frames.push(callback); return frames.length; })
-    );
-    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    const frames = stubFrameQueue();
     vi.spyOn(performance, "now").mockReturnValue(100);
     const hook = renderHook(
       ({ songId, playing }) => useKaraokePanorama(songId, playing),
@@ -134,18 +100,14 @@ describe("karaoke panorama", () => {
     const panorama = document.createElement("div");
     hook.result.current.panoramaRef.current = panorama;
     hook.rerender({ songId: "two", playing: true });
-    expect(hook.result.current.activeTheme).toEqual({ id: "two" });
-    expect(mocks.getPanoramaPosition).not.toHaveBeenCalled();
+    verify([hook.result.current.activeTheme, 'toEqual', { id: "two" }], [mocks.getPanoramaPosition, 'not.toHaveBeenCalled']);
     act(() => frames.shift()(10));
-    expect(mocks.getPanoramaPosition).toHaveBeenLastCalledWith( -90, 240_000, [1, 2, 3]
-    );
+    verify([mocks.getPanoramaPosition, 'toHaveBeenLastCalledWith', -90, 240_000, [1, 2, 3]]);
     act(() => frames.shift()(200));
-    expect(panorama.style.getPropertyValue("--panorama-x")).toBe("-12.346cqh");
-    expect(panorama.style.getPropertyValue("--panorama-y")).toBe("67.891%");
+    same([panorama.style.getPropertyValue("--panorama-x"), "-12.346cqh"], [panorama.style.getPropertyValue("--panorama-y"), "67.891%"]);
     hook.rerender({ songId: "two", playing: false });
     expect(cancelAnimationFrame).toHaveBeenCalled();
   });
-
   test("does not animate without a panorama element", () => {
     vi.stubGlobal("requestAnimationFrame", vi.fn());
     const hook = renderHook(
@@ -155,14 +117,8 @@ describe("karaoke panorama", () => {
     hook.rerender({ playing: true });
     expect(requestAnimationFrame).not.toHaveBeenCalled();
   });
-
   test("resumes panorama animation from the accumulated clock", () => {
-    const frames = [];
-    vi.stubGlobal(
-      "requestAnimationFrame",
-      vi.fn((callback) => { frames.push(callback); return frames.length; })
-    );
-    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    const frames = stubFrameQueue();
     const now = vi.spyOn(performance, "now");
     now.mockReturnValue(100);
     const hook = renderHook(
@@ -173,23 +129,15 @@ describe("karaoke panorama", () => {
     hook.result.current.panoramaRef.current = panorama;
     hook.rerender({ playing: true });
     act(() => frames.shift()(200));
-    expect(mocks.getPanoramaPosition).toHaveBeenLastCalledWith( 100, 240_000, [1, 2, 3]
-    );
+    verify([mocks.getPanoramaPosition, 'toHaveBeenLastCalledWith', 100, 240_000, [1, 2, 3]]);
     hook.rerender({ playing: false });
     now.mockReturnValue(300);
     hook.rerender({ playing: true });
     act(() => frames.at(-1)(350));
-    expect(mocks.getPanoramaPosition).toHaveBeenLastCalledWith( 150, 240_000, [1, 2, 3]
-    );
+    verify([mocks.getPanoramaPosition, 'toHaveBeenLastCalledWith', 150, 240_000, [1, 2, 3]]);
   });
-
   test("throttles frames in reduced-performance mode and refills themes", () => {
-    const frames = [];
-    vi.stubGlobal(
-      "requestAnimationFrame",
-      vi.fn((callback) => { frames.push(callback); return frames.length; })
-    );
-    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    const frames = stubFrameQueue();
     document.documentElement.dataset.performance = "reduced";
     mocks.shuffleThemes
       .mockReturnValueOnce([])
@@ -211,7 +159,14 @@ describe("karaoke panorama", () => {
     expect(mocks.getPanoramaPosition).toHaveBeenCalledTimes(1);
   });
 });
-
+const guideProps = (overrides = {}) => ({
+  notes: [{ start: 0, end: 1, midi: 60 }],
+  volume: 1,
+  keyShift: 0,
+  currentTimeRef: { current: 0 },
+  ...overrides
+});
+const renderGuide = (overrides) => renderHook(() => useMelodyGuide(guideProps(overrides)));
 function installGuideContext({ resumeError, closeError } = {}) {
   const oscillator = {
     type: "",
@@ -250,7 +205,6 @@ function installGuideContext({ resumeError, closeError } = {}) {
   };
   return { context, oscillator, gain };
 }
-
 describe("melody guide", () => {
   test("starts, updates, silences and disposes its oscillator", async () => {
     const audio = installGuideContext();
@@ -266,103 +220,66 @@ describe("melody guide", () => {
     await expect(hook.result.current.startMelodyGuide()).resolves.toBe(true);
     await expect(hook.result.current.startMelodyGuide()).resolves.toBe(true);
     expect(audio.oscillator.start).toHaveBeenCalledOnce();
-    expect(audio.context.options).toEqual({ latencyHint: "interactive" });
-    expect(audio.oscillator.type).toBe("triangle");
-    expect(audio.oscillator.frequency.setTargetAtTime).toHaveBeenCalledWith( 440, 3, 0.012
-    );
-    expect(audio.gain.gain.setTargetAtTime).toHaveBeenCalledWith( 0.3 * 0.5 ** 1.65, 3, 0.015
-    );
+    verify([audio.context.options, 'toEqual', { latencyHint: "interactive" }], [audio.oscillator.type, 'toBe', "triangle"]);
+    verify([audio.oscillator.frequency.setTargetAtTime, 'toHaveBeenCalledWith', 440, 3, 0.012]);
+    verify([audio.gain.gain.setTargetAtTime, 'toHaveBeenCalledWith', 0.3 * 0.5 ** 1.65, 3, 0.015]);
     const frequencyCalls =
       audio.oscillator.frequency.setTargetAtTime.mock.calls.length;
     act(() => hook.result.current.updateMelodyGuide(5));
-    expect(audio.oscillator.frequency.setTargetAtTime).toHaveBeenCalledTimes( frequencyCalls
-    );
-    expect(audio.gain.gain.setTargetAtTime).toHaveBeenLastCalledWith( 0.0001, 3, 0.018
-    );
+    verify([audio.oscillator.frequency.setTargetAtTime, 'toHaveBeenCalledTimes', frequencyCalls]);
+    verify([audio.gain.gain.setTargetAtTime, 'toHaveBeenLastCalledWith', 0.0001, 3, 0.018]);
     act(() => hook.result.current.silenceMelodyGuide());
-    expect(audio.gain.gain.cancelScheduledValues).toHaveBeenCalledWith(3);
-    expect(audio.gain.gain.setValueAtTime).toHaveBeenCalledWith(0.0001, 3);
+    calledWith([audio.gain.gain.cancelScheduledValues, [3]], [audio.gain.gain.setValueAtTime, [0.0001, 3]]);
     hook.unmount();
-    expect(audio.oscillator.stop).toHaveBeenCalled();
-    expect(audio.context.close).toHaveBeenCalled();
+    called(audio.oscillator.stop, audio.context.close);
   });
-
   test("rejects missing inputs and cleans a guide whose resume fails", async () => {
     installGuideContext();
     const empty = renderHook(() =>
-      useMelodyGuide({ notes: [], volume: 1, keyShift: 0, currentTimeRef: { current: 0 } })
+      useMelodyGuide(guideProps({ notes: [] }))
     );
     act(() => empty.result.current.updateMelodyGuide(0));
     act(() => empty.result.current.silenceMelodyGuide());
     expect(await empty.result.current.startMelodyGuide()).toBe(false);
     empty.unmount();
-
     for (const props of [
       { notes: null, volume: 1 },
       { notes: [{ start: 0, end: 1, midi: 60 }], volume: 0 }
     ]) {
       const invalid = renderHook(() =>
-        useMelodyGuide({ ...props, keyShift: 0, currentTimeRef: { current: 0 } })
+        useMelodyGuide(guideProps(props))
       );
       expect(await invalid.result.current.startMelodyGuide()).toBe(false);
       invalid.unmount();
     }
-
     delete globalThis.AudioContext;
-    const unavailable = renderHook(() =>
-      useMelodyGuide({
-        notes: [{ start: 0, end: 1, midi: 60 }],
-        volume: 1,
-        keyShift: 0,
-        currentTimeRef: { current: 0 }
-      })
-    );
+    const unavailable = renderGuide();
     expect(await unavailable.result.current.startMelodyGuide()).toBe(false);
     unavailable.unmount();
-
     const failure = new Error("resume failed");
     const audio = installGuideContext({
       resumeError: failure,
       closeError: new Error("already closed")
     });
-    const failed = renderHook(() =>
-      useMelodyGuide({
-        notes: [{ start: 0, end: 1, midi: 60 }],
-        volume: 1,
-        keyShift: 0,
-        currentTimeRef: { current: 0 }
-      })
-    );
+    const failed = renderGuide();
     await expect(failed.result.current.startMelodyGuide()).rejects.toThrow( "resume failed"
     );
-    expect(audio.oscillator.stop).toHaveBeenCalled();
-    expect(audio.context.close).toHaveBeenCalled();
+    called(audio.oscillator.stop, audio.context.close);
   });
-
   test("closed guides ignore updates and are recreated on start", async () => {
     const first = installGuideContext();
-    const hook = renderHook(() =>
-      useMelodyGuide({
-        notes: [{ start: 0, end: 1, midi: 60 }],
-        volume: 1,
-        keyShift: 0,
-        currentTimeRef: { current: 0 }
-      })
-    );
+    const hook = renderGuide();
     await hook.result.current.startMelodyGuide();
     first.context.state = "closed";
     const gainCalls = first.gain.gain.setTargetAtTime.mock.calls.length;
     act(() => hook.result.current.updateMelodyGuide(0));
     act(() => hook.result.current.silenceMelodyGuide());
-    expect(first.gain.gain.setTargetAtTime).toHaveBeenCalledTimes(gainCalls);
-    expect(first.gain.gain.cancelScheduledValues).not.toHaveBeenCalled();
-
+    verify([first.gain.gain.setTargetAtTime, 'toHaveBeenCalledTimes', gainCalls], [first.gain.gain.cancelScheduledValues, 'not.toHaveBeenCalled']);
     const second = installGuideContext();
     await expect(hook.result.current.startMelodyGuide()).resolves.toBe(true);
     expect(second.oscillator.start).toHaveBeenCalledOnce();
     hook.unmount();
   });
-
   test("start follows a replaced playback clock ref", async () => {
     const audio = installGuideContext();
     const hook = renderHook((props) => useMelodyGuide(props), {
@@ -373,47 +290,26 @@ describe("melody guide", () => {
         currentTimeRef: { current: 5 }
       }
     });
-    hook.rerender({
-      notes: [{ start: 0, end: 1, midi: 60 }],
-      volume: 1,
-      keyShift: 0,
-      currentTimeRef: { current: 0.5 }
-    });
+    hook.rerender(guideProps({ currentTimeRef: { current: 0.5 } }));
     await hook.result.current.startMelodyGuide();
     expect(audio.oscillator.frequency.setTargetAtTime).toHaveBeenCalled();
     hook.unmount();
   });
-
   test("ignores an asynchronous close failure during disposal", async () => {
     const audio = installGuideContext({ closeError: new Error("already closed") });
-    const hook = renderHook(() =>
-      useMelodyGuide({
-        notes: [{ start: 0, end: 1, midi: 60 }],
-        volume: 1,
-        keyShift: 0,
-        currentTimeRef: { current: 0 }
-      })
-    );
+    const hook = renderGuide();
     await hook.result.current.startMelodyGuide();
     hook.unmount();
     await act(async () => Promise.resolve());
     expect(audio.context.close).toHaveBeenCalled();
   });
-
   test("does not restore a guide disposed during a failed resume", async () => {
     let rejectResume;
     const audio = installGuideContext();
     audio.context.resume.mockReturnValueOnce(
       new Promise((_resolve, reject) => { rejectResume = reject; })
     );
-    const hook = renderHook(() =>
-      useMelodyGuide({
-        notes: [{ start: 0, end: 1, midi: 60 }],
-        volume: 1,
-        keyShift: 0,
-        currentTimeRef: { current: 0 }
-      })
-    );
+    const hook = renderGuide();
     const start = hook.result.current.startMelodyGuide();
     hook.unmount();
     rejectResume(new Error("disposed"));

@@ -1,18 +1,13 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { test } from "vitest";
-
 const read = (file) => fs.readFileSync(file, "utf8");
-
 const installer = read("../scripts/karaoke-studio.iss");
 const electronMain = read("electron/main.cjs");
 const preload = read("electron/preload.cjs");
-
 const matches = (source, patterns) => patterns.forEach((pattern) => assert.match(source, pattern));
-
 const excludes = (source, patterns) =>
   patterns.forEach((pattern) => assert.doesNotMatch(source, pattern));
-
 test("installer theme and optional-model handoff remain wired", () => {
   matches(installer, [
     /InstallModelsCheck\.Checked := True/,
@@ -44,7 +39,6 @@ test("installer theme and optional-model handoff remain wired", () => {
   matches(electronMain, [/--advoice-theme=\$\{initialTheme\}/]);
   matches(preload, [/initialTheme/]);
 });
-
 test("installer language selection drives Inno's own wizard localization", () => {
   matches(installer, [
     /^ShowLanguageDialog=yes$/m,
@@ -52,7 +46,6 @@ test("installer language selection drives Inno's own wizard localization", () =>
     /LanguageCombo\.ItemIndex := ActiveLanguageComboIndex;/
   ]);
 });
-
 test("installer window toggles native fullscreen through the trusted IPC boundary", () => {
   matches(electronMain, [
     /handleTrustedIpc\("window:toggleFullscreen"/,
@@ -60,7 +53,6 @@ test("installer window toggles native fullscreen through the trusted IPC boundar
     /"enter-full-screen"/,
     /"leave-full-screen"/
   ]);
-
   matches(preload, [
     /toggleFullscreen: \(\) => ipcRenderer\.invoke\("window:toggleFullscreen"\)/,
     /onFullscreenChange/

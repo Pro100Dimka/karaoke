@@ -1,8 +1,7 @@
 import { beforeEach, expect, test, vi } from "vitest";
-
+import { same, sameDeep, verify } from "./helpers/assertions.mjs";
 let geometry;
 let operations;
-
 beforeEach(async () => {
   vi.resetModules();
   [geometry, operations] = await Promise.all([
@@ -10,12 +9,8 @@ beforeEach(async () => {
     import("../src/pages/Library/modals/song-settings/melody-editor-operations.js")
   ]);
 });
-
 test("editor scroll geometry keeps anchors and exact viewport limits", () => {
-  expect(geometry.clampEditor(5, 0, 10)).toBe(5);
-  expect(geometry.clampEditor(-1, 0, 10)).toBe(0);
-  expect(geometry.clampEditor(11, 0, 10)).toBe(10);
-
+  same([geometry.clampEditor(5, 0, 10), 5], [geometry.clampEditor(-1, 0, 10), 0], [geometry.clampEditor(11, 0, 10), 10]);
   const horizontal = {
     time: 5,
     oldZoom: 10,
@@ -26,9 +21,7 @@ test("editor scroll geometry keeps anchors and exact viewport limits", () => {
     scrollWidth: 500
   };
   expect(geometry.anchoredHorizontalScroll(horizontal)).toBe(70);
-  expect(geometry.anchoredHorizontalScroll({ ...horizontal, time: 100 })).toBe( 400
-  );
-
+  verify([geometry.anchoredHorizontalScroll({ ...horizontal, time: 100 }), 'toBe', 400]);
   const vertical = {
     scrollTop: 50,
     clientHeight: 100,
@@ -37,15 +30,10 @@ test("editor scroll geometry keeps anchors and exact viewport limits", () => {
     rowCount: 20
   };
   expect(geometry.anchoredVerticalScroll(vertical)).toBe(150);
-  expect( geometry.anchoredVerticalScroll({ ...vertical, scrollTop: 1_000 })
-  ).toBe(300);
-
+  verify([geometry.anchoredVerticalScroll({ ...vertical, scrollTop: 1_000 }), 'toBe', 300]);
   const follow = { scrollLeft: 20, clientWidth: 100, keyboardWidth: 20, scrollWidth: 500 };
-  expect(geometry.autoFollowScrollLeft({ ...follow, playheadX: 70 })).toBe(20);
-  expect(geometry.autoFollowScrollLeft({ ...follow, playheadX: 100 })).toBe(40);
-  expect(geometry.autoFollowScrollLeft({ ...follow, playheadX: 1_000 })).toBe( 400
-  );
-
+  same([geometry.autoFollowScrollLeft({ ...follow, playheadX: 70 }), 20], [geometry.autoFollowScrollLeft({ ...follow, playheadX: 100 }), 40]);
+  verify([geometry.autoFollowScrollLeft({ ...follow, playheadX: 1_000 }), 'toBe', 400]);
   const noteAnchor = {
     noteMidi: 60,
     maxMidi: 70,
@@ -56,10 +44,8 @@ test("editor scroll geometry keeps anchors and exact viewport limits", () => {
     rowCount: 20
   };
   expect(geometry.anchoredVerticalScrollToNote(noteAnchor)).toBe(155);
-  expect( geometry.anchoredVerticalScrollToNote({ ...noteAnchor, noteMidi: -100 })
-  ).toBe(300);
+  verify([geometry.anchoredVerticalScrollToNote({ ...noteAnchor, noteMidi: -100 }), 'toBe', 300]);
 });
-
 test("marquee intersection uses half-closed geometry on every edge", () => {
   const note = { _id: "note", start: 2, end: 4, midi_note: 60 };
   const hit = (bounds, overrides = {}) =>
@@ -75,47 +61,10 @@ test("marquee intersection uses half-closed geometry on every edge", () => {
       maxMidi: 64,
       ...overrides
     });
-
-  expect(hit([31, 42, 49, 48])).toEqual(["note"]);
-  expect(hit([0, 0, 29, 100])).toEqual([]);
-  expect(hit([0, 0, 30, 100])).toEqual(["note"]);
-  expect(hit([51, 0, 100, 100])).toEqual([]);
-  expect(hit([50, 0, 100, 100])).toEqual(["note"]);
-  expect(hit([0, 0, 100, 40])).toEqual([]);
-  expect(hit([0, 0, 100, 41])).toEqual(["note"]);
-  expect(hit([0, 50, 100, 100])).toEqual([]);
-  expect(hit([0, 49, 100, 100])).toEqual(["note"]);
-  expect(hit([49, 48, 31, 42])).toEqual(["note"]);
-
-  expect(hit([30, 90, 50, 95], { rowHeight: 20 })).toEqual(["note"]);
-  expect(
-    geometry.marqueeHitIds({
-      notes: [{ _id: "zero" }],
-      x1: 0,
-      y1: 0,
-      x2: 8,
-      y2: 8,
-      keyboardWidth: 0,
-      zoom: 10,
-      rowHeight: 10,
-      maxMidi: 0
-    })
-  ).toEqual(["zero"]);
-  expect(
-    geometry.marqueeHitIds({
-      notes: null,
-      x1: 0,
-      y1: 0,
-      x2: 1,
-      y2: 1,
-      keyboardWidth: 0,
-      zoom: 1,
-      rowHeight: 10,
-      maxMidi: 0
-    })
-  ).toEqual([]);
+  sameDeep([hit([31, 42, 49, 48]), ["note"]], [hit([0, 0, 29, 100]), []], [hit([0, 0, 30, 100]), ["note"]], [hit([51, 0, 100, 100]), []], [hit([50, 0, 100, 100]), ["note"]], [hit([0, 0, 100, 40]), []], [hit([0, 0, 100, 41]), ["note"]], [hit([0, 50, 100, 100]), []], [hit([0, 49, 100, 100]), ["note"]], [hit([49, 48, 31, 42]), ["note"]], [hit([30, 90, 50, 95], { rowHeight: 20 }), ["note"]]);
+  verify([geometry.marqueeHitIds({ notes: [{ _id: "zero" }], x1: 0, y1: 0, x2: 8, y2: 8, keyboardWidth: 0, zoom: 10, rowHeight: 10, maxMidi: 0 }), 'toEqual', ["zero"]]);
+  verify([geometry.marqueeHitIds({ notes: null, x1: 0, y1: 0, x2: 1, y2: 1, keyboardWidth: 0, zoom: 1, rowHeight: 10, maxMidi: 0 }), 'toEqual', []]);
 });
-
 const editorNote = (id, start, end, overrides = {}) => ({
   _id: id,
   start,
@@ -124,43 +73,17 @@ const editorNote = (id, start, end, overrides = {}) => ({
   syllable_index: Number.NaN,
   ...overrides
 });
-
 test("editor note labels use exact ownership and edited-text precedence", () => {
   const syllables = new Map([
     [0, { text: "first", word_index: 3 }],
     [1, { text: "second", word_index: 4 }]
   ]);
-  expect(
-    operations.displayTextForNote(
-      { _id: "a", editor_text: "edited", syllable_index: 0 },
-      syllables,
-      new Map()
-    )
-  ).toBe("edited");
-  expect(
-    operations.displayTextForNote(
-      { _id: "a", editor_text: "", syllable_index: 0 },
-      syllables,
-      new Map([[0, "a"]])
-    )
-  ).toBe("first");
-  expect(
-    operations.displayTextForNote(
-      { _id: "a", syllable_index: 0 },
-      syllables,
-      new Map([[0, "other"]])
-    )
-  ).toBe("");
-  expect(
-    operations.displayTextForNote( { _id: "a", syllable_index: "invalid" }, syllables, new Map()
-    )
-  ).toBe("");
-  expect(
-    operations.displayTextForNote( { _id: "a", syllable_index: 9 }, syllables, new Map([[9, "a"]])
-    )
-  ).toBe("");
+  verify([operations.displayTextForNote( { _id: "a", editor_text: "edited", syllable_index: 0 }, syllables, new Map() ), 'toBe', "edited"]);
+  verify([operations.displayTextForNote( { _id: "a", editor_text: "", syllable_index: 0 }, syllables, new Map([[0, "a"]]) ), 'toBe', "first"]);
+  verify([operations.displayTextForNote( { _id: "a", syllable_index: 0 }, syllables, new Map([[0, "other"]]) ), 'toBe', ""]);
+  verify([operations.displayTextForNote( { _id: "a", syllable_index: "invalid" }, syllables, new Map() ), 'toBe', ""]);
+  verify([operations.displayTextForNote( { _id: "a", syllable_index: 9 }, syllables, new Map([[9, "a"]]) ), 'toBe', ""]);
 });
-
 const canonicalSyllables = () => [
   { index: 0, word_index: 0, text: "Я", start: 3.888836, end: 3.908882 },
   { index: 1, word_index: 1, text: "не", start: 4.069246, end: 4.129383 },
@@ -173,12 +96,9 @@ const canonicalSyllables = () => [
   { index: 8, word_index: 5, text: "люб", start: 4.790886, end: 4.815255 },
   { index: 9, word_index: 5, text: "ви", start: 4.815255, end: 4.83475 }
 ];
-
 test("canonical lyric projection preserves exact phrase order and timestamps", () => {
-  expect(operations.canonicalLyricProjection(canonicalSyllables())).toEqual( canonicalSyllables()
-  );
+  verify([operations.canonicalLyricProjection(canonicalSyllables()), 'toEqual', canonicalSyllables()]);
 });
-
 test.each([0, 1, 4, 40])(
   "canonical lyric projection is independent from %i musical notes",
   (noteCount) => {
@@ -193,19 +113,9 @@ test.each([0, 1, 4, 40])(
     expect(after).toEqual(before);
   }
 );
-
 test("canonical projection rejects invalid display data without reordering lyrics", () => {
-  expect(
-    operations
-      .canonicalLyricProjection([
-        ...canonicalSyllables(),
-        { index: 10, text: "", start: 5, end: 6 },
-        { index: 11, text: "bad", start: 6, end: 6 }
-      ])
-      .map(({ text }) => text)
-  ).toEqual(["Я", "не", "хо", "чу", "ку", "рить", "пос", "ле", "люб", "ви"]);
+  verify([operations .canonicalLyricProjection([ ...canonicalSyllables(), { index: 10, text: "", start: 5, end: 6 }, { index: 11, text: "bad", start: 6, end: 6 } ]) .map(({ text }) => text), 'toEqual', ["Я", "не", "хо", "чу", "ку", "рить", "пос", "ле", "люб", "ви"]]);
 });
-
 test("editor note labels expand ordered many-to-many syllable associations", () => {
   const syllables = new Map([
     [2, { text: "ши", word_index: 1 }],
@@ -227,13 +137,10 @@ test("editor note labels expand ordered many-to-many syllable associations", () 
   const musicalFields = [note.start, note.end, note.midi_note];
   const owners = new Map( note.syllable_indices.map((index) => [index, note._id])
   );
-
   expect(operations.syllableIndicesForNote(note)).toEqual([ 2, 3, 4, 5, 6, 7, 8 ]);
-  expect(operations.displayTextForNote(note, syllables, owners)).toBe( "широкий город магис"
-  );
+  verify([operations.displayTextForNote(note, syllables, owners), 'toBe', "широкий город магис"]);
   expect([note.start, note.end, note.midi_note]).toEqual(musicalFields);
 });
-
 test("merging notes preserves timing, pitch, sources, ordering and text", () => {
   const notes = [
     editorNote("right", 3, 5, {
@@ -252,22 +159,11 @@ test("merging notes preserves timing, pitch, sources, ordering and text", () => 
   ];
   const result = operations.mergeSelectedNotes( notes, ["right", "left"], new Map()
   );
-  expect(result.selectedId).toBe("left");
-  expect(result.notes.map(({ _id }) => _id)).toEqual(["keep", "left"]);
-  expect(result.notes[1]).toMatchObject({
-    start: 1,
-    end: 5,
-    midi_note: 62,
-    editor_text: "hello",
-    syllable_indices: [1, 2, 3]
-  });
-
+  verify([result.selectedId, 'toBe', "left"], [result.notes.map(({ _id }) => _id), 'toEqual', ["keep", "left"]]);
+  verify([result.notes[1], 'toMatchObject', { start: 1, end: 5, midi_note: 62, editor_text: "hello", syllable_indices: [1, 2, 3] }]);
   const unchanged = operations.mergeSelectedNotes(notes, ["keep"], new Map());
-  expect(unchanged).toEqual({ notes, selectedId: "keep" });
-  expect(unchanged.notes).toBe(notes);
-  expect(operations.mergeSelectedNotes(notes, [], new Map())).toEqual({ notes, selectedId: null });
+  verify([unchanged, 'toEqual', { notes, selectedId: "keep" }], [unchanged.notes, 'toBe', notes], [operations.mergeSelectedNotes(notes, [], new Map()), 'toEqual', { notes, selectedId: null }]);
 });
-
 test.each([
   ["", "right", 1, 1, "right"],
   ["left", "", 1, 2, "left"],
@@ -283,11 +179,9 @@ test.each([
       editorNote("left", 0, 1, { editor_text: leftText, word_index: leftWord }),
       editorNote("right", 1, 2, { editor_text: rightText, word_index: rightWord })
     ];
-    expect( operations.mergeSelectedNotes(notes, ["left", "right"], new Map()) .notes[0].editor_text
-    ).toBe(expected);
+    verify([operations.mergeSelectedNotes(notes, ["left", "right"], new Map()) .notes[0].editor_text, 'toBe', expected]);
   }
 );
-
 test("word and syllable fallbacks participate in note merging", () => {
   const syllables = new Map([
     [0, { text: "one", word_index: 7 }],
@@ -299,37 +193,16 @@ test("word and syllable fallbacks participate in note merging", () => {
     editorNote("b", 1, 2, { syllable_index: 1, word_index: null }),
     editorNote("c", 2, 3, { syllable_index: 2, word_index: undefined })
   ];
-  expect( operations.mergeSelectedNotes(notes, ["a", "b"], syllables).notes[0] .editor_text
-  ).toBe("onet");
-  expect( operations.mergeSelectedNotes(notes, ["a", "b"], syllables).notes[0] .syllable_indices
-  ).toEqual([0, 1]);
-  expect(
-    operations
-      .mergeSelectedNotes(notes, ["b", "c"], syllables)
-      .notes.find(({ _id }) => _id === "b").editor_text
-  ).toBe("net two");
-
+  verify([operations.mergeSelectedNotes(notes, ["a", "b"], syllables).notes[0] .editor_text, 'toBe', "onet"]);
+  verify([operations.mergeSelectedNotes(notes, ["a", "b"], syllables).notes[0] .syllable_indices, 'toEqual', [0, 1]]);
+  verify([operations .mergeSelectedNotes(notes, ["b", "c"], syllables) .notes.find(({ _id }) => _id === "b").editor_text, 'toBe', "net two"]);
   const explicitWord = [
     editorNote("fallback", 0, 1, { syllable_index: 0, word_index: "" }),
     editorNote("explicit", 1, 2, { editor_text: "net", word_index: 7 })
   ];
-  expect(
-    operations.mergeSelectedNotes( explicitWord, ["fallback", "explicit"], syllables
-    ).notes[0].editor_text
-  ).toBe("onet");
-
-  expect(
-    operations.mergeSelectedNotes(
-      [
-        editorNote("missing", 0, 1, { syllable_index: 99 }),
-        editorNote("text", 1, 2, { editor_text: "text", word_index: 1 })
-      ],
-      ["missing", "text"],
-      syllables
-    ).notes[0].editor_text
-  ).toBe("text");
+  verify([operations.mergeSelectedNotes( explicitWord, ["fallback", "explicit"], syllables ).notes[0].editor_text, 'toBe', "onet"]);
+  verify([operations.mergeSelectedNotes( [ editorNote("missing", 0, 1, { syllable_index: 99 }), editorNote("text", 1, 2, { editor_text: "text", word_index: 1 }) ], ["missing", "text"], syllables ).notes[0].editor_text, 'toBe', "text"]);
 });
-
 test("merging equal-time notes uses end, pitch and source tie breakers", () => {
   const result = operations.mergeSelectedNotes(
     [
@@ -351,30 +224,22 @@ test("merging equal-time notes uses end, pitch and source tie breakers", () => {
     ["long", "short"],
     new Map()
   );
-  expect(result.selectedId).toBe("short");
-  expect(result.notes.map(({ _id }) => _id)).toEqual([ "outside-low", "short", "outside-high" ]);
+  verify([result.selectedId, 'toBe', "short"], [result.notes.map(({ _id }) => _id), 'toEqual', [ "outside-low", "short", "outside-high" ]]);
   expect(result.notes[1]).toMatchObject({ editor_text: "a b", syllable_indices: [1, 2, 3, 4] });
 });
-
 test("unknown word ownership never glues unrelated note labels", () => {
   const unknown = [
     editorNote("a", 0, 1, { editor_text: "a", word_index: null }),
     editorNote("b", 1, 2, { editor_text: "b", word_index: null })
   ];
-  expect( operations.mergeSelectedNotes(unknown, ["a", "b"], new Map()).notes[0] .editor_text
-  ).toBe("a b");
-
+  verify([operations.mergeSelectedNotes(unknown, ["a", "b"], new Map()).notes[0] .editor_text, 'toBe', "a b"]);
   const interrupted = [
     editorNote("a", 0, 1, { editor_text: "a", word_index: 1 }),
     editorNote("unknown", 1, 2, { editor_text: "?", word_index: null }),
     editorNote("b", 2, 3, { editor_text: "b", word_index: 1 })
   ];
-  expect(
-    operations.mergeSelectedNotes(interrupted, ["a", "unknown", "b"], new Map())
-      .notes[0].editor_text
-  ).toBe("a ?b");
+  verify([operations.mergeSelectedNotes(interrupted, ["a", "unknown", "b"], new Map()) .notes[0].editor_text, 'toBe', "a ?b"]);
 });
-
 test("deleting notes transfers text and source ownership to the nearest note", () => {
   const notes = [
     editorNote("right", 3, 4, { editor_text: "right", word_index: 2, syllable_indices: [3] }),
@@ -391,7 +256,6 @@ test("deleting notes transfers text and source ownership to the nearest note", (
   expect(result.map(({ _id }) => _id)).toEqual(["left", "right"]);
   expect(result[0]).toMatchObject({ editor_text: "left gone", syllable_indices: [0, 1, 2] });
   expect(result[1].editor_text).toBe("right");
-
   const before = operations.deleteNotesAndTransferText(
     [
       editorNote("gone", 0, 1, { editor_text: "pre", word_index: 4, syllable_indices: [0] }),
@@ -401,7 +265,6 @@ test("deleting notes transfers text and source ownership to the nearest note", (
     new Map()
   );
   expect(before[0]).toMatchObject({ editor_text: "prefix", syllable_indices: [0, 1] });
-
   const centered = operations.deleteNotesAndTransferText(
     [
       editorNote("target", 0, 4, { editor_text: "target", word_index: 2 }),
@@ -412,7 +275,6 @@ test("deleting notes transfers text and source ownership to the nearest note", (
   );
   expect(centered[0].editor_text).toBe("gone target");
 });
-
 test("deletion chooses the nearest note, breaks ties left and sorts results", () => {
   const result = operations.deleteNotesAndTransferText(
     [
@@ -426,10 +288,8 @@ test("deletion chooses the nearest note, breaks ties left and sorts results", ()
     new Map()
   );
   expect(result.map(({ _id }) => _id)).toEqual([ "left-low", "left-high", "right", "far" ]);
-  expect(result.find(({ _id }) => _id === "left-high").editor_text).toBe( "left gone"
-  );
+  verify([result.find(({ _id }) => _id === "left-high").editor_text, 'toBe', "left gone"]);
   expect(result.find(({ _id }) => _id === "far").editor_text).toBe("far");
-
   const chronological = operations.deleteNotesAndTransferText(
     [
       editorNote("late", 2, 3, { editor_text: "late", word_index: 2 }),
@@ -440,7 +300,6 @@ test("deletion chooses the nearest note, breaks ties left and sorts results", ()
     new Map()
   );
   expect(chronological[0].editor_text).toBe("early late target");
-
   const rightIsNearer = operations.deleteNotesAndTransferText(
     [
       editorNote("left", 0, 0.5, { editor_text: "left" }),
@@ -450,11 +309,8 @@ test("deletion chooses the nearest note, breaks ties left and sorts results", ()
     ["gone"],
     new Map()
   );
-  expect(rightIsNearer.find(({ _id }) => _id === "right").editor_text).toBe( "gone right"
-  );
-  expect(rightIsNearer.find(({ _id }) => _id === "left").editor_text).toBe( "left"
-  );
-
+  verify([rightIsNearer.find(({ _id }) => _id === "right").editor_text, 'toBe', "gone right"]);
+  verify([rightIsNearer.find(({ _id }) => _id === "left").editor_text, 'toBe', "left"]);
   const firstIsNearer = operations.deleteNotesAndTransferText(
     [
       editorNote("gone", 0, 0.5, { editor_text: "gone" }),
@@ -464,23 +320,17 @@ test("deletion chooses the nearest note, breaks ties left and sorts results", ()
     ["gone"],
     new Map()
   );
-  expect(firstIsNearer.find(({ _id }) => _id === "near").editor_text).toBe( "gone near"
-  );
+  verify([firstIsNearer.find(({ _id }) => _id === "near").editor_text, 'toBe', "gone near"]);
 });
-
 test("deleting empty, absent or all notes has an exact immutable result", () => {
   const a = editorNote("a", 0, 1);
   const b = editorNote("b", 1, 2, { editor_text: "b" });
   const untouched = operations.deleteNotesAndTransferText( [a, b], [], new Map()
   );
-  expect(untouched).toEqual([a, b]);
-  expect(untouched[0]).not.toBe(a);
-  expect( operations.deleteNotesAndTransferText([a, b], ["a"], new Map())
-  ).toEqual([b]);
-  expect( operations.deleteNotesAndTransferText([a, b], ["a", "b"], new Map())
-  ).toEqual([]);
+  verify([untouched, 'toEqual', [a, b]], [untouched[0], 'not.toBe', a]);
+  verify([operations.deleteNotesAndTransferText([a, b], ["a"], new Map()), 'toEqual', [b]]);
+  verify([operations.deleteNotesAndTransferText([a, b], ["a", "b"], new Map()), 'toEqual', []]);
 });
-
 test("adjacent selection follows the canonical note ordering", () => {
   const notes = [
     editorNote("late", 2, 3, { midi_note: 60 }),
@@ -489,19 +339,8 @@ test("adjacent selection follows the canonical note ordering", () => {
     editorNote("low", 0, 1, { midi_note: 60 })
   ];
   expect(operations.adjacentNoteId([], [], 1)).toBeNull();
-  expect(operations.adjacentNoteId(notes, [], 1)).toBe("low");
-  expect(operations.adjacentNoteId(notes, [], -1)).toBe("late");
-  expect(operations.adjacentNoteId(notes, ["low"], 1)).toBe("high");
-  expect(operations.adjacentNoteId(notes, ["late"], 1)).toBe("late");
-  expect(operations.adjacentNoteId(notes, ["late"], -1)).toBe("long");
-  expect(operations.adjacentNoteId(notes, ["low"], -1)).toBe("low");
-  expect(operations.adjacentNoteId(notes, ["high", "long"], -1)).toBe("high");
-  expect(operations.adjacentNoteId(notes, ["high", "long"], 1)).toBe("long");
-  expect(operations.adjacentNoteId(notes, [], 0)).toBe("late");
-  expect(operations.adjacentNoteId(notes, ["high"], 0)).toBe("low");
-  expect(operations.adjacentNoteId(notes, ["high", "long"], 0)).toBe("high");
+  same([operations.adjacentNoteId(notes, [], 1), "low"], [operations.adjacentNoteId(notes, [], -1), "late"], [operations.adjacentNoteId(notes, ["low"], 1), "high"], [operations.adjacentNoteId(notes, ["late"], 1), "late"], [operations.adjacentNoteId(notes, ["late"], -1), "long"], [operations.adjacentNoteId(notes, ["low"], -1), "low"], [operations.adjacentNoteId(notes, ["high", "long"], -1), "high"], [operations.adjacentNoteId(notes, ["high", "long"], 1), "long"], [operations.adjacentNoteId(notes, [], 0), "late"], [operations.adjacentNoteId(notes, ["high"], 0), "low"], [operations.adjacentNoteId(notes, ["high", "long"], 0), "high"]);
 });
-
 test("moving notes is clamped by duration and neighboring notes", () => {
   const notes = [
     editorNote("before", 0, 1),
@@ -510,46 +349,14 @@ test("moving notes is clamped by duration and neighboring notes", () => {
     editorNote("after", 4, 5)
   ];
   expect(operations.constrainedMoveDelta(notes, [], 1, 10)).toBe(0);
-  expect( operations.constrainedMoveDelta(notes, ["moving-a", "moving-b"], -5, 10)
-  ).toBe(0);
-  expect( operations.constrainedMoveDelta(notes, ["moving-a", "moving-b"], 5, 10)
-  ).toBe(0);
-  expect(
-    operations.constrainedMoveDelta(
-      notes.filter(({ _id }) => _id !== "after"),
-      ["moving-a", "moving-b"],
-      20,
-      6
-    )
-  ).toBe(2);
-  expect(
-    operations.constrainedMoveDelta(
-      notes.filter(({ _id }) => _id !== "before"),
-      ["moving-a", "moving-b"],
-      -20,
-      10
-    )
-  ).toBe(-1);
-
+  verify([operations.constrainedMoveDelta(notes, ["moving-a", "moving-b"], -5, 10), 'toBe', 0]);
+  verify([operations.constrainedMoveDelta(notes, ["moving-a", "moving-b"], 5, 10), 'toBe', 0]);
+  verify([operations.constrainedMoveDelta( notes.filter(({ _id }) => _id !== "after"), ["moving-a", "moving-b"], 20, 6 ), 'toBe', 2]);
+  verify([operations.constrainedMoveDelta( notes.filter(({ _id }) => _id !== "before"), ["moving-a", "moving-b"], -20, 10 ), 'toBe', -1]);
   const epsilon = 1e-9;
-  expect(
-    operations.constrainedMoveDelta(
-      [editorNote("before", 0, 1 + epsilon), editorNote("moving", 1, 2)],
-      ["moving"],
-      -1,
-      10
-    )
-  ).toBeCloseTo(epsilon, 15);
-  expect(
-    operations.constrainedMoveDelta(
-      [editorNote("moving", 1, 2), editorNote("after", 2 - epsilon, 3)],
-      ["moving"],
-      1,
-      10
-    )
-  ).toBeCloseTo(-epsilon, 15);
+  verify([operations.constrainedMoveDelta( [editorNote("before", 0, 1 + epsilon), editorNote("moving", 1, 2)], ["moving"], -1, 10 ), 'toBeCloseTo', epsilon, 15]);
+  verify([operations.constrainedMoveDelta( [editorNote("moving", 1, 2), editorNote("after", 2 - epsilon, 3)], ["moving"], 1, 10 ), 'toBeCloseTo', -epsilon, 15]);
 });
-
 test("resize bounds stop exactly at neighboring notes", () => {
   const notes = [
     editorNote("before", 0, 1),
@@ -557,19 +364,8 @@ test("resize bounds stop exactly at neighboring notes", () => {
     editorNote("after", 3, 4)
   ];
   expect(operations.resizeBounds(notes, "missing", 10)).toBeNull();
-  expect(operations.resizeBounds(notes, "current", 10)).toEqual({
-    minStart: 1,
-    maxStart: 2.97,
-    minEnd: 1.03,
-    maxEnd: 3
-  });
-  expect(operations.resizeBounds([notes[1]], "current", 8, 0.5)).toEqual({
-    minStart: 0,
-    maxStart: 2.5,
-    minEnd: 1.5,
-    maxEnd: 8
-  });
-
+  verify([operations.resizeBounds(notes, "current", 10), 'toEqual', { minStart: 1, maxStart: 2.97, minEnd: 1.03, maxEnd: 3 }]);
+  verify([operations.resizeBounds([notes[1]], "current", 8, 0.5), 'toEqual', { minStart: 0, maxStart: 2.5, minEnd: 1.5, maxEnd: 8 }]);
   const epsilon = 1e-9;
   const nearBounds = operations.resizeBounds(
     [
@@ -580,6 +376,5 @@ test("resize bounds stop exactly at neighboring notes", () => {
     "current",
     10
   );
-  expect(nearBounds.minStart).toBeCloseTo(1 + epsilon, 15);
-  expect(nearBounds.maxEnd).toBeCloseTo(3 - epsilon, 15);
+  verify([nearBounds.minStart, 'toBeCloseTo', 1 + epsilon, 15], [nearBounds.maxEnd, 'toBeCloseTo', 3 - epsilon, 15]);
 });

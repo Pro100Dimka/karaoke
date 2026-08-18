@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test, vi } from "vitest";
-
+import { equal, deepEqual } from "./helpers/assertions.mjs";
 test("mock fixtures preserve the complete development data contract", async () => {
   vi.resetModules();
   const {
@@ -11,101 +11,9 @@ test("mock fixtures preserve the complete development data contract", async () =
     mockSongEditor,
     mockSongs
   } = await import("../src/api/mock/fixtures.js");
-  assert.equal(MOCK_SONG_ID, "mock-song-1");
-  assert.deepEqual(mockSongs, [
-    {
-      id: "mock-song-1",
-      title: "Тестовая песня",
-      artist: "A&D Voice",
-      genre: "Pop",
-      status: "done",
-      progress_percent: 100,
-      duration_sec: 185,
-      key: "C",
-      tempo: 120,
-      video_url: ""
-    },
-    {
-      id: "mock-song-processing",
-      title: "Песня в обработке",
-      artist: "Demo",
-      status: "processing",
-      progress_percent: 48,
-      progress_step: "Разделение дорожек"
-    }
-  ]);
-  assert.deepEqual(mockKaraokeResult, {
-    lyrics_sync: [
-      {
-        start: 0,
-        end: 5,
-        text: "Добро пожаловать в A&D Voice",
-        words: [
-          { text: "Добро", start: 0, end: 1 },
-          { text: "пожаловать", start: 1, end: 2.4 },
-          { text: "в", start: 2.4, end: 2.7 },
-          { text: "Karaoke", start: 2.7, end: 3.8 },
-          { text: "Studio", start: 3.8, end: 5 }
-        ]
-      },
-      { start: 5, end: 10, text: "Интерфейс работает без backend", words: [] }
-    ],
-    reference_notes: [
-      { start: 0.5, end: 1.2, midi: 60 },
-      { start: 1.3, end: 2.1, midi: 62 },
-      { start: 2.2, end: 3.2, midi: 64 },
-      { start: 3.3, end: 4.5, midi: 67 }
-    ]
-  });
-  assert.deepEqual(mockSongEditor, {
-    ai_backup_exists: true,
-    song_map: {
-      duration: 10,
-      syllables: [
-        { index: 0, text: "A&D", word_index: 0 },
-        { index: 1, text: "Voice", word_index: 1 }
-      ],
-      notes: [
-        {
-          _id: "mock-note-1",
-          start: 0.5,
-          end: 1.5,
-          midi_note: 60,
-          velocity: 96,
-          syllable_index: 0,
-          word_index: 0
-        },
-        {
-          _id: "mock-note-2",
-          start: 1.5,
-          end: 2.5,
-          midi_note: 64,
-          velocity: 96,
-          syllable_index: 1,
-          word_index: 1
-        }
-      ]
-    }
-  });
-  assert.deepEqual(mockAppSettings, {
-    online_name: "Тестовый пользователь",
-    theme: "dark",
-    accent: "purple",
-    density: "comfortable",
-    animations: true
-  });
-  assert.deepEqual(mockAudioSettings, {
-    volume: 1,
-    reverb: 0,
-    echo: 0,
-    delay: 0,
-    audio_driver: "auto",
-    asio_driver_name: "",
-    buffer_size: 64,
-    monitoring_enabled: false
-  });
+  equal([MOCK_SONG_ID, "mock-song-1"]);
+  deepEqual([mockSongs, [ { id: "mock-song-1", title: "Тестовая песня", artist: "A&D Voice", genre: "Pop", status: "done", progress_percent: 100, duration_sec: 185, key: "C", tempo: 120, video_url: "" }, { id: "mock-song-processing", title: "Песня в обработке", artist: "Demo", status: "processing", progress_percent: 48, progress_step: "Разделение дорожек" } ]], [mockKaraokeResult, { lyrics_sync: [ { start: 0, end: 5, text: "Добро пожаловать в A&D Voice", words: [ { text: "Добро", start: 0, end: 1 }, { text: "пожаловать", start: 1, end: 2.4 }, { text: "в", start: 2.4, end: 2.7 }, { text: "Karaoke", start: 2.7, end: 3.8 }, { text: "Studio", start: 3.8, end: 5 } ] }, { start: 5, end: 10, text: "Интерфейс работает без backend", words: [] } ], reference_notes: [ { start: 0.5, end: 1.2, midi: 60 }, { start: 1.3, end: 2.1, midi: 62 }, { start: 2.2, end: 3.2, midi: 64 }, { start: 3.3, end: 4.5, midi: 67 } ] }], [mockSongEditor, { ai_backup_exists: true, song_map: { duration: 10, syllables: [ { index: 0, text: "A&D", word_index: 0 }, { index: 1, text: "Voice", word_index: 1 } ], notes: [ { _id: "mock-note-1", start: 0.5, end: 1.5, midi_note: 60, velocity: 96, syllable_index: 0, word_index: 0 }, { _id: "mock-note-2", start: 1.5, end: 2.5, midi_note: 64, velocity: 96, syllable_index: 1, word_index: 1 } ] } }], [mockAppSettings, { online_name: "Тестовый пользователь", theme: "dark", accent: "purple", density: "comfortable", animations: true }], [mockAudioSettings, { volume: 1, reverb: 0, echo: 0, delay: 0, audio_driver: "auto", asio_driver_name: "", buffer_size: 64, monitoring_enabled: false }]);
 });
-
 test("mock API implements the complete development contract", async () => {
   vi.resetModules();
   const [{ api }, { MOCK_SONG_ID, mockSongs }, requestModule] =
@@ -117,204 +25,58 @@ test("mock API implements the complete development contract", async () => {
   const { mockBlobRequest, mockRequest } = requestModule;
   const rejectsRoute = (path, options) =>
     assert.rejects(mockRequest(path, options), /not implemented/);
-  assert.deepEqual(await mockRequest("/recording/library"), []);
+  deepEqual([await mockRequest("/recording/library"), []]);
   const originalSongs = await mockRequest("/songs");
-  assert.deepEqual(originalSongs, mockSongs);
+  deepEqual([originalSongs, mockSongs]);
   originalSongs[0].title = "mutated outside store";
-  assert.equal((await mockRequest("/songs"))[0].title, "Тестовая песня");
+  equal([(await mockRequest("/songs"))[0].title, "Тестовая песня"]);
   const added = await mockRequest("/songs", { method: "post" });
-  assert.deepEqual(added, {
-    id: "mock-song-3",
-    title: "Новая песня",
-    status: "processing",
-    progress_percent: 0
-  });
-  assert.equal((await mockRequest(`/songs/${added.id}`)).id, added.id);
-  assert.equal(
-    (
-      await mockRequest(`/songs/${added.id}`, { method: "PATCH", body: '{"title":"Changed"}' })
-    ).title,
-    "Changed"
-  );
-  assert.equal(
-    (
-      await mockRequest(`/songs/${added.id}`, { method: "PATCH", body: "broken" })
-    ).title,
-    "Changed"
-  );
-  assert.equal(
-    await mockRequest(`/songs/${added.id}`, { method: "DELETE" }),
-    null
-  );
-  assert.equal( (await mockRequest("/songs")).some((song) => song.id === added.id), false
-  );
-  assert.equal(await mockRequest("/songs/missing"), null);
-  assert.equal(await mockRequest("/songs/missing", { method: "DELETE" }), null);
+  deepEqual([added, { id: "mock-song-3", title: "Новая песня", status: "processing", progress_percent: 0 }]);
+  equal([(await mockRequest(`/songs/${added.id}`)).id, added.id], [( await mockRequest(`/songs/${added.id}`, { method: "PATCH", body: '{"title":"Changed"}' }) ).title, "Changed"], [( await mockRequest(`/songs/${added.id}`, { method: "PATCH", body: "broken" }) ).title, "Changed"], [await mockRequest(`/songs/${added.id}`, { method: "DELETE" }), null], [(await mockRequest("/songs")).some((song) => song.id === added.id), false], [await mockRequest("/songs/missing"), null], [await mockRequest("/songs/missing", { method: "DELETE" }), null]);
   await assert.rejects(
     mockRequest("/songs/missing", { method: "PUT" }),
     /Mock API route is not implemented/
   );
-  assert.deepEqual(
-    await mockRequest("/songs/package/import", { method: "POST" }),
-    { imported: true }
-  );
+  deepEqual([await mockRequest("/songs/package/import", { method: "POST" }), { imported: true }]);
   assert.ok((await mockRequest(`/songs/${MOCK_SONG_ID}/result`)).lyrics_sync);
   const editorPath = `/songs/${MOCK_SONG_ID}/editor`;
-  assert.equal((await mockRequest(editorPath)).song_map.notes.length, 2);
-  assert.equal( (await mockRequest("/songs/unknown/editor")).song_map.notes.length, 2
-  );
-  assert.deepEqual(
-    await mockRequest(editorPath, { method: "PUT", body: '{"notes":[{"_id":"edited"}]}' }),
-    {
-      ai_backup_exists: true,
-      song_map: {
-        duration: 10,
-        syllables: [
-          { index: 0, text: "A&D", word_index: 0 },
-          { index: 1, text: "Voice", word_index: 1 }
-        ],
-        notes: [{ _id: "edited" }]
-      }
-    }
-  );
-  assert.deepEqual(
-    (
-      await mockRequest("/songs/new/editor", { method: "PUT", body: "{}" })
-    ).song_map.notes,
-    []
-  );
-  assert.deepEqual(
-    (
-      await mockRequest("/songs/new/editor", { method: "PUT", body: "broken" })
-    ).song_map.notes,
-    []
-  );
-  assert.equal(
-    (
-      await mockRequest(`/songs/${MOCK_SONG_ID}/editor/reset`, { method: "POST" })
-    ).song_map.notes.length,
-    2
-  );
-  assert.equal(
-    (await mockRequest(`/songs/${MOCK_SONG_ID}/status`)).id,
-    MOCK_SONG_ID
-  );
+  equal([(await mockRequest(editorPath)).song_map.notes.length, 2], [(await mockRequest("/songs/unknown/editor")).song_map.notes.length, 2]);
+  deepEqual([await mockRequest(editorPath, { method: "PUT", body: '{"notes":[{"_id":"edited"}]}' }), { ai_backup_exists: true, song_map: { duration: 10, syllables: [ { index: 0, text: "A&D", word_index: 0 }, { index: 1, text: "Voice", word_index: 1 } ], notes: [{ _id: "edited" }] } }], [( await mockRequest("/songs/new/editor", { method: "PUT", body: "{}" }) ).song_map.notes, []], [( await mockRequest("/songs/new/editor", { method: "PUT", body: "broken" }) ).song_map.notes, []]);
+  equal([( await mockRequest(`/songs/${MOCK_SONG_ID}/editor/reset`, { method: "POST" }) ).song_map.notes.length, 2], [(await mockRequest(`/songs/${MOCK_SONG_ID}/status`)).id, MOCK_SONG_ID]);
   for (const action of ["process", "reprocess", "cancel"])
-    assert.deepEqual(await mockRequest(`/songs/${MOCK_SONG_ID}/${action}`), { ok: true });
-  assert.deepEqual(await mockRequest(`/songs/${MOCK_SONG_ID}/lyrics`), { ok: true });
-  assert.deepEqual(await mockRequest(`/songs/${MOCK_SONG_ID}/log`), [ "Mock pipeline ready" ]);
-
+    deepEqual([await mockRequest(`/songs/${MOCK_SONG_ID}/${action}`), { ok: true }]);
+  deepEqual([await mockRequest(`/songs/${MOCK_SONG_ID}/lyrics`), { ok: true }], [await mockRequest(`/songs/${MOCK_SONG_ID}/log`), [ "Mock pipeline ready" ]]);
   const settings = await mockRequest("/settings");
-  assert.deepEqual(settings, {
-    online_name: "Тестовый пользователь",
-    theme: "dark",
-    accent: "purple",
-    density: "comfortable",
-    animations: true
-  });
+  deepEqual([settings, { online_name: "Тестовый пользователь", theme: "dark", accent: "purple", density: "comfortable", animations: true }]);
   settings.theme = "external mutation";
-  assert.equal((await mockRequest("/settings")).theme, "dark");
-  assert.equal(
-    (
-      await mockRequest("/settings", { method: "PATCH", body: '{"accent":"red"}' })
-    ).accent,
-    "red"
-  );
-  assert.deepEqual(await mockRequest("/audio/settings"), {
-    volume: 1,
-    reverb: 0,
-    echo: 0,
-    delay: 0,
-    audio_driver: "auto",
-    asio_driver_name: "",
-    buffer_size: 64,
-    monitoring_enabled: false
-  });
-  assert.equal(
-    (
-      await mockRequest("/audio/settings", { method: "POST", body: '{"buffer_size":128}' })
-    ).buffer_size,
-    128
-  );
+  equal([(await mockRequest("/settings")).theme, "dark"], [( await mockRequest("/settings", { method: "PATCH", body: '{"accent":"red"}' }) ).accent, "red"]);
+  deepEqual([await mockRequest("/audio/settings"), { volume: 1, reverb: 0, echo: 0, delay: 0, audio_driver: "auto", asio_driver_name: "", buffer_size: 64, monitoring_enabled: false }]);
+  equal([( await mockRequest("/audio/settings", { method: "POST", body: '{"buffer_size":128}' }) ).buffer_size, 128]);
   for (const path of [ "/audio/devices", "/audio/output-devices", "/audio/asio-drivers" ])
-    assert.deepEqual(await mockRequest(path), []);
-  assert.equal((await mockRequest("/audio/signal-quality")).rms_dbfs, -42);
-  assert.deepEqual(await mockRequest("/audio/direct-monitor/start"), { ok: true });
-
-  assert.equal( (await mockRequest("/recording/start")).recording_session_id, "mock-session-1"
-  );
-  assert.deepEqual(await mockRequest("/recording/pause?session_id=x"), { ok: true });
-  assert.deepEqual(await mockRequest("/recording/resume?session_id=x"), { ok: true });
+    deepEqual([await mockRequest(path), []]);
+  equal([(await mockRequest("/audio/signal-quality")).rms_dbfs, -42]);
+  deepEqual([await mockRequest("/audio/direct-monitor/start"), { ok: true }]);
+  equal([(await mockRequest("/recording/start")).recording_session_id, "mock-session-1"]);
+  deepEqual([await mockRequest("/recording/pause?session_id=x"), { ok: true }], [await mockRequest("/recording/resume?session_id=x"), { ok: true }]);
   const recording = await mockRequest("/recording/stop?session_id=x");
-  assert.deepEqual(recording, {
-    id: "mock-recording-1",
-    song_id: "mock-song-1",
-    duration_sec: 10,
-    created_at: "1970-01-01T00:00:00.000Z"
-  });
+  deepEqual([recording, { id: "mock-recording-1", song_id: "mock-song-1", duration_sec: 10, created_at: "1970-01-01T00:00:00.000Z" }]);
   const retainedRecording = await mockRequest( "/recording/stop?session_id=retained"
   );
-  assert.equal( (await mockRequest("/recording/library")).at(-1).id, retainedRecording.id
-  );
-  assert.equal(
-    (await mockRequest(`/recording/by-song/${MOCK_SONG_ID}`)).at(-1).id,
-    retainedRecording.id
-  );
-  assert.equal(
-    await mockRequest(`/recording/${recording.id}`, { method: "DELETE" }),
-    null
-  );
-  assert.deepEqual(await mockRequest("/recording/library"), [ retainedRecording ]);
-  assert.deepEqual(await mockRequest("/analysis/id/run"), { queued: true });
-  assert.equal((await mockRequest("/analysis/id")).accuracy_percent, 82);
-  assert.deepEqual(await mockRequest("/analysis/id"), {
-    accuracy_percent: 82,
-    average_deviation_cents: 18,
-    sections: []
-  });
-
-  assert.deepEqual(await mockRequest("/models/whisper"), []);
-  assert.equal((await mockRequest("/models/whisper/base/download")).ok, true);
-  assert.deepEqual(await mockRequest("/diagnostics/ai-models"), {
-    state: "ready",
-    ready: true,
-    ready_count: 5,
-    total: 5,
-    current_model: null,
-    error: null,
-    models_dir: "mock/models",
-    models: []
-  });
-  assert.deepEqual(await mockRequest("/diagnostics/ai-models/download"), {
-    state: "downloading",
-    ready: false,
-    ready_count: 0,
-    total: 5,
-    current_model: null,
-    error: null,
-    models_dir: "mock/models",
-    models: []
-  });
+  equal([(await mockRequest("/recording/library")).at(-1).id, retainedRecording.id], [(await mockRequest(`/recording/by-song/${MOCK_SONG_ID}`)).at(-1).id, retainedRecording.id], [await mockRequest(`/recording/${recording.id}`, { method: "DELETE" }), null]);
+  deepEqual([await mockRequest("/recording/library"), [ retainedRecording ]], [await mockRequest("/analysis/id/run"), { queued: true }]);
+  equal([(await mockRequest("/analysis/id")).accuracy_percent, 82]);
+  deepEqual([await mockRequest("/analysis/id"), { accuracy_percent: 82, average_deviation_cents: 18, sections: [] }], [await mockRequest("/models/whisper"), []]);
+  equal([(await mockRequest("/models/whisper/base/download")).ok, true]);
+  deepEqual([await mockRequest("/diagnostics/ai-models"), { state: "ready", ready: true, ready_count: 5, total: 5, current_model: null, error: null, models_dir: "mock/models", models: [] }], [await mockRequest("/diagnostics/ai-models/download"), { state: "downloading", ready: false, ready_count: 0, total: 5, current_model: null, error: null, models_dir: "mock/models", models: [] }]);
   const mutableModelStatus = await mockRequest("/diagnostics/ai-models");
   mutableModelStatus.models.push({ name: "mutated" });
-  assert.deepEqual((await mockRequest("/diagnostics/ai-models")).models, []);
-  assert.equal((await mockRequest("/cache/size")).bytes, 0);
+  deepEqual([(await mockRequest("/diagnostics/ai-models")).models, []]);
+  equal([(await mockRequest("/cache/size")).bytes, 0]);
   assert.ok((await mockRequest("/cache/free-space")).bytes);
-  assert.equal((await mockRequest("/cache/clear")).ok, true);
-  assert.equal((await mockRequest("/diagnostics/health")).status, "ok");
-  assert.equal((await mockRequest("/diagnostics/pipeline")).status, "ok");
-  assert.deepEqual(await mockRequest("/diagnostics/versions"), {});
-  assert.deepEqual(await mockRequest("/diagnostics/errors"), []);
-  assert.deepEqual(await mockRequest("/history"), []);
-  assert.deepEqual(await mockRequest("/about"), {
-    backend_version: "mock",
-    ai_version: "mock",
-    data_dir: "mock://data"
-  });
-
+  equal([(await mockRequest("/cache/clear")).ok, true], [(await mockRequest("/diagnostics/health")).status, "ok"], [(await mockRequest("/diagnostics/pipeline")).status, "ok"]);
+  deepEqual([await mockRequest("/diagnostics/versions"), {}], [await mockRequest("/diagnostics/errors"), []], [await mockRequest("/history"), []], [await mockRequest("/about"), { backend_version: "mock", ai_version: "mock", data_dir: "mock://data" }]);
   const blob = await mockBlobRequest(`/songs/${MOCK_SONG_ID}/package`);
-  assert.equal(blob.type, "application/zip");
-  assert.equal(await blob.text(), "mock karaoke package");
+  equal([blob.type, "application/zip"], [await blob.text(), "mock karaoke package"]);
   await assert.rejects( mockRequest("/missing", { method: "PUT" }), /not implemented/
   );
   await assert.rejects( mockBlobRequest("/missing", { method: "POST" }), /not implemented/
@@ -362,6 +124,5 @@ test("mock API implements the complete development contract", async () => {
   await rejectsRoute("/recording/missing", { method: "GET" });
   await rejectsRoute("/prefix/recording/missing", { method: "DELETE" });
   await rejectsRoute("/recording/missing/suffix", { method: "DELETE" });
-  assert.equal(Object.isFrozen(api), true);
-  assert.equal(typeof api.listSongs, "function");
+  equal([Object.isFrozen(api), true], [typeof api.listSongs, "function"]);
 });

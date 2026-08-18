@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-
+import { sameDeep, called, calledWith, verify } from "./helpers/assertions.mjs";
 vi.mock("../src/components/fields", () => ({
   RangeInput: ({ onChange, ...props }) => (
     <input {...props} type="range" onChange={(e) => onChange(e.target.value)} />
@@ -26,15 +26,12 @@ vi.mock("../src/pages/Karaoke/components/waveform-timeline", () => ({
     <button data-testid="timeline" onClick={() => onChange(3)} />
   )
 }));
-
 import EffectDial from "../src/pages/Karaoke/components/console/effect-dial.jsx";
 import ConsoleCenter from "../src/pages/Karaoke/components/console/center.jsx";
 import MixerPanel from "../src/pages/Karaoke/components/console/mixer.jsx";
 import SongStrip from "../src/pages/Karaoke/components/console/song-strip.jsx";
 import ToolsPanel from "../src/pages/Karaoke/components/console/tools.jsx";
-
 afterEach(cleanup);
-
 test("effect dial supports range, wheel and pointer dragging with clamping", () => {
   const change = vi.fn();
   const result = render( <EffectDial label="Echo" value={0.5} onChange={change} />
@@ -49,12 +46,10 @@ test("effect dial supports range, wheel and pointer dragging with clamping", () 
   fireEvent.pointerMove(dial, { clientY: 0, pointerId: 1 });
   fireEvent.pointerUp(dial, { pointerId: 1 });
   fireEvent.change(getByLabelText("Echo"), { target: { value: "0.3" } });
-  expect(change.mock.calls.length).toBeGreaterThanOrEqual(4);
-  expect(change.mock.calls[2][0]).toBe(1);
+  verify([change.mock.calls.length, 'toBeGreaterThanOrEqual', 4], [change.mock.calls[2][0], 'toBe', 1]);
   result.unmount();
   render(<EffectDial label="Empty" onChange={vi.fn()} />);
 });
-
 test("song strip formats metadata and delegates seeking", () => {
   const seek = vi.fn();
   const result = render(
@@ -65,8 +60,7 @@ test("song strip formats metadata and delegates seeking", () => {
       onSeek={seek}
     />
   );
-  expect(result.container.textContent).toContain("Singer");
-  expect(result.container.textContent).toContain("1:05");
+  verify([result.container.textContent, 'toContain', "Singer"], [result.container.textContent, 'toContain', "1:05"]);
   fireEvent.click(result.getByTestId("timeline"));
   expect(seek).toHaveBeenCalledWith(3);
   result.rerender(
@@ -78,7 +72,6 @@ test("song strip formats metadata and delegates seeking", () => {
     />
   );
 });
-
 test("mixer changes and commits volumes and effects", () => {
   const microphone = vi.fn();
   const commit = vi.fn();
@@ -106,8 +99,7 @@ test("mixer changes and commits volumes and effects", () => {
     target: { value: "0.6" }
   });
   expect(microphone).toHaveBeenCalledWith(0.8);
-  expect(commit).toHaveBeenCalled();
-  expect(effect).toHaveBeenCalled();
+  called(commit, effect);
   view.rerender(
     <MixerPanel
       microphoneLevel={0}
@@ -118,7 +110,6 @@ test("mixer changes and commits volumes and effects", () => {
     />
   );
 });
-
 test("tools toggle visibility, monitoring, auto-hide, settings and presets", () => {
   const handlers = {
     onToggleNotes: vi.fn(),
@@ -144,14 +135,10 @@ test("tools toggle visibility, monitoring, auto-hide, settings and presets", () 
     button.title?.includes("%")
   );
   fireEvent.click(preset);
-  expect(handlers.onToggleNotes).toHaveBeenCalled();
-  expect(handlers.onToggleLyrics).toHaveBeenCalled();
-  expect(handlers.onMonitoringChange).toHaveBeenCalledWith(false);
-  expect(handlers.onAutoHideChange).toHaveBeenCalledWith(true);
-  expect(handlers.onOpenAppSettings).toHaveBeenCalled();
-  expect(handlers.onApplyEffectPreset).toHaveBeenCalled();
+  called(handlers.onToggleNotes, handlers.onToggleLyrics);
+  calledWith([handlers.onMonitoringChange, [false]], [handlers.onAutoHideChange, [true]]);
+  called(handlers.onOpenAppSettings, handlers.onApplyEffectPreset);
 });
-
 test("center controls transport, tempo and bounded key changes", () => {
   const handlers = {
     onSkip: vi.fn(),
@@ -170,7 +157,6 @@ test("center controls transport, tempo and bounded key changes", () => {
       isPlaying={false}
     />
   );
-
   fireEvent.click(result.getByLabelText("Назад на 5 секунд"));
   fireEvent.click(result.getByLabelText("Вперед на 5 секунд"));
   fireEvent.click(result.getByLabelText("Відтворити"));
@@ -179,15 +165,12 @@ test("center controls transport, tempo and bounded key changes", () => {
   fireEvent.click(result.getByLabelText("Збільшити темп на 1 BPM"));
   fireEvent.click(result.getByLabelText("Зменшити тональність"));
   fireEvent.click(result.getByLabelText("Підвищити тональність"));
-
   expect(handlers.onSkip.mock.calls).toEqual([[-5], [5]]);
   expect(handlers.onTogglePlay).toHaveBeenCalledOnce();
   expect(handlers.onStop).toHaveBeenCalledOnce();
-  expect(handlers.onTempoChange.mock.calls).toEqual([[-1], [1]]);
-  expect(handlers.onKeyShiftChange.mock.calls).toEqual([[11], [12]]);
+  sameDeep([handlers.onTempoChange.mock.calls, [[-1], [1]]], [handlers.onKeyShiftChange.mock.calls, [[11], [12]]]);
   expect(result.container.textContent).toContain("A2 – E5");
 });
-
 test("center uses fallback note range and pause state", () => {
   const result = render(
     <ConsoleCenter
@@ -203,8 +186,6 @@ test("center uses fallback note range and pause state", () => {
       onKeyShiftChange={vi.fn()}
     />
   );
-
   fireEvent.click(result.getByLabelText("Зменшити тональність"));
-  expect(result.getByLabelText("Пауза")).toBeTruthy();
-  expect(result.container.textContent).toContain("C2 – C5");
+  verify([result.getByLabelText("Пауза"), 'toBeTruthy'], [result.container.textContent, 'toContain', "C2 – C5"]);
 });

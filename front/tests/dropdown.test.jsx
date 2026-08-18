@@ -1,13 +1,10 @@
 /* @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
-
 import Dropdown from "../src/components/fields/Dropdown.jsx";
-
+import { same, verify } from "./helpers/assertions.mjs";
 afterEach(() => { cleanup(); document.body.replaceChildren(); });
-
 const options = [ { value: "a", label: "Alpha" }, { value: "b", label: "Beta" } ];
-
 describe("dropdown", () => {
   test("selects a value and restores trigger focus", () => {
     const change = vi.fn();
@@ -23,19 +20,14 @@ describe("dropdown", () => {
       />
     );
     const trigger = screen.getByRole("button", { name: /Alpha/ });
-    expect(trigger.id).toBe("choice");
-    expect(trigger.getAttribute("aria-describedby")).toBe("hint");
+    same([trigger.id, "choice"], [trigger.getAttribute("aria-describedby"), "hint"]);
     fireEvent.click(trigger);
     expect(screen.getByRole("listbox")).not.toBeNull();
     fireEvent.pointerDown(trigger);
-    expect(screen.getByRole("option", { name: /Alpha/ }).className).toContain( "is-selected"
-    );
+    verify([screen.getByRole("option", { name: /Alpha/ }).className, 'toContain', "is-selected"]);
     fireEvent.click(screen.getByRole("option", { name: /Beta/ }));
-    expect(change).toHaveBeenCalledWith("b");
-    expect(screen.queryByRole("listbox")).toBeNull();
-    expect(document.activeElement).toBe(trigger);
+    verify([change, 'toHaveBeenCalledWith', "b"], [screen.queryByRole("listbox"), 'toBeNull'], [document.activeElement, 'toBe', trigger]);
   });
-
   test("opens from the keyboard and closes on Escape or outside pointer", () => {
     const keyDown = vi.fn();
     render(
@@ -54,15 +46,11 @@ describe("dropdown", () => {
     fireEvent.keyDown(trigger, { key: "ArrowDown" });
     fireEvent.keyDown(document, { key: "A" });
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("listbox")).toBeNull();
-    expect(document.activeElement).toBe(trigger);
-
+    verify([screen.queryByRole("listbox"), 'toBeNull'], [document.activeElement, 'toBe', trigger]);
     fireEvent.keyDown(trigger, { key: "Enter" });
     fireEvent.pointerDown(document.body);
-    expect(screen.queryByRole("listbox")).toBeNull();
-    expect(keyDown).toHaveBeenCalledTimes(4);
+    verify([screen.queryByRole("listbox"), 'toBeNull'], [keyDown, 'toHaveBeenCalledTimes', 4]);
   });
-
   test("supports option Escape and trigger toggle", () => {
     render(<Dropdown value="a" options={options} onChange={vi.fn()} />);
     const trigger = screen.getByRole("button", { name: /Alpha/ });
@@ -76,7 +64,6 @@ describe("dropdown", () => {
     fireEvent.click(trigger);
     expect(screen.queryByRole("listbox")).toBeNull();
   });
-
   test("closes when disabled or another dropdown opens", () => {
     const view = render(
       <>
@@ -87,17 +74,13 @@ describe("dropdown", () => {
     fireEvent.click(document.getElementById("one"));
     expect(screen.getAllByRole("listbox")).toHaveLength(1);
     fireEvent.click(document.getElementById("two"));
-    expect(screen.getAllByRole("listbox")).toHaveLength(1);
-    expect(screen.getByRole("listbox").id).toBe("two-menu");
-
+    verify([screen.getAllByRole("listbox"), 'toHaveLength', 1], [screen.getByRole("listbox").id, 'toBe', "two-menu"]);
     view.rerender( <Dropdown id="two" disabled options={options} onChange={vi.fn()} />
     );
-    expect(screen.queryByRole("listbox")).toBeNull();
-    expect(screen.getByRole("button").disabled).toBe(true);
+    verify([screen.queryByRole("listbox"), 'toBeNull'], [screen.getByRole("button").disabled, 'toBe', true]);
     fireEvent.keyDown(screen.getByRole("button"), { key: " " });
     expect(screen.queryByRole("listbox")).toBeNull();
   });
-
   test("commits blur only after focus leaves both trigger and menu", async () => {
     const blur = vi.fn();
     render(<Dropdown options={options} onChange={vi.fn()} onBlur={blur} />);
@@ -108,7 +91,6 @@ describe("dropdown", () => {
     fireEvent.blur(trigger);
     await act(async () => Promise.resolve());
     expect(blur).not.toHaveBeenCalled();
-
     const outside = document.createElement("button");
     document.body.append(outside);
     outside.focus();
@@ -116,7 +98,6 @@ describe("dropdown", () => {
     await act(async () => Promise.resolve());
     expect(blur).toHaveBeenCalledOnce();
   });
-
   test("positions a long menu above and updates on viewport changes", () => {
     render(
       <Dropdown
@@ -132,8 +113,7 @@ describe("dropdown", () => {
     root.getBoundingClientRect = () => ({ left: 10, top: 700, bottom: 740, width: 250 });
     fireEvent.click(screen.getByRole("button"));
     const menu = screen.getByRole("listbox");
-    expect(menu.style.bottom).not.toBe("auto");
-    expect(menu.style.width).toBe("250px");
+    verify([menu.style.bottom, 'not.toBe', "auto"], [menu.style.width, 'toBe', "250px"]);
     fireEvent.resize(window);
     fireEvent.scroll(window);
   });

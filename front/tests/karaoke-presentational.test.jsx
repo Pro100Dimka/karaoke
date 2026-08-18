@@ -2,7 +2,7 @@
 import { createRef } from "react";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-
+import { verify } from "./helpers/assertions.mjs";
 vi.mock("../src/components/fields", () => ({
   RangeInput: ({ onChange, ...props }) => (
     <input
@@ -15,13 +15,10 @@ vi.mock("../src/components/fields", () => ({
 vi.mock("../src/api/client", () => ({
   api: { getAudioTrackUrl: (id, track) => `${id}/${track}` }
 }));
-
 import KaraokeMedia from "../src/pages/Karaoke/components/karaoke-media.jsx";
 import WaveformTimeline from "../src/pages/Karaoke/components/waveform-timeline.jsx";
 import KaraokeLyricLine from "../src/pages/Karaoke/components/karaoke-performance-stage/karaoke-lyric-line.jsx";
-
 afterEach(cleanup);
-
 test("karaoke media loads audio gain and initializes YouTube playback", () => {
   const send = vi.fn();
   const sync = vi.fn();
@@ -47,11 +44,7 @@ test("karaoke media loads audio gain and initializes YouTube playback", () => {
   fireEvent.loadedMetadata(audio);
   expect(audio.volume).toBeGreaterThan(0);
   fireEvent.load(container.querySelector("iframe"));
-  expect(send.mock.calls.map(([command]) => command)).toEqual([
-    "mute",
-    "setPlaybackRate",
-    "playVideo"
-  ]);
+  verify([send.mock.calls.map(([command]) => command), 'toEqual', [ "mute", "setPlaybackRate", "playVideo" ]]);
   expect(sync).toHaveBeenCalled();
   rerender(
     <KaraokeMedia
@@ -86,10 +79,8 @@ test("karaoke media loads audio gain and initializes YouTube playback", () => {
       syncSecondaryMedia={sync}
     />
   );
-  expect(container.querySelector("video").getAttribute("src")).toBe( "video.mp4"
-  );
+  verify([container.querySelector("video").getAttribute("src"), 'toBe', "video.mp4"]);
 });
-
 test("waveform supports click, drag and range seeking", () => {
   const change = vi.fn();
   const { container, rerender } = render(
@@ -111,7 +102,6 @@ test("waveform supports click, drag and range seeking", () => {
   fireEvent.pointerDown(zeroWidth, { clientX: 0 });
   expect(change).toHaveBeenCalledTimes(3);
 });
-
 test("lyrics render words, syllables, suffixes and untimed fallback text", () => {
   const { container, rerender } = render(
     <KaraokeLyricLine
@@ -134,8 +124,7 @@ test("lyrics render words, syllables, suffixes and untimed fallback text", () =>
       }}
     />
   );
-  expect(container.textContent).toBe("Большоймир");
-  expect(container.querySelectorAll(".karaoke-lyric-syllable")).toHaveLength(2);
+  verify([container.textContent, 'toBe', "Большоймир"], [container.querySelectorAll(".karaoke-lyric-syllable"), 'toHaveLength', 2]);
   rerender( <KaraokeLyricLine currentTime={0} line={{ text: "Plain", start: 0, end: 1 }} />
   );
   expect(container.textContent).toBe("Plain");
@@ -160,7 +149,6 @@ test("lyrics render words, syllables, suffixes and untimed fallback text", () =>
   rerender(<KaraokeLyricLine currentTime={0} line={null} />);
   expect(container.textContent).toBe("");
 });
-
 test("lyrics preserve punctuation the backend's syllable split strips from the word edge", () => {
   // split_written() in AI/syllables.py strips leading/trailing punctuation
   // before splitting a word into syllables (see AI/syllables.py _WORD_EDGE).

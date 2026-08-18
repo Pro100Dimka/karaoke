@@ -2,7 +2,7 @@
 import { useRef } from "react";
 import { act, cleanup, render, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-
+import { same, notCalled, verify } from "./helpers/assertions.mjs";
 const apiMocks = vi.hoisted(() => ({
   getResult: vi.fn(),
   getHealth: vi.fn(),
@@ -12,7 +12,6 @@ const apiMocks = vi.hoisted(() => ({
   getSongCoverUrl: vi.fn((id) => `cover/${id}`)
 }));
 vi.mock("../src/api/client", () => ({ api: apiMocks }));
-
 import useAsyncQueue from "../src/hooks/useAsyncQueue.js";
 import useExclusiveAsyncAction from "../src/hooks/useExclusiveAsyncAction.js";
 import useLatestRef from "../src/hooks/useLatestRef.js";
@@ -29,10 +28,8 @@ import useKaraokeHotkeys, {
 import useKaraokeResult from "../src/pages/Karaoke/hooks/useKaraokeResult.js";
 import useKaraokeStageLayout from "../src/pages/Karaoke/hooks/useKaraokeStageLayout.js";
 import { getKaraokeStageLayout } from "../src/pages/Karaoke/utils/layout.js";
-
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 beforeEach(() => Object.values(apiMocks).forEach((mock) => mock.mockReset()));
-
 describe("async state hooks", () => {
   test.each([
     [{ active: false, hidden: false, intervalMs: 10 }, false],
@@ -79,7 +76,6 @@ describe("async state hooks", () => {
   ])("decides whether polling should continue %#", (options, expected) => {
     expect(shouldSchedulePoll(options)).toBe(expected);
   });
-
   test("latest and mounted refs track lifecycle", () => {
     const latest = renderHook(({ value }) => useLatestRef(value), { initialProps: { value: 1 } });
     expect(latest.result.current.current).toBe(1);
@@ -91,13 +87,11 @@ describe("async state hooks", () => {
       mountedDuringRender = ref.current;
       return ref;
     });
-    expect(mountedDuringRender).toBe(true);
-    expect(mounted.result.current.current).toBe(true);
+    same([mountedDuringRender, true], [mounted.result.current.current, true]);
     const ref = mounted.result.current;
     mounted.unmount();
     expect(ref.current).toBe(false);
   });
-
   test("serializes queued actions and survives failures", async () => {
     let pendingDuringRender;
     const { result, unmount } = renderHook(() => {
@@ -129,8 +123,7 @@ describe("async state hooks", () => {
       await expect(first).resolves.toBe("a");
       await Promise.resolve();
     });
-    expect(order).toEqual([1, 2, 3]);
-    expect(result.current.pending).toBe(true);
+    verify([order, 'toEqual', [1, 2, 3]], [result.current.pending, 'toBe', true]);
     await act(async () => { releaseSecond(); await expect(second).resolves.toBe("b"); });
     expect(result.current.pending).toBe(false);
     await expect(result.current.run(null)).rejects.toThrow(
@@ -140,7 +133,6 @@ describe("async state hooks", () => {
     ).rejects.toThrow("bad");
     unmount();
   });
-
   test("reuses one exclusive action promise", async () => {
     let pendingDuringRender;
     const { result, unmount } = renderHook(() => {
@@ -155,8 +147,7 @@ describe("async state hooks", () => {
     let first;
     let second;
     act(() => { first = result.current.run(action); second = result.current.run(action); });
-    expect(first).toBe(second);
-    expect(result.current.pending).toBe(true);
+    same([first, second], [result.current.pending, true]);
     release("done");
     await expect(first).resolves.toBe("done");
     await act(async () => {});
@@ -164,7 +155,6 @@ describe("async state hooks", () => {
     expect(action).toHaveBeenCalledOnce();
     unmount();
   });
-
   test("settles queued and exclusive work safely after unmount", async () => {
     let releaseQueue;
     const queued = renderHook(() => useAsyncQueue());
@@ -178,13 +168,11 @@ describe("async state hooks", () => {
     await expect(queuedPromise).resolves.toBe("queued");
     await expect(queued.result.current.run(() => "after")).resolves.toBe( "after"
     );
-
     const exclusive = renderHook(() => useExclusiveAsyncAction());
     exclusive.unmount();
     await expect(exclusive.result.current.run(() => "done")).resolves.toBe( "done"
     );
   });
-
   test("ignores a polling rejection after unmount", async () => {
     let rejectFetch;
     const hook = renderHook(() =>
@@ -196,7 +184,6 @@ describe("async state hooks", () => {
     rejectFetch(new Error("obsolete"));
     await act(async () => Promise.resolve());
   });
-
   test("polls without overlap, refreshes, stops and reports errors", async () => {
     vi.useFakeTimers();
     const fetcher = vi
@@ -216,7 +203,6 @@ describe("async state hooks", () => {
     await act(async () => { result.current.refresh(); await Promise.resolve(); });
     unmount();
   });
-
   test("polling resumes on visibility and coalesces overlapping refreshes", async () => {
     Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
     const visibleFetcher = vi.fn().mockResolvedValue("visible");
@@ -226,7 +212,6 @@ describe("async state hooks", () => {
     document.dispatchEvent(new Event("visibilitychange"));
     await waitFor(() => expect(hidden.result.current.data).toBe("visible"));
     hidden.unmount();
-
     let release;
     const first = new Promise((resolve) => { release = resolve; });
     const fetcher = vi
@@ -241,7 +226,6 @@ describe("async state hooks", () => {
     await waitFor(() => expect(polling.result.current.data).toBe("second"));
     polling.unmount();
   });
-
   test("ignores late results and replaces a scheduled poll on visibility", async () => {
     vi.useFakeTimers();
     let release;
@@ -250,7 +234,6 @@ describe("async state hooks", () => {
     act(() => { late.result.current.refresh(); });
     late.unmount();
     await act(async () => { release("late"); await pending; });
-
     const fetcher = vi.fn().mockResolvedValue("ready");
     Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
     const visible = renderHook(() => usePolling(fetcher, 100));
@@ -263,7 +246,6 @@ describe("async state hooks", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
     visible.unmount();
   });
-
   test("restarts for dependency changes and uses the latest fetcher", async () => {
     const first = vi.fn().mockResolvedValue("first");
     const second = vi.fn().mockResolvedValue("second");
@@ -279,7 +261,6 @@ describe("async state hooks", () => {
     polling.unmount();
     expect(() => polling.result.current.refresh()).not.toThrow();
   });
-
   test("rejects a detached hotkey scope and ignores a stale poll timer", async () => {
     expect(isHotkeyScopeActive(document.createElement("div"))).toBe(false);
     let scheduled;
@@ -292,50 +273,38 @@ describe("async state hooks", () => {
     polling.unmount();
     await act(async () => scheduled());
     expect(fetcher).toHaveBeenCalledOnce();
-    expect(removeListener).toHaveBeenCalledWith( "visibilitychange", expect.any(Function)
-    );
+    verify([removeListener, 'toHaveBeenCalledWith', "visibilitychange", expect.any(Function)]);
     expect(() => polling.result.current.refresh()).not.toThrow();
     vi.unstubAllGlobals();
   });
 });
-
 describe("song cover hook", () => {
   test("resolves a cover url per song id and clears a failure on a new song or reset key", () => {
     const hook = renderHook((props) => useSongCover(props.songId, props.resetKey), {
       initialProps: { songId: "song-1", resetKey: undefined }
     });
-    expect(hook.result.current.coverUrl).toBe("cover/song-1");
-    expect(hook.result.current.hasCover).toBe(true);
-
+    same([hook.result.current.coverUrl, "cover/song-1"], [hook.result.current.hasCover, true]);
     act(() => hook.result.current.handleCoverError());
     expect(hook.result.current.hasCover).toBe(false);
-
     // Same song, same reset key: a prior failure must stick (no flash back to
     // the broken image on an unrelated re-render).
     hook.rerender({ songId: "song-1", resetKey: undefined });
     expect(hook.result.current.hasCover).toBe(false);
-
     // A different song clears the failure even though the reset key is unchanged.
     hook.rerender({ songId: "song-2", resetKey: undefined });
-    expect(hook.result.current.coverUrl).toBe("cover/song-2");
-    expect(hook.result.current.hasCover).toBe(true);
-
+    same([hook.result.current.coverUrl, "cover/song-2"], [hook.result.current.hasCover, true]);
     act(() => hook.result.current.handleCoverError());
     expect(hook.result.current.hasCover).toBe(false);
-
     // Same song id, but the caller bumped resetKey (e.g. a room song swap that
     // reuses the id) -- the failure must clear even without an id change.
     hook.rerender({ songId: "song-2", resetKey: "swap-1" });
     expect(hook.result.current.hasCover).toBe(true);
   });
-
   test("has no cover for a missing song id", () => {
     const hook = renderHook(() => useSongCover(null));
-    expect(hook.result.current.coverUrl).toBe("");
-    expect(hook.result.current.hasCover).toBe(false);
+    same([hook.result.current.coverUrl, ""], [hook.result.current.hasCover, false]);
   });
 });
-
 describe("navigation and karaoke hooks", () => {
   test("changes settings navigation", () => {
     const defaults = renderHook(() => useSettingsNavigation());
@@ -350,7 +319,6 @@ describe("navigation and karaoke hooks", () => {
     act(() => result.current.selectTab("storage"));
     expect(result.current).toMatchObject({ tab: "storage", service: null });
   });
-
   test("auto-hides and reveals karaoke controls", () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
@@ -380,8 +348,7 @@ describe("navigation and karaoke hooks", () => {
     fireEventFullscreen();
     expect(result.current.controlsVisible).toBe(true);
     rerender({ enabled: false });
-    expect(result.current.controlsVisible).toBe(true);
-    expect(setInterval).toHaveBeenCalledTimes(1);
+    verify([result.current.controlsVisible, 'toBe', true], [setInterval, 'toHaveBeenCalledTimes', 1]);
     act(() => result.current.hideControls());
     act(() => result.current.revealControls());
     // Scene transitions call hideControls() unconditionally even when
@@ -390,18 +357,15 @@ describe("navigation and karaoke hooks", () => {
     // otherwise it stays hidden and unreachable for the rest of the session.
     expect(result.current.controlsVisible).toBe(true);
     rerender({ enabled: true });
-    expect(result.current.controlsVisible).toBe(true);
-    expect(setInterval).toHaveBeenCalledTimes(2);
+    verify([result.current.controlsVisible, 'toBe', true], [setInterval, 'toHaveBeenCalledTimes', 2]);
     const fullscreenRegistration = addEvent.mock.calls.find(
       ([event]) => event === "fullscreenchange"
     );
     expect(fullscreenRegistration).toBeDefined();
     unmount();
     expect(clearInterval).toHaveBeenCalled();
-    expect(removeEvent).toHaveBeenCalledWith( "fullscreenchange", fullscreenRegistration[1]
-    );
+    verify([removeEvent, 'toHaveBeenCalledWith', "fullscreenchange", fullscreenRegistration[1]]);
   });
-
   test("fullscreen forces controls to auto-hide even when the preference is off", () => {
     // Fullscreen is meant to be an unobstructed view: the console must still
     // auto-hide there even if the user disabled the general preference for
@@ -414,24 +378,20 @@ describe("navigation and karaoke hooks", () => {
       { initialProps: { isFullscreen: false } }
     );
     expect(setInterval).not.toHaveBeenCalled();
-
     rerender({ isFullscreen: true });
     expect(setInterval).toHaveBeenCalledOnce();
     const checkVisibility = setInterval.mock.calls[0][0];
     act(() => { vi.setSystemTime(2200); checkVisibility(); });
     expect(result.current.controlsVisible).toBe(false);
-
     rerender({ isFullscreen: false });
     expect(result.current.controlsVisible).toBe(true);
   });
-
   test("enables control auto-hide by default", () => {
     vi.useFakeTimers();
     const setInterval = vi.spyOn(window, "setInterval");
     renderHook(() => useKaraokeControls());
     expect(setInterval).toHaveBeenCalledWith(expect.any(Function), 250);
   });
-
   test("renders controls as visible before mount effects run", () => {
     const snapshots = [];
     const Probe = () => {
@@ -441,7 +401,6 @@ describe("navigation and karaoke hooks", () => {
     render(<Probe />);
     expect(snapshots[0].controlsVisible).toBe(true);
   });
-
   test("dispatches scoped karaoke hotkeys", () => {
     const toggle = vi.fn();
     const seek = vi.fn();
@@ -467,17 +426,10 @@ describe("navigation and karaoke hooks", () => {
         new KeyboardEvent("keydown", { code, bubbles: true, cancelable: true })
     );
     events.forEach((event) => scope.dispatchEvent(event));
-    expect(events.map(({ defaultPrevented }) => defaultPrevented)).toEqual([
-      true,
-      true,
-      true,
-      false,
-      false
-    ]);
+    verify([events.map(({ defaultPrevented }) => defaultPrevented), 'toEqual', [ true, true, true, false, false ]]);
     expect(toggle).toHaveBeenCalledOnce();
     expect(seek.mock.calls).toEqual([[0], [6]]);
     expect(stop).toHaveBeenCalledOnce();
-
     const nextScope = document.createElement("div");
     document.body.append(nextScope);
     hook.rerender({ scopeRef: { current: nextScope } });
@@ -488,14 +440,12 @@ describe("navigation and karaoke hooks", () => {
     nextScope.dispatchEvent( new KeyboardEvent("keydown", { code: "Space", bubbles: true })
     );
     expect(toggle).toHaveBeenCalledTimes(2);
-
     const keydownRegistration = addEvent.mock.calls.find( ([event]) => event === "keydown"
     );
     expect(keydownRegistration).toBeDefined();
     hook.unmount();
     expect(removeEvent).toHaveBeenCalledWith("keydown", expect.any(Function));
   });
-
   test("dispatches every karaoke command with optional callbacks", () => {
     const toggle = vi.fn();
     const seek = vi.fn();
@@ -509,24 +459,19 @@ describe("navigation and karaoke hooks", () => {
     };
     dispatchKaraokeHotkey("toggle-playback", context);
     expect(toggle).toHaveBeenCalledOnce();
-    expect(seek).not.toHaveBeenCalled();
-    expect(stop).not.toHaveBeenCalled();
+    notCalled(seek, stop);
     dispatchKaraokeHotkey("seek-backward", context);
-    expect(seek.mock.calls).toEqual([[0]]);
-    expect(stop).not.toHaveBeenCalled();
+    verify([seek.mock.calls, 'toEqual', [[0]]], [stop, 'not.toHaveBeenCalled']);
     dispatchKaraokeHotkey("seek-forward", context);
-    expect(seek.mock.calls).toEqual([[0], [6]]);
-    expect(stop).not.toHaveBeenCalled();
+    verify([seek.mock.calls, 'toEqual', [[0], [6]]], [stop, 'not.toHaveBeenCalled']);
     dispatchKaraokeHotkey("stop", context);
     expect(stop).toHaveBeenCalledOnce();
     dispatchKaraokeHotkey("unknown", context);
     expect(stop).toHaveBeenCalledTimes(2);
     for (const action of [ "toggle-playback", "seek-backward", "seek-forward", "stop" ]) {
-      expect(() => dispatchKaraokeHotkey(action, { currentTime: 0, duration: 0 })
-      ).not.toThrow();
+      verify([() => dispatchKaraokeHotkey(action, { currentTime: 0, duration: 0 }), 'not.toThrow']);
     }
   });
-
   test("loads, rejects and resets karaoke results safely", async () => {
     let resolve;
     const success = new Promise((done) => { resolve = done; });
@@ -551,7 +496,6 @@ describe("navigation and karaoke hooks", () => {
     expect(result.current).toEqual({ result: null, loading: false, error: null });
     unmount();
   });
-
   test("starts karaoke result state from the exact idle contract", async () => {
     const snapshots = [];
     const Probe = ({ song }) => {
@@ -568,7 +512,6 @@ describe("navigation and karaoke hooks", () => {
     await act(async () => Promise.resolve());
     initial.unmount();
   });
-
   test("ignores karaoke result completion after cancellation", async () => {
     let resolveResult;
     apiMocks.getResult.mockReturnValueOnce( new Promise((resolve) => { resolveResult = resolve; })
@@ -580,7 +523,6 @@ describe("navigation and karaoke hooks", () => {
     resolveResult({ notes: [1] });
     await act(async () => Promise.resolve());
     expect(resolved.result.current.result).toBeNull();
-
     let rejectResult;
     apiMocks.getResult.mockReturnValueOnce(
       new Promise((_resolve, reject) => { rejectResult = reject; })
@@ -593,7 +535,6 @@ describe("navigation and karaoke hooks", () => {
     await act(async () => Promise.resolve());
     expect(rejected.result.current).toEqual({ result: null, loading: false, error: null });
   });
-
   test("synchronizes stage CSS and cleans observer", () => {
     const shell = document.createElement("div");
     shell.className = "karaoke-app-shell";
@@ -647,12 +588,9 @@ describe("navigation and karaoke hooks", () => {
     act(() => resizeCallback());
     unmount();
     expect(disconnect).toHaveBeenCalledOnce();
-    expect(shell.style.getPropertyValue("--karaoke-nav-extra")).toBe("");
-    expect(stage.style.getPropertyValue("--karaoke-video-width")).toBe("");
-    expect(stage.style.getPropertyValue("--karaoke-video-height")).toBe("");
+    same([shell.style.getPropertyValue("--karaoke-nav-extra"), ""], [stage.style.getPropertyValue("--karaoke-video-width"), ""], [stage.style.getPropertyValue("--karaoke-video-height"), ""]);
     shell.remove();
   });
-
   test("skips stage synchronization when any required node is missing", () => {
     document
       .querySelectorAll(".karaoke-app-shell")
@@ -665,26 +603,19 @@ describe("navigation and karaoke hooks", () => {
       observe() {}
       disconnect() {}
     };
-
     const detachedMain = document.createElement("main");
     const stageWithoutShell = document.createElement("section");
     detachedMain.append(stageWithoutShell);
-    expect(() => renderHook(() => useKaraokeStageLayout({ current: stageWithoutShell }))
-    ).not.toThrow();
-
+    verify([() => renderHook(() => useKaraokeStageLayout({ current: stageWithoutShell })), 'not.toThrow']);
     const shell = document.createElement("div");
     shell.className = "karaoke-app-shell";
     document.body.append(shell);
-    expect(() => renderHook(() => useKaraokeStageLayout({ current: null }))
-    ).not.toThrow();
-
+    verify([() => renderHook(() => useKaraokeStageLayout({ current: null })), 'not.toThrow']);
     const detachedStage = document.createElement("section");
-    expect(() => renderHook(() => useKaraokeStageLayout({ current: detachedStage }))
-    ).not.toThrow();
+    verify([() => renderHook(() => useKaraokeStageLayout({ current: detachedStage })), 'not.toThrow']);
     expect(observe).not.toHaveBeenCalled();
     shell.remove();
   });
-
   test("moves stage synchronization when the stage ref changes", () => {
     const shell = document.createElement("div");
     shell.className = "karaoke-app-shell";
@@ -710,16 +641,13 @@ describe("navigation and karaoke hooks", () => {
     const hook = renderHook(({ stageRef }) => useKaraokeStageLayout(stageRef), {
       initialProps: { stageRef: { current: stages[0] } }
     });
-    expect(stages[0].style.getPropertyValue("--karaoke-video-width")).not.toBe( ""
-    );
+    verify([stages[0].style.getPropertyValue("--karaoke-video-width"), 'not.toBe', ""]);
     hook.rerender({ stageRef: { current: stages[1] } });
     expect(stages[0].style.getPropertyValue("--karaoke-video-width")).toBe("");
-    expect(stages[1].style.getPropertyValue("--karaoke-video-width")).not.toBe( ""
-    );
+    verify([stages[1].style.getPropertyValue("--karaoke-video-width"), 'not.toBe', ""]);
     shell.remove();
   });
 });
-
 function fireEventFullscreen() {
   act(() => document.dispatchEvent(new Event("fullscreenchange")));
 }

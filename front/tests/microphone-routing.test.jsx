@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { translateSaved } from "../src/i18n/runtime.js";
-
+import { calledWith, verify } from "./helpers/assertions.mjs";
 const mocks = vi.hoisted(() => ({
   updateAudioSettings: vi.fn(),
   releaseDirectMonitoring: vi.fn(),
@@ -11,10 +11,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../src/api/client", () => ({ api: mocks }));
 vi.mock("../src/hooks/useAsyncQueue", () => ({ default: () => ({ run: (action) => action() }) }));
 vi.mock("../src/utils/audio-preferences", () => ({ getAudioPreferences: mocks.getAudioPreferences }));
-
 import useAudioOutputRouting from "../src/pages/Karaoke/hooks/useAudioOutputRouting.js";
 import useMicrophoneSettings from "../src/pages/Karaoke/hooks/useMicrophoneSettings.js";
-
 beforeEach(() => {
   Object.values(mocks).forEach((mock) => mock.mockReset());
   mocks.releaseDirectMonitoring.mockResolvedValue(undefined);
@@ -22,7 +20,6 @@ beforeEach(() => {
   Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: undefined });
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
-
 describe("microphone settings", () => {
   test("normalizes backend settings and reacts to global changes", () => {
     const onError = vi.fn();
@@ -44,13 +41,7 @@ describe("microphone settings", () => {
         }
       }
     );
-    expect(hook.result.current).toMatchObject({
-      microphoneVolume: 0.6,
-      audioDriver: "asio",
-      directOutputDeviceId: 3,
-      monitoringEnabled: true,
-      microphoneEffects: { reverb: 0.2, echo: 0.3, delay: 0.4 }
-    });
+    verify([hook.result.current, 'toMatchObject', { microphoneVolume: 0.6, audioDriver: "asio", directOutputDeviceId: 3, monitoringEnabled: true, microphoneEffects: { reverb: 0.2, echo: 0.3, delay: 0.4 } }]);
     act(() =>
       window.dispatchEvent(
         new CustomEvent("audio-settings-changed", {
@@ -63,21 +54,11 @@ describe("microphone settings", () => {
         })
       )
     );
-    expect(hook.result.current).toMatchObject({
-      microphoneVolume: 0.2,
-      audioDriver: "auto",
-      directOutputDeviceId: 4,
-      monitoringEnabled: false
-    });
+    verify([hook.result.current, 'toMatchObject', { microphoneVolume: 0.2, audioDriver: "auto", directOutputDeviceId: 4, monitoringEnabled: false }]);
     hook.rerender({
       settings: { volume: 0.9, audio_driver: "asio", output_device_id: 8, monitoring_enabled: true }
     });
-    expect(hook.result.current).toMatchObject({
-      microphoneVolume: 0.9,
-      audioDriver: "asio",
-      directOutputDeviceId: 8,
-      monitoringEnabled: true
-    });
+    verify([hook.result.current, 'toMatchObject', { microphoneVolume: 0.9, audioDriver: "asio", directOutputDeviceId: 8, monitoringEnabled: true }]);
     expect(hook.result.current.microphoneEffects).toEqual({ reverb: 0.2, echo: 0.3, delay: 0.4 });
     act(() =>
       window.dispatchEvent(
@@ -91,46 +72,27 @@ describe("microphone settings", () => {
     act(() => window.dispatchEvent(new CustomEvent("audio-settings-changed")));
     expect(hook.result.current.microphoneVolume).toBe(0.9);
     hook.rerender({ settings: null });
-    expect(hook.result.current).toMatchObject({
-      microphoneVolume: 0.9,
-      audioDriver: "asio",
-      directOutputDeviceId: 8,
-      monitoringEnabled: true
-    });
+    verify([hook.result.current, 'toMatchObject', { microphoneVolume: 0.9, audioDriver: "asio", directOutputDeviceId: 8, monitoringEnabled: true }]);
     hook.unmount();
-    expect(removeEventListener).toHaveBeenCalledWith( "audio-settings-changed", expect.any(Function)
-    );
-    expect(removeEventListener).toHaveBeenCalledWith(
-      "audio-preferences-changed",
-      expect.any(Function)
-    );
+    verify([removeEventListener, 'toHaveBeenCalledWith', "audio-settings-changed", expect.any(Function)]);
+    verify([removeEventListener, 'toHaveBeenCalledWith', "audio-preferences-changed", expect.any(Function)]);
   });
-
   test("updates settings and reports backend failures", async () => {
     const onError = vi.fn();
     mocks.updateAudioSettings.mockResolvedValueOnce({ volume: 0.75 });
     const { result } = renderHook(() => useMicrophoneSettings({ audioSettings: null, onError })
     );
-    expect(result.current).toMatchObject({
-      microphoneVolume: 1,
-      microphoneEffects: { reverb: 0, echo: 0, delay: 0 },
-      audioDriver: "auto",
-      directOutputDeviceId: "",
-      monitoringEnabled: false,
-      monitorInputDeviceId: "default"
-    });
+    verify([result.current, 'toMatchObject', { microphoneVolume: 1, microphoneEffects: { reverb: 0, echo: 0, delay: 0 }, audioDriver: "auto", directOutputDeviceId: "", monitoringEnabled: false, monitorInputDeviceId: "default" }]);
     await act(() => result.current.updateMicrophone({ volume: 0.7 }));
     expect(result.current.microphoneVolume).toBe(0.75);
     mocks.updateAudioSettings.mockRejectedValueOnce(new Error("device busy"));
     await expect( result.current.updateMicrophone({ volume: 0.4 })
     ).resolves.toBeNull();
-    expect(onError).toHaveBeenCalledWith( expect.stringContaining("device busy")
-    );
+    verify([onError, 'toHaveBeenCalledWith', expect.stringContaining("device busy")]);
     mocks.updateAudioSettings.mockResolvedValueOnce({ echo: 0.2 });
     await act(() => result.current.updateMicrophone({ echo: 0.2 }));
     expect(result.current.microphoneVolume).toBe(0);
   });
-
   test("uses the latest error callback and the unknown-error fallback", async () => {
     const firstError = vi.fn();
     const nextError = vi.fn();
@@ -144,10 +106,8 @@ describe("microphone settings", () => {
     ).resolves.toBeNull();
     expect(firstError).not.toHaveBeenCalled();
     expect(nextError).toHaveBeenCalledOnce();
-    expect(nextError.mock.calls[0][0]).toContain( translateSaved("неизвестная ошибка")
-    );
+    verify([nextError.mock.calls[0][0], 'toContain', translateSaved("неизвестная ошибка")]);
   });
-
   test("ignores microphone updates that settle after unmount", async () => {
     let resolveUpdate;
     mocks.updateAudioSettings.mockReturnValueOnce(
@@ -160,7 +120,6 @@ describe("microphone settings", () => {
     resolved.unmount();
     resolveUpdate({ volume: 0.3 });
     await expect(success).resolves.toEqual({ volume: 0.3 });
-
     let rejectUpdate;
     const onError = vi.fn();
     mocks.updateAudioSettings.mockReturnValueOnce(
@@ -174,7 +133,6 @@ describe("microphone settings", () => {
     await expect(failure).resolves.toBeNull();
     expect(onError).not.toHaveBeenCalled();
   });
-
   test("uses stored input preference when an event omits details", () => {
     mocks.getAudioPreferences
       .mockReturnValueOnce({ monitorInputDeviceId: "initial" })
@@ -187,9 +145,7 @@ describe("microphone settings", () => {
     expect(result.current.monitorInputDeviceId).toBe("fallback");
   });
 });
-
 const mediaRef = (setSinkId = vi.fn().mockResolvedValue(undefined)) => ({ current: { setSinkId } });
-
 describe("audio output routing", () => {
   test("selects an ASIO output and routes browser media to the matching sink", async () => {
     const setDirectOutputDeviceId = vi.fn();
@@ -219,18 +175,14 @@ describe("audio output routing", () => {
       vocalsRef
     };
     const hook = renderHook((props) => useAudioOutputRouting(props), { initialProps: options });
-    expect(setDirectOutputDeviceId).toHaveBeenCalledWith(2);
-    expect(updateMicrophone).toHaveBeenCalledWith({ output_device_id: 2 });
-
+    calledWith([setDirectOutputDeviceId, [2]], [updateMicrophone, [{ output_device_id: 2 }]]);
     hook.rerender({ ...options, directOutputDeviceId: 2 });
     await waitFor(() =>
       expect(instrumentalRef.current.setSinkId).toHaveBeenCalledWith( "browser-output"
       )
     );
-    expect(vocalsRef.current.setSinkId).toHaveBeenCalledWith("browser-output");
-    expect(videoRef.current.setSinkId).toHaveBeenCalledWith("browser-output");
+    calledWith([vocalsRef.current.setSinkId, ["browser-output"]], [videoRef.current.setSinkId, ["browser-output"]]);
   });
-
   test("selects an ASIO output only when it is needed and available", () => {
     const setDirectOutputDeviceId = vi.fn();
     const updateMicrophone = vi.fn();
@@ -247,7 +199,6 @@ describe("audio output routing", () => {
     };
     const hook = renderHook((props) => useAudioOutputRouting(props), { initialProps: base });
     expect(setDirectOutputDeviceId).not.toHaveBeenCalled();
-
     hook.rerender({
       ...base,
       audioDriver: "asio",
@@ -255,7 +206,6 @@ describe("audio output routing", () => {
     });
     expect(setDirectOutputDeviceId).toHaveBeenCalledExactlyOnceWith(2);
     expect(updateMicrophone).toHaveBeenCalledExactlyOnceWith({ output_device_id: 2 });
-
     setDirectOutputDeviceId.mockClear();
     updateMicrophone.mockClear();
     hook.rerender({
@@ -264,7 +214,6 @@ describe("audio output routing", () => {
       audioSettings: { asio_driver_name: "Focusrite ASIO", output_device_id: 7 }
     });
     expect(setDirectOutputDeviceId).not.toHaveBeenCalled();
-
     hook.rerender({
       ...base,
       audioDriver: "asio",
@@ -272,7 +221,6 @@ describe("audio output routing", () => {
       directOutputDevices: []
     });
     expect(setDirectOutputDeviceId).not.toHaveBeenCalled();
-
     hook.rerender({
       ...base,
       audioDriver: "asio",
@@ -281,7 +229,6 @@ describe("audio output routing", () => {
     });
     expect(setDirectOutputDeviceId).not.toHaveBeenCalled();
   });
-
   test("does not enumerate without a usable device selection and API", () => {
     const enumerateDevices = vi.fn();
     Object.defineProperty(navigator, "mediaDevices", {
@@ -315,19 +262,9 @@ describe("audio output routing", () => {
     expect(enumerateDevices).not.toHaveBeenCalled();
     nullSelection.unmount();
     emptySelection.unmount();
-
     Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: undefined });
-    expect(() =>
-      renderHook(() =>
-        useAudioOutputRouting({
-          ...base,
-          directOutputDeviceId: 2,
-          directOutputDevices: [{ index: 2, name: "Output" }]
-        })
-      )
-    ).not.toThrow();
+    verify([() => renderHook(() => useAudioOutputRouting({ ...base, directOutputDeviceId: 2, directOutputDevices: [{ index: 2, name: "Output" }] }) ), 'not.toThrow']);
   });
-
   test("releases backend monitoring on shutdown", async () => {
     mocks.releaseDirectMonitoring.mockRejectedValueOnce(new Error("release"));
     const hook = renderHook(() =>
@@ -351,7 +288,6 @@ describe("audio output routing", () => {
     expect(mocks.releaseDirectMonitoring).toHaveBeenCalledOnce();
     await act(async () => Promise.resolve());
   });
-
   test("isolates browser device enumeration failures", async () => {
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
@@ -373,7 +309,6 @@ describe("audio output routing", () => {
     await act(async () => Promise.resolve());
     expect(navigator.mediaDevices.enumerateDevices).toHaveBeenCalled();
   });
-
   test("ignores missing outputs, unmatched sinks and late enumeration", async () => {
     let resolveDevices;
     const enumerateDevices = vi.fn( () => new Promise((resolve) => { resolveDevices = resolve; })
@@ -401,19 +336,16 @@ describe("audio output routing", () => {
       useAudioOutputRouting({ ...base, directOutputDeviceId: 2, directOutputDevices: undefined })
     );
     noDevices.unmount();
-
     const late = renderHook(() => useAudioOutputRouting({ ...base, directOutputDeviceId: 2 })
     );
     late.unmount();
     resolveDevices([ { kind: "audiooutput", deviceId: "late", label: "Output" } ]);
     await act(async () => Promise.resolve());
     expect(routedAfterMissing).not.toHaveBeenCalled();
-
     enumerateDevices.mockResolvedValueOnce([]);
     renderHook(() => useAudioOutputRouting({ ...base, directOutputDeviceId: 2 })
     );
     await act(async () => Promise.resolve());
-
     enumerateDevices.mockResolvedValueOnce([
       { kind: "audiooutput", deviceId: "sink", label: "Output" }
     ]);

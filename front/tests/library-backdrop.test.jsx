@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-
+import { called, notCalled, verify } from "./helpers/assertions.mjs";
 const mocks = vi.hoisted(() => ({
   playing: true,
   bass: vi.fn(() => 0.6),
@@ -14,9 +14,7 @@ vi.mock("../src/contexts/radio", () => ({
     getSpectrumLevels: mocks.spectrum
   })
 }));
-
 import LibraryBackdrop from "../src/pages/Library/components/backdrop/index.jsx";
-
 const context = {
   setTransform: vi.fn(),
   save: vi.fn(),
@@ -28,7 +26,6 @@ const context = {
   clearRect: vi.fn(),
   fillRect: vi.fn()
 };
-
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.playing = true;
@@ -50,19 +47,12 @@ beforeEach(() => {
     clientHeight: { configurable: true, get: () => 300 }
   });
 });
-
 afterEach(() => { cleanup(); document.documentElement.dataset.performance = ""; });
-
 test("backdrop renders decorations and animated terrain", () => {
   const { container, unmount } = render(<LibraryBackdrop />);
-  expect( container.querySelectorAll(".library-music-object--record span")
-  ).toHaveLength(4);
-  expect( container.querySelectorAll(".library-music-object--notes span")
-  ).toHaveLength(18);
-  expect(context.setTransform).toHaveBeenCalled();
-  expect(context.clearRect).toHaveBeenCalled();
-  expect(context.stroke).toHaveBeenCalled();
-  expect(context.fillRect).toHaveBeenCalled();
+  verify([container.querySelectorAll(".library-music-object--record span"), 'toHaveLength', 4]);
+  verify([container.querySelectorAll(".library-music-object--notes span"), 'toHaveLength', 18]);
+  called(context.setTransform, context.clearRect, context.stroke, context.fillRect);
   fireEvent(window, new Event("resize"));
   Object.defineProperty(document, "hidden", { configurable: true, value: true });
   fireEvent(document, new Event("visibilitychange"));
@@ -71,37 +61,27 @@ test("backdrop renders decorations and animated terrain", () => {
   unmount();
   expect(globalThis.cancelAnimationFrame).toHaveBeenCalled();
 });
-
 test("parallax follows pointer and cleans root variables", () => {
   const { unmount } = render(<LibraryBackdrop />);
   const frameCount = globalThis.requestAnimationFrame.mock.calls.length;
   fireEvent.pointerMove(window, { clientX: 100, clientY: 100 });
   fireEvent.mouseLeave(document);
-  expect(globalThis.requestAnimationFrame.mock.calls.length).toBeGreaterThan( frameCount
-  );
+  verify([globalThis.requestAnimationFrame.mock.calls.length, 'toBeGreaterThan', frameCount]);
   unmount();
-  expect( document.documentElement.style.getPropertyValue("--library-parallax-x")
-  ).toBe("");
+  verify([document.documentElement.style.getPropertyValue("--library-parallax-x"), 'toBe', ""]);
 });
-
 test("reduced performance skips parallax registration", () => {
   document.documentElement.dataset.performance = "reduced";
   const add = vi.spyOn(globalThis, "addEventListener");
   render(<LibraryBackdrop />);
   expect(add.mock.calls.some(([type]) => type === "pointermove")).toBe(false);
 });
-
 test("terrain tolerates unavailable canvas context", () => {
   HTMLCanvasElement.prototype.getContext = vi.fn(() => null);
   expect(() => render(<LibraryBackdrop />)).not.toThrow();
 });
-
 test("runs queued parallax and reacts to theme changes", async () => {
-  const frames = [];
-  globalThis.requestAnimationFrame = vi.fn((callback) => {
-    frames.push(callback);
-    return frames.length;
-  });
+  const frames = installFrameQueue();
   render(<LibraryBackdrop />);
   fireEvent.pointerMove(window, { clientX: 120, clientY: 80 });
   let timestamp = 40;
@@ -111,16 +91,10 @@ test("runs queued parallax and reacts to theme changes", async () => {
   }
   document.documentElement.dataset.theme = "changed";
   await act(async () => Promise.resolve());
-  expect( document.documentElement.style.getPropertyValue("--library-parallax-x")
-  ).not.toBe("");
+  verify([document.documentElement.style.getPropertyValue("--library-parallax-x"), 'not.toBe', ""]);
 });
-
 test("terrain traverses hidden mesh gaps across animation phases", () => {
-  const frames = [];
-  globalThis.requestAnimationFrame = vi.fn((callback) => {
-    frames.push(callback);
-    return frames.length;
-  });
+  const frames = installFrameQueue();
   render(<LibraryBackdrop />);
   for (let timestamp = 0; timestamp <= 120_000; timestamp += 1000) {
     const callback = frames.shift();
@@ -129,7 +103,6 @@ test("terrain traverses hidden mesh gaps across animation phases", () => {
   }
   expect(context.stroke).toHaveBeenCalled();
 });
-
 test("terrain uses theme colors and silent fallbacks", () => {
   mocks.playing = false;
   const descriptor = Object.getOwnPropertyDescriptor(window, "devicePixelRatio");
@@ -139,8 +112,7 @@ test("terrain uses theme colors and silent fallbacks", () => {
       name === "--wave-terrain-rgb" ? "1,2,3" : "4,5,6"
   });
   render(<LibraryBackdrop />);
-  expect(mocks.bass).not.toHaveBeenCalled();
-  expect(mocks.spectrum).not.toHaveBeenCalled();
+  notCalled(mocks.bass, mocks.spectrum);
   style.mockRestore();
   if (descriptor)
     Object.defineProperty(window, "devicePixelRatio", descriptor);

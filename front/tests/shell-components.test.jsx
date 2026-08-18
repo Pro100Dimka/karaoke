@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-
+import { called, verify } from "./helpers/assertions.mjs";
 const mocks = vi.hoisted(() => ({
   location: { pathname: "/" },
   radio: {
@@ -18,7 +18,6 @@ const mocks = vi.hoisted(() => ({
   hydrate: vi.fn(),
   getTheme: vi.fn(() => "dark")
 }));
-
 vi.mock("react-router-dom", () => ({ useLocation: () => mocks.location }));
 vi.mock("../src/contexts/radio", () => ({ useRadio: () => mocks.radio }));
 vi.mock("../src/hooks/useOnlineRoomNavigation", () => ({ useOnlineRoomNavigation: vi.fn() }));
@@ -78,11 +77,9 @@ vi.mock("../src/runtime-config", () => ({ BACKEND_BOOT_RETRY_MS: 5 }));
 vi.mock("../src/utils/theme", () => ({ getSavedTheme: mocks.getTheme }));
 vi.mock("../src/utils/language", () => ({ getSavedLanguage: () => "uk" }));
 vi.mock("../src/utils/ui-preferences", () => ({ hydrateUiPreferences: mocks.hydrate }));
-
 import TitleBar from "../src/components/TitleBar.jsx";
 import BackendBootLoader from "../src/components/backend-boot-loader.jsx";
 import AppLayout from "../src/components/layout.jsx";
-
 beforeEach(() => {
   mocks.location = { pathname: "/" };
   mocks.radio.error = "";
@@ -95,9 +92,7 @@ beforeEach(() => {
   mocks.hydrate.mockReset().mockResolvedValue(undefined);
   window.electronAPI = undefined;
 });
-
 afterEach(() => { cleanup(); vi.useRealTimers(); delete window.electronAPI; });
-
 describe("application shell", () => {
   test("title bar invokes desktop actions and isolates rejected actions", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -111,18 +106,15 @@ describe("application shell", () => {
     fireEvent.click(getByLabelText("common.maximizeWindow"));
     fireEvent.click(getByLabelText("common.closeWindow"));
     await waitFor(() => expect(error).toHaveBeenCalled());
-    expect(window.electronAPI.minimize).toHaveBeenCalled();
-    expect(window.electronAPI.maximize).toHaveBeenCalled();
+    called(window.electronAPI.minimize, window.electronAPI.maximize);
     rerender(<TitleBar hideActions />);
     expect(document.querySelectorAll(".title-bar__button")).toHaveLength(0);
     error.mockRestore();
   });
-
   test("layout opens settings, song editor, radio and blackout state", () => {
     const { container, getByLabelText, getByTestId, queryByTestId } = render( <AppLayout />
     );
-    expect( container .querySelector(".app-shell") .classList.contains("karaoke-app-shell")
-    ).toBe(false);
+    verify([container .querySelector(".app-shell") .classList.contains("karaoke-app-shell"), 'toBe', false]);
     fireEvent.click(getByLabelText("radio.enable:Radio"));
     expect(mocks.radio.toggle).toHaveBeenCalled();
     fireEvent.change(container.querySelector(".app-radio-volume input"), {
@@ -138,46 +130,34 @@ describe("application shell", () => {
     fireEvent.click(getByTestId("settings"));
     fireEvent( window, new CustomEvent("app:route-blackout", { detail: { visible: true } })
     );
-    expect( container .querySelector(".app-route-blackout") .classList.contains("is-visible")
-    ).toBe(true);
+    verify([container .querySelector(".app-route-blackout") .classList.contains("is-visible"), 'toBe', true]);
     fireEvent(window, new CustomEvent("app:route-blackout"));
-    expect( container .querySelector(".app-route-blackout") .classList.contains("is-visible")
-    ).toBe(false);
+    verify([container .querySelector(".app-route-blackout") .classList.contains("is-visible"), 'toBe', false]);
     fireEvent.click(getByTestId("route-empty-song"));
     expect(queryByTestId("song-settings")).toBeNull();
   });
-
   test("layout exposes active and failed radio states", () => {
     mocks.radio.error = "radio failed";
     mocks.radio.isLoading = true;
     mocks.radio.isPlaying = true;
     const view = render(<AppLayout />);
     const radio = view.getByLabelText("radio failed");
-    expect(radio.className).toContain("is-playing");
-    expect(radio.className).toContain("is-loading");
+    verify([radio.className, 'toContain', "is-playing"], [radio.className, 'toContain', "is-loading"]);
     mocks.radio.error = "";
     view.rerender(<AppLayout />);
     expect(view.getByLabelText("radio.disable:Radio")).not.toBeNull();
   });
-
   test("layout applies route-specific shells and suppresses floating controls", () => {
     mocks.location = { pathname: "/karaoke" };
     const karaoke = render(<AppLayout />);
-    expect( karaoke.container .querySelector(".app-shell") .classList.contains("karaoke-app-shell")
-    ).toBe(true);
-    expect( karaoke.container.querySelector(".app-floating-controls")
-    ).toBeNull();
+    verify([karaoke.container .querySelector(".app-shell") .classList.contains("karaoke-app-shell"), 'toBe', true]);
+    verify([karaoke.container.querySelector(".app-floating-controls"), 'toBeNull']);
     cleanup();
     mocks.location = { pathname: "/editor/song" };
     const editor = render(<AppLayout />);
-    expect(
-      editor.container
-        .querySelector(".app-shell")
-        .classList.contains("melody-editor-app-shell")
-    ).toBe(true);
+    verify([editor.container .querySelector(".app-shell") .classList.contains("melody-editor-app-shell"), 'toBe', true]);
     expect(editor.container.querySelector(".title-bar__button")).toBeNull();
   });
-
   test("backend loader hydrates preferences and reacts to theme changes", async () => {
     mocks.hydrate.mockRejectedValueOnce(new Error("optional"));
     const { getByRole, getByText } = render(
@@ -185,13 +165,11 @@ describe("application shell", () => {
         <div>ready-child</div>
       </BackendBootLoader>
     );
-    expect(getByRole("status")).not.toBeNull();
-    expect(getByText("backend.starting")).not.toBeNull();
+    verify([getByRole("status"), 'not.toBeNull'], [getByText("backend.starting"), 'not.toBeNull']);
     document.documentElement.dataset.theme = "green";
     await waitFor(() => expect(mocks.getHealth).toHaveBeenCalled());
     await waitFor(() => expect(getByText("ready-child")).not.toBeNull());
   });
-
   test("backend loader retries health checks", async () => {
     vi.useFakeTimers();
     mocks.getHealth.mockRejectedValueOnce(new Error("offline"));
@@ -202,7 +180,6 @@ describe("application shell", () => {
     await Promise.resolve();
     expect(mocks.getHealth).toHaveBeenCalledTimes(2);
   });
-
   test("backend loader exposes a terminal error and can retry", async () => {
     vi.useFakeTimers();
     mocks.getHealth.mockRejectedValue(new Error("offline"));
@@ -212,15 +189,12 @@ describe("application shell", () => {
       </BackendBootLoader>
     );
     await vi.advanceTimersByTimeAsync(40 * 5);
-    expect(view.getByText("backend.failed")).not.toBeNull();
-    expect(mocks.getHealth).toHaveBeenCalledTimes(40);
+    verify([view.getByText("backend.failed"), 'not.toBeNull'], [mocks.getHealth, 'toHaveBeenCalledTimes', 40]);
     mocks.getHealth.mockResolvedValue({ ok: true });
     fireEvent.click(view.getByText("backend.retry"));
     await act(async () => Promise.resolve());
-    expect(mocks.getHealth).toHaveBeenCalledTimes(41);
-    expect(view.getByText("ready-after-manual-retry")).not.toBeNull();
+    verify([mocks.getHealth, 'toHaveBeenCalledTimes', 41], [view.getByText("ready-after-manual-retry"), 'not.toBeNull']);
   });
-
   test("backend loader falls back for unknown themes and ignores late health", async () => {
     mocks.getTheme.mockReturnValue("unknown");
     let resolveHealth;

@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-
+import { same, called, calledWith, verify } from "./helpers/assertions.mjs";
 const mocks = vi.hoisted(() => ({
   location: { state: { songId: "song" } },
   navigate: vi.fn(),
@@ -29,7 +29,6 @@ const mocks = vi.hoisted(() => ({
   startMonitoring: vi.fn(),
   stopMonitoring: vi.fn()
 }));
-
 vi.mock("react-router-dom", () => ({
   useLocation: () => mocks.location,
   useNavigate: () => mocks.navigate
@@ -165,9 +164,7 @@ vi.mock("../src/pages/Karaoke/hooks/useMelodyGuide", () => ({
 }));
 vi.mock("../src/pages/Karaoke/hooks/useKaraokeHotkeys", () => ({ default: vi.fn() }));
 vi.mock("../src/pages/Karaoke/hooks/useKaraokeStageLayout", () => ({ default: vi.fn() }));
-
 import Karaoke from "../src/pages/Karaoke/index.jsx";
-
 const song = {
   id: "song",
   title: "Song",
@@ -184,7 +181,6 @@ const result = {
   },
   music: { tempo: 120, key: "C" }
 };
-
 beforeEach(() => {
   Object.defineProperties(HTMLMediaElement.prototype, {
     load: { configurable: true, value: vi.fn() },
@@ -255,18 +251,15 @@ beforeEach(() => {
     .mockResolvedValue({ monitoring_enabled: false });
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
-
 describe("karaoke page", () => {
   test("renders ready song and wires stage, console, radio and monitoring", async () => {
     const appSettings = vi.fn();
     const page = render(<Karaoke onOpenAppSettings={appSettings} />);
     expect(page.getByTestId("stage")).not.toBeNull();
-    expect(mocks.stageProps.songId).toBe("song");
-    expect(mocks.consoleProps.currentTempo).toBe(120);
+    same([mocks.stageProps.songId, "song"], [mocks.consoleProps.currentTempo, 120]);
     fireEvent.mouseMove(page.container.querySelector(".karaoke-stage"));
     fireEvent.click(page.getByTestId("preset"));
-    expect(mocks.preferences.setEffectPreset).toHaveBeenCalledWith("hall");
-    expect(mocks.microphone.updateMicrophone).toHaveBeenCalled();
+    verify([mocks.preferences.setEffectPreset, 'toHaveBeenCalledWith', "hall"], [mocks.microphone.updateMicrophone, 'toHaveBeenCalled']);
     fireEvent.click(page.getByTestId("monitor"));
     await waitFor(() => expect(mocks.startMonitoring).toHaveBeenCalled());
     expect(mocks.microphone.setMonitoringEnabled).toHaveBeenCalledWith(true);
@@ -274,7 +267,6 @@ describe("karaoke page", () => {
     fireEvent.click(radio);
     expect(mocks.radio.toggle).toHaveBeenCalled();
   });
-
   test("covers library, song, processing and result guard states", () => {
     const cases = [
       [ { data: null, error: new Error("offline") }, mocks.result, "field-error" ],
@@ -302,7 +294,6 @@ describe("karaoke page", () => {
       cleanup();
     }
   });
-
   test("selects the first ready song when route state has no song id", () => {
     mocks.location = { state: null };
     mocks.songsPoll = {
@@ -312,7 +303,6 @@ describe("karaoke page", () => {
     render(<Karaoke />);
     expect(mocks.stageProps.songId).toBe("song");
   });
-
   test("renders the no-ready-song message without route state", () => {
     mocks.location = { state: null };
     mocks.songsPoll = { data: null, error: null };
@@ -323,7 +313,6 @@ describe("karaoke page", () => {
     const empty = render(<Karaoke />);
     expect(empty.container.querySelector(".text-muted")).not.toBeNull();
   });
-
   test("starts playback with intro and stops through blackout transition", async () => {
     vi.useFakeTimers();
     const page = render(<Karaoke />);
@@ -340,19 +329,14 @@ describe("karaoke page", () => {
     fireEvent.click(page.getByTestId("stop"));
     await vi.runAllTimersAsync();
     expect(mocks.transport.stop).toHaveBeenCalled();
-    expect(mocks.navigate).toHaveBeenCalledWith( "/", expect.objectContaining({ replace: true })
-    );
+    verify([mocks.navigate, 'toHaveBeenCalledWith', "/", expect.objectContaining({ replace: true })]);
   });
-
   test("syncs participant effects while a room is active", () => {
     mocks.room.room = { host: true };
     mocks.room.participants = [{ id: "guest" }];
     render(<Karaoke />);
-    expect(mocks.room.syncUi).toHaveBeenCalledWith({
-      participantEffects: mocks.microphone.microphoneEffects
-    });
+    verify([mocks.room.syncUi, 'toHaveBeenCalledWith', { participantEffects: mocks.microphone.microphoneEffects }]);
   });
-
   test("suspends radio only for an active recording during playback", async () => {
     render(<Karaoke />);
     await act(async () => mocks.transportOptions.setRecordingSessionId("rec"));
@@ -362,7 +346,6 @@ describe("karaoke page", () => {
     await act(async () => mocks.transportOptions.setRecordingSessionId(null));
     expect(mocks.radio.setRecordingActive).toHaveBeenLastCalledWith(false);
   });
-
   test("reports direct monitoring failure", async () => {
     mocks.startMonitoring.mockRejectedValueOnce(new Error("monitor failed"));
     const page = render(<Karaoke />);
@@ -372,7 +355,6 @@ describe("karaoke page", () => {
       ).toContain("monitor failed")
     );
   });
-
   test("wires all console mutations and stopping monitoring", async () => {
     const page = render(<Karaoke />);
     fireEvent.click(page.getByTestId("effect"));
@@ -385,27 +367,16 @@ describe("karaoke page", () => {
     fireEvent.click(page.getByTestId("skip"));
     fireEvent.click(page.getByTestId("monitor-off"));
     await waitFor(() => expect(mocks.stopMonitoring).toHaveBeenCalled());
-
-    expect(mocks.preferences.setEffectPreset).toHaveBeenCalledWith("custom");
-    expect(mocks.microphone.updateMicrophone).toHaveBeenCalledWith({ echo: 0.6 });
-    expect(mocks.microphone.updateMicrophone).toHaveBeenCalledWith({ volume: 0.9 });
-    expect(mocks.preferences.setSpeed).toHaveBeenCalledWith(0.5);
-    expect(mocks.preferences.setShowNotes).toHaveBeenCalled();
-    expect(mocks.preferences.setShowLyrics).toHaveBeenCalled();
-    expect(mocks.preferences.setAutoHideConsole).toHaveBeenCalledWith(true);
-    expect(mocks.transport.seekTo).toHaveBeenCalledWith(2);
-    expect(mocks.transport.skip).toHaveBeenCalledWith(5);
-    expect(mocks.microphone.setMonitoringEnabled).toHaveBeenCalledWith(false);
+    calledWith([mocks.preferences.setEffectPreset, ["custom"]], [mocks.microphone.updateMicrophone, [{ echo: 0.6 }]], [mocks.microphone.updateMicrophone, [{ volume: 0.9 }]], [mocks.preferences.setSpeed, [0.5]]);
+    called(mocks.preferences.setShowNotes, mocks.preferences.setShowLyrics);
+    calledWith([mocks.preferences.setAutoHideConsole, [true]], [mocks.transport.seekTo, [2]], [mocks.transport.skip, [5]], [mocks.microphone.setMonitoringEnabled, [false]]);
   });
-
   test("opens analysis result and handles every completion path", async () => {
     const page = render(<Karaoke />);
     await act(async () => mocks.transportOptions.setAnalysisRecordingId("rec"));
     expect(page.getByTestId("analysis-modal")).toBeTruthy();
     fireEvent.click(page.getByTestId("analysis-close"));
-    expect(mocks.navigate).toHaveBeenCalledWith( "/", expect.objectContaining({ replace: true })
-    );
-
+    verify([mocks.navigate, 'toHaveBeenCalledWith', "/", expect.objectContaining({ replace: true })]);
     await act(async () =>
       mocks.transportOptions.setAnalysisRecordingId( (previous) => previous || "next"
       )
@@ -416,7 +387,6 @@ describe("karaoke page", () => {
     fireEvent.click(page.getByTestId("analysis-delete"));
     expect(mocks.navigate).toHaveBeenCalledTimes(3);
   });
-
   test("pauses, resumes and restores radio after the first intro", async () => {
     vi.useFakeTimers();
     mocks.radio.isPlaying = true;
@@ -427,15 +397,11 @@ describe("karaoke page", () => {
     mocks.radio.turnOn.mockRejectedValueOnce(new Error("radio unavailable"));
     fireEvent.click(page.getByTestId("play"));
     await act(async () => Promise.resolve());
-    expect(mocks.transport.togglePlay).toHaveBeenCalledWith({ forcePlaying: false });
-    expect(mocks.radio.turnOn).toHaveBeenCalledWith({ remember: false, fadeIn: true });
-
+    calledWith([mocks.transport.togglePlay, [{ forcePlaying: false }]], [mocks.radio.turnOn, [{ remember: false, fadeIn: true }]]);
     await act(async () => mocks.transportOptions.setIsPlaying(false));
     fireEvent.click(page.getByTestId("play"));
-    expect(mocks.radio.turnOff).toHaveBeenCalled();
-    expect(mocks.transport.togglePlay).toHaveBeenCalledWith({ forcePlaying: true });
+    verify([mocks.radio.turnOff, 'toHaveBeenCalled'], [mocks.transport.togglePlay, 'toHaveBeenCalledWith', { forcePlaying: true }]);
   });
-
   test("auto-starts after route handoff and clears its timers on unmount", async () => {
     vi.useFakeTimers();
     mocks.location = { state: { songId: "song", autoPlay: true } };
@@ -444,36 +410,30 @@ describe("karaoke page", () => {
     window.addEventListener("app:route-blackout", listener);
     const page = render(<Karaoke />);
     await vi.runAllTimersAsync();
-    expect(mocks.transport.togglePlay).toHaveBeenCalledWith({ forcePlaying: true });
-    expect(events).toContain(false);
+    verify([mocks.transport.togglePlay, 'toHaveBeenCalledWith', { forcePlaying: true }], [events, 'toContain', false]);
     page.unmount();
     window.removeEventListener("app:route-blackout", listener);
   });
-
   test("releases blackout when auto-start media never mounts", async () => {
     vi.useFakeTimers();
     mocks.location = { state: { songId: "song", autoPlay: true } };
     mocks.renderMedia = false;
     const page = render(<Karaoke />);
     await vi.runAllTimersAsync();
-    expect(mocks.transport.togglePlay).not.toHaveBeenCalled();
-    expect(mocks.stageProps.sceneBlackout).toBe(false);
+    verify([mocks.transport.togglePlay, 'not.toHaveBeenCalled'], [mocks.stageProps.sceneBlackout, 'toBe', false]);
     page.unmount();
   });
-
   test("continues intro after media readiness timeout and handles media-ended callback", async () => {
     vi.useFakeTimers();
     const page = render(<Karaoke />);
     fireEvent.click(page.getByTestId("play"));
     await vi.runAllTimersAsync();
     expect(mocks.transport.togglePlay).toHaveBeenCalledWith({ forcePlaying: true });
-
     const ended = mocks.mediaSyncOptions.onPlaybackEndedRef.current();
     await vi.runAllTimersAsync();
     await ended;
     expect(mocks.transport.stop).toHaveBeenCalled();
   });
-
   test("starts immediately when song media is already ready", async () => {
     vi.useFakeTimers();
     Object.defineProperty(HTMLMediaElement.prototype, "readyState", {
@@ -485,7 +445,6 @@ describe("karaoke page", () => {
     await vi.runAllTimersAsync();
     expect(mocks.transport.togglePlay).toHaveBeenCalledWith({ forcePlaying: true });
   });
-
   test("handles declined playback, pause and stop transitions", async () => {
     vi.useFakeTimers();
     mocks.radio.isPlaying = true;
@@ -501,7 +460,6 @@ describe("karaoke page", () => {
     await vi.runAllTimersAsync();
     expect(mocks.transport.stop).toHaveBeenCalled();
   });
-
   test("uses tempo, key and hidden-control fallbacks", () => {
     mocks.songsPoll = { data: [{ ...song, key_override: "", tempo_override: "bad" }], error: null };
     mocks.result = {
@@ -511,15 +469,13 @@ describe("karaoke page", () => {
     };
     mocks.controls.controlsVisible = false;
     const page = render(<Karaoke />);
-    expect(mocks.consoleProps.currentTempo).toBe(120);
-    expect(mocks.consoleProps.compactKey).toContain("D");
+    verify([mocks.consoleProps.currentTempo, 'toBe', 120], [mocks.consoleProps.compactKey, 'toContain', "D"]);
     // Stage actions render in a fixed order: back, fullscreen, console
     // visibility toggle, radio.
     const consoleToggle = page.container.querySelectorAll(".karaoke-stage-action")[2];
     fireEvent.click(consoleToggle);
     expect(mocks.controls.showControls).toHaveBeenCalled();
     page.unmount();
-
     mocks.result = {
       result: { ...result, music: { tempo: null, key: "" } },
       loading: false,
@@ -528,7 +484,6 @@ describe("karaoke page", () => {
     render(<Karaoke />);
     expect(mocks.consoleProps.compactKey).toContain("C");
   });
-
   test("ignores an auto-start callback retained after unmount", () => {
     mocks.location = { state: { songId: "song", autoPlay: true } };
     let autoStart;

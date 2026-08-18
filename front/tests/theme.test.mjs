@@ -1,22 +1,14 @@
 import assert from "node:assert/strict";
 import { test, vi } from "vitest";
-
+import { equal } from "./helpers/assertions.mjs";
 const loadTheme = async () => {
   vi.resetModules();
   return import("../src/utils/theme.js");
 };
-
 test("theme normalization accepts only supported themes", async () => {
   const { resolveTheme } = await loadTheme();
-  assert.equal(resolveTheme("dark"), "dark");
-  assert.equal(resolveTheme("light"), "light");
-  assert.equal(resolveTheme("green"), "green");
-  assert.equal(resolveTheme(" violet "), "violet");
-  assert.equal(resolveTheme("unknown"), "dark");
-  assert.equal(resolveTheme(null), "dark");
-  assert.equal(resolveTheme({}), "dark");
+  equal([resolveTheme("dark"), "dark"], [resolveTheme("light"), "light"], [resolveTheme("green"), "green"], [resolveTheme(" violet "), "violet"], [resolveTheme("unknown"), "dark"], [resolveTheme(null), "dark"], [resolveTheme({}), "dark"]);
 });
-
 test("theme storage is resilient and normalized", async () => {
   const { readStoredTheme, writeStoredTheme } = await loadTheme();
   const values = new Map([["karaoke-theme", "green"]]);
@@ -24,23 +16,8 @@ test("theme storage is resilient and normalized", async () => {
     getItem: (key) => values.get(key),
     setItem: (key, value) => values.set(key, value)
   };
-  assert.equal(readStoredTheme(storage), "green");
-  assert.equal(writeStoredTheme(storage, "light"), "light");
-  assert.equal(values.get("karaoke-theme"), "light");
-  assert.equal(readStoredTheme({ getItem: () => "invalid" }), "dark");
-  assert.equal(readStoredTheme(), "dark");
-  assert.equal(readStoredTheme({}), "dark");
-  assert.equal( readStoredTheme({ getItem: () => { throw new Error("blocked"); } }), "dark"
-  );
-  assert.equal(writeStoredTheme(undefined, "green"), "green");
-  assert.equal(writeStoredTheme({}, "green"), "green");
-  assert.equal(
-    writeStoredTheme( { setItem: () => { throw new Error("blocked"); } }, "green"
-    ),
-    "green"
-  );
+  equal([readStoredTheme(storage), "green"], [writeStoredTheme(storage, "light"), "light"], [values.get("karaoke-theme"), "light"], [readStoredTheme({ getItem: () => "invalid" }), "dark"], [readStoredTheme(), "dark"], [readStoredTheme({}), "dark"], [readStoredTheme({ getItem: () => { throw new Error("blocked"); } }), "dark"], [writeStoredTheme(undefined, "green"), "green"], [writeStoredTheme({}, "green"), "green"], [writeStoredTheme( { setItem: () => { throw new Error("blocked"); } }, "green" ), "green"]);
 });
-
 test("applying a theme synchronizes DOM, storage and Electron icon", async () => {
   const { applyTheme, getSavedTheme, saveTheme } = await loadTheme();
   const originalWindow = globalThis.window;
@@ -55,16 +32,10 @@ test("applying a theme synchronizes DOM, storage and Electron icon", async () =>
     electronAPI: { setIconTheme: (theme) => iconThemes.push(theme) }
   };
   globalThis.document = { documentElement: { dataset: {} } };
-
-  assert.equal(saveTheme("violet"), "violet");
-  assert.equal(getSavedTheme(), "violet");
-  assert.equal(applyTheme("green"), "green");
-  assert.equal(document.documentElement.dataset.theme, "green");
+  equal([saveTheme("violet"), "violet"], [getSavedTheme(), "violet"], [applyTheme("green"), "green"], [document.documentElement.dataset.theme, "green"]);
   assert.deepEqual(iconThemes, ["green"]);
-
   delete globalThis.window.electronAPI;
-  assert.equal(applyTheme("light"), "light");
-
+  equal([applyTheme("light"), "light"]);
   globalThis.window = originalWindow;
   globalThis.document = originalDocument;
 });

@@ -1,12 +1,12 @@
 /* @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
-
+import { suppressWindowErrors } from "./helpers/browser.mjs";
+import { same, calledWith, verify } from "./helpers/assertions.mjs";
 vi.mock("../src/i18n", async (importOriginal) => {
   const actual = await importOriginal();
   return { ...actual, useI18n: () => ({ t: (key, _values, fallback) => fallback || key }) };
 });
-
 import { AudioPlayer } from "../src/components/AudioPlayer.jsx";
 import Button from "../src/components/fields/button.jsx";
 import Field, { FieldRow } from "../src/components/fields/field.jsx";
@@ -21,9 +21,7 @@ import PageState from "../src/components/ui/PageState.jsx";
 import Panel from "../src/components/ui/Panel.jsx";
 import ProgressBar from "../src/components/ui/ProgressBar.jsx";
 import StatusBadge from "../src/components/ui/StatusBadge.jsx";
-
 const Icon = (props) => <svg data-testid="icon" {...props} />;
-
 beforeAll(() => {
   Object.defineProperties(HTMLMediaElement.prototype, {
     play: { configurable: true, value: vi.fn(async () => {}) },
@@ -32,7 +30,6 @@ beforeAll(() => {
   });
 });
 afterEach(cleanup);
-
 describe("primitive UI components", () => {
   test("renders buttons, icons, fields, rows and panels", () => {
     const clicked = vi.fn();
@@ -68,22 +65,13 @@ describe("primitive UI components", () => {
     );
     fireEvent.click(screen.getByText("Save"));
     expect(clicked).toHaveBeenCalledOnce();
-    expect(screen.getByText("Save").className).toContain("btn-primary");
-    expect(screen.getByText("Raw").className).toBe("raw");
-    expect(screen.getByText("Bare").getAttribute("class")).toBeNull();
-    expect(screen.getByLabelText("Icon action").title).toBe("Custom");
-    expect(screen.getByLabelText("Raw icon").getAttribute("class")).toBeNull();
-    expect(screen.getByText("Error").className).toBe("field-error");
-    expect(screen.getByText("Row").className).toContain("extra");
+    verify([screen.getByText("Save").className, 'toContain', "btn-primary"], [screen.getByText("Raw").className, 'toBe', "raw"], [screen.getByText("Bare").getAttribute("class"), 'toBeNull'], [screen.getByLabelText("Icon action").title, 'toBe', "Custom"], [screen.getByLabelText("Raw icon").getAttribute("class"), 'toBeNull'], [screen.getByText("Error").className, 'toBe', "field-error"], [screen.getByText("Row").className, 'toContain', "extra"]);
   });
-
   test("renders progress, statuses, page states and tables", () => {
     const { rerender } = render(<ProgressBar percent="bad" />);
-    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe( "0"
-    );
+    verify([screen.getByRole("progressbar").getAttribute("aria-valuenow"), 'toBe', "0"]);
     rerender(<ProgressBar percent={150} label="Work" />);
-    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe( "100"
-    );
+    verify([screen.getByRole("progressbar").getAttribute("aria-valuenow"), 'toBe', "100"]);
     rerender(<StatusBadge status="done" />);
     expect(document.querySelector(".badge-done")).not.toBeNull();
     rerender(<StatusBadge status="custom" />);
@@ -139,7 +127,6 @@ describe("primitive UI components", () => {
       />
     );
   });
-
   test("applies neon card pointer effects and delegates handlers", () => {
     const moved = vi.fn();
     const left = vi.fn();
@@ -158,8 +145,7 @@ describe("primitive UI components", () => {
     const card = document.querySelector(".ui-card");
     card.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100 });
     fireEvent.pointerMove(card, { clientX: 75, clientY: 25 });
-    expect(card.style.getPropertyValue("--card-mx")).toBe("75%");
-    expect(card.style.getPropertyValue("--tilt-y")).toBe("2.5deg");
+    same([card.style.getPropertyValue("--card-mx"), "75%"], [card.style.getPropertyValue("--tilt-y"), "2.5deg"]);
     fireEvent.pointerLeave(card);
     expect(card.style.getPropertyValue("--card-mx")).toBe("");
     expect(moved).toHaveBeenCalledOnce();
@@ -178,7 +164,6 @@ describe("primitive UI components", () => {
     expect(screen.getByText("Plain")).not.toBeNull();
   });
 });
-
 describe("field controls", () => {
   test.each([
     ["text", "hello", "world"],
@@ -198,11 +183,9 @@ describe("field controls", () => {
     const control = screen.getByRole("textbox");
     fireEvent.change(control, { target: { value: next } });
     fireEvent.blur(control, { target: { value: next } });
-    expect(change).toHaveBeenCalledWith(next);
-    expect(blur).toHaveBeenCalledWith(next);
+    calledWith([change, [next]], [blur, [next]]);
     expect(control.getAttribute("aria-invalid")).toBe("true");
   });
-
   test("supports numeric, toggle, readonly, select, bare and invalid controls", async () => {
     const change = vi.fn();
     const blur = vi.fn();
@@ -218,8 +201,7 @@ describe("field controls", () => {
     const number = screen.getByLabelText("Number");
     fireEvent.change(number, { target: { value: "" } });
     fireEvent.blur(number, { target: { value: "bad" } });
-    expect(change).toHaveBeenCalledWith(null);
-    expect(blur).toHaveBeenCalledWith(null);
+    calledWith([change, [null]], [blur, [null]]);
     fireEvent.change(number, { target: { value: "2.5" } });
     fireEvent.blur(number, { target: { value: "3" } });
     expect(change).toHaveBeenLastCalledWith(2.5);
@@ -260,7 +242,6 @@ describe("field controls", () => {
     );
     expect(document.body.textContent).toBe("");
   });
-
   test("accepts the default blur handler", () => {
     render(
       <FieldInput
@@ -271,7 +252,6 @@ describe("field controls", () => {
     );
     expect(() => fireEvent.blur(screen.getByLabelText("Text"))).not.toThrow();
   });
-
   test("maps field lists and range commit semantics", () => {
     const change = vi.fn();
     const blur = vi.fn();
@@ -287,8 +267,7 @@ describe("field controls", () => {
     fireEvent.change(screen.getByLabelText("X"), { target: { value: "b" } });
     fireEvent.blur(screen.getByLabelText("X"));
     expect(change).toHaveBeenCalledWith("x", "b");
-    expect(blur).toHaveBeenCalledWith( "x", "a", expect.objectContaining({ name: "x" })
-    );
+    verify([blur, 'toHaveBeenCalledWith', "x", "a", expect.objectContaining({ name: "x" })]);
     rerender(
       <FieldList
         fields={[{ name: "y", label: "Y" }]}
@@ -310,7 +289,6 @@ describe("field controls", () => {
     fireEvent.change(screen.getByLabelText("Text range"), { target: { value: "3" } });
   });
 });
-
 describe("AudioPlayer and error boundary", () => {
   test("handles playback, media events, seeking and volume", async () => {
     render( <AudioPlayer src="one.wav" initialDuration={10} className="extra" />
@@ -332,10 +310,8 @@ describe("AudioPlayer and error boundary", () => {
     fireEvent.click(buttons[1]);
     fireEvent.ended(audio);
     expect(audio.currentTime).toBe(0);
-    expect(document.querySelector(".performance-player").className).toContain( "extra"
-    );
+    verify([document.querySelector(".performance-player").className, 'toContain', "extra"]);
   });
-
   test("ignores browser media property assignment failures", () => {
     render(<AudioPlayer src="one.wav" initialDuration={10} />);
     const audio = document.querySelector("audio");
@@ -346,18 +322,15 @@ describe("AudioPlayer and error boundary", () => {
         throw new Error("seek blocked");
       }
     });
-    expect(() => fireEvent.change(sliders[0], { target: { value: "5" } })
-    ).not.toThrow();
+    verify([() => fireEvent.change(sliders[0], { target: { value: "5" } }), 'not.toThrow']);
     Object.defineProperty(audio, "volume", {
       configurable: true,
       set: () => {
         throw new Error("volume blocked");
       }
     });
-    expect(() => fireEvent.change(sliders[1], { target: { value: "0.5" } })
-    ).not.toThrow();
+    verify([() => fireEvent.change(sliders[1], { target: { value: "0.5" } }), 'not.toThrow']);
   });
-
   test("keeps zero duration when media metadata is invalid", () => {
     render(<AudioPlayer src="empty.wav" />);
     const audio = document.querySelector("audio");
@@ -368,23 +341,17 @@ describe("AudioPlayer and error boundary", () => {
     fireEvent.loadedMetadata(audio);
     fireEvent.timeUpdate(audio);
     const position = screen.getByLabelText("audio.recordingPosition");
-    expect(position.max).toBe("0");
-    expect(position.value).toBe("0");
+    same([position.max, "0"], [position.value, "0"]);
   });
-
   test("renders the fallback after a descendant throws", () => {
-    const log = vi.spyOn(console, "error").mockImplementation(() => {});
-    const suppress = (event) => event.preventDefault();
-    window.addEventListener("error", suppress);
+    const { log, restore } = suppressWindowErrors();
     const Crash = () => {
       throw new Error("boom");
     };
     render( <ErrorBoundary> <Crash /> </ErrorBoundary>
     );
-    window.removeEventListener("error", suppress);
-    expect(screen.getByRole("alert")).not.toBeNull();
-    expect(screen.getByText("boom")).not.toBeNull();
-    expect(log).toHaveBeenCalled();
+    verify([screen.getByRole("alert"), 'not.toBeNull'], [screen.getByText("boom"), 'not.toBeNull'], [log, 'toHaveBeenCalled']);
+    restore();
     fireEvent.click(screen.getByRole("button"));
   });
 });

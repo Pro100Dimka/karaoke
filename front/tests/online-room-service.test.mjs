@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-
 import { translateSaved } from "../src/i18n/runtime.js";
 import {
   DEFAULT_SIGNALING_URL,
@@ -7,13 +6,12 @@ import {
   createRoomId,
   normalizeRoomId
 } from "../src/services/onlineRoom.js";
-
+import { same, verify } from "./helpers/assertions.mjs";
 class FakeSocket {
   static CONNECTING = 0;
   static OPEN = 1;
   static CLOSING = 2;
   static instances = [];
-
   constructor(url) {
     this.url = url;
     this.readyState = FakeSocket.CONNECTING;
@@ -25,7 +23,6 @@ class FakeSocket {
     FakeSocket.instances.push(this);
   }
 }
-
 const installSocket = () => {
   FakeSocket.instances = [];
   globalThis.WebSocket = FakeSocket;
@@ -34,18 +31,14 @@ const loadOnlineRoomService = async () => {
   vi.resetModules();
   return import("../src/services/onlineRoom.js");
 };
-
 afterEach(() => {
   vi.useRealTimers();
   delete globalThis.WebSocket;
 });
-
 describe("online room service", () => {
   test("loads deployment limits from the active module instance", async () => {
     const service = await loadOnlineRoomService();
-    expect(service.DEFAULT_SIGNALING_URL).toBe(
-      "wss://karaoke-studio-online.pro100dimka-and.workers.dev"
-    );
+    verify([service.DEFAULT_SIGNALING_URL, 'toBe', "wss://karaoke-studio-online.pro100dimka-and.workers.dev"]);
     installSocket();
     const client = new service.OnlineRoomClient();
     const connection = client.connect({ id: "ABCD" });
@@ -57,40 +50,20 @@ describe("online room service", () => {
     expect(client.send("message", { text: "x".repeat(1024) })).toBe(true);
     client.disconnect();
   });
-
   test("generates and normalizes room identifiers through every entropy source", () => {
-    expect(DEFAULT_SIGNALING_URL).toBe("wss://karaoke-studio-online.pro100dimka-and.workers.dev");
-    expect(createRoomId({ randomUUID: () => "ab-cd-ef-gh-12-34-56" })).toBe("ABCDEFGH1234");
-    expect(
-      createRoomId({
-        getRandomValues: (bytes) => {
-          bytes.set([0, 1, 254, 255, 16, 32]);
-          return bytes;
-        }
-      })
-    ).toBe("0001FEFF1020");
-    expect(createRoomId({}, () => 0)).toBe("000000000000");
-    expect(createRoomId(null, () => 0xabcdef12 / 0x1_0000_0000)).toHaveLength(12);
-    expect(normalizeRoomId(" ab!_c-d? ")).toBe("AB_C-D");
-    expect(normalizeRoomId(`a${"b".repeat(40)}`)).toBe(`A${"B".repeat(31)}`);
-    expect(normalizeRoomId(null)).toBe("");
+    same([DEFAULT_SIGNALING_URL, "wss://karaoke-studio-online.pro100dimka-and.workers.dev"], [createRoomId({ randomUUID: () => "ab-cd-ef-gh-12-34-56" }), "ABCDEFGH1234"]);
+    verify([createRoomId({ getRandomValues: (bytes) => { bytes.set([0, 1, 254, 255, 16, 32]); return bytes; } }), 'toBe', "0001FEFF1020"]);
+    verify([createRoomId({}, () => 0), 'toBe', "000000000000"], [createRoomId(null, () => 0xabcdef12 / 0x1_0000_0000), 'toHaveLength', 12]);
+    same([normalizeRoomId(" ab!_c-d? "), "AB_C-D"], [normalizeRoomId(`a${"b".repeat(40)}`), `A${"B".repeat(31)}`], [normalizeRoomId(null), ""]);
   });
-
   test("sanitizes signaling URLs and rejects unsupported protocols", () => {
-    expect(new OnlineRoomClient("https://user:pass@example.test/path/").url).toBe(
-      "wss://example.test/path"
-    );
+    verify([new OnlineRoomClient("https://user:pass@example.test/path/").url, 'toBe', "wss://example.test/path"]);
     expect(new OnlineRoomClient("http://example.test").url).toBe("ws://example.test");
-    expect(() => new OnlineRoomClient("ftp://example.test")).toThrow(
-      translateSaved("Некорректный адрес сервера комнат")
-    );
+    verify([() => new OnlineRoomClient("ftp://example.test"), 'toThrow', translateSaved("Некорректный адрес сервера комнат")]);
   });
-
   test("validates listeners and isolates listener failures", () => {
     const client = new OnlineRoomClient();
-    expect(() => client.onMessage(null)).toThrow(
-      translateSaved("Обработчик сообщений комнаты должен быть функцией")
-    );
+    verify([() => client.onMessage(null), 'toThrow', translateSaved("Обработчик сообщений комнаты должен быть функцией")]);
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const bad = vi.fn(() => {
       throw new Error("listener");
@@ -100,16 +73,12 @@ describe("online room service", () => {
     client.onMessage(good);
     client.emit({ type: "ok" });
     expect(good).toHaveBeenCalledWith({ type: "ok" });
-    expect(error).toHaveBeenCalledWith(
-      "Online room listener failed",
-      expect.objectContaining({ message: "listener" })
-    );
+    verify([error, 'toHaveBeenCalledWith', "Online room listener failed", expect.objectContaining({ message: "listener" })]);
     unsubscribe();
     client.emit({ type: "again" });
     expect(bad).toHaveBeenCalledTimes(1);
     error.mockRestore();
   });
-
   test("connects with a safe participant name and parses valid packets", async () => {
     installSocket();
     const client = new OnlineRoomClient("ws://example.test/");
@@ -117,9 +86,7 @@ describe("online room service", () => {
     client.onMessage(listener);
     const connection = client.connect({ id: " room-1 ", name: " A\u001fB\u007fC ", host: true });
     const socket = FakeSocket.instances[0];
-    expect(socket.url).toContain("/rooms/ROOM-1?");
-    expect(new URL(socket.url).searchParams.get("name")).toBe("A B C");
-    expect(socket.url).toContain("role=host");
+    verify([socket.url, 'toContain', "/rooms/ROOM-1?"], [new URL(socket.url).searchParams.get("name"), 'toBe', "A B C"], [socket.url, 'toContain', "role=host"]);
     socket.readyState = FakeSocket.OPEN;
     socket.onopen();
     await expect(connection).resolves.toBe("ROOM-1");
@@ -133,43 +100,29 @@ describe("online room service", () => {
     socket.onmessage({ data: "bad" });
     socket.onmessage({ data: new ArrayBuffer(1) });
     socket.onmessage({ data: { length: 16, toString: () => JSON.stringify({ type: "coerced" }) } });
-    expect(listener).toHaveBeenCalledTimes(1);
-    expect(listener).toHaveBeenCalledWith({ type: "state" });
+    verify([listener, 'toHaveBeenCalledTimes', 1], [listener, 'toHaveBeenCalledWith', { type: "state" }]);
     socket.onclose({ code: 1000 });
     expect(client.socket).toBeNull();
   });
-
   test("uses the guest fallback, sends bounded objects and disconnects", async () => {
     installSocket();
     const client = new OnlineRoomClient();
     const connection = client.connect({ id: "ABCD", name: "\u0001" });
     const socket = FakeSocket.instances[0];
     expect(socket.url).toContain("role=guest");
-    expect(new URL(socket.url).searchParams.get("name")).toBe(translateSaved("Гость"));
-    expect(client.send("x", {})).toBe(false);
+    same([new URL(socket.url).searchParams.get("name"), translateSaved("Гость")], [client.send("x", {}), false]);
     expect(socket.send).not.toHaveBeenCalled();
     socket.readyState = FakeSocket.OPEN;
     socket.onopen();
     await connection;
-    expect(client.send(" update ", { value: 1 })).toBe(true);
-    expect(JSON.parse(socket.send.mock.calls[0][0])).toEqual({ value: 1, type: "update" });
-    expect(client.send("", {})).toBe(false);
-    expect(client.send("   ", {})).toBe(false);
-    expect(client.send(null, {})).toBe(false);
-    expect(client.send("x", [])).toBe(false);
-    expect(client.send("x", null)).toBe(false);
-    expect(client.send("x", "payload")).toBe(false);
+    verify([client.send(" update ", { value: 1 }), 'toBe', true], [JSON.parse(socket.send.mock.calls[0][0]), 'toEqual', { value: 1, type: "update" }]);
+    same([client.send("", {}), false], [client.send("   ", {}), false], [client.send(null, {}), false], [client.send("x", []), false], [client.send("x", null), false], [client.send("x", "payload"), false]);
     const serializedOverhead = JSON.stringify({ value: "", type: "x" }).length;
     expect(client.send("x", { value: "x".repeat(256 * 1024 - serializedOverhead) })).toBe(true);
-    expect(client.send("x", { value: "x".repeat(256 * 1024 - serializedOverhead + 1) })).toBe(
-      false
-    );
-    expect(client.send("x", { value: "x".repeat(300_000) })).toBe(false);
-    expect(client.send("x", { value: 1n })).toBe(false);
+    verify([client.send("x", { value: "x".repeat(256 * 1024 - serializedOverhead + 1) }), 'toBe', false]);
+    same([client.send("x", { value: "x".repeat(300_000) }), false], [client.send("x", { value: 1n }), false]);
     client.disconnect();
-    expect(socket.close).toHaveBeenCalledWith(1000, "Client left room");
-    expect(client.send("x")).toBe(false);
-
+    verify([socket.close, 'toHaveBeenCalledWith', 1000, "Client left room"], [client.send("x"), 'toBe', false]);
     const longConnection = client.connect({
       id: "ABCD",
       name: `A${"b".repeat(80)}`
@@ -181,7 +134,6 @@ describe("online room service", () => {
     await longConnection;
     client.disconnect();
   });
-
   test("rejects invalid setup and synchronous WebSocket construction errors", async () => {
     const client = new OnlineRoomClient();
     await expect(client.connect({ id: "a" })).rejects.toThrow(
@@ -204,7 +156,6 @@ describe("online room service", () => {
     };
     await expect(client.connect({ id: "ABCD" })).rejects.toThrow(Error);
   });
-
   test("reports close details, emits closure and ignores stale sockets", async () => {
     installSocket();
     const client = new OnlineRoomClient();
@@ -219,14 +170,12 @@ describe("online room service", () => {
     first.onopen();
     expect(first.close).toHaveBeenLastCalledWith(1000, "Stale connection");
     first.onclose({ code: 1000 });
-    expect(client.socket).toBe(second);
-    expect(listener).not.toHaveBeenCalled();
+    verify([client.socket, 'toBe', second], [listener, 'not.toHaveBeenCalled']);
     await expect(firstConnection).rejects.toThrow();
     second.onclose({ code: 4001, reason: " denied " });
     await expect(secondConnection).rejects.toThrow(/denied/);
     expect(listener).toHaveBeenCalledWith({ type: "connection-closed" });
   });
-
   test("formats every initial close reason exactly", async () => {
     installSocket();
     const expectedError = (detail) =>
@@ -246,7 +195,6 @@ describe("online room service", () => {
       await expect(connection).rejects.toThrow(expectedError(detail));
     }
   });
-
   test("disconnect does not close sockets already closing or closed", async () => {
     installSocket();
     for (const readyState of [FakeSocket.CLOSING, 3]) {
@@ -260,7 +208,6 @@ describe("online room service", () => {
       await expect(connection).rejects.toThrow(Error);
     }
   });
-
   test("closes oversized packets and times out unresponsive servers", async () => {
     vi.useFakeTimers();
     installSocket();
@@ -278,7 +225,6 @@ describe("online room service", () => {
     await rejection;
     expect(socket.close).toHaveBeenCalledTimes(1);
   });
-
   test("ignores an obsolete connection timeout", async () => {
     vi.useFakeTimers();
     installSocket();

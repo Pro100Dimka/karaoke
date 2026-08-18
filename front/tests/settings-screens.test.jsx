@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-
+import { same, called, verify } from "./helpers/assertions.mjs";
 const mocks = vi.hoisted(() => ({
   polling: [],
   pollingIndex: 0,
@@ -44,7 +44,6 @@ vi.mock("../src/i18n", async (importOriginal) => ({
       fallback || (values ? `${key}:${Object.values(values).join(",")}` : key)
   })
 }));
-
 import About from "../src/pages/Settings/screens/about.jsx";
 import Diagnostics from "../src/pages/Settings/screens/diagnostics/index.jsx";
 import {
@@ -63,7 +62,6 @@ import {
   runMemoryAction
 } from "../src/pages/Settings/screens/memory/utils.jsx";
 import { translateSaved } from "../src/i18n/runtime.js";
-
 beforeEach(() => {
   mocks.polling = [];
   mocks.pollingIndex = 0;
@@ -75,7 +73,6 @@ beforeEach(() => {
   mocks.clearRecordings.mockResolvedValue({});
 });
 afterEach(cleanup);
-
 describe("settings information screens", () => {
   test("renders about data and missing placeholders", () => {
     mocks.polling = [
@@ -89,14 +86,11 @@ describe("settings information screens", () => {
       }
     ];
     render(<About />);
-    expect(screen.getByText("A&D Voice")).not.toBeNull();
-    expect(screen.getByText("1.0")).not.toBeNull();
-    expect(screen.getByText("D:/Data")).not.toBeNull();
+    verify([screen.getByText("A&D Voice"), 'not.toBeNull'], [screen.getByText("1.0"), 'not.toBeNull'], [screen.getByText("D:/Data"), 'not.toBeNull']);
     cleanup();
     mocks.polling = [{ data: null }];
     expect(() => render(<About />)).not.toThrow();
   });
-
   test("renders diagnostic checks, versions and errors", () => {
     mocks.diagnostics = {
       health: { ok: true },
@@ -107,12 +101,9 @@ describe("settings information screens", () => {
       }
     };
     render(<Diagnostics />);
-    expect(screen.getByText("backend")).not.toBeNull();
-    expect(screen.getByText("failed")).not.toBeNull();
-    expect( document.querySelectorAll(".diagnostics-icon").length
-    ).toBeGreaterThan(1);
+    verify([screen.getByText("backend"), 'not.toBeNull'], [screen.getByText("failed"), 'not.toBeNull']);
+    verify([document.querySelectorAll(".diagnostics-icon").length, 'toBeGreaterThan', 1]);
   });
-
   test("covers standalone diagnostic empty and fallback states", () => {
     const view = render(
       <>
@@ -132,31 +123,21 @@ describe("settings information screens", () => {
     mocks.diagnostics = { health: null, pipeline: null, versions: null, errors: null };
     expect(() => render(<Diagnostics />)).not.toThrow();
   });
-
   test("renders exact version contracts and stable error keys", () => {
     const empty = render(<VersionList components={{}} />);
     expect(empty.container.innerHTML).toBe("");
     empty.unmount();
-
     render( <VersionList components={{ backend: "1.0", zero: 0, empty: "", missing: null }} />
     );
-    expect(screen.getByText("settings.diagnostics.versions")).not.toBeNull();
-    expect(screen.getByText("1.0")).not.toBeNull();
-    expect(screen.getByText("0")).not.toBeNull();
-    expect(screen.getByText("—")).not.toBeNull();
+    verify([screen.getByText("settings.diagnostics.versions"), 'not.toBeNull'], [screen.getByText("1.0"), 'not.toBeNull'], [screen.getByText("0"), 'not.toBeNull'], [screen.getByText("—"), 'not.toBeNull']);
     const values = document.querySelectorAll(".settings-version-row .mono");
     expect(values).toHaveLength(4);
     values.forEach((value) => {
-      expect(value.style.overflowWrap).toBe("anywhere");
-      expect(value.style.textAlign).toBe("right");
+      same([value.style.overflowWrap, "anywhere"], [value.style.textAlign, "right"]);
     });
-
-    expect(getErrorKey({ id: 0, updated_at: "now", title: "Zero" })).toBe(0);
-    expect(getErrorKey({ id: 7, updated_at: "now", title: "Known" })).toBe(7);
-    expect(getErrorKey({ updated_at: "now", title: "Fallback" })).toBe( "now-Fallback"
-    );
+    same([getErrorKey({ id: 0, updated_at: "now", title: "Zero" }), 0], [getErrorKey({ id: 7, updated_at: "now", title: "Known" }), 7]);
+    verify([getErrorKey({ updated_at: "now", title: "Fallback" }), 'toBe', "now-Fallback"]);
   });
-
   test("renders history rows, statuses and polling errors", () => {
     mocks.polling = [
       {
@@ -188,18 +169,13 @@ describe("settings information screens", () => {
       }
     ];
     render(<History />);
-    expect(screen.getByText("history offline")).not.toBeNull();
-    expect(screen.getByText("Song")).not.toBeNull();
-    expect(screen.getByText(/settings.history.seconds/)).not.toBeNull();
-    expect(screen.getByText("done")).not.toBeNull();
+    verify([screen.getByText("history offline"), 'not.toBeNull'], [screen.getByText("Song"), 'not.toBeNull'], [screen.getByText(/settings.history.seconds/), 'not.toBeNull'], [screen.getByText("done"), 'not.toBeNull']);
   });
-
   test("renders empty and unknown history values defensively", () => {
     mocks.polling = [{ data: null }];
     const empty = render(<History />);
     expect(screen.getByText("settings.history.empty")).not.toBeNull();
     empty.unmount();
-
     mocks.pollingIndex = 0;
     mocks.polling = [
       {
@@ -212,12 +188,9 @@ describe("settings information screens", () => {
       }
     ];
     render(<History />);
-    expect(screen.getByText("custom")).not.toBeNull();
-    expect(screen.getByText("custom-status")).not.toBeNull();
-    expect(screen.getByText("status.unknown")).not.toBeNull();
+    verify([screen.getByText("custom"), 'not.toBeNull'], [screen.getByText("custom-status"), 'not.toBeNull'], [screen.getByText("status.unknown"), 'not.toBeNull']);
   });
 });
-
 describe("memory management", () => {
   test("runs memory actions with success and failure notifications", async () => {
     const notify = vi.fn().mockResolvedValue(undefined);
@@ -236,14 +209,11 @@ describe("memory management", () => {
       })
     ).resolves.toBe(false);
     expect(notify).toHaveBeenLastCalledWith("locked");
-
     await expect(
       runMemoryAction({ request: vi.fn().mockRejectedValue(null), getMessage: vi.fn(), notify })
     ).resolves.toBe(false);
-    expect(notify).toHaveBeenLastCalledWith( translateSaved("Не удалось выполнить действие")
-    );
+    verify([notify, 'toHaveBeenLastCalledWith', translateSaved("Не удалось выполнить действие")]);
   });
-
   test("renders exact memory statistics and empty fallbacks", () => {
     const view = render(
       <MemoryStats
@@ -251,20 +221,13 @@ describe("memory management", () => {
         free={{ free_human: "5 GB", total_human: "20 GB" }}
       />
     );
-    expect(screen.getByText(translateSaved("Всего занято"))).not.toBeNull();
-    expect(screen.getByText("10 GB")).not.toBeNull();
-    expect( screen.getByText(translateSaved("Свободно на диске"))
-    ).not.toBeNull();
-    expect( screen.getByText(translateSaved("{0} из {1}", { 0: "5 GB", 1: "20 GB" }))
-    ).not.toBeNull();
+    verify([screen.getByText(translateSaved("Всего занято")), 'not.toBeNull'], [screen.getByText("10 GB"), 'not.toBeNull']);
+    verify([screen.getByText(translateSaved("Свободно на диске")), 'not.toBeNull']);
+    verify([screen.getByText(translateSaved("{0} из {1}", { 0: "5 GB", 1: "20 GB" })), 'not.toBeNull']);
     expect(document.querySelectorAll(".settings-metric-item")).toHaveLength(2);
-
     view.rerender(<MemoryStats size={null} free={null} />);
-    expect(screen.getByText("—")).not.toBeNull();
-    expect(document.querySelectorAll(".settings-metric-item")).toHaveLength(1);
-    expect(screen.queryByText(translateSaved("Свободно на диске"))).toBeNull();
+    verify([screen.getByText("—"), 'not.toBeNull'], [document.querySelectorAll(".settings-metric-item"), 'toHaveLength', 1], [screen.queryByText(translateSaved("Свободно на диске")), 'toBeNull']);
   });
-
   test("maps memory action variants and optional icons exactly", () => {
     const Icon = (props) => <svg data-testid="memory-action-icon" {...props} />;
     render(
@@ -276,25 +239,18 @@ describe("memory management", () => {
         notify={vi.fn()}
       />
     );
-    expect( screen.getByRole("button", { name: "Ghost" }).getAttribute("data-variant")
-    ).toBe("outline");
-    expect( screen.getByRole("button", { name: "Solid" }).getAttribute("data-variant")
-    ).toBe("solid");
-    expect(screen.getByTestId("memory-action-icon").getAttribute("size")).toBe( "15"
-    );
-    expect( document.querySelectorAll(".settings-memory-actions button")
-    ).toHaveLength(2);
+    verify([screen.getByRole("button", { name: "Ghost" }).getAttribute("data-variant"), 'toBe', "outline"]);
+    verify([screen.getByRole("button", { name: "Solid" }).getAttribute("data-variant"), 'toBe', "solid"]);
+    verify([screen.getByTestId("memory-action-icon").getAttribute("size"), 'toBe', "15"]);
+    verify([document.querySelectorAll(".settings-memory-actions button"), 'toHaveLength', 2]);
   });
-
   test("keeps the optimize-song heading and alignment contract", () => {
     render( <OptimizeSong value="" options={[]} onChange={vi.fn()} onOptimize={vi.fn()} />
     );
-    expect( screen.getByText(translateSaved("Оптимизация песни"))
-    ).not.toBeNull();
+    verify([screen.getByText(translateSaved("Оптимизация песни")), 'not.toBeNull']);
     const grid = document.querySelector(".settings-optimize-section .ui-grid");
     expect(grid.style.alignItems).toBe("end");
   });
-
   test("renders breakdown, stats, actions and optimizer controls", () => {
     const action = vi.fn().mockResolvedValue({});
     const optimize = vi.fn();
@@ -322,13 +278,11 @@ describe("memory management", () => {
     fireEvent.click(screen.getByText("Clear"));
     fireEvent.click( screen.getByText(/Оптимізувати|РћРїС‚РёРјРёР·РёСЂРѕРІР°С‚СЊ/)
     );
-    expect(action).toHaveBeenCalled();
-    expect(optimize).toHaveBeenCalled();
+    called(action, optimize);
     view.rerender(<MemoryBreakdown />);
     expect(view.container.textContent).toBe("");
     view.rerender(<MemoryStats size={null} free={null} />);
   });
-
   test("loads memory data and optimizes a selected song", async () => {
     mocks.polling = [
       {
@@ -351,7 +305,6 @@ describe("memory management", () => {
     await act(async () => Promise.resolve());
     expect(mocks.optimizeSong).toHaveBeenCalledWith("song");
   });
-
   test("handles missing songs and a failed memory optimization", async () => {
     mocks.polling = [
       { data: { total_human: "1 GB", breakdown: {} }, error: null },
@@ -360,8 +313,7 @@ describe("memory management", () => {
     ];
     mocks.optimizeSong.mockRejectedValueOnce(new Error("locked"));
     render(<MemoryManager />);
-    expect(screen.getByRole("button", { name: "Оптимізувати" }).disabled).toBe( true
-    );
+    verify([screen.getByRole("button", { name: "Оптимізувати" }).disabled, 'toBe', true]);
     cleanup();
     mocks.pollingIndex = 0;
     mocks.polling = [

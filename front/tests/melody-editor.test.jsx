@@ -1,7 +1,8 @@
 /* @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-
+import { installFrameQueue } from "./helpers/browser.mjs";
+import { called, verify } from "./helpers/assertions.mjs";
 const mocks = vi.hoisted(() => ({
   getSongEditor: vi.fn(),
   saveSongEditor: vi.fn(),
@@ -11,7 +12,6 @@ const mocks = vi.hoisted(() => ({
   notify: vi.fn(),
   confirm: vi.fn()
 }));
-
 vi.mock("../src/api/client", () => ({
   api: {
     getSongEditor: mocks.getSongEditor,
@@ -49,9 +49,7 @@ vi.mock("../src/pages/Karaoke/components/console/song-strip", () => ({
     <button type="button" data-testid="song-strip" onClick={() => onSeek(1)} />
   )
 }));
-
 import MelodyEditor from "../src/pages/Library/modals/song-settings/melody-editor.jsx";
-
 const payload = {
   ai_backup_exists: true,
   song_map: {
@@ -82,7 +80,6 @@ const payload = {
     ]
   }
 };
-
 const audioParam = () => ({
   value: 0,
   setValueAtTime: vi.fn(),
@@ -121,7 +118,6 @@ class FakeAudioContext {
     stop: vi.fn()
   });
 }
-
 beforeEach(() => {
   mocks.getAudioTrackBlob.mockReset().mockResolvedValue(new Blob(["audio"], { type: "audio/wav" }));
   mocks.getSongEditor.mockReset().mockResolvedValue(payload);
@@ -138,9 +134,7 @@ beforeEach(() => {
     pause: { configurable: true, value: vi.fn() }
   });
 });
-
 afterEach(() => { cleanup(); delete globalThis.AudioContext; });
-
 const loadEditor = async (props = {}) => {
   const result = render( <MelodyEditor song={{ id: "song", title: "Song" }} {...props} />
   );
@@ -150,7 +144,6 @@ const loadEditor = async (props = {}) => {
   );
   return result;
 };
-
 describe("melody editor", () => {
   test("loads, selects, merges, saves and restores notes", async () => {
     const onSaved = vi.fn();
@@ -173,7 +166,6 @@ describe("melody editor", () => {
     fireEvent.click(restore);
     await waitFor(() => expect(mocks.resetSongEditor).toHaveBeenCalled());
   });
-
   test("handles transport, hotkeys, zoom, volume and close controls", async () => {
     const onClose = vi.fn();
     const { container, getByTestId } = await loadEditor({ onClose });
@@ -198,25 +190,20 @@ describe("melody editor", () => {
     fireEvent.keyDown(window, { code: "KeyS", ctrlKey: true });
     await waitFor(() => expect(mocks.saveSongEditor).toHaveBeenCalled());
     fireEvent.click(container.querySelector(".is-nav .melody-editor-tool"));
-    expect(onClose).toHaveBeenCalled();
-    expect(mocks.persist).toHaveBeenCalled();
+    called(onClose, mocks.persist);
   });
-
   test("reports load and save failures without leaving the editor busy", async () => {
     mocks.getSongEditor.mockRejectedValueOnce(new Error("load failed"));
     const empty = render(<MelodyEditor song={{ id: "song", title: "Song" }} />);
     await waitFor(() => expect(mocks.notify).toHaveBeenCalled());
     expect(empty.container.querySelector(".melody-editor-loading")).toBeNull();
     cleanup();
-
     const { container } = await loadEditor();
     mocks.saveSongEditor.mockRejectedValueOnce(new Error("save failed"));
     fireEvent.click(container.querySelector(".melody-editor-tool.tone-pink"));
     await waitFor(() => expect(mocks.notify).toHaveBeenCalled());
-    expect( container.querySelector(".melody-editor-tool.tone-pink").disabled
-    ).toBe(false);
+    verify([container.querySelector(".melody-editor-tool.tone-pink").disabled, 'toBe', false]);
   });
-
   test("supports keyboard editing history, clipboard and note navigation", async () => {
     const { container } = await loadEditor();
     const key = (code, options = {}) =>
@@ -232,7 +219,6 @@ describe("melody editor", () => {
       clientX: 100,
       clientY: 100
     });
-
     key("KeyC", { ctrlKey: true });
     key("Home", { key: "Home" });
     key("KeyV", { ctrlKey: true });
@@ -271,13 +257,11 @@ describe("melody editor", () => {
     fireEvent.click(autoScroll);
     fireEvent.click(autoScroll);
   });
-
   test("does not trigger transport shortcuts from editable controls", async () => {
     const { container } = await loadEditor();
     const speed = container.querySelector("#melody-editor-playback-rate");
     fireEvent.keyDown(speed, { code: "Space" });
     expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
-
     const note = container.querySelector(".melody-editor-note");
     fireEvent.pointerDown(note, { pointerId: 1, clientX: 100, clientY: 100 });
     fireEvent.change(
@@ -286,7 +270,6 @@ describe("melody editor", () => {
     );
     expect(container.textContent).toContain("льшой");
   });
-
   test("handles note, marquee, playhead and custom scrollbar pointers", async () => {
     const { container } = await loadEditor();
     const shell = container.querySelector(".melody-editor-roll-shell");
@@ -301,7 +284,6 @@ describe("melody editor", () => {
     }
     canvas.getBoundingClientRect = () => ({ left: 0, top: 0 });
     fireEvent.scroll(shell);
-
     fireEvent.change(
       container.querySelector("#melody-editor-horizontal-zoom"),
       { target: { value: "180" } }
@@ -330,7 +312,6 @@ describe("melody editor", () => {
       target: { value: "36" }
     });
     fireEvent.wheel(canvas, { ctrlKey: true, deltaY: -1 });
-
     const tracks = container.querySelectorAll(".melody-editor-scroll-track");
     tracks[0].getBoundingClientRect = () => ({ left: 0, width: 100 });
     tracks[1].getBoundingClientRect = () => ({ top: 0, height: 100 });
@@ -345,7 +326,6 @@ describe("melody editor", () => {
     fireEvent.pointerDown(thumbs[1], { pointerId: 2, clientX: 10, clientY: 10 });
     fireEvent.pointerMove(thumbs[1], { pointerId: 2, clientX: 10, clientY: 50 });
     fireEvent.pointerCancel(thumbs[1], { pointerId: 2 });
-
     let note = container.querySelector(".melody-editor-note");
     fireEvent.pointerDown(note, { pointerId: 3, clientX: 100, clientY: 100 });
     fireEvent.pointerMove(canvas, { pointerId: 3, clientX: 100, clientY: 100 });
@@ -373,7 +353,6 @@ describe("melody editor", () => {
     });
     fireEvent.pointerMove(canvas, { pointerId: 5, clientX: 110, clientY: 100 });
     fireEvent.pointerCancel(canvas, { pointerId: 5 });
-
     fireEvent.pointerDown(canvas, { pointerId: 6, button: 0, clientX: 80, clientY: 450 });
     fireEvent.pointerMove(canvas, { pointerId: 6, clientX: 220, clientY: 600 });
     fireEvent.pointerUp(canvas, { pointerId: 6 });
@@ -406,7 +385,6 @@ describe("melody editor", () => {
       container.querySelector(".melody-editor-piano-key.is-black"),
       { pointerId: 11 }
     );
-
     const playhead = container.querySelector(".melody-editor-playhead");
     fireEvent.pointerMove(playhead, { pointerId: 8, clientX: 140 });
     fireEvent.pointerUp(playhead, { pointerId: 99, clientX: 140 });
@@ -422,27 +400,20 @@ describe("melody editor", () => {
     fireEvent.pointerUp(playhead, { pointerId: 14, clientX: 5000 });
     expect(shell.scrollLeft).toBeGreaterThanOrEqual(0);
   });
-
   test("honors cancelled AI restore and reports reset failures", async () => {
     mocks.confirm.mockResolvedValueOnce(false);
     let result = await loadEditor();
     fireEvent.click(result.container.querySelector(".is-ai .tone-amber"));
     expect(mocks.resetSongEditor).not.toHaveBeenCalled();
     cleanup();
-
     mocks.confirm.mockResolvedValueOnce(true);
     mocks.resetSongEditor.mockRejectedValueOnce(new Error("reset failed"));
     result = await loadEditor();
     fireEvent.click(result.container.querySelector(".is-ai .tone-amber"));
     await waitFor(() => expect(mocks.notify).toHaveBeenCalled());
   });
-
   test("synchronizes running media, melody synth and media events", async () => {
-    const frames = [];
-    globalThis.requestAnimationFrame = vi.fn((callback) => {
-      frames.push(callback);
-      return frames.length;
-    });
+    const frames = installFrameQueue();
     const { container } = await loadEditor();
     const [vocals, master] = container.querySelectorAll("audio");
     const shell = container.querySelector(".melody-editor-roll-shell");
@@ -459,7 +430,6 @@ describe("melody editor", () => {
       currentTime: { configurable: true, writable: true, value: 1 },
       playbackRate: { configurable: true, writable: true, value: 1 }
     });
-
     await act(async () => frames.at(-1)(10));
     await act(async () => frames.at(-1)(20));
     await act(async () => frames.at(-1)(500));
@@ -483,7 +453,6 @@ describe("melody editor", () => {
     await act(async () => frames.at(-1)(1600));
     master.currentTime = 3.5;
     await act(async () => frames.at(-1)(2000));
-
     fireEvent.timeUpdate(master);
     const playhead = container.querySelector(".melody-editor-playhead");
     fireEvent.pointerDown(playhead, { pointerId: 3, clientX: 150 });
@@ -501,7 +470,6 @@ describe("melody editor", () => {
     fireEvent.ended(master);
     expect(globalThis.AudioContext).toBe(FakeAudioContext);
   });
-
   test("covers duplicate, cut, mixer controls and playback failure recovery", async () => {
     const { container } = await loadEditor();
     fireEvent.pointerDown(container.querySelector(".melody-editor-note"), {
@@ -519,7 +487,6 @@ describe("melody editor", () => {
     );
     fireEvent.change(dials[1], { target: { value: "0.4" } });
     fireEvent.change(dials[2], { target: { value: "0.3" } });
-
     const master = container.querySelectorAll("audio")[1];
     Object.defineProperty(master, "play", {
       configurable: true,
@@ -529,22 +496,18 @@ describe("melody editor", () => {
     );
     await waitFor(() => expect(mocks.notify).toHaveBeenCalled());
   });
-
   test("derives duration when SongMap does not provide it", async () => {
     mocks.getSongEditor.mockResolvedValueOnce({
       ...payload,
       song_map: { ...payload.song_map, duration: 0 }
     });
     const { container } = await loadEditor();
-    expect( container.querySelector(".melody-editor-timecode").textContent
-    ).toContain("2.00");
+    verify([container.querySelector(".melody-editor-timecode").textContent, 'toContain', "2.00"]);
   });
-
   test("handles missing identifiers, empty notes and invalid syllable owners", async () => {
     const missing = render(<MelodyEditor song={{ title: "Missing" }} />);
     await act(async () => Promise.resolve());
     missing.unmount();
-
     mocks.getSongEditor.mockResolvedValueOnce({
       ...payload,
       song_map: { ...payload.song_map, notes: [] }
@@ -559,7 +522,6 @@ describe("melody editor", () => {
       { target: { value: "24" } }
     );
     empty.unmount();
-
     mocks.getSongEditor.mockResolvedValueOnce({
       ...payload,
       song_map: {
@@ -578,7 +540,6 @@ describe("melody editor", () => {
       ).toHaveLength(4)
     );
   });
-
   test("normalizes sparse display notes and fallback save/reset payloads", async () => {
     mocks.getSongEditor.mockResolvedValueOnce({
       ai_backup_exists: true,
@@ -616,7 +577,6 @@ describe("melody editor", () => {
       expect(result.container.querySelectorAll(".melody-editor-note")).toHaveLength( 0
       )
     );
-
     cleanup();
     mocks.getSongEditor.mockResolvedValueOnce({ song_map: {} });
     const noNotes = render( <MelodyEditor song={{ id: "no-notes", title: "No notes" }} />
@@ -624,7 +584,6 @@ describe("melody editor", () => {
     await waitFor(() => expect(noNotes.container.querySelector(".melody-editor-loading")).toBeNull()
     );
   });
-
   test("bounds long edit history and refuses duplication beyond duration", async () => {
     const { container } = await loadEditor();
     fireEvent.pointerDown(container.querySelector(".melody-editor-note"), {
@@ -635,25 +594,18 @@ describe("melody editor", () => {
     for (let index = 0; index < 81; index += 1) {
       fireEvent.keyDown(window, { key: "ArrowUp", code: "ArrowUp" });
     }
-
     const canvas = container.querySelector(".melody-editor-roll-canvas");
     const selected = container.querySelector(".melody-editor-note.is-selected");
     fireEvent.pointerDown(selected, { pointerId: 90, clientX: 100, clientY: 100 });
     fireEvent.pointerMove(canvas, { pointerId: 90, clientX: 110, clientY: 100 });
     fireEvent.pointerUp(canvas, { pointerId: 90 });
-
     fireEvent.keyDown(window, { code: "KeyD", ctrlKey: true });
     fireEvent.keyDown(window, { code: "KeyD", ctrlKey: true });
     fireEvent.keyDown(window, { code: "KeyD", ctrlKey: true });
     fireEvent.keyDown(window, { code: "KeyD", ctrlKey: true });
   });
-
   test("ignores queued animation frames after unmount", async () => {
-    const frames = [];
-    globalThis.requestAnimationFrame = vi.fn((callback) => {
-      frames.push(callback);
-      return frames.length;
-    });
+    const frames = installFrameQueue();
     const result = await loadEditor();
     result.unmount();
     act(() => frames.splice(0).forEach((callback) => callback(100)));
