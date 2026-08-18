@@ -1,7 +1,8 @@
 import { useCallback, useRef } from "react";
 import { connectMicrophoneChannelStrip } from "../../services/microphoneChannelStrip";
+import { clamp01 as clampUnit } from "../../utils/math";
 
-const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+const clamp01 = (value) => clampUnit(Number(value) || 0);
 const closeContext = (context) => {
   try {
     const result = context?.close?.();
@@ -43,7 +44,7 @@ export default function useOnlineRoomAudio({
     (participantId, value) => {
       participantVolumesRef.current = {
         ...(participantVolumesRef.current || {}),
-        [participantId]: Math.max(0, Math.min(1, Number(value) || 0))
+        [participantId]: clamp01(value)
       };
       applyRemoteAudioMute();
     },

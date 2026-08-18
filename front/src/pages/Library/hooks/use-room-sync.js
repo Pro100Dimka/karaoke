@@ -1,6 +1,23 @@
 import { useEffect, useRef } from "react";
 import { api } from "../../../api/client";
 
+// Must stay within the guest "ui" validation the room server enforces
+// (cloudflare/src/worker.js, KaraokeRoom.webSocketMessage): a payload over
+// either limit is rejected outright, closing the guest's connection.
+const MAX_PARTICIPANT_SONGS = 500;
+const MAX_PARTICIPANT_SONGS_JSON_LENGTH = 120 * 1024;
+
+function capParticipantSongs(songs) {
+  let capped = songs.length > MAX_PARTICIPANT_SONGS ? songs.slice(0, MAX_PARTICIPANT_SONGS) : songs;
+  while (
+    capped.length > 0 &&
+    JSON.stringify({ participantSongs: capped }).length > MAX_PARTICIPANT_SONGS_JSON_LENGTH
+  ) {
+    capped = capped.slice(0, capped.length - 1);
+  }
+  return capped;
+}
+
 export default function useLibraryRoomSync({
   localSongs,
   query,
@@ -46,7 +63,7 @@ export default function useLibraryRoomSync({
         }
       })
     ).then((songs) => {
-      if (!cancelled) syncUi({ participantSongs: songs });
+      if (!cancelled) syncUi({ participantSongs: capParticipantSongs(songs) });
     });
     return () => {
       cancelled = true;

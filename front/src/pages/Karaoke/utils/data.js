@@ -1,4 +1,5 @@
 import { translateSaved } from "../../../i18n/runtime";
+import { clamp01 } from "../../../utils/math";
 // Node test runner requires the explicit extension for this ESM import.
 // eslint-disable-next-line import/extensions
 import { normalizeNoteList } from "./note-normalization";
@@ -133,7 +134,7 @@ export function transposeKey(key, semitones) {
   }${suffix}`;
 }
 export function playbackGain(value) {
-  const normalized = Math.max(0, Math.min(1, Number(value) || 0));
+  const normalized = clamp01(Number(value) || 0);
   return normalized ** 2;
 }
 export function getYouTubeVideoId(url) {

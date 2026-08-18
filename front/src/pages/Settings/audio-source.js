@@ -11,6 +11,7 @@ import { POLLING_INTERVALS } from "../../runtime-config";
 import { getAudioPreferences, saveAudioPreferences } from "../../utils/audio-preferences";
 import { getErrorMessage } from "../../utils/errors";
 import { MICROPHONE_CAPTURE_CONSTRAINTS } from "../../utils/microphone-capture-constraints";
+import { persistUiPreferences } from "../../utils/ui-preferences";
 import {
   groupBrowserAudioDevices,
   normalizeAudioRuntimeSettings
@@ -244,11 +245,7 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
       return updated;
     }, translateSaved("Не удалось сохранить аудионастройки"));
   const updatePreference = (name, value) =>
-    setPreferences(() => {
-      const next = saveAudioPreferences({ [name]: value });
-      api.updateUiPreferences("audio", next).catch(() => {});
-      return next;
-    });
+    setPreferences(() => persistUiPreferences(api, "audio", saveAudioPreferences({ [name]: value })));
   const toggleMonitoring = () =>
     runMonitoring(async () => {
       const enabling = !monitoringEnabled;

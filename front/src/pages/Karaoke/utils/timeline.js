@@ -1,4 +1,4 @@
-const clamp01 = (value) => Math.max(0, Math.min(1, value));
+import { clamp01 } from "../../../utils/math";
 
 export function getTimelineProgress(value, duration) {
   const safeDuration = Number(duration);

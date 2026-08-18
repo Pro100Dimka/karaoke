@@ -1,3 +1,5 @@
+import { clamp01 } from "../../../utils/math";
+
 function readFiniteTime(source, ...keys) {
   for (const key of keys) {
     const raw = source[key];
@@ -60,5 +62,5 @@ export function getLyricFill(currentTime, start, end) {
   if (safeEnd <= safeStart) return safeCurrent >= safeEnd ? 1 : 0;
 
   const progress = (safeCurrent - safeStart) / (safeEnd - safeStart);
-  return Math.max(0, Math.min(1, progress));
+  return clamp01(progress);
 }

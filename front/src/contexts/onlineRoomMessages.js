@@ -37,7 +37,8 @@ export function createOnlineRoomMessageHandler(options) {
     setVoiceError,
     setTransferStatus,
     onParticipantJoined = () => {},
-    onConnectionClosed
+    onConnectionClosed,
+    lastRoomErrorRef = { current: null }
   } = options;
 
   const publishRoomCommand = (command, eventPrefix) => {
@@ -335,13 +336,22 @@ export function createOnlineRoomMessageHandler(options) {
       if (!senderIsHost(message)) return;
       publishRoomCommand(command, message.sentAt || "sync");
     },
+    // Sent by the server right before it force-closes this socket (rate limit, oversized or
+    // invalid payload, etc.). Recorded so "connection-closed" can surface the real reason
+    // instead of a generic "connection lost" message.
+    error: (message) => {
+      const text = typeof message.message === "string" ? message.message.trim() : "";
+      if (text) lastRoomErrorRef.current = text;
+    },
     "connection-closed": () => {
+      const reason = lastRoomErrorRef.current;
+      lastRoomErrorRef.current = null;
       if (disconnectIntentRef.current) return;
-      if (onConnectionClosed) return onConnectionClosed();
+      if (onConnectionClosed) return onConnectionClosed(reason);
       cleanupConnection();
       setRoom(null);
       setParticipants([]);
-      setVoiceError(translateSaved("Соединение с комнатой потеряно."));
+      setVoiceError(reason || translateSaved("Соединение с комнатой потеряно."));
     }
   };
 

@@ -1,6 +1,7 @@
 import { memo } from "react";
+import StatusBadge from "../../../../components/ui/StatusBadge";
 import { translateSaved } from "../../../../i18n/runtime";
-import { Badge, Button, Card, IconButton, Stack, Typography } from "../../../../theme/ui";
+import { Button, Card, IconButton, Stack, Typography } from "../../../../theme/ui";
 import { getSongCardState } from "../../utils";
 import ProcessingSignal from "./processing-signal";
 import SongCardArtwork from "./song-card-artwork";
@@ -8,28 +9,7 @@ import { formatSongKey, getSongActions } from "./utils";
 
 const INTERACTIVE_SELECTOR = "button, a, input, select, textarea";
 const ACTIVATION_KEYS = ["Enter", " "];
-const STATUS = {
-  pending: [translateSaved("Ожидание"), "badge-pending"],
-  queued: [translateSaved("В очереди"), "badge-pending"],
-  processing: [translateSaved("Обрабатывается"), "badge-processing"],
-  cancelling: [translateSaved("Отмена..."), "badge-processing"],
-  cancelled: [translateSaved("Отменено"), "badge-cancelled"],
-  done: [translateSaved("Готово"), "badge-done"],
-  error: [translateSaved("Ошибка"), "badge-error"]
-};
 const TextItems = ({ items }) => items.map((value, key) => value && <span key={key}>{value}</span>);
-const SongStatusBadge = ({ status }) => {
-  const [label, className] = STATUS[status] ?? [
-    status || translateSaved("Неизвестно"),
-    "badge-pending"
-  ];
-  return (
-    <Badge invisible className={`badge ${className}`}>
-      <span className="badge-dot" aria-hidden="true" />
-      {label}
-    </Badge>
-  );
-};
 function LibrarySongCard({
   cardIndex,
   onOpenKaraoke,
@@ -80,7 +60,7 @@ function LibrarySongCard({
           <div className="song-title-content">
             <TextItems items={titleDetails} />
           </div>
-          <SongStatusBadge status={songStatus} />
+          <StatusBadge status={songStatus} />
         </Stack>
         {(isWorking || transferStatus) && (
           <Button

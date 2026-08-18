@@ -8,6 +8,8 @@ import {
   OnlineVoiceMesh
 } from "../services/onlineRoom";
 import { getErrorMessage } from "../utils/errors";
+import { generateId } from "../utils/id";
+import { clamp } from "../utils/math";
 import useApplicationAudioMute from "./hooks/useApplicationAudioMute";
 import useOnlineRoomAudio from "./hooks/useOnlineRoomAudio";
 import useOnlineRoomCommands from "./hooks/useOnlineRoomCommands";
@@ -33,6 +35,7 @@ export function OnlineRoomProvider({ children }) {
   const hostSongCommandRef = useRef(null);
   const songExportsRef = useRef(new Map());
   const connectionTokenRef = useRef(null);
+  const lastRoomErrorRef = useRef(null);
   const [room, setRoomState] = useState(null);
   const participantsRef = useRef([]);
   const [participants, setParticipantsState] = useState([]);
@@ -398,12 +401,13 @@ export function OnlineRoomProvider({ children }) {
           setVoiceError,
           setTransferStatus,
           onParticipantJoined: playParticipantJoinedSound,
-          onConnectionClosed: () => {
+          lastRoomErrorRef,
+          onConnectionClosed: (reason) => {
             connectionTokenRef.current = Symbol("connection-closed");
             restoreApplicationAudio();
             cleanupConnection();
             resetRoomState();
-            setVoiceError(translateSaved("Соединение с комнатой потеряно."));
+            setVoiceError(reason || translateSaved("Соединение с комнатой потеряно."));
           }
         })
       );
@@ -506,10 +510,7 @@ export function OnlineRoomProvider({ children }) {
       const previous = pendingSongCommandRef.current;
       previous?.reject?.(new Error(translateSaved("Передача песни заменена новым запросом")));
       if (previous?.commandId) voiceRef.current?.cancelTransfersByCommandId?.(previous.commandId);
-      const commandId =
-        typeof globalThis.crypto?.randomUUID === "function"
-          ? globalThis.crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const commandId = generateId();
       return new Promise((resolve, reject) => {
         const timer = globalThis.setTimeout(() => {
           if (pendingSongCommandRef.current?.commandId !== commandId) return;
@@ -574,7 +575,7 @@ export function OnlineRoomProvider({ children }) {
 
   const setParticipantVolume = useCallback(
     (id, value) => {
-      const nextValue = Math.max(0, Math.min(1, Number(value) || 0));
+      const nextValue = clamp(Number(value) || 0, 0, 1);
       participantVolumesRef.current = { ...participantVolumesRef.current, [id]: nextValue };
       setParticipantVolumes((current) => ({ ...current, [id]: nextValue }));
       applyParticipantVolume(id, nextValue);

@@ -614,9 +614,7 @@
 
 .library-search.ui-card:focus-within {
   border-color: var(--color-primary);
-  box-shadow:
-    0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
-    0 0 1.875rem color-mix(in srgb, var(--color-accent) 24%, transparent);
+  box-shadow: var(--shadow-neon-soft);
 }
 
 .library-action-card.ui-card {
@@ -889,10 +887,7 @@
   padding: 0.45rem;
   border-color: var(--color-border-strong);
   background: color-mix(in srgb, var(--color-surface-strong) 94%, transparent);
-  box-shadow:
-    0 1.75rem 5.625rem color-mix(in srgb, var(--color-bg-deep) 52%, transparent),
-    0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
-    0 0 1.875rem color-mix(in srgb, var(--color-accent) 24%, transparent);
+  box-shadow: var(--shadow-lg), var(--shadow-neon-soft);
 }
 
 .app-dropdown-option {
@@ -1205,9 +1200,7 @@
   color: var(--color-primary);
   font-family: var(--font-mono);
   letter-spacing: 0.12em;
-  text-shadow:
-    0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
-    0 0 1.875rem color-mix(in srgb, var(--color-accent) 24%, transparent);
+  text-shadow: var(--shadow-neon-soft);
 }
 
 .online-room-dock-people {
@@ -1239,9 +1232,7 @@
   transform: translateY(-0.08rem);
   border-color: var(--color-primary);
   color: var(--color-primary);
-  box-shadow:
-    0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
-    0 0 1.875rem color-mix(in srgb, var(--color-accent) 24%, transparent);
+  box-shadow: var(--shadow-neon-soft);
 }
 
 .online-room-icon-button.is-off,
@@ -1388,10 +1379,7 @@
   border-radius: 0 var(--radius-round) var(--radius-round) 0;
   background: var(--color-surface-strong);
   color: var(--color-text);
-  box-shadow:
-    0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
-    0 0 1.875rem color-mix(in srgb, var(--color-accent) 24%, transparent),
-    0 1.125rem 3.4375rem color-mix(in srgb, var(--color-bg-deep) 38%, transparent);
+  box-shadow: var(--shadow-neon-soft), var(--shadow-md);
   backdrop-filter: blur(var(--blur-md)) saturate(150%);
   cursor: pointer;
   animation: online-room-restore-in var(--motion-normal) ease both;

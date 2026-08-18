@@ -2,15 +2,17 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { verify } from "./helpers/assertions.mjs";
+import { mockUseI18nWithFallback, passthrough } from "./helpers/mocks.mjs";
+vi.mock("../src/i18n", async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, useI18n: mockUseI18nWithFallback };
+});
 vi.mock("../src/theme/ui", () => ({
-  Badge: ({ children, ...props }) => <span {...props}>{children}</span>,
-  Button: ({ children, ...props }) => <button {...props}>{children}</button>,
-  Card: ({ children, ...props }) => <div {...props}>{children}</div>,
-  IconButton: ({ children, ...props }) => (
-    <button {...props}>{children}</button>
-  ),
-  Stack: ({ children, ...props }) => <div {...props}>{children}</div>,
-  Typography: ({ children, ...props }) => <span {...props}>{children}</span>
+  Button: passthrough("button"),
+  Card: passthrough("div"),
+  IconButton: passthrough("button"),
+  Stack: passthrough("div"),
+  Typography: passthrough("span")
 }));
 vi.mock("../src/pages/Library/components/song-card/processing-signal", () => ({
   default: ({ progress }) => <span data-testid="progress">{progress}</span>

@@ -1,3 +1,5 @@
+import { clamp01 } from "../../../utils/math";
+
 const A4_MIDI = 69;
 const A4_FREQUENCY = 440;
 
@@ -20,7 +22,7 @@ export function findActiveMelodyNote(notes, position) {
 }
 
 export function getMelodyGuideState({ notes, position, keyShift = 0, volume = 0 }) {
-  const safeVolume = Math.max(0, Math.min(1, Number(volume) || 0));
+  const safeVolume = clamp01(Number(volume) || 0);
   const note = findActiveMelodyNote(notes, position);
   if (!note || safeVolume <= 0) return { active: false, note: null, frequency: null, gain: 0.0001 };
 

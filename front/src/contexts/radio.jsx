@@ -1,7 +1,9 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
 import { translateSaved } from "../i18n/runtime";
-import { readJsonStorage, writeJsonStorage } from "../utils/storage";
+import { clamp01 as clampVolume } from "../utils/math";
+import { readJsonStorage } from "../utils/storage";
+import { persistUiPreferences } from "../utils/ui-preferences";
 import useRadioLifecycle from "./hooks/useRadioLifecycle";
 import useRadioValue from "./hooks/useRadioValue";
 import { DEFAULT_RADIO_SETTINGS, RADIO_STATIONS } from "./radio-config";
@@ -14,7 +16,6 @@ const STORAGE_KEY = "karaoke-radio";
 const STARTUP_FADE_MS = 2000;
 const NO_STREAM_ERROR = "No radio stream could be played";
 const createVersion = () => Object.create(null);
-const clampVolume = (value) => Math.max(0, Math.min(1, value));
 const RadioContext = createContext(null);
 
 export function normalizeRadioSettings(stored = {}) {
@@ -65,9 +66,7 @@ export function RadioProvider({ children }) {
   const station = RADIO_STATIONS.find(({ id }) => id === stationId);
   // Stryker disable ArrayDeclaration: only module functions and stable React refs are captured.
   const persist = useCallback((patch) => {
-    const next = { ...loadRadioSettings(), ...patch };
-    writeJsonStorage(STORAGE_KEY, next);
-    api.updateUiPreferences("radio", next).catch(() => {});
+    persistUiPreferences(api, "radio", { ...loadRadioSettings(), ...patch });
   }, []);
   // Stryker restore ArrayDeclaration
   // Stryker disable ArrayDeclaration: only a stable React ref is captured.

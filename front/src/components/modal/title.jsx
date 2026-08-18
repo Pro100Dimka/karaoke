@@ -19,8 +19,7 @@ export default function ModalTitle({ icon: Icon, eyebrow, title, description, ac
       transparent 42%
 ),
     color-mix(in srgb, var(--color-primary) 14%, var(--color-surface-glass))`,
-            boxShadow: `0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
-    0 0 1.875rem color-mix(in srgb, var(--color-accent) 24%, transparent),
+            boxShadow: `var(--shadow-neon-soft),
     inset 0 var(--hairline)
       color-mix(in srgb, var(--color-highlight) 12%, transparent)`
           }}

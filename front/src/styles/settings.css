@@ -9,9 +9,7 @@
   color: var(--color-text);
   border-color: var(--color-border-strong);
   background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface-glass));
-  box-shadow:
-    0 0 0.75rem color-mix(in srgb, var(--color-primary-hover) 34%, transparent),
-    0 0 1.875rem color-mix(in srgb, var(--color-accent) 24%, transparent);
+  box-shadow: var(--shadow-neon-soft);
 }
 
 .settings-content-panel .panel-header {

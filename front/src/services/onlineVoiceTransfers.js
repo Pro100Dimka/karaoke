@@ -1,5 +1,6 @@
 // eslint-disable-next-line import/extensions
 import { translateSaved } from "../i18n/runtime";
+import { generateId } from "../utils/id";
 import { cleanupIncomingTransfer, createTransferSink } from "./onlineVoiceTransferStorage";
 
 const wait = (delayMs) =>
@@ -688,10 +689,7 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
     throw new RangeError(translateSaved("Файл слишком большой для передачи через комнату"));
   }
   const { lifecycleVersion } = mesh;
-  const transferId =
-    typeof globalThis.crypto?.randomUUID === "function"
-      ? globalThis.crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const transferId = generateId();
   const controller =
     typeof globalThis.AbortController === "function" ? new globalThis.AbortController() : null;
   const active = {

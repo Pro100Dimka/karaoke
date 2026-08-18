@@ -9,6 +9,7 @@ import SongCardArtwork from "../src/pages/Library/components/song-card/song-card
 import ProcessingModal from "../src/pages/Library/modals/processing.jsx";
 import RecordingsModal from "../src/pages/Library/modals/recordings.jsx";
 import { called, same, verify } from "./helpers/assertions.mjs";
+import { passthrough } from "./helpers/mocks.mjs";
 
 const mocks = vi.hoisted(() => ({ isPlaying: false, theme: "dark", noSettings: false }));
 vi.mock("../src/contexts/radio", () => ({ useRadio: () => ({ isPlaying: mocks.isPlaying }) }));
@@ -16,23 +17,17 @@ vi.mock("../src/hooks/useAppSettings", () => ({
   default: () => (mocks.noSettings ? null : { settings: { theme: mocks.theme } })
 }));
 vi.mock("../src/theme/ui", () => ({
-  Box: ({ children, ...props }) => <div {...props}>{children}</div>,
-  Stack: ({ children, ...props }) => <div {...props}>{children}</div>,
-  Typography: ({ children, ...props }) => <span {...props}>{children}</span>,
-  Badge: ({ children, ...props }) => <span {...props}>{children}</span>,
+  Box: passthrough("div"),
+  Stack: passthrough("div"),
+  Typography: passthrough("span"),
+  Badge: passthrough("span"),
   Card: ({ as: Comp = "div", children, cardPanel: _panel, cardContent: _content, ...props }) => (
     <Comp {...props}>{children}</Comp>
   ),
-  Button: ({ children, ...props }) => <button {...props}>{children}</button>,
-  IconButton: ({ children, ...props }) => <button {...props}>{children}</button>
+  Button: passthrough("button"),
+  IconButton: passthrough("button")
 }));
 vi.mock("../src/components/ui", () => ({
-  Card: ({ as: Comp = "div", children, cardPanel: _panel, ...props }) => (
-    <Comp {...props}>{children}</Comp>
-  ),
-  IconButton: ({ icon: _icon, label, onClick, ...props }) => (
-    <button aria-label={label} onClick={onClick} {...props} />
-  ),
   StatusBadge: ({ status }) => <span data-testid="status">{status}</span>
 }));
 vi.mock("../src/components/modal", () => ({

@@ -1,10 +1,11 @@
+import { clamp, clamp01 } from "../../../utils/math";
+
 function toFiniteNumber(value, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
 }
 
-const clamp01 = (value) => Math.max(0, Math.min(1, value));
-const clamp02 = (value) => Math.max(0, Math.min(2, value));
+const clamp02 = (value) => clamp(value, 0, 2);
 
 function toBoolean(value) {
   if (typeof value === "string") {

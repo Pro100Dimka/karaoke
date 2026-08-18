@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { verify } from "./helpers/assertions.mjs";
+import { mockUseI18nWithFallback, passthrough } from "./helpers/mocks.mjs";
 const mocks = vi.hoisted(() => ({
   updateUiPreferences: vi.fn(),
   radio: {},
@@ -43,10 +44,10 @@ vi.mock("../src/pages/Settings/config", () => {
 });
 vi.mock("../src/i18n", async (importOriginal) => ({
   ...(await importOriginal()),
-  useI18n: () => ({ t: (key, _values, fallback) => fallback || key })
+  useI18n: mockUseI18nWithFallback
 }));
 vi.mock("../src/theme/ui", () => ({
-  Button: ({ children, ...props }) => <button {...props}>{children}</button>,
+  Button: passthrough("button"),
   Card: ({
     children,
     as: As = "div",
@@ -68,7 +69,7 @@ vi.mock("../src/theme/ui", () => ({
   Progress: ({ value, ...props }) => (
     <progress max="100" value={value} {...props} />
   ),
-  Stack: ({ children, ...props }) => <div {...props}>{children}</div>,
+  Stack: passthrough("div"),
   Typography: ({ children }) => <span>{children}</span>
 }));
 import SettingsContent from "../src/pages/Settings/settings-content.jsx";

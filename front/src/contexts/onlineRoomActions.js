@@ -1,10 +1,5 @@
 import { translateSaved } from "../i18n/runtime";
-
-function createCommandId() {
-  return typeof globalThis.crypto?.randomUUID === "function"
-    ? globalThis.crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
+import { generateId as createCommandId } from "../utils/id";
 
 const SONG_READY_TIMEOUT_MS = 5 * 60_000;
 

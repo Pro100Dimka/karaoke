@@ -3,9 +3,10 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 import { suppressWindowErrors } from "./helpers/browser.mjs";
 import { same, calledWith, verify } from "./helpers/assertions.mjs";
+import { mockUseI18nWithFallback } from "./helpers/mocks.mjs";
 vi.mock("../src/i18n", async (importOriginal) => {
   const actual = await importOriginal();
-  return { ...actual, useI18n: () => ({ t: (key, _values, fallback) => fallback || key }) };
+  return { ...actual, useI18n: mockUseI18nWithFallback };
 });
 import { AudioPlayer } from "../src/components/AudioPlayer.jsx";
 import Button from "../src/components/fields/button.jsx";
