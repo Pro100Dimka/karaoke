@@ -352,12 +352,10 @@ def get_audio_track(track: str, song: SongDependency):
 def get_song_editor(song: SongDependency):
     if song.status != models.SongStatus.DONE:
         raise HTTPException(status_code=409, detail="Песня ещё не обработана")
-    try:
+    with http_error(ValueError, 409):
         song_map, backup_exists = song_editor_service.load_editor(
             song_service.resolve_output_dir(song)
         )
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return schemas.SongEditorOut(song_map=song_map, ai_backup_exists=backup_exists)
 
 
@@ -367,14 +365,11 @@ def save_song_editor(
 ):
     if song.status != models.SongStatus.DONE:
         raise HTTPException(status_code=409, detail="Песня ещё не обработана")
-    try:
-        with song_service.song_content_lock(song.id), song_service.library_write_lock():
-            song_map = song_editor_service.save_editor(
-                song_service.resolve_output_dir(song), payload.notes
-            )
-            song_package_service.invalidate_content_revision(song)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    with http_error(ValueError, 400), song_service.song_content_lock(song.id), song_service.library_write_lock():
+        song_map = song_editor_service.save_editor(
+            song_service.resolve_output_dir(song), payload.notes
+        )
+        song_package_service.invalidate_content_revision(song)
     _touch_song(db, song, refresh=True)
     return schemas.SongEditorOut(song_map=song_map, ai_backup_exists=True)
 
@@ -383,12 +378,9 @@ def save_song_editor(
 def reset_song_editor(song: SongDependency, db: Session = Depends(get_db)):
     if song.status != models.SongStatus.DONE:
         raise HTTPException(status_code=409, detail="Песня ещё не обработана")
-    try:
-        with song_service.song_content_lock(song.id), song_service.library_write_lock():
-            song_map = song_editor_service.reset_editor(song_service.resolve_output_dir(song))
-            song_package_service.invalidate_content_revision(song)
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    with http_error(ValueError, 409), song_service.song_content_lock(song.id), song_service.library_write_lock():
+        song_map = song_editor_service.reset_editor(song_service.resolve_output_dir(song))
+        song_package_service.invalidate_content_revision(song)
     _touch_song(db, song, refresh=False)
     return schemas.SongEditorOut(song_map=song_map, ai_backup_exists=True)
 

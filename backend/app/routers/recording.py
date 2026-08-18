@@ -8,6 +8,7 @@ import models
 import schemas
 from app import repositories
 from app.api.dependencies import DatabaseSession, RecordingDependency, SongDependency
+from app.api.errors import http_error
 from app.services import audio_service, pipeline_service, recording_service
 from database import get_db
 
@@ -15,10 +16,8 @@ router = APIRouter(prefix="/recording", tags=["recording"])
 
 
 def _change_session_state(session_id: str, action, status: str) -> dict[str, str]:
-    try:
+    with http_error(KeyError, 404):
         action(session_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"status": status}
 
 

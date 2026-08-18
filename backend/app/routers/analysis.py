@@ -11,6 +11,7 @@ import models
 import schemas
 from app import repositories
 from app.api.dependencies import AnalysisDependency, DatabaseSession, RecordingDependency
+from app.api.errors import http_error
 from app.services import analysis_service
 from app.utils.json_values import parse_json_value
 
@@ -37,10 +38,8 @@ def run_analysis(recording: RecordingDependency, db: DatabaseSession):
     if (existing := repositories.get_analysis_by_recording(db, recording.id)) is not None:
         return _to_out(existing)
 
-    try:
+    with http_error(ValueError, 409):
         analysis = analysis_service.analyze_recording(recording, song)
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     result = models.AnalysisResult(
         recording_id=recording.id,
