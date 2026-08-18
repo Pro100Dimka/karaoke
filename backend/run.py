@@ -198,17 +198,13 @@ def main() -> None:
             logging.getLogger(__name__).info("Backend is already running on %s:%s; duplicate launch skipped", config.HOST, config.PORT)
             raise SystemExit(23)
 
+        from AI.utils.env import env_flag
         from app.main import app
 
         # Request access lines (GET /songs/... 200 OK) drown out the AI logs in
         # desktop development.  Keep warnings/errors, and allow temporary
         # re-enabling with SONGAPP_ACCESS_LOG=1 when HTTP tracing is needed.
-        access_log = os.getenv("SONGAPP_ACCESS_LOG", "0").strip().lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
+        access_log = env_flag("SONGAPP_ACCESS_LOG")
         uvicorn.run(
             app,
             host=config.HOST,

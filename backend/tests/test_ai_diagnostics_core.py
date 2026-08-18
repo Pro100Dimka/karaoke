@@ -6,6 +6,7 @@ import pytest
 
 from AI import diagnostics
 from AI.models import PitchFrame, StageReport, Syllable, VocalNote, Word
+from AI.utils.numeric import clamp01
 
 
 def pitch(time, hz=220, confidence=0.8, voiced=True):
@@ -13,7 +14,9 @@ def pitch(time, hz=220, confidence=0.8, voiced=True):
 
 
 def test_diagnostic_primitives():
-    assert diagnostics._clamp(2) == 1 and diagnostics._clamp(-1) == 0
+    # diagnostics.py delegates its [0, 1] clamping directly to the shared
+    # AI.utils.numeric.clamp01 primitive (no local wrapper remains).
+    assert clamp01(2) == 1 and clamp01(-1) == 0
     assert diagnostics._median([1, float("nan"), 3]) == 2
     assert diagnostics._median([], 4) == 4
     assert diagnostics._pitch_regions([]) == ([], [])

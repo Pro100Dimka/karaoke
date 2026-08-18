@@ -19,7 +19,7 @@ from ..models import Word
 from ..profiler import profile_operation
 from ..syllables import VOWELS
 from ..utils.env import env_flag
-from ..utils.numeric import clamp01
+from ..utils.numeric import clamp, clamp01
 from .base import Aligner, Transcriber
 from .ctc_alignment import CTC_ALIGNMENT_VERSION, CTCWordAligner, _language_code
 from .device import fallback_torch_device, select_torch_device
@@ -607,7 +607,6 @@ def _lossless_canonical_alignment(
         if pauses:
             # Map pause positions to approximate line boundaries using nominal
             # cumulative time, then spread leftover time across unique boundaries.
-            nominal_total = max(1e-6, sum(durations))
             nominal_starts = []
             acc = active_start
             for duration_value in durations:
@@ -866,7 +865,7 @@ def _atomic_line_acoustic_alignment(
     if best:
         scores: list[float] = []
         prev: list[int] = []
-        for pos, (li, words, kind, priority) in enumerate(best):
+        for pos, (li, words, _kind, priority) in enumerate(best):
             best_score = priority
             best_prev = -1
             for ppos in range(pos):
@@ -906,9 +905,7 @@ def _atomic_line_acoustic_alignment(
             return False
         last_li, last_words, _kind, _priority = items[-1]
         suffix_need = sum(line_min[last_li + 1 :]) + line_gap_floor * (line_count - last_li - 1)
-        if active_end < last_words[-1].end + suffix_need - 1e-6:
-            return False
-        return True
+        return active_end >= last_words[-1].end + suffix_need - 1e-6
 
     # Edge pruning is rare; recompute selected map after removing only offending
     # first/last anchors. Internal compatibility was already guaranteed by DP.
@@ -1012,7 +1009,7 @@ def _atomic_line_acoustic_alignment(
     line_results: list[list[Word] | None] = [None] * line_count
 
     # Copy acoustic anchor lines byte-for-byte in timing/confidence.
-    for li, (words, kind, _priority) in selected_by_line.items():
+    for li, (words, _kind, _priority) in selected_by_line.items():
         line_results[li] = [
             Word(word.start, word.end, line_tokens[li][idx], word.confidence, idx)
             for idx, word in enumerate(words)
@@ -1020,7 +1017,7 @@ def _atomic_line_acoustic_alignment(
 
     # Fill prefix, interior gaps and suffix.
     boundaries = [(-1, active_start, active_start)]
-    for li, words, kind, priority in selected:
+    for li, words, _kind, _priority in selected:
         boundaries.append((li, words[0].start, words[-1].end))
     boundaries.append((line_count, active_end, active_end))
 
@@ -1412,7 +1409,7 @@ def _line_aware_canonical_alignment(
     # Compute bounded line ends. A strong CTC/Qwen last-word end may extend the
     # window, but never into the next line and never beyond a sane line maximum.
     line_windows: list[tuple[float, float]] = []
-    for line_index, tokens in enumerate(line_tokens):
+    for line_index, _tokens in enumerate(line_tokens):
         start = max(0.0, min(duration_sec, float(line_starts[line_index])))
         next_start = (
             max(start + line_minimum[line_index], float(line_starts[line_index + 1]))
@@ -1421,7 +1418,7 @@ def _line_aware_canonical_alignment(
         )
         if line_index + 1 < len(line_tokens):
             boundary_span = max(0.0, next_start - start)
-            boundary_pad = _clamp_timing(boundary_span * 0.005, 0.008, 0.05)
+            boundary_pad = clamp(boundary_span * 0.005, 0.008, 0.05)
             hard_end = min(duration_sec, next_start - boundary_pad)
         else:
             hard_end = min(duration_sec, active_end)
@@ -2143,7 +2140,6 @@ def _anchor_preserving_canonical_alignment(
 
     # First choose a monotonic high-value chain.
     ordered = sorted(candidates.items())
-    min_gap_per_missing_word = 0.035
     dp_score: list[float] = []
     dp_prev: list[int] = []
     for pos, (idx, (word, _kind, priority)) in enumerate(ordered):
@@ -2980,10 +2976,6 @@ def _expected_sung_phrase_duration(tokens: list[str]) -> float:
     return max(0.65, 0.34 * len(tokens) + 0.024 * characters)
 
 
-def _clamp_timing(value: float, low: float, high: float) -> float:
-    return max(low, min(high, float(value)))
-
-
 def _line_timing_profile(tokens: list[str]) -> dict[str, float]:
     """Return adaptive timing tolerances for one lyric line.
 
@@ -2995,18 +2987,18 @@ def _line_timing_profile(tokens: list[str]) -> dict[str, float]:
     """
     minimum = _minimum_sung_phrase_duration(tokens)
     expected = _expected_sung_phrase_duration(tokens)
-    context = _clamp_timing(expected * 0.45, 0.75, 2.20)
-    cursor_backtrack = _clamp_timing(expected * 0.08, 0.10, 0.32)
-    anchor_lead = _clamp_timing(expected * 0.24, 0.35, 0.95)
-    candidate_slack = _clamp_timing(expected * 0.035, 0.05, 0.14)
-    overlap_slack = _clamp_timing(expected * 0.010, 0.012, 0.030)
-    min_word_duration = _clamp_timing((minimum / max(1, len(tokens))) * 0.18, 0.014, 0.030)
+    context = clamp(expected * 0.45, 0.75, 2.20)
+    cursor_backtrack = clamp(expected * 0.08, 0.10, 0.32)
+    anchor_lead = clamp(expected * 0.24, 0.35, 0.95)
+    candidate_slack = clamp(expected * 0.035, 0.05, 0.14)
+    overlap_slack = clamp(expected * 0.010, 0.012, 0.030)
+    min_word_duration = clamp((minimum / max(1, len(tokens))) * 0.18, 0.014, 0.030)
     minimum_window = max(
         expected * 1.85 + context,
         minimum * 2.4 + context,
         3.8,
     )
-    search_window = _clamp_timing(
+    search_window = clamp(
         expected * 2.7 + context * 2.0,
         minimum_window,
         14.0,
@@ -4285,7 +4277,6 @@ class Qwen3ForcedAligner(Aligner):
                         if j in anchor_windows:
                             next_start = float(anchor_windows[j][0])
                             break
-                    expected = timing["expected"]
                     search_start = max(0.0, prev_end - timing["cursor_backtrack"])
                     search_end = min(
                         duration_sec,

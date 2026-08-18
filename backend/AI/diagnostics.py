@@ -7,10 +7,7 @@ from typing import Any
 
 from .engines.text import tokenize
 from .models import PitchFrame, StageReport, Syllable, VocalNote, Word
-
-
-def _clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
-    return max(low, min(high, float(value)))
+from .utils.numeric import clamp01
 
 
 def _median(values: list[float], default: float = 0.0) -> float:
@@ -53,7 +50,7 @@ def _overlap_ratio(start: float, end: float, regions: list[tuple[float, float]])
         if left >= end:
             break
         overlap += max(0.0, min(end, right) - max(start, left))
-    return _clamp(overlap / span)
+    return clamp01(overlap / span)
 
 
 def _nearest_ms(value: float, points: list[float]) -> float | None:
@@ -281,7 +278,7 @@ def build_alignment_debug(
     acoustic_ratio = acoustic_words / max(1, len(words))
     suspicious_ratio = sum(1 for row in word_rows if row["reasons"]) / max(1, len(word_rows))
     text_health = round(
-        100.0 * _clamp(0.48 * acoustic_ratio + 0.42 * mean_conf + 0.10 * (1.0 - suspicious_ratio)),
+        100.0 * clamp01(0.48 * acoustic_ratio + 0.42 * mean_conf + 0.10 * (1.0 - suspicious_ratio)),
         1,
     )
 
@@ -337,18 +334,18 @@ def build_alignment_debug(
     tail_source = pitch_source_analysis.get("tail_suppressed")
     if isinstance(original_source, dict) and isinstance(tail_source, dict):
         original_voiced = max(1e-9, float(original_source.get("voiced_ratio") or 0.0))
-        tail_removed = _clamp(
+        tail_removed = clamp01(
             (original_voiced - float(tail_source.get("voiced_ratio") or 0.0)) / original_voiced
         )
-        micro_reduction = _clamp(
+        micro_reduction = clamp01(
             float(original_source.get("micro_run_rate") or 0.0)
             - float(tail_source.get("micro_run_rate") or 0.0)
         )
-        jump_reduction = _clamp(
+        jump_reduction = clamp01(
             float(original_source.get("jump_rate") or 0.0)
             - float(tail_source.get("jump_rate") or 0.0)
         )
-        octave_reduction = _clamp(
+        octave_reduction = clamp01(
             float(original_source.get("octave_flip_rate") or 0.0)
             - float(tail_source.get("octave_flip_rate") or 0.0)
         )
@@ -358,10 +355,10 @@ def build_alignment_debug(
             "large_jump_reduction": jump_reduction,
             "octave_flip_reduction": octave_reduction,
             "reverb_echo_likelihood": round(
-                100.0 * _clamp(0.55 * tail_removed + 0.45 * micro_reduction), 1
+                100.0 * clamp01(0.55 * tail_removed + 0.45 * micro_reduction), 1
             ),
             "harmonic_leakage_likelihood": round(
-                100.0 * _clamp(0.55 * octave_reduction + 0.45 * jump_reduction), 1
+                100.0 * clamp01(0.55 * octave_reduction + 0.45 * jump_reduction), 1
             ),
             "interpretation": ("comparative signal indicators; not a definitive effect classifier"),
         }
@@ -417,7 +414,7 @@ def build_alignment_debug(
     effect_indicators = pitch_source_analysis.get("effect_residual_indicators") or {}
     audio_effects = dict(vocal_effect_diagnostics or {})
     audio_cause_scores = audio_effects.get("possible_causes_percent") or {}
-    effect_presence_score = _clamp(
+    effect_presence_score = clamp01(
         max(
             float(effect_indicators.get("reverb_echo_likelihood") or 0.0),
             float(effect_indicators.get("harmonic_leakage_likelihood") or 0.0),
@@ -426,29 +423,29 @@ def build_alignment_debug(
         / 100.0
     )
     cleanup_metrics = audio_effects.get("cleanup") or {}
-    cleanup_impact = _clamp(
+    cleanup_impact = clamp01(
         max(
             float(cleanup_metrics.get("denoise_mean_rms_attenuation_ratio") or 0.0),
             float(cleanup_metrics.get("tail_gate_mean_rms_attenuation_ratio") or 0.0),
         )
     )
-    pitch_effect_impact = _clamp(
+    pitch_effect_impact = clamp01(
         max(
             float(effect_indicators.get("reverb_echo_likelihood") or 0.0),
             float(effect_indicators.get("harmonic_leakage_likelihood") or 0.0),
         )
         / 100.0
     )
-    effect_score = _clamp(
+    effect_score = clamp01(
         effect_presence_score * (0.15 + 0.45 * cleanup_impact + 0.40 * pitch_effect_impact)
     )
-    alignment_score = _clamp(
+    alignment_score = clamp01(
         0.38 * suspicious_ratio
         + 0.27 * (1.0 - mean_conf)
         + 0.20 * (1.0 - acoustic_ratio)
         + 0.15 * disagreement_ratio
     )
-    pitch_score = _clamp(
+    pitch_score = clamp01(
         0.55 * (1.0 - pitch_mean_conf)
         + 0.25
         * float(pitch_changes["large_pitch_changes"])
@@ -458,7 +455,7 @@ def build_alignment_debug(
     text_overlap_count = int(timeline_integrity["words"]["overlap_count"]) + int(
         timeline_integrity["syllables"]["overlap_count"]
     )
-    timeline_score = _clamp(
+    timeline_score = clamp01(
         0.75 * min(1.0, text_overlap_count / max(1, len(words) * 0.02))
         + 0.25 * float(timeline_integrity["game_notes"]["micro_interval_count"]) / max(1, len(game))
     )
@@ -505,7 +502,7 @@ def build_alignment_debug(
         },
         "health": {
             "text_alignment": text_health,
-            "pitch": round(100.0 * _clamp(pitch_mean_conf), 1),
+            "pitch": round(100.0 * clamp01(pitch_mean_conf), 1),
             "note_linkage": round(100.0 * linked_notes / max(1, len(notes)), 1),
         },
         "model_evidence": {
