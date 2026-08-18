@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import useApplicationAudioMute from "../src/contexts/hooks/useApplicationAudioMute.js";
 import useSpeakingLevels from "../src/contexts/hooks/useSpeakingLevels.js";
 import { same, verify } from "./helpers/assertions.mjs";
+
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
@@ -19,10 +20,9 @@ describe("application audio muting", () => {
     const room = document.createElement("audio");
     room.dataset.onlineRoomParticipant = "guest";
     document.body.append(normal, alreadyMuted, room);
-    const { result, unmount } = renderHook(() => useApplicationAudioMute(false)
-    );
+    const { result, unmount } = renderHook(() => useApplicationAudioMute(false));
     act(() => result.current.muteApplicationAudio(document));
-    expect([normal.muted, alreadyMuted.muted, room.muted]).toEqual([ true, true, false ]);
+    expect([normal.muted, alreadyMuted.muted, room.muted]).toEqual([true, true, false]);
     act(() => result.current.muteApplicationAudio(normal));
     act(() => result.current.muteApplicationAudio({}));
     const detached = document.createElement("audio");
@@ -30,14 +30,16 @@ describe("application audio muting", () => {
     act(() => result.current.muteApplicationAudio(detached));
     detached.remove();
     act(() => result.current.restoreApplicationAudio());
-    verify([[normal.muted, alreadyMuted.muted], 'toEqual', [false, true]], [detached.muted, 'toBe', true]);
+    verify(
+      [[normal.muted, alreadyMuted.muted], "toEqual", [false, true]],
+      [detached.muted, "toBe", true]
+    );
     act(() => result.current.muteApplicationAudio(null));
     unmount();
   });
   test("mutes a detached audio root and restores manual muting on unmount", () => {
     const detached = document.createElement("audio");
-    const { result, unmount } = renderHook(() => useApplicationAudioMute(false)
-    );
+    const { result, unmount } = renderHook(() => useApplicationAudioMute(false));
     act(() => result.current.muteApplicationAudio(detached));
     expect(detached.muted).toBe(true);
     document.body.append(detached);
@@ -145,11 +147,25 @@ describe("speaking level meters", () => {
     });
     expect(result.current.localSpeakingLevel).toBeGreaterThan(0);
     same([result.current.localSpeakingLevel, 0.54], [result.current.speakingLevels.guest, 0.54]);
-    verify([contexts[0].source.connect, 'toHaveBeenCalled'], [contexts[0].options, 'toEqual', { latencyHint: "interactive" }]);
-    verify([remoteTrack.addEventListener, 'toHaveBeenCalledWith', "ended", expect.any(Function), { once: true }]);
+    verify(
+      [contexts[0].source.connect, "toHaveBeenCalled"],
+      [contexts[0].options, "toEqual", { latencyHint: "interactive" }]
+    );
+    verify([
+      remoteTrack.addEventListener,
+      "toHaveBeenCalledWith",
+      "ended",
+      expect.any(Function),
+      { once: true }
+    ]);
     act(() => remoteTrack.dispatchEvent(new Event("ended")));
     expect(result.current.speakingLevels.guest).toBeUndefined();
-    verify([remoteTrack.removeEventListener, 'toHaveBeenCalledWith', "ended", expect.any(Function)]);
+    verify([
+      remoteTrack.removeEventListener,
+      "toHaveBeenCalledWith",
+      "ended",
+      expect.any(Function)
+    ]);
     act(() => result.current.stopSpeakingMeter("missing"));
     act(() => result.current.stopAllSpeakingMeters());
     act(() => result.current.stopAllSpeakingMeters());
@@ -167,18 +183,28 @@ describe("speaking level meters", () => {
     const running = renderHook(() => useSpeakingLevels());
     act(() => running.result.current.startSpeakingMeter("x", null));
     act(() => running.result.current.startSpeakingMeter("x", {}));
-    verify([runningContexts, 'toHaveLength', 0], [running.result.current.prepareSpeakingMeter(), 'toBe', true], [runningContexts[0].resume, 'not.toHaveBeenCalled'], [runningContexts, 'toHaveLength', 1]);
+    verify(
+      [runningContexts, "toHaveLength", 0],
+      [running.result.current.prepareSpeakingMeter(), "toBe", true],
+      [runningContexts[0].resume, "not.toHaveBeenCalled"],
+      [runningContexts, "toHaveLength", 1]
+    );
     running.unmount();
     const contexts = installAudioContext({ state: "suspended", sample: 128 });
     const suspended = renderHook(() => useSpeakingLevels());
-    verify([suspended.result.current.prepareSpeakingMeter(), 'toBe', true], [contexts[0].resume, 'toHaveBeenCalled']);
-    act(() => suspended.result.current.startSpeakingMeter("x", streamWith(null))
+    verify(
+      [suspended.result.current.prepareSpeakingMeter(), "toBe", true],
+      [contexts[0].resume, "toHaveBeenCalled"]
     );
+    act(() => suspended.result.current.startSpeakingMeter("x", streamWith(null)));
     const ended = new FakeTrack();
     ended.readyState = "ended";
-    act(() => suspended.result.current.startSpeakingMeter("x", streamWith(ended))
+    act(() => suspended.result.current.startSpeakingMeter("x", streamWith(ended)));
+    verify(
+      [suspended.result.current.speakingLevels, "toEqual", {}],
+      [ended.addEventListener, "not.toHaveBeenCalled"],
+      [contexts[0].source.disconnect, "toHaveBeenCalled"]
     );
-    verify([suspended.result.current.speakingLevels, 'toEqual', {}], [ended.addEventListener, 'not.toHaveBeenCalled'], [contexts[0].source.disconnect, 'toHaveBeenCalled']);
     suspended.unmount();
   });
   test("stops a meter when sampling fails", () => {
@@ -187,8 +213,7 @@ describe("speaking level meters", () => {
     contexts.length = 0;
     const track = new FakeTrack();
     const hook = renderHook(() => useSpeakingLevels());
-    act(() => hook.result.current.startSpeakingMeter("guest", streamWith(track))
-    );
+    act(() => hook.result.current.startSpeakingMeter("guest", streamWith(track)));
     contexts[0].analyser.getByteTimeDomainData.mockImplementation(() => {
       throw new Error("device removed");
     });
@@ -221,7 +246,10 @@ describe("speaking level meters", () => {
     const hook = renderHook(() => useSpeakingLevels());
     expect(hook.result.current.prepareSpeakingMeter()).toBe(true);
     contexts[0].state = "closed";
-    verify([hook.result.current.prepareSpeakingMeter(), 'toBe', true], [contexts, 'toHaveLength', 2]);
+    verify(
+      [hook.result.current.prepareSpeakingMeter(), "toBe", true],
+      [contexts, "toHaveLength", 2]
+    );
     hook.unmount();
     globalThis.AudioContext = class {
       constructor() {
@@ -230,8 +258,7 @@ describe("speaking level meters", () => {
     };
     const failed = renderHook(() => useSpeakingLevels());
     expect(failed.result.current.prepareSpeakingMeter()).toBe(false);
-    act(() => failed.result.current.startSpeakingMeter( "guest", streamWith(new FakeTrack()) )
-    );
+    act(() => failed.result.current.startSpeakingMeter("guest", streamWith(new FakeTrack())));
   });
   test("rejects synchronous resume and graph-construction failures", () => {
     const contexts = installAudioContext();
@@ -240,14 +267,15 @@ describe("speaking level meters", () => {
     contexts[0].state = "suspended";
     contexts[0].resume
       .mockImplementationOnce(() => undefined)
-      .mockImplementationOnce(() => { throw new Error("resume failed"); });
+      .mockImplementationOnce(() => {
+        throw new Error("resume failed");
+      });
     expect(hook.result.current.prepareSpeakingMeter()).toBe(false);
     contexts[0].state = "running";
     contexts[0].createAnalyser = () => {
       throw new Error("graph failed");
     };
-    act(() => hook.result.current.startSpeakingMeter( "guest", streamWith(new FakeTrack()) )
-    );
+    act(() => hook.result.current.startSpeakingMeter("guest", streamWith(new FakeTrack())));
     expect(contexts[0].source.disconnect).toHaveBeenCalled();
   });
   test("rejects a synchronous initial context resume failure", () => {
@@ -281,23 +309,20 @@ describe("speaking level meters", () => {
     const values = [132, 131, 128, 132];
     installAudioContext({ sample: () => values.shift() ?? 132 });
     const hook = renderHook(() => useSpeakingLevels());
-    act(() => hook.result.current.startSpeakingMeter( "guest", streamWith(new FakeTrack()) )
-    );
+    act(() => hook.result.current.startSpeakingMeter("guest", streamWith(new FakeTrack())));
     act(() => vi.advanceTimersByTime(70));
     expect(hook.result.current.speakingLevels.guest).toBe(0.04);
     act(() => vi.advanceTimersByTime(70));
     expect(hook.result.current.speakingLevels.guest).toBe(0.04);
     act(() => hook.result.current.stopSpeakingMeter("guest"));
-    act(() => hook.result.current.startSpeakingMeter( "boundary", streamWith(new FakeTrack()) )
-    );
+    act(() => hook.result.current.startSpeakingMeter("boundary", streamWith(new FakeTrack())));
     act(() => vi.advanceTimersByTime(70));
     expect(hook.result.current.speakingLevels.boundary).toBe(0);
     act(() => vi.advanceTimersByTime(70));
     expect(hook.result.current.speakingLevels.boundary).toBe(0.04);
     act(() => hook.result.current.stopSpeakingMeter("boundary"));
     values.push(131);
-    act(() => hook.result.current.startSpeakingMeter( "quiet", streamWith(new FakeTrack()) )
-    );
+    act(() => hook.result.current.startSpeakingMeter("quiet", streamWith(new FakeTrack())));
     act(() => vi.advanceTimersByTime(70));
     expect(hook.result.current.speakingLevels.quiet).toBe(0);
   });
@@ -306,22 +331,23 @@ describe("speaking level meters", () => {
     const contexts = installAudioContext();
     const track = new FakeTrack();
     const hook = renderHook(() => useSpeakingLevels());
-    act(() => hook.result.current.startSpeakingMeter("guest", streamWith(track))
-    );
+    act(() => hook.result.current.startSpeakingMeter("guest", streamWith(track)));
     act(() => vi.advanceTimersByTime(70));
     expect(hook.result.current.speakingLevels.guest).toBe(0.32);
     contexts[0].state = "closed";
     act(() => vi.advanceTimersByTime(70));
-    verify([hook.result.current.speakingLevels.guest, 'toBeUndefined'], [contexts[0].source.disconnect, 'toHaveBeenCalled']);
+    verify(
+      [hook.result.current.speakingLevels.guest, "toBeUndefined"],
+      [contexts[0].source.disconnect, "toHaveBeenCalled"]
+    );
   });
   test("unmount stops active speaking meters and closes their context", () => {
     const contexts = installAudioContext();
     const track = new FakeTrack();
     const hook = renderHook(() => useSpeakingLevels());
-    act(() => hook.result.current.startSpeakingMeter("guest", streamWith(track))
-    );
+    act(() => hook.result.current.startSpeakingMeter("guest", streamWith(track)));
     hook.unmount();
-    verify([track.removeEventListener, 'toHaveBeenCalledWith', "ended", expect.any(Function)]);
+    verify([track.removeEventListener, "toHaveBeenCalledWith", "ended", expect.any(Function)]);
     expect(contexts[0].source.disconnect).toHaveBeenCalled();
     expect(contexts[0].close).toHaveBeenCalledOnce();
   });
@@ -330,13 +356,15 @@ describe("speaking level meters", () => {
     const contexts = installAudioContext({ sample: 128 });
     const track = new FakeTrack();
     const hook = renderHook(() => useSpeakingLevels());
-    act(() => hook.result.current.startSpeakingMeter("guest", streamWith(track))
-    );
+    act(() => hook.result.current.startSpeakingMeter("guest", streamWith(track)));
     act(() => vi.advanceTimersByTime(70));
     act(() => vi.advanceTimersByTime(70));
     expect(hook.result.current.speakingLevels.guest).toBe(0);
     track.readyState = "ended";
     act(() => vi.advanceTimersByTime(70));
-    verify([hook.result.current.speakingLevels.guest, 'toBeUndefined'], [contexts[0].source.disconnect, 'toHaveBeenCalled']);
+    verify(
+      [hook.result.current.speakingLevels.guest, "toBeUndefined"],
+      [contexts[0].source.disconnect, "toHaveBeenCalled"]
+    );
   });
 });

@@ -12,7 +12,7 @@ export const ukMessages = {
   "common.dialog": "Діалог",
   "common.loading": "Завантаження…",
   "common.minimizeWindow": "Згорнути вікно",
-  "common.maximizeWindow": "Розгорнути / віконний режим",
+  "common.maximizeWindow": "Повноекранний / віконний режим",
   "common.noData": "Немає даних",
   "error.screen.body": "Спробуйте відкрити екран ще раз.",
   "error.screen.title": "Не вдалося відкрити екран",

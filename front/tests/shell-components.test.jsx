@@ -98,7 +98,7 @@ describe("application shell", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     window.electronAPI = {
       minimize: vi.fn().mockResolvedValue(undefined),
-      maximize: vi.fn().mockResolvedValue(undefined),
+      toggleFullscreen: vi.fn().mockResolvedValue(undefined),
       close: vi.fn().mockRejectedValue(new Error("close failed"))
     };
     const { getByLabelText, rerender } = render(<TitleBar title="Voice" />);
@@ -106,7 +106,7 @@ describe("application shell", () => {
     fireEvent.click(getByLabelText("common.maximizeWindow"));
     fireEvent.click(getByLabelText("common.closeWindow"));
     await waitFor(() => expect(error).toHaveBeenCalled());
-    called(window.electronAPI.minimize, window.electronAPI.maximize);
+    called(window.electronAPI.minimize, window.electronAPI.toggleFullscreen);
     rerender(<TitleBar hideActions />);
     expect(document.querySelectorAll(".title-bar__button")).toHaveLength(0);
     error.mockRestore();

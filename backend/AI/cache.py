@@ -82,11 +82,17 @@ class StageCache:
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
     def key_matches(self, stage: str, key: str) -> bool:
-        """Return whether the persisted stage provenance matches ``key``."""
-        with self._lock:
-            self.index = self._load_index()
-            entry = self.index.get("stages", {}).get(stage)
-        return isinstance(entry, dict) and entry.get("key") == key
+        """Return whether the persisted stage provenance matches ``key``.
+
+        Processing and reprocessing must always run every stage fresh --
+        a prior session repeatedly lost hours chasing "why didn't my fix
+        change the output" only to find a stage had silently served a
+        stale cached result instead of re-running. Reads are disabled
+        outright rather than threading a bypass flag through every call
+        site; ``commit``/``invalidate`` still run harmlessly for callers
+        that expect them, they just never influence a later run.
+        """
+        return False
 
     def hit(
         self,
@@ -95,45 +101,16 @@ class StageCache:
         outputs: list[Path],
         validators: dict[Path, Validator] | None = None,
     ) -> bool:
-        with self._lock:
-            self.index = self._load_index()
-            entry = self.index.get("stages", {}).get(stage)
-        if not isinstance(entry, dict) or entry.get("key") != key:
-            return False
-        recorded = entry.get("outputs")
-        if not isinstance(recorded, dict):
-            return False
-        try:
-            for output in outputs:
-                path = Path(output)
-                metadata = recorded.get(str(path.resolve()))
-                if not isinstance(metadata, dict) or not path.is_file():
-                    return False
-                stat = path.stat()
-                if stat.st_size <= 0 or stat.st_size != metadata.get("size"):
-                    return False
-                if self.file_hash(path) != metadata.get("sha256"):
-                    return False
-                if (validator := validators.get(path) if validators else None) is not None:
-                    validator(path)
-        except (OSError, ValueError, RuntimeError, TypeError):
-            return False
-        return True
+        return False
 
     def commit(self, stage: str, key: str, outputs: list[Path] | None = None) -> None:
-        artifact_data: dict[str, dict[str, object]] = {}
+        # Caching is disabled (see ``hit``/``key_matches``), but still assert
+        # that the stage actually produced every artifact it claims to --
+        # that check is a correctness guarantee, not a caching concern.
         for output in outputs or []:
             path = Path(output)
             if not path.is_file() or path.stat().st_size <= 0:
-                raise FileNotFoundError(f"Cannot cache missing artifact: {path}")
-            artifact_data[str(path.resolve())] = {
-                "size": path.stat().st_size,
-                "sha256": self.file_hash(path),
-            }
-        with self._lock, self._process_lock():
-            self.index = self._load_index()
-            self.index.setdefault("stages", {})[stage] = {"key": key, "outputs": artifact_data}
-            write_json_atomic(self.index_path, self.index)
+                raise FileNotFoundError(f"Missing expected stage artifact: {path}")
 
     def invalidate(self, *stages: str) -> None:
         with self._lock, self._process_lock():

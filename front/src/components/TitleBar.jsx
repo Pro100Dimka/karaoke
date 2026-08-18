@@ -4,7 +4,7 @@ import { IconButton } from "./ui";
 
 const WINDOW_ACTIONS = [
   { id: "minimize", labelKey: "common.minimizeWindow", Icon: Minus, size: 16 },
-  { id: "maximize", labelKey: "common.maximizeWindow", Icon: Maximize2, size: 14 },
+  { id: "maximize", labelKey: "common.maximizeWindow", Icon: Maximize2, size: 14, action: "toggleFullscreen" },
   { id: "close", labelKey: "common.closeWindow", Icon: X, size: 16, danger: true }
 ];
 
@@ -23,7 +23,7 @@ export default function TitleBar({ title = "A&D Voice", hideActions = false }) {
       <div className="title-bar__actions">
         {!hideActions &&
           electronAPI &&
-          WINDOW_ACTIONS.map(({ id, labelKey, Icon, size, danger }) => (
+          WINDOW_ACTIONS.map(({ id, labelKey, Icon, size, danger, action }) => (
             <IconButton
               key={id}
               unstyled
@@ -31,7 +31,7 @@ export default function TitleBar({ title = "A&D Voice", hideActions = false }) {
               size={size}
               label={t(labelKey)}
               className={`title-bar__button ${danger ? "is-danger" : ""}`.trim()}
-              onClick={() => invokeWindowAction(electronAPI, id)}
+              onClick={() => invokeWindowAction(electronAPI, action || id)}
             />
           ))}
       </div>

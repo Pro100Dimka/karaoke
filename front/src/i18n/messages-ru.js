@@ -12,7 +12,7 @@ export const ruMessages = {
   "common.dialog": "Диалог",
   "common.loading": "Загрузка…",
   "common.minimizeWindow": "Свернуть окно",
-  "common.maximizeWindow": "Развернуть / оконный режим",
+  "common.maximizeWindow": "Полноэкранный / оконный режим",
   "common.noData": "Нет данных",
   "error.screen.body": "Попробуйте открыть экран ещё раз.",
   "error.screen.title": "Не удалось открыть экран",

@@ -74,6 +74,7 @@
     "no-param-reassign": 0,
     "react/no-array-index-key": 0,
     "react/jsx-curly-newline": 0,
+    "no-sequences": 0,
     "curly": 0,
     "operator-linebreak": 0,
     "no-underscore-dangle": 0,

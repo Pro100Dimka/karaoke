@@ -9,7 +9,9 @@ def _sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def test_trusted_optimized_flac_restores_separation_cache(monkeypatch, tmp_path):
+def test_trusted_optimized_flac_restore_is_disabled(monkeypatch, tmp_path):
+    """Caching is disabled for processing/reprocessing: even a matching,
+    trusted optimized-FLAC provenance record must not skip separation."""
     output = tmp_path / "song"
     separated = output / "separated"
     separated.mkdir(parents=True)
@@ -51,11 +53,11 @@ def test_trusted_optimized_flac_restores_separation_cache(monkeypatch, tmp_path)
     monkeypatch.setattr(pipeline, "validate_audio", lambda _path: None)
     core = pipeline.KaraokePipeline(SimpleNamespace(sample_rate=44100), SimpleNamespace())
 
-    assert core._restore_optimized_separation_cache(
+    assert not core._restore_optimized_separation_cache(
         cache, key, output, vocals_wav, instrumental_wav
     )
-    assert vocals_wav.is_file() and instrumental_wav.is_file()
-    assert cache.hit("separation", key, [vocals_wav, instrumental_wav])
+    assert not vocals_wav.is_file() and not instrumental_wav.is_file()
+    assert not cache.hit("separation", key, [vocals_wav, instrumental_wav])
 
 
 def test_optimized_flac_restore_rejects_bad_integrity(monkeypatch, tmp_path):
@@ -98,7 +100,9 @@ def test_optimized_flac_restore_rejects_bad_integrity(monkeypatch, tmp_path):
     )
 
 
-def test_full_reprocess_keeps_manifest_until_optimized_stems_are_restored(monkeypatch, tmp_path):
+def test_full_reprocess_no_longer_restores_optimized_stems(monkeypatch, tmp_path):
+    """A reprocess run must not skip separation via the optimized-FLAC path
+    either, now that caching is disabled end-to-end."""
     from app.services import pipeline_service
 
     library = tmp_path / "library"
@@ -162,5 +166,5 @@ def test_full_reprocess_keeps_manifest_until_optimized_stems_are_restored(monkey
     monkeypatch.setattr(pipeline_service, "_run_job", run_job)
     pipeline_service._run_reprocessing("song")
 
-    assert restored == [True]
-    assert vocals_wav.is_file() and instrumental_wav.is_file()
+    assert restored == [False]
+    assert not vocals_wav.is_file() and not instrumental_wav.is_file()

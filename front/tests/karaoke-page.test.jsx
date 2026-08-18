@@ -470,9 +470,9 @@ describe("karaoke page", () => {
     mocks.controls.controlsVisible = false;
     const page = render(<Karaoke />);
     verify([mocks.consoleProps.currentTempo, 'toBe', 120], [mocks.consoleProps.compactKey, 'toContain', "D"]);
-    // Stage actions render in a fixed order: back, fullscreen, console
-    // visibility toggle, radio.
-    const consoleToggle = page.container.querySelectorAll(".karaoke-stage-action")[2];
+    // Stage actions render in a fixed order: back, console visibility
+    // toggle, radio.
+    const consoleToggle = page.container.querySelectorAll(".karaoke-stage-action")[1];
     fireEvent.click(consoleToggle);
     expect(mocks.controls.showControls).toHaveBeenCalled();
     page.unmount();

@@ -8,7 +8,10 @@ export const installFrameQueue = () => {
 
 export const stubFrameQueue = () => {
   const frames = [];
-  vi.stubGlobal("requestAnimationFrame", vi.fn((callback) => (frames.push(callback), frames.length)));
+  vi.stubGlobal(
+    "requestAnimationFrame",
+    vi.fn((callback) => (frames.push(callback), frames.length))
+  );
   vi.stubGlobal("cancelAnimationFrame", vi.fn());
   return frames;
 };

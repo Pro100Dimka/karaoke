@@ -1,7 +1,10 @@
 /* @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import LibraryBackdrop from "../src/pages/Library/components/backdrop/index.jsx";
 import { called, notCalled, verify } from "./helpers/assertions.mjs";
+import { installFrameQueue } from "./helpers/browser.mjs";
+
 const mocks = vi.hoisted(() => ({
   playing: true,
   bass: vi.fn(() => 0.6),
@@ -14,7 +17,6 @@ vi.mock("../src/contexts/radio", () => ({
     getSpectrumLevels: mocks.spectrum
   })
 }));
-import LibraryBackdrop from "../src/pages/Library/components/backdrop/index.jsx";
 const context = {
   setTransform: vi.fn(),
   save: vi.fn(),
@@ -47,11 +49,14 @@ beforeEach(() => {
     clientHeight: { configurable: true, get: () => 300 }
   });
 });
-afterEach(() => { cleanup(); document.documentElement.dataset.performance = ""; });
+afterEach(() => {
+  cleanup();
+  document.documentElement.dataset.performance = "";
+});
 test("backdrop renders decorations and animated terrain", () => {
   const { container, unmount } = render(<LibraryBackdrop />);
-  verify([container.querySelectorAll(".library-music-object--record span"), 'toHaveLength', 4]);
-  verify([container.querySelectorAll(".library-music-object--notes span"), 'toHaveLength', 18]);
+  verify([container.querySelectorAll(".library-music-object--record span"), "toHaveLength", 4]);
+  verify([container.querySelectorAll(".library-music-object--notes span"), "toHaveLength", 18]);
   called(context.setTransform, context.clearRect, context.stroke, context.fillRect);
   fireEvent(window, new Event("resize"));
   Object.defineProperty(document, "hidden", { configurable: true, value: true });
@@ -66,9 +71,9 @@ test("parallax follows pointer and cleans root variables", () => {
   const frameCount = globalThis.requestAnimationFrame.mock.calls.length;
   fireEvent.pointerMove(window, { clientX: 100, clientY: 100 });
   fireEvent.mouseLeave(document);
-  verify([globalThis.requestAnimationFrame.mock.calls.length, 'toBeGreaterThan', frameCount]);
+  verify([globalThis.requestAnimationFrame.mock.calls.length, "toBeGreaterThan", frameCount]);
   unmount();
-  verify([document.documentElement.style.getPropertyValue("--library-parallax-x"), 'toBe', ""]);
+  verify([document.documentElement.style.getPropertyValue("--library-parallax-x"), "toBe", ""]);
 });
 test("reduced performance skips parallax registration", () => {
   document.documentElement.dataset.performance = "reduced";
@@ -91,7 +96,7 @@ test("runs queued parallax and reacts to theme changes", async () => {
   }
   document.documentElement.dataset.theme = "changed";
   await act(async () => Promise.resolve());
-  verify([document.documentElement.style.getPropertyValue("--library-parallax-x"), 'not.toBe', ""]);
+  verify([document.documentElement.style.getPropertyValue("--library-parallax-x"), "not.toBe", ""]);
 });
 test("terrain traverses hidden mesh gaps across animation phases", () => {
   const frames = installFrameQueue();
@@ -108,12 +113,10 @@ test("terrain uses theme colors and silent fallbacks", () => {
   const descriptor = Object.getOwnPropertyDescriptor(window, "devicePixelRatio");
   Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 0 });
   const style = vi.spyOn(globalThis, "getComputedStyle").mockReturnValue({
-    getPropertyValue: (name) =>
-      name === "--wave-terrain-rgb" ? "1,2,3" : "4,5,6"
+    getPropertyValue: (name) => (name === "--wave-terrain-rgb" ? "1,2,3" : "4,5,6")
   });
   render(<LibraryBackdrop />);
   notCalled(mocks.bass, mocks.spectrum);
   style.mockRestore();
-  if (descriptor)
-    Object.defineProperty(window, "devicePixelRatio", descriptor);
+  if (descriptor) Object.defineProperty(window, "devicePixelRatio", descriptor);
 });

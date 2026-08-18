@@ -44,13 +44,15 @@ def test_file_hash_memoization_and_optional_files(tmp_path):
 
 
 def test_cache_commit_hit_invalidate_round_trip(tmp_path):
+    """Processing/reprocessing must always re-run every stage: reads are
+    disabled outright, so a hit never occurs regardless of a prior commit."""
     cache = StageCache(tmp_path / "cache")
     output = tmp_path / "artifact"
     output.write_text("ok")
     validator = Mock()
     cache.commit("pitch", "key", [output])
-    assert cache.hit("pitch", "key", [output], {output: validator})
-    validator.assert_called_once_with(output)
+    assert not cache.hit("pitch", "key", [output], {output: validator})
+    validator.assert_not_called()
     assert not cache.hit("pitch", "other", [output])
     cache.invalidate("pitch", "missing")
     assert not cache.hit("pitch", "key", [output])
@@ -95,10 +97,10 @@ def test_cache_hit_swallows_validator_and_filesystem_errors(monkeypatch, tmp_pat
 def test_cache_commit_rejects_missing_and_empty_artifacts(tmp_path):
     cache = StageCache(tmp_path / "cache")
     missing = tmp_path / "missing"
-    with pytest.raises(FileNotFoundError, match="Cannot cache"):
+    with pytest.raises(FileNotFoundError, match="Missing expected stage artifact"):
         cache.commit("s", "k", [missing])
     missing.touch()
-    with pytest.raises(FileNotFoundError, match="Cannot cache"):
+    with pytest.raises(FileNotFoundError, match="Missing expected stage artifact"):
         cache.commit("s", "k", [missing])
     cache.commit("empty", "key")
-    assert cache.hit("empty", "key", [])
+    assert not cache.hit("empty", "key", [])

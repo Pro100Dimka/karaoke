@@ -110,7 +110,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     return () => setRecordingActive(false);
   }, [isPlaying, recordingSessionId, setRecordingActive]);
   const autoStartRequested = Boolean(location.state?.autoPlay);
-  const { isFullscreen, toggleFullscreen } = useFullscreen();
+  const { isFullscreen } = useFullscreen();
   const { controlsVisible, hideControls, revealControls, showControls } = useKaraokeControls({
     autoHideEnabled: autoHideConsole,
     isFullscreen
@@ -383,14 +383,12 @@ export default function Karaoke({ onOpenAppSettings }) {
         autoHideConsole,
         controlsVisible,
         hideControls,
-        isFullscreen,
         isPlaying,
         isRadioPlaying,
         returnToLibrary,
         sceneTransitioning,
         showControls,
         stageActionsVisible,
-        toggleFullscreen,
         toggleRadio
       }}
       performanceProps={{

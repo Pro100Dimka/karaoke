@@ -12,7 +12,7 @@ export const enMessages = {
   "common.dialog": "Dialog",
   "common.loading": "Loading…",
   "common.minimizeWindow": "Minimize window",
-  "common.maximizeWindow": "Maximize / windowed mode",
+  "common.maximizeWindow": "Fullscreen / windowed mode",
   "common.noData": "No data",
   "error.screen.body": "Try opening the screen again.",
   "error.screen.title": "Could not open the screen",
