@@ -1,5 +1,6 @@
 """Микрофон и звук: список устройств, настройки записи, проверка сигнала."""
 
+import contextlib
 import json
 import logging
 import re
@@ -40,11 +41,14 @@ _MONITOR_RESTART_FIELDS = frozenset(
         "audio_driver",
         "asio_driver_name",
         "buffer_size",
-        "reverb",
-        "echo",
-        "delay",
     }
 )
+# The out-of-process worker for the "auto" driver takes reverb/echo/delay
+# updates live over stdin (see _send_live_update) instead of a full stream
+# restart. The ASIO bridge is a separate native binary with no live-update
+# channel, so it still needs a restart to pick up new effect values.
+_ASIO_ONLY_RESTART_FIELDS = frozenset({"reverb", "echo", "delay"})
+_LIVE_UPDATE_FIELDS = frozenset({"reverb", "echo", "delay"})
 _monitor_signal = dict(_EMPTY_MONITOR_SIGNAL)
 logger = logging.getLogger(__name__)
 
@@ -373,10 +377,13 @@ def update_settings(db: Session, patch: dict) -> models.AudioSettings:
     settings = _get_or_create_settings(db)
     updates, changed_fields = _normalized_settings_patch(settings, patch)
     previous = {field: getattr(settings, field) for field in updates}
+    driver = updates.get("audio_driver", settings.audio_driver)
+    restart_fields = _MONITOR_RESTART_FIELDS | (_ASIO_ONLY_RESTART_FIELDS if driver == "asio" else set())
     reconfigure_monitoring = bool(
         "monitoring_enabled" in changed_fields
-        or (settings.monitoring_enabled and _MONITOR_RESTART_FIELDS & changed_fields)
+        or (settings.monitoring_enabled and restart_fields & changed_fields)
     )
+    live_update_fields = set() if driver == "asio" else _LIVE_UPDATE_FIELDS & changed_fields
 
     for field, value in updates.items():
         setattr(settings, field, value)
@@ -386,6 +393,8 @@ def update_settings(db: Session, patch: dict) -> models.AudioSettings:
         # audio driver or SQLite rejects the change, both layers are restored.
         if reconfigure_monitoring:
             configure_monitoring(settings)
+        elif live_update_fields and settings.monitoring_enabled:
+            _send_live_update({field: getattr(settings, field) for field in live_update_fields})
         db.commit()
         db.refresh(settings)
         return settings
@@ -452,8 +461,24 @@ def stop_monitoring() -> None:
     finally:
         if process.stdout is not None:
             process.stdout.close()
+        if process.stdin is not None:
+            with contextlib.suppress(OSError):
+                process.stdin.close()
         if reader is not None and reader is not threading.current_thread():
             reader.join(timeout=0.5)
+
+
+def _send_live_update(payload: dict) -> None:
+    """Push an effect-parameter change to the running monitor worker without restarting it."""
+    with _monitor_lock:
+        process = _monitor_process
+    if process is None or process.poll() is not None or process.stdin is None:
+        return
+    try:
+        process.stdin.write(json.dumps(payload) + "\n")
+        process.stdin.flush()
+    except (OSError, ValueError) as exc:
+        logger.warning("Could not push live update to audio monitor worker: %s", exc)
 
 
 def configure_monitoring(settings: models.AudioSettings) -> None:
@@ -524,6 +549,9 @@ def configure_monitoring(settings: models.AudioSettings) -> None:
         "output_channels": output_channels,
         "blocksize": settings.buffer_size,
         "gain": gain,
+        "reverb": max(0.0, min(1.0, settings.reverb)),
+        "echo": max(0.0, min(1.0, settings.echo)),
+        "delay": max(0.0, min(1.0, settings.delay)),
         "wasapi_exclusive": use_wasapi_exclusive,
     }
     _start_monitor_worker(worker_options)
@@ -583,7 +611,7 @@ def _launch_monitor_process(command: list[str], *, cwd: Path) -> None:
     process = subprocess.Popen(
         command,
         cwd=cwd,
-        stdin=subprocess.DEVNULL,
+        stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,

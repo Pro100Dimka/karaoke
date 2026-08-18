@@ -384,7 +384,11 @@ describe("navigation and karaoke hooks", () => {
     expect(setInterval).toHaveBeenCalledTimes(1);
     act(() => result.current.hideControls());
     act(() => result.current.revealControls());
-    expect(result.current.controlsVisible).toBe(false);
+    // Scene transitions call hideControls() unconditionally even when
+    // auto-hide is off, so revealControls() (mouse activity) must be able to
+    // bring the console back regardless of the auto-hide preference --
+    // otherwise it stays hidden and unreachable for the rest of the session.
+    expect(result.current.controlsVisible).toBe(true);
     rerender({ enabled: true });
     expect(result.current.controlsVisible).toBe(true);
     expect(setInterval).toHaveBeenCalledTimes(2);

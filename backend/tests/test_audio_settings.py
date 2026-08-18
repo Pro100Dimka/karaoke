@@ -129,6 +129,62 @@ def test_update_settings_reconfigures_monitor_and_rolls_back(monkeypatch):
         audio_service.update_settings(database, {"volume": 3.0})
 
 
+def test_update_settings_sends_live_effect_update_instead_of_restarting(monkeypatch):
+    current = settings(monitoring_enabled=True, reverb=0.1)
+    database = Mock()
+    monkeypatch.setattr(audio_service, "_get_or_create_settings", Mock(return_value=current))
+    configure = Mock()
+    live_update = Mock()
+    monkeypatch.setattr(audio_service, "configure_monitoring", configure)
+    monkeypatch.setattr(audio_service, "_send_live_update", live_update)
+
+    result = audio_service.update_settings(database, {"reverb": 0.6, "echo": 0.3})
+    assert result is current and current.reverb == 0.6 and current.echo == 0.3
+    # Effect-only changes on the "auto" driver must not tear down the audio
+    # stream -- that was the direct cause of monitoring going silent whenever
+    # the user dragged a reverb/echo/delay slider.
+    configure.assert_not_called()
+    live_update.assert_called_once_with({"reverb": 0.6, "echo": 0.3})
+
+    configure.reset_mock()
+    live_update.reset_mock()
+    asio_current = settings(monitoring_enabled=True, audio_driver="asio")
+    monkeypatch.setattr(audio_service, "_get_or_create_settings", Mock(return_value=asio_current))
+    audio_service.update_settings(database, {"echo": 0.4})
+    # The ASIO bridge has no live-update channel, so it still needs a restart.
+    configure.assert_called_once_with(asio_current)
+    live_update.assert_not_called()
+
+    configure.reset_mock()
+    live_update.reset_mock()
+    disabled_current = settings(monitoring_enabled=False)
+    monkeypatch.setattr(audio_service, "_get_or_create_settings", Mock(return_value=disabled_current))
+    audio_service.update_settings(database, {"delay": 0.5})
+    configure.assert_not_called()
+    live_update.assert_not_called()
+
+
+def test_send_live_update_writes_json_line_and_tolerates_dead_or_missing_process(monkeypatch):
+    process = Mock()
+    process.poll.return_value = None
+    monkeypatch.setattr(audio_service, "_monitor_process", process)
+    audio_service._send_live_update({"reverb": 0.5})
+    process.stdin.write.assert_called_once_with('{"reverb": 0.5}\n')
+    process.stdin.flush.assert_called_once_with()
+
+    process.stdin.write.side_effect = OSError("broken pipe")
+    audio_service._send_live_update({"echo": 0.2})  # must not raise
+
+    monkeypatch.setattr(audio_service, "_monitor_process", None)
+    audio_service._send_live_update({"delay": 0.2})  # must not raise
+
+    dead = Mock()
+    dead.poll.return_value = 1
+    monkeypatch.setattr(audio_service, "_monitor_process", dead)
+    audio_service._send_live_update({"delay": 0.2})
+    dead.stdin.write.assert_not_called()
+
+
 def test_set_monitoring_enabled_is_idempotent_and_transactional(monkeypatch):
     database = Mock()
     current = settings(monitoring_enabled=False)
@@ -199,6 +255,9 @@ def test_configure_monitoring_routes_auto_and_asio(monkeypatch):
         "output_channels": 2,
         "blocksize": 128,
         "gain": 4,
+        "reverb": 0.0,
+        "echo": 0.0,
+        "delay": 0.0,
         "wasapi_exclusive": False,
     }
 

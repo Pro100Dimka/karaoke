@@ -307,6 +307,37 @@ describe("karaoke media synchronization", () => {
     expect(() => renderHook(() => useKaraokeMediaSync(props))).not.toThrow();
   });
 
+  test("retries attaching duration/timeupdate listeners until the <audio> element mounts", () => {
+    // Karaoke/index.jsx can render this hook's effect before <KaraokeMedia>
+    // (and its <audio ref={instrumentalRef}>) has actually mounted -- the
+    // song result can finish loading on a later render than songId first
+    // resolving. Giving up permanently on that one null check silently
+    // starved duration/timeupdate forever; this proves the retry loop picks
+    // the element up once it appears instead.
+    const props = createProps();
+    const instrumental = props.instrumentalRef.current;
+    props.instrumentalRef.current = null;
+    let rafCallback;
+    vi.stubGlobal(
+      "requestAnimationFrame",
+      vi.fn((callback) => {
+        rafCallback = callback;
+        return 1;
+      })
+    );
+    renderHook(() => useKaraokeMediaSync(props));
+    expect(props.setDuration).not.toHaveBeenCalled();
+
+    props.instrumentalRef.current = instrumental;
+    act(() => rafCallback());
+
+    expect(props.setDuration).toHaveBeenCalledWith(120);
+    props.setCurrentTime.mockClear();
+    instrumental.currentTime = 33;
+    act(() => instrumental.dispatchEvent(new Event("timeupdate")));
+    expect(props.setCurrentTime).toHaveBeenCalledWith(33);
+  });
+
   test("does not schedule position frames while playback is paused", () => {
     const props = createProps({ isPlaying: false });
     const hook = renderHook((value) => useKaraokeMediaSync(value), { initialProps: props });

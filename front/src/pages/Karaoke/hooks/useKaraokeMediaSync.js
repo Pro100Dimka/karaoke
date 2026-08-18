@@ -69,42 +69,72 @@ export default function useKaraokeMediaSync({
   );
 
   useEffect(() => {
-    const instrumental = instrumentalRef.current;
-    const vocals = vocalsRef.current;
-    if (!instrumental) return undefined;
+    // Karaoke/index.jsx renders a loading placeholder instead of <KaraokeMedia>
+    // until the song result finishes fetching, which can land in a render
+    // *after* this effect's songId dependency already changed -- so on the
+    // commit where songId first resolves, instrumentalRef.current is still
+    // null, this effect bails out, and songId never changes again to trigger
+    // a retry. That permanently starved duration/timeupdate listeners while
+    // the unrelated rAF-driven currentTime loop kept working (it re-reads
+    // instrumentalRef.current live every frame instead of capturing it once),
+    // which is why the timecode text ticked up but the timeline never moved
+    // or became seekable. Poll for the element instead of giving up once.
+    let detachListeners;
+    let cancelRetry = () => {};
 
-    const handleMetadata = () => {
-      const nextDuration = Number(instrumental.duration);
-      setDuration(Number.isFinite(nextDuration) ? Math.max(0, nextDuration) : 0);
-    };
-    const handleTimeUpdate = () => {
-      const position = Number(instrumental.currentTime);
-      if (!Number.isFinite(position) || position < 0) return;
-      currentTimeRef.current = position;
-      setCurrentTime(position);
-    };
-    const handleEnded = () => {
-      if (onPlaybackEndedRef.current) {
-        Promise.resolve(onPlaybackEndedRef.current()).catch(() => {});
+    const attach = () => {
+      const instrumental = instrumentalRef.current;
+      const vocals = vocalsRef.current;
+      if (!instrumental) {
+        if (typeof globalThis.requestAnimationFrame === "function") {
+          const frame = globalThis.requestAnimationFrame(attach);
+          cancelRetry = () => globalThis.cancelAnimationFrame(frame);
+        } else {
+          const timer = globalThis.setTimeout(attach, 16);
+          cancelRetry = () => globalThis.clearTimeout(timer);
+        }
         return;
       }
-      vocals?.pause();
-      videoRef.current?.pause();
-      sendYouTubeCommand("pauseVideo");
-      silenceMelodyGuide();
-      setIsPlaying(false);
+
+      const handleMetadata = () => {
+        const nextDuration = Number(instrumental.duration);
+        setDuration(Number.isFinite(nextDuration) ? Math.max(0, nextDuration) : 0);
+      };
+      const handleTimeUpdate = () => {
+        const position = Number(instrumental.currentTime);
+        if (!Number.isFinite(position) || position < 0) return;
+        currentTimeRef.current = position;
+        setCurrentTime(position);
+      };
+      const handleEnded = () => {
+        if (onPlaybackEndedRef.current) {
+          Promise.resolve(onPlaybackEndedRef.current()).catch(() => {});
+          return;
+        }
+        vocals?.pause();
+        videoRef.current?.pause();
+        sendYouTubeCommand("pauseVideo");
+        silenceMelodyGuide();
+        setIsPlaying(false);
+      };
+
+      const metadataEvents = ["loadedmetadata", "durationchange"];
+      metadataEvents.forEach((event) => instrumental.addEventListener(event, handleMetadata));
+      instrumental.addEventListener("ended", handleEnded);
+      instrumental.addEventListener("timeupdate", handleTimeUpdate);
+      // The element may already have metadata before this effect subscribes.
+      handleMetadata();
+      detachListeners = () => {
+        metadataEvents.forEach((event) => instrumental.removeEventListener(event, handleMetadata));
+        instrumental.removeEventListener("ended", handleEnded);
+        instrumental.removeEventListener("timeupdate", handleTimeUpdate);
+      };
     };
 
-    const metadataEvents = ["loadedmetadata", "durationchange"];
-    metadataEvents.forEach((event) => instrumental.addEventListener(event, handleMetadata));
-    instrumental.addEventListener("ended", handleEnded);
-    instrumental.addEventListener("timeupdate", handleTimeUpdate);
-    // The element may already have metadata before this effect subscribes.
-    handleMetadata();
+    attach();
     return () => {
-      metadataEvents.forEach((event) => instrumental.removeEventListener(event, handleMetadata));
-      instrumental.removeEventListener("ended", handleEnded);
-      instrumental.removeEventListener("timeupdate", handleTimeUpdate);
+      cancelRetry();
+      detachListeners?.();
     };
   }, [
     currentTimeRef,

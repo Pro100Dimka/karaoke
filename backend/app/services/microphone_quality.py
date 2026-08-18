@@ -78,3 +78,64 @@ class StudioMicrophoneProcessor:
         # Smooth soft limiter; unlike hard clipping it avoids brittle digital distortion.
         y = np.tanh(y * 1.12) / np.tanh(1.12)
         return np.clip(y, -_LIMITER_CEILING, _LIMITER_CEILING).astype(np.float32, copy=False)
+
+
+class MonitorEffectsChain:
+    """Realtime reverb/echo/delay for direct monitoring.
+
+    Mirrors the tap timing and decay curve of the offline mixdown filters in
+    ``recording_service._effect_filter`` (ffmpeg ``aecho``) so a "hear
+    yourself" take sounds like the exported recording, not a dry passthrough.
+    Each tap gets its own feedback delay line -- sharing one buffer across
+    taps would sum their feedback gains and could exceed unity, diverging
+    into runaway noise instead of a decaying echo.
+    """
+
+    _SLOT_COUNT = 6
+    _MAX_DELAY_SEC = 0.6
+
+    def __init__(self, sample_rate: float):
+        self.sample_rate = max(8_000.0, float(sample_rate))
+        self._buffer_len = int(self.sample_rate * self._MAX_DELAY_SEC) + 1
+        self._buffers = np.zeros((self._SLOT_COUNT, self._buffer_len), dtype=np.float32)
+        self._write_pos = 0
+
+    @staticmethod
+    def _slots(reverb: float, echo: float, delay: float) -> tuple[tuple[float, float], ...]:
+        reverb = max(0.0, min(1.0, reverb))
+        echo = max(0.0, min(1.0, echo))
+        delay = max(0.0, min(1.0, delay))
+        return (
+            (0.055, 0.20 + reverb * 0.24 if reverb >= 0.01 else 0.0),
+            (0.110, 0.14 + reverb * 0.18 if reverb >= 0.01 else 0.0),
+            (0.170, 0.08 + reverb * 0.14 if reverb >= 0.01 else 0.0),
+            (0.180, 0.18 + echo * 0.38 if echo >= 0.01 else 0.0),
+            (0.360, 0.10 + echo * 0.22 if echo >= 0.01 else 0.0),
+            (0.110 + delay * 0.39, 0.16 + delay * 0.34 if delay >= 0.01 else 0.0),
+        )
+
+    def process(self, samples: np.ndarray, reverb: float, echo: float, delay: float) -> np.ndarray:
+        slots = self._slots(reverb, echo, delay)
+        if not any(decay > 0.0 for _, decay in slots):
+            return samples
+        length = self._buffer_len
+        offsets = [min(length - 1, max(1, int(delay_sec * self.sample_rate))) for delay_sec, _ in slots]
+        decays = [decay for _, decay in slots]
+        buffers = self._buffers
+        write_pos = self._write_pos
+        out = np.empty_like(samples)
+        for index in range(len(samples)):
+            dry = float(samples[index])
+            wet = 0.0
+            for slot in range(self._SLOT_COUNT):
+                decay = decays[slot]
+                if decay <= 0.0:
+                    continue
+                read_pos = (write_pos - offsets[slot]) % length
+                delayed = buffers[slot, read_pos]
+                buffers[slot, write_pos] = dry + decay * delayed
+                wet += decay * delayed
+            out[index] = dry + wet
+            write_pos = (write_pos + 1) % length
+        self._write_pos = write_pos
+        return out

@@ -24,7 +24,7 @@ from .device import fallback_torch_device, select_torch_device
 
 _CLEAN = re.compile(r"[^\w]+", re.UNICODE)
 
-CTC_ALIGNMENT_VERSION = "v6-reject-dominant-internal-gap"
+CTC_ALIGNMENT_VERSION = "v8-reverted-to-v3-span-floor"
 
 
 @dataclass(frozen=True, slots=True)
@@ -725,35 +725,23 @@ class CTCWordAligner:
                 line_span = absolute_words[-1].end - absolute_words[0].start
                 # The minimum accepted span scales with the expected sung line
                 # duration and token density instead of a fixed millisecond rule.
-                # Calibrated against a real production run of one song: two
-                # genuinely correct lines landed at 125% and 134% of their
-                # expected duration, while a visibly-broken line (the whole
-                # phrase compressed into under a second) landed at just 36%.
-                # 0.18, and even 0.35, both still clear that 36% floor. 0.6
-                # sits with real margin below the good lines and well above
-                # the bad one. A rejected line here is not lost: it falls
-                # through to the ASR/Qwen alignment tier below, so raising
-                # this floor only trades a wrong-but-plausible CTC timing for
-                # that safer fallback -- it does not need to hit the audio.
-                min_span = max(minimum, expected * 0.6)
-                # A wide-enough envelope can still hide a broken internal
-                # layout: one word anchored correctly (or on a noise/silence
-                # false positive) at one edge, a multi-second dead gap, then
-                # every remaining word crammed into what's left. The envelope
-                # span alone does not catch this -- reject when one gap
-                # between consecutive words eats more than half the line.
-                max_internal_gap = max(
-                    (
-                        max(0.0, b.start - a.end)
-                        for a, b in zip(absolute_words, absolute_words[1:])
-                    ),
-                    default=0.0,
-                )
+                #
+                # This threshold was tuned upward twice today (18% -> 35% ->
+                # 60%, plus an upper-bound and an internal-gap check) against
+                # single real examples of one hard, quiet-vocal song. Each
+                # change fixed the one line being looked at but pushed MORE
+                # lines in that same song past both CTC and its Qwen fallback
+                # to the interpolation tier, which has no equivalent quality
+                # floor -- net result, confirmed by the person testing it live,
+                # was worse across the song, not better. Reverted to the
+                # original, long-shipped ratio rather than keep guessing
+                # thresholds against one example at a time; see git history on
+                # this line for the abandoned attempt if revisiting this.
+                min_span = max(minimum, expected * 0.18)
                 return (
                     local.confidence >= 0.035
                     and line_span >= min_span
                     and absolute_words[0].start >= cursor - expected * 0.08
-                    and max_internal_gap <= line_span * 0.5
                 )
 
             # Local second pass only for a failed anchored line. It uses a much

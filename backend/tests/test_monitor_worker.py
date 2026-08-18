@@ -2,6 +2,7 @@ import contextlib
 import json
 import runpy
 import sys
+import threading
 from unittest.mock import Mock
 
 import numpy as np
@@ -36,6 +37,59 @@ def test_emit_and_stop_update_process_contract(monkeypatch, capsys):
     monkeypatch.setattr(monitor_worker, "_running", True)
     monitor_worker._stop(0, None)
     assert monitor_worker._running is False
+
+
+def test_read_live_updates_applies_json_lines_and_ignores_bad_input(monkeypatch):
+    monkeypatch.setattr(monitor_worker, "_live_params", {"reverb": 0.0, "echo": 0.0, "delay": 0.0})
+    lines = iter(["not-json\n", "\n", '{"reverb": 0.4}\n', '{"echo": 0.2, "delay": 0.1}\n'])
+    monkeypatch.setattr(sys, "stdin", lines)
+    monitor_worker._read_live_updates()
+    assert monitor_worker._live_params == {"reverb": 0.4, "echo": 0.2, "delay": 0.1}
+
+
+def test_audio_callback_reads_current_live_effect_parameters(monkeypatch):
+    monkeypatch.setattr(monitor_worker, "_live_params", {"reverb": 0.3, "echo": 0.4, "delay": 0.5})
+    captured = {}
+
+    class FakeChain:
+        def __init__(self, sample_rate):
+            pass
+
+        def process(self, samples, reverb, echo, delay):
+            captured["params"] = (reverb, echo, delay)
+            return samples
+
+    monkeypatch.setattr(monitor_worker, "MonitorEffectsChain", FakeChain)
+    callback = monitor_worker._audio_callback(1.0, monitor_worker.threading.Event(), [], sample_rate=48_000)
+    indata = np.zeros((4, 1), dtype=np.float32)
+    outdata = np.zeros((4, 2), dtype=np.float32)
+    callback(indata, outdata, 4, None, None)
+    assert captured["params"] == (0.3, 0.4, 0.5)
+
+
+def test_main_seeds_live_params_from_config_and_starts_reader_thread(monkeypatch, capsys):
+    configure_argv(monkeypatch, {**options(), "reverb": 0.2, "echo": 0.5, "delay": 0.7})
+    monkeypatch.setattr(monitor_worker, "_running", False)
+    monkeypatch.setattr(monitor_worker, "_live_params", {"reverb": 0.0, "echo": 0.0, "delay": 0.0})
+    thread_started = threading.Event()
+    real_thread_init = monitor_worker.threading.Thread.__init__
+
+    def watched_init(self, *args, **kwargs):
+        if kwargs.get("target") is monitor_worker._read_live_updates:
+            thread_started.set()
+            assert kwargs.get("daemon") is True
+        real_thread_init(self, *args, **kwargs)
+
+    monkeypatch.setattr(monitor_worker.threading.Thread, "__init__", watched_init)
+    # Stdin here is pytest's captured input; the reader thread must not block
+    # or crash main() when it hits that (_read_live_updates swallows errors).
+    stream = Mock()
+    monkeypatch.setattr(monitor_worker.sd, "Stream", Mock(return_value=stream))
+
+    assert monitor_worker.main() == 0
+    assert monitor_worker._live_params == {"reverb": 0.2, "echo": 0.5, "delay": 0.7}
+    assert thread_started.is_set()
+    capsys.readouterr()
 
 
 def test_main_starts_and_stops_first_candidate(monkeypatch, capsys):
@@ -136,6 +190,10 @@ def test_main_emits_level_while_running(monkeypatch, capsys):
             return False
 
     monkeypatch.setattr(monitor_worker.threading, "Event", Event)
+    # The live-update reader thread is unrelated to this test's control of the
+    # stream loop; a real Thread would construct a real Event internally and
+    # collide with the fake Event class patched above.
+    monkeypatch.setattr(monitor_worker.threading, "Thread", Mock())
     stream = Mock()
     monkeypatch.setattr(monitor_worker.sd, "Stream", Mock(return_value=stream))
     assert monitor_worker.main() == 0

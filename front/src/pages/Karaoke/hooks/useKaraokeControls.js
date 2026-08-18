@@ -48,9 +48,16 @@ export default function useKaraokeControls({ autoHideEnabled = true } = {}) {
   }, [autoHideEnabled, showControls]);
 
   const revealControls = useCallback(() => {
-    if (!autoHideEnabled) return;
+    // Scene transitions call hideControls() unconditionally (to black out the
+    // UI during the intro/outro animation) regardless of this preference, so
+    // reveal-on-activity must be equally unconditional. Gating it on
+    // autoHideEnabled used to mean: once autoHideConsole was turned off, any
+    // hideControls() call (every song start/stop) permanently hid the entire
+    // console -- moving the mouse could never bring it back, since neither
+    // this handler nor the (also disabled) auto-hide watcher would ever call
+    // showControls() again.
     showControls();
-  }, [autoHideEnabled, showControls]);
+  }, [showControls]);
 
   return { controlsVisible, hideControls, revealControls, showControls };
 }

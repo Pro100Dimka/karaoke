@@ -21,6 +21,7 @@ class OutputLines(list):
 def process(*lines, poll=None):
     return SimpleNamespace(
         stdout=OutputLines(*lines),
+        stdin=Mock(),
         poll=Mock(return_value=poll),
         terminate=Mock(),
         kill=Mock(),

@@ -23,10 +23,12 @@ except Exception:  # PortAudio may be unavailable in CI/diagnostics.
     from types import SimpleNamespace
     sd = SimpleNamespace(Stream=None, WasapiSettings=lambda **kwargs: kwargs)
 
-from app.services.microphone_quality import StudioMicrophoneProcessor
+from app.services.microphone_quality import MonitorEffectsChain, StudioMicrophoneProcessor
 
 _running = True
 _level = {"rms_db": -120.0, "clipping": False, "silent": True}
+_live_lock = threading.Lock()
+_live_params = {"reverb": 0.0, "echo": 0.0, "delay": 0.0}
 
 
 def _stream_candidates(options: dict) -> list[dict]:
@@ -70,8 +72,35 @@ def _stop(_signum: int, _frame: object) -> None:
     _running = False
 
 
+def _read_live_updates() -> None:
+    """Apply reverb/echo/delay changes pushed over stdin without restarting the stream.
+
+    Reverb/echo/delay used to be in the parent's restart-field set, so every
+    knob nudge tore down and reopened the native audio stream -- slow, and on
+    a burst of drag events (rapid stdin patches from the settings API) prone
+    to losing the race for the device and going silent. Reading live updates
+    here instead lets the already-open stream just change its effect mix.
+    """
+    try:
+        for line in sys.stdin:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                update = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            with _live_lock:
+                for key in ("reverb", "echo", "delay"):
+                    if key in update:
+                        _live_params[key] = float(update[key])
+    except Exception:
+        return
+
+
 def _audio_callback(gain: float, restart_requested: threading.Event, glitches: list[float], sample_rate: float = 48_000):
     quality = StudioMicrophoneProcessor(sample_rate, 1)
+    effects = MonitorEffectsChain(sample_rate)
     def callback(indata, outdata, _frames, _time_info, status):
         if status:
             now = time.monotonic()
@@ -80,7 +109,10 @@ def _audio_callback(gain: float, restart_requested: threading.Event, glitches: l
                 glitches.pop(0)
             if len(glitches) >= 3:
                 restart_requested.set()
+        with _live_lock:
+            reverb, echo, delay = _live_params["reverb"], _live_params["echo"], _live_params["delay"]
         processed = quality.process(indata[:, :1], gain)[:, 0]
+        processed = effects.process(processed, reverb, echo, delay)
         outdata.fill(0)
         for channel in range(outdata.shape[1]):
             outdata[:, channel] = processed
@@ -102,6 +134,11 @@ def main() -> int:
     parser.add_argument("--config", required=True)
     options = json.loads(parser.parse_args().config)
     gain = float(options["gain"])
+    with _live_lock:
+        _live_params["reverb"] = float(options.get("reverb", 0.0))
+        _live_params["echo"] = float(options.get("echo", 0.0))
+        _live_params["delay"] = float(options.get("delay", 0.0))
+    threading.Thread(target=_read_live_updates, daemon=True).start()
 
     restart_requested = threading.Event()
     glitches: list[float] = []
