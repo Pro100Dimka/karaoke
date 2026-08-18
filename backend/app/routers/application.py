@@ -5,11 +5,12 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 import models
+from app.api.errors import http_error
 from app.services import app_settings_service, diagnostics_service
 from database import get_db
 
@@ -34,10 +35,8 @@ def get_settings() -> dict:
 
 @router.patch("/settings")
 def update_settings(patch: AppSettingsPatch) -> dict:
-    try:
+    with http_error(ValueError, 422):
         return app_settings_service.update_settings(patch.model_dump(exclude_none=True))
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/preferences")
@@ -47,10 +46,8 @@ def get_ui_preferences() -> dict[str, dict[str, Any]]:
 
 @router.patch("/preferences/{namespace}")
 def update_ui_preferences(namespace: str, patch: dict[str, Any]) -> dict[str, Any]:
-    try:
+    with http_error(ValueError, 422):
         return app_settings_service.update_ui_preferences(namespace, patch)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/history")
