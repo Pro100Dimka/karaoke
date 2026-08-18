@@ -23,6 +23,7 @@ import config
 import models
 import schemas
 from app.api.dependencies import SongDependency
+from app.api.errors import http_error
 from app.services import (
     ai_bridge,
     pipeline_service,
@@ -32,6 +33,7 @@ from app.services import (
     song_package_service,
     song_service,
 )
+from app.services.db_utils import commit, commit_refresh
 from app.utils.files import read_text_tail
 from app.utils.json_files import read_json, write_json
 from app.utils.uploads import save_upload_limited
@@ -74,18 +76,13 @@ def _queue_song_job(
     def restore_previous_state() -> None:
         for field, value in previous.items():
             setattr(song, field, value)
-        try:
-            db.commit()
-        except Exception:
-            db.rollback()
-            raise
+        commit(db)
 
     for field, value in queued_values.items():
         setattr(song, field, value)
     try:
-        db.commit()
+        commit(db)
     except Exception:
-        db.rollback()
         for field, value in previous.items():
             setattr(song, field, value)
         raise
@@ -99,6 +96,21 @@ def _queue_song_job(
         return
     restore_previous_state()
     raise HTTPException(status_code=409, detail="Обработка уже запущена")
+
+
+def _touch_song(db: Session, song: models.Song, *, refresh: bool) -> None:
+    """Bump ``updated_at`` and commit through the canonical rollback-safe helper."""
+    song.updated_at = datetime.now(UTC)
+    db.add(song)
+    if refresh:
+        commit_refresh(db, song)
+    else:
+        commit(db)
+
+
+def _song_error_status(detail: str) -> int:
+    """Song-lookup failures are 404; every other packaging/fingerprint error is 409."""
+    return 404 if detail == "Song not found" else 409
 
 
 @router.post("", response_model=schemas.SongOut, status_code=201)
@@ -153,8 +165,9 @@ def get_song_revision(song_id: str, db: Session = Depends(get_db)):
         revision = song_package_service.content_revision_for_song(db, song_id)
     except (OSError, ValueError) as exc:
         detail = str(exc)
-        status = 404 if detail == "Song not found" else 409
-        raise HTTPException(status_code=status, detail=f"Could not fingerprint song: {detail}") from exc
+        raise HTTPException(
+            status_code=_song_error_status(detail), detail=f"Could not fingerprint song: {detail}"
+        ) from exc
     return {"song_id": song_id, "revision": revision}
 
 
@@ -169,8 +182,9 @@ def export_song_package(
         )
     except (OSError, ValueError) as exc:
         detail = str(exc)
-        status = 404 if detail == "Song not found" else 409
-        raise HTTPException(status_code=status, detail=f"Could not package song: {detail}") from exc
+        raise HTTPException(
+            status_code=_song_error_status(detail), detail=f"Could not package song: {detail}"
+        ) from exc
     background_tasks.add_task(package_path.unlink, missing_ok=True)
     return FileResponse(
         package_path,
@@ -215,10 +229,8 @@ async def import_song_package(
 
 @router.patch("/{song_id}", response_model=schemas.SongOut)
 def patch_song(song: SongDependency, patch: schemas.SongUpdate, db: Session = Depends(get_db)):
-    try:
+    with http_error(ValueError, 422):
         return song_service.update_song(db, song, patch)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.delete("/{song_id}", status_code=204)
@@ -363,10 +375,7 @@ def save_song_editor(
             song_package_service.invalidate_content_revision(song)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    song.updated_at = datetime.now(UTC)
-    db.add(song)
-    db.commit()
-    db.refresh(song)
+    _touch_song(db, song, refresh=True)
     return schemas.SongEditorOut(song_map=song_map, ai_backup_exists=True)
 
 
@@ -380,9 +389,7 @@ def reset_song_editor(song: SongDependency, db: Session = Depends(get_db)):
             song_package_service.invalidate_content_revision(song)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    song.updated_at = datetime.now(UTC)
-    db.add(song)
-    db.commit()
+    _touch_song(db, song, refresh=False)
     return schemas.SongEditorOut(song_map=song_map, ai_backup_exists=True)
 
 

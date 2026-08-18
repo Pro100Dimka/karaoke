@@ -15,6 +15,7 @@ from dataclasses import asdict, dataclass, replace
 from typing import Literal
 
 from .backend_registry import AI_BACKEND_REGISTRY, BackendSpec
+from .utils.env import env_flag
 
 ComputePreference = Literal["auto", "cuda", "cpu"]
 PRODUCTION_QUALITY = frozenset({"baseline", "validated"})
@@ -161,10 +162,6 @@ def detect_hardware(torch_module=None) -> HardwareProfile:
 
 
 
-def _truthy_env(name: str) -> bool:
-    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
-
-
 def _cpu_thread_settings(logical_cores: int) -> tuple[int, int]:
     physical = logical_cores
     try:
@@ -187,7 +184,7 @@ def _cpu_thread_settings(logical_cores: int) -> tuple[int, int]:
 
 
 def _apply_cpu_tuning(hardware: HardwareProfile, torch_module=None) -> tuple[int, int] | None:
-    if not _truthy_env("KARAOKE_CPU_TUNING"):
+    if not env_flag("KARAOKE_CPU_TUNING"):
         return None
     intra, inter = _cpu_thread_settings(hardware.logical_cores)
     os.environ["OMP_NUM_THREADS"] = str(intra)
@@ -325,7 +322,7 @@ def format_runtime_plan(plan: RuntimePlan | None = None) -> tuple[str, ...]:
     gpu = ", ".join(item.name for item in plan.hardware.gpus) or "none"
     tuning = (
         _cpu_thread_settings(plan.hardware.logical_cores)
-        if plan.preference == "cpu" and _truthy_env("KARAOKE_CPU_TUNING")
+        if plan.preference == "cpu" and env_flag("KARAOKE_CPU_TUNING")
         else None
     )
     lines = (
@@ -333,7 +330,7 @@ def format_runtime_plan(plan: RuntimePlan | None = None) -> tuple[str, ...]:
         *(
             (
                 f"CPU tuning: intraop={tuning[0]}, interop={tuning[1]}, "
-                f"separation_inference_mode={'on' if _truthy_env('KARAOKE_CPU_INFERENCE_MODE') else 'off'}",
+                f"separation_inference_mode={'on' if env_flag('KARAOKE_CPU_INFERENCE_MODE') else 'off'}",
             )
             if tuning is not None
             else ()

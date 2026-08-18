@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+import models
 import schemas
 from app import repositories
 from app.api.dependencies import DatabaseSession, RecordingDependency, SongDependency
@@ -147,12 +148,16 @@ def get_recording(recording: RecordingDependency):
     return recording
 
 
-@router.get("/{recording_id}/file")
-def get_recording_file(recording: RecordingDependency):
+def _wav_file_response(recording: models.Recording) -> FileResponse:
     path = recording_service.resolve_recording_path(recording)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Файл записи не найден")
     return FileResponse(path, media_type="audio/wav", filename=recording.filename)
+
+
+@router.get("/{recording_id}/file")
+def get_recording_file(recording: RecordingDependency):
+    return _wav_file_response(recording)
 
 
 @router.get("/{recording_id}/performance")
@@ -161,10 +166,7 @@ def get_performance_file(recording: RecordingDependency):
         if mixed_path.is_file():
             media_type = "audio/mpeg" if mixed_path.suffix == ".mp3" else "audio/wav"
             return FileResponse(mixed_path, media_type=media_type, filename=mixed_path.name)
-    path = recording_service.resolve_recording_path(recording)
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="Файл записи не найден")
-    return FileResponse(path, media_type="audio/wav", filename=recording.filename)
+    return _wav_file_response(recording)
 
 
 @router.delete("/{recording_id}", status_code=204)

@@ -1,9 +1,10 @@
 """Микрофон и звук."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 import schemas
+from app.api.errors import http_error
 from app.services import audio_service
 from database import get_db
 
@@ -32,18 +33,14 @@ def get_settings(db: Session = Depends(get_db)):
 
 @router.post("/settings", response_model=schemas.AudioSettingsOut)
 def update_settings(patch: schemas.AudioSettingsUpdate, db: Session = Depends(get_db)):
-    try:
+    with http_error(RuntimeError, 503):
         return audio_service.update_settings(db, patch.model_dump(exclude_unset=True))
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.post("/direct-monitor/start", response_model=schemas.AudioSettingsOut)
 def start_direct_monitoring(db: Session = Depends(get_db)):
-    try:
+    with http_error(RuntimeError, 503):
         return audio_service.set_monitoring_enabled(db, True)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.post("/direct-monitor/stop", response_model=schemas.AudioSettingsOut)
@@ -59,11 +56,9 @@ def select_device(device_id: int, db: Session = Depends(get_db)):
 @router.get("/signal-quality", response_model=schemas.SignalQualityOut)
 def signal_quality(db: Session = Depends(get_db)):
     settings = audio_service.get_settings(db)
-    try:
+    with http_error(RuntimeError, 503):
         return audio_service.check_signal_quality(
             settings.input_device_id,
             gain=settings.volume,
             monitoring_expected=settings.monitoring_enabled,
         )
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc

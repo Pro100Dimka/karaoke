@@ -4,6 +4,7 @@ import math
 from pathlib import Path
 
 from .audio import load_mono
+from .utils.numeric import clamp01
 
 _NOTE_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 _MAJOR_PROFILE = (6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88)
@@ -118,7 +119,7 @@ def _tracked_tempo(
         med = float(np.median(intervals))
         if med > 0:
             mad = float(np.median(np.abs(intervals - med)))
-            regularity = max(0.0, min(1.0, 1.0 - mad / med))
+            regularity = clamp01(1.0 - mad / med)
     return value, len(beats), regularity
 
 

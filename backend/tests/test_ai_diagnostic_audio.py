@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 
+from AI import audio as ai_audio
 from AI import diagnostic_audio
 from AI.errors import AICoreError
 from AI.models import VocalNote
@@ -53,7 +54,7 @@ def test_write_diagnostic_audio_success_normalizes_vocal(monkeypatch, tmp_path):
         with open(command[-1], "wb") as stream:
             stream.write(b"mp3")
 
-    monkeypatch.setattr(diagnostic_audio.subprocess, "run", run)
+    monkeypatch.setattr(ai_audio.subprocess, "run", run)
     result = diagnostic_audio.write_diagnostic_audio(
         source, target, [VocalNote(0, 0.001, 60)], sample_rate=8000
     )
@@ -66,6 +67,7 @@ def test_write_diagnostic_audio_success_normalizes_vocal(monkeypatch, tmp_path):
     ("failure", "message"),
     [
         (FileNotFoundError(), "required"),
+        (subprocess.TimeoutExpired("ffmpeg", 1), "safety timeout"),
         (subprocess.CalledProcessError(1, "ffmpeg", stderr=b"encode failed"), "encode failed"),
         (subprocess.CalledProcessError(1, "ffmpeg", stderr=b""), "FFmpeg failed"),
     ],
@@ -73,7 +75,7 @@ def test_write_diagnostic_audio_success_normalizes_vocal(monkeypatch, tmp_path):
 def test_write_diagnostic_audio_wraps_ffmpeg_errors(monkeypatch, tmp_path, failure, message):
     source = tmp_path / "vocal.wav"
     write_vocal(source)
-    monkeypatch.setattr(diagnostic_audio.subprocess, "run", Mock(side_effect=failure))
+    monkeypatch.setattr(ai_audio.subprocess, "run", Mock(side_effect=failure))
     with pytest.raises(AICoreError, match=message):
         diagnostic_audio.write_diagnostic_audio(
             source, tmp_path / "out.mp3", [VocalNote(0, 0.001, 60)], sample_rate=8000
@@ -84,7 +86,7 @@ def test_write_diagnostic_audio_wraps_ffmpeg_errors(monkeypatch, tmp_path, failu
 def test_write_diagnostic_audio_rejects_missing_encoder_output(monkeypatch, tmp_path):
     source = tmp_path / "vocal.wav"
     write_vocal(source)
-    monkeypatch.setattr(diagnostic_audio.subprocess, "run", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(ai_audio.subprocess, "run", lambda *_args, **_kwargs: None)
     with pytest.raises(AICoreError, match="did not create"):
         diagnostic_audio.write_diagnostic_audio(
             source, tmp_path / "out.mp3", [VocalNote(0, 0.001, 60)], sample_rate=8000

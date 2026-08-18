@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-import os
 import re
 import sys
 import tempfile
@@ -55,7 +54,9 @@ from .pitch_post import (
 from .profiler import RuntimeTelemetry, environment_info
 from .quality import evaluate_quality
 from .syllables import SYLLABLE_ALIGNER_VERSION, VOWELS, align_syllables
+from .utils.env import env_flag
 from .utils.io import read_json, write_json_atomic, write_text_atomic
+from .utils.numeric import clamp01
 from .validators import (
     validate_audio,
     validate_derivation_json,
@@ -258,7 +259,7 @@ def _preserve_complete_canonical_timeline(
         local = list(words)
         acoustic = {"ctc", "consensus", "qwen"}
         direct_confidences = [
-            max(0.0, min(1.0, float(word.confidence)))
+            clamp01(float(word.confidence))
             for word, source in zip(words, sources, strict=True)
             if source in acoustic
         ]
@@ -296,7 +297,7 @@ def _preserve_complete_canonical_timeline(
             start = max(0, index - 4)
             end = min(len(words), index + 5)
             local_confidences = [
-                max(0.0, min(1.0, float(words[pos].confidence)))
+                clamp01(float(words[pos].confidence))
                 for pos in range(start, end)
                 if sources[pos] in acoustic
             ]
@@ -497,7 +498,7 @@ def _preserve_complete_canonical_timeline(
     for index, word in enumerate(words):
         start = max(0.0, min(total_duration, float(word.start)))
         end = max(start + 0.01, min(total_duration, float(word.end)))
-        confidence = max(0.0, min(1.0, float(word.confidence)))
+        confidence = clamp01(float(word.confidence))
 
         if repaired and start < repaired[-1].end:
             previous = repaired[-1]
@@ -631,9 +632,7 @@ def _print_full_lyrics(source: str, text: str, query: str | None) -> None:
         f"[lyrics] result: source={source or 'unknown'} query={query or '<empty>'!r} "
         f"lines={line_count} chars={len(text)}"
     )
-    if os.getenv("KARAOKE_LYRICS_LOG_TEXT", "").strip().lower() in {
-        "1", "true", "yes", "on"
-    }:
+    if env_flag("KARAOKE_LYRICS_LOG_TEXT"):
         _lyrics_console("[lyrics] FOUND TEXT BEGIN")
         _lyrics_console(text)
         _lyrics_console("[lyrics] FOUND TEXT END")

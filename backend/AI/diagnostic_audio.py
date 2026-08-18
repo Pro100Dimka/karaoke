@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 import os
-import subprocess
 import tempfile
 from pathlib import Path
 
@@ -11,6 +10,7 @@ import soundfile as sf
 
 import config
 
+from .audio import run_ffmpeg
 from .errors import AICoreError
 from .models import VocalNote
 
@@ -78,7 +78,7 @@ def write_diagnostic_audio(
     temporary = output.with_name(f".{output.name}.tmp.mp3")
     try:
         sf.write(wav, stereo, sample_rate, subtype="PCM_16")
-        subprocess.run(
+        run_ffmpeg(
             [
                 config.FFMPEG_EXE,
                 "-y",
@@ -93,18 +93,18 @@ def write_diagnostic_audio(
                 "192k",
                 str(temporary),
             ],
-            check=True,
-            capture_output=True,
-            timeout=30 * 60,
+            timeout_sec=30 * 60,
+            not_found_message="FFmpeg is required to create diagnostic audio",
+            timeout_message="Diagnostic audio FFmpeg exceeded the safety timeout",
+            failed_message="FFmpeg failed while creating diagnostic audio",
         )
         if not temporary.is_file() or temporary.stat().st_size <= 0:
             raise AICoreError("FFmpeg did not create diagnostic MP3")
         os.replace(temporary, output)
-    except FileNotFoundError as exc:
-        raise AICoreError("FFmpeg is required to create diagnostic audio") from exc
-    except subprocess.CalledProcessError as exc:
-        detail = exc.stderr.decode("utf-8", "replace").strip()
-        raise AICoreError(detail or "FFmpeg failed while creating diagnostic audio") from exc
+    except (OSError, RuntimeError) as exc:
+        if isinstance(exc, AICoreError):
+            raise
+        raise AICoreError(f"Could not create diagnostic audio: {exc}") from exc
     finally:
         wav.unlink(missing_ok=True)
         temporary.unlink(missing_ok=True)

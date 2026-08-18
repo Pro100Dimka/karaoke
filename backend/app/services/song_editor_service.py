@@ -9,6 +9,7 @@ from typing import Any
 
 from AI.midi import write_midi
 from AI.models import Syllable, VocalNote, Word
+from AI.utils.numeric import clamp01
 from app.services.artifact_integrity import refresh_manifest_integrity
 from app.utils.json_files import read_json, write_json
 
@@ -87,7 +88,7 @@ def _words(song_map: JsonObject) -> list[Word]:
                 float(raw.get("start") or 0.0),
                 max(float(raw.get("start") or 0.0), float(raw.get("end") or 0.0)),
                 str(raw.get("text") or raw.get("word") or "?").strip() or "?",
-                max(0.0, min(1.0, float(raw.get("confidence") or 1.0))),
+                clamp01(float(raw.get("confidence") or 1.0)),
                 _safe_int(raw.get("index"), i),
             )
         )
@@ -106,7 +107,7 @@ def _syllables(song_map: JsonObject) -> list[Syllable]:
                 str(raw.get("text") or "?").strip() or "?",
                 _safe_int(raw.get("word_index"), 0),
                 _safe_int(raw.get("index"), i),
-                max(0.0, min(1.0, float(raw.get("confidence") or 1.0))),
+                clamp01(float(raw.get("confidence") or 1.0)),
             )
         )
     return result

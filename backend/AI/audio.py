@@ -19,6 +19,34 @@ from .errors import AICoreError
 from .profiler import profile_operation, record_operation
 
 DEFAULT_FFMPEG_TIMEOUT_SEC = 30 * 60
+
+
+def run_ffmpeg(
+    command: list[str],
+    *,
+    timeout_sec: float,
+    not_found_message: str,
+    timeout_message: str,
+    failed_message: str,
+) -> None:
+    """Run an ffmpeg subprocess, mapping every failure mode to AICoreError.
+
+    Every ffmpeg call site in the AI core built its own command and then
+    independently repeated the same FileNotFoundError/TimeoutExpired/
+    CalledProcessError -> AICoreError translation (including stderr
+    decoding). This centralizes exactly that translation; command
+    construction and any post-run artifact validation stay at each call
+    site since those genuinely differ per caller.
+    """
+    try:
+        subprocess.run(command, check=True, capture_output=True, timeout=timeout_sec)
+    except FileNotFoundError as exc:
+        raise AICoreError(not_found_message) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise AICoreError(timeout_message) from exc
+    except subprocess.CalledProcessError as exc:
+        detail = exc.stderr.decode("utf-8", "replace").strip()
+        raise AICoreError(detail or failed_message) from exc
 _AUDIO_CACHE: ContextVar[dict[tuple[str, int, int, int | None], tuple[np.ndarray, int]] | None] = (
     ContextVar("ai_audio_cache", default=None)
 )
@@ -76,7 +104,13 @@ def decode_audio(
     started = time.perf_counter()
     try:
         with profile_operation("decode.ffmpeg", byte_count=source_path.stat().st_size):
-            subprocess.run(command, check=True, capture_output=True, timeout=timeout_sec)
+            run_ffmpeg(
+                command,
+                timeout_sec=timeout_sec,
+                not_found_message="FFmpeg is required but was not found in PATH",
+                timeout_message=f"FFmpeg exceeded the {timeout_sec}-second safety timeout",
+                failed_message="FFmpeg failed without an error message",
+            )
         if not temporary.is_file() or temporary.stat().st_size < 44:
             raise AICoreError("FFmpeg finished but did not create a valid WAV file")
         # Verify readability before publishing the artifact.
@@ -84,13 +118,6 @@ def decode_audio(
         if info.frames <= 0 or info.samplerate != sample_rate:
             raise AICoreError("FFmpeg created an empty WAV or unexpected sample rate")
         os.replace(temporary, target_path)
-    except FileNotFoundError as exc:
-        raise AICoreError("FFmpeg is required but was not found in PATH") from exc
-    except subprocess.TimeoutExpired as exc:
-        raise AICoreError(f"FFmpeg exceeded the {timeout_sec}-second safety timeout") from exc
-    except subprocess.CalledProcessError as exc:
-        details = exc.stderr.decode("utf-8", "replace").strip()
-        raise AICoreError(details or "FFmpeg failed without an error message") from exc
     except (OSError, RuntimeError) as exc:
         if isinstance(exc, AICoreError):
             raise

@@ -16,16 +16,13 @@ import os
 import threading
 import urllib.request
 
+from AI.utils.env import env_flag
+
 _LOG_UPLOAD_URL = os.getenv(
     "KARAOKE_LOG_COLLECTOR_URL",
     "https://karaoke-studio-online.pro100dimka-and.workers.dev/logs",
 )
-_DISABLED = os.getenv("KARAOKE_LOG_COLLECTOR_DISABLED", "0").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
+_DISABLED = env_flag("KARAOKE_LOG_COLLECTOR_DISABLED")
 
 
 def _current_online_name() -> str:

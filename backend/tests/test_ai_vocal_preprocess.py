@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 
+from AI import audio as ai_audio
 from AI import vocal_preprocess as vocal
 from AI.errors import AICoreError
 from AI.models import PitchFrame
@@ -25,7 +26,7 @@ def test_render_analysis_variant_success(monkeypatch, tmp_path):
     def run(command, **_):
         write(command[-1], np.ones(100))
 
-    monkeypatch.setattr(vocal.subprocess, "run", run)
+    monkeypatch.setattr(ai_audio.subprocess, "run", run)
     assert vocal._render_analysis_variant(source, target, "filter") == target
     assert target.exists() and not list(target.parent.glob("*.tmp"))
     with pytest.raises(FileNotFoundError):
@@ -44,7 +45,7 @@ def test_render_analysis_variant_success(monkeypatch, tmp_path):
 def test_render_wraps_ffmpeg_failures(monkeypatch, tmp_path, failure, message):
     source = tmp_path / "source.wav"
     write(source, np.ones(100))
-    monkeypatch.setattr(vocal.subprocess, "run", Mock(side_effect=failure))
+    monkeypatch.setattr(ai_audio.subprocess, "run", Mock(side_effect=failure))
     with pytest.raises(AICoreError, match=message):
         vocal._render_analysis_variant(source, tmp_path / "out.wav", "filter")
 
@@ -66,7 +67,7 @@ def test_render_rejects_changed_output(monkeypatch, tmp_path, target_info, messa
             stream.write(b"wav")
 
     infos = iter((SimpleNamespace(frames=100, samplerate=1000, duration=0.1), target_info))
-    monkeypatch.setattr(vocal.subprocess, "run", run)
+    monkeypatch.setattr(ai_audio.subprocess, "run", run)
     monkeypatch.setattr(vocal.sf, "info", lambda _: next(infos))
     with pytest.raises(AICoreError, match=message):
         vocal._render_analysis_variant(source, tmp_path / "out.wav", "filter")
