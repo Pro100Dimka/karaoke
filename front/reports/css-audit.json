@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-08-18T06:58:41.459Z",
+  "generatedAt": "2026-08-18T11:14:55.694Z",
   "root": "D:\\Git\\karaoke\\front",
   "summary": {
     "cssFiles": 52,
     "sourceFiles": 268,
-    "selectors": 1388,
-    "classesDefined": 501,
-    "classesUsed": 295,
+    "selectors": 1389,
+    "classesDefined": 502,
+    "classesUsed": 296,
     "unusedClassCandidates": 207,
     "dynamicClassCandidates": 2,
     "duplicateSelectors": 265,
@@ -26,7 +26,7 @@
     {
       "file": "src/styles/karaoke-base.css",
       "lines": 1485,
-      "bytes": 38483
+      "bytes": 38492
     },
     {
       "file": "src/styles/karaoke-polish.css",
@@ -40,8 +40,8 @@
     },
     {
       "file": "src/styles/karaoke-scenes.css",
-      "lines": 1104,
-      "bytes": 31750
+      "lines": 1117,
+      "bytes": 32135
     },
     {
       "file": "src/styles/melody-editor-v4-v6.css",
@@ -3595,14 +3595,14 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 973,
+          "line": 986,
           "column": 1,
           "context": "",
           "selector": ".karaoke-stage-action.is-active"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 985,
+          "line": 998,
           "column": 1,
           "context": "",
           "selector": ".karaoke-stage-radio.is-active"
@@ -4373,7 +4373,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1101,
+          "line": 1114,
           "column": 1,
           "context": "",
           "selector": ".karaoke-effect-dial"
@@ -4571,14 +4571,14 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 994,
+          "line": 1007,
           "column": 1,
           "context": "",
           "selector": ".karaoke-scene-blackout.is-visible"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1011,
+          "line": 1024,
           "column": 1,
           "context": "",
           "selector": ".library-route-blackout.is-visible"
@@ -5359,7 +5359,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 947,
+          "line": 960,
           "column": 1,
           "context": "",
           "selector": ".karaoke-stage-actions"
@@ -5404,14 +5404,14 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 990,
+          "line": 1003,
           "column": 1,
           "context": "",
           "selector": ".karaoke-scene-blackout"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 994,
+          "line": 1007,
           "column": 1,
           "context": "",
           "selector": ".karaoke-scene-blackout.is-visible"
@@ -5442,7 +5442,7 @@
       "locations": [
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 985,
+          "line": 998,
           "column": 1,
           "context": "",
           "selector": ".karaoke-stage-radio.is-active"
@@ -5454,21 +5454,21 @@
       "locations": [
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1001,
+          "line": 1014,
           "column": 1,
           "context": "",
           "selector": ".library-route-blackout"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1011,
+          "line": 1024,
           "column": 1,
           "context": "",
           "selector": ".library-route-blackout.is-visible"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1095,
+          "line": 1108,
           "column": 1,
           "context": "",
           "selector": ".library-route-blackout"
@@ -8792,7 +8792,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1080,
+          "line": 1093,
           "column": 1,
           "context": "",
           "selector": ".karaoke-lyric-next"
@@ -8855,7 +8855,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1051,
+          "line": 1064,
           "column": 1,
           "context": "",
           "selector": ".karaoke-lyric"
@@ -9401,7 +9401,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1086,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".karaoke-lyric-next .karaoke-lyric-character"
@@ -9443,14 +9443,14 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1018,
+          "line": 1031,
           "column": 1,
           "context": "",
           "selector": ".melody-roll"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1027,
+          "line": 1040,
           "column": 1,
           "context": "",
           "selector": ".melody-roll"
@@ -9961,7 +9961,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1086,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": "[data-theme=\"light\"] .karaoke-lyric-next .karaoke-lyric-character"
@@ -10003,7 +10003,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1040,
+          "line": 1053,
           "column": 1,
           "context": "",
           "selector": ".karaoke-lyrics"
@@ -10045,7 +10045,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1063,
+          "line": 1076,
           "column": 1,
           "context": "",
           "selector": ".karaoke-lyric-current .karaoke-lyric-character"
@@ -10612,7 +10612,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1063,
+          "line": 1076,
           "column": 1,
           "context": "",
           "selector": "[data-theme=\"light\"] .karaoke-lyric-current .karaoke-lyric-character"
@@ -10647,7 +10647,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1034,
+          "line": 1047,
           "column": 1,
           "context": "",
           "selector": ".melody-roll .piano-roll-keyboard-bed"
@@ -12103,7 +12103,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1046,
+          "line": 1059,
           "column": 1,
           "context": "",
           "selector": ".karaoke-lyrics::before"
@@ -12243,7 +12243,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 947,
+          "line": 960,
           "column": 1,
           "context": "",
           "selector": ".karaoke-stage-actions"
@@ -12271,7 +12271,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 951,
+          "line": 964,
           "column": 1,
           "context": "",
           "selector": ".karaoke-stage-action"
@@ -12299,7 +12299,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 973,
+          "line": 986,
           "column": 1,
           "context": "",
           "selector": ".karaoke-stage-action:hover"
@@ -12327,7 +12327,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 990,
+          "line": 1003,
           "column": 1,
           "context": "",
           "selector": ".karaoke-scene-blackout"
@@ -14112,7 +14112,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1101,
+          "line": 1114,
           "column": 1,
           "context": "",
           "selector": ".karaoke-effect-dial"
@@ -14847,7 +14847,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 973,
+          "line": 986,
           "column": 1,
           "context": "",
           "selector": ".karaoke-stage-action.is-active"
@@ -14868,7 +14868,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 994,
+          "line": 1007,
           "column": 1,
           "context": "",
           "selector": ".karaoke-scene-blackout.is-visible"
@@ -14882,14 +14882,14 @@
       "locations": [
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1001,
+          "line": 1014,
           "column": 1,
           "context": "",
           "selector": ".library-route-blackout"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1095,
+          "line": 1108,
           "column": 1,
           "context": "",
           "selector": ".library-route-blackout"
@@ -16551,37 +16551,37 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 906,
+          "line": 919,
           "column": 3,
           "selector": ".karaoke-song-intro-kicker"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 957,
+          "line": 970,
           "column": 3,
           "selector": ".karaoke-stage-action"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 966,
+          "line": 979,
           "column": 3,
           "selector": ".karaoke-stage-action"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 975,
+          "line": 988,
           "column": 3,
           "selector": ".karaoke-stage-action:hover,\n.karaoke-stage-action.is-active"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 978,
+          "line": 991,
           "column": 3,
           "selector": ".karaoke-stage-action:hover,\n.karaoke-stage-action.is-active"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 986,
+          "line": 999,
           "column": 3,
           "selector": ".karaoke-stage-radio.is-active"
         },
@@ -17283,7 +17283,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 935,
+          "line": 948,
           "column": 3,
           "selector": ".karaoke-song-intro-meta span"
         },
@@ -18525,13 +18525,13 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 966,
+          "line": 979,
           "column": 3,
           "selector": ".karaoke-stage-action"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 978,
+          "line": 991,
           "column": 3,
           "selector": ".karaoke-stage-action:hover,\n.karaoke-stage-action.is-active"
         },
@@ -18942,6 +18942,12 @@
           "line": 881,
           "column": 3,
           "selector": ".karaoke-song-intro-card"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 907,
+          "column": 3,
+          "selector": ".karaoke-song-intro-art"
         },
         {
           "file": "src/styles/library.css",
@@ -19792,492 +19798,6 @@
       ]
     },
     {
-      "property": "position",
-      "value": "absolute",
-      "locations": [
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 127,
-          "column": 3,
-          "selector": ".ui-card__fx"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 398,
-          "column": 3,
-          "selector": ".app-modal-close"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 703,
-          "column": 3,
-          "selector": ".sr-only,\n.visually-hidden"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 1242,
-          "column": 3,
-          "selector": ".app-dialog-close"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 1333,
-          "column": 3,
-          "selector": ".karaoke-aurora-world,\n.karaoke-panoramic-sky,\n.aurora-nebula,\n.aurora-stars,\n.aurora-grid-floor,\n.aurora-horizon-city,\n.aurora-cloud-texture,\n.aurora-solar-flare,\n.aurora-particles"
-        },
-        {
-          "file": "src/styles/backend-loader.css",
-          "line": 21,
-          "column": 3,
-          "selector": ".backend-boot-loader__aurora"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 14,
-          "column": 3,
-          "selector": ".karaoke-panoramic-sky,\n.karaoke-aurora-world,\n.karaoke-video"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 29,
-          "column": 3,
-          "selector": ".aurora-nebula,\n.aurora-cloud-texture,\n.aurora-solar-flare,\n.aurora-grid-floor,\n.aurora-horizon-city,\n.aurora-stars,\n.aurora-particles"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 116,
-          "column": 3,
-          "selector": ".aurora-stars i,\n.aurora-particles i"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 140,
-          "column": 3,
-          "selector": ".waveform-timeline input"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 167,
-          "column": 3,
-          "selector": ".karaoke-settings-close"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 230,
-          "column": 3,
-          "selector": ".karaoke-recording-error"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 362,
-          "column": 3,
-          "selector": ".melody-roll::before"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 555,
-          "column": 3,
-          "selector": ".karaoke-performance-stage::before,\n.karaoke-performance-stage::after"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 588,
-          "column": 3,
-          "selector": ".melody-roll::after"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 944,
-          "column": 3,
-          "selector": ".karaoke-lyrics::before"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 1032,
-          "column": 3,
-          "selector": ".karaoke-transport-area"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 1135,
-          "column": 3,
-          "selector": ".karaoke-lyrics"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 1153,
-          "column": 3,
-          "selector": ".karaoke-lyrics-cover"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 1178,
-          "column": 3,
-          "selector": ".melody-roll"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 1226,
-          "column": 3,
-          "selector": ".karaoke-effect-dial__control::after"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 1238,
-          "column": 3,
-          "selector": ".karaoke-effect-dial input"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 1295,
-          "column": 3,
-          "selector": ".karaoke-song-strip .waveform-timeline::after"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 1362,
-          "column": 3,
-          "selector": ".karaoke-effect-dial__knob::before"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 1410,
-          "column": 3,
-          "selector": ".karaoke-effect-dial__knob"
-        },
-        {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 12,
-          "column": 3,
-          "selector": ".karaoke-performance-stage.karaoke-video-stage"
-        },
-        {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 228,
-          "column": 3,
-          "selector": ".app-modal-close,\n.modal-close,\n.performance-analysis-close,\n.app-dialog-close"
-        },
-        {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 742,
-          "column": 3,
-          "selector": ".karaoke-lyrics::before"
-        },
-        {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 814,
-          "column": 3,
-          "selector": ".app-checkbox__input"
-        },
-        {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 841,
-          "column": 3,
-          "selector": ".app-checkbox__box::after"
-        },
-        {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 974,
-          "column": 3,
-          "selector": ".app-modal-close,\n.modal-close,\n.performance-analysis-close,\n.app-dialog-close"
-        },
-        {
-          "file": "src/styles/karaoke-scenes.css",
-          "line": 205,
-          "column": 3,
-          "selector": ".app-radio-volume"
-        },
-        {
-          "file": "src/styles/karaoke-scenes.css",
-          "line": 239,
-          "column": 3,
-          "selector": ".app-radio-volume::after"
-        },
-        {
-          "file": "src/styles/karaoke-scenes.css",
-          "line": 344,
-          "column": 3,
-          "selector": ".library-concert-backdrop::after"
-        },
-        {
-          "file": "src/styles/karaoke-scenes.css",
-          "line": 659,
-          "column": 3,
-          "selector": ".karaoke-stage-actions"
-        },
-        {
-          "file": "src/styles/karaoke-scenes.css",
-          "line": 742,
-          "column": 3,
-          "selector": ".karaoke-scene-video"
-        },
-        {
-          "file": "src/styles/karaoke-scenes.css",
-          "line": 769,
-          "column": 3,
-          "selector": ".karaoke-scene-blackout"
-        },
-        {
-          "file": "src/styles/karaoke-scenes.css",
-          "line": 861,
-          "column": 3,
-          "selector": ".karaoke-song-intro"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 15,
-          "column": 3,
-          "selector": ".library-stage-lights,\n.library-music-decor"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 21,
-          "column": 3,
-          "selector": ".library-stage-lights i"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 50,
-          "column": 3,
-          "selector": ".library-wave-terrain"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 67,
-          "column": 3,
-          "selector": ".library-music-object,\n.library-music-object span"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 88,
-          "column": 3,
-          "selector": ".library-search-icon"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 143,
-          "column": 3,
-          "selector": ".library-song-card-wave"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 219,
-          "column": 3,
-          "selector": ".modal-close"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 683,
-          "column": 3,
-          "selector": ".processing-signal__value"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 878,
-          "column": 3,
-          "selector": ".app-dropdown-menu"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 1482,
-          "column": 3,
-          "selector": ".online-room-person::before"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 1752,
-          "column": 3,
-          "selector": ".online-room-person-volume-control .online-room-person-volume"
-        },
-        {
-          "file": "src/styles/melody-editor-v2.css",
-          "line": 150,
-          "column": 3,
-          "selector": ".melody-editor-pitch-row"
-        },
-        {
-          "file": "src/styles/melody-editor-v2.css",
-          "line": 187,
-          "column": 3,
-          "selector": ".melody-editor-note"
-        },
-        {
-          "file": "src/styles/melody-editor-v2.css",
-          "line": 208,
-          "column": 3,
-          "selector": ".melody-editor-lyrics-layer"
-        },
-        {
-          "file": "src/styles/melody-editor-v2.css",
-          "line": 216,
-          "column": 3,
-          "selector": ".melody-editor-lyric-fragment"
-        },
-        {
-          "file": "src/styles/melody-editor-v2.css",
-          "line": 224,
-          "column": 3,
-          "selector": ".melody-editor-lyric-fragment > span"
-        },
-        {
-          "file": "src/styles/melody-editor-v2.css",
-          "line": 235,
-          "column": 3,
-          "selector": ".melody-editor-note-handle"
-        },
-        {
-          "file": "src/styles/melody-editor-v2.css",
-          "line": 248,
-          "column": 3,
-          "selector": ".melody-editor-playhead"
-        },
-        {
-          "file": "src/styles/melody-editor-v2.css",
-          "line": 369,
-          "column": 3,
-          "selector": ".melody-editor-selection-box"
-        },
-        {
-          "file": "src/styles/melody-editor-v4-v6.css",
-          "line": 171,
-          "column": 3,
-          "selector": ".melody-editor-piano-key"
-        },
-        {
-          "file": "src/styles/melody-editor-v4-v6.css",
-          "line": 273,
-          "column": 3,
-          "selector": ".melody-editor-stage > .melody-editor-zoom-controls"
-        },
-        {
-          "file": "src/styles/melody-editor-v4-v6.css",
-          "line": 582,
-          "column": 3,
-          "selector": ".melody-editor-playhead::before"
-        },
-        {
-          "file": "src/styles/melody-editor-v4-v6.css",
-          "line": 589,
-          "column": 3,
-          "selector": ".melody-editor-playhead-handle"
-        },
-        {
-          "file": "src/styles/melody-editor-v4-v6.css",
-          "line": 894,
-          "column": 3,
-          "selector": ".melody-editor-cubase-scrollbar"
-        },
-        {
-          "file": "src/styles/melody-editor-v4-v6.css",
-          "line": 933,
-          "column": 3,
-          "selector": ".melody-editor-scroll-thumb"
-        },
-        {
-          "file": "src/styles/melody-editor-v7-v12.css",
-          "line": 431,
-          "column": 3,
-          "selector": ".melody-editor-piano-key"
-        },
-        {
-          "file": "src/styles/melody-editor-v7-v12.css",
-          "line": 491,
-          "column": 3,
-          "selector": ".melody-editor-piano-key"
-        },
-        {
-          "file": "src/styles/melody-editor-v7-v12.css",
-          "line": 530,
-          "column": 3,
-          "selector": ".melody-editor-zero-time"
-        },
-        {
-          "file": "src/theme/ui/Autocomplete/autocomplete.css",
-          "line": 22,
-          "column": 5,
-          "selector": ".ui-autocomplete-list"
-        },
-        {
-          "file": "src/theme/ui/Badge/badge.css",
-          "line": 4,
-          "column": 5,
-          "selector": ".ui-badge-content"
-        },
-        {
-          "file": "src/theme/ui/Button/button.css",
-          "line": 33,
-          "column": 5,
-          "selector": ".ui-button::before"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 145,
-          "column": 5,
-          "selector": ".ui-card__fx"
-        },
-        {
-          "file": "src/theme/ui/Popover/popover.css",
-          "line": 3,
-          "column": 5,
-          "selector": ".ui-popover"
-        },
-        {
-          "file": "src/theme/ui/Progress/progress.css",
-          "line": 16,
-          "column": 5,
-          "selector": ".ui-progress::before"
-        },
-        {
-          "file": "src/theme/ui/Switch/switch.css",
-          "line": 20,
-          "column": 5,
-          "selector": ".ui-switch::before"
-        },
-        {
-          "file": "src/theme/ui/Switch/switch.css",
-          "line": 79,
-          "column": 5,
-          "selector": ".ui-switch[data-state=\"loading\"]::after"
-        },
-        {
-          "file": "src/theme/ui/Tabs/tabs.css",
-          "line": 31,
-          "column": 5,
-          "selector": ".ui-tab[data-active]::after"
-        },
-        {
-          "file": "src/theme/ui/Tooltip/tooltip.css",
-          "line": 39,
-          "column": 5,
-          "selector": ".ui-tooltip[data-placement=\"top\"]::after"
-        },
-        {
-          "file": "src/theme/ui/Tooltip/tooltip.css",
-          "line": 64,
-          "column": 5,
-          "selector": ".ui-tooltip[data-placement=\"bottom\"]::after"
-        },
-        {
-          "file": "src/theme/ui/Tooltip/tooltip.css",
-          "line": 89,
-          "column": 5,
-          "selector": ".ui-tooltip[data-placement=\"left\"]::after"
-        },
-        {
-          "file": "src/theme/ui/Tooltip/tooltip.css",
-          "line": 114,
-          "column": 5,
-          "selector": ".ui-tooltip[data-placement=\"right\"]::after"
-        },
-        {
-          "file": "src/theme/ui/_internal/VisuallyHidden/visually-hidden.css",
-          "line": 3,
-          "column": 5,
-          "selector": ".ui-visually-hidden"
-        }
-      ]
-    },
-    {
       "property": "min-inline-size",
       "value": "0",
       "locations": [
@@ -20764,6 +20284,486 @@
       ]
     },
     {
+      "property": "position",
+      "value": "absolute",
+      "locations": [
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 127,
+          "column": 3,
+          "selector": ".ui-card__fx"
+        },
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 398,
+          "column": 3,
+          "selector": ".app-modal-close"
+        },
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 703,
+          "column": 3,
+          "selector": ".sr-only,\n.visually-hidden"
+        },
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 1242,
+          "column": 3,
+          "selector": ".app-dialog-close"
+        },
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 1333,
+          "column": 3,
+          "selector": ".karaoke-aurora-world,\n.karaoke-panoramic-sky,\n.aurora-nebula,\n.aurora-stars,\n.aurora-grid-floor,\n.aurora-horizon-city,\n.aurora-cloud-texture,\n.aurora-solar-flare,\n.aurora-particles"
+        },
+        {
+          "file": "src/styles/backend-loader.css",
+          "line": 21,
+          "column": 3,
+          "selector": ".backend-boot-loader__aurora"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 14,
+          "column": 3,
+          "selector": ".karaoke-panoramic-sky,\n.karaoke-aurora-world,\n.karaoke-video"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 29,
+          "column": 3,
+          "selector": ".aurora-nebula,\n.aurora-cloud-texture,\n.aurora-solar-flare,\n.aurora-grid-floor,\n.aurora-horizon-city,\n.aurora-stars,\n.aurora-particles"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 116,
+          "column": 3,
+          "selector": ".aurora-stars i,\n.aurora-particles i"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 140,
+          "column": 3,
+          "selector": ".waveform-timeline input"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 167,
+          "column": 3,
+          "selector": ".karaoke-settings-close"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 230,
+          "column": 3,
+          "selector": ".karaoke-recording-error"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 362,
+          "column": 3,
+          "selector": ".melody-roll::before"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 555,
+          "column": 3,
+          "selector": ".karaoke-performance-stage::before,\n.karaoke-performance-stage::after"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 588,
+          "column": 3,
+          "selector": ".melody-roll::after"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 944,
+          "column": 3,
+          "selector": ".karaoke-lyrics::before"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1032,
+          "column": 3,
+          "selector": ".karaoke-transport-area"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1135,
+          "column": 3,
+          "selector": ".karaoke-lyrics"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1178,
+          "column": 3,
+          "selector": ".melody-roll"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1226,
+          "column": 3,
+          "selector": ".karaoke-effect-dial__control::after"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1238,
+          "column": 3,
+          "selector": ".karaoke-effect-dial input"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1295,
+          "column": 3,
+          "selector": ".karaoke-song-strip .waveform-timeline::after"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1362,
+          "column": 3,
+          "selector": ".karaoke-effect-dial__knob::before"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1410,
+          "column": 3,
+          "selector": ".karaoke-effect-dial__knob"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 12,
+          "column": 3,
+          "selector": ".karaoke-performance-stage.karaoke-video-stage"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 228,
+          "column": 3,
+          "selector": ".app-modal-close,\n.modal-close,\n.performance-analysis-close,\n.app-dialog-close"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 742,
+          "column": 3,
+          "selector": ".karaoke-lyrics::before"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 814,
+          "column": 3,
+          "selector": ".app-checkbox__input"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 841,
+          "column": 3,
+          "selector": ".app-checkbox__box::after"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 974,
+          "column": 3,
+          "selector": ".app-modal-close,\n.modal-close,\n.performance-analysis-close,\n.app-dialog-close"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 205,
+          "column": 3,
+          "selector": ".app-radio-volume"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 239,
+          "column": 3,
+          "selector": ".app-radio-volume::after"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 344,
+          "column": 3,
+          "selector": ".library-concert-backdrop::after"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 659,
+          "column": 3,
+          "selector": ".karaoke-stage-actions"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 742,
+          "column": 3,
+          "selector": ".karaoke-scene-video"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 769,
+          "column": 3,
+          "selector": ".karaoke-scene-blackout"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 861,
+          "column": 3,
+          "selector": ".karaoke-song-intro"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 15,
+          "column": 3,
+          "selector": ".library-stage-lights,\n.library-music-decor"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 21,
+          "column": 3,
+          "selector": ".library-stage-lights i"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 50,
+          "column": 3,
+          "selector": ".library-wave-terrain"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 67,
+          "column": 3,
+          "selector": ".library-music-object,\n.library-music-object span"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 88,
+          "column": 3,
+          "selector": ".library-search-icon"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 143,
+          "column": 3,
+          "selector": ".library-song-card-wave"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 219,
+          "column": 3,
+          "selector": ".modal-close"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 683,
+          "column": 3,
+          "selector": ".processing-signal__value"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 878,
+          "column": 3,
+          "selector": ".app-dropdown-menu"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 1482,
+          "column": 3,
+          "selector": ".online-room-person::before"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 1752,
+          "column": 3,
+          "selector": ".online-room-person-volume-control .online-room-person-volume"
+        },
+        {
+          "file": "src/styles/melody-editor-v2.css",
+          "line": 150,
+          "column": 3,
+          "selector": ".melody-editor-pitch-row"
+        },
+        {
+          "file": "src/styles/melody-editor-v2.css",
+          "line": 187,
+          "column": 3,
+          "selector": ".melody-editor-note"
+        },
+        {
+          "file": "src/styles/melody-editor-v2.css",
+          "line": 208,
+          "column": 3,
+          "selector": ".melody-editor-lyrics-layer"
+        },
+        {
+          "file": "src/styles/melody-editor-v2.css",
+          "line": 216,
+          "column": 3,
+          "selector": ".melody-editor-lyric-fragment"
+        },
+        {
+          "file": "src/styles/melody-editor-v2.css",
+          "line": 224,
+          "column": 3,
+          "selector": ".melody-editor-lyric-fragment > span"
+        },
+        {
+          "file": "src/styles/melody-editor-v2.css",
+          "line": 235,
+          "column": 3,
+          "selector": ".melody-editor-note-handle"
+        },
+        {
+          "file": "src/styles/melody-editor-v2.css",
+          "line": 248,
+          "column": 3,
+          "selector": ".melody-editor-playhead"
+        },
+        {
+          "file": "src/styles/melody-editor-v2.css",
+          "line": 369,
+          "column": 3,
+          "selector": ".melody-editor-selection-box"
+        },
+        {
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 171,
+          "column": 3,
+          "selector": ".melody-editor-piano-key"
+        },
+        {
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 273,
+          "column": 3,
+          "selector": ".melody-editor-stage > .melody-editor-zoom-controls"
+        },
+        {
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 582,
+          "column": 3,
+          "selector": ".melody-editor-playhead::before"
+        },
+        {
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 589,
+          "column": 3,
+          "selector": ".melody-editor-playhead-handle"
+        },
+        {
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 894,
+          "column": 3,
+          "selector": ".melody-editor-cubase-scrollbar"
+        },
+        {
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 933,
+          "column": 3,
+          "selector": ".melody-editor-scroll-thumb"
+        },
+        {
+          "file": "src/styles/melody-editor-v7-v12.css",
+          "line": 431,
+          "column": 3,
+          "selector": ".melody-editor-piano-key"
+        },
+        {
+          "file": "src/styles/melody-editor-v7-v12.css",
+          "line": 491,
+          "column": 3,
+          "selector": ".melody-editor-piano-key"
+        },
+        {
+          "file": "src/styles/melody-editor-v7-v12.css",
+          "line": 530,
+          "column": 3,
+          "selector": ".melody-editor-zero-time"
+        },
+        {
+          "file": "src/theme/ui/Autocomplete/autocomplete.css",
+          "line": 22,
+          "column": 5,
+          "selector": ".ui-autocomplete-list"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 4,
+          "column": 5,
+          "selector": ".ui-badge-content"
+        },
+        {
+          "file": "src/theme/ui/Button/button.css",
+          "line": 33,
+          "column": 5,
+          "selector": ".ui-button::before"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 145,
+          "column": 5,
+          "selector": ".ui-card__fx"
+        },
+        {
+          "file": "src/theme/ui/Popover/popover.css",
+          "line": 3,
+          "column": 5,
+          "selector": ".ui-popover"
+        },
+        {
+          "file": "src/theme/ui/Progress/progress.css",
+          "line": 16,
+          "column": 5,
+          "selector": ".ui-progress::before"
+        },
+        {
+          "file": "src/theme/ui/Switch/switch.css",
+          "line": 20,
+          "column": 5,
+          "selector": ".ui-switch::before"
+        },
+        {
+          "file": "src/theme/ui/Switch/switch.css",
+          "line": 79,
+          "column": 5,
+          "selector": ".ui-switch[data-state=\"loading\"]::after"
+        },
+        {
+          "file": "src/theme/ui/Tabs/tabs.css",
+          "line": 31,
+          "column": 5,
+          "selector": ".ui-tab[data-active]::after"
+        },
+        {
+          "file": "src/theme/ui/Tooltip/tooltip.css",
+          "line": 39,
+          "column": 5,
+          "selector": ".ui-tooltip[data-placement=\"top\"]::after"
+        },
+        {
+          "file": "src/theme/ui/Tooltip/tooltip.css",
+          "line": 64,
+          "column": 5,
+          "selector": ".ui-tooltip[data-placement=\"bottom\"]::after"
+        },
+        {
+          "file": "src/theme/ui/Tooltip/tooltip.css",
+          "line": 89,
+          "column": 5,
+          "selector": ".ui-tooltip[data-placement=\"left\"]::after"
+        },
+        {
+          "file": "src/theme/ui/Tooltip/tooltip.css",
+          "line": 114,
+          "column": 5,
+          "selector": ".ui-tooltip[data-placement=\"right\"]::after"
+        },
+        {
+          "file": "src/theme/ui/_internal/VisuallyHidden/visually-hidden.css",
+          "line": 3,
+          "column": 5,
+          "selector": ".ui-visually-hidden"
+        }
+      ]
+    },
+    {
       "property": "display",
       "value": "flex",
       "locations": [
@@ -20937,7 +20937,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 926,
+          "line": 939,
           "column": 3,
           "selector": ".karaoke-song-intro-meta"
         },
@@ -21378,6 +21378,12 @@
           "line": 730,
           "column": 3,
           "selector": ".karaoke-performance-stage.karaoke-video-stage"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 911,
+          "column": 3,
+          "selector": ".karaoke-song-intro-art"
         },
         {
           "file": "src/styles/library.css",
@@ -21903,13 +21909,13 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 959,
+          "line": 972,
           "column": 3,
           "selector": ".karaoke-stage-action"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 966,
+          "line": 979,
           "column": 3,
           "selector": ".karaoke-stage-action"
         },
@@ -22038,6 +22044,372 @@
           "line": 18,
           "column": 5,
           "selector": ".ui-card"
+        }
+      ]
+    },
+    {
+      "property": "position",
+      "value": "relative",
+      "locations": [
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 115,
+          "column": 3,
+          "selector": ".ui-card--neon"
+        },
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 208,
+          "column": 3,
+          "selector": ".ui-card__panel"
+        },
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 223,
+          "column": 3,
+          "selector": ".ui-card__content"
+        },
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 438,
+          "column": 3,
+          "selector": ".modal-title"
+        },
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 719,
+          "column": 3,
+          "selector": ".panel"
+        },
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 904,
+          "column": 3,
+          "selector": ".app-dropdown"
+        },
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 1053,
+          "column": 3,
+          "selector": ".settings-modal,\n.app-dialog,\n.modal"
+        },
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 1130,
+          "column": 3,
+          "selector": ".app-main"
+        },
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 1135,
+          "column": 3,
+          "selector": ".app-shell"
+        },
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 1185,
+          "column": 3,
+          "selector": ".title-bar__button"
+        },
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 1362,
+          "column": 3,
+          "selector": ".performance-analysis-modal,\n.processing-modal"
+        },
+        {
+          "file": "src/styles/backend-loader.css",
+          "line": 38,
+          "column": 3,
+          "selector": ".backend-boot-loader__logo"
+        },
+        {
+          "file": "src/styles/backend-loader.css",
+          "line": 58,
+          "column": 3,
+          "selector": ".backend-boot-loader__copy"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 148,
+          "column": 3,
+          "selector": ".karaoke-settings-modal"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 224,
+          "column": 3,
+          "selector": ".microphone-controls-launcher"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 890,
+          "column": 3,
+          "selector": ".karaoke-stage"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 936,
+          "column": 3,
+          "selector": ".melody-roll svg"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1058,
+          "column": 3,
+          "selector": ".waveform-timeline"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1155,
+          "column": 3,
+          "selector": ".karaoke-lyrics-cover"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1167,
+          "column": 3,
+          "selector": ".karaoke-performance-stage"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1321,
+          "column": 3,
+          "selector": ".karaoke-quick-mixer--vertical .slider-field"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1343,
+          "column": 3,
+          "selector": ".karaoke-effect-dial__control"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1393,
+          "column": 3,
+          "selector": ".karaoke-effect-dial"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 750,
+          "column": 3,
+          "selector": ".karaoke-lyric"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 804,
+          "column": 3,
+          "selector": ".app-checkbox"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 822,
+          "column": 3,
+          "selector": ".app-checkbox__box"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 164,
+          "column": 3,
+          "selector": ".app-floating-controls .app-settings-fab"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 178,
+          "column": 3,
+          "selector": ".app-radio-fab-wrap"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 726,
+          "column": 3,
+          "selector": ".karaoke-performance-stage.karaoke-video-stage"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 906,
+          "column": 3,
+          "selector": ".karaoke-song-intro-art"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 82,
+          "column": 3,
+          "selector": ".library-search"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 133,
+          "column": 3,
+          "selector": ".library-song-card-art"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 204,
+          "column": 3,
+          "selector": ".processing-modal,\n.modal"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 742,
+          "column": 3,
+          "selector": ".library-song-card"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 792,
+          "column": 3,
+          "selector": ".processing-signal"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 1058,
+          "column": 3,
+          "selector": ".processing-modal-art"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 1472,
+          "column": 3,
+          "selector": ".online-room-person"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 1495,
+          "column": 3,
+          "selector": ".online-room-person > *"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 1594,
+          "column": 3,
+          "selector": ".song-settings-workspace > .panel"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 1747,
+          "column": 3,
+          "selector": ".online-room-person-volume-control"
+        },
+        {
+          "file": "src/styles/melody-editor-v2.css",
+          "line": 130,
+          "column": 3,
+          "selector": ".melody-editor-roll-shell"
+        },
+        {
+          "file": "src/styles/melody-editor-v2.css",
+          "line": 146,
+          "column": 3,
+          "selector": ".melody-editor-roll-canvas"
+        },
+        {
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 94,
+          "column": 3,
+          "selector": ".melody-editor-stage"
+        },
+        {
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 139,
+          "column": 3,
+          "selector": ".melody-editor-roll-shell"
+        },
+        {
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 678,
+          "column": 3,
+          "selector": ".melody-editor-stage"
+        },
+        {
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 693,
+          "column": 3,
+          "selector": ".melody-editor-topdeck"
+        },
+        {
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 813,
+          "column": 3,
+          "selector": ".melody-editor-roll-shell"
+        },
+        {
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 916,
+          "column": 3,
+          "selector": ".melody-editor-scroll-track"
+        },
+        {
+          "file": "src/theme/ui/Autocomplete/autocomplete.css",
+          "line": 3,
+          "column": 5,
+          "selector": ".ui-autocomplete"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 2,
+          "column": 15,
+          "selector": ".ui-badge"
+        },
+        {
+          "file": "src/theme/ui/Button/button.css",
+          "line": 6,
+          "column": 5,
+          "selector": ".ui-button"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 15,
+          "column": 5,
+          "selector": ".ui-card"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 24,
+          "column": 5,
+          "selector": ".ui-card"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 113,
+          "column": 5,
+          "selector": ".ui-card--neon"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 284,
+          "column": 5,
+          "selector": ".ui-card__panel"
+        },
+        {
+          "file": "src/theme/ui/Card/card.css",
+          "line": 356,
+          "column": 5,
+          "selector": ".ui-card__content"
+        },
+        {
+          "file": "src/theme/ui/Progress/progress.css",
+          "line": 3,
+          "column": 5,
+          "selector": ".ui-progress"
+        },
+        {
+          "file": "src/theme/ui/Select/select.css",
+          "line": 3,
+          "column": 5,
+          "selector": ".ui-select-root"
+        },
+        {
+          "file": "src/theme/ui/Switch/switch.css",
+          "line": 4,
+          "column": 5,
+          "selector": ".ui-switch"
+        },
+        {
+          "file": "src/theme/ui/Tabs/tabs.css",
+          "line": 14,
+          "column": 5,
+          "selector": ".ui-tab"
         }
       ]
     },
@@ -22179,19 +22551,25 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 970,
+          "line": 912,
+          "column": 3,
+          "selector": ".karaoke-song-intro-art"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 983,
           "column": 3,
           "selector": ".karaoke-stage-action"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1042,
+          "line": 1055,
           "column": 3,
           "selector": ".karaoke-lyrics"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1057,
+          "line": 1070,
           "column": 3,
           "selector": ".karaoke-lyric"
         },
@@ -22398,360 +22776,6 @@
           "line": 37,
           "column": 5,
           "selector": ".ui-typography[data-variant=\"body1\"]"
-        }
-      ]
-    },
-    {
-      "property": "position",
-      "value": "relative",
-      "locations": [
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 115,
-          "column": 3,
-          "selector": ".ui-card--neon"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 208,
-          "column": 3,
-          "selector": ".ui-card__panel"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 223,
-          "column": 3,
-          "selector": ".ui-card__content"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 438,
-          "column": 3,
-          "selector": ".modal-title"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 719,
-          "column": 3,
-          "selector": ".panel"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 904,
-          "column": 3,
-          "selector": ".app-dropdown"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 1053,
-          "column": 3,
-          "selector": ".settings-modal,\n.app-dialog,\n.modal"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 1130,
-          "column": 3,
-          "selector": ".app-main"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 1135,
-          "column": 3,
-          "selector": ".app-shell"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 1185,
-          "column": 3,
-          "selector": ".title-bar__button"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 1362,
-          "column": 3,
-          "selector": ".performance-analysis-modal,\n.processing-modal"
-        },
-        {
-          "file": "src/styles/backend-loader.css",
-          "line": 38,
-          "column": 3,
-          "selector": ".backend-boot-loader__logo"
-        },
-        {
-          "file": "src/styles/backend-loader.css",
-          "line": 58,
-          "column": 3,
-          "selector": ".backend-boot-loader__copy"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 148,
-          "column": 3,
-          "selector": ".karaoke-settings-modal"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 224,
-          "column": 3,
-          "selector": ".microphone-controls-launcher"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 890,
-          "column": 3,
-          "selector": ".karaoke-stage"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 936,
-          "column": 3,
-          "selector": ".melody-roll svg"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 1058,
-          "column": 3,
-          "selector": ".waveform-timeline"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 1167,
-          "column": 3,
-          "selector": ".karaoke-performance-stage"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 1321,
-          "column": 3,
-          "selector": ".karaoke-quick-mixer--vertical .slider-field"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 1343,
-          "column": 3,
-          "selector": ".karaoke-effect-dial__control"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 1393,
-          "column": 3,
-          "selector": ".karaoke-effect-dial"
-        },
-        {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 750,
-          "column": 3,
-          "selector": ".karaoke-lyric"
-        },
-        {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 804,
-          "column": 3,
-          "selector": ".app-checkbox"
-        },
-        {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 822,
-          "column": 3,
-          "selector": ".app-checkbox__box"
-        },
-        {
-          "file": "src/styles/karaoke-scenes.css",
-          "line": 164,
-          "column": 3,
-          "selector": ".app-floating-controls .app-settings-fab"
-        },
-        {
-          "file": "src/styles/karaoke-scenes.css",
-          "line": 178,
-          "column": 3,
-          "selector": ".app-radio-fab-wrap"
-        },
-        {
-          "file": "src/styles/karaoke-scenes.css",
-          "line": 726,
-          "column": 3,
-          "selector": ".karaoke-performance-stage.karaoke-video-stage"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 82,
-          "column": 3,
-          "selector": ".library-search"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 133,
-          "column": 3,
-          "selector": ".library-song-card-art"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 204,
-          "column": 3,
-          "selector": ".processing-modal,\n.modal"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 742,
-          "column": 3,
-          "selector": ".library-song-card"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 792,
-          "column": 3,
-          "selector": ".processing-signal"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 1058,
-          "column": 3,
-          "selector": ".processing-modal-art"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 1472,
-          "column": 3,
-          "selector": ".online-room-person"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 1495,
-          "column": 3,
-          "selector": ".online-room-person > *"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 1594,
-          "column": 3,
-          "selector": ".song-settings-workspace > .panel"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 1747,
-          "column": 3,
-          "selector": ".online-room-person-volume-control"
-        },
-        {
-          "file": "src/styles/melody-editor-v2.css",
-          "line": 130,
-          "column": 3,
-          "selector": ".melody-editor-roll-shell"
-        },
-        {
-          "file": "src/styles/melody-editor-v2.css",
-          "line": 146,
-          "column": 3,
-          "selector": ".melody-editor-roll-canvas"
-        },
-        {
-          "file": "src/styles/melody-editor-v4-v6.css",
-          "line": 94,
-          "column": 3,
-          "selector": ".melody-editor-stage"
-        },
-        {
-          "file": "src/styles/melody-editor-v4-v6.css",
-          "line": 139,
-          "column": 3,
-          "selector": ".melody-editor-roll-shell"
-        },
-        {
-          "file": "src/styles/melody-editor-v4-v6.css",
-          "line": 678,
-          "column": 3,
-          "selector": ".melody-editor-stage"
-        },
-        {
-          "file": "src/styles/melody-editor-v4-v6.css",
-          "line": 693,
-          "column": 3,
-          "selector": ".melody-editor-topdeck"
-        },
-        {
-          "file": "src/styles/melody-editor-v4-v6.css",
-          "line": 813,
-          "column": 3,
-          "selector": ".melody-editor-roll-shell"
-        },
-        {
-          "file": "src/styles/melody-editor-v4-v6.css",
-          "line": 916,
-          "column": 3,
-          "selector": ".melody-editor-scroll-track"
-        },
-        {
-          "file": "src/theme/ui/Autocomplete/autocomplete.css",
-          "line": 3,
-          "column": 5,
-          "selector": ".ui-autocomplete"
-        },
-        {
-          "file": "src/theme/ui/Badge/badge.css",
-          "line": 2,
-          "column": 15,
-          "selector": ".ui-badge"
-        },
-        {
-          "file": "src/theme/ui/Button/button.css",
-          "line": 6,
-          "column": 5,
-          "selector": ".ui-button"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 15,
-          "column": 5,
-          "selector": ".ui-card"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 24,
-          "column": 5,
-          "selector": ".ui-card"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 113,
-          "column": 5,
-          "selector": ".ui-card--neon"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 284,
-          "column": 5,
-          "selector": ".ui-card__panel"
-        },
-        {
-          "file": "src/theme/ui/Card/card.css",
-          "line": 356,
-          "column": 5,
-          "selector": ".ui-card__content"
-        },
-        {
-          "file": "src/theme/ui/Progress/progress.css",
-          "line": 3,
-          "column": 5,
-          "selector": ".ui-progress"
-        },
-        {
-          "file": "src/theme/ui/Select/select.css",
-          "line": 3,
-          "column": 5,
-          "selector": ".ui-select-root"
-        },
-        {
-          "file": "src/theme/ui/Switch/switch.css",
-          "line": 4,
-          "column": 5,
-          "selector": ".ui-switch"
-        },
-        {
-          "file": "src/theme/ui/Tabs/tabs.css",
-          "line": 14,
-          "column": 5,
-          "selector": ".ui-tab"
         }
       ]
     },
@@ -24393,7 +24417,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1007,
+          "line": 1020,
           "column": 3,
           "selector": ".library-route-blackout"
         },
@@ -24669,7 +24693,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1012,
+          "line": 1025,
           "column": 3,
           "selector": ".library-route-blackout.is-visible"
         },
@@ -25701,7 +25725,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 956,
+          "line": 969,
           "column": 3,
           "selector": ".karaoke-stage-action"
         },
@@ -26253,7 +26277,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1047,
+          "line": 1060,
           "column": 3,
           "selector": ".karaoke-lyrics::before"
         },
@@ -26481,7 +26505,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 978,
+          "line": 991,
           "column": 3,
           "selector": ".karaoke-stage-action:hover,\n.karaoke-stage-action.is-active"
         },
@@ -26697,7 +26721,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1004,
+          "line": 1017,
           "column": 3,
           "selector": ".library-route-blackout"
         },
@@ -27159,7 +27183,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 955,
+          "line": 968,
           "column": 3,
           "selector": ".karaoke-stage-action"
         },
@@ -27288,6 +27312,180 @@
           "line": 6,
           "column": 5,
           "selector": ".ui-visually-hidden"
+        }
+      ]
+    },
+    {
+      "property": "place-items",
+      "value": "center",
+      "locations": [
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 391,
+          "column": 3,
+          "selector": ".app-modal-backdrop"
+        },
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 406,
+          "column": 3,
+          "selector": ".app-modal-close"
+        },
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 997,
+          "column": 3,
+          "selector": ".app-settings-fab"
+        },
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 1044,
+          "column": 3,
+          "selector": ".app-dialog-backdrop,\n.modal-backdrop"
+        },
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 1080,
+          "column": 3,
+          "selector": ".modal-close"
+        },
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 1091,
+          "column": 3,
+          "selector": ".application-error"
+        },
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 1182,
+          "column": 3,
+          "selector": ".title-bar__button"
+        },
+        {
+          "file": "src/styles/app-foundation.css",
+          "line": 1355,
+          "column": 3,
+          "selector": ".performance-analysis-backdrop"
+        },
+        {
+          "file": "src/styles/backend-loader.css",
+          "line": 7,
+          "column": 3,
+          "selector": ".backend-boot-loader"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 174,
+          "column": 3,
+          "selector": ".karaoke-settings-close"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1263,
+          "column": 3,
+          "selector": ".karaoke-song-cover"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 809,
+          "column": 3,
+          "selector": ".app-checkbox"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 1305,
+          "column": 3,
+          "selector": ".settings-about-icon"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 865,
+          "column": 3,
+          "selector": ".karaoke-song-intro"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 908,
+          "column": 3,
+          "selector": ".karaoke-song-intro-art"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 194,
+          "column": 3,
+          "selector": ".modal-backdrop"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 226,
+          "column": 3,
+          "selector": ".modal-close"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 248,
+          "column": 3,
+          "selector": ".performance-player-play,\n.performance-player-volume button"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 1060,
+          "column": 3,
+          "selector": ".processing-modal-art"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 1319,
+          "column": 3,
+          "selector": ".online-room-icon-button"
+        },
+        {
+          "file": "src/styles/melody-editor-v2.css",
+          "line": 312,
+          "column": 3,
+          "selector": ".melody-editor-loading,\n.melody-editor-route-loading"
+        },
+        {
+          "file": "src/styles/melody-editor-v7-v12.css",
+          "line": 411,
+          "column": 3,
+          "selector": ".melody-editor-tool"
+        },
+        {
+          "file": "src/styles/melody-editor-v7-v12.css",
+          "line": 471,
+          "column": 3,
+          "selector": ".melody-editor-tool"
+        },
+        {
+          "file": "src/theme/ui/Autocomplete/autocomplete.css",
+          "line": 9,
+          "column": 5,
+          "selector": ".ui-autocomplete-clear"
+        },
+        {
+          "file": "src/theme/ui/Avatar/avatar.css",
+          "line": 4,
+          "column": 5,
+          "selector": ".ui-avatar"
+        },
+        {
+          "file": "src/theme/ui/Badge/badge.css",
+          "line": 8,
+          "column": 5,
+          "selector": ".ui-badge-content"
+        },
+        {
+          "file": "src/theme/ui/Button/button.css",
+          "line": 8,
+          "column": 5,
+          "selector": ".ui-button"
+        },
+        {
+          "file": "src/theme/ui/Chip/chip.css",
+          "line": 42,
+          "column": 5,
+          "selector": ".ui-chip-remove"
         }
       ]
     },
@@ -27915,7 +28113,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1081,
+          "line": 1094,
           "column": 3,
           "selector": ".karaoke-lyric-next"
         },
@@ -27978,174 +28176,6 @@
           "line": 62,
           "column": 5,
           "selector": ".ui-card--neon"
-        }
-      ]
-    },
-    {
-      "property": "place-items",
-      "value": "center",
-      "locations": [
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 391,
-          "column": 3,
-          "selector": ".app-modal-backdrop"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 406,
-          "column": 3,
-          "selector": ".app-modal-close"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 997,
-          "column": 3,
-          "selector": ".app-settings-fab"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 1044,
-          "column": 3,
-          "selector": ".app-dialog-backdrop,\n.modal-backdrop"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 1080,
-          "column": 3,
-          "selector": ".modal-close"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 1091,
-          "column": 3,
-          "selector": ".application-error"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 1182,
-          "column": 3,
-          "selector": ".title-bar__button"
-        },
-        {
-          "file": "src/styles/app-foundation.css",
-          "line": 1355,
-          "column": 3,
-          "selector": ".performance-analysis-backdrop"
-        },
-        {
-          "file": "src/styles/backend-loader.css",
-          "line": 7,
-          "column": 3,
-          "selector": ".backend-boot-loader"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 174,
-          "column": 3,
-          "selector": ".karaoke-settings-close"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 1263,
-          "column": 3,
-          "selector": ".karaoke-song-cover"
-        },
-        {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 809,
-          "column": 3,
-          "selector": ".app-checkbox"
-        },
-        {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 1305,
-          "column": 3,
-          "selector": ".settings-about-icon"
-        },
-        {
-          "file": "src/styles/karaoke-scenes.css",
-          "line": 865,
-          "column": 3,
-          "selector": ".karaoke-song-intro"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 194,
-          "column": 3,
-          "selector": ".modal-backdrop"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 226,
-          "column": 3,
-          "selector": ".modal-close"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 248,
-          "column": 3,
-          "selector": ".performance-player-play,\n.performance-player-volume button"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 1060,
-          "column": 3,
-          "selector": ".processing-modal-art"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 1319,
-          "column": 3,
-          "selector": ".online-room-icon-button"
-        },
-        {
-          "file": "src/styles/melody-editor-v2.css",
-          "line": 312,
-          "column": 3,
-          "selector": ".melody-editor-loading,\n.melody-editor-route-loading"
-        },
-        {
-          "file": "src/styles/melody-editor-v7-v12.css",
-          "line": 411,
-          "column": 3,
-          "selector": ".melody-editor-tool"
-        },
-        {
-          "file": "src/styles/melody-editor-v7-v12.css",
-          "line": 471,
-          "column": 3,
-          "selector": ".melody-editor-tool"
-        },
-        {
-          "file": "src/theme/ui/Autocomplete/autocomplete.css",
-          "line": 9,
-          "column": 5,
-          "selector": ".ui-autocomplete-clear"
-        },
-        {
-          "file": "src/theme/ui/Avatar/avatar.css",
-          "line": 4,
-          "column": 5,
-          "selector": ".ui-avatar"
-        },
-        {
-          "file": "src/theme/ui/Badge/badge.css",
-          "line": 8,
-          "column": 5,
-          "selector": ".ui-badge-content"
-        },
-        {
-          "file": "src/theme/ui/Button/button.css",
-          "line": 8,
-          "column": 5,
-          "selector": ".ui-button"
-        },
-        {
-          "file": "src/theme/ui/Chip/chip.css",
-          "line": 42,
-          "column": 5,
-          "selector": ".ui-chip-remove"
         }
       ]
     },
@@ -28221,7 +28251,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1042,
+          "line": 1055,
           "column": 3,
           "selector": ".karaoke-lyrics"
         },
@@ -29025,7 +29055,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1006,
+          "line": 1019,
           "column": 3,
           "selector": ".library-route-blackout"
         },
@@ -29217,25 +29247,25 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 914,
+          "line": 927,
           "column": 3,
           "selector": ".karaoke-song-intro-card > strong"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1066,
+          "line": 1079,
           "column": 3,
           "selector": ".karaoke-lyric-current .karaoke-lyric-character,\n[data-theme=\"light\"] .karaoke-lyric-current .karaoke-lyric-character"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1067,
+          "line": 1080,
           "column": 3,
           "selector": ".karaoke-lyric-current .karaoke-lyric-character,\n[data-theme=\"light\"] .karaoke-lyric-current .karaoke-lyric-character"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1067,
+          "line": 1080,
           "column": 3,
           "selector": ".karaoke-lyric-current .karaoke-lyric-character,\n[data-theme=\"light\"] .karaoke-lyric-current .karaoke-lyric-character"
         },
@@ -29817,7 +29847,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 939,
+          "line": 952,
           "column": 3,
           "selector": ".karaoke-song-intro-meta span"
         },
@@ -30489,7 +30519,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 959,
+          "line": 972,
           "column": 3,
           "selector": ".karaoke-stage-action"
         },
@@ -30747,7 +30777,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 915,
+          "line": 928,
           "column": 3,
           "selector": ".karaoke-song-intro-card > strong"
         },
@@ -32103,7 +32133,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1002,
+          "line": 1015,
           "column": 3,
           "selector": ".library-route-blackout"
         },
@@ -32391,7 +32421,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 966,
+          "line": 979,
           "column": 3,
           "selector": ".karaoke-stage-action"
         },
@@ -32691,7 +32721,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1057,
+          "line": 1070,
           "column": 3,
           "selector": ".karaoke-lyric"
         },
@@ -32937,19 +32967,19 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 952,
+          "line": 965,
           "column": 3,
           "selector": ".karaoke-stage-action"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 953,
+          "line": 966,
           "column": 3,
           "selector": ".karaoke-stage-action"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 954,
+          "line": 967,
           "column": 3,
           "selector": ".karaoke-stage-action"
         },
@@ -33387,7 +33417,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 922,
+          "line": 935,
           "column": 3,
           "selector": ".karaoke-song-intro-artist"
         },
@@ -33471,7 +33501,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 929,
+          "line": 942,
           "column": 3,
           "selector": ".karaoke-song-intro-meta"
         },
@@ -33567,7 +33597,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1005,
+          "line": 1018,
           "column": 3,
           "selector": ".library-route-blackout"
         },
@@ -33999,7 +34029,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 928,
+          "line": 941,
           "column": 3,
           "selector": ".karaoke-song-intro-meta"
         },
@@ -34743,7 +34773,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 927,
+          "line": 940,
           "column": 3,
           "selector": ".karaoke-song-intro-meta"
         },
@@ -35421,7 +35451,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1057,
+          "line": 1070,
           "column": 3,
           "selector": ".karaoke-lyric"
         },
@@ -35472,6 +35502,78 @@
           "line": 63,
           "column": 5,
           "selector": ".ui-card--neon"
+        }
+      ]
+    },
+    {
+      "property": "size-token-candidate",
+      "value": "0.6rem",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1218,
+          "column": 3,
+          "selector": ".karaoke-effect-dial__label"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 726,
+          "column": 3,
+          "selector": ".karaoke-lyrics"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 944,
+          "column": 3,
+          "selector": ".modal-title__actions"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 430,
+          "column": 3,
+          "selector": ".library-song-card-art"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 435,
+          "column": 3,
+          "selector": ".library-song-card-art.is-radio-reactive > svg"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 616,
+          "column": 5,
+          "selector": ".melody-roll"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 915,
+          "column": 3,
+          "selector": ".karaoke-song-intro-art"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 907,
+          "column": 3,
+          "selector": ".app-dropdown-option"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 1759,
+          "column": 3,
+          "selector": ".online-room-person-volume-control .online-room-person-volume"
+        },
+        {
+          "file": "src/styles/melody-editor-v2.css",
+          "line": 103,
+          "column": 3,
+          "selector": ".melody-editor-transport"
+        },
+        {
+          "file": "src/theme/ui/Tooltip/tooltip.css",
+          "line": 13,
+          "column": 5,
+          "selector": ".ui-tooltip"
         }
       ]
     },
@@ -35577,7 +35679,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 909,
+          "line": 922,
           "column": 3,
           "selector": ".karaoke-song-intro-kicker"
         },
@@ -35681,72 +35783,6 @@
     },
     {
       "property": "size-token-candidate",
-      "value": "0.6rem",
-      "locations": [
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 1218,
-          "column": 3,
-          "selector": ".karaoke-effect-dial__label"
-        },
-        {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 726,
-          "column": 3,
-          "selector": ".karaoke-lyrics"
-        },
-        {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 944,
-          "column": 3,
-          "selector": ".modal-title__actions"
-        },
-        {
-          "file": "src/styles/karaoke-scenes.css",
-          "line": 430,
-          "column": 3,
-          "selector": ".library-song-card-art"
-        },
-        {
-          "file": "src/styles/karaoke-scenes.css",
-          "line": 435,
-          "column": 3,
-          "selector": ".library-song-card-art.is-radio-reactive > svg"
-        },
-        {
-          "file": "src/styles/karaoke-scenes.css",
-          "line": 616,
-          "column": 5,
-          "selector": ".melody-roll"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 907,
-          "column": 3,
-          "selector": ".app-dropdown-option"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 1759,
-          "column": 3,
-          "selector": ".online-room-person-volume-control .online-room-person-volume"
-        },
-        {
-          "file": "src/styles/melody-editor-v2.css",
-          "line": 103,
-          "column": 3,
-          "selector": ".melody-editor-transport"
-        },
-        {
-          "file": "src/theme/ui/Tooltip/tooltip.css",
-          "line": 13,
-          "column": 5,
-          "selector": ".ui-tooltip"
-        }
-      ]
-    },
-    {
-      "property": "size-token-candidate",
       "value": "0.28rem",
       "locations": [
         {
@@ -35769,7 +35805,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1057,
+          "line": 1070,
           "column": 3,
           "selector": ".karaoke-lyric"
         },
@@ -36573,7 +36609,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 930,
+          "line": 943,
           "column": 3,
           "selector": ".karaoke-song-intro-meta"
         },
@@ -36645,7 +36681,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1013,
+          "line": 1026,
           "column": 3,
           "selector": ".library-route-blackout.is-visible"
         },
@@ -37071,7 +37107,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 908,
+          "line": 921,
           "column": 3,
           "selector": ".karaoke-song-intro-kicker"
         },
@@ -37323,7 +37359,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 915,
+          "line": 928,
           "column": 3,
           "selector": ".karaoke-song-intro-card > strong"
         },
@@ -37599,7 +37635,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 913,
+          "line": 926,
           "column": 3,
           "selector": ".karaoke-song-intro-card > strong"
         },
@@ -37659,7 +37695,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 966,
+          "line": 979,
           "column": 3,
           "selector": ".karaoke-stage-action"
         },
@@ -38019,7 +38055,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 907,
+          "line": 920,
           "column": 3,
           "selector": ".karaoke-song-intro-kicker"
         },
@@ -38163,7 +38199,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 948,
+          "line": 961,
           "column": 3,
           "selector": ".karaoke-stage-actions"
         },
@@ -38457,7 +38493,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1055,
+          "line": 1068,
           "column": 3,
           "selector": ".karaoke-lyric"
         },
@@ -38478,54 +38514,6 @@
           "line": 423,
           "column": 5,
           "selector": ".ui-card--neon:is(:hover, :focus-within) .ui-card__panel"
-        }
-      ]
-    },
-    {
-      "property": "transform",
-      "value": "translateX(-50%)",
-      "locations": [
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 240,
-          "column": 3,
-          "selector": ".karaoke-recording-error"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 1157,
-          "column": 3,
-          "selector": ".karaoke-lyrics-cover"
-        },
-        {
-          "file": "src/styles/karaoke-base.css",
-          "line": 1369,
-          "column": 3,
-          "selector": ".karaoke-effect-dial__knob::before"
-        },
-        {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 86,
-          "column": 3,
-          "selector": ".karaoke-lyrics"
-        },
-        {
-          "file": "src/styles/karaoke-polish.css",
-          "line": 723,
-          "column": 3,
-          "selector": ".karaoke-lyrics"
-        },
-        {
-          "file": "src/styles/melody-editor-v2.css",
-          "line": 232,
-          "column": 3,
-          "selector": ".melody-editor-lyric-fragment > span"
-        },
-        {
-          "file": "src/theme/ui/Tooltip/tooltip.css",
-          "line": 58,
-          "column": 5,
-          "selector": ".ui-tooltip[data-placement=\"bottom\"]"
         }
       ]
     },
@@ -38745,19 +38733,19 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1060,
+          "line": 1073,
           "column": 3,
           "selector": ".karaoke-lyric"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1076,
+          "line": 1089,
           "column": 3,
           "selector": ".karaoke-lyric-current .karaoke-lyric-character,\n[data-theme=\"light\"] .karaoke-lyric-current .karaoke-lyric-character"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1091,
+          "line": 1104,
           "column": 3,
           "selector": ".karaoke-lyric-next .karaoke-lyric-character,\n[data-theme=\"light\"] .karaoke-lyric-next .karaoke-lyric-character"
         },
@@ -39501,7 +39489,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1082,
+          "line": 1095,
           "column": 3,
           "selector": ".karaoke-lyric-next"
         }
@@ -39588,6 +39576,48 @@
           "line": 662,
           "column": 3,
           "selector": ".melody-editor-statusline"
+        }
+      ]
+    },
+    {
+      "property": "transform",
+      "value": "translateX(-50%)",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 240,
+          "column": 3,
+          "selector": ".karaoke-recording-error"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1369,
+          "column": 3,
+          "selector": ".karaoke-effect-dial__knob::before"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 86,
+          "column": 3,
+          "selector": ".karaoke-lyrics"
+        },
+        {
+          "file": "src/styles/karaoke-polish.css",
+          "line": 723,
+          "column": 3,
+          "selector": ".karaoke-lyrics"
+        },
+        {
+          "file": "src/styles/melody-editor-v2.css",
+          "line": 232,
+          "column": 3,
+          "selector": ".melody-editor-lyric-fragment > span"
+        },
+        {
+          "file": "src/theme/ui/Tooltip/tooltip.css",
+          "line": 58,
+          "column": 5,
+          "selector": ".ui-tooltip[data-placement=\"bottom\"]"
         }
       ]
     },
@@ -39699,7 +39729,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 978,
+          "line": 991,
           "column": 3,
           "selector": ".karaoke-stage-action:hover,\n.karaoke-stage-action.is-active"
         },
@@ -39741,7 +39771,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1043,
+          "line": 1056,
           "column": 3,
           "selector": ".karaoke-lyrics"
         },
@@ -39861,7 +39891,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 934,
+          "line": 947,
           "column": 3,
           "selector": ".karaoke-song-intro-meta span"
         },
@@ -39963,7 +39993,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1054,
+          "line": 1067,
           "column": 3,
           "selector": ".karaoke-lyric"
         }
@@ -40131,7 +40161,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1005,
+          "line": 1018,
           "column": 3,
           "selector": ".library-route-blackout"
         }
@@ -40344,6 +40374,48 @@
           "line": 20,
           "column": 3,
           "selector": ".melody-editor-title-block"
+        }
+      ]
+    },
+    {
+      "property": "size-token-candidate",
+      "value": "4rem",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 897,
+          "column": 3,
+          "selector": ".karaoke-song-intro-card"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 909,
+          "column": 3,
+          "selector": ".karaoke-song-intro-art"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 910,
+          "column": 3,
+          "selector": ".karaoke-song-intro-art"
+        },
+        {
+          "file": "src/styles/library.css",
+          "line": 1288,
+          "column": 5,
+          "selector": ".song-recording-player .performance-player-volume"
+        },
+        {
+          "file": "src/styles/root.css",
+          "line": 60,
+          "column": 3,
+          "selector": ":root"
+        },
+        {
+          "file": "src/styles/settings.css",
+          "line": 19,
+          "column": 3,
+          "selector": ".settings-content-panel .panel-header"
         }
       ]
     },
@@ -41067,7 +41139,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1055,
+          "line": 1068,
           "column": 3,
           "selector": ".karaoke-lyric"
         },
@@ -41577,7 +41649,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1065,
+          "line": 1078,
           "column": 3,
           "selector": ".karaoke-lyric-current .karaoke-lyric-character,\n[data-theme=\"light\"] .karaoke-lyric-current .karaoke-lyric-character"
         }
@@ -41667,7 +41739,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 934,
+          "line": 947,
           "column": 3,
           "selector": ".karaoke-song-intro-meta span"
         },
@@ -42003,13 +42075,13 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1028,
+          "line": 1041,
           "column": 3,
           "selector": ".melody-roll"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1029,
+          "line": 1042,
           "column": 3,
           "selector": ".melody-roll"
         }
@@ -42027,7 +42099,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 938,
+          "line": 951,
           "column": 3,
           "selector": ".karaoke-song-intro-meta span"
         },
@@ -42141,13 +42213,13 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 914,
+          "line": 927,
           "column": 3,
           "selector": ".karaoke-song-intro-card > strong"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1066,
+          "line": 1079,
           "column": 3,
           "selector": ".karaoke-lyric-current .karaoke-lyric-character,\n[data-theme=\"light\"] .karaoke-lyric-current .karaoke-lyric-character"
         },
@@ -42909,7 +42981,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 908,
+          "line": 921,
           "column": 3,
           "selector": ".karaoke-song-intro-kicker"
         },
@@ -43569,7 +43641,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1035,
+          "line": 1048,
           "column": 3,
           "selector": ".melody-roll .piano-roll-keyboard-bed"
         },
@@ -43809,7 +43881,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1043,
+          "line": 1056,
           "column": 3,
           "selector": ".karaoke-lyrics"
         },
@@ -44025,7 +44097,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1057,
+          "line": 1070,
           "column": 3,
           "selector": ".karaoke-lyric"
         }
@@ -44085,7 +44157,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1048,
+          "line": 1061,
           "column": 3,
           "selector": ".karaoke-lyrics::before"
         }
@@ -44229,7 +44301,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 929,
+          "line": 942,
           "column": 3,
           "selector": ".karaoke-song-intro-meta"
         },
@@ -44242,42 +44314,12 @@
       ]
     },
     {
-      "property": "size-token-candidate",
-      "value": "4rem",
-      "locations": [
-        {
-          "file": "src/styles/karaoke-scenes.css",
-          "line": 897,
-          "column": 3,
-          "selector": ".karaoke-song-intro-card"
-        },
-        {
-          "file": "src/styles/library.css",
-          "line": 1288,
-          "column": 5,
-          "selector": ".song-recording-player .performance-player-volume"
-        },
-        {
-          "file": "src/styles/root.css",
-          "line": 60,
-          "column": 3,
-          "selector": ":root"
-        },
-        {
-          "file": "src/styles/settings.css",
-          "line": 19,
-          "column": 3,
-          "selector": ".settings-content-panel .panel-header"
-        }
-      ]
-    },
-    {
       "property": "color-token-candidate",
       "value": "rgba(255, 255, 255, 0.82)",
       "locations": [
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 937,
+          "line": 950,
           "column": 3,
           "selector": ".karaoke-song-intro-meta span"
         },
@@ -44307,25 +44349,25 @@
       "locations": [
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1067,
+          "line": 1080,
           "column": 3,
           "selector": ".karaoke-lyric-current .karaoke-lyric-character,\n[data-theme=\"light\"] .karaoke-lyric-current .karaoke-lyric-character"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1067,
+          "line": 1080,
           "column": 3,
           "selector": ".karaoke-lyric-current .karaoke-lyric-character,\n[data-theme=\"light\"] .karaoke-lyric-current .karaoke-lyric-character"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1088,
+          "line": 1101,
           "column": 3,
           "selector": ".karaoke-lyric-next .karaoke-lyric-character,\n[data-theme=\"light\"] .karaoke-lyric-next .karaoke-lyric-character"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1089,
+          "line": 1102,
           "column": 3,
           "selector": ".karaoke-lyric-next .karaoke-lyric-character,\n[data-theme=\"light\"] .karaoke-lyric-next .karaoke-lyric-character"
         }
@@ -47417,7 +47459,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1080,
+          "line": 1093,
           "column": 1,
           "context": "",
           "selector": ".karaoke-lyric-next"
@@ -48430,7 +48472,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1086,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": "[data-theme=\"light\"] .karaoke-lyric-next .karaoke-lyric-character"
@@ -48496,7 +48538,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1051,
+          "line": 1064,
           "column": 1,
           "context": "",
           "selector": ".karaoke-lyric"
@@ -48548,7 +48590,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1086,
+          "line": 1099,
           "column": 1,
           "context": "",
           "selector": ".karaoke-lyric-next .karaoke-lyric-character"
@@ -48743,7 +48785,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1046,
+          "line": 1059,
           "column": 1,
           "context": "",
           "selector": ".karaoke-lyrics::before"
@@ -48992,7 +49034,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1040,
+          "line": 1053,
           "column": 1,
           "context": "",
           "selector": ".karaoke-lyrics"
@@ -49014,7 +49056,7 @@
       "severity": "warning",
       "message": "Нестандартный z-index: 8.",
       "file": "src/styles/karaoke-base.css",
-      "line": 1154,
+      "line": 1156,
       "selector": ".karaoke-lyrics-cover",
       "property": "z-index",
       "value": "8"
@@ -49057,14 +49099,14 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1018,
+          "line": 1031,
           "column": 1,
           "context": "",
           "selector": ".melody-roll"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1027,
+          "line": 1040,
           "column": 1,
           "context": "",
           "selector": ".melody-roll"
@@ -49232,7 +49274,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1101,
+          "line": 1114,
           "column": 1,
           "context": "",
           "selector": ".karaoke-effect-dial"
@@ -49866,7 +49908,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1063,
+          "line": 1076,
           "column": 1,
           "context": "",
           "selector": ".karaoke-lyric-current .karaoke-lyric-character"
@@ -49904,7 +49946,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1063,
+          "line": 1076,
           "column": 1,
           "context": "",
           "selector": "[data-theme=\"light\"] .karaoke-lyric-current .karaoke-lyric-character"
@@ -50032,7 +50074,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1034,
+          "line": 1047,
           "column": 1,
           "context": "",
           "selector": ".melody-roll .piano-roll-keyboard-bed"
@@ -52639,7 +52681,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 947,
+          "line": 960,
           "column": 1,
           "context": "",
           "selector": ".karaoke-stage-actions"
@@ -52680,7 +52722,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 951,
+          "line": 964,
           "column": 1,
           "context": "",
           "selector": ".karaoke-stage-action"
@@ -52711,7 +52753,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 973,
+          "line": 986,
           "column": 1,
           "context": "",
           "selector": ".karaoke-stage-action:hover"
@@ -52735,7 +52777,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 973,
+          "line": 986,
           "column": 1,
           "context": "",
           "selector": ".karaoke-stage-action.is-active"
@@ -52796,7 +52838,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 990,
+          "line": 1003,
           "column": 1,
           "context": "",
           "selector": ".karaoke-scene-blackout"
@@ -52830,7 +52872,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 994,
+          "line": 1007,
           "column": 1,
           "context": "",
           "selector": ".karaoke-scene-blackout.is-visible"
@@ -53032,7 +53074,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 991,
+      "line": 1004,
       "selector": ".karaoke-scene-blackout",
       "property": "transition",
       "value": "opacity 520ms cubic-bezier(0.22, 1, 0.36, 1)"
@@ -53042,7 +53084,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 995,
+      "line": 1008,
       "selector": ".karaoke-scene-blackout.is-visible",
       "property": "transition-duration",
       "value": "420ms"
@@ -53052,19 +53094,19 @@
       "severity": "warning",
       "message": "Селектор объявлен 2 раз.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1001,
+      "line": 1014,
       "selector": ".library-route-blackout",
       "details": [
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1001,
+          "line": 1014,
           "column": 1,
           "context": "",
           "selector": ".library-route-blackout"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1095,
+          "line": 1108,
           "column": 1,
           "context": "",
           "selector": ".library-route-blackout"
@@ -53076,7 +53118,7 @@
       "severity": "warning",
       "message": "Нестандартный z-index: 9999.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1003,
+      "line": 1016,
       "selector": ".library-route-blackout",
       "property": "z-index",
       "value": "9999"
@@ -53086,7 +53128,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1019,
+      "line": 1032,
       "selector": ".melody-roll",
       "property": "block-size",
       "value": "clamp(15rem, 30vh, 18rem)"
@@ -53096,7 +53138,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1028,
+      "line": 1041,
       "selector": ".melody-roll",
       "property": "block-size",
       "value": "50vh"
@@ -53106,7 +53148,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1029,
+      "line": 1042,
       "selector": ".melody-roll",
       "property": "max-block-size",
       "value": "50vh"
@@ -53116,7 +53158,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1030,
+      "line": 1043,
       "selector": ".melody-roll",
       "property": "min-block-size",
       "value": "22rem"
@@ -53126,7 +53168,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1041,
+      "line": 1054,
       "selector": ".karaoke-lyrics",
       "property": "inline-size",
       "value": "min(72rem, 88vw)"
@@ -53136,7 +53178,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1042,
+      "line": 1055,
       "selector": ".karaoke-lyrics",
       "property": "padding",
       "value": "0.45rem 1rem"
@@ -53146,7 +53188,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1043,
+      "line": 1056,
       "selector": ".karaoke-lyrics",
       "property": "inset-block-start",
       "value": "clamp(7rem, 17vh, 11rem)"
@@ -53156,7 +53198,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1047,
+      "line": 1060,
       "selector": ".karaoke-lyrics::before",
       "property": "display",
       "value": "none"
@@ -53166,7 +53208,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1048,
+      "line": 1061,
       "selector": ".karaoke-lyrics::before",
       "property": "content",
       "value": "none"
@@ -53176,7 +53218,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1052,
+      "line": 1065,
       "selector": ".karaoke-lyric",
       "property": "color",
       "value": "rgba(255, 255, 255, 0.74)"
@@ -53186,7 +53228,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1053,
+      "line": 1066,
       "selector": ".karaoke-lyric",
       "property": "-webkit-text-fill-color",
       "value": "rgba(255, 255, 255, 0.74)"
@@ -53196,7 +53238,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1054,
+      "line": 1067,
       "selector": ".karaoke-lyric",
       "property": "-webkit-text-stroke",
       "value": "0"
@@ -53206,7 +53248,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1055,
+      "line": 1068,
       "selector": ".karaoke-lyric",
       "property": "font",
       "value": "850 clamp(1.65rem, 2.75vw, 3.2rem) / 1.08 var(--font-display)"
@@ -53216,7 +53258,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1056,
+      "line": 1069,
       "selector": ".karaoke-lyric",
       "property": "letter-spacing",
       "value": "0.002em"
@@ -53226,7 +53268,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1057,
+      "line": 1070,
       "selector": ".karaoke-lyric",
       "property": "text-shadow",
       "value": "0 0.12rem 0.28rem rgba(0, 0, 0, 0.82),\n    0 0.3rem 1rem rgba(0, 0, 0, 0.5)"
@@ -53236,7 +53278,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1060,
+      "line": 1073,
       "selector": ".karaoke-lyric",
       "property": "filter",
       "value": "none"
@@ -53246,7 +53288,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1065,
+      "line": 1078,
       "selector": ".karaoke-lyric-current .karaoke-lyric-character,\n[data-theme=\"light\"] .karaoke-lyric-current .karaoke-lyric-character",
       "property": "-webkit-text-fill-color",
       "value": "transparent"
@@ -53256,7 +53298,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1066,
+      "line": 1079,
       "selector": ".karaoke-lyric-current .karaoke-lyric-character,\n[data-theme=\"light\"] .karaoke-lyric-current .karaoke-lyric-character",
       "property": "color",
       "value": "#fff"
@@ -53266,7 +53308,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1067,
+      "line": 1080,
       "selector": ".karaoke-lyric-current .karaoke-lyric-character,\n[data-theme=\"light\"] .karaoke-lyric-current .karaoke-lyric-character",
       "property": "background",
       "value": "linear-gradient(\n    90deg,\n    #fff 0%,\n    #fff var(--character-fill),\n    rgba(255, 255, 255, 0.5) var(--character-fill),\n    rgba(255, 255, 255, 0.5) 100%\n  )"
@@ -53276,7 +53318,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1074,
+      "line": 1087,
       "selector": ".karaoke-lyric-current .karaoke-lyric-character,\n[data-theme=\"light\"] .karaoke-lyric-current .karaoke-lyric-character",
       "property": "background-clip",
       "value": "text"
@@ -53286,7 +53328,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1075,
+      "line": 1088,
       "selector": ".karaoke-lyric-current .karaoke-lyric-character,\n[data-theme=\"light\"] .karaoke-lyric-current .karaoke-lyric-character",
       "property": "-webkit-background-clip",
       "value": "text"
@@ -53296,7 +53338,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1076,
+      "line": 1089,
       "selector": ".karaoke-lyric-current .karaoke-lyric-character,\n[data-theme=\"light\"] .karaoke-lyric-current .karaoke-lyric-character",
       "property": "filter",
       "value": "none"
@@ -53306,7 +53348,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1077,
+      "line": 1090,
       "selector": ".karaoke-lyric-current .karaoke-lyric-character,\n[data-theme=\"light\"] .karaoke-lyric-current .karaoke-lyric-character",
       "property": "text-shadow",
       "value": "none"
@@ -53316,7 +53358,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1081,
+      "line": 1094,
       "selector": ".karaoke-lyric-next",
       "property": "margin-block-start",
       "value": "0.55rem"
@@ -53326,7 +53368,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1082,
+      "line": 1095,
       "selector": ".karaoke-lyric-next",
       "property": "opacity",
       "value": "0.72"
@@ -53336,7 +53378,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1083,
+      "line": 1096,
       "selector": ".karaoke-lyric-next",
       "property": "font-size",
       "value": "0.58em"
@@ -53346,7 +53388,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1088,
+      "line": 1101,
       "selector": ".karaoke-lyric-next .karaoke-lyric-character,\n[data-theme=\"light\"] .karaoke-lyric-next .karaoke-lyric-character",
       "property": "-webkit-text-fill-color",
       "value": "rgba(255, 255, 255, 0.5)"
@@ -53356,7 +53398,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1089,
+      "line": 1102,
       "selector": ".karaoke-lyric-next .karaoke-lyric-character,\n[data-theme=\"light\"] .karaoke-lyric-next .karaoke-lyric-character",
       "property": "color",
       "value": "rgba(255, 255, 255, 0.5)"
@@ -53366,7 +53408,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1090,
+      "line": 1103,
       "selector": ".karaoke-lyric-next .karaoke-lyric-character,\n[data-theme=\"light\"] .karaoke-lyric-next .karaoke-lyric-character",
       "property": "background",
       "value": "none"
@@ -53376,7 +53418,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1091,
+      "line": 1104,
       "selector": ".karaoke-lyric-next .karaoke-lyric-character,\n[data-theme=\"light\"] .karaoke-lyric-next .karaoke-lyric-character",
       "property": "filter",
       "value": "none"
@@ -53386,7 +53428,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1096,
+      "line": 1109,
       "selector": ".library-route-blackout",
       "property": "transition",
       "value": "opacity 900ms cubic-bezier(0.22, 1, 0.36, 1)"
@@ -53396,7 +53438,7 @@
       "severity": "warning",
       "message": "Использован !important.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1102,
+      "line": 1115,
       "selector": ".karaoke-effect-dial",
       "property": "padding-block",
       "value": "0.24rem"
@@ -62262,14 +62304,14 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 973,
+          "line": 986,
           "column": 1,
           "context": "",
           "selector": ".karaoke-stage-action.is-active"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 985,
+          "line": 998,
           "column": 1,
           "context": "",
           "selector": ".karaoke-stage-radio.is-active"
@@ -63125,7 +63167,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1101,
+          "line": 1114,
           "column": 1,
           "context": "",
           "selector": ".karaoke-effect-dial"
@@ -63353,14 +63395,14 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 994,
+          "line": 1007,
           "column": 1,
           "context": "",
           "selector": ".karaoke-scene-blackout.is-visible"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1011,
+          "line": 1024,
           "column": 1,
           "context": "",
           "selector": ".library-route-blackout.is-visible"
@@ -64236,7 +64278,7 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 947,
+          "line": 960,
           "column": 1,
           "context": "",
           "selector": ".karaoke-stage-actions"
@@ -64291,14 +64333,14 @@
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 990,
+          "line": 1003,
           "column": 1,
           "context": "",
           "selector": ".karaoke-scene-blackout"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 994,
+          "line": 1007,
           "column": 1,
           "context": "",
           "selector": ".karaoke-scene-blackout.is-visible"
@@ -64334,12 +64376,12 @@
       "severity": "info",
       "message": "Класс .karaoke-stage-radio не найден в статическом исходном коде.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 985,
+      "line": 998,
       "selector": ".karaoke-stage-radio",
       "details": [
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 985,
+          "line": 998,
           "column": 1,
           "context": "",
           "selector": ".karaoke-stage-radio.is-active"
@@ -64351,26 +64393,26 @@
       "severity": "info",
       "message": "Класс .library-route-blackout не найден в статическом исходном коде.",
       "file": "src/styles/karaoke-scenes.css",
-      "line": 1001,
+      "line": 1014,
       "selector": ".library-route-blackout",
       "details": [
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1001,
+          "line": 1014,
           "column": 1,
           "context": "",
           "selector": ".library-route-blackout"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1011,
+          "line": 1024,
           "column": 1,
           "context": "",
           "selector": ".library-route-blackout.is-visible"
         },
         {
           "file": "src/styles/karaoke-scenes.css",
-          "line": 1095,
+          "line": 1108,
           "column": 1,
           "context": "",
           "selector": ".library-route-blackout"

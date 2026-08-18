@@ -17,6 +17,7 @@ from ..errors import EngineUnavailableError, InvalidArtifactError
 from ..model_registry import get_model
 from ..models import Word
 from ..profiler import profile_operation
+from ..syllables import VOWELS
 from .base import Aligner, Transcriber
 from .ctc_alignment import CTC_ALIGNMENT_VERSION, CTCWordAligner, _language_code
 from .device import fallback_torch_device, select_torch_device
@@ -169,8 +170,21 @@ def _words_from_items(items) -> list[Word]:
 
 
 ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v15-newline-phrase-join"
-LONG_TEXT_ALIGNMENT_VERSION = "v52-pure-evidence-consensus-quality-ranking"
+LONG_TEXT_ALIGNMENT_VERSION = "v54-vowel-weighted-interpolation"
 FALLBACK_WORD_CONFIDENCE = 0.012
+
+
+def _vowel_weighted_length(cleaned_token: str) -> float:
+    """Proportional-split weight for a word with no reliable acoustic timing.
+
+    Sung duration tracks vowel nuclei far more than raw character count -- a
+    consonant cluster is typically sung almost instantly while a single held
+    vowel can span a whole beat. Weighting vowels extra (matching the same
+    len + 2*vowels scheme AI/syllables.py already uses for in-word syllable
+    boundaries) keeps a short vowel-heavy word from being starved next to a
+    long consonant-heavy one when neither has a real CTC/Qwen anchor.
+    """
+    return max(1.0, float(len(cleaned_token) + 2 * sum(char in VOWELS for char in cleaned_token)))
 
 
 def _normalize_singing_audio(y: np.ndarray) -> np.ndarray:
@@ -641,9 +655,9 @@ def _lossless_canonical_alignment(
         if not tokens:
             continue
         start, end = line_windows[line_index]
-        token_weights = [max(1, len(token)) for token in tokens]
+        token_weights = [_vowel_weighted_length(token) for token in tokens]
         total_weight = max(1, sum(token_weights))
-        cursor_weight = 0
+        cursor_weight = 0.0
         for token, weight in zip(tokens, token_weights, strict=True):
             word_start = start + (end - start) * cursor_weight / total_weight
             cursor_weight += weight
@@ -1657,7 +1671,7 @@ def _line_aware_canonical_alignment(
                 }
 
             extra = max(0.0, (right_time - left_time) - minimum_total)
-            weights = [max(1.0, float(len(norm(tokens[idx])))) for idx in range(run_start, run_end)]
+            weights = [_vowel_weighted_length(norm(tokens[idx])) for idx in range(run_start, run_end)]
             weight_total = max(1.0, sum(weights))
             cursor = left_time
             for local_index, minimum, weight in zip(
@@ -2332,7 +2346,7 @@ def _anchor_preserving_canonical_alignment(
             local_minima = [minimum_word_span(tokens[pos], pos) for pos in positions]
             minimum_total = sum(local_minima)
             extra = max(0.0, (region_end - region_start) - minimum_total)
-            weights = [max(1.0, float(len(normalize(tokens[pos])))) for pos in positions]
+            weights = [_vowel_weighted_length(normalize(tokens[pos])) for pos in positions]
             total_weight = max(1.0, sum(weights))
             cursor = region_start
             for pos, minimum, weight in zip(positions, local_minima, weights, strict=True):
@@ -2545,7 +2559,7 @@ def _anchor_preserving_canonical_alignment(
                     minimum_total = sum(minima)
                 extra = max(0.0, (right_time - left_time) - minimum_total)
                 lexical_weights = [
-                    max(1.0, float(len(normalize(tokens[pos]))))
+                    _vowel_weighted_length(normalize(tokens[pos]))
                     for pos in range(run_start, run_end)
                 ]
                 lexical_total = max(1.0, sum(lexical_weights))
@@ -2752,9 +2766,9 @@ def _pathological_alignment(words: list[Word], span: float) -> bool:
 
 
 def _proportional_words(tokens: list[str], span: float) -> list[Word]:
-    weights = [max(2, len(token)) for token in tokens]
+    weights = [max(2.0, _vowel_weighted_length(token)) for token in tokens]
     total = sum(weights)
-    offset = 0
+    offset = 0.0
     output = []
     for index, (token, weight) in enumerate(zip(tokens, weights, strict=True)):
         word_start = span * offset / total

@@ -51,6 +51,12 @@ def test_pathological_alignment_cases(candidate):
 def test_proportional_and_vocal_regions():
     result = text._proportional_words(["a", "long"], 1)
     assert result[0].start == 0 and result[-1].end == 1
+    # Vowel-weighted split, not raw length: "я" (1 char, 1 vowel) vs "тьмы"
+    # (4 chars, 1 vowel) should get a 3:6 split of the span, not the 1:4 a
+    # plain character-count weight would give.
+    vowel_split = text._proportional_words(["я", "тьмы"], 9.0)
+    assert vowel_split[0].end - vowel_split[0].start == pytest.approx(3.0)
+    assert vowel_split[1].end - vowel_split[1].start == pytest.approx(6.0)
     assert text._vocal_activity_regions(np.ones(2), 100) == []
     signal = np.r_[np.zeros(20), np.ones(30), np.zeros(50), np.ones(30), np.zeros(20)]
     regions = text._vocal_activity_regions(signal, 100, join_gap=0.1)

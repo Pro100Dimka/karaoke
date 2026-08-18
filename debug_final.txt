@@ -1,0 +1,16 @@
+VERSION_CHECK=v54-vowel-weighted-interpolation key=1ba87bcfaf0050e391fc359682f7df206dda9b20cf373ced6f89d35dbe6f14e0
+VERSION_CHECK=v54-vowel-weighted-interpolation key=55fa040d1c589fd1169523da909e31cd71f7a3365dee6da687d2de92cecfb8f8
+VERSION_CHECK=v54-vowel-weighted-interpolation key=feed253e2bd86e5b2c235b580689e74138679a9ef38b675de81655697746d42a
+VERSION_CHECK=v54-vowel-weighted-interpolation key=ec1a73aeba1c682cd67c870db65e4ae8005c0d114801c4b698a78560f3f9f39a
+VERSION_CHECK=v54-vowel-weighted-interpolation key=75cfa362d7d54e74f93e9304e5f11dfa65c03753060830adf1b6146ff1d45f25
+VERSION_CHECK=v54-vowel-weighted-interpolation key=alignment:338
+VERSION_CHECK=v54-vowel-weighted-interpolation key=alignment:338
+VERSION_CHECK=v54-vowel-weighted-interpolation key=alignment:339
+VERSION_CHECK=v54-vowel-weighted-interpolation key=alignment:339
+VERSION_CHECK=v54-vowel-weighted-interpolation key=alignment:364
+VERSION_CHECK=v54-vowel-weighted-interpolation key=alignment:364
+VERSION_CHECK=v54-vowel-weighted-interpolation key=alignment:338
+VERSION_CHECK=v54-vowel-weighted-interpolation key=alignment:338
+VERSION_CHECK=v54-vowel-weighted-interpolation key=alignment:338
+VERSION_CHECK=v54-vowel-weighted-interpolation key=alignment:338
+VERSION_CHECK=v54-vowel-weighted-interpolation key=alignment:338

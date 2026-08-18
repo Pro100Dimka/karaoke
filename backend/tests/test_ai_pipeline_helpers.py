@@ -87,6 +87,20 @@ def test_lossless_canonical_words_preserve_or_retime():
     assert all(word.confidence == 0.004 for word in retimed)
     with pytest.raises(InvalidArtifactError, match="could not be locally"):
         pipeline._pipeline_lossless_canonical_words("a b", aligned, 0.5)
+
+
+def test_retiming_split_weights_vowels_not_just_character_count():
+    # "я" (1 char, 1 vowel) vs "тьмы" (4 chars, 1 vowel): a plain
+    # character-count split would give "я" only 1/5 of the gap and "тьмы"
+    # 4/5, even though sung duration tracks vowel nuclei, not consonant
+    # clusters. Weighting by len + 2*vowels gives 3/9 vs 6/9 instead.
+    mismatched = words((0, 1, "other", 1))
+    retimed = pipeline._pipeline_lossless_canonical_words("я тьмы", mismatched[:1], 9.0)
+    assert [word.text for word in retimed] == ["я", "тьмы"]
+    assert retimed[0].start == pytest.approx(0.0)
+    assert retimed[0].end == pytest.approx(3.0)
+    assert retimed[1].start == pytest.approx(3.0)
+    assert retimed[1].end == pytest.approx(9.0)
     reset = pipeline._pipeline_lossless_canonical_words("a b", words((0.09, 0.1, "x", 1)), 0.1)
     assert reset[0].start == 0
     tiny = pipeline._pipeline_lossless_canonical_words(
@@ -198,6 +212,34 @@ def test_unreliable_span_is_local_and_reliable_anchors_are_exact():
     assert repaired[0] == original[0]
     assert repaired[3] == original[3]
     assert all(left.end <= right.start for left, right in zip(repaired, repaired[1:], strict=False))
+
+
+def test_local_interpolation_gap_also_weights_vowels_not_just_length():
+    # Same vowel-weighted split as test_retiming_split_weights_vowels_not_just_character_count,
+    # but for the far more common path: two acoustically-unreliable words
+    # ("я", "тьмы") sandwiched between two confident CTC anchors.
+    original = words(
+        (0.0, 1.0, "anchor", 0.95),
+        (1.0, 1.005, "я", 0.000001),
+        (1.005, 1.008, "тьмы", 0.000001),
+        (10.0, 10.5, "right", 0.9),
+    )
+    repaired = pipeline._pipeline_lossless_canonical_words(
+        "anchor я тьмы right",
+        original,
+        11.0,
+        ["ctc", "interpolated", "interpolated", "qwen"],
+        [
+            _candidate(0.0, 1.0, 0.95),
+            {},
+            {},
+            _candidate(10.0, 10.5, 0.9, "qwen"),
+        ],
+    )
+    assert repaired[1].start == pytest.approx(1.0)
+    assert repaired[1].end == pytest.approx(4.0)
+    assert repaired[2].start == pytest.approx(4.0)
+    assert repaired[2].end == pytest.approx(10.0)
 
 
 def test_existing_acoustic_candidate_precedes_synthetic_interpolation():

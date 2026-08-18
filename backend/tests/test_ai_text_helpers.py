@@ -210,6 +210,20 @@ def test_lossless_canonical_alignment_branches(monkeypatch):
     assert len(degenerate) == 10
 
 
+def test_lossless_canonical_alignment_weights_vowels_not_just_length(monkeypatch):
+    # "я" (1 char, 1 vowel) vs "тьмы" (4 chars, 1 vowel): a plain
+    # character-count split would give "я" only 1/5 of the line and "тьмы"
+    # 4/5, even though sung duration tracks vowel nuclei, not consonant
+    # clusters. Weighting by len + 2*vowels gives 3/9 vs 6/9 instead.
+    source = np.ones(1000, dtype=np.float32)
+    monkeypatch.setattr(text, "_activity_quantile_times", lambda *_: [0, 9])
+    result = text._lossless_canonical_alignment(["я тьмы"], source, 100, 9)
+    assert [word.text for word in result] == ["я", "тьмы"]
+    span = result[1].end - result[0].start
+    assert result[0].end - result[0].start == pytest.approx(span * 3 / 9)
+    assert result[1].end - result[1].start == pytest.approx(span * 6 / 9)
+
+
 def test_atomic_line_alignment_interpolation_ctc_and_qwen(monkeypatch):
     source = np.ones(1000, dtype=np.float32)
     empty, stats = text._atomic_line_acoustic_alignment([], [], [], source, 100, 10)

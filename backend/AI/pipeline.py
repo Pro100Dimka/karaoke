@@ -53,7 +53,7 @@ from .pitch_post import (
 )
 from .profiler import RuntimeTelemetry, environment_info
 from .quality import evaluate_quality
-from .syllables import SYLLABLE_ALIGNER_VERSION, align_syllables
+from .syllables import SYLLABLE_ALIGNER_VERSION, VOWELS, align_syllables
 from .utils.io import read_json, write_json_atomic, write_text_atomic
 from .validators import (
     validate_audio,
@@ -79,7 +79,7 @@ from .vocal_preprocess import (
 ProgressCallback = Callable[[str, float, str], None]
 CancelCallback = Callable[[], bool]
 PIPELINE_LOCK_TIMEOUT_SECONDS = 180.0
-CANONICAL_NORMALIZATION_VERSION = "v3-confidence-aware-idempotent-local-anchors"
+CANONICAL_NORMALIZATION_VERSION = "v4-vowel-weighted-interpolation"
 
 
 def _bound_word_durations(words: list[Word]) -> list[Word]:
@@ -348,7 +348,18 @@ def _preserve_complete_canonical_timeline(
                 return True
             if end - start < len(indices) * 0.01:
                 return False
-            weights = [max(1, len(words[index].text)) for index in indices]
+            # Weight by vowel-heavy length, not raw character count: sung
+            # duration tracks vowel nuclei far more than consonants (a held
+            # note lands on a vowel), so a plain character-count split let a
+            # short vowel-heavy word starve while a long consonant-heavy one
+            # hogged the span -- the same distortion align_syllables() (see
+            # syllables.py's _proportional_bounds) already avoids for
+            # syllable boundaries within a word.
+            weights = [
+                max(1, len(words[index].text) +
+                    2 * sum(char in VOWELS for char in words[index].text))
+                for index in indices
+            ]
             total_weight = sum(weights)
             cursor = start
             for index, weight in zip(indices, weights, strict=True):
@@ -530,7 +541,13 @@ def _pipeline_lossless_canonical_words(
     if end <= start + 0.08:
         start, end = 0.0, total_duration
 
-    weights = [max(1, len(token)) for token in tokens]
+    # Same vowel-weighted split as the local interpolate() fallback above
+    # (see its comment) -- sung duration tracks vowel nuclei, not raw
+    # character count.
+    weights = [
+        max(1, len(token) + 2 * sum(char in VOWELS for char in token))
+        for token in tokens
+    ]
     total = max(1, sum(weights))
     cursor = 0
     output: list[Word] = []
@@ -1226,6 +1243,8 @@ class KaraokePipeline:
             alignment_validators = {
                 words_path: lambda path: validate_json(path, ("text", "words")),
             }
+            with open(r"D:\Git\karaoke\debug_final.txt", "a", encoding="utf-8") as _dbg:
+                _dbg.write(f"VERSION_CHECK={LONG_TEXT_ALIGNMENT_VERSION} key={alignment_key}\n")
             if self._cache_hit(
                 cache, "alignment", alignment_key, alignment_outputs, alignment_validators
             ):
