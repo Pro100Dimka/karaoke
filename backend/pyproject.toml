@@ -9,7 +9,7 @@ readme = "README.md"
 line-length = 100
 target-version = "py311"
 extend-exclude = [
-    "engines",
+    "/engines",
 ]
 
 [tool.ruff.lint]

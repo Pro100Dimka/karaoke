@@ -5,6 +5,7 @@ import pytest
 
 from AI.engines import text
 from AI.models import Word
+from AI.utils.numeric import clamp
 
 
 def words(*rows):
@@ -128,7 +129,9 @@ def test_duration_and_timing_profiles():
     assert text._expected_sung_phrase_duration([]) == 0.5
     assert text._minimum_sung_phrase_duration(["one"]) > 0
     assert text._expected_sung_phrase_duration(["one"]) >= 0.65
-    assert text._clamp_timing(5, 0, 1) == 1
+    # text.py's line-timing bounds delegate directly to the shared
+    # AI.utils.numeric.clamp primitive (no local _clamp_timing wrapper remains).
+    assert clamp(5, 0, 1) == 1
     profile = text._line_timing_profile(["one", "two"])
     assert profile["search_window"] >= profile["minimum_window"]
     assert text._lrc_window_is_plausible(["one"], 10)
