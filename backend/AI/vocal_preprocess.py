@@ -15,6 +15,7 @@ import config
 
 from .errors import AICoreError
 from .models import PitchFrame
+from .utils.numeric import clamp01
 
 VOCAL_ANALYSIS_PREPROCESS_VERSION = "v4-tail-gate-lyric-phrase-filter-20260812"
 
@@ -364,11 +365,11 @@ def analyze_vocal_residuals(
     )
     denoise_attenuation = max(0.0, 1.0 - _ratio(denoise_env, vocal_env))
     tail_attenuation = max(0.0, 1.0 - _ratio(tail_env, vocal_env))
-    echo_score = max(0.0, min(1.0, (echo_peak - 0.08) / 0.35))
-    reverb_score = max(0.0, min(1.0, 0.65 * decay_persistence + 0.35 * tail_attenuation))
-    leakage_score = max(0.0, min(1.0, (envelope_correlation - 0.15) / 0.70))
-    noise_score = max(0.0, min(1.0, denoise_attenuation / 0.25))
-    clipping_score = max(0.0, min(1.0, levels["clipped_sample_ratio"] / 0.002))
+    echo_score = clamp01((echo_peak - 0.08) / 0.35)
+    reverb_score = clamp01(0.65 * decay_persistence + 0.35 * tail_attenuation)
+    leakage_score = clamp01((envelope_correlation - 0.15) / 0.70)
+    noise_score = clamp01(denoise_attenuation / 0.25)
+    clipping_score = clamp01(levels["clipped_sample_ratio"] / 0.002)
     return {
         "available": True,
         "levels": levels,

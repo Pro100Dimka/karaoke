@@ -8,6 +8,7 @@ import numpy as np
 
 from .audio import load_mono
 from .models import PitchFrame
+from .utils.numeric import clamp01
 
 # Harmonic tracking is needed on dense vocal stems, but transitions must become
 # cheap at a real acoustic re-attack.  This keeps short melodic leaps while
@@ -29,7 +30,7 @@ def _normalized_periodicity(signal: np.ndarray, lag: int) -> float:
     denom = float(np.linalg.norm(left) * np.linalg.norm(right))
     if denom <= 1e-10:
         return 0.0
-    return max(0.0, min(1.0, float(np.dot(left, right) / denom)))
+    return clamp01(float(np.dot(left, right) / denom))
 
 
 def refine_pitch_confidence(
@@ -87,13 +88,13 @@ def refine_pitch_confidence(
         if lower_periodicity > periodicity + 0.10:
             periodicity *= max(0.25, 1.0 - (lower_periodicity - periodicity) * 1.8)
 
-        measured = max(0.0, min(1.0, periodicity))
+        measured = clamp01(periodicity)
         if fake_unity:
             confidence = measured
         else:
             # If FCPE supplies genuine confidence, require agreement between the
             # network and waveform periodicity instead of replacing either one.
-            confidence = math.sqrt(max(0.0, min(1.0, frame.confidence)) * measured)
+            confidence = math.sqrt(clamp01(frame.confidence) * measured)
         voiced = confidence >= 0.16
         output.append(
             PitchFrame(
@@ -169,7 +170,7 @@ def fuse_pitch_with_yin(
         stable = [item for item in voiced if abs(_midi(item.frequency) - center_midi) <= 0.75]
         continuity = len(stable) / len(voiced)
         confidence = statistics.median(float(item.confidence) for item in stable) if stable else 0.0
-        return continuity * max(0.0, min(1.0, confidence))
+        return continuity * clamp01(confidence)
 
     def protected_subharmonic(index: int, candidate_midi: float, evidence: float) -> bool:
         frame = frames[index]
@@ -204,7 +205,7 @@ def fuse_pitch_with_yin(
         history = energies[max(0, i - 8) : i]
         baseline = statistics.median(history) if history else energy
         ratio = (energy + 1e-7) / (baseline + 1e-7)
-        attacks.append(max(0.0, min(1.0, (ratio - 1.15) / 0.95)))
+        attacks.append(clamp01((ratio - 1.15) / 0.95))
 
     for i, frame in enumerate(frames):
         yi = min(len(yin) - 1, max(0, int(round(frame.time * sr / hop))))
@@ -287,7 +288,7 @@ def fuse_pitch_with_yin(
         for offset, state in enumerate(chosen):
             k = i + offset
             midi_value, obs, hz_value = rows[k][state]
-            confidence = max(0.0, min(1.0, obs))
+            confidence = clamp01(obs)
             result[k] = PitchFrame(
                 frames[k].time,
                 float(hz_value),
@@ -333,7 +334,7 @@ def _attack_strength(run: list[PitchFrame], index: int) -> float:
         return 1.0 if current > 1e-5 else 0.0
     ratio = current / baseline
     # No discount below ~1.25x; full attack discount at ~2.1x.
-    return max(0.0, min(1.0, (ratio - 1.25) / 0.85))
+    return clamp01((ratio - 1.25) / 0.85)
 
 
 def _transition_cost(left: float, right: float, attack: float) -> float:
@@ -341,7 +342,7 @@ def _transition_cost(left: float, right: float, attack: float) -> float:
     base = 0.12 * distance + 0.035 * distance * distance
     # At a strong acoustic attack, a real large melodic leap should be allowed.
     # Still keep a small cost so noise does not make the path completely free.
-    scale = 1.0 - 0.88 * max(0.0, min(1.0, attack))
+    scale = 1.0 - 0.88 * clamp01(attack)
     return base * max(0.12, scale)
 
 
@@ -353,7 +354,7 @@ def _shift_cost(shift: float, confidence: float) -> float:
     # Never treat fallback confidence as absolute truth.  Confidence only adds a
     # modest source prior; sustained raw notes still win because a correction
     # pays this emission cost on every frame.
-    trust = max(0.0, min(1.0, confidence))
+    trust = clamp01(confidence)
     return base * (0.78 + 0.28 * trust)
 
 

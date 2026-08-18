@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 import config
 import models
+from AI.utils.numeric import clamp01
 from app.services.db_utils import commit_refresh
 
 try:
@@ -549,9 +550,9 @@ def configure_monitoring(settings: models.AudioSettings) -> None:
         "output_channels": output_channels,
         "blocksize": settings.buffer_size,
         "gain": gain,
-        "reverb": max(0.0, min(1.0, settings.reverb)),
-        "echo": max(0.0, min(1.0, settings.echo)),
-        "delay": max(0.0, min(1.0, settings.delay)),
+        "reverb": clamp01(settings.reverb),
+        "echo": clamp01(settings.echo),
+        "delay": clamp01(settings.delay),
         "wasapi_exclusive": use_wasapi_exclusive,
     }
     _start_monitor_worker(worker_options)
@@ -575,11 +576,11 @@ def _start_asio_monitor(settings: models.AudioSettings) -> None:
         "--gain",
         str(max(0.0, min(4.0, settings.volume))),
         "--reverb",
-        str(max(0.0, min(1.0, settings.reverb))),
+        str(clamp01(settings.reverb)),
         "--echo",
-        str(max(0.0, min(1.0, settings.echo))),
+        str(clamp01(settings.echo)),
         "--delay",
-        str(max(0.0, min(1.0, settings.delay))),
+        str(clamp01(settings.delay)),
     ]
     _launch_monitor_process(command, cwd=bridge.parent)
 

@@ -5,6 +5,8 @@ import math
 
 import numpy as np
 
+from AI.utils.numeric import clamp01
+
 # Largest float32 value that is guaranteed not to exceed the documented 0.985
 # limiter ceiling when compared in Python/float64. ``np.float32(0.985)`` itself
 # is slightly larger (0.985000014...), which made exact limiter hits violate
@@ -102,9 +104,9 @@ class MonitorEffectsChain:
 
     @staticmethod
     def _slots(reverb: float, echo: float, delay: float) -> tuple[tuple[float, float], ...]:
-        reverb = max(0.0, min(1.0, reverb))
-        echo = max(0.0, min(1.0, echo))
-        delay = max(0.0, min(1.0, delay))
+        reverb = clamp01(reverb)
+        echo = clamp01(echo)
+        delay = clamp01(delay)
         return (
             (0.055, 0.20 + reverb * 0.24 if reverb >= 0.01 else 0.0),
             (0.110, 0.14 + reverb * 0.18 if reverb >= 0.01 else 0.0),

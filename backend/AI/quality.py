@@ -4,6 +4,7 @@ import statistics
 from dataclasses import dataclass
 
 from .models import PitchFrame, Syllable, VocalNote, Word
+from .utils.numeric import clamp01
 
 
 @dataclass(frozen=True)
@@ -19,7 +20,7 @@ class QualityReport:
 
 
 def _clamp(v: float) -> float:
-    return max(0.0, min(1.0, float(v)))
+    return clamp01(float(v))
 
 
 def evaluate_quality(

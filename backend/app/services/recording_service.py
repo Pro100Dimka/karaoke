@@ -24,6 +24,7 @@ from typing import Any
 
 import config
 import models
+from AI.utils.numeric import clamp01
 from app import repositories
 from app.services import song_artifacts, song_service
 from app.services.db_utils import commit_refresh
@@ -74,9 +75,9 @@ class RecordingSession:
         self.sample_rate = sample_rate
         self.channels = channels
         self.gain = max(0.0, min(4.0, gain))
-        self.music_gain = max(0.0, min(1.0, music_gain))
+        self.music_gain = clamp01(music_gain)
         self.effects = {
-            name: max(0.0, min(1.0, float((effects or {}).get(name, 0.0))))
+            name: clamp01(float((effects or {}).get(name, 0.0)))
             for name in ("reverb", "echo", "delay")
         }
         self.playback_offset_sec = max(0.0, playback_offset_sec)
@@ -466,7 +467,7 @@ def _find_instrumental(song_dir: Path) -> Path | None:
 
 
 def _effect_filter(name: str, amount: float, source: str, target: str) -> str | None:
-    amount = max(0.0, min(1.0, float(amount)))
+    amount = clamp01(float(amount))
     if amount < 0.01:
         return None
     if name == "reverb":

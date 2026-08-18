@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from contextlib import suppress
 import os
+from contextlib import suppress
 
 import numpy as np
 
@@ -10,6 +10,7 @@ from ..backend_shadow import ShadowPolicy
 from ..errors import EngineUnavailableError
 from ..models import PitchFrame
 from ..profiler import profile_operation
+from ..utils.numeric import clamp01
 from .base import PitchEstimator
 from .device import fallback_torch_device, select_torch_device
 from .fcpe_backends import (
@@ -165,7 +166,7 @@ class FCPEPitchEstimator(PitchEstimator):
             )
             valid = np.isfinite(hz) and self.fmin <= hz <= self.fmax
             if confidence is not None:
-                conf = max(0.0, min(1.0, float(confidence[index])))
+                conf = clamp01(float(confidence[index]))
                 voiced = bool(valid and conf >= 0.05)
             else:
                 # TorchFCPE's documented infer() API returns f0 after its own

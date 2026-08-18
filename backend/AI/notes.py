@@ -12,6 +12,7 @@ import numpy as np
 
 from .audio import load_mono
 from .models import PitchFrame, Syllable, VocalNote, Word
+from .utils.numeric import clamp01
 
 NOTE_DECODER_VERSION = "acoustic-notes-v33-boundary-lyrics-association"
 _NOTE_DIAGNOSTICS: ContextVar[dict | None] = ContextVar("note_diagnostics", default=None)
@@ -316,7 +317,7 @@ def _local_frame_attack_strength(run: list[PitchFrame], index: int) -> float:
     if baseline <= 1e-8:
         return 1.0 if current > 1e-5 else 0.0
     ratio = current / baseline
-    return max(0.0, min(1.0, (ratio - 1.25) / 0.90))
+    return clamp01((ratio - 1.25) / 0.90)
 
 
 def _energy_reattack_boundaries(segment: list[PitchFrame], min_note: float) -> list[int]:
@@ -1374,7 +1375,7 @@ def _pitch_attack_strength(
     if baseline <= 1e-8:
         return 1.0 if current > 1e-5 else 0.0
     ratio = current / baseline
-    return max(0.0, min(1.0, (ratio - 1.22) / 0.88))
+    return clamp01((ratio - 1.22) / 0.88)
 
 
 def _consolidate_micro_fragments(

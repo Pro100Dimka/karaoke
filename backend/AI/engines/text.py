@@ -19,6 +19,7 @@ from ..models import Word
 from ..profiler import profile_operation
 from ..syllables import VOWELS
 from ..utils.env import env_flag
+from ..utils.numeric import clamp01
 from .base import Aligner, Transcriber
 from .ctc_alignment import CTC_ALIGNMENT_VERSION, CTCWordAligner, _language_code
 from .device import fallback_torch_device, select_torch_device
@@ -163,7 +164,7 @@ def _words_from_items(items) -> list[Word]:
                     float(start),
                     float(end),
                     token,
-                    max(0.0, min(1.0, float(confidence))),
+                    clamp01(float(confidence)),
                     index,
                 )
             )
@@ -456,7 +457,7 @@ def _complete_line_anchor_windows(
             completed[line_index] = (
                 max(0.0, float(a0)),
                 min(duration_sec, float(a1)),
-                max(bscore, max(0.0, min(1.0, float(ascore)))),
+                max(bscore, clamp01(float(ascore))),
             )
             provenance[line_index] = "asr_unique"
             continue
@@ -474,7 +475,7 @@ def _complete_line_anchor_windows(
             provenance[line_index] = "vocal_baseline_rejected_asr_repeat"
             continue
 
-        reliability = max(0.0, min(1.0, float(ascore)))
+        reliability = clamp01(float(ascore))
         # Blend centres; retain enough span for either observation without
         # allowing a weak coarse segment to expand the line arbitrarily.
         centre = baseline_mid * (1.0 - reliability) + asr_mid * reliability
@@ -773,7 +774,7 @@ def _atomic_line_acoustic_alignment(
                     max(0.0, start),
                     min(duration_sec, end),
                     token,
-                    max(0.0, min(1.0, float(word.confidence))),
+                    clamp01(float(word.confidence)),
                     local_index,
                 )
             )
@@ -793,7 +794,7 @@ def _atomic_line_acoustic_alignment(
             float(getattr(result, "confidence", 0.0) or 0.0),
             sum(word.confidence for word in words) / len(words),
         )
-        priority = 10000.0 + 5000.0 * max(0.0, min(1.0, confidence))
+        priority = 10000.0 + 5000.0 * clamp01(confidence)
         candidates.setdefault(line_index, []).append((words, "ctc", priority))
 
     # Secondary Qwen words may form a complete canonical line. Only complete
@@ -830,7 +831,7 @@ def _atomic_line_acoustic_alignment(
                         max(0.0, float(source_word.start)),
                         min(duration_sec, float(source_word.end)),
                         expected[local],
-                        max(0.0, min(1.0, float(source_word.confidence))),
+                        clamp01(float(source_word.confidence)),
                         local,
                     )
                 )
@@ -1202,7 +1203,7 @@ def _line_aware_canonical_alignment(
             continue
         expected_norm = [norm(token) for token in expected]
         actual_norm = [norm(word.text) for word in actual]
-        quality = max(0.0, min(1.0, float(getattr(result, "confidence", 0.0) or 0.0)))
+        quality = clamp01(float(getattr(result, "confidence", 0.0) or 0.0))
         ctc_line_quality[line_index] = quality
         matcher = SequenceMatcher(None, actual_norm, expected_norm, autojunk=False)
         for block in matcher.get_matching_blocks():
@@ -1222,7 +1223,7 @@ def _line_aware_canonical_alignment(
                         bounded_start,
                         bounded_end,
                         expected[local_index],
-                        max(0.0, min(1.0, float(word.confidence))),
+                        clamp01(float(word.confidence)),
                         local_index,
                     )
 
@@ -1251,7 +1252,7 @@ def _line_aware_canonical_alignment(
                         bounded_start,
                         bounded_end,
                         line_tokens[line_index][local_index],
-                        max(0.0, min(1.0, float(word.confidence))),
+                        clamp01(float(word.confidence)),
                         local_index,
                     )
 
@@ -1932,7 +1933,7 @@ def _anchor_preserving_canonical_alignment(
             if window is not None and line_index < len(line_tokens):
                 anchor_start, anchor_end, anchor_score = window
                 timing = _line_timing_profile(line_tokens[line_index])
-                reliability = max(0.0, min(1.0, float(anchor_score)))
+                reliability = clamp01(float(anchor_score))
                 adaptive_margin = (
                     float(timing["context"])
                     + float(timing["anchor_lead"])
@@ -1953,11 +1954,11 @@ def _anchor_preserving_canonical_alignment(
                     }
                     return
 
-        confidence = max(0.0, min(1.0, float(getattr(word, "confidence", 0.0) or 0.0)))
+        confidence = clamp01(float(getattr(word, "confidence", 0.0) or 0.0))
         quality = (
             confidence
             if source_quality is None
-            else max(confidence, max(0.0, min(1.0, float(source_quality))))
+            else max(confidence, clamp01(float(source_quality)))
         )
         # Confidence must dominate the choice between independent acoustic
         # engines.  The old source-rank multiplier let a near-zero-confidence
@@ -2052,7 +2053,7 @@ def _anchor_preserving_canonical_alignment(
                 evidence_catalog.setdefault(idx, {})["qwen"] = {
                     "start": float(qwen_word.start),
                     "end": min(duration_sec, float(qwen_word.end)),
-                    "confidence": max(0.0, min(1.0, float(qwen_word.confidence))),
+                    "confidence": clamp01(float(qwen_word.confidence)),
                 }
                 ctc_word = existing[0]
                 if float(
@@ -3240,7 +3241,7 @@ def _transcript_quality(text: str, duration_sec: float, language: str | None) ->
     if len(tokens) >= 4:
         score -= min(0.22, repeated / max(1, len(tokens) - 1) * 0.5)
     score -= max(0.0, 0.82 - _script_ratio(value, language)) * 0.45
-    return max(0.0, min(1.0, score))
+    return clamp01(score)
 
 
 def _token_key(token: str) -> str:
@@ -3746,7 +3747,7 @@ def _line_agreement_score(
     ]
     scale = max(0.04, sum(max(0.02, float(x.end) - float(x.start)) for x in a) / max(1, len(a)))
     score = sum(math.exp(-d / (2.0 * scale)) for d in deltas) / len(deltas)
-    return len(a), float(max(0.0, min(1.0, score)))
+    return len(a), float(clamp01(score))
 
 
 class Qwen3ForcedAligner(Aligner):
