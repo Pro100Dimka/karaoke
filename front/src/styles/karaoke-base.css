@@ -1145,6 +1145,24 @@
   inset-block-start: clamp(12.5rem, 24vh, 16rem);
   inset-block-end: auto;
 }
+/* A small cover thumbnail anchored just above the lyric block. Kept out of
+   .karaoke-lyrics entirely -- that rule stack is tuned across many
+   breakpoints with !important overrides for the "two stable lyric rows"
+   layout, and nesting anything inside it risks fighting that cascade. */
+.karaoke-lyrics-cover {
+  position: absolute;
+  z-index: 8;
+  inset-inline: 50% auto;
+  inset-block-start: clamp(8.5rem, 19dvh, 11.5rem);
+  transform: translateX(-50%);
+  inline-size: clamp(3rem, 6vw, 4.5rem);
+  block-size: clamp(3rem, 6vw, 4.5rem);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  pointer-events: none;
+  box-shadow: 0 0.75rem 2rem color-mix(in srgb, var(--color-bg-deep) 55%, transparent);
+}
+
 .karaoke-performance-stage {
   position: relative;
   overflow: hidden;

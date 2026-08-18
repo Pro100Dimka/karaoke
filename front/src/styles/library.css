@@ -1047,6 +1047,26 @@
   min-block-size: 5.5rem;
 }
 
+.processing-modal-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-inline-size: 0;
+}
+
+.processing-modal-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  color: var(--color-highlight);
+  background: linear-gradient(160deg, var(--color-secondary), var(--color-bg-elevated));
+}
+
 /* Shared modal dimensions override old screen-specific sizing. */
 
 .processing-modal,

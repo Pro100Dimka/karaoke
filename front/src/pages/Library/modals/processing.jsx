@@ -4,6 +4,7 @@ import Modal from "../../../components/modal";
 import { StatusBadge } from "../../../components/ui";
 import { translateSaved } from "../../../i18n/runtime";
 import ProcessingSignal from "../components/song-card/processing-signal";
+import SongCoverArt from "../components/song-card/song-cover-art";
 import { formatEta, getProcessingProgress, isProcessingActive } from "../utils";
 
 function getVisibleProgress(progress, active, done) {
@@ -60,7 +61,10 @@ export default function ProcessingModal({ song, status, onCancel, onClose, onOpe
     >
       <div className="processing-modal-body modal-scroll">
         <div className="processing-modal-summary u-row-between">
-          <StatusBadge status={currentStatus} />
+          <div className="processing-modal-identity">
+            <SongCoverArt song={song} className="processing-modal-art" iconSize={18} />
+            <StatusBadge status={currentStatus} />
+          </div>
           <strong>{Math.round(visibleProgress)}%</strong>
         </div>
         <ProcessingSignal progress={visibleProgress} />

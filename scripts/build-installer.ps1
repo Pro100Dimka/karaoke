@@ -73,6 +73,51 @@ $CMake = Join-Path $Vs "Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\c
 $Ninja = Join-Path $Vs "Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe"
 
 $AppName = "A&D Voice"
+
+# The top-level orchestrator (no -Worker) owns the build number and bumps it
+# once before anything else runs. Worker sub-processes (-Worker backend/asio/
+# frontend/models, see Start-WorkerProcess) must not re-bump: they are spawned
+# by this same script with -File $PSCommandPath and would otherwise each
+# increment the version again for a single build-installer run.
+if (-not $Worker) {
+    function Get-NextPatchVersion([string]$Version) {
+        if ($Version -notmatch '^(\d+)\.(\d+)\.(\d+)$') {
+            throw "Version '$Version' is not in major.minor.patch form"
+        }
+        return "{0}.{1}.{2}" -f $Matches[1], $Matches[2], ([int]$Matches[3] + 1)
+    }
+    function Set-VersionInFile([string]$Path, [string]$Pattern, [string]$Replacement) {
+        # Windows PowerShell 5.1's Get-Content -Raw guesses the system ANSI
+        # codepage for BOM-less files instead of UTF-8, which silently mangles
+        # the Cyrillic comments/strings these files contain. Decode the bytes
+        # as UTF-8 explicitly on both the read and write side.
+        $bytes = [IO.File]::ReadAllBytes($Path)
+        $content = [Text.Encoding]::UTF8.GetString($bytes)
+        $updated = [regex]::Replace($content, $Pattern, $Replacement, "Multiline")
+        if ($updated -eq $content) { throw "Could not find a version to bump in $Path" }
+        [IO.File]::WriteAllText($Path, $updated, (New-Object Text.UTF8Encoding($false)))
+    }
+
+    $PackageJsonPath = Join-Path $Frontend "package.json"
+    $PackageJsonText = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($PackageJsonPath))
+    $CurrentVersion = ($PackageJsonText | ConvertFrom-Json).version
+    if (-not $CurrentVersion) { throw "front/package.json does not define version" }
+    $NextVersion = Get-NextPatchVersion $CurrentVersion
+    $EscapedCurrent = [regex]::Escape($CurrentVersion)
+
+    Set-VersionInFile $PackageJsonPath `
+        ('"version": "' + $EscapedCurrent + '"') `
+        ('"version": "' + $NextVersion + '"')
+    Set-VersionInFile (Join-Path $Backend "pyproject.toml") `
+        ('^version = "' + $EscapedCurrent + '"') `
+        ('version = "' + $NextVersion + '"')
+    Set-VersionInFile (Join-Path $Backend "app\services\diagnostics_service.py") `
+        ('BACKEND_VERSION = "' + $EscapedCurrent + '"') `
+        ('BACKEND_VERSION = "' + $NextVersion + '"')
+
+    Write-Host "Build version bumped: $CurrentVersion -> $NextVersion"
+}
+
 $AppVersion = (Get-Content -LiteralPath (Join-Path $Frontend "package.json") -Raw | ConvertFrom-Json).version
 if (-not $AppVersion) { throw "front/package.json does not define version" }
 $AppExe = "A&D Voice.exe"

@@ -45,7 +45,10 @@ vi.mock("../src/components/AudioPlayer", () => ({
   AudioPlayer: ({ src }) => <audio data-testid="player" src={src} />
 }));
 vi.mock("../src/api/client", () => ({
-  api: { getPerformanceFileUrl: (id) => `recording/${id}` }
+  api: {
+    getPerformanceFileUrl: (id) => `recording/${id}`,
+    getSongCoverUrl: (id) => `cover/${id}`
+  }
 }));
 
 import LibraryActions from "../src/pages/Library/components/hero/actions.jsx";
@@ -142,6 +145,11 @@ test("processing modal covers active, complete, error and absent songs", () => {
   );
   fireEvent.click(active.container.querySelector("button"));
   expect(cancel).toHaveBeenCalled();
+  const art = active.container.querySelector(".processing-modal-art");
+  expect(art.querySelector("img").src).toContain("cover/song");
+  fireEvent.error(art.querySelector("img"));
+  expect(art.querySelector("img")).toBeNull();
+  expect(art.querySelector("svg")).not.toBeNull();
   active.rerender(
     <ProcessingModal
       song={{ id: "song", title: "Song", status: "done" }}

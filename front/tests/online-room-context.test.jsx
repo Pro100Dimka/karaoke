@@ -689,6 +689,91 @@ describe("online room provider", () => {
     expect(monitorTrack.stop).toHaveBeenCalled();
   });
 
+  test("hear-yourself monitoring runs the mic through the studio channel strip, not a raw passthrough", async () => {
+    const gains = [];
+    const filters = [];
+    const contexts = [];
+    let compressor;
+    let limiter;
+    globalThis.AudioContext = class {
+      constructor(options) {
+        this.options = options;
+        this.destination = {};
+        this.source = { connect: vi.fn() };
+        this.resume = vi.fn().mockResolvedValue(undefined);
+        this.close = vi.fn().mockResolvedValue(undefined);
+        contexts.push(this);
+      }
+      createMediaStreamSource = () => this.source;
+      createGain = () => {
+        const node = { gain: { value: 0 }, connect: vi.fn() };
+        gains.push(node);
+        return node;
+      };
+      createBiquadFilter = () => {
+        const node = { type: null, frequency: { value: 0 }, gain: { value: 0 }, connect: vi.fn() };
+        filters.push(node);
+        return node;
+      };
+      createDynamicsCompressor = () => {
+        compressor = {
+          threshold: { value: 0 },
+          knee: { value: 0 },
+          ratio: { value: 0 },
+          attack: { value: 0 },
+          release: { value: 0 },
+          connect: vi.fn()
+        };
+        return compressor;
+      };
+      createWaveShaper = () => {
+        limiter = { curve: null, oversample: null, connect: vi.fn() };
+        return limiter;
+      };
+    };
+    const hook = renderHook(() => useOnlineRoom(), { wrapper });
+    await act(() => hook.result.current.createRoom("Alice"));
+    await act(async () => {
+      expect(await hook.result.current.setLocalMonitoring(true)).toBe(true);
+    });
+
+    const [finalGain, makeup] = gains;
+    const [highpass, presence] = filters;
+    const { source } = contexts[0];
+
+    // Rumble/mud removal and a touch of presence/air, matching the same
+    // character as backend/app/services/microphone_quality.py's
+    // StudioMicrophoneProcessor used for recording and direct monitoring.
+    expect(highpass.type).toBe("highpass");
+    expect(highpass.frequency.value).toBe(70);
+    expect(presence.type).toBe("highshelf");
+    expect(presence.frequency.value).toBe(2200);
+    expect(presence.gain.value).toBeGreaterThan(0);
+
+    expect(compressor.threshold.value).toBe(-16);
+    expect(compressor.ratio.value).toBe(3);
+    expect(makeup.gain.value).toBeCloseTo(1.08);
+
+    // Soft-knee limiter curve: silence maps to silence, and the extremes stay
+    // within [-1, 1] instead of hard-clipping.
+    expect(limiter.curve).toHaveLength(1024);
+    expect(limiter.curve[512]).toBeCloseTo(0, 1);
+    expect(limiter.curve[1023]).toBeCloseTo(1, 5);
+    expect(limiter.curve[0]).toBeCloseTo(-1, 5);
+
+    // Wiring: source -> highpass -> presence -> compressor -> makeup -> limiter
+    // -> the pre-existing mute/volume gain -> destination. The final gain is
+    // what setRoomSoundMuted/applyRemoteAudioMute-style controls would act on,
+    // so it must still sit last in the chain, unaffected by the new nodes.
+    expect(source.connect).toHaveBeenCalledWith(highpass);
+    expect(highpass.connect).toHaveBeenCalledWith(presence);
+    expect(presence.connect).toHaveBeenCalledWith(compressor);
+    expect(compressor.connect).toHaveBeenCalledWith(makeup);
+    expect(makeup.connect).toHaveBeenCalledWith(limiter);
+    expect(limiter.connect).toHaveBeenCalledWith(finalGain);
+    expect(finalGain.gain.value).toBe(1);
+  });
+
   test("reports voice playback failures and isolates rejected audio graph promises", async () => {
     HTMLMediaElement.prototype.play.mockRejectedValueOnce(new Error("autoplay blocked"));
     const contexts = [];

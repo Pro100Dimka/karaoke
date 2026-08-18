@@ -274,7 +274,7 @@ describe("audio settings source", () => {
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
-            autoGainControl: true,
+            autoGainControl: false,
             channelCount: 1,
             deviceId: { exact: "mic" }
           }
@@ -285,7 +285,7 @@ describe("audio settings source", () => {
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
-            autoGainControl: true,
+            autoGainControl: false,
             channelCount: 1
           }
         }
@@ -389,7 +389,7 @@ describe("audio settings source", () => {
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
-            autoGainControl: true,
+            autoGainControl: false,
             channelCount: 1
           }
         }
@@ -459,7 +459,7 @@ describe("audio settings source", () => {
       audio: {
         echoCancellation: true,
         noiseSuppression: true,
-        autoGainControl: true,
+        autoGainControl: false,
         channelCount: 1,
         deviceId: { exact: "new-mic" }
       }

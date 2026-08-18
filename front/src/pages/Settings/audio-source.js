@@ -155,7 +155,14 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
     const base = {
       echoCancellation: true,
       noiseSuppression: true,
-      autoGainControl: true,
+      // Auto gain control constantly renormalizes the captured level, which
+      // makes this meter read as "full" almost regardless of how loud the
+      // microphone actually is -- exactly the number a device-level check is
+      // supposed to reveal. Every other capture path in the app (pitch
+      // detection, room voice, direct monitoring/recording) already disables
+      // it for the same reason; keep this preview consistent with what the
+      // user will actually get.
+      autoGainControl: false,
       channelCount: 1
     };
     const candidates =

@@ -8,7 +8,8 @@ const apiMocks = vi.hoisted(() => ({
   getHealth: vi.fn(),
   getPipelineHealth: vi.fn(),
   getVersions: vi.fn(),
-  getErrors: vi.fn()
+  getErrors: vi.fn(),
+  getSongCoverUrl: vi.fn((id) => `cover/${id}`)
 }));
 vi.mock("../src/api/client", () => ({ api: apiMocks }));
 
@@ -20,6 +21,7 @@ import { shouldSchedulePoll, usePolling } from "../src/hooks/usePolling.js";
 import { translateSaved } from "../src/i18n/runtime.js";
 import { isHotkeyScopeActive } from "../src/utils/hotkeys.js";
 import useSettingsNavigation from "../src/hooks/useSettingsNavigation.js";
+import useSongCover from "../src/hooks/useSongCover.js";
 import useKaraokeControls from "../src/pages/Karaoke/hooks/useKaraokeControls.js";
 import useKaraokeHotkeys, {
   dispatchKaraokeHotkey
@@ -294,6 +296,43 @@ describe("async state hooks", () => {
     );
     expect(() => polling.result.current.refresh()).not.toThrow();
     vi.unstubAllGlobals();
+  });
+});
+
+describe("song cover hook", () => {
+  test("resolves a cover url per song id and clears a failure on a new song or reset key", () => {
+    const hook = renderHook((props) => useSongCover(props.songId, props.resetKey), {
+      initialProps: { songId: "song-1", resetKey: undefined }
+    });
+    expect(hook.result.current.coverUrl).toBe("cover/song-1");
+    expect(hook.result.current.hasCover).toBe(true);
+
+    act(() => hook.result.current.handleCoverError());
+    expect(hook.result.current.hasCover).toBe(false);
+
+    // Same song, same reset key: a prior failure must stick (no flash back to
+    // the broken image on an unrelated re-render).
+    hook.rerender({ songId: "song-1", resetKey: undefined });
+    expect(hook.result.current.hasCover).toBe(false);
+
+    // A different song clears the failure even though the reset key is unchanged.
+    hook.rerender({ songId: "song-2", resetKey: undefined });
+    expect(hook.result.current.coverUrl).toBe("cover/song-2");
+    expect(hook.result.current.hasCover).toBe(true);
+
+    act(() => hook.result.current.handleCoverError());
+    expect(hook.result.current.hasCover).toBe(false);
+
+    // Same song id, but the caller bumped resetKey (e.g. a room song swap that
+    // reuses the id) -- the failure must clear even without an id change.
+    hook.rerender({ songId: "song-2", resetKey: "swap-1" });
+    expect(hook.result.current.hasCover).toBe(true);
+  });
+
+  test("has no cover for a missing song id", () => {
+    const hook = renderHook(() => useSongCover(null));
+    expect(hook.result.current.coverUrl).toBe("");
+    expect(hook.result.current.hasCover).toBe(false);
   });
 });
 

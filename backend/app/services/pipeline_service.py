@@ -690,6 +690,20 @@ def _create_ai_progress_callback(
     return on_ai_progress
 
 
+def _ensure_cover_extracted(source_path: str, out_dir: Path) -> None:
+    """Extract embedded cover art eagerly so it is cached before the first UI poll.
+
+    Without this, the cover only appears once something triggers a ``GET
+    /songs/{id}/cover`` request -- the processing modal would show the note-icon
+    fallback for the entire processing run even for songs whose source file
+    already has embedded artwork. Extraction failures must never break processing.
+    """
+    if any((out_dir / f"cover{ext}").is_file() for ext in (".jpg", ".png", ".webp")):
+        return
+    with contextlib.suppress(Exception):
+        song_service.extract_embedded_cover(Path(source_path), out_dir)
+
+
 def _acquire_processing_slot(song_id: str) -> bool:
     while True:
         if _processing_slot.acquire(timeout=0.2):
@@ -719,6 +733,7 @@ def _run_job(song_id: str) -> None:
         _begin_runtime_progress(song_id)
         heartbeat_stop, heartbeat_thread = _start_progress_heartbeat(song_id)
         capture = _create_progress_capture(song_id, out_dir)
+        _ensure_cover_extracted(source_path, out_dir)
         _update_progress(
             song_id, step_label="Проверка AI-моделей", percent=1.0)
         model_install_service.ensure_ready_sync(

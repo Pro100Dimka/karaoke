@@ -159,6 +159,48 @@ describe("online voice mesh", () => {
     expect(noSetter.getParameters).not.toHaveBeenCalled();
   });
 
+  test("optimizes audio senders only for a peer created after the microphone is already running", async () => {
+    const freshMesh = makeMesh();
+    const earlySpy = vi.spyOn(freshMesh, "optimizeAudioSenders");
+    freshMesh.createPeer("early-joiner");
+    expect(earlySpy).not.toHaveBeenCalled();
+
+    class AudioSenderPeer extends FakePeer {
+      constructor(configuration) {
+        super(configuration);
+        this.addTrack = vi.fn((mediaTrack) => {
+          const sender = {
+            track: mediaTrack,
+            getParameters: () => ({ encodings: [{}] }),
+            setParameters: vi.fn().mockResolvedValue(undefined)
+          };
+          this.senders.push(sender);
+          return sender;
+        });
+      }
+    }
+    const media = stream([track("mic")]);
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: { mediaDevices: { getUserMedia: vi.fn().mockResolvedValue(media) } }
+    });
+    const mesh = makeMesh();
+    await mesh.start();
+    const lateSpy = vi.spyOn(mesh, "optimizeAudioSenders");
+
+    // No peer existed before the microphone started, so nothing was created
+    // (and therefore nothing optimized) via the start() loop for this peer.
+    globalThis.RTCPeerConnection = AudioSenderPeer;
+    const lateJoiner = mesh.createPeer("late-joiner");
+    expect(lateSpy).toHaveBeenCalledWith(lateJoiner);
+    const sender = lateJoiner.getSenders()[0];
+    await vi.waitFor(() => expect(sender.setParameters).toHaveBeenCalled());
+    expect(sender.setParameters).toHaveBeenCalledWith({
+      encodings: [{ maxBitrate: 256_000, networkPriority: "high" }],
+      degradationPreference: "maintain-framerate"
+    });
+  });
+
   test("validates exact public error and data-channel creation contracts", async () => {
     const mesh = makeMesh();
     delete globalThis.RTCPeerConnection;

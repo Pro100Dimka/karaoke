@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { translateSaved } from "../../../../i18n/runtime";
+import SongCoverArt from "../../../Library/components/song-card/song-cover-art";
 import useKaraokePanorama from "../../hooks/useKaraokePanorama";
 import AuroraWorld from "./aurora-world";
 import KaraokeLyricLine from "./karaoke-lyric-line";
@@ -143,6 +144,9 @@ export default function KaraokePerformanceStage(props) {
       </div>
 
       {showNotes && notes.length > 0 && <MelodyRoll {...props} />}
+      {showLyrics && songId && (
+        <SongCoverArt song={{ id: songId }} className="karaoke-lyrics-cover" iconSize={20} />
+      )}
       {showLyrics && (
         <Lyrics {...props} lyrics={lyrics} currentTime={currentTime} nextLine={nextLine} />
       )}

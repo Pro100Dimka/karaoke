@@ -133,6 +133,11 @@ export default class OnlineVoiceMesh {
     this.stream?.getTracks().forEach((track) => {
       peer.addTrack(track, this.stream);
     });
+    // A peer created while the microphone is already running (e.g. a new
+    // participant joining a call already in progress) must get the same
+    // low-latency sender parameters as peers optimized in start(); otherwise
+    // its audio sender silently keeps the browser's unprioritized defaults.
+    if (this.stream) this.optimizeAudioSenders(peer);
     const isCurrentPeer = () => this.peers.get(participantId) === peer;
     peer.onicecandidate = ({ candidate }) => {
       if (!candidate || !isCurrentPeer()) return;

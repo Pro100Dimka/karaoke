@@ -1,7 +1,5 @@
-import { Music2 } from "lucide-react";
-import { useEffect, useState } from "react";
-import { api } from "../../../../api/client";
 import { useRadio } from "../../../../contexts/radio";
+import SongCoverArt from "./song-cover-art";
 
 const WAVE_BARS = Object.freeze(
   Array.from({ length: 18 }, (_, index) => ({
@@ -12,35 +10,13 @@ const WAVE_BARS = Object.freeze(
 
 export default function SongCardArtwork({ cardIndex, song }) {
   const { isPlaying } = useRadio();
-  const [coverFailed, setCoverFailed] = useState(false);
-  const coverUrl = song?.id ? api.getSongCoverUrl(song.id) : "";
-  useEffect(() => setCoverFailed(false), [coverUrl, song?.__roomLocal]);
-
   return (
-    <div
+    <SongCoverArt
+      song={song}
       className={["library-song-card-art", isPlaying && "is-radio-reactive"]
         .filter(Boolean)
         .join(" ")}
-      aria-hidden="true"
     >
-      {coverUrl && !coverFailed ? (
-        <img
-          src={coverUrl}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          onError={() => setCoverFailed(true)}
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            position: "absolute",
-            inset: 0
-          }}
-        />
-      ) : (
-        <Music2 size={26} />
-      )}
       <div className="library-song-card-wave">
         {WAVE_BARS.map(({ idle, speed }, i) => (
           <i
@@ -54,6 +30,6 @@ export default function SongCardArtwork({ cardIndex, song }) {
           />
         ))}
       </div>
-    </div>
+    </SongCoverArt>
   );
 }

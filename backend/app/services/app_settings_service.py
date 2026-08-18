@@ -17,10 +17,33 @@ PATH_SETTINGS_FILE = config.PATH_SETTINGS_FILE
 INSTALL_PREFERENCES_FILE = config.DATA_DIR.parent / "install-preferences.json"
 _settings_lock = threading.RLock()
 
+
+def _default_thread_count() -> int:
+    """Size CPU inference threading to the machine, not a fixed guess.
+
+    ``thread_count`` feeds OMP_NUM_THREADS/MKL_NUM_THREADS/torch.set_num_threads
+    for every processing job (see pipeline_service._configure_ai_runtime), so a
+    low hardcoded cap silently throttles CPU-only song processing on any machine
+    with more than a few cores. Physical cores are what actually matters for
+    BLAS/OMP-style intraop parallelism (hyperthreads mostly don't add throughput
+    for this workload) — mirrors the "auto" intraop sizing AI/runtime.py already
+    uses when KARAOKE_CPU_TUNING is enabled.
+    """
+    logical = os.cpu_count() or 2
+    physical = logical
+    try:
+        import psutil
+
+        physical = int(psutil.cpu_count(logical=False) or logical)
+    except (ImportError, OSError, TypeError, ValueError):
+        physical = logical
+    return max(1, min(64, physical))
+
+
 DEFAULT_SETTINGS: dict[str, Any] = {
     "language": "uk",
     "theme": "dark",
-    "thread_count": min(4, max(1, (os.cpu_count() or 2) // 2)),
+    "thread_count": _default_thread_count(),
     "compute_mode": "auto",
     "online_name": "",
 }
