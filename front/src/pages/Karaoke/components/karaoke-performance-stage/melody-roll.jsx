@@ -1,10 +1,10 @@
 import { translateSaved } from "../../../../i18n/runtime";
+import { clamp } from "../../../../utils/math";
 import { midiToWesternNote } from "../../utils/format";
 import { getMelodyCue, getMelodyRange, getVisibleNotes } from "../../utils/melody";
 
 const VIEW = { width: 1200, height: 288, labelWidth: 0, keyboardWidth: 48, seconds: 10 };
 const BLACK_KEY_CLASSES = [1, 3, 6, 8, 10];
-const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 export default function MelodyRoll({
   notes,
   currentTime,

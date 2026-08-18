@@ -19,6 +19,7 @@ const IconButton = forwardRef(
       icon: Icon,
       size = "md",
       iconSize,
+      unstyled = false,
       className,
       children,
       "aria-label": ariaLabel,
@@ -38,7 +39,8 @@ const IconButton = forwardRef(
       <Button
         ref={ref}
         size={size}
-        className={cx("ui-icon-button", className)}
+        unstyled={unstyled}
+        className={unstyled ? className : cx("ui-icon-button", className)}
         aria-label={accessibleLabel}
         title={title ?? accessibleLabel}
         {...props}

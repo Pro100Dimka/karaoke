@@ -1,12 +1,12 @@
 import { forwardRef } from "react";
+import { clamp as clampRange } from "../../../utils/math";
 import Field from "../_internal/Field";
 import cx from "../_internal/cx";
 import mergeSx from "../_internal/sx";
 import useControllable from "../_internal/useControllable";
 import "./slider.css";
 
-const clamp = (value, min, max) =>
-  Math.min(max, Math.max(min, Number(value) || 0));
+const clamp = (value, min, max) => clampRange(Number(value) || 0, min, max);
 
 const COMMIT_KEYS = new Set([
   "ArrowLeft",

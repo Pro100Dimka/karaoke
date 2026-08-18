@@ -1,4 +1,5 @@
-const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+import { clamp } from "../../../utils/math";
+
 const MIN_PITCH_HZ = 55;
 const MAX_PITCH_HZ = 1760;
 const MIN_RMS = 0.01;

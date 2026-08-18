@@ -1,6 +1,6 @@
 import { ArrowLeft, Radio, SlidersHorizontal } from "lucide-react";
-import { IconButton } from "../../../components/ui";
 import { translateSaved } from "../../../i18n/runtime";
+import { IconButton } from "../../../theme/ui";
 
 export default function KaraokeStageActions({
   autoHideConsole,
@@ -53,7 +53,7 @@ export default function KaraokeStageActions({
               unstyled
               className={`karaoke-stage-action ${extraClass} ${active ? "is-active" : ""}`}
               icon={icon}
-              size={size}
+              iconSize={size}
               label={label}
               aria-pressed={active}
               onClick={onClick}

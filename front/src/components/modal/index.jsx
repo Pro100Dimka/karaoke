@@ -2,8 +2,7 @@ import { X } from "lucide-react";
 import { useEffect, useId, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../../i18n";
-import { IconButton } from "../ui";
-import Card from "../ui/Card";
+import { Card, IconButton } from "../../theme/ui";
 import ModalTitle from "./title";
 
 const FOCUSABLE_SELECTOR = [
@@ -157,7 +156,7 @@ export default function Modal({
           <IconButton
             unstyled
             icon={X}
-            size={closeIconSize}
+            iconSize={closeIconSize}
             className={closeClasses}
             onClick={() => onCloseRef.current?.()}
             label={resolvedCloseAriaLabel}

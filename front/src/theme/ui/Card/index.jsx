@@ -1,5 +1,6 @@
 import { forwardRef } from "react";
 
+import useCardTilt from "../../../hooks/useCardTilt";
 import Primitive from "../_internal/Primitive";
 import cx from "../_internal/cx";
 import "./card.css";
@@ -16,6 +17,7 @@ const Card = forwardRef(
       tilt = true,
       cardContent,
       cardPanel,
+      overlay,
       className,
       sx,
       style,
@@ -27,44 +29,13 @@ const Card = forwardRef(
     ref
   ) => {
     const isNeon = variant === "neon" || variant === "animation";
-
-    const handlePointerMove = (event) => {
-      if (isNeon) {
-        const rect = event.currentTarget.getBoundingClientRect();
-        const x = ((event.clientX - rect.left) / rect.width) * 100;
-        const y = ((event.clientY - rect.top) / rect.height) * 100;
-
-        event.currentTarget.style.setProperty("--card-mx", `${x}%`);
-        event.currentTarget.style.setProperty("--card-my", `${y}%`);
-        event.currentTarget.style.setProperty("--glow-x", `${x}%`);
-        event.currentTarget.style.setProperty("--glow-y", `${y}%`);
-
-        if (tilt) {
-          const tiltX = (0.5 - y / 100) * 8;
-          const tiltY = (x / 100 - 0.5) * 10;
-
-          event.currentTarget.style.setProperty("--tilt-x", `${tiltX}deg`);
-          event.currentTarget.style.setProperty("--tilt-y", `${tiltY}deg`);
-        }
-      }
-
-      onPointerMove?.(event);
-    };
-
-    const handlePointerLeave = (event) => {
-      if (isNeon) {
-        [
-          "--card-mx",
-          "--card-my",
-          "--glow-x",
-          "--glow-y",
-          "--tilt-x",
-          "--tilt-y"
-        ].forEach((name) => event.currentTarget.style.removeProperty(name));
-      }
-
-      onPointerLeave?.(event);
-    };
+    const { handlePointerMove, handlePointerLeave } = useCardTilt({
+      isNeon,
+      tilt,
+      extraPositionVars: [["--glow-x", "--glow-y"]],
+      onPointerMove,
+      onPointerLeave
+    });
 
     return (
       <Primitive
@@ -111,9 +82,13 @@ const Card = forwardRef(
                 {children}
               </div>
             </div>
+            {overlay}
           </>
         ) : (
-          children
+          <>
+            {children}
+            {overlay}
+          </>
         )}
       </Primitive>
     );

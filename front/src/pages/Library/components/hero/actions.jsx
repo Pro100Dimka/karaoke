@@ -1,7 +1,6 @@
 import { Plus, Search, UsersRound } from "lucide-react";
-import { Card } from "../../../../components/ui";
 import { translateSaved } from "../../../../i18n/runtime";
-import { Stack } from "../../../../theme/ui";
+import { Card, Stack } from "../../../../theme/ui";
 
 export default function LibraryActions({
   canManageLibrary,

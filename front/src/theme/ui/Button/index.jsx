@@ -11,6 +11,7 @@ const Button = forwardRef(
       variant = "solid",
       tone = "primary",
       size = "md",
+      unstyled = false,
       disabled = false,
       className,
       onClick,
@@ -35,17 +36,14 @@ const Button = forwardRef(
         ref={ref}
         as={as}
         type={native ? type : undefined}
-        className={cx(
-          "ui-button",
-          "ui-control",
-          "ui-focus-ring",
-          "ui-disabled",
-          "ui-motion",
-          className
-        )}
-        data-variant={variant}
-        data-tone={tone}
-        data-size={size}
+        className={
+          unstyled
+            ? className
+            : cx("ui-button", "ui-control", "ui-focus-ring", "ui-disabled", "ui-motion", className)
+        }
+        data-variant={unstyled ? undefined : variant}
+        data-tone={unstyled ? undefined : tone}
+        data-size={unstyled ? undefined : size}
         disabled={native ? disabled : undefined}
         aria-disabled={!native && disabled ? true : undefined}
         tabIndex={!native && disabled ? -1 : tabIndex}

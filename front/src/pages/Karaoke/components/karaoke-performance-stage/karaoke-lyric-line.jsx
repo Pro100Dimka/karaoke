@@ -1,7 +1,7 @@
+import { clamp01 } from "../../../../utils/math";
 import { getLyricFill } from "../../utils/lyrics";
 
 const percent = (value) => `${Math.round(value * 100)}%`;
-const clamp = (value) => Math.max(0, Math.min(1, value));
 
 function TimedText({ text, start, end, currentTime, className }) {
   const fill = getLyricFill(currentTime, start, end);
@@ -14,7 +14,7 @@ function TimedText({ text, start, end, currentTime, className }) {
         <span
           key={`${character}-${index}`}
           className="karaoke-lyric-character"
-          style={{ "--character-fill": percent(clamp(progress - index)) }}
+          style={{ "--character-fill": percent(clamp01(progress - index)) }}
         >
           {character}
         </span>

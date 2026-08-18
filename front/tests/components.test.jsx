@@ -14,13 +14,9 @@ import FieldInput from "../src/components/fields/field-input.jsx";
 import FieldList from "../src/components/fields/field-list.jsx";
 import RangeInput from "../src/components/fields/range-input.jsx";
 import Table from "../src/components/Table.jsx";
-import Card from "../src/components/ui/Card.jsx";
 import ErrorBoundary from "../src/components/ui/ErrorBoundary.jsx";
-import IconButton from "../src/components/ui/IconButton.jsx";
-import PageState from "../src/components/ui/PageState.jsx";
-import Panel from "../src/components/ui/Panel.jsx";
-import ProgressBar from "../src/components/ui/ProgressBar.jsx";
 import StatusBadge from "../src/components/ui/StatusBadge.jsx";
+import { Card, IconButton } from "../src/theme/ui";
 const Icon = (props) => <svg data-testid="icon" {...props} />;
 beforeAll(() => {
   Object.defineProperties(HTMLMediaElement.prototype, {
@@ -31,7 +27,7 @@ beforeAll(() => {
 });
 afterEach(cleanup);
 describe("primitive UI components", () => {
-  test("renders buttons, icons, fields, rows and panels", () => {
+  test("renders buttons, icons, fields and rows", () => {
     const clicked = vi.fn();
     render(
       <>
@@ -57,38 +53,19 @@ describe("primitive UI components", () => {
           <input />
         </Field>
         <FieldRow className="extra">Row</FieldRow>
-        <Panel>Panel</Panel>
-        <Panel title="Title" actions={<button>Action</button>}>
-          Content
-        </Panel>
       </>
     );
     fireEvent.click(screen.getByText("Save"));
     expect(clicked).toHaveBeenCalledOnce();
     verify([screen.getByText("Save").className, 'toContain', "btn-primary"], [screen.getByText("Raw").className, 'toBe', "raw"], [screen.getByText("Bare").getAttribute("class"), 'toBeNull'], [screen.getByLabelText("Icon action").title, 'toBe', "Custom"], [screen.getByLabelText("Raw icon").getAttribute("class"), 'toBeNull'], [screen.getByText("Error").className, 'toBe', "field-error"], [screen.getByText("Row").className, 'toContain', "extra"]);
   });
-  test("renders progress, statuses, page states and tables", () => {
-    const { rerender } = render(<ProgressBar percent="bad" />);
-    verify([screen.getByRole("progressbar").getAttribute("aria-valuenow"), 'toBe', "0"]);
-    rerender(<ProgressBar percent={150} label="Work" />);
-    verify([screen.getByRole("progressbar").getAttribute("aria-valuenow"), 'toBe', "100"]);
-    rerender(<StatusBadge status="done" />);
+  test("renders statuses and tables", () => {
+    const { rerender } = render(<StatusBadge status="done" />);
     expect(document.querySelector(".badge-done")).not.toBeNull();
     rerender(<StatusBadge status="custom" />);
     expect(document.querySelector(".badge-pending")).not.toBeNull();
     rerender(<StatusBadge />);
     expect(screen.getByText("status.unknown")).not.toBeNull();
-    rerender(<PageState loading>Child</PageState>);
-    expect(screen.getByRole("status")).not.toBeNull();
-    rerender(<PageState error="Broken">Child</PageState>);
-    expect(screen.getByRole("alert")).not.toBeNull();
-    rerender( <PageState empty emptyTitle="Empty"> Child </PageState>
-    );
-    expect(screen.getByText("Empty")).not.toBeNull();
-    rerender(<PageState empty>Child</PageState>);
-    expect(screen.getByText("common.noData")).not.toBeNull();
-    rerender(<PageState>Child</PageState>);
-    expect(screen.getByText("Child")).not.toBeNull();
     rerender(
       <Table
         columns={[["name", "Name"]]}

@@ -1,5 +1,6 @@
 import { useId } from "react";
 import { translateSaved } from "../../../../i18n/runtime";
+import { clamp as clampRange } from "../../../../utils/math";
 
 const WAVE_CONFIG = {
   length: 96,
@@ -22,7 +23,7 @@ const POINTS = (() => {
   });
 })();
 const WIDTH = 960;
-const clamp = (value) => Math.max(0, Math.min(100, Number(value) || 0));
+const clamp = (value) => clampRange(Number(value) || 0, 0, 100);
 function createPolygon(height, compact) {
   const center = height / 2;
   const step = WIDTH / (POINTS.length - 1);

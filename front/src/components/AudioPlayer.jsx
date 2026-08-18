@@ -1,6 +1,7 @@
 import { Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
+import { IconButton } from "../theme/ui";
 import {
   formatAudioTime,
   normalizeAudioDuration,
@@ -9,7 +10,6 @@ import {
   toggleAudioPlayback
 } from "./audio-player-utils";
 import { RangeInput } from "./fields";
-import { IconButton } from "./ui";
 
 export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
   const { t } = useI18n();
@@ -96,7 +96,7 @@ export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
         unstyled
         className="performance-player-play"
         icon={playing ? Pause : Play}
-        size={18}
+        iconSize={18}
         label={t(playing ? "audio.pause" : "audio.playRecording")}
         onClick={toggle}
       />
@@ -117,7 +117,7 @@ export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
         <IconButton
           unstyled
           icon={volume ? Volume2 : VolumeX}
-          size={16}
+          iconSize={16}
           label={t(volume ? "audio.mute" : "audio.unmute")}
           onClick={toggleMuted}
         />

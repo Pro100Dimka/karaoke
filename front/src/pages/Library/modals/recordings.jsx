@@ -2,8 +2,8 @@ import { BarChart3, Music2, Trash2 } from "lucide-react";
 import { api } from "../../../api/client";
 import { AudioPlayer } from "../../../components/AudioPlayer";
 import Modal from "../../../components/modal";
-import { Card, IconButton } from "../../../components/ui";
 import { translateSaved } from "../../../i18n/runtime";
+import { Card, IconButton } from "../../../theme/ui";
 import { getErrorMessage } from "../../../utils/errors";
 import { formatLibraryDate } from "../utils";
 
@@ -31,7 +31,7 @@ function RecordingCard({ recording, onAnalyze, onDelete }) {
             key={label}
             unstyled
             icon={Icon}
-            size={size}
+            iconSize={size}
             label={label}
             className={`btn btn-sm ${className}`}
             onClick={() => handler(recording)}

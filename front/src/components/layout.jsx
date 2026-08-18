@@ -6,9 +6,9 @@ import { useOnlineRoomNavigation } from "../hooks/useOnlineRoomNavigation";
 import { useI18n } from "../i18n";
 import SongSettings from "../pages/Library/modals/song-settings";
 import Settings from "../pages/Settings";
+import { IconButton } from "../theme/ui";
 import TitleBar from "./TitleBar";
 import AppRoutes from "./routes";
-import { IconButton } from "./ui";
 
 const ROUTES = { karaoke: "/karaoke" };
 
@@ -30,7 +30,7 @@ function AppFloatingControls({ onOpenSettings }) {
             .filter(Boolean)
             .join(" ")}
           icon={Radio}
-          size={28}
+          iconSize={28}
           label={
             error || t(isPlaying ? "radio.disable" : "radio.enable", { station: station.name })
           }
@@ -54,7 +54,7 @@ function AppFloatingControls({ onOpenSettings }) {
         unstyled
         className="app-settings-fab"
         icon={Cog}
-        size={28}
+        iconSize={28}
         label={t("settings.open")}
         onClick={onOpenSettings}
       />

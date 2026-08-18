@@ -1,15 +1,15 @@
 import { useId, useRef } from "react";
 import { RangeInput } from "../../../../components/fields";
+import { clamp01 } from "../../../../utils/math";
 
-const clamp = (value) => Math.max(0, Math.min(1, value));
 const normalizeId = (id) => id.replace(/:/g, "");
 
 export default function EffectDial({ label, value, onChange, accent = "primary" }) {
   const inputId = `effect-dial-${normalizeId(useId())}`;
   const dragRef = useRef(null);
-  const normalized = clamp(Number(value) || 0);
+  const normalized = clamp01(Number(value) || 0);
   const percent = Math.round(normalized * 100);
-  const setValue = (value) => onChange(clamp(value));
+  const setValue = (value) => onChange(clamp01(value));
   const stopDrag = (event) => {
     dragRef.current = null;
     event.currentTarget.releasePointerCapture?.(event.pointerId);

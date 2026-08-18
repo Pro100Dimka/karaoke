@@ -1,6 +1,6 @@
 import { Maximize2, Minus, X } from "lucide-react";
 import { useI18n } from "../i18n";
-import { IconButton } from "./ui";
+import { IconButton } from "../theme/ui";
 
 const WINDOW_ACTIONS = [
   { id: "minimize", labelKey: "common.minimizeWindow", Icon: Minus, size: 16 },
@@ -28,7 +28,7 @@ export default function TitleBar({ title = "A&D Voice", hideActions = false }) {
               key={id}
               unstyled
               icon={Icon}
-              size={size}
+              iconSize={size}
               label={t(labelKey)}
               className={`title-bar__button ${danger ? "is-danger" : ""}`.trim()}
               onClick={() => invokeWindowAction(electronAPI, action || id)}

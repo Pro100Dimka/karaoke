@@ -1,12 +1,11 @@
 import { useEffect, useRef } from "react";
 import { useRadio } from "../../../../contexts/radio";
+import { clamp01 as clamp } from "../../../../utils/math";
 
 const ROWS = 36;
 const COLUMNS = 108;
 const TARGET_FRAME_TIME = 1000 / 30;
 const TAU = Math.PI * 2;
-
-const clamp = (value, min = 0, max = 1) => Math.min(max, Math.max(min, value));
 
 const hash = (x, y, seed = 0) => {
   const value = Math.sin(x * 127.1 + y * 311.7 + seed * 74.7) * 43758.5453;

@@ -1,8 +1,10 @@
+import { clamp as clampRange } from "../../../utils/math";
+
 export const KARAOKE_PREFERENCES_KEY = "karaoke-player-preferences";
 
 const clamp = (value, min, max, fallback) => {
   const number = Number(value);
-  return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback;
+  return Number.isFinite(number) ? clampRange(number, min, max) : fallback;
 };
 
 const boolean = (value, fallback) => {

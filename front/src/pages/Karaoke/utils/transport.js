@@ -1,4 +1,4 @@
-const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+import { clamp } from "../../../utils/math";
 
 export function clampPlaybackPosition(time, duration) {
   const value = Number(time);

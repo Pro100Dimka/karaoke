@@ -1,4 +1,4 @@
-import { IconButton } from "../../../../components/ui";
+import { IconButton } from "../../../../theme/ui";
 
 export default function MelodyEditorToolbarButton({
   icon,
@@ -11,6 +11,7 @@ export default function MelodyEditorToolbarButton({
 }) {
   return (
     <IconButton
+      unstyled
       icon={icon}
       label={label}
       disabled={disabled}
@@ -23,7 +24,7 @@ export default function MelodyEditorToolbarButton({
       ]
         .filter(Boolean)
         .join(" ")}
-      size={18}
+      iconSize={18}
     />
   );
 }
