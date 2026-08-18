@@ -66,11 +66,9 @@ def _apply_torch_cpu_worker_tuning(torch, settings: tuple[int, int] | None) -> N
     if (setter := getattr(torch, "set_num_threads", None)) is not None:
         setter(intra)
     if (setter := getattr(torch, "set_num_interop_threads", None)) is not None:
-        try:
+        # PyTorch only allows changing the inter-op pool before it has been used.
+        with suppress(RuntimeError):
             setter(inter)
-        except RuntimeError:
-            # PyTorch only allows changing the inter-op pool before it has been used.
-            pass
     print(
         f"[AI runtime] separation CPU tuning: intraop={intra}, interop={inter}, "
         f"inference_mode={'on' if env_flag('KARAOKE_CPU_INFERENCE_MODE') else 'off'}",

@@ -89,12 +89,9 @@ def refine_pitch_confidence(
             periodicity *= max(0.25, 1.0 - (lower_periodicity - periodicity) * 1.8)
 
         measured = clamp01(periodicity)
-        if fake_unity:
-            confidence = measured
-        else:
-            # If FCPE supplies genuine confidence, require agreement between the
-            # network and waveform periodicity instead of replacing either one.
-            confidence = math.sqrt(clamp01(frame.confidence) * measured)
+        # If FCPE supplies genuine confidence, require agreement between the
+        # network and waveform periodicity instead of replacing either one.
+        confidence = measured if fake_unity else math.sqrt(clamp01(frame.confidence) * measured)
         voiced = confidence >= 0.16
         output.append(
             PitchFrame(
