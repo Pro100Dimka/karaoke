@@ -902,6 +902,19 @@ body {
   text-align: center;
 }
 
+.karaoke-song-intro-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  inline-size: clamp(4rem, 9vw, 6rem);
+  block-size: clamp(4rem, 9vw, 6rem);
+  overflow: hidden;
+  border-radius: 1rem;
+  color: rgba(255, 255, 255, 0.7);
+  background: linear-gradient(160deg, var(--color-secondary), var(--color-bg-elevated));
+  box-shadow: 0 0.6rem 1.6rem rgba(0, 0, 0, 0.4);
+}
+
 .karaoke-song-intro-kicker {
   color: color-mix(in srgb, var(--color-primary) 66%, white);
   font: 800 0.68rem/1 var(--font-sans);

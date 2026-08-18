@@ -24,7 +24,7 @@ from .device import fallback_torch_device, select_torch_device
 
 _CLEAN = re.compile(r"[^\w]+", re.UNICODE)
 
-CTC_ALIGNMENT_VERSION = "v3-song-relative-window-local-retry"
+CTC_ALIGNMENT_VERSION = "v6-reject-dominant-internal-gap"
 
 
 @dataclass(frozen=True, slots=True)
@@ -725,11 +725,35 @@ class CTCWordAligner:
                 line_span = absolute_words[-1].end - absolute_words[0].start
                 # The minimum accepted span scales with the expected sung line
                 # duration and token density instead of a fixed millisecond rule.
-                min_span = max(minimum, expected * 0.18)
+                # Calibrated against a real production run of one song: two
+                # genuinely correct lines landed at 125% and 134% of their
+                # expected duration, while a visibly-broken line (the whole
+                # phrase compressed into under a second) landed at just 36%.
+                # 0.18, and even 0.35, both still clear that 36% floor. 0.6
+                # sits with real margin below the good lines and well above
+                # the bad one. A rejected line here is not lost: it falls
+                # through to the ASR/Qwen alignment tier below, so raising
+                # this floor only trades a wrong-but-plausible CTC timing for
+                # that safer fallback -- it does not need to hit the audio.
+                min_span = max(minimum, expected * 0.6)
+                # A wide-enough envelope can still hide a broken internal
+                # layout: one word anchored correctly (or on a noise/silence
+                # false positive) at one edge, a multi-second dead gap, then
+                # every remaining word crammed into what's left. The envelope
+                # span alone does not catch this -- reject when one gap
+                # between consecutive words eats more than half the line.
+                max_internal_gap = max(
+                    (
+                        max(0.0, b.start - a.end)
+                        for a, b in zip(absolute_words, absolute_words[1:])
+                    ),
+                    default=0.0,
+                )
                 return (
                     local.confidence >= 0.035
                     and line_span >= min_span
                     and absolute_words[0].start >= cursor - expected * 0.08
+                    and max_internal_gap <= line_span * 0.5
                 )
 
             # Local second pass only for a failed anchored line. It uses a much

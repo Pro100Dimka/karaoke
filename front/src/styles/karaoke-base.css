@@ -1145,16 +1145,16 @@
   inset-block-start: clamp(12.5rem, 24vh, 16rem);
   inset-block-end: auto;
 }
-/* A small cover thumbnail anchored just above the lyric block. Kept out of
-   .karaoke-lyrics entirely -- that rule stack is tuned across many
-   breakpoints with !important overrides for the "two stable lyric rows"
-   layout, and nesting anything inside it risks fighting that cascade. */
+/* A small cover thumbnail, one more row in .karaoke-lyrics's own flex column
+   (karaoke-polish.css sets display:flex/flex-direction:column/align-items:
+   center/gap there) -- letting it flow naturally, rather than absolutely
+   positioning it against that heavily !important-tuned block, is what keeps
+   it centered and spaced consistently with the lyric rows at every
+   breakpoint. */
 .karaoke-lyrics-cover {
-  position: absolute;
+  position: relative;
   z-index: 8;
-  inset-inline: 50% auto;
-  inset-block-start: clamp(8.5rem, 19dvh, 11.5rem);
-  transform: translateX(-50%);
+  flex-shrink: 0;
   inline-size: clamp(3rem, 6vw, 4.5rem);
   block-size: clamp(3rem, 6vw, 4.5rem);
   border-radius: var(--radius-lg);

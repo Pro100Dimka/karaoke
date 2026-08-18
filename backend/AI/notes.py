@@ -686,7 +686,17 @@ def _adaptive_lyric_timing(
     gap = float(statistics.median(gaps)) if gaps else max(min_note, typical * 0.18)
     pad = max(min_note * 0.55, min(typical * 0.16, gap * 0.75))
     merge = max(pad * 1.5, min(typical * 0.38, gap * 1.35))
-    nearest = max(min_note * 0.65, min(pad, typical * 0.18))
+    # _filter_to_lyric_phrases() already pads every lyric-active interval by
+    # `pad` before testing overlap. `nearest` is a *second*, independent
+    # tolerance applied on top of that padded edge for notes with zero
+    # overlap -- it exists only to excuse forced-alignment timing jitter of a
+    # few tens of ms, not to relitigate where the phrase boundary is. Letting
+    # it grow to the same scale as `pad` stacks both tolerances (seen in
+    # practice: ~150ms total past a word's real end), which is enough for a
+    # short noise/bleed-through pitch blip inside a genuine singing pause to
+    # get mistaken for a real note. Cap it well below `pad` at a fixed
+    # jitter-sized ceiling.
+    nearest = min(0.03, max(min_note * 0.65, min(pad, typical * 0.18)))
     return pad, merge, nearest
 
 

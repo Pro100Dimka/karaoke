@@ -6,7 +6,7 @@ import AuroraWorld from "./aurora-world";
 import KaraokeLyricLine from "./karaoke-lyric-line";
 import MelodyRoll from "./melody-roll";
 
-function Lyrics({ lyrics, currentLine, upcomingLine, nextLine, currentTime }) {
+function Lyrics({ songId, lyrics, currentLine, upcomingLine, nextLine, currentTime }) {
   const activeLine = currentLine || upcomingLine;
   const activeClassName = [
     "karaoke-lyric karaoke-lyric-current",
@@ -18,6 +18,12 @@ function Lyrics({ lyrics, currentLine, upcomingLine, nextLine, currentTime }) {
     <div className="karaoke-lyrics">
       {!lyrics.length && (
         <p className="text-muted">{translateSaved("Синхронизированный текст недоступен")}</p>
+      )}
+
+      {/* Only while actual lyric text is on screen -- not for the whole
+          performance, and not once the song has finished. */}
+      {activeLine && songId && (
+        <SongCoverArt song={{ id: songId }} className="karaoke-lyrics-cover" iconSize={20} />
       )}
 
       {activeLine ? (
@@ -129,6 +135,9 @@ export default function KaraokePerformanceStage(props) {
         aria-hidden={!sceneIntroVisible}
       >
         <div className="karaoke-song-intro-card">
+          {songId && (
+            <SongCoverArt song={{ id: songId }} className="karaoke-song-intro-art" iconSize={26} />
+          )}
           <span className="karaoke-song-intro-kicker">{translateSaved("Сейчас прозвучит")}</span>
           <strong>{sceneIntro?.title || translateSaved("Караоке")}</strong>
           {sceneIntro?.artist && (
@@ -144,9 +153,6 @@ export default function KaraokePerformanceStage(props) {
       </div>
 
       {showNotes && notes.length > 0 && <MelodyRoll {...props} />}
-      {showLyrics && songId && (
-        <SongCoverArt song={{ id: songId }} className="karaoke-lyrics-cover" iconSize={20} />
-      )}
       {showLyrics && (
         <Lyrics {...props} lyrics={lyrics} currentTime={currentTime} nextLine={nextLine} />
       )}
