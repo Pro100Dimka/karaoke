@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
@@ -10,12 +9,13 @@ import numpy as np
 from .audio import load_mono
 from .engines.text import tokenize
 from .models import Word
+from .utils.env import env_flag
 
 DEBUG_ENV = "KARAOKE_ALIGNMENT_DEBUG"
 
 
 def alignment_debug_enabled() -> bool:
-    return str(os.getenv(DEBUG_ENV, "")).strip().lower() in {"1", "true", "yes", "on"}
+    return env_flag(DEBUG_ENV)
 
 
 def _word_dict(word: Word) -> dict[str, Any]:

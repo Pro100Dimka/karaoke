@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-import os
 import re
 import sys
 import tempfile
@@ -55,6 +54,7 @@ from .pitch_post import (
 from .profiler import RuntimeTelemetry, environment_info
 from .quality import evaluate_quality
 from .syllables import SYLLABLE_ALIGNER_VERSION, VOWELS, align_syllables
+from .utils.env import env_flag
 from .utils.io import read_json, write_json_atomic, write_text_atomic
 from .validators import (
     validate_audio,
@@ -631,9 +631,7 @@ def _print_full_lyrics(source: str, text: str, query: str | None) -> None:
         f"[lyrics] result: source={source or 'unknown'} query={query or '<empty>'!r} "
         f"lines={line_count} chars={len(text)}"
     )
-    if os.getenv("KARAOKE_LYRICS_LOG_TEXT", "").strip().lower() in {
-        "1", "true", "yes", "on"
-    }:
+    if env_flag("KARAOKE_LYRICS_LOG_TEXT"):
         _lyrics_console("[lyrics] FOUND TEXT BEGIN")
         _lyrics_console(text)
         _lyrics_console("[lyrics] FOUND TEXT END")

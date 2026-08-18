@@ -18,6 +18,7 @@ from ..model_registry import get_model
 from ..models import Word
 from ..profiler import profile_operation
 from ..syllables import VOWELS
+from ..utils.env import env_flag
 from .base import Aligner, Transcriber
 from .ctc_alignment import CTC_ALIGNMENT_VERSION, CTCWordAligner, _language_code
 from .device import fallback_torch_device, select_torch_device
@@ -4183,12 +4184,7 @@ class Qwen3ForcedAligner(Aligner):
             # Qwen fallback lines are evaluated.
             self._ctc.release()
 
-        require_ctc = os.getenv("KARAOKE_AI_REQUIRE_CTC", "0").strip().casefold() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
+        require_ctc = env_flag("KARAOKE_AI_REQUIRE_CTC")
         ctc_language = _language_code(language, text)
         if require_ctc and ctc_language in {"ru", "uk"} and not ctc_attempted:
             resource = getattr(self._ctc, "last_resource_diagnostics", {}).get(ctc_language, {})

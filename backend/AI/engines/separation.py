@@ -20,13 +20,9 @@ import soundfile as sf
 from ..errors import AICoreError, EngineUnavailableError
 from ..profiler import profile_operation, record_operation
 from ..runtime import selected_backend
+from ..utils.env import env_flag
 from .base import Separator
 from .device import accelerator_failure
-
-
-
-def _truthy_env(name: str) -> bool:
-    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _cpu_thread_settings() -> tuple[int, int]:
@@ -53,7 +49,7 @@ def _cpu_thread_settings() -> tuple[int, int]:
 
 
 def _prepare_cpu_worker_environment() -> tuple[int, int] | None:
-    if not _truthy_env("KARAOKE_CPU_TUNING"):
+    if not env_flag("KARAOKE_CPU_TUNING"):
         return None
     intra, inter = _cpu_thread_settings()
     # PyTorch/OpenMP read these values during runtime initialization. The worker
@@ -77,7 +73,7 @@ def _apply_torch_cpu_worker_tuning(torch, settings: tuple[int, int] | None) -> N
             pass
     print(
         f"[AI runtime] separation CPU tuning: intraop={intra}, interop={inter}, "
-        f"inference_mode={'on' if _truthy_env('KARAOKE_CPU_INFERENCE_MODE') else 'off'}",
+        f"inference_mode={'on' if env_flag('KARAOKE_CPU_INFERENCE_MODE') else 'off'}",
         flush=True,
     )
 
@@ -201,7 +197,7 @@ def _run_persistent_msst_worker(
                     context = (
                         torch.inference_mode()
                         if cpu_settings is not None
-                        and _truthy_env("KARAOKE_CPU_INFERENCE_MODE")
+                        and env_flag("KARAOKE_CPU_INFERENCE_MODE")
                         and hasattr(torch, "inference_mode")
                         else nullcontext()
                     )

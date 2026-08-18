@@ -6,6 +6,8 @@ import hashlib
 import os
 from dataclasses import dataclass
 
+from .utils.env import env_flag
+
 
 @dataclass(frozen=True, slots=True)
 class ShadowPolicy:
@@ -15,18 +17,13 @@ class ShadowPolicy:
 
     @classmethod
     def from_env(cls, prefix: str = "KARAOKE_AI_CTC_SHADOW") -> ShadowPolicy:
-        enabled = os.getenv(prefix, "0").strip().casefold() in {"1", "true", "yes", "on"}
+        enabled = env_flag(prefix)
         raw_rate = os.getenv(f"{prefix}_RATE", "1" if enabled else "0")
         try:
             rate = float(raw_rate)
         except ValueError:
             rate = 0.0
-        resident = os.getenv(f"{prefix}_RESIDENT", "0").strip().casefold() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
+        resident = env_flag(f"{prefix}_RESIDENT")
         return cls(enabled, min(1.0, max(0.0, rate)), resident)
 
     def selects(self, identity: str) -> bool:

@@ -14,6 +14,8 @@ from difflib import SequenceMatcher
 from html.parser import HTMLParser
 from pathlib import Path
 
+from .utils.env import env_flag
+
 _LRC_TIME = re.compile(
     r"\[(?P<minutes>\d{1,3}):(?P<seconds>\d{1,2}(?:[.:]\d+)?)\]")
 _META = re.compile(r"^\[(?:ar|ti|al|by|offset|re|ve):.*?\]\s*$", re.I)
@@ -217,9 +219,7 @@ def _lyrics_log(message: str) -> None:
 
 def _lyrics_debug(message: str) -> None:
     """Write provider/candidate diagnostics only when explicitly requested."""
-    if os.getenv("KARAOKE_LYRICS_VERBOSE", "").strip().lower() not in {
-        "1", "true", "yes", "on"
-    }:
+    if not env_flag("KARAOKE_LYRICS_VERBOSE"):
         return
     _lyrics_log(message)
 
