@@ -56,6 +56,13 @@ class ProgressReporter:
         if not self.progress_file:
             return
         self.progress_file.parent.mkdir(parents=True, exist_ok=True)
+        # Write the total size immediately instead of waiting for the first
+        # per-model event or the background thread's first 1s tick: the
+        # installer's progress bar reads this file and, until total_bytes
+        # shows up in it, has nothing to report but a static "preparing..."
+        # label -- indistinguishable from being stuck, even though the total
+        # size (unlike the download itself) was already known up front.
+        self.write()
         self._thread = threading.Thread(target=self._run, name="model-progress", daemon=True)
         self._thread.start()
 

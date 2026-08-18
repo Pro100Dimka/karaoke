@@ -272,8 +272,8 @@ describe("audio settings source", () => {
       [
         {
           audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
+            echoCancellation: false,
+            noiseSuppression: false,
             autoGainControl: false,
             channelCount: 1,
             deviceId: { exact: "mic" }
@@ -283,8 +283,8 @@ describe("audio settings source", () => {
       [
         {
           audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
+            echoCancellation: false,
+            noiseSuppression: false,
             autoGainControl: false,
             channelCount: 1
           }
@@ -387,8 +387,8 @@ describe("audio settings source", () => {
       [
         {
           audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
+            echoCancellation: false,
+            noiseSuppression: false,
             autoGainControl: false,
             channelCount: 1
           }
@@ -457,8 +457,8 @@ describe("audio settings source", () => {
     await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
     expect(getUserMedia).toHaveBeenLastCalledWith({
       audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
+        echoCancellation: false,
+        noiseSuppression: false,
         autoGainControl: false,
         channelCount: 1,
         deviceId: { exact: "new-mic" }

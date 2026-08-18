@@ -513,8 +513,9 @@ describe("karaoke page", () => {
     const page = render(<Karaoke />);
     expect(mocks.consoleProps.currentTempo).toBe(120);
     expect(mocks.consoleProps.compactKey).toContain("D");
-    const consoleToggle = page.container.querySelectorAll( ".karaoke-stage-action"
-    )[1];
+    // Stage actions render in a fixed order: back, fullscreen, console
+    // visibility toggle, radio.
+    const consoleToggle = page.container.querySelectorAll(".karaoke-stage-action")[2];
     fireEvent.click(consoleToggle);
     expect(mocks.controls.showControls).toHaveBeenCalled();
     page.unmount();

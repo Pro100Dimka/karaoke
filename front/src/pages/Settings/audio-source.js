@@ -10,6 +10,7 @@ import { translateSaved } from "../../i18n/runtime";
 import { POLLING_INTERVALS } from "../../runtime-config";
 import { getAudioPreferences, saveAudioPreferences } from "../../utils/audio-preferences";
 import { getErrorMessage } from "../../utils/errors";
+import { MICROPHONE_CAPTURE_CONSTRAINTS } from "../../utils/microphone-capture-constraints";
 import {
   groupBrowserAudioDevices,
   normalizeAudioRuntimeSettings
@@ -152,19 +153,7 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
     stopStream(monitorStream.current);
     monitorStream.current = null;
     const selected = preferences.monitorInputDeviceId;
-    const base = {
-      echoCancellation: true,
-      noiseSuppression: true,
-      // Auto gain control constantly renormalizes the captured level, which
-      // makes this meter read as "full" almost regardless of how loud the
-      // microphone actually is -- exactly the number a device-level check is
-      // supposed to reveal. Every other capture path in the app (pitch
-      // detection, room voice, direct monitoring/recording) already disables
-      // it for the same reason; keep this preview consistent with what the
-      // user will actually get.
-      autoGainControl: false,
-      channelCount: 1
-    };
+    const base = { ...MICROPHONE_CAPTURE_CONSTRAINTS, channelCount: 1 };
     const candidates =
       selected && selected !== "default"
         ? [{ ...base, deviceId: { exact: selected } }, base]

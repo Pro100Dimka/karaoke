@@ -20,7 +20,7 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppName}
-DefaultDirName={userdocs}\{#MyAppName}
+DefaultDirName={code:GetDefaultDir}
 DefaultGroupName={#MyAppName}
 DisableDirPage=no
 DisableProgramGroupPage=yes
@@ -30,7 +30,13 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
 WizardStyle=modern
-ShowLanguageDialog=no
+; Shown once before the wizard starts; Inno then localizes every built-in
+; wizard string (Next/Back/Cancel, page titles, etc.) automatically for the
+; rest of the run. The custom language combo on the preferences page only
+; ever wrote its choice to the installed app's settings.json -- it never
+; touched the installer's own UI language, so switching it there had no
+; visible effect until after installation.
+ShowLanguageDialog=yes
 SetupIconFile={#SetupIcon}
 Compression=none
 SolidCompression=no
@@ -102,6 +108,26 @@ var
   ModelProgressTimerID: Integer;
   ModelProgressPath: String;
 
+function GetDefaultDir(Param: String): String;
+var
+  Drive: Char;
+begin
+  // The system drive is usually the small/fast one Windows itself lives on;
+  // a multi-gigabyte app plus its AI models is more comfortable on any other
+  // drive when one exists. {sd} is Inno's system drive constant ("C:" on
+  // almost every machine, but this stays correct if it ever isn't).
+  Result := ExpandConstant('{userdocs}\{#MyAppName}');
+  for Drive := 'D' to 'Z' do
+  begin
+    if (Drive + ':\') = ExpandConstant('{sd}\') then Continue;
+    if DirExists(Drive + ':\') then
+    begin
+      Result := Drive + ':\{#MyAppName}';
+      Break;
+    end;
+  end;
+end;
+
 function SetTimer(hWnd, nIDEvent, uElapse, lpTimerFunc: Longword): Longword;
 external 'SetTimer@user32.dll stdcall';
 
@@ -128,6 +154,21 @@ begin
 end;
 
 function SelectedTheme: String; forward;
+
+function ActiveLanguageComboIndex: Integer;
+begin
+  // LanguageCombo lists Ukrainian/Russian/English (0/1/2) -- a different
+  // order than [Languages] -- so the language picked in Inno's own dialog
+  // (ActiveLanguage) needs mapping onto the matching combo entry, otherwise
+  // the app-language default would silently contradict the installer's own
+  // just-chosen UI language.
+  case ActiveLanguage of
+    'russian': Result := 1;
+    'english': Result := 2;
+  else
+    Result := 0; // ukrainian
+  end;
+end;
 
 procedure ThemeChanged(Sender: TObject);
 begin
@@ -179,7 +220,7 @@ begin
   LanguageCombo.Items.Add('Українська');
   LanguageCombo.Items.Add('Русский');
   LanguageCombo.Items.Add('English');
-  LanguageCombo.ItemIndex := 0;
+  LanguageCombo.ItemIndex := ActiveLanguageComboIndex;
 
   ThemeLabel := TNewStaticText.Create(PreferencesPage);
   ThemeLabel.Parent := PreferencesPage.Surface;

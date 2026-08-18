@@ -75,3 +75,32 @@ test("performance profile honors reduced motion and safely skips missing APIs", 
   );
   assert.equal(applyPerformanceProfile({ navigator: {} }), false);
 });
+
+test("processing load temporarily forces the reduced profile and restores it", async () => {
+  const { setProcessingLoadActive } = await loadProfile();
+  const documentElement = { dataset: {} };
+  const environment = { document: { documentElement } };
+
+  setProcessingLoadActive(true, environment);
+  assert.equal(documentElement.dataset.performance, "reduced");
+  setProcessingLoadActive(false, environment);
+  assert.equal(documentElement.dataset.performance, undefined);
+});
+
+test("processing load never turns off a hardware-forced reduced profile", async () => {
+  const { setProcessingLoadActive } = await loadProfile();
+  const documentElement = { dataset: { performance: "reduced" } };
+  const environment = { document: { documentElement } };
+
+  // The very first call captures the pre-existing hardware baseline; since it
+  // was already reduced, processing load must not touch it either way.
+  setProcessingLoadActive(true, environment);
+  assert.equal(documentElement.dataset.performance, "reduced");
+  setProcessingLoadActive(false, environment);
+  assert.equal(documentElement.dataset.performance, "reduced");
+});
+
+test("processing load is a no-op without a document", async () => {
+  const { setProcessingLoadActive } = await loadProfile();
+  assert.doesNotThrow(() => setProcessingLoadActive(true, {}));
+});

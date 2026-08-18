@@ -402,6 +402,29 @@ describe("navigation and karaoke hooks", () => {
     );
   });
 
+  test("fullscreen forces controls to auto-hide even when the preference is off", () => {
+    // Fullscreen is meant to be an unobstructed view: the console must still
+    // auto-hide there even if the user disabled the general preference for
+    // windowed playback.
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const setInterval = vi.spyOn(window, "setInterval");
+    const { result, rerender } = renderHook(
+      ({ isFullscreen }) => useKaraokeControls({ autoHideEnabled: false, isFullscreen }),
+      { initialProps: { isFullscreen: false } }
+    );
+    expect(setInterval).not.toHaveBeenCalled();
+
+    rerender({ isFullscreen: true });
+    expect(setInterval).toHaveBeenCalledOnce();
+    const checkVisibility = setInterval.mock.calls[0][0];
+    act(() => { vi.setSystemTime(2200); checkVisibility(); });
+    expect(result.current.controlsVisible).toBe(false);
+
+    rerender({ isFullscreen: false });
+    expect(result.current.controlsVisible).toBe(true);
+  });
+
   test("enables control auto-hide by default", () => {
     vi.useFakeTimers();
     const setInterval = vi.spyOn(window, "setInterval");

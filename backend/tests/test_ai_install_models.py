@@ -63,6 +63,25 @@ def test_progress_reporter_counts_writes_and_finishes(monkeypatch, tmp_path):
     no_file.finish(False)
 
 
+def test_progress_reporter_writes_total_size_immediately_on_start(monkeypatch, tmp_path):
+    # The installer's progress bar reads this file and has nothing to show
+    # until total_bytes appears in it; without an immediate write here, the
+    # UI showed a static "preparing..." label -- indistinguishable from being
+    # stuck -- for as long as per-model validity checks took before the
+    # first real download event, even though the total size was already
+    # known before any of that began.
+    file_model, snapshot, _ = specs()
+    monkeypatch.setattr(install, "MODELS", (file_model, snapshot))
+    reporter = install.ProgressReporter(tmp_path, tmp_path / "progress.txt")
+    reporter.start()
+    try:
+        payload = reporter.progress_file.read_text()
+        assert f"total_bytes={reporter.total_bytes}" in payload
+        assert "downloaded_bytes=0" in payload
+    finally:
+        reporter.finish(True)
+
+
 def test_progress_reporter_tolerates_size_and_write_errors(monkeypatch, tmp_path):
     file_model, _, _ = specs()
     monkeypatch.setattr(install, "MODELS", (file_model,))

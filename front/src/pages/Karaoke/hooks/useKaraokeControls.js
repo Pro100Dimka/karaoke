@@ -3,9 +3,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 const CONTROLS_VISIBLE_MS = 2200;
 const VISIBILITY_CHECK_MS = 250;
 
-export default function useKaraokeControls({ autoHideEnabled = true } = {}) {
+export default function useKaraokeControls({ autoHideEnabled = true, isFullscreen = false } = {}) {
   const [controlsVisible, setControlsVisible] = useState(true);
   const lastActivityRef = useRef(Date.now());
+  // Fullscreen is meant to be an unobstructed view: the transport console
+  // must auto-hide there even if the user turned the general auto-hide
+  // preference off for windowed playback.
+  const effectiveAutoHide = autoHideEnabled || isFullscreen;
 
   const showControls = useCallback(
     () => {
@@ -25,14 +29,14 @@ export default function useKaraokeControls({ autoHideEnabled = true } = {}) {
   );
 
   useEffect(() => {
-    if (!autoHideEnabled) return undefined;
+    if (!effectiveAutoHide) return undefined;
 
     const watcher = window.setInterval(() => {
       setControlsVisible(Date.now() - lastActivityRef.current < CONTROLS_VISIBLE_MS);
     }, VISIBILITY_CHECK_MS);
 
     return () => window.clearInterval(watcher);
-  }, [autoHideEnabled]);
+  }, [effectiveAutoHide]);
 
   useEffect(
     () => {
@@ -45,7 +49,7 @@ export default function useKaraokeControls({ autoHideEnabled = true } = {}) {
 
   useEffect(() => {
     showControls();
-  }, [autoHideEnabled, showControls]);
+  }, [effectiveAutoHide, showControls]);
 
   const revealControls = useCallback(() => {
     // Scene transitions call hideControls() unconditionally (to black out the

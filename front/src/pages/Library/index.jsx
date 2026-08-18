@@ -11,6 +11,7 @@ import { translateSaved } from "../../i18n/runtime";
 import { POLLING_INTERVALS } from "../../runtime-config";
 import { Grid, Stack } from "../../theme/ui";
 import { getErrorMessage } from "../../utils/errors";
+import { setProcessingLoadActive } from "../../utils/performance-profile";
 import { setGlobalRouteBlackout } from "../../utils/route-blackout";
 import PerformanceAnalysisModal from "../Karaoke/performance-analysis-modal";
 import LibraryBackdrop from "./components/backdrop";
@@ -224,6 +225,11 @@ export default function Library({ onOpenSongSettings }) {
     }
   }, [confirmDialog, notify, processingSong, refreshSongs]);
   const currentSongs = mergeSongProcessingStatus(songs, processingStatus);
+  const anySongProcessing = hasActiveSongProcessing(currentSongs);
+  useEffect(() => {
+    setProcessingLoadActive(anySongProcessing);
+    return () => setProcessingLoadActive(false);
+  }, [anySongProcessing]);
   const localVisibleSongs = getLocalVisibleSongs(currentSongs, hiddenSongIds);
   const visibleSongs = resolveVisibleSongs({
     localSongs: localVisibleSongs,

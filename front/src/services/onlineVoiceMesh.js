@@ -1,6 +1,7 @@
 // eslint-disable-next-line import/extensions
 import { translateSaved } from "../i18n/runtime";
 import { closeAudioContext, closeAudioContextQuietly } from "../utils/audio-context";
+import { MICROPHONE_CAPTURE_CONSTRAINTS } from "../utils/microphone-capture-constraints";
 import { createStudioMicrophoneGraph } from "./microphoneStudioQuality";
 // Audio is transferred directly between participants. The Worker is used only
 // for signalling, therefore microphone data is never stored in the cloud.
@@ -64,9 +65,7 @@ export default class OnlineVoiceMesh {
     const startPromise = navigator.mediaDevices
       .getUserMedia({
         audio: {
-          echoCancellation: false,
-          noiseSuppression: true,
-          autoGainControl: false,
+          ...MICROPHONE_CAPTURE_CONSTRAINTS,
           channelCount: 1,
           sampleRate: { ideal: 48_000 },
           sampleSize: { ideal: 24 }

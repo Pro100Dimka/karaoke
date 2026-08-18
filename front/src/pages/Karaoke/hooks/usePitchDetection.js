@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { closeAudioContext, closeAudioContextQuietly } from "../../../utils/audio-context";
+import { MICROPHONE_CAPTURE_CONSTRAINTS } from "../../../utils/microphone-capture-constraints";
 import { detectMidiFromAnalyser } from "../utils/pitch";
 
 export default function usePitchDetection({
-  browserMonitorRef,
   isPlaying,
   monitorInputDeviceId,
   monitoringEnabled
@@ -45,40 +45,26 @@ export default function usePitchDetection({
     resetPitch();
     const start = async () => {
       try {
-        const monitor = browserMonitorRef.current;
-        stream = monitor?.stream;
-        context = monitor?.context;
-        const streamHasLiveAudio = Boolean(
-          stream?.getAudioTracks?.().some((track) => track.readyState === "live")
-        );
-        if (!streamHasLiveAudio) {
-          const baseAudio = {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false
-          };
-          const candidates =
-            monitorInputDeviceId && monitorInputDeviceId !== "default"
-              ? [{ ...baseAudio, deviceId: { exact: monitorInputDeviceId } }, baseAudio]
-              : [baseAudio];
-          for (const audio of candidates) {
-            try {
-              const candidateStream = await navigator.mediaDevices.getUserMedia({ audio });
-              if (!candidateStream) continue;
-              stream = candidateStream;
-              ownsStream = true;
-              break;
-            } catch {
-              // Try the next capture constraint set.
-            }
+        const baseAudio = { ...MICROPHONE_CAPTURE_CONSTRAINTS };
+        const candidates =
+          monitorInputDeviceId && monitorInputDeviceId !== "default"
+            ? [{ ...baseAudio, deviceId: { exact: monitorInputDeviceId } }, baseAudio]
+            : [baseAudio];
+        for (const audio of candidates) {
+          try {
+            const candidateStream = await navigator.mediaDevices.getUserMedia({ audio });
+            if (!candidateStream) continue;
+            stream = candidateStream;
+            ownsStream = true;
+            break;
+          } catch {
+            // Try the next capture constraint set.
           }
-          if (!stream) throw new Error();
         }
-        if (!context || context.state === "closed") {
-          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-          context = new AudioContextClass({ latencyHint: "interactive" });
-          ownsContext = true;
-        }
+        if (!stream) throw new Error();
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        context = new AudioContextClass({ latencyHint: "interactive" });
+        ownsContext = true;
         if (cancelled) {
           // Cancellation can only interleave with the awaited capture above,
           // so this stream is necessarily owned by this effect.
@@ -185,6 +171,6 @@ export default function usePitchDetection({
       if (ownsStream) stream.getTracks().forEach((track) => track.stop());
       if (ownsContext) closeAudioContextQuietly(context);
     };
-  }, [browserMonitorRef, isPlaying, monitorInputDeviceId, monitoringEnabled]);
+  }, [isPlaying, monitorInputDeviceId, monitoringEnabled]);
   return { sungMidi, isPitchDetected, isPitchAttacking, pitchRestProgress };
 }

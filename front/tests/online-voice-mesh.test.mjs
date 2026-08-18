@@ -124,7 +124,7 @@ describe("online voice mesh", () => {
     expect(capture).toHaveBeenCalledWith({
       audio: {
         echoCancellation: false,
-        noiseSuppression: true,
+        noiseSuppression: false,
         autoGainControl: false,
         channelCount: 1,
         sampleRate: { ideal: 48_000 },

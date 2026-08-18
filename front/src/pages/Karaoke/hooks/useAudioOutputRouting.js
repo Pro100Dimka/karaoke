@@ -1,13 +1,11 @@
 import { useEffect } from "react";
 import { api } from "../../../api/client";
-import { closeAudioContextQuietly } from "../../../utils/audio-context";
 import { findDriverOutputDevice, findMatchingBrowserOutput } from "../utils/audio-settings";
 
 export default function useAudioOutputRouting(options) {
   const {
     audioDriver,
     audioSettings,
-    browserMonitorRef,
     directOutputDeviceId,
     directOutputDevices,
     instrumentalRef,
@@ -67,17 +65,6 @@ export default function useAudioOutputRouting(options) {
       active = false;
     };
   }, [directOutputDeviceId, directOutputDevices, instrumentalRef, videoRef, vocalsRef]);
-
-  useEffect(
-    () => () => {
-      const monitor = browserMonitorRef.current;
-      monitor?.stream?.getTracks?.().forEach((track) => track.stop());
-      if (monitor?.context && monitor.context.state !== "closed")
-        closeAudioContextQuietly(monitor.context);
-      browserMonitorRef.current = null;
-    },
-    [browserMonitorRef]
-  );
 
   useEffect(
     () => {

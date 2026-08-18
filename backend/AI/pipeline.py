@@ -30,7 +30,7 @@ from .engines.text import (
     tokenize,
 )
 from .errors import EngineUnavailableError, InvalidArtifactError, ProcessingCancelledError
-from .karaoke_timeline import build_karaoke_song_map
+from .karaoke_timeline import KARAOKE_TIMELINE_VERSION, build_karaoke_song_map
 from .locks import ThreadFileLock
 from .lyrics_sources import discover_lyrics
 from .midi import write_midi
@@ -79,7 +79,7 @@ from .vocal_preprocess import (
 ProgressCallback = Callable[[str, float, str], None]
 CancelCallback = Callable[[], bool]
 PIPELINE_LOCK_TIMEOUT_SECONDS = 180.0
-CANONICAL_NORMALIZATION_VERSION = "v4-vowel-weighted-interpolation"
+CANONICAL_NORMALIZATION_VERSION = "v5-vowel-weighted-interpolation"
 
 
 def _bound_word_durations(words: list[Word]) -> list[Word]:
@@ -1243,8 +1243,6 @@ class KaraokePipeline:
             alignment_validators = {
                 words_path: lambda path: validate_json(path, ("text", "words")),
             }
-            with open(r"D:\Git\karaoke\debug_final.txt", "a", encoding="utf-8") as _dbg:
-                _dbg.write(f"VERSION_CHECK={LONG_TEXT_ALIGNMENT_VERSION} key={alignment_key}\n")
             if self._cache_hit(
                 cache, "alignment", alignment_key, alignment_outputs, alignment_validators
             ):
@@ -1583,6 +1581,7 @@ class KaraokePipeline:
                 "key": music_analysis.get("key"),
                 "tempo": tempo_key,
                 "build": AI_BUILD_ID,
+                "timeline_builder": KARAOKE_TIMELINE_VERSION,
             },
         )
         if self._cache_hit(

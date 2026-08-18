@@ -602,6 +602,12 @@ function createWindow() {
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
+  const notifyFullscreenChange = (isFullScreen) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send("window:fullscreen-changed", isFullScreen);
+  };
+  mainWindow.on("enter-full-screen", () => notifyFullscreenChange(true));
+  mainWindow.on("leave-full-screen", () => notifyFullscreenChange(false));
 }
 
 function handleTrustedIpc(channel, handler) {
@@ -615,6 +621,11 @@ handleTrustedIpc("window:maximize", () => {
   else mainWindow.maximize();
 });
 handleTrustedIpc("window:close", () => mainWindow?.close());
+handleTrustedIpc("window:toggleFullscreen", () => {
+  if (!mainWindow) return false;
+  mainWindow.setFullScreen(!mainWindow.isFullScreen());
+  return mainWindow.isFullScreen();
+});
 handleTrustedIpc("shell:openSongFolder", async (target) => {
   const request = typeof target === "string" ? { path: target } : target || {};
   const songsDir = await resolveSongOutputDir();

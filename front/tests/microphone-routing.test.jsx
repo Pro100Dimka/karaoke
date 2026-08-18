@@ -209,7 +209,6 @@ describe("audio output routing", () => {
     const options = {
       audioDriver: "asio",
       audioSettings: { asio_driver_name: "Focusrite ASIO" },
-      browserMonitorRef: { current: null },
       directOutputDeviceId: "",
       directOutputDevices: [{ index: 2, name: "Focusrite USB", is_asio: true }],
       instrumentalRef,
@@ -238,7 +237,6 @@ describe("audio output routing", () => {
     const base = {
       audioDriver: "auto",
       audioSettings: null,
-      browserMonitorRef: { current: null },
       directOutputDeviceId: "",
       directOutputDevices: [{ index: 2, name: "Focusrite", is_asio: true }],
       instrumentalRef: { current: null },
@@ -293,7 +291,6 @@ describe("audio output routing", () => {
     const base = {
       audioDriver: "auto",
       audioSettings: {},
-      browserMonitorRef: { current: null },
       directOutputDevices: [],
       instrumentalRef: { current: null },
       setDirectOutputDeviceId: vi.fn(),
@@ -331,18 +328,12 @@ describe("audio output routing", () => {
     ).not.toThrow();
   });
 
-  test("releases browser and backend monitoring on shutdown", async () => {
-    const stop = vi.fn();
-    const close = vi.fn().mockRejectedValue(new Error("close"));
+  test("releases backend monitoring on shutdown", async () => {
     mocks.releaseDirectMonitoring.mockRejectedValueOnce(new Error("release"));
-    const browserMonitorRef = {
-      current: { stream: { getTracks: () => [{ stop }] }, context: { state: "running", close } }
-    };
     const hook = renderHook(() =>
       useAudioOutputRouting({
         audioDriver: "auto",
         audioSettings: {},
-        browserMonitorRef,
         directOutputDeviceId: "",
         directOutputDevices: [],
         instrumentalRef: { current: null },
@@ -356,63 +347,9 @@ describe("audio output routing", () => {
     window.dispatchEvent(new Event("pagehide"));
     expect(mocks.releaseDirectMonitoring).toHaveBeenCalledOnce();
     hook.unmount();
-    expect(stop).toHaveBeenCalledOnce();
-    expect(close).toHaveBeenCalledOnce();
-    expect(browserMonitorRef.current).toBeNull();
     window.dispatchEvent(new Event("pagehide"));
     expect(mocks.releaseDirectMonitoring).toHaveBeenCalledOnce();
     await act(async () => Promise.resolve());
-  });
-
-  test("skips closed monitors and cleans old and replacement monitor refs", () => {
-    const oldStop = vi.fn();
-    const oldClose = vi.fn().mockResolvedValue(undefined);
-    const nextStop = vi.fn();
-    const nextClose = vi.fn().mockResolvedValue(undefined);
-    const oldRef = {
-      current: {
-        stream: { getTracks: () => [{ stop: oldStop }] },
-        context: { state: "running", close: oldClose }
-      }
-    };
-    const nextRef = {
-      current: {
-        stream: { getTracks: () => [{ stop: nextStop }] },
-        context: { state: "closed", close: nextClose }
-      }
-    };
-    const base = {
-      audioDriver: "auto",
-      audioSettings: {},
-      directOutputDeviceId: "",
-      directOutputDevices: [],
-      instrumentalRef: { current: null },
-      setDirectOutputDeviceId: vi.fn(),
-      updateMicrophone: vi.fn(),
-      videoRef: { current: null },
-      vocalsRef: { current: null }
-    };
-    const hook = renderHook(
-      ({ browserMonitorRef }) =>
-        useAudioOutputRouting({ ...base, browserMonitorRef }),
-      { initialProps: { browserMonitorRef: oldRef } }
-    );
-    hook.rerender({ browserMonitorRef: nextRef });
-    expect(oldStop).toHaveBeenCalledOnce();
-    expect(oldClose).toHaveBeenCalledOnce();
-    expect(oldRef.current).toBeNull();
-    hook.unmount();
-    expect(nextStop).toHaveBeenCalledOnce();
-    expect(nextClose).not.toHaveBeenCalled();
-    expect(nextRef.current).toBeNull();
-
-    for (const monitor of [{ context: null }, { stream: {}, context: null }]) {
-      const browserMonitorRef = { current: monitor };
-      const partial = renderHook(() => useAudioOutputRouting({ ...base, browserMonitorRef })
-      );
-      expect(() => partial.unmount()).not.toThrow();
-      expect(browserMonitorRef.current).toBeNull();
-    }
   });
 
   test("isolates browser device enumeration failures", async () => {
@@ -424,8 +361,7 @@ describe("audio output routing", () => {
       useAudioOutputRouting({
         audioDriver: "auto",
         audioSettings: {},
-        browserMonitorRef: { current: null },
-        directOutputDeviceId: 2,
+          directOutputDeviceId: 2,
         directOutputDevices: [{ index: 2, name: "Output" }],
         instrumentalRef: { current: null },
         setDirectOutputDeviceId: vi.fn(),
@@ -450,7 +386,6 @@ describe("audio output routing", () => {
     const base = {
       audioDriver: "auto",
       audioSettings: {},
-      browserMonitorRef: { current: null },
       directOutputDevices: [{ index: 2, name: "Output" }],
       instrumentalRef: { current: null },
       setDirectOutputDeviceId: vi.fn(),

@@ -8,6 +8,7 @@ import { translateSaved } from "../../i18n/runtime";
 import { POLLING_INTERVALS } from "../../runtime-config";
 import { getErrorMessage } from "../../utils/errors";
 import useAudioOutputRouting from "./hooks/useAudioOutputRouting";
+import useFullscreen from "./hooks/useFullscreen";
 import useKaraokeControls from "./hooks/useKaraokeControls";
 import useKaraokeHotkeys from "./hooks/useKaraokeHotkeys";
 import useKaraokeMediaSync from "./hooks/useKaraokeMediaSync";
@@ -109,12 +110,13 @@ export default function Karaoke({ onOpenAppSettings }) {
     return () => setRecordingActive(false);
   }, [isPlaying, recordingSessionId, setRecordingActive]);
   const autoStartRequested = Boolean(location.state?.autoPlay);
+  const { isFullscreen, toggleFullscreen } = useFullscreen();
   const { controlsVisible, hideControls, revealControls, showControls } = useKaraokeControls({
-    autoHideEnabled: autoHideConsole
+    autoHideEnabled: autoHideConsole,
+    isFullscreen
   });
   const currentTimeRef = useRef(currentTime);
   const durationRef = useRef(duration);
-  const browserMonitorRef = useRef(null);
   const playbackEndedRef = useRef(null);
   currentTimeRef.current = currentTime;
   durationRef.current = duration;
@@ -152,7 +154,6 @@ export default function Karaoke({ onOpenAppSettings }) {
   useAudioOutputRouting({
     audioDriver,
     audioSettings,
-    browserMonitorRef,
     directOutputDeviceId,
     directOutputDevices,
     instrumentalRef,
@@ -197,14 +198,11 @@ export default function Karaoke({ onOpenAppSettings }) {
   const lyricTime = currentTime;
   const { currentLine, upcomingLine, nextLine } = getLyricDisplayState(lyrics, lyricTime);
   const { sendYouTubeCommand, syncSecondaryMedia } = useKaraokeMediaSync({
-    browserMonitorRef,
     currentTimeRef,
     instrumentalRef,
     isPlaying,
     keyShift,
     melodyVolume,
-    microphoneEffects,
-    microphoneVolume,
     musicVolume,
     onPlaybackEndedRef: playbackEndedRef,
     setCurrentTime,
@@ -221,7 +219,6 @@ export default function Karaoke({ onOpenAppSettings }) {
     youTubeClipRef
   });
   const { sungMidi, isPitchDetected, isPitchAttacking, pitchRestProgress } = usePitchDetection({
-    browserMonitorRef,
     isPlaying,
     monitorInputDeviceId,
     monitoringEnabled
@@ -386,12 +383,14 @@ export default function Karaoke({ onOpenAppSettings }) {
         autoHideConsole,
         controlsVisible,
         hideControls,
+        isFullscreen,
         isPlaying,
         isRadioPlaying,
         returnToLibrary,
         sceneTransitioning,
         showControls,
         stageActionsVisible,
+        toggleFullscreen,
         toggleRadio
       }}
       performanceProps={{

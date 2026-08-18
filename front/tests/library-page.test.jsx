@@ -18,7 +18,8 @@ const mocks = vi.hoisted(() => ({
   roomOptions: null,
   pollOptions: [],
   deleteRecording: vi.fn(),
-  cancelProcessing: vi.fn()
+  cancelProcessing: vi.fn(),
+  setProcessingLoadActive: vi.fn()
 }));
 
 vi.mock("react-router-dom", () => ({
@@ -41,6 +42,9 @@ vi.mock("../src/hooks/usePolling", () => ({
     mocks.refreshes.push(refresh);
     return { data: null, error: null, ...value, refresh };
   }
+}));
+vi.mock("../src/utils/performance-profile", () => ({
+  setProcessingLoadActive: mocks.setProcessingLoadActive
 }));
 vi.mock("../src/api/client", () => ({
   api: {
@@ -182,6 +186,7 @@ beforeEach(() => {
   mocks.sharedRoom.openKaraoke.mockReset().mockResolvedValue(true);
   mocks.deleteRecording.mockReset().mockResolvedValue(undefined);
   mocks.cancelProcessing.mockReset().mockResolvedValue(undefined);
+  mocks.setProcessingLoadActive.mockReset();
   mocks.pollIndex = 0;
   mocks.pollOptions = [];
   mocks.refreshes = [];
@@ -204,6 +209,28 @@ describe("library page", () => {
     mocks.reloadSettings.mockRejectedValueOnce(new Error("settings"));
     fireEvent.click(result.getByTestId("open-room"));
     await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(2));
+  });
+
+  test("flags the reduced-performance profile while any song is processing or queued", async () => {
+    // Vocal separation already saturates the GPU on its own; the always-on
+    // background animations were competing with it for the same GPU and
+    // freezing the whole system, which only cleared up once the renderer's
+    // GPU process was killed by closing the window. Suppress those
+    // animations for as long as any song is actively processing/queued.
+    mocks.polls = [
+      { data: [{ id: "one", title: "One", status: "queued" }] },
+      { data: [] },
+      { data: null }
+    ];
+    const result = render(<Library />);
+    await waitFor(() => expect(mocks.setProcessingLoadActive).toHaveBeenCalledWith(true));
+
+    cleanup();
+    mocks.setProcessingLoadActive.mockClear();
+    mocks.pollIndex = 0;
+    mocks.polls = [{ data: songs }, { data: [] }, { data: null }];
+    render(<Library />);
+    await waitFor(() => expect(mocks.setProcessingLoadActive).toHaveBeenCalledWith(false));
   });
 
   test("navigates to karaoke after transition and handles room refusal", async () => {

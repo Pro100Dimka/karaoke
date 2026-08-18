@@ -1,4 +1,4 @@
-import { ArrowLeft, Radio, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, Minimize2, Maximize2, Radio, SlidersHorizontal } from "lucide-react";
 import { IconButton } from "../../../components/ui";
 import { translateSaved } from "../../../i18n/runtime";
 
@@ -6,12 +6,14 @@ export default function KaraokeStageActions({
   autoHideConsole,
   controlsVisible,
   hideControls,
+  isFullscreen,
   isPlaying,
   isRadioPlaying,
   returnToLibrary,
   sceneTransitioning,
   showControls,
   stageActionsVisible,
+  toggleFullscreen,
   toggleRadio
 }) {
   return (
@@ -27,6 +29,21 @@ export default function KaraokeStageActions({
         label={translateSaved("Назад в библиотеку")}
         onClick={returnToLibrary}
       />
+      {toggleFullscreen && (
+        <IconButton
+          unstyled
+          className={`karaoke-stage-action ${isFullscreen ? "is-active" : ""}`}
+          icon={isFullscreen ? Minimize2 : Maximize2}
+          size={22}
+          label={
+            isFullscreen
+              ? translateSaved("Выйти из полноэкранного режима")
+              : translateSaved("Полноэкранный режим")
+          }
+          aria-pressed={isFullscreen}
+          onClick={toggleFullscreen}
+        />
+      )}
       {!autoHideConsole && (
         <IconButton
           unstyled

@@ -170,7 +170,7 @@ def _words_from_items(items) -> list[Word]:
 
 
 ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v15-newline-phrase-join"
-LONG_TEXT_ALIGNMENT_VERSION = "v54-vowel-weighted-interpolation"
+LONG_TEXT_ALIGNMENT_VERSION = "v60-vowel-weighted-interpolation"
 FALLBACK_WORD_CONFIDENCE = 0.012
 
 

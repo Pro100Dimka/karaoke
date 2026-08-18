@@ -13,6 +13,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   minimize: () => ipcRenderer.invoke("window:minimize"),
   maximize: () => ipcRenderer.invoke("window:maximize"),
   close: () => ipcRenderer.invoke("window:close"),
+  toggleFullscreen: () => ipcRenderer.invoke("window:toggleFullscreen"),
+  onFullscreenChange: (callback) => {
+    const listener = (_event, isFullScreen) => callback(isFullScreen);
+    ipcRenderer.on("window:fullscreen-changed", listener);
+    return () => ipcRenderer.removeListener("window:fullscreen-changed", listener);
+  },
 
   openSongFolder: (song) => ipcRenderer.invoke("shell:openSongFolder", song),
 

@@ -21,16 +21,11 @@ const createProps = (overrides = {}) => {
   const vocals = media({ currentTime: 0, duration: 100 });
   const video = media({ currentTime: 0, duration: 80 });
   return {
-    browserMonitorRef: {
-      current: { gainNode: { gain: { value: 0 } }, effects: { apply: vi.fn() } }
-    },
     currentTimeRef: { current: 0 },
     instrumentalRef: { current: instrumental },
     isPlaying: false,
     keyShift: 0,
     melodyVolume: 0,
-    microphoneEffects: { echo: 0.2 },
-    microphoneVolume: 0.7,
     musicVolume: 0.8,
     onPlaybackEndedRef: { current: null },
     setCurrentTime: vi.fn(),
@@ -76,8 +71,6 @@ describe("karaoke media synchronization", () => {
     renderHook(() => useKaraokeMediaSync(props));
     expect(props.instrumentalRef.current.volume).toBeCloseTo(0.64);
     expect(props.vocalsRef.current.volume).toBeCloseTo(0.36);
-    expect(props.browserMonitorRef.current.gainNode.gain.value).toBe(0.7);
-    expect(props.browserMonitorRef.current.effects.apply).toHaveBeenCalledWith({ echo: 0.2 });
     expect(props.instrumentalRef.current.playbackRate).toBe(1.25);
     expect(props.youTubeClipRef.current.contentWindow.postMessage).toHaveBeenCalledWith(
       JSON.stringify({ event: "command", func: "setPlaybackRate", args: [1.25] }),
@@ -374,11 +367,9 @@ describe("karaoke media synchronization", () => {
     expect(props.setCurrentTime).toHaveBeenCalledWith(4);
   });
 
-  test("falls back to safe rates and tolerates missing monitor/media nodes", async () => {
+  test("falls back to safe rates and tolerates missing media nodes", async () => {
     const props = createProps({
       speed: "bad",
-      microphoneVolume: "bad",
-      browserMonitorRef: { current: null },
       vocalsRef: { current: null },
       videoRef: { current: null },
       isPlaying: true,
@@ -390,46 +381,29 @@ describe("karaoke media synchronization", () => {
     expect(props.instrumentalRef.current.playbackRate).toBe(1);
   });
 
-  test("clamps media rates and microphone gain at both boundaries", () => {
-    const props = createProps({ speed: 0.01, microphoneVolume: -2 });
+  test("clamps media rates at both boundaries", () => {
+    const props = createProps({ speed: 0.01 });
     const hook = renderHook((value) => useKaraokeMediaSync(value), { initialProps: props });
     expect(props.instrumentalRef.current.playbackRate).toBe(0.25);
-    expect(props.browserMonitorRef.current.gainNode.gain.value).toBe(0);
-    hook.rerender({ ...props, speed: 8, microphoneVolume: 5 });
+    hook.rerender({ ...props, speed: 8 });
     expect(props.instrumentalRef.current.playbackRate).toBe(4);
-    expect(props.browserMonitorRef.current.gainNode.gain.value).toBe(1);
-    hook.rerender({ ...props, speed: 0, microphoneVolume: Number.NaN });
+    hook.rerender({ ...props, speed: 0 });
     expect(props.instrumentalRef.current.playbackRate).toBe(1);
-    expect(props.browserMonitorRef.current.gainNode.gain.value).toBe(1);
     hook.rerender({ ...props, speed: Number.POSITIVE_INFINITY });
     expect(props.instrumentalRef.current.playbackRate).toBe(1);
-  });
-
-  test("tolerates partially constructed browser monitor nodes", () => {
-    for (const current of [{}, { gainNode: {} }, { effects: {} }]) {
-      const props = createProps({ browserMonitorRef: { current } });
-      // Each iteration verifies an independent partial node.
-      // eslint-disable-next-line no-loop-func
-      expect(() => renderHook(() => useKaraokeMediaSync(props))).not.toThrow();
-    }
   });
 
   test("reacts to every mutable media setting without touching unrelated state", () => {
     const props = createProps();
     const hook = renderHook((value) => useKaraokeMediaSync(value), { initialProps: props });
-    const nextEffects = { reverb: 0.9 };
     hook.rerender({
       ...props,
       musicVolume: 0.5,
       vocalVolume: 0.4,
-      microphoneVolume: 0.25,
-      microphoneEffects: nextEffects,
       speed: 2
     });
     expect(props.instrumentalRef.current.volume).toBe(0.25);
     expect(props.vocalsRef.current.volume).toBeCloseTo(0.16);
-    expect(props.browserMonitorRef.current.gainNode.gain.value).toBe(0.25);
-    expect(props.browserMonitorRef.current.effects.apply).toHaveBeenLastCalledWith(nextEffects);
     expect(props.videoRef.current.playbackRate).toBe(2);
   });
 

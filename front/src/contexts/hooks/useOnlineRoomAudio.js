@@ -1,4 +1,5 @@
 import { useCallback, useRef } from "react";
+import { connectMicrophoneChannelStrip } from "../../services/microphoneChannelStrip";
 
 const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0));
 const closeContext = (context) => {
@@ -8,58 +9,6 @@ const closeContext = (context) => {
   } catch {
     // Closing an already-closed Web Audio context is harmless.
   }
-};
-
-// Soft-knee limiter curve: y = tanh(k*x) / tanh(k), the same shape the backend's
-// StudioMicrophoneProcessor uses to tame peaks without the crackle of hard
-// clipping (see backend/app/services/microphone_quality.py).
-const SOFT_LIMITER_DRIVE = 1.12;
-const buildSoftLimiterCurve = () => {
-  const samples = 1024;
-  const curve = new Float32Array(samples);
-  const normalizer = Math.tanh(SOFT_LIMITER_DRIVE);
-  for (let index = 0; index < samples; index += 1) {
-    const x = (index / (samples - 1)) * 2 - 1;
-    curve[index] = Math.tanh(x * SOFT_LIMITER_DRIVE) / normalizer;
-  }
-  return curve;
-};
-
-// Gives self-monitoring the same "studio channel strip" character as direct
-// monitoring and recording (backend/app/services/microphone_quality.py):
-// remove sub-vocal rumble, add a touch of presence/air, keep levels even with
-// gentle compression, and round off peaks with a soft limiter instead of the
-// harsh digital clipping a raw passthrough would produce.
-const buildStudioMonitorChain = (context, source, destination) => {
-  const highpass = context.createBiquadFilter();
-  highpass.type = "highpass";
-  highpass.frequency.value = 70;
-
-  const presence = context.createBiquadFilter();
-  presence.type = "highshelf";
-  presence.frequency.value = 2200;
-  presence.gain.value = 2.5;
-
-  const compressor = context.createDynamicsCompressor();
-  compressor.threshold.value = -16;
-  compressor.knee.value = 6;
-  compressor.ratio.value = 3;
-  compressor.attack.value = 0.01;
-  compressor.release.value = 0.15;
-
-  const makeup = context.createGain();
-  makeup.gain.value = 1.08;
-
-  const limiter = context.createWaveShaper();
-  limiter.curve = buildSoftLimiterCurve();
-  limiter.oversample = "2x";
-
-  source.connect(highpass);
-  highpass.connect(presence);
-  presence.connect(compressor);
-  compressor.connect(makeup);
-  makeup.connect(limiter);
-  limiter.connect(destination);
 };
 
 export default function useOnlineRoomAudio({
@@ -261,7 +210,7 @@ export default function useOnlineRoomAudio({
         const source = context.createMediaStreamSource(stream);
         const gain = context.createGain();
         gain.gain.value = 1;
-        buildStudioMonitorChain(context, source, gain);
+        connectMicrophoneChannelStrip(context, source, gain);
         gain.connect(context.destination);
         await context.resume?.();
         if (voiceRef.current !== voice) {

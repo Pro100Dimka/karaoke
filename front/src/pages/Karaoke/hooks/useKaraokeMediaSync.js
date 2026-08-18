@@ -5,14 +5,11 @@ import { getSecondaryMediaPosition, shouldSyncMedia } from "../utils/transport";
 const YOUTUBE_NO_COOKIE_ORIGIN = "https://www.youtube-nocookie.com";
 
 export default function useKaraokeMediaSync({
-  browserMonitorRef,
   currentTimeRef,
   instrumentalRef,
   isPlaying,
   keyShift,
   melodyVolume,
-  microphoneEffects,
-  microphoneVolume,
   musicVolume,
   onPlaybackEndedRef,
   setCurrentTime,
@@ -190,17 +187,6 @@ export default function useKaraokeMediaSync({
   useEffect(() => {
     if (instrumentalRef.current) instrumentalRef.current.volume = playbackGain(musicVolume);
   }, [instrumentalRef, musicVolume]);
-
-  useEffect(() => {
-    const gain = browserMonitorRef.current?.gainNode?.gain;
-    const value = Number(microphoneVolume);
-    if (!gain || !Number.isFinite(value)) return;
-    gain.value = Math.max(0, Math.min(1, value));
-  }, [browserMonitorRef, microphoneVolume]);
-
-  useEffect(() => {
-    browserMonitorRef.current?.effects?.apply?.(microphoneEffects);
-  }, [browserMonitorRef, microphoneEffects]);
 
   useEffect(() => {
     if (vocalsRef.current) vocalsRef.current.volume = playbackGain(vocalVolume);

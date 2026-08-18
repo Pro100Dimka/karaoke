@@ -47,7 +47,6 @@ const createAudio = ({ state = "running" } = {}) => {
 };
 
 const props = (overrides = {}) => ({
-  browserMonitorRef: { current: null },
   isPlaying: true,
   monitorInputDeviceId: "default",
   monitoringEnabled: true,
@@ -78,17 +77,9 @@ describe("pitch detection", () => {
   });
 
   test("never initializes audio while playback is paused", async () => {
-    const audio = createAudio();
     const getUserMedia = vi.fn();
     Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { getUserMedia } });
-    const hook = renderHook(() =>
-      usePitchDetection(
-        props({
-          isPlaying: false,
-          browserMonitorRef: { current: { stream: audio.stream, context: audio.context } }
-        })
-      )
-    );
+    const hook = renderHook(() => usePitchDetection(props({ isPlaying: false })));
     await act(async () => Promise.resolve());
     expect(frames).toEqual([]);
     expect(getUserMedia).not.toHaveBeenCalled();
@@ -99,15 +90,14 @@ describe("pitch detection", () => {
     const audio = createAudio();
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
-      value: { getUserMedia: vi.fn() }
+      value: { getUserMedia: vi.fn().mockResolvedValue(audio.stream) }
     });
+    installAudioContext(audio);
     mocks.detectMidiFromAnalyser
       .mockReturnValueOnce(69)
       .mockReturnValueOnce(70)
       .mockReturnValue(null);
-    const input = props({
-      browserMonitorRef: { current: { stream: audio.stream, context: audio.context } }
-    });
+    const input = props();
     const hook = renderHook(() => usePitchDetection(input));
     await waitFor(() => expect(frames.length).toBeGreaterThan(0));
     const expected = [
@@ -135,12 +125,11 @@ describe("pitch detection", () => {
     const audio = createAudio();
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
-      value: { getUserMedia: vi.fn() }
+      value: { getUserMedia: vi.fn().mockResolvedValue(audio.stream) }
     });
+    installAudioContext(audio);
     mocks.detectMidiFromAnalyser.mockReturnValue(69);
-    const input = props({
-      browserMonitorRef: { current: { stream: audio.stream, context: audio.context } }
-    });
+    const input = props();
     const hook = renderHook((value) => usePitchDetection(value), { initialProps: input });
     await waitFor(() => expect(frames.length).toBeGreaterThan(0));
     act(() => frames.shift()(40));
@@ -158,12 +147,11 @@ describe("pitch detection", () => {
     const audio = createAudio();
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
-      value: { getUserMedia: vi.fn() }
+      value: { getUserMedia: vi.fn().mockResolvedValue(audio.stream) }
     });
+    installAudioContext(audio);
     mocks.detectMidiFromAnalyser.mockReturnValue(69);
-    const input = props({
-      browserMonitorRef: { current: { stream: audio.stream, context: audio.context } }
-    });
+    const input = props();
     const hook = renderHook((value) => usePitchDetection(value), { initialProps: input });
     await waitFor(() => expect(frames.length).toBeGreaterThan(0));
     act(() => frames.shift()(40));
@@ -205,79 +193,6 @@ describe("pitch detection", () => {
     expect(audio.track.stop).toHaveBeenCalled();
     expect(audio.context.close).toHaveBeenCalled();
     audio.context.close.mockClear();
-  });
-
-  test("reuses a stream when at least one audio track is live", async () => {
-    const audio = createAudio();
-    const endedTrack = { readyState: "ended", stop: vi.fn() };
-    audio.stream.getAudioTracks = () => [endedTrack, audio.track];
-    const getUserMedia = vi.fn();
-    Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { getUserMedia } });
-    const hook = renderHook(() =>
-      usePitchDetection(
-        props({ browserMonitorRef: { current: { stream: audio.stream, context: audio.context } } })
-      )
-    );
-    await waitFor(() => expect(frames.length).toBeGreaterThan(0));
-    expect(getUserMedia).not.toHaveBeenCalled();
-    expect(audio.context.resume).not.toHaveBeenCalled();
-    hook.unmount();
-    expect(audio.track.stop).not.toHaveBeenCalled();
-    expect(endedTrack.stop).not.toHaveBeenCalled();
-    expect(audio.context.close).not.toHaveBeenCalled();
-  });
-
-  test("captures a new stream when all borrowed tracks are ended", async () => {
-    const borrowed = createAudio();
-    borrowed.track.readyState = "ended";
-    const captured = createAudio();
-    const getUserMedia = vi.fn().mockResolvedValue(captured.stream);
-    Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { getUserMedia } });
-    const hook = renderHook(() =>
-      usePitchDetection(
-        props({
-          browserMonitorRef: { current: { stream: borrowed.stream, context: borrowed.context } }
-        })
-      )
-    );
-    await waitFor(() => expect(frames.length).toBeGreaterThan(0));
-    expect(getUserMedia).toHaveBeenCalledOnce();
-    hook.unmount();
-    expect(captured.track.stop).toHaveBeenCalled();
-    expect(borrowed.track.stop).not.toHaveBeenCalled();
-  });
-
-  test("captures when a borrowed stream has no audio-track accessor", async () => {
-    const captured = createAudio();
-    const getUserMedia = vi.fn().mockResolvedValue(captured.stream);
-    Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { getUserMedia } });
-    const hook = renderHook(() =>
-      usePitchDetection(
-        props({ browserMonitorRef: { current: { stream: {}, context: captured.context } } })
-      )
-    );
-    await waitFor(() => expect(frames.length).toBeGreaterThan(0));
-    expect(getUserMedia).toHaveBeenCalledOnce();
-    hook.unmount();
-  });
-
-  test("replaces a closed context and never resumes a running replacement", async () => {
-    const closed = createAudio({ state: "closed" });
-    const replacement = createAudio();
-    Object.defineProperty(navigator, "mediaDevices", {
-      configurable: true,
-      value: { getUserMedia: vi.fn() }
-    });
-    installAudioContext(replacement);
-    const hook = renderHook(() =>
-      usePitchDetection(
-        props({ browserMonitorRef: { current: { stream: closed.stream, context: closed.context } } })
-      )
-    );
-    await waitFor(() => expect(frames.length).toBeGreaterThan(0));
-    expect(window.AudioContext).toHaveBeenCalledOnce();
-    expect(replacement.context.resume).not.toHaveBeenCalled();
-    hook.unmount();
   });
 
   test("does not construct a context when every capture attempt fails", async () => {
@@ -342,11 +257,12 @@ describe("pitch detection", () => {
 
     const audio = createAudio({ state: "suspended" });
     audio.context.resume.mockRejectedValue(new Error("resume denied"));
-    const resume = renderHook(() =>
-      usePitchDetection(
-        props({ browserMonitorRef: { current: { stream: audio.stream, context: audio.context } } })
-      )
-    );
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia: vi.fn().mockResolvedValue(audio.stream) }
+    });
+    installAudioContext(audio);
+    const resume = renderHook(() => usePitchDetection(props()));
     await act(async () => Promise.resolve());
     expect(resume.result.current.isPitchDetected).toBe(false);
   });
@@ -366,27 +282,6 @@ describe("pitch detection", () => {
     await act(async () => resolveStream(audio.stream));
     expect(audio.track.stop).toHaveBeenCalled();
     expect(audio.context.close).toHaveBeenCalled();
-    audio.context.close.mockClear();
-
-    let resolveBorrowedContextStream;
-    Object.defineProperty(navigator, "mediaDevices", {
-      configurable: true,
-      value: {
-        getUserMedia: vi.fn(
-          () =>
-            new Promise((resolve) => { resolveBorrowedContextStream = resolve; })
-        )
-      }
-    });
-    const borrowed = renderHook(() =>
-      usePitchDetection( props({ browserMonitorRef: { current: { context: audio.context } } })
-      )
-    );
-    await waitFor(() => expect(resolveBorrowedContextStream).toBeTypeOf("function")
-    );
-    borrowed.unmount();
-    await act(async () => resolveBorrowedContextStream(audio.stream));
-    expect(audio.context.close).not.toHaveBeenCalled();
   });
 
   test("handles null and stale capture results after unmount", async () => {
@@ -417,15 +312,14 @@ describe("pitch detection", () => {
     const audio = createAudio();
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
-      value: { getUserMedia: vi.fn() }
+      value: { getUserMedia: vi.fn().mockResolvedValue(audio.stream) }
     });
+    installAudioContext(audio);
     mocks.detectMidiFromAnalyser
       .mockReturnValueOnce(null)
       .mockReturnValueOnce(69)
       .mockReturnValue(null);
-    const input = props({
-      browserMonitorRef: { current: { stream: audio.stream, context: audio.context } }
-    });
+    const input = props();
     const hook = renderHook(() => usePitchDetection(input));
     await waitFor(() => expect(frames.length).toBeGreaterThan(0));
     for (const timestamp of [40, 45, 80, 85, 200, 210]) {
@@ -439,15 +333,14 @@ describe("pitch detection", () => {
     const audio = createAudio();
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
-      value: { getUserMedia: vi.fn() }
+      value: { getUserMedia: vi.fn().mockResolvedValue(audio.stream) }
     });
+    installAudioContext(audio);
     mocks.detectMidiFromAnalyser
       .mockReturnValueOnce(60)
       .mockReturnValueOnce(90)
       .mockReturnValue(null);
-    const input = props({
-      browserMonitorRef: { current: { stream: audio.stream, context: audio.context } }
-    });
+    const input = props();
     const hook = renderHook(() => usePitchDetection(input));
     await waitFor(() => expect(frames.length).toBeGreaterThan(0));
 
@@ -490,12 +383,11 @@ describe("pitch detection", () => {
     const audio = createAudio();
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
-      value: { getUserMedia: vi.fn() }
+      value: { getUserMedia: vi.fn().mockResolvedValue(audio.stream) }
     });
+    installAudioContext(audio);
     mocks.detectMidiFromAnalyser.mockReturnValue(60);
-    const input = props({
-      browserMonitorRef: { current: { stream: audio.stream, context: audio.context } }
-    });
+    const input = props();
     const hook = renderHook(() => usePitchDetection(input));
     await waitFor(() => expect(frames.length).toBeGreaterThan(0));
     act(() => frames.shift()(40));
@@ -563,17 +455,16 @@ describe("pitch detection", () => {
     const audio = createAudio();
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
-      value: { getUserMedia: vi.fn() }
+      value: { getUserMedia: vi.fn().mockResolvedValue(audio.stream) }
     });
+    installAudioContext(audio);
     mocks.detectMidiFromAnalyser
       .mockReturnValueOnce(64)
       .mockReturnValueOnce(60)
       .mockReturnValueOnce(62)
       .mockReturnValueOnce(61)
       .mockReturnValueOnce(63);
-    const input = props({
-      browserMonitorRef: { current: { stream: audio.stream, context: audio.context } }
-    });
+    const input = props();
     const hook = renderHook(() => usePitchDetection(input));
     await waitFor(() => expect(frames.length).toBeGreaterThan(0));
     for (const timestamp of [40, 80, 120, 160, 200]) {

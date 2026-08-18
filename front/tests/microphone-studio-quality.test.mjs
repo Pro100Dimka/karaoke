@@ -15,18 +15,23 @@ class Node {
 describe("studio microphone quality", () => {
   afterEach(() => { delete globalThis.AudioContext; });
 
-  test("builds an always-on cleanup graph before creative effects", async () => {
+  test("builds an always-on cleanup graph through the shared channel strip", async () => {
+    // Room self-monitor and room outgoing-to-peers must sound identical --
+    // both now build the exact same node chain (see
+    // src/services/microphoneChannelStrip.js) instead of two independently
+    // hand-tuned graphs.
     const processedTrack = { kind: "audio", contentHint: "", stop: vi.fn() };
     const destination = {
       stream: { getAudioTracks: () => [processedTrack], getTracks: () => [processedTrack] }
     };
-    const created = { filters: [], compressors: [] };
+    const created = { filters: [], compressors: [], shapers: [] };
     globalThis.AudioContext = class {
       constructor() { this.state = "running"; }
       createMediaStreamSource() { return new Node(); }
       createBiquadFilter() { const node = new Node(); created.filters.push(node); return node; }
       createDynamicsCompressor() { const node = new Node(); created.compressors.push(node); return node; }
       createGain() { return new Node(); }
+      createWaveShaper() { const node = new Node(); created.shapers.push(node); return node; }
       createMediaStreamDestination() { return destination; }
       resume() { return Promise.resolve(); }
       close() { this.state = "closed"; return Promise.resolve(); }
@@ -36,10 +41,9 @@ describe("studio microphone quality", () => {
 
     const graph = createStudioMicrophoneGraph(rawStream);
     expect(graph.stream).toBe(destination.stream);
-    expect(created.filters.map((node) => node.type)).toEqual([
-      "highpass", "peaking", "peaking", "highshelf"
-    ]);
-    expect(created.compressors).toHaveLength(2);
+    expect(created.filters.map((node) => node.type)).toEqual(["highpass", "highshelf"]);
+    expect(created.compressors).toHaveLength(1);
+    expect(created.shapers).toHaveLength(1);
     expect(processedTrack.contentHint).toBe("music");
     await graph.close();
     expect(rawTrack.stop).toHaveBeenCalledOnce();
