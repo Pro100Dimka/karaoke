@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 import os
-import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,6 +12,7 @@ import soundfile as sf
 
 import config
 
+from .audio import run_ffmpeg
 from .errors import AICoreError
 from .models import PitchFrame
 from .utils.numeric import clamp01
@@ -60,7 +60,13 @@ def _render_analysis_variant(source: Path, target: Path, filter_graph: str) -> P
         str(temporary),
     ]
     try:
-        subprocess.run(command, check=True, capture_output=True, timeout=30 * 60)
+        run_ffmpeg(
+            command,
+            timeout_sec=30 * 60,
+            not_found_message="FFmpeg is required for MIDI vocal preprocessing",
+            timeout_message="MIDI vocal preprocessing exceeded safety timeout",
+            failed_message="FFmpeg vocal preprocessing failed",
+        )
         source_info = sf.info(source)
         target_info = sf.info(temporary)
         if target_info.frames <= 0:
@@ -71,13 +77,10 @@ def _render_analysis_variant(source: Path, target: Path, filter_graph: str) -> P
         if duration_delta > max(0.002, 1.5 / max(1, source_info.samplerate)):
             raise AICoreError(f"Vocal preprocessing changed duration by {duration_delta:.6f}s")
         os.replace(temporary, target)
-    except FileNotFoundError as exc:
-        raise AICoreError("FFmpeg is required for MIDI vocal preprocessing") from exc
-    except subprocess.TimeoutExpired as exc:
-        raise AICoreError("MIDI vocal preprocessing exceeded safety timeout") from exc
-    except subprocess.CalledProcessError as exc:
-        details = exc.stderr.decode("utf-8", "replace").strip()
-        raise AICoreError(details or "FFmpeg vocal preprocessing failed") from exc
+    except (OSError, RuntimeError) as exc:
+        if isinstance(exc, AICoreError):
+            raise
+        raise AICoreError(f"Could not validate preprocessed vocal audio: {exc}") from exc
     finally:
         temporary.unlink(missing_ok=True)
     return target
