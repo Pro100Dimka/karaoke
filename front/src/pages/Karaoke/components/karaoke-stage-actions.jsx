@@ -1,4 +1,4 @@
-import { ArrowLeft, Minimize2, Maximize2, Radio, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, Maximize2, Minimize2, Radio, SlidersHorizontal } from "lucide-react";
 import { IconButton } from "../../../components/ui";
 import { translateSaved } from "../../../i18n/runtime";
 
@@ -16,59 +16,61 @@ export default function KaraokeStageActions({
   toggleFullscreen,
   toggleRadio
 }) {
+  const actions = [
+    {
+      show: true,
+      icon: ArrowLeft,
+      label: translateSaved("Назад в библиотеку"),
+      onClick: returnToLibrary
+    },
+    {
+      show: !!toggleFullscreen,
+      icon: isFullscreen ? Minimize2 : Maximize2,
+      size: 22,
+      label: isFullscreen
+        ? translateSaved("Выйти из полноэкранного режима")
+        : translateSaved("Полноэкранный режим"),
+      active: isFullscreen,
+      onClick: toggleFullscreen
+    },
+    {
+      show: !autoHideConsole,
+      icon: SlidersHorizontal,
+      label: controlsVisible
+        ? translateSaved("Скрыть консоль")
+        : translateSaved("Показать консоль"),
+      active: controlsVisible,
+      onClick: controlsVisible ? hideControls : showControls
+    },
+    {
+      show: !isPlaying,
+      icon: Radio,
+      label: isRadioPlaying ? translateSaved("Выключить радио") : translateSaved("Включить радио"),
+      active: isRadioPlaying,
+      extraClass: "karaoke-stage-radio",
+      onClick: toggleRadio
+    }
+  ];
+
   return (
     <div
       className={`karaoke-stage-actions ${stageActionsVisible && !sceneTransitioning ? "is-visible" : ""}`}
       aria-label={translateSaved("Навигация караоке")}
     >
-      <IconButton
-        unstyled
-        className="karaoke-stage-action"
-        icon={ArrowLeft}
-        size={25}
-        label={translateSaved("Назад в библиотеку")}
-        onClick={returnToLibrary}
-      />
-      {toggleFullscreen && (
-        <IconButton
-          unstyled
-          className={`karaoke-stage-action ${isFullscreen ? "is-active" : ""}`}
-          icon={isFullscreen ? Minimize2 : Maximize2}
-          size={22}
-          label={
-            isFullscreen
-              ? translateSaved("Выйти из полноэкранного режима")
-              : translateSaved("Полноэкранный режим")
-          }
-          aria-pressed={isFullscreen}
-          onClick={toggleFullscreen}
-        />
-      )}
-      {!autoHideConsole && (
-        <IconButton
-          unstyled
-          className={`karaoke-stage-action ${controlsVisible ? "is-active" : ""}`}
-          icon={SlidersHorizontal}
-          size={25}
-          label={
-            controlsVisible ? translateSaved("Скрыть консоль") : translateSaved("Показать консоль")
-          }
-          aria-pressed={controlsVisible}
-          onClick={controlsVisible ? hideControls : showControls}
-        />
-      )}
-      {!isPlaying && (
-        <IconButton
-          unstyled
-          className={`karaoke-stage-action karaoke-stage-radio ${isRadioPlaying ? "is-active" : ""}`}
-          icon={Radio}
-          size={24}
-          label={
-            isRadioPlaying ? translateSaved("Выключить радио") : translateSaved("Включить радио")
-          }
-          aria-pressed={isRadioPlaying}
-          onClick={toggleRadio}
-        />
+      {actions.map(
+        ({ show, icon, size, label, active, extraClass = "", onClick }, i) =>
+          show && (
+            <IconButton
+              key={i}
+              unstyled
+              className={`karaoke-stage-action ${extraClass} ${active ? "is-active" : ""}`}
+              icon={icon}
+              size={size}
+              label={label}
+              aria-pressed={active}
+              onClick={onClick}
+            />
+          )
       )}
     </div>
   );

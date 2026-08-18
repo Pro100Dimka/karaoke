@@ -2,58 +2,67 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { test } from "vitest";
 
-const installer = fs.readFileSync("../scripts/karaoke-studio.iss", "utf8");
-const electronMain = fs.readFileSync("electron/main.cjs", "utf8");
-const preload = fs.readFileSync("electron/preload.cjs", "utf8");
+const read = (file) => fs.readFileSync(file, "utf8");
+
+const installer = read("../scripts/karaoke-studio.iss");
+const electronMain = read("electron/main.cjs");
+const preload = read("electron/preload.cjs");
+
+const matches = (source, patterns) => patterns.forEach((pattern) => assert.match(source, pattern));
+
+const excludes = (source, patterns) =>
+  patterns.forEach((pattern) => assert.doesNotMatch(source, pattern));
 
 test("installer theme and optional-model handoff remain wired", () => {
-  assert.match(installer, /InstallModelsCheck\.Checked := True/);
-  assert.match(installer, /if not InstallModelsCheck\.Checked then/);
-  assert.match(installer, /install-preferences\.json/);
-  assert.match(installer, /selected-theme\.txt/);
-  assert.match(installer, /selected-theme\.ico/);
-  assert.match(installer, /^DefaultDirName=\{code:GetDefaultDir\}$/m);
-  // Installing on the system drive is the least convenient default for a
-  // multi-gigabyte app plus its AI models; prefer any other drive when one
-  // exists, and only fall back to the user's documents folder otherwise.
-  assert.match(installer, /function GetDefaultDir\(Param: String\): String;/);
-  assert.match(installer, /Result := ExpandConstant\('\{userdocs\}\\\{#MyAppName\}'\);/);
-  assert.match(installer, /for Drive := 'D' to 'Z' do/);
-  assert.match(installer, /Result := Drive \+ ':\\\{#MyAppName\}';/);
-  assert.match(installer, /\{app\}\\data\\backend/);
-  assert.match(installer, /\{app\}\\data\\models/);
-  assert.match(installer, /\{app\}\\data\\cache/);
-  assert.match(installer, /\{app\}\\data\\logs/);
-  assert.match(installer, /DestDir: "\{app\}\\\.install"/);
-  assert.doesNotMatch(installer, /\{localappdata\}\\A&D Voice|\{userappdata\}\\A&D Voice/);
-  assert.match( installer, /FileCopy\(SelectedIconPath\(''\), ThemeIconPath, False\)/
-  );
-  assert.match( installer, /их можно будет скачать позже в настройках A&D Voice/
-  );
-  assert.doesNotMatch(installer, /ThemeIconPreviewsDir|TBitmapImage/);
-  assert.match(installer, /Check: EnsureApplicationExecutable/);
-  assert.match(installer, /function EnsureApplicationExecutable: Boolean/);
-  assert.match(electronMain, /--advoice-theme=\$\{initialTheme\}/);
-  assert.match(preload, /initialTheme/);
+  matches(installer, [
+    /InstallModelsCheck\.Checked := True/,
+    /if not InstallModelsCheck\.Checked then/,
+    /install-preferences\.json/,
+    /selected-theme\.txt/,
+    /selected-theme\.ico/,
+    /^DefaultDirName=\{code:GetDefaultDir\}$/m,
+    /function GetDefaultDir\(Param: String\): String;/,
+    /Result := ExpandConstant\('\{userdocs\}\\\{#MyAppName\}'\);/,
+    /for Drive := Ord\('D'\) to Ord\('Z'\) do/,
+    /DrivePath := Chr\(Drive\) \+ ':\\';/,
+    /DrivePath <> ExpandConstant\('\{sd\}\\'\)/,
+    /Result := DrivePath \+ '\{#MyAppName\}';/,
+    /\{app\}\\data\\backend/,
+    /\{app\}\\data\\models/,
+    /\{app\}\\data\\cache/,
+    /\{app\}\\data\\logs/,
+    /DestDir: "\{app\}\\\.install"/,
+    /FileCopy\(SelectedIconPath\(''\), ThemeIconPath, False\)/,
+    /их можно будет скачать позже в настройках A&D Voice/,
+    /Check: EnsureApplicationExecutable/,
+    /function EnsureApplicationExecutable: Boolean/
+  ]);
+  excludes(installer, [
+    /\{localappdata\}\\A&D Voice|\{userappdata\}\\A&D Voice/,
+    /ThemeIconPreviewsDir|TBitmapImage/
+  ]);
+  matches(electronMain, [/--advoice-theme=\$\{initialTheme\}/]);
+  matches(preload, [/initialTheme/]);
 });
 
 test("installer language selection drives Inno's own wizard localization", () => {
-  // The custom language combo only ever wrote its choice to the installed
-  // app's settings.json -- it never affected the installer's own wizard
-  // text (Next/Back/Cancel, page titles, ...), so picking a different
-  // language there had no visible effect until after installation.
-  // ShowLanguageDialog=yes lets Inno's native dialog (shown before the
-  // wizard starts) drive that localization automatically instead.
-  assert.match(installer, /^ShowLanguageDialog=yes$/m);
-  assert.match(installer, /function ActiveLanguageComboIndex: Integer;/);
-  assert.match(installer, /LanguageCombo\.ItemIndex := ActiveLanguageComboIndex;/);
+  matches(installer, [
+    /^ShowLanguageDialog=yes$/m,
+    /function ActiveLanguageComboIndex: Integer;/,
+    /LanguageCombo\.ItemIndex := ActiveLanguageComboIndex;/
+  ]);
 });
 
 test("installer window toggles native fullscreen through the trusted IPC boundary", () => {
-  assert.match(electronMain, /handleTrustedIpc\("window:toggleFullscreen"/);
-  assert.match(electronMain, /mainWindow\.setFullScreen\(!mainWindow\.isFullScreen\(\)\)/);
-  assert.match(electronMain, /"enter-full-screen"/);
-  assert.match(electronMain, /"leave-full-screen"/);
-  assert.match(preload, /toggleFullscreen: \(\) => ipcRenderer\.invoke\("window:toggleFullscreen"\)/);
-  assert.match(preload, /onFullscreenChange/);
+  matches(electronMain, [
+    /handleTrustedIpc\("window:toggleFullscreen"/,
+    /mainWindow\.setFullScreen\(!mainWindow\.isFullScreen\(\)\)/,
+    /"enter-full-screen"/,
+    /"leave-full-screen"/
+  ]);
+
+  matches(preload, [
+    /toggleFullscreen: \(\) => ipcRenderer\.invoke\("window:toggleFullscreen"\)/,
+    /onFullscreenChange/
+  ]);
 });

@@ -19,13 +19,6 @@ function Lyrics({ songId, lyrics, currentLine, upcomingLine, nextLine, currentTi
       {!lyrics.length && (
         <p className="text-muted">{translateSaved("Синхронизированный текст недоступен")}</p>
       )}
-
-      {/* Only while actual lyric text is on screen -- not for the whole
-          performance, and not once the song has finished. */}
-      {activeLine && songId && (
-        <SongCoverArt song={{ id: songId }} className="karaoke-lyrics-cover" iconSize={20} />
-      )}
-
       {activeLine ? (
         <KaraokeLyricLine
           key={`${activeLine.start}-${activeLine.text}`}

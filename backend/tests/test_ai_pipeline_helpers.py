@@ -34,6 +34,31 @@ def test_bound_and_trim_canonical_words():
     assert pipeline._trim_supplied_text_to_aligned_words(" \n ", aligned) == ""
 
 
+def _pitch_frames(*, voiced_times, silent_times=()):
+    frames = [
+        PitchFrame(time=t, frequency=220.0, confidence=0.8, voiced=True) for t in voiced_times
+    ]
+    frames += [
+        PitchFrame(time=t, frequency=0.0, confidence=0.0, voiced=False) for t in silent_times
+    ]
+    return frames
+
+
+def test_segments_ignore_real_singing_detects_a_structural_mismatch():
+    # A synced-lyrics provider can time a different mix/edit of the same
+    # song -- a longer intro, a missing verse. When that happens, real
+    # singing lands squarely in what the supplied lines claim is a gap.
+    segments = ((0.0, 2.0, "line one"), (20.0, 22.0, "line two"))
+    mismatched_pitch = _pitch_frames(voiced_times=[0.5, 1.5, 8.0, 9.0, 10.0, 11.0, 21.0])
+    assert pipeline._segments_ignore_real_singing(segments, mismatched_pitch)
+
+    matching_pitch = _pitch_frames(voiced_times=[0.5, 1.5, 20.5, 21.5], silent_times=[10.0, 11.0])
+    assert not pipeline._segments_ignore_real_singing(segments, matching_pitch)
+
+    assert not pipeline._segments_ignore_real_singing((), mismatched_pitch)
+    assert not pipeline._segments_ignore_real_singing(segments, [])
+
+
 def test_canonical_identity_and_publishability():
     aligned = words((0, 1, "Hello", 1), (1, 2, "world", 1))
     assert pipeline._canonical_alignment_matches("hello, world!", aligned)

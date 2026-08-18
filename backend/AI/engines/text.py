@@ -171,6 +171,7 @@ def _words_from_items(items) -> list[Word]:
 
 ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v15-newline-phrase-join"
 LONG_TEXT_ALIGNMENT_VERSION = "v60-vowel-weighted-interpolation"
+SEGMENTED_ALIGNMENT_VERSION = "v2-ctc-fallback-tier"
 FALLBACK_WORD_CONFIDENCE = 0.012
 
 
@@ -3909,6 +3910,7 @@ class Qwen3ForcedAligner(Aligner):
         source, sample_rate = load_mono(audio, 16000)
         duration_sec = len(source) / sample_rate
         output: list[Word] = []
+        word_sources: list[str] = []
         cursor = 0.0
         ordered = sorted(segments, key=lambda item: (float(item[0]), float(item[1])))
 
@@ -3916,6 +3918,39 @@ class Qwen3ForcedAligner(Aligner):
             max(0.05, float(end) - float(start)) for start, end, text in ordered if tokenize(text)
         ]
         batch_size = _adaptive_qwen_batch_size(clip_hints)
+
+        # LRC-provided line timestamps are a trusted, tight anchor -- feed them
+        # to the same CTC forced aligner align_long_text relies on before ever
+        # falling back to Qwen. Qwen's per-line candidate is only accepted when
+        # its transcription matches the canonical tokens exactly (see
+        # _segment_alignment_is_usable), so any reverb, mumbled diction or
+        # background bleed makes it reject the whole line and fall straight to
+        # non-acoustic proportional interpolation. CTC aligns against the
+        # trusted lyric text itself and never needs a transcription match, so
+        # it recovers real acoustic timing for lines Qwen alone would give up
+        # on entirely.
+        ctc_line_results = [None] * len(ordered)
+        ctc_available = callable(getattr(self._ctc, "available_for", None))
+        if ctc_available and self._ctc.available_for(
+            language, "\n".join(text for _, _, text in ordered)
+        ):
+            ctc_anchor_windows = {
+                i: (
+                    max(0.0, float(start)),
+                    min(duration_sec, max(float(start) + 0.04, float(end))),
+                    0.9,
+                )
+                for i, (start, end, text) in enumerate(ordered)
+                if tokenize(text)
+            }
+            try:
+                ctc_line_results = self._ctc.align_lines(
+                    audio, [text for _, _, text in ordered], language, ctc_anchor_windows
+                )
+            except (EngineUnavailableError, InvalidArtifactError, RuntimeError, ValueError):
+                ctc_line_results = [None] * len(ordered)
+            finally:
+                self._ctc.release()
 
         with tempfile.TemporaryDirectory(prefix="karaoke-align-") as temp_dir:
             root = Path(temp_dir)
@@ -3999,6 +4034,7 @@ class Qwen3ForcedAligner(Aligner):
                     candidate = candidate_by_index.get(segment_index, [])
 
                     local_words: list[Word] = []
+                    line_source = "interpolated"
                     candidate_ok = _segment_alignment_is_usable(candidate, tokens, search_span)
                     if candidate_ok:
                         absolute_start = search_start + candidate[0].start
@@ -4016,8 +4052,17 @@ class Qwen3ForcedAligner(Aligner):
                             )
                     if candidate_ok:
                         local_words = candidate
+                        line_source = "qwen"
+
+                    ctc_result = ctc_line_results[segment_index]
+                    if not local_words and ctc_result is not None and len(ctc_result.words) == len(tokens):
+                        local_words = list(ctc_result.words)
+                        search_start = 0.0
+                        search_end = duration_sec
+                        line_source = "ctc"
 
                     if not local_words:
+                        line_source = "interpolated"
                         if plausible_anchor:
                             local_words = _timed_segment_fallback_words(tokens, anchor_span)
                             search_start = anchor_start
@@ -4065,11 +4110,13 @@ class Qwen3ForcedAligner(Aligner):
                             )
                             for word in _proportional_words(tokens, safe_span)
                         ]
+                        line_source = "interpolated"
 
                     for word in line_words:
                         output.append(
                             Word(word.start, word.end, word.text, word.confidence, len(output))
                         )
+                        word_sources.append(line_source)
                     if line_words:
                         cursor = max(cursor, line_words[-1].end)
 
@@ -4077,6 +4124,12 @@ class Qwen3ForcedAligner(Aligner):
 
         if not output:
             raise InvalidArtifactError("Segmented forced aligner returned no timed words")
+        self.last_alignment_diagnostics = {
+            "word_sources": word_sources,
+            "ctc_lines_used": sum(1 for item in word_sources if item == "ctc"),
+            "qwen_lines_used": sum(1 for item in word_sources if item == "qwen"),
+            "interpolated_lines_used": sum(1 for item in word_sources if item == "interpolated"),
+        }
         return enforce_segmented_timing_safety(output, ordered, duration_sec)
 
     def align_long_text(self, audio, text, language):

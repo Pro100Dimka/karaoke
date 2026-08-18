@@ -1,21 +1,21 @@
 {
-  "generatedAt": "2026-08-18T11:14:55.694Z",
+  "generatedAt": "2026-08-18T16:10:41.665Z",
   "root": "D:\\Git\\karaoke\\front",
   "summary": {
     "cssFiles": 52,
-    "sourceFiles": 268,
+    "sourceFiles": 271,
     "selectors": 1389,
     "classesDefined": 502,
-    "classesUsed": 296,
-    "unusedClassCandidates": 207,
+    "classesUsed": 293,
+    "unusedClassCandidates": 210,
     "dynamicClassCandidates": 2,
     "duplicateSelectors": 265,
     "repeatedValues": 355,
     "breakpoints": 11,
-    "issues": 1011,
+    "issues": 1014,
     "errors": 0,
     "warnings": 803,
-    "info": 208
+    "info": 211
   },
   "fileStats": [
     {
@@ -4341,6 +4341,149 @@
       ]
     },
     {
+      "className": "karaoke-lyrics-cover",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1154,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-lyrics-cover"
+        }
+      ]
+    },
+    {
+      "className": "karaoke-song-strip",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1187,
+          "column": 1,
+          "context": "",
+          "selector": "[data-theme=\"light\"] .karaoke-song-strip"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1249,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-song-strip"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1286,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-song-strip .waveform-timeline"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1293,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-song-strip .waveform-timeline::after"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1386,
+          "column": 1,
+          "context": "",
+          "selector": "[data-theme=\"light\"] .karaoke-song-strip .waveform-timeline"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1457,
+          "column": 3,
+          "context": "@media (max-width: 78rem)",
+          "selector": ".karaoke-song-strip"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1469,
+          "column": 3,
+          "context": "@media (max-width: 56rem)",
+          "selector": ".karaoke-song-strip"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1472,
+          "column": 3,
+          "context": "@media (max-width: 56rem)",
+          "selector": ".karaoke-song-strip .waveform-timeline"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1475,
+          "column": 3,
+          "context": "@media (max-width: 56rem)",
+          "selector": ".karaoke-song-strip .karaoke-timecode"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 832,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-song-strip"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 844,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-song-strip .waveform-timeline"
+        },
+        {
+          "file": "src/styles/melody-editor-v2.css",
+          "line": 107,
+          "column": 1,
+          "context": "",
+          "selector": ".melody-editor-transport .karaoke-song-strip"
+        },
+        {
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 107,
+          "column": 1,
+          "context": "",
+          "selector": ".melody-editor-transport .karaoke-song-strip"
+        },
+        {
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 475,
+          "column": 1,
+          "context": "",
+          "selector": ".melody-editor-transport .karaoke-song-strip"
+        },
+        {
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 713,
+          "column": 1,
+          "context": "",
+          "selector": ".melody-editor-transport .karaoke-song-strip"
+        },
+        {
+          "file": "src/styles/melody-editor-v7-v12.css",
+          "line": 82,
+          "column": 1,
+          "context": "",
+          "selector": ".melody-editor-transport .karaoke-song-strip"
+        },
+        {
+          "file": "src/styles/melody-editor-v7-v12.css",
+          "line": 640,
+          "column": 1,
+          "context": "",
+          "selector": ".melody-editor-topdeck-v11 .melody-editor-transport .karaoke-song-strip"
+        },
+        {
+          "file": "src/styles/melody-editor-v7-v12.css",
+          "line": 679,
+          "column": 1,
+          "context": "",
+          "selector": ".melody-editor-waveform-only .karaoke-song-strip"
+        }
+      ]
+    },
+    {
       "className": "karaoke-effect-dial",
       "locations": [
         {
@@ -5363,6 +5506,81 @@
           "column": 1,
           "context": "",
           "selector": ".karaoke-stage-actions"
+        }
+      ]
+    },
+    {
+      "className": "karaoke-stage-action",
+      "locations": [
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 668,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-stage-action"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 689,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-stage-action"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 696,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-stage-action:hover"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 696,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-stage-action.is-active"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 705,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-stage-action:hover"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 710,
+          "column": 3,
+          "context": "@media (max-width: 48rem)",
+          "selector": ".karaoke-stage-action span"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 714,
+          "column": 3,
+          "context": "@media (max-width: 48rem)",
+          "selector": ".karaoke-stage-action"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 964,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-stage-action"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 986,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-stage-action:hover"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 986,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-stage-action.is-active"
         }
       ]
     },
@@ -63132,6 +63350,159 @@
     {
       "rule": "unused-class-candidate",
       "severity": "info",
+      "message": "Класс .karaoke-lyrics-cover не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-base.css",
+      "line": 1154,
+      "selector": ".karaoke-lyrics-cover",
+      "details": [
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1154,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-lyrics-cover"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .karaoke-song-strip не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-base.css",
+      "line": 1187,
+      "selector": ".karaoke-song-strip",
+      "details": [
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1187,
+          "column": 1,
+          "context": "",
+          "selector": "[data-theme=\"light\"] .karaoke-song-strip"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1249,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-song-strip"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1286,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-song-strip .waveform-timeline"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1293,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-song-strip .waveform-timeline::after"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1386,
+          "column": 1,
+          "context": "",
+          "selector": "[data-theme=\"light\"] .karaoke-song-strip .waveform-timeline"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1457,
+          "column": 3,
+          "context": "@media (max-width: 78rem)",
+          "selector": ".karaoke-song-strip"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1469,
+          "column": 3,
+          "context": "@media (max-width: 56rem)",
+          "selector": ".karaoke-song-strip"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1472,
+          "column": 3,
+          "context": "@media (max-width: 56rem)",
+          "selector": ".karaoke-song-strip .waveform-timeline"
+        },
+        {
+          "file": "src/styles/karaoke-base.css",
+          "line": 1475,
+          "column": 3,
+          "context": "@media (max-width: 56rem)",
+          "selector": ".karaoke-song-strip .karaoke-timecode"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 832,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-song-strip"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 844,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-song-strip .waveform-timeline"
+        },
+        {
+          "file": "src/styles/melody-editor-v2.css",
+          "line": 107,
+          "column": 1,
+          "context": "",
+          "selector": ".melody-editor-transport .karaoke-song-strip"
+        },
+        {
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 107,
+          "column": 1,
+          "context": "",
+          "selector": ".melody-editor-transport .karaoke-song-strip"
+        },
+        {
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 475,
+          "column": 1,
+          "context": "",
+          "selector": ".melody-editor-transport .karaoke-song-strip"
+        },
+        {
+          "file": "src/styles/melody-editor-v4-v6.css",
+          "line": 713,
+          "column": 1,
+          "context": "",
+          "selector": ".melody-editor-transport .karaoke-song-strip"
+        },
+        {
+          "file": "src/styles/melody-editor-v7-v12.css",
+          "line": 82,
+          "column": 1,
+          "context": "",
+          "selector": ".melody-editor-transport .karaoke-song-strip"
+        },
+        {
+          "file": "src/styles/melody-editor-v7-v12.css",
+          "line": 640,
+          "column": 1,
+          "context": "",
+          "selector": ".melody-editor-topdeck-v11 .melody-editor-transport .karaoke-song-strip"
+        },
+        {
+          "file": "src/styles/melody-editor-v7-v12.css",
+          "line": 679,
+          "column": 1,
+          "context": "",
+          "selector": ".melody-editor-waveform-only .karaoke-song-strip"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
       "message": "Класс .karaoke-effect-dial не найден в статическом исходном коде.",
       "file": "src/styles/karaoke-base.css",
       "line": 1237,
@@ -64282,6 +64653,86 @@
           "column": 1,
           "context": "",
           "selector": ".karaoke-stage-actions"
+        }
+      ]
+    },
+    {
+      "rule": "unused-class-candidate",
+      "severity": "info",
+      "message": "Класс .karaoke-stage-action не найден в статическом исходном коде.",
+      "file": "src/styles/karaoke-scenes.css",
+      "line": 668,
+      "selector": ".karaoke-stage-action",
+      "details": [
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 668,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-stage-action"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 689,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-stage-action"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 696,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-stage-action:hover"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 696,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-stage-action.is-active"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 705,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-stage-action:hover"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 710,
+          "column": 3,
+          "context": "@media (max-width: 48rem)",
+          "selector": ".karaoke-stage-action span"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 714,
+          "column": 3,
+          "context": "@media (max-width: 48rem)",
+          "selector": ".karaoke-stage-action"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 964,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-stage-action"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 986,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-stage-action:hover"
+        },
+        {
+          "file": "src/styles/karaoke-scenes.css",
+          "line": 986,
+          "column": 1,
+          "context": "",
+          "selector": ".karaoke-stage-action.is-active"
         }
       ]
     },

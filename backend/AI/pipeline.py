@@ -24,6 +24,7 @@ from .engines.text import (
     ASR_PIPELINE_VERSION,
     FALLBACK_WORD_CONFIDENCE,
     LONG_TEXT_ALIGNMENT_VERSION,
+    SEGMENTED_ALIGNMENT_VERSION,
     UniformTextFallback,
     enforce_segmented_timing_safety,
     resolve_alignment_language,
@@ -80,6 +81,37 @@ ProgressCallback = Callable[[str, float, str], None]
 CancelCallback = Callable[[], bool]
 PIPELINE_LOCK_TIMEOUT_SECONDS = 180.0
 CANONICAL_NORMALIZATION_VERSION = "v5-vowel-weighted-interpolation"
+
+
+def _segments_ignore_real_singing(
+    segments: tuple[tuple[float, float, str], ...],
+    pitch: list[PitchFrame],
+) -> bool:
+    """Detect synced-lyrics timing that doesn't match this audio's structure.
+
+    A synced-lyrics provider (LRCLIB, etc.) can return timestamps for a
+    different mix/edit of the same song -- a longer intro, a missing verse,
+    a reordered bridge. When that happens, the gaps between its lines
+    actually contain real singing, and every downstream alignment call
+    anchored to those lines inherits the mismatch no matter how good CTC/Qwen
+    themselves are. Detect it directly from the voicing data this pipeline
+    already computed, instead of trusting the external source blindly.
+    """
+    if not segments or not pitch:
+        return False
+    voiced_times = [frame.time for frame in pitch if frame.voiced]
+    if not voiced_times:
+        return False
+    ordered = sorted(segments, key=lambda item: item[0])
+
+    def covered(time: float) -> bool:
+        return any(start <= time <= end for start, end, _text in ordered)
+
+    uncovered = sum(1 for time in voiced_times if not covered(time))
+    # A healthy sync still has some off-line ad-libs/backing vocals; only
+    # treat this as a structural mismatch when a large share of everything
+    # actually sung falls entirely outside every supplied line.
+    return (uncovered / len(voiced_times)) > 0.35
 
 
 def _bound_word_durations(words: list[Word]) -> list[Word]:
@@ -1207,6 +1239,14 @@ class KaraokePipeline:
         validate_within_duration(pitch, song_duration,
                                  "pitch", self.config.hop_seconds * 2)
 
+        if _segments_ignore_real_singing(supplied_segments, pitch):
+            warnings.append(
+                "Synced lyrics timing does not match this audio's vocal activity "
+                "(likely a different mix/edit); ignoring its line timestamps and "
+                "re-deriving alignment from the audio instead"
+            )
+            supplied_segments = ()
+
         lyrics_txt = output / "lyrics.txt"
         words_path = output / "lyricsSync.json"
 
@@ -1237,6 +1277,7 @@ class KaraokePipeline:
                                 "_ctc", None), "models", {}
                     ),
                     "timed_segments": supplied_segments,
+                    "segmented_alignment_algorithm": SEGMENTED_ALIGNMENT_VERSION,
                 },
             )
             alignment_outputs = [lyrics_txt, words_path]

@@ -3,95 +3,94 @@ import path from "node:path";
 import process from "node:process";
 
 const root = process.cwd();
-const sourceRoot = path.join(root, "src");
+const src = path.join(root, "src");
+const theme = path.join(src, "theme");
 const files = [];
-const SOURCE_FILE_PATTERN = /\.(?:js|jsx|ts|tsx|css)$/;
-const SINGLETON_AUDIT_EXCLUSIONS = [sourceRoot, path.join(sourceRoot, "theme")];
-
-function walk(directory) {
-  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-    const fullPath = path.join(directory, entry.name);
-    if (entry.isDirectory()) {
-      if (fullPath === path.join(sourceRoot, "theme")) continue;
-      walk(fullPath);
-    } else if (/\.(?:js|jsx)$/.test(entry.name)) files.push(fullPath);
-  }
-}
-walk(sourceRoot);
-
-const relative = (file) => path.relative(root, file).replaceAll("\\", "/");
-const read = (file) => fs.readFileSync(file, "utf8");
 const violations = [];
 const advisories = [];
+const relative = (file) => path.relative(root, file).replaceAll("\\", "/");
+const extensions = /\.(?:js|jsx|ts|tsx|css)$/;
+const audited = /\.(?:js|jsx)$/;
 
-function auditSingletonDirectories(directory) {
+const walk = (directory) => {
   const entries = fs.readdirSync(directory, { withFileTypes: true });
-  const childDirectories = entries.filter((entry) => entry.isDirectory());
-  const childFiles = entries.filter(
-    (entry) => entry.isFile() && SOURCE_FILE_PATTERN.test(entry.name)
-  );
-  if (!SINGLETON_AUDIT_EXCLUSIONS.includes(directory)) {
-    if (childDirectories.length === 0 && childFiles.length === 1) {
-      violations.push(`single-file source directory must be flattened: ${relative(directory)}`);
-    }
+  const dirs = entries.filter((x) => x.isDirectory());
+  const sources = entries.filter((x) => x.isFile() && extensions.test(x.name));
+  if (![src, theme].includes(directory) && !dirs.length && sources.length === 1) {
+    violations.push(`single-file source directory must be flattened: ${relative(directory)}`);
   }
-  for (const entry of childDirectories) {
-    const child = path.join(directory, entry.name);
-    if (child === path.join(sourceRoot, "theme")) continue;
-    auditSingletonDirectories(child);
-  }
-}
-auditSingletonDirectories(sourceRoot);
+  dirs
+    .map((x) => path.join(directory, x.name))
+    .filter((x) => x !== theme)
+    .forEach(walk);
 
-for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
-  if (entry.isDirectory() && entry.name.startsWith("coverage-"))
-    violations.push(`legacy coverage directory must be consolidated: ${entry.name}`);
-}
-const coverageRoot = path.join(root, "coverage");
-if (fs.existsSync(coverageRoot)) {
-  for (const entry of fs.readdirSync(coverageRoot, { withFileTypes: true })) {
-    if (entry.isFile() && entry.name === "coverage-final.json")
-      violations.push("coverage/coverage-final.json must use a descriptive report name");
-  }
-}
+  entries
+    .filter((x) => x.isFile() && audited.test(x.name))
+    .map((x) => path.join(directory, x.name))
+    .forEach((file) =>
+      files.push({
+        name: relative(file),
+        text: fs.readFileSync(file, "utf8")
+      })
+    );
+};
+walk(src);
+const projectChecks = [
+  ...fs
+    .readdirSync(root, { withFileTypes: true })
+    .filter((x) => x.isDirectory() && x.name.startsWith("coverage-"))
+    .map((x) => `legacy coverage directory must be consolidated: ${x.name}`),
+  ...(fs.existsSync(path.join(root, "coverage", "coverage-final.json"))
+    ? ["coverage/coverage-final.json must use a descriptive report name"]
+    : [])
+];
 
-function forbid(label, pattern, allow = []) {
-  for (const file of files) {
-    const name = relative(file);
-    if (allow.includes(name)) continue;
-    if (pattern.test(read(file))) violations.push(`${label}: ${name}`);
-  }
-}
+violations.push(...projectChecks);
 
-forbid("destructured catch parameter", /catch\s*\(\s*\{/);
-forbid("direct localStorage access", /(?:window\.|globalThis\.)?localStorage/, [
+const localStorageAllow = new Set([
   "src/utils/theme.js",
   "src/utils/language.js",
   "src/utils/storage.js",
   "src/pages/Karaoke/utils/preferences.js"
 ]);
-forbid("direct interpolation of unknown error.message", /\$\{\s*(?:err|error)\.message\s*\}/);
-forbid("javascript URL", /(?:href|src)\s*=\s*["']javascript:/i);
-forbid("placeholder hash link", /href\s*=\s*["']#["']/i);
 
-const routes = read(path.join(sourceRoot, "components/routes.jsx"));
-if (/key=\{(?:index|i)\}/.test(routes) || !routes.includes("key={path}")) {
-  violations.push("routes must use stable path keys");
-}
+const rules = [
+  ["destructured catch parameter", /catch\s*\(\s*\{/],
+  ["direct interpolation of unknown error.message", /\$\{\s*(?:err|error)\.message\s*\}/],
+  ["javascript URL", /(?:href|src)\s*=\s*["']javascript:/i],
+  ["placeholder hash link", /href\s*=\s*["']#["']/i]
+];
 
-for (const file of files) {
-  const name = relative(file);
-  const lines = read(file).split(/\r?\n/).length;
+for (const { name, text } of files) {
+  violations.push(
+    ...rules.filter(([, pattern]) => pattern.test(text)).map(([label]) => `${label}: ${name}`)
+  );
+  if (!localStorageAllow.has(name) && /(?:window\.|globalThis\.)?localStorage/.test(text)) {
+    violations.push(`direct localStorage access: ${name}`);
+  }
+
+  if (
+    name === "src/components/routes.jsx" &&
+    (/key=\{(?:index|i)\}/.test(text) || !text.includes("key={path}"))
+  ) {
+    violations.push("routes must use stable path keys");
+  }
+
+  const lines = text.split(/\r?\n/).length;
   if (lines > 700) advisories.push(`${name}: ${lines} lines`);
 }
 
-if (violations.length) {
-  console.error("Architecture policy violations:");
-  violations.forEach((violation) => console.error(`- ${violation}`));
-  process.exitCode = 1;
-} else console.log("Architecture policies: passed.");
+const report = (title, items, method = "log") => {
+  if (items.length) {
+    console[method](`${title}:\n${items.map((x) => `- ${x}`).join("\n")}`);
+  }
+};
 
-if (advisories.length) {
-  console.log("Large-file advisories:");
-  advisories.forEach((advisory) => console.log(`- ${advisory}`));
+if (violations.length) {
+  report("Architecture policy violations", violations, "error");
+  process.exitCode = 1;
+} else {
+  console.log("Architecture policies: passed.");
 }
+
+report("Large-file advisories", advisories);

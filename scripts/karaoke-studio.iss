@@ -110,20 +110,19 @@ var
 
 function GetDefaultDir(Param: String): String;
 var
-  Drive: Char;
+  Drive: Integer;
+  DrivePath: String;
 begin
-  // The system drive is usually the small/fast one Windows itself lives on;
-  // a multi-gigabyte app plus its AI models is more comfortable on any other
-  // drive when one exists. {sd} is Inno's system drive constant ("C:" on
-  // almost every machine, but this stays correct if it ever isn't).
   Result := ExpandConstant('{userdocs}\{#MyAppName}');
-  for Drive := 'D' to 'Z' do
+
+  for Drive := Ord('D') to Ord('Z') do
   begin
-    if (Drive + ':\') = ExpandConstant('{sd}\') then Continue;
-    if DirExists(Drive + ':\') then
+    DrivePath := Chr(Drive) + ':\';
+
+    if (DrivePath <> ExpandConstant('{sd}\')) and DirExists(DrivePath) then
     begin
-      Result := Drive + ':\{#MyAppName}';
-      Break;
+      Result := DrivePath + '{#MyAppName}';
+      Exit;
     end;
   end;
 end;

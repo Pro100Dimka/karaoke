@@ -3,11 +3,7 @@ import { closeAudioContext, closeAudioContextQuietly } from "../../../utils/audi
 import { MICROPHONE_CAPTURE_CONSTRAINTS } from "../../../utils/microphone-capture-constraints";
 import { detectMidiFromAnalyser } from "../utils/pitch";
 
-export default function usePitchDetection({
-  isPlaying,
-  monitorInputDeviceId,
-  monitoringEnabled
-}) {
+export default function usePitchDetection({ isPlaying, monitorInputDeviceId, monitoringEnabled }) {
   const [sungMidi, setSungMidi] = useState(null);
   const [isPitchDetected, setIsPitchDetected] = useState(false);
   const [isPitchAttacking, setIsPitchAttacking] = useState(false);

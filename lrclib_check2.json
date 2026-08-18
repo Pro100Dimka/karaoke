@@ -1,0 +1,220 @@
+{
+ "q_Nervy_full": {
+  "count": 20,
+  "items": [
+   {
+    "artist": "Алан Гегуев",
+    "track": "Нервы",
+    "dur": 142.0
+   },
+   {
+    "artist": "tet baby",
+    "track": "Нервы",
+    "dur": 131.0
+   },
+   {
+    "artist": "Chernyi Obelisk",
+    "track": "Нервы",
+    "dur": 192.0
+   },
+   {
+    "artist": "Чёрный обелиск",
+    "track": "Нервы",
+    "dur": 192.0
+   },
+   {
+    "artist": "Черный Обелиск",
+    "track": "Нервы",
+    "dur": 192.0
+   },
+   {
+    "artist": "whylovly",
+    "track": "нервы",
+    "dur": 114.0
+   },
+   {
+    "artist": "Нервы",
+    "track": "Вороны",
+    "dur": 240.0
+   },
+   {
+    "artist": "НЕРВЫ",
+    "track": "Ярче и теплее",
+    "dur": 159.0
+   },
+   {
+    "artist": "НЕРВЫ",
+    "track": "Ты бы о****а",
+    "dur": 196.0
+   },
+   {
+    "artist": "НЕРВЫ",
+    "track": "Батареи",
+    "dur": 194.0
+   },
+   {
+    "artist": "Нервы",
+    "track": "НЕРВЫ",
+    "dur": 161.0
+   },
+   {
+    "artist": "Нервы",
+    "track": "НЕРВЫ",
+    "dur": 153.0
+   },
+   {
+    "artist": "Нервы",
+    "track": "НЕРВЫ",
+    "dur": 157.0
+   },
+   {
+    "artist": "Нервы",
+    "track": "НЕРВЫ",
+    "dur": 159.0
+   },
+   {
+    "artist": "Нервы",
+    "track": "НЕРВЫ",
+    "dur": 162.0
+   },
+   {
+    "artist": "Нервы",
+    "track": "Нервы",
+    "dur": 169.0
+   },
+   {
+    "artist": "Нервы",
+    "track": "Нервы",
+    "dur": 158.0
+   },
+   {
+    "artist": "Нервы",
+    "track": "Нервы",
+    "dur": 162.0
+   },
+   {
+    "artist": "Нервы",
+    "track": "Нервы",
+    "dur": 159.0
+   },
+   {
+    "artist": "Нервы",
+    "track": "Нервы",
+    "dur": 159.0
+   }
+  ]
+ },
+ "q_lady": {
+  "count": 20,
+  "items": [
+   {
+    "artist": "Bakhtin",
+    "track": "Леди",
+    "dur": 180.976325
+   },
+   {
+    "artist": "Emmanuil",
+    "track": "Леди",
+    "dur": 175.0
+   },
+   {
+    "artist": "Нискуба",
+    "track": "Леди",
+    "dur": 139.0
+   },
+   {
+    "artist": "Neki",
+    "track": "Леди",
+    "dur": 125.0
+   },
+   {
+    "artist": "dontxlook",
+    "track": "Леди Димитреску",
+    "dur": 161.0
+   },
+   {
+    "artist": "НЕ.KURILI, Katrin Mokko, и, Slav Smoke",
+    "track": "Леди-скандал",
+    "dur": 252.0
+   },
+   {
+    "artist": "Чёрный Кофе",
+    "track": "Леди Осень",
+    "dur": 288.052245
+   },
+   {
+    "artist": "Kamazz",
+    "track": "Леди Натали",
+    "dur": 261.0
+   },
+   {
+    "artist": "Евгений Путилов",
+    "track": "Леди ночь",
+    "dur": 219.0
+   },
+   {
+    "artist": "НЕ.KURILI, Katrin Mokko, Slav Smoke",
+    "track": "Леди-скандал",
+    "dur": 252.0
+   },
+   {
+    "artist": "Чёрный кофе",
+    "track": "Леди осень",
+    "dur": 291.0
+   },
+   {
+    "artist": "НЕ.KURILI",
+    "track": "Леди-скандал",
+    "dur": 252.0
+   },
+   {
+    "artist": "Nodahsa",
+    "track": "Леди грация",
+    "dur": 162.0
+   },
+   {
+    "artist": "Бахтавар",
+    "track": "Бизнес-леди",
+    "dur": 148.0
+   },
+   {
+    "artist": "MIRBRO",
+    "track": "Леди-Скандал (НЕ.KURILI & Slav Smoke & Katrin Mokko)",
+    "dur": 251.0
+   },
+   {
+    "artist": "Эндорфины",
+    "track": "Студентка",
+    "dur": 145.0
+   },
+   {
+    "artist": "Юрий Визбор",
+    "track": "Леди",
+    "dur": 197.0
+   },
+   {
+    "artist": "Юрий Визбор",
+    "track": "Леди",
+    "dur": 196.6563072
+   },
+   {
+    "artist": "Bakhtin",
+    "track": "Леди",
+    "dur": 181.0
+   },
+   {
+    "artist": "Yuri Vizbor",
+    "track": "Леди",
+    "dur": 197.0
+   }
+  ]
+ },
+ "q_moya_lady_swap": {
+  "count": 0,
+  "items": []
+ },
+ "q_track_only": {
+  "count": 0,
+  "items": []
+ }
+}
