@@ -274,7 +274,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     turnOnRadio,
     vocalsRef
   });
-  playbackEndedRef.current = () => handleStop();
+  playbackEndedRef.current = handleStop;
   useKaraokeHotkeys({
     scopeRef: containerRef,
     currentTime,

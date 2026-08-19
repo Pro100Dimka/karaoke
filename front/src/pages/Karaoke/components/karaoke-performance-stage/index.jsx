@@ -7,7 +7,7 @@ import AuroraWorld from "./aurora-world";
 import KaraokeLyricLine from "./karaoke-lyric-line";
 import MelodyRoll from "./melody-roll";
 
-function Lyrics({ songId, lyrics, currentLine, upcomingLine, nextLine, currentTime }) {
+function Lyrics({ lyrics, currentLine, upcomingLine, nextLine, currentTime }) {
   const activeLine = currentLine || upcomingLine;
   const activeClassName = cx(
     "karaoke-lyric karaoke-lyric-current",

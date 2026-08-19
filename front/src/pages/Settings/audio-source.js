@@ -245,7 +245,9 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
       return updated;
     }, translateSaved("Не удалось сохранить аудионастройки"));
   const updatePreference = (name, value) =>
-    setPreferences(() => persistUiPreferences(api, "audio", saveAudioPreferences({ [name]: value })));
+    setPreferences(() =>
+      persistUiPreferences(api, "audio", saveAudioPreferences({ [name]: value }))
+    );
   const toggleMonitoring = () =>
     runMonitoring(async () => {
       const enabling = !monitoringEnabled;

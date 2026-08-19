@@ -1,6 +1,6 @@
 [project]
 name = "a-and-d-voice-backend"
-version = "0.3.19"
+version = "0.3.20"
 description = "Локальный FastAPI backend приложения A&D Voice."
 requires-python = ">=3.11,<3.13"
 readme = "README.md"

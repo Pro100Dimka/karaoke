@@ -17,7 +17,12 @@ export default function MelodyEditorToolbarButton({
       label={label}
       disabled={disabled}
       onClick={onClick}
-      className={cx("melody-editor-tool", danger && "is-danger", active && "is-active", `tone-${tone}`)}
+      className={cx(
+        "melody-editor-tool",
+        danger && "is-danger",
+        active && "is-active",
+        `tone-${tone}`
+      )}
       iconSize={18}
     />
   );

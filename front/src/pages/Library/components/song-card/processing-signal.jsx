@@ -4,13 +4,9 @@ import { clamp as clampRange } from "../../../../utils/math";
 
 const WAVE_CONFIG = {
   length: 96,
-  // количество точек
   start: 65,
-  // стартовая высота
   min: 36,
-  // минимальная высота
   max: 70,
-  // максимальная высота
   variation: 30 // насколько сильно может прыгать соседняя точка
 };
 const POINTS = (() => {

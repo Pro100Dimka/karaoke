@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,7 +28,7 @@ function waveBuffer() {
 }
 
 test("real Electron media element authenticates localhost playback and preserves Range", async () => {
-  const token = "release-e2e-launch-secret";
+  const token = randomUUID();
   const wav = waveBuffer();
   let resolveRequest;
   const requestSeen = new Promise((resolve) => { resolveRequest = resolve; });

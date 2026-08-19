@@ -28,7 +28,7 @@ const scanExtensions = [".js", ".jsx", ".cjs", ".mjs", ".json", ".env"];
 
 function walk(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    if (["node_modules", "dist", "release", ".git"].includes(entry.name)) return [];
+    if (["node_modules", "dist", "release", ".git", ".stryker-tmp"].includes(entry.name)) return [];
     const fullPath = path.join(directory, entry.name);
     return entry.isDirectory() ? walk(fullPath) : [fullPath];
   });
@@ -48,5 +48,5 @@ if (failures.length) {
 }
 
 const command = process.platform === "win32" ? "npm.cmd" : "npm";
-const result = spawnSync(command, ["run", "verify"], { cwd: root, stdio: "inherit", shell: false });
+const result = spawnSync(command, ["run", "verify"], { cwd: root, stdio: "inherit", shell: true });
 process.exit(result.status ?? 1);

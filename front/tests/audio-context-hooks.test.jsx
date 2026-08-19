@@ -183,8 +183,8 @@ describe("speaking level meters", () => {
     const running = renderHook(() => useSpeakingLevels());
     act(() => running.result.current.startSpeakingMeter("x", null));
     act(() => running.result.current.startSpeakingMeter("x", {}));
+    expect(runningContexts).toHaveLength(0);
     verify(
-      [runningContexts, "toHaveLength", 0],
       [running.result.current.prepareSpeakingMeter(), "toBe", true],
       [runningContexts[0].resume, "not.toHaveBeenCalled"],
       [runningContexts, "toHaveLength", 1]

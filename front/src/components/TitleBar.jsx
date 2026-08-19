@@ -4,7 +4,13 @@ import { IconButton } from "../theme/ui";
 
 const WINDOW_ACTIONS = [
   { id: "minimize", labelKey: "common.minimizeWindow", Icon: Minus, size: 16 },
-  { id: "maximize", labelKey: "common.maximizeWindow", Icon: Maximize2, size: 14, action: "toggleFullscreen" },
+  {
+    id: "maximize",
+    labelKey: "common.maximizeWindow",
+    Icon: Maximize2,
+    size: 14,
+    action: "toggleFullscreen"
+  },
   { id: "close", labelKey: "common.closeWindow", Icon: X, size: 16, danger: true }
 ];
 
