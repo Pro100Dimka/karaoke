@@ -14,7 +14,6 @@ vi.mock("../src/theme/ui", () => ({
   Box: passthrough("div"),
   Stack: passthrough("div"),
   Typography: passthrough("span"),
-  Badge: passthrough("span"),
   Card: ({ as: Comp = "div", children, cardPanel: _panel, cardContent: _content, ...props }) => (
     <Comp {...props}>{children}</Comp>
   ),

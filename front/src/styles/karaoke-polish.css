@@ -207,8 +207,6 @@
 /* The close control sits directly on the modal corner and intentionally hangs
    half outside the card. Modal scrolling belongs to .modal-scroll, not the shell. */
 .app-modal.modal-card,
-.settings-modal.modal-card,
-.song-settings-modal.modal-card,
 .processing-modal.modal-card,
 .online-room-modal.modal-card,
 .app-dialog.modal-card,
@@ -248,29 +246,6 @@
 .modal-close:hover,
 .performance-analysis-close:hover,
 .app-dialog-close:hover {
-  transform: translate(30%, -30%) scale(1.06);
-}
-
-/* Legacy microphone modal selectors retained for compatibility; the dialog now uses <Modal>. */
-.karaoke-settings-modal {
-  overflow: visible;
-}
-
-.karaoke-settings-close {
-  inset: 0 0 auto auto;
-  margin: 0;
-  inline-size: 2.65rem;
-  block-size: 2.65rem;
-  transform: translate(30%, -30%);
-  border-color: var(--color-border-strong);
-  background: color-mix(in srgb, var(--color-surface-strong) 92%, transparent);
-  backdrop-filter: blur(0.75rem) saturate(145%);
-  box-shadow:
-    0 0.55rem 1.25rem color-mix(in srgb, var(--color-bg-deep) 34%, transparent),
-    0 0 0.7rem color-mix(in srgb, var(--color-primary) 32%, transparent);
-}
-
-.karaoke-settings-close:hover {
   transform: translate(30%, -30%) scale(1.06);
 }
 
@@ -500,25 +475,6 @@ body {
   border-radius: inherit;
 }
 
-/* Settings and microphone dialogs now use the same Modal shell. */
-
-.karaoke-settings-modal {
-  inline-size: min(34rem, calc(100vw - 2rem));
-  max-block-size: min(86dvh, 42rem);
-}
-
-.karaoke-settings-modal > .ui-card__panel > .ui-card__content {
-  display: flex;
-  min-block-size: 0;
-  flex-direction: column;
-}
-
-.karaoke-settings-modal .microphone-effects,
-.karaoke-settings-modal .karaoke-settings-section {
-  min-block-size: 0;
-  padding: var(--space-5);
-}
-
 /* ========================================================================== 
    LIBRARY / MELODY VISUAL TUNING · theme-matched terrain + stable piano
    ========================================================================== */
@@ -631,34 +587,11 @@ body {
   border-radius: inherit;
 }
 
-/* Song settings previously painted its own large background outside Card. */
-
-.song-settings-modal > .ui-card__panel,
-.song-settings-modal > .ui-card__panel > .ui-card__content {
-  min-block-size: 0;
-  overflow: hidden;
-}
-
-/* Columns inside song settings are content sections, not nested modal cards. */
-
-.song-settings-workspace > .panel::before,
-.song-settings-workspace > .panel::after {
-  content: none !important;
-  display: none !important;
-}
-
-.song-settings-workspace .panel-header {
-  background: transparent;
-  box-shadow: none;
-}
-
 /* Explicit modal variants keep their geometry only; the visual surface stays shared. */
-.settings-modal,
 .processing-modal,
 .online-room-modal,
 .app-dialog,
-.performance-analysis-modal,
-.karaoke-settings-modal {
+.performance-analysis-modal {
   background: transparent !important;
   box-shadow: none !important;
 }
@@ -1079,7 +1012,6 @@ body {
 
 /* Modal close overlay: direct child of Card, always above the card edge and fully opaque. */
 .modal-card > .app-modal-close,
-.modal-card > .settings-modal-close,
 .modal-card > .modal-close,
 .modal-card > .performance-analysis-close,
 .modal-card > .app-dialog-close {

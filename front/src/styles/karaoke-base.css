@@ -144,88 +144,6 @@
   cursor: pointer;
 }
 
-.karaoke-settings-modal {
-  position: relative;
-  width: min(900px, 100%);
-  max-height: 90vh;
-  overflow: auto;
-  border-radius: var(--radius-xl);
-  display: grid;
-  inline-size: min(46rem, 92vw);
-  max-block-size: 88dvh;
-  gap: var(--space-4);
-  padding: var(--space-5);
-  border: var(--hairline) solid var(--color-border-strong);
-  background: var(--gradient-panel);
-  box-shadow:
-    0 1.75rem 5.625rem color-mix(in srgb, var(--color-bg-deep) 52%, transparent),
-    0 0 0.5625rem color-mix(in srgb, var(--color-primary) 48%, transparent),
-    0 0 1.75rem color-mix(in srgb, var(--color-primary-strong) 38%, transparent);
-}
-
-.karaoke-settings-close {
-  position: absolute;
-  top: var(--space-4);
-  right: var(--space-4);
-  inset: var(--space-3) var(--space-3) auto auto;
-  display: grid;
-  inline-size: 2.5rem;
-  aspect-ratio: 1;
-  place-items: center;
-  border: var(--hairline) solid var(--color-border);
-  border-radius: 50%;
-  color: var(--color-text);
-  background: var(--color-surface-glass);
-}
-
-.karaoke-settings-section {
-  padding: var(--space-4);
-  border: var(--hairline) solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--color-surface-glass) 82%, transparent);
-}
-
-.karaoke-settings-section-title {
-  font-weight: 850;
-}
-.karaoke-settings-toggles {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-}
-.slider-field__header {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.karaoke-key-stepper,
-.karaoke-speed-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-.karaoke-key-stepper button,
-.karaoke-speed-switch button {
-  min-block-size: 2.3rem;
-  padding-inline: var(--space-3);
-  border: var(--hairline) solid var(--color-border);
-  border-radius: var(--radius-md);
-  color: var(--color-text);
-  background: var(--color-surface-glass);
-}
-.karaoke-speed-switch button.is-active {
-  border-color: var(--color-primary);
-  background: var(--gradient-primary);
-}
-
-.microphone-controls-launcher {
-  position: relative;
-  display: flex;
-  justify-content: flex-end;
-}
-
 .karaoke-recording-error {
   position: absolute;
   z-index: 40;
@@ -285,9 +203,6 @@
 @media (max-width: 62rem) {
   .melody-roll {
     inset-inline: var(--space-4);
-  }
-  .karaoke-settings-sliders {
-    grid-template-columns: 1fr;
   }
 }
 
@@ -415,9 +330,6 @@
   }
   .karaoke-player-meta {
     grid-column: 1 / -1;
-  }
-  .karaoke-settings-modal {
-    padding: var(--space-4);
   }
   .performance-analysis-metrics {
     grid-template-columns: 1fr;
@@ -724,23 +636,6 @@
   }
 }
 
-/* Compact four-channel mixer in the performance HUD. */
-
-.karaoke-quick-mixer .slider-field {
-  min-inline-size: 0;
-  gap: 0.25rem;
-}
-
-.karaoke-settings-sliders--single {
-  grid-template-columns: 1fr;
-}
-
-.karaoke-effects-panel {
-  display: grid;
-  gap: var(--space-4);
-  padding: var(--space-5);
-}
-
 /* Final karaoke readability and quick-display controls. */
 .karaoke-lyric,
 .karaoke-lyric-character {
@@ -761,10 +656,6 @@
     var(--color-highlight) var(--character-fill),
     var(--color-highlight) 100%
   );
-}
-
-.karaoke-settings-toggles--playback {
-  grid-template-columns: minmax(0, 1fr);
 }
 
 /* ==========================================================================
@@ -844,10 +735,6 @@
 @media (max-width: 40rem) {
   .settings-header {
     padding-inline-start: var(--space-4);
-  }
-
-  .audio-monitor-card .btn {
-    width: 100%;
   }
 
   .karaoke-stage {
@@ -1064,16 +951,6 @@
   block-size: 1.62rem;
 }
 
-.karaoke-quick-mixer .slider-field__header {
-  gap: 0.25rem;
-  white-space: nowrap;
-  font-size: 0.5rem;
-}
-.karaoke-quick-mixer .slider-field__header .mono {
-  color: var(--color-text-muted);
-  font-size: 0.48rem;
-}
-
 [data-theme="light"] .karaoke-lyric,
 [data-theme="light"] .karaoke-lyric-character {
   text-shadow:
@@ -1090,11 +967,6 @@
     grid-column: 2;
     justify-content: flex-end;
   }
-  .settings-modal {
-    inline-size: calc(100vw - 2 * var(--space-3));
-    block-size: min(92dvh, 52rem);
-  }
-
   .settings-header {
     grid-template-columns: auto minmax(0, 1fr);
   }
@@ -1117,19 +989,6 @@
 
 /* --- Studio console layout inspired by a modern DAW/karaoke workstation. --- */
 
-.karaoke-quick-mixer--vertical .slider-field label {
-  inline-size: 100%;
-  text-align: center;
-  font-size: 0.66rem;
-}
-
-.karaoke-tool-tabs button.is-active {
-  color: var(--color-highlight);
-  border-color: var(--color-primary);
-  box-shadow: 0 0 1rem color-mix(in srgb, var(--color-primary) 22%, transparent);
-  transform: translateY(-0.05rem);
-}
-
 /* Keep lyrics clear above the larger studio console. */
 .karaoke-lyrics {
   position: absolute;
@@ -1146,23 +1005,6 @@
   inset-block-end: auto;
 }
 /* A small cover thumbnail, one more row in .karaoke-lyrics's own flex column
-   (karaoke-polish.css sets display:flex/flex-direction:column/align-items:
-   center/gap there) -- letting it flow naturally, rather than absolutely
-   positioning it against that heavily !important-tuned block, is what keeps
-   it centered and spaced consistently with the lyric rows at every
-   breakpoint. */
-.karaoke-lyrics-cover {
-  position: relative;
-  z-index: 8;
-  flex-shrink: 0;
-  inline-size: clamp(3rem, 6vw, 4.5rem);
-  block-size: clamp(3rem, 6vw, 4.5rem);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  pointer-events: none;
-  box-shadow: 0 0.75rem 2rem color-mix(in srgb, var(--color-bg-deep) 55%, transparent);
-}
-
 .karaoke-performance-stage {
   position: relative;
   overflow: hidden;
@@ -1182,36 +1024,6 @@
   border-radius: clamp(0.9rem, 1.35vw, 1.25rem);
   inset: clamp(0.45rem, 0.8vh, 0.7rem) clamp(0.55rem, 1.25vw, 1.15rem) auto;
   border-color: color-mix(in srgb, var(--color-primary) 62%, var(--color-border));
-}
-
-[data-theme="light"] .karaoke-song-strip {
-  background: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--color-highlight) 72%, transparent),
-    color-mix(in srgb, var(--color-highlight) 62%, transparent)
-  );
-  box-shadow:
-    inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 88%, transparent),
-    0 0.7rem 1.8rem color-mix(in srgb, var(--color-primary-strong) 12%, transparent);
-}
-
-/* Studio mixer: vertical channel faders + quick effect dials. */
-
-.karaoke-quick-mixer--vertical .slider-field__header {
-  display: contents;
-}
-
-.karaoke-quick-mixer--vertical .slider-field__header > span:first-child {
-  grid-row: 1;
-  color: var(--color-text-soft);
-  font-size: 0.63rem;
-  white-space: nowrap;
-}
-
-.karaoke-quick-mixer--vertical .slider-field__header > .mono {
-  grid-row: 3;
-  color: var(--color-primary);
-  font-size: 0.65rem;
 }
 
 .karaoke-effect-dial__label {
@@ -1245,19 +1057,6 @@
 
 /* Compact studio controls: BPM, key name and vocal range. */
 
-/* Theme-only color polish for the studio console. Layout is intentionally unchanged. */
-.karaoke-song-strip {
-  display: grid;
-  grid-template-columns:
-    4.6rem minmax(10rem, 14rem) auto minmax(16rem, 1fr)
-    auto;
-  align-items: center;
-  gap: 0.8rem;
-  min-block-size: 4.3rem;
-  border-radius: 0.85rem;
-  border-color: color-mix(in srgb, var(--color-accent) 34%, var(--color-border));
-}
-
 .karaoke-song-cover {
   display: grid;
   place-items: center;
@@ -1281,56 +1080,6 @@
   box-shadow:
     inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 25%, transparent),
     0 0 1.25rem color-mix(in srgb, var(--color-primary) 34%, transparent);
-}
-
-.karaoke-song-strip .waveform-timeline {
-  block-size: 3.1rem;
-  color: var(--color-primary);
-  filter: drop-shadow(0 0 0.22rem color-mix(in srgb, var(--color-primary) 55%, transparent))
-    drop-shadow(0 0 0.5rem color-mix(in srgb, var(--color-accent) 24%, transparent));
-}
-
-.karaoke-song-strip .waveform-timeline::after {
-  content: "";
-  position: absolute;
-  inset: 18% 0;
-  pointer-events: none;
-  mix-blend-mode: screen;
-  opacity: 0.65;
-}
-
-.karaoke-quick-mixer--vertical .slider-field:nth-child(1) {
-  --channel-color: var(--color-primary);
-}
-.karaoke-quick-mixer--vertical .slider-field:nth-child(2) {
-  --channel-color: var(--color-success);
-}
-.karaoke-quick-mixer--vertical .slider-field:nth-child(3) {
-  --channel-color: var(--color-accent);
-}
-.karaoke-quick-mixer--vertical .slider-field:nth-child(4) {
-  --channel-color: var(--color-secondary);
-}
-
-.karaoke-quick-mixer--vertical .slider-field {
-  display: grid;
-  justify-items: center;
-  align-content: end;
-  min-inline-size: 0;
-  border-radius: 0.65rem;
-  position: relative;
-  grid-template-rows: auto 1fr auto;
-  align-items: center;
-  gap: 0.25rem;
-  min-block-size: 9.6rem;
-  padding: 0.35rem 0.2rem 0.45rem;
-  overflow: hidden;
-}
-
-.karaoke-quick-mixer--vertical .slider-field__header > span:first-child,
-.karaoke-quick-mixer--vertical .slider-field__header > .mono {
-  color: var(--channel-color);
-  text-shadow: 0 0 0.55rem color-mix(in srgb, var(--channel-color) 34%, transparent);
 }
 
 .karaoke-effect-dial strong {
@@ -1370,24 +1119,6 @@
   box-shadow: 0 0 0.55rem var(--dial-color);
 }
 
-.karaoke-tool-tabs button.is-active {
-  color: color-mix(in srgb, var(--tool-color) 42%, var(--color-highlight));
-  border-color: var(--tool-color);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--tool-color) 16%, var(--color-surface-glass)),
-    color-mix(in srgb, var(--color-bg-deep) 62%, transparent)
-  );
-  box-shadow:
-    inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 18%, transparent),
-    0 0 1rem color-mix(in srgb, var(--tool-color) 28%, transparent);
-}
-
-[data-theme="light"] .karaoke-song-strip .waveform-timeline {
-  filter: drop-shadow(0 0 0.16rem color-mix(in srgb, var(--color-primary) 34%, transparent))
-    drop-shadow(0 0 0.34rem color-mix(in srgb, var(--color-accent) 18%, transparent));
-}
-
 /* Interaction and alignment polish for the studio console. */
 .karaoke-effect-dial {
   position: relative;
@@ -1419,29 +1150,6 @@
   transition: none;
 }
 
-.karaoke-effect-presets button.is-active {
-  color: color-mix(in srgb, var(--preset-color) 45%, var(--color-highlight));
-  border-color: var(--preset-color);
-  background:
-    radial-gradient(
-      circle at 50% 20%,
-      color-mix(in srgb, var(--preset-color) 20%, transparent),
-      transparent 55%
-    ),
-    color-mix(in srgb, var(--color-bg-deep) 52%, transparent);
-  box-shadow:
-    inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 18%, transparent),
-    0 0 0.85rem color-mix(in srgb, var(--preset-color) 24%, transparent);
-  transform: translateY(-0.04rem);
-}
-
-.karaoke-effect-presets button.is-active > span {
-  background: color-mix(in srgb, var(--preset-color) 14%, transparent);
-  box-shadow:
-    inset 0 0 0.65rem color-mix(in srgb, var(--preset-color) 14%, transparent),
-    0 0 0.7rem color-mix(in srgb, var(--preset-color) 30%, transparent);
-}
-
 @media (max-width: 78rem) {
   .melody-roll {
     block-size: clamp(11.5rem, 22vh, 14rem);
@@ -1454,27 +1162,12 @@
     inset-block-start: clamp(8.8rem, 21dvh, 11rem);
   }
 
-  .karaoke-song-strip {
-    grid-template-columns:
-      3.8rem minmax(8rem, 12rem) auto minmax(10rem, 1fr)
-      auto;
-  }
-
   .karaoke-effect-dial__control {
     inline-size: 2.65rem;
   }
 }
 
 @media (max-width: 56rem) {
-  .karaoke-song-strip {
-    grid-template-columns: 3.5rem minmax(0, 1fr) auto;
-  }
-  .karaoke-song-strip .waveform-timeline {
-    grid-column: 1 / -1;
-  }
-  .karaoke-song-strip .karaoke-timecode {
-    display: none;
-  }
   .karaoke-performance-stage {
     padding-block-end: 0;
   }

@@ -34,60 +34,11 @@
   min-height: 0;
   overflow: hidden;
 }
-.melody-editor-control-rail {
-  display: grid;
-  align-content: start;
-  gap: 0.75rem;
-  min-width: 0;
-  overflow: auto;
-  padding: 0.62rem;
-  border-right: 1px solid var(--color-border);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--color-surface-strong) 58%, var(--color-bg-deep)),
-    color-mix(in srgb, var(--color-bg-deep) 96%, transparent)
-  );
-}
-.melody-editor-toolbar {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 0.26rem;
-  margin: 0;
-  padding-bottom: 0.08rem;
-  overflow-x: auto;
-}
 .melody-editor-tool {
   width: 31px;
   height: 31px;
   min-width: 31px;
   border-radius: 8px;
-}
-.melody-editor-dials {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.15rem;
-  justify-items: center;
-}
-.melody-editor-dials .karaoke-effect-dial {
-  min-width: 0;
-  transform: scale(0.74);
-  transform-origin: top center;
-  margin-bottom: -12px;
-}
-.melody-editor-shortcuts {
-  display: grid;
-  gap: 0.35rem;
-  padding: 0.62rem;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 17%, var(--color-border));
-  border-radius: 10px;
-  color: var(--color-text-muted);
-  background: rgba(0, 0, 0, 0.12);
-  font-size: 9.5px;
-  line-height: 1.35;
-}
-.melody-editor-shortcuts strong {
-  color: var(--color-text-soft);
-  font-size: 10px;
 }
 
 .melody-editor-stage {
@@ -200,81 +151,18 @@
   pointer-events: none;
 }
 
-.melody-editor-inspector {
-  padding: 0.65rem;
-  font-size: 10px;
-}
-.melody-editor-inspector-title {
-  margin-bottom: 0.55rem;
-  font-size: 9.5px;
-}
-.melody-editor-inspector-row {
-  gap: 0.45rem;
-  padding: 0.35rem 0;
-  font-size: 10px;
-}
-.melody-editor-syllable-field {
-  margin-top: 0.55rem;
-  font-size: 9.5px;
-}
-
-.melody-editor-zoom-controls {
-  position: sticky;
-  z-index: 80;
-  right: 10px;
-  bottom: 8px;
-  float: right;
-  display: grid;
-  width: 172px;
-  gap: 0.3rem;
-  margin: -58px 10px 8px auto;
-  padding: 0.45rem 0.5rem;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
-  border-radius: 9px;
-  background: color-mix(in srgb, var(--color-bg-deep) 92%, transparent);
-  box-shadow:
-    0 5px 18px rgba(0, 0, 0, 0.42),
-    0 0 14px color-mix(in srgb, var(--color-primary) 10%, transparent);
-  backdrop-filter: blur(10px);
-}
-.melody-editor-zoom-controls label {
-  display: grid;
-  grid-template-columns: 15px minmax(0, 1fr);
-  align-items: center;
-  gap: 0.4rem;
-  color: var(--color-text-muted);
-}
-.melody-editor-zoom-controls input[type="range"] {
-  width: 100%;
-  margin: 0;
-  accent-color: var(--color-primary);
-}
-
 @media (max-width: 1100px) {
   .melody-editor-layout {
     grid-template-columns: 250px minmax(0, 1fr);
-  }
-  .melody-editor-inspector {
-    display: none;
   }
 }
 @media (max-width: 780px) {
   .melody-editor-layout {
     grid-template-columns: 1fr;
   }
-  .melody-editor-control-rail {
-    display: none;
-  }
   .melody-editor-statusline {
     display: none;
   }
-}
-.melody-editor-stage > .melody-editor-zoom-controls {
-  position: absolute;
-  right: 12px;
-  bottom: 10px;
-  float: none;
-  margin: 0;
 }
 
 /* ==================== MIDI EDITOR V5 ==================== */
@@ -314,9 +202,6 @@
   letter-spacing: 0.18em;
   opacity: 0.88;
 }
-.melody-editor-back {
-  border-radius: 9px;
-}
 .melody-editor-statusline {
   gap: 0.55rem;
 }
@@ -339,46 +224,6 @@
 .melody-editor-layout {
   grid-template-columns: var(--editor-rail-width) minmax(0, 1fr);
   background: #050408;
-}
-.melody-editor-control-rail {
-  gap: 0.62rem;
-  padding: 0.58rem;
-  border-right-color: color-mix(in srgb, var(--color-primary) 24%, rgba(255, 255, 255, 0.08));
-  background:
-    radial-gradient(
-      circle at 50% 0%,
-      color-mix(in srgb, var(--color-primary) 11%, transparent),
-      transparent 28%
-    ),
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--color-surface-strong) 44%, #080509),
-      #080507 72%
-    );
-  box-shadow: 8px 0 24px rgba(0, 0, 0, 0.18);
-}
-.melody-editor-rail-section,
-.melody-editor-selection-card {
-  padding: 0.58rem;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 15%, rgba(255, 255, 255, 0.075));
-  border-radius: 12px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
-  box-shadow:
-    inset 0 1px rgba(255, 255, 255, 0.035),
-    0 8px 18px rgba(0, 0, 0, 0.12);
-}
-.melody-editor-rail-title {
-  margin-bottom: 0.48rem;
-  color: var(--color-text-muted);
-  font: 850 8px/1 var(--font-display);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-.melody-editor-toolbar {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.34rem;
-  overflow: visible;
 }
 .melody-editor-tool {
   width: 100%;
@@ -404,65 +249,6 @@
     0 0 18px color-mix(in srgb, var(--color-primary) 30%, transparent),
     inset 0 1px rgba(255, 255, 255, 0.16);
 }
-.melody-editor-dials {
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.05rem;
-}
-.melody-editor-dials .karaoke-effect-dial {
-  transform: scale(0.69);
-  transform-origin: top center;
-  margin: 0 -8px -17px;
-}
-
-.melody-editor-selection-card {
-  display: grid;
-  gap: 0.5rem;
-  min-height: 74px;
-}
-.melody-editor-selection-card.is-active {
-  border-color: color-mix(in srgb, var(--color-primary) 31%, rgba(255, 255, 255, 0.08));
-}
-.melody-editor-selection-card__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--color-text-muted);
-  font-size: 9px;
-  font-weight: 850;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.melody-editor-selection-card__head strong {
-  color: var(--color-primary-hover);
-  font-size: 11px;
-}
-.melody-editor-selection-note {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-.melody-editor-selection-note strong {
-  font: 900 1.05rem/1 var(--font-display);
-  color: var(--color-text);
-}
-.melody-editor-selection-note span,
-.melody-editor-selection-empty {
-  color: var(--color-text-muted);
-  font-size: 9px;
-  line-height: 1.45;
-}
-.melody-editor-syllable-field {
-  gap: 0.35rem;
-  margin: 0;
-  font-size: 9px;
-}
-.melody-editor-syllable-field select {
-  min-height: 30px;
-  border-radius: 8px;
-  font-size: 10px;
-}
-
 .melody-editor-stage {
   grid-template-rows: 50px minmax(0, 1fr);
   background: #07060a;
@@ -598,32 +384,9 @@
   box-shadow: 0 0 12px color-mix(in srgb, var(--color-primary) 72%, transparent);
 }
 
-.melody-editor-zoom-controls {
-  width: 184px;
-  gap: 0.34rem;
-  padding: 0.45rem 0.55rem;
-  border-radius: 11px;
-  border-color: color-mix(in srgb, var(--color-primary) 28%, rgba(255, 255, 255, 0.08));
-  background: color-mix(in srgb, #07060a 91%, transparent);
-  box-shadow:
-    0 8px 24px rgba(0, 0, 0, 0.48),
-    inset 0 1px rgba(255, 255, 255, 0.035),
-    0 0 20px color-mix(in srgb, var(--color-primary) 9%, transparent);
-}
-.melody-editor-zoom-controls label {
-  grid-template-columns: 16px minmax(0, 1fr);
-  color: color-mix(in srgb, var(--color-text-muted) 88%, white);
-}
-.melody-editor-zoom-controls input[type="range"] {
-  height: 3px;
-}
-
 @media (max-width: 980px) {
   .melody-editor-workspace {
     --editor-rail-width: 188px;
-  }
-  .melody-editor-dials {
-    grid-template-columns: repeat(2, 1fr);
   }
   .melody-editor-status-pill {
     display: none;
@@ -632,9 +395,6 @@
 @media (max-width: 720px) {
   .melody-editor-layout {
     grid-template-columns: 1fr;
-  }
-  .melody-editor-control-rail {
-    display: none;
   }
   .melody-editor-statusline {
     display: none;
@@ -685,10 +445,6 @@
   overflow: hidden;
   background: #060509;
 }
-.melody-editor-control-rail {
-  display: none !important;
-}
-
 .melody-editor-topdeck {
   position: relative;
   z-index: 120;

@@ -57,22 +57,6 @@
   font: 850 10px/1 var(--font-display);
   letter-spacing: 0.16em;
 }
-.melody-editor-back {
-  flex: none;
-}
-
-.melody-editor-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 0.42rem;
-  min-width: 0;
-  margin-left: auto;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.melody-editor-toolbar::-webkit-scrollbar {
-  display: none;
-}
 .melody-editor-tool {
   flex: none;
   width: 38px;
@@ -104,28 +88,6 @@
   border-bottom: 1px solid var(--color-border);
   background: color-mix(in srgb, var(--color-surface-glass) 68%, var(--color-bg-deep));
 }
-.melody-editor-transport .karaoke-song-strip {
-  min-width: 0;
-  border-radius: var(--shape-lg);
-}
-.melody-editor-dials {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.melody-editor-dials .karaoke-effect-dial {
-  transform: scale(0.82);
-  transform-origin: center;
-  min-width: 66px;
-}
-
-.melody-editor-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 220px;
-  min-height: 0;
-  overflow: hidden;
-}
-
 .melody-editor-roll-shell {
   position: relative;
   min-width: 0;
@@ -255,57 +217,6 @@
   box-shadow: 0 0 0.8rem var(--color-primary);
 }
 
-.melody-editor-inspector {
-  min-width: 0;
-  overflow-y: auto;
-  padding: 0.9rem;
-  border-left: 1px solid var(--color-border);
-  background: color-mix(in srgb, var(--color-bg-deep) 94%, transparent);
-}
-.melody-editor-inspector-title {
-  margin-bottom: 0.8rem;
-  color: var(--color-primary-hover);
-  font: 850 11px/1 var(--font-display);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-.melody-editor-inspector-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.48rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  font-size: 12px;
-}
-.melody-editor-inspector-row span {
-  color: var(--color-text-muted);
-}
-.melody-editor-syllable-field {
-  display: grid;
-  gap: 0.45rem;
-  margin-top: 0.8rem;
-  color: var(--color-text-soft);
-  font-size: 11px;
-  font-weight: 800;
-}
-.melody-editor-syllable-field select {
-  width: 100%;
-  min-width: 0;
-}
-.melody-editor-help {
-  margin-top: 1rem;
-  color: var(--color-text-muted);
-  font-size: 10.5px;
-  line-height: 1.55;
-}
-.melody-editor-zoom-readout {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 1rem;
-  color: var(--color-text-soft);
-  font-size: 11px;
-}
 .melody-editor-loading,
 .melody-editor-route-loading {
   display: grid;
@@ -347,21 +258,8 @@
     align-items: flex-start;
     flex-direction: column;
   }
-  .melody-editor-toolbar {
-    width: 100%;
-    margin-left: 0;
-  }
   .melody-editor-transport {
     grid-template-columns: 1fr;
-  }
-  .melody-editor-dials {
-    justify-content: center;
-  }
-  .melody-editor-main {
-    grid-template-columns: 1fr;
-  }
-  .melody-editor-inspector {
-    display: none;
   }
 }
 

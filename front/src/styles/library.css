@@ -272,12 +272,6 @@
   background: var(--color-surface-soft);
 }
 
-/* Song settings: one bounded Card, with internal scrolling only. */
-
-.song-lyrics-editor::-webkit-scrollbar {
-  display: none;
-}
-
 /* Flat form composition copied from the clean reference: label + one control. */
 .settings-field {
   display: flex;
@@ -387,9 +381,6 @@
   .library-song-card-heading {
     align-items: flex-start;
     flex-direction: column;
-  }
-  .song-lyrics-editor {
-    min-block-size: 20rem;
   }
 }
 
@@ -544,19 +535,6 @@
     );
 }
 
-.song-settings-modal > .ui-card__panel,
-.song-settings-modal > .ui-card__panel > .ui-card__content {
-  display: flex;
-  min-block-size: 0;
-  flex: 1;
-  flex-direction: column;
-}
-
-.song-settings-modal > .ui-card__panel {
-  overflow: hidden;
-  max-block-size: 88dvh;
-}
-
 :root[data-theme="light"] .library-song-card > .ui-card__panel {
   background:
     radial-gradient(
@@ -574,27 +552,6 @@
       color-mix(in srgb, var(--color-highlight) 78%, transparent),
       color-mix(in srgb, var(--color-highlight) 86%, transparent)
     );
-}
-
-/* Compact semantic rows for the song form. */
-
-.song-settings-field-row > .settings-field {
-  min-inline-size: 0;
-}
-
-.song-settings-note-range .field-row {
-  block-size: var(--field-control-size);
-}
-
-/* Shared title bar inside the song settings modal. */
-
-.song-settings-panel .panel-header {
-  flex: none;
-  padding: var(--space-4) var(--space-5);
-  border-block-end: var(--hairline) solid var(--color-border);
-  background: color-mix(in srgb, var(--color-surface-glass) 30%, transparent);
-  min-block-size: 3.6rem;
-  padding-inline-end: var(--space-5);
 }
 
 /* Card primitives used by the highlighted hero controls. */
@@ -653,15 +610,6 @@
 .library-song-card-heading .badge {
   flex: none;
   max-inline-size: 46%;
-}
-
-.library-song-card-icon {
-  flex: 0 0 clamp(2.25rem, 5.8vw, 2.7rem);
-  padding: 0;
-  aspect-ratio: 1;
-  flex-basis: 2.25rem;
-  inline-size: 2.25rem;
-  block-size: 2.25rem;
 }
 
 .library-song-card-progress {
@@ -774,8 +722,7 @@
   justify-content: flex-end;
 }
 
-.library-song-card-actions .btn-sm,
-.library-song-card-icon {
+.library-song-card-actions .btn-sm {
   inline-size: 2.05rem;
   block-size: 2.05rem;
   min-block-size: 2.05rem;
@@ -1065,7 +1012,6 @@
 /* Shared modal dimensions override old screen-specific sizing. */
 
 .processing-modal,
-.settings-modal,
 .online-room-modal,
 .app-dialog {
   inline-size: min(90vw, 43.75rem);
@@ -1075,13 +1021,9 @@
 }
 
 .processing-modal > .ui-card__panel,
-.song-settings-modal > .ui-card__panel,
-.settings-modal > .ui-card__panel,
 .online-room-modal > .ui-card__panel,
 .app-dialog > .ui-card__panel,
 .processing-modal > .ui-card__panel > .ui-card__content,
-.song-settings-modal > .ui-card__panel > .ui-card__content,
-.settings-modal > .ui-card__panel > .ui-card__content,
 .online-room-modal > .ui-card__panel > .ui-card__content,
 .app-dialog > .ui-card__panel > .ui-card__content {
   block-size: auto;
@@ -1570,147 +1512,9 @@
   }
 }
 
-/*
- * Holographic liquid-glass frame.
- * The panel itself supplies the glass depth, ::before is the sharp moving
- * reflective edge, and ::after is a wider coloured light spill.
- */
-.song-settings-workspace > .panel {
-  flex: 1;
-  --frame-angle: 0deg;
-  --frame-glow: 0.72;
-  position: relative;
-  isolation: isolate;
-  min-width: 0;
-  padding-bottom: var(--space-6);
-  overflow: visible;
-  transform: translateZ(0);
-}
-
-.song-settings-workspace > .panel:nth-child(2) {
-  animation-delay: -1.8s;
-}
-
-.song-settings-workspace > .panel:nth-child(2)::before,
-.song-settings-workspace > .panel:nth-child(2)::after {
-  animation-delay:
-    -2.9s,
-    -1.1s;
-}
-
-.song-settings-workspace .panel-header {
-  border-bottom: 0;
-  padding: var(--space-6) var(--space-6) var(--space-4);
-}
-.song-settings-workspace .panel-title {
-  color: var(--color-highlight);
-  text-transform: uppercase;
-}
-.song-settings-workspace .panel-title::before {
-  content: "✦";
-  margin-right: var(--space-3);
-  color: var(--color-accent);
-  text-shadow:
-    0 0 0.5625rem color-mix(in srgb, var(--color-primary) 42%, transparent),
-    0 0 1.75rem color-mix(in srgb, var(--color-primary-strong) 30%, transparent);
-}
-
-.song-settings-fields .settings-field {
-  padding: var(--space-2) 0;
-  border-color: var(--color-border);
-}
-.song-settings-fields .settings-field:hover {
-  border-color: var(--color-border-strong);
-  box-shadow:
-    inset 0 0 26px color-mix(in srgb, var(--color-success) 12%, transparent),
-    0 0 14px color-mix(in srgb, var(--color-success) 14%, transparent);
-}
-
-.song-lyrics-field > .settings-field {
-  display: flex;
-  inline-size: 100%;
-  min-block-size: 0;
-  flex-direction: column;
-  width: 100%;
-  min-width: 0;
-  align-items: stretch;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-.song-lyrics-field > .settings-field > span {
-  flex: none;
-  padding-block-end: var(--space-3);
-  margin-bottom: var(--space-3);
-}
-.song-lyrics-editor {
-  min-block-size: 0;
-  flex: 1;
-  scrollbar-width: none;
-  display: block;
-  width: 100%;
-  min-width: 0;
-  min-height: 520px;
-  resize: vertical;
-  writing-mode: horizontal-tb;
-  white-space: pre-wrap;
-  overflow-x: hidden;
-  overflow-y: auto;
-  border-color: var(--color-border-strong);
-  border-radius: var(--radius-lg);
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  line-height: 1.2;
-  background:
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--color-bg-deep) 10%, transparent) 1px,
-      transparent 1px
-    ),
-    linear-gradient(color-mix(in srgb, var(--color-bg-deep) 8%, transparent) 1px, transparent 1px),
-    color-mix(in srgb, var(--color-bg-deep) 82%, transparent);
-  background-size: 28px 28px;
-  box-shadow:
-    inset 0 0 45px color-mix(in srgb, var(--color-bg-deep) 16%, transparent),
-    0 0 22px color-mix(in srgb, var(--color-success) 12%, transparent);
-}
 .song-lyrics-error {
   margin: var(--space-3) var(--space-5) 0;
   color: var(--color-rose);
-}
-
-@property --frame-angle {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 0deg;
-}
-
-@keyframes song-settings-frame-flow {
-  to {
-    --frame-angle: 360deg;
-  }
-}
-
-@keyframes song-settings-frame-breathe {
-  0% {
-    opacity: 0.48;
-    filter: blur(14px);
-  }
-  100% {
-    opacity: var(--frame-glow);
-    filter: blur(21px);
-  }
-}
-
-@media (max-width: 940px) {
-  .song-lyrics-editor {
-    min-height: 340px;
-  }
-}
-@media (max-width: 560px) {
-  .song-settings-workspace .panel-header {
-    padding-inline: var(--space-4);
-  }
 }
 
 .online-room-person-volume {

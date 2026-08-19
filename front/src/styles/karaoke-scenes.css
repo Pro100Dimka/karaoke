@@ -829,26 +829,8 @@ body {
 /* Restore the console's original wide footprint. Only its vertical density is
    reduced below; it still floats above the stage and MelodyRoll. */
 
-.karaoke-song-strip {
-  min-block-size: 3.25rem !important;
-  grid-template-columns:
-    3.45rem minmax(9rem, 13rem) auto minmax(14rem, 1fr)
-    auto !important;
-  gap: 0.52rem !important;
-}
-
 .karaoke-song-cover {
   inline-size: 2.85rem !important;
-}
-
-.karaoke-song-strip .waveform-timeline {
-  block-size: 2.25rem !important;
-}
-
-.karaoke-quick-mixer--vertical .slider-field {
-  min-block-size: 0 !important;
-  padding-block: 0.2rem 0.26rem !important;
-  gap: 0.12rem !important;
 }
 
 /* A blackout is intentionally slower now: playback begins only after the
