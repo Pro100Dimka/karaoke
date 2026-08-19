@@ -2,11 +2,11 @@ import { Settings2 } from "lucide-react";
 
 import Modal from "../../components/modal";
 import { useAppDialog } from "../../contexts/AppDialog";
-import useSettingsForm from "../../hooks/useSettingsForm";
-import useSettingsNavigation from "../../hooks/useSettingsNavigation";
 import { useI18n } from "../../i18n";
 import Tabs from "../../theme/ui/Tabs";
 import { SETTINGS_TABS } from "./config";
+import useSettingsForm from "./hooks/useSettingsForm";
+import useSettingsNavigation from "./hooks/useSettingsNavigation";
 import SettingsContent from "./settings-content";
 
 export default function Settings({ isOpen = true, onClose, initialTab = "appearance" }) {

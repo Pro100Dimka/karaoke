@@ -2,12 +2,6 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { createRef } from "react";
 import { afterEach, expect, test, vi } from "vitest";
-import LibraryActions from "../src/pages/Library/components/hero/actions.jsx";
-import LibraryHero from "../src/pages/Library/components/hero/hero.jsx";
-import ProcessingSignal from "../src/pages/Library/components/song-card/processing-signal.jsx";
-import SongCardArtwork from "../src/pages/Library/components/song-card/song-card-artwork.jsx";
-import ProcessingModal from "../src/pages/Library/modals/processing.jsx";
-import RecordingsModal from "../src/pages/Library/modals/recordings.jsx";
 import { called, same, verify } from "./helpers/assertions.mjs";
 import { passthrough } from "./helpers/mocks.mjs";
 
@@ -27,8 +21,8 @@ vi.mock("../src/theme/ui", () => ({
   Button: passthrough("button"),
   IconButton: passthrough("button")
 }));
-vi.mock("../src/components/ui", () => ({
-  StatusBadge: ({ status }) => <span data-testid="status">{status}</span>
+vi.mock("../src/components/ui/StatusBadge", () => ({
+  default: ({ status }) => <span data-testid="status">{status}</span>
 }));
 vi.mock("../src/components/modal", () => ({
   default: ({ children, titleProps }) => (
@@ -53,6 +47,12 @@ vi.mock("../src/api/client", () => ({
     getSongCoverUrl: (id) => `cover/${id}`
   }
 }));
+import LibraryActions from "../src/pages/Library/components/hero/actions.jsx";
+import LibraryHero from "../src/pages/Library/components/hero/hero.jsx";
+import ProcessingSignal from "../src/pages/Library/components/song-card/processing-signal.jsx";
+import SongCardArtwork from "../src/pages/Library/components/song-card/song-card-artwork.jsx";
+import ProcessingModal from "../src/pages/Library/modals/processing.jsx";
+import RecordingsModal from "../src/pages/Library/modals/recordings.jsx";
 afterEach(() => {
   cleanup();
   mocks.noSettings = false;

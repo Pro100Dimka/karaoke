@@ -24,17 +24,6 @@ vi.mock("../src/contexts/AppDialog", () => ({
   useAppDialog: () => ({ alert: mocks.notify, confirm: mocks.confirm })
 }));
 vi.mock("../src/utils/ui-preferences", () => ({ persistUiPreferences: mocks.persist }));
-vi.mock("../src/components/ui", () => ({
-  IconButton: ({ label, onClick, disabled, className }) => (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onClick}
-      disabled={disabled}
-      className={className}
-    />
-  )
-}));
 vi.mock("../src/pages/Karaoke/components/console/effect-dial", () => ({
   default: ({ label, value, onChange }) => (
     <input

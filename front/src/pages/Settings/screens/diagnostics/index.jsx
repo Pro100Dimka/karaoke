@@ -1,7 +1,7 @@
-import useDiagnostics from "../../../../hooks/useDiagnostics";
 import { useI18n } from "../../../../i18n";
 import { Grid, Stack, Typography } from "../../../../theme/ui";
 import { PIPELINE_CHECKS } from "./config";
+import useDiagnostics from "./useDiagnostics";
 import { DiagnosticCheck, ErrorList, VersionList } from "./utils";
 
 export default function Diagnostics() {

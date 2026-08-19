@@ -1,5 +1,5 @@
 import Button from "../Button";
-import useAction from "../_internal/action/useAction";
+import useAction from "../_internal/useAction";
 import "./async-button.css";
 
 const TEXT = {

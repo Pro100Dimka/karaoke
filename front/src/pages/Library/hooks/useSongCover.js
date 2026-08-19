@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "../api/client";
+import { api } from "../../../api/client";
 
 /**
  * Resolves a song's extracted cover art URL and tracks whether the image

@@ -52,11 +52,6 @@ vi.mock("../src/api/client", () => ({
     stopDirectMonitoring: mocks.stopMonitoring
   }
 }));
-vi.mock("../src/components/ui", () => ({
-  IconButton: ({ label, onClick, ...props }) => (
-    <button aria-label={label} onClick={onClick} {...props} />
-  )
-}));
 vi.mock("../src/pages/Karaoke/components/karaoke-media", () => ({
   default: (props) => {
     mocks.mediaProps = props;

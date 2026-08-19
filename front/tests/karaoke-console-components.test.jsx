@@ -2,15 +2,16 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { sameDeep, called, calledWith, verify } from "./helpers/assertions.mjs";
+import { passthrough } from "./helpers/mocks.mjs";
 vi.mock("../src/components/fields", () => ({
   RangeInput: ({ onChange, ...props }) => (
     <input {...props} type="range" onChange={(e) => onChange(e.target.value)} />
   )
 }));
 vi.mock("../src/theme/ui", () => ({
-  Stack: ({ children, ...props }) => <div {...props}>{children}</div>,
-  Grid: ({ children, ...props }) => <div {...props}>{children}</div>,
-  Typography: ({ children, ...props }) => <span {...props}>{children}</span>,
+  Stack: passthrough("div"),
+  Grid: passthrough("div"),
+  Typography: passthrough("span"),
   Card: ({ children, surface: _surface, tilt: _tilt, sx: _sx, ...props }) => (
     <div {...props}>{children}</div>
   ),

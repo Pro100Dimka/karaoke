@@ -22,7 +22,9 @@ vi.mock("../src/hooks/usePolling", () => ({
     return mocks.polling[mocks.pollingIndex++ % mocks.polling.length];
   }
 }));
-vi.mock("../src/hooks/useDiagnostics", () => ({ default: () => mocks.diagnostics }));
+vi.mock("../src/pages/Settings/screens/diagnostics/useDiagnostics", () => ({
+  default: () => mocks.diagnostics
+}));
 vi.mock("../src/contexts/AppDialog", () => ({ useAppDialog: () => ({ alert: mocks.notify }) }));
 vi.mock("../src/api/client", () => ({
   api: {

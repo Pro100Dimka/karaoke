@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { same, verify } from "./helpers/assertions.mjs";
+import { passthrough } from "./helpers/mocks.mjs";
 const mocks = vi.hoisted(() => ({
   location: { state: null },
   navigate: vi.fn(),
@@ -54,13 +55,13 @@ vi.mock("../src/api/client", () => ({
     cancelProcessing: mocks.cancelProcessing
   }
 }));
-vi.mock("../src/pages/Library/hooks/use-file-import", () => ({
+vi.mock("../src/pages/Library/hooks/useFileImport", () => ({
   default: (options) => {
     mocks.importOptions = options;
     return { importing: false, importFile: vi.fn(), openFilePicker: vi.fn() };
   }
 }));
-vi.mock("../src/pages/Library/hooks/use-song-actions", () => ({
+vi.mock("../src/pages/Library/hooks/useSongActions", () => ({
   default: (options) => {
     mocks.actionOptions = options;
     return {
@@ -71,14 +72,14 @@ vi.mock("../src/pages/Library/hooks/use-song-actions", () => ({
     };
   }
 }));
-vi.mock("../src/pages/Library/hooks/use-room-sync", () => ({
+vi.mock("../src/pages/Library/hooks/useRoomSync", () => ({
   default: (options) => {
     mocks.roomOptions = options;
   }
 }));
 vi.mock("../src/theme/ui", () => ({
-  Stack: ({ children, ...props }) => <div {...props}>{children}</div>,
-  Grid: ({ children, ...props }) => <div {...props}>{children}</div>
+  Stack: passthrough("div"),
+  Grid: passthrough("div")
 }));
 vi.mock("../src/pages/Library/components/backdrop", () => ({
   default: () => <div data-testid="backdrop" />

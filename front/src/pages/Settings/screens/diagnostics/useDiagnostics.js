@@ -1,6 +1,6 @@
-import { api } from "../api/client";
-import { POLLING_INTERVALS } from "../runtime-config";
-import { usePolling } from "./usePolling";
+import { api } from "../../../../api/client";
+import { usePolling } from "../../../../hooks/usePolling";
+import { POLLING_INTERVALS } from "../../../../runtime-config";
 
 export default function useDiagnostics() {
   const { data: health } = usePolling(api.getHealth, POLLING_INTERVALS.health, []);

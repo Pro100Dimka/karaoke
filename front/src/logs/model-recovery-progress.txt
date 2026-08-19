@@ -1,9 +1,0 @@
-downloaded_bytes=9985049187
-total_bytes=9985049187
-downloaded_mb=9522
-total_mb=9522
-remaining_seconds=0
-ready_count=1
-model_count=6
-complete=1
-active=

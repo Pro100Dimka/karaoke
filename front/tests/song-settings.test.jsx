@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { verify } from "./helpers/assertions.mjs";
+import { passthrough } from "./helpers/mocks.mjs";
 const mocks = vi.hoisted(() => ({
   poll: {},
   notify: vi.fn(),
@@ -30,7 +31,7 @@ vi.mock("../src/components/fields/button", () => ({
   )
 }));
 vi.mock("../src/theme/ui", () => ({
-  Stack: ({ children, ...props }) => <div {...props}>{children}</div>,
+  Stack: passthrough("div"),
   NumberField: ({ value, onChange, placeholder }) => (
     <input
       aria-label={placeholder}

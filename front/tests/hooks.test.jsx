@@ -18,13 +18,13 @@ import useLatestRef from "../src/hooks/useLatestRef.js";
 import useMountedRef from "../src/hooks/useMountedRef.js";
 import { shouldSchedulePoll, usePolling } from "../src/hooks/usePolling.js";
 import { translateSaved } from "../src/i18n/runtime.js";
-import { isHotkeyScopeActive } from "../src/utils/hotkeys.js";
-import useSettingsNavigation from "../src/hooks/useSettingsNavigation.js";
-import useSongCover from "../src/hooks/useSongCover.js";
+import useSongCover from "../src/pages/Library/hooks/useSongCover.js";
 import useKaraokeControls from "../src/pages/Karaoke/hooks/useKaraokeControls.js";
 import useKaraokeHotkeys, {
   dispatchKaraokeHotkey
 } from "../src/pages/Karaoke/hooks/useKaraokeHotkeys.js";
+import useSettingsNavigation from "../src/pages/Settings/hooks/useSettingsNavigation.js";
+import { isHotkeyScopeActive } from "../src/utils/hotkeys.js";
 import useKaraokeResult from "../src/pages/Karaoke/hooks/useKaraokeResult.js";
 import useKaraokeStageLayout from "../src/pages/Karaoke/hooks/useKaraokeStageLayout.js";
 import { getKaraokeStageLayout } from "../src/pages/Karaoke/utils/layout.js";

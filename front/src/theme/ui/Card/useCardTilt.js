@@ -1,7 +1,5 @@
-// Shared pointer-driven neon tilt/glow handler used by both card
-// implementations (components/ui/Card and theme/ui/Card). Only the CSS
-// custom-property side effects live here; each Card keeps its own markup,
-// classNames and prop contract untouched.
+// Pointer-driven neon tilt/glow handler. Only the CSS custom-property side
+// effects live here; Card keeps its own markup, classNames and prop contract.
 export default function useCardTilt({
   isNeon,
   tilt,

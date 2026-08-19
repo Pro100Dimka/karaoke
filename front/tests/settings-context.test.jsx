@@ -67,7 +67,7 @@ beforeEach(async () => {
     appSettingsReducer
   } = await import("../src/contexts/app-settings"));
   ({ default: useAppSettings } = await import("../src/hooks/useAppSettings"));
-  ({ default: useSettingsForm } = await import("../src/hooks/useSettingsForm"));
+  ({ default: useSettingsForm } = await import("../src/pages/Settings/hooks/useSettingsForm"));
   Object.values(mocks).forEach((mock) => mock.mockReset());
   mocks.getAppSettings.mockResolvedValue({});
   mocks.updateAppSettings.mockResolvedValue({});

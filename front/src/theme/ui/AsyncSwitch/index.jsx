@@ -1,5 +1,5 @@
 import Switch from "../Switch";
-import useAction from "../_internal/action/useAction";
+import useAction from "../_internal/useAction";
 
 export default function AsyncSwitch({
   state,

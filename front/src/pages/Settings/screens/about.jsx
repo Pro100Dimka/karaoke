@@ -5,7 +5,7 @@ import { usePolling } from "../../../hooks/usePolling";
 import { useI18n } from "../../../i18n";
 import { POLLING_INTERVALS } from "../../../runtime-config";
 import { Grid, Stack, Typography } from "../../../theme/ui";
-import { APP_INFO } from "../../../utils/config";
+import { APP_INFO } from "./about-info";
 
 const INFO_FIELDS = [
   ["backend_version", "backendVersion"],

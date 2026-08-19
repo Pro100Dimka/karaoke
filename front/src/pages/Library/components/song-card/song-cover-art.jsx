@@ -1,5 +1,5 @@
 import { Music2 } from "lucide-react";
-import useSongCover from "../../../../hooks/useSongCover";
+import useSongCover from "../../hooks/useSongCover";
 
 /**
  * Cover-art tile shared by the library song card and the processing modal:

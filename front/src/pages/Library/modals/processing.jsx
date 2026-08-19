@@ -1,7 +1,7 @@
 import { CircleDot, Library, OctagonX, Play } from "lucide-react";
 import Button from "../../../components/fields/button";
 import Modal from "../../../components/modal";
-import { StatusBadge } from "../../../components/ui";
+import StatusBadge from "../../../components/ui/StatusBadge";
 import { translateSaved } from "../../../i18n/runtime";
 import ProcessingSignal from "../components/song-card/processing-signal";
 import SongCoverArt from "../components/song-card/song-cover-art";

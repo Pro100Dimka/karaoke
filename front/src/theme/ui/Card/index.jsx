@@ -1,6 +1,6 @@
 import { forwardRef } from "react";
 
-import useCardTilt from "../../../hooks/useCardTilt";
+import useCardTilt from "./useCardTilt";
 import Primitive from "../_internal/Primitive";
 import cx from "../_internal/cx";
 import "./card.css";

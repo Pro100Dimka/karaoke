@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { stubImmediateAnimationFrame } from "./helpers/browser.mjs";
 import { verify } from "./helpers/assertions.mjs";
+import { mockUseI18nWithValues } from "./helpers/mocks.mjs";
 const mocks = vi.hoisted(() => ({
   polling: { data: null, error: null, refresh: vi.fn() },
   downloadAiModels: vi.fn(),
@@ -21,13 +22,10 @@ vi.mock("../src/hooks/usePolling", () => ({
 }));
 vi.mock("../src/i18n", async (importOriginal) => ({
   ...(await importOriginal()),
-  useI18n: () => ({
-    t: (key, values) =>
-      values ? `${key}:${Object.values(values).join(",")}` : key
-  })
+  useI18n: mockUseI18nWithValues
 }));
-vi.mock("../src/hooks/useSettingsForm", () => ({ default: () => mocks.settingsForm }));
-vi.mock("../src/hooks/useSettingsNavigation", () => ({ default: () => mocks.navigation }));
+vi.mock("../src/pages/Settings/hooks/useSettingsForm", () => ({ default: () => mocks.settingsForm }));
+vi.mock("../src/pages/Settings/hooks/useSettingsNavigation", () => ({ default: () => mocks.navigation }));
 vi.mock("../src/contexts/AppDialog", () => ({ useAppDialog: () => ({ alert: vi.fn() }) }));
 vi.mock("../src/pages/Settings/settings-content", () => ({
   default: ({ tab }) => <div data-testid={`settings-${tab}`}>{tab}</div>

@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { stubImmediateAnimationFrame } from "./helpers/browser.mjs";
 import { notCalled, calledWith, verify } from "./helpers/assertions.mjs";
+import { mockUseI18nWithValues } from "./helpers/mocks.mjs";
 const mocks = vi.hoisted(() => ({
   roomValue: null,
   radioValue: null,
@@ -18,10 +19,7 @@ vi.mock("../src/hooks/useExclusiveAsyncAction", () => ({
 }));
 vi.mock("../src/i18n", async (importOriginal) => ({
   ...(await importOriginal()),
-  useI18n: () => ({
-    t: (key, values) =>
-      values ? `${key}:${Object.values(values).join(",")}` : key
-  })
+  useI18n: mockUseI18nWithValues
 }));
 import { OnlineRoomDock } from "../src/components/OnlineRoomDock.jsx";
 import { OnlineRoomModal } from "../src/components/OnlineRoomModal.jsx";

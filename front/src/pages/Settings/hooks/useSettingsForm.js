@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "../api/client";
-import { translateSaved } from "../i18n/runtime";
-import { getErrorMessage } from "../utils/errors";
-import { applyTheme } from "../utils/theme";
+import { api } from "../../../api/client";
+import useAppSettings from "../../../hooks/useAppSettings";
+import useAsyncQueue from "../../../hooks/useAsyncQueue";
+import useLatestRef from "../../../hooks/useLatestRef";
+import useMountedRef from "../../../hooks/useMountedRef";
+import { translateSaved } from "../../../i18n/runtime";
+import { getErrorMessage } from "../../../utils/errors";
+import { applyTheme } from "../../../utils/theme";
 import { mergeSettings, prepareSettingValue, resolveSavedSetting } from "./settings-form-utils";
-import useAppSettings from "./useAppSettings";
-import useAsyncQueue from "./useAsyncQueue";
-import useLatestRef from "./useLatestRef";
-import useMountedRef from "./useMountedRef";
 
 export default function useSettingsForm(notify) {
   const [form, setForm] = useState(null);

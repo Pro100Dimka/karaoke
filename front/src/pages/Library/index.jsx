@@ -17,9 +17,9 @@ import PerformanceAnalysisModal from "../Karaoke/performance-analysis-modal";
 import LibraryBackdrop from "./components/backdrop";
 import LibraryHero from "./components/hero";
 import LibrarySongCard from "./components/song-card";
-import useLibraryFileImport from "./hooks/use-file-import";
-import useLibraryRoomSync from "./hooks/use-room-sync";
-import useLibrarySongActions from "./hooks/use-song-actions";
+import useLibraryFileImport from "./hooks/useFileImport";
+import useLibraryRoomSync from "./hooks/useRoomSync";
+import useLibrarySongActions from "./hooks/useSongActions";
 import ProcessingModal from "./modals/processing";
 import RecordingsModal from "./modals/recordings";
 import {

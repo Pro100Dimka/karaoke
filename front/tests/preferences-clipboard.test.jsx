@@ -11,7 +11,7 @@ const importUtility = async (name) => {
     case "clipboard":
       return import("../src/utils/clipboard.js");
     case "config":
-      return import("../src/utils/config.js");
+      return import("../src/pages/Settings/screens/about-info.js");
     case "ui-preferences":
       return import("../src/utils/ui-preferences.js");
     default:

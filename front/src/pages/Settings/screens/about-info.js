@@ -1,4 +1,4 @@
-import { translateSaved } from "../i18n/runtime";
+import { translateSaved } from "../../../i18n/runtime";
 
 export const APP_INFO = {
   title: "A&D Voice",

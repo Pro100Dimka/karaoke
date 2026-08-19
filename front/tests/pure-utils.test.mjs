@@ -12,7 +12,7 @@ import {
   mergeSettings,
   prepareSettingValue,
   resolveSavedSetting
-} from "../src/hooks/settings-form-utils.js";
+} from "../src/pages/Settings/hooks/settings-form-utils.js";
 import { translateSaved } from "../src/i18n/runtime.js";
 import {
   findDriverOutputDevice,

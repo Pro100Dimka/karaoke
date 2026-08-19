@@ -27,17 +27,6 @@ vi.mock("../src/i18n", () => ({
   }),
   translateMessage: (_language, key) => key
 }));
-vi.mock("../src/components/ui", () => ({
-  IconButton: ({ label, onClick, className, disabled }) => (
-    <button
-      type="button"
-      aria-label={label}
-      className={className}
-      onClick={onClick}
-      disabled={disabled}
-    />
-  )
-}));
 vi.mock("../src/pages/Library/modals/song-settings", () => ({
   default: ({ songId, onClose }) => (
     <button type="button" data-testid="song-settings" onClick={onClose}>

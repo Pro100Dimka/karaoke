@@ -102,6 +102,26 @@ afterEach(() => {
   delete globalThis.webkitAudioContext;
   delete HTMLMediaElement.prototype.setSinkId;
 });
+// A running AudioContext whose gain/oscillator node calls aren't individually
+// asserted on by the test using it -- only its overall shape matters.
+function installRunningFakeAudioContext() {
+  globalThis.AudioContext = class {
+    state = "running";
+    currentTime = 0;
+    close = vi.fn();
+    createMediaStreamDestination = () => ({ stream: { getTracks: () => [] } });
+    createGain = () => ({
+      gain: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+      connect: vi.fn()
+    });
+    createOscillator = () => ({
+      frequency: { setValueAtTime: vi.fn() },
+      connect: vi.fn(),
+      start: vi.fn(),
+      stop: vi.fn()
+    });
+  };
+}
 describe("audio settings source", () => {
   test("normalizes signal levels and monitor decay at exact boundaries", () => {
     same([getSignalLevel({ rms_db: -30, rms_dbfs: -60 }), 50], [getSignalLevel({ rms_db: 0, rms_dbfs: -60 }), 100], [getSignalLevel({ rms_dbfs: -60 }), 0], [getSignalLevel({ rms_db: -90 }), 0], [getSignalLevel({ rms_db: 12 }), 100], [getSignalLevel({ rms_db: "invalid" }), 0], [getSignalLevel(null), 0], [resolveMonitorTarget(false, true, 0.8, { rms_db: 0 }), 0], [resolveMonitorTarget(true, false, 0.8, { rms_db: 0 }), 0], [resolveMonitorTarget(true, true, 0.25, { rms_db: -30 }), 50], [resolveMonitorTarget(true, true, 0.8, { rms_db: -30 }), 80], [nextMonitorLevel(50, 50, 100, 200), 50], [nextMonitorLevel(50, 50, 200, 100), 50], [nextMonitorLevel(50, 120, 100, 200), 100], [nextMonitorLevel(50, 40, 100, 200), 50], [nextMonitorLevel(50, 40, 200, 200), 39], [nextMonitorLevel(1, 0, 200, 100), 0]);
@@ -551,22 +571,7 @@ describe("audio settings source", () => {
   });
   test("does not start a second speaker test while one is playing", async () => {
     let releasePlay;
-    globalThis.AudioContext = class {
-      state = "running";
-      currentTime = 0;
-      close = vi.fn();
-      createMediaStreamDestination = () => ({ stream: { getTracks: () => [] } });
-      createGain = () => ({
-        gain: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
-        connect: vi.fn()
-      });
-      createOscillator = () => ({
-        frequency: { setValueAtTime: vi.fn() },
-        connect: vi.fn(),
-        start: vi.fn(),
-        stop: vi.fn()
-      });
-    };
+    installRunningFakeAudioContext();
     vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(
       () =>
         new Promise((resolve) => { releasePlay = resolve; })
@@ -626,22 +631,7 @@ describe("audio settings source", () => {
       monitorInputDeviceId: "default",
       monitorOutputDeviceId: "speakers"
     });
-    globalThis.AudioContext = class {
-      state = "running";
-      currentTime = 0;
-      close = vi.fn();
-      createMediaStreamDestination = () => ({ stream: { getTracks: () => [] } });
-      createGain = () => ({
-        gain: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
-        connect: vi.fn()
-      });
-      createOscillator = () => ({
-        frequency: { setValueAtTime: vi.fn() },
-        connect: vi.fn(),
-        start: vi.fn(),
-        stop: vi.fn()
-      });
-    };
+    installRunningFakeAudioContext();
     vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
     const hook = renderHook(() => useAudioSettingsSource());
