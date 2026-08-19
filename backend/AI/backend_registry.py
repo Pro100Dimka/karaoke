@@ -16,23 +16,37 @@ BenchmarkStatus = Literal["baseline", "isolated", "corpus", "unmeasured"]
 
 
 @dataclass(frozen=True, slots=True)
-class BackendAvailability: available: bool; reason: str
+class BackendAvailability:
+    available: bool
+    reason: str
 
 
 @dataclass(frozen=True, slots=True)
-class MemoryRequirements: ram_bytes: int = 0; vram_bytes: int = 0
+class MemoryRequirements:
+    ram_bytes: int = 0
+    vram_bytes: int = 0
 
 
 @dataclass(frozen=True, slots=True)
-class ArtifactRequirement: kind: str; location: str; required: bool = True
+class ArtifactRequirement:
+    kind: str
+    location: str
+    required: bool = True
 
 
 @dataclass(frozen=True, slots=True)
-class RuntimeRequirement: name: str; version: str = ""; optional: bool = True
+class RuntimeRequirement:
+    name: str
+    version: str = ""
+    optional: bool = True
 
 
 @dataclass(frozen=True, slots=True)
-class SupportedShapes: dynamic_axes: tuple[str, ...]; min_samples: int; max_samples: int | None = None; batch_sizes: tuple[int, ...] = (1,)
+class SupportedShapes:
+    dynamic_axes: tuple[str, ...]
+    min_samples: int
+    max_samples: int | None = None
+    batch_sizes: tuple[int, ...] = (1,)
 
 
 AvailabilityProbe = Callable[[], BackendAvailability]
@@ -57,9 +71,14 @@ class BackendSpec:
     runtime_requirements: tuple[RuntimeRequirement, ...] = ()
 
     @property
-    def key(self) -> str: return f"{self.backend}:{self.device}:{self.precision}"
+    def key(self) -> str:
+        return f"{self.backend}:{self.device}:{self.precision}"
 
-    def describe(self) -> dict[str, object]: availability, result = self.availability(), asdict(self); result["availability"] = asdict(availability); result["key"] = self.key; return result
+    def describe(self) -> dict[str, object]:
+        availability, result = self.availability(), asdict(self)
+        result["availability"] = asdict(availability)
+        result["key"] = self.key
+        return result
 
 
 
@@ -79,8 +98,10 @@ class BackendRegistry:
         self._specs[identity] = spec
 
     def get(self, model: str, key: str) -> BackendSpec:
-        try: return self._specs[(model, key)]
-        except KeyError as exc: raise KeyError(f"Unknown backend: {model}/{key}") from exc
+        try:
+            return self._specs[(model, key)]
+        except KeyError as exc:
+            raise KeyError(f"Unknown backend: {model}/{key}") from exc
 
     def candidates(
         self,
@@ -95,20 +116,30 @@ class BackendRegistry:
         return tuple(sorted(result, key=lambda spec: (-spec.priority, spec.key)))
 
     def fallback_chain(self, model: str, start: str) -> tuple[BackendSpec, ...]:
-        output: list[BackendSpec] = []; pending = [start]; seen: set[str] = set()
+        output: list[BackendSpec] = []
+        pending = [start]
+        seen: set[str] = set()
         while pending:
-            key = pending.pop(0); seen.add(key); spec = self.get(model, key); output.append(spec)
+            key = pending.pop(0)
+            seen.add(key)
+            spec = self.get(model, key)
+            output.append(spec)
             if any(fallback in seen for fallback in spec.fallback):
-                repeated = next(fallback for fallback in spec.fallback if fallback in seen); raise ValueError(f"Fallback cycle detected for {model}/{repeated}")
+                repeated = next(fallback for fallback in spec.fallback if fallback in seen)
+                raise ValueError(f"Fallback cycle detected for {model}/{repeated}")
             pending[0:0] = [fallback for fallback in spec.fallback if fallback not in pending]
         return tuple(output)
 
-    def describe(self, model: str | None = None) -> tuple[dict[str, object], ...]: specs = self.candidates(model) if model else tuple(self._specs.values()); return tuple(spec.describe() for spec in specs)
+    def describe(self, model: str | None = None) -> tuple[dict[str, object], ...]:
+        specs = self.candidates(model) if model else tuple(self._specs.values())
+        return tuple(spec.describe() for spec in specs)
 
 
 def _module_available(name: str) -> bool:
-    try: return importlib.util.find_spec(name) is not None
-    except (ImportError, ValueError): return False
+    try:
+        return importlib.util.find_spec(name) is not None
+    except (ImportError, ValueError):
+        return False
 
 
 def _pytorch_availability(require_cuda: bool) -> BackendAvailability:
@@ -118,17 +149,23 @@ def _pytorch_availability(require_cuda: bool) -> BackendAvailability:
         import torch
 
         available = bool(torch.cuda.is_available())
-    except (ImportError, OSError, RuntimeError) as exc: return BackendAvailability(False, f"PyTorch CUDA probe failed: {exc}")
+    except (ImportError, OSError, RuntimeError) as exc:
+        return BackendAvailability(False, f"PyTorch CUDA probe failed: {exc}")
     return BackendAvailability(
         available,
         "PyTorch CUDA is available" if available else "PyTorch cannot access CUDA",
     )
 
 
-def ctc_onnx_path(model: str) -> Path | None: code = model.removeprefix("ctc_").upper(); value = os.getenv(f"KARAOKE_AI_CTC_{code}_ONNX", "").strip(); return Path(value).expanduser() if value else None
+def ctc_onnx_path(model: str) -> Path | None:
+    code = model.removeprefix("ctc_").upper()
+    value = os.getenv(f"KARAOKE_AI_CTC_{code}_ONNX", "").strip()
+    return Path(value).expanduser() if value else None
 
 
-def fcpe_onnx_path() -> Path | None: value = os.getenv("KARAOKE_AI_FCPE_ONNX", "").strip(); return Path(value).expanduser() if value else None
+def fcpe_onnx_path() -> Path | None:
+    value = os.getenv("KARAOKE_AI_FCPE_ONNX", "").strip()
+    return Path(value).expanduser() if value else None
 
 
 _OPTIONAL_RUNTIME_FORBIDDEN_TOP_LEVEL = (
@@ -169,14 +206,16 @@ def _ort_provider_availability(
         if not runtime_ok: return BackendAvailability(False, runtime_reason)
     artifact = fcpe_onnx_path() if model == "fcpe" else ctc_onnx_path(model)
     if artifact is None:
-        env_var = "KARAOKE_AI_FCPE_ONNX" if model == "fcpe" else f"KARAOKE_AI_{model.upper()}_ONNX"; return BackendAvailability(False, f"{env_var} is not configured")
+        env_var = "KARAOKE_AI_FCPE_ONNX" if model == "fcpe" else f"KARAOKE_AI_{model.upper()}_ONNX"
+        return BackendAvailability(False, f"{env_var} is not configured")
     if not artifact.is_file(): return BackendAvailability(False, f"ONNX artifact does not exist: {artifact}")
     if not _module_available("onnxruntime"): return BackendAvailability(False, "ONNX Runtime is not installed")
     try:
         import onnxruntime as ort
 
         providers = ort.get_available_providers()
-    except (ImportError, OSError, RuntimeError) as exc: return BackendAvailability(False, f"ONNX Runtime probe failed: {exc}")
+    except (ImportError, OSError, RuntimeError) as exc:
+        return BackendAvailability(False, f"ONNX Runtime probe failed: {exc}")
     available = provider in providers
     return BackendAvailability(
         available,
@@ -187,11 +226,12 @@ def _ort_provider_availability(
 def _ort_cuda_availability(model: str) -> BackendAvailability: return _ort_provider_availability(model, 'CUDAExecutionProvider', 'ORT CUDA')
 
 
-def _ort_directml_availability(model: str) -> BackendAvailability: return _ort_provider_availability(model, 'DmlExecutionProvider', 'ORT DirectML', windows_only=True, runtime_path_env='KARAOKE_AI_ORT_DIRECTML_PATH')
-
 
 def _ctc_specs(model: str) -> tuple[BackendSpec, ...]:
-    artifact = ArtifactRequirement("pytorch-snapshot", get_model(model).relative_path); onnx = ArtifactRequirement("onnx", f"KARAOKE_AI_{model.upper()}_ONNX"); common = frozenset({"ctc-logits", "dynamic-time", "batch-1", "forced-alignment"}); shapes = SupportedShapes(("batch", "time", "frames"), min_samples=400)
+    artifact = ArtifactRequirement("pytorch-snapshot", get_model(model).relative_path)
+    onnx = ArtifactRequirement("onnx", f"KARAOKE_AI_{model.upper()}_ONNX")
+    common = frozenset({"ctc-logits", "dynamic-time", "batch-1", "forced-alignment"})
+    shapes = SupportedShapes(("batch", "time", "frames"), min_samples=400)
     return (
         _backend(model, "onnxruntime", "cuda", "fp16", lambda model=model: _ort_cuda_availability(model), 300, MemoryRequirements(1_800_000_000, 2_300_000_000), (onnx,), common | {"optional-runtime", "shadow-only", "corpus-quality-rejected"}, shapes, "disabled", "corpus", ("pytorch:cuda:fp16",), "nvidia", (RuntimeRequirement("onnxruntime-gpu", "1.22"),)),
         _backend(model, "pytorch", "cuda", "fp16", lambda: _pytorch_availability(True), 200, MemoryRequirements(2_200_000_000, 3_900_000_000), (artifact,), common | {"production"}, shapes, fallback=("pytorch:cpu:fp32",), vendor="nvidia", runtime=(RuntimeRequirement("pytorch", "2.8"),)),
@@ -200,11 +240,14 @@ def _ctc_specs(model: str) -> tuple[BackendSpec, ...]:
 
 
 def _fcpe_specs() -> tuple[BackendSpec, ...]:
-    common = frozenset({"pitch", "dynamic-time", "batch-1", "neural-core-only"}); shapes = SupportedShapes(("batch", "mel_time", "frames"), min_samples=1600); onnx = (ArtifactRequirement("onnx", "KARAOKE_AI_FCPE_ONNX"),); weights = (ArtifactRequirement("python-package-asset", "torchfcpe/assets/fcpe_c_v001.pt"),)
+    common = frozenset({"pitch", "dynamic-time", "batch-1", "neural-core-only"})
+    shapes = SupportedShapes(("batch", "mel_time", "frames"), min_samples=1600)
+    onnx = (ArtifactRequirement("onnx", "KARAOKE_AI_FCPE_ONNX"),)
+    weights = (ArtifactRequirement("python-package-asset", "torchfcpe/assets/fcpe_c_v001.pt"),)
     torch_runtime = (RuntimeRequirement("pytorch", "2.8"), RuntimeRequirement("torchfcpe", "0.0.4"))
     return (
         _backend("fcpe", "onnxruntime", "cuda", "fp16", lambda: _ort_cuda_availability("fcpe"), 300, MemoryRequirements(1_800_000_000, 1_900_000_000), onnx, common | {"optional-runtime", "shadow-only", "corpus-quality-rejected"}, shapes, "disabled", "corpus", ("pytorch:cuda:fp32",), "nvidia", (RuntimeRequirement("onnxruntime-gpu", "1.22"),)),
-        _backend("fcpe", "onnxruntime", "directml", "fp32", lambda: _ort_directml_availability("fcpe"), 250, MemoryRequirements(1_300_000_000, 1_700_000_000), onnx, common | {"optional-runtime", "shadow-only", "broad-windows-gpu-candidate"}, shapes, "shadow", "isolated", ("pytorch:cpu:fp32",), "amd,intel", (RuntimeRequirement("onnxruntime-directml"),)),
+        _backend("fcpe", "onnxruntime", "directml", "fp32", lambda: _ort_provider_availability("fcpe", "DmlExecutionProvider", "ORT DirectML", windows_only=True, runtime_path_env="KARAOKE_AI_ORT_DIRECTML_PATH"), 250, MemoryRequirements(1_300_000_000, 1_700_000_000), onnx, common | {"optional-runtime", "shadow-only", "broad-windows-gpu-candidate"}, shapes, "shadow", "isolated", ("pytorch:cpu:fp32",), "amd,intel", (RuntimeRequirement("onnxruntime-directml"),)),
         _backend("fcpe", "pytorch", "cuda", "fp32", lambda: _pytorch_availability(True), 200, MemoryRequirements(1_300_000_000, 1_500_000_000), weights, common | {"production"}, shapes, fallback=("pytorch:cpu:fp32",), vendor="nvidia", runtime=torch_runtime),
         _backend("fcpe", "pytorch", "cpu", "fp32", lambda: _pytorch_availability(False), 100, MemoryRequirements(1_500_000_000, 0), weights, common | {"universal-fallback"}, shapes, runtime=torch_runtime),
     )
@@ -214,7 +257,8 @@ def _pytorch_specs(
     model: str, *, cuda_precision: str, artifact: ArtifactRequirement,
     capabilities: frozenset[str], cuda_memory: MemoryRequirements, cpu_memory: MemoryRequirements,
 ) -> tuple[BackendSpec, ...]:
-    shapes = SupportedShapes(("batch", "time"), min_samples=1); runtime = (RuntimeRequirement("pytorch", "2.8"),)
+    shapes = SupportedShapes(("batch", "time"), min_samples=1)
+    runtime = (RuntimeRequirement("pytorch", "2.8"),)
     return (
         _backend(model, "pytorch", "cuda", cuda_precision, lambda: _pytorch_availability(True), 200, cuda_memory, (artifact,), capabilities | {"production"}, shapes, fallback=("pytorch:cpu:fp32",), vendor="nvidia", runtime=runtime),
         _backend(model, "pytorch", "cpu", "fp32", lambda: _pytorch_availability(False), 100, cpu_memory, (artifact,), capabilities | {"universal-fallback", "production"}, shapes, runtime=runtime),

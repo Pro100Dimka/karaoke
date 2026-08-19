@@ -3,6 +3,7 @@ import { clamp01 } from "../../../utils/math";
 // Node test runner requires the explicit extension for this ESM import.
 // eslint-disable-next-line import/extensions
 import { normalizeNoteList } from "./note-normalization";
+import { END_TIME_KEYS, readFiniteTime, START_TIME_KEYS } from "./time-keys";
 
 const ACCIDENTAL_OFFSETS = Object.freeze({ "#": 1, b: -1 });
 
@@ -33,30 +34,19 @@ export function normalizeLyrics(raw) {
   const list = Array.isArray(source) ? source : [];
   const toText = (value) =>
     ["string", "number"].includes(typeof value) ? String(value).trim() : "";
-  const readTime = (value, keys) => {
-    for (const key of keys) {
-      const rawValue = value[key];
-      if ([null, ""].includes(rawValue)) continue;
-      const number = Number(rawValue);
-      if (Number.isFinite(number) && number >= 0) return number;
-    }
-    return null;
-  };
-  const startKeys = ["start", "start_sec", "start_time", "begin", "from"];
-  const endKeys = ["end", "end_sec", "end_time", "finish", "to"];
   return list
     .filter(Boolean)
     .map((line) => {
-      const declaredStart = readTime(line, startKeys);
-      const declaredEnd = readTime(line, endKeys);
+      const declaredStart = readFiniteTime(line, ...START_TIME_KEYS);
+      const declaredEnd = readFiniteTime(line, ...END_TIME_KEYS);
       const words = Array.isArray(line.words)
         ? line.words
             .filter(Boolean)
             .map((word, wordIndex) => ({
               ...word,
               text: toText(word.word ?? word.text),
-              start: readTime(word, startKeys),
-              end: readTime(word, endKeys),
+              start: readFiniteTime(word, ...START_TIME_KEYS),
+              end: readFiniteTime(word, ...END_TIME_KEYS),
               __wordIndex: wordIndex
             }))
             // Preserve the backend/source word order. Sorting a partially timed

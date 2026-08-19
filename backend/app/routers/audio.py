@@ -12,19 +12,23 @@ router = APIRouter(prefix="/audio", tags=["audio"])
 
 
 @router.get("/devices", response_model=list[schemas.AudioDeviceOut])
-def list_devices(): return audio_service.list_input_devices()
+def list_devices():
+    return audio_service.list_input_devices()
 
 
 @router.get("/output-devices", response_model=list[schemas.AudioOutputDeviceOut])
-def list_output_devices(): return audio_service.list_output_devices()
+def list_output_devices():
+    return audio_service.list_output_devices()
 
 
 @router.get("/asio-drivers", response_model=list[schemas.AsioDriverOut])
-def list_asio_drivers(): return [{"name": name} for name in audio_service.list_asio_drivers()]
+def list_asio_drivers():
+    return [{"name": name} for name in audio_service.list_asio_drivers()]
 
 
 @router.get("/settings", response_model=schemas.AudioSettingsOut)
-def get_settings(db: Session = Depends(get_db)): return audio_service.get_settings(db)
+def get_settings(db: Session = Depends(get_db)):
+    return audio_service.get_settings(db)
 
 
 @router.post("/settings", response_model=schemas.AudioSettingsOut)
@@ -38,11 +42,13 @@ def start_direct_monitoring(db: Session = Depends(get_db)):
 
 
 @router.post("/direct-monitor/stop", response_model=schemas.AudioSettingsOut)
-def stop_direct_monitoring(db: Session = Depends(get_db)): return audio_service.set_monitoring_enabled(db, False)
+def stop_direct_monitoring(db: Session = Depends(get_db)):
+    return audio_service.set_monitoring_enabled(db, False)
 
 
 @router.post("/devices/select", response_model=schemas.AudioSettingsOut)
-def select_device(device_id: int, db: Session = Depends(get_db)): return audio_service.update_settings(db, {"input_device_id": device_id})
+def select_device(device_id: int, db: Session = Depends(get_db)):
+    return audio_service.update_settings(db, {"input_device_id": device_id})
 
 
 @router.get("/signal-quality", response_model=schemas.SignalQualityOut)

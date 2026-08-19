@@ -10,7 +10,9 @@ from .models import PitchFrame, StageReport, Syllable, VocalNote, Word
 from .utils.numeric import clamp01
 
 
-def _median(values: list[float], default: float = 0.0) -> float: clean = [float(v) for v in values if math.isfinite(float(v))]; return statistics.median(clean) if clean else default
+def _median(values: list[float], default: float = 0.0) -> float:
+    clean = [float(v) for v in values if math.isfinite(float(v))]
+    return statistics.median(clean) if clean else default
 
 
 def _pitch_regions(pitch: list[PitchFrame]) -> tuple[list[tuple[float, float]], list[float]]:
@@ -20,14 +22,21 @@ def _pitch_regions(pitch: list[PitchFrame]) -> tuple[list[tuple[float, float]], 
         [b.time - a.time for a, b in zip(voiced, voiced[1:], strict=False) if b.time > a.time],
         0.01,
     )
-    join_gap = max(step * 4.0, 0.025); regions: list[tuple[float, float]] = []; onsets: list[float] = []; start, end = voiced[0].time, voiced[0].time + step
+    join_gap = max(step * 4.0, 0.025)
+    regions: list[tuple[float, float]] = []
+    onsets: list[float] = []
+    start, end = voiced[0].time, voiced[0].time + step
     onsets.append(start)
     for frame in voiced[1:]:
         if frame.time <= end + join_gap:
             end = max(end, frame.time + step)
         else:
-            regions.append((start, end)); start = frame.time; end = frame.time + step; onsets.append(start)
-    regions.append((start, end)); return regions, onsets
+            regions.append((start, end))
+            start = frame.time
+            end = frame.time + step
+            onsets.append(start)
+    regions.append((start, end))
+    return regions, onsets
 
 
 def _overlap_ratio(start: float, end: float, regions: list[tuple[float, float]]) -> float:
@@ -50,7 +59,9 @@ def _timeline_metrics(items: list[Any]) -> dict[str, Any]:
         )
         for item in items
     )
-    overlaps: list[float] = []; gaps: list[float] = []; previous_end = None
+    overlaps: list[float] = []
+    gaps: list[float] = []
+    previous_end = None
     for start, end in intervals:
         if previous_end is not None:
             if start < previous_end:
@@ -78,7 +89,8 @@ def _candidate_for(candidate: dict[str, Any], kind: str) -> dict[str, float] | N
             "end": float(raw["end"]),
             "confidence": float(raw.get("confidence", 0.0)),
         }
-    except (KeyError, TypeError, ValueError): return None
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 def build_alignment_debug(
@@ -98,10 +110,15 @@ def build_alignment_debug(
     pitch_source_diagnostics: dict[str, Any] | None = None,
     vocal_effect_diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    diag = dict(alignment_diagnostics or {}); sources, candidates = list(diag.get('word_sources') or []), list(diag.get('word_candidates') or []); regions, onsets = _pitch_regions(pitch); durations = [max(0.0, word.end - word.start) for word in words]
+    diag = dict(alignment_diagnostics or {})
+    sources, candidates = list(diag.get('word_sources') or []), list(diag.get('word_candidates') or [])
+    regions, onsets = _pitch_regions(pitch)
+    durations = [max(0.0, word.end - word.start) for word in words]
     typical_duration = max(0.02, _median(durations, 0.25))
 
-    word_rows: list[dict[str, Any]] = []; source_counts: Counter[str] = Counter(); rejected_reasons: Counter[str] = Counter()
+    word_rows: list[dict[str, Any]] = []
+    source_counts: Counter[str] = Counter()
+    rejected_reasons: Counter[str] = Counter()
     for index, word in enumerate(words):
         source = str(sources[index]) if index < len(sources) else "unknown"
         candidate = (
@@ -109,27 +126,28 @@ def build_alignment_debug(
             if index < len(candidates) and isinstance(candidates[index], dict)
             else {}
         )
-        ctc = _candidate_for(candidate, "ctc"); qwen = _candidate_for(candidate, "qwen"); consensus = _candidate_for(candidate, "consensus")
+        ctc = _candidate_for(candidate, "ctc")
+        qwen = _candidate_for(candidate, "qwen")
+        consensus = _candidate_for(candidate, "consensus")
         if source == "unknown":
-            if consensus:
+            sources = [name for name, value in (("ctc", ctc), ("qwen", qwen)) if value]
+            if consensus or len(sources) == 2 and abs(
+                ((ctc["start"] + ctc["end"]) - (qwen["start"] + qwen["end"])) / 2.0
+            ) <= max(0.08, typical_duration * 0.65):
                 source = "consensus"
-            elif ctc and qwen:
-                source = (
-                    "consensus"
-                    if abs(((ctc["start"] + ctc["end"]) - (qwen["start"] + qwen["end"])) / 2.0)
-                    <= max(0.08, typical_duration * 0.65)
-                    else "ctc_or_qwen"
-                )
-            elif ctc:
-                source = "ctc"
-            elif qwen:
-                source = "qwen"
-            elif word.confidence <= 0.02: source = "interpolated"
+            elif sources:
+                source = sources[0] if len(sources) == 1 else "ctc_or_qwen"
+            elif word.confidence <= 0.02:
+                source = "interpolated"
         source_counts[source] += 1
 
-        span = max(0.0, word.end - word.start); overlap = _overlap_ratio(word.start, word.end, regions); disagreement_ms = None
+        span = max(0.0, word.end - word.start)
+        overlap = _overlap_ratio(word.start, word.end, regions)
+        disagreement_ms = None
         if ctc and qwen:
-            ctc_mid = (ctc["start"] + ctc["end"]) / 2.0; qwen_mid = (qwen["start"] + qwen["end"]) / 2.0; disagreement_ms = abs(ctc_mid - qwen_mid) * 1000.0
+            ctc_mid = (ctc["start"] + ctc["end"]) / 2.0
+            qwen_mid = (qwen["start"] + qwen["end"]) / 2.0
+            disagreement_ms = abs(ctc_mid - qwen_mid) * 1000.0
 
         reasons: list[str] = []
         if word.confidence < 0.08:
@@ -167,10 +185,13 @@ def build_alignment_debug(
             }
         )
 
-    lines: list[dict[str, Any]] = []; cursor, lyric_lines = 0, [line.strip() for line in str(lyrics_text or '').splitlines() if line.strip()]
+    lines: list[dict[str, Any]] = []
+    cursor, lyric_lines = 0, [line.strip() for line in str(lyrics_text or '').splitlines() if line.strip()]
     if not lyric_lines and words: lyric_lines = [" ".join(word.text for word in words)]
     for line_index, line in enumerate(lyric_lines):
-        count = len(tokenize(line)); row = word_rows[cursor : cursor + count]; cursor += count
+        count = len(tokenize(line))
+        row = word_rows[cursor : cursor + count]
+        cursor += count
         if not row: continue
         sources_here: Counter[str] = Counter(item["final"]["source"] for item in row)
         direct = sum(
@@ -204,34 +225,48 @@ def build_alignment_debug(
             }
         )
 
-    suspicious_regions: list[dict[str, Any]] = []; current: list[dict[str, Any]] = []
+    suspicious_regions: list[dict[str, Any]] = []
+    current: list[dict[str, Any]] = []
     for item in word_rows:
         if item["reasons"]:
             if current and item["final"]["start"] - current[-1]["final"]["end"] > max(
                 0.8, typical_duration * 3.0
             ):
-                suspicious_regions.append(_region(current)); current = []
+                suspicious_regions.append(_region(current))
+                current = []
             current.append(item)
         elif current:
-            suspicious_regions.append(_region(current)); current = []
+            suspicious_regions.append(_region(current))
+            current = []
     if current: suspicious_regions.append(_region(current))
 
-    acoustic_words, mean_conf = sum((value for key, value in source_counts.items() if key in {'consensus', 'ctc', 'qwen'})), sum((word.confidence for word in words)) / max(1, len(words)); acoustic_ratio, suspicious_ratio = acoustic_words / max(1, len(words)), sum((1 for row in word_rows if row['reasons'])) / max(1, len(word_rows)); text_health, total_elapsed, stage_perf = round(100.0 * clamp01(0.48 * acoustic_ratio + 0.42 * mean_conf + 0.1 * (1.0 - suspicious_ratio)), 1), sum((max(0.0, float(report.elapsed_sec)) for report in reports)), [{'stage': report.stage, 'elapsed_sec': float(report.elapsed_sec), 'cached': bool(report.cached), 'engine': report.engine} for report in reports]; stage_perf.sort(key=lambda item: item["elapsed_sec"], reverse=True)
+    acoustic_words, mean_conf = sum((value for key, value in source_counts.items() if key in {'consensus', 'ctc', 'qwen'})), sum((word.confidence for word in words)) / max(1, len(words))
+    acoustic_ratio, suspicious_ratio = acoustic_words / max(1, len(words)), sum((1 for row in word_rows if row['reasons'])) / max(1, len(word_rows))
+    text_health, total_elapsed, stage_perf = round(100.0 * clamp01(0.48 * acoustic_ratio + 0.42 * mean_conf + 0.1 * (1.0 - suspicious_ratio)), 1), sum((max(0.0, float(report.elapsed_sec)) for report in reports)), [{'stage': report.stage, 'elapsed_sec': float(report.elapsed_sec), 'cached': bool(report.cached), 'engine': report.engine} for report in reports]
+    stage_perf.sort(key=lambda item: item["elapsed_sec"], reverse=True)
 
-    voiced_frames = sum(1 for frame in pitch if frame.voiced and frame.frequency > 0.0); pitch_mean_conf, linked_notes, pitch_changes = sum((frame.confidence for frame in pitch if frame.voiced and frame.frequency > 0.0)) / max(1, voiced_frames), sum((1 for note in notes if note.word_index is not None or note.syllable_index is not None)), {'compared_frames': 0, 'voicing_changes': 0, 'large_pitch_changes': 0, 'mean_abs_semitone_delta': 0.0}
+    voiced_frames = sum(1 for frame in pitch if frame.voiced and frame.frequency > 0.0)
+    pitch_mean_conf, linked_notes, pitch_changes = sum((frame.confidence for frame in pitch if frame.voiced and frame.frequency > 0.0)) / max(1, voiced_frames), sum((1 for note in notes if note.word_index is not None or note.syllable_index is not None)), {'compared_frames': 0, 'voicing_changes': 0, 'large_pitch_changes': 0, 'mean_abs_semitone_delta': 0.0}
     if raw_pitch:
-        raw_by_time = {round(frame.time, 6): frame for frame in raw_pitch}; deltas: list[float] = []; voicing_changes = 0; large_changes = 0
+        raw_by_time = {round(frame.time, 6): frame for frame in raw_pitch}
+        deltas: list[float] = []
+        voicing_changes = 0
+        large_changes = 0
         for frame in pitch:
             original = raw_by_time.get(round(frame.time, 6))
             if original is None: continue
             pitch_changes["compared_frames"] += 1
             if bool(original.voiced) != bool(frame.voiced): voicing_changes += 1
             if original.voiced and frame.voiced and original.frequency > 0 and frame.frequency > 0:
-                semitones = abs(12.0 * math.log2(frame.frequency / original.frequency)); deltas.append(semitones)
+                semitones = abs(12.0 * math.log2(frame.frequency / original.frequency))
+                deltas.append(semitones)
                 if semitones >= 6.0: large_changes += 1
-        pitch_changes["voicing_changes"] = voicing_changes; pitch_changes["large_pitch_changes"] = large_changes; pitch_changes["mean_abs_semitone_delta"] = sum(deltas) / max(1, len(deltas))
+        pitch_changes["voicing_changes"] = voicing_changes
+        pitch_changes["large_pitch_changes"] = large_changes
+        pitch_changes["mean_abs_semitone_delta"] = sum(deltas) / max(1, len(deltas))
 
-    pitch_source_analysis = dict(pitch_source_diagnostics or {}); original_source, tail_source = pitch_source_analysis.get('original'), pitch_source_analysis.get('tail_suppressed')
+    pitch_source_analysis = dict(pitch_source_diagnostics or {})
+    original_source, tail_source = pitch_source_analysis.get('original'), pitch_source_analysis.get('tail_suppressed')
     if isinstance(original_source, dict) and isinstance(tail_source, dict):
         original_voiced = max(1e-9, float(original_source.get("voiced_ratio") or 0.0))
         tail_removed = clamp01(
@@ -263,14 +298,19 @@ def build_alignment_debug(
             "interpretation": ("comparative signal indicators; not a definitive effect classifier"),
         }
 
-    game = list(game_notes or notes); syllable_split_events, syllable_ids, game_syllable_ids = max(0, len(game) - len(notes)), {int(item.index) for item in syllables}, [int(note.syllable_index) for note in game if note.syllable_index is not None]; game_syllable_set = set(game_syllable_ids); events_per_syllable: Counter[int] = Counter(game_syllable_ids)
+    game = list(game_notes or notes)
+    syllable_split_events, syllable_ids, game_syllable_ids = max(0, len(game) - len(notes)), {int(item.index) for item in syllables}, [int(note.syllable_index) for note in game if note.syllable_index is not None]
+    game_syllable_set = set(game_syllable_ids)
+    events_per_syllable: Counter[int] = Counter(game_syllable_ids)
     game_durations = [max(0.0, float(note.end) - float(note.start)) for note in game]
     if sorted_game_durations := sorted(value for value in game_durations if value > 0.0):
 
         def _quantile(frac: float) -> float:
-            pos = (len(sorted_game_durations) - 1) * frac; lo, hi = int(math.floor(pos)), int(math.ceil(pos))
+            pos = (len(sorted_game_durations) - 1) * frac
+            lo, hi = int(math.floor(pos)), int(math.ceil(pos))
             if lo == hi: return sorted_game_durations[lo]
-            weight = pos - lo; return sorted_game_durations[lo] * (1.0 - weight) + sorted_game_durations[hi] * weight
+            weight = pos - lo
+            return sorted_game_durations[lo] * (1.0 - weight) + sorted_game_durations[hi] * weight
 
         game_duration_quantiles = {
             "p05": _quantile(0.05),
@@ -282,8 +322,13 @@ def build_alignment_debug(
     else:
         game_duration_quantiles = {key: 0.0 for key in ("p05", "p25", "p50", "p75", "p95")}
 
-    syllable_durations, timeline_integrity, direct_disagreements = sorted((max(0.0, float(item.end) - float(item.start)) for item in syllables)), {'words': _timeline_metrics(words), 'syllables': _timeline_metrics(syllables), 'acoustic_notes': _timeline_metrics(notes), 'game_notes': _timeline_metrics(game), 'lines': _timeline_metrics(lines)}, [float(row['agreement']['ctc_qwen_delta_ms']) for row in word_rows if row['agreement']['ctc_qwen_delta_ms'] is not None]; disagreement_ratio, effect_indicators, audio_effects = sum((value > 180.0 for value in direct_disagreements)) / max(1, len(direct_disagreements)), pitch_source_analysis.get('effect_residual_indicators') or {}, dict(vocal_effect_diagnostics or {}); audio_cause_scores = audio_effects.get("possible_causes_percent") or {}; effect_presence_score, cleanup_metrics = clamp01(max(float(effect_indicators.get('reverb_echo_likelihood') or 0.0), float(effect_indicators.get('harmonic_leakage_likelihood') or 0.0), *(float(value or 0.0) for value in audio_cause_scores.values())) / 100.0), audio_effects.get('cleanup') or {}
-    cleanup_impact, pitch_effect_impact = clamp01(max(float(cleanup_metrics.get('denoise_mean_rms_attenuation_ratio') or 0.0), float(cleanup_metrics.get('tail_gate_mean_rms_attenuation_ratio') or 0.0))), clamp01(max(float(effect_indicators.get('reverb_echo_likelihood') or 0.0), float(effect_indicators.get('harmonic_leakage_likelihood') or 0.0)) / 100.0); effect_score, alignment_score = clamp01(effect_presence_score * (0.15 + 0.45 * cleanup_impact + 0.4 * pitch_effect_impact)), clamp01(0.38 * suspicious_ratio + 0.27 * (1.0 - mean_conf) + 0.2 * (1.0 - acoustic_ratio) + 0.15 * disagreement_ratio); pitch_score, text_overlap_count = clamp01(0.55 * (1.0 - pitch_mean_conf) + 0.25 * float(pitch_changes['large_pitch_changes']) / max(1, int(pitch_changes['compared_frames'])) + 0.2 * effect_score), int(timeline_integrity['words']['overlap_count']) + int(timeline_integrity['syllables']['overlap_count'])
+    syllable_durations, timeline_integrity, direct_disagreements = sorted((max(0.0, float(item.end) - float(item.start)) for item in syllables)), {'words': _timeline_metrics(words), 'syllables': _timeline_metrics(syllables), 'acoustic_notes': _timeline_metrics(notes), 'game_notes': _timeline_metrics(game), 'lines': _timeline_metrics(lines)}, [float(row['agreement']['ctc_qwen_delta_ms']) for row in word_rows if row['agreement']['ctc_qwen_delta_ms'] is not None]
+    disagreement_ratio, effect_indicators, audio_effects = sum((value > 180.0 for value in direct_disagreements)) / max(1, len(direct_disagreements)), pitch_source_analysis.get('effect_residual_indicators') or {}, dict(vocal_effect_diagnostics or {})
+    audio_cause_scores = audio_effects.get("possible_causes_percent") or {}
+    effect_presence_score, cleanup_metrics = clamp01(max(float(effect_indicators.get('reverb_echo_likelihood') or 0.0), float(effect_indicators.get('harmonic_leakage_likelihood') or 0.0), *(float(value or 0.0) for value in audio_cause_scores.values())) / 100.0), audio_effects.get('cleanup') or {}
+    cleanup_impact, pitch_effect_impact = clamp01(max(float(cleanup_metrics.get('denoise_mean_rms_attenuation_ratio') or 0.0), float(cleanup_metrics.get('tail_gate_mean_rms_attenuation_ratio') or 0.0))), clamp01(max(float(effect_indicators.get('reverb_echo_likelihood') or 0.0), float(effect_indicators.get('harmonic_leakage_likelihood') or 0.0)) / 100.0)
+    effect_score, alignment_score = clamp01(effect_presence_score * (0.15 + 0.45 * cleanup_impact + 0.4 * pitch_effect_impact)), clamp01(0.38 * suspicious_ratio + 0.27 * (1.0 - mean_conf) + 0.2 * (1.0 - acoustic_ratio) + 0.15 * disagreement_ratio)
+    pitch_score, text_overlap_count = clamp01(0.55 * (1.0 - pitch_mean_conf) + 0.25 * float(pitch_changes['large_pitch_changes']) / max(1, int(pitch_changes['compared_frames'])) + 0.2 * effect_score), int(timeline_integrity['words']['overlap_count']) + int(timeline_integrity['syllables']['overlap_count'])
     timeline_score = clamp01(
         0.75 * min(1.0, text_overlap_count / max(1, len(words) * 0.02))
         + 0.25 * float(timeline_integrity["game_notes"]["micro_interval_count"]) / max(1, len(game))

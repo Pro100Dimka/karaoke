@@ -1,40 +1,107 @@
-
 import json
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+import pytest
 
-
-def _text(relative: str) -> str: return (ROOT / relative).read_text(encoding='utf-8-sig')
+from tests._shared import assert_contains, assert_excludes, project_text
 
 
-def test_start_dev_has_prepare_only_mode_for_build_bootstrap(): script = _text("start-dev.bat"); assert ('if /i "%~1"=="--prepare-only" set "PREPARE_ONLY=1"' in script) and ('Development dependencies are ready' in script)
+@pytest.mark.parametrize(
+    ("script", "required"),
+    [
+        (
+            "start-dev.bat",
+            (
+                'if /i "%~1"=="--prepare-only" set "PREPARE_ONLY=1"',
+                "Development dependencies are ready",
+            ),
+        ),
+        (
+            "scripts/install-ai-models.bat",
+            (
+                'set "DML_SETUP=%ROOT%\\scripts\\prepare-fcpe-directml-pilot.bat"',
+                ":optional_accelerators",
+                'call "%DML_SETUP%"',
+            ),
+        ),
+    ],
+)
+def test_recovery_script_contracts(script, required):
+    assert_contains(project_text(script, encoding="utf-8-sig"), *required)
 
 
-def test_build_installer_bootstraps_gitignored_downloads_first(): script = _text("build-installer.bat"); assert ('set "KARAOKE_PREPARE_DIRECTML=1"' in script) and ('call "%~dp0start-dev.bat" --prepare-only' in script) and (script.index('--prepare-only') < script.index('build-installer.ps1'))
+def test_build_installer_prepares_gitignored_downloads_before_build():
+    script = project_text("build-installer.bat", encoding="utf-8-sig")
+    assert_contains(script, 'set "KARAOKE_PREPARE_DIRECTML=1"', 'call "%~dp0start-dev.bat" --prepare-only')
+    assert script.index("--prepare-only") < script.index("build-installer.ps1")
 
 
-def test_ai_install_restores_msst_engine_before_fast_path(): script = _text("scripts/install-ai-models.bat"); assert ('set "MSST_SETUP=%ROOT%\\scripts\\install-msst-engine.bat"' in script) and ('call "%MSST_SETUP%" "%ROOT%" || goto :fail' in script) and (script.index('call "%MSST_SETUP%"') < script.index('rem FAST PATH'))
+def test_ai_install_restores_msst_before_fast_path():
+    script = project_text("scripts/install-ai-models.bat", encoding="utf-8-sig")
+    assert_contains(
+        script,
+        'set "MSST_SETUP=%ROOT%\\scripts\\install-msst-engine.bat"',
+        'call "%MSST_SETUP%" "%ROOT%" || goto :fail',
+    )
+    assert script.index('call "%MSST_SETUP%"') < script.index("rem FAST PATH")
 
 
-def test_msst_installer_has_git_and_zip_recovery_and_verification():
-    script = _text("scripts/install-msst-engine.bat"); assert ('ZFTurbo/Music-Source-Separation-Training.git' in script) and ('Music-Source-Separation-Training/archive/refs/heads/main.zip' in script)
-    for required in (
+def test_msst_installer_recovery_contract():
+    script = project_text("scripts/install-msst-engine.bat", encoding="utf-8-sig")
+    assert_contains(
+        script,
+        "ZFTurbo/Music-Source-Separation-Training.git",
+        "Music-Source-Separation-Training/archive/refs/heads/main.zip",
         "inference.py",
         "utils\\model_utils.py",
         "models\\bs_roformer\\mel_band_roformer.py",
         "config_vocals_mel_band_roformer_kj.yaml",
-    ):
-        assert required in script
+    )
 
 
-def test_directml_optional_assets_are_recoverable_automatically(): script = _text("scripts/install-ai-models.bat"); assert ('set "DML_SETUP=%ROOT%\\scripts\\prepare-fcpe-directml-pilot.bat"' in script) and (':optional_accelerators' in script) and ('call "%DML_SETUP%"' in script); cached = script.index("AI Core is ready. [cached]"); assert script.rfind("call :optional_accelerators", 0, cached) != -1
+def test_directml_optional_assets_run_before_cached_fast_path():
+    script = project_text("scripts/install-ai-models.bat", encoding="utf-8-sig")
+    cached = script.index("AI Core is ready. [cached]")
+    assert script.rfind("call :optional_accelerators", 0, cached) != -1
 
 
-def test_scene_video_is_optional_for_git_clean_build(): package = json.loads(_text("front/package.json")); extras = package["build"]["extraResources"]; assert all(item.get("from") != "../downloads/media/videoplayback.webm" for item in extras); builder = _text("scripts/build-installer.ps1"); assert ('Optional karaoke scene video is absent; building without it.' in builder) and ('Optional karaoke scene video copied into application resources.' in builder)
+def test_scene_video_remains_optional_for_git_clean_build():
+    package = json.loads(project_text("front/package.json", encoding="utf-8-sig"))
+    assert all(
+        item.get("from") != "../downloads/media/videoplayback.webm"
+        for item in package["build"]["extraResources"]
+    )
+    assert_contains(
+        project_text("scripts/build-installer.ps1", encoding="utf-8-sig"),
+        "Optional karaoke scene video is absent; building without it.",
+        "Optional karaoke scene video copied into application resources.",
+    )
 
 
-def test_ai_cached_quick_check_does_not_require_private_nagisa_modules_directly(): script = _text("scripts/install-ai-models.bat"); quick_line = next(line for line in script.splitlines() if "mods=('qwen_asr','nagisa'" in line); assert ("'prepro'" not in quick_line) and ("'nagisa_utils'" not in quick_line) and ('Qwen/Nagisa runtime' in script) and ('from qwen_asr import Qwen3ASRModel,Qwen3ForcedAligner;import nagisa' in script)
+def test_ai_cached_quick_check_uses_public_nagisa_runtime():
+    script = project_text("scripts/install-ai-models.bat", encoding="utf-8-sig")
+    quick_line = next(line for line in script.splitlines() if "mods=('qwen_asr','nagisa'" in line)
+    assert_excludes(quick_line, "'prepro'", "'nagisa_utils'")
+    assert_contains(
+        script,
+        "Qwen/Nagisa runtime",
+        "from qwen_asr import Qwen3ASRModel,Qwen3ForcedAligner;import nagisa",
+    )
 
 
-def test_backend_packaging_bundles_nagisa_native_modules_and_smokes_qwen(): builder = _text("scripts/build-installer.ps1"); assert ('foreach ($moduleName in @("prepro", "nagisa_utils"))' in builder) and ('from importlib.metadata import files' in builder) and ("files('nagisa')" in builder) and ('$args += @("--add-binary", "$($nagisaNative[$moduleName]);.")' in builder) and ('Required Nagisa native module' not in builder); smoke = _text("scripts/smoke-packaged-backend.ps1"); assert 'ArgumentList "--verify-qwen-runtime"' in smoke; runner = _text("backend/run.py"); assert ('nagisa.tagging("テスト")' in runner) and ('importlib.import_module("prepro")' not in runner)
+def test_backend_packaging_bundles_nagisa_native_modules_and_smokes_qwen():
+    builder = project_text("scripts/build-installer.ps1", encoding="utf-8-sig")
+    assert_contains(
+        builder,
+        'foreach ($moduleName in @("prepro", "nagisa_utils"))',
+        "from importlib.metadata import files",
+        "files('nagisa')",
+        '$args += @("--add-binary", "$($nagisaNative[$moduleName]);.")',
+    )
+    assert_excludes(builder, "Required Nagisa native module")
+    assert_contains(
+        project_text("scripts/smoke-packaged-backend.ps1", encoding="utf-8-sig"),
+        'ArgumentList "--verify-qwen-runtime"',
+    )
+    runner = project_text("backend/run.py", encoding="utf-8-sig")
+    assert_contains(runner, 'nagisa.tagging("テスト")')
+    assert_excludes(runner, 'importlib.import_module("prepro")')

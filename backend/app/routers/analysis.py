@@ -40,27 +40,34 @@ def run_analysis(recording: RecordingDependency, db: DatabaseSession):
     )
     db.add(result)
     try:
-        db.commit(); db.refresh(result)
+        db.commit()
+        db.refresh(result)
     except IntegrityError:
-        db.rollback(); stored_result = repositories.get_analysis_by_recording(db, recording.id)
+        db.rollback()
+        stored_result = repositories.get_analysis_by_recording(db, recording.id)
         if stored_result is None: raise
         result = stored_result
     except Exception:
-        db.rollback(); raise
+        db.rollback()
+        raise
     return _to_out(result)
 
 
 @router.get("/{recording_id}", response_model=schemas.AnalysisOut)
-def get_analysis(result: AnalysisDependency): return _to_out(result)
+def get_analysis(result: AnalysisDependency):
+    return _to_out(result)
 
 
 @router.get("/{recording_id}/accuracy")
-def get_accuracy(result: AnalysisDependency): return {"pitch_accuracy_percent": result.pitch_accuracy_percent}
+def get_accuracy(result: AnalysisDependency):
+    return {"pitch_accuracy_percent": result.pitch_accuracy_percent}
 
 
 @router.get("/{recording_id}/deviation")
-def get_deviation(result: AnalysisDependency): return {"mean_deviation_semitones": result.mean_deviation_semitones}
+def get_deviation(result: AnalysisDependency):
+    return {"mean_deviation_semitones": result.mean_deviation_semitones}
 
 
 @router.get("/{recording_id}/sections")
-def get_sections(result: AnalysisDependency): return {"sections": parse_json_value(result.sections_json, None)}
+def get_sections(result: AnalysisDependency):
+    return {"sections": parse_json_value(result.sections_json, None)}

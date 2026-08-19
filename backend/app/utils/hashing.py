@@ -10,7 +10,8 @@ _CHUNK_SIZE = 1024 * 1024
 
 
 def sha256_stream(stream: IO[bytes]) -> str:
-    """Hash an already-open binary stream (e.g. a zip member) without loading it fully."""; digest = hashlib.sha256()
+    """Hash an already-open binary stream (e.g. a zip member) without loading it fully."""
+    digest = hashlib.sha256()
     while chunk := stream.read(_CHUNK_SIZE): digest.update(chunk)
     return digest.hexdigest()
 

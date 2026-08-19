@@ -13,14 +13,19 @@ def publish_files_atomically(pairs: list[tuple[Path, Path]]) -> None:
     targets = [target.resolve() for _, target in normalized]
     if len(set(targets)) != len(targets): raise ValueError("Transaction targets must be unique")
 
-    token = secrets.token_hex(8); backups: list[tuple[Path, Path]] = []; published: list[Path] = []
+    token = secrets.token_hex(8)
+    backups: list[tuple[Path, Path]] = []
+    published: list[Path] = []
     try:
         for _, target in normalized:
             target.parent.mkdir(parents=True, exist_ok=True)
             if target.exists():
-                backup = target.with_name(f".{target.name}.{token}.bak"); os.replace(target, backup); backups.append((target, backup))
+                backup = target.with_name(f".{target.name}.{token}.bak")
+                os.replace(target, backup)
+                backups.append((target, backup))
         for source, target in normalized:
-            os.replace(source, target); published.append(target)
+            os.replace(source, target)
+            published.append(target)
     except BaseException:
         for target in reversed(published):
             with suppress(OSError): target.unlink(missing_ok=True)

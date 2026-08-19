@@ -1,10 +1,4 @@
-export function formatTime(seconds) {
-  const safeSeconds = Number.isFinite(Number(seconds)) ? Number(seconds) : 0;
-  const minutes = Math.floor(Math.max(0, safeSeconds) / 60);
-  const remainder = Math.floor(Math.max(0, safeSeconds) % 60);
-
-  return `${minutes}:${String(remainder).padStart(2, "0")}`;
-}
+export { formatClockTime as formatTime } from "../../../utils/time-format";
 
 export function midiToWesternNote(midi) {
   if (!Number.isFinite(midi)) return "—";

@@ -18,7 +18,8 @@ from models import SongStatus
 # --------------------------------------------------------------------
 
 
-class ORMModel(BaseModel): model_config = ConfigDict(from_attributes=True)
+class ORMModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SongOut(ORMModel):
@@ -94,22 +95,38 @@ class TimedText(BaseModel):
         return self
 
 
-class LyricWord(TimedText): _time_label = "Word"; word: str = Field(max_length=512)
+class LyricWord(TimedText):
+    _time_label = "Word"
+    word: str = Field(max_length=512)
 
 
-class LyricLine(TimedText): _time_label = "Line"; text: str = Field(max_length=4_000); words: list[LyricWord] = Field(default_factory=list, max_length=1_000)
+class LyricLine(TimedText):
+    _time_label = "Line"
+    text: str = Field(max_length=4_000)
+    words: list[LyricWord] = Field(default_factory=list, max_length=1_000)
 
 
-class LyricsUpdate(BaseModel): lyrics: list[LyricLine] = Field(max_length=10_000)
+class LyricsUpdate(BaseModel):
+    lyrics: list[LyricLine] = Field(max_length=10_000)
 
 
-class ProcessingStatusOut(BaseModel): song_id: str; status: SongStatus; progress_step: str | None = None; progress_percent: float; progress_detail: str | None = None; eta_seconds: int | None = None; error_message: str | None = None
+class ProcessingStatusOut(BaseModel):
+    song_id: str
+    status: SongStatus
+    progress_step: str | None = None
+    progress_percent: float
+    progress_detail: str | None = None
+    eta_seconds: int | None = None
+    error_message: str | None = None
 
 
-class SongEditorUpdate(BaseModel): notes: list[dict[str, Any]] = Field(default_factory=list, max_length=20_000)
+class SongEditorUpdate(BaseModel):
+    notes: list[dict[str, Any]] = Field(default_factory=list, max_length=20_000)
 
 
-class SongEditorOut(BaseModel): song_map: dict[str, Any]; ai_backup_exists: bool = False
+class SongEditorOut(BaseModel):
+    song_map: dict[str, Any]
+    ai_backup_exists: bool = False
 
 
 class SongResultOut(BaseModel):
@@ -141,7 +158,8 @@ class PlaybackStateOut(ORMModel):
     is_playing: bool
 
 
-class SeekRequest(BaseModel): position_sec: float = Field(ge=0)
+class SeekRequest(BaseModel):
+    position_sec: float = Field(ge=0)
 
 
 # --------------------------------------------------------------------
@@ -159,13 +177,23 @@ class RecordingOut(ORMModel):
     created_at: datetime
 
 
-class RecordedSongOut(RecordingOut): song_title: str
+class RecordedSongOut(RecordingOut):
+    song_title: str
 
 
-class RecordingStartRequest(BaseModel): song_id: str; position_sec: float = Field(default=0, ge=0); music_volume: float = Field(default=1, ge=0, le=1); microphone_volume: float = Field(default=1, ge=0, le=4); reverb: float = Field(default=0, ge=0, le=1); echo: float = Field(default=0, ge=0, le=1); delay: float = Field(default=0, ge=0, le=1)
+class RecordingStartRequest(BaseModel):
+    song_id: str
+    position_sec: float = Field(default=0, ge=0)
+    music_volume: float = Field(default=1, ge=0, le=1)
+    microphone_volume: float = Field(default=1, ge=0, le=4)
+    reverb: float = Field(default=0, ge=0, le=1)
+    echo: float = Field(default=0, ge=0, le=1)
+    delay: float = Field(default=0, ge=0, le=1)
 
 
-class RecordingStartOut(BaseModel): recording_session_id: str; message: str
+class RecordingStartOut(BaseModel):
+    recording_session_id: str
+    message: str
 
 
 # --------------------------------------------------------------------
@@ -188,13 +216,24 @@ class AnalysisOut(ORMModel):
 # --------------------------------------------------------------------
 
 
-class CacheSizeOut(BaseModel): total_bytes: int; total_human: str; breakdown: dict[str, int]
+class CacheSizeOut(BaseModel):
+    total_bytes: int
+    total_human: str
+    breakdown: dict[str, int]
 
 
-class FreeSpaceOut(BaseModel): free_bytes: int; free_human: str; total_bytes: int; total_human: str
+class FreeSpaceOut(BaseModel):
+    free_bytes: int
+    free_human: str
+    total_bytes: int
+    total_human: str
 
 
-class OptimizeResultOut(BaseModel): song_id: str; freed_bytes: int; freed_human: str; actions: list[str]
+class OptimizeResultOut(BaseModel):
+    song_id: str
+    freed_bytes: int
+    freed_human: str
+    actions: list[str]
 
 
 # --------------------------------------------------------------------
@@ -202,25 +241,58 @@ class OptimizeResultOut(BaseModel): song_id: str; freed_bytes: int; freed_human:
 # --------------------------------------------------------------------
 
 
-class HealthOut(BaseModel): status: str; version: str
+class HealthOut(BaseModel):
+    status: str
+    version: str
 
 
-class PipelineHealthOut(BaseModel): ffmpeg_available: bool; demucs_available: bool; whisper_available: bool; torch_available: bool; cuda_available: bool; ai_dir_found: bool; runtime: dict[str, object] | None = None
+class PipelineHealthOut(BaseModel):
+    ffmpeg_available: bool
+    demucs_available: bool
+    whisper_available: bool
+    torch_available: bool
+    cuda_available: bool
+    ai_dir_found: bool
+    runtime: dict[str, object] | None = None
 
 
-class AIModelResourceOut(BaseModel): key: str; name: str; ready: bool
+class AIModelResourceOut(BaseModel):
+    key: str
+    name: str
+    ready: bool
 
 
-class AIModelsStatusOut(BaseModel): state: str; ready: bool; ready_count: int; total: int; current_model: str | None = None; error: str | None = None; models_dir: str; models: list[AIModelResourceOut]; downloaded_bytes: int | None = None; total_bytes: int | None = None; remaining_seconds: int | None = None
+class AIModelsStatusOut(BaseModel):
+    state: str
+    ready: bool
+    ready_count: int
+    total: int
+    current_model: str | None = None
+    error: str | None = None
+    models_dir: str
+    models: list[AIModelResourceOut]
+    downloaded_bytes: int | None = None
+    total_bytes: int | None = None
+    remaining_seconds: int | None = None
 
 
-class VersionsOut(BaseModel): backend_version: str; python_version: str; components: dict[str, str | None]
+class VersionsOut(BaseModel):
+    backend_version: str
+    python_version: str
+    components: dict[str, str | None]
 
 
-class SystemErrorsOut(BaseModel): errors: list[dict[str, Any]]
+class SystemErrorsOut(BaseModel):
+    errors: list[dict[str, Any]]
 
 
-class ClientLogIn(BaseModel): source: str = "renderer"; level: str = "info"; message: str; stack: str | None = None; url: str | None = None; user: str | None = None
+class ClientLogIn(BaseModel):
+    source: str = "renderer"
+    level: str = "info"
+    message: str
+    stack: str | None = None
+    url: str | None = None
+    user: str | None = None
 
 
 # --------------------------------------------------------------------
@@ -228,13 +300,26 @@ class ClientLogIn(BaseModel): source: str = "renderer"; level: str = "info"; mes
 # --------------------------------------------------------------------
 
 
-class AudioDeviceOut(BaseModel): index: int; name: str; max_input_channels: int; default_samplerate: float | None = None; host_api: str; is_asio: bool
+class AudioDeviceOut(BaseModel):
+    index: int
+    name: str
+    max_input_channels: int
+    default_samplerate: float | None = None
+    host_api: str
+    is_asio: bool
 
 
-class AudioOutputDeviceOut(BaseModel): index: int; name: str; max_output_channels: int; default_samplerate: float | None = None; host_api: str; is_asio: bool
+class AudioOutputDeviceOut(BaseModel):
+    index: int
+    name: str
+    max_output_channels: int
+    default_samplerate: float | None = None
+    host_api: str
+    is_asio: bool
 
 
-class AsioDriverOut(BaseModel): name: str
+class AsioDriverOut(BaseModel):
+    name: str
 
 
 class AudioSettingsOut(ORMModel):
@@ -254,7 +339,22 @@ class AudioSettingsOut(ORMModel):
     delay: float
 
 
-class AudioSettingsUpdate(BaseModel): input_device_id: int | None = None; output_device_id: int | None = None; volume: float | None = Field(default=None, ge=0, le=4); sensitivity: float | None = Field(default=None, ge=0, le=1); latency_ms: int | None = Field(default=None, ge=0); audio_driver: str | None = None; asio_driver_name: str | None = Field(default=None, max_length=255); buffer_size: int | None = Field(default=None, ge=16, le=2048); monitoring_enabled: bool | None = None; reverb: float | None = Field(default=None, ge=0, le=1); echo: float | None = Field(default=None, ge=0, le=1); delay: float | None = Field(default=None, ge=0, le=1)
+class AudioSettingsUpdate(BaseModel):
+    input_device_id: int | None = None
+    output_device_id: int | None = None
+    volume: float | None = Field(default=None, ge=0, le=4)
+    sensitivity: float | None = Field(default=None, ge=0, le=1)
+    latency_ms: int | None = Field(default=None, ge=0)
+    audio_driver: str | None = None
+    asio_driver_name: str | None = Field(default=None, max_length=255)
+    buffer_size: int | None = Field(default=None, ge=16, le=2048)
+    monitoring_enabled: bool | None = None
+    reverb: float | None = Field(default=None, ge=0, le=1)
+    echo: float | None = Field(default=None, ge=0, le=1)
+    delay: float | None = Field(default=None, ge=0, le=1)
 
 
-class SignalQualityOut(BaseModel): rms_db: float; clipping: bool; silent: bool
+class SignalQualityOut(BaseModel):
+    rms_db: float
+    clipping: bool
+    silent: bool

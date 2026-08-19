@@ -27,16 +27,6 @@ def _encode_mp3(wav_path: Path, mp3_path: Path) -> None: _run_ffmpeg_transcode(w
 def _encode_flac(wav_path: Path, flac_path: Path) -> None: _run_ffmpeg_transcode(wav_path, flac_path, '-codec:a', 'flac', '-compression_level', '5')
 
 
-
-def _retarget_manifest_output(out_dir: Path, old_relative: str, new_relative: str) -> bool:
-    manifest_path = out_dir / "manifest.json"; manifest = read_json(manifest_path)
-    if not isinstance(manifest, dict) or not isinstance(manifest.get("outputs"), dict): return False
-    outputs = manifest["outputs"]; keys = [key for key, relative in outputs.items() if relative == old_relative]
-    if not keys: return False
-    for key in keys: outputs[key] = new_relative
-    artifact_integrity.refresh_manifest_integrity(out_dir, manifest, {new_relative}); write_json(manifest_path, manifest); return True
-
-
 _OPTIMIZATION_JOURNAL = ".optimization-journal.json"
 
 
@@ -44,7 +34,8 @@ def _safe_journal_path(out_dir: Path, value: object) -> Path:
     if not isinstance(value, str) or not value or any(token in value for token in ("\\", ":", "\x00")): raise ValueError("Optimization journal contains an unsafe path")
     relative = PurePosixPath(value)
     if relative.is_absolute() or any(part in {"", ".", ".."} for part in relative.parts): raise ValueError("Optimization journal contains an unsafe path")
-    root = out_dir.resolve(); candidate = (root / Path(*relative.parts)).resolve()
+    root = out_dir.resolve()
+    candidate = (root / Path(*relative.parts)).resolve()
     if candidate == root or root not in candidate.parents: raise ValueError("Optimization journal path escapes the song directory")
     return candidate
 
@@ -56,7 +47,9 @@ def _journal_paths(out_dir: Path, journal: dict, key: str) -> list[Path]:
 
 
 def _restore_precommit_optimization(out_dir: Path, journal: dict) -> None:
-    created = _journal_paths(out_dir, journal, "created"); _journal_paths(out_dir, journal, "retire"); manifest_before = journal.get("manifest_before")
+    created = _journal_paths(out_dir, journal, "created")
+    _journal_paths(out_dir, journal, "retire")
+    manifest_before = journal.get("manifest_before")
     if manifest_before is not None and not isinstance(manifest_before, dict): raise ValueError("Optimization journal is invalid")
     if isinstance(manifest_before, dict): write_json(out_dir / "manifest.json", manifest_before)
     for path in created: path.unlink(missing_ok=True)
@@ -64,20 +57,27 @@ def _restore_precommit_optimization(out_dir: Path, journal: dict) -> None:
 
 
 def _recover_optimization(out_dir: Path, *, committed: bool) -> None:
-    journal_path = out_dir / _OPTIMIZATION_JOURNAL; journal: object = read_json(journal_path, default={})
+    journal_path = out_dir / _OPTIMIZATION_JOURNAL
+    journal: object = read_json(journal_path, default={})
     if not isinstance(journal, dict) or not journal: return
     if not committed:
-        _restore_precommit_optimization(out_dir, journal); return
-    retire = _journal_paths(out_dir, journal, "retire"); _journal_paths(out_dir, journal, "created"); published_outputs, published_integrity = journal.get('published_outputs'), journal.get('published_integrity')
+        _restore_precommit_optimization(out_dir, journal)
+        return
+    retire = _journal_paths(out_dir, journal, "retire")
+    _journal_paths(out_dir, journal, "created")
+    published_outputs, published_integrity = journal.get('published_outputs'), journal.get('published_integrity')
     if not isinstance(published_outputs, dict) or not isinstance(published_integrity, dict):
-        journal_path.unlink(missing_ok=True); return
-    current_manifest: object = read_json(out_dir / "manifest.json", default={}); current_outputs, current_integrity = current_manifest.get('outputs') if isinstance(current_manifest, dict) else None, current_manifest.get('integrity') if isinstance(current_manifest, dict) else None
+        journal_path.unlink(missing_ok=True)
+        return
+    current_manifest: object = read_json(out_dir / "manifest.json", default={})
+    current_outputs, current_integrity = current_manifest.get('outputs') if isinstance(current_manifest, dict) else None, current_manifest.get('integrity') if isinstance(current_manifest, dict) else None
     if not isinstance(current_outputs, dict) or not isinstance(current_integrity, dict): raise ValueError("Current processing manifest is invalid")
     if (
         any(current_outputs.get(key) != value for key, value in published_outputs.items())
         or any(current_integrity.get(key) != value for key, value in published_integrity.items())
     ):
-        journal_path.unlink(missing_ok=True); return
+        journal_path.unlink(missing_ok=True)
+        return
     for path in retire: path.unlink(missing_ok=True)
     journal_path.unlink(missing_ok=True)
 
@@ -85,7 +85,9 @@ def _recover_optimization(out_dir: Path, *, committed: bool) -> None:
 def _prepare_optimization(out_dir: Path, actions: list[str]) -> tuple[dict, list[str], list[str]]:
     manifest = read_json(out_dir / "manifest.json")
     if not isinstance(manifest, dict) or not isinstance(manifest.get("outputs"), dict): raise ValueError("Song processing manifest is invalid")
-    updated = copy.deepcopy(manifest); created: list[str] = []; retire: list[str] = []
+    updated = copy.deepcopy(manifest)
+    created: list[str] = []
+    retire: list[str] = []
 
     conversions = [("song.wav", ".mp3", _encode_mp3)] + [
         (relative, ".flac", _encode_flac) for relative in _LOSSLESS_STEMS
@@ -94,7 +96,10 @@ def _prepare_optimization(out_dir: Path, actions: list[str]) -> tuple[dict, list
         for relative, suffix, encoder in conversions:
             source = out_dir / relative
             if not source.is_file(): continue
-            target = source.with_suffix(suffix); target.unlink(missing_ok=True); target.parent.mkdir(parents=True, exist_ok=True); encoder(source, target)
+            target = source.with_suffix(suffix)
+            target.unlink(missing_ok=True)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            encoder(source, target)
             if not target.is_file() or target.stat().st_size <= 0: raise RuntimeError(f"Optimization encoder produced no output: {relative}")
             target_relative = target.relative_to(out_dir).as_posix()
             tracked_keys = [
@@ -103,8 +108,12 @@ def _prepare_optimization(out_dir: Path, actions: list[str]) -> tuple[dict, list
             if relative == "separated/instrumental.wav" and not tracked_keys: raise ValueError("Song processing manifest does not track instrumental.wav")
             trial = copy.deepcopy(updated)
             for key in tracked_keys: trial["outputs"][key] = target_relative
-            artifact_integrity.refresh_manifest_integrity(out_dir, trial, {target_relative}); updated = trial; created.append(target_relative); retire.append(relative)
-            label = " (lossless)" if suffix == ".flac" else ""; actions.append(f"{relative} -> {target.name}{label}")
+            artifact_integrity.refresh_manifest_integrity(out_dir, trial, {target_relative})
+            updated = trial
+            created.append(target_relative)
+            retire.append(relative)
+            label = " (lossless)" if suffix == ".flac" else ""
+            actions.append(f"{relative} -> {target.name}{label}")
     except Exception:
         for relative in created: _safe_journal_path(out_dir, relative).unlink(missing_ok=True)
         for relative, suffix, _encoder in conversions:
@@ -134,7 +143,8 @@ def cache_size() -> dict:
         "database": Path(config.DB_PATH).stat().st_size if Path(config.DB_PATH).exists() else 0,
         "cache": _dir_size_bytes(config.CACHE_DIR),
     }
-    total = sum(breakdown.values()); return {"total_bytes": total, "total_human": _human(total), "breakdown": breakdown}
+    total = sum(breakdown.values())
+    return {"total_bytes": total, "total_human": _human(total), "breakdown": breakdown}
 
 
 def free_space() -> dict:
@@ -155,7 +165,8 @@ def clear_temp_files() -> int:
         for name in _HEAVY_INTERMEDIATE_DIRNAMES:
             target = song_dir / name
             if target.exists():
-                freed += _dir_size_bytes(target); shutil.rmtree(target, ignore_errors=True)
+                freed += _dir_size_bytes(target)
+                shutil.rmtree(target, ignore_errors=True)
     return freed
 
 
@@ -167,30 +178,9 @@ def _remove_intermediate_directories(out_dir: Path, actions: list[str]) -> int:
     for name in _HEAVY_INTERMEDIATE_DIRNAMES:
         target = out_dir / name
         if not target.exists(): continue
-        freed += _dir_size_bytes(target); shutil.rmtree(target, ignore_errors=True); actions.append(f"удалена временная папка {name}/")
-    return freed
-
-
-def _convert_heavy_wavs(out_dir: Path, actions: list[str]) -> int:
-    freed = 0
-    for wav_name in _HEAVY_KEEP_AS_MP3:
-        wav_path = out_dir / wav_name
-        if not wav_path.exists(): continue
-        mp3_path = wav_path.with_suffix(".mp3"); mp3_path.parent.mkdir(parents=True, exist_ok=True)
-        try: _encode_mp3(wav_path, mp3_path)
-        except Exception: continue
-        freed += max(0, wav_path.stat().st_size - mp3_path.stat().st_size); wav_path.unlink(); actions.append(f"{wav_name} -> {mp3_path.name}")
-    for wav_name in _LOSSLESS_STEMS:
-        wav_path = out_dir / wav_name
-        if not wav_path.exists(): continue
-        flac_path = wav_path.with_suffix(".flac"); flac_relative = flac_path.relative_to(out_dir).as_posix()
-        try:
-            _encode_flac(wav_path, flac_path); tracked = _retarget_manifest_output(out_dir, wav_name, flac_relative)
-            if wav_name == "separated/instrumental.wav" and not tracked:
-                flac_path.unlink(missing_ok=True); continue
-        except Exception:
-            flac_path.unlink(missing_ok=True); continue
-        freed += max(0, wav_path.stat().st_size - flac_path.stat().st_size); wav_path.unlink(); actions.append(f"{wav_name} -> {flac_path.name} (lossless)")
+        freed += _dir_size_bytes(target)
+        shutil.rmtree(target, ignore_errors=True)
+        actions.append(f"удалена временная папка {name}/")
     return freed
 
 
@@ -205,10 +195,14 @@ def recover_optimization_transactions() -> None:
                 out_dir = song_service.resolve_output_dir(song)
                 if (out_dir / _OPTIMIZATION_JOURNAL).is_file():
                     with song_service.song_content_lock(song.id), song_service.library_write_lock():
-                        db.refresh(song); _recover_optimization(out_dir, committed=bool(song.optimized)); revision_cache.invalidate(song)
+                        db.refresh(song)
+                        _recover_optimization(out_dir, committed=bool(song.optimized))
+                        revision_cache.invalidate(song)
             except Exception:
-                db.rollback(); continue
-    finally: db.close()
+                db.rollback()
+                continue
+    finally:
+        db.close()
 
 
 def optimize_song_files(song_id: str) -> dict:
@@ -218,10 +212,14 @@ def optimize_song_files(song_id: str) -> dict:
         if song is None or not song.output_dir: return _optimization_result(song_id)
 
         with song_service.song_content_lock(song_id), song_service.library_write_lock():
-            db.refresh(song); out_dir = song_service.resolve_output_dir(song); _recover_optimization(out_dir, committed=bool(song.optimized)); actions: list[str] = []
+            db.refresh(song)
+            out_dir = song_service.resolve_output_dir(song)
+            _recover_optimization(out_dir, committed=bool(song.optimized))
+            actions: list[str] = []
             manifest_before = read_json(out_dir / "manifest.json")
             if not isinstance(manifest_before, dict): raise ValueError("Song processing manifest is invalid")
-            created: list[str] = []; retire: list[str] = []
+            created: list[str] = []
+            retire: list[str] = []
             try:
                 updated_manifest, created, retire = _prepare_optimization(out_dir, actions)
                 published_outputs = {
@@ -240,7 +238,10 @@ def optimize_song_files(song_id: str) -> dict:
                     "published_outputs": published_outputs,
                     "published_integrity": published_integrity,
                 }
-                write_json(out_dir / _OPTIMIZATION_JOURNAL, journal); write_json(out_dir / "manifest.json", updated_manifest); song.optimized = True; commit(db)
+                write_json(out_dir / _OPTIMIZATION_JOURNAL, journal)
+                write_json(out_dir / "manifest.json", updated_manifest)
+                song.optimized = True
+                commit(db)
             except Exception:
                 if created or (out_dir / _OPTIMIZATION_JOURNAL).exists():
                     _restore_precommit_optimization(
@@ -254,8 +255,14 @@ def optimize_song_files(song_id: str) -> dict:
 
             freed = 0
             for relative in retire:
-                old = out_dir / relative; new = old.with_suffix(".mp3" if relative == "song.wav" else ".flac")
+                old = out_dir / relative
+                new = old.with_suffix(".mp3" if relative == "song.wav" else ".flac")
                 if old.is_file() and new.is_file():
-                    freed += max(0, old.stat().st_size - new.stat().st_size); old.unlink(missing_ok=True)
-            (out_dir / _OPTIMIZATION_JOURNAL).unlink(missing_ok=True); freed += _remove_intermediate_directories(out_dir, actions); revision_cache.invalidate(song); return _optimization_result(song_id, freed, actions)
-    finally: db.close()
+                    freed += max(0, old.stat().st_size - new.stat().st_size)
+                    old.unlink(missing_ok=True)
+            (out_dir / _OPTIMIZATION_JOURNAL).unlink(missing_ok=True)
+            freed += _remove_intermediate_directories(out_dir, actions)
+            revision_cache.invalidate(song)
+            return _optimization_result(song_id, freed, actions)
+    finally:
+        db.close()

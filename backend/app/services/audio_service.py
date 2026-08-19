@@ -68,9 +68,12 @@ def list_asio_drivers() -> list[str]:
             timeout=4,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
-        payload = json.loads(result.stdout.strip().splitlines()[-1]); drivers = payload.get("drivers", []); return [str(name) for name in drivers if isinstance(name, str)]
+        payload = json.loads(result.stdout.strip().splitlines()[-1])
+        drivers = payload.get("drivers", [])
+        return [str(name) for name in drivers if isinstance(name, str)]
     except (OSError, ValueError, subprocess.SubprocessError, IndexError) as exc:
-        logger.warning("Could not enumerate ASIO drivers: %s", exc); return []
+        logger.warning("Could not enumerate ASIO drivers: %s", exc)
+        return []
 
 
 def _device_tokens(name: str) -> set[str]: return {token for token in re.findall('[\\w]+', name.casefold()) if len(token) > 2 and token not in {'audio', 'device', 'микрофон', 'наушники'}}
@@ -78,12 +81,17 @@ def _device_tokens(name: str) -> set[str]: return {token for token in re.findall
 
 def _device_latency(device: dict, kind: str) -> float:
     value = device.get(f"default_low_{kind}_latency", 1.0)
-    try: return max(0.0, float(value))
-    except (TypeError, ValueError): return 1.0
+    try:
+        return max(0.0, float(value))
+    except (TypeError, ValueError):
+        return 1.0
 
 
 def _low_latency_equivalent(device_id: int | None, kind: str) -> int:
-    source_id, devices = _resolved_device_index(device_id, kind), sd.query_devices(); source, capability = devices[source_id], f'max_{kind}_channels'; source_tokens = _device_tokens(str(source.get("name", ""))); best: tuple[float, int] | None = None
+    source_id, devices = _resolved_device_index(device_id, kind), sd.query_devices()
+    source, capability = devices[source_id], f'max_{kind}_channels'
+    source_tokens = _device_tokens(str(source.get("name", "")))
+    best: tuple[float, int] | None = None
     for index, candidate in enumerate(devices):
         if int(candidate.get(capability, 0)) < 1: continue
         host = _host_api_name(candidate).casefold()
@@ -97,18 +105,25 @@ def _low_latency_equivalent(device_id: int | None, kind: str) -> int:
 
 
 def _matching_output_for_input(input_id: int, output_id: int | None) -> int:
-    selected_output, devices = _low_latency_equivalent(output_id, 'output'), sd.query_devices(); input_info = devices[input_id]; input_host_api = int(input_info["hostapi"])
+    selected_output, devices = _low_latency_equivalent(output_id, 'output'), sd.query_devices()
+    input_info = devices[input_id]
+    input_host_api = int(input_info["hostapi"])
     if output_id is not None:
         output_info = devices[selected_output]
         if int(output_info["hostapi"]) == input_host_api: return selected_output
         selected_output = _resolved_device_index(output_id, "output")
         if int(devices[selected_output]["hostapi"]) == input_host_api: return selected_output
-    input_tokens, input_rate = _device_tokens(str(input_info.get('name', ''))), float(input_info.get('default_samplerate', 0) or 0); candidates: list[tuple[float, int]] = []
+    input_tokens, input_rate = _device_tokens(str(input_info.get('name', ''))), float(input_info.get('default_samplerate', 0) or 0)
+    candidates: list[tuple[float, int]] = []
     for index, candidate in enumerate(devices):
         if int(candidate.get("max_output_channels", 0)) < 1: continue
         if int(candidate["hostapi"]) != input_host_api: continue
-        host = _host_api_name(candidate).casefold(); overlap = len(input_tokens & _device_tokens(str(candidate.get("name", "")))); rate = float(candidate.get("default_samplerate", 0) or 0); score = float((300 if "wasapi" in host else 100) + overlap * 35)
-        score -= abs(rate - input_rate) / 1000; score -= _device_latency(candidate, "output") * 1000
+        host = _host_api_name(candidate).casefold()
+        overlap = len(input_tokens & _device_tokens(str(candidate.get("name", ""))))
+        rate = float(candidate.get("default_samplerate", 0) or 0)
+        score = float((300 if "wasapi" in host else 100) + overlap * 35)
+        score -= abs(rate - input_rate) / 1000
+        score -= _device_latency(candidate, "output") * 1000
         if index == selected_output: score += 45
         candidates.append((score, index))
     return max(candidates)[1] if candidates else selected_output
@@ -125,10 +140,12 @@ def _matching_asio_device_index(driver_name: str | None, kind: str) -> int | Non
     if not _AUDIO_BACKEND_AVAILABLE: return None
     hint = _asio_device_hint(driver_name)
     if not hint: return None
-    capability = "max_input_channels" if kind == "input" else "max_output_channels"; best: tuple[int, int] | None = None
+    capability = "max_input_channels" if kind == "input" else "max_output_channels"
+    best: tuple[int, int] | None = None
     for index, device in enumerate(sd.query_devices()):
         if int(device.get(capability, 0)) < 1: continue
-        name = str(device.get("name", "")).lower(); overlap = sum(token in name for token in hint.split() if len(token) > 2)
+        name = str(device.get("name", "")).lower()
+        overlap = sum(token in name for token in hint.split() if len(token) > 2)
         if overlap == 0: continue
         score = overlap * 10 + (5 if _is_asio_device(device) else 0)
         if best is None or score > best[0]: best = (score, index)
@@ -157,9 +174,12 @@ def _is_asio_device(device: dict) -> bool: return 'asio' in _host_api_name(devic
 
 def _resolved_device_index(device_id: int | None, kind: str) -> int:
     if device_id is not None: return device_id
-    default_input, default_output = sd.default.device; raw_default = default_input if kind == "input" else default_output
-    try: default_id = int(raw_default)
-    except (TypeError, ValueError): default_id = -1
+    default_input, default_output = sd.default.device
+    raw_default = default_input if kind == "input" else default_output
+    try:
+        default_id = int(raw_default)
+    except (TypeError, ValueError):
+        default_id = -1
     if default_id >= 0: return default_id
     capability = f"max_{kind}_channels"
     candidates = [
@@ -170,12 +190,13 @@ def _resolved_device_index(device_id: int | None, kind: str) -> int:
     if not candidates: raise RuntimeError(f"No {kind} audio device is available")
     host_priority = {"wasapi": 0, "mme": 1, "directsound": 2, "wdm-ks": 3}
 
-    def rank(item: tuple[int, dict]) -> tuple[int, float]: _index, device = item; host = _host_api_name(device).casefold().replace("windows ", ""); priority = next((value for name, value in host_priority.items() if name in host), 4); return priority, _device_latency(device, kind)
+    def rank(item: tuple[int, dict]) -> tuple[int, float]:
+        _index, device = item
+        host = _host_api_name(device).casefold().replace("windows ", "")
+        priority = next((value for name, value in host_priority.items() if name in host), 4)
+        return priority, _device_latency(device, kind)
 
     return min(candidates, key=rank)[0]
-
-
-def _is_wasapi_device(device: dict) -> bool: return 'wasapi' in _host_api_name(device).lower()
 
 
 def preferred_output_device(
@@ -191,12 +212,14 @@ def preferred_output_device(
             device = sd.query_devices(input_device_id)
             if _is_asio_device(device) and int(device.get("max_output_channels", 0)) > 0: return input_device_id
         return _matching_asio_device_index(asio_driver_name, "output")
-    resolved_input = _low_latency_equivalent(input_device_id, "input"); return _matching_output_for_input(resolved_input, output_device_id)
+    resolved_input = _low_latency_equivalent(input_device_id, "input")
+    return _matching_output_for_input(resolved_input, output_device_id)
 
 
 def preferred_sample_rate(input_device_id: int | None = None, driver: str = "auto") -> int:
     if _AUDIO_BACKEND_AVAILABLE and input_device_id is not None:
-        device = sd.query_devices(input_device_id); return int(round(float(device["default_samplerate"])))
+        device = sd.query_devices(input_device_id)
+        return int(round(float(device["default_samplerate"])))
     return config.RECORDING_SAMPLE_RATE
 
 
@@ -227,7 +250,9 @@ def list_output_devices() -> list[dict]: return _list_devices('output')
 
 def _get_or_create_settings(db: Session) -> models.AudioSettings:
     if (settings := db.get(models.AudioSettings, 1)) is not None: return settings
-    settings = models.AudioSettings(id=1); db.add(settings); return commit_refresh(db, settings)
+    settings = models.AudioSettings(id=1)
+    db.add(settings)
+    return commit_refresh(db, settings)
 
 
 def get_settings(db: Session) -> models.AudioSettings: return _get_or_create_settings(db)
@@ -235,22 +260,26 @@ def get_settings(db: Session) -> models.AudioSettings: return _get_or_create_set
 
 def _input_device_name(device_id: int | None) -> str | None:
     if device_id is None or not _AUDIO_BACKEND_AVAILABLE: return None
-    devices = sd.query_devices(); return str(devices[device_id].get('name') or '') or None if 0 <= device_id < len(devices) else None
+    devices = sd.query_devices()
+    return str(devices[device_id].get('name') or '') or None if 0 <= device_id < len(devices) else None
 
 
 def _normalized_settings_patch(
     settings: models.AudioSettings, patch: dict
 ) -> tuple[dict, set[str]]:
-    updates: dict = {}; changed_fields: set[str] = set()
+    updates: dict = {}
+    changed_fields: set[str] = set()
     for field, value in patch.items():
         if field in {"input_device_id", "output_device_id"} and value is None:
             if getattr(settings, field) is not None:
-                updates[field] = None; changed_fields.add(field)
+                updates[field] = None
+                changed_fields.add(field)
             if field == "input_device_id": updates["input_device_name"] = None
             continue
         if value is None: continue
         if getattr(settings, field) != value:
-            updates[field] = value; changed_fields.add(field)
+            updates[field] = value
+            changed_fields.add(field)
         if field == "input_device_id": updates["input_device_name"] = _input_device_name(value)
 
     driver, asio_name = updates.get('audio_driver', settings.audio_driver), updates.get('asio_driver_name', settings.asio_driver_name)
@@ -259,12 +288,16 @@ def _normalized_settings_patch(
         drivers = list_asio_drivers()
         if not drivers: raise RuntimeError("Native ASIO bridge is not installed or no ASIO drivers were found")
         if asio_name not in drivers:
-            updates["asio_driver_name"] = drivers[0]; changed_fields.add("asio_driver_name")
+            updates["asio_driver_name"] = drivers[0]
+            changed_fields.add("asio_driver_name")
     return updates, changed_fields
 
 
 def update_settings(db: Session, patch: dict) -> models.AudioSettings:
-    settings = _get_or_create_settings(db); updates, changed_fields = _normalized_settings_patch(settings, patch); previous, driver = {field: getattr(settings, field) for field in updates}, updates.get('audio_driver', settings.audio_driver); restart_fields = _MONITOR_RESTART_FIELDS | (_ASIO_ONLY_RESTART_FIELDS if driver == "asio" else set())
+    settings = _get_or_create_settings(db)
+    updates, changed_fields = _normalized_settings_patch(settings, patch)
+    previous, driver = {field: getattr(settings, field) for field in updates}, updates.get('audio_driver', settings.audio_driver)
+    restart_fields = _MONITOR_RESTART_FIELDS | (_ASIO_ONLY_RESTART_FIELDS if driver == "asio" else set())
     reconfigure_monitoring, live_update_fields = bool('monitoring_enabled' in changed_fields or (settings.monitoring_enabled and restart_fields & changed_fields)), set() if driver == 'asio' else _LIVE_UPDATE_FIELDS & changed_fields
 
     for field, value in updates.items(): setattr(settings, field, value)
@@ -273,12 +306,15 @@ def update_settings(db: Session, patch: dict) -> models.AudioSettings:
         if reconfigure_monitoring:
             configure_monitoring(settings)
         elif live_update_fields and settings.monitoring_enabled: _send_live_update({field: getattr(settings, field) for field in live_update_fields})
-        db.commit(); db.refresh(settings); return settings
+        db.commit()
+        db.refresh(settings)
+        return settings
     except Exception:
         db.rollback()
         for field, value in previous.items(): setattr(settings, field, value)
         if reconfigure_monitoring:
-            try: configure_monitoring(settings)
+            try:
+                configure_monitoring(settings)
             except Exception as restore_error:
                 logger.warning(
                     "Could not restore direct monitoring after settings failure: %s",
@@ -288,7 +324,8 @@ def update_settings(db: Session, patch: dict) -> models.AudioSettings:
 
 
 def set_monitoring_enabled(db: Session, enabled: bool) -> models.AudioSettings:
-    settings = get_settings(db); previous = settings.monitoring_enabled
+    settings = get_settings(db)
+    previous = settings.monitoring_enabled
     if previous == enabled:
         if enabled:
             configure_monitoring(settings)
@@ -298,25 +335,35 @@ def set_monitoring_enabled(db: Session, enabled: bool) -> models.AudioSettings:
 
     settings.monitoring_enabled = enabled
     try:
-        configure_monitoring(settings); return commit_refresh(db, settings)
+        configure_monitoring(settings)
+        return commit_refresh(db, settings)
     except Exception:
-        db.rollback(); settings.monitoring_enabled = previous
-        try: configure_monitoring(settings)
-        except Exception as restore_error: logger.warning("Could not restore direct monitoring after failure: %s", restore_error)
+        db.rollback()
+        settings.monitoring_enabled = previous
+        try:
+            configure_monitoring(settings)
+        except Exception as restore_error:
+            logger.warning("Could not restore direct monitoring after failure: %s", restore_error)
         raise
 
 
 def stop_monitoring() -> None:
     global _monitor_process, _monitor_reader
     with _monitor_lock:
-        process = _monitor_process; reader = _monitor_reader; _monitor_process = None; _monitor_reader = None
+        process = _monitor_process
+        reader = _monitor_reader
+        _monitor_process = None
+        _monitor_reader = None
         _monitor_signal.update(_EMPTY_MONITOR_SIGNAL)
     if process is None or process.poll() is not None: return
     try:
-        process.terminate(); process.wait(timeout=1.5)
+        process.terminate()
+        process.wait(timeout=1.5)
     except subprocess.TimeoutExpired:
-        process.kill(); process.wait(timeout=1.5)
-    except OSError as exc: logger.warning("Could not stop direct monitoring worker: %s", exc)
+        process.kill()
+        process.wait(timeout=1.5)
+    except OSError as exc:
+        logger.warning("Could not stop direct monitoring worker: %s", exc)
     finally:
         if process.stdout is not None: process.stdout.close()
         if process.stdin is not None:
@@ -328,24 +375,30 @@ def _send_live_update(payload: dict) -> None:
     with _monitor_lock: process = _monitor_process
     if process is None or process.poll() is not None or process.stdin is None: return
     try:
-        process.stdin.write(json.dumps(payload) + "\n"); process.stdin.flush()
-    except (OSError, ValueError) as exc: logger.warning("Could not push live update to audio monitor worker: %s", exc)
+        process.stdin.write(json.dumps(payload) + "\n")
+        process.stdin.flush()
+    except (OSError, ValueError) as exc:
+        logger.warning("Could not push live update to audio monitor worker: %s", exc)
 
 
 def configure_monitoring(settings: models.AudioSettings) -> None:
     stop_monitoring()
     if not settings.monitoring_enabled: return
     if settings.audio_driver == "asio":
-        _start_asio_monitor(settings); return
+        _start_asio_monitor(settings)
+        return
     if not _AUDIO_BACKEND_AVAILABLE: raise RuntimeError("Audio backend is unavailable")
 
     input_device_id = preferred_input_device(
         settings.input_device_id, settings.audio_driver, settings.asio_driver_name
     )
-    output_device_id, resolved_input_id = preferred_output_device(input_device_id, settings.audio_driver, settings.output_device_id, settings.asio_driver_name), _resolved_device_index(input_device_id, 'input'); resolved_output_id, input_info = _resolved_device_index(output_device_id, 'output'), sd.query_devices(resolved_input_id); output_info = sd.query_devices(resolved_output_id)
+    output_device_id, resolved_input_id = preferred_output_device(input_device_id, settings.audio_driver, settings.output_device_id, settings.asio_driver_name), _resolved_device_index(input_device_id, 'input')
+    resolved_output_id, input_info = _resolved_device_index(output_device_id, 'output'), sd.query_devices(resolved_input_id)
+    output_info = sd.query_devices(resolved_output_id)
 
     if int(input_info["hostapi"]) != int(output_info["hostapi"]):
-        matched_output_id = _matching_output_for_input(resolved_input_id, None); matched_info = sd.query_devices(matched_output_id)
+        matched_output_id = _matching_output_for_input(resolved_input_id, None)
+        matched_info = sd.query_devices(matched_output_id)
         if int(matched_info["hostapi"]) == int(input_info["hostapi"]):
             resolved_output_id, output_info = matched_output_id, matched_info
         else:
@@ -414,7 +467,10 @@ def _start_monitor_worker(worker_options: dict) -> None:
 
 
 def _launch_monitor_process(command: list[str], *, cwd: Path) -> None:
-    global _monitor_process, _monitor_reader; ready = threading.Event(); state: dict[str, str | None] = {"error": None}; creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    global _monitor_process, _monitor_reader
+    ready = threading.Event()
+    state: dict[str, str | None] = {"error": None}
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     process = subprocess.Popen(
         command,
         cwd=cwd,
@@ -429,9 +485,11 @@ def _launch_monitor_process(command: list[str], *, cwd: Path) -> None:
     def consume_output() -> None:
         assert process.stdout is not None
         for line in process.stdout:
-            try: message = json.loads(line)
+            try:
+                message = json.loads(line)
             except json.JSONDecodeError:
-                logger.warning("Audio monitor worker: %s", line.rstrip()); continue
+                logger.warning("Audio monitor worker: %s", line.rstrip())
+                continue
             event = message.get("event")
             if event == "started":
                 ready.set()
@@ -442,20 +500,25 @@ def _launch_monitor_process(command: list[str], *, cwd: Path) -> None:
                             {key: message[key] for key in _monitor_signal if key in message}
                         )
             elif event == "error":
-                state["error"] = str(message.get("message") or "unknown audio worker error"); ready.set()
+                state["error"] = str(message.get("message") or "unknown audio worker error")
+                ready.set()
         if not ready.is_set():
-            state["error"] = state["error"] or "audio monitoring worker terminated during startup"; ready.set()
+            state["error"] = state["error"] or "audio monitoring worker terminated during startup"
+            ready.set()
         with _monitor_lock:
             if _monitor_process is process and process.poll() is not None: _monitor_signal.update(_EMPTY_MONITOR_SIGNAL)
 
     reader = threading.Thread(target=consume_output, name="audio-monitor-reader", daemon=True)
     with _monitor_lock:
-        _monitor_process = process; _monitor_reader = reader
+        _monitor_process = process
+        _monitor_reader = reader
     reader.start()
     if not ready.wait(timeout=4):
-        stop_monitoring(); raise RuntimeError("Timed out starting direct microphone monitoring")
+        stop_monitoring()
+        raise RuntimeError("Timed out starting direct microphone monitoring")
     if state["error"]:
-        stop_monitoring(); raise RuntimeError(f"Could not start direct microphone monitoring: {state['error']}")
+        stop_monitoring()
+        raise RuntimeError(f"Could not start direct microphone monitoring: {state['error']}")
 
 
 def check_signal_quality(
@@ -471,7 +534,8 @@ def check_signal_quality(
         process = _monitor_process
         if process is not None and process.poll() is None: return dict(_monitor_signal)
         if process is not None:
-            _monitor_process = None; _monitor_signal.update(_EMPTY_MONITOR_SIGNAL)
+            _monitor_process = None
+            _monitor_signal.update(_EMPTY_MONITOR_SIGNAL)
         if monitoring_expected: return dict(_monitor_signal)
 
     sample_rate = 44100
@@ -482,9 +546,11 @@ def check_signal_quality(
         device=device_id,
         dtype="float32",
     )
-    sd.wait(); samples = np.clip(recording.flatten() * max(0.0, min(4.0, gain)), -1.0, 1.0)
+    sd.wait()
+    samples = np.clip(recording.flatten() * max(0.0, min(4.0, gain)), -1.0, 1.0)
 
-    rms = float(np.sqrt(np.mean(np.square(samples)))) if len(samples) else 0.0; rms_db, peak = 20 * np.log10(rms) if rms > 0 else -120.0, float(np.max(np.abs(samples))) if len(samples) else 0.0
+    rms = float(np.sqrt(np.mean(np.square(samples)))) if len(samples) else 0.0
+    rms_db, peak = 20 * np.log10(rms) if rms > 0 else -120.0, float(np.max(np.abs(samples))) if len(samples) else 0.0
 
     return {
         "rms_db": round(rms_db, 1),

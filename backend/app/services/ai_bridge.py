@@ -29,9 +29,6 @@ def _note_syllable_indices(note: dict[str, Any]) -> tuple[int, ...]:
     return tuple(dict.fromkeys(index for value in values if (index := _int_or_default(value)) >= 0))
 
 
-def get_service() -> AICoreService: return get_ai_service()
-
-
 def process_song(
     source_path: str | Path,
     output_dir: str | Path,
@@ -44,7 +41,7 @@ def process_song(
     progress: ProgressCallback | None = None,
     cancelled: CancelCallback | None = None,
 ):
-    result = get_service().process_song(
+    result = get_ai_service().process_song(
         source_path=source_path,
         output_dir=output_dir,
         language=language,
@@ -55,21 +52,9 @@ def process_song(
         progress=progress,
         cancelled=cancelled,
     )
-    ensure_legacy_artifacts(Path(output_dir), title=title); return result
+    ensure_legacy_artifacts(Path(output_dir), title=title)
+    return result
 
-
-def get_run_all_pipeline():
-
-    def _run(source_path, output_dir, whisper_model=None, language=None, **kwargs):
-        del whisper_model
-        return process_song(
-            source_path,
-            output_dir,
-            language=language,
-            **kwargs,
-        )
-
-    return _run
 
 
 def _pitch_frame_to_legacy(frame: PitchFrame) -> dict[str, Any]:
@@ -89,14 +74,14 @@ def _pitch_frame_to_legacy(frame: PitchFrame) -> dict[str, Any]:
     }
 
 
-def analyze_vocal(audio_path: str | Path) -> list[dict[str, Any]]: frames = get_service().analyze_pitch(audio_path); return [_pitch_frame_to_legacy(frame) for frame in frames]
-
-
-def get_analyze_vocal(): return analyze_vocal
+def analyze_vocal(audio_path: str | Path) -> list[dict[str, Any]]:
+    frames = get_ai_service().analyze_pitch(audio_path)
+    return [_pitch_frame_to_legacy(frame) for frame in frames]
 
 
 def _normalize_line_words(line: dict[str, Any]) -> dict[str, Any]:
-    text, start = str(line.get('text') or '').strip(), max(0.0, float(line.get('start') or 0.0)); end, candidate_words = max(start, float(line.get('end') or start)), line.get('words')
+    text, start = str(line.get('text') or '').strip(), max(0.0, float(line.get('start') or 0.0))
+    end, candidate_words = max(start, float(line.get('end') or start)), line.get('words')
     raw_words: list[Any] = candidate_words if isinstance(
         candidate_words, list) else []
 
@@ -105,7 +90,8 @@ def _normalize_line_words(line: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(raw, dict): continue
         token = str(raw.get("word") or raw.get("text") or "").strip()
         if not token: continue
-        raw_start = raw.get("start"); raw_end = raw.get("end")
+        raw_start = raw.get("start")
+        raw_end = raw.get("end")
         word_start = max(start, float(
             start if raw_start is None else raw_start))
         word_end = min(
@@ -122,9 +108,14 @@ def _normalize_line_words(line: dict[str, Any]) -> dict[str, Any]:
         else:
             words = []
             if tokens:
-                span = max(0.0, end - start); weights = [max(1, len(token)) for token in tokens]; total = sum(weights); cursor = 0
+                span = max(0.0, end - start)
+                weights = [max(1, len(token)) for token in tokens]
+                total = sum(weights)
+                cursor = 0
                 for token, weight in zip(tokens, weights, strict=True):
-                    word_start = start + span * cursor / total; cursor += weight; word_end = start + span * cursor / total
+                    word_start = start + span * cursor / total
+                    cursor += weight
+                    word_end = start + span * cursor / total
                     words.append(
                         {"word": token, "start": word_start, "end": word_end})
 
@@ -134,10 +125,8 @@ def _normalize_line_words(line: dict[str, Any]) -> dict[str, Any]:
 def reconcile_lyric_words(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
     normalized = [_normalize_line_words(line)
                   for line in lines if isinstance(line, dict)]
-    normalized.sort(key=lambda line: (line["start"], line["end"])); return normalized
-
-
-def get_reconcile_lyric_words(): return reconcile_lyric_words
+    normalized.sort(key=lambda line: (line["start"], line["end"]))
+    return normalized
 
 
 def _source_line_boundaries(text: str, words: list[dict[str, Any]]) -> list[int]:
@@ -146,7 +135,8 @@ def _source_line_boundaries(text: str, words: list[dict[str, Any]]) -> list[int]
         raw_line = raw_line.strip()
         if not tokenize(raw_line): continue
         if len(tokenize(raw_line)) <= 10:
-            source_lines.append(raw_line); continue
+            source_lines.append(raw_line)
+            continue
 
         sentences = [
             sentence.strip()
@@ -155,16 +145,21 @@ def _source_line_boundaries(text: str, words: list[dict[str, Any]]) -> list[int]
         ]
         for sentence in sentences:
             if len(tokenize(sentence)) <= 10:
-                source_lines.append(sentence); continue
+                source_lines.append(sentence)
+                continue
             clauses = [
                 clause.strip() for clause in re.split(r"(?<=[,;])\s+", sentence) if tokenize(clause)
             ]
-            current: list[str] = []; current_size = 0
+            current: list[str] = []
+            current_size = 0
             for clause in clauses:
                 clause_size = len(tokenize(clause))
                 if current and current_size + clause_size > 8:
-                    source_lines.append(" ".join(current)); current = []; current_size = 0
-                current.append(clause); current_size += clause_size
+                    source_lines.append(" ".join(current))
+                    current = []
+                    current_size = 0
+                current.append(clause)
+                current_size += clause_size
             if current: source_lines.append(" ".join(current))
     if len(source_lines) < 2: return []
 
@@ -186,7 +181,8 @@ def _source_line_boundaries(text: str, words: list[dict[str, Any]]) -> list[int]
             return round(right_start + ratio * (right_end - right_start))
         return len(aligned_tokens)
 
-    boundaries: list[int] = []; cursor = 0
+    boundaries: list[int] = []
+    cursor = 0
     for line in source_lines[:-1]:
         cursor += len(tokenize(line))
         boundary = max(
@@ -197,10 +193,9 @@ def _source_line_boundaries(text: str, words: list[dict[str, Any]]) -> list[int]
 
 def _normalized_word(word: object) -> dict[str, Any] | None:
     if not isinstance(word, dict) or not (token := str(word.get("text") or word.get("word") or "").strip()): return None
-    start = float(word.get("start") or 0.0); return {**word, "word": token, "text": token, "start": start, "end": max(start, float(word.get("end") or start))}
+    start = float(word.get("start") or 0.0)
+    return {**word, "word": token, "text": token, "start": start, "end": max(start, float(word.get("end") or start))}
 
-
-def _first_existing(*paths: Path) -> Path | None: return next((path for path in paths if path.is_file()), None)
 
 
 def _artifact_list(output_dir: Path, key: str, *files: str) -> list[dict[str, Any]]:
@@ -223,23 +218,29 @@ def _group_words_into_lines(
     normalized_words = [item for word in words if (item := _normalized_word(word)) is not None]
 
     if boundaries := _source_line_boundaries(source_text, normalized_words):
-        lines: list[list[dict[str, Any]]] = []; cursor = 0
+        lines: list[list[dict[str, Any]]] = []
+        cursor = 0
         for boundary in [*boundaries, len(normalized_words)]:
             if boundary > cursor: lines.append(normalized_words[cursor:boundary])
             cursor = boundary
         return _lines_payload(lines)
 
-    lines = []; current: list[dict[str, Any]] = []; sentence_end = re.compile(r"[.!?…]+$")
+    lines = []
+    current: list[dict[str, Any]] = []
+    sentence_end = re.compile(r"[.!?…]+$")
 
     for item in normalized_words:
         token, start, end = item["word"], item["start"], item["end"]
         if current:
-            gap = start - current[-1]["end"]; line_duration = end - current[0]["start"]
+            gap = start - current[-1]["end"]
+            line_duration = end - current[0]["start"]
             if gap >= 0.9 or len(current) >= 8 or line_duration >= 7.0:
-                lines.append(current); current = []
+                lines.append(current)
+                current = []
         current.append(item)
         if sentence_end.search(token) and len(current) >= 2:
-            lines.append(current); current = []
+            lines.append(current)
+            current = []
 
     if current: lines.append(current)
 
@@ -249,159 +250,15 @@ def _group_words_into_lines(
 def _lines_payload(lines: list[list[dict[str, Any]]]) -> list[dict[str, Any]]: return [{'text': ' '.join((item['word'] for item in line)), 'start': line[0]['start'], 'end': line[-1]['end'], 'words': line} for line in lines if line]
 
 
-def _snap_lines_to_regions(
-    lines: list[dict[str, Any]], regions: list[tuple[float, float]]
-) -> list[dict[str, Any]]:
-    if not lines or not regions: return lines
-    result: list[dict[str, Any]] = []; previous_region = -1
-    for line in lines:
-        old_start = float(line["start"]); search_start = max(0, previous_region); candidates = range(search_start, min(len(regions), search_start + 8))
-        region_index = min(
-            candidates,
-            key=lambda index: (
-                abs(regions[index][0] - old_start) +
-                (0.85 if index == previous_region else 0.0)
-            ),
-        )
-        region_start, region_end = regions[region_index]
-        if region_end <= region_start:
-            result.append(line); continue
-
-        words = list(line.get("words") or []); old_end = float(line["end"]); old_span = max(0.02, old_end - old_start); region_span = region_end - region_start
-        timed_words = []
-        for word in words:
-            relative_start = max(
-                0.0, min(1.0, (float(word["start"]) - old_start) / old_span))
-            relative_end = max(
-                relative_start,
-                min(1.0, (float(word["end"]) - old_start) / old_span),
-            )
-            timed_words.append(
-                {
-                    **word,
-                    "start": region_start + region_span * relative_start,
-                    "end": region_start + region_span * relative_end,
-                }
-            )
-        result.append(
-            {
-                **line,
-                "start": region_start,
-                "end": region_end,
-                "words": timed_words,
-            }
-        )
-        previous_region = region_index
-    return result
-
-
-def _snap_lines_to_vocals(lines: list[dict[str, Any]], output_dir: Path) -> list[dict[str, Any]]:
-    vocals = _first_existing(output_dir / "separated/vocals.flac", output_dir / "separated/vocals.wav")
-    if vocals is None: return lines
-    try:
-        audio, sample_rate = load_mono(vocals, 16000); regions = _vocal_activity_regions(audio, sample_rate)
-    except (OSError, RuntimeError, ValueError): return lines
-    return _snap_lines_to_regions(lines, regions)
-
-
-def _line_timing_is_impossible(line: dict[str, Any]) -> bool:
-    words = list(line.get("words") or [])
-    if not words: return True
-    span = max(0.0, float(line.get("end") or 0.0) -
-               float(line.get("start") or 0.0))
-    return span < max(0.18, len(words) * 0.115)
-
-
-def _active_offset_to_time(
-    regions: list[tuple[float, float]], active_duration: float, offset: float
-) -> float:
-    remaining = max(0.0, min(active_duration, offset))
-    for region_start, region_end in regions:
-        region_span = max(0.0, region_end - region_start)
-        if remaining <= region_span: return region_start + remaining
-        remaining -= region_span
-    return regions[-1][1]
-
-
-def _repair_impossible_alignment_chunks(
-    lines: list[dict[str, Any]], output_dir: Path, maximum_words: int = 38
-) -> list[dict[str, Any]]:
-    vocals = _first_existing(output_dir / "separated/vocals.flac", output_dir / "separated/vocals.wav")
-    if vocals is None or not lines: return lines
-    try: audio, sample_rate = load_mono(vocals, 16000)
-    except (OSError, RuntimeError, ValueError): return lines
-
-    del maximum_words  # retained for compatibility with focused tests/callers
-    groups: list[tuple[int, int]] = []; index = 0
-    while index < len(lines):
-        if not _line_timing_is_impossible(lines[index]):
-            index += 1; continue
-        end_index = index + 1
-        while end_index < len(lines) and _line_timing_is_impossible(lines[end_index]): end_index += 1
-        boundary_start = float(lines[index - 1]["end"]) if index > 0 else 0.0
-        while end_index < len(lines):
-            word_count = sum(len(line.get("words") or [])
-                             for line in lines[index:end_index])
-            available = float(lines[end_index]["start"]) - boundary_start
-            if available >= max(0.18, word_count * 0.115): break
-            end_index += 1
-        groups.append((index, end_index)); index = end_index
-
-    result = list(lines)
-    for first, after_last in groups:
-        group = lines[first:after_last]; start = float(lines[first - 1]["end"]) if first > 0 else 0.0
-        end = (
-            float(lines[after_last]["start"])
-            if after_last < len(lines)
-            else len(audio) / sample_rate
-        )
-        end = max(start + 0.08, end); left = max(0, int(start * sample_rate)); right = min(len(audio), max(left + 1, int(end * sample_rate)))
-        regions = [
-            (start + region_start, start + region_end)
-            for region_start, region_end in _vocal_activity_regions(audio[left:right], sample_rate)
-        ]
-        if not regions: regions = [(start, end)]
-        active_duration = sum(max(0.0, b - a) for a, b in regions)
-        words = [word for line in group for word in list(
-            line.get("words") or [])]
-        if active_duration < len(words) * 0.115:
-            regions = [(start, end)]; active_duration = end - start
-        weights = [max(2, len(str(word.get("word") or word.get("text") or "")))
-                   for word in words]
-        total_weight = max(1, sum(weights))
-
-        repaired_words: list[dict[str, Any]] = []; consumed = 0
-        for word, weight in zip(words, weights, strict=True):
-            word_start = _active_offset_to_time(
-                regions, active_duration, active_duration * consumed / total_weight
-            )
-            consumed += weight
-            word_end = _active_offset_to_time(
-                regions, active_duration, active_duration * consumed / total_weight
-            )
-            repaired_words.append(
-                {**word, "start": word_start,
-                    "end": max(word_start + 0.02, word_end)}
-            )
-
-        cursor = 0
-        for line_index, line in enumerate(group, first):
-            size = len(line.get("words") or []); line_words = repaired_words[cursor: cursor + size]; cursor += size
-            result[line_index] = {
-                **line,
-                "start": line_words[0]["start"],
-                "end": line_words[-1]["end"],
-                "words": line_words,
-            }
-    return result
-
-
 def _bound_legacy_word_durations(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
     output: list[dict[str, Any]] = []
     for line in lines:
         words = []
         for word in list(line.get("words") or []):
-            start = float(word.get("start") or 0.0); end = max(start + 0.02, float(word.get("end") or start)); token = str(word.get("word") or word.get("text") or "").strip(); maximum = min(3.2, max(0.7, 0.42 + len(token) * 0.22))
+            start = float(word.get("start") or 0.0)
+            end = max(start + 0.02, float(word.get("end") or start))
+            token = str(word.get("word") or word.get("text") or "").strip()
+            maximum = min(3.2, max(0.7, 0.42 + len(token) * 0.22))
             words.append(
                 {**word, "start": start, "end": min(end, start + maximum)})
         output.append(
@@ -416,7 +273,8 @@ def _bound_legacy_word_durations(lines: list[dict[str, Any]]) -> list[dict[str, 
 
 
 def get_karaoke_lyrics(output_dir: str | Path) -> list[dict[str, Any]]:
-    output_dir = Path(output_dir); song_map: Any = read_json(output_dir / "songMap.json", default={})
+    output_dir = Path(output_dir)
+    song_map: Any = read_json(output_dir / "songMap.json", default={})
     if isinstance(song_map, dict) and isinstance(song_map.get("lines"), list): return [item for item in song_map["lines"] if isinstance(item, dict)]
     payload: Any = read_json(output_dir / "lyricsSync.json", default={})
     if not isinstance(payload, dict): return []
@@ -439,12 +297,15 @@ def get_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
     ):
         from app.services.song_editor_service import normalize_editor_timeline
 
-        normalize_editor_timeline(payload); return payload
+        normalize_editor_timeline(payload)
+        return payload
     return _build_legacy_karaoke_timeline(output_dir)
 
 
 def _build_legacy_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
-    output_dir = Path(output_dir); lines, syllables, notes = get_karaoke_lyrics(output_dir), get_syllables(output_dir), get_game_notes(output_dir); song_map: Any = read_json(output_dir / "songMap.json", default={})
+    output_dir = Path(output_dir)
+    lines, syllables, notes = get_karaoke_lyrics(output_dir), get_syllables(output_dir), get_game_notes(output_dir)
+    song_map: Any = read_json(output_dir / "songMap.json", default={})
 
     syllables_by_word: dict[int, list[dict[str, Any]]] = {}
     for syllable in syllables:
@@ -469,11 +330,14 @@ def _build_legacy_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
     for line_index, line in enumerate(lines):
         timeline_words: list[dict[str, Any]] = []
         for source_word in list(line.get("words") or []):
-            word = dict(source_word); word_index = _int_or_default(word.get("index"))
+            word = dict(source_word)
+            word_index = _int_or_default(word.get("index"))
 
             linked_syllables: list[dict[str, Any]] = []
             for source_syllable in syllables_by_word.get(word_index, []):
-                syllable = dict(source_syllable); syllable_index = _int_or_default(syllable.get("index")); linked_notes = notes_by_syllable.get(syllable_index, [])
+                syllable = dict(source_syllable)
+                syllable_index = _int_or_default(syllable.get("index"))
+                linked_notes = notes_by_syllable.get(syllable_index, [])
                 linked_syllables.append(
                     {
                         **syllable,
@@ -491,9 +355,11 @@ def _build_legacy_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
             )
 
         if timeline_words:
-            line_start = min(float(word["start"]) for word in timeline_words); line_end = max(float(word["end"]) for word in timeline_words)
+            line_start = min(float(word["start"]) for word in timeline_words)
+            line_end = max(float(word["end"]) for word in timeline_words)
         else:
-            line_start = float(line.get("start") or 0.0); line_end = max(line_start, float(line.get("end") or line_start))
+            line_start = float(line.get("start") or 0.0)
+            line_end = max(line_start, float(line.get("end") or line_start))
         timeline_lines.append(
             {
                 **line,
@@ -506,10 +372,14 @@ def _build_legacy_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
 
     duration = 0.0
     if isinstance(song_map, dict):
-        try: duration = max(0.0, float(song_map.get("duration") or 0.0))
-        except (TypeError, ValueError): duration = 0.0
+        try:
+            duration = max(0.0, float(song_map.get("duration") or 0.0))
+        except (TypeError, ValueError):
+            duration = 0.0
     if not duration:
-        candidates = [float(line.get("end") or 0.0) for line in timeline_lines]; candidates.extend(float(note.get("end") or 0.0) for note in notes); duration = max(candidates, default=0.0)
+        candidates = [float(line.get("end") or 0.0) for line in timeline_lines]
+        candidates.extend(float(note.get("end") or 0.0) for note in notes)
+        duration = max(candidates, default=0.0)
 
     return {
         "version": 1,
@@ -528,14 +398,18 @@ def _reference_notes(output_dir: Path) -> list[dict[str, Any]]:
         raw = read_json(legacy_cache, default={})
     else:
         raw = read_json(output_dir / "reference.json", default={})
-    notes = raw.get("notes", []) if isinstance(raw, dict) else raw if isinstance(raw, list) else []; return _notes_with_midi(notes)
+    notes = raw.get("notes", []) if isinstance(raw, dict) else raw if isinstance(raw, list) else []
+    return _notes_with_midi(notes)
 
 
 def get_reference_notes(output_dir: str | Path) -> list[dict[str, Any]]: return _reference_notes(Path(output_dir))
 
 
 def ensure_legacy_artifacts(output_dir: Path, *, title: str | None = None) -> None:
-    output_dir = Path(output_dir); word_payload: Any = read_json(output_dir / "lyricsSync.json", default={}); words, source_text = word_payload.get('words', []) if isinstance(word_payload, dict) else [], word_payload.get('text', '') if isinstance(word_payload, dict) else ''; lines = _group_words_into_lines(words, source_text)
+    output_dir = Path(output_dir)
+    word_payload: Any = read_json(output_dir / "lyricsSync.json", default={})
+    words, source_text = word_payload.get('words', []) if isinstance(word_payload, dict) else [], word_payload.get('text', '') if isinstance(word_payload, dict) else ''
+    lines = _group_words_into_lines(words, source_text)
     write_json(output_dir / "lyrics.json", _bound_legacy_word_durations(lines))
 
     song_map: Any = read_json(output_dir / "songMap.json", default={})
@@ -547,7 +421,9 @@ def ensure_legacy_artifacts(output_dir: Path, *, title: str | None = None) -> No
     notes, duration = _reference_notes(output_dir), float(song_map.get('duration') or 0.0)
     midi_values = [int(note["midi"])
                    for note in notes if note.get("midi") is not None]
-    note_range, density = max(midi_values) - min(midi_values) if midi_values else 0, len(notes) / duration if duration > 0 else 0.0; score = min(100, round(note_range * 2.2 + density * 16)); level = "easy" if score < 35 else "medium" if score < 65 else "hard"
+    note_range, density = max(midi_values) - min(midi_values) if midi_values else 0, len(notes) / duration if duration > 0 else 0.0
+    score = min(100, round(note_range * 2.2 + density * 16))
+    level = "easy" if score < 35 else "medium" if score < 65 else "hard"
     write_json(
         output_dir / "difficulty.json",
         {
@@ -563,4 +439,5 @@ def ensure_legacy_artifacts(output_dir: Path, *, title: str | None = None) -> No
     if duration > 0:
         structure = [{"label": "Песня", "name": "song",
                       "start": 0.0, "end": duration}]
-    write_json(output_dir / "structure.json", structure); write_json(output_dir / "breaths.json", [])
+    write_json(output_dir / "structure.json", structure)
+    write_json(output_dir / "breaths.json", [])

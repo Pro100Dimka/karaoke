@@ -22,11 +22,15 @@ class CTCInferenceBackend(Protocol):
 
 class PyTorchCTCBackend:
 
-    def __init__(self, model, device: str): self.model = model; self.device = device
+    def __init__(self, model, device: str):
+        self.model = model
+        self.device = device
 
     def infer(self, input_values, attention_mask=None):
-        try: import torch
-        except ImportError as exc: raise EngineUnavailableError("torch is required for CTC alignment") from exc
+        try:
+            import torch
+        except ImportError as exc:
+            raise EngineUnavailableError("torch is required for CTC alignment") from exc
         kwargs = {"input_values": input_values}
         if attention_mask is not None: kwargs["attention_mask"] = attention_mask
         with torch.inference_mode(), profile_operation("inference.ctc"):
@@ -38,12 +42,23 @@ class PyTorchCTCBackend:
 
 
 @dataclass(frozen=True, slots=True)
-class ShadowInference: logits: np.ndarray; session_initialization_sec: float; inference_sec: float; input_bytes: int; output_bytes: int; providers: tuple[str, ...]
+class ShadowInference:
+    logits: np.ndarray
+    session_initialization_sec: float
+    inference_sec: float
+    input_bytes: int
+    output_bytes: int
+    providers: tuple[str, ...]
 
 
 class OrtCudaCTCBackend(OrtSessionMixin):
 
-    def __init__(self, model: str, artifact: Path | None = None): self.model = model; self.artifact = artifact or ctc_onnx_path(model); self._session = None; self._providers: tuple[str, ...] = (); self.last_initialization_sec = 0.0
+    def __init__(self, model: str, artifact: Path | None = None):
+        self.model = model
+        self.artifact = artifact or ctc_onnx_path(model)
+        self._session = None
+        self._providers: tuple[str, ...] = ()
+        self.last_initialization_sec = 0.0
 
     def availability(self): return CTC_BACKEND_REGISTRY.get(self.model, 'onnxruntime:cuda:fp16').availability()
 
@@ -52,9 +67,12 @@ class OrtCudaCTCBackend(OrtSessionMixin):
     unavailable_message = "ONNX Runtime CUDA is unavailable"
 
     @property
-    def artifact_message(self) -> str: return f"ONNX artifact is not configured for {self.model}"
+    def artifact_message(self) -> str:
+        return f"ONNX artifact is not configured for {self.model}"
 
-    def _load(self): self.load_metric = f"model.load.{self.model}.shadow_ort"; return super()._load()
+    def _load(self):
+        self.load_metric = f"model.load.{self.model}.shadow_ort"
+        return super()._load()
 
     def infer(self, input_values, attention_mask=None) -> ShadowInference:
         del attention_mask  # Exported CTC cores accept normalized waveform only.
@@ -70,4 +88,7 @@ class OrtCudaCTCBackend(OrtSessionMixin):
             self._providers,
         )
 
-def describe_inference(result: ShadowInference) -> dict[str, object]: data = asdict(result); data.pop("logits"); return data
+def describe_inference(result: ShadowInference) -> dict[str, object]:
+    data = asdict(result)
+    data.pop("logits")
+    return data

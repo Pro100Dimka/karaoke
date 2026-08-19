@@ -21,7 +21,10 @@ _SUBHARMONIC_INTERVALS = (12.0, 19.01955, 24.0)
 def _normalized_periodicity(signal: np.ndarray, lag: int) -> float:
     lag = int(lag)
     if lag < 2 or signal.size <= lag + 8: return 0.0
-    left, right = signal[:-lag].astype(np.float64, copy=False), signal[lag:].astype(np.float64, copy=False); left, right = left - float(np.mean(left)), right - float(np.mean(right)); denom = float(np.linalg.norm(left) * np.linalg.norm(right)); return 0.0 if denom <= 1e-10 else clamp01(float(np.dot(left, right) / denom))
+    left, right = signal[:-lag].astype(np.float64, copy=False), signal[lag:].astype(np.float64, copy=False)
+    left, right = left - float(np.mean(left)), right - float(np.mean(right))
+    denom = float(np.linalg.norm(left) * np.linalg.norm(right))
+    return 0.0 if denom <= 1e-10 else clamp01(float(np.dot(left, right) / denom))
 
 
 def refine_pitch_confidence(
@@ -31,11 +34,15 @@ def refine_pitch_confidence(
     sample_rate: int = 16000,
 ) -> list[PitchFrame]:
     if not frames: return []
-    try: y, sr = load_mono(audio, sample_rate)
-    except Exception: return list(frames)
+    try:
+        y, sr = load_mono(audio, sample_rate)
+    except Exception:
+        return list(frames)
     if y.size < 256: return list(frames)
 
-    y, half_window = np.asarray(y, dtype=np.float32), max(192, int(round(sr * 0.025))); output: list[PitchFrame] = []; raw_confidences = [float(f.confidence) for f in frames if f.voiced and f.frequency > 0]
+    y, half_window = np.asarray(y, dtype=np.float32), max(192, int(round(sr * 0.025)))
+    output: list[PitchFrame] = []
+    raw_confidences = [float(f.confidence) for f in frames if f.voiced and f.frequency > 0]
     fake_unity = (
         bool(raw_confidences)
         and sum(c >= 0.999 for c in raw_confidences) / len(raw_confidences) >= 0.97
@@ -43,14 +50,21 @@ def refine_pitch_confidence(
 
     for frame in frames:
         if not frame.voiced or frame.frequency <= 0:
-            output.append(frame); continue
-        center = int(round(frame.time * sr)); start = max(0, center - half_window); end = min(len(y), center + half_window); window = y[start:end]
-        lag = int(round(sr / max(1e-6, frame.frequency))); periodicity = _normalized_periodicity(window, lag)
+            output.append(frame)
+            continue
+        center = int(round(frame.time * sr))
+        start = max(0, center - half_window)
+        end = min(len(y), center + half_window)
+        window = y[start:end]
+        lag = int(round(sr / max(1e-6, frame.frequency)))
+        periodicity = _normalized_periodicity(window, lag)
 
         lower_periodicity = _normalized_periodicity(window, lag * 2)
         if lower_periodicity > periodicity + 0.10: periodicity *= max(0.25, 1.0 - (lower_periodicity - periodicity) * 1.8)
 
-        measured = clamp01(periodicity); confidence = measured if fake_unity else math.sqrt(clamp01(frame.confidence) * measured); voiced = confidence >= 0.16
+        measured = clamp01(periodicity)
+        confidence = measured if fake_unity else math.sqrt(clamp01(frame.confidence) * measured)
+        voiced = confidence >= 0.16
         output.append(
             PitchFrame(
                 frame.time,
@@ -76,9 +90,12 @@ def fuse_pitch_with_yin(
         import librosa
 
         y, sr = load_mono(audio, sample_rate)
-    except Exception: return list(frames)
+    except Exception:
+        return list(frames)
     if y.size < 2048: return list(frames)
-    y, gaps = np.asarray(y, dtype=np.float32), [b.time - a.time for a, b in zip(frames, frames[1:], strict=False) if 0 < b.time - a.time < 0.05]; step = statistics.median(gaps) if gaps else 0.01; hop = max(64, int(round(sr * step)))
+    y, gaps = np.asarray(y, dtype=np.float32), [b.time - a.time for a, b in zip(frames, frames[1:], strict=False) if 0 < b.time - a.time < 0.05]
+    step = statistics.median(gaps) if gaps else 0.01
+    hop = max(64, int(round(sr * step)))
     try:
         yin = librosa.yin(
             y,
@@ -90,16 +107,20 @@ def fuse_pitch_with_yin(
             trough_threshold=0.10,
             center=True,
         )
-    except Exception: return list(frames)
+    except Exception:
+        return list(frames)
 
     half_window = max(256, int(round(sr * 0.025)))
 
     def fcpe_run_strength(index: int) -> float:
         frame = frames[index]
         if not frame.voiced or frame.frequency <= 0: return 0.0
-        center_midi, neighbourhood = _midi(frame.frequency), frames[max(0, index - 6):min(len(frames), index + 7)]; voiced = [item for item in neighbourhood if item.voiced and item.frequency > 0]
+        center_midi, neighbourhood = _midi(frame.frequency), frames[max(0, index - 6):min(len(frames), index + 7)]
+        voiced = [item for item in neighbourhood if item.voiced and item.frequency > 0]
         if len(voiced) < 4: return 0.0
-        stable = [item for item in voiced if abs(_midi(item.frequency) - center_midi) <= 0.75]; continuity, confidence = len(stable) / len(voiced), statistics.median((float(item.confidence) for item in stable)) if stable else 0.0; return continuity * clamp01(confidence)
+        stable = [item for item in voiced if abs(_midi(item.frequency) - center_midi) <= 0.75]
+        continuity, confidence = len(stable) / len(voiced), statistics.median((float(item.confidence) for item in stable)) if stable else 0.0
+        return continuity * clamp01(confidence)
 
     def protected_subharmonic(index: int, candidate_midi: float, evidence: float) -> bool:
         frame = frames[index]
@@ -108,18 +129,28 @@ def fuse_pitch_with_yin(
         if not any(abs(interval - harmonic) <= 0.65 for harmonic in _SUBHARMONIC_INTERVALS): return False
         run_strength = fcpe_run_strength(index)
         if run_strength < 0.32: return False
-        fcpe_evidence = support(index, float(frame.frequency)) + 0.06; return evidence < fcpe_evidence + 0.16 + 0.10 * run_strength
+        fcpe_evidence = support(index, float(frame.frequency)) + 0.06
+        return evidence < fcpe_evidence + 0.16 + 0.10 * run_strength
 
     def support(index: int, hz: float) -> float:
         if not np.isfinite(hz) or hz < float(fmin_hz) or hz > float(fmax_hz): return 0.0
-        center = int(round(frames[index].time * sr)); start, end = max(0, center - half_window), min(len(y), center + half_window); window, lag = y[start:end], int(round(sr / hz)); return _normalized_periodicity(window, lag)
+        center = int(round(frames[index].time * sr))
+        start, end = max(0, center - half_window), min(len(y), center + half_window)
+        window, lag = y[start:end], int(round(sr / hz))
+        return _normalized_periodicity(window, lag)
 
-    rows: list[list[tuple[float, float, float]]] = []; energies = [max(0.0, float(f.energy)) for f in frames]; attacks: list[float] = []
+    rows: list[list[tuple[float, float, float]]] = []
+    energies = [max(0.0, float(f.energy)) for f in frames]
+    attacks: list[float] = []
     for i, energy in enumerate(energies):
-        history = energies[max(0, i - 8) : i]; baseline = statistics.median(history) if history else energy; ratio = (energy + 1e-7) / (baseline + 1e-7); attacks.append(clamp01((ratio - 1.15) / 0.95))
+        history = energies[max(0, i - 8) : i]
+        baseline = statistics.median(history) if history else energy
+        ratio = (energy + 1e-7) / (baseline + 1e-7)
+        attacks.append(clamp01((ratio - 1.15) / 0.95))
 
     for i, frame in enumerate(frames):
-        yi = min(len(yin) - 1, max(0, int(round(frame.time * sr / hop)))); sources = []
+        yi = min(len(yin) - 1, max(0, int(round(frame.time * sr / hop))))
+        sources = []
         if frame.voiced and frame.frequency > 0: sources.append((float(frame.frequency), 0.06))
         yh = float(yin[yi]) if 0 <= yi < len(yin) and np.isfinite(yin[yi]) else 0.0
         if yh > 0: sources.append((yh, 0.0))
@@ -127,49 +158,68 @@ def fuse_pitch_with_yin(
         for hz, source_bonus in sources:
             base_support = support(i, hz)
             if base_support >= 0.17:
-                m = _midi(hz); evidence = base_support + source_bonus
+                m = _midi(hz)
+                evidence = base_support + source_bonus
                 if not protected_subharmonic(i, m, evidence): candidates.append((m, evidence, hz))
             lower = hz / 2.0
             if lower >= float(fmin_hz):
                 lower_support = support(i, lower)
                 if lower_support >= max(0.22, base_support + 0.055):
-                    lower_midi = _midi(lower); evidence = lower_support - 0.01
+                    lower_midi = _midi(lower)
+                    evidence = lower_support - 0.01
                     if not protected_subharmonic(i, lower_midi, evidence): candidates.append((lower_midi, evidence, lower))
-        candidates.sort(key=lambda item: item[1], reverse=True); unique: list[tuple[float, float, float]] = []
+        candidates.sort(key=lambda item: item[1], reverse=True)
+        unique: list[tuple[float, float, float]] = []
         for item in candidates:
             if not any(abs(item[0] - other[0]) < 0.30 for other in unique): unique.append(item)
         rows.append(unique[:4])
 
-    result: list[PitchFrame] = [PitchFrame(f.time, 0.0, 0.0, False, f.energy) for f in frames]; i = 0
+    result: list[PitchFrame] = [PitchFrame(f.time, 0.0, 0.0, False, f.energy) for f in frames]
+    i = 0
     while i < len(frames):
         if not rows[i]:
-            i += 1; continue
+            i += 1
+            continue
         j = i
         while j < len(frames) and rows[j] and j - i < max(120, int(round(8.0 / step))): j += 1
-        costs: list[float] = []; back: list[list[int]] = []
+        costs: list[float] = []
+        back: list[list[int]] = []
         for k in range(i, j):
-            current = rows[k]; current_costs: list[float] = []; current_back: list[int] = []
+            current = rows[k]
+            current_costs: list[float] = []
+            current_back: list[int] = []
             for midi_value, obs, _hz_value in current:
                 emission = -3.4 * obs
                 if not costs:
-                    current_costs.append(emission); current_back.append(-1); continue
-                best = float("inf"); best_index = 0
+                    current_costs.append(emission)
+                    current_back.append(-1)
+                    continue
+                best = float("inf")
+                best_index = 0
                 for pi, previous_cost in enumerate(costs):
-                    previous_midi = rows[k - 1][pi][0]; delta = abs(midi_value - previous_midi)
+                    previous_midi = rows[k - 1][pi][0]
+                    delta = abs(midi_value - previous_midi)
                     transition = (
                         0.045 * delta + 0.30 * max(0.0, delta - 2.0) + 0.72 * max(0.0, delta - 7.0)
                     ) * (1.0 - 0.84 * attacks[k])
                     value = previous_cost + transition + emission
                     if value < best:
-                        best = value; best_index = pi
-                current_costs.append(best); current_back.append(best_index)
-            costs = current_costs; back.append(current_back)
-        state = min(range(len(costs)), key=costs.__getitem__); chosen: list[int] = []
+                        best = value
+                        best_index = pi
+                current_costs.append(best)
+                current_back.append(best_index)
+            costs = current_costs
+            back.append(current_back)
+        state = min(range(len(costs)), key=costs.__getitem__)
+        chosen: list[int] = []
         for k in range(j - 1, i - 1, -1):
-            chosen.append(state); state = back[k - i][state]
+            chosen.append(state)
+            state = back[k - i][state]
         chosen.reverse()
         for offset, state in enumerate(chosen):
-            k = i + offset; midi_value, obs, hz_value = rows[k][state]; confidence = clamp01(obs)
+            k = i + offset
+            midi_value, obs, hz_value = rows[k][state]
+            confidence = clamp01(obs)
             result[k] = PitchFrame(
                 frames[k].time,
                 float(hz_value),
@@ -198,15 +248,21 @@ def _frame_step(frames: list[PitchFrame]) -> float:
 
 def _attack_strength(run: list[PitchFrame], index: int) -> float:
     if index <= 0: return 0.0
-    history = [max(0.0, run[i].energy) for i in range(max(0, index - 5), index)]; return energy_attack_strength(history, [max(0.0, run[index].energy)], scale=0.85)
+    history = [max(0.0, run[i].energy) for i in range(max(0, index - 5), index)]
+    return energy_attack_strength(history, [max(0.0, run[index].energy)], scale=0.85)
 
 
-def _transition_cost(left: float, right: float, attack: float) -> float: distance = min(24.0, abs(right - left)); base, scale = 0.12 * distance + 0.035 * distance * distance, 1.0 - 0.88 * clamp01(attack); return base * max(0.12, scale)
+def _transition_cost(left: float, right: float, attack: float) -> float:
+    distance = min(24.0, abs(right - left))
+    base, scale = 0.12 * distance + 0.035 * distance * distance, 1.0 - 0.88 * clamp01(attack)
+    return base * max(0.12, scale)
 
 
 def _shift_cost(shift: float, confidence: float) -> float:
     if abs(shift) < 0.01: return 0.0
-    magnitude = abs(shift); base, trust = 1.0 if magnitude < 13 else 1.25 if magnitude < 20 else 1.5, clamp01(confidence); return base * (0.78 + 0.28 * trust)
+    magnitude = abs(shift)
+    base, trust = 1.0 if magnitude < 13 else 1.25 if magnitude < 20 else 1.5, clamp01(confidence)
+    return base * (0.78 + 0.28 * trust)
 
 
 def _stabilize_voiced_run(run: list[PitchFrame]) -> list[PitchFrame]:
@@ -220,19 +276,26 @@ def _stabilize_voiced_run(run: list[PitchFrame]) -> list[PitchFrame]:
         ]
         candidates.append(values or [(raw, 0.0)])
 
-    attacks, costs = [_attack_strength(run, index) for index in range(len(run))], [_shift_cost(shift, run[0].confidence) for _, shift in candidates[0]]; parents: list[list[int]] = [[-1] * len(candidates[0])]
+    attacks, costs = [_attack_strength(run, index) for index in range(len(run))], [_shift_cost(shift, run[0].confidence) for _, shift in candidates[0]]
+    parents: list[list[int]] = [[-1] * len(candidates[0])]
 
     for index in range(1, len(run)):
-        next_costs: list[float] = []; next_parents: list[int] = []; attack = attacks[index]
+        next_costs: list[float] = []
+        next_parents: list[int] = []
+        attack = attacks[index]
         for value, shift in candidates[index]:
             choices = [
                 cost + _transition_cost(previous_value, value, attack)
                 for cost, (previous_value, _) in zip(costs, candidates[index - 1], strict=False)
             ]
-            parent = min(range(len(choices)), key=choices.__getitem__); next_costs.append(choices[parent] + _shift_cost(shift, run[index].confidence)); next_parents.append(parent)
-        costs = next_costs; parents.append(next_parents)
+            parent = min(range(len(choices)), key=choices.__getitem__)
+            next_costs.append(choices[parent] + _shift_cost(shift, run[index].confidence))
+            next_parents.append(parent)
+        costs = next_costs
+        parents.append(next_parents)
 
-    selected = [0] * len(run); selected[-1] = min(range(len(costs)), key=costs.__getitem__)
+    selected = [0] * len(run)
+    selected[-1] = min(range(len(costs)), key=costs.__getitem__)
     for index in range(len(run) - 1, 0, -1): selected[index - 1] = parents[index][selected[index]]
 
     output: list[PitchFrame] = []
@@ -251,11 +314,13 @@ def _stabilize_voiced_run(run: list[PitchFrame]) -> list[PitchFrame]:
 
 
 def _stabilize_harmonics(frames: list[PitchFrame]) -> list[PitchFrame]:
-    output, step = list(frames), _frame_step(frames); run_gap, index = step * 3.5, 0
+    output, step = list(frames), _frame_step(frames)
+    run_gap, index = step * 3.5, 0
     while index < len(frames):
         frame = frames[index]
         if not frame.voiced or frame.frequency <= 0:
-            index += 1; continue
+            index += 1
+            continue
         end = index + 1
         while (
             end < len(frames)
@@ -264,12 +329,14 @@ def _stabilize_harmonics(frames: list[PitchFrame]) -> list[PitchFrame]:
             and frames[end].time - frames[end - 1].time <= run_gap
         ):
             end += 1
-        output[index:end] = _stabilize_voiced_run(frames[index:end]); index = end
+        output[index:end] = _stabilize_voiced_run(frames[index:end])
+        index = end
     return output
 
 
 def _repair_single_frame_holes(frames: list[PitchFrame]) -> list[PitchFrame]:
-    out = list(frames); step = _frame_step(out)
+    out = list(frames)
+    step = _frame_step(out)
     for index in range(1, len(out) - 1):
         prev, cur, nxt = out[index - 1], out[index], out[index + 1]
         if cur.voiced or not prev.voiced or not nxt.voiced: continue
@@ -285,4 +352,6 @@ def _repair_single_frame_holes(frames: list[PitchFrame]) -> list[PitchFrame]:
     return out
 
 
-def stabilize_pitch(frames: list[PitchFrame], max_octave_jump=10.5) -> list[PitchFrame]: del max_octave_jump; return list(frames) if len(frames) < 3 else _repair_single_frame_holes(_stabilize_harmonics(frames))
+def stabilize_pitch(frames: list[PitchFrame], max_octave_jump=10.5) -> list[PitchFrame]:
+    del max_octave_jump
+    return list(frames) if len(frames) < 3 else _repair_single_frame_holes(_stabilize_harmonics(frames))

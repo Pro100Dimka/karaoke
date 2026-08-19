@@ -3,6 +3,7 @@ import { useEffect, useId, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../../i18n";
 import { Card, IconButton } from "../../theme/ui";
+import cx from "../../utils/cx";
 import ModalTitle from "./title";
 
 const FOCUSABLE_SELECTOR = [
@@ -13,7 +14,6 @@ const FOCUSABLE_SELECTOR = [
   "textarea:not([disabled])",
   '[tabindex]:not([tabindex="-1"])'
 ].join(", ");
-const joinClasses = (...values) => values.filter(Boolean).join(" ");
 
 const openModalStack = [];
 let bodyLockCount = 0;
@@ -127,9 +127,9 @@ export default function Modal({
 
   if (!isOpen) return null;
 
-  const backdropClasses = joinClasses("app-modal-backdrop", backdropClassName);
-  const modalClasses = joinClasses("app-modal modal-card", modalClassName);
-  const closeClasses = joinClasses("app-modal-close", closeClassName);
+  const backdropClasses = cx("app-modal-backdrop", backdropClassName);
+  const modalClasses = cx("app-modal modal-card", modalClassName);
+  const closeClasses = cx("app-modal-close", closeClassName);
 
   const content = (
     <div

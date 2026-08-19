@@ -1,4 +1,5 @@
 import { IconButton } from "../../../../theme/ui";
+import cx from "../../../../utils/cx";
 
 export default function MelodyEditorToolbarButton({
   icon,
@@ -16,14 +17,7 @@ export default function MelodyEditorToolbarButton({
       label={label}
       disabled={disabled}
       onClick={onClick}
-      className={[
-        "melody-editor-tool",
-        danger && "is-danger",
-        active && "is-active",
-        `tone-${tone}`
-      ]
-        .filter(Boolean)
-        .join(" ")}
+      className={cx("melody-editor-tool", danger && "is-danger", active && "is-active", `tone-${tone}`)}
       iconSize={18}
     />
   );

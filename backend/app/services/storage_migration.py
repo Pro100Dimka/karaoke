@@ -22,7 +22,8 @@ class _Move:
 
     def rollback(self) -> None:
         if self.target.exists() and not self.source.exists():
-            self.source.parent.mkdir(parents=True, exist_ok=True); move_path(self.target, self.source)
+            self.source.parent.mkdir(parents=True, exist_ok=True)
+            move_path(self.target, self.source)
 
 
 def _existing_source(target: Path) -> Path | None:
@@ -55,7 +56,10 @@ def _is_historical(path: Path) -> bool:
     )
 
 
-def _recorded_move(source: Path, target: Path, moves: list[_Move]) -> None: target.parent.mkdir(parents=True, exist_ok=True); move_path(source, target); moves.append(_Move(source=source, target=target))
+def _recorded_move(source: Path, target: Path, moves: list[_Move]) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    move_path(source, target)
+    moves.append(_Move(source=source, target=target))
 
 
 def _migrate_source(
@@ -70,12 +74,14 @@ def _migrate_source(
 
     if normalized.is_file():
         if previous_source.is_file() and previous_source != normalized: deferred_deletes.append(previous_source)
-        song.source_path = str(normalized); return
+        song.source_path = str(normalized)
+        return
 
     if previous_source.is_file() and target not in previous_source.parents:
         migrated_source = target / f"source{previous_source.suffix.lower()}"
         if not migrated_source.exists(): _recorded_move(previous_source, migrated_source, moves)
-        song.source_path = str(migrated_source); return
+        song.source_path = str(migrated_source)
+        return
 
     if previous_output != target and previous_output in previous_source.parents:
         song.source_path = str(
@@ -126,21 +132,24 @@ def _migrate_song(
     )
     _repair_source_path(song, target)
 
-    song.output_dir = str(target); return original_paths
+    song.output_dir = str(target)
+    return original_paths
 
 
 def _restore_song_paths(
     original_paths: list[tuple[models.Song, str, str | None]],
 ) -> None:
     for song, source_path, output_dir in original_paths:
-        song.source_path = source_path; song.output_dir = output_dir
+        song.source_path = source_path
+        song.output_dir = output_dir
 
 
 def _rollback_moves(moves: list[_Move]) -> None:
     rollback_errors: list[Exception] = []
 
     for operation in reversed(moves):
-        try: operation.rollback()
+        try:
+            operation.rollback()
         except Exception as exc:  # pragma: no cover - catastrophic recovery path
             rollback_errors.append(exc)
             logger.exception(
@@ -159,7 +168,9 @@ def _rollback_migration(
     original_paths: list[tuple[models.Song, str, str | None]],
     moves: list[_Move],
 ) -> None:
-    _restore_song_paths(original_paths); logger.exception("Could not migrate the legacy song library"); _rollback_moves(moves)
+    _restore_song_paths(original_paths)
+    logger.exception("Could not migrate the legacy song library")
+    _rollback_moves(moves)
 
 
 def _cleanup_migration(deferred_deletes: list[Path]) -> None:
@@ -171,7 +182,10 @@ def _cleanup_migration(deferred_deletes: list[Path]) -> None:
 
 
 def migrate_legacy_song_storage() -> None:
-    db = SessionLocal(); moves: list[_Move] = []; deferred_deletes: list[Path] = []; original_paths: list[tuple[models.Song, str, str | None]] = []
+    db = SessionLocal()
+    moves: list[_Move] = []
+    deferred_deletes: list[Path] = []
+    original_paths: list[tuple[models.Song, str, str | None]] = []
 
     try:
         library_root = config.SONG_OUTPUT_DIR.resolve()
@@ -188,8 +202,11 @@ def migrate_legacy_song_storage() -> None:
         commit(db)
 
     except Exception:
-        db.rollback(); _rollback_migration(original_paths, moves); raise
+        db.rollback()
+        _rollback_migration(original_paths, moves)
+        raise
 
-    finally: db.close()
+    finally:
+        db.close()
 
     _cleanup_migration(deferred_deletes)

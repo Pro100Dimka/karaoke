@@ -25,10 +25,15 @@ engine = create_engine(
 
 @event.listens_for(engine, "connect")
 def _configure_sqlite(dbapi_connection, _connection_record) -> None:
-    """Enable integrity and concurrency settings for every SQLite connection."""; cursor = dbapi_connection.cursor()
+    """Enable integrity and concurrency settings for every SQLite connection."""
+    cursor = dbapi_connection.cursor()
     try:
-        cursor.execute("PRAGMA foreign_keys=ON"); cursor.execute("PRAGMA journal_mode=WAL"); cursor.execute("PRAGMA synchronous=NORMAL"); cursor.execute("PRAGMA busy_timeout=30000")
-    finally: cursor.close()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA busy_timeout=30000")
+    finally:
+        cursor.close()
 
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -66,7 +71,8 @@ def _apply_additive_migrations(connection, existing: set[str], migrations: dict[
 
 
 def _repair_invalid_audio_settings_datetime(connection) -> None:
-    """Repair legacy/corrupted SQLite datetime values before ORM reads them."""; inspector = inspect(connection)
+    """Repair legacy/corrupted SQLite datetime values before ORM reads them."""
+    inspector = inspect(connection)
     if "audio_settings" not in inspector.get_table_names(): return
     columns = {column["name"] for column in inspector.get_columns("audio_settings")}
     if "updated_at" not in columns: return
@@ -148,13 +154,21 @@ def init_db() -> None:
     """Create tables and apply backward-compatible SQLite migrations."""
     import models  # noqa: F401  (registers models before create_all)
 
-    Base.metadata.create_all(bind=engine); inspector = inspect(engine); song_columns, audio_columns = {column['name'] for column in inspector.get_columns('songs')}, {column['name'] for column in inspector.get_columns('audio_settings')}
+    Base.metadata.create_all(bind=engine)
+    inspector = inspect(engine)
+    song_columns, audio_columns = {column['name'] for column in inspector.get_columns('songs')}, {column['name'] for column in inspector.get_columns('audio_settings')}
     with engine.begin() as connection:
-        _apply_additive_migrations(connection, song_columns, _SONG_COLUMN_MIGRATIONS); _apply_additive_migrations(connection, audio_columns, _AUDIO_COLUMN_MIGRATIONS); _repair_invalid_audio_settings_datetime(connection); _repair_corrupted_audio_settings(connection)
+        _apply_additive_migrations(connection, song_columns, _SONG_COLUMN_MIGRATIONS)
+        _apply_additive_migrations(connection, audio_columns, _AUDIO_COLUMN_MIGRATIONS)
+        _repair_invalid_audio_settings_datetime(connection)
+        _repair_corrupted_audio_settings(connection)
         _mark_interrupted_jobs(connection)
 
 
 def get_db():
-    """FastAPI-зависимость: одна Session на запрос, всегда закрывается."""; db = SessionLocal()
-    try: yield db
-    finally: db.close()
+    """FastAPI-зависимость: одна Session на запрос, всегда закрывается."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

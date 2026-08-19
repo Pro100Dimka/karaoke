@@ -30,7 +30,9 @@ def _extend_micro_duration_spans(items: list[dict[str, Any]], total_duration: fl
         range(len(items)), key=lambda index: _safe_float(items[index].get("start"), 0.0)
     )
     for position, index in enumerate(ordered):
-        item = items[index]; start = _safe_float(item.get("start"), 0.0); end = _safe_float(item.get("end"), start)
+        item = items[index]
+        start = _safe_float(item.get("start"), 0.0)
+        end = _safe_float(item.get("end"), start)
         if end - start >= _MIN_DISPLAY_DURATION: continue
         if position + 1 < len(ordered):
             next_start = _safe_float(items[ordered[position + 1]].get("start"), total_duration)
@@ -43,14 +45,20 @@ def _extend_micro_duration_spans(items: list[dict[str, Any]], total_duration: fl
 def _remap(value: float, old_start: float, old_end: float, new_start: float, new_end: float) -> float:
     old_span = old_end - old_start
     if old_span <= 0: return new_start
-    ratio = (value - old_start) / old_span; return new_start + ratio * (new_end - new_start)
+    ratio = (value - old_start) / old_span
+    return new_start + ratio * (new_end - new_start)
 
 
 def _retime_line_words(words: list[dict[str, Any]], start: float, end: float) -> None:
-    weights = [_vowel_weighted_length(str(word.get("text", ""))) for word in words]; total_weight, cursor, span = sum(weights) or 1.0, start, end - start
+    weights = [_vowel_weighted_length(str(word.get("text", ""))) for word in words]
+    total_weight, cursor, span = sum(weights) or 1.0, start, end - start
     for word, weight in zip(words, weights, strict=True):
-        old_start = _safe_float(word.get("start"), cursor); old_end = _safe_float(word.get("end"), old_start); word_start = cursor; cursor += span * weight / total_weight
-        word["start"] = word_start; word["end"] = cursor
+        old_start = _safe_float(word.get("start"), cursor)
+        old_end = _safe_float(word.get("end"), old_start)
+        word_start = cursor
+        cursor += span * weight / total_weight
+        word["start"] = word_start
+        word["end"] = cursor
         for syllable in word.get("syllables") or []:
             syllable["start"] = _remap(
                 _safe_float(syllable.get("start"), old_start), old_start, old_end, word_start, cursor
@@ -65,14 +73,22 @@ def _rebalance_compressed_line_boundaries(lines: list[dict[str, Any]]) -> None:
     for index in range(len(lines) - 1):
         first, second = lines[index], lines[index + 1]
         if abs(float(first["end"]) - float(second["start"])) > 1e-6: continue
-        first_words = first.get("words") or []; second_words = second.get("words") or []
+        first_words = first.get("words") or []
+        second_words = second.get("words") or []
         if not first_words or not second_words: continue
-        first_weight = sum(_vowel_weighted_length(str(w.get("text", ""))) for w in first_words); second_weight = sum(_vowel_weighted_length(str(w.get("text", ""))) for w in second_words); span_start = float(first["start"]); span_end = float(second["end"])
+        first_weight = sum(_vowel_weighted_length(str(w.get("text", ""))) for w in first_words)
+        second_weight = sum(_vowel_weighted_length(str(w.get("text", ""))) for w in second_words)
+        span_start = float(first["start"])
+        span_end = float(second["end"])
         total = span_end - span_start
         if total <= 0 or (first_weight + second_weight) <= 0: continue
-        fair_boundary = span_start + total * first_weight / (first_weight + second_weight); current_boundary = float(first["end"])
+        fair_boundary = span_start + total * first_weight / (first_weight + second_weight)
+        current_boundary = float(first["end"])
         if current_boundary >= fair_boundary * 0.85: continue
-        _retime_line_words(first_words, span_start, fair_boundary); _retime_line_words(second_words, fair_boundary, span_end); first["end"] = fair_boundary; second["start"] = fair_boundary
+        _retime_line_words(first_words, span_start, fair_boundary)
+        _retime_line_words(second_words, fair_boundary, span_end)
+        first["end"] = fair_boundary
+        second["start"] = fair_boundary
 
 
 def _dict(item: Any) -> dict[str, Any]: return dict(item) if isinstance(item, dict) else dict(to_dict(item))
@@ -82,14 +98,18 @@ _integer = int_or
 
 def _midi(note: dict[str, Any]) -> int | None:
     raw = note.get("midi_note", note.get("midi"))
-    try: value = int(round(float(raw)))
-    except (TypeError, ValueError): return None
+    try:
+        value = int(round(float(raw)))
+    except (TypeError, ValueError):
+        return None
     return value if 0 <= value <= 127 else None
 
 
 def _positive_duration(note: dict[str, Any]) -> float:
-    try: return max(0.0, float(note.get("end", 0.0)) - float(note.get("start", 0.0)))
-    except (TypeError, ValueError): return 0.0
+    try:
+        return max(0.0, float(note.get("end", 0.0)) - float(note.get("start", 0.0)))
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _merge_display_notes(notes: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -97,11 +117,16 @@ def _merge_display_notes(notes: list[dict[str, Any]]) -> list[dict[str, Any]]:
         dict(note) for note in notes if _midi(note) is not None and _positive_duration(note) > 0.0
     ]
     for note in clean:
-        note["midi_note"] = _midi(note); note["display_source"] = "acoustic_game_note"
-    clean.sort(key=lambda item: (float(item["start"]), float(item["end"]), int(item["midi_note"]))); return clean
+        note["midi_note"] = _midi(note)
+        note["display_source"] = "acoustic_game_note"
+    clean.sort(key=lambda item: (float(item["start"]), float(item["end"]), int(item["midi_note"])))
+    return clean
 
 
-def _syllable_indices(note: dict[str, Any]) -> tuple[int, ...]: raw = note.get("syllable_indices"); values = raw if isinstance(raw, (list, tuple, set)) else (note.get("syllable_index"),); return tuple(dict.fromkeys(index for value in values if (index := _integer(value)) is not None))
+def _syllable_indices(note: dict[str, Any]) -> tuple[int, ...]:
+    raw = note.get("syllable_indices")
+    values = raw if isinstance(raw, (list, tuple, set)) else (note.get("syllable_index"),)
+    return tuple(dict.fromkeys(index for value in values if (index := _integer(value)) is not None))
 
 
 def build_karaoke_song_map(
@@ -116,7 +141,10 @@ def build_karaoke_song_map(
     ai_build_id: str,
     note_decoder_version: str,
 ) -> dict[str, Any]:
-    word_payload, syllable_payload, note_payload = [_dict(item) for item in words], [_dict(item) for item in syllables], [_dict(item) for item in game_notes]; display_notes = _merge_display_notes(note_payload); _extend_micro_duration_spans(word_payload, float(duration)); _extend_micro_duration_spans(syllable_payload, float(duration))
+    word_payload, syllable_payload, note_payload = [_dict(item) for item in words], [_dict(item) for item in syllables], [_dict(item) for item in game_notes]
+    display_notes = _merge_display_notes(note_payload)
+    _extend_micro_duration_spans(word_payload, float(duration))
+    _extend_micro_duration_spans(syllable_payload, float(duration))
 
     syllables_by_word: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for item in syllable_payload:
@@ -135,13 +163,24 @@ def build_karaoke_song_map(
 
     prepared_words: list[dict[str, Any]] = []
     for index, source in enumerate(word_payload):
-        word = dict(source); word_index = _integer(word.get("index"), index); linked_syllables: list[dict[str, Any]] = []
+        word = dict(source)
+        word_index = _integer(word.get("index"), index)
+        linked_syllables: list[dict[str, Any]] = []
         for source_syllable in syllables_by_word.get(word_index, []):
-            syllable = dict(source_syllable); syllable_index = _integer(syllable.get("index"), -1); linked_notes = [dict(note) for note in display_by_syllable.get(syllable_index, [])]; syllable["timing_source"] = "syllable_alignment"
-            syllable["display_notes"] = linked_notes; linked_syllables.append(syllable)
-        word["timing_source"] = "word_alignment"; word["syllables"] = linked_syllables; prepared_words.append(word)
+            syllable = dict(source_syllable)
+            syllable_index = _integer(syllable.get("index"), -1)
+            linked_notes = [dict(note) for note in display_by_syllable.get(syllable_index, [])]
+            syllable["timing_source"] = "syllable_alignment"
+            syllable["display_notes"] = linked_notes
+            linked_syllables.append(syllable)
+        word["timing_source"] = "word_alignment"
+        word["syllables"] = linked_syllables
+        prepared_words.append(word)
 
-    line_texts = [line.strip() for line in str(lyrics_text or "").splitlines() if tokenize(line)]; line_counts = [len(tokenize(line)) for line in line_texts]; lines: list[dict[str, Any]] = []; cursor = 0
+    line_texts = [line.strip() for line in str(lyrics_text or "").splitlines() if tokenize(line)]
+    line_counts = [len(tokenize(line)) for line in line_texts]
+    lines: list[dict[str, Any]] = []
+    cursor = 0
     for line_index, (line_text, count) in enumerate(zip(line_texts, line_counts, strict=True)):
         is_last_line = line_index == len(line_texts) - 1
         line_words = (

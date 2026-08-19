@@ -22,7 +22,8 @@ from app.api import dependencies
         ("video_url", " https://example.test/video ", "https://example.test/video"),
     ],
 )
-def test_song_update_normalizes_optional_text(field, value, expected): assert getattr(schemas.SongUpdate(**{field: value}), field) == expected
+def test_song_update_normalizes_optional_text(field, value, expected):
+    assert getattr(schemas.SongUpdate(**{field: value}), field) == expected
 
 
 @pytest.mark.parametrize(
@@ -33,10 +34,12 @@ def test_song_update_normalizes_optional_text(field, value, expected): assert ge
         {"note_range_min": 72, "note_range_max": 60},
     ],
 )
-def test_song_update_rejects_invalid_semantics(payload): raises(ValidationError, lambda: schemas.SongUpdate(**payload))
+def test_song_update_rejects_invalid_semantics(payload):
+    raises(ValidationError, lambda: schemas.SongUpdate(**payload))
 
 
-def test_song_update_accepts_ordered_or_partial_note_ranges(): assert (schemas.SongUpdate(note_range_min=48, note_range_max=72).note_range_max == 72) and (schemas.SongUpdate(note_range_min=48).note_range_min == 48)
+def test_song_update_accepts_ordered_or_partial_note_ranges():
+    assert (schemas.SongUpdate(note_range_min=48, note_range_max=72).note_range_max == 72) and (schemas.SongUpdate(note_range_min=48).note_range_min == 48)
 
 
 @pytest.mark.parametrize(
@@ -46,10 +49,14 @@ def test_song_update_accepts_ordered_or_partial_note_ranges(): assert (schemas.S
         (schemas.LyricLine, {"text": "line", "start": 2, "end": 1}),
     ],
 )
-def test_lyrics_reject_reversed_time_ranges(schema, payload): raises(ValidationError, lambda: schema(**payload))
+def test_lyrics_reject_reversed_time_ranges(schema, payload):
+    raises(ValidationError, lambda: schema(**payload))
 
 
-def test_lyrics_accept_equal_boundaries_and_nested_words(): word = schemas.LyricWord(word="word", start=1, end=1); line = schemas.LyricLine(text="word", start=1, end=1, words=[word]); assert line.words == [word]
+def test_lyrics_accept_equal_boundaries_and_nested_words():
+    word = schemas.LyricWord(word="word", start=1, end=1)
+    line = schemas.LyricLine(text="word", start=1, end=1, words=[word])
+    assert line.words == [word]
 
 
 @pytest.mark.parametrize(
@@ -68,13 +75,19 @@ def test_lyrics_accept_equal_boundaries_and_nested_words(): word = schemas.Lyric
 def test_entity_dependencies_return_found_or_stable_404(
     monkeypatch, dependency, repository_name, identifier_name, detail_fragment
 ):
-    database, entity = Mock(), object(); lookup = Mock(return_value=entity); monkeypatch.setattr(dependencies.repositories, repository_name, lookup)
+    database, entity = Mock(), object()
+    lookup = Mock(return_value=entity)
+    monkeypatch.setattr(dependencies.repositories, repository_name, lookup)
 
-    assert dependency(**{identifier_name: "id", "db": database}) is entity; lookup.assert_called_once_with(database, "id")
+    assert dependency(**{identifier_name: "id", "db": database}) is entity
+    lookup.assert_called_once_with(database, "id")
 
     lookup.return_value = None
     with pytest.raises(HTTPException) as missing: dependency(**{identifier_name: "missing", "db": database})
     assert (missing.value.status_code == 404) and (detail_fragment in missing.value.detail)
 
 
-def test_model_factories_generate_unique_ids_and_utc_timestamps(): assert models._new_id() != models._new_id(); timestamp = models._utc_now(); assert (isinstance(timestamp, datetime)) and (timestamp.tzinfo is UTC)
+def test_model_factories_generate_unique_ids_and_utc_timestamps():
+    assert models._new_id() != models._new_id()
+    timestamp = models._utc_now()
+    assert (isinstance(timestamp, datetime)) and (timestamp.tzinfo is UTC)

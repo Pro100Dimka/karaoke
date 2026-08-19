@@ -19,17 +19,25 @@ def test_render_notes_handles_bounds_fades_and_clipping():
         VocalNote(0, 1, 120),
         VocalNote(2, 3, 60),
     ]
-    rendered = diagnostic_audio._render_notes(notes, frames=100, sample_rate=100); assert ((rendered.shape, rendered.dtype) == ((100,), np.float32)) and (np.max(np.abs(rendered)) <= 0.92) and (np.all(diagnostic_audio._render_notes([], 5, 100) == 0))
+    rendered = diagnostic_audio._render_notes(notes, frames=100, sample_rate=100)
+    assert ((rendered.shape, rendered.dtype) == ((100,), np.float32)) and (np.max(np.abs(rendered)) <= 0.92) and (np.all(diagnostic_audio._render_notes([], 5, 100) == 0))
 
 
 def write_vocal(path, rate=8000, payload=None): sf.write(path, np.asarray(payload if payload is not None else [0, 0.5, -0.5], dtype=np.float32), rate)
 
 
-def test_write_diagnostic_audio_validates_inputs(tmp_path): raises(FileNotFoundError, lambda: diagnostic_audio.write_diagnostic_audio(tmp_path / 'missing', tmp_path / 'out', [VocalNote(0, 1, 60)])); source = tmp_path / "vocal.wav"; write_vocal(source); raises(ValueError, lambda: diagnostic_audio.write_diagnostic_audio(source, tmp_path / 'out', [], sample_rate=8000), match='at least one'); raises(ValueError, lambda: diagnostic_audio.write_diagnostic_audio(source, tmp_path / 'out', [VocalNote(0, 1, 60)]), match='sample rate')
+def test_write_diagnostic_audio_validates_inputs(tmp_path):
+    raises(FileNotFoundError, lambda: diagnostic_audio.write_diagnostic_audio(tmp_path / 'missing', tmp_path / 'out', [VocalNote(0, 1, 60)]))
+    source = tmp_path / "vocal.wav"
+    write_vocal(source)
+    raises(ValueError, lambda: diagnostic_audio.write_diagnostic_audio(source, tmp_path / 'out', [], sample_rate=8000), match='at least one')
+    raises(ValueError, lambda: diagnostic_audio.write_diagnostic_audio(source, tmp_path / 'out', [VocalNote(0, 1, 60)]), match='sample rate')
 
 
 def test_write_diagnostic_audio_success_normalizes_vocal(monkeypatch, tmp_path):
-    source = tmp_path / "vocal.wav"; write_vocal(source, payload=[0, 0, 0]); target = tmp_path / "nested" / "diagnostic.mp3"
+    source = tmp_path / "vocal.wav"
+    write_vocal(source, payload=[0, 0, 0])
+    target = tmp_path / "nested" / "diagnostic.mp3"
 
     def run(command, **_):
         with open(command[-1], "wb") as stream: stream.write(b"mp3")
@@ -50,7 +58,16 @@ def test_write_diagnostic_audio_success_normalizes_vocal(monkeypatch, tmp_path):
         (subprocess.CalledProcessError(1, "ffmpeg", stderr=b""), "FFmpeg failed"),
     ],
 )
-def test_write_diagnostic_audio_wraps_ffmpeg_errors(monkeypatch, tmp_path, failure, message): source = tmp_path / "vocal.wav"; write_vocal(source); monkeypatch.setattr(ai_audio.subprocess, "run", Mock(side_effect=failure)); raises(AICoreError, lambda: diagnostic_audio.write_diagnostic_audio(source, tmp_path / 'out.mp3', [VocalNote(0, 0.001, 60)], sample_rate=8000), match=message); assert not list(tmp_path.glob("diagnostic-*.wav"))
+def test_write_diagnostic_audio_wraps_ffmpeg_errors(monkeypatch, tmp_path, failure, message):
+    source = tmp_path / "vocal.wav"
+    write_vocal(source)
+    monkeypatch.setattr(ai_audio.subprocess, "run", Mock(side_effect=failure))
+    raises(AICoreError, lambda: diagnostic_audio.write_diagnostic_audio(source, tmp_path / 'out.mp3', [VocalNote(0, 0.001, 60)], sample_rate=8000), match=message)
+    assert not list(tmp_path.glob("diagnostic-*.wav"))
 
 
-def test_write_diagnostic_audio_rejects_missing_encoder_output(monkeypatch, tmp_path): source = tmp_path / "vocal.wav"; write_vocal(source); monkeypatch.setattr(ai_audio.subprocess, "run", lambda *_args, **_kwargs: None); raises(AICoreError, lambda: diagnostic_audio.write_diagnostic_audio(source, tmp_path / 'out.mp3', [VocalNote(0, 0.001, 60)], sample_rate=8000), match='did not create')
+def test_write_diagnostic_audio_rejects_missing_encoder_output(monkeypatch, tmp_path):
+    source = tmp_path / "vocal.wav"
+    write_vocal(source)
+    monkeypatch.setattr(ai_audio.subprocess, "run", lambda *_args, **_kwargs: None)
+    raises(AICoreError, lambda: diagnostic_audio.write_diagnostic_audio(source, tmp_path / 'out.mp3', [VocalNote(0, 0.001, 60)], sample_rate=8000), match='did not create')

@@ -1,16 +1,30 @@
-from pathlib import Path
+from tests._shared import assert_contains, project_text
 
-ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = ROOT / "scripts"
-
-
-def _text(name: str) -> str: return (SCRIPTS / name).read_text(encoding='utf-8')
+import pytest
 
 
-def test_start_dev_cpu_enables_safe_tuning(): text = _text("start-dev-cpu.bat"); assert ('set "KARAOKE_AI_RUNTIME_OVERRIDE=cpu"' in text) and ('set "KARAOKE_CPU_TUNING=1"' in text) and ('set "KARAOKE_CPU_INTEROP_THREADS=1"' in text) and ('set "KARAOKE_CPU_INFERENCE_MODE=1"' in text)
-
-
-def test_cpu_baseline_disables_tuning(): text = _text("start-dev-cpu-baseline.bat"); assert ('set "KARAOKE_AI_RUNTIME_OVERRIDE=cpu"' in text) and ('set "KARAOKE_CPU_TUNING="' in text) and ('set "KARAOKE_CPU_INFERENCE_MODE="' in text)
-
-
-def test_legacy_tuned_alias_delegates_to_optimized_cpu_script(): text = _text("start-dev-cpu-tuned.bat"); assert 'call "%~dp0start-dev-cpu.bat" %*' in text
+@pytest.mark.parametrize(
+    ("script", "required"),
+    [
+        (
+            "scripts/start-dev-cpu.bat",
+            (
+                'set "KARAOKE_AI_RUNTIME_OVERRIDE=cpu"',
+                'set "KARAOKE_CPU_TUNING=1"',
+                'set "KARAOKE_CPU_INTEROP_THREADS=1"',
+                'set "KARAOKE_CPU_INFERENCE_MODE=1"',
+            ),
+        ),
+        (
+            "scripts/start-dev-cpu-baseline.bat",
+            (
+                'set "KARAOKE_AI_RUNTIME_OVERRIDE=cpu"',
+                'set "KARAOKE_CPU_TUNING="',
+                'set "KARAOKE_CPU_INFERENCE_MODE="',
+            ),
+        ),
+        ("scripts/start-dev-cpu-tuned.bat", ('call "%~dp0start-dev-cpu.bat" %*',)),
+    ],
+)
+def test_cpu_launcher_contracts(script, required):
+    assert_contains(project_text(script), *required)

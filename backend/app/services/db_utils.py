@@ -9,9 +9,14 @@ T = TypeVar("T")
 
 
 def commit(db: Session) -> None:
-    try: db.commit()
+    try:
+        db.commit()
     except Exception:
-        db.rollback(); raise
+        db.rollback()
+        raise
 
 
-def commit_refresh(db: Session, instance: T) -> T: commit(db); db.refresh(instance); return instance
+def commit_refresh(db: Session, instance: T) -> T:
+    commit(db)
+    db.refresh(instance)
+    return instance

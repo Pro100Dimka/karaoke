@@ -19,13 +19,15 @@ def refresh_manifest_integrity(
     if not isinstance(outputs, dict): return
     integrity = manifest.get("integrity")
     if not isinstance(integrity, dict):
-        integrity = {}; manifest["integrity"] = integrity
+        integrity = {}
+        manifest["integrity"] = integrity
     wanted = set(relatives)
     for key, relative in list(outputs.items()):
         if not isinstance(relative, str) or relative not in wanted: continue
         artifact = root / relative
         if not artifact.is_file():
             if remove_missing:
-                outputs.pop(key, None); integrity.pop(key, None)
+                outputs.pop(key, None)
+                integrity.pop(key, None)
             continue
         integrity[key] = {"size": artifact.stat().st_size, "sha256": sha256_file(artifact)}

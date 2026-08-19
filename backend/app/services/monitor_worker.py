@@ -10,7 +10,8 @@ import time
 
 import numpy as np
 
-try: import sounddevice as sd
+try:
+    import sounddevice as sd
 except Exception:  # PortAudio may be unavailable in CI/diagnostics.
     from types import SimpleNamespace
     sd = SimpleNamespace(Stream=None, WasapiSettings=lambda **kwargs: kwargs)
@@ -45,7 +46,9 @@ def _stream_candidates(options: dict) -> list[dict]:
 def _emit(payload: dict) -> None: print(json.dumps(payload), flush=True)
 
 
-def _stop(_signum: int, _frame: object) -> None: global _running; _running = False
+def _stop(_signum: int, _frame: object) -> None:
+    global _running
+    _running = False
 
 
 def _read_live_updates() -> None:
@@ -53,23 +56,29 @@ def _read_live_updates() -> None:
         for line in sys.stdin:
             line = line.strip()
             if not line: continue
-            try: update = json.loads(line)
-            except json.JSONDecodeError: continue
+            try:
+                update = json.loads(line)
+            except json.JSONDecodeError:
+                continue
             with _live_lock:
                 for key in ("reverb", "echo", "delay"):
                     if key in update: _live_params[key] = float(update[key])
-    except Exception: return
+    except Exception:
+        return
 
 
 def _audio_callback(gain: float, restart_requested: threading.Event, glitches: list[float], sample_rate: float = 48_000):
     quality, effects = StudioMicrophoneProcessor(sample_rate, 1), MonitorEffectsChain(sample_rate)
     def callback(indata, outdata, _frames, _time_info, status):
         if status:
-            now = time.monotonic(); glitches.append(now)
+            now = time.monotonic()
+            glitches.append(now)
             while glitches and glitches[0] < now - 2.0: glitches.pop(0)
             if len(glitches) >= 3: restart_requested.set()
         with _live_lock: reverb, echo, delay = _live_params["reverb"], _live_params["echo"], _live_params["delay"]
-        processed = quality.process(indata[:, :1], gain)[:, 0]; processed = effects.process(processed, reverb, echo, delay); outdata.fill(0)
+        processed = quality.process(indata[:, :1], gain)[:, 0]
+        processed = effects.process(processed, reverb, echo, delay)
+        outdata.fill(0)
         for channel in range(outdata.shape[1]): outdata[:, channel] = processed
         rms, peak = float(np.sqrt(np.mean(np.square(processed)))) if len(processed) else 0.0, float(np.max(np.abs(processed))) if len(processed) else 0.0
         _level.update(
@@ -84,17 +93,26 @@ def _audio_callback(gain: float, restart_requested: threading.Event, glitches: l
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(); parser.add_argument("--config", required=True); options = json.loads(parser.parse_args().config); gain = float(options["gain"])
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", required=True)
+    options = json.loads(parser.parse_args().config)
+    gain = float(options["gain"])
     with _live_lock:
-        _live_params["reverb"] = float(options.get("reverb", 0.0)); _live_params["echo"] = float(options.get("echo", 0.0)); _live_params["delay"] = float(options.get("delay", 0.0))
+        _live_params["reverb"] = float(options.get("reverb", 0.0))
+        _live_params["echo"] = float(options.get("echo", 0.0))
+        _live_params["delay"] = float(options.get("delay", 0.0))
     threading.Thread(target=_read_live_updates, daemon=True).start()
 
-    restart_requested = threading.Event(); glitches: list[float] = []; callback, stream = _audio_callback(gain, restart_requested, glitches, float(options['sample_rate'])), None
+    restart_requested = threading.Event()
+    glitches: list[float] = []
+    callback, stream = _audio_callback(gain, restart_requested, glitches, float(options['sample_rate'])), None
     try:
-        failures: list[str] = []; candidates = _stream_candidates(options)
+        failures: list[str] = []
+        candidates = _stream_candidates(options)
         for candidate_index, candidate in enumerate(candidates):
             try:
-                stream = sd.Stream(**candidate, callback=callback); stream.start()
+                stream = sd.Stream(**candidate, callback=callback)
+                stream.start()
                 if failures or candidate_index:
                     _emit(
                         {
@@ -111,25 +129,33 @@ def main() -> int:
                         "exclusive": "extra_settings" in candidate,
                     }
                 )
-                restart_requested.clear(); glitches.clear()
+                restart_requested.clear()
+                glitches.clear()
                 while _running and not restart_requested.wait(0.1): _emit({"event": "level", **_level})
-                stream.abort(); stream.close(); stream = None
+                stream.abort()
+                stream.close()
+                stream = None
                 if not _running: break
             except Exception as error:
                 failures.append(str(error))
                 if stream is not None:
                     try:
-                        stream.abort(); stream.close()
-                    except Exception: pass
+                        stream.abort()
+                        stream.close()
+                    except Exception:
+                        pass
                     stream = None
         if _running: raise RuntimeError(failures[-1] if failures else "No audio stream candidate")
     except Exception as exc:  # The parent converts this into a friendly API error.
-        _emit({"event": "error", "message": str(exc)}); return 1
+        _emit({"event": "error", "message": str(exc)})
+        return 1
     finally:
         if stream is not None:
             try:
-                stream.abort(); stream.close()
-            except Exception: pass
+                stream.abort()
+                stream.close()
+            except Exception:
+                pass
     return 0
 
 

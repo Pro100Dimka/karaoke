@@ -7,6 +7,7 @@ import { useI18n } from "../i18n";
 import SongSettings from "../pages/Library/modals/song-settings";
 import Settings from "../pages/Settings";
 import { IconButton } from "../theme/ui";
+import cx from "../utils/cx";
 import TitleBar from "./TitleBar";
 import AppRoutes from "./routes";
 
@@ -21,14 +22,12 @@ function AppFloatingControls({ onOpenSettings }) {
       <div className="app-radio-fab-wrap">
         <IconButton
           unstyled
-          className={[
+          className={cx(
             "app-settings-fab",
             "app-radio-fab",
             isPlaying && "is-playing",
             isLoading && "is-loading"
-          ]
-            .filter(Boolean)
-            .join(" ")}
+          )}
           icon={Radio}
           iconSize={28}
           label={
@@ -102,13 +101,11 @@ export default function AppLayout() {
 
   return (
     <div
-      className={[
+      className={cx(
         "app-shell",
         isKaraoke && "karaoke-app-shell",
         isEditor && "melody-editor-app-shell"
-      ]
-        .filter(Boolean)
-        .join(" ")}
+      )}
     >
       <TitleBar hideActions={isEditor} />
       <div className="app-body">

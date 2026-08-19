@@ -40,7 +40,8 @@ def _is_benign_client_disconnect(context: dict) -> bool:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    loop = asyncio.get_running_loop(); previous_exception_handler = loop.get_exception_handler()
+    loop = asyncio.get_running_loop()
+    previous_exception_handler = loop.get_exception_handler()
 
     def handle_loop_exception(active_loop, context):
         if _is_benign_client_disconnect(context): return
@@ -49,16 +50,23 @@ async def lifespan(_app: FastAPI):
         else:
             active_loop.default_exception_handler(context)
 
-    loop.set_exception_handler(handle_loop_exception); init_db(); storage_migration.migrate_legacy_song_storage(); song_package_service.recover_import_transactions()
+    loop.set_exception_handler(handle_loop_exception)
+    init_db()
+    storage_migration.migrate_legacy_song_storage()
+    song_package_service.recover_import_transactions()
     cache_service.recover_optimization_transactions()
     for line in pipeline_service.format_runtime_plan(pipeline_service._configure_ai_runtime()): print(f"[backend] AI runtime: {line}", flush=True)
-    try: yield
+    try:
+        yield
     finally:
         loop.set_exception_handler(previous_exception_handler)
-        try: recording_service.close_all_sessions()
+        try:
+            recording_service.close_all_sessions()
         finally:
-            try: audio_service.stop_monitoring()
-            finally: ai_service.reset_ai_service()
+            try:
+                audio_service.stop_monitoring()
+            finally:
+                ai_service.reset_ai_service()
 
 
 app = FastAPI(
@@ -100,4 +108,5 @@ app.include_router(application.router)
 
 
 @app.get("/")
-def root(): return {"name": "A&D Voice Backend", "docs": "/docs"}
+def root():
+    return {"name": "A&D Voice Backend", "docs": "/docs"}

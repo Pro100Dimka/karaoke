@@ -32,10 +32,13 @@ def _line_max_duration(tokens: list[str]) -> float: return _line_duration(tokens
 def _rms_activity(
     audio: np.ndarray, sample_rate: int, start: float, end: float
 ) -> dict[str, float]:
-    left = max(0, min(len(audio), int(max(0.0, start) * sample_rate))); right = max(left, min(len(audio), int(max(start, end) * sample_rate))); chunk = np.asarray(audio[left:right], dtype=np.float32)
+    left = max(0, min(len(audio), int(max(0.0, start) * sample_rate)))
+    right = max(left, min(len(audio), int(max(start, end) * sample_rate)))
+    chunk = np.asarray(audio[left:right], dtype=np.float32)
     if chunk.size == 0: return {"rms": 0.0, "peak": 0.0, "active_ratio": 0.0}
 
-    rms, peak, hop = float(np.sqrt(np.mean(chunk * chunk) + 1e-12)), float(np.max(np.abs(chunk))) if chunk.size else 0.0, max(1, int(sample_rate * 0.04)); frame = max(hop, int(sample_rate * 0.08))
+    rms, peak, hop = float(np.sqrt(np.mean(chunk * chunk) + 1e-12)), float(np.max(np.abs(chunk))) if chunk.size else 0.0, max(1, int(sample_rate * 0.04))
+    frame = max(hop, int(sample_rate * 0.08))
     if chunk.size < frame: return {"rms": rms, "peak": peak, "active_ratio": 1.0 if rms > 1e-5 else 0.0}
 
     values = np.asarray(
@@ -45,12 +48,16 @@ def _rms_activity(
         ],
         dtype=np.float32,
     )
-    p10, p90 = float(np.percentile(values, 10)), float(np.percentile(values, 90)); threshold = max(p10 * 1.25, p10 + (p90 - p10) * 0.20); active_ratio = float(np.mean(values >= threshold)); return {"rms": rms, "peak": peak, "active_ratio": active_ratio}
+    p10, p90 = float(np.percentile(values, 10)), float(np.percentile(values, 90))
+    threshold = max(p10 * 1.25, p10 + (p90 - p10) * 0.20)
+    active_ratio = float(np.mean(values >= threshold))
+    return {"rms": rms, "peak": peak, "active_ratio": active_ratio}
 
 
 def _confidence_mode(words: list[Word]) -> str:
     if not words: return "missing"
-    values = [float(word.confidence) for word in words]; mean = sum(values) / len(values)
+    values = [float(word.confidence) for word in words]
+    mean = sum(values) / len(values)
     if max(values) <= 0.121: return "fallback"
     return 'very_low_confidence' if mean < 0.2 else 'forced_aligner'
 
@@ -60,7 +67,9 @@ def build_alignment_debug(
     lyrics_text: str,
     words: list[Word],
 ) -> dict[str, Any]:
-    source_audio, sample_rate = load_mono(vocals, 16000); duration_sec, lines = len(source_audio) / sample_rate if sample_rate else 0.0, [line.strip() for line in str(lyrics_text or '').splitlines() if line.strip()]; source_tokens, aligned_tokens = [token for line in lines for token in tokenize(line)], [word.text for word in words]
+    source_audio, sample_rate = load_mono(vocals, 16000)
+    duration_sec, lines = len(source_audio) / sample_rate if sample_rate else 0.0, [line.strip() for line in str(lyrics_text or '').splitlines() if line.strip()]
+    source_tokens, aligned_tokens = [token for line in lines for token in tokenize(line)], [word.text for word in words]
 
     report: dict[str, Any] = {
         "audio_duration_sec": round(duration_sec, 4),
@@ -91,7 +100,10 @@ def build_alignment_debug(
 
     word_cursor, previous_end = 0, 0.0
     for line_index, line in enumerate(lines):
-        tokens = tokenize(line); count = len(tokens); line_words = words[word_cursor : word_cursor + count]; word_cursor += count
+        tokens = tokenize(line)
+        count = len(tokens)
+        line_words = words[word_cursor : word_cursor + count]
+        word_cursor += count
 
         item: dict[str, Any] = {
             "line_index": line_index,
@@ -104,19 +116,29 @@ def build_alignment_debug(
         }
 
         if count == 0:
-            item["mode"] = "no_tokens"; report["lines"].append(item); continue
+            item["mode"] = "no_tokens"
+            report["lines"].append(item)
+            continue
         if len(line_words) != count:
             item["mode"] = "missing_words"
             item["reasons"].append(
                 f"Expected {count} words from source line, but only {len(line_words)} aligned words remain"
             )
-            item["severity"] = 100; report["lines"].append(item)
+            item["severity"] = 100
+            report["lines"].append(item)
             if report["first_suspect"] is None: report["first_suspect"] = item.copy()
             continue
 
-        start = float(line_words[0].start); end = float(line_words[-1].end); span = max(0.0, end - start); gap_before = max(0.0, start - previous_end) if line_index else start
-        confidences = [float(word.confidence) for word in line_words]; mean_confidence = sum(confidences) / len(confidences); mode = _confidence_mode(line_words); minimum = _line_min_duration(tokens)
-        maximum = _line_max_duration(tokens); activity = _rms_activity(source_audio, sample_rate, start, end)
+        start = float(line_words[0].start)
+        end = float(line_words[-1].end)
+        span = max(0.0, end - start)
+        gap_before = max(0.0, start - previous_end) if line_index else start
+        confidences = [float(word.confidence) for word in line_words]
+        mean_confidence = sum(confidences) / len(confidences)
+        mode = _confidence_mode(line_words)
+        minimum = _line_min_duration(tokens)
+        maximum = _line_max_duration(tokens)
+        activity = _rms_activity(source_audio, sample_rate, start, end)
         before_activity = _rms_activity(
             source_audio, sample_rate, max(previous_end, start - 2.5), start
         )
@@ -147,7 +169,8 @@ def build_alignment_debug(
             )
             item["severity"] += 45
         elif mode == "very_low_confidence":
-            item["reasons"].append("Forced-aligner confidence is extremely low"); item["severity"] += 30
+            item["reasons"].append("Forced-aligner confidence is extremely low")
+            item["severity"] += 30
 
         if span < minimum * 0.72:
             item["reasons"].append(
@@ -168,14 +191,16 @@ def build_alignment_debug(
             )
             item["severity"] += 35
         if sum(duration <= 0.09 for duration in durations) > max(1, len(durations) // 3):
-            item["reasons"].append("Too many words are <=90ms; likely context collapse"); item["severity"] += 35
+            item["reasons"].append("Too many words are <=90ms; likely context collapse")
+            item["severity"] += 35
 
         internal_gaps = [
             max(0.0, float(right.start) - float(left.end))
             for left, right in zip(line_words, line_words[1:], strict=False)
         ]
         if internal_gaps and max(internal_gaps) > 1.6:
-            item["reasons"].append(f"Huge gap inside one written line: {max(internal_gaps):.2f}s"); item["severity"] += 25
+            item["reasons"].append(f"Huge gap inside one written line: {max(internal_gaps):.2f}s")
+            item["severity"] += 25
 
         if (
             gap_before > 0.8
@@ -195,7 +220,8 @@ def build_alignment_debug(
                 )
                 item["severity"] += 50
 
-        report["lines"].append(item); previous_end = max(previous_end, end)
+        report["lines"].append(item)
+        previous_end = max(previous_end, end)
 
         if report["first_suspect"] is None and item["severity"] >= 45:
             report["first_suspect"] = {
@@ -218,13 +244,16 @@ def write_alignment_debug(
     lyrics_text: str,
     words: list[Word],
 ) -> dict[str, Any]:
-    report = build_alignment_debug(vocals, lyrics_text, words); output_path.parent.mkdir(parents=True, exist_ok=True)
+    report = build_alignment_debug(vocals, lyrics_text, words)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
         json.dumps(report, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
-    suspect = report.get("first_suspect"); print("\n" + "=" * 78, flush=True); print("[ALIGNMENT DEBUG] diagnostic report written to:", output_path, flush=True)
+    suspect = report.get("first_suspect")
+    print("\n" + "=" * 78, flush=True)
+    print("[ALIGNMENT DEBUG] diagnostic report written to:", output_path, flush=True)
     if suspect:
         print(
             "[ALIGNMENT DEBUG] FIRST SUSPECT:",
@@ -236,7 +265,8 @@ def write_alignment_debug(
         for reason in suspect.get("reasons", []): print("[ALIGNMENT DEBUG] WHY:", reason, flush=True)
     else:
         print("[ALIGNMENT DEBUG] No obvious structural timing failure detected.", flush=True)
-    print("=" * 78 + "\n", flush=True); return report
+    print("=" * 78 + "\n", flush=True)
+    return report
 
 
 def _main() -> int:
@@ -251,12 +281,18 @@ def _main() -> int:
     )
     args = parser.parse_args()
 
-    root = Path(args.song_folder).expanduser().resolve(); lyrics_path, sync_path, vocals_candidates = root / 'lyrics.txt', root / 'lyricsSync.json', [root / 'separated' / 'vocals.flac', root / 'separated' / 'vocals.wav', root / 'vocals.flac', root / 'vocals.wav']; vocals_path, missing = next((path for path in vocals_candidates if path.exists()), None), [str(path) for path in (lyrics_path, sync_path) if not path.exists()]
+    root = Path(args.song_folder).expanduser().resolve()
+    lyrics_path, sync_path, vocals_candidates = root / 'lyrics.txt', root / 'lyricsSync.json', [root / 'separated' / 'vocals.flac', root / 'separated' / 'vocals.wav', root / 'vocals.flac', root / 'vocals.wav']
+    vocals_path, missing = next((path for path in vocals_candidates if path.exists()), None), [str(path) for path in (lyrics_path, sync_path) if not path.exists()]
     if vocals_path is None: missing.append("separated/vocals.flac|wav")
     if missing:
-        print("[ALIGNMENT DEBUG] Missing required files:", ", ".join(missing)); return 2
+        print("[ALIGNMENT DEBUG] Missing required files:", ", ".join(missing))
+        return 2
 
-    raw = json.loads(sync_path.read_text(encoding="utf-8")); raw_words = raw.get("words", []) if isinstance(raw, dict) else []; words, lyrics = [Word(**item) for item in raw_words], lyrics_path.read_text(encoding='utf-8'); write_alignment_debug(root / "alignmentDebug.json", vocals_path, lyrics, words)
+    raw = json.loads(sync_path.read_text(encoding="utf-8"))
+    raw_words = raw.get("words", []) if isinstance(raw, dict) else []
+    words, lyrics = [Word(**item) for item in raw_words], lyrics_path.read_text(encoding='utf-8')
+    write_alignment_debug(root / "alignmentDebug.json", vocals_path, lyrics, words)
     return 0
 
 

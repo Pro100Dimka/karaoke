@@ -57,7 +57,10 @@ _progress_runtime_lock = threading.RLock()
 
 
 def _configure_ai_runtime() -> RuntimePlan:
-    config.configure_ai_resource_environment(force=True); settings = app_settings_service.read_settings(); configured_device, override = str(settings['compute_mode']), os.getenv('KARAOKE_AI_RUNTIME_OVERRIDE', '').strip().lower(); device, thread_count = override if override in {'auto', 'cuda', 'cpu'} else configured_device, int(settings['thread_count'])
+    config.configure_ai_resource_environment(force=True)
+    settings = app_settings_service.read_settings()
+    configured_device, override = str(settings['compute_mode']), os.getenv('KARAOKE_AI_RUNTIME_OVERRIDE', '').strip().lower()
+    device, thread_count = override if override in {'auto', 'cuda', 'cpu'} else configured_device, int(settings['thread_count'])
     os.environ["SONGAPP_DEVICE"] = device
     for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"): os.environ[name] = str(thread_count)
     with contextlib.suppress(ImportError, RuntimeError):
@@ -73,21 +76,22 @@ def _apply_source_metadata(song: models.Song) -> None:
         from mutagen import File as MutagenFile
 
         tags = MutagenFile(song.source_path, easy=True)
-    except Exception: tags = None
+    except Exception:
+        tags = None
 
     tagged_title, tagged_artist, tagged_album = first_audio_tag(tags, 'title') if tags is not None else None, first_audio_tag(tags, 'artist', 'albumartist') if tags is not None else None, first_audio_tag(tags, 'album') if tags is not None else None
     filename_artist, filename_title = song_service.parse_filename_identity(
         song.original_filename)
 
     if tagged_title:
-        artist, clean_title = song_service._normalize_artist_title(
+        artist, song.title = song_service._normalize_artist_title(
             tagged_artist, tagged_title, tagged_album
         )
-        song.title = clean_title; song.artist = artist or filename_artist
-    else:
-        if filename_artist:
-            song.artist = filename_artist; song.title = filename_title
-        elif not song.title: song.title = filename_title
+        song.artist = artist or filename_artist
+    elif filename_artist:
+        song.artist, song.title = filename_artist, filename_title
+    elif not song.title:
+        song.title = filename_title
 
     if not song.genre:
         song.genre = first_audio_tag(
@@ -133,22 +137,27 @@ _AI_STAGE_PLAN = {
 }
 
 
-class ProcessingCancelled(RuntimeError): pass
+class ProcessingCancelled(RuntimeError):
+    pass
 
 
 class _ProgressCapture(io.TextIOBase):
 
     def __init__(self, song_id: str, log_path: Path):
-        self._song_id = song_id; self._lock = threading.RLock(); self._closed = False
+        self._song_id = song_id
+        self._lock = threading.RLock()
+        self._closed = False
         self._log_file = open(log_path, "a", encoding="utf-8")  # noqa: SIM115
 
     def write(self, text: str) -> int:
         with self._lock:
             if self._closed: raise ValueError("I/O operation on closed progress capture")
             if _is_cancelled(self._song_id): raise ProcessingCancelled("Processing cancelled by user")
-            self._log_file.write(text); self._log_file.flush()
+            self._log_file.write(text)
+            self._log_file.flush()
             if match := _STEP_RE.search(text):
-                step = match.group("step"); _set_runtime_step(self._song_id, float(step), text)
+                step = match.group("step")
+                _set_runtime_step(self._song_id, float(step), text)
                 _update_progress(
                     self._song_id,
                     step_label=f"{step}/13",
@@ -164,17 +173,21 @@ class _ProgressCapture(io.TextIOBase):
     def close(self) -> None:
         with self._lock:
             if self._closed: return
-            self._closed = True; self._log_file.close()
+            self._closed = True
+            self._log_file.close()
 
 
 def _percent_from_step(step_str: str) -> float:
     try:
-        step = float(step_str); return _STEP_PLAN.get(step, (min(99.0, step / 13.0 * 100.0), 100.0, 1))[0]
-    except ValueError: return 0.0
+        step = float(step_str)
+        return _STEP_PLAN.get(step, (min(99.0, step / 13.0 * 100.0), 100.0, 1))[0]
+    except ValueError:
+        return 0.0
 
 
 def _set_runtime_step(song_id: str, step: float, log_line: str) -> None:
-    detail = log_line.strip().splitlines()[0]; detail = re.sub(r"^\d+(?:\.\d+)?\s*/\s*13\s*", "", detail).strip(" .—-")
+    detail = log_line.strip().splitlines()[0]
+    detail = re.sub(r"^\d+(?:\.\d+)?\s*/\s*13\s*", "", detail).strip(" .—-")
     with _progress_runtime_lock:
         now = time.monotonic()
         runtime = _progress_runtime.setdefault(
@@ -189,7 +202,8 @@ def _set_runtime_step(song_id: str, step: float, log_line: str) -> None:
         previous_step = float(runtime.get("step", 0.0))
 
         if step <= previous_step:
-            runtime["detail"] = detail[:120]; return
+            runtime["detail"] = detail[:120]
+            return
 
         if previous_step in _STEP_PLAN:
             completed = runtime.setdefault("completed_step_seconds", {})
@@ -230,7 +244,8 @@ def _runtime_speed_factor(completed_steps: dict) -> float:
     for completed_step, seconds in completed_steps.items():
         plan = _STEP_PLAN.get(float(completed_step))
         if plan is None: continue
-        expected_total += plan[2]; actual_total += float(seconds)
+        expected_total += plan[2]
+        actual_total += float(seconds)
     return 1.0 if expected_total < 10.0 or actual_total <= 0 else min(3.0, max(0.25, actual_total / expected_total))
 
 
@@ -249,12 +264,15 @@ def get_processing_telemetry(song_id: str) -> dict:
     if not runtime: return {}
 
     if "direct_percent" in runtime:
-        now = time.monotonic(); stage = str(runtime.get("stage") or ""); base = float(runtime.get("direct_percent", 0.0))
+        now = time.monotonic()
+        stage = str(runtime.get("stage") or "")
+        base = float(runtime.get("direct_percent", 0.0))
         next_percent, expected, _label = _AI_STAGE_PLAN.get(
             stage, (min(99.7, base + 1.0), 10,
                     runtime.get("detail") or "Обрабатываем песню")
         )
-        elapsed = max(0.0, now - float(runtime.get("stage_started_at", now))); completed = runtime.get("completed_stage_seconds", {})
+        elapsed = max(0.0, now - float(runtime.get("stage_started_at", now)))
+        completed = runtime.get("completed_stage_seconds", {})
         expected_done = sum(_AI_STAGE_PLAN[name][1]
                             for name in completed if name in _AI_STAGE_PLAN)
         actual_done = sum(float(value) for value in completed.values())
@@ -263,12 +281,16 @@ def get_processing_telemetry(song_id: str) -> dict:
             if expected_done >= 5 and actual_done > 0
             else 1.0
         )
-        scale = max(1.0, expected * speed_factor); fraction = 1.0 - math.exp(-2.0 * elapsed / scale); percent = base + (next_percent - base) * fraction
+        scale = max(1.0, expected * speed_factor)
+        fraction = 1.0 - math.exp(-2.0 * elapsed / scale)
+        percent = base + (next_percent - base) * fraction
         percent = min(next_percent - 0.05,
                       percent) if next_percent > base else base
         stage_names = list(_AI_STAGE_PLAN)
-        try: stage_index = stage_names.index(stage)
-        except ValueError: stage_index = len(stage_names) - 1
+        try:
+            stage_index = stage_names.index(stage)
+        except ValueError:
+            stage_index = len(stage_names) - 1
         remaining = max(0.0, expected * speed_factor - elapsed)
         remaining += sum(
             _AI_STAGE_PLAN[name][1] * speed_factor for name in stage_names[stage_index + 1:]
@@ -289,7 +311,9 @@ def get_processing_telemetry(song_id: str) -> dict:
             "progress_detail": runtime.get("detail"),
             "eta_seconds": None,
         }
-    base, end, expected = _STEP_PLAN.get(step, (0.0, 1.0, 10)); elapsed = max(0.0, now - runtime.get("step_started_at", now)); fraction, speed_factor = min(0.94, elapsed / max(1, expected)), _runtime_speed_factor(runtime.get('completed_step_seconds', {}))
+    base, end, expected = _STEP_PLAN.get(step, (0.0, 1.0, 10))
+    elapsed = max(0.0, now - runtime.get("step_started_at", now))
+    fraction, speed_factor = min(0.94, elapsed / max(1, expected)), _runtime_speed_factor(runtime.get('completed_step_seconds', {}))
     return {
         "step": step,
         "progress_percent": round(base + (end - base) * fraction, 1),
@@ -302,7 +326,8 @@ def _progress_heartbeat(song_id: str, stop_event: threading.Event) -> None:
     while not stop_event.wait(1.0):
         try:
             if telemetry := get_processing_telemetry(song_id):
-                step = telemetry["step"]; detail = telemetry.get("progress_detail") or "Обработка AI"
+                step = telemetry["step"]
+                detail = telemetry.get("progress_detail") or "Обработка AI"
                 label = detail if telemetry.get(
                     "semantic") else f"{step:g}/13 · {detail}"
                 _update_progress(
@@ -319,8 +344,10 @@ def _progress_heartbeat(song_id: str, stop_event: threading.Event) -> None:
 @contextlib.contextmanager
 def _song_session(song_id: str) -> Iterator[tuple[Session, models.Song | None]]:
     db = SessionLocal()
-    try: yield db, repositories.get_song(db, song_id)
-    finally: db.close()
+    try:
+        yield db, repositories.get_song(db, song_id)
+    finally:
+        db.close()
 
 
 def _update_progress(
@@ -341,7 +368,8 @@ def _update_progress(
 
 def is_processing(song_id: str) -> bool:
     with _active_jobs_lock:
-        thread = _active_jobs.get(song_id); return thread is not None and thread.is_alive()
+        thread = _active_jobs.get(song_id)
+        return thread is not None and thread.is_alive()
 
 
 def has_active_jobs() -> bool:
@@ -354,7 +382,8 @@ def _release_active_job(song_id: str) -> None:
 
 
 def _job_entrypoint(song_id: str, target) -> None:
-    try: target(song_id)
+    try:
+        target(song_id)
     finally:
         if _is_cancelled(song_id):
             try:
@@ -368,7 +397,9 @@ def _job_entrypoint(song_id: str, target) -> None:
                 logger.exception(
                     "Could not persist terminal cancellation for %s", song_id)
         with _active_jobs_lock: _cancelled_jobs.discard(song_id)
-        _release_active_job(song_id); gc.collect(); torch = sys.modules.get("torch")
+        _release_active_job(song_id)
+        gc.collect()
+        torch = sys.modules.get("torch")
         with contextlib.suppress(AttributeError, RuntimeError):
             if torch is not None and torch.cuda.is_available(): torch.cuda.empty_cache()
 
@@ -383,9 +414,11 @@ def _start_background_job(song_id: str, target) -> bool:
             daemon=True,
         )
         _active_jobs[song_id] = thread
-        try: thread.start()
+        try:
+            thread.start()
         except Exception:
-            _active_jobs.pop(song_id, None); raise
+            _active_jobs.pop(song_id, None)
+            raise
         return True
 
 
@@ -432,7 +465,8 @@ def _load_ai_inputs(song_id: str, out_dir: Path) -> tuple[Path | None, float | N
             else None
         )
 
-        tempo_value = getattr(song, "tempo_override", None); key_value = getattr(song, "key_override", None)
+        tempo_value = getattr(song, "tempo_override", None)
+        key_value = getattr(song, "key_override", None)
         tempo_edited = bool(
             getattr(song, "tempo_user_edited", tempo_value is not None))
         key_edited = bool(
@@ -462,10 +496,14 @@ def _start_progress_heartbeat(song_id: str) -> tuple[threading.Event, threading.
         args=(song_id, stop_event),
         daemon=True,
     )
-    thread.start(); return stop_event, thread
+    thread.start()
+    return stop_event, thread
 
 
-def _create_progress_capture(song_id: str, out_dir: Path) -> _ProgressCapture: log_dir = out_dir / config.LOGS_DIRNAME; log_dir.mkdir(parents=True, exist_ok=True); return _ProgressCapture(song_id, log_dir / "pipeline.log")
+def _create_progress_capture(song_id: str, out_dir: Path) -> _ProgressCapture:
+    log_dir = out_dir / config.LOGS_DIRNAME
+    log_dir.mkdir(parents=True, exist_ok=True)
+    return _ProgressCapture(song_id, log_dir / "pipeline.log")
 
 
 def _stop_progress_heartbeat(
@@ -477,7 +515,9 @@ def _stop_progress_heartbeat(
     if thread is not None and thread is not threading.current_thread(): thread.join(timeout=2.0)
 
 
-def _format_processing_error(exc: BaseException) -> str: error_type, message = type(exc).__name__, str(exc).strip(); return f"{error_type}: {message}" if message else error_type
+def _format_processing_error(exc: BaseException) -> str:
+    error_type, message = type(exc).__name__, str(exc).strip()
+    return f"{error_type}: {message}" if message else error_type
 
 
 def _write_pipeline_error(capture: _ProgressCapture | None, exc: Exception) -> None:
@@ -498,7 +538,8 @@ def _create_ai_progress_callback(
         bounded_percent, friendly = max(0.0, min(99.7, float(percent))), _AI_STAGE_PLAN.get(stage, (0, 0, 'Обрабатываем песню'))[2]
         with _progress_runtime_lock:
             if (runtime := _progress_runtime.get(song_id)) is not None:
-                now = time.monotonic(); previous_stage = runtime.get("stage")
+                now = time.monotonic()
+                previous_stage = runtime.get("stage")
                 if previous_stage and previous_stage != stage:
                     completed = runtime.setdefault(
                         "completed_stage_seconds", {})
@@ -506,8 +547,11 @@ def _create_ai_progress_callback(
                         0.0, now - float(runtime.get("stage_started_at", now))
                     )
                 if previous_stage != stage: runtime["stage_started_at"] = now
-                runtime["stage"] = stage; runtime["direct_percent"] = bounded_percent; runtime["detail"] = friendly
-        _update_progress(song_id, step_label=friendly, percent=bounded_percent); capture.write(f"[AI] {bounded_percent:5.1f}% {stage} · {detail}\n")
+                runtime["stage"] = stage
+                runtime["direct_percent"] = bounded_percent
+                runtime["detail"] = friendly
+        _update_progress(song_id, step_label=friendly, percent=bounded_percent)
+        capture.write(f"[AI] {bounded_percent:5.1f}% {stage} · {detail}\n")
 
     return on_ai_progress
 
@@ -526,15 +570,23 @@ def _acquire_processing_slot(song_id: str) -> bool:
 def _run_job(song_id: str) -> None:
     paths = _load_job_paths(song_id)
     if paths is None or _is_cancelled(song_id): return
-    source_path, out_dir = paths; searchable_title = _load_searchable_title(song_id); lyrics_path, bpm_override, key_override = _load_ai_inputs(song_id, out_dir)
+    source_path, out_dir = paths
+    searchable_title = _load_searchable_title(song_id)
+    lyrics_path, bpm_override, key_override = _load_ai_inputs(song_id, out_dir)
 
-    capture: _ProgressCapture | None = None; heartbeat_stop: threading.Event | None = None; heartbeat_thread: threading.Thread | None = None; slot_acquired = False
+    capture: _ProgressCapture | None = None
+    heartbeat_stop: threading.Event | None = None
+    heartbeat_thread: threading.Thread | None = None
+    slot_acquired = False
     try:
         slot_acquired = _acquire_processing_slot(song_id)
         if not slot_acquired: return
         _update_progress(
             song_id, status=models.SongStatus.PROCESSING, percent=0.0, step_label="0/13")
-        _begin_runtime_progress(song_id); heartbeat_stop, heartbeat_thread = _start_progress_heartbeat(song_id); capture = _create_progress_capture(song_id, out_dir); _ensure_cover_extracted(source_path, out_dir)
+        _begin_runtime_progress(song_id)
+        heartbeat_stop, heartbeat_thread = _start_progress_heartbeat(song_id)
+        capture = _create_progress_capture(song_id, out_dir)
+        _ensure_cover_extracted(source_path, out_dir)
         _update_progress(
             song_id, step_label="Проверка AI-моделей", percent=1.0)
         model_install_service.ensure_ready_sync(
@@ -571,7 +623,8 @@ def _run_job(song_id: str) -> None:
         return
     finally:
         if capture is not None: capture.close()
-        _stop_progress_heartbeat(heartbeat_stop, heartbeat_thread); _end_runtime_progress(song_id)
+        _stop_progress_heartbeat(heartbeat_stop, heartbeat_thread)
+        _end_runtime_progress(song_id)
         if slot_acquired: _processing_slot.release()
 
     if not _is_cancelled(song_id):
@@ -593,7 +646,8 @@ _MIDI_REBUILD_FILES = (
 
 
 def _force_midi_rebuild(out_dir: Path) -> None:
-    cache = StageCache(out_dir / ".ai-cache"); cache.invalidate("pitch", "derivation", "midi", "song-map")
+    cache = StageCache(out_dir / ".ai-cache")
+    cache.invalidate("pitch", "derivation", "midi", "song-map")
     for relative in _MIDI_REBUILD_FILES:
         with contextlib.suppress(OSError): (out_dir / relative).unlink(missing_ok=True)
     with contextlib.suppress(OSError): (out_dir / "acousticNotes.json").unlink(missing_ok=True)
@@ -602,7 +656,8 @@ def _force_midi_rebuild(out_dir: Path) -> None:
 def _run_reprocessing(song_id: str) -> None:
     with _song_session(song_id) as (_db, song):
         if song is None: return
-        out_dir = song_service.resolve_output_dir(song); optimized = bool(getattr(song, "optimized", False))
+        out_dir = song_service.resolve_output_dir(song)
+        optimized = bool(getattr(song, "optimized", False))
     output_root, target_dir = config.SONG_OUTPUT_DIR.resolve(), out_dir.resolve()
     if target_dir.parent != output_root:
         _update_progress(
@@ -612,12 +667,16 @@ def _run_reprocessing(song_id: str) -> None:
         )
         return
     with song_service.song_content_lock(song_id):
-        cache_service.recover_optimization_state(out_dir, committed=optimized); _force_midi_rebuild(out_dir); _run_job(song_id)
+        cache_service.recover_optimization_state(out_dir, committed=optimized)
+        _force_midi_rebuild(out_dir)
+        _run_job(song_id)
 
 
 def _read_optional_generated_json(path: Path, default):
-    try: return read_json(path, default=default)
-    except (OSError, ValueError, TypeError): return default
+    try:
+        return read_json(path, default=default)
+    except (OSError, ValueError, TypeError):
+        return default
 
 
 def _apply_generated_metadata(song: models.Song, out_dir: Path) -> None:
@@ -643,7 +702,8 @@ def _apply_generated_metadata(song: models.Song, out_dir: Path) -> None:
         for note in reference:
             if not isinstance(note, dict): continue
             if (value := note.get("midi_note", note.get("midi"))) is not None: midi.append(int(value))
-    except (TypeError, ValueError): return
+    except (TypeError, ValueError):
+        return
     if not midi: return
     if getattr(song, "note_range_min", None) is None: song.note_range_min = min(midi)
     if getattr(song, "note_range_max", None) is None: song.note_range_max = max(midi)
@@ -652,8 +712,15 @@ def _apply_generated_metadata(song: models.Song, out_dir: Path) -> None:
 def _finalize_success(song_id: str, out_dir: Path) -> None:
     with _song_session(song_id) as (db, song):
         if song is None: return
-        song.output_dir = str(out_dir); _apply_source_metadata(song); _apply_generated_metadata(song, out_dir); song.status = models.SongStatus.DONE
-        song.optimized = False; song.progress_percent = 100.0; song.progress_step = "13/13"; song.error_message = None
-        commit(db); revision_cache.invalidate(song)
+        song.output_dir = str(out_dir)
+        _apply_source_metadata(song)
+        _apply_generated_metadata(song, out_dir)
+        song.status = models.SongStatus.DONE
+        song.optimized = False
+        song.progress_percent = 100.0
+        song.progress_step = "13/13"
+        song.error_message = None
+        commit(db)
+        revision_cache.invalidate(song)
 
     with contextlib.suppress(Exception): cache_service.optimize_song_files(song_id)

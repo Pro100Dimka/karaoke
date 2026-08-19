@@ -15,16 +15,20 @@ from .models import PitchFrame, Syllable, VocalNote, Word
 def validate_audio(path: str | Path):
     source = Path(path)
     if not source.is_file() or source.stat().st_size < 44: raise InvalidArtifactError(f"Missing or truncated audio: {source}")
-    try: info = sf.info(source)
-    except (RuntimeError, OSError) as exc: raise InvalidArtifactError(f"Unreadable audio {source}: {exc}") from exc
+    try:
+        info = sf.info(source)
+    except (RuntimeError, OSError) as exc:
+        raise InvalidArtifactError(f"Unreadable audio {source}: {exc}") from exc
     if info.frames <= 0 or info.samplerate <= 0 or info.channels <= 0: raise InvalidArtifactError(f"Empty audio: {source}")
     return info
 
 
 def validate_json(path: str | Path, required: Iterable[str] = ()):
     source = Path(path)
-    try: data = json.loads(source.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc: raise InvalidArtifactError(f"Invalid JSON {source}: {exc}") from exc
+    try:
+        data = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise InvalidArtifactError(f"Invalid JSON {source}: {exc}") from exc
     if not isinstance(data, dict): raise InvalidArtifactError(f"Expected JSON object in {source}")
     for key in required:
         if key not in data: raise InvalidArtifactError(f"{source} missing required key {key!r}")
@@ -34,7 +38,8 @@ def validate_json(path: str | Path, required: Iterable[str] = ()):
 def validate_timeline(items, name: str = "timeline") -> None:
     previous_start = -1.0
     for index, item in enumerate(items):
-        start = float(getattr(item, "start", getattr(item, "time", 0.0))); end = float(getattr(item, "end", start))
+        start = float(getattr(item, "start", getattr(item, "time", 0.0)))
+        end = float(getattr(item, "end", start))
         if not math.isfinite(start) or not math.isfinite(end): raise InvalidArtifactError(f"Non-finite {name} item {index}")
         if start < 0 or end < start: raise InvalidArtifactError(f"Invalid {name} item {index}: {start}..{end}")
         if start + 1e-6 < previous_start: raise InvalidArtifactError(f"{name} is not sorted at item {index}")
@@ -69,8 +74,11 @@ def validate_pitch_json(path: str | Path):
     try:
         data = json.loads(source.read_text(encoding="utf-8"))
         if not isinstance(data, list): raise TypeError("expected a JSON array")
-        frames = [PitchFrame(**item) for item in data]; validate_pitch(frames); return frames
-    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError) as exc: raise InvalidArtifactError(f"Invalid pitch JSON {source}: {exc}") from exc
+        frames = [PitchFrame(**item) for item in data]
+        validate_pitch(frames)
+        return frames
+    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        raise InvalidArtifactError(f"Invalid pitch JSON {source}: {exc}") from exc
 
 
 def validate_derivation_json(path: str | Path, kind: str):
@@ -83,7 +91,8 @@ def validate_derivation_json(path: str | Path, kind: str):
             "notes": ("notes", VocalNote),
             "frames": ("frames", PitchFrame),
         }
-        key, cls = mapping[kind]; items = data.get(key)
+        key, cls = mapping[kind]
+        items = data.get(key)
         if not isinstance(items, list): raise TypeError(f"{key} must be an array")
         values = [cls(**item) for item in items]
         if kind == "frames":
@@ -91,7 +100,8 @@ def validate_derivation_json(path: str | Path, kind: str):
         else:
             validate_timeline(values, kind)
         return values
-    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc: raise InvalidArtifactError(f"Invalid {kind} JSON {source}: {exc}") from exc
+    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+        raise InvalidArtifactError(f"Invalid {kind} JSON {source}: {exc}") from exc
 
 
 __all__ = [
@@ -113,15 +123,21 @@ def validate_words_json(path: str | Path):
     try:
         data = json.loads(source.read_text(encoding="utf-8"))
         if not isinstance(data, dict): raise TypeError("expected a JSON object")
-        text = data.get("text"); items = data.get("words")
+        text = data.get("text")
+        items = data.get("words")
         if not isinstance(text, str) or not isinstance(items, list): raise TypeError("expected string text and array words")
-        words = [Word(**item) for item in items]; validate_timeline(words, "words"); return words
-    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError) as exc: raise InvalidArtifactError(f"Invalid words JSON {source}: {exc}") from exc
+        words = [Word(**item) for item in items]
+        validate_timeline(words, "words")
+        return words
+    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        raise InvalidArtifactError(f"Invalid words JSON {source}: {exc}") from exc
 
 
 def validate_music_json(path: str | Path) -> float:
     data = validate_json(path, ("bpm",))
-    try: bpm = float(data["bpm"])
-    except (TypeError, ValueError) as exc: raise InvalidArtifactError(f"Invalid BPM in {path}: {exc}") from exc
+    try:
+        bpm = float(data["bpm"])
+    except (TypeError, ValueError) as exc:
+        raise InvalidArtifactError(f"Invalid BPM in {path}: {exc}") from exc
     if not math.isfinite(bpm) or not 20.0 <= bpm <= 300.0: raise InvalidArtifactError(f"BPM out of range in {path}: {bpm}")
     return bpm

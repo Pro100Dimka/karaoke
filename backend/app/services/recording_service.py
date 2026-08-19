@@ -57,15 +57,27 @@ class RecordingSession:
         effects: dict[str, float] | None = None,
         latency: str | float = "low",
     ):
-        self.session_id = session_id; self.song_id = song_id; self.sample_rate = sample_rate; self.channels = channels
-        self.gain = max(0.0, min(4.0, gain)); self.music_gain = clamp01(music_gain)
+        self.session_id = session_id
+        self.song_id = song_id
+        self.sample_rate = sample_rate
+        self.channels = channels
+        self.gain = max(0.0, min(4.0, gain))
+        self.music_gain = clamp01(music_gain)
         self.effects = {
             name: clamp01(float((effects or {}).get(name, 0.0)))
             for name in ("reverb", "echo", "delay")
         }
-        self.playback_offset_sec = max(0.0, playback_offset_sec); self._queue: queue.Queue[Any] = queue.Queue(); self._writer_ready = threading.Event(); self._writer_thread: threading.Thread | None = None
-        self._writer_error: BaseException | None = None; self._temporary_path: Path | None = None; self._frames_written = 0; self._closed = False
-        self._paused = False; self._monitoring_enabled = monitoring_enabled; self._quality = StudioMicrophoneProcessor(sample_rate, channels)
+        self.playback_offset_sec = max(0.0, playback_offset_sec)
+        self._queue: queue.Queue[Any] = queue.Queue()
+        self._writer_ready = threading.Event()
+        self._writer_thread: threading.Thread | None = None
+        self._writer_error: BaseException | None = None
+        self._temporary_path: Path | None = None
+        self._frames_written = 0
+        self._closed = False
+        self._paused = False
+        self._monitoring_enabled = monitoring_enabled
+        self._quality = StudioMicrophoneProcessor(sample_rate, channels)
         if monitoring_enabled:
             output_info = (
                 sd.query_devices(output_device_id, kind="output")
@@ -116,9 +128,11 @@ class RecordingSession:
                 while True:
                     chunk = self._queue.get()
                     if chunk is self._WRITER_STOP: break
-                    output.write(chunk); self._frames_written += len(chunk)
+                    output.write(chunk)
+                    self._frames_written += len(chunk)
         except BaseException as exc:  # Store library/thread errors for the API thread.
-            self._writer_error = exc; self._writer_ready.set()
+            self._writer_error = exc
+            self._writer_ready.set()
 
     def _start_writer(self) -> None:
         config.DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -127,62 +141,86 @@ class RecordingSession:
             suffix=".wav",
             dir=config.CACHE_DIR,
         )
-        os.close(descriptor); self._temporary_path = Path(name)
+        os.close(descriptor)
+        self._temporary_path = Path(name)
         self._writer_thread = threading.Thread(
             target=self._write_audio,
             name=f"recording-writer-{self.session_id[:8]}",
             daemon=True,
         )
-        self._writer_thread.start(); self._writer_ready.wait()
+        self._writer_thread.start()
+        self._writer_ready.wait()
         if self._writer_error is not None:
-            self._cleanup_temporary_file(); raise RuntimeError(f"Could not prepare recording file: {self._writer_error}")
+            self._cleanup_temporary_file()
+            raise RuntimeError(f"Could not prepare recording file: {self._writer_error}")
 
     def _stop_writer(self) -> None:
         thread = self._writer_thread
         if thread is None: return
         if thread.is_alive():
-            self._queue.put(self._WRITER_STOP); thread.join()
+            self._queue.put(self._WRITER_STOP)
+            thread.join()
         self._writer_thread = None
 
     def _cleanup_temporary_file(self) -> None:
         if self._temporary_path is not None:
-            self._temporary_path.unlink(missing_ok=True); self._temporary_path = None
+            self._temporary_path.unlink(missing_ok=True)
+            self._temporary_path = None
 
     def start(self) -> None:
         self._start_writer()
-        try: self._stream.start()
+        try:
+            self._stream.start()
         except Exception:
-            self._stop_writer(); self._cleanup_temporary_file(); raise
+            self._stop_writer()
+            self._cleanup_temporary_file()
+            raise
 
-    def pause(self) -> None: self._paused = True
+    def pause(self) -> None:
+        self._paused = True
 
-    def resume(self) -> None: self._paused = False
+    def resume(self) -> None:
+        self._paused = False
 
     def close(self) -> None:
         if self._closed: return
         self._closed = True
         with contextlib.suppress(Exception): self._stream.close()
-        self._stop_writer(); self._cleanup_temporary_file()
+        self._stop_writer()
+        self._cleanup_temporary_file()
 
     def stop_and_save(self, out_path: Path) -> tuple[float, int]:
         if self._closed: raise RuntimeError("Recording session is already closed")
-        self._closed = True; stream_error: BaseException | None = None
+        self._closed = True
+        stream_error: BaseException | None = None
         try:
-            self._stream.stop(); self._stream.close()
-        except BaseException as exc: stream_error = exc
-        finally: self._stop_writer()
+            self._stream.stop()
+            self._stream.close()
+        except BaseException as exc:
+            stream_error = exc
+        finally:
+            self._stop_writer()
 
         if stream_error is not None:
-            self._cleanup_temporary_file(); raise RuntimeError(f"Could not stop recording stream: {stream_error}") from stream_error
+            self._cleanup_temporary_file()
+            raise RuntimeError(f"Could not stop recording stream: {stream_error}") from stream_error
         if self._writer_error is not None:
-            error = self._writer_error; self._cleanup_temporary_file(); raise RuntimeError(f"Could not write recording: {error}") from error
+            error = self._writer_error
+            self._cleanup_temporary_file()
+            raise RuntimeError(f"Could not write recording: {error}") from error
         if self._temporary_path is None: raise RuntimeError("Recording file was not initialized")
 
-        out_path.parent.mkdir(parents=True, exist_ok=True); publish_path = out_path.with_name(f".{out_path.name}.{uuid.uuid4().hex}.tmp")
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        publish_path = out_path.with_name(f".{out_path.name}.{uuid.uuid4().hex}.tmp")
         try:
-            shutil.copyfile(self._temporary_path, publish_path); os.replace(publish_path, out_path)
-        finally: publish_path.unlink(missing_ok=True)
-        self._temporary_path.unlink(missing_ok=True); self._temporary_path = None; duration_sec = self._frames_written / float(self.sample_rate) if self.sample_rate else 0.0; return duration_sec, self.sample_rate
+            shutil.copyfile(self._temporary_path, publish_path)
+            os.replace(publish_path, out_path)
+        finally:
+            publish_path.unlink(missing_ok=True)
+        self._temporary_path.unlink(missing_ok=True)
+        self._temporary_path = None
+        duration_sec = self._frames_written / float(self.sample_rate) if self.sample_rate else 0.0
+        return duration_sec, self.sample_rate
 
 
 _sessions: dict[str, RecordingSession] = {}
@@ -211,7 +249,8 @@ def _capture_attempts(
         attempts.append(
             (None, None, int(round(float(default_info["default_samplerate"]))), 0, False, "high")
         )
-    attempts.append((None, None, sample_rate, 0, False, "high")); return list(dict.fromkeys(attempts))
+    attempts.append((None, None, sample_rate, 0, False, "high"))
+    return list(dict.fromkeys(attempts))
 
 
 def backend_available() -> tuple[bool, str | None]: return (_AUDIO_BACKEND_AVAILABLE, _AUDIO_BACKEND_ERROR)
@@ -232,7 +271,9 @@ def start_recording(
 ) -> str:
     if not _AUDIO_BACKEND_AVAILABLE: raise RuntimeError(f"Аудио-бэкенд недоступен: {_AUDIO_BACKEND_ERROR}")
 
-    session_id = uuid.uuid4().hex; session: RecordingSession | None = None; errors: list[str] = []
+    session_id = uuid.uuid4().hex
+    session: RecordingSession | None = None
+    errors: list[str] = []
     for input_id, output_id, rate, frames, monitor, latency in _capture_attempts(
         device_id, output_device_id, sample_rate, blocksize, monitoring_enabled
     ):
@@ -264,7 +305,8 @@ def start_recording(
                 with contextlib.suppress(Exception): session.close()
             session = None
     if session is None:
-        detail = errors[-1] if errors else "no compatible capture mode"; raise RuntimeError(f"Could not start recording stream: {detail}")
+        detail = errors[-1] if errors else "no compatible capture mode"
+        raise RuntimeError(f"Could not start recording stream: {detail}")
     with _sessions_lock: _sessions[session_id] = session
     return session_id
 
@@ -282,7 +324,8 @@ def has_active_recording(song_id: object) -> bool:
 
 def close_all_sessions() -> None:
     with _sessions_lock:
-        sessions = tuple(_sessions.values()); _sessions.clear()
+        sessions = tuple(_sessions.values())
+        _sessions.clear()
     for session in sessions:
         with contextlib.suppress(Exception): session.close()
 
@@ -302,9 +345,11 @@ def stop_recording(session_id: str) -> models.Recording:
         song = repositories.get_song(db, session.song_id)
         if song is None: raise ValueError(f"Песня {session.song_id} не найдена")
 
-        out_dir = song_service.resolve_output_dir(song) / config.RECORDINGS_DIRNAME; out_dir.mkdir(parents=True, exist_ok=True)
+        out_dir = song_service.resolve_output_dir(song) / config.RECORDINGS_DIRNAME
+        out_dir.mkdir(parents=True, exist_ok=True)
 
-        filename = f"take-{uuid.uuid4().hex[:8]}.wav"; out_path = out_dir / filename
+        filename = f"take-{uuid.uuid4().hex[:8]}.wav"
+        out_path = out_dir / filename
         try:
             duration_sec, sample_rate = session.stop_and_save(out_path)
             recording = models.Recording(
@@ -314,9 +359,12 @@ def stop_recording(session_id: str) -> models.Recording:
                 duration_sec=duration_sec,
                 sample_rate=sample_rate,
             )
-            db.add(recording); commit_refresh(db, recording)
+            db.add(recording)
+            commit_refresh(db, recording)
         except Exception:
-            db.rollback(); out_path.unlink(missing_ok=True); raise
+            db.rollback()
+            out_path.unlink(missing_ok=True)
+            raise
         _create_performance_mix_safely(
             recording,
             song,
@@ -326,21 +374,24 @@ def stop_recording(session_id: str) -> models.Recording:
         )
         return recording
     finally:
-        session.close(); db.close()
+        session.close()
+        db.close()
 
 
 def resolve_recording_path(recording: models.Recording) -> Path:
-    try: return song_service.resolve_library_path(Path(recording.path))
-    except ValueError as exc: raise ValueError("Recording path is outside the application library") from exc
+    try:
+        return song_service.resolve_library_path(Path(recording.path))
+    except ValueError as exc:
+        raise ValueError("Recording path is outside the application library") from exc
 
 
-def _existing_recording_files(recording: models.Recording) -> tuple[Path, ...]: return existing_unique_paths((resolve_recording_path(recording), *performance_mix_paths(recording)))
+
+def delete_recording(db, recording: models.Recording) -> None: delete_with_files(db, recording, existing_unique_paths((resolve_recording_path(recording), *performance_mix_paths(recording))))
 
 
-def delete_recording(db, recording: models.Recording) -> None: delete_with_files(db, recording, _existing_recording_files(recording))
-
-
-def performance_mix_path(recording: models.Recording) -> Path: voice_path = resolve_recording_path(recording); return voice_path.with_name(f"{voice_path.stem}-performance.mp3")
+def performance_mix_path(recording: models.Recording) -> Path:
+    voice_path = resolve_recording_path(recording)
+    return voice_path.with_name(f"{voice_path.stem}-performance.mp3")
 
 
 def performance_mix_paths(recording: models.Recording) -> tuple[Path, Path]:
@@ -381,9 +432,11 @@ def _performance_mix_command(
 ) -> list[str]:
     inputs, filters, performer_label = ['-ss', f'{offset_sec:.3f}', '-i', str(instrumental), '-i', recording.path], [f'[0:a]volume={music_gain:.6f}[music]', '[1:a]volume=1.000000[performer0]'], 'performer0'
     for index, (name, amount) in enumerate((effects or {}).items(), start=1):
-        next_label = f"performer{index}"; effect = _effect_filter(name, amount, performer_label, next_label)
+        next_label = f"performer{index}"
+        effect = _effect_filter(name, amount, performer_label, next_label)
         if effect is None: continue
-        filters.append(effect); performer_label = next_label
+        filters.append(effect)
+        performer_label = next_label
     filters.append(
         f"[music][{performer_label}]amix=inputs=2:duration=first:normalize=0,"
         "alimiter=limit=0.95[mix]"
@@ -413,7 +466,8 @@ def _create_performance_mix_safely(
     music_gain: float,
     effects: dict[str, float] | None = None,
 ) -> None:
-    try: _create_performance_mix(recording, song, offset_sec, music_gain, effects)
+    try:
+        _create_performance_mix(recording, song, offset_sec, music_gain, effects)
     except Exception:  # noqa: BLE001 - the raw take is already committed and must remain usable
         logger.exception("Could not create performance mix for recording %s", recording.id)
 
@@ -439,5 +493,7 @@ def _create_performance_mix(
         music_gain,
         effects,
     )
-    try: subprocess.run(command, capture_output=True, check=True, timeout=90)
-    except (OSError, subprocess.SubprocessError): destination.unlink(missing_ok=True)
+    try:
+        subprocess.run(command, capture_output=True, check=True, timeout=90)
+    except (OSError, subprocess.SubprocessError):
+        destination.unlink(missing_ok=True)

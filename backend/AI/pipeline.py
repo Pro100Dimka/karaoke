@@ -96,13 +96,16 @@ def _segments_ignore_real_singing(
 
     def covered(time: float) -> bool: return any((start <= time <= end for start, end, _text in ordered))
 
-    uncovered = sum(1 for time in voiced_times if not covered(time)); return (uncovered / len(voiced_times)) > 0.35
+    uncovered = sum(1 for time in voiced_times if not covered(time))
+    return (uncovered / len(voiced_times)) > 0.35
 
 
 def _bound_word_durations(words: list[Word]) -> list[Word]:
     bounded: list[Word] = []
     for word in words:
-        token_length = max(1, len(word.text.strip())); maximum = min(3.2, max(0.7, 0.42 + token_length * 0.22)); end = min(word.end, word.start + maximum)
+        token_length = max(1, len(word.text.strip()))
+        maximum = min(3.2, max(0.7, 0.42 + token_length * 0.22))
+        end = min(word.end, word.start + maximum)
         bounded.append(
             Word(word.start, max(word.start + 0.02, end),
                  word.text, word.confidence, word.index)
@@ -110,50 +113,22 @@ def _bound_word_durations(words: list[Word]) -> list[Word]:
     return bounded
 
 
-def _trim_supplied_text_to_aligned_words(text: str, words: list[Word]) -> str:
-    remaining = len(words)
-    if remaining <= 0: return ""
-    lines = [line.strip()
-             for line in str(text or "").splitlines() if line.strip()]
-    if not lines: return text.strip()
-    kept: list[str] = []; used = 0
-    for line in lines:
-        count = len(tokenize(line))
-        if count <= 0: continue
-        if used + count > remaining: break
-        kept.append(line); used += count
-        if used == remaining: break
-    return "\n".join(kept).strip() if kept else text.strip()
-
-
-def _canonical_alignment_matches(text: str, words: list[Word]) -> bool: expected = tokenize(text); return False if len(expected) != len(words) else all((_normalize_match_token(token) == _normalize_match_token(word.text) for token, word in zip(expected, words, strict=True)))
+def _canonical_alignment_matches(text: str, words: list[Word]) -> bool:
+    expected = tokenize(text)
+    return False if len(expected) != len(words) else all((_normalize_match_token(token) == _normalize_match_token(word.text) for token, word in zip(expected, words, strict=True)))
 
 
 def _canonical_timeline_is_publishable(words: list[Word], total_duration: float) -> bool:
     if not words: return False
     previous_end = -1.0
     for word in words:
-        start = float(word.start); end = float(word.end)
+        start = float(word.start)
+        end = float(word.end)
         if not math.isfinite(start) or not math.isfinite(end): return False
         if start < -1e-6 or end <= start + 0.009 or end > total_duration + 0.10: return False
         if start < previous_end - 1e-4: return False
         previous_end = end
     return True
-
-
-def _repair_canonical_timeline_locally(
-    words: list[Word], total_duration: float
-) -> list[Word] | None:
-    if not words or total_duration <= 0.04: return None
-    repaired: list[Word] = []; cumulative_shift, max_single_shift = 0.0, 0.0
-    for index, word in enumerate(words):
-        original_start = max(0.0, float(word.start)); duration = max(0.02, min(3.2, float(word.end) - float(word.start))); required_start = repaired[-1].end if repaired else original_start; start = max(original_start, required_start)
-        shift = start - original_start; cumulative_shift += shift; max_single_shift = max(max_single_shift, shift); end = start + duration
-        if end > total_duration + 1e-6: return None
-        repaired.append(Word(start, end, word.text, min(
-            float(word.confidence), 0.25), index))
-
-    return None if max_single_shift > 1.25 or cumulative_shift > max(2.5, len(words) * 0.08) else repaired if _canonical_timeline_is_publishable(repaired, total_duration) else None
 
 
 def _preserve_complete_canonical_timeline(
@@ -165,7 +140,8 @@ def _preserve_complete_canonical_timeline(
     if not words or total_duration <= 0.04: return None
 
     if sources and candidates and len(sources) == len(words) and len(candidates) == len(words):
-        local = list(words); acoustic = {"ctc", "consensus", "qwen"}
+        local = list(words)
+        acoustic = {"ctc", "consensus", "qwen"}
         direct_confidences = [
             clamp01(float(word.confidence))
             for word, source in zip(words, sources, strict=True)
@@ -181,7 +157,9 @@ def _preserve_complete_canonical_timeline(
         typical_duration = durations[len(
             durations) // 2] if durations else 0.25
 
-        def percentile(values: list[float], fraction: float) -> float: ordered = sorted(values); return ordered[min(len(ordered) - 1, int((len(ordered) - 1) * fraction))]
+        def percentile(values: list[float], fraction: float) -> float:
+            ordered = sorted(values)
+            return ordered[min(len(ordered) - 1, int((len(ordered) - 1) * fraction))]
 
         global_reference = percentile(
             direct_confidences, 0.75) if direct_confidences else 1.0
@@ -224,7 +202,8 @@ def _preserve_complete_canonical_timeline(
             scores) if score >= 0.25}
 
         while True:
-            changed = False; ordered = sorted(anchors)
+            changed = False
+            ordered = sorted(anchors)
             for left, right in zip([-1, *ordered], [*ordered, len(words)], strict=True):
                 left_time = words[left].end if left >= 0 else 0.0
                 right_time = words[right].start if right < len(
@@ -235,7 +214,8 @@ def _preserve_complete_canonical_timeline(
                 if not removable: return None
                 anchors.remove(
                     min(removable, key=lambda index: (scores[index], index)))
-                changed = True; break
+                changed = True
+                break
             if not changed: break
 
         def candidate_for(index: int) -> Word | None:
@@ -246,17 +226,20 @@ def _preserve_complete_canonical_timeline(
                 value = entry.get(kind)
                 if not isinstance(value, dict): continue
                 try:
-                    start = float(value["start"]); end = float(value["end"])
+                    start = float(value["start"])
+                    end = float(value["end"])
                     confidence = max(
                         0.0, min(1.0, float(value.get("confidence", 0.0))))
-                except (KeyError, TypeError, ValueError): continue
+                except (KeyError, TypeError, ValueError):
+                    continue
                 if 0.0 <= start < end <= total_duration and end - start >= 0.01:
                     options.append(
                         (confidence, rank, Word(start, end,
                          words[index].text, confidence, index))
                     )
             if options: return max(options, key=lambda item: item[:2])[2]
-            current = words[index]; return current if sources[index] in {'interpolated', 'reacquired'} and 0.0 <= current.start < current.end <= total_duration and (current.end - current.start >= 0.01) else None
+            current = words[index]
+            return current if sources[index] in {'interpolated', 'reacquired'} and 0.0 <= current.start < current.end <= total_duration and (current.end - current.start >= 0.01) else None
 
         def interpolate(indices: list[int], start: float, end: float) -> bool:
             if not indices: return True
@@ -275,26 +258,34 @@ def _preserve_complete_canonical_timeline(
                 word = words[index]
                 local[index] = Word(cursor, boundary, word.text,
                                     word.confidence, word.index)
-                sources[index] = "interpolated"; cursor = boundary; total_weight -= weight; start = cursor
+                sources[index] = "interpolated"
+                cursor = boundary
+                total_weight -= weight
+                start = cursor
             return True
 
         def reconstruct(indices: list[int], left_time: float, right_time: float) -> bool:
-            cursor = left_time; pending: list[int] = []
+            cursor = left_time
+            pending: list[int] = []
             for index in indices:
                 candidate = candidate_for(index)
                 if candidate is None or candidate.end > right_time + 1e-9:
-                    pending.append(index); continue
+                    pending.append(index)
+                    continue
                 minimum_pending = len(pending) * 0.01
                 if candidate.start >= cursor + minimum_pending:
                     if not interpolate(pending, cursor, candidate.start): return False
                     local[index] = candidate
                     if sources[index] not in acoustic and candidate is not words[index]: sources[index] = "reacquired"
-                    cursor = candidate.end; pending.clear(); continue
+                    cursor = candidate.end
+                    pending.clear()
+                    continue
                 block = [*pending, index]
                 if candidate.end >= cursor + len(block) * 0.01:
                     if not interpolate(block, cursor, candidate.end): return False
                     if candidate is not words[index]: sources[index] = "reacquired"
-                    cursor = candidate.end; pending.clear()
+                    cursor = candidate.end
+                    pending.clear()
                 else:
                     pending.append(index)
             return interpolate(pending, cursor, right_time)
@@ -310,7 +301,8 @@ def _preserve_complete_canonical_timeline(
         if _canonical_timeline_is_publishable(local, total_duration): return local
 
     if sources and len(sources) == len(words):
-        local = list(words); acoustic = {"ctc", "consensus", "qwen"}
+        local = list(words)
+        acoustic = {"ctc", "consensus", "qwen"}
         anchors = [index for index, source in enumerate(
             sources) if source in acoustic]
         for left, right in zip([-1, *anchors], [*anchors, len(words)], strict=True):
@@ -319,7 +311,8 @@ def _preserve_complete_canonical_timeline(
             left_time = local[left].end if left >= 0 else 0.0
             right_time = local[right].start if right < len(
                 local) else total_duration
-            previous_end = left_time; valid = right_time > left_time
+            previous_end = left_time
+            valid = right_time > left_time
             for index in indices:
                 word = local[index]
                 valid = (
@@ -330,11 +323,14 @@ def _preserve_complete_canonical_timeline(
                 )
                 previous_end = word.end
             if valid: continue
-            weights = [max(1, len(words[index].text)) for index in indices]; available = right_time - left_time
+            weights = [max(1, len(words[index].text)) for index in indices]
+            available = right_time - left_time
             if available < len(indices) * 0.01: continue
-            cursor = left_time; total_weight = sum(weights)
+            cursor = left_time
+            total_weight = sum(weights)
             for index, weight in zip(indices, weights, strict=True):
-                end = cursor + available * weight / total_weight; word = words[index]
+                end = cursor + available * weight / total_weight
+                word = words[index]
                 local[index] = Word(cursor, end, word.text,
                                     word.confidence, word.index)
                 cursor = end
@@ -342,7 +338,9 @@ def _preserve_complete_canonical_timeline(
 
     repaired: list[Word] = []
     for index, word in enumerate(words):
-        start = max(0.0, min(total_duration, float(word.start))); end = max(start + 0.01, min(total_duration, float(word.end))); confidence = clamp01(float(word.confidence))
+        start = max(0.0, min(total_duration, float(word.start)))
+        end = max(start + 0.01, min(total_duration, float(word.end)))
+        confidence = clamp01(float(word.confidence))
 
         if repaired and start < repaired[-1].end:
             previous = repaired[-1]
@@ -400,10 +398,13 @@ def _pipeline_lossless_canonical_words(
         max(1, len(token) + 2 * sum(char in VOWELS for char in token))
         for token in tokens
     ]
-    total, cursor = max(1, sum(weights)), 0; output: list[Word] = []
+    total, cursor = max(1, sum(weights)), 0
+    output: list[Word] = []
 
     for index, (token, weight) in enumerate(zip(tokens, weights, strict=True)):
-        word_start = start + (end - start) * cursor / total; cursor += weight; word_end = start + (end - start) * cursor / total
+        word_start = start + (end - start) * cursor / total
+        cursor += weight
+        word_end = start + (end - start) * cursor / total
 
         if word_end <= word_start + 0.019: word_end = min(total_duration, word_start + 0.02)
 
@@ -417,7 +418,8 @@ def _lyrics_console(*parts: object) -> None:
     try:
         if hasattr(stream, "reconfigure") and getattr(stream, "encoding", "").lower() != "utf-8": stream.reconfigure(encoding="utf-8", errors="replace")
         print(text, file=stream, flush=True)
-    except (OSError, ValueError, UnicodeError): pass
+    except (OSError, ValueError, UnicodeError):
+        pass
 
 
 def _lyrics_language_hint(value: str | None) -> str | None:
@@ -433,7 +435,9 @@ def _print_full_lyrics(source: str, text: str, query: str | None) -> None:
         f"lines={line_count} chars={len(text)}"
     )
     if env_flag("KARAOKE_LYRICS_LOG_TEXT"):
-        _lyrics_console("[lyrics] FOUND TEXT BEGIN"); _lyrics_console(text); _lyrics_console("[lyrics] FOUND TEXT END")
+        _lyrics_console("[lyrics] FOUND TEXT BEGIN")
+        _lyrics_console(text)
+        _lyrics_console("[lyrics] FOUND TEXT END")
 
 
 class _OutputDirectoryLock(ThreadFileLock):
@@ -442,11 +446,24 @@ class _OutputDirectoryLock(ThreadFileLock):
 
 
 @dataclass(frozen=True)
-class PipelineRequest: source_path: str | Path; output_dir: str | Path; language: str | None = None; lyrics_path: str | Path | None = None; title: str | None = None; progress: ProgressCallback | None = None; cancelled: CancelCallback | None = None; bpm_override: float | None = None; key_override: str | None = None
+class PipelineRequest:
+    source_path: str | Path
+    output_dir: str | Path
+    language: str | None = None
+    lyrics_path: str | Path | None = None
+    title: str | None = None
+    progress: ProgressCallback | None = None
+    cancelled: CancelCallback | None = None
+    bpm_override: float | None = None
+    key_override: str | None = None
 
 
 @dataclass(frozen=True)
-class PipelineResult: output_dir: Path; manifest_path: Path; warnings: tuple[str, ...]; reports: tuple[StageReport, ...]
+class PipelineResult:
+    output_dir: Path
+    manifest_path: Path
+    warnings: tuple[str, ...]
+    reports: tuple[StageReport, ...]
 
 
 class KaraokePipeline:
@@ -457,7 +474,8 @@ class KaraokePipeline:
         config: CoreConfig | None = None,
         engines: EngineRegistry | None = None,
     ):
-        self.config = config or CoreConfig.from_env(); self.engines = engines or EngineRegistry.create_default(self.config)
+        self.config = config or CoreConfig.from_env()
+        self.engines = engines or EngineRegistry.create_default(self.config)
 
     def close(self) -> None:
         if (close := getattr(self.engines.separator, "close", None)) is not None: close()
@@ -472,7 +490,10 @@ class KaraokePipeline:
         output: Path, lyrics_txt: Path, words_path: Path, text: str, words: list[Word]
     ) -> None:
         with tempfile.TemporaryDirectory(prefix="karaoke-text-", dir=output) as temp_dir:
-            root = Path(temp_dir); temp_text = root / "lyrics.txt"; temp_words = root / "lyricsSync.json"; write_text_atomic(temp_text, text.strip() + "\n")
+            root = Path(temp_dir)
+            temp_text = root / "lyrics.txt"
+            temp_words = root / "lyricsSync.json"
+            write_text_atomic(temp_text, text.strip() + "\n")
             write_json_atomic(
                 temp_words,
                 {"text": text, "words": [to_dict(word) for word in words]},
@@ -494,13 +515,16 @@ class KaraokePipeline:
         bend_range: int,
     ) -> None:
         with tempfile.TemporaryDirectory(prefix="karaoke-midi-", dir=output) as temp_dir:
-            root = Path(temp_dir); temp_vocal = root / "vocal.mid"; temp_game = root / "game.mid"
+            root = Path(temp_dir)
+            temp_vocal = root / "vocal.mid"
+            temp_game = root / "game.mid"
             write_midi(temp_vocal, vocal_notes, words,
                        syllables, bpm, True, bend_range)
             write_midi(
                 temp_game, game_notes or vocal_notes, words, syllables, bpm, False, bend_range
             )
-            validate_midi(temp_vocal); validate_midi(temp_game)
+            validate_midi(temp_vocal)
+            validate_midi(temp_game)
             publish_files_atomically(
                 [(temp_vocal, vocal_midi), (temp_game, game_midi)])
 
@@ -509,6 +533,37 @@ class KaraokePipeline:
     ) -> bool:
         if not self.config.validate_cached_artifacts: validators = None
         return cache.hit(stage, key, outputs, validators=validators)
+
+
+    def _cached_stage(
+        self,
+        cache: StageCache,
+        reports: list[StageReport],
+        stage: str,
+        key: str,
+        outputs: list[Path],
+        validators=None,
+        *,
+        details: str = "cached",
+    ) -> bool:
+        if not self._cache_hit(cache, stage, key, outputs, validators):
+            return False
+        self._report(reports, stage, details, cached=True)
+        return True
+
+    def _complete_stage(
+        self,
+        cache: StageCache,
+        reports: list[StageReport],
+        stage: str,
+        key: str,
+        outputs: list[Path],
+        details: str,
+        *,
+        started=None,
+    ) -> None:
+        cache.commit(stage, key, outputs)
+        self._report(reports, stage, details, started=started)
 
     def _restore_optimized_separation_cache(
         self,
@@ -520,11 +575,13 @@ class KaraokePipeline:
     ) -> bool:
         key_matches = getattr(cache, "key_matches", None)
         if key_matches is None or not key_matches("separation", key): return False
-        manifest = read_json(output / "manifest.json", {}) or {}; outputs, integrity = manifest.get('outputs') if isinstance(manifest, dict) else None, manifest.get('integrity') if isinstance(manifest, dict) else None
+        manifest = read_json(output / "manifest.json", {}) or {}
+        outputs, integrity = manifest.get('outputs') if isinstance(manifest, dict) else None, manifest.get('integrity') if isinstance(manifest, dict) else None
         if not isinstance(outputs, dict) or not isinstance(integrity, dict): return False
         sources: list[tuple[Path, Path]] = []
         for logical, target in (("vocals", vocals), ("instrumental", instrumental)):
-            relative = outputs.get(logical); expected = integrity.get(logical)
+            relative = outputs.get(logical)
+            expected = integrity.get(logical)
             if not isinstance(relative, str) or not isinstance(expected, dict): return False
             source = output / relative
             if source.suffix.lower() != ".flac" or not source.is_file(): return False
@@ -533,12 +590,18 @@ class KaraokePipeline:
             sources.append((source, target))
         try:
             with tempfile.TemporaryDirectory(prefix="karaoke-stem-restore-", dir=output) as temp_dir:
-                root = Path(temp_dir); publications = []
+                root = Path(temp_dir)
+                publications = []
                 for source, target in sources:
-                    temporary = root / target.name; decode_audio(source, temporary, self.config.sample_rate); validate_audio(temporary); publications.append((temporary, target))
+                    temporary = root / target.name
+                    decode_audio(source, temporary, self.config.sample_rate)
+                    validate_audio(temporary)
+                    publications.append((temporary, target))
                 publish_files_atomically(publications)
-            cache.commit("separation", key, [vocals, instrumental]); return True
-        except (OSError, RuntimeError, ValueError): return False
+            cache.commit("separation", key, [vocals, instrumental])
+            return True
+        except (OSError, RuntimeError, ValueError):
+            return False
 
     def _notify(self, request: PipelineRequest, stage: str, progress: float, message: str):
         if request.cancelled and request.cancelled(): raise ProcessingCancelledError("AI processing was cancelled")
@@ -553,7 +616,8 @@ class KaraokePipeline:
     def _run(self, name, engine, function, reports, warnings):
         started = time.perf_counter()
         try:
-            result = function(engine); used = engine.name
+            result = function(engine)
+            used = engine.name
         except EngineUnavailableError as exc:
             if not self.config.allow_fallback: raise
             warnings.append(str(exc))
@@ -568,11 +632,15 @@ class KaraokePipeline:
                 "transcription": UniformTextFallback(),
                 "alignment": UniformTextFallback(),
             }
-            fallback = fallbacks[name]; result = function(fallback); used = fallback.name
-        self._report(reports, name, used, started=started); return result
+            fallback = fallbacks[name]
+            result = function(fallback)
+            used = fallback.name
+        self._report(reports, name, used, started=started)
+        return result
 
     def run(self, request: PipelineRequest) -> PipelineResult:
-        output = Path(request.output_dir).resolve(); output.mkdir(parents=True, exist_ok=True)
+        output = Path(request.output_dir).resolve()
+        output.mkdir(parents=True, exist_ok=True)
         with ThreadFileLock(output / ".pipeline.lock", timeout_sec=PIPELINE_LOCK_TIMEOUT_SECONDS): return self._run_unlocked(request)
 
     def _run_unlocked(self, request: PipelineRequest) -> PipelineResult:
@@ -582,7 +650,8 @@ class KaraokePipeline:
     def _run_profiled(
         self, request: PipelineRequest, telemetry: RuntimeTelemetry
     ) -> PipelineResult:
-        source, output = Path(request.source_path).resolve(), Path(request.output_dir).resolve(); output.mkdir(parents=True, exist_ok=True)
+        source, output = Path(request.source_path).resolve(), Path(request.output_dir).resolve()
+        output.mkdir(parents=True, exist_ok=True)
         if not source.is_file(): raise FileNotFoundError(source)
         protected_outputs = {
             (output / "song.wav").resolve(),
@@ -593,26 +662,44 @@ class KaraokePipeline:
             raise ValueError(
                 "source_path cannot point to a pipeline-generated audio artifact")
 
-        cache = StageCache(output / ".ai-cache"); reports: list[StageReport] = []; alignment_debug_raw: dict[str, object] = {}; warnings: list[str] = []
-        source_hash, song_wav, vocals, instrumental = cache.file_hash(source), output / 'song.wav', output / 'separated' / 'vocals.wav', output / 'separated' / 'instrumental.wav'; vocals.parent.mkdir(exist_ok=True)
+        cache = StageCache(output / ".ai-cache")
+        reports: list[StageReport] = []
+        alignment_debug_raw: dict[str, object] = {}
+        warnings: list[str] = []
+        source_hash, song_wav, vocals, instrumental = cache.file_hash(source), output / 'song.wav', output / 'separated' / 'vocals.wav', output / 'separated' / 'instrumental.wav'
+        vocals.parent.mkdir(exist_ok=True)
 
         self._notify(request, "decode", 2, "Подготовка аудио")
         decode_key = cache.key(
             "decode", {"source": source_hash, "sr": self.config.sample_rate})
-        if self._cache_hit(cache, "decode", decode_key, [song_wav], {song_wav: validate_audio}):
-            self._report(reports, "decode", "ffmpeg", cached=True)
+        if self._cached_stage(
+            cache,
+            reports,
+            "decode",
+            decode_key,
+            [song_wav],
+            {song_wav: validate_audio},
+            details="ffmpeg",
+        ):
+            pass
         else:
             started = time.perf_counter()
             with tempfile.TemporaryDirectory(prefix="karaoke-decode-", dir=output) as temp_dir:
-                temporary_song = Path(temp_dir) / "song.wav"; decode_audio(source, temporary_song, self.config.sample_rate); validate_audio(temporary_song)
+                temporary_song = Path(temp_dir) / "song.wav"
+                decode_audio(source, temporary_song, self.config.sample_rate)
+                validate_audio(temporary_song)
                 if cache.file_hash(source) != source_hash:
                     raise RuntimeError(
                         "Source audio changed during decoding; retry with a stable file"
                     )
                 publish_files_atomically([(temporary_song, song_wav)])
-            cache.commit("decode", decode_key, [song_wav]); self._report(reports, "decode", "ffmpeg", started=started)
+            self._complete_stage(
+                cache, reports, "decode", decode_key, [song_wav], "ffmpeg", started=started
+            )
 
-        song_duration, supplied = duration(song_wav), ''; supplied_segments: tuple[tuple[float, float, str], ...] = (); effective_language, asr_language, lyrics_source, lyrics_query = request.language, request.language or _lyrics_language_hint(request.title), None, request.title
+        song_duration, supplied = duration(song_wav), ''
+        supplied_segments: tuple[tuple[float, float, str], ...] = ()
+        effective_language, asr_language, lyrics_source, lyrics_query = request.language, request.language or _lyrics_language_hint(request.title), None, request.title
         if request.lyrics_path and Path(request.lyrics_path).exists():
             supplied = Path(request.lyrics_path).read_text(
                 encoding="utf-8-sig").strip()
@@ -623,7 +710,10 @@ class KaraokePipeline:
                 title=request.title,
                 duration_sec=song_duration,
             )
-            supplied = discovery.text; supplied_segments = discovery.segments; lyrics_source = discovery.source; lyrics_query = discovery.query or request.title
+            supplied = discovery.text
+            supplied_segments = discovery.segments
+            lyrics_source = discovery.source
+            lyrics_query = discovery.query or request.title
             if supplied:
                 warnings.append(
                     f"Using trusted {lyrics_source} lyrics instead of ASR")
@@ -670,7 +760,8 @@ class KaraokePipeline:
             self._report(reports, "separation", "cached", cached=True)
         else:
             with tempfile.TemporaryDirectory(prefix="karaoke-stems-", dir=output) as temp_dir:
-                temporary_vocals = Path(temp_dir) / "vocals.wav"; temporary_instrumental = Path(temp_dir) / "instrumental.wav"
+                temporary_vocals = Path(temp_dir) / "vocals.wav"
+                temporary_instrumental = Path(temp_dir) / "instrumental.wav"
                 self._run(
                     "separation",
                     self.engines.separator,
@@ -680,7 +771,8 @@ class KaraokePipeline:
                     reports,
                     warnings,
                 )
-                validate_audio(temporary_vocals); validate_audio(temporary_instrumental)
+                validate_audio(temporary_vocals)
+                validate_audio(temporary_instrumental)
                 publish_files_atomically(
                     [
                         (temporary_vocals, vocals),
@@ -691,7 +783,8 @@ class KaraokePipeline:
 
         vocal_fingerprint, instrumental_fingerprint = vocals, instrumental
 
-        self._notify(request, "tempo", 48, "Анализ темпа"); music_path, tempo_key = output / 'music.json', cache.key('tempo', {'instrumental': cache.file_hash(instrumental_fingerprint), 'engine': MUSIC_ANALYZER_VERSION, 'bpm_override': request.bpm_override, 'key_override': request.key_override})
+        self._notify(request, "tempo", 48, "Анализ темпа")
+        music_path, tempo_key = output / 'music.json', cache.key('tempo', {'instrumental': cache.file_hash(instrumental_fingerprint), 'engine': MUSIC_ANALYZER_VERSION, 'bpm_override': request.bpm_override, 'key_override': request.key_override})
         if request.bpm_override is not None:
             override_bpm = float(request.bpm_override)
             if not 20.0 <= override_bpm <= 300.0:
@@ -702,11 +795,11 @@ class KaraokePipeline:
         override_key = str(request.key_override).strip(
         ) if request.key_override is not None else ""
 
-        if self._cache_hit(
-            cache, "tempo", tempo_key, [music_path], {
-                music_path: validate_music_json}
+        if self._cached_stage(
+            cache, reports, "tempo", tempo_key, [music_path], {music_path: validate_music_json}
         ):
-            music_analysis = read_json(music_path, {}); bpm = int(round(float(music_analysis.get("bpm") or 120.0))); self._report(reports, "tempo", "cached", cached=True)
+            music_analysis = read_json(music_path, {})
+            bpm = int(round(float(music_analysis.get("bpm") or 120.0)))
         else:
             started = time.perf_counter()
             music_analysis = (
@@ -722,21 +815,33 @@ class KaraokePipeline:
                 else analyze_music(instrumental)
             )
             if override_bpm is not None:
-                music_analysis["bpm"] = int(round(override_bpm)); music_analysis["tempo_confidence"] = 1.0; music_analysis["tempo_source"] = "override"
+                music_analysis["bpm"] = int(round(override_bpm))
+                music_analysis["tempo_confidence"] = 1.0
+                music_analysis["tempo_source"] = "override"
             if override_key:
-                music_analysis["key"] = override_key; music_analysis["key_confidence"] = 1.0; music_analysis["key_source"] = "override"
-            bpm = int(round(float(music_analysis.get("bpm") or 120.0))); music_analysis["bpm"] = bpm; write_json_atomic(music_path, music_analysis); cache.commit("tempo", tempo_key, [music_path])
-            self._report(
-                reports, "tempo",
+                music_analysis["key"] = override_key
+                music_analysis["key_confidence"] = 1.0
+                music_analysis["key_source"] = "override"
+            bpm = int(round(float(music_analysis.get("bpm") or 120.0)))
+            music_analysis["bpm"] = bpm
+            write_json_atomic(music_path, music_analysis)
+            self._complete_stage(
+                cache,
+                reports,
+                "tempo",
+                tempo_key,
+                [music_path],
                 "override" if override_bpm is not None or override_key else "librosa-beat",
                 started=started,
             )
 
         self._notify(request, "pitch", 52,
                      "Очистка вокала и определение мелодии")
-        pitch_raw_path, pitch_path, midi_analysis_vocal, midi_tail_vocal = output / 'pitchRaw.json', output / 'pitch.json', output / 'separated' / 'vocals.midi-analysis.wav', output / 'separated' / 'vocals.midi-analysis-tail.wav'; cleanup_outputs, cleanup_key = [midi_analysis_vocal, midi_tail_vocal], cache.key('midi-vocal-cleanup', {'vocals': cache.file_hash(vocal_fingerprint), 'algorithm': VOCAL_ANALYSIS_PREPROCESS_VERSION, 'code': cache.optional_file_hash(Path(__file__).with_name('vocal_preprocess.py'))})
-        if not self._cache_hit(
+        pitch_raw_path, pitch_path, midi_analysis_vocal, midi_tail_vocal = output / 'pitchRaw.json', output / 'pitch.json', output / 'separated' / 'vocals.midi-analysis.wav', output / 'separated' / 'vocals.midi-analysis-tail.wav'
+        cleanup_outputs, cleanup_key = [midi_analysis_vocal, midi_tail_vocal], cache.key('midi-vocal-cleanup', {'vocals': cache.file_hash(vocal_fingerprint), 'algorithm': VOCAL_ANALYSIS_PREPROCESS_VERSION, 'code': cache.optional_file_hash(Path(__file__).with_name('vocal_preprocess.py'))})
+        if not self._cached_stage(
             cache,
+            reports,
             "midi-vocal-cleanup",
             cleanup_key,
             cleanup_outputs,
@@ -746,27 +851,36 @@ class KaraokePipeline:
             prepare_midi_analysis_variants(
                 vocals, midi_analysis_vocal, midi_tail_vocal)
             for path in cleanup_outputs: validate_audio(path)
-            cache.commit("midi-vocal-cleanup", cleanup_key, cleanup_outputs)
-            self._report(
-                reports, "midi-vocal-cleanup", VOCAL_ANALYSIS_PREPROCESS_VERSION,
+            self._complete_stage(
+                cache,
+                reports,
+                "midi-vocal-cleanup",
+                cleanup_key,
+                cleanup_outputs,
+                VOCAL_ANALYSIS_PREPROCESS_VERSION,
                 started=started_cleanup,
             )
-        else:
-            self._report(reports, "midi-vocal-cleanup", "cached", cached=True)
 
-        primary_melody = getattr(self.engines, "melody", None); pitch_key, pitch_outputs = cache.key('pitch', {'song': cache.file_hash(song_wav), 'vocals': cache.file_hash(vocal_fingerprint), 'cleanup': VOCAL_ANALYSIS_PREPROCESS_VERSION, 'primary_engine': getattr(primary_melody, 'name', None), 'primary_config': getattr(primary_melody, 'fingerprint', lambda: {})(), 'primary_postprocess': 'native-contour-v1', 'fallback_engine': self.engines.pitch.name, 'fallback_config': getattr(self.engines.pitch, 'fingerprint', lambda: {})(), 'hop': self.config.hop_seconds, 'fmin': self.config.fmin_hz, 'fmax': self.config.fmax_hz, 'postprocessor': PITCH_STABILIZER_VERSION, 'primary_code': cache.optional_file_hash(Path(__file__).parent / 'engines' / 'omnizart_pitch.py'), 'pitch_post_code': cache.optional_file_hash(Path(__file__).with_name('pitch_post.py'))}), [pitch_raw_path, pitch_path] if self.config.preserve_raw_pitch else [pitch_path]; pitch_validators, pitch_analysis_source, original_quality, cleaned_quality, tail_quality = {path: validate_pitch_json for path in pitch_outputs}, 'cached', None, None, None
+        primary_melody = getattr(self.engines, "melody", None)
+        pitch_key, pitch_outputs = cache.key('pitch', {'song': cache.file_hash(song_wav), 'vocals': cache.file_hash(vocal_fingerprint), 'cleanup': VOCAL_ANALYSIS_PREPROCESS_VERSION, 'primary_engine': getattr(primary_melody, 'name', None), 'primary_config': getattr(primary_melody, 'fingerprint', lambda: {})(), 'primary_postprocess': 'native-contour-v1', 'fallback_engine': self.engines.pitch.name, 'fallback_config': getattr(self.engines.pitch, 'fingerprint', lambda: {})(), 'hop': self.config.hop_seconds, 'fmin': self.config.fmin_hz, 'fmax': self.config.fmax_hz, 'postprocessor': PITCH_STABILIZER_VERSION, 'primary_code': cache.optional_file_hash(Path(__file__).parent / 'engines' / 'omnizart_pitch.py'), 'pitch_post_code': cache.optional_file_hash(Path(__file__).with_name('pitch_post.py'))}), [pitch_raw_path, pitch_path] if self.config.preserve_raw_pitch else [pitch_path]
+        pitch_validators, pitch_analysis_source, original_quality, cleaned_quality, tail_quality = {path: validate_pitch_json for path in pitch_outputs}, 'cached', None, None, None
         if self._cache_hit(cache, "pitch", pitch_key, pitch_outputs, pitch_validators):
-            pitch = [PitchFrame(**item) for item in read_json(pitch_path, [])]; self._report(reports, "pitch", "cached", cached=True)
+            pitch = [PitchFrame(**item) for item in read_json(pitch_path, [])]
+            self._report(reports, "pitch", "cached", cached=True)
         else:
-            raw_pitch = None; stabilization_input = None
+            raw_pitch = None
+            stabilization_input = None
             if primary_melody is not None:
                 started_primary = time.perf_counter()
                 try:
-                    candidate = primary_melody.estimate(song_wav); validate_pitch(candidate)
+                    candidate = primary_melody.estimate(song_wav)
+                    validate_pitch(candidate)
                     if not any(frame.voiced for frame in candidate):
                         raise EngineUnavailableError(
                             "Omnizart Patch-CNN returned no voiced frames")
-                    raw_pitch = list(candidate); stabilization_input = raw_pitch; pitch_analysis_source = "omnizart-full-mix"
+                    raw_pitch = list(candidate)
+                    stabilization_input = raw_pitch
+                    pitch_analysis_source = "omnizart-full-mix"
                     self._report(
                         reports, "pitch-primary", primary_melody.name, started=started_primary
                     )
@@ -802,13 +916,17 @@ class KaraokePipeline:
                 qualities = {
                     name: score_pitch_track(list(value)) for name, value in pitch_candidates.items()
                 }
-                original_quality = qualities["original"]; cleaned_quality = qualities["denoise"]; tail_quality = qualities["tail-suppressed"]; pitch_analysis_source = choose_best_pitch_track(qualities)
+                original_quality = qualities["original"]
+                cleaned_quality = qualities["denoise"]
+                tail_quality = qualities["tail-suppressed"]
+                pitch_analysis_source = choose_best_pitch_track(qualities)
                 pitch_audio_by_source = {
                     "original": vocals,
                     "denoise": midi_analysis_vocal,
                     "tail-suppressed": midi_tail_vocal,
                 }
-                pitch_analysis_audio = pitch_audio_by_source[pitch_analysis_source]; raw_pitch = list(pitch_candidates[pitch_analysis_source])
+                pitch_analysis_audio = pitch_audio_by_source[pitch_analysis_source]
+                raw_pitch = list(pitch_candidates[pitch_analysis_source])
                 self._report(
                     reports, "pitch-source-selection",
                     " ".join(f"{name}={quality.score:.4f}" for name, quality in qualities.items())
@@ -833,14 +951,16 @@ class KaraokePipeline:
                 if pitch_analysis_source == "omnizart-full-mix"
                 else stabilize_pitch(stabilization_input or raw_pitch)
             )
-            validate_pitch(pitch); pitch_outputs = [pitch_path]
+            validate_pitch(pitch)
+            pitch_outputs = [pitch_path]
             if self.config.preserve_raw_pitch:
                 write_json_atomic(
                     pitch_raw_path, [to_dict(frame) for frame in raw_pitch])
                 pitch_outputs.insert(0, pitch_raw_path)
             else:
                 self._remove_stale(pitch_raw_path)
-            write_json_atomic(pitch_path, [to_dict(frame) for frame in pitch]); cache.commit("pitch", pitch_key, pitch_outputs)
+            write_json_atomic(pitch_path, [to_dict(frame) for frame in pitch])
+            cache.commit("pitch", pitch_key, pitch_outputs)
         validate_within_duration(pitch, song_duration,
                                  "pitch", self.config.hop_seconds * 2)
 
@@ -900,7 +1020,7 @@ class KaraokePipeline:
                     cached_text = supplied
                 self._publish_text_alignment(
                     output, lyrics_txt, words_path, cached_text, words)
-                cache.commit("alignment", alignment_key, alignment_outputs); self._report(reports, "alignment", "cached", cached=True)
+                cache.commit("alignment", alignment_key, alignment_outputs)
             else:
                 if (
                     not supplied_segments
@@ -908,7 +1028,8 @@ class KaraokePipeline:
                     and callable(getattr(self.engines.transcriber, "transcribe", None))
                     and callable(getattr(self.engines.aligner, "set_global_asr_segments", None))
                 ):
-                    started_anchor = time.perf_counter(); anchor_segments = []
+                    started_anchor = time.perf_counter()
+                    anchor_segments = []
                     try:
                         if hasattr(self.engines.transcriber, "set_pitch_activity"): self.engines.transcriber.set_pitch_activity(pitch)
                         self.engines.transcriber.transcribe(
@@ -917,7 +1038,8 @@ class KaraokePipeline:
                             getattr(self.engines.transcriber,
                                     "last_segments", None) or []
                         )
-                    except (EngineUnavailableError, RuntimeError, ValueError) as exc: warnings.append(f"ASR anchor pass unavailable: {exc}")
+                    except (EngineUnavailableError, RuntimeError, ValueError) as exc:
+                        warnings.append(f"ASR anchor pass unavailable: {exc}")
                     finally:
                         release = getattr(
                             self.engines.transcriber, "release", None)
@@ -984,7 +1106,8 @@ class KaraokePipeline:
                         word_sources,
                         word_candidates,
                     )
-                    alignment_debug_raw["word_sources"] = word_sources; publish_text = supplied
+                    alignment_debug_raw["word_sources"] = word_sources
+                    publish_text = supplied
                 validate_timeline(words, "words")
                 self._publish_text_alignment(
                     output, lyrics_txt, words_path, publish_text, words)
@@ -1018,7 +1141,6 @@ class KaraokePipeline:
                     output, lyrics_txt, words_path, text, words)
                 cache.commit("transcription", transcription_key,
                              [lyrics_txt, words_path])
-                self._report(reports, "transcription", "cached", cached=True)
             else:
                 if hasattr(self.engines.transcriber, "set_pitch_activity"): self.engines.transcriber.set_pitch_activity(pitch)
                 text, words = self._run(
@@ -1050,7 +1172,8 @@ class KaraokePipeline:
                         reports,
                         warnings,
                     )
-                words = _bound_word_durations(words); validate_timeline(words, "words")
+                words = _bound_word_durations(words)
+                validate_timeline(words, "words")
                 self._publish_text_alignment(
                     output, lyrics_txt, words_path, text, words)
                 cache.commit("transcription", transcription_key,
@@ -1060,9 +1183,12 @@ class KaraokePipeline:
 
         validate_within_duration(words, song_duration, "words", 0.5)
 
-        self._notify(request, "syllables", 82, "Разметка слогов и нот"); syllable_path, reference, contour, notes_path, derivation_key = output / 'syllables.json', output / 'reference.json', output / 'melodyContour.json', output / 'acousticNotes.json', cache.key('derivation', {'pitch': cache.file_hash(pitch_path), 'words': cache.file_hash(words_path), 'min_note': self.config.min_note_sec, 'confidence': self.config.min_voiced_confidence, 'split': self.config.split_note_semitones, 'gap': self.config.max_gap_sec, 'decoder': NOTE_DECODER_VERSION, 'decoder_code': cache.optional_file_hash(Path(__file__).with_name('notes.py')), 'pipeline_code': cache.optional_file_hash(Path(__file__)), 'build': AI_BUILD_ID, 'syllable_aligner': SYLLABLE_ALIGNER_VERSION, 'trusted_activity_segments': supplied_segments}); note_diagnostics: dict[str, object] = {}; derivation_outputs, derivation_validators = [syllable_path, reference, contour, notes_path], {syllable_path: lambda path: validate_derivation_json(path, 'syllables'), reference: lambda path: validate_derivation_json(path, 'notes'), contour: lambda path: validate_derivation_json(path, 'frames'), notes_path: lambda path: validate_derivation_json(path, 'notes')}
-        if self._cache_hit(
-            cache, "derivation", derivation_key, derivation_outputs, derivation_validators
+        self._notify(request, "syllables", 82, "Разметка слогов и нот")
+        syllable_path, reference, contour, notes_path, derivation_key = output / 'syllables.json', output / 'reference.json', output / 'melodyContour.json', output / 'acousticNotes.json', cache.key('derivation', {'pitch': cache.file_hash(pitch_path), 'words': cache.file_hash(words_path), 'min_note': self.config.min_note_sec, 'confidence': self.config.min_voiced_confidence, 'split': self.config.split_note_semitones, 'gap': self.config.max_gap_sec, 'decoder': NOTE_DECODER_VERSION, 'decoder_code': cache.optional_file_hash(Path(__file__).with_name('notes.py')), 'pipeline_code': cache.optional_file_hash(Path(__file__)), 'build': AI_BUILD_ID, 'syllable_aligner': SYLLABLE_ALIGNER_VERSION, 'trusted_activity_segments': supplied_segments})
+        note_diagnostics: dict[str, object] = {}
+        derivation_outputs, derivation_validators = [syllable_path, reference, contour, notes_path], {syllable_path: lambda path: validate_derivation_json(path, 'syllables'), reference: lambda path: validate_derivation_json(path, 'notes'), contour: lambda path: validate_derivation_json(path, 'frames'), notes_path: lambda path: validate_derivation_json(path, 'notes')}
+        if self._cached_stage(
+            cache, reports, "derivation", derivation_key, derivation_outputs, derivation_validators
         ):
             syllables = [
                 Syllable(**item) for item in read_json(syllable_path, {}).get("syllables", [])
@@ -1071,9 +1197,9 @@ class KaraokePipeline:
                           for item in read_json(reference, {}).get("notes", [])]
             vocal_notes = [
                 VocalNote(**item) for item in read_json(notes_path, {}).get("notes", [])]
-            self._report(reports, "derivation", "cached", cached=True)
         else:
-            started = time.perf_counter(); syllables = align_syllables(words, pitch)
+            started = time.perf_counter()
+            syllables = align_syllables(words, pitch)
             vocal_notes = build_vocal_notes(
                 pitch,
                 syllables,
@@ -1090,7 +1216,9 @@ class KaraokePipeline:
             note_diagnostics = get_note_diagnostics()
             game_notes = build_game_notes(
                 vocal_notes, syllables, min_note=self.config.min_note_sec)
-            validate_timeline(words, "words"); validate_timeline(syllables, "syllables"); validate_timeline(vocal_notes, "vocal notes")
+            validate_timeline(words, "words")
+            validate_timeline(syllables, "syllables")
+            validate_timeline(vocal_notes, "vocal notes")
             write_json_atomic(syllable_path, {"syllables": [
                               to_dict(item) for item in syllables]})
             write_json_atomic(
@@ -1099,21 +1227,31 @@ class KaraokePipeline:
                 contour, {"frames": [to_dict(item) for item in pitch]})
             write_json_atomic(
                 notes_path, {"notes": [to_dict(item) for item in vocal_notes]})
-            cache.commit("derivation", derivation_key, derivation_outputs); self._report(reports, "derivation", "word-aware", started=started)
+            self._complete_stage(
+                cache,
+                reports,
+                "derivation",
+                derivation_key,
+                derivation_outputs,
+                "word-aware",
+                started=started,
+            )
         validate_within_duration(syllables, song_duration, "syllables", 0.5)
         validate_within_duration(
             vocal_notes, song_duration, "vocal notes", 0.1)
         validate_within_duration(game_notes, song_duration, "game notes", 0.1)
 
-        self._notify(request, "midi", 90, "Создание MIDI"); vocal_midi, game_midi, midi_key = output / 'vocal.mid', output / 'game.mid', cache.key('midi', {'derivation': derivation_key, 'bpm': round(bpm, 4), 'bend': self.config.midi_bend_range})
-        if vocal_notes and self._cache_hit(
+        self._notify(request, "midi", 90, "Создание MIDI")
+        vocal_midi, game_midi, midi_key = output / 'vocal.mid', output / 'game.mid', cache.key('midi', {'derivation': derivation_key, 'bpm': round(bpm, 4), 'bend': self.config.midi_bend_range})
+        if vocal_notes and self._cached_stage(
             cache,
+            reports,
             "midi",
             midi_key,
             [vocal_midi, game_midi],
             {vocal_midi: validate_midi, game_midi: validate_midi},
         ):
-            self._report(reports, "midi", "cached", cached=True)
+            pass
         elif vocal_notes:
             started = time.perf_counter()
             self._publish_midi_pair(
@@ -1127,13 +1265,24 @@ class KaraokePipeline:
                 bpm,
                 self.config.midi_bend_range,
             )
-            cache.commit("midi", midi_key, [vocal_midi, game_midi]); self._report(reports, "midi", "word-syllable-aware", started=started)
+            self._complete_stage(
+                cache,
+                reports,
+                "midi",
+                midi_key,
+                [vocal_midi, game_midi],
+                "word-syllable-aware",
+                started=started,
+            )
         else:
-            self._remove_stale(vocal_midi, game_midi); cache.invalidate("midi"); warnings.append("No voiced notes detected; MIDI was not generated")
+            self._remove_stale(vocal_midi, game_midi)
+            cache.invalidate("midi")
+            warnings.append("No voiced notes detected; MIDI was not generated")
 
         canonical_lyrics_text, song_map, song_map_key = lyrics_txt.read_text(encoding='utf-8') if lyrics_txt.exists() else str(supplied or ''), output / 'songMap.json', cache.key('song-map', {'derivation': derivation_key, 'duration': song_duration, 'bpm': round(bpm, 6), 'key': music_analysis.get('key'), 'tempo': tempo_key, 'build': AI_BUILD_ID, 'timeline_builder': KARAOKE_TIMELINE_VERSION})
-        if self._cache_hit(
+        if self._cached_stage(
             cache,
+            reports,
             "song-map",
             song_map_key,
             [song_map],
@@ -1143,7 +1292,7 @@ class KaraokePipeline:
                 )
             },
         ):
-            self._report(reports, "song-map", "cached", cached=True)
+            pass
         else:
             write_json_atomic(
                 song_map,
@@ -1159,7 +1308,9 @@ class KaraokePipeline:
                     note_decoder_version=NOTE_DECODER_VERSION,
                 ),
             )
-            cache.commit("song-map", song_map_key, [song_map]); self._remove_stale(output / "songMap.ai.json"); self._report(reports, "song-map", "builder")
+            cache.commit("song-map", song_map_key, [song_map])
+            self._remove_stale(output / "songMap.ai.json")
+            self._report(reports, "song-map", "builder")
 
         quality_path, quality = output / 'quality.json', evaluate_quality(song_duration, pitch, words, syllables, vocal_notes)
         if self.config.write_quality_report:
@@ -1174,7 +1325,8 @@ class KaraokePipeline:
                 vocals, instrumental, midi_analysis_vocal, midi_tail_vocal
             )
         except (OSError, RuntimeError, ValueError) as exc:
-            vocal_effect_diagnostics = {"available": False, "reason": str(exc)}; warnings.append(f"Vocal residual diagnostics unavailable: {exc}")
+            vocal_effect_diagnostics = {"available": False, "reason": str(exc)}
+            warnings.append(f"Vocal residual diagnostics unavailable: {exc}")
         alignment_debug = build_alignment_debug(
             lyrics_text=lyrics_txt.read_text(
                 encoding="utf-8") if lyrics_txt.exists() else "",
@@ -1203,7 +1355,9 @@ class KaraokePipeline:
         )
         write_json_atomic(alignment_debug_path, alignment_debug)
 
-        runtime_performance, performance_path = telemetry.result(reports), output / 'performance.json'; write_json_atomic(performance_path, runtime_performance); diagnostics_path = output / "diagnostics.json"
+        runtime_performance, performance_path = telemetry.result(reports), output / 'performance.json'
+        write_json_atomic(performance_path, runtime_performance)
+        diagnostics_path = output / "diagnostics.json"
         write_json_atomic(
             diagnostics_path,
             {
@@ -1284,7 +1438,8 @@ class KaraokePipeline:
         if self.config.write_quality_report and quality_path.exists(): outputs["quality"] = "quality.json"
         if vocal_midi.exists() and game_midi.exists(): outputs.update({"vocalMidi": "vocal.mid", "gameMidi": "game.mid"})
 
-        self._notify(request, "manifest", 98, "Проверка результата"); integrity: dict[str, dict[str, object]] = {}
+        self._notify(request, "manifest", 98, "Проверка результата")
+        integrity: dict[str, dict[str, object]] = {}
         for name, relative in outputs.items():
             artifact = output / relative
             if not artifact.is_file():
@@ -1294,5 +1449,8 @@ class KaraokePipeline:
                 "size": artifact.stat().st_size,
                 "sha256": cache.file_hash(artifact),
             }
-        manifest, manifest_path = PipelineManifest(self.VERSION, str(source), outputs, [to_dict(report) for report in reports], warnings, title=request.title, language=effective_language or request.language, integrity=integrity), output / 'manifest.json'; write_json_atomic(manifest_path, to_dict(manifest)); validate_json(manifest_path, ("version", "outputs")); self._notify(request, "complete", 100, "Готово")
+        manifest, manifest_path = PipelineManifest(self.VERSION, str(source), outputs, [to_dict(report) for report in reports], warnings, title=request.title, language=effective_language or request.language, integrity=integrity), output / 'manifest.json'
+        write_json_atomic(manifest_path, to_dict(manifest))
+        validate_json(manifest_path, ("version", "outputs"))
+        self._notify(request, "complete", 100, "Готово")
         return PipelineResult(output, manifest_path, tuple(warnings), tuple(reports))

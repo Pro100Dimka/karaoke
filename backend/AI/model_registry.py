@@ -8,7 +8,13 @@ ModelKind = Literal["snapshot", "file", "bundle"]
 
 
 @dataclass(frozen=True, slots=True)
-class ModelFile: relative_path: str; url: str; sha256: str | None = None; expected_bytes: int = 0; min_bytes: int = 1; contains: tuple[str, ...] = ()
+class ModelFile:
+    relative_path: str
+    url: str
+    sha256: str | None = None
+    expected_bytes: int = 0
+    min_bytes: int = 1
+    contains: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,7 +33,8 @@ class ModelSpec:
     files: tuple[ModelFile, ...] = ()
 
     @property
-    def local_name(self) -> str: return Path(self.relative_path).name
+    def local_name(self) -> str:
+        return Path(self.relative_path).name
 
 
 def _model(key, name, repo_id, revision, relative_path, env_var, expected_bytes, **extra): return ModelSpec(key, name, repo_id, revision, relative_path, env_var, expected_bytes=expected_bytes, **extra)
@@ -63,4 +70,6 @@ def get_model(key: str) -> ModelSpec: return MODEL_BY_KEY[key]
 def model_directory(models_root: Path, model: ModelSpec) -> Path: return models_root / model.relative_path
 
 
-def model_path(models_root: Path, model: ModelSpec) -> Path: directory = model_directory(models_root, model); return directory / model.filename if model.kind == "file" and model.filename else directory
+def model_path(models_root: Path, model: ModelSpec) -> Path:
+    directory = model_directory(models_root, model)
+    return directory / model.filename if model.kind == "file" and model.filename else directory

@@ -47,7 +47,8 @@ def _processing_status(
     *,
     telemetry: dict[str, object] | None = None,
 ) -> schemas.ProcessingStatusOut:
-    telemetry = telemetry or {}; progress_detail, live_percent, eta_seconds = telemetry.get('progress_detail'), telemetry.get('progress_percent'), telemetry.get('eta_seconds')
+    telemetry = telemetry or {}
+    progress_detail, live_percent, eta_seconds = telemetry.get('progress_detail'), telemetry.get('progress_percent'), telemetry.get('eta_seconds')
     return schemas.ProcessingStatusOut(
         song_id=song.id,
         status=song.status,
@@ -74,20 +75,25 @@ def _queue_song_job(
         commit(db)
 
     for field, value in queued_values.items(): setattr(song, field, value)
-    try: commit(db)
+    try:
+        commit(db)
     except Exception:
         for field, value in previous.items(): setattr(song, field, value)
         raise
 
-    try: started = start_job(song.id)
+    try:
+        started = start_job(song.id)
     except Exception:
-        restore_previous_state(); raise
+        restore_previous_state()
+        raise
     if started: return
-    restore_previous_state(); raise HTTPException(status_code=409, detail="Обработка уже запущена")
+    restore_previous_state()
+    raise HTTPException(status_code=409, detail="Обработка уже запущена")
 
 
 def _touch_song(db: Session, song: models.Song, *, refresh: bool) -> None:
-    song.updated_at = datetime.now(UTC); db.add(song)
+    song.updated_at = datetime.now(UTC)
+    db.add(song)
     if refresh:
         commit_refresh(db, song)
     else:
@@ -125,22 +131,28 @@ async def add_song(
             file.filename or "song",
             temporary_path,
         )
-    except HTTPException: raise
-    except ValueError as exc: raise HTTPException(status_code=400, detail=str(exc)) from exc
-    finally: temporary_path.unlink(missing_ok=True)
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
 
 @router.get("", response_model=list[schemas.SongOut])
-def get_songs(db: Session = Depends(get_db)): return song_service.list_songs(db)
+def get_songs(db: Session = Depends(get_db)):
+    return song_service.list_songs(db)
 
 
 @router.get("/{song_id}", response_model=schemas.SongOut)
-def get_song(song: SongDependency): return song
+def get_song(song: SongDependency):
+    return song
 
 
 @router.get("/{song_id}/revision")
 def get_song_revision(song_id: str, db: Session = Depends(get_db)):
-    try: revision = song_package_service.content_revision_for_song(db, song_id)
+    try:
+        revision = song_package_service.content_revision_for_song(db, song_id)
     except (OSError, ValueError) as exc:
         detail = str(exc)
         raise HTTPException(
@@ -195,12 +207,14 @@ async def import_song_package(
             too_large_message="Song package is too large",
         )
         return song_package_service.import_package(db, temporary_path, expected_revision=expected_revision)
-    except HTTPException: raise
+    except HTTPException:
+        raise
     except (OSError, ValueError, zipfile.BadZipFile) as exc:
         raise HTTPException(
             status_code=400, detail=f"Could not import song package: {exc}"
         ) from exc
-    finally: temporary_path.unlink(missing_ok=True)
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
 
 @router.patch("/{song_id}", response_model=schemas.SongOut)
@@ -215,8 +229,10 @@ def remove_song(song: SongDependency, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=409, detail="Песня сейчас обрабатывается, дождитесь завершения"
         )
-    try: song_service.delete_song(db, song)
-    except (OSError, ValueError) as exc: raise HTTPException(status_code=409, detail=f"Could not delete song files: {exc}") from exc
+    try:
+        song_service.delete_song(db, song)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=f"Could not delete song files: {exc}") from exc
 
 
 @router.post("/{song_id}/process", response_model=schemas.ProcessingStatusOut, status_code=202)
@@ -231,7 +247,8 @@ def process_song(song: SongDependency, db: Session = Depends(get_db)):
         status=models.SongStatus.QUEUED,
         error_message=None,
     )
-    db.refresh(song); return _processing_status(song)
+    db.refresh(song)
+    return _processing_status(song)
 
 
 @router.post("/{song_id}/reprocess", response_model=schemas.ProcessingStatusOut, status_code=202)
@@ -250,21 +267,27 @@ def reprocess_melody(song: SongDependency, db: Session = Depends(get_db)):
         progress_percent=0.0,
         progress_step="0/13",
     )
-    db.refresh(song); return _processing_status(song)
+    db.refresh(song)
+    return _processing_status(song)
 
 
 @router.get("/{song_id}/status", response_model=schemas.ProcessingStatusOut)
-def get_status(song: SongDependency): telemetry = pipeline_service.get_processing_telemetry(song.id); return _processing_status(song, telemetry=telemetry)
+def get_status(song: SongDependency):
+    telemetry = pipeline_service.get_processing_telemetry(song.id)
+    return _processing_status(song, telemetry=telemetry)
 
 
 @router.post("/{song_id}/cancel", response_model=schemas.ProcessingStatusOut)
 def cancel_processing(song: SongDependency, db: Session = Depends(get_db)):
     if not pipeline_service.cancel_processing(song.id): raise HTTPException(status_code=409, detail="Song is not being processed")
-    db.refresh(song); return _processing_status(song)
+    db.refresh(song)
+    return _processing_status(song)
 
 
 @router.get("/{song_id}/log")
-def get_processing_log(song: SongDependency): log_path = song_service.resolve_output_dir(song) / config.LOGS_DIRNAME / "pipeline.log"; return {'lines': []} if not log_path.exists() else {'lines': read_text_tail(log_path)}
+def get_processing_log(song: SongDependency):
+    log_path = song_service.resolve_output_dir(song) / config.LOGS_DIRNAME / "pipeline.log"
+    return {'lines': []} if not log_path.exists() else {'lines': read_text_tail(log_path)}
 
 
 @router.get("/{song_id}/cover")
@@ -274,9 +297,11 @@ def get_song_cover(song: SongDependency):
         path = output_dir / filename
         if path.is_file(): return FileResponse(path, media_type=media_type)
 
-    source = song_service.resolve_source_path(song); recovered = song_service.extract_embedded_cover(source, output_dir) if source.is_file() else None
+    source = song_service.resolve_source_path(song)
+    recovered = song_service.extract_embedded_cover(source, output_dir) if source.is_file() else None
     if recovered is not None:
-        media_type = {".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}[recovered.suffix.lower()]; return FileResponse(recovered, media_type=media_type)
+        media_type = {".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}[recovered.suffix.lower()]
+        return FileResponse(recovered, media_type=media_type)
     raise HTTPException(status_code=404, detail="Song cover not found")
 
 
@@ -317,22 +342,27 @@ def save_song_editor(
             song_service.resolve_output_dir(song), payload.notes
         )
         song_package_service.invalidate_content_revision(song)
-    _touch_song(db, song, refresh=True); return schemas.SongEditorOut(song_map=song_map, ai_backup_exists=True)
+    _touch_song(db, song, refresh=True)
+    return schemas.SongEditorOut(song_map=song_map, ai_backup_exists=True)
 
 
 @router.post("/{song_id}/editor/reset", response_model=schemas.SongEditorOut)
 def reset_song_editor(song: SongDependency, db: Session = Depends(get_db)):
     if song.status != models.SongStatus.DONE: raise HTTPException(status_code=409, detail="Песня ещё не обработана")
     with http_error(ValueError, 409), song_service.song_content_lock(song.id), song_service.library_write_lock():
-        song_map = song_editor_service.reset_editor(song_service.resolve_output_dir(song)); song_package_service.invalidate_content_revision(song)
-    _touch_song(db, song, refresh=False); return schemas.SongEditorOut(song_map=song_map, ai_backup_exists=True)
+        song_map = song_editor_service.reset_editor(song_service.resolve_output_dir(song))
+        song_package_service.invalidate_content_revision(song)
+    _touch_song(db, song, refresh=False)
+    return schemas.SongEditorOut(song_map=song_map, ai_backup_exists=True)
 
 
 @router.get("/{song_id}/result", response_model=schemas.SongResultOut)
 def get_result(song: SongDependency, response: Response):
     if song.status != models.SongStatus.DONE or not song.output_dir: raise HTTPException(status_code=409, detail="Песня ещё не обработана")
 
-    out_dir = song_service.resolve_output_dir(song); response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"; response.headers["Pragma"] = "no-cache"
+    out_dir = song_service.resolve_output_dir(song)
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
     return schemas.SongResultOut(
         song=schemas.SongOut.model_validate(song),
         music=read_json(out_dir / "music.json"),
@@ -353,12 +383,17 @@ def get_result(song: SongDependency, response: Response):
 def update_lyrics(body: schemas.LyricsUpdate, song: SongDependency):
     if song.status != models.SongStatus.DONE or not song.output_dir: raise HTTPException(status_code=409, detail="Song has not been processed yet")
 
-    out_dir = song_service.resolve_output_dir(song); lyrics_path = out_dir / "lyrics.json"
+    out_dir = song_service.resolve_output_dir(song)
+    lyrics_path = out_dir / "lyrics.json"
     try:
-        reconcile_lyric_words = ai_bridge.get_reconcile_lyric_words(); lyrics = reconcile_lyric_words([line.model_dump() for line in body.lyrics]); write_json(lyrics_path, lyrics); trusted_text = "\n".join(str(line.get("text") or "").strip() for line in lyrics).strip()
+        reconcile_lyric_words = ai_bridge.reconcile_lyric_words
+        lyrics = reconcile_lyric_words([line.model_dump() for line in body.lyrics])
+        write_json(lyrics_path, lyrics)
+        trusted_text = "\n".join(str(line.get("text") or "").strip() for line in lyrics).strip()
         if trusted_text:
             (out_dir / config.TRUSTED_LYRICS_FILENAME).write_text(
                 trusted_text + "\n", encoding="utf-8"
             )
-    except (OSError, TypeError, ValueError) as exc: raise HTTPException(status_code=400, detail=f"Could not save lyrics: {exc}") from exc
+    except (OSError, TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"Could not save lyrics: {exc}") from exc
     return {"status": "saved"}

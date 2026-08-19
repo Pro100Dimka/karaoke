@@ -6,10 +6,13 @@ from ..runtime import configure_runtime, mark_backend_failed, selected_backend
 
 def select_torch_device(torch, model: str = "fcpe") -> str:
     plan = configure_runtime(torch_module=torch)
-    try: cuda_available = bool(torch.cuda.is_available())
-    except (AttributeError, RuntimeError): cuda_available = False
+    try:
+        cuda_available = bool(torch.cuda.is_available())
+    except (AttributeError, RuntimeError):
+        cuda_available = False
     if cuda_available != plan.hardware.cuda_available: plan = configure_runtime(force=True, torch_module=torch)
-    spec = plan.selected.get(model); return "cuda:0" if spec is not None and spec.device == "cuda" else "cpu"
+    spec = plan.selected.get(model)
+    return "cuda:0" if spec is not None and spec.device == "cuda" else "cpu"
 
 
 def accelerator_failure(error: BaseException) -> bool:

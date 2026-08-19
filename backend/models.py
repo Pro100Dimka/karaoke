@@ -18,7 +18,14 @@ def _new_id() -> str: return uuid.uuid4().hex
 def _utc_now() -> datetime: return datetime.now(UTC)
 
 
-class SongStatus(enum.StrEnum): PENDING = "pending"; QUEUED = "queued"; PROCESSING = "processing"; CANCELLING = "cancelling"; DONE = "done"; CANCELLED = "cancelled"; ERROR = "error"
+class SongStatus(enum.StrEnum):
+    PENDING = "pending"
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    CANCELLING = "cancelling"
+    DONE = "done"
+    CANCELLED = "cancelled"
+    ERROR = "error"
 
 
 class Song(Base):
@@ -77,7 +84,17 @@ class Recording(Base):
     )
 
 
-class AnalysisResult(Base): __tablename__ = "analysis_results"; id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_id); recording_id: Mapped[str] = mapped_column(ForeignKey("recordings.id"), unique=True); pitch_accuracy_percent: Mapped[float | None] = mapped_column(Float); mean_deviation_semitones: Mapped[float | None] = mapped_column(Float); sections_json: Mapped[str | None] = mapped_column(Text); created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now); recording: Mapped[Recording] = relationship(back_populates="analysis")
+class AnalysisResult(Base):
+    __tablename__ = "analysis_results"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_id)
+    recording_id: Mapped[str] = mapped_column(ForeignKey("recordings.id"), unique=True)
+    pitch_accuracy_percent: Mapped[float | None] = mapped_column(Float)
+    mean_deviation_semitones: Mapped[float | None] = mapped_column(Float)
+    sections_json: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+
+    recording: Mapped[Recording] = relationship(back_populates="analysis")
 
 
 class PlaybackState(Base):

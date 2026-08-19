@@ -1,3 +1,5 @@
+import { formatClockTime } from "../utils/time-format";
+
 export function clampFinite(value, min, max, fallback = min) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
@@ -30,10 +32,7 @@ export function normalizeAudioVolume(value) {
 }
 
 export function formatAudioTime(seconds) {
-  const value = normalizeAudioPosition(seconds);
-  const minutes = Math.floor(value / 60);
-  const remainder = Math.floor(value % 60);
-  return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+  return formatClockTime(seconds, { padMinutes: true });
 }
 
 export async function toggleAudioPlayback(audio) {

@@ -12,14 +12,18 @@ from AI.errors import EngineUnavailableError
 
 def model_files(root):
     for relative in omnizart_pitch._MODEL_FILES:
-        path = root / relative; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(b"model")
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"model")
 
 
 def test_decode_contour_preserves_native_timing_salience_and_unvoiced():
     patches, mapping = np.ones((3, 25, 25), dtype=np.float32), np.asarray(((40, 0), (41, 1), (42, 2)))
 
     class Model:
-        def predict(self, batch, verbose=0): assert verbose == 0 and batch.shape == (3, 25, 25, 1); return np.asarray(((0.1, 0.9), (0.8, 0.2), (0.4, 0.6)))
+        def predict(self, batch, verbose=0):
+            assert verbose == 0 and batch.shape == (3, 25, 25, 1)
+            return np.asarray(((0.1, 0.9), (0.8, 0.2), (0.4, 0.6)))
 
     frequency, confidence = omnizart_pitch.decode_contour(
         patches, mapping, np.ones((4, 3)), np.arange(100, dtype=float), Model()
@@ -30,7 +34,9 @@ def test_decode_contour_preserves_native_timing_salience_and_unvoiced():
 def test_chunked_cfp_preserves_native_frame_grid(monkeypatch):
     hop = 320
 
-    def fake_chunk(waveform, **_kwargs): frame_count = max(0, len(waveform) // hop - 1); return np.ones((2, frame_count)), [80.0, 81.0, 82.0]
+    def fake_chunk(waveform, **_kwargs):
+        frame_count = max(0, len(waveform) // hop - 1)
+        return np.ones((2, frame_count)), [80.0, 81.0, 82.0]
 
     monkeypatch.setattr(omnizart_pitch, "_cfp_chunk", fake_chunk)
     matrix, _ = omnizart_pitch._extract_cfp_matrix(
@@ -44,14 +50,18 @@ def test_estimator_success_uses_20ms_original_timeline(monkeypatch, tmp_path):
     estimator = omnizart_pitch.OmnizartPatchCNNPitchEstimator(
         tmp_path, model_loader=lambda _: object()
     )
-    patch_attrs(monkeypatch, omnizart_pitch, load_mono=lambda *_: (np.ones(1600, dtype=np.float32) * 0.1, 16000), extract_patch_cfp_feature=lambda *_args, **_kwargs: (np.ones((3, 25, 25), dtype=np.float32), np.ones((3, 2), dtype=np.int32), np.ones((2, 3), dtype=np.float32), np.arange(100, dtype=float)), decode_contour=lambda *_args, **_kwargs: (np.asarray([220, 0, 440]), np.asarray([0.8, 0, 1.0]))); frames = estimator.estimate("original.wav"); assert (([frame.time for frame in frames], [frame.voiced for frame in frames]) == ([0, 0.02, 0.04], [True, False, True])) and (frames[0].confidence == 0.8 and frames[1].frequency == 0) and (estimator.fingerprint()['input'] == 'original-full-mix')
+    patch_attrs(monkeypatch, omnizart_pitch, load_mono=lambda *_: (np.ones(1600, dtype=np.float32) * 0.1, 16000), extract_patch_cfp_feature=lambda *_args, **_kwargs: (np.ones((3, 25, 25), dtype=np.float32), np.ones((3, 2), dtype=np.int32), np.ones((2, 3), dtype=np.float32), np.arange(100, dtype=float)), decode_contour=lambda *_args, **_kwargs: (np.asarray([220, 0, 440]), np.asarray([0.8, 0, 1.0])))
+    frames = estimator.estimate("original.wav")
+    assert (([frame.time for frame in frames], [frame.voiced for frame in frames]) == ([0, 0.02, 0.04], [True, False, True])) and (frames[0].confidence == 0.8 and frames[1].frequency == 0) and (estimator.fingerprint()['input'] == 'original-full-mix')
 
 
 def test_estimator_unavailable_and_runtime_failure_are_fallback_safe(monkeypatch, tmp_path):
-    missing = omnizart_pitch.OmnizartPatchCNNPitchEstimator(tmp_path); raises(EngineUnavailableError, lambda: missing.estimate('audio'), match='not installed')
+    missing = omnizart_pitch.OmnizartPatchCNNPitchEstimator(tmp_path)
+    raises(EngineUnavailableError, lambda: missing.estimate('audio'), match='not installed')
 
     model_files(tmp_path)
     broken = omnizart_pitch.OmnizartPatchCNNPitchEstimator(
         tmp_path, model_loader=lambda _: SimpleNamespace()
     )
-    patch_attrs(monkeypatch, omnizart_pitch, load_mono=lambda *_: (np.ones(1600, dtype=np.float32), 16000), extract_patch_cfp_feature=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError('inference'))); raises(EngineUnavailableError, lambda: broken.estimate('audio'), match='inference failed')
+    patch_attrs(monkeypatch, omnizart_pitch, load_mono=lambda *_: (np.ones(1600, dtype=np.float32), 16000), extract_patch_cfp_feature=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError('inference')))
+    raises(EngineUnavailableError, lambda: broken.estimate('audio'), match='inference failed')

@@ -29,11 +29,15 @@ def run_ffmpeg(
     timeout_message: str,
     failed_message: str,
 ) -> None:
-    try: subprocess.run(command, check=True, capture_output=True, timeout=timeout_sec)
-    except FileNotFoundError as exc: raise AICoreError(not_found_message) from exc
-    except subprocess.TimeoutExpired as exc: raise AICoreError(timeout_message) from exc
+    try:
+        subprocess.run(command, check=True, capture_output=True, timeout=timeout_sec)
+    except FileNotFoundError as exc:
+        raise AICoreError(not_found_message) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise AICoreError(timeout_message) from exc
     except subprocess.CalledProcessError as exc:
-        detail = exc.stderr.decode("utf-8", "replace").strip(); raise AICoreError(detail or failed_message) from exc
+        detail = exc.stderr.decode("utf-8", "replace").strip()
+        raise AICoreError(detail or failed_message) from exc
 _AUDIO_CACHE: ContextVar[dict[tuple[str, int, int, int | None], tuple[np.ndarray, int]] | None] = (
     ContextVar("ai_audio_cache", default=None)
 )
@@ -42,9 +46,71 @@ _AUDIO_CACHE: ContextVar[dict[tuple[str, int, int, int | None], tuple[np.ndarray
 @contextmanager
 def audio_buffer_cache():
     token = _AUDIO_CACHE.set({})
-    try: yield
-    finally: _AUDIO_CACHE.reset(token)
+    try:
+        yield
+    finally:
+        _AUDIO_CACHE.reset(token)
 
+
+
+def render_wav_atomic(
+    source: str | Path,
+    target: str | Path,
+    arguments: list[str],
+    *,
+    timeout_sec: float,
+    not_found_message: str,
+    timeout_message: str,
+    failed_message: str,
+    validate=None,
+    profile_name: str | None = None,
+) -> Path:
+    source_path, target_path = Path(source), Path(target)
+    if not source_path.is_file():
+        raise FileNotFoundError(source_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f"{target_path.name}.",
+        suffix=".wav.tmp",
+        dir=target_path.parent,
+    )
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    command = [
+        config.FFMPEG_EXE,
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        str(source_path),
+        *arguments,
+        str(temporary),
+    ]
+    try:
+        if profile_name:
+            with profile_operation(profile_name, byte_count=source_path.stat().st_size):
+                run_ffmpeg(
+                    command,
+                    timeout_sec=timeout_sec,
+                    not_found_message=not_found_message,
+                    timeout_message=timeout_message,
+                    failed_message=failed_message,
+                )
+        else:
+            run_ffmpeg(
+                command,
+                timeout_sec=timeout_sec,
+                not_found_message=not_found_message,
+                timeout_message=timeout_message,
+                failed_message=failed_message,
+            )
+        if validate:
+            validate(temporary)
+        os.replace(temporary, target_path)
+        return target_path
+    finally:
+        temporary.unlink(missing_ok=True)
 
 def decode_audio(
     source: str | Path,
@@ -54,46 +120,54 @@ def decode_audio(
     timeout_sec: int = DEFAULT_FFMPEG_TIMEOUT_SEC,
 ) -> Path:
     source_path, target_path = Path(source), Path(target)
-    if not source_path.is_file(): raise FileNotFoundError(source_path)
-    if sample_rate <= 0: raise ValueError("sample_rate must be positive")
+    if not source_path.is_file():
+        raise FileNotFoundError(source_path)
+    if sample_rate <= 0:
+        raise ValueError("sample_rate must be positive")
 
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f"{target_path.name}.", suffix=".wav.tmp", dir=target_path.parent
-    )
-    os.close(descriptor); temporary = Path(temporary_name); command, started = [config.FFMPEG_EXE, '-y', '-hide_banner', '-loglevel', 'error', '-i', str(source_path), '-vn', '-ac', '2', '-ar', str(sample_rate), '-c:a', 'pcm_s24le', '-f', 'wav', str(temporary)], time.perf_counter()
+    def validate(path: Path) -> None:
+        if not path.is_file() or path.stat().st_size < 44:
+            raise AICoreError("FFmpeg finished but did not create a valid WAV file")
+        info = sf.info(path)
+        if info.frames <= 0 or info.samplerate != sample_rate:
+            raise AICoreError("FFmpeg created an empty WAV or unexpected sample rate")
+
+    started = time.perf_counter()
     try:
-        with profile_operation("decode.ffmpeg", byte_count=source_path.stat().st_size):
-            run_ffmpeg(
-                command,
-                timeout_sec=timeout_sec,
-                not_found_message="FFmpeg is required but was not found in PATH",
-                timeout_message=f"FFmpeg exceeded the {timeout_sec}-second safety timeout",
-                failed_message="FFmpeg failed without an error message",
-            )
-        if not temporary.is_file() or temporary.stat().st_size < 44: raise AICoreError("FFmpeg finished but did not create a valid WAV file")
-        info = sf.info(temporary)
-        if info.frames <= 0 or info.samplerate != sample_rate: raise AICoreError("FFmpeg created an empty WAV or unexpected sample rate")
-        os.replace(temporary, target_path)
+        result = render_wav_atomic(
+            source_path,
+            target_path,
+            ["-vn", "-ac", "2", "-ar", str(sample_rate), "-c:a", "pcm_s24le", "-f", "wav"],
+            timeout_sec=timeout_sec,
+            not_found_message="FFmpeg is required but was not found in PATH",
+            timeout_message=f"FFmpeg exceeded the {timeout_sec}-second safety timeout",
+            failed_message="FFmpeg failed without an error message",
+            validate=validate,
+            profile_name="decode.ffmpeg",
+        )
     except (OSError, RuntimeError) as exc:
-        if isinstance(exc, AICoreError): raise
+        if isinstance(exc, AICoreError):
+            raise
         raise AICoreError(f"Could not validate decoded WAV: {exc}") from exc
-    finally: temporary.unlink(missing_ok=True)
     record_operation(
         "decode.output",
         elapsed_sec=time.perf_counter() - started,
         byte_count=target_path.stat().st_size,
     )
-    return target_path
+    return result
 
 
 def load_mono(
     path: str | Path,
     target_sample_rate: int | None = None,
 ) -> tuple[np.ndarray, int]:
-    source = Path(path).resolve(); stat = source.stat(); key, cache = (str(source), stat.st_size, stat.st_mtime_ns, target_sample_rate), _AUDIO_CACHE.get()
+    source = Path(path).resolve()
+    stat = source.stat()
+    key, cache = (str(source), stat.st_size, stat.st_mtime_ns, target_sample_rate), _AUDIO_CACHE.get()
     if cache is not None and key in cache:
-        audio, sample_rate = cache[key]; record_operation("audio.cache_hit", byte_count=audio.nbytes); return audio.copy(), sample_rate
+        audio, sample_rate = cache[key]
+        record_operation("audio.cache_hit", byte_count=audio.nbytes)
+        return audio.copy(), sample_rate
 
     with profile_operation("audio.read", byte_count=stat.st_size): audio, sample_rate = sf.read(source, dtype="float32", always_2d=True)
     mono = np.mean(audio, axis=1, dtype=np.float32)
@@ -112,7 +186,8 @@ def load_mono(
 
     result, rate = np.ascontiguousarray(mono, dtype=np.float32), int(sample_rate)
     if cache is not None: cache[key] = (result, rate)
-    record_operation("audio.load_mono", byte_count=stat.st_size); return result.copy() if cache is not None else result, rate
+    record_operation("audio.load_mono", byte_count=stat.st_size)
+    return result.copy() if cache is not None else result, rate
 
 
 def duration(path: str | Path) -> float: return float(sf.info(path).duration)

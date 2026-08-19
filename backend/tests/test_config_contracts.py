@@ -9,33 +9,87 @@ import config
 
 
 def test_environment_path_integer_and_csv_helpers(monkeypatch, tmp_path):
-    monkeypatch.delenv("TEST_PATH", raising=False); assert config._env_path("TEST_PATH", tmp_path) == tmp_path; monkeypatch.setenv("TEST_PATH", str(tmp_path / "nested" / ".." / "target")); assert config._env_path("TEST_PATH", tmp_path) == (tmp_path / "target").resolve()
+    monkeypatch.delenv("TEST_PATH", raising=False)
+    assert config._env_path("TEST_PATH", tmp_path) == tmp_path
+    monkeypatch.setenv("TEST_PATH", str(tmp_path / "nested" / ".." / "target"))
+    assert config._env_path("TEST_PATH", tmp_path) == (tmp_path / "target").resolve()
 
-    monkeypatch.delenv("TEST_INT", raising=False); assert config._env_int("TEST_INT", 3, minimum=1, maximum=5) == 3; monkeypatch.setenv("TEST_INT", "4"); assert config._env_int("TEST_INT", 3, minimum=1, maximum=5) == 4
+    monkeypatch.delenv("TEST_INT", raising=False)
+    assert config._env_int("TEST_INT", 3, minimum=1, maximum=5) == 3
+    monkeypatch.setenv("TEST_INT", "4")
+    assert config._env_int("TEST_INT", 3, minimum=1, maximum=5) == 4
     for invalid in ("text", "0", "6"):
-        monkeypatch.setenv("TEST_INT", invalid); raises(ValueError, lambda: config._env_int('TEST_INT', 3, minimum=1, maximum=5), match='TEST_INT')
-    monkeypatch.setenv("TEST_INT", "0"); raises(ValueError, lambda: config._env_int('TEST_INT', 3, minimum=1), match='>= 1')
+        monkeypatch.setenv("TEST_INT", invalid)
+        raises(ValueError, lambda: config._env_int('TEST_INT', 3, minimum=1, maximum=5), match='TEST_INT')
+    monkeypatch.setenv("TEST_INT", "0")
+    raises(ValueError, lambda: config._env_int('TEST_INT', 3, minimum=1), match='>= 1')
 
-    monkeypatch.delenv("TEST_CSV", raising=False); assert config._unique_csv("TEST_CSV", ("a", "b")) == ("a", "b"); monkeypatch.setenv("TEST_CSV", " b, a, b, ,c "); assert config._unique_csv("TEST_CSV", ()) == ("b", "a", "c")
+    monkeypatch.delenv("TEST_CSV", raising=False)
+    assert config._unique_csv("TEST_CSV", ("a", "b")) == ("a", "b")
+    monkeypatch.setenv("TEST_CSV", " b, a, b, ,c ")
+    assert config._unique_csv("TEST_CSV", ()) == ("b", "a", "c")
 
 
-def test_runtime_executable_prefers_bundled_binary_then_path(monkeypatch, tmp_path): executable_dir, runtime_dir, base_dir = tmp_path / 'python', tmp_path / 'runtime', tmp_path / 'base'; executable_dir.mkdir(); runtime_dir.mkdir(); base_dir.mkdir(); monkeypatch.setattr(config.sys, "executable", str(executable_dir / "python.exe")); patch_attrs(monkeypatch, config, RUNTIME_DIR=runtime_dir, BASE_DIR=base_dir); bundled_name = "tool.exe" if config.os.name == "nt" else "tool"; bundled = runtime_dir / bundled_name; bundled.write_bytes(b"binary"); assert config.resolve_runtime_executable("tool") == str(bundled); bundled.unlink(); monkeypatch.setattr(config.shutil, "which", Mock(return_value="C:/bin/tool.exe")); assert config.resolve_runtime_executable("tool.exe") == "C:/bin/tool.exe"; config.shutil.which.return_value = None; assert config.resolve_runtime_executable("missing") == "missing"
+def test_runtime_executable_prefers_bundled_binary_then_path(monkeypatch, tmp_path):
+    executable_dir, runtime_dir, base_dir = tmp_path / 'python', tmp_path / 'runtime', tmp_path / 'base'
+    executable_dir.mkdir()
+    runtime_dir.mkdir()
+    base_dir.mkdir()
+    monkeypatch.setattr(config.sys, "executable", str(executable_dir / "python.exe"))
+    patch_attrs(monkeypatch, config, RUNTIME_DIR=runtime_dir, BASE_DIR=base_dir)
+
+    bundled_name = "tool.exe" if config.os.name == "nt" else "tool"
+    bundled = runtime_dir / bundled_name
+    bundled.write_bytes(b"binary")
+    assert config.resolve_runtime_executable("tool") == str(bundled)
+    bundled.unlink()
+
+    monkeypatch.setattr(config.shutil, "which", Mock(return_value="C:/bin/tool.exe"))
+    assert config.resolve_runtime_executable("tool.exe") == "C:/bin/tool.exe"
+    config.shutil.which.return_value = None
+    assert config.resolve_runtime_executable("missing") == "missing"
 
 
-def test_default_data_and_models_directories_cover_runtime_modes(monkeypatch, tmp_path): patch_attrs(monkeypatch, config, IS_FROZEN=False, PROJECT_ROOT=tmp_path / 'project', DOWNLOADS_DIR=tmp_path / 'downloads'); assert (config._default_data_dir() == tmp_path / 'project' / 'data') and (config._default_models_dir() == tmp_path / 'downloads' / 'models'); monkeypatch.setattr(config, "IS_FROZEN", True); monkeypatch.setenv("SONGAPP_INSTALL_ROOT", str(tmp_path / "installed")); assert (config._default_data_dir() == tmp_path / 'installed' / 'data' / 'backend') and (config._default_models_dir() == tmp_path / 'installed' / 'data' / 'models'); monkeypatch.delenv("SONGAPP_INSTALL_ROOT"); executable = tmp_path / "portable" / "resources" / "backend" / "KaraokeBackend.exe"; monkeypatch.setattr(config.sys, "executable", str(executable)); assert (config._default_data_dir() == tmp_path / 'portable' / 'data' / 'backend') and (config._default_models_dir() == tmp_path / 'portable' / 'data' / 'models')
+def test_default_data_and_models_directories_cover_runtime_modes(monkeypatch, tmp_path):
+    patch_attrs(monkeypatch, config, IS_FROZEN=False, PROJECT_ROOT=tmp_path / 'project', DOWNLOADS_DIR=tmp_path / 'downloads')
+    assert (config._default_data_dir() == tmp_path / 'project' / 'data') and (config._default_models_dir() == tmp_path / 'downloads' / 'models')
+
+    monkeypatch.setattr(config, "IS_FROZEN", True)
+    monkeypatch.setenv("SONGAPP_INSTALL_ROOT", str(tmp_path / "installed"))
+    assert (config._default_data_dir() == tmp_path / 'installed' / 'data' / 'backend') and (config._default_models_dir() == tmp_path / 'installed' / 'data' / 'models')
+
+    monkeypatch.delenv("SONGAPP_INSTALL_ROOT")
+    executable = tmp_path / "portable" / "resources" / "backend" / "KaraokeBackend.exe"
+    monkeypatch.setattr(config.sys, "executable", str(executable))
+    assert (config._default_data_dir() == tmp_path / 'portable' / 'data' / 'backend') and (config._default_models_dir() == tmp_path / 'portable' / 'data' / 'models')
 
 
-def test_saved_storage_path_is_validated(monkeypatch, tmp_path): settings, default = tmp_path / 'paths.json', tmp_path / 'default'; monkeypatch.setattr(config, "PATH_SETTINGS_FILE", settings); assert config._saved_path("songs_folder", default) == default; settings.write_text("invalid", encoding="utf-8"); assert config._saved_path("songs_folder", default) == default; settings.write_text('[["songs_folder", "ignored"]]', encoding="utf-8"); assert config._saved_path("songs_folder", default) == default; settings.write_text('{"songs_folder": "   "}', encoding="utf-8"); assert config._saved_path("songs_folder", default) == default; selected = tmp_path / "selected"; settings.write_text(f'{{"songs_folder": "{selected.as_posix()}"}}', encoding="utf-8"); assert config._saved_path("songs_folder", default) == selected.resolve()
+def test_saved_storage_path_is_validated(monkeypatch, tmp_path):
+    settings, default = tmp_path / 'paths.json', tmp_path / 'default'
+    monkeypatch.setattr(config, "PATH_SETTINGS_FILE", settings)
+
+    assert config._saved_path("songs_folder", default) == default
+    settings.write_text("invalid", encoding="utf-8")
+    assert config._saved_path("songs_folder", default) == default
+    settings.write_text('[["songs_folder", "ignored"]]', encoding="utf-8")
+    assert config._saved_path("songs_folder", default) == default
+    settings.write_text('{"songs_folder": "   "}', encoding="utf-8")
+    assert config._saved_path("songs_folder", default) == default
+    selected = tmp_path / "selected"
+    settings.write_text(f'{{"songs_folder": "{selected.as_posix()}"}}', encoding="utf-8")
+    assert config._saved_path("songs_folder", default) == selected.resolve()
 
 
 
 def test_saved_storage_path_from_previous_dev_checkout_uses_current_default(monkeypatch, tmp_path):
-    current_root, old_root = tmp_path / 'D' / 'Git' / 'karaoke', tmp_path / 'E' / 'Git' / 'karaoke'; current_default, settings = current_root / 'karaoke_songs', tmp_path / 'paths.json'
+    current_root, old_root = tmp_path / 'D' / 'Git' / 'karaoke', tmp_path / 'E' / 'Git' / 'karaoke'
+    current_default, settings = current_root / 'karaoke_songs', tmp_path / 'paths.json'
     settings.write_text(
         '{"songs_folder": "' + (old_root / "karaoke_songs").as_posix() + '"}',
         encoding="utf-8",
     )
-    patch_attrs(monkeypatch, config, IS_FROZEN=False, PROJECT_ROOT=current_root, PATH_SETTINGS_FILE=settings); assert config._saved_path("songs_folder", current_default) == current_default
+    patch_attrs(monkeypatch, config, IS_FROZEN=False, PROJECT_ROOT=current_root, PATH_SETTINGS_FILE=settings)
+    assert config._saved_path("songs_folder", current_default) == current_default
 
     external = tmp_path / "external-library"
     settings.write_text(
@@ -44,21 +98,29 @@ def test_saved_storage_path_from_previous_dev_checkout_uses_current_default(monk
     assert config._saved_path("songs_folder", current_default) == external.resolve()
 
 def test_apply_storage_paths_updates_only_supplied_values(monkeypatch, tmp_path):
-    original_models, ensure, configure = config.MODELS_DIR, Mock(), Mock(); patch_attrs(monkeypatch, config, ensure_directories=ensure, configure_ai_resource_environment=configure)
+    original_models, ensure, configure = config.MODELS_DIR, Mock(), Mock()
+    patch_attrs(monkeypatch, config, ensure_directories=ensure, configure_ai_resource_environment=configure)
 
     config.apply_storage_paths(
         songs_folder=str(tmp_path / "songs"),
         ai_folder=str(tmp_path / "models"),
         cache_folder=str(tmp_path / "cache"),
     )
-    assert ((tmp_path / 'songs').resolve() == config.SONG_OUTPUT_DIR) and ((tmp_path / 'models').resolve() == config.MODELS_DIR) and ((tmp_path / 'cache').resolve() == config.CACHE_DIR) and ((tmp_path / 'cache' / 'uploads').resolve() == config.UPLOAD_TEMP_DIR); ensure.assert_called_once_with(); configure.assert_called_once_with(force=True)
+    assert ((tmp_path / 'songs').resolve() == config.SONG_OUTPUT_DIR) and ((tmp_path / 'models').resolve() == config.MODELS_DIR) and ((tmp_path / 'cache').resolve() == config.CACHE_DIR) and ((tmp_path / 'cache' / 'uploads').resolve() == config.UPLOAD_TEMP_DIR)
+    ensure.assert_called_once_with()
+    configure.assert_called_once_with(force=True)
 
     monkeypatch.setattr(config, "MODELS_DIR", original_models)
 
 
 def test_ai_resource_environment_uses_existing_downloads(monkeypatch, tmp_path):
-    models_dir, engine_dir = tmp_path / 'models', tmp_path / 'engines' / 'msst'; config_file, checkpoint, snapshot = engine_dir / 'configs' / 'KimberleyJensen' / 'config_vocals_mel_band_roformer_kj.yaml', models_dir / 'pitch.pt', models_dir / 'asr'; config_file.parent.mkdir(parents=True); config_file.write_text("model: test", encoding="utf-8")
-    checkpoint.parent.mkdir(parents=True); checkpoint.write_bytes(b"model"); snapshot.mkdir()
+    models_dir, engine_dir = tmp_path / 'models', tmp_path / 'engines' / 'msst'
+    config_file, checkpoint, snapshot = engine_dir / 'configs' / 'KimberleyJensen' / 'config_vocals_mel_band_roformer_kj.yaml', models_dir / 'pitch.pt', models_dir / 'asr'
+    config_file.parent.mkdir(parents=True)
+    config_file.write_text("model: test", encoding="utf-8")
+    checkpoint.parent.mkdir(parents=True)
+    checkpoint.write_bytes(b"model")
+    snapshot.mkdir()
     resources = (
         SimpleNamespace(key="pitch", env_var="TEST_PITCH", kind="file"),
         SimpleNamespace(key="asr", env_var="TEST_ASR", kind="snapshot"),
@@ -77,8 +139,13 @@ def test_ai_resource_environment_uses_existing_downloads(monkeypatch, tmp_path):
 
     assert (config.os.environ['TEST_PITCH'] == str(checkpoint)) and (config.os.environ['TEST_ASR'] == str(snapshot)) and (config.os.environ['MSST_ENGINE_DIR'] == str(engine_dir)) and (config.os.environ['MSST_CONFIG'] == str(config_file)) and (config.os.environ['KARAOKE_AI_REQUIRE_CTC'] == '1')
 
-    alternate = tmp_path / "alternate.pt"; alternate.write_bytes(b"old"); monkeypatch.setenv("TEST_PITCH", str(alternate)); config.configure_ai_resource_environment()
-    assert config.os.environ["TEST_PITCH"] == str(alternate); config.configure_ai_resource_environment(force=True); assert config.os.environ["TEST_PITCH"] == str(checkpoint)
+    alternate = tmp_path / "alternate.pt"
+    alternate.write_bytes(b"old")
+    monkeypatch.setenv("TEST_PITCH", str(alternate))
+    config.configure_ai_resource_environment()
+    assert config.os.environ["TEST_PITCH"] == str(alternate)
+    config.configure_ai_resource_environment(force=True)
+    assert config.os.environ["TEST_PITCH"] == str(checkpoint)
 
 
 def test_ensure_directories_creates_every_runtime_location(monkeypatch, tmp_path):
@@ -89,4 +156,5 @@ def test_ensure_directories_creates_every_runtime_location(monkeypatch, tmp_path
         strict=True,
     ):
         monkeypatch.setattr(config, attribute, path)
-    config.ensure_directories(); assert all(path.is_dir() for path in paths)
+    config.ensure_directories()
+    assert all(path.is_dir() for path in paths)

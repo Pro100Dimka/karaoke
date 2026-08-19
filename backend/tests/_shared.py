@@ -9,7 +9,8 @@ def patch_many(monkeypatch, *patches):
 
 
 def assert_http_status(status, invoke):
-    import pytest; from fastapi import HTTPException
+    import pytest
+    from fastapi import HTTPException
 
     with pytest.raises(HTTPException) as error: invoke()
     assert error.value.status_code == status
@@ -35,21 +36,43 @@ def raises(exception, invoke, *, match=None):
     with pytest.raises(exception, match=match): return invoke()
 
 
-def alignment_result(words=(), confidence=0.0): from types import SimpleNamespace; return SimpleNamespace(words=words, confidence=confidence)
+def alignment_result(words=(), confidence=0.0):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(words=words, confidence=confidence)
 
 
-def mock_database(monkeypatch, module): from unittest.mock import Mock; database = Mock(); monkeypatch.setattr(module, "SessionLocal", Mock(return_value=database)); return database
+def mock_database(monkeypatch, module):
+    from unittest.mock import Mock
+
+    database = Mock()
+    monkeypatch.setattr(module, "SessionLocal", Mock(return_value=database))
+    return database
 
 
-def mock_song_lookup(monkeypatch, module, current=None): from unittest.mock import Mock; database = mock_database(monkeypatch, module); lookup = Mock(return_value=current); monkeypatch.setattr(module.repositories, "get_song", lookup); return database, lookup
+def mock_song_lookup(monkeypatch, module, current=None):
+    from unittest.mock import Mock
 
-def dump_json(path, value): import json; path.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
+    database = mock_database(monkeypatch, module)
+    lookup = Mock(return_value=current)
+    monkeypatch.setattr(module.repositories, "get_song", lookup)
+    return database, lookup
+
+def dump_json(path, value):
+    import json
+
+    path.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
 
 
-def pitch_frame(time, hz=220, confidence=0.8, voiced=True, energy=0.1): from AI.models import PitchFrame; return PitchFrame(time, hz if voiced else 0, confidence if voiced else 0, voiced, energy)
+def pitch_frame(time, hz=220, confidence=0.8, voiced=True, energy=0.1):
+    from AI.models import PitchFrame
+
+    return PitchFrame(time, hz if voiced else 0, confidence if voiced else 0, voiced, energy)
 
 
-def midi_frame(time, midi=60, confidence=0.9, energy=1.0, voiced=True): hz = 440 * 2 ** ((midi - 69) / 12) if voiced else 0; return pitch_frame(time, hz, confidence, voiced, energy)
+def midi_frame(time, midi=60, confidence=0.9, energy=1.0, voiced=True):
+    hz = 440 * 2 ** ((midi - 69) / 12) if voiced else 0
+    return pitch_frame(time, hz, confidence, voiced, energy)
 
 
 def missing_import(real_import, *blocked):
@@ -61,10 +84,52 @@ def missing_import(real_import, *blocked):
 
 
 class FakeOrtSession:
-    def __init__(self, input_name, output, providers=("CUDAExecutionProvider", "CPUExecutionProvider")): from unittest.mock import Mock; self.input_name, self.output, self.providers = input_name, output, providers; self.disable_fallback = Mock()
+    def __init__(self, input_name, output, providers=("CUDAExecutionProvider", "CPUExecutionProvider")):
+        from unittest.mock import Mock
+
+        self.input_name, self.output, self.providers = input_name, output, providers
+        self.disable_fallback = Mock()
 
     def get_providers(self): return list(self.providers)
 
-    def get_inputs(self): from types import SimpleNamespace; return [SimpleNamespace(name=self.input_name)]
+    def get_inputs(self):
+        from types import SimpleNamespace
+
+        return [SimpleNamespace(name=self.input_name)]
 
     def run(self, *_): return [self.output]
+
+
+def project_text(relative, *, encoding="utf-8"):
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    return (root / relative).read_text(encoding=encoding)
+
+
+def assert_contains(text, *required):
+    assert all(value in text for value in required)
+
+
+def assert_excludes(text, *forbidden):
+    assert all(value not in text for value in forbidden)
+
+
+def upload_file(payload=b"audio", filename="song.wav"):
+    from io import BytesIO
+    from fastapi import UploadFile
+
+    return UploadFile(filename=filename, file=BytesIO(payload))
+
+
+def word_rows(*rows):
+    from AI.models import Word
+
+    return [
+        Word(start, end, token, confidence, index)
+        for index, (start, end, token, confidence) in enumerate(rows)
+    ]
+
+
+def alignment_candidate(start, end, confidence=0.5, kind="ctc"):
+    return {kind: {"start": start, "end": end, "confidence": confidence}}

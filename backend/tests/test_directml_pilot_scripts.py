@@ -1,22 +1,59 @@
-from pathlib import Path
+from tests._shared import assert_contains, assert_excludes, project_text
 
-ROOT = Path(__file__).resolve().parents[2]
-
-
-def test_directml_prepare_installs_runtime_without_dependencies(): text = (ROOT / "scripts" / "prepare-fcpe-directml-pilot.bat").read_text(encoding="utf-8"); assert ('--no-deps "onnxruntime-directml==%ORT_VER%"' in text) and ('--no-deps "onnx==%ONNX_VER%"' in text) and ('for %%P in (numpy scipy tensorflow protobuf ml_dtypes)' in text) and ('backend virtual environment is not modified' in text)
+import pytest
 
 
-def test_directml_smoke_requires_isolation_gate(): smoke, file_gate = (ROOT / 'scripts' / 'test-fcpe-directml-smoke.bat').read_text(encoding='utf-8'), (ROOT / 'scripts' / 'test-fcpe-directml-file.bat').read_text(encoding='utf-8'); assert ('call test-directml-isolation.bat' in smoke) and ('call test-directml-isolation.bat' in file_gate)
+@pytest.mark.parametrize(
+    ("script", "required"),
+    [
+        (
+            "scripts/prepare-fcpe-directml-pilot.bat",
+            (
+                '--no-deps "onnxruntime-directml==%ORT_VER%"',
+                '--no-deps "onnx==%ONNX_VER%"',
+                'for %%P in (numpy scipy tensorflow protobuf ml_dtypes)',
+                'backend virtual environment is not modified',
+            ),
+        ),
+        (
+            "scripts/test-directml-isolation.bat",
+            (
+                'environment_fingerprint.py" --output "%BEFORE%"',
+                'environment_fingerprint.py" --output "%AFTER%"',
+                'fc /b "%BEFORE%" "%AFTER%"',
+                r'backend\venv is unchanged',
+            ),
+        ),
+        (
+            "scripts/ai_runtime_benchmark/directml_fcpe_file_gate.py",
+            (
+                'os.environ["SONGAPP_DEVICE"] = "cpu"',
+                'if estimator._device != "cpu":',
+                'print("Reference device: cpu")',
+                'print("DirectML provider: DmlExecutionProvider")',
+            ),
+        ),
+    ],
+)
+def test_directml_script_contracts(script, required):
+    assert_contains(project_text(script), *required)
 
 
-def test_isolation_test_compares_backend_environment_before_and_after(): text = (ROOT / "scripts" / "test-directml-isolation.bat").read_text(encoding="utf-8"); assert ('environment_fingerprint.py" --output "%BEFORE%"' in text) and ('environment_fingerprint.py" --output "%AFTER%"' in text) and ('fc /b "%BEFORE%" "%AFTER%"' in text) and ('backend\\venv is unchanged' in text)
+def test_directml_smoke_requires_isolation_gate():
+    for script in ("scripts/test-fcpe-directml-smoke.bat", "scripts/test-fcpe-directml-file.bat"):
+        assert_contains(project_text(script), "call test-directml-isolation.bat")
 
 
-def test_directml_real_file_gate_forces_pytorch_reference_to_cpu():
-    text = (ROOT / "scripts" / "ai_runtime_benchmark" / "directml_fcpe_file_gate.py").read_text(
-        encoding="utf-8"
+def test_directml_real_file_gate_auto_selects_latest_vocal_and_prints_decision():
+    bat = project_text("scripts/test-fcpe-directml-file.bat")
+    gate = project_text("scripts/ai_runtime_benchmark/directml_fcpe_file_gate.py")
+    assert_contains(bat, 'if "%~1"=="" (')
+    assert_contains(
+        gate,
+        'rglob("vocals.*")',
+        '{".wav", ".flac"}',
+        'print(" DECISION")',
+        '"quality_pass": quality_pass',
+        '"speed_pass": speed_pass',
+        '"stage_candidate": provider_pass and quality_pass and speed_pass and target_hardware',
     )
-    assert ('os.environ["SONGAPP_DEVICE"] = "cpu"' in text) and ('if estimator._device != "cpu":' in text) and ('print("Reference device: cpu")' in text) and ('print("DirectML provider: DmlExecutionProvider")' in text)
-
-
-def test_directml_real_file_gate_can_auto_select_latest_vocal_and_print_decision(): bat, gate = (ROOT / 'scripts' / 'test-fcpe-directml-file.bat').read_text(encoding='utf-8'), (ROOT / 'scripts' / 'ai_runtime_benchmark' / 'directml_fcpe_file_gate.py').read_text(encoding='utf-8'); assert ('if "%~1"=="" (' in bat) and ('rglob("vocals.*")' in gate) and ('{".wav", ".flac"}' in gate) and ('print(" DECISION")' in gate) and ('"quality_pass": quality_pass' in gate) and ('"speed_pass": speed_pass' in gate) and ('"stage_candidate": provider_pass and quality_pass and speed_pass and target_hardware' in gate)

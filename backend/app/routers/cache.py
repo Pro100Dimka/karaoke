@@ -12,19 +12,23 @@ def _clear_temp_response() -> dict[str, int]: return {'freed_bytes': cache_servi
 
 
 @router.get("/size", response_model=schemas.CacheSizeOut)
-def get_cache_size(): return cache_service.cache_size()
+def get_cache_size():
+    return cache_service.cache_size()
 
 
 @router.get("/free-space", response_model=schemas.FreeSpaceOut)
-def get_free_space(): return cache_service.free_space()
+def get_free_space():
+    return cache_service.free_space()
 
 
 @router.post("/clear")
-def clear_cache(): return _clear_temp_response()
+def clear_cache():
+    return _clear_temp_response()
 
 
 @router.delete("/temp")
-def delete_temp(): return _clear_temp_response()
+def delete_temp():
+    return _clear_temp_response()
 
 
 @router.post("/optimize/{song_id}", response_model=schemas.OptimizeResultOut)

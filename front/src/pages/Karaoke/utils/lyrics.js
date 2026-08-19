@@ -1,21 +1,11 @@
 import { clamp01 } from "../../../utils/math";
-
-function readFiniteTime(source, ...keys) {
-  for (const key of keys) {
-    const raw = source[key];
-    if ([null, ""].includes(raw)) continue;
-    const value = Number(raw);
-    if (Number.isFinite(value) && value >= 0) return value;
-  }
-
-  return null;
-}
+import { END_TIME_KEYS, readFiniteTime, START_TIME_KEYS } from "./time-keys";
 
 function normalizeLine(line) {
   if (!line) return null;
 
-  const start = readFiniteTime(line, "start", "start_sec", "start_time", "begin", "from");
-  const end = readFiniteTime(line, "end", "end_sec", "end_time", "finish", "to");
+  const start = readFiniteTime(line, ...START_TIME_KEYS);
+  const end = readFiniteTime(line, ...END_TIME_KEYS);
   if ([start, end].includes(null) || end < start) return null;
 
   return { ...line, start, end };

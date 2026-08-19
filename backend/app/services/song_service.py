@@ -55,8 +55,10 @@ def _ensure_path_within(path: Path, root: Path) -> Path:
 def resolve_library_path(path: Path) -> Path:
     errors, roots = [], {config.SONG_OUTPUT_DIR.resolve(), *(Path(root).resolve() for root in config.SONG_LIBRARY_ROOTS)}
     for root in roots:
-        try: return _ensure_path_within(path, root)
-        except ValueError as exc: errors.append(exc)
+        try:
+            return _ensure_path_within(path, root)
+        except ValueError as exc:
+            errors.append(exc)
     raise ValueError("Song file path is outside the application library") from (
         errors[-1] if errors else None)
 
@@ -81,7 +83,8 @@ def extract_embedded_cover(source_path: Path, output_dir: Path) -> Path | None:
         from mutagen import File as MutagenFile
 
         audio = MutagenFile(source_path)
-    except Exception: return None
+    except Exception:
+        return None
     if audio is None: return None
 
     candidates = [
@@ -122,7 +125,9 @@ def extract_embedded_cover(source_path: Path, output_dir: Path) -> Path | None:
     for payload in candidates:
         extension = _cover_extension(payload)
         if extension is None: continue
-        target = output_dir / f"cover{extension}"; atomic_write_bytes(target, payload); return target
+        target = output_dir / f"cover{extension}"
+        atomic_write_bytes(target, payload)
+        return target
     return None
 
 
@@ -142,14 +147,18 @@ def _identity_words(value: str | None) -> list[str]: return [part for part in re
 def _normalize_artist_title(
     artist: str | None, title: str | None, album: str | None = None
 ) -> tuple[str | None, str]:
-    raw_artist, clean_title = str(artist or '').strip(), str(title or '').strip(); value = raw_artist
+    raw_artist, clean_title = str(artist or '').strip(), str(title or '').strip()
+    value = raw_artist
     if album:
         value = re.sub(re.escape(str(album).strip()),
                        " ", value, flags=re.IGNORECASE)
     if clean_title: value = re.sub(re.escape(clean_title), " ", value, flags=re.IGNORECASE)
-    value = _RELEASE_WORD_RE.sub(" ", value); value = _YEAR_RE.sub(" ", value); value = " ".join(value.replace("–", " ").replace("—", " ").split())
+    value = _RELEASE_WORD_RE.sub(" ", value)
+    value = _YEAR_RE.sub(" ", value)
+    value = " ".join(value.replace("–", " ").replace("—", " ").split())
 
-    artist_words, title_words = _identity_words(value), _identity_words(clean_title); shared: list[str] = []
+    artist_words, title_words = _identity_words(value), _identity_words(clean_title)
+    shared: list[str] = []
     for left, right in zip(artist_words, title_words, strict=False):
         if left.casefold() != right.casefold(): break
         shared.append(left)
@@ -161,9 +170,6 @@ def _normalize_artist_title(
     return (value or None), clean_title
 
 
-def _clean_artist_tag(artist: str | None, title: str | None) -> str | None: return _normalize_artist_title(artist, title)[0]
-
-
 def parse_filename_identity(filename: str) -> tuple[str | None, str]:
     stem = _clean_copy_suffix(Path(filename).stem.strip())
     if not stem: return None, "song"
@@ -172,7 +178,8 @@ def parse_filename_identity(filename: str) -> tuple[str | None, str]:
     if len(spaced) == 2 and all(part.strip() for part in spaced): return spaced[0].strip(), spaced[1].strip()
 
     if compact := re.match(r"^(.+?)[–—-](.+)$", stem):
-        artist = compact.group(1).strip(); title = compact.group(2).strip()
+        artist = compact.group(1).strip()
+        title = compact.group(2).strip()
         if artist and title and any(ch.isalpha() for ch in artist): return artist, title
 
     return None, stem
@@ -181,14 +188,19 @@ def parse_filename_identity(filename: str) -> tuple[str | None, str]:
 def _read_source_identity(
     source_path: Path, original_filename: str, requested_title: str
 ) -> tuple[str | None, str]:
-    tagged_title: str | None = None; tagged_artist: str | None = None; tagged_album: str | None = None
+    tagged_title: str | None = None
+    tagged_artist: str | None = None
+    tagged_album: str | None = None
     try:
         from mutagen import File as MutagenFile
 
         tags = MutagenFile(source_path, easy=True)
         if tags is not None:
-            tagged_title = first_audio_tag(tags, "title"); tagged_artist = first_audio_tag(tags, "artist", "albumartist"); tagged_album = first_audio_tag(tags, "album")
-    except Exception: pass
+            tagged_title = first_audio_tag(tags, "title")
+            tagged_artist = first_audio_tag(tags, "artist", "albumartist")
+            tagged_album = first_audio_tag(tags, "album")
+    except Exception:
+        pass
 
     filename_artist, filename_title = parse_filename_identity(
         original_filename)
@@ -205,7 +217,8 @@ _WINDOWS_RESERVED_NAMES = {"CON", "PRN", "AUX", "NUL", *
 
 
 def _windows_safe_component(value: str, fallback: str) -> str:
-    value = unicodedata.normalize("NFC", value).rstrip(" ."); stem = value.split(".", 1)[0].rstrip(" .").upper()
+    value = unicodedata.normalize("NFC", value).rstrip(" .")
+    stem = value.split(".", 1)[0].rstrip(" .").upper()
     if stem in _WINDOWS_RESERVED_NAMES: value = f"_{value}"
     return value or fallback
 
@@ -213,34 +226,44 @@ def _windows_safe_component(value: str, fallback: str) -> str:
 def _folder_name(artist: str | None, title: str, fallback: str) -> str:
     identity = " ".join(part for part in (artist, title)
                         if part and part.strip()).strip()
-    value = _WINDOWS_FORBIDDEN_RE.sub(" ", identity); value = " ".join(value.split()).rstrip(" ."); return _windows_safe_component(value[:180], fallback)
+    value = _WINDOWS_FORBIDDEN_RE.sub(" ", identity)
+    value = " ".join(value.split()).rstrip(" .")
+    return _windows_safe_component(value[:180], fallback)
 
 
 def _unique_output_dir(base_name: str) -> Path:
     candidate, suffix = config.SONG_OUTPUT_DIR / base_name, 2
     while candidate.exists():
-        candidate = config.SONG_OUTPUT_DIR / f"{base_name} ({suffix})"; suffix += 1
+        candidate = config.SONG_OUTPUT_DIR / f"{base_name} ({suffix})"
+        suffix += 1
     return candidate
 
 
-def slugify(title: str, fallback: str) -> str: normalized = unicodedata.normalize("NFKD", title); ascii_ish = normalized.encode("ascii", "ignore").decode("ascii"); slug = re.sub(r"[^a-zA-Z0-9]+", "-", ascii_ish).strip("-").lower(); return slug or fallback
+def slugify(title: str, fallback: str) -> str:
+    normalized = unicodedata.normalize("NFKD", title)
+    ascii_ish = normalized.encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", ascii_ish).strip("-").lower()
+    return slug or fallback
 
 
 def make_unique_slug(db: Session, base_slug: str) -> str:
     slug, suffix = base_slug, 2
     while _slug_exists(db, slug) or _slug_has_files(slug):
-        slug = f"{base_slug}-{suffix}"; suffix += 1
+        slug = f"{base_slug}-{suffix}"
+        suffix += 1
     return slug
 
 
 def _song_input(title: str, original_filename: str) -> tuple[str, str, str]:
-    safe_original_name = Path(original_filename).name.strip() or "song"; extension = Path(safe_original_name).suffix.lower()
+    safe_original_name = Path(original_filename).name.strip() or "song"
+    extension = Path(safe_original_name).suffix.lower()
     if extension not in config.ALLOWED_AUDIO_EXTENSIONS:
         raise ValueError(
             f"Неподдерживаемый формат файла: {extension or '(нет расширения)'}. "
             f"Разрешено: {', '.join(sorted(config.ALLOWED_AUDIO_EXTENSIONS))}"
         )
-    clean_title = title.strip() or Path(safe_original_name).stem; return clean_title, safe_original_name, extension
+    clean_title = title.strip() or Path(safe_original_name).stem
+    return clean_title, safe_original_name, extension
 
 
 def _persist_song(
@@ -256,8 +279,12 @@ def _persist_song(
         artist, title) if part).strip() or title
     base_slug = slugify(identity, fallback="song")
     with library_write_lock():
-        slug = make_unique_slug(db, base_slug); folder_base = _folder_name(artist, title, slug) if artist else slug; output_dir = _unique_output_dir(folder_base); destination = output_dir / f"source{extension}"
-        write_source(destination); extract_embedded_cover(destination, output_dir)
+        slug = make_unique_slug(db, base_slug)
+        folder_base = _folder_name(artist, title, slug) if artist else slug
+        output_dir = _unique_output_dir(folder_base)
+        destination = output_dir / f"source{extension}"
+        write_source(destination)
+        extract_embedded_cover(destination, output_dir)
         song = models.Song(
             title=title,
             artist=artist,
@@ -269,7 +296,9 @@ def _persist_song(
         )
         db.add(song)
         try:
-            saved = commit_refresh(db, song); revision_cache.invalidate(saved); return saved
+            saved = commit_refresh(db, song)
+            revision_cache.invalidate(saved)
+            return saved
         except Exception:
             destination.unlink(missing_ok=True)
             for cover in output_dir.glob("cover.*"): cover.unlink(missing_ok=True)
@@ -305,7 +334,9 @@ def create_song_from_path(
     artist, resolved_title = _read_source_identity(
         temporary_source, safe_name, clean_title)
 
-    def move_source(destination: Path) -> None: destination.parent.mkdir(parents=True, exist_ok=True); move_path(temporary_source, destination)
+    def move_source(destination: Path) -> None:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        move_path(temporary_source, destination)
 
     return _persist_song(
         db,
@@ -324,7 +355,8 @@ def get_song(db: Session, song_id: str) -> models.Song | None: return repositori
 
 
 def update_song(db: Session, song: models.Song, patch: schemas.SongUpdate) -> models.Song:
-    changes = patch.model_dump(exclude_unset=True); note_min, note_max = changes.get('note_range_min', getattr(song, 'note_range_min', None)), changes.get('note_range_max', getattr(song, 'note_range_max', None))
+    changes = patch.model_dump(exclude_unset=True)
+    note_min, note_max = changes.get('note_range_min', getattr(song, 'note_range_min', None)), changes.get('note_range_max', getattr(song, 'note_range_max', None))
     if note_min is not None and note_max is not None and note_min > note_max: raise ValueError("note_range_min must not exceed note_range_max")
     with library_write_lock():
         previous = {field: getattr(song, field) for field in changes}
@@ -336,7 +368,9 @@ def update_song(db: Session, song: models.Song, patch: schemas.SongUpdate) -> mo
         if "key_override" in changes: song.key_user_edited = changes["key_override"] is not None
         if "tempo_override" in changes: song.tempo_user_edited = changes["tempo_override"] is not None
         try:
-            saved = commit_refresh(db, song); revision_cache.invalidate(saved); return saved
+            saved = commit_refresh(db, song)
+            revision_cache.invalidate(saved)
+            return saved
         except Exception:
             for field, value in previous.items(): setattr(song, field, value)
             if hasattr(song, "key_user_edited"): song.key_user_edited = previous_edit_flags[0]

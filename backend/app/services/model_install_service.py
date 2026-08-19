@@ -29,11 +29,14 @@ def _progress_values() -> dict[str, int]:
             for line in path.read_text(encoding="utf-8").splitlines()
             if "=" in line
         )
-    except OSError: return {}
+    except OSError:
+        return {}
     result = {}
     for name in ("downloaded_bytes", "total_bytes", "remaining_seconds"):
-        try: result[name] = int(pairs[name])
-        except (KeyError, ValueError): continue
+        try:
+            result[name] = int(pairs[name])
+        except (KeyError, ValueError):
+            continue
     return result
 
 
@@ -41,7 +44,9 @@ def _model_states(models_root: Path) -> list[dict[str, object]]: return [{'key':
 
 
 def status() -> dict[str, object]:
-    models_root = config.MODELS_DIR.resolve(); models = _model_states(models_root); ready_count = sum(bool(model["ready"]) for model in models)
+    models_root = config.MODELS_DIR.resolve()
+    models = _model_states(models_root)
+    ready_count = sum(bool(model["ready"]) for model in models)
     with _lock: runtime = dict(_state)
 
     state = str(runtime["state"])
@@ -76,27 +81,40 @@ def _install_missing_models(
 ) -> None:
     for model in MODELS:
         if is_valid(models_root, model):
-            reporter.model_finished(model.name); continue
+            reporter.model_finished(model.name)
+            continue
         if log_repairs:
             logger.warning(
                 "Repairing incomplete AI model before processing: %s", model.name)
-        _set_state(current_model=model.name); reporter.model_started(model.name); install_one(models_root, cache_dir, model, retries=3); reporter.model_finished(model.name)
+        _set_state(current_model=model.name)
+        reporter.model_started(model.name)
+        install_one(models_root, cache_dir, model, retries=3)
+        reporter.model_finished(model.name)
 
     if not all(is_valid(models_root, model) for model in MODELS): raise RuntimeError(verification_failure_message)
-    config.configure_ai_resource_environment(force=True); from AI.service import reset_ai_service
+    config.configure_ai_resource_environment(force=True)
+    from AI.service import reset_ai_service
 
     reset_ai_service()
 
 
-def _recover_models(models_root: Path, cache_dir: Path, reporter: ProgressReporter, *, verification_message: str, log_repairs: bool) -> None: models_root.mkdir(parents=True, exist_ok=True); cache_dir.mkdir(parents=True, exist_ok=True); _install_missing_models(models_root, cache_dir, reporter, verification_failure_message=verification_message, log_repairs=log_repairs)
+def _recover_models(models_root: Path, cache_dir: Path, reporter: ProgressReporter, *, verification_message: str, log_repairs: bool) -> None:
+    models_root.mkdir(parents=True, exist_ok=True)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    _install_missing_models(models_root, cache_dir, reporter, verification_failure_message=verification_message, log_repairs=log_repairs)
 
 
 def _download_worker(models_root: Path, cache_dir: Path) -> None:
-    reporter = ProgressReporter(models_root, config.APP_LOG_DIR / "model-recovery-progress.txt"); reporter.start()
+    reporter = ProgressReporter(models_root, config.APP_LOG_DIR / "model-recovery-progress.txt")
+    reporter.start()
     try:
-        _recover_models(models_root, cache_dir, reporter, verification_message="Model verification failed after download", log_repairs=False); reporter.finish(True); _set_state(state="ready", current_model=None, error=None)
+        _recover_models(models_root, cache_dir, reporter, verification_message="Model verification failed after download", log_repairs=False)
+        reporter.finish(True)
+        _set_state(state="ready", current_model=None, error=None)
     except Exception as exc:
-        reporter.finish(False); logger.exception("AI model recovery failed"); _set_state(state="error", current_model=None, error=str(exc)[:2000])
+        reporter.finish(False)
+        logger.exception("AI model recovery failed")
+        _set_state(state="error", current_model=None, error=str(exc)[:2000])
 
 
 def ensure_ready_sync(cancelled=None) -> dict[str, object]:
@@ -114,11 +132,18 @@ def ensure_ready_sync(cancelled=None) -> dict[str, object]:
 
     reporter = ProgressReporter(
         models_root, config.APP_LOG_DIR / "model-recovery-progress.txt")
-    reporter.start(); cache_dir = (config.CACHE_DIR / "model-downloads").resolve()
+    reporter.start()
+    cache_dir = (config.CACHE_DIR / "model-downloads").resolve()
     try:
-        _recover_models(models_root, cache_dir, reporter, verification_message="Model verification failed after recovery", log_repairs=True); reporter.finish(True); _set_state(state="ready", current_model=None, error=None); return status()
+        _recover_models(models_root, cache_dir, reporter, verification_message="Model verification failed after recovery", log_repairs=True)
+        reporter.finish(True)
+        _set_state(state="ready", current_model=None, error=None)
+        return status()
     except Exception as exc:
-        reporter.finish(False); logger.exception("Synchronous AI model recovery failed"); _set_state(state="error", current_model=None, error=str(exc)[:2000]); raise
+        reporter.finish(False)
+        logger.exception("Synchronous AI model recovery failed")
+        _set_state(state="error", current_model=None, error=str(exc)[:2000])
+        raise
 
 
 def start_download() -> dict[str, object]:

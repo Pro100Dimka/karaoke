@@ -23,8 +23,10 @@ def _ffmpeg_available() -> bool: return config.FFMPEG_EXE != 'ffmpeg'
 
 def _package_available(distribution: str) -> bool:
     try:
-        importlib.metadata.version(distribution); return True
-    except importlib.metadata.PackageNotFoundError: return False
+        importlib.metadata.version(distribution)
+        return True
+    except importlib.metadata.PackageNotFoundError:
+        return False
 
 
 def _torch_info() -> tuple[bool, bool, str | None]:
@@ -32,7 +34,8 @@ def _torch_info() -> tuple[bool, bool, str | None]:
         import torch
 
         return True, torch.cuda.is_available(), torch.__version__
-    except (ImportError, RuntimeError): return False, False, None
+    except (ImportError, RuntimeError):
+        return False, False, None
 
 
 def _ai_package_available() -> bool:
@@ -41,16 +44,21 @@ def _ai_package_available() -> bool:
         from AI.service import AICoreService  # noqa: F401
 
         return True
-    except ImportError: return False
+    except ImportError:
+        return False
 
 
 def pipeline_health() -> dict:
-    torch_available, cuda_available, _ = _torch_info(); runtime = None
+    torch_available, cuda_available, _ = _torch_info()
+    runtime = None
     try:
         from app.services import ai_bridge
 
-        health = ai_bridge.get_service().health(); separator_available = bool(health.get("separation_configured")); runtime = health.get("runtime")
-    except Exception: separator_available = False
+        health = ai_bridge.get_ai_service().health()
+        separator_available = bool(health.get("separation_configured"))
+        runtime = health.get("runtime")
+    except Exception:
+        separator_available = False
 
     return {
         "ffmpeg_available": _ffmpeg_available(),
@@ -64,13 +72,17 @@ def pipeline_health() -> dict:
 
 
 def versions() -> dict:
-    _, _, torch_version = _torch_info(); components: dict[str, str | None] = {"torch": torch_version}
+    _, _, torch_version = _torch_info()
+    components: dict[str, str | None] = {"torch": torch_version}
     try:
-        from AI.pipeline import KaraokePipeline; from AI.version import AI_BUILD_ID
+        from AI.pipeline import KaraokePipeline
+        from AI.version import AI_BUILD_ID
 
-        components["ai_build"] = AI_BUILD_ID; components["ai_pipeline"] = KaraokePipeline.VERSION
+        components["ai_build"] = AI_BUILD_ID
+        components["ai_pipeline"] = KaraokePipeline.VERSION
     except Exception:
-        components["ai_build"] = None; components["ai_pipeline"] = None
+        components["ai_build"] = None
+        components["ai_pipeline"] = None
 
     try:
         result = subprocess.run(
@@ -81,7 +93,8 @@ def versions() -> dict:
             check=False,
         )
         components["ffmpeg"] = result.stdout.splitlines()[0] if result.stdout else None
-    except (OSError, subprocess.SubprocessError): components["ffmpeg"] = None
+    except (OSError, subprocess.SubprocessError):
+        components["ffmpeg"] = None
 
     for display, package in (
         ("qwen_asr", "qwen-asr"),
@@ -90,8 +103,10 @@ def versions() -> dict:
         ("mido", "mido"),
         ("soundfile", "soundfile"),
     ):
-        try: components[display] = importlib.metadata.version(package)
-        except importlib.metadata.PackageNotFoundError: components[display] = None
+        try:
+            components[display] = importlib.metadata.version(package)
+        except importlib.metadata.PackageNotFoundError:
+            components[display] = None
 
     return {
         "backend_version": BACKEND_VERSION,
@@ -101,7 +116,8 @@ def versions() -> dict:
 
 
 def recent_errors(limit: int = 20) -> list[dict]:
-    import models; from database import SessionLocal
+    import models
+    from database import SessionLocal
 
     db = SessionLocal()
     try:
@@ -121,10 +137,12 @@ def recent_errors(limit: int = 20) -> list[dict]:
             }
             for song in errored
         ]
-    finally: db.close()
+    finally:
+        db.close()
 
 
 def record_client_log(entry) -> None:
-    level, context = _CLIENT_LOG_LEVELS.get(str(entry.level or 'info').casefold(), logging.INFO), ' '.join((part for part in (f'user={entry.user}' if entry.user else '', f'at={entry.url}' if entry.url else '') if part)); message = f"{context}: {entry.message}" if context else entry.message
+    level, context = _CLIENT_LOG_LEVELS.get(str(entry.level or 'info').casefold(), logging.INFO), ' '.join((part for part in (f'user={entry.user}' if entry.user else '', f'at={entry.url}' if entry.url else '') if part))
+    message = f"{context}: {entry.message}" if context else entry.message
     if entry.stack: message = f"{message}\n{entry.stack}"
     logging.getLogger(f"client.{entry.source or 'unknown'}").log(level, message)

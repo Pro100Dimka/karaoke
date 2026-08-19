@@ -36,7 +36,8 @@ class ReferenceIndex:
     def note_at(self, timestamp: float) -> int | None:
         index = bisect.bisect_right(self.starts, timestamp) - 1
         if index < 0: return None
-        end, midi = self.notes[index]; return midi if timestamp < end else None
+        end, midi = self.notes[index]
+        return midi if timestamp < end else None
 
 
 def _to_midi(value: object) -> int | None:
@@ -48,8 +49,10 @@ def _to_midi(value: object) -> int | None:
 
     letter, accidental = value[0].upper(), value[1] if len(value) > 1 and value[1] in {'#', 'b'} else ''
     octave_text = value[2:] if accidental else value[1:]
-    try: octave = int(octave_text)
-    except ValueError: return None
+    try:
+        octave = int(octave_text)
+    except ValueError:
+        return None
 
     accidental_offset = 1 if accidental == "#" else -1 if accidental == "b" else 0
     return (octave + 1) * 12 + _NOTE_OFFSETS[letter] + accidental_offset
@@ -58,17 +61,25 @@ def _to_midi(value: object) -> int | None:
 def analyze_recording(recording: models.Recording, song: models.Song) -> dict[str, Any]:
     if not song.output_dir: raise ValueError("Песня ещё не обработана — нет эталонной мелодии для сравнения")
 
-    output_dir = song_service.resolve_output_dir(song); reference_notes, structure = ai_bridge.get_reference_notes(output_dir), read_json(output_dir / 'structure.json')
+    output_dir = song_service.resolve_output_dir(song)
+    reference_notes, structure = ai_bridge.get_reference_notes(output_dir), read_json(output_dir / 'structure.json')
     if not reference_notes: raise ValueError("Не найден reference.json — эталонная мелодия ещё не построена")
 
-    reference_index, pitch_frames = ReferenceIndex.build(reference_notes), ai_bridge.get_analyze_vocal()(recording.path); deviations: list[float] = []; frames: list[dict[str, float]] = []; hits = 0
+    reference_index, pitch_frames = ReferenceIndex.build(reference_notes), ai_bridge.analyze_vocal(recording.path)
+    deviations: list[float] = []
+    frames: list[dict[str, float]] = []
+    hits = 0
 
     for frame in pitch_frames:
-        timestamp = frame.get("time"); user_midi = _to_midi(frame.get("midi") or frame.get("note"))
+        timestamp = frame.get("time")
+        user_midi = _to_midi(frame.get("midi") or frame.get("note"))
         if not isinstance(timestamp, (int, float)) or user_midi is None: continue
         reference_midi = reference_index.note_at(float(timestamp))
         if reference_midi is None: continue
-        deviation = abs(user_midi - reference_midi); deviations.append(deviation); frames.append({"time": float(timestamp), "deviation_semitones": deviation}); hits += deviation <= _HIT_TOLERANCE_SEMITONES
+        deviation = abs(user_midi - reference_midi)
+        deviations.append(deviation)
+        frames.append({"time": float(timestamp), "deviation_semitones": deviation})
+        hits += deviation <= _HIT_TOLERANCE_SEMITONES
 
     accuracy, mean_deviation, sections = round(hits / len(deviations) * 100, 1) if deviations else None, round(statistics.fmean(deviations), 3) if deviations else None, _sections_breakdown(structure, frames) if isinstance(structure, list) else None
     return {
@@ -79,11 +90,14 @@ def analyze_recording(recording: models.Recording, song: models.Song) -> dict[st
 
 
 def _sections_breakdown(structure: list[dict], frames: list[dict[str, float]]) -> list[dict]:
-    result: list[dict] = []; times = [frame["time"] for frame in frames]
+    result: list[dict] = []
+    times = [frame["time"] for frame in frames]
     for section in structure:
         start, end = section.get("start"), section.get("end")
         if not isinstance(start, (int, float)) or not isinstance(end, (int, float)): continue
-        left = bisect.bisect_left(times, float(start)); right = bisect.bisect_left(times, float(end), lo=left); deviations = [frame["deviation_semitones"] for frame in frames[left:right]]
+        left = bisect.bisect_left(times, float(start))
+        right = bisect.bisect_left(times, float(end), lo=left)
+        deviations = [frame["deviation_semitones"] for frame in frames[left:right]]
         result.append(
             {
                 "label": section.get("label", section.get("name")),

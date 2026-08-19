@@ -17,7 +17,14 @@ class StageCache:
     INDEX_VERSION = 5
     LOCK_TIMEOUT_SEC = 30.0
 
-    def __init__(self, root: str | Path): self.root = Path(root); self.root.mkdir(parents=True, exist_ok=True); self.index_path = self.root / "index.json"; self.lock_path = self.root / "index.lock"; self._hash_memo: dict[tuple[str, int, int, int], str] = {}; self._lock = threading.RLock(); self.index = self._load_index()
+    def __init__(self, root: str | Path):
+        self.root = Path(root)
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.index_path = self.root / "index.json"
+        self.lock_path = self.root / "index.lock"
+        self._hash_memo: dict[tuple[str, int, int, int], str] = {}
+        self._lock = threading.RLock()
+        self.index = self._load_index()
 
     def _load_index(self) -> dict:
         loaded = read_json(self.index_path, {}) or {}
@@ -25,10 +32,10 @@ class StageCache:
         if not isinstance(loaded.get("stages"), dict): loaded["stages"] = {}
         return loaded
 
-    def _process_lock(self): return FileLock(self.lock_path, timeout_sec=self.LOCK_TIMEOUT_SEC)
 
     def file_hash(self, path: str | Path, block: int = 1024 * 1024) -> str:
-        source = Path(path); stat = source.stat()
+        source = Path(path)
+        stat = source.stat()
         memo_key = (
             str(source.resolve()),
             stat.st_size,
@@ -48,7 +55,8 @@ class StageCache:
 
     def optional_file_hash(self, path: str | Path | None) -> str | None:
         if path is None: return None
-        candidate = Path(path); return f'missing:{candidate.resolve()}' if not candidate.is_file() else self.file_hash(candidate)
+        candidate = Path(path)
+        return f'missing:{candidate.resolve()}' if not candidate.is_file() else self.file_hash(candidate)
 
     @staticmethod
     def key(stage: str, payload: dict) -> str:
@@ -71,7 +79,8 @@ class StageCache:
             if not path.is_file() or path.stat().st_size <= 0: raise FileNotFoundError(f"Missing expected stage artifact: {path}")
 
     def invalidate(self, *stages: str) -> None:
-        with self._lock, self._process_lock():
-            self.index = self._load_index(); data = self.index.setdefault("stages", {})
+        with self._lock, FileLock(self.lock_path, timeout_sec=self.LOCK_TIMEOUT_SEC):
+            self.index = self._load_index()
+            data = self.index.setdefault("stages", {})
             for stage in stages: data.pop(stage, None)
             write_json_atomic(self.index_path, self.index)

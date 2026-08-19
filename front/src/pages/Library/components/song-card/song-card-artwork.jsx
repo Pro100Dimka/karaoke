@@ -1,4 +1,5 @@
 import { useRadio } from "../../../../contexts/radio";
+import cx from "../../../../utils/cx";
 import SongCoverArt from "./song-cover-art";
 
 const WAVE_BARS = Object.freeze(
@@ -13,9 +14,7 @@ export default function SongCardArtwork({ cardIndex, song }) {
   return (
     <SongCoverArt
       song={song}
-      className={["library-song-card-art", isPlaying && "is-radio-reactive"]
-        .filter(Boolean)
-        .join(" ")}
+      className={cx("library-song-card-art", isPlaying && "is-radio-reactive")}
     >
       <div className="library-song-card-wave">
         {WAVE_BARS.map(({ idle, speed }, i) => (

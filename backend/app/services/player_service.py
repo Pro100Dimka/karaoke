@@ -32,10 +32,13 @@ def get_timeline(song: models.Song) -> dict:
 def _get_or_create_state(db: Session, song_id: str) -> models.PlaybackState:
     if (state := repositories.get_playback_state(db, song_id)) is not None: return state
 
-    state = models.PlaybackState(song_id=song_id, position_sec=0.0, is_playing=False); db.add(state)
-    try: return commit_refresh(db, state)
+    state = models.PlaybackState(song_id=song_id, position_sec=0.0, is_playing=False)
+    db.add(state)
+    try:
+        return commit_refresh(db, state)
     except IntegrityError:
-        db.rollback(); existing = repositories.get_playback_state(db, song_id)
+        db.rollback()
+        existing = repositories.get_playback_state(db, song_id)
         if existing is None: raise
         return existing
 
@@ -43,10 +46,20 @@ def _get_or_create_state(db: Session, song_id: str) -> models.PlaybackState:
 def get_state(db: Session, song_id: str) -> models.PlaybackState: return _get_or_create_state(db, song_id)
 
 
-def seek(db: Session, song_id: str, position_sec: float) -> models.PlaybackState: state = _get_or_create_state(db, song_id); state.position_sec = max(0.0, position_sec); return commit_refresh(db, state)
+def seek(db: Session, song_id: str, position_sec: float) -> models.PlaybackState:
+    state = _get_or_create_state(db, song_id)
+    state.position_sec = max(0.0, position_sec)
+    return commit_refresh(db, state)
 
 
-def set_playing(db: Session, song_id: str, is_playing: bool) -> models.PlaybackState: state = _get_or_create_state(db, song_id); state.is_playing = is_playing; return commit_refresh(db, state)
+def set_playing(db: Session, song_id: str, is_playing: bool) -> models.PlaybackState:
+    state = _get_or_create_state(db, song_id)
+    state.is_playing = is_playing
+    return commit_refresh(db, state)
 
 
-def stop(db: Session, song_id: str) -> models.PlaybackState: state = _get_or_create_state(db, song_id); state.is_playing = False; state.position_sec = 0.0; return commit_refresh(db, state)
+def stop(db: Session, song_id: str) -> models.PlaybackState:
+    state = _get_or_create_state(db, song_id)
+    state.is_playing = False
+    state.position_sec = 0.0
+    return commit_refresh(db, state)

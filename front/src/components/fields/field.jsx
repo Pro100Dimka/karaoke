@@ -1,3 +1,5 @@
+import cx from "../../utils/cx";
+
 export default function Field({
   id,
   label,
@@ -9,9 +11,7 @@ export default function Field({
   children
 }) {
   const baseClass = inline ? "settings-toggle" : "settings-field";
-  const classes = [baseClass, variant && `${baseClass}--${variant}`, className]
-    .filter(Boolean)
-    .join(" ");
+  const classes = cx(baseClass, variant && `${baseClass}--${variant}`, className);
 
   return (
     <label className={classes} htmlFor={id}>

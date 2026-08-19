@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { translateSaved } from "../../../../i18n/runtime";
+import cx from "../../../../utils/cx";
 import SongCoverArt from "../../../Library/components/song-card/song-cover-art";
 import useKaraokePanorama from "../../hooks/useKaraokePanorama";
 import AuroraWorld from "./aurora-world";
@@ -8,12 +9,10 @@ import MelodyRoll from "./melody-roll";
 
 function Lyrics({ songId, lyrics, currentLine, upcomingLine, nextLine, currentTime }) {
   const activeLine = currentLine || upcomingLine;
-  const activeClassName = [
+  const activeClassName = cx(
     "karaoke-lyric karaoke-lyric-current",
-    !currentLine && upcomingLine ? "karaoke-lyric-upcoming" : ""
-  ]
-    .filter(Boolean)
-    .join(" ");
+    !currentLine && upcomingLine && "karaoke-lyric-upcoming"
+  );
   return (
     <div className="karaoke-lyrics">
       {!lyrics.length && (

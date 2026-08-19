@@ -14,8 +14,10 @@ def clamp01(value: float) -> float: return max(0.0, min(1.0, value))
 
 
 def _number_or(cast, value, default):
-    try: return cast(value)
-    except (TypeError, ValueError): return default
+    try:
+        return cast(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def int_or(value, default=None): return _number_or(int, value, default)

@@ -20,12 +20,18 @@ DIAGNOSTIC_AUDIO_VERSION = "stereo-v1-authoritative-game-notes"
 def _render_notes(notes: list[VocalNote], frames: int, sample_rate: int) -> np.ndarray:
     audio = np.zeros(frames, dtype=np.float32)
     for note in notes:
-        start = max(0, min(frames, round(note.start * sample_rate))); end = max(start, min(frames, round(note.end * sample_rate)))
+        start = max(0, min(frames, round(note.start * sample_rate)))
+        end = max(start, min(frames, round(note.end * sample_rate)))
         if end <= start: continue
-        count = end - start; t = np.arange(count, dtype=np.float64) / sample_rate; frequency = 440.0 * 2.0 ** ((int(note.midi_note) - 69) / 12.0); tone = np.sin(2.0 * math.pi * frequency * t)
-        tone += 0.16 * np.sin(4.0 * math.pi * frequency * t); envelope = np.ones(count, dtype=np.float64)
+        count = end - start
+        t = np.arange(count, dtype=np.float64) / sample_rate
+        frequency = 440.0 * 2.0 ** ((int(note.midi_note) - 69) / 12.0)
+        tone = np.sin(2.0 * math.pi * frequency * t)
+        tone += 0.16 * np.sin(4.0 * math.pi * frequency * t)
+        envelope = np.ones(count, dtype=np.float64)
         if fade := min(round(0.008 * sample_rate), count // 3):
-            envelope[:fade] = np.linspace(0.0, 1.0, fade, endpoint=False); envelope[-fade:] = np.linspace(1.0, 0.0, fade, endpoint=False)
+            envelope[:fade] = np.linspace(0.0, 1.0, fade, endpoint=False)
+            envelope[-fade:] = np.linspace(1.0, 0.0, fade, endpoint=False)
         audio[start:end] += (tone * envelope * 0.42).astype(np.float32)
     return np.clip(audio, -0.92, 0.92)
 
@@ -43,11 +49,16 @@ def write_diagnostic_audio(
 
     vocal, source_rate = sf.read(source, dtype="float32", always_2d=True)
     if source_rate != sample_rate: raise ValueError(f"unexpected diagnostic vocal sample rate: {source_rate}")
-    mono = np.mean(vocal, axis=1, dtype=np.float32); peak = float(np.max(np.abs(mono))) if mono.size else 0.0
+    mono = np.mean(vocal, axis=1, dtype=np.float32)
+    peak = float(np.max(np.abs(mono))) if mono.size else 0.0
     if peak > 0: mono = mono * (0.58 / peak)
-    melody = _render_notes(notes, len(mono), sample_rate); stereo = np.column_stack((mono, melody)).astype(np.float32, copy=False)
+    melody = _render_notes(notes, len(mono), sample_rate)
+    stereo = np.column_stack((mono, melody)).astype(np.float32, copy=False)
 
-    output.parent.mkdir(parents=True, exist_ok=True); fd, wav_name = tempfile.mkstemp(prefix="diagnostic-", suffix=".wav", dir=output.parent); os.close(fd); wav, temporary = Path(wav_name), output.with_name(f'.{output.name}.tmp.mp3')
+    output.parent.mkdir(parents=True, exist_ok=True)
+    fd, wav_name = tempfile.mkstemp(prefix="diagnostic-", suffix=".wav", dir=output.parent)
+    os.close(fd)
+    wav, temporary = Path(wav_name), output.with_name(f'.{output.name}.tmp.mp3')
     try:
         sf.write(wav, stereo, sample_rate, subtype="PCM_16")
         run_ffmpeg(
@@ -76,5 +87,6 @@ def write_diagnostic_audio(
         if isinstance(exc, AICoreError): raise
         raise AICoreError(f"Could not create diagnostic audio: {exc}") from exc
     finally:
-        wav.unlink(missing_ok=True); temporary.unlink(missing_ok=True)
+        wav.unlink(missing_ok=True)
+        temporary.unlink(missing_ok=True)
     return output

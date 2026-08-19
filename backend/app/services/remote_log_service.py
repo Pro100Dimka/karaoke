@@ -21,7 +21,8 @@ def _current_online_name() -> str:
         from app.services.app_settings_service import read_settings
 
         return str(read_settings().get("online_name") or "").strip()
-    except Exception: return ""
+    except Exception:
+        return ""
 
 
 def _send(message: str, user: str) -> None:
@@ -44,6 +45,8 @@ class RemoteErrorLogHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         if _DISABLED: return
-        try: message = self.format(record)
-        except Exception: return
+        try:
+            message = self.format(record)
+        except Exception:
+            return
         threading.Thread(target=_send, args=(message, _current_online_name()), daemon=True).start()

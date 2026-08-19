@@ -19,8 +19,10 @@ def _env_bool(name: str, default: bool) -> bool:
 
 def _env_number(name, default, cast, kind):
     if (raw := os.getenv(name)) is None: return default
-    try: return cast(raw)
-    except ValueError as exc: raise ConfigurationError(f"{name} must be {kind}, got {raw!r}") from exc
+    try:
+        return cast(raw)
+    except ValueError as exc:
+        raise ConfigurationError(f"{name} must be {kind}, got {raw!r}") from exc
 
 
 def _env_int(name: str, default: int) -> int: return _env_number(name, default, int, 'an integer')
