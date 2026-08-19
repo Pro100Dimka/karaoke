@@ -1,14 +1,12 @@
-from tests._shared import patch_attrs, make_song, raises, patch_many
-
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
 
-import models
 import schemas
 from app.services import song_service
+from tests._shared import make_song, patch_attrs, patch_many, raises
 
 
 def test_library_lock_and_owned_path_validation(monkeypatch, tmp_path):

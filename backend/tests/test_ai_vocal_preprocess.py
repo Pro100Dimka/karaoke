@@ -1,5 +1,3 @@
-from tests._shared import raises, patch_many, pitch_frame
-
 import subprocess
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -11,7 +9,7 @@ import soundfile as sf
 from AI import audio as ai_audio
 from AI import vocal_preprocess as vocal
 from AI.errors import AICoreError
-from AI.models import PitchFrame
+from tests._shared import patch_many, pitch_frame, raises
 
 
 def write(path, values, rate=1000): sf.write(path, np.asarray(values, dtype=np.float32), rate, format='WAV')

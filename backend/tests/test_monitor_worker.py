@@ -1,5 +1,3 @@
-from tests._shared import patch_attrs
-
 import contextlib
 import json
 import runpy
@@ -11,6 +9,7 @@ import numpy as np
 import pytest
 
 from app.services import monitor_worker
+from tests._shared import patch_attrs
 
 
 def options(): return {'sample_rate': 48000, 'output_channels': 2, 'input_device_id': 1, 'output_device_id': 2, 'blocksize': 64, 'gain': 2, 'wasapi_exclusive': False}

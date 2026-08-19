@@ -17,10 +17,11 @@ import schemas
 from app import repositories
 from app.services import revision_cache
 from app.services._metadata import first_audio_tag
-_first_audio_tag = first_audio_tag
 from app.services.db_utils import commit_refresh
 from app.services.resource_deletion import delete_with_files
 from app.utils.atomic_files import atomic_write_bytes, move_path
+
+_first_audio_tag = first_audio_tag
 
 _library_write_lock = threading.RLock()
 _content_locks_guard = threading.Lock()

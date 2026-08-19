@@ -1,6 +1,4 @@
 
-from tests._shared import patch_attrs, raises
-
 import builtins
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -11,6 +9,7 @@ from AI import config, profiler
 from AI.errors import ConfigurationError
 from AI.models import PitchFrame, StageReport, Syllable, VocalNote, Word
 from AI.quality import evaluate_quality
+from tests._shared import patch_attrs, raises
 
 
 @pytest.mark.parametrize("value", ["1", "true", "YES", "on"])

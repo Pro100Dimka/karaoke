@@ -1,11 +1,7 @@
-from tests._shared import raises, dump_json
-
 from unittest.mock import Mock
 
-import pytest
-
 from AI.cache import StageCache
-
+from tests._shared import dump_json, raises
 
 
 def test_cache_loads_only_current_valid_index(tmp_path):

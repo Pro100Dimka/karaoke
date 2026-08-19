@@ -1,10 +1,9 @@
-from tests._shared import patch_attrs
-
 from pathlib import Path
 
 import config
 from app.services import audio_service, monitor_worker, recording_service
 from app.services.song_editor_service import _refresh_lines, normalize_editor_timeline
+from tests._shared import patch_attrs
 
 
 def test_runtime_executable_prefers_packaged_sibling(monkeypatch, tmp_path):

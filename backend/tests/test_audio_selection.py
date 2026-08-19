@@ -1,12 +1,9 @@
-from tests._shared import patch_attrs, raises, patch_many
-
 import json
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-import pytest
-
 from app.services import audio_service
+from tests._shared import patch_attrs, patch_many, raises
 
 
 def device(name, hostapi, *, inputs=0, outputs=0, rate=48000, input_latency=0.02, output_latency=0.02): return {'name': name, 'hostapi': hostapi, 'max_input_channels': inputs, 'max_output_channels': outputs, 'default_samplerate': rate, 'default_low_input_latency': input_latency, 'default_low_output_latency': output_latency}

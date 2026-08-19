@@ -117,6 +117,7 @@ def assert_excludes(text, *forbidden):
 
 def upload_file(payload=b"audio", filename="song.wav"):
     from io import BytesIO
+
     from fastapi import UploadFile
 
     return UploadFile(filename=filename, file=BytesIO(payload))

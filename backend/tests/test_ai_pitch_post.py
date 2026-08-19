@@ -1,6 +1,4 @@
 
-from tests._shared import patch_attrs, pitch_frame, missing_import
-
 import builtins
 import sys
 from types import SimpleNamespace
@@ -9,10 +7,11 @@ import numpy as np
 import pytest
 
 from AI import pitch_post as post
-from AI.models import PitchFrame
+from tests._shared import missing_import, patch_attrs, pitch_frame
 
 
-frame = lambda time, hz=220, confidence=1, voiced=True, energy=0.1: pitch_frame(time, hz, confidence, voiced, energy)
+def frame(time, hz=220, confidence=1, voiced=True, energy=0.1):
+    return pitch_frame(time, hz, confidence, voiced, energy)
 
 
 def test_normalized_periodicity_edges_and_signal():

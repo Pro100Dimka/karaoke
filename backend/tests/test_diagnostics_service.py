@@ -1,5 +1,3 @@
-from tests._shared import patch_attrs
-
 import builtins
 import importlib.metadata
 from datetime import UTC, datetime
@@ -7,6 +5,7 @@ from types import ModuleType, SimpleNamespace
 from unittest.mock import Mock
 
 from app.services import diagnostics_service
+from tests._shared import patch_attrs
 
 
 def test_ffmpeg_and_package_availability(monkeypatch):

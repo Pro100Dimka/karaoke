@@ -8,7 +8,7 @@ import subprocess
 
 import config
 
-BACKEND_VERSION = "0.3.20"
+BACKEND_VERSION = "0.3.26"
 _CLIENT_LOG_LEVELS = {
     "debug": logging.DEBUG,
     "info": logging.INFO,
@@ -142,7 +142,7 @@ def recent_errors(limit: int = 20) -> list[dict]:
 
 
 def record_client_log(entry) -> None:
-    level, context = _CLIENT_LOG_LEVELS.get(str(entry.level or 'info').casefold(), logging.INFO), ' '.join((part for part in (f'user={entry.user}' if entry.user else '', f'at={entry.url}' if entry.url else '') if part))
+    level, context = _CLIENT_LOG_LEVELS.get(str(entry.level or 'info').casefold(), logging.INFO), ' '.join(part for part in (f'user={entry.user}' if entry.user else '', f'at={entry.url}' if entry.url else '') if part)
     message = f"{context}: {entry.message}" if context else entry.message
     if entry.stack: message = f"{message}\n{entry.stack}"
     logging.getLogger(f"client.{entry.source or 'unknown'}").log(level, message)

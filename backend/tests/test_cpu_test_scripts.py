@@ -1,6 +1,6 @@
-from tests._shared import assert_contains, project_text
-
 import pytest
+
+from tests._shared import assert_contains, project_text
 
 
 @pytest.mark.parametrize(

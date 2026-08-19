@@ -1,5 +1,3 @@
-from tests._shared import raises
-
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -9,6 +7,7 @@ from AI import karaoke_timeline as timeline
 from AI import midi
 from AI.errors import InvalidArtifactError
 from AI.models import Syllable, VocalNote, Word
+from tests._shared import raises
 
 
 def test_midi_helpers_clamp_and_sort_events():
@@ -82,7 +81,7 @@ def test_display_notes_filter_invalid_events_without_merging_musical_notes():
         {"start": 3, "end": 4, "midi": "bad"},
     ]
     merged = timeline._merge_display_notes(notes)
-    assert (len(merged) == 5) and ([(item['start'], item['end'], item['midi_note']) for item in merged[:2]] == [(0, 0.1, 60), (0.1, 0.2, 60)]) and (all((item['display_source'] == 'acoustic_game_note' for item in merged))) and (timeline._merge_display_notes([]) == [])
+    assert (len(merged) == 5) and ([(item['start'], item['end'], item['midi_note']) for item in merged[:2]] == [(0, 0.1, 60), (0.1, 0.2, 60)]) and (all(item['display_source'] == 'acoustic_game_note' for item in merged)) and (timeline._merge_display_notes([]) == [])
     leading_fragment = timeline._merge_display_notes(
         [
             {"start": 0, "end": 0.1, "midi": 60, "syllable_index": 1},

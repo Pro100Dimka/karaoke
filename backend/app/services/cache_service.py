@@ -126,7 +126,7 @@ def _prepare_optimization(out_dir: Path, actions: list[str]) -> tuple[dict, list
         if not isinstance(relative, str) or not _safe_journal_path(out_dir, relative).is_file(): raise ValueError(f"Optimization would leave a missing {key} artifact")
     return updated, created, retire
 
-def _dir_size_bytes(path: Path) -> int: return 0 if not path.exists() else sum((f.stat().st_size for f in path.rglob('*') if f.is_file()))
+def _dir_size_bytes(path: Path) -> int: return 0 if not path.exists() else sum(f.stat().st_size for f in path.rglob('*') if f.is_file())
 
 
 def _human(num_bytes: int) -> str:

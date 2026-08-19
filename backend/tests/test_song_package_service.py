@@ -1,5 +1,3 @@
-from tests._shared import patch_attrs, make_song, raises, patch_many
-
 import contextlib
 import hashlib
 import io
@@ -19,6 +17,7 @@ from sqlalchemy.orm import Session
 import models
 from app.services import cache_service, song_artifacts, song_package_service
 from database import Base
+from tests._shared import make_song, patch_attrs, patch_many, raises
 
 
 def wav_bytes(frames=800, rate=8000):
@@ -179,7 +178,7 @@ def test_manifest_identity_and_source_validation(tmp_path):
         assert song_package_service._package_identity(manifest) == ("id", "Song")
         assert song_package_service._source_member(archive.infolist()).filename == "source/song.wav"
 
-    for manifest in ({}, {"id": "id"}, {"title": "Song"}): raises(ValueError, lambda: song_package_service._package_identity(manifest), match='no song')
+    for manifest in ({}, {"id": "id"}, {"title": "Song"}): raises(ValueError, lambda manifest=manifest: song_package_service._package_identity(manifest), match='no song')
     raises(ValueError, lambda: song_package_service._source_member([]), match='one source')
     raises(ValueError, lambda: song_package_service._source_member([fake_member('source/song.exe')]), match='format')
 

@@ -1,6 +1,4 @@
 
-from tests._shared import patch_attrs, raises, patch_many, missing_import
-
 import builtins
 import contextlib
 import sys
@@ -15,6 +13,7 @@ from AI.engines import pitch
 from AI.engines.fcpe_backends import FCPEInference
 from AI.errors import EngineUnavailableError
 from AI.models import PitchFrame
+from tests._shared import missing_import, patch_attrs, patch_many, raises
 
 
 class Tensor:
@@ -78,7 +77,7 @@ def test_fcpe_estimate_empty_and_confident_frames(monkeypatch):
     assert estimator.estimate("empty") == []
     patch_attrs(monkeypatch, pitch, load_mono=lambda *_: (np.asarray([2, -2, 0.5] * 10, dtype=np.float32), 100))
     frames = estimator.estimate("audio")
-    assert (frames[0].voiced and frames[0].confidence == pytest.approx(0.8)) and (not frames[1].voiced and (not frames[2].voiced)) and (max((frame.energy for frame in frames)) <= 1)
+    assert (frames[0].voiced and frames[0].confidence == pytest.approx(0.8)) and (not frames[1].voiced and (not frames[2].voiced)) and (max(frame.energy for frame in frames) <= 1)
 
 
 def test_fcpe_old_api_and_confidence_fallback(monkeypatch):

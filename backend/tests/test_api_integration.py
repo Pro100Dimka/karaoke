@@ -1,5 +1,3 @@
-from tests._shared import patch_attrs, make_song
-
 from datetime import UTC, datetime
 
 import pytest
@@ -12,6 +10,7 @@ import models
 from app.main import app
 from app.services import app_settings_service
 from database import Base, get_db
+from tests._shared import make_song, patch_attrs
 
 
 @pytest.fixture

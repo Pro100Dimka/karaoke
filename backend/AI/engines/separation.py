@@ -19,7 +19,8 @@ import soundfile as sf
 
 from ..errors import AICoreError, EngineUnavailableError
 from ..profiler import profile_operation, record_operation
-from ..runtime import _cpu_thread_settings as _runtime_cpu_thread_settings, selected_backend
+from ..runtime import _cpu_thread_settings as _runtime_cpu_thread_settings
+from ..runtime import selected_backend
 from ..utils.env import env_flag
 from .base import Separator
 from .device import accelerator_failure
@@ -179,6 +180,18 @@ def _fit_channels_and_length(audio: np.ndarray, channels: int, frames: int) -> n
             audio = np.pad(audio, ((0, 0), (0, channels - audio.shape[1])))
     if len(audio) < frames: audio = np.pad(audio, ((0, frames - len(audio)), (0, 0)))
     return audio[:frames]
+
+
+def _write_stems(vocals, instrumental, vocal_audio, instrumental_audio, sample_rate):
+    vocals.parent.mkdir(parents=True, exist_ok=True)
+    instrumental.parent.mkdir(parents=True, exist_ok=True)
+    sf.write(vocals, np.clip(vocal_audio, -1, 1), sample_rate, subtype="PCM_24")
+    sf.write(
+        instrumental,
+        np.clip(instrumental_audio, -1, 1),
+        sample_rate,
+        subtype="PCM_24",
+    )
 
 
 class MSSTMelRoformerSeparator(Separator):
@@ -358,14 +371,8 @@ class MSSTMelRoformerSeparator(Separator):
             else:
                 instrumental_audio = mix_audio - vocal_audio
 
-            vocals.parent.mkdir(parents=True, exist_ok=True)
-            instrumental.parent.mkdir(parents=True, exist_ok=True)
-            sf.write(vocals, np.clip(vocal_audio, -1, 1), sample_rate, subtype="PCM_24")
-            sf.write(
-                instrumental,
-                np.clip(instrumental_audio, -1, 1),
-                sample_rate,
-                subtype="PCM_24",
+            _write_stems(
+                vocals, instrumental, vocal_audio, instrumental_audio, sample_rate
             )
 
 
@@ -381,7 +388,4 @@ class CenterChannelFallbackSeparator(Separator):
             mid = np.mean(audio[:, :2], axis=1, keepdims=True)
             vocal = np.repeat(mid, 2, axis=1)
             inst = audio[:, :2] - vocal
-        vocals.parent.mkdir(parents=True, exist_ok=True)
-        instrumental.parent.mkdir(parents=True, exist_ok=True)
-        sf.write(vocals, np.clip(vocal, -1, 1), sample_rate, subtype="PCM_24")
-        sf.write(instrumental, np.clip(inst, -1, 1), sample_rate, subtype="PCM_24")
+        _write_stems(vocals, instrumental, vocal, inst, sample_rate)

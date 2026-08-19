@@ -8,8 +8,6 @@ from statistics import median
 import numpy as np
 import soundfile as sf
 
-import config
-
 from .audio import render_wav_atomic
 from .errors import AICoreError
 from .models import PitchFrame
@@ -107,7 +105,7 @@ def score_pitch_track(frames: list[PitchFrame]) -> PitchTrackQuality:
     voiced_ratio = len(voiced) / len(frames)
     if len(voiced) < 3: return PitchTrackQuality(-0.5, voiced_ratio, 0.0, 1.0, 1.0, 1.0)
 
-    mean_confidence, jumps, transitions, octave_flips = sum((frame.confidence for frame in voiced)) / len(voiced), 0, 0, 0
+    mean_confidence, jumps, transitions, octave_flips = sum(frame.confidence for frame in voiced) / len(voiced), 0, 0, 0
     for index in range(1, len(frames)):
         left = frames[index - 1]
         right = frames[index]

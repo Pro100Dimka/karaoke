@@ -1,6 +1,4 @@
 
-from tests._shared import patch_attrs, dump_json
-
 import json
 from pathlib import Path
 from unittest.mock import Mock
@@ -9,6 +7,7 @@ import pytest
 
 from AI.models import PitchFrame
 from app.services import ai_bridge as bridge
+from tests._shared import patch_attrs
 
 
 def dump_json(path: Path, payload) -> None: path.write_text(json.dumps(payload, ensure_ascii=False), encoding='utf-8')

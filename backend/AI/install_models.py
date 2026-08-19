@@ -132,12 +132,12 @@ def _indexed_weight_files(path: Path) -> tuple[set[str], bool]:
 
 def _has_complete_weights(path: Path) -> bool:
     shards, indexed = _indexed_weight_files(path)
-    return bool(shards) and all(((path / shard).is_file() for shard in shards)) if indexed else any(path.glob('*.safetensors')) or (path / 'pytorch_model.bin').is_file()
+    return bool(shards) and all((path / shard).is_file() for shard in shards) if indexed else any(path.glob('*.safetensors')) or (path / 'pytorch_model.bin').is_file()
 
 
 def missing_snapshot_files(path: Path) -> list[str]:
     shards, indexed = _indexed_weight_files(path)
-    return [] if not indexed else sorted((shard for shard in shards if not (path / shard).is_file()))
+    return [] if not indexed else sorted(shard for shard in shards if not (path / shard).is_file())
 
 
 def is_valid(models_root: Path, model: ModelSpec) -> bool:

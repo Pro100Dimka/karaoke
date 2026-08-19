@@ -1,14 +1,11 @@
-from tests._shared import patch_attrs, raises, patch_many
-
 import json
 import subprocess
 import threading
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-import pytest
-
 from app.services import audio_service
+from tests._shared import patch_attrs, patch_many, raises
 
 
 class OutputLines(list):

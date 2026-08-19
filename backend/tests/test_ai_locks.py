@@ -1,6 +1,4 @@
 
-from tests._shared import patch_attrs, raises
-
 import ctypes
 import json
 import os
@@ -11,6 +9,7 @@ from unittest.mock import Mock
 import pytest
 
 from AI import locks
+from tests._shared import patch_attrs, raises
 
 
 @pytest.mark.parametrize(

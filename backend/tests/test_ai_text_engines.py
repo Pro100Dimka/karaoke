@@ -1,6 +1,4 @@
 
-from tests._shared import patch_attrs, raises, alignment_result, patch_many
-
 import sys
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -11,6 +9,7 @@ import pytest
 from AI.engines import text
 from AI.errors import EngineUnavailableError, InvalidArtifactError
 from AI.models import PitchFrame, Word
+from tests._shared import alignment_result, patch_attrs, patch_many, raises
 
 
 def make_aligner(monkeypatch):
@@ -398,7 +397,7 @@ def test_align_long_text_passes_nonpathological_candidate_to_fallback(monkeypatc
 
     monkeypatch.setattr(text, "_long_text_line_fallback", fallback)
     result = aligner.align_long_text("audio", "one two\nthree", "en")
-    assert ([word.text for word in result] == ['one', 'two', 'three']) and (any((candidate for candidate in captured)))
+    assert ([word.text for word in result] == ['one', 'two', 'three']) and (any(candidate for candidate in captured))
 
 
 def test_align_long_text_rejects_micro_local_words_before_merge(monkeypatch):
@@ -420,7 +419,7 @@ def test_align_long_text_micro_activity_fallback_and_invariant(monkeypatch):
     monkeypatch.setattr(aligner, "_align_many", lambda audios, *_: [[] for _ in audios])
     patch_attrs(monkeypatch, text, _long_text_line_fallback=lambda *_a, **_k: [], _atomic_line_acoustic_alignment=lambda *_a, **_k: ([], {}), _anchor_preserving_canonical_alignment=lambda *_a, **_k: ([], {}), _line_aware_canonical_alignment=lambda *_a, **_k: ([], {}), _lossless_canonical_alignment=lambda *_: [], _activity_quantile_times=lambda *_: [0, 0.1])
     result = aligner.align_long_text("audio", "\n".join(groups), "en")
-    assert (len(result) == 10 and all((word.end > word.start for word in result))) and (all((right.start >= left.end for left, right in zip(result, result[1:], strict=False))))
+    assert (len(result) == 10 and all(word.end > word.start for word in result)) and (all((right.start >= left.end for left, right in zip(result, result[1:], strict=False))))
 
     patch_attrs(monkeypatch, text, _long_text_line_fallback=lambda tokens, span, **_k: [Word(word.start, word.end, 'wrong', 0.1, word.index) for word in text._proportional_words(tokens, span)], load_mono=lambda *_: (np.ones(1000), 100), _activity_quantile_times=lambda *_: [])
     raises(InvalidArtifactError, lambda: aligner.align_long_text('audio', '\n'.join(groups), 'en'), match='canonical lyric invariant')

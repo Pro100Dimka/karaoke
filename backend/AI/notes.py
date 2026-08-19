@@ -12,7 +12,7 @@ import numpy as np
 
 from .audio import load_mono
 from .models import PitchFrame, Syllable, VocalNote, Word
-from .utils.numeric import clamp01, energy_attack_strength
+from .utils.numeric import energy_attack_strength
 
 NOTE_DECODER_VERSION = "acoustic-notes-v33-boundary-lyrics-association"
 _NOTE_DIAGNOSTICS: ContextVar[dict | None] = ContextVar("note_diagnostics", default=None)
@@ -288,7 +288,7 @@ def _split_on_reattacks(segment: list[PitchFrame], min_note: float) -> list[list
         else:
             step = 0.01
         durations.append(part[-1].time - part[0].time + step)
-    return [segment] if any((value < min_note for value in durations)) else parts
+    return [segment] if any(value < min_note for value in durations) else parts
 
 
 def _bend_curve(
@@ -347,7 +347,7 @@ def _note_from_segment(
         for frame, energy in zip(segment, energies, strict=False)
     ]
     center = _robust_pitch_center(values, weights)
-    base, confidence = max(0, min(127, int(round(center)))), sum((frame.confidence for frame in segment)) / len(segment)
+    base, confidence = max(0, min(127, int(round(center)))), sum(frame.confidence for frame in segment) / len(segment)
     velocity, cents = max(42, min(118, int(round(62 + confidence * 48)))), _bend_curve(segment, start=start, base=base, duration=end - start)
     return VocalNote(
         start,
@@ -811,7 +811,7 @@ def _audio_verify_note_register(
         if value >= 7: return "large_7_11"
         return 'medium_3_6' if value >= 3 else 'small_1_2'
 
-    accepted_buckets, rejected_buckets, diag = Counter((_bucket(int(item['semitone_delta'])) for item in accepted_changes)), Counter((_bucket(int(item['semitone_delta'])) for item in rejected_changes)), dict(_NOTE_DIAGNOSTICS.get() or {})
+    accepted_buckets, rejected_buckets, diag = Counter(_bucket(int(item['semitone_delta'])) for item in accepted_changes), Counter(_bucket(int(item['semitone_delta'])) for item in rejected_changes), dict(_NOTE_DIAGNOSTICS.get() or {})
     diag["register_verification"] = {
         "checked_notes": len(notes),
         "changed_notes": len(changed),

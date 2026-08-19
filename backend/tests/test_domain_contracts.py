@@ -1,4 +1,3 @@
-from tests._shared import raises
 from datetime import UTC, datetime
 from unittest.mock import Mock
 
@@ -9,6 +8,7 @@ from pydantic import ValidationError
 import models
 import schemas
 from app.api import dependencies
+from tests._shared import raises
 
 
 @pytest.mark.parametrize(

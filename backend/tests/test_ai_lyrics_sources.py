@@ -1,6 +1,4 @@
 
-from tests._shared import patch_attrs, patch_many
-
 import json
 import sys
 from types import SimpleNamespace
@@ -10,6 +8,7 @@ from urllib.error import URLError
 import pytest
 
 from AI import lyrics_sources as lyrics
+from tests._shared import patch_attrs, patch_many
 
 
 class Response:
@@ -367,7 +366,7 @@ def test_mychords_artist_catalog_finds_exact_song_on_paginated_artist_page(monke
     patch_attrs(monkeypatch, lyrics, _mychords_search=lambda _query: pytest.fail('generic MyChords search used'), _web_search=lambda _query: pytest.fail('external search used'))
     candidate = lyrics.LyricsSearchCandidate('Нервы Моя Леди', 'Нервы', 'Моя Леди')
     result = lyrics._web_online(candidate)
-    assert (result.source == 'web:mychords.net') and (len(result.text.split()) == 40) and ('https://mychords.net/ru/nervi/page/3/' in seen) and (all(('/page/4/' not in url for url in seen)))
+    assert (result.source == 'web:mychords.net') and (len(result.text.split()) == 40) and ('https://mychords.net/ru/nervi/page/3/' in seen) and (all('/page/4/' not in url for url in seen))
 
 
 def test_mychords_catalog_does_not_accept_other_artist_or_similar_title(monkeypatch):

@@ -1,12 +1,12 @@
-from tests._shared import patch_attrs, pitch_frame
-
 import pytest
 
 from AI import syllables
-from AI.models import PitchFrame, Word
+from AI.models import Word
+from tests._shared import patch_attrs, pitch_frame
 
 
-frame = lambda time, frequency=220, confidence=0.9, voiced=True, energy=0.8: pitch_frame(time, frequency, confidence, voiced, energy)
+def frame(time, frequency=220, confidence=0.9, voiced=True, energy=0.8):
+    return pitch_frame(time, frequency, confidence, voiced, energy)
 
 
 @pytest.mark.parametrize(

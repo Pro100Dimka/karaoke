@@ -1,5 +1,3 @@
-from tests._shared import patch_attrs, make_song, raises
-
 from datetime import UTC, datetime
 from unittest.mock import Mock
 
@@ -13,6 +11,7 @@ from app import repositories
 from app.services import db_utils, player_service, resource_deletion
 from app.utils.json_files import write_json
 from database import Base
+from tests._shared import make_song, patch_attrs, raises
 
 
 @pytest.fixture

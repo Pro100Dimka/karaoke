@@ -279,7 +279,7 @@ def reset_runtime_for_tests() -> None:
 
 def format_runtime_plan(plan: RuntimePlan | None = None) -> tuple[str, ...]:
     plan = plan or get_runtime_plan()
-    gpu, tuning = ', '.join((item.name for item in plan.hardware.gpus)) or 'none', _cpu_thread_settings(plan.hardware.logical_cores) if plan.preference == 'cpu' and env_flag('KARAOKE_CPU_TUNING') else None
+    gpu, tuning = ', '.join(item.name for item in plan.hardware.gpus) or 'none', _cpu_thread_settings(plan.hardware.logical_cores) if plan.preference == 'cpu' and env_flag('KARAOKE_CPU_TUNING') else None
     lines = (
         f"CPU: {plan.hardware.cpu} ({plan.hardware.logical_cores} logical cores)",
         *(

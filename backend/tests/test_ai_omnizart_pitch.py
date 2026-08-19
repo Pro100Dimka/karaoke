@@ -1,13 +1,11 @@
 
-from tests._shared import patch_attrs, raises
-
 from types import SimpleNamespace
 
 import numpy as np
-import pytest
 
 from AI.engines import omnizart_pitch
 from AI.errors import EngineUnavailableError
+from tests._shared import patch_attrs, raises
 
 
 def model_files(root):

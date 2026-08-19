@@ -1,9 +1,8 @@
-from tests._shared import make_song, patch_attrs, raises, patch_many
-
 import pytest
 
 import models
 from app.services import analysis_service
+from tests._shared import make_song, patch_attrs, patch_many, raises
 
 
 @pytest.mark.parametrize(

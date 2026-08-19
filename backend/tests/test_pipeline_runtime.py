@@ -1,13 +1,10 @@
-from tests._shared import mock_song_lookup, patch_attrs, raises, patch_many
-
 import sys
 from types import ModuleType, SimpleNamespace
 from unittest.mock import Mock
 
-import pytest
-
 import models
 from app.services import pipeline_service
+from tests._shared import mock_song_lookup, patch_attrs, patch_many, raises
 
 
 def test_runtime_configuration_applies_device_threads_and_torch(monkeypatch):

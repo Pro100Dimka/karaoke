@@ -204,7 +204,7 @@ def _song_mode_from_files(output_dir: Path) -> str:
         raise ValueError("Song timeline artifacts are invalid") from exc
     notes, words, sync_words = song_map.get('notes', []) if isinstance(song_map, dict) else [], song_map.get('words', []) if isinstance(song_map, dict) else [], lyrics_sync.get('words', []) if isinstance(lyrics_sync, dict) else []
     if isinstance(notes, list) and any(isinstance(item, dict) for item in notes): return "melody"
-    return 'lyrics' if isinstance(words, list) and any((isinstance(item, dict) for item in words)) or (isinstance(sync_words, list) and any((isinstance(item, dict) for item in sync_words))) else 'instrumental'
+    return 'lyrics' if isinstance(words, list) and any(isinstance(item, dict) for item in words) or (isinstance(sync_words, list) and any(isinstance(item, dict) for item in sync_words)) else 'instrumental'
 
 
 def _manifest(song: models.Song) -> dict[str, object]:

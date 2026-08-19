@@ -1,6 +1,4 @@
 
-from tests._shared import patch_attrs
-
 import json
 import sys
 
@@ -9,6 +7,7 @@ import pytest
 
 from AI import alignment_debug as debug
 from AI.models import Word
+from tests._shared import patch_attrs
 
 
 def test_debug_flag_and_word_helpers(monkeypatch):
@@ -63,7 +62,7 @@ def test_build_alignment_debug_detects_structural_failures(monkeypatch):
         "missing_words",
     ]
     reasons = {reason for line in report["lines"] for reason in line["reasons"]}
-    assert (any(('FIRST forced-aligner' in reason for reason in reasons))) and (any(('implausibly long' in reason for reason in reasons))) and (any(('Huge gap' in reason for reason in reasons))) and (any(('substantial vocal energy' in reason for reason in reasons))) and (report['top_suspects'])
+    assert (any('FIRST forced-aligner' in reason for reason in reasons)) and (any('implausibly long' in reason for reason in reasons)) and (any('Huge gap' in reason for reason in reasons)) and (any('substantial vocal energy' in reason for reason in reasons)) and (report['top_suspects'])
 
 
 def test_token_mismatch_and_yo_normalization(monkeypatch):

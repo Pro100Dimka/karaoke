@@ -1,10 +1,9 @@
-from tests._shared import patch_attrs, patch_many
-
 import hashlib
 from types import SimpleNamespace
 
 from AI import pipeline
 from AI.cache import StageCache
+from tests._shared import patch_attrs, patch_many
 
 
 def _sha(path): return hashlib.sha256(path.read_bytes()).hexdigest()

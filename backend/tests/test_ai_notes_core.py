@@ -1,6 +1,4 @@
 
-from tests._shared import patch_attrs, raises, midi_frame
-
 import math
 import sys
 from dataclasses import replace
@@ -10,8 +8,8 @@ from unittest.mock import Mock
 import pytest
 
 from AI import notes
-from AI.models import PitchFrame, Syllable, VocalNote, Word
-
+from AI.models import Syllable, VocalNote, Word
+from tests._shared import midi_frame, patch_attrs, raises
 
 frame = midi_frame
 
@@ -224,7 +222,7 @@ def test_game_notes_preserve_syllable_granularity():
 
     rounding_edge, aligned_edge = note(114.46, 114.97000000000001, 63), [syllable(114.325024, 114.478816, 199, word=10), syllable(114.478816, 114.683872, 200, word=10), syllable(114.683872, 114.87, 201, word=10), syllable(114.87, 114.97, 202, word=10), syllable(114.97, 115.14, 203)]
     result = notes.build_game_notes([rounding_edge], aligned_edge)
-    assert (len(result) == 1) and (result[0].syllable_indices == (199, 200, 201, 202)) and (all((item.end > item.start for item in result)))
+    assert (len(result) == 1) and (result[0].syllable_indices == (199, 200, 201, 202)) and (all(item.end > item.start for item in result))
 
     boundary_note, boundary_syllables = note(7.12, 7.52, 55), [syllable(7.048732824, 7.12, 2, word=1), syllable(7.12, 7.16, 3, word=1)]
     result = notes.build_game_notes([boundary_note], boundary_syllables)
@@ -246,7 +244,7 @@ def test_game_notes_preserve_real_repeated_notes_and_melisma():
 
     melisma = [note(0, 0.4, 60), note(0.4, 0.8, 62), note(0.8, 1.0, 64)]
     result = notes.build_game_notes(melisma, [syllable(0, 1)])
-    assert (len(result) == 3) and (all((item.syllable_indices == (0,) for item in result))) and (all((item.end > item.start for item in result)))
+    assert (len(result) == 3) and (all(item.syllable_indices == (0,) for item in result)) and (all(item.end > item.start for item in result))
 
 
 def test_many_to_many_lyric_association_never_consumes_by_note_count():

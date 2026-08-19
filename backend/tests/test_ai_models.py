@@ -1,10 +1,9 @@
-from tests._shared import raises
-
 from dataclasses import dataclass
 
 import pytest
 
 from AI.models import PitchFrame, Syllable, TimeSpan, VocalNote, Word, to_dict
+from tests._shared import raises
 
 
 @pytest.mark.parametrize(

@@ -1,5 +1,3 @@
-from tests._shared import patch_attrs, make_song, raises, patch_many
-
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -7,6 +5,7 @@ import pytest
 
 import models
 from app.services import recording_service
+from tests._shared import make_song, patch_attrs, patch_many, raises
 
 
 def recording(path, *, duration=12.5): return models.Recording(id='recording', song_id='song', filename='take.wav', path=str(path), duration_sec=duration, sample_rate=48000)

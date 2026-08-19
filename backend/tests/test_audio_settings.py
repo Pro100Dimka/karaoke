@@ -1,14 +1,12 @@
-from tests._shared import patch_attrs, raises, patch_many
-
 import builtins
 import importlib
 from unittest.mock import Mock
 
 import numpy as np
-import pytest
 
 import models
 from app.services import audio_service
+from tests._shared import patch_attrs, patch_many, raises
 
 
 def settings(**changes):

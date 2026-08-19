@@ -86,7 +86,7 @@ if (-not $Worker) {
         }
         return "{0}.{1}.{2}" -f $Matches[1], $Matches[2], ([int]$Matches[3] + 1)
     }
-    function Set-VersionInFile([string]$Path, [string]$Pattern, [string]$Replacement) {
+    function Get-VersionBumpedContent([string]$Path, [string]$Pattern, [string]$Replacement) {
         # Windows PowerShell 5.1's Get-Content -Raw guesses the system ANSI
         # codepage for BOM-less files instead of UTF-8, which silently mangles
         # the Cyrillic comments/strings these files contain. Decode the bytes
@@ -95,25 +95,37 @@ if (-not $Worker) {
         $content = [Text.Encoding]::UTF8.GetString($bytes)
         $updated = [regex]::Replace($content, $Pattern, $Replacement, "Multiline")
         if ($updated -eq $content) { throw "Could not find a version to bump in $Path" }
-        [IO.File]::WriteAllText($Path, $updated, (New-Object Text.UTF8Encoding($false)))
+        return $updated
     }
 
     $PackageJsonPath = Join-Path $Frontend "package.json"
+    $PyprojectPath = Join-Path $Backend "pyproject.toml"
+    $DiagnosticsPath = Join-Path $Backend "app\services\diagnostics_service.py"
+
     $PackageJsonText = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($PackageJsonPath))
     $CurrentVersion = ($PackageJsonText | ConvertFrom-Json).version
     if (-not $CurrentVersion) { throw "front/package.json does not define version" }
     $NextVersion = Get-NextPatchVersion $CurrentVersion
     $EscapedCurrent = [regex]::Escape($CurrentVersion)
 
-    Set-VersionInFile $PackageJsonPath `
+    # Compute and validate every file's replacement before writing any of them.
+    # Writing eagerly per-file would leave earlier files bumped and later ones
+    # stale if a later pattern fails to match, permanently desyncing the
+    # versions and breaking every subsequent build with the same error.
+    $PackageJsonUpdated = Get-VersionBumpedContent $PackageJsonPath `
         ('"version": "' + $EscapedCurrent + '"') `
         ('"version": "' + $NextVersion + '"')
-    Set-VersionInFile (Join-Path $Backend "pyproject.toml") `
+    $PyprojectUpdated = Get-VersionBumpedContent $PyprojectPath `
         ('^version = "' + $EscapedCurrent + '"') `
         ('version = "' + $NextVersion + '"')
-    Set-VersionInFile (Join-Path $Backend "app\services\diagnostics_service.py") `
+    $DiagnosticsUpdated = Get-VersionBumpedContent $DiagnosticsPath `
         ('BACKEND_VERSION = "' + $EscapedCurrent + '"') `
         ('BACKEND_VERSION = "' + $NextVersion + '"')
+
+    $Utf8NoBom = New-Object Text.UTF8Encoding($false)
+    [IO.File]::WriteAllText($PackageJsonPath, $PackageJsonUpdated, $Utf8NoBom)
+    [IO.File]::WriteAllText($PyprojectPath, $PyprojectUpdated, $Utf8NoBom)
+    [IO.File]::WriteAllText($DiagnosticsPath, $DiagnosticsUpdated, $Utf8NoBom)
 
     Write-Host "Build version bumped: $CurrentVersion -> $NextVersion"
 }

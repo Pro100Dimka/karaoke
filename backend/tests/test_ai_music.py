@@ -1,6 +1,4 @@
 
-from tests._shared import patch_attrs, raises, missing_import
-
 import sys
 from types import SimpleNamespace
 
@@ -8,6 +6,7 @@ import numpy as np
 import pytest
 
 from AI import music
+from tests._shared import missing_import, patch_attrs, raises
 
 
 def test_profile_scores_empty_and_ranked():

@@ -1,5 +1,3 @@
-from tests._shared import assert_http_status, raises, upload_file
-
 import asyncio
 from io import BytesIO
 from types import SimpleNamespace
@@ -18,6 +16,7 @@ from app.utils.quarantine import (
     restore_quarantined_paths,
 )
 from app.utils.uploads import read_upload_limited, save_upload_limited
+from tests._shared import assert_http_status, raises
 
 
 def upload_file(payload: bytes) -> UploadFile: return UploadFile(filename='payload.bin', file=BytesIO(payload))

@@ -1,11 +1,8 @@
-from tests._shared import patch_attrs, raises
-
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-import pytest
-
 import config
+from tests._shared import patch_attrs, raises
 
 
 def test_environment_path_integer_and_csv_helpers(monkeypatch, tmp_path):

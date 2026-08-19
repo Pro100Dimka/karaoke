@@ -1,5 +1,3 @@
-from tests._shared import patch_attrs, assert_http_status, patch_many
-
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -10,6 +8,7 @@ from fastapi import HTTPException
 import schemas
 from app import main
 from app.routers import application, cache, diagnostics, player
+from tests._shared import assert_http_status, patch_attrs, patch_many
 
 
 def test_application_router_translates_service_validation(monkeypatch):

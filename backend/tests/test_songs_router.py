@@ -1,17 +1,21 @@
-from tests._shared import patch_attrs, assert_http_status, make_song, raises, patch_many, upload_file
-
 import asyncio
 from datetime import UTC, datetime
-from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
-import pytest
-from fastapi import BackgroundTasks, HTTPException, Response, UploadFile
+from fastapi import BackgroundTasks, HTTPException, Response
 
 import models
 import schemas
 from app.routers import songs
+from tests._shared import (
+    assert_http_status,
+    make_song,
+    patch_attrs,
+    patch_many,
+    raises,
+    upload_file,
+)
 
 
 def domain_song(**changes):
@@ -194,7 +198,7 @@ def test_editor_endpoints_validate_state_save_and_reset(monkeypatch):
         lambda: songs.save_song_editor(schemas.SongEditorUpdate(notes=[]), current, database),
         lambda: songs.reset_song_editor(current, database),
     ):
-        raises(HTTPException, lambda: action())
+        raises(HTTPException, action)
     current.status = models.SongStatus.DONE
     patch_attrs(monkeypatch, songs.song_service, resolve_output_dir=Mock(return_value=SimpleNamespace()))
     patch_attrs(monkeypatch, songs.song_editor_service, load_editor=Mock(return_value=({'notes': []}, True)))
@@ -252,4 +256,4 @@ def test_song_mutations_are_blocked_while_recording_is_active(monkeypatch):
         (songs.process_song, pending),
         (songs.reprocess_melody, done),
     ):
-        assert_http_status(409, lambda: action(song, database))
+        assert_http_status(409, lambda action=action, song=song: action(song, database))

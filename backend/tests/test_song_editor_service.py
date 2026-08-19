@@ -1,4 +1,3 @@
-from tests._shared import raises
 import json
 from pathlib import Path
 from unittest.mock import Mock
@@ -7,6 +6,7 @@ import pytest
 
 from app.services import song_editor_service
 from app.utils.json_files import write_json
+from tests._shared import raises
 
 
 @pytest.mark.parametrize("value", [None, "bad"])
@@ -47,7 +47,7 @@ def test_note_normalization_clamps_velocity_and_links_indices():
         ({"start": 0, "end": 4, "midi": 60}, "outside"),
         ({"start": 0, "end": 1, "midi": 128}, "MIDI"),
     ]
-    for payload, message in invalid: raises(ValueError, lambda: song_editor_service._normalize_note(payload, 3), match=message)
+    for payload, message in invalid: raises(ValueError, lambda payload=payload: song_editor_service._normalize_note(payload, 3), match=message)
 
 
 def test_words_and_syllables_filter_invalid_items_and_clamp_values():

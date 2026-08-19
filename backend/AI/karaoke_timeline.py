@@ -5,6 +5,7 @@ from typing import Any
 
 from .engines.text import _vowel_weighted_length, tokenize
 from .models import Syllable, VocalNote, Word, to_dict
+from .utils.numeric import float_or, int_or
 
 KARAOKE_TIMELINE_VERSION = "v3-compressed-line-boundary-rebalance"
 
@@ -21,8 +22,6 @@ KARAOKE_TIMELINE_VERSION = "v3-compressed-line-boundary-rebalance"
 # already exists before the next item, never past it.
 _MIN_DISPLAY_DURATION = 0.10
 
-
-from .utils.numeric import float_or, int_or
 _safe_float = float_or
 
 def _extend_micro_duration_spans(items: list[dict[str, Any]], total_duration: float) -> None:

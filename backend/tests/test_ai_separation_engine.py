@@ -1,6 +1,4 @@
 
-from tests._shared import patch_attrs, raises
-
 import queue
 from types import ModuleType, SimpleNamespace
 from unittest.mock import Mock
@@ -11,6 +9,7 @@ import soundfile as sf
 
 from AI.engines import separation
 from AI.errors import AICoreError, EngineUnavailableError
+from tests._shared import patch_attrs, raises
 
 
 class ResultQueue:

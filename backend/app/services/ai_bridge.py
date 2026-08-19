@@ -8,12 +8,11 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
-from AI.audio import load_mono
-from AI.engines.text import _vocal_activity_regions, tokenize
+from AI.engines.text import tokenize
 from AI.models import PitchFrame
 from AI.notes import hz_to_midi
+from AI.service import get_ai_service
 from AI.utils.numeric import int_or
-from AI.service import AICoreService, get_ai_service
 from app.utils.json_files import read_json, write_json
 
 ProgressCallback = Callable[[str, float, str], None]
@@ -200,7 +199,7 @@ def _normalized_word(word: object) -> dict[str, Any] | None:
 
 def _artifact_list(output_dir: Path, key: str, *files: str) -> list[dict[str, Any]]:
     for name in files:
-        payload = read_json(output_dir / name, default={})
+        payload: Any = read_json(output_dir / name, default={})
         if isinstance(payload, dict) and isinstance(items := payload.get(key), list): return [item for item in items if isinstance(item, dict)]
     return []
 
@@ -247,7 +246,7 @@ def _group_words_into_lines(
     return _lines_payload(lines)
 
 
-def _lines_payload(lines: list[list[dict[str, Any]]]) -> list[dict[str, Any]]: return [{'text': ' '.join((item['word'] for item in line)), 'start': line[0]['start'], 'end': line[-1]['end'], 'words': line} for line in lines if line]
+def _lines_payload(lines: list[list[dict[str, Any]]]) -> list[dict[str, Any]]: return [{'text': ' '.join(item['word'] for item in line), 'start': line[0]['start'], 'end': line[-1]['end'], 'words': line} for line in lines if line]
 
 
 def _bound_legacy_word_durations(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:

@@ -1,5 +1,3 @@
-from tests._shared import patch_attrs, raises, FakeOrtSession
-
 import sys
 from contextlib import nullcontext
 from types import SimpleNamespace
@@ -20,6 +18,7 @@ from AI.backend_registry import (
 )
 from AI.engines import ctc_backends
 from AI.errors import EngineUnavailableError
+from tests._shared import FakeOrtSession, patch_attrs, raises
 
 
 def spec(name='a', *, available=True, fallback=(), priority=1, quality='baseline'): return BackendSpec('ctc_ru', name, 'cpu', 'fp32', lambda: BackendAvailability(available, 'test'), priority, MemoryRequirements(1, 2), (ArtifactRequirement('weights', 'path'),), frozenset({'dynamic-time'}), SupportedShapes(('time',), 400), quality, 'baseline', fallback)
@@ -126,7 +125,8 @@ def test_pytorch_adapter_cpu_cuda_and_missing_import(monkeypatch):
     raises(EngineUnavailableError, lambda: ctc_backends.PyTorchCTCBackend(model, 'cpu').infer(values), match='torch is required')
 
 
-FakeSession = lambda providers=("CUDAExecutionProvider", "CPUExecutionProvider"): FakeOrtSession("input_values", np.ones((1, 3, 4), dtype=np.float32), providers)
+def FakeSession(providers=("CUDAExecutionProvider", "CPUExecutionProvider")):
+    return FakeOrtSession("input_values", np.ones((1, 3, 4), dtype=np.float32), providers)
 
 def test_ort_adapter_load_infer_cache_release_and_failures(monkeypatch, tmp_path):
     artifact = tmp_path / "model.onnx"

@@ -1,6 +1,4 @@
 
-from tests._shared import patch_attrs, raises, patch_many
-
 import sys
 from contextlib import nullcontext
 from types import SimpleNamespace
@@ -14,6 +12,7 @@ from AI.engines import ctc_alignment as ctc
 from AI.engines.ctc_backends import ShadowInference
 from AI.errors import EngineUnavailableError, InvalidArtifactError
 from AI.models import Word
+from tests._shared import patch_attrs, patch_many, raises
 
 
 @pytest.mark.parametrize(

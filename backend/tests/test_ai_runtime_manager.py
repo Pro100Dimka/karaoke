@@ -1,10 +1,10 @@
-from tests._shared import patch_attrs
 from types import SimpleNamespace
 
 import pytest
 
 from AI import backend_registry, runtime
 from AI.engines import device
+from tests._shared import patch_attrs
 
 
 @pytest.fixture(autouse=True)
@@ -36,7 +36,7 @@ def test_auto_selects_only_quality_approved_cuda_and_registered_cpu_fallback(mon
     runtime.reset_runtime_for_tests()
     monkeypatch.setattr(runtime, "detect_hardware", lambda _torch=None: profile(cuda=True))
     plan = runtime.configure_runtime("auto", force=True)
-    assert (set(plan.selected) == set(runtime.MODEL_ROLES)) and (all((spec.backend == 'pytorch' and spec.device == 'cuda' for spec in plan.selected.values()))) and (all((specs and specs[-1].device == 'cpu' for specs in plan.fallbacks.values()))) and (all(('onnxruntime' not in spec.key for spec in plan.selected.values())))
+    assert (set(plan.selected) == set(runtime.MODEL_ROLES)) and (all(spec.backend == 'pytorch' and spec.device == 'cuda' for spec in plan.selected.values())) and (all(specs and specs[-1].device == 'cpu' for specs in plan.fallbacks.values())) and (all('onnxruntime' not in spec.key for spec in plan.selected.values()))
 
 
 def test_cpu_and_unavailable_cuda_always_select_safe_cpu(monkeypatch):
@@ -45,7 +45,7 @@ def test_cpu_and_unavailable_cuda_always_select_safe_cpu(monkeypatch):
     cpu = runtime.configure_runtime("cpu", force=True)
     assert all(spec.device == "cpu" for spec in cpu.selected.values())
     requested_cuda = runtime.configure_runtime("cuda", force=True)
-    assert (all((spec.device == 'cpu' for spec in requested_cuda.selected.values()))) and (any(('CUDA was requested' in warning for warning in requested_cuda.warnings)))
+    assert (all(spec.device == 'cpu' for spec in requested_cuda.selected.values())) and (any('CUDA was requested' in warning for warning in requested_cuda.warnings))
 
 
 def test_failed_cuda_backend_is_disabled_for_process_and_switches_one_model(monkeypatch):
@@ -63,7 +63,7 @@ def test_device_runtime_failure_uses_registry_fallback_and_formats_log(monkeypat
     runtime.configure_runtime("auto", force=True)
     assert (device.fallback_torch_device('aligner', 'cuda:0', RuntimeError('CUDA driver')) == 'cpu') and ('retrying with pytorch:cpu:fp32' in capsys.readouterr().out)
     lines = runtime.format_runtime_plan()
-    assert (any((line == 'GPU: none' for line in lines))) and (any(('aligner -> pytorch:cpu:fp32' in line for line in lines)))
+    assert (any(line == 'GPU: none' for line in lines)) and (any('aligner -> pytorch:cpu:fp32' in line for line in lines))
 
 
 def test_non_accelerator_error_is_not_masked(monkeypatch):

@@ -1,6 +1,4 @@
 
-from tests._shared import patch_attrs, alignment_result
-
 from types import SimpleNamespace
 
 import numpy as np
@@ -8,6 +6,7 @@ import pytest
 
 from AI.engines import text
 from AI.models import Word
+from tests._shared import alignment_result, patch_attrs
 
 
 def anchor_merge(
@@ -147,7 +146,7 @@ def test_complete_anchor_windows_degenerate_observation(monkeypatch):
     completed, provenance = text._complete_line_anchor_windows(
         ["same", "same"], {0: (20, 20, 1), 1: (22, 22, 1)}, source, 10, 10
     )
-    assert (set(completed) == {0, 1}) and (all((value.startswith('vocal_baseline') for value in provenance.values())))
+    assert (set(completed) == {0, 1}) and (all(value.startswith('vocal_baseline') for value in provenance.values()))
 
     baseline = [Word(20, 21, "same"), Word(22, 23, "same", index=1)]
     monkeypatch.setattr(text, "_lossless_canonical_alignment", lambda *_: baseline)

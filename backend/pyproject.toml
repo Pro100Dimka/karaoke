@@ -1,6 +1,6 @@
 [project]
 name = "a-and-d-voice-backend"
-version = "0.3.20"
+version = "0.3.26"
 description = "Локальный FastAPI backend приложения A&D Voice."
 requires-python = ">=3.11,<3.13"
 readme = "README.md"
@@ -24,6 +24,7 @@ select = [
 ignore = [
     "B008", # FastAPI declares Depends/File through parameter defaults.
     "E501", # длину строк уже ограничивает line-length; докстринги/комментарии на русском иногда длиннее
+    "E701", # проект намеренно использует однострочные if/for/with (code golf)
 ]
 
 [tool.ruff.lint.isort]

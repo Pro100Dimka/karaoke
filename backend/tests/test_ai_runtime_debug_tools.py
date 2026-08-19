@@ -1,9 +1,8 @@
-from tests._shared import patch_attrs
-
 import importlib.util
 from pathlib import Path
 
 from AI import runtime
+from tests._shared import patch_attrs
 
 ROOT = Path(__file__).resolve().parents[2]
 

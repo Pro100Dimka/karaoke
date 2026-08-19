@@ -1,5 +1,3 @@
-from tests._shared import raises
-
 import subprocess
 from unittest.mock import Mock
 
@@ -11,6 +9,7 @@ from AI import audio as ai_audio
 from AI import diagnostic_audio
 from AI.errors import AICoreError
 from AI.models import VocalNote
+from tests._shared import raises
 
 
 def test_render_notes_handles_bounds_fades_and_clipping():

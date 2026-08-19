@@ -1,5 +1,3 @@
-from tests._shared import alignment_candidate
-
 from types import SimpleNamespace
 
 import pytest
@@ -7,6 +5,7 @@ import pytest
 from AI import diagnostics
 from AI.models import PitchFrame, StageReport, Syllable, VocalNote, Word
 from AI.utils.numeric import clamp01
+from tests._shared import alignment_candidate
 
 
 def pitch(time, hz=220, confidence=0.8, voiced=True): return PitchFrame(time, hz if voiced else 0, confidence, voiced, 0.1)

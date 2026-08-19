@@ -1,5 +1,3 @@
-from tests._shared import mock_song_lookup, patch_attrs, make_song, raises, patch_many
-
 import builtins
 import importlib
 from unittest.mock import MagicMock, Mock
@@ -9,6 +7,7 @@ import pytest
 
 import models
 from app.services import recording_service
+from tests._shared import make_song, mock_song_lookup, patch_attrs, patch_many, raises
 
 
 def make_session(monkeypatch, **overrides):

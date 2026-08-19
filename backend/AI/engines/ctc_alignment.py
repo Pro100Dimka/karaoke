@@ -188,7 +188,7 @@ class CTCWordAligner:
             "tokenizer_config.json",
             "vocab.json",
         )
-        return (False, 'processor/tokenizer files are missing') if not any(((path / name).is_file() for name in processor_files)) else (True, 'ok')
+        return (False, 'processor/tokenizer files are missing') if not any((path / name).is_file() for name in processor_files) else (True, 'ok')
 
     @classmethod
     def _candidate_paths(cls, code: str, configured: str = "") -> list[Path]:

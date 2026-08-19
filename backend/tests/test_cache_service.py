@@ -1,12 +1,10 @@
-from tests._shared import mock_song_lookup, patch_attrs, make_song, raises, patch_many
-
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
 
-import models
 from app.services import cache_service
+from tests._shared import make_song, mock_song_lookup, patch_attrs, patch_many, raises
 
 
 def test_encoders_build_expected_ffmpeg_commands(monkeypatch, tmp_path):
@@ -15,7 +13,7 @@ def test_encoders_build_expected_ffmpeg_commands(monkeypatch, tmp_path):
     wav = tmp_path / "source.wav"
     cache_service._encode_mp3(wav, tmp_path / "target.mp3")
     cache_service._encode_flac(wav, tmp_path / "target.flac")
-    assert (run.call_count == 2) and ('libmp3lame' in run.call_args_list[0].args[0]) and ('flac' in run.call_args_list[1].args[0]) and (all((call.kwargs['check'] for call in run.call_args_list)))
+    assert (run.call_count == 2) and ('libmp3lame' in run.call_args_list[0].args[0]) and ('flac' in run.call_args_list[1].args[0]) and (all(call.kwargs['check'] for call in run.call_args_list))
 
 
 @pytest.mark.parametrize(
@@ -217,7 +215,7 @@ def test_safe_journal_path_accepts_only_contained_portable_paths(tmp_path):
     target = out / "separated" / "instrumental.flac"
     target.parent.mkdir(parents=True)
     assert cache_service._safe_journal_path(out, "separated/instrumental.flac") == target.resolve()
-    for value in (None, "", "a\\b", "C:/x", "../x", "/x", ".", "x/../y"): raises(ValueError, lambda: cache_service._safe_journal_path(out, value))
+    for value in (None, "", "a\\b", "C:/x", "../x", "/x", ".", "x/../y"): raises(ValueError, lambda value=value: cache_service._safe_journal_path(out, value))
 
 
 def test_committed_stale_optimization_journal_never_retires_new_generation(tmp_path):

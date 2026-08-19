@@ -8,7 +8,6 @@ from dataclasses import asdict, dataclass
 import numpy as np
 
 from ..backend_registry import AI_BACKEND_REGISTRY, fcpe_onnx_path
-from ..errors import EngineUnavailableError
 from ..profiler import profile_operation
 from .ort_session import OrtSessionMixin
 

@@ -1,15 +1,12 @@
 
-from tests._shared import patch_attrs, raises
-
 import hashlib
 import logging
 from pathlib import Path
 from unittest.mock import Mock
 
-import pytest
-
 from AI import install_models as install
 from AI.model_registry import ModelFile, ModelSpec
+from tests._shared import patch_attrs, raises
 
 
 def specs():

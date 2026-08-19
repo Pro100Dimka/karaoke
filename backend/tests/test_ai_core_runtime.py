@@ -1,6 +1,4 @@
 
-from tests._shared import patch_attrs, raises, patch_many
-
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,6 +12,7 @@ from AI import runtime as ai_runtime
 from AI.engines import device, registry
 from AI.errors import ConfigurationError
 from AI.utils import io
+from tests._shared import patch_attrs, patch_many, raises
 
 
 def test_lazy_ai_exports_and_unknown_attribute():

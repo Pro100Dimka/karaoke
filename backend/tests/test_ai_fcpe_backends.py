@@ -1,15 +1,13 @@
-from tests._shared import raises, FakeOrtSession
-
 import sys
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import numpy as np
-import pytest
 
 from AI.backend_registry import BackendAvailability
 from AI.engines import fcpe_backends
 from AI.errors import EngineUnavailableError
+from tests._shared import FakeOrtSession, raises
 
 
 def test_decode_and_nearest_resize_contract():
@@ -23,7 +21,8 @@ def test_decode_and_nearest_resize_contract():
     assert (resized.tolist() == [[1, 1, 2, 2]]) and (fcpe_backends.nearest_resize(resized, 4) is resized)
 
 
-FakeSession = lambda providers=("CUDAExecutionProvider", "CPUExecutionProvider"): FakeOrtSession("mel", np.pad(np.ones((1, 2, 1), dtype=np.float32), ((0, 0), (0, 0), (4, 7))), providers)
+def FakeSession(providers=("CUDAExecutionProvider", "CPUExecutionProvider")):
+    return FakeOrtSession("mel", np.pad(np.ones((1, 2, 1), dtype=np.float32), ((0, 0), (0, 0), (4, 7))), providers)
 
 def _fake_ort(session): return SimpleNamespace(SessionOptions=lambda: SimpleNamespace(graph_optimization_level=None), GraphOptimizationLevel=SimpleNamespace(ORT_ENABLE_ALL='all'), InferenceSession=Mock(return_value=session))
 

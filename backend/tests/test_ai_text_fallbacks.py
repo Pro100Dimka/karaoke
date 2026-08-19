@@ -1,12 +1,9 @@
-from tests._shared import word_rows
-
 import numpy as np
 import pytest
 
 from AI.engines import text
-from AI.models import Word
 from AI.utils.numeric import clamp
-
+from tests._shared import word_rows
 
 
 def test_grouping_activity_quantiles_and_long_segments(monkeypatch):

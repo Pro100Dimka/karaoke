@@ -1,11 +1,10 @@
-from tests._shared import patch_attrs, patch_many
-
 from unittest.mock import Mock
 
 import config
 from AI.engines.separation import MSSTMelRoformerSeparator
 from AI.model_registry import ModelSpec, model_directory
 from app.services import model_install_service
+from tests._shared import patch_attrs, patch_many
 
 
 def _model() -> ModelSpec: return ModelSpec(key='recovery', name='Recovery model', repo_id='owner/repository', revision='revision', relative_path='recovery', env_var='RECOVERY_MODEL')
@@ -28,7 +27,7 @@ def test_separator_reports_each_missing_resource(monkeypatch, tmp_path):
 
     missing = separator.missing_resources()
 
-    assert (any(('MSST_ENGINE_DIR/inference.py' in item for item in missing))) and (any(('MSST_CONFIG' in item for item in missing))) and (any(('MSST_CHECKPOINT=<not configured>' in item for item in missing)))
+    assert (any('MSST_ENGINE_DIR/inference.py' in item for item in missing)) and (any('MSST_CONFIG' in item for item in missing)) and (any('MSST_CHECKPOINT=<not configured>' in item for item in missing))
 
 
 def test_model_status_reports_missing_resources(monkeypatch, tmp_path):

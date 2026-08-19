@@ -1,13 +1,10 @@
-from tests._shared import patch_attrs, raises, patch_many, mock_song_lookup
-
 from types import SimpleNamespace
 from unittest.mock import Mock
-
-import pytest
 
 import models
 from app.services import pipeline_service
 from app.utils.json_files import write_json
+from tests._shared import mock_song_lookup, patch_attrs, patch_many, raises
 
 
 def test_load_job_paths_handles_missing_default_and_persisted_output(monkeypatch, tmp_path):
@@ -110,7 +107,7 @@ def test_force_midi_rebuild_invalidates_cache_and_files_but_preserves_manifest(m
     (tmp_path / "manifest.json").write_text('{"outputs":{}}', encoding="utf-8")
     pipeline_service._force_midi_rebuild(tmp_path)
     cache.invalidate.assert_called_once_with("pitch", "derivation", "midi", "song-map")
-    assert (not any(((tmp_path / name).exists() for name in pipeline_service._MIDI_REBUILD_FILES))) and ((tmp_path / 'manifest.json').is_file())
+    assert (not any((tmp_path / name).exists() for name in pipeline_service._MIDI_REBUILD_FILES)) and ((tmp_path / 'manifest.json').is_file())
 
 
 def test_reprocessing_validates_owned_direct_child_and_runs_job(monkeypatch, tmp_path):

@@ -1,6 +1,4 @@
 
-from tests._shared import patch_attrs, raises, word_rows, alignment_candidate
-
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,7 +11,7 @@ from AI.errors import EngineUnavailableError, InvalidArtifactError, ProcessingCa
 from AI.models import PitchFrame, Syllable, VocalNote, Word
 from AI.quality import QualityReport
 from AI.vocal_preprocess import PitchTrackQuality
-
+from tests._shared import alignment_candidate, patch_attrs, raises, word_rows
 
 
 def test_bound_and_trim_canonical_words():
@@ -58,7 +56,7 @@ def test_preserve_complete_timeline_repairs_bounds_and_suffix():
     assert pipeline._preserve_complete_canonical_timeline([], 1) is None
     overlap = word_rows((0, 1, "a", 1), (0.8, 2, "b", 0), (1.99, 3.5, "c", 0.5))
     repaired = pipeline._preserve_complete_canonical_timeline(overlap, 3)
-    assert (repaired and repaired[0].start == 0 and (repaired[-1].end == 3)) and (all((0 <= word.confidence <= 1 for word in repaired)))
+    assert (repaired and repaired[0].start == 0 and (repaired[-1].end == 3)) and (all(0 <= word.confidence <= 1 for word in repaired))
     impossible = word_rows((0, 1, "a", 1), (0, 1, "b", 1), (0, 1, "c", 1))
     assert pipeline._preserve_complete_canonical_timeline(impossible, 0.02) is None
     shifted = word_rows((0, 1, "a", 1), (0, 1.02, "b", 1))
@@ -73,7 +71,7 @@ def test_lossless_canonical_words_preserve_or_retime():
     aligned = word_rows((0, 1, "a", 0.8), (1, 2, "b", 0.9))
     assert (pipeline._pipeline_lossless_canonical_words('', aligned, 2) is aligned) and (pipeline._pipeline_lossless_canonical_words('a b', aligned, 2)[0].confidence == 0.8)
     retimed = pipeline._pipeline_lossless_canonical_words("long x", aligned[:1], 0.1)
-    assert ([word.text for word in retimed] == ['long', 'x']) and (all((word.confidence == 0.004 for word in retimed)))
+    assert ([word.text for word in retimed] == ['long', 'x']) and (all(word.confidence == 0.004 for word in retimed))
     raises(InvalidArtifactError, lambda: pipeline._pipeline_lossless_canonical_words('a b', aligned, 0.5), match='could not be locally')
 
 
@@ -378,7 +376,7 @@ def test_pipeline_rejects_missing_and_generated_sources(tmp_path):
     ],
 )
 def test_full_pipeline_fresh_supplied_lyrics_flow(monkeypatch, tmp_path, mode):
-    trusted_lyrics, cached, lyric_text = mode not in {'asr', 'cached-asr'}, mode.startswith('cached'), ' '.join((f'word{i}' for i in range(60))) if mode in {'long', 'anchor-fail'} else 'hello world'
+    trusted_lyrics, cached, lyric_text = mode not in {'asr', 'cached-asr'}, mode.startswith('cached'), ' '.join(f'word{i}' for i in range(60)) if mode in {'long', 'anchor-fail'} else 'hello world'
     supplied_segments, source = ((0.0, 2.0, lyric_text),) if mode in {'segments', 'cached-segments'} else (), tmp_path / 'source.mp3'
     source.write_bytes(b"source")
     output, hash_count = tmp_path / 'output', 0

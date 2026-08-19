@@ -20,12 +20,12 @@ from .engines.pitch import PyinFallbackPitchEstimator
 from .engines.registry import EngineRegistry
 from .engines.separation import CenterChannelFallbackSeparator
 from .engines.text import (
-    _normalize_match_token,
     ASR_PIPELINE_VERSION,
     FALLBACK_WORD_CONFIDENCE,
     LONG_TEXT_ALIGNMENT_VERSION,
     SEGMENTED_ALIGNMENT_VERSION,
     UniformTextFallback,
+    _normalize_match_token,
     enforce_segmented_timing_safety,
     resolve_alignment_language,
     tokenize,
@@ -414,7 +414,7 @@ def _pipeline_lossless_canonical_words(
 
 
 def _lyrics_console(*parts: object) -> None:
-    text, stream = ' '.join((str(part) for part in parts)), getattr(sys, '__stdout__', None) or sys.stdout
+    text, stream = ' '.join(str(part) for part in parts), getattr(sys, '__stdout__', None) or sys.stdout
     try:
         if hasattr(stream, "reconfigure") and getattr(stream, "encoding", "").lower() != "utf-8": stream.reconfigure(encoding="utf-8", errors="replace")
         print(text, file=stream, flush=True)

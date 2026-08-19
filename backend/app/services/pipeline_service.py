@@ -34,9 +34,10 @@ from app.services import (
 )
 from app.services._metadata import first_audio_tag
 from app.services.db_utils import commit
-_first_audio_tag = first_audio_tag
 from app.utils.json_files import read_json
 from database import SessionLocal
+
+_first_audio_tag = first_audio_tag
 
 logger = logging.getLogger(__name__)
 

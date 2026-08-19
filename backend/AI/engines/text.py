@@ -156,7 +156,7 @@ SEGMENTED_ALIGNMENT_VERSION = "v2-ctc-fallback-tier"
 FALLBACK_WORD_CONFIDENCE = 0.012
 
 
-def _vowel_weighted_length(cleaned_token: str) -> float: return max(1.0, float(len(cleaned_token) + 2 * sum((char in VOWELS for char in cleaned_token))))
+def _vowel_weighted_length(cleaned_token: str) -> float: return max(1.0, float(len(cleaned_token) + 2 * sum(char in VOWELS for char in cleaned_token)))
 
 
 def _normalize_singing_audio(y: np.ndarray) -> np.ndarray:
@@ -629,8 +629,8 @@ def _fill_weighted_gap(
 ) -> None:
     cursor = left_time
     durations = _weighted_gap_durations(tokens, start, end, minima, left_time, right_time)
-    for index, duration in zip(range(start, end), durations, strict=True):
-        word_end = min(right_time, cursor + duration)
+    for index, gap_duration in zip(range(start, end), durations, strict=True):
+        word_end = min(right_time, cursor + gap_duration)
         bounded_end = min(duration_limit, word_end) if duration_limit is not None else word_end
         if minimum_span:
             bounded_end = max(cursor + minimum_span, bounded_end)
@@ -771,7 +771,7 @@ def _atomic_line_acoustic_alignment(
         words, kind, priority = max(candidates[li], key=lambda item: item[2])
         best.append((li, words, kind, priority))
 
-    def skipped_minimum(left_line: int, right_line: int) -> float: return line_gap_floor if right_line <= left_line + 1 else sum((line_min[idx] for idx in range(left_line + 1, right_line))) + line_gap_floor * (right_line - left_line)
+    def skipped_minimum(left_line: int, right_line: int) -> float: return line_gap_floor if right_line <= left_line + 1 else sum(line_min[idx] for idx in range(left_line + 1, right_line)) + line_gap_floor * (right_line - left_line)
 
     selected: list[tuple[int, list[Word], str, float]] = []
     if best:
@@ -836,7 +836,7 @@ def _atomic_line_acoustic_alignment(
         right_time: float,
     ) -> list[list[Word]] | None:
         indices = list(range(begin_line, end_line))
-        total_min, gap_count, available = sum((line_min[i] for i in indices)), len(indices) + 1, right_time - left_time
+        total_min, gap_count, available = sum(line_min[i] for i in indices), len(indices) + 1, right_time - left_time
         required = total_min + line_gap_floor * gap_count
         if available < required - 1e-6: return None
 
@@ -1018,8 +1018,6 @@ def _line_aware_canonical_alignment(
         for idx in range(len(line_tokens))
     ]
 
-    offsets = _line_offsets(line_tokens)
-
     ctc_maps: list[dict[int, Word]] = [dict() for _ in line_tokens]
     ctc_line_quality: list[float] = [0.0] * len(line_tokens)
     for line_index, result in enumerate(ctc_lines or []):
@@ -1094,7 +1092,7 @@ def _line_aware_canonical_alignment(
         1.0 / max(1, sample_rate), typical_line_minimum / max(18.0, len(line_tokens) * 1.5)
     )
 
-    def required_between(left_index: int, right_index: int) -> float: return sum((line_minimum[idx] for idx in range(left_index, right_index))) + line_gap_floor * max(0, right_index - left_index)
+    def required_between(left_index: int, right_index: int) -> float: return sum(line_minimum[idx] for idx in range(left_index, right_index)) + line_gap_floor * max(0, right_index - left_index)
 
     changed = True
     while changed and selected_proposals:
@@ -1277,7 +1275,7 @@ def _line_aware_canonical_alignment(
                 )
         candidates = clipped
 
-        def min_span(begin: int, finish: int) -> float: return sum((word_minimum(tokens[idx]) for idx in range(begin, finish)))
+        def min_span(begin: int, finish: int) -> float: return sum(word_minimum(tokens[idx]) for idx in range(begin, finish))
 
         dropped = 0
         while True:
@@ -1402,7 +1400,7 @@ def _line_aware_canonical_alignment(
             )
 
         final = [word for word in result if word is not None]
-        span, monotonic, micro, interior_gap = final[-1].end - final[0].start, all((right.start >= left.end - 1e-06 for left, right in zip(final, final[1:], strict=False))), any((word.end - word.start < min(0.075, word_minimum(word.text) * 0.6) for word in final)), max([right.start - left.end for left, right in zip(final, final[1:], strict=False)] or [0.0])
+        span, monotonic, micro, interior_gap = final[-1].end - final[0].start, all((right.start >= left.end - 1e-06 for left, right in zip(final, final[1:], strict=False))), any(word.end - word.start < min(0.075, word_minimum(word.text) * 0.6) for word in final), max([right.start - left.end for left, right in zip(final, final[1:], strict=False)] or [0.0])
         if (
             not monotonic
             or micro
@@ -1690,7 +1688,7 @@ def _anchor_preserving_canonical_alignment(
         chars = max(1, len(_normalize_match_token(token)))
         return max(0.10, min(0.48, 0.065 + 0.038 * chars))
 
-    def minimum_run_span(begin: int, end: int) -> float: return sum((minimum_word_span(tokens[pos], pos) for pos in range(begin, end)))
+    def minimum_run_span(begin: int, end: int) -> float: return sum(minimum_word_span(tokens[pos], pos) for pos in range(begin, end))
 
     anchor_boundary_tolerance, anchor_min_duration = duration_sec if relaxed_gap_fit else 0.22, min(adaptive_base_floors) if relaxed_gap_fit and adaptive_base_floors else 0.055
 
@@ -1992,7 +1990,6 @@ def _anchor_preserving_canonical_alignment(
             if reacquire_complete_lines(
                 result, source_kind, run_start, run_end, left_time, right_time
             ):
-                index = run_start
                 continue
 
             activity_words = activity_gap_words(
@@ -2097,7 +2094,7 @@ def _activity_quantile_times(audio: np.ndarray, sample_rate: int) -> list[float]
 def _pathological_alignment(words: list[Word], span: float) -> bool:
     if not words: return True
     durations = [max(0.0, word.end - word.start) for word in words]
-    collapsed, compressed, implausible_long_word, implausible_held_word, overlaps, token_count, total_span = sum((duration <= 0.025 for duration in durations)), sum((duration <= 0.09 for duration in durations)), any((len(tokenize(word.text)[0]) >= 4 and duration <= 0.09 for word, duration in zip(words, durations, strict=True) if tokenize(word.text))), any((duration > min(3.2, max(1.8, 0.42 + len(tokenize(word.text)[0]) * 0.22)) for word, duration in zip(words, durations, strict=True) if tokenize(word.text))), sum((right.start < left.end - 0.015 for left, right in zip(words, words[1:], strict=False))), sum((max(1, len(tokenize(word.text))) for word in words)), max(0.0, words[-1].end - words[0].start)
+    collapsed, compressed, implausible_long_word, implausible_held_word, overlaps, token_count, total_span = sum(duration <= 0.025 for duration in durations), sum(duration <= 0.09 for duration in durations), any((len(tokenize(word.text)[0]) >= 4 and duration <= 0.09 for word, duration in zip(words, durations, strict=True) if tokenize(word.text))), any((duration > min(3.2, max(1.8, 0.42 + len(tokenize(word.text)[0]) * 0.22)) for word, duration in zip(words, durations, strict=True) if tokenize(word.text))), sum((right.start < left.end - 0.015 for left, right in zip(words, words[1:], strict=False))), sum(max(1, len(tokenize(word.text))) for word in words), max(0.0, words[-1].end - words[0].start)
     return (
         min(durations) < 0.02
         or max(durations) > max(4.5, span * 0.62)
@@ -3272,7 +3269,7 @@ class Qwen3ForcedAligner(Aligner):
                 "KARAOKE_AI_CTC_UK_MODEL to the model directory."
             )
 
-        ctc_accepted, qwen_fallback_lines = sum((1 for item in ctc_lines if item is not None)), 0
+        ctc_accepted, qwen_fallback_lines = sum(1 for item in ctc_lines if item is not None), 0
         self.last_alignment_diagnostics = {
             "ctc_version": CTC_ALIGNMENT_VERSION,
             "ctc_attempted": ctc_attempted,

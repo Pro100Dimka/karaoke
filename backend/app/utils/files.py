@@ -22,7 +22,6 @@ def read_text_tail(
         stream.seek(start)
         content = stream.read()
     lines = content.decode(encoding, errors="replace").splitlines()
-    if start > 0 and content[:1] in {b"\n", b"\r"} and lines and lines[0] == "":
+    if start > 0 and content[:1] in {b"\n", b"\r"} and lines and lines[0] == "" or start > 0 and previous not in {b"\n", b"\r"}:
         lines = lines[1:]
-    elif start > 0 and previous not in {b"\n", b"\r"}: lines = lines[1:]
     return lines[-max_lines:]

@@ -1,5 +1,3 @@
-from tests._shared import patch_attrs, raises, patch_many, dump_json
-
 import subprocess
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -11,7 +9,7 @@ import soundfile as sf
 from AI import audio, validators
 from AI.errors import AICoreError, InvalidArtifactError
 from AI.models import PitchFrame, TimeSpan
-
+from tests._shared import dump_json, patch_attrs, patch_many, raises
 
 
 def test_load_mono_resamples_and_reports_duration(tmp_path):
@@ -100,7 +98,7 @@ def test_validate_audio_and_json(monkeypatch, tmp_path):
     info = SimpleNamespace(frames=1, samplerate=1, channels=1)
     monkeypatch.setattr(validators.sf, "info", lambda _: info)
     assert validators.validate_audio(path) is info
-    for bad in (tmp_path / "missing",): raises(InvalidArtifactError, lambda: validators.validate_audio(bad))
+    raises(InvalidArtifactError, lambda: validators.validate_audio(tmp_path / "missing"))
     monkeypatch.setattr(validators.sf, "info", Mock(side_effect=RuntimeError("bad")))
     raises(InvalidArtifactError, lambda: validators.validate_audio(path), match='Unreadable')
     patch_attrs(monkeypatch, validators.sf, info=lambda _: SimpleNamespace(frames=0, samplerate=1, channels=1))
@@ -142,7 +140,7 @@ def test_validate_duration_and_pitch():
         SimpleNamespace(time=0, frequency=0, confidence=2, energy=0, voiced=False),
         SimpleNamespace(time=0, frequency=0, confidence=1, energy=0, voiced=True),
     ]
-    for frame in invalid: raises(InvalidArtifactError, lambda: validators.validate_pitch([frame]))
+    for frame in invalid: raises(InvalidArtifactError, lambda frame=frame: validators.validate_pitch([frame]))
     raises(InvalidArtifactError, lambda: validators.validate_pitch([good[1], good[0]]), match='not sorted')
 
 

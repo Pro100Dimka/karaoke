@@ -1,15 +1,13 @@
-from tests._shared import patch_attrs, assert_http_status, raises
-
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-import pytest
 from sqlalchemy.exc import IntegrityError
 
 import models
 import schemas
 from app.routers import analysis, audio
+from tests._shared import assert_http_status, patch_attrs, raises
 
 
 def test_audio_router_forwards_devices_settings_and_selection(monkeypatch):

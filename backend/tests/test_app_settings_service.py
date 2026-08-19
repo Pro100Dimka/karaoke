@@ -1,5 +1,3 @@
-from tests._shared import patch_attrs, raises
-
 import json
 from pathlib import Path
 from unittest.mock import Mock
@@ -7,6 +5,7 @@ from unittest.mock import Mock
 import pytest
 
 from app.services import app_settings_service
+from tests._shared import patch_attrs, raises
 
 
 def test_installer_preferences_merge_once_without_erasing_settings(monkeypatch, tmp_path):

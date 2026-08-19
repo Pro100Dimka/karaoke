@@ -22,18 +22,18 @@ def _parts(value: object) -> tuple[str, ...] | None:
 
 def is_internal_output_path(value: object) -> bool:
     parts = _parts(value)
-    return True if not parts else any((part in _INTERNAL_OUTPUT_DIRS for part in parts)) or any((part in _INTERNAL_OUTPUT_NAMES or part.startswith('.optimization-') for part in parts))
+    return True if not parts else any(part in _INTERNAL_OUTPUT_DIRS for part in parts) or any(part in _INTERNAL_OUTPUT_NAMES or part.startswith('.optimization-') for part in parts)
 
 
 def is_portable_output_path(value: object) -> bool:
     parts = _parts(value)
-    return False if not parts else not is_internal_output_path(value) and (not any((part in _LOCAL_ONLY_OUTPUT_DIRS for part in parts)))
+    return False if not parts else not is_internal_output_path(value) and (not any(part in _LOCAL_ONLY_OUTPUT_DIRS for part in parts))
 
 
 def _safe_relative(value: object) -> Path | None:
     if not isinstance(value, str) or not value.strip() or any(c in value for c in ("\\", ":", "\x00")): return None
     relative = PurePosixPath(value)
-    return None if relative.is_absolute() or any((part in {'', '.', '..'} for part in relative.parts)) else Path(*relative.parts)
+    return None if relative.is_absolute() or any(part in {'', '.', '..'} for part in relative.parts) else Path(*relative.parts)
 
 
 def _manifest_payload(output_dir: Path) -> dict | None:

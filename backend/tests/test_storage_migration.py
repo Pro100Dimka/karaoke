@@ -1,13 +1,8 @@
-from tests._shared import patch_attrs, make_song, raises
-
 from pathlib import Path
 from unittest.mock import Mock
 
-import pytest
-
-import models
 from app.services import storage_migration
-
+from tests._shared import make_song, patch_attrs, raises
 
 
 def song(tmp_path, **changes): return make_song(tmp_path, **{'output_dir': None, **changes})

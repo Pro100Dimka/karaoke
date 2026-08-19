@@ -22,7 +22,14 @@ class ORMModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class SongOut(ORMModel):
+class ProcessingState(BaseModel):
+    status: SongStatus
+    progress_step: str | None = None
+    progress_percent: float
+    error_message: str | None = None
+
+
+class SongOut(ORMModel, ProcessingState):
 
     id: str
     title: str
@@ -31,10 +38,6 @@ class SongOut(ORMModel):
     original_filename: str
     slug: str
     output_dir: str | None = None
-    status: SongStatus
-    progress_step: str | None = None
-    progress_percent: float
-    error_message: str | None = None
 
     key_override: str | None = None
     tempo_override: int | None = None
@@ -300,22 +303,20 @@ class ClientLogIn(BaseModel):
 # --------------------------------------------------------------------
 
 
-class AudioDeviceOut(BaseModel):
+class AudioDeviceBase(BaseModel):
     index: int
     name: str
+    default_samplerate: float | None = None
+    host_api: str
+    is_asio: bool
+
+
+class AudioDeviceOut(AudioDeviceBase):
     max_input_channels: int
-    default_samplerate: float | None = None
-    host_api: str
-    is_asio: bool
 
 
-class AudioOutputDeviceOut(BaseModel):
-    index: int
-    name: str
+class AudioOutputDeviceOut(AudioDeviceBase):
     max_output_channels: int
-    default_samplerate: float | None = None
-    host_api: str
-    is_asio: bool
 
 
 class AsioDriverOut(BaseModel):

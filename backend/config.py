@@ -98,7 +98,7 @@ def _looks_like_previous_dev_checkout(path: Path, default: Path) -> bool:
         relative = default.resolve().relative_to(PROJECT_ROOT.resolve())
     except ValueError:
         return False
-    tail, parts = tuple((part.casefold() for part in relative.parts)), path.resolve().parts
+    tail, parts = tuple(part.casefold() for part in relative.parts), path.resolve().parts
     if not tail or len(parts) <= len(tail): return False
     if tuple(part.casefold() for part in parts[-len(tail) :]) != tail: return False
     old_root, current_root = Path(*parts[:-len(tail)]).resolve(), PROJECT_ROOT.resolve()

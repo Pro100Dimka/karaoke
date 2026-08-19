@@ -1,11 +1,9 @@
-from tests._shared import patch_attrs, raises
-
 from unittest.mock import MagicMock, Mock
 
-import pytest
 from sqlalchemy import create_engine, text
 
 import database
+from tests._shared import patch_attrs, raises
 
 
 def test_sqlite_connection_configuration_always_closes_cursor():

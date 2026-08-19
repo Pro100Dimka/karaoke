@@ -204,7 +204,7 @@ class OmnizartPatchCNNPitchEstimator(PitchEstimator):
 
     def fingerprint(self): return {'name': self.name, 'version': OMNIZART_CONTOUR_VERSION, 'sample_rate': 16000, 'hop_seconds': 0.02, 'input': 'original-full-mix', 'model_available': self.available()}
 
-    def available(self): return self.model_path.is_dir() and all(((self.model_path / relative).is_file() for relative in _MODEL_FILES))
+    def available(self): return self.model_path.is_dir() and all((self.model_path / relative).is_file() for relative in _MODEL_FILES)
 
     def _load_model(self):
         if not self.available(): raise EngineUnavailableError("Omnizart Patch-CNN model is not installed")

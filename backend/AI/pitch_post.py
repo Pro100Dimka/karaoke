@@ -119,7 +119,7 @@ def fuse_pitch_with_yin(
         voiced = [item for item in neighbourhood if item.voiced and item.frequency > 0]
         if len(voiced) < 4: return 0.0
         stable = [item for item in voiced if abs(_midi(item.frequency) - center_midi) <= 0.75]
-        continuity, confidence = len(stable) / len(voiced), statistics.median((float(item.confidence) for item in stable)) if stable else 0.0
+        continuity, confidence = len(stable) / len(voiced), statistics.median(float(item.confidence) for item in stable) if stable else 0.0
         return continuity * clamp01(confidence)
 
     def protected_subharmonic(index: int, candidate_midi: float, evidence: float) -> bool:

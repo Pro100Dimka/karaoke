@@ -1,5 +1,3 @@
-from tests._shared import patch_attrs, assert_http_status, raises, patch_many
-
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -10,6 +8,7 @@ from fastapi import HTTPException
 import models
 import schemas
 from app.routers import recording
+from tests._shared import assert_http_status, patch_attrs, patch_many, raises
 
 
 def audio_settings(**changes):
