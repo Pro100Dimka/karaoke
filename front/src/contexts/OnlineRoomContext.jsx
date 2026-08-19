@@ -503,7 +503,7 @@ export function OnlineRoomProvider({ children }) {
       }
       const ownerId = song.__roomOwnerId;
       const revision = song.__roomRevision;
-      if (!ownerId || ownerId === roomRef.current.selfId || !revision)
+      if (!roomRef.current || !ownerId || ownerId === roomRef.current.selfId || !revision)
         throw new Error(
           translateSaved("Не удалось определить владельца или версию песни в комнате")
         );

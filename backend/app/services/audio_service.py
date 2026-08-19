@@ -158,11 +158,11 @@ def preferred_input_device(
     asio_driver_name: str | None = None,
 ) -> int | None:
     if driver == "asio":
-        return (
-            device_id
-            if device_id is not None
-            else _matching_asio_device_index(asio_driver_name, "input")
-        )
+        if device_id is not None and (
+            not _AUDIO_BACKEND_AVAILABLE or 0 <= device_id < len(sd.query_devices())
+        ):
+            return device_id
+        return _matching_asio_device_index(asio_driver_name, "input")
     return device_id if not _AUDIO_BACKEND_AVAILABLE else _low_latency_equivalent(device_id, 'input')
 
 
@@ -173,7 +173,7 @@ def _is_asio_device(device: dict) -> bool: return 'asio' in _host_api_name(devic
 
 
 def _resolved_device_index(device_id: int | None, kind: str) -> int:
-    if device_id is not None: return device_id
+    if device_id is not None and 0 <= device_id < len(sd.query_devices()): return device_id
     default_input, default_output = sd.default.device
     raw_default = default_input if kind == "input" else default_output
     try:
@@ -209,8 +209,10 @@ def preferred_output_device(
     if driver == "asio":
         if output_device_id is not None: return output_device_id
         if input_device_id is not None:
-            device = sd.query_devices(input_device_id)
-            if _is_asio_device(device) and int(device.get("max_output_channels", 0)) > 0: return input_device_id
+            devices = sd.query_devices()
+            if 0 <= input_device_id < len(devices):
+                device = devices[input_device_id]
+                if _is_asio_device(device) and int(device.get("max_output_channels", 0)) > 0: return input_device_id
         return _matching_asio_device_index(asio_driver_name, "output")
     resolved_input = _low_latency_equivalent(input_device_id, "input")
     return _matching_output_for_input(resolved_input, output_device_id)
@@ -218,8 +220,9 @@ def preferred_output_device(
 
 def preferred_sample_rate(input_device_id: int | None = None, driver: str = "auto") -> int:
     if _AUDIO_BACKEND_AVAILABLE and input_device_id is not None:
-        device = sd.query_devices(input_device_id)
-        return int(round(float(device["default_samplerate"])))
+        devices = sd.query_devices()
+        if 0 <= input_device_id < len(devices):
+            return int(round(float(devices[input_device_id]["default_samplerate"])))
     return config.RECORDING_SAMPLE_RATE
 
 
@@ -539,14 +542,17 @@ def check_signal_quality(
         if monitoring_expected: return dict(_monitor_signal)
 
     sample_rate = 44100
-    recording = sd.rec(
-        int(duration_sec * sample_rate),
-        samplerate=sample_rate,
-        channels=1,
-        device=device_id,
-        dtype="float32",
-    )
-    sd.wait()
+    try:
+        recording = sd.rec(
+            int(duration_sec * sample_rate),
+            samplerate=sample_rate,
+            channels=1,
+            device=device_id,
+            dtype="float32",
+        )
+        sd.wait()
+    except Exception as exc:  # Audio drivers raise implementation-specific errors.
+        raise RuntimeError(f"Could not read microphone signal: {exc}") from exc
     samples = np.clip(recording.flatten() * max(0.0, min(4.0, gain)), -1.0, 1.0)
 
     rms = float(np.sqrt(np.mean(np.square(samples)))) if len(samples) else 0.0

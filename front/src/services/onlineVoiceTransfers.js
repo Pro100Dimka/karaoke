@@ -885,7 +885,7 @@ export async function sendFile(mesh, participantId, blob, metadata = {}, options
   } finally {
     const flow = mesh.pendingTransferCredits.get(transferId);
     if (flow) {
-      const error = new Error(translateSaved("Передача файла завершена"));
+      const error = new Error(translateSaved("Передача файла отменена"));
       flow.waiters.forEach((waiter) => {
         globalThis.clearTimeout(waiter.timer);
         waiter.reject(error);

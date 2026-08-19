@@ -59,8 +59,8 @@ export function createOnlineRoomMessageHandler(options) {
       const ownsHostOffer =
         activeRoomRef.current?.host &&
         offered?.commandId === command.commandId &&
-        offered.songId === command.songId &&
-        offered.revision === command.revision;
+        offered?.songId === command.songId &&
+        offered?.revision === command.revision;
       if (
         !command.requesterId ||
         !command.songId ||
@@ -159,9 +159,9 @@ export function createOnlineRoomMessageHandler(options) {
         !command.requesterId ||
         message.fromId !== command.requesterId ||
         offered?.commandId !== command.commandId ||
-        offered.songId !== command.songId ||
-        offered.revision !== command.revision ||
-        !offered.expectedIds?.has(command.requesterId)
+        offered?.songId !== command.songId ||
+        offered?.revision !== command.revision ||
+        !offered?.expectedIds?.has(command.requesterId)
       )
         return false;
       offered.markReady?.(command.requesterId);
@@ -193,7 +193,7 @@ export function createOnlineRoomMessageHandler(options) {
         error: errorText,
         percent: 0
       });
-      pending.reject?.(new Error(errorText));
+      pending?.reject?.(new Error(errorText));
       return true;
     },
     "open-karaoke": (command, message) => {

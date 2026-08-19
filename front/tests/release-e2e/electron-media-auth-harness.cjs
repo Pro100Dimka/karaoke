@@ -8,6 +8,11 @@ const token = process.env.ADVOICE_E2E_TOKEN;
 if (!backendBase || !token) throw new Error("Missing Electron release E2E environment");
 
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+// Electron 30+ rejects --remote-debugging-port on the raw CLI (playwright's
+// electron.launch() no longer works around this: microsoft/playwright#39008),
+// so the switch is set here instead. Chromium still logs the same
+// "DevTools listening on ws://..." line playwright waits for.
+app.commandLine.appendSwitch("remote-debugging-port", "0");
 
 app.whenReady().then(async () => {
   installBackendFileAuthentication(session.defaultSession.webRequest, backendBase, token);

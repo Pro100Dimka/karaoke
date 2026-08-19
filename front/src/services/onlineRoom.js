@@ -7,6 +7,11 @@ const CONNECTION_TIMEOUT_MS = 10_000;
 function getMaxSignalMessageLength() {
   return 256 * 1024;
 }
+// Must match the "signal" field cap the Cloudflare worker enforces
+// (cloudflare/src/worker.js MAX_SIGNAL_BYTES) -- it's tighter than the general
+// per-message limit above, so an oversized WebRTC signal that passes the
+// general check would still get the worker to close the whole socket.
+const MAX_SIGNAL_PAYLOAD_LENGTH = 64 * 1024;
 const MAX_PARTICIPANT_NAME_LENGTH = 64;
 export function createRoomId(cryptoApi = globalThis.crypto, random = Math.random) {
   if (cryptoApi && typeof cryptoApi.randomUUID === "function") {
@@ -191,7 +196,14 @@ export class OnlineRoomClient {
       return false;
     }
     try {
-      const serialized = JSON.stringify({ ...payload, type: type.trim() });
+      const trimmedType = type.trim();
+      if (
+        trimmedType === "signal" &&
+        JSON.stringify(payload.signal ?? null).length > MAX_SIGNAL_PAYLOAD_LENGTH
+      ) {
+        return false;
+      }
+      const serialized = JSON.stringify({ ...payload, type: trimmedType });
       if (serialized.length > getMaxSignalMessageLength()) return false;
       socket.send(serialized);
       return true;

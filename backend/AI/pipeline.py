@@ -632,7 +632,7 @@ class KaraokePipeline:
                 "transcription": UniformTextFallback(),
                 "alignment": UniformTextFallback(),
             }
-            fallback = fallbacks[name]
+            fallback = fallbacks[name.split("-", 1)[0]]
             result = function(fallback)
             used = fallback.name
         self._report(reports, name, used, started=started)
