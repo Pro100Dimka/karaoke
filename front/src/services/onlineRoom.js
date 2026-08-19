@@ -4,6 +4,12 @@ import { translateSaved } from "../i18n/runtime";
 
 export const DEFAULT_SIGNALING_URL = "wss://karaoke-studio-online.pro100dimka-and.workers.dev";
 const CONNECTION_TIMEOUT_MS = 10_000;
+// Many home routers/NATs/corporate firewalls silently drop an idle WebSocket
+// after ~30-60s of no traffic (no close frame, no reason -- the client just
+// sees an abrupt onclose). Sending a small ping well under that window keeps
+// the connection's NAT mapping alive for participants who aren't otherwise
+// sending anything (e.g. quietly listening).
+const PING_INTERVAL_MS = 20_000;
 function getMaxSignalMessageLength() {
   return 256 * 1024;
 }
@@ -63,6 +69,14 @@ export class OnlineRoomClient {
     this.url = parsedUrl.toString().replace(/\/$/, "");
     this.listeners = new Set();
     this.socket = null;
+    this.pingTimer = null;
+  }
+
+  _stopPing() {
+    if (this.pingTimer !== null) {
+      globalThis.clearInterval(this.pingTimer);
+      this.pingTimer = null;
+    }
   }
 
   onMessage(listener) {
@@ -144,6 +158,8 @@ export class OnlineRoomClient {
           socket.close(1000, "Stale connection");
           return;
         }
+        this._stopPing();
+        this.pingTimer = globalThis.setInterval(() => this.send("ping", {}), PING_INTERVAL_MS);
         settle(resolve, normalizedId);
       };
       socket.onmessage = (event) => {
@@ -166,7 +182,10 @@ export class OnlineRoomClient {
       };
       socket.onclose = (event) => {
         const wasCurrent = isCurrent();
-        if (wasCurrent) this.socket = null;
+        if (wasCurrent) {
+          this.socket = null;
+          this._stopPing();
+        }
         globalThis.clearTimeout(timeout);
         const detail = getCloseDetail(event);
         settle(
@@ -215,6 +234,7 @@ export class OnlineRoomClient {
   disconnect() {
     const { socket } = this;
     this.socket = null;
+    this._stopPing();
     if (socket && socket.readyState < 2) socket.close(1000, "Client left room");
   }
 }

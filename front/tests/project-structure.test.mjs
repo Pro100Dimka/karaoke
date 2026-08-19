@@ -29,7 +29,7 @@ test("release gate executes unit verification and pins a supported Node runtime"
 });
 test("mutation gate uses canonical production module ids and pragmatic thresholds", () => {
   const stryker = fs.readFileSync(path.join(root, "stryker.config.mjs"), "utf8");
-  verify([stryker, 'toContain', "thresholds: { high: 90, low: 75, break: 75 }"], [stryker, 'not.toContain', '"src/pages/Settings/config.jsx"'], [stryker, 'not.toContain', '"src/pages/Settings/screens/**/config.js"'], [stryker, 'toContain', '"!src/utils/config.js"']);
+  verify([stryker, 'toContain', "thresholds: { high: 90, low: 75, break: 75 }"], [stryker, 'not.toContain', '"src/pages/Settings/config.jsx"'], [stryker, 'not.toContain', '"src/pages/Settings/screens/**/config.js"'], [stryker, 'not.toContain', '"!src/utils/config.js"']);
   const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
   verify([pkg.scripts["test:mutation"], 'toBe', "stryker run && node scripts/check-mutation-quality.mjs"]);
   const qualityCheck = fs.readFileSync(

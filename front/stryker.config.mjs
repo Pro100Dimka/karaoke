@@ -15,8 +15,7 @@ const businessLogic = [
   "src/pages/Settings/audio-source.js",
   "src/pages/Settings/screens/**/format.js",
   "src/services/**/*.js",
-  "src/utils/**/*.js",
-  "!src/utils/config.js"
+  "src/utils/**/*.js"
 ];
 const csv = (value) =>
   value

@@ -231,6 +231,11 @@ export class KaraokeRoom {
       return;
     }
 
+    if (message.type === "ping") {
+      this.send(socket, "pong", {});
+      return;
+    }
+
     if (message.type === "presence" && typeof message.micMuted === "boolean") {
       sender.micMuted = message.micMuted;
       socket.serializeAttachment(sender);
