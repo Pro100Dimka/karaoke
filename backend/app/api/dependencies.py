@@ -14,25 +14,18 @@ from database import get_db
 DatabaseSession = Annotated[Session, Depends(get_db)]
 
 
-def require_song(song_id: str, db: DatabaseSession) -> models.Song:
-    song = repositories.get_song(db, song_id)
-    if song is None:
-        raise HTTPException(status_code=404, detail="Песня не найдена")
-    return song
+def _require(loader, db, identifier, detail):
+    if (item := loader(db, identifier)) is None: raise HTTPException(status_code=404, detail=detail)
+    return item
 
 
-def require_recording(recording_id: str, db: DatabaseSession) -> models.Recording:
-    recording = repositories.get_recording(db, recording_id)
-    if recording is None:
-        raise HTTPException(status_code=404, detail="Запись не найдена")
-    return recording
+def require_song(song_id: str, db: DatabaseSession) -> models.Song: return _require(repositories.get_song, db, song_id, 'Песня не найдена')
 
 
-def require_analysis(recording_id: str, db: DatabaseSession) -> models.AnalysisResult:
-    result = repositories.get_analysis_by_recording(db, recording_id)
-    if result is None:
-        raise HTTPException(status_code=404, detail="Анализ ещё не выполнялся для этой записи")
-    return result
+def require_recording(recording_id: str, db: DatabaseSession) -> models.Recording: return _require(repositories.get_recording, db, recording_id, 'Запись не найдена')
+
+
+def require_analysis(recording_id: str, db: DatabaseSession) -> models.AnalysisResult: return _require(repositories.get_analysis_by_recording, db, recording_id, 'Анализ ещё не выполнялся для этой записи')
 
 
 SongDependency = Annotated[models.Song, Depends(require_song)]

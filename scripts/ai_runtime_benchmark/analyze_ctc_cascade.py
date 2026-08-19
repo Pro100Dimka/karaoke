@@ -1,27 +1,25 @@
-"""Locate the first CTC FP16 divergence and its sequential cursor amplification."""
 
-from __future__ import annotations
 
 import json
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from common import ROOT, write_json
+
+import sys
 SOURCE = ROOT / "build/ctc-shadow-corpus/ctc-corpus-results.json"
 OUTPUT = ROOT / "build/ctc-shadow-corpus/cascade-analysis.json"
 
 
 def _line_delta(left, right):
-    if left is None or right is None:
-        return None
+    if left is None or right is None: return None
     values = []
-    for a, b in zip(left["words"], right["words"]):
-        values.extend((abs(a["start"] - b["start"]), abs(a["end"] - b["end"])))
+    for a, b in zip(left["words"], right["words"]): values.extend((abs(a["start"] - b["start"]), abs(a["end"] - b["end"])))
     return max(values, default=0.0)
 
 
 def main() -> None:
-    payload = json.loads(SOURCE.read_text(encoding="utf-8"))
-    cases = []
+    payload = json.loads(SOURCE.read_text(encoding="utf-8")); cases = []
     for case in payload["cases"]:
         windows = [
             {
@@ -67,9 +65,7 @@ def main() -> None:
                 else None,
             }
         )
-    OUTPUT.write_text(json.dumps({"cases": cases}, indent=2), encoding="utf-8")
-    print(OUTPUT)
+    write_json(OUTPUT, {"cases": cases}); print(OUTPUT)
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__": main()

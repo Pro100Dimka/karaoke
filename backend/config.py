@@ -17,9 +17,8 @@ from pathlib import Path
 from AI.model_registry import MODELS, model_path
 
 
-def _env_path(name: str, default: Path) -> Path:
-    value = os.environ.get(name)
-    return Path(value).expanduser().resolve() if value else default
+def _env_path(name: str, default: Path) -> Path: value = os.environ.get(
+    name); return Path(value).expanduser().resolve() if value else default
 
 
 def _env_int(name: str, default: int, *, minimum: int, maximum: int | None = None) -> int:
@@ -54,8 +53,8 @@ PROJECT_ROOT = BASE_DIR.parent
 
 def resolve_runtime_executable(name: str) -> str:
     """Resolve packaged siblings deterministically before consulting the host PATH."""
-    names = [name] if name.lower().endswith(".exe") else ([f"{name}.exe", name] if IS_FROZEN else ([name, f"{name}.exe"] if os.name != "nt" else [f"{name}.exe", name]))
-    roots = (Path(sys.executable).resolve().parent, RUNTIME_DIR, BASE_DIR)
+    names, roots = [name] if name.lower().endswith('.exe') else [f'{name}.exe', name] if IS_FROZEN else [
+        name, f'{name}.exe'] if os.name != 'nt' else [f'{name}.exe', name], (Path(sys.executable).resolve().parent, RUNTIME_DIR, BASE_DIR)
     for root in roots:
         for executable in names:
             candidate = root / executable
@@ -81,10 +80,8 @@ def _install_root() -> Path:
     return PROJECT_ROOT
 
 
-def _default_data_dir() -> Path:
-    if not IS_FROZEN:
-        return PROJECT_ROOT / "data"
-    return _install_root() / "data" / "backend"
+def _default_data_dir() -> Path: return PROJECT_ROOT / \
+    'data' if not IS_FROZEN else _install_root() / 'data' / 'backend'
 
 
 DATA_DIR = _env_path("SONGAPP_DATA_DIR", _default_data_dir())
@@ -106,14 +103,14 @@ def _looks_like_previous_dev_checkout(path: Path, default: Path) -> bool:
         relative = default.resolve().relative_to(PROJECT_ROOT.resolve())
     except ValueError:
         return False
-    tail = tuple(part.casefold() for part in relative.parts)
-    parts = path.resolve().parts
+    tail, parts = tuple((part.casefold()
+                        for part in relative.parts)), path.resolve().parts
     if not tail or len(parts) <= len(tail):
         return False
-    if tuple(part.casefold() for part in parts[-len(tail) :]) != tail:
+    if tuple(part.casefold() for part in parts[-len(tail):]) != tail:
         return False
-    old_root = Path(*parts[: -len(tail)]).resolve()
-    current_root = PROJECT_ROOT.resolve()
+    old_root, current_root = Path(
+        *parts[:-len(tail)]).resolve(), PROJECT_ROOT.resolve()
     return old_root != current_root and old_root.name.casefold() == current_root.name.casefold()
 
 
@@ -139,18 +136,19 @@ DOWNLOADS_DIR = _env_path(
 
 
 # Packaged models stay under the selected installation root together with the app.
-def _default_models_dir() -> Path:
-    if not IS_FROZEN:
-        return DOWNLOADS_DIR / "models"
-    return _install_root() / "data" / "models"
+def _default_models_dir() -> Path: return DOWNLOADS_DIR / \
+    'models' if not IS_FROZEN else _install_root() / 'data' / 'models'
 
 
 _DEFAULT_MODELS_DIR = _default_models_dir()
-MODELS_DIR = _env_path("SONGAPP_MODELS_DIR", _saved_path("ai_folder", _DEFAULT_MODELS_DIR))
+MODELS_DIR = _env_path("SONGAPP_MODELS_DIR", _saved_path(
+    "ai_folder", _DEFAULT_MODELS_DIR))
 EXTERNAL_ENGINES_DIR = _env_path(
-    "SONGAPP_ENGINES_DIR", RUNTIME_DIR / "engines" if IS_FROZEN else DOWNLOADS_DIR / "engines"
+    "SONGAPP_ENGINES_DIR", RUNTIME_DIR /
+    "engines" if IS_FROZEN else DOWNLOADS_DIR / "engines"
 )
-RECORDINGS_DIRNAME = "recordings"  # подпапка внутри Song/<slug>/ для записей пользователя
+# подпапка внутри Song/<slug>/ для записей пользователя
+RECORDINGS_DIRNAME = "recordings"
 LOGS_DIRNAME = "logs"  # подпапка внутри Song/<slug>/ для логов обработки
 TRUSTED_LYRICS_FILENAME = "trusted_lyrics.txt"
 
@@ -160,7 +158,8 @@ APP_LOG_DIR = _env_path("SONGAPP_LOG_DIR", _DEFAULT_LOG_DIR)
 # Source uploads and generated artefacts live in one owned library. The original
 # upload is replaced by the pipeline's normalized song.mp3 after processing, so
 # the application never keeps a second full-song copy indefinitely.
-_DEFAULT_SONGS_DIR = DATA_DIR / "karaoke_songs" if IS_FROZEN else PROJECT_ROOT / "karaoke_songs"
+_DEFAULT_SONGS_DIR = DATA_DIR / \
+    "karaoke_songs" if IS_FROZEN else PROJECT_ROOT / "karaoke_songs"
 SONG_OUTPUT_DIR = _env_path(
     "SONGAPP_SONG_OUTPUT_DIR", _saved_path("songs_folder", _DEFAULT_SONGS_DIR)
 )
@@ -171,18 +170,18 @@ def _saved_song_library_roots(current: Path) -> set[Path]:
         raw = json.loads(PATH_SETTINGS_FILE.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, TypeError):
         raw = {}
-    values = raw.get("song_library_roots", []) if isinstance(raw, dict) else []
-    roots = {current.resolve()}
+    values, roots = raw.get('song_library_roots', []) if isinstance(
+        raw, dict) else [], {current.resolve()}
     if isinstance(values, list):
-        for value in values:
-            if isinstance(value, str) and value.strip():
-                roots.add(Path(value).expanduser().resolve())
+        roots.update(Path(value).expanduser().resolve()
+                     for value in values if isinstance(value, str) and value.strip())
     return roots
 
 
 SONG_LIBRARY_ROOTS = _saved_song_library_roots(SONG_OUTPUT_DIR)
 _DEFAULT_CACHE_DIR = DATA_DIR / "cache"
-CACHE_DIR = _env_path("SONGAPP_CACHE_DIR", _saved_path("cache_folder", _DEFAULT_CACHE_DIR))
+CACHE_DIR = _env_path("SONGAPP_CACHE_DIR", _saved_path(
+    "cache_folder", _DEFAULT_CACHE_DIR))
 UPLOAD_TEMP_DIR = CACHE_DIR / "uploads"
 
 
@@ -219,7 +218,8 @@ def apply_storage_paths(
 def configure_ai_resource_environment(*, force: bool = False) -> None:
     """Point the AI core at resources declared by the backend model registry."""
     msst = EXTERNAL_ENGINES_DIR / "msst"
-    msst_config = msst / "configs" / "KimberleyJensen" / "config_vocals_mel_band_roformer_kj.yaml"
+    msst_config = msst / "configs" / "KimberleyJensen" / \
+        "config_vocals_mel_band_roformer_kj.yaml"
 
     def set_resource(name: str, path: Path, *, directory: bool = False) -> None:
         configured = os.environ.get(name)
@@ -250,7 +250,8 @@ def configure_ai_resource_environment(*, force: bool = False) -> None:
             else (path.is_dir() if model.kind in {"snapshot", "bundle"} else path.is_file())
         )
         if valid:
-            set_resource(model.env_var, path, directory=model.kind in {"snapshot", "bundle"})
+            set_resource(model.env_var, path, directory=model.kind in {
+                         "snapshot", "bundle"})
         elif force:
             configured = os.environ.get(model.env_var)
             if configured and Path(configured).expanduser().resolve() == path.resolve():
@@ -275,8 +276,10 @@ DATABASE_URL = f"sqlite:///{DB_PATH}"
 DEFAULT_LANGUAGE = None  # автоопределение
 
 ALLOWED_AUDIO_EXTENSIONS = {".mp3", ".wav", ".flac", ".m4a", ".ogg"}
-MAX_AUDIO_UPLOAD_BYTES = _env_int("SONGAPP_MAX_AUDIO_UPLOAD_BYTES", 2 * 1024**3, minimum=1)
-UPLOAD_CHUNK_SIZE = _env_int("SONGAPP_UPLOAD_CHUNK_SIZE", 1024 * 1024, minimum=4096)
+MAX_AUDIO_UPLOAD_BYTES = _env_int(
+    "SONGAPP_MAX_AUDIO_UPLOAD_BYTES", 2 * 1024**3, minimum=1)
+UPLOAD_CHUNK_SIZE = _env_int(
+    "SONGAPP_UPLOAD_CHUNK_SIZE", 1024 * 1024, minimum=4096)
 
 # Стандартный формат аудио, который backend гарантирует на выходе
 # (используется при оптимизации/конвертации файлов песни, см. cache_service).
@@ -294,7 +297,8 @@ RECORDING_CHANNELS = 1
 # Сервер
 # --------------------------------------------------------------------
 
-HOST = os.environ.get("SONGAPP_HOST", "127.0.0.1")  # локальный десктоп-бекенд — наружу не торчит
+# локальный десктоп-бекенд — наружу не торчит
+HOST = os.environ.get("SONGAPP_HOST", "127.0.0.1")
 PORT = _env_int("SONGAPP_PORT", 8000, minimum=1, maximum=65535)
 DEFAULT_UI_ORIGINS = (
     "http://127.0.0.1:3000",

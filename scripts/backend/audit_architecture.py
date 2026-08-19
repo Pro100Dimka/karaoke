@@ -1,6 +1,4 @@
-"""Lightweight architectural checks that do not require external tools."""
 
-from __future__ import annotations
 
 import ast
 from pathlib import Path
@@ -17,19 +15,12 @@ FUNCTION_LINE_LIMITS = {
 }
 
 
-def python_files() -> list[Path]:
-    return [
-        path
-        for path in ROOT.rglob("*.py")
-        if not EXCLUDED_PARTS.intersection(path.relative_to(ROOT).parts)
-    ]
+def python_files() -> list[Path]: return [path for path in ROOT.rglob('*.py') if not EXCLUDED_PARTS.intersection(path.relative_to(ROOT).parts)]
 
 
 def imported_module(node: ast.AST) -> str | None:
-    if isinstance(node, ast.ImportFrom):
-        return node.module
-    if isinstance(node, ast.Import) and node.names:
-        return node.names[0].name
+    if isinstance(node, ast.ImportFrom): return node.module
+    if isinstance(node, ast.Import) and node.names: return node.names[0].name
     return None
 
 
@@ -41,11 +32,9 @@ def audit_file(path: Path) -> list[str]:
             path.read_text(encoding="utf-8"),
             filename=str(relative),
         )
-    except (OSError, SyntaxError, UnicodeError) as exc:
-        return [f"{relative}: cannot parse file: {exc}"]
+    except (OSError, SyntaxError, UnicodeError) as exc: return [f"{relative}: cannot parse file: {exc}"]
 
-    errors: list[str] = []
-    parts = relative.parts
+    errors: list[str] = []; parts = relative.parts
 
     for node in ast.walk(tree):
         module = imported_module(node)
@@ -97,24 +86,18 @@ def audit_file(path: Path) -> list[str]:
         ):
             errors.append(f"{relative}:{node.lineno}: wildcard import")
 
-        if isinstance(node, ast.ExceptHandler) and node.type is None:
-            errors.append(f"{relative}:{node.lineno}: bare except")
+        if isinstance(node, ast.ExceptHandler) and node.type is None: errors.append(f"{relative}:{node.lineno}: bare except")
 
     return errors
 
 
 def main() -> int:
-    files = python_files()
-    errors = [error for path in files for error in audit_file(path)]
+    files = python_files(); errors = [error for path in files for error in audit_file(path)]
 
     if errors:
-        print("Architecture audit failed:")
-        print("\n".join(f"- {error}" for error in errors))
-        return 1
+        print("Architecture audit failed:"); print("\n".join(f"- {error}" for error in errors)); return 1
 
-    print(f"Architecture audit passed ({len(files)} Python files).")
-    return 0
+    print(f"Architecture audit passed ({len(files)} Python files)."); return 0
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == "__main__": raise SystemExit(main())

@@ -10,11 +10,6 @@ from .text import Qwen3ForcedAligner, Qwen3Transcriber
 
 @dataclass
 class EngineRegistry:
-    """Long-lived engine instances.
-
-    A backend should keep one KaraokePipeline instance alive. Heavy model objects then
-    remain loaded between jobs instead of being reconstructed for every song.
-    """
 
     separator: MSSTMelRoformerSeparator
     pitch: FCPEPitchEstimator

@@ -1,11 +1,12 @@
-"""Profile the existing tempo/key implementation without changing its algorithm."""
 
-from __future__ import annotations
 
 import json
 import math
 import time
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from common import ROOT, write_json
 
 import librosa
 import numpy as np
@@ -13,24 +14,19 @@ import soundfile as sf
 from AI.music import _adaptive_key_windows, _profile_scores, analyze_music
 from scipy.signal import resample_poly
 
-ROOT = Path(__file__).resolve().parents[2]
+import sys
 SOURCE = ROOT / "build/performance-baseline-after-v2/warm/song.wav"
 OUTPUT = ROOT / "build/ai-runtime-benchmark/tempo-profile.json"
 
 
-def measured(function):
-    started = time.perf_counter()
-    value = function()
-    return value, time.perf_counter() - started
+def measured(function): started = time.perf_counter(); value = function(); return value, time.perf_counter() - started
 
 
 def run_once():
     audio_data, disk_io = measured(
         lambda: sf.read(SOURCE, dtype="float32", always_2d=True)
     )
-    (audio, source_rate) = audio_data
-    mono, mono_mix = measured(lambda: np.mean(audio, axis=1, dtype=np.float32))
-    divisor = math.gcd(source_rate, 22050)
+    (audio, source_rate) = audio_data; mono, mono_mix = measured(lambda: np.mean(audio, axis=1, dtype=np.float32)); divisor = math.gcd(source_rate, 22050)
     mono, resample = measured(
         lambda: resample_poly(mono, 22050 // divisor, source_rate // divisor).astype(
             np.float32, copy=False
@@ -66,10 +62,8 @@ def run_once():
     )
 
     def score_key():
-        global_scores = _profile_scores(chroma)
-        windows = _adaptive_key_windows(chroma, 22050 / 512.0)
-        for block in windows:
-            _profile_scores(block)
+        global_scores = _profile_scores(chroma); windows = _adaptive_key_windows(chroma, 22050 / 512.0)
+        for block in windows: _profile_scores(block)
         return len(global_scores), len(windows)
 
     _, key_scoring = measured(score_key)
@@ -106,13 +100,8 @@ def run_once():
 
 
 def main():
-    authoritative_runs = [measured(lambda: analyze_music(SOURCE)) for _ in range(3)]
-    authoritative = authoritative_runs[-1][0]
-    authoritative_time = float(np.median([item[1] for item in authoritative_runs]))
-    runs = [run_once() for _ in range(3)]
-    keys = [key for key in runs[0] if isinstance(runs[0][key], float)]
-    median = {key: float(np.median([run[key] for run in runs])) for key in keys}
-    median["other"] = max(0.0, authoritative_time - median["accounted_total"])
+    authoritative_runs = [measured(lambda: analyze_music(SOURCE)) for _ in range(3)]; authoritative = authoritative_runs[-1][0]; authoritative_time = float(np.median([item[1] for item in authoritative_runs])); runs = [run_once() for _ in range(3)]
+    keys = [key for key in runs[0] if isinstance(runs[0][key], float)]; median = {key: float(np.median([run[key] for run in runs])) for key in keys}; median["other"] = max(0.0, authoritative_time - median["accounted_total"])
     result = {
         "source": str(SOURCE),
         "source_bytes": SOURCE.stat().st_size,
@@ -123,10 +112,7 @@ def main():
         "median_breakdown": median,
         "runs": runs,
     }
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(json.dumps(result, indent=2), encoding="utf-8")
-    print(json.dumps(result, indent=2))
+    write_json(OUTPUT, result); print(json.dumps(result, indent=2))
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__": main()

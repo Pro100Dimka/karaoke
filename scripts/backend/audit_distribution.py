@@ -1,6 +1,4 @@
-"""Reject runtime and build artifacts that must never ship with source updates."""
 
-from __future__ import annotations
 
 import subprocess
 from pathlib import Path
@@ -31,8 +29,7 @@ def violations() -> list[Path]:
     found: list[Path] = []
     for name in tracked:
         relative = Path(name).relative_to("backend")
-        if relative.parts and relative.parts[0] in IGNORED_ROOTS:
-            continue
+        if relative.parts and relative.parts[0] in IGNORED_ROOTS: continue
         if (
             FORBIDDEN_DIRS.intersection(relative.parts)
             or relative.name in FORBIDDEN_FILES
@@ -45,12 +42,8 @@ def violations() -> list[Path]:
 def main() -> int:
     found = violations()
     if found:
-        print("Distribution audit failed; remove generated/runtime artifacts:")
-        print("\n".join(f"- {path}" for path in found))
-        return 1
-    print("Distribution audit passed.")
-    return 0
+        print("Distribution audit failed; remove generated/runtime artifacts:"); print("\n".join(f"- {path}" for path in found)); return 1
+    print("Distribution audit passed."); return 0
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == "__main__": raise SystemExit(main())

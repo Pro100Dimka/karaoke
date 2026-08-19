@@ -23,47 +23,34 @@ def _temporary_path(path: Path) -> tuple[int, Path]:
 
 
 def _sync_directory(path: Path) -> None:
-    """Best-effort directory sync after an atomic replace (not available on Windows)."""
-    if os.name == "nt":
-        return
+    if os.name == "nt": return
     with contextlib.suppress(OSError):
         descriptor = os.open(path, os.O_RDONLY)
-        try:
-            os.fsync(descriptor)
-        finally:
-            os.close(descriptor)
+        try: os.fsync(descriptor)
+        finally: os.close(descriptor)
 
 
 def atomic_write(path: Path, writer: Callable[[BinaryIO], None]) -> None:
-    """Write *path* through a unique sibling temp file and atomically replace it."""
-    descriptor, temporary = _temporary_path(path)
+    """Write *path* through a unique sibling temp file and atomically replace it."""; descriptor, temporary = _temporary_path(path)
     try:
         with os.fdopen(descriptor, "wb") as stream:
-            writer(stream)
-            stream.flush()
-            os.fsync(stream.fileno())
-        temporary.replace(path)
-        _sync_directory(path.parent)
+            writer(stream); stream.flush(); os.fsync(stream.fileno())
+        temporary.replace(path); _sync_directory(path.parent)
     except Exception:
-        temporary.unlink(missing_ok=True)
-        raise
+        temporary.unlink(missing_ok=True); raise
 
 
 def atomic_write_bytes(path: Path, payload: bytes) -> None:
     """Atomically write a bytes payload."""
 
-    def write_payload(stream: BinaryIO) -> None:
-        stream.write(payload)
+    def write_payload(stream: BinaryIO) -> None: stream.write(payload)
 
     atomic_write(path, write_payload)
 
 
 def move_path(source: Path, destination: Path) -> None:
-    """Move a file/directory, including across Windows drive boundaries."""
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        source.replace(destination)
+    """Move a file/directory, including across Windows drive boundaries."""; destination.parent.mkdir(parents=True, exist_ok=True)
+    try: source.replace(destination)
     except OSError as exc:
-        if exc.errno != errno.EXDEV and getattr(exc, "winerror", None) != 17:
-            raise
+        if exc.errno != errno.EXDEV and getattr(exc, "winerror", None) != 17: raise
         shutil.move(str(source), str(destination))

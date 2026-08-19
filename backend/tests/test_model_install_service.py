@@ -1,3 +1,5 @@
+from tests._shared import patch_attrs, patch_many
+
 from unittest.mock import Mock
 
 import config
@@ -6,22 +8,10 @@ from AI.model_registry import ModelSpec, model_directory
 from app.services import model_install_service
 
 
-def _model() -> ModelSpec:
-    return ModelSpec(
-        key="recovery",
-        name="Recovery model",
-        repo_id="owner/repository",
-        revision="revision",
-        relative_path="recovery",
-        env_var="RECOVERY_MODEL",
-    )
+def _model() -> ModelSpec: return ModelSpec(key='recovery', name='Recovery model', repo_id='owner/repository', revision='revision', relative_path='recovery', env_var='RECOVERY_MODEL')
 
 
-def test_frozen_default_model_path_matches_installer(monkeypatch, tmp_path):
-    monkeypatch.setattr(config, "IS_FROZEN", True)
-    monkeypatch.setenv("SONGAPP_INSTALL_ROOT", str(tmp_path / "A&D Voice"))
-
-    assert config._default_models_dir() == tmp_path / "A&D Voice" / "data" / "models"
+def test_frozen_default_model_path_matches_installer(monkeypatch, tmp_path): monkeypatch.setattr(config, "IS_FROZEN", True); monkeypatch.setenv("SONGAPP_INSTALL_ROOT", str(tmp_path / "A&D Voice")); assert config._default_models_dir() == tmp_path / "A&D Voice" / "data" / "models"
 
 
 def test_separator_reports_each_missing_resource(monkeypatch, tmp_path):
@@ -34,57 +24,26 @@ def test_separator_reports_each_missing_resource(monkeypatch, tmp_path):
 
     missing = separator.missing_resources()
 
-    assert any("MSST_ENGINE_DIR/inference.py" in item for item in missing)
-    assert any("MSST_CONFIG" in item for item in missing)
-    assert any("MSST_CHECKPOINT=<not configured>" in item for item in missing)
+    assert (any(('MSST_ENGINE_DIR/inference.py' in item for item in missing))) and (any(('MSST_CONFIG' in item for item in missing))) and (any(('MSST_CHECKPOINT=<not configured>' in item for item in missing)))
 
 
-def test_model_status_reports_missing_resources(monkeypatch, tmp_path):
-    model = _model()
-    monkeypatch.setattr(model_install_service, "MODELS", (model,))
-    monkeypatch.setattr(model_install_service.config, "MODELS_DIR", tmp_path / "models")
-    model_install_service._set_state(state="idle", current_model=None, error=None)
-
-    result = model_install_service.status()
-
-    assert result["state"] == "missing"
-    assert result["ready_count"] == 0
-    assert result["models"] == [{"key": "recovery", "name": "Recovery model", "ready": False}]
+def test_model_status_reports_missing_resources(monkeypatch, tmp_path): model = _model(); patch_many(monkeypatch, (model_install_service, "MODELS", (model,)), (model_install_service.config, "MODELS_DIR", tmp_path / "models")); model_install_service._set_state(state="idle", current_model=None, error=None); result = model_install_service.status(); assert (result['state'], result['ready_count'], result['models']) == ('missing', 0, [{'key': 'recovery', 'name': 'Recovery model', 'ready': False}])
 
 
 def test_recovery_download_verifies_and_activates_models(monkeypatch, tmp_path):
-    model = _model()
-    models_root = tmp_path / "models"
-    configured = []
-    resets = []
+    model, models_root, configured, resets = _model(), tmp_path / 'models', [], []
 
-    def install(root, _cache, resource, retries):
-        assert retries == 3
-        directory = model_directory(root, resource)
-        directory.mkdir(parents=True)
-        (directory / "config.json").write_text("{}", encoding="utf-8")
-        (directory / "model.safetensors").write_bytes(b"weights")
+    def install(root, _cache, resource, retries): assert retries == 3; directory = model_directory(root, resource); directory.mkdir(parents=True); (directory / "config.json").write_text("{}", encoding="utf-8"); (directory / "model.safetensors").write_bytes(b"weights")
 
-    monkeypatch.setattr(model_install_service, "MODELS", (model,))
-    monkeypatch.setattr(model_install_service, "install_one", install)
-    monkeypatch.setattr(
-        model_install_service.config,
-        "configure_ai_resource_environment",
-        lambda **options: configured.append(options),
-    )
-    monkeypatch.setattr("AI.service.reset_ai_service", lambda: resets.append(True))
-    model_install_service._set_state(state="downloading", current_model=None, error=None)
+    patch_attrs(monkeypatch, model_install_service, MODELS=(model,), install_one=install); patch_attrs(monkeypatch, model_install_service.config, configure_ai_resource_environment=lambda **options: configured.append(options)); monkeypatch.setattr("AI.service.reset_ai_service", lambda: resets.append(True)); model_install_service._set_state(state="downloading", current_model=None, error=None)
 
     model_install_service._download_worker(models_root, tmp_path / "cache")
 
-    assert model_install_service._state["state"] == "ready"
-    assert configured == [{"force": True}]
-    assert resets == [True]
+    assert (model_install_service._state['state'], configured, resets) == ('ready', [{'force': True}], [True])
 
 
 def test_progress_values_tolerate_missing_and_invalid_entries(monkeypatch, tmp_path):
-    monkeypatch.setattr(model_install_service.config, "APP_LOG_DIR", tmp_path)
-    assert model_install_service._progress_values() == {}
+    monkeypatch.setattr(model_install_service.config, "APP_LOG_DIR", tmp_path); assert model_install_service._progress_values() == {}
     (tmp_path / "model-recovery-progress.txt").write_text(
         "downloaded_bytes=10\ntotal_bytes=bad\nignored\nremaining_seconds=4\n",
         encoding="utf-8",
@@ -95,84 +54,25 @@ def test_progress_values_tolerate_missing_and_invalid_entries(monkeypatch, tmp_p
     }
 
 
-def test_status_ready_overrides_stale_runtime_error(monkeypatch, tmp_path):
-    model = _model()
-    monkeypatch.setattr(model_install_service, "MODELS", (model,))
-    monkeypatch.setattr(model_install_service.config, "MODELS_DIR", tmp_path)
-    monkeypatch.setattr(model_install_service, "is_valid", Mock(return_value=True))
-    monkeypatch.setattr(
-        model_install_service,
-        "_progress_values",
-        Mock(return_value={"downloaded_bytes": 42}),
-    )
-    model_install_service._set_state(state="error", current_model="stale", error="previous failure")
-
-    result = model_install_service.status()
-
-    assert result["state"] == "ready"
-    assert result["ready"] is True
-    assert result["current_model"] is None
-    assert result["error"] is None
-    assert result["downloaded_bytes"] == 42
+def test_status_ready_overrides_stale_runtime_error(monkeypatch, tmp_path): model = _model(); patch_many(monkeypatch, (model_install_service, "MODELS", (model,)), (model_install_service.config, "MODELS_DIR", tmp_path)); patch_attrs(monkeypatch, model_install_service, is_valid=Mock(return_value=True), _progress_values=Mock(return_value={'downloaded_bytes': 42})); model_install_service._set_state(state="error", current_model="stale", error="previous failure"); result = model_install_service.status(); assert (result['state'] == 'ready') and (result['ready'] is True) and (result['current_model'] is None) and (result['error'] is None) and (result['downloaded_bytes'] == 42)
 
 
-def test_status_preserves_active_download_state(monkeypatch, tmp_path):
-    monkeypatch.setattr(model_install_service, "MODELS", (_model(),))
-    monkeypatch.setattr(model_install_service.config, "MODELS_DIR", tmp_path)
-    monkeypatch.setattr(model_install_service, "is_valid", Mock(return_value=False))
-    model_install_service._set_state(state="downloading", current_model="Recovery", error=None)
-    assert model_install_service.status()["state"] == "downloading"
+def test_status_preserves_active_download_state(monkeypatch, tmp_path): patch_many(monkeypatch, (model_install_service, "MODELS", (_model(),)), (model_install_service.config, "MODELS_DIR", tmp_path), (model_install_service, "is_valid", Mock(return_value=False))); model_install_service._set_state(state="downloading", current_model="Recovery", error=None); assert model_install_service.status()["state"] == "downloading"
 
 
-def test_download_worker_skips_valid_models(monkeypatch, tmp_path):
-    model = _model()
-    reporter = Mock()
-    monkeypatch.setattr(model_install_service, "MODELS", (model,))
-    monkeypatch.setattr(model_install_service, "is_valid", Mock(return_value=True))
-    monkeypatch.setattr(model_install_service, "ProgressReporter", Mock(return_value=reporter))
-    install = Mock()
-    monkeypatch.setattr(model_install_service, "install_one", install)
-    monkeypatch.setattr(model_install_service.config, "configure_ai_resource_environment", Mock())
-    monkeypatch.setattr("AI.service.reset_ai_service", Mock())
-
-    model_install_service._download_worker(tmp_path / "models", tmp_path / "cache")
-
-    install.assert_not_called()
-    reporter.model_finished.assert_called_once_with(model.name)
-    reporter.finish.assert_called_once_with(True)
+def test_download_worker_skips_valid_models(monkeypatch, tmp_path): model, reporter = _model(), Mock(); patch_attrs(monkeypatch, model_install_service, MODELS=(model,), is_valid=Mock(return_value=True), ProgressReporter=Mock(return_value=reporter)); install = Mock(); patch_many(monkeypatch, (model_install_service, "install_one", install), (model_install_service.config, "configure_ai_resource_environment", Mock())); monkeypatch.setattr("AI.service.reset_ai_service", Mock()); model_install_service._download_worker(tmp_path / "models", tmp_path / "cache"); install.assert_not_called(); reporter.model_finished.assert_called_once_with(model.name); reporter.finish.assert_called_once_with(True)
 
 
-def test_download_worker_reports_verification_failure(monkeypatch, tmp_path):
-    reporter = Mock()
-    monkeypatch.setattr(model_install_service, "MODELS", (_model(),))
-    monkeypatch.setattr(model_install_service, "is_valid", Mock(return_value=False))
-    monkeypatch.setattr(model_install_service, "install_one", Mock())
-    monkeypatch.setattr(model_install_service, "ProgressReporter", Mock(return_value=reporter))
-    model_install_service._set_state(state="downloading", current_model=None, error=None)
-
-    model_install_service._download_worker(tmp_path / "models", tmp_path / "cache")
-
-    assert model_install_service._state["state"] == "error"
-    assert model_install_service._state["error"] == "Model verification failed after download"
-    reporter.finish.assert_called_once_with(False)
+def test_download_worker_reports_verification_failure(monkeypatch, tmp_path): reporter = Mock(); patch_attrs(monkeypatch, model_install_service, MODELS=(_model(),), is_valid=Mock(return_value=False), install_one=Mock(), ProgressReporter=Mock(return_value=reporter)); model_install_service._set_state(state="downloading", current_model=None, error=None); model_install_service._download_worker(tmp_path / "models", tmp_path / "cache"); assert (model_install_service._state['state'], model_install_service._state['error']) == ('error', 'Model verification failed after download'); reporter.finish.assert_called_once_with(False)
 
 
 def test_start_download_is_idempotent_and_spawns_daemon(monkeypatch, tmp_path):
-    response = {"state": "test"}
-    status = Mock(return_value=response)
-    monkeypatch.setattr(model_install_service, "status", status)
-    monkeypatch.setattr(model_install_service.config, "MODELS_DIR", tmp_path / "models")
-    monkeypatch.setattr(model_install_service.config, "CACHE_DIR", tmp_path / "cache")
-    thread = Mock()
-    thread_factory = Mock(return_value=thread)
-    monkeypatch.setattr(model_install_service.threading, "Thread", thread_factory)
+    response = {"state": "test"}; status = Mock(return_value=response); monkeypatch.setattr(model_install_service, "status", status); patch_attrs(monkeypatch, model_install_service.config, MODELS_DIR=tmp_path / 'models', CACHE_DIR=tmp_path / 'cache')
+    thread = Mock(); thread_factory = Mock(return_value=thread); monkeypatch.setattr(model_install_service.threading, "Thread", thread_factory)
 
-    model_install_service._set_state(state="downloading", current_model=None, error=None)
-    assert model_install_service.start_download() is response
-    thread_factory.assert_not_called()
+    model_install_service._set_state(state="downloading", current_model=None, error=None); assert model_install_service.start_download() is response; thread_factory.assert_not_called()
 
-    model_install_service._set_state(state="missing", current_model="old", error="old")
-    assert model_install_service.start_download() is response
+    model_install_service._set_state(state="missing", current_model="old", error="old"); assert model_install_service.start_download() is response
     thread_factory.assert_called_once_with(
         target=model_install_service._download_worker,
         args=((tmp_path / "models").resolve(), (tmp_path / "cache/model-downloads").resolve()),
@@ -188,27 +88,13 @@ def test_start_download_is_idempotent_and_spawns_daemon(monkeypatch, tmp_path):
 
 
 def test_sync_recovery_repairs_before_processing(monkeypatch, tmp_path):
-    model = _model()
-    models_root = tmp_path / "models"
-    monkeypatch.setattr(model_install_service, "MODELS", (model,))
-    monkeypatch.setattr(model_install_service.config, "MODELS_DIR", models_root)
-    monkeypatch.setattr(model_install_service.config, "CACHE_DIR", tmp_path / "cache-root")
-    monkeypatch.setattr(model_install_service.config, "APP_LOG_DIR", tmp_path / "logs")
-    configured = Mock()
-    monkeypatch.setattr(model_install_service.config, "configure_ai_resource_environment", configured)
-    monkeypatch.setattr("AI.service.reset_ai_service", Mock())
+    model, models_root = _model(), tmp_path / 'models'; monkeypatch.setattr(model_install_service, "MODELS", (model,)); patch_attrs(monkeypatch, model_install_service.config, MODELS_DIR=models_root, CACHE_DIR=tmp_path / 'cache-root', APP_LOG_DIR=tmp_path / 'logs'); configured = Mock()
+    monkeypatch.setattr(model_install_service.config, "configure_ai_resource_environment", configured); monkeypatch.setattr("AI.service.reset_ai_service", Mock())
 
-    def install(root, _cache, resource, retries):
-        assert retries == 3
-        directory = model_directory(root, resource)
-        directory.mkdir(parents=True, exist_ok=True)
-        (directory / "config.json").write_text("{}", encoding="utf-8")
-        (directory / "model.safetensors").write_bytes(b"weights")
+    def install(root, _cache, resource, retries): assert retries == 3; directory = model_directory(root, resource); directory.mkdir(parents=True, exist_ok=True); (directory / "config.json").write_text("{}", encoding="utf-8"); (directory / "model.safetensors").write_bytes(b"weights")
 
-    monkeypatch.setattr(model_install_service, "install_one", install)
-    model_install_service._set_state(state="idle", current_model=None, error=None)
+    monkeypatch.setattr(model_install_service, "install_one", install); model_install_service._set_state(state="idle", current_model=None, error=None)
 
     result = model_install_service.ensure_ready_sync()
 
-    assert result["ready"] is True
-    configured.assert_called_once_with(force=True)
+    assert result["ready"] is True; configured.assert_called_once_with(force=True)

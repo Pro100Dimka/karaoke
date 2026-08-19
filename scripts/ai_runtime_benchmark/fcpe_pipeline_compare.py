@@ -1,23 +1,18 @@
-"""Counterfactual full pitch/downstream comparison on identical cached upstream data."""
 
-from __future__ import annotations
 
-import hashlib
 import json
 import os
-import shutil
 import sys
 import time
 from difflib import SequenceMatcher
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from common import DEPS, ROOT, reset_cached_tree, sha256, write_json
+
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[2]
 BUILD = ROOT / "build/fcpe-shadow-corpus"
-DEPS = Path(
-    os.getenv("KARAOKE_BENCHMARK_DEPS", ROOT.parent / ".karaoke-ai-benchmark-deps")
-)
 sys.path.insert(0, str(DEPS / "ort-gpu"))
 sys.path.insert(0, str(ROOT / "backend"))
 
@@ -40,57 +35,28 @@ INVALIDATED = (
 QUALITY_OUTPUTS = INVALIDATED[1:10]
 
 
-def _hash(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def _reset(source: Path, target: Path) -> None:
-    if target.exists():
-        shutil.rmtree(target)
-    shutil.copytree(source, target)
-    index_path = target / ".ai-cache/index.json"
-    cache = json.loads(index_path.read_text(encoding="utf-8"))
-    for stage in cache["stages"].values():
-        stage["outputs"] = {
-            str(target / Path(path).relative_to(source)): metadata
-            for path, metadata in stage["outputs"].items()
-        }
-    index_path.write_text(json.dumps(cache, indent=2), encoding="utf-8")
-    for name in INVALIDATED:
-        (target / name).unlink(missing_ok=True)
+def _reset(source: Path, target: Path) -> None: reset_cached_tree(source, target, INVALIDATED)
 
 
 def _install_ort_estimator(estimator):
-    import torch
-    from AI.audio import load_mono
-    from AI.engines.fcpe_backends import OrtCudaFCPEBackend
-    from AI.models import PitchFrame
+    import torch; from AI.audio import load_mono; from AI.engines.fcpe_backends import OrtCudaFCPEBackend; from AI.models import PitchFrame
 
     backend = OrtCudaFCPEBackend()
 
     def estimate(audio_path):
-        _, model = estimator._load_model()
-        y, _ = load_mono(audio_path, estimator.sr)
-        if y.size == 0:
-            return []
-        y = np.asarray(y, dtype=np.float32)
-        peak = float(np.max(np.abs(y)))
-        if peak > 0.999:
-            y = np.ascontiguousarray(y * (0.999 / peak), dtype=np.float32)
-        tensor = torch.from_numpy(y).view(1, -1, 1).to(estimator._device)
-        target_length = len(y) // estimator.hop + 1
-        with torch.inference_mode():
-            mel = model.wav2mel(tensor, estimator.sr)
+        _, model = estimator._load_model(); y, _ = load_mono(audio_path, estimator.sr)
+        if y.size == 0: return []
+        y = np.asarray(y, dtype=np.float32); peak = float(np.max(np.abs(y)))
+        if peak > 0.999: y = np.ascontiguousarray(y * (0.999 / peak), dtype=np.float32)
+        tensor = torch.from_numpy(y).view(1, -1, 1).to(estimator._device); target_length = len(y) // estimator.hop + 1
+        with torch.inference_mode(): mel = model.wav2mel(tensor, estimator.sr)
         cent_table = model.model.cent_table.float().cpu().numpy()
         result = backend.infer(
             mel.detach().cpu().numpy(), cent_table, target_length=target_length
         )
-        energy_window = max(32, int(estimator.sr * 0.025))
-        output = []
+        energy_window = max(32, int(estimator.sr * 0.025)); output = []
         for index, value in enumerate(result.f0):
-            hz = min(float(value), estimator.fmax)
-            start = min(len(y), round(index * estimator.hop))
-            end = min(len(y), start + energy_window)
+            hz = min(float(value), estimator.fmax); start = min(len(y), round(index * estimator.hop)); end = min(len(y), start + energy_window)
             energy = (
                 float(np.sqrt(np.mean(np.square(y[start:end])) + 1e-12))
                 if end > start
@@ -108,8 +74,7 @@ def _install_ort_estimator(estimator):
             )
         return output
 
-    estimator.estimate = estimate
-    return backend
+    estimator.estimate = estimate; return backend
 
 
 def _freeze_text_stage(pipeline) -> None:
@@ -128,13 +93,8 @@ def _freeze_text_stage(pipeline) -> None:
 def _run(pipeline, target: Path) -> dict[str, object]:
     from AI.pipeline import PipelineRequest
 
-    source = ROOT / "build/performance-baseline-input/source.mp3"
-    started = time.perf_counter()
-    result = pipeline.run(PipelineRequest(source, target, language="Russian"))
-    wall = time.perf_counter() - started
-    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
-    performance = json.loads((target / "performance.json").read_text(encoding="utf-8"))
-    stages = {report["stage"]: report["elapsed_sec"] for report in manifest["reports"]}
+    source = ROOT / "build/performance-baseline-input/source.mp3"; started = time.perf_counter(); result = pipeline.run(PipelineRequest(source, target, language="Russian")); wall = time.perf_counter() - started
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8")); performance = json.loads((target / "performance.json").read_text(encoding="utf-8")); stages = {report["stage"]: report["elapsed_sec"] for report in manifest["reports"]}
     return {
         "wall_sec": wall,
         "pitch_stage_sec": sum(
@@ -143,15 +103,12 @@ def _run(pipeline, target: Path) -> dict[str, object]:
         "derivation_sec": stages.get("derivation", 0.0),
         "midi_sec": stages.get("midi", 0.0),
         "performance": performance,
-        "hashes": {name: _hash(target / name) for name in QUALITY_OUTPUTS},
+        "hashes": {name: sha256(target / name) for name in QUALITY_OUTPUTS},
     }
 
 
 def _note_comparison(left: Path, right: Path, key: str) -> dict[str, object]:
-    left_data = json.loads(left.read_text(encoding="utf-8"))
-    right_data = json.loads(right.read_text(encoding="utf-8"))
-    production = left_data[key] if isinstance(left_data, dict) else left_data
-    candidate = right_data[key] if isinstance(right_data, dict) else right_data
+    left_data = json.loads(left.read_text(encoding="utf-8")); right_data = json.loads(right.read_text(encoding="utf-8")); production = left_data[key] if isinstance(left_data, dict) else left_data; candidate = right_data[key] if isinstance(right_data, dict) else right_data
     pitch, cents, onset, offset = [], [], [], []
     left_keys = [
         (item.get("word_index"), item.get("syllable_index"), item.get("midi_note"))
@@ -175,8 +132,7 @@ def _note_comparison(left: Path, right: Path, key: str) -> dict[str, object]:
                 for index in range(block.size)
             )
     for a, b in pairs:
-        if "midi_note" in a and "midi_note" in b:
-            pitch.append(abs(float(a["midi_note"]) - float(b["midi_note"])))
+        if "midi_note" in a and "midi_note" in b: pitch.append(abs(float(a["midi_note"]) - float(b["midi_note"])))
         if float(a.get("frequency", 0)) > 0 and float(b.get("frequency", 0)) > 0:
             cents.append(
                 abs(1200 * np.log2(float(a["frequency"]) / float(b["frequency"])))
@@ -208,31 +164,17 @@ def _note_comparison(left: Path, right: Path, key: str) -> dict[str, object]:
 
 
 def main() -> int:
-    from AI.config import CoreConfig
-    from AI.pipeline import KaraokePipeline
+    from AI.config import CoreConfig; from AI.pipeline import KaraokePipeline
 
     os.environ["KARAOKE_AI_FCPE_ONNX"] = str(
         ROOT / "build/ai-runtime-benchmark/artifacts/fcpe-fp16.onnx"
     )
-    source = (ROOT / "build/performance-baseline-after-v2/warm").resolve()
-    output = (ROOT / "build/fcpe-shadow-corpus/pipeline").resolve()
-    production_pipeline = KaraokePipeline(CoreConfig.from_env())
-    candidate_pipeline = KaraokePipeline(CoreConfig.from_env())
-    _freeze_text_stage(production_pipeline)
-    _freeze_text_stage(candidate_pipeline)
-    backend = _install_ort_estimator(candidate_pipeline.engines.pitch)
-    results = {"production": [], "candidate": []}
+    source = (ROOT / "build/performance-baseline-after-v2/warm").resolve(); output = (ROOT / "build/fcpe-shadow-corpus/pipeline").resolve(); production_pipeline = KaraokePipeline(CoreConfig.from_env()); candidate_pipeline = KaraokePipeline(CoreConfig.from_env())
+    _freeze_text_stage(production_pipeline); _freeze_text_stage(candidate_pipeline); backend = _install_ort_estimator(candidate_pipeline.engines.pitch); results = {"production": [], "candidate": []}
     for run in ("cold", "warm"):
-        production_dir = output / f"production-{run}"
-        candidate_dir = output / f"candidate-{run}"
-        _reset(source, production_dir)
-        _reset(source, candidate_dir)
-        results["production"].append(_run(production_pipeline, production_dir))
-        results["candidate"].append(_run(candidate_pipeline, candidate_dir))
-    backend.release()
-    production_pipeline.close()
-    candidate_pipeline.close()
-    left, right = output / "production-warm", output / "candidate-warm"
+        production_dir = output / f"production-{run}"; candidate_dir = output / f"candidate-{run}"; _reset(source, production_dir); _reset(source, candidate_dir)
+        results["production"].append(_run(production_pipeline, production_dir)); results["candidate"].append(_run(candidate_pipeline, candidate_dir))
+    backend.release(); production_pipeline.close(); candidate_pipeline.close(); left, right = output / "production-warm", output / "candidate-warm"
     payload = {
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         **results,
@@ -251,13 +193,7 @@ def main() -> int:
         "quality_equal": json.loads((left / "quality.json").read_text(encoding="utf-8"))
         == json.loads((right / "quality.json").read_text(encoding="utf-8")),
     }
-    result_path = BUILD / "pipeline-results.json"
-    result_path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-    print(result_path)
-    return 0
+    result_path = BUILD / "pipeline-results.json"; write_json(result_path, payload, ensure_ascii=False); print(result_path); return 0
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == "__main__": raise SystemExit(main())

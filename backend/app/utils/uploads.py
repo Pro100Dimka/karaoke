@@ -9,8 +9,7 @@ from fastapi import HTTPException, UploadFile
 
 
 def _validate_limits(limit: int, chunk_size: int) -> None:
-    if limit < 0 or chunk_size <= 0:
-        raise ValueError("Upload limit must be non-negative and chunk size must be positive")
+    if limit < 0 or chunk_size <= 0: raise ValueError("Upload limit must be non-negative and chunk size must be positive")
 
 
 async def read_upload_limited(
@@ -20,12 +19,9 @@ async def read_upload_limited(
     chunk_size: int,
     too_large_message: str = "Uploaded file is too large",
 ) -> bytes:
-    """Read an upload incrementally and reject payloads above *limit*."""
-    _validate_limits(limit, chunk_size)
-    payload = bytearray()
+    """Read an upload incrementally and reject payloads above *limit*."""; _validate_limits(limit, chunk_size); payload = bytearray()
     while chunk := await upload.read(chunk_size):
-        if len(payload) + len(chunk) > limit:
-            raise HTTPException(status_code=413, detail=too_large_message)
+        if len(payload) + len(chunk) > limit: raise HTTPException(status_code=413, detail=too_large_message)
         payload.extend(chunk)
     return bytes(payload)
 
@@ -38,20 +34,14 @@ async def save_upload_limited(
     chunk_size: int,
     too_large_message: str = "Uploaded file is too large",
 ) -> int:
-    """Stream an upload to disk and remove a partial file on failure."""
-    _validate_limits(limit, chunk_size)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    received = 0
+    """Stream an upload to disk and remove a partial file on failure."""; _validate_limits(limit, chunk_size); destination.parent.mkdir(parents=True, exist_ok=True); received = 0
     try:
         with destination.open("wb") as stream:
             while chunk := await upload.read(chunk_size):
                 received += len(chunk)
-                if received > limit:
-                    raise HTTPException(status_code=413, detail=too_large_message)
+                if received > limit: raise HTTPException(status_code=413, detail=too_large_message)
                 stream.write(chunk)
-            stream.flush()
-            os.fsync(stream.fileno())
+            stream.flush(); os.fsync(stream.fileno())
     except Exception:
-        destination.unlink(missing_ok=True)
-        raise
+        destination.unlink(missing_ok=True); raise
     return received

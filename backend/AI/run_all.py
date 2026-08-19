@@ -7,14 +7,8 @@ from .pipeline import KaraokePipeline, PipelineRequest
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(description="A&D Voice AI Core")
-    p.add_argument("--input", "--source", dest="source", required=True)
-    p.add_argument("--output", "--out", dest="output", required=True)
-    p.add_argument("--language")
-    p.add_argument("--lyrics")
-    p.add_argument("--bpm", type=float)
-    p.add_argument("--key")
-    args = p.parse_args(argv)
+    p = argparse.ArgumentParser(description="A&D Voice AI Core"); p.add_argument("--input", "--source", dest="source", required=True); p.add_argument("--output", "--out", dest="output", required=True); p.add_argument("--language")
+    p.add_argument("--lyrics"); p.add_argument("--bpm", type=float); p.add_argument("--key"); args = p.parse_args(argv)
     result = KaraokePipeline().run(
         PipelineRequest(
             source_path=args.source,

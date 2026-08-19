@@ -1,6 +1,4 @@
-"""Generate the authoritative current-PyTorch reference for isolated benchmarks."""
 
-from __future__ import annotations
 
 import argparse
 import json
@@ -22,16 +20,12 @@ from benchmark_worker import (
 def fcpe_reference():
     import torchfcpe
 
-    model, cold_load = timer(lambda: torchfcpe.spawn_bundled_infer_model(device="cuda"))
-    arrays, lengths = {}, []
+    model, cold_load = timer(lambda: torchfcpe.spawn_bundled_infer_model(device="cuda")); arrays, lengths = {}, []
     for duration in DURATIONS["fcpe"]:
-        audio = load_audio(duration)
-        runs, output = [], None
+        audio = load_audio(duration); runs, output = [], None
         for _ in range(3):
-            wav = torch.from_numpy(audio).view(1, -1, 1).cuda()
-            mel, preprocessing = timer(lambda wav=wav: model.wav2mel(wav, 16000))
-            with torch.inference_mode():
-                latent, inference = timer(lambda mel=mel: model.model(mel))
+            wav = torch.from_numpy(audio).view(1, -1, 1).cuda(); mel, preprocessing = timer(lambda wav=wav: model.wav2mel(wav, 16000))
+            with torch.inference_mode(): latent, inference = timer(lambda mel=mel: model.model(mel))
             output, postprocessing = timer(
                 lambda latent=latent: fcpe_post(
                     latent.float().cpu().numpy()[0],
@@ -45,9 +39,7 @@ def fcpe_reference():
                     "postprocessing": postprocessing,
                 }
             )
-        arrays[f"f0_{duration:g}"] = output[0]
-        arrays[f"confidence_{duration:g}"] = output[1]
-        warm = {key: float(np.median([run[key] for run in runs])) for key in runs[0]}
+        arrays[f"f0_{duration:g}"] = output[0]; arrays[f"confidence_{duration:g}"] = output[1]; warm = {key: float(np.median([run[key] for run in runs])) for key in runs[0]}
         lengths.append(
             {"seconds": duration, "warm": warm, "full_stage": sum(warm.values())}
         )
@@ -71,11 +63,9 @@ def ctc_reference(name):
             .cuda()
         )
     )
-    model.config.apply_spec_augment = False
-    arrays, lengths = {}, []
+    model.config.apply_spec_augment = False; arrays, lengths = {}, []
     for duration in DURATIONS[name]:
-        audio = load_audio(duration)
-        runs, logits = [], None
+        audio = load_audio(duration); runs, logits = [], None
         for _ in range(3):
             values, preprocessing = timer(
                 lambda audio=audio: (
@@ -99,8 +89,7 @@ def ctc_reference(name):
                     "postprocessing": postprocessing,
                 }
             )
-        arrays[f"logits_{duration:g}"] = logits
-        warm = {key: float(np.median([run[key] for run in runs])) for key in runs[0]}
+        arrays[f"logits_{duration:g}"] = logits; warm = {key: float(np.median([run[key] for run in runs])) for key in runs[0]}
         lengths.append(
             {"seconds": duration, "warm": warm, "full_stage": sum(warm.values())}
         )
@@ -114,10 +103,7 @@ def ctc_reference(name):
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("model", choices=("fcpe", "ctc_ru", "ctc_uk"))
-    args = parser.parse_args()
-    output = ARTIFACTS.parent / "reference"
+    parser = argparse.ArgumentParser(); parser.add_argument("model", choices=("fcpe", "ctc_ru", "ctc_uk")); args = parser.parse_args(); output = ARTIFACTS.parent / "reference"
     output.mkdir(parents=True, exist_ok=True)
     with ResourceSampler() as resources:
         arrays, result = (
@@ -137,5 +123,4 @@ def main():
     print(json.dumps(result, indent=2))
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__": main()

@@ -34,47 +34,31 @@ class _StreamToLogFile:
     every backend line, log calls and plain prints alike, in one place.
     """
 
-    def __init__(self, file_handler: RotatingFileHandler, level: int, original):
-        self._file_handler = file_handler
-        self._level = level
-        self._original = original
+    def __init__(self, file_handler: RotatingFileHandler, level: int, original): self._file_handler = file_handler; self._level = level; self._original = original
 
     def write(self, message: str) -> int:
         self._original.write(message)
         for line in message.splitlines():
             if line.strip():
-                record = logging.LogRecord("stdout", self._level, "", 0, line, (), None)
-                self._file_handler.emit(record)
+                record = logging.LogRecord("stdout", self._level, "", 0, line, (), None); self._file_handler.emit(record)
         return len(message)
 
-    def flush(self) -> None:
-        self._original.flush()
+    def flush(self) -> None: self._original.flush()
 
-    def isatty(self) -> bool:
-        return False
+    def isatty(self) -> bool: return False
 
 
 def configure_logging() -> None:
-    import config
-    from app.services.remote_log_service import RemoteErrorLogHandler
+    import config; from app.services.remote_log_service import RemoteErrorLogHandler
 
-    log_path = config.APP_LOG_DIR / "backend.log"
-    file_handler = RotatingFileHandler(
-        log_path, maxBytes=2_000_000, backupCount=3, encoding="utf-8"
-    )
-    # ERROR+ records (from the backend itself, and forwarded here from the
-    # frontend/Electron via /diagnostics/client-log) also ship to the
-    # developer's remote collector, so every user's failures are visible in
-    # one place regardless of whether that user is in an online room.
-    remote_handler = RemoteErrorLogHandler()
+    log_path = config.APP_LOG_DIR / "backend.log"; file_handler, remote_handler = RotatingFileHandler(log_path, maxBytes=2000000, backupCount=3, encoding='utf-8'), RemoteErrorLogHandler()
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         handlers=[file_handler, logging.StreamHandler(sys.stdout), remote_handler],
         force=True,
     )
-    sys.stdout = _StreamToLogFile(file_handler, logging.INFO, sys.stdout)
-    sys.stderr = _StreamToLogFile(file_handler, logging.ERROR, sys.stderr)
+    sys.stdout = _StreamToLogFile(file_handler, logging.INFO, sys.stdout); sys.stderr = _StreamToLogFile(file_handler, logging.ERROR, sys.stderr)
 
 
 
@@ -83,36 +67,27 @@ def configure_logging() -> None:
 class _SingleInstanceLock:
     """Cross-process lock acquired before importing the FastAPI application."""
 
-    def __init__(self, path: Path):
-        self.path = path
-        self._file: BinaryIO | None = None
+    def __init__(self, path: Path): self.path = path; self._file: BinaryIO | None = None
 
     def acquire(self) -> bool:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        handle = self.path.open("a+b")
+        self.path.parent.mkdir(parents=True, exist_ok=True); handle = self.path.open("a+b")
         try:
             handle.seek(0)
             if os.name == "nt":
                 import msvcrt
 
                 if handle.tell() == 0 and handle.read(1) == b"":
-                    handle.write(b"0")
-                    handle.flush()
-                handle.seek(0)
-                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                    handle.write(b"0"); handle.flush()
+                handle.seek(0); msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
             else:
-                fcntl: Any = importlib.import_module("fcntl")
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl: Any = importlib.import_module("fcntl"); fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except (OSError, BlockingIOError):
-            handle.close()
-            return False
-        self._file = handle
-        return True
+            handle.close(); return False
+        self._file = handle; return True
 
     def release(self) -> None:
         handle, self._file = self._file, None
-        if handle is None:
-            return
+        if handle is None: return
         try:
             handle.seek(0)
             if os.name == "nt":
@@ -120,10 +95,8 @@ class _SingleInstanceLock:
 
                 msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
             else:
-                fcntl: Any = importlib.import_module("fcntl")
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-        finally:
-            handle.close()
+                fcntl: Any = importlib.import_module("fcntl"); fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        finally: handle.close()
 
 def _existing_backend_is_healthy(host: str, port: int) -> bool:
     """Detect our already-running backend before importing app/main.
@@ -132,23 +105,18 @@ def _existing_backend_is_healthy(host: str, port: int) -> bool:
     also prevents a losing process from marking live jobs as interrupted.
     """
     try:
-        with socket.create_connection((host, port), timeout=0.35):
-            pass
-    except OSError:
-        return False
+        with socket.create_connection((host, port), timeout=0.35): pass
+    except OSError: return False
     try:
         with urllib.request.urlopen(f"http://{host}:{port}/diagnostics/health", timeout=0.7) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-            return response.status == 200 and bool(payload)
-    except Exception:
-        return False
+            payload = json.loads(response.read().decode("utf-8")); return response.status == 200 and bool(payload)
+    except Exception: return False
 
 def main() -> None:
     if "--install-ai-models" in sys.argv:
         from AI.install_models import main as install_models
 
-        args = [arg for arg in sys.argv[1:] if arg != "--install-ai-models"]
-        raise SystemExit(install_models(args))
+        args = [arg for arg in sys.argv[1:] if arg != "--install-ai-models"]; raise SystemExit(install_models(args))
 
     if "--verify-ai-runtime" in sys.argv:
         from pathlib import Path
@@ -156,11 +124,8 @@ def main() -> None:
         import torchfcpe
 
         checkpoint = Path(torchfcpe.__file__).resolve().parent / "assets" / "fcpe_c_v001.pt"
-        if not checkpoint.is_file():
-            raise FileNotFoundError(f"Bundled TorchFCPE checkpoint is missing: {checkpoint}")
-        model = torchfcpe.spawn_bundled_infer_model(device="cpu")
-        print(f"TorchFCPE runtime ready: {type(model).__name__} ({checkpoint})")
-        return
+        if not checkpoint.is_file(): raise FileNotFoundError(f"Bundled TorchFCPE checkpoint is missing: {checkpoint}")
+        model = torchfcpe.spawn_bundled_infer_model(device="cpu"); print(f"TorchFCPE runtime ready: {type(model).__name__} ({checkpoint})"); return
 
     if "--verify-qwen-runtime" in sys.argv:
         import importlib
@@ -171,13 +136,9 @@ def main() -> None:
         # Do not require those private extensions to be importable as explicit
         # build-time top-level modules: the packaged smoke test itself is the
         # authoritative proof that the frozen application contains them.
-        qwen_asr = importlib.import_module("qwen_asr")
-        asr_model = qwen_asr.Qwen3ASRModel
-        aligner_model = qwen_asr.Qwen3ForcedAligner
-        nagisa = importlib.import_module("nagisa")
+        qwen_asr = importlib.import_module("qwen_asr"); asr_model = qwen_asr.Qwen3ASRModel; aligner_model = qwen_asr.Qwen3ForcedAligner; nagisa = importlib.import_module("nagisa")
         tagged = nagisa.tagging("テスト")
-        if not getattr(tagged, "words", None):
-            raise RuntimeError("Nagisa tokenizer smoke test returned no tokens")
+        if not getattr(tagged, "words", None): raise RuntimeError("Nagisa tokenizer smoke test returned no tokens")
         print(
             "Qwen runtime ready: "
             f"ASR={asr_model.__name__}, aligner={aligner_model.__name__}, "
@@ -188,18 +149,14 @@ def main() -> None:
 
     import config
 
-    configure_logging()
-    lock = _SingleInstanceLock(config.DATA_DIR / "backend.instance.lock")
+    configure_logging(); lock = _SingleInstanceLock(config.DATA_DIR / "backend.instance.lock")
     if not lock.acquire():
-        logging.getLogger(__name__).info("Backend instance lock is already held; duplicate launch skipped")
-        raise SystemExit(23)
+        logging.getLogger(__name__).info("Backend instance lock is already held; duplicate launch skipped"); raise SystemExit(23)
     try:
         if _existing_backend_is_healthy(config.HOST, config.PORT):
-            logging.getLogger(__name__).info("Backend is already running on %s:%s; duplicate launch skipped", config.HOST, config.PORT)
-            raise SystemExit(23)
+            logging.getLogger(__name__).info("Backend is already running on %s:%s; duplicate launch skipped", config.HOST, config.PORT); raise SystemExit(23)
 
-        from AI.utils.env import env_flag
-        from app.main import app
+        from AI.utils.env import env_flag; from app.main import app
 
         # Request access lines (GET /songs/... 200 OK) drown out the AI logs in
         # desktop development.  Keep warnings/errors, and allow temporary
@@ -212,8 +169,7 @@ def main() -> None:
             access_log=access_log,
             log_level=os.getenv("SONGAPP_UVICORN_LOG_LEVEL", "warning"),
         )
-    finally:
-        lock.release()
+    finally: lock.release()
 
 
 if __name__ == "__main__":

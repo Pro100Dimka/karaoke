@@ -1,6 +1,4 @@
-"""Report Pythonic simplification candidates without modifying production code."""
 
-from __future__ import annotations
 
 import ast
 from collections import Counter
@@ -13,38 +11,19 @@ EXCLUDED_PARTS = {"tests", "venv", "engines", "__pycache__"}
 
 
 @dataclass(frozen=True, slots=True)
-class Finding:
-    path: str
-    line: int
-    kind: str
-    detail: str
+class Finding: path: str; line: int; kind: str; detail: str
 
 
 class SemanticVisitor(ast.NodeVisitor):
-    def __init__(self, path: Path):
-        self.path = path
-        self.findings: list[Finding] = []
-        self.parents: list[ast.AST] = []
+    def __init__(self, path: Path): self.path = path; self.findings: list[Finding] = []; self.parents: list[ast.AST] = []
 
-    def report(self, node: ast.AST, kind: str, detail: str) -> None:
-        self.findings.append(
-            Finding(
-                self.path.relative_to(ROOT).as_posix(),
-                getattr(node, "lineno", 1),
-                kind,
-                detail,
-            )
-        )
+    def report(self, node: ast.AST, kind: str, detail: str) -> None: self.findings.append(Finding(self.path.relative_to(ROOT).as_posix(), getattr(node, 'lineno', 1), kind, detail))
 
-    def visit(self, node: ast.AST) -> None:
-        self.parents.append(node)
-        super().visit(node)
-        self.parents.pop()
+    def visit(self, node: ast.AST) -> None: self.parents.append(node); super().visit(node); self.parents.pop()
 
     def visit_BoolOp(self, node: ast.BoolOp) -> None:
         comparisons = [value for value in node.values if isinstance(value, ast.Compare)]
-        if isinstance(node.op, ast.Or) and len(comparisons) >= 3:
-            self.report(node, "membership", f"{len(comparisons)} OR comparisons")
+        if isinstance(node.op, ast.Or) and len(comparisons) >= 3: self.report(node, "membership", f"{len(comparisons)} OR comparisons")
         self.generic_visit(node)
 
     def visit_For(self, node: ast.For) -> None:
@@ -59,14 +38,12 @@ class SemanticVisitor(ast.NodeVisitor):
             and call.args[0].func.id == "len"
         ):
             self.report(node, "enumerate-zip", "range(len(...)) loop")
-        if len(node.body) == 1 and isinstance(node.body[0], (ast.If, ast.Expr)):
-            self.report(node, "comprehension", "simple collection loop")
+        if len(node.body) == 1 and isinstance(node.body[0], (ast.If, ast.Expr)): self.report(node, "comprehension", "simple collection loop")
         self.generic_visit(node)
 
     def visit_If(self, node: ast.If) -> None:
         depth = sum(isinstance(parent, ast.If) for parent in self.parents[:-1])
-        if depth >= 2:
-            self.report(node, "guard-clause", f"nested if depth {depth + 1}")
+        if depth >= 2: self.report(node, "guard-clause", f"nested if depth {depth + 1}")
         self.generic_visit(node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
@@ -81,8 +58,7 @@ class SemanticVisitor(ast.NodeVisitor):
             for default in (*node.args.defaults, *node.args.kw_defaults)
             if default is not None
         )
-        if boolean_defaults >= 2:
-            self.report(node, "state-model", f"{boolean_defaults} boolean parameters")
+        if boolean_defaults >= 2: self.report(node, "state-model", f"{boolean_defaults} boolean parameters")
         self.generic_visit(node)
 
     visit_AsyncFunctionDef = visit_FunctionDef
@@ -112,28 +88,17 @@ def python_files() -> list[Path]:
 def audit() -> list[Finding]:
     findings: list[Finding] = []
     for path in python_files():
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        except (OSError, SyntaxError, UnicodeDecodeError):
-            continue
-        visitor = SemanticVisitor(path)
-        visitor.visit(tree)
-        findings.extend(visitor.findings)
+        try: tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        except (OSError, SyntaxError, UnicodeDecodeError): continue
+        visitor = SemanticVisitor(path); visitor.visit(tree); findings.extend(visitor.findings)
     return findings
 
 
 def main() -> None:
-    findings = audit()
-    counts = Counter(finding.kind for finding in findings)
-    print("Python semantic simplification audit (advisory):")
-    print(f"Candidates: {len(findings)}")
-    for kind, count in sorted(counts.items()):
-        print(f"- {kind}: {count}")
-    for finding in findings[:40]:
-        print(f"  {finding.path}:{finding.line} [{finding.kind}] {finding.detail}")
-    if len(findings) > 40:
-        print(f"  ...and {len(findings) - 40} more")
+    findings = audit(); counts = Counter(finding.kind for finding in findings); print("Python semantic simplification audit (advisory):"); print(f"Candidates: {len(findings)}")
+    for kind, count in sorted(counts.items()): print(f"- {kind}: {count}")
+    for finding in findings[:40]: print(f"  {finding.path}:{finding.line} [{finding.kind}] {finding.detail}")
+    if len(findings) > 40: print(f"  ...and {len(findings) - 40} more")
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__": main()

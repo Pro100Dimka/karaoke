@@ -17,10 +17,6 @@ __all__ = ["__version__", *_EXPORTS]
 
 
 def __getattr__(name: str) -> Any:
-    try:
-        module_name, attribute = _EXPORTS[name]
-    except KeyError as error:
-        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from error
-    value = getattr(import_module(module_name, __name__), attribute)
-    globals()[name] = value
-    return value
+    try: module_name, attribute = _EXPORTS[name]
+    except KeyError as error: raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from error
+    value = getattr(import_module(module_name, __name__), attribute); globals()[name] = value; return value

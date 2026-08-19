@@ -10,9 +10,6 @@ T = TypeVar("T")
 
 def parse_json_value(value: str | None, default: T) -> Any | T:
     """Parse a JSON text value and return *default* when it is missing or corrupt."""
-    if not value:
-        return default
-    try:
-        return json.loads(value)
-    except (TypeError, ValueError):
-        return default
+    if not value: return default
+    try: return json.loads(value)
+    except (TypeError, ValueError): return default

@@ -1,4 +1,3 @@
-"""Persistent application preferences shared by API endpoints and workers."""
 
 from __future__ import annotations
 
@@ -19,24 +18,12 @@ _settings_lock = threading.RLock()
 
 
 def _default_thread_count() -> int:
-    """Size CPU inference threading to the machine, not a fixed guess.
-
-    ``thread_count`` feeds OMP_NUM_THREADS/MKL_NUM_THREADS/torch.set_num_threads
-    for every processing job (see pipeline_service._configure_ai_runtime), so a
-    low hardcoded cap silently throttles CPU-only song processing on any machine
-    with more than a few cores. Physical cores are what actually matters for
-    BLAS/OMP-style intraop parallelism (hyperthreads mostly don't add throughput
-    for this workload) — mirrors the "auto" intraop sizing AI/runtime.py already
-    uses when KARAOKE_CPU_TUNING is enabled.
-    """
-    logical = os.cpu_count() or 2
-    physical = logical
+    logical = os.cpu_count() or 2; physical = logical
     try:
         import psutil
 
         physical = int(psutil.cpu_count(logical=False) or logical)
-    except (ImportError, OSError, TypeError, ValueError):
-        physical = logical
+    except (ImportError, OSError, TypeError, ValueError): physical = logical
     return max(1, min(64, physical))
 
 
@@ -56,55 +43,34 @@ INSTALL_PREFERENCE_VALUES = {
 }
 
 
-def path_settings() -> dict[str, str]:
-    """Return the storage paths currently used by the backend."""
-    return {
-        "songs_folder": str(config.SONG_OUTPUT_DIR),
-        "ai_folder": str(config.MODELS_DIR),
-        "cache_folder": str(config.CACHE_DIR),
-    }
+def path_settings() -> dict[str, str]: return {'songs_folder': str(config.SONG_OUTPUT_DIR), 'ai_folder': str(config.MODELS_DIR), 'cache_folder': str(config.CACHE_DIR)}
 
 
 PATH_SETTING_KEYS = ("songs_folder", "ai_folder", "cache_folder")
 
 
 def _normalize_writable_directory(value: Any, label: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{label}: выберите папку")
+    if not isinstance(value, str) or not value.strip(): raise ValueError(f"{label}: выберите папку")
     path = Path(value).expanduser().resolve()
     try:
-        path.mkdir(parents=True, exist_ok=True)
-        probe = path / f".advoice-write-test-{os.getpid()}"
-        probe.write_bytes(b"")
-        probe.unlink(missing_ok=True)
-    except OSError as exc:
-        raise ValueError(f"Нет доступа на запись в папку {label}: {path}") from exc
+        path.mkdir(parents=True, exist_ok=True); probe = path / f".advoice-write-test-{os.getpid()}"; probe.write_bytes(b""); probe.unlink(missing_ok=True)
+    except OSError as exc: raise ValueError(f"Нет доступа на запись в папку {label}: {path}") from exc
     return str(path)
 
 
 def _persist_path_settings(values: dict[str, str]) -> dict[str, Any]:
-    try:
-        existing: Any = read_json(PATH_SETTINGS_FILE, default={})
-    except (json.JSONDecodeError, OSError):
-        existing = {}
-    roots = set(existing.get("song_library_roots", [])) if isinstance(existing, dict) else set()
-    roots.update(str(path) for path in config.SONG_LIBRARY_ROOTS)
-    roots.add(str(Path(values["songs_folder"]).expanduser().resolve()))
-    payload = {**values, "song_library_roots": sorted(roots, key=str.casefold)}
-    write_json(PATH_SETTINGS_FILE, payload)
-    return payload
+    try: existing: Any = read_json(PATH_SETTINGS_FILE, default={})
+    except (json.JSONDecodeError, OSError): existing = {}
+    roots = set(existing.get("song_library_roots", [])) if isinstance(existing, dict) else set(); roots.update(str(path) for path in config.SONG_LIBRARY_ROOTS); roots.add(str(Path(values["songs_folder"]).expanduser().resolve())); payload = {**values, "song_library_roots": sorted(roots, key=str.casefold)}
+    write_json(PATH_SETTINGS_FILE, payload); return payload
 
 
 def _read_settings_unlocked() -> dict[str, Any]:
-    try:
-        raw: Any = read_json(SETTINGS_FILE, default={})
-    except (json.JSONDecodeError, OSError):
-        raw = {}
+    try: raw: Any = read_json(SETTINGS_FILE, default={})
+    except (json.JSONDecodeError, OSError): raw = {}
     stored = raw if isinstance(raw, dict) else {}
-    try:
-        install_preferences: Any = read_json(INSTALL_PREFERENCES_FILE, default={})
-    except (json.JSONDecodeError, OSError):
-        install_preferences = {}
+    try: install_preferences: Any = read_json(INSTALL_PREFERENCES_FILE, default={})
+    except (json.JSONDecodeError, OSError): install_preferences = {}
     selected = (
         {
             key: value
@@ -115,14 +81,11 @@ def _read_settings_unlocked() -> dict[str, Any]:
         else {}
     )
     if selected:
-        stored = {**stored, **selected}
-        write_json(SETTINGS_FILE, stored)
-    if INSTALL_PREFERENCES_FILE.exists():
-        INSTALL_PREFERENCES_FILE.unlink(missing_ok=True)
+        stored = {**stored, **selected}; write_json(SETTINGS_FILE, stored)
+    if INSTALL_PREFERENCES_FILE.exists(): INSTALL_PREFERENCES_FILE.unlink(missing_ok=True)
     known_values = {key: stored[key] for key in DEFAULT_SETTINGS if key in stored}
     if "compute_mode" not in known_values:
-        use_gpu = bool(stored.get("use_gpu", True))
-        use_cpu = bool(stored.get("use_cpu", True))
+        use_gpu = bool(stored.get("use_gpu", True)); use_cpu = bool(stored.get("use_cpu", True))
         known_values["compute_mode"] = (
             "auto" if use_gpu and use_cpu else "cuda" if use_gpu else "cpu"
         )
@@ -130,49 +93,35 @@ def _read_settings_unlocked() -> dict[str, Any]:
 
 
 def read_settings() -> dict[str, Any]:
-    with _settings_lock:
-        return _read_settings_unlocked()
+    with _settings_lock: return _read_settings_unlocked()
 
 
 def update_settings(patch: dict[str, Any]) -> dict[str, Any]:
-    """Validate the complete patch before publishing any persistent/runtime state."""
     with _settings_lock:
-        current = _read_settings_unlocked()
-        data = {**current, **patch}
-        if data["compute_mode"] not in {"auto", "cuda", "cpu"}:
-            raise ValueError("Unsupported AI compute mode")
+        current = _read_settings_unlocked(); data = {**current, **patch}
+        if data["compute_mode"] not in {"auto", "cuda", "cpu"}: raise ValueError("Unsupported AI compute mode")
 
-        path_values = path_settings()
-        labels = {"songs_folder": "Песни", "ai_folder": "AI-модели", "cache_folder": "Кэш"}
+        path_values = path_settings(); labels = {"songs_folder": "Песни", "ai_folder": "AI-модели", "cache_folder": "Кэш"}
         for key in PATH_SETTING_KEYS:
-            if key in patch:
-                path_values[key] = _normalize_writable_directory(patch[key], labels[key])
+            if key in patch: path_values[key] = _normalize_writable_directory(patch[key], labels[key])
 
-        persisted = {key: data[key] for key in DEFAULT_SETTINGS if key in data}
-        old_settings: Any = read_json(SETTINGS_FILE, default={})
-        old_paths: Any = read_json(PATH_SETTINGS_FILE, default=path_settings())
-        paths_changed = any(key in patch for key in PATH_SETTING_KEYS)
+        persisted = {key: data[key] for key in DEFAULT_SETTINGS if key in data}; old_settings: Any = read_json(SETTINGS_FILE, default={}); old_paths: Any = read_json(PATH_SETTINGS_FILE, default=path_settings()); paths_changed = any(key in patch for key in PATH_SETTING_KEYS)
         ai_runtime_changed = "compute_mode" in patch or "thread_count" in patch or "ai_folder" in patch
         if ai_runtime_changed or paths_changed:
             from app.services import pipeline_service
-            if pipeline_service.has_active_jobs():
-                raise ValueError("Нельзя менять AI/хранилище, пока песни стоят в очереди или обрабатываются")
+            if pipeline_service.has_active_jobs(): raise ValueError("Нельзя менять AI/хранилище, пока песни стоят в очереди или обрабатываются")
         try:
-            persisted_paths = _persist_path_settings(path_values) if paths_changed else None
-            write_json(SETTINGS_FILE, persisted)
-            if persisted_paths is not None:
-                config.apply_storage_paths(**persisted_paths)
+            persisted_paths = _persist_path_settings(path_values) if paths_changed else None; write_json(SETTINGS_FILE, persisted)
+            if persisted_paths is not None: config.apply_storage_paths(**persisted_paths)
             if ai_runtime_changed:
-                from AI.service import reset_ai_service
-                reset_ai_service()
+                from AI.service import reset_ai_service; reset_ai_service()
             return _read_settings_unlocked()
         except Exception:
             write_json(SETTINGS_FILE, old_settings if isinstance(old_settings, dict) else {})
             if paths_changed:
                 write_json(PATH_SETTINGS_FILE, old_paths if isinstance(old_paths, dict) else path_settings())
                 if isinstance(old_paths, dict):
-                    defaults = path_settings()
-                    roots_value = old_paths.get("song_library_roots")
+                    defaults = path_settings(); roots_value = old_paths.get("song_library_roots")
                     roots = (
                         [value for value in roots_value if isinstance(value, str)]
                         if isinstance(roots_value, list)
@@ -189,12 +138,9 @@ def update_settings(patch: dict[str, Any]) -> dict[str, Any]:
 
 def read_ui_preferences() -> dict[str, dict[str, Any]]:
     with _settings_lock:
-        try:
-            raw: Any = read_json(UI_PREFERENCES_FILE, default={})
-        except (json.JSONDecodeError, OSError):
-            raw = {}
-        if not isinstance(raw, dict):
-            return {}
+        try: raw: Any = read_json(UI_PREFERENCES_FILE, default={})
+        except (json.JSONDecodeError, OSError): raw = {}
+        if not isinstance(raw, dict): return {}
         return {
             namespace: deepcopy(value)
             for namespace, value in raw.items()
@@ -203,14 +149,9 @@ def read_ui_preferences() -> dict[str, dict[str, Any]]:
 
 
 def update_ui_preferences(namespace: str, patch: dict[str, Any]) -> dict[str, Any]:
-    if namespace not in UI_PREFERENCE_NAMESPACES:
-        raise ValueError(f"Unknown preference namespace: {namespace}")
+    if namespace not in UI_PREFERENCE_NAMESPACES: raise ValueError(f"Unknown preference namespace: {namespace}")
     encoded = json.dumps(patch, ensure_ascii=False)
-    if len(encoded.encode("utf-8")) > 32_768:
-        raise ValueError("Preference payload is too large")
+    if len(encoded.encode("utf-8")) > 32_768: raise ValueError("Preference payload is too large")
     with _settings_lock:
-        stored = read_ui_preferences()
-        current = stored.get(namespace, {})
-        stored[namespace] = {**current, **deepcopy(patch)}
-        write_json(UI_PREFERENCES_FILE, stored)
+        stored = read_ui_preferences(); current = stored.get(namespace, {}); stored[namespace] = {**current, **deepcopy(patch)}; write_json(UI_PREFERENCES_FILE, stored)
         return deepcopy(stored[namespace])

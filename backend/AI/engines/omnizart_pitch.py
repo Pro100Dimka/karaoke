@@ -1,9 +1,3 @@
-"""Lazy Omnizart Patch-CNN adapter with no dependency on the full CLI package.
-
-The CFP feature and contour decoding below are the inference-only subset of
-Music-and-Culture-Technology-Lab/omnizart (MIT, pinned model revision in
-``AI.model_registry``). Training, MIDI, UI and dataset dependencies are excluded.
-"""
 
 from __future__ import annotations
 
@@ -31,29 +25,15 @@ _MODEL_FILES = (
 
 
 def _stft(waveform, frequency_resolution, sample_rate, hop, window):
-    times = np.arange(hop, np.ceil(len(waveform) / float(hop)) * hop, hop)
-    fft_size = int(sample_rate / float(frequency_resolution))
-    half_window = int(np.floor((len(window) - 1) / 2))
-    spectrum = np.zeros((fft_size, len(times)), dtype=float)
+    times, fft_size, half_window = np.arange(hop, np.ceil(len(waveform) / float(hop)) * hop, hop), int(sample_rate / float(frequency_resolution)), int(np.floor((len(window) - 1) / 2)); spectrum = np.zeros((fft_size, len(times)), dtype=float)
     for column, time_index in enumerate(times):
-        time_index = int(time_index)
-        radius = int(min(round(fft_size / 2.0) - 1, half_window, time_index - 1))
-        right = int(min(round(fft_size / 2.0) - 1, half_window, len(waveform) - time_index))
-        offsets = np.arange(-radius, right)
-        indices = np.mod(fft_size + offsets, fft_size) + 1
-        weights = window[half_window + offsets - 1]
-        norm = np.linalg.norm(weights)
-        if norm > 0:
-            spectrum[indices - 1, column] = waveform[time_index + offsets - 1] * weights / norm
+        time_index = int(time_index); radius = int(min(round(fft_size / 2.0) - 1, half_window, time_index - 1)); right = int(min(round(fft_size / 2.0) - 1, half_window, len(waveform) - time_index)); offsets = np.arange(-radius, right)
+        indices = np.mod(fft_size + offsets, fft_size) + 1; weights = window[half_window + offsets - 1]; norm = np.linalg.norm(weights)
+        if norm > 0: spectrum[indices - 1, column] = waveform[time_index + offsets - 1] * weights / norm
     return np.abs(fftpack.fft(spectrum, n=fft_size, axis=0)), fft_size
 
 
-def _nonlinear(values, gamma, cutoff):
-    values = values.copy()
-    values[values < 0] = 0
-    values[: int(cutoff), :] = 0
-    values[-int(cutoff) :, :] = 0
-    return np.power(values, gamma)
+def _nonlinear(values, gamma, cutoff): values = values.copy(); values[values < 0] = 0; values[: int(cutoff), :] = 0; values[-int(cutoff) :, :] = 0; return np.power(values, gamma)
 
 
 def _centers(lowest, highest, bins_per_octave):
@@ -66,36 +46,25 @@ def _centers(lowest, highest, bins_per_octave):
 
 
 def _triangular_weight(frequency, centers, index):
-    """Triangular filter weight of one source bin against filter ``index``."""
-    if centers[index - 1] < frequency < centers[index]:
-        return (frequency - centers[index - 1]) / (centers[index] - centers[index - 1])
-    if centers[index] < frequency < centers[index + 1]:
-        return (centers[index + 1] - frequency) / (centers[index + 1] - centers[index])
-    return 0.0
+    if centers[index - 1] < frequency < centers[index]: return (frequency - centers[index - 1]) / (centers[index] - centers[index - 1])
+    return (centers[index + 1] - frequency) / (centers[index + 1] - centers[index]) if centers[index] < frequency < centers[index + 1] else 0.0
 
 
 def _frequency_mapping(values, frequencies, resolution, centers):
     transform = np.zeros((len(centers) - 1, len(frequencies)), dtype=float)
     for index in range(1, len(centers) - 1):
-        left = int(round(centers[index - 1] / resolution))
-        right = int(round(centers[index + 1] / resolution) + 1)
+        left = int(round(centers[index - 1] / resolution)); right = int(round(centers[index + 1] / resolution) + 1)
         if left >= right - 1:
-            transform[index, left] = 1
-            continue
-        for source in range(left, right):
-            transform[index, source] = _triangular_weight(frequencies[source], centers, index)
+            transform[index, left] = 1; continue
+        for source in range(left, right): transform[index, source] = _triangular_weight(frequencies[source], centers, index)
     return transform @ values
 
 
 def _quefrency_mapping(values, sample_rate, centers):
-    quefrencies = np.arange(len(values)) / float(sample_rate)
-    frequencies = 1 / (quefrencies + 1e-9)
-    transform = np.zeros((len(centers) - 1, len(frequencies)), dtype=float)
+    quefrencies = np.arange(len(values)) / float(sample_rate); frequencies = 1 / (quefrencies + 1e-9); transform = np.zeros((len(centers) - 1, len(frequencies)), dtype=float)
     for index in range(1, len(centers) - 1):
-        left = int(round(sample_rate / centers[index + 1]))
-        right = int(round(sample_rate / centers[index - 1]) + 1)
-        for source in range(left, min(right, len(frequencies))):
-            transform[index, source] = _triangular_weight(frequencies[source], centers, index)
+        left = int(round(sample_rate / centers[index + 1])); right = int(round(sample_rate / centers[index - 1]) + 1)
+        for source in range(left, min(right, len(frequencies))): transform[index, source] = _triangular_weight(frequencies[source], centers, index)
     return transform @ values
 
 
@@ -118,23 +87,9 @@ def _cfp_chunk(
         hop,
         blackmanharris(window_size),
     )
-    spectrum = np.power(spectrum, 0.24)
-    cepstrum = np.real(np.fft.fft(spectrum, axis=0)) / np.sqrt(fft_size)
-    cepstrum = _nonlinear(cepstrum, 0.6, round(sample_rate / highest_frequency))
-    generalized = np.real(np.fft.fft(cepstrum, axis=0)) / np.sqrt(fft_size)
-    generalized = _nonlinear(generalized, 1.0, round(lowest_frequency / frequency_resolution))
-
-    half = int(round(fft_size / 2))
-    upper_frequency = int(round(highest_frequency / frequency_resolution) + 1)
-    frequencies = sample_rate * np.linspace(0, 0.5, half, endpoint=True)
-    generalized = generalized[:half, :][:upper_frequency, :]
-    frequencies = frequencies[:upper_frequency]
-    max_quefrency = int(round(sample_rate / lowest_frequency) + 1)
-    cepstrum = cepstrum[:half, :][:max_quefrency, :]
-    centers = _centers(lowest_frequency, highest_frequency, bins_per_octave)
-    spectral = _frequency_mapping(generalized, frequencies, frequency_resolution, centers)
-    periodic = _quefrency_mapping(cepstrum, sample_rate, centers)
-    return spectral * periodic, centers
+    spectrum = np.power(spectrum, 0.24); cepstrum = np.real(np.fft.fft(spectrum, axis=0)) / np.sqrt(fft_size); cepstrum = _nonlinear(cepstrum, 0.6, round(sample_rate / highest_frequency)); generalized = np.real(np.fft.fft(cepstrum, axis=0)) / np.sqrt(fft_size)
+    generalized, half, upper_frequency = _nonlinear(generalized, 1.0, round(lowest_frequency / frequency_resolution)), int(round(fft_size / 2)), int(round(highest_frequency / frequency_resolution) + 1); frequencies, generalized = sample_rate * np.linspace(0, 0.5, half, endpoint=True), generalized[:half, :][:upper_frequency, :]; frequencies, max_quefrency = frequencies[:upper_frequency], int(round(sample_rate / lowest_frequency) + 1); cepstrum, centers = cepstrum[:half, :][:max_quefrency, :], _centers(lowest_frequency, highest_frequency, bins_per_octave)
+    spectral, periodic = _frequency_mapping(generalized, frequencies, frequency_resolution, centers), _quefrency_mapping(cepstrum, sample_rate, centers); return spectral * periodic, centers
 
 
 def _extract_cfp_matrix(
@@ -145,17 +100,10 @@ def _extract_cfp_matrix(
     lowest_frequency=27.5,
     highest_frequency=4487.0,
 ):
-    hop = round(sample_rate * 0.02)
-    chunk_samples = max_frames * hop
-    chunks = []
-    centers = []
+    hop = round(sample_rate * 0.02); chunk_samples, chunks, centers = max_frames * hop, [], []
     for start in range(0, len(waveform), chunk_samples):
-        # Omnizart's STFT starts at one hop and excludes the stop sample. Keep
-        # one look-ahead hop so concatenated chunks retain the native 20 ms
-        # frame grid instead of losing one frame (and 20 ms) per chunk.
         chunk = waveform[start : start + chunk_samples + hop]
-        if len(chunk) <= hop:
-            continue
+        if len(chunk) <= hop: continue
         matrix, centers = _cfp_chunk(
             chunk,
             sample_rate=sample_rate,
@@ -163,45 +111,28 @@ def _extract_cfp_matrix(
             highest_frequency=highest_frequency,
         )
         chunks.append(matrix)
-    if not chunks:
-        return np.empty((0, 0), dtype=np.float32), np.asarray([])
-    return np.concatenate(chunks, axis=1), np.asarray(centers)
+    return (np.empty((0, 0), dtype=np.float32), np.asarray([])) if not chunks else (np.concatenate(chunks, axis=1), np.asarray(centers))
 
 
-def extract_cfp_feature(waveform, *, sample_rate=16_000, max_frames=2000):
-    """Return the exact Omnizart CFP channel as ``time x frequency``."""
-    matrix, _ = _extract_cfp_matrix(waveform, sample_rate=sample_rate, max_frames=max_frames)
-    return matrix.T.astype(np.float32, copy=False)
+def extract_cfp_feature(waveform, *, sample_rate=16_000, max_frames=2000): matrix, _ = _extract_cfp_matrix(waveform, sample_rate=sample_rate, max_frames=max_frames); return matrix.T.astype(np.float32, copy=False)
 
 
 def extract_patch_cfp_feature(waveform, *, sample_rate=16_000, patch_size=25):
-    """Extract Omnizart's candidate-centered CFP patches from a polyphonic mix."""
     matrix, centers = _extract_cfp_matrix(
         waveform,
         sample_rate=sample_rate,
         lowest_frequency=80.0,
         highest_frequency=1000.0,
     )
-    half = patch_size // 2
-    padded = np.pad(matrix, ((0, half), (half, half)), constant_values=0)
-    patches = []
-    mapping = []
+    half = patch_size // 2; padded, patches, mapping = np.pad(matrix, ((0, half), (half, half)), constant_values=0), [], []
     for time_index in range(half, padded.shape[1] - half):
-        column = padded[:, time_index]
-        before = np.maximum(column[1:-1] - column[:-2], 0) > 0
-        after = np.maximum(column[1:-1] - column[2:], 0) > 0
-        maxima = np.concatenate(([False], before & after, [False]))
+        column = padded[:, time_index]; before = np.maximum(column[1:-1] - column[:-2], 0) > 0; after = np.maximum(column[1:-1] - column[2:], 0) > 0; maxima = np.concatenate(([False], before & after, [False]))
         locations = np.flatnonzero(maxima)
         for frequency_index in locations:
             if half <= frequency_index < padded.shape[0] - half:
-                frequency_range = range(frequency_index - half, frequency_index + half + 1)
-                time_range = range(time_index - half, time_index + half + 1)
-                patches.append(padded[np.ix_(frequency_range, time_range)])
-                mapping.append((frequency_index, time_index - half))
-    # Preserve the published Patch-CNN edge trimming exactly.
+                frequency_range = range(frequency_index - half, frequency_index + half + 1); time_range = range(time_index - half, time_index + half + 1); patches.append(padded[np.ix_(frequency_range, time_range)]); mapping.append((frequency_index, time_index - half))
     if patches:
-        patches = patches[:-1][half:-half]
-        mapping = mapping[:-1][half:-half]
+        patches = patches[:-1][half:-half]; mapping = mapping[:-1][half:-half]
     return (
         np.asarray(patches, dtype=np.float32),
         np.asarray(mapping, dtype=np.int32),
@@ -211,24 +142,13 @@ def extract_patch_cfp_feature(waveform, *, sample_rate=16_000, patch_size=25):
 
 
 def decode_contour(patches, mapping, matrix, centers, model, *, threshold=0.5):
-    """Decode F0 and posterior salience using Patch-CNN's published semantics."""
     del matrix
-    if patches.ndim != 3 or not len(patches) or not len(mapping):
-        return np.asarray([]), np.asarray([])
-    prediction = np.asarray(model.predict(patches[..., None], verbose=0))[:, 1]
-    selected = np.flatnonzero(prediction > threshold)
-    frequencies = np.zeros(int(np.max(mapping[:, 1])) + 1, dtype=np.float32)
-    confidence = np.zeros_like(frequencies)
-    candidates = np.column_stack((mapping[selected], prediction[selected]))
-    candidates = candidates[np.argsort(candidates[:, 1], kind="stable")]
+    if patches.ndim != 3 or not len(patches) or not len(mapping): return np.asarray([]), np.asarray([])
+    prediction = np.asarray(model.predict(patches[..., None], verbose=0))[:, 1]; selected, frequencies = np.flatnonzero(prediction > threshold), np.zeros(int(np.max(mapping[:, 1])) + 1, dtype=np.float32); confidence, candidates = np.zeros_like(frequencies), np.column_stack((mapping[selected], prediction[selected])); candidates = candidates[np.argsort(candidates[:, 1], kind="stable")]
     for time_index in range(len(frequencies)):
         frame = candidates[candidates[:, 1] == time_index]
-        if not len(frame):
-            continue
-        winner = frame[int(np.argmax(frame[:, 2]))]
-        frequency_index = int(winner[0])
-        frequencies[time_index] = centers[frequency_index]
-        confidence[time_index] = min(1.0, max(0.0, float(winner[2])))
+        if not len(frame): continue
+        winner = frame[int(np.argmax(frame[:, 2]))]; frequency_index = int(winner[0]); frequencies[time_index] = centers[frequency_index]; confidence[time_index] = min(1.0, max(0.0, float(winner[2])))
     return frequencies, confidence
 
 
@@ -239,53 +159,28 @@ class OmnizartPatchCNNPitchEstimator(PitchEstimator):
         self.model_path = Path(
             model_path or os.getenv("KARAOKE_AI_OMNIZART_MODEL", "")
         ).expanduser()
-        self._model_loader = model_loader
-        self._model = None
+        self._model_loader = model_loader; self._model = None
 
-    def fingerprint(self):
-        return {
-            "name": self.name,
-            "version": OMNIZART_CONTOUR_VERSION,
-            "sample_rate": 16_000,
-            "hop_seconds": 0.02,
-            "input": "original-full-mix",
-            "model_available": self.available(),
-        }
+    def fingerprint(self): return {'name': self.name, 'version': OMNIZART_CONTOUR_VERSION, 'sample_rate': 16000, 'hop_seconds': 0.02, 'input': 'original-full-mix', 'model_available': self.available()}
 
-    def available(self):
-        return self.model_path.is_dir() and all(
-            (self.model_path / relative).is_file() for relative in _MODEL_FILES
-        )
+    def available(self): return self.model_path.is_dir() and all(((self.model_path / relative).is_file() for relative in _MODEL_FILES))
 
     def _load_model(self):
-        if not self.available():
-            raise EngineUnavailableError("Omnizart Patch-CNN model is not installed")
+        if not self.available(): raise EngineUnavailableError("Omnizart Patch-CNN model is not installed")
         if self._model is None:
             try:
                 if self._model_loader is not None:
                     loader = self._model_loader
                 else:
-                    os.environ.setdefault("TF_USE_LEGACY_KERAS", "1")
-                    os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
-                    logging.getLogger("tensorflow").setLevel(logging.ERROR)
-                    logging.getLogger("absl").setLevel(logging.ERROR)
-                    import tensorflow as tf
-                    tf.get_logger().setLevel("ERROR")
-                    logging.getLogger("tensorflow").setLevel(logging.ERROR)
-                    logging.getLogger("absl").setLevel(logging.ERROR)
+                    os.environ.setdefault("TF_USE_LEGACY_KERAS", "1"); os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2"); logging.getLogger("tensorflow").setLevel(logging.ERROR); logging.getLogger("absl").setLevel(logging.ERROR)
+                    import tensorflow as tf; tf.get_logger().setLevel("ERROR"); logging.getLogger("tensorflow").setLevel(logging.ERROR); logging.getLogger("absl").setLevel(logging.ERROR)
 
-                    # Native TensorFlow for Windows is CPU-only after 2.10. Keep
-                    # this explicit so a future runtime cannot reserve CUDA VRAM.
-                    with np.errstate(all="ignore"):
-                        tf.config.set_visible_devices([], "GPU")
+                    with np.errstate(all="ignore"): tf.config.set_visible_devices([], "GPU")
 
-                    def loader(path):
-                        return tf.keras.models.load_model(path, compile=False)
+                    def loader(path): return tf.keras.models.load_model(path, compile=False)
 
-                with profile_operation("model.load.omnizart_patch_cnn"):
-                    self._model = loader(str(self.model_path))
-            except EngineUnavailableError:
-                raise
+                with profile_operation("model.load.omnizart_patch_cnn"): self._model = loader(str(self.model_path))
+            except EngineUnavailableError: raise
             except Exception as exc:
                 raise EngineUnavailableError(
                     f"Omnizart Patch-CNN could not load: {type(exc).__name__}: {exc}"
@@ -294,25 +189,18 @@ class OmnizartPatchCNNPitchEstimator(PitchEstimator):
 
     def estimate(self, audio):
         try:
-            model = self._load_model()
-            waveform, sample_rate = load_mono(audio, 16_000)
-            if not waveform.size:
-                return []
+            model = self._load_model(); waveform, sample_rate = load_mono(audio, 16_000)
+            if not waveform.size: return []
             with profile_operation("preprocess.omnizart_cfp", byte_count=waveform.nbytes):
                 patches, mapping, matrix, centers = extract_patch_cfp_feature(
                     waveform, sample_rate=sample_rate
                 )
-            with profile_operation("inference.omnizart_patch_cnn"):
-                frequencies, confidence = decode_contour(patches, mapping, matrix, centers, model)
-            window = max(1, round(sample_rate * 0.025))
-            frames = []
+            with profile_operation("inference.omnizart_patch_cnn"): frequencies, confidence = decode_contour(patches, mapping, matrix, centers, model)
+            window = max(1, round(sample_rate * 0.025)); frames = []
             for index, (frequency, salience) in enumerate(
                 zip(frequencies, confidence, strict=True)
             ):
-                start = min(len(waveform), round(index * 0.02 * sample_rate))
-                samples = waveform[start : start + window]
-                energy = float(np.sqrt(np.mean(np.square(samples)) + 1e-12)) if len(samples) else 0
-                voiced = bool(np.isfinite(frequency) and frequency > 0 and salience > 0)
+                start = min(len(waveform), round(index * 0.02 * sample_rate)); samples = waveform[start : start + window]; energy = float(np.sqrt(np.mean(np.square(samples)) + 1e-12)) if len(samples) else 0; voiced = bool(np.isfinite(frequency) and frequency > 0 and salience > 0)
                 frames.append(
                     PitchFrame(
                         index * 0.02,
@@ -323,8 +211,7 @@ class OmnizartPatchCNNPitchEstimator(PitchEstimator):
                     )
                 )
             return frames
-        except EngineUnavailableError:
-            raise
+        except EngineUnavailableError: raise
         except Exception as exc:
             raise EngineUnavailableError(
                 f"Omnizart Patch-CNN inference failed: {type(exc).__name__}: {exc}"

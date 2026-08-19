@@ -13,10 +13,8 @@ T = TypeVar("T")
 
 def read_json(path: Path, default: T | None = None) -> Any | T | None:
     """Return parsed JSON or *default* when the file does not exist."""
-    if not path.is_file():
-        return default
-    with path.open(encoding="utf-8") as stream:
-        return json.load(stream)
+    if not path.is_file(): return default
+    with path.open(encoding="utf-8") as stream: return json.load(stream)
 
 
 def write_json(path: Path, payload: Any, *, indent: int = 2) -> None:
@@ -24,7 +22,6 @@ def write_json(path: Path, payload: Any, *, indent: int = 2) -> None:
 
     encoded = (json.dumps(payload, ensure_ascii=False, indent=indent) + "\n").encode("utf-8")
 
-    def write_payload(stream: BinaryIO) -> None:
-        stream.write(encoded)
+    def write_payload(stream: BinaryIO) -> None: stream.write(encoded)
 
     atomic_write(path, write_payload)

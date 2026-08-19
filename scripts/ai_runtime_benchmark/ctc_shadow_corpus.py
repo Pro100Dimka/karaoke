@@ -1,9 +1,6 @@
-"""Run reproducible RU/UK CTC shadow validation without changing production policy."""
 
-from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import shutil
@@ -14,28 +11,19 @@ import urllib.request
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from common import DEPS, ROOT, sha256, write_json
+
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[2]
 BUILD = ROOT / "build/ctc-shadow-corpus"
 SOURCES = BUILD / "sources"
-DEPS = Path(
-    os.getenv("KARAOKE_BENCHMARK_DEPS", ROOT.parent / ".karaoke-ai-benchmark-deps")
-)
 sys.path.insert(0, str(DEPS / "ort-gpu"))
 sys.path.insert(0, str(ROOT / "backend"))
 
 
 @dataclass(frozen=True, slots=True)
-class CorpusCase:
-    name: str
-    language: str
-    source: Path
-    lyrics: str
-    traits: tuple[str, ...]
-    source_url: str = ""
-    license: str = "local"
-    sha256: str = ""
+class CorpusCase: name: str; language: str; source: Path; lyrics: str; traits: tuple[str, ...]; source_url: str = ""; license: str = "local"; sha256: str = ""
 
 
 EXTERNAL = (
@@ -134,17 +122,10 @@ EXTERNAL = (
 )
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _download(case: CorpusCase) -> None:
-    if case.source.is_file() and _sha256(case.source) == case.sha256:
-        return
+    if case.source.is_file() and sha256(case.source) == case.sha256: return
     case.source.parent.mkdir(parents=True, exist_ok=True)
     request = urllib.request.Request(
         case.source_url, headers={"User-Agent": "A&D-Voice-Research/1.0"}
@@ -155,36 +136,13 @@ def _download(case: CorpusCase) -> None:
         temporary.open("wb") as target,
     ):
         shutil.copyfileobj(response, target)
-    if _sha256(temporary) != case.sha256:
-        temporary.unlink(missing_ok=True)
-        raise RuntimeError(f"Checksum mismatch for {case.name}")
+    if sha256(temporary) != case.sha256:
+        temporary.unlink(missing_ok=True); raise RuntimeError(f"Checksum mismatch for {case.name}")
     temporary.replace(case.source)
 
 
-def _ffmpeg(source: Path, target: Path, *arguments: str) -> None:
-    executable = shutil.which("ffmpeg")
-    if not executable:
-        raise RuntimeError("ffmpeg is required to prepare the CTC quality corpus")
-    target.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        [
-            executable,
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-y",
-            "-i",
-            str(source),
-            *arguments,
-            str(target),
-        ],
-        check=True,
-    )
-
-
 def prepare_cases() -> tuple[CorpusCase, ...]:
-    for case in EXTERNAL:
-        _download(case)
+    for case in EXTERNAL: _download(case)
     project = CorpusCase(
         "ru-project-female",
         "Russian",
@@ -195,19 +153,14 @@ def prepare_cases() -> tuple[CorpusCase, ...]:
         ),
         ("ru", "female", "long", "real-project-song", "separated-vocal"),
     )
-    variants = BUILD / "variants"
-    reverb = variants / "ru-project-strong-echo.wav"
-    weak = variants / "ru-project-weak-vocal.flac"
-    resampled = variants / "ru-project-22050.flac"
+    variants = BUILD / "variants"; reverb = variants / "ru-project-strong-echo.wav"; weak = variants / "ru-project-weak-vocal.flac"; resampled = variants / "ru-project-22050.flac"
     bleed = variants / "ru-project-instrumental-bleed.wav"
     if not reverb.is_file():
-        _ffmpeg(
+        ffmpeg(
             project.source, reverb, "-af", "aecho=0.8:0.82:45|90|180:0.28|0.18|0.10"
         )
-    if not weak.is_file():
-        _ffmpeg(project.source, weak, "-af", "volume=0.08", "-ar", "48000")
-    if not resampled.is_file():
-        _ffmpeg(project.source, resampled, "-ar", "22050")
+    if not weak.is_file(): ffmpeg(project.source, weak, "-af", "volume=0.08", "-ar", "48000")
+    if not resampled.is_file(): ffmpeg(project.source, resampled, "-ar", "22050")
     if not bleed.is_file():
         instrumental = (
             ROOT / "build/performance-baseline-after-v2/warm/separated/instrumental.wav"
@@ -261,8 +214,7 @@ def prepare_cases() -> tuple[CorpusCase, ...]:
 
 
 def _serialize_line(line):
-    if line is None:
-        return None
+    if line is None: return None
     return {
         "confidence": line.confidence,
         "window_start": line.window_start,
@@ -279,26 +231,19 @@ def _serialize_line(line):
     }
 
 
-def _percentile(values: list[float], percentile: float) -> float:
-    return float(np.percentile(values, percentile)) if values else 0.0
+def _percentile(values: list[float], percentile: float) -> float: return float(np.percentile(values, percentile)) if values else 0.0
 
 
 def _comparison(production, candidate) -> dict[str, object]:
-    line_presence = [left is not None for left in production]
-    candidate_presence = [right is not None for right in candidate]
-    timing: list[float] = []
-    confidence: list[float] = []
+    line_presence = [left is not None for left in production]; candidate_presence = [right is not None for right in candidate]; timing: list[float] = []; confidence: list[float] = []
     text_mismatches = 0
     for left, right in zip(production, candidate, strict=True):
-        if left is None or right is None:
-            continue
+        if left is None or right is None: continue
         left_words, right_words = list(left.words), list(right.words)
         if [word.text for word in left_words] != [word.text for word in right_words]:
-            text_mismatches += 1
-            continue
+            text_mismatches += 1; continue
         for a, b in zip(left_words, right_words, strict=True):
-            timing.extend((abs(a.start - b.start) * 1000, abs(a.end - b.end) * 1000))
-            confidence.append(abs(a.confidence - b.confidence))
+            timing.extend((abs(a.start - b.start) * 1000, abs(a.end - b.end) * 1000)); confidence.append(abs(a.confidence - b.confidence))
     return {
         "line_presence_equal": line_presence == candidate_presence,
         "production_lines": sum(line_presence),
@@ -312,10 +257,7 @@ def _comparison(production, candidate) -> dict[str, object]:
 
 
 def _word_comparison(production, candidate) -> dict[str, object]:
-    left_text = [word.text for word in production]
-    right_text = [word.text for word in candidate]
-    timing: list[float] = []
-    confidence: list[float] = []
+    left_text = [word.text for word in production]; right_text = [word.text for word in candidate]; timing: list[float] = []; confidence: list[float] = []
     if left_text == right_text:
         for left, right in zip(production, candidate, strict=True):
             timing.extend(
@@ -346,35 +288,20 @@ def _ort_infer(aligner, backend, audio, sample_rate, language, text):
         .cpu()
         .numpy()
     )
-    shadow = backend.infer(values)
-    return torch.log_softmax(torch.from_numpy(shadow.logits).float(), dim=-1), processor
+    shadow = backend.infer(values); return torch.log_softmax(torch.from_numpy(shadow.logits).float(), dim=-1), processor
 
 
 def run_case(case: CorpusCase) -> dict[str, object]:
-    from AI.backend_shadow import ShadowPolicy
-    from AI.engines.ctc_alignment import CTCWordAligner
-    from AI.engines.ctc_backends import OrtCudaCTCBackend
-    from AI.engines.text import _group_lyric_text
+    from AI.backend_shadow import ShadowPolicy; from AI.engines.ctc_alignment import CTCWordAligner; from AI.engines.ctc_backends import OrtCudaCTCBackend; from AI.engines.text import _group_lyric_text
 
-    groups = _group_lyric_text(case.lyrics)
-    production = CTCWordAligner(shadow_policy=ShadowPolicy(True, 1, True))
-    started = time.perf_counter()
-    production_lines = production.align_lines(case.source, groups, case.language)
-    production_sec = time.perf_counter() - started
-    shadow = dict(production.last_shadow_diagnostics)
-    production.release_shadow()
-    production.release()
+    groups = _group_lyric_text(case.lyrics); production = CTCWordAligner(shadow_policy=ShadowPolicy(True, 1, True)); started = time.perf_counter(); production_lines = production.align_lines(case.source, groups, case.language)
+    production_sec = time.perf_counter() - started; shadow = dict(production.last_shadow_diagnostics); production.release_shadow(); production.release()
 
-    code = "ctc_uk" if case.language.casefold().startswith("uk") else "ctc_ru"
-    ort = OrtCudaCTCBackend(code)
-    candidate = CTCWordAligner(shadow_policy=ShadowPolicy(False, 0))
+    code = "ctc_uk" if case.language.casefold().startswith("uk") else "ctc_ru"; ort = OrtCudaCTCBackend(code); candidate = CTCWordAligner(shadow_policy=ShadowPolicy(False, 0))
     candidate._infer = lambda audio, rate, language, text: _ort_infer(
         candidate, ort, audio, rate, language, text
     )
-    started = time.perf_counter()
-    candidate_lines = candidate.align_lines(case.source, groups, case.language)
-    candidate_sec = time.perf_counter() - started
-    candidate.release()
+    started = time.perf_counter(); candidate_lines = candidate.align_lines(case.source, groups, case.language); candidate_sec = time.perf_counter() - started; candidate.release()
     ort.release()
 
     compared_windows = [
@@ -389,7 +316,7 @@ def run_case(case: CorpusCase) -> dict[str, object]:
         "language": case.language,
         "traits": case.traits,
         "source": str(case.source),
-        "source_sha256": _sha256(case.source),
+        "source_sha256": sha256(case.source),
         "groups": len(groups),
         "production_sec": production_sec,
         "candidate_sec": candidate_sec,
@@ -415,32 +342,17 @@ def run_case(case: CorpusCase) -> dict[str, object]:
 
 
 def run_hybrid_case(case: CorpusCase) -> dict[str, object]:
-    from AI.backend_shadow import ShadowPolicy
-    from AI.engines.ctc_alignment import CTCWordAligner
-    from AI.engines.ctc_backends import OrtCudaCTCBackend
-    from AI.engines.text import Qwen3ForcedAligner
+    from AI.backend_shadow import ShadowPolicy; from AI.engines.ctc_alignment import CTCWordAligner; from AI.engines.ctc_backends import OrtCudaCTCBackend; from AI.engines.text import Qwen3ForcedAligner
 
-    baseline = Qwen3ForcedAligner()
-    baseline._ctc = CTCWordAligner(shadow_policy=ShadowPolicy(False, 0))
-    started = time.perf_counter()
-    production_words = baseline.align_long_text(case.source, case.lyrics, case.language)
-    production_sec = time.perf_counter() - started
-    production_diagnostics = dict(baseline.last_alignment_diagnostics)
-    baseline._model = None
+    baseline = Qwen3ForcedAligner(); baseline._ctc = CTCWordAligner(shadow_policy=ShadowPolicy(False, 0)); started = time.perf_counter(); production_words = baseline.align_long_text(case.source, case.lyrics, case.language)
+    production_sec = time.perf_counter() - started; production_diagnostics = dict(baseline.last_alignment_diagnostics); baseline._model = None
 
-    code = "ctc_uk" if case.language.casefold().startswith("uk") else "ctc_ru"
-    ort = OrtCudaCTCBackend(code)
-    candidate = Qwen3ForcedAligner()
-    candidate._ctc = CTCWordAligner(shadow_policy=ShadowPolicy(False, 0))
+    code = "ctc_uk" if case.language.casefold().startswith("uk") else "ctc_ru"; ort = OrtCudaCTCBackend(code); candidate = Qwen3ForcedAligner(); candidate._ctc = CTCWordAligner(shadow_policy=ShadowPolicy(False, 0))
     candidate._ctc._infer = lambda audio, rate, language, text: _ort_infer(
         candidate._ctc, ort, audio, rate, language, text
     )
-    started = time.perf_counter()
-    candidate_words = candidate.align_long_text(case.source, case.lyrics, case.language)
-    candidate_sec = time.perf_counter() - started
-    candidate_diagnostics = dict(candidate.last_alignment_diagnostics)
-    candidate._model = None
-    ort.release()
+    started = time.perf_counter(); candidate_words = candidate.align_long_text(case.source, case.lyrics, case.language); candidate_sec = time.perf_counter() - started; candidate_diagnostics = dict(candidate.last_alignment_diagnostics)
+    candidate._model = None; ort.release()
     return {
         "production_sec": production_sec,
         "candidate_sec": candidate_sec,
@@ -455,13 +367,8 @@ def main() -> int:
     parser.add_argument(
         "--output", type=Path, default=BUILD / "ctc-corpus-results.json"
     )
-    parser.add_argument("--cases", nargs="*")
-    parser.add_argument("--hybrid", action="store_true")
-    parser.add_argument("--precision", choices=("fp16", "fp32"), default="fp16")
-    parser.add_argument("--ru-artifact", type=Path)
-    parser.add_argument("--uk-artifact", type=Path)
-    args = parser.parse_args()
-    suffix = "-fp16" if args.precision == "fp16" else ""
+    parser.add_argument("--cases", nargs="*"); parser.add_argument("--hybrid", action="store_true"); parser.add_argument("--precision", choices=("fp16", "fp32"), default="fp16"); parser.add_argument("--ru-artifact", type=Path)
+    parser.add_argument("--uk-artifact", type=Path); args = parser.parse_args(); suffix = "-fp16" if args.precision == "fp16" else ""
     os.environ["KARAOKE_AI_CTC_RU_ONNX"] = str(
         args.ru_artifact
         or ROOT / f"build/ai-runtime-benchmark/artifacts/ctc_ru{suffix}.onnx"
@@ -470,19 +377,13 @@ def main() -> int:
         args.uk_artifact
         or ROOT / f"build/ai-runtime-benchmark/artifacts/ctc_uk{suffix}.onnx"
     )
-    os.environ["KARAOKE_AI_CTC_SHADOW"] = "1"
-    os.environ["KARAOKE_AI_CTC_SHADOW_RATE"] = "1"
-    cases = prepare_cases()
-    selected = set(args.cases or ())
-    if selected:
-        cases = tuple(case for case in cases if case.name in selected)
+    os.environ["KARAOKE_AI_CTC_SHADOW"] = "1"; os.environ["KARAOKE_AI_CTC_SHADOW_RATE"] = "1"; cases = prepare_cases(); selected = set(args.cases or ())
+    if selected: cases = tuple(case for case in cases if case.name in selected)
     results = []
     for case in cases:
-        print(f"[ctc-corpus] {case.name}", flush=True)
-        result = run_case(case)
+        print(f"[ctc-corpus] {case.name}", flush=True); result = run_case(case)
         if args.hybrid:
-            print(f"[ctc-corpus] {case.name} hybrid", flush=True)
-            result["hybrid"] = run_hybrid_case(case)
+            print(f"[ctc-corpus] {case.name} hybrid", flush=True); result["hybrid"] = run_hybrid_case(case)
         results.append(result)
     payload = {
         "schema": 1,
@@ -497,13 +398,7 @@ def main() -> int:
             for case in cases
         ],
     }
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-    print(args.output, flush=True)
-    return 0
+    write_json(args.output, payload, ensure_ascii=False); print(args.output, flush=True); return 0
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == "__main__": raise SystemExit(main())

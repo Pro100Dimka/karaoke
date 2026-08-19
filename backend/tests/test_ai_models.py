@@ -1,4 +1,4 @@
-from __future__ import annotations
+from tests._shared import raises
 
 from dataclasses import dataclass
 
@@ -28,22 +28,13 @@ from AI.models import PitchFrame, Syllable, TimeSpan, VocalNote, Word, to_dict
         lambda: VocalNote(0, 1, 60, cents=((2, 0),)),
     ],
 )
-def test_invalid_ai_domain_values(factory):
-    with pytest.raises(ValueError):
-        factory()
+def test_invalid_ai_domain_values(factory): raises(ValueError, lambda: factory())
 
 
 def test_ai_domain_values_are_normalized():
-    span = TimeSpan("1", "2")
-    assert span.start == 1 and span.end == 2
-    word = Word(0, 1, " hello ", confidence=".5", index="2")
-    assert (word.text, word.confidence, word.index) == ("hello", 0.5, 2)
-    syllable = Syllable(0, 1, " la ", "2", "3", confidence=".8")
-    assert (syllable.text, syllable.word_index, syllable.index) == ("la", 2, 3)
-    unvoiced = PitchFrame("1", 440, 0.9, False, "2")
-    assert unvoiced.frequency == 0 and unvoiced.confidence == 0 and unvoiced.energy == 2
-    voiced = PitchFrame(1, 440, 0.9, True)
-    assert voiced.voiced and voiced.frequency == 440
+    span = TimeSpan("1", "2"); assert span.start == 1 and span.end == 2; word = Word(0, 1, " hello ", confidence=".5", index="2"); assert (word.text, word.confidence, word.index) == ("hello", 0.5, 2)
+    syllable = Syllable(0, 1, " la ", "2", "3", confidence=".8"); assert (syllable.text, syllable.word_index, syllable.index) == ("la", 2, 3); unvoiced = PitchFrame("1", 440, 0.9, False, "2"); assert unvoiced.frequency == 0 and unvoiced.confidence == 0 and unvoiced.energy == 2
+    voiced = PitchFrame(1, 440, 0.9, True); assert voiced.voiced and voiced.frequency == 440
     note = VocalNote(
         0, 1, "60", velocity="100", word_index="1", syllable_index="2", cents=((0, "2"), (1, 3))
     )
@@ -52,9 +43,6 @@ def test_ai_domain_values_are_normalized():
 
 def test_to_dict_only_converts_instances():
     @dataclass
-    class Value:
-        number: int
+    class Value: number: int
 
-    assert to_dict(Value(2)) == {"number": 2}
-    assert to_dict(Value) is Value
-    assert to_dict({"number": 2}) == {"number": 2}
+    assert (to_dict(Value(2)) == {'number': 2}) and (to_dict(Value) is Value) and (to_dict({'number': 2}) == {'number': 2})

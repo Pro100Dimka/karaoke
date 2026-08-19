@@ -10,16 +10,8 @@ from .runtime import get_runtime_plan
 
 
 class AICoreService:
-    """Long-lived facade for FastAPI/Electron backends.
 
-    Model instances are retained between jobs. The inference lock serializes GPU-heavy
-    work to prevent consumer GPUs from running out of VRAM.
-    """
-
-    def __init__(self, config: CoreConfig | None = None):
-        self.config = config or CoreConfig.from_env()
-        self.pipeline = KaraokePipeline(self.config)
-        self._inference_lock = threading.RLock()
+    def __init__(self, config: CoreConfig | None = None): self.config = config or CoreConfig.from_env(); self.pipeline = KaraokePipeline(self.config); self._inference_lock = threading.RLock()
 
     def process_song(
         self,
@@ -49,14 +41,11 @@ class AICoreService:
             )
 
     def analyze_pitch(self, audio_path):
-        """Run the configured pitch engine for a standalone vocal recording."""
         with self._inference_lock:
-            frames = self.pipeline.engines.pitch.estimate(audio_path)
-            return stabilize_pitch(frames)
+            frames = self.pipeline.engines.pitch.estimate(audio_path); return stabilize_pitch(frames)
 
     def close(self) -> None:
-        with self._inference_lock:
-            self.pipeline.close()
+        with self._inference_lock: self.pipeline.close()
 
     def health(self) -> dict:
         engines = self.pipeline.engines
@@ -91,12 +80,10 @@ _service_lock = threading.Lock()
 
 
 def get_ai_service(config: CoreConfig | None = None) -> AICoreService:
-    global _service, _service_config
-    requested = config or CoreConfig.from_env()
+    global _service, _service_config; requested = config or CoreConfig.from_env()
     with _service_lock:
         if _service is None:
-            _service = AICoreService(requested)
-            _service_config = requested
+            _service = AICoreService(requested); _service_config = requested
         elif _service_config != requested:
             raise ConfigurationError(
                 "AI service is already initialized with another configuration. "
@@ -106,18 +93,13 @@ def get_ai_service(config: CoreConfig | None = None) -> AICoreService:
 
 
 def reset_ai_service() -> None:
-    """Discard cached engines after resource paths or model files change."""
     global _service, _service_config
     with _service_lock:
-        if _service is not None:
-            _service.close()
-        _service = None
-        _service_config = None
+        if _service is not None: _service.close()
+        _service = None; _service_config = None
 
 
-def reset_ai_service_for_tests() -> None:
-    reset_ai_service()
+def reset_ai_service_for_tests() -> None: reset_ai_service()
 
 
-def process_song(*args, **kwargs) -> PipelineResult:
-    return get_ai_service().process_song(*args, **kwargs)
+def process_song(*args, **kwargs) -> PipelineResult: return get_ai_service().process_song(*args, **kwargs)

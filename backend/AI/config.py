@@ -10,34 +10,23 @@ from .model_registry import get_model
 
 def _env_bool(name: str, default: bool) -> bool:
     raw = os.getenv(name)
-    if raw is None:
-        return default
+    if raw is None: return default
     value = raw.strip().lower()
-    if value in {"1", "true", "yes", "on"}:
-        return True
-    if value in {"0", "false", "no", "off"}:
-        return False
+    if value in {"1", "true", "yes", "on"}: return True
+    if value in {"0", "false", "no", "off"}: return False
     raise ConfigurationError(f"{name} must be one of: 1/0, true/false, yes/no, on/off")
 
 
-def _env_int(name: str, default: int) -> int:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    try:
-        return int(raw)
-    except ValueError as exc:
-        raise ConfigurationError(f"{name} must be an integer, got {raw!r}") from exc
+def _env_number(name, default, cast, kind):
+    if (raw := os.getenv(name)) is None: return default
+    try: return cast(raw)
+    except ValueError as exc: raise ConfigurationError(f"{name} must be {kind}, got {raw!r}") from exc
 
 
-def _env_float(name: str, default: float) -> float:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    try:
-        return float(raw)
-    except ValueError as exc:
-        raise ConfigurationError(f"{name} must be a number, got {raw!r}") from exc
+def _env_int(name: str, default: int) -> int: return _env_number(name, default, int, 'an integer')
+
+
+def _env_float(name: str, default: float) -> float: return _env_number(name, default, float, 'a number')
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,13 +37,6 @@ class CoreConfig:
     fmin_hz: float = 55.0
     fmax_hz: float = 1400.0
     # A sung pitch this short is almost never a real, perceivable note: even a
-    # fast 16th-note melisma near 200 BPM is ~75ms, and vocal cords cannot
-    # articulate a distinct pitch much faster than that. The previous 55ms
-    # floor let plosive/sibilant transients and single vibrato lobes that
-    # escaped _sustained_pitch_segments()'s hysteresis register as full MIDI
-    # notes, which is exactly the "many strange short notes" symptom on the
-    # karaoke note guide. 70ms trims that noise while staying below genuine
-    # fast passages.
     min_note_sec: float = 0.07
     min_voiced_confidence: float = 0.38
     split_note_semitones: float = 0.78
@@ -82,24 +64,15 @@ class CoreConfig:
             "max_gap_sec": self.max_gap_sec,
         }
         for name, value in numeric.items():
-            if not math.isfinite(float(value)):
-                raise ConfigurationError(f"{name} must be finite")
-        if self.sample_rate <= 0 or self.pitch_sample_rate <= 0:
-            raise ConfigurationError("Sample rates must be positive")
-        if not 0.001 <= self.hop_seconds <= 0.1:
-            raise ConfigurationError("hop_seconds must be between 0.001 and 0.1")
-        if not 0 < self.fmin_hz < self.fmax_hz <= self.pitch_sample_rate / 2:
-            raise ConfigurationError("Expected 0 < fmin_hz < fmax_hz <= pitch Nyquist frequency")
-        if not 0 <= self.min_voiced_confidence <= 1:
-            raise ConfigurationError("min_voiced_confidence must be between 0 and 1")
-        if self.min_note_sec <= 0 or self.max_gap_sec < 0:
-            raise ConfigurationError("Note duration must be positive and max gap non-negative")
-        if not 0.05 <= self.split_note_semitones <= 12:
-            raise ConfigurationError("split_note_semitones must be between 0.05 and 12")
-        if not 1 <= self.midi_bend_range <= 24:
-            raise ConfigurationError("midi_bend_range must be between 1 and 24")
-        if not self.asr_model.strip() or not self.aligner_model.strip():
-            raise ConfigurationError("ASR and aligner model names cannot be empty")
+            if not math.isfinite(float(value)): raise ConfigurationError(f"{name} must be finite")
+        if self.sample_rate <= 0 or self.pitch_sample_rate <= 0: raise ConfigurationError("Sample rates must be positive")
+        if not 0.001 <= self.hop_seconds <= 0.1: raise ConfigurationError("hop_seconds must be between 0.001 and 0.1")
+        if not 0 < self.fmin_hz < self.fmax_hz <= self.pitch_sample_rate / 2: raise ConfigurationError("Expected 0 < fmin_hz < fmax_hz <= pitch Nyquist frequency")
+        if not 0 <= self.min_voiced_confidence <= 1: raise ConfigurationError("min_voiced_confidence must be between 0 and 1")
+        if self.min_note_sec <= 0 or self.max_gap_sec < 0: raise ConfigurationError("Note duration must be positive and max gap non-negative")
+        if not 0.05 <= self.split_note_semitones <= 12: raise ConfigurationError("split_note_semitones must be between 0.05 and 12")
+        if not 1 <= self.midi_bend_range <= 24: raise ConfigurationError("midi_bend_range must be between 1 and 24")
+        if not self.asr_model.strip() or not self.aligner_model.strip(): raise ConfigurationError("ASR and aligner model names cannot be empty")
         supported: dict[str, tuple[str, set[str]]] = {
             "separation_engine": (self.separation_engine, {"mel-roformer"}),
             "pitch_engine": (self.pitch_engine, {"fcpe"}),
@@ -138,5 +111,4 @@ class CoreConfig:
             validate_cached_artifacts=_env_bool("KARAOKE_AI_VALIDATE_CACHE", True),
         )
 
-    def fingerprint(self) -> dict[str, object]:
-        return asdict(self)
+    def fingerprint(self) -> dict[str, object]: return asdict(self)

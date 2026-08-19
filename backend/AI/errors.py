@@ -1,18 +1,13 @@
-class AICoreError(RuntimeError):
-    """Base error raised by AI Core."""
+class AICoreError(RuntimeError): pass
 
 
-class EngineUnavailableError(AICoreError):
-    """Raised when a configured inference engine is not installed or configured."""
+class EngineUnavailableError(AICoreError): pass
 
 
-class InvalidArtifactError(AICoreError):
-    """Raised when an output artifact is missing, corrupt, or inconsistent."""
+class InvalidArtifactError(AICoreError): pass
 
 
-class ProcessingCancelledError(AICoreError):
-    """Raised when the caller cancels processing."""
+class ProcessingCancelledError(AICoreError): pass
 
 
-class ConfigurationError(AICoreError):
-    """Raised when production configuration is incomplete or invalid."""
+class ConfigurationError(AICoreError): pass

@@ -16,59 +16,44 @@ router = APIRouter(prefix="/recording", tags=["recording"])
 
 
 def _change_session_state(session_id: str, action, status: str) -> dict[str, str]:
-    with http_error(KeyError, 404):
-        action(session_id)
+    with http_error(KeyError, 404): action(session_id)
     return {"status": status}
 
 
 def _restore_monitoring(db: Session) -> None:
-    """Restore persisted monitoring without hiding an already completed action."""
-    try:
-        audio_service.configure_monitoring(audio_service.get_settings(db))
-    except RuntimeError:
-        audio_service.stop_monitoring()
+    try: audio_service.configure_monitoring(audio_service.get_settings(db))
+    except RuntimeError: audio_service.stop_monitoring()
 
 
 def _configure_recording_monitor(settings, body: schemas.RecordingStartRequest) -> bool:
-    """Prepare monitoring and return whether ASIO uses a temporary native monitor."""
     keep_native_monitor = settings.audio_driver == "asio"
     if not keep_native_monitor:
-        audio_service.stop_monitoring()
-        return False
+        audio_service.stop_monitoring(); return False
 
     if not settings.monitoring_enabled:
-        audio_service.stop_monitoring()
-        return True
+        audio_service.stop_monitoring(); return True
 
     transient_values = {
         name: getattr(settings, name)
         for name in ("monitoring_enabled", "volume", "reverb", "echo", "delay")
     }
-    settings.monitoring_enabled = True
-    settings.volume = body.microphone_volume
-    settings.reverb = body.reverb
-    settings.echo = body.echo
+    settings.monitoring_enabled = True; settings.volume = body.microphone_volume; settings.reverb = body.reverb; settings.echo = body.echo
     settings.delay = body.delay
-    try:
-        audio_service.configure_monitoring(settings)
+    try: audio_service.configure_monitoring(settings)
     finally:
-        for name, value in transient_values.items():
-            setattr(settings, name, value)
+        for name, value in transient_values.items(): setattr(settings, name, value)
     return True
 
 
 @router.get("/settings", response_model=schemas.AudioSettingsOut)
-def get_recording_settings(db: Session = Depends(get_db)):
-    return audio_service.get_settings(db)
+def get_recording_settings(db: Session = Depends(get_db)): return audio_service.get_settings(db)
 
 
 @router.post("/start", response_model=schemas.RecordingStartOut)
 def start_recording(body: schemas.RecordingStartRequest, db: DatabaseSession):
     song = repositories.get_song(db, body.song_id)
-    if song is None:
-        raise HTTPException(status_code=404, detail="Песня не найдена")
-    if pipeline_service.is_processing(song.id):
-        raise HTTPException(status_code=409, detail="Нельзя начать запись во время обработки песни")
+    if song is None: raise HTTPException(status_code=404, detail="Песня не найдена")
+    if pipeline_service.is_processing(song.id): raise HTTPException(status_code=409, detail="Нельзя начать запись во время обработки песни")
     settings = audio_service.get_settings(db)
     try:
         keep_native_monitor = _configure_recording_monitor(settings, body)
@@ -98,39 +83,30 @@ def start_recording(body: schemas.RecordingStartRequest, db: DatabaseSession):
             effects={"reverb": body.reverb, "echo": body.echo, "delay": body.delay},
         )
     except RuntimeError as exc:
-        _restore_monitoring(db)
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        _restore_monitoring(db); raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     return schemas.RecordingStartOut(recording_session_id=session_id, message="Запись начата")
 
 
 @router.post("/pause")
-def pause_recording(session_id: str):
-    return _change_session_state(session_id, recording_service.pause_recording, "paused")
+def pause_recording(session_id: str): return _change_session_state(session_id, recording_service.pause_recording, "paused")
 
 
 @router.post("/resume")
-def resume_recording(session_id: str):
-    return _change_session_state(session_id, recording_service.resume_recording, "recording")
+def resume_recording(session_id: str): return _change_session_state(session_id, recording_service.resume_recording, "recording")
 
 
 @router.post("/stop", response_model=schemas.RecordingOut)
 def stop_recording(session_id: str, db: Session = Depends(get_db)):
-    try:
-        recording = recording_service.stop_recording(session_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Could not save recording: {exc}") from exc
-    _restore_monitoring(db)
-    return recording
+    try: recording = recording_service.stop_recording(session_id)
+    except KeyError as exc: raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc: raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except OSError as exc: raise HTTPException(status_code=500, detail=f"Could not save recording: {exc}") from exc
+    _restore_monitoring(db); return recording
 
 
 @router.get("/by-song/{song_id}", response_model=list[schemas.RecordingOut])
-def list_recordings_for_song(song: SongDependency, db: Session = Depends(get_db)):
-    return repositories.list_recordings_for_song(db, song.id)
+def list_recordings_for_song(song: SongDependency, db: Session = Depends(get_db)): return repositories.list_recordings_for_song(db, song.id)
 
 
 @router.get("/library", response_model=list[schemas.RecordedSongOut])
@@ -143,31 +119,26 @@ def list_recording_library(db: Session = Depends(get_db)):
 
 
 @router.get("/{recording_id}", response_model=schemas.RecordingOut)
-def get_recording(recording: RecordingDependency):
-    return recording
+def get_recording(recording: RecordingDependency): return recording
 
 
 def _wav_file_response(recording: models.Recording) -> FileResponse:
     path = recording_service.resolve_recording_path(recording)
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="Файл записи не найден")
+    if not path.is_file(): raise HTTPException(status_code=404, detail="Файл записи не найден")
     return FileResponse(path, media_type="audio/wav", filename=recording.filename)
 
 
 @router.get("/{recording_id}/file")
-def get_recording_file(recording: RecordingDependency):
-    return _wav_file_response(recording)
+def get_recording_file(recording: RecordingDependency): return _wav_file_response(recording)
 
 
 @router.get("/{recording_id}/performance")
 def get_performance_file(recording: RecordingDependency):
     for mixed_path in recording_service.performance_mix_paths(recording):
         if mixed_path.is_file():
-            media_type = "audio/mpeg" if mixed_path.suffix == ".mp3" else "audio/wav"
-            return FileResponse(mixed_path, media_type=media_type, filename=mixed_path.name)
+            media_type = "audio/mpeg" if mixed_path.suffix == ".mp3" else "audio/wav"; return FileResponse(mixed_path, media_type=media_type, filename=mixed_path.name)
     return _wav_file_response(recording)
 
 
 @router.delete("/{recording_id}", status_code=204)
-def delete_recording(recording: RecordingDependency, db: DatabaseSession):
-    recording_service.delete_recording(db, recording)
+def delete_recording(recording: RecordingDependency, db: DatabaseSession): recording_service.delete_recording(db, recording)

@@ -1,35 +1,28 @@
-"""Read-only exactness/performance probes for HPSS median-filter candidates."""
 
-from __future__ import annotations
 
 import json
 import time
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from common import ROOT, write_json
 
 import librosa
 import numpy as np
 import soundfile as sf
 from scipy import ndimage, signal
 
-ROOT = Path(__file__).resolve().parents[2]
+import sys
 SOURCE = ROOT / "build/performance-baseline-after-v2/warm/song.wav"
 OUTPUT = ROOT / "build/ai-runtime-benchmark/hpss-feasibility.json"
 KERNEL = 31
 RADIUS = KERNEL // 2
 
 
-def measured(function):
-    started = time.perf_counter()
-    result = function()
-    return result, time.perf_counter() - started
+def measured(function): started = time.perf_counter(); result = function(); return result, time.perf_counter() - started
 
 
-def medfilt2d_exact(magnitude: np.ndarray, axis: int) -> np.ndarray:
-    padding = ((0, 0), (RADIUS, RADIUS)) if axis == 1 else ((RADIUS, RADIUS), (0, 0))
-    padded = np.pad(magnitude, padding, mode="symmetric")
-    kernel = (1, KERNEL) if axis == 1 else (KERNEL, 1)
-    filtered = signal.medfilt2d(padded, kernel_size=kernel)
-    return filtered[:, RADIUS:-RADIUS] if axis == 1 else filtered[RADIUS:-RADIUS, :]
+def medfilt2d_exact(magnitude: np.ndarray, axis: int) -> np.ndarray: padding = ((0, 0), (RADIUS, RADIUS)) if axis == 1 else ((RADIUS, RADIUS), (0, 0)); padded = np.pad(magnitude, padding, mode="symmetric"); kernel = (1, KERNEL) if axis == 1 else (KERNEL, 1); filtered = signal.medfilt2d(padded, kernel_size=kernel); return filtered[:, RADIUS:-RADIUS] if axis == 1 else filtered[RADIUS:-RADIUS, :]
 
 
 def torch_cuda_median(
@@ -37,14 +30,9 @@ def torch_cuda_median(
 ) -> np.ndarray:
     import torch
 
-    oriented = magnitude if axis == 1 else magnitude.T
-    padded = np.pad(oriented, ((0, 0), (RADIUS, RADIUS)), mode="symmetric")
-    source = torch.from_numpy(padded).cuda()
-    output = np.empty_like(oriented)
+    oriented = magnitude if axis == 1 else magnitude.T; padded = np.pad(oriented, ((0, 0), (RADIUS, RADIUS)), mode="symmetric"); source = torch.from_numpy(padded).cuda(); output = np.empty_like(oriented)
     for start in range(0, len(oriented), chunk_rows):
-        end = min(len(oriented), start + chunk_rows)
-        windows = source[start:end].unfold(1, KERNEL, 1)
-        output[start:end] = windows.median(dim=-1).values.cpu().numpy()
+        end = min(len(oriented), start + chunk_rows); windows = source[start:end].unfold(1, KERNEL, 1); output[start:end] = windows.median(dim=-1).values.cpu().numpy()
     return output if axis == 1 else output.T
 
 
@@ -59,10 +47,8 @@ def compare(reference: np.ndarray, candidate: np.ndarray) -> dict[str, float | b
 
 def main() -> None:
     audio, sample_rate = sf.read(SOURCE, dtype="float32", always_2d=False)
-    if audio.ndim > 1:
-        audio = np.mean(audio, axis=1, dtype=np.float32)
-    if sample_rate != 22_050:
-        audio = librosa.resample(audio, orig_sr=sample_rate, target_sr=22_050)
+    if audio.ndim > 1: audio = np.mean(audio, axis=1, dtype=np.float32)
+    if sample_rate != 22_050: audio = librosa.resample(audio, orig_sr=sample_rate, target_sr=22_050)
     spectrum, stft_sec = measured(
         lambda: librosa.stft(audio, n_fft=2048, hop_length=512)
     )
@@ -134,9 +120,7 @@ def main() -> None:
             "opencv_medianBlur": "square-kernel/type constraints do not match separable 1x31/31x1 float32 contract",
         },
     }
-    OUTPUT.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    print(OUTPUT)
+    write_json(OUTPUT, payload); print(OUTPUT)
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__": main()

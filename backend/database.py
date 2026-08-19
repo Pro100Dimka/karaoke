@@ -25,15 +25,10 @@ engine = create_engine(
 
 @event.listens_for(engine, "connect")
 def _configure_sqlite(dbapi_connection, _connection_record) -> None:
-    """Enable integrity and concurrency settings for every SQLite connection."""
-    cursor = dbapi_connection.cursor()
+    """Enable integrity and concurrency settings for every SQLite connection."""; cursor = dbapi_connection.cursor()
     try:
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA synchronous=NORMAL")
-        cursor.execute("PRAGMA busy_timeout=30000")
-    finally:
-        cursor.close()
+        cursor.execute("PRAGMA foreign_keys=ON"); cursor.execute("PRAGMA journal_mode=WAL"); cursor.execute("PRAGMA synchronous=NORMAL"); cursor.execute("PRAGMA busy_timeout=30000")
+    finally: cursor.close()
 
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -67,18 +62,14 @@ _AUDIO_COLUMN_MIGRATIONS = {
 def _apply_additive_migrations(connection, existing: set[str], migrations: dict[str, str]) -> None:
     """Apply missing-column migrations without rebuilding user tables."""
     for column, statement in migrations.items():
-        if column not in existing:
-            connection.execute(text(statement))
+        if column not in existing: connection.execute(text(statement))
 
 
 def _repair_invalid_audio_settings_datetime(connection) -> None:
-    """Repair legacy/corrupted SQLite datetime values before ORM reads them."""
-    inspector = inspect(connection)
-    if "audio_settings" not in inspector.get_table_names():
-        return
+    """Repair legacy/corrupted SQLite datetime values before ORM reads them."""; inspector = inspect(connection)
+    if "audio_settings" not in inspector.get_table_names(): return
     columns = {column["name"] for column in inspector.get_columns("audio_settings")}
-    if "updated_at" not in columns:
-        return
+    if "updated_at" not in columns: return
     # SQLAlchemy's SQLite DateTime processor uses datetime.fromisoformat().
     # SQLite datetime(value) returns NULL for malformed values, letting us
     # repair only rows that the ORM would otherwise fail to deserialize.
@@ -104,23 +95,9 @@ def _repair_corrupted_audio_settings(connection) -> None:
     corrupted settings row and let the ORM recreate it with current defaults.
     """
     inspector = inspect(connection)
-    if "audio_settings" not in inspector.get_table_names():
-        return
-    columns = {column["name"] for column in inspector.get_columns("audio_settings")}
-    required = {
-        "id",
-        "volume",
-        "sensitivity",
-        "latency_ms",
-        "audio_driver",
-        "buffer_size",
-        "monitoring_enabled",
-        "reverb",
-        "echo",
-        "delay",
-    }
-    if not required.issubset(columns):
-        return
+    if "audio_settings" not in inspector.get_table_names(): return
+    columns, required = {column['name'] for column in inspector.get_columns('audio_settings')}, {'id', 'volume', 'sensitivity', 'latency_ms', 'audio_driver', 'buffer_size', 'monitoring_enabled', 'reverb', 'echo', 'delay'}
+    if not required.issubset(columns): return
 
     rows = (
         connection.execute(
@@ -133,11 +110,9 @@ def _repair_corrupted_audio_settings(connection) -> None:
         .all()
     )
 
-    def is_number(value) -> bool:
-        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    def is_number(value) -> bool: return isinstance(value, (int, float)) and (not isinstance(value, bool))
 
-    def in_range(value, low: float, high: float) -> bool:
-        return is_number(value) and low <= float(value) <= high
+    def in_range(value, low: float, high: float) -> bool: return is_number(value) and low <= float(value) <= high
 
     corrupted_ids: list[int] = []
     for row in rows:
@@ -157,8 +132,7 @@ def _repair_corrupted_audio_settings(connection) -> None:
             and in_range(row["echo"], 0.0, 1.0)
             and in_range(row["delay"], 0.0, 1.0)
         )
-        if not valid:
-            corrupted_ids.append(int(row["id"]))
+        if not valid: corrupted_ids.append(int(row["id"]))
 
     for settings_id in corrupted_ids:
         connection.execute(
@@ -167,44 +141,20 @@ def _repair_corrupted_audio_settings(connection) -> None:
         )
 
 
-def _mark_interrupted_jobs(connection) -> None:
-    connection.execute(
-        text(
-            "UPDATE songs "
-            "SET status = :cancelled, progress_step = :step, progress_percent = 0, "
-            "error_message = :message "
-            "WHERE status IN (:queued, :processing)"
-        ),
-        {
-            "cancelled": "CANCELLED",
-            "queued": "QUEUED",
-            "processing": "PROCESSING",
-            "step": "Interrupted",
-            "message": "Processing was interrupted by an application restart",
-        },
-    )
+def _mark_interrupted_jobs(connection) -> None: connection.execute(text('UPDATE songs SET status = :cancelled, progress_step = :step, progress_percent = 0, error_message = :message WHERE status IN (:queued, :processing)'), {'cancelled': 'CANCELLED', 'queued': 'QUEUED', 'processing': 'PROCESSING', 'step': 'Interrupted', 'message': 'Processing was interrupted by an application restart'})
 
 
 def init_db() -> None:
     """Create tables and apply backward-compatible SQLite migrations."""
     import models  # noqa: F401  (registers models before create_all)
 
-    Base.metadata.create_all(bind=engine)
-    inspector = inspect(engine)
-    song_columns = {column["name"] for column in inspector.get_columns("songs")}
-    audio_columns = {column["name"] for column in inspector.get_columns("audio_settings")}
+    Base.metadata.create_all(bind=engine); inspector = inspect(engine); song_columns, audio_columns = {column['name'] for column in inspector.get_columns('songs')}, {column['name'] for column in inspector.get_columns('audio_settings')}
     with engine.begin() as connection:
-        _apply_additive_migrations(connection, song_columns, _SONG_COLUMN_MIGRATIONS)
-        _apply_additive_migrations(connection, audio_columns, _AUDIO_COLUMN_MIGRATIONS)
-        _repair_invalid_audio_settings_datetime(connection)
-        _repair_corrupted_audio_settings(connection)
+        _apply_additive_migrations(connection, song_columns, _SONG_COLUMN_MIGRATIONS); _apply_additive_migrations(connection, audio_columns, _AUDIO_COLUMN_MIGRATIONS); _repair_invalid_audio_settings_datetime(connection); _repair_corrupted_audio_settings(connection)
         _mark_interrupted_jobs(connection)
 
 
 def get_db():
-    """FastAPI-зависимость: одна Session на запрос, всегда закрывается."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    """FastAPI-зависимость: одна Session на запрос, всегда закрывается."""; db = SessionLocal()
+    try: yield db
+    finally: db.close()

@@ -1,12 +1,13 @@
-"""Read-only call-level profile of the current tempo/key implementation."""
 
-from __future__ import annotations
 
 import json
 import time
 from collections import defaultdict
 from contextlib import ExitStack
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from common import ROOT, write_json
 from unittest.mock import patch
 
 import librosa
@@ -14,7 +15,7 @@ import numpy as np
 import soundfile as sf
 from AI.music import analyze_music
 
-ROOT = Path(__file__).resolve().parents[2]
+import sys
 SOURCE = ROOT / "build/performance-baseline-after-v2/warm/song.wav"
 OUTPUT = ROOT / "build/ai-runtime-benchmark/tempo-profile-detailed.json"
 
@@ -24,10 +25,7 @@ def main() -> None:
 
     def timed(name, function):
         def wrapper(*args, **kwargs):
-            started = time.perf_counter()
-            result = function(*args, **kwargs)
-            elapsed = time.perf_counter() - started
-            array = args[0] if args else None
+            started = time.perf_counter(); result = function(*args, **kwargs); elapsed = time.perf_counter() - started; array = args[0] if args else None
             calls[name].append(
                 {
                     "seconds": elapsed,
@@ -56,11 +54,8 @@ def main() -> None:
         "chroma_cqt": ("librosa.feature.chroma_cqt", librosa.feature.chroma_cqt),
     }
     with ExitStack() as stack:
-        for name, (target, function) in targets.items():
-            stack.enter_context(patch(target, timed(name, function)))
-        started = time.perf_counter()
-        result = analyze_music(SOURCE)
-        total = time.perf_counter() - started
+        for name, (target, function) in targets.items(): stack.enter_context(patch(target, timed(name, function)))
+        started = time.perf_counter(); result = analyze_music(SOURCE); total = time.perf_counter() - started
 
     summary = {
         name: {
@@ -89,10 +84,7 @@ def main() -> None:
         "numpy_version": np.__version__,
         "librosa_version": librosa.__version__,
     }
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    print(OUTPUT)
+    write_json(OUTPUT, payload); print(OUTPUT)
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__": main()

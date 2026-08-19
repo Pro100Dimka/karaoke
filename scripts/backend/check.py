@@ -1,6 +1,4 @@
-"""Single cross-platform quality gate for local development and CI."""
 
-from __future__ import annotations
 
 import subprocess
 import sys
@@ -43,13 +41,9 @@ COMMANDS = (
 
 def main() -> int:
     for command in COMMANDS:
-        print(f"\n> {' '.join(command)}", flush=True)
-        result = subprocess.run(command, check=False, cwd=BACKEND_ROOT)
-        if result.returncode:
-            return result.returncode
-    print("\nAll checks passed.")
-    return 0
+        print(f"\n> {' '.join(command)}", flush=True); result = subprocess.run(command, check=False, cwd=BACKEND_ROOT)
+        if result.returncode: return result.returncode
+    print("\nAll checks passed."); return 0
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == "__main__": raise SystemExit(main())
