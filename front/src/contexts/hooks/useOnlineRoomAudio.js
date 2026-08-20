@@ -1,5 +1,4 @@
 import { useCallback, useRef } from "react";
-import { connectMicrophoneChannelStrip } from "../../services/microphoneChannelStrip";
 import { clamp01 as clampUnit } from "../../utils/math";
 
 const clamp01 = (value) => clampUnit(Number(value) || 0);
@@ -211,7 +210,10 @@ export default function useOnlineRoomAudio({
         const source = context.createMediaStreamSource(stream);
         const gain = context.createGain();
         gain.gain.value = 1;
-        connectMicrophoneChannelStrip(context, source, gain);
+        // voice.start() returns the already processed stream from the central
+        // microphone service. Applying the channel strip again would gate and
+        // compress the singer twice.
+        source.connect(gain);
         gain.connect(context.destination);
         await context.resume?.();
         if (voiceRef.current !== voice) {

@@ -9,5 +9,6 @@ export const MIXER_FIELDS = [
 export const EFFECT_FIELDS = [
   ["echo", translateSaved("Эхо")],
   ["reverb", translateSaved("Реверб"), "secondary"],
-  ["delay", translateSaved("Дилей")]
+  ["delay", translateSaved("Дилей")],
+  ["noise_suppression", translateSaved("Шум")]
 ];

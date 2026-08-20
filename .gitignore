@@ -8,6 +8,7 @@
 *.key
 
 # Python environments, caches and test artefacts
+generated/
 __pycache__/
 *.py[cod]
 *.pyd
@@ -48,10 +49,13 @@ front/reports/mutation/
 *.db
 *.sqlite
 *.sqlite3
+*.db-shm
+*.db-wal
 
 # Downloaded tools and legacy local paths (kept ignored during migration)
 backend/tools/*.exe
 backend/models/
+backend/engines/asio/build/
 
 # Packaging output and diagnostic files
 backend/*.spec
@@ -60,6 +64,12 @@ backend/*.spec
 *.temp
 *.bak
 *.orig
+*.mp4
+coverage/
+.runtime/
+reports/
+playwright-report/
+*-snapshots/
 
 # IDE and operating-system files
 .idea/

@@ -8,7 +8,6 @@ from pathlib import Path
 import soundfile as sf
 
 from .errors import InvalidArtifactError
-from .midi import validate_midi
 from .models import PitchFrame, Syllable, VocalNote, Word
 
 
@@ -107,7 +106,6 @@ def validate_derivation_json(path: str | Path, kind: str):
 __all__ = [
     "validate_audio",
     "validate_json",
-    "validate_midi",
     "validate_pitch",
     "validate_pitch_json",
     "validate_derivation_json",

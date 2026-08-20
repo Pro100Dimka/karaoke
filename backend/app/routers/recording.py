@@ -90,6 +90,11 @@ def start_recording(body: schemas.RecordingStartRequest, db: DatabaseSession):
             blocksize=settings.buffer_size,
             music_gain=body.music_volume,
             effects={"reverb": body.reverb, "echo": body.echo, "delay": body.delay},
+            noise_suppression=(
+                0.35
+                if getattr(settings, "noise_suppression", None) is None
+                else settings.noise_suppression
+            ),
         )
     except RuntimeError as exc:
         _restore_monitoring(db)

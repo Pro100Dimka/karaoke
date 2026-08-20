@@ -241,7 +241,7 @@ def test_create_performance_mix_runs_ffmpeg_and_cleans_failure(monkeypatch, tmp_
     executable.write_bytes(b"binary")
     song_dir = tmp_path / "song"
     song_dir.mkdir()
-    instrumental = song_dir / "instrumental.mp3"
+    instrumental = song_dir / "instrumental.flac"
     instrumental.write_bytes(b"music")
     voice = song_dir / "take.wav"
     voice.write_bytes(b"voice")

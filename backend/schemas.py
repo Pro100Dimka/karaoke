@@ -53,6 +53,11 @@ class SongOut(ORMModel, ProcessingState):
     updated_at: datetime
 
 
+class SongIdentityOut(BaseModel):
+    title: str
+    artist: str | None = None
+
+
 class SongUpdate(BaseModel):
     """Все поля опциональны — PATCH-семантика, меняем только переданное."""
 
@@ -128,7 +133,7 @@ class SongEditorUpdate(BaseModel):
 
 
 class SongEditorOut(BaseModel):
-    song_map: dict[str, Any]
+    lyrics_sync: dict[str, Any]
     ai_backup_exists: bool = False
 
 
@@ -136,17 +141,7 @@ class SongResultOut(BaseModel):
     """Агрегированные результаты AI-пайплайна по одной песне (содержимое Song/<slug>/*.json)."""
 
     song: SongOut
-    music: dict[str, Any] | None = None
-    reference_notes: list[dict[str, Any]] | None = None
-    game_notes: list[dict[str, Any]] | None = None
-    syllables: list[dict[str, Any]] | None = None
     lyrics_sync: Any | None = None
-    karaoke_timeline: dict[str, Any] | None = None
-    song_map: dict[str, Any] | None = None
-    difficulty: Any | None = None
-    structure: Any | None = None
-    breaths: Any | None = None
-    manifest: dict[str, Any] | None = None
 
 
 # --------------------------------------------------------------------
@@ -338,6 +333,7 @@ class AudioSettingsOut(ORMModel):
     reverb: float
     echo: float
     delay: float
+    noise_suppression: float
 
 
 class AudioSettingsUpdate(BaseModel):
@@ -353,6 +349,7 @@ class AudioSettingsUpdate(BaseModel):
     reverb: float | None = Field(default=None, ge=0, le=1)
     echo: float | None = Field(default=None, ge=0, le=1)
     delay: float | None = Field(default=None, ge=0, le=1)
+    noise_suppression: float | None = Field(default=None, ge=0, le=1)
 
 
 class SignalQualityOut(BaseModel):

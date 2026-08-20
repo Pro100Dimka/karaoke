@@ -523,7 +523,7 @@ describe("online room provider", () => {
     });
     expect(monitorTrack.stop).toHaveBeenCalled();
   });
-  test("hear-yourself monitoring runs the mic through the studio channel strip, not a raw passthrough", async () => {
+  test("hear-yourself monitoring reuses the already processed central microphone stream", async () => {
     const gains = [];
     const filters = [];
     const contexts = [];
@@ -570,24 +570,12 @@ describe("online room provider", () => {
     await act(async () => {
       expect(await hook.result.current.setLocalMonitoring(true)).toBe(true);
     });
-    const [finalGain, makeup] = gains;
-    const [highpass, presence] = filters;
+    const [finalGain] = gains;
     const { source } = contexts[0];
-    // Rumble/mud removal and a touch of presence/air, matching the same
-    // character as backend/app/services/microphone_quality.py's
-    // StudioMicrophoneProcessor used for recording and direct monitoring.
-    same([highpass.type, "highpass"], [highpass.frequency.value, 70], [presence.type, "highshelf"], [presence.frequency.value, 2200]);
-    expect(presence.gain.value).toBeGreaterThan(0);
-    same([compressor.threshold.value, -16], [compressor.ratio.value, 3]);
-    expect(makeup.gain.value).toBeCloseTo(1.08);
-    // Soft-knee limiter curve: silence maps to silence, and the extremes stay
-    // within [-1, 1] instead of hard-clipping.
-    verify([limiter.curve, 'toHaveLength', 1024], [limiter.curve[512], 'toBeCloseTo', 0, 1], [limiter.curve[1023], 'toBeCloseTo', 1, 5], [limiter.curve[0], 'toBeCloseTo', -1, 5]);
-    // Wiring: source -> highpass -> presence -> compressor -> makeup -> limiter
-    // -> the pre-existing mute/volume gain -> destination. The final gain is
-    // what setRoomSoundMuted/applyRemoteAudioMute-style controls would act on,
-    // so it must still sit last in the chain, unaffected by the new nodes.
-    calledWith([source.connect, [highpass]], [highpass.connect, [presence]], [presence.connect, [compressor]], [compressor.connect, [makeup]], [makeup.connect, [limiter]], [limiter.connect, [finalGain]]);
+    expect(filters).toHaveLength(0);
+    expect(compressor).toBeUndefined();
+    expect(limiter).toBeUndefined();
+    calledWith([source.connect, [finalGain]]);
     expect(finalGain.gain.value).toBe(1);
   });
   test("reports voice playback failures and isolates rejected audio graph promises", async () => {

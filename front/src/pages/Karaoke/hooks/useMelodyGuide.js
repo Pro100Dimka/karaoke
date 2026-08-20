@@ -25,8 +25,18 @@ export default function useMelodyGuide({ notes, volume, keyShift, currentTimeRef
         volume: volumeRef.current
       });
 
-      if (state.active) guide.oscillator.frequency.setTargetAtTime(state.frequency, now, 0.012);
-      guide.gain.gain.setTargetAtTime(state.gain, now, state.active ? 0.015 : 0.018);
+      if (state.active) {
+        guide.oscillator.frequency.setTargetAtTime(state.frequency, now, 0.012);
+        const noteKey = `${state.note.start}:${state.note.end}:${state.note.note}`;
+        if (noteKey !== guide.activeNoteKey) {
+          guide.gain.gain.cancelScheduledValues(now);
+          guide.gain.gain.setValueAtTime(0.0001, now);
+          guide.activeNoteKey = noteKey;
+        }
+      } else {
+        guide.activeNoteKey = null;
+      }
+      guide.gain.gain.setTargetAtTime(state.gain, now, state.active ? 0.02 : 0.018);
     },
     // Stryker disable next-line ArrayDeclaration: update reads current values from stable refs.
     []
@@ -47,7 +57,7 @@ export default function useMelodyGuide({ notes, volume, keyShift, currentTimeRef
       gain.gain.value = 0.0001;
       oscillator.connect(gain).connect(context.destination);
       oscillator.start();
-      guide = { context, oscillator, gain };
+      guide = { context, oscillator, gain, activeNoteKey: null };
       guideRef.current = guide;
     }
 

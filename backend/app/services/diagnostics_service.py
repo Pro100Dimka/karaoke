@@ -100,7 +100,6 @@ def versions() -> dict:
         ("qwen_asr", "qwen-asr"),
         ("torchfcpe", "torchfcpe"),
         ("librosa", "librosa"),
-        ("mido", "mido"),
         ("soundfile", "soundfile"),
     ):
         try:

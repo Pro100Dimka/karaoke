@@ -7,227 +7,22 @@ from unittest.mock import Mock
 import pytest
 
 from AI import pipeline
-from AI.errors import EngineUnavailableError, InvalidArtifactError, ProcessingCancelledError
+from AI.errors import EngineUnavailableError, ProcessingCancelledError
 from AI.models import PitchFrame, Syllable, VocalNote, Word
-from tests._shared import alignment_candidate, patch_attrs, raises, word_rows
+from tests._shared import patch_attrs, raises, word_rows
 
 
-def test_bound_and_trim_canonical_words():
-    source = word_rows((0, 10, "x", 0.8), (10, 20, "verylongtoken", 0.8))
-    bounded = pipeline._bound_word_durations(source)
-    assert (bounded[0].end == 0.7 and bounded[1].end <= 13.2)
-
-
-def _pitch_frames(*, voiced_times, silent_times=()):
-    frames = [
-        PitchFrame(time=t, frequency=220.0, confidence=0.8, voiced=True) for t in voiced_times
-    ]
-    frames += [
-        PitchFrame(time=t, frequency=0.0, confidence=0.0, voiced=False) for t in silent_times
-    ]
-    return frames
-
-
-def test_segments_ignore_real_singing_detects_a_structural_mismatch():
-    segments, mismatched_pitch = ((0.0, 2.0, 'line one'), (20.0, 22.0, 'line two')), _pitch_frames(voiced_times=[0.5, 1.5, 8.0, 9.0, 10.0, 11.0, 21.0])
-    assert pipeline._segments_ignore_real_singing(segments, mismatched_pitch)
-
-    matching_pitch = _pitch_frames(voiced_times=[0.5, 1.5, 20.5, 21.5], silent_times=[10.0, 11.0])
-    assert (not pipeline._segments_ignore_real_singing(segments, matching_pitch)) and (not pipeline._segments_ignore_real_singing((), mismatched_pitch)) and (not pipeline._segments_ignore_real_singing(segments, []))
-
-
-def test_canonical_identity_and_publishability():
-    aligned = word_rows((0, 1, "Hello", 1), (1, 2, "world", 1))
-    assert (pipeline._canonical_alignment_matches('hello, world!', aligned)) and (not pipeline._canonical_alignment_matches('hello', aligned)) and (not pipeline._canonical_alignment_matches('other world', aligned)) and (not pipeline._canonical_timeline_is_publishable([], 2)) and (pipeline._canonical_timeline_is_publishable(aligned, 2))
-    invalid = [
-        [SimpleNamespace(start=float("nan"), end=1)],
-        [SimpleNamespace(start=-1, end=1)],
-        [SimpleNamespace(start=0, end=0.001)],
-        [SimpleNamespace(start=0, end=3)],
-        [SimpleNamespace(start=1, end=2), SimpleNamespace(start=0.5, end=1)],
-    ]
-    for values in invalid:
-        assert not pipeline._canonical_timeline_is_publishable(values, 2)
-
-
-def test_preserve_complete_timeline_repairs_bounds_and_suffix():
-    assert pipeline._preserve_complete_canonical_timeline([], 1) is None
-    overlap = word_rows((0, 1, "a", 1), (0.8, 2, "b", 0), (1.99, 3.5, "c", 0.5))
-    repaired = pipeline._preserve_complete_canonical_timeline(overlap, 3)
-    assert (repaired and repaired[0].start == 0 and (repaired[-1].end == 3)) and (all(0 <= word.confidence <= 1 for word in repaired))
-    impossible = word_rows((0, 1, "a", 1), (0, 1, "b", 1), (0, 1, "c", 1))
-    assert pipeline._preserve_complete_canonical_timeline(impossible, 0.02) is None
-    shifted = word_rows((0, 1, "a", 1), (0, 1.02, "b", 1))
-    assert pipeline._preserve_complete_canonical_timeline(shifted, 2)[1].start == 0.5
-    clipped = word_rows((0, 1, "a", 1), (1.1, 3, "b", 1))
-    assert pipeline._preserve_complete_canonical_timeline(clipped, 2)[1].end == 2
-    eof = word_rows((1.995, 3, "a", 1))
-    assert pipeline._preserve_complete_canonical_timeline(eof, 2)[0].start == 1.99
-
-
-def test_lossless_canonical_words_preserve_or_retime():
-    aligned = word_rows((0, 1, "a", 0.8), (1, 2, "b", 0.9))
-    assert (pipeline._pipeline_lossless_canonical_words('', aligned, 2) is aligned) and (pipeline._pipeline_lossless_canonical_words('a b', aligned, 2)[0].confidence == 0.8)
-    retimed = pipeline._pipeline_lossless_canonical_words("long x", aligned[:1], 0.1)
-    assert ([word.text for word in retimed] == ['long', 'x']) and (all(word.confidence == 0.004 for word in retimed))
-    raises(InvalidArtifactError, lambda: pipeline._pipeline_lossless_canonical_words('a b', aligned, 0.5), match='could not be locally')
-
-
-def test_retiming_split_weights_vowels_not_just_character_count():
-    mismatched = word_rows((0, 1, "other", 1))
-    retimed = pipeline._pipeline_lossless_canonical_words("я тьмы", mismatched[:1], 9.0)
-    assert ([word.text for word in retimed] == ['я', 'тьмы']) and (retimed[0].start == pytest.approx(0.0)) and (retimed[0].end == pytest.approx(3.0)) and (retimed[1].start == pytest.approx(3.0)) and (retimed[1].end == pytest.approx(9.0))
-    reset = pipeline._pipeline_lossless_canonical_words("a b", word_rows((0.09, 0.1, "x", 1)), 0.1)
-    assert reset[0].start == 0
-    tiny = pipeline._pipeline_lossless_canonical_words(
-        "verylongtoken x", word_rows((0, 0.1, "mismatch", 1)), 0.1
+def test_publish_text_alignment_preserves_engine_timestamps_exactly(tmp_path):
+    words = word_rows(
+        (64.770123456789, 65.031987654321, "Пять", 0.123456789),
+        (65.111222333444, 65.973999888777, "киловатт", 0.987654321),
     )
-    assert tiny[-1].end == 0.1
-
-
-def test_lossless_words_repair_only_collapsed_transient_span():
-    original = word_rows(
-        (55.757884630828, 56.240116035786684, "сердце", 0.3333),
-        (56.240116035786684, 56.26011603578669, "покой", 0.012),
-        (56.24511603578669, 56.26511603578669, "Я", 0.012),
-        (56.2651160357867, 56.2851160357867, "в", 0.012),
-        (56.28011603578668, 56.43011603578668, "Черты", 0.3),
-        (75.76090877868262, 75.82115117411988, "Но", 0.003),
+    lyrics_txt, words_path = tmp_path / "lyrics.txt", tmp_path / "lyricsSync.json"
+    pipeline.KaraokePipeline._publish_text_alignment(
+        tmp_path, lyrics_txt, words_path, "Пять киловатт", words
     )
-    repaired = pipeline._pipeline_lossless_canonical_words(
-        "сердце покой Я в Черты Но",
-        original,
-        195.54913832199546,
-        ["ctc", "interpolated", "interpolated", "reacquired", "reacquired", "qwen"],
-    )
-    assert (repaired[0] == original[0] and repaired[5] == original[5]) and ([(word.text, word.confidence) for word in repaired] == [(word.text, word.confidence) for word in original]) and (all((left.end <= right.start for left, right in zip(repaired, repaired[1:], strict=False)))) and (repaired[1].start == original[0].end) and (repaired[4].end == pytest.approx(original[5].start))
-
-
-
-def test_confidence_aware_repair_preserves_candidate_before_weak_anchor():
-    original, sources = word_rows((4.630521255, 4.790885628, 'после', 0.2000004), (4.790885628, 4.83475, 'любви', 0.012), (4.83475, 4.854835776, 'Я', 4.1e-06), (4.874921552, 5.055693534, 'хочу', 6.27e-05), (5.115950862, 6.92367069, 'наслаждаться', 0.3046425)), ['ctc', 'interpolated', 'ctc', 'ctc', 'ctc']
-    repaired = pipeline._pipeline_lossless_canonical_words(
-        "после любви Я хочу наслаждаться",
-        original,
-        195.549138322,
-        sources,
-        [
-            alignment_candidate(4.630521255, 4.790885628, 0.2000004),
-            alignment_candidate(4.830976721, 4.951250000, 0.0000661),
-            alignment_candidate(4.834750000, 4.854835776, 0.0000041),
-            alignment_candidate(4.874921552, 5.055693534, 0.0000627),
-            alignment_candidate(5.115950862, 6.923670690, 0.3046425),
-        ],
-    )
-    assert ((repaired[1].start, repaired[1].end) == (4.830976721, 4.95125)) and (repaired[0] == original[0] and repaired[4] == original[4]) and (sources[1] == 'reacquired' and sources[2] == 'interpolated')
-
-
-def test_weak_anchor_cannot_pull_following_sequence():
-    original = word_rows(
-        (0.2, 0.8, "left", 0.9),
-        (0.8, 0.82, "weak", 0.000001),
-        (1.10, 1.35, "one", 0.012),
-        (1.40, 1.70, "two", 0.012),
-        (2.0, 2.5, "right", 0.95),
-    )
-    repaired = pipeline._pipeline_lossless_canonical_words(
-        "left weak one two right",
-        original,
-        3.0,
-        ["ctc", "ctc", "interpolated", "interpolated", "qwen"],
-        [
-            alignment_candidate(0.2, 0.8, 0.9),
-            alignment_candidate(0.81, 0.83, 0.000001),
-            alignment_candidate(1.10, 1.35, 0.4),
-            alignment_candidate(1.40, 1.70, 0.4),
-            alignment_candidate(2.0, 2.5, 0.95, "qwen"),
-        ],
-    )
-    assert ((repaired[2].start, repaired[2].end), (repaired[3].start, repaired[3].end), repaired[4]) == ((1.1, 1.35), (1.4, 1.7), original[4])
-
-
-def test_unreliable_span_is_local_and_reliable_anchors_are_exact():
-    original = word_rows(
-        (1.0, 1.4, "a", 0.95),
-        (1.4, 1.42, "b", 0.000001),
-        (1.42, 1.44, "c", 0.012),
-        (2.4, 2.9, "d", 0.9),
-    )
-    repaired = pipeline._pipeline_lossless_canonical_words(
-        "a b c d",
-        original,
-        4.0,
-        ["ctc", "ctc", "interpolated", "qwen"],
-        [
-            alignment_candidate(1.0, 1.4, 0.95),
-            alignment_candidate(1.41, 1.43, 0.000001),
-            {},
-            alignment_candidate(2.4, 2.9, 0.9, "qwen"),
-        ],
-    )
-    assert ((repaired[0], repaired[3]) == (original[0], original[3])) and (all((left.end <= right.start for left, right in zip(repaired, repaired[1:], strict=False))))
-
-
-def test_local_interpolation_gap_also_weights_vowels_not_just_length():
-    original = word_rows(
-        (0.0, 1.0, "anchor", 0.95),
-        (1.0, 1.005, "я", 0.000001),
-        (1.005, 1.008, "тьмы", 0.000001),
-        (10.0, 10.5, "right", 0.9),
-    )
-    repaired = pipeline._pipeline_lossless_canonical_words(
-        "anchor я тьмы right",
-        original,
-        11.0,
-        ["ctc", "interpolated", "interpolated", "qwen"],
-        [
-            alignment_candidate(0.0, 1.0, 0.95),
-            {},
-            {},
-            alignment_candidate(10.0, 10.5, 0.9, "qwen"),
-        ],
-    )
-    assert (repaired[1].start == pytest.approx(1.0)) and (repaired[1].end == pytest.approx(4.0)) and (repaired[2].start == pytest.approx(4.0)) and (repaired[2].end == pytest.approx(10.0))
-
-
-def test_existing_acoustic_candidate_precedes_synthetic_interpolation():
-    original = word_rows(
-        (0.0, 0.5, "left", 0.9),
-        (0.5, 0.7, "candidate", 0.012),
-        (1.5, 2.0, "right", 0.9),
-    )
-    repaired = pipeline._pipeline_lossless_canonical_words(
-        "left candidate right",
-        original,
-        2.5,
-        ["ctc", "interpolated", "ctc"],
-        [alignment_candidate(0.0, 0.5, 0.9), alignment_candidate(0.72, 1.12, 0.02), alignment_candidate(1.5, 2.0, 0.9)],
-    )
-    assert (repaired[1].start, repaired[1].end) == (0.72, 1.12)
-
-
-def test_former_invalid_artifact_conflict_repairs_only_local_span():
-    original = word_rows(
-        (10.0, 10.5, "anchor", 0.9),
-        (10.5, 10.52, "bad", 0.000001),
-        (10.51, 10.53, "local", 0.012),
-        (20.0, 20.5, "fixed", 0.95),
-        (25.0, 25.5, "later", 0.9),
-    )
-    repaired = pipeline._pipeline_lossless_canonical_words(
-        "anchor bad local fixed later",
-        original,
-        30.0,
-        ["ctc", "ctc", "interpolated", "qwen", "ctc"],
-        [
-            alignment_candidate(10.0, 10.5, 0.9),
-            alignment_candidate(10.51, 10.53, 0.000001),
-            {},
-            alignment_candidate(20.0, 20.5, 0.95, "qwen"),
-            alignment_candidate(25.0, 25.5, 0.9),
-        ],
-    )
-    assert ((repaired[0], repaired[3:]) == (original[0], original[3:])) and (pipeline._canonical_timeline_is_publishable(repaired, 30.0))
+    saved = pipeline.read_json(words_path)["words"]
+    assert saved == [pipeline.to_dict(word) for word in words]
 
 
 class Console(StringIO):
@@ -471,8 +266,6 @@ def test_full_pipeline_fresh_supplied_lyrics_flow(monkeypatch, tmp_path, mode):
                         "melodyContour.json": {"frames": []},
                     }
                     pipeline.write_json_atomic(path, payloads[path.name])
-                elif stage == "song-map":
-                    pipeline.write_json_atomic(path, {"duration": 5})
                 else:
                     path.write_bytes(stage.encode())
             return True
@@ -519,7 +312,7 @@ def test_full_pipeline_fresh_supplied_lyrics_flow(monkeypatch, tmp_path, mode):
     stabilizer = Mock(side_effect=lambda frames: frames)
     monkeypatch.setattr(pipeline, "stabilize_pitch", stabilizer)
     syllables, vocal_notes = [Syllable(0, 1, 'hello', 0, 0), Syllable(1, 2, 'world', 1, 1)], [VocalNote(0, 1, 60, word_index=0, syllable_index=0)]
-    patch_attrs(monkeypatch, pipeline, align_syllables=lambda *_: syllables, build_vocal_notes=lambda *_args, **_kwargs: vocal_notes, build_game_notes=lambda notes, *_args, **_kwargs: notes)
+    patch_attrs(monkeypatch, pipeline, align_syllables=lambda *_: syllables, build_vocal_notes=lambda *_args, **_kwargs: vocal_notes)
     progress, lyrics_path = Mock(), None
     if mode == "explicit":
         lyrics_path = tmp_path / "explicit.txt"
@@ -540,9 +333,11 @@ def test_full_pipeline_fresh_supplied_lyrics_flow(monkeypatch, tmp_path, mode):
         raises(error, lambda: pipeline.KaraokePipeline(cfg, engines).run(request))
         return
     result = pipeline.KaraokePipeline(cfg, engines).run(request)
-    assert result.manifest_path.exists() and (output / "lyricsSync.json").exists() and (output / "vocalNotes.json").exists()
-    assert not (output / "songMap.json").exists() and not (output / "game.mid").exists()
-    assert pipeline.read_json(result.manifest_path)["outputs"]["vocalNotes"] == "vocalNotes.json"
+    assert result.manifest_path == output / "lyricsSync.json"
+    assert {path.name for path in output.iterdir()} == {"instrumental.flac", "vocals.flac", "lyricsSync.json"}
+    lyrics_sync = pipeline.read_json(result.manifest_path)
+    assert lyrics_sync["bpm"] == 120 and lyrics_sync["key"] == "C"
+    assert all("notes" in word for word in lyrics_sync["words"])
     assert progress.call_args.args[:2] == ('complete', 100)
     if mode == "omnizart":
         assert any(report.stage == "pitch-primary" for report in result.reports)

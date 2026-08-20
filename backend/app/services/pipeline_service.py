@@ -51,7 +51,9 @@ _NOISY_PROGRESS_RE = re.compile(
 # запускать одну и ту же песню повторно, пока предыдущий запуск не завершился
 _active_jobs: dict[str, threading.Thread] = {}
 _active_jobs_lock = threading.RLock()
-_processing_slot = threading.Lock()
+_processing_condition = threading.Condition(threading.RLock())
+_processing_queue: list[str] = []
+_processing_owner: str | None = None
 _cancelled_jobs: set[str] = set()
 _progress_runtime: dict[str, dict] = {}
 _progress_runtime_lock = threading.RLock()
@@ -439,6 +441,8 @@ def cancel_processing(song_id: str) -> bool:
     with _active_jobs_lock:
         if not is_processing(song_id): return False
         _cancelled_jobs.add(song_id)
+    with _processing_condition:
+        _processing_condition.notify_all()
     _update_progress(
         song_id, status=models.SongStatus.CANCELLING, step_label="Cancelling")
     return True
@@ -576,9 +580,27 @@ def _ensure_cover_extracted(source_path: str, out_dir: Path) -> None:
 
 
 def _acquire_processing_slot(song_id: str) -> bool:
-    while True:
-        if _processing_slot.acquire(timeout=0.2): return True
-        if _is_cancelled(song_id): return False
+    global _processing_owner
+    with _processing_condition:
+        if song_id not in _processing_queue:
+            _processing_queue.append(song_id)
+        while _processing_owner is not None or _processing_queue[0] != song_id:
+            if _is_cancelled(song_id):
+                _processing_queue.remove(song_id)
+                _processing_condition.notify_all()
+                return False
+            _processing_condition.wait(timeout=0.2)
+        _processing_queue.pop(0)
+        _processing_owner = song_id
+        return True
+
+
+def _release_processing_slot(song_id: str) -> None:
+    global _processing_owner
+    with _processing_condition:
+        if _processing_owner == song_id:
+            _processing_owner = None
+        _processing_condition.notify_all()
 
 
 def _run_job(song_id: str) -> None:
@@ -644,7 +666,7 @@ def _run_job(song_id: str) -> None:
             lyrics_path.unlink(missing_ok=True)
         _stop_progress_heartbeat(heartbeat_stop, heartbeat_thread)
         _end_runtime_progress(song_id)
-        if slot_acquired: _processing_slot.release()
+        if slot_acquired: _release_processing_slot(song_id)
 
     if not _is_cancelled(song_id):
         try:
@@ -657,19 +679,13 @@ def _run_job(song_id: str) -> None:
             )
 
 
-_LEGACY_GENERATED_FILES = (
-    "pitchRaw.json", "pitch.json", "syllables.json", "reference.json", "acousticNotes.json",
-    "melodyContour.json", "vocal.mid", "game.mid", "songMap.json", "songInfo.json",
-    "difficulty.json", "quality.json", "diagnostics.json", "alignmentDebug.json",
-)
-
-
 def _clear_generated_results(out_dir: Path) -> None:
     cache = StageCache(out_dir / ".ai-cache")
-    cache.invalidate("pitch", "derivation", "song-map")
-    for relative in _LEGACY_GENERATED_FILES:
-        with contextlib.suppress(OSError): (out_dir / relative).unlink(missing_ok=True)
-    with contextlib.suppress(OSError): (out_dir / "acousticNotes.json").unlink(missing_ok=True)
+    cache.invalidate("pitch", "derivation")
+    for pattern in ("*.json", "*.mid", "*.midi"):
+        for path in out_dir.glob(pattern):
+            if path.name == "lyricsSync.json": continue
+            with contextlib.suppress(OSError): path.unlink(missing_ok=True)
 
 
 def _run_reprocessing(song_id: str) -> None:
@@ -700,8 +716,6 @@ def _read_optional_generated_json(path: Path, default):
 
 def _apply_generated_metadata(song: models.Song, out_dir: Path) -> None:
     music = _read_optional_generated_json(out_dir / "lyricsSync.json", {})
-    if not isinstance(music, dict) or not any(key in music for key in ("bpm", "key")):
-        music = _read_optional_generated_json(out_dir / "music.json", {})
     if isinstance(music, dict):
         key_user_edited = getattr(
             song, "key_user_edited", getattr(
@@ -715,16 +729,16 @@ def _apply_generated_metadata(song: models.Song, out_dir: Path) -> None:
         detected_bpm = music.get("bpm")
         if detected_bpm is not None and not tempo_user_edited: song.tempo_override = int(round(float(detected_bpm)))
 
-    reference = _read_optional_generated_json(out_dir / "vocalNotes.json", {})
-    if not isinstance(reference, dict) or not isinstance(reference.get("notes"), list):
-        reference = _read_optional_generated_json(out_dir / "reference.json", {})
-    if isinstance(reference, dict): reference = reference.get("notes", [])
-    if not isinstance(reference, list): return
+    words = music.get("words", []) if isinstance(music, dict) else []
+    if not isinstance(words, list): return
     try:
         midi = []
-        for note in reference:
-            if not isinstance(note, dict): continue
-            if (value := note.get("midi_note", note.get("midi"))) is not None: midi.append(int(value))
+        for word in words:
+            notes = word.get("notes", []) if isinstance(word, dict) else []
+            if not isinstance(notes, list): continue
+            for note in notes:
+                if isinstance(note, dict) and (value := note.get("note")) is not None:
+                    midi.append(int(value))
     except (TypeError, ValueError):
         return
     if not midi: return
@@ -733,11 +747,19 @@ def _apply_generated_metadata(song: models.Song, out_dir: Path) -> None:
 
 
 def _finalize_success(song_id: str, out_dir: Path) -> None:
+    retired_source: Path | None = None
     with _song_session(song_id) as (db, song):
         if song is None: return
         song.output_dir = str(out_dir)
         _apply_source_metadata(song)
         _apply_generated_metadata(song, out_dir)
+        instrumental = (out_dir / "instrumental.flac").resolve()
+        source_value = getattr(song, "source_path", None)
+        if source_value and instrumental.is_file():
+            source = song_service.resolve_source_path(song).resolve()
+            if source.parent == out_dir.resolve() and source.name.startswith("source."):
+                song.source_path = str(instrumental)
+                retired_source = source
         song.status = models.SongStatus.DONE
         song.optimized = False
         song.progress_percent = 100.0
@@ -746,4 +768,6 @@ def _finalize_success(song_id: str, out_dir: Path) -> None:
         commit(db)
         revision_cache.invalidate(song)
 
+    if retired_source is not None:
+        with contextlib.suppress(OSError): retired_source.unlink(missing_ok=True)
     with contextlib.suppress(Exception): cache_service.optimize_song_files(song_id)

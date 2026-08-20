@@ -71,7 +71,7 @@ export function marqueeHitIds({ notes, x1, y1, x2, y2, keyboardWidth, zoom, rowH
     .filter((note) => {
       const noteLeft = keyboardWidth + Number(note.start || 0) * zoom;
       const noteRight = keyboardWidth + Number(note.end || 0) * zoom;
-      const noteTop = (maxMidi - Number(note.midi_note || 0)) * rowHeight + 1;
+      const noteTop = (maxMidi - Number(note.note || 0)) * rowHeight + 1;
       const noteBottom = noteTop + Math.max(8, rowHeight - 2);
       return noteRight >= left && noteLeft <= right && noteBottom >= top && noteTop <= bottom;
     })

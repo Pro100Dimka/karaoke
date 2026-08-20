@@ -6,6 +6,30 @@ const mocks = vi.hoisted(() => ({ detectMidiFromAnalyser: vi.fn() }));
 vi.mock("../src/pages/Karaoke/utils/pitch", () => ({
   detectMidiFromAnalyser: mocks.detectMidiFromAnalyser
 }));
+vi.mock("../src/services/microphoneCapture", () => ({
+  acquireMicrophone: async (preferredDeviceId) => {
+    const base = {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false
+    };
+    const selected = preferredDeviceId && preferredDeviceId !== "default";
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: selected ? { ...base, deviceId: { exact: preferredDeviceId } } : base
+      });
+      if (!stream && selected) stream = await navigator.mediaDevices.getUserMedia({ audio: base });
+    } catch (error) {
+      if (!selected) throw error;
+      stream = await navigator.mediaDevices.getUserMedia({ audio: base });
+    }
+    return {
+      stream,
+      release: async () => stream?.getTracks?.().forEach((track) => track.stop())
+    };
+  }
+}));
 let usePitchDetection;
 let frames;
 beforeEach(async () => {

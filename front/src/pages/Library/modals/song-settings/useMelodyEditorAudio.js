@@ -116,7 +116,7 @@ export default function useMelodyEditorAudio({ notes, playbackRate, volumes }) {
         melodyGainRef.current = gain;
       }
       oscillatorRef.current.frequency.setTargetAtTime(
-        midiFrequency(active.midi_note),
+        midiFrequency(active.note),
         context.currentTime,
         0.01
       );

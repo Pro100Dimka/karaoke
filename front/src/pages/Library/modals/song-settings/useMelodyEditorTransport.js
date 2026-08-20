@@ -249,7 +249,7 @@ export default function useMelodyEditorTransport({
       else {
         stopOscillator();
         const active = noteAtTime(value);
-        if (auditionWhenStopped && active) auditionNote(active.midi_note, 180);
+        if (auditionWhenStopped && active) auditionNote(active.note, 180);
       }
     },
     [
@@ -286,7 +286,7 @@ export default function useMelodyEditorTransport({
         `${keyboardWidth + next * zoom}px`
       );
       if (playheadDragRef.current) playheadDragRef.current.value = next;
-      const midi = noteAtTime(next)?.midi_note ?? null;
+      const midi = noteAtTime(next)?.note ?? null;
       if (midi !== playheadPreviewMidiRef.current) {
         playheadPreviewMidiRef.current = midi;
         stopOscillator();

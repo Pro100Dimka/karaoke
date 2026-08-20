@@ -42,6 +42,8 @@ _WEB_LYRICS_HOSTS = {
     "tekst-pesni.online",
     "911pesni.ru",
     "zaycev.net",
+    "you-words.ru",
+    "teksti-pesen.com",
 }
 _WEB_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AAndDVoice/2026.35",
@@ -901,7 +903,12 @@ def _metadata_search_plan(
 
     def add_query(value: str) -> None:
         query = _plain_search_query(value)
-        if query and query.casefold() not in technical_names: candidates.append(LyricsSearchCandidate(query=query, track=query))
+        if not query or query.casefold() in technical_names: return
+        candidates.append(LyricsSearchCandidate(query=query, track=query))
+        alias_words = {"моя": "my", "мой": "my", "леди": "lady"}
+        alias = " ".join(alias_words.get(word.casefold(), word) for word in query.split())
+        if alias.casefold() != query.casefold():
+            candidates.append(LyricsSearchCandidate(query=alias, track=alias))
 
     def add_identity(artist: str, title: str) -> None:
         clean_artist, clean_title = _plain_search_query(str(artist or '').strip()), _plain_search_query(_strip_filename_copy_suffix(str(title or '').strip()))

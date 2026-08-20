@@ -12,7 +12,8 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
   const [microphoneEffects, setMicrophoneEffects] = useState(() => ({
     reverb: 0,
     echo: 0,
-    delay: 0
+    delay: 0,
+    noise_suppression: 0.35
   }));
   const [audioDriver, setAudioDriver] = useState("auto");
   const [directOutputDeviceId, setDirectOutputDeviceId] = useState("");
@@ -44,6 +45,7 @@ export default function useMicrophoneSettings({ audioSettings, onError }) {
         setAudioDriver(normalized.audioDriver);
         setMonitoringEnabled(normalized.monitoringEnabled);
         setDirectOutputDeviceId(normalized.outputDeviceId);
+        setMicrophoneEffects((current) => normalizeAudioEffects({ ...current, ...event.detail }));
       };
       globalThis.addEventListener("audio-settings-changed", syncAudioSettings);
       return () => globalThis.removeEventListener("audio-settings-changed", syncAudioSettings);

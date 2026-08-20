@@ -66,7 +66,7 @@ export function getSongActions({
         [FolderOpen, translateSaved("Открыть папку"), "outline", () => onOpenFolder(song), 14],
         isReady && [
           RotateCcw,
-          translateSaved("Переобработать MIDI"),
+          translateSaved("Переобработать мелодию"),
           "outline",
           () => onReprocess(song),
           14

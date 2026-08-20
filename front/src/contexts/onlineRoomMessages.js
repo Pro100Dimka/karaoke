@@ -42,7 +42,12 @@ export function createOnlineRoomMessageHandler(options) {
   } = options;
 
   const publishRoomCommand = (command, eventPrefix) => {
-    setRoomCommand({ ...command, __eventId: createEventId(eventPrefix) });
+    setRoomCommand({
+      ...command,
+      __serverSentAt: Number(eventPrefix) || null,
+      __receivedServerAt: client.serverNow?.() ?? Date.now(),
+      __eventId: createEventId(eventPrefix)
+    });
   };
   const senderIsHost = (message) =>
     participantsRef.current?.some(

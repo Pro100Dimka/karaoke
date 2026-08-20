@@ -64,7 +64,7 @@ def main():
     }
     output = (
         ROOT
-        / "build/ai-runtime-benchmark/provider-coverage"
+        / "generated/benchmarks/provider-coverage"
         / f"{args.model}-{args.backend}-{args.precision}.json"
     )
     write_json(output, result); profile_path.unlink(missing_ok=True); print(json.dumps(result, indent=2))

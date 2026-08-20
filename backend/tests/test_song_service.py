@@ -175,7 +175,7 @@ def test_list_get_update_and_delete_song(monkeypatch, tmp_path):
     output = library / "song"
     source = output / "source.wav"
     monkeypatch.setattr(song_service.config, "SONG_OUTPUT_DIR", library)
-    domain, delete = SimpleNamespace(output_dir=str(output), source_path=str(source), slug='song'), Mock()
+    domain, delete = SimpleNamespace(id='song-id', output_dir=str(output), source_path=str(source), slug='song'), Mock()
     monkeypatch.setattr(song_service, "delete_with_files", delete)
     song_service.delete_song(database, domain)
     delete.assert_called_with(database, domain, (output.resolve(),))

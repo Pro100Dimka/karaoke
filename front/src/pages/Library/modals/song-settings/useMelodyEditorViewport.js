@@ -151,14 +151,14 @@ export default function useMelodyEditorViewport({
       const viewportCenterY = shell.scrollTop + shell.clientHeight / 2;
       const anchorNote = notes.length
         ? notes.reduce((best, note) => {
-            const y = (maxMidi - note.midi_note + 0.5) * verticalZoom;
+            const y = (maxMidi - note.note + 0.5) * verticalZoom;
             const distance = Math.abs(y - viewportCenterY);
             return !best || distance < best.distance ? { note, distance } : best;
           }, null)
         : null;
       const nextTop = anchorNote
         ? anchoredVerticalScrollToNote({
-            noteMidi: anchorNote.note.midi_note,
+            noteMidi: anchorNote.note.note,
             maxMidi,
             oldRowHeight: verticalZoom,
             newRowHeight: next,

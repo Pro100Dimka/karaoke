@@ -22,7 +22,7 @@ from ..syllables import VOWELS
 from ..utils.env import env_flag
 from ..utils.numeric import clamp, clamp01
 from .base import Aligner, Transcriber
-from .ctc_alignment import CTC_ALIGNMENT_VERSION, CTCWordAligner, _language_code
+from .ctc_alignment import CTC_ALIGNMENT_VERSION, CTCWordAligner
 from .device import fallback_torch_device, select_torch_device
 
 _TOKEN = re.compile(r"\w+(?:[’'-]\w+)*", re.UNICODE)
@@ -151,7 +151,7 @@ def _words_from_items(items) -> list[Word]:
 
 
 ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v15-newline-phrase-join"
-LONG_TEXT_ALIGNMENT_VERSION = "v60-vowel-weighted-interpolation"
+LONG_TEXT_ALIGNMENT_VERSION = "v61-full-song-vocal-ctc"
 SEGMENTED_ALIGNMENT_VERSION = "v2-ctc-fallback-tier"
 FALLBACK_WORD_CONFIDENCE = 0.012
 
@@ -2028,7 +2028,9 @@ def _anchor_preserving_canonical_alignment(
                 )
 
         final = [word for word in result if word is not None]
-        assert len(final) == len(tokens)
+        if len(final) != len(tokens):
+            rejection_reasons["incomplete_gap_fill"] += len(tokens) - len(final)
+            return None, None
         last_built_sources = [str(kind or "interpolated") for kind in source_kind]
         return final, None
 
@@ -2911,16 +2913,8 @@ class Qwen3ForcedAligner(Aligner):
         self.model_name = model
         self._model = None
         self._device = "cpu"
-        self._global_asr_segments: list[tuple[float, float, str]] = []
         self._ctc = CTCWordAligner.from_environment()
         self.last_alignment_diagnostics: dict[str, object] = {}
-
-    def set_global_asr_segments(self, segments) -> None:
-        self._global_asr_segments = [
-            (float(start), float(end), str(text))
-            for start, end, text in (segments or [])
-            if text and float(end) > float(start)
-        ]
 
     def _load(self):
         try:
@@ -3227,475 +3221,104 @@ class Qwen3ForcedAligner(Aligner):
         return enforce_segmented_timing_safety(output, ordered, duration_sec)
 
     def align_long_text(self, audio, text, language):
-        groups = _group_lyric_text(text)
-        anchor_windows = _asr_line_anchor_windows(groups, self._global_asr_segments)
-        if len(groups) <= 1: return self.align(audio, text, language)
-
-        try:
-            import soundfile as sf
-        except ImportError as exc:
-            raise EngineUnavailableError("soundfile is required for long-text alignment") from exc
+        tokens = tokenize(text)
+        if not tokens:
+            raise InvalidArtifactError("Long-text alignment requires lyrics")
 
         source, sample_rate = load_mono(audio, 16000)
         duration_sec = len(source) / sample_rate
-        anchor_windows, anchor_window_sources = _complete_line_anchor_windows(
-            groups, anchor_windows, source, sample_rate, duration_sec
-        )
-        output: list[Word] = []
-        cursor, ctc_lines, ctc_attempted, ctc_failure_reason = 0.0, [None] * len(groups), False, ''
+        if duration_sec <= 0.04:
+            raise InvalidArtifactError("Vocal track is too short for alignment")
+
+        ctc_available = False
+        ctc_failure = ""
         try:
-            ctc_attempted = self._ctc.available_for(language, text)
-            if ctc_attempted:
-                ctc_lines = self._ctc.align_lines(audio, groups, language, anchor_windows)
-            else:
-                code = _language_code(language, text)
-                resource = self._ctc.last_resource_diagnostics.get(code, {})
-                ctc_failure_reason = str(resource.get("reason", "CTC model unavailable"))
+            ctc_available = self._ctc.available_for(language, text)
+            if ctc_available:
+                with profile_operation("inference.ctc_full_song_alignment"):
+                    result = self._ctc.align_window(source, sample_rate, tokens, language)
+                if result is None:
+                    ctc_failure = "CTC returned no words"
+                else:
+                    words = [
+                        Word(
+                            float(word.start),
+                            float(word.end),
+                            token,
+                            float(word.confidence),
+                            index,
+                        )
+                        for index, (word, token) in enumerate(
+                            zip(result.words, tokens, strict=True)
+                        )
+                    ]
+                    if not _canonical_words_match(words, tokens):
+                        ctc_failure = "CTC violated canonical lyric invariant"
+                    elif _pathological_alignment(words, duration_sec):
+                        ctc_failure = "CTC returned invalid timestamps"
+                    else:
+                        self.last_alignment_diagnostics = {
+                            "alignment_mode": "full-song-ctc",
+                            "audio_reference": "vocals",
+                            "ctc_version": CTC_ALIGNMENT_VERSION,
+                            "word_count": len(words),
+                            "confidence": float(result.confidence),
+                            "interpolated_words": 0,
+                        }
+                        return words
         except (EngineUnavailableError, InvalidArtifactError, RuntimeError, ValueError) as exc:
-            ctc_lines = [None] * len(groups)
-            ctc_failure_reason = f"{type(exc).__name__}: {exc}"
+            ctc_failure = f"{type(exc).__name__}: {exc}"
         finally:
             self._ctc.release()
 
-        require_ctc, ctc_language = env_flag('KARAOKE_AI_REQUIRE_CTC'), _language_code(language, text)
-        if require_ctc and ctc_language in {"ru", "uk"} and not ctc_attempted:
-            resource = getattr(self._ctc, "last_resource_diagnostics", {}).get(ctc_language, {})
-            checked = resource.get("checked", []) if isinstance(resource, dict) else []
-            checked_text = "; ".join(
-                f"{item.get('path', '?')} [{item.get('reason', '?')}]"
-                for item in checked[:8]
-                if isinstance(item, dict)
-            )
+        require_ctc = env_flag("KARAOKE_AI_REQUIRE_CTC")
+        if require_ctc:
             raise EngineUnavailableError(
-                "Acoustic CTC word alignment is required but its local model is unavailable. "
-                f"Language={ctc_language}; reason={ctc_failure_reason or resource.get('reason', 'not found')}. "
-                f"Checked: {checked_text or 'no candidate paths'}. "
-                "Run scripts\\install-ai-models.bat once or set KARAOKE_AI_CTC_RU_MODEL/"
-                "KARAOKE_AI_CTC_UK_MODEL to the model directory."
+                "Full-song acoustic CTC alignment failed: "
+                f"{ctc_failure or 'CTC model unavailable'}"
             )
 
-        ctc_accepted, qwen_fallback_lines = sum(1 for item in ctc_lines if item is not None), 0
-        self.last_alignment_diagnostics = {
-            "ctc_version": CTC_ALIGNMENT_VERSION,
-            "ctc_attempted": ctc_attempted,
-            "ctc_lines": ctc_accepted,
-            "total_lines": len(groups),
-            "qwen_fallback_lines": 0,
-            "ctc_failure_reason": ctc_failure_reason,
-            "ctc_resource": dict(getattr(self._ctc, "last_resource_diagnostics", {}) or {}),
-            "ctc_pass": dict(getattr(self._ctc, "last_alignment_diagnostics", {}) or {}),
-            "qwen_model_resident": self._model is not None,
-        }
-        normalized_lines: dict[str, list[int]] = {}
-        for line_index, group in enumerate(groups):
-            key = " ".join(_normalized_match_tokens(group))
-            if key: normalized_lines.setdefault(key, []).append(line_index)
-        repeated_lines = [
-            {"text": groups[indexes[0]], "line_indices": indexes}
-            for indexes in normalized_lines.values()
-            if len(indexes) > 1
-        ]
-        self.last_alignment_diagnostics["repeated_lyric_lines"] = repeated_lines
-        self.last_alignment_diagnostics["line_anchor_windows"] = [
-            {
-                "line": int(line_index),
-                "start": float(window[0]),
-                "end": float(window[1]),
-                "score": float(window[2]),
-                "source": anchor_window_sources.get(line_index, "unknown"),
-                "text": groups[line_index],
-            }
-            for line_index, window in sorted(anchor_windows.items())
-            if 0 <= line_index < len(groups)
-        ]
-
-        qwen_evidence_words: list[Word] = []
-        group_token_offsets: list[int] = []
-        _token_offset = 0
-        for _group in groups:
-            group_token_offsets.append(_token_offset)
-            _token_offset += len(tokenize(_group))
-
-        with tempfile.TemporaryDirectory(prefix="karaoke-align-lines-") as temp_dir:
-            root = Path(temp_dir)
-
-            qwen_jobs: list[dict[str, object]] = []
-            for line_index, line in enumerate(groups):
-                tokens = tokenize(line)
-                ctc_line = ctc_lines[line_index] if line_index < len(ctc_lines) else None
-                if not tokens or (
-                    ctc_line is not None
-                    and len(ctc_line.words) == len(tokens)
-                    and _canonical_words_match(list(ctc_line.words), tokens)
-                ):
-                    continue
-                timing = _line_timing_profile(tokens)
-                anchor = anchor_windows.get(line_index)
-                if anchor is not None:
-                    a0, a1, _score = anchor
-                    search_start = max(0.0, a0 - timing["anchor_lead"])
-                    search_end = min(
-                        duration_sec,
-                        max(a1 + timing["context"], search_start + timing["minimum_window"]),
-                    )
-                else:
-                    prev_end = 0.0
-                    next_start = duration_sec
-                    for j in range(line_index - 1, -1, -1):
-                        if j in anchor_windows:
-                            prev_end = float(anchor_windows[j][1])
-                            break
-                    for j in range(line_index + 1, len(groups)):
-                        if j in anchor_windows:
-                            next_start = float(anchor_windows[j][0])
-                            break
-                    search_start = max(0.0, prev_end - timing["cursor_backtrack"])
-                    search_end = min(
-                        duration_sec,
-                        max(
-                            search_start + timing["minimum_window"],
-                            min(
-                                next_start + timing["context"],
-                                search_start + timing["search_window"],
-                            ),
-                        ),
-                    )
-                if search_end <= search_start + timing["min_word_duration"]: continue
-                path, _ = _write_alignment_clip(
-                    sf, root, f"qwen-line-{line_index:03d}.wav", source, sample_rate, search_start, search_end
+        try:
+            with profile_operation("inference.qwen_full_song_alignment"):
+                raw = self._run_alignment(
+                    audio=str(audio),
+                    text=text,
+                    language=resolve_alignment_language(text, language),
                 )
-                qwen_jobs.append(
-                    {
-                        "line": line_index,
-                        "path": path,
-                        "text": line,
-                        "start": search_start,
-                        "end": search_end,
-                    }
-                )
+        except Exception as exc:
+            raise InvalidArtifactError(
+                "Full-song vocal alignment failed: "
+                f"{ctc_failure or 'CTC model unavailable'}; "
+                f"Qwen: {type(exc).__name__}: {exc}"
+            ) from exc
 
-            qwen_candidate_map: dict[int, list[Word]] = {}
-            qwen_window_map: dict[int, tuple[float, float]] = {}
-            batch_size = _adaptive_qwen_batch_size(
-                [float(j["end"]) - float(j["start"]) for j in qwen_jobs]
-            )
-            for job, result in _batched_alignment_results(self._align_many, qwen_jobs, batch_size, language):
-                idx = int(job["line"])
-                qwen_candidate_map[idx] = list(result or [])
-                qwen_window_map[idx] = (float(job["start"]), float(job["end"]))
-
-            context_jobs: list[dict[str, object]] = []
-            for line_index, line in enumerate(groups):
-                tokens = tokenize(line)
-                ctc_line = ctc_lines[line_index] if line_index < len(ctc_lines) else None
-                ctc_complete = bool(
-                    ctc_line is not None
-                    and len(ctc_line.words) == len(tokens)
-                    and _canonical_words_match(list(ctc_line.words), tokens)
-                )
-                if not tokens or ctc_complete or qwen_candidate_map.get(line_index): continue
-                lo = max(0, line_index - 1)
-                hi = min(len(groups), line_index + 2)
-                block_lines = groups[lo:hi]
-                block_tokens = [tokenize(x) for x in block_lines]
-                if not all(block_tokens): continue
-                starts = []
-                ends = []
-                for j in range(lo, hi):
-                    if j in anchor_windows:
-                        starts.append(float(anchor_windows[j][0]))
-                        ends.append(float(anchor_windows[j][1]))
-                if not starts: continue
-                block_start = max(
-                    0.0, min(starts) - _line_timing_profile(tokenize(groups[lo]))["anchor_lead"]
-                )
-                block_end = min(
-                    duration_sec,
-                    max(ends) + _line_timing_profile(tokenize(groups[hi - 1]))["context"],
-                )
-                path, _ = _write_alignment_clip(
-                    sf, root, f"qwen-context-{line_index:03d}.wav", source, sample_rate, block_start, block_end
-                )
-                context_jobs.append(
-                    {
-                        "line": line_index,
-                        "lo": lo,
-                        "tokens": block_tokens,
-                        "path": path,
-                        "text": "\n".join(block_lines),
-                        "start": block_start,
-                        "end": block_end,
-                    }
-                )
-            context_recovered = 0
-            for job, result in _batched_alignment_results(self._align_many, context_jobs, batch_size, language):
-                flat, idx = list(result or []), int(job["line"])
-                offset = sum(len(x) for x in job["tokens"][: idx - int(job["lo"])])
-                count = len(job["tokens"][idx - int(job["lo"])])
-                piece = flat[offset : offset + count]
-                if len(piece) == count and _canonical_words_match(piece, tokenize(groups[idx])):
-                    qwen_candidate_map[idx] = piece
-                    qwen_window_map[idx] = (float(job["start"]), float(job["end"]))
-                    context_recovered += count
-
-            self.last_alignment_diagnostics["qwen_batch_size"] = batch_size
-            self.last_alignment_diagnostics["qwen_batched_lines"] = len(qwen_jobs)
-            self.last_alignment_diagnostics["context_recovered_words"] = context_recovered
-
-            qwen_evidence_words = [
-                Word(float(qwen_window_map[line][0]) + float(word.start), float(qwen_window_map[line][0]) + float(word.end), word.text, float(word.confidence), int(group_token_offsets[line]) + index)
-                for line, words in qwen_candidate_map.items() for index, word in enumerate(words)
-            ]
-            self.last_alignment_diagnostics["pure_qwen_evidence_words"] = len(qwen_evidence_words)
-
-            for line_index, line in enumerate(groups):
-                tokens = tokenize(line)
-                if not tokens: continue
-                if cursor >= duration_sec - 0.08: break
-
-                timing = _line_timing_profile(tokens)
-                ctc_line = ctc_lines[line_index] if line_index < len(ctc_lines) else None
-                if ctc_line is not None:
-                    ctc_words = list(ctc_line.words)
-                    if (
-                        len(ctc_words) == len(tokens)
-                        and _canonical_words_match(ctc_words, tokens)
-                        and ctc_words[0].start >= cursor - timing["cursor_backtrack"]
-                        and all(
-                            right.start >= left.end - timing["overlap_slack"]
-                            for left, right in zip(ctc_words, ctc_words[1:], strict=False)
-                        )
-                    ):
-                        _extend_words(output, ctc_words)
-                        cursor = ctc_words[-1].end
-                        continue
-
-                qwen_fallback_lines += 1
-                anchor = anchor_windows.get(line_index)
-                if anchor is not None:
-                    anchor_start, anchor_end, anchor_score = anchor
-                    search_start = max(
-                        0.0,
-                        cursor - timing["cursor_backtrack"],
-                        anchor_start - timing["anchor_lead"],
-                    )
-                    search_end = min(
-                        duration_sec,
-                        max(
-                            anchor_end + timing["context"],
-                            search_start + timing["minimum_window"],
-                        ),
-                    )
-                else:
-                    search_start = max(0.0, cursor - timing["cursor_backtrack"] * 1.8)
-                    search_end = min(
-                        duration_sec,
-                        search_start + timing["search_window"],
-                    )
-                if search_end <= search_start + 0.10: break
-
-                path, line_audio = _write_alignment_clip(
-                    sf, root, f"line-{line_index:03d}.wav", source, sample_rate, search_start, search_end
-                )
-                local_cursor = max(0.0, cursor - search_start)
-
-                candidate: list[Word] = list(qwen_candidate_map.get(line_index, []))
-                local_words: list[Word] = []
-                candidate_window = qwen_window_map.get(line_index)
-                if candidate_window is not None:
-                    precomputed_start, precomputed_end = candidate_window
-                    shift = precomputed_start - search_start
-                    candidate_start = precomputed_start + candidate[0].start if candidate else 0.0
-                    candidate_end = precomputed_start + candidate[-1].end if candidate else 0.0
-                    candidate_span = candidate[-1].end - candidate[0].start if candidate else 0.0
-                    valid = bool(candidate) and (
-                        not _pathological_alignment(candidate, precomputed_end - precomputed_start)
-                        and candidate_start >= cursor - timing["cursor_backtrack"]
-                        and candidate_end > cursor + timing["min_word_duration"]
-                        and candidate_end <= precomputed_end + timing["candidate_slack"]
-                        and candidate_span >= timing["minimum"]
-                        and len(candidate) == len(tokens)
-                        and _canonical_words_match(candidate, tokens)
-                        and float(candidate[0].start) + shift >= 0.0
-                    )
-                    if valid:
-                        local_words = [
-                            Word(w.start + shift, w.end + shift, w.text, w.confidence, w.index)
-                            for w in candidate
-                        ]
-                if not local_words:
-                    fallback_candidate = None
-                    if candidate and candidate_window is not None:
-                        precomputed_start, _precomputed_end = candidate_window
-                        shift = precomputed_start - search_start
-                        if float(candidate[0].start) + shift >= 0.0:
-                            fallback_candidate = [
-                                Word(w.start + shift, w.end + shift, w.text, w.confidence, w.index)
-                                for w in candidate
-                            ]
-                    local_words = _long_text_line_fallback(
-                        tokens,
-                        search_end - search_start,
-                        candidate_words=fallback_candidate,
-                        minimum_start=local_cursor,
-                        audio=line_audio,
-                        sample_rate=sample_rate,
-                    )
-
-                line_words: list[Word] = []
-                for word in local_words:
-                    start = search_start + float(word.start)
-                    end = search_start + float(word.end)
-                    line_words.append(Word(start, end, word.text, word.confidence, 0))
-
-                line_span = line_words[-1].end - line_words[0].start if line_words else 0.0
-                invalid_line = (
-                    len(line_words) != len(tokens)
-                    or line_span < timing["minimum"]
-                    or (line_words and line_words[0].start < cursor - timing["cursor_backtrack"])
-                    or any(
-                        right.start < left.end - timing["overlap_slack"]
-                        for left, right in zip(line_words, line_words[1:], strict=False)
-                    )
-                )
-                if invalid_line:
-                    local_words = _long_text_line_fallback(
-                        tokens,
-                        search_end - search_start,
-                        candidate_words=candidate or None,
-                        minimum_start=local_cursor,
-                        audio=line_audio,
-                        sample_rate=sample_rate,
-                    )
-                    line_words = [
-                        Word(search_start + word.start, search_start + word.end, word.text, 0.03, 0)
-                        for word in local_words
-                    ]
-
-                safe_line: list[Word] = []
-                for word in line_words:
-                    word_start = (
-                        max(cursor, float(word.start))
-                        if not safe_line
-                        else max(safe_line[-1].end, float(word.start))
-                    )
-                    word_end = min(duration_sec, float(word.end))
-                    if word_end <= word_start + timing["min_word_duration"]:
-                        safe_line = []
-                        break
-                    safe_line.append(Word(word_start, word_end, word.text, word.confidence, 0))
-
-                if len(safe_line) != len(tokens): break
-                _extend_words(output, safe_line)
-                cursor = safe_line[-1].end
-
-        self.last_alignment_diagnostics["qwen_fallback_lines"] = qwen_fallback_lines
-        self.last_alignment_diagnostics["ctc_words"] = sum(
-            len(item.words) for item in ctc_lines if item is not None
+        item = _unwrap_single_result(raw)
+        raw_words = _words_from_items(
+            item if isinstance(item, (list, tuple)) else _unwrap_items(item)
         )
-        self.last_alignment_diagnostics["published_words_before_guard"] = len(output)
-
-        canonical_tokens, raw_ctc_word_count = [token for group in groups for token in tokenize(group)], int(self.last_alignment_diagnostics.get('ctc_words', 0) or 0)
-        if raw_ctc_word_count > 0 or not _canonical_words_match(output, canonical_tokens):
-            merge_candidates: list[tuple[str, list[Word], dict[str, int], dict[str, object]]] = []
-            merge_attempts: dict[str, dict[str, object]] = {}
-
-            atomic_words, atomic_stats = _atomic_line_acoustic_alignment(
-                groups, ctc_lines, output, source, sample_rate, duration_sec, anchor_windows
+        words = [
+            Word(
+                float(word.start),
+                float(word.end),
+                token,
+                float(word.confidence),
+                index,
             )
-            _record_merge_candidate(
-                "atomic", atomic_words, atomic_stats, canonical_tokens, merge_attempts, merge_candidates
-            )
+            for index, (word, token) in enumerate(zip(raw_words, tokens, strict=False))
+        ]
+        if not _canonical_words_match(words, tokens):
+            raise InvalidArtifactError("Full-song aligner violated canonical lyric invariant")
+        if _pathological_alignment(words, duration_sec):
+            raise InvalidArtifactError("Full-song aligner returned invalid timestamps")
 
-            anchor_debug: dict[str, object] = {}
-            anchor_words, anchor_stats = _anchor_preserving_canonical_alignment(
-                groups, ctc_lines, qwen_evidence_words, source, sample_rate, duration_sec,
-                anchor_windows, debug_out=anchor_debug,
-            )
-            _record_merge_candidate(
-                "partial-anchors-strict", anchor_words, anchor_stats, canonical_tokens,
-                merge_attempts, merge_candidates, anchor_debug,
-            )
-
-            relaxed_candidate_debug: dict[str, object] = {}
-            relaxed_candidate_words, relaxed_candidate_stats = _anchor_preserving_canonical_alignment(
-                groups, ctc_lines, qwen_evidence_words, source, sample_rate, duration_sec,
-                anchor_windows, relaxed_gap_fit=True, debug_out=relaxed_candidate_debug,
-            )
-            _record_merge_candidate(
-                "partial-anchors-v2", relaxed_candidate_words, relaxed_candidate_stats, canonical_tokens,
-                merge_attempts, merge_candidates, relaxed_candidate_debug,
-            )
-
-            line_words, line_stats = _line_aware_canonical_alignment(
-                groups, ctc_lines, output, source, sample_rate, duration_sec, anchor_windows
-            )
-            _record_merge_candidate(
-                "line-aware", line_words, line_stats, canonical_tokens, merge_attempts, merge_candidates
-            )
-
-            self.last_alignment_diagnostics["alignment_merge_attempts"] = merge_attempts
-
-            if merge_candidates:
-                merge_mode, merged, merge_stats, merge_debug = max(
-                    merge_candidates, key=_merge_evidence_rank
-                )
-                _publish_merge_diagnostics(
-                    self.last_alignment_diagnostics, merge_mode, merged, merge_stats, merge_debug,
-                    merge_candidates, raw_ctc_word_count,
-                )
-                return merged
-
-            self.last_alignment_diagnostics["final_guard_v2"] = {
-                "used": False,
-                "reason": str(
-                    relaxed_candidate_debug.get("failure_reason") or "canonical_merge_failed"
-                ),
-                "stage": str(relaxed_candidate_debug.get("failure_stage") or "unknown"),
-            }
-
-            lossless = _lossless_canonical_alignment(
-                groups, source, sample_rate, duration_sec, anchor_windows
-            )
-            if _canonical_words_match(lossless, canonical_tokens):
-                self.last_alignment_diagnostics["alignment_merge_mode"] = "emergency-baseline"
-                self.last_alignment_diagnostics["emergency_fallback"] = {
-                    "reason": str(
-                        relaxed_candidate_debug.get("failure_reason") or "canonical_merge_failed"
-                    ),
-                    "stage": str(
-                        relaxed_candidate_debug.get("failure_stage") or "partial-anchors-v2"
-                    ),
-                    "published_acoustic_words_before_fallback": int(raw_ctc_word_count),
-                }
-                return lossless
-
-        if not output:
-            active = _activity_quantile_times(source, sample_rate)
-            if not active: active = [0.0, duration_sec]
-            active_start = max(0.0, float(active[0]))
-            active_end = min(duration_sec, max(active_start + 0.08, float(active[-1])))
-            all_tokens = [token for group in groups for token in tokenize(group)]
-            if all_tokens and active_end > active_start + 0.04:
-                weights = [max(1, len(token)) for token in all_tokens]
-                total_weight = max(1, sum(weights))
-                cursor_weight = 0
-                fallback: list[Word] = []
-                span = active_end - active_start
-                for index, (token, weight) in enumerate(zip(all_tokens, weights, strict=True)):
-                    start = active_start + span * (cursor_weight / total_weight)
-                    cursor_weight += weight
-                    end = active_start + span * (cursor_weight / total_weight)
-                    fallback.append(Word(start, end, token, 0.01, index))
-                if fallback and fallback[-1].end > fallback[0].start: return fallback
-            if all_tokens and duration_sec > 0.08:
-                return [
-                    Word(word.start, word.end, word.text, 0.005, word.index)
-                    for word in _proportional_words(all_tokens, duration_sec)
-                ]
-            raise InvalidArtifactError("Long-text forced aligner returned no timed words")
-        if not _canonical_words_match(output, canonical_tokens): raise InvalidArtifactError("Long-text aligner violated canonical lyric invariant")
-        return output
+        self.last_alignment_diagnostics = {
+            "alignment_mode": "full-song-qwen",
+            "audio_reference": "vocals",
+            "word_count": len(words),
+            "interpolated_words": 0,
+            "ctc_failure_reason": ctc_failure or "CTC model unavailable",
+        }
+        return words
 
 
 def _low_confidence_regions(words: list[Word]) -> list[dict[str, object]]:

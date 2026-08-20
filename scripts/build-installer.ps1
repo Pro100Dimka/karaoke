@@ -12,7 +12,7 @@ Set-StrictMode -Version 2
 $Root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $Backend = Join-Path $Root "backend"
 $Frontend = Join-Path $Root "front"
-$Build = Join-Path $Root "build"
+$Build = Join-Path $Root "generated\build"
 $Downloads = Join-Path $Root "downloads"
 $Release = Join-Path $Root "release"
 

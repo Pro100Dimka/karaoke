@@ -208,8 +208,9 @@ def test_configure_monitoring_routes_auto_and_asio(monkeypatch):
         "gain": 4,
         "reverb": 0.0,
         "echo": 0.0,
-        "delay": 0.0,
-        "wasapi_exclusive": False,
+            "delay": 0.0,
+            "noise_suppression": 0.35,
+            "wasapi_exclusive": False,
     }
 
     devices[2]["max_output_channels"] = 0

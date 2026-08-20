@@ -227,7 +227,7 @@ describe("audio settings source", () => {
     const removeEvent = vi.spyOn(globalThis, "removeEventListener");
     const { result, unmount } = renderHook(() => useAudioSettingsSource());
     await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
-    verify([getUserMedia.mock.calls, 'toEqual', [ [ { audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1, deviceId: { exact: "mic" } } } ], [ { audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } } ] ]]);
+    verify([getUserMedia.mock.calls, 'toEqual', [ [ { audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1, sampleRate: { ideal: 44_100 }, sampleSize: { ideal: 24 }, deviceId: { exact: "mic" } } } ], [ { audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1, sampleRate: { ideal: 44_100 }, sampleSize: { ideal: 24 } } } ] ]]);
     verify([mocks.prepareSpeakingMeter, 'toHaveBeenCalled'], [mocks.startSpeakingMeter, 'toHaveBeenCalledWith', "local", stream]);
     expect(result.current.options.browserInputs).toContainEqual({ value: "mic", label: "Mic" });
     verify([result.current.options.browserInputs.find( ({ value }) => value === "unnamed-mic" ).label, 'toBe', translateSaved("Микрофон")]);
@@ -305,7 +305,7 @@ describe("audio settings source", () => {
     });
     const failed = renderHook(() => useAudioSettingsSource());
     await waitFor(() => expect(failedMedia).toHaveBeenCalledOnce());
-    verify([failedMedia.mock.calls, 'toEqual', [ [ { audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } } ] ]]);
+    verify([failedMedia.mock.calls, 'toEqual', [ [ { audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1, sampleRate: { ideal: 44_100 }, sampleSize: { ideal: 24 } } } ] ]]);
     window.dispatchEvent(new Event("pointerdown"));
     await waitFor(() => expect(failedMedia.mock.calls.length).toBeGreaterThan(1)
     );
@@ -360,7 +360,7 @@ describe("audio settings source", () => {
     act(() => hook.result.current.updatePreference("monitorInputDeviceId", "new-mic")
     );
     await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
-    verify([getUserMedia, 'toHaveBeenLastCalledWith', { audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1, deviceId: { exact: "new-mic" } } }]);
+    verify([getUserMedia, 'toHaveBeenLastCalledWith', { audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1, sampleRate: { ideal: 44_100 }, sampleSize: { ideal: 24 }, deviceId: { exact: "new-mic" } } }]);
     expect(firstTrack.stop).toHaveBeenCalled();
     hook.unmount();
     expect(secondTrack.stop).toHaveBeenCalled();
@@ -377,9 +377,10 @@ describe("audio settings source", () => {
     const hook = renderHook(() => useAudioSettingsSource());
     await waitFor(() => expect(getUserMedia).toHaveBeenCalledOnce());
     act(() => hook.result.current.updatePreference("monitorInputDeviceId", "new-mic"));
+    expect(getUserMedia).toHaveBeenCalledOnce();
+    await act(async () => resolveFirst({ getTracks: () => [firstTrack] }));
     await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
     await act(async () => resolveSecond({ getTracks: () => [secondTrack] }));
-    await act(async () => resolveFirst({ getTracks: () => [firstTrack] }));
     verify([firstTrack.stop, 'toHaveBeenCalled'], [secondTrack.stop, 'not.toHaveBeenCalled']);
     hook.unmount();
     expect(secondTrack.stop).toHaveBeenCalled();

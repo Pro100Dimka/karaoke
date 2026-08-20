@@ -138,7 +138,7 @@ RECORDINGS_DIRNAME = "recordings"  # подпапка внутри Song/<slug>/ 
 LOGS_DIRNAME = "logs"  # подпапка внутри Song/<slug>/ для логов обработки
 TRUSTED_LYRICS_FILENAME = "trusted_lyrics.txt"
 
-_DEFAULT_LOG_DIR = DATA_DIR / "logs" if IS_FROZEN else PROJECT_ROOT / "logs"
+_DEFAULT_LOG_DIR = DATA_DIR / "generated" / "logs" if IS_FROZEN else PROJECT_ROOT / "generated" / "logs"
 APP_LOG_DIR = _env_path("SONGAPP_LOG_DIR", _DEFAULT_LOG_DIR)
 
 # Source uploads and generated artefacts live in one owned library. The original
@@ -161,7 +161,7 @@ def _saved_song_library_roots(current: Path) -> set[Path]:
 
 
 SONG_LIBRARY_ROOTS = _saved_song_library_roots(SONG_OUTPUT_DIR)
-_DEFAULT_CACHE_DIR = DATA_DIR / "cache"
+_DEFAULT_CACHE_DIR = DATA_DIR / "generated" / "temp" if IS_FROZEN else PROJECT_ROOT / "generated" / "temp"
 CACHE_DIR = _env_path("SONGAPP_CACHE_DIR", _saved_path("cache_folder", _DEFAULT_CACHE_DIR))
 UPLOAD_TEMP_DIR = CACHE_DIR / "uploads"
 

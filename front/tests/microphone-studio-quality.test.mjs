@@ -37,7 +37,7 @@ describe("studio microphone quality", () => {
     const rawTrack = { kind: "audio", stop: vi.fn() };
     const rawStream = { getTracks: () => [rawTrack] };
     const graph = createStudioMicrophoneGraph(rawStream);
-    verify([graph.stream, 'toBe', destination.stream], [created.filters.map((node) => node.type), 'toEqual', ["highpass", "highshelf"]], [created.compressors, 'toHaveLength', 1], [created.shapers, 'toHaveLength', 1], [processedTrack.contentHint, 'toBe', "music"]);
+    verify([graph.stream, 'toBe', destination.stream], [created.filters.map((node) => node.type), 'toEqual', ["highpass", "highshelf"]], [created.compressors, 'toHaveLength', 1], [created.shapers, 'toHaveLength', 2], [processedTrack.contentHint, 'toBe', "music"]);
     await graph.close();
     expect(rawTrack.stop).toHaveBeenCalledOnce();
     expect(processedTrack.stop).toHaveBeenCalledOnce();

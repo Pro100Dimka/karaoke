@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
@@ -7,6 +7,7 @@ import { usePolling } from "../../hooks/usePolling";
 import { translateSaved } from "../../i18n/runtime";
 import { POLLING_INTERVALS } from "../../runtime-config";
 import { getErrorMessage } from "../../utils/errors";
+import { flattenLyricsNotes } from "../../utils/lyrics-sync";
 import useAudioOutputRouting from "./hooks/useAudioOutputRouting";
 import useFullscreen from "./hooks/useFullscreen";
 import useKaraokeControls from "./hooks/useKaraokeControls";
@@ -22,13 +23,9 @@ import useMicrophoneSettings from "./hooks/useMicrophoneSettings";
 import usePitchDetection from "./hooks/usePitchDetection";
 import KaraokeLoadState from "./karaoke-load-state";
 import KaraokeView from "./karaoke-view";
-import { getYouTubeVideoId, lyricsSyncLines, normalizeNotes, transposeKey } from "./utils/data";
+import { getYouTubeVideoId, transposeKey } from "./utils/data";
 import { formatCompactKey } from "./utils/display";
-import { getLyricDisplayState } from "./utils/lyrics";
 import { getMicrophoneLevel } from "./utils/transport";
-
-// Lyric highlighting uses only word start/end values from lyricsSync.json.
-// songMap remains independent and supplies melody notes to the editor/player.
 
 export default function Karaoke({ onOpenAppSettings }) {
   const onlineRoom = useOnlineRoom();
@@ -81,11 +78,6 @@ export default function Karaoke({ onOpenAppSettings }) {
     effectPreset,
     setEffectPreset
   } = useKaraokePreferences();
-  // ВАЖНО: keyShift сейчас смещает только отображаемую линию мелодии
-  // (транспонирует ноты на экране), а НЕ реальный питч аудио — честный
-  // питч-шифтинг воспроизведения в браузере требует DSP-библиотеки вроде
-  // SoundTouch-js/Rubberband и здесь не реализован. Если нужен настоящий
-  // сдвиг тональности звука — это отдельная задача.
   const [recordingSessionId, setRecordingSessionId] = useState(null);
   const [analysisRecordingId, setAnalysisRecordingId] = useState(null);
   const analysisRecordingIdRef = useRef(null);
@@ -147,9 +139,10 @@ export default function Karaoke({ onOpenAppSettings }) {
     directOutputDeviceId,
     setDirectOutputDeviceId,
     monitoringEnabled,
-    setMonitoringEnabled
+    setMonitoringEnabled,
+    monitorInputDeviceId
   } = microphoneSettings;
-  const { monitorInputDeviceId, updateMicrophone } = microphoneSettings;
+  const { updateMicrophone } = microphoneSettings;
   useAudioOutputRouting({
     audioDriver,
     audioSettings,
@@ -167,17 +160,8 @@ export default function Karaoke({ onOpenAppSettings }) {
     setDuration(0);
   }, [song?.id]);
 
-  const songMap = result?.song_map;
-  const lyrics = useMemo(() => lyricsSyncLines(result?.lyrics_sync), [result?.lyrics_sync]);
-  const notes = useMemo(
-    () =>
-      normalizeNotes(
-        Array.isArray(songMap?.display_notes)
-          ? songMap.display_notes
-          : (result?.game_notes ?? result?.reference_notes)
-      ),
-    [songMap, result]
-  );
+  const lyricsSync = result?.lyrics_sync;
+  const notes = flattenLyricsNotes(lyricsSync);
   const { startMelodyGuide, updateMelodyGuide, silenceMelodyGuide } = useMelodyGuide({
     notes,
     volume: melodyVolume,
@@ -186,11 +170,7 @@ export default function Karaoke({ onOpenAppSettings }) {
   });
   const youTubeVideoId = getYouTubeVideoId(song?.video_url);
 
-  // Lyrics and melody use the same instrumental clock.  A former global
-  // "anchor" delay shifted every word by up to half a second even when the
-  // word-level alignment was already correct for the current song.
   const lyricTime = currentTime;
-  const { currentLine, upcomingLine, nextLine } = getLyricDisplayState(lyrics, lyricTime);
   const { sendYouTubeCommand, syncSecondaryMedia } = useKaraokeMediaSync({
     currentTimeRef,
     instrumentalRef,
@@ -212,7 +192,7 @@ export default function Karaoke({ onOpenAppSettings }) {
     vocalsRef,
     youTubeClipRef
   });
-  const { sungMidi, isPitchDetected, isPitchAttacking, pitchRestProgress } = usePitchDetection({
+  const { sungMidi, isPitchDetected } = usePitchDetection({
     isPlaying,
     monitorInputDeviceId,
     monitoringEnabled
@@ -299,12 +279,10 @@ export default function Karaoke({ onOpenAppSettings }) {
       />
     );
   }
-  const rawBaseTempo = Number(result?.music?.tempo ?? song.tempo_override);
-  const baseTempo = Number.isFinite(rawBaseTempo) && rawBaseTempo > 0 ? rawBaseTempo : 120;
+  const rawBaseTempo = Number(lyricsSync?.bpm);
+  const baseTempo = rawBaseTempo;
   const currentTempo = Math.max(1, Math.round(baseTempo * speed));
-  const compactKey = formatCompactKey(
-    transposeKey(song.key_override || result?.music?.key || "C", keyShift)
-  );
+  const compactKey = formatCompactKey(transposeKey(lyricsSync.key, keyShift));
   const changeTempo = (delta) => {
     const nextTempo = Math.max(1, currentTempo + delta);
     setSpeed(Math.max(0.5, Math.min(1.5, nextTempo / baseTempo)));
@@ -386,18 +364,12 @@ export default function Karaoke({ onOpenAppSettings }) {
         toggleRadio
       }}
       performanceProps={{
-        currentLine,
         currentTime: lyricTime,
-        isPitchAttacking,
         isPitchDetected,
         isPlaying,
         keyShift,
-        lyrics,
-        nextLine,
-        noteRangeMax: song.note_range_max,
-        noteRangeMin: song.note_range_min,
+        lyricsSync,
         notes,
-        pitchRestProgress,
         sceneBlackout,
         sceneIntroVisible,
         sceneIntro: {
@@ -411,9 +383,7 @@ export default function Karaoke({ onOpenAppSettings }) {
         songId: song.id,
         showLyrics,
         showNotes,
-        songTitle: song.title,
-        sungMidi,
-        upcomingLine
+        sungMidi
       }}
       consoleProps={{
         song,

@@ -477,8 +477,15 @@ describe("API domains", () => {
   test("uploads, exports and creates audio URLs with exact song package contracts", async () => {
     const { songsApi } = await importDomain("songs");
     const song = new Blob(["song"]);
-    await songsApi.addSong(song, "Title");
+    fetch.mockResolvedValueOnce(response({ body: '{"title":"Tagged","artist":"Artist"}' }));
+    deepEqual([await songsApi.inspectSongIdentity(song), { title: "Tagged", artist: "Artist" }]);
     let [url, options] = lastCall();
+    deepEqual([
+      [pathOf(url), options.method, await options.body.get("file").text()],
+      ["/songs/identity", "POST", "song"]
+    ]);
+    await songsApi.addSong(song, "Title");
+    [url, options] = lastCall();
     deepEqual([
       [
         pathOf(url),
@@ -490,7 +497,7 @@ describe("API domains", () => {
     ]);
     await songsApi.addSong(song);
     [, options] = lastCall();
-    deepEqual([[...options.body.keys()], ["file"]]);
+    deepEqual([[...options.body.keys()], ["file", "artist"]]);
     equal([
       pathOf(songsApi.getAudioTrackUrl("a/b", "lead vocal")),
       "/songs/a%2Fb/audio/lead%20vocal"

@@ -32,6 +32,7 @@ known-first-party = ["app"]
 
 [tool.mypy]
 python_version = "3.12"
+cache_dir = "../generated/tests/mypy"
 ignore_missing_imports = true
 warn_unused_ignores = true
 exclude = ["AI/"]
@@ -43,3 +44,13 @@ ignore_errors = true
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+cache_dir = "../generated/tests/pytest"
+
+[tool.coverage.run]
+data_file = "../generated/coverage/backend/.coverage"
+
+[tool.coverage.html]
+directory = "../generated/coverage/backend/html"
+
+[tool.coverage.json]
+output = "../generated/coverage/backend/coverage.json"

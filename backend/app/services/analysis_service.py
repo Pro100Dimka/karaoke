@@ -27,7 +27,7 @@ class ReferenceIndex:
             notes=tuple(
                 (
                     float(note.get("end", note.get("start", 0.0))),
-                    _to_midi(note.get("midi") or note.get("pitch") or note.get("note")),
+                    _to_midi(note.get("note")),
                 )
                 for note in normalized
             ),

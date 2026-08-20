@@ -3,12 +3,18 @@ import { normalizeSong, normalizeSongList } from "../normalizers";
 
 export const songsApi = {
   listSongs: () => request("/songs").then(normalizeSongList),
+  inspectSongIdentity: (file) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request("/songs/identity", { method: "POST", body: form, timeoutMs: 5 * 60_000 });
+  },
   getSong: (id) => request(`/songs/${encodePathSegment(id)}`).then(normalizeSong),
   getSongRevision: (id) => request(`/songs/${encodePathSegment(id)}/revision`),
-  addSong: (file, title) => {
+  addSong: (file, title, artist = "") => {
     const form = new FormData();
     form.append("file", file);
     if (title) form.append("title", title);
+    form.append("artist", artist);
     return request("/songs", { method: "POST", body: form, timeoutMs: 5 * 60_000 });
   },
   updateSong: (id, patch) =>

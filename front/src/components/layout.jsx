@@ -1,17 +1,17 @@
 import { Cog, Radio, Volume2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useRadio } from "../contexts/radio";
 import { useOnlineRoomNavigation } from "../hooks/useOnlineRoomNavigation";
 import { useI18n } from "../i18n";
-import SongSettings from "../pages/Library/modals/song-settings";
-import Settings from "../pages/Settings";
 import { IconButton } from "../theme/ui";
 import cx from "../utils/cx";
 import TitleBar from "./TitleBar";
 import AppRoutes from "./routes";
 
 const ROUTES = { karaoke: "/karaoke" };
+const SongSettings = lazy(() => import("../pages/Library/modals/song-settings"));
+const Settings = lazy(() => import("../pages/Settings"));
 
 function AppFloatingControls({ onOpenSettings }) {
   const { t } = useI18n();
@@ -113,12 +113,20 @@ export default function AppLayout() {
           <AppRoutes onOpenAppSettings={openSettings} onOpenSongSettings={openSongSettings} />
         </main>
         {!isKaraoke && !isEditor && <AppFloatingControls onOpenSettings={openSettings} />}
-        {songSettingsId && <SongSettings songId={songSettingsId} onClose={closeSongSettings} />}
+        {songSettingsId && (
+          <Suspense fallback={null}>
+            <SongSettings songId={songSettingsId} onClose={closeSongSettings} />
+          </Suspense>
+        )}
         <div
           className={`app-route-blackout ${routeBlackout ? "is-visible" : ""}`}
           aria-hidden="true"
         />
-        {isSettingsOpen && <Settings isOpen onClose={closeSettings} />}
+        {isSettingsOpen && (
+          <Suspense fallback={null}>
+            <Settings isOpen onClose={closeSettings} />
+          </Suspense>
+        )}
       </div>
     </div>
   );

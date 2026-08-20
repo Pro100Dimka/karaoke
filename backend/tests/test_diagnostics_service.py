@@ -72,7 +72,7 @@ def test_versions_reports_components_and_missing_packages(monkeypatch):
 
     monkeypatch.setattr(importlib.metadata, "version", package_version)
     result = diagnostics_service.versions()
-    assert ((result['components']['torch'], result['components']['ffmpeg'], result['components']['qwen_asr']) == ('2.8', 'ffmpeg version 8', '1')) and (result['components']['mido'] is None) and (result['components']['ai_build'])
+    assert ((result['components']['torch'], result['components']['ffmpeg'], result['components']['qwen_asr']) == ('2.8', 'ffmpeg version 8', '1')) and result['components']['ai_build']
 
 
 def test_versions_tolerates_ai_and_ffmpeg_failures(monkeypatch):

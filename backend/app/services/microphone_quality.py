@@ -27,7 +27,7 @@ class StudioMicrophoneProcessor:
         self._hp_r = math.exp(-2.0 * math.pi * 70.0 / self.sample_rate)
         self._tone_alpha = 1.0 - math.exp(-2.0 * math.pi * 2200.0 / self.sample_rate)
 
-    def process(self, data, gain: float = 1.0):
+    def process(self, data, gain: float = 1.0, noise_suppression: float = 0.35):
         source = np.asarray(data, dtype=np.float32)
         if source.ndim == 1: source = source[:, None]
         if source.size == 0: return source.copy()
@@ -56,6 +56,8 @@ class StudioMicrophoneProcessor:
             target_gate = 0.5 + 0.5 * (rms - threshold) / (threshold * 1.2)
         else:
             target_gate = 1.0
+        strength = clamp01(noise_suppression)
+        target_gate = 1.0 + (target_gate - 1.0) * strength
         gate_speed = 0.55 if target_gate > self._gate_gain else 0.18
         self._gate_gain += (target_gate - self._gate_gain) * gate_speed
         y *= self._gate_gain

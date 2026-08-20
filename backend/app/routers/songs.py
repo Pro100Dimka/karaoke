@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 import config
 import models
 import schemas
+from AI.lyrics_document import validate_lyrics_document
 from app.api.dependencies import SongDependency
 from app.api.errors import http_error
 from app.services import (
@@ -107,6 +108,7 @@ def _song_error_status(detail: str) -> int: return 404 if detail == 'Song not fo
 async def add_song(
     file: UploadFile = File(...),
     title: str | None = Form(default=None),
+    artist: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     config.UPLOAD_TEMP_DIR.mkdir(parents=True, exist_ok=True)
@@ -130,11 +132,45 @@ async def add_song(
             title or "",
             file.filename or "song",
             temporary_path,
+            artist,
         )
     except HTTPException:
         raise
     except song_service.SongAlreadyExistsError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        temporary_path.unlink(missing_ok=True)
+
+
+@router.post("/identity", response_model=schemas.SongIdentityOut)
+async def inspect_song_identity(file: UploadFile = File(...)):
+    config.UPLOAD_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    suffix = Path(file.filename or "song").suffix or ".tmp"
+    with tempfile.NamedTemporaryFile(
+        prefix=".song-identity-",
+        suffix=suffix,
+        dir=config.UPLOAD_TEMP_DIR,
+        delete=False,
+    ) as temporary:
+        temporary_path = Path(temporary.name)
+    try:
+        await save_upload_limited(
+            file,
+            temporary_path,
+            limit=config.MAX_AUDIO_UPLOAD_BYTES,
+            chunk_size=config.UPLOAD_CHUNK_SIZE,
+            too_large_message="Audio file is too large",
+        )
+        artist, title = song_service._read_source_identity(
+            temporary_path,
+            file.filename or "song",
+            "",
+        )
+        return schemas.SongIdentityOut(title=title, artist=artist)
+    except HTTPException:
+        raise
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     finally:
@@ -255,10 +291,13 @@ def process_song(song: SongDependency, db: Session = Depends(get_db)):
 
 @router.post("/{song_id}/reprocess", response_model=schemas.ProcessingStatusOut, status_code=202)
 def reprocess_melody(song: SongDependency, db: Session = Depends(get_db)):
-    """Clear prior generated files and rebuild the song with the current MIDI algorithm."""
+    """Clear prior generated files and rebuild the vocal melody from vocals.flac."""
     if recording_service.has_active_recording(song.id): raise HTTPException(status_code=409, detail="Нельзя переобрабатывать песню во время записи")
     if not song.output_dir or song.status != models.SongStatus.DONE: raise HTTPException(status_code=409, detail="Сначала завершите полную обработку песни")
     if pipeline_service.is_processing(song.id): raise HTTPException(status_code=409, detail="Обработка уже запущена")
+    source = Path(song.source_path)
+    if source.name == "instrumental.flac" and source.parent == song_service.resolve_output_dir(song):
+        raise HTTPException(status_code=409, detail="Исходная запись удалена после обработки; добавьте песню заново")
 
     _queue_song_job(
         db,
@@ -330,10 +369,10 @@ def get_audio_track(track: str, song: SongDependency):
 def get_song_editor(song: SongDependency):
     if song.status != models.SongStatus.DONE: raise HTTPException(status_code=409, detail="Песня ещё не обработана")
     with http_error(ValueError, 409):
-        song_map, backup_exists = song_editor_service.load_editor(
+        lyrics_sync, backup_exists = song_editor_service.load_editor(
             song_service.resolve_output_dir(song)
         )
-    return schemas.SongEditorOut(song_map=song_map, ai_backup_exists=backup_exists)
+    return schemas.SongEditorOut(lyrics_sync=lyrics_sync, ai_backup_exists=backup_exists)
 
 
 @router.put("/{song_id}/editor", response_model=schemas.SongEditorOut)
@@ -342,22 +381,22 @@ def save_song_editor(
 ):
     if song.status != models.SongStatus.DONE: raise HTTPException(status_code=409, detail="Песня ещё не обработана")
     with http_error(ValueError, 400), song_service.song_content_lock(song.id), song_service.library_write_lock():
-        song_map = song_editor_service.save_editor(
+        lyrics_sync = song_editor_service.save_editor(
             song_service.resolve_output_dir(song), payload.notes
         )
         song_package_service.invalidate_content_revision(song)
     _touch_song(db, song, refresh=True)
-    return schemas.SongEditorOut(song_map=song_map, ai_backup_exists=True)
+    return schemas.SongEditorOut(lyrics_sync=lyrics_sync, ai_backup_exists=True)
 
 
 @router.post("/{song_id}/editor/reset", response_model=schemas.SongEditorOut)
 def reset_song_editor(song: SongDependency, db: Session = Depends(get_db)):
     if song.status != models.SongStatus.DONE: raise HTTPException(status_code=409, detail="Песня ещё не обработана")
     with http_error(ValueError, 409), song_service.song_content_lock(song.id), song_service.library_write_lock():
-        song_map = song_editor_service.reset_editor(song_service.resolve_output_dir(song))
+        lyrics_sync = song_editor_service.reset_editor(song_service.resolve_output_dir(song))
         song_package_service.invalidate_content_revision(song)
     _touch_song(db, song, refresh=False)
-    return schemas.SongEditorOut(song_map=song_map, ai_backup_exists=True)
+    return schemas.SongEditorOut(lyrics_sync=lyrics_sync, ai_backup_exists=False)
 
 
 @router.get("/{song_id}/result", response_model=schemas.SongResultOut)
@@ -371,17 +410,7 @@ def get_result(song: SongDependency, response: Response):
     response.headers["Pragma"] = "no-cache"
     return schemas.SongResultOut(
         song=schemas.SongOut.model_validate(song),
-        music={key: lyrics_sync.get(key) for key in ("bpm", "key", "duration")},
-        reference_notes=ai_bridge.get_reference_notes(out_dir),
-        game_notes=ai_bridge.get_game_notes(out_dir),
-        syllables=ai_bridge.get_syllables(out_dir),
         lyrics_sync=lyrics_sync,
-        karaoke_timeline=ai_bridge.get_karaoke_timeline(out_dir),
-        song_map=read_json(out_dir / "songMap.json"),
-        difficulty=read_json(out_dir / "difficulty.json"),
-        structure=read_json(out_dir / "structure.json"),
-        breaths=read_json(out_dir / "breaths.json"),
-        manifest=read_json(out_dir / "manifest.json"),
     )
 
 
@@ -396,8 +425,23 @@ def update_lyrics(body: schemas.LyricsUpdate, song: SongDependency):
         lyrics = reconcile_lyric_words([line.model_dump() for line in body.lyrics])
         current = read_json(lyrics_path, default={}) or {}
         trusted_text = "\n".join(str(line.get("text") or "").strip() for line in lyrics).strip()
-        words = [dict(word, index=index) for index, word in enumerate(word for line in lyrics for word in line.get("words", []))]
-        write_json(lyrics_path, {**current, "text": trusted_text, "words": words, "edited": True})
+        previous = current.get("words", []) if isinstance(current, dict) else []
+        words = []
+        for index, source in enumerate(
+            word for line in lyrics for word in line.get("words", [])
+        ):
+            word = dict(source)
+            word["text"] = str(word.pop("word", word.get("text", ""))).strip()
+            old = previous[index] if index < len(previous) else {}
+            same_interval = (
+                isinstance(old, dict)
+                and old.get("start") == word.get("start")
+                and old.get("end") == word.get("end")
+            )
+            word["notes"] = [dict(note) for note in old.get("notes", [])] if same_interval else []
+            words.append(word)
+        updated = {**current, "text": trusted_text, "words": words, "edited": True}
+        write_json(lyrics_path, validate_lyrics_document(updated))
     except (OSError, TypeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=f"Could not save lyrics: {exc}") from exc
     return {"status": "saved"}

@@ -21,7 +21,7 @@ from app.services.microphone_quality import MonitorEffectsChain, StudioMicrophon
 _running = True
 _level = {"rms_db": -120.0, "clipping": False, "silent": True}
 _live_lock = threading.Lock()
-_live_params = {"reverb": 0.0, "echo": 0.0, "delay": 0.0}
+_live_params = {"reverb": 0.0, "echo": 0.0, "delay": 0.0, "noise_suppression": 0.35}
 
 
 def _stream_candidates(options: dict) -> list[dict]:
@@ -61,13 +61,13 @@ def _read_live_updates() -> None:
             except json.JSONDecodeError:
                 continue
             with _live_lock:
-                for key in ("reverb", "echo", "delay"):
+                for key in ("reverb", "echo", "delay", "noise_suppression"):
                     if key in update: _live_params[key] = float(update[key])
     except Exception:
         return
 
 
-def _audio_callback(gain: float, restart_requested: threading.Event, glitches: list[float], sample_rate: float = 48_000):
+def _audio_callback(gain: float, restart_requested: threading.Event, glitches: list[float], sample_rate: float = 44_100):
     quality, effects = StudioMicrophoneProcessor(sample_rate, 1), MonitorEffectsChain(sample_rate)
     def callback(indata, outdata, _frames, _time_info, status):
         if status:
@@ -75,8 +75,14 @@ def _audio_callback(gain: float, restart_requested: threading.Event, glitches: l
             glitches.append(now)
             while glitches and glitches[0] < now - 2.0: glitches.pop(0)
             if len(glitches) >= 3: restart_requested.set()
-        with _live_lock: reverb, echo, delay = _live_params["reverb"], _live_params["echo"], _live_params["delay"]
-        processed = quality.process(indata[:, :1], gain)[:, 0]
+        with _live_lock:
+            reverb, echo, delay, noise_suppression = (
+                _live_params["reverb"],
+                _live_params["echo"],
+                _live_params["delay"],
+                _live_params.get("noise_suppression", 0.35),
+            )
+        processed = quality.process(indata[:, :1], gain, noise_suppression)[:, 0]
         processed = effects.process(processed, reverb, echo, delay)
         outdata.fill(0)
         for channel in range(outdata.shape[1]): outdata[:, channel] = processed
@@ -101,6 +107,7 @@ def main() -> int:
         _live_params["reverb"] = float(options.get("reverb", 0.0))
         _live_params["echo"] = float(options.get("echo", 0.0))
         _live_params["delay"] = float(options.get("delay", 0.0))
+        _live_params["noise_suppression"] = float(options.get("noise_suppression", 0.35))
     threading.Thread(target=_read_live_updates, daemon=True).start()
 
     restart_requested = threading.Event()

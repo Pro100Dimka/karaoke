@@ -1,4 +1,4 @@
-/* ==================== MIDI EDITOR V7 ==================== */
+/* ==================== MELODY EDITOR V7 ==================== */
 .melody-editor-workspace {
   --editor-keyboard-width: 72px;
   grid-template-rows: 36px minmax(0, 1fr);

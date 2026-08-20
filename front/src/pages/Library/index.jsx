@@ -20,6 +20,7 @@ import LibrarySongCard from "./components/song-card";
 import useLibraryFileImport from "./hooks/useFileImport";
 import useLibraryRoomSync from "./hooks/useRoomSync";
 import useLibrarySongActions from "./hooks/useSongActions";
+import AddSongsModal from "./modals/add-songs";
 import ProcessingModal from "./modals/processing";
 import RecordingsModal from "./modals/recordings";
 import {
@@ -174,9 +175,13 @@ export default function Library({ onOpenSongSettings }) {
     };
   }, [processingStatus, refreshSongs, trackedSongId]);
   const {
+    cancelDraft,
+    confirmDraft,
     importing,
     importFile: handleFileChosen,
-    openFilePicker: handleAddClick
+    openFilePicker: handleAddClick,
+    review,
+    updateDraft
   } = useLibraryFileImport({
     fileInputRef,
     notify,
@@ -388,6 +393,12 @@ export default function Library({ onOpenSongSettings }) {
           setAnalysisRecordingId(recording.id);
         }}
         onDelete={handleDeleteRecording}
+      />
+      <AddSongsModal
+        review={review}
+        onCancel={cancelDraft}
+        onConfirm={confirmDraft}
+        onUpdate={updateDraft}
       />
       {analysisRecordingId && (
         <PerformanceAnalysisModal

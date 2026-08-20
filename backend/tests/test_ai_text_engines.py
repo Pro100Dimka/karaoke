@@ -171,8 +171,6 @@ def test_adaptive_batch_size(monkeypatch, configured, free_gb, longest, expected
 def test_forced_aligner_setup_load_and_direct_align(monkeypatch, tmp_path):
     monkeypatch.setattr(text.CTCWordAligner, "from_environment", lambda: object())
     aligner = text.Qwen3ForcedAligner("model")
-    aligner.set_global_asr_segments([(0, 1, "one"), (1, 1, "bad"), (2, 3, "")])
-    assert aligner._global_asr_segments == [(0, 1, "one")]
     monkeypatch.setitem(sys.modules, "qwen_asr", None)
     raises(EngineUnavailableError, lambda: aligner._load())
 
@@ -242,251 +240,123 @@ def test_align_segments_rebuilds_invalid_plausible_fallback(monkeypatch):
     assert ([word.text for word in result] == ['one', 'two']) and (result[-1].end - result[0].start >= text._minimum_sung_phrase_duration(['one', 'two']))
 
 
-def test_align_long_text_single_missing_dependency_and_required_ctc(monkeypatch):
+def test_align_long_text_uses_exact_full_song_ctc_timestamps(monkeypatch):
     aligner = make_aligner(monkeypatch)
-    monkeypatch.setattr(aligner, "align", lambda *_: [Word(0, 1, "one")])
-    assert aligner.align_long_text("audio", "one", "en")
-    monkeypatch.setattr(text, "_group_lyric_text", lambda _: ["one", "two"])
-    monkeypatch.setitem(sys.modules, "soundfile", None)
-    raises(EngineUnavailableError, lambda: aligner.align_long_text('audio', 'one\ntwo', 'en'))
-
-    ctc_engine = make_ctc_engine(
-        available_for=lambda *_: False,
-        align_lines=Mock(),
-        last_resource_diagnostics={"ru": {"reason": "missing", "checked": []}},
+    patch_attrs(monkeypatch, text, load_mono=lambda *_: (np.ones(1000), 100))
+    direct = alignment_result(
+        (
+            Word(1.123456789, 1.523456789, "wrong", 0.8),
+            Word(3.234567891, 3.834567891, "wrong", 0.7, 1),
+        ),
+        0.75,
     )
-    aligner._ctc = ctc_engine
-    monkeypatch.setitem(sys.modules, "soundfile", SimpleNamespace(write=Mock()))
-    patch_attrs(monkeypatch, text, load_mono=lambda *_: (np.ones(1000), 100), _complete_line_anchor_windows=lambda *_: ({0: (0, 2, 1), 1: (2, 4, 1)}, {0: 'test', 1: 'test'}))
-    monkeypatch.setenv("KARAOKE_AI_REQUIRE_CTC", "1")
-    monkeypatch.setattr(text, "_language_code", lambda *_: "ru")
-    raises(EngineUnavailableError, lambda: aligner.align_long_text('audio', 'one\ntwo', 'ru'), match='required')
-    assert ctc_engine.release.called
-
-
-def test_align_long_text_complete_ctc_and_merge_ranking(monkeypatch):
-    groups = ['one two', 'three four']
-    aligner = setup_long_text(monkeypatch, groups)
-    source = np.ones(1000)
-    patch_attrs(monkeypatch, text, load_mono=lambda *_: (source, 100), _complete_line_anchor_windows=lambda *_: ({0: (0, 3, 1), 1: (3, 7, 1)}, {0: 'test', 1: 'test'}))
-    ctc_lines = [
-        alignment_result((Word(0.5, 1, 'one', 0.9), Word(1, 1.5, 'two', 0.9, 1)), 0.9),
-        alignment_result((Word(4, 4.5, 'three', 0.9), Word(4.5, 5, 'four', 0.9, 1)), 0.9),
-    ]
-    ctc_engine = make_ctc_engine(
-        available_for=lambda *_: True,
-        align_lines=lambda *_: ctc_lines,
-        last_alignment_diagnostics={"ok": True},
-    )
-    aligner._ctc = ctc_engine
-    canonical = [word for line in ctc_lines for word in line.words]
-    patch_attrs(monkeypatch, text, _atomic_line_acoustic_alignment=lambda *_a, **_k: (canonical, {'ctc': 4, 'qwen': 0, 'interpolated': 0}), _anchor_preserving_canonical_alignment=lambda *_a, **_k: (canonical, {'ctc': 3, 'qwen': 0, 'interpolated': 1}), _line_aware_canonical_alignment=lambda *_a, **_k: (canonical, {'ctc': 2, 'qwen': 0, 'interpolated': 2}))
-    result = aligner.align_long_text("audio", "one two\nthree four", "en")
-    assert ([word.text for word in result], aligner.last_alignment_diagnostics['alignment_merge_mode']) == (['one', 'two', 'three', 'four'], 'atomic')
-
-
-def test_align_long_text_qwen_fallback_without_ctc(monkeypatch):
-    groups = ['one two', 'three four']
-    aligner = setup_long_text(monkeypatch, groups)
-    patch_attrs(monkeypatch, text, load_mono=lambda *_: (np.ones(1000), 100), _complete_line_anchor_windows=lambda *_: ({0: (0, 3, 1), 1: (4, 7, 1)}, {0: 'test', 1: 'test'}))
-    ctc_engine = make_ctc_engine(
-        available_for=lambda *_: False,
-        align_lines=Mock(),
-        last_resource_diagnostics={"en": {"reason": "unavailable"}},
-    )
-    aligner._ctc = ctc_engine
-
-    def align_many(_audios, texts, _language):
-        output = []
-        for value in texts:
-            tokens = text.tokenize(value)
-            output.append(
-                [
-                    Word(index * 0.5, (index + 1) * 0.5, token, 0.8, index)
-                    for index, token in enumerate(tokens)
-                ]
-            )
-        return output
-
-    monkeypatch.setattr(aligner, "_align_many", align_many)
-    result = aligner.align_long_text("audio", "one two\nthree four", "en")
-    assert ([word.text for word in result], aligner.last_alignment_diagnostics['qwen_fallback_lines']) == (['one', 'two', 'three', 'four'], 2)
-
-
-def test_align_long_text_uses_neighbor_windows(monkeypatch):
-    groups = ['one two', 'three four', 'five six']
-    aligner = setup_long_text(monkeypatch, groups)
-    patch_attrs(monkeypatch, text, load_mono=lambda *_: (np.ones(1000), 100), _complete_line_anchor_windows=lambda *_: ({0: (0, 2, 1), 2: (7, 9, 1)}, {0: 'test', 2: 'test'}))
-    ctc_lines = [
-        alignment_result((Word(0.5, 1.0, 'one', 0.8),), 0.8),
-        None,
-        None,
-    ]
+    align_window = Mock(return_value=direct)
     aligner._ctc = make_ctc_engine(
         available_for=lambda *_: True,
-        align_lines=lambda *_: ctc_lines,
+        align_window=align_window,
     )
 
-    def align_many(_audios, values, _language): return [[Word(0.45 + index * 0.55, 0.95 + index * 0.55, token, 0.9, index) for index, token in enumerate(text.tokenize(value))] for value in values]
+    words = aligner.align_long_text("vocals.flac", "one\ntwo", "en")
 
-    monkeypatch.setattr(aligner, "_align_many", align_many)
-    result = aligner.align_long_text("audio", "\n".join(groups), "en")
-    assert ([word.text for word in result] == text.tokenize(' '.join(groups))) and (aligner.last_alignment_diagnostics['pure_qwen_evidence_words'] == 6)
-
-
-def test_align_long_text_publishes_merge_diagnostics(monkeypatch):
-    aligner, groups = make_aligner(monkeypatch), ['one two', 'three four']
-    canonical = [
-        Word(index, index + 0.5, token, 0.8, index)
-        for index, token in enumerate(text.tokenize(" ".join(groups)))
+    assert [(word.text, word.start, word.end) for word in words] == [
+        ("one", 1.123456789, 1.523456789),
+        ("two", 3.234567891, 3.834567891),
     ]
-    monkeypatch.setattr(text, "_group_lyric_text", lambda _: groups)
-    monkeypatch.setitem(sys.modules, "soundfile", SimpleNamespace(write=Mock()))
-    patch_attrs(monkeypatch, text, load_mono=lambda *_: (np.ones(1000), 100), _complete_line_anchor_windows=lambda *_: ({}, {}))
-    aligner._ctc = make_ctc_engine(
-        available_for=lambda *_: True,
-        align_lines=lambda *_: [alignment_result(canonical[:1], 0.8), None],
-    )
-    monkeypatch.setattr(aligner, "_align_many", lambda audios, *_: [[] for _ in audios])
-    debug = {
-        "word_sources": ["interpolated"] * 4,
-        "word_candidates": [{"index": index} for index in range(4)],
-        "candidate_acoustic_words": 1,
-        "accepted_acoustic_words": 0,
-        "rejected_acoustic_words": 1,
-        "rejected_reasons": {"overlap": 1},
+    assert align_window.call_args.args[2] == ["one", "two"]
+    assert aligner.last_alignment_diagnostics == {
+        "alignment_mode": "full-song-ctc",
+        "audio_reference": "vocals",
+        "ctc_version": text.CTC_ALIGNMENT_VERSION,
+        "word_count": 2,
+        "confidence": 0.75,
+        "interpolated_words": 0,
     }
-    patch_attrs(monkeypatch, text, _atomic_line_acoustic_alignment=lambda *_a, **_k: ([], {}), _line_aware_canonical_alignment=lambda *_a, **_k: ([], {}), _anchor_preserving_canonical_alignment=lambda *_a, **kwargs: (kwargs.get('debug_out', {}).update(debug) or canonical, {'ctc': 0, 'qwen': 0, 'interpolated': 4}))
-    result = aligner.align_long_text("audio", "\n".join(groups), "en")
-    assert ((result, aligner.last_alignment_diagnostics['word_sources'], aligner.last_alignment_diagnostics['word_candidates']) == (canonical, debug['word_sources'], debug['word_candidates'])) and (aligner.last_alignment_diagnostics['ctc_all_anchors_rejected'] is True)
+    assert aligner._ctc.release.called
 
 
-def test_align_long_text_skips_nonlexical_group_context(monkeypatch):
-    groups = ['one', '---', 'two']
-    aligner = setup_long_text(monkeypatch, groups)
-    patch_attrs(monkeypatch, text, load_mono=lambda *_: (np.ones(1000), 100), _complete_line_anchor_windows=lambda *_: ({0: (0, 2, 1), 2: (7, 9, 1)}, {}))
-    disable_ctc(aligner)
-    monkeypatch.setattr(aligner, "_align_many", lambda audios, *_: [[] for _ in audios])
-    result = aligner.align_long_text("audio", "\n".join(groups), "en")
-    assert [word.text for word in result] == ["one", "two"]
+def test_align_long_text_rejects_missing_lyrics_and_short_vocals(monkeypatch):
+    aligner = make_aligner(monkeypatch)
+    raises(InvalidArtifactError, lambda: aligner.align_long_text("vocals.flac", "", "en"))
+    monkeypatch.setattr(text, "load_mono", lambda *_: (np.ones(4), 100))
+    raises(
+        InvalidArtifactError,
+        lambda: aligner.align_long_text("vocals.flac", "one", "en"),
+        match="too short",
+    )
 
 
-def test_align_long_text_short_windows_and_micro_line_fallback(monkeypatch):
-    groups = ['one', 'two']
-    aligner = setup_long_text(monkeypatch, groups)
-    patch_attrs(monkeypatch, text, load_mono=lambda *_: (np.ones(10), 100), _complete_line_anchor_windows=lambda *_: ({0: (0.09, 0.1, 1), 1: (0.09, 0.1, 1)}, {}))
-    disable_ctc(aligner)
-    monkeypatch.setattr(aligner, "_align_many", lambda audios, *_: [[] for _ in audios])
-    result = aligner.align_long_text("audio", "one\ntwo", "en")
-    assert [word.text for word in result] == ["one", "two"]
-
-    monkeypatch.setattr(text, "load_mono", lambda *_: (np.ones(1), 100))
-    raises(InvalidArtifactError, lambda: aligner.align_long_text('audio', 'one\ntwo', 'en'))
-
-
-def test_align_long_text_passes_nonpathological_candidate_to_fallback(monkeypatch):
-    aligner = setup_long_text(monkeypatch, ["one two", "three"])
-    patch_attrs(monkeypatch, text, load_mono=lambda *_: (np.ones(1000), 100), _complete_line_anchor_windows=lambda *_: ({0: (0, 4, 1), 1: (5, 8, 1)}, {}))
-    disable_ctc(aligner)
-    patch_attrs(monkeypatch, aligner, _align_many=lambda _audio, values, _language: [[Word(index * 0.1, (index + 1) * 0.1, 'wrong', 0.8, index) for index, _token in enumerate(text.tokenize(value))] for value in values])
-    captured = []
-
-    def fallback(tokens, span, *, candidate_words=None, **_kwargs):
-        captured.append(candidate_words)
-        return text._proportional_words(tokens, span)
-
-    monkeypatch.setattr(text, "_long_text_line_fallback", fallback)
-    result = aligner.align_long_text("audio", "one two\nthree", "en")
-    assert ([word.text for word in result] == ['one', 'two', 'three']) and (any(candidate for candidate in captured))
-
-
-def test_align_long_text_rejects_micro_local_words_before_merge(monkeypatch):
-    aligner, groups, canonical = make_aligner(monkeypatch), ['one', 'two'], [Word(1, 2, 'one', 0.1), Word(3, 4, 'two', 0.1, 1)]
-    monkeypatch.setattr(text, "_group_lyric_text", lambda _: groups)
-    monkeypatch.setitem(sys.modules, "soundfile", SimpleNamespace(write=Mock()))
-    patch_attrs(monkeypatch, text, load_mono=lambda *_: (np.ones(1000), 100), _complete_line_anchor_windows=lambda *_: ({0: (0, 3, 1), 1: (3, 6, 1)}, {}))
-    disable_ctc(aligner)
-    monkeypatch.setattr(aligner, "_align_many", lambda audios, *_: [[] for _ in audios])
-    patch_attrs(monkeypatch, text, _long_text_line_fallback=lambda tokens, *_a, **_k: [Word(0, 0.005, tokens[0], 0.01)], _atomic_line_acoustic_alignment=lambda *_a, **_k: ([], {}), _line_aware_canonical_alignment=lambda *_a, **_k: ([], {}), _anchor_preserving_canonical_alignment=lambda *_a, **_k: (canonical, {'ctc': 0, 'qwen': 0, 'interpolated': 2}))
-    assert aligner.align_long_text("audio", "one\ntwo", "en") == canonical
-
-
-def test_align_long_text_micro_activity_fallback_and_invariant(monkeypatch):
-    groups = ['a b c d e', 'f g h i j']
-    aligner = setup_long_text(monkeypatch, groups)
-    patch_attrs(monkeypatch, text, load_mono=lambda *_: (np.ones(10), 100), _complete_line_anchor_windows=lambda *_: ({}, {}))
-    disable_ctc(aligner)
-    monkeypatch.setattr(aligner, "_align_many", lambda audios, *_: [[] for _ in audios])
-    patch_attrs(monkeypatch, text, _long_text_line_fallback=lambda *_a, **_k: [], _atomic_line_acoustic_alignment=lambda *_a, **_k: ([], {}), _anchor_preserving_canonical_alignment=lambda *_a, **_k: ([], {}), _line_aware_canonical_alignment=lambda *_a, **_k: ([], {}), _lossless_canonical_alignment=lambda *_: [], _activity_quantile_times=lambda *_: [0, 0.1])
-    result = aligner.align_long_text("audio", "\n".join(groups), "en")
-    assert (len(result) == 10 and all(word.end > word.start for word in result)) and (all((right.start >= left.end for left, right in zip(result, result[1:], strict=False))))
-
-    patch_attrs(monkeypatch, text, _long_text_line_fallback=lambda tokens, span, **_k: [Word(word.start, word.end, 'wrong', 0.1, word.index) for word in text._proportional_words(tokens, span)], load_mono=lambda *_: (np.ones(1000), 100), _activity_quantile_times=lambda *_: [])
-    raises(InvalidArtifactError, lambda: aligner.align_long_text('audio', '\n'.join(groups), 'en'), match='canonical lyric invariant')
-
-
-def test_align_long_text_ctc_failure_and_context_recovery(monkeypatch):
-    groups = ['one', 'two', 'three']
-    aligner = setup_long_text(monkeypatch, groups)
-    patch_attrs(monkeypatch, text, load_mono=lambda *_: (np.ones(1000), 100), _complete_line_anchor_windows=lambda *_: ({0: (0, 2, 1), 1: (3, 5, 1), 2: (7, 9, 1)}, {}))
+def test_align_long_text_required_ctc_fails_without_synthetic_timeline(monkeypatch):
+    aligner = make_aligner(monkeypatch)
+    monkeypatch.setattr(text, "load_mono", lambda *_: (np.ones(1000), 100))
+    monkeypatch.setenv("KARAOKE_AI_REQUIRE_CTC", "1")
     aligner._ctc = make_ctc_engine(
         available_for=lambda *_: True,
-        align_lines=Mock(side_effect=RuntimeError("ctc failed")),
+        align_window=Mock(return_value=None),
     )
-    calls = 0
 
-    def align_many(_audios, values, _language):
-        nonlocal calls
-        calls += 1
-        return [[] for _ in values] if calls == 1 else [[Word(index * 0.4, (index + 1) * 0.4, token, 0.8, index) for index, token in enumerate(text.tokenize(value))] for value in values]
-
-    monkeypatch.setattr(aligner, "_align_many", align_many)
-    result = aligner.align_long_text("audio", "\n".join(groups), "en")
-    assert (len(result) == 3) and ('ctc failed' in aligner.last_alignment_diagnostics['ctc_failure_reason']) and (aligner.last_alignment_diagnostics['context_recovered_words'] >= 1)
+    raises(
+        EngineUnavailableError,
+        lambda: aligner.align_long_text("vocals.flac", "one two", "en"),
+        match="returned no words",
+    )
+    assert aligner._ctc.release.called
 
 
-def test_align_long_text_emergency_merge_guard(monkeypatch):
-    groups = ['one two', 'three four']
-    aligner = setup_long_text(monkeypatch, groups)
-    source = np.ones(1000)
-    patch_attrs(monkeypatch, text, load_mono=lambda *_: (source, 100), _complete_line_anchor_windows=lambda *_: ({0: (0, 3, 1), 1: (3, 7, 1)}, {0: 'test', 1: 'test'}))
-    ctc_lines = [
-        alignment_result((Word(0.5, 1, 'one', 0.9), Word(1, 1.5, 'two', 0.9, 1)), 0.9),
-        alignment_result((Word(4, 4.5, 'three', 0.9), Word(4.5, 5, 'four', 0.9, 1)), 0.9),
+def test_align_long_text_uses_raw_full_song_qwen_when_ctc_is_unavailable(monkeypatch):
+    aligner = make_aligner(monkeypatch)
+    monkeypatch.setattr(text, "load_mono", lambda *_: (np.ones(1000), 100))
+    monkeypatch.delenv("KARAOKE_AI_REQUIRE_CTC", raising=False)
+    aligner._ctc = make_ctc_engine(available_for=lambda *_: False)
+    monkeypatch.setattr(
+        aligner,
+        "_run_alignment",
+        lambda **_: SimpleNamespace(
+            words=[
+                Word(1.111111111, 1.511111111, "one", 0.8),
+                Word(2.222222222, 2.822222222, "two", 0.7, 1),
+            ]
+        ),
+    )
+
+    words = aligner.align_long_text("vocals.flac", "one\ntwo", "en")
+
+    assert [(word.start, word.end) for word in words] == [
+        (1.111111111, 1.511111111),
+        (2.222222222, 2.822222222),
     ]
-    aligner._ctc = make_ctc_engine(
-        available_for=lambda *_: True,
-        align_lines=lambda *_: ctc_lines,
+    assert aligner.last_alignment_diagnostics["alignment_mode"] == "full-song-qwen"
+    assert aligner.last_alignment_diagnostics["interpolated_words"] == 0
+
+
+def test_align_long_text_rejects_incomplete_qwen_result(monkeypatch):
+    aligner = make_aligner(monkeypatch)
+    monkeypatch.setattr(text, "load_mono", lambda *_: (np.ones(1000), 100))
+    monkeypatch.delenv("KARAOKE_AI_REQUIRE_CTC", raising=False)
+    aligner._ctc = make_ctc_engine(available_for=lambda *_: False)
+    monkeypatch.setattr(
+        aligner,
+        "_run_alignment",
+        lambda **_: SimpleNamespace(words=[Word(1.0, 1.5, "one", 0.8)]),
     )
-    canonical = [word for line in ctc_lines for word in line.words]
-    patch_attrs(monkeypatch, text, _atomic_line_acoustic_alignment=lambda *_a, **_k: ([], {}), _line_aware_canonical_alignment=lambda *_a, **_k: ([], {}))
-    calls = 0
 
-    def anchor_merge(*_args, **_kwargs):
-        nonlocal calls
-        calls += 1
-        return [], {"ctc": 0, "interpolated": 4}
-
-    patch_attrs(monkeypatch, text, _anchor_preserving_canonical_alignment=anchor_merge, _lossless_canonical_alignment=lambda *_: canonical)
-    result = aligner.align_long_text("audio", "one two\nthree four", "en")
-    assert (len(result) == 4) and ((calls, aligner.last_alignment_diagnostics['alignment_merge_mode']) == (2, 'emergency-baseline'))
-
-
-@pytest.mark.parametrize("mode", ["activity", "empty", "proportional", "error"])
-def test_align_long_text_absolute_fallbacks(monkeypatch, mode):
-    aligner = setup_long_text(monkeypatch, ["one", "two"])
-    duration_sec = 10 if mode != "error" else 0.05
-    source = np.ones(max(1, int(duration_sec * 100)))
-    patch_attrs(monkeypatch, text, load_mono=lambda *_: (source, 100), _complete_line_anchor_windows=lambda *_: ({0: (0, duration_sec / 2, 1), 1: (duration_sec / 2, duration_sec, 1)}, {}))
-    disable_ctc(aligner)
-    monkeypatch.setattr(aligner, "_align_many", lambda audios, *_: [[] for _ in audios])
-    patch_attrs(monkeypatch, text, _atomic_line_acoustic_alignment=lambda *_a, **_k: ([], {}), _anchor_preserving_canonical_alignment=lambda *_a, **_k: ([], {}), _line_aware_canonical_alignment=lambda *_a, **_k: ([], {}), _lossless_canonical_alignment=lambda *_: [], _long_text_line_fallback=lambda *_a, **_k: [])
-    active = (
-        [1, 9] if mode == "activity" else ([] if mode == "empty" else [duration_sec, duration_sec])
+    raises(
+        InvalidArtifactError,
+        lambda: aligner.align_long_text("vocals.flac", "one two", "en"),
+        match="canonical lyric invariant",
     )
-    monkeypatch.setattr(text, "_activity_quantile_times", lambda *_: active)
-    if mode == "error":
-        raises(InvalidArtifactError, lambda: aligner.align_long_text('audio', 'one\ntwo', 'en'))
-    else:
-        result = aligner.align_long_text("audio", "one\ntwo", "en")
-        assert [word.text for word in result] == ["one", "two"]
+
+
+def test_canonical_alignment_returns_failure_instead_of_asserting_on_incomplete_gap(monkeypatch):
+    monkeypatch.setattr(text, "_fill_weighted_gap", lambda *_args, **_kwargs: None)
+
+    words, stats = text._anchor_preserving_canonical_alignment(
+        ["one two"],
+        [],
+        [],
+        np.zeros(1_000, dtype=np.float32),
+        100,
+        10.0,
+    )
+
+    assert words == []
+    assert stats["interpolated"] == 0

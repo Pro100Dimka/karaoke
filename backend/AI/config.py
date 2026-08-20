@@ -43,7 +43,6 @@ class CoreConfig:
     min_voiced_confidence: float = 0.38
     split_note_semitones: float = 0.78
     max_gap_sec: float = 0.05
-    midi_bend_range: int = 2
     separation_engine: str = "mel-roformer"
     pitch_engine: str = "fcpe"
     transcription_engine: str = "qwen3-asr"
@@ -73,7 +72,6 @@ class CoreConfig:
         if not 0 <= self.min_voiced_confidence <= 1: raise ConfigurationError("min_voiced_confidence must be between 0 and 1")
         if self.min_note_sec <= 0 or self.max_gap_sec < 0: raise ConfigurationError("Note duration must be positive and max gap non-negative")
         if not 0.05 <= self.split_note_semitones <= 12: raise ConfigurationError("split_note_semitones must be between 0.05 and 12")
-        if not 1 <= self.midi_bend_range <= 24: raise ConfigurationError("midi_bend_range must be between 1 and 24")
         if not self.asr_model.strip() or not self.aligner_model.strip(): raise ConfigurationError("ASR and aligner model names cannot be empty")
         supported: dict[str, tuple[str, set[str]]] = {
             "separation_engine": (self.separation_engine, {"mel-roformer"}),
@@ -100,7 +98,6 @@ class CoreConfig:
             min_voiced_confidence=_env_float("KARAOKE_AI_MIN_CONFIDENCE", 0.38),
             split_note_semitones=_env_float("KARAOKE_AI_SPLIT_SEMITONES", 0.78),
             max_gap_sec=_env_float("KARAOKE_AI_MAX_GAP_SEC", 0.05),
-            midi_bend_range=_env_int("KARAOKE_AI_MIDI_BEND_RANGE", 2),
             separation_engine=os.getenv("KARAOKE_AI_SEPARATION", "mel-roformer"),
             pitch_engine=os.getenv("KARAOKE_AI_PITCH", "fcpe"),
             transcription_engine=os.getenv("KARAOKE_AI_ASR", "qwen3-asr"),

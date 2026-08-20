@@ -36,7 +36,8 @@ export default {
   ...(selectedTests?.length ? { testFiles: selectedTests } : {}),
   coverageAnalysis: "perTest",
   incremental: true,
-  incrementalFile: "reports/mutation/incremental.json",
+  incrementalFile: "../generated/mutation/incremental.json",
+  tempDirName: "../generated/mutation/temp",
   ignorePatterns: [
     ".runtime/**",
     ".stryker-tmp/**",
@@ -55,7 +56,7 @@ export default {
   reporters: ["progress", "clear-text", "json"],
   jsonReporter: {
     fileName:
-      process.env.MUTATION_REPORT || "reports/mutation/business-logic.json"
+      process.env.MUTATION_REPORT || "../generated/mutation/business-logic.json"
   },
   // Release blocks only on a genuinely weak suite; 90 remains the quality target.
   thresholds: { high: 90, low: 75, break: 75 },

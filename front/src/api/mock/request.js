@@ -91,6 +91,9 @@ export async function mockRequest(path, options = {}) {
     store.songs.push(song);
     return clone(song);
   }
+  if (pathname === "/songs/identity" && method === "POST") {
+    return { title: "Новая песня", artist: "Исполнитель" };
+  }
   if (pathname === "/songs/package/import" && method === "POST") return { imported: true };
 
   const songMatch = pathname.match(/^\/songs\/([^/]+)$/);
@@ -114,9 +117,15 @@ export async function mockRequest(path, options = {}) {
     const id = editorMatch[1];
     if (method === "PUT") {
       const current = store.editors[id] || clone(mockSongEditor);
+      const words = current.lyrics_sync.words.map((word) => ({ ...word, notes: [] }));
+      for (const note of body.notes || []) {
+        if (words[note.word_index]) {
+          words[note.word_index].notes.push({ note: note.note, start: note.start, end: note.end });
+        }
+      }
       store.editors[id] = {
         ...current,
-        song_map: { ...current.song_map, notes: clone(body.notes || []) }
+        lyrics_sync: { ...current.lyrics_sync, words }
       };
     }
     return clone(store.editors[id] || mockSongEditor);

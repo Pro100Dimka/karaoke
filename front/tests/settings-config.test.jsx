@@ -24,7 +24,7 @@ afterEach(() => { delete globalThis.electronAPI; });
 const field = (section, name) =>
   config.SETTINGS[section].fields.find((item) => item.name === name);
 test("settings catalog exposes stable tabs, screens and options", () => {
-  verify([Object.keys(config.SETTINGS), 'toEqual', ["appearance", "audio", "ai"]], [config.FULL, 'toBe', 12], [config.SETTINGS_TABS.map(({ id }) => id), 'toEqual', [ "appearance", "audio", "ai" ]], [field("audio", "monitorInputDeviceId"), 'toBeDefined']);
+  verify([Object.keys(config.SETTINGS), 'toEqual', ["appearance", "audio", "ai"]], [config.FULL, 'toBe', 12], [config.SETTINGS_TABS.map(({ id }) => id), 'toEqual', [ "appearance", "audio", "ai" ]], [field("audio", "input_device_id"), 'toBeDefined'], [field("audio", "noise_suppression"), 'toBeDefined']);
   verify([config.SERVICE_SCREENS.every(({ id }) => config.SCREEN_BY_ID[id]), 'toBe', true]);
   verify([config.EMPTY_BROWSER_DEVICES, 'toEqual', { inputs: [], outputs: [] }], [Object.isFrozen(config.EMPTY_BROWSER_DEVICES), 'toBe', true]);
 });
@@ -77,12 +77,7 @@ test("audio action and monitor fields delegate to the audio controller", async (
 test("audio fields read the exact runtime option sources and labels", () => {
   const sources = {
     input_device_id: "inputDevices",
-    output_device_id: "outputDevices",
-    audio_driver: "audioDrivers",
-    asio_driver_name: "asioDrivers",
-    buffer_size: "bufferSizes",
-    monitorInputDeviceId: "browserInputs",
-    monitorOutputDeviceId: "browserOutputs"
+    output_device_id: "outputDevices"
   };
   const options = Object.fromEntries(
     Object.values(sources).map((source) => [source, [{ value: source }]])

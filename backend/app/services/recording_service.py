@@ -55,6 +55,7 @@ class RecordingSession:
         blocksize: int = 64,
         music_gain: float = 1.0,
         effects: dict[str, float] | None = None,
+        noise_suppression: float = 0.35,
         latency: str | float = "low",
     ):
         self.session_id = session_id
@@ -77,6 +78,7 @@ class RecordingSession:
         self._closed = False
         self._paused = False
         self._monitoring_enabled = monitoring_enabled
+        self.noise_suppression = clamp01(noise_suppression)
         self._quality = StudioMicrophoneProcessor(sample_rate, channels)
         if monitoring_enabled:
             output_info = (
@@ -105,10 +107,13 @@ class RecordingSession:
             )
 
     def _callback(self, indata, frames, time_info, status):  # noqa: ARG002
-        if not self._paused: self._queue.put(self._quality.process(indata, self.gain).copy())
+        if not self._paused:
+            self._queue.put(
+                self._quality.process(indata, self.gain, self.noise_suppression).copy()
+            )
 
     def _monitoring_callback(self, indata, outdata, frames, time_info, status):  # noqa: ARG002
-        processed = self._quality.process(indata, self.gain)
+        processed = self._quality.process(indata, self.gain, self.noise_suppression)
         if not self._paused: self._queue.put(processed.copy())
         outdata.fill(0)
         if self._monitoring_enabled:
@@ -268,6 +273,7 @@ def start_recording(
     blocksize: int = 64,
     music_gain: float = 1.0,
     effects: dict[str, float] | None = None,
+    noise_suppression: float = 0.35,
 ) -> str:
     if not _AUDIO_BACKEND_AVAILABLE: raise RuntimeError(f"Аудио-бэкенд недоступен: {_AUDIO_BACKEND_ERROR}")
 
@@ -291,6 +297,7 @@ def start_recording(
                 frames,
                 music_gain,
                 effects,
+                noise_suppression,
                 latency,
             )
             session.start()

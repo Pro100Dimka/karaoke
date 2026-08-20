@@ -298,7 +298,9 @@ function startBackend() {
     : path.join(backendDir, IS_WINDOWS ? "KaraokeBackend.exe" : "KaraokeBackend");
   const backendArgs = isDev ? ["run.py"] : [];
   const backendDataDir = isDev ? null : resolvePackagedBackendDataDir();
-  const backendLogDir = isDev ? path.resolve(__dirname, "..", "..", "logs") : INSTALL_LOG_DIR;
+  const backendLogDir = isDev
+    ? path.resolve(__dirname, "..", "..", "generated", "logs")
+    : INSTALL_LOG_DIR;
   const packagedModelsDir = isDev ? null : path.join(INSTALL_DATA_ROOT, "models");
   const packagedCacheDir = isDev ? null : path.join(INSTALL_DATA_ROOT, "cache");
   const packagedDownloadsDir = isDev ? null : path.join(INSTALL_DATA_ROOT, "downloads");

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../../../../api/client";
 import { translateSaved } from "../../../../i18n/runtime";
 import { getErrorMessage } from "../../../../utils/errors";
+import { flattenLyricsNotes } from "../../../../utils/lyrics-sync";
 
 export default function useMelodyEditorDocument({
   confirmDialog,
@@ -23,7 +24,7 @@ export default function useMelodyEditorDocument({
     try {
       const result = await api.getSongEditor(song.id);
       setPayload(result);
-      reset(result?.song_map?.notes || result?.song_map?.display_notes || []);
+      reset(flattenLyricsNotes(result?.lyrics_sync));
       setSelected([]);
     } catch (error) {
       await notify(
@@ -41,10 +42,15 @@ export default function useMelodyEditorDocument({
   const save = useCallback(async () => {
     setSaving(true);
     try {
-      const serializable = notes.map(({ _id: _, ...note }) => note);
+      const serializable = notes.map(({ note, start, end, word_index }) => ({
+        note,
+        start,
+        end,
+        word_index
+      }));
       const result = await api.saveSongEditor(song.id, serializable);
       setPayload(result);
-      reset(result.song_map?.notes || serializable);
+      reset(flattenLyricsNotes(result.lyrics_sync));
       setSelected([]);
       await onSaved?.();
     } catch (error) {
@@ -68,7 +74,7 @@ export default function useMelodyEditorDocument({
     try {
       const result = await api.resetSongEditor(song.id);
       setPayload(result);
-      reset(result.song_map?.notes || []);
+      reset(flattenLyricsNotes(result.lyrics_sync));
       setSelected([]);
       await onSaved?.();
     } catch (error) {

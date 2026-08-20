@@ -113,6 +113,19 @@ def test_add_song_streams_upload_maps_validation_and_cleans_temp(monkeypatch, tm
     assert_http_status(413, lambda: asyncio.run(songs.add_song(upload_file(), None, Mock())))
 
 
+def test_song_identity_preview_uses_the_same_metadata_parser_as_database(monkeypatch, tmp_path):
+    monkeypatch.setattr(songs.config, "UPLOAD_TEMP_DIR", tmp_path)
+    monkeypatch.setattr(songs, "save_upload_limited", AsyncMock())
+    detect = Mock(return_value=("Artist", "Tagged title"))
+    monkeypatch.setattr(songs.song_service, "_read_source_identity", detect)
+
+    result = asyncio.run(songs.inspect_song_identity(upload_file(filename="fallback - name.mp3")))
+
+    assert result == schemas.SongIdentityOut(title="Tagged title", artist="Artist")
+    assert detect.call_args.args[1:] == ("fallback - name.mp3", "")
+    assert not detect.call_args.args[0].exists()
+
+
 def test_listing_get_patch_remove_and_package(monkeypatch, tmp_path):
     database, current = Mock(), domain_song()
     patch_attrs(monkeypatch, songs.song_service, list_songs=Mock(return_value=[current]), update_song=Mock(return_value=current), delete_song=Mock())
@@ -185,14 +198,12 @@ def test_logs_and_audio_track_resolution(monkeypatch, tmp_path):
     assert songs.get_processing_log(current) == {"lines": ["[song:song] one", "[song:song] two"]}
     raises(HTTPException, lambda: songs.get_audio_track('unknown', current))
     raises(HTTPException, lambda: songs.get_audio_track('vocals', current))
-    separated = tmp_path / "separated"
-    separated.mkdir()
-    vocals = separated / "vocals.flac"
+    vocals = tmp_path / "vocals.flac"
     vocals.write_bytes(b"audio")
     assert songs.get_audio_track("vocals", current).media_type == "audio/flac"
     diagnostic = tmp_path / "diagnostic.mp3"
     diagnostic.write_bytes(b"audio")
-    assert songs.get_audio_track("diagnostic", current).media_type == "audio/mpeg"
+    raises(HTTPException, lambda: songs.get_audio_track("diagnostic", current))
 
 
 def test_editor_endpoints_validate_state_save_and_reset(monkeypatch):
@@ -218,7 +229,7 @@ def test_editor_endpoints_validate_state_save_and_reset(monkeypatch):
     assert_http_status(400, lambda: songs.save_song_editor(schemas.SongEditorUpdate(notes=[]), current, database))
 
     monkeypatch.setattr(songs.song_editor_service, "reset_editor", Mock(return_value={"notes": []}))
-    assert songs.reset_song_editor(current, database).ai_backup_exists
+    assert not songs.reset_song_editor(current, database).ai_backup_exists
     songs.song_editor_service.reset_editor.side_effect = ValueError("backup missing")
     raises(HTTPException, lambda: songs.reset_song_editor(current, database))
 
@@ -229,17 +240,26 @@ def test_result_and_lyrics_contracts(monkeypatch, tmp_path):
     raises(HTTPException, lambda: songs.update_lyrics(schemas.LyricsUpdate(lyrics=[]), current))
     current.status = models.SongStatus.DONE
     current.output_dir = str(tmp_path)
-    patch_many(monkeypatch, (songs.song_service, "resolve_output_dir", Mock(return_value=tmp_path)), (songs, "read_json", Mock(return_value={})))
-    for name in (
-        "get_reference_notes",
-        "get_game_notes",
-        "get_syllables",
-        "get_karaoke_lyrics",
-    ):
+    note = {"start": 1.25, "end": 1.75, "note": 64}
+    lyrics_sync = {
+        "bpm": 120,
+        "key": "C",
+        "words": [{"text": "la", "start": 1.25, "end": 1.75, "notes": [note]}],
+    }
+
+    def generated(path, *args, **kwargs):
+        del args, kwargs
+        return lyrics_sync if path.name == "lyricsSync.json" else {}
+
+    patch_many(monkeypatch, (songs.song_service, "resolve_output_dir", Mock(return_value=tmp_path)), (songs, "read_json", Mock(side_effect=generated)))
+    for name in ("get_reference_notes", "get_game_notes", "get_syllables"):
         monkeypatch.setattr(songs.ai_bridge, name, Mock(return_value=[]))
+    monkeypatch.setattr(songs.ai_bridge, "get_karaoke_lyrics", Mock(return_value=lyrics_sync))
     monkeypatch.setattr(songs.ai_bridge, "get_karaoke_timeline", Mock(return_value={}))
     response = Response()
-    assert (songs.get_result(current, response).song.id == 'song') and (response.headers['Cache-Control'].startswith('no-store'))
+    result = songs.get_result(current, response)
+    assert result.song.id == 'song' and result.lyrics_sync == lyrics_sync
+    assert response.headers['Cache-Control'].startswith('no-store')
 
     reconcile = Mock(return_value=[{"text": " Hello "}, {"text": "World"}])
     monkeypatch.setattr(songs.ai_bridge, "reconcile_lyric_words", reconcile)

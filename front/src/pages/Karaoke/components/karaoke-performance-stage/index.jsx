@@ -1,61 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { translateSaved } from "../../../../i18n/runtime";
-import cx from "../../../../utils/cx";
 import SongCoverArt from "../../../Library/components/song-card/song-cover-art";
 import useKaraokePanorama from "../../hooks/useKaraokePanorama";
 import AuroraWorld from "./aurora-world";
-import KaraokeLyricLine from "./karaoke-lyric-line";
+import KaraokeLyrics from "./karaoke-lyrics";
 import MelodyRoll from "./melody-roll";
 
-function Lyrics({ lyrics, currentLine, upcomingLine, nextLine, currentTime }) {
-  const activeLine = currentLine || upcomingLine;
-  const activeClassName = cx(
-    "karaoke-lyric karaoke-lyric-current",
-    !currentLine && upcomingLine && "karaoke-lyric-upcoming"
-  );
-  return (
-    <div className="karaoke-lyrics">
-      {!lyrics.length && (
-        <p className="text-muted">{translateSaved("Синхронизированный текст недоступен")}</p>
-      )}
-      {activeLine ? (
-        <KaraokeLyricLine
-          key={`${activeLine.start}-${activeLine.text}`}
-          line={activeLine}
-          currentTime={currentTime}
-          className={activeClassName}
-        />
-      ) : (
-        lyrics.length > 0 && (
-          <div className="karaoke-lyric karaoke-lyric-current">
-            {translateSaved("Песня завершена")}
-          </div>
-        )
-      )}
-
-      {nextLine && (
-        <KaraokeLyricLine
-          line={nextLine}
-          currentTime={currentTime}
-          className="karaoke-lyric karaoke-lyric-next"
-        />
-      )}
-    </div>
-  );
-}
 export default function KaraokePerformanceStage(props) {
   const {
     currentTime,
-    lyrics,
-    nextLine,
+    lyricsSync,
     sceneBlackout,
     sceneIntroVisible,
     sceneIntro,
     songId,
     isPlaying,
+    isPitchDetected,
+    keyShift,
     showLyrics,
     showNotes,
-    notes
+    notes,
+    sungMidi
   } = props;
   const { activeTheme, panoramaRef } = useKaraokePanorama(songId, isPlaying);
   const sceneVideoRef = useRef(null);
@@ -144,10 +109,16 @@ export default function KaraokePerformanceStage(props) {
         </div>
       </div>
 
-      {showNotes && notes.length > 0 && <MelodyRoll {...props} />}
-      {showLyrics && (
-        <Lyrics {...props} lyrics={lyrics} currentTime={currentTime} nextLine={nextLine} />
+      {showNotes && notes.length > 0 && (
+        <MelodyRoll
+          notes={notes}
+          currentTime={currentTime}
+          isPitchDetected={isPitchDetected}
+          keyShift={keyShift}
+          sungMidi={sungMidi}
+        />
       )}
+      {showLyrics && <KaraokeLyrics lyricsSync={lyricsSync} currentTime={currentTime} />}
     </div>
   );
 }

@@ -52,6 +52,7 @@ export default function LibraryActions({
             ref={fileInputRef}
             className="visually-hidden"
             type="file"
+            multiple
             accept="audio/*,.mp3,.wav,.flac,.m4a,.ogg"
             onChange={onFileChosen}
             disabled={importing}

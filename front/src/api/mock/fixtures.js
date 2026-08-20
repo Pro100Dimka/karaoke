@@ -25,54 +25,32 @@ export const mockSongs = [
 
 export const mockKaraokeResult = {
   lyrics_sync: {
+    bpm: 120,
+    key: "C",
     text: "Добро пожаловать в A&D Voice\nИнтерфейс работает без backend",
     words: [
-      { text: "Добро", start: 0, end: 1 },
-      { text: "пожаловать", start: 1, end: 2.4 },
-      { text: "в", start: 2.4, end: 2.7 },
-      { text: "A&D", start: 2.7, end: 3.8 },
-      { text: "Voice", start: 3.8, end: 5 },
-      { text: "Интерфейс", start: 5, end: 6.2 },
-      { text: "работает", start: 6.2, end: 7.5 },
-      { text: "без", start: 7.5, end: 8.2 },
-      { text: "backend", start: 8.2, end: 10 }
+      { text: "Добро", start: 0, end: 1, notes: [{ note: 60, start: 0.5, end: 1 }] },
+      { text: "пожаловать", start: 1, end: 2.4, notes: [{ note: 62, start: 1.3, end: 2.1 }] },
+      { text: "в", start: 2.4, end: 2.7, notes: [] },
+      { text: "A&D", start: 2.7, end: 3.8, notes: [{ note: 64, start: 2.7, end: 3.2 }] },
+      { text: "Voice", start: 3.8, end: 5, notes: [{ note: 67, start: 3.8, end: 4.5 }] },
+      { text: "Интерфейс", start: 5, end: 6.2, notes: [] },
+      { text: "работает", start: 6.2, end: 7.5, notes: [] },
+      { text: "без", start: 7.5, end: 8.2, notes: [] },
+      { text: "backend", start: 8.2, end: 10, notes: [] }
     ]
-  },
-  reference_notes: [
-    { start: 0.5, end: 1.2, midi: 60 },
-    { start: 1.3, end: 2.1, midi: 62 },
-    { start: 2.2, end: 3.2, midi: 64 },
-    { start: 3.3, end: 4.5, midi: 67 }
-  ]
+  }
 };
 
 export const mockSongEditor = {
   ai_backup_exists: true,
-  song_map: {
+  lyrics_sync: {
+    bpm: 120,
+    key: "C",
     duration: 10,
-    syllables: [
-      { index: 0, text: "A&D", word_index: 0 },
-      { index: 1, text: "Voice", word_index: 1 }
-    ],
-    notes: [
-      {
-        _id: "mock-note-1",
-        start: 0.5,
-        end: 1.5,
-        midi_note: 60,
-        velocity: 96,
-        syllable_index: 0,
-        word_index: 0
-      },
-      {
-        _id: "mock-note-2",
-        start: 1.5,
-        end: 2.5,
-        midi_note: 64,
-        velocity: 96,
-        syllable_index: 1,
-        word_index: 1
-      }
+    words: [
+      { text: "A&D", start: 0, end: 1.5, notes: [{ note: 60, start: 0.5, end: 1.5 }] },
+      { text: "Voice", start: 1.5, end: 2.5, notes: [{ note: 64, start: 1.5, end: 2.5 }] }
     ]
   }
 };
@@ -90,6 +68,7 @@ export const mockAudioSettings = {
   reverb: 0,
   echo: 0,
   delay: 0,
+  noise_suppression: 0.35,
   audio_driver: "auto",
   asio_driver_name: "",
   buffer_size: 64,

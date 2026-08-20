@@ -166,12 +166,12 @@ function VolumeDials({ setVolumes, volumes }) {
   );
 }
 
-function SelectionSummary({ assignSyllable, selected, selectedNote, syllables }) {
+function SelectionSummary({ selected, selectedNote }) {
   return (
     <div className={`melody-editor-inline-selection ${selected.length ? "is-active" : ""}`}>
       {selectedNote ? (
         <>
-          <strong>{noteName(selectedNote.midi_note)}</strong>
+          <strong>{noteName(selectedNote.note)}</strong>
           <span>
             {selected.length > 1
               ? translateSaved("{0} нот", { 0: selected.length })
@@ -180,18 +180,7 @@ function SelectionSummary({ assignSyllable, selected, selectedNote, syllables })
                   1: selectedNote.end.toFixed(2)
                 })}
           </span>
-          <select
-            aria-label={translateSaved("Текст / слог")}
-            value={selectedNote.syllable_index ?? ""}
-            onChange={(event) => assignSyllable(event.target.value)}
-          >
-            <option value="">{translateSaved("Без текста")}</option>
-            {syllables.map((item) => (
-              <option key={item.index} value={item.index}>
-                {item.text} · #{item.index}
-              </option>
-            ))}
-          </select>
+          <span>{selectedNote.word_text}</span>
         </>
       ) : (
         <span>{translateSaved("Выберите ноту")}</span>
@@ -201,7 +190,6 @@ function SelectionSummary({ assignSyllable, selected, selectedNote, syllables })
 }
 
 export default function MelodyEditorControls({
-  assignSyllable,
   autoScroll,
   deleteSelected,
   duration,
@@ -222,7 +210,6 @@ export default function MelodyEditorControls({
   setPlaybackRate,
   setVolumes,
   song,
-  syllables,
   time,
   toggleAutoScroll,
   undo,
@@ -252,12 +239,7 @@ export default function MelodyEditorControls({
       <div className="melody-editor-transport melody-editor-waveform-only">
         <SongStrip song={song} currentTime={time} duration={duration} onSeek={seek} />
       </div>
-      <SelectionSummary
-        assignSyllable={assignSyllable}
-        selected={selected}
-        selectedNote={selectedNote}
-        syllables={syllables}
-      />
+      <SelectionSummary selected={selected} selectedNote={selectedNote} />
     </div>
   );
 }

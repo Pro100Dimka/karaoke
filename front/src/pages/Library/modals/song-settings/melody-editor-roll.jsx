@@ -74,19 +74,19 @@ function LyricsLayer({ keyboardWidth, lyricProjection, scrollTop, zoom }) {
     <div
       className="melody-editor-lyrics-layer"
       style={{ top: scrollTop + 4 }}
-      aria-label={translateSaved("Слоги песни")}
+      aria-label={translateSaved("Слова песни")}
     >
-      {lyricProjection.map((syllable) => (
+      {lyricProjection.map((word) => (
         <span
-          key={`lyric-${syllable.index}`}
+          key={`lyric-${word.index}`}
           className="melody-editor-lyric-fragment"
           style={{
-            left: keyboardWidth + syllable.start * zoom,
-            width: Math.max(1, (syllable.end - syllable.start) * zoom)
+            left: keyboardWidth + word.start * zoom,
+            width: Math.max(1, (word.end - word.start) * zoom)
           }}
-          title={`${syllable.text} · ${syllable.start.toFixed(3)}–${syllable.end.toFixed(3)}`}
+          title={`${word.text} · ${word.start.toFixed(3)}–${word.end.toFixed(3)}`}
         >
-          <span>{syllable.text}</span>
+          <span>{word.text}</span>
         </span>
       ))}
     </div>
@@ -95,7 +95,7 @@ function LyricsLayer({ keyboardWidth, lyricProjection, scrollTop, zoom }) {
 
 function NotesLayer({ maxMidi, notes, rowHeight, selected, startDrag, zoom, keyboardWidth }) {
   return notes.map((note) => {
-    const top = (maxMidi - note.midi_note) * rowHeight + 1;
+    const top = (maxMidi - note.note) * rowHeight + 1;
     const left = keyboardWidth + note.start * zoom;
     const width = Math.max(6, (note.end - note.start) * zoom);
     const active = selected.includes(note._id);
@@ -105,7 +105,7 @@ function NotesLayer({ maxMidi, notes, rowHeight, selected, startDrag, zoom, keyb
         className={`melody-editor-note ${active ? "is-selected" : ""}`}
         onPointerDown={(event) => startDrag(event, note, "move")}
         style={{ left, top, width, height: Math.max(8, rowHeight - 2) }}
-        title={`${noteName(note.midi_note)} · ${note.start.toFixed(3)}–${note.end.toFixed(3)}`}
+        title={`${noteName(note.note)} · ${note.start.toFixed(3)}–${note.end.toFixed(3)}`}
       >
         <span
           className="melody-editor-note-handle is-left"

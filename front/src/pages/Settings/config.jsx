@@ -2,17 +2,14 @@ import { Cpu, Mic2, Palette, Radio, SlidersHorizontal } from "lucide-react";
 import { translateSaved } from "../../i18n/runtime";
 import screens from "./screens";
 import {
-  audioDriverVisible,
   audioSelect,
   audioSlider,
   fieldType,
   FORM_FIELDS,
   HALF,
   monitorDisabled,
-  multipleAudioDriversAvailable,
   opts,
   percent,
-  preferenceSelect,
   radioField,
   speakerPlaying
 } from "./utils";
@@ -148,46 +145,9 @@ const AUDIO_SELECT_FIELDS = [
     translateSaved("Динамики или наушники"),
     translateSaved("Куда выводить звук приложения"),
     { span: 8, parse: "nullable-number" }
-  ],
-  [
-    "audio_driver",
-    "audioDrivers",
-    translateSaved("Режим звука"),
-    translateSaved("Автоматический режим подходит большинству пользователей"),
-    { advanced: true, isVisible: multipleAudioDriversAvailable }
-  ],
-  [
-    "asio_driver_name",
-    "asioDrivers",
-    translateSaved("ASIO-драйвер"),
-    translateSaved("Нужен только при ручном использовании ASIO"),
-    { advanced: true, isVisible: audioDriverVisible }
-  ],
-  [
-    "buffer_size",
-    "bufferSizes",
-    translateSaved("Буфер аудио"),
-    translateSaved("Меньше — ниже задержка, но выше нагрузка и риск щелчков"),
-    { advanced: true, parse: "number" }
   ]
 ].map(([name, source, label, tooltip, extra = {}]) =>
   audioSelect(name, source, { label, tooltip, isDisabled: monitorDisabled, ...extra })
-);
-const PREFERENCE_FIELDS = [
-  [
-    "monitorInputDeviceId",
-    "browserInputs",
-    translateSaved("Микрофон для проверки"),
-    translateSaved("Отдельный микрофон только для браузерного индикатора уровня")
-  ],
-  [
-    "monitorOutputDeviceId",
-    "browserOutputs",
-    translateSaved("Выход для проверки"),
-    translateSaved("Отдельное устройство только для тестового сигнала")
-  ]
-].map(([name, source, label, tooltip]) =>
-  preferenceSelect(name, source, { label, tooltip, advanced: true, isDisabled: monitorDisabled })
 );
 const AUDIO_SPECIAL_FIELDS = [
   [
@@ -225,7 +185,7 @@ const AUDIO_SPECIAL_FIELDS = [
   tooltip,
   ...extra
 }));
-const [MICROPHONE_FIELD, OUTPUT_FIELD, ...ADVANCED_AUDIO_FIELDS] = AUDIO_SELECT_FIELDS;
+const [MICROPHONE_FIELD, OUTPUT_FIELD] = AUDIO_SELECT_FIELDS;
 const VOICE_VOLUME_FIELD = audioSlider("volume", {
   span: 5,
   label: translateSaved("Громкость голоса"),
@@ -235,14 +195,22 @@ const VOICE_VOLUME_FIELD = audioSlider("volume", {
   step: 0.05,
   getLabel: percent(translateSaved("Громкость голоса"))
 });
+const NOISE_SUPPRESSION_FIELD = audioSlider("noise_suppression", {
+  span: 4,
+  label: translateSaved("Подавление шума"),
+  tooltip: translateSaved("Убирает постоянный фоновый шум до творческих эффектов"),
+  min: 0,
+  max: 1,
+  step: 0.05,
+  getLabel: percent(translateSaved("Подавление шума"))
+});
 const AUDIO_FIELDS = [
   OUTPUT_FIELD,
   AUDIO_SPECIAL_FIELDS[0],
   MICROPHONE_FIELD,
   VOICE_VOLUME_FIELD,
   AUDIO_SPECIAL_FIELDS[1],
-  ...ADVANCED_AUDIO_FIELDS,
-  ...PREFERENCE_FIELDS
+  NOISE_SUPPRESSION_FIELD
 ];
 
 /* =========================================================

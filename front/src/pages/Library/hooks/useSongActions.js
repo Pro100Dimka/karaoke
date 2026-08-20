@@ -161,7 +161,7 @@ export default function useLibrarySongActions(props) {
       await runProcessingAction(
         song,
         api.reprocessMelody,
-        translateSaved("Не удалось переобработать MIDI")
+        translateSaved("Не удалось переобработать мелодию")
       );
     },
     [confirmDialog, runProcessingAction]

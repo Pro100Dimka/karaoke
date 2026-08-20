@@ -71,6 +71,8 @@ export class OnlineRoomClient {
     this.listeners = new Set();
     this.socket = null;
     this.pingTimer = null;
+    this.clockOffsetMs = 0;
+    this.clockSynchronized = false;
   }
 
   _stopPing() {
@@ -96,6 +98,14 @@ export class OnlineRoomClient {
         console.error("Online room listener failed", error);
       }
     }
+  }
+
+  serverNow() {
+    return Date.now() + this.clockOffsetMs;
+  }
+
+  _sendClockProbe() {
+    this.send("ping", { clientTime: Date.now() });
   }
 
   connect({ id, name, host = false, hostToken = "" }) {
@@ -160,7 +170,8 @@ export class OnlineRoomClient {
           return;
         }
         this._stopPing();
-        this.pingTimer = globalThis.setInterval(() => this.send("ping", {}), PING_INTERVAL_MS);
+        this._sendClockProbe();
+        this.pingTimer = globalThis.setInterval(() => this._sendClockProbe(), PING_INTERVAL_MS);
         settle(resolve, normalizedId);
       };
       socket.onmessage = (event) => {
@@ -172,6 +183,18 @@ export class OnlineRoomClient {
         try {
           const message = JSON.parse(event.data);
           if (typeof message !== "object" || message === null || Array.isArray(message)) return;
+          if (
+            message.type === "pong" &&
+            Number.isFinite(message.serverTime) &&
+            Number.isFinite(message.clientTime)
+          ) {
+            const midpoint = (message.clientTime + Date.now()) / 2;
+            const sample = message.serverTime - midpoint;
+            this.clockOffsetMs = this.clockSynchronized
+              ? this.clockOffsetMs * 0.75 + sample * 0.25
+              : sample;
+            this.clockSynchronized = true;
+          }
           this.emit(message);
         } catch {
           // A malformed packet must not interrupt the room connection.

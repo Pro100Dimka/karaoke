@@ -158,7 +158,8 @@ def main() -> int:
         print("AMD/Intel hardware: YES"); print("Stage candidate   :", "YES" if payload["decision"]["stage_candidate"] else "NO")
     else:
         print("AMD/Intel hardware: NO (current GPU is not a target performance device)"); print("Stage candidate   : NO -- compatibility/quality only on this PC")
-    print("\nNOTE: even Stage candidate=YES is not full production approval; full downstream"); print("      pitch/notes/reference/MIDI/songMap validation remains mandatory.")
+    print("\nNOTE: even Stage candidate=YES is not full production approval;")
+    print("      full lyricsSync pitch-note validation remains mandatory.")
 
     if args.json_output:
         args.json_output.parent.mkdir(parents=True, exist_ok=True); args.json_output.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"); print(f"JSON: {args.json_output}")

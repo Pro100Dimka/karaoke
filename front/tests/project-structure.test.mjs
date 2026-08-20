@@ -9,14 +9,8 @@ test("keeps generated coverage consolidated under one canonical directory", () =
     .readdirSync(root, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && entry.name.startsWith("coverage-"));
   expect(legacyCoverage).toEqual([]);
-  verify([fs.readFileSync(path.join(root, "vitest.config.mjs"), "utf8"), 'toContain', 'reportsDirectory: "coverage"']);
-  if (exists("coverage")) {
-    const reports = fs
-      .readdirSync(path.join(root, "coverage"), { withFileTypes: true })
-      .filter((entry) => entry.isFile())
-      .map((entry) => entry.name);
-    verify([reports, 'not.toContain', "coverage-final.json"], [new Set(reports).size, 'toBe', reports.length]);
-  }
+  verify([fs.readFileSync(path.join(root, "vitest.config.mjs"), "utf8"), 'toContain', 'reportsDirectory: "../generated/coverage/front"']);
+  expect(exists("coverage")).toBe(false);
 });
 test("keeps required production entry files in their canonical locations", () => {
   same([exists("src/components/Table.jsx"), true], [exists("src/runtime-config.js"), true], [exists("src/pages/Karaoke/performance-analysis-modal.jsx"), true], [exists("src/pages/MelodyEditor.jsx"), true]);

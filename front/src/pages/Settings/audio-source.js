@@ -8,9 +8,9 @@ import useExclusiveAsyncAction from "../../hooks/useExclusiveAsyncAction";
 import { usePolling } from "../../hooks/usePolling";
 import { translateSaved } from "../../i18n/runtime";
 import { POLLING_INTERVALS } from "../../runtime-config";
+import { acquireMicrophone } from "../../services/microphoneCapture";
 import { getAudioPreferences, saveAudioPreferences } from "../../utils/audio-preferences";
 import { getErrorMessage } from "../../utils/errors";
-import { MICROPHONE_CAPTURE_CONSTRAINTS } from "../../utils/microphone-capture-constraints";
 import { persistUiPreferences } from "../../utils/ui-preferences";
 import {
   groupBrowserAudioDevices,
@@ -92,6 +92,7 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
   const [speakerTestState, setSpeakerTestState] = useState("idle");
   const [monitorLevel, setMonitorLevel] = useState(0);
   const monitorStream = useRef(null);
+  const monitorLease = useRef(null);
   const monitorRequest = useRef(0);
   const monitorPending = useRef(0);
   const speakerTimer = useRef(null);
@@ -142,48 +143,37 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
     monitorRequest.current += 1;
     monitorPending.current = 0;
     stopSpeakingMeter("local");
-    stopStream(monitorStream.current);
+    monitorLease.current?.release();
+    monitorLease.current = null;
     monitorStream.current = null;
   }, [stopSpeakingMeter]);
   const startLocalMeter = useCallback(async () => {
-    const { mediaDevices } = navigator;
-    if (typeof mediaDevices?.getUserMedia !== "function") return false;
+    if (typeof navigator.mediaDevices?.getUserMedia !== "function") return false;
     const request = ++monitorRequest.current;
     monitorPending.current = request;
     stopSpeakingMeter("local");
-    stopStream(monitorStream.current);
+    monitorLease.current?.release();
+    monitorLease.current = null;
     monitorStream.current = null;
-    const selected = preferences.monitorInputDeviceId;
-    const base = { ...MICROPHONE_CAPTURE_CONSTRAINTS, channelCount: 1 };
-    const candidates =
-      selected && selected !== "default"
-        ? [{ ...base, deviceId: { exact: selected } }, base]
-        : [base];
     try {
-      for (const audio of candidates) {
-        let stream;
-        try {
-          stream = await mediaDevices.getUserMedia({ audio });
-          if (request !== monitorRequest.current) {
-            stopStream(stream);
-            return false;
-          }
-          monitorStream.current = stream;
-          prepareSpeakingMeter();
-          startSpeakingMeter("local", stream);
-          return true;
-        } catch {
-          stopStream(stream);
-          if (request !== monitorRequest.current) return false;
-        }
+      const lease = await acquireMicrophone(preferences.monitorInputDeviceId);
+      if (request !== monitorRequest.current) {
+        await lease.release();
+        return false;
       }
+      monitorLease.current = lease;
+      monitorStream.current = lease.stream;
+      prepareSpeakingMeter();
+      startSpeakingMeter("local", lease.stream);
+      return true;
+    } catch {
       return false;
     } finally {
       if (monitorPending.current === request) monitorPending.current = 0;
     }
   }, [
-    preferences.monitorInputDeviceId,
     prepareSpeakingMeter,
+    preferences.monitorInputDeviceId,
     startSpeakingMeter,
     stopSpeakingMeter
   ]);

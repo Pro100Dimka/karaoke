@@ -1,8 +1,6 @@
 // eslint-disable-next-line import/extensions
 import { translateSaved } from "../i18n/runtime";
-import { closeAudioContext, closeAudioContextQuietly } from "../utils/audio-context";
-import { MICROPHONE_CAPTURE_CONSTRAINTS } from "../utils/microphone-capture-constraints";
-import { createStudioMicrophoneGraph } from "./microphoneStudioQuality";
+import { acquireMicrophone } from "./microphoneCapture";
 // Audio is transferred directly between participants. The Worker is used only
 // for signalling, therefore microphone data is never stored in the cloud.
 
@@ -36,6 +34,7 @@ export default class OnlineVoiceMesh {
     this.outboundTransfers = new Map();
     this.stream = null;
     this.microphoneGraph = null;
+    this.microphoneLease = null;
     this.startPromise = null;
     this.lifecycleVersion = 0;
     this.onRemoteStream = null;
@@ -53,32 +52,24 @@ export default class OnlineVoiceMesh {
     const liveStream = this.stream?.getAudioTracks?.().some((track) => track.readyState === "live");
     if (liveStream) return this.stream;
     if (this.stream) {
-      if (this.microphoneGraph) {
-        await closeAudioContext(this.microphoneGraph);
-        this.microphoneGraph = null;
-      } else this.stream.getTracks?.().forEach((track) => track.stop());
+      await this.microphoneLease?.release();
+      this.microphoneLease = null;
+      this.microphoneGraph = null;
       this.stream = null;
     }
     if (this.startPromise) return this.startPromise;
     const { lifecycleVersion } = this;
-    let capturedStream;
-    const startPromise = navigator.mediaDevices
-      .getUserMedia({
-        audio: {
-          ...MICROPHONE_CAPTURE_CONSTRAINTS,
-          channelCount: 1,
-          sampleRate: { ideal: 48_000 },
-          sampleSize: { ideal: 24 }
-        }
-      })
-      .then(async (stream) => {
-        capturedStream = stream;
+    let lease;
+    const startPromise = acquireMicrophone()
+      .then(async (capture) => {
+        lease = capture;
+        const { stream } = capture;
         if (lifecycleVersion !== this.lifecycleVersion) {
-          stream.getTracks().forEach((track) => track.stop());
+          await capture.release();
           throw new Error(translateSaved("Запуск микрофона отменён"));
         }
-        this.microphoneGraph = createStudioMicrophoneGraph(stream);
-        const outgoingStream = this.microphoneGraph.stream || stream;
+        this.microphoneLease = capture;
+        const outgoingStream = stream;
         this.stream = outgoingStream;
         outgoingStream.getAudioTracks().forEach((track) => {
           track.contentHint = "music";
@@ -103,11 +94,10 @@ export default class OnlineVoiceMesh {
         return outgoingStream;
       })
       .catch(async (error) => {
-        if (this.microphoneGraph?.rawStream === capturedStream) {
-          await closeAudioContext(this.microphoneGraph);
-          this.microphoneGraph = null;
-          this.stream = null;
-        } else capturedStream?.getTracks?.().forEach((track) => track.stop());
+        if (this.microphoneLease === lease) this.microphoneLease = null;
+        await lease?.release();
+        this.microphoneGraph = null;
+        this.stream = null;
         throw error;
       })
       .finally(() => {
@@ -379,10 +369,9 @@ export default class OnlineVoiceMesh {
   stop() {
     this.lifecycleVersion += 1;
     new Set([...this.peers.keys(), ...this.channels.keys()]).forEach((id) => this.removePeer(id));
-    if (this.microphoneGraph) {
-      closeAudioContextQuietly(this.microphoneGraph);
-      this.microphoneGraph = null;
-    } else this.stream?.getTracks().forEach((track) => track.stop());
+    this.microphoneLease?.release();
+    this.microphoneLease = null;
+    this.microphoneGraph = null;
     this.stream = null;
     this.startPromise = null;
     this.pendingInvites.clear();

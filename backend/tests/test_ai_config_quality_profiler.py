@@ -45,7 +45,6 @@ def test_environment_parsers_defaults_and_errors(monkeypatch):
         {"min_voiced_confidence": 2},
         {"min_note_sec": 0},
         {"split_note_semitones": 20},
-        {"midi_bend_range": 0},
         {"asr_model": " "},
         {"separation_engine": "other"},
         {"pitch_engine": "other"},

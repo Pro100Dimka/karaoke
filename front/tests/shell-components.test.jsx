@@ -100,7 +100,7 @@ describe("application shell", () => {
     expect(document.querySelectorAll(".title-bar__button")).toHaveLength(0);
     error.mockRestore();
   });
-  test("layout opens settings, song editor, radio and blackout state", () => {
+  test("layout opens settings, song editor, radio and blackout state", async () => {
     const { container, getByLabelText, getByTestId, queryByTestId } = render( <AppLayout />
     );
     verify([container .querySelector(".app-shell") .classList.contains("karaoke-app-shell"), 'toBe', false]);
@@ -111,11 +111,11 @@ describe("application shell", () => {
     });
     expect(mocks.radio.setVolume).toHaveBeenCalledWith("0.7");
     fireEvent.click(getByTestId("route-song"));
-    expect(getByTestId("song-settings").textContent).toContain("song");
+    await waitFor(() => expect(getByTestId("song-settings").textContent).toContain("song"));
     fireEvent.click(getByTestId("song-settings"));
     expect(queryByTestId("song-settings")).toBeNull();
     fireEvent.click(getByTestId("route-settings"));
-    expect(getByTestId("settings")).not.toBeNull();
+    await waitFor(() => expect(getByTestId("settings")).not.toBeNull());
     fireEvent.click(getByTestId("settings"));
     fireEvent( window, new CustomEvent("app:route-blackout", { detail: { visible: true } })
     );

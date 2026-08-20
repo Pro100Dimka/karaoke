@@ -332,7 +332,21 @@ export default function useKaraokeTransport({
       return;
 
     const position = Number(roomCommand.position);
-    if (Number.isFinite(position)) seekToRef.current(position, { broadcast: false });
+    const sentAt = Number(roomCommand.__serverSentAt);
+    const receivedAt = Number(roomCommand.__receivedServerAt);
+    const deliverySeconds =
+      ["play", "sync"].includes(roomCommand.action) &&
+      Number.isFinite(sentAt) &&
+      Number.isFinite(receivedAt)
+        ? Math.max(0, (receivedAt - sentAt) / 1000)
+        : 0;
+    const targetPosition = position + deliverySeconds;
+    if (
+      Number.isFinite(targetPosition) &&
+      (roomCommand.action !== "sync" ||
+        Math.abs(instrumentalRef.current.currentTime - targetPosition) > 0.08)
+    )
+      seekToRef.current(targetPosition, { broadcast: false });
     const actions = {
       play: () => togglePlayRef.current({ broadcast: false, forcePlaying: true }),
       pause: () => togglePlayRef.current({ broadcast: false, forcePlaying: false }),

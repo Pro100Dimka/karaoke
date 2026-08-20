@@ -61,6 +61,9 @@ _AUDIO_COLUMN_MIGRATIONS = {
     "reverb": "ALTER TABLE audio_settings ADD COLUMN reverb FLOAT DEFAULT 0",
     "echo": "ALTER TABLE audio_settings ADD COLUMN echo FLOAT DEFAULT 0",
     "delay": "ALTER TABLE audio_settings ADD COLUMN delay FLOAT DEFAULT 0",
+    "noise_suppression": (
+        "ALTER TABLE audio_settings ADD COLUMN noise_suppression FLOAT DEFAULT 0.35"
+    ),
 }
 
 
@@ -109,7 +112,9 @@ def _repair_corrupted_audio_settings(connection) -> None:
         connection.execute(
             text(
                 "SELECT id, volume, sensitivity, latency_ms, audio_driver, buffer_size, "
-                "monitoring_enabled, reverb, echo, delay FROM audio_settings"
+                "monitoring_enabled, reverb, echo, delay, "
+                + ("noise_suppression" if "noise_suppression" in columns else "0.35 AS noise_suppression")
+                + " FROM audio_settings"
             )
         )
         .mappings()
@@ -137,6 +142,7 @@ def _repair_corrupted_audio_settings(connection) -> None:
             and in_range(row["reverb"], 0.0, 1.0)
             and in_range(row["echo"], 0.0, 1.0)
             and in_range(row["delay"], 0.0, 1.0)
+            and in_range(row["noise_suppression"], 0.0, 1.0)
         )
         if not valid: corrupted_ids.append(int(row["id"]))
 

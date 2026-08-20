@@ -3,7 +3,7 @@ import { marqueeHitIds } from "./melody-editor-geometry";
 import {
   adjacentNoteId,
   constrainedMoveDelta,
-  deleteNotesAndTransferText,
+  deleteNotes,
   mergeSelectedNotes,
   resizeBounds
 } from "./melody-editor-operations";
@@ -33,7 +33,6 @@ export default function useMelodyEditorEditing({
   seek,
   selected,
   setSelected,
-  syllableByIndex,
   time,
   undo,
   workspaceRef,
@@ -56,22 +55,20 @@ export default function useMelodyEditorEditing({
       const note = notes.find((item) => item._id === id);
       setSelected([id]);
       seek(note.start);
-      auditionNote(note.midi_note, 180);
+      auditionNote(note.note, 180);
     },
     [auditionNote, notes, seek, selected, setSelected]
   );
   const deleteSelected = useCallback(() => {
     if (!selected.length) return;
-    commit((current) => deleteNotesAndTransferText(current, selected, syllableByIndex));
+    commit((current) => deleteNotes(current, selected));
     setSelected([]);
-  }, [commit, selected, setSelected, syllableByIndex]);
+  }, [commit, selected, setSelected]);
   const nudgeSelected = useCallback(
     (timeDelta = 0, midiDelta = 0) => {
       if (!selected.length) return;
       const chosen = notes.filter((note) => selected.includes(note._id));
-      const minStart = Math.min(...chosen.map((note) => note.start));
-      const maxEnd = Math.max(...chosen.map((note) => note.end));
-      const safeTimeDelta = clamp(timeDelta, -minStart, duration - maxEnd);
+      const safeTimeDelta = constrainedMoveDelta(notes, selected, timeDelta);
       commit((current) =>
         current.map((note) =>
           selected.includes(note._id)
@@ -79,12 +76,12 @@ export default function useMelodyEditorEditing({
                 ...note,
                 start: roundTime(note.start + safeTimeDelta),
                 end: roundTime(note.end + safeTimeDelta),
-                midi_note: clamp(note.midi_note + midiDelta, 0, 127)
+                note: clamp(note.note + midiDelta, 0, 127)
               }
             : note
         )
       );
-      auditionNote(clamp(chosen[0].midi_note + midiDelta, 0, 127), 150);
+      auditionNote(clamp(chosen[0].note + midiDelta, 0, 127), 150);
     },
     [auditionNote, commit, duration, notes, selected]
   );
@@ -127,29 +124,10 @@ export default function useMelodyEditorEditing({
     setSelected(copies.map((note) => note._id));
   }, [commit, duration, notes, selected, setSelected]);
   const mergeSelected = useCallback(() => {
-    const result = mergeSelectedNotes(notes, selected, syllableByIndex);
+    const result = mergeSelectedNotes(notes, selected);
     commit(result.notes);
     setSelected([result.selectedId]);
-  }, [commit, notes, selected, setSelected, syllableByIndex]);
-  const assignSyllable = useCallback(
-    (value) => {
-      const syllableIndex = value === "" ? null : Number(value);
-      const syllable = syllableByIndex.get(syllableIndex);
-      commit((current) =>
-        current.map((note) =>
-          selected.includes(note._id)
-            ? {
-                ...note,
-                syllable_index: syllableIndex,
-                word_index: syllable?.word_index ?? null,
-                editor_text: syllableIndex == null ? "" : String(syllable?.text || "")
-              }
-            : note
-        )
-      );
-    },
-    [commit, selected, syllableByIndex]
-  );
+  }, [commit, notes, selected, setSelected]);
   const startDrag = useCallback(
     (event, note, mode) => {
       event.preventDefault();
@@ -162,7 +140,7 @@ export default function useMelodyEditorEditing({
           .filter((item) => movingSelection.includes(item._id))
           .map((item) => [item._id, { ...item }])
       );
-      auditionNote(note.midi_note, 150);
+      auditionNote(note.note, 150);
       dragRef.current = {
         id: note._id,
         ids: movingSelection,
@@ -187,8 +165,8 @@ export default function useMelodyEditorEditing({
         state.moved = true;
       const dy = event.shiftKey ? 0 : rawDy;
       if (state.mode === "move") {
-        const safeDx = constrainedMoveDelta(state.snapshot, state.ids, dx, duration);
-        const previewMidi = clamp(state.originals.get(state.id).midi_note + dy, 0, 127);
+        const safeDx = constrainedMoveDelta(state.snapshot, state.ids, dx);
+        const previewMidi = clamp(state.originals.get(state.id).note + dy, 0, 127);
         if (state.previewMidi !== previewMidi) {
           state.previewMidi = previewMidi;
           auditionNote(previewMidi, 95);
@@ -202,7 +180,7 @@ export default function useMelodyEditorEditing({
                 ...note,
                 start: roundTime(original.start + safeDx),
                 end: roundTime(original.end + safeDx),
-                midi_note: clamp(original.midi_note + dy, 0, 127)
+                note: clamp(original.note + dy, 0, 127)
               };
             }),
           false
@@ -210,7 +188,7 @@ export default function useMelodyEditorEditing({
         return;
       }
       const original = state.originals.get(state.id);
-      const bounds = resizeBounds(state.snapshot, state.id, duration);
+      const bounds = resizeBounds(state.snapshot, state.id);
       let { start } = original;
       let { end } = original;
       if (state.mode === "left") {
@@ -222,7 +200,7 @@ export default function useMelodyEditorEditing({
       }
       if (!state.lastResizePreview || performance.now() - state.lastResizePreview > 90) {
         state.lastResizePreview = performance.now();
-        auditionNote(original.midi_note, 85);
+        auditionNote(original.note, 85);
       }
       replace(
         (current) =>
@@ -241,7 +219,7 @@ export default function useMelodyEditorEditing({
     if (state.moved) {
       remember(state.snapshot);
       const current = notes.find((note) => note._id === state.id);
-      auditionNote(current.midi_note, 170);
+      auditionNote(current.note, 170);
     }
   }, [auditionNote, notes, remember]);
   const marqueeSelection = useCallback(
@@ -346,7 +324,6 @@ export default function useMelodyEditorEditing({
   });
 
   return {
-    assignSyllable,
     deleteSelected,
     drag,
     endDrag,

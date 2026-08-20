@@ -160,7 +160,7 @@ describe("karaoke panorama", () => {
   });
 });
 const guideProps = (overrides = {}) => ({
-  notes: [{ start: 0, end: 1, midi: 60 }],
+  notes: [{ start: 0, end: 1, note: 60 }],
   volume: 1,
   keyShift: 0,
   currentTimeRef: { current: 0 },
@@ -211,7 +211,7 @@ describe("melody guide", () => {
     const currentTimeRef = { current: 1 };
     const hook = renderHook((props) => useMelodyGuide(props), {
       initialProps: {
-        notes: [{ start: 0, end: 2, midi: 69 }],
+        notes: [{ start: 0, end: 2, note: 69 }],
         volume: 0.5,
         keyShift: 0,
         currentTimeRef
@@ -222,7 +222,11 @@ describe("melody guide", () => {
     expect(audio.oscillator.start).toHaveBeenCalledOnce();
     verify([audio.context.options, 'toEqual', { latencyHint: "interactive" }], [audio.oscillator.type, 'toBe', "triangle"]);
     verify([audio.oscillator.frequency.setTargetAtTime, 'toHaveBeenCalledWith', 440, 3, 0.012]);
-    verify([audio.gain.gain.setTargetAtTime, 'toHaveBeenCalledWith', 0.3 * 0.5 ** 1.65, 3, 0.015]);
+    verify([audio.gain.gain.setTargetAtTime, 'toHaveBeenCalledWith', 0.3 * 0.5 ** 1.65, 3, 0.02]);
+    calledWith(
+      [audio.gain.gain.cancelScheduledValues, [3]],
+      [audio.gain.gain.setValueAtTime, [0.0001, 3]]
+    );
     const frequencyCalls =
       audio.oscillator.frequency.setTargetAtTime.mock.calls.length;
     act(() => hook.result.current.updateMelodyGuide(5));
@@ -232,6 +236,31 @@ describe("melody guide", () => {
     calledWith([audio.gain.gain.cancelScheduledValues, [3]], [audio.gain.gain.setValueAtTime, [0.0001, 3]]);
     hook.unmount();
     called(audio.oscillator.stop, audio.context.close);
+  });
+  test("articulates every new lyricsSync note", async () => {
+    const audio = installGuideContext();
+    const hook = renderHook((props) => useMelodyGuide(props), {
+      initialProps: {
+        notes: [
+          { start: 0, end: 1, note: 69 },
+          { start: 1, end: 2, note: 71 }
+        ],
+        volume: 0.5,
+        keyShift: 0,
+        currentTimeRef: { current: 0.5 }
+      }
+    });
+
+    await hook.result.current.startMelodyGuide();
+    act(() => hook.result.current.updateMelodyGuide(1.5));
+
+    expect(audio.gain.gain.setValueAtTime).toHaveBeenCalledTimes(2);
+    expect(audio.oscillator.frequency.setTargetAtTime).toHaveBeenLastCalledWith(
+      expect.closeTo(493.883, 2),
+      3,
+      0.012
+    );
+    hook.unmount();
   });
   test("rejects missing inputs and cleans a guide whose resume fails", async () => {
     installGuideContext();
@@ -244,7 +273,7 @@ describe("melody guide", () => {
     empty.unmount();
     for (const props of [
       { notes: null, volume: 1 },
-      { notes: [{ start: 0, end: 1, midi: 60 }], volume: 0 }
+      { notes: [{ start: 0, end: 1, note: 60 }], volume: 0 }
     ]) {
       const invalid = renderHook(() =>
         useMelodyGuide(guideProps(props))
@@ -272,9 +301,13 @@ describe("melody guide", () => {
     await hook.result.current.startMelodyGuide();
     first.context.state = "closed";
     const gainCalls = first.gain.gain.setTargetAtTime.mock.calls.length;
+    const cancelCalls = first.gain.gain.cancelScheduledValues.mock.calls.length;
     act(() => hook.result.current.updateMelodyGuide(0));
     act(() => hook.result.current.silenceMelodyGuide());
-    verify([first.gain.gain.setTargetAtTime, 'toHaveBeenCalledTimes', gainCalls], [first.gain.gain.cancelScheduledValues, 'not.toHaveBeenCalled']);
+    verify(
+      [first.gain.gain.setTargetAtTime, "toHaveBeenCalledTimes", gainCalls],
+      [first.gain.gain.cancelScheduledValues, "toHaveBeenCalledTimes", cancelCalls]
+    );
     const second = installGuideContext();
     await expect(hook.result.current.startMelodyGuide()).resolves.toBe(true);
     expect(second.oscillator.start).toHaveBeenCalledOnce();
@@ -284,7 +317,7 @@ describe("melody guide", () => {
     const audio = installGuideContext();
     const hook = renderHook((props) => useMelodyGuide(props), {
       initialProps: {
-        notes: [{ start: 0, end: 1, midi: 60 }],
+        notes: [{ start: 0, end: 1, note: 60 }],
         volume: 1,
         keyShift: 0,
         currentTimeRef: { current: 5 }

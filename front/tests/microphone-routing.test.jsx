@@ -59,7 +59,7 @@ describe("microphone settings", () => {
       settings: { volume: 0.9, audio_driver: "asio", output_device_id: 8, monitoring_enabled: true }
     });
     verify([hook.result.current, 'toMatchObject', { microphoneVolume: 0.9, audioDriver: "asio", directOutputDeviceId: 8, monitoringEnabled: true }]);
-    expect(hook.result.current.microphoneEffects).toEqual({ reverb: 0.2, echo: 0.3, delay: 0.4 });
+    expect(hook.result.current.microphoneEffects).toEqual({ reverb: 0.2, echo: 0.3, delay: 0.4, noise_suppression: 0.35 });
     act(() =>
       window.dispatchEvent(
         new CustomEvent("audio-preferences-changed", { detail: { monitorInputDeviceId: "mic" } })
@@ -82,7 +82,7 @@ describe("microphone settings", () => {
     mocks.updateAudioSettings.mockResolvedValueOnce({ volume: 0.75 });
     const { result } = renderHook(() => useMicrophoneSettings({ audioSettings: null, onError })
     );
-    verify([result.current, 'toMatchObject', { microphoneVolume: 1, microphoneEffects: { reverb: 0, echo: 0, delay: 0 }, audioDriver: "auto", directOutputDeviceId: "", monitoringEnabled: false, monitorInputDeviceId: "default" }]);
+    verify([result.current, 'toMatchObject', { microphoneVolume: 1, microphoneEffects: { reverb: 0, echo: 0, delay: 0, noise_suppression: 0.35 }, audioDriver: "auto", directOutputDeviceId: "", monitoringEnabled: false, monitorInputDeviceId: "default" }]);
     await act(() => result.current.updateMicrophone({ volume: 0.7 }));
     expect(result.current.microphoneVolume).toBe(0.75);
     mocks.updateAudioSettings.mockRejectedValueOnce(new Error("device busy"));

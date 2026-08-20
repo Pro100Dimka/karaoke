@@ -14,20 +14,37 @@ export const noteName = (midi) => {
 
 export const cloneNotes = (notes) => notes.map((note) => ({ ...note }));
 export const editorPreferences = () => readJsonStorage(EDITOR_STORAGE_KEY);
-export const normalizeEditorNotes = (notes = []) =>
-  notes
+export const normalizeEditorNotes = (notes = []) => {
+  const normalized = notes
     .map((note, index) => ({
       ...note,
       _id: note._id || `note-${index}-${note.start}-${note.end}`,
-      start: Number(note.start) || 0,
-      end: Number(note.end) || 0,
-      midi_note: Number(note.midi_note ?? note.midi ?? 60),
-      velocity: Number(note.velocity) || 96,
-      word_index: note.word_index ?? null,
-      syllable_index: note.syllable_index ?? null
+      start: Math.max(Number(note.word_start), Number(note.start)),
+      end: Math.min(Number(note.word_end), Number(note.end)),
+      note: Number(note.note),
+      word_index: Number(note.word_index),
+      word_start: Number(note.word_start),
+      word_end: Number(note.word_end)
     }))
-    .filter((note) => note.end > note.start)
-    .sort((a, b) => a.start - b.start || a.midi_note - b.midi_note);
+    .filter(
+      (note) =>
+        Number.isInteger(note.note) &&
+        note.note >= 0 &&
+        note.note <= 127 &&
+        Number.isInteger(note.word_index) &&
+        note.end > note.start
+    )
+    .sort((a, b) => a.word_index - b.word_index || a.start - b.start || a.note - b.note);
+  const result = [];
+  const wordEnds = new Map();
+  for (const note of normalized) {
+    const previousEnd = wordEnds.get(note.word_index) ?? note.word_start;
+    if (note.start < previousEnd) continue;
+    result.push(note);
+    wordEnds.set(note.word_index, note.end);
+  }
+  return result.sort((a, b) => a.start - b.start || a.note - b.note);
+};
 
 export function useEditorHistory(initial = []) {
   const [notes, setNotesState] = useState(initial);

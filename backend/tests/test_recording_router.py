@@ -85,8 +85,9 @@ def test_start_recording_builds_device_specific_session(monkeypatch):
         playback_offset_sec=2,
         blocksize=64,
         music_gain=0.8,
-        effects={"reverb": 0.4, "echo": 0.5, "delay": 0.6},
-    )
+            effects={"reverb": 0.4, "echo": 0.5, "delay": 0.6},
+            noise_suppression=0.35,
+        )
 
 
 def test_start_recording_translates_missing_song_and_audio_failure(monkeypatch):

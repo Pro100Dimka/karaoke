@@ -17,7 +17,10 @@ vi.mock("../src/api/client", () => ({
 }));
 import KaraokeMedia from "../src/pages/Karaoke/components/karaoke-media.jsx";
 import WaveformTimeline from "../src/pages/Karaoke/components/waveform-timeline.jsx";
-import KaraokeLyricLine from "../src/pages/Karaoke/components/karaoke-performance-stage/karaoke-lyric-line.jsx";
+import KaraokeLyrics from "../src/pages/Karaoke/components/karaoke-performance-stage/karaoke-lyrics.jsx";
+const KaraokeLyricLine = ({ line, currentTime }) => (
+  <KaraokeLyrics lyricsSync={{ text: line.text, words: line.words }} currentTime={currentTime} />
+);
 afterEach(cleanup);
 test("karaoke media loads audio gain and initializes YouTube playback", () => {
   const send = vi.fn();
@@ -161,4 +164,36 @@ test("lyrics highlight every word only between its exact lyricsSync start and en
         .style.getPropertyValue("--character-fill")
     )
   ).toBeCloseTo(50, 10);
+});
+
+test("lyrics show only the current and next source lines", () => {
+  const lyricsSync = {
+    text: "Первая строка\n.\nВторая строка\nТретья строка",
+    words: [
+      { index: 0, text: "Первая", start: 1.01, end: 1.41 },
+      { index: 1, text: "строка", start: 1.42, end: 1.82 },
+      { index: 2, text: "Вторая", start: 2.01, end: 2.41 },
+      { index: 3, text: "строка", start: 2.42, end: 2.82 },
+      { index: 4, text: "Третья", start: 3.01, end: 3.41 },
+      { index: 5, text: "строка", start: 3.42, end: 3.82 }
+    ]
+  };
+  const { container, rerender } = render(
+    <KaraokeLyrics lyricsSync={lyricsSync} currentTime={1.5} />
+  );
+
+  let lines = container.querySelectorAll(".karaoke-lyric");
+  expect(lines).toHaveLength(2);
+  expect(lines[0].textContent).toBe("Перваястрока");
+  expect(lines[1].textContent).toBe("Втораястрока");
+  expect(container.textContent).not.toContain("Третья");
+  expect(lines[0].querySelector("[data-start]").dataset.start).toBe("1.01");
+  expect(lines[0].querySelector("[data-end]").dataset.end).toBe("1.41");
+
+  rerender(<KaraokeLyrics lyricsSync={lyricsSync} currentTime={2.5} />);
+  lines = container.querySelectorAll(".karaoke-lyric");
+  expect(lines).toHaveLength(2);
+  expect(lines[0].textContent).toBe("Втораястрока");
+  expect(lines[1].textContent).toBe("Третьястрока");
+  expect(container.textContent).not.toContain("Первая");
 });

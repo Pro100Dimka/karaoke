@@ -9,9 +9,6 @@ import {
 import {
   createPanoramaPath,
   getYouTubeVideoId,
-  lyricsSyncLines,
-  normalizeNotes,
-  noteNameToMidi,
   playbackGain,
   transposeKey,
   youTubeEmbedUrl
@@ -21,12 +18,6 @@ import {
   createBufferSizeOptions,
   createIndexedDeviceOptions
 } from "../src/pages/Karaoke/utils/devices.js";
-import { getLyricDisplayState, getLyricFill } from "../src/pages/Karaoke/utils/lyrics.js";
-import {
-  getMelodyCue,
-  getMelodyRange,
-  getVisibleNotes
-} from "../src/pages/Karaoke/utils/melody.js";
 import {
   detectMidiFromAnalyser,
   findBestPitchLag,
@@ -125,10 +116,7 @@ describe("analysis normalization and feedback", () => {
   });
 });
 describe("karaoke data contracts", () => {
-  test("parses notes, keys, gain and YouTube URLs", () => {
-    equal([noteNameToMidi(" C4 "), 60], [noteNameToMidi("C#4"), 61], [noteNameToMidi("Db4"), 61], [noteNameToMidi("c-1"), 0], [noteNameToMidi("G9"), 127]);
-    for (const value of [null, "bad", "xC4", "C4x", "C-2", "C20", "G#9"])
-      equal([noteNameToMidi(value), null]);
+  test("parses keys, gain and YouTube URLs", () => {
     equal([transposeKey("Db minor", 2), "D# minor"]);
     const sharpKeys = [
       "C",
@@ -194,122 +182,9 @@ describe("karaoke data contracts", () => {
     for (const id of ["bad", "xabcdefghijk", "abcdefghijkx", null, 7])
       equal([youTubeEmbedUrl(id), null]);
     deepEqual([createPanoramaPath(() => 0), { xPhaseA: 0, xPhaseB: 0, xPhaseC: 0, yPhaseA: 0, yPhaseB: 0 }], [createPanoramaPath(() => 0.25), { xPhaseA: Math.PI / 2, xPhaseB: Math.PI / 2, xPhaseC: Math.PI / 2, yPhaseA: Math.PI / 2, yPhaseB: Math.PI / 2 }]);
-    equal([normalizeNotes([{ start: 0, end: 1, note: "C4" }])[0].midi, 60]);
-  });
-  test("uses only exact lyricsSync word timings and preserves source order", () => {
-    deepEqual([lyricsSyncLines(null), []], [lyricsSyncLines({}), []], [lyricsSyncLines([]), []]);
-    const sourceWords = [
-      { index: 0, text: "Я", start: 3.888836032388664, end: 3.9088815789473683 },
-      { index: 1, text: "не", start: 4.069245951417004, end: 4.129382591093117 },
-      { index: 2, text: "хочу", start: 4.249655870445344, end: 4.470156882591094 },
-      { index: 3, text: "курить", start: 4.4902024291497975, end: 4.610475708502024 },
-      { index: 4, text: "после", start: 4.630521255060729, end: 4.790885627530364 },
-      { index: 5, text: "любви", start: 4.790885627530364, end: 4.83475 }
-    ];
-    const result = lyricsSyncLines({
-      text: "Я не хочу\nкурить после любви",
-      words: sourceWords
-    });
-    equal([result.length, 2], [result[0].start, 3.888836032388664], [result[1].end, 4.83475]);
-    equal([result[0].words[0], sourceWords[0]], [result[1].words[2], sourceWords[5]]);
-    deepEqual([result.flatMap((line) => line.words).map(({ text, start, end }) => ({ text, start, end })), [
-      { text: "Я", start: 3.888836032388664, end: 3.9088815789473683 },
-      { text: "не", start: 4.069245951417004, end: 4.129382591093117 },
-      { text: "хочу", start: 4.249655870445344, end: 4.470156882591094 },
-      { text: "курить", start: 4.4902024291497975, end: 4.610475708502024 },
-      { text: "после", start: 4.630521255060729, end: 4.790885627530364 },
-      { text: "любви", start: 4.790885627530364, end: 4.83475 }
-    ]]);
-  });
-  test("does not shift words after punctuation-only source lines", () => {
-    const first = { index: 0, text: "Моя", start: 10, end: 10.4 };
-    const second = { index: 1, text: "леди", start: 20, end: 20.5 };
-    const result = lyricsSyncLines({ text: "Моя\n.\nледи", words: [first, second] });
-
-    equal([result.length, 2], [result[0].words[0], first], [result[1].words[0], second]);
-    equal([result[1].text, "леди"], [result[1].start, 20], [result[1].end, 20.5]);
   });
 });
 describe("lyrics, melody and pitch", () => {
-  test("uses only canonical start and end fields without aliases or sorting", () => {
-    const first = { start: 0, end: 1, text: "first" };
-    const second = { start: 1, end: 2, text: "second" };
-    const state = getLyricDisplayState([first, second], 1.5);
-    equal([state.currentLine, second], [state.currentLineIndex, 1]);
-    deepEqual([getLyricDisplayState(null, 1), { currentLineIndex: -1, currentLine: null, upcomingLine: null, nextLine: null }]);
-  });
-  test("selects current, upcoming and next lyrics at exact boundaries", () => {
-    const lyrics = [
-      { start: 0, end: 1, text: "one" },
-      { start: 1, end: 2, text: "two" },
-      { start: 2, end: 3, text: "three" }
-    ];
-    const before = getLyricDisplayState(lyrics, -1);
-    equal([before.currentLineIndex, -1], [before.upcomingLine.text, "one"], [before.nextLine.text, "two"]);
-    const first = getLyricDisplayState(lyrics, 0.5);
-    equal([first.currentLineIndex, 0], [first.currentLine.text, "one"], [first.upcomingLine.text, "two"], [first.nextLine.text, "two"]);
-    const boundary = getLyricDisplayState(lyrics, 1);
-    equal([boundary.currentLine.text, "two"], [boundary.upcomingLine.text, "three"], [boundary.nextLine.text, "three"]);
-    const gap = getLyricDisplayState(
-      [ { start: 0, end: 1, text: "past" }, { start: 2, end: 3, text: "future" } ],
-      1.5
-    );
-    equal([gap.currentLine, null], [gap.upcomingLine.text, "future"], [gap.nextLine, null]);
-    const zeroDuration = getLyricDisplayState( [{ start: 1, end: 1, text: "instant" }], 0
-    );
-    equal([zeroDuration.upcomingLine.text, "instant"]);
-    deepEqual([getLyricDisplayState([{ start: 1, end: 2, text: "ended" }], 2), { currentLineIndex: -1, currentLine: null, upcomingLine: null, nextLine: null }]);
-  });
-  test("calculates lyric fill directly from start and end", () => {
-    equal([getLyricFill(-1, 0, 2), 0], [getLyricFill(1, 0, 2), 0.5], [getLyricFill(3, 2, 6), 0.25], [getLyricFill(3, 0, 2), 1], [getLyricFill(0, 1, 1), 0], [getLyricFill(1, 1, 1), 1], [getLyricFill(1, 2, 1), 1], [getLyricFill(0, 2, 1), 0]);
-  });
-  test("computes melody range from saved, actual and fallback values", () => {
-    deepEqual([getMelodyRange({ notes: [null, "bad", { midi: "40" }, { midi: 80 }], keyShift: 2, noteRangeMin: 50, noteRangeMax: 70 }), { minMidi: 40, maxMidi: 84, pitchRange: 45 }], [getMelodyRange({ notes: [], keyShift: 1, noteRangeMin: 60, noteRangeMax: 60 }), { minMidi: 59, maxMidi: 63, pitchRange: 5 }], [getMelodyRange({ notes: [{ midi: 60 }], fallbackMidi: 90 }), { minMidi: 58, maxMidi: 62, pitchRange: 5 }]);
-    for (const [noteRangeMin, noteRangeMax] of [
-      [null, 70],
-      [50, null],
-      [-10, null],
-      ["bad", 70],
-      [50, Infinity],
-      [70, 60]
-    ])
-      deepEqual([getMelodyRange({ notes: null, keyShift: "bad", noteRangeMin, noteRangeMax, fallbackMidi: 69.5 }), { minMidi: 67, maxMidi: 72, pitchRange: 6 }]);
-    deepEqual([getMelodyRange({ notes: [], fallbackMidi: "bad" }), { minMidi: 58, maxMidi: 62, pitchRange: 5 }], [getMelodyRange({ notes: [{ midi: 60 }], keyShift: 2, noteRangeMin: 50, noteRangeMax: 70 }), { minMidi: 50, maxMidi: 74, pitchRange: 25 }], [getMelodyRange({ notes: [], noteRangeMin: -20, noteRangeMax: -10 }), { minMidi: -22, maxMidi: -8, pitchRange: 15 }]);
-  });
-  test("selects visible notes including exact viewport boundaries", () => {
-    deepEqual([getVisibleNotes([{ start: 1, end: 2 }], "bad", 4), []], [getVisibleNotes([], 0, "bad"), []], [getVisibleNotes([{ start: 1, end: 2 }], -Infinity, 4), []], [getVisibleNotes([{ start: 1, end: 2 }], 0, Infinity), []], [getVisibleNotes(null, 0, 4), []]);
-    const visible = getVisibleNotes(
-      [
-        null,
-        { id: "bad-start", start: "bad", end: 1 },
-        { id: "bad-end", start: 1, end: "bad" },
-        { id: "infinite-start", start: -Infinity, end: 2 },
-        { id: "infinite-end", start: 1, end: Infinity },
-        { id: "reversed", start: 2, end: 1 },
-        { id: "left", start: -2, end: -1 },
-        { id: "end-boundary", start: 0, end: 1 },
-        { id: "inside", start: 1, end: 2 },
-        { id: "zero", start: 2, end: 2 },
-        { id: "start-boundary", start: 3, end: 4 },
-        { id: "right", start: 4, end: 5 }
-      ],
-      1,
-      3
-    );
-    deepEqual([visible.map(({ id }) => id), ["end-boundary", "inside", "zero", "start-boundary"]]);
-  });
-  test("selects active, imminent and just-ended melody cues", () => {
-    const notes = [
-      { start: 1, end: 2, midi: 62, id: "a" },
-      { start: 3, end: 4, midi: 70, id: "b" }
-    ];
-    const active = getMelodyCue({ notes, currentTime: 1, keyShift: 2 });
-    equal([active.activeNote.id, "a"], [active.activeMidi, 64], [active.cueNote.id, "a"], [active.targetMidi, 64]);
-    const upcoming = getMelodyCue({ notes, currentTime: 2 });
-    equal([upcoming.activeNote, null], [upcoming.activeMidi, null], [upcoming.cueNote.id, "b"], [upcoming.targetMidi, 70]);
-    const ended = getMelodyCue({ notes, currentTime: 4 });
-    equal([ended.activeNote, null], [ended.cueNote.id, "b"], [getMelodyCue({ notes, currentTime: 4.01 }).cueNote, null], [getMelodyCue({ notes, currentTime: "bad", keyShift: "bad" }).targetMidi, 62], [getMelodyCue({ notes: [{ start: 0.92, end: 0.99, midi: 60 }], currentTime: 1 }).targetMidi, 60], [getMelodyCue({ notes: [{ start: 0.919, end: 0.99, midi: 60 }], currentTime: 1 }).cueNote, null]);
-  });
   test("calculates normalized pitch correlation and lag boundaries", () => {
     equal([normalizedCorrelation(Float32Array.of(1, 2, 3, 4), 1), 20 / Math.sqrt(14 * 29)], [normalizedCorrelation(Float32Array.of(1, 0, 0), 1), 0], [rootMeanSquare(Float32Array.of(3, 4)), Math.sqrt(12.5)], [hasSufficientPitchEnergy([0.01]), true], [hasSufficientPitchEnergy([0.009]), false], [isConfidentPitchScore(0.62), true], [isConfidentPitchScore(0.619), false]);
     deepEqual([getPitchLagRange(2048, 48_000), { minLag: 26, maxLag: 874 }]);
@@ -501,7 +376,7 @@ describe("device, settings and song-card factories", () => {
         size,
         options
       }));
-    deepEqual([actionContracts(ready), [ { label: translateSaved("Прослушать записи"), variant: "outline", callback: "function", size: 15, options: undefined }, { label: translateSaved("Настройки песни"), variant: "outline", callback: "function", size: 14, options: undefined }, { label: translateSaved("Открыть папку"), variant: "outline", callback: "function", size: 14, options: undefined }, { label: translateSaved("Переобработать MIDI"), variant: "outline", callback: "function", size: 14, options: undefined }, { label: translateSaved("Удалить песню"), variant: "danger", callback: "function", size: 15, options: undefined } ]]);
+    deepEqual([actionContracts(ready), [ { label: translateSaved("Прослушать записи"), variant: "outline", callback: "function", size: 15, options: undefined }, { label: translateSaved("Настройки песни"), variant: "outline", callback: "function", size: 14, options: undefined }, { label: translateSaved("Открыть папку"), variant: "outline", callback: "function", size: 14, options: undefined }, { label: translateSaved("Переобработать мелодию"), variant: "outline", callback: "function", size: 14, options: undefined }, { label: translateSaved("Удалить песню"), variant: "danger", callback: "function", size: 15, options: undefined } ]]);
     ready.forEach((action) => action[3]());
     deepEqual([callbacks.onOpenRecordings.mock.calls.at(-1), [songs[0]]], [callbacks.onOpenSettings.mock.calls.at(-1), ["a"]], [callbacks.onOpenFolder.mock.calls.at(-1), [songs[0]]], [callbacks.onReprocess.mock.calls.at(-1), [songs[0]]], [callbacks.onDelete.mock.calls.at(-1), [songs[0]]]);
     const pending = getSongActions({

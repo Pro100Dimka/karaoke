@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -101,14 +102,15 @@ def test_ai_progress_callback_updates_semantic_runtime_and_cancels(monkeypatch):
     raises(pipeline_service.ProcessingCancelled, lambda: callback('pitch', 50, 'raw'))
 
 
-def test_clear_generated_results_invalidates_cache_and_files_but_preserves_manifest(monkeypatch, tmp_path):
+def test_clear_generated_results_preserves_only_lyrics_sync(monkeypatch, tmp_path):
     cache = Mock()
     monkeypatch.setattr(pipeline_service, "StageCache", Mock(return_value=cache))
-    for name in pipeline_service._LEGACY_GENERATED_FILES: (tmp_path / name).write_text("x", encoding="utf-8")
-    (tmp_path / "manifest.json").write_text('{"outputs":{}}', encoding="utf-8")
+    (tmp_path / "old.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "old.mid").write_bytes(b"midi")
+    (tmp_path / "lyricsSync.json").write_text("{}", encoding="utf-8")
     pipeline_service._clear_generated_results(tmp_path)
-    cache.invalidate.assert_called_once_with("pitch", "derivation", "song-map")
-    assert (not any((tmp_path / name).exists() for name in pipeline_service._LEGACY_GENERATED_FILES)) and ((tmp_path / 'manifest.json').is_file())
+    cache.invalidate.assert_called_once_with("pitch", "derivation")
+    assert {path.name for path in tmp_path.iterdir()} == {"lyricsSync.json"}
 
 
 def test_reprocessing_validates_owned_direct_child_and_runs_job(monkeypatch, tmp_path):
@@ -149,11 +151,7 @@ def test_optional_json_and_generated_metadata_preserve_user_edits(monkeypatch, t
     patch_attrs(monkeypatch, pipeline_service, read_json=Mock(side_effect=ValueError('bad json')))
     assert pipeline_service._read_optional_generated_json(tmp_path / "bad", []) == []
 
-    write_json(tmp_path / "music.json", {"key": "C", "bpm": 120.4})
-    write_json(
-        tmp_path / "reference.json",
-        {"notes": [None, {"midi_note": 50}, {"midi": "70"}]},
-    )
+    write_json(tmp_path / "lyricsSync.json", {"key": "C", "bpm": 120.4, "words": [{"notes": [{"note": 50}, {"note": 70}]}]})
     patch_attrs(monkeypatch, pipeline_service, read_json=__import__('app.utils.json_files', fromlist=['read_json']).read_json)
     current = SimpleNamespace(
         key_override=None,
@@ -175,11 +173,11 @@ def test_optional_json_and_generated_metadata_preserve_user_edits(monkeypatch, t
     pipeline_service._apply_generated_metadata(current, tmp_path)
     assert (current.key_override, current.tempo_override, current.note_range_min) == ("D", 100, 40)
 
-    write_json(tmp_path / "reference.json", {"notes": [{"midi": "bad"}]})
+    write_json(tmp_path / "lyricsSync.json", {"key": "C", "bpm": 120, "words": [{"notes": [{"note": "bad"}]}]})
     pipeline_service._apply_generated_metadata(current, tmp_path)
-    write_json(tmp_path / "reference.json", {"notes": []})
+    write_json(tmp_path / "lyricsSync.json", {"key": "C", "bpm": 120, "words": [{"notes": []}]})
     pipeline_service._apply_generated_metadata(current, tmp_path)
-    write_json(tmp_path / "reference.json", {"notes": "bad"})
+    write_json(tmp_path / "lyricsSync.json", {"key": "C", "bpm": 120, "words": "bad"})
     pipeline_service._apply_generated_metadata(current, tmp_path)
 
 
@@ -252,7 +250,11 @@ def test_run_job_maps_finalization_failure(monkeypatch, tmp_path):
 
 def test_finalize_success_marks_new_generation_unoptimized_before_best_effort_optimization(monkeypatch, tmp_path):
     song, database = SimpleNamespace(id='song', output_dir=str(tmp_path), source_path=str(tmp_path / 'source.wav'), optimized=True, status=models.SongStatus.PROCESSING, progress_percent=50.0, progress_step='processing', error_message=None, key_override=None, tempo_override=None, note_range_min=None, note_range_max=None), Mock()
+    (tmp_path / "source.wav").write_bytes(b"source")
+    instrumental = tmp_path / "instrumental.flac"
+    instrumental.write_bytes(b"instrumental")
     patch_many(monkeypatch, (pipeline_service, "SessionLocal", Mock(return_value=database)), (pipeline_service.repositories, "get_song", Mock(return_value=song)))
+    monkeypatch.setattr(pipeline_service.song_service, "resolve_source_path", lambda current: Path(current.source_path))
     patch_attrs(monkeypatch, pipeline_service, _apply_source_metadata=Mock(), _apply_generated_metadata=Mock())
     commit = Mock()
     patch_many(monkeypatch, (pipeline_service, "commit", commit), (pipeline_service.revision_cache, "invalidate", Mock()))
@@ -260,4 +262,5 @@ def test_finalize_success_marks_new_generation_unoptimized_before_best_effort_op
     pipeline_service._finalize_success("song", tmp_path)
 
     assert (song.status == models.SongStatus.DONE) and (song.optimized is False)
+    assert Path(song.source_path) == instrumental.resolve() and not (tmp_path / "source.wav").exists()
     commit.assert_called_once_with(database)

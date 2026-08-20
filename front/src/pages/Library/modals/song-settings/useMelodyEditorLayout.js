@@ -3,26 +3,15 @@ import { canonicalLyricProjection } from "./melody-editor-operations";
 import { BLACK_KEYS } from "./melody-editor-state";
 
 export default function useMelodyEditorLayout({ notes, payload, verticalZoom, zoom }) {
-  const songMap = payload?.song_map || {};
-  const duration = Number(songMap.duration) || Math.max(1, ...notes.map((note) => note.end));
-  const syllables = useMemo(
-    () =>
-      (songMap.syllables || []).map((item, index) => ({
-        ...item,
-        index: Number(item.index ?? index)
-      })),
-    [songMap.syllables]
-  );
-  const syllableByIndex = useMemo(
-    () => new Map(syllables.map((item) => [item.index, item])),
-    [syllables]
-  );
-  const lyricProjection = useMemo(() => canonicalLyricProjection(syllables), [syllables]);
+  const lyricsSync = payload?.lyrics_sync || {};
+  const duration = Number(lyricsSync.duration) || Math.max(1, ...notes.map((note) => note.end));
+  const words = lyricsSync.words || [];
+  const lyricProjection = useMemo(() => canonicalLyricProjection(words), [words]);
   const noteAtTime = useCallback(
     (value) => notes.find((note) => note.start <= value && note.end > value) || null,
     [notes]
   );
-  const midiValues = notes.map((note) => note.midi_note);
+  const midiValues = notes.map((note) => note.note);
   const rawMinMidi = Math.min(...midiValues, 60);
   const rawMaxMidi = Math.max(...midiValues, 72);
   const wantedSpan = Math.max(60, rawMaxMidi - rawMinMidi + 24);
@@ -63,8 +52,6 @@ export default function useMelodyEditorLayout({ notes, payload, verticalZoom, zo
     minMidi,
     noteAtTime,
     rowHeight,
-    syllableByIndex,
-    syllables,
     whiteKeyGeometry
   };
 }

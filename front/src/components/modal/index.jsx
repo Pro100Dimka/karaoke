@@ -1,7 +1,8 @@
 import { X } from "lucide-react";
-import { useEffect, useId, useLayoutEffect, useRef } from "react";
+import { useContext, useEffect, useId, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { useI18n } from "../../i18n";
+import { I18nContext } from "../../i18n";
+import { translateSaved } from "../../i18n/runtime";
 import { Card, IconButton } from "../../theme/ui";
 import cx from "../../utils/cx";
 import ModalTitle from "./title";
@@ -51,9 +52,10 @@ export default function Modal({
   cardVariant = "neon",
   maxWidth
 }) {
-  const { t } = useI18n();
-  const resolvedAriaLabel = ariaLabel || t("common.dialog");
-  const resolvedCloseAriaLabel = closeAriaLabel || t("common.close");
+  const i18n = useContext(I18nContext);
+  const resolvedAriaLabel = ariaLabel || i18n?.t("common.dialog") || translateSaved("Диалог");
+  const resolvedCloseAriaLabel =
+    closeAriaLabel || i18n?.t("common.close") || translateSaved("Закрыть");
   const dialogRef = useRef(null);
   const onCloseRef = useRef(onClose);
   const modalTokenRef = useRef(Symbol("modal"));

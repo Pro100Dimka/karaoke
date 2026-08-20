@@ -23,7 +23,8 @@ export function normalizeAudioEffects(settings) {
   return {
     reverb: clamp01(toFiniteNumber(settings?.reverb)),
     echo: clamp01(toFiniteNumber(settings?.echo)),
-    delay: clamp01(toFiniteNumber(settings?.delay))
+    delay: clamp01(toFiniteNumber(settings?.delay)),
+    noise_suppression: clamp01(toFiniteNumber(settings?.noise_suppression, 0.35))
   };
 }
 

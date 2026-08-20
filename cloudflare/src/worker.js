@@ -238,7 +238,10 @@ export class KaraokeRoom {
     }
 
     if (message.type === "ping") {
-      this.send(socket, "pong", {});
+      this.send(socket, "pong", {
+        serverTime: Date.now(),
+        clientTime: Number.isFinite(message.clientTime) ? message.clientTime : null,
+      });
       return;
     }
 

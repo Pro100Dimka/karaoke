@@ -41,6 +41,7 @@ struct Options {
   double reverb = 0.0;
   double echo = 0.0;
   double delay = 0.0;
+  double noise_suppression = 0.35;
   bool list = false;
 };
 
@@ -58,7 +59,12 @@ struct Engine {
   float reverb = 0.0F;
   float echo = 0.0F;
   float delay = 0.0F;
-  float sample_rate = 48000.0F;
+  float noise_suppression = 0.35F;
+  float previous_input = 0.0F;
+  float highpass_state = 0.0F;
+  float noise_floor = 0.003F;
+  float gate_gain = 1.0F;
+  float sample_rate = 44100.0F;
   std::vector<float> reverb_line_a;
   std::vector<float> reverb_line_b;
   std::vector<float> echo_line;
@@ -95,6 +101,8 @@ std::optional<Options> parse_options(int argc, char** argv) {
     else if (key == "--reverb" && index + 1 < argc) options.reverb = std::stod(argv[++index]);
     else if (key == "--echo" && index + 1 < argc) options.echo = std::stod(argv[++index]);
     else if (key == "--delay" && index + 1 < argc) options.delay = std::stod(argv[++index]);
+    else if (key == "--noise-suppression" && index + 1 < argc)
+      options.noise_suppression = std::stod(argv[++index]);
     else return std::nullopt;
   }
   return options;
@@ -173,12 +181,29 @@ bool supports_dsp(ASIOSampleType type) {
 }
 
 bool effects_enabled() {
-  return g_engine.reverb > 0.001F || g_engine.echo > 0.001F || g_engine.delay > 0.001F;
+  return true;
 }
 
 float process_effects(float sample) {
-  const float dry = sample * g_engine.gain;
-  if (!effects_enabled()) return std::clamp(dry, -1.0F, 1.0F);
+  const float input = sample * g_engine.gain;
+  const float highpass_coefficient = std::exp(-2.0F * 3.14159265F * 70.0F / g_engine.sample_rate);
+  const float highpass = input - g_engine.previous_input +
+                         highpass_coefficient * g_engine.highpass_state;
+  g_engine.previous_input = input;
+  g_engine.highpass_state = highpass;
+  const float level = std::abs(highpass);
+  if (level < g_engine.noise_floor * 1.4F)
+    g_engine.noise_floor = g_engine.noise_floor * 0.9995F + level * 0.0005F;
+  const float threshold = std::max(0.0025F, g_engine.noise_floor * 2.4F);
+  const float suppressed = level <= threshold
+    ? 0.12F + 0.38F * (threshold > 0.0F ? level / threshold : 0.0F)
+    : level < threshold * 2.2F
+      ? 0.5F + 0.5F * (level - threshold) / (threshold * 1.2F)
+      : 1.0F;
+  const float target_gate = 1.0F + (suppressed - 1.0F) * g_engine.noise_suppression;
+  const float gate_speed = target_gate > g_engine.gate_gain ? 0.08F : 0.02F;
+  g_engine.gate_gain += (target_gate - g_engine.gate_gain) * gate_speed;
+  const float dry = std::tanh(highpass * g_engine.gate_gain * 1.12F) / std::tanh(1.12F);
   const size_t cursor = g_engine.effect_cursor % g_engine.reverb_line_a.size();
   const auto read_delay = [cursor](const std::vector<float>& line, size_t samples) {
     const size_t offset = std::min(samples, line.size() - 1);
@@ -319,7 +344,9 @@ bool create_buffers(const Options& options) {
   g_engine.reverb = static_cast<float>(std::clamp(options.reverb, 0.0, 1.0));
   g_engine.echo = static_cast<float>(std::clamp(options.echo, 0.0, 1.0));
   g_engine.delay = static_cast<float>(std::clamp(options.delay, 0.0, 1.0));
-  ASIOSampleRate rate = 48000.0;
+  g_engine.noise_suppression = static_cast<float>(
+    std::clamp(options.noise_suppression, 0.0, 1.0));
+  ASIOSampleRate rate = 44100.0;
   ASIOGetSampleRate(&rate);
   g_engine.sample_rate = static_cast<float>(std::max(1.0, rate));
   const size_t effect_size = static_cast<size_t>(std::max(1.0, rate * 0.72));

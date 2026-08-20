@@ -7,6 +7,7 @@ vi.mock("../src/pages/Karaoke/hooks/useKaraokePanorama", () => ({
   default: () => ({ activeTheme: mocks.theme, panoramaRef: mocks.panoramaRef })
 }));
 import KaraokePerformanceStage from "../src/pages/Karaoke/components/karaoke-performance-stage/index.jsx";
+import KaraokeLyrics from "../src/pages/Karaoke/components/karaoke-performance-stage/karaoke-lyrics.jsx";
 import MelodyRoll from "../src/pages/Karaoke/components/karaoke-performance-stage/melody-roll.jsx";
 import AuroraWorld from "../src/pages/Karaoke/components/karaoke-performance-stage/aurora-world.jsx";
 beforeEach(() => {
@@ -16,56 +17,94 @@ beforeEach(() => {
     play: { configurable: true, value: vi.fn().mockResolvedValue(undefined) }
   });
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); delete globalThis.electronAPI; });
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  delete globalThis.electronAPI;
+});
 const notes = [
-  { start: 0, end: 1, midi: 60 },
-  { start: 1, end: 2, midi: 61 },
-  { start: 2, end: 3, midi: 72 },
-  { start: 20, end: 21, midi: 80 }
+  { start: 0, end: 1, note: 60 },
+  { start: 1, end: 2, note: 61 },
+  { start: 2, end: 3, note: 72 },
+  { start: 20, end: 21, note: 80 }
 ];
-test("melody roll renders keyboard, visible notes, current and sung pitch", () => {
-  const { container, rerender } = render(
-    <MelodyRoll
-      notes={[...notes, { start: 0.2, end: 0.8, midi: 200 }]}
-      currentTime={0.5}
-      sungMidi={60.2}
-      isPitchDetected
-      keyShift={0}
-      noteRangeMin={58}
-      noteRangeMax={74}
-    />
+test("melody roll renders lyricsSync notes at exact boundaries", () => {
+  const { container, rerender } = render(<MelodyRoll notes={notes} currentTime={0.5} />);
+  expect(
+    container.querySelectorAll(".melody-note, .melody-note-current, .melody-note-past")
+  ).toHaveLength(3);
+  expect(container.querySelector(".melody-note-current").dataset.midi).toBe("60");
+  rerender(<MelodyRoll notes={notes} currentTime={1} />);
+  expect(container.querySelector(".melody-note-current").dataset.midi).toBe("61");
+});
+test("melody roll uses only the moving lyricsSync note window and restores pitch feedback", () => {
+  const { container } = render(
+    <MelodyRoll notes={notes} currentTime={20.5} isPitchDetected sungMidi={80} />
   );
-  verify([container.querySelectorAll(".melody-note-past"), 'toHaveLength', 0], [container.querySelector(".melody-pitch-indicator"), 'not.toBeNull'], [container.querySelectorAll("svg rect").length, 'toBeGreaterThan', 2]);
-  rerender(
-    <MelodyRoll
-      notes={notes}
-      currentTime={1.5}
-      sungMidi={61}
-      isPitchDetected
-      keyShift={0}
-      noteRangeMin={58}
-      noteRangeMax={74}
-    />
+  const renderedNotes = container.querySelectorAll(
+    ".melody-note, .melody-note-current, .melody-note-past"
   );
-  verify([[...container.querySelectorAll("svg rect")].some( (node) => node.getAttribute("fill") === "#f3234c" ), 'toBe', true]);
-  rerender(
-    <MelodyRoll
-      notes={notes}
-      currentTime={2.5}
-      sungMidi={200}
-      isPitchDetected
-      keyShift={2}
-      noteRangeMin={58}
-      noteRangeMax={74}
-    />
+  expect(renderedNotes).toHaveLength(1);
+  expect(renderedNotes[0].dataset.start).toBe("20");
+  expect(renderedNotes[0].dataset.end).toBe("21");
+  expect(container.querySelector(".melody-pitch-indicator")).not.toBeNull();
+});
+test("lyrics use the exact late-song start/end interval without accumulated drift", () => {
+  const lyricsSync = {
+    text: "застывал в ожидании тебя\nНеблагодарно\nС тобой",
+    words: [
+      { index: 0, text: "застывал", start: 27, end: 27.76 },
+      { index: 1, text: "в", start: 27.84, end: 27.86 },
+      { index: 2, text: "ожидании", start: 27.94, end: 28.7 },
+      { index: 3, text: "тебя", start: 28.86, end: 29.16 },
+      { index: 4, text: "Неблагодарно", start: 30.12, end: 31.38 },
+      { index: 5, text: "С", start: 31.88, end: 31.9 },
+      { index: 6, text: "тобой", start: 31.96, end: 32.78 }
+    ]
+  };
+  const view = render(<KaraokeLyrics lyricsSync={lyricsSync} currentTime={30.75} />);
+  const current = [...view.container.querySelectorAll(".karaoke-lyric-word")].find(
+    (word) => word.textContent === "Неблагодарно"
   );
-  verify([container.querySelectorAll(".melody-note-past").length, 'toBeGreaterThan', 0]);
-  expect(container.querySelector(".melody-pitch-indicator")).toBeNull();
+  expect(view.container.querySelectorAll(".karaoke-lyric")).toHaveLength(2);
+  expect(current.dataset.start).toBe("30.12");
+  expect(current.dataset.end).toBe("31.38");
+  expect(current.style.getPropertyValue("--character-fill")).toBe("50%");
+});
+test("keeps a very short letter line visible without changing its word timing", () => {
+  const lyricsSync = {
+    text: "Длинная строка\nА я\nСледующая строка",
+    words: [
+      { index: 0, text: "Длинная", start: 17, end: 17.6 },
+      { index: 1, text: "строка", start: 17.65, end: 18.2 },
+      { index: 2, text: "А", start: 18.94, end: 18.96 },
+      { index: 3, text: "я", start: 19.04, end: 19.06 },
+      { index: 4, text: "Следующая", start: 19.2, end: 19.7 },
+      { index: 5, text: "строка", start: 19.72, end: 20.1 }
+    ]
+  };
+
+  const view = render(<KaraokeLyrics lyricsSync={lyricsSync} currentTime={19.25} />);
+
+  expect(view.container.querySelector(".karaoke-lyric-current").textContent).toBe("Ая");
+  const letter = [...view.container.querySelectorAll(".karaoke-lyric-word")].find(
+    (word) => word.textContent === "А"
+  );
+  expect(letter.dataset.start).toBe("18.94");
+  expect(letter.dataset.end).toBe("18.96");
+  expect(letter.style.getPropertyValue("--character-fill")).toBe("100%");
 });
 test("aurora world produces deterministic decoration, stars and particles", () => {
   const { container } = render(<AuroraWorld seed={12} />);
-  verify([container.querySelectorAll(".aurora-stars i"), 'toHaveLength', 96], [container.querySelectorAll(".aurora-particles i"), 'toHaveLength', 112]);
-  verify([container .querySelector(".aurora-stars i") .style.getPropertyValue("--aurora-x"), 'not.toBe', ""]);
+  verify(
+    [container.querySelectorAll(".aurora-stars i"), "toHaveLength", 96],
+    [container.querySelectorAll(".aurora-particles i"), "toHaveLength", 112]
+  );
+  verify([
+    container.querySelector(".aurora-stars i").style.getPropertyValue("--aurora-x"),
+    "not.toBe",
+    ""
+  ]);
 });
 test("stage displays panorama, intro, lyrics and melody", () => {
   const { container, rerender } = render(
@@ -73,7 +112,13 @@ test("stage displays panorama, intro, lyrics and melody", () => {
       songId="song"
       isPlaying
       currentTime={0.5}
-      lyrics={[{ text: "Line", start: 0, end: 1, words: [{ text: "Line", start: 0, end: 1 }] }]}
+      lyricsSync={{
+        text: "Line\nNext",
+        words: [
+          { index: 0, text: "Line", start: 0, end: 1 },
+          { index: 1, text: "Next", start: 1, end: 2 }
+        ]
+      }}
       currentLine={{ text: "Line", start: 0, end: 1, words: [{ text: "Line", start: 0, end: 1 }] }}
       upcomingLine={null}
       nextLine={{ text: "Next", start: 1, end: 2, words: [{ text: "Next", start: 1, end: 2 }] }}
@@ -92,13 +137,18 @@ test("stage displays panorama, intro, lyrics and melody", () => {
       }}
     />
   );
-  verify([container.querySelector(".karaoke-panoramic-sky"), 'not.toBeNull'], [container.querySelector(".melody-roll"), 'not.toBeNull'], [container.textContent, 'toContain', "LineNext"], [container.textContent, 'toContain', "Artist"]);
+  verify(
+    [container.querySelector(".karaoke-panoramic-sky"), "not.toBeNull"],
+    [container.querySelector(".melody-roll"), "not.toBeNull"],
+    [container.textContent, "toContain", "LineNext"],
+    [container.textContent, "toContain", "Artist"]
+  );
   rerender(
     <KaraokePerformanceStage
       songId=""
       isPlaying
       currentTime={0}
-      lyrics={[{ text: "Soon", start: 1, end: 2, words: [{ text: "Soon", start: 1, end: 2 }] }]}
+      lyricsSync={{ text: "Soon", words: [{ index: 0, text: "Soon", start: 1, end: 2 }] }}
       currentLine={null}
       upcomingLine={{ text: "Soon", start: 1, end: 2, words: [{ text: "Soon", start: 1, end: 2 }] }}
       nextLine={null}
@@ -107,13 +157,13 @@ test("stage displays panorama, intro, lyrics and melody", () => {
       showNotes={false}
     />
   );
-  expect(container.querySelector(".karaoke-lyric-upcoming")).not.toBeNull();
+  expect(container.textContent).toContain("Soon");
   rerender(
     <KaraokePerformanceStage
       songId="song"
       isPlaying={false}
       currentTime={5}
-      lyrics={[{ text: "Line", start: 0, end: 1 }]}
+      lyricsSync={{ text: "Line", words: [{ index: 0, text: "Line", start: 0, end: 1 }] }}
       currentLine={null}
       upcomingLine={null}
       nextLine={null}
@@ -124,7 +174,7 @@ test("stage displays panorama, intro, lyrics and melody", () => {
       sceneIntroVisible={false}
     />
   );
-  expect(container.textContent).toMatch(/завершена|завершена/i);
+  expect(container.textContent).toContain("Line");
 });
 test("stage randomizes local scene video with a short fade", () => {
   vi.useFakeTimers();
@@ -148,7 +198,10 @@ test("stage randomizes local scene video with a short fade", () => {
   fireEvent.loadedMetadata(video);
   expect(video.classList.contains("is-switching")).toBe(true);
   vi.advanceTimersByTime(180);
-  verify([video.currentTime, 'toBeGreaterThan', 0], [HTMLMediaElement.prototype.play, 'toHaveBeenCalled']);
+  verify(
+    [video.currentTime, "toBeGreaterThan", 0],
+    [HTMLMediaElement.prototype.play, "toHaveBeenCalled"]
+  );
   vi.useRealTimers();
 });
 test("stage ignores a rejected background-video play request", async () => {

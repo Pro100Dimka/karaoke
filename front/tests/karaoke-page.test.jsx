@@ -170,11 +170,11 @@ const song = {
   note_range_max: 75
 };
 const result = {
-  song_map: {
-    lines: [{ text: "Line", start: 0, end: 1 }],
-    display_notes: [{ start: 0, end: 1, midi: 60 }]
-  },
-  music: { tempo: 120, key: "C" }
+  lyrics_sync: {
+    bpm: 120,
+    key: "C",
+    words: [{ text: "Line", start: 0, end: 1, notes: [{ note: 60, start: 0, end: 1 }] }]
+  }
 };
 beforeEach(() => {
   Object.defineProperties(HTMLMediaElement.prototype, {
@@ -455,29 +455,21 @@ describe("karaoke page", () => {
     await vi.runAllTimersAsync();
     expect(mocks.transport.stop).toHaveBeenCalled();
   });
-  test("uses tempo, key and hidden-control fallbacks", () => {
-    mocks.songsPoll = { data: [{ ...song, key_override: "", tempo_override: "bad" }], error: null };
+  test("uses only lyricsSync tempo and key while controls are hidden", () => {
+    mocks.songsPoll = { data: [{ ...song, key_override: "F#", tempo_override: 42 }], error: null };
     mocks.result = {
-      result: { ...result, music: { tempo: "bad", key: "D" } },
+      result: { ...result, lyrics_sync: { ...result.lyrics_sync, bpm: 137, key: "D" } },
       loading: false,
       error: null
     };
     mocks.controls.controlsVisible = false;
     const page = render(<Karaoke />);
-    verify([mocks.consoleProps.currentTempo, 'toBe', 120], [mocks.consoleProps.compactKey, 'toContain', "D"]);
+    verify([mocks.consoleProps.currentTempo, 'toBe', 137], [mocks.consoleProps.compactKey, 'toContain', "D"]);
     // Stage actions render in a fixed order: back, console visibility
     // toggle, radio.
     const consoleToggle = page.container.querySelectorAll(".karaoke-stage-action")[1];
     fireEvent.click(consoleToggle);
     expect(mocks.controls.showControls).toHaveBeenCalled();
-    page.unmount();
-    mocks.result = {
-      result: { ...result, music: { tempo: null, key: "" } },
-      loading: false,
-      error: null
-    };
-    render(<Karaoke />);
-    expect(mocks.consoleProps.compactKey).toContain("C");
   });
   test("ignores an auto-start callback retained after unmount", () => {
     mocks.location = { state: { songId: "song", autoPlay: true } };

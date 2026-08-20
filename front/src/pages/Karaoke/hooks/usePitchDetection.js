@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
+import { acquireMicrophone } from "../../../services/microphoneCapture";
 import { closeAudioContext, closeAudioContextQuietly } from "../../../utils/audio-context";
-import { MICROPHONE_CAPTURE_CONSTRAINTS } from "../../../utils/microphone-capture-constraints";
 import { detectMidiFromAnalyser } from "../utils/pitch";
 
 export default function usePitchDetection({ isPlaying, monitorInputDeviceId, monitoringEnabled }) {
@@ -18,8 +18,8 @@ export default function usePitchDetection({ isPlaying, monitorInputDeviceId, mon
     }
     let cancelled = false;
     let animationFrameId = 0;
-    let ownsStream = false;
     let ownsContext = false;
+    let microphoneLease;
     let stream;
     let context;
     let sourceNode;
@@ -41,30 +41,15 @@ export default function usePitchDetection({ isPlaying, monitorInputDeviceId, mon
     resetPitch();
     const start = async () => {
       try {
-        const baseAudio = { ...MICROPHONE_CAPTURE_CONSTRAINTS };
-        const candidates =
-          monitorInputDeviceId && monitorInputDeviceId !== "default"
-            ? [{ ...baseAudio, deviceId: { exact: monitorInputDeviceId } }, baseAudio]
-            : [baseAudio];
-        for (const audio of candidates) {
-          try {
-            const candidateStream = await navigator.mediaDevices.getUserMedia({ audio });
-            if (!candidateStream) continue;
-            stream = candidateStream;
-            ownsStream = true;
-            break;
-          } catch {
-            // Try the next capture constraint set.
-          }
-        }
-        if (!stream) throw new Error();
+        microphoneLease = await acquireMicrophone(monitorInputDeviceId);
+        stream = microphoneLease.stream;
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         context = new AudioContextClass({ latencyHint: "interactive" });
         ownsContext = true;
         if (cancelled) {
           // Cancellation can only interleave with the awaited capture above,
           // so this stream is necessarily owned by this effect.
-          stream.getTracks().forEach((track) => track.stop());
+          await microphoneLease.release();
           if (ownsContext) await closeAudioContext(context);
           return;
         }
@@ -148,9 +133,8 @@ export default function usePitchDetection({ isPlaying, monitorInputDeviceId, mon
         };
         animationFrameId = requestAnimationFrame(updatePitch);
       } catch {
-        if (ownsStream) stream?.getTracks?.().forEach((track) => track.stop());
+        microphoneLease?.release();
         if (ownsContext) closeAudioContextQuietly(context);
-        ownsStream = false;
         ownsContext = false;
         // Pitch feedback is optional; the state was reset before startup.
       }
@@ -164,7 +148,7 @@ export default function usePitchDetection({ isPlaying, monitorInputDeviceId, mon
       } catch {
         // The graph may be absent or already disconnected by the browser.
       }
-      if (ownsStream) stream.getTracks().forEach((track) => track.stop());
+      microphoneLease?.release();
       if (ownsContext) closeAudioContextQuietly(context);
     };
   }, [isPlaying, monitorInputDeviceId, monitoringEnabled]);

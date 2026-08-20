@@ -115,7 +115,11 @@ describe("online room service", () => {
     socket.readyState = FakeSocket.OPEN;
     socket.onopen();
     await connection;
-    verify([client.send(" update ", { value: 1 }), 'toBe', true], [JSON.parse(socket.send.mock.calls[0][0]), 'toEqual', { value: 1, type: "update" }]);
+    expect(client.send(" update ", { value: 1 })).toBe(true);
+    expect(socket.send.mock.calls.map(([message]) => JSON.parse(message))).toContainEqual({
+      value: 1,
+      type: "update"
+    });
     same([client.send("", {}), false], [client.send("   ", {}), false], [client.send(null, {}), false], [client.send("x", []), false], [client.send("x", null), false], [client.send("x", "payload"), false]);
     const serializedOverhead = JSON.stringify({ value: "", type: "x" }).length;
     expect(client.send("x", { value: "x".repeat(256 * 1024 - serializedOverhead) })).toBe(true);

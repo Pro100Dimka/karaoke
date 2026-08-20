@@ -35,7 +35,7 @@ def test_read_live_updates_applies_json_lines_and_ignores_bad_input(monkeypatch)
 
 
 def test_audio_callback_reads_current_live_effect_parameters(monkeypatch):
-    monkeypatch.setattr(monitor_worker, "_live_params", {"reverb": 0.3, "echo": 0.4, "delay": 0.5})
+    monkeypatch.setattr(monitor_worker, "_live_params", {"reverb": 0.3, "echo": 0.4, "delay": 0.5, "noise_suppression": 0.35})
     captured = {}
 
     class FakeChain:
@@ -53,7 +53,7 @@ def test_audio_callback_reads_current_live_effect_parameters(monkeypatch):
 
 def test_main_seeds_live_params_from_config_and_starts_reader_thread(monkeypatch, capsys):
     configure_argv(monkeypatch, {**options(), "reverb": 0.2, "echo": 0.5, "delay": 0.7})
-    patch_attrs(monkeypatch, monitor_worker, _running=False, _live_params={'reverb': 0.0, 'echo': 0.0, 'delay': 0.0})
+    patch_attrs(monkeypatch, monitor_worker, _running=False, _live_params={'reverb': 0.0, 'echo': 0.0, 'delay': 0.0, 'noise_suppression': 0.35})
     thread_started, real_thread_init = threading.Event(), monitor_worker.threading.Thread.__init__
 
     def watched_init(self, *args, **kwargs):
@@ -66,7 +66,7 @@ def test_main_seeds_live_params_from_config_and_starts_reader_thread(monkeypatch
     stream = Mock()
     monkeypatch.setattr(monitor_worker.sd, "Stream", Mock(return_value=stream))
 
-    assert (monitor_worker.main() == 0) and (monitor_worker._live_params == {'reverb': 0.2, 'echo': 0.5, 'delay': 0.7}) and (thread_started.is_set())
+    assert (monitor_worker.main() == 0) and (monitor_worker._live_params == {'reverb': 0.2, 'echo': 0.5, 'delay': 0.7, 'noise_suppression': 0.35}) and (thread_started.is_set())
     capsys.readouterr()
 
 

@@ -1,5 +1,5 @@
 /* @vitest-environment jsdom */
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 vi.mock("../src/pages/Library", () => ({ default: () => <div data-testid="library" /> }));
@@ -12,8 +12,8 @@ test.each([
   ["/karaoke", "karaoke"],
   ["/editor/song", "editor"],
   ["/missing", "library"]
-])("routes %s to %s", (path, testId) => {
+])("routes %s to %s", async (path, testId) => {
   const result = render( <MemoryRouter initialEntries={[path]}> <AppRoutes /> </MemoryRouter>
   );
-  expect(result.getByTestId(testId)).not.toBeNull();
+  await waitFor(() => expect(result.getByTestId(testId)).not.toBeNull());
 });

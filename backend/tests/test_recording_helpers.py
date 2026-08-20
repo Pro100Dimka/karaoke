@@ -124,19 +124,9 @@ def test_performance_mix_command_contains_timing_effects_and_lossy_output(tmp_pa
 
 def test_instrumental_lookup_and_optional_mix_fail_safely(monkeypatch, tmp_path):
     assert recording_service._find_instrumental(tmp_path) is None
-    separated = tmp_path / "separated"
-    separated.mkdir()
-    instrumental = separated / "instrumental.wav"
-    instrumental.write_bytes(b"music")
+    instrumental = tmp_path / "instrumental.flac"
+    instrumental.write_bytes(b"lossless")
     assert recording_service._find_instrumental(tmp_path) == instrumental
-    instrumental.unlink()
-    optimized = separated / "instrumental.flac"
-    optimized.write_bytes(b"lossless")
-    assert recording_service._find_instrumental(tmp_path) == optimized
-    optimized.unlink()
-    legacy = tmp_path / "instrumental.wav"
-    legacy.write_bytes(b"legacy")
-    assert recording_service._find_instrumental(tmp_path) == legacy
 
     create = Mock(side_effect=RuntimeError("ffmpeg failed"))
     monkeypatch.setattr(recording_service, "_create_performance_mix", create)

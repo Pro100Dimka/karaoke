@@ -47,8 +47,8 @@ _MONITOR_RESTART_FIELDS = frozenset(
 # updates live over stdin (see _send_live_update) instead of a full stream
 # restart. The ASIO bridge is a separate native binary with no live-update
 # channel, so it still needs a restart to pick up new effect values.
-_ASIO_ONLY_RESTART_FIELDS = frozenset({"reverb", "echo", "delay"})
-_LIVE_UPDATE_FIELDS = frozenset({"reverb", "echo", "delay"})
+_ASIO_ONLY_RESTART_FIELDS = frozenset({"reverb", "echo", "delay", "noise_suppression"})
+_LIVE_UPDATE_FIELDS = frozenset({"reverb", "echo", "delay", "noise_suppression"})
 _monitor_signal = dict(_EMPTY_MONITOR_SIGNAL)
 logger = logging.getLogger(__name__)
 
@@ -423,6 +423,7 @@ def configure_monitoring(settings: models.AudioSettings) -> None:
         "reverb": clamp01(settings.reverb),
         "echo": clamp01(settings.echo),
         "delay": clamp01(settings.delay),
+        "noise_suppression": clamp01(settings.noise_suppression if settings.noise_suppression is not None else 0.35),
         "wasapi_exclusive": use_wasapi_exclusive,
     }
     _start_monitor_worker(worker_options)
@@ -449,6 +450,8 @@ def _start_asio_monitor(settings: models.AudioSettings) -> None:
         str(clamp01(settings.echo)),
         "--delay",
         str(clamp01(settings.delay)),
+        "--noise-suppression",
+        str(clamp01(settings.noise_suppression if settings.noise_suppression is not None else 0.35)),
     ]
     _launch_monitor_process(command, cwd=bridge.parent)
 

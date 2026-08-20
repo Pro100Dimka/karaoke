@@ -1,4 +1,4 @@
-/* ==================== MIDI EDITOR V4 ==================== */
+/* ==================== MELODY EDITOR V4 ==================== */
 .melody-editor-workspace {
   --editor-keyboard-width: 82px;
   grid-template-rows: 48px minmax(0, 1fr);
@@ -165,7 +165,7 @@
   }
 }
 
-/* ==================== MIDI EDITOR V5 ==================== */
+/* ==================== MELODY EDITOR V5 ==================== */
 .melody-editor-workspace {
   --editor-keyboard-width: 88px;
   --editor-rail-width: 214px;
@@ -401,7 +401,7 @@
   }
 }
 
-/* ==================== MIDI EDITOR V6 ==================== */
+/* ==================== MELODY EDITOR V6 ==================== */
 .melody-editor-workspace {
   --editor-keyboard-width: 78px;
   grid-template-rows: 42px minmax(0, 1fr);

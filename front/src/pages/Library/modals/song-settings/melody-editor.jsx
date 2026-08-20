@@ -76,8 +76,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     minMidi,
     noteAtTime,
     rowHeight,
-    syllableByIndex,
-    syllables,
     whiteKeyGeometry
   } = useMelodyEditorLayout({ notes, payload, verticalZoom, zoom });
   const transport = useMelodyEditorTransport({
@@ -142,14 +140,12 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     seek,
     selected,
     setSelected,
-    syllableByIndex,
     time,
     undo,
     workspaceRef,
     zoom
   });
   const {
-    assignSyllable,
     deleteSelected,
     drag,
     endDrag,
@@ -180,12 +176,11 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       />
 
       {loading ? (
-        <div className="melody-editor-loading">{translateSaved("Загружаем SongMap…")}</div>
+        <div className="melody-editor-loading">{translateSaved("Загружаем lyricsSync.json…")}</div>
       ) : (
         <div className="melody-editor-layout">
           <div className="melody-editor-stage">
             <MelodyEditorControls
-              assignSyllable={assignSyllable}
               autoScroll={autoScroll}
               deleteSelected={deleteSelected}
               duration={duration}
@@ -206,7 +201,6 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
               setPlaybackRate={setPlaybackRate}
               setVolumes={setVolumes}
               song={song}
-              syllables={syllables}
               time={time}
               toggleAutoScroll={toggleAutoScroll}
               undo={undo}

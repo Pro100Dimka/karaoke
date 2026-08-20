@@ -1,56 +1,6 @@
 import { translateSaved } from "../../../i18n/runtime";
 import { clamp01 } from "../../../utils/math";
-// Node test runner requires the explicit extension for this ESM import.
-// eslint-disable-next-line import/extensions
-import { normalizeNoteList } from "./note-normalization";
 
-const ACCIDENTAL_OFFSETS = Object.freeze({ "#": 1, b: -1 });
-
-export function noteNameToMidi(noteName) {
-  if (typeof noteName !== "string") return null;
-  const match = /^([A-Ga-g])([#b]?)(-?\d)$/.exec(noteName.trim());
-  if (!match) return null;
-  const semitones = {
-    C: 0,
-    D: 2,
-    E: 4,
-    F: 5,
-    G: 7,
-    A: 9,
-    B: 11
-  };
-  const [, letter, accidental, octaveText] = match;
-  const base = semitones[letter.toUpperCase()];
-  const offset = ACCIDENTAL_OFFSETS[accidental] ?? 0;
-  const midi = (Number(octaveText) + 1) * 12 + base + offset;
-  return midi >= 0 && midi <= 127 ? midi : null;
-}
-export function lyricsSyncLines(raw) {
-  if (!raw || !Array.isArray(raw.words)) return [];
-  const sourceLines = typeof raw.text === "string" ? raw.text.split(/\r?\n/) : [];
-  const tokenPattern = /[\p{L}\p{N}_]+(?:[’'-][\p{L}\p{N}_]+)*/gu;
-  const counts = sourceLines.map((text) => [...text.matchAll(tokenPattern)].length);
-  if (counts.reduce((total, count) => total + count, 0) !== raw.words.length) return [];
-
-  let cursor = 0;
-  return counts
-    .map((count, lineIndex) => {
-      const lineWords = raw.words.slice(cursor, cursor + count);
-      cursor += count;
-      if (!lineWords.length) return null;
-      return {
-        index: lineIndex,
-        text: sourceLines[lineIndex],
-        start: lineWords[0].start,
-        end: lineWords.at(-1).end,
-        words: lineWords
-      };
-    })
-    .filter(Boolean);
-}
-export function normalizeNotes(raw) {
-  return normalizeNoteList(raw, noteNameToMidi);
-}
 export function transposeKey(key, semitones) {
   if (!key) return translateSaved("Тональность не определена");
   const match = /^([A-G](?:#|b)?)(.*)/i.exec(key.trim());

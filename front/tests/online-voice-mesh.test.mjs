@@ -124,7 +124,7 @@ describe("online voice mesh", () => {
         noiseSuppression: false,
         autoGainControl: false,
         channelCount: 1,
-        sampleRate: { ideal: 48_000 },
+        sampleRate: { ideal: 44_100 },
         sampleSize: { ideal: 24 }
       }
     });
@@ -410,7 +410,7 @@ describe("online voice mesh", () => {
     const stopped = track("stopped", "ended");
     mesh.stream = { getAudioTracks: () => [stopped], getTracks: () => [stopped] };
     await mesh.start();
-    expect(stopped.stop).toHaveBeenCalledOnce();
+    expect(stopped.stop).not.toHaveBeenCalled();
     expect(capture).toHaveBeenCalledOnce();
     const live = stream([track("live", "live")]);
     mesh.stream = live;
@@ -474,7 +474,7 @@ describe("online voice mesh", () => {
     expect(mesh.lifecycleVersion).toBe(version + 1);
     expect(peerOnly.close).toHaveBeenCalledOnce();
     expect(channelOnly.close).toHaveBeenCalledOnce();
-    expect(local.stop).toHaveBeenCalledOnce();
+    expect(local.stop).not.toHaveBeenCalled();
     expect(mesh.onPeerClosed.mock.calls.map(([id]) => id).sort()).toEqual(["channel", "peer"]);
     for (const collection of [
       mesh.peers,
@@ -846,6 +846,7 @@ describe("online voice mesh", () => {
     });
     const mesh = makeMesh();
     const starting = mesh.start();
+    await vi.waitFor(() => expect(releaseCapture).toBeTypeOf("function"));
     const foreignStart = Promise.resolve("foreign");
     mesh.startPromise = foreignStart;
     releaseCapture(stream());
@@ -1437,7 +1438,9 @@ describe("online voice mesh", () => {
     const media = stream();
     const first = mesh.start();
     const second = mesh.start();
-    expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() =>
+      expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledTimes(1)
+    );
     mesh.stop();
     resolveCapture(media);
     await expect(first).rejects.toThrow("Запуск микрофона отменён");
@@ -1942,7 +1945,7 @@ describe("online voice mesh", () => {
     const localTrack = track("local");
     mesh.stream = stream([localTrack]);
     mesh.stop();
-    expect(localTrack.stop).toHaveBeenCalledOnce();
+    expect(localTrack.stop).not.toHaveBeenCalled();
   });
   test("cancels stale invites and direct ICE work", async () => {
     const mesh = makeMesh();

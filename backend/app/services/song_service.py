@@ -351,12 +351,15 @@ def create_song_from_path(
     title: str,
     original_filename: str,
     temporary_source: Path,
+    artist: str | None = None,
 ) -> models.Song:
     clean_title, safe_name, extension = _song_input(title, original_filename)
     if not temporary_source.is_file() or temporary_source.stat().st_size == 0: raise ValueError("Audio file is empty")
 
-    artist, resolved_title = _read_source_identity(
+    detected_artist, detected_title = _read_source_identity(
         temporary_source, safe_name, clean_title)
+    resolved_title = clean_title if title.strip() else detected_title
+    resolved_artist = artist.strip() or None if artist is not None else detected_artist
 
     def move_source(destination: Path) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -365,14 +368,17 @@ def create_song_from_path(
     return _persist_song(
         db,
         title=resolved_title,
-        artist=artist,
+        artist=resolved_artist,
         original_filename=safe_name,
         extension=extension,
         write_source=move_source,
     )
 
 
-def list_songs(db: Session) -> list[models.Song]: return list(db.scalars(select(models.Song).order_by(models.Song.created_at.desc())))
+def list_songs(db: Session) -> list[models.Song]:
+    return list(
+        db.scalars(select(models.Song).order_by(models.Song.created_at.desc(), models.Song.id.desc()))
+    )
 
 
 def get_song(db: Session, song_id: str) -> models.Song | None: return repositories.get_song(db, song_id)
@@ -412,4 +418,6 @@ def delete_song(db: Session, song: models.Song) -> None:
             source_path,
         )
     )
+    song_id = song.id
     delete_with_files(db, song, paths)
+    revision_cache.invalidate(song_id)

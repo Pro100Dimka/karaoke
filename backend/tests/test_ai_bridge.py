@@ -1,199 +1,69 @@
-
 import json
-from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
 
 from AI.models import PitchFrame
 from app.services import ai_bridge as bridge
-from tests._shared import patch_attrs
 
 
-def dump_json(path: Path, payload) -> None: path.write_text(json.dumps(payload, ensure_ascii=False), encoding='utf-8')
+def dump_json(path, payload):
+    path.write_text(json.dumps(payload), encoding="utf-8")
 
 
-def word(text: str, start: float, end: float, **extra): return {'text': text, 'word': text, 'start': start, 'end': end, **extra}
-
-
-def test_service_entrypoints_and_pitch_conversion(monkeypatch, tmp_path):
+def test_process_song_forwards_the_request(monkeypatch, tmp_path):
     service = Mock()
     service.process_song.return_value = "result"
-    service.analyze_pitch.return_value = [
-        PitchFrame(0.1, 440, 0.9, True, 0.2),
-        PitchFrame(0.2, 0, 0.1, False, 0),
-    ]
     monkeypatch.setattr(bridge, "get_ai_service", lambda: service)
-    assert bridge.process_song('a.wav', tmp_path, language='uk', title='T') == 'result'
-    frames = bridge.analyze_vocal("take.wav")
-    assert (frames[0]['midi'] == frames[0]['note'] == 69) and (frames[1]['midi'] is None)
-
-
-@pytest.mark.parametrize("value,default,expected", [("2", -1, 2), (None, 7, 7), ("x", 3, 3)])
-def test_int_or_default(value, default, expected):
-    assert bridge._int_or_default(value, default) == expected
-
-
-def test_normalize_and_reconcile_words():
-    assert bridge._normalize_line_words({"text": " ", "start": -2, "end": -1}) == {
-        "text": "",
-        "start": 0,
-        "end": 0,
-        "words": [],
-    }
-    corrected = bridge._normalize_line_words(
-        {
-            "text": "New words",
-            "start": 1,
-            "end": 3,
-            "words": [
-                {"word": "Old", "start": 0, "end": 2},
-                {"text": "labels", "start": 2, "end": 9},
-                None,
-            ],
-        }
-    )
-    assert ([item['word'] for item in corrected['words']], corrected['words'][0]['start'], corrected['words'][1]['end']) == (['New', 'words'], 1, 3)
-    rebuilt = bridge._normalize_line_words(
-        {"text": "one longer three", "start": 0, "end": 9, "words": []}
-    )
-    assert (([item['word'] for item in rebuilt['words']], rebuilt['words'][-1]['end']) == (['one', 'longer', 'three'], 9)) and (bridge._normalize_line_words({'text': '', 'words': [{'word': ' '}]})['words'] == [])
-    lines = bridge.reconcile_lyric_words(
-        [{"text": "late", "start": 2, "end": 3}, "bad", {"text": "early", "start": 1, "end": 2}]
-    )
-    assert [line["text"] for line in lines] == ["early", "late"]
-
-
-def test_source_boundaries_and_word_grouping():
-    words = [word(token, i, i + 0.4) for i, token in enumerate(["one", "two", "three", "four"])]
-    assert (bridge._source_line_boundaries('single line', words) == []) and (bridge._source_line_boundaries('one two\nthree four', words) == [2])
-    lines = bridge._group_words_into_lines(words, "one two\nthree four")
-    assert ([line['text'] for line in lines] == ['one two', 'three four']) and (bridge._group_words_into_lines([]) == [])
-    fallback = bridge._group_words_into_lines(
-        [
-            word("Hello", 0, 0.2),
-            None,
-            word("world!", 0.3, 0.6),
-            word("later", 2, 2.2),
-            word("1", 2.3, 2.4),
-            word("2", 2.5, 2.6),
-            word("3", 2.7, 2.8),
-            word("4", 2.9, 3),
-            word("5", 3.1, 3.2),
-            word("6", 3.3, 3.4),
-            word("7", 3.5, 3.6),
-            word("8", 3.7, 3.8),
-            word("long", 10, 10.1),
-        ]
-    )
-    assert (fallback[0]['text'] == 'Hello world!') and (len(fallback) >= 3)
-    long_text = (
-        "\n"
-        + "one two three four five six. seven eight nine ten eleven twelve"
-        + "\na b c d e, f g h i j, k l m n o"
-    )
-    assert (len(bridge._source_line_boundaries(long_text, [{'word': token} for token in bridge.tokenize(long_text)])) >= 2) and (bridge._group_words_into_lines([None, {'text': ' '}]) == [])
+    assert bridge.process_song(
+        "source", tmp_path, language="ru", title="Song", bpm_override=120, key_override="C"
+    ) == "result"
+    assert service.process_song.call_args.kwargs["source_path"] == "source"
 
 
 @pytest.mark.parametrize(
-    "opcodes,expected",
+    "frame,expected",
     [
-        ([("x", 0, 0, 0, 0), ("x", 0, 1, 0, 2)], 2),
-        ([("x", 1, 1, 0, 2)], 2),
-        ([("x", 0, 0, 0, 0)], 2),
+        (PitchFrame(0, 440, 0.8, True, 0.1), 69),
+        (PitchFrame(0, 0, 0, False, 0), None),
     ],
 )
-def test_source_boundary_opcode_edges(monkeypatch, opcodes, expected):
-    matcher = Mock()
-    matcher.get_opcodes.return_value = opcodes
-    monkeypatch.setattr(bridge, "SequenceMatcher", lambda *_, **__: matcher)
-    assert bridge._source_line_boundaries("a\nb", [{"word": "a"}, {"word": "b"}]) == [expected]
+def test_pitch_analysis_uses_the_analyzed_audio(monkeypatch, frame, expected):
+    monkeypatch.setattr(
+        bridge, "get_ai_service", lambda: SimpleNamespace(analyze_pitch=lambda _path: [frame])
+    )
+    assert bridge.analyze_vocal("vocals.flac")[0]["midi"] == expected
 
 
-def test_bound_durations_and_artifact_readers(tmp_path):
-    bounded = bridge._bound_legacy_word_durations(
-        [
-            {"start": 0, "end": 10, "words": [{"word": "x", "start": 0, "end": 10}]},
-            {"start": 2, "end": 3, "words": []},
-        ]
-    )
-    assert (bounded[0]['words'][0]['end'] == pytest.approx(0.7)) and (bounded[1]['start'] == 2)
-    dump_json(
-        tmp_path / "songMap.json",
-        {
-            "lines": [{"text": "ok"}, 1],
-            "notes": [{"midi_note": 60}, 1],
-            "syllables": [{"text": "la"}, 1],
-        },
-    )
-    assert (bridge.get_karaoke_lyrics(tmp_path) == {}) and (bridge.get_game_notes(tmp_path)[0]['pitch'] == 60) and (bridge.get_syllables(tmp_path) == [{'text': 'la'}])
-    dump_json(tmp_path / "songMap.json", [])
-    dump_json(
-        tmp_path / "lyricsSync.json",
-        {"text": "hi all", "words": [word("hi", 0, 1), word("all", 1, 2)]},
-    )
-    dump_json(tmp_path / "reference.json", {"notes": [{"midi": 62}]})
-    dump_json(tmp_path / "syllables.json", {"syllables": [{"text": "hi"}]})
-    assert (bridge.get_karaoke_lyrics(tmp_path)['text'] == 'hi all') and (bridge.get_karaoke_lyrics(tmp_path)['words'][0]['start'] == 0) and (bridge.get_game_notes(tmp_path)[0]['midi'] == 62) and (bridge.get_syllables(tmp_path) == [{'text': 'hi'}])
+def test_reconcile_lyrics_preserves_the_supplied_order_and_values():
+    lines = [
+        {"text": "second", "start": 2.123456789, "end": 3.987654321, "words": []},
+        {"text": "first", "start": 0.25, "end": 1.75, "words": []},
+    ]
+    result = bridge.reconcile_lyric_words(lines)
+    assert result == lines and result is not lines
+
+
+def test_karaoke_readers_return_only_canonical_artifacts(tmp_path):
+    notes = [{"start": 64.77, "end": 65.03, "note": 64}]
+    words = [{"index": 0, "text": "Пять", "start": 64.77, "end": 65.03, "notes": notes}]
+    dump_json(tmp_path / "lyricsSync.json", {"bpm": 120, "key": "Am", "duration": 100, "words": words})
+
+    assert bridge.get_karaoke_lyrics(tmp_path)["words"] == words
+    projected = [{**notes[0], "word_index": 0}]
+    assert bridge.get_vocal_notes(tmp_path) == projected
+    assert bridge.get_game_notes(tmp_path) == projected
+    assert bridge.get_reference_notes(tmp_path) == projected
+    assert bridge.get_syllables(tmp_path) == []
+    assert bridge.get_karaoke_timeline(tmp_path) == {
+        "duration": 100,
+        "words": words,
+        "notes": projected,
+    }
+
+
+def test_karaoke_readers_reject_noncanonical_shapes(tmp_path):
     dump_json(tmp_path / "lyricsSync.json", [])
     assert bridge.get_karaoke_lyrics(tmp_path) == {}
-    dump_json(tmp_path / "lyricsSync.json", {"words": "bad"})
-    assert bridge.get_karaoke_lyrics(tmp_path) == {}
-    dump_json(tmp_path / "reference.json", {"notes": "bad"})
-    assert bridge.get_game_notes(tmp_path) == []
-
-
-def test_timeline_prefers_song_map_and_builds_legacy(monkeypatch, tmp_path):
-    ready = {"lines": [], "display_notes": [], "overlap": True}
-    dump_json(tmp_path / "songMap.json", ready)
-    normalize = Mock()
-    monkeypatch.setattr("app.services.song_editor_service.normalize_editor_timeline", normalize)
-    assert bridge.get_karaoke_timeline(tmp_path) == ready
-    normalize.assert_called_once()
-    patch_attrs(monkeypatch, bridge, get_karaoke_lyrics=lambda _: {'text': 'la x', 'words': [{'text': 'la', 'index': 0, 'start': 0, 'end': 1}, {'text': 'x', 'index': 1, 'start': 2, 'end': 3}]}, get_syllables=lambda _: [{'index': 5, 'word_index': 0, 'start': 0.2, 'end': 0.8}, {'index': 6, 'word_index': 0, 'start': 0.8, 'end': 1}, {'index': 9, 'word_index': -1}], get_game_notes=lambda _: [{'syllable_index': 5, 'syllable_indices': [5, 6], 'start': 0.3, 'end': 0.7}, {'syllable_index': -1, 'start': 9, 'end': 10}])
-    dump_json(tmp_path / "songMap.json", {"duration": "bad"})
-    timeline = bridge._build_legacy_karaoke_timeline(tmp_path)
-    first, second = timeline["lines"][0]["words"][0], timeline["lines"][1]["words"][0]
-    assert (((first['start'], first['end']), (first['syllables'][0]['start'], first['syllables'][0]['end']), first['syllables'][0]['timing_source']) == ((0, 1), (0.2, 0.8), 'syllable_alignment')) and (first['syllables'][0]['notes']) and (first['syllables'][1]['notes']) and ((first['syllables'][1]['timing_source'], second['timing_source'], timeline['duration']) == ('syllable_alignment', 'word_alignment', 10))
-    dump_json(tmp_path / "songMap.json", {})
-    monkeypatch.setattr(bridge, "_build_legacy_karaoke_timeline", lambda _: {"legacy": True})
-    assert bridge.get_karaoke_timeline(tmp_path) == {"legacy": True}
-
-
-def test_legacy_timeline_empty_lyrics_and_explicit_duration(monkeypatch, tmp_path):
-    patch_attrs(monkeypatch, bridge, get_karaoke_lyrics=lambda _: {'text': '', 'words': []}, get_syllables=lambda _: [], get_game_notes=lambda _: [])
-    dump_json(tmp_path / "songMap.json", {"duration": 7})
-    timeline = bridge._build_legacy_karaoke_timeline(tmp_path)
-    assert (timeline['lines'], timeline['duration']) == ([], 7)
-
-
-def test_reference_note_priority(tmp_path):
-    dump_json(tmp_path / "reference.json", {"notes": [{"midi": 1}, "bad"]})
-    assert bridge.get_reference_notes(tmp_path)[0]["pitch"] == 1
-    cache = tmp_path / ".ai-cache"
-    cache.mkdir()
-    dump_json(cache / "vocal-notes.json", [{"midi_note": 2}])
-    assert bridge.get_reference_notes(tmp_path)[0]["pitch"] == 2
-    dump_json(tmp_path / "acousticNotes.json", {"notes": [{"midi": 3}]})
-    assert bridge.get_reference_notes(tmp_path)[0]["pitch"] == 3
-
-
-@pytest.mark.parametrize(
-    "duration,notes,level",
-    [(0, [], "easy"), (10, [{"midi": 60}], "easy"), (1, [{"midi": 40}, {"midi": 70}], "hard")],
-)
-def test_ensure_legacy_artifacts(tmp_path, duration, notes, level):
-    dump_json(tmp_path / "lyricsSync.json", {"text": "hello", "words": [word("hello", 0, 1)]})
-    dump_json(tmp_path / "songMap.json", {"duration": duration})
-    dump_json(tmp_path / "acousticNotes.json", {"notes": notes})
-    bridge.ensure_legacy_artifacts(tmp_path, title="Title")
-    assert (json.loads((tmp_path / 'songInfo.json').read_text(encoding='utf-8'))['title'] == 'Title') and (json.loads((tmp_path / 'difficulty.json').read_text(encoding='utf-8'))['level'] == level)
-    structure = json.loads((tmp_path / "structure.json").read_text(encoding="utf-8"))
-    assert (bool(structure) is bool(duration)) and (json.loads((tmp_path / 'breaths.json').read_text()) == [])
-
-
-def test_ensure_artifacts_recovers_from_invalid_song_map(tmp_path):
-    dump_json(tmp_path / "lyricsSync.json", [])
-    dump_json(tmp_path / "songMap.json", [])
-    bridge.ensure_legacy_artifacts(tmp_path)
-    assert json.loads((tmp_path / "songInfo.json").read_text()) == {}
+    assert bridge.get_vocal_notes(tmp_path) == []
