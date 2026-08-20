@@ -130,6 +130,13 @@ def test_create_song_persists_bytes_and_cleans_commit_failure(monkeypatch, tmp_p
     assert not (tmp_path / "custom/source.wav").exists()
 
 
+def test_duplicate_title_is_unicode_case_and_artist_insensitive():
+    database = Mock()
+    database.scalars.return_value = [SimpleNamespace(artist="Other", title="  МОЯ   ЛЕДИ ")]
+    duplicate = song_service._find_duplicate(database, "Нервы", "Моя леди")
+    assert duplicate is database.scalars.return_value[0]
+
+
 def test_create_song_from_streamed_path_moves_nonempty_source(monkeypatch, tmp_path):
     library = tmp_path / "library"
     patch_many(monkeypatch, (song_service.config, "SONG_OUTPUT_DIR", library), (song_service, "_slug_exists", Mock(return_value=False)))

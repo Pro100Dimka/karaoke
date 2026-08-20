@@ -42,7 +42,7 @@ def test_analysis_requires_processed_reference(monkeypatch, tmp_path):
     raises(ValueError, lambda: analysis_service.analyze_recording(recording, domain_song()), match='нет эталонной')
 
     patch_many(monkeypatch, (analysis_service.song_service, "resolve_output_dir", lambda _song: tmp_path), (analysis_service.ai_bridge, "get_reference_notes", lambda _path: []), (analysis_service, "read_json", lambda _path: []))
-    raises(ValueError, lambda: analysis_service.analyze_recording(recording, domain_song(str(tmp_path))), match='reference.json')
+    raises(ValueError, lambda: analysis_service.analyze_recording(recording, domain_song(str(tmp_path))), match='вокальные ноты')
 
 
 def test_analysis_filters_invalid_frames_and_calculates_sections(monkeypatch, tmp_path):

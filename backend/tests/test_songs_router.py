@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -105,6 +106,9 @@ def test_add_song_streams_upload_maps_validation_and_cleans_temp(monkeypatch, tm
     create.side_effect = ValueError("invalid audio")
     assert_http_status(400, lambda: asyncio.run(songs.add_song(upload_file(filename=None), None, Mock())))
 
+    create.side_effect = songs.song_service.SongAlreadyExistsError("Такая песня уже существует")
+    assert_http_status(409, lambda: asyncio.run(songs.add_song(upload_file(), None, Mock())))
+
     save.side_effect = HTTPException(status_code=413, detail="large")
     assert_http_status(413, lambda: asyncio.run(songs.add_song(upload_file(), None, Mock())))
 
@@ -174,11 +178,11 @@ def test_process_reprocess_status_and_cancel(monkeypatch):
 def test_logs_and_audio_track_resolution(monkeypatch, tmp_path):
     current = domain_song()
     monkeypatch.setattr(songs.song_service, "resolve_output_dir", Mock(return_value=tmp_path))
+    monkeypatch.setattr(songs.config, "APP_LOG_DIR", tmp_path)
     assert songs.get_processing_log(current) == {"lines": []}
-    log = tmp_path / songs.config.LOGS_DIRNAME / "pipeline.log"
-    log.parent.mkdir()
-    log.write_text("one\ntwo", encoding="utf-8")
-    assert songs.get_processing_log(current) == {"lines": ["one", "two"]}
+    log = tmp_path / "application.log"
+    log.write_text("ignored\n[song:song] one\n[song:song] two", encoding="utf-8")
+    assert songs.get_processing_log(current) == {"lines": ["[song:song] one", "[song:song] two"]}
     raises(HTTPException, lambda: songs.get_audio_track('unknown', current))
     raises(HTTPException, lambda: songs.get_audio_track('vocals', current))
     separated = tmp_path / "separated"
@@ -240,7 +244,9 @@ def test_result_and_lyrics_contracts(monkeypatch, tmp_path):
     reconcile = Mock(return_value=[{"text": " Hello "}, {"text": "World"}])
     monkeypatch.setattr(songs.ai_bridge, "reconcile_lyric_words", reconcile)
     body = schemas.LyricsUpdate(lyrics=[schemas.LyricLine(text="Hello", start=0, end=1, words=[])])
-    assert (songs.update_lyrics(body, current) == {'status': 'saved'}) and ((tmp_path / songs.config.TRUSTED_LYRICS_FILENAME).read_text(encoding='utf-8') == 'Hello\nWorld\n')
+    assert songs.update_lyrics(body, current) == {'status': 'saved'}
+    saved = json.loads((tmp_path / "lyricsSync.json").read_text(encoding="utf-8"))
+    assert saved["text"] == "Hello\nWorld" and saved["edited"] is True
     reconcile.return_value = [{"text": " "}]
     assert songs.update_lyrics(body, current) == {"status": "saved"}
     reconcile.side_effect = ValueError("bad lyrics")

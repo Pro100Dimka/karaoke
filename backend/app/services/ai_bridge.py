@@ -51,7 +51,6 @@ def process_song(
         progress=progress,
         cancelled=cancelled,
     )
-    ensure_legacy_artifacts(Path(output_dir), title=title)
     return result
 
 
@@ -277,7 +276,7 @@ def get_karaoke_lyrics(output_dir: str | Path) -> dict[str, Any]:
     return payload
 
 
-def get_game_notes(output_dir: str | Path) -> list[dict[str, Any]]: return _notes_with_midi(_artifact_list(Path(output_dir), 'notes', 'songMap.json', 'reference.json'))
+def get_game_notes(output_dir: str | Path) -> list[dict[str, Any]]: return _notes_with_midi(_artifact_list(Path(output_dir), 'notes', 'vocalNotes.json', 'songMap.json', 'reference.json'))
 
 
 def get_syllables(output_dir: str | Path) -> list[dict[str, Any]]: return _artifact_list(Path(output_dir), 'syllables', 'songMap.json', 'syllables.json')
@@ -389,9 +388,11 @@ def _build_legacy_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
 
 
 def _reference_notes(output_dir: Path) -> list[dict[str, Any]]:
-    canonical, legacy_cache = output_dir / 'acousticNotes.json', output_dir / '.ai-cache' / 'vocal-notes.json'
+    canonical, legacy_cache = output_dir / 'vocalNotes.json', output_dir / '.ai-cache' / 'vocal-notes.json'
     if canonical.exists():
         raw: Any = read_json(canonical, default={})
+    elif (legacy := output_dir / "acousticNotes.json").exists():
+        raw = read_json(legacy, default={})
     elif legacy_cache.exists():
         raw = read_json(legacy_cache, default={})
     else:

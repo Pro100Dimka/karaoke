@@ -60,9 +60,10 @@ def test_heartbeat_capture_start_stop_and_error_helpers(monkeypatch, tmp_path):
     assert pipeline_service._start_progress_heartbeat("song") == (event, thread)
     thread.start.assert_called_once_with()
 
+    monkeypatch.setattr(pipeline_service.config, "APP_LOG_DIR", tmp_path)
     capture = pipeline_service._create_progress_capture("song", tmp_path)
     capture.close()
-    assert (tmp_path / pipeline_service.config.LOGS_DIRNAME / "pipeline.log").exists()
+    assert (tmp_path / "application.log").exists()
     pipeline_service._stop_progress_heartbeat(None, thread)
     current = Mock()
     monkeypatch.setattr(pipeline_service.threading, "current_thread", Mock(return_value=current))
@@ -100,14 +101,14 @@ def test_ai_progress_callback_updates_semantic_runtime_and_cancels(monkeypatch):
     raises(pipeline_service.ProcessingCancelled, lambda: callback('pitch', 50, 'raw'))
 
 
-def test_force_midi_rebuild_invalidates_cache_and_files_but_preserves_manifest(monkeypatch, tmp_path):
+def test_clear_generated_results_invalidates_cache_and_files_but_preserves_manifest(monkeypatch, tmp_path):
     cache = Mock()
     monkeypatch.setattr(pipeline_service, "StageCache", Mock(return_value=cache))
-    for name in pipeline_service._MIDI_REBUILD_FILES: (tmp_path / name).write_text("x", encoding="utf-8")
+    for name in pipeline_service._LEGACY_GENERATED_FILES: (tmp_path / name).write_text("x", encoding="utf-8")
     (tmp_path / "manifest.json").write_text('{"outputs":{}}', encoding="utf-8")
-    pipeline_service._force_midi_rebuild(tmp_path)
-    cache.invalidate.assert_called_once_with("pitch", "derivation", "midi", "song-map")
-    assert (not any((tmp_path / name).exists() for name in pipeline_service._MIDI_REBUILD_FILES)) and ((tmp_path / 'manifest.json').is_file())
+    pipeline_service._clear_generated_results(tmp_path)
+    cache.invalidate.assert_called_once_with("pitch", "derivation", "song-map")
+    assert (not any((tmp_path / name).exists() for name in pipeline_service._LEGACY_GENERATED_FILES)) and ((tmp_path / 'manifest.json').is_file())
 
 
 def test_reprocessing_validates_owned_direct_child_and_runs_job(monkeypatch, tmp_path):
@@ -135,7 +136,7 @@ def test_reprocessing_validates_owned_direct_child_and_runs_job(monkeypatch, tmp
     target.mkdir()
     resolve.return_value = target
     rebuild, run = Mock(), Mock()
-    patch_attrs(monkeypatch, pipeline_service, _force_midi_rebuild=rebuild, _run_job=run)
+    patch_attrs(monkeypatch, pipeline_service, _clear_generated_results=rebuild, _run_job=run)
     pipeline_service._run_reprocessing("song")
     rebuild.assert_called_once_with(target)
     run.assert_called_once_with("song")

@@ -44,7 +44,7 @@ def errors():
 
 @router.post("/client-log", status_code=204)
 def client_log(entry: schemas.ClientLogIn):
-    """Accept a frontend/Electron log line and fold it into backend.log.
+    """Accept a frontend/Electron log line and fold it into application.log.
 
     Lets renderer and Electron-main errors land in the same single log file
     as the Python backend instead of only ever reaching devtools/the OS console.

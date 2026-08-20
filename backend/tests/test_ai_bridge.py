@@ -24,10 +24,7 @@ def test_service_entrypoints_and_pitch_conversion(monkeypatch, tmp_path):
         PitchFrame(0.2, 0, 0.1, False, 0),
     ]
     monkeypatch.setattr(bridge, "get_ai_service", lambda: service)
-    ensured = Mock()
-    monkeypatch.setattr(bridge, "ensure_legacy_artifacts", ensured)
     assert bridge.process_song('a.wav', tmp_path, language='uk', title='T') == 'result'
-    ensured.assert_called_once_with(tmp_path, title="T")
     frames = bridge.analyze_vocal("take.wav")
     assert (frames[0]['midi'] == frames[0]['note'] == 69) and (frames[1]['midi'] is None)
 

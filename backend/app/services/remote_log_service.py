@@ -6,6 +6,8 @@ import logging
 import os
 import threading
 import urllib.request
+import uuid
+from pathlib import Path
 
 from AI.utils.env import env_flag
 
@@ -14,15 +16,35 @@ _LOG_UPLOAD_URL = os.getenv(
     "https://karaoke-studio-online.pro100dimka-and.workers.dev/logs",
 )
 _DISABLED = env_flag("KARAOKE_LOG_COLLECTOR_DISABLED")
+_IDENTITY_LOCK = threading.Lock()
+
+
+def _persistent_device_id() -> str:
+    from config import DATA_DIR
+
+    path = Path(DATA_DIR) / "device-id"
+    with _IDENTITY_LOCK:
+        try:
+            value = path.read_text(encoding="utf-8").strip()
+            if value: return value
+        except OSError:
+            pass
+        value = f"pc-{uuid.uuid4().hex[:12]}"
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(value, encoding="utf-8")
+        except OSError:
+            pass
+        return value
 
 
 def _current_online_name() -> str:
     try:
         from app.services.app_settings_service import read_settings
 
-        return str(read_settings().get("online_name") or "").strip()
+        return str(read_settings().get("online_name") or "").strip() or _persistent_device_id()
     except Exception:
-        return ""
+        return _persistent_device_id()
 
 
 def _send(message: str, user: str) -> None:
@@ -39,9 +61,14 @@ def _send(message: str, user: str) -> None:
         pass  # Diagnostics must never raise into the caller.
 
 
+def send_diagnostic(message: str) -> None:
+    if _DISABLED or not message.strip(): return
+    threading.Thread(target=_send, args=(message, _current_online_name()), daemon=True).start()
+
+
 class RemoteErrorLogHandler(logging.Handler):
 
-    def __init__(self) -> None: super().__init__(level=logging.ERROR)
+    def __init__(self) -> None: super().__init__(level=logging.WARNING)
 
     def emit(self, record: logging.LogRecord) -> None:
         if _DISABLED: return
@@ -49,4 +76,4 @@ class RemoteErrorLogHandler(logging.Handler):
             message = self.format(record)
         except Exception:
             return
-        threading.Thread(target=_send, args=(message, _current_online_name()), daemon=True).start()
+        send_diagnostic(message)

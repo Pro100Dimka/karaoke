@@ -34,6 +34,9 @@ PACKAGE_SCHEMA_VERSION = 5
 REQUIRED_OUTPUT_KEYS = {"instrumental", "music", "lyricsSync", "reference", "songMap"}
 REQUIRED_OUTPUT_PATHS = {"music.json", "lyricsSync.json", "reference.json", "songMap.json", "manifest.json"}
 REVISION_ARTIFACTS = ("songMap.json", "reference.json", "lyricsSync.json", "music.json")
+CANONICAL_OUTPUT_KEYS = {"instrumental", "vocals", "lyricsSync", "vocalNotes"}
+CANONICAL_OUTPUT_PATHS = {"lyricsSync.json", "vocalNotes.json", "manifest.json"}
+CANONICAL_REVISION_ARTIFACTS = ("lyricsSync.json", "vocalNotes.json")
 REVISION_RUNTIME_FIELDS = (
     "key_override", "tempo_override", "note_range_min", "note_range_max",
     "difficulty_override", "video_url", "show_lyrics", "show_notes", "optimized",
@@ -76,7 +79,9 @@ def _instrumental_relative(root: Path) -> str:
     return path.relative_to(root.resolve()).as_posix()
 
 
-def _revision_artifact_paths(root: Path) -> tuple[str, ...]: return (*REVISION_ARTIFACTS, _instrumental_relative(root))
+def _revision_artifact_paths(root: Path) -> tuple[str, ...]:
+    artifacts = CANONICAL_REVISION_ARTIFACTS if (root / "vocalNotes.json").is_file() else REVISION_ARTIFACTS
+    return (*artifacts, _instrumental_relative(root))
 
 
 def _canonical_runtime_state(values: dict[str, object], mode: str) -> dict[str, object]:
@@ -198,8 +203,16 @@ def invalidate_content_revision(song: models.Song) -> None: revision_cache.inval
 
 def _song_mode_from_files(output_dir: Path) -> str:
     try:
-        song_map = json.loads((output_dir / "songMap.json").read_text(encoding="utf-8"))
         lyrics_sync = json.loads((output_dir / "lyricsSync.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise ValueError("Song timeline artifacts are invalid") from exc
+    canonical_notes = read_json(output_dir / "vocalNotes.json", default={})
+    if isinstance(canonical_notes, dict) and isinstance(canonical_notes.get("notes"), list):
+        if any(isinstance(item, dict) for item in canonical_notes["notes"]): return "melody"
+        sync_words = lyrics_sync.get("words", []) if isinstance(lyrics_sync, dict) else []
+        return "lyrics" if any(isinstance(item, dict) for item in sync_words) else "instrumental"
+    try:
+        song_map = json.loads((output_dir / "songMap.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise ValueError("Song timeline artifacts are invalid") from exc
     notes, words, sync_words = song_map.get('notes', []) if isinstance(song_map, dict) else [], song_map.get('words', []) if isinstance(song_map, dict) else [], lyrics_sync.get('words', []) if isinstance(lyrics_sync, dict) else []
@@ -349,7 +362,8 @@ def _archive_revision(archive: zipfile.ZipFile, manifest: dict[str, object]) -> 
     processing = _archive_processing_manifest(archive, require_outputs=True)
     instrumental = _safe_output_relative(processing["outputs"].get("instrumental"), key="instrumental")
     artifacts: dict[str, str] = {}
-    for relative in (*REVISION_ARTIFACTS, instrumental):
+    revisions = CANONICAL_REVISION_ARTIFACTS if "vocalNotes" in processing["outputs"] else REVISION_ARTIFACTS
+    for relative in (*revisions, instrumental):
         name = f"output/{relative}"
         try:
             info = archive.getinfo(name)
@@ -466,11 +480,12 @@ def _instrumental_member(archive: zipfile.ZipFile) -> zipfile.ZipInfo:
 def _validate_processing_manifest(archive: zipfile.ZipFile, files: set[str]) -> None:
     pipeline_manifest = _archive_processing_manifest(archive, require_outputs=True)
     outputs = pipeline_manifest["outputs"]
-    if not REQUIRED_OUTPUT_KEYS.issubset(outputs): raise ValueError("Song package processing manifest is incomplete")
+    required = CANONICAL_OUTPUT_KEYS if "vocalNotes" in outputs else REQUIRED_OUTPUT_KEYS
+    if not required.issubset(outputs): raise ValueError("Song package processing manifest is incomplete")
     build = pipeline_manifest.get("build") or pipeline_manifest.get("version")
     if not isinstance(build, str) or not build.strip(): raise ValueError("Song package processing build identifier is invalid")
     integrity = pipeline_manifest.get("integrity")
-    for key in REQUIRED_OUTPUT_KEYS:
+    for key in required:
         relative = outputs.get(key)
         if not isinstance(relative, str) or f"output/{relative}" not in files: raise ValueError(f"Song package manifest points to missing artifact: {key}")
         expected = integrity.get(key) if isinstance(integrity, dict) else None
@@ -480,6 +495,23 @@ def _validate_processing_manifest(archive: zipfile.ZipFile, files: set[str]) -> 
 
 
 def _validate_timeline_artifacts(archive: zipfile.ZipFile, mode: object) -> None:
+    canonical = (
+        _archive_json(archive, "output/vocalNotes.json", max_bytes=16 * 1024 * 1024)
+        if "output/vocalNotes.json" in archive.namelist()
+        else None
+    )
+    if isinstance(canonical, dict):
+        notes = canonical.get("notes")
+        if not isinstance(notes, list) or any(not _valid_note(item) for item in notes):
+            raise ValueError("Song package vocalNotes.json is structurally invalid")
+        lyrics_sync = _archive_json(archive, "output/lyricsSync.json", max_bytes=16 * 1024 * 1024)
+        if not isinstance(lyrics_sync, dict) or not isinstance(lyrics_sync.get("words", []), list):
+            raise ValueError("Song package lyricsSync.json is structurally invalid")
+        words = lyrics_sync.get("words", [])
+        if any(not _valid_word(item) for item in words): raise ValueError("Song package contains invalid lyric timing")
+        if mode == "melody" and not notes: raise ValueError("Melody package has no vocal notes")
+        if mode == "lyrics" and not words: raise ValueError("Lyrics package has no timed words")
+        return
     song_map = _archive_json(archive, "output/songMap.json", max_bytes=16 * 1024 * 1024)
     if not isinstance(song_map, dict) or not all(isinstance(song_map.get(key), list) for key in ("words", "syllables", "notes")): raise ValueError("Song package songMap.json is structurally invalid")
     notes = [item for item in song_map["notes"] if _valid_note(item)]
@@ -514,7 +546,9 @@ def _validate_semantic_package(archive: zipfile.ZipFile, members: list[zipfile.Z
     if revision != _archive_revision(archive, manifest): raise ValueError("Song package content revision does not match its artifacts")
 
     files = {member.filename for member in members if not member.is_dir()}
-    if missing := {f"output/{name}" for name in REQUIRED_OUTPUT_PATHS} - files: raise ValueError(f"Song package is incomplete; missing: {', '.join(sorted(missing))}")
+    processing = _archive_processing_manifest(archive, require_outputs=True)
+    paths = CANONICAL_OUTPUT_PATHS if "vocalNotes" in processing["outputs"] else REQUIRED_OUTPUT_PATHS
+    if missing := {f"output/{name}" for name in paths} - files: raise ValueError(f"Song package is incomplete; missing: {', '.join(sorted(missing))}")
     _validate_archive_audio(archive, _instrumental_member(archive), label="instrumental")
     source = _source_member(members)
     _validate_archive_audio(archive, source, label="source")
@@ -826,4 +860,3 @@ def import_package(db: Session, package_path: Path, *, expected_revision: str | 
                 song_id=song_id, title=title, slug=slug,
                 final_source_name=final_source_name, output_dir=output_dir,
             )
-

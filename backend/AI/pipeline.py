@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import re
+import shutil
 import sys
 import tempfile
 import time
@@ -11,10 +12,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .artifacts import publish_files_atomically
-from .audio import audio_buffer_cache, decode_audio, duration
+from .audio import audio_buffer_cache, decode_audio, duration, encode_flac
 from .cache import StageCache
 from .config import CoreConfig
-from .diagnostics import build_alignment_debug
 from .engines.ctc_alignment import CTC_ALIGNMENT_VERSION
 from .engines.pitch import PyinFallbackPitchEstimator
 from .engines.registry import EngineRegistry
@@ -31,39 +31,32 @@ from .engines.text import (
     tokenize,
 )
 from .errors import EngineUnavailableError, InvalidArtifactError, ProcessingCancelledError
-from .karaoke_timeline import KARAOKE_TIMELINE_VERSION, build_karaoke_song_map
 from .locks import ThreadFileLock
 from .lyrics_sources import discover_lyrics
-from .midi import write_midi
 from .models import (
     PipelineManifest,
     PitchFrame,
     StageReport,
-    Syllable,
-    VocalNote,
     Word,
     to_compact_dict,
     to_dict,
 )
 from .music import MUSIC_ANALYZER_VERSION, analyze_music
-from .notes import NOTE_DECODER_VERSION, build_game_notes, build_vocal_notes, get_note_diagnostics
+from .notes import build_game_notes, build_vocal_notes
 from .pitch_post import (
     PITCH_STABILIZER_VERSION,
     fuse_pitch_with_yin,
     refine_pitch_confidence,
     stabilize_pitch,
 )
-from .profiler import RuntimeTelemetry, environment_info
-from .quality import evaluate_quality
-from .syllables import SYLLABLE_ALIGNER_VERSION, VOWELS, align_syllables
+from .profiler import RuntimeTelemetry
+from .syllables import VOWELS, align_syllables
 from .utils.env import env_flag
 from .utils.io import read_json, write_json_atomic, write_text_atomic
 from .utils.numeric import clamp01
 from .validators import (
     validate_audio,
-    validate_derivation_json,
     validate_json,
-    validate_midi,
     validate_music_json,
     validate_pitch,
     validate_pitch_json,
@@ -72,13 +65,6 @@ from .validators import (
     validate_words_json,
 )
 from .version import AI_BUILD_ID
-from .vocal_preprocess import (
-    VOCAL_ANALYSIS_PREPROCESS_VERSION,
-    analyze_vocal_residuals,
-    choose_best_pitch_track,
-    prepare_midi_analysis_variants,
-    score_pitch_track,
-)
 
 ProgressCallback = Callable[[str, float, str], None]
 CancelCallback = Callable[[], bool]
@@ -504,32 +490,6 @@ class KaraokePipeline:
             publish_files_atomically(
                 [(temp_text, lyrics_txt), (temp_words, words_path)])
 
-    @staticmethod
-    def _publish_midi_pair(
-        output: Path,
-        vocal_midi: Path,
-        game_midi: Path,
-        vocal_notes,
-        game_notes,
-        words,
-        syllables,
-        bpm: float,
-        bend_range: int,
-    ) -> None:
-        with tempfile.TemporaryDirectory(prefix="karaoke-midi-", dir=output) as temp_dir:
-            root = Path(temp_dir)
-            temp_vocal = root / "vocal.mid"
-            temp_game = root / "game.mid"
-            write_midi(temp_vocal, vocal_notes, words,
-                       syllables, bpm, True, bend_range)
-            write_midi(
-                temp_game, game_notes or vocal_notes, words, syllables, bpm, False, bend_range
-            )
-            validate_midi(temp_vocal)
-            validate_midi(temp_game)
-            publish_files_atomically(
-                [(temp_vocal, vocal_midi), (temp_game, game_midi)])
-
     def _cache_hit(
         self, cache: StageCache, stage: str, key: str, outputs: list[Path], validators=None
     ) -> bool:
@@ -643,7 +603,12 @@ class KaraokePipeline:
     def run(self, request: PipelineRequest) -> PipelineResult:
         output = Path(request.output_dir).resolve()
         output.mkdir(parents=True, exist_ok=True)
-        with ThreadFileLock(output / ".pipeline.lock", timeout_sec=PIPELINE_LOCK_TIMEOUT_SECONDS): return self._run_unlocked(request)
+        lock_path = output / ".pipeline.lock"
+        try:
+            with ThreadFileLock(lock_path, timeout_sec=PIPELINE_LOCK_TIMEOUT_SECONDS):
+                return self._run_unlocked(request)
+        finally:
+            self._remove_stale(lock_path)
 
     def _run_unlocked(self, request: PipelineRequest) -> PipelineResult:
         telemetry = RuntimeTelemetry()
@@ -657,8 +622,8 @@ class KaraokePipeline:
         if not source.is_file(): raise FileNotFoundError(source)
         protected_outputs = {
             (output / "song.wav").resolve(),
-            (output / "separated" / "vocals.wav").resolve(),
-            (output / "separated" / "instrumental.wav").resolve(),
+            (output / "separated" / "vocals.flac").resolve(),
+            (output / "separated" / "instrumental.flac").resolve(),
         }
         if source in protected_outputs:
             raise ValueError(
@@ -668,7 +633,7 @@ class KaraokePipeline:
         reports: list[StageReport] = []
         alignment_debug_raw: dict[str, object] = {}
         warnings: list[str] = []
-        source_hash, song_wav, vocals, instrumental = cache.file_hash(source), output / 'song.wav', output / 'separated' / 'vocals.wav', output / 'separated' / 'instrumental.wav'
+        source_hash, song_wav, vocals, instrumental = cache.file_hash(source), output / 'song.wav', output / 'separated' / 'vocals.flac', output / 'separated' / 'instrumental.flac'
         vocals.parent.mkdir(exist_ok=True)
 
         self._notify(request, "decode", 2, "Подготовка аудио")
@@ -775,10 +740,14 @@ class KaraokePipeline:
                 )
                 validate_audio(temporary_vocals)
                 validate_audio(temporary_instrumental)
+                encoded_vocals = Path(temp_dir) / "vocals.flac"
+                encoded_instrumental = Path(temp_dir) / "instrumental.flac"
+                encode_flac(temporary_vocals, encoded_vocals)
+                encode_flac(temporary_instrumental, encoded_instrumental)
                 publish_files_atomically(
                     [
-                        (temporary_vocals, vocals),
-                        (temporary_instrumental, instrumental),
+                        (encoded_vocals, vocals),
+                        (encoded_instrumental, instrumental),
                     ]
                 )
             cache.commit("separation", separation_key, [vocals, instrumental])
@@ -837,35 +806,12 @@ class KaraokePipeline:
                 started=started,
             )
 
-        self._notify(request, "pitch", 52,
-                     "Очистка вокала и определение мелодии")
-        pitch_raw_path, pitch_path, midi_analysis_vocal, midi_tail_vocal = output / 'pitchRaw.json', output / 'pitch.json', output / 'separated' / 'vocals.midi-analysis.wav', output / 'separated' / 'vocals.midi-analysis-tail.wav'
-        cleanup_outputs, cleanup_key = [midi_analysis_vocal, midi_tail_vocal], cache.key('midi-vocal-cleanup', {'vocals': cache.file_hash(vocal_fingerprint), 'algorithm': VOCAL_ANALYSIS_PREPROCESS_VERSION, 'code': cache.optional_file_hash(Path(__file__).with_name('vocal_preprocess.py'))})
-        if not self._cached_stage(
-            cache,
-            reports,
-            "midi-vocal-cleanup",
-            cleanup_key,
-            cleanup_outputs,
-            {path: validate_audio for path in cleanup_outputs},
-        ):
-            started_cleanup = time.perf_counter()
-            prepare_midi_analysis_variants(
-                vocals, midi_analysis_vocal, midi_tail_vocal)
-            for path in cleanup_outputs: validate_audio(path)
-            self._complete_stage(
-                cache,
-                reports,
-                "midi-vocal-cleanup",
-                cleanup_key,
-                cleanup_outputs,
-                VOCAL_ANALYSIS_PREPROCESS_VERSION,
-                started=started_cleanup,
-            )
+        self._notify(request, "pitch", 52, "Определение нот по vocals.flac")
+        pitch_raw_path, pitch_path = output / 'pitchRaw.json', output / 'pitch.json'
 
         primary_melody = getattr(self.engines, "melody", None)
-        pitch_key, pitch_outputs = cache.key('pitch', {'song': cache.file_hash(song_wav), 'vocals': cache.file_hash(vocal_fingerprint), 'cleanup': VOCAL_ANALYSIS_PREPROCESS_VERSION, 'primary_engine': getattr(primary_melody, 'name', None), 'primary_config': getattr(primary_melody, 'fingerprint', lambda: {})(), 'primary_postprocess': 'native-contour-v1', 'fallback_engine': self.engines.pitch.name, 'fallback_config': getattr(self.engines.pitch, 'fingerprint', lambda: {})(), 'hop': self.config.hop_seconds, 'fmin': self.config.fmin_hz, 'fmax': self.config.fmax_hz, 'postprocessor': PITCH_STABILIZER_VERSION, 'primary_code': cache.optional_file_hash(Path(__file__).parent / 'engines' / 'omnizart_pitch.py'), 'pitch_post_code': cache.optional_file_hash(Path(__file__).with_name('pitch_post.py'))}), [pitch_raw_path, pitch_path] if self.config.preserve_raw_pitch else [pitch_path]
-        pitch_validators, pitch_analysis_source, original_quality, cleaned_quality, tail_quality = {path: validate_pitch_json for path in pitch_outputs}, 'cached', None, None, None
+        pitch_key, pitch_outputs = cache.key('pitch', {'vocals': cache.file_hash(vocal_fingerprint), 'primary_engine': getattr(primary_melody, 'name', None), 'primary_config': getattr(primary_melody, 'fingerprint', lambda: {})(), 'primary_postprocess': 'vocal-contour-v1', 'fallback_engine': self.engines.pitch.name, 'fallback_config': getattr(self.engines.pitch, 'fingerprint', lambda: {})(), 'hop': self.config.hop_seconds, 'fmin': self.config.fmin_hz, 'fmax': self.config.fmax_hz, 'postprocessor': PITCH_STABILIZER_VERSION, 'primary_code': cache.optional_file_hash(Path(__file__).parent / 'engines' / 'omnizart_pitch.py'), 'pitch_post_code': cache.optional_file_hash(Path(__file__).with_name('pitch_post.py'))}), [pitch_raw_path, pitch_path] if self.config.preserve_raw_pitch else [pitch_path]
+        pitch_validators = {path: validate_pitch_json for path in pitch_outputs}
         if self._cache_hit(cache, "pitch", pitch_key, pitch_outputs, pitch_validators):
             pitch = [PitchFrame(**item) for item in read_json(pitch_path, [])]
             self._report(reports, "pitch", "cached", cached=True)
@@ -875,14 +821,13 @@ class KaraokePipeline:
             if primary_melody is not None:
                 started_primary = time.perf_counter()
                 try:
-                    candidate = primary_melody.estimate(song_wav)
+                    candidate = primary_melody.estimate(vocals)
                     validate_pitch(candidate)
                     if not any(frame.voiced for frame in candidate):
                         raise EngineUnavailableError(
                             "Omnizart Patch-CNN returned no voiced frames")
                     raw_pitch = list(candidate)
                     stabilization_input = raw_pitch
-                    pitch_analysis_source = "omnizart-full-mix"
                     self._report(
                         reports, "pitch-primary", primary_melody.name, started=started_primary
                     )
@@ -891,56 +836,18 @@ class KaraokePipeline:
                         f"{exc}; using the existing FCPE/YIN fallback")
 
             if raw_pitch is None:
-                pitch_candidates = {
-                    "original": self._run(
-                        "pitch-original",
-                        self.engines.pitch,
-                        lambda engine: engine.estimate(vocals),
-                        reports,
-                        warnings,
-                    ),
-                    "denoise": self._run(
-                        "pitch-denoise",
-                        self.engines.pitch,
-                        lambda engine: engine.estimate(midi_analysis_vocal),
-                        reports,
-                        warnings,
-                    ),
-                    "tail-suppressed": self._run(
-                        "pitch-tail-suppressed",
-                        self.engines.pitch,
-                        lambda engine: engine.estimate(midi_tail_vocal),
-                        reports,
-                        warnings,
-                    ),
-                }
-                for candidate in pitch_candidates.values(): validate_pitch(candidate)
-                qualities = {
-                    name: score_pitch_track(list(value)) for name, value in pitch_candidates.items()
-                }
-                original_quality = qualities["original"]
-                cleaned_quality = qualities["denoise"]
-                tail_quality = qualities["tail-suppressed"]
-                pitch_analysis_source = choose_best_pitch_track(qualities)
-                pitch_audio_by_source = {
-                    "original": vocals,
-                    "denoise": midi_analysis_vocal,
-                    "tail-suppressed": midi_tail_vocal,
-                }
-                pitch_analysis_audio = pitch_audio_by_source[pitch_analysis_source]
-                raw_pitch = list(pitch_candidates[pitch_analysis_source])
-                self._report(
-                    reports, "pitch-source-selection",
-                    " ".join(f"{name}={quality.score:.4f}" for name, quality in qualities.items())
-                    + f" selected={pitch_analysis_source}",
-                )
+                raw_pitch = list(self._run(
+                    "pitch-vocals", self.engines.pitch,
+                    lambda engine: engine.estimate(vocals), reports, warnings,
+                ))
+                validate_pitch(raw_pitch)
                 confidence_pitch = refine_pitch_confidence(
-                    raw_pitch, pitch_analysis_audio, sample_rate=self.config.pitch_sample_rate
+                    raw_pitch, vocals, sample_rate=self.config.pitch_sample_rate
                 )
                 validate_pitch(confidence_pitch)
                 stabilization_input = fuse_pitch_with_yin(
                     confidence_pitch,
-                    pitch_analysis_audio,
+                    vocals,
                     sample_rate=self.config.pitch_sample_rate,
                     fmin_hz=self.config.fmin_hz,
                     fmax_hz=self.config.fmax_hz,
@@ -950,7 +857,7 @@ class KaraokePipeline:
             validate_pitch(raw_pitch)
             pitch = (
                 list(raw_pitch)
-                if pitch_analysis_source == "omnizart-full-mix"
+                if primary_melody is not None and stabilization_input is raw_pitch
                 else stabilize_pitch(stabilization_input or raw_pitch)
             )
             validate_pitch(pitch)
@@ -1185,265 +1092,56 @@ class KaraokePipeline:
 
         validate_within_duration(words, song_duration, "words", 0.5)
 
-        self._notify(request, "syllables", 82, "Разметка слогов и нот")
-        syllable_path, reference, contour, notes_path, derivation_key = output / 'syllables.json', output / 'reference.json', output / 'melodyContour.json', output / 'acousticNotes.json', cache.key('derivation', {'pitch': cache.file_hash(pitch_path), 'words': cache.file_hash(words_path), 'min_note': self.config.min_note_sec, 'confidence': self.config.min_voiced_confidence, 'split': self.config.split_note_semitones, 'gap': self.config.max_gap_sec, 'decoder': NOTE_DECODER_VERSION, 'decoder_code': cache.optional_file_hash(Path(__file__).with_name('notes.py')), 'pipeline_code': cache.optional_file_hash(Path(__file__)), 'build': AI_BUILD_ID, 'serialization': 'compact-floats-v1', 'syllable_aligner': SYLLABLE_ALIGNER_VERSION, 'trusted_activity_segments': supplied_segments})
-        note_diagnostics: dict[str, object] = {}
-        derivation_outputs, derivation_validators = [syllable_path, reference, contour, notes_path], {syllable_path: lambda path: validate_derivation_json(path, 'syllables'), reference: lambda path: validate_derivation_json(path, 'notes'), contour: lambda path: validate_derivation_json(path, 'frames'), notes_path: lambda path: validate_derivation_json(path, 'notes')}
-        if self._cached_stage(
-            cache, reports, "derivation", derivation_key, derivation_outputs, derivation_validators
-        ):
-            syllables = [
-                Syllable(**item) for item in read_json(syllable_path, {}).get("syllables", [])
-            ]
-            game_notes = [VocalNote(**item)
-                          for item in read_json(reference, {}).get("notes", [])]
-            vocal_notes = [
-                VocalNote(**item) for item in read_json(notes_path, {}).get("notes", [])]
-        else:
-            started = time.perf_counter()
-            syllables = align_syllables(words, pitch)
-            vocal_notes = build_vocal_notes(
-                pitch,
-                syllables,
-                min_note=self.config.min_note_sec,
-                split_semitones=self.config.split_note_semitones,
-                max_gap=self.config.max_gap_sec,
-                min_confidence=self.config.min_voiced_confidence,
-                words=words,
-                audio=midi_tail_vocal,
-                activity_segments=supplied_segments,
-                fmin_hz=self.config.fmin_hz,
-                fmax_hz=self.config.fmax_hz,
-            )
-            note_diagnostics = get_note_diagnostics()
-            game_notes = build_game_notes(
-                vocal_notes, syllables, min_note=self.config.min_note_sec)
-            validate_timeline(words, "words")
-            validate_timeline(syllables, "syllables")
-            validate_timeline(vocal_notes, "vocal notes")
-            write_json_atomic(syllable_path, {"syllables": [
-                              to_compact_dict(item) for item in syllables]}, compact=True)
-            write_json_atomic(
-                reference, {"notes": [to_compact_dict(item) for item in game_notes]}, compact=True)
-            write_json_atomic(
-                contour, {"frames": [to_compact_dict(item) for item in pitch]}, compact=True)
-            write_json_atomic(
-                notes_path, {"notes": [to_compact_dict(item) for item in vocal_notes]}, compact=True)
-            self._complete_stage(
-                cache,
-                reports,
-                "derivation",
-                derivation_key,
-                derivation_outputs,
-                "word-aware",
-                started=started,
-            )
-        validate_within_duration(syllables, song_duration, "syllables", 0.5)
-        validate_within_duration(
-            vocal_notes, song_duration, "vocal notes", 0.1)
-        validate_within_duration(game_notes, song_duration, "game notes", 0.1)
-
-        self._notify(request, "midi", 90, "Создание MIDI")
-        vocal_midi, game_midi, midi_key = output / 'vocal.mid', output / 'game.mid', cache.key('midi', {'derivation': derivation_key, 'bpm': round(bpm, 4), 'bend': self.config.midi_bend_range})
-        if vocal_notes and self._cached_stage(
-            cache,
-            reports,
-            "midi",
-            midi_key,
-            [vocal_midi, game_midi],
-            {vocal_midi: validate_midi, game_midi: validate_midi},
-        ):
-            pass
-        elif vocal_notes:
-            started = time.perf_counter()
-            self._publish_midi_pair(
-                output,
-                vocal_midi,
-                game_midi,
-                vocal_notes,
-                game_notes,
-                words,
-                syllables,
-                bpm,
-                self.config.midi_bend_range,
-            )
-            self._complete_stage(
-                cache,
-                reports,
-                "midi",
-                midi_key,
-                [vocal_midi, game_midi],
-                "word-syllable-aware",
-                started=started,
-            )
-        else:
-            self._remove_stale(vocal_midi, game_midi)
-            cache.invalidate("midi")
-            warnings.append("No voiced notes detected; MIDI was not generated")
-
-        canonical_lyrics_text, song_map, song_map_key = lyrics_txt.read_text(encoding='utf-8') if lyrics_txt.exists() else str(supplied or ''), output / 'songMap.json', cache.key('song-map', {'derivation': derivation_key, 'duration': song_duration, 'bpm': round(bpm, 6), 'key': music_analysis.get('key'), 'tempo': tempo_key, 'build': AI_BUILD_ID, 'timeline_builder': KARAOKE_TIMELINE_VERSION})
-        if self._cached_stage(
-            cache,
-            reports,
-            "song-map",
-            song_map_key,
-            [song_map],
-            {
-                song_map: lambda path: validate_json(
-                    path, ("duration", "bpm", "words", "syllables", "notes")
-                )
-            },
-        ):
-            pass
-        else:
-            write_json_atomic(
-                song_map,
-                build_karaoke_song_map(
-                    lyrics_text=canonical_lyrics_text,
-                    words=words,
-                    syllables=syllables,
-                    game_notes=game_notes,
-                    duration=song_duration,
-                    bpm=bpm,
-                    key=music_analysis.get("key"),
-                    ai_build_id=AI_BUILD_ID,
-                    note_decoder_version=NOTE_DECODER_VERSION,
-                ),
-                compact=True,
-            )
-            cache.commit("song-map", song_map_key, [song_map])
-            self._remove_stale(output / "songMap.ai.json")
-            self._report(reports, "song-map", "builder")
-
-        quality_path, quality = output / 'quality.json', evaluate_quality(song_duration, pitch, words, syllables, vocal_notes)
-        if self.config.write_quality_report:
-            write_json_atomic(quality_path, to_dict(quality))
-        else:
-            self._remove_stale(quality_path)
-        warnings.extend(
-            item for item in quality.warnings if item not in warnings)
-        alignment_debug_path, raw_pitch_for_debug = output / 'alignmentDebug.json', [PitchFrame(**item) for item in read_json(pitch_raw_path, [])] if pitch_raw_path.exists() else None
-        try:
-            vocal_effect_diagnostics = analyze_vocal_residuals(
-                vocals, instrumental, midi_analysis_vocal, midi_tail_vocal
-            )
-        except (OSError, RuntimeError, ValueError) as exc:
-            vocal_effect_diagnostics = {"available": False, "reason": str(exc)}
-            warnings.append(f"Vocal residual diagnostics unavailable: {exc}")
-        alignment_debug = build_alignment_debug(
-            lyrics_text=lyrics_txt.read_text(
-                encoding="utf-8") if lyrics_txt.exists() else "",
+        self._notify(request, "notes", 82, "Построение нот голоса по vocals.flac")
+        notes_path = output / "vocalNotes.json"
+        started = time.perf_counter()
+        syllables = align_syllables(words, pitch)
+        vocal_notes = build_vocal_notes(
+            pitch,
+            syllables,
+            min_note=self.config.min_note_sec,
+            split_semitones=self.config.split_note_semitones,
+            max_gap=self.config.max_gap_sec,
+            min_confidence=self.config.min_voiced_confidence,
             words=words,
-            syllables=syllables,
-            pitch=pitch,
-            notes=vocal_notes,
-            duration_sec=song_duration,
-            raw_pitch=raw_pitch_for_debug,
-            game_notes=game_notes,
-            alignment_diagnostics={
-                **dict(alignment_debug_raw.get("model_evidence") or {}),
-                "word_sources": list(alignment_debug_raw.get("word_sources") or []),
-                "word_candidates": list(alignment_debug_raw.get("word_candidates") or []),
-            },
-            reports=reports,
-            note_diagnostics=note_diagnostics,
-            music_diagnostics=music_analysis,
-            pitch_source_diagnostics={
-                "selected": pitch_analysis_source,
-                "original": to_dict(original_quality) if original_quality is not None else None,
-                "denoise": to_dict(cleaned_quality) if cleaned_quality is not None else None,
-                "tail_suppressed": to_dict(tail_quality) if tail_quality is not None else None,
-            },
-            vocal_effect_diagnostics=vocal_effect_diagnostics,
+            audio=vocals,
+            activity_segments=supplied_segments,
+            fmin_hz=self.config.fmin_hz,
+            fmax_hz=self.config.fmax_hz,
         )
-        write_json_atomic(alignment_debug_path, alignment_debug)
-
-        runtime_performance, performance_path = telemetry.result(reports), output / 'performance.json'
-        write_json_atomic(performance_path, runtime_performance)
-        diagnostics_path = output / "diagnostics.json"
+        game_notes = build_game_notes(
+            vocal_notes, syllables, min_note=self.config.min_note_sec)
+        validate_timeline(words, "words")
+        validate_timeline(syllables, "syllables")
+        validate_timeline(vocal_notes, "vocal notes")
+        validate_within_duration(syllables, song_duration, "syllables", 0.5)
+        validate_within_duration(vocal_notes, song_duration, "vocal notes", 0.1)
+        validate_within_duration(game_notes, song_duration, "game notes", 0.1)
         write_json_atomic(
-            diagnostics_path,
+            notes_path,
             {
-                "build": {
-                    "ai_build_id": AI_BUILD_ID,
-                    "pipeline_version": self.VERSION,
-                    "note_decoder_version": NOTE_DECODER_VERSION,
-                    "pitch_stabilizer_version": PITCH_STABILIZER_VERSION,
-                    "pipeline_file": str(Path(__file__).resolve()),
-                },
-                "environment": environment_info(),
-                "quality": to_dict(quality),
-                "health": alignment_debug.get("health", {}),
-                "alignment_summary": alignment_debug.get("summary", {}),
-                "alignment_suspicious_regions": alignment_debug.get("suspicious_regions", []),
-                "timeline_integrity": alignment_debug.get("timeline_integrity", {}),
-                "root_cause_analysis": alignment_debug.get("root_cause_analysis", {}),
-                "pitch_source_analysis": alignment_debug.get("pitch_source_analysis", {}),
-                "vocal_effect_analysis": alignment_debug.get("vocal_effect_analysis", {}),
-                "performance": {
-                    **dict(alignment_debug.get("performance", {})),
-                    "runtime": runtime_performance,
-                },
-                "data_flow": {
-                    "source_sha256": source_hash,
-                    "song_sha256": cache.file_hash(song_wav),
-                    "vocals_sha256": cache.file_hash(vocals),
-                    "midi_analysis_vocals_sha256": cache.file_hash(midi_analysis_vocal),
-                    "midi_analysis_tail_vocals_sha256": cache.file_hash(midi_tail_vocal),
-                    "pitch_analysis_source": pitch_analysis_source,
-                    "pitch_preprocess_version": VOCAL_ANALYSIS_PREPROCESS_VERSION,
-                    "note_analysis": note_diagnostics,
-                    "pitch_original_quality": to_dict(original_quality)
-                    if original_quality is not None
-                    else None,
-                    "pitch_cleaned_quality": to_dict(cleaned_quality)
-                    if cleaned_quality is not None
-                    else None,
-                    "instrumental_sha256": cache.file_hash(instrumental),
-                    "bpm": bpm,
-                    "bpm_source": music_analysis.get("tempo_source", "analysis"),
-                    "key": music_analysis.get("key"),
-                    "key_source": music_analysis.get("key_source", "analysis"),
-                    "pitch_frames": len(pitch),
-                    "voiced_pitch_frames": sum(
-                        1 for frame in pitch if frame.voiced and frame.frequency > 0
-                    ),
-                    "words": len(words),
-                    "syllables": len(syllables),
-                    "vocal_notes": len(vocal_notes),
-                    "game_notes": len(game_notes),
-                },
-                "stages": [to_dict(report) for report in reports],
-                "cache_hits": sum(1 for report in reports if report.cached),
-                "cache_misses": sum(1 for report in reports if not report.cached),
+                "reference_audio": "separated/vocals.flac",
+                "notes": [to_compact_dict(item) for item in game_notes],
             },
+            compact=True,
         )
+        self._report(reports, "notes", "vocals", started=started)
 
-        # These WAVs are pitch-analysis scratch space, not song deliverables.
-        # Keeping them doubled the retained PCM storage for every processed song.
-        self._remove_stale(midi_analysis_vocal, midi_tail_vocal)
-        cache.invalidate("midi-vocal-cleanup")
+        lyrics_payload = read_json(words_path, {})
+        lyrics_payload.update({
+            "reference_audio": "separated/vocals.flac",
+            "duration": round(song_duration, 3),
+            "bpm": bpm,
+            "key": music_analysis.get("key"),
+        })
+        write_json_atomic(words_path, lyrics_payload, compact=True)
 
         outputs = {
-            "song": "song.wav",
-            "vocals": "separated/vocals.wav",
-            "instrumental": "separated/instrumental.wav",
-            "music": "music.json",
-            "lyrics": "lyrics.txt",
+            "vocals": "separated/vocals.flac",
+            "instrumental": "separated/instrumental.flac",
             "lyricsSync": "lyricsSync.json",
-            "pitch": "pitch.json",
-            "syllables": "syllables.json",
-            "reference": "reference.json",
-            "acousticNotes": "acousticNotes.json",
-            "melodyContour": "melodyContour.json",
-            "songMap": "songMap.json",
-            "diagnostics": "diagnostics.json",
-            "alignmentDebug": "alignmentDebug.json",
-            "performance": "performance.json",
+            "vocalNotes": "vocalNotes.json",
         }
-        if self.config.preserve_raw_pitch and pitch_raw_path.exists(): outputs["pitchRaw"] = "pitchRaw.json"
-        if self.config.write_quality_report and quality_path.exists(): outputs["quality"] = "quality.json"
-        if vocal_midi.exists() and game_midi.exists(): outputs.update({"vocalMidi": "vocal.mid", "gameMidi": "game.mid"})
 
         self._notify(request, "manifest", 98, "Проверка результата")
         integrity: dict[str, dict[str, object]] = {}
@@ -1459,5 +1157,20 @@ class KaraokePipeline:
         manifest, manifest_path = PipelineManifest(self.VERSION, str(source), outputs, [to_dict(report) for report in reports], warnings, title=request.title, language=effective_language or request.language, integrity=integrity), output / 'manifest.json'
         write_json_atomic(manifest_path, to_dict(manifest))
         validate_json(manifest_path, ("version", "outputs"))
+        self._remove_stale(song_wav)
+        for name in (
+            "music.json", "lyrics.txt", "pitch.json", "pitchRaw.json",
+            "syllables.json", "reference.json", "acousticNotes.json",
+            "melodyContour.json", "songMap.json", "songInfo.json",
+            "lyrics.json", "difficulty.json", "quality.json", "diagnostics.json",
+            "alignmentDebug.json", "performance.json", "structure.json",
+            "breaths.json", "vocal.mid", "game.mid",
+            "song.mp3", "trusted_lyrics.txt",
+            "separated/vocals.midi-analysis.wav",
+            "separated/vocals.midi-analysis-tail.wav",
+        ):
+            self._remove_stale(output / name)
+        shutil.rmtree(output / ".ai-cache", ignore_errors=True)
+        shutil.rmtree(output / "logs", ignore_errors=True)
         self._notify(request, "complete", 100, "Готово")
         return PipelineResult(output, manifest_path, tuple(warnings), tuple(reports))

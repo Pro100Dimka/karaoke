@@ -184,7 +184,7 @@ function requestBackendJson(pathname, timeoutMs = BACKEND_REQUEST_TIMEOUT_MS) {
   });
 }
 
-// Folds Electron main-process errors into the same backend.log file the
+// Folds Electron main-process errors into the same application.log file the
 // Python backend and renderer already report to, instead of leaving them
 // only in this process's own stdout. Best-effort: the backend is not always
 // reachable when these fire (e.g. the backend itself failed to start), so
@@ -303,19 +303,12 @@ function startBackend() {
   const packagedCacheDir = isDev ? null : path.join(INSTALL_DATA_ROOT, "cache");
   const packagedDownloadsDir = isDev ? null : path.join(INSTALL_DATA_ROOT, "downloads");
 
-  let backendLogFd = null;
   try {
-    if (!isDev) {
-      fs.mkdirSync(backendLogDir, { recursive: true });
-      backendLogFd = fs.openSync(path.join(backendLogDir, "backend-process.log"), "a");
-      fs.writeSync(backendLogFd, `\n\n===== backend start ${new Date().toISOString()} =====\n`);
-    }
-
     const childProcess = spawn(backendCommand, backendArgs, {
       cwd: backendDir,
-      // In development inherit the terminal. In the installed application keep
-      // stdout/stderr in a persistent file instead of discarding the traceback.
-      stdio: isDev ? "inherit" : ["ignore", backendLogFd, backendLogFd],
+      // run.py already writes backend, renderer and Electron diagnostics to
+      // application.log; redirecting the child created a duplicate log stream.
+      stdio: isDev ? "inherit" : "ignore",
       windowsHide: true,
       env: {
         ...process.env,
@@ -348,10 +341,6 @@ function startBackend() {
       backendStableTimer = setTimeout(() => {
         if (backendProcess === childProcess) backendRestartAttempts = 0;
       }, BACKEND_STABLE_RESET_MS);
-      if (backendLogFd !== null) {
-        fs.closeSync(backendLogFd);
-        backendLogFd = null;
-      }
     });
     childProcess.on("error", (err) => {
       clearTimeout(backendStableTimer);
@@ -380,17 +369,9 @@ function startBackend() {
       scheduleBackendRestart();
     });
   } catch (err) {
-    if (backendLogFd !== null) {
-      try {
-        fs.writeSync(backendLogFd, `${err?.stack || err}\n`);
-        fs.closeSync(backendLogFd);
-      } catch {
-        // Ignore secondary logging failures while reporting the real startup error.
-      }
-      backendLogFd = null;
-    }
     backendProcess = null;
     console.error("Не удалось запустить backend:", err);
+    reportBackendError("Не удалось запустить backend", err?.stack || String(err));
     scheduleBackendRestart();
   }
 }
@@ -571,6 +552,9 @@ function createWindow() {
       ]
     }
   });
+  // Apply the initial window state before loading/rendering so the first
+  // visible frame already occupies the full work area (no 1440x900 flash).
+  mainWindow.maximize();
   updateThemeShortcuts(getThemeShortcutIcon(initialTheme));
 
   const packagedIndexPath = path.join(__dirname, "..", "dist", "index.html");
@@ -587,7 +571,6 @@ function createWindow() {
   });
 
   mainWindow.once("ready-to-show", () => {
-    mainWindow?.maximize();
     mainWindow?.show();
   });
 

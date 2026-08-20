@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 import models
 from app import repositories
-from app.services import song_service
+from app.services import ai_bridge, song_service
 from app.services.db_utils import commit_refresh
 from app.utils.json_files import read_json
 
@@ -12,21 +12,30 @@ from app.utils.json_files import read_json
 def get_sync_data(song: models.Song) -> dict:
     if not song.output_dir: return {}
     out_dir = song_service.resolve_output_dir(song)
+    lyrics = ai_bridge.get_karaoke_lyrics(out_dir)
+    if not lyrics:
+        return {
+            "lyrics": read_json(out_dir / "lyrics.json"),
+            "structure": read_json(out_dir / "structure.json"),
+            "music": read_json(out_dir / "music.json"),
+            "breaths": read_json(out_dir / "breaths.json"),
+        }
+    duration = float(lyrics.get("duration") or 0.0) if isinstance(lyrics, dict) else 0.0
     return {
-        "lyrics": read_json(out_dir / "lyrics.json"),
-        "structure": read_json(out_dir / "structure.json"),
-        "music": read_json(out_dir / "music.json"),
-        "breaths": read_json(out_dir / "breaths.json"),
+        "lyrics": lyrics,
+        "structure": [{"label": "Песня", "name": "song", "start": 0.0, "end": duration}] if duration else [],
+        "music": {key: lyrics.get(key) for key in ("bpm", "key", "duration")} if isinstance(lyrics, dict) else {},
+        "breaths": [],
     }
 
 
 def get_timeline(song: models.Song) -> dict:
     if not song.output_dir: return {}
     out_dir = song_service.resolve_output_dir(song)
-    return {
-        "structure": read_json(out_dir / "structure.json"),
-        "song_info": read_json(out_dir / "songInfo.json"),
-    }
+    if not (out_dir / "lyricsSync.json").is_file():
+        return {"structure": read_json(out_dir / "structure.json"), "song_info": read_json(out_dir / "songInfo.json")}
+    timeline = ai_bridge.get_karaoke_timeline(out_dir)
+    return {"structure": get_sync_data(song)["structure"], "song_info": timeline}
 
 
 def _get_or_create_state(db: Session, song_id: str) -> models.PlaybackState:

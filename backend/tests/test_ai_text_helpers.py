@@ -594,3 +594,28 @@ def test_canonical_mergers_adversarial_matrix(monkeypatch):
         ["one two"], [], [], source, 100, 0.03, {0: (0, 0.01, 1)}
     )
     assert output == []
+
+
+def test_anchor_alignment_does_not_treat_partial_line_reacquisition_as_complete(monkeypatch):
+    source = np.ones(600, dtype=np.float32)
+    monkeypatch.setattr(
+        text,
+        "_activity_fallback_words",
+        lambda tokens, *_args, **_kwargs: [
+            Word(index * 0.5, (index + 1) * 0.5, token, 0.2, index)
+            for index, token in enumerate(tokens)
+        ],
+    )
+
+    output, _ = text._anchor_preserving_canonical_alignment(
+        ["lead x", "a b", "tail y"],
+        [],
+        [Word(0.1, 0.3, "lead", 0.9, 0), Word(5.7, 5.9, "y", 0.9, 5)],
+        source,
+        100,
+        6.0,
+        {1: (2.0, 3.0, 1.0)},
+    )
+
+    assert [word.text for word in output] == ["lead", "x", "a", "b", "tail", "y"]
+    assert all(left.end <= right.start for left, right in zip(output, output[1:], strict=False))

@@ -131,8 +131,7 @@ _AI_STAGE_PLAN = {
     "pitch": (70.0, 45, "Определяем мелодию голоса"),
     "transcription": (82.0, 75, "Распознаём слова песни"),
     "alignment": (82.0, 75, "Синхронизируем слова с голосом"),
-    "syllables": (90.0, 15, "Уточняем слоги и вокальные ноты"),
-    "midi": (98.0, 10, "Создаём ноты для караоке"),
+    "notes": (96.0, 15, "Строим вокальные ноты"),
     "manifest": (99.7, 4, "Проверяем результат"),
     "complete": (100.0, 2, "Завершаем обработку"),
 }
@@ -154,8 +153,15 @@ class _ProgressCapture(io.TextIOBase):
         with self._lock:
             if self._closed: raise ValueError("I/O operation on closed progress capture")
             if _is_cancelled(self._song_id): raise ProcessingCancelled("Processing cancelled by user")
-            self._log_file.write(text)
+            tagged = "".join(
+                f"[song:{self._song_id}] {line}\n" for line in text.splitlines() if line.strip()
+            )
+            self._log_file.write(tagged)
             self._log_file.flush()
+            if any(token in text for token in ("[AI]", "AI runtime:", "ОШИБК", "WARNING")):
+                from app.services.remote_log_service import send_diagnostic
+
+                send_diagnostic(tagged.rstrip())
             if match := _STEP_RE.search(text):
                 step = match.group("step")
                 _set_runtime_step(self._song_id, float(step), text)
@@ -465,6 +471,13 @@ def _load_ai_inputs(song_id: str, out_dir: Path) -> tuple[Path | None, float | N
             and candidate_lyrics_path.read_text(encoding="utf-8-sig", errors="ignore").strip()
             else None
         )
+        if lyrics_path is None:
+            lyrics_payload = _read_optional_generated_json(out_dir / "lyricsSync.json", {})
+            if isinstance(lyrics_payload, dict) and lyrics_payload.get("edited") and str(lyrics_payload.get("text") or "").strip():
+                cached_lyrics = config.CACHE_DIR / "trusted-lyrics" / f"{song.id}.txt"
+                cached_lyrics.parent.mkdir(parents=True, exist_ok=True)
+                cached_lyrics.write_text(str(lyrics_payload["text"]).strip() + "\n", encoding="utf-8")
+                lyrics_path = cached_lyrics
 
         tempo_value = getattr(song, "tempo_override", None)
         key_value = getattr(song, "key_override", None)
@@ -502,9 +515,9 @@ def _start_progress_heartbeat(song_id: str) -> tuple[threading.Event, threading.
 
 
 def _create_progress_capture(song_id: str, out_dir: Path) -> _ProgressCapture:
-    log_dir = out_dir / config.LOGS_DIRNAME
-    log_dir.mkdir(parents=True, exist_ok=True)
-    return _ProgressCapture(song_id, log_dir / "pipeline.log")
+    del out_dir
+    config.APP_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    return _ProgressCapture(song_id, config.APP_LOG_DIR / "application.log")
 
 
 def _stop_progress_heartbeat(
@@ -601,7 +614,7 @@ def _run_job(song_id: str) -> None:
         capture.write(f"[backend] AI module={Path(__file__).resolve()}\n")
         for line in format_runtime_plan(runtime_plan): capture.write(f"[backend] AI runtime: {line}\n")
 
-        ai_bridge.process_song(
+        result = ai_bridge.process_song(
             source_path, out_dir,
             language=None if lyrics_path is not None else config.DEFAULT_LANGUAGE,
             lyrics_path=lyrics_path, title=searchable_title, bpm_override=bpm_override,
@@ -609,6 +622,9 @@ def _run_job(song_id: str) -> None:
                 song_id, capture),
             cancelled=lambda: _is_cancelled(song_id),
         )
+        result_warnings = getattr(result, "warnings", ())
+        for warning in result_warnings if isinstance(result_warnings, (list, tuple)) else ():
+            capture.write(f"[WARNING] {warning}\n")
     except ProcessingCancelled:
         _update_progress(
             song_id, status=models.SongStatus.CANCELLED, step_label="Отменено")
@@ -624,6 +640,8 @@ def _run_job(song_id: str) -> None:
         return
     finally:
         if capture is not None: capture.close()
+        if lyrics_path is not None and lyrics_path.parent == config.CACHE_DIR / "trusted-lyrics":
+            lyrics_path.unlink(missing_ok=True)
         _stop_progress_heartbeat(heartbeat_stop, heartbeat_thread)
         _end_runtime_progress(song_id)
         if slot_acquired: _processing_slot.release()
@@ -639,17 +657,17 @@ def _run_job(song_id: str) -> None:
             )
 
 
-_MIDI_REBUILD_FILES = (
+_LEGACY_GENERATED_FILES = (
     "pitchRaw.json", "pitch.json", "syllables.json", "reference.json", "acousticNotes.json",
     "melodyContour.json", "vocal.mid", "game.mid", "songMap.json", "songInfo.json",
     "difficulty.json", "quality.json", "diagnostics.json", "alignmentDebug.json",
 )
 
 
-def _force_midi_rebuild(out_dir: Path) -> None:
+def _clear_generated_results(out_dir: Path) -> None:
     cache = StageCache(out_dir / ".ai-cache")
-    cache.invalidate("pitch", "derivation", "midi", "song-map")
-    for relative in _MIDI_REBUILD_FILES:
+    cache.invalidate("pitch", "derivation", "song-map")
+    for relative in _LEGACY_GENERATED_FILES:
         with contextlib.suppress(OSError): (out_dir / relative).unlink(missing_ok=True)
     with contextlib.suppress(OSError): (out_dir / "acousticNotes.json").unlink(missing_ok=True)
 
@@ -669,7 +687,7 @@ def _run_reprocessing(song_id: str) -> None:
         return
     with song_service.song_content_lock(song_id):
         cache_service.recover_optimization_state(out_dir, committed=optimized)
-        _force_midi_rebuild(out_dir)
+        _clear_generated_results(out_dir)
         _run_job(song_id)
 
 
@@ -681,7 +699,9 @@ def _read_optional_generated_json(path: Path, default):
 
 
 def _apply_generated_metadata(song: models.Song, out_dir: Path) -> None:
-    music = _read_optional_generated_json(out_dir / "music.json", {})
+    music = _read_optional_generated_json(out_dir / "lyricsSync.json", {})
+    if not isinstance(music, dict) or not any(key in music for key in ("bpm", "key")):
+        music = _read_optional_generated_json(out_dir / "music.json", {})
     if isinstance(music, dict):
         key_user_edited = getattr(
             song, "key_user_edited", getattr(
@@ -695,7 +715,9 @@ def _apply_generated_metadata(song: models.Song, out_dir: Path) -> None:
         detected_bpm = music.get("bpm")
         if detected_bpm is not None and not tempo_user_edited: song.tempo_override = int(round(float(detected_bpm)))
 
-    reference = _read_optional_generated_json(out_dir / "reference.json", {})
+    reference = _read_optional_generated_json(out_dir / "vocalNotes.json", {})
+    if not isinstance(reference, dict) or not isinstance(reference.get("notes"), list):
+        reference = _read_optional_generated_json(out_dir / "reference.json", {})
     if isinstance(reference, dict): reference = reference.get("notes", [])
     if not isinstance(reference, list): return
     try:

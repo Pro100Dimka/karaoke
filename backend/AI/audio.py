@@ -157,6 +157,40 @@ def decode_audio(
     return result
 
 
+def encode_flac(
+    source: str | Path,
+    target: str | Path,
+    *,
+    timeout_sec: int = DEFAULT_FFMPEG_TIMEOUT_SEC,
+) -> Path:
+    source_path, target_path = Path(source), Path(target)
+    if not source_path.is_file(): raise FileNotFoundError(source_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f"{target_path.name}.", suffix=".flac.tmp", dir=target_path.parent
+    )
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    try:
+        run_ffmpeg(
+            [
+                config.FFMPEG_EXE, "-y", "-hide_banner", "-loglevel", "error",
+                "-i", str(source_path), "-c:a", "flac", "-compression_level", "5",
+                "-f", "flac", str(temporary),
+            ],
+            timeout_sec=timeout_sec,
+            not_found_message="FFmpeg is required but was not found in PATH",
+            timeout_message=f"FFmpeg exceeded the {timeout_sec}-second safety timeout",
+            failed_message="FFmpeg failed to encode FLAC",
+        )
+        if not temporary.is_file() or temporary.stat().st_size <= 0:
+            raise AICoreError("FFmpeg produced an empty FLAC file")
+        os.replace(temporary, target_path)
+        return target_path
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def load_mono(
     path: str | Path,
     target_sample_rate: int | None = None,

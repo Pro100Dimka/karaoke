@@ -145,4 +145,20 @@ test("lyrics highlight every word only between its exact lyricsSync start and en
       .querySelector(".karaoke-lyric-character")
       .style.getPropertyValue("--character-fill")
   ).toBe("100%");
+  rerender(
+    <KaraokeLyricLine
+      currentTime={(4.790885627530364 + 4.83475) / 2}
+      line={{
+        text: "любви",
+        words: [{ text: "любви", start: 4.790885627530364, end: 4.83475 }]
+      }}
+    />
+  );
+  expect(
+    Number.parseFloat(
+      container
+        .querySelector(".karaoke-lyric-character")
+        .style.getPropertyValue("--character-fill")
+    )
+  ).toBeCloseTo(50, 10);
 });

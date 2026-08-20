@@ -7,9 +7,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from AI.midi import write_midi
-from AI.models import Syllable, VocalNote, Word
-from AI.utils.numeric import clamp01, int_or
+from AI.utils.numeric import int_or
 from app.services.artifact_integrity import refresh_manifest_integrity
 from app.utils.json_files import read_json, write_json
 
@@ -63,12 +61,6 @@ def _normalize_note(raw: dict[str, Any], duration: float) -> dict[str, Any]:
         "cents": [],
         "edited": True,
     }
-
-
-def _words(song_map: JsonObject) -> list[Word]: return [Word(float(raw.get('start') or 0.0), max(float(raw.get('start') or 0.0), float(raw.get('end') or 0.0)), str(raw.get('text') or raw.get('word') or '?').strip() or '?', clamp01(float(raw.get('confidence') or 1.0)), _safe_int(raw.get('index'), i)) for i, raw in enumerate(song_map.get('words') or []) if isinstance(raw, dict)]
-
-
-def _syllables(song_map: JsonObject) -> list[Syllable]: return [Syllable(float(raw.get('start') or 0.0), max(float(raw.get('start') or 0.0), float(raw.get('end') or 0.0)), str(raw.get('text') or '?').strip() or '?', _safe_int(raw.get('word_index'), 0), _safe_int(raw.get('index'), i), clamp01(float(raw.get('confidence') or 1.0))) for i, raw in enumerate(song_map.get('syllables') or []) if isinstance(raw, dict)]
 
 
 def _project_notes_by_syllable(notes: list[JsonObject], syllables: list[JsonObject]) -> dict[int, list[JsonObject]]:
@@ -171,6 +163,23 @@ def _refresh_generated_note_associations(song_map: JsonObject) -> None:
 
 
 def load_editor(output_dir: Path) -> tuple[JsonObject, bool]:
+    canonical: Any = read_json(output_dir / "vocalNotes.json", default={})
+    if isinstance(canonical, dict) and isinstance(canonical.get("notes"), list):
+        lyrics: Any = read_json(output_dir / "lyricsSync.json", default={})
+        if not isinstance(lyrics, dict): lyrics = {}
+        words = [dict(item) for item in lyrics.get("words", []) if isinstance(item, dict)]
+        lines = []
+        for offset in range(0, len(words), 8):
+            group = words[offset:offset + 8]
+            if group:
+                lines.append({"index": len(lines), "start": group[0].get("start", 0), "end": group[-1].get("end", 0), "words": group, "text": " ".join(str(word.get("text") or word.get("word") or "") for word in group)})
+        notes = [dict(item) for item in canonical["notes"] if isinstance(item, dict)]
+        return {
+            "duration": lyrics.get("duration", 0), "bpm": lyrics.get("bpm", 120),
+            "key": lyrics.get("key"), "words": words, "syllables": [],
+            "notes": notes, "display_notes": notes, "lines": lines,
+            "editor": {"edited": bool(canonical.get("edited")), "source": "manual" if canonical.get("edited") else "ai"},
+        }, isinstance(canonical.get("ai_notes"), list)
     song_map: Any = read_json(output_dir / "songMap.json", default={})
     if not isinstance(song_map, dict) or not isinstance(song_map.get("notes"), list): raise ValueError("songMap.json is not available")
     if isinstance(song_map.get("editor"), dict):
@@ -191,23 +200,15 @@ def normalize_editor_timeline(song_map: JsonObject) -> JsonObject:
 def _write_editor_generation(staging: Path, song_map: JsonObject, notes: list[JsonObject], manifest: Any) -> None:
     write_json(staging / "songMap.json", song_map)
     write_json(staging / "reference.json", {"notes": notes})
-    midi_notes = [
-        VocalNote(float(note["start"]), float(note["end"]), _safe_int(note.get("midi_note", note.get("midi")), -1), _safe_int(note.get("velocity"), 96), _int_or_none(note.get("word_index")), _int_or_none(note.get("syllable_index")), ())
-        for note in notes if isinstance(note, dict)
-    ]
-    if midi_notes:
-        midi_path = staging / "game.mid"
-        write_midi(midi_path, midi_notes, _words(song_map), _syllables(song_map), float(song_map.get("bpm") or 120.0), False)
-        if not midi_path.is_file(): raise OSError("MIDI writer did not produce game.mid")
     if isinstance(manifest, dict):
         refresh_manifest_integrity(
-            staging, manifest, {"songMap.json", "reference.json", "game.mid"}, remove_missing=True
+            staging, manifest, {"songMap.json", "reference.json"}, remove_missing=True
         )
         write_json(staging / "manifest.json", manifest)
 
 
-def _publish_editor_generation(output_dir: Path, staging: Path, *, has_midi: bool, has_manifest: bool) -> None:
-    names, delete_names, rollback = ['songMap.json', 'reference.json'] + (['game.mid'] if has_midi else []) + (['manifest.json'] if has_manifest else []), [] if has_midi else ['game.mid'], Path(tempfile.mkdtemp(prefix='editor-rollback-', dir=output_dir))
+def _publish_editor_generation(output_dir: Path, staging: Path, *, has_manifest: bool) -> None:
+    names, delete_names, rollback = ['songMap.json', 'reference.json'] + (['manifest.json'] if has_manifest else []), ['game.mid'], Path(tempfile.mkdtemp(prefix='editor-rollback-', dir=output_dir))
     existed: dict[str, bool] = {}
     try:
         for name in names + delete_names:
@@ -235,7 +236,7 @@ def _stage_and_publish(
     try:
         _write_editor_generation(staging, song_map, notes, manifest)
         _publish_editor_generation(
-            output_dir, staging, has_midi=bool(notes), has_manifest=isinstance(manifest, dict)
+            output_dir, staging, has_manifest=isinstance(manifest, dict)
         )
     finally:
         shutil.rmtree(staging, ignore_errors=True)
@@ -245,6 +246,14 @@ def _stage_and_publish(
 def save_editor(output_dir: Path, raw_notes: list[JsonObject]) -> JsonObject:
     output_dir = Path(output_dir)
     song_map, _ = load_editor(output_dir)
+    canonical: Any = read_json(output_dir / "vocalNotes.json", default={})
+    if isinstance(canonical, dict) and isinstance(canonical.get("notes"), list):
+        duration = float(song_map.get("duration") or 0.0)
+        notes = sorted((_normalize_note(item, duration) for item in raw_notes), key=lambda n: (n["start"], n["end"], n["midi_note"]))
+        if not isinstance(canonical.get("ai_notes"), list): canonical["ai_notes"] = canonical["notes"]
+        canonical.update(notes=notes, edited=True)
+        write_json(output_dir / "vocalNotes.json", canonical)
+        return load_editor(output_dir)[0]
     backup = output_dir / "songMap.ai.json"
     if not backup.exists(): shutil.copy2(output_dir / "songMap.json", backup)
     duration = float(song_map.get("duration") or 0.0)
@@ -263,6 +272,12 @@ def save_editor(output_dir: Path, raw_notes: list[JsonObject]) -> JsonObject:
 
 def reset_editor(output_dir: Path) -> JsonObject:
     output_dir = Path(output_dir)
+    canonical: Any = read_json(output_dir / "vocalNotes.json", default={})
+    if isinstance(canonical, dict) and isinstance(canonical.get("ai_notes"), list):
+        canonical["notes"] = canonical.pop("ai_notes")
+        canonical["edited"] = False
+        write_json(output_dir / "vocalNotes.json", canonical)
+        return load_editor(output_dir)[0]
     backup = output_dir / "songMap.ai.json"
     if not backup.exists(): raise ValueError("AI backup is not available")
     song_map: Any = read_json(backup, default={})
@@ -272,4 +287,3 @@ def reset_editor(output_dir: Path) -> JsonObject:
     manifest: Any = read_json(output_dir / "manifest.json", default={})
     if isinstance(manifest, dict): manifest["manual_editor"] = {"edited": False, "restored_ai": True, "note_count": len(notes)}
     return _stage_and_publish(output_dir, song_map, notes, manifest)
-

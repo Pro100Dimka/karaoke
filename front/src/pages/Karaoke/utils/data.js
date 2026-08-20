@@ -27,40 +27,20 @@ export function noteNameToMidi(noteName) {
 }
 export function lyricsSyncLines(raw) {
   if (!raw || !Array.isArray(raw.words)) return [];
-  const words = raw.words
-    .map((word, position) => ({
-      index: Number.isInteger(word?.index) ? word.index : position,
-      text: typeof word?.text === "string" ? word.text.trim() : "",
-      start: word?.start,
-      end: word?.end,
-      confidence: word?.confidence
-    }))
-    .filter(
-      (word) =>
-        word.text &&
-        Number.isFinite(word.start) &&
-        Number.isFinite(word.end) &&
-        word.end >= word.start
-    );
-  if (!words.length) return [];
-
-  const sourceLines = String(raw.text || "")
-    .split(/\r?\n/)
-    .map((text) => text.trim())
-    .filter(Boolean);
-  const counts = sourceLines.map((text) => text.split(/\s+/).length);
-  if (!counts.length) counts.push(words.length);
+  const sourceLines = typeof raw.text === "string" ? raw.text.split(/\r?\n/) : [];
+  const tokenPattern = /[\p{L}\p{N}_]+(?:[’'-][\p{L}\p{N}_]+)*/gu;
+  const counts = sourceLines.map((text) => [...text.matchAll(tokenPattern)].length);
+  if (counts.reduce((total, count) => total + count, 0) !== raw.words.length) return [];
 
   let cursor = 0;
   return counts
     .map((count, lineIndex) => {
-      const lineWords =
-        lineIndex === counts.length - 1 ? words.slice(cursor) : words.slice(cursor, cursor + count);
+      const lineWords = raw.words.slice(cursor, cursor + count);
       cursor += count;
       if (!lineWords.length) return null;
       return {
         index: lineIndex,
-        text: lineWords.map((word) => word.text).join(" "),
+        text: sourceLines[lineIndex],
         start: lineWords[0].start,
         end: lineWords.at(-1).end,
         words: lineWords

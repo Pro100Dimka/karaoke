@@ -198,18 +198,20 @@ describe("karaoke data contracts", () => {
   });
   test("uses only exact lyricsSync word timings and preserves source order", () => {
     deepEqual([lyricsSyncLines(null), []], [lyricsSyncLines({}), []], [lyricsSyncLines([]), []]);
+    const sourceWords = [
+      { index: 0, text: "Я", start: 3.888836032388664, end: 3.9088815789473683 },
+      { index: 1, text: "не", start: 4.069245951417004, end: 4.129382591093117 },
+      { index: 2, text: "хочу", start: 4.249655870445344, end: 4.470156882591094 },
+      { index: 3, text: "курить", start: 4.4902024291497975, end: 4.610475708502024 },
+      { index: 4, text: "после", start: 4.630521255060729, end: 4.790885627530364 },
+      { index: 5, text: "любви", start: 4.790885627530364, end: 4.83475 }
+    ];
     const result = lyricsSyncLines({
       text: "Я не хочу\nкурить после любви",
-      words: [
-        { index: 0, text: "Я", start: 3.888836032388664, end: 3.9088815789473683 },
-        { index: 1, text: "не", start: 4.069245951417004, end: 4.129382591093117 },
-        { index: 2, text: "хочу", start: 4.249655870445344, end: 4.470156882591094 },
-        { index: 3, text: "курить", start: 4.4902024291497975, end: 4.610475708502024 },
-        { index: 4, text: "после", start: 4.630521255060729, end: 4.790885627530364 },
-        { index: 5, text: "любви", start: 4.790885627530364, end: 4.83475 }
-      ]
+      words: sourceWords
     });
     equal([result.length, 2], [result[0].start, 3.888836032388664], [result[1].end, 4.83475]);
+    equal([result[0].words[0], sourceWords[0]], [result[1].words[2], sourceWords[5]]);
     deepEqual([result.flatMap((line) => line.words).map(({ text, start, end }) => ({ text, start, end })), [
       { text: "Я", start: 3.888836032388664, end: 3.9088815789473683 },
       { text: "не", start: 4.069245951417004, end: 4.129382591093117 },
@@ -219,78 +221,46 @@ describe("karaoke data contracts", () => {
       { text: "любви", start: 4.790885627530364, end: 4.83475 }
     ]]);
   });
+  test("does not shift words after punctuation-only source lines", () => {
+    const first = { index: 0, text: "Моя", start: 10, end: 10.4 };
+    const second = { index: 1, text: "леди", start: 20, end: 20.5 };
+    const result = lyricsSyncLines({ text: "Моя\n.\nледи", words: [first, second] });
+
+    equal([result.length, 2], [result[0].words[0], first], [result[1].words[0], second]);
+    equal([result[1].text, "леди"], [result[1].start, 20], [result[1].end, 20.5]);
+  });
 });
 describe("lyrics, melody and pitch", () => {
-  test("accepts every supported lyric time alias", () => {
-    for (const startKey of [ "start", "start_sec", "start_time", "begin", "from" ]) {
-      const state = getLyricDisplayState( [{ [startKey]: 1, end: 2, text: startKey }], 1.5
-      );
-      equal([state.currentLine.text, startKey], [state.currentLine.start, 1]);
-    }
-    for (const endKey of ["end", "end_sec", "end_time", "finish", "to"]) {
-      const state = getLyricDisplayState( [{ start: 1, [endKey]: 2, text: endKey }], 1.5
-      );
-      equal([state.currentLine.text, endKey], [state.currentLine.end, 2]);
-    }
-  });
-  test("skips invalid time aliases and malformed lines", () => {
-    const lyrics = [
-      null,
-      false,
-      "bad",
-      { start: null, start_sec: 1, end: "", end_sec: 2, text: "nulls" },
-      { start: -1, begin: 2, end: Infinity, finish: 3, text: "fallbacks" },
-      { start: "bad", end: 3, text: "invalid-start" },
-      { start: 3, end: "bad", text: "invalid-end" },
-      { start: 4, end: 3, text: "reversed" }
-    ];
-    const nulls = getLyricDisplayState(lyrics, 1.5).currentLine;
-    equal([nulls.text, "nulls"], [nulls.start, 1], [nulls.end, 2]);
-    const fallbacks = getLyricDisplayState(lyrics, 2.5).currentLine;
-    equal([fallbacks.text, "fallbacks"], [fallbacks.start, 2], [fallbacks.end, 3]);
-    const emptyState = {
-      currentLineIndex: -1,
-      currentLine: null,
-      upcomingLine: null,
-      nextLine: null
-    };
-    for (const invalid of [
-      null,
-      false,
-      "bad",
-      { start: "bad", end: 3 },
-      { start: 0, end: "bad" },
-      { start: 4, end: 3 }
-    ])
-      deepEqual([getLyricDisplayState([invalid], -1), emptyState]);
+  test("uses only canonical start and end fields without aliases or sorting", () => {
+    const first = { start: 0, end: 1, text: "first" };
+    const second = { start: 1, end: 2, text: "second" };
+    const state = getLyricDisplayState([first, second], 1.5);
+    equal([state.currentLine, second], [state.currentLineIndex, 1]);
     deepEqual([getLyricDisplayState(null, 1), { currentLineIndex: -1, currentLine: null, upcomingLine: null, nextLine: null }]);
   });
   test("selects current, upcoming and next lyrics at exact boundaries", () => {
     const lyrics = [
-      { start: 2, end: 3, text: "three" },
       { start: 0, end: 1, text: "one" },
       { start: 1, end: 2, text: "two" },
-      { start: 1, end: 1.5, text: "short-overlap" }
+      { start: 2, end: 3, text: "three" }
     ];
     const before = getLyricDisplayState(lyrics, -1);
-    equal([before.currentLineIndex, -1], [before.upcomingLine.text, "one"], [before.nextLine.text, "short-overlap"]);
+    equal([before.currentLineIndex, -1], [before.upcomingLine.text, "one"], [before.nextLine.text, "two"]);
     const first = getLyricDisplayState(lyrics, 0.5);
-    equal([first.currentLineIndex, 0], [first.currentLine.text, "one"], [first.upcomingLine.text, "short-overlap"], [first.nextLine.text, "short-overlap"]);
+    equal([first.currentLineIndex, 0], [first.currentLine.text, "one"], [first.upcomingLine.text, "two"], [first.nextLine.text, "two"]);
     const boundary = getLyricDisplayState(lyrics, 1);
     equal([boundary.currentLine.text, "two"], [boundary.upcomingLine.text, "three"], [boundary.nextLine.text, "three"]);
     const gap = getLyricDisplayState(
       [ { start: 0, end: 1, text: "past" }, { start: 2, end: 3, text: "future" } ],
       1.5
     );
-    equal([gap.currentLine, null], [gap.upcomingLine.text, "future"], [gap.nextLine, null], [getLyricDisplayState(lyrics, "bad").currentLine.text, "one"]);
+    equal([gap.currentLine, null], [gap.upcomingLine.text, "future"], [gap.nextLine, null]);
     const zeroDuration = getLyricDisplayState( [{ start: 1, end: 1, text: "instant" }], 0
     );
     equal([zeroDuration.upcomingLine.text, "instant"]);
     deepEqual([getLyricDisplayState([{ start: 1, end: 2, text: "ended" }], 2), { currentLineIndex: -1, currentLine: null, upcomingLine: null, nextLine: null }]);
   });
-  test("calculates lyric fill for invalid, regular and zero durations", () => {
-    for (const args of [ ["bad", 0, 1], [0, "bad", 1], [0, 0, "bad"] ])
-      equal([getLyricFill(...args), 0]);
+  test("calculates lyric fill directly from start and end", () => {
     equal([getLyricFill(-1, 0, 2), 0], [getLyricFill(1, 0, 2), 0.5], [getLyricFill(3, 2, 6), 0.25], [getLyricFill(3, 0, 2), 1], [getLyricFill(0, 1, 1), 0], [getLyricFill(1, 1, 1), 1], [getLyricFill(1, 2, 1), 1], [getLyricFill(0, 2, 1), 0]);
   });
   test("computes melody range from saved, actual and fallback values", () => {

@@ -63,7 +63,7 @@ def analyze_recording(recording: models.Recording, song: models.Song) -> dict[st
 
     output_dir = song_service.resolve_output_dir(song)
     reference_notes, structure = ai_bridge.get_reference_notes(output_dir), read_json(output_dir / 'structure.json')
-    if not reference_notes: raise ValueError("Не найден reference.json — эталонная мелодия ещё не построена")
+    if not reference_notes: raise ValueError("Не найдены вокальные ноты — мелодия ещё не построена")
 
     reference_index, pitch_frames = ReferenceIndex.build(reference_notes), ai_bridge.analyze_vocal(recording.path)
     deviations: list[float] = []

@@ -61,7 +61,7 @@ def test_recovery_download_verifies_and_activates_models(monkeypatch, tmp_path):
 
 
 def test_progress_values_tolerate_missing_and_invalid_entries(monkeypatch, tmp_path):
-    monkeypatch.setattr(model_install_service.config, "APP_LOG_DIR", tmp_path)
+    monkeypatch.setattr(model_install_service.config, "CACHE_DIR", tmp_path)
     assert model_install_service._progress_values() == {}
     (tmp_path / "model-recovery-progress.txt").write_text(
         "downloaded_bytes=10\ntotal_bytes=bad\nignored\nremaining_seconds=4\n",

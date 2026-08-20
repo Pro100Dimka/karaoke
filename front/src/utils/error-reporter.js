@@ -1,5 +1,5 @@
 // Forwards renderer errors to the backend so they land in the same
-// backend.log file as everything else, instead of only ever reaching
+// application.log file as everything else, instead of only ever reaching
 // devtools. Best-effort throughout: a failed report must never itself
 // throw or recurse back into the error-reporting path.
 import { api } from "../api/client";

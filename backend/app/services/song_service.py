@@ -29,6 +29,10 @@ _content_locks: weakref.WeakValueDictionary[str,
                                             threading.RLock] = weakref.WeakValueDictionary()
 
 
+class SongAlreadyExistsError(ValueError):
+    pass
+
+
 @contextmanager
 def library_write_lock():
     with _library_write_lock: yield
@@ -156,7 +160,7 @@ def _normalize_artist_title(
     if clean_title: value = re.sub(re.escape(clean_title), " ", value, flags=re.IGNORECASE)
     value = _RELEASE_WORD_RE.sub(" ", value)
     value = _YEAR_RE.sub(" ", value)
-    value = " ".join(value.replace("–", " ").replace("—", " ").split())
+    value = " ".join(re.sub(r"\s*[-–—]+\s*", " ", value).split())
 
     artist_words, title_words = _identity_words(value), _identity_words(clean_title)
     shared: list[str] = []
@@ -267,6 +271,23 @@ def _song_input(title: str, original_filename: str) -> tuple[str, str, str]:
     return clean_title, safe_original_name, extension
 
 
+def _identity_key(artist: str | None, title: str) -> str:
+    value = " ".join(part for part in (artist, title) if part)
+    value = unicodedata.normalize("NFKC", value).casefold()
+    return " ".join(re.sub(r"[^\w]+", " ", value).split())
+
+
+def _find_duplicate(db: Session, artist: str | None, title: str) -> models.Song | None:
+    del artist
+    expected = _identity_key(None, title)
+    if not expected: return None
+    songs = db.scalars(select(models.Song))
+    if not hasattr(songs, "__iter__"): return None
+    for song in songs:
+        if _identity_key(None, song.title) == expected: return song
+    return None
+
+
 def _persist_song(
     db: Session,
     *,
@@ -280,6 +301,8 @@ def _persist_song(
         artist, title) if part).strip() or title
     base_slug = slugify(identity, fallback="song")
     with library_write_lock():
+        if _find_duplicate(db, artist, title) is not None:
+            raise SongAlreadyExistsError("Такая песня уже существует")
         slug = make_unique_slug(db, base_slug)
         folder_base = _folder_name(artist, title, slug) if artist else slug
         output_dir = _unique_output_dir(folder_base)

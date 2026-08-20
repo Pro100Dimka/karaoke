@@ -133,6 +133,8 @@ async def add_song(
         )
     except HTTPException:
         raise
+    except song_service.SongAlreadyExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     finally:
@@ -286,8 +288,10 @@ def cancel_processing(song: SongDependency, db: Session = Depends(get_db)):
 
 @router.get("/{song_id}/log")
 def get_processing_log(song: SongDependency):
-    log_path = song_service.resolve_output_dir(song) / config.LOGS_DIRNAME / "pipeline.log"
-    return {'lines': []} if not log_path.exists() else {'lines': read_text_tail(log_path)}
+    log_path = config.APP_LOG_DIR / "application.log"
+    marker = f"[song:{song.id}]"
+    lines = [] if not log_path.exists() else [line for line in read_text_tail(log_path) if marker in line]
+    return {"lines": lines}
 
 
 @router.get("/{song_id}/cover")
@@ -361,15 +365,17 @@ def get_result(song: SongDependency, response: Response):
     if song.status != models.SongStatus.DONE or not song.output_dir: raise HTTPException(status_code=409, detail="Песня ещё не обработана")
 
     out_dir = song_service.resolve_output_dir(song)
+    lyrics_sync = ai_bridge.get_karaoke_lyrics(out_dir)
+    if not isinstance(lyrics_sync, dict): lyrics_sync = {}
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
     return schemas.SongResultOut(
         song=schemas.SongOut.model_validate(song),
-        music=read_json(out_dir / "music.json"),
+        music={key: lyrics_sync.get(key) for key in ("bpm", "key", "duration")},
         reference_notes=ai_bridge.get_reference_notes(out_dir),
         game_notes=ai_bridge.get_game_notes(out_dir),
         syllables=ai_bridge.get_syllables(out_dir),
-        lyrics_sync=ai_bridge.get_karaoke_lyrics(out_dir),
+        lyrics_sync=lyrics_sync,
         karaoke_timeline=ai_bridge.get_karaoke_timeline(out_dir),
         song_map=read_json(out_dir / "songMap.json"),
         difficulty=read_json(out_dir / "difficulty.json"),
@@ -384,16 +390,14 @@ def update_lyrics(body: schemas.LyricsUpdate, song: SongDependency):
     if song.status != models.SongStatus.DONE or not song.output_dir: raise HTTPException(status_code=409, detail="Song has not been processed yet")
 
     out_dir = song_service.resolve_output_dir(song)
-    lyrics_path = out_dir / "lyrics.json"
+    lyrics_path = out_dir / "lyricsSync.json"
     try:
         reconcile_lyric_words = ai_bridge.reconcile_lyric_words
         lyrics = reconcile_lyric_words([line.model_dump() for line in body.lyrics])
-        write_json(lyrics_path, lyrics)
+        current = read_json(lyrics_path, default={}) or {}
         trusted_text = "\n".join(str(line.get("text") or "").strip() for line in lyrics).strip()
-        if trusted_text:
-            (out_dir / config.TRUSTED_LYRICS_FILENAME).write_text(
-                trusted_text + "\n", encoding="utf-8"
-            )
+        words = [dict(word, index=index) for index, word in enumerate(word for line in lyrics for word in line.get("words", []))]
+        write_json(lyrics_path, {**current, "text": trusted_text, "words": words, "edited": True})
     except (OSError, TypeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=f"Could not save lyrics: {exc}") from exc
     return {"status": "saved"}

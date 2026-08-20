@@ -191,6 +191,12 @@ def test_manifest_rejects_missing_invalid_and_non_object_json(tmp_path):
         with zipfile.ZipFile(package) as archive, pytest.raises(ValueError, match="manifest"): song_package_service._read_manifest(archive)
 
 
+def test_canonical_song_mode_uses_vocal_notes_without_song_map(tmp_path):
+    (tmp_path / "lyricsSync.json").write_text('{"words":[{"text":"word","start":0,"end":1}]}', encoding="utf-8")
+    (tmp_path / "vocalNotes.json").write_text('{"notes":[{"start":0,"end":1,"midi_note":60}]}', encoding="utf-8")
+    assert song_package_service._song_mode_from_files(tmp_path) == "melody"
+
+
 def test_copy_extract_and_song_model(monkeypatch, tmp_path):
     package = tmp_path / "package.zip"
     with zipfile.ZipFile(package, "w") as archive:

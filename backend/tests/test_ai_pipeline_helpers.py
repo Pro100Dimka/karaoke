@@ -9,8 +9,6 @@ import pytest
 from AI import pipeline
 from AI.errors import EngineUnavailableError, InvalidArtifactError, ProcessingCancelledError
 from AI.models import PitchFrame, Syllable, VocalNote, Word
-from AI.quality import QualityReport
-from AI.vocal_preprocess import PitchTrackQuality
 from tests._shared import alignment_candidate, patch_attrs, raises, word_rows
 
 
@@ -329,7 +327,7 @@ def test_pipeline_run_stage_primary_fallback_and_disabled(monkeypatch):
     raises(EngineUnavailableError, lambda: instance._run('pitch', engine, lambda _: (_ for _ in ()).throw(EngineUnavailableError('x')), [], []))
 
 
-def test_publish_alignment_midi_and_run_lock(monkeypatch, tmp_path):
+def test_publish_alignment_and_run_lock(monkeypatch, tmp_path):
     publish = Mock()
     patch_attrs(monkeypatch, pipeline, publish_files_atomically=publish, validate_json=Mock())
     aligned = word_rows((0, 1, "a", 1))
@@ -337,11 +335,6 @@ def test_publish_alignment_midi_and_run_lock(monkeypatch, tmp_path):
         tmp_path, tmp_path / "lyrics.txt", tmp_path / "sync.json", "a", aligned
     )
     assert publish.call_count == 1
-    patch_attrs(monkeypatch, pipeline, write_midi=Mock(), validate_midi=Mock())
-    pipeline.KaraokePipeline._publish_midi_pair(
-        tmp_path, tmp_path / "v.mid", tmp_path / "g.mid", [1], [], aligned, [], 120, 2
-    )
-    assert publish.call_count == 2
     instance = make_pipeline()
     monkeypatch.setattr(instance, "_run_unlocked", lambda request: "done")
     assert (instance.run(pipeline.PipelineRequest('in', tmp_path)) == 'done') and (pipeline._OutputDirectoryLock(tmp_path).path == tmp_path / '.pipeline.lock')
@@ -366,11 +359,9 @@ def test_pipeline_rejects_missing_and_generated_sources(tmp_path):
         "anchor-fail",
         "segments",
         "cached-segments",
-        "variants",
         "explicit",
         "invalid-bpm",
         "source-change",
-        "missing-artifact",
         "omnizart",
         "omnizart-fail",
     ],
@@ -494,18 +485,16 @@ def test_full_pipeline_fresh_supplied_lyrics_flow(monkeypatch, tmp_path, mode):
         def invalidate(*_args, **_kwargs):
             return None
 
-    patch_attrs(monkeypatch, pipeline, StageCache=Cache, decode_audio=lambda _source, target, _rate: target.write_bytes(b'wav') or target, duration=lambda _: 5.0)
+    patch_attrs(monkeypatch, pipeline, StageCache=Cache, decode_audio=lambda _source, target, _rate: target.write_bytes(b'wav') or target, encode_flac=lambda source, target: target.write_bytes(Path(source).read_bytes()) or target, duration=lambda _: 5.0)
     for name in (
         "validate_audio",
         "validate_pitch",
         "validate_timeline",
         "validate_within_duration",
         "validate_json",
-        "validate_midi",
         "validate_music_json",
         "validate_pitch_json",
         "validate_words_json",
-        "validate_derivation_json",
     ):
         monkeypatch.setattr(pipeline, name, lambda *_args, **_kwargs: None)
     patch_attrs(monkeypatch, pipeline, discover_lyrics=lambda *_args, **_kwargs: SimpleNamespace(text=lyric_text if trusted_lyrics else '', segments=supplied_segments, source='trusted', query='query'))
@@ -515,7 +504,7 @@ def test_full_pipeline_fresh_supplied_lyrics_flow(monkeypatch, tmp_path, mode):
         melody = SimpleNamespace(
             name="omnizart-patch-cnn",
             fingerprint=lambda: {"version": "test"},
-            estimate=lambda path: raw_pitch if Path(path).name == "song.wav" else [],
+            estimate=lambda path: raw_pitch if Path(path).name == "vocals.flac" else [],
         )
     elif mode == "omnizart-fail":
         melody = SimpleNamespace(
@@ -523,31 +512,14 @@ def test_full_pipeline_fresh_supplied_lyrics_flow(monkeypatch, tmp_path, mode):
             fingerprint=lambda: {"version": "test"},
             estimate=lambda _path: (_ for _ in ()).throw(EngineUnavailableError("broken")),
         )
-    engines, cfg = SimpleNamespace(separator=separator, pitch=pitch_engine, aligner=aligner, transcriber=transcriber, melody=melody), SimpleNamespace(sample_rate=44100, pitch_sample_rate=16000, hop_seconds=0.01, fmin_hz=55, fmax_hz=1400, preserve_raw_pitch=mode != 'variants', validate_cached_artifacts=True, allow_fallback=False, min_note_sec=0.05, min_voiced_confidence=0.3, split_note_semitones=0.8, max_gap_sec=0.05, midi_bend_range=2, write_quality_report=mode != 'variants')
+    engines, cfg = SimpleNamespace(separator=separator, pitch=pitch_engine, aligner=aligner, transcriber=transcriber, melody=melody), SimpleNamespace(sample_rate=44100, pitch_sample_rate=16000, hop_seconds=0.01, fmin_hz=55, fmax_hz=1400, preserve_raw_pitch=True, validate_cached_artifacts=True, allow_fallback=False, min_note_sec=0.05, min_voiced_confidence=0.3, split_note_semitones=0.8, max_gap_sec=0.05)
     patch_attrs(monkeypatch, pipeline, analyze_music=lambda _: {'bpm': 120, 'key': 'C', 'tempo_source': 'analysis'})
 
-    def cleanup(_source, denoise, tail):
-        denoise.write_bytes(b"denoise")
-        tail.write_bytes(b"tail")
-        return {"denoise": denoise, "tail-suppressed": tail}
-
-    patch_attrs(monkeypatch, pipeline, prepare_midi_analysis_variants=cleanup, score_pitch_track=lambda _: PitchTrackQuality(0.8, 1, 0.8, 0, 0, 0), choose_best_pitch_track=lambda _: 'tail-suppressed', refine_pitch_confidence=lambda frames, *_args, **_kwargs: frames, fuse_pitch_with_yin=lambda frames, *_args, **_kwargs: frames)
+    patch_attrs(monkeypatch, pipeline, refine_pitch_confidence=lambda frames, *_args, **_kwargs: frames, fuse_pitch_with_yin=lambda frames, *_args, **_kwargs: frames)
     stabilizer = Mock(side_effect=lambda frames: frames)
     monkeypatch.setattr(pipeline, "stabilize_pitch", stabilizer)
     syllables, vocal_notes = [Syllable(0, 1, 'hello', 0, 0), Syllable(1, 2, 'world', 1, 1)], [VocalNote(0, 1, 60, word_index=0, syllable_index=0)]
-    patch_attrs(monkeypatch, pipeline, align_syllables=lambda *_: syllables, build_vocal_notes=lambda *_args, **_kwargs: [] if mode == 'variants' else vocal_notes, get_note_diagnostics=lambda: {'ok': True}, build_game_notes=lambda notes, *_args, **_kwargs: notes)
-
-    def midi_file(path, *_args, **_kwargs):
-        Path(path).write_bytes(b"midi")
-        return Path(path)
-
-    patch_attrs(monkeypatch, pipeline, write_midi=midi_file, build_karaoke_song_map=lambda **_: {'duration': 5}, evaluate_quality=lambda *_: QualityReport(1, 1, 1, 1, 1, 1, 1, ('quality warning',)), analyze_vocal_residuals=Mock(side_effect=ValueError('diagnostic failed')) if mode == 'variants' else lambda *_: {'available': True}, build_alignment_debug=lambda **_: {'health': {}, 'summary': {}, 'suspicious_regions': [], 'timeline_integrity': {}, 'root_cause_analysis': {}, 'pitch_source_analysis': {}, 'vocal_effect_analysis': {}, 'performance': {}})
-
-    def environment_info():
-        if mode == "missing-artifact": (output / "song.wav").unlink()
-        return {"device": "test"}
-
-    monkeypatch.setattr(pipeline, "environment_info", environment_info)
+    patch_attrs(monkeypatch, pipeline, align_syllables=lambda *_: syllables, build_vocal_notes=lambda *_args, **_kwargs: vocal_notes, build_game_notes=lambda notes, *_args, **_kwargs: notes)
     progress, lyrics_path = Mock(), None
     if mode == "explicit":
         lyrics_path = tmp_path / "explicit.txt"
@@ -558,21 +530,20 @@ def test_full_pipeline_fresh_supplied_lyrics_flow(monkeypatch, tmp_path, mode):
         title="Українська пісня" if mode == "asr" else "Song",
         progress=progress,
         lyrics_path=lyrics_path,
-        bpm_override=10 if mode == "invalid-bpm" else 140 if mode == "variants" else None,
-        key_override="Am" if mode == "variants" else None,
+        bpm_override=10 if mode == "invalid-bpm" else None,
     )
-    if mode in {"invalid-bpm", "source-change", "missing-artifact"}:
+    if mode in {"invalid-bpm", "source-change"}:
         error = {
             "invalid-bpm": ValueError,
             "source-change": RuntimeError,
-            "missing-artifact": FileNotFoundError,
         }[mode]
         raises(error, lambda: pipeline.KaraokePipeline(cfg, engines).run(request))
         return
     result = pipeline.KaraokePipeline(cfg, engines).run(request)
-    assert (result.manifest_path.exists()) and ('quality warning' in result.warnings) and ((output / 'songMap.json').exists()) and ((output / 'diagnostics.json').exists())
-    performance = pipeline.read_json(output / "performance.json")
-    assert (performance['elapsed_sec'] >= 0 and performance['stages']) and (pipeline.read_json(result.manifest_path)['outputs']['performance'] == 'performance.json') and (progress.call_args.args[:2] == ('complete', 100))
+    assert result.manifest_path.exists() and (output / "lyricsSync.json").exists() and (output / "vocalNotes.json").exists()
+    assert not (output / "songMap.json").exists() and not (output / "game.mid").exists()
+    assert pipeline.read_json(result.manifest_path)["outputs"]["vocalNotes"] == "vocalNotes.json"
+    assert progress.call_args.args[:2] == ('complete', 100)
     if mode == "omnizart":
         assert any(report.stage == "pitch-primary" for report in result.reports)
         assert not any(report.stage == "pitch-original" for report in result.reports)

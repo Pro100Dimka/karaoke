@@ -22,7 +22,7 @@ _state: dict[str, str | None] = {
 
 
 def _progress_values() -> dict[str, int]:
-    path = config.APP_LOG_DIR / "model-recovery-progress.txt"
+    path = config.CACHE_DIR / "model-recovery-progress.txt"
     try:
         pairs = dict(
             line.split("=", 1)
@@ -105,7 +105,7 @@ def _recover_models(models_root: Path, cache_dir: Path, reporter: ProgressReport
 
 
 def _download_worker(models_root: Path, cache_dir: Path) -> None:
-    reporter = ProgressReporter(models_root, config.APP_LOG_DIR / "model-recovery-progress.txt")
+    reporter = ProgressReporter(models_root, config.CACHE_DIR / "model-recovery-progress.txt")
     reporter.start()
     try:
         _recover_models(models_root, cache_dir, reporter, verification_message="Model verification failed after download", log_repairs=False)
@@ -131,7 +131,7 @@ def ensure_ready_sync(cancelled=None) -> dict[str, object]:
         _state.update(state="downloading", current_model=None, error=None)
 
     reporter = ProgressReporter(
-        models_root, config.APP_LOG_DIR / "model-recovery-progress.txt")
+        models_root, config.CACHE_DIR / "model-recovery-progress.txt")
     reporter.start()
     cache_dir = (config.CACHE_DIR / "model-downloads").resolve()
     try:

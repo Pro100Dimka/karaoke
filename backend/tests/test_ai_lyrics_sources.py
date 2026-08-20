@@ -232,6 +232,7 @@ def test_query_helpers_and_metadata_candidates(monkeypatch, tmp_path):
     assert [candidate.query for candidate in lyrics._metadata_search_plan(noisy_source, None)] == [
         "Нервы Моя Леди",
         "Моя Леди",
+        "Нервы my lady",
     ]
 
     noisy_without_album = {
@@ -243,7 +244,7 @@ def test_query_helpers_and_metadata_candidates(monkeypatch, tmp_path):
     )
     assert [candidate.query for candidate in lyrics._metadata_search_plan(
         tmp_path / "source.wav", "Нервы - Моя Леди"
-    )] == ["Нервы Моя Леди", "Моя Леди"]
+    )] == ["Нервы Моя Леди", "Моя Леди", "Нервы my lady"]
 
     plan = lyrics._metadata_search_plan(tmp_path / "source.wav", "Нервы - Моя Леди")
     assert (plan[0] == lyrics.LyricsSearchCandidate(query='Нервы Моя Леди', artist='Нервы', track='Моя Леди')) and (plan[1] == lyrics.LyricsSearchCandidate(query='Моя Леди', track='Моя Леди'))

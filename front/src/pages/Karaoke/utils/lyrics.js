@@ -1,56 +1,25 @@
 import { clamp01 } from "../../../utils/math";
-import { END_TIME_KEYS, readFiniteTime, START_TIME_KEYS } from "./time-keys";
-
-function normalizeLine(line) {
-  if (!line) return null;
-
-  const start = readFiniteTime(line, ...START_TIME_KEYS);
-  const end = readFiniteTime(line, ...END_TIME_KEYS);
-  if ([start, end].includes(null) || end < start) return null;
-
-  return { ...line, start, end };
-}
-
-function getSafeLyrics(lyrics) {
-  // Stryker disable next-line ArrayDeclaration: normalizeLine discards the primitive.
-  return (Array.isArray(lyrics) ? lyrics : [])
-    .map(normalizeLine)
-    .filter(Boolean)
-    .sort((a, b) => a.start - b.start || a.end - b.end);
-}
 
 export function getLyricDisplayState(lyrics, currentTime) {
-  const safeLyrics = getSafeLyrics(lyrics);
-  const parsedTime = Number(currentTime);
-  const time = Number.isFinite(parsedTime) ? parsedTime : 0;
+  const sourceLyrics = Array.isArray(lyrics) ? lyrics : [];
 
   let currentLineIndex = -1;
-  for (let index = 0; index < safeLyrics.length; index += 1) {
-    const line = safeLyrics[index];
-    if (line.start > time) break;
-    if (time < line.end) currentLineIndex = index;
+  for (let index = 0; index < sourceLyrics.length; index += 1) {
+    const line = sourceLyrics[index];
+    if (line.start > currentTime) break;
+    if (currentTime < line.end) currentLineIndex = index;
   }
 
-  const currentLine = safeLyrics[currentLineIndex] || null;
-  const upcomingLineIndex = safeLyrics.findIndex((line) => line.start > time);
-  const upcomingLine = safeLyrics[upcomingLineIndex] || null;
+  const currentLine = sourceLyrics[currentLineIndex] || null;
+  const upcomingLineIndex = sourceLyrics.findIndex((line) => line.start > currentTime);
+  const upcomingLine = sourceLyrics[upcomingLineIndex] || null;
   const primaryLineIndex = currentLine ? currentLineIndex : upcomingLineIndex;
-  const nextLine = primaryLineIndex >= 0 ? safeLyrics[primaryLineIndex + 1] || null : null;
+  const nextLine = primaryLineIndex >= 0 ? sourceLyrics[primaryLineIndex + 1] || null : null;
 
   return { currentLineIndex, currentLine, upcomingLine, nextLine };
 }
 
 export function getLyricFill(currentTime, start, end) {
-  const safeCurrent = Number(currentTime);
-  const safeStart = Number(start);
-  const safeEnd = Number(end);
-
-  if (!Number.isFinite(safeCurrent) || !Number.isFinite(safeStart) || !Number.isFinite(safeEnd)) {
-    return 0;
-  }
-
-  if (safeEnd <= safeStart) return safeCurrent >= safeEnd ? 1 : 0;
-
-  const progress = (safeCurrent - safeStart) / (safeEnd - safeStart);
-  return clamp01(progress);
+  if (end <= start) return currentTime >= end ? 1 : 0;
+  return clamp01((currentTime - start) / (end - start));
 }

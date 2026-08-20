@@ -1883,7 +1883,7 @@ def _anchor_preserving_canonical_alignment(
     ) -> bool:
         if not anchor_windows or run_end <= run_start: return False
 
-        changed = False
+        reacquired: dict[int, Word] = {}
         for line_index, (line_start, line_end) in enumerate(line_ranges):
             if line_end <= run_start or line_start >= run_end: continue
             if line_start < run_start or line_end > run_end: continue
@@ -1931,12 +1931,17 @@ def _anchor_preserving_canonical_alignment(
                 previous_end = end
             if not valid or len(absolute_words) != len(tokens_for_line): continue
 
-            for word in absolute_words:
-                result[word.index] = word
-                source_kind[word.index] = "reacquired"
-            changed = True
+            reacquired.update((word.index, word) for word in absolute_words)
 
-        return changed
+        # The caller skips fallback filling when this returns True. Commit only
+        # when the complete missing run was recovered; otherwise a full-line
+        # island could leave partial boundary lines unset.
+        if any(index not in reacquired for index in range(run_start, run_end)):
+            return False
+        for index in range(run_start, run_end):
+            result[index] = reacquired[index]
+            source_kind[index] = "reacquired"
+        return True
 
     last_built_sources: list[str] = []
 

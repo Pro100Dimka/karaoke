@@ -702,6 +702,18 @@ def _mychords_search(title: str) -> list[tuple[str, str]]:
     return []
 
 
+def _lyricshare_search(title: str, track: str = "") -> list[tuple[str, str]]:
+    base = "https://lyricshare.net/ru/search"
+    url = base + "?" + urllib.parse.urlencode({"q": title})
+    page = _read_html(urllib.request.Request(url, headers=_WEB_HEADERS))
+    if not page: return []
+    matches = _unique_song_links(
+        _html_links(page), base_url=url, host="lyricshare.net",
+        accept=lambda parsed, result_title: parsed.path.endswith(".html") and _search_tokens_match(track or title, result_title),
+    )
+    return [(result_url, f"{title} {result_title}") for result_url, result_title in matches]
+
+
 def _duckduckgo_search(query: str, title: str) -> list[tuple[str, str]]:
     request = urllib.request.Request(
         "https://html.duckduckgo.com/html/",
@@ -794,6 +806,7 @@ def _web_online(title: str | LyricsSearchCandidate | None) -> LyricsDiscovery:
     if expected_artist:
         providers.append(lambda: _mychords_catalog_search(expected_artist, track))
     providers.append(lambda: _mychords_search(query))
+    providers.append(lambda: _lyricshare_search(query, track))
     providers.append(lambda: _web_search(query))
     artist_tokens = {
         token for token in _normalize_name(expected_artist).split() if len(token) >= 2
@@ -905,6 +918,10 @@ def _metadata_search_plan(
                 candidates.append(
                     LyricsSearchCandidate(query=clean_title, track=clean_title)
                 )
+            alias_words = {"моя": "my", "мой": "my", "леди": "lady"}
+            alias = " ".join(alias_words.get(word.casefold(), word) for word in clean_title.split())
+            if alias.casefold() != clean_title.casefold():
+                candidates.append(LyricsSearchCandidate(query=f"{clean_artist} {alias}", artist=clean_artist, track=alias))
             return
         add_query(clean_title)
 

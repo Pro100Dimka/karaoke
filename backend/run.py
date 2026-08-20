@@ -13,28 +13,35 @@ import importlib
 import json
 import logging
 import os
+import shutil
 import socket
 import sys
 import urllib.request
-from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, BinaryIO
 
 import uvicorn
 
 
+class _UsefulLogFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno >= logging.WARNING: return True
+        message = record.getMessage()
+        return any(marker in message for marker in ("[AI]", "AI runtime:", "AI build="))
+
+
 class _StreamToLogFile:
-    """Mirror a raw text stream into the backend's rotating log file.
+    """Mirror selected raw text lines into the application's single log file.
 
     Progress/diagnostic lines throughout the AI pipeline (``print(f"[AI] ...")``)
     never went through ``logging``, so they only ever reached the terminal --
-    or, in the packaged app, a second, separate ``backend-process.log`` that
-    Electron captured on its own. Emitting straight to the same file handler
+    or, in older packaged builds, a second process log captured by Electron.
+    Emitting straight to the same file handler
     (bypassing the logger dispatch chain, so nothing is printed twice) keeps
     every backend line, log calls and plain prints alike, in one place.
     """
 
-    def __init__(self, file_handler: RotatingFileHandler, level: int, original):
+    def __init__(self, file_handler: logging.FileHandler, level: int, original):
         self._file_handler = file_handler
         self._level = level
         self._original = original
@@ -44,7 +51,7 @@ class _StreamToLogFile:
         for line in message.splitlines():
             if line.strip():
                 record = logging.LogRecord("stdout", self._level, "", 0, line, (), None)
-                self._file_handler.emit(record)
+                self._file_handler.handle(record)
         return len(message)
 
     def flush(self) -> None: self._original.flush()
@@ -56,8 +63,17 @@ def configure_logging() -> None:
     import config
     from app.services.remote_log_service import RemoteErrorLogHandler
 
-    log_path = config.APP_LOG_DIR / "backend.log"
-    file_handler, remote_handler = RotatingFileHandler(log_path, maxBytes=2000000, backupCount=3, encoding='utf-8'), RemoteErrorLogHandler()
+    log_path = config.APP_LOG_DIR / "application.log"
+    for legacy in config.APP_LOG_DIR.iterdir():
+        if legacy.is_file() and legacy.resolve() != log_path.resolve(): legacy.unlink(missing_ok=True)
+    library_root = config.SONG_OUTPUT_DIR.resolve()
+    if library_root.is_dir():
+        for song_dir in library_root.iterdir():
+            legacy_logs = song_dir / config.LOGS_DIRNAME
+            if song_dir.is_dir() and legacy_logs.is_dir() and legacy_logs.resolve().parent == song_dir.resolve():
+                shutil.rmtree(legacy_logs, ignore_errors=True)
+    file_handler, remote_handler = logging.FileHandler(log_path, encoding='utf-8'), RemoteErrorLogHandler()
+    file_handler.addFilter(_UsefulLogFilter())
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",

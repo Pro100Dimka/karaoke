@@ -1,6 +1,4 @@
 import json
-from pathlib import Path
-from unittest.mock import Mock
 
 import pytest
 
@@ -48,28 +46,6 @@ def test_note_normalization_clamps_velocity_and_links_indices():
         ({"start": 0, "end": 1, "midi": 128}, "MIDI"),
     ]
     for payload, message in invalid: raises(ValueError, lambda payload=payload: song_editor_service._normalize_note(payload, 3), match=message)
-
-
-def test_words_and_syllables_filter_invalid_items_and_clamp_values():
-    payload = {
-        "words": [
-            None,
-            {"start": 2, "end": 1, "text": " ", "confidence": 2, "index": "bad"},
-        ],
-        "syllables": [
-            "bad",
-            {
-                "start": 2,
-                "end": 1,
-                "text": " ",
-                "confidence": -1,
-                "word_index": "bad",
-                "index": "bad",
-            },
-        ],
-    }
-    words, syllables = song_editor_service._words(payload), song_editor_service._syllables(payload)
-    assert (len(words) == len(syllables) == 1) and (words[0].text == '?' and words[0].end == 2 and (words[0].confidence == 1)) and (syllables[0].text == '?' and syllables[0].end == 2 and (syllables[0].confidence == 0))
 
 
 def test_refresh_lines_ignores_invalid_links_and_line_entries():
@@ -144,11 +120,9 @@ def test_load_and_normalize_editor_validate_contract(tmp_path):
     assert song_editor_service.normalize_editor_timeline(untouched) is untouched
 
 
-def test_save_editor_creates_backup_json_midi_manifest_and_empty_cleanup(monkeypatch, tmp_path):
+def test_save_editor_creates_backup_json_manifest_and_removes_legacy_midi(tmp_path):
     write_json(tmp_path / "songMap.json", base_song_map())
     write_json(tmp_path / "manifest.json", {"existing": True})
-    midi = Mock(side_effect=lambda path, *_args, **_kwargs: Path(path).write_bytes(b"MThd"))
-    monkeypatch.setattr(song_editor_service, "write_midi", midi)
     notes = [
         {
             "start": 1,
@@ -167,7 +141,7 @@ def test_save_editor_creates_backup_json_midi_manifest_and_empty_cleanup(monkeyp
     ]
     saved = song_editor_service.save_editor(tmp_path, notes)
     assert ([note['midi_note'] for note in saved['notes']] == [60, 62]) and ((tmp_path / 'songMap.ai.json').exists()) and (json.loads((tmp_path / 'reference.json').read_text(encoding='utf-8'))['notes']) and (json.loads((tmp_path / 'manifest.json').read_text(encoding='utf-8'))['manual_editor']['note_count'] == 2)
-    midi.assert_called_once()
+    assert not (tmp_path / "game.mid").exists()
 
     (tmp_path / "game.mid").write_bytes(b"old")
     write_json(tmp_path / "manifest.json", [])
@@ -175,7 +149,7 @@ def test_save_editor_creates_backup_json_midi_manifest_and_empty_cleanup(monkeyp
     assert not (tmp_path / "game.mid").exists()
 
 
-def test_reset_editor_validates_backup_and_rebuilds_outputs(monkeypatch, tmp_path):
+def test_reset_editor_validates_backup_and_rebuilds_outputs(tmp_path):
     raises(ValueError, lambda: song_editor_service.reset_editor(tmp_path), match='not available')
     backup = tmp_path / "songMap.ai.json"
     write_json(backup, [])
@@ -197,11 +171,9 @@ def test_reset_editor_validates_backup_and_rebuilds_outputs(monkeypatch, tmp_pat
     ]
     write_json(backup, payload)
     write_json(tmp_path / "manifest.json", {})
-    midi = Mock(side_effect=lambda path, *_args, **_kwargs: Path(path).write_bytes(b"MThd"))
-    monkeypatch.setattr(song_editor_service, "write_midi", midi)
     restored = song_editor_service.reset_editor(tmp_path)
     assert restored["notes"] == payload["notes"]
-    midi.assert_called_once()
+    assert not (tmp_path / "game.mid").exists()
     assert (
         json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))["manual_editor"][
             "restored_ai"
