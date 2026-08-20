@@ -271,15 +271,10 @@ def _bound_legacy_word_durations(lines: list[dict[str, Any]]) -> list[dict[str, 
     return output
 
 
-def get_karaoke_lyrics(output_dir: str | Path) -> list[dict[str, Any]]:
-    output_dir = Path(output_dir)
-    song_map: Any = read_json(output_dir / "songMap.json", default={})
-    if isinstance(song_map, dict) and isinstance(song_map.get("lines"), list): return [item for item in song_map["lines"] if isinstance(item, dict)]
-    payload: Any = read_json(output_dir / "lyricsSync.json", default={})
-    if not isinstance(payload, dict): return []
-    words = payload.get("words", [])
-    if not isinstance(words, list): words = []
-    return _group_words_into_lines(words, str(payload.get("text") or ""))
+def get_karaoke_lyrics(output_dir: str | Path) -> dict[str, Any]:
+    payload: Any = read_json(Path(output_dir) / "lyricsSync.json", default={})
+    if not isinstance(payload, dict) or not isinstance(payload.get("words"), list): return {}
+    return payload
 
 
 def get_game_notes(output_dir: str | Path) -> list[dict[str, Any]]: return _notes_with_midi(_artifact_list(Path(output_dir), 'notes', 'songMap.json', 'reference.json'))
@@ -303,7 +298,11 @@ def get_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
 
 def _build_legacy_karaoke_timeline(output_dir: str | Path) -> dict[str, Any]:
     output_dir = Path(output_dir)
-    lines, syllables, notes = get_karaoke_lyrics(output_dir), get_syllables(output_dir), get_game_notes(output_dir)
+    lyrics_sync = get_karaoke_lyrics(output_dir)
+    lines = _group_words_into_lines(
+        lyrics_sync.get("words", []), str(lyrics_sync.get("text") or "")
+    )
+    syllables, notes = get_syllables(output_dir), get_game_notes(output_dir)
     song_map: Any = read_json(output_dir / "songMap.json", default={})
 
     syllables_by_word: dict[int, list[dict[str, Any]]] = {}

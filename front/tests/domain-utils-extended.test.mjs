@@ -9,7 +9,7 @@ import {
 import {
   createPanoramaPath,
   getYouTubeVideoId,
-  normalizeLyrics,
+  lyricsSyncLines,
   normalizeNotes,
   noteNameToMidi,
   playbackGain,
@@ -196,30 +196,28 @@ describe("karaoke data contracts", () => {
     deepEqual([createPanoramaPath(() => 0), { xPhaseA: 0, xPhaseB: 0, xPhaseC: 0, yPhaseA: 0, yPhaseB: 0 }], [createPanoramaPath(() => 0.25), { xPhaseA: Math.PI / 2, xPhaseB: Math.PI / 2, xPhaseC: Math.PI / 2, yPhaseA: Math.PI / 2, yPhaseB: Math.PI / 2 }]);
     equal([normalizeNotes([{ start: 0, end: 1, note: "C4" }])[0].midi, 60]);
   });
-  test("normalizes lyric aliases without changing source word order", () => {
-    deepEqual([normalizeLyrics(null), []], [normalizeLyrics({ lines: "bad" }), []], [normalizeLyrics({ lines: ["bad"] }), []], [normalizeLyrics({}), []], [normalizeLyrics([{ text: "bad", start: -1 }]), []]);
-    for (const startKey of [ "start", "start_sec", "start_time", "begin", "from" ])
-      deepEqual([normalizeLyrics([{ text: startKey, [startKey]: 1, end: 2 }]).map( ({ text, start, end }) => ({ text, start, end }) ), [{ text: startKey, start: 1, end: 2 }]]);
-    for (const endKey of ["end", "end_sec", "end_time", "finish", "to"])
-      deepEqual([normalizeLyrics([{ text: endKey, start: 1, [endKey]: 2 }]).map( ({ text, start, end }) => ({ text, start, end }) ), [{ text: endKey, start: 1, end: 2 }]]);
-    deepEqual([normalizeLyrics([ { text: "", start: null, start_sec: 1, end: "", end_sec: 4, words: [ { word: " first ", start: 2, end: 2.5 }, { word: 42, start: 1.5, end: 3 }, { text: "last", start: 3, end: 3.5 }, "invalid" ] } ]).map(({ text, start, end }) => ({ text, start, end })), [{ text: "first 42 last", start: 1, end: 4 }]], [normalizeLyrics([{ text: "zero", start: 0 }]).map( ({ text, start, end, words }) => ({ text, start, end, words }) ), [{ text: "zero", start: 0, end: 2, words: [] }]], [normalizeLyrics([ { words: [ { text: "later", start: 2, end: 3 }, { text: "earlier", start: 1, end: 4 }, { text: "untimed" } ] } ]).map(({ text, start, end }) => ({ text, start, end })), [{ text: "later earlier untimed", start: 1, end: 4 }]], [normalizeLyrics([ { text: "first", start: 1, end: 1 }, { text: "second", start: 1, end: 1 } ]).map(({ end }) => end), [3, 3]]);
-    const result = normalizeLyrics({
-      segments: [
-        { line: "later", begin: 3, finish: 2 },
-        {
-          words: [
-            { word: "first", start_time: 1, end_time: 1.5 },
-            null,
-            { text: "second", start: "", end: 2 },
-            { text: " " }
-          ]
-        },
-        { text: "untimed" },
-        null
+  test("uses only exact lyricsSync word timings and preserves source order", () => {
+    deepEqual([lyricsSyncLines(null), []], [lyricsSyncLines({}), []], [lyricsSyncLines([]), []]);
+    const result = lyricsSyncLines({
+      text: "Я не хочу\nкурить после любви",
+      words: [
+        { index: 0, text: "Я", start: 3.888836032388664, end: 3.9088815789473683 },
+        { index: 1, text: "не", start: 4.069245951417004, end: 4.129382591093117 },
+        { index: 2, text: "хочу", start: 4.249655870445344, end: 4.470156882591094 },
+        { index: 3, text: "курить", start: 4.4902024291497975, end: 4.610475708502024 },
+        { index: 4, text: "после", start: 4.630521255060729, end: 4.790885627530364 },
+        { index: 5, text: "любви", start: 4.790885627530364, end: 4.83475 }
       ]
     });
-    equal([result.length, 2], [result[0].text, "first second"], [result[0].end, 2], [result[1].end, 5]);
-    deepEqual([result[0].words.map((word) => word.text), ["first", "second"]], [normalizeLyrics([ { text: "first", start: 1, end: 1 }, { text: "second", start: 2, end: 3 } ]).map(({ text, start, end }) => ({ text, start, end })), [ { text: "first", start: 1, end: 2 }, { text: "second", start: 2, end: 3 } ]], [normalizeLyrics([ { text: "later", start: 1, end: 3 }, { text: "shorter", start: 1, end: 2 }, { text: "same", start: 1, end: 2 } ]).map(({ text }) => text), ["shorter", "same", "later"]]);
+    equal([result.length, 2], [result[0].start, 3.888836032388664], [result[1].end, 4.83475]);
+    deepEqual([result.flatMap((line) => line.words).map(({ text, start, end }) => ({ text, start, end })), [
+      { text: "Я", start: 3.888836032388664, end: 3.9088815789473683 },
+      { text: "не", start: 4.069245951417004, end: 4.129382591093117 },
+      { text: "хочу", start: 4.249655870445344, end: 4.470156882591094 },
+      { text: "курить", start: 4.4902024291497975, end: 4.610475708502024 },
+      { text: "после", start: 4.630521255060729, end: 4.790885627530364 },
+      { text: "любви", start: 4.790885627530364, end: 4.83475 }
+    ]]);
   });
 });
 describe("lyrics, melody and pitch", () => {

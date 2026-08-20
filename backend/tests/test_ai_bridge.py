@@ -129,7 +129,7 @@ def test_bound_durations_and_artifact_readers(tmp_path):
             "syllables": [{"text": "la"}, 1],
         },
     )
-    assert (bridge.get_karaoke_lyrics(tmp_path) == [{'text': 'ok'}]) and (bridge.get_game_notes(tmp_path)[0]['pitch'] == 60) and (bridge.get_syllables(tmp_path) == [{'text': 'la'}])
+    assert (bridge.get_karaoke_lyrics(tmp_path) == {}) and (bridge.get_game_notes(tmp_path)[0]['pitch'] == 60) and (bridge.get_syllables(tmp_path) == [{'text': 'la'}])
     dump_json(tmp_path / "songMap.json", [])
     dump_json(
         tmp_path / "lyricsSync.json",
@@ -137,11 +137,11 @@ def test_bound_durations_and_artifact_readers(tmp_path):
     )
     dump_json(tmp_path / "reference.json", {"notes": [{"midi": 62}]})
     dump_json(tmp_path / "syllables.json", {"syllables": [{"text": "hi"}]})
-    assert (bridge.get_karaoke_lyrics(tmp_path)[0]['text'] == 'hi all') and (bridge.get_game_notes(tmp_path)[0]['midi'] == 62) and (bridge.get_syllables(tmp_path) == [{'text': 'hi'}])
+    assert (bridge.get_karaoke_lyrics(tmp_path)['text'] == 'hi all') and (bridge.get_karaoke_lyrics(tmp_path)['words'][0]['start'] == 0) and (bridge.get_game_notes(tmp_path)[0]['midi'] == 62) and (bridge.get_syllables(tmp_path) == [{'text': 'hi'}])
     dump_json(tmp_path / "lyricsSync.json", [])
-    assert bridge.get_karaoke_lyrics(tmp_path) == []
+    assert bridge.get_karaoke_lyrics(tmp_path) == {}
     dump_json(tmp_path / "lyricsSync.json", {"words": "bad"})
-    assert bridge.get_karaoke_lyrics(tmp_path) == []
+    assert bridge.get_karaoke_lyrics(tmp_path) == {}
     dump_json(tmp_path / "reference.json", {"notes": "bad"})
     assert bridge.get_game_notes(tmp_path) == []
 
@@ -153,21 +153,21 @@ def test_timeline_prefers_song_map_and_builds_legacy(monkeypatch, tmp_path):
     monkeypatch.setattr("app.services.song_editor_service.normalize_editor_timeline", normalize)
     assert bridge.get_karaoke_timeline(tmp_path) == ready
     normalize.assert_called_once()
-    patch_attrs(monkeypatch, bridge, get_karaoke_lyrics=lambda _: [{'text': 'la x', 'start': 0, 'end': 3, 'words': [{'word': 'la', 'index': 0, 'start': 0, 'end': 1}, {'word': 'x', 'index': 1, 'start': 2, 'end': 3}]}], get_syllables=lambda _: [{'index': 5, 'word_index': 0, 'start': 0.2, 'end': 0.8}, {'index': 6, 'word_index': 0, 'start': 0.8, 'end': 1}, {'index': 9, 'word_index': -1}], get_game_notes=lambda _: [{'syllable_index': 5, 'syllable_indices': [5, 6], 'start': 0.3, 'end': 0.7}, {'syllable_index': -1, 'start': 9, 'end': 10}])
+    patch_attrs(monkeypatch, bridge, get_karaoke_lyrics=lambda _: {'text': 'la x', 'words': [{'text': 'la', 'index': 0, 'start': 0, 'end': 1}, {'text': 'x', 'index': 1, 'start': 2, 'end': 3}]}, get_syllables=lambda _: [{'index': 5, 'word_index': 0, 'start': 0.2, 'end': 0.8}, {'index': 6, 'word_index': 0, 'start': 0.8, 'end': 1}, {'index': 9, 'word_index': -1}], get_game_notes=lambda _: [{'syllable_index': 5, 'syllable_indices': [5, 6], 'start': 0.3, 'end': 0.7}, {'syllable_index': -1, 'start': 9, 'end': 10}])
     dump_json(tmp_path / "songMap.json", {"duration": "bad"})
     timeline = bridge._build_legacy_karaoke_timeline(tmp_path)
-    first, second = timeline["lines"][0]["words"]
+    first, second = timeline["lines"][0]["words"][0], timeline["lines"][1]["words"][0]
     assert (((first['start'], first['end']), (first['syllables'][0]['start'], first['syllables'][0]['end']), first['syllables'][0]['timing_source']) == ((0, 1), (0.2, 0.8), 'syllable_alignment')) and (first['syllables'][0]['notes']) and (first['syllables'][1]['notes']) and ((first['syllables'][1]['timing_source'], second['timing_source'], timeline['duration']) == ('syllable_alignment', 'word_alignment', 10))
     dump_json(tmp_path / "songMap.json", {})
     monkeypatch.setattr(bridge, "_build_legacy_karaoke_timeline", lambda _: {"legacy": True})
     assert bridge.get_karaoke_timeline(tmp_path) == {"legacy": True}
 
 
-def test_legacy_timeline_empty_line_and_explicit_duration(monkeypatch, tmp_path):
-    patch_attrs(monkeypatch, bridge, get_karaoke_lyrics=lambda _: [{'start': 2, 'end': 3, 'words': []}], get_syllables=lambda _: [], get_game_notes=lambda _: [])
+def test_legacy_timeline_empty_lyrics_and_explicit_duration(monkeypatch, tmp_path):
+    patch_attrs(monkeypatch, bridge, get_karaoke_lyrics=lambda _: {'text': '', 'words': []}, get_syllables=lambda _: [], get_game_notes=lambda _: [])
     dump_json(tmp_path / "songMap.json", {"duration": 7})
     timeline = bridge._build_legacy_karaoke_timeline(tmp_path)
-    assert (timeline['lines'][0]['start'], timeline['duration']) == (2, 7)
+    assert (timeline['lines'], timeline['duration']) == ([], 7)
 
 
 def test_reference_note_priority(tmp_path):

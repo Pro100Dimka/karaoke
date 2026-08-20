@@ -3,7 +3,6 @@ import { clamp01 } from "../../../utils/math";
 // Node test runner requires the explicit extension for this ESM import.
 // eslint-disable-next-line import/extensions
 import { normalizeNoteList } from "./note-normalization";
-import { END_TIME_KEYS, readFiniteTime, START_TIME_KEYS } from "./time-keys";
 
 const ACCIDENTAL_OFFSETS = Object.freeze({ "#": 1, b: -1 });
 
@@ -26,67 +25,48 @@ export function noteNameToMidi(noteName) {
   const midi = (Number(octaveText) + 1) * 12 + base + offset;
   return midi >= 0 && midi <= 127 ? midi : null;
 }
-export function normalizeLyrics(raw) {
-  if (!raw) return [];
-  // Stryker disable next-line ArrayDeclaration: injected primitive is filtered.
-  const source = Array.isArray(raw) ? raw : raw.lines || raw.segments || [];
-  // Stryker disable next-line ArrayDeclaration: injected primitive is filtered.
-  const list = Array.isArray(source) ? source : [];
-  const toText = (value) =>
-    ["string", "number"].includes(typeof value) ? String(value).trim() : "";
-  return list
-    .filter(Boolean)
-    .map((line) => {
-      const declaredStart = readFiniteTime(line, ...START_TIME_KEYS);
-      const declaredEnd = readFiniteTime(line, ...END_TIME_KEYS);
-      const words = Array.isArray(line.words)
-        ? line.words
-            .filter(Boolean)
-            .map((word, wordIndex) => ({
-              ...word,
-              text: toText(word.word ?? word.text),
-              start: readFiniteTime(word, ...START_TIME_KEYS),
-              end: readFiniteTime(word, ...END_TIME_KEYS),
-              __wordIndex: wordIndex
-            }))
-            // Preserve the backend/source word order. Sorting a partially timed
-            // line by timestamp can move untimed words to the end and visibly
-            // scramble the lyric text. Timing repair happens later without
-            // changing the textual order.
-            .filter((word) => word.text)
-        : [];
-      const finiteWordStarts = words.map((word) => word.start).filter(Number.isFinite);
-      const wordEnds = words.map((word) => word.end);
-      const wordStart = finiteWordStarts.length ? Math.min(...finiteWordStarts) : null;
-      const wordEnd = wordEnds.length ? Math.max(...wordEnds) : null;
-      const startTime = declaredStart ?? wordStart ?? null;
-      const endTime = declaredEnd ?? wordEnd ?? null;
-      const text = toText(line.text ?? line.line) || words.map((word) => word.text).join(" ");
+export function lyricsSyncLines(raw) {
+  if (!raw || !Array.isArray(raw.words)) return [];
+  const words = raw.words
+    .map((word, position) => ({
+      index: Number.isInteger(word?.index) ? word.index : position,
+      text: typeof word?.text === "string" ? word.text.trim() : "",
+      start: word?.start,
+      end: word?.end,
+      confidence: word?.confidence
+    }))
+    .filter(
+      (word) =>
+        word.text &&
+        Number.isFinite(word.start) &&
+        Number.isFinite(word.end) &&
+        word.end >= word.start
+    );
+  if (!words.length) return [];
 
-      // Untimed lines are unsafe for real-time karaoke. In particular, never
-      // coerce a missing start to zero: that makes an arbitrary line appear at
-      // the beginning of every song.
-      if (!text || startTime === null) return null;
+  const sourceLines = String(raw.text || "")
+    .split(/\r?\n/)
+    .map((text) => text.trim())
+    .filter(Boolean);
+  const counts = sourceLines.map((text) => text.split(/\s+/).length);
+  if (!counts.length) counts.push(words.length);
+
+  let cursor = 0;
+  return counts
+    .map((count, lineIndex) => {
+      const lineWords =
+        lineIndex === counts.length - 1 ? words.slice(cursor) : words.slice(cursor, cursor + count);
+      cursor += count;
+      if (!lineWords.length) return null;
       return {
-        ...line,
-        start: startTime,
-        end: endTime ?? startTime,
-        text,
-        words: words.map(({ __wordIndex: _, ...word }) => word)
+        index: lineIndex,
+        text: lineWords.map((word) => word.text).join(" "),
+        start: lineWords[0].start,
+        end: lineWords.at(-1).end,
+        words: lineWords
       };
     })
-    .filter(Boolean)
-    .sort((left, right) => left.start - right.start || left.end - right.end)
-    .map((line, index, lines) => {
-      const cleanLine = { ...line };
-      // If a backend omitted/invalidated line end, use the next line boundary
-      // rather than creating a zero-length line that can never become current.
-      if (cleanLine.end <= cleanLine.start) {
-        const nextStart = lines[index + 1]?.start;
-        cleanLine.end = nextStart > cleanLine.start ? nextStart : cleanLine.start + 2;
-      }
-      return cleanLine;
-    });
+    .filter(Boolean);
 }
 export function normalizeNotes(raw) {
   return normalizeNoteList(raw, noteNameToMidi);

@@ -73,10 +73,10 @@ test("stage displays panorama, intro, lyrics and melody", () => {
       songId="song"
       isPlaying
       currentTime={0.5}
-      lyrics={[{ text: "Line", start: 0, end: 1 }]}
-      currentLine={{ text: "Line", start: 0, end: 1 }}
+      lyrics={[{ text: "Line", start: 0, end: 1, words: [{ text: "Line", start: 0, end: 1 }] }]}
+      currentLine={{ text: "Line", start: 0, end: 1, words: [{ text: "Line", start: 0, end: 1 }] }}
       upcomingLine={null}
-      nextLine={{ text: "Next", start: 1, end: 2 }}
+      nextLine={{ text: "Next", start: 1, end: 2, words: [{ text: "Next", start: 1, end: 2 }] }}
       notes={notes}
       showLyrics
       showNotes
@@ -98,9 +98,9 @@ test("stage displays panorama, intro, lyrics and melody", () => {
       songId=""
       isPlaying
       currentTime={0}
-      lyrics={[{ text: "Soon", start: 1, end: 2 }]}
+      lyrics={[{ text: "Soon", start: 1, end: 2, words: [{ text: "Soon", start: 1, end: 2 }] }]}
       currentLine={null}
-      upcomingLine={{ text: "Soon", start: 1, end: 2 }}
+      upcomingLine={{ text: "Soon", start: 1, end: 2, words: [{ text: "Soon", start: 1, end: 2 }] }}
       nextLine={null}
       notes={[]}
       showLyrics

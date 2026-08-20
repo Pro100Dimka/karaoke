@@ -102,76 +102,47 @@ test("waveform supports click, drag and range seeking", () => {
   fireEvent.pointerDown(zeroWidth, { clientX: 0 });
   expect(change).toHaveBeenCalledTimes(3);
 });
-test("lyrics render words, syllables, suffixes and untimed fallback text", () => {
+test("lyrics highlight every word only between its exact lyricsSync start and end", () => {
   const { container, rerender } = render(
     <KaraokeLyricLine
-      currentTime={0.5}
+      currentTime={3.888836032388664}
       className="line"
       line={{
-        text: "Большой мир",
+        text: "Я не",
         words: [
           {
-            text: "Большой",
-            start: 0,
-            end: 1,
-            syllables: [
-              { index: 0, text: "Бол", start: 0, end: 0.4 },
-              { index: 1, text: "ьш", start: 0.4, end: 0.8 }
-            ]
+            index: 0,
+            text: "Я",
+            start: 3.888836032388664,
+            end: 3.9088815789473683
           },
-          { text: "мир", start: 1, end: 2 }
-        ]
-      }}
-    />
-  );
-  verify([container.textContent, 'toBe', "Большоймир"], [container.querySelectorAll(".karaoke-lyric-syllable"), 'toHaveLength', 2]);
-  rerender( <KaraokeLyricLine currentTime={0} line={{ text: "Plain", start: 0, end: 1 }} />
-  );
-  expect(container.textContent).toBe("Plain");
-  rerender(
-    <KaraokeLyricLine
-      currentTime={0}
-      line={{
-        text: "",
-        words: [
-          { word: "Word", start: 0, end: 1 },
-          {},
-          // Syllables that do not reconstruct "XY" must not delete the word
-          // from the screen: it falls back to word-level highlighting instead
-          // of silently dropping the mismatched characters.
-          { word: "XY", syllables: [ { start: 0, end: 0.5 }, { text: "Z", start: 0.5, end: 1 } ] },
-          { syllables: [{}] }
-        ]
-      }}
-    />
-  );
-  expect(container.textContent).toBe("WordXY");
-  rerender(<KaraokeLyricLine currentTime={0} line={null} />);
-  expect(container.textContent).toBe("");
-});
-test("lyrics preserve punctuation the backend's syllable split strips from the word edge", () => {
-  // split_written() in AI/syllables.py strips leading/trailing punctuation
-  // before splitting a word into syllables (see AI/syllables.py _WORD_EDGE).
-  // A leading em dash/quote is common in dialogue-style lyric lines, e.g.
-  // "— Пришла", and must still be rendered/highlighted, not disappear.
-  const { container } = render(
-    <KaraokeLyricLine
-      currentTime={0.5}
-      line={{
-        text: "— Пришла",
-        words: [
           {
-            text: "—Пришла",
-            start: 0,
-            end: 1,
-            syllables: [
-              { index: 0, text: "При", start: 0, end: 0.5 },
-              { index: 1, text: "шла", start: 0.5, end: 1 }
-            ]
+            index: 1,
+            text: "не",
+            start: 4.069245951417004,
+            end: 4.129382591093117,
+            syllables: [{ text: "ignored", start: 0, end: 10 }]
           }
         ]
       }}
     />
   );
-  expect(container.textContent).toBe("—Пришла");
+  expect(container.textContent).toBe("Яне");
+  expect(container.querySelectorAll(".karaoke-lyric-syllable")).toHaveLength(0);
+  expect(
+    container.querySelectorAll(".karaoke-lyric-character")[0].style.getPropertyValue(
+      "--character-fill"
+    )
+  ).toBe("0%");
+  rerender(
+    <KaraokeLyricLine
+      currentTime={3.9088815789473683}
+      line={{ text: "Я", words: [{ text: "Я", start: 3.888836032388664, end: 3.9088815789473683 }] }}
+    />
+  );
+  expect(
+    container
+      .querySelector(".karaoke-lyric-character")
+      .style.getPropertyValue("--character-fill")
+  ).toBe("100%");
 });

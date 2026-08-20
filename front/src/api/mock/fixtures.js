@@ -24,21 +24,20 @@ export const mockSongs = [
 ];
 
 export const mockKaraokeResult = {
-  lyrics_sync: [
-    {
-      start: 0,
-      end: 5,
-      text: "Добро пожаловать в A&D Voice",
-      words: [
-        { text: "Добро", start: 0, end: 1 },
-        { text: "пожаловать", start: 1, end: 2.4 },
-        { text: "в", start: 2.4, end: 2.7 },
-        { text: "Karaoke", start: 2.7, end: 3.8 },
-        { text: "Studio", start: 3.8, end: 5 }
-      ]
-    },
-    { start: 5, end: 10, text: "Интерфейс работает без backend", words: [] }
-  ],
+  lyrics_sync: {
+    text: "Добро пожаловать в A&D Voice\nИнтерфейс работает без backend",
+    words: [
+      { text: "Добро", start: 0, end: 1 },
+      { text: "пожаловать", start: 1, end: 2.4 },
+      { text: "в", start: 2.4, end: 2.7 },
+      { text: "A&D", start: 2.7, end: 3.8 },
+      { text: "Voice", start: 3.8, end: 5 },
+      { text: "Интерфейс", start: 5, end: 6.2 },
+      { text: "работает", start: 6.2, end: 7.5 },
+      { text: "без", start: 7.5, end: 8.2 },
+      { text: "backend", start: 8.2, end: 10 }
+    ]
+  },
   reference_notes: [
     { start: 0.5, end: 1.2, midi: 60 },
     { start: 1.3, end: 2.1, midi: 62 },

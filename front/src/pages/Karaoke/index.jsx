@@ -22,14 +22,13 @@ import useMicrophoneSettings from "./hooks/useMicrophoneSettings";
 import usePitchDetection from "./hooks/usePitchDetection";
 import KaraokeLoadState from "./karaoke-load-state";
 import KaraokeView from "./karaoke-view";
-import { getYouTubeVideoId, normalizeLyrics, normalizeNotes, transposeKey } from "./utils/data";
+import { getYouTubeVideoId, lyricsSyncLines, normalizeNotes, transposeKey } from "./utils/data";
 import { formatCompactKey } from "./utils/display";
 import { getLyricDisplayState } from "./utils/lyrics";
 import { getMicrophoneLevel } from "./utils/transport";
 
-// Karaoke timing is authoritative on the backend. The UI only reads the ready
-// songMap.json and advances it with the instrumental playback clock. Legacy
-// normalization remains only as a compatibility fallback for older payloads.
+// Lyric highlighting uses only word start/end values from lyricsSync.json.
+// songMap remains independent and supplies melody notes to the editor/player.
 
 export default function Karaoke({ onOpenAppSettings }) {
   const onlineRoom = useOnlineRoom();
@@ -168,13 +167,8 @@ export default function Karaoke({ onOpenAppSettings }) {
     setDuration(0);
   }, [song?.id]);
 
-  // songMap.json is the single ready-to-render karaoke contract produced by
-  // the backend.  Do not rebuild word/syllable/note timing in the browser.
   const songMap = result?.song_map;
-  const lyrics = useMemo(
-    () => (Array.isArray(songMap?.lines) ? songMap.lines : normalizeLyrics(result?.lyrics_sync)),
-    [songMap, result]
-  );
+  const lyrics = useMemo(() => lyricsSyncLines(result?.lyrics_sync), [result?.lyrics_sync]);
   const notes = useMemo(
     () =>
       normalizeNotes(
