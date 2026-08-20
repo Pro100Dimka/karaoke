@@ -24,8 +24,15 @@ def write_bytes_atomic(path: str | Path, data: bytes) -> None:
 def write_text_atomic(path: str | Path, text: str) -> None: write_bytes_atomic(path, text.encode('utf-8'))
 
 
-def write_json_atomic(path: str | Path, data: Any) -> None:
-    payload = json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False)
+def write_json_atomic(path: str | Path, data: Any, *, compact: bool = False) -> None:
+    payload = json.dumps(
+        data,
+        ensure_ascii=False,
+        indent=None if compact else 2,
+        separators=(",", ":") if compact else None,
+        sort_keys=True,
+        allow_nan=False,
+    )
     write_text_atomic(path, payload + "\n")
 
 

@@ -42,6 +42,7 @@ from .models import (
     Syllable,
     VocalNote,
     Word,
+    to_compact_dict,
     to_dict,
 )
 from .music import MUSIC_ANALYZER_VERSION, analyze_music
@@ -496,7 +497,8 @@ class KaraokePipeline:
             write_text_atomic(temp_text, text.strip() + "\n")
             write_json_atomic(
                 temp_words,
-                {"text": text, "words": [to_dict(word) for word in words]},
+                {"text": text, "words": [to_compact_dict(word) for word in words]},
+                compact=True,
             )
             validate_json(temp_words, ("text", "words"))
             publish_files_atomically(
@@ -1184,7 +1186,7 @@ class KaraokePipeline:
         validate_within_duration(words, song_duration, "words", 0.5)
 
         self._notify(request, "syllables", 82, "Разметка слогов и нот")
-        syllable_path, reference, contour, notes_path, derivation_key = output / 'syllables.json', output / 'reference.json', output / 'melodyContour.json', output / 'acousticNotes.json', cache.key('derivation', {'pitch': cache.file_hash(pitch_path), 'words': cache.file_hash(words_path), 'min_note': self.config.min_note_sec, 'confidence': self.config.min_voiced_confidence, 'split': self.config.split_note_semitones, 'gap': self.config.max_gap_sec, 'decoder': NOTE_DECODER_VERSION, 'decoder_code': cache.optional_file_hash(Path(__file__).with_name('notes.py')), 'pipeline_code': cache.optional_file_hash(Path(__file__)), 'build': AI_BUILD_ID, 'syllable_aligner': SYLLABLE_ALIGNER_VERSION, 'trusted_activity_segments': supplied_segments})
+        syllable_path, reference, contour, notes_path, derivation_key = output / 'syllables.json', output / 'reference.json', output / 'melodyContour.json', output / 'acousticNotes.json', cache.key('derivation', {'pitch': cache.file_hash(pitch_path), 'words': cache.file_hash(words_path), 'min_note': self.config.min_note_sec, 'confidence': self.config.min_voiced_confidence, 'split': self.config.split_note_semitones, 'gap': self.config.max_gap_sec, 'decoder': NOTE_DECODER_VERSION, 'decoder_code': cache.optional_file_hash(Path(__file__).with_name('notes.py')), 'pipeline_code': cache.optional_file_hash(Path(__file__)), 'build': AI_BUILD_ID, 'serialization': 'compact-floats-v1', 'syllable_aligner': SYLLABLE_ALIGNER_VERSION, 'trusted_activity_segments': supplied_segments})
         note_diagnostics: dict[str, object] = {}
         derivation_outputs, derivation_validators = [syllable_path, reference, contour, notes_path], {syllable_path: lambda path: validate_derivation_json(path, 'syllables'), reference: lambda path: validate_derivation_json(path, 'notes'), contour: lambda path: validate_derivation_json(path, 'frames'), notes_path: lambda path: validate_derivation_json(path, 'notes')}
         if self._cached_stage(
@@ -1220,13 +1222,13 @@ class KaraokePipeline:
             validate_timeline(syllables, "syllables")
             validate_timeline(vocal_notes, "vocal notes")
             write_json_atomic(syllable_path, {"syllables": [
-                              to_dict(item) for item in syllables]})
+                              to_compact_dict(item) for item in syllables]}, compact=True)
             write_json_atomic(
-                reference, {"notes": [to_dict(item) for item in game_notes]})
+                reference, {"notes": [to_compact_dict(item) for item in game_notes]}, compact=True)
             write_json_atomic(
-                contour, {"frames": [to_dict(item) for item in pitch]})
+                contour, {"frames": [to_compact_dict(item) for item in pitch]}, compact=True)
             write_json_atomic(
-                notes_path, {"notes": [to_dict(item) for item in vocal_notes]})
+                notes_path, {"notes": [to_compact_dict(item) for item in vocal_notes]}, compact=True)
             self._complete_stage(
                 cache,
                 reports,
@@ -1307,6 +1309,7 @@ class KaraokePipeline:
                     ai_build_id=AI_BUILD_ID,
                     note_decoder_version=NOTE_DECODER_VERSION,
                 ),
+                compact=True,
             )
             cache.commit("song-map", song_map_key, [song_map])
             self._remove_stale(output / "songMap.ai.json")
@@ -1416,10 +1419,14 @@ class KaraokePipeline:
             },
         )
 
+        # These WAVs are pitch-analysis scratch space, not song deliverables.
+        # Keeping them doubled the retained PCM storage for every processed song.
+        self._remove_stale(midi_analysis_vocal, midi_tail_vocal)
+        cache.invalidate("midi-vocal-cleanup")
+
         outputs = {
             "song": "song.wav",
             "vocals": "separated/vocals.wav",
-            "midiAnalysisVocals": "separated/vocals.midi-analysis.wav",
             "instrumental": "separated/instrumental.wav",
             "music": "music.json",
             "lyrics": "lyrics.txt",

@@ -579,4 +579,4 @@ def test_full_pipeline_fresh_supplied_lyrics_flow(monkeypatch, tmp_path, mode):
         stabilizer.assert_not_called()
     elif mode == "omnizart-fail":
         assert any("FCPE/YIN fallback" in warning for warning in result.warnings)
-        assert (output / "separated" / "vocals.midi-analysis.wav").exists()
+        assert not (output / "separated" / "vocals.midi-analysis.wav").exists()

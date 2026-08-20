@@ -150,3 +150,13 @@ class PipelineManifest:
 
 
 def to_dict(value: Any) -> Any: return asdict(value) if is_dataclass(value) and (not isinstance(value, type)) else value
+
+
+def to_compact_dict(value: Any, digits: int = 3) -> Any:
+    """Serialize public analysis artifacts without meaningless float noise."""
+    payload = to_dict(value)
+    if isinstance(payload, dict):
+        return {key: to_compact_dict(item, digits) for key, item in payload.items()}
+    if isinstance(payload, (list, tuple)):
+        return [to_compact_dict(item, digits) for item in payload]
+    return round(payload, digits) if isinstance(payload, float) else payload

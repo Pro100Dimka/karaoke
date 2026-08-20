@@ -3,91 +3,13 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
-from .engines.text import _vowel_weighted_length, tokenize
-from .models import Syllable, VocalNote, Word, to_dict
+from .engines.text import tokenize
+from .models import Syllable, VocalNote, Word, to_compact_dict, to_dict
 from .utils.numeric import float_or, int_or
 
-KARAOKE_TIMELINE_VERSION = "v3-compressed-line-boundary-rebalance"
-
-# CTC forced alignment marks the frame where a token becomes *recognizable*,
-# not how long it's actually sung -- for a short/quiet function word (a
-# single-letter "а"/"я", a preposition) that frame can be only a few tens of
-# milliseconds wide even at high confidence. A word highlighted for 20ms is
-# imperceptible: it flashes and is gone before a viewer can register it,
-# which reads as the highlight stalling on the *previous* word until the
-# next one arrives. This is a display-only floor applied after every upstream
-# alignment/interpolation decision has already been made, so it never
-# changes which words are trusted or how gaps between real anchors are
-# filled -- it only stretches an already-accepted word into silence that
-# already exists before the next item, never past it.
-_MIN_DISPLAY_DURATION = 0.10
+KARAOKE_TIMELINE_VERSION = "v4-authoritative-alignment"
 
 _safe_float = float_or
-
-def _extend_micro_duration_spans(items: list[dict[str, Any]], total_duration: float) -> None:
-    ordered = sorted(
-        range(len(items)), key=lambda index: _safe_float(items[index].get("start"), 0.0)
-    )
-    for position, index in enumerate(ordered):
-        item = items[index]
-        start = _safe_float(item.get("start"), 0.0)
-        end = _safe_float(item.get("end"), start)
-        if end - start >= _MIN_DISPLAY_DURATION: continue
-        if position + 1 < len(ordered):
-            next_start = _safe_float(items[ordered[position + 1]].get("start"), total_duration)
-        else:
-            next_start = total_duration
-        target_end = min(next_start, start + _MIN_DISPLAY_DURATION)
-        if target_end > end: item["end"] = target_end
-
-
-def _remap(value: float, old_start: float, old_end: float, new_start: float, new_end: float) -> float:
-    old_span = old_end - old_start
-    if old_span <= 0: return new_start
-    ratio = (value - old_start) / old_span
-    return new_start + ratio * (new_end - new_start)
-
-
-def _retime_line_words(words: list[dict[str, Any]], start: float, end: float) -> None:
-    weights = [_vowel_weighted_length(str(word.get("text", ""))) for word in words]
-    total_weight, cursor, span = sum(weights) or 1.0, start, end - start
-    for word, weight in zip(words, weights, strict=True):
-        old_start = _safe_float(word.get("start"), cursor)
-        old_end = _safe_float(word.get("end"), old_start)
-        word_start = cursor
-        cursor += span * weight / total_weight
-        word["start"] = word_start
-        word["end"] = cursor
-        for syllable in word.get("syllables") or []:
-            syllable["start"] = _remap(
-                _safe_float(syllable.get("start"), old_start), old_start, old_end, word_start, cursor
-            )
-            syllable["end"] = _remap(
-                _safe_float(syllable.get("end"), old_end), old_start, old_end, word_start, cursor
-            )
-    words[-1]["end"] = end
-
-
-def _rebalance_compressed_line_boundaries(lines: list[dict[str, Any]]) -> None:
-    for index in range(len(lines) - 1):
-        first, second = lines[index], lines[index + 1]
-        if abs(float(first["end"]) - float(second["start"])) > 1e-6: continue
-        first_words = first.get("words") or []
-        second_words = second.get("words") or []
-        if not first_words or not second_words: continue
-        first_weight = sum(_vowel_weighted_length(str(w.get("text", ""))) for w in first_words)
-        second_weight = sum(_vowel_weighted_length(str(w.get("text", ""))) for w in second_words)
-        span_start = float(first["start"])
-        span_end = float(second["end"])
-        total = span_end - span_start
-        if total <= 0 or (first_weight + second_weight) <= 0: continue
-        fair_boundary = span_start + total * first_weight / (first_weight + second_weight)
-        current_boundary = float(first["end"])
-        if current_boundary >= fair_boundary * 0.85: continue
-        _retime_line_words(first_words, span_start, fair_boundary)
-        _retime_line_words(second_words, fair_boundary, span_end)
-        first["end"] = fair_boundary
-        second["start"] = fair_boundary
 
 
 def _dict(item: Any) -> dict[str, Any]: return dict(item) if isinstance(item, dict) else dict(to_dict(item))
@@ -142,8 +64,6 @@ def build_karaoke_song_map(
 ) -> dict[str, Any]:
     word_payload, syllable_payload, note_payload = [_dict(item) for item in words], [_dict(item) for item in syllables], [_dict(item) for item in game_notes]
     display_notes = _merge_display_notes(note_payload)
-    _extend_micro_duration_spans(word_payload, float(duration))
-    _extend_micro_duration_spans(syllable_payload, float(duration))
 
     syllables_by_word: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for item in syllable_payload:
@@ -196,9 +116,7 @@ def build_karaoke_song_map(
                 "words": line_words,
             }
         )
-    _rebalance_compressed_line_boundaries(lines)
-
-    return {
+    return to_compact_dict({
         "version": KARAOKE_TIMELINE_VERSION,
         "duration": float(duration),
         "bpm": float(bpm),
@@ -215,4 +133,4 @@ def build_karaoke_song_map(
             "display_note_count": len(display_notes),
             "syllable_count": len(syllable_payload),
         },
-    }
+    })

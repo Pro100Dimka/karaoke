@@ -106,28 +106,10 @@ def test_build_karaoke_song_map_links_authoritative_timing():
         note_decoder_version="decoder",
     )
     first_word = result["lines"][0]["words"][0]
-    assert (((first_word['start'], first_word['end']), [(item['start'], item['end']) for item in first_word['syllables']]) == ((0, 1), [(0, 0.5), (0.5, 1)])) and ([len(item['display_notes']) for item in first_word['syllables']] == [1, 1]) and ((first_word['syllables'][0]['display_notes'][0]['syllable_indices'], first_word['timing_source'], first_word['syllables'][0]['timing_source'], result['lines'][1]['words'][0]['syllables'][0]['timing_source']) == ((0, 1), 'word_alignment', 'syllable_alignment', 'syllable_alignment')) and (len(result['lines']) == 2) and (result['display_stats'] == {'game_note_count': 1, 'display_note_count': 1, 'syllable_count': 3})
+    assert (((first_word['start'], first_word['end']), [(item['start'], item['end']) for item in first_word['syllables']]) == ((0, 1), [(0, 0.5), (0.5, 1)])) and ([len(item['display_notes']) for item in first_word['syllables']] == [1, 1]) and ((first_word['syllables'][0]['display_notes'][0]['syllable_indices'], first_word['timing_source'], first_word['syllables'][0]['timing_source'], result['lines'][1]['words'][0]['syllables'][0]['timing_source']) == ([0, 1], 'word_alignment', 'syllable_alignment', 'syllable_alignment')) and (len(result['lines']) == 2) and (result['display_stats'] == {'game_note_count': 1, 'display_note_count': 1, 'syllable_count': 3})
 
 
-def test_extend_micro_duration_spans_borrows_only_from_existing_gaps():
-    items = [
-        {"start": 0.0, "end": 0.02, "text": "А"},  # 20ms: stretched to the floor
-        {"start": 0.03, "end": 0.05, "text": "я"},  # 20ms but only 5ms of room before "left"
-        {"start": 0.06, "end": 0.5, "text": "left"},  # already long enough: untouched
-    ]
-    timeline._extend_micro_duration_spans(items, total_duration=10.0)
-    assert (items[0]['end'] == pytest.approx(0.03)) and (items[1]['end'] == pytest.approx(0.06)) and (items[2]['end'] == 0.5)
-
-    last_only = [{"start": 9.95, "end": 9.96, "text": "last"}]
-    timeline._extend_micro_duration_spans(last_only, total_duration=10.0)
-    assert last_only[0]["end"] == pytest.approx(10.0)  # capped at the song's own end
-
-    malformed = [{"start": "bad", "end": 1}]
-    timeline._extend_micro_duration_spans(malformed, total_duration=10.0)  # must not raise
-    assert malformed[0]["end"] == 1
-
-
-def test_build_karaoke_song_map_stretches_micro_duration_words_and_syllables():
+def test_build_karaoke_song_map_preserves_authoritative_micro_timings():
     words, syllables = [Word(0.0, 0.02, 'А', index=0), Word(0.2, 1.0, 'world', index=1)], [Syllable(0.0, 0.02, 'А', 0, 0), Syllable(0.2, 0.6, 'wor', 1, 1), Syllable(0.6, 1.0, 'ld', 1, 2)]
     result = timeline.build_karaoke_song_map(
         lyrics_text="А\nworld",
@@ -141,10 +123,10 @@ def test_build_karaoke_song_map_stretches_micro_duration_words_and_syllables():
         note_decoder_version="decoder",
     )
     first_word = result["lines"][0]["words"][0]
-    assert (first_word['end'] == pytest.approx(0.1)) and (first_word['syllables'][0]['end'] == pytest.approx(0.1)) and (result['lines'][1]['words'][0]['end'] == 1.0)
+    assert (first_word['end'] == pytest.approx(0.02)) and (first_word['syllables'][0]['end'] == pytest.approx(0.02)) and (result['lines'][1]['words'][0]['end'] == 1.0)
 
 
-def test_build_karaoke_song_map_rebalances_a_compressed_line_against_its_neighbor():
+def test_build_karaoke_song_map_does_not_retime_compressed_lines():
     words = [
         Word(3.89, 3.99, "Я", index=0),
         Word(3.99, 4.09, "не", index=1),
@@ -169,7 +151,7 @@ def test_build_karaoke_song_map_rebalances_a_compressed_line_against_its_neighbo
         note_decoder_version="decoder",
     )
     first_line, second_line = result["lines"]
-    assert (first_line['start'] == pytest.approx(3.89)) and (second_line['end'] == pytest.approx(7.75)) and (first_line['end'] == pytest.approx(second_line['start'])) and (first_line['end'] > 5.5) and (first_line['words'][-1]['end'] == pytest.approx(first_line['end'])) and (second_line['words'][0]['start'] == pytest.approx(second_line['start']))
+    assert (first_line['start'] == pytest.approx(3.89)) and (first_line['end'] == pytest.approx(4.83)) and (second_line['start'] == pytest.approx(4.83)) and (second_line['end'] == pytest.approx(7.75))
     for line in (first_line, second_line):
         ordered = line["words"]
         assert ordered[0]["start"] == pytest.approx(line["start"])
@@ -177,40 +159,6 @@ def test_build_karaoke_song_map_rebalances_a_compressed_line_against_its_neighbo
             left["end"] <= right["start"] + 1e-9
             for left, right in zip(ordered, ordered[1:], strict=False)
         )
-
-
-def test_rebalance_leaves_a_real_gap_and_a_reasonable_split_untouched():
-    lines = [
-        {
-            "start": 0.0,
-            "end": 1.0,
-            "words": [{"start": 0.0, "end": 1.0, "text": "left", "syllables": []}]
-        },
-        {
-            "start": 2.0,  # a genuine musical pause before the next line
-            "end": 3.0,
-            "words": [{"start": 2.0, "end": 3.0, "text": "right", "syllables": []}]
-        }
-    ]
-    timeline._rebalance_compressed_line_boundaries(lines)
-    assert lines[0]["end"] == 1.0 and lines[1]["start"] == 2.0
-
-    touching_but_fair = [
-        {
-            "start": 0.0,
-            "end": 1.0,
-            "words": [{"start": 0.0, "end": 1.0, "text": "left", "syllables": []}]
-        },
-        {
-            "start": 1.0,
-            "end": 2.0,
-            "words": [{"start": 1.0, "end": 2.0, "text": "right", "syllables": []}]
-        }
-    ]
-    timeline._rebalance_compressed_line_boundaries(touching_but_fair)
-    assert touching_but_fair[0]["end"] == 1.0
-
-
 def test_build_song_map_skips_invalid_links_and_unlinked_words():
     result = timeline.build_karaoke_song_map(
         lyrics_text="a",

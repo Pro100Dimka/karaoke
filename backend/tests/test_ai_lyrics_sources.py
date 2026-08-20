@@ -213,6 +213,7 @@ def test_query_helpers_and_metadata_candidates(monkeypatch, tmp_path):
     audio = {"title": ["Song"], "artist": ["Artist Song (2020) Single"]}
     monkeypatch.setitem(sys.modules, "mutagen", SimpleNamespace(File=lambda *_a, **_k: audio))
     assert [candidate.query for candidate in lyrics._metadata_search_plan(source, "Fallback")] == ["Artist Song"]
+
     monkeypatch.setitem(
         sys.modules, "mutagen", SimpleNamespace(File=Mock(side_effect=RuntimeError))
     )
@@ -246,6 +247,27 @@ def test_query_helpers_and_metadata_candidates(monkeypatch, tmp_path):
 
     plan = lyrics._metadata_search_plan(tmp_path / "source.wav", "Нервы - Моя Леди")
     assert (plan[0] == lyrics.LyricsSearchCandidate(query='Нервы Моя Леди', artist='Нервы', track='Моя Леди')) and (plan[1] == lyrics.LyricsSearchCandidate(query='Моя Леди', track='Моя Леди'))
+
+
+def test_search_title_matching_accepts_exact_tokens_with_site_noise():
+    assert lyrics._search_tokens_match(
+        'Нервы Моя Леди', 'Текст песни Нервы - Моя леди перевод, слова и видео'
+    )
+    assert not lyrics._search_tokens_match('Нервы Моя Леди', 'Стас Пьеха - Моя прекрасная леди')
+
+
+def test_web_search_keeps_alternative_sources_after_mychords_results(monkeypatch):
+    monkeypatch.setattr(
+        lyrics,
+        '_duckduckgo_search',
+        lambda query, _title: [('https://mychords.net/ru/a.html', 'Artist - Song')]
+        if query.startswith('site:')
+        else [('https://genius.com/artist-song-lyrics', 'Artist - Song Lyrics')],
+    )
+    assert [url for url, _title in lyrics._web_search('Artist Song')] == [
+        'https://genius.com/artist-song-lyrics',
+        'https://mychords.net/ru/a.html',
+    ]
 
 
 def test_online_structured_candidate_preserves_artist_and_track(monkeypatch):
@@ -347,6 +369,26 @@ def test_web_structured_candidate_keeps_artist_filter(monkeypatch):
     candidate = lyrics.LyricsSearchCandidate("Моя Леди", "Нервы", "Моя Леди")
     result = lyrics._web_online(candidate)
     assert (result.source == 'web:mychords.net') and (result.text.startswith('слово'))
+
+
+def test_web_online_falls_through_when_mychords_candidate_cannot_be_fetched(monkeypatch):
+    patch_attrs(
+        monkeypatch,
+        lyrics,
+        _mychords_catalog_search=lambda _artist, _track: [('https://mychords.net/ru/nervi/1.html', 'Нервы - Моя Леди')],
+        _mychords_search=lambda _query: [],
+        _web_search=lambda _query: [('https://genius.com/nervy-moya-ledi', 'Нервы - Моя Леди Lyrics')],
+        _fetch_web_lyrics=lambda url: '' if 'mychords.net' in url else 'слово ' * 40,
+    )
+    candidate = lyrics.LyricsSearchCandidate('Нервы Моя Леди', 'Нервы', 'Моя Леди')
+    result = lyrics._web_online(candidate)
+    assert result.source == 'web:genius.com'
+
+
+def test_lyricshare_parser(monkeypatch):
+    body = '<div id="lyricSheet"><p class="verse">' + '<span class="line">строка песни</span>' * 35 + '</p></div>'
+    patch_attrs(monkeypatch, lyrics.urllib.request, urlopen=lambda *_args, **_kwargs: Response(body, 'utf-8'))
+    assert len(lyrics._fetch_web_lyrics('https://lyricshare.net/ru/nervyi/my-lady.html').split()) == 70
 
 
 def test_mychords_artist_catalog_finds_exact_song_on_paginated_artist_page(monkeypatch):

@@ -31,6 +31,7 @@ _TITLE_NOISE = re.compile(
 _WEB_LYRICS_HOSTS = {
     "muztext.com",
     "mychords.net",
+    "lyricshare.net",
     "genius.com",
     "lyricsworld.ru",
     "tekstan.ru",
@@ -160,13 +161,18 @@ class _LyricsHTMLParser(HTMLParser):
             self.depth = 1
             self.buffer = []
             return
+        if self.mode is None and values.get("id") == "lyricSheet":
+            self.mode = "semantic"
+            self.depth = 1
+            self.buffer = []
+            return
         if self.mode is None: return
         if tag == "br":
             self.buffer.append("\n")
             return
         self.depth += 1
         if "b-accord__symbol" in classes: self.skip_depth = self.depth
-        if "pline" in classes or "single-line" in classes: self.buffer.append("\n")
+        if classes.intersection({"pline", "single-line", "line"}): self.buffer.append("\n")
 
     def handle_endtag(self, tag: str) -> None:
         if self.mode is None: return
@@ -472,7 +478,10 @@ def _search_tokens_match(query: str, result_title: str) -> bool:
     matched = sum(token in title_tokens for token in query_tokens)
     coverage, similarity = matched / len(query_tokens), _similarity(query, result_title)
 
-    return coverage >= 0.85 and similarity >= 0.55 if len(query_tokens) >= 3 else coverage >= 1.0 and similarity >= 0.72
+    # Search-result titles commonly prepend/append "lyrics", "текст песни",
+    # translations and site branding. Complete token coverage is stronger
+    # evidence than whole-string similarity for those noisy titles.
+    return coverage >= 0.85 if len(query_tokens) >= 3 else coverage >= 1.0 and similarity >= 0.72
 
 
 def _safe_result_url(raw: str) -> str | None:
@@ -516,7 +525,11 @@ def _read_html(request: urllib.request.Request, limit: int = 1_500_000, timeout:
             headers = getattr(response, "headers", None)
             get_charset = getattr(headers, "get_content_charset", None)
             charset = get_charset() if callable(get_charset) else None
-    except (OSError, UnicodeError, urllib.error.URLError):
+    except (OSError, UnicodeError, urllib.error.URLError) as exc:
+        _lyrics_debug(
+            f"[lyrics] HTTP fetch failed: url={request.full_url!r} "
+            f"error={type(exc).__name__} status={getattr(exc, 'code', None)!r}"
+        )
         return ""
     return _decode_html_payload(payload, charset)
 
@@ -716,8 +729,8 @@ def _duckduckgo_search(query: str, title: str) -> list[tuple[str, str]]:
 
 def _web_search(title: str) -> list[tuple[str, str]]:
     queries = [
-        f'site:mychords.net/ru {title}',
         f'{title} "текст песни" lyrics',
+        f'site:mychords.net/ru {title}',
     ]
     output: list[tuple[str, str]] = []
     seen: set[str] = set()
@@ -726,7 +739,6 @@ def _web_search(title: str) -> list[tuple[str, str]]:
             if url not in seen:
                 seen.add(url)
                 output.append((url, result_title))
-        if output: break
     return output[:6]
 
 
@@ -778,37 +790,41 @@ def _web_online(title: str | LyricsSearchCandidate | None) -> LyricsDiscovery:
     )
     track = title.track.strip() if isinstance(
         title, LyricsSearchCandidate) else query
-    results = _mychords_catalog_search(
-        expected_artist, track) if expected_artist else []
-    if not results: results = _mychords_search(query)
-    if not results: results = _web_search(query)
-
+    providers = []
     if expected_artist:
-        artist_tokens = {
-            token for token in _normalize_name(expected_artist).split() if len(token) >= 2
-        }
+        providers.append(lambda: _mychords_catalog_search(expected_artist, track))
+    providers.append(lambda: _mychords_search(query))
+    providers.append(lambda: _web_search(query))
+    artist_tokens = {
+        token for token in _normalize_name(expected_artist).split() if len(token) >= 2
+    }
+    seen: set[str] = set()
+    number = 0
+    for provider in providers:
+        results = provider()
         if artist_tokens:
             results = [
                 (url, result_title)
                 for url, result_title in results
                 if artist_tokens.issubset(set(_normalize_name(result_title).split()))
             ]
-
-    _lyrics_debug(f"[lyrics] WEB matching search results: {len(results)}")
-
-    for number, (url, result_title) in enumerate(results, 1):
-        _lyrics_debug(
-            f"[lyrics] WEB candidate #{number}: title={result_title!r} url={url!r}")
-        if text := _fetch_web_lyrics(url):
-            host = (urllib.parse.urlparse(
-                url).hostname or "web").removeprefix("www.")
+        results = [item for item in results if item[0] not in seen]
+        _lyrics_debug(f"[lyrics] WEB matching search results: {len(results)}")
+        for url, result_title in results:
+            seen.add(url)
+            number += 1
             _lyrics_debug(
-                f"[lyrics] WEB SELECTED: query={query!r} result={result_title!r} source={host!r}"
-            )
-            return LyricsDiscovery(text, f"web:{host}")
+                f"[lyrics] WEB candidate #{number}: title={result_title!r} url={url!r}")
+            if text := _fetch_web_lyrics(url):
+                host = (urllib.parse.urlparse(
+                    url).hostname or "web").removeprefix("www.")
+                _lyrics_debug(
+                    f"[lyrics] WEB SELECTED: query={query!r} result={result_title!r} source={host!r}"
+                )
+                return LyricsDiscovery(text, f"web:{host}")
 
-        _lyrics_debug(
-            f"[lyrics] WEB candidate #{number}: no usable lyrics -> REJECT")
+            _lyrics_debug(
+                f"[lyrics] WEB candidate #{number}: no usable lyrics -> REJECT")
 
     _lyrics_debug(f"[lyrics] WEB: no acceptable candidate for query={query!r}")
     return LyricsDiscovery()
