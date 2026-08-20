@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 FRONT = ROOT / "front"
+CLOUDFLARE = ROOT / "cloudflare"
 
 
 def fail(message: str) -> "NoReturn": print(f"\n[RELEASE BLOCKED] {message}", file=sys.stderr); raise SystemExit(1)
@@ -45,8 +46,9 @@ def require_release_environment() -> tuple[str, str]:
         FRONT / "node_modules" / "electron",
         FRONT / "node_modules" / "vitest",
         FRONT / "node_modules" / "vite",
+        CLOUDFLARE / "node_modules" / "wrangler",
     ]
-    missing = [str(path.relative_to(FRONT)) for path in required_modules if not path.exists()]
+    missing = [str(path.relative_to(ROOT)) for path in required_modules if not path.exists()]
     if missing: fail("Required release-test dependencies are missing: " + ", ".join(missing))
 
     return node, npm
@@ -82,6 +84,10 @@ def main() -> int:
     run("Browser user-journey E2E", [npm, "run", "test:e2e"], cwd=FRONT)
 
     run("Electron release-critical E2E", [npm, "run", "test:e2e:electron-release"], cwd=FRONT)
+
+    run("Online service tests", [npm, "test"], cwd=CLOUDFLARE)
+    run("Online service dependency audit", [npm, "audit"], cwd=CLOUDFLARE)
+    run("Online service deployment dry run", [npm, "run", "check"], cwd=CLOUDFLARE)
 
     print("\n[RELEASE GATE PASS] Every mandatory release layer ran and passed."); return 0
 

@@ -128,11 +128,25 @@ describe("online room service", () => {
       name: `A${"b".repeat(80)}`
     });
     const longSocket = FakeSocket.instances.at(-1);
-    expect(new URL(longSocket.url).searchParams.get("name")).toBe(`A${"b".repeat(63)}`);
+    expect(new URL(longSocket.url).searchParams.get("name")).toBe(`A${"b".repeat(39)}`);
     longSocket.readyState = FakeSocket.OPEN;
     longSocket.onopen();
     await longConnection;
     client.disconnect();
+  });
+  test("applies signaling limits to UTF-8 bytes instead of UTF-16 characters", async () => {
+    installSocket();
+    const client = new OnlineRoomClient();
+    const connection = client.connect({ id: "ABCD" });
+    const socket = FakeSocket.instances[0];
+    socket.readyState = FakeSocket.OPEN;
+    socket.onopen();
+    await connection;
+    expect(client.send("x", { value: "я".repeat(130_000) })).toBe(true);
+    expect(client.send("x", { value: "я".repeat(132_000) })).toBe(false);
+    expect(client.send("signal", { signal: "я".repeat(33_000) })).toBe(false);
+    socket.onmessage({ data: "я".repeat(132_000) });
+    expect(socket.close).toHaveBeenCalledWith(1009, "Message too large");
   });
   test("rejects invalid setup and synchronous WebSocket construction errors", async () => {
     const client = new OnlineRoomClient();

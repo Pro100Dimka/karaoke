@@ -518,8 +518,7 @@ const main = async () => {
   const counts = countIssues(issues);
 
   const report = {
-    generatedAt: new Date().toISOString(),
-    root: ROOT,
+    root: ".",
     summary: {
       cssFiles: cssFiles.length,
       sourceFiles: sourceFiles.length,

@@ -18,7 +18,8 @@ function getMaxSignalMessageLength() {
 // per-message limit above, so an oversized WebRTC signal that passes the
 // general check would still get the worker to close the whole socket.
 const MAX_SIGNAL_PAYLOAD_LENGTH = 64 * 1024;
-const MAX_PARTICIPANT_NAME_LENGTH = 64;
+const MAX_PARTICIPANT_NAME_LENGTH = 40;
+const utf8ByteLength = (value) => new TextEncoder().encode(value).byteLength;
 export function createRoomId(cryptoApi = globalThis.crypto, random = Math.random) {
   if (cryptoApi && typeof cryptoApi.randomUUID === "function") {
     return cryptoApi.randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase();
@@ -164,7 +165,7 @@ export class OnlineRoomClient {
       };
       socket.onmessage = (event) => {
         if (!isCurrent() || typeof event.data !== "string") return;
-        if (event.data.length > getMaxSignalMessageLength()) {
+        if (utf8ByteLength(event.data) > getMaxSignalMessageLength()) {
           socket.close(1009, "Message too large");
           return;
         }
@@ -218,12 +219,12 @@ export class OnlineRoomClient {
       const trimmedType = type.trim();
       if (
         trimmedType === "signal" &&
-        JSON.stringify(payload.signal ?? null).length > MAX_SIGNAL_PAYLOAD_LENGTH
+        utf8ByteLength(JSON.stringify(payload.signal ?? null)) > MAX_SIGNAL_PAYLOAD_LENGTH
       ) {
         return false;
       }
       const serialized = JSON.stringify({ ...payload, type: trimmedType });
-      if (serialized.length > getMaxSignalMessageLength()) return false;
+      if (utf8ByteLength(serialized) > getMaxSignalMessageLength()) return false;
       socket.send(serialized);
       return true;
     } catch {

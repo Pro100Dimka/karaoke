@@ -124,7 +124,13 @@ export class KaraokeRoom {
     if (!this.withinRate(sender.id)) { this.reject(socket, "Rate limit exceeded"); return; }
 
     if (message.type === "signal" && typeof message.targetId === "string") {
-      if (JSON.stringify(message.signal ?? null).length > MAX_SIGNAL_BYTES) { this.reject(socket, "Signal too large"); return; }
+      if (
+        new TextEncoder().encode(JSON.stringify(message.signal ?? null)).byteLength >
+        MAX_SIGNAL_BYTES
+      ) {
+        this.reject(socket, "Signal too large");
+        return;
+      }
       const target = this.ctx
         .getWebSockets()
         .find((candidate) => participantFromSocket(candidate)?.id === message.targetId);
