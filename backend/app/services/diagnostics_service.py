@@ -8,7 +8,7 @@ import subprocess
 
 import config
 
-BACKEND_VERSION = "0.3.29"
+BACKEND_VERSION = "0.3.30"
 _CLIENT_LOG_LEVELS = {
     "debug": logging.DEBUG,
     "info": logging.INFO,
