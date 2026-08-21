@@ -20,6 +20,7 @@ const PLAYBACK_RATES = [0.5, 0.65, 0.75, 0.85, 1];
 
 function EditorActions({
   autoScroll,
+  canMerge,
   deleteSelected,
   mergeSelected,
   onBack,
@@ -105,7 +106,7 @@ function EditorActions({
         <MelodyEditorToolbarButton
           icon={Merge}
           label={translateSaved("Соединить выбранные")}
-          disabled={selectedCount < 2}
+          disabled={!canMerge}
           tone="amber"
           onClick={mergeSelected}
         />
@@ -191,6 +192,7 @@ function SelectionSummary({ selected, selectedNote }) {
 
 export default function MelodyEditorControls({
   autoScroll,
+  canMerge,
   deleteSelected,
   duration,
   mergeSelected,
@@ -219,6 +221,7 @@ export default function MelodyEditorControls({
     <div className="melody-editor-topdeck melody-editor-topdeck-v11">
       <EditorActions
         autoScroll={autoScroll}
+        canMerge={canMerge}
         deleteSelected={deleteSelected}
         mergeSelected={mergeSelected}
         onBack={onBack}

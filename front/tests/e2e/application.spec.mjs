@@ -6,7 +6,9 @@ test.beforeEach(async ({ page }, testInfo) => {
   testInfo.errorsInPage = errors;
 });
 
-test.afterEach(async ({}, testInfo) => { expect(testInfo.errorsInPage).toEqual([]); });
+test.afterEach(async ({}, testInfo) => {
+  expect(testInfo.errorsInPage).toEqual([]);
+});
 
 test("library boots and remains interactive", async ({ page }) => {
   await page.goto("/");
@@ -14,9 +16,7 @@ test("library boots and remains interactive", async ({ page }) => {
   await expect(page.locator(".library-song-card")).toHaveCount(2);
   await expect(page.locator(".title-bar")).toBeVisible();
 
-  const search = page
-    .locator('input[type="search"], input[placeholder]')
-    .first();
+  const search = page.locator('input[type="search"], input[placeholder]').first();
   await search.fill("A&D Voice");
   await expect(page.locator(".library-song-card")).toHaveCount(1);
   await search.fill("");
@@ -30,6 +30,9 @@ test("song import enters the visible processing flow", async ({ page }) => {
     mimeType: "audio/mpeg",
     buffer: Buffer.from("mock audio")
   });
+  const review = page.getByRole("dialog", { name: "Подтверждение добавления песни" });
+  await expect(review).toBeVisible();
+  await review.locator('button[type="submit"]').click();
   await expect(page.locator(".processing-modal-body")).toBeVisible();
   await expect(page.locator(".library-song-card")).toHaveCount(3);
 });
@@ -62,7 +65,14 @@ test("ready song opens the complete karaoke workspace", async ({ page }) => {
   await expect(page.locator(".karaoke-transport-area")).toBeVisible();
   await page.keyboard.press("Space");
   await expect(page.locator(".karaoke-stage")).toHaveClass(/karaoke-is-playing/);
-  await expect.poll(() => page.locator("audio").first().evaluate((audio) => audio.paused)).toBe(false);
+  await expect
+    .poll(() =>
+      page
+        .locator("audio")
+        .first()
+        .evaluate((audio) => audio.paused)
+    )
+    .toBe(false);
 });
 
 test("melody editor loads notes and supports selection", async ({ page }) => {
@@ -71,8 +81,7 @@ test("melody editor loads notes and supports selection", async ({ page }) => {
   await expect(editor).toBeVisible();
   await expect(editor.locator(".melody-editor-note")).toHaveCount(2);
   await editor.locator(".melody-editor-note").first().click();
-  await expect(editor.locator(".melody-editor-note.is-selected")).toHaveCount( 1
-  );
+  await expect(editor.locator(".melody-editor-note.is-selected")).toHaveCount(1);
   await page.keyboard.press("Control+s");
   await expect(editor).toBeVisible();
 });
@@ -87,27 +96,19 @@ test("melody editor persists a merged note across reopening", async ({ page }) =
 
   await notes.first().click();
   await notes.last().click({ modifiers: ["Control"] });
-  await expect(editor.locator(".melody-editor-note.is-selected")).toHaveCount( 2
-  );
+  await expect(editor.locator(".melody-editor-note.is-selected")).toHaveCount(2);
 
-  const merge = editor
-    .locator(".melody-editor-tool-group.is-edit button")
-    .first();
+  const merge = editor.locator(".melody-editor-tool-group.is-edit button").first();
   await expect(merge).toBeEnabled();
   await merge.click();
   await expect(notes).toHaveCount(1);
 
-  await editor
-    .locator(".melody-editor-tool-group.is-nav button")
-    .nth(1)
-    .click();
-  await expect(editor.locator(".melody-editor-note.is-selected")).toHaveCount( 0
-  );
-  await editor
-    .locator(".melody-editor-tool-group.is-nav button")
-    .first()
-    .click();
+  await editor.locator(".melody-editor-tool-group.is-nav button").nth(1).click();
+  await expect(editor.locator(".melody-editor-note.is-selected")).toHaveCount(0);
+  await editor.locator(".melody-editor-tool-group.is-nav button").first().click();
   await expect(page.locator(".app-shell")).toBeVisible();
-  await page.evaluate(() => { window.location.hash = "/editor/e2e-merge-persistence"; });
+  await page.evaluate(() => {
+    window.location.hash = "/editor/e2e-merge-persistence";
+  });
   await expect(page.locator(".melody-editor-note")).toHaveCount(1);
 });

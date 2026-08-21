@@ -49,8 +49,16 @@ export const mockSongEditor = {
     key: "C",
     duration: 10,
     words: [
-      { text: "A&D", start: 0, end: 1.5, notes: [{ note: 60, start: 0.5, end: 1.5 }] },
-      { text: "Voice", start: 1.5, end: 2.5, notes: [{ note: 64, start: 1.5, end: 2.5 }] }
+      {
+        text: "A&D",
+        start: 0,
+        end: 1.5,
+        notes: [
+          { note: 60, start: 0.5, end: 1 },
+          { note: 64, start: 1, end: 1.5 }
+        ]
+      },
+      { text: "Voice", start: 1.5, end: 2.5, notes: [] }
     ]
   }
 };

@@ -1,6 +1,6 @@
 {
   "name": "a-and-d-voice",
-  "version": "0.3.30",
+  "version": "0.3.34",
   "description": "A&D Voice — десктопное приложение (AI-караоке-тренажёр)",
   "author": "A&D Voice",
   "private": true,
@@ -8,7 +8,7 @@
   "scripts": {
     "postinstall": "patch-package",
     "dev": "vite",
-    "dev:web": "concurrently -k -n vite,backend -c cyan,green \"vite --open\" \"cd ../backend && python run.py\"",
+    "dev:web": "node scripts/start-web.mjs",
     "dev:electron": "concurrently -k \"vite\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "build": "vite build",
     "build:electron": "npm run release:check && electron-builder",
@@ -41,6 +41,7 @@
     "test:unit": "vitest run",
     "test:unit:coverage": "vitest run --coverage",
     "test:mutation": "stryker run && node scripts/check-mutation-quality.mjs",
+    "test:mutation:full": "cross-env MUTATION_INCLUDE_STATIC=true MUTATION_REPORT=../generated/mutation/business-logic-full.json stryker run && cross-env MUTATION_REPORT=../generated/mutation/business-logic-full.json node scripts/check-mutation-quality.mjs",
     "test:e2e": "playwright test",
     "test:e2e:real": "npm run test:integration:backend",
     "test:integration:backend": "cross-env VITE_USE_MOCK_API=false playwright test",

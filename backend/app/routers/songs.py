@@ -5,6 +5,7 @@ import zipfile
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from fastapi import (
     APIRouter,
@@ -423,7 +424,7 @@ def update_lyrics(body: schemas.LyricsUpdate, song: SongDependency):
     try:
         reconcile_lyric_words = ai_bridge.reconcile_lyric_words
         lyrics = reconcile_lyric_words([line.model_dump() for line in body.lyrics])
-        current = read_json(lyrics_path, default={}) or {}
+        current: dict[str, Any] = read_json(lyrics_path, default={}) or {}
         trusted_text = "\n".join(str(line.get("text") or "").strip() for line in lyrics).strip()
         previous = current.get("words", []) if isinstance(current, dict) else []
         words = []

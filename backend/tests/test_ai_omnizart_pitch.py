@@ -63,3 +63,91 @@ def test_estimator_unavailable_and_runtime_failure_are_fallback_safe(monkeypatch
     )
     patch_attrs(monkeypatch, omnizart_pitch, load_mono=lambda *_: (np.ones(1600, dtype=np.float32), 16000), extract_patch_cfp_feature=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError('inference')))
     raises(EngineUnavailableError, lambda: broken.estimate('audio'), match='inference failed')
+
+
+def test_cfp_numeric_helpers_and_empty_inputs(monkeypatch):
+    waveform = np.sin(np.linspace(0, np.pi * 4, 100, dtype=np.float64))
+    spectrum, fft_size = omnizart_pitch._stft(
+        waveform, 5.0, 100, 10, np.ones(9, dtype=np.float64)
+    )
+    assert fft_size == 20 and spectrum.shape[0] == 20
+
+    nonlinear = omnizart_pitch._nonlinear(
+        np.asarray([[-1.0, 4.0], [9.0, 16.0], [25.0, 36.0]]), 0.5, 1
+    )
+    assert np.count_nonzero(nonlinear) == 2
+    centers = omnizart_pitch._centers(10.0, 40.0, 12)
+    assert centers[0] == 10.0 and centers[-1] < 40.0
+    assert omnizart_pitch._triangular_weight(centers[1], centers, 1) == 0
+    assert omnizart_pitch._triangular_weight((centers[0] + centers[1]) / 2, centers, 1) > 0
+
+    matrix, frequencies = omnizart_pitch._extract_cfp_matrix(
+        np.asarray([], dtype=np.float32), sample_rate=100, max_frames=2
+    )
+    assert matrix.shape == (0, 0) and frequencies.size == 0
+    monkeypatch.setattr(
+        omnizart_pitch,
+        "_extract_cfp_matrix",
+        lambda *_args, **_kwargs: (np.ones((3, 2)), np.asarray([80.0, 90.0, 100.0, 110.0])),
+    )
+    assert omnizart_pitch.extract_cfp_feature(waveform, sample_rate=100).shape == (2, 3)
+
+
+def test_cfp_chunk_runs_frequency_and_quefrency_mappings():
+    waveform = np.sin(np.linspace(0, np.pi * 8, 128, dtype=np.float64))
+
+    matrix, centers = omnizart_pitch._cfp_chunk(
+        waveform,
+        sample_rate=128,
+        hop_seconds=0.125,
+        window_size=17,
+        frequency_resolution=4.0,
+        lowest_frequency=8.0,
+        highest_frequency=48.0,
+        bins_per_octave=12,
+    )
+
+    assert matrix.shape[0] == len(centers) - 1
+    assert matrix.shape[1] > 0
+    assert np.all(np.isfinite(matrix))
+
+
+def test_patch_feature_and_contour_edge_cases(monkeypatch):
+    matrix = np.zeros((30, 40), dtype=np.float32)
+    matrix[15, :] = 2.0
+    monkeypatch.setattr(
+        omnizart_pitch,
+        "_extract_cfp_matrix",
+        lambda *_args, **_kwargs: (matrix, np.arange(31, dtype=float)),
+    )
+    patches, mapping, returned, centers = omnizart_pitch.extract_patch_cfp_feature(
+        np.ones(100), sample_rate=100, patch_size=5
+    )
+    assert patches.ndim == 3 and mapping.shape[1] == 2
+    assert returned is matrix and len(centers) == 31
+
+    empty_frequency, empty_confidence = omnizart_pitch.decode_contour(
+        np.asarray([]), np.asarray([]), matrix, centers, object()
+    )
+    assert empty_frequency.size == 0 and empty_confidence.size == 0
+
+
+def test_estimator_empty_audio_and_model_loading_error(monkeypatch, tmp_path):
+    model_files(tmp_path)
+    empty = omnizart_pitch.OmnizartPatchCNNPitchEstimator(
+        tmp_path, model_loader=lambda _: object()
+    )
+    monkeypatch.setattr(
+        omnizart_pitch, "load_mono", lambda *_: (np.asarray([], dtype=np.float32), 16_000)
+    )
+    assert empty.estimate("audio") == []
+
+    failed = omnizart_pitch.OmnizartPatchCNNPitchEstimator(
+        tmp_path, model_loader=MockLoaderError()
+    )
+    raises(EngineUnavailableError, lambda: failed.estimate("audio"), match="could not load")
+
+
+class MockLoaderError:
+    def __call__(self, _path):
+        raise RuntimeError("broken model")

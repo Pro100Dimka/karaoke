@@ -70,7 +70,7 @@ test("mock API implements the complete development contract", async () => {
   assert.ok((await mockRequest(`/songs/${MOCK_SONG_ID}/result`)).lyrics_sync);
   const editorPath = `/songs/${MOCK_SONG_ID}/editor`;
   equal(
-    [(await mockRequest(editorPath)).lyrics_sync.words[0].notes.length, 1],
+    [(await mockRequest(editorPath)).lyrics_sync.words[0].notes.length, 2],
     [(await mockRequest("/songs/unknown/editor")).lyrics_sync.words.length, 2]
   );
   const edited = await mockRequest(editorPath, {
@@ -88,7 +88,7 @@ test("mock API implements the complete development contract", async () => {
     [
       (await mockRequest(`/songs/${MOCK_SONG_ID}/editor/reset`, { method: "POST" })).lyrics_sync
         .words[0].notes.length,
-      1
+      2
     ],
     [(await mockRequest(`/songs/${MOCK_SONG_ID}/status`)).id, MOCK_SONG_ID]
   );

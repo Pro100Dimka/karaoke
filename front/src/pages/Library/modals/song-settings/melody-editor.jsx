@@ -4,6 +4,7 @@ import { useAppDialog } from "../../../../contexts/AppDialog";
 import { translateSaved } from "../../../../i18n/runtime";
 import MelodyEditorControls from "./melody-editor-controls";
 import MelodyEditorHeader from "./melody-editor-header";
+import { canMergeSelectedNotes } from "./melody-editor-operations";
 import MelodyEditorRoll from "./melody-editor-roll";
 import { useEditorHistory } from "./melody-editor-state";
 import useMelodyEditorDocument from "./useMelodyEditorDocument";
@@ -182,6 +183,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
           <div className="melody-editor-stage">
             <MelodyEditorControls
               autoScroll={autoScroll}
+              canMerge={canMergeSelectedNotes(notes, selected)}
               deleteSelected={deleteSelected}
               duration={duration}
               mergeSelected={mergeSelected}

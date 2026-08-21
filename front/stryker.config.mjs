@@ -25,6 +25,7 @@ const csv = (value) =>
 const selectedFiles = csv(process.env.MUTATION_FILES);
 const selectedTests = csv(process.env.MUTATION_TEST_FILES);
 const concurrency = Number(process.env.MUTATION_CONCURRENCY);
+const includeStatic = process.env.MUTATION_INCLUDE_STATIC === "true";
 
 export default {
   mutate: selectedFiles?.length ? selectedFiles : businessLogic,
@@ -35,8 +36,14 @@ export default {
   },
   ...(selectedTests?.length ? { testFiles: selectedTests } : {}),
   coverageAnalysis: "perTest",
+  // Static mutants force almost the whole suite to rerun for every mutation.
+  // They remain available in the explicit full audit; the installer gate still
+  // mutates every executable branch and function.
+  ignoreStatic: !includeStatic,
   incremental: true,
-  incrementalFile: "../generated/mutation/incremental.json",
+  incrementalFile:
+    process.env.MUTATION_INCREMENTAL_FILE ||
+    `../generated/mutation/${includeStatic ? "full" : "release"}-incremental.json`,
   tempDirName: "../generated/mutation/temp",
   ignorePatterns: [
     ".runtime/**",
@@ -55,8 +62,7 @@ export default {
         : Math.max(4, os.cpus().length - 2),
   reporters: ["progress", "clear-text", "json"],
   jsonReporter: {
-    fileName:
-      process.env.MUTATION_REPORT || "../generated/mutation/business-logic.json"
+    fileName: process.env.MUTATION_REPORT || "../generated/mutation/business-logic.json"
   },
   // Release blocks only on a genuinely weak suite; 90 remains the quality target.
   thresholds: { high: 90, low: 75, break: 75 },

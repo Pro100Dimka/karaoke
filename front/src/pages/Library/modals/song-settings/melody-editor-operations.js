@@ -1,5 +1,10 @@
 const byStart = (left, right) => left.start - right.start || left.note - right.note;
 
+const selectedNotes = (notes, selectedIds) => {
+  const selected = new Set(selectedIds);
+  return notes.filter((note) => selected.has(note._id)).sort(byStart);
+};
+
 export const canonicalLyricProjection = (words) =>
   (words || []).map((word, index) => ({
     index,
@@ -9,11 +14,11 @@ export const canonicalLyricProjection = (words) =>
   }));
 
 export function mergeSelectedNotes(notes, selectedIds) {
-  const selected = new Set(selectedIds);
-  const chosen = notes.filter((note) => selected.has(note._id)).sort(byStart);
-  if (chosen.length < 2 || chosen.some((note) => note.word_index !== chosen[0].word_index)) {
+  const chosen = selectedNotes(notes, selectedIds);
+  if (!canMergeSelectedNotes(notes, selectedIds)) {
     return { notes, selectedId: chosen[0]?._id || null };
   }
+  const selected = new Set(selectedIds);
   const merged = {
     ...chosen[0],
     start: Math.min(...chosen.map((note) => note.start)),
@@ -24,6 +29,11 @@ export function mergeSelectedNotes(notes, selectedIds) {
     notes: [...notes.filter((note) => !selected.has(note._id)), merged].sort(byStart),
     selectedId: merged._id
   };
+}
+
+export function canMergeSelectedNotes(notes, selectedIds) {
+  const chosen = selectedNotes(notes, selectedIds);
+  return chosen.length >= 2 && chosen.every((note) => note.word_index === chosen[0].word_index);
 }
 
 export function deleteNotes(notes, selectedIds) {

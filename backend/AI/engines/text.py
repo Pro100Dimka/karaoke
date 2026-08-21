@@ -2114,6 +2114,27 @@ def _pathological_alignment(words: list[Word], span: float) -> bool:
     )
 
 
+def _invalid_acoustic_timestamp_reason(words: list[Word], span: float) -> str | None:
+    """Return a structural error without judging how a singer phrases a word."""
+    if not math.isfinite(span) or span <= 0:
+        return "invalid audio duration"
+    if not words:
+        return "no timed words"
+    previous_end = 0.0
+    for index, word in enumerate(words):
+        start, end = float(word.start), float(word.end)
+        if not math.isfinite(start) or not math.isfinite(end):
+            return f"word {index} is non-finite"
+        if start < -1e-6 or end <= start:
+            return f"word {index} has an invalid interval"
+        if end > span + 1e-3:
+            return f"word {index} ends outside vocals"
+        if index and start < previous_end - 1e-6:
+            return f"word {index} overlaps word {index - 1}"
+        previous_end = end
+    return None
+
+
 def _proportional_words(tokens: list[str], span: float) -> list[Word]:
     weights = [max(2.0, _vowel_weighted_length(token)) for token in tokens]
     total, offset, output = sum(weights), 0.0, []
@@ -3254,8 +3275,8 @@ class Qwen3ForcedAligner(Aligner):
                     ]
                     if not _canonical_words_match(words, tokens):
                         ctc_failure = "CTC violated canonical lyric invariant"
-                    elif _pathological_alignment(words, duration_sec):
-                        ctc_failure = "CTC returned invalid timestamps"
+                    elif reason := _invalid_acoustic_timestamp_reason(words, duration_sec):
+                        ctc_failure = f"CTC returned invalid timestamps ({reason})"
                     else:
                         self.last_alignment_diagnostics = {
                             "alignment_mode": "full-song-ctc",
@@ -3308,8 +3329,10 @@ class Qwen3ForcedAligner(Aligner):
         ]
         if not _canonical_words_match(words, tokens):
             raise InvalidArtifactError("Full-song aligner violated canonical lyric invariant")
-        if _pathological_alignment(words, duration_sec):
-            raise InvalidArtifactError("Full-song aligner returned invalid timestamps")
+        if reason := _invalid_acoustic_timestamp_reason(words, duration_sec):
+            raise InvalidArtifactError(
+                f"Full-song aligner returned invalid timestamps ({reason})"
+            )
 
         self.last_alignment_diagnostics = {
             "alignment_mode": "full-song-qwen",

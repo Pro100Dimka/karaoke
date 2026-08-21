@@ -74,12 +74,11 @@ $Ninja = Join-Path $Vs "Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja
 
 $AppName = "A&D Voice"
 
-# The top-level orchestrator (no -Worker) owns the build number and bumps it
-# once before anything else runs. Worker sub-processes (-Worker backend/asio/
-# frontend/models, see Start-WorkerProcess) must not re-bump: they are spawned
-# by this same script with -File $PSCommandPath and would otherwise each
-# increment the version again for a single build-installer run.
-if (-not $Worker) {
+# Repeated full/fast builds keep the current application version so unchanged
+# components and the installer can be reused. A clean release build explicitly
+# advances the patch version and rebuilds every version-bearing artifact.
+# Worker sub-processes must never bump independently.
+if (-not $Worker -and $Mode -eq "clean") {
     function Get-NextPatchVersion([string]$Version) {
         if ($Version -notmatch '^(\d+)\.(\d+)\.(\d+)$') {
             throw "Version '$Version' is not in major.minor.patch form"
@@ -353,6 +352,50 @@ function Test-ExcludedPath(
     return $false
 }
 
+function Get-IncludedFiles(
+    [string]$Root,
+    [string[]]$ExcludeDirectoryNames = @(),
+    [string[]]$ExcludeFilePatterns = @(),
+    [string[]]$ExcludeRegexes = @()
+) {
+    $files = [Collections.Generic.List[IO.FileInfo]]::new()
+    $pending = [Collections.Generic.Stack[IO.DirectoryInfo]]::new()
+    $excludedDirectories = [Collections.Generic.HashSet[string]]::new(
+        [StringComparer]::OrdinalIgnoreCase
+    )
+
+    foreach ($name in $ExcludeDirectoryNames) {
+        [void]$excludedDirectories.Add($name)
+    }
+
+    $pending.Push([IO.DirectoryInfo]::new($Root))
+    while ($pending.Count -gt 0) {
+        $directory = $pending.Pop()
+
+        try {
+            foreach ($file in $directory.EnumerateFiles()) {
+                if (-not (Test-ExcludedPath $file.FullName @() $ExcludeFilePatterns $ExcludeRegexes)) {
+                    $files.Add($file)
+                }
+            }
+
+            foreach ($child in $directory.EnumerateDirectories()) {
+                if ($excludedDirectories.Contains($child.Name)) { continue }
+                if (Test-ExcludedPath $child.FullName @() @() $ExcludeRegexes) { continue }
+                $pending.Push($child)
+            }
+        }
+        catch [UnauthorizedAccessException] {
+            continue
+        }
+        catch [IO.IOException] {
+            continue
+        }
+    }
+
+    return $files
+}
+
 function Get-Fingerprint(
     [string[]]$Paths,
     [string[]]$ExcludeDirectoryNames = @(),
@@ -378,13 +421,10 @@ function Get-Fingerprint(
 
         $root = [IO.Path]::GetFullPath($item.FullName).TrimEnd('\')
 
-        Get-ChildItem -LiteralPath $root -Recurse -File -Force -ErrorAction SilentlyContinue |
-            ForEach-Object {
-                if (-not (Test-ExcludedPath $_.FullName $ExcludeDirectoryNames $ExcludeFilePatterns $ExcludeRegexes)) {
-                    $relative = $_.FullName.Substring($root.Length).TrimStart('\').ToLowerInvariant()
-                    $rows.Add("F|$root|$relative|$($_.Length)|$($_.LastWriteTimeUtc.Ticks)")
-                }
-            }
+        foreach ($file in (Get-IncludedFiles $root $ExcludeDirectoryNames $ExcludeFilePatterns $ExcludeRegexes)) {
+            $relative = $file.FullName.Substring($root.Length).TrimStart('\').ToLowerInvariant()
+            $rows.Add("F|$root|$relative|$($file.Length)|$($file.LastWriteTimeUtc.Ticks)")
+        }
     }
 
     $payload = [Text.Encoding]::UTF8.GetBytes((($rows | Sort-Object) -join "`n"))
@@ -417,12 +457,9 @@ function Get-ContentFingerprint(
             $item = Get-Item -LiteralPath $path -Force
 
             if ($item.PSIsContainer) {
-                Get-ChildItem -LiteralPath $item.FullName -Recurse -File -Force -ErrorAction SilentlyContinue |
-                    ForEach-Object {
-                        if (-not (Test-ExcludedPath $_.FullName $ExcludeDirectoryNames $ExcludeFilePatterns $ExcludeRegexes)) {
-                            $files.Add($_)
-                        }
-                    }
+                foreach ($file in (Get-IncludedFiles $item.FullName $ExcludeDirectoryNames $ExcludeFilePatterns $ExcludeRegexes)) {
+                    $files.Add($file)
+                }
             }
             elseif (-not (Test-ExcludedPath $item.FullName $ExcludeDirectoryNames $ExcludeFilePatterns $ExcludeRegexes)) {
                 $files.Add($item)
@@ -598,8 +635,18 @@ function Get-BackendFingerprint {
 }
 
 function Get-FrontendInputFingerprint {
-    return Get-ContentFingerprint @($Frontend) `
-        @("node_modules","dist","build","tests","reports",".git",".cache",".vite","coverage","playwright-report","test-results") `
+    $inputs = @(
+        (Join-Path $Frontend "src"),
+        (Join-Path $Frontend "patches"),
+        (Join-Path $Frontend "index.html"),
+        (Join-Path $Frontend "package.json"),
+        (Join-Path $Frontend "package-lock.json"),
+        (Join-Path $Frontend "vite.config.mjs"),
+        (Join-Path $Frontend ".babelrc")
+    )
+
+    return Get-ContentFingerprint $inputs `
+        @("node_modules","dist","build",".git",".cache",".vite") `
         @("*.log")
 }
 

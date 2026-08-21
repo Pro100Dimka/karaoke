@@ -274,6 +274,58 @@ def test_align_long_text_uses_exact_full_song_ctc_timestamps(monkeypatch):
     assert aligner._ctc.release.called
 
 
+def test_align_long_text_preserves_short_and_held_ctc_words(monkeypatch):
+    aligner = make_aligner(monkeypatch)
+    patch_attrs(monkeypatch, text, load_mono=lambda *_: (np.ones(1000), 100))
+    direct = alignment_result(
+        (
+            Word(1.0, 1.01, "letter", 0.8),
+            Word(1.5, 6.5, "held", 0.7, 1),
+        ),
+        0.75,
+    )
+    aligner._ctc = make_ctc_engine(
+        available_for=lambda *_: True,
+        align_window=Mock(return_value=direct),
+    )
+
+    words = aligner.align_long_text("vocals.flac", "letter held", "en")
+
+    assert [(word.start, word.end) for word in words] == [(1.0, 1.01), (1.5, 6.5)]
+    assert aligner.last_alignment_diagnostics["interpolated_words"] == 0
+
+
+@pytest.mark.parametrize(
+    ("words", "reason"),
+    [
+        ([Word(1.0, 1.0, "one", 1.0)], "invalid interval"),
+        ([Word(9.0, 10.01, "one", 1.0)], "outside vocals"),
+        (
+            [Word(1.0, 2.0, "one", 1.0), Word(1.9, 2.5, "two", 1.0, 1)],
+            "overlaps",
+        ),
+    ],
+)
+def test_align_long_text_rejects_only_structurally_invalid_ctc_timestamps(
+    monkeypatch, words, reason
+):
+    aligner = make_aligner(monkeypatch)
+    patch_attrs(monkeypatch, text, load_mono=lambda *_: (np.ones(1000), 100))
+    monkeypatch.setenv("KARAOKE_AI_REQUIRE_CTC", "1")
+    aligner._ctc = make_ctc_engine(
+        available_for=lambda *_: True,
+        align_window=Mock(return_value=alignment_result(tuple(words), 0.75)),
+    )
+
+    raises(
+        EngineUnavailableError,
+        lambda: aligner.align_long_text(
+            "vocals.flac", "one two" if len(words) == 2 else "one", "en"
+        ),
+        match=reason,
+    )
+
+
 def test_align_long_text_rejects_missing_lyrics_and_short_vocals(monkeypatch):
     aligner = make_aligner(monkeypatch)
     raises(InvalidArtifactError, lambda: aligner.align_long_text("vocals.flac", "", "en"))

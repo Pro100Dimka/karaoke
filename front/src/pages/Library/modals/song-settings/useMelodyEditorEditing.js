@@ -125,6 +125,7 @@ export default function useMelodyEditorEditing({
   }, [commit, duration, notes, selected, setSelected]);
   const mergeSelected = useCallback(() => {
     const result = mergeSelectedNotes(notes, selected);
+    if (result.notes === notes) return;
     commit(result.notes);
     setSelected([result.selectedId]);
   }, [commit, notes, selected, setSelected]);

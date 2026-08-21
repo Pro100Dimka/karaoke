@@ -1,5 +1,6 @@
 
 
+import hashlib
 import json
 import os
 import re
@@ -7,14 +8,79 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 FRONT = ROOT / "front"
 CLOUDFLARE = ROOT / "cloudflare"
+GATE_STATE = ROOT / "generated" / "tests" / "release-gate.json"
+GATE_SCHEMA = "release-gate-v2-incremental-mutation"
 
 
-def fail(message: str) -> "NoReturn": print(f"\n[RELEASE BLOCKED] {message}", file=sys.stderr); raise SystemExit(1)
+def release_fingerprint() -> str:
+    roots = (
+        BACKEND / "app", BACKEND / "AI", BACKEND / "tests",
+        FRONT / "src", FRONT / "tests", FRONT / "scripts", FRONT / "electron",
+        CLOUDFLARE / "src", CLOUDFLARE / "test", ROOT / "scripts" / "backend",
+    )
+    files = [
+        path for root in roots if root.exists()
+        for path in root.rglob("*") if path.is_file()
+    ]
+    files.extend(
+        path for path in (
+            BACKEND / "config.py", BACKEND / "database.py", BACKEND / "models.py",
+            BACKEND / "schemas.py", BACKEND / "run.py", BACKEND / "pyproject.toml",
+            FRONT / "package.json", FRONT / "package-lock.json", FRONT / "vite.config.mjs",
+            FRONT / "vitest.config.mjs", FRONT / "stryker.config.mjs",
+            FRONT / "playwright.config.mjs", FRONT / "playwright.release.config.mjs",
+            CLOUDFLARE / "package.json", CLOUDFLARE / "package-lock.json",
+            ROOT / "scripts" / "release_gate.py",
+            ROOT / "scripts" / "build-installer.ps1",
+            ROOT / "build-installer.bat", ROOT / "start-web.bat",
+            ROOT / "verify-release.bat",
+        ) if path.is_file()
+    )
+    digest = hashlib.sha256(GATE_SCHEMA.encode())
+    for path in sorted(set(files)):
+        relative = path.relative_to(ROOT).as_posix()
+        if any(part in {"node_modules", "venv", ".runtime", ".stryker-tmp"} for part in path.parts):
+            continue
+        payload = path.read_bytes()
+        if relative in {
+            "front/package.json", "backend/pyproject.toml",
+            "backend/app/services/diagnostics_service.py",
+        }:
+            payload = re.sub(
+                rb'(?m)("version"\s*:\s*"|^version\s*=\s*"|BACKEND_VERSION\s*=\s*")\d+\.\d+\.\d+',
+                rb'\g<1><release-version>',
+                payload,
+            )
+        digest.update(relative.encode())
+        digest.update(b"\0")
+        digest.update(payload)
+    return digest.hexdigest()
+
+
+def cached_release_pass(fingerprint: str) -> bool:
+    if os.getenv("KARAOKE_RELEASE_FULL") == "1": return False
+    try: state = json.loads(GATE_STATE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError): return False
+    return state == {"schema": GATE_SCHEMA, "fingerprint": fingerprint}
+
+
+def save_release_pass() -> None:
+    GATE_STATE.parent.mkdir(parents=True, exist_ok=True)
+    temporary = GATE_STATE.with_suffix(".tmp")
+    temporary.write_text(
+        json.dumps({"schema": GATE_SCHEMA, "fingerprint": release_fingerprint()}),
+        encoding="utf-8",
+    )
+    temporary.replace(GATE_STATE)
+
+
+def fail(message: str) -> NoReturn: print(f"\n[RELEASE BLOCKED] {message}", file=sys.stderr); raise SystemExit(1)
 
 
 def run(label: str, command: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> None:
@@ -56,6 +122,10 @@ def require_release_environment() -> tuple[str, str]:
 
 def main() -> int:
     _node, npm = require_release_environment()
+    fingerprint = release_fingerprint()
+    if cached_release_pass(fingerprint):
+        print("\n[RELEASE GATE CACHED PASS] Tested inputs are unchanged; reusing the last complete pass.")
+        return 0
 
     run("Backend static/architecture gate", [sys.executable, str(ROOT / "scripts" / "backend" / "check.py")], cwd=BACKEND)
     run(
@@ -89,6 +159,7 @@ def main() -> int:
     run("Online service dependency audit", [npm, "audit"], cwd=CLOUDFLARE)
     run("Online service deployment dry run", [npm, "run", "check"], cwd=CLOUDFLARE)
 
+    save_release_pass()
     print("\n[RELEASE GATE PASS] Every mandatory release layer ran and passed."); return 0
 
 

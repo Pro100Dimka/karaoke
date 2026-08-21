@@ -13,5 +13,5 @@ if errorlevel 1 (
     echo [ERROR] Build dependency preparation failed.
     exit /b 1
 )
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\build-installer.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\build-installer.ps1" %*
 exit /b %errorlevel%

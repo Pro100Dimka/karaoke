@@ -10,7 +10,7 @@ JsonObject = dict[str, Any]
 
 
 def _load(output_dir: Path) -> JsonObject:
-    payload = read_json(Path(output_dir) / "lyricsSync.json", default={})
+    payload: Any = read_json(Path(output_dir) / "lyricsSync.json", default={})
     return validate_lyrics_document(payload)
 
 
@@ -32,7 +32,8 @@ def normalize_editor_timeline(payload: JsonObject) -> JsonObject:
 
 def save_editor(output_dir: Path, raw_notes: list[JsonObject]) -> JsonObject:
     payload = _load(output_dir)
-    editor = payload.get("editor") if isinstance(payload.get("editor"), dict) else {}
+    editor_value = payload.get("editor")
+    editor: JsonObject = editor_value if isinstance(editor_value, dict) else {}
     if not isinstance(editor.get("ai_notes"), list):
         editor["ai_notes"] = [
             [dict(note) for note in word["notes"]] for word in payload["words"]
