@@ -8,7 +8,7 @@ import {
   getMelodyGuideState,
   midiToFrequency
 } from "../src/pages/Karaoke/utils/melody-guide.js";
-import { marqueeHitIds } from "../src/pages/Library/modals/song-settings/melody-editor-geometry.js";
+import { marqueeHitIds } from "../src/pages/MelodyEditor/melody-editor-geometry.js";
 import {
   adjacentNoteId,
   canMergeSelectedNotes,
@@ -16,7 +16,7 @@ import {
   deleteNotes,
   mergeSelectedNotes,
   resizeBounds
-} from "../src/pages/Library/modals/song-settings/melody-editor-operations.js";
+} from "../src/pages/MelodyEditor/melody-editor-operations.js";
 import { flattenLyricsNotes } from "../src/utils/lyrics-sync.js";
 
 describe("canonical lyricsSync utilities", () => {
@@ -56,6 +56,7 @@ describe("canonical lyricsSync utilities", () => {
       })
     ]);
     expect(flattenLyricsNotes(null)).toEqual([]);
+    expect(flattenLyricsNotes({ words: [{ notes: "invalid" }] })).toEqual([]);
   });
 
   test("deduplicates one acoustic note shared by adjacent words", () => {
@@ -68,7 +69,31 @@ describe("canonical lyricsSync utilities", () => {
     });
 
     expect(notes).toHaveLength(1);
-    expect(notes[0]).toMatchObject({ ...shared, word_index: 1 });
+    expect(notes[0]).toMatchObject({ ...shared, _id: "note-60:1.2:1.8", word_index: 1 });
+  });
+
+  test("assigns a shared note to the word with the largest real overlap", () => {
+    const shared = { note: 64, start: 1.1, end: 2.05 };
+    const notes = flattenLyricsNotes({
+      words: [
+        { text: "long", start: 1, end: 2, notes: [shared] },
+        { text: "short", start: 2, end: 2.1, notes: [shared] }
+      ]
+    });
+
+    expect(notes[0]).toMatchObject({ ...shared, word_index: 0, word_text: "long" });
+  });
+
+  test("keeps the first word when a shared note overlaps both equally", () => {
+    const shared = { note: 65, start: 1.2, end: 1.8 };
+    const notes = flattenLyricsNotes({
+      words: [
+        { text: "first", start: 1, end: 1.5, notes: [shared] },
+        { text: "second", start: 1.5, end: 2, notes: [shared] }
+      ]
+    });
+
+    expect(notes[0].word_text).toBe("first");
   });
 
   test("uses half-open note boundaries for melody display and sound", () => {

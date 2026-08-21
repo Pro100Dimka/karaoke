@@ -40,7 +40,6 @@ export default function Settings({ isOpen = true, onClose, initialTab = "appeara
       maxWidth="100vw"
       ariaLabel={t("settings.title")}
       titleProps={{
-        className: "settings-header",
         icon: Settings2,
         eyebrow: t("settings.eyebrow"),
         title: t("settings.title"),

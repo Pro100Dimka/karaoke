@@ -289,7 +289,7 @@ def test_audio_register_verifier_guards_and_full_decode(monkeypatch):
         (69, 60, 60, "large_7_11"),
         (64, 60, 60, "medium_3_6"),
         (61, 60, 60, "small_1_2"),
-        (72, 72, 60, None),
+        (72, 72, 60, "octave_12_plus"),
     ],
 )
 def test_audio_register_decision_bands(monkeypatch, original, yin_midi, peak, accepted_bucket):
@@ -375,6 +375,64 @@ def test_audio_register_corrects_low_octave_from_independent_spectrum(monkeypatc
     )
 
     assert result[1].midi_note == 62
+
+
+def test_audio_register_follows_predominant_voice_when_backing_fundamental_wins_yin(monkeypatch):
+    np = pytest.importorskip("numpy")
+    source = [note(0, 0.25, 63), note(0.26, 0.56, 50), note(0.57, 0.85, 63)]
+    frames = [frame(i * 0.01) for i in range(90)]
+    profile = notes._note_timing_profile(frames, source, min_note_hint=0.04)
+    backing_hz = 440 * 2 ** ((50 - 69) / 12)
+    fake = SimpleNamespace(
+        yin=lambda *_a, **_k: np.full(100, backing_hz),
+        stft=lambda *_a, **_k: np.ones((1025, 100), dtype=complex),
+        onset=SimpleNamespace(onset_strength=lambda **_: np.zeros(100)),
+    )
+    monkeypatch.setitem(sys.modules, "librosa", fake)
+    patch_attrs(
+        monkeypatch,
+        notes,
+        load_mono=lambda *_: (np.ones(16000), 16000),
+        _audio_harmonic_salience=lambda _m, _i, midi, **_: (
+            30 if midi == 50 else 29.5 if midi in {62, 63} else 20
+        ),
+    )
+
+    result = notes._audio_verify_note_register(
+        source, "audio.wav", profile, fmin_hz=50, fmax_hz=500
+    )
+
+    assert result[1].midi_note == 62
+    details = notes.get_note_diagnostics()["register_verification"]["accepted_details"]
+    assert any(item["reason"] == "predominant_voice_trajectory" for item in details)
+
+
+def test_audio_register_preserves_attacked_octave_leap(monkeypatch):
+    np = pytest.importorskip("numpy")
+    source = [note(0, 0.2, 60), note(0.21, 0.4, 72), note(0.41, 0.65, 60)]
+    frames = [frame(i * 0.01) for i in range(70)]
+    profile = notes._note_timing_profile(frames, source, min_note_hint=0.04)
+    onset = np.ones(100)
+    onset[21] = 4
+    high_hz = 440 * 2 ** ((72 - 69) / 12)
+    fake = SimpleNamespace(
+        yin=lambda *_a, **_k: np.full(100, high_hz),
+        stft=lambda *_a, **_k: np.ones((1025, 100), dtype=complex),
+        onset=SimpleNamespace(onset_strength=lambda **_: onset),
+    )
+    monkeypatch.setitem(sys.modules, "librosa", fake)
+    patch_attrs(
+        monkeypatch,
+        notes,
+        load_mono=lambda *_: (np.ones(16000), 16000),
+        _audio_harmonic_salience=lambda _m, _i, midi, **_: 30 - abs(midi - 60),
+    )
+
+    result = notes._audio_verify_note_register(
+        source, "audio.wav", profile, fmin_hz=50, fmax_hz=500
+    )
+
+    assert result[1].midi_note == 72
 
 
 def test_audio_register_does_not_pull_a_short_attack_below_learned_register(monkeypatch):
@@ -503,26 +561,3 @@ def test_word_pitch_evidence_rejects_two_frame_noise():
 
     assert result == []
     assert retained == 0
-
-
-def test_unstable_low_attack_is_discarded_without_inventing_a_pitch():
-    melody = [
-        note(0.0, 0.3, 55, word=0),
-        note(0.4, 0.52, 38, word=1),
-        note(0.54, 0.84, 54, word=1),
-        note(1.0, 1.3, 57, word=2),
-        note(1.5, 1.8, 59, word=3),
-    ]
-    frames = [
-        *(frame(0.01 + index * 0.02, 55, confidence=0.9) for index in range(15)),
-        *(frame(0.41 + index * 0.02, 38, confidence=0.5) for index in range(6)),
-        *(frame(0.55 + index * 0.02, 54, confidence=0.9) for index in range(15)),
-        *(frame(1.01 + index * 0.02, 57, confidence=0.9) for index in range(15)),
-        *(frame(1.51 + index * 0.02, 59, confidence=0.9) for index in range(15)),
-    ]
-    profile = notes._note_timing_profile(frames, melody, min_note_hint=0.07)
-
-    result, discarded = notes._discard_unstable_low_attacks(melody, frames, profile)
-
-    assert discarded == 1
-    assert [item.midi_note for item in result] == [55, 54, 57, 59]

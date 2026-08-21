@@ -35,7 +35,7 @@ from .models import (
     to_dict,
 )
 from .music import MUSIC_ANALYZER_VERSION, analyze_music
-from .notes import build_vocal_notes
+from .notes import NOTE_DECODER_VERSION, build_vocal_notes
 from .pitch_post import (
     PITCH_STABILIZER_VERSION,
     fuse_pitch_with_yin,
@@ -662,6 +662,7 @@ class KaraokePipeline:
             "duration": round(song_duration, 3),
             "bpm": bpm,
             "key": str(music_analysis.get("key") or "unknown"),
+            "note_decoder": NOTE_DECODER_VERSION,
             "words": words_with_notes(words, vocal_notes),
         })
         validate_lyrics_document(lyrics_payload)

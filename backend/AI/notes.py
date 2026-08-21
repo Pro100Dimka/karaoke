@@ -14,7 +14,7 @@ from .audio import load_mono
 from .models import PitchFrame, Syllable, VocalNote, Word
 from .utils.numeric import energy_attack_strength
 
-NOTE_DECODER_VERSION = "acoustic-notes-v37-sustained-gap-evidence"
+NOTE_DECODER_VERSION = "acoustic-notes-v39-predominant-vocal-trajectory"
 _NOTE_DIAGNOSTICS: ContextVar[dict | None] = ContextVar("note_diagnostics", default=None)
 
 
@@ -723,6 +723,50 @@ def _audio_verify_note_register(
     accepted_changes: list[dict[str, object]] = []
     rejected_changes: list[dict[str, object]] = []
 
+    selected_pitches = [
+        int(candidate_rows[index][selected_states[index]])
+        for index in range(len(notes))
+    ]
+
+    def _predominant_voice_support(index: int, original_pitch: int, proposed_pitch: int, emission_margin: float) -> bool:
+        """Resolve a brief harmonic island without inventing a neighbouring note.
+
+        Dense vocal stems may contain lead and backing voices at the same time.
+        YIN can therefore prefer the louder backing fundamental even though the
+        full spectral/Viterbi path follows the lead harmonic.  Only accept that
+        path when it is bracketed by the same melodic trajectory and there is no
+        acoustic re-attack that could mark a real leap.
+        """
+        if index <= 0 or index >= len(notes) - 1 or _is_strong_attack(index):
+            return False
+        harmonic_rewrite = any(
+            abs(abs(proposed_pitch - original_pitch) - harmonic) <= 1.1
+            for harmonic in (12, 19, 24)
+        )
+        if not harmonic_rewrite:
+            return False
+
+        # Bracket against observed neighbouring notes, not merely their Viterbi
+        # proposals.  That prevents one uncertain alternative voice from
+        # dragging a whole phrase into another octave.
+        left = int(notes[index - 1].midi_note)
+        right = int(notes[index + 1].midi_note)
+        local_span = notes[index + 1].start - notes[index - 1].end
+        trajectory_window = max(
+            profile.note_scale * 5.0,
+            profile.gap_scale * 8.0,
+            profile.frame_step * 30.0,
+        )
+        if local_span > trajectory_window:
+            return False
+
+        proposed_jump = abs(proposed_pitch - left) + abs(right - proposed_pitch)
+        original_jump = abs(original_pitch - left) + abs(right - original_pitch)
+        if max(abs(proposed_pitch - left), abs(right - proposed_pitch)) > 5:
+            return False
+        continuity_gain = original_jump - proposed_jump
+        return continuity_gain >= 10 and emission_margin + 0.34 * continuity_gain >= 1.2
+
     for index, note in enumerate(notes):
         proposed = int(candidate_rows[index][selected_states[index]])
         chosen = proposed
@@ -746,6 +790,12 @@ def _audio_verify_note_register(
             candidate_yin_distance = abs(proposed - yin_center)
             original_yin_distance = abs(int(note.midi_note) - yin_center)
             strong_attack = _is_strong_attack(index)
+            predominant_voice_support = _predominant_voice_support(
+                index,
+                int(note.midi_note),
+                proposed,
+                emission_margin,
+            )
 
             required_margin = next(
                 margin for threshold, margin in ((19, 1.75), (12, 1.20), (7, 0.85), (0, 0.45))
@@ -774,7 +824,7 @@ def _audio_verify_note_register(
                         proposed > int(note.midi_note)
                         or downward_rewrite_stays_in_register
                     )
-                ) or spectral_supports_upward_rewrite
+                ) or spectral_supports_upward_rewrite or predominant_voice_support
             else:
                 accept = emission_margin >= required_margin and (
                     yin_supports_rewrite
@@ -794,10 +844,18 @@ def _audio_verify_note_register(
                 "candidate_yin_distance": round(candidate_yin_distance, 3) if has_yin else None,
                 "original_yin_distance": round(original_yin_distance, 3) if has_yin else None,
                 "strong_attack": bool(strong_attack),
+                "predominant_voice_support": predominant_voice_support,
                 "required_margin": round(required_margin, 3),
             }
             if accept:
-                accepted_changes.append({**decision, "reason": "independent_audio_evidence"})
+                accepted_changes.append({
+                    **decision,
+                    "reason": (
+                        "predominant_voice_trajectory"
+                        if predominant_voice_support
+                        else "independent_audio_evidence"
+                    ),
+                })
             else:
                 chosen = int(note.midi_note)
                 rejected_changes.append({**decision, "reason": "insufficient_independent_evidence"})
@@ -907,8 +965,6 @@ def build_vocal_notes(
     if ordered_syllables: notes = _attach_soft_lyric_labels(notes, ordered_syllables)
     notes = _make_monophonic(notes, min_note)
     timing = _note_timing_profile(frames, notes, min_note_hint=min_note)
-    notes = _audio_verify_note_register(notes, audio, timing, fmin_hz=fmin_hz, fmax_hz=fmax_hz)
-    notes = _merge_verified_fragments(notes, frames, timing)
     notes = _consolidate_micro_fragments(notes, frames, timing)
     notes = _repair_short_isolated_spikes(notes, frames, timing)
     notes = _merge_same_pitch_gaps(notes, frames, timing)
@@ -922,10 +978,15 @@ def build_vocal_notes(
         max_gap=max_gap,
         frame_step=timing.frame_step,
     )
-    notes, discarded_unstable_attacks = _discard_unstable_low_attacks(notes, frames, timing)
+    # Retained word evidence comes from the same monophonic frame stream, but
+    # it can still latch onto a louder backing voice.  Verify the complete set
+    # once, after retention, so no note bypasses predominant-voice selection.
+    notes = _audio_verify_note_register(
+        notes, audio, timing, fmin_hz=fmin_hz, fmax_hz=fmax_hz
+    )
+    notes = _merge_verified_fragments(notes, frames, timing)
     diag = dict(_NOTE_DIAGNOSTICS.get() or {})
     diag["retained_word_pitch_notes"] = retained_word_notes
-    diag["discarded_unstable_low_attacks"] = discarded_unstable_attacks
     diag["timing_profile"] = {
         "frame_step": timing.frame_step,
         "note_scale": timing.note_scale,
@@ -993,59 +1054,6 @@ def _retain_word_pitch_evidence(
                 output.append(replace(note, start=start, end=end, word_index=word_index))
                 retained += 1
     return sorted(output, key=lambda note: (note.start, note.end, note.midi_note)), retained
-
-
-def _discard_unstable_low_attacks(
-    notes: list[VocalNote],
-    frames: list[PitchFrame],
-    profile: _NoteTimingProfile,
-) -> tuple[list[VocalNote], int]:
-    """Drop brief low non-vocal attacks; never replace them with a neighbouring pitch."""
-    if len(notes) < 4 or not frames:
-        return list(notes), 0
-
-    sustained_limit = max(profile.note_scale * 0.7, profile.frame_step * 10.0)
-    sustained = [note for note in notes if note.end - note.start >= sustained_limit]
-    if len(sustained) < 4:
-        return list(notes), 0
-    register_floor = float(np.percentile([note.midi_note for note in sustained], 15))
-    transient_limit = max(profile.note_scale * 1.25, profile.frame_step * 12.0)
-
-    def confidence(note: VocalNote) -> float:
-        values = [
-            frame.confidence
-            for frame in frames
-            if note.start <= frame.time < note.end and frame.voiced and frame.frequency > 0
-        ]
-        return float(statistics.median(values)) if values else 0.0
-
-    discarded: set[int] = set()
-    for index, note in enumerate(notes):
-        if note.end - note.start > transient_limit or note.midi_note >= register_floor - 4.0:
-            continue
-        following = [
-            candidate
-            for candidate in notes[index + 1 : index + 4]
-            if candidate.start - note.end <= profile.neighbour_radius
-            and candidate.word_index == note.word_index
-            and candidate.midi_note - note.midi_note >= 7
-        ]
-        if not following:
-            continue
-        nearby_low_support = any(
-            candidate is not note
-            and abs(candidate.midi_note - note.midi_note) <= 2
-            and min(abs(candidate.end - note.start), abs(candidate.start - note.end))
-            <= profile.neighbour_radius
-            for candidate in notes[max(0, index - 3) : index + 4]
-        )
-        if nearby_low_support:
-            continue
-        reference_confidence = max(confidence(candidate) for candidate in following)
-        if confidence(note) < min(0.86, reference_confidence + 0.08):
-            discarded.add(index)
-
-    return [note for index, note in enumerate(notes) if index not in discarded], len(discarded)
 
 
 def _discard_unconfirmed_micro_notes(

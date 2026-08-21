@@ -22,16 +22,7 @@ function VerticalSlider({ label, value, color, onChange, onCommit, max = 1 }) {
       >
         {label}
       </Typography>
-
-      <div
-        style={{
-          position: "relative",
-          width: 26,
-          height: 116,
-          display: "grid",
-          placeItems: "center"
-        }}
-      >
+      <Stack style={{ height: 80, position: "relative" }}>
         <div
           aria-hidden="true"
           style={{
@@ -102,7 +93,7 @@ function VerticalSlider({ label, value, color, onChange, onCommit, max = 1 }) {
             pointerEvents: "none"
           }}
         />
-      </div>
+      </Stack>
 
       <Typography variant="caption" sx={{ color, fontSize: 10, fontWeight: 800, lineHeight: 1 }}>
         {percent}%

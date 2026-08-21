@@ -18,7 +18,9 @@ export function flattenLyricsNotes(lyricsSync) {
       });
     });
   });
-  return [...canonical.values()]
-    .sort((left, right) => left.start - right.start || left.end - right.end || left.note - right.note)
-    .map(({ _wordOverlap, ...note }) => note);
+  return [...canonical.values()].map((item) => {
+    const note = { ...item };
+    delete note._wordOverlap;
+    return note;
+  });
 }
