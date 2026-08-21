@@ -9,7 +9,7 @@ const apiMocks = vi.hoisted(() => ({
   getPipelineHealth: vi.fn(),
   getVersions: vi.fn(),
   getErrors: vi.fn(),
-  getSongCoverUrl: vi.fn((id) => `cover/${id}`)
+  getSongCoverUrl: vi.fn((id, version) => `cover/${id}${version ? `?v=${version}` : ""}`)
 }));
 vi.mock("../src/api/client", () => ({ api: apiMocks }));
 import useAsyncQueue from "../src/hooks/useAsyncQueue.js";
@@ -298,7 +298,10 @@ describe("song cover hook", () => {
     // Same song id, but the caller bumped resetKey (e.g. a room song swap that
     // reuses the id) -- the failure must clear even without an id change.
     hook.rerender({ songId: "song-2", resetKey: "swap-1" });
-    expect(hook.result.current.hasCover).toBe(true);
+    same(
+      [hook.result.current.coverUrl, "cover/song-2?v=swap-1"],
+      [hook.result.current.hasCover, true]
+    );
   });
   test("has no cover for a missing song id", () => {
     const hook = renderHook(() => useSongCover(null));

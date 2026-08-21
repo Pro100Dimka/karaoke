@@ -10,7 +10,7 @@ export default function ModalTitle({
   actions
 }) {
   return (
-    <Stack direction="row" align="center" justify="space-between" p="2rem" gap="2rem">
+    <Stack direction="row" align="center" justify="space-between" p="2rem" gap="2rem" pb="0">
       {(Icon || image) && (
         <Box
           sx={{

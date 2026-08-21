@@ -306,24 +306,25 @@ def test_align_long_text_preserves_short_and_held_ctc_words(monkeypatch):
         ),
     ],
 )
-def test_align_long_text_rejects_only_structurally_invalid_ctc_timestamps(
+def test_align_long_text_falls_back_to_vocals_for_structurally_invalid_ctc_timestamps(
     monkeypatch, words, reason
 ):
     aligner = make_aligner(monkeypatch)
     patch_attrs(monkeypatch, text, load_mono=lambda *_: (np.ones(1000), 100))
-    monkeypatch.setenv("KARAOKE_AI_REQUIRE_CTC", "1")
     aligner._ctc = make_ctc_engine(
         available_for=lambda *_: True,
         align_window=Mock(return_value=alignment_result(tuple(words), 0.75)),
     )
-
-    raises(
-        EngineUnavailableError,
-        lambda: aligner.align_long_text(
-            "vocals.flac", "one two" if len(words) == 2 else "one", "en"
-        ),
-        match=reason,
+    monkeypatch.setattr(
+        aligner, "_run_alignment", Mock(side_effect=EngineUnavailableError("qwen offline"))
     )
+
+    fallback = aligner.align_long_text(
+        "vocals.flac", "one two" if len(words) == 2 else "one", "en"
+    )
+    assert [word.text for word in fallback] == (["one", "two"] if len(words) == 2 else ["one"])
+    assert aligner.last_alignment_diagnostics["alignment_mode"] == "vocal-activity-fallback"
+    assert reason in aligner.last_alignment_diagnostics["ctc_failure_reason"]
 
 
 def test_align_long_text_rejects_missing_lyrics_and_short_vocals(monkeypatch):
@@ -337,20 +338,20 @@ def test_align_long_text_rejects_missing_lyrics_and_short_vocals(monkeypatch):
     )
 
 
-def test_align_long_text_required_ctc_fails_without_synthetic_timeline(monkeypatch):
+def test_align_long_text_missing_ctc_uses_vocal_activity_when_qwen_is_unavailable(monkeypatch):
     aligner = make_aligner(monkeypatch)
     monkeypatch.setattr(text, "load_mono", lambda *_: (np.ones(1000), 100))
-    monkeypatch.setenv("KARAOKE_AI_REQUIRE_CTC", "1")
     aligner._ctc = make_ctc_engine(
         available_for=lambda *_: True,
         align_window=Mock(return_value=None),
     )
-
-    raises(
-        EngineUnavailableError,
-        lambda: aligner.align_long_text("vocals.flac", "one two", "en"),
-        match="returned no words",
+    monkeypatch.setattr(
+        aligner, "_run_alignment", Mock(side_effect=EngineUnavailableError("qwen offline"))
     )
+
+    words = aligner.align_long_text("vocals.flac", "one two", "en")
+    assert [word.text for word in words] == ["one", "two"]
+    assert aligner.last_alignment_diagnostics["alignment_mode"] == "vocal-activity-fallback"
     assert aligner._ctc.release.called
 
 
@@ -380,7 +381,7 @@ def test_align_long_text_uses_raw_full_song_qwen_when_ctc_is_unavailable(monkeyp
     assert aligner.last_alignment_diagnostics["interpolated_words"] == 0
 
 
-def test_align_long_text_rejects_incomplete_qwen_result(monkeypatch):
+def test_align_long_text_repairs_incomplete_qwen_result_from_vocal_activity(monkeypatch):
     aligner = make_aligner(monkeypatch)
     monkeypatch.setattr(text, "load_mono", lambda *_: (np.ones(1000), 100))
     monkeypatch.delenv("KARAOKE_AI_REQUIRE_CTC", raising=False)
@@ -391,11 +392,9 @@ def test_align_long_text_rejects_incomplete_qwen_result(monkeypatch):
         lambda **_: SimpleNamespace(words=[Word(1.0, 1.5, "one", 0.8)]),
     )
 
-    raises(
-        InvalidArtifactError,
-        lambda: aligner.align_long_text("vocals.flac", "one two", "en"),
-        match="canonical lyric invariant",
-    )
+    words = aligner.align_long_text("vocals.flac", "one two", "en")
+    assert [word.text for word in words] == ["one", "two"]
+    assert aligner.last_alignment_diagnostics["qwen_failure_reason"] == "canonical lyric invariant"
 
 
 def test_canonical_alignment_returns_failure_instead_of_asserting_on_incomplete_gap(monkeypatch):

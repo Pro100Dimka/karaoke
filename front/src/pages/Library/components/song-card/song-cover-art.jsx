@@ -8,7 +8,8 @@ import useSongCover from "../../hooks/useSongCover";
  * `children` renders on top of the art (e.g. the song card's reactive wave).
  */
 export default function SongCoverArt({ children, className, iconSize = 26, song }) {
-  const { coverUrl, hasCover, handleCoverError } = useSongCover(song?.id, song?.__roomLocal);
+  const coverVersion = `${song?.updated_at ?? ""}:${song?.status ?? ""}:${song?.__roomLocal ?? ""}`;
+  const { coverUrl, hasCover, handleCoverError } = useSongCover(song?.id, coverVersion);
   return (
     <div className={className} aria-hidden="true">
       {hasCover ? (

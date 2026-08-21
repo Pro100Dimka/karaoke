@@ -73,9 +73,7 @@ export default function KaraokePerformanceStage(props) {
           <div
             ref={panoramaRef}
             className="karaoke-panoramic-sky"
-            style={{
-              "--panorama-image": `url("${activeTheme.image}")`
-            }}
+            style={{ "--panorama-image": `url("${activeTheme.image}")` }}
             aria-hidden="true"
           />
           <AuroraWorld seed={sceneSeed} />

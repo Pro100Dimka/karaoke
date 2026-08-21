@@ -52,6 +52,11 @@ def test_remote_device_identity_is_persistent_and_failure_safe(monkeypatch, tmp_
     assert (tmp_path / "device-id").read_text(encoding="utf-8") == "pc-abcdef123456"
 
 
+def test_remote_logs_are_disabled_for_source_development_runs():
+    assert remote_log_service._running_installed_build() is False
+    assert remote_log_service._DISABLED is True
+
+
 class MockLock:
     def __enter__(self):
         return self

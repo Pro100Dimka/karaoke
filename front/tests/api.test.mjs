@@ -511,6 +511,11 @@ describe("API domains", () => {
       pathOf(songsApi.getAudioTrackUrl("a/b", "lead vocal")),
       "/songs/a%2Fb/audio/lead%20vocal"
     ]);
+    const coverUrl = new URL(songsApi.getSongCoverUrl("a/b", "2026-08-21 15:00"));
+    deepEqual([
+      [coverUrl.pathname, coverUrl.searchParams.get("v")],
+      ["/songs/a%2Fb/cover", "2026-08-21 15:00"]
+    ]);
     fetch.mockResolvedValueOnce(response({ body: "package" }));
     equal([await (await songsApi.exportSongPackage("a/b", "sha256:abc")).text(), "package"]);
     [url, options] = lastCall();

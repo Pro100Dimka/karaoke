@@ -57,12 +57,7 @@ def test_lyrics_console_language_and_summary(monkeypatch):
     calls.clear()
     monkeypatch.setenv("KARAOKE_LYRICS_LOG_TEXT", "1")
     pipeline._print_full_lyrics("source", "a\n\nb", "query")
-    assert calls == [
-        ("[lyrics] result: source=source query='query' lines=2 chars=4",),
-        ("[lyrics] FOUND TEXT BEGIN",),
-        ("a\n\nb",),
-        ("[lyrics] FOUND TEXT END",),
-    ]
+    assert calls == [("[lyrics] result: source=source query='query' lines=2 chars=4",)]
 
 
 def config(**changes):
@@ -278,7 +273,7 @@ def test_full_pipeline_fresh_supplied_lyrics_flow(monkeypatch, tmp_path, mode):
         def invalidate(*_args, **_kwargs):
             return None
 
-    patch_attrs(monkeypatch, pipeline, StageCache=Cache, decode_audio=lambda _source, target, _rate: target.write_bytes(b'wav') or target, encode_flac=lambda source, target: target.write_bytes(Path(source).read_bytes()) or target, duration=lambda _: 5.0)
+    patch_attrs(monkeypatch, pipeline, StageCache=Cache, decode_audio=lambda _source, target, _rate: target.write_bytes(b'wav') or target, prepare_vocal_reference=lambda source, target: target.write_bytes(Path(source).read_bytes()) or target, validate_vocal_reference=lambda *_: SimpleNamespace(channels=1), encode_flac=lambda source, target: target.write_bytes(Path(source).read_bytes()) or target, duration=lambda _: 5.0)
     for name in (
         "validate_audio",
         "validate_pitch",

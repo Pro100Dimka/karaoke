@@ -1,6 +1,5 @@
 import { useId, useRef } from "react";
 import { clamp } from "../../utils/math";
-import RangeInput from "./range-input";
 import { getRotaryDragValue, getRotaryWheelValue } from "./rotary-knob-utils";
 
 const normalizeId = (id) => id.replace(/:/g, "");
@@ -93,7 +92,7 @@ export default function RotaryKnob({
         <span className="karaoke-effect-dial__knob" />
       </span>
       <strong>{percent}%</strong>
-      <RangeInput
+      {/* <RangeInput
         id={inputId}
         min={min}
         max={max}
@@ -103,7 +102,7 @@ export default function RotaryKnob({
         aria-valuetext={`${percent}%`}
         onChange={onChange}
         onCommit={onCommit}
-      />
+      /> */}
     </label>
   );
 }

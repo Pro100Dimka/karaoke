@@ -39,7 +39,10 @@ export const songsApi = {
       method: "PUT",
       body: JSON.stringify({ lyrics })
     }),
-  getSongCoverUrl: (id) => createFileUrl(`/songs/${encodePathSegment(id)}/cover`),
+  getSongCoverUrl: (id, version) => {
+    const suffix = version ? `?v=${encodeURIComponent(version)}` : "";
+    return createFileUrl(`/songs/${encodePathSegment(id)}/cover${suffix}`);
+  },
   getAudioTrackUrl: (id, track) =>
     createFileUrl(`/songs/${encodePathSegment(id)}/audio/${encodePathSegment(track)}`),
   getAudioTrackBlob: (id, track) =>

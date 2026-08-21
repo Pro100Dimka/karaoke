@@ -1,4 +1,4 @@
-import { CircleDot, Library, OctagonX, Play } from "lucide-react";
+import { CircleAlert, CircleDot, Library, OctagonX, Play } from "lucide-react";
 import Button from "../../../components/fields/button";
 import Modal from "../../../components/modal";
 import ModalCarouselNavigation from "../../../components/modal/carousel-navigation";
@@ -11,6 +11,25 @@ import { formatEta, getProcessingProgress, isProcessingActive } from "../utils";
 function getVisibleProgress(progress, active, done) {
   if (done) return 100;
   return active ? Math.max(1, progress) : progress;
+}
+
+export function getProcessingFailureInfo(message) {
+  const raw = String(message || "").trim();
+  const separator = raw.indexOf(":");
+  const type = separator > 0 ? raw.slice(0, separator).trim() : "ProcessingError";
+  const reason = separator > 0 ? raw.slice(separator + 1).trim() : raw;
+  const normalized = raw.toLowerCase();
+  let hint = translateSaved("Повторите обработку. Если ошибка повторится, откройте журнал приложения.");
+  if (normalized.includes("ctc") || normalized.includes("model unavailable")) {
+    hint = translateSaved(
+      "Модель синхронизации недоступна. Проверьте установку AI-моделей и повторите обработку."
+    );
+  } else if (normalized.includes("timestamp") || normalized.includes("interval")) {
+    hint = translateSaved(
+      "Не удалось построить корректные интервалы слов по вокалу. Проверьте текст и повторите обработку."
+    );
+  }
+  return { type, reason: reason || translateSaved("Причина не передана backend"), hint };
 }
 
 export default function ProcessingModal({
@@ -29,6 +48,10 @@ export default function ProcessingModal({
   const progress = getProcessingProgress(visibleStatus, song);
   const active = isProcessingActive(currentStatus);
   const isDone = currentStatus === "done";
+  const isFailed = currentStatus === "error";
+  const isCancelled = currentStatus === "cancelled";
+  const errorMessage = visibleStatus?.error_message ?? song.error_message;
+  const failure = isFailed ? getProcessingFailureInfo(errorMessage) : null;
   const visibleProgress = getVisibleProgress(progress, active, isDone);
   const carouselSongs = songs.some((item) => item.id === song.id) ? songs : [song, ...songs];
   const songIndex = carouselSongs.findIndex((item) => item.id === song.id);
@@ -90,27 +113,54 @@ export default function ProcessingModal({
         <div>
           <StatusBadge status={currentStatus} />
         </div>
-        <ProcessingSignal progress={visibleProgress} />
-        <div className="processing-modal-stage u-between-3">
-          <span>
-            {isDone
-              ? translateSaved("Песня готова к караоке")
-              : (visibleStatus?.progress_detail ??
-                visibleStatus?.progress_step ??
-                translateSaved("Подготавливаем обработку песни"))}
-          </span>
-          {active && (
-            <strong style={{ textAlign: "right", width: "100%" }}>
-              {translateSaved("Осталось:")}
-              {formatEta(visibleStatus?.eta_seconds)}
-            </strong>
-          )}
-        </div>
-        {visibleStatus?.error_message && (
-          <p className="field-error">
-            {translateSaved("Ошибка обработки:")}
-            {visibleStatus.error_message}
-          </p>
+        {!isFailed && !isCancelled && <ProcessingSignal progress={visibleProgress} />}
+        {failure ? (
+          <section className="processing-modal-error" role="alert">
+            <div className="processing-modal-error__title">
+              <CircleAlert size={22} aria-hidden="true" />
+              <strong>{translateSaved("Обработка остановлена")}</strong>
+            </div>
+            <p>{failure.reason}</p>
+            <dl>
+              <div>
+                <dt>{translateSaved("Тип ошибки")}</dt>
+                <dd>{failure.type}</dd>
+              </div>
+              <div>
+                <dt>{translateSaved("Этап")}</dt>
+                <dd>
+                  {visibleStatus?.progress_detail ??
+                    visibleStatus?.progress_step ??
+                    song.progress_step ??
+                    translateSaved("Не указан")}
+                </dd>
+              </div>
+              <div>
+                <dt>{translateSaved("Выполнено")}</dt>
+                <dd>{Math.round(progress)}%</dd>
+              </div>
+            </dl>
+            <p className="processing-modal-error__hint">{failure.hint}</p>
+            <small>{translateSaved("Технические подробности сохранены в application.log")}</small>
+          </section>
+        ) : (
+          <div className="processing-modal-stage u-between-3">
+            <span>
+              {isDone
+                ? translateSaved("Песня готова к караоке")
+                : isCancelled
+                  ? translateSaved("Обработка отменена")
+                  : (visibleStatus?.progress_detail ??
+                    visibleStatus?.progress_step ??
+                    translateSaved("Подготавливаем обработку песни"))}
+            </span>
+            {active && (
+              <strong style={{ textAlign: "right", width: "100%" }}>
+                {translateSaved("Осталось:")}
+                {formatEta(visibleStatus?.eta_seconds)}
+              </strong>
+            )}
+          </div>
         )}
       </div>
     </Modal>

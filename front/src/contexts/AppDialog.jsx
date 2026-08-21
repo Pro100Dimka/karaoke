@@ -13,7 +13,9 @@ import Modal from "../components/modal";
 import { translateSaved } from "../i18n/runtime";
 import { createDialogConfig, getDialogCloseResult, normalizeDialogOptions } from "./dialog-utils";
 
-const DialogContext = createContext(null);
+const DIALOG_CONTEXT_KEY = Symbol.for("advoice.app-dialog-context");
+const DialogContext = globalThis[DIALOG_CONTEXT_KEY] ?? createContext(null);
+globalThis[DIALOG_CONTEXT_KEY] = DialogContext;
 export function resolveDialog(dialog, result) {
   dialog?.resolve(result);
 }

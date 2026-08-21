@@ -242,7 +242,6 @@
   overflow: auto;
   overflow-wrap: anywhere;
   padding: 1rem;
-  padding-top: 0 !important;
   overscroll-behavior: contain;
 }
 

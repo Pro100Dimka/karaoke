@@ -63,7 +63,9 @@ import LibraryActions from "../src/pages/Library/components/hero/actions.jsx";
 import LibraryHero from "../src/pages/Library/components/hero/hero.jsx";
 import ProcessingSignal from "../src/pages/Library/components/song-card/processing-signal.jsx";
 import SongCardArtwork from "../src/pages/Library/components/song-card/song-card-artwork.jsx";
-import ProcessingModal from "../src/pages/Library/modals/processing.jsx";
+import ProcessingModal, {
+  getProcessingFailureInfo
+} from "../src/pages/Library/modals/processing.jsx";
 import RecordingsModal from "../src/pages/Library/modals/recordings.jsx";
 import { getProcessingSongs } from "../src/pages/Library/utils.js";
 afterEach(() => {
@@ -146,6 +148,20 @@ test("processing songs keep the active job before the stable queue", () => {
   expect(getProcessingSongs([queuedA, cancelling, active])).toEqual([active, cancelling, queuedA]);
   expect(getProcessingSongs(null)).toEqual([]);
 });
+test("processing failure details classify backend causes without hiding the original reason", () => {
+  expect(getProcessingFailureInfo("EngineUnavailableError: CTC model unavailable")).toMatchObject({
+    type: "EngineUnavailableError",
+    reason: "CTC model unavailable"
+  });
+  expect(getProcessingFailureInfo("InvalidArtifactError: invalid interval").hint).toContain(
+    "интервалы"
+  );
+  expect(getProcessingFailureInfo("disk failure")).toMatchObject({
+    type: "ProcessingError",
+    reason: "disk failure"
+  });
+  expect(getProcessingFailureInfo("").reason).toContain("Причина");
+});
 test("processing modal covers active, complete, error and absent songs", () => {
   const cancel = vi.fn();
   const close = vi.fn();
@@ -186,12 +202,24 @@ test("processing modal covers active, complete, error and absent songs", () => {
   expect(active.container.firstChild).toBeNull();
   active.rerender(
     <ProcessingModal
-      song={{ id: "song", status: "error" }}
+      song={{
+        id: "song",
+        status: "error",
+        progress_percent: 77,
+        progress_step: "Синхронизация текста",
+        error_message:
+          "InvalidArtifactError: Full-song aligner returned invalid timestamps (word 0 has an invalid interval)"
+      }}
       onCancel={cancel}
       onClose={close}
       onOpenKaraoke={open}
     />
   );
+  expect(active.queryByRole("progressbar")).toBeNull();
+  expect(active.getByRole("alert").textContent).toContain("Full-song aligner");
+  expect(active.getByRole("alert").textContent).toContain("InvalidArtifactError");
+  expect(active.getByRole("alert").textContent).toContain("Синхронизация текста");
+  expect(active.getByRole("alert").textContent).toContain("77%");
 });
 test("processing modal carousel changes only the viewed queued song", () => {
   const select = vi.fn();

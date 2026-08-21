@@ -1,4 +1,5 @@
 import { useId } from "react";
+import TextField from "../../theme/ui/TextField";
 import Dropdown from "./Dropdown";
 import Field from "./field";
 
@@ -103,6 +104,38 @@ export default function FieldInput({
   if (!control) return null;
   if (bare) return control;
 
+  const type = field.type ?? "text";
+  if (["text", "url", "number", "textarea", "readonly"].includes(type)) {
+    return (
+      <TextField
+        id={inputId}
+        type={type === "readonly" || type === "textarea" ? undefined : type}
+        multiline={type === "textarea"}
+        label={field.label}
+        hint={field.hint}
+        error={field.error}
+        required={field.required}
+        disabled={field.disabled}
+        readOnly={type === "readonly"}
+        value={value ?? ""}
+        placeholder={field.placeholder}
+        maxLength={field.maxLength}
+        min={field.min}
+        max={field.max}
+        step={field.step}
+        rows={field.rows}
+        spellCheck={field.spellCheck}
+        fieldClassName={field.wrapperClassName}
+        inputClassName={field.className}
+        onKeyDown={onKeyDown}
+        onChange={(nextValue) => onChange(type === "number" ? toNumber(nextValue) : nextValue)}
+        onBlur={(event) =>
+          onBlur(type === "number" ? toNumber(event.target.value) : event.target.value)
+        }
+      />
+    );
+  }
+
   return (
     <Field
       id={inputId}
@@ -110,7 +143,6 @@ export default function FieldInput({
       hint={field.hint}
       error={field.error}
       inline={field.type === "toggle"}
-      floating={["text", "url", "number", "textarea", "readonly"].includes(field.type ?? "text")}
       className={field.wrapperClassName}
       variant={field.variant}
     >

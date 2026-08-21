@@ -40,7 +40,10 @@ test("song confirmation presents metadata in a compact two-field layout", async 
   expect(view.container.querySelector(".modal-title__image")?.src).toContain(
     "data:image/png;base64,cover"
   );
-  expect(view.container.querySelectorAll(".settings-field.library-add-song-field")).toHaveLength(2);
+  expect(view.container.querySelectorAll(".library-add-song-field > .ui-text-field")).toHaveLength(
+    2
+  );
+  expect(view.container.querySelectorAll(".ui-text-field-outline legend")).toHaveLength(2);
   const title = view.getByDisplayValue("Track");
   const artist = view.getByDisplayValue("Artist");
   const preview = view.container.querySelector(".library-add-song-file-icon");
@@ -61,9 +64,11 @@ test("song confirmation presents metadata in a compact two-field layout", async 
   expect(preview.getAttribute("aria-label")).toMatch(/Приостановить|Призупинити/);
   fireEvent.ended(audio);
   expect(preview.getAttribute("aria-label")).toMatch(/Прослушать|Прослухати/);
-  expect(title.closest("label").textContent.trim()).not.toBe("");
-  expect(artist.closest("label").textContent.trim()).not.toBe("");
-  expect(title.closest("label").textContent).not.toBe(artist.closest("label").textContent);
+  const titleLabel = title.closest(".ui-text-field").querySelector("label");
+  const artistLabel = artist.closest(".ui-text-field").querySelector("label");
+  expect(titleLabel.textContent.trim()).not.toBe("");
+  expect(artistLabel.textContent.trim()).not.toBe("");
+  expect(titleLabel.textContent).not.toBe(artistLabel.textContent);
   expect(title.required).toBe(true);
   expect(title.value).toBe("Track");
   expect(artist.value).toBe("Artist");

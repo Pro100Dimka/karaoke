@@ -1,25 +1,24 @@
 import { Mic } from "lucide-react";
-import { useState } from "react";
-import { api } from "../../../../api/client";
 import { translateSaved } from "../../../../i18n/runtime";
 import { Stack } from "../../../../theme/ui";
+import useSongCover from "../../../Library/hooks/useSongCover";
 import { formatTime } from "../../utils/format";
 import WaveformTimeline from "../waveform-timeline";
 
 export default function SongStrip({ song, currentTime, duration, onSeek }) {
   const { title, artist, performer } = song;
-  const [coverFailed, setCoverFailed] = useState(false);
-  const coverUrl = song?.id ? api.getSongCoverUrl(song.id) : "";
+  const coverVersion = `${song?.updated_at ?? ""}:${song?.status ?? ""}`;
+  const { coverUrl, hasCover, handleCoverError } = useSongCover(song?.id, coverVersion);
   const timecodes = [currentTime, duration].map(formatTime);
   return (
     <Stack direction="row" gap={2}>
       <div className="karaoke-song-cover" aria-hidden="true">
-        {coverUrl && !coverFailed ? (
+        {hasCover ? (
           <img
             src={coverUrl}
             alt=""
             decoding="async"
-            onError={() => setCoverFailed(true)}
+            onError={handleCoverError}
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
           />
         ) : (

@@ -57,6 +57,11 @@ from .validators import (
     validate_words_json,
 )
 from .version import AI_BUILD_ID
+from .vocal_preprocess import (
+    VOCAL_REFERENCE_PREPROCESS_VERSION,
+    prepare_vocal_reference,
+    validate_vocal_reference,
+)
 
 ProgressCallback = Callable[[str, float, str], None]
 CancelCallback = Callable[[], bool]
@@ -313,9 +318,6 @@ class KaraokePipeline:
             supplied = discovery.text
             lyrics_source = discovery.source
             lyrics_query = discovery.query or request.title
-            if supplied:
-                warnings.append(
-                    f"Using trusted {lyrics_source} lyrics instead of ASR")
 
         if supplied:
             _print_full_lyrics(lyrics_source or "unknown",
@@ -342,6 +344,7 @@ class KaraokePipeline:
                     if getattr(self.engines.separator, "engine_dir", None)
                     else None
                 ),
+                "vocal_reference": VOCAL_REFERENCE_PREPROCESS_VERSION,
             },
         )
         separation_cached = self._cache_hit(
@@ -349,13 +352,14 @@ class KaraokePipeline:
             "separation",
             separation_key,
             [vocals, instrumental],
-            {vocals: validate_audio, instrumental: validate_audio},
+            {vocals: validate_vocal_reference, instrumental: validate_audio},
         )
         if separation_cached:
             self._report(reports, "separation", "cached", cached=True)
         else:
             with tempfile.TemporaryDirectory(prefix="karaoke-stems-", dir=output) as temp_dir:
                 temporary_vocals = Path(temp_dir) / "vocals.wav"
+                cleaned_vocals = Path(temp_dir) / "vocals-clean-mono.wav"
                 temporary_instrumental = Path(temp_dir) / "instrumental.wav"
                 self._run(
                     "separation",
@@ -368,9 +372,11 @@ class KaraokePipeline:
                 )
                 validate_audio(temporary_vocals)
                 validate_audio(temporary_instrumental)
+                prepare_vocal_reference(temporary_vocals, cleaned_vocals)
+                validate_vocal_reference(cleaned_vocals)
                 encoded_vocals = Path(temp_dir) / "vocals.flac"
                 encoded_instrumental = Path(temp_dir) / "instrumental.flac"
-                encode_flac(temporary_vocals, encoded_vocals)
+                encode_flac(cleaned_vocals, encoded_vocals)
                 encode_flac(temporary_instrumental, encoded_instrumental)
                 publish_files_atomically(
                     [

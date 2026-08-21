@@ -1,68 +1,138 @@
 @layer ui.components {
   .ui-text-field,
-  .ui-text-field-input {
-    min-inline-size: 0;
-  }
+  .ui-text-field-input { min-inline-size: 0; }
 
   .ui-text-field {
+    position: relative;
     display: flex;
     align-items: center;
     inline-size: 100%;
     min-block-size: var(--control-size, var(--control-md));
-    border: 1px solid var(--field-border);
-    border-radius: var(--shape-md);
+    border-radius: var(--shape-lg, var(--shape-md));
     background: var(--field-bg);
     color: var(--field-fg);
+    transition: box-shadow var(--motion-duration-fast) var(--motion-easing-standard);
+  }
+
+  .ui-text-field-outline {
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0 .65rem;
+    overflow: hidden;
+    border: 1px solid var(--field-border);
+    border-radius: inherit;
+    pointer-events: none;
     transition:
       border-color var(--motion-duration-fast) var(--motion-easing-standard),
-      box-shadow var(--motion-duration-fast) var(--motion-easing-standard),
-      background var(--motion-duration-fast) var(--motion-easing-standard);
+      filter var(--motion-duration-fast) var(--motion-easing-standard);
   }
 
-  .ui-text-field:focus-within {
-    border-color: var(--ui-focus);
-    box-shadow: var(--focus-shadow);
+  .ui-text-field-outline legend {
+    max-inline-size: 0;
+    block-size: 0;
+    padding: 0;
+    overflow: hidden;
+    color: transparent;
+    font-size: .75rem;
+    line-height: 0;
+    white-space: nowrap;
+    transition: max-inline-size var(--motion-duration-fast) var(--motion-easing-standard);
   }
 
-  .ui-text-field[data-error] { border-color: var(--ui-danger); }
+  .ui-text-field-outline legend > span {
+    display: inline-block;
+    padding-inline: .3rem;
+  }
+
+  .ui-text-field:focus-within { box-shadow: none; }
+  .ui-text-field:focus-within .ui-text-field-outline {
+    border-color: var(--color-primary);
+    filter:
+      drop-shadow(0 0 .35rem color-mix(in srgb, var(--color-primary-hover) 42%, transparent))
+      drop-shadow(0 0 1rem color-mix(in srgb, var(--color-accent) 28%, transparent));
+  }
+  .ui-text-field[data-error] .ui-text-field-outline { border-color: var(--ui-danger); }
+
+  .ui-text-field-label-row {
+    position: absolute;
+    z-index: 2;
+    inset-inline-start: var(--control-pad, var(--control-pad-md));
+    inset-block-start: 50%;
+    display: inline-flex;
+    align-items: center;
+    max-inline-size: calc(100% - 2 * var(--control-pad, var(--control-pad-md)));
+    color: var(--field-placeholder);
+    pointer-events: none;
+    transform: translateY(-50%);
+    transform-origin: left center;
+    transition:
+      inset-block-start var(--motion-duration-fast) var(--motion-easing-standard),
+      color var(--motion-duration-fast) var(--motion-easing-standard),
+      transform var(--motion-duration-fast) var(--motion-easing-standard);
+  }
+
+  .ui-text-field-label {
+    min-inline-size: 0;
+    overflow: hidden;
+    color: inherit;
+    font: 750 .875rem / 1.2 var(--font-display);
+    text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ui-text-field-label-row .ui-icon-button {
+    min-inline-size: 1.5rem;
+    min-block-size: 1.5rem;
+    pointer-events: auto;
+  }
+
+  .ui-text-field:focus-within .ui-text-field-label-row,
+  .ui-text-field:has(.ui-text-field-input:not(:placeholder-shown)) .ui-text-field-label-row {
+    inset-block-start: 0;
+    color: var(--ui-focus);
+    transform: translateY(-50%) scale(.86);
+  }
+
+  .ui-text-field:focus-within .ui-text-field-outline legend,
+  .ui-text-field:has(.ui-text-field-input:not(:placeholder-shown)) .ui-text-field-outline legend {
+    max-inline-size: 100%;
+  }
 
   .ui-text-field-input {
+    position: relative;
+    z-index: 1;
+    flex: 1;
     inline-size: 100%;
     min-block-size: var(--control-size, var(--control-md));
     padding-inline: var(--control-pad, var(--control-pad-md));
-    border: 1px solid var(--field-border);
-    border-radius: var(--shape-md);
+    border: 0;
+    border-radius: inherit;
     outline: 0;
-    background: var(--field-bg);
+    background: transparent;
     color: var(--field-fg);
+    box-shadow: none;
     line-height: 1.2;
-    transition:
-      border-color var(--motion-duration-fast) var(--motion-easing-standard),
-      box-shadow var(--motion-duration-fast) var(--motion-easing-standard),
-      background var(--motion-duration-fast) var(--motion-easing-standard);
   }
 
-  .ui-text-field > .ui-text-field-input {
-    flex: 1;
-    min-block-size: 0;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
+  textarea.ui-text-field-input {
+    min-block-size: 6rem;
+    padding-block: .85rem;
+    resize: vertical;
   }
 
   .ui-text-field-input[data-size="sm"] { font-size: .8125rem; }
   .ui-text-field-input[data-size="md"] { font-size: .875rem; }
   .ui-text-field-input[data-size="lg"] { font-size: 1rem; }
-
-  .ui-text-field-input::placeholder {
-    color: var(--field-placeholder);
-    opacity: 1;
-  }
-
-  .ui-text-field-input[aria-invalid="true"] { border-color: var(--ui-danger); }
+  .ui-text-field-input::placeholder { color: transparent; }
+  .ui-text-field:focus-within .ui-text-field-input::placeholder { color: var(--field-placeholder); }
 
   .ui-text-field-slot {
+    position: relative;
+    z-index: 1;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -71,7 +141,7 @@
     color: var(--field-placeholder);
   }
 
-    .ui-text-field-slot > svg {
+  .ui-text-field-slot > svg {
     inline-size: 1.1em;
     block-size: 1.1em;
   }

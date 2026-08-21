@@ -19,7 +19,6 @@ from ..model_registry import get_model
 from ..models import Word
 from ..profiler import profile_operation
 from ..syllables import VOWELS
-from ..utils.env import env_flag
 from ..utils.numeric import clamp, clamp01
 from .base import Aligner, Transcriber
 from .ctc_alignment import CTC_ALIGNMENT_VERSION, CTCWordAligner
@@ -3292,12 +3291,27 @@ class Qwen3ForcedAligner(Aligner):
         finally:
             self._ctc.release()
 
-        require_ctc = env_flag("KARAOKE_AI_REQUIRE_CTC")
-        if require_ctc:
-            raise EngineUnavailableError(
-                "Full-song acoustic CTC alignment failed: "
-                f"{ctc_failure or 'CTC model unavailable'}"
+        def vocal_activity_fallback(qwen_failure: str) -> list[Word]:
+            groups = [line.strip() for line in text.splitlines() if tokenize(line)] or [text]
+            fallback = _lossless_canonical_alignment(
+                groups, source, sample_rate, duration_sec, None
             )
+            reason = _invalid_acoustic_timestamp_reason(fallback, duration_sec)
+            if not _canonical_words_match(fallback, tokens) or reason:
+                raise InvalidArtifactError(
+                    "Full-song vocal alignment failed: "
+                    f"{ctc_failure or 'CTC model unavailable'}; Qwen: {qwen_failure}; "
+                    f"vocal activity: {reason or 'canonical lyric invariant'}"
+                )
+            self.last_alignment_diagnostics = {
+                "alignment_mode": "vocal-activity-fallback",
+                "audio_reference": "vocals",
+                "word_count": len(fallback),
+                "interpolated_words": len(fallback),
+                "ctc_failure_reason": ctc_failure or "CTC model unavailable",
+                "qwen_failure_reason": qwen_failure,
+            }
+            return fallback
 
         try:
             with profile_operation("inference.qwen_full_song_alignment"):
@@ -3307,11 +3321,7 @@ class Qwen3ForcedAligner(Aligner):
                     language=resolve_alignment_language(text, language),
                 )
         except Exception as exc:
-            raise InvalidArtifactError(
-                "Full-song vocal alignment failed: "
-                f"{ctc_failure or 'CTC model unavailable'}; "
-                f"Qwen: {type(exc).__name__}: {exc}"
-            ) from exc
+            return vocal_activity_fallback(f"{type(exc).__name__}: {exc}")
 
         item = _unwrap_single_result(raw)
         raw_words = _words_from_items(
@@ -3328,11 +3338,9 @@ class Qwen3ForcedAligner(Aligner):
             for index, (word, token) in enumerate(zip(raw_words, tokens, strict=False))
         ]
         if not _canonical_words_match(words, tokens):
-            raise InvalidArtifactError("Full-song aligner violated canonical lyric invariant")
+            return vocal_activity_fallback("canonical lyric invariant")
         if reason := _invalid_acoustic_timestamp_reason(words, duration_sec):
-            raise InvalidArtifactError(
-                f"Full-song aligner returned invalid timestamps ({reason})"
-            )
+            return vocal_activity_fallback(f"invalid timestamps ({reason})")
 
         self.last_alignment_diagnostics = {
             "alignment_mode": "full-song-qwen",

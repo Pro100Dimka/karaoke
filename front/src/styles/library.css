@@ -355,76 +355,6 @@
     0 0 1rem color-mix(in srgb, var(--color-primary) 12%, transparent);
 }
 
-.settings-field--floating {
-  position: relative;
-  display: block;
-  min-width: 0;
-  border: var(--hairline) solid color-mix(in srgb, var(--color-primary-hover) 38%, transparent);
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--color-surface-glass) 76%, transparent);
-  box-shadow:
-    inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 7%, transparent),
-    0 0 1rem color-mix(in srgb, var(--color-primary) 8%, transparent);
-  transition:
-    border-color var(--transition-fast),
-    box-shadow var(--transition-fast);
-}
-
-.settings-field--floating:focus-within {
-  border-color: var(--color-primary);
-  box-shadow:
-    0 0 0 0.16rem color-mix(in srgb, var(--color-primary) 14%, transparent),
-    var(--shadow-neon-soft);
-}
-
-.settings-field--floating > span {
-  position: absolute;
-  z-index: 2;
-  top: 50%;
-  left: var(--space-3);
-  display: block;
-  min-width: 0;
-  padding: 0 var(--space-1);
-  color: var(--color-text-muted);
-  pointer-events: none;
-  transform: translateY(-50%);
-  transform-origin: left center;
-  transition:
-    top var(--transition-fast),
-    color var(--transition-fast),
-    transform var(--transition-fast);
-}
-
-.settings-field--floating > .input,
-.settings-field--floating > textarea {
-  width: 100%;
-  min-width: 0;
-  border: 0;
-  border-radius: inherit;
-  background: transparent;
-  box-shadow: none;
-  outline: 0;
-}
-
-.settings-field--floating > .input::placeholder,
-.settings-field--floating > textarea::placeholder {
-  color: transparent;
-}
-
-.settings-field--floating:focus-within > span,
-.settings-field--floating:has(.input:not(:placeholder-shown)) > span,
-.settings-field--floating:has(textarea:not(:placeholder-shown)) > span {
-  top: 0;
-  color: var(--color-primary-hover);
-  background: var(--color-surface-strong);
-  transform: translateY(-50%) scale(0.82);
-}
-
-.settings-field--floating:focus-within > .input::placeholder,
-.settings-field--floating:focus-within > textarea::placeholder {
-  color: var(--color-text-muted);
-}
-
 .field-hint {
   padding-inline: var(--space-2);
   color: var(--color-text-muted);
@@ -1065,6 +995,56 @@
 
 .processing-modal .processing-signal {
   min-block-size: 5.5rem;
+}
+
+.processing-modal-error {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: var(--hairline) solid color-mix(in srgb, var(--color-danger) 62%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-danger) 9%, var(--color-surface-strong));
+  box-shadow: inset 0 var(--hairline) color-mix(in srgb, var(--color-highlight) 8%, transparent);
+}
+
+.processing-modal-error p,
+.processing-modal-error dl {
+  margin: 0;
+}
+
+.processing-modal-error__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-danger);
+}
+
+.processing-modal-error dl {
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+}
+
+.processing-modal-error dl > div {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.processing-modal-error dt,
+.processing-modal-error small {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.processing-modal-error dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.processing-modal-error__hint {
+  color: var(--color-text-secondary);
 }
 
 .processing-modal-identity {
