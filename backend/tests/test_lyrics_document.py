@@ -1,6 +1,6 @@
 import pytest
 
-from AI.lyrics_document import stabilize_lyrics_melody, validate_lyrics_document
+from AI.lyrics_document import validate_lyrics_document
 
 
 def document(notes=None):
@@ -24,7 +24,7 @@ def test_accepts_exact_word_note_contract():
     assert validate_lyrics_document(payload) is payload
 
 
-def test_stabilizes_isolated_octave_errors_and_out_of_key_notes():
+def test_validation_does_not_rewrite_acoustically_detected_notes():
     payload = {
         "bpm": 120,
         "key": "D# major",
@@ -43,10 +43,10 @@ def test_stabilizes_isolated_octave_errors_and_out_of_key_notes():
         ],
     }
 
-    stabilized = stabilize_lyrics_melody(payload)
+    validated = validate_lyrics_document(payload)
 
-    pitches = [note["note"] for note in stabilized["words"][0]["notes"]]
-    assert pitches == [68, 67]
+    pitches = [note["note"] for note in validated["words"][0]["notes"]]
+    assert pitches == [68, 55, 67, 66]
 
 
 @pytest.mark.parametrize(

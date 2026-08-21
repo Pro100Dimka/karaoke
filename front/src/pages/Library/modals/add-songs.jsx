@@ -1,6 +1,8 @@
 import { Music2 } from "lucide-react";
+import { FieldInput } from "../../../components/fields";
 import Modal from "../../../components/modal";
 import { translateSaved } from "../../../i18n/runtime";
+import { Stack } from "../../../theme/ui";
 
 export default function AddSongsModal({ review, onCancel, onConfirm, onUpdate }) {
   const item = review?.items?.[review.index];
@@ -30,6 +32,29 @@ export default function AddSongsModal({ review, onCancel, onConfirm, onUpdate })
             onConfirm();
           }}
         >
+          <Stack gap={1} direction="row">
+            <FieldInput
+              field={{
+                name: "artist",
+                type: "text",
+                label: translateSaved("Исполнитель"),
+                wrapperClassName: "library-add-song-field"
+              }}
+              value={item.artist}
+              onChange={(artist) => onUpdate({ artist })}
+            />
+            <FieldInput
+              field={{
+                name: "title",
+                type: "text",
+                label: translateSaved("Название песни"),
+                required: true,
+                wrapperClassName: "library-add-song-field"
+              }}
+              value={item.title}
+              onChange={(title) => onUpdate({ title })}
+            />
+          </Stack>
           <div className="library-add-song-file">
             <span className="library-add-song-file-icon">
               <Music2 size={22} />
@@ -38,25 +63,6 @@ export default function AddSongsModal({ review, onCancel, onConfirm, onUpdate })
               <small>{translateSaved("Выбранный аудиофайл")}</small>
               <strong title={item.file.name}>{item.file.name}</strong>
             </span>
-          </div>
-          <div className="library-add-song-fields">
-            <label className="library-add-song-field">
-              <span>{translateSaved("Название песни")}</span>
-              <input
-                className="input"
-                required
-                value={item.title}
-                onChange={(event) => onUpdate({ title: event.target.value })}
-              />
-            </label>
-            <label className="library-add-song-field">
-              <span>{translateSaved("Исполнитель")}</span>
-              <input
-                className="input"
-                value={item.artist}
-                onChange={(event) => onUpdate({ artist: event.target.value })}
-              />
-            </label>
           </div>
           <div className="library-add-song-actions">
             <button className="btn btn-ghost" type="button" onClick={onCancel}>

@@ -6,13 +6,18 @@ import { fileURLToPath } from "node:url";
 
 const front = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const backend = path.resolve(front, "../backend");
-const healthUrl = "http://127.0.0.1:8000/diagnostics/health";
+const backendUrl = process.env.KARAOKE_BACKEND_URL || "http://127.0.0.1:18000";
+const apiToken = process.env.SONGAPP_API_TOKEN || "advoice-local-development";
+const healthUrl = `${backendUrl}/diagnostics/health`;
 const viteEntry = path.join(front, "node_modules/vite/bin/vite.js");
 const bundledPython = path.join(backend, "venv/Scripts/python.exe");
 
 const healthy = async () => {
   try {
-    const response = await fetch(healthUrl, { signal: AbortSignal.timeout(800) });
+    const response = await fetch(healthUrl, {
+      headers: { "X-ADVoice-Token": apiToken },
+      signal: AbortSignal.timeout(800)
+    });
     return response.ok;
   } catch {
     return false;
@@ -37,7 +42,11 @@ if (!(await healthy())) {
     process.env.KARAOKE_PYTHON || (existsSync(bundledPython) ? bundledPython : "python");
   backendProcess = spawn(python, ["run.py"], {
     cwd: backend,
-    env: process.env,
+    env: {
+      ...process.env,
+      SONGAPP_API_TOKEN: apiToken,
+      SONGAPP_PORT: new URL(backendUrl).port || "80"
+    },
     stdio: "inherit"
   });
   await waitForBackend(backendProcess);
@@ -50,7 +59,12 @@ const viteArguments = [viteEntry];
 if (process.env.KARAOKE_WEB_OPEN !== "0") viteArguments.push("--open");
 const vite = spawn(process.execPath, viteArguments, {
   cwd: front,
-  env: { ...process.env, VITE_USE_MOCK_API: "false" },
+  env: {
+    ...process.env,
+    VITE_API_BASE_URL: backendUrl,
+    VITE_API_TOKEN: apiToken,
+    VITE_USE_MOCK_API: "false"
+  },
   stdio: "inherit"
 });
 

@@ -6,9 +6,10 @@ const RATE_WINDOW_MS = 10_000;
 const RATE_LIMIT = 80;
 const MAX_SIGNAL_BYTES = 64 * 1024;
 const MAX_STATE_BYTES = 128 * 1024;
-const MAX_LOG_BYTES = 32 * 1024;
+const MAX_LOG_BYTES = 128 * 1024;
+const MAX_STORED_LOG_BYTES = 1024 * 1024;
 const LOG_RATE_WINDOW_MS = 60_000;
-const LOG_RATE_LIMIT = 30;
+const LOG_RATE_LIMIT = 6;
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -271,10 +272,9 @@ export class KaraokeRoom {
   }
 }
 
-function sanitizeLogUser(value) {
-  const raw = String(value || "anonymous").trim().slice(0, 64);
-  const cleaned = raw.replace(/[^\p{L}\p{N} _.-]/gu, "_").trim();
-  return cleaned || "anonymous";
+function sanitizeDeviceId(value) {
+  const id = String(value || "").trim();
+  return /^[a-zA-Z0-9_-]{3,80}$/.test(id) ? id : null;
 }
 
 // Module-scope state survives only while this isolate stays warm, so this is
@@ -293,7 +293,26 @@ function withinLogRate(id) {
   return entry.count <= LOG_RATE_LIMIT;
 }
 
-async function handleLogUpload(request, env) {
+function serializeComputerLog(document) {
+  let encoded = JSON.stringify(document, null, 2);
+  while (new TextEncoder().encode(encoded).byteLength > MAX_STORED_LOG_BYTES && document.events.length > 1) {
+    document.events.splice(0, Math.max(1, Math.ceil(document.events.length / 10)));
+    encoded = JSON.stringify(document, null, 2);
+  }
+  return encoded;
+}
+
+async function removeLegacyLogObjects(bucket) {
+  let cursor;
+  do {
+    const page = await bucket.list({ prefix: "logs/", ...(cursor ? { cursor } : {}) });
+    const keys = page.objects.map(({ key }) => key);
+    if (keys.length) await bucket.delete(keys);
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+}
+
+export async function handleLogUpload(request, env) {
   if (!env.LOGS) return json({ error: "Log storage is not configured" }, 503);
   const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
   if (!withinLogRate(clientIp)) return json({ error: "Rate limit exceeded" }, 429);
@@ -308,15 +327,53 @@ async function handleLogUpload(request, env) {
   } catch {
     return json({ error: "Invalid JSON" }, 400);
   }
-  const message = String(payload?.message || "").trim();
-  if (!message) return json({ error: "Empty log message" }, 400);
-  const user = sanitizeLogUser(payload?.user);
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const key = `logs/${user}/${timestamp}-${crypto.randomUUID().slice(0, 8)}.log`;
-  await env.LOGS.put(key, message.slice(0, MAX_LOG_BYTES), {
-    httpMetadata: { contentType: "text/plain; charset=utf-8" },
+  const deviceId = sanitizeDeviceId(payload?.device_id);
+  if (!deviceId) return json({ error: "Invalid device id" }, 400);
+  const events = Array.isArray(payload?.events)
+    ? payload.events
+        .filter((event) => event && ["WARNING", "ERROR"].includes(event.level) && String(event.message || "").trim())
+        .map((event) => ({
+          timestamp: String(event.timestamp || "").slice(0, 40),
+          level: event.level,
+          message: String(event.message).trim().slice(0, 16_000),
+        }))
+    : [];
+  const hardware = payload?.hardware && typeof payload.hardware === "object" && !Array.isArray(payload.hardware)
+    ? payload.hardware
+    : null;
+  if (!events.length && !hardware) return json({ error: "No diagnostics supplied" }, 400);
+
+  const key = `${deviceId}.json`;
+  const now = new Date().toISOString();
+  let existing = null;
+  try {
+    const object = await env.LOGS.get(key);
+    if (object) existing = JSON.parse(await object.text());
+  } catch {
+    existing = null;
+  }
+  if (!existing) await removeLegacyLogObjects(env.LOGS);
+  const document = {
+    device_id: deviceId,
+    display_name: String(payload?.display_name || "").trim().slice(0, 80),
+    created_at: existing?.created_at || now,
+    updated_at: now,
+    hardware: hardware
+      ? {
+          ...(existing?.hardware || {}),
+          ...hardware,
+          settings: {
+            ...(existing?.hardware?.settings || {}),
+            ...(hardware.settings || {}),
+          },
+        }
+      : existing?.hardware || null,
+    events: [...(Array.isArray(existing?.events) ? existing.events : []), ...events],
+  };
+  await env.LOGS.put(key, serializeComputerLog(document), {
+    httpMetadata: { contentType: "application/json; charset=utf-8" },
   });
-  return json({ ok: true });
+  return json({ ok: true, key, appended: events.length });
 }
 
 export default {

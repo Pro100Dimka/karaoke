@@ -14,18 +14,19 @@ const check = (ok, message) => {
 
 const blocker = net.createServer();
 await new Promise((resolve, reject) =>
-  blocker.once("error", reject).listen(8000, "127.0.0.1", resolve)
+  blocker.once("error", reject).listen(0, "127.0.0.1", resolve)
 );
+const blockedPort = blocker.address().port;
 
 try {
   const { host, port } = await chooseRuntimeBackendEndpoint({
     isDev: false,
     explicitUrl: "",
-    defaultUrl: "http://127.0.0.1:8000"
+    defaultUrl: `http://127.0.0.1:${blockedPort}`
   });
   check(
-    host === "127.0.0.1" && port > 0 && port !== 8000,
-    `backend endpoint stayed on occupied :8000 (${host}:${port})`
+    host === "127.0.0.1" && port > 0 && port !== blockedPort,
+    `backend endpoint stayed on occupied :${blockedPort} (${host}:${port})`
   );
 } finally {
   await new Promise((resolve) => blocker.close(resolve));

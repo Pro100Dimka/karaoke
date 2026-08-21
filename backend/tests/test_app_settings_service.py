@@ -104,6 +104,24 @@ def test_update_settings_validates_compute_and_applies_storage_paths(monkeypatch
     apply_paths.assert_called_once_with(**persisted_paths)
 
 
+def test_update_optimization_settings_queues_remote_hardware_refresh(monkeypatch, tmp_path):
+    configure_files(monkeypatch, tmp_path)
+    from AI import service as ai_service
+    from app.services import pipeline_service, remote_log_service
+
+    queued = Mock()
+    monkeypatch.setattr(pipeline_service, "has_active_jobs", lambda: False)
+    monkeypatch.setattr(ai_service, "reset_ai_service", Mock())
+    monkeypatch.setattr(remote_log_service, "queue_hardware_snapshot", queued)
+
+    result = app_settings_service.update_settings({"compute_mode": "cpu", "thread_count": 3})
+
+    assert result["compute_mode"] == "cpu"
+    queued.assert_called_once_with(
+        {"settings": {"compute_mode": "cpu", "thread_count": 3}}
+    )
+
+
 def test_ui_preferences_filter_merge_validate_and_copy(monkeypatch, tmp_path):
     _settings, _paths, _install, ui = configure_files(monkeypatch, tmp_path)
     ui.write_text("invalid", encoding="utf-8")

@@ -1,6 +1,6 @@
 import { Box, Stack } from "../../theme/ui";
 
-export default function ModalTitle({ icon: Icon, eyebrow, title, description, actions }) {
+export default function ModalTitle({ icon: Icon, image, eyebrow, title, description, actions }) {
   return (
     <Stack direction="row" align="center" justify="space-between" p="2rem" gap="2rem">
       {Icon && (
@@ -24,7 +24,15 @@ export default function ModalTitle({ icon: Icon, eyebrow, title, description, ac
       color-mix(in srgb, var(--color-highlight) 12%, transparent)`
           }}
         >
-          <Icon size={24} />
+          {image ? (
+            <img
+              src={image}
+              alt=""
+              style={{ width: "4.8rem", height: "4.8rem", objectFit: "cover" }}
+            />
+          ) : (
+            <Icon size={24} />
+          )}
         </Box>
       )}
       <Stack align="start">

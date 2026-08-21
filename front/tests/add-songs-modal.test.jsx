@@ -28,10 +28,19 @@ test("song confirmation presents metadata in a compact two-field layout", () => 
   );
 
   expect(view.container.querySelector(".library-add-song-fields")).not.toBeNull();
-  expect(view.getByDisplayValue("Track")).not.toBeNull();
-  expect(view.getByDisplayValue("Artist")).not.toBeNull();
-  fireEvent.change(view.getByDisplayValue("Track"), { target: { value: "New title" } });
+  expect(view.container.querySelectorAll(".settings-field.library-add-song-field")).toHaveLength(2);
+  const title = view.getByDisplayValue("Track");
+  const artist = view.getByDisplayValue("Artist");
+  expect(title.closest("label").textContent.trim()).not.toBe("");
+  expect(artist.closest("label").textContent.trim()).not.toBe("");
+  expect(title.closest("label").textContent).not.toBe(artist.closest("label").textContent);
+  expect(title.required).toBe(true);
+  expect(title.value).toBe("Track");
+  expect(artist.value).toBe("Artist");
+  fireEvent.change(title, { target: { value: "New title" } });
   expect(onUpdate).toHaveBeenCalledWith({ title: "New title" });
+  fireEvent.change(artist, { target: { value: "New artist" } });
+  expect(onUpdate).toHaveBeenCalledWith({ artist: "New artist" });
   fireEvent.submit(view.container.querySelector("form"));
   expect(onConfirm).toHaveBeenCalledOnce();
   fireEvent.click(view.getByText("Пропустить"));

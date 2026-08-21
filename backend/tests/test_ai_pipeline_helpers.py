@@ -339,10 +339,7 @@ def test_full_pipeline_fresh_supplied_lyrics_flow(monkeypatch, tmp_path, mode):
     assert lyrics_sync["bpm"] == 120 and lyrics_sync["key"] == "C"
     assert all("notes" in word for word in lyrics_sync["words"])
     assert progress.call_args.args[:2] == ('complete', 100)
-    if mode == "omnizart":
-        assert any(report.stage == "pitch-primary" for report in result.reports)
-        assert not any(report.stage == "pitch-original" for report in result.reports)
+    if cached:
         stabilizer.assert_not_called()
-    elif mode == "omnizart-fail":
-        assert any("FCPE/YIN fallback" in warning for warning in result.warnings)
-        assert not (output / "separated" / "vocals.midi-analysis.wav").exists()
+    else:
+        stabilizer.assert_called_once()

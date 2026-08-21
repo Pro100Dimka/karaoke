@@ -34,7 +34,7 @@ from app.services import (
 )
 from app.services._metadata import first_audio_tag
 from app.services.db_utils import commit
-from app.utils.json_files import read_json
+from app.utils.json_files import read_json, write_json
 from database import SessionLocal
 
 _first_audio_tag = first_audio_tag
@@ -81,20 +81,6 @@ def _apply_source_metadata(song: models.Song) -> None:
         tags = MutagenFile(song.source_path, easy=True)
     except Exception:
         tags = None
-
-    tagged_title, tagged_artist, tagged_album = first_audio_tag(tags, 'title') if tags is not None else None, first_audio_tag(tags, 'artist', 'albumartist') if tags is not None else None, first_audio_tag(tags, 'album') if tags is not None else None
-    filename_artist, filename_title = song_service.parse_filename_identity(
-        song.original_filename)
-
-    if tagged_title:
-        artist, song.title = song_service._normalize_artist_title(
-            tagged_artist, tagged_title, tagged_album
-        )
-        song.artist = artist or filename_artist
-    elif filename_artist:
-        song.artist, song.title = filename_artist, filename_title
-    elif not song.title:
-        song.title = filename_title
 
     if not song.genre:
         song.genre = first_audio_tag(
@@ -160,10 +146,6 @@ class _ProgressCapture(io.TextIOBase):
             )
             self._log_file.write(tagged)
             self._log_file.flush()
-            if any(token in text for token in ("[AI]", "AI runtime:", "ОШИБК", "WARNING")):
-                from app.services.remote_log_service import send_diagnostic
-
-                send_diagnostic(tagged.rstrip())
             if match := _STEP_RE.search(text):
                 step = match.group("step")
                 _set_runtime_step(self._song_id, float(step), text)
@@ -500,9 +482,8 @@ def _load_ai_inputs(song_id: str, out_dir: Path) -> tuple[Path | None, float | N
 def _load_searchable_title(song_id: str) -> str | None:
     with _song_session(song_id) as (_db, song):
         if song is None: return None
-        artist, title = song_service._read_source_identity(
-            Path(song.source_path), song.original_filename, song.title
-        )
+        artist = str(getattr(song, "artist", "") or "").strip()
+        title = str(getattr(song, "title", "") or "").strip()
         if artist and title: return f"{artist} - {title}"
         return (title or artist or "").strip() or None
 
@@ -646,7 +627,7 @@ def _run_job(song_id: str) -> None:
         )
         result_warnings = getattr(result, "warnings", ())
         for warning in result_warnings if isinstance(result_warnings, (list, tuple)) else ():
-            capture.write(f"[WARNING] {warning}\n")
+            logger.warning("Song processing warning: %s", warning)
     except ProcessingCancelled:
         _update_progress(
             song_id, status=models.SongStatus.CANCELLED, step_label="Отменено")
@@ -746,12 +727,23 @@ def _apply_generated_metadata(song: models.Song, out_dir: Path) -> None:
     if getattr(song, "note_range_max", None) is None: song.note_range_max = max(midi)
 
 
+def _persist_confirmed_identity(song: models.Song, out_dir: Path) -> None:
+    path = out_dir / "lyricsSync.json"
+    payload = _read_optional_generated_json(path, {})
+    if not isinstance(payload, dict):
+        raise ValueError("lyricsSync.json must contain an object")
+    payload["title"] = str(song.title).strip()
+    payload["artist"] = str(song.artist or "").strip()
+    write_json(path, payload)
+
+
 def _finalize_success(song_id: str, out_dir: Path) -> None:
     retired_source: Path | None = None
     with _song_session(song_id) as (db, song):
         if song is None: return
         song.output_dir = str(out_dir)
         _apply_source_metadata(song)
+        _persist_confirmed_identity(song, out_dir)
         _apply_generated_metadata(song, out_dir)
         instrumental = (out_dir / "instrumental.flac").resolve()
         source_value = getattr(song, "source_path", None)

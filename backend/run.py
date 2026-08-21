@@ -23,11 +23,14 @@ from typing import Any, BinaryIO
 import uvicorn
 
 
+def _is_useful_record(record: logging.LogRecord) -> bool:
+    if record.levelno >= logging.WARNING: return True
+    message = record.getMessage()
+    return any(marker in message for marker in ("[AI]", "AI runtime:", "AI build="))
+
+
 class _UsefulLogFilter(logging.Filter):
-    def filter(self, record: logging.LogRecord) -> bool:
-        if record.levelno >= logging.WARNING: return True
-        message = record.getMessage()
-        return any(marker in message for marker in ("[AI]", "AI runtime:", "AI build="))
+    def filter(self, record: logging.LogRecord) -> bool: return _is_useful_record(record)
 
 
 class _StreamToLogFile:
@@ -41,8 +44,15 @@ class _StreamToLogFile:
     every backend line, log calls and plain prints alike, in one place.
     """
 
-    def __init__(self, file_handler: logging.FileHandler, level: int, original):
+    def __init__(
+        self,
+        file_handler: logging.FileHandler,
+        remote_handler: logging.Handler,
+        level: int,
+        original,
+    ):
         self._file_handler = file_handler
+        self._remote_handler = remote_handler
         self._level = level
         self._original = original
 
@@ -52,6 +62,7 @@ class _StreamToLogFile:
             if line.strip():
                 record = logging.LogRecord("stdout", self._level, "", 0, line, (), None)
                 self._file_handler.handle(record)
+                if record.levelno >= logging.WARNING: self._remote_handler.handle(record)
         return len(message)
 
     def flush(self) -> None: self._original.flush()
@@ -80,8 +91,8 @@ def configure_logging() -> None:
         handlers=[file_handler, logging.StreamHandler(sys.stdout), remote_handler],
         force=True,
     )
-    sys.stdout = _StreamToLogFile(file_handler, logging.INFO, sys.stdout)
-    sys.stderr = _StreamToLogFile(file_handler, logging.ERROR, sys.stderr)
+    sys.stdout = _StreamToLogFile(file_handler, remote_handler, logging.INFO, sys.stdout)
+    sys.stderr = _StreamToLogFile(file_handler, remote_handler, logging.ERROR, sys.stderr)
 
 
 

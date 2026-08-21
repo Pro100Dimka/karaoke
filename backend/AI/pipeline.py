@@ -26,7 +26,7 @@ from .engines.text import (
 )
 from .errors import EngineUnavailableError, ProcessingCancelledError
 from .locks import ThreadFileLock
-from .lyrics_document import stabilize_lyrics_melody, words_with_notes
+from .lyrics_document import validate_lyrics_document, words_with_notes
 from .lyrics_sources import discover_lyrics
 from .models import (
     PitchFrame,
@@ -64,9 +64,11 @@ PIPELINE_LOCK_TIMEOUT_SECONDS = 180.0
 
 
 def _lyrics_console(*parts: object) -> None:
-    text, stream = ' '.join(str(part) for part in parts), getattr(sys, '__stdout__', None) or sys.stdout
+    text, stream = ' '.join(str(part) for part in parts), getattr(
+        sys, '__stdout__', None) or sys.stdout
     try:
-        if hasattr(stream, "reconfigure") and getattr(stream, "encoding", "").lower() != "utf-8": stream.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(stream, "reconfigure") and getattr(stream, "encoding", "").lower() != "utf-8":
+            stream.reconfigure(encoding="utf-8", errors="replace")
         print(text, file=stream, flush=True)
     except (OSError, ValueError, UnicodeError):
         pass
@@ -74,7 +76,8 @@ def _lyrics_console(*parts: object) -> None:
 
 def _lyrics_language_hint(value: str | None) -> str | None:
     text = str(value or "").casefold()
-    if any(ch in text for ch in "іїєґ"): return "uk"
+    if any(ch in text for ch in "іїєґ"):
+        return "uk"
     return 'ru' if re.search('[а-яё]', text) else None
 
 
@@ -84,15 +87,12 @@ def _print_full_lyrics(source: str, text: str, query: str | None) -> None:
         f"[lyrics] result: source={source or 'unknown'} query={query or '<empty>'!r} "
         f"lines={line_count} chars={len(text)}"
     )
-    if env_flag("KARAOKE_LYRICS_LOG_TEXT"):
-        _lyrics_console("[lyrics] FOUND TEXT BEGIN")
-        _lyrics_console(text)
-        _lyrics_console("[lyrics] FOUND TEXT END")
 
 
 class _OutputDirectoryLock(ThreadFileLock):
 
-    def __init__(self, output: Path, timeout_sec: float=30.0): super().__init__(Path(output) / '.pipeline.lock', timeout_sec=timeout_sec)
+    def __init__(self, output: Path, timeout_sec: float = 30.0): super().__init__(
+        Path(output) / '.pipeline.lock', timeout_sec=timeout_sec)
 
 
 @dataclass(frozen=True)
@@ -128,12 +128,14 @@ class KaraokePipeline:
         self.engines = engines or EngineRegistry.create_default(self.config)
 
     def close(self) -> None:
-        if (close := getattr(self.engines.separator, "close", None)) is not None: close()
+        if (close := getattr(self.engines.separator, "close", None)) is not None:
+            close()
 
     @staticmethod
     def _remove_stale(*paths: Path) -> None:
         for path in paths:
-            with suppress(OSError): path.unlink(missing_ok=True)
+            with suppress(OSError):
+                path.unlink(missing_ok=True)
 
     @staticmethod
     def _publish_text_alignment(
@@ -156,9 +158,9 @@ class KaraokePipeline:
     def _cache_hit(
         self, cache: StageCache, stage: str, key: str, outputs: list[Path], validators=None
     ) -> bool:
-        if not self.config.validate_cached_artifacts: validators = None
+        if not self.config.validate_cached_artifacts:
+            validators = None
         return cache.hit(stage, key, outputs, validators=validators)
-
 
     def _cached_stage(
         self,
@@ -191,8 +193,10 @@ class KaraokePipeline:
         self._report(reports, stage, details, started=started)
 
     def _notify(self, request: PipelineRequest, stage: str, progress: float, message: str):
-        if request.cancelled and request.cancelled(): raise ProcessingCancelledError("AI processing was cancelled")
-        if request.progress: request.progress(stage, max(0.0, min(100.0, progress)), message)
+        if request.cancelled and request.cancelled():
+            raise ProcessingCancelledError("AI processing was cancelled")
+        if request.progress:
+            request.progress(stage, max(0.0, min(100.0, progress)), message)
 
     @staticmethod
     def _report(reports, name, engine, *, started=None, cached=False):
@@ -206,7 +210,8 @@ class KaraokePipeline:
             result = function(engine)
             used = engine.name
         except EngineUnavailableError as exc:
-            if not self.config.allow_fallback: raise
+            if not self.config.allow_fallback:
+                raise
             warnings.append(str(exc))
             fallbacks = {
                 "separation": CenterChannelFallbackSeparator(),
@@ -237,14 +242,17 @@ class KaraokePipeline:
 
     def _run_unlocked(self, request: PipelineRequest) -> PipelineResult:
         telemetry = RuntimeTelemetry()
-        with telemetry, audio_buffer_cache(): return self._run_profiled(request, telemetry)
+        with telemetry, audio_buffer_cache():
+            return self._run_profiled(request, telemetry)
 
     def _run_profiled(
         self, request: PipelineRequest, telemetry: RuntimeTelemetry
     ) -> PipelineResult:
-        source, output = Path(request.source_path).resolve(), Path(request.output_dir).resolve()
+        source, output = Path(request.source_path).resolve(), Path(
+            request.output_dir).resolve()
         output.mkdir(parents=True, exist_ok=True)
-        if not source.is_file(): raise FileNotFoundError(source)
+        if not source.is_file():
+            raise FileNotFoundError(source)
         protected_outputs = {
             (output / "song.wav").resolve(),
             (output / "vocals.flac").resolve(),
@@ -290,7 +298,8 @@ class KaraokePipeline:
             )
 
         song_duration, supplied = duration(song_wav), ''
-        effective_language, asr_language, lyrics_source, lyrics_query = request.language, request.language or _lyrics_language_hint(request.title), None, request.title
+        effective_language, asr_language, lyrics_source, lyrics_query = request.language, request.language or _lyrics_language_hint(
+            request.title), None, request.title
         if request.lyrics_path and Path(request.lyrics_path).exists():
             supplied = Path(request.lyrics_path).read_text(
                 encoding="utf-8-sig").strip()
@@ -374,7 +383,8 @@ class KaraokePipeline:
         vocal_fingerprint, instrumental_fingerprint = vocals, instrumental
 
         self._notify(request, "tempo", 48, "Анализ темпа")
-        music_path, tempo_key = output / 'music.json', cache.key('tempo', {'instrumental': cache.file_hash(instrumental_fingerprint), 'engine': MUSIC_ANALYZER_VERSION, 'bpm_override': request.bpm_override, 'key_override': request.key_override})
+        music_path, tempo_key = output / 'music.json', cache.key('tempo', {'instrumental': cache.file_hash(
+            instrumental_fingerprint), 'engine': MUSIC_ANALYZER_VERSION, 'bpm_override': request.bpm_override, 'key_override': request.key_override})
         if request.bpm_override is not None:
             override_bpm = float(request.bpm_override)
             if not 20.0 <= override_bpm <= 300.0:
@@ -386,7 +396,8 @@ class KaraokePipeline:
         ) if request.key_override is not None else ""
 
         if self._cached_stage(
-            cache, reports, "tempo", tempo_key, [music_path], {music_path: validate_music_json}
+            cache, reports, "tempo", tempo_key, [
+                music_path], {music_path: validate_music_json}
         ):
             music_analysis = read_json(music_path, {})
             bpm = int(round(float(music_analysis.get("bpm") or 120.0)))
@@ -428,57 +439,32 @@ class KaraokePipeline:
         self._notify(request, "pitch", 52, "Определение нот по vocals.flac")
         pitch_raw_path, pitch_path = output / 'pitchRaw.json', output / 'pitch.json'
 
-        primary_melody = getattr(self.engines, "melody", None)
-        pitch_key, pitch_outputs = cache.key('pitch', {'vocals': cache.file_hash(vocal_fingerprint), 'primary_engine': getattr(primary_melody, 'name', None), 'primary_config': getattr(primary_melody, 'fingerprint', lambda: {})(), 'primary_postprocess': 'vocal-contour-v1', 'fallback_engine': self.engines.pitch.name, 'fallback_config': getattr(self.engines.pitch, 'fingerprint', lambda: {})(), 'hop': self.config.hop_seconds, 'fmin': self.config.fmin_hz, 'fmax': self.config.fmax_hz, 'postprocessor': PITCH_STABILIZER_VERSION, 'primary_code': cache.optional_file_hash(Path(__file__).parent / 'engines' / 'omnizart_pitch.py'), 'pitch_post_code': cache.optional_file_hash(Path(__file__).with_name('pitch_post.py'))}), [pitch_raw_path, pitch_path] if self.config.preserve_raw_pitch else [pitch_path]
-        pitch_validators = {path: validate_pitch_json for path in pitch_outputs}
+        pitch_key, pitch_outputs = cache.key('pitch', {'vocals': cache.file_hash(vocal_fingerprint), 'engine': self.engines.pitch.name, 'engine_config': getattr(self.engines.pitch, 'fingerprint', lambda: {})(), 'hop': self.config.hop_seconds, 'fmin': self.config.fmin_hz,
+                                             'fmax': self.config.fmax_hz, 'postprocessor': PITCH_STABILIZER_VERSION, 'pitch_post_code': cache.optional_file_hash(Path(__file__).with_name('pitch_post.py'))}), [pitch_raw_path, pitch_path] if self.config.preserve_raw_pitch else [pitch_path]
+        pitch_validators = {
+            path: validate_pitch_json for path in pitch_outputs}
         if self._cache_hit(cache, "pitch", pitch_key, pitch_outputs, pitch_validators):
             pitch = [PitchFrame(**item) for item in read_json(pitch_path, [])]
             self._report(reports, "pitch", "cached", cached=True)
         else:
-            raw_pitch = None
-            stabilization_input = None
-            if primary_melody is not None:
-                started_primary = time.perf_counter()
-                try:
-                    candidate = primary_melody.estimate(vocals)
-                    validate_pitch(candidate)
-                    if not any(frame.voiced for frame in candidate):
-                        raise EngineUnavailableError(
-                            "Omnizart Patch-CNN returned no voiced frames")
-                    raw_pitch = list(candidate)
-                    stabilization_input = raw_pitch
-                    self._report(
-                        reports, "pitch-primary", primary_melody.name, started=started_primary
-                    )
-                except EngineUnavailableError as exc:
-                    warnings.append(
-                        f"{exc}; using the existing FCPE/YIN fallback")
-
-            if raw_pitch is None:
-                raw_pitch = list(self._run(
-                    "pitch-vocals", self.engines.pitch,
-                    lambda engine: engine.estimate(vocals), reports, warnings,
-                ))
-                validate_pitch(raw_pitch)
-                confidence_pitch = refine_pitch_confidence(
-                    raw_pitch, vocals, sample_rate=self.config.pitch_sample_rate
-                )
-                validate_pitch(confidence_pitch)
-                stabilization_input = fuse_pitch_with_yin(
-                    confidence_pitch,
-                    vocals,
-                    sample_rate=self.config.pitch_sample_rate,
-                    fmin_hz=self.config.fmin_hz,
-                    fmax_hz=self.config.fmax_hz,
-                )
-                validate_pitch(stabilization_input)
-
+            raw_pitch = list(self._run(
+                "pitch-vocals", self.engines.pitch,
+                lambda engine: engine.estimate(vocals), reports, warnings,
+            ))
             validate_pitch(raw_pitch)
-            pitch = (
-                list(raw_pitch)
-                if primary_melody is not None and stabilization_input is raw_pitch
-                else stabilize_pitch(stabilization_input or raw_pitch)
+            confidence_pitch = refine_pitch_confidence(
+                raw_pitch, vocals, sample_rate=self.config.pitch_sample_rate
             )
+            validate_pitch(confidence_pitch)
+            stabilization_input = fuse_pitch_with_yin(
+                confidence_pitch,
+                vocals,
+                sample_rate=self.config.pitch_sample_rate,
+                fmin_hz=self.config.fmin_hz,
+                fmax_hz=self.config.fmax_hz,
+            )
+            validate_pitch(stabilization_input)
+            pitch = stabilize_pitch(stabilization_input)
             validate_pitch(pitch)
             pitch_outputs = [pitch_path]
             if self.config.preserve_raw_pitch:
@@ -492,7 +478,8 @@ class KaraokePipeline:
         validate_within_duration(pitch, song_duration,
                                  "pitch", self.config.hop_seconds * 2)
 
-        lyrics_txt, words_path, text_hash = output / 'lyrics.txt', output / 'lyricsSync.json', StageCache.key('text', {'text': supplied})
+        lyrics_txt, words_path, text_hash = output / 'lyrics.txt', output / \
+            'lyricsSync.json', StageCache.key('text', {'text': supplied})
 
         self._notify(
             request,
@@ -536,7 +523,8 @@ class KaraokePipeline:
                     "alignment",
                     self.engines.aligner,
                     lambda engine: (
-                        engine.align_long_text(vocals, supplied, effective_language)
+                        engine.align_long_text(
+                            vocals, supplied, effective_language)
                         if callable(getattr(engine, "align_long_text", None))
                         else engine.align(vocals, supplied, effective_language)
                     ),
@@ -595,7 +583,8 @@ class KaraokePipeline:
                 cache.commit("transcription", transcription_key,
                              [lyrics_txt, words_path])
             else:
-                if hasattr(self.engines.transcriber, "set_pitch_activity"): self.engines.transcriber.set_pitch_activity(pitch)
+                if hasattr(self.engines.transcriber, "set_pitch_activity"):
+                    self.engines.transcriber.set_pitch_activity(pitch)
                 text, words = self._run(
                     "transcription",
                     self.engines.transcriber,
@@ -635,7 +624,8 @@ class KaraokePipeline:
 
         validate_within_duration(words, song_duration, "words", 0.5)
 
-        self._notify(request, "notes", 82, "Построение нот голоса по vocals.flac")
+        self._notify(request, "notes", 82,
+                     "Построение нот голоса по vocals.flac")
         started = time.perf_counter()
         syllables = align_syllables(words, pitch)
         vocal_notes = build_vocal_notes(
@@ -655,7 +645,8 @@ class KaraokePipeline:
         validate_timeline(syllables, "syllables")
         validate_timeline(vocal_notes, "vocal notes")
         validate_within_duration(syllables, song_duration, "syllables", 0.5)
-        validate_within_duration(vocal_notes, song_duration, "vocal notes", 0.1)
+        validate_within_duration(
+            vocal_notes, song_duration, "vocal notes", 0.1)
         self._report(reports, "notes", "vocals", started=started)
 
         lyrics_payload = read_json(words_path, {})
@@ -666,7 +657,7 @@ class KaraokePipeline:
             "key": str(music_analysis.get("key") or "unknown"),
             "words": words_with_notes(words, vocal_notes),
         })
-        stabilize_lyrics_melody(lyrics_payload)
+        validate_lyrics_document(lyrics_payload)
         write_json_atomic(words_path, lyrics_payload, compact=True)
 
         outputs = {

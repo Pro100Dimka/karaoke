@@ -29,6 +29,18 @@ def test_recovery_script_contracts(script, required):
     assert_contains(project_text(script, encoding="utf-8-sig"), *required)
 
 
+def test_development_launch_uses_browser_compatible_isolated_ports():
+    script = project_text("start-dev.bat", encoding="utf-8-sig")
+    assert_contains(
+        script,
+        'set "KARAOKE_BACKEND_URL=http://127.0.0.1:18000"',
+        'set "VITE_API_BASE_URL=http://127.0.0.1:18000"',
+        'set "SONGAPP_API_TOKEN=advoice-local-development"',
+        'set "VITE_API_TOKEN=advoice-local-development"',
+        '"$p=18000,5173;',
+    )
+
+
 def test_build_installer_prepares_gitignored_downloads_before_build():
     script = project_text("build-installer.bat", encoding="utf-8-sig")
     assert_contains(script, 'set "KARAOKE_PREPARE_DIRECTML=1"', 'call "%~dp0start-dev.bat" --prepare-only')

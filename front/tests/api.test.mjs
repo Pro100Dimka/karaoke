@@ -62,6 +62,15 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("API transport", () => {
+  test("uses the development token in a regular browser", async () => {
+    vi.stubEnv("VITE_API_TOKEN", "browser-secret");
+    const { request } = await importApi("core");
+
+    await request("diagnostics/health");
+
+    equal([lastCall()[1].headers["X-ADVoice-Token"], "browser-secret"]);
+  });
+
   test("normalizes request paths, bodies and successful response kinds", async () => {
     const { request, requestBlob } = await importApi("core");
     fetch

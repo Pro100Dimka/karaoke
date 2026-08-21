@@ -54,7 +54,7 @@ function buildRequestOptions(options = {}) {
   const FormDataCtor = globalThis.FormData;
   const isFormData = typeof FormDataCtor === "function" && body instanceof FormDataCtor;
   const normalizedHeaders = normalizeHeaders(headers);
-  const apiToken = globalThis.electronAPI?.apiToken;
+  const apiToken = globalThis.electronAPI?.apiToken || import.meta.env.VITE_API_TOKEN;
   if (isFormData || body == null) {
     const nextHeaders = normalizedHeaders || {};
     if (apiToken) nextHeaders["X-ADVoice-Token"] = apiToken;

@@ -1589,11 +1589,6 @@
   display: flex;
   align-items: center;
   gap: 0.9rem;
-  min-width: 0;
-  padding: 0.85rem 1rem;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 25%, var(--color-border));
-  border-radius: 0.9rem;
-  background: color-mix(in srgb, var(--color-primary) 7%, var(--color-surface-soft));
 }
 
 .library-add-song-file-icon {
@@ -1633,12 +1628,8 @@
 }
 
 .library-add-song-field {
-  display: grid;
   min-width: 0;
-  gap: 0.45rem;
-  color: var(--color-text-soft);
-  font-size: 0.8rem;
-  font-weight: 700;
+  margin: 0;
 }
 
 .library-add-song-field .input {

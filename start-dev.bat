@@ -1,6 +1,11 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 set "KARAOKE_LYRICS_LOG_TEXT=1"
+set "KARAOKE_BACKEND_URL=http://127.0.0.1:18000"
+set "KARAOKE_RENDERER_ORIGIN=http://127.0.0.1:5173"
+set "SONGAPP_API_TOKEN=advoice-local-development"
+set "VITE_API_BASE_URL=http://127.0.0.1:18000"
+set "VITE_API_TOKEN=advoice-local-development"
 set "PREPARE_ONLY=0"
 if /i "%~1"=="--prepare-only" set "PREPARE_ONLY=1"
 if /i "%~1"=="--job" goto :job
@@ -118,10 +123,10 @@ rem PORTS
 rem ============================================================================
 
 if "%PREPARE_ONLY%"=="0" (
-    echo Stopping processes on ports 8000 and 5173...
+    echo Stopping processes on development ports 18000 and 5173...
 
     powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
-    "$p=8000,5173;$c=Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue;foreach($x in $c){if($p -contains $x.LocalPort){Stop-Process -Id $x.OwningProcess -Force -ErrorAction SilentlyContinue}}"
+    "$p=18000,5173;$c=Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue;foreach($x in $c){if($p -contains $x.LocalPort){Stop-Process -Id $x.OwningProcess -Force -ErrorAction SilentlyContinue}}"
 
     if errorlevel 1 echo [WARN] Could not fully clean development ports.
 )

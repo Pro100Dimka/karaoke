@@ -42,17 +42,11 @@ def test_audio_tags_and_source_metadata_fallbacks(monkeypatch):
     )
     monkeypatch.setitem(sys.modules, "mutagen", mutagen)
     pipeline_service._apply_source_metadata(current)
-    assert (current.title, current.artist, current.genre) == ("Tagged", "Artist", "Rock")
+    assert (current.title, current.artist, current.genre) == ("Requested", None, "Rock")
     mutagen.File.side_effect = RuntimeError("bad tags")
-    current.title = ""
-    current.artist = None
     current.genre = None
     pipeline_service._apply_source_metadata(current)
-    assert (current.artist, current.title) == ("Artist", "Filename")
-    current.original_filename = "Plain.wav"
-    current.title = ""
-    pipeline_service._apply_source_metadata(current)
-    assert current.title == "Plain"
+    assert (current.title, current.artist, current.genre) == ("Requested", None, None)
 
 
 def test_progress_capture_writes_steps_details_flush_close_and_cancel(monkeypatch, tmp_path):

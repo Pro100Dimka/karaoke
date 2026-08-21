@@ -55,7 +55,39 @@ async def lifespan(_app: FastAPI):
     storage_migration.migrate_legacy_song_storage()
     song_package_service.recover_import_transactions()
     cache_service.recover_optimization_transactions()
-    for line in pipeline_service.format_runtime_plan(pipeline_service._configure_ai_runtime()): print(f"[backend] AI runtime: {line}", flush=True)
+    runtime_plan = pipeline_service._configure_ai_runtime()
+    runtime_lines = pipeline_service.format_runtime_plan(runtime_plan)
+    for line in runtime_lines: print(f"[backend] AI runtime: {line}", flush=True)
+    from app.services.app_settings_service import read_settings
+    from app.services.remote_log_service import queue_hardware_snapshot
+
+    settings = read_settings()
+    hardware = runtime_plan.hardware
+    queue_hardware_snapshot(
+        {
+            "cpu": hardware.cpu,
+            "logical_cores": hardware.logical_cores,
+            "ram_bytes": hardware.ram_bytes,
+            "gpus": [
+                {
+                    "name": gpu.name,
+                    "vendor": gpu.vendor,
+                    "memory_bytes": gpu.memory_bytes,
+                }
+                for gpu in hardware.gpus
+            ],
+            "torch_available": hardware.torch_available,
+            "cuda_available": hardware.cuda_available,
+            "cuda_version": hardware.cuda_version,
+            "selected_backends": {
+                name: spec.key for name, spec in runtime_plan.selected.items()
+            },
+            "settings": {
+                "compute_mode": settings.get("compute_mode"),
+                "thread_count": settings.get("thread_count"),
+            },
+        }
+    )
     try:
         yield
     finally:

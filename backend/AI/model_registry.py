@@ -49,16 +49,6 @@ MODELS: tuple[ModelSpec, ...] = (
     _model("ctc_ru", "Russian CTC aligner", "jonatasgrosman/wav2vec2-large-xlsr-53-russian", "2329100508896c6d9b157019803ab5601e6f3406", "ctc/wav2vec2-large-xlsr-53-russian", "KARAOKE_AI_CTC_RU_MODEL", 1_265_908_849, ignore_patterns=("language_model/**", "flax_model.msgpack")),
     _model("ctc_uk", "Ukrainian CTC aligner", "Yehor/wav2vec2-xls-r-300m-uk-with-small-lm", "e3ced4def0d70be3aab0f2db598a59961fe9ab3b", "ctc/wav2vec2-xls-r-300m-uk", "KARAOKE_AI_CTC_UK_MODEL", 1_261_978_306, ignore_patterns=("language_model/**", "flax_model.msgpack")),
     _model("roformer", "Mel-Band RoFormer", "KimberleyJSN/melbandroformer", "ac9b0614ab3cd7f77219e18ba494dfd93956c348", "roformer", "MSST_CHECKPOINT", 913_106_900, kind="file", filename="MelBandRoformer.ckpt", sha256="87201f4d31afb5bc79993230fc49446918425574db48c01c405e44f365c7559e"),
-    _model(
-        "omnizart_patch_cnn", "Omnizart Patch-CNN Vocal Melody", "Music-and-Culture-Technology-Lab/omnizart",
-        "bcd8cb44d4da66ce87df10b6abee5c35a8cc2886", "omnizart/patch_cnn_melody", "KARAOKE_AI_OMNIZART_MODEL", 868_365, kind="bundle",
-        files=(
-            _file("configurations.yaml", "https://raw.githubusercontent.com/Music-and-Culture-Technology-Lab/omnizart/bcd8cb44d4da66ce87df10b6abee5c35a8cc2886/omnizart/checkpoints/patch_cnn/patch_cnn_melody/configurations.yaml", min_bytes=1_000, contains=("TranscriptionMode:", "Value: Melody", "PatchSize:", "SamplingRate:")),
-            _file("saved_model.pb", "https://raw.githubusercontent.com/Music-and-Culture-Technology-Lab/omnizart/bcd8cb44d4da66ce87df10b6abee5c35a8cc2886/omnizart/checkpoints/patch_cnn/patch_cnn_melody/saved_model.pb", "78a90299f4b24484dbf4638df16f4bc25af3f2f2b36d37b5197f7de72525f720", 155_120),
-            _file("variables/variables.index", "https://raw.githubusercontent.com/Music-and-Culture-Technology-Lab/omnizart/bcd8cb44d4da66ce87df10b6abee5c35a8cc2886/omnizart/checkpoints/patch_cnn/patch_cnn_melody/variables/variables.index", "8d8eb8b6726e36c530917a5daaa771d42a8efe378b6fa84f6f048fdd986a0ac7", 760),
-            _file("variables/variables.data-00000-of-00001", "https://github.com/Music-and-Culture-Technology-Lab/omnizart/releases/download/checkpoints-20211001/patch_cnn_melody@variables.data-00000-of-00001", "bbbd11fc0b60a5f3986c39f7bb3985205d719031f70f916edc560f8b4d01b51a", 708_098),
-        ),
-    ),
 )
 
 MODEL_BY_KEY = {model.key: model for model in MODELS}

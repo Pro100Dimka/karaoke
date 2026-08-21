@@ -44,14 +44,12 @@ def test_load_ai_inputs_respects_trusted_nonempty_text_and_edit_flags(monkeypatc
 def test_load_searchable_title_prefers_artist_title_and_closes(monkeypatch, tmp_path):
     database, lookup = mock_song_lookup(monkeypatch, pipeline_service)
     assert pipeline_service._load_searchable_title("missing") is None
-    current = SimpleNamespace(source_path="x", original_filename="x.wav", title="Request")
+    current = SimpleNamespace(title="Title", artist="Artist")
     lookup.return_value = current
-    identity = Mock(return_value=("Artist", "Title"))
-    monkeypatch.setattr(pipeline_service.song_service, "_read_source_identity", identity)
     assert pipeline_service._load_searchable_title("song") == "Artist - Title"
-    identity.return_value = (None, "Title")
+    current.artist = None
     assert pipeline_service._load_searchable_title("song") == "Title"
-    identity.return_value = (None, "")
+    current.title = ""
     assert pipeline_service._load_searchable_title("song") is None
 
 
@@ -185,7 +183,7 @@ def test_finalize_success_commits_metadata_and_best_effort_optimization(monkeypa
     current = SimpleNamespace()
     database, lookup = mock_song_lookup(monkeypatch, pipeline_service, current)
     metadata, generated, commit, optimize = Mock(), Mock(), Mock(), Mock(side_effect=RuntimeError('optional failure'))
-    patch_attrs(monkeypatch, pipeline_service, _apply_source_metadata=metadata, _apply_generated_metadata=generated, commit=commit)
+    patch_attrs(monkeypatch, pipeline_service, _apply_source_metadata=metadata, _persist_confirmed_identity=Mock(), _apply_generated_metadata=generated, commit=commit)
     monkeypatch.setattr(pipeline_service.cache_service, "optimize_song_files", optimize)
     pipeline_service._finalize_success("song", tmp_path)
     assert current.status == models.SongStatus.DONE and current.progress_percent == 100
@@ -249,10 +247,11 @@ def test_run_job_maps_finalization_failure(monkeypatch, tmp_path):
 
 
 def test_finalize_success_marks_new_generation_unoptimized_before_best_effort_optimization(monkeypatch, tmp_path):
-    song, database = SimpleNamespace(id='song', output_dir=str(tmp_path), source_path=str(tmp_path / 'source.wav'), optimized=True, status=models.SongStatus.PROCESSING, progress_percent=50.0, progress_step='processing', error_message=None, key_override=None, tempo_override=None, note_range_min=None, note_range_max=None), Mock()
+    song, database = SimpleNamespace(id='song', title='Confirmed title', artist='Confirmed artist', output_dir=str(tmp_path), source_path=str(tmp_path / 'source.wav'), optimized=True, status=models.SongStatus.PROCESSING, progress_percent=50.0, progress_step='processing', error_message=None, key_override=None, tempo_override=None, note_range_min=None, note_range_max=None), Mock()
     (tmp_path / "source.wav").write_bytes(b"source")
     instrumental = tmp_path / "instrumental.flac"
     instrumental.write_bytes(b"instrumental")
+    write_json(tmp_path / "lyricsSync.json", {"bpm": 120, "key": "C", "words": []})
     patch_many(monkeypatch, (pipeline_service, "SessionLocal", Mock(return_value=database)), (pipeline_service.repositories, "get_song", Mock(return_value=song)))
     monkeypatch.setattr(pipeline_service.song_service, "resolve_source_path", lambda current: Path(current.source_path))
     patch_attrs(monkeypatch, pipeline_service, _apply_source_metadata=Mock(), _apply_generated_metadata=Mock())
@@ -263,4 +262,6 @@ def test_finalize_success_marks_new_generation_unoptimized_before_best_effort_op
 
     assert (song.status == models.SongStatus.DONE) and (song.optimized is False)
     assert Path(song.source_path) == instrumental.resolve() and not (tmp_path / "source.wav").exists()
+    identity = pipeline_service.read_json(tmp_path / "lyricsSync.json")
+    assert (identity["title"], identity["artist"]) == ("Confirmed title", "Confirmed artist")
     commit.assert_called_once_with(database)

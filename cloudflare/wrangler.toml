@@ -13,7 +13,7 @@ new_sqlite_classes = ["KaraokeRoom"]
 
 # Collects client error logs (backend, frontend and Electron main process --
 # see backend/app/services/remote_log_service.py and POST /diagnostics/client-log)
-# under logs/<user>/<timestamp>.log. Create the bucket once before deploying:
+# as one <device-id>.json object per computer. Create the bucket once before deploying:
 #   wrangler r2 bucket create karaoke-studio-logs
 [[r2_buckets]]
 binding = "LOGS"

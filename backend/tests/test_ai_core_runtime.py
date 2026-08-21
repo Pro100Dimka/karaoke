@@ -49,9 +49,9 @@ def test_device_selection_safely_falls_back_for_unavailable_or_unknown(monkeypat
 def test_default_engine_registry_uses_config(monkeypatch):
     constructors = {
         name: Mock(return_value=name)
-        for name in ("separator", "pitch", "transcriber", "aligner", "melody")
+        for name in ("separator", "pitch", "transcriber", "aligner")
     }
-    patch_attrs(monkeypatch, registry, MSSTMelRoformerSeparator=constructors['separator'], FCPEPitchEstimator=constructors['pitch'], Qwen3Transcriber=constructors['transcriber'], Qwen3ForcedAligner=constructors['aligner'], OmnizartPatchCNNPitchEstimator=constructors['melody'])
+    patch_attrs(monkeypatch, registry, MSSTMelRoformerSeparator=constructors['separator'], FCPEPitchEstimator=constructors['pitch'], Qwen3Transcriber=constructors['transcriber'], Qwen3ForcedAligner=constructors['aligner'])
     config = SimpleNamespace(
         pitch_sample_rate=100,
         hop_seconds=0,
@@ -72,7 +72,7 @@ def test_default_engine_registry_uses_config(monkeypatch):
         "pitch",
         "transcriber",
         "aligner",
-        "melody",
+        None,
     )
     constructors["pitch"].assert_called_once_with(sr=100, hop=1, fmin=50, fmax=500)
 

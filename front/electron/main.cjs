@@ -98,7 +98,8 @@ let backendDuplicateDetected = false;
 let backendDuplicateWatchGeneration = 0;
 const BACKEND_STABLE_RESET_MS = 30_000;
 const BACKEND_DUPLICATE_WATCH_MS = 5_000;
-const BACKEND_API_TOKEN = crypto.randomBytes(32).toString("base64url");
+const BACKEND_API_TOKEN =
+  process.env.SONGAPP_API_TOKEN || crypto.randomBytes(32).toString("base64url");
 let runtimeBackendUrl = BACKEND_URL;
 let runtimeBackendHost = BACKEND_HOST;
 let runtimeBackendPort = BACKEND_PORT;

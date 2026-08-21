@@ -1,3 +1,4 @@
+import Stack from "../../theme/ui/Stack";
 import cx from "../../utils/cx";
 
 export default function Field({
@@ -14,16 +15,18 @@ export default function Field({
   const classes = cx(baseClass, variant && `${baseClass}--${variant}`, className);
 
   return (
-    <label className={classes} htmlFor={id}>
-      {(label || hint) && (
-        <span>
-          {label && <strong>{label}</strong>}
-          {hint && <small>{hint}</small>}
-        </span>
-      )}
+    <Stack gap={0.5} align="start">
+      <label className={classes} htmlFor={id}>
+        {(label || hint) && (
+          <span>
+            {label && <strong>{label}</strong>}
+            {hint && <small>{hint}</small>}
+          </span>
+        )}
+      </label>
       {children}
       {error && <small className="field-error">{error}</small>}
-    </label>
+    </Stack>
   );
 }
 

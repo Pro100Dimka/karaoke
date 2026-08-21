@@ -16,11 +16,7 @@ ml-collections==1.1.0
 beartype==0.14.1
 rotary-embedding-torch==0.3.5
 matplotlib>=3.10,<4
-# Omnizart Patch-CNN Vocal Melody is isolated behind a lazy adapter. Native Windows
-# Native Windows TensorFlow is CPU-only, so it cannot contend with the PyTorch CUDA stack.
 # The protobuf floor includes the upstream fix for PYSEC-2026-1805.
-tensorflow==2.20.0; python_version < "3.13"
-tf-keras==2.20.1; python_version < "3.13"
 protobuf>=5.29.6,<8; python_version < "3.13"
 qwen-asr==0.0.6
 # qwen-asr 0.0.6 imports private Transformers APIs and currently hard-pins

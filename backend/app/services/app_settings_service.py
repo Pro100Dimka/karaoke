@@ -140,7 +140,19 @@ def update_settings(patch: dict[str, Any]) -> dict[str, Any]:
             if ai_runtime_changed:
                 from AI.service import reset_ai_service
                 reset_ai_service()
-            return _read_settings_unlocked()
+            updated = _read_settings_unlocked()
+            if ai_runtime_changed:
+                from app.services.remote_log_service import queue_hardware_snapshot
+
+                queue_hardware_snapshot(
+                    {
+                        "settings": {
+                            "compute_mode": updated["compute_mode"],
+                            "thread_count": updated["thread_count"],
+                        }
+                    }
+                )
+            return updated
         except Exception:
             write_json(SETTINGS_FILE, old_settings if isinstance(old_settings, dict) else {})
             if paths_changed:
