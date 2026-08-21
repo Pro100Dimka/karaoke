@@ -17,7 +17,11 @@ import {
   mergeSelectedNotes,
   resizeBounds
 } from "../src/pages/MelodyEditor/melody-editor-operations.js";
-import { flattenLyricsNotes } from "../src/utils/lyrics-sync.js";
+import {
+  flattenLyricsNotes,
+  lyricsNoteFillPercent,
+  mergeAdjacentLyricsNotes
+} from "../src/utils/lyrics-sync.js";
 
 describe("canonical lyricsSync utilities", () => {
   const lyricsSync = {
@@ -106,6 +110,77 @@ describe("canonical lyricsSync utilities", () => {
       active: true,
       note: notes[1]
     });
+  });
+
+  test("fills lyrics evenly across the acoustic note envelope", () => {
+    const word = {
+      start: 0,
+      end: 3,
+      notes: [
+        { note: 60, start: 0.2, end: 0.3 },
+        { note: 60, start: 0.31, end: 1.2 },
+        { note: 62, start: 1.5, end: 2.2 }
+      ]
+    };
+
+    expect(mergeAdjacentLyricsNotes(word)).toEqual([
+      { note: 60, start: 0.2, end: 1.2 },
+      { note: 62, start: 1.5, end: 2.2 }
+    ]);
+    expect(lyricsNoteFillPercent(word, 0.2)).toBe(0);
+    expect(lyricsNoteFillPercent(word, 1.2)).toBe(50);
+    expect(lyricsNoteFillPercent(word, 2.2)).toBe(100);
+  });
+
+  test("uses one note's exact start and end and falls back to the word interval", () => {
+    const oneNote = {
+      start: 1,
+      end: 3,
+      notes: [{ note: 64, start: 1.5, end: 2.5 }]
+    };
+    expect(lyricsNoteFillPercent(oneNote, 1.5)).toBe(0);
+    expect(lyricsNoteFillPercent(oneNote, 2)).toBe(50);
+    expect(lyricsNoteFillPercent(oneNote, 2.5)).toBe(100);
+    expect(lyricsNoteFillPercent({ start: 1, end: 3, notes: [] }, 2)).toBe(50);
+  });
+
+  test("rejects malformed lyric-note intervals and clips valid notes to their word", () => {
+    expect(mergeAdjacentLyricsNotes(null)).toEqual([]);
+    expect(mergeAdjacentLyricsNotes({ start: 1, end: 1, notes: [] })).toEqual([]);
+    expect(mergeAdjacentLyricsNotes({ start: Number.NaN, end: 2, notes: [] })).toEqual([]);
+    expect(
+      mergeAdjacentLyricsNotes({
+        start: 1,
+        end: 3,
+        notes: [
+          { note: 60.5, start: 1, end: 2 },
+          { note: 61, start: Number.NaN, end: 2 },
+          { note: 62, start: 1, end: Number.NaN },
+          { note: 63, start: 2, end: 2 },
+          { note: 64, start: 0, end: 4 }
+        ]
+      })
+    ).toEqual([{ note: 64, start: 1, end: 3 }]);
+  });
+
+  test("merges only continuous equal pitches and keeps chronological order", () => {
+    const word = {
+      start: 0,
+      end: 4,
+      notes: [
+        { note: 64, start: 2, end: 2.4 },
+        { note: 60, start: 0.5, end: 1 },
+        { note: 60, start: 0.9, end: 1.2 },
+        { note: 60, start: 1.41, end: 1.8 },
+        { note: 64, start: 2.59, end: 3 }
+      ]
+    };
+
+    expect(mergeAdjacentLyricsNotes(word)).toEqual([
+      { note: 60, start: 0.5, end: 1.2 },
+      { note: 60, start: 1.41, end: 1.8 },
+      { note: 64, start: 2, end: 3 }
+    ]);
   });
 });
 

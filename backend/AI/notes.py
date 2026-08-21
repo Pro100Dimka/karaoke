@@ -698,7 +698,7 @@ def _audio_verify_note_register(
                     if not strong_attack and any(
                         abs(delta - harmonic) <= 1.1 for harmonic in (12, 19, 24)
                     ):
-                        transition += 1.45
+                        transition += 4.0
                     value = local_scores[-1][previous_state] - transition * transition_scale
                     if value > best_score:
                         best_score = value
@@ -722,11 +722,6 @@ def _audio_verify_note_register(
     verified: list[VocalNote] = []
     accepted_changes: list[dict[str, object]] = []
     rejected_changes: list[dict[str, object]] = []
-
-    selected_pitches = [
-        int(candidate_rows[index][selected_states[index]])
-        for index in range(len(notes))
-    ]
 
     def _predominant_voice_support(index: int, original_pitch: int, proposed_pitch: int, emission_margin: float) -> bool:
         """Resolve a brief harmonic island without inventing a neighbouring note.
@@ -762,10 +757,33 @@ def _audio_verify_note_register(
 
         proposed_jump = abs(proposed_pitch - left) + abs(right - proposed_pitch)
         original_jump = abs(original_pitch - left) + abs(right - original_pitch)
-        if max(abs(proposed_pitch - left), abs(right - proposed_pitch)) > 5:
-            return False
+        bracketed = max(abs(proposed_pitch - left), abs(right - proposed_pitch)) <= 7
+        continuation = False
+        if verified and proposed_pitch > original_pitch:
+            previous = int(verified[-1].midi_note)
+            previous_gap = notes[index].start - notes[index - 1].end
+            same_word = (
+                note.word_index is not None
+                and note.word_index == notes[index - 1].word_index
+            )
+            continuation = (
+                same_word
+                and previous_gap <= trajectory_window
+                and abs(proposed_pitch - previous) <= 4
+                and abs(original_pitch - previous) >= 7
+            )
         continuity_gain = original_jump - proposed_jump
-        return continuity_gain >= 10 and emission_margin + 0.34 * continuity_gain >= 1.2
+        if continuation:
+            previous = int(verified[-1].midi_note)
+            continuity_gain = max(
+                continuity_gain,
+                abs(original_pitch - previous) - abs(proposed_pitch - previous),
+            )
+        return (
+            (bracketed or continuation)
+            and continuity_gain >= 7
+            and emission_margin + 0.34 * continuity_gain >= 1.2
+        )
 
     for index, note in enumerate(notes):
         proposed = int(candidate_rows[index][selected_states[index]])

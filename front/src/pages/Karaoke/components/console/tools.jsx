@@ -38,11 +38,6 @@ function EffectPreset({ id, label, symbol, echo, reverb, active, onClick }) {
       })}
       onClick={onClick}
       sx={{
-        minWidth: 0,
-        minHeight: 62,
-        padding: "0.4rem 0.45rem",
-        display: "grid",
-        placeItems: "center",
         borderRadius: "var(--shape-lg)",
         color: active ? "var(--preset-accent)" : "var(--color-text-soft)",
         border: active
@@ -69,14 +64,7 @@ function EffectPreset({ id, label, symbol, echo, reverb, active, onClick }) {
             fontSize: 24,
             lineHeight: 1,
             filter: active
-              ? `drop-shadow(
-                  0 0 0.45rem
-                  color-mix(
-                    in srgb,
-                    ${accent} 55%,
-                    transparent
-)
-)`
+              ? `drop-shadow(0 0 0.45rem color-mix(in srgb,${accent} 55%,transparent))`
               : "none"
           }}
         >

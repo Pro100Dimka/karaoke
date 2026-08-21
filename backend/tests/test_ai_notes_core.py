@@ -394,7 +394,7 @@ def test_audio_register_follows_predominant_voice_when_backing_fundamental_wins_
         notes,
         load_mono=lambda *_: (np.ones(16000), 16000),
         _audio_harmonic_salience=lambda _m, _i, midi, **_: (
-            30 if midi == 50 else 29.5 if midi in {62, 63} else 20
+            34 if midi == 63 else 30 if midi == 50 else 29.5 if midi == 62 else 20
         ),
     )
 

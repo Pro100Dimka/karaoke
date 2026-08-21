@@ -6,6 +6,7 @@ const VISIBILITY_CHECK_MS = 250;
 export default function useKaraokeControls({ autoHideEnabled = true, isFullscreen = false } = {}) {
   const [controlsVisible, setControlsVisible] = useState(true);
   const lastActivityRef = useRef(Date.now());
+  const lastPointerRef = useRef(null);
   // Fullscreen is meant to be an unobstructed view: the transport console
   // must auto-hide there even if the user turned the general auto-hide
   // preference off for windowed playback.
@@ -51,17 +52,26 @@ export default function useKaraokeControls({ autoHideEnabled = true, isFullscree
     showControls();
   }, [effectiveAutoHide, showControls]);
 
-  const revealControls = useCallback(() => {
-    // Scene transitions call hideControls() unconditionally (to black out the
-    // UI during the intro/outro animation) regardless of this preference, so
-    // reveal-on-activity must be equally unconditional. Gating it on
-    // autoHideEnabled used to mean: once autoHideConsole was turned off, any
-    // hideControls() call (every song start/stop) permanently hid the entire
-    // console -- moving the mouse could never bring it back, since neither
-    // this handler nor the (also disabled) auto-hide watcher would ever call
-    // showControls() again.
-    showControls();
-  }, [showControls]);
+  const revealControls = useCallback(
+    (event) => {
+      // Scene transitions call hideControls() unconditionally (to black out the
+      // UI during the intro/outro animation) regardless of this preference, so
+      // reveal-on-activity must be equally unconditional. Gating it on
+      // autoHideEnabled used to mean: once autoHideConsole was turned off, any
+      // hideControls() call (every song start/stop) permanently hid the entire
+      // console -- moving the mouse could never bring it back, since neither
+      // this handler nor the (also disabled) auto-hide watcher would ever call
+      // showControls() again.
+      if (event && Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+        const position = `${event.clientX}:${event.clientY}`;
+        if (lastPointerRef.current === position) return false;
+        lastPointerRef.current = position;
+      }
+      showControls();
+      return true;
+    },
+    [showControls]
+  );
 
   return { controlsVisible, hideControls, revealControls, showControls };
 }

@@ -1,6 +1,6 @@
 import { Mic } from "lucide-react";
 import { RotaryKnob } from "../../../../components/fields";
-import { translateSaved } from "../../../../i18n/runtime";
+import { translateSaved as t } from "../../../../i18n/runtime";
 import { Stack, Typography } from "../../../../theme/ui";
 import { EFFECT_FIELDS, MIXER_FIELDS } from "./config";
 import { clamp } from "./utils";
@@ -11,44 +11,56 @@ const MIXER_COLORS = {
   vocal: "var(--color-warning)",
   melody: "var(--color-secondary)"
 };
+
+const TRACK_STYLE = {
+  position: "absolute",
+  width: 6,
+  height: "100%",
+  borderRadius: 999,
+  background: "color-mix(in srgb, var(--color-surface-strong) 76%, var(--color-bg-deep))",
+  border: "1px solid color-mix(in srgb, var(--color-border-strong) 55%, transparent)",
+  boxShadow: "inset 0 0 0.4rem color-mix(in srgb, var(--color-bg-deep) 72%, transparent)"
+};
+
+const INPUT_STYLE = {
+  position: "absolute",
+  width: 116,
+  height: 26,
+  margin: 0,
+  transform: "rotate(-90deg)",
+  transformOrigin: "center",
+  opacity: 0,
+  cursor: "pointer",
+  touchAction: "none"
+};
+
+const LABEL_STYLE = { fontWeight: 800, lineHeight: 1 };
+
 function VerticalSlider({ label, value, color, onChange, onCommit, max = 1 }) {
   const percent = Math.round(value * 100);
-  const fillPercent = Math.max(0, Math.min(100, (value / max) * 100));
+  const fill = Math.min(100, Math.max(0, (value / max) * 100));
+  const readValue = ({ currentTarget }) => Number(currentTarget.value);
   return (
     <Stack gap={0.45} sx={{ userSelect: "none", width: "auto" }}>
       <Typography
         variant="caption"
-        sx={{ color, fontSize: 10.5, fontWeight: 800, lineHeight: 1, whiteSpace: "nowrap" }}
+        sx={{ ...LABEL_STYLE, color, fontSize: 10.5, whiteSpace: "nowrap" }}
       >
         {label}
       </Typography>
       <Stack style={{ height: 80, position: "relative" }}>
+        <div aria-hidden style={TRACK_STYLE} />
         <div
-          aria-hidden="true"
+          aria-hidden
           style={{
-            position: "absolute",
-            width: 6,
-            height: "100%",
-            borderRadius: 999,
-            background: "color-mix(in srgb, var(--color-surface-strong) 76%, var(--color-bg-deep))",
-            border: "1px solid color-mix(in srgb, var(--color-border-strong) 55%, transparent)",
-            boxShadow: "inset 0 0 0.4rem color-mix(in srgb, var(--color-bg-deep) 72%, transparent)"
-          }}
-        />
-
-        <div
-          aria-hidden="true"
-          style={{
-            position: "absolute",
+            ...TRACK_STYLE,
             bottom: 0,
-            width: 6,
-            height: `${fillPercent}%`,
-            borderRadius: 999,
+            height: `${fill}%`,
             background: color,
+            border: 0,
             boxShadow: `0 0 0.7rem ${color}`
           }}
         />
-
         <input
           type="range"
           min={0}
@@ -57,33 +69,16 @@ function VerticalSlider({ label, value, color, onChange, onCommit, max = 1 }) {
           value={value}
           aria-label={label}
           aria-valuetext={`${percent}%`}
-          onChange={(event) => onChange?.(Number(event.target.value))}
-          onPointerUp={(event) => onCommit?.(Number(event.currentTarget.value))}
-          onKeyUp={(event) => onCommit?.(Number(event.currentTarget.value))}
-          style={{
-            position: "absolute",
-            width: 116,
-            height: 26,
-            margin: 0,
-            transform: "rotate(-90deg)",
-            transformOrigin: "center",
-            opacity: 0,
-            cursor: "pointer",
-            // The input's own drag axis is horizontal (rotation is a paint-only
-            // transform); browsers compute touch/pen gesture routing from the
-            // pre-rotation layout, so the default "auto" touch-action lets a
-            // vertical drag on this rotated thumb be claimed as a page pan
-            // instead of a slider drag. Claim the gesture exclusively so only
-            // the value changes, never the surrounding interface.
-            touchAction: "none"
-          }}
+          onChange={(event) => onChange?.(readValue(event))}
+          onPointerUp={(event) => onCommit?.(readValue(event))}
+          onKeyUp={(event) => onCommit?.(readValue(event))}
+          style={INPUT_STYLE}
         />
-
         <div
-          aria-hidden="true"
+          aria-hidden
           style={{
             position: "absolute",
-            bottom: `clamp(0px, calc(${fillPercent}% - 7px), calc(100% - 14px))`,
+            bottom: `clamp(0px, calc(${fill}% - 7px), calc(100% - 14px))`,
             width: 14,
             height: 14,
             border: `1px solid color-mix(in srgb, ${color} 78%, white)`,
@@ -94,21 +89,22 @@ function VerticalSlider({ label, value, color, onChange, onCommit, max = 1 }) {
           }}
         />
       </Stack>
-
-      <Typography variant="caption" sx={{ color, fontSize: 10, fontWeight: 800, lineHeight: 1 }}>
+      <Typography variant="caption" sx={{ ...LABEL_STYLE, color, fontSize: 10 }}>
         {percent}%
       </Typography>
     </Stack>
   );
 }
-export default function MixerPanel({
-  microphoneLevel,
-  volumes,
-  onVolumeChange,
-  onMicrophoneCommit,
-  microphoneEffects,
-  onEffectChange
-}) {
+
+export default function MixerPanel(props) {
+  const {
+    microphoneLevel,
+    volumes,
+    onVolumeChange,
+    onMicrophoneCommit,
+    microphoneEffects,
+    onEffectChange
+  } = props;
   const level = clamp(microphoneLevel, 0, 1);
   return (
     <Stack gap="1rem" style={{ "--microphone-level": level }}>
@@ -116,39 +112,39 @@ export default function MixerPanel({
         <Mic size={15} strokeWidth={2.2} />
         <Typography
           variant="caption"
-          sx={{ color: "var(--color-text)", fontSize: 11.5, fontWeight: 850, lineHeight: 1 }}
+          sx={{
+            color: "var(--color-text)",
+            fontSize: 11.5,
+            fontWeight: 850,
+            lineHeight: 1
+          }}
         >
-          {translateSaved("Микшер")}
+          {t("Микшер")}
         </Typography>
       </Stack>
       <Stack direction="row" align="center" justify="space-between">
         {MIXER_FIELDS.flatMap(([key, label], index) => {
-          const value = volumes[key] ?? 0;
           const effect = EFFECT_FIELDS[index];
-          const items = [
+          return [
             <VerticalSlider
-              key={`mixer-${key}`}
+              key={key}
               label={label}
-              value={value}
+              value={volumes[key] ?? 0}
               color={MIXER_COLORS[key]}
               onChange={onVolumeChange[key]}
               onCommit={key === "microphone" ? onMicrophoneCommit : undefined}
               max={key === "microphone" ? 2 : 1}
-            />
-          ];
-          if (effect) {
-            const [effectKey, effectLabel, accent] = effect;
-            items.push(
+            />,
+            effect && (
               <RotaryKnob
-                key={`effect-${effectKey}`}
-                label={effectLabel}
-                value={microphoneEffects[effectKey]}
-                accent={accent}
-                onChange={(nextValue) => onEffectChange(effectKey, nextValue)}
+                key={effect[0]}
+                label={effect[1]}
+                value={microphoneEffects[effect[0]]}
+                accent={effect[2]}
+                onChange={(value) => onEffectChange(effect[0], value)}
               />
-            );
-          }
-          return items;
+            )
+          ].filter(Boolean);
         })}
       </Stack>
     </Stack>

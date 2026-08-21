@@ -329,10 +329,10 @@ export default function Karaoke({ onOpenAppSettings }) {
     <KaraokeView
       containerRef={containerRef}
       className={`karaoke-stage ${isPlaying ? "karaoke-is-playing" : ""} ${!controlsVisible || sceneTransitioning ? "karaoke-ui-hidden" : ""}`}
-      onMouseMove={() => {
+      onMouseMove={(event) => {
         if (sceneTransitioning) return;
+        if (!revealControls(event)) return;
         revealStageActions();
-        revealControls();
       }}
       mediaProps={{
         instrumentalRef,

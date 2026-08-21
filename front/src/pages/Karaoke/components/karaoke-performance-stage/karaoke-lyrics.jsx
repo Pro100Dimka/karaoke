@@ -1,4 +1,5 @@
 import { translateSaved } from "../../../../i18n/runtime";
+import { lyricsNoteFillPercent } from "../../../../utils/lyrics-sync";
 
 const WORD_PATTERN = /[\p{L}\p{N}_]+(?:[’'-][\p{L}\p{N}_]+)*/gu;
 const MIN_LINE_HOLD_SECONDS = 1.2;
@@ -13,35 +14,6 @@ function lyricLines({ text, words }) {
     return lineWords.length ? [lineWords] : [];
   });
   return offset === words.length ? lines : [];
-}
-
-function fillPercent({ start, end }, currentTime) {
-  if (currentTime <= start) return 0;
-  if (currentTime >= end) return 100;
-  return ((currentTime - start) / (end - start)) * 100;
-}
-
-export function noteFillPercent(word, currentTime) {
-  const notes = Array.isArray(word.notes)
-    ? word.notes
-        .map((note) => ({
-          start: Math.max(Number(word.start), Number(note.start)),
-          end: Math.min(Number(word.end), Number(note.end))
-        }))
-        .filter(
-          (note) =>
-            Number.isFinite(note.start) && Number.isFinite(note.end) && note.end > note.start
-        )
-        .sort((left, right) => left.start - right.start)
-    : [];
-  if (notes.length === 0) return fillPercent(word, currentTime);
-  if (currentTime <= notes[0].start) return 0;
-  const total = notes.reduce((sum, note) => sum + note.end - note.start, 0);
-  const sung = notes.reduce((sum, note) => {
-    if (currentTime <= note.start) return sum;
-    return sum + Math.min(currentTime, note.end) - note.start;
-  }, 0);
-  return Math.max(0, Math.min(100, (sung / total) * 100));
 }
 
 export default function KaraokeLyrics({ lyricsSync, currentTime }) {
@@ -76,7 +48,7 @@ export default function KaraokeLyrics({ lyricsSync, currentTime }) {
               className="karaoke-lyric-word karaoke-lyric-character"
               data-end={word.end}
               data-start={word.start}
-              style={{ "--character-fill": `${noteFillPercent(word, currentTime)}%` }}
+              style={{ "--character-fill": `${lyricsNoteFillPercent(word, currentTime)}%` }}
             >
               {word.text}
             </span>
