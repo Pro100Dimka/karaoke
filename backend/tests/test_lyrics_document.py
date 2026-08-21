@@ -1,6 +1,11 @@
 import pytest
 
-from AI.lyrics_document import replace_word_notes, validate_lyrics_document, words_with_notes
+from AI.lyrics_document import (
+    flatten_word_notes,
+    replace_word_notes,
+    validate_lyrics_document,
+    words_with_notes,
+)
 from AI.models import VocalNote, Word
 
 
@@ -69,8 +74,11 @@ def test_sustained_acoustic_note_is_preserved_in_every_word_it_crosses():
         [VocalNote(1.1, 1.7, 60, word_index=0)],
     )
 
-    assert payload[0]["notes"] == [{"note": 60, "start": 1.1, "end": 1.4}]
-    assert payload[1]["notes"] == [{"note": 60, "start": 1.4, "end": 1.7}]
+    assert payload[0]["notes"] == [{"note": 60, "start": 1.1, "end": 1.7}]
+    assert payload[1]["notes"] == [{"note": 60, "start": 1.1, "end": 1.7}]
+
+    flattened = flatten_word_notes({"bpm": 120, "key": "Am", "words": payload})
+    assert flattened == [{"note": 60, "start": 1.1, "end": 1.7, "word_index": 0}]
 
 
 def test_export_preserves_every_acoustically_detected_interval_without_filling_gaps():
@@ -119,8 +127,8 @@ def test_editor_does_not_create_a_note_for_an_empty_word():
 @pytest.mark.parametrize(
     "notes",
     [
-        [{"note": 60, "start": 0.9, "end": 1.2}],
-        [{"note": 60, "start": 1.8, "end": 2.1}],
+        [{"note": 60, "start": 0.5, "end": 0.9}],
+        [{"note": 60, "start": 2.1, "end": 2.3}],
         [{"note": 60, "start": 1.5, "end": 1.5}],
         [
             {"note": 60, "start": 1.0, "end": 1.6},

@@ -58,6 +58,19 @@ describe("canonical lyricsSync utilities", () => {
     expect(flattenLyricsNotes(null)).toEqual([]);
   });
 
+  test("deduplicates one acoustic note shared by adjacent words", () => {
+    const shared = { note: 60, start: 1.2, end: 1.8 };
+    const notes = flattenLyricsNotes({
+      words: [
+        { text: "one", start: 1, end: 1.4, notes: [shared] },
+        { text: "two", start: 1.4, end: 2, notes: [shared] }
+      ]
+    });
+
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toMatchObject({ ...shared, word_index: 1 });
+  });
+
   test("uses half-open note boundaries for melody display and sound", () => {
     const notes = flattenLyricsNotes(lyricsSync);
     expect(findActiveMelodyNote(notes, 1.999)).toBe(notes[0]);

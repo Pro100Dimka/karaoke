@@ -40,7 +40,7 @@ def validate_lyrics_document(payload: Any) -> dict[str, Any]:
             raise ValueError(f"words[{position}].notes must be an array")
         if not notes:
             continue
-        previous_end = start
+        previous_end = -float("inf")
         for note_position, note in enumerate(notes):
             path = f"words[{position}].notes[{note_position}]"
             if not isinstance(note, dict):
@@ -52,8 +52,8 @@ def validate_lyrics_document(payload: Any) -> dict[str, Any]:
                 raise ValueError(f"{path}.note must be between 0 and 127")
             note_start = _number(note.get("start"), f"{path}.start")
             note_end = _number(note.get("end"), f"{path}.end")
-            if note_start < start - _EPSILON or note_end > end + _EPSILON:
-                raise ValueError(f"{path} lies outside its word")
+            if note_end <= start + _EPSILON or note_start >= end - _EPSILON:
+                raise ValueError(f"{path} does not overlap its word")
             if note_end <= note_start:
                 raise ValueError(f"{path}.start must be less than end")
             if note_start < previous_end - _EPSILON:
@@ -91,11 +91,11 @@ def _acoustic_note_rows(
 
 
 def _acoustic_word_notes(word: Word, owned: list[VocalNote]) -> list[dict[str, Any]]:
-    return _acoustic_note_rows(
-        float(word.start),
-        float(word.end),
-        [(note.midi_note, note.start, note.end) for note in owned],
-    )
+    del word
+    return [
+        {"note": note.midi_note, "start": float(note.start), "end": float(note.end)}
+        for note in sorted(owned, key=lambda item: (item.start, item.end, item.midi_note))
+    ]
 
 
 def words_with_notes(words: list[Word], notes: list[VocalNote]) -> list[dict[str, Any]]:
@@ -123,11 +123,18 @@ def words_with_notes(words: list[Word], notes: list[VocalNote]) -> list[dict[str
 
 def flatten_word_notes(payload: dict[str, Any]) -> list[dict[str, Any]]:
     validate_lyrics_document(payload)
-    return [
-        {**note, "word_index": word_index}
-        for word_index, word in enumerate(payload["words"])
-        for note in word["notes"]
-    ]
+    canonical: dict[tuple[int, float, float], dict[str, Any]] = {}
+    overlaps: dict[tuple[int, float, float], float] = {}
+    for word_index, word in enumerate(payload["words"]):
+        for note in word["notes"]:
+            signature = (int(note["note"]), float(note["start"]), float(note["end"]))
+            overlap = min(float(note["end"]), float(word["end"])) - max(
+                float(note["start"]), float(word["start"])
+            )
+            if signature not in canonical or overlap > overlaps[signature]:
+                canonical[signature] = {**note, "word_index": word_index}
+                overlaps[signature] = overlap
+    return sorted(canonical.values(), key=lambda note: (note["start"], note["end"], note["note"]))
 
 
 def replace_word_notes(

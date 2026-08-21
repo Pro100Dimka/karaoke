@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { OnlineRoomModal } from "../../components/OnlineRoomModal";
@@ -34,6 +34,8 @@ import {
   resolveVisibleSongs
 } from "./utils";
 
+const SongSettings = lazy(() => import("./modals/song-settings"));
+
 function LibraryResults({ error, songs, children }) {
   if (error) {
     return (
@@ -53,11 +55,12 @@ function LibraryResults({ error, songs, children }) {
   return children;
 }
 
-export default function Library({ onOpenSongSettings }) {
+export default function Library() {
   const location = useLocation();
   const [query, setQuery] = useState("");
   const [recordingsSong, setRecordingsSong] = useState(null);
   const [processingSong, setProcessingSong] = useState(null);
+  const [settingsSongId, setSettingsSongId] = useState(null);
   const [trackedSongId, setTrackedSongId] = useState(null);
   const [analysisRecordingId, setAnalysisRecordingId] = useState(
     () => location.state?.analysisRecordingId || null
@@ -291,10 +294,6 @@ export default function Library({ onOpenSongSettings }) {
   });
   const filtered = filterSongs(visibleSongs, query);
   const readyCount = countReadySongs(visibleSongs);
-  const openSongSettings = useCallback(
-    (songId) => onOpenSongSettings?.(songId),
-    [onOpenSongSettings]
-  );
   const openSongInKaraoke = useCallback(
     async (selectedSong) => {
       if (karaokeTransitioningRef.current) return;
@@ -367,7 +366,7 @@ export default function Library({ onOpenSongSettings }) {
                   onOpenKaraoke={openSongInKaraoke}
                   onOpenProcessing={trackProcessingSong}
                   onOpenRecordings={setRecordingsSong}
-                  onOpenSettings={openSongSettings}
+                  onOpenSettings={setSettingsSongId}
                   onProcess={handleProcess}
                   onReprocess={handleReprocess}
                 />
@@ -408,6 +407,11 @@ export default function Library({ onOpenSongSettings }) {
         onConfirm={confirmDraft}
         onUpdate={updateDraft}
       />
+      {settingsSongId && (
+        <Suspense fallback={null}>
+          <SongSettings songId={settingsSongId} onClose={() => setSettingsSongId(null)} />
+        </Suspense>
+      )}
       {analysisRecordingId && (
         <PerformanceAnalysisModal
           recordingId={analysisRecordingId}

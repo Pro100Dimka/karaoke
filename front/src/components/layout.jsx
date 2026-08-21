@@ -9,7 +9,6 @@ import cx from "../utils/cx";
 import TitleBar from "./TitleBar";
 import AppRoutes from "./routes";
 
-const SongSettings = lazy(() => import("../pages/Library/modals/song-settings"));
 const Settings = lazy(() => import("../pages/Settings"));
 
 const ROUTES = {
@@ -87,22 +86,13 @@ function AppFloatingControls({ onOpenSettings }) {
 export default function AppLayout() {
   const { pathname } = useLocation();
   const [isSettingsOpen, setSettingsOpen] = useState(false);
-  const [songSettingsId, setSongSettingsId] = useState(null);
   const routeBlackout = useRouteBlackout();
 
   const isKaraoke = pathname === ROUTES.karaoke;
   const isEditor = pathname.startsWith(ROUTES.editor);
   const showFloatingControls = !isKaraoke && !isEditor;
 
-  const openSettings = () => {
-    setSongSettingsId(null);
-    setSettingsOpen(true);
-  };
-
-  const openSongSettings = (songId) => {
-    setSettingsOpen(false);
-    setSongSettingsId(songId || null);
-  };
+  const openSettings = () => setSettingsOpen(true);
 
   useOnlineRoomNavigation();
 
@@ -118,16 +108,10 @@ export default function AppLayout() {
 
       <div className="app-body">
         <main className="app-main">
-          <AppRoutes onOpenAppSettings={openSettings} onOpenSongSettings={openSongSettings} />
+          <AppRoutes onOpenAppSettings={openSettings} />
         </main>
 
         {showFloatingControls && <AppFloatingControls onOpenSettings={openSettings} />}
-
-        {songSettingsId && (
-          <Lazy>
-            <SongSettings songId={songSettingsId} onClose={() => setSongSettingsId(null)} />
-          </Lazy>
-        )}
 
         <div
           className={cx("app-route-blackout", routeBlackout && "is-visible")}

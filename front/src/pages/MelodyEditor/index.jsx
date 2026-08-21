@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../api/client";
 import { useAppDialog } from "../../contexts/AppDialog";
 import { translateSaved } from "../../i18n/runtime";
@@ -13,11 +14,35 @@ import useMelodyEditorLayout from "./useMelodyEditorLayout";
 import useMelodyEditorPreferences from "./useMelodyEditorPreferences";
 import useMelodyEditorTransport from "./useMelodyEditorTransport";
 
-export default function MelodyEditor({ song, onClose, onSaved }) {
+export default function MelodyEditor() {
+  const { songId } = useParams();
+  const navigate = useNavigate();
+  const [song, setSong] = useState(null);
+  useEffect(() => {
+    if (songId) {
+      let alive = true;
+      api
+        .listSongs()
+        .then((songs) => {
+          if (!alive) return;
+          setSong(
+            (songs || []).find((item) => String(item.id) === String(songId)) || {
+              id: songId,
+              title: translateSaved("Редактор мелодии")
+            }
+          );
+        })
+        .catch(() => alive && setSong({ id: songId, title: translateSaved("Редактор мелодии") }));
+      return () => {
+        alive = false;
+      };
+    }
+  }, [songId]);
   const { alert: notify, confirm: confirmDialog } = useAppDialog();
   const [selected, setSelected] = useState([]);
   const [audioUrls, setAudioUrls] = useState({ vocals: "", instrumental: "" });
   useEffect(() => {
+    if (!song?.id) return;
     let alive = true;
     const urls = [];
     const blobs = [];
@@ -41,7 +66,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
       urls.forEach((url) => URL.revokeObjectURL(url));
       blobs.forEach((blob) => blob?.cleanup?.());
     };
-  }, [song.id]);
+  }, [song?.id]);
   const {
     autoScroll,
     playbackRate,
@@ -61,7 +86,7 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     confirmDialog,
     notes,
     notify,
-    onSaved,
+    onSaved: null,
     reset,
     saveRef,
     setSelected,
@@ -158,6 +183,11 @@ export default function MelodyEditor({ song, onClose, onSaved }) {
     updateMarquee
   } = editing;
   const selectedNote = notes.find((note) => note._id === selected[0]);
+  const onClose = () => navigate("/");
+  if (!song)
+    return (
+      <div className="melody-editor-route-loading">{translateSaved("Открываем редактор…")}</div>
+    );
   const onBack = () => {
     pause();
     onClose?.();

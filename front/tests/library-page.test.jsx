@@ -156,6 +156,13 @@ vi.mock("../src/pages/Library/modals/recordings", () => ({
       </div>
     ) : null
 }));
+vi.mock("../src/pages/Library/modals/song-settings", () => ({
+  default: ({ songId, onClose }) => (
+    <button data-testid="song-settings-modal" onClick={onClose}>
+      {songId}
+    </button>
+  )
+}));
 vi.mock("../src/pages/Karaoke/performance-analysis-modal", () => ({
   default: ({ onClose, onDone, onDeleted }) => (
     <div data-testid="analysis">
@@ -291,12 +298,13 @@ describe("library page", () => {
     expect(empty.container.querySelector(".library-card-empty")).not.toBeNull();
   });
   test("connects import and action hooks to page state", () => {
-    const openSettings = vi.fn();
-    const result = render(<Library onOpenSongSettings={openSettings} />);
+    const result = render(<Library />);
     act(() => mocks.importOptions.onStarted(songs[1]));
     verify([mocks.actionOptions.processingSongId, 'toBe', "two"], [mocks.roomOptions.localSongs, 'toHaveLength', 2]);
     fireEvent.click(result.getAllByTestId("song-settings")[0]);
-    expect(openSettings).toHaveBeenCalledWith("one");
+    expect(result.getByTestId("song-settings-modal").textContent).toBe("one");
+    fireEvent.click(result.getByTestId("song-settings-modal"));
+    expect(result.queryByTestId("song-settings-modal")).toBeNull();
     const processingOptions = mocks.pollOptions.find( (options) => options?.shouldContinue
     );
     verify([processingOptions.shouldContinue({ status: "processing" }), 'toBe', true]);

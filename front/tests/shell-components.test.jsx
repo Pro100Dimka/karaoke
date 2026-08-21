@@ -27,35 +27,18 @@ vi.mock("../src/i18n", () => ({
   }),
   translateMessage: (_language, key) => key
 }));
-vi.mock("../src/pages/Library/modals/song-settings", () => ({
-  default: ({ songId, onClose }) => (
-    <button type="button" data-testid="song-settings" onClick={onClose}>
-      {songId}
-    </button>
-  )
-}));
 vi.mock("../src/pages/Settings", () => ({
   default: ({ onClose }) => (
     <button type="button" data-testid="settings" onClick={onClose} />
   )
 }));
 vi.mock("../src/components/routes", () => ({
-  default: ({ onOpenAppSettings, onOpenSongSettings }) => (
+  default: ({ onOpenAppSettings }) => (
     <>
       <button
         type="button"
         data-testid="route-settings"
         onClick={onOpenAppSettings}
-      />
-      <button
-        type="button"
-        data-testid="route-song"
-        onClick={() => onOpenSongSettings("song")}
-      />
-      <button
-        type="button"
-        data-testid="route-empty-song"
-        onClick={() => onOpenSongSettings("")}
       />
     </>
   )
@@ -100,7 +83,7 @@ describe("application shell", () => {
     expect(document.querySelectorAll(".title-bar__button")).toHaveLength(0);
     error.mockRestore();
   });
-  test("layout opens settings, song editor, radio and blackout state", async () => {
+  test("layout opens global settings, radio and blackout state", async () => {
     const { container, getByLabelText, getByTestId, queryByTestId } = render( <AppLayout />
     );
     verify([container .querySelector(".app-shell") .classList.contains("karaoke-app-shell"), 'toBe', false]);
@@ -110,10 +93,6 @@ describe("application shell", () => {
       target: { value: "0.7" }
     });
     expect(mocks.radio.setVolume).toHaveBeenCalledWith("0.7");
-    fireEvent.click(getByTestId("route-song"));
-    await waitFor(() => expect(getByTestId("song-settings").textContent).toContain("song"));
-    fireEvent.click(getByTestId("song-settings"));
-    expect(queryByTestId("song-settings")).toBeNull();
     fireEvent.click(getByTestId("route-settings"));
     await waitFor(() => expect(getByTestId("settings")).not.toBeNull());
     fireEvent.click(getByTestId("settings"));
@@ -122,8 +101,6 @@ describe("application shell", () => {
     verify([container .querySelector(".app-route-blackout") .classList.contains("is-visible"), 'toBe', true]);
     fireEvent(window, new CustomEvent("app:route-blackout"));
     verify([container .querySelector(".app-route-blackout") .classList.contains("is-visible"), 'toBe', false]);
-    fireEvent.click(getByTestId("route-empty-song"));
-    expect(queryByTestId("song-settings")).toBeNull();
   });
   test("layout exposes active and failed radio states", () => {
     mocks.radio.error = "radio failed";
