@@ -50,6 +50,7 @@ export default function FieldInput({
         id={inputId}
         checked={Boolean(value)}
         disabled={field.disabled}
+        variant={bare ? "plain" : "outlined"}
         label={bare ? field.label : undefined}
         onChange={(nextValue) => onChange(nextValue)}
         onBlur={(event) => onBlur(event.target.checked)}

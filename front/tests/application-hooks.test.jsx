@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { useOnlineRoomNavigation } from "../src/hooks/useOnlineRoomNavigation.js";
 import { useRequireOnlineName } from "../src/hooks/useRequireOnlineName.js";
 import { translateSaved } from "../src/i18n/runtime.js";
-import useDiagnostics from "../src/pages/Settings/screens/diagnostics/useDiagnostics.js";
+import useDiagnostics from "../src/pages/SettingsOLD/screens/diagnostics/useDiagnostics.js";
 import { POLLING_INTERVALS } from "../src/runtime-config.js";
 import { verify } from "./helpers/assertions.mjs";
 

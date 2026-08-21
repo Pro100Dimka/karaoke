@@ -157,6 +157,7 @@ const Select = forwardRef(
         <div className="ui-select-root">
           <OutlinedInput
             label={label}
+            labelAccessory={Boolean(tooltip)}
             labelNode={
               <FloatingLabel
                 id={controlId}

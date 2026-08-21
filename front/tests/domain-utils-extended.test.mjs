@@ -51,11 +51,11 @@ import {
   preferenceSelect,
   radioField,
   speakerPlaying
-} from "../src/pages/Settings/utils.js";
+} from "../src/pages/SettingsOLD/utils.js";
 import {
   MEMORY_ACTIONS,
   buildOptimizeOptions
-} from "../src/pages/Settings/screens/memory/config.js";
+} from "../src/pages/SettingsOLD/screens/memory/config.js";
 import { equal, deepEqual } from "./helpers/assertions.mjs";
 describe("analysis normalization and feedback", () => {
   test("normalizes every nullable section field without inventing data", () => {

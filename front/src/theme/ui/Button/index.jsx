@@ -13,6 +13,8 @@ const Button = forwardRef(
       size = "md",
       unstyled = false,
       disabled = false,
+      startIcon,
+      children,
       className,
       onClick,
       tabIndex,
@@ -49,7 +51,14 @@ const Button = forwardRef(
         tabIndex={!native && disabled ? -1 : tabIndex}
         onClick={click}
         {...props}
-      />
+      >
+        {startIcon && (
+          <span className="ui-button-start-icon" aria-hidden="true">
+            {startIcon}
+          </span>
+        )}
+        {children}
+      </Primitive>
     );
   }
 );

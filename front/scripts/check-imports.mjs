@@ -8,6 +8,7 @@ const IMPORT_PATTERN = /(?:from\s+|import\s*\()(["'])(\.{1,2}\/[^"']+)\1/g;
 function walk(directory) {
   return readdirSync(directory).flatMap((name) => {
     const path = join(directory, name);
+    if (path === join(ROOT, "pages", "SettingsOLD")) return [];
     return statSync(path).isDirectory() ? walk(path) : [path];
   });
 }

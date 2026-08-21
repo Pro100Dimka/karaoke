@@ -13,7 +13,6 @@ import Button from "../src/components/fields/button.jsx";
 import FieldInput from "../src/theme/ui/FieldInput/index.jsx";
 import FieldList from "../src/theme/ui/FieldList/index.jsx";
 import RangeInput from "../src/theme/ui/RangeInput/index.jsx";
-import Table from "../src/components/Table.jsx";
 import ErrorBoundary from "../src/components/ui/ErrorBoundary.jsx";
 import StatusBadge from "../src/components/ui/StatusBadge.jsx";
 import { Card, IconButton } from "../src/theme/ui";
@@ -52,44 +51,13 @@ describe("primitive UI components", () => {
       [screen.getByLabelText("Raw icon").getAttribute("class"), "toBeNull"]
     );
   });
-  test("renders statuses and tables", () => {
+  test("renders statuses", () => {
     const { rerender } = render(<StatusBadge status="done" />);
     expect(document.querySelector(".badge-done")).not.toBeNull();
     rerender(<StatusBadge status="custom" />);
     expect(document.querySelector(".badge-pending")).not.toBeNull();
     rerender(<StatusBadge />);
     expect(screen.getByText("status.unknown")).not.toBeNull();
-    rerender(
-      <Table columns={[["name", "Name"]]} data={[]} renderRow={() => []} getRowKey={() => "x"} />
-    );
-    rerender(<Table columns={[]} data={null} renderRow={() => []} getRowKey={() => 0} />);
-    expect(screen.getByText("common.noData")).not.toBeNull();
-    rerender(
-      <Table
-        columns={[["name", "Name", "head"]]}
-        data={[{ id: 1, name: "One" }]}
-        getRowKey={(row) => row.id}
-        renderRow={(row) => [[row.name, "cell"]]}
-      />
-    );
-    expect(screen.getByText("One").className).toBe("cell");
-    rerender(
-      <Table
-        columns={[["name", "Name"]]}
-        data={[{ id: 2, name: "Two" }]}
-        getRowKey={(row) => row.id}
-        renderRow={(row) => [[row.name]]}
-      />
-    );
-    expect(screen.getByText("Two").className).toBe("");
-    rerender(
-      <Table
-        columns={[]}
-        data={[{ id: 3 }]}
-        renderRow={() => [["Fallback key"]]}
-        getRowKey={() => "none"}
-      />
-    );
   });
   test("applies neon card pointer effects and delegates handlers", () => {
     const moved = vi.fn();

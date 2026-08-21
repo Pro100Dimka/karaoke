@@ -1,38 +1,40 @@
-import { Settings2 } from "lucide-react";
-
+import { ArrowLeft, Settings2 } from "lucide-react";
+import { useState } from "react";
 import Modal from "../../components/modal";
-import { useAppDialog } from "../../contexts/AppDialog";
 import { useI18n } from "../../i18n";
-import Tabs from "../../theme/ui/Tabs";
-import { SETTINGS_TABS } from "./config";
-import useSettingsForm from "./hooks/useSettingsForm";
-import useSettingsNavigation from "./hooks/useSettingsNavigation";
-import SettingsContent from "./settings-content";
+import { Button, Stack, Tabs, Typography } from "../../theme/ui";
+import ModelStatus from "./ModelStatus";
+import { Service, ServiceCards, SERVICE_ICONS } from "./Services";
+import SettingsForm from "./SettingsForm";
+import { TABS } from "./schema";
+import useSettings from "./use-settings";
 
 export default function Settings({ isOpen = true, onClose, initialTab = "appearance" }) {
-  const { alert } = useAppDialog();
   const { t } = useI18n();
-  const settings = useSettingsForm(alert);
-  const navigation = useSettingsNavigation(initialTab);
-  const tabs = SETTINGS_TABS.map(({ id, label, icon: Icon }) => ({
+  const [tab, setTab] = useState(initialTab);
+  const [service, setService] = useState(null);
+  const settings = useSettings(isOpen);
+  const ServiceIcon = SERVICE_ICONS[service];
+  const items = TABS.map(([id, label, Icon]) => ({
     value: id,
     label: t(`settings.tab.${id}`, {}, label),
     icon: <Icon size={17} />,
-    content: settings.form ? (
-      <SettingsContent
-        tab={id}
-        service={navigation.service}
-        form={settings.form}
-        onChange={settings.updateField}
-        onFieldBlur={settings.saveField}
-        onOpenService={navigation.openService}
-        onCloseService={navigation.closeService}
-      />
+    content: service ? (
+      <Service id={service} />
     ) : (
-      <p className="text-muted">{t("settings.loading")}</p>
+      <Stack gap={1}>
+        {settings.app.form ? (
+          <SettingsForm tab={id} settings={settings} />
+        ) : (
+          <Typography tone="muted" sx={{ padding: "1rem" }}>
+            {t("settings.loading")}
+          </Typography>
+        )}
+        {id === "ai" && <ModelStatus />}
+        {id === "appearance" && <ServiceCards open={setService} />}
+      </Stack>
     )
   }));
-
   return (
     <Modal
       isOpen={isOpen}
@@ -40,17 +42,31 @@ export default function Settings({ isOpen = true, onClose, initialTab = "appeara
       maxWidth="100vw"
       ariaLabel={t("settings.title")}
       titleProps={{
-        icon: Settings2,
+        icon: ServiceIcon ?? Settings2,
         eyebrow: t("settings.eyebrow"),
-        title: t("settings.title"),
-        description: t("settings.description")
+        title: service ? t(`settings.service.${service}.title`) : t("settings.title"),
+        description: service
+          ? t(`settings.service.${service}.text`)
+          : t("settings.description"),
+        actions: service && (
+          <Button
+            variant="outline"
+            startIcon={<ArrowLeft />}
+            onClick={() => setService(null)}
+            className="modal-title-action"
+          >
+            {t("settings.back")}
+          </Button>
+        )
       }}
     >
       <Tabs
-        value={navigation.tab}
-        onChange={navigation.selectTab}
-        aria-label={t("settings.sections")}
-        items={tabs}
+        value={tab}
+        onChange={(value) => {
+          setTab(value);
+          setService(null);
+        }}
+        items={items}
       />
     </Modal>
   );

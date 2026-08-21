@@ -1,84 +1,57 @@
 import { FolderOpen } from "lucide-react";
 import { forwardRef } from "react";
 
-import Field from "../_internal/Field";
-import cx from "../_internal/cx";
 import IconButton from "../IconButton";
-import InputBase from "../InputBase";
+import TextField from "../TextField";
+import cx from "../_internal/cx";
 
 import "./folder-field.css";
 
-const FolderField = forwardRef(function FolderField(
+const FolderField = forwardRef((
   {
-    id,
-    label,
-    hint,
-    tooltip,
-    error,
     value = "",
     placeholder = "Выберите папку",
     disabled = false,
-    browseLabel = "Выбрать папку",
     onBrowse,
+    readOnly = Boolean(onBrowse),
+    browseLabel = "Выбрать папку",
     className,
-    fieldClassName,
-    sx,
-    style,
+    inputClassName,
     ...props
   },
   ref
-) {
-  const control = (fieldProps = {}) => (
-    <InputBase
-      component="div"
-      disableNativeDisabled
-      className={cx("ui-folder-field ui-control ui-motion", className)}
-      disabled={disabled}
-      error={!!error}
-      sx={sx}
-      style={style}
-    >
-      <input
-        ref={ref}
-        className="ui-folder-field__input"
-        value={value ?? ""}
-        placeholder={placeholder}
-        readOnly
-        disabled={disabled}
-        title={value || undefined}
-        {...fieldProps}
-        {...props}
-      />
+) => {
+  const browse = () => {
+    if (!disabled) onBrowse?.();
+  };
 
-      <IconButton
-        className="ui-folder-field__browse"
-        variant="ghost"
-        size="sm"
-        disabled={disabled}
-        aria-label={browseLabel}
-        title={browseLabel}
-        onClick={onBrowse}
-      >
-        <FolderOpen size={17} aria-hidden="true" />
-      </IconButton>
-    </InputBase>
-  );
-
-  return label || hint || error ? (
-    <Field
-      id={id}
-      label={label}
-      tooltip={tooltip}
-      hint={hint}
-      error={error}
+  return (
+    <TextField
+      {...props}
+      ref={ref}
+      value={value}
+      placeholder={placeholder}
+      readOnly={readOnly}
       disabled={disabled}
-      className={fieldClassName}
-    >
-      {control}
-    </Field>
-  ) : (
-    control({ id })
+      title={value || browseLabel}
+      className={cx("ui-folder-field", className)}
+      inputClassName={cx("ui-folder-field-input", inputClassName)}
+      onClick={onBrowse ? browse : undefined}
+      end={onBrowse ? (
+        <IconButton
+          icon={FolderOpen}
+          variant="ghost"
+          size="sm"
+          disabled={disabled}
+          aria-label={browseLabel}
+          title={browseLabel}
+          onClick={browse}
+        />
+      ) : undefined}
+    />
   );
 });
+
+FolderField.displayName = "FolderField";
 
 export default FolderField;

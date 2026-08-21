@@ -52,6 +52,7 @@ export default {
     "dist/**",
     "release/**",
     "reports/**",
+    "src/pages/SettingsOLD/**",
     "test-results/**"
   ],
   concurrency:

@@ -4,8 +4,10 @@
     --_button-fg: var(--button-fg);
 
     position: relative;
-    display: inline-grid;
-    place-items: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2, .5rem);
     min-block-size: var(--control-size, var(--control-md));
     padding-inline: calc(var(--control-pad, var(--control-pad-md)) + .25rem);
     border: 0;
@@ -42,6 +44,23 @@
   .ui-button[data-size="md"] { font-size: .875rem; }
   .ui-button[data-size="lg"] { font-size: 1rem; }
 
+  .ui-button-start-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    inline-size: 1.25em;
+    block-size: 1.25em;
+    line-height: 0;
+  }
+
+  .ui-button-start-icon > svg {
+    inline-size: 1.1em;
+    block-size: 1.1em;
+    display: block;
+    stroke-width: 2;
+  }
+
   .ui-button[data-tone="secondary"] {
     --_button-bg: var(--ui-secondary);
     --_button-fg: var(--button-fg);
@@ -66,8 +85,9 @@
     --_button-bg: var(--color-surface);
     --_button-fg: var(--ui-text);
     box-shadow: inset 0 0 0 1px var(--ui-border);
+    border-radius: var(--shape-lg, var(--shape-md));
   }
-    .ui-button[data-variant="outline"]:hover {
+  .ui-button[data-variant="outline"]:hover {
     --_button-bg: transparent;
     --_button-fg: var(--ui-text);
     box-shadow: inset 0 0 0 1px var(--ui-border);

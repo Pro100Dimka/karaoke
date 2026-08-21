@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { formatBytes } from "../src/pages/Settings/screens/memory/format.js";
+import { formatBytes } from "../src/pages/SettingsOLD/screens/memory/format.js";
 import { clamp, normalizePreset } from "../src/pages/Karaoke/components/console/utils.js";
 import { same, sameDeep, notCalled, calledTimes, calledWith, verify } from "./helpers/assertions.mjs";
 const importUtility = async (name) => {
@@ -11,7 +11,7 @@ const importUtility = async (name) => {
     case "clipboard":
       return import("../src/utils/clipboard.js");
     case "config":
-      return import("../src/pages/Settings/screens/about-info.js");
+      return import("../src/pages/SettingsOLD/screens/about-info.js");
     case "ui-preferences":
       return import("../src/utils/ui-preferences.js");
     default:

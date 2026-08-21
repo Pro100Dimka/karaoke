@@ -54,14 +54,24 @@ const DEFAULT_RENDERERS = {
     <TextField {...props} value={value ?? ""} readOnly />
   ),
 
-  folder: ({ props, value, change, field, context }) => (
+  folder: ({ props, value, change, blur, field, context }) => (
     <FolderField
       {...props}
       value={value ?? ""}
-      onBrowse={async () => {
-        const nextValue = await field.pick?.(context, value);
-        if (nextValue) change(nextValue);
-      }}
+      readOnly={Boolean(field.pick)}
+      onChange={change}
+      onBlur={(event) => blur(event?.target?.value ?? value)}
+      onBrowse={
+        field.pick
+          ? async () => {
+              const nextValue = await field.pick(context, value);
+              if (nextValue) {
+                change(nextValue);
+                blur(nextValue);
+              }
+            }
+          : undefined
+      }
     />
   ),
 
@@ -94,7 +104,7 @@ function ConfigField({ field, context, renderers, parsers, columns }) {
     key,
 
     span = columns,
-    advanced: _advanced,
+    advanced: _,
 
     parse = "default",
     save,

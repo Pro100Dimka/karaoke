@@ -23,7 +23,7 @@ import useKaraokeControls from "../src/pages/Karaoke/hooks/useKaraokeControls.js
 import useKaraokeHotkeys, {
   dispatchKaraokeHotkey
 } from "../src/pages/Karaoke/hooks/useKaraokeHotkeys.js";
-import useSettingsNavigation from "../src/pages/Settings/hooks/useSettingsNavigation.js";
+import useSettingsNavigation from "../src/pages/SettingsOLD/hooks/useSettingsNavigation.js";
 import { isHotkeyScopeActive } from "../src/utils/hotkeys.js";
 import useKaraokeResult from "../src/pages/Karaoke/hooks/useKaraokeResult.js";
 import useKaraokeStageLayout from "../src/pages/Karaoke/hooks/useKaraokeStageLayout.js";

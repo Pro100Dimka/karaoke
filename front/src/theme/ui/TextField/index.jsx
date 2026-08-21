@@ -83,6 +83,7 @@ const TextField = forwardRef(({
     >
       <OutlinedInput
         label={label}
+        labelAccessory={Boolean(tooltip)}
         labelNode={labelNode}
         required={required}
         disabled={disabled}

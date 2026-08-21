@@ -47,6 +47,11 @@
     padding-inline: .3rem;
   }
 
+  .ui-text-field-legend-accessory {
+    display: inline-block;
+    inline-size: 1.5rem;
+  }
+
   .ui-text-field:focus-within { box-shadow: none; }
   .ui-text-field:focus-within .ui-text-field-outline {
     border-color: var(--color-primary);
