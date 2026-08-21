@@ -156,7 +156,9 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
     monitorLease.current = null;
     monitorStream.current = null;
     try {
-      const lease = await acquireMicrophone(preferences.monitorInputDeviceId);
+      const lease = await acquireMicrophone(preferences.monitorInputDeviceId, {
+        disabledEffects: true
+      });
       if (request !== monitorRequest.current) {
         await lease.release();
         return false;
@@ -242,7 +244,9 @@ export default function useAudioSettingsSource({ enabled = true } = {}) {
     runMonitoring(async () => {
       const enabling = !monitoringEnabled;
       const result = await execute(
-        enabling ? api.startDirectMonitoring : api.stopDirectMonitoring,
+        enabling
+          ? () => api.startDirectMonitoring({ disabledEffects: true })
+          : api.stopDirectMonitoring,
         translateSaved("Не удалось изменить прослушивание")
       );
       if (!result.ok) {

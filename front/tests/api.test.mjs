@@ -289,7 +289,11 @@ describe("API domains", () => {
         "POST",
         { latency: 1 }
       ],
-      [audioApi.startDirectMonitoring, "/audio/direct-monitor/start", "POST"],
+      [
+        audioApi.startDirectMonitoring,
+        "/audio/direct-monitor/start?disabled_effects=false",
+        "POST"
+      ],
       [audioApi.stopDirectMonitoring, "/audio/direct-monitor/stop", "POST"],
       [audioApi.getSignalQuality, "/audio/signal-quality"],
       [() => playerApi.getSync("a/b"), "/player/a%2Fb/sync"],

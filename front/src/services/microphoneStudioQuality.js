@@ -13,7 +13,12 @@ export function createStudioMicrophoneGraph(rawStream, options = {}) {
   const noiseSuppression = options.noiseSuppression ?? currentNoiseSuppression;
   const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
   if (!AudioContextClass?.prototype || !rawStream) {
-    return { stream: rawStream, rawStream, close: async () => stopStream(rawStream) };
+    return {
+      stream: rawStream,
+      rawStream,
+      getStream: () => rawStream,
+      close: async () => stopStream(rawStream)
+    };
   }
 
   let context;
@@ -39,6 +44,8 @@ export function createStudioMicrophoneGraph(rawStream, options = {}) {
     return {
       stream: destination.stream,
       rawStream,
+      getStream: ({ disabledEffects = false } = {}) =>
+        disabledEffects ? inputStream : destination.stream,
       context,
       setNoiseSuppression: channelStrip.setNoiseSuppression,
       replaceInput: async (nextStream) => {

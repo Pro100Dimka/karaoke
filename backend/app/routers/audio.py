@@ -37,8 +37,13 @@ def update_settings(patch: schemas.AudioSettingsUpdate, db: Session = Depends(ge
 
 
 @router.post("/direct-monitor/start", response_model=schemas.AudioSettingsOut)
-def start_direct_monitoring(db: Session = Depends(get_db)):
-    with http_error(RuntimeError, 503): return audio_service.set_monitoring_enabled(db, True)
+def start_direct_monitoring(
+    db: Session = Depends(get_db), disabled_effects: bool = False
+):
+    with http_error(RuntimeError, 503):
+        return audio_service.set_monitoring_enabled(
+            db, True, disabled_effects=disabled_effects
+        )
 
 
 @router.post("/direct-monitor/stop", response_model=schemas.AudioSettingsOut)

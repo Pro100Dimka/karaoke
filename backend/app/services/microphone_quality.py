@@ -49,14 +49,17 @@ class StudioMicrophoneProcessor:
 
         rms = float(np.sqrt(np.mean(np.square(y), dtype=np.float64)))
         if rms < self._noise_floor * 1.4: self._noise_floor = self._noise_floor * 0.995 + rms * 0.005
-        threshold = max(0.0025, self._noise_floor * 2.4)
+        strength = clamp01(noise_suppression)
+        threshold = max(0.0025, self._noise_floor * (2.4 + strength * 1.2))
         if rms <= threshold:
-            target_gate = 0.12 + 0.38 * (rms / threshold if threshold else 0.0)
+            closed_gain = 0.12 - strength * 0.08
+            target_gate = closed_gain + (0.5 - closed_gain) * (
+                rms / threshold if threshold else 0.0
+            )
         elif rms < threshold * 2.2:
             target_gate = 0.5 + 0.5 * (rms - threshold) / (threshold * 1.2)
         else:
             target_gate = 1.0
-        strength = clamp01(noise_suppression)
         target_gate = 1.0 + (target_gate - 1.0) * strength
         gate_speed = 0.55 if target_gate > self._gate_gain else 0.18
         self._gate_gain += (target_gate - self._gate_gain) * gate_speed
@@ -86,22 +89,27 @@ class MonitorEffectsChain:
         self._buffer_len = int(self.sample_rate * self._MAX_DELAY_SEC) + 1
         self._buffers = np.zeros((self._SLOT_COUNT, self._buffer_len), dtype=np.float32)
         self._write_pos = 0
+        self._active_slots = [False] * self._SLOT_COUNT
 
     @staticmethod
     def _slots(reverb: float, echo: float, delay: float) -> tuple[tuple[float, float], ...]:
         reverb, echo, delay = clamp01(reverb), clamp01(echo), clamp01(delay)
         return (
-            (0.055, 0.20 + reverb * 0.24 if reverb >= 0.01 else 0.0),
-            (0.110, 0.14 + reverb * 0.18 if reverb >= 0.01 else 0.0),
-            (0.170, 0.08 + reverb * 0.14 if reverb >= 0.01 else 0.0),
-            (0.180, 0.18 + echo * 0.38 if echo >= 0.01 else 0.0),
-            (0.360, 0.10 + echo * 0.22 if echo >= 0.01 else 0.0),
-            (0.110 + delay * 0.39, 0.16 + delay * 0.34 if delay >= 0.01 else 0.0),
+            (0.055, reverb * 0.44),
+            (0.110, reverb * 0.32),
+            (0.170, reverb * 0.22),
+            (0.180, echo * 0.56),
+            (0.360, echo * 0.32),
+            (0.110 + delay * 0.39, delay * 0.50),
         )
 
     def process(self, samples: np.ndarray, reverb: float, echo: float, delay: float) -> np.ndarray:
         slots = self._slots(reverb, echo, delay)
-        if not any(decay > 0.0 for _, decay in slots): return samples
+        active = [decay > 0.0 for _, decay in slots]
+        for slot, enabled in enumerate(active):
+            if self._active_slots[slot] and not enabled: self._buffers[slot].fill(0.0)
+        self._active_slots = active
+        if not any(active): return samples
         length = self._buffer_len
         offsets, decays, buffers, write_pos, out = [min(length - 1, max(1, int(delay_sec * self.sample_rate))) for delay_sec, _ in slots], [decay for _, decay in slots], self._buffers, self._write_pos, np.empty_like(samples)
         for index in range(len(samples)):

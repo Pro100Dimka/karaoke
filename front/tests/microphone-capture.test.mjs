@@ -17,14 +17,20 @@ describe("central microphone capture", () => {
     const processedStream = {
       getAudioTracks: () => [{ readyState: "live" }]
     };
+    const rawStream = { id: "raw" };
     graph = {
       stream: processedStream,
+      rawStream,
+      getStream: vi.fn(({ disabledEffects = false } = {}) =>
+        disabledEffects ? rawStream : processedStream
+      ),
       close: vi.fn().mockResolvedValue(undefined),
       replaceInput: vi.fn().mockResolvedValue(undefined),
       setNoiseSuppression: vi.fn()
     };
     mocks.createGraph.mockReset().mockReturnValue(graph);
-    getUserMedia = vi.fn()
+    getUserMedia = vi
+      .fn()
       .mockResolvedValueOnce({ id: "default" })
       .mockResolvedValueOnce({ id: "studio" });
     Object.defineProperty(globalThis, "navigator", {
@@ -48,6 +54,20 @@ describe("central microphone capture", () => {
     expect(graph.close).toHaveBeenCalledOnce();
   });
 
+  test("can bypass effects for one lease without changing other microphone users", async () => {
+    const { acquireMicrophone } = await import("../src/services/microphoneCapture.js");
+    const clean = await acquireMicrophone("", { disabledEffects: true });
+    const processed = await acquireMicrophone();
+
+    expect(clean.stream).toBe(graph.rawStream);
+    expect(processed.stream).toBe(graph.stream);
+    expect(getUserMedia).toHaveBeenCalledOnce();
+    expect(graph.getStream).toHaveBeenNthCalledWith(1, { disabledEffects: true });
+    expect(graph.getStream).toHaveBeenNthCalledWith(2, { disabledEffects: false });
+    await clean.release();
+    await processed.release();
+  });
+
   test("switches the physical input without replacing the shared output stream", async () => {
     const { acquireMicrophone } = await import("../src/services/microphoneCapture.js");
     const defaultLease = await acquireMicrophone();
@@ -63,7 +83,8 @@ describe("central microphone capture", () => {
   });
 
   test("falls back to the default input when the selected device disappeared", async () => {
-    getUserMedia = vi.fn()
+    getUserMedia = vi
+      .fn()
       .mockRejectedValueOnce(new Error("missing device"))
       .mockResolvedValueOnce({ id: "fallback" });
     navigator.mediaDevices.getUserMedia = getUserMedia;

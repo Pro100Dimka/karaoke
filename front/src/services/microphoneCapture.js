@@ -55,7 +55,7 @@ async function resolveCapture(deviceId) {
   return entry;
 }
 
-export async function acquireMicrophone(preferredDeviceId = "") {
+export async function acquireMicrophone(preferredDeviceId = "", { disabledEffects = false } = {}) {
   if (!navigator.mediaDevices?.getUserMedia) throw new Error("Microphone capture is unavailable");
   const deviceId = normalizeDeviceId(preferredDeviceId);
   const request = (pending || Promise.resolve())
@@ -71,7 +71,10 @@ export async function acquireMicrophone(preferredDeviceId = "") {
   entry.users += 1;
   let released = false;
   return {
-    stream: entry.graph.stream,
+    stream:
+      entry.graph.getStream?.({ disabledEffects }) ??
+      (disabledEffects ? entry.graph.rawStream : entry.graph.stream) ??
+      entry.graph.stream,
     setNoiseSuppression: entry.graph.setNoiseSuppression,
     async release() {
       if (released) return;

@@ -37,6 +37,28 @@ def test_transcriber_pitch_activity_and_batch_parsing():
     assert (len(transcriber._activity_hints) == 2) and (text.Qwen3Transcriber._parse_batch(None, 1) == [{}]) and (text.Qwen3Transcriber._parse_batch({'text': 'x'}, 2) == [{'text': 'x'}, {}]) and (text.Qwen3Transcriber._parse_batch([{'text': 'x'}], 2) == [{'text': 'x'}, {}])
 
 
+def test_pitch_activity_repairs_only_collapsed_word_with_real_vocal_frames():
+    words = [
+        Word(0.5, 1.0, "before", index=0),
+        Word(1.2, 1.24, "target", index=1),
+        Word(1.6, 2.0, "after", index=2),
+    ]
+    frames = [
+        PitchFrame(0.7, 220, 0.9, True),
+        PitchFrame(1.10, 220, 0.9, True),
+        PitchFrame(1.11, 220, 0.9, True),
+        PitchFrame(1.8, 220, 0.9, True),
+    ]
+
+    repaired, count = text._repair_words_from_pitch_activity(words, frames)
+
+    assert count == 1
+    assert repaired[0] == words[0] and repaired[2] == words[2]
+    assert repaired[1].start < words[1].start
+    assert repaired[1].end == words[1].end
+    assert text._repair_words_from_pitch_activity(words, [frames[1]]) == (words, 0)
+
+
 def test_transcriber_load_cpu_cuda_and_import_error(monkeypatch):
     transcriber = text.Qwen3Transcriber("model")
     monkeypatch.setitem(sys.modules, "qwen_asr", None)
@@ -270,6 +292,7 @@ def test_align_long_text_uses_exact_full_song_ctc_timestamps(monkeypatch):
         "word_count": 2,
         "confidence": 0.75,
         "interpolated_words": 0,
+        "pitch_repaired_words": 0,
     }
     assert aligner._ctc.release.called
 

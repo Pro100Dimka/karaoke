@@ -152,11 +152,8 @@
 /* Library floating actions: radio lives next to Settings and uses the same FAB. */
 .app-floating-controls {
   position: fixed;
-  inset-inline-end: var(--space-5);
-  inset-block-end: var(--space-5);
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
+  right: var(--space-5);
+  bottom: var(--space-5);
   z-index: 1200;
 }
 

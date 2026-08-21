@@ -179,7 +179,7 @@ def test_set_monitoring_enabled_is_idempotent_and_transactional(monkeypatch):
 
 def test_configure_monitoring_routes_auto_and_asio(monkeypatch):
     stop, asio, worker = Mock(), Mock(), Mock()
-    patch_attrs(monkeypatch, audio_service, stop_monitoring=stop, _start_asio_monitor=asio, _start_monitor_worker=worker)
+    patch_attrs(monkeypatch, audio_service, stop_monitoring=stop, _start_asio_monitor=asio, _start_monitor_worker=worker, _monitor_effects_disabled=False)
 
     audio_service.configure_monitoring(settings(monitoring_enabled=False))
     stop.assert_called_once_with()
@@ -212,6 +212,14 @@ def test_configure_monitoring_routes_auto_and_asio(monkeypatch):
             "noise_suppression": 0.35,
             "wasapi_exclusive": False,
     }
+
+    monkeypatch.setattr(audio_service, "_monitor_effects_disabled", True)
+    audio_service.configure_monitoring(
+        settings(monitoring_enabled=True, reverb=0.8, echo=0.7, delay=0.6)
+    )
+    disabled = worker.call_args.args[0]
+    assert (disabled["reverb"], disabled["echo"], disabled["delay"]) == (0.0, 0.0, 0.0)
+    assert disabled["noise_suppression"] == 0.35
 
     devices[2]["max_output_channels"] = 0
     raises(RuntimeError, lambda: audio_service.configure_monitoring(settings(monitoring_enabled=True)), match='No output')

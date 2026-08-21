@@ -427,7 +427,7 @@ select {
   -webkit-tap-highlight-color: transparent;
 }
 
-button:focus-visible,
+/* button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
@@ -435,7 +435,7 @@ select:focus-visible,
 [tabindex]:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 3px;
-}
+} */
 
 img,
 svg {

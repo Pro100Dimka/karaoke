@@ -150,7 +150,7 @@ def _words_from_items(items) -> list[Word]:
 
 
 ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v15-newline-phrase-join"
-LONG_TEXT_ALIGNMENT_VERSION = "v62-reject-collapsed-acoustic-anchors"
+LONG_TEXT_ALIGNMENT_VERSION = "v63-pitch-verified-word-intervals"
 SEGMENTED_ALIGNMENT_VERSION = "v2-ctc-fallback-tier"
 FALLBACK_WORD_CONFIDENCE = 0.012
 
@@ -2155,6 +2155,74 @@ def _invalid_acoustic_timestamp_reason(words: list[Word], span: float) -> str | 
     return None
 
 
+def _repair_words_from_pitch_activity(words: list[Word], frames) -> tuple[list[Word], int]:
+    voiced = sorted(
+        (
+            frame
+            for frame in frames or []
+            if frame.voiced and frame.frequency > 0 and frame.confidence >= 0.35
+        ),
+        key=lambda frame: frame.time,
+    )
+    if not words or len(voiced) < 2:
+        return list(words), 0
+    gaps = [
+        right.time - left.time
+        for left, right in zip(voiced, voiced[1:], strict=False)
+        if 0 < right.time - left.time <= 0.05
+    ]
+    frame_step = float(np.median(gaps)) if gaps else 0.01
+    frame_step = max(1e-4, min(0.05, frame_step))
+    minimum_span = max(0.055, frame_step * 5.0)
+    repaired, changed = list(words), 0
+
+    for index, word in enumerate(words):
+        direct = [frame for frame in voiced if word.start <= frame.time <= word.end]
+        if word.end - word.start >= minimum_span and direct:
+            continue
+        left_bound = repaired[index - 1].end if index else 0.0
+        right_bound = words[index + 1].start if index + 1 < len(words) else float("inf")
+        radius = max(0.16, minimum_span * 2.5)
+        candidates = [
+            frame
+            for frame in voiced
+            if left_bound <= frame.time <= right_bound
+            and frame.time >= word.start - radius
+            and frame.time <= word.end + radius
+        ]
+        runs: list[list] = []
+        for frame in candidates:
+            if not runs or frame.time - runs[-1][-1].time > max(0.03, frame_step * 2.5):
+                runs.append([frame])
+            else:
+                runs[-1].append(frame)
+        runs = [run for run in runs if len(run) >= 2]
+        if not runs:
+            continue
+
+        def distance(
+            run,
+            target_start: float = word.start,
+            target_end: float = word.end,
+        ) -> float:
+            start, end = run[0].time - frame_step / 2.0, run[-1].time + frame_step / 2.0
+            if end < target_start:
+                return target_start - end
+            if start > target_end:
+                return start - target_end
+            return 0.0
+
+        run = min(runs, key=lambda item: (distance(item), -len(item)))
+        evidence_start = max(float(left_bound), float(run[0].time) - frame_step / 2.0)
+        evidence_end = min(float(right_bound), float(run[-1].time) + frame_step / 2.0)
+        start, end = min(word.start, evidence_start), max(word.end, evidence_end)
+        if end - start < minimum_span or end <= start:
+            continue
+        repaired[index] = replace(word, start=start, end=end)
+        changed += 1
+    return repaired, changed
+
+
 def _proportional_words(tokens: list[str], span: float) -> list[Word]:
     weights = [max(2.0, _vowel_weighted_length(token)) for token in tokens]
     total, offset, output = sum(weights), 0.0, []
@@ -2956,6 +3024,10 @@ class Qwen3ForcedAligner(Aligner):
         self._device = "cpu"
         self._ctc = CTCWordAligner.from_environment()
         self.last_alignment_diagnostics: dict[str, object] = {}
+        self._pitch_activity = []
+
+    def set_pitch_activity(self, frames) -> None:
+        self._pitch_activity = sorted(frames or [], key=lambda frame: frame.time)
 
     def _load(self):
         try:
@@ -3298,6 +3370,9 @@ class Qwen3ForcedAligner(Aligner):
                     elif reason := _invalid_acoustic_timestamp_reason(words, duration_sec):
                         ctc_failure = f"CTC returned invalid timestamps ({reason})"
                     else:
+                        words, pitch_repaired = _repair_words_from_pitch_activity(
+                            words, self._pitch_activity
+                        )
                         self.last_alignment_diagnostics = {
                             "alignment_mode": "full-song-ctc",
                             "audio_reference": "vocals",
@@ -3305,6 +3380,7 @@ class Qwen3ForcedAligner(Aligner):
                             "word_count": len(words),
                             "confidence": float(result.confidence),
                             "interpolated_words": 0,
+                            "pitch_repaired_words": pitch_repaired,
                         }
                         return words
         except (EngineUnavailableError, InvalidArtifactError, RuntimeError, ValueError) as exc:

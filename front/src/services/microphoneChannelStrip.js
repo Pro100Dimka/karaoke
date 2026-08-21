@@ -16,7 +16,7 @@ const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0));
 export function buildNoiseGateCurve(strength = 0.35) {
   const samples = 4096;
   const curve = new Float32Array(samples);
-  const threshold = 0.0015 + clamp01(strength) * 0.012;
+  const threshold = 0.0015 + clamp01(strength) * 0.018;
   for (let index = 0; index < samples; index += 1) {
     const x = (index / (samples - 1)) * 2 - 1;
     const magnitude = Math.abs(x);

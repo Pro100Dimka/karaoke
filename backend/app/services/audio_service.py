@@ -50,6 +50,7 @@ _MONITOR_RESTART_FIELDS = frozenset(
 _ASIO_ONLY_RESTART_FIELDS = frozenset({"reverb", "echo", "delay", "noise_suppression"})
 _LIVE_UPDATE_FIELDS = frozenset({"reverb", "echo", "delay", "noise_suppression"})
 _monitor_signal = dict(_EMPTY_MONITOR_SIGNAL)
+_monitor_effects_disabled = False
 logger = logging.getLogger(__name__)
 
 
@@ -326,9 +327,14 @@ def update_settings(db: Session, patch: dict) -> models.AudioSettings:
         raise
 
 
-def set_monitoring_enabled(db: Session, enabled: bool) -> models.AudioSettings:
+def set_monitoring_enabled(
+    db: Session, enabled: bool, *, disabled_effects: bool = False
+) -> models.AudioSettings:
+    global _monitor_effects_disabled
     settings = get_settings(db)
     previous = settings.monitoring_enabled
+    previous_effect_mode = _monitor_effects_disabled
+    _monitor_effects_disabled = bool(disabled_effects) if enabled else False
     if previous == enabled:
         if enabled:
             configure_monitoring(settings)
@@ -343,6 +349,7 @@ def set_monitoring_enabled(db: Session, enabled: bool) -> models.AudioSettings:
     except Exception:
         db.rollback()
         settings.monitoring_enabled = previous
+        _monitor_effects_disabled = previous_effect_mode
         try:
             configure_monitoring(settings)
         except Exception as restore_error:
@@ -375,6 +382,11 @@ def stop_monitoring() -> None:
 
 
 def _send_live_update(payload: dict) -> None:
+    if _monitor_effects_disabled:
+        payload = {
+            key: (0.0 if key in {"reverb", "echo", "delay"} else value)
+            for key, value in payload.items()
+        }
     with _monitor_lock: process = _monitor_process
     if process is None or process.poll() is not None or process.stdin is None: return
     try:
@@ -413,6 +425,10 @@ def configure_monitoring(settings: models.AudioSettings) -> None:
     output_channels = min(2, int(output_info["max_output_channels"]))
     if output_channels < 1: raise RuntimeError("No output device is available for microphone monitoring")
     gain, use_wasapi_exclusive = max(0.0, min(4.0, settings.volume)), False
+    effects = {
+        name: 0.0 if _monitor_effects_disabled else clamp01(getattr(settings, name))
+        for name in ("reverb", "echo", "delay")
+    }
     worker_options = {
         "input_device_id": resolved_input_id,
         "output_device_id": resolved_output_id,
@@ -420,9 +436,7 @@ def configure_monitoring(settings: models.AudioSettings) -> None:
         "output_channels": output_channels,
         "blocksize": settings.buffer_size,
         "gain": gain,
-        "reverb": clamp01(settings.reverb),
-        "echo": clamp01(settings.echo),
-        "delay": clamp01(settings.delay),
+        **effects,
         "noise_suppression": clamp01(settings.noise_suppression if settings.noise_suppression is not None else 0.35),
         "wasapi_exclusive": use_wasapi_exclusive,
     }
@@ -445,11 +459,11 @@ def _start_asio_monitor(settings: models.AudioSettings) -> None:
         "--gain",
         str(max(0.0, min(4.0, settings.volume))),
         "--reverb",
-        str(clamp01(settings.reverb)),
+        str(0.0 if _monitor_effects_disabled else clamp01(settings.reverb)),
         "--echo",
-        str(clamp01(settings.echo)),
+        str(0.0 if _monitor_effects_disabled else clamp01(settings.echo)),
         "--delay",
-        str(clamp01(settings.delay)),
+        str(0.0 if _monitor_effects_disabled else clamp01(settings.delay)),
         "--noise-suppression",
         str(clamp01(settings.noise_suppression if settings.noise_suppression is not None else 0.35)),
     ]

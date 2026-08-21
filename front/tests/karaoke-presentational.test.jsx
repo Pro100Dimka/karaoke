@@ -1,19 +1,19 @@
 /* @vitest-environment jsdom */
 import { createRef } from "react";
-import { cleanup, fireEvent, render } from "@testing-library/react";
-import { afterEach, expect, test, vi } from "vitest";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { verify } from "./helpers/assertions.mjs";
+const apiMocks = vi.hoisted(() => ({ getAudioTrackBlob: vi.fn() }));
 vi.mock("../src/components/fields", () => ({
   RangeInput: ({ onChange, ...props }) => (
-    <input
-      {...props}
-      type="range"
-      onChange={(event) => onChange?.(event.target.value)}
-    />
+    <input {...props} type="range" onChange={(event) => onChange?.(event.target.value)} />
   )
 }));
 vi.mock("../src/api/client", () => ({
-  api: { getAudioTrackUrl: (id, track) => `${id}/${track}` }
+  api: {
+    getAudioTrackUrl: (id, track) => `${id}/${track}`,
+    getAudioTrackBlob: apiMocks.getAudioTrackBlob
+  }
 }));
 import KaraokeMedia from "../src/pages/Karaoke/components/karaoke-media.jsx";
 import WaveformTimeline from "../src/pages/Karaoke/components/waveform-timeline.jsx";
@@ -21,8 +21,107 @@ import KaraokeLyrics from "../src/pages/Karaoke/components/karaoke-performance-s
 const KaraokeLyricLine = ({ line, currentTime }) => (
   <KaraokeLyrics lyricsSync={{ text: line.text, words: line.words }} currentTime={currentTime} />
 );
-afterEach(cleanup);
-test("karaoke media loads audio gain and initializes YouTube playback", () => {
+beforeEach(() => {
+  apiMocks.getAudioTrackBlob.mockReset();
+  apiMocks.getAudioTrackBlob.mockImplementation((_id, track) => Promise.resolve(new Blob([track])));
+  delete globalThis.electronAPI;
+});
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+test("karaoke media keeps direct authenticated URLs inside Electron", () => {
+  globalThis.electronAPI = { isElectron: true };
+  const props = {
+    instrumentalRef: createRef(),
+    vocalsRef: createRef(),
+    videoRef: createRef(),
+    youTubeClipRef: createRef(),
+    isPlaying: false,
+    musicVolume: 0.5,
+    vocalVolume: 0.4,
+    speed: 1,
+    youTubeVideoId: "",
+    sendYouTubeCommand: vi.fn(),
+    syncSecondaryMedia: vi.fn()
+  };
+  const { container, rerender } = render(
+    <KaraokeMedia {...props} song={{ id: "electron-song", title: "Title" }} />
+  );
+  expect(
+    [...container.querySelectorAll("audio")].map((audio) => audio.getAttribute("src"))
+  ).toEqual(["electron-song/instrumental", "electron-song/vocals"]);
+  rerender(<KaraokeMedia {...props} song={{ id: "next-song", title: "Next" }} />);
+  expect(
+    [...container.querySelectorAll("audio")].map((audio) => audio.getAttribute("src"))
+  ).toEqual(["next-song/instrumental", "next-song/vocals"]);
+  expect(apiMocks.getAudioTrackBlob).not.toHaveBeenCalled();
+});
+test("karaoke media releases authenticated files resolved after unmount", async () => {
+  const resolvers = [];
+  const release = vi.fn();
+  const createObjectURL = vi.spyOn(URL, "createObjectURL");
+  const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL");
+  apiMocks.getAudioTrackBlob.mockImplementation(
+    () => new Promise((resolve) => resolvers.push(resolve))
+  );
+  const view = render(
+    <KaraokeMedia
+      instrumentalRef={createRef()}
+      vocalsRef={createRef()}
+      videoRef={createRef()}
+      youTubeClipRef={createRef()}
+      isPlaying={false}
+      musicVolume={0.5}
+      vocalVolume={0.4}
+      speed={1}
+      song={{ id: "late-song", title: "Title" }}
+      youTubeVideoId=""
+      sendYouTubeCommand={vi.fn()}
+      syncSecondaryMedia={vi.fn()}
+    />
+  );
+  view.unmount();
+  await act(async () => {
+    resolvers.forEach((resolve) => {
+      const file = new Blob(["audio"]);
+      file.cleanup = release;
+      resolve(file);
+    });
+    await Promise.resolve();
+  });
+  expect(createObjectURL).not.toHaveBeenCalled();
+  expect(revokeObjectURL).not.toHaveBeenCalled();
+  expect(release).toHaveBeenCalledTimes(2);
+});
+test("karaoke media leaves failed browser tracks unloaded", async () => {
+  apiMocks.getAudioTrackBlob.mockRejectedValue(new Error("forbidden"));
+  const { container } = render(
+    <KaraokeMedia
+      instrumentalRef={createRef()}
+      vocalsRef={createRef()}
+      videoRef={createRef()}
+      youTubeClipRef={createRef()}
+      isPlaying={false}
+      musicVolume={0.5}
+      vocalVolume={0.4}
+      speed={1}
+      song={{ id: "failed-song", title: "Title" }}
+      youTubeVideoId=""
+      sendYouTubeCommand={vi.fn()}
+      syncSecondaryMedia={vi.fn()}
+    />
+  );
+  await waitFor(() => expect(apiMocks.getAudioTrackBlob).toHaveBeenCalledTimes(2));
+  expect(
+    [...container.querySelectorAll("audio")].every((audio) => !audio.hasAttribute("src"))
+  ).toBe(true);
+});
+test("karaoke media loads authenticated audio blobs and initializes YouTube playback", async () => {
+  const createObjectURL = vi
+    .spyOn(URL, "createObjectURL")
+    .mockImplementation((blob) => `blob:${blob.size}`);
+  const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
   const send = vi.fn();
   const sync = vi.fn();
   const instrumentalRef = createRef();
@@ -42,12 +141,22 @@ test("karaoke media loads audio gain and initializes YouTube playback", () => {
       syncSecondaryMedia={sync}
     />
   );
+  expect(
+    [...container.querySelectorAll("audio")].every((audio) => !audio.hasAttribute("src"))
+  ).toBe(true);
+  await waitFor(() => expect(createObjectURL).toHaveBeenCalledTimes(2));
+  send.mockClear();
   const audio = container.querySelector("audio");
+  expect(audio.getAttribute("src")).toBe("blob:12");
   Object.defineProperty(audio, "volume", { configurable: true, writable: true, value: 0 });
   fireEvent.loadedMetadata(audio);
   expect(audio.volume).toBeGreaterThan(0);
   fireEvent.load(container.querySelector("iframe"));
-  verify([send.mock.calls.map(([command]) => command), 'toEqual', [ "mute", "setPlaybackRate", "playVideo" ]]);
+  verify([
+    send.mock.calls.map(([command]) => command),
+    "toEqual",
+    ["mute", "setPlaybackRate", "playVideo"]
+  ]);
   expect(sync).toHaveBeenCalled();
   rerender(
     <KaraokeMedia
@@ -82,7 +191,9 @@ test("karaoke media loads audio gain and initializes YouTube playback", () => {
       syncSecondaryMedia={sync}
     />
   );
-  verify([container.querySelector("video").getAttribute("src"), 'toBe', "video.mp4"]);
+  verify([container.querySelector("video").getAttribute("src"), "toBe", "video.mp4"]);
+  cleanup();
+  expect(revokeObjectURL).toHaveBeenCalledTimes(2);
 });
 test("waveform supports click, drag and range seeking", () => {
   const change = vi.fn();
@@ -133,20 +244,21 @@ test("lyrics highlight every word only between its exact lyricsSync start and en
   expect(container.textContent).toBe("Яне");
   expect(container.querySelectorAll(".karaoke-lyric-syllable")).toHaveLength(0);
   expect(
-    container.querySelectorAll(".karaoke-lyric-character")[0].style.getPropertyValue(
-      "--character-fill"
-    )
+    container
+      .querySelectorAll(".karaoke-lyric-character")[0]
+      .style.getPropertyValue("--character-fill")
   ).toBe("0%");
   rerender(
     <KaraokeLyricLine
       currentTime={3.9088815789473683}
-      line={{ text: "Я", words: [{ text: "Я", start: 3.888836032388664, end: 3.9088815789473683 }] }}
+      line={{
+        text: "Я",
+        words: [{ text: "Я", start: 3.888836032388664, end: 3.9088815789473683 }]
+      }}
     />
   );
   expect(
-    container
-      .querySelector(".karaoke-lyric-character")
-      .style.getPropertyValue("--character-fill")
+    container.querySelector(".karaoke-lyric-character").style.getPropertyValue("--character-fill")
   ).toBe("100%");
   rerender(
     <KaraokeLyricLine
@@ -159,9 +271,7 @@ test("lyrics highlight every word only between its exact lyricsSync start and en
   );
   expect(
     Number.parseFloat(
-      container
-        .querySelector(".karaoke-lyric-character")
-        .style.getPropertyValue("--character-fill")
+      container.querySelector(".karaoke-lyric-character").style.getPropertyValue("--character-fill")
     )
   ).toBeCloseTo(50, 10);
 });

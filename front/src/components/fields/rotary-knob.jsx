@@ -1,6 +1,10 @@
-import { useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { clamp } from "../../utils/math";
-import { getRotaryDragValue, getRotaryWheelValue } from "./rotary-knob-utils";
+import {
+  getRotaryDragValue,
+  getRotaryPointerValue,
+  getRotaryWheelValue
+} from "./rotary-knob-utils";
 
 const normalizeId = (id) => id.replace(/:/g, "");
 
@@ -17,12 +21,19 @@ export default function RotaryKnob({
 }) {
   const inputId = `rotary-knob-${normalizeId(useId())}`;
   const dragRef = useRef(null);
+  const [editing, setEditing] = useState(false);
+  const [draftPercent, setDraftPercent] = useState("");
   const normalized = clamp(Number(value) || 0, min, max);
+  const valueRef = useRef(normalized);
+  useEffect(() => {
+    if (!dragRef.current) valueRef.current = normalized;
+  }, [normalized]);
   const range = max - min || 1;
   const ratio = (normalized - min) / range;
   const percent = Math.round(ratio * 100);
   const setValue = (nextValue) => {
     const next = clamp(nextValue, min, max);
+    valueRef.current = next;
     onChange?.(next);
     return next;
   };
@@ -31,6 +42,14 @@ export default function RotaryKnob({
     dragRef.current = null;
     event.currentTarget.releasePointerCapture?.(event.pointerId);
     if (drag) onCommit?.(drag.value);
+  };
+  const commitPercent = () => {
+    const number = Number(draftPercent);
+    if (Number.isFinite(number)) {
+      const next = setValue(min + (clamp(number, 0, 100) / 100) * range);
+      onCommit?.(next);
+    }
+    setEditing(false);
   };
 
   return (
@@ -45,16 +64,23 @@ export default function RotaryKnob({
         "--dial-value": `${percent}%`,
         "--dial-angle": `${-135 + ratio * 270}deg`
       }}
-      onDoubleClick={(event) => {
-        event.preventDefault();
-        const next = setValue(defaultValue);
-        onCommit?.(next);
-      }}
       onPointerDown={(event) => {
-        if (event.button !== 0) return;
+        if (event.button !== 0 || event.target.closest("input")) return;
         event.preventDefault();
         event.currentTarget.setPointerCapture?.(event.pointerId);
-        dragRef.current = { lastY: event.clientY, value: normalized };
+        const control = event.target.closest(".karaoke-effect-dial__control");
+        const next = control
+          ? setValue(
+              getRotaryPointerValue({
+                clientX: event.clientX,
+                clientY: event.clientY,
+                rect: control.getBoundingClientRect(),
+                min,
+                max
+              })
+            )
+          : valueRef.current;
+        dragRef.current = { lastY: event.clientY, value: next };
       }}
       onPointerMove={(event) => {
         const drag = dragRef.current;
@@ -73,11 +99,12 @@ export default function RotaryKnob({
       }}
       onPointerUp={stopDrag}
       onPointerCancel={stopDrag}
+      onLostPointerCapture={stopDrag}
       onWheel={(event) => {
         event.preventDefault();
-        setValue(
+        const next = setValue(
           getRotaryWheelValue({
-            value: normalized,
+            value: valueRef.current,
             deltaY: event.deltaY,
             step,
             min,
@@ -85,14 +112,65 @@ export default function RotaryKnob({
             fine: event.shiftKey
           })
         );
+        onCommit?.(next);
       }}
     >
       <span className="karaoke-effect-dial__label">{label}</span>
-      <span className="karaoke-effect-dial__control" aria-hidden="true">
+      <span
+        className="karaoke-effect-dial__control"
+        aria-hidden="true"
+        onDoubleClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const next = setValue(defaultValue);
+          onCommit?.(next);
+        }}
+      >
         <span className="karaoke-effect-dial__knob" />
       </span>
-      <strong>{percent}%</strong>
-      {/* <RangeInput
+      {editing ? (
+        <span className="karaoke-effect-dial__value-editor">
+          <input
+            autoFocus
+            aria-label={`${label}, ${percent}%`}
+            inputMode="decimal"
+            min="0"
+            max="100"
+            type="number"
+            value={draftPercent}
+            onBlur={commitPercent}
+            onChange={(event) => setDraftPercent(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") commitPercent();
+              if (event.key === "Escape") setEditing(false);
+            }}
+          />
+          <span>%</span>
+        </span>
+      ) : (
+        <strong
+          onDoubleClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setDraftPercent(String(percent));
+            setEditing(true);
+          }}
+        >
+          {percent}%
+        </strong>
+      )}
+      <input
+        style={{
+          clip: "rect(0 0 0 0)",
+          clipPath: "inset(50%)",
+          height: 1,
+          overflow: "hidden",
+          pointerEvents: "none",
+          position: "absolute",
+          whiteSpace: "nowrap",
+          width: 1
+        }}
+        type="range"
         id={inputId}
         min={min}
         max={max}
@@ -100,9 +178,11 @@ export default function RotaryKnob({
         value={normalized}
         aria-label={label}
         aria-valuetext={`${percent}%`}
-        onChange={onChange}
-        onCommit={onCommit}
-      /> */}
+        onChange={(event) => {
+          const next = setValue(Number(event.target.value));
+          onCommit?.(next);
+        }}
+      />
     </label>
   );
 }

@@ -23,6 +23,8 @@ def test_audio_router_forwards_devices_settings_and_selection(monkeypatch):
     assert (audio.list_devices() == [{'i': 1}]) and (audio.list_output_devices() == [{'o': 1}]) and (audio.list_asio_drivers() == [{'name': 'ASIO'}]) and (audio.get_settings(database) is current) and (audio.update_settings(schemas.AudioSettingsUpdate(volume=2), database) is current)
     update.assert_called_with(database, {"volume": 2.0})
     assert (audio.start_direct_monitoring(database) is current) and (audio.stop_direct_monitoring(database) is current) and (audio.select_device(4, database) is current)
+    assert audio.start_direct_monitoring(database, disabled_effects=True) is current
+    monitor.assert_any_call(database, True, disabled_effects=True)
     update.assert_called_with(database, {"input_device_id": 4})
 
 

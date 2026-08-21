@@ -1087,6 +1087,27 @@
   font-size: 0.63rem;
   color: var(--dial-color);
 }
+.karaoke-effect-dial__value-editor {
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  color: var(--dial-color);
+  font-size: 0.63rem;
+  font-weight: 800;
+}
+.karaoke-effect-dial__value-editor input {
+  position: static;
+  inline-size: 2.35rem;
+  block-size: 1.15rem;
+  padding: 0 0.15rem;
+  border: var(--hairline) solid var(--dial-color);
+  border-radius: 0.25rem;
+  opacity: 1;
+  color: var(--color-text);
+  background: var(--color-bg-deep);
+  text-align: end;
+  font: inherit;
+}
 .karaoke-effect-dial__control {
   grid-column: 1 / -1;
   position: relative;

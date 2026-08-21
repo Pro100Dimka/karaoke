@@ -44,7 +44,6 @@ from .pitch_post import (
 )
 from .profiler import RuntimeTelemetry
 from .syllables import align_syllables
-from .utils.env import env_flag
 from .utils.io import read_json, write_json_atomic, write_text_atomic
 from .validators import (
     validate_audio,
@@ -483,6 +482,8 @@ class KaraokePipeline:
             cache.commit("pitch", pitch_key, pitch_outputs)
         validate_within_duration(pitch, song_duration,
                                  "pitch", self.config.hop_seconds * 2)
+        if hasattr(self.engines.aligner, "set_pitch_activity"):
+            self.engines.aligner.set_pitch_activity(pitch)
 
         lyrics_txt, words_path, text_hash = output / 'lyrics.txt', output / \
             'lyricsSync.json', StageCache.key('text', {'text': supplied})
