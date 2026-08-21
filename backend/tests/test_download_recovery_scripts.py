@@ -117,3 +117,11 @@ def test_backend_packaging_bundles_nagisa_native_modules_and_smokes_qwen():
     runner = project_text("backend/run.py", encoding="utf-8-sig")
     assert_contains(runner, 'nagisa.tagging("テスト")')
     assert_excludes(runner, 'importlib.import_module("prepro")')
+
+
+def test_backend_packaging_bundles_and_smokes_parselmouth():
+    build = project_text("scripts/build-installer.ps1", encoding="utf-8-sig")
+    runner = project_text("backend/run.py", encoding="utf-8-sig")
+
+    assert_contains(build, '"--collect-all","parselmouth"', "backend-v5-parselmouth-psola")
+    assert_contains(runner, "import parselmouth", "parselmouth.PRAAT_VERSION")

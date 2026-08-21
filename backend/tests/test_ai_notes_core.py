@@ -176,36 +176,22 @@ def test_pitch_attack_and_fragment_postprocessing():
     merged = notes._merge_same_pitch_gaps(same, quiet_frames, profile)
     assert (len(merged) == 1 and merged[0].word_index is None) and (notes._merge_same_pitch_gaps(separate, quiet_frames, profile) == separate) and (notes._merge_same_pitch_gaps([], [], profile) == []) and (notes._repair_note_outliers(spike) == spike)
 
+    micro = [VocalNote(0.2, 0.25, 67, 70)]
+    assert notes._discard_unconfirmed_micro_notes(micro, quiet_frames, profile, 0.07) == []
+    confirmed = [VocalNote(0.1, 0.15, 67, 100)]
+    attack_frames = [frame(i * 0.01, energy=0 if i < 10 else 1) for i in range(30)]
+    assert notes._discard_unconfirmed_micro_notes(confirmed, attack_frames, profile, 0.07) == confirmed
 
-def test_local_harmonic_repair_and_verified_merge():
+
+def test_verified_merge():
     frames, base_notes = [frame(i * 0.01, energy=1) for i in range(100)], [note(0, 0.2, 60), note(0.21, 0.3, 72), note(0.31, 0.5, 61)]
     profile = notes._note_timing_profile(frames, base_notes, min_note_hint=0.04)
-    assert notes._repair_isolated_harmonic_notes(base_notes[:2], frames, profile) == base_notes[:2]
-    repaired = notes._repair_isolated_harmonic_notes(base_notes, frames, profile)
-    assert repaired[1].midi_note in {60, 61}
     fragments = [
         note(0, 0.2, 60, word=0, syllable_index=0),
         note(0.21, 0.4, 60, word=0, syllable_index=0),
         note(0.5, 0.7, 62),
     ]
     assert (len(notes._merge_verified_fragments(fragments, frames, profile)) == 2) and (notes._merge_verified_fragments([], frames, profile) == [])
-
-
-def test_harmonic_repair_rejection_guards(monkeypatch):
-    frames, base = [frame(i * 0.01) for i in range(200)], [note(0, 0.2, 60), note(0.21, 0.3, 72), note(0.31, 0.5, 60)]
-    profile = notes._note_timing_profile(frames, base, min_note_hint=0.04)
-
-    def unchanged(items, attack=0, selected_profile=profile):
-        monkeypatch.setattr(notes, "_pitch_attack_strength", lambda *_: attack)
-        assert notes._repair_isolated_harmonic_notes(items, frames, selected_profile) == items
-
-    unchanged([note(0, 0.2, 60), note(2, 2.1, 72), note(2.2, 2.4, 60)])
-    unchanged(base, attack=1)
-    unchanged([note(0, 0.2, 50), note(0.21, 0.3, 72), note(0.31, 0.5, 70)])
-    unchanged([note(0, 0.2, 60), note(0.21, 0.3, 65), note(0.31, 0.5, 60)])
-    unchanged([note(0, 0.2, 60), note(0.21, 0.3, 100), note(0.31, 0.5, 60)])
-    long = [note(0, 0.2, 60), note(0.21, 2, 72), note(2.01, 2.2, 60)]
-    unchanged(long, selected_profile=replace(profile, phrase_gap=3))
 
 
 def test_game_notes_preserve_syllable_granularity():
@@ -365,11 +351,11 @@ def test_build_vocal_notes_orchestrates_all_stages(monkeypatch):
     frames, syllables, base = [frame(0), frame(0.01)], [syllable(0, 0.2)], [note(0, 0.2)]
     patch_attrs(monkeypatch, notes, _decode_pitch_only=Mock(return_value=base), _filter_to_lyric_phrases=Mock(side_effect=lambda value, *_a, **_k: value), _attach_soft_lyric_labels=Mock(side_effect=lambda value, *_: value), _make_monophonic=Mock(side_effect=lambda value, *_: value), _audio_verify_note_register=Mock(side_effect=lambda value, *_a, **_k: value))
     for name in (
-        "_repair_isolated_harmonic_notes",
         "_merge_verified_fragments",
         "_consolidate_micro_fragments",
         "_repair_short_isolated_spikes",
         "_merge_same_pitch_gaps",
+        "_discard_unconfirmed_micro_notes",
     ):
         monkeypatch.setattr(notes, name, Mock(side_effect=lambda value, *_: value))
     monkeypatch.setattr(notes, "_repair_note_outliers", Mock(side_effect=lambda value: value))
@@ -377,3 +363,37 @@ def test_build_vocal_notes_orchestrates_all_stages(monkeypatch):
     assert result == base and notes.get_note_diagnostics()["timing_profile"]["frame_step"] > 0
     notes.build_vocal_notes(frames, [])
     notes._attach_soft_lyric_labels.assert_called_once()
+
+
+def test_word_pitch_evidence_keeps_only_confirmed_frames_inside_the_word():
+    words = [Word(1.0, 1.04, "voiced", index=0), Word(2.0, 2.04, "silent", index=1)]
+    frames = [frame(1.01, 67), frame(1.02, 67), frame(2.01, 72)]
+
+    result, retained = notes._retain_word_pitch_evidence(
+        [],
+        frames,
+        words,
+        min_confidence=0.38,
+        max_gap=0.05,
+        frame_step=0.01,
+    )
+
+    assert retained == 1
+    assert [(item.midi_note, item.word_index) for item in result] == [(67, 0)]
+
+
+def test_word_pitch_evidence_does_not_duplicate_an_existing_acoustic_note():
+    words = [Word(1.0, 1.5, "voiced", index=0)]
+    detected = [note(1.1, 1.4, 60, word=0)]
+
+    result, retained = notes._retain_word_pitch_evidence(
+        detected,
+        [frame(1.2, 67), frame(1.21, 67)],
+        words,
+        min_confidence=0.38,
+        max_gap=0.05,
+        frame_step=0.01,
+    )
+
+    assert result == detected
+    assert retained == 0

@@ -14,7 +14,7 @@ from .audio import load_mono
 from .models import PitchFrame, Syllable, VocalNote, Word
 from .utils.numeric import energy_attack_strength
 
-NOTE_DECODER_VERSION = "acoustic-notes-v33-boundary-lyrics-association"
+NOTE_DECODER_VERSION = "acoustic-notes-v35-word-frame-evidence"
 _NOTE_DIAGNOSTICS: ContextVar[dict | None] = ContextVar("note_diagnostics", default=None)
 
 
@@ -829,41 +829,6 @@ def _audio_verify_note_register(
     return verified
 
 
-def _repair_isolated_harmonic_notes(
-    notes: list[VocalNote],
-    frames: list[PitchFrame],
-    profile: _NoteTimingProfile,
-) -> list[VocalNote]:
-    if len(notes) < 3: return list(notes)
-    work, harmonic_shifts = list(notes), (-24, -19, -12, 12, 19, 24)
-    for index in range(1, len(work) - 1):
-        left, current, right = work[index - 1], work[index], work[index + 1]
-        left_gap = current.start - left.end
-        right_gap = right.start - current.end
-        if left_gap > profile.phrase_gap or right_gap > profile.phrase_gap: continue
-        if _pitch_attack_strength(frames, current.start, profile) >= profile.attack_strong: continue
-        if abs(left.midi_note - right.midi_note) > 5: continue
-        target = (left.midi_note + right.midi_note) / 2.0
-        original_distance = abs(current.midi_note - target)
-        if original_distance < 7.5: continue
-        candidates = [current.midi_note + shift for shift in harmonic_shifts]
-        candidate = min(candidates, key=lambda value: abs(value - target))
-        candidate_distance = abs(candidate - target)
-        improvement = original_distance - candidate_distance
-        duration = current.end - current.start
-        neighbourhood_spread = abs(left.midi_note - right.midi_note)
-        allowed_distance = max(2.5, min(5.0, neighbourhood_spread + 3.0))
-        required_improvement = max(4.0, original_distance * 0.55)
-        if candidate_distance > allowed_distance or improvement < required_improvement: continue
-        long_note = profile.note_scale * 1.35
-        very_long_note = profile.note_scale * 2.4
-        if duration > long_note and not (duration <= very_long_note and candidate_distance <= 3.0): continue
-        work[index] = replace(
-            current, midi_note=int(round(candidate)), cents=(), syllable_indices=()
-        )
-    return work
-
-
 def _merge_verified_fragments(
     notes: list[VocalNote],
     frames: list[PitchFrame] | None,
@@ -928,12 +893,22 @@ def build_vocal_notes(
     notes = _make_monophonic(notes, min_note)
     timing = _note_timing_profile(frames, notes, min_note_hint=min_note)
     notes = _audio_verify_note_register(notes, audio, timing, fmin_hz=fmin_hz, fmax_hz=fmax_hz)
-    notes = _repair_isolated_harmonic_notes(notes, frames, timing)
     notes = _merge_verified_fragments(notes, frames, timing)
     notes = _consolidate_micro_fragments(notes, frames, timing)
     notes = _repair_short_isolated_spikes(notes, frames, timing)
     notes = _merge_same_pitch_gaps(notes, frames, timing)
-    notes, diag = _repair_note_outliers(notes), dict(_NOTE_DIAGNOSTICS.get() or {})
+    notes = _discard_unconfirmed_micro_notes(notes, frames, timing, min_note)
+    notes = _repair_note_outliers(notes)
+    notes, retained_word_notes = _retain_word_pitch_evidence(
+        notes,
+        frames,
+        words or [],
+        min_confidence=min_confidence,
+        max_gap=max_gap,
+        frame_step=timing.frame_step,
+    )
+    diag = dict(_NOTE_DIAGNOSTICS.get() or {})
+    diag["retained_word_pitch_notes"] = retained_word_notes
     diag["timing_profile"] = {
         "frame_step": timing.frame_step,
         "note_scale": timing.note_scale,
@@ -944,6 +919,85 @@ def build_vocal_notes(
     }
     _NOTE_DIAGNOSTICS.set(diag)
     return notes
+
+
+def _retain_word_pitch_evidence(
+    notes: list[VocalNote],
+    frames: list[PitchFrame],
+    words: list[Word],
+    *,
+    min_confidence: float,
+    max_gap: float,
+    frame_step: float,
+) -> tuple[list[VocalNote], int]:
+    """Keep stable FLAC pitch that the global minimum-duration filter removed."""
+    if not frames or not words:
+        return list(notes), 0
+
+    output, retained = list(notes), 0
+    step = max(float(frame_step), 1e-4)
+    for word_index, word in enumerate(words):
+        if any(
+            min(note.end, word.end) - max(note.start, word.start) > 1e-9
+            for note in output
+        ):
+            continue
+        candidates = [
+            frame
+            for frame in frames
+            if word.start <= frame.time <= word.end
+            and frame.voiced
+            and frame.frequency > 0
+            and frame.confidence >= min_confidence
+        ]
+        runs: list[list[PitchFrame]] = []
+        for frame in candidates:
+            midi = int(round(hz_to_midi(frame.frequency)))
+            if (
+                not runs
+                or frame.time - runs[-1][-1].time > max(max_gap, step * 1.5)
+                or int(round(hz_to_midi(runs[-1][-1].frequency))) != midi
+            ):
+                runs.append([frame])
+            else:
+                runs[-1].append(frame)
+        for run in runs:
+            if len(run) < 2:
+                continue
+            start = max(float(word.start), float(run[0].time) - step / 2.0)
+            end = min(float(word.end), float(run[-1].time) + step / 2.0)
+            if end <= start:
+                continue
+            confidence = sum(frame.confidence for frame in run) / len(run)
+            output.append(
+                VocalNote(
+                    start,
+                    end,
+                    int(round(statistics.median(hz_to_midi(frame.frequency) for frame in run))),
+                    max(42, min(118, int(round(62 + confidence * 48)))),
+                    word_index,
+                )
+            )
+            retained += 1
+    return sorted(output, key=lambda note: (note.start, note.end, note.midi_note)), retained
+
+
+def _discard_unconfirmed_micro_notes(
+    notes: list[VocalNote],
+    frames: list[PitchFrame],
+    profile: _NoteTimingProfile,
+    minimum_note: float,
+) -> list[VocalNote]:
+    threshold = max(float(minimum_note) * 1.5, profile.frame_step * 7.0)
+    return [
+        note
+        for note in notes
+        if note.end - note.start >= threshold
+        or (
+            note.velocity >= 90
+            and _pitch_attack_strength(frames, note.start, profile) >= profile.attack_strong
+        )
+    ]
 
 
 def _pitch_attack_strength(

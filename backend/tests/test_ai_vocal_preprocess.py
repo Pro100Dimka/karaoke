@@ -37,6 +37,11 @@ def test_prepare_vocal_reference_downmixes_before_time_preserving_cleanup(monkey
         "_dereverberate_mono",
         lambda _source, destination: destination,
     )
+    monkeypatch.setattr(
+        vocal_preprocess,
+        "_autotune_mono",
+        lambda _source, destination: destination,
+    )
 
     assert vocal_preprocess.prepare_vocal_reference(source, target) == target
     mono_arguments = render.call_args_list[0].args[2]

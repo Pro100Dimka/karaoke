@@ -8,12 +8,13 @@ import numpy as np
 
 from .audio import load_mono
 from .models import PitchFrame
+from .pitch_quantization import quantize_voiced_points
 from .utils.numeric import clamp01, energy_attack_strength
 
 # Harmonic tracking is needed on dense vocal stems, but transitions must become
 # cheap at a real acoustic re-attack.  This keeps short melodic leaps while
 # folding unsupported octave/harmonic detours back onto the lead trajectory.
-PITCH_STABILIZER_VERSION = "fcpe-yin-consensus-v8-adaptive-analysis-audit"
+PITCH_STABILIZER_VERSION = "fcpe-yin-consensus-v9-note-locked-no-vibrato"
 _HARMONIC_SHIFTS = (0.0, -12.0, 12.0, -19.01955, 19.01955, -24.0, 24.0)
 _SUBHARMONIC_INTERVALS = (12.0, 19.01955, 24.0)
 
@@ -354,4 +355,21 @@ def _repair_single_frame_holes(frames: list[PitchFrame]) -> list[PitchFrame]:
 
 def stabilize_pitch(frames: list[PitchFrame], max_octave_jump=10.5) -> list[PitchFrame]:
     del max_octave_jump
-    return list(frames) if len(frames) < 3 else _repair_single_frame_holes(_stabilize_harmonics(frames))
+    stabilized = list(frames) if len(frames) < 3 else _repair_single_frame_holes(_stabilize_harmonics(frames))
+    output = list(stabilized)
+    voiced_indices = [
+        index for index, frame in enumerate(stabilized)
+        if frame.voiced and frame.frequency > 0
+    ]
+    if not voiced_indices:
+        return output
+    frequencies = quantize_voiced_points(
+        [stabilized[index].time for index in voiced_indices],
+        [stabilized[index].frequency for index in voiced_indices],
+    )
+    for index, frequency in zip(voiced_indices, frequencies, strict=True):
+        frame = stabilized[index]
+        output[index] = PitchFrame(
+            frame.time, frequency, frame.confidence, True, frame.energy
+        )
+    return output

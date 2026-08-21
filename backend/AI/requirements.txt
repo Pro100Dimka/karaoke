@@ -10,6 +10,8 @@ psutil>=5.9,<8
 torchfcpe==0.0.4
 # Model-free, time-preserving late-reverb and echo suppression for vocals.
 nara_wpe==0.0.11
+# Praat PSOLA resynthesis for time-preserving vocal pitch locking.
+praat-parselmouth==0.4.7
 # Minimal inference-only dependencies for the bundled Mel-Band RoFormer.
 # The former standalone MSST environment duplicated PyTorch/CUDA and pulled in
 # training/UI packages that the application never executes.

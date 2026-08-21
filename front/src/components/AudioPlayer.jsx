@@ -1,7 +1,7 @@
 import { Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
-import { IconButton } from "../theme/ui";
+import { IconButton, Stack } from "../theme/ui";
 import {
   formatAudioTime,
   normalizeAudioDuration,
@@ -63,7 +63,7 @@ export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
   };
 
   return (
-    <div className={`performance-player ${className}`}>
+    <Stack direction="row" align="center" gap={0.5} justify="space-between">
       <audio
         ref={audioRef}
         preload="metadata"
@@ -130,6 +130,6 @@ export function AudioPlayer({ src, className = "", initialDuration = 0 }) {
           onChange={changeVolume}
         />
       </div>
-    </div>
+    </Stack>
   );
 }

@@ -6,6 +6,7 @@ from typing import Any
 from .models import VocalNote, Word, to_dict
 
 _EPSILON = 1e-9
+_MIN_EXPORTED_NOTE_SECONDS = 0.07
 
 
 def _number(value: Any, name: str) -> float:
@@ -39,7 +40,7 @@ def validate_lyrics_document(payload: Any) -> dict[str, Any]:
         if not isinstance(notes, list):
             raise ValueError(f"words[{position}].notes must be an array")
         if not notes:
-            raise ValueError(f"words[{position}].notes must cover the word")
+            continue
         previous_end = start
         for note_position, note in enumerate(notes):
             path = f"words[{position}].notes[{note_position}]"
@@ -66,34 +67,46 @@ def validate_lyrics_document(payload: Any) -> dict[str, Any]:
     return payload
 
 
-def _interval_distance(note: VocalNote, word: Word) -> float:
-    if note.end < word.start:
-        return float(word.start - note.end)
-    if note.start > word.end:
-        return float(note.start - word.end)
-    return 0.0
+def _continuous_note_rows(
+    word_start: float,
+    word_end: float,
+    rows: list[tuple[int, float, float]],
+) -> list[dict[str, Any]]:
+    compact: list[tuple[int, float, float]] = []
+    for note, start, end in sorted(rows, key=lambda item: (item[1], item[2], item[0])):
+        if compact and compact[-1][0] == note:
+            continue
+        compact.append((int(note), float(start), float(end)))
+    if not compact:
+        return []
+
+    while True:
+        boundaries = [float(word_start)]
+        for left, right in zip(compact, compact[1:], strict=False):
+            midpoint = (left[2] + right[1]) / 2.0
+            boundaries.append(max(float(word_start), min(float(word_end), midpoint)))
+        boundaries.append(float(word_end))
+        if any(right <= left for left, right in zip(boundaries, boundaries[1:], strict=False)):
+            step = (float(word_end) - float(word_start)) / len(compact)
+            boundaries = [float(word_start) + step * index for index in range(len(compact) + 1)]
+        durations = [right - left for left, right in zip(boundaries, boundaries[1:], strict=False)]
+        shortest = min(range(len(durations)), key=durations.__getitem__)
+        threshold = min(_MIN_EXPORTED_NOTE_SECONDS, float(word_end) - float(word_start))
+        if len(compact) == 1 or durations[shortest] + _EPSILON >= threshold:
+            break
+        compact.pop(shortest)
+    return [
+        {"note": note[0], "start": boundaries[index], "end": boundaries[index + 1]}
+        for index, note in enumerate(compact)
+    ]
 
 
 def _continuous_word_notes(word: Word, owned: list[VocalNote]) -> list[dict[str, Any]]:
-    ordered = sorted(owned, key=lambda item: (item.start, item.end, item.midi_note))
-    compact: list[VocalNote] = []
-    for note in ordered:
-        if compact and compact[-1].midi_note == note.midi_note:
-            continue
-        compact.append(note)
-    if not compact:
-        return []
-    boundaries = [float(word.start)]
-    for left, right in zip(compact, compact[1:], strict=False):
-        boundaries.append((float(left.end) + float(right.start)) / 2.0)
-    boundaries.append(float(word.end))
-    if any(right <= left for left, right in zip(boundaries, boundaries[1:], strict=False)):
-        step = (float(word.end) - float(word.start)) / len(compact)
-        boundaries = [float(word.start) + step * index for index in range(len(compact) + 1)]
-    return [
-        {"note": int(note.midi_note), "start": boundaries[index], "end": boundaries[index + 1]}
-        for index, note in enumerate(compact)
-    ]
+    return _continuous_note_rows(
+        float(word.start),
+        float(word.end),
+        [(note.midi_note, note.start, note.end) for note in owned],
+    )
 
 
 def words_with_notes(words: list[Word], notes: list[VocalNote]) -> list[dict[str, Any]]:
@@ -103,25 +116,17 @@ def words_with_notes(words: list[Word], notes: list[VocalNote]) -> list[dict[str
 
     assigned: list[list[VocalNote]] = [[] for _ in result]
     for note in notes:
-        overlaps = [
-            max(0.0, min(float(note.end), float(word.end)) - max(float(note.start), float(word.start)))
-            for word in words
-        ]
-        preferred = note.word_index
-        if preferred is not None and 0 <= preferred < len(words) and overlaps[preferred] > _EPSILON:
-            owner = preferred
-        else:
-            owner = max(range(len(words)), key=overlaps.__getitem__)
-            if overlaps[owner] <= _EPSILON:
-                continue
-        assigned[owner].append(note)
+        for word_index, word in enumerate(words):
+            overlap = min(float(note.end), float(word.end)) - max(
+                float(note.start), float(word.start)
+            )
+            if overlap > _EPSILON:
+                assigned[word_index].append(note)
 
     for word_index, owned in enumerate(assigned):
-        word = result[word_index]
+        payload_word = result[word_index]
         source_word = words[word_index]
-        if not owned and notes:
-            owned = [min(notes, key=lambda note: _interval_distance(note, source_word))]
-        word["notes"] = _continuous_word_notes(source_word, owned)
+        payload_word["notes"] = _continuous_word_notes(source_word, owned)
 
     validate_lyrics_document({"bpm": 1, "key": "unknown", "words": result})
     return result
@@ -164,40 +169,21 @@ def replace_word_notes(
             }
         )
     for word in words:
-        word["notes"].sort(key=lambda item: (_number(item.get("start"), "note.start"), _number(item.get("end"), "note.end")))
-    available = [note for word in words for note in word["notes"]]
-    for word in words:
         notes = word["notes"]
-        if not notes and available:
-            midpoint = (_number(word["start"], "word.start") + _number(word["end"], "word.end")) / 2
-            nearest = min(
-                available,
-                key=lambda note: abs(
-                    (_number(note["start"], "note.start") + _number(note["end"], "note.end")) / 2
-                    - midpoint
-                ),
-            )
-            notes = [{**nearest}]
         if not notes:
             continue
-        compact: list[dict[str, Any]] = []
-        for note in notes:
-            if compact and compact[-1].get("note") == note.get("note"):
-                continue
-            compact.append(note)
         start, end = _number(word["start"], "word.start"), _number(word["end"], "word.end")
-        boundaries = [start]
-        for left, right in zip(compact, compact[1:], strict=False):
-            boundaries.append(
-                (_number(left["end"], "note.end") + _number(right["start"], "note.start")) / 2
-            )
-        boundaries.append(end)
-        if any(right <= left for left, right in zip(boundaries, boundaries[1:], strict=False)):
-            step = (end - start) / len(compact)
-            boundaries = [start + step * index for index in range(len(compact) + 1)]
-        word["notes"] = [
-            {"note": note.get("note"), "start": boundaries[index], "end": boundaries[index + 1]}
-            for index, note in enumerate(compact)
-        ]
+        word["notes"] = _continuous_note_rows(
+            start,
+            end,
+            [
+                (
+                    int(note["note"]),
+                    _number(note["start"], "note.start"),
+                    _number(note["end"], "note.end"),
+                )
+                for note in notes
+            ],
+        )
     result = {**payload, "words": words}
     return validate_lyrics_document(result)

@@ -346,6 +346,17 @@ def test_anchor_merger_candidate_validation_and_debug(monkeypatch):
     assert [word.text for word in output] == ["one"]
 
 
+def test_anchor_merger_rejects_collapsed_ctc_word_anchor():
+    source, debug = np.ones(1000, dtype=np.float32), {}
+    ctc = [alignment_result((Word(1.0, 1.02, "a", 0.99),), 0.99)]
+
+    output, _ = anchor_merge(["a"], ctc, [], source, debug_out=debug)
+
+    assert output == []
+    assert debug["failure_reason"] == "no_duration_valid_candidates"
+    assert debug["rejected_reasons"]["collapsed_acoustic_anchor"] == 1
+
+
 def test_anchor_merger_temporal_agreement_and_qwen_replacement():
     source, ctc = np.ones(1000, dtype=np.float32), [alignment_result((Word(1, 2, 'one', 0.2),), 0.2)]
     agreed, stats = anchor_merge(['one'], ctc, [Word(2.01, 2.2, 'one', 0.9)], source)

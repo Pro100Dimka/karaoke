@@ -150,7 +150,7 @@ def _words_from_items(items) -> list[Word]:
 
 
 ASR_PIPELINE_VERSION = "singing-batched-script-consensus-v15-newline-phrase-join"
-LONG_TEXT_ALIGNMENT_VERSION = "v61-full-song-vocal-ctc"
+LONG_TEXT_ALIGNMENT_VERSION = "v62-reject-collapsed-acoustic-anchors"
 SEGMENTED_ALIGNMENT_VERSION = "v2-ctc-fallback-tier"
 FALLBACK_WORD_CONFIDENCE = 0.012
 
@@ -1688,6 +1688,27 @@ def _anchor_preserving_canonical_alignment(
         return max(0.10, min(0.48, 0.065 + 0.038 * chars))
 
     def minimum_run_span(begin: int, end: int) -> float: return sum(minimum_word_span(tokens[pos], pos) for pos in range(begin, end))
+
+    duration_filtered: dict[int, tuple[Word, str, float]] = {}
+    for idx, candidate in candidates.items():
+        acoustic_floor = max(
+            1e-9,
+            min(0.055, minimum_word_span(tokens[idx], idx) * 0.60),
+        )
+        if candidate[0].end - candidate[0].start + 1e-9 < acoustic_floor:
+            reason = (
+                "weak_qwen_micro_anchor"
+                if relaxed_gap_fit and candidate[1] == "qwen"
+                else "collapsed_acoustic_anchor"
+            )
+            rejection_reasons[reason] += 1
+            continue
+        duration_filtered[idx] = candidate
+    candidates = duration_filtered
+    if not candidates:
+        return _alignment_failure(
+            debug_out, "no_duration_valid_candidates", "candidate_filtering", rejection_reasons
+        )
 
     anchor_boundary_tolerance, anchor_min_duration = duration_sec if relaxed_gap_fit else 0.22, min(adaptive_base_floors) if relaxed_gap_fit and adaptive_base_floors else 0.055
 

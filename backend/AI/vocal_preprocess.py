@@ -8,9 +8,10 @@ import soundfile as sf
 
 from .audio import DEFAULT_FFMPEG_TIMEOUT_SEC, render_wav_atomic
 from .errors import AICoreError
+from .pitch_quantization import quantize_voiced_points
 from .profiler import profile_operation
 
-VOCAL_REFERENCE_PREPROCESS_VERSION = "v3-mono-wpe5-dereverb-denoise-20260821"
+VOCAL_REFERENCE_PREPROCESS_VERSION = "v4-mono-wpe5-psola-note-lock-20260821"
 
 _WPE_CHUNK_SECONDS = 30
 _WPE_OVERLAP_SECONDS = 2
@@ -81,12 +82,49 @@ def _dereverberate_mono(source: Path, target: Path) -> Path:
     return target
 
 
+def _autotune_mono(source: Path, target: Path) -> Path:
+    """Remove vibrato by replacing Praat's voiced pitch tier with stable notes."""
+    try:
+        import parselmouth
+        from parselmouth.praat import call
+    except ImportError as exc:
+        raise AICoreError("Praat-Parselmouth is required for vocal pitch locking") from exc
+
+    try:
+        sound = parselmouth.Sound(str(source))
+        manipulation = call(sound, "To Manipulation", 0.01, 55.0, 1400.0)
+        pitch_tier = call(manipulation, "Extract pitch tier")
+        count = int(call(pitch_tier, "Get number of points"))
+        if count:
+            times = [float(call(pitch_tier, "Get time from index", index)) for index in range(1, count + 1)]
+            frequencies = [float(call(pitch_tier, "Get value at index", index)) for index in range(1, count + 1)]
+            locked = quantize_voiced_points(times, frequencies)
+            call(pitch_tier, "Remove points between", float(sound.xmin), float(sound.xmax))
+            for timestamp, frequency in zip(times, locked, strict=True):
+                call(pitch_tier, "Add point", timestamp, frequency)
+            call([pitch_tier, manipulation], "Replace pitch tier")
+        tuned = call(manipulation, "Get resynthesis (overlap-add)")
+        audio = np.asarray(tuned.values, dtype=np.float32).reshape(-1)
+    except Exception as exc:
+        raise AICoreError(f"Praat vocal pitch locking failed: {exc}") from exc
+
+    source_info = validate_vocal_reference(source)
+    if audio.size != source_info.frames or not np.all(np.isfinite(audio)):
+        raise AICoreError("Vocal pitch locking changed duration or produced invalid audio")
+    peak = float(np.max(np.abs(audio))) if audio.size else 0.0
+    if peak > 0.999: audio *= 0.999 / peak
+    sf.write(target, audio, source_info.samplerate, subtype="PCM_24", format="WAV")
+    validate_vocal_reference(target)
+    return target
+
+
 def prepare_vocal_reference(source: str | Path, target: str | Path) -> Path:
     """Create the mono, time-preserving vocal used by every downstream stage.
 
-    Downmix is deliberately completed before WPE removes predictable late
-    reflections (reverb and delay). Conservative stationary-noise removal is
-    applied last. No stage changes pitch, sample rate, duration, or timing.
+    Downmix is completed before WPE removes predictable late reflections.
+    Praat PSOLA then locks the voiced contour to stable semitones and removes
+    vibrato without changing timing. Stationary-noise removal is applied last;
+    sample rate and duration remain unchanged.
     """
     source_path, target_path = Path(source), Path(target)
     source_info = sf.info(source_path)
@@ -104,6 +142,7 @@ def prepare_vocal_reference(source: str | Path, target: str | Path) -> Path:
         temporary = Path(raw)
         mono = temporary / "mono.wav"
         dereverberated = temporary / "dereverberated.wav"
+        tuned = temporary / "tuned.wav"
         render_wav_atomic(
             source_path,
             mono,
@@ -119,8 +158,9 @@ def prepare_vocal_reference(source: str | Path, target: str | Path) -> Path:
             profile_name="vocal_reference.mono",
         )
         _dereverberate_mono(mono, dereverberated)
+        _autotune_mono(dereverberated, tuned)
         return render_wav_atomic(
-            dereverberated,
+            tuned,
             target_path,
             [
                 "-vn", "-af", "highpass=f=65:p=2,lowpass=f=6500:p=2,afftdn=nr=6:nf=-50:tn=1:gs=3,volume=0.90",
