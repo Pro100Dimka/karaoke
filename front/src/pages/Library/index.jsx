@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
-import { OnlineRoomModal } from "../../components/OnlineRoomModal";
 import { useAppDialog } from "../../contexts/AppDialog";
 import { useOnlineRoom } from "../../contexts/OnlineRoomContext";
 import useAppSettings from "../../hooks/useAppSettings";
@@ -296,42 +295,76 @@ export default function Library({ onOpenSongSettings }) {
     [onOpenSongSettings]
   );
   const openSongInKaraoke = useCallback(
-    async (selectedSong) => {
+    async (s) => {
       if (karaokeTransitioningRef.current) return;
       karaokeTransitioningRef.current = true;
+      const stop = () => {
+        karaokeTransitioningRef.current = false;
+      };
       try {
-        if (activeRoom && !localVisibleSongs.some((song) => song.id === selectedSong.id)) {
-          await sharedRoom.syncSong(selectedSong);
+        if (activeRoom && !localVisibleSongs.some((x) => x.id === s.id)) {
+          await sharedRoom.syncSong(s);
           await refreshSongs();
-          if (!activeRoom.host) {
-            karaokeTransitioningRef.current = false;
-            return;
-          }
+          if (!activeRoom.host) return stop();
         }
-        if (activeRoom) {
-          const readyLocally = await openKaraokeInRoom(selectedSong.id);
-          if (!readyLocally) {
-            karaokeTransitioningRef.current = false;
-            return;
-          }
-        }
+        if (activeRoom && !(await openKaraokeInRoom(s.id))) return stop();
         setGlobalRouteBlackout(true);
         setKaraokeTransitioning(true);
-        await new Promise((resolve) => {
-          window.setTimeout(resolve, 920);
-        });
-        navigate("/karaoke", { state: { songId: selectedSong.id, autoPlay: true } });
-      } catch (openError) {
-        karaokeTransitioningRef.current = false;
+        await new Promise((r) => setTimeout(r, 920));
+        navigate("/karaoke", { state: { songId: s.id, autoPlay: true } });
+      } catch (e) {
+        stop();
         setKaraokeTransitioning(false);
         setGlobalRouteBlackout(false);
-        await notify(
-          translateSaved("Не удалось открыть песню: {0}", { 0: getErrorMessage(openError) })
-        );
+        await notify(translateSaved("Не удалось открыть песню: {0}", { 0: getErrorMessage(e) }));
       }
     },
     [navigate, notify, activeRoom, localVisibleSongs, openKaraokeInRoom, refreshSongs, sharedRoom]
   );
+  const modals = [
+    [
+      RecordingsModal,
+      {
+        song: recordingsSong,
+        recordings: songRecordings || [],
+        error: recordingsError,
+        onClose: () => setRecordingsSong(null),
+        onAnalyze: ({ id }) => {
+          setAnalysisRecordings(songRecordings || []);
+          setRecordingsSong(null);
+          setAnalysisRecordingId(id);
+        },
+        onDelete: handleDeleteRecording
+      }
+    ],
+    [
+      AddSongsModal,
+      { review, onCancel: cancelDraft, onConfirm: confirmDraft, onUpdate: updateDraft }
+    ],
+    [
+      PerformanceAnalysisModal,
+      {
+        recordingId: analysisRecordingId,
+        recordings: analysisRecordings,
+        onClose: closeAnalysis,
+        onDone: closeAnalysis,
+        onDeleted: closeAnalysis
+      },
+      analysisRecordingId
+    ],
+    [
+      ProcessingModal,
+      {
+        song: processingSong,
+        songs: processingSongs,
+        status: processingStatus?.song_id === processingSong?.id ? processingStatus : null,
+        onSelectSong: trackProcessingSong,
+        onClose: () => setProcessingSong(null),
+        onCancel: cancelProcessing,
+        onOpenKaraoke: (songId) => navigate("/karaoke", { state: { songId } })
+      }
+    ]
+  ];
   return (
     <Stack align="center" sx={{ height: "100vh" }}>
       <LibraryBackdrop />
@@ -376,56 +409,11 @@ export default function Library({ onOpenSongSettings }) {
           </Stack>
         </LibraryResults>
       </Stack>
-
       <div
         className={`library-route-blackout ${karaokeTransitioning ? "is-visible" : ""}`}
         aria-hidden="true"
       />
-      {onlineRoomOpen && (
-        <OnlineRoomModal
-          onlineName={settings?.online_name?.trim() || ""}
-          onOnlineNameChange={(onlineName) =>
-            updateSettings((current) => ({ ...current, online_name: onlineName }))
-          }
-          onClose={() => setOnlineRoomOpen(false)}
-        />
-      )}
-      <RecordingsModal
-        song={recordingsSong}
-        recordings={songRecordings || []}
-        error={recordingsError}
-        onClose={() => setRecordingsSong(null)}
-        onAnalyze={(recording) => {
-          setAnalysisRecordings(songRecordings || []);
-          setRecordingsSong(null);
-          setAnalysisRecordingId(recording.id);
-        }}
-        onDelete={handleDeleteRecording}
-      />
-      <AddSongsModal
-        review={review}
-        onCancel={cancelDraft}
-        onConfirm={confirmDraft}
-        onUpdate={updateDraft}
-      />
-      {analysisRecordingId && (
-        <PerformanceAnalysisModal
-          recordingId={analysisRecordingId}
-          recordings={analysisRecordings}
-          onClose={closeAnalysis}
-          onDone={closeAnalysis}
-          onDeleted={closeAnalysis}
-        />
-      )}
-      <ProcessingModal
-        song={processingSong}
-        songs={processingSongs}
-        status={processingStatus?.song_id === processingSong?.id ? processingStatus : null}
-        onSelectSong={trackProcessingSong}
-        onClose={() => setProcessingSong(null)}
-        onCancel={cancelProcessing}
-        onOpenKaraoke={(songId) => navigate("/karaoke", { state: { songId } })}
-      />
+      {modals.map(([Component, props, show = true], i) => show && <Component key={i} {...props} />)}
     </Stack>
   );
 }
